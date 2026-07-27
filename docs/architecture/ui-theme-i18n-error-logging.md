@@ -127,13 +127,15 @@ detectWebviewLocale()
 
 ### 错误处理规则
 
-- `catch (error)` 后先归一化：TS 使用 `toBaseError` 或领域专用转换；Engine client 使用 response code/status/details；Rust 使用 `thiserror` 类型转换到 `ApiError`。
+- `catch (error)` 后先归一化：TS 使用 `toBaseError` 或领域专用转换；媒体
+  adapter 使用稳定 diagnostic code/details，并保留 FFmpeg stderr 摘要。
 - 用户可见动作走 `IErrorHandler` 或 Webview ErrorBoundary/toast，不在业务深处直接散落 show message。
 - Extension Host 可用 `VSCodeErrorHandler`：同时记录日志，并按 category/severity 调用 VS Code message API。
 - Webview ErrorBoundary 只负责 React 崩溃兜底；业务错误应以 inline validation、toast、diagnostic panel 或 artifact projection 呈现。
 - 可重试错误必须显式标注 `retryable`、`retryAfter` 或 recovery signal；不要让 UI 靠解析 message 决定重试。
 - 权限、认证、外部副作用和数据覆盖错误必须提供明确用户动作，例如 Open Settings、Retry、Reveal Output、Cancel。
-- Engine/GPU/stream fallback 需要返回 diagnostics；不能静默降级，也不能只在日志里记录。
+- codec/filter/stream 能力不足必须返回 diagnostics；不能静默降级，也不能
+  只在日志里记录。
 - 不把 secret、绝对本地路径、token、完整 prompt、二进制 payload 写入用户提示或可上传诊断。
 
 ## 日志
@@ -152,7 +154,7 @@ package module
 | L0/Node/browser  | `ConsoleLogger`、`ConsoleTransport`、`CapturedLogTransport`     | 默认 fallback 或测试捕获                                        |
 | Extension Host   | `createVSCodeLogger`、`watchLogLevel`、`OutputChannelTransport` | 写 VS Code OutputChannel，响应 `neko.logLevel`                  |
 | Package registry | `createLoggerRegistry(packageName)`                             | 包内 `getLogger(source)` 统一来源和 child source                |
-| Rust Engine      | `tracing`、`RUST_LOG`                                           | 由 host logger level 同步环境变量，Rust 侧保留结构化 span/event |
+| Node 媒体 adapter | package logger + FFmpeg diagnostic                              | 记录 operation/code，不记录 token、原始媒体或完整本地路径      |
 
 ### 日志规则
 
@@ -171,7 +173,7 @@ Extension command
   -> vscode.l10n.t user text
   -> logger child source
   -> try operation
-      -> EngineClient / domain service
+      -> domain port / Node media adapter
       -> ApiError or diagnostic
   -> toBaseError / diagnostic projection
   -> VSCodeErrorHandler or Webview projection
@@ -187,13 +189,12 @@ React event
   -> inline validation / toast / ErrorBoundary fallback
 ```
 
-Engine 侧：
+媒体 adapter 侧：
 
 ```text
-runtime error
-  -> thiserror domain error
-  -> host-api ApiError/ErrorCode/details
-  -> EngineClient normalized response
+ffprobe / FFmpeg / loopback error
+  -> typed media diagnostic
+  -> domain adapter normalized response
   -> Extension/Webview diagnostic or user-visible error
 ```
 
@@ -208,14 +209,14 @@ runtime error
 | 用 `console.log` 做正式日志                   | 无级别、无来源、难排查 | 使用 `ILogger` 和 package logger registry                    |
 | 业务层直接 `showErrorMessage` 到处散落        | 无法统一显示策略和测试 | 通过 `IErrorHandler` 或集中 adapter                          |
 | UI 解析错误字符串决定重试                     | 文案变更破坏逻辑       | 使用 `code/category/retryable/retryAfter`                    |
-| Engine 只返回字符串错误                       | TS 无法分类恢复        | 返回 `ErrorCode`、message、details/diagnostic                |
+| adapter 只返回字符串错误                      | UI 无法分类恢复        | 返回 `code`、message、details/diagnostic                     |
 | 高吞吐循环写 info/debug 日志                  | 卡顿和日志噪声         | 采样、聚合或 trace-level gated                               |
 | Webview topbar 重复展示被动状态               | 多包 UI 不一致         | 被动状态投影到 VS Code StatusBar                             |
 
 ## 与其他架构文档的关系
 
 - 子包依赖和运行平面边界见 [`package-boundaries.md`](package-boundaries.md)。
-- Engine 错误、diagnostic 和 fallback 的运行时权威见 [`engine-runtime.md`](engine-runtime.md)。
+- 媒体错误、diagnostic 和 fail-visible 运行时边界见 [`media-runtime.md`](media-runtime.md)。
 - Agent 消息、artifact 和 recovery projection 见 [`agent.md`](agent.md)。
 - Auth/secret 不应进入日志、prompt 或 Webview state，见 [`auth.md`](auth.md)。
 - 缓存、路径和运行时 URI/token 的持久化边界见 [`cache-file-access-and-paths.md`](cache-file-access-and-paths.md)。

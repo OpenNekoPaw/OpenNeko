@@ -462,7 +462,6 @@ export interface BuildAgentErrorAssistantMessageInput {
 
 export interface AgentTurnContextPatchInput {
   readonly imageAttachments?: readonly AgentBase64ImageAttachment[];
-  readonly timelineContextPacket?: unknown;
   readonly canvasNodes?: readonly AgentAmbientCanvasNode[];
   readonly canvasContextPacket?: unknown;
   readonly multimodalContextPacket?: unknown;
@@ -1604,9 +1603,7 @@ export function buildAgentTurnContextPatch(
       ? { multimodalContextPacket: input.multimodalContextPacket }
       : input.canvasContextPacket !== undefined && input.canvasContextPacket !== null
         ? { multimodalContextPacket: input.canvasContextPacket }
-        : input.timelineContextPacket !== undefined && input.timelineContextPacket !== null
-          ? { multimodalContextPacket: input.timelineContextPacket }
-          : {}),
+        : {}),
     ...(input.executionMetadata ? { metadata: input.executionMetadata } : {}),
   };
 

@@ -83,7 +83,7 @@ import {
 } from '@neko/search/host-vscode';
 import { createAgentProjectSearchAdapters } from './services/agentProjectSearchAdapters';
 import { ExternalProcessorRegistryService } from './services/externalProcessorRegistryService';
-import { getEngineClientProvider } from './services/engineClientProvider';
+import { getAgentMediaRuntimeProvider } from './services/mediaRuntimeProvider';
 import { createExtensionAgentContentAccessRuntime } from './services/agentContentAccessRuntime';
 import {
   createWorkspaceGeneratedAssetIndex,
@@ -92,10 +92,7 @@ import {
 import { MediaGenerationDeliveryHost } from './services/mediaGenerationDeliveryHost';
 import { cleanupLegacyCanvasBoardMetadata } from './services/legacyCanvasBoardMetadataCleanup';
 import { cleanupLegacyConversationWorkspaceState } from './services/legacyConversationWorkspaceStateCleanup';
-import {
-  createHostContentPathResolver,
-  getHostContentAuthorizedReadRoots,
-} from '@neko/shared/vscode/extension';
+import { createHostContentPathResolver } from '@neko/shared/vscode/extension';
 import {
   registerTimelineProjectionAcceptanceCommands,
   TimelineProjectionAcceptanceController,
@@ -294,14 +291,14 @@ export async function activate(
     await coordinator.recoverPersistedGenerationJobs();
     registerMediaAgentTools(bootstrapResult.toolRegistry, coordinator);
   }
-  const engineClientProvider = getEngineClientProvider();
-  await engineClientProvider.setAuthorizedReadRoots?.(
-    await getHostContentAuthorizedReadRoots({
-      workspaceRoot,
-      getExtension: vscode.extensions.getExtension,
-      logger,
-    }),
-  );
+  const mediaRuntimeProvider = getAgentMediaRuntimeProvider();
+  context.subscriptions.push({
+    dispose: () => {
+      void mediaRuntimeProvider
+        .dispose()
+        .catch((error) => logger.warn('Failed to dispose Agent media runtime', { error }));
+    },
+  });
   const agentContentAccess = await createExtensionAgentContentAccessRuntime({
     context,
     workspaceRoot,

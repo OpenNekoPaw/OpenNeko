@@ -69,6 +69,7 @@ import {
   assertCanvasNodeType,
   createCanvasPreviewSemanticFingerprint,
   createCanvasRepresentationSpec,
+  createCanvasWebviewContentSecurityPolicy,
   createProjectionSourceKey,
   findOpenCanvasDocumentUriByProjectRef,
   hashProjectionSource,
@@ -121,6 +122,15 @@ function resourceRef(
 }
 
 describe('CanvasEditorProvider contracts', () => {
+  it('allows the canonical loopback media runtime in Canvas Webview CSP', () => {
+    const policy = createCanvasWebviewContentSecurityPolicy('vscode-webview:', 'test-nonce');
+
+    expect(policy).toContain("script-src 'nonce-test-nonce'");
+    expect(policy).toContain('media-src vscode-webview: data: blob: https: http://127.0.0.1:*');
+    expect(policy).toContain('connect-src ws://127.0.0.1:* http://127.0.0.1:*');
+    expect(policy).not.toContain('http://localhost:*');
+  });
+
   it('recognizes editor keyboard actions and playback media types', () => {
     expect(isCanvasEditorLevelKeyboardAction('deleteSelected')).toBe(true);
     expect(isCanvasEditorLevelKeyboardAction('selectNode:node-1')).toBe(false);

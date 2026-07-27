@@ -14,7 +14,7 @@
 - **入口**：`packages/extension/src/index.ts`（Extension）；Terminal TUI / headless 产品位于 `../../apps/neko-tui/src/tui/cli.tsx`
 - **子包**：`agent`（运行时）、`platform`（LLM 路由）、`extension`（VSCode 宿主）、`webview`（对话 UI）
 - **依赖**：`@neko/agent`、`@neko/platform`、`@neko/shared`
-- **激活依赖**：neko-engine、neko-tools、neko-preview
+- **媒体依赖**：`@neko/media`、neko-tools、neko-preview
 
 ## Architecture
 

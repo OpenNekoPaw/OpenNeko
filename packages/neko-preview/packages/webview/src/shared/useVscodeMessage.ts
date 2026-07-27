@@ -5,7 +5,7 @@
  */
 
 import { useEffect, useCallback, useRef } from 'react';
-import type { WebviewMessage, ExtensionMessage } from './types';
+import type { WebviewMessage, ExtensionMessage, ReadyMessage } from './types';
 import { getVscodeApi } from './vscodeApi';
 
 /**
@@ -38,15 +38,16 @@ export function useExtensionMessage(handler: (message: ExtensionMessage) => void
 /**
  * Hook that sends 'ready' on mount and provides postMessage
  */
-export function useVscodeReady(): {
+export function useVscodeReady(readyMessage: ReadyMessage = { type: 'ready' }): {
   postMessage: (message: WebviewMessage) => void;
 } {
+  const readyMessageRef = useRef(readyMessage);
   const post = useCallback((message: WebviewMessage) => {
     postMessage(message);
   }, []);
 
   useEffect(() => {
-    postMessage({ type: 'ready' });
+    postMessage(readyMessageRef.current);
   }, []);
 
   return { postMessage: post };

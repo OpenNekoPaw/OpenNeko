@@ -1,18 +1,13 @@
 /**
- * FrameOperations — frame extraction, seek, and element inspection.
+ * FrameOperations — frame extraction and seek.
  *
  * Handles:
  * - Debounced seek requests (prevents VideoToolbox session exhaustion)
  * - Concurrent frame extraction with semaphore control
- * - Lazy content diff for timeline media elements (thumbnail inspection)
  */
 
 import type { IHandlerContext } from './types';
 import { MAX_CONCURRENT_FRAMES } from './types';
-import { getLogger } from '../../../utils/logger';
-
-const logger = getLogger('FrameOperations');
-
 /**
  * Handle seek request for video — debounced to avoid VideoToolbox exhaustion.
  * Rapid slider dragging can fire dozens of seek events; only the last one matters.
@@ -26,22 +21,34 @@ export async function handleSeek(
   if (ctx.seekDebounceTimer) {
     ctx.seekDebounceTimer.cancel();
     ctx.seekDebounceTimer = null;
+    ctx.pendingSeekCompletion?.resolve();
+    ctx.pendingSeekCompletion = null;
   }
 
-  return new Promise<void>((resolve) => {
+  return new Promise<void>((resolve, reject) => {
+    const completion = { resolve, reject };
+    ctx.pendingSeekCompletion = completion;
     ctx.seekDebounceTimer = ctx.scheduler.scheduleOnce(async () => {
       ctx.seekDebounceTimer = null;
-      await Promise.all([
-        handleGetFrame(ctx, time, 'current', requestId),
-        handleGetFrame(ctx, time, 'previous', requestId),
-      ]);
-      resolve();
+      try {
+        await Promise.all([
+          handleGetFrame(ctx, time, 'current', requestId),
+          handleGetFrame(ctx, time, 'previous', requestId),
+        ]);
+        resolve();
+      } catch (error) {
+        reject(error);
+      } finally {
+        if (ctx.pendingSeekCompletion === completion) {
+          ctx.pendingSeekCompletion = null;
+        }
+      }
     }, 50);
   });
 }
 
 /**
- * Handle get frame request for video — extracts a single frame via neko-engine.
+ * Handle get frame request for video through the Node/FFmpeg runtime.
  * Includes concurrency control to prevent VideoToolbox session exhaustion.
  */
 export async function handleGetFrame(
@@ -55,7 +62,9 @@ export async function handleGetFrame(
       ? ctx.fileUri.fsPath
       : (ctx.previousUri?.fsPath ?? ctx.requestState.previousFilePath);
 
-  if (!filePath) return;
+  if (!filePath) {
+    throw new Error(`No ${version} file is available for frame extraction.`);
+  }
 
   // Wait if too many concurrent extractions
   while (ctx.activeFrameExtractions >= MAX_CONCURRENT_FRAMES) {
@@ -64,57 +73,26 @@ export async function handleGetFrame(
   ctx.activeFrameExtractions++;
 
   try {
-    const imageBuffer = await ctx.requireEngine().extractFrame(filePath, time);
-
-    if (imageBuffer) {
-      ctx.sendMessage({
-        requestId,
-        type: 'mediaDiff:frameData',
-        payload: {
-          time,
-          version,
-          imageBuffer,
-        },
-      });
-    }
-  } catch (error) {
-    logger.error(`Failed to extract frame at ${time}s (${version}):`, error);
+    const imageBuffer = dataUrlToArrayBuffer(
+      await ctx.requireMediaRuntime().captureFrame(filePath, time),
+    );
+    ctx.sendMessage({
+      requestId,
+      type: 'mediaDiff:frameData',
+      payload: {
+        time,
+        version,
+        imageBuffer,
+      },
+    });
   } finally {
     ctx.activeFrameExtractions--;
   }
 }
 
-/**
- * Handle inspect element request — lazy content diff for timeline media elements.
- * Extracts a low-resolution thumbnail frame from the media source.
- */
-export async function handleInspectElement(
-  ctx: IHandlerContext,
-  src: string,
-  requestId?: string,
-): Promise<void> {
-  if (!src) return;
-
-  const path = await import('path');
-  const { resolveMediaSrcPath } = await import('../../../media-lsp/services/resolveMediaSrcPath');
-  const projectDir = path.dirname(ctx.fileUri.fsPath);
-  const absoluteSrc = await resolveMediaSrcPath(projectDir, src);
-
-  try {
-    // Extract a thumbnail frame at t=0 with low resolution
-    const imageBuffer = await ctx.requireEngine().extractFrame(absoluteSrc, 0);
-
-    if (imageBuffer) {
-      ctx.sendMessage({
-        requestId,
-        type: 'mediaDiff:elementThumbnail',
-        payload: {
-          src,
-          imageBuffer,
-        },
-      });
-    }
-  } catch (error) {
-    logger.error(`Failed to inspect element ${src}:`, error);
-  }
+function dataUrlToArrayBuffer(dataUrl: string): ArrayBuffer {
+  const separator = dataUrl.indexOf(',');
+  if (separator < 0) throw new Error('Frame capture returned an invalid data URL.');
+  const bytes = Buffer.from(dataUrl.slice(separator + 1), 'base64');
+  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
 }

@@ -12,7 +12,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@neko/neko-client": "workspace:*",
+    "@neko/media": "workspace:*",
     "@neko/shared": "workspace:*",
     "@neko/ui": "workspace:*",
     "@vscode/codicons": "0.0.45",

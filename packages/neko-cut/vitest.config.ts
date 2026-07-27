@@ -10,7 +10,6 @@ export default defineConfig({
     alias: {
       '@neko/shared': resolve(__dirname, '../neko-types/src'),
       '@neko/ui': resolve(__dirname, '../neko-ui/src'),
-      '@neko/neko-client': resolve(__dirname, '../neko-client/src'),
     },
   },
   test: {

@@ -1,434 +1,321 @@
-/**
- * StreamingController — video/audio stream lifecycle management.
- *
- * Handles:
- * - Start/stop dual H264 streams (current + previous)
- * - Start/stop audio-only streams (audio diff mode)
- * - Playback control forwarding (play/pause/seek)
- * - Lazy stream creation on first play (neko-preview pattern)
- */
-
 import type {
-  VideoDiffDetails,
   AudioDiffDetails,
-  StreamConfig,
   AudioStreamConfig,
-} from '@neko/shared';
+  StreamConfig,
+  VideoDiffDetails,
+} from '@neko-tools/contracts';
 import type { IHandlerContext } from './types';
 import { getLogger } from '../../../utils/logger';
 
 const logger = getLogger('StreamingController');
 
-// =========================================================================
-// Video Streaming
-// =========================================================================
-
-/**
- * Start dual H264 streams (current + previous) via neko-engine.
- *
- * Flow:
- *   1. Ensure frame server is running -> get port
- *   2. Probe both files -> get resolution, fps, duration
- *   3. Dispatch `videos:stream` for each file -> get streamIds
- *   4. Send `mediaDiff:streamConfig` to webview immediately
- *      (no engine-level pause — neko-preview pattern: streams
- *       created lazily on first play, WebSocket clients connect
- *       immediately after config arrives)
- */
 export async function handleStartStreaming(
   ctx: IHandlerContext,
   requestId?: string,
+  startTime = 0,
+  playbackRate = 1,
 ): Promise<void> {
+  await handleStopStreaming(ctx);
+  const generation = ctx.videoStreamGeneration;
+  const controller = new AbortController();
+  ctx.videoStreamAbortController = controller;
+  const ownedSessionIds: string[] = [];
   try {
-    const engine = ctx.requireEngine();
-
-    // 1. Resolve file paths for both versions.
-    // If git show is still in progress, wait for it rather than failing immediately.
-    // This handles the race where the user clicks Play before ensurePreviousFilePath
-    // finishes (3-30s for large repos).
-    const currentPath = ctx.fileUri.fsPath;
-    let previousPath = ctx.previousUri?.fsPath ?? ctx.requestState.previousFilePath;
-    if (!previousPath && ctx.requestState.fetchPromise) {
-      await ctx.requestState.fetchPromise;
-      previousPath = ctx.previousUri?.fsPath ?? ctx.requestState.previousFilePath;
+    const [currentPath, previousPath] = await resolvePairPaths(ctx);
+    const details = getVideoDetails(ctx);
+    const [currentProbe, previousProbe] = details
+      ? [undefined, undefined]
+      : await Promise.all([
+          ctx.mediaRuntime.probe(currentPath, controller.signal),
+          ctx.mediaRuntime.probe(previousPath, controller.signal),
+        ]);
+    const width = details
+      ? Math.max(details.resolution.current.width, details.resolution.previous.width)
+      : Math.max(currentProbe?.video?.width ?? 0, previousProbe?.video?.width ?? 0);
+    const height = details
+      ? Math.max(details.resolution.current.height, details.resolution.previous.height)
+      : Math.max(currentProbe?.video?.height ?? 0, previousProbe?.video?.height ?? 0);
+    const fps = details?.fps.current || currentProbe?.video?.framesPerSecond || 30;
+    const duration = details
+      ? Math.max(details.duration.current, details.duration.previous)
+      : Math.max(currentProbe?.durationSeconds ?? 0, previousProbe?.durationSeconds ?? 0);
+    const currentVideo = await ctx.mediaRuntime.prepareVideo(
+      currentPath,
+      undefined,
+      controller.signal,
+    );
+    ownedSessionIds.push(currentVideo.sessionId);
+    controller.signal.throwIfAborted();
+    const previousVideo = await ctx.mediaRuntime.prepareVideo(
+      previousPath,
+      undefined,
+      controller.signal,
+    );
+    ownedSessionIds.push(previousVideo.sessionId);
+    controller.signal.throwIfAborted();
+    const remaining = Math.max(0, duration - startTime);
+    const audioResults =
+      remaining > 0
+        ? await Promise.allSettled([
+            ctx.mediaRuntime.startPcm(
+              currentPath,
+              {
+                startTimeSeconds: startTime,
+                durationSeconds: remaining,
+                playbackRate,
+              },
+              controller.signal,
+            ),
+            ctx.mediaRuntime.startPcm(
+              previousPath,
+              {
+                startTimeSeconds: startTime,
+                durationSeconds: remaining,
+                playbackRate,
+              },
+              controller.signal,
+            ),
+          ])
+        : [];
+    const currentAudio =
+      audioResults[0]?.status === 'fulfilled' ? audioResults[0].value : undefined;
+    const previousAudio =
+      audioResults[1]?.status === 'fulfilled' ? audioResults[1].value : undefined;
+    if (currentAudio) ownedSessionIds.push(currentAudio.sessionId);
+    if (previousAudio) ownedSessionIds.push(previousAudio.sessionId);
+    controller.signal.throwIfAborted();
+    if (ctx.videoStreamGeneration !== generation) {
+      throw new Error('Media diff playback request was superseded.');
     }
-    if (!previousPath) {
-      throw new Error('No previous file available for streaming');
-    }
-
-    // 2. Extract resolution/fps/duration from cached diff result (avoids ~400ms redundant probes).
-    //    The diff analysis always runs before streaming, so lastDiffResult should be populated.
-    //    Falls back to probing only if the cache is empty (shouldn't happen in normal flow).
-    let width: number;
-    let height: number;
-    let fps: number;
-    let duration: number;
-
-    const videoDetails =
-      ctx.lastDiffResult?.mediaType === 'video'
-        ? (ctx.lastDiffResult.details as VideoDiffDetails)
-        : null;
-
-    if (videoDetails) {
-      width = Math.max(
-        videoDetails.resolution.current.width,
-        videoDetails.resolution.previous.width,
-      );
-      height = Math.max(
-        videoDetails.resolution.current.height,
-        videoDetails.resolution.previous.height,
-      );
-      fps = videoDetails.fps.current || 30;
-      duration = Math.max(videoDetails.duration.current, videoDetails.duration.previous);
-      logger.debug('Using cached diff metadata:', { width, height, fps, duration });
-    } else {
-      // Fallback: probe if diff result is not cached (e.g., streaming started without prior diff)
-      logger.warn('No cached diff result — falling back to probe');
-      const [currentInfo, previousInfo] = await Promise.all([
-        engine.probe('videos', currentPath),
-        engine.probe('videos', previousPath),
-      ]);
-      width = Math.max(currentInfo.width, previousInfo.width);
-      height = Math.max(currentInfo.height, previousInfo.height);
-      fps = currentInfo.fps || 30;
-      duration = Math.max(currentInfo.duration, previousInfo.duration);
-    }
-
-    // 3. Start streams for both files via videos:stream
-    const [currentHandle, previousHandle] = await Promise.all([
-      engine.createStream('videos', currentPath, { sessionId: ctx.sessionId }),
-      engine.createStream('videos', previousPath, { sessionId: ctx.sessionId }),
-    ]);
-
-    ctx.currentStreamId = currentHandle.streamId;
-    ctx.previousStreamId = previousHandle.streamId;
-
-    // 4. Always try to create audio streams — don't rely on metadata.
-    // If the file has no audio track, the engine returns an error which we catch.
-    if (videoDetails) {
-      logger.debug('Audio track changed:', videoDetails.audioTrackChanged);
-    }
-    try {
-      const [curAudioResult, prevAudioResult] = await Promise.allSettled([
-        engine.createStream('audios', currentPath, { sessionId: ctx.sessionId }),
-        engine.createStream('audios', previousPath, { sessionId: ctx.sessionId }),
-      ]);
-
-      if (curAudioResult.status === 'fulfilled') {
-        ctx.currentAudioStreamId = curAudioResult.value.streamId;
-        logger.debug('Current audio stream created:', ctx.currentAudioStreamId);
-      } else {
-        logger.debug('Current file has no audio track (or stream creation failed)');
-      }
-
-      if (prevAudioResult.status === 'fulfilled') {
-        ctx.previousAudioStreamId = prevAudioResult.value.streamId;
-        logger.debug('Previous audio stream created:', ctx.previousAudioStreamId);
-      } else {
-        logger.debug('Previous file has no audio track (or stream creation failed)');
-      }
-    } catch (audioErr) {
-      logger.warn('Audio stream creation failed (non-fatal):', audioErr);
-    }
-
-    // 5. Send config to webview immediately (no engine-level pause).
-    // Streams auto-play — WebSocket clients connect as soon as
-    // config arrives, well within the subscriber timeout.
+    ctx.currentStreamId = currentVideo.sessionId;
+    ctx.previousStreamId = previousVideo.sessionId;
+    ctx.currentAudioStreamId = currentAudio?.sessionId ?? null;
+    ctx.previousAudioStreamId = previousAudio?.sessionId ?? null;
     const config: StreamConfig = {
-      port: engine.port,
-      currentStreamId: ctx.currentStreamId,
-      previousStreamId: ctx.previousStreamId,
-      currentAudioStreamId: ctx.currentAudioStreamId ?? undefined,
-      previousAudioStreamId: ctx.previousAudioStreamId ?? undefined,
+      currentVideo: currentVideo.video,
+      previousVideo: previousVideo.video,
+      ...(currentAudio ? { currentAudio: currentAudio.stream } : {}),
+      ...(previousAudio ? { previousAudio: previousAudio.stream } : {}),
       width,
       height,
       fps,
       duration,
+      startTime,
+      playbackRate,
     };
-
-    ctx.sendMessage({
-      requestId,
-      type: 'mediaDiff:streamConfig',
-      payload: config,
-    });
-  } catch (error) {
-    logger.error('Failed to start streaming:', error);
-    ctx.sendMessage({
-      requestId,
-      type: 'mediaDiff:streamError',
-      error: error instanceof Error ? error.message : String(error),
-    });
-  }
-}
-
-/**
- * Stop all streams (video + audio) and clean up state.
- */
-export async function handleStopStreaming(
-  ctx: IHandlerContext,
-  _requestId?: string,
-): Promise<void> {
-  try {
-    const engine = ctx.requireEngine();
-    const stopPromises: Promise<void>[] = [];
-
-    for (const sid of [
-      ctx.currentStreamId,
-      ctx.previousStreamId,
-      ctx.currentAudioStreamId,
-      ctx.previousAudioStreamId,
-    ]) {
-      if (sid) {
-        stopPromises.push(engine.controlStream('streams', sid, 'stop'));
-      }
+    ctx.sendMessage({ requestId, type: 'mediaDiff:streamConfig', payload: config });
+    if (ctx.videoStreamAbortController === controller) {
+      ctx.videoStreamAbortController = null;
     }
-
-    await Promise.allSettled(stopPromises);
   } catch (error) {
-    logger.error('Failed to stop streaming:', error);
-  } finally {
-    ctx.currentStreamId = null;
-    ctx.previousStreamId = null;
-    ctx.currentAudioStreamId = null;
-    ctx.previousAudioStreamId = null;
+    await stopSessionsAfterStartupFailure(ctx, ownedSessionIds);
+    if (ctx.videoStreamAbortController === controller) {
+      ctx.videoStreamAbortController = null;
+    }
+    if (!controller.signal.aborted && ctx.videoStreamGeneration === generation) {
+      logger.error('Failed to start media diff playback:', error);
+      ctx.sendMessage({
+        requestId,
+        type: 'mediaDiff:streamError',
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
   }
 }
 
-/**
- * Forward playback control (play/pause/seek) to all active streams.
- *
- * On first 'play', lazily creates streams (neko-preview pattern):
- * streams are only created when the user clicks Play, ensuring
- * WebSocket clients connect immediately after creation and well
- * within the engine's subscriber timeout.
- *
- * Controls both video and audio streams simultaneously.
- */
+export async function handleStopStreaming(ctx: IHandlerContext, requestId?: string): Promise<void> {
+  const generation = ++ctx.videoStreamGeneration;
+  ctx.videoStreamAbortController?.abort(new Error('Media diff playback stopped.'));
+  ctx.videoStreamAbortController = null;
+  const sessionIds = [
+    ctx.currentStreamId,
+    ctx.previousStreamId,
+    ctx.currentAudioStreamId,
+    ctx.previousAudioStreamId,
+  ].filter((value): value is string => value !== null);
+  ctx.currentStreamId = null;
+  ctx.previousStreamId = null;
+  ctx.currentAudioStreamId = null;
+  ctx.previousAudioStreamId = null;
+  await stopSessions(ctx, sessionIds);
+  if (requestId && ctx.videoStreamGeneration === generation) {
+    ctx.sendMessage({ requestId, type: 'mediaDiff:streamConfig', payload: null });
+  }
+}
+
 export async function handleStreamControl(
   ctx: IHandlerContext,
   action: 'play' | 'pause' | 'seek',
   payload: { time?: number; speed?: number },
   requestId?: string,
 ): Promise<void> {
-  // Lazy stream creation on first play (neko-preview pattern)
-  if (action === 'play' && !ctx.currentStreamId) {
-    await handleStartStreaming(ctx, requestId);
-    // Streams auto-play after creation — no resume needed
+  if (action === 'pause') {
+    await handleStopStreaming(ctx, requestId);
     return;
   }
-
-  // Collect all active streams with their dispatch group
-  const allStreams = [
-    { id: ctx.currentStreamId, group: 'videos' },
-    { id: ctx.previousStreamId, group: 'videos' },
-    { id: ctx.currentAudioStreamId, group: 'audios' },
-    { id: ctx.previousAudioStreamId, group: 'audios' },
-  ].filter((s): s is { id: string; group: string } => s.id != null);
-
-  if (allStreams.length === 0) return;
-
-  try {
-    const engine = ctx.requireEngine();
-    let streamAction: 'resume' | 'pause' | 'seek';
-    let options: Record<string, unknown>;
-
-    switch (action) {
-      case 'play':
-        streamAction = 'resume';
-        options = { speed: payload.speed ?? 1.0 };
-        break;
-      case 'pause':
-        streamAction = 'pause';
-        options = {};
-        break;
-      case 'seek':
-        streamAction = 'seek';
-        options = { time: payload.time ?? 0 };
-        break;
-    }
-
-    await Promise.all(
-      allStreams.map((s) => engine.controlStream(s.group, s.id, streamAction, options)),
-    );
-  } catch (error) {
-    logger.error(`Stream control '${action}' failed:`, error);
-    ctx.sendMessage({
-      requestId,
-      type: 'mediaDiff:streamError',
-      error: error instanceof Error ? error.message : String(error),
-    });
-  }
+  await handleStartStreaming(
+    ctx,
+    requestId,
+    action === 'seek' ? (payload.time ?? 0) : 0,
+    payload.speed ?? 1,
+  );
 }
 
-// =========================================================================
-// Audio-Only Streaming (for Audio Diff)
-// =========================================================================
-
-/**
- * Start dual audio-only streams (current + previous) for audio diff.
- *
- * Flow:
- *   1. Ensure frame server is running -> get port
- *   2. Resolve file paths
- *   3. Dispatch `audios:stream` for each file -> get streamIds
- *   4. Send `mediaDiff:audioStreamConfig` to webview immediately
- *      (no engine-level pause — AudioStreamClient pauses locally
- *       to avoid subscriber timeout)
- */
 export async function handleStartAudioStreaming(
   ctx: IHandlerContext,
   requestId?: string,
+  startTime = 0,
+  playbackRate = 1,
 ): Promise<void> {
+  await handleStopAudioStreaming(ctx);
+  const generation = ctx.audioStreamGeneration;
+  const controller = new AbortController();
+  ctx.audioStreamAbortController = controller;
+  const ownedSessionIds: string[] = [];
   try {
-    const engine = ctx.requireEngine();
-
-    // 1. Resolve file paths, awaiting git fetch if still in progress.
-    const currentPath = ctx.fileUri.fsPath;
-    let previousPath = ctx.previousUri?.fsPath ?? ctx.requestState.previousFilePath;
-    if (!previousPath && ctx.requestState.fetchPromise) {
-      await ctx.requestState.fetchPromise;
-      previousPath = ctx.previousUri?.fsPath ?? ctx.requestState.previousFilePath;
+    const [currentPath, previousPath] = await resolvePairPaths(ctx);
+    const details = getAudioDetails(ctx);
+    const duration = details
+      ? Math.max(details.duration.current, details.duration.previous)
+      : Math.max(
+          (await ctx.mediaRuntime.probe(currentPath, controller.signal)).durationSeconds,
+          (await ctx.mediaRuntime.probe(previousPath, controller.signal)).durationSeconds,
+        );
+    const remaining = Math.max(0, duration - startTime);
+    if (remaining <= 0) throw new Error('Audio diff playback start is outside the duration.');
+    const currentAudio = await ctx.mediaRuntime.startPcm(
+      currentPath,
+      {
+        startTimeSeconds: startTime,
+        durationSeconds: remaining,
+        playbackRate,
+      },
+      controller.signal,
+    );
+    ownedSessionIds.push(currentAudio.sessionId);
+    controller.signal.throwIfAborted();
+    const previousAudio = await ctx.mediaRuntime.startPcm(
+      previousPath,
+      {
+        startTimeSeconds: startTime,
+        durationSeconds: remaining,
+        playbackRate,
+      },
+      controller.signal,
+    );
+    ownedSessionIds.push(previousAudio.sessionId);
+    controller.signal.throwIfAborted();
+    if (ctx.audioStreamGeneration !== generation) {
+      throw new Error('Audio diff playback request was superseded.');
     }
-    if (!previousPath) {
-      throw new Error('No previous file available for audio streaming');
-    }
-
-    // 2. Extract duration from cached diff result (avoids ~400ms redundant probes).
-    let duration: number;
-
-    const audioDetails =
-      ctx.lastDiffResult?.mediaType === 'audio'
-        ? (ctx.lastDiffResult.details as AudioDiffDetails)
-        : null;
-
-    if (audioDetails) {
-      duration = Math.max(audioDetails.duration.current, audioDetails.duration.previous);
-      logger.debug('Using cached audio diff metadata:', { duration });
-    } else {
-      logger.warn('No cached audio diff result — falling back to probe');
-      const [currentInfo, previousInfo] = await Promise.all([
-        engine.probe('audios', currentPath),
-        engine.probe('audios', previousPath),
-      ]);
-      duration = Math.max(currentInfo.duration ?? 0, previousInfo.duration ?? 0);
-    }
-
-    // 3. Create audio streams
-    const [curHandle, prevHandle] = await Promise.all([
-      engine.createStream('audios', currentPath, { sessionId: ctx.sessionId }),
-      engine.createStream('audios', previousPath, { sessionId: ctx.sessionId }),
-    ]);
-
-    ctx.currentAudioOnlyStreamId = curHandle.streamId;
-    ctx.previousAudioOnlyStreamId = prevHandle.streamId;
-
-    // 4. Send config to webview immediately so WebSocket clients
-    //    connect before the engine subscriber timeout fires.
-    //    AudioStreamClients pause locally to suppress auto-playback.
+    ctx.currentAudioOnlyStreamId = currentAudio.sessionId;
+    ctx.previousAudioOnlyStreamId = previousAudio.sessionId;
     const config: AudioStreamConfig = {
-      port: engine.port,
-      currentAudioStreamId: ctx.currentAudioOnlyStreamId,
-      previousAudioStreamId: ctx.previousAudioOnlyStreamId,
+      currentAudio: currentAudio.stream,
+      previousAudio: previousAudio.stream,
       duration,
+      startTime,
+      playbackRate,
     };
-
-    ctx.sendMessage({
-      requestId,
-      type: 'mediaDiff:audioStreamConfig',
-      payload: config,
-    });
+    ctx.sendMessage({ requestId, type: 'mediaDiff:audioStreamConfig', payload: config });
+    if (ctx.audioStreamAbortController === controller) {
+      ctx.audioStreamAbortController = null;
+    }
   } catch (error) {
-    logger.error('Failed to start audio streaming:', error);
-    ctx.sendMessage({
-      requestId,
-      type: 'mediaDiff:streamError',
-      error: error instanceof Error ? error.message : String(error),
-    });
+    await stopSessionsAfterStartupFailure(ctx, ownedSessionIds);
+    if (ctx.audioStreamAbortController === controller) {
+      ctx.audioStreamAbortController = null;
+    }
+    if (!controller.signal.aborted && ctx.audioStreamGeneration === generation) {
+      logger.error('Failed to start audio diff playback:', error);
+      ctx.sendMessage({
+        requestId,
+        type: 'mediaDiff:streamError',
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
   }
 }
 
-/**
- * Stop audio-only streams and clean up state.
- */
 export async function handleStopAudioStreaming(
   ctx: IHandlerContext,
-  _requestId?: string,
+  requestId?: string,
 ): Promise<void> {
-  try {
-    const engine = ctx.requireEngine();
-    const stopPromises: Promise<void>[] = [];
-
-    for (const sid of [ctx.currentAudioOnlyStreamId, ctx.previousAudioOnlyStreamId]) {
-      if (sid) {
-        stopPromises.push(engine.controlStream('streams', sid, 'stop'));
-      }
-    }
-
-    await Promise.allSettled(stopPromises);
-  } catch (error) {
-    logger.error('Failed to stop audio streaming:', error);
-  } finally {
-    ctx.currentAudioOnlyStreamId = null;
-    ctx.previousAudioOnlyStreamId = null;
+  const generation = ++ctx.audioStreamGeneration;
+  ctx.audioStreamAbortController?.abort(new Error('Audio diff playback stopped.'));
+  ctx.audioStreamAbortController = null;
+  const sessionIds = [ctx.currentAudioOnlyStreamId, ctx.previousAudioOnlyStreamId].filter(
+    (value): value is string => value !== null,
+  );
+  ctx.currentAudioOnlyStreamId = null;
+  ctx.previousAudioOnlyStreamId = null;
+  await stopSessions(ctx, sessionIds);
+  if (requestId && ctx.audioStreamGeneration === generation) {
+    ctx.sendMessage({ requestId, type: 'mediaDiff:audioStreamConfig', payload: null });
   }
 }
 
-/**
- * Forward playback control to audio-only streams.
- *
- * On first 'play', lazily creates streams (neko-preview pattern):
- * streams are only created when the user clicks Play, ensuring
- * WebSocket clients connect immediately after creation and well
- * within the engine's subscriber timeout.
- */
 export async function handleAudioStreamControl(
   ctx: IHandlerContext,
   action: 'play' | 'pause' | 'seek',
   payload: { time?: number },
   requestId?: string,
 ): Promise<void> {
-  // Lazy stream creation on first play (neko-preview pattern)
-  if (action === 'play' && !ctx.currentAudioOnlyStreamId) {
-    await handleStartAudioStreaming(ctx, requestId);
-    // Streams auto-play after creation — no resume needed
+  if (action === 'pause') {
+    await handleStopAudioStreaming(ctx, requestId);
     return;
   }
+  await handleStartAudioStreaming(ctx, requestId, action === 'seek' ? (payload.time ?? 0) : 0);
+}
 
-  const allStreams = [ctx.currentAudioOnlyStreamId, ctx.previousAudioOnlyStreamId].filter(
-    (id): id is string => id != null,
+async function resolvePairPaths(ctx: IHandlerContext): Promise<[string, string]> {
+  const currentPath = ctx.fileUri.fsPath;
+  let previousPath = ctx.previousUri?.fsPath ?? ctx.requestState.previousFilePath;
+  if (!previousPath && ctx.requestState.fetchPromise) {
+    await ctx.requestState.fetchPromise;
+    previousPath = ctx.previousUri?.fsPath ?? ctx.requestState.previousFilePath;
+  }
+  if (!previousPath) throw new Error('No previous file is available for media diff playback.');
+  return [currentPath, previousPath];
+}
+
+function getVideoDetails(ctx: IHandlerContext): VideoDiffDetails | undefined {
+  const result = ctx.lastDiffResult;
+  if (result?.mediaType !== 'video' || !('resolution' in result.details)) return undefined;
+  return result.details;
+}
+
+function getAudioDetails(ctx: IHandlerContext): AudioDiffDetails | undefined {
+  const result = ctx.lastDiffResult;
+  if (result?.mediaType !== 'audio' || !('sampleRate' in result.details)) return undefined;
+  return result.details;
+}
+
+async function stopSessions(ctx: IHandlerContext, sessionIds: readonly string[]): Promise<void> {
+  const results = await Promise.allSettled(
+    sessionIds.map((sessionId) => ctx.mediaRuntime.stop(sessionId)),
   );
+  const failures = results.flatMap((result, index) =>
+    result.status === 'rejected'
+      ? [
+          new Error(`Failed to stop media runtime session "${sessionIds[index]}".`, {
+            cause: result.reason,
+          }),
+        ]
+      : [],
+  );
+  if (failures.length > 0) {
+    throw new AggregateError(failures, 'Failed to stop one or more media runtime sessions.');
+  }
+}
 
-  if (allStreams.length === 0) return;
-
+async function stopSessionsAfterStartupFailure(
+  ctx: IHandlerContext,
+  sessionIds: readonly string[],
+): Promise<void> {
   try {
-    const engine = ctx.requireEngine();
-    let streamAction: 'resume' | 'pause' | 'seek';
-    let options: Record<string, unknown>;
-
-    switch (action) {
-      case 'play':
-        streamAction = 'resume';
-        options = {};
-        break;
-      case 'pause':
-        streamAction = 'pause';
-        options = {};
-        break;
-      case 'seek':
-        streamAction = 'seek';
-        options = { time: payload.time ?? 0 };
-        break;
-    }
-
-    await Promise.all(
-      allStreams.map((sid) => engine.controlStream('audios', sid, streamAction, options)),
-    );
-  } catch (error) {
-    logger.error(`Audio stream control '${action}' failed:`, error);
-    ctx.sendMessage({
-      requestId,
-      type: 'mediaDiff:streamError',
-      error: error instanceof Error ? error.message : String(error),
-    });
+    await stopSessions(ctx, sessionIds);
+  } catch (cleanupError) {
+    logger.error('Failed to clean up media runtime sessions after startup failure:', cleanupError);
   }
 }

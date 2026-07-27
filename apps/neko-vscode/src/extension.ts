@@ -16,11 +16,11 @@ import {
   type OpenNekoAiHostRuntime,
   type OpenNekoAiHostServices,
 } from './ai-host-runtime';
+import { configureOpenNekoMediaRuntime } from './media-host-runtime';
 
 const requireFeature = createRequire(__filename);
 
 const FEATURE_ORDER = Object.freeze([
-  'neko-engine',
   'neko-tools',
   'neko-preview',
   'neko-assets',
@@ -30,6 +30,12 @@ const FEATURE_ORDER = Object.freeze([
 ]);
 
 const FEATURE_IDS = FEATURE_ORDER.map((packageName) => `neko.${packageName}`);
+const RETIRED_FEATURE_IDS = Object.freeze(['neko.neko-engine']);
+const RETIRED_ENGINE_COMMANDS = Object.freeze([
+  'neko.engine.ensureFrameServer',
+  'neko.engine.extractThumbnail',
+  'neko.engine.probeInternal',
+]);
 
 interface EmbeddedFeatureModule {
   activate(
@@ -50,6 +56,16 @@ let aiHostRuntime: OpenNekoAiHostRuntime | undefined;
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   await assertNoStandaloneFeatureConflicts();
+  await configureOpenNekoMediaRuntime(context.extensionUri.fsPath);
+  for (const command of RETIRED_ENGINE_COMMANDS) {
+    context.subscriptions.push(
+      vscode.commands.registerCommand(command, () => {
+        throw new Error(
+          `Retired media command ${command} cannot be used. The owning feature must use its Node/FFmpeg media port.`,
+        );
+      }),
+    );
+  }
 
   const registry = new EmbeddedFeatureRegistry();
   context.subscriptions.push(installEmbeddedFeatureRegistry(registry));
@@ -122,11 +138,13 @@ async function disposeActivationState(): Promise<void> {
 }
 
 async function assertNoStandaloneFeatureConflicts(): Promise<void> {
-  const installed = FEATURE_IDS.filter((id) => vscode.extensions.getExtension(id));
+  const installed = [...FEATURE_IDS, ...RETIRED_FEATURE_IDS].filter((id) =>
+    vscode.extensions.getExtension(id),
+  );
   if (installed.length === 0) return;
 
   const action = await vscode.window.showErrorMessage(
-    `OpenNeko now contains all product features in one extension. Remove these separately installed feature extensions and reload VS Code: ${installed.join(', ')}. Workspace files and settings are not deleted; package-local UI state may reset.`,
+    `OpenNeko cannot run with separately installed product or retired feature extensions. Remove these extensions and reload VS Code: ${installed.join(', ')}. Workspace files and settings are not deleted; package-local UI state may reset.`,
     { modal: true },
     'Show Extensions',
   );

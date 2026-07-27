@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type {
-  ExportEnginePort,
-  ExportEngineProgress,
+  ExportExecutorPort,
+  ExportExecutionProgress,
   ExportJobResultCommitter,
   ExportJobSnapshot,
 } from './contracts';
@@ -9,9 +9,9 @@ import { ExportJobCoordinator } from './coordinator';
 import { createInMemoryExportJobStore } from './store';
 
 describe('ExportJobCoordinator', () => {
-  it('commits monotonic Engine progress and the output before terminal success', async () => {
-    const engine = createEngine();
-    engine.describeExport
+  it('commits monotonic executor progress and the output before terminal success', async () => {
+    const executor = createExecutor();
+    executor.describeExport
       .mockResolvedValueOnce(progress({ progress: 35, currentFrame: 35, elapsedMs: 1_000 }))
       .mockResolvedValueOnce(
         progress({
@@ -22,12 +22,12 @@ describe('ExportJobCoordinator', () => {
         }),
       );
     const resultCommitter = createCommitter();
-    const coordinator = createCoordinator(engine, resultCommitter);
+    const coordinator = createCoordinator(executor, resultCommitter);
 
     const initial = await coordinator.submitExport(createInput());
     const terminal = await waitForPhase(coordinator, initial.ref, 'succeeded');
 
-    expect(engine.enqueueExport).toHaveBeenCalledWith({
+    expect(executor.enqueueExport).toHaveBeenCalledWith({
       ref: initial.ref,
       request: initial.request,
     });
@@ -53,9 +53,9 @@ describe('ExportJobCoordinator', () => {
     expect(terminal.revision).toBeGreaterThan(4);
   });
 
-  it('fails visibly when final output commit fails after Engine completion', async () => {
-    const engine = createEngine();
-    engine.describeExport.mockResolvedValueOnce(
+  it('fails visibly when final output commit fails after executor completion', async () => {
+    const executor = createExecutor();
+    executor.describeExport.mockResolvedValueOnce(
       progress({
         state: 'completed',
         progress: 100,
@@ -67,7 +67,7 @@ describe('ExportJobCoordinator', () => {
     resultCommitter.commitExport.mockRejectedValueOnce(
       new Error('Committed export output is unavailable.'),
     );
-    const coordinator = createCoordinator(engine, resultCommitter);
+    const coordinator = createCoordinator(executor, resultCommitter);
 
     const initial = await coordinator.submitExport(createInput());
     const terminal = await waitForPhase(coordinator, initial.ref, 'failed');
@@ -85,8 +85,8 @@ describe('ExportJobCoordinator', () => {
   });
 
   it('rejects a committed result that does not match the frozen Export request', async () => {
-    const engine = createEngine();
-    engine.describeExport.mockResolvedValueOnce(
+    const executor = createExecutor();
+    executor.describeExport.mockResolvedValueOnce(
       progress({
         state: 'completed',
         progress: 100,
@@ -100,7 +100,7 @@ describe('ExportJobCoordinator', () => {
       totalFrames: 100,
       elapsedMs: 2_000,
     });
-    const coordinator = createCoordinator(engine, resultCommitter);
+    const coordinator = createCoordinator(executor, resultCommitter);
 
     const initial = await coordinator.submitExport(createInput());
     const terminal = await waitForPhase(coordinator, initial.ref, 'failed');
@@ -113,12 +113,12 @@ describe('ExportJobCoordinator', () => {
     expect(terminal.result).toBeUndefined();
   });
 
-  it('rejects an Engine response for a different identity', async () => {
-    const engine = createEngine();
-    engine.describeExport.mockResolvedValue(
-      progress({ engineJobId: 'different-engine-job', progress: 25 }),
+  it('rejects an executor response for a different identity', async () => {
+    const executor = createExecutor();
+    executor.describeExport.mockResolvedValue(
+      progress({ executionId: 'different-execution', progress: 25 }),
     );
-    const coordinator = createCoordinator(engine, createCommitter());
+    const coordinator = createCoordinator(executor, createCommitter());
 
     const initial = await coordinator.submitExport(createInput());
     const terminal = await waitForPhase(coordinator, initial.ref, 'outcome-unknown');
@@ -129,12 +129,12 @@ describe('ExportJobCoordinator', () => {
     });
   });
 
-  it('rejects regressing Engine progress without replacing the last committed values', async () => {
-    const engine = createEngine();
-    engine.describeExport
+  it('rejects regressing executor progress without replacing the last committed values', async () => {
+    const executor = createExecutor();
+    executor.describeExport
       .mockResolvedValueOnce(progress({ progress: 60, currentFrame: 60, elapsedMs: 1_000 }))
       .mockResolvedValueOnce(progress({ progress: 40, currentFrame: 40, elapsedMs: 900 }));
-    const coordinator = createCoordinator(engine, createCommitter());
+    const coordinator = createCoordinator(executor, createCommitter());
 
     const initial = await coordinator.submitExport(createInput());
     const terminal = await waitForPhase(coordinator, initial.ref, 'outcome-unknown');
@@ -147,36 +147,36 @@ describe('ExportJobCoordinator', () => {
     expect(terminal.failure?.message).toContain('regressed');
   });
 
-  it('rejects stale cancellation before calling the Engine and cancels exact identity', async () => {
-    const engine = createEngine();
-    engine.describeExport.mockImplementation(() => new Promise(() => undefined));
-    const coordinator = createCoordinator(engine, createCommitter());
+  it('rejects stale cancellation before calling the executor and cancels exact identity', async () => {
+    const executor = createExecutor();
+    executor.describeExport.mockImplementation(() => new Promise(() => undefined));
+    const coordinator = createCoordinator(executor, createCommitter());
     const initial = await coordinator.submitExport(createInput());
     const running = await waitForRevision(coordinator, initial.ref, 3);
 
     await expect(
       coordinator.cancelExport({ ref: initial.ref, expectedRevision: 1 }),
     ).rejects.toMatchObject({ code: 'stale-revision' });
-    expect(engine.cancelExport).not.toHaveBeenCalled();
+    expect(executor.cancelExport).not.toHaveBeenCalled();
 
     const cancelled = await coordinator.cancelExport({
       ref: initial.ref,
       expectedRevision: running.revision,
     });
 
-    expect(engine.cancelExport).toHaveBeenCalledWith({
+    expect(executor.cancelExport).toHaveBeenCalledWith({
       ref: initial.ref,
       request: initial.request,
-      engineJobId: 'engine-job-1',
+      executionId: 'execution-1',
     });
     expect(cancelled).toMatchObject({ ref: initial.ref, phase: 'cancelled' });
   });
 
-  it('does not report cancellation when the Engine cancellation fails', async () => {
-    const engine = createEngine();
-    engine.describeExport.mockImplementation(() => new Promise(() => undefined));
-    engine.cancelExport.mockRejectedValueOnce(new Error('Engine cancellation unavailable'));
-    const coordinator = createCoordinator(engine, createCommitter());
+  it('does not report cancellation when the executor cancellation fails', async () => {
+    const executor = createExecutor();
+    executor.describeExport.mockImplementation(() => new Promise(() => undefined));
+    executor.cancelExport.mockRejectedValueOnce(new Error('executor cancellation unavailable'));
+    const coordinator = createCoordinator(executor, createCommitter());
     const initial = await coordinator.submitExport(createInput());
     const running = await waitForRevision(coordinator, initial.ref, 3);
 
@@ -185,16 +185,16 @@ describe('ExportJobCoordinator', () => {
         ref: initial.ref,
         expectedRevision: running.revision,
       }),
-    ).rejects.toThrow('Engine cancellation unavailable');
+    ).rejects.toThrow('executor cancellation unavailable');
 
     expect((await coordinator.describeExport(initial.ref)).phase).toBe('running');
   });
 
   it('retries with a new identity and immutable retry provenance', async () => {
-    const engine = createEngine();
-    engine.enqueueExport.mockRejectedValueOnce(new Error('Engine rejected export'));
-    engine.describeExport.mockImplementation(() => new Promise(() => undefined));
-    const coordinator = createCoordinator(engine, createCommitter());
+    const executor = createExecutor();
+    executor.enqueueExport.mockRejectedValueOnce(new Error('executor rejected export'));
+    executor.describeExport.mockImplementation(() => new Promise(() => undefined));
+    const coordinator = createCoordinator(executor, createCommitter());
     const original = await coordinator.submitExport(createInput());
     const failed = await waitForPhase(coordinator, original.ref, 'failed');
 
@@ -208,23 +208,23 @@ describe('ExportJobCoordinator', () => {
     expect(await coordinator.describeExport(original.ref)).toEqual(failed);
   });
 
-  it('marks an Engine query failure outcome-unknown without resubmitting', async () => {
-    const engine = createEngine();
-    engine.describeExport.mockRejectedValueOnce(new Error('Engine connection lost'));
-    const coordinator = createCoordinator(engine, createCommitter());
+  it('marks an executor query failure outcome-unknown without resubmitting', async () => {
+    const executor = createExecutor();
+    executor.describeExport.mockRejectedValueOnce(new Error('executor connection lost'));
+    const coordinator = createCoordinator(executor, createCommitter());
 
     const initial = await coordinator.submitExport(createInput());
     const unknown = await waitForPhase(coordinator, initial.ref, 'outcome-unknown');
 
     expect(unknown.failure).toMatchObject({
       code: 'export-outcome-unknown',
-      message: 'Engine connection lost',
+      message: 'executor connection lost',
       retryable: false,
     });
-    expect(engine.enqueueExport).toHaveBeenCalledTimes(1);
+    expect(executor.enqueueExport).toHaveBeenCalledTimes(1);
   });
 
-  it('recovers a persisted Engine identity without enqueueing a second export', async () => {
+  it('recovers a persisted executor identity without enqueueing a second export', async () => {
     const store = createInMemoryExportJobStore();
     const initial = await store.create(snapshot());
     const running = await store.commit({
@@ -235,20 +235,20 @@ describe('ExportJobCoordinator', () => {
         phase: 'running',
         revision: 2,
         updatedAt: 102,
-        engineJobId: 'engine-job-recovered',
+        executionId: 'execution-recovered',
         progress: {
           ...initial.progress,
-          stage: 'waiting-engine',
+          stage: 'waiting-executor',
           percent: 50,
           currentFrame: 50,
           elapsedMs: 1_000,
         },
       },
     });
-    const engine = createEngine();
-    engine.describeExport.mockResolvedValueOnce(
+    const executor = createExecutor();
+    executor.describeExport.mockResolvedValueOnce(
       progress({
-        engineJobId: 'engine-job-recovered',
+        executionId: 'execution-recovered',
         state: 'completed',
         progress: 100,
         currentFrame: 100,
@@ -257,7 +257,7 @@ describe('ExportJobCoordinator', () => {
     );
     const coordinator = new ExportJobCoordinator({
       store,
-      engine,
+      executor,
       resultCommitter: createCommitter(),
       now: incrementingClock(102),
       waitForPoll: async () => undefined,
@@ -268,20 +268,20 @@ describe('ExportJobCoordinator', () => {
     const terminal = await waitForPhase(coordinator, running.ref, 'succeeded');
 
     expect(terminal.result?.outputPath).toBe('/workspace/output/final.mp4');
-    expect(engine.describeExport).toHaveBeenCalledTimes(1);
-    expect(engine.enqueueExport).not.toHaveBeenCalled();
+    expect(executor.describeExport).toHaveBeenCalledTimes(1);
+    expect(executor.enqueueExport).not.toHaveBeenCalled();
   });
 });
 
 function createCoordinator(
-  engine: ReturnType<typeof createEngine>,
+  executor: ReturnType<typeof createExecutor>,
   resultCommitter: ExportJobResultCommitter,
 ) {
   let id = 0;
   let now = 100;
   return new ExportJobCoordinator({
     store: createInMemoryExportJobStore(),
-    engine,
+    executor,
     resultCommitter,
     createJobId: () => `export-${++id}`,
     now: () => ++now,
@@ -289,10 +289,10 @@ function createCoordinator(
   });
 }
 
-function createEngine() {
+function createExecutor() {
   return {
-    enqueueExport: vi.fn(async () => ({ engineJobId: 'engine-job-1' })),
-    describeExport: vi.fn<ExportEnginePort['describeExport']>(),
+    enqueueExport: vi.fn(async () => ({ executionId: 'execution-1' })),
+    describeExport: vi.fn<ExportExecutorPort['describeExport']>(),
     cancelExport: vi.fn(async () => undefined),
   };
 }
@@ -311,7 +311,7 @@ function createCommitter(): ExportJobResultCommitter & {
 
 function createInput() {
   return {
-    documentUri: 'file:///workspace/project.nkv',
+    documentUri: 'file:///workspace/project.otio',
     config: {
       outputPath: '/workspace/output/final.mp4',
       format: 'mp4' as const,
@@ -324,7 +324,7 @@ function createInput() {
       includeAudio: true,
       audioSampleRate: 48_000 as const,
     },
-    engineConfig: {
+    executionConfig: {
       timeline: { version: 1, tracks: [] },
       output: { path: '/workspace/output/final.mp4' },
     },
@@ -351,9 +351,9 @@ function snapshot(): ExportJobSnapshot {
   };
 }
 
-function progress(overrides: Partial<ExportEngineProgress> = {}): ExportEngineProgress {
+function progress(overrides: Partial<ExportExecutionProgress> = {}): ExportExecutionProgress {
   return {
-    engineJobId: 'engine-job-1',
+    executionId: 'execution-1',
     state: 'running',
     progress: 0,
     currentFrame: 0,

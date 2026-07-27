@@ -10,8 +10,7 @@ import {
   rmSync,
   writeFileSync,
 } from 'node:fs';
-import { createRequire } from 'node:module';
-import { basename, join, resolve } from 'node:path';
+import { join, resolve } from 'node:path';
 
 import {
   OPENNEKO_FEATURE_PACKAGES,
@@ -20,18 +19,18 @@ import {
   openNekoArtifactName,
 } from './openneko-vsix-contract.mjs';
 import { assertEmbeddedRuntimeClosure } from './embedded-runtime-closure.mjs';
+import {
+  assertStagedMediaRuntime,
+  stagePackagedMediaRuntime,
+} from './media-runtime-closure.mjs';
 
 const repoRoot = resolve(import.meta.dirname, '..');
 const appRoot = join(repoRoot, 'apps', 'neko-vscode');
-const require = createRequire(import.meta.url);
-const { getTargetConfig } = require('../packages/neko-engine/scripts/package-config.js');
 
 export function parseOpenNekoPackageArgs(argv) {
   const targetIndex = argv.indexOf('--target');
-  const engineIndex = argv.indexOf('--engine-vsix');
   return {
     target: targetIndex >= 0 ? argv[targetIndex + 1] : undefined,
-    engineVsix: engineIndex >= 0 ? argv[engineIndex + 1] : undefined,
   };
 }
 
@@ -43,7 +42,7 @@ export function resolveHostTarget(platform = process.platform, arch = process.ar
   );
 }
 
-export function assertEmbeddedNativeClosure(files, target) {
+export function assertOpenNekoPayloadClosure(files, target) {
   const buildInputFiles = files.filter((file) =>
     file.replaceAll('\\', '/').split('/').includes('deps'),
   );
@@ -52,30 +51,13 @@ export function assertEmbeddedNativeClosure(files, target) {
       `OpenNeko ${target} payload contains build-only dependency files: ${buildInputFiles.join(', ')}.`,
     );
   }
-
-  const nativeFiles = files.filter((file) => /neko-engine\.[^.]+\.node$/u.test(file));
-  const targetConfig = getTargetConfig(target);
-  if (!targetConfig) {
-    throw new Error(`Unsupported OpenNeko native target: ${target}`);
-  }
-  const expected = targetConfig.nodeFile;
-  if (nativeFiles.length !== 1 || basename(nativeFiles[0]) !== expected) {
+  const engineFiles = files.filter((file) => /(?:^|[/\\])neko-engine(?:[/\\.]|$)/u.test(file));
+  if (engineFiles.length > 0) {
     throw new Error(
-      `OpenNeko ${target} native closure must contain only ${expected}; received ${nativeFiles.join(', ') || '<none>'}.`,
+      `OpenNeko ${target} payload contains retired Engine files: ${engineFiles.join(', ')}.`,
     );
   }
-  const runtimeLibraries = files.filter((file) =>
-    target === 'darwin-arm64' ? file.endsWith('.dylib') : /\.so(?:\.|$)/u.test(file),
-  );
-  if (runtimeLibraries.length === 0) {
-    throw new Error(
-      `OpenNeko ${target} native closure does not contain an FFmpeg runtime library.`,
-    );
-  }
-  return Object.freeze({
-    nativeFile: nativeFiles[0],
-    runtimeLibraryCount: runtimeLibraries.length,
-  });
+  return Object.freeze({ fileCount: files.length });
 }
 
 export function createComposedManifest() {
@@ -92,7 +74,7 @@ export function createComposedManifest() {
   return manifest;
 }
 
-function packageOpenNekoPlatform({ target, engineVsix }, command = runCommand) {
+function packageOpenNekoPlatform({ target }, command = runCommand) {
   const manifest = createComposedManifest();
   const version = manifest.version;
   const buildRoot = join(repoRoot, '.tmp', 'openneko-vsix', target);
@@ -110,7 +92,6 @@ function packageOpenNekoPlatform({ target, engineVsix }, command = runCommand) {
 
   const payloads = new Map();
   for (const packageName of OPENNEKO_FEATURE_PACKAGES) {
-    if (packageName === 'neko-engine') continue;
     const outputPath = join(payloadRoot, `${packageName}.vsix`);
     command(
       'pnpm',
@@ -132,9 +113,6 @@ function packageOpenNekoPlatform({ target, engineVsix }, command = runCommand) {
     payloads.set(packageName, outputPath);
   }
 
-  const resolvedEngineVsix = resolveEngineVsix(target, engineVsix);
-  payloads.set('neko-engine', resolvedEngineVsix);
-
   for (const packageName of OPENNEKO_FEATURE_PACKAGES) {
     const payloadPath = payloads.get(packageName);
     if (!payloadPath) throw new Error(`Missing embedded feature payload: ${packageName}`);
@@ -146,11 +124,10 @@ function packageOpenNekoPlatform({ target, engineVsix }, command = runCommand) {
   }
 
   stageOpenNekoApplicationRuntime(stageRoot);
-  assertEmbeddedNativeClosure(
-    listFiles(join(stageRoot, 'dist', 'features', 'neko-engine')),
-    target,
-  );
+  stagePackagedMediaRuntime(stageRoot, target, process.env.NEKO_MEDIA_RUNTIME_ROOT?.trim());
+  assertOpenNekoPayloadClosure(listFiles(stageRoot), target);
   assertEmbeddedRuntimeClosure(stageRoot, target);
+  assertStagedMediaRuntime(stageRoot, target, { qualify: true });
   cpSync(join(appRoot, 'README.md'), join(stageRoot, 'README.md'));
   cpSync(join(appRoot, 'LICENSE'), join(stageRoot, 'LICENSE'));
   writeJson(join(stageRoot, 'package.json'), manifest);
@@ -193,23 +170,6 @@ export function stageOpenNekoApplicationRuntime(stageRoot) {
   cpSync(sourceBundle, join(targetDist, 'extension.js'));
   cpSync(sourceManifest, join(targetDist, 'runtime-closure.json'));
   cpSync(sourceNodeModules, join(targetDist, 'node_modules'), { recursive: true });
-}
-
-function resolveEngineVsix(target, explicitPath) {
-  if (explicitPath) {
-    const path = resolve(repoRoot, explicitPath);
-    assertFile(path, `Engine VSIX does not exist: ${path}`);
-    return path;
-  }
-  const matches = readdirSync(join(repoRoot, 'packages', 'neko-engine'))
-    .filter((entry) => entry.startsWith(`neko-engine-${target}-`) && entry.endsWith('.vsix'))
-    .map((entry) => join(repoRoot, 'packages', 'neko-engine', entry));
-  if (matches.length !== 1) {
-    throw new Error(
-      `Expected exactly one neko-engine ${target} VSIX; received ${matches.join(', ') || '<none>'}. Build the Engine target first or pass --engine-vsix.`,
-    );
-  }
-  return matches[0];
 }
 
 export function writeMergedLocalizations(stageRoot) {
@@ -259,7 +219,6 @@ function main() {
   const args = parseOpenNekoPackageArgs(process.argv.slice(2));
   packageOpenNekoPlatform({
     target: args.target ?? resolveHostTarget(),
-    engineVsix: args.engineVsix,
   });
 }
 

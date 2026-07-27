@@ -15,9 +15,6 @@ export * from './tools/index';
 // Core utilities
 export * from './core/index';
 
-// Operations (EditOperation 指令序列系统)
-export * from './operations';
-
 // Logger (ILogger + ConsoleLogger)
 export * from './logger/index';
 
@@ -43,7 +40,6 @@ export * from './project-authoring/index';
 export * from './entity-uri/index';
 
 // Format SDKs (load/validate/migrate/save project files)
-export * from './nkv/index';
 export * from './nkc/index';
 
 // VSCode Webview API is NOT exported from main entry to avoid

@@ -12,8 +12,7 @@ import type { ComponentType } from 'react';
 // ---------------------------------------------------------------------------
 
 /** Built-in rich content kinds shipped with neko-agent */
-export type BuiltinContentKind =
-  'image' | 'image-grid' | 'video' | 'audio' | 'storyboard' | 'panoramic-image' | 'panoramic-video';
+export type BuiltinContentKind = 'image' | 'image-grid' | 'video' | 'audio' | 'storyboard';
 
 /**
  * Union of all content kinds.

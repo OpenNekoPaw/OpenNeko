@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-07-16",
+  "updatedAt": "2026-07-26",
   "owner": "release-engineering",
   "channels": {
     "local": {
@@ -26,7 +26,6 @@
       "allowPublish": true,
       "requires": ["check:quality", "ci:local", "smoke", "vsix-artifacts"],
       "packages": [
-        "neko-engine",
         "neko-tools",
         "neko-preview",
         "neko-cut",
@@ -58,7 +57,7 @@
       "to": "stable",
       "requires": [
         "full release workflow",
-        "Engine/Webview smoke where applicable",
+        "Node media/Webview smoke where applicable",
         "artifact audit"
       ]
     }

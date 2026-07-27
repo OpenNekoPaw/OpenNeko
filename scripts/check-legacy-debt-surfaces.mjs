@@ -1396,8 +1396,8 @@ function runSelfTest() {
     },
     {
       value: classifySurface(
-        'packages/neko-client/src/EngineClient.ts',
-        'fallback to cpu when gpu fails',
+        'packages/neko-media/src/node/NodeMediaRuntime.ts',
+        'fallback to software encoding when hardware fails',
         'fallback',
       ),
       expected: 'runtime-resilience',
@@ -1413,8 +1413,8 @@ function runSelfTest() {
     {
       value: buildQualityGate([
         {
-          file: 'packages/neko-client/src/EngineClient.ts',
-          packageName: '@neko/client',
+          file: 'packages/neko-media/src/node/NodeMediaRuntime.ts',
+          packageName: '@neko/media',
           lineNumber: 1,
           term: 'fallback',
           text: 'fallback to cpu when gpu fails',

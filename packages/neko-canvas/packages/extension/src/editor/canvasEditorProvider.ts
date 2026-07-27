@@ -1,8 +1,7 @@
 /**
  * Canvas Editor Provider - Custom editor for .nkc files
  *
- * Supports inline media playback via MediaPlaybackService
- * from @neko/neko-client (direct engine connection).
+ * Supports inline media playback through the shared Node/FFmpeg media runtime.
  */
 import * as vscode from 'vscode';
 import * as fs from 'node:fs';
@@ -35,7 +34,6 @@ import {
   type PreviewVariantResourceApi,
 } from '@neko/shared/vscode/extension';
 import {
-  getPanoramicPreviewRoute,
   inferCanvasDroppedAssetKind,
   inferCanvasMediaType,
   inferCanvasTextFileFormat,
@@ -46,7 +44,7 @@ import {
   isCanvasNodeType,
   isProjectedCanvasData,
   isProjectedCanvasSource,
-  createDefaultProjectFormatCodecRegistry,
+  createNkcProjectFormatCodecRegistry,
   storeProjectSourceAddRequest,
   nkcSourcePathPolicy,
   ProjectFileStore,
@@ -125,8 +123,8 @@ import type {
 import type { CanvasChangeEvent, ShapeConfig } from '../api';
 import type { CanvasOutlineProvider, CanvasOutlineData } from '../views/canvasOutlineProvider';
 import type { CanvasStatusBar } from '../views/canvasStatusBar';
-import { EngineClient, MediaPlaybackService } from '@neko/neko-client';
-import type { PlaybackHandle, PlaybackMediaType } from '@neko/neko-client';
+import { NodeMediaRuntime } from '@neko/media/node';
+import type { HtmlVideoDescriptor, MediaProbe, PcmStreamDescriptor } from '@neko/media';
 import { getLogger } from '../utils/logger';
 import { handleError } from '../utils/errorHandler';
 import {
@@ -136,6 +134,7 @@ import {
 import { readCanvasTextDocumentProjection } from '../services/textDocumentProjection';
 import { resolveCanvasPickerAssetKind } from '../services/canvasSourceSelection';
 import { parseCanvasPreviewDelegateRequest } from './previewDelegateMessage';
+import { selectCanvasPlaybackTracks } from './canvasMediaPlaybackPolicy';
 import {
   applyCanvasContentNodeDelta,
   assertCanvasDocumentSnapshotBoundary,
@@ -144,6 +143,7 @@ import {
 const logger = getLogger('CanvasEditorProvider');
 const CANVAS_KEYBOARD_OWNER_PREFIX = 'neko.canvasEditor:';
 const PREVIEW_RESOURCE_VARIANT_TIMEOUT_MS = 4500;
+const CANVAS_MEDIA_LOOPBACK_SOURCE = 'http://127.0.0.1:*';
 const CANVAS_PREVIEW_SEMANTIC_FINGERPRINT_KEYS = [
   'name',
   'nodes',
@@ -192,6 +192,33 @@ interface CanvasPlaybackPreviewSourceResolution {
   readonly playableAssetPath?: string;
 }
 
+type PlaybackMediaType = 'video' | 'audio' | 'auto';
+
+interface CanvasMediaInfo {
+  readonly duration: number;
+  readonly width: number;
+  readonly height: number;
+  readonly fps: number;
+  readonly codec: string;
+  readonly format: string;
+  readonly bitrate?: number;
+  readonly hasAudio: boolean;
+  readonly audioCodec?: string;
+  readonly audioSampleRate?: number;
+  readonly audioChannels?: number;
+}
+
+interface CanvasPlaybackHandle {
+  readonly sourcePath: string;
+  readonly mediaInfo: CanvasMediaInfo;
+  readonly mediaType: PlaybackMediaType;
+  readonly speed: number;
+  readonly videoSessionId?: string;
+  readonly video?: HtmlVideoDescriptor;
+  readonly audioSessionId?: string;
+  readonly audio?: PcmStreamDescriptor;
+}
+
 interface PreviewResourceVariantRequestContext {
   readonly requestId?: string;
   readonly sourceId?: string;
@@ -209,6 +236,84 @@ export function isCanvasEditorLevelKeyboardAction(action: string): boolean {
 
 export function readPlaybackMediaType(value: unknown): PlaybackMediaType {
   return value === 'video' || value === 'audio' ? value : 'auto';
+}
+
+export function createCanvasWebviewContentSecurityPolicy(cspSource: string, nonce: string): string {
+  return [
+    "default-src 'none'",
+    `style-src ${cspSource} 'unsafe-inline'`,
+    `script-src 'nonce-${nonce}'`,
+    `img-src ${cspSource} data: blob: https:`,
+    `font-src ${cspSource}`,
+    `media-src ${cspSource} data: blob: https: ${CANVAS_MEDIA_LOOPBACK_SOURCE}`,
+    `connect-src ws://127.0.0.1:* ${CANVAS_MEDIA_LOOPBACK_SOURCE}`,
+  ].join('; ');
+}
+
+function projectCanvasMediaInfo(probe: MediaProbe): CanvasMediaInfo {
+  const video = probe.video;
+  const audio = probe.audioStreams[0];
+  return {
+    duration: probe.durationSeconds,
+    width: video?.width ?? 0,
+    height: video?.height ?? 0,
+    fps: video?.framesPerSecond ?? 0,
+    codec: video?.codecName ?? audio?.codecName ?? 'unknown',
+    format: probe.formatName ?? 'unknown',
+    ...(probe.bitRate === undefined ? {} : { bitrate: probe.bitRate }),
+    hasAudio: audio !== undefined,
+    ...(audio
+      ? {
+          audioCodec: audio.codecName,
+          audioSampleRate: audio.sampleRate,
+          audioChannels: audio.channels,
+        }
+      : {}),
+  };
+}
+
+function parseCanvasMediaInfo(value: unknown): CanvasMediaInfo | undefined {
+  if (!isPlainRecord(value)) return undefined;
+  const duration = value['duration'];
+  const width = value['width'];
+  const height = value['height'];
+  const fps = value['fps'];
+  const codec = value['codec'];
+  const format = value['format'];
+  const hasAudio = value['hasAudio'];
+  if (
+    typeof duration !== 'number' ||
+    !Number.isFinite(duration) ||
+    typeof width !== 'number' ||
+    typeof height !== 'number' ||
+    typeof fps !== 'number' ||
+    typeof codec !== 'string' ||
+    typeof format !== 'string' ||
+    typeof hasAudio !== 'boolean'
+  ) {
+    return undefined;
+  }
+  return {
+    duration,
+    width,
+    height,
+    fps,
+    codec,
+    format,
+    hasAudio,
+    ...(typeof value['bitrate'] === 'number' ? { bitrate: value['bitrate'] } : {}),
+    ...(typeof value['audioCodec'] === 'string' ? { audioCodec: value['audioCodec'] } : {}),
+    ...(typeof value['audioSampleRate'] === 'number'
+      ? { audioSampleRate: value['audioSampleRate'] }
+      : {}),
+    ...(typeof value['audioChannels'] === 'number'
+      ? { audioChannels: value['audioChannels'] }
+      : {}),
+  };
+}
+
+function finitePlaybackNumber(value: unknown, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
 }
 
 export function isWorkspaceScopedVariablePath(value: string): boolean {
@@ -718,11 +823,8 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
   private outlineProvider: CanvasOutlineProvider | undefined;
   private statusBar: CanvasStatusBar | undefined;
 
-  // Direct media playback via neko-client (no cross-extension dependency)
-  private _engineClient: EngineClient | null = null;
-  private _mediaPlayback: MediaPlaybackService | null = null;
-  // Track active streams per panel for cleanup
-  private _activeStreams = new Map<vscode.WebviewPanel, Map<string, PlaybackHandle>>();
+  private readonly mediaRuntime = new NodeMediaRuntime();
+  private _activeStreams = new Map<vscode.WebviewPanel, Map<string, CanvasPlaybackHandle>>();
   private localResourceAccess!: LocalResourceAccessService;
   private derivedRuntime!: HostDerivedContentRuntime;
   private contentRepresentation!: ContentRepresentationService;
@@ -733,7 +835,7 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
   private readonly focusedWebviews: IFocusedWebviewRegistry;
   private readonly projectFileAdapter = createVSCodeProjectFileIoAdapter({ vscodeApi: vscode });
   private readonly projectFileStore = new ProjectFileStore({
-    registry: createDefaultProjectFormatCodecRegistry(),
+    registry: createNkcProjectFormatCodecRegistry(),
     fileOps: this.projectFileAdapter.fileOps,
     resolveAuthorizedWrite: (filePath) => ({
       writer: new NodeAuthorizedWorkspaceWriter({ workspaceRoot: path.dirname(filePath) }),
@@ -780,6 +882,9 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
     void this.derivedRuntime
       .dispose()
       .catch((error) => logger.warn('Failed to dispose Canvas derived content runtime', { error }));
+    void this.mediaRuntime
+      .dispose()
+      .catch((error) => logger.warn('Failed to dispose Canvas media runtime', { error }));
   }
 
   private async initializeContentRuntime(): Promise<void> {
@@ -931,25 +1036,6 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
     }
   }
 
-  private async getMediaPlayback(): Promise<MediaPlaybackService | null> {
-    if (this._mediaPlayback) return this._mediaPlayback;
-    try {
-      const result = await vscode.commands.executeCommand<{ port: number } | null>(
-        'neko.engine.ensureFrameServer',
-      );
-      if (!result) {
-        logger.warn('ensureFrameServer returned null');
-        return null;
-      }
-      this._engineClient = new EngineClient(result.port);
-      this._mediaPlayback = new MediaPlaybackService(this._engineClient);
-      return this._mediaPlayback;
-    } catch (error) {
-      logger.error(`Failed to init media playback: ${error}`);
-      return null;
-    }
-  }
-
   private async getPreviewVariantApi(): Promise<NekoPreviewVariantAPI | null> {
     try {
       const ext = resolveNekoExtension('neko.neko-preview', (id) =>
@@ -967,11 +1053,50 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
   private async disposeMediaPlaybackPanel(webviewPanel: vscode.WebviewPanel): Promise<void> {
     const panelStreams = this._activeStreams.get(webviewPanel);
     if (!panelStreams || panelStreams.size === 0) return;
-    const playback = await this.getMediaPlayback();
     for (const handle of panelStreams.values()) {
-      await playback?.stopPlayback(handle).catch(() => {});
+      await this.stopCanvasPlayback(handle).catch(() => {});
     }
     this._activeStreams.delete(webviewPanel);
+  }
+
+  private async startCanvasPlayback(
+    sourcePath: string,
+    mediaInfo: CanvasMediaInfo,
+    mediaType: PlaybackMediaType,
+    startTime: number,
+    speed: number,
+  ): Promise<CanvasPlaybackHandle> {
+    const duration = Math.max(0, mediaInfo.duration - startTime);
+    if (duration <= 0) throw new Error('Canvas playback start is outside the media duration.');
+    const tracks = selectCanvasPlaybackTracks(mediaType, mediaInfo);
+    const video = tracks.video ? await this.mediaRuntime.prepareVideo(sourcePath) : undefined;
+    try {
+      const audio = tracks.audio
+        ? await this.mediaRuntime.startPcm(sourcePath, {
+            startTimeSeconds: startTime,
+            durationSeconds: duration,
+            playbackRate: speed,
+          })
+        : undefined;
+      return {
+        sourcePath,
+        mediaInfo,
+        mediaType,
+        speed,
+        ...(video ? { videoSessionId: video.sessionId, video: video.video } : {}),
+        ...(audio ? { audioSessionId: audio.sessionId, audio: audio.stream } : {}),
+      };
+    } catch (error) {
+      if (video) await this.mediaRuntime.stop(video.sessionId);
+      throw error;
+    }
+  }
+
+  private async stopCanvasPlayback(handle: CanvasPlaybackHandle): Promise<void> {
+    const sessionIds = [handle.videoSessionId, handle.audioSessionId].filter(
+      (value): value is string => value !== undefined,
+    );
+    await Promise.all(sessionIds.map((sessionId) => this.mediaRuntime.stop(sessionId)));
   }
 
   /** Wire up external providers after construction */
@@ -2052,13 +2177,17 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
     );
 
     const nonce = this.getNonce();
+    const contentSecurityPolicy = createCanvasWebviewContentSecurityPolicy(
+      webview.cspSource,
+      nonce,
+    );
 
     return `<!DOCTYPE html>
 <html ${injectLocaleAttribute()}>
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}'; img-src ${webview.cspSource} data: blob: https:; font-src ${webview.cspSource}; media-src ${webview.cspSource} data: blob: https:; connect-src ws://127.0.0.1:* http://127.0.0.1:*;">
+  <meta http-equiv="Content-Security-Policy" content="${contentSecurityPolicy};">
   <title>Canvas Editor</title>
   <link rel="stylesheet" href="${webviewUri}/assets/index.css">
 </head>
@@ -2434,18 +2563,7 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
           const ext = fsPath.split('.').pop()?.toLowerCase() ?? '';
           const videoExts = ['mp4', 'mov', 'avi', 'mkv', 'webm', 'm4v', 'ts', 'flv', 'wmv'];
           const audioExts = ['mp3', 'wav', 'ogg', 'flac', 'aac', 'm4a', 'wma', 'opus'];
-          const panoramicRoute = getPanoramicPreviewRoute({
-            filePath: fsPath,
-            mediaType: mediaTypeHint,
-          });
-
-          if (panoramicRoute) {
-            await vscode.commands.executeCommand(
-              'vscode.openWith',
-              fileUri,
-              panoramicRoute.viewType,
-            );
-          } else if (videoExts.includes(ext) || mediaTypeHint === 'video') {
+          if (videoExts.includes(ext) || mediaTypeHint === 'video') {
             await vscode.commands.executeCommand('vscode.openWith', fileUri, 'neko.videoPreview');
           } else if (audioExts.includes(ext) || mediaTypeHint === 'audio') {
             await vscode.commands.executeCommand('vscode.openWith', fileUri, 'neko.audioPreview');
@@ -2503,16 +2621,17 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
         if (request.target === 'preview') {
           const fsPath = await this.resolveAssetPath(request.assetPath, document.uri);
           const fileUri = vscode.Uri.file(fsPath);
-          const panoramicRoute = getPanoramicPreviewRoute({
-            filePath: fsPath,
-            mediaType: request.mediaType,
-          });
-          if (panoramicRoute) {
-            await vscode.commands.executeCommand(
-              'vscode.openWith',
-              fileUri,
-              panoramicRoute.viewType,
-            );
+          const extension = path.extname(fsPath).slice(1).toLowerCase();
+          if (
+            request.mediaType === 'video' ||
+            ['mp4', 'mov', 'avi', 'mkv', 'webm', 'm4v', 'ts', 'flv', 'wmv'].includes(extension)
+          ) {
+            await vscode.commands.executeCommand('vscode.openWith', fileUri, 'neko.videoPreview');
+          } else if (
+            request.mediaType === 'audio' ||
+            ['mp3', 'wav', 'ogg', 'flac', 'aac', 'm4a', 'wma', 'opus'].includes(extension)
+          ) {
+            await vscode.commands.executeCommand('vscode.openWith', fileUri, 'neko.audioPreview');
           } else {
             await vscode.commands.executeCommand('vscode.open', fileUri);
           }
@@ -2530,7 +2649,7 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
         break;
 
       case 'operationApplied':
-        // EditOperation sync from webview — fire dirty event
+        // CanvasEditOperation sync from webview — fire dirty event
         this.dirtyCanvasDocumentUris.add(document.uri.toString());
         this._onDidChangeDocumentLifecycle.fire({
           type: 'dirty',
@@ -2579,7 +2698,7 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
       }
 
       // =================================================================
-      // Media playback via MediaPlaybackService (direct engine)
+      // Media playback via the canonical Node/FFmpeg runtime
       // =================================================================
 
       case 'media:probe': {
@@ -2630,16 +2749,7 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
                 document.uri,
                 'neko-canvas.media-capture-frame',
               );
-          const playback = await this.getMediaPlayback();
-          if (!playback) {
-            webviewPanel.webview.postMessage({
-              type: 'media:captureFrameResult',
-              nodeId: message.nodeId,
-              error: 'Media engine not available',
-            });
-            break;
-          }
-          const dataUrl = await playback.captureFrame(filePath, time);
+          const dataUrl = await this.mediaRuntime.captureFrame(filePath, time);
           webviewPanel.webview.postMessage({
             type: 'media:captureFrameResult',
             nodeId: message.nodeId,
@@ -2651,61 +2761,6 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
             nodeId: message.nodeId,
             error: error instanceof Error ? error.message : 'Capture failed',
           });
-        }
-        break;
-      }
-
-      case 'media:requestPanoramicThumbnail': {
-        const assetPath = message.assetPath as string;
-        if (!assetPath) break;
-        let assetId: string | null = null;
-        try {
-          const filePath = await this.resolveCanvasMediaLocalFilePath(
-            assetPath,
-            document.uri,
-            'neko-canvas.media-panoramic-thumbnail',
-          );
-          const route = getPanoramicPreviewRoute({
-            filePath,
-            mediaType: message.mediaType as string | undefined,
-          });
-          if (!route) break;
-          const variantApi = await this.getPreviewVariantApi();
-          if (!variantApi) {
-            webviewPanel.webview.postMessage({
-              type: 'media:panoramicThumbnailResult',
-              nodeId: message.nodeId,
-              error: 'Preview variant API not available',
-            });
-            break;
-          }
-          const manifest = await variantApi.registerPreviewAsset({
-            source: filePath,
-            kind: route.kind,
-            expectedProjection: 'equirectangular',
-          });
-          assetId = manifest.assetId;
-          const variant = await variantApi.requestPreviewVariant(manifest.assetId, {
-            role: route.kind === 'image' ? 'proxy' : 'thumbnail',
-            width: 640,
-            height: 320,
-          });
-          webviewPanel.webview.postMessage({
-            type: 'media:panoramicThumbnailResult',
-            nodeId: message.nodeId,
-            url: variant.url ?? manifest.variants.find((item) => item.role === 'source')?.url,
-          });
-        } catch (error) {
-          webviewPanel.webview.postMessage({
-            type: 'media:panoramicThumbnailResult',
-            nodeId: message.nodeId,
-            error: error instanceof Error ? error.message : 'Panoramic thumbnail failed',
-          });
-        } finally {
-          if (assetId) {
-            const variantApi = await this.getPreviewVariantApi();
-            await variantApi?.unregisterPreviewAsset(assetId).catch(() => {});
-          }
         }
         break;
       }
@@ -3040,7 +3095,6 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
   ): Promise<void> {
     switch (message.type) {
       case 'media:probe': {
-        const mediaType = readPlaybackMediaType(message.mediaType);
         try {
           const filePath = await this.resolveMediaPlaybackFilePath(
             message,
@@ -3056,23 +3110,12 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
             });
             break;
           }
-          const playback = await this.getMediaPlayback();
-          if (!playback) {
-            await this.postMediaPlaybackResponse(webviewPanel, {
-              type: 'media:probeResult',
-              nodeId: message.nodeId,
-              ...this.readPreviewSessionEnvelope(message),
-              error: 'Media engine not available',
-            });
-            break;
-          }
-          const mediaInfo = await playback.probeMedia(filePath, mediaType);
+          const mediaInfo = projectCanvasMediaInfo(await this.mediaRuntime.probe(filePath));
           await this.postMediaPlaybackResponse(webviewPanel, {
             type: 'media:probeResult',
             nodeId: message.nodeId,
             ...this.readPreviewSessionEnvelope(message),
             mediaInfo,
-            port: playback.port,
           });
         } catch (error) {
           logger.error(`Probe failed: ${error}`);
@@ -3087,9 +3130,9 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
       }
 
       case 'media:play': {
-        const mediaInfo = message.mediaInfo as Record<string, unknown> | undefined;
-        const startTime = (message.startTime as number) ?? 0;
-        const speed = (message.speed as number) ?? 1.0;
+        const mediaInfo = parseCanvasMediaInfo(message.mediaInfo);
+        const startTime = finitePlaybackNumber(message.startTime, 0);
+        const speed = finitePlaybackNumber(message.speed, 1);
         const mediaType = readPlaybackMediaType(message.mediaType);
         if (!mediaInfo) {
           await this.postMediaPlaybackResponse(webviewPanel, {
@@ -3115,16 +3158,6 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
             });
             break;
           }
-          const playback = await this.getMediaPlayback();
-          if (!playback) {
-            await this.postMediaPlaybackResponse(webviewPanel, {
-              type: 'media:streamReady',
-              nodeId: message.nodeId,
-              ...this.readPreviewSessionEnvelope(message),
-              error: 'Media engine not available',
-            });
-            break;
-          }
           const nodeId = (message.nodeId as string) ?? filePath;
           let panelStreams = this._activeStreams.get(webviewPanel);
           if (!panelStreams) {
@@ -3133,16 +3166,16 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
           }
           const prev = panelStreams.get(nodeId);
           if (prev) {
-            await playback.stopPlayback(prev).catch(() => {});
+            await this.stopCanvasPlayback(prev).catch(() => {});
           }
-          const hasAudio = (mediaInfo.hasAudio as boolean) ?? true;
-          const handle = await playback.startPlayback(filePath, {
-            hasAudio,
+          const handle = await this.startCanvasPlayback(
+            filePath,
+            mediaInfo,
             mediaType,
             startTime,
             speed,
-          });
-          if (!handle.videoStreamUrl && !handle.audioStreamUrl) {
+          );
+          if (!handle.video && !handle.audio) {
             await this.postMediaPlaybackResponse(webviewPanel, {
               type: 'media:streamReady',
               nodeId: message.nodeId,
@@ -3156,11 +3189,11 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
             type: 'media:streamReady',
             nodeId: message.nodeId,
             ...this.readPreviewSessionEnvelope(message),
-            videoStreamUrl: handle.videoStreamUrl,
-            audioStreamUrl: handle.audioStreamUrl,
-            videoStreamId: handle.videoStreamId,
-            audioStreamId: handle.audioStreamId,
+            ...(handle.video ? { video: handle.video } : {}),
+            ...(handle.audio ? { audio: handle.audio } : {}),
             mediaInfo,
+            startTime,
+            playbackRate: speed,
           });
         } catch (error) {
           await this.postMediaPlaybackResponse(webviewPanel, {
@@ -3175,38 +3208,42 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
 
       case 'media:seek': {
         const nodeId = (message.nodeId as string) ?? '';
-        const handle = this._activeStreams.get(webviewPanel)?.get(nodeId);
+        const panelStreams = this._activeStreams.get(webviewPanel);
+        const handle = panelStreams?.get(nodeId);
         if (!handle) break;
-        const playback = await this.getMediaPlayback();
-        await playback?.seekPlayback(handle, message.time as number);
+        const time = finitePlaybackNumber(message.time, 0);
+        await this.stopCanvasPlayback(handle);
+        const replacement = await this.startCanvasPlayback(
+          handle.sourcePath,
+          handle.mediaInfo,
+          handle.mediaType,
+          time,
+          handle.speed,
+        );
+        panelStreams?.set(nodeId, replacement);
+        await this.postMediaPlaybackResponse(webviewPanel, {
+          type: 'media:streamReady',
+          nodeId,
+          ...this.readPreviewSessionEnvelope(message),
+          ...(replacement.video ? { video: replacement.video } : {}),
+          ...(replacement.audio ? { audio: replacement.audio } : {}),
+          mediaInfo: replacement.mediaInfo,
+          startTime: time,
+          playbackRate: replacement.speed,
+        });
         break;
       }
 
-      case 'media:pause': {
-        const nodeId = (message.nodeId as string) ?? '';
-        const handle = this._activeStreams.get(webviewPanel)?.get(nodeId);
-        if (!handle) break;
-        const playback = await this.getMediaPlayback();
-        await playback?.pausePlayback(handle);
+      case 'media:pause':
+      case 'media:resume':
         break;
-      }
-
-      case 'media:resume': {
-        const nodeId = (message.nodeId as string) ?? '';
-        const handle = this._activeStreams.get(webviewPanel)?.get(nodeId);
-        if (!handle) break;
-        const playback = await this.getMediaPlayback();
-        await playback?.resumePlayback(handle);
-        break;
-      }
 
       case 'media:stop': {
         const nodeId = (message.nodeId as string) ?? '';
         const panelStreams = this._activeStreams.get(webviewPanel);
         const handle = panelStreams?.get(nodeId);
         if (!handle) break;
-        const playback = await this.getMediaPlayback();
-        await playback?.stopPlayback(handle);
+        await this.stopCanvasPlayback(handle);
         panelStreams?.delete(nodeId);
         if (panelStreams?.size === 0) {
           this._activeStreams.delete(webviewPanel);
@@ -3226,8 +3263,8 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
         nodeId: message.nodeId,
         error: message.error,
         hasMediaInfo: Boolean(message.mediaInfo),
-        hasVideoStreamUrl: Boolean(message.videoStreamUrl),
-        hasAudioStreamUrl: Boolean(message.audioStreamUrl),
+        hasVideoDescriptor: Boolean(message.video),
+        hasAudioDescriptor: Boolean(message.audio),
       })}`,
     );
     const delivered = await webviewPanel.webview.postMessage(message);
@@ -3413,18 +3450,12 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
       }
       const variantApi = await this.getPreviewVariantApi();
       if (variantApi) {
-        const panoramicRoute = getPanoramicPreviewRoute({
-          filePath: fsPath,
-          mediaType: mediaTypeHint,
-        });
         const manifest = await variantApi.registerPreviewAsset({
           source: fsPath,
           kind:
-            panoramicRoute?.kind ??
-            (mediaTypeHint === 'image' || mediaTypeHint === 'video' || mediaTypeHint === 'audio'
+            mediaTypeHint === 'image' || mediaTypeHint === 'video' || mediaTypeHint === 'audio'
               ? mediaTypeHint
-              : 'unknown'),
-          expectedProjection: panoramicRoute ? 'equirectangular' : undefined,
+              : 'unknown',
         });
         const variant = await variantApi.requestPreviewVariant(manifest.assetId, {
           role:

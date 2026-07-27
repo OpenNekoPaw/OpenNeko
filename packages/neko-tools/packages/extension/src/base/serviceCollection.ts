@@ -22,8 +22,8 @@ export class ServiceCollection implements vscode.Disposable {
   set<T>(id: ServiceIdentifier<T>, instance: T): void {
     this.services.set(id as ServiceIdentifier<unknown>, instance);
 
-    if (instance && typeof (instance as vscode.Disposable).dispose === 'function') {
-      this.disposables.push(instance as vscode.Disposable);
+    if (isDisposable(instance)) {
+      this.disposables.push(instance);
     }
   }
 
@@ -47,4 +47,13 @@ export class ServiceCollection implements vscode.Disposable {
     this.disposables.length = 0;
     this.services.clear();
   }
+}
+
+function isDisposable(value: unknown): value is vscode.Disposable {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'dispose' in value &&
+    typeof value.dispose === 'function'
+  );
 }

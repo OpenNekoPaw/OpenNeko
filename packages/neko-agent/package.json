@@ -28,7 +28,6 @@
     "workspace"
   ],
   "extensionDependencies": [
-    "neko.neko-engine",
     "neko.neko-tools",
     "neko.neko-preview"
   ],

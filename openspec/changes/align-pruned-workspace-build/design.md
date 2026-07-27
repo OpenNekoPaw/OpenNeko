@@ -1,3 +1,7 @@
+> **Superseded (2026-07-26):** the media-runtime decisions in this design are
+> replaced by `retire-neko-engine-before-node-media-rebuild`. Do not restore
+> Engine, EngineClient, N-API, or their fallback paths from this document.
+
 ## Context
 
 The worktree contains a deliberate large deletion of non-core products and the Rust Engine. Retained Webviews already expose package-owned host adapters and have no production dependency on Workbench Core, while Agent/TUI retain deleted Market references and root scripts still name removed products. Retained media callers continue to depend on `neko.engine.ensureFrameServer`, `EngineClient`, authorized file access, Range/seek, decoder reuse, GPU processing, and stream transport.

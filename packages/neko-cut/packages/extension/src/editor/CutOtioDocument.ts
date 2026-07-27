@@ -1,6 +1,9 @@
 import * as vscode from 'vscode';
-import { CutDocumentSession, type CutDocumentStorage } from '@neko-cut/domain';
-import { NekoEngineCutMediaAdapter } from '../services/NekoEngineCutMediaAdapter';
+import {
+  CutDocumentSession,
+  type CutDocumentStorage,
+  type CutMediaRuntimeAdapter,
+} from '@neko-cut/domain';
 import { getLogger } from '../base';
 
 const logger = getLogger('CutOtioDocument');
@@ -48,7 +51,7 @@ export class CutOtioDocument implements vscode.CustomDocument {
 
   constructor(
     readonly session: CutDocumentSession,
-    readonly mediaAdapter: NekoEngineCutMediaAdapter,
+    readonly mediaAdapter: CutMediaRuntimeAdapter,
   ) {}
 
   get uri(): vscode.Uri {

@@ -28,7 +28,8 @@
 - [x] 4.1 Adapt generic Markdown/Media/Group projection into the existing Preview workspace and route/storyboard matrix
 - [x] 4.2 Remove obsolete Narrative authoring feature flags and Shot/Scene commands without removing Preview workspace or media runtime
 - [x] 4.3 Update outline, status, clipboard, drag/drop and Extension API paths
-- [x] 4.4 Preserve the Extension-authorized Engine stream and `@neko/neko-client` playback path with canonical-path tests
+- [x] 4.4 Preserve the Extension-authorized Preview path on `@neko/media`
+      NodeMediaRuntime plus native-video/PCM descriptors, with Engine fallback poisoned
 - [x] 4.5 Route quick generation from explicit Canvas selection into Agent-owned Job execution
 
 ## 5. Documentation and acceptance

@@ -1,11 +1,13 @@
 import * as vscode from 'vscode';
+import * as path from 'node:path';
 import type { IErrorHandler } from '@neko/shared';
-import { getMediaType } from '@neko/shared';
 import type { IExtensionI18n } from '../contracts/IExtensionI18n';
+import type { IMediaRuntimeService } from '../contracts/IMediaRuntimeService';
 
 interface IRegisterCommandsDependencies {
   i18n: IExtensionI18n;
   errorHandler: IErrorHandler;
+  mediaRuntimeService: IMediaRuntimeService;
 }
 
 type SupportedMediaType = 'image' | 'video' | 'audio';
@@ -26,7 +28,7 @@ export function registerNekoToolsCommands(
   context: vscode.ExtensionContext,
   dependencies: IRegisterCommandsDependencies,
 ): void {
-  const { errorHandler, i18n } = dependencies;
+  const { errorHandler, i18n, mediaRuntimeService } = dependencies;
 
   context.subscriptions.push(
     vscode.commands.registerCommand(
@@ -75,10 +77,29 @@ export function registerNekoToolsCommands(
       const targetUri = uri ?? (await pickMediaInfoFile(i18n));
       if (!targetUri) return;
 
-      const mediaType = getMediaType(targetUri.fsPath) ?? i18n.t('neko.tools.mediaType.unknown');
-      vscode.window.showInformationMessage(
-        i18n.t('neko.tools.mediaInfo.fallback', targetUri.fsPath, mediaType),
-      );
+      try {
+        const probe = await mediaRuntimeService.probe(targetUri.fsPath);
+        const lines = [
+          i18n.t('neko.tools.mediaInfo.file', path.basename(targetUri.fsPath)),
+          i18n.t('neko.tools.mediaInfo.duration', probe.duration.toFixed(3)),
+          i18n.t('neko.tools.mediaInfo.codec', probe.codec),
+          ...(probe.width > 0 && probe.height > 0
+            ? [i18n.t('neko.tools.mediaInfo.resolution', `${probe.width}×${probe.height}`)]
+            : []),
+          ...(probe.fps > 0
+            ? [i18n.t('neko.tools.mediaInfo.frameRate', probe.fps.toFixed(3))]
+            : []),
+          ...(probe.audioSampleRate
+            ? [i18n.t('neko.tools.mediaInfo.sampleRate', probe.audioSampleRate)]
+            : []),
+        ];
+        await vscode.window.showInformationMessage(lines.join(' · '));
+      } catch (error) {
+        await errorHandler.handleError(error instanceof Error ? error : new Error(String(error)), {
+          showToUser: true,
+          severity: 'error',
+        });
+      }
     }),
   );
 }

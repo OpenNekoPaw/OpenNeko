@@ -16,6 +16,7 @@ if (forwardedArguments.includes('--coverage')) {
 nodeArguments.push(
   fileURLToPath(new URL('./manifest.test.mjs', import.meta.url)),
   fileURLToPath(new URL('../src/ai-host-runtime.test.ts', import.meta.url)),
+  fileURLToPath(new URL('../src/media-host-runtime.test.ts', import.meta.url)),
   fileURLToPath(new URL('../src/scoped-extension-context.test.ts', import.meta.url)),
 );
 

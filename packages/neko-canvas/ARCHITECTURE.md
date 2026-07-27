@@ -130,12 +130,15 @@ Group。`.nkc` 始终是布局权威。
 
 ## 运行边界
 
-- Extension Host：文件 IO、路径授权、CustomEditor 生命周期、资源解析。
-- Webview：交互、可恢复 UI 状态、浏览器渲染和授权媒体消费。
-- Rust Engine：媒体 probe、capture、stream 和编解码。
+- Extension Host：文件 IO、路径授权、CustomEditor 生命周期、资源解析，以及
+  `NodeMediaRuntime` 的 probe、capture、按需 remux/transcode 和 PCM session。
+- Webview：交互、可恢复 UI 状态、原生 `<video>` 渲染和授权 PCM 消费。
 - Agent/Job service：AI 调度、provider、任务生命周期和结果事实。
 
-运行时 Webview URI、blob、cache/temp path 和 Engine token 不得写入 `.nkc`。
+H.264、VP8 等 Webview 可直接播放的视频优先通过授权 URI 或按需代理读取；
+其他格式由 Node/FFmpeg adapter remux 或转码。音频统一由 PCM descriptor 和
+`PcmAudioClient` 消费，Canvas playback store 负责跨 surface 的播放状态交接。
+运行时 Webview URI、blob、cache/temp path 和媒体 session token 不得写入 `.nkc`。
 资源不可用时返回明确 diagnostic，不以空节点、旧 renderer 或 no-op 表示成功。
 
 ## 验证

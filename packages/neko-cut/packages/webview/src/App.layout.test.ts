@@ -136,19 +136,89 @@ describe('Cut OTIO Webview boundary', () => {
   });
 
   it('keeps preview stream ownership in the controller layer and consumes all audio streams', () => {
-    expect(app).toMatch(/EngineAvStreamLifecycle/);
+    expect(app).toMatch(/CutHtmlVideoClient/);
+    expect(app).toMatch(/CutPcmAudioClient/);
+    expect(app).toMatch(/CutPreviewClock/);
     expect(app).toMatch(/PreviewAudioContextOwner/);
     expect(app).toMatch(/contextForConnection\(\)/);
-    expect(app).toMatch(/\{ audioContext \}/);
-    expect(app).toMatch(/additionalAudioStreamUrls\.map/);
-    expect(app).toMatch(/new AudioStreamClient/);
-    expect(app).toMatch(/frame\.timestamp \/ 1_000_000/);
-    expect(app).toMatch(/setClockPlaybackRate\(message\.mediaPlaybackRate \?\? 1\)/);
+    expect(app).toMatch(/message\.audioStreams\.map/);
+    expect(app).toMatch(/new CutPcmAudioClient/);
+    expect(app).toMatch(/previewClockRef\.current\?\.read\(\)/);
+    expect(app).not.toMatch(/EngineAvStreamLifecycle|AudioStreamClient/);
     expect(app).toMatch(/timelineEndSeconds: prepared\.playbackEndSeconds/);
-    expect(app).toMatch(/controller\.startPreview\(playheadSeconds\)/);
+    expect(app).toMatch(/controller\.startPreview\(\s*playheadSeconds,/);
     expect(app).toMatch(/controller\.preparePreview\(playheadSeconds\)/);
     expect(app).toMatch(/controller\.activatePreview\(generation\)/);
-    expect(app.match(/controller\.startPreview\(/g)).toHaveLength(1);
+    expect(app.match(/controller\.startPreview\(/g)).toHaveLength(2);
+    expect(app).toMatch(/previewVideoClientRef\.current\?\.pause\(\)/);
+    expect(app).toMatch(/activeVideoClient\.seek\(/);
+    expect(app).toMatch(/<Timeline onOpenPackage=\{linkMediaToSelectedTrack\} onSeek=\{seek\} \/>/);
+    expect(timeline).toMatch(/onSeek: \(seconds: number\) => void/);
+    expect(timeline).toMatch(/props\.onSeek\(/);
+    expect(timeline).toMatch(/onSeek=\{props\.onSeek\}/);
+    expect(timeline).not.toMatch(/actions\.seek\(/);
+    expect(app).toMatch(/controller\.pausePreview\(\)/);
+    expect(app).toMatch(/controller\.pausePreview\(generation\)/);
+    expect(app).toMatch(/preparePreviewVideoClient\(message, attempt\)/);
+    expect(app).toMatch(/preparePreviewAudioClients\(\s*message,/);
+    expect(app).toMatch(/onEnded: \(\) => mediaPlaybackEndRef\.current\?\.\(message\.generation\)/);
+    expect(app).toMatch(
+      /onPlaybackEnd: \(\) => mediaPlaybackEndRef\.current\?\.\(message\.generation\)/,
+    );
+    expect(app).toMatch(/finishPreviewPlaybackSegment\(segment\)/);
+    expect(app).toMatch(/secondaryVideoRef=\{secondaryPreviewVideoRef\}/);
+    expect(app).toMatch(/controller\.startPreview\(\s*targetSeconds,\s*undefined,\s*'paused'/);
+
+    const connect = app.slice(
+      app.indexOf('const connectPreviewClients'),
+      app.indexOf('const activatePreparedPreview'),
+    );
+    const preparedBranch = app.slice(
+      app.indexOf("message['type'] === 'cut:preview-prepared'"),
+      app.indexOf("message['type'] === 'cut:preview-activated'"),
+    );
+    expect(preparedBranch).toContain('preparePreviewAudioClients(');
+    expect(preparedBranch).toContain('preparePreviewVideoClient(');
+    expect(preparedBranch.indexOf('preparePreviewVideoClient(')).toBeLessThan(
+      app.indexOf('activatePreparedPreview(waitingBoundary)') -
+        app.indexOf("message['type'] === 'cut:preview-prepared'"),
+    );
+    const activation = app.slice(
+      app.indexOf("message['type'] === 'cut:preview-activated'"),
+      app.indexOf('const accepted = controller.acceptHostMessage'),
+    );
+    expect(connect).not.toContain('.startAt(');
+    expect(
+      app.slice(
+        app.indexOf('const preparePreviewVideoClient'),
+        app.indexOf('const disposePreparedVideoGeneration'),
+      ),
+    ).toContain('primeForSynchronizedStart()');
+    expect(activation).not.toContain('primeForSynchronizedStart()');
+    expect(activation.indexOf('.startAt(sharedStartTime)')).toBeGreaterThan(-1);
+    expect(activation.indexOf('.startAt(sharedStartTime)')).toBeLessThan(
+      activation.indexOf('waitForAudioContextTime('),
+    );
+    expect(activation.indexOf('waitForAudioContextTime(')).toBeLessThan(
+      activation.indexOf('videoClient?.play()'),
+    );
+    expect(activation.indexOf('videoClient?.play()')).toBeLessThan(
+      activation.indexOf('playbackSegmentRef.current ='),
+    );
+    expect(activation.indexOf('setActiveVideoSlot(')).toBeLessThan(
+      activation.indexOf('videoPromotion.previous.dispose()'),
+    );
+  });
+
+  it('disposes Webview playback clients before stopping a discontinuous host preview', () => {
+    const branchStart = app.indexOf('if (clock?.discontinuity) {');
+    const branchEnd = app.indexOf('return;', branchStart);
+    const branch = app.slice(branchStart, branchEnd);
+    expect(branchStart).toBeGreaterThan(-1);
+    expect(branch).toContain('stopPlaybackClients(');
+    expect(branch.indexOf('stopPlaybackClients(')).toBeLessThan(
+      branch.indexOf('controller.stopPreview()'),
+    );
   });
 
   it('projects localized failures through the retained Toast surface only', () => {

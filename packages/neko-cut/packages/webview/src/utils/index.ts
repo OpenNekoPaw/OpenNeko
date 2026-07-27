@@ -1,4 +1,4 @@
-import { formatMediaTime } from '@neko/neko-client';
+import { formatCutMediaTime } from '@neko-cut/domain';
 
 // =============================================================================
 // ID Generation
@@ -19,14 +19,14 @@ export function generateId(): string {
  * Format seconds to MM:SS format (for timeline ruler)
  */
 export function formatTimeShort(seconds: number): string {
-  return formatMediaTime(seconds, { padMinutes: true, rollHoursIntoMinutes: true });
+  return formatCutMediaTime(seconds, { padMinutes: true, rollHoursIntoMinutes: true });
 }
 
 /**
  * Format seconds to MM:SS.ms format (for toolbar display)
  */
 export function formatTimeFull(seconds: number): string {
-  return formatMediaTime(seconds, { fractionalDigits: 2, padMinutes: true });
+  return formatCutMediaTime(seconds, { fractionalDigits: 2, padMinutes: true });
 }
 
 // =============================================================================

@@ -26,7 +26,6 @@
     "workspace"
   ],
   "extensionDependencies": [
-    "neko.neko-engine",
     "neko.neko-tools",
     "neko.neko-preview"
   ],
@@ -373,6 +372,7 @@
   "dependencies": {
     "@neko/content": "workspace:*",
     "@neko/entity": "workspace:*",
+    "@neko/media": "workspace:*",
     "@neko/search": "workspace:*",
     "@neko/shared": "workspace:*"
   },

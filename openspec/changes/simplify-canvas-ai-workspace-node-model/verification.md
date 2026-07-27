@@ -18,8 +18,8 @@ The Canvas tests cover the canonical six-node renderer registry, the 2/3/2
 user add catalog without empty Job authoring, shared toolbar/context-menu
 catalog projection, node transforms and ports, connection rendering/editing,
 shared Markdown rendering, Preview workspace, route/storyboard matrix,
-generation provenance, and the Engine/`@neko/neko-client` media path without
-native `<audio>` or `<video>` fallback.
+generation provenance, and the `@neko/media` NodeMediaRuntime path with native
+`<video>` plus PCM descriptors and no Engine fallback.
 
 ## Runtime blocker
 

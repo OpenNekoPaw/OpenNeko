@@ -33,7 +33,6 @@
   "mediaDiff.error.selectTwoFiles": "Please select exactly 2 files to compare",
   "mediaDiff.error.unsupportedType": "Unsupported media type",
   "mediaDiff.error.typeMismatch": "Selected files must have the same media type",
-  "mediaDiff.error.engineUnavailable": "neko-engine extension not available. Install it for media diff analysis.",
   "assetDiff.title": "Asset Variant Diff",
   "assetDiff.loading": "Loading...",
   "assetDiff.analyzing": "Analyzing...",

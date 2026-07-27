@@ -7,9 +7,9 @@ const appRoot = resolve(import.meta.dirname, '..');
 const repoRoot = resolve(appRoot, '../..');
 const manifest = readJson(resolve(appRoot, 'package.json'));
 const groups = readJson(resolve(repoRoot, 'scripts/package-groups.json'));
+const compositionSource = readFileSync(resolve(appRoot, 'src/extension.ts'), 'utf8');
 
 const retainedReleaseExtensions = [
-  'neko-engine',
   'neko-tools',
   'neko-preview',
   'neko-assets',
@@ -34,6 +34,22 @@ test('OpenNeko is the single runtime extension rather than an extension pack', (
   assert.equal(manifest.extensionPack, undefined);
   assert.equal(manifest.extensionDependencies, undefined);
   assert.ok(!manifest.categories.includes('Extension Packs'));
+});
+
+test('product composition excludes Engine and poisons every retired media command', () => {
+  assert.doesNotMatch(compositionSource, /^\s*['"]neko-engine['"],?\s*$/mu);
+  assert.match(
+    compositionSource,
+    /const RETIRED_FEATURE_IDS = Object\.freeze\(\['neko\.neko-engine'\]\)/u,
+  );
+  for (const command of [
+    'neko.engine.ensureFrameServer',
+    'neko.engine.extractThumbnail',
+    'neko.engine.probeInternal',
+  ]) {
+    assert.match(compositionSource, new RegExp(command.replaceAll('.', '\\.'), 'u'));
+  }
+  assert.match(compositionSource, /Retired media command \$\{command\} cannot be used/u);
 });
 
 function readJson(path) {

@@ -16,13 +16,13 @@ describe('EmbeddedFeatureRegistry', () => {
     const registry = new EmbeddedFeatureRegistry();
     let activations = 0;
     registry.register({
-      id: 'neko.neko-engine',
-      extensionUri: uri('/features/neko-engine'),
-      packageJSON: { name: 'neko-engine' },
+      id: 'neko.neko-tools',
+      extensionUri: uri('/features/neko-tools'),
+      packageJSON: { name: 'neko-tools' },
       activate: () => ({ activation: ++activations }),
     });
 
-    const extension = registry.requireExtension('neko.neko-engine');
+    const extension = registry.requireExtension('neko.neko-tools');
     expect(extension.isActive).toBe(false);
     expect(await extension.activate()).toEqual({ activation: 1 });
     expect(await extension.activate()).toEqual({ activation: 1 });
@@ -55,7 +55,7 @@ describe('EmbeddedFeatureRegistry', () => {
   it('activates features in the requested dependency order', async () => {
     const registry = new EmbeddedFeatureRegistry();
     const activationOrder: string[] = [];
-    for (const id of ['neko.neko-engine', 'neko.neko-tools', 'neko.neko-agent']) {
+    for (const id of ['neko.neko-preview', 'neko.neko-tools', 'neko.neko-agent']) {
       registry.register({
         id,
         extensionUri: uri(`/features/${id}`),
@@ -66,15 +66,15 @@ describe('EmbeddedFeatureRegistry', () => {
       });
     }
 
-    await registry.activateAll(['neko.neko-engine', 'neko.neko-tools', 'neko.neko-agent']);
-    expect(activationOrder).toEqual(['neko.neko-engine', 'neko.neko-tools', 'neko.neko-agent']);
+    await registry.activateAll(['neko.neko-preview', 'neko.neko-tools', 'neko.neko-agent']);
+    expect(activationOrder).toEqual(['neko.neko-preview', 'neko.neko-tools', 'neko.neko-agent']);
   });
 
   it('fails visibly for duplicate, missing, and cyclic registrations', async () => {
     const registry = new EmbeddedFeatureRegistry();
     const registration = {
-      id: 'neko.neko-engine',
-      extensionUri: uri('/features/neko-engine'),
+      id: 'neko.neko-tools',
+      extensionUri: uri('/features/neko-tools'),
       packageJSON: {},
       activate: () => ({}),
     };

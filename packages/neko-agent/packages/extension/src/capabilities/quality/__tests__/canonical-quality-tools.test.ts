@@ -84,7 +84,7 @@ describe('canonical quality tools', () => {
           resourceRef: { id: 'not-a-resource-ref' },
           projectRef: {
             domain: 'cut',
-            documentUri: 'project://movie.nkv',
+            documentUri: 'project://movie.otio',
             projectRevision: 'rev-1',
           },
         },

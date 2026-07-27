@@ -53,7 +53,7 @@ describe('webview protocol parser', () => {
           asset: { path: '/workspace/neko/generated/video/shot.mp4', mediaType: 'video' },
           target: {
             kind: 'file',
-            documentUri: 'file:///workspace/edit.nkv',
+            documentUri: 'file:///workspace/edit.otio',
             expectedProjectRevision: 'revision-1',
           },
         },
@@ -62,7 +62,7 @@ describe('webview protocol parser', () => {
       payload: {
         target: {
           kind: 'file',
-          documentUri: 'file:///workspace/edit.nkv',
+          documentUri: 'file:///workspace/edit.otio',
           expectedProjectRevision: 'revision-1',
         },
       },

@@ -10,8 +10,9 @@
  */
 
 import * as vscode from 'vscode';
+import { randomUUID } from 'node:crypto';
 import * as path from 'path';
-import { getMediaType } from '@neko/shared';
+import { getMediaType } from '@neko-tools/contracts';
 import {
   createDefaultLocalResourceAccessService,
   injectLocaleAttribute,
@@ -119,6 +120,7 @@ export class MediaDiffEditorProvider implements vscode.CustomReadonlyEditorProvi
     _token: vscode.CancellationToken,
   ): Promise<void> {
     const docUri = document.uri.toString();
+    const sessionId = `media-diff-${randomUUID()}`;
 
     // Check if this is a local file comparison
     const previousUri = this.localCompareFiles.get(docUri);
@@ -159,6 +161,7 @@ export class MediaDiffEditorProvider implements vscode.CustomReadonlyEditorProvi
     webviewPanel.webview.html = this.getHtmlForWebview(
       webviewPanel.webview,
       document.uri,
+      sessionId,
       previousUri,
       requiresRecompare,
     );
@@ -166,6 +169,7 @@ export class MediaDiffEditorProvider implements vscode.CustomReadonlyEditorProvi
     const session = await this.sessionFactory.createSession({
       webviewPanel,
       documentUri: document.uri,
+      sessionId,
       previousUri,
     });
 
@@ -205,10 +209,14 @@ export class MediaDiffEditorProvider implements vscode.CustomReadonlyEditorProvi
   private getHtmlForWebview(
     webview: vscode.Webview,
     fileUri: vscode.Uri,
+    sessionId: string,
     previousUri?: vscode.Uri,
     requiresRecompare?: boolean,
   ): string {
-    const mediaType = getMediaType(fileUri.fsPath) ?? 'image';
+    const mediaType = getMediaType(fileUri.fsPath);
+    if (!mediaType) {
+      throw new Error(`Unsupported media diff file: ${fileUri.fsPath}`);
+    }
     const fileName = path.basename(fileUri.fsPath);
     const isLocalComparison = !!previousUri;
 
@@ -229,6 +237,7 @@ export class MediaDiffEditorProvider implements vscode.CustomReadonlyEditorProvi
       fileUri: fileUri.toString(),
       previousUri: previousUri?.toString(),
       requiresRecompare: requiresRecompare ?? false,
+      sessionId,
     });
 
     return `<!DOCTYPE html>

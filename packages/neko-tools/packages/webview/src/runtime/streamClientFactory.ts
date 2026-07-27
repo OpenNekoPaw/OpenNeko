@@ -1,22 +1,12 @@
-import {
-  AudioStreamClient,
-  H264StreamClient,
-  type AudioStreamClientConfig,
-  type H264StreamClientConfig,
-} from '@neko/neko-client';
+import { PcmAudioClient, type PcmAudioClientOptions } from '@neko/media/browser';
 
 export interface IMediaDiffStreamClientFactory {
-  createAudioStreamClient(config: AudioStreamClientConfig): AudioStreamClient;
-  createVideoStreamClient(config: H264StreamClientConfig): H264StreamClient;
+  createAudioClient(options: PcmAudioClientOptions): PcmAudioClient;
 }
 
 class DefaultMediaDiffStreamClientFactory implements IMediaDiffStreamClientFactory {
-  createAudioStreamClient(config: AudioStreamClientConfig): AudioStreamClient {
-    return new AudioStreamClient(config);
-  }
-
-  createVideoStreamClient(config: H264StreamClientConfig): H264StreamClient {
-    return new H264StreamClient(config);
+  createAudioClient(options: PcmAudioClientOptions): PcmAudioClient {
+    return new PcmAudioClient(options);
   }
 }
 

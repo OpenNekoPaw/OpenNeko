@@ -6,6 +6,7 @@ import {
   type ReactElement,
 } from 'react';
 import type {
+  CutClipRepresentationRequest,
   CutClipRepresentationResult,
   CutExportTaskSnapshot,
   CutUserDiagnostic,
@@ -251,10 +252,11 @@ export function useCutPresentationStoreApi(): CutPresentationStore {
 
 export function representationKey(
   revision: number,
-  clipId: string,
-  kind: CutClipRepresentationResult['kind'],
+  representation: CutClipRepresentationRequest | CutClipRepresentationResult,
 ): string {
-  return `${revision}:${clipId}:${kind}`;
+  return representation.kind === 'thumbnail'
+    ? `${revision}:${representation.clipId}:thumbnail:${representation.density}:${representation.tileIndex}`
+    : `${revision}:${representation.clipId}:waveform:${representation.peaksPerSecond}`;
 }
 
 function clamp(value: number, minimum: number, maximum: number): number {

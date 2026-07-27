@@ -74,7 +74,7 @@ Avatar Preview 必须区分两类状态：
 - Webview 直接导入 Agent runtime、VS Code API 或工作区文件系统；
 - Preview 为动作请求选择 AI provider、模型或外部上传目的地；
 - Extension/Agent 在缺失 identity 时回退到当前活动预览；
-- Rust Media Engine 承担 Avatar 模型、动作或 scene 权威。
+- owning Avatar domain service 承担模型、动作或 scene 权威；通用 Node 媒体运行时只负责媒体 probe/prepare/PCM。
 
 ## 责任与依赖边界
 
@@ -297,7 +297,7 @@ opening -> loading -> ready -> performing -> ready
 
 ### 使用 Unity 统一 Live2D、VRM 和 MMD
 
-拒绝。它会在本地 VS Code + TypeScript Webview + Rust Media Engine 产品边界外增加完整编辑器/runtime、构建链、嵌入层和许可复杂度，也不能复用现有 Preview Webview、安全模型和 Three.js 路径。
+拒绝。它会在本地 VS Code + TypeScript Webview + Node 媒体运行时产品边界外增加完整编辑器/runtime、构建链、嵌入层和许可复杂度，也不能复用现有 Preview Webview、安全模型和 Three.js 路径。
 
 ### 用 Three.js 统一渲染 Live2D
 

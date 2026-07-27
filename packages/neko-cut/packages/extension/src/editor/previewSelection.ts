@@ -9,11 +9,13 @@ export interface CutPreviewSelection {
   readonly videoClip?: TimelineClipView;
   readonly videoAudioMuted: boolean;
   readonly audioClips: readonly TimelineClipView[];
+  readonly videoSegmentEndSeconds?: number;
   readonly segmentEndSeconds: number;
   readonly playbackEndSeconds: number;
 }
 
 export const resolvePreviewPlaybackEnd = resolveTimelinePlaybackEndSeconds;
+const CUT_PREVIEW_WINDOW_SECONDS = 10;
 
 export function resolvePreviewSelection(
   view: TimelineView,
@@ -28,12 +30,19 @@ export function resolvePreviewSelection(
   }
   const videoTrack = view.tracks.find((track) => track.enabled && track.kind === 'Video');
   const videoClip = activeClips(view, 'Video', timelineTimeSeconds)[0];
+  const inputBoundarySeconds = nextInputBoundary(view, timelineTimeSeconds, playbackEndSeconds);
   return {
     timelineTimeSeconds,
     ...(videoClip ? { videoClip } : {}),
+    ...(videoClip
+      ? { videoSegmentEndSeconds: videoClip.startSeconds + videoClip.durationSeconds }
+      : {}),
     videoAudioMuted: videoTrack?.audioMuted ?? false,
     audioClips: activeClips(view, 'Audio', timelineTimeSeconds).filter((clip) => !clip.audio.muted),
-    segmentEndSeconds: nextInputBoundary(view, timelineTimeSeconds, playbackEndSeconds),
+    segmentEndSeconds: Math.min(
+      inputBoundarySeconds,
+      timelineTimeSeconds + CUT_PREVIEW_WINDOW_SECONDS,
+    ),
     playbackEndSeconds,
   };
 }

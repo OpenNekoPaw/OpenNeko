@@ -95,13 +95,6 @@ export {
   buildPluginSlashCommandCommand,
   type PluginSlashCommandCommandInput,
 } from './extension-command-contract';
-export {
-  NEKO_ENGINE_CLIENT_TIMEOUT_MS,
-  NEKO_ENGINE_ENSURE_FRAME_SERVER_COMMAND,
-  NEKO_ENGINE_EXTENSION_ID,
-  isNekoEngineFrameServerResult,
-  type NekoEngineFrameServerResult,
-} from './engine-bridge-contract';
 export type {
   AgentHostKind,
   AgentHostRouteCoverageDiagnostic,

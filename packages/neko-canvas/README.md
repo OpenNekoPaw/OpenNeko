@@ -48,6 +48,11 @@ remain status/open-source surfaces and are not interpreted as executable content
 Canvas does not infer Storyboard, branching Narrative, Character behavior, or Job
 execution from Markdown, positions, or legacy fields.
 
+Media preview uses the shared `@neko/media` ports. The Extension Host owns
+Node/FFmpeg probe, capture, on-demand remux/transcode, and PCM sessions; the
+Webview consumes authorized native `<video>` and PCM descriptors. No Engine
+client or legacy media fallback participates in this path.
+
 ## Source Input
 
 - Image, audio, and video sources create `media`.

@@ -16,7 +16,7 @@
 import type { IRafScheduler } from '../../../runtime/rafScheduler';
 
 /** Frame source accepted by renderPair: VideoFrame (streaming) or ImageBitmap (static) */
-export type DiffFrame = VideoFrame | ImageBitmap;
+export type DiffFrame = VideoFrame | ImageBitmap | HTMLVideoElement;
 
 export type DiffMode = 'side-by-side' | 'curtain' | 'heatmap' | 'flicker';
 
@@ -155,8 +155,14 @@ function getFrameDimensions(frame: DiffFrame): { w: number; h: number } {
     // VideoFrame
     return { w: frame.displayWidth, h: frame.displayHeight };
   }
-  // ImageBitmap
+  if (frame instanceof HTMLVideoElement) {
+    return { w: frame.videoWidth, h: frame.videoHeight };
+  }
   return { w: frame.width, h: frame.height };
+}
+
+function closeFrame(frame: DiffFrame): void {
+  if (!(frame instanceof HTMLVideoElement)) frame.close();
 }
 
 // ─── DiffRenderer ────────────────────────────────────────────────────────────
@@ -268,8 +274,8 @@ export class DiffRenderer {
   /** Render a paired frame. Uploads textures and draws. Closes frames after upload. */
   renderPair(frameA: DiffFrame, frameB: DiffFrame): void {
     if (this.disposed) {
-      frameA.close();
-      frameB.close();
+      closeFrame(frameA);
+      closeFrame(frameB);
       return;
     }
 
@@ -287,13 +293,13 @@ export class DiffRenderer {
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, this.texA);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, frameA);
-    frameA.close();
+    closeFrame(frameA);
 
     // Upload frame B → texture unit 1
     gl.activeTexture(gl.TEXTURE1);
     gl.bindTexture(gl.TEXTURE_2D, this.texB);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, frameB);
-    frameB.close();
+    closeFrame(frameB);
 
     this.draw();
   }
@@ -305,7 +311,7 @@ export class DiffRenderer {
    */
   renderSingle(frame: DiffFrame, side: 'A' | 'B'): void {
     if (this.disposed) {
-      frame.close();
+      closeFrame(frame);
       return;
     }
 
@@ -325,7 +331,7 @@ export class DiffRenderer {
       gl.bindTexture(gl.TEXTURE_2D, this.texB);
     }
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, frame);
-    frame.close();
+    closeFrame(frame);
 
     this.draw();
   }

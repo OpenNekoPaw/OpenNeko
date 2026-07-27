@@ -1,10 +1,12 @@
 # ADR: Cut OTIO 工程、VS Code 精简与 Desktop 媒体迁移边界
 
-状态：Accepted（目标架构，尚未实施）
+状态：Superseded / Historical（2026-07-26）
 日期：2026-07-22
 范围：`neko-cut`、`apps/neko-vscode`、拟议中的 `apps/neko-desktop`、`@neko/host`、`@neko/neko-client`、`neko-engine`、OTIO 工程、媒体文件访问、PCM 预览和 FFmpeg 导出。
 
 本文记录 Cut 从 NKV/NKC 和宽功能面收敛为 OTIO 轻量剪辑器的目标架构，并定义 VS Code 与 Desktop 仅在媒体运行时 adapter 上分化的过渡边界。它补充 [`package-boundaries.md`](package-boundaries.md)、[`webview-media-security.md`](webview-media-security.md) 和 [`adr-neko-desktop-composition-and-open-source-reference-boundary.md`](adr-neko-desktop-composition-and-open-source-reference-boundary.md)。
+
+后续决策（2026-07-27）：本文关于 Desktop WebCodecs 主路径、VS Code 长期保留 Engine、严格 H.264/8-bit/SDR media profile、宿主媒体 runtime 分化和不建设代理关系的目标，已被 [`adr-cut-html-video-node-ffmpeg-media-runtime-boundary.md`](adr-cut-html-video-node-ffmpeg-media-runtime-boundary.md) 取代。本文的 OTIO 工程、轻量产品面、host-neutral ports、显式 identity、媒体数据不走普通 IPC、fail-visible 和无双实现 fallback 约束继续有效。
 
 本文取代以下尚未实施或已不再成立的目标：
 
@@ -28,13 +30,13 @@
 
 ## 五层分析
 
-| 层 | 决策 |
-| --- | --- |
-| 职责 | Cut Core 拥有 OTIO 文档、编辑命令和能力验证；宿主 adapter 只拥有文件授权、媒体预览和导出执行。 |
+| 层   | 决策                                                                                                               |
+| ---- | ------------------------------------------------------------------------------------------------------------------ |
+| 职责 | Cut Core 拥有 OTIO 文档、编辑命令和能力验证；宿主 adapter 只拥有文件授权、媒体预览和导出执行。                     |
 | 依赖 | Webview 依赖 Cut Core/browser contract，不依赖 VS Code API、Node、Engine DTO 或 Electron；宿主实现依赖公共小接口。 |
-| 接口 | 文件、probe、预览、PCM 和导出分别使用小接口；不以一个宽泛 MediaService 重新聚合全部职责。 |
-| 扩展 | VS Code 与 Desktop 是两个显式 composition root；新增宿主只能实现相同 contract，不能增加第二种项目事实。 |
-| 测试 | 同一 OTIO fixture 和媒体 profile 必须在两个宿主验证编辑结果、时长、seek、A/V 同步和导出边界。 |
+| 接口 | 文件、probe、预览、PCM 和导出分别使用小接口；不以一个宽泛 MediaService 重新聚合全部职责。                          |
+| 扩展 | VS Code 与 Desktop 是两个显式 composition root；新增宿主只能实现相同 contract，不能增加第二种项目事实。            |
+| 测试 | 同一 OTIO fixture 和媒体 profile 必须在两个宿主验证编辑结果、时长、seek、A/V 同步和导出边界。                      |
 
 ## 决策
 
@@ -177,12 +179,12 @@ FFmpeg/FFprobe 使用应用打包并校验的固定版本；系统 FFmpeg 只允
 
 Extension/Electron bridge 只传控制面：授权、descriptor、play、pause、seek、job、progress、cancel 和 diagnostic。媒体二进制不得编码为 Base64 或通过普通 `postMessage` 大块传递。
 
-| 数据 | 通道 |
-| --- | --- |
-| 视频输入字节 | localhost HTTP Range、Electron custom protocol 或等价 bounded source |
-| PCM | localhost binary WebSocket 或等价有背压二进制通道 |
-| 工程/命令/状态 | 类型化 host bridge / IPC |
-| 导出文件 | Host 分配的临时输出和原子提交 |
+| 数据           | 通道                                                                 |
+| -------------- | -------------------------------------------------------------------- |
+| 视频输入字节   | localhost HTTP Range、Electron custom protocol 或等价 bounded source |
+| PCM            | localhost binary WebSocket 或等价有背压二进制通道                    |
+| 工程/命令/状态 | 类型化 host bridge / IPC                                             |
+| 导出文件       | Host 分配的临时输出和原子提交                                        |
 
 文件服务复用现有 PDF/CBZ/EPUB Node transport 已验证的 token、loopback、HEAD/CORS/PNA、stream、撤销和 dispose 机制，但公共内核不能属于 Preview 包。EPUB entry、文档 MIME 和 viewer 行为继续留在文档领域。
 
@@ -194,19 +196,19 @@ Extension/Electron bridge 只传控制面：授权、descriptor、play、pause�
 
 直接编辑白名单：
 
-| 类别 | Cut v1 限制 |
-| --- | --- |
-| 容器 | MP4 |
-| 视频 | H.264/AVC、8-bit、YUV 4:2:0、SDR、逐行 |
-| 分辨率 | 最大 1920 x 1080 |
-| 帧率 | CFR；24/25/30/50/60 及对应常见 NTSC rate |
-| 内嵌音频 | AAC-LC、44.1/48 kHz、mono/stereo |
-| 独立音频 | WAV PCM、44.1/48 kHz、mono/stereo |
-| 前端 PCM | f32le、48 kHz、stereo |
+| 类别     | Cut v1 限制                              |
+| -------- | ---------------------------------------- |
+| 容器     | MP4                                      |
+| 视频     | H.264/AVC、8-bit、YUV 4:2:0、SDR、逐行   |
+| 分辨率   | 最大 1920 x 1080                         |
+| 帧率     | CFR；24/25/30/50/60 及对应常见 NTSC rate |
+| 内嵌音频 | AAC-LC、44.1/48 kHz、mono/stereo         |
+| 独立音频 | WAV PCM、44.1/48 kHz、mono/stereo        |
+| 前端 PCM | f32le、48 kHz、stereo                    |
 
 VFR、HDR、10-bit、4:2:2/4:4:4、interlaced、多视频 stream、多声道、DRM、损坏时间戳和未知 duration 明确拒绝。
 
-Desktop 可以提供“转换导入”，用 FFmpeg 把 MOV/MKV/WebM/MP3/FLAC 等转换为项目 `media/` 下符合 profile 的 MP4/WAV；转换后的文件成为 OTIO 正式引用和导出来源。第一阶段不建设 proxy/original relink 或高质量原片回套。VS Code 在未接入同一转换 job 前只显示 actionable diagnostic，不建立第二套转换器。
+Desktop 可以提供“转换导入”，用 FFmpeg 把 MOV/MKV/MP3/FLAC 等转换为项目 `media/` 下符合 profile 的 MP4/WAV；转换后的文件成为 OTIO 正式引用和导出来源。第一阶段不建设 proxy/original relink 或高质量原片回套。VS Code 在未接入同一转换 job 前只显示 actionable diagnostic，不建立第二套转换器。
 
 ### 10. 第一阶段导出只有一个媒体 profile
 

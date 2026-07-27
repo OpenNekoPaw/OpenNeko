@@ -24,26 +24,6 @@
       "outputs": ["dist/**", "out/**"],
       "cache": true
     },
-    "@neko-engine/host-napi#build:native": {
-      "dependsOn": [],
-      "outputs": ["neko-engine.*.node"],
-      "cache": false
-    },
-    "@neko-engine/host-cli#build:native": {
-      "dependsOn": [],
-      "outputs": [],
-      "cache": false
-    },
-    "neko-engine#build": {
-      "dependsOn": ["^build"],
-      "outputs": ["dist/**"],
-      "cache": false
-    },
-    "neko-engine#compile": {
-      "dependsOn": ["@neko-engine/host-napi#build:native", "^build"],
-      "outputs": ["dist/**"],
-      "cache": true
-    },
     "neko-preview#build": {
       "dependsOn": ["@neko/preview-webview#build", "^build"],
       "outputs": ["dist/**"],
@@ -55,22 +35,22 @@
       "cache": true
     },
     "neko-cut#compile": {
-      "dependsOn": ["neko-engine#compile", "neko-tools#compile", "@neko/webview#build"],
+      "dependsOn": ["neko-tools#compile", "@neko/webview#build"],
       "outputs": ["dist/**", "out/**"],
       "cache": true
     },
     "neko-canvas#compile": {
-      "dependsOn": ["neko-engine#compile", "neko-tools#compile"],
+      "dependsOn": ["neko-tools#compile"],
       "outputs": ["dist/**", "out/**"],
       "cache": true
     },
     "neko-agent#compile": {
-      "dependsOn": ["neko-engine#compile", "neko-tools#compile"],
+      "dependsOn": ["neko-tools#compile"],
       "outputs": ["dist/**", "out/**"],
       "cache": true
     },
     "neko-assets#compile": {
-      "dependsOn": ["neko-engine#compile", "neko-tools#compile"],
+      "dependsOn": ["neko-tools#compile"],
       "outputs": ["dist/**", "out/**"],
       "cache": true
     },

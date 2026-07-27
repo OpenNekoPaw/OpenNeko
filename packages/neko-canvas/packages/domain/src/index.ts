@@ -10,3 +10,10 @@ export {
   type CanvasWorkspaceBoardMutationPort,
   type WorkspaceBoardDeliveryCoordinatorOptions,
 } from './workspace-board-delivery-coordinator';
+export type {
+  CanvasBatchOperation,
+  CanvasEditOperation,
+  CanvasNodeUpdateOperation,
+  CanvasOperationMeta,
+  CanvasOperationSource,
+} from './edit-operations';

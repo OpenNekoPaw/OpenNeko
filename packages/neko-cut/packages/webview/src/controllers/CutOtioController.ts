@@ -1,10 +1,12 @@
-import { isCutUserDiagnostic } from '@neko-cut/domain';
+import { CUT_THUMBNAIL_DENSITIES, isCutUserDiagnostic } from '@neko-cut/domain';
 import type {
   CutClipRepresentationRequest,
   CutClipRepresentationResult,
   CutCommand,
   CutExportTaskSnapshot,
   CutExportSettings,
+  CutHtmlVideoDescriptor,
+  CutPcmStreamDescriptor,
   OtioTrackKind,
   TimelineView,
 } from '@neko-cut/domain';
@@ -79,6 +81,8 @@ export type CutWebviewIntent =
       readonly type: 'cut:preview-start';
       readonly timelineTimeSeconds: number;
       readonly generation: number;
+      readonly retainedVideoClipId?: string;
+      readonly playbackMode: 'playing' | 'paused';
     } & CutIdentity)
   | ({
       readonly type: 'cut:preview-prepare';
@@ -86,6 +90,11 @@ export type CutWebviewIntent =
       readonly generation: number;
     } & CutIdentity)
   | ({ readonly type: 'cut:preview-activate'; readonly generation: number } & CutIdentity)
+  | ({
+      readonly type: 'cut:preview-pause';
+      readonly generation: number;
+      readonly preparedGeneration?: number;
+    } & CutIdentity)
   | ({ readonly type: 'cut:preview-stop'; readonly generation: number } & CutIdentity)
   | ({
       readonly type: 'cut:request-representations';
@@ -110,9 +119,20 @@ export interface CutPreviewReadyMessage extends Record<string, unknown> {
   readonly width: number;
   readonly height: number;
   readonly framesPerSecond: number;
-  readonly videoStreamUrl?: string;
-  readonly audioStreamUrls: readonly string[];
+  readonly video?: CutHtmlVideoDescriptor;
+  readonly videoPlaybackRate?: number;
+  readonly audioStreams: readonly CutPcmStreamDescriptor[];
   readonly audioGainsDb: readonly number[];
+  readonly audioPlayback: readonly CutPreviewAudioPlayback[];
+}
+
+export interface CutPreviewAudioPlayback {
+  readonly mediaOriginSeconds: number;
+  readonly playbackRate: number;
+  readonly positionSeconds: number;
+  readonly clipDurationSeconds: number;
+  readonly fadeInSeconds: number;
+  readonly fadeOutSeconds: number;
 }
 
 export class CutOtioController {
@@ -122,7 +142,12 @@ export class CutOtioController {
   private placementModeInitialized = false;
   private pendingSequenceTrim = false;
   private sequenceTrimMutationId?: string;
-  private deferredPreview?: { readonly timelineTimeSeconds: number; readonly generation: number };
+  private deferredPreview?: {
+    readonly timelineTimeSeconds: number;
+    readonly generation: number;
+    readonly retainedVideoClipId?: string;
+    readonly playbackMode: 'playing' | 'paused';
+  };
   private previewGeneration = 0;
 
   constructor(
@@ -249,11 +274,20 @@ export class CutOtioController {
     }));
   }
 
-  startPreview(timelineTimeSeconds: number): number {
+  startPreview(
+    timelineTimeSeconds: number,
+    retainedVideoClipId?: string,
+    playbackMode: 'playing' | 'paused' = 'playing',
+  ): number {
     const generation = ++this.previewGeneration;
     if (this.inFlightMutationId || this.mutationQueue.length > 0) {
-      this.deferredPreview = { timelineTimeSeconds, generation };
-      this.store.setState({ isPlaying: true });
+      this.deferredPreview = {
+        timelineTimeSeconds,
+        generation,
+        ...(retainedVideoClipId ? { retainedVideoClipId } : {}),
+        playbackMode,
+      };
+      if (playbackMode === 'playing') this.store.setState({ isPlaying: true });
       return generation;
     }
     this.bridge.postMessage({
@@ -261,6 +295,8 @@ export class CutOtioController {
       ...this.identity(),
       timelineTimeSeconds,
       generation,
+      ...(retainedVideoClipId ? { retainedVideoClipId } : {}),
+      playbackMode,
     });
     return generation;
   }
@@ -290,6 +326,19 @@ export class CutOtioController {
       ...this.identity(),
       generation,
     });
+  }
+
+  pausePreview(preparedGeneration?: number): number {
+    const generation = ++this.previewGeneration;
+    this.deferredPreview = undefined;
+    if (this.inFlightMutationId || this.mutationQueue.length > 0) return generation;
+    this.bridge.postMessage({
+      type: 'cut:preview-pause',
+      ...this.identity(),
+      generation,
+      ...(preparedGeneration !== undefined ? { preparedGeneration } : {}),
+    });
+    return generation;
   }
 
   stopPreview(): number {
@@ -471,6 +520,10 @@ export class CutOtioController {
       ...this.identity(),
       timelineTimeSeconds: deferred.timelineTimeSeconds,
       generation: deferred.generation,
+      ...(deferred.retainedVideoClipId
+        ? { retainedVideoClipId: deferred.retainedVideoClipId }
+        : {}),
+      playbackMode: deferred.playbackMode,
     });
   }
 
@@ -491,12 +544,9 @@ export class CutOtioController {
     this.store.setState((state) => {
       const representations = new Map(state.representations);
       for (const result of results) {
-        representations.set(
-          representationKey(currentView.revision, result.clipId, result.kind),
-          result,
-        );
+        representations.set(representationKey(currentView.revision, result), result);
       }
-      return { representations };
+      return { representations: pruneRepresentationCache(representations) };
     });
     return true;
   }
@@ -547,11 +597,11 @@ function retainRepresentations(
   }
   const retained = new Map<string, CutClipRepresentationResult>();
   for (const result of current.values()) {
-    if (result.status !== 'ready') continue;
+    if (result.status !== 'ready' && result.status !== 'partial') continue;
     const previousClip = findClipProjection(previous, result.clipId);
     const nextClip = findClipProjection(next, result.clipId);
     if (!previousClip || !nextClip || !sameRepresentationInput(previousClip, nextClip)) continue;
-    retained.set(representationKey(next.revision, result.clipId, result.kind), result);
+    retained.set(representationKey(next.revision, result), result);
   }
   return retained;
 }
@@ -592,6 +642,7 @@ function sameRepresentationInput(
   return (
     previous.trackKind === next.trackKind &&
     previous.clip.targetUrl === next.clip.targetUrl &&
+    previous.clip.startSeconds === next.clip.startSeconds &&
     previous.clip.sourceStartSeconds === next.clip.sourceStartSeconds &&
     previous.clip.durationSeconds === next.clip.durationSeconds &&
     previous.clip.playbackRate === next.clip.playbackRate
@@ -694,11 +745,77 @@ function isPreviewReadyMessage(value: Record<string, unknown>): value is CutPrev
     typeof value['width'] === 'number' &&
     typeof value['height'] === 'number' &&
     typeof value['framesPerSecond'] === 'number' &&
-    (value['videoStreamUrl'] === undefined || typeof value['videoStreamUrl'] === 'string') &&
-    Array.isArray(value['audioStreamUrls']) &&
-    value['audioStreamUrls'].every((item) => typeof item === 'string') &&
+    (value['video'] === undefined || isHtmlVideoDescriptor(value['video'])) &&
+    (value['videoPlaybackRate'] === undefined ||
+      (typeof value['videoPlaybackRate'] === 'number' &&
+        Number.isFinite(value['videoPlaybackRate']) &&
+        value['videoPlaybackRate'] > 0)) &&
+    Array.isArray(value['audioStreams']) &&
+    value['audioStreams'].every(isPcmStreamDescriptor) &&
     Array.isArray(value['audioGainsDb']) &&
-    value['audioGainsDb'].every((item) => typeof item === 'number')
+    value['audioGainsDb'].length === value['audioStreams'].length &&
+    value['audioGainsDb'].every((item) => typeof item === 'number') &&
+    Array.isArray(value['audioPlayback']) &&
+    value['audioPlayback'].length === value['audioStreams'].length &&
+    value['audioPlayback'].every(isPreviewAudioPlayback)
+  );
+}
+
+function isPreviewAudioPlayback(value: unknown): value is CutPreviewAudioPlayback {
+  return (
+    isRecord(value) &&
+    isNonNegativeFinite(value['mediaOriginSeconds']) &&
+    isPositiveFinite(value['playbackRate']) &&
+    isNonNegativeFinite(value['positionSeconds']) &&
+    isPositiveFinite(value['clipDurationSeconds']) &&
+    value['positionSeconds'] < value['clipDurationSeconds'] &&
+    isNonNegativeFinite(value['fadeInSeconds']) &&
+    value['fadeInSeconds'] <= value['clipDurationSeconds'] &&
+    isNonNegativeFinite(value['fadeOutSeconds']) &&
+    value['fadeOutSeconds'] <= value['clipDurationSeconds']
+  );
+}
+
+function isNonNegativeFinite(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0;
+}
+
+function isPositiveFinite(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0;
+}
+
+function isHtmlVideoDescriptor(value: unknown): value is CutHtmlVideoDescriptor {
+  return (
+    isRecord(value) &&
+    value['version'] === 1 &&
+    value['transport'] === 'http' &&
+    isLoopbackHttpUrl(value['url']) &&
+    typeof value['mimeType'] === 'string' &&
+    typeof value['preparationProfile'] === 'string' &&
+    isNonNegativeFinite(value['mediaTimeOriginSeconds']) &&
+    isPositiveFinite(value['durationSeconds'])
+  );
+}
+
+function isLoopbackHttpUrl(value: unknown): value is string {
+  if (typeof value !== 'string') return false;
+  try {
+    const url = new URL(value);
+    return url.protocol === 'http:' && url.hostname === '127.0.0.1';
+  } catch {
+    return false;
+  }
+}
+
+function isPcmStreamDescriptor(value: unknown): value is CutPcmStreamDescriptor {
+  return (
+    isRecord(value) &&
+    value['version'] === 1 &&
+    value['transport'] === 'http' &&
+    value['protocol'] === 'neko-pcm-f32le-v1' &&
+    typeof value['streamUrl'] === 'string' &&
+    typeof value['sampleRate'] === 'number' &&
+    typeof value['channels'] === 'number'
   );
 }
 
@@ -731,11 +848,82 @@ function isExportSettings(value: unknown): boolean {
 function isRepresentationResult(value: unknown): value is CutClipRepresentationResult {
   if (!isRecord(value) || typeof value['clipId'] !== 'string') return false;
   if (value['kind'] !== 'thumbnail' && value['kind'] !== 'waveform') return false;
-  if (value['status'] === 'unavailable') return typeof value['message'] === 'string';
+  if (value['kind'] === 'thumbnail') {
+    if (
+      !CUT_THUMBNAIL_DENSITIES.some((density) => density === value['density']) ||
+      !Number.isSafeInteger(value['tileIndex']) ||
+      typeof value['tileIndex'] !== 'number' ||
+      value['tileIndex'] < 0
+    ) {
+      return false;
+    }
+    if (value['status'] === 'unavailable') {
+      return (
+        typeof value['message'] === 'string' &&
+        isOptionalRepresentationFailureScope(value['failureScope'])
+      );
+    }
+    return (
+      value['status'] === 'ready' &&
+      typeof value['sourceTimeSeconds'] === 'number' &&
+      typeof value['dataUrl'] === 'string'
+    );
+  }
+  if (
+    !Number.isInteger(value['peaksPerSecond']) ||
+    typeof value['peaksPerSecond'] !== 'number' ||
+    value['peaksPerSecond'] < 1
+  ) {
+    return false;
+  }
+  if (value['status'] === 'unavailable') {
+    return (
+      typeof value['message'] === 'string' &&
+      isOptionalRepresentationFailureScope(value['failureScope'])
+    );
+  }
+  if (value['status'] === 'partial') {
+    return (
+      isRecord(value['waveform']) &&
+      Array.isArray(value['waveform']['peaks']) &&
+      isRecord(value['waveform']['partial']) &&
+      typeof value['waveform']['partial']['availableDurationSeconds'] === 'number' &&
+      (value['waveform']['partial']['failureScope'] === 'source' ||
+        value['waveform']['partial']['failureScope'] === 'stream' ||
+        value['waveform']['partial']['failureScope'] === 'interval') &&
+      typeof value['waveform']['partial']['message'] === 'string'
+    );
+  }
   if (value['status'] !== 'ready') return false;
-  return value['kind'] === 'thumbnail'
-    ? Array.isArray(value['thumbnails'])
-    : isRecord(value['waveform']) && Array.isArray(value['waveform']['peaks']);
+  return isRecord(value['waveform']) && Array.isArray(value['waveform']['peaks']);
+}
+
+function isOptionalRepresentationFailureScope(value: unknown): boolean {
+  return (
+    value === undefined ||
+    value === 'source' ||
+    value === 'stream' ||
+    value === 'interval' ||
+    value === 'operation'
+  );
+}
+
+const MAX_CACHED_THUMBNAIL_TILES = 256;
+
+function pruneRepresentationCache(
+  representations: Map<string, CutClipRepresentationResult>,
+): Map<string, CutClipRepresentationResult> {
+  let thumbnailCount = [...representations.values()].filter(
+    (result) => result.kind === 'thumbnail',
+  ).length;
+  if (thumbnailCount <= MAX_CACHED_THUMBNAIL_TILES) return representations;
+  for (const [key, result] of representations) {
+    if (result.kind !== 'thumbnail') continue;
+    representations.delete(key);
+    thumbnailCount -= 1;
+    if (thumbnailCount <= MAX_CACHED_THUMBNAIL_TILES) break;
+  }
+  return representations;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

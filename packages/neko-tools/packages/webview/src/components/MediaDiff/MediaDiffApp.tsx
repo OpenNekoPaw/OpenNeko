@@ -60,13 +60,13 @@ const ProgressOverlay = memo(function ProgressOverlay({
 // =============================================================================
 
 interface GitRefSelectorProps {
-  commits: Array<{
+  commits: readonly {
     hash: string;
     shortHash: string;
     subject: string;
     authorName: string;
     date: string;
-  }>;
+  }[];
   currentRef?: string;
   onChangeRef: (ref: string) => void;
   onLoadHistory: () => void;
@@ -149,13 +149,11 @@ export default function MediaDiffApp() {
     error,
     currentImageSrc,
     previousImageSrc,
-    heatmapSrc,
     currentWaveform,
     previousWaveform,
     currentFrameSrc,
     previousFrameSrc,
     commits,
-    elementThumbnails,
     streamConfig,
     initialState,
     isFetchingPrevious,
@@ -165,7 +163,6 @@ export default function MediaDiffApp() {
     sendCancel,
     sendGetFileHistory,
     sendChangeRef,
-    sendInspectElement,
     sendStreamControl,
     audioStreamConfig,
     sendAudioStreamControl,
@@ -241,12 +238,10 @@ export default function MediaDiffApp() {
           diffResult={diffResult ?? undefined}
           currentSrc={currentImageSrc ?? ''}
           previousSrc={previousImageSrc ?? ''}
-          heatmapSrc={heatmapSrc ?? undefined}
           currentFrameSrc={currentFrameSrc ?? undefined}
           previousFrameSrc={previousFrameSrc ?? undefined}
           currentWaveform={currentWaveform}
           previousWaveform={previousWaveform}
-          elementThumbnails={elementThumbnails}
           isLoading={isLoading && !progress}
           error={undefined}
           gitRef={initialState.ref ?? 'HEAD'}
@@ -254,7 +249,6 @@ export default function MediaDiffApp() {
           streamConfig={streamConfig}
           isFetchingPrevious={isFetchingPrevious}
           onTimeChange={handleTimeChange}
-          onInspectElement={sendInspectElement}
           onStreamControl={sendStreamControl}
           audioStreamConfig={audioStreamConfig}
           onAudioStreamControl={sendAudioStreamControl}

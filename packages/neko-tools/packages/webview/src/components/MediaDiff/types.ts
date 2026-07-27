@@ -1,6 +1,6 @@
 /**
  * MediaDiff Component Types
- * Adapted from neko-cut with timeline support and protocol integration
+ * Package-owned media comparison presentation types.
  */
 
 import type {
@@ -9,12 +9,11 @@ import type {
   ImageDiffDetails,
   VideoDiffDetails,
   AudioDiffDetails,
-  TimelineDiffDetails,
   MediaType,
   GitCommitInfo,
   StreamConfig,
   AudioStreamConfig,
-} from '@neko/shared';
+} from '@neko-tools/contracts';
 
 // Re-export for convenience
 export type {
@@ -23,7 +22,6 @@ export type {
   ImageDiffDetails,
   VideoDiffDetails,
   AudioDiffDetails,
-  TimelineDiffDetails,
   MediaType,
   GitCommitInfo,
   StreamConfig,
@@ -48,7 +46,6 @@ export interface BaseDiffViewerProps {
 
 export interface ImageDiffViewerProps extends BaseDiffViewerProps {
   details?: ImageDiffDetails;
-  heatmapSrc?: string;
   sliderPosition?: number;
   onSliderChange?: (position: number) => void;
   overlayOpacity?: number;
@@ -90,8 +87,8 @@ export interface VideoDiffViewerProps extends BaseDiffViewerProps {
 
 export interface AudioDiffViewerProps extends BaseDiffViewerProps {
   details?: AudioDiffDetails;
-  currentWaveform?: number[];
-  previousWaveform?: number[];
+  currentWaveform?: readonly number[];
+  previousWaveform?: readonly number[];
   currentTime?: number;
   onTimeChange?: (time: number) => void;
   playingVersion?: 'current' | 'previous' | 'both';
@@ -102,18 +99,6 @@ export interface AudioDiffViewerProps extends BaseDiffViewerProps {
   onAudioStreamControl?: (action: 'play' | 'pause' | 'seek', payload?: { time?: number }) => void;
   /** True while git show is extracting the previous version — disables Play */
   isFetchingPrevious?: boolean;
-}
-
-// =============================================================================
-// Timeline Diff Props
-// =============================================================================
-
-export interface TimelineDiffViewerProps {
-  details?: TimelineDiffDetails;
-  /** Request thumbnail for a media element */
-  onInspectElement?: (src: string) => void;
-  /** Cached element thumbnails (src → Blob URL) */
-  elementThumbnails?: Map<string, string>;
 }
 
 // =============================================================================
@@ -144,15 +129,12 @@ export interface MediaDiffViewerProps {
   diffResult?: DiffResult;
   currentSrc: string;
   previousSrc: string;
-  heatmapSrc?: string;
   /** Frame sources for video diff */
   currentFrameSrc?: string;
   previousFrameSrc?: string;
   /** Waveform data for audio diff */
-  currentWaveform?: number[];
-  previousWaveform?: number[];
-  /** Timeline element thumbnails */
-  elementThumbnails?: Map<string, string>;
+  currentWaveform?: readonly number[];
+  previousWaveform?: readonly number[];
   isLoading?: boolean;
   error?: string | null;
   gitRef?: string;
@@ -165,7 +147,6 @@ export interface MediaDiffViewerProps {
   isFetchingPrevious?: boolean;
   /** Callbacks */
   onTimeChange?: (time: number) => void;
-  onInspectElement?: (src: string) => void;
   onStreamControl?: (
     action: 'play' | 'pause' | 'seek',
     payload?: { time?: number; speed?: number },
@@ -194,6 +175,7 @@ export interface MediaDiffState {
 // =============================================================================
 
 export interface InitialState {
+  sessionId: string;
   mediaType: MediaType;
   fileName: string;
   isLocalComparison: boolean;

@@ -23,11 +23,11 @@ export interface ExportConfig {
 export interface ExportJobRequest {
   readonly documentUri: string;
   readonly config: ExportConfig;
-  readonly engineConfig: Readonly<Record<string, unknown>>;
+  readonly executionConfig: Readonly<Record<string, unknown>>;
 }
 
 export type ExportJobStage =
-  'queued' | 'enqueuing' | 'waiting-engine' | 'committing-output' | 'completed';
+  'queued' | 'enqueuing' | 'waiting-executor' | 'committing-output' | 'completed';
 
 export interface ExportJobProgress {
   readonly stage: ExportJobStage;
@@ -48,7 +48,7 @@ export interface ExportJobResult {
 export interface ExportJobSnapshot extends JobSnapshotBase<typeof EXPORT_JOB_KIND> {
   readonly request: ExportJobRequest;
   readonly progress: ExportJobProgress;
-  readonly engineJobId?: string;
+  readonly executionId?: string;
   readonly result?: ExportJobResult;
 }
 
@@ -65,8 +65,8 @@ export interface ExportJobCommandInput {
   readonly expectedRevision: number;
 }
 
-export interface ExportEngineProgress {
-  readonly engineJobId: string;
+export interface ExportExecutionProgress {
+  readonly executionId: string;
   readonly state: 'pending' | 'queued' | 'running' | 'completed' | 'cancelled' | 'error';
   readonly progress: number;
   readonly currentFrame: number;
@@ -79,20 +79,20 @@ export interface ExportEngineProgress {
   };
 }
 
-export interface ExportEnginePort {
+export interface ExportExecutorPort {
   enqueueExport(input: {
     readonly ref: ExportJobRef;
     readonly request: ExportJobRequest;
-  }): Promise<{ readonly engineJobId: string }>;
+  }): Promise<{ readonly executionId: string }>;
   describeExport(input: {
     readonly ref: ExportJobRef;
     readonly request: ExportJobRequest;
-    readonly engineJobId: string;
-  }): Promise<ExportEngineProgress>;
+    readonly executionId: string;
+  }): Promise<ExportExecutionProgress>;
   cancelExport(input: {
     readonly ref: ExportJobRef;
     readonly request: ExportJobRequest;
-    readonly engineJobId: string;
+    readonly executionId: string;
   }): Promise<void>;
 }
 
@@ -100,7 +100,7 @@ export interface ExportJobResultCommitter {
   commitExport(input: {
     readonly ref: ExportJobRef;
     readonly request: ExportJobRequest;
-    readonly progress: ExportEngineProgress;
+    readonly progress: ExportExecutionProgress;
   }): Promise<ExportJobResult>;
 }
 
@@ -117,7 +117,7 @@ export type ExportJobErrorCode =
   | 'export-job-cancel-unavailable'
   | 'export-job-reconcile-unavailable'
   | 'export-job-retry-unavailable'
-  | 'export-job-engine-identity-mismatch'
+  | 'export-job-executor-identity-mismatch'
   | 'export-job-invalid-progress'
   | 'export-job-result-invalid'
   | 'export-job-persistence-invalid';

@@ -26,7 +26,8 @@
 - 不把 Job queue/session/runtime 生命周期搬进 Canvas。
 - 不从任意 Markdown 文本猜测镜头、分支、Character 或执行状态。
 - 不保留 Basic/Professional、旧 subsystem registry 或双 renderer。
-- 不重写、替换或降级原有 Preview workspace、matrix、媒体播放和 Engine stream runtime。
+- 不重写或降级原有 Preview workspace；媒体 transport 按后续 Engine retirement
+  变更切换为共享 Node/FFmpeg runtime。
 - 不删除通用编辑或快速生成入口；快速生成只迁移执行 owner，不迁移用户能力。
 
 ## Decisions
@@ -93,7 +94,11 @@ Group 使用 `container.childIds` 和一个通用 layout policy。Scene、Artboa
 
 节点模型简化只改变 playback plan 的输入投影，不改变 Preview workspace 自身的交互与运行边界。Markdown、Media 和 Group 由 generic adapter 投影为 `CanvasPlaybackPlan`；原有 stage、route tabs、route/storyboard matrix、尺寸调整、焦点、播放控制、进度保存与 surface handoff 必须继续存在。Job 和 File 展示状态或打开来源，但不作为可播放单元。
 
-音视频播放的 canonical path 保持为 `Canvas Webview -> typed host message -> Canvas Extension -> Engine media service -> @neko/neko-client stream lifecycle`。Webview 原生 `<audio>` / `<video>` 不得成为替代实现或 fallback。复杂叙事由 owning Job 生成带 schema/version 的显式 artifact；Canvas 不从空间位置或任意 Markdown 猜测分支，但这不构成删除 matrix 或 Preview 工作区的理由。
+音视频播放的 canonical path 为
+`Canvas Webview -> typed host message -> Canvas Extension -> @neko/media NodeMediaRuntime`。
+视频消费授权的原生 `<video>` descriptor，音频统一消费 PCM descriptor；不允许
+恢复 Engine client 或旧 stream fallback。复杂叙事由 owning Job 生成带
+schema/version 的显式 artifact；Canvas 不从空间位置或任意 Markdown 猜测分支。
 
 ### 7. User-facing Canvas actions are localized
 
@@ -110,7 +115,9 @@ Canvas Webview 使用宿主 locale 投影所有用户可见的添加分组、动
 ## Risks / Trade-offs
 
 - [旧 Storyboard/Narrative 能力不再直接可编辑] → 在迁移报告中保留可读文本和稳定媒体，复杂运行图明确标为不支持，不用旧路径伪装成功。
-- [现有 Preview 输入曾依赖 Shot/Scene] → 只替换 playback input adapter 为 generic content/Job refs；保留中立的 plan、matrix、stage、控制器和 Engine stream 消费能力，并用路径测试证明旧 authoring type 未参与。
+- [现有 Preview 输入曾依赖 Shot/Scene] → 只替换 playback input adapter 为 generic
+  content/Job refs；保留中立的 plan、stage、控制器和共享 Node/FFmpeg 媒体消费能力，
+  并用路径测试证明旧 authoring type 与 Engine fallback 均未参与。
 - [Generic Markdown 减少结构化字段] → 需要确定性执行时由 Job 产出独立 schema/version artifact，不能解析自由文本。
 - [Character 暂时不可添加] → 目录不显示占位入口；角色领域 contract 落地后通过新的 capability contribution 加入。
 - [迁移可能扩大 Group/Media 节点数量] → 使用确定性 ID、坐标和 provenance，保证重复加载不重复迁移。

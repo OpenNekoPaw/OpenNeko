@@ -5,7 +5,6 @@
   "version": "0.0.1",
   "type": "module",
   "scripts": {
-    "generate": "node ../../scripts/proto-gen-ts.mjs",
     "test": "vitest"
   },
   "exports": {
@@ -22,7 +21,6 @@
     "./node/workspace-linked-media-libraries": "./src/node/workspace-linked-media-libraries.ts",
     "./project-authoring": "./src/project-authoring/index.ts",
     "./project-authoring/test-helpers": "./src/project-authoring/test-helpers.ts",
-    "./nkv": "./src/nkv/index.ts",
     "./nkc": "./src/nkc/index.ts",
     "./components": "./src/components/index.ts",
     "./content-access": "./src/content-access/index.ts",

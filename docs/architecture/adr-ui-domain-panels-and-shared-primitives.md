@@ -28,11 +28,11 @@ OpenNeko 的保留 Webview 包覆盖 Canvas、Cut、Preview、Agent、Assets 和
 典型反模式是固定面板先擦除类型、再恢复类型：
 
 ```text
-TimelineElement.animTransform.x: AnimatableProperty
+CutClipView.transform.x: number
   -> map to PropertyDefinition { id: "animTransform.x", kind: "number", value: number }
   -> PropertyPanel commits (id: string, value: PropertyValue)
   -> propertyPath.split(".") + typeof value
-  -> rebuild Partial<TimelineElement>
+  -> rebuild partial domain patch
 ```
 
 这个路径把编译期可见的领域类型降为 `string | number | boolean`，再依赖 `id` 字符串和运行时类型守卫恢复。对固定字段来说，这不是必要抽象，而是把开发错误推迟到运行时。
@@ -47,24 +47,24 @@ OpenNeko 的创作 UI 复用边界采用以下原则：
 
 这不等于取消 `PropertyPanel`。决策目标是补上第三条路径：
 
-| 路径 | 适用 | 问题/价值 |
-| ---- | ---- | --------- |
-| 通用 schema + adapter | 动态字段、插件字段、runtime 参数 | 对固定面板会类型擦除并增加反向解析 |
-| 裸 JSX | 极少量一次性 UI | 代码重复，布局和交互容易漂移 |
-| 类型化组合原语 | 固定领域面板 | 保留编译期类型，同时复用布局、控件和约束 |
+| 路径                  | 适用                             | 问题/价值                                |
+| --------------------- | -------------------------------- | ---------------------------------------- |
+| 通用 schema + adapter | 动态字段、插件字段、runtime 参数 | 对固定面板会类型擦除并增加反向解析       |
+| 裸 JSX                | 极少量一次性 UI                  | 代码重复，布局和交互容易漂移             |
+| 类型化组合原语        | 固定领域面板                     | 保留编译期类型，同时复用布局、控件和约束 |
 
 ## 可共享内容
 
 以下能力适合进入 `@neko/ui` 或共享 Webview 基础层：
 
-| 类型 | 示例 |
-| ---- | ---- |
-| 视觉原语 | Button、IconButton、Badge、Dialog、Tabs、Toolbar、Tooltip、Panel shell、Section、EmptyState |
-| 表单控件 | NumberInput、Slider、ColorPicker、Select、Switch、Checkbox、Stepper、SegmentedControl |
-| 创作控件约束 | 统一 spacing、density、disabled、focus ring、keyboard suppression、tooltip、a11y、drag affordance |
-| 主题与布局约束 | VS Code token、`--neko-*` token、radius、border、scroll container、panel resize rule |
-| 稳定低语义组合 | 属性行、分组、轴向输入、数值/颜色/选择属性行、TreeView visual shell、keyframe visual shell |
-| 测试工具 | Webview UI test utils、keyboard/focus helpers、render wrappers |
+| 类型           | 示例                                                                                              |
+| -------------- | ------------------------------------------------------------------------------------------------- |
+| 视觉原语       | Button、IconButton、Badge、Dialog、Tabs、Toolbar、Tooltip、Panel shell、Section、EmptyState       |
+| 表单控件       | NumberInput、Slider、ColorPicker、Select、Switch、Checkbox、Stepper、SegmentedControl             |
+| 创作控件约束   | 统一 spacing、density、disabled、focus ring、keyboard suppression、tooltip、a11y、drag affordance |
+| 主题与布局约束 | VS Code token、`--neko-*` token、radius、border、scroll container、panel resize rule              |
+| 稳定低语义组合 | 属性行、分组、轴向输入、数值/颜色/选择属性行、TreeView visual shell、keyframe visual shell        |
+| 测试工具       | Webview UI test utils、keyboard/focus helpers、render wrappers                                    |
 
 这些共享能力只接收 props、callbacks 和 typed data，不拥有领域状态、文件格式、Engine command、Agent runtime 或 Extension message 协议。
 
@@ -72,22 +72,22 @@ OpenNeko 的创作 UI 复用边界采用以下原则：
 
 截至 2026-06-20，`@neko/ui` 已覆盖多数基础控件，并已补齐固定面板迁移所需的低语义组合原语。固定领域面板出现 adapter 膨胀时，不能先假设“共享组件缺失”，应先审计已有原语是否被绕过。
 
-| ADR 要求 | 当前状态 | 位置 |
-| -------- | -------- | ---- |
-| `NumberInput` | 已存在 | `@neko/ui/creative` |
-| `ColorPicker` | 已存在 | `@neko/ui/creative` |
-| `Badge` | 已存在 | `@neko/ui/primitives` |
-| `Dialog` | 已存在 | `@neko/ui/primitives` |
-| `EmptyState` | 已存在 | `@neko/ui/primitives` |
-| `SegmentedControl` | 已存在 | `@neko/ui/primitives` |
-| `Checkbox` | 已存在 | `@neko/ui/primitives` |
-| `Switch` | 已存在 | `@neko/ui/primitives` |
-| `Stepper` | 已存在 | `@neko/ui/primitives` |
-| `PropertyRow`（layout-only） | 已存在 | `@neko/ui/creative`；schema-bound row 已改名为 `SchemaPropertyRow` |
-| `PanelSection` | 已存在 | `@neko/ui/creative` |
-| `AxisGroup` | 已存在 | `@neko/ui/creative`；用于 2/3/4 轴数字组 |
-| `NumberPropertyRow` / `SliderPropertyRow` / `ColorPropertyRow` / `SelectPropertyRow` | 已存在 | `@neko/ui/creative` |
-| `KeyframeButton` / `KeyframeDiamond` / `KeyframeTimeline` visual shell | 已完成语义剥离 | `@neko/ui/creative`；视觉 DTO 留在 UI 层，轨道生命周期语义由领域包投影 |
+| ADR 要求                                                                             | 当前状态       | 位置                                                                   |
+| ------------------------------------------------------------------------------------ | -------------- | ---------------------------------------------------------------------- |
+| `NumberInput`                                                                        | 已存在         | `@neko/ui/creative`                                                    |
+| `ColorPicker`                                                                        | 已存在         | `@neko/ui/creative`                                                    |
+| `Badge`                                                                              | 已存在         | `@neko/ui/primitives`                                                  |
+| `Dialog`                                                                             | 已存在         | `@neko/ui/primitives`                                                  |
+| `EmptyState`                                                                         | 已存在         | `@neko/ui/primitives`                                                  |
+| `SegmentedControl`                                                                   | 已存在         | `@neko/ui/primitives`                                                  |
+| `Checkbox`                                                                           | 已存在         | `@neko/ui/primitives`                                                  |
+| `Switch`                                                                             | 已存在         | `@neko/ui/primitives`                                                  |
+| `Stepper`                                                                            | 已存在         | `@neko/ui/primitives`                                                  |
+| `PropertyRow`（layout-only）                                                         | 已存在         | `@neko/ui/creative`；schema-bound row 已改名为 `SchemaPropertyRow`     |
+| `PanelSection`                                                                       | 已存在         | `@neko/ui/creative`                                                    |
+| `AxisGroup`                                                                          | 已存在         | `@neko/ui/creative`；用于 2/3/4 轴数字组                               |
+| `NumberPropertyRow` / `SliderPropertyRow` / `ColorPropertyRow` / `SelectPropertyRow` | 已存在         | `@neko/ui/creative`                                                    |
+| `KeyframeButton` / `KeyframeDiamond` / `KeyframeTimeline` visual shell               | 已完成语义剥离 | `@neko/ui/creative`；视觉 DTO 留在 UI 层，轨道生命周期语义由领域包投影 |
 
 因此，后续审查重点不是再抽一个通用 property interpreter，而是：
 
@@ -126,12 +126,12 @@ OpenNeko 的创作 UI 复用边界采用以下原则：
 
 以下能力默认留在 owning package：
 
-| 领域能力 | 保留原因 |
-| -------- | -------- |
+| 领域能力                                                                          | 保留原因                                                                                                             |
+| --------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
 | Cut 属性、keyframe 业务语义、preview/commit、project defaults、duration/trim 转换 | Timeline 编辑语义；keyframe 视觉控件可共享，但 `AnimatableProperty`、轨道生命周期、trim 偏移和 commit 语义留在领域内 |
-| Canvas 节点库、创建策略、连接属性、叙事节点面板 | Canvas 创作模型 |
-| Agent Chat input、模型选择、session mode、media model bar | Agent-first 工作流 |
-| Assets metadata、Entity Browser 与 Inspector action | 素材和实体生命周期 |
+| Canvas 节点库、创建策略、连接属性、叙事节点面板                                   | Canvas 创作模型                                                                                                      |
+| Agent Chat input、模型选择、session mode、media model bar                         | Agent-first 工作流                                                                                                   |
+| Assets metadata、Entity Browser 与 Inspector action                               | 素材和实体生命周期                                                                                                   |
 
 这些面板可以复用共享控件和样式，但不应为了复用而把领域状态先转换成通用 property schema，再从 string id 反向解析回领域 patch。
 
@@ -229,22 +229,22 @@ Engine/plugin/provider schema
 
 ### 领域适用矩阵
 
-| 领域面板 | 推荐路径 | 原因 |
-| -------- | -------- | ---- |
-| `neko-cut` Transform / Audio / Text | 组合原语 | 固定属性集；已删除旧 `sharedPropertyAdapter`，正常编辑路径走 typed callbacks |
-| `neko-canvas` Transform | 组合原语 | 固定属性较少，`AxisGroup` / row 即可表达 |
-| `neko-agent` provider/model selector | 领域组件 + 公共基础控件 | session/provider 语义留在 Agent，Select/Dialog 等视觉原语复用 |
-| `neko-assets` metadata/Entity Inspector | 领域组件 + 公共 layout primitive | Asset/Entity action 与事实边界由 Assets/Entity contract 拥有 |
+| 领域面板                                | 推荐路径                         | 原因                                                                         |
+| --------------------------------------- | -------------------------------- | ---------------------------------------------------------------------------- |
+| `neko-cut` Transform / Audio / Text     | 组合原语                         | 固定属性集；已删除旧 `sharedPropertyAdapter`，正常编辑路径走 typed callbacks |
+| `neko-canvas` Transform                 | 组合原语                         | 固定属性较少，`AxisGroup` / row 即可表达                                     |
+| `neko-agent` provider/model selector    | 领域组件 + 公共基础控件          | session/provider 语义留在 Agent，Select/Dialog 等视觉原语复用                |
+| `neko-assets` metadata/Entity Inspector | 领域组件 + 公共 layout primitive | Asset/Entity action 与事实边界由 Assets/Entity contract 拥有                 |
 
 ### 当前 @neko/ui 领域泄漏
 
 ADR 不只约束未来代码，也承认当前共享层已经存在少量领域语义泄漏。清理这些泄漏是 `@neko/ui` 继续作为无业务 UI 层的前置条件。
 
-| 位置 | 当前泄漏 | 处理方向 |
-| ---- | -------- | -------- |
-| `@neko/ui/primitives/context-menu-ai.ts` | `AICapability`、`agentActions`、默认文案 `发送到 Agent` 和 Agent 图标进入共享 primitives | 删除默认 Agent 文案和图标；若保留 helper，只作为无业务 menu section builder，label/icon/action 全由消费者传入；Agent 专属 helper 移至 `neko-agent` 或 owning package |
-| `@neko/ui/viewport/prediction-layer.ts` | 历史版本曾内置多个已移除领域动作 | 已改为通用基础 kind + branded/custom string；领域映射只能留在 owning package |
-| `@neko/ui/creative/keyframe-timeline.tsx` | 视觉组件曾直接消费领域轨道 DTO | 保留 keyframe visual shell；使用 UI-local 最小视觉 DTO，由保留 owning package 单向投影 |
+| 位置                                      | 当前泄漏                                                                                 | 处理方向                                                                                                                                                             |
+| ----------------------------------------- | ---------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@neko/ui/primitives/context-menu-ai.ts`  | `AICapability`、`agentActions`、默认文案 `发送到 Agent` 和 Agent 图标进入共享 primitives | 删除默认 Agent 文案和图标；若保留 helper，只作为无业务 menu section builder，label/icon/action 全由消费者传入；Agent 专属 helper 移至 `neko-agent` 或 owning package |
+| `@neko/ui/viewport/prediction-layer.ts`   | 历史版本曾内置多个已移除领域动作                                                         | 已改为通用基础 kind + branded/custom string；领域映射只能留在 owning package                                                                                         |
+| `@neko/ui/creative/keyframe-timeline.tsx` | 视觉组件曾直接消费领域轨道 DTO                                                           | 保留 keyframe visual shell；使用 UI-local 最小视觉 DTO，由保留 owning package 单向投影                                                                               |
 
 上述三项已在 `introduce-ui-composition-primitives` 变更中完成：Agent 菜单默认值改为无业务 `buildMenuSection`，prediction kind 改为可扩展 custom contract，keyframe timeline 改用 UI-local DTO。
 

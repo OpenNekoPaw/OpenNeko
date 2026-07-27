@@ -1,14 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, type RefObject } from 'react';
-import type { StreamConfig } from '@neko/shared';
-import type { AudioStreamClient, H264StreamClient } from '@neko/neko-client';
+import type { StreamConfig } from '@neko-tools/contracts';
+import type { PcmAudioClient } from '@neko/media/browser';
 import { useMediaDiffRuntime } from '../runtime/MediaDiffRuntimeContext';
-import { FramePairBuffer } from '../components/MediaDiff/streaming/FramePairBuffer';
 import { DiffRenderer, type DiffMode } from '../components/MediaDiff/streaming/DiffRenderer';
 import { getLogger } from '../utils/logger';
 
 const logger = getLogger('useVideoDiffStreaming');
-
-const SEEK_FILTER_TOLERANCE_SEC = 2.0;
+const SYNC_THRESHOLD_SECONDS = 0.08;
 
 export interface UseVideoDiffStreamingOptions {
   canvasRef: RefObject<HTMLCanvasElement | null>;
@@ -39,42 +37,20 @@ export function useVideoDiffStreaming({
   onStreamEnd,
 }: UseVideoDiffStreamingOptions): UseVideoDiffStreamingResult {
   const { streamClientFactory, rafScheduler } = useMediaDiffRuntime();
-  const rendererRef = useRef<DiffRenderer | null>(null);
-  const bufferRef = useRef<FramePairBuffer | null>(null);
-  const clientARef = useRef<H264StreamClient | null>(null);
-  const clientBRef = useRef<H264StreamClient | null>(null);
-  const audioClientRef = useRef<AudioStreamClient | null>(null);
-  const seekFilterRef = useRef<number | null>(null);
-  const onTimeUpdateRef = useRef(onTimeUpdate);
-  const onErrorRef = useRef(onError);
-  const onStreamEndRef = useRef(onStreamEnd);
-
-  useEffect(() => {
-    onTimeUpdateRef.current = onTimeUpdate;
-  }, [onTimeUpdate]);
-
-  useEffect(() => {
-    onErrorRef.current = onError;
-  }, [onError]);
-
-  useEffect(() => {
-    onStreamEndRef.current = onStreamEnd;
-  }, [onStreamEnd]);
+  const rendererRef = useRef<DiffRenderer>();
+  const currentVideoRef = useRef<HTMLVideoElement>();
+  const previousVideoRef = useRef<HTMLVideoElement>();
+  const audioClientRef = useRef<PcmAudioClient>();
+  const animationRef = useRef<number | null>(null);
 
   const seek = useCallback((time: number) => {
-    seekFilterRef.current = time;
-    bufferRef.current?.flush();
-    clientARef.current?.resetDecoder();
-    clientBRef.current?.resetDecoder();
-    audioClientRef.current?.resetClock();
+    if (currentVideoRef.current) currentVideoRef.current.currentTime = time;
+    if (previousVideoRef.current) previousVideoRef.current.currentTime = time;
   }, []);
 
   const renderStaticPair = useCallback(async (blobUrlA: string, blobUrlB: string) => {
     const renderer = rendererRef.current;
-    if (!renderer) {
-      return;
-    }
-
+    if (!renderer) return;
     const [blobA, blobB] = await Promise.all([
       fetch(blobUrlA).then((response) => response.blob()),
       fetch(blobUrlB).then((response) => response.blob()),
@@ -83,202 +59,139 @@ export function useVideoDiffStreaming({
       createImageBitmap(blobA),
       createImageBitmap(blobB),
     ]);
-
     renderer.renderPair(bitmapA, bitmapB);
   }, []);
 
   const pauseAudio = useCallback(() => {
-    audioClientRef.current?.pause();
+    currentVideoRef.current?.pause();
+    previousVideoRef.current?.pause();
+    void audioClientRef.current?.pause();
   }, []);
 
   const resumeAudio = useCallback(() => {
-    audioClientRef.current?.resume();
+    void currentVideoRef.current?.play();
+    void previousVideoRef.current?.play();
+    void audioClientRef.current?.resume();
   }, []);
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas) {
-      return;
-    }
-
-    const { port, currentStreamId, previousStreamId, currentAudioStreamId, width, height, fps } =
-      streamConfig;
-
-    logger.debug('Pipeline setup', {
-      port,
-      currentStreamId,
-      previousStreamId,
-      width,
-      height,
-      fps,
+    if (!canvas) return;
+    const renderer = new DiffRenderer({
+      canvas,
+      width: streamConfig.width,
+      height: streamConfig.height,
+      rafScheduler,
     });
-
-    const renderer = new DiffRenderer({ canvas, width, height, rafScheduler });
     renderer.setMode(diffMode);
     renderer.setSliderPosition(sliderPosition);
     rendererRef.current = renderer;
+    const currentVideo = createVideo(streamConfig.currentVideo.url, streamConfig.playbackRate);
+    const previousVideo = createVideo(streamConfig.previousVideo.url, streamConfig.playbackRate);
+    currentVideoRef.current = currentVideo;
+    previousVideoRef.current = previousVideo;
+    let disposed = false;
+    let audioClient: PcmAudioClient | undefined;
 
-    const halfFrameUs = 1_000_000 / fps / 2;
-    let pairCount = 0;
-    let singleCount = 0;
-    const buffer = new FramePairBuffer({
-      toleranceUs: halfFrameUs,
-      maxBufferSize: 10,
-      onPair: (pair) => {
-        pairCount++;
-        if (pairCount <= 3 || pairCount % 30 === 0) {
-          logger.debug(`Pair #${pairCount}`, {
-            ptsA: pair.frameA.timestamp,
-            ptsB: pair.frameB.timestamp,
-          });
+    const start = async (): Promise<void> => {
+      await Promise.all([waitForMetadata(currentVideo), waitForMetadata(previousVideo)]);
+      currentVideo.currentTime = streamConfig.startTime;
+      previousVideo.currentTime = streamConfig.startTime;
+      if (streamConfig.currentAudio) {
+        if (!audioContext) throw new Error('Media diff AudioContext requires a user gesture.');
+        audioClient = streamClientFactory.createAudioClient({
+          descriptor: streamConfig.currentAudio,
+          playbackRate: streamConfig.playbackRate,
+          volume: 1,
+          onError: (error) => onError?.(error.message),
+        });
+        await audioClient.connect(audioContext);
+        audioClientRef.current = audioClient;
+      }
+      if (disposed) return;
+      await Promise.all([currentVideo.play(), previousVideo.play()]);
+      const tick = (): void => {
+        if (disposed) return;
+        const masterTime = audioClient?.isClockReady
+          ? audioClient.getCurrentTime()
+          : currentVideo.currentTime;
+        if (Math.abs(currentVideo.currentTime - masterTime) > SYNC_THRESHOLD_SECONDS) {
+          currentVideo.currentTime = masterTime;
         }
-        renderer.renderPair(pair.frameA, pair.frameB);
-        onTimeUpdateRef.current?.(pair.frameA.timestamp / 1_000_000);
-      },
-      onSingle: (frame, side) => {
-        singleCount++;
-        if (singleCount <= 3 || singleCount % 30 === 0) {
-          logger.debug(`Single #${singleCount}`, { side, pts: frame.timestamp });
+        if (Math.abs(previousVideo.currentTime - masterTime) > SYNC_THRESHOLD_SECONDS) {
+          previousVideo.currentTime = masterTime;
         }
-        renderer.renderSingle(frame, side);
-        onTimeUpdateRef.current?.(frame.timestamp / 1_000_000);
-      },
-    });
-    bufferRef.current = buffer;
-
-    const baseUrl = `ws://127.0.0.1:${port}/v1/streams`;
-
-    const filterFrame = (frame: VideoFrame, feed: (videoFrame: VideoFrame) => void) => {
-      const seekTarget = seekFilterRef.current;
-      if (seekTarget !== null) {
-        const frameSec = frame.timestamp / 1_000_000;
-        if (Math.abs(frameSec - seekTarget) > SEEK_FILTER_TOLERANCE_SEC) {
-          frame.close();
+        if (currentVideo.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
+          renderer.renderPair(currentVideo, previousVideo);
+          onTimeUpdate?.(masterTime);
+        }
+        if (masterTime >= streamConfig.duration) {
+          onStreamEnd?.();
           return;
         }
-
-        seekFilterRef.current = null;
-      }
-
-      feed(frame);
+        animationRef.current = rafScheduler.requestFrame(tick);
+      };
+      animationRef.current = rafScheduler.requestFrame(tick);
     };
-
-    let frameCountA = 0;
-    let frameCountB = 0;
-
-    const clientA = streamClientFactory.createVideoStreamClient({
-      websocketUrl: `${baseUrl}/${currentStreamId}`,
-      width,
-      height,
-      onFrame: (frame) => {
-        frameCountA++;
-        if (frameCountA <= 5 || frameCountA % 60 === 0) {
-          logger.debug(`Frame A #${frameCountA}`, {
-            pts: frame.timestamp,
-            size: `${frame.displayWidth}x${frame.displayHeight}`,
-          });
-        }
-        filterFrame(frame, (videoFrame) => buffer.feedA(videoFrame));
-      },
-      onError: (err) => {
-        logger.error('Stream A error', err);
-        onErrorRef.current?.(err.message);
-      },
-      onConnectionChange: (connected) => {
-        logger.debug(`Stream A connection: ${connected ? 'OPEN' : 'CLOSED'}`);
-      },
-      onStreamEnd: () => {
-        logger.debug('Stream A ended (EOF)');
-        buffer.markEndOfStream('A');
-        onStreamEndRef.current?.();
-      },
+    void start().catch((error: unknown) => {
+      logger.error('Native media diff playback failed', error);
+      onError?.(error instanceof Error ? error.message : String(error));
     });
-
-    const clientB = streamClientFactory.createVideoStreamClient({
-      websocketUrl: `${baseUrl}/${previousStreamId}`,
-      width,
-      height,
-      onFrame: (frame) => {
-        frameCountB++;
-        if (frameCountB <= 5 || frameCountB % 60 === 0) {
-          logger.debug(`Frame B #${frameCountB}`, {
-            pts: frame.timestamp,
-            size: `${frame.displayWidth}x${frame.displayHeight}`,
-          });
-        }
-        filterFrame(frame, (videoFrame) => buffer.feedB(videoFrame));
-      },
-      onError: (err) => {
-        logger.error('Stream B error', err);
-        onErrorRef.current?.(err.message);
-      },
-      onConnectionChange: (connected) => {
-        logger.debug(`Stream B connection: ${connected ? 'OPEN' : 'CLOSED'}`);
-      },
-      onStreamEnd: () => {
-        logger.debug('Stream B ended (EOF)');
-        buffer.markEndOfStream('B');
-        onStreamEndRef.current?.();
-      },
-    });
-
-    clientARef.current = clientA;
-    clientBRef.current = clientB;
-
-    void clientA.connect();
-    void clientB.connect();
-
-    if (currentAudioStreamId) {
-      const audioClient = streamClientFactory.createAudioStreamClient({
-        websocketUrl: `${baseUrl}/${currentAudioStreamId}`,
-        volume: 1.0,
-        onError: (err) => {
-          logger.error('Audio error', err);
-        },
-        onConnectionChange: (connected) => {
-          logger.debug(`Audio connection: ${connected ? 'OPEN' : 'CLOSED'}`);
-        },
-        onStreamEnd: () => {
-          logger.debug('Audio stream ended (EOF)');
-        },
-      });
-
-      audioClientRef.current = audioClient;
-      void audioClient.connect(audioContext);
-    } else {
-      logger.debug('No audio stream ID — skipping audio');
-    }
-
     return () => {
-      clientA.dispose();
-      clientB.dispose();
-      audioClientRef.current?.dispose();
-      buffer.dispose();
+      disposed = true;
+      rafScheduler.cancelFrame(animationRef.current);
+      currentVideo.pause();
+      previousVideo.pause();
+      currentVideo.removeAttribute('src');
+      previousVideo.removeAttribute('src');
+      currentVideo.load();
+      previousVideo.load();
+      audioClient?.dispose();
       renderer.dispose();
-      clientARef.current = null;
-      clientBRef.current = null;
-      audioClientRef.current = null;
-      bufferRef.current = null;
-      rendererRef.current = null;
-      seekFilterRef.current = null;
+      rendererRef.current = undefined;
+      currentVideoRef.current = undefined;
+      previousVideoRef.current = undefined;
+      audioClientRef.current = undefined;
     };
   }, [audioContext, canvasRef, rafScheduler, streamClientFactory, streamConfig]);
 
-  useEffect(() => {
-    rendererRef.current?.setMode(diffMode);
-  }, [diffMode]);
-
-  useEffect(() => {
-    rendererRef.current?.setSliderPosition(sliderPosition);
-  }, [sliderPosition]);
+  useEffect(() => rendererRef.current?.setMode(diffMode), [diffMode]);
+  useEffect(() => rendererRef.current?.setSliderPosition(sliderPosition), [sliderPosition]);
 
   return useMemo(
-    () => ({
-      seek,
-      renderStaticPair,
-      pauseAudio,
-      resumeAudio,
-    }),
+    () => ({ seek, renderStaticPair, pauseAudio, resumeAudio }),
     [pauseAudio, renderStaticPair, resumeAudio, seek],
   );
+}
+
+function createVideo(url: string, playbackRate: number): HTMLVideoElement {
+  const video = document.createElement('video');
+  video.muted = true;
+  video.defaultMuted = true;
+  video.playsInline = true;
+  video.preload = 'auto';
+  video.playbackRate = playbackRate;
+  video.src = url;
+  video.load();
+  return video;
+}
+
+function waitForMetadata(video: HTMLVideoElement): Promise<void> {
+  if (video.readyState >= HTMLMediaElement.HAVE_METADATA) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    const cleanup = (): void => {
+      video.removeEventListener('loadedmetadata', loaded);
+      video.removeEventListener('error', failed);
+    };
+    const loaded = (): void => {
+      cleanup();
+      resolve();
+    };
+    const failed = (): void => {
+      cleanup();
+      reject(new Error('Media diff video metadata failed to load.'));
+    };
+    video.addEventListener('loadedmetadata', loaded, { once: true });
+    video.addEventListener('error', failed, { once: true });
+  });
 }

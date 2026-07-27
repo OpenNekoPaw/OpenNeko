@@ -11,13 +11,14 @@
 
 TimelineView + resolved workspace media
   -> host-neutral media ports
-     -> VS Code NekoEngineCutMediaAdapter
+     -> VS Code NodeFfmpegCutMediaAdapter
+        -> tokenized Range <video src> (muted) + HTTP PCM + Web Audio
 ```
 
-- `@neko-cut/domain` 只定义受限 OTIO subset、OpenNeko metadata、命令、投影、会话和媒体 port，不导入 VS Code、React 或 Engine 实现。
+- `@neko-cut/domain` 只定义受限 OTIO subset、OpenNeko metadata、命令、投影、会话和媒体 port，不导入 VS Code、React、Node 或 FFmpeg 实现。
 - Extension Host 拥有 workspace IO、`.otio`-relative 路径解析与 containment、Custom Editor 生命周期、Canvas 显式交接和媒体 adapter。
 - Webview 只消费 revisioned `TimelineView` 并发送 command intent；不得保存或回传完整工程快照。
-- Neko Engine request、job ID、播放 handle 与内部 timeline DTO 保持在 adapter 内部。
+- FFmpeg process、临时片段、loopback token 和播放 session 保持在 Node adapter 内部。
 
 ## OTIO subset
 
@@ -40,6 +41,6 @@ OpenNeko metadata 仅持久化工程 profile、稳定 `trackId`/`clipId`、分�
 ## 验证
 
 - Domain：OTIO round-trip/diagnostic、identity/link graph、命令代数、session/revision。
-- Extension：document-relative path/rebase、workspace containment、Engine probe/preview/PCM/export 生命周期、`.otio` 注册。
+- Extension：document-relative path/rebase、workspace containment、Node/FFmpeg probe/Range/PCM/export 生命周期、`.otio` 注册。
 - Webview：只读投影边界、基础布局/控制与已删除能力 absence guard。
 - 运行态：Extension Development Host + Webview CDP 场景。

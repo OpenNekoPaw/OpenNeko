@@ -1,3 +1,8 @@
+> **Superseded (2026-07-26):** `retire-neko-engine-before-node-media-rebuild`
+> replaces this change's retained Rust Engine and `@neko/neko-client` decisions.
+> This artifact is historical verification context and is not an active
+> implementation constraint.
+
 ## Why
 
 The customized workspace removes non-core products but retained Cut, Canvas, Assets, Preview, Tools, and Agent media paths still require on-demand file access, FFmpeg codec support, decoder reuse, GPU media processing, and low-latency stream transport. Replacing the existing Rust runtime with a process-per-action TypeScript wrapper would preserve basic probe/transcode operations but regress retained Range, seek, decoder-pool, GPU, and streaming behavior.

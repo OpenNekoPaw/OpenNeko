@@ -1,269 +1,367 @@
-/**
- * PreviewService - Media preview orchestration service
- *
- * Connects to neko-engine's Frame Server via EngineClient (HTTP) for:
- * - Media probing (metadata extraction)
- * - Video playback control (start/stop/seek via H.264 stream)
- * - Waveform data generation
- *
- * Architecture:
- * PreviewService → EngineClient (HTTP) → neko-engine Frame Server → Rust EngineApi
- */
-
+import * as fs from 'node:fs/promises';
+import * as path from 'node:path';
+import { randomUUID } from 'node:crypto';
 import * as vscode from 'vscode';
-import { resolveNekoExtension } from '@neko/shared/vscode/extension';
-import { EngineClient, MediaPlaybackService } from '@neko/neko-client';
-import type { PlaybackHandle } from '@neko/neko-client';
-import type {
-  PreviewManifest,
-  PreviewVariant,
-  PreviewVariantRequest,
-  RegisterPreviewAssetRequest,
-  UpdatePreviewAssetMetadataRequest,
+import {
+  DEFAULT_PANORAMA_VIEW_STATE,
+  type PreviewAssetKind,
+  type PreviewManifest,
+  type PreviewProjectionType,
+  type PreviewVariant,
+  type PreviewVariantRequest,
+  type RegisterPreviewAssetRequest,
+  type UpdatePreviewAssetMetadataRequest,
 } from '@neko/shared';
-import { getLogger } from '../utils/logger';
-
-const logger = getLogger('PreviewService');
-
-const ENGINE_EXTENSION_ID = 'neko.neko-engine';
-
+import { NodeMediaRuntime } from '@neko/media/node';
+import type {
+  HtmlVideoDescriptor,
+  HtmlVideoNativeCapabilities,
+  HtmlVideoPreparationProfile,
+  PcmStreamDescriptor,
+} from '@neko/media';
 import type { MediaInfo } from '../types/api';
+
 export type { MediaInfo } from '../types/api';
 
-// =============================================================================
-// PreviewService
-// =============================================================================
+interface PreviewAssetRecord {
+  readonly sourcePath: string;
+  readonly sessionIds: readonly string[];
+  manifest: PreviewManifest;
+}
+
+export interface PreviewPlayback {
+  readonly videoSessionId?: string;
+  readonly video?: HtmlVideoDescriptor;
+  readonly audioSessionId?: string;
+  readonly audio?: PcmStreamDescriptor;
+}
+
+export type PreviewPlaybackKind = 'video' | 'audio';
+
+export interface PreviewPlaybackOptions {
+  readonly nativeVideoCapabilities?: HtmlVideoNativeCapabilities;
+}
+
+export type PreviewMediaRuntime = Pick<
+  NodeMediaRuntime,
+  | 'probe'
+  | 'captureFrame'
+  | 'generateWaveform'
+  | 'planVideo'
+  | 'prepareVideo'
+  | 'publishFile'
+  | 'startPcm'
+  | 'stop'
+  | 'dispose'
+>;
 
 export class PreviewService implements vscode.Disposable {
-  private _client: EngineClient | null = null;
-  private _playback: MediaPlaybackService | null = null;
-  private _port: number | null = null;
-  private _disposed = false;
+  private readonly assets = new Map<string, PreviewAssetRecord>();
+  private disposed = false;
 
-  /**
-   * Try to create a PreviewService instance.
-   * Returns null if engine connection fails.
-   */
-  static async tryCreate(): Promise<PreviewService | null> {
-    const service = new PreviewService();
-    const initialized = await service.initialize();
-    if (initialized) {
-      return service;
-    }
-    await service.dispose();
-    return null;
+  static async tryCreate(): Promise<PreviewService> {
+    return new PreviewService(new NodeMediaRuntime());
   }
 
-  private constructor() {}
-
-  private async initialize(): Promise<boolean> {
-    try {
-      logger.info('Connecting to neko-engine Frame Server...');
-
-      // 1. Ensure engine extension is activated
-      const ext = resolveNekoExtension(ENGINE_EXTENSION_ID, (id) =>
-        vscode.extensions.getExtension(id),
-      );
-      if (!ext) {
-        logger.error(`OpenNeko feature ${ENGINE_EXTENSION_ID} is unavailable`);
-        return false;
-      }
-
-      if (!ext.isActive) {
-        await ext.activate();
-      }
-
-      // 2. Ensure Frame Server is running → get port
-      const result = await vscode.commands.executeCommand<{ port: number } | null>(
-        'neko.engine.ensureFrameServer',
-      );
-      if (!result) {
-        logger.error('ensureFrameServer returned null');
-        return false;
-      }
-
-      this._port = result.port;
-      this._client = new EngineClient(result.port);
-      this._playback = new MediaPlaybackService(this._client);
-      logger.info(`Connected to Frame Server on port ${this._port}`);
-
-      return true;
-    } catch (error) {
-      logger.error(`Failed to initialize: ${error instanceof Error ? error.message : error}`);
-      return false;
-    }
-  }
-
-  // =========================================================================
-  // Properties
-  // =========================================================================
+  constructor(private readonly runtime: PreviewMediaRuntime) {}
 
   get isAvailable(): boolean {
-    return this._client !== null && this._port !== null && !this._disposed;
+    return !this.disposed;
   }
-
-  get port(): number | null {
-    return this._port;
-  }
-
-  getStreamWebSocketUrl(streamId: string): string | null {
-    if (!this._playback) return null;
-    return this._playback.getStreamWebSocketUrl(streamId);
-  }
-
-  getAudioWebSocketUrl(streamId: string): string | null {
-    if (!this._playback) return null;
-    return this._playback.getAudioWebSocketUrl(streamId);
-  }
-
-  getPreviewBaseUrl(): string | null {
-    if (!this._port) return null;
-    return `http://127.0.0.1:${this._port}`;
-  }
-
-  // =========================================================================
-  // Media Probing
-  // =========================================================================
 
   async probeMedia(filePath: string): Promise<MediaInfo> {
-    if (!this._playback) throw new Error('PreviewService not available');
-    const probe = await this._playback.probeMedia(filePath);
+    const probe = await this.runtime.probe(filePath);
+    const video = probe.video;
+    const audio = probe.audioStreams[0];
     return {
-      duration: probe.duration,
-      width: probe.width,
-      height: probe.height,
-      fps: probe.fps,
-      codec: probe.codec,
-      format: probe.format,
-      bitrate: probe.bitrate,
-      hasAudio: probe.hasAudio,
-      audioCodec: probe.audioCodec,
-      audioSampleRate: probe.audioSampleRate,
-      audioChannels: probe.audioChannels,
+      duration: probe.durationSeconds,
+      width: video?.width ?? 0,
+      height: video?.height ?? 0,
+      fps: video?.framesPerSecond ?? 0,
+      codec: video?.codecName ?? audio?.codecName ?? 'unknown',
+      format: probe.formatName ?? path.extname(filePath).slice(1),
+      ...(probe.bitRate === undefined ? {} : { bitrate: probe.bitRate }),
+      hasAudio: audio !== undefined,
+      ...(audio
+        ? {
+            audioCodec: audio.codecName,
+            audioSampleRate: audio.sampleRate,
+            audioChannels: audio.channels,
+          }
+        : {}),
     };
   }
 
-  async registerPreviewAsset(request: RegisterPreviewAssetRequest): Promise<PreviewManifest> {
-    if (!this._client || this._disposed) {
-      throw new Error('PreviewService not available');
+  async startPlayback(
+    filePath: string,
+    mediaInfo: MediaInfo,
+    kind: PreviewPlaybackKind,
+    startTimeSeconds = 0,
+    playbackRate = 1,
+    options: PreviewPlaybackOptions = {},
+  ): Promise<PreviewPlayback> {
+    this.assertAvailable();
+    const remainingDuration = Math.max(0, mediaInfo.duration - startTimeSeconds);
+    if (remainingDuration <= 0) throw new Error('Preview start is outside the media duration.');
+    const video =
+      kind === 'video'
+        ? options.nativeVideoCapabilities
+          ? await this.runtime.prepareVideo(filePath, {
+              nativeCapabilities: options.nativeVideoCapabilities,
+            })
+          : await this.runtime.prepareVideo(filePath)
+        : undefined;
+    try {
+      const audio = mediaInfo.hasAudio
+        ? await this.runtime.startPcm(filePath, {
+            startTimeSeconds,
+            durationSeconds: remainingDuration,
+            playbackRate,
+          })
+        : undefined;
+      return {
+        ...(video ? { videoSessionId: video.sessionId, video: video.video } : {}),
+        ...(audio ? { audioSessionId: audio.sessionId, audio: audio.stream } : {}),
+      };
+    } catch (error) {
+      if (video) await this.runtime.stop(video.sessionId);
+      throw error;
     }
-    return this._client.registerPreviewAsset(request);
+  }
+
+  async planVideo(
+    filePath: string,
+    options: PreviewPlaybackOptions = {},
+  ): Promise<HtmlVideoPreparationProfile> {
+    this.assertAvailable();
+    return this.runtime.planVideo(filePath, {
+      ...(options.nativeVideoCapabilities
+        ? { nativeCapabilities: options.nativeVideoCapabilities }
+        : {}),
+    });
+  }
+
+  async stopPlayback(playback: {
+    readonly videoSessionId?: string;
+    readonly audioSessionId?: string;
+  }): Promise<void> {
+    const ids = [playback.videoSessionId, playback.audioSessionId].filter(
+      (value): value is string => value !== undefined,
+    );
+    await Promise.all(ids.map((id) => this.runtime.stop(id)));
+  }
+
+  async getWaveform(
+    filePath: string,
+  ): Promise<{ peaks: number[]; duration: number; sampleRate: number; partial?: boolean }> {
+    const waveform = await this.runtime.generateWaveform(filePath, { peaksPerSecond: 100 });
+    return {
+      peaks: [...waveform.peaks],
+      duration: waveform.durationSeconds,
+      sampleRate: waveform.sampleRate,
+      ...(waveform.partial ? { partial: true } : {}),
+    };
+  }
+
+  async captureFrame(filePath: string, time: number, quality = 80): Promise<string> {
+    return this.runtime.captureFrame(filePath, time, { quality });
+  }
+
+  async registerPreviewAsset(request: RegisterPreviewAssetRequest): Promise<PreviewManifest> {
+    this.assertAvailable();
+    const sourcePath = path.resolve(request.source);
+    const [metadata, probe] = await Promise.all([
+      fs.stat(sourcePath),
+      this.runtime.probe(sourcePath),
+    ]);
+    if (!metadata.isFile()) throw new Error('Preview source must be a file.');
+    const kind = request.kind ?? inferKind(sourcePath, probe.video !== undefined);
+    const published =
+      kind === 'video'
+        ? await this.runtime.prepareVideo(sourcePath)
+        : await this.runtime.publishFile(sourcePath, mimeTypeFor(sourcePath));
+    const sessionId = published.sessionId;
+    const sourceUrl = 'video' in published ? published.video.url : published.url;
+    const assetId = randomUUID();
+    const projectionType =
+      request.expectedProjection ?? inferProjection(probe.video?.width, probe.video?.height);
+    const sourceVariant: PreviewVariant = {
+      id: randomUUID(),
+      assetId,
+      role: 'source',
+      url: sourceUrl,
+      token: sessionId,
+      mimeType: mimeTypeFor(sourcePath),
+      ...(probe.video
+        ? { dimensions: { width: probe.video.width, height: probe.video.height } }
+        : {}),
+      fileSizeBytes: metadata.size,
+    };
+    const manifest: PreviewManifest = {
+      manifestVersion: 1,
+      assetId,
+      token: sessionId,
+      kind,
+      status: 'ready',
+      sourceName: path.basename(sourcePath),
+      sourceUrl,
+      projection: {
+        type: projectionType,
+        confidence: request.expectedProjection ? 'explicit' : 'heuristic',
+        source: request.expectedProjection ? 'metadata' : 'aspect-ratio',
+        ...(projectionType === 'unknown' ? { requiresConfirmation: true } : {}),
+      },
+      media: {
+        ...(probe.video
+          ? { dimensions: { width: probe.video.width, height: probe.video.height } }
+          : {}),
+        fileSizeBytes: metadata.size,
+        mimeType: mimeTypeFor(sourcePath),
+        dynamicRange: isHdrTransfer(probe.video?.color.transfer) ? 'hdr' : 'sdr',
+        ...(probe.video?.bitDepth === undefined ? {} : { bitDepth: probe.video.bitDepth }),
+        codec: {
+          ...(probe.formatName ? { container: probe.formatName } : {}),
+          ...(kind === 'image' && probe.video ? { imageFormat: probe.video.codecName } : {}),
+          ...(kind === 'video' && probe.video ? { videoCodec: probe.video.codecName } : {}),
+          ...(probe.audioStreams[0] ? { audioCodec: probe.audioStreams[0].codecName } : {}),
+          ...(probe.video?.pixelFormat ? { pixelFormat: probe.video.pixelFormat } : {}),
+          ...(probe.video?.color.space ? { colorSpace: probe.video.color.space } : {}),
+          ...(probe.durationSeconds > 0 ? { durationSecs: probe.durationSeconds } : {}),
+          ...(probe.video ? { fps: probe.video.framesPerSecond } : {}),
+          hasAudio: probe.audioStreams.length > 0,
+        },
+      },
+      defaultViewState: DEFAULT_PANORAMA_VIEW_STATE,
+      variants: [sourceVariant],
+      createdAt: new Date().toISOString(),
+    };
+    this.assets.set(assetId, { sourcePath, sessionIds: [sessionId], manifest });
+    return manifest;
   }
 
   async requestPreviewVariant(
     assetId: string,
     request: PreviewVariantRequest,
   ): Promise<PreviewVariant> {
-    if (!this._client || this._disposed) {
-      throw new Error('PreviewService not available');
+    const record = this.requireAsset(assetId);
+    const existing = record.manifest.variants.find(
+      (variant) => variant.role === request.role && request.role === 'source',
+    );
+    if (existing) return existing;
+    if (
+      request.role !== 'thumbnail' &&
+      request.role !== 'fov-crop' &&
+      request.role !== 'screenshot' &&
+      request.role !== 'proxy'
+    ) {
+      throw new Error(`Preview variant role ${request.role} is not implemented by Node media.`);
     }
-    return this._client.requestPreviewVariant(assetId, request);
+    if (request.role === 'proxy') {
+      const source = record.manifest.variants[0];
+      if (!source) throw new Error('Preview asset has no source variant.');
+      return { ...source, id: randomUUID(), role: 'proxy' };
+    }
+    const dataUrl = await this.runtime.captureFrame(record.sourcePath, 0, {
+      ...(request.width ? { width: request.width } : {}),
+      ...(request.height ? { height: request.height } : {}),
+      quality: request.quality ?? 85,
+    });
+    const variant: PreviewVariant = {
+      id: randomUUID(),
+      assetId,
+      role: request.role,
+      url: dataUrl,
+      mimeType: 'image/jpeg',
+      ...(request.width && request.height
+        ? { dimensions: { width: request.width, height: request.height } }
+        : {}),
+      ...(request.viewState ? { viewState: request.viewState } : {}),
+    };
+    record.manifest = { ...record.manifest, variants: [...record.manifest.variants, variant] };
+    return variant;
   }
 
   async updatePreviewAssetMetadata(
     assetId: string,
     request: UpdatePreviewAssetMetadataRequest,
   ): Promise<PreviewManifest> {
-    if (!this._client || this._disposed) {
-      throw new Error('PreviewService not available');
-    }
-    return this._client.updatePreviewAssetMetadata(assetId, request);
+    const record = this.requireAsset(assetId);
+    record.manifest = {
+      ...record.manifest,
+      projection: {
+        ...record.manifest.projection,
+        ...(request.projectionType
+          ? { type: request.projectionType, confidence: 'manual', source: 'manual' }
+          : {}),
+        ...(request.coverageAngle ? { coverageAngle: request.coverageAngle } : {}),
+      },
+      ...(request.defaultViewState ? { defaultViewState: request.defaultViewState } : {}),
+    };
+    return record.manifest;
   }
 
   async unregisterPreviewAsset(assetIdOrToken: string): Promise<void> {
-    if (!this._client || this._disposed) return;
-    await this._client.unregisterPreviewAsset(assetIdOrToken);
+    const record =
+      this.assets.get(assetIdOrToken) ??
+      [...this.assets.values()].find((candidate) => candidate.manifest.token === assetIdOrToken);
+    if (!record) throw new Error(`Unknown preview asset: ${assetIdOrToken}`);
+    this.assets.delete(record.manifest.assetId);
+    await Promise.all(record.sessionIds.map((id) => this.runtime.stop(id)));
   }
-
-  // =========================================================================
-  // Video Playback Control
-  // =========================================================================
-
-  async startVideoPlayback(
-    filePath: string,
-    mediaInfo: MediaInfo,
-    startTime: number = 0,
-    speed: number = 1.0,
-  ): Promise<{ videoStreamId: string | null; audioStreamId: string | null }> {
-    if (!this._playback) return { videoStreamId: null, audioStreamId: null };
-    const handle = await this._playback.startPlayback(filePath, {
-      hasAudio: mediaInfo.hasAudio,
-      startTime,
-      speed,
-    });
-    return { videoStreamId: handle.videoStreamId, audioStreamId: handle.audioStreamId };
-  }
-
-  async stopStreams(videoStreamId: string | null, audioStreamId: string | null): Promise<void> {
-    if (!this._playback) return;
-    await this._playback.stopPlayback(this.toHandle(videoStreamId, audioStreamId));
-  }
-
-  async seekStreams(
-    videoStreamId: string | null,
-    audioStreamId: string | null,
-    time: number,
-  ): Promise<void> {
-    if (!this._playback) return;
-    await this._playback.seekPlayback(this.toHandle(videoStreamId, audioStreamId), time);
-  }
-
-  async setStreamSpeed(
-    videoStreamId: string | null,
-    audioStreamId: string | null,
-    speed: number,
-  ): Promise<void> {
-    if (!this._playback) return;
-    await this._playback.setPlaybackSpeed(this.toHandle(videoStreamId, audioStreamId), speed);
-  }
-
-  async pauseStreams(videoStreamId: string | null, audioStreamId: string | null): Promise<void> {
-    if (!this._playback) return;
-    await this._playback.pausePlayback(this.toHandle(videoStreamId, audioStreamId));
-  }
-
-  async resumeStreams(videoStreamId: string | null, audioStreamId: string | null): Promise<void> {
-    if (!this._playback) return;
-    await this._playback.resumePlayback(this.toHandle(videoStreamId, audioStreamId));
-  }
-
-  // =========================================================================
-  // Audio Operations
-  // =========================================================================
-
-  async getWaveform(
-    filePath: string,
-  ): Promise<{ peaks: number[]; duration: number; sampleRate: number }> {
-    if (!this._playback) throw new Error('PreviewService not available');
-    const result = await this._playback.getWaveform(filePath);
-    return { peaks: result.peaks, duration: result.duration, sampleRate: result.sampleRate };
-  }
-
-  async captureFrame(filePath: string, time: number, quality: number = 80): Promise<string> {
-    if (!this._playback) throw new Error('PreviewService not available');
-    return this._playback.captureFrame(filePath, time, { quality });
-  }
-
-  // =========================================================================
-  // Helpers
-  // =========================================================================
-
-  private toHandle(videoStreamId: string | null, audioStreamId: string | null): PlaybackHandle {
-    return { videoStreamId, audioStreamId, videoStreamUrl: null, audioStreamUrl: null };
-  }
-
-  // =========================================================================
-  // Disposal
-  // =========================================================================
 
   async dispose(): Promise<void> {
-    if (this._disposed) return;
-    this._disposed = true;
-
-    // No need to stop Frame Server — managed by neko-engine extension
-    this._playback = null;
-    this._client = null;
-    this._port = null;
-    logger.info('PreviewService disposed');
+    if (this.disposed) return;
+    this.disposed = true;
+    this.assets.clear();
+    await this.runtime.dispose();
   }
+
+  private requireAsset(assetId: string): PreviewAssetRecord {
+    const record = this.assets.get(assetId);
+    if (!record) throw new Error(`Unknown preview asset: ${assetId}`);
+    return record;
+  }
+
+  private assertAvailable(): void {
+    if (this.disposed) throw new Error('PreviewService is disposed.');
+  }
+}
+
+function inferKind(sourcePath: string, hasVideo: boolean): PreviewAssetKind {
+  if (/\.(?:jpg|jpeg|png|webp|hdr|exr)$/iu.test(sourcePath)) return 'image';
+  return hasVideo ? 'video' : 'audio';
+}
+
+function inferProjection(
+  width: number | undefined,
+  height: number | undefined,
+): PreviewProjectionType {
+  if (!width || !height) return 'unknown';
+  const ratio = width / height;
+  if (ratio >= 1.9 && ratio <= 2.1) return 'equirectangular';
+  return 'flat';
+}
+
+function mimeTypeFor(sourcePath: string): string {
+  switch (path.extname(sourcePath).toLowerCase()) {
+    case '.jpg':
+    case '.jpeg':
+      return 'image/jpeg';
+    case '.png':
+      return 'image/png';
+    case '.webp':
+      return 'image/webp';
+    case '.webm':
+      return 'video/webm';
+    case '.mp3':
+      return 'audio/mpeg';
+    case '.wav':
+      return 'audio/wav';
+    default:
+      return 'video/mp4';
+  }
+}
+
+function isHdrTransfer(transfer: string | undefined): boolean {
+  return transfer === 'smpte2084' || transfer === 'arib-std-b67';
 }

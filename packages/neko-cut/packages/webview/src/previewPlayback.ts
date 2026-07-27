@@ -1,15 +1,34 @@
+import type { CutPreviewPreparationProfile } from '@neko-cut/domain';
+
 export interface PreviewPlaybackSegment {
   readonly timelineStartSeconds: number;
   readonly wallStartMilliseconds: number;
   readonly segmentEndSeconds: number;
   readonly timelineEndSeconds: number;
+  readonly preparationLeadSeconds?: number;
   readonly mediaClock?: {
     readonly sourceStartSeconds: number;
     readonly playbackRate: number;
   };
 }
 
-const PREVIEW_PREPARE_LEAD_SECONDS = 0.5;
+const DEFAULT_PREVIEW_PREPARE_LEAD_SECONDS = 0.5;
+const MEDIA_BOUNDARY_TOLERANCE_SECONDS = 0.05;
+
+export function previewPreparationLeadSeconds(
+  profile: CutPreviewPreparationProfile | undefined,
+): number {
+  switch (profile) {
+    case 'h264-sdr-transcode':
+      return 5;
+    case 'h264-mp4-remux':
+      return 2;
+    case 'h264-mp4-direct':
+    case 'vp8-webm-direct':
+    case undefined:
+      return DEFAULT_PREVIEW_PREPARE_LEAD_SECONDS;
+  }
+}
 
 export type PreviewPlaybackAdvance =
   | { readonly kind: 'continue'; readonly playheadSeconds: number }
@@ -41,15 +60,17 @@ export function advancePreviewPlayback(
         )
     : Math.max(0, (wallNowMilliseconds - segment.wallStartMilliseconds) / 1000);
   const nextSeconds = segment.timelineStartSeconds + elapsedSeconds;
-  if (nextSeconds >= segment.timelineEndSeconds) {
+  if (nextSeconds + MEDIA_BOUNDARY_TOLERANCE_SECONDS >= segment.timelineEndSeconds) {
     return { kind: 'timeline-end', playheadSeconds: segment.timelineEndSeconds };
   }
-  if (nextSeconds >= segment.segmentEndSeconds) {
+  if (nextSeconds + MEDIA_BOUNDARY_TOLERANCE_SECONDS >= segment.segmentEndSeconds) {
     return { kind: 'segment-boundary', playheadSeconds: segment.segmentEndSeconds };
   }
   if (
     segment.segmentEndSeconds < segment.timelineEndSeconds &&
-    nextSeconds >= segment.segmentEndSeconds - PREVIEW_PREPARE_LEAD_SECONDS
+    nextSeconds >=
+      segment.segmentEndSeconds -
+        (segment.preparationLeadSeconds ?? DEFAULT_PREVIEW_PREPARE_LEAD_SECONDS)
   ) {
     return {
       kind: 'prepare-next',

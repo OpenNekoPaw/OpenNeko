@@ -59,7 +59,6 @@ export default tseslint.config(
   // Explicit console output boundaries: the shared transport and a local manual executable.
   {
     files: [
-      'packages/neko-engine/packages/extension/src/mediaEngine/export/ExportIntegrationTest.ts',
       'packages/neko-types/src/logger/console-logger.ts',
     ],
     rules: {

@@ -26,19 +26,3 @@ export function containSourceRect(
     height,
   };
 }
-
-export function drawContainedVideoFrame(
-  context: CanvasRenderingContext2D,
-  frame: VideoFrame,
-): void {
-  const canvas = context.canvas;
-  const rect = containSourceRect(
-    frame.displayWidth,
-    frame.displayHeight,
-    canvas.width,
-    canvas.height,
-  );
-  context.fillStyle = '#000000';
-  context.fillRect(0, 0, canvas.width, canvas.height);
-  context.drawImage(frame, rect.x, rect.y, rect.width, rect.height);
-}

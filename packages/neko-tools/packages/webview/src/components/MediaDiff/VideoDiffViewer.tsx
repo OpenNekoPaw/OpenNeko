@@ -3,11 +3,11 @@
  *
  * Real-time H264 dual-stream video diff viewer.
  * Uses StreamingVideoDiffViewer for WebGL-accelerated diff rendering
- * via WebSocket H264 streams from neko-engine.
+ * via tokenized native video descriptors and PCM streams.
  */
 
 import { memo, useState, useCallback, useRef, useEffect, useMemo } from 'react';
-import { formatMediaTimeCentiseconds } from '@neko/neko-client';
+import { formatMediaTimeCentiseconds } from '@neko/media';
 import { PlayIcon, PauseIcon } from '@neko/ui/icons';
 import { Button, Slider } from '@neko/ui/primitives';
 import { useTranslation } from '../../i18n/I18nContext';
@@ -36,9 +36,9 @@ interface KeyframeDiff {
  * Merges adjacent keyframes by averaging their similarity scores.
  */
 function downsampleKeyframeDiffs(
-  keyframeDiffs: KeyframeDiff[],
+  keyframeDiffs: readonly KeyframeDiff[],
   maxCount: number = 500,
-): KeyframeDiff[] {
+): readonly KeyframeDiff[] {
   if (keyframeDiffs.length <= maxCount) {
     return keyframeDiffs;
   }
@@ -70,7 +70,7 @@ interface SeekControlsProps {
   onSeek: (time: number) => void;
   isPlaying: boolean;
   onPlayPause: () => void;
-  diffRegions?: Array<{ start: number; end: number }>;
+  diffRegions?: readonly { start: number; end: number }[];
   /** Disable Play while git show is extracting the previous version */
   isFetchingPrevious?: boolean;
 }
@@ -148,7 +148,7 @@ interface VideoDetailsProps {
     };
     fps: { current: number; previous: number };
     codec?: { current: string; previous: string };
-    keyframeDiffs?: Array<{ time: number; similarity: number }>;
+    keyframeDiffs?: readonly { time: number; similarity: number }[];
   };
 }
 
@@ -305,7 +305,7 @@ export const VideoDiffViewer = memo(function VideoDiffViewer({
       onTimeChange?.(time);
       // Local reset: arm seek filter, flush buffer, reset decoders
       streamingRef.current?.seek(time);
-      // Remote: tell extension to seek both engine streams
+      // Tell the Extension Host to replace both Node media sessions at the new time.
       onStreamControl?.('seek', { time });
     },
     [onTimeChange, onStreamControl],

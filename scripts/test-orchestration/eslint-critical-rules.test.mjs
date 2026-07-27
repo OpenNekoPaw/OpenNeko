@@ -9,7 +9,6 @@ const HOOK_ORDER_RULE = 'react-hooks/rules-of-hooks';
 const CONSOLE_RULE = 'no-console';
 const TIMING_ATTACK_RULE = 'security/detect-possible-timing-attacks';
 const CONSOLE_BOUNDARY_FILES = [
-  'packages/neko-engine/packages/extension/src/mediaEngine/export/ExportIntegrationTest.ts',
   'packages/neko-types/src/logger/console-logger.ts',
 ];
 

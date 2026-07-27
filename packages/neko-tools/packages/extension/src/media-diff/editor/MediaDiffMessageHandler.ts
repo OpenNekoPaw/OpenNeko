@@ -4,7 +4,7 @@
  * Thin dispatcher that routes webview messages to domain-specific handlers.
  * All business logic lives in `./handlers/`:
  *   - AnalysisPipeline: diff initialization, Git/local analysis orchestration
- *   - FrameOperations: seek, frame extraction, element inspection
+ *   - FrameOperations: seek and frame extraction
  *   - VisualizationHandler: image data, waveform, early extraction
  *   - StreamingController: video/audio stream lifecycle and playback control
  *
@@ -15,9 +15,15 @@
  */
 
 import * as vscode from 'vscode';
-import type { MediaDiffRequest, MediaDiffResponse } from '@neko/shared';
-import type { EngineClient } from '@neko/neko-client/EngineClient';
-import type { IScheduler } from '../../contracts/IScheduler';
+import {
+  MEDIA_DIFF_SCHEMA_VERSION,
+  type DiffResult,
+  type MediaDiffRequest,
+  type MediaDiffResponse,
+  type MediaDiffResponseDraft,
+} from '@neko-tools/contracts';
+import type { IToolsMediaRuntime } from '../../contracts/IMediaRuntimeService';
+import type { IScheduledTask, IScheduler } from '../../contracts/IScheduler';
 import type { ITempFileService } from '../../contracts/ITempFileService';
 import type { IMediaDiffService } from '../services/MediaDiffService';
 import type { IHandlerContext } from './handlers/types';
@@ -28,7 +34,6 @@ import {
   cancelCurrentAnalysis,
   handleSeek,
   handleGetFrame,
-  handleInspectElement,
   handleStartStreaming,
   handleStopStreaming,
   handleStreamControl,
@@ -52,7 +57,7 @@ export class MediaDiffMessageHandler implements vscode.Disposable, IHandlerConte
   isDisposed = false;
   readonly requestState: IMediaDiffRequestState;
   /** Cached diff result — used to avoid redundant probe calls in handleStartStreaming */
-  lastDiffResult: import('@neko/shared').DiffResult | null = null;
+  lastDiffResult: DiffResult | null = null;
   /** Last ref used for diff (for re-analysis with time range) */
   lastRef: string = 'HEAD';
   /** User-specified time range for analysis (video/audio only) */
@@ -67,60 +72,65 @@ export class MediaDiffMessageHandler implements vscode.Disposable, IHandlerConte
   currentAudioStreamId: string | null = null;
   /** Previous version audio stream ID (video mode) */
   previousAudioStreamId: string | null = null;
+  videoStreamGeneration = 0;
+  videoStreamAbortController: AbortController | null = null;
   /** Current version audio-only stream ID (audio diff mode) */
   currentAudioOnlyStreamId: string | null = null;
   /** Previous version audio-only stream ID (audio diff mode) */
   previousAudioOnlyStreamId: string | null = null;
+  audioStreamGeneration = 0;
+  audioStreamAbortController: AbortController | null = null;
 
   // ── Frame operations state ─────────────────────────────────────────
   /** Debounce timer for seek requests to avoid VideoToolbox session exhaustion */
-  seekDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+  seekDebounceTimer: IScheduledTask | null = null;
+  /** Promise settlement for the currently debounced seek. */
+  pendingSeekCompletion: {
+    readonly resolve: () => void;
+    readonly reject: (error: unknown) => void;
+  } | null = null;
   /** Pending frame extraction promises for concurrency control */
   activeFrameExtractions = 0;
 
   /** Session ID for grouping streams from this handler */
-  readonly sessionId = `diff-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  currentRequestId: string | null = null;
   private disposePromise: Promise<void> | null = null;
 
   constructor(
     readonly webview: vscode.Webview,
     readonly fileUri: vscode.Uri,
     readonly diffService: IMediaDiffService,
-    readonly engineClient: EngineClient | null,
+    readonly mediaRuntime: IToolsMediaRuntime,
     readonly scheduler: IScheduler,
     readonly tempFileService: ITempFileService,
+    readonly sessionId: string,
     readonly previousUri?: vscode.Uri,
   ) {
     this.requestState = new MediaDiffRequestState(tempFileService);
   }
 
-  // ── Public API (called by MediaDiffEditorProvider) ──────────────────
-
-  /**
-   * Initialize diff analysis
-   */
-  async initializeDiff(ref: string = 'HEAD'): Promise<void> {
-    return initializeDiff(this, ref);
-  }
-
   // ── IHandlerContext — helpers ───────────────────────────────────────
 
-  /**
-   * Assert engine client is available. Throws into caller's try/catch.
-   */
-  requireEngine(): EngineClient {
-    if (!this.engineClient) {
-      throw new Error('neko-engine not available');
-    }
-    return this.engineClient;
+  requireMediaRuntime(): IToolsMediaRuntime {
+    return this.mediaRuntime;
   }
 
   /**
    * Send message to webview (no-op if disposed).
    */
-  sendMessage(message: Partial<MediaDiffResponse>): void {
+  sendMessage(message: MediaDiffResponseDraft): void {
     if (!this.isDisposed) {
-      this.webview.postMessage(message);
+      const requestId = message.requestId ?? this.currentRequestId;
+      if (!requestId) {
+        throw new Error(`Media diff response ${message.type} has no request identity.`);
+      }
+      const response: MediaDiffResponse = {
+        ...message,
+        schemaVersion: MEDIA_DIFF_SCHEMA_VERSION,
+        sessionId: this.sessionId,
+        requestId,
+      };
+      this.webview.postMessage(response);
     }
   }
 
@@ -133,19 +143,16 @@ export class MediaDiffMessageHandler implements vscode.Disposable, IHandlerConte
     if (this.isDisposed) return;
 
     const { type, requestId } = message;
+    this.currentRequestId = requestId;
 
     try {
       switch (type) {
         case 'mediaDiff:init':
-          await initializeDiff(this, message.payload.ref);
+          await initializeDiff(this, message.payload.ref, requestId);
           break;
 
         case 'mediaDiff:initLocal':
-          await initializeLocalDiff(this);
-          break;
-
-        case 'mediaDiff:setViewMode':
-          // View mode is handled in webview, just acknowledge
+          await initializeLocalDiff(this, requestId);
           break;
 
         case 'mediaDiff:seek':
@@ -158,14 +165,9 @@ export class MediaDiffMessageHandler implements vscode.Disposable, IHandlerConte
           await handleGetFrame(this, message.payload.time, message.payload.version, requestId);
           break;
 
-        case 'mediaDiff:inspectElement':
-          // Lazy content diff: extract thumbnail for a media element
-          await handleInspectElement(this, message.payload.src, requestId);
-          break;
-
         case 'mediaDiff:cancel':
-          // Only cancel this handler's analysis, not the global service
           cancelCurrentAnalysis(this);
+          this.sendMessage({ requestId, type: 'mediaDiff:cancelled' });
           break;
 
         case 'mediaDiff:getFileHistory':
@@ -176,7 +178,7 @@ export class MediaDiffMessageHandler implements vscode.Disposable, IHandlerConte
           // Stop any active streams before switching refs to prevent resource leaks
           await handleStopStreaming(this);
           await handleStopAudioStreaming(this);
-          await initializeDiff(this, message.payload.ref);
+          await initializeDiff(this, message.payload.ref, requestId);
           break;
 
         case 'mediaDiff:setTimeRange':
@@ -187,7 +189,7 @@ export class MediaDiffMessageHandler implements vscode.Disposable, IHandlerConte
             startTime: message.payload.startTime,
             endTime: message.payload.endTime,
           };
-          await initializeDiff(this, this.lastRef);
+          await initializeDiff(this, this.lastRef, requestId);
           break;
 
         // ── Streaming lifecycle ──────────────────────────────
@@ -216,7 +218,7 @@ export class MediaDiffMessageHandler implements vscode.Disposable, IHandlerConte
           await handleAudioStreamControl(this, message.payload.action, message.payload, requestId);
           break;
       }
-    } catch {
+    } catch (error) {
       this.sendMessage({
         requestId,
         type: 'mediaDiff:error',
@@ -231,20 +233,12 @@ export class MediaDiffMessageHandler implements vscode.Disposable, IHandlerConte
    * Handle get file history request
    */
   private async handleGetFileHistory(maxCount?: number, requestId?: string): Promise<void> {
-    try {
-      const commits = await this.diffService.getFileHistory(this.fileUri, maxCount);
-      this.sendMessage({
-        requestId,
-        type: 'mediaDiff:fileHistory',
-        payload: { commits },
-      });
-    } catch {
-      this.sendMessage({
-        requestId,
-        type: 'mediaDiff:fileHistory',
-        payload: { commits: [] },
-      });
-    }
+    const commits = await this.diffService.getFileHistory(this.fileUri, maxCount);
+    this.sendMessage({
+      requestId,
+      type: 'mediaDiff:fileHistory',
+      payload: { commits },
+    });
   }
 
   // ── Lifecycle ──────────────────────────────────────────────────────
@@ -265,6 +259,8 @@ export class MediaDiffMessageHandler implements vscode.Disposable, IHandlerConte
       this.seekDebounceTimer.cancel();
       this.seekDebounceTimer = null;
     }
+    this.pendingSeekCompletion?.resolve();
+    this.pendingSeekCompletion = null;
     // Only cancel this handler's analysis, NOT the shared service
     cancelCurrentAnalysis(this);
 

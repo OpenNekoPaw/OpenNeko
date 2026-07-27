@@ -49,9 +49,9 @@ import {
 import { createInputProcessor, getConversationWorkDirHash, type InputProcessor } from '@neko/agent';
 import { getLogger } from '../base';
 import {
-  getEngineClientProvider,
-  type IEngineClientProvider,
-} from '../services/engineClientProvider';
+  getAgentMediaRuntimeProvider,
+  type IAgentMediaRuntimeProvider,
+} from '../services/mediaRuntimeProvider';
 import { MediaTurnBridge } from '../services/mediaTurnBridge';
 import { WorkspaceBoardProjectionHost } from '../services/workspaceBoardProjectionHost';
 import type { AgentLocalResourceAccess } from '../services/localResourceAccess';
@@ -104,7 +104,7 @@ export class AgentMessageTurnHandler {
       executionMode: 'auto' | 'ask' | 'plan',
     ) => string,
     private readonly _platform?: Platform,
-    private readonly _engineClientProvider: IEngineClientProvider = getEngineClientProvider(),
+    private readonly _mediaRuntimeProvider: IAgentMediaRuntimeProvider = getAgentMediaRuntimeProvider(),
     private readonly _localResourceAccess?: AgentLocalResourceAccess,
     private readonly _options: AgentMessageTurnHandlerOptions = {},
   ) {
@@ -210,7 +210,7 @@ export class AgentMessageTurnHandler {
         this._attachmentProcessor.processContextImageResources(resources),
       createReferencedMediaProcessor: async () =>
         new MediaPreprocessor(
-          await this._engineClientProvider.getOptionalClient(),
+          this._mediaRuntimeProvider.getRuntime(),
           getCapabilityRuntimeBindings().contentAccessRuntime,
         ),
       onReferenceError: (error) => {

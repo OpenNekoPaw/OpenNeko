@@ -90,14 +90,6 @@ package_extension() {
     return 0
   fi
 
-  # neko-engine with --target: use platform-specific packaging
-  if [ "$pkg" = "neko-engine" ] && [ -n "$TARGET_PLATFORM" ]; then
-    echo "  📦 $pkg (platform: $TARGET_PLATFORM)"
-    bash "$pkg_dir/scripts/package-platform.sh" "$TARGET_PLATFORM"
-    cp -f "$pkg_dir"/*.vsix . 2>/dev/null || true
-    return 0
-  fi
-
   echo "  📦 $pkg"
   (cd "$pkg_dir" && npx @vscode/vsce package --allow-missing-repository --no-dependencies 2>/dev/null)
   cp -f "$pkg_dir"/*.vsix . 2>/dev/null || true
@@ -114,14 +106,12 @@ package_list() {
 
 package_openneko() {
   local target="$TARGET_PLATFORM"
-  local rust_target
   if [ -z "$target" ] && ! target="$(detect_host_target)"; then
     echo "Unsupported host: $(uname -s)-$(uname -m). Pass --target for a supported build host." >&2
     return 1
   fi
   case "$target" in
-    darwin-arm64) rust_target="aarch64-apple-darwin" ;;
-    linux-x64) rust_target="x86_64-unknown-linux-gnu" ;;
+    darwin-arm64|linux-x64) ;;
     *)
       echo "Unsupported OpenNeko target: $target" >&2
       return 1
@@ -130,8 +120,6 @@ package_openneko() {
 
   echo ""
   echo "📦 Packaging OpenNeko ($target)..."
-  pnpm --dir "$SCRIPT_DIR/packages/neko-engine/packages/host-napi" run build:napi -- --target "$rust_target"
-  bash "$SCRIPT_DIR/packages/neko-engine/scripts/package-platform.sh" "$target"
   node "$SCRIPT_DIR/scripts/package-openneko-platform.mjs" --target "$target"
 }
 

@@ -1,51 +1,12 @@
 import { loadNkc, saveNkc } from '../nkc/codec';
 import { CURRENT_NKC_VERSION } from '../nkc/migrator';
-import { loadNkv, saveNkv } from '../nkv/codec';
-import { CURRENT_NKV_VERSION } from '../nkv/types';
 import type { CanvasData } from '../types/canvas';
-import type { ProjectData } from '../types/project';
 import { createProjectFileDiagnostic, type ProjectFileDiagnostic } from './diagnostics';
 import {
   ProjectFormatCodecRegistry,
   type ProjectFormatCodec,
   type ProjectFormatMigrationMetadata,
 } from './codec';
-
-export const nkvProjectFormatCodec: ProjectFormatCodec<ProjectData> = {
-  formatId: 'nkv',
-  fileExtensions: ['.nkv'],
-  currentVersion: CURRENT_NKV_VERSION,
-  load(json) {
-    const result = loadNkv(json);
-    const diagnostics = validationToDiagnostics(
-      result.validation.errors,
-      result.validation.warnings,
-    );
-    const migration: ProjectFormatMigrationMetadata | undefined = result.migration
-      ? {
-          fromVersion: result.migration.fromVersion,
-          toVersion: result.migration.toVersion,
-          appliedMigrations: result.migration.appliedMigrations,
-          warnings: result.migration.warnings,
-        }
-      : undefined;
-    return {
-      document: result.project,
-      diagnostics,
-      ...(migration ? { migration } : {}),
-      compatibility: {
-        loadedVersion: result.migration?.fromVersion ?? result.project.version,
-        currentVersion: CURRENT_NKV_VERSION,
-        mode: result.migration ? 'migrated' : diagnostics.length > 0 ? 'invalid' : 'current',
-        readOnly: false,
-        warnings: result.migration?.warnings ?? [],
-      },
-    };
-  },
-  save(document, context) {
-    return { content: saveNkv(document, { indent: context.indent }), diagnostics: [] };
-  },
-};
 
 export const nkcProjectFormatCodec: ProjectFormatCodec<CanvasData> = {
   formatId: 'nkc',
@@ -83,9 +44,8 @@ export const nkcProjectFormatCodec: ProjectFormatCodec<CanvasData> = {
   },
 };
 
-export function createDefaultProjectFormatCodecRegistry(): ProjectFormatCodecRegistry {
+export function createNkcProjectFormatCodecRegistry(): ProjectFormatCodecRegistry {
   const registry = new ProjectFormatCodecRegistry();
-  registry.register(nkvProjectFormatCodec);
   registry.register(nkcProjectFormatCodec);
   return registry;
 }

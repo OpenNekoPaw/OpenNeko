@@ -302,6 +302,7 @@ describe('CutOtioController', () => {
       expectedRevision: 5,
       timelineTimeSeconds: 1.5,
       generation: 1,
+      playbackMode: 'playing',
     });
     expect(store.getState().isPlaying).toBe(true);
   });
@@ -318,6 +319,68 @@ describe('CutOtioController', () => {
     expect(postMessage).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({ type: 'cut:preview-start', generation: 2 }),
+    );
+  });
+
+  it('projects a retained same-Clip video identity when resuming PCM playback', () => {
+    const store = createCutPresentationStore();
+    const postMessage = vi.fn();
+    const controller = new CutOtioController(store, { postMessage });
+    controller.acceptHostMessage({ type: 'cut:view', view: createView() });
+
+    controller.startPreview(2, 'clip-1');
+
+    expect(postMessage).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        type: 'cut:preview-start',
+        timelineTimeSeconds: 2,
+        retainedVideoClipId: 'clip-1',
+      }),
+    );
+  });
+
+  it('requests a paused preview generation without changing transport to playing', () => {
+    const store = createCutPresentationStore();
+    const postMessage = vi.fn();
+    const controller = new CutOtioController(store, { postMessage });
+    controller.acceptHostMessage({ type: 'cut:view', view: createView() });
+
+    controller.startPreview(3, undefined, 'paused');
+
+    expect(store.getState().isPlaying).toBe(false);
+    expect(postMessage).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        type: 'cut:preview-start',
+        timelineTimeSeconds: 3,
+        playbackMode: 'paused',
+      }),
+    );
+  });
+
+  it('distinguishes retaining a paused video from fully stopping preview resources', () => {
+    const store = createCutPresentationStore();
+    const postMessage = vi.fn();
+    const controller = new CutOtioController(store, { postMessage });
+    controller.acceptHostMessage({ type: 'cut:view', view: createView() });
+
+    const preparedGeneration = controller.startPreview(3, undefined, 'paused');
+    controller.pausePreview(preparedGeneration);
+    controller.stopPreview();
+
+    expect(postMessage).toHaveBeenNthCalledWith(2, {
+      type: 'cut:preview-pause',
+      documentUri: 'file:///workspace/project.otio',
+      sessionId: 'session-1',
+      expectedRevision: 4,
+      generation: 2,
+      preparedGeneration,
+    });
+    expect(postMessage).toHaveBeenNthCalledWith(
+      3,
+      expect.objectContaining({
+        type: 'cut:preview-stop',
+        generation: 3,
+      }),
     );
   });
 
@@ -385,6 +448,7 @@ describe('CutOtioController', () => {
           clipId: 'clip-1',
           kind: 'waveform',
           status: 'ready',
+          peaksPerSecond: 1,
           waveform: { peaks: [0.2], durationSeconds: 1, peaksPerSecond: 1 },
         },
       ],
@@ -408,7 +472,10 @@ describe('CutOtioController', () => {
           clipId: 'clip-1',
           kind: 'thumbnail',
           status: 'ready',
-          thumbnails: [{ sourceTimeSeconds: 0, dataUrl: 'data:image/png;base64,thumb' }],
+          density: 64,
+          tileIndex: 0,
+          sourceTimeSeconds: 0,
+          dataUrl: 'data:image/png;base64,thumb',
         },
       ],
     });
@@ -426,11 +493,93 @@ describe('CutOtioController', () => {
       },
     });
 
-    expect(store.getState().representations.get('5:clip-1:thumbnail')).toMatchObject({
+    expect(store.getState().representations.get('5:clip-1:thumbnail:64:0')).toMatchObject({
       clipId: 'clip-1',
       status: 'ready',
     });
     expect(store.getState().view?.tracks[0]).toBe(previousTrack);
+  });
+
+  it('stores independent thumbnail tiles and rejects the removed Clip-wide result schema', () => {
+    const store = createCutPresentationStore();
+    const controller = new CutOtioController(store, { postMessage: vi.fn() });
+    const current = createView();
+    controller.acceptHostMessage({ type: 'cut:view', view: current });
+
+    controller.acceptHostMessage({
+      type: 'cut:representations',
+      documentUri: current.documentUri,
+      sessionId: current.sessionId,
+      revision: current.revision,
+      results: [
+        {
+          clipId: 'clip-1',
+          kind: 'thumbnail',
+          status: 'ready',
+          density: 64,
+          tileIndex: 0,
+          sourceTimeSeconds: 0.5,
+          dataUrl: 'data:image/jpeg;base64,tile-0',
+        },
+        {
+          clipId: 'clip-1',
+          kind: 'thumbnail',
+          status: 'ready',
+          density: 64,
+          tileIndex: 1,
+          sourceTimeSeconds: 2.5,
+          dataUrl: 'data:image/jpeg;base64,tile-1',
+        },
+      ],
+    });
+
+    expect([...store.getState().representations.keys()]).toEqual([
+      '4:clip-1:thumbnail:64:0',
+      '4:clip-1:thumbnail:64:1',
+    ]);
+    expect(() =>
+      controller.acceptHostMessage({
+        type: 'cut:representations',
+        documentUri: current.documentUri,
+        sessionId: current.sessionId,
+        revision: current.revision,
+        results: [
+          {
+            clipId: 'clip-1',
+            kind: 'thumbnail',
+            status: 'ready',
+            thumbnails: [{ sourceTimeSeconds: 0, dataUrl: 'data:image/jpeg;base64,legacy' }],
+          },
+        ],
+      }),
+    ).toThrow('invalid Clip representations');
+  });
+
+  it('bounds the disposable thumbnail tile cache', () => {
+    const store = createCutPresentationStore();
+    const controller = new CutOtioController(store, { postMessage: vi.fn() });
+    const current = createView();
+    controller.acceptHostMessage({ type: 'cut:view', view: current });
+
+    controller.acceptHostMessage({
+      type: 'cut:representations',
+      documentUri: current.documentUri,
+      sessionId: current.sessionId,
+      revision: current.revision,
+      results: Array.from({ length: 257 }, (_, tileIndex) => ({
+        clipId: 'clip-1',
+        kind: 'thumbnail',
+        status: 'ready',
+        density: 64,
+        tileIndex,
+        sourceTimeSeconds: tileIndex,
+        dataUrl: `data:image/jpeg;base64,${tileIndex}`,
+      })),
+    });
+
+    expect(store.getState().representations.size).toBe(256);
+    expect(store.getState().representations.has('4:clip-1:thumbnail:64:0')).toBe(false);
+    expect(store.getState().representations.has('4:clip-1:thumbnail:64:256')).toBe(true);
   });
 
   it('does not reuse stale Track or Clip projections when edit state changes', () => {
@@ -478,12 +627,70 @@ describe('CutOtioController', () => {
       width: 1920,
       height: 1080,
       framesPerSecond: 30,
-      audioStreamUrls: ['ws://audio/pcm-1'],
+      audioStreams: [
+        {
+          version: 1,
+          transport: 'http',
+          protocol: 'neko-pcm-f32le-v1',
+          streamUrl: 'http://127.0.0.1:4123/v1/cut-media/pcm/pcm-1',
+          sampleRate: 48_000,
+          channels: 2,
+        },
+      ],
       audioGainsDb: [0],
+      audioPlayback: [
+        {
+          mediaOriginSeconds: 2,
+          playbackRate: 1,
+          positionSeconds: 2,
+          clipDurationSeconds: 4,
+          fadeInSeconds: 0,
+          fadeOutSeconds: 0,
+        },
+      ],
     };
 
     expect(controller.acceptHostMessage(message)).toBe(true);
     expect(onPreviewReady).toHaveBeenCalledWith(message);
+  });
+
+  it('accepts only loopback native video descriptors', () => {
+    const store = createCutPresentationStore();
+    const onPreviewReady = vi.fn();
+    const controller = new CutOtioController(store, { postMessage: vi.fn() }, { onPreviewReady });
+    const message = {
+      type: 'cut:preview-ready',
+      generation: 1,
+      videoClipId: 'clip-1',
+      timelineTimeSeconds: 2,
+      segmentEndSeconds: 4,
+      playbackEndSeconds: 4,
+      width: 1920,
+      height: 1080,
+      framesPerSecond: 30,
+      video: {
+        version: 1,
+        transport: 'http',
+        url: 'http://127.0.0.1:4123/v1/cut-media/file/video-1',
+        mimeType: 'video/mp4; codecs="avc1.640029"',
+        preparationProfile: 'h264-mp4-direct',
+        mediaTimeOriginSeconds: 5,
+        durationSeconds: 2,
+      },
+      audioStreams: [],
+      audioGainsDb: [],
+      audioPlayback: [],
+    };
+
+    expect(controller.acceptHostMessage(message)).toBe(true);
+    expect(
+      controller.acceptHostMessage({
+        ...message,
+        generation: 2,
+        video: { ...message.video, url: 'https://example.com/video.mp4' },
+      }),
+    ).toBe(false);
+    expect(onPreviewReady).toHaveBeenCalledTimes(1);
   });
 
   it('projects background export task state and keeps task control Host-owned', () => {

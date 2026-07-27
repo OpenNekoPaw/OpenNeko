@@ -6,7 +6,7 @@
 import { memo, useRef, useEffect, useCallback } from 'react';
 
 export interface WaveformCanvasProps {
-  peaks: number[];
+  peaks: readonly number[];
   width: number;
   height: number;
   color: string;

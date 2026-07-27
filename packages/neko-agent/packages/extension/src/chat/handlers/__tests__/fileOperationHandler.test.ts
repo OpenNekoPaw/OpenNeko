@@ -66,15 +66,11 @@ describe('FileOperationHandler', () => {
       );
     });
 
-    it('should open panoramic images and videos with neko panoramic preview', async () => {
+    it('should not route panorama-named media to retired panoramic viewers', async () => {
       const { commands } = await import('vscode');
       await handler.handleOpenFile('/tmp/skybox.hdr');
 
-      expect(commands.executeCommand).toHaveBeenCalledWith(
-        'vscode.openWith',
-        expect.any(Object),
-        'neko.preview.panoramicImage',
-      );
+      expect(commands.executeCommand).toHaveBeenCalledWith('vscode.open', expect.any(Object));
 
       vi.clearAllMocks();
       await handler.handleOpenFile('/tmp/tour_360.mp4');
@@ -82,7 +78,7 @@ describe('FileOperationHandler', () => {
       expect(commands.executeCommand).toHaveBeenCalledWith(
         'vscode.openWith',
         expect.any(Object),
-        'neko.preview.panoramicVideo',
+        'neko.videoPreview',
       );
     });
 

@@ -109,9 +109,10 @@ Canvas Preview SHALL render Markdown, playable Media, and explicitly ordered Gro
 #### Scenario: Play audio or video in a VS Code Webview
 
 - **WHEN** a Preview media surface starts playback
-- **THEN** the Webview requests an Extension-authorized Engine stream
-- **AND** `@neko/neko-client` owns stream lifecycle, frame scheduling, audio, seek, pause, resume, and disposal
-- **AND** Canvas does not replace this path with native Webview `<audio>` or `<video>` playback
+- **THEN** the Webview requests an Extension-authorized `@neko/media` session
+- **AND** `NodeMediaRuntime` owns probe, native-video preparation, PCM creation, seek replacement, and disposal
+- **AND** the Webview consumes the returned native `<video>` and PCM descriptors
+- **AND** no Engine client, route, DTO, or fallback participates
 
 ### Requirement: Canvas add surfaces are localized
 

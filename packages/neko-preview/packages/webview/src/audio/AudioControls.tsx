@@ -8,7 +8,7 @@
  */
 
 import { useCallback } from 'react';
-import { formatTime } from '@neko/neko-client';
+import { formatMediaTime } from '@neko/media';
 import { useTranslation } from '../i18n/I18nContext';
 import { ProgressBar } from '../shared/ProgressBar';
 import { MacIconButton } from '../shared/MacIconButton';
@@ -148,8 +148,8 @@ export function AudioControls({
           onSeeking={onScrub}
         />
         <div className="flex justify-between text-[11px] text-neko-preview-text-secondary pt-1 tabular-nums">
-          <span>{formatTime(currentTime)}</span>
-          <span>{formatTime(duration)}</span>
+          <span>{formatMediaTime(currentTime)}</span>
+          <span>{formatMediaTime(duration)}</span>
         </div>
       </div>
 

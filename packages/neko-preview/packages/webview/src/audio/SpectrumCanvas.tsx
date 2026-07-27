@@ -1,16 +1,16 @@
 /**
  * SpectrumCanvas - Real-time frequency spectrum analyzer
  *
- * Taps into the existing Web Audio graph via AudioStreamClient's
+ * Taps into the existing Web Audio graph via PcmAudioClient's
  * GainNode to create an AnalyserNode for FFT visualization.
  * Colors are theme-aware via CSS custom properties.
  */
 
 import { useRef, useEffect, useCallback } from 'react';
-import type { EngineAvAudioStreamClient } from '@neko/neko-client';
+import type { PcmAudioClient } from '@neko/media/browser';
 
 interface SpectrumCanvasProps {
-  audioClient: EngineAvAudioStreamClient | null;
+  audioClient: PcmAudioClient | undefined;
   isPlaying: boolean;
 }
 

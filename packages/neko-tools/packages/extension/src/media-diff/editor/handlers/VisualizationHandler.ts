@@ -8,8 +8,8 @@
  * - Early waveform extraction (parallel with diff)
  */
 
-import type { DiffResult } from '@neko/shared';
-import type { EngineClient } from '@neko/neko-client/EngineClient';
+import type { DiffResult } from '@neko-tools/contracts';
+import type { IToolsMediaRuntime } from '../../../contracts/IMediaRuntimeService';
 import type { IHandlerContext } from './types';
 import { handleSeek } from './FrameOperations';
 import { getLogger } from '../../../utils/logger';
@@ -44,13 +44,14 @@ function getMimeType(filePath: string): string {
 export async function sendVisualizationData(
   ctx: IHandlerContext,
   result: DiffResult,
-  ref: string = 'HEAD',
+  ref: string,
+  requestId: string,
 ): Promise<void> {
   if (ctx.isDisposed) return;
 
   switch (result.mediaType) {
     case 'image':
-      await sendImageData(ctx, ref);
+      await sendImageData(ctx, ref, requestId);
       break;
 
     case 'audio':
@@ -58,6 +59,7 @@ export async function sendVisualizationData(
       // Task B (startEarlyWaveform) will send real waveform data in ~500ms.
       if (result.visualization) {
         ctx.sendMessage({
+          requestId,
           type: 'mediaDiff:waveformData',
           payload: {
             currentWaveform: result.visualization?.currentWaveform ?? [],
@@ -71,11 +73,8 @@ export async function sendVisualizationData(
       // Skip frame extraction for preliminary calls (engine may not be active yet).
       // Frames are extracted on-demand when user interacts (seek/play).
       if (result.visualization) {
-        await handleSeek(ctx, 0);
+        await handleSeek(ctx, 0, requestId);
       }
-      break;
-
-    case 'timeline':
       break;
   }
 }
@@ -86,12 +85,13 @@ export async function sendVisualizationData(
 export async function sendVisualizationDataForLocal(
   ctx: IHandlerContext,
   result: DiffResult,
+  requestId: string,
 ): Promise<void> {
   if (ctx.isDisposed) return;
 
   switch (result.mediaType) {
     case 'image':
-      await sendImageDataForLocal(ctx);
+      await sendImageDataForLocal(ctx, requestId);
       break;
 
     case 'audio':
@@ -99,6 +99,7 @@ export async function sendVisualizationDataForLocal(
       // Task B (startEarlyWaveform) will send real waveform data in ~500ms.
       if (result.visualization) {
         ctx.sendMessage({
+          requestId,
           type: 'mediaDiff:waveformData',
           payload: {
             currentWaveform: result.visualization?.currentWaveform ?? [],
@@ -111,11 +112,8 @@ export async function sendVisualizationDataForLocal(
     case 'video':
       // Skip frame extraction for preliminary calls (engine may not be active yet)
       if (result.visualization) {
-        await handleSeek(ctx, 0);
+        await handleSeek(ctx, 0, requestId);
       }
-      break;
-
-    case 'timeline':
       break;
   }
 }
@@ -125,25 +123,26 @@ export async function sendVisualizationDataForLocal(
 /**
  * Send image data to webview (Git mode).
  */
-async function sendImageData(ctx: IHandlerContext, ref: string = 'HEAD'): Promise<void> {
+async function sendImageData(ctx: IHandlerContext, ref: string, requestId: string): Promise<void> {
   try {
     const versions = await ctx.diffService.getFileVersions(ctx.fileUri, ref);
 
     // Handle new file case
     if (versions.isNewFile) {
       ctx.sendMessage({
+        requestId,
         type: 'mediaDiff:imageData',
         payload: {
           currentImage: versions.current,
-          previousImage: null, // No previous version for new files
+          // There is no previous image for a new file.
           mimeType: getMimeType(ctx.fileUri.fsPath),
-          isNewFile: true,
         },
       });
       return;
     }
 
     ctx.sendMessage({
+      requestId,
       type: 'mediaDiff:imageData',
       payload: {
         currentImage: versions.current,
@@ -159,13 +158,14 @@ async function sendImageData(ctx: IHandlerContext, ref: string = 'HEAD'): Promis
 /**
  * Send image data for local file comparison.
  */
-async function sendImageDataForLocal(ctx: IHandlerContext): Promise<void> {
+async function sendImageDataForLocal(ctx: IHandlerContext, requestId: string): Promise<void> {
   if (!ctx.previousUri) return;
 
   try {
     const versions = await ctx.diffService.getLocalFileVersions(ctx.fileUri, ctx.previousUri);
 
     ctx.sendMessage({
+      requestId,
       type: 'mediaDiff:imageData',
       payload: {
         currentImage: versions.current,
@@ -178,18 +178,23 @@ async function sendImageDataForLocal(ctx: IHandlerContext): Promise<void> {
   }
 }
 
-// ── Waveform helpers ────────────────────────────────────────���─────────
+// ── Waveform helpers ─────────────────────────────────────────────────
 
 /**
  * Send waveform data extracted from a completed analysis result.
  * Works for both audio (direct waveform) and video (embedded audio diff).
  */
-export function sendWaveformFromResult(ctx: IHandlerContext, result: DiffResult): void {
+export function sendWaveformFromResult(
+  ctx: IHandlerContext,
+  result: DiffResult,
+  requestId: string,
+): void {
   if (ctx.isDisposed) return;
   const currentWaveform = result.visualization?.currentWaveform ?? [];
   const previousWaveform = result.visualization?.previousWaveform ?? [];
   if (currentWaveform.length === 0 && previousWaveform.length === 0) return;
   ctx.sendMessage({
+    requestId,
     type: 'mediaDiff:waveformData',
     payload: { currentWaveform, previousWaveform },
   });
@@ -208,15 +213,20 @@ export function sendWaveformFromResult(ctx: IHandlerContext, result: DiffResult)
  */
 export function startEarlyWaveform(
   ctx: IHandlerContext,
-  engine: EngineClient,
+  runtime: IToolsMediaRuntime,
   currentPath: string,
   previousPath: string,
   signal: AbortSignal,
+  requestId: string,
 ): Promise<void> {
-  return Promise.all([engine.waveform(currentPath), engine.waveform(previousPath)])
+  return Promise.all([
+    runtime.generateWaveform(currentPath, undefined, signal),
+    runtime.generateWaveform(previousPath, undefined, signal),
+  ])
     .then(([wfA, wfB]) => {
       if (ctx.isDisposed || signal.aborted) return;
       ctx.sendMessage({
+        requestId,
         type: 'mediaDiff:waveformData',
         payload: {
           currentWaveform: wfA.peaks,
@@ -242,16 +252,19 @@ export function startEarlyWaveform(
  */
 export function startEarlyFrameExtraction(
   ctx: IHandlerContext,
-  engine: EngineClient,
+  runtime: IToolsMediaRuntime,
   currentPath: string,
   previousPath: string,
   signal: AbortSignal,
+  requestId: string,
 ): void {
   const extract = async (filePath: string, version: 'current' | 'previous') => {
     try {
-      const imageBuffer = await engine.extractFrame(filePath, 0);
+      const dataUrl = await runtime.captureFrame(filePath, 0, undefined, signal);
+      const imageBuffer = dataUrlToArrayBuffer(dataUrl);
       if (ctx.isDisposed || signal.aborted || !imageBuffer) return;
       ctx.sendMessage({
+        requestId,
         type: 'mediaDiff:frameData',
         payload: { time: 0, version, imageBuffer },
       });
@@ -262,4 +275,11 @@ export function startEarlyFrameExtraction(
   };
   void extract(currentPath, 'current');
   void extract(previousPath, 'previous');
+}
+
+function dataUrlToArrayBuffer(dataUrl: string): ArrayBuffer {
+  const separator = dataUrl.indexOf(',');
+  if (separator < 0) throw new Error('Frame capture returned an invalid data URL.');
+  const bytes = Buffer.from(dataUrl.slice(separator + 1), 'base64');
+  return Uint8Array.from(bytes).buffer;
 }

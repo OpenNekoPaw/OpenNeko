@@ -38,8 +38,6 @@ const config: KnipConfig = {
     'packages/neko-canvas/packages/webview/src/types/extendedCanvas.ts': ['exports'],
     'packages/neko-preview/packages/extension/src/types/document-messages.ts': ['exports'],
     'packages/neko-preview/packages/webview/src/shared/document-types.ts': ['exports'],
-    // CommonJS script API consumed by package/bundle scripts via require().
-    'packages/neko-engine/scripts/package-config.js': ['exports'],
   },
 
   workspaces: {
@@ -62,12 +60,16 @@ const config: KnipConfig = {
         'scripts/check-webview-boundaries.mjs',
         'scripts/compile-ts-vsix.mjs',
         'scripts/project-release-version.mjs',
-        'scripts/proto-gen-ts.mjs',
+        'scripts/prepare-vscode-media-fixture.mjs',
+        'scripts/prepare-media-runtime-bundle.mjs',
         'scripts/smoke-vscode-targets.mjs',
         'scripts/smoke-webview-builds.mjs',
         'scripts/stage-openneko-dev-extension.mjs',
         'scripts/test-orchestration/fixtures/*.ts',
         'scripts/test-orchestration/vscode-debug-config.local.mjs',
+        'scripts/test-orchestration/vscode-media-fixture-paths.local.mjs',
+        'scripts/validate-node-media-matrix.mts',
+        'scripts/validate-node-media-waveform.mts',
       ],
     },
     // ── Layer 0: Library packages ──────────────────────
@@ -77,7 +79,6 @@ const config: KnipConfig = {
         'src/components/index.ts',
         'src/config/config-reader.ts',
         'src/content-access/index.ts',
-        'src/generated/__engine-check.ts',
         'src/i18n/index.ts',
         'src/i18n/react.tsx',
         'src/i18n/webview.ts',
@@ -88,7 +89,6 @@ const config: KnipConfig = {
         'src/local-metadata/sqlite/index.ts',
         'src/local-metadata/testing/index.ts',
         'src/nkc/index.ts',
-        'src/nkv/index.ts',
         'src/path/index.ts',
         'src/project-authoring/index.ts',
         'src/project-file-io/index.ts',
@@ -101,7 +101,7 @@ const config: KnipConfig = {
     'packages/neko-content': {
       entry: ['src/index.ts', 'src/document/index.ts'],
     },
-    'packages/neko-client': {},
+    'packages/neko-media': {},
     'packages/neko-chara': {
       entry: [
         'src/index.ts',
@@ -163,10 +163,6 @@ const config: KnipConfig = {
     'packages/neko-tools': {},
     'packages/neko-preview': {},
     'packages/neko-assets': {},
-    'packages/neko-engine': {
-      entry: ['scripts/check-media-closure.mjs', 'scripts/run-with-ffmpeg-env.js'],
-      ignore: ['packages/host-napi/**'], // Rust packages, skip
-    },
 
     // ── Extension sub-packages ────────────────────────
     'packages/neko-cut/packages/extension': {},
@@ -212,8 +208,11 @@ const config: KnipConfig = {
         'src/components/panels/PropertyPanel.tsx',
       ],
     },
+    'packages/neko-tools/packages/contracts': {
+      entry: ['src/index.ts'],
+    },
     'packages/neko-tools/packages/extension': {
-      entry: ['src/bootstrap/index.ts', 'src/media-diff/index.ts', 'src/media-lsp/index.ts'],
+      entry: ['src/bootstrap/index.ts', 'src/media-diff/index.ts'],
     },
     'packages/neko-tools/packages/webview': {
       entry: ['src/mediaDiff.tsx'],
@@ -237,23 +236,12 @@ const config: KnipConfig = {
       ],
     },
     'packages/neko-preview/packages/extension': {},
-    'packages/neko-engine/packages/extension': {},
 
     // ── Skills (CLI scripts, not imported) ───────────────
     // Skills are excluded from analysis - they are runtime scripts, not imported modules
-
     // ── Skip packages ─────────────────────────────────
-    'packages/neko-proto': {
-      // Protobuf IDL files, not TypeScript code
-      entry: ['package.json'],
-    },
     'apps/neko-vscode': {
       entry: ['package.json', 'scripts/run-tests.mjs', 'scripts/validate-manifest.mjs'],
-    },
-    'packages/neko-engine/packages/host-napi': { ignore: ['**/*'] },
-    'packages/neko-engine/packages/host-cli': {
-      // Rust CLI binary, not TypeScript
-      entry: ['package.json'],
     },
   },
 };

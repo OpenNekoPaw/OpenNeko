@@ -109,6 +109,26 @@ describe('resolvePreviewSelection', () => {
     expect(selection.segmentEndSeconds).toBe(8);
   });
 
+  it('caps a long Clip to an on-demand preview preparation window', () => {
+    const longClip: TimelineView = {
+      ...view,
+      durationSeconds: 120,
+      tracks: [
+        {
+          ...view.tracks[0]!,
+          items: [{ ...clip('long-video', 0), durationSeconds: 120 }],
+        },
+      ],
+    };
+
+    expect(resolvePreviewSelection(longClip, 0)).toMatchObject({
+      segmentEndSeconds: 10,
+      videoSegmentEndSeconds: 120,
+    });
+    expect(resolvePreviewSelection(longClip, 10).segmentEndSeconds).toBe(20);
+    expect(resolvePreviewSelection(longClip, 115).segmentEndSeconds).toBe(120);
+  });
+
   it('does not depend on a selected Clip identity', () => {
     expect(resolvePreviewSelection(view, 0).timelineTimeSeconds).toBe(0);
   });

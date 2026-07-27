@@ -49,14 +49,14 @@ describe('release source validation', () => {
     assert.deepEqual(
       resolvePublishablePackagePaths({
         productApplication: 'apps/neko-vscode',
-        packages: { buildRelease: ['neko-engine', 'neko-tools', 'neko-engine'] },
+        packages: { buildRelease: ['neko-cut', 'neko-tools', 'neko-cut'] },
       }),
-      ['apps/neko-vscode', 'packages/neko-engine', 'packages/neko-tools'],
+      ['apps/neko-vscode', 'packages/neko-cut', 'packages/neko-tools'],
     );
   });
 
   it('validates internally consistent source manifests without comparing them to the tag', () => {
-    const packagePaths = ['apps/neko-vscode', 'packages/neko-engine'];
+    const packagePaths = ['apps/neko-vscode', 'packages/neko-cut'];
     const matching = new Map(packagePaths.map((path) => [path, { version: '0.0.1' }]));
     assert.deepEqual(
       inspectPublishableManifests({
@@ -66,7 +66,7 @@ describe('release source validation', () => {
       {
         entries: [
           { packagePath: 'apps/neko-vscode', manifest: { version: '0.0.1' } },
-          { packagePath: 'packages/neko-engine', manifest: { version: '0.0.1' } },
+          { packagePath: 'packages/neko-cut', manifest: { version: '0.0.1' } },
         ],
         packageCount: 2,
         sourceVersion: '0.0.1',
@@ -74,7 +74,7 @@ describe('release source validation', () => {
     );
 
     const mismatched = new Map(matching);
-    mismatched.set('packages/neko-engine', { version: '0.0.2' });
+    mismatched.set('packages/neko-cut', { version: '0.0.2' });
     assert.throws(
       () =>
         inspectPublishableManifests({
@@ -114,11 +114,10 @@ describe('release source validation', () => {
     assert.deepEqual(releaseOpenNeko?.needs, ['validate-release', 'release-tests']);
     assertStepPrecedes(releaseTests, 'Project release manifest versions', 'pnpm install');
     assertStepPrecedes(releaseTests, 'Project release manifest versions', 'pnpm test');
-    assertStepPrecedes(releaseOpenNeko, 'Project release manifest versions', 'Build host-napi');
     assertStepPrecedes(
       releaseOpenNeko,
       'Project release manifest versions',
-      'Package Engine payload',
+      'Verify retired media runtime is absent from product composition',
     );
     assertStepPrecedes(
       releaseOpenNeko,

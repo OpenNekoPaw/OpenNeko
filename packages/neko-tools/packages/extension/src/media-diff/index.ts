@@ -13,21 +13,6 @@ export {
   type DiffProgressCallback,
 } from './services/MediaDiffService';
 
-// Analyzers
-export {
-  type IMediaDiffAnalyzer,
-  AnalyzerRegistry,
-  BaseMediaDiffAnalyzer,
-  isImageDiffDetails,
-  isVideoDiffDetails,
-  isAudioDiffDetails,
-  isTimelineDiffDetails,
-  ImageDiffAnalyzer,
-  VideoDiffAnalyzer,
-  AudioDiffAnalyzer,
-  TimelineDiffAnalyzer,
-} from './services/analyzers';
-
 // Editor
 export { MediaDiffEditorProvider } from './editor/MediaDiffEditorProvider';
 export { MediaDiffMessageHandler } from './editor/MediaDiffMessageHandler';
@@ -44,7 +29,7 @@ export { MediaDiffEditorSessionFactory } from './editor/MediaDiffEditorSessionFa
 // =============================================================================
 
 import * as vscode from 'vscode';
-import { getMediaType } from '@neko/shared';
+import { getMediaType } from '@neko-tools/contracts';
 import type { IMediaDiffService } from './services/MediaDiffService';
 import { MediaDiffEditorProvider } from './editor/MediaDiffEditorProvider';
 import type { IMediaDiffEditorSessionFactory } from './editor/MediaDiffEditorSession';

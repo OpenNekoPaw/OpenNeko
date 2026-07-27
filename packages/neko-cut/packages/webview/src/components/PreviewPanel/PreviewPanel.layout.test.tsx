@@ -50,5 +50,9 @@ describe('PreviewPanel retained canvas presentation', () => {
     expect(canvas?.getAttribute('width')).toBe('1080');
     expect(canvas?.getAttribute('height')).toBe('1920');
     expect(canvas?.className).toContain('object-contain');
+    const videos = host.querySelectorAll('video');
+    expect(videos).toHaveLength(2);
+    expect(videos[0]?.getAttribute('aria-hidden')).toBe('false');
+    expect(videos[1]?.getAttribute('aria-hidden')).toBe('true');
   });
 });

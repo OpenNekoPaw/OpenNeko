@@ -163,19 +163,19 @@ State-owned transaction 必须独立提交并进入备份/恢复策略；cache-o
 
 以下内容不因 SQLite 引入而迁入数据库：
 
-| 数据                                             | Canonical location / format                                               | 原因                                            |
-| ------------------------------------------------ | ------------------------------------------------------------------------- | ----------------------------------------------- |
-| 项目设置                                         | `neko/settings.json`                                                      | Git-trackable 项目事实；不保存媒体库 target     |
+| 数据                                             | Canonical location / format                                               | 原因                                              |
+| ------------------------------------------------ | ------------------------------------------------------------------------- | ------------------------------------------------- |
+| 项目设置                                         | `neko/settings.json`                                                      | Git-trackable 项目事实；不保存媒体库 target       |
 | 本机媒体库 link                                  | `neko/assets/<libraryName>`                                               | Git-ignored symlink/junction；OS 拥有 target 映射 |
-| Confirmed unified entities                       | `characters.json`、`neko/entities/*.json`                                 | 稳定项目身份和语义事实                          |
-| Confirmed entity representation bindings         | `neko/entity-representation-bindings.json`                                | 用户确认创作决策；直接保存 ContentLocator       |
-| Entity requirements / visual drafts              | `neko/entity-asset-requirements.json`、`neko/visual-identity-drafts.json` | 可审阅项目计划/草案事实                         |
-| Domain project files                             | `.nkc`、`.nkv`、`.nks`、`.nkm`、`.nkp` 等                                 | 项目格式契约                                    |
-| AGENTS / memory / Skills / Commands / Processors | Markdown/TOML/package/manifests                                           | 用户可编辑、可复制、可审计                      |
-| Conversation transcript/events                   | Journal JSONL                                                             | append-only recovery authority                  |
-| Raw operational/audit logs                       | JSONL/log files                                                           | DB 锁定或损坏时仍可诊断                         |
-| Retained media and cache artifact bytes          | managed files                                                             | Webview URI、Engine Range、外部工具和大文件清理 |
-| Secrets                                          | SecretStorage/system keychain                                             | 不得进入普通 DB/config/log                      |
+| Confirmed unified entities                       | `characters.json`、`neko/entities/*.json`                                 | 稳定项目身份和语义事实                            |
+| Confirmed entity representation bindings         | `neko/entity-representation-bindings.json`                                | 用户确认创作决策；直接保存 ContentLocator         |
+| Entity requirements / visual drafts              | `neko/entity-asset-requirements.json`、`neko/visual-identity-drafts.json` | 可审阅项目计划/草案事实                           |
+| Domain project files                             | `.nkc`、`.otio` 等                                                        | 项目格式契约                                      |
+| AGENTS / memory / Skills / Commands / Processors | Markdown/TOML/package/manifests                                           | 用户可编辑、可复制、可审计                        |
+| Conversation transcript/events                   | Journal JSONL                                                             | append-only recovery authority                    |
+| Raw operational/audit logs                       | JSONL/log files                                                           | DB 锁定或损坏时仍可诊断                           |
+| Retained media and cache artifact bytes          | managed files                                                             | Webview URI、Engine Range、外部工具和大文件清理   |
+| Secrets                                          | SecretStorage/system keychain                                             | 不得进入普通 DB/config/log                        |
 
 ### Unified Entity Boundary
 
@@ -248,7 +248,7 @@ EntityProjectionRepository
 - Agent Core、Webview、feature domain package 不导入 `node:sqlite` 或 `bun:sqlite`。
 - Webview/TUI presentation 不接收 DB path、table name、cache path 或原始 SQLite error。
 - `node:sqlite` 是同步 API；bulk FTS、semantic rebuild 和大型 migration 必须使用 worker，不能阻塞 Extension Host。
-- `neko-engine` 不拥有本地 metadata DB。
+- `@neko/media` 与 FFmpeg 子进程不拥有本地 metadata DB。
 
 ## 运行时支持策略
 

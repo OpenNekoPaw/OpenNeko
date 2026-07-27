@@ -1,58 +1,63 @@
-# Proto 与 Wire Contract
+# Wire 与运行时契约
 
 状态：Accepted
 
-更新日期：2026-07-17
+更新日期：2026-07-27
 
-Proto 与 Rust Host API 是跨语言通信的契约来源；Canvas `.nkc`、Cut `.nkv` 等项目格式是持久领域事实来源。两者不能混用，也不能由 Webview/Extension 各自维护平行 DTO。
+OpenNeko 当前没有需要 Protobuf 生成的跨语言或持久 wire contract。
+原 `timeline.proto`、`diff.proto` 只生成 TypeScript interface，没有编码、解码、
+producer、consumer 或版本协商，已经连同 `@neko/proto` 包和生成器删除。
 
-## 契约层级
+## 当前契约层级
 
 ```text
-Proto / Rust Host API media contracts
-  -> generated TypeScript / Rust DTOs
-  -> @neko/neko-client wire normalizers
-  -> Extension / Webview / Agent projections
-  -> owning domain project formats (.nkc / .nkv)
+owning domain schema/codec
+  -> Canvas NKC / Cut OTIO
+
+domain media port
+  -> @neko/media host-neutral contract
+  -> @neko/media/node process + loopback session
+  -> package-owned Host/Webview message
+
+package-owned L0 contract
+  -> Extension Host
+  -> Webview
 ```
 
-当前 Engine wire surface 只覆盖保留媒体能力：文件授权与 Range、probe/capture、audio/video、timeline、stream、effect、color、preview/export 和 task/health。Scene、Puppet、Model、ML、Device、Live 和 panoramic contract 已移除，不能作为兼容字段、路由或成功 no-op 保留。
-
-## Contract 类型
-
-| 类型 | 例子 | 权威 | 持久化 |
-| --- | --- | --- | --- |
-| Engine wire | media action、file token、Range response、stream descriptor、timeline operation | Proto / Rust Host API 与生成类型 | 否 |
-| Client projection | normalized Engine response、stream/session handle | `@neko/neko-client` | 否 |
-| Host/Webview message | package-owned typed intent、status、diagnostic | owning package contract | 仅可恢复 UI state 可短期保存 |
-| Project format | `.nkc`、`.nkv` | Canvas/Cut codec 与 schema | 是 |
-| Resource identity | `ResourceRef`、document source ref、Asset/Entity ID | shared/domain service | 是 |
+| 类型                 | 例子                                            | 权威                       | 持久化                       |
+| -------------------- | ----------------------------------------------- | -------------------------- | ---------------------------- |
+| Project format       | Canvas `.nkc`、Cut OTIO                         | owning domain schema/codec | 是                           |
+| 媒体 port            | probe、frame、waveform、preview、PCM descriptor | `@neko/media`              | 否                           |
+| Host/Webview message | intent、status、diagnostic、session identity    | owning package L0 contract | 仅可恢复 UI state 可短期保存 |
+| Resource identity    | `ResourceRef`、Asset/Entity ID                  | shared/domain service      | 是                           |
 
 ## 不变量
 
-- 功能包不得手写与 Proto/Host API 平行的 Engine request/response parser。
-- `@neko/neko-client` 负责 wire normalization，不拥有权限、项目事实或 UI fallback。
-- UI projection 可以裁剪字段，但不能改变 action、identity、error 或 lifecycle 语义。
+- 普通共享 TypeScript shape 不得以 `*.proto -> interface` 生成链伪装为 wire contract。
+- 功能包通过窄领域 port 消费 `@neko/media`，不得重建万能 client 或旧 Engine DTO。
 - runtime handle、token、端口、URL、blob、Webview URI 和 stream id 不写入项目格式。
-- 未知 action、schema/version、缺失字段和陈旧 instance identity 必须明确失败。
-- 新路径测试同时断言结果与 handler/adapter 路径，并证明旧 route 未参与。
+- 未知 message、schema/version、缺失字段和陈旧 session identity 必须明确失败。
+- UI projection 可以裁剪字段，但不能改变 identity、error、cancel 或 lifecycle 语义。
+- 新路径测试同时断言结果与 adapter/handler 路径，并证明退休 route 未参与。
 
-## 变更顺序
+## Proto 重新准入条件
 
-1. 定义或更新 Proto/Host API/descriptor 与错误 contract；
-2. 生成 TypeScript/Rust 类型并检查生成物一致性；
-3. 在 Engine Kernel/runtime 实现 canonical handler；
-4. 更新 HTTP/N-API/CLI 中适用的 host surface；
-5. 更新 `@neko/neko-client` normalizer 和窄接口；
-6. 在 Extension/Agent/Webview 消费最小投影；
-7. 确需持久化时，再更新 owning domain schema/migrator。
+只有同时满足以下条件，才能通过新的 OpenSpec 重新建立 Proto 包：
 
-涉及只在 TypeScript Host 内运行的项目文件或 UI intent，不需要为了形式创建 Proto；只有真实跨语言/跨进程 wire 边界才进入 Proto/Host API。
+1. 存在两个明确的 runtime、语言或持久化边界；
+2. 有真实序列化 producer 与 consumer，而非只生成 TypeScript interface；
+3. 定义 schema version、兼容策略、未知字段行为和迁移/拒绝语义；
+4. 生成物有明确 owner、发布方式和漂移门禁；
+5. owning domain 的直接 TypeScript contract 或 codec 无法更清晰地表达该边界。
+
+Node 子进程参数、loopback URL/token、Webview message、package-local DTO 和单语言
+Host 内部类型不满足准入条件。
 
 ## 验证
 
-- Proto/生成物一致性与 Rust/TypeScript compile；
-- Engine Host API unknown-action、invalid-payload 和 removed-action 测试；
-- HTTP/N-API/CLI 生产者测试与 `EngineClient` 消费者契约测试；
-- token、Range、stream/session identity 和 dispose/cancel 路径测试；
-- project-format 测试证明 runtime 字段未被持久化。
+- `pnpm check:application-boundaries` 阻止已删除 Proto 包、生成器和 Engine Timeline/Diff
+  生成物回流；
+- media port、Node adapter、browser client 与 owning package message 测试；
+- token、Range、PCM、session identity、dispose/cancel 路径测试；
+- project-format 测试证明 runtime 字段未被持久化；
+- `pnpm check:engine-retirement-boundary` 证明旧 client/DTO/route 不会返回。

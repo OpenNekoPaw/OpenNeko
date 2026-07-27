@@ -1,6 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { isResourceRef, type DelegateAction, type ResourceRef } from '@neko/shared';
-import { formatTime } from '@neko/neko-client';
+import {
+  formatMediaTime as formatTime,
+  type HtmlVideoDescriptor,
+  type PcmStreamDescriptor,
+} from '@neko/media';
 import { dispatchPreviewDelegate } from './previewDelegates';
 import { isImagePreviewUrl, isSafeWebviewUrl, WebviewPreviewResolver } from './previewResolver';
 import { PreviewRuntime } from './previewRuntime';
@@ -126,13 +130,15 @@ function useCaptureFrame(
 // =============================================================================
 
 interface MediaStreamState {
-  videoStreamUrl: string | null;
-  audioStreamUrl: string | null;
+  video: HtmlVideoDescriptor | null;
+  audio: PcmStreamDescriptor | null;
+  audioContext: AudioContext | null;
   width: number;
   height: number;
   fps: number;
   duration: number;
   startTime: number;
+  playbackRate: number;
 }
 
 interface MediaDescription {
@@ -157,6 +163,11 @@ function getMonotonicTimeMs(): number {
   return performance.now();
 }
 
+function normalizePlaybackStartTime(startTime: number, duration: number): number {
+  const normalized = Number.isFinite(startTime) ? Math.max(0, startTime) : 0;
+  return duration > 0 && normalized >= duration ? 0 : normalized;
+}
+
 function useMediaStream(
   assetPath: string | undefined,
   mediaType: 'video' | 'audio',
@@ -176,6 +187,23 @@ function useMediaStream(
   const requestProbeRef = useRef<() => void>(() => undefined);
   const streamDurationRef = useRef(0);
   const stoppedPlaybackRef = useRef(true);
+  const playbackAudioContextRef = useRef<AudioContext>();
+
+  const closePlaybackAudioContext = useCallback(() => {
+    const context = playbackAudioContextRef.current;
+    playbackAudioContextRef.current = undefined;
+    if (context && context.state !== 'closed') void context.close();
+  }, []);
+
+  const primePlaybackAudioContext = useCallback((): AudioContext => {
+    let context = playbackAudioContextRef.current;
+    if (!context || context.state === 'closed') {
+      context = new AudioContext({ sampleRate: 48_000 });
+      playbackAudioContextRef.current = context;
+    }
+    if (context.state === 'suspended') void context.resume();
+    return context;
+  }, []);
 
   const [savedStartTime] = useState(() => {
     const sourceKey = createMediaPlaybackSourceKey(assetPath, resourceRef);
@@ -245,6 +273,7 @@ function useMediaStream(
         if (msg.error) {
           probeRequested = false;
           pendingPlaybackStartRef.current = null;
+          closePlaybackAudioContext();
           return;
         }
         if (!isRecord(msg.mediaInfo)) {
@@ -264,12 +293,27 @@ function useMediaStream(
       }
       if (msg.type === 'media:streamReady' && msg.nodeId === surfaceId) {
         setProbing(false);
-        if (msg.error) return;
+        if (msg.error) {
+          closePlaybackAudioContext();
+          return;
+        }
         if (!isRecord(msg.mediaInfo)) {
           throw new Error(`Media stream for "${sourceKey}" returned invalid mediaInfo.`);
         }
         const description = readMediaDescription(msg.mediaInfo, knownDuration);
         const startTime = currentTimeRef.current;
+        const video = readHtmlVideoDescriptor(msg.video);
+        const audio = readPcmStreamDescriptor(msg.audio);
+        if (mediaType === 'video' && !video) {
+          throw new Error(`Media stream for "${sourceKey}" returned no HTML video descriptor.`);
+        }
+        if (mediaType === 'audio' && !audio) {
+          throw new Error(`Media stream for "${sourceKey}" returned no PCM audio descriptor.`);
+        }
+        const audioContext = audio
+          ? (playbackAudioContextRef.current ?? primePlaybackAudioContext())
+          : null;
+        if (!audio) closePlaybackAudioContext();
         streamDurationRef.current = description.duration;
         setMediaDescription(description);
         usePlaybackStore.getState().startActivePlayback({
@@ -286,13 +330,15 @@ function useMediaStream(
           updatedAtMs: getMonotonicTimeMs(),
         };
         setStream({
-          videoStreamUrl: (msg.videoStreamUrl as string) ?? null,
-          audioStreamUrl: (msg.audioStreamUrl as string) ?? null,
+          video,
+          audio,
+          audioContext,
           width: description.width ?? 640,
           height: description.height ?? 360,
           fps: description.fps ?? 30,
           duration: description.duration,
-          startTime,
+          startTime: typeof msg.startTime === 'number' ? msg.startTime : startTime,
+          playbackRate: typeof msg.playbackRate === 'number' ? msg.playbackRate : 1,
         });
       }
     };
@@ -306,9 +352,11 @@ function useMediaStream(
     };
   }, [
     assetPath,
+    closePlaybackAudioContext,
     knownDuration,
     mediaType,
     postPlaybackRequest,
+    primePlaybackAudioContext,
     resourceRef,
     surfaceId,
     surfaceKind,
@@ -336,13 +384,15 @@ function useMediaStream(
 
       isPausedRef.current = false;
       stoppedPlaybackRef.current = false;
+      primePlaybackAudioContext();
 
       const sourceHandoff = playbackStore.consumeHandoff(sourceKey, surfaceKind);
-      const startTime =
+      const requestedStartTime =
         resumeFromTime ??
         sourceHandoff?.startTime ??
         playbackStore.getPlayback(sourceKey)?.currentTime ??
         savedStartTime;
+      const startTime = normalizePlaybackStartTime(requestedStartTime, streamDurationRef.current);
       currentTimeRef.current = startTime;
       const mediaInfo = mediaInfoRef.current;
       if (mediaInfo) {
@@ -356,6 +406,7 @@ function useMediaStream(
       assetPath,
       mediaType,
       postPlaybackRequest,
+      primePlaybackAudioContext,
       resourceRef,
       savedStartTime,
       surfaceId,
@@ -461,9 +512,12 @@ function useMediaStream(
       }
       setStream(null);
       isPausedRef.current = false;
+      closePlaybackAudioContext();
     },
-    [assetPath, resourceRef, surfaceId],
+    [assetPath, closePlaybackAudioContext, resourceRef, surfaceId],
   );
+
+  useEffect(() => closePlaybackAudioContext, [closePlaybackAudioContext]);
 
   usePlaybackHandoff({
     assetPath,
@@ -743,6 +797,7 @@ function VideoPreviewRenderer({
     updatePlaybackProgress,
     stopPlayback,
     mediaDescription,
+    surfaceId,
   } = useMediaStream(assetPath, 'video', surfaceKind, resourceRef, knownDuration);
 
   const posterUrl = capturedFrame ?? thumbnailUrl;
@@ -807,21 +862,25 @@ function VideoPreviewRenderer({
         data-media-duration={String(stream.duration)}
       >
         <InlineVideoPlayer
-          videoStreamUrl={stream.videoStreamUrl}
-          audioStreamUrl={stream.audioStreamUrl}
+          video={stream.video}
+          audio={stream.audio}
+          audioContext={stream.audioContext ?? undefined}
           width={stream.width}
           height={stream.height}
           fps={stream.fps}
           duration={stream.duration}
           startTime={stream.startTime}
+          playbackRate={stream.playbackRate}
           onPause={pausePlayback}
           onResume={resumePlayback}
           onSeek={seekPlayback}
           onTimeUpdate={handleTimeUpdate}
           onStop={stopPlayback}
-          playbackState={playbackControl?.state}
-          playbackRequestId={playbackControl?.requestId}
-          playbackStartTime={playbackControl?.startTimeSeconds}
+          playbackState={playbackControl?.state ?? 'playing'}
+          playbackRequestId={
+            playbackControl?.requestId ?? `${surfaceId}:${stream.startTime}:${stream.playbackRate}`
+          }
+          playbackStartTime={playbackControl?.startTimeSeconds ?? stream.startTime}
           onEnded={handleEnded}
         />
       </div>
@@ -895,6 +954,7 @@ function AudioPreviewRenderer({
     updatePlaybackProgress,
     stopPlayback,
     mediaDescription,
+    surfaceId,
   } = useMediaStream(assetPath, 'audio', surfaceKind, resourceRef, knownDuration);
   const consumedPlaybackRequestRef = useRef<string | undefined>();
   const onPlaybackTimeUpdate = playbackControl?.onTimeUpdate;
@@ -948,7 +1008,7 @@ function AudioPreviewRenderer({
     [onPlaybackEnded, source.id, stream?.duration],
   );
 
-  if (stream && stream.audioStreamUrl) {
+  if (stream?.audio) {
     return (
       <div
         className={getAudioPreviewFrameClassName(chrome)}
@@ -957,18 +1017,22 @@ function AudioPreviewRenderer({
         data-media-duration={String(stream.duration)}
       >
         <InlineAudioPlayer
-          audioStreamUrl={stream.audioStreamUrl}
+          audio={stream.audio}
+          audioContext={stream.audioContext ?? undefined}
           duration={stream.duration}
           audioLayout={audioLayout}
           startTime={stream.startTime}
+          playbackRate={stream.playbackRate}
           onPause={pausePlayback}
           onResume={resumePlayback}
           onSeek={seekPlayback}
           onTimeUpdate={handleTimeUpdate}
           onStop={stopPlayback}
-          playbackState={playbackControl?.state}
-          playbackRequestId={playbackControl?.requestId}
-          playbackStartTime={playbackControl?.startTimeSeconds}
+          playbackState={playbackControl?.state ?? 'playing'}
+          playbackRequestId={
+            playbackControl?.requestId ?? `${surfaceId}:${stream.startTime}:${stream.playbackRate}`
+          }
+          playbackStartTime={playbackControl?.startTimeSeconds ?? stream.startTime}
           onEnded={handleEnded}
         />
       </div>
@@ -1027,6 +1091,55 @@ function readPreviewSourceResourceRef(source: PreviewSourceDescriptor): Resource
 
 function readPreviewSourceDuration(source: PreviewSourceDescriptor): number {
   return readPositiveFiniteNumber(source.metadata?.['duration']) ?? 0;
+}
+
+function readHtmlVideoDescriptor(value: unknown): HtmlVideoDescriptor | null {
+  if (
+    !isRecord(value) ||
+    value['version'] !== 1 ||
+    value['transport'] !== 'http' ||
+    typeof value['url'] !== 'string' ||
+    typeof value['mimeType'] !== 'string' ||
+    typeof value['durationSeconds'] !== 'number' ||
+    (value['preparationProfile'] !== 'h264-mp4-direct' &&
+      value['preparationProfile'] !== 'av1-mp4-direct' &&
+      value['preparationProfile'] !== 'vp8-webm-direct' &&
+      value['preparationProfile'] !== 'h264-mp4-remux' &&
+      value['preparationProfile'] !== 'vp9-mp4-remux' &&
+      value['preparationProfile'] !== 'h264-sdr-transcode')
+  ) {
+    return null;
+  }
+  return {
+    version: 1,
+    transport: 'http',
+    url: value['url'],
+    mimeType: value['mimeType'],
+    durationSeconds: value['durationSeconds'],
+    preparationProfile: value['preparationProfile'],
+  };
+}
+
+function readPcmStreamDescriptor(value: unknown): PcmStreamDescriptor | null {
+  if (
+    !isRecord(value) ||
+    value['version'] !== 1 ||
+    value['transport'] !== 'http' ||
+    value['protocol'] !== 'neko-pcm-f32le-v1' ||
+    typeof value['streamUrl'] !== 'string' ||
+    typeof value['sampleRate'] !== 'number' ||
+    typeof value['channels'] !== 'number'
+  ) {
+    return null;
+  }
+  return {
+    version: 1,
+    transport: 'http',
+    protocol: 'neko-pcm-f32le-v1',
+    streamUrl: value['streamUrl'],
+    sampleRate: value['sampleRate'],
+    channels: value['channels'],
+  };
 }
 
 function getStableSafeUrl(source: PreviewSourceDescriptor): string | undefined {

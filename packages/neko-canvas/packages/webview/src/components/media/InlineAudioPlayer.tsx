@@ -1,9 +1,6 @@
 import { useRef, useState, useCallback, useEffect } from 'react';
-import {
-  EngineAvStreamLifecycle,
-  formatTime,
-  type EngineAvAudioStreamClient,
-} from '@neko/neko-client';
+import { formatMediaTime as formatTime, type PcmStreamDescriptor } from '@neko/media';
+import { PcmAudioClient } from '@neko/media/browser';
 import { ProgressBar } from '@neko/ui/creative';
 import { PlayIcon, PauseIcon, VolumeIcon, VolumeOffIcon } from '@neko/ui/icons';
 import { t } from '../../i18n';
@@ -12,6 +9,7 @@ import { getLogger } from '../../utils/logger';
 const logger = getLogger('InlineAudioPlayer');
 
 const DEFAULT_VOLUME = 0.8;
+const PLAYBACK_SEEK_EPSILON_SECONDS = 0.001;
 const WAVEFORM_BAR_HEIGHTS = [
   30, 48, 66, 42, 58, 74, 50, 36, 62, 82, 56, 40, 68, 52, 34, 78, 64, 46, 72, 54, 38, 60, 84, 52,
   44, 70, 58, 36, 76, 62, 48, 80, 56, 42, 68, 50, 74, 46, 64, 34,
@@ -20,10 +18,12 @@ const WAVEFORM_BAR_HEIGHTS = [
 export type AudioPlayerLayout = 'transport' | 'node-card';
 
 export interface InlineAudioPlayerProps {
-  audioStreamUrl: string;
+  audio: PcmStreamDescriptor;
+  audioContext?: AudioContext;
   duration: number;
   audioLayout?: AudioPlayerLayout;
   startTime?: number;
+  playbackRate?: number;
   onPause: (currentTime: number) => void;
   onResume: () => void;
   onSeek: (time: number) => void;
@@ -36,10 +36,12 @@ export interface InlineAudioPlayerProps {
 }
 
 export function InlineAudioPlayer({
-  audioStreamUrl,
+  audio,
+  audioContext,
   duration,
   audioLayout = 'transport',
   startTime = 0,
+  playbackRate = 1,
   onPause,
   onResume,
   onSeek,
@@ -50,194 +52,141 @@ export function InlineAudioPlayer({
   playbackStartTime,
   onEnded,
 }: InlineAudioPlayerProps) {
-  const audioClientRef = useRef<EngineAvAudioStreamClient | null>(null);
-  const lifecycleRef = useRef<EngineAvStreamLifecycle | null>(null);
-  const animFrameRef = useRef<number>(0);
-  const playStartTimeRef = useRef(startTime);
-  const playWallTimeRef = useRef(0);
-  const clockSourceRef = useRef<'wall' | 'audio'>('wall');
+  const clientRef = useRef<PcmAudioClient>();
+  const ownedContextRef = useRef<AudioContext>();
   const currentTimeRef = useRef(startTime);
+  const startingRef = useRef(false);
   const handledPlaybackRequestRef = useRef<string | undefined>();
   const handledPlaybackStateRef = useRef<'playing' | 'paused' | undefined>();
-  const controlledPlaybackStateRef = useRef(playbackState);
-  const pauseIntentRef = useRef(playbackState === 'paused');
-  const completedRef = useRef(false);
-  const completePlaybackRef = useRef<(() => void) | null>(null);
-
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(startTime);
-  const [volume] = useState(DEFAULT_VOLUME);
   const [isMuted, setIsMuted] = useState(false);
-  controlledPlaybackStateRef.current = playbackState;
-  if (playbackState !== undefined) {
-    pauseIntentRef.current = playbackState === 'paused';
-  }
 
-  if (!lifecycleRef.current) {
-    lifecycleRef.current = new EngineAvStreamLifecycle({
-      callbacks: {
-        onClientsChanged: ({ audioClient }) => {
-          audioClientRef.current = audioClient;
-          if (controlledPlaybackStateRef.current === 'paused') {
-            audioClient?.pause();
-          }
-        },
-        onStreamEnd: () => {
-          if (pauseIntentRef.current) return;
-          completePlaybackRef.current?.();
-        },
-      },
-    });
-  }
+  const activateContext = useCallback((): AudioContext => {
+    if (audioContext && audioContext.state !== 'closed') {
+      if (audioContext.state === 'suspended') void audioContext.resume();
+      return audioContext;
+    }
+    let context = ownedContextRef.current;
+    if (!context || context.state === 'closed') {
+      context = new AudioContext({ sampleRate: audio.sampleRate });
+      ownedContextRef.current = context;
+    }
+    if (context.state === 'suspended') void context.resume();
+    return context;
+  }, [audio.sampleRate, audioContext]);
 
   useEffect(() => {
-    currentTimeRef.current = currentTime;
-  }, [currentTime]);
+    currentTimeRef.current = startTime;
+    setCurrentTime(startTime);
+    startingRef.current = false;
+    clientRef.current?.dispose();
+    clientRef.current = undefined;
+    return () => {
+      startingRef.current = false;
+      clientRef.current?.dispose();
+      clientRef.current = undefined;
+    };
+  }, [audio, playbackRate, startTime]);
 
-  // =========================================================================
-  // Playback loop
-  // =========================================================================
+  useEffect(() => {
+    if (!isPlaying) return;
+    let frame = 0;
+    const tick = (): void => {
+      const nextTime = clientRef.current?.isClockReady
+        ? clientRef.current.getCurrentTime()
+        : currentTimeRef.current;
+      currentTimeRef.current = nextTime;
+      setCurrentTime(nextTime);
+      onTimeUpdate?.(nextTime);
+      frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [isPlaying, onTimeUpdate]);
 
-  const completePlayback = useCallback(() => {
-    if (completedRef.current) return;
-    completedRef.current = true;
-    const endedAt = duration;
-    if (animFrameRef.current) {
-      cancelAnimationFrame(animFrameRef.current);
-      animFrameRef.current = 0;
-    }
+  useEffect(() => {
+    return () => {
+      const context = ownedContextRef.current;
+      if (context && context.state !== 'closed') void context.close();
+    };
+  }, []);
+
+  const pause = useCallback(() => {
+    void clientRef.current?.pause();
     setIsPlaying(false);
-    setCurrentTime(endedAt);
-    currentTimeRef.current = endedAt;
-    onStop(endedAt);
-    onEnded?.(endedAt);
-  }, [duration, onEnded, onStop]);
-  completePlaybackRef.current = completePlayback;
+    onPause(currentTimeRef.current);
+  }, [onPause]);
 
-  const updatePlaybackTime = useCallback(() => {
-    if (completedRef.current) return;
-
-    const audioClient = audioClientRef.current;
-
-    let newTime: number;
-    if (audioClient?.isClockReady) {
-      if (clockSourceRef.current === 'wall') {
-        clockSourceRef.current = 'audio';
-      }
-      newTime = audioClient.getCurrentTime();
-    } else {
-      const elapsed = (performance.now() - playWallTimeRef.current) / 1000;
-      newTime = playStartTimeRef.current + elapsed;
-    }
-
-    if (newTime >= duration) {
-      completePlayback();
+  const resume = useCallback(() => {
+    const context = activateContext();
+    const existingClient = clientRef.current;
+    if (existingClient?.isClockReady) {
+      void existingClient.resume().then(() => {
+        setIsPlaying(true);
+        onResume();
+      });
       return;
     }
-
-    setCurrentTime(newTime);
-    onTimeUpdate?.(newTime);
-    animFrameRef.current = requestAnimationFrame(updatePlaybackTime);
-  }, [completePlayback, duration, onTimeUpdate]);
-
-  useEffect(() => {
-    if (isPlaying) {
-      animFrameRef.current = requestAnimationFrame(updatePlaybackTime);
-    }
-    return () => {
-      if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
-    };
-  }, [isPlaying, updatePlaybackTime]);
-
-  // =========================================================================
-  // Connect stream on mount
-  // =========================================================================
-
-  useEffect(() => {
-    void lifecycleRef.current
-      ?.start({
-        audio: {
-          websocketUrl: audioStreamUrl,
-          volume: DEFAULT_VOLUME,
-          onError: (err) => logger.warn(`Audio error: ${err}`),
-        },
-      })
-      .catch((err) => logger.warn(`Inline audio lifecycle error: ${err}`));
-
-    setIsPlaying(controlledPlaybackStateRef.current !== 'paused');
+    if (startingRef.current) return;
+    startingRef.current = true;
+    currentTimeRef.current = startTime;
     setCurrentTime(startTime);
-    playStartTimeRef.current = startTime;
-    playWallTimeRef.current = performance.now();
-    clockSourceRef.current = 'wall';
-    completedRef.current = false;
-
-    return () => {
-      audioClientRef.current?.setVolume(0);
-      lifecycleRef.current?.stop();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- startTime is only used for initial value; including it would restart the stream on pause
-  }, [audioStreamUrl]);
-
-  // =========================================================================
-  // Controls
-  // =========================================================================
+    const client = new PcmAudioClient({
+      descriptor: audio,
+      playbackRate,
+      volume: DEFAULT_VOLUME,
+      onError: (error) => logger.warn(`Canvas PCM error: ${error.message}`),
+      onPlaybackEnd: () => {
+        startingRef.current = false;
+        if (clientRef.current === client) {
+          client.dispose();
+          clientRef.current = undefined;
+        }
+        currentTimeRef.current = duration;
+        setCurrentTime(duration);
+        setIsPlaying(false);
+        onStop(duration);
+        onEnded?.(duration);
+      },
+    });
+    clientRef.current = client;
+    void client
+      .prepare(context)
+      .then(() => client.startAt(context.currentTime + 0.1))
+      .then(() => {
+        startingRef.current = false;
+        if (clientRef.current !== client) return;
+        setIsPlaying(true);
+        onResume();
+      })
+      .catch((error: unknown) => {
+        startingRef.current = false;
+        if (clientRef.current === client) {
+          client.dispose();
+          clientRef.current = undefined;
+        }
+        logger.warn(`Inline audio playback failed: ${String(error)}`);
+      });
+  }, [activateContext, audio, duration, onEnded, onResume, onStop, playbackRate, startTime]);
 
   const handleTogglePlay = useCallback(
-    (e?: React.MouseEvent) => {
-      e?.stopPropagation();
-      if (isPlaying) {
-        pauseIntentRef.current = true;
-        setIsPlaying(false);
-        audioClientRef.current?.pause();
-        onPause(currentTimeRef.current);
-      } else {
-        pauseIntentRef.current = false;
-        completedRef.current = false;
-        setIsPlaying(true);
-        audioClientRef.current?.resume();
-        playStartTimeRef.current = currentTimeRef.current;
-        playWallTimeRef.current = performance.now();
-        clockSourceRef.current = 'wall';
-        onResume();
-      }
+    (event?: React.MouseEvent) => {
+      event?.stopPropagation();
+      if (isPlaying) pause();
+      else resume();
     },
-    [isPlaying, onPause, onResume],
+    [isPlaying, pause, resume],
   );
 
   const handleSeekCommit = useCallback(
     (time: number) => {
-      completedRef.current = false;
       setCurrentTime(time);
       currentTimeRef.current = time;
       onTimeUpdate?.(time);
-      playStartTimeRef.current = time;
-      playWallTimeRef.current = performance.now();
-      clockSourceRef.current = 'wall';
-      audioClientRef.current?.resetClock();
       onSeek(time);
     },
     [onSeek, onTimeUpdate],
-  );
-
-  const applyControlledPlaybackState = useCallback(
-    (nextState: 'playing' | 'paused') => {
-      if (nextState === 'paused') {
-        pauseIntentRef.current = true;
-        setIsPlaying(false);
-        audioClientRef.current?.pause();
-        onPause(currentTimeRef.current);
-        return;
-      }
-      pauseIntentRef.current = false;
-      completedRef.current = false;
-      setIsPlaying(true);
-      audioClientRef.current?.resume();
-      playStartTimeRef.current = currentTimeRef.current;
-      playWallTimeRef.current = performance.now();
-      clockSourceRef.current = 'wall';
-      onResume();
-    },
-    [onPause, onResume],
   );
 
   useEffect(() => {
@@ -250,19 +199,26 @@ export function InlineAudioPlayer({
     if (requestChanged) {
       handledPlaybackRequestRef.current = playbackRequestId;
     }
-    if (requestChanged && playbackStartTime !== undefined) {
+    if (
+      requestChanged &&
+      playbackStartTime !== undefined &&
+      Math.abs(currentTimeRef.current - playbackStartTime) > PLAYBACK_SEEK_EPSILON_SECONDS
+    ) {
       handleSeekCommit(playbackStartTime);
     }
     const nextState = playbackState ?? (requestChanged ? 'playing' : undefined);
     if (!nextState) return;
     handledPlaybackStateRef.current = nextState;
-    applyControlledPlaybackState(nextState);
+    if (nextState === 'paused' && isPlaying) pause();
+    if (nextState === 'playing' && !isPlaying) resume();
   }, [
-    applyControlledPlaybackState,
     handleSeekCommit,
+    isPlaying,
+    pause,
     playbackRequestId,
     playbackStartTime,
     playbackState,
+    resume,
   ]);
 
   const handleSeeking = useCallback((time: number) => {
@@ -274,9 +230,9 @@ export function InlineAudioPlayer({
       e.stopPropagation();
       const newMuted = !isMuted;
       setIsMuted(newMuted);
-      audioClientRef.current?.setVolume(newMuted ? 0 : volume);
+      clientRef.current?.setVolume(newMuted ? 0 : DEFAULT_VOLUME);
     },
-    [isMuted, volume],
+    [isMuted],
   );
 
   // =========================================================================

@@ -5,7 +5,6 @@
  */
 
 // Color correction mapping (UI ↔ Engine)
-export { mapBasicColorToEngine, mapEngineColorToBasic } from './colorCorrectionMapping';
 
 // Media utilities (type detection, MIME mapping)
 export {

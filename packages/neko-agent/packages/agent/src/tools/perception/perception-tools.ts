@@ -268,7 +268,7 @@ export class PerceptionImageSimilarityTool extends BuiltinTool {
           : {}),
         modelContext: {
           modelId: model,
-          providerId: 'neko-engine',
+          providerId: 'openneko-perception',
         },
         data: {
           kind: 'perception.image.similarity',
@@ -392,7 +392,7 @@ export class PerceptionImageClassifyTool extends BuiltinTool {
           : {}),
         modelContext: {
           modelId: model,
-          providerId: 'neko-engine',
+          providerId: 'openneko-perception',
         },
         data: {
           kind: 'perception.image.classify',
@@ -481,7 +481,7 @@ export class PerceptionAudioTranscribeTool extends BuiltinTool {
           : {}),
         modelContext: {
           modelId: model,
-          providerId: 'neko-engine',
+          providerId: 'openneko-perception',
         },
         data: {
           kind: 'perception.audio.transcribe',
@@ -589,7 +589,7 @@ export class PerceptionVideoDetectShotsTool extends BuiltinTool {
           ? { observationId: readNonEmptyString(args['observationId']) }
           : {}),
         modelContext: {
-          providerId: 'neko-engine',
+          providerId: 'openneko-perception',
         },
         data: {
           kind: 'perception.video.detectShots',

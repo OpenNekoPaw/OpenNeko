@@ -129,24 +129,6 @@ vi.mock('../providers/AudioPreviewProvider', () => {
   return { AudioPreviewProvider: ctor };
 });
 
-vi.mock('../providers/PanoramicImagePreviewProvider', () => {
-  const ctor = vi.fn().mockImplementation(function (this: Record<string, unknown>) {
-    this.setPreviewService = vi.fn();
-    this.dispose = vi.fn();
-  });
-  (ctor as unknown as Record<string, string>).viewType = 'neko.preview.panoramicImage';
-  return { PanoramicImagePreviewProvider: ctor };
-});
-
-vi.mock('../providers/PanoramicVideoPreviewProvider', () => {
-  const ctor = vi.fn().mockImplementation(function (this: Record<string, unknown>) {
-    this.setPreviewService = vi.fn();
-    this.dispose = vi.fn();
-  });
-  (ctor as unknown as Record<string, string>).viewType = 'neko.preview.panoramicVideo';
-  return { PanoramicVideoPreviewProvider: ctor };
-});
-
 vi.mock('../providers/model/ModelPreviewProvider', () => {
   const ctor = vi.fn().mockImplementation(function (this: Record<string, unknown>) {
     this.dispose = vi.fn();
@@ -169,7 +151,6 @@ import { activate, deactivate } from '../extension';
 import { PreviewService } from '../services/PreviewService';
 import { VideoPreviewProvider } from '../providers/VideoPreviewProvider';
 import { AudioPreviewProvider } from '../providers/AudioPreviewProvider';
-import { PanoramicImagePreviewProvider } from '../providers/PanoramicImagePreviewProvider';
 import { ModelPreviewProvider } from '../providers/model/ModelPreviewProvider';
 import * as vscode from 'vscode';
 
@@ -281,8 +262,10 @@ describe('extension', () => {
 
       expect(registeredCommands).toContain('neko.preview.openVideo');
       expect(registeredCommands).toContain('neko.preview.openAudio');
-      expect(registeredCommands).toContain('neko.preview.openPanoramicImage');
       expect(registeredCommands).toContain('neko.preview.openThreeReferenceGuide');
+      expect(registeredCommands).not.toContain('neko.preview.openPanoramicImage');
+      expect(registeredCommands).not.toContain('neko.preview.openPanoramicVideo');
+      expect(registeredCommands).not.toContain('neko.preview.openBestPanoramic');
     });
 
     it('opens an explicit no-source mannequin guide without selecting a model file', async () => {
@@ -323,11 +306,9 @@ describe('extension', () => {
 
       const videoResolver = vi.mocked(VideoPreviewProvider).mock.calls[0]?.[2];
       const audioResolver = vi.mocked(AudioPreviewProvider).mock.calls[0]?.[2];
-      const panoramicResolver = vi.mocked(PanoramicImagePreviewProvider).mock.calls[0]?.[2];
 
       expect(videoResolver).toBeTypeOf('function');
       expect(audioResolver).toBe(videoResolver);
-      expect(panoramicResolver).toBe(videoResolver);
       await videoResolver?.();
       await audioResolver?.();
       expect(PreviewService.tryCreate).toHaveBeenCalledTimes(1);
@@ -349,16 +330,7 @@ describe('extension', () => {
 
       expect(api).toBeDefined();
       expect(typeof api.isAvailable).toBe('boolean');
-      expect(api.port).toBeNull();
-      expect(typeof api.getStreamWebSocketUrl).toBe('function');
-      expect(typeof api.getPreviewBaseUrl).toBe('function');
       expect(typeof api.probeMedia).toBe('function');
-      expect(typeof api.startPlayback).toBe('function');
-      expect(typeof api.stopStreams).toBe('function');
-      expect(typeof api.seekStreams).toBe('function');
-      expect(typeof api.pauseStreams).toBe('function');
-      expect(typeof api.resumeStreams).toBe('function');
-      expect(typeof api.setStreamSpeed).toBe('function');
       expect(typeof api.captureFrame).toBe('function');
       expect(typeof api.registerPreviewAsset).toBe('function');
       expect(typeof api.requestPreviewVariant).toBe('function');
@@ -372,7 +344,6 @@ describe('extension', () => {
       const api = await activate(context);
 
       expect(api.isAvailable).toBe(false);
-      expect(api.port).toBeNull();
     });
 
     it('should fall back to default open for CBR document locator reveals', async () => {
@@ -412,7 +383,6 @@ describe('extension', () => {
 
       // Should still activate and return API, just not available
       expect(api.isAvailable).toBe(false);
-      expect(api.port).toBeNull();
     });
 
     it('should preserve the lazy resolver when service creation fails', async () => {
@@ -427,16 +397,18 @@ describe('extension', () => {
     });
 
     describe('API methods', () => {
-      it('getStreamWebSocketUrl should delegate to PreviewService', async () => {
+      it('captureFrame should delegate to the shared Node media service', async () => {
         const context = createMockContext();
         const api = await activate(context);
 
         const resolver = vi.mocked(VideoPreviewProvider).mock.calls[0]?.[2];
         await resolver?.();
+        mockPreviewService.captureFrame.mockResolvedValueOnce('data:image/jpeg;base64,frame');
 
-        const url = api.getStreamWebSocketUrl('stream-abc');
+        const frame = await api.captureFrame('/media/video.mp4', 3.5, 75);
 
-        expect(url).toBe('ws://127.0.0.1:9090/v1/streams/stream-abc');
+        expect(frame).toBe('data:image/jpeg;base64,frame');
+        expect(mockPreviewService.captureFrame).toHaveBeenCalledWith('/media/video.mp4', 3.5, 75);
       });
 
       it('probeMedia should reject when service is not available', async () => {
@@ -453,7 +425,7 @@ describe('extension', () => {
         );
       });
 
-      it('stopStreams should resolve even when service is not available', async () => {
+      it('unregisterPreviewAsset is idempotent when service is not available', async () => {
         vi.mocked(PreviewService.tryCreate).mockResolvedValueOnce(null);
 
         const context = createMockContext();
@@ -462,7 +434,7 @@ describe('extension', () => {
         const resolver = vi.mocked(VideoPreviewProvider).mock.calls[0]?.[2];
         await resolver?.();
 
-        await expect(api.stopStreams('v1', 'a1')).resolves.toBeUndefined();
+        await expect(api.unregisterPreviewAsset('asset-1')).resolves.toBeUndefined();
       });
     });
   });

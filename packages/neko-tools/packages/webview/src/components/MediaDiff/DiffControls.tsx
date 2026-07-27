@@ -5,8 +5,8 @@
 
 import { memo, useState, useCallback } from 'react';
 import type { ReactNode } from 'react';
-import type { DiffViewMode } from '@neko/shared';
-import { formatMediaTime } from '@neko/neko-client';
+import type { DiffViewMode } from '@neko-tools/contracts';
+import { formatMediaTimeWithFraction } from '@neko/media';
 import { Badge, Button, Slider } from '@neko/ui/primitives';
 import { LayersIcon, SettingsIcon, toCodiconClassName } from '@neko/ui/icons';
 import { useTranslation } from '../../i18n/I18nContext';
@@ -132,7 +132,7 @@ const SliderControl = memo(function SliderControl({
 
 /** Format seconds as m:ss.s */
 function formatTime(seconds: number): string {
-  return formatMediaTime(seconds, { fractionalDigits: 1 });
+  return formatMediaTimeWithFraction(seconds, 1);
 }
 
 /** Parse time string (m:ss.s or plain seconds) to seconds */

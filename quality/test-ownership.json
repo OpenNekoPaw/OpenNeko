@@ -109,8 +109,8 @@
       "testScope": "src/**/*.test.{ts,tsx}"
     },
     {
-      "path": "packages/neko-client",
-      "owner": "packages/neko-client",
+      "path": "packages/neko-media",
+      "owner": "packages/neko-media",
       "mode": "self",
       "sourceScope": "src/**/*.{ts,tsx}",
       "testScope": "src/**/*.test.{ts,tsx}"
@@ -156,20 +156,6 @@
       "mode": "self",
       "sourceScope": "src/**/*.{ts,tsx}",
       "testScope": "src/**/*.test.{ts,tsx}"
-    },
-    {
-      "path": "packages/neko-engine",
-      "owner": "packages/neko-engine",
-      "mode": "self",
-      "sourceScope": "src/**/*.{ts,tsx}",
-      "testScope": "src/**/*.test.{ts,tsx}"
-    },
-    {
-      "path": "packages/neko-engine/packages/extension",
-      "owner": "packages/neko-engine",
-      "mode": "aggregated",
-      "sourceScope": "src/**/*.{ts,tsx}",
-      "testScope": "packages/extension/src/**/*.test.{ts,tsx}"
     },
     {
       "path": "packages/neko-entity",
@@ -226,6 +212,13 @@
       "mode": "self",
       "sourceScope": "src/**/*.{ts,tsx}",
       "testScope": "src and package child tests"
+    },
+    {
+      "path": "packages/neko-tools/packages/contracts",
+      "owner": "packages/neko-tools/packages/contracts",
+      "mode": "self",
+      "sourceScope": "src/**/*.ts",
+      "testScope": "src/**/*.test.ts"
     },
     {
       "path": "packages/neko-tools/packages/extension",

@@ -13,9 +13,9 @@ import type {
   CanvasExtractStructuredContentResult,
   CanvasUpdateBlockRequest,
   CanvasUpdateBlockResult,
-  CanvasNodeUpdateOperation,
   PortDefinition,
 } from '@neko/shared';
+import type { CanvasNodeUpdateOperation } from '@neko-canvas/domain';
 import {
   createNodeConnectionEndpoint,
   getContainerChildIds,

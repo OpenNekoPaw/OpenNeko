@@ -8,6 +8,8 @@ import {
   serializeOtio,
   type CutCommand,
   type CutRouteAppendItem,
+  type CutHtmlVideoDescriptor,
+  type CutPcmStreamDescriptor,
   type TimelineView,
 } from '@neko-cut/domain';
 import type {
@@ -23,14 +25,14 @@ import {
 import { CutOtioDocument, VSCodeCutDocumentStorage } from './CutOtioDocument';
 import { generateClipRepresentations, readClipRepresentationRequests } from './clipRepresentations';
 import { resolvePreviewSelection } from './previewSelection';
+import { PreviewOperationQueue } from './PreviewOperationQueue';
 import { executeCutWorkbenchHistory } from './cutHistory';
 import { CutExportTaskRegistry } from './CutExportTaskRegistry';
 import { freezeCutExportRequest, readCutExportSettings } from './cutExportRequest';
 import type { ExportJobStore } from '../services/export-job';
 import { CutWorkspaceMediaImporter } from '../services/CutWorkspaceMediaImporter';
 import { CutWorkspaceMediaPaths } from '../services/CutWorkspaceMediaPaths';
-import { EngineConnection } from '../services/EngineConnection';
-import { NekoEngineCutMediaAdapter } from '../services/NekoEngineCutMediaAdapter';
+import { NodeFfmpegCutMediaAdapter } from '../services/NodeFfmpegCutMediaAdapter';
 import { handleError } from '../base';
 import { projectCutAgentContext, type CutAgentSelection } from './cutAgentContext';
 import { buildDuplicateClipCommands, buildPasteClipCommands } from './cutClipboardCommands';
@@ -63,10 +65,26 @@ interface CutPreviewRecord {
     readonly width: number;
     readonly height: number;
     readonly framesPerSecond: number;
-    readonly videoStreamUrl?: string;
-    readonly audioStreamUrls: readonly string[];
+    readonly video?: CutHtmlVideoDescriptor;
+    readonly videoPlaybackRate?: number;
+    readonly audioStreams: readonly CutPcmStreamDescriptor[];
     readonly audioGainsDb: readonly number[];
+    readonly audioPlayback: readonly {
+      readonly mediaOriginSeconds: number;
+      readonly playbackRate: number;
+      readonly positionSeconds: number;
+      readonly clipDurationSeconds: number;
+      readonly fadeInSeconds: number;
+      readonly fadeOutSeconds: number;
+    }[];
   };
+}
+
+class CutPreviewSupersededError extends Error {
+  constructor(generation: number) {
+    super(`Cut preview generation ${generation} was superseded.`);
+    this.name = 'CutPreviewSupersededError';
+  }
 }
 
 export class CutOtioEditorProvider implements vscode.CustomEditorProvider<CutOtioDocument> {
@@ -79,11 +97,11 @@ export class CutOtioEditorProvider implements vscode.CustomEditorProvider<CutOti
     vscode.WebviewPanel,
     { readonly active?: CutPreviewRecord; readonly prepared?: CutPreviewRecord }
   >();
+  private readonly previewOperations = new PreviewOperationQueue<vscode.WebviewPanel>();
   private readonly previewGenerations = new Map<vscode.WebviewPanel, number>();
   private readonly representationRequests = new Map<vscode.WebviewPanel, AbortController>();
   private readonly documents = new Map<string, CutOtioDocument>();
   private readonly storage = new VSCodeCutDocumentStorage();
-  private readonly engineConnection = new EngineConnection();
   private readonly exportTasks: CutExportTaskRegistry;
   private readonly localResourceAccess: LocalResourceAccessService;
   private activePanel: vscode.WebviewPanel | undefined;
@@ -139,7 +157,9 @@ export class CutOtioEditorProvider implements vscode.CustomEditorProvider<CutOti
     }
     const document = new CutOtioDocument(
       session,
-      new NekoEngineCutMediaAdapter(workspace.uri.fsPath, this.engineConnection),
+      new NodeFfmpegCutMediaAdapter(workspace.uri.fsPath, {
+        cacheRoot: nodePath.join(this.context.globalStorageUri.fsPath, 'cut-media-runtime'),
+      }),
     );
     this.documents.set(uri.toString(), document);
     document.onDidDispose(() => {
@@ -248,14 +268,16 @@ export class CutOtioEditorProvider implements vscode.CustomEditorProvider<CutOti
         this.activePanel = undefined;
         this.hostEvents.onDocumentStatusUpdate(undefined);
       }
-      void this.stopPanelPreview(document, panel).catch((error: unknown) => {
-        void handleError(
-          new Error(
-            `Failed to stop Cut preview: ${error instanceof Error ? error.message : String(error)}`,
-          ),
-          { showToUser: false },
-        );
-      });
+      void this.previewOperations
+        .run(panel, () => this.stopPanelPreview(document, panel))
+        .catch((error: unknown) => {
+          void handleError(
+            new Error(
+              `Failed to stop Cut preview: ${error instanceof Error ? error.message : String(error)}`,
+            ),
+            { showToUser: false },
+          );
+        });
     });
     panel.webview.onDidReceiveMessage((message: unknown) =>
       this.handleMessage(document, panel, message),
@@ -345,17 +367,26 @@ export class CutOtioEditorProvider implements vscode.CustomEditorProvider<CutOti
       if (value['type'] === 'cut:preview-start') {
         if (
           typeof value['timelineTimeSeconds'] !== 'number' ||
-          typeof value['generation'] !== 'number'
+          typeof value['generation'] !== 'number' ||
+          (value['retainedVideoClipId'] !== undefined &&
+            typeof value['retainedVideoClipId'] !== 'string') ||
+          (value['playbackMode'] !== 'playing' && value['playbackMode'] !== 'paused')
         ) {
           throw new Error('Invalid Cut preview intent.');
         }
         assertCurrentIdentity(document.session.view(), identity);
         this.previewGenerations.set(panel, value['generation']);
-        await this.startPanelPreview(
-          document,
-          panel,
-          value['timelineTimeSeconds'],
-          value['generation'],
+        await this.previewOperations.run(panel, () =>
+          this.startPanelPreview(
+            document,
+            panel,
+            value['timelineTimeSeconds'],
+            value['generation'],
+            typeof value['retainedVideoClipId'] === 'string'
+              ? value['retainedVideoClipId']
+              : undefined,
+            value['playbackMode'] === 'playing',
+          ),
         );
         return;
       }
@@ -368,11 +399,13 @@ export class CutOtioEditorProvider implements vscode.CustomEditorProvider<CutOti
         }
         assertCurrentIdentity(document.session.view(), identity);
         this.previewGenerations.set(panel, value['generation']);
-        await this.preparePanelPreview(
-          document,
-          panel,
-          value['timelineTimeSeconds'],
-          value['generation'],
+        await this.previewOperations.run(panel, () =>
+          this.preparePanelPreview(
+            document,
+            panel,
+            value['timelineTimeSeconds'],
+            value['generation'],
+          ),
         );
         return;
       }
@@ -381,7 +414,30 @@ export class CutOtioEditorProvider implements vscode.CustomEditorProvider<CutOti
           throw new Error('Invalid Cut preview activation intent.');
         }
         assertCurrentIdentity(document.session.view(), identity);
-        await this.activatePanelPreview(document, panel, value['generation']);
+        await this.previewOperations.run(panel, () =>
+          this.activatePanelPreview(document, panel, value['generation']),
+        );
+        return;
+      }
+      if (value['type'] === 'cut:preview-pause') {
+        if (
+          typeof value['generation'] !== 'number' ||
+          (value['preparedGeneration'] !== undefined &&
+            typeof value['preparedGeneration'] !== 'number')
+        ) {
+          throw new Error('Invalid Cut preview pause intent.');
+        }
+        assertCurrentIdentity(document.session.view(), identity);
+        this.previewGenerations.set(panel, value['generation']);
+        await this.previewOperations.run(panel, () =>
+          this.pausePanelPreview(
+            document,
+            panel,
+            typeof value['preparedGeneration'] === 'number'
+              ? value['preparedGeneration']
+              : undefined,
+          ),
+        );
         return;
       }
       if (value['type'] === 'cut:preview-stop') {
@@ -389,7 +445,7 @@ export class CutOtioEditorProvider implements vscode.CustomEditorProvider<CutOti
         if (typeof value['generation'] === 'number') {
           this.previewGenerations.set(panel, value['generation']);
         }
-        await this.stopPanelPreview(document, panel);
+        await this.previewOperations.run(panel, () => this.stopPanelPreview(document, panel));
         return;
       }
       if (value['type'] === 'cut:request-representations') {
@@ -433,6 +489,9 @@ export class CutOtioEditorProvider implements vscode.CustomEditorProvider<CutOti
             revision: requestedView.revision,
             results,
           });
+        } catch (error) {
+          if (controller.signal.aborted) return;
+          throw error;
         } finally {
           if (this.representationRequests.get(panel) === controller) {
             this.representationRequests.delete(panel);
@@ -737,6 +796,7 @@ export class CutOtioEditorProvider implements vscode.CustomEditorProvider<CutOti
       }
       await this.applyCommand(document, identity, command);
     } catch (error) {
+      if (error instanceof CutPreviewSupersededError) return;
       mutationSucceeded = false;
       if (!isKnownCutUserError(error)) {
         await handleError(error, { showToUser: false });
@@ -943,11 +1003,24 @@ export class CutOtioEditorProvider implements vscode.CustomEditorProvider<CutOti
     panel: vscode.WebviewPanel,
     timelineTime: number,
     generation: number,
+    retainedVideoClipId?: string,
+    includeAudio = true,
   ): Promise<void> {
-    await this.stopPanelPreview(document, panel);
-    const record = await this.buildPanelPreview(document, panel, timelineTime, generation);
+    const current = this.previewSessions.get(panel);
+    const record = await this.buildPanelPreview(
+      document,
+      panel,
+      timelineTime,
+      generation,
+      retainedVideoClipId,
+      includeAudio,
+    );
     try {
-      this.previewSessions.set(panel, { prepared: record });
+      if (current?.prepared) await this.stopPreviewRecord(document, current.prepared);
+      this.previewSessions.set(panel, {
+        ...(current?.active ? { active: current.active } : {}),
+        prepared: record,
+      });
       await panel.webview.postMessage({
         type: 'cut:preview-ready',
         generation,
@@ -955,7 +1028,11 @@ export class CutOtioEditorProvider implements vscode.CustomEditorProvider<CutOti
       });
     } catch (error) {
       if (this.previewSessions.get(panel)?.prepared === record) {
-        this.previewSessions.delete(panel);
+        if (current?.active) {
+          this.previewSessions.set(panel, { active: current.active });
+        } else {
+          this.previewSessions.delete(panel);
+        }
       }
       await this.stopPreviewRecord(document, record);
       throw error;
@@ -967,6 +1044,8 @@ export class CutOtioEditorProvider implements vscode.CustomEditorProvider<CutOti
     panel: vscode.WebviewPanel,
     timelineTime: number,
     generation: number,
+    retainedVideoClipId?: string,
+    includeAudio = true,
   ): Promise<CutPreviewRecord> {
     const view = document.session.view();
     const selection = resolvePreviewSelection(view, timelineTime);
@@ -977,12 +1056,16 @@ export class CutOtioEditorProvider implements vscode.CustomEditorProvider<CutOti
     let preview:
       | {
           readonly sessionId: string;
-          readonly videoStreamUrl?: string;
-          readonly audioStreamUrl?: string;
+          readonly video: CutHtmlVideoDescriptor;
         }
       | undefined;
     let videoProbe:
-      | { readonly width: number; readonly height: number; readonly framesPerSecond: number }
+      | {
+          readonly width: number;
+          readonly height: number;
+          readonly framesPerSecond: number;
+          readonly hasAudio: boolean;
+        }
       | undefined;
     if (videoClip) {
       const source = await paths.resolveTarget(document.uri.fsPath, videoClip.targetUrl);
@@ -990,48 +1073,78 @@ export class CutOtioEditorProvider implements vscode.CustomEditorProvider<CutOti
       videoProbe = await document.mediaAdapter.probe({
         workspaceRelativePath: source.workspaceRelativePath,
       });
-      preview = await document.mediaAdapter.startPreview(
-        { workspaceRelativePath: source.workspaceRelativePath },
-        {
-          startTimeSeconds:
-            videoClip.sourceStartSeconds +
-            Math.max(0, timelineTime - videoClip.startSeconds) * videoClip.playbackRate,
-          includeAudio: !selection.videoAudioMuted && !videoClip.audio.muted,
-          playbackRate: videoClip.playbackRate,
-          startPaused: true,
-        },
-      );
+      if (videoClip.clipId !== retainedVideoClipId) {
+        preview = await document.mediaAdapter.startPreview(
+          { workspaceRelativePath: source.workspaceRelativePath },
+          {
+            startTimeSeconds:
+              videoClip.sourceStartSeconds +
+              Math.max(0, timelineTime - videoClip.startSeconds) * videoClip.playbackRate,
+            durationSeconds:
+              (selection.videoSegmentEndSeconds ?? selection.segmentEndSeconds) - timelineTime,
+            playbackRate: videoClip.playbackRate,
+            startPaused: true,
+          },
+        );
+      }
     }
-    const pcmSessions: Array<{ readonly sessionId: string; readonly streamUrl: string }> = [];
+    const pcmSessions: Array<{
+      readonly sessionId: string;
+      readonly stream: CutPcmStreamDescriptor;
+    }> = [];
     try {
-      for (const audioClip of selection.audioClips) {
-        const audioSource = await paths.resolveTarget(document.uri.fsPath, audioClip.targetUrl);
-        if (audioSource.status !== 'available') {
-          throw new Error(`Cannot preview missing audio media: ${audioClip.targetUrl}`);
-        }
-        pcmSessions.push(
-          await document.mediaAdapter.startPcm(
-            { workspaceRelativePath: audioSource.workspaceRelativePath },
-            {
-              startTimeSeconds:
-                audioClip.sourceStartSeconds +
-                Math.max(0, timelineTime - audioClip.startSeconds) * audioClip.playbackRate,
+      const audibleClips = includeAudio
+        ? [
+            ...(!selection.videoAudioMuted &&
+            videoClip &&
+            videoProbe?.hasAudio === true &&
+            !videoClip.audio.muted
+              ? [videoClip]
+              : []),
+            ...selection.audioClips,
+          ]
+        : [];
+      if (audibleClips.length > 0) {
+        const mixSources = await Promise.all(
+          audibleClips.map(async (audioClip) => {
+            const audioSource = await paths.resolveTarget(document.uri.fsPath, audioClip.targetUrl);
+            if (audioSource.status !== 'available') {
+              throw new Error(`Cannot preview missing audio media: ${audioClip.targetUrl}`);
+            }
+            const clipPositionSeconds = Math.max(0, timelineTime - audioClip.startSeconds);
+            return {
+              source: { workspaceRelativePath: audioSource.workspaceRelativePath },
+              sourceStartSeconds:
+                audioClip.sourceStartSeconds + clipPositionSeconds * audioClip.playbackRate,
               playbackRate: audioClip.playbackRate,
-              startPaused: true,
-            },
-          ),
+              gainDb: audioClip.audio.gainDb,
+              clipPositionSeconds,
+              clipDurationSeconds: audioClip.durationSeconds,
+              fadeInSeconds: audioClip.audio.fadeInSeconds,
+              fadeOutSeconds: audioClip.audio.fadeOutSeconds,
+            };
+          }),
+        );
+        pcmSessions.push(
+          await document.mediaAdapter.startPcmMix(mixSources, {
+            timelineStartSeconds: timelineTime,
+            durationSeconds: selection.segmentEndSeconds - timelineTime,
+            startPaused: true,
+          }),
         );
       }
       if (this.previewGenerations.get(panel) !== generation) {
-        throw new Error(`Cut preview generation ${generation} is no longer current.`);
+        throw new CutPreviewSupersededError(generation);
       }
       const profile = view.profile;
-      const primaryClockClip =
-        preview?.audioStreamUrl && videoClip ? videoClip : (selection.audioClips[0] ?? videoClip);
-      const mediaSourceTimeSeconds = primaryClockClip
-        ? primaryClockClip.sourceStartSeconds +
-          Math.max(0, timelineTime - primaryClockClip.startSeconds) * primaryClockClip.playbackRate
-        : undefined;
+      const hasMixedPcm = pcmSessions.length > 0;
+      const mediaSourceTimeSeconds = hasMixedPcm
+        ? timelineTime
+        : videoClip
+          ? videoClip.sourceStartSeconds +
+            Math.max(0, timelineTime - videoClip.startSeconds) * videoClip.playbackRate
+          : undefined;
+      const mediaPlaybackRate = hasMixedPcm ? 1 : videoClip?.playbackRate;
       return {
         generation,
         ...(preview ? { videoSessionId: preview.sessionId } : {}),
@@ -1041,10 +1154,10 @@ export class CutOtioEditorProvider implements vscode.CustomEditorProvider<CutOti
           timelineTimeSeconds: selection.timelineTimeSeconds,
           segmentEndSeconds: selection.segmentEndSeconds,
           playbackEndSeconds: selection.playbackEndSeconds,
-          ...(mediaSourceTimeSeconds !== undefined && primaryClockClip
+          ...(mediaSourceTimeSeconds !== undefined && mediaPlaybackRate !== undefined
             ? {
                 mediaSourceTimeSeconds,
-                mediaPlaybackRate: primaryClockClip.playbackRate,
+                mediaPlaybackRate,
               }
             : {}),
           width: videoProbe?.width ?? profile?.width ?? 1920,
@@ -1052,15 +1165,18 @@ export class CutOtioEditorProvider implements vscode.CustomEditorProvider<CutOti
           framesPerSecond:
             videoProbe?.framesPerSecond ??
             (profile ? profile.editRateNumerator / profile.editRateDenominator : 30),
-          ...(preview?.videoStreamUrl ? { videoStreamUrl: preview.videoStreamUrl } : {}),
-          audioStreamUrls: [
-            ...(preview?.audioStreamUrl ? [preview.audioStreamUrl] : []),
-            ...pcmSessions.map((session) => session.streamUrl),
-          ],
-          audioGainsDb: [
-            ...(preview?.audioStreamUrl && videoClip ? [videoClip.audio.gainDb] : []),
-            ...selection.audioClips.map((clip) => clip.audio.gainDb),
-          ],
+          ...(preview ? { video: preview.video } : {}),
+          ...(videoClip ? { videoPlaybackRate: videoClip.playbackRate } : {}),
+          audioStreams: pcmSessions.map((session) => session.stream),
+          audioGainsDb: pcmSessions.map(() => 0),
+          audioPlayback: pcmSessions.map(() => ({
+            mediaOriginSeconds: timelineTime,
+            playbackRate: 1,
+            positionSeconds: 0,
+            clipDurationSeconds: selection.segmentEndSeconds - timelineTime,
+            fadeInSeconds: 0,
+            fadeOutSeconds: 0,
+          })),
         },
       };
     } catch (error) {
@@ -1075,8 +1191,9 @@ export class CutOtioEditorProvider implements vscode.CustomEditorProvider<CutOti
           width: 0,
           height: 0,
           framesPerSecond: 0,
-          audioStreamUrls: [],
+          audioStreams: [],
           audioGainsDb: [],
+          audioPlayback: [],
         },
       });
       throw error;
@@ -1089,8 +1206,14 @@ export class CutOtioEditorProvider implements vscode.CustomEditorProvider<CutOti
     timelineTime: number,
     generation: number,
   ): Promise<void> {
-    const record = await this.buildPanelPreview(document, panel, timelineTime, generation);
     const current = this.previewSessions.get(panel);
+    const record = await this.buildPanelPreview(
+      document,
+      panel,
+      timelineTime,
+      generation,
+      current?.active?.descriptor.videoClipId,
+    );
     if (current?.prepared) await this.stopPreviewRecord(document, current.prepared);
     this.previewSessions.set(panel, {
       ...(current?.active ? { active: current.active } : {}),
@@ -1122,16 +1245,35 @@ export class CutOtioEditorProvider implements vscode.CustomEditorProvider<CutOti
   ): Promise<void> {
     const current = this.previewSessions.get(panel);
     const prepared = current?.prepared;
+    if (this.previewGenerations.get(panel) !== generation) {
+      throw new CutPreviewSupersededError(generation);
+    }
     if (!prepared || prepared.generation !== generation) {
       throw new Error(`Cut preview generation ${generation} is not prepared.`);
     }
+    const activated =
+      current.active?.videoSessionId &&
+      !prepared.videoSessionId &&
+      current.active.descriptor.videoClipId !== undefined &&
+      current.active.descriptor.videoClipId === prepared.descriptor.videoClipId
+        ? { ...prepared, videoSessionId: current.active.videoSessionId }
+        : prepared;
     await this.resumePreviewRecord(document, prepared);
-    this.previewSessions.set(panel, { active: prepared });
+    this.previewSessions.set(panel, { active: activated });
     await panel.webview.postMessage({
       type: 'cut:preview-activated',
       generation,
     });
-    if (current.active) await this.stopPreviewRecord(document, current.active);
+    if (current.active) {
+      if (
+        activated.videoSessionId !== undefined &&
+        activated.videoSessionId === current.active.videoSessionId
+      ) {
+        await this.stopPreviewRecord(document, withoutVideoSession(current.active));
+      } else {
+        await this.stopPreviewRecord(document, current.active);
+      }
+    }
   }
 
   private async stopPreviewRecord(
@@ -1150,19 +1292,86 @@ export class CutOtioEditorProvider implements vscode.CustomEditorProvider<CutOti
     }
   }
 
+  private async pausePanelPreview(
+    document: CutOtioDocument,
+    panel: vscode.WebviewPanel,
+    preparedGeneration?: number,
+  ): Promise<void> {
+    const sessions = this.previewSessions.get(panel);
+    if (!sessions) return;
+    const requested =
+      preparedGeneration === undefined
+        ? sessions.active
+        : sessions.prepared?.generation === preparedGeneration
+          ? sessions.prepared
+          : undefined;
+    if (preparedGeneration !== undefined && !requested) {
+      throw new Error(`Cut paused preview generation ${preparedGeneration} is not prepared.`);
+    }
+
+    const retained =
+      requested &&
+      !requested.videoSessionId &&
+      sessions.active?.videoSessionId &&
+      requested.descriptor.videoClipId !== undefined &&
+      requested.descriptor.videoClipId === sessions.active.descriptor.videoClipId
+        ? { ...requested, videoSessionId: sessions.active.videoSessionId }
+        : requested;
+    const retainedVideoSessionId = retained?.videoSessionId;
+    if (retainedVideoSessionId) {
+      this.previewSessions.set(panel, {
+        active: {
+          ...retained,
+          videoSessionId: retainedVideoSessionId,
+          pcmSessionIds: [],
+        },
+      });
+    } else {
+      this.previewSessions.delete(panel);
+    }
+
+    const records = [
+      ...new Set(
+        [sessions.active, sessions.prepared].filter(
+          (record): record is CutPreviewRecord => record !== undefined,
+        ),
+      ),
+    ];
+    const results = await Promise.allSettled(
+      records.map((record) =>
+        record === requested || record.videoSessionId === retainedVideoSessionId
+          ? this.stopPreviewRecord(document, withoutVideoSession(record))
+          : this.stopPreviewRecord(document, record),
+      ),
+    );
+    const failures = results.flatMap((result) =>
+      result.status === 'rejected' ? [result.reason] : [],
+    );
+    if (failures.length > 0) {
+      throw new AggregateError(
+        failures,
+        'One or more Cut preview audio sessions could not be paused.',
+      );
+    }
+  }
+
   private async stopPanelPreview(
     document: CutOtioDocument,
     panel: vscode.WebviewPanel,
   ): Promise<void> {
     const sessions = this.previewSessions.get(panel);
     if (!sessions) return;
-    const records = [sessions.active, sessions.prepared].filter(
-      (record): record is CutPreviewRecord => record !== undefined,
-    );
+    this.previewSessions.delete(panel);
+    const records = [
+      ...new Set(
+        [sessions.active, sessions.prepared].filter(
+          (record): record is CutPreviewRecord => record !== undefined,
+        ),
+      ),
+    ];
     const results = await Promise.allSettled(
       records.map((record) => this.stopPreviewRecord(document, record)),
     );
-    this.previewSessions.delete(panel);
     const failures = results.flatMap((result) =>
       result.status === 'rejected' ? [result.reason] : [],
     );
@@ -1179,7 +1388,7 @@ export class CutOtioEditorProvider implements vscode.CustomEditorProvider<CutOti
     await Promise.all(
       panels.map(async (panel) => {
         this.previewGenerations.delete(panel);
-        await this.stopPanelPreview(document, panel);
+        await this.previewOperations.run(panel, () => this.stopPanelPreview(document, panel));
       }),
     );
   }
@@ -1211,7 +1420,7 @@ export class CutOtioEditorProvider implements vscode.CustomEditorProvider<CutOti
       vscode.Uri.joinPath(this.context.extensionUri, 'dist', 'webview'),
     );
     const nonce = randomId();
-    return `<!DOCTYPE html><html ${injectLocaleAttribute()}><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}'; img-src ${webview.cspSource} data: blob:; media-src ${webview.cspSource} data: blob:; connect-src ws://127.0.0.1:* http://127.0.0.1:*;"><title>Neko Cut</title><link rel="stylesheet" href="${root}/assets/style.css"></head><body><div id="root"></div><script nonce="${nonce}">window.documentUri=${JSON.stringify(documentUri.toString())};</script><script nonce="${nonce}" type="module" src="${root}/assets/index.js"></script></body></html>`;
+    return `<!DOCTYPE html><html ${injectLocaleAttribute()}><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}'; img-src ${webview.cspSource} data: blob:; media-src ${webview.cspSource} data: http://127.0.0.1:*; connect-src ws://127.0.0.1:* http://127.0.0.1:*;"><title>Neko Cut</title><link rel="stylesheet" href="${root}/assets/style.css"></head><body><div id="root"></div><script nonce="${nonce}">window.documentUri=${JSON.stringify(documentUri.toString())};</script><script nonce="${nonce}" type="module" src="${root}/assets/index.js"></script></body></html>`;
   }
 }
 
@@ -1536,6 +1745,14 @@ export function readCommand(value: unknown): CutCommand {
       rightClipId: value['rightClipId'],
     };
   throw new Error(`Unsupported or invalid Cut command: ${type}`);
+}
+
+function withoutVideoSession(record: CutPreviewRecord): CutPreviewRecord {
+  return {
+    generation: record.generation,
+    pcmSessionIds: record.pcmSessionIds,
+    descriptor: record.descriptor,
+  };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

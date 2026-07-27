@@ -30,7 +30,7 @@ export const lowConfidenceToolEvidenceFixture: PerceptionEvidence = {
   modelContext: {
     modelId: 'clip-zero-shot',
     modelVersion: 'fixture',
-    providerId: 'neko-engine',
+    providerId: 'openneko-perception',
   },
 };
 

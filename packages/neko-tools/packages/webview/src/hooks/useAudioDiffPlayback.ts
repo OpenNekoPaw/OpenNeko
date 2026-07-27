@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { AudioStreamConfig } from '@neko/shared';
-import type { AudioStreamClient } from '@neko/neko-client';
+import type { AudioStreamConfig } from '@neko-tools/contracts';
+import type { PcmAudioClient } from '@neko/media/browser';
 import { useMediaDiffRuntime } from '../runtime/MediaDiffRuntimeContext';
 import { getLogger } from '../utils/logger';
 
@@ -25,11 +25,22 @@ export function useAudioDiffPlayback({
   onTimeChange,
   onAudioStreamControl,
 }: UseAudioDiffPlaybackOptions): UseAudioDiffPlaybackResult {
-  const { streamClientFactory, rafScheduler } = useMediaDiffRuntime();
-  const currentClientRef = useRef<AudioStreamClient | null>(null);
-  const previousClientRef = useRef<AudioStreamClient | null>(null);
+  const { streamClientFactory, rafScheduler, audioContextFactory } = useMediaDiffRuntime();
+  const currentClientRef = useRef<PcmAudioClient>();
+  const previousClientRef = useRef<PcmAudioClient>();
+  const audioContextRef = useRef<AudioContext>();
   const rafHandleRef = useRef<number | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
+
+  const activateAudio = useCallback((): AudioContext => {
+    let context = audioContextRef.current;
+    if (!context || context.state === 'closed') {
+      context = audioContextFactory.create({ sampleRate: 48_000 });
+      audioContextRef.current = context;
+    }
+    void audioContextFactory.resume(context);
+    return context;
+  }, [audioContextFactory]);
 
   const cancelTick = useCallback(() => {
     rafScheduler.cancelFrame(rafHandleRef.current);
@@ -37,54 +48,44 @@ export function useAudioDiffPlayback({
   }, [rafScheduler]);
 
   useEffect(() => {
-    if (!audioStreamConfig) {
-      return;
-    }
-
-    const { port, currentAudioStreamId, previousAudioStreamId } = audioStreamConfig;
-    const baseUrl = `ws://127.0.0.1:${port}/v1/streams`;
-
-    const currentClient = streamClientFactory.createAudioStreamClient({
-      websocketUrl: `${baseUrl}/${currentAudioStreamId}`,
+    if (!audioStreamConfig) return;
+    const context = activateAudio();
+    const currentClient = streamClientFactory.createAudioClient({
+      descriptor: audioStreamConfig.currentAudio,
+      playbackRate: audioStreamConfig.playbackRate,
       volume: playingVersion === 'previous' ? 0 : 1,
-      onError: (err) => logger.error('Current stream error', err),
+      onError: (error) => logger.error('Current PCM stream error', error),
     });
-
-    const previousClient = streamClientFactory.createAudioStreamClient({
-      websocketUrl: `${baseUrl}/${previousAudioStreamId}`,
+    const previousClient = streamClientFactory.createAudioClient({
+      descriptor: audioStreamConfig.previousAudio,
+      playbackRate: audioStreamConfig.playbackRate,
       volume: playingVersion === 'current' ? 0 : 1,
-      onError: (err) => logger.error('Previous stream error', err),
+      onError: (error) => logger.error('Previous PCM stream error', error),
     });
-
     currentClientRef.current = currentClient;
     previousClientRef.current = previousClient;
-
-    void currentClient.connect();
-    void previousClient.connect();
-
+    void Promise.all([currentClient.connect(context), previousClient.connect(context)])
+      .then(() => setIsPlaying(true))
+      .catch((error: unknown) => logger.error('Audio diff PCM connect failed', error));
     return () => {
       cancelTick();
       currentClient.dispose();
       previousClient.dispose();
-      currentClientRef.current = null;
-      previousClientRef.current = null;
+      if (currentClientRef.current === currentClient) currentClientRef.current = undefined;
+      if (previousClientRef.current === previousClient) previousClientRef.current = undefined;
     };
-  }, [audioStreamConfig, cancelTick, streamClientFactory]);
+  }, [activateAudio, audioStreamConfig, cancelTick, streamClientFactory]);
 
   useEffect(() => {
     if (!isPlaying) {
       cancelTick();
       return;
     }
-
-    const tick = () => {
+    const tick = (): void => {
       const client = currentClientRef.current;
-      if (client?.isClockReady) {
-        onTimeChange(client.getCurrentTime());
-      }
+      if (client?.isClockReady) onTimeChange(client.getCurrentTime());
       rafHandleRef.current = rafScheduler.requestFrame(tick);
     };
-
     rafHandleRef.current = rafScheduler.requestFrame(tick);
     return cancelTick;
   }, [cancelTick, isPlaying, onTimeChange, rafScheduler]);
@@ -94,40 +95,39 @@ export function useAudioDiffPlayback({
     previousClientRef.current?.setVolume(playingVersion === 'current' ? 0 : 1);
   }, [playingVersion]);
 
-  useEffect(() => cancelTick, [cancelTick]);
+  useEffect(() => {
+    return () => {
+      cancelTick();
+      const context = audioContextRef.current;
+      if (context) void audioContextFactory.close(context);
+    };
+  }, [audioContextFactory, cancelTick]);
 
   const togglePlayback = useCallback(() => {
-    const currentClient = currentClientRef.current;
-    const previousClient = previousClientRef.current;
-
+    activateAudio();
     if (isPlaying) {
-      currentClient?.pause();
-      previousClient?.pause();
+      void currentClientRef.current?.pause();
+      void previousClientRef.current?.pause();
       onAudioStreamControl?.('pause');
       cancelTick();
       setIsPlaying(false);
       return;
     }
-
-    currentClient?.resume();
-    previousClient?.resume();
+    if (currentClientRef.current && previousClientRef.current) {
+      void currentClientRef.current.resume();
+      void previousClientRef.current.resume();
+      setIsPlaying(true);
+    }
     onAudioStreamControl?.('play');
-    setIsPlaying(true);
-  }, [cancelTick, isPlaying, onAudioStreamControl]);
+  }, [activateAudio, cancelTick, isPlaying, onAudioStreamControl]);
 
   const seekTo = useCallback(
     (time: number) => {
       onTimeChange(time);
-      currentClientRef.current?.resetClock();
-      previousClientRef.current?.resetClock();
       onAudioStreamControl?.('seek', { time });
     },
     [onAudioStreamControl, onTimeChange],
   );
 
-  return {
-    isPlaying,
-    togglePlayback,
-    seekTo,
-  };
+  return { isPlaying, togglePlayback, seekTo };
 }

@@ -1,12 +1,13 @@
-import { useCallback, useEffect, useMemo, useRef, type MutableRefObject } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
 import type {
   CutCommand,
   CutExportTaskSnapshot,
+  CutHtmlVideoDescriptor,
+  CutPcmStreamDescriptor,
   TimelineClipView,
   TimelineView,
 } from '@neko-cut/domain';
 import { isCutUserDiagnostic } from '@neko-cut/domain';
-import { AudioStreamClient, EngineAvStreamLifecycle } from '@neko/neko-client';
 import { usePersistedResize, useResizable } from '@neko/ui/hooks';
 import { useFocusedWebviewRoot } from '@neko/ui/keyboard';
 import { ResizeHandle } from '@neko/ui/primitives';
@@ -14,7 +15,6 @@ import { CreativeWorkbenchShell } from '@neko/ui/workbench';
 import { PropertyPanelInline } from './components/PropertyPanel/PropertyPanelInline';
 import { PreviewControls } from './components/PreviewControls';
 import { PreviewPanel } from './components/PreviewPanel';
-import { drawContainedVideoFrame } from './components/PreviewPanel/previewCanvas';
 import { Timeline } from './components/Timeline';
 import { clampTimelineTime, timelineInsertionTime } from './components/Timeline/timelineMath';
 import { collectIndependentClipIds } from './components/Timeline/timelineSelection';
@@ -26,32 +26,84 @@ import {
   advancePreviewPlayback,
   applyPreviewPlaybackAdvance,
   finishPreviewPlaybackSegment,
+  previewPreparationLeadSeconds,
   shouldAcceptPreviewReady,
   type PreviewPlaybackAdvance,
   type PreviewPlaybackSegment,
 } from './previewPlayback';
-import { PreviewAudioContextOwner } from './previewAudioContext';
+import { PreviewAudioContextOwner, previewAudioStartTime } from './previewAudioContext';
+import {
+  PreviewFailureGate,
+  previewFailureDiagnostic,
+  type PreviewFailureStage,
+} from './previewFailureGate';
+import {
+  HtmlVideoClient as CutHtmlVideoClient,
+  PcmAudioClient as CutPcmAudioClient,
+} from '@neko/media/browser';
+import { CutPreviewClock } from './media/CutPreviewClock';
+import type { CutPreviewAudioPlayback } from './controllers/CutOtioController';
 import { useCutOtioController } from './controllers/CutOtioControllerContext';
 import {
   useCutPresentationStore,
   useCutPresentationStoreApi,
 } from './stores/cut-presentation-store';
 
+type PreviewVideoSlot = 0 | 1;
+
+interface PreparedVideoClient {
+  readonly client: CutHtmlVideoClient;
+  readonly slot: PreviewVideoSlot;
+}
+
+interface PendingVideoPromotion {
+  readonly generation: number;
+  readonly client?: CutHtmlVideoClient;
+  readonly slot?: PreviewVideoSlot;
+  readonly previous?: CutHtmlVideoClient;
+  readonly videoClipId?: string;
+  readonly timelineOriginSeconds?: number;
+  readonly playbackRate: number;
+  readonly retained: boolean;
+}
+
 function App() {
   const rootRef = useRef<HTMLDivElement>(null);
   const previewCanvasRef = useRef<HTMLCanvasElement>(null);
-  const previewLifecycleRef = useRef<EngineAvStreamLifecycle>();
+  const previewVideoRef = useRef<HTMLVideoElement>(null);
+  const secondaryPreviewVideoRef = useRef<HTMLVideoElement>(null);
+  const [activeVideoSlot, setActiveVideoSlot] = useState<PreviewVideoSlot>(0);
+  const activeVideoSlotRef = useRef<PreviewVideoSlot>(0);
+  const previewVideoClientRef = useRef<CutHtmlVideoClient>();
+  const pendingVideoPromotionRef = useRef<PendingVideoPromotion>();
+  const preparedVideoGenerationRef = useRef<{
+    readonly generation: number;
+    readonly client: Promise<PreparedVideoClient | undefined>;
+  }>();
+  const activeVideoClipIdRef = useRef<string>();
+  const activeVideoTimelineOriginRef = useRef<number>();
+  const activeVideoPlaybackRateRef = useRef(1);
   const previewAudioContextOwnerRef = useRef<PreviewAudioContextOwner>();
-  const additionalAudioClientsRef = useRef<readonly AudioStreamClient[]>([]);
+  const previewAudioClientsRef = useRef<readonly CutPcmAudioClient[]>([]);
+  const retiringAudioClientsRef = useRef<readonly CutPcmAudioClient[]>([]);
+  const preparedAudioGenerationRef = useRef<{
+    readonly generation: number;
+    readonly clients: Promise<readonly CutPcmAudioClient[]>;
+  }>();
+  const previewClockRef = useRef<CutPreviewClock>();
   const audioGainMultipliersRef = useRef<readonly number[]>([]);
   const previewGenerationRef = useRef(0);
   const requestedPreviewGenerationRef = useRef<number>();
+  const requestedPreviewModeRef = useRef<'playing' | 'paused'>();
   const preparingPreviewGenerationRef = useRef<number>();
   const preparedPreviewRef = useRef<PreviewStreamMessage>();
   const activatingPreviewGenerationRef = useRef<number>();
+  const activePreviewHostGenerationRef = useRef<number>();
   const waitingPreviewBoundaryRef = useRef<number>();
   const playbackSegmentRef = useRef<PreviewPlaybackSegment>();
-  const mediaClockTimeSecondsRef = useRef<number>();
+  const mediaPlaybackEndRef = useRef<(generation: number) => void>();
+  const previewAttemptRef = useRef<number>();
+  const previewFailureGateRef = useRef<PreviewFailureGate>();
   const volumeRef = useRef(1);
   const { isKeyboardFocused } = useFocusedWebviewRoot(rootRef);
   const { t } = useTranslation();
@@ -75,7 +127,9 @@ function App() {
   const { showToast } = useToast();
   const controller = useCutOtioController();
   previewAudioContextOwnerRef.current ??= new PreviewAudioContextOwner();
+  previewFailureGateRef.current ??= new PreviewFailureGate();
   const previewAudioContextOwner = previewAudioContextOwnerRef.current;
+  const previewFailureGate = previewFailureGateRef.current;
   const previewSplit = usePersistedResize('cut.previewTimelineSplit', 0.5, {
     minSize: 0.2,
     maxSize: 0.8,
@@ -105,95 +159,252 @@ function App() {
     presentationActions.clearDiagnostic();
   }, [diagnostic, presentationActions, showToast, t]);
 
-  const drawPreviewFrame = useCallback((frame: VideoFrame) => {
-    mediaClockTimeSecondsRef.current = frame.timestamp / 1_000_000;
-    const canvas = previewCanvasRef.current;
-    const context = canvas?.getContext('2d');
-    if (!canvas || !context) {
-      frame.close();
-      return;
-    }
-    try {
-      drawContainedVideoFrame(context, frame);
-    } finally {
-      frame.close();
+  const reportPreviewFailure = useCallback(
+    (attempt: number, stage: PreviewFailureStage): void => {
+      if (!previewFailureGate.accept(attempt)) return;
+      presentationActions.setPlaying(false);
+      presentationActions.reportDiagnostic(previewFailureDiagnostic(stage));
+    },
+    [presentationActions, previewFailureGate],
+  );
+
+  const preparePreviewVideoClient = useCallback(
+    async (
+      message: PreviewStreamMessage,
+      attempt: number,
+    ): Promise<PreparedVideoClient | undefined> => {
+      if (!message.video) return undefined;
+      const slot: PreviewVideoSlot = previewVideoClientRef.current
+        ? activeVideoSlotRef.current === 0
+          ? 1
+          : 0
+        : activeVideoSlotRef.current;
+      const videoElement = slot === 0 ? previewVideoRef.current : secondaryPreviewVideoRef.current;
+      if (!videoElement) throw new Error('Cut preview video element is unavailable.');
+      const client = new CutHtmlVideoClient({
+        video: videoElement,
+        descriptor: message.video,
+        playbackRate: message.videoPlaybackRate ?? 1,
+        onEnded: () => mediaPlaybackEndRef.current?.(message.generation),
+        onError: () => reportPreviewFailure(attempt, 'video'),
+      });
+      try {
+        await client.connect();
+        await client.primeForSynchronizedStart();
+        return { client, slot };
+      } catch (error) {
+        client.dispose();
+        reportPreviewFailure(attempt, 'video');
+        throw error;
+      }
+    },
+    [reportPreviewFailure],
+  );
+
+  const disposePreparedVideoGeneration = useCallback((): void => {
+    const prepared = preparedVideoGenerationRef.current;
+    preparedVideoGenerationRef.current = undefined;
+    if (!prepared) return;
+    void prepared.client.then((result) => result?.client.dispose()).catch(() => undefined);
+  }, []);
+
+  const discardPendingVideoPromotion = useCallback((): void => {
+    const pending = pendingVideoPromotionRef.current;
+    pendingVideoPromotionRef.current = undefined;
+    if (pending?.client && pending.client !== previewVideoClientRef.current) {
+      pending.client.dispose();
     }
   }, []);
 
-  const connectPreviewClients = useCallback(
-    async (message: PreviewStreamMessage): Promise<boolean> => {
-      const canvas = previewCanvasRef.current;
-      if (canvas && !message.videoStreamUrl) {
-        const context = canvas.getContext('2d');
-        if (context) {
-          context.fillStyle = '#000000';
-          context.fillRect(0, 0, canvas.width, canvas.height);
-        }
-      }
-      const lifecycle = previewLifecycleRef.current;
-      if (!lifecycle) throw new Error('Cut preview lifecycle is unavailable.');
-      const audioContext = await previewAudioContextOwner.contextForConnection();
-      disposeAudioClients(additionalAudioClientsRef);
-      mediaClockTimeSecondsRef.current = undefined;
-      const generation = previewGenerationRef.current + 1;
-      previewGenerationRef.current = generation;
-      const [primaryAudioStreamUrl, ...additionalAudioStreamUrls] = message.audioStreamUrls;
-      audioGainMultipliersRef.current = message.audioGainsDb.map(dbToLinearGain);
-      const [primaryGain = 1, ...additionalGains] = audioGainMultipliersRef.current;
-      const snapshot = await lifecycle.start(
-        {
-          ...(message.videoStreamUrl
+  const preparePreviewAudioClients = useCallback(
+    async (
+      message: PreviewStreamMessage,
+      attempt: number,
+      generation: number,
+    ): Promise<readonly CutPcmAudioClient[]> => {
+      const audioContext =
+        message.audioStreams.length > 0
+          ? await previewAudioContextOwner.contextForConnection()
+          : undefined;
+      const audioClients = message.audioStreams.map((descriptor, index) => {
+        const playback = message.audioPlayback[index];
+        if (!playback) throw new Error(`Cut preview audio playback ${index} is missing.`);
+        return new CutPcmAudioClient({
+          descriptor,
+          playbackRate: playback.playbackRate,
+          volume: volumeRef.current * dbToLinearGain(message.audioGainsDb[index] ?? 0),
+          gainEnvelope: {
+            positionSeconds: playback.positionSeconds,
+            clipDurationSeconds: playback.clipDurationSeconds,
+            fadeInSeconds: playback.fadeInSeconds,
+            fadeOutSeconds: playback.fadeOutSeconds,
+          },
+          onError: () => {
+            if (previewGenerationRef.current === generation) {
+              reportPreviewFailure(attempt, 'audio');
+            }
+          },
+          ...(index === 0
             ? {
-                video: {
-                  websocketUrl: message.videoStreamUrl,
-                  width: message.width,
-                  height: message.height,
-                  onFrame: drawPreviewFrame,
-                },
+                onPlaybackEnd: () => mediaPlaybackEndRef.current?.(message.generation),
               }
             : {}),
-          ...(primaryAudioStreamUrl
-            ? {
-                audio: {
-                  websocketUrl: primaryAudioStreamUrl,
-                  volume: volumeRef.current * primaryGain,
-                },
-              }
-            : {}),
-          fps: message.framesPerSecond,
-          schedulerMode: 'none',
-          videoFrameRoute: 'callback',
-        },
-        { audioContext },
-      );
-      snapshot.audioClient?.setClockPlaybackRate(message.mediaPlaybackRate ?? 1);
-      if (previewGenerationRef.current !== generation) return false;
-      const additionalClients = additionalAudioStreamUrls.map(
-        (websocketUrl, index) =>
-          new AudioStreamClient({
-            websocketUrl,
-            volume: volumeRef.current * (additionalGains[index] ?? 1),
-            onError: () => {
-              if (previewGenerationRef.current === generation) {
-                presentationActions.setPlaying(false);
-                presentationActions.reportDiagnostic({ code: 'preview-failed' });
-              }
-            },
-          }),
-      );
-      additionalAudioClientsRef.current = additionalClients;
+        });
+      });
       try {
-        await Promise.all(additionalClients.map((client) => client.connect(audioContext)));
+        await Promise.all(
+          audioClients.map((client) =>
+            client.prepare(audioContext).catch((error: unknown) => {
+              reportPreviewFailure(attempt, 'audio');
+              throw error;
+            }),
+          ),
+        );
+        return audioClients;
       } catch (error) {
-        if (previewGenerationRef.current === generation) {
-          disposeAudioClients(additionalAudioClientsRef);
-          lifecycle.stop();
-        }
+        for (const client of audioClients) client.dispose();
         throw error;
       }
-      return previewGenerationRef.current === generation;
     },
-    [drawPreviewFrame, presentationActions, previewAudioContextOwner],
+    [previewAudioContextOwner, reportPreviewFailure],
+  );
+
+  const disposePreparedAudioGeneration = useCallback((): void => {
+    const prepared = preparedAudioGenerationRef.current;
+    preparedAudioGenerationRef.current = undefined;
+    if (!prepared) return;
+    void prepared.clients.then(disposeAudioClients).catch(() => undefined);
+  }, []);
+
+  const connectPausedPreview = useCallback(
+    (message: PreviewStreamMessage): void => {
+      const attempt = previewAttemptRef.current;
+      if (attempt === undefined) throw new Error('Cut paused preview attempt is unavailable.');
+      const generation = message.generation;
+      void preparePreviewVideoClient(message, attempt)
+        .then((preparedVideo) => {
+          if (
+            requestedPreviewGenerationRef.current !== generation ||
+            requestedPreviewModeRef.current !== 'paused'
+          ) {
+            preparedVideo?.client.dispose();
+            return;
+          }
+          const previous = previewVideoClientRef.current;
+          if (preparedVideo) {
+            preparedVideo.client.pause();
+            activeVideoSlotRef.current = preparedVideo.slot;
+            setActiveVideoSlot(preparedVideo.slot);
+            previewVideoClientRef.current = preparedVideo.client;
+            activeVideoClipIdRef.current = message.videoClipId;
+            activeVideoTimelineOriginRef.current = message.timelineTimeSeconds;
+            activeVideoPlaybackRateRef.current = message.videoPlaybackRate ?? 1;
+          } else {
+            previewVideoClientRef.current = undefined;
+            activeVideoClipIdRef.current = undefined;
+            activeVideoTimelineOriginRef.current = undefined;
+          }
+          if (previous && previous !== preparedVideo?.client) previous.dispose();
+          requestedPreviewGenerationRef.current = undefined;
+          requestedPreviewModeRef.current = undefined;
+          previewAttemptRef.current = undefined;
+          previewFailureGate.invalidate();
+          controller.pausePreview(generation);
+        })
+        .catch(() => {
+          if (requestedPreviewGenerationRef.current !== generation) return;
+          requestedPreviewGenerationRef.current = undefined;
+          requestedPreviewModeRef.current = undefined;
+          reportPreviewFailure(attempt, 'video');
+          controller.stopPreview();
+        });
+    },
+    [controller, preparePreviewVideoClient, previewFailureGate, reportPreviewFailure],
+  );
+
+  const connectPreviewClients = useCallback(
+    async (
+      message: PreviewStreamMessage,
+      preparedAudioClients?: Promise<readonly CutPcmAudioClient[]>,
+      preparedVideoClient?: Promise<PreparedVideoClient | undefined>,
+    ): Promise<boolean> => {
+      const attempt = previewAttemptRef.current;
+      if (attempt === undefined) throw new Error('Cut preview attempt is unavailable.');
+      const retainedVideoClient =
+        !message.video &&
+        message.videoClipId !== undefined &&
+        message.videoClipId === activeVideoClipIdRef.current
+          ? previewVideoClientRef.current
+          : undefined;
+      const generation = previewGenerationRef.current + 1;
+      previewGenerationRef.current = generation;
+      audioGainMultipliersRef.current = message.audioGainsDb.map(dbToLinearGain);
+      const [preparedVideo, audioClients] = await Promise.all([
+        message.video
+          ? (preparedVideoClient ?? preparePreviewVideoClient(message, attempt))
+          : Promise.resolve(undefined),
+        preparedAudioClients ?? preparePreviewAudioClients(message, attempt, generation),
+      ]);
+      const videoClient = preparedVideo?.client ?? retainedVideoClient;
+      try {
+        if (previewGenerationRef.current !== generation) {
+          preparedVideo?.client.dispose();
+          for (const client of audioClients) client.dispose();
+          return false;
+        }
+      } catch (error) {
+        preparedVideo?.client.dispose();
+        for (const client of audioClients) client.dispose();
+        throw error;
+      }
+      retiringAudioClientsRef.current = previewAudioClientsRef.current;
+      pendingVideoPromotionRef.current = {
+        generation: message.generation,
+        ...(videoClient ? { client: videoClient } : {}),
+        ...(preparedVideo ? { slot: preparedVideo.slot } : {}),
+        ...(!retainedVideoClient && previewVideoClientRef.current
+          ? { previous: previewVideoClientRef.current }
+          : {}),
+        ...(message.videoClipId ? { videoClipId: message.videoClipId } : {}),
+        ...(preparedVideo ? { timelineOriginSeconds: message.timelineTimeSeconds } : {}),
+        playbackRate: message.videoPlaybackRate ?? activeVideoPlaybackRateRef.current,
+        retained: retainedVideoClient !== undefined,
+      };
+      previewAudioClientsRef.current = audioClients;
+      previewClockRef.current = new CutPreviewClock({
+        ...(audioClients[0] ? { primaryAudio: audioClients[0] } : {}),
+        ...(audioClients.length > 1
+          ? {
+              secondaryAudio: audioClients.slice(1).map((clock, index) => {
+                const playback = message.audioPlayback[index + 1];
+                if (!playback) {
+                  throw new Error(`Cut preview secondary audio playback ${index + 1} is missing.`);
+                }
+                return {
+                  clock,
+                  mediaOriginSeconds: playback.mediaOriginSeconds,
+                  playbackRate: playback.playbackRate,
+                };
+              }),
+            }
+          : {}),
+        ...(videoClient ? { video: videoClient } : {}),
+        ...(message.mediaSourceTimeSeconds !== undefined
+          ? { primaryMediaOriginSeconds: message.mediaSourceTimeSeconds }
+          : {}),
+        ...(message.mediaPlaybackRate !== undefined
+          ? { primaryPlaybackRate: message.mediaPlaybackRate }
+          : {}),
+        ...(message.videoPlaybackRate !== undefined
+          ? { videoPlaybackRate: message.videoPlaybackRate }
+          : {}),
+        ...(retainedVideoClient
+          ? { videoClockOriginSeconds: retainedVideoClient.currentTimeSeconds }
+          : {}),
+      });
+      return true;
+    },
+    [preparePreviewAudioClients, preparePreviewVideoClient],
   );
 
   const activatePreparedPreview = useCallback(
@@ -207,10 +418,22 @@ function App() {
       }
       if (activatingPreviewGenerationRef.current !== undefined) return;
       const generation = prepared.generation;
+      const attempt = previewAttemptRef.current;
+      if (attempt === undefined) throw new Error('Cut preview attempt is unavailable.');
       activatingPreviewGenerationRef.current = generation;
       waitingPreviewBoundaryRef.current = boundarySeconds;
       presentationActions.seek(boundarySeconds);
-      void connectPreviewClients(prepared)
+      const preparedAudio =
+        preparedAudioGenerationRef.current?.generation === generation
+          ? preparedAudioGenerationRef.current.clients
+          : undefined;
+      if (preparedAudio) preparedAudioGenerationRef.current = undefined;
+      const preparedVideo =
+        preparedVideoGenerationRef.current?.generation === generation
+          ? preparedVideoGenerationRef.current.client
+          : undefined;
+      if (preparedVideo) preparedVideoGenerationRef.current = undefined;
+      void connectPreviewClients(prepared, preparedAudio, preparedVideo)
         .then((connected) => {
           if (
             !connected ||
@@ -223,12 +446,11 @@ function App() {
         })
         .catch(() => {
           if (activatingPreviewGenerationRef.current !== generation) return;
-          presentationActions.setPlaying(false);
-          presentationActions.reportDiagnostic({ code: 'preview-failed' });
+          reportPreviewFailure(attempt, 'startup');
           controller.stopPreview();
         });
     },
-    [connectPreviewClients, controller, presentationActions, store],
+    [connectPreviewClients, controller, presentationActions, reportPreviewFailure, store],
   );
 
   const finishOrContinuePreview = useCallback(
@@ -253,63 +475,88 @@ function App() {
         },
         stopAtTimelineEnd: () => {
           playbackSegmentRef.current = undefined;
-          stopPlaybackClients(previewLifecycleRef, additionalAudioClientsRef, previewGenerationRef);
+          stopPlaybackClients(
+            previewVideoClientRef,
+            previewAudioClientsRef,
+            previewClockRef,
+            previewGenerationRef,
+          );
           requestedPreviewGenerationRef.current = undefined;
           preparingPreviewGenerationRef.current = undefined;
           preparedPreviewRef.current = undefined;
           activatingPreviewGenerationRef.current = undefined;
+          activePreviewHostGenerationRef.current = undefined;
           waitingPreviewBoundaryRef.current = undefined;
+          previewAttemptRef.current = undefined;
+          previewFailureGate.invalidate();
           presentationActions.setPlaying(false);
           controller.stopPreview();
         },
       });
     },
-    [activatePreparedPreview, controller, presentationActions],
+    [activatePreparedPreview, controller, presentationActions, previewFailureGate],
   );
 
+  mediaPlaybackEndRef.current = (generation) => {
+    if (!store.getState().isPlaying || activePreviewHostGenerationRef.current !== generation) {
+      return;
+    }
+    const segment = playbackSegmentRef.current;
+    if (!segment) return;
+    finishOrContinuePreview(finishPreviewPlaybackSegment(segment), segment);
+  };
+
   useEffect(() => {
-    const lifecycle = new EngineAvStreamLifecycle({
-      callbacks: {
-        onError: () => {
-          presentationActions.setPlaying(false);
-          presentationActions.reportDiagnostic({ code: 'preview-failed' });
-        },
-        onStreamEnd: (kind) => {
-          if (kind === 'audio' && lifecycle.getSnapshot().videoClient) return;
-          const segment = playbackSegmentRef.current;
-          if (!segment) return;
-          const advance = finishPreviewPlaybackSegment(segment);
-          window.queueMicrotask(() => finishOrContinuePreview(advance, segment));
-        },
-      },
-    });
-    previewLifecycleRef.current = lifecycle;
     return () => {
+      previewAttemptRef.current = undefined;
+      requestedPreviewModeRef.current = undefined;
+      previewFailureGate.invalidate();
       previewGenerationRef.current += 1;
-      disposeAudioClients(additionalAudioClientsRef);
-      lifecycle.dispose();
-      void previewAudioContextOwner.dispose().catch(() => {
-        presentationActions.reportDiagnostic({ code: 'preview-failed' });
+      disposePreviewClients(previewVideoClientRef, previewAudioClientsRef, previewClockRef);
+      disposeAudioClients(retiringAudioClientsRef.current);
+      retiringAudioClientsRef.current = [];
+      disposePreparedAudioGeneration();
+      disposePreparedVideoGeneration();
+      discardPendingVideoPromotion();
+      activePreviewHostGenerationRef.current = undefined;
+      activeVideoClipIdRef.current = undefined;
+      activeVideoTimelineOriginRef.current = undefined;
+      void previewAudioContextOwner.dispose().catch((error: unknown) => {
+        globalThis.reportError(error);
       });
-      previewLifecycleRef.current = undefined;
     };
-  }, [finishOrContinuePreview, presentationActions, previewAudioContextOwner]);
+  }, [
+    disposePreparedAudioGeneration,
+    disposePreparedVideoGeneration,
+    discardPendingVideoPromotion,
+    previewAudioContextOwner,
+    previewFailureGate,
+  ]);
 
   useEffect(() => {
     const receive = (event: MessageEvent<unknown>) => {
       if (!isRecord(event.data)) return;
       const message = event.data;
       if (message['type'] === 'cut:preview-ready' && isPreviewStreamMessage(message)) {
+        const requestMode = requestedPreviewModeRef.current;
         if (
           !shouldAcceptPreviewReady(
             message.generation,
             requestedPreviewGenerationRef.current,
-            store.getState().isPlaying,
+            store.getState().isPlaying || requestMode === 'paused',
           )
         ) {
           return;
         }
+        disposePreparedAudioGeneration();
+        disposePreparedVideoGeneration();
+        discardPendingVideoPromotion();
+        if (requestMode === 'paused') {
+          connectPausedPreview(message);
+          return;
+        }
         requestedPreviewGenerationRef.current = undefined;
+        requestedPreviewModeRef.current = undefined;
         preparingPreviewGenerationRef.current = undefined;
         preparedPreviewRef.current = message;
         activatingPreviewGenerationRef.current = undefined;
@@ -327,6 +574,23 @@ function App() {
         ) {
           return;
         }
+        const attempt = previewAttemptRef.current;
+        if (attempt === undefined) throw new Error('Cut preview attempt is unavailable.');
+        disposePreparedAudioGeneration();
+        disposePreparedVideoGeneration();
+        const clients = preparePreviewAudioClients(
+          message,
+          attempt,
+          previewGenerationRef.current + 1,
+        );
+        void clients.catch(() => undefined);
+        preparedAudioGenerationRef.current = { generation: message.generation, clients };
+        const videoClient = preparePreviewVideoClient(message, attempt);
+        void videoClient.catch(() => undefined);
+        preparedVideoGenerationRef.current = {
+          generation: message.generation,
+          client: videoClient,
+        };
         preparedPreviewRef.current = message;
         const waitingBoundary = waitingPreviewBoundaryRef.current;
         if (waitingBoundary !== undefined) {
@@ -347,37 +611,147 @@ function App() {
         ) {
           return;
         }
-        playbackSegmentRef.current = {
-          timelineStartSeconds: prepared.timelineTimeSeconds,
-          wallStartMilliseconds: performance.now(),
-          segmentEndSeconds: prepared.segmentEndSeconds,
-          timelineEndSeconds: prepared.playbackEndSeconds,
-          ...(prepared.mediaSourceTimeSeconds !== undefined &&
-          prepared.mediaPlaybackRate !== undefined
-            ? {
-                mediaClock: {
-                  sourceStartSeconds: prepared.mediaSourceTimeSeconds,
-                  playbackRate: prepared.mediaPlaybackRate,
-                },
+        const attempt = previewAttemptRef.current;
+        if (attempt === undefined) throw new Error('Cut preview attempt is unavailable.');
+        const videoPromotion = pendingVideoPromotionRef.current;
+        const videoClient =
+          videoPromotion?.generation === generation ? videoPromotion.client : undefined;
+        const audioClients = previewAudioClientsRef.current;
+        const audioContext = audioClients[0]?.getAudioContext();
+        const retiringAudioClients = retiringAudioClientsRef.current;
+        const startContext = audioContext ?? retiringAudioClients[0]?.getAudioContext();
+        void (async () => {
+          try {
+            if (
+              !store.getState().isPlaying ||
+              activatingPreviewGenerationRef.current !== generation ||
+              preparedPreviewRef.current?.generation !== generation
+            ) {
+              return;
+            }
+            const sharedStartTime = startContext ? previewAudioStartTime(startContext) : undefined;
+            if (audioContext && sharedStartTime !== undefined) {
+              await Promise.all(
+                audioClients.map((client) =>
+                  client.startAt(sharedStartTime).catch((error: unknown) => {
+                    reportPreviewFailure(attempt, 'audio');
+                    throw error;
+                  }),
+                ),
+              );
+            }
+            if (sharedStartTime !== undefined) {
+              for (const client of retiringAudioClients) client.retireAt(sharedStartTime, 0.01);
+              retiringAudioClientsRef.current = [];
+              if (startContext) await waitForAudioContextTime(startContext, sharedStartTime);
+            } else {
+              disposeAudioClients(retiringAudioClients);
+              retiringAudioClientsRef.current = [];
+            }
+            if (
+              !store.getState().isPlaying ||
+              activatingPreviewGenerationRef.current !== generation ||
+              preparedPreviewRef.current?.generation !== generation
+            ) {
+              return;
+            }
+            await videoClient?.play().catch((error: unknown) => {
+              reportPreviewFailure(attempt, 'video');
+              throw error;
+            });
+            if (
+              !store.getState().isPlaying ||
+              activatingPreviewGenerationRef.current !== generation ||
+              preparedPreviewRef.current?.generation !== generation
+            ) {
+              return;
+            }
+            if (videoPromotion?.generation === generation) {
+              if (videoPromotion.slot !== undefined) {
+                activeVideoSlotRef.current = videoPromotion.slot;
+                setActiveVideoSlot(videoPromotion.slot);
               }
-            : {}),
-        };
-        preparingPreviewGenerationRef.current = undefined;
-        preparedPreviewRef.current = undefined;
-        activatingPreviewGenerationRef.current = undefined;
-        waitingPreviewBoundaryRef.current = undefined;
+              previewVideoClientRef.current = videoClient;
+              activeVideoClipIdRef.current = videoPromotion.videoClipId;
+              if (videoPromotion.timelineOriginSeconds !== undefined) {
+                activeVideoTimelineOriginRef.current = videoPromotion.timelineOriginSeconds;
+              } else if (!videoPromotion.retained) {
+                activeVideoTimelineOriginRef.current = undefined;
+              }
+              activeVideoPlaybackRateRef.current = videoPromotion.playbackRate;
+              if (videoPromotion.previous && videoPromotion.previous !== videoClient) {
+                videoPromotion.previous.dispose();
+              }
+              if (!videoClient) {
+                const context = previewCanvasRef.current?.getContext('2d');
+                if (context && previewCanvasRef.current) {
+                  context.fillStyle = '#000000';
+                  context.fillRect(
+                    0,
+                    0,
+                    previewCanvasRef.current.width,
+                    previewCanvasRef.current.height,
+                  );
+                }
+              }
+              pendingVideoPromotionRef.current = undefined;
+            }
+            playbackSegmentRef.current = {
+              timelineStartSeconds: prepared.timelineTimeSeconds,
+              wallStartMilliseconds: performance.now(),
+              segmentEndSeconds: prepared.segmentEndSeconds,
+              timelineEndSeconds: prepared.playbackEndSeconds,
+              preparationLeadSeconds: previewPreparationLeadSeconds(
+                prepared.video?.preparationProfile,
+              ),
+              ...(prepared.mediaSourceTimeSeconds !== undefined &&
+              prepared.mediaPlaybackRate !== undefined
+                ? {
+                    mediaClock: {
+                      sourceStartSeconds: prepared.mediaSourceTimeSeconds,
+                      playbackRate: prepared.mediaPlaybackRate,
+                    },
+                  }
+                : {}),
+            };
+            activePreviewHostGenerationRef.current = generation;
+            preparingPreviewGenerationRef.current = undefined;
+            preparedPreviewRef.current = undefined;
+            activatingPreviewGenerationRef.current = undefined;
+            waitingPreviewBoundaryRef.current = undefined;
+          } catch {
+            reportPreviewFailure(attempt, 'startup');
+            controller.stopPreview();
+          }
+        })();
         return;
       }
       const accepted = controller.acceptHostMessage(message);
       if (!accepted) return;
       if (message['type'] === 'cut:view' || message['type'] === 'cut:error') {
+        previewAttemptRef.current = undefined;
+        requestedPreviewModeRef.current = undefined;
+        previewFailureGate.invalidate();
         playbackSegmentRef.current = undefined;
         requestedPreviewGenerationRef.current = undefined;
         preparingPreviewGenerationRef.current = undefined;
         preparedPreviewRef.current = undefined;
+        disposePreparedAudioGeneration();
+        disposePreparedVideoGeneration();
+        discardPendingVideoPromotion();
         activatingPreviewGenerationRef.current = undefined;
+        activePreviewHostGenerationRef.current = undefined;
         waitingPreviewBoundaryRef.current = undefined;
-        stopPlaybackClients(previewLifecycleRef, additionalAudioClientsRef, previewGenerationRef);
+        stopPlaybackClients(
+          previewVideoClientRef,
+          previewAudioClientsRef,
+          previewClockRef,
+          previewGenerationRef,
+        );
+        disposeAudioClients(retiringAudioClientsRef.current);
+        retiringAudioClientsRef.current = [];
+        activeVideoClipIdRef.current = undefined;
+        activeVideoTimelineOriginRef.current = undefined;
       }
       if (message['type'] === 'cut:export-task' && isExportTaskSnapshot(message['task'])) {
         const task = message['task'];
@@ -401,8 +775,16 @@ function App() {
   }, [
     activatePreparedPreview,
     connectPreviewClients,
+    connectPausedPreview,
     controller,
+    disposePreparedAudioGeneration,
+    disposePreparedVideoGeneration,
+    discardPendingVideoPromotion,
+    preparePreviewAudioClients,
+    preparePreviewVideoClient,
     presentationActions,
+    previewFailureGate,
+    reportPreviewFailure,
     showToast,
     store,
     t,
@@ -410,10 +792,8 @@ function App() {
 
   useEffect(() => {
     volumeRef.current = volume;
-    const [primaryGain = 1, ...additionalGains] = audioGainMultipliersRef.current;
-    previewLifecycleRef.current?.getSnapshot().audioClient?.setVolume(volume * primaryGain);
-    additionalAudioClientsRef.current.forEach((client, index) =>
-      client.setVolume(volume * (additionalGains[index] ?? 1)),
+    previewAudioClientsRef.current.forEach((client, index) =>
+      client.setVolume(volume * (audioGainMultipliersRef.current[index] ?? 1)),
     );
   }, [volume]);
 
@@ -422,15 +802,24 @@ function App() {
     const timer = window.setInterval(() => {
       const segment = playbackSegmentRef.current;
       if (!segment) return;
-      const primaryAudio = previewLifecycleRef.current?.getSnapshot().audioClient;
-      const mediaTimeSeconds =
-        primaryAudio?.isClockReady === true
-          ? primaryAudio.getCurrentTime()
-          : mediaClockTimeSecondsRef.current;
+      const clock = previewClockRef.current?.read();
+      if (clock?.discontinuity) {
+        const attempt = previewAttemptRef.current;
+        if (attempt === undefined) throw new Error('Cut preview attempt is unavailable.');
+        reportPreviewFailure(attempt, 'synchronization');
+        stopPlaybackClients(
+          previewVideoClientRef,
+          previewAudioClientsRef,
+          previewClockRef,
+          previewGenerationRef,
+        );
+        controller.stopPreview();
+        return;
+      }
       const advance = advancePreviewPlayback(
         segment,
         performance.now(),
-        mediaTimeSeconds,
+        clock?.mediaTimeSeconds,
         store.getState().playheadSeconds,
       );
       if (advance.kind === 'continue') {
@@ -440,7 +829,7 @@ function App() {
       finishOrContinuePreview(advance, segment);
     }, 50);
     return () => window.clearInterval(timer);
-  }, [finishOrContinuePreview, playing, presentationActions, store, view]);
+  }, [controller, finishOrContinuePreview, playing, reportPreviewFailure, store, view]);
 
   const selected = useMemo(() => findClip(view, selectedClipId), [selectedClipId, view]);
   const selectedTrack = useMemo(() => {
@@ -479,45 +868,104 @@ function App() {
     );
   };
 
-  const stopPreview = () => {
+  const pausePreview = () => {
+    previewAttemptRef.current = undefined;
+    previewFailureGate.invalidate();
     playbackSegmentRef.current = undefined;
     requestedPreviewGenerationRef.current = undefined;
+    requestedPreviewModeRef.current = undefined;
     preparingPreviewGenerationRef.current = undefined;
     preparedPreviewRef.current = undefined;
+    disposePreparedAudioGeneration();
+    disposePreparedVideoGeneration();
+    discardPendingVideoPromotion();
     activatingPreviewGenerationRef.current = undefined;
+    activePreviewHostGenerationRef.current = undefined;
     waitingPreviewBoundaryRef.current = undefined;
-    stopPlaybackClients(previewLifecycleRef, additionalAudioClientsRef, previewGenerationRef);
+    previewGenerationRef.current += 1;
+    previewVideoClientRef.current?.pause();
+    const audioClients = previewAudioClientsRef.current;
+    previewAudioClientsRef.current = [];
+    const audioContext = audioClients[0]?.getAudioContext();
+    if (audioContext) {
+      const retirementTime = audioContext.currentTime + 0.005;
+      for (const client of audioClients) client.retireAt(retirementTime, 0.01);
+    } else {
+      disposeAudioClients(audioClients);
+    }
+    disposeAudioClients(retiringAudioClientsRef.current);
+    retiringAudioClientsRef.current = [];
+    previewClockRef.current = undefined;
     presentationActions.setPlaying(false);
-    if (view) controller.stopPreview();
+    if (view) controller.pausePreview();
   };
 
   const togglePlayback = () => {
     if (playing) {
-      stopPreview();
+      pausePreview();
       return;
     }
     if (!view) {
       presentationActions.reportDiagnostic({ code: 'project-not-open' });
       return;
     }
+    const attempt = previewFailureGate.begin();
+    previewAttemptRef.current = attempt;
     try {
       previewAudioContextOwner.activateFromUserGesture();
     } catch {
-      presentationActions.reportDiagnostic({ code: 'preview-failed' });
+      reportPreviewFailure(attempt, 'audio');
       return;
     }
     presentationActions.setPlaying(true);
     playbackSegmentRef.current = undefined;
     preparingPreviewGenerationRef.current = undefined;
     preparedPreviewRef.current = undefined;
+    disposePreparedAudioGeneration();
+    disposePreparedVideoGeneration();
+    discardPendingVideoPromotion();
     activatingPreviewGenerationRef.current = undefined;
+    activePreviewHostGenerationRef.current = undefined;
     waitingPreviewBoundaryRef.current = undefined;
-    requestedPreviewGenerationRef.current = controller.startPreview(playheadSeconds);
+    const playheadVideoClip = findVideoClipAtTime(view, playheadSeconds);
+    requestedPreviewModeRef.current = 'playing';
+    requestedPreviewGenerationRef.current = controller.startPreview(
+      playheadSeconds,
+      playheadVideoClip?.clipId === activeVideoClipIdRef.current
+        ? activeVideoClipIdRef.current
+        : undefined,
+      'playing',
+    );
   };
 
   const seek = (seconds: number) => {
-    if (playing) stopPreview();
-    presentationActions.seek(clampTimelineTime(seconds, view?.durationSeconds ?? 0));
+    if (playing) pausePreview();
+    const targetSeconds = clampTimelineTime(seconds, view?.durationSeconds ?? 0);
+    presentationActions.seek(targetSeconds);
+    const activeVideoClient = previewVideoClientRef.current;
+    const activeTimelineOrigin = activeVideoTimelineOriginRef.current;
+    const targetVideoClip = findVideoClipAtTime(view, targetSeconds);
+    if (
+      activeVideoClient &&
+      activeTimelineOrigin !== undefined &&
+      targetVideoClip?.clipId === activeVideoClipIdRef.current
+    ) {
+      const mediaOffsetSeconds =
+        (targetSeconds - activeTimelineOrigin) * activeVideoPlaybackRateRef.current;
+      if (activeVideoClient.canSeek(mediaOffsetSeconds)) {
+        activeVideoClient.seek(mediaOffsetSeconds);
+        return;
+      }
+    }
+    if (!view || targetSeconds >= view.durationSeconds) return;
+    const attempt = previewFailureGate.begin();
+    previewAttemptRef.current = attempt;
+    requestedPreviewModeRef.current = 'paused';
+    requestedPreviewGenerationRef.current = controller.startPreview(
+      targetSeconds,
+      undefined,
+      'paused',
+    );
   };
 
   const splitClip = (clip: TimelineClipView) => {
@@ -617,6 +1065,9 @@ function App() {
               <div className="cut-basic-preview-region">
                 <PreviewPanel
                   ref={previewCanvasRef}
+                  videoRef={previewVideoRef}
+                  secondaryVideoRef={secondaryPreviewVideoRef}
+                  activeVideoSlot={activeVideoSlot}
                   title={previewTitle}
                   source={previewSource}
                   projectWidth={view?.profile?.width ?? 1920}
@@ -668,7 +1119,7 @@ function App() {
               className="cut-basic-preview-resize-handle"
             />
             <section className="cut-basic-timeline-region" style={{ flex: 1 - previewSplit.size }}>
-              <Timeline onOpenPackage={linkMediaToSelectedTrack} />
+              <Timeline onOpenPackage={linkMediaToSelectedTrack} onSeek={seek} />
             </section>
           </div>
         }
@@ -688,6 +1139,21 @@ function findClip(
   return item?.kind === 'clip' ? item : undefined;
 }
 
+function findVideoClipAtTime(
+  view: TimelineView | undefined,
+  timelineTimeSeconds: number,
+): TimelineClipView | undefined {
+  return view?.tracks
+    .find((track) => track.enabled && track.kind === 'Video')
+    ?.items.find(
+      (item): item is TimelineClipView =>
+        item.kind === 'clip' &&
+        item.enabled &&
+        item.startSeconds <= timelineTimeSeconds &&
+        timelineTimeSeconds < item.startSeconds + item.durationSeconds,
+    );
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -704,9 +1170,11 @@ interface PreviewStreamMessage extends Record<string, unknown> {
   readonly width: number;
   readonly height: number;
   readonly framesPerSecond: number;
-  readonly videoStreamUrl?: string;
-  readonly audioStreamUrls: readonly string[];
+  readonly video?: CutHtmlVideoDescriptor;
+  readonly videoPlaybackRate?: number;
+  readonly audioStreams: readonly CutPcmStreamDescriptor[];
   readonly audioGainsDb: readonly number[];
+  readonly audioPlayback: readonly CutPreviewAudioPlayback[];
 }
 
 function isPreviewStreamMessage(value: Record<string, unknown>): value is PreviewStreamMessage {
@@ -729,17 +1197,87 @@ function isPreviewStreamMessage(value: Record<string, unknown>): value is Previe
     typeof value['width'] === 'number' &&
     typeof value['height'] === 'number' &&
     typeof value['framesPerSecond'] === 'number' &&
-    (value['videoStreamUrl'] === undefined || typeof value['videoStreamUrl'] === 'string') &&
-    Array.isArray(value['audioStreamUrls']) &&
-    value['audioStreamUrls'].every((streamUrl) => typeof streamUrl === 'string') &&
+    (value['video'] === undefined || isHtmlVideoDescriptor(value['video'])) &&
+    (value['videoPlaybackRate'] === undefined ||
+      (typeof value['videoPlaybackRate'] === 'number' &&
+        Number.isFinite(value['videoPlaybackRate']) &&
+        value['videoPlaybackRate'] > 0)) &&
+    Array.isArray(value['audioStreams']) &&
+    value['audioStreams'].every(isPcmStreamDescriptor) &&
     Array.isArray(value['audioGainsDb']) &&
-    value['audioGainsDb'].length === value['audioStreamUrls'].length &&
-    value['audioGainsDb'].every((gain) => typeof gain === 'number' && Number.isFinite(gain))
+    value['audioGainsDb'].length === value['audioStreams'].length &&
+    value['audioGainsDb'].every((gain) => typeof gain === 'number' && Number.isFinite(gain)) &&
+    Array.isArray(value['audioPlayback']) &&
+    value['audioPlayback'].length === value['audioStreams'].length &&
+    value['audioPlayback'].every(isPreviewAudioPlayback)
+  );
+}
+
+function isPreviewAudioPlayback(value: unknown): value is CutPreviewAudioPlayback {
+  return (
+    isRecord(value) &&
+    isNonNegativeFinite(value['mediaOriginSeconds']) &&
+    isPositiveFinite(value['playbackRate']) &&
+    isNonNegativeFinite(value['positionSeconds']) &&
+    isPositiveFinite(value['clipDurationSeconds']) &&
+    value['positionSeconds'] < value['clipDurationSeconds'] &&
+    isNonNegativeFinite(value['fadeInSeconds']) &&
+    value['fadeInSeconds'] <= value['clipDurationSeconds'] &&
+    isNonNegativeFinite(value['fadeOutSeconds']) &&
+    value['fadeOutSeconds'] <= value['clipDurationSeconds']
+  );
+}
+
+function isNonNegativeFinite(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0;
+}
+
+function isPositiveFinite(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0;
+}
+
+function isHtmlVideoDescriptor(value: unknown): value is CutHtmlVideoDescriptor {
+  return (
+    isRecord(value) &&
+    value['version'] === 1 &&
+    value['transport'] === 'http' &&
+    isLoopbackHttpUrl(value['url']) &&
+    typeof value['mimeType'] === 'string' &&
+    typeof value['preparationProfile'] === 'string' &&
+    isNonNegativeFinite(value['mediaTimeOriginSeconds']) &&
+    isPositiveFinite(value['durationSeconds'])
+  );
+}
+
+function isLoopbackHttpUrl(value: unknown): value is string {
+  if (typeof value !== 'string') return false;
+  try {
+    const url = new URL(value);
+    return url.protocol === 'http:' && url.hostname === '127.0.0.1';
+  } catch {
+    return false;
+  }
+}
+
+function isPcmStreamDescriptor(value: unknown): value is CutPcmStreamDescriptor {
+  return (
+    isRecord(value) &&
+    value['version'] === 1 &&
+    value['transport'] === 'http' &&
+    value['protocol'] === 'neko-pcm-f32le-v1' &&
+    typeof value['streamUrl'] === 'string' &&
+    typeof value['sampleRate'] === 'number' &&
+    typeof value['channels'] === 'number'
   );
 }
 
 function dbToLinearGain(gainDb: number): number {
   return 10 ** (gainDb / 20);
+}
+
+function waitForAudioContextTime(context: AudioContext, contextTime: number): Promise<void> {
+  const delayMilliseconds = Math.max(0, (contextTime - context.currentTime) * 1_000);
+  return new Promise((resolve) => window.setTimeout(resolve, delayMilliseconds));
 }
 
 function isExportTaskSnapshot(value: unknown): value is CutExportTaskSnapshot {
@@ -769,20 +1307,36 @@ function isExportSettings(value: unknown): boolean {
 }
 
 function stopPlaybackClients(
-  lifecycleRef: MutableRefObject<EngineAvStreamLifecycle | undefined>,
-  audioClientsRef: MutableRefObject<readonly AudioStreamClient[]>,
+  videoClientRef: MutableRefObject<CutHtmlVideoClient | undefined>,
+  audioClientsRef: MutableRefObject<readonly CutPcmAudioClient[]>,
+  clockRef: MutableRefObject<CutPreviewClock | undefined>,
   generationRef: MutableRefObject<number>,
 ): void {
   generationRef.current += 1;
-  disposeAudioClients(audioClientsRef);
-  lifecycleRef.current?.stop();
+  disposePreviewClients(videoClientRef, audioClientsRef, clockRef);
 }
 
-function disposeAudioClients(
-  audioClientsRef: MutableRefObject<readonly AudioStreamClient[]>,
+function disposePreviewClients(
+  videoClientRef: MutableRefObject<CutHtmlVideoClient | undefined>,
+  audioClientsRef: MutableRefObject<readonly CutPcmAudioClient[]>,
+  clockRef: MutableRefObject<CutPreviewClock | undefined>,
+): void {
+  videoClientRef.current?.dispose();
+  videoClientRef.current = undefined;
+  disposePreviewAudioClients(audioClientsRef, clockRef);
+}
+
+function disposePreviewAudioClients(
+  audioClientsRef: MutableRefObject<readonly CutPcmAudioClient[]>,
+  clockRef: MutableRefObject<CutPreviewClock | undefined>,
 ): void {
   const clients = audioClientsRef.current;
   audioClientsRef.current = [];
+  disposeAudioClients(clients);
+  clockRef.current = undefined;
+}
+
+function disposeAudioClients(clients: readonly CutPcmAudioClient[]): void {
   for (const client of clients) client.dispose();
 }
 

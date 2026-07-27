@@ -92,7 +92,7 @@ describe('embedded runtime closure validator', () => {
     const internal = await createStage();
     await writeFile(
       join(internal.agentRoot, 'dist', 'extension.js'),
-      'require("@neko-engine/host-napi");',
+      'require("@neko/media/private-runtime");',
     );
     assert.throws(
       () => assertEmbeddedRuntimeClosure(internal.stageRoot, 'darwin-arm64'),

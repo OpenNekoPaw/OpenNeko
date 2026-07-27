@@ -125,7 +125,7 @@ describe('editor workbench shell primitives', () => {
             emptyLabel="No editors"
             tabs={[
               { id: 'a', label: 'A.nkc', icon: <span>NKC</span> },
-              { id: 'b', label: 'B.nkv' },
+              { id: 'b', label: 'B.otio' },
             ]}
             onSelect={onTabSelect}
           />
@@ -200,7 +200,7 @@ describe('editor workbench shell primitives', () => {
           emptyLabel="No editors"
           tabs={[
             { id: 'a', label: 'A.nkc', closeLabel: 'Close A.nkc' },
-            { id: 'b', label: 'B.nkv', closeLabel: 'Close B.nkv' },
+            { id: 'b', label: 'B.otio', closeLabel: 'Close B.otio' },
           ]}
           onClose={onTabClose}
           onReorder={onTabReorder}

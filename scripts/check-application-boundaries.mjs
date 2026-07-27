@@ -31,10 +31,6 @@ const removedProductContractRules = [
     tokens: ["layer: 'market'", 'marketRegistration', 'readonly market:'],
   },
   {
-    file: 'packages/neko-client/src/index.ts',
-    tokens: ['PuppetCommandAck', 'PuppetCommandEnvelope'],
-  },
-  {
     file: 'packages/neko-tools/package.json',
     tokens: [
       'neko-audio-file',
@@ -105,10 +101,6 @@ const removedProductContractRules = [
     tokens: ['MarketInstallationRepository', 'MarketInstallationRecord', 'marketInstallations'],
   },
   {
-    file: 'packages/neko-engine/packages/host-cli/src/runner.rs',
-    tokens: ['NkaLoader', 'run_nka_mix_export'],
-  },
-  {
     file: 'packages/neko-types/src/types/extension-api.ts',
     tokens: [
       'NekoAudioAPI',
@@ -155,14 +147,6 @@ const removedProductContractRules = [
       'packages/neko-live',
     ],
   },
-  {
-    file: 'packages/neko-engine/README.md',
-    tokens: ['runtime-scene', 'runtime-puppet', 'runtime-device', 'runtime-ml'],
-  },
-  {
-    file: 'packages/neko-engine/ARCHITECTURE.md',
-    tokens: ['runtime-scene', 'runtime-puppet', 'runtime-device', 'runtime-ml'],
-  },
 ];
 const removedProductContractFiles = [
   'packages/neko-types/src/types/recording-artifact.ts',
@@ -181,7 +165,26 @@ const removedProductContractFiles = [
   'packages/neko-types/src/types/__tests__/model-ai-preview-scene-modes-contract.test.ts',
   'packages/neko-types/src/types/__tests__/puppet-agent-tool-contract.test.ts',
   'packages/neko-types/src/types/__fixtures__/model-ai-preview-scene-modes-v1.json',
+  'packages/neko-proto/package.json',
+  'packages/neko-proto/README.md',
+  'packages/neko-proto/diff.proto',
+  'packages/neko-proto/timeline.proto',
   'packages/neko-proto/scene.proto',
+  'scripts/proto-gen-ts.mjs',
+  'packages/neko-types/src/generated/__engine-check.ts',
+  'packages/neko-types/src/generated/diff.engine.ts',
+  'packages/neko-types/src/generated/timeline.engine.ts',
+  'packages/neko-types/src/nkv/index.ts',
+  'packages/neko-types/src/operations/index.ts',
+  'packages/neko-types/src/types/project.ts',
+  'packages/neko-types/src/types/element.ts',
+  'packages/neko-types/src/types/mediaDiffProtocol.ts',
+  'packages/neko-tools/language-configuration.json',
+  'packages/neko-tools/packages/extension/src/bootstrap/bootstrapMediaLsp.ts',
+  'packages/neko-tools/packages/extension/src/media-lsp/index.ts',
+  'packages/neko-tools/packages/extension/src/media-diff/services/analyzers/TimelineDiffAnalyzer.ts',
+  'packages/neko-tools/packages/webview/src/components/MediaDiff/TimelineDiffViewer.tsx',
+  'packages/neko-agent/packages/agent/src/runtime/turn/timeline-context-runtime.ts',
   'packages/neko-types/src/generated/scene.engine.ts',
   'packages/neko-types/src/generated/__tests__/scene-contract.test.ts',
   'packages/neko-types/src/generated/__fixtures__/scene-character-v0.json',
@@ -198,7 +201,6 @@ const removedProductContractFiles = [
   'packages/neko-types/src/nka/index.ts',
   'packages/neko-types/src/nks/index.ts',
   'packages/neko-types/src/vscode/extension/templates/glb-template.ts',
-  'packages/neko-engine/packages/host-cli/src/nka_loader.rs',
   'packages/neko-entity/src/providers/story.ts',
   'packages/neko-ui/src/viewport/index.ts',
   'packages/neko-assets/src/market/VoicePackInstallTarget.ts',
@@ -573,7 +575,7 @@ function runSelfTest() {
     removedFeaturePackages: ['packages/neko-model'],
     removedProductContracts: [
       {
-        file: 'packages/neko-client/src/index.ts',
+        file: 'packages/neko-proto/scene.proto',
         token: 'PuppetCommandEnvelope',
       },
     ],

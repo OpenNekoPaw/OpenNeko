@@ -66,20 +66,8 @@ export const AudioDiffViewer = memo(function AudioDiffViewer({
     onAudioStreamControl,
   });
 
-  const displayCurrentWaveform = useMemo(
-    () =>
-      currentWaveform.length > 0
-        ? currentWaveform
-        : Array.from({ length: 100 }, () => Math.random()),
-    [currentWaveform],
-  );
-  const displayPreviousWaveform = useMemo(
-    () =>
-      previousWaveform.length > 0
-        ? previousWaveform
-        : Array.from({ length: 100 }, () => Math.random()),
-    [previousWaveform],
-  );
+  const displayCurrentWaveform = useMemo(() => currentWaveform, [currentWaveform]);
+  const displayPreviousWaveform = useMemo(() => previousWaveform, [previousWaveform]);
 
   if (error) {
     return (

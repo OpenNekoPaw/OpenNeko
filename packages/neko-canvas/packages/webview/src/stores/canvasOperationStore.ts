@@ -1,13 +1,18 @@
 /**
- * Canvas Operation Bridge — 在 canvasStore 操作时生成 EditOperation
+ * Canvas Operation Bridge — 在 canvasStore 操作时生成 CanvasEditOperation
  *
- * 桥接层：在 canvasStore mutation 时生成 EditOperation 并同步到 Extension。
+ * 桥接层：在 canvasStore mutation 时生成 CanvasEditOperation 并同步到 Extension。
  * 保持现有 historyStore 快照式 undo/redo 不变，同时为 dirty 标记和 AI/source 标注提供统一协议。
  */
 
 import { create } from 'zustand';
-import type { CanvasNode, CanvasConnection, CanvasNodeUpdateOperation } from '@neko/shared';
-import type { EditOperation, OperationMeta, OperationSource } from '@neko/shared';
+import type { CanvasNode, CanvasConnection } from '@neko/shared';
+import type {
+  CanvasEditOperation,
+  CanvasNodeUpdateOperation,
+  CanvasOperationMeta,
+  CanvasOperationSource,
+} from '@neko-canvas/domain';
 import { getGlobalVSCodeApi } from '../utils/vscode';
 
 // =============================================================================
@@ -21,7 +26,7 @@ function postMessage(message: Record<string, unknown>): void {
   }
 }
 
-function syncOperationToExtension(op: EditOperation): void {
+function syncOperationToExtension(op: CanvasEditOperation): void {
   postMessage({ type: 'operationApplied', operation: op });
 }
 
@@ -45,7 +50,10 @@ function syncContentNodeDeltaToExtension(
 
 let counter = 0;
 
-function createMeta(source: OperationSource = 'user', description?: string): OperationMeta {
+function createMeta(
+  source: CanvasOperationSource = 'user',
+  description?: string,
+): CanvasOperationMeta {
   return {
     id: `canvas-op-${Date.now()}-${++counter}`,
     timestamp: Date.now(),
@@ -59,12 +67,12 @@ function createMeta(source: OperationSource = 'user', description?: string): Ope
 // =============================================================================
 
 export interface CanvasOperationStore {
-  operationSourceOverride: OperationSource | null;
+  operationSourceOverride: CanvasOperationSource | null;
 
   /** 记录操作（由 canvasStore 的 action 调用） */
-  recordOperation: (op: EditOperation) => void;
+  recordOperation: (op: CanvasEditOperation) => void;
   /** Temporarily override operation source within a synchronous mutation boundary */
-  withOperationSource: <T>(source: OperationSource, run: () => T) => T;
+  withOperationSource: <T>(source: CanvasOperationSource, run: () => T) => T;
 
   // =========================================================================
   // Convenience builders — 构建 CanvasOperation 并记录

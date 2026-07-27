@@ -13,6 +13,11 @@ import type {
   PreviewVariant,
   PreviewVariantRequest,
 } from '@neko/shared';
+import type {
+  HtmlVideoDescriptor,
+  HtmlVideoNativeCapabilities,
+  PcmStreamDescriptor,
+} from '@neko/media';
 
 // =============================================================================
 // Media Info (from Extension probe)
@@ -41,20 +46,18 @@ export interface MediaInfo {
 export interface PreviewInitMessage {
   type: 'preview:init';
   payload: {
-    filePath: string;
     mediaInfo: MediaInfo;
-    /** Frame server port (video only) */
-    port?: number | null;
+    displayName: string;
   };
 }
 
-export interface PreviewStreamReadyMessage {
-  type: 'preview:streamReady';
+export interface PreviewPlaybackReadyMessage {
+  type: 'preview:playbackReady';
   payload: {
-    streamId: string;
-    streamUrl: string;
-    audioStreamId?: string | null;
-    audioStreamUrl?: string | null;
+    video?: HtmlVideoDescriptor;
+    audio?: PcmStreamDescriptor;
+    startTime: number;
+    playbackRate: number;
   };
 }
 
@@ -62,6 +65,24 @@ export interface PreviewFrameDataMessage {
   type: 'preview:frameData';
   payload: {
     imageDataUrl: string;
+  };
+}
+
+export type PreviewOperation = 'captureFrame' | 'playback' | 'protocol';
+
+export type PreviewOperationDiagnosticCode =
+  | 'hardware-decoder-unavailable'
+  | 'hardware-preview-unavailable'
+  | 'hdr-poster-unavailable'
+  | 'frame-capture-failed'
+  | 'playback-failed'
+  | 'protocol-failed';
+
+export interface PreviewOperationFailedMessage {
+  type: 'preview:operationFailed';
+  payload: {
+    operation: PreviewOperation;
+    code: PreviewOperationDiagnosticCode;
   };
 }
 
@@ -85,7 +106,6 @@ export interface PanoramaInitMessage {
   type: 'panorama:init';
   payload: {
     manifest: PreviewManifest;
-    engineBaseUrl: string | null;
   };
 }
 
@@ -103,21 +123,11 @@ export interface PanoramaErrorMessage {
   };
 }
 
-export interface PreviewStreamReconnectMessage {
-  type: 'preview:streamReconnect';
-  payload: {
-    streamId: string;
-    audioStreamUrl?: string | null;
-    streamUrl?: string | null;
-    audioStreamId?: string | null;
-  };
-}
-
 export type ExtensionMessage =
   | PreviewInitMessage
-  | PreviewStreamReadyMessage
-  | PreviewStreamReconnectMessage
+  | PreviewPlaybackReadyMessage
   | PreviewFrameDataMessage
+  | PreviewOperationFailedMessage
   | PreviewWaveformMessage
   | PreviewLyricsMessage
   | PanoramaInitMessage
@@ -131,6 +141,7 @@ export type ExtensionMessage =
 
 export interface ReadyMessage {
   type: 'ready';
+  nativeVideoCapabilities?: HtmlVideoNativeCapabilities;
 }
 
 export interface PlayMessage {
@@ -154,16 +165,12 @@ export interface StopMessage {
 export interface SeekMessage {
   type: 'preview:seek';
   time: number;
+  speed?: number;
 }
 
 export interface SpeedMessage {
   type: 'preview:speed';
   speed: number;
-}
-
-export interface CaptureFrameMessage {
-  type: 'preview:captureFrame';
-  time: number;
 }
 
 export interface StatusUpdateMessage {
@@ -210,7 +217,6 @@ export type WebviewMessage =
   | StopMessage
   | SeekMessage
   | SpeedMessage
-  | CaptureFrameMessage
   | StatusUpdateMessage
   | EofMessage
   | PanoramaConfirmProjectionMessage

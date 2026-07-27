@@ -18,6 +18,7 @@ import { usePlaybackStore } from '../stores/playbackStore';
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 
 type InlineVideoPlayerMockProps = {
+  readonly audioContext?: AudioContext;
   readonly duration: number;
   readonly onStop: (currentTime: number) => void;
   readonly onEnded?: (currentTime: number) => void;
@@ -26,6 +27,15 @@ type InlineVideoPlayerMockProps = {
 type InlineAudioPlayerMockProps = InlineVideoPlayerMockProps & {
   readonly audioLayout?: 'transport' | 'node-card';
 };
+
+const audioContextMocks: AudioContextMock[] = [];
+
+class AudioContextMock {
+  readonly currentTime = 0;
+  readonly state = 'running';
+  readonly close = vi.fn().mockResolvedValue(undefined);
+  readonly resume = vi.fn().mockResolvedValue(undefined);
+}
 
 vi.mock('../components/media/InlineVideoPlayer', async () => {
   const ReactModule = await vi.importActual<typeof import('react')>('react');
@@ -53,10 +63,12 @@ vi.mock('../components/media/InlineAudioPlayer', async () => {
       layout,
       duration,
       showPlaybackButton = true,
+      onTogglePlay,
     }: {
       readonly layout?: 'transport' | 'node-card';
       readonly duration: number;
       readonly showPlaybackButton?: boolean;
+      readonly onTogglePlay: (event?: React.MouseEvent) => void;
     }) =>
       layout === 'node-card'
         ? ReactModule.createElement(
@@ -76,7 +88,11 @@ vi.mock('../components/media/InlineAudioPlayer', async () => {
               'data-duration': duration,
             },
             showPlaybackButton
-              ? ReactModule.createElement('button', { type: 'button', title: 'Play' }, 'Play')
+              ? ReactModule.createElement(
+                  'button',
+                  { type: 'button', title: 'Play', onClick: onTogglePlay },
+                  'Play',
+                )
               : ReactModule.createElement('span', null, `0:00 / ${duration.toFixed(0)}`),
           ),
     InlineAudioPlayer: ({ duration, onStop, onEnded, audioLayout }: InlineAudioPlayerMockProps) =>
@@ -112,6 +128,15 @@ describe('PreviewSurface media playback control', () => {
     });
     api.postMessage = postMessage;
     mockWindow = installMockWebviewWindow(api);
+    audioContextMocks.length = 0;
+    Object.assign(globalThis, {
+      AudioContext: class extends AudioContextMock {
+        constructor() {
+          super();
+          audioContextMocks.push(this);
+        }
+      },
+    });
     usePlaybackStore.setState({
       activePlayback: null,
       handoffRequest: null,
@@ -339,15 +364,89 @@ describe('PreviewSurface media playback control', () => {
     {
       role: 'video-proxy' as const,
       mediaType: 'video' as const,
+      assetPath: 'clips/user-activated.mp4',
+    },
+    {
+      role: 'audio-waveform' as const,
+      mediaType: 'audio' as const,
+      assetPath: 'audio/user-activated.wav',
+    },
+  ])(
+    'primes Web Audio during the initial $mediaType user gesture before the Host stream roundtrip',
+    async ({ role, mediaType, assetPath }) => {
+      await act(async () => {
+        root.render(
+          <PreviewSurface
+            source={{
+              id: `user-activated-${mediaType}`,
+              role,
+              title: assetPath,
+              asset: {
+                kind: 'asset-identity',
+                path: assetPath,
+                mediaType,
+              },
+            }}
+          />,
+        );
+      });
+
+      const probe = latestMessageOfType('media:probe');
+      const nodeId = readString(probe['nodeId']);
+      if (!nodeId) throw new Error('media:probe did not include a node id');
+      await act(async () => {
+        mockWindow.dispatchMessage({
+          type: 'media:probeResult',
+          nodeId,
+          mediaInfo: mediaInfoFor(mediaType),
+        });
+      });
+
+      await act(async () => {
+        host.querySelector<HTMLButtonElement>('button[title="Play"]')?.click();
+      });
+
+      expect(audioContextMocks).toHaveLength(1);
+      expect(latestMessageOfType('media:play')).toMatchObject({
+        type: 'media:play',
+        nodeId,
+        mediaType,
+        startTime: 0,
+      });
+    },
+  );
+
+  it.each([
+    {
+      role: 'video-proxy' as const,
+      mediaType: 'video' as const,
       assetPath: 'clips/a.mp4',
-      readyUrls: { videoStreamUrl: 'ws://video/a', audioStreamUrl: null },
+      readyDescriptors: {
+        video: {
+          version: 1,
+          transport: 'http',
+          url: 'http://127.0.0.1:3000/file/video-a',
+          mimeType: 'video/mp4',
+          preparationProfile: 'h264-mp4-direct',
+          durationSeconds: 2,
+        },
+      },
       endedTestId: 'inline-video-ended',
     },
     {
       role: 'audio-waveform' as const,
       mediaType: 'audio' as const,
       assetPath: 'audio/a.wav',
-      readyUrls: { videoStreamUrl: null, audioStreamUrl: 'ws://audio/a' },
+      readyDescriptors: {
+        audio: {
+          version: 1,
+          transport: 'http',
+          protocol: 'neko-pcm-f32le-v1',
+          streamUrl: 'http://127.0.0.1:3000/pcm/audio-a',
+          sampleRate: 48_000,
+          channels: 2,
+        },
+      },
       endedTestId: 'inline-audio-ended',
     },
   ])(
@@ -409,7 +508,9 @@ describe('PreviewSurface media playback control', () => {
           type: 'media:streamReady',
           nodeId,
           mediaInfo: mediaInfoFor(caseData.mediaType),
-          ...caseData.readyUrls,
+          ...caseData.readyDescriptors,
+          startTime: 0,
+          playbackRate: 1,
         });
       });
 
@@ -439,6 +540,61 @@ describe('PreviewSurface media playback control', () => {
       expect(messagesOfType('media:probe')).toHaveLength(1);
     },
   );
+
+  it('restarts inline video from zero when the saved position is at media end', async () => {
+    const assetPath = 'clips/replay.mp4';
+    usePlaybackStore.setState({
+      playbacks: new Map([
+        [
+          assetPath,
+          {
+            currentTime: 2,
+            duration: 2,
+            wasPlaying: false,
+            savedAt: Date.now(),
+          },
+        ],
+      ]),
+    });
+
+    await act(async () => {
+      root.render(
+        <PreviewSurface
+          source={{
+            id: 'replay-video',
+            role: 'video-proxy',
+            title: assetPath,
+            asset: {
+              kind: 'asset-identity',
+              path: assetPath,
+              mediaType: 'video',
+            },
+          }}
+        />,
+      );
+    });
+
+    const probe = latestMessageOfType('media:probe');
+    const nodeId = readString(probe['nodeId']);
+    if (!nodeId) throw new Error('media:probe did not include a node id');
+    await act(async () => {
+      mockWindow.dispatchMessage({
+        type: 'media:probeResult',
+        nodeId,
+        mediaInfo: mediaInfoFor('video'),
+      });
+    });
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>('button[title="Play"]')?.click();
+    });
+
+    expect(latestMessageOfType('media:play')).toMatchObject({
+      type: 'media:play',
+      nodeId,
+      mediaType: 'video',
+      startTime: 0,
+    });
+  });
 
   function messagesOfType(type: string): Record<string, unknown>[] {
     return postMessage.mock.calls

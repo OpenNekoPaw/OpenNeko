@@ -46,7 +46,7 @@ Agent 应优先调用 typed domain tools：
 
 - 文档/图片读取：`ReadDocument`、`ReadImage`。
 - Canvas/Timeline 修改：typed intent 或领域工具。
-- 媒体生成和转码：`neko-engine`、media provider adapter 或受管 external processor。
+- 媒体生成和转码：`@neko/media` 的 Node/FFmpeg adapter、media provider adapter 或受管 external processor。
 - 产物交付：`ResourceRef`、artifact transfer、workspace-relative path 或 `${VAR}/path`。
 
 ### 2. 所有文件类工具必须进入统一 PathAccessPolicy

@@ -10,7 +10,7 @@
  */
 
 import { useState, useRef, useCallback, memo } from 'react';
-import { formatTime } from '@neko/neko-client';
+import { formatMediaTime as formatTime } from '@neko/media';
 import { ChevronDownIcon as ChevronIcon, ErrorIcon, OpenIcon, PlayIcon } from '@neko/shared/icons';
 import { openMediaTarget } from './openMediaTarget';
 

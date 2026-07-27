@@ -29,7 +29,7 @@ describe('project file I/O guardrails', () => {
 
     for (const file of migratedFiles) {
       expect(readSource(file), file).toContain('ProjectFileStore');
-      expect(readSource(file), file).toContain('createDefaultProjectFormatCodecRegistry');
+      expect(readSource(file), file).toContain('createNkcProjectFormatCodecRegistry');
     }
   });
 

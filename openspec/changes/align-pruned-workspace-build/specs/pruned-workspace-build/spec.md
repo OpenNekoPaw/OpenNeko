@@ -1,3 +1,8 @@
+> **Superseded (2026-07-26):** requirements that retain or build
+> `neko-engine` are replaced by
+> `retire-neko-engine-before-node-media-rebuild` and must not be enforced as
+> current architecture.
+
 ## ADDED Requirements
 
 ### Requirement: Workspace dependencies are closed

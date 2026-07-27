@@ -8,11 +8,9 @@ const repositoryRoot = path.resolve(import.meta.dirname, '../..');
 const localVSCodeConfigurationPaths = ['.vscode/launch.json', '.vscode/tasks.json'];
 const productDevStageArgument =
   '--extensionDevelopmentPath=${workspaceFolder}/.tmp/openneko-vscode-dev';
-const processScopedArguments = [
-  '--extensions-dir',
-  '--remote-debugging-port',
-  '--user-data-dir',
-];
+const canonicalTestWorkspaceArgument = '${env:HOME}/Git/neko-test';
+const retiredRepositoryTestWorkspace = '.tmp/vscode-test-workspaces/media-runtime';
+const processScopedArguments = ['--extensions-dir', '--remote-debugging-port', '--user-data-dir'];
 const presentLocalVSCodeConfigurationPaths = localVSCodeConfigurationPaths.filter((relativePath) =>
   existsSync(path.join(repositoryRoot, relativePath)),
 );
@@ -90,8 +88,18 @@ test(
       'Debug Dev (All) must load the composed apps/neko-vscode development stage',
     );
     assert.ok(
-      developmentConfiguration.args.includes('${env:HOME}/Git/neko-test'),
-      'Debug Dev (All) must open the dedicated synthetic neko-test workspace',
+      developmentConfiguration.args.includes(canonicalTestWorkspaceArgument),
+      'Debug Dev (All) must open the canonical neko-test workspace',
+    );
+    assert.equal(
+      JSON.stringify(launchConfiguration).includes(retiredRepositoryTestWorkspace),
+      false,
+      'VS Code launch configurations must not use a repository-local test workspace',
+    );
+    assert.equal(
+      JSON.stringify(launchConfiguration).includes('/packages/neko-engine'),
+      false,
+      'VS Code launch configurations must not activate the retired Engine feature',
     );
     assert.ok(
       developmentConfiguration.args.includes('--disable-extensions'),
@@ -129,6 +137,10 @@ test(
       ),
       'Debug Feature Packages (All) must retain the package-local extension roots',
     );
+    assert.ok(
+      featureConfiguration.args.includes(canonicalTestWorkspaceArgument),
+      'Debug Feature Packages (All) must open the canonical neko-test workspace',
+    );
     assert.equal(featureConfiguration.preLaunchTask, 'build:feature-dev');
     assert.equal(
       JSON.stringify(launchConfiguration).includes('neko-dashboard'),
@@ -144,14 +156,42 @@ test(
     skip: !hasLocalVSCodeConfiguration,
   },
   async () => {
-    const [taskConfiguration, packageManifest] = await Promise.all([
+    const [launchConfiguration, taskConfiguration, packageManifest] = await Promise.all([
+      readWorkspaceJson('.vscode/launch.json'),
       readWorkspaceJson('.vscode/tasks.json'),
       readWorkspaceJson('package.json'),
     ]);
     const productDevTask = taskConfiguration.tasks.find(
       (task) => task.label === 'build:product-dev',
     );
-    assert.equal(productDevTask?.command, 'pnpm build:vscode:dev');
+    const developmentConfiguration = launchConfiguration.configurations.find(
+      (configuration) => configuration.name === 'Debug Dev (All)',
+    );
+    const featureConfiguration = launchConfiguration.configurations.find(
+      (configuration) => configuration.name === 'Debug Feature Packages (All)',
+    );
+    const featureDevTask = taskConfiguration.tasks.find(
+      (task) => task.label === 'build:feature-dev',
+    );
+    assert.equal(
+      productDevTask?.command,
+      'pnpm prepare:vscode-media-fixture && pnpm build:vscode:dev',
+    );
+    assert.deepEqual(
+      productDevTask?.options?.env,
+      developmentConfiguration?.env,
+      'the product pre-launch task must receive the explicit media runtime paths because launch env is not inherited by preLaunchTask',
+    );
+    assert.deepEqual(
+      featureDevTask?.options?.env,
+      featureConfiguration?.env,
+      'the feature pre-launch task must receive the explicit fixture runtime paths because launch env is not inherited by preLaunchTask',
+    );
+    assert.equal(
+      typeof packageManifest.scripts['prepare:vscode-media-fixture'],
+      'string',
+      'root package scripts must provide prepare:vscode-media-fixture',
+    );
     assert.equal(
       typeof packageManifest.scripts['build:vscode:dev'],
       'string',

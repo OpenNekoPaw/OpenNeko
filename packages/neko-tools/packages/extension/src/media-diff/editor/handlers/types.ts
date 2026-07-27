@@ -7,8 +7,8 @@
  */
 
 import type * as vscode from 'vscode';
-import type { EngineClient } from '@neko/neko-client/EngineClient';
-import type { DiffResult, MediaDiffResponse } from '@neko/shared';
+import type { DiffResult, MediaDiffResponseDraft } from '@neko-tools/contracts';
+import type { IToolsMediaRuntime } from '../../../contracts/IMediaRuntimeService';
 import type { IScheduledTask, IScheduler } from '../../../contracts/IScheduler';
 import type { ITempFileService } from '../../../contracts/ITempFileService';
 import type { IMediaDiffService } from '../../services/MediaDiffService';
@@ -20,12 +20,13 @@ export interface IHandlerContext {
   readonly fileUri: vscode.Uri;
   readonly previousUri?: vscode.Uri;
   readonly diffService: IMediaDiffService;
-  readonly engineClient: EngineClient | null;
+  readonly mediaRuntime: IToolsMediaRuntime;
   readonly scheduler: IScheduler;
   readonly tempFileService: ITempFileService;
   readonly requestState: IMediaDiffRequestState;
   /** Session ID for grouping streams from this handler */
   readonly sessionId: string;
+  currentRequestId: string | null;
 
   // ── Mutable state ───────────────────────────────────────────────────
   isDisposed: boolean;
@@ -45,22 +46,30 @@ export interface IHandlerContext {
   currentAudioStreamId: string | null;
   /** Previous version audio stream ID (video mode) */
   previousAudioStreamId: string | null;
+  videoStreamGeneration: number;
+  videoStreamAbortController: AbortController | null;
   /** Current version audio-only stream ID (audio diff mode) */
   currentAudioOnlyStreamId: string | null;
   /** Previous version audio-only stream ID (audio diff mode) */
   previousAudioOnlyStreamId: string | null;
+  audioStreamGeneration: number;
+  audioStreamAbortController: AbortController | null;
 
   // ── Frame operations state ──────────────────────────────────────────
   /** Debounce timer for seek requests to avoid VideoToolbox session exhaustion */
   seekDebounceTimer: IScheduledTask | null;
+  /** Promise settlement for the currently debounced seek. */
+  pendingSeekCompletion: {
+    readonly resolve: () => void;
+    readonly reject: (error: unknown) => void;
+  } | null;
   /** Pending frame extraction promises for concurrency control */
   activeFrameExtractions: number;
 
   // ── Helpers ─────────────────────────────────────────────────────────
   /** Send message to webview (no-op if disposed) */
-  sendMessage(message: Partial<MediaDiffResponse>): void;
-  /** Assert engine client is available. Throws into caller's try/catch. */
-  requireEngine(): EngineClient;
+  sendMessage(message: MediaDiffResponseDraft): void;
+  requireMediaRuntime(): IToolsMediaRuntime;
 }
 
 /** Maximum concurrent frame extractions (shared constant) */

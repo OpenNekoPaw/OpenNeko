@@ -77,12 +77,8 @@ jobs:
         include:
           - target: darwin-arm64
             os: macos-15
-            rust-target: aarch64-apple-darwin
-            ffmpeg-install: brew untap aws/tap >/dev/null 2>&1 || true; brew install ffmpeg pkg-config
           - target: linux-x64
             os: ubuntu-latest
-            rust-target: x86_64-unknown-linux-gnu
-            ffmpeg-install: sudo apt-get update && sudo apt-get install -y clang libclang-dev libasound2-dev libavcodec-dev libavdevice-dev libavfilter-dev libavformat-dev libavutil-dev libssl-dev libswresample-dev libswscale-dev libudev-dev libva-dev libvulkan-dev libwayland-dev libx11-dev libxcursor-dev libxfixes-dev libxi-dev libxkbcommon-dev libxrandr-dev patchelf pkg-config
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v5
@@ -98,40 +94,24 @@ jobs:
       - name: Enable Corepack
         run: corepack enable
 
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.rust-target }}
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: packages/neko-engine
-          key: release-${{ matrix.target }}
-
-      - name: Install FFmpeg
-        run: ${{ matrix.ffmpeg-install }}
-        shell: bash
-
-      - name: Prepare configured FFmpeg build SDK
-        run: node packages/neko-engine/scripts/download-ffmpeg.js --platform ${{ matrix.target }}
-
       - run: pnpm install --frozen-lockfile
 
-      - name: Remove vendor source override
-        run: rm -f packages/neko-engine/.cargo/config.toml
-        shell: bash
+      - name: Verify retired media runtime is absent from product composition
+        run: pnpm check:engine-retirement-boundary
 
-      - name: Build host-napi
-        working-directory: packages/neko-engine/packages/host-napi
-        env:
-          FFMPEG_DIR: ${{ github.workspace }}/packages/neko-engine/deps/ffmpeg
-        run: pnpm run build:napi -- --target ${{ matrix.rust-target }}
+      - name: Install Linux media runtime build dependencies
+        if: ${{ matrix.target == 'linux-x64' }}
+        run: |
+          sudo apt-get update
+          xargs sudo apt-get install -y --no-install-recommends < scripts/media-runtime-build-packages.txt
 
-      - name: Package Engine payload
-        working-directory: packages/neko-engine
-        run: bash scripts/package-platform.sh ${{ matrix.target }}
+      - name: Build verified FFmpeg runtime
+        run: scripts/build-media-runtime.sh ${{ matrix.target }} .tmp/release-media-runtime/${{ matrix.target }}
 
       - name: Assemble OpenNeko platform VSIX
         run: node scripts/package-openneko-platform.mjs --target ${{ matrix.target }}
+        env:
+          NEKO_MEDIA_RUNTIME_ROOT: ${{ github.workspace }}/.tmp/release-media-runtime/${{ matrix.target }}
 
       - uses: actions/upload-artifact@v6
         with:

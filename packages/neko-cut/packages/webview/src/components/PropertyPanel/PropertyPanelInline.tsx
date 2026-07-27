@@ -1,7 +1,7 @@
 /**
  * Adapts the revisioned OTIO TimelineView to the existing property form.
  *
- * The form-specific TimelineElement shape exists only as a controlled draft. It
+ * The form-specific Cut clip shape exists only as a controlled draft. It
  * is never persisted and never becomes a second project authority.
  */
 
@@ -10,14 +10,13 @@ import type { TimelineClipView, TimelineTrackView } from '@neko-cut/domain';
 import { SendIcon } from '@neko/ui/icons';
 import { PanelSection, PropertyRow, SelectPropertyRow } from '@neko/ui/creative';
 import { Button, Checkbox } from '@neko/ui/primitives';
-import { ENGINE_DEFAULT_TRANSFORM, type TimelineElement } from '../../types';
 import { useCutOtioController } from '../../controllers/CutOtioControllerContext';
 import { useTranslation } from '../../i18n/I18nContext';
 import {
   useCutPresentationStore,
   type CutPresentationSelection,
 } from '../../stores/cut-presentation-store';
-import { PropertyPanel } from './PropertyPanel';
+import { PropertyPanel, type CutClipPropertyDraft } from './PropertyPanel';
 import {
   PROJECT_CANVAS_PRESETS,
   projectCanvasCommandForPreset,
@@ -56,18 +55,18 @@ export const PropertyPanelInline = memo(function PropertyPanelInline({
     () => (selected ? projectClipForPropertyForm(selected.track, selected.clip) : null),
     [selected],
   );
-  const [draft, setDraft] = useState<TimelineElement | null>(projected);
+  const [draft, setDraft] = useState<CutClipPropertyDraft | null>(projected);
 
   useEffect(() => setDraft(projected), [projected, view?.revision]);
 
-  const previewChange = useCallback((elementId: string, changes: Partial<TimelineElement>) => {
+  const previewChange = useCallback((elementId: string, changes: Partial<CutClipPropertyDraft>) => {
     setDraft((current) =>
       current?.id === elementId ? mergeElementDraft(current, changes) : current,
     );
   }, []);
 
   const commitChange = useCallback(
-    (elementId: string, changes: Partial<TimelineElement>) => {
+    (elementId: string, changes: Partial<CutClipPropertyDraft>) => {
       if (!selected || selected.clip.clipId !== elementId) return;
       const { clip, track } = selected;
       if (typeof changes.name === 'string' && changes.name !== clip.name) {
@@ -471,7 +470,7 @@ function findSelectedClip(
 export function projectClipForPropertyForm(
   track: TimelineTrackView,
   clip: TimelineClipView,
-): TimelineElement {
+): CutClipPropertyDraft {
   const availableStart = clip.sourceAvailableStartSeconds;
   const availableDuration = clip.sourceAvailableDurationSeconds;
   const trimStart = normalizeInspectorSeconds(
@@ -498,13 +497,6 @@ export function projectClipForPropertyForm(
     startTime: normalizeInspectorSeconds(clip.startSeconds),
     trimStart,
     trimEnd,
-    transform: ENGINE_DEFAULT_TRANSFORM,
-    opacity: 1,
-    blendMode: 'normal' as const,
-    effects: [],
-    muted: clip.audio.muted,
-    hidden: !clip.enabled || !track.enabled,
-    locked: clip.locked || track.locked,
     audio: {
       volume: 1,
       pan: 0,
@@ -519,28 +511,11 @@ export function projectClipForPropertyForm(
       reverse: false,
     },
   };
-  if (track.kind === 'Audio') return { ...common, type: 'audio', src: clip.targetUrl };
+  if (track.kind === 'Audio') return { ...common, type: 'audio' };
   if (track.kind === 'Subtitle') {
-    return {
-      ...common,
-      type: 'subtitle',
-      text: clip.name,
-      fontSize: 48,
-      fontFamily: 'Arial',
-      color: '#ffffff',
-      backgroundColor: 'transparent',
-      textAlign: 'center',
-      strokeColor: 'transparent',
-      strokeWidth: 0,
-    };
+    return { ...common, type: 'subtitle' };
   }
-  return {
-    ...common,
-    type: 'media',
-    src: clip.targetUrl,
-    mediaType: 'video',
-    ...(clip.linkedAudioClipId ? { linkedAudioId: clip.linkedAudioClipId } : {}),
-  };
+  return { ...common, type: 'media' };
 }
 
 function frameRate(
@@ -570,8 +545,8 @@ function formatSeconds(value: number): string {
 }
 
 function mergeElementDraft(
-  current: TimelineElement,
-  changes: Partial<TimelineElement>,
-): TimelineElement {
+  current: CutClipPropertyDraft,
+  changes: Partial<CutClipPropertyDraft>,
+): CutClipPropertyDraft {
   return Object.assign({}, current, changes);
 }
