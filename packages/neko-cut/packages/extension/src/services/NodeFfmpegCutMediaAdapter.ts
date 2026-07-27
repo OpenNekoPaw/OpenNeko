@@ -1,3 +1,4 @@
+import * as nodeCrypto from 'node:crypto';
 import * as nodeFs from 'node:fs/promises';
 import * as nodeOs from 'node:os';
 import * as nodePath from 'node:path';
@@ -107,6 +108,7 @@ export class NodeFfmpegCutMediaAdapter implements CutMediaRuntimeAdapter {
   private readonly cacheRoot: string;
   private readonly sessions = new Map<string, SessionRecord>();
   private readonly keyframeIndexes = new Map<string, Promise<KeyframeIndex>>();
+  private readonly thumbnailCaptures = new Map<string, Promise<{ readonly dataUrl: string }>>();
   private readonly vp8WebmDirectQualified: boolean;
   private readonly hardwareVideoBackend: 'videotoolbox' | 'unavailable';
   private adapterRootPromise: Promise<string> | undefined;
@@ -179,6 +181,88 @@ export class NodeFfmpegCutMediaAdapter implements CutMediaRuntimeAdapter {
     assertNonNegativeFinite(timeSeconds, 'frame time');
     assertPositiveInteger(options.width, 'frame width');
     assertPositiveInteger(options.height, 'frame height');
+    signal?.throwIfAborted();
+    const sourcePath = this.resolveSource(source);
+    const stat = await nodeFs.stat(sourcePath);
+    const cacheKey = nodeCrypto
+      .createHash('sha256')
+      .update(
+        JSON.stringify({
+          source: source.workspaceRelativePath,
+          size: stat.size,
+          mtimeMs: stat.mtimeMs,
+          timeSeconds,
+          width: options.width,
+          height: options.height,
+        }),
+      )
+      .digest('hex');
+    const existing = this.thumbnailCaptures.get(cacheKey);
+    if (existing) return existing;
+    const pending = this.captureFrameCached(
+      source,
+      sourcePath,
+      timeSeconds,
+      options,
+      cacheKey,
+      signal,
+    );
+    this.thumbnailCaptures.set(cacheKey, pending);
+    try {
+      return await pending;
+    } finally {
+      if (this.thumbnailCaptures.get(cacheKey) === pending) {
+        this.thumbnailCaptures.delete(cacheKey);
+      }
+    }
+  }
+
+  private async captureFrameCached(
+    source: CutRuntimeMediaSource,
+    sourcePath: string,
+    timeSeconds: number,
+    options: { readonly width: number; readonly height: number },
+    cacheKey: string,
+    signal?: AbortSignal,
+  ): Promise<{ readonly dataUrl: string }> {
+    const directory = nodePath.join(this.cacheRoot, 'thumbnails');
+    const cachePath = nodePath.join(directory, `${cacheKey}.jpg`);
+    try {
+      const cached = await nodeFs.readFile(cachePath);
+      if (cached.byteLength > 0) {
+        return { dataUrl: `data:image/jpeg;base64,${cached.toString('base64')}` };
+      }
+      await nodeFs.rm(cachePath, { force: true });
+    } catch (error) {
+      if (!hasNodeErrorCode(error, 'ENOENT')) throw error;
+    }
+    signal?.throwIfAborted();
+    const captured = await this.captureFrameUncached(
+      source,
+      sourcePath,
+      timeSeconds,
+      options,
+      signal,
+    );
+    const jpeg = Buffer.from(captured.dataUrl.slice('data:image/jpeg;base64,'.length), 'base64');
+    await nodeFs.mkdir(directory, { recursive: true });
+    const temporaryPath = `${cachePath}.${nodeCrypto.randomUUID()}.tmp`;
+    try {
+      await nodeFs.writeFile(temporaryPath, jpeg);
+      await nodeFs.rename(temporaryPath, cachePath);
+    } finally {
+      await nodeFs.rm(temporaryPath, { force: true });
+    }
+    return captured;
+  }
+
+  private async captureFrameUncached(
+    source: CutRuntimeMediaSource,
+    sourcePath: string,
+    timeSeconds: number,
+    options: { readonly width: number; readonly height: number },
+    signal?: AbortSignal,
+  ): Promise<{ readonly dataUrl: string }> {
     const probe = await this.probe(source, signal);
     const video = probe.video;
     if (!video) throw new Error('Frame source contains no video stream.');
@@ -204,7 +288,7 @@ export class NodeFfmpegCutMediaAdapter implements CutMediaRuntimeAdapter {
           '-ss',
           decimal(timeSeconds),
           '-i',
-          this.resolveSource(source),
+          sourcePath,
           '-map',
           '0:v:0',
           '-frames:v',
@@ -1591,4 +1675,8 @@ function isMissingFileError(error: unknown): boolean {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function hasNodeErrorCode(error: unknown, code: string): boolean {
+  return isRecord(error) && error['code'] === code;
 }

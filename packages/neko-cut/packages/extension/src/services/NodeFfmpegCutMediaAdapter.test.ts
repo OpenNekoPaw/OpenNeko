@@ -22,6 +22,7 @@ describe('NodeFfmpegCutMediaAdapter', () => {
   let sourcePath: string;
   let vp8Path: string;
   let surroundPath: string;
+  let thumbnailPath: string;
   const adapters: NodeFfmpegCutMediaAdapter[] = [];
 
   beforeAll(async () => {
@@ -32,6 +33,8 @@ describe('NodeFfmpegCutMediaAdapter', () => {
     sourcePath = path.join(root, 'source.mp4');
     vp8Path = path.join(root, 'source.webm');
     surroundPath = path.join(root, 'surround.wav');
+    thumbnailPath = path.join(root, 'thumbnail-source.mp4');
+    await writeFile(thumbnailPath, 'thumbnail-source-v1');
     const process = new NodeFfmpegProcess();
     await process.run('ffmpeg', [
       '-y',
@@ -128,6 +131,67 @@ describe('NodeFfmpegCutMediaAdapter', () => {
     expect(waveform.peaks.every((peak) => peak >= 0 && peak <= 1)).toBe(true);
   });
 
+  it('reuses fingerprinted thumbnail captures across concurrent requests and adapter sessions', async () => {
+    let captureCount = 0;
+    const process: FfmpegProcessPort = {
+      run: async (executable) => {
+        if (executable === 'ffprobe') {
+          return {
+            stdout: Buffer.from(
+              JSON.stringify({
+                streams: [
+                  {
+                    index: 0,
+                    codec_type: 'video',
+                    codec_name: 'h264',
+                    pix_fmt: 'yuv420p',
+                    width: 320,
+                    height: 180,
+                    r_frame_rate: '30/1',
+                  },
+                ],
+                format: { duration: '2' },
+              }),
+            ),
+            stderr: '',
+          };
+        }
+        captureCount += 1;
+        return { stdout: Buffer.from(`jpeg-${captureCount}`), stderr: '' };
+      },
+      streamFfmpeg: () => {
+        throw new Error('Unexpected streaming FFmpeg process.');
+      },
+    };
+    const first = new NodeFfmpegCutMediaAdapter(root, { cacheRoot, process });
+    const second = new NodeFfmpegCutMediaAdapter(root, { cacheRoot, process });
+    adapters.push(first, second);
+    const request = () =>
+      first.captureFrame({ workspaceRelativePath: 'thumbnail-source.mp4' }, 0.5, {
+        width: 160,
+        height: 90,
+      });
+
+    const [left, right] = await Promise.all([request(), request()]);
+    expect(left).toEqual(right);
+    expect(captureCount).toBe(1);
+
+    await expect(
+      second.captureFrame({ workspaceRelativePath: 'thumbnail-source.mp4' }, 0.5, {
+        width: 160,
+        height: 90,
+      }),
+    ).resolves.toEqual(left);
+    expect(captureCount).toBe(1);
+
+    await writeFile(thumbnailPath, 'thumbnail-source-v2-with-a-new-fingerprint');
+    await second.captureFrame({ workspaceRelativePath: 'thumbnail-source.mp4' }, 0.5, {
+      width: 160,
+      height: 90,
+    });
+    expect(captureCount).toBe(2);
+  });
+
   it('classifies a corrupt bounded frame as interval corruption', async () => {
     const process: FfmpegProcessPort = {
       run: async (executable) => {
@@ -166,6 +230,7 @@ describe('NodeFfmpegCutMediaAdapter', () => {
     };
     const adapter = new NodeFfmpegCutMediaAdapter(root, { cacheRoot, process });
     adapters.push(adapter);
+    await writeFile(path.join(root, 'partially-corrupt.mp4'), 'corrupt-frame-fixture');
 
     await expect(
       adapter.captureFrame({ workspaceRelativePath: 'partially-corrupt.mp4' }, 139, {
