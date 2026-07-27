@@ -211,7 +211,10 @@ describe('NodeMediaRuntime', () => {
   });
 
   it('preserves valid captures when one bounded frame is corrupt', async () => {
-    const runtime = new NodeMediaRuntime({ process: new PartialFrameProcess() });
+    const runtime = new NodeMediaRuntime({
+      process: new PartialFrameProcess(),
+      hardwareVideoBackend: 'videotoolbox',
+    });
     runtimes.push(runtime);
 
     await expect(runtime.captureFrames('/fixture/damaged.mp4', [0, 1, 2])).resolves.toEqual([
@@ -227,7 +230,10 @@ describe('NodeMediaRuntime', () => {
   });
 
   it('classifies a bounded early-EOF frame as interval corruption', async () => {
-    const runtime = new NodeMediaRuntime({ process: new EmptyFrameProcess() });
+    const runtime = new NodeMediaRuntime({
+      process: new EmptyFrameProcess(),
+      hardwareVideoBackend: 'videotoolbox',
+    });
     runtimes.push(runtime);
 
     await expect(runtime.captureFrame('/fixture/truncated.mp4', 150)).rejects.toMatchObject({

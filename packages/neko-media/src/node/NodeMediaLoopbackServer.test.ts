@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, rm, truncate, writeFile } from 'node:fs/promises';
 import { get } from 'node:http';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
@@ -67,7 +67,9 @@ describe('NodeMediaLoopbackServer', () => {
     const root = await mkdtemp(path.join(tmpdir(), 'cut-media-server-'));
     roots.push(root);
     const filePath = path.join(root, 'segment.mp4');
-    await writeFile(filePath, Buffer.alloc(8 * 1024 * 1024));
+    // Keep the response active beyond any platform loopback socket buffer.
+    await writeFile(filePath, '');
+    await truncate(filePath, 1024 * 1024 * 1024);
     const server = new NodeMediaLoopbackServer();
     servers.push(server);
     const registration = await server.registerFile(filePath, 'video/mp4');
