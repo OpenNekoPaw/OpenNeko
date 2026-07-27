@@ -27,4 +27,4 @@
 - [x] 4.2 Build and qualify the Linux runtime in an amd64 Linux environment.
 - [x] 4.3 Run `pnpm build`, `pnpm test`, `pnpm check`, legacy-debt, unused, and
       OpenSpec strict gates.
-- [ ] 4.4 Push the focused commits and verify PR GitHub Actions.
+- [x] 4.4 Push the focused commits and verify PR GitHub Actions.

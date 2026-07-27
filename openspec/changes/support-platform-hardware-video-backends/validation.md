@@ -75,5 +75,18 @@ driver. Device execution remains the explicit platform smoke-test risk.
 
 PR #12 at `8be49b259bbbc9ba4e2da9e7ed19d6904b95621b` failed in TypeScript Tests
 because Ubuntu could not spawn the macOS-only VideoToolbox path. The platform
-strategy and Linux build closure are not yet pushed. Task 4.4 remains open until
-the focused commits are pushed and the replacement GitHub Actions run passes.
+strategy and Linux build closure were pushed through
+`a17e59c4353e56567f2128d50e4233579035bf2e`.
+
+GitHub Actions run `30278225006` passed all 11 required checks:
+
+- TypeScript Tests passed in 6 minutes 3 seconds.
+- `darwin-arm64` VSIX packaging passed in 6 minutes 27 seconds.
+- `linux-x64` VSIX packaging built and qualified the VAAPI runtime, then passed
+  in 7 minutes 37 seconds.
+- Build & Lint, Code Quality, OpenSpec Validation, Dependency Review, both
+  Local Metadata Runtime jobs, promotion validation, and the final Merge Gate
+  passed.
+
+Manual Gate was skipped as expected for a pull request event. No required check
+failed or was skipped.
