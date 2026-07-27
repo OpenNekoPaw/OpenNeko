@@ -39,7 +39,7 @@ export interface NodeFfmpegCutMediaAdapterOptions {
 interface PreviewSessionRecord {
   readonly kind: 'preview';
   readonly token: string;
-  readonly directory: string;
+  readonly preparedDirectory?: string;
   state: 'paused' | 'active';
 }
 
@@ -111,7 +111,6 @@ export class NodeFfmpegCutMediaAdapter implements CutMediaRuntimeAdapter {
   private readonly thumbnailCaptures = new Map<string, Promise<{ readonly dataUrl: string }>>();
   private readonly vp8WebmDirectQualified: boolean;
   private readonly hardwareVideoBackend: 'videotoolbox' | 'unavailable';
-  private adapterRootPromise: Promise<string> | undefined;
   private nextSessionId = 0;
   private disposed = false;
 
@@ -410,80 +409,84 @@ export class NodeFfmpegCutMediaAdapter implements CutMediaRuntimeAdapter {
     validatePreviewInterval(options);
     const sourcePath = this.resolveSource(source);
     const probe = await this.probe(source, signal);
-    if (!probe.video) throw new Error('Preview source contains no video stream.');
-    const profile = this.selectPreparationProfile(sourcePath, probe.video);
+    const video = probe.video;
+    if (!video) throw new Error('Preview source contains no video stream.');
+    const profile = this.selectPreparationProfile(sourcePath, video);
     this.assertPreviewRuntimeCapabilities(profile, signal);
     const sourceDuration = options.durationSeconds * options.playbackRate;
-    const fragment =
-      profile === 'h264-fragmented-mp4-copy' || profile === 'h264-fragmented-mp4-remux'
-        ? await this.resolveH264Fragment(
-            sourcePath,
-            options.startTimeSeconds,
-            sourceDuration,
-            signal,
-          )
-        : {
-            startTimeSeconds: options.startTimeSeconds,
-            sourceDurationSeconds: sourceDuration,
-            mediaTimeOriginSeconds: 0,
-          };
     const sessionId = this.newSessionId('preview');
-    const directory = await nodeFs.mkdtemp(
-      nodePath.join(await this.adapterRoot(), `${sessionId}-`),
-    );
     const webm = profile === 'vp8-webm-direct';
-    const outputPath = nodePath.join(directory, webm ? 'preview.webm' : 'preview.mp4');
+    const direct = profile === 'h264-mp4-direct' || webm;
+    let preparedDirectory: string | undefined;
+    let registration: Awaited<ReturnType<NodeMediaLoopbackServer['registerFile']>> | undefined;
     try {
-      try {
-        await this.process.run(
-          'ffmpeg',
-          buildPreviewArgs(sourcePath, outputPath, probe.video, profile, {
-            startTimeSeconds: fragment.startTimeSeconds,
-            sourceDurationSeconds: fragment.sourceDurationSeconds,
-          }),
-          signal,
-        );
-      } catch (error) {
-        if (profile === 'h264-sdr-transcode') {
-          throw classifyVideoToolboxCommandError(error, probe.video.codecName);
+      let preparedPath = sourcePath;
+      let mediaTimeOriginSeconds = options.startTimeSeconds;
+      if (!direct) {
+        const fragment =
+          profile === 'h264-mp4-remux'
+            ? await this.resolveH264Fragment(
+                sourcePath,
+                options.startTimeSeconds,
+                sourceDuration,
+                signal,
+              )
+            : {
+                startTimeSeconds: options.startTimeSeconds,
+                sourceDurationSeconds: sourceDuration,
+                mediaTimeOriginSeconds: 0,
+              };
+        await nodeFs.mkdir(this.cacheRoot, { recursive: true });
+        preparedDirectory = await nodeFs.mkdtemp(nodePath.join(this.cacheRoot, 'preview-'));
+        preparedPath = nodePath.join(preparedDirectory, 'preview.mp4');
+        try {
+          await this.process.run(
+            'ffmpeg',
+            buildPreviewArgs(sourcePath, preparedPath, video, profile, {
+              startTimeSeconds: fragment.startTimeSeconds,
+              sourceDurationSeconds: fragment.sourceDurationSeconds,
+            }),
+            signal,
+          );
+        } catch (error) {
+          if (profile === 'h264-sdr-transcode') {
+            throw classifyVideoToolboxCommandError(error, video.codecName);
+          }
+          throw classifyMediaCommandError(error, 'interval', 'prepare preview interval');
         }
-        throw classifyMediaCommandError(error, 'interval', 'prepare preview interval');
+        mediaTimeOriginSeconds = fragment.mediaTimeOriginSeconds;
       }
-      const registration = await this.server.registerFile(
-        outputPath,
+      registration = await this.server.registerFile(
+        preparedPath,
         webm ? 'video/webm' : 'video/mp4',
       );
       this.sessions.set(sessionId, {
         kind: 'preview',
         token: registration.token,
-        directory,
+        ...(preparedDirectory ? { preparedDirectory } : {}),
         state: options.startPaused ? 'paused' : 'active',
       });
       return {
         sessionId,
         video: {
           version: 1 as const,
-          transport: 'http-mse' as const,
+          transport: 'http' as const,
+          url: registration.url,
           mimeType: webm
             ? 'video/webm; codecs="vp8"'
             : profile === 'h264-sdr-transcode'
               ? 'video/mp4; codecs="avc1.640029"'
-              : h264MimeType(probe.video),
+              : h264MimeType(video),
           preparationProfile: profile,
-          mediaTimeOriginSeconds: fragment.mediaTimeOriginSeconds,
+          mediaTimeOriginSeconds,
           durationSeconds: options.durationSeconds,
-          segments: [
-            {
-              index: 0,
-              startTimeSeconds: 0,
-              endTimeSeconds: fragment.mediaTimeOriginSeconds + sourceDuration,
-              url: registration.url,
-            },
-          ],
         },
       };
     } catch (error) {
-      await nodeFs.rm(directory, { recursive: true, force: true });
+      if (registration) this.server.unregister(registration.token);
+      if (preparedDirectory) {
+        await nodeFs.rm(preparedDirectory, { recursive: true, force: true });
+      }
       throw error;
     }
   }
@@ -500,7 +503,9 @@ export class NodeFfmpegCutMediaAdapter implements CutMediaRuntimeAdapter {
     const session = this.requireSession(sessionId, 'preview');
     this.sessions.delete(sessionId);
     this.server.unregister(session.token);
-    await nodeFs.rm(session.directory, { recursive: true, force: true });
+    if (session.preparedDirectory) {
+      await nodeFs.rm(session.preparedDirectory, { recursive: true, force: true });
+    }
   }
 
   async startPcmMix(
@@ -608,14 +613,13 @@ export class NodeFfmpegCutMediaAdapter implements CutMediaRuntimeAdapter {
     this.sessions.clear();
     for (const [, session] of records) this.server.unregister(session.token);
     await Promise.all(
-      records
-        .filter((entry): entry is [string, PreviewSessionRecord] => entry[1].kind === 'preview')
-        .map(([, session]) => nodeFs.rm(session.directory, { recursive: true, force: true })),
+      records.flatMap(([, session]) =>
+        session.kind === 'preview' && session.preparedDirectory
+          ? [nodeFs.rm(session.preparedDirectory, { recursive: true, force: true })]
+          : [],
+      ),
     );
     await this.server.dispose();
-    if (this.adapterRootPromise) {
-      await nodeFs.rm(await this.adapterRootPromise, { recursive: true, force: true });
-    }
   }
 
   private createPcmMixProcess(
@@ -705,12 +709,19 @@ export class NodeFfmpegCutMediaAdapter implements CutMediaRuntimeAdapter {
     sourcePath: string,
     video: CutMediaVideoStream,
   ): CutPreviewPreparationProfile {
-    if (video.codecName === 'vp8' && this.vp8WebmDirectQualified) return 'vp8-webm-direct';
-    if (video.codecName !== 'h264') return 'h264-sdr-transcode';
     const extension = nodePath.extname(sourcePath).toLowerCase();
-    return extension === '.mp4' || extension === '.m4v'
-      ? 'h264-fragmented-mp4-copy'
-      : 'h264-fragmented-mp4-remux';
+    if (
+      video.codecName === 'vp8' &&
+      extension === '.webm' &&
+      this.vp8WebmDirectQualified &&
+      isQualifiedNativeVideo(video)
+    ) {
+      return 'vp8-webm-direct';
+    }
+    if (video.codecName !== 'h264' || !isQualifiedNativeVideo(video)) {
+      return 'h264-sdr-transcode';
+    }
+    return extension === '.mp4' || extension === '.m4v' ? 'h264-mp4-direct' : 'h264-mp4-remux';
   }
 
   private async resolveH264Fragment(
@@ -1077,13 +1088,6 @@ export class NodeFfmpegCutMediaAdapter implements CutMediaRuntimeAdapter {
     return `cut-${kind}-${this.nextSessionId}`;
   }
 
-  private adapterRoot(): Promise<string> {
-    this.adapterRootPromise ??= nodeFs
-      .mkdir(this.cacheRoot, { recursive: true })
-      .then(() => nodeFs.mkdtemp(nodePath.join(this.cacheRoot, 'document-')));
-    return this.adapterRootPromise;
-  }
-
   private assertUsable(): void {
     if (this.disposed) throw new Error('Node/FFmpeg Cut media adapter is disposed.');
   }
@@ -1107,6 +1111,9 @@ function buildPreviewArgs(
   profile: CutPreviewPreparationProfile,
   interval: { readonly startTimeSeconds: number; readonly sourceDurationSeconds: number },
 ): readonly string[] {
+  if (profile === 'h264-mp4-direct' || profile === 'vp8-webm-direct') {
+    throw new Error(`Direct Cut preview profile must not invoke FFmpeg: ${profile}`);
+  }
   const base = [
     '-y',
     '-v',
@@ -1126,10 +1133,7 @@ function buildPreviewArgs(
     '-sn',
     '-dn',
   ];
-  if (profile === 'vp8-webm-direct') {
-    return [...base, '-c:v', 'copy', '-avoid_negative_ts', 'make_zero', '-f', 'webm', outputPath];
-  }
-  if (profile === 'h264-fragmented-mp4-copy' || profile === 'h264-fragmented-mp4-remux') {
+  if (profile === 'h264-mp4-remux') {
     return [
       ...base,
       '-c:v',
@@ -1137,7 +1141,7 @@ function buildPreviewArgs(
       '-avoid_negative_ts',
       'make_zero',
       '-movflags',
-      '+frag_keyframe+empty_moov+default_base_moof',
+      '+faststart',
       '-f',
       'mp4',
       outputPath,
@@ -1170,7 +1174,7 @@ function buildPreviewArgs(
     '-sc_threshold',
     '0',
     '-movflags',
-    '+frag_keyframe+empty_moov+default_base_moof',
+    '+faststart',
     '-f',
     'mp4',
     outputPath,
@@ -1219,9 +1223,17 @@ function evenDimension(value: number): number {
 
 function isHdrVideo(video: CutMediaVideoStream): boolean {
   return (
-    video.bitDepth !== undefined &&
-    video.bitDepth > 8 &&
-    (video.color?.colorTransfer === 'smpte2084' || video.color?.colorTransfer === 'arib-std-b67')
+    video.color?.colorTransfer === 'smpte2084' || video.color?.colorTransfer === 'arib-std-b67'
+  );
+}
+
+function isQualifiedNativeVideo(video: CutMediaVideoStream): boolean {
+  return (
+    (video.bitDepth ?? 8) <= 8 &&
+    !isHdrVideo(video) &&
+    (video.pixelFormat === 'yuv420p' ||
+      video.pixelFormat === 'yuvj420p' ||
+      video.pixelFormat === 'nv12')
   );
 }
 

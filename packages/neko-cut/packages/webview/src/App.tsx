@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObjec
 import type {
   CutCommand,
   CutExportTaskSnapshot,
-  CutMseVideoDescriptor,
+  CutHtmlVideoDescriptor,
   CutPcmStreamDescriptor,
   TimelineClipView,
   TimelineView,
@@ -38,7 +38,7 @@ import {
   type PreviewFailureStage,
 } from './previewFailureGate';
 import {
-  MseVideoClient as CutMseVideoClient,
+  HtmlVideoClient as CutHtmlVideoClient,
   PcmAudioClient as CutPcmAudioClient,
 } from '@neko/media/browser';
 import { CutPreviewClock } from './media/CutPreviewClock';
@@ -52,15 +52,15 @@ import {
 type PreviewVideoSlot = 0 | 1;
 
 interface PreparedVideoClient {
-  readonly client: CutMseVideoClient;
+  readonly client: CutHtmlVideoClient;
   readonly slot: PreviewVideoSlot;
 }
 
 interface PendingVideoPromotion {
   readonly generation: number;
-  readonly client?: CutMseVideoClient;
+  readonly client?: CutHtmlVideoClient;
   readonly slot?: PreviewVideoSlot;
-  readonly previous?: CutMseVideoClient;
+  readonly previous?: CutHtmlVideoClient;
   readonly videoClipId?: string;
   readonly timelineOriginSeconds?: number;
   readonly playbackRate: number;
@@ -74,7 +74,7 @@ function App() {
   const secondaryPreviewVideoRef = useRef<HTMLVideoElement>(null);
   const [activeVideoSlot, setActiveVideoSlot] = useState<PreviewVideoSlot>(0);
   const activeVideoSlotRef = useRef<PreviewVideoSlot>(0);
-  const previewVideoClientRef = useRef<CutMseVideoClient>();
+  const previewVideoClientRef = useRef<CutHtmlVideoClient>();
   const pendingVideoPromotionRef = useRef<PendingVideoPromotion>();
   const preparedVideoGenerationRef = useRef<{
     readonly generation: number;
@@ -181,7 +181,7 @@ function App() {
         : activeVideoSlotRef.current;
       const videoElement = slot === 0 ? previewVideoRef.current : secondaryPreviewVideoRef.current;
       if (!videoElement) throw new Error('Cut preview video element is unavailable.');
-      const client = new CutMseVideoClient({
+      const client = new CutHtmlVideoClient({
         video: videoElement,
         descriptor: message.video,
         playbackRate: message.videoPlaybackRate ?? 1,
@@ -309,7 +309,7 @@ function App() {
           requestedPreviewModeRef.current = undefined;
           previewAttemptRef.current = undefined;
           previewFailureGate.invalidate();
-          controller.stopPreview();
+          controller.pausePreview(generation);
         })
         .catch(() => {
           if (requestedPreviewGenerationRef.current !== generation) return;
@@ -897,7 +897,7 @@ function App() {
     retiringAudioClientsRef.current = [];
     previewClockRef.current = undefined;
     presentationActions.setPlaying(false);
-    if (view) controller.stopPreview();
+    if (view) controller.pausePreview();
   };
 
   const togglePlayback = () => {
@@ -1119,7 +1119,7 @@ function App() {
               className="cut-basic-preview-resize-handle"
             />
             <section className="cut-basic-timeline-region" style={{ flex: 1 - previewSplit.size }}>
-              <Timeline onOpenPackage={linkMediaToSelectedTrack} />
+              <Timeline onOpenPackage={linkMediaToSelectedTrack} onSeek={seek} />
             </section>
           </div>
         }
@@ -1170,7 +1170,7 @@ interface PreviewStreamMessage extends Record<string, unknown> {
   readonly width: number;
   readonly height: number;
   readonly framesPerSecond: number;
-  readonly video?: CutMseVideoDescriptor;
+  readonly video?: CutHtmlVideoDescriptor;
   readonly videoPlaybackRate?: number;
   readonly audioStreams: readonly CutPcmStreamDescriptor[];
   readonly audioGainsDb: readonly number[];
@@ -1197,7 +1197,7 @@ function isPreviewStreamMessage(value: Record<string, unknown>): value is Previe
     typeof value['width'] === 'number' &&
     typeof value['height'] === 'number' &&
     typeof value['framesPerSecond'] === 'number' &&
-    (value['video'] === undefined || isMseVideoDescriptor(value['video'])) &&
+    (value['video'] === undefined || isHtmlVideoDescriptor(value['video'])) &&
     (value['videoPlaybackRate'] === undefined ||
       (typeof value['videoPlaybackRate'] === 'number' &&
         Number.isFinite(value['videoPlaybackRate']) &&
@@ -1236,18 +1236,27 @@ function isPositiveFinite(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value) && value > 0;
 }
 
-function isMseVideoDescriptor(value: unknown): value is CutMseVideoDescriptor {
+function isHtmlVideoDescriptor(value: unknown): value is CutHtmlVideoDescriptor {
   return (
     isRecord(value) &&
     value['version'] === 1 &&
-    value['transport'] === 'http-mse' &&
+    value['transport'] === 'http' &&
+    isLoopbackHttpUrl(value['url']) &&
     typeof value['mimeType'] === 'string' &&
     typeof value['preparationProfile'] === 'string' &&
-    typeof value['mediaTimeOriginSeconds'] === 'number' &&
-    typeof value['durationSeconds'] === 'number' &&
-    Array.isArray(value['segments']) &&
-    value['segments'].length > 0
+    isNonNegativeFinite(value['mediaTimeOriginSeconds']) &&
+    isPositiveFinite(value['durationSeconds'])
   );
+}
+
+function isLoopbackHttpUrl(value: unknown): value is string {
+  if (typeof value !== 'string') return false;
+  try {
+    const url = new URL(value);
+    return url.protocol === 'http:' && url.hostname === '127.0.0.1';
+  } catch {
+    return false;
+  }
 }
 
 function isPcmStreamDescriptor(value: unknown): value is CutPcmStreamDescriptor {
@@ -1298,7 +1307,7 @@ function isExportSettings(value: unknown): boolean {
 }
 
 function stopPlaybackClients(
-  videoClientRef: MutableRefObject<CutMseVideoClient | undefined>,
+  videoClientRef: MutableRefObject<CutHtmlVideoClient | undefined>,
   audioClientsRef: MutableRefObject<readonly CutPcmAudioClient[]>,
   clockRef: MutableRefObject<CutPreviewClock | undefined>,
   generationRef: MutableRefObject<number>,
@@ -1308,7 +1317,7 @@ function stopPlaybackClients(
 }
 
 function disposePreviewClients(
-  videoClientRef: MutableRefObject<CutMseVideoClient | undefined>,
+  videoClientRef: MutableRefObject<CutHtmlVideoClient | undefined>,
   audioClientsRef: MutableRefObject<readonly CutPcmAudioClient[]>,
   clockRef: MutableRefObject<CutPreviewClock | undefined>,
 ): void {

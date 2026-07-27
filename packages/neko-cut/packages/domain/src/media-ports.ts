@@ -149,27 +149,16 @@ export type CutClipRepresentationResult =
     };
 
 export type CutPreviewPreparationProfile =
-  | 'h264-fragmented-mp4-copy'
-  | 'h264-fragmented-mp4-remux'
-  | 'vp8-webm-direct'
-  | 'h264-sdr-transcode';
+  'h264-mp4-direct' | 'h264-mp4-remux' | 'vp8-webm-direct' | 'h264-sdr-transcode';
 
-export interface CutMseSegmentDescriptor {
-  readonly index: number;
-  readonly startTimeSeconds: number;
-  readonly endTimeSeconds: number;
-  readonly url: string;
-}
-
-export interface CutMseVideoDescriptor {
+export interface CutHtmlVideoDescriptor {
   readonly version: 1;
-  readonly transport: 'http-mse';
+  readonly transport: 'http';
+  readonly url: string;
   readonly mimeType: string;
   readonly preparationProfile: CutPreviewPreparationProfile;
   readonly mediaTimeOriginSeconds: number;
   readonly durationSeconds: number;
-  readonly initSegmentUrl?: string;
-  readonly segments: readonly CutMseSegmentDescriptor[];
 }
 
 export interface CutPcmStreamDescriptor {
@@ -183,7 +172,7 @@ export interface CutPcmStreamDescriptor {
 
 export interface CutPreviewSession {
   readonly sessionId: string;
-  readonly video: CutMseVideoDescriptor;
+  readonly video: CutHtmlVideoDescriptor;
 }
 
 export interface CutPcmSession {

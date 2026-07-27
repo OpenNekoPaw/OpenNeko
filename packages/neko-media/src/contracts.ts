@@ -40,28 +40,6 @@ export interface MediaProbe {
   readonly audioStreams: readonly MediaAudioStream[];
 }
 
-export interface MseVideoSegment {
-  readonly index: number;
-  readonly url: string;
-  readonly startTimeSeconds: number;
-  readonly endTimeSeconds: number;
-}
-
-export interface MseVideoDescriptor {
-  readonly version: 1;
-  readonly transport: 'http-mse';
-  readonly mimeType: string;
-  readonly preparationProfile:
-    | 'h264-fragmented-mp4-copy'
-    | 'h264-fragmented-mp4-remux'
-    | 'vp8-webm-direct'
-    | 'h264-sdr-transcode';
-  readonly mediaTimeOriginSeconds: number;
-  readonly durationSeconds: number;
-  readonly initSegmentUrl?: string;
-  readonly segments: readonly MseVideoSegment[];
-}
-
 export interface PcmStreamDescriptor {
   readonly version: 1;
   readonly transport: 'http';

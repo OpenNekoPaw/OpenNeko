@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -298,7 +298,7 @@ describe('NodeFfmpegCutMediaAdapter', () => {
     expect(waveform.durationSeconds).toBe(10);
   });
 
-  it('prepares a non-zero compatible H.264 seek from the preceding GOP without transcoding', async () => {
+  it('publishes a non-zero compatible H.264 source as a native Range URL', async () => {
     const adapter = createAdapter();
 
     const session = await adapter.startPreview(
@@ -310,18 +310,136 @@ describe('NodeFfmpegCutMediaAdapter', () => {
         startPaused: true,
       },
     );
-    const segment = session.video.segments[0];
-    if (!segment) throw new Error('Expected one preview segment.');
-    const response = await fetch(segment.url, { headers: { Range: 'bytes=0-31' } });
+    const response = await fetch(session.video.url, { headers: { Range: 'bytes=0-31' } });
 
-    expect(session.video.preparationProfile).toBe('h264-fragmented-mp4-copy');
+    expect(session.video.preparationProfile).toBe('h264-mp4-direct');
+    expect(session.video.transport).toBe('http');
     expect(session.video.mimeType).toContain('video/mp4');
     expect(session.video.mediaTimeOriginSeconds).toBeCloseTo(0.25, 2);
     expect(response.status).toBe(206);
+    expect(response.headers.get('content-range')).toMatch(/^bytes 0-31\//u);
+    expect(response.headers.get('content-type')).toBe('video/mp4');
     expect((await response.arrayBuffer()).byteLength).toBe(32);
     await adapter.resumePreview(session.sessionId);
     await adapter.stopPreview(session.sessionId);
-    expect((await fetch(segment.url)).status).toBe(404);
+    expect((await fetch(session.video.url)).status).toBe(404);
+  });
+
+  it('does not invoke FFmpeg or keyframe indexing for compatible H.264 MP4', async () => {
+    const run = vi.fn(async (executable: 'ffmpeg' | 'ffprobe') => {
+      if (executable === 'ffmpeg') {
+        throw new Error('Compatible direct preview invoked FFmpeg.');
+      }
+      return {
+        stdout: Buffer.from(
+          JSON.stringify({
+            streams: [
+              {
+                index: 0,
+                codec_type: 'video',
+                codec_name: 'h264',
+                pix_fmt: 'yuv420p',
+                width: 320,
+                height: 180,
+                r_frame_rate: '30/1',
+              },
+            ],
+            format: { duration: '2' },
+          }),
+        ),
+        stderr: '',
+      };
+    });
+    const process: FfmpegProcessPort = {
+      run,
+      streamFfmpeg: () => {
+        throw new Error('Compatible direct preview invoked streaming FFmpeg.');
+      },
+    };
+    const adapter = new NodeFfmpegCutMediaAdapter(root, { cacheRoot, process });
+    adapters.push(adapter);
+
+    const session = await adapter.startPreview(
+      { workspaceRelativePath: 'source.mp4' },
+      {
+        startTimeSeconds: 0.25,
+        durationSeconds: 0.75,
+        playbackRate: 1,
+        startPaused: true,
+      },
+    );
+    expect(session.video.preparationProfile).toBe('h264-mp4-direct');
+    expect(session.video.mediaTimeOriginSeconds).toBeCloseTo(0.25, 2);
+    expect(run).toHaveBeenCalledTimes(1);
+    expect(run.mock.calls[0]?.[0]).toBe('ffprobe');
+    await adapter.stopPreview(session.sessionId);
+  });
+
+  it('publishes H.264 remux only after a seekable file is complete and removes it on stop', async () => {
+    await writeFile(path.join(root, 'source.mkv'), 'h264-mkv-source');
+    let preparedPath: string | undefined;
+    let ffmpegArgs: readonly string[] | undefined;
+    const process: FfmpegProcessPort = {
+      run: async (executable, args) => {
+        if (executable === 'ffprobe' && args.includes('-show_streams')) {
+          return {
+            stdout: Buffer.from(
+              JSON.stringify({
+                streams: [
+                  {
+                    index: 0,
+                    codec_type: 'video',
+                    codec_name: 'h264',
+                    pix_fmt: 'yuv420p',
+                    width: 320,
+                    height: 180,
+                    r_frame_rate: '30/1',
+                  },
+                ],
+                format: { duration: '2' },
+              }),
+            ),
+            stderr: '',
+          };
+        }
+        if (executable === 'ffprobe') {
+          return { stdout: Buffer.from('0\n1\n'), stderr: '' };
+        }
+        ffmpegArgs = args;
+        preparedPath = args.at(-1);
+        if (!preparedPath) throw new Error('Remux output path is missing.');
+        await writeFile(preparedPath, 'completed-remux');
+        return { stdout: Buffer.alloc(0), stderr: '' };
+      },
+      streamFfmpeg: () => {
+        throw new Error('H.264 remux invoked streaming FFmpeg.');
+      },
+    };
+    const adapter = new NodeFfmpegCutMediaAdapter(root, { cacheRoot, process });
+    adapters.push(adapter);
+
+    const session = await adapter.startPreview(
+      { workspaceRelativePath: 'source.mkv' },
+      {
+        startTimeSeconds: 0.25,
+        durationSeconds: 0.75,
+        playbackRate: 1,
+        startPaused: true,
+      },
+    );
+
+    expect(session.video.preparationProfile).toBe('h264-mp4-remux');
+    expect(session.video.mediaTimeOriginSeconds).toBeCloseTo(0.25, 2);
+    expect(ffmpegArgs).toContain('+faststart');
+    expect(ffmpegArgs).toContain('copy');
+    expect((await fetch(session.video.url)).status).toBe(200);
+    if (!preparedPath) throw new Error('Expected a completed remux path.');
+    await expect(stat(preparedPath)).resolves.toBeDefined();
+
+    await adapter.stopPreview(session.sessionId);
+
+    expect((await fetch(session.video.url)).status).toBe(404);
+    await expect(stat(preparedPath)).rejects.toMatchObject({ code: 'ENOENT' });
   });
 
   it('uses a VideoToolbox-only H.264 profile for unqualified VP8', async () => {
@@ -351,12 +469,12 @@ describe('NodeFfmpegCutMediaAdapter', () => {
         }
         ffmpegArgs.push([...args]);
         const outputPath = args.at(-1);
-        if (!outputPath) throw new Error('Expected Cut preview output path.');
-        await writeFile(outputPath, Buffer.from('prepared preview'));
+        if (!outputPath) throw new Error('Prepared preview output path is missing.');
+        await writeFile(outputPath, 'prepared preview');
         return { stdout: Buffer.alloc(0), stderr: '' };
       },
       streamFfmpeg: () => {
-        throw new Error('Unexpected streaming FFmpeg process.');
+        throw new Error('Hardware preview invoked streaming FFmpeg.');
       },
     };
     const adapter = new NodeFfmpegCutMediaAdapter(root, {
@@ -379,6 +497,7 @@ describe('NodeFfmpegCutMediaAdapter', () => {
 
     expect(session.video.preparationProfile).toBe('h264-sdr-transcode');
     expect(session.video.mimeType).toContain('avc1');
+    expect((await fetch(session.video.url)).status).toBe(200);
     expect(ffmpegArgs).toHaveLength(1);
     expect(ffmpegArgs[0]).toEqual(
       expect.arrayContaining([
@@ -395,6 +514,70 @@ describe('NodeFfmpegCutMediaAdapter', () => {
     );
     expect(ffmpegArgs[0]).not.toContain('libx264');
     expect(ffmpegArgs[0]).not.toContain('-pix_fmt');
+    await adapter.stopPreview(session.sessionId);
+  });
+
+  it('routes 10-bit HDR H.264 MP4 through VideoToolbox instead of native video', async () => {
+    let transcodeArgs: readonly string[] | undefined;
+    const process: FfmpegProcessPort = {
+      run: async (executable, args) => {
+        if (executable === 'ffprobe') {
+          return {
+            stdout: Buffer.from(
+              JSON.stringify({
+                streams: [
+                  {
+                    index: 0,
+                    codec_type: 'video',
+                    codec_name: 'h264',
+                    pix_fmt: 'yuv420p10le',
+                    bits_per_raw_sample: '10',
+                    width: 1920,
+                    height: 1080,
+                    r_frame_rate: '30/1',
+                    color_primaries: 'bt2020',
+                    color_transfer: 'smpte2084',
+                    color_space: 'bt2020nc',
+                  },
+                ],
+                format: { duration: '1' },
+              }),
+            ),
+            stderr: '',
+          };
+        }
+        transcodeArgs = args;
+        const outputPath = args.at(-1);
+        if (!outputPath) throw new Error('Prepared preview output path is missing.');
+        await writeFile(outputPath, 'prepared preview');
+        return { stdout: Buffer.alloc(0), stderr: '' };
+      },
+      streamFfmpeg: () => {
+        throw new Error('Hardware preview invoked streaming FFmpeg.');
+      },
+    };
+    const adapter = new NodeFfmpegCutMediaAdapter(root, {
+      cacheRoot,
+      process,
+      hardwareVideoBackend: 'videotoolbox',
+    });
+    adapters.push(adapter);
+
+    const session = await adapter.startPreview(
+      { workspaceRelativePath: 'hdr-h264.mp4' },
+      {
+        startTimeSeconds: 0,
+        durationSeconds: 0.5,
+        playbackRate: 1,
+        startPaused: true,
+      },
+    );
+
+    expect(session.video.preparationProfile).toBe('h264-sdr-transcode');
+    expect(transcodeArgs).toEqual(
+      expect.arrayContaining(['-c:v', 'h264_videotoolbox', '-allow_sw', '0']),
+    );
+    expect(transcodeArgs).not.toContain('libx264');
     await adapter.stopPreview(session.sessionId);
   });
 
@@ -429,6 +612,7 @@ describe('NodeFfmpegCutMediaAdapter', () => {
             stderr: '',
           };
         }
+        transcodeArgs = args;
         throw new FfmpegCommandError(
           'ffmpeg',
           args,
@@ -442,10 +626,11 @@ describe('NodeFfmpegCutMediaAdapter', () => {
         );
       },
     );
+    let transcodeArgs: readonly string[] | undefined;
     const process: FfmpegProcessPort = {
       run,
       streamFfmpeg: () => {
-        throw new Error('Unexpected streaming FFmpeg process.');
+        throw new Error('Hardware preview invoked streaming FFmpeg.');
       },
     };
     const adapter = new NodeFfmpegCutMediaAdapter(root, {
@@ -470,8 +655,7 @@ describe('NodeFfmpegCutMediaAdapter', () => {
       capability: 'AV1 VideoToolbox decoder',
     });
     expect(run).toHaveBeenCalledTimes(2);
-    const transcodeCall = run.mock.calls[1];
-    expect(transcodeCall?.[1]).not.toContain('libx264');
+    expect(transcodeArgs).not.toContain('libx264');
   });
 
   it('keeps Cut preview scaling and color conversion on VideoToolbox frames', () => {
@@ -514,9 +698,7 @@ describe('NodeFfmpegCutMediaAdapter', () => {
 
     expect(session.video.preparationProfile).toBe('vp8-webm-direct');
     expect(session.video.mimeType).toBe('video/webm; codecs="vp8"');
-    const segment = session.video.segments[0];
-    if (!segment) throw new Error('Expected one VP8 preview segment.');
-    expect((await fetch(segment.url)).headers.get('content-type')).toBe('video/webm');
+    expect((await fetch(session.video.url)).headers.get('content-type')).toBe('video/webm');
     await adapter.stopPreview(session.sessionId);
   });
 

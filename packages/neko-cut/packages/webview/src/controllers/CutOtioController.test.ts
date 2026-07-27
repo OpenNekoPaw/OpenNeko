@@ -357,6 +357,33 @@ describe('CutOtioController', () => {
     );
   });
 
+  it('distinguishes retaining a paused video from fully stopping preview resources', () => {
+    const store = createCutPresentationStore();
+    const postMessage = vi.fn();
+    const controller = new CutOtioController(store, { postMessage });
+    controller.acceptHostMessage({ type: 'cut:view', view: createView() });
+
+    const preparedGeneration = controller.startPreview(3, undefined, 'paused');
+    controller.pausePreview(preparedGeneration);
+    controller.stopPreview();
+
+    expect(postMessage).toHaveBeenNthCalledWith(2, {
+      type: 'cut:preview-pause',
+      documentUri: 'file:///workspace/project.otio',
+      sessionId: 'session-1',
+      expectedRevision: 4,
+      generation: 2,
+      preparedGeneration,
+    });
+    expect(postMessage).toHaveBeenNthCalledWith(
+      3,
+      expect.objectContaining({
+        type: 'cut:preview-stop',
+        generation: 3,
+      }),
+    );
+  });
+
   it('prepares and activates one exact preview generation at a Clip boundary', () => {
     const store = createCutPresentationStore();
     const postMessage = vi.fn();
@@ -625,6 +652,45 @@ describe('CutOtioController', () => {
 
     expect(controller.acceptHostMessage(message)).toBe(true);
     expect(onPreviewReady).toHaveBeenCalledWith(message);
+  });
+
+  it('accepts only loopback native video descriptors', () => {
+    const store = createCutPresentationStore();
+    const onPreviewReady = vi.fn();
+    const controller = new CutOtioController(store, { postMessage: vi.fn() }, { onPreviewReady });
+    const message = {
+      type: 'cut:preview-ready',
+      generation: 1,
+      videoClipId: 'clip-1',
+      timelineTimeSeconds: 2,
+      segmentEndSeconds: 4,
+      playbackEndSeconds: 4,
+      width: 1920,
+      height: 1080,
+      framesPerSecond: 30,
+      video: {
+        version: 1,
+        transport: 'http',
+        url: 'http://127.0.0.1:4123/v1/cut-media/file/video-1',
+        mimeType: 'video/mp4; codecs="avc1.640029"',
+        preparationProfile: 'h264-mp4-direct',
+        mediaTimeOriginSeconds: 5,
+        durationSeconds: 2,
+      },
+      audioStreams: [],
+      audioGainsDb: [],
+      audioPlayback: [],
+    };
+
+    expect(controller.acceptHostMessage(message)).toBe(true);
+    expect(
+      controller.acceptHostMessage({
+        ...message,
+        generation: 2,
+        video: { ...message.video, url: 'https://example.com/video.mp4' },
+      }),
+    ).toBe(false);
+    expect(onPreviewReady).toHaveBeenCalledTimes(1);
   });
 
   it('projects background export task state and keeps task control Host-owned', () => {

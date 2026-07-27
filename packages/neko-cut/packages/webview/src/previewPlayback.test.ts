@@ -152,9 +152,9 @@ describe('advancePreviewPlayback', () => {
 });
 
 describe('previewPreparationLeadSeconds', () => {
-  it('prepares H.264 copy/remux before the measured full-fragment startup latency', () => {
-    expect(previewPreparationLeadSeconds('h264-fragmented-mp4-copy')).toBe(2);
-    expect(previewPreparationLeadSeconds('h264-fragmented-mp4-remux')).toBe(2);
+  it('uses short native lead for direct files and longer Host preparation lead otherwise', () => {
+    expect(previewPreparationLeadSeconds('h264-mp4-direct')).toBe(0.5);
+    expect(previewPreparationLeadSeconds('h264-mp4-remux')).toBe(2);
     expect(previewPreparationLeadSeconds('h264-sdr-transcode')).toBe(5);
     expect(previewPreparationLeadSeconds('vp8-webm-direct')).toBe(0.5);
   });

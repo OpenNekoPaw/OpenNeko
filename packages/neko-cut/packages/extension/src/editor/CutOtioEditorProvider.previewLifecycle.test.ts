@@ -3,6 +3,17 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 describe('Cut preview generation lifecycle wiring', () => {
+  it('allows only the authorized loopback origin in the native video CSP', async () => {
+    const source = await readFile(
+      fileURLToPath(new URL('./CutOtioEditorProvider.ts', import.meta.url)),
+      'utf8',
+    );
+
+    expect(source).toContain('media-src ${webview.cspSource} data: http://127.0.0.1:*;');
+    expect(source).not.toContain('media-src ${webview.cspSource} data: blob:');
+    expect(source).not.toContain('http://localhost:*');
+  });
+
   it('keeps the initial generation paused until the connected Webview activates it', async () => {
     const source = await readFile(
       fileURLToPath(new URL('./CutOtioEditorProvider.ts', import.meta.url)),
@@ -11,7 +22,8 @@ describe('Cut preview generation lifecycle wiring', () => {
     const initialStart = branch(source, 'private async startPanelPreview(', 2_000);
 
     expect(initialStart).not.toContain('await this.resumePreviewRecord(document, record)');
-    expect(initialStart).toContain('this.previewSessions.set(panel, { prepared: record })');
+    expect(initialStart).toContain('this.previewSessions.set(panel, {');
+    expect(initialStart).toContain('prepared: record');
     expect(initialStart).toContain("type: 'cut:preview-ready'");
   });
 
@@ -27,6 +39,11 @@ describe('Cut preview generation lifecycle wiring', () => {
     expect(prepareBranch).toContain('this.preparePanelPreview(');
     expect(builder.match(/startPaused: true/g)).toHaveLength(2);
     expect(activation).toContain('await this.resumePreviewRecord(document, prepared)');
+    expect(activation).toContain(
+      'current.active.descriptor.videoClipId === prepared.descriptor.videoClipId',
+    );
+    expect(activation).toContain('videoSessionId: current.active.videoSessionId');
+    expect(activation).toContain('withoutVideoSession(current.active)');
     expect(activation).toContain('await this.stopPreviewRecord(document, current.active)');
     expect(activation).toContain("type: 'cut:preview-activated'");
     expect(activation.indexOf("type: 'cut:preview-activated'")).toBeLessThan(
@@ -49,6 +66,33 @@ describe('Cut preview generation lifecycle wiring', () => {
       panelStop.indexOf('await Promise.allSettled'),
     );
     expect(panelStop).toContain('new Set(');
+  });
+
+  it('retains native video authorization when playback pauses', async () => {
+    const source = await readFile(
+      fileURLToPath(new URL('./CutOtioEditorProvider.ts', import.meta.url)),
+      'utf8',
+    );
+    const pauseBranch = branch(source, "value['type'] === 'cut:preview-pause'", 1_500);
+    const panelPause = branch(source, 'private async pausePanelPreview(', 4_000);
+
+    expect(pauseBranch).toContain('this.pausePanelPreview(');
+    expect(panelPause).toContain('videoSessionId: retainedVideoSessionId');
+    expect(panelPause).toContain('pcmSessionIds: []');
+    expect(panelPause).toContain('this.stopPreviewRecord(document, withoutVideoSession(record))');
+    expect(panelPause).not.toContain('document.mediaAdapter.stopPreview(retained.videoSessionId)');
+  });
+
+  it('prepares a replacement before retiring the currently visible video', async () => {
+    const source = await readFile(
+      fileURLToPath(new URL('./CutOtioEditorProvider.ts', import.meta.url)),
+      'utf8',
+    );
+    const initialStart = branch(source, 'private async startPanelPreview(', 3_000);
+
+    expect(initialStart).not.toContain('await this.stopPanelPreview(document, panel)');
+    expect(initialStart).toContain('...(current?.active ? { active: current.active } : {})');
+    expect(initialStart).toContain('prepared: record');
   });
 
   it('does not project superseded representation work as a playback failure', async () => {

@@ -21,9 +21,9 @@ export function previewPreparationLeadSeconds(
   switch (profile) {
     case 'h264-sdr-transcode':
       return 5;
-    case 'h264-fragmented-mp4-copy':
-    case 'h264-fragmented-mp4-remux':
+    case 'h264-mp4-remux':
       return 2;
+    case 'h264-mp4-direct':
     case 'vp8-webm-direct':
     case undefined:
       return DEFAULT_PREVIEW_PREPARE_LEAD_SECONDS;

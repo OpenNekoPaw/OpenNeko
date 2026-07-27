@@ -11,8 +11,6 @@ export type {
   HtmlVideoNativeCapabilities,
   HtmlVideoPreparationOptions,
   HtmlVideoPreparationProfile,
-  MseVideoDescriptor,
-  MseVideoSegment,
   PcmStreamDescriptor,
   WaveformResult,
 } from './contracts';

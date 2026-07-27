@@ -136,7 +136,7 @@ describe('Cut OTIO Webview boundary', () => {
   });
 
   it('keeps preview stream ownership in the controller layer and consumes all audio streams', () => {
-    expect(app).toMatch(/CutMseVideoClient/);
+    expect(app).toMatch(/CutHtmlVideoClient/);
     expect(app).toMatch(/CutPcmAudioClient/);
     expect(app).toMatch(/CutPreviewClock/);
     expect(app).toMatch(/PreviewAudioContextOwner/);
@@ -152,6 +152,13 @@ describe('Cut OTIO Webview boundary', () => {
     expect(app.match(/controller\.startPreview\(/g)).toHaveLength(2);
     expect(app).toMatch(/previewVideoClientRef\.current\?\.pause\(\)/);
     expect(app).toMatch(/activeVideoClient\.seek\(/);
+    expect(app).toMatch(/<Timeline onOpenPackage=\{linkMediaToSelectedTrack\} onSeek=\{seek\} \/>/);
+    expect(timeline).toMatch(/onSeek: \(seconds: number\) => void/);
+    expect(timeline).toMatch(/props\.onSeek\(/);
+    expect(timeline).toMatch(/onSeek=\{props\.onSeek\}/);
+    expect(timeline).not.toMatch(/actions\.seek\(/);
+    expect(app).toMatch(/controller\.pausePreview\(\)/);
+    expect(app).toMatch(/controller\.pausePreview\(generation\)/);
     expect(app).toMatch(/preparePreviewVideoClient\(message, attempt\)/);
     expect(app).toMatch(/preparePreviewAudioClients\(\s*message,/);
     expect(app).toMatch(/onEnded: \(\) => mediaPlaybackEndRef\.current\?\.\(message\.generation\)/);

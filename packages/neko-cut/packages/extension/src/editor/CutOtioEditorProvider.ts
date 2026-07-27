@@ -8,7 +8,7 @@ import {
   serializeOtio,
   type CutCommand,
   type CutRouteAppendItem,
-  type CutMseVideoDescriptor,
+  type CutHtmlVideoDescriptor,
   type CutPcmStreamDescriptor,
   type TimelineView,
 } from '@neko-cut/domain';
@@ -65,7 +65,7 @@ interface CutPreviewRecord {
     readonly width: number;
     readonly height: number;
     readonly framesPerSecond: number;
-    readonly video?: CutMseVideoDescriptor;
+    readonly video?: CutHtmlVideoDescriptor;
     readonly videoPlaybackRate?: number;
     readonly audioStreams: readonly CutPcmStreamDescriptor[];
     readonly audioGainsDb: readonly number[];
@@ -416,6 +416,27 @@ export class CutOtioEditorProvider implements vscode.CustomEditorProvider<CutOti
         assertCurrentIdentity(document.session.view(), identity);
         await this.previewOperations.run(panel, () =>
           this.activatePanelPreview(document, panel, value['generation']),
+        );
+        return;
+      }
+      if (value['type'] === 'cut:preview-pause') {
+        if (
+          typeof value['generation'] !== 'number' ||
+          (value['preparedGeneration'] !== undefined &&
+            typeof value['preparedGeneration'] !== 'number')
+        ) {
+          throw new Error('Invalid Cut preview pause intent.');
+        }
+        assertCurrentIdentity(document.session.view(), identity);
+        this.previewGenerations.set(panel, value['generation']);
+        await this.previewOperations.run(panel, () =>
+          this.pausePanelPreview(
+            document,
+            panel,
+            typeof value['preparedGeneration'] === 'number'
+              ? value['preparedGeneration']
+              : undefined,
+          ),
         );
         return;
       }
@@ -985,7 +1006,7 @@ export class CutOtioEditorProvider implements vscode.CustomEditorProvider<CutOti
     retainedVideoClipId?: string,
     includeAudio = true,
   ): Promise<void> {
-    await this.stopPanelPreview(document, panel);
+    const current = this.previewSessions.get(panel);
     const record = await this.buildPanelPreview(
       document,
       panel,
@@ -995,7 +1016,11 @@ export class CutOtioEditorProvider implements vscode.CustomEditorProvider<CutOti
       includeAudio,
     );
     try {
-      this.previewSessions.set(panel, { prepared: record });
+      if (current?.prepared) await this.stopPreviewRecord(document, current.prepared);
+      this.previewSessions.set(panel, {
+        ...(current?.active ? { active: current.active } : {}),
+        prepared: record,
+      });
       await panel.webview.postMessage({
         type: 'cut:preview-ready',
         generation,
@@ -1003,7 +1028,11 @@ export class CutOtioEditorProvider implements vscode.CustomEditorProvider<CutOti
       });
     } catch (error) {
       if (this.previewSessions.get(panel)?.prepared === record) {
-        this.previewSessions.delete(panel);
+        if (current?.active) {
+          this.previewSessions.set(panel, { active: current.active });
+        } else {
+          this.previewSessions.delete(panel);
+        }
       }
       await this.stopPreviewRecord(document, record);
       throw error;
@@ -1027,7 +1056,7 @@ export class CutOtioEditorProvider implements vscode.CustomEditorProvider<CutOti
     let preview:
       | {
           readonly sessionId: string;
-          readonly video: CutMseVideoDescriptor;
+          readonly video: CutHtmlVideoDescriptor;
         }
       | undefined;
     let videoProbe:
@@ -1222,13 +1251,29 @@ export class CutOtioEditorProvider implements vscode.CustomEditorProvider<CutOti
     if (!prepared || prepared.generation !== generation) {
       throw new Error(`Cut preview generation ${generation} is not prepared.`);
     }
+    const activated =
+      current.active?.videoSessionId &&
+      !prepared.videoSessionId &&
+      current.active.descriptor.videoClipId !== undefined &&
+      current.active.descriptor.videoClipId === prepared.descriptor.videoClipId
+        ? { ...prepared, videoSessionId: current.active.videoSessionId }
+        : prepared;
     await this.resumePreviewRecord(document, prepared);
-    this.previewSessions.set(panel, { active: prepared });
+    this.previewSessions.set(panel, { active: activated });
     await panel.webview.postMessage({
       type: 'cut:preview-activated',
       generation,
     });
-    if (current.active) await this.stopPreviewRecord(document, current.active);
+    if (current.active) {
+      if (
+        activated.videoSessionId !== undefined &&
+        activated.videoSessionId === current.active.videoSessionId
+      ) {
+        await this.stopPreviewRecord(document, withoutVideoSession(current.active));
+      } else {
+        await this.stopPreviewRecord(document, current.active);
+      }
+    }
   }
 
   private async stopPreviewRecord(
@@ -1244,6 +1289,69 @@ export class CutOtioEditorProvider implements vscode.CustomEditorProvider<CutOti
     );
     if (failures.length > 0) {
       throw new AggregateError(failures, 'One or more Cut preview streams could not be stopped.');
+    }
+  }
+
+  private async pausePanelPreview(
+    document: CutOtioDocument,
+    panel: vscode.WebviewPanel,
+    preparedGeneration?: number,
+  ): Promise<void> {
+    const sessions = this.previewSessions.get(panel);
+    if (!sessions) return;
+    const requested =
+      preparedGeneration === undefined
+        ? sessions.active
+        : sessions.prepared?.generation === preparedGeneration
+          ? sessions.prepared
+          : undefined;
+    if (preparedGeneration !== undefined && !requested) {
+      throw new Error(`Cut paused preview generation ${preparedGeneration} is not prepared.`);
+    }
+
+    const retained =
+      requested &&
+      !requested.videoSessionId &&
+      sessions.active?.videoSessionId &&
+      requested.descriptor.videoClipId !== undefined &&
+      requested.descriptor.videoClipId === sessions.active.descriptor.videoClipId
+        ? { ...requested, videoSessionId: sessions.active.videoSessionId }
+        : requested;
+    const retainedVideoSessionId = retained?.videoSessionId;
+    if (retainedVideoSessionId) {
+      this.previewSessions.set(panel, {
+        active: {
+          ...retained,
+          videoSessionId: retainedVideoSessionId,
+          pcmSessionIds: [],
+        },
+      });
+    } else {
+      this.previewSessions.delete(panel);
+    }
+
+    const records = [
+      ...new Set(
+        [sessions.active, sessions.prepared].filter(
+          (record): record is CutPreviewRecord => record !== undefined,
+        ),
+      ),
+    ];
+    const results = await Promise.allSettled(
+      records.map((record) =>
+        record === requested || record.videoSessionId === retainedVideoSessionId
+          ? this.stopPreviewRecord(document, withoutVideoSession(record))
+          : this.stopPreviewRecord(document, record),
+      ),
+    );
+    const failures = results.flatMap((result) =>
+      result.status === 'rejected' ? [result.reason] : [],
+    );
+    if (failures.length > 0) {
+      throw new AggregateError(
+        failures,
+        'One or more Cut preview audio sessions could not be paused.',
+      );
     }
   }
 
@@ -1312,7 +1420,7 @@ export class CutOtioEditorProvider implements vscode.CustomEditorProvider<CutOti
       vscode.Uri.joinPath(this.context.extensionUri, 'dist', 'webview'),
     );
     const nonce = randomId();
-    return `<!DOCTYPE html><html ${injectLocaleAttribute()}><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}'; img-src ${webview.cspSource} data: blob:; media-src ${webview.cspSource} data: blob:; connect-src ws://127.0.0.1:* http://127.0.0.1:*;"><title>Neko Cut</title><link rel="stylesheet" href="${root}/assets/style.css"></head><body><div id="root"></div><script nonce="${nonce}">window.documentUri=${JSON.stringify(documentUri.toString())};</script><script nonce="${nonce}" type="module" src="${root}/assets/index.js"></script></body></html>`;
+    return `<!DOCTYPE html><html ${injectLocaleAttribute()}><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}'; img-src ${webview.cspSource} data: blob:; media-src ${webview.cspSource} data: http://127.0.0.1:*; connect-src ws://127.0.0.1:* http://127.0.0.1:*;"><title>Neko Cut</title><link rel="stylesheet" href="${root}/assets/style.css"></head><body><div id="root"></div><script nonce="${nonce}">window.documentUri=${JSON.stringify(documentUri.toString())};</script><script nonce="${nonce}" type="module" src="${root}/assets/index.js"></script></body></html>`;
   }
 }
 
@@ -1637,6 +1745,14 @@ export function readCommand(value: unknown): CutCommand {
       rightClipId: value['rightClipId'],
     };
   throw new Error(`Unsupported or invalid Cut command: ${type}`);
+}
+
+function withoutVideoSession(record: CutPreviewRecord): CutPreviewRecord {
+  return {
+    generation: record.generation,
+    pcmSessionIds: record.pcmSessionIds,
+    descriptor: record.descriptor,
+  };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

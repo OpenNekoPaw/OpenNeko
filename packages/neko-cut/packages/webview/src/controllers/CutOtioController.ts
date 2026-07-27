@@ -5,7 +5,7 @@ import type {
   CutCommand,
   CutExportTaskSnapshot,
   CutExportSettings,
-  CutMseVideoDescriptor,
+  CutHtmlVideoDescriptor,
   CutPcmStreamDescriptor,
   OtioTrackKind,
   TimelineView,
@@ -90,6 +90,11 @@ export type CutWebviewIntent =
       readonly generation: number;
     } & CutIdentity)
   | ({ readonly type: 'cut:preview-activate'; readonly generation: number } & CutIdentity)
+  | ({
+      readonly type: 'cut:preview-pause';
+      readonly generation: number;
+      readonly preparedGeneration?: number;
+    } & CutIdentity)
   | ({ readonly type: 'cut:preview-stop'; readonly generation: number } & CutIdentity)
   | ({
       readonly type: 'cut:request-representations';
@@ -114,7 +119,7 @@ export interface CutPreviewReadyMessage extends Record<string, unknown> {
   readonly width: number;
   readonly height: number;
   readonly framesPerSecond: number;
-  readonly video?: CutMseVideoDescriptor;
+  readonly video?: CutHtmlVideoDescriptor;
   readonly videoPlaybackRate?: number;
   readonly audioStreams: readonly CutPcmStreamDescriptor[];
   readonly audioGainsDb: readonly number[];
@@ -321,6 +326,19 @@ export class CutOtioController {
       ...this.identity(),
       generation,
     });
+  }
+
+  pausePreview(preparedGeneration?: number): number {
+    const generation = ++this.previewGeneration;
+    this.deferredPreview = undefined;
+    if (this.inFlightMutationId || this.mutationQueue.length > 0) return generation;
+    this.bridge.postMessage({
+      type: 'cut:preview-pause',
+      ...this.identity(),
+      generation,
+      ...(preparedGeneration !== undefined ? { preparedGeneration } : {}),
+    });
+    return generation;
   }
 
   stopPreview(): number {
@@ -727,7 +745,7 @@ function isPreviewReadyMessage(value: Record<string, unknown>): value is CutPrev
     typeof value['width'] === 'number' &&
     typeof value['height'] === 'number' &&
     typeof value['framesPerSecond'] === 'number' &&
-    (value['video'] === undefined || isMseVideoDescriptor(value['video'])) &&
+    (value['video'] === undefined || isHtmlVideoDescriptor(value['video'])) &&
     (value['videoPlaybackRate'] === undefined ||
       (typeof value['videoPlaybackRate'] === 'number' &&
         Number.isFinite(value['videoPlaybackRate']) &&
@@ -766,18 +784,27 @@ function isPositiveFinite(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value) && value > 0;
 }
 
-function isMseVideoDescriptor(value: unknown): value is CutMseVideoDescriptor {
+function isHtmlVideoDescriptor(value: unknown): value is CutHtmlVideoDescriptor {
   return (
     isRecord(value) &&
     value['version'] === 1 &&
-    value['transport'] === 'http-mse' &&
+    value['transport'] === 'http' &&
+    isLoopbackHttpUrl(value['url']) &&
     typeof value['mimeType'] === 'string' &&
     typeof value['preparationProfile'] === 'string' &&
-    typeof value['mediaTimeOriginSeconds'] === 'number' &&
-    typeof value['durationSeconds'] === 'number' &&
-    Array.isArray(value['segments']) &&
-    value['segments'].length > 0
+    isNonNegativeFinite(value['mediaTimeOriginSeconds']) &&
+    isPositiveFinite(value['durationSeconds'])
   );
+}
+
+function isLoopbackHttpUrl(value: unknown): value is string {
+  if (typeof value !== 'string') return false;
+  try {
+    const url = new URL(value);
+    return url.protocol === 'http:' && url.hostname === '127.0.0.1';
+  } catch {
+    return false;
+  }
 }
 
 function isPcmStreamDescriptor(value: unknown): value is CutPcmStreamDescriptor {
