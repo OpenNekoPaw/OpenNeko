@@ -82,6 +82,25 @@ decode, filters, transcoding, proxy generation, or a software fallback.
 Preview SHALL observe every asynchronous Webview message operation and SHALL
 distinguish optional poster capture from playback preparation.
 
+#### Scenario: Hardware-required playback route orders capability checks
+
+- **WHEN** probe and native Webview capabilities select a hardware-processing
+  playback route
+- **THEN** Preview does not request optional HDR poster extraction
+- **AND** source-specific hardware playback preparation is the next capability
+  check
+- **AND** an unavailable hardware decoder produces only the playback
+  capability diagnostic
+- **AND** no HDR-poster diagnostic is emitted for that failed route
+
+#### Scenario: Qualified direct route may capture a poster
+
+- **WHEN** probe and Webview capabilities select a qualified direct or remux
+  playback route
+- **THEN** Preview may request optional poster extraction
+- **AND** poster failure remains independent from the already qualified
+  playback route
+
 #### Scenario: HDR poster capture is unavailable
 
 - **WHEN** HDR frame capture would require CPU filtering or hardware readback

@@ -124,9 +124,12 @@ override.
 - The synthetic H.264/AAC direct profile advanced from 0 to 1.88 seconds and
   reached 0:06 EOF. Webview CDP contained only VS Code's known
   `local-network-access` warning.
-- HDR poster capture now fails independently with a hardware-only diagnostic
-  because JPEG capture would require CPU filtering/readback. It does not block
-  the subsequent playback attempt.
+- Preview now plans the video route before optional poster extraction. The
+  hardware-required AV1 Main10 fixture emitted no HDR poster diagnostic on
+  open; Play performed the source-specific VideoToolbox qualification and
+  emitted only the hardware-decoder alert. The Webview snapshot contained one
+  `role=alert` and no `role=status`. Qualified direct/remux routes retain
+  independent optional poster capture.
 
 Commands:
 

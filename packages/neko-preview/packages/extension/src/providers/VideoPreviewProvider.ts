@@ -120,6 +120,30 @@ export class VideoPreviewProvider implements vscode.CustomReadonlyEditorProvider
       await service.stopPlayback(activeVideo);
     };
 
+    const reportOperationFailure = async (
+      error: unknown,
+      operation: 'captureFrame' | 'playback' | 'protocol',
+    ): Promise<void> => {
+      const failure = error instanceof Error ? error.message : String(error);
+      logger.error(`Video preview ${operation} operation failed.`, error);
+      try {
+        await panel.webview.postMessage({
+          type: 'preview:operationFailed',
+          payload: {
+            operation,
+            code: videoPreviewDiagnosticCode(error, operation),
+          },
+        });
+      } catch (reportError) {
+        const reportFailure =
+          reportError instanceof Error ? reportError.message : String(reportError);
+        panel.webview.html = getPreviewErrorHtml(
+          `Failed to report video preview failure: ${reportFailure}. Original failure: ${failure}`,
+        );
+        this.statusBar.hide();
+      }
+    };
+
     const handleMessage = async (message: Record<string, unknown>): Promise<void> => {
       switch (message['type']) {
         case 'ready': {
@@ -128,10 +152,25 @@ export class VideoPreviewProvider implements vscode.CustomReadonlyEditorProvider
           );
           const mediaInfo = await mediaInfoPromise;
           if (!mediaInfo) return;
+          const service = this.previewService;
+          if (!service) throw new Error('Node/FFmpeg Preview adapter is unavailable.');
+          const preparationProfile = await service.planVideo(filePath, {
+            ...(nativeVideoCapabilities ? { nativeVideoCapabilities } : {}),
+          });
           await panel.webview.postMessage({
             type: 'preview:init',
             payload: { mediaInfo, displayName: fileName },
           });
+          if (preparationProfile === 'h264-sdr-transcode') return;
+          try {
+            const imageDataUrl = await service.captureFrame(filePath, 0);
+            await panel.webview.postMessage({
+              type: 'preview:frameData',
+              payload: { imageDataUrl },
+            });
+          } catch (error) {
+            await reportOperationFailure(error, 'captureFrame');
+          }
           return;
         }
         case 'preview:play':
@@ -143,18 +182,6 @@ export class VideoPreviewProvider implements vscode.CustomReadonlyEditorProvider
         case 'preview:stop':
           await stopPlayback();
           return;
-        case 'preview:captureFrame': {
-          if (!this.previewService) return;
-          const imageDataUrl = await this.previewService.captureFrame(
-            filePath,
-            numberOr(message['time'], 0),
-          );
-          await panel.webview.postMessage({
-            type: 'preview:frameData',
-            payload: { imageDataUrl },
-          });
-          return;
-        }
         case 'preview:pause':
         case 'preview:resume':
         case 'preview:speed':
@@ -176,25 +203,8 @@ export class VideoPreviewProvider implements vscode.CustomReadonlyEditorProvider
     const messageDisposable = panel.webview.onDidReceiveMessage(
       (message: Record<string, unknown>) => {
         void handleMessage(message).catch((error: unknown) => {
-          const failure = error instanceof Error ? error.message : String(error);
           const operation = previewOperation(message['type']);
-          logger.error(`Video preview ${operation} operation failed.`, error);
-          void Promise.resolve(
-            panel.webview.postMessage({
-              type: 'preview:operationFailed',
-              payload: {
-                operation,
-                code: videoPreviewDiagnosticCode(error, operation),
-              },
-            }),
-          ).catch((reportError: unknown) => {
-            const reportFailure =
-              reportError instanceof Error ? reportError.message : String(reportError);
-            panel.webview.html = getPreviewErrorHtml(
-              `Failed to report video preview failure: ${reportFailure}. Original failure: ${failure}`,
-            );
-            this.statusBar.hide();
-          });
+          void reportOperationFailure(error, operation);
         });
       },
     );
@@ -284,7 +294,6 @@ function parseNativeVideoCapabilities(value: unknown): HtmlVideoNativeCapabiliti
 }
 
 function previewOperation(value: unknown): 'captureFrame' | 'playback' | 'protocol' {
-  if (value === 'preview:captureFrame') return 'captureFrame';
   if (value === 'preview:play' || value === 'preview:seek' || value === 'preview:stop') {
     return 'playback';
   }

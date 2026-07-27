@@ -173,11 +173,6 @@ export interface SpeedMessage {
   speed: number;
 }
 
-export interface CaptureFrameMessage {
-  type: 'preview:captureFrame';
-  time: number;
-}
-
 export interface StatusUpdateMessage {
   type: 'preview:statusUpdate';
   playbackState: 'playing' | 'paused' | 'stopped';
@@ -222,7 +217,6 @@ export type WebviewMessage =
   | StopMessage
   | SeekMessage
   | SpeedMessage
-  | CaptureFrameMessage
   | StatusUpdateMessage
   | EofMessage
   | PanoramaConfirmProjectionMessage

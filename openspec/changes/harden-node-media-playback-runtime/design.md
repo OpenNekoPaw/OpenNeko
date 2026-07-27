@@ -167,6 +167,15 @@ Extension event callbacks consume every rejected promise and project the
 operation and diagnostic to the Webview; they never return an unobserved async
 callback promise to the VS Code event emitter.
 
+Preview derives poster policy from the canonical video preparation plan before
+requesting frame extraction. Qualified direct/remux routes may request the
+optional poster independently. A route planned as `h264-sdr-transcode` does not
+request an HDR poster: playback preparation is the first source-specific
+hardware qualification, and the prepared video's first frame becomes the
+visual surface after success. If hardware decode is unavailable, Preview emits
+only the playback capability diagnostic. It does not perform a second HDR
+capture check or retain a stale poster diagnostic beside the playback failure.
+
 Preview operation failures cross the Host/Webview boundary as stable diagnostic
 codes rather than user-facing `Error.message` strings. An unavailable hardware
 decoder is a non-crashing playback limitation: the mounted video element,

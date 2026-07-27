@@ -71,6 +71,10 @@
 - [x] 5.10 Replace raw Preview runtime strings and the whole-player error
       return with structured localized AV1/hardware and HDR-poster notices that
       retain video, controls, metadata, and session state.
+- [x] 5.11 Derive poster policy from the canonical video preparation plan so
+      hardware-required routes skip HDR poster extraction and surface only the
+      higher-priority playback capability diagnostic when decode is
+      unavailable.
 
 ## 6. Validation
 
@@ -93,3 +97,7 @@
       native playback.
 - [x] 6.8 Add red-capable Host/Webview diagnostic tests and verify both notices
       in the real `~/Git/neko-test` Extension Development Host.
+- [x] 6.9 Verify the ordered capability path against
+      `~/Git/neko-test/cases/4K.mp4`: opening the hardware-required AV1 source
+      emits no HDR poster diagnostic, Play emits one hardware-decoder alert,
+      and CDP observes no concurrent poster status.

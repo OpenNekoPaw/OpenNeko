@@ -146,7 +146,6 @@ export function VideoPlayer() {
         const info = (message as PreviewInitMessage).payload.mediaInfo;
         setMediaInfo(info);
         setIsLoading(false);
-        postMessage({ type: 'preview:captureFrame', time: 0 });
         return;
       }
       case 'preview:playbackReady':
@@ -166,6 +165,7 @@ export function VideoPlayer() {
           return;
         }
         setIsPlaying(false);
+        setPosterDiagnostic(undefined);
         setPlaybackDiagnostic(failure.payload.code);
         return;
       }
@@ -396,7 +396,7 @@ export function VideoPlayer() {
             />
           </div>
         )}
-        {posterDiagnostic && !posterUrl && (
+        {posterDiagnostic && !posterUrl && !playbackDiagnostic && (
           <div
             className="absolute top-3 left-1/2 flex w-[min(36rem,calc(100%-1.5rem))] -translate-x-1/2 items-start gap-2 rounded-lg border border-[var(--vscode-inputValidation-infoBorder,var(--vscode-panel-border))] bg-[var(--vscode-editor-background)] px-3 py-2 text-xs text-vscode-descriptionForeground shadow-lg"
             role="status"

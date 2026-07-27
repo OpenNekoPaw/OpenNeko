@@ -99,6 +99,7 @@ describe('Preview VideoPlayer native playback lifecycle', () => {
     pause.mockClear();
     load.mockClear();
     play.mockClear();
+    postMessage.mockClear();
     readyMessages.mockClear();
     pcmClients.instances.length = 0;
     pcmClients.connectBehaviors.length = 0;
@@ -210,6 +211,29 @@ describe('Preview VideoPlayer native playback lifecycle', () => {
     expect(host.querySelector('[data-testid="video-controls"]')).not.toBeNull();
   });
 
+  it('does not request poster capture before the Host selects a playback route', async () => {
+    await act(async () => root.render(<VideoPlayer />));
+    postMessage.mockClear();
+
+    await emit({
+      type: 'preview:init',
+      payload: {
+        mediaInfo: {
+          width: 3840,
+          height: 2160,
+          fps: 24,
+          duration: 100,
+          codec: 'av1',
+          format: 'mp4',
+          hasAudio: false,
+        },
+        displayName: '4K.mp4',
+      },
+    });
+
+    expect(postMessage).not.toHaveBeenCalledWith({ type: 'preview:captureFrame', time: 0 });
+  });
+
   it('keeps the player mounted and localizes an unavailable AV1 hardware decoder', async () => {
     await act(async () => root.render(<VideoPlayer />));
     await emit({
@@ -230,6 +254,15 @@ describe('Preview VideoPlayer native playback lifecycle', () => {
     await emit({
       type: 'preview:operationFailed',
       payload: {
+        operation: 'captureFrame',
+        code: 'hdr-poster-unavailable',
+        message:
+          'HDR frame capture would require a CPU video-filter/readback path and is disabled.',
+      },
+    });
+    await emit({
+      type: 'preview:operationFailed',
+      payload: {
         operation: 'playback',
         code: 'hardware-decoder-unavailable',
         message: 'Media runtime is unavailable for AV1 VideoToolbox decoder.',
@@ -242,6 +275,7 @@ describe('Preview VideoPlayer native playback lifecycle', () => {
     expect(host.textContent).not.toContain('Media runtime is unavailable');
     expect(host.querySelector('video')).not.toBeNull();
     expect(host.querySelector('[data-testid="video-controls"]')).not.toBeNull();
+    expect(host.querySelector('[role="status"]')).toBeNull();
   });
 
   it('keeps the video element mounted while a playing seek replaces its source', async () => {

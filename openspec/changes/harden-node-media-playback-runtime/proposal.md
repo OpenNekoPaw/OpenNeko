@@ -24,6 +24,10 @@ wholly unreadable source.
   message callbacks must consume rejected promises and project an
   operation-scoped diagnostic instead of producing an Extension Host
   `unhandledRejection`.
+- Order Preview capability checks as probe, playback-route selection, and only
+  then optional poster capture. Routes that still require hardware video
+  processing must not attempt HDR poster extraction before hardware decode is
+  qualified; they use the prepared video's first frame instead.
 - Project hardware playback and HDR poster limitations as structured,
   localized notices inside the retained player surface. Raw FFmpeg/runtime
   messages must not replace the whole Webview or become the primary user copy.

@@ -407,6 +407,17 @@ export class NodeMediaRuntime {
     };
   }
 
+  async planVideo(
+    sourcePath: string,
+    options: HtmlVideoPreparationOptions = {},
+    signal?: AbortSignal,
+  ): Promise<HtmlVideoPreparationProfile> {
+    this.assertUsable();
+    const probe = await this.probe(sourcePath, signal);
+    if (!probe.video) throw new Error('Video source contains no video stream.');
+    return this.selectVideoProfile(sourcePath, probe, options);
+  }
+
   async publishFile(
     sourcePath: string,
     contentType: string,

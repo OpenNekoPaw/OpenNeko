@@ -114,6 +114,38 @@ describe('VideoPreviewProvider Node media path', () => {
     expect(JSON.stringify(payload)).not.toContain('/media/video.mp4');
   });
 
+  it('skips optional poster capture when playback still requires hardware qualification', async () => {
+    service.planVideo.mockResolvedValueOnce('h264-sdr-transcode');
+    service.startPlayback.mockRejectedValueOnce(
+      new MediaRuntimeUnavailableError('AV1 VideoToolbox decoder'),
+    );
+    const { panel, message } = await resolve(provider);
+
+    await message({
+      type: 'ready',
+      nativeVideoCapabilities: { version: 1, av1Mp4: false, vp9Mp4: false },
+    });
+    await message({ type: 'preview:play', startTime: 0, speed: 1 });
+
+    expect(service.planVideo).toHaveBeenCalledWith('/media/video.mp4', {
+      nativeVideoCapabilities: { version: 1, av1Mp4: false, vp9Mp4: false },
+    });
+    expect(service.captureFrame).not.toHaveBeenCalled();
+    expect(
+      panel.webview.postMessage.mock.calls
+        .map(([payload]) => payload)
+        .filter((payload) => payload.type === 'preview:operationFailed'),
+    ).toEqual([
+      {
+        type: 'preview:operationFailed',
+        payload: {
+          operation: 'playback',
+          code: 'hardware-decoder-unavailable',
+        },
+      },
+    ]);
+  });
+
   it('restarts playback through native video/PCM descriptors for play and seek', async () => {
     const { panel, message } = await resolve(provider);
     await message({
@@ -239,11 +271,15 @@ describe('VideoPreviewProvider Node media path', () => {
     );
   });
 
-  it('captures a frame through FFmpeg and returns only a data URL', async () => {
+  it('captures an optional poster after selecting a qualified direct route', async () => {
     const { panel, message } = await resolve(provider);
-    await message({ type: 'preview:captureFrame', time: 7.5 });
+    await message({
+      type: 'ready',
+      nativeVideoCapabilities: { version: 1, av1Mp4: true, vp9Mp4: true },
+    });
 
-    expect(service.captureFrame).toHaveBeenCalledWith('/media/video.mp4', 7.5);
+    expect(service.planVideo).toHaveBeenCalled();
+    expect(service.captureFrame).toHaveBeenCalledWith('/media/video.mp4', 0);
     expect(panel.webview.postMessage).toHaveBeenLastCalledWith({
       type: 'preview:frameData',
       payload: { imageDataUrl: 'data:image/jpeg;base64,frame' },
@@ -259,7 +295,12 @@ describe('VideoPreviewProvider Node media path', () => {
     );
     const { panel, message } = await resolve(provider);
 
-    await expect(message({ type: 'preview:captureFrame', time: 0 })).resolves.toBeUndefined();
+    await expect(
+      message({
+        type: 'ready',
+        nativeVideoCapabilities: { version: 1, av1Mp4: true, vp9Mp4: true },
+      }),
+    ).resolves.toBeUndefined();
     await vi.waitFor(() =>
       expect(panel.webview.postMessage).toHaveBeenLastCalledWith({
         type: 'preview:operationFailed',
@@ -333,6 +374,7 @@ function createPreviewService() {
   return {
     isAvailable: true,
     probeMedia: vi.fn().mockResolvedValue(MEDIA_INFO),
+    planVideo: vi.fn().mockResolvedValue('h264-mp4-direct'),
     startPlayback: vi.fn().mockResolvedValue(PLAYBACK),
     stopPlayback: vi.fn().mockResolvedValue(undefined),
     captureFrame: vi.fn().mockResolvedValue('data:image/jpeg;base64,frame'),

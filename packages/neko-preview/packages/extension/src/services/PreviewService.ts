@@ -16,6 +16,7 @@ import { NodeMediaRuntime } from '@neko/media/node';
 import type {
   HtmlVideoDescriptor,
   HtmlVideoNativeCapabilities,
+  HtmlVideoPreparationProfile,
   PcmStreamDescriptor,
 } from '@neko/media';
 import type { MediaInfo } from '../types/api';
@@ -46,6 +47,7 @@ export type PreviewMediaRuntime = Pick<
   | 'probe'
   | 'captureFrame'
   | 'generateWaveform'
+  | 'planVideo'
   | 'prepareVideo'
   | 'publishFile'
   | 'startPcm'
@@ -125,6 +127,18 @@ export class PreviewService implements vscode.Disposable {
       if (video) await this.runtime.stop(video.sessionId);
       throw error;
     }
+  }
+
+  async planVideo(
+    filePath: string,
+    options: PreviewPlaybackOptions = {},
+  ): Promise<HtmlVideoPreparationProfile> {
+    this.assertAvailable();
+    return this.runtime.planVideo(filePath, {
+      ...(options.nativeVideoCapabilities
+        ? { nativeCapabilities: options.nativeVideoCapabilities }
+        : {}),
+    });
   }
 
   async stopPlayback(playback: {

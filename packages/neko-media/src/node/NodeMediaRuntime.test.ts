@@ -96,6 +96,24 @@ describe('NodeMediaRuntime', () => {
     expect(process.ffmpegRuns).toEqual([]);
   });
 
+  it('plans a hardware-required AV1 route without decoding or capturing HDR frames', async () => {
+    const fixture = await createVideoFixture('av1', '.mp4', temporaryDirectories);
+    const process = new ProfilePreparationProcess(AV1_HDR_PROBE);
+    const runtime = new NodeMediaRuntime({
+      process,
+      hardwareVideoBackend: 'videotoolbox',
+    });
+    runtimes.push(runtime);
+
+    await expect(
+      runtime.planVideo(fixture, {
+        nativeCapabilities: { version: 1, av1Mp4: false, vp9Mp4: false },
+      }),
+    ).resolves.toBe('h264-sdr-transcode');
+
+    expect(process.ffmpegRuns).toEqual([]);
+  });
+
   it('remuxes qualified VP9 WebM into MP4 without re-encoding', async () => {
     const fixture = await createVideoFixture('vp9', '.webm', temporaryDirectories);
     const process = new ProfilePreparationProcess(VP9_HDR_PROBE);
