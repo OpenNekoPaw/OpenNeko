@@ -367,7 +367,10 @@ export class CutOtioEditorProvider implements vscode.CustomEditorProvider<CutOti
       if (value['type'] === 'cut:preview-start') {
         if (
           typeof value['timelineTimeSeconds'] !== 'number' ||
-          typeof value['generation'] !== 'number'
+          typeof value['generation'] !== 'number' ||
+          (value['retainedVideoClipId'] !== undefined &&
+            typeof value['retainedVideoClipId'] !== 'string') ||
+          (value['playbackMode'] !== 'playing' && value['playbackMode'] !== 'paused')
         ) {
           throw new Error('Invalid Cut preview intent.');
         }
@@ -379,6 +382,10 @@ export class CutOtioEditorProvider implements vscode.CustomEditorProvider<CutOti
             panel,
             value['timelineTimeSeconds'],
             value['generation'],
+            typeof value['retainedVideoClipId'] === 'string'
+              ? value['retainedVideoClipId']
+              : undefined,
+            value['playbackMode'] === 'playing',
           ),
         );
         return;
@@ -975,9 +982,18 @@ export class CutOtioEditorProvider implements vscode.CustomEditorProvider<CutOti
     panel: vscode.WebviewPanel,
     timelineTime: number,
     generation: number,
+    retainedVideoClipId?: string,
+    includeAudio = true,
   ): Promise<void> {
     await this.stopPanelPreview(document, panel);
-    const record = await this.buildPanelPreview(document, panel, timelineTime, generation);
+    const record = await this.buildPanelPreview(
+      document,
+      panel,
+      timelineTime,
+      generation,
+      retainedVideoClipId,
+      includeAudio,
+    );
     try {
       this.previewSessions.set(panel, { prepared: record });
       await panel.webview.postMessage({
@@ -999,6 +1015,8 @@ export class CutOtioEditorProvider implements vscode.CustomEditorProvider<CutOti
     panel: vscode.WebviewPanel,
     timelineTime: number,
     generation: number,
+    retainedVideoClipId?: string,
+    includeAudio = true,
   ): Promise<CutPreviewRecord> {
     const view = document.session.view();
     const selection = resolvePreviewSelection(view, timelineTime);
@@ -1026,32 +1044,37 @@ export class CutOtioEditorProvider implements vscode.CustomEditorProvider<CutOti
       videoProbe = await document.mediaAdapter.probe({
         workspaceRelativePath: source.workspaceRelativePath,
       });
-      preview = await document.mediaAdapter.startPreview(
-        { workspaceRelativePath: source.workspaceRelativePath },
-        {
-          startTimeSeconds:
-            videoClip.sourceStartSeconds +
-            Math.max(0, timelineTime - videoClip.startSeconds) * videoClip.playbackRate,
-          durationSeconds: selection.segmentEndSeconds - timelineTime,
-          playbackRate: videoClip.playbackRate,
-          startPaused: true,
-        },
-      );
+      if (videoClip.clipId !== retainedVideoClipId) {
+        preview = await document.mediaAdapter.startPreview(
+          { workspaceRelativePath: source.workspaceRelativePath },
+          {
+            startTimeSeconds:
+              videoClip.sourceStartSeconds +
+              Math.max(0, timelineTime - videoClip.startSeconds) * videoClip.playbackRate,
+            durationSeconds:
+              (selection.videoSegmentEndSeconds ?? selection.segmentEndSeconds) - timelineTime,
+            playbackRate: videoClip.playbackRate,
+            startPaused: true,
+          },
+        );
+      }
     }
     const pcmSessions: Array<{
       readonly sessionId: string;
       readonly stream: CutPcmStreamDescriptor;
     }> = [];
     try {
-      const audibleClips = [
-        ...(!selection.videoAudioMuted &&
-        videoClip &&
-        videoProbe?.hasAudio === true &&
-        !videoClip.audio.muted
-          ? [videoClip]
-          : []),
-        ...selection.audioClips,
-      ];
+      const audibleClips = includeAudio
+        ? [
+            ...(!selection.videoAudioMuted &&
+            videoClip &&
+            videoProbe?.hasAudio === true &&
+            !videoClip.audio.muted
+              ? [videoClip]
+              : []),
+            ...selection.audioClips,
+          ]
+        : [];
       if (audibleClips.length > 0) {
         const mixSources = await Promise.all(
           audibleClips.map(async (audioClip) => {
@@ -1154,8 +1177,14 @@ export class CutOtioEditorProvider implements vscode.CustomEditorProvider<CutOti
     timelineTime: number,
     generation: number,
   ): Promise<void> {
-    const record = await this.buildPanelPreview(document, panel, timelineTime, generation);
     const current = this.previewSessions.get(panel);
+    const record = await this.buildPanelPreview(
+      document,
+      panel,
+      timelineTime,
+      generation,
+      current?.active?.descriptor.videoClipId,
+    );
     if (current?.prepared) await this.stopPreviewRecord(document, current.prepared);
     this.previewSessions.set(panel, {
       ...(current?.active ? { active: current.active } : {}),

@@ -302,6 +302,7 @@ describe('CutOtioController', () => {
       expectedRevision: 5,
       timelineTimeSeconds: 1.5,
       generation: 1,
+      playbackMode: 'playing',
     });
     expect(store.getState().isPlaying).toBe(true);
   });
@@ -318,6 +319,41 @@ describe('CutOtioController', () => {
     expect(postMessage).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({ type: 'cut:preview-start', generation: 2 }),
+    );
+  });
+
+  it('projects a retained same-Clip video identity when resuming PCM playback', () => {
+    const store = createCutPresentationStore();
+    const postMessage = vi.fn();
+    const controller = new CutOtioController(store, { postMessage });
+    controller.acceptHostMessage({ type: 'cut:view', view: createView() });
+
+    controller.startPreview(2, 'clip-1');
+
+    expect(postMessage).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        type: 'cut:preview-start',
+        timelineTimeSeconds: 2,
+        retainedVideoClipId: 'clip-1',
+      }),
+    );
+  });
+
+  it('requests a paused preview generation without changing transport to playing', () => {
+    const store = createCutPresentationStore();
+    const postMessage = vi.fn();
+    const controller = new CutOtioController(store, { postMessage });
+    controller.acceptHostMessage({ type: 'cut:view', view: createView() });
+
+    controller.startPreview(3, undefined, 'paused');
+
+    expect(store.getState().isPlaying).toBe(false);
+    expect(postMessage).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        type: 'cut:preview-start',
+        timelineTimeSeconds: 3,
+        playbackMode: 'paused',
+      }),
     );
   });
 

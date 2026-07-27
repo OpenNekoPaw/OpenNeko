@@ -81,6 +81,8 @@ export type CutWebviewIntent =
       readonly type: 'cut:preview-start';
       readonly timelineTimeSeconds: number;
       readonly generation: number;
+      readonly retainedVideoClipId?: string;
+      readonly playbackMode: 'playing' | 'paused';
     } & CutIdentity)
   | ({
       readonly type: 'cut:preview-prepare';
@@ -135,7 +137,12 @@ export class CutOtioController {
   private placementModeInitialized = false;
   private pendingSequenceTrim = false;
   private sequenceTrimMutationId?: string;
-  private deferredPreview?: { readonly timelineTimeSeconds: number; readonly generation: number };
+  private deferredPreview?: {
+    readonly timelineTimeSeconds: number;
+    readonly generation: number;
+    readonly retainedVideoClipId?: string;
+    readonly playbackMode: 'playing' | 'paused';
+  };
   private previewGeneration = 0;
 
   constructor(
@@ -262,11 +269,20 @@ export class CutOtioController {
     }));
   }
 
-  startPreview(timelineTimeSeconds: number): number {
+  startPreview(
+    timelineTimeSeconds: number,
+    retainedVideoClipId?: string,
+    playbackMode: 'playing' | 'paused' = 'playing',
+  ): number {
     const generation = ++this.previewGeneration;
     if (this.inFlightMutationId || this.mutationQueue.length > 0) {
-      this.deferredPreview = { timelineTimeSeconds, generation };
-      this.store.setState({ isPlaying: true });
+      this.deferredPreview = {
+        timelineTimeSeconds,
+        generation,
+        ...(retainedVideoClipId ? { retainedVideoClipId } : {}),
+        playbackMode,
+      };
+      if (playbackMode === 'playing') this.store.setState({ isPlaying: true });
       return generation;
     }
     this.bridge.postMessage({
@@ -274,6 +290,8 @@ export class CutOtioController {
       ...this.identity(),
       timelineTimeSeconds,
       generation,
+      ...(retainedVideoClipId ? { retainedVideoClipId } : {}),
+      playbackMode,
     });
     return generation;
   }
@@ -484,6 +502,10 @@ export class CutOtioController {
       ...this.identity(),
       timelineTimeSeconds: deferred.timelineTimeSeconds,
       generation: deferred.generation,
+      ...(deferred.retainedVideoClipId
+        ? { retainedVideoClipId: deferred.retainedVideoClipId }
+        : {}),
+      playbackMode: deferred.playbackMode,
     });
   }
 

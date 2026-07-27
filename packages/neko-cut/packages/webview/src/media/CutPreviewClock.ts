@@ -19,6 +19,7 @@ export interface CutPreviewClockInput {
   readonly primaryMediaOriginSeconds?: number;
   readonly primaryPlaybackRate?: number;
   readonly videoPlaybackRate?: number;
+  readonly videoClockOriginSeconds?: number;
 }
 
 export interface CutPreviewClockReading {
@@ -52,8 +53,9 @@ export class CutPreviewClock {
     }
     if (video) {
       const origin = this.input.primaryMediaOriginSeconds ?? 0;
+      const videoOrigin = this.input.videoClockOriginSeconds ?? 0;
       return {
-        mediaTimeSeconds: origin + video.currentTimeSeconds,
+        mediaTimeSeconds: origin + Math.max(0, video.currentTimeSeconds - videoOrigin),
         discontinuity: false,
       };
     }
@@ -97,7 +99,8 @@ export class CutPreviewClock {
     }
     const timelineDelta =
       (primaryMediaTimeSeconds - primaryMediaOriginSeconds) / primaryPlaybackRate;
-    const expectedVideoTime = Math.max(0, timelineDelta * videoPlaybackRate);
+    const expectedVideoTime =
+      (this.input.videoClockOriginSeconds ?? 0) + Math.max(0, timelineDelta * videoPlaybackRate);
     const drift = video.currentTimeSeconds - expectedVideoTime;
     if (Math.abs(drift) <= NUDGE_THRESHOLD_SECONDS) {
       video.playbackRate = videoPlaybackRate;

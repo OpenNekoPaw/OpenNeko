@@ -146,14 +146,35 @@ describe('Cut OTIO Webview boundary', () => {
     expect(app).toMatch(/previewClockRef\.current\?\.read\(\)/);
     expect(app).not.toMatch(/EngineAvStreamLifecycle|AudioStreamClient/);
     expect(app).toMatch(/timelineEndSeconds: prepared\.playbackEndSeconds/);
-    expect(app).toMatch(/controller\.startPreview\(playheadSeconds\)/);
+    expect(app).toMatch(/controller\.startPreview\(\s*playheadSeconds,/);
     expect(app).toMatch(/controller\.preparePreview\(playheadSeconds\)/);
     expect(app).toMatch(/controller\.activatePreview\(generation\)/);
-    expect(app.match(/controller\.startPreview\(/g)).toHaveLength(1);
+    expect(app.match(/controller\.startPreview\(/g)).toHaveLength(2);
+    expect(app).toMatch(/previewVideoClientRef\.current\?\.pause\(\)/);
+    expect(app).toMatch(/activeVideoClient\.seek\(/);
+    expect(app).toMatch(/preparePreviewVideoClient\(message, attempt\)/);
+    expect(app).toMatch(/preparePreviewAudioClients\(\s*message,/);
+    expect(app).toMatch(/onEnded: \(\) => mediaPlaybackEndRef\.current\?\.\(message\.generation\)/);
+    expect(app).toMatch(
+      /onPlaybackEnd: \(\) => mediaPlaybackEndRef\.current\?\.\(message\.generation\)/,
+    );
+    expect(app).toMatch(/finishPreviewPlaybackSegment\(segment\)/);
+    expect(app).toMatch(/secondaryVideoRef=\{secondaryPreviewVideoRef\}/);
+    expect(app).toMatch(/controller\.startPreview\(\s*targetSeconds,\s*undefined,\s*'paused'/);
 
     const connect = app.slice(
       app.indexOf('const connectPreviewClients'),
       app.indexOf('const activatePreparedPreview'),
+    );
+    const preparedBranch = app.slice(
+      app.indexOf("message['type'] === 'cut:preview-prepared'"),
+      app.indexOf("message['type'] === 'cut:preview-activated'"),
+    );
+    expect(preparedBranch).toContain('preparePreviewAudioClients(');
+    expect(preparedBranch).toContain('preparePreviewVideoClient(');
+    expect(preparedBranch.indexOf('preparePreviewVideoClient(')).toBeLessThan(
+      app.indexOf('activatePreparedPreview(waitingBoundary)') -
+        app.indexOf("message['type'] === 'cut:preview-prepared'"),
     );
     const activation = app.slice(
       app.indexOf("message['type'] === 'cut:preview-activated'"),
@@ -173,6 +194,9 @@ describe('Cut OTIO Webview boundary', () => {
     );
     expect(activation.indexOf('videoClient?.play()')).toBeLessThan(
       activation.indexOf('playbackSegmentRef.current ='),
+    );
+    expect(activation.indexOf('setActiveVideoSlot(')).toBeLessThan(
+      activation.indexOf('videoPromotion.previous.dispose()'),
     );
   });
 
