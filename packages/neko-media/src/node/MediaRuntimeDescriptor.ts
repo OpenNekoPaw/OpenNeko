@@ -9,7 +9,7 @@ import {
 } from './NodeFfmpegProcess';
 import { NodeMediaRuntime } from './NodeMediaRuntime';
 
-export const MEDIA_RUNTIME_DESCRIPTOR_SCHEMA = 'openneko.media-runtime.v1';
+export const MEDIA_RUNTIME_DESCRIPTOR_SCHEMA = 'openneko.media-runtime.v2';
 
 export type MediaRuntimeTarget = 'darwin-arm64' | 'linux-x64';
 
@@ -28,6 +28,7 @@ export interface MediaRuntimeDescriptor {
     readonly ffprobe: { readonly file: string; readonly sha256: string };
   };
   readonly requiredCapabilities: {
+    readonly hardwareAccelerators: readonly (keyof MediaRuntimeQualification['hardwareAccelerators'])[];
     readonly decoders: readonly (keyof MediaRuntimeQualification['decoders'])[];
     readonly encoders: readonly (keyof MediaRuntimeQualification['encoders'])[];
     readonly filters: readonly (keyof MediaRuntimeQualification['filters'])[];
@@ -51,7 +52,8 @@ const DECODER_CAPABILITIES = [
   'flac',
   'dts',
 ] as const;
-const ENCODER_CAPABILITIES = ['h264', 'h264VideoToolbox', 'aac'] as const;
+const HARDWARE_ACCELERATOR_CAPABILITIES = ['videoToolbox', 'vaapi'] as const;
+const ENCODER_CAPABILITIES = ['h264', 'h264VideoToolbox', 'h264Vaapi', 'aac'] as const;
 const FILTER_CAPABILITIES = [
   'zscale',
   'tonemap',
@@ -60,6 +62,8 @@ const FILTER_CAPABILITIES = [
   'loudnorm',
   'ebur128',
   'scaleVt',
+  'scaleVaapi',
+  'tonemapVaapi',
 ] as const;
 
 export async function verifyMediaRuntimeDirectory(
@@ -127,6 +131,11 @@ function parseMediaRuntimeDescriptor(value: unknown): MediaRuntimeDescriptor {
   const required = readRequiredRecord(value, 'requiredCapabilities');
   const licenseFile = parseFileDescriptor(licenseValue);
   const requiredCapabilities = Object.freeze({
+    hardwareAccelerators: readCapabilities(
+      required,
+      'hardwareAccelerators',
+      HARDWARE_ACCELERATOR_CAPABILITIES,
+    ),
     decoders: readCapabilities(required, 'decoders', DECODER_CAPABILITIES),
     encoders: readCapabilities(required, 'encoders', ENCODER_CAPABILITIES),
     filters: readCapabilities(required, 'filters', FILTER_CAPABILITIES),
@@ -169,6 +178,11 @@ function assertRequiredCapabilities(
   descriptor: MediaRuntimeDescriptor,
   qualification: MediaRuntimeQualification,
 ): void {
+  for (const capability of descriptor.requiredCapabilities.hardwareAccelerators) {
+    if (!qualification.hardwareAccelerators[capability]) {
+      missingCapability('hardwareAccelerators', capability);
+    }
+  }
   for (const capability of descriptor.requiredCapabilities.decoders) {
     if (!qualification.decoders[capability]) missingCapability('decoders', capability);
   }
@@ -185,15 +199,19 @@ function assertCapabilityFloor(
   capabilities: MediaRuntimeDescriptor['requiredCapabilities'],
 ): void {
   const required = {
+    hardwareAccelerators:
+      target === 'darwin-arm64' ? (['videoToolbox'] as const) : (['vaapi'] as const),
     decoders: DECODER_CAPABILITIES,
     encoders:
-      target === 'darwin-arm64' ? (['h264VideoToolbox', 'aac'] as const) : (['aac'] as const),
+      target === 'darwin-arm64'
+        ? (['h264VideoToolbox', 'aac'] as const)
+        : (['h264Vaapi', 'aac'] as const),
     filters:
       target === 'darwin-arm64'
         ? (['alimiter', 'loudnorm', 'ebur128', 'scaleVt'] as const)
-        : (['alimiter', 'loudnorm', 'ebur128'] as const),
+        : (['alimiter', 'loudnorm', 'ebur128', 'scaleVaapi', 'tonemapVaapi'] as const),
   };
-  for (const section of ['decoders', 'encoders', 'filters'] as const) {
+  for (const section of ['hardwareAccelerators', 'decoders', 'encoders', 'filters'] as const) {
     for (const capability of required[section]) {
       if (!includesCapability(capabilities[section], capability)) {
         throw new Error(

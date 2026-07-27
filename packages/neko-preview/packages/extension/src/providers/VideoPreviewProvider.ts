@@ -314,7 +314,7 @@ function videoPreviewDiagnosticCode(
     if (error.capability === 'hardware-only HDR frame capture') {
       return 'hdr-poster-unavailable';
     }
-    if (/ VideoToolbox decoder$/u.test(error.capability)) {
+    if (/ decoder$/u.test(error.capability)) {
       return 'hardware-decoder-unavailable';
     }
     return 'hardware-preview-unavailable';

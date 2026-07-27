@@ -12,11 +12,15 @@ import { NodeFfmpegCutMediaAdapter, buildCutPreviewVideoFilter } from './NodeFfm
 import {
   FfmpegCommandError,
   NodeFfmpegProcess,
+  resolveHardwareVideoBackend,
   type FfmpegProcessPort,
   type FfmpegRunResult,
 } from '@neko/media/node';
 
 describe('NodeFfmpegCutMediaAdapter', () => {
+  const hardwareSmokeEnabled =
+    (process.platform === 'darwin' && process.arch === 'arm64') ||
+    process.env['NEKO_HARDWARE_VIDEO_SMOKE'] === '1';
   let root: string;
   let cacheRoot: string;
   let sourcePath: string;
@@ -114,19 +118,30 @@ describe('NodeFfmpegCutMediaAdapter', () => {
     });
   });
 
-  it('captures a JPEG frame and renders bounded normalized waveform peaks', async () => {
-    const adapter = createAdapter();
+  it.runIf(hardwareSmokeEnabled)('captures a JPEG frame on the host hardware backend', async () => {
+    const adapter = new NodeFfmpegCutMediaAdapter(root, {
+      cacheRoot,
+      hardwareVideoBackend: resolveHardwareVideoBackend(),
+    });
+    adapters.push(adapter);
 
-    const [frame, waveform] = await Promise.all([
-      adapter.captureFrame({ workspaceRelativePath: 'source.mp4' }, 0.5, {
-        width: 160,
-        height: 90,
-      }),
-      adapter.generateWaveform({ workspaceRelativePath: 'source.mp4' }, { peaksPerSecond: 10 }),
-    ]);
+    const frame = await adapter.captureFrame({ workspaceRelativePath: 'source.mp4' }, 0.5, {
+      width: 160,
+      height: 90,
+    });
 
     expect(frame.dataUrl).toMatch(/^data:image\/jpeg;base64,/);
     expect(frame.dataUrl.length).toBeGreaterThan(2_000);
+  });
+
+  it('renders bounded normalized waveform peaks', async () => {
+    const adapter = createAdapter();
+
+    const waveform = await adapter.generateWaveform(
+      { workspaceRelativePath: 'source.mp4' },
+      { peaksPerSecond: 10 },
+    );
+
     expect(waveform.peaks.length).toBeGreaterThanOrEqual(19);
     expect(waveform.peaks.every((peak) => peak >= 0 && peak <= 1)).toBe(true);
   });
@@ -163,8 +178,16 @@ describe('NodeFfmpegCutMediaAdapter', () => {
         throw new Error('Unexpected streaming FFmpeg process.');
       },
     };
-    const first = new NodeFfmpegCutMediaAdapter(root, { cacheRoot, process });
-    const second = new NodeFfmpegCutMediaAdapter(root, { cacheRoot, process });
+    const first = new NodeFfmpegCutMediaAdapter(root, {
+      cacheRoot,
+      process,
+      hardwareVideoBackend: 'vaapi',
+    });
+    const second = new NodeFfmpegCutMediaAdapter(root, {
+      cacheRoot,
+      process,
+      hardwareVideoBackend: 'vaapi',
+    });
     adapters.push(first, second);
     const request = () =>
       first.captureFrame({ workspaceRelativePath: 'thumbnail-source.mp4' }, 0.5, {
@@ -228,7 +251,11 @@ describe('NodeFfmpegCutMediaAdapter', () => {
         throw new Error('Unexpected streaming FFmpeg process.');
       },
     };
-    const adapter = new NodeFfmpegCutMediaAdapter(root, { cacheRoot, process });
+    const adapter = new NodeFfmpegCutMediaAdapter(root, {
+      cacheRoot,
+      process,
+      hardwareVideoBackend: 'vaapi',
+    });
     adapters.push(adapter);
     await writeFile(path.join(root, 'partially-corrupt.mp4'), 'corrupt-frame-fixture');
 
@@ -675,12 +702,39 @@ describe('NodeFfmpegCutMediaAdapter', () => {
       },
       1280,
       720,
+      'videotoolbox',
     );
 
     expect(filter).toBe(
       'scale_vt=w=1280:h=720:color_matrix=bt709:color_primaries=bt709:color_transfer=bt709',
     );
     expect(filter).not.toMatch(/(?:zscale|tonemap|scale=)/u);
+  });
+
+  it('keeps Cut preview scaling and color conversion on VAAPI frames', () => {
+    const filter = buildCutPreviewVideoFilter(
+      {
+        streamIndex: 0,
+        codecName: 'av1',
+        bitDepth: 10,
+        width: 3840,
+        height: 2160,
+        framesPerSecond: 24,
+        color: {
+          colorPrimaries: 'bt2020',
+          colorTransfer: 'smpte2084',
+          colorSpace: 'bt2020nc',
+        },
+      },
+      1280,
+      720,
+      'vaapi',
+    );
+
+    expect(filter).toBe(
+      'tonemap_vaapi=format=nv12:matrix=bt709:primaries=bt709:transfer=bt709,scale_vaapi=w=1280:h=720:format=nv12:out_color_matrix=bt709:out_color_primaries=bt709:out_color_transfer=bt709:out_range=limited',
+    );
+    expect(filter).not.toMatch(/(?:^|,)(?:zscale|tonemap|scale)=|hwdownload/u);
   });
 
   it('uses the qualified VP8 WebM direct profile for the VS Code baseline', async () => {

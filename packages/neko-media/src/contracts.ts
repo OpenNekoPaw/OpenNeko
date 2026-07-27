@@ -90,6 +90,10 @@ export interface WaveformResult {
 export interface MediaRuntimeQualification {
   readonly ffmpegVersion: string;
   readonly ffprobeVersion: string;
+  readonly hardwareAccelerators: {
+    readonly videoToolbox: boolean;
+    readonly vaapi: boolean;
+  };
   readonly decoders: {
     readonly h264: boolean;
     readonly hevc: boolean;
@@ -104,6 +108,7 @@ export interface MediaRuntimeQualification {
   readonly encoders: {
     readonly h264: boolean;
     readonly h264VideoToolbox: boolean;
+    readonly h264Vaapi: boolean;
     readonly aac: boolean;
   };
   readonly filters: {
@@ -114,6 +119,8 @@ export interface MediaRuntimeQualification {
     readonly loudnorm: boolean;
     readonly ebur128: boolean;
     readonly scaleVt: boolean;
+    readonly scaleVaapi: boolean;
+    readonly tonemapVaapi: boolean;
   };
 }
 

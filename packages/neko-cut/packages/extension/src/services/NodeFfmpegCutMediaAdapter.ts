@@ -24,7 +24,12 @@ import {
   NodeMediaLoopbackServer,
   NodeFfmpegProcess,
   createPcmPacketTransform,
+  getHardwareVideoPipeline,
+  resolveHardwareVideoBackend,
   type FfmpegProcessPort,
+  type HardwareVideoBackend,
+  type HardwareVideoPipeline,
+  type QualifiedHardwareVideoBackend,
   type RunningProcess,
 } from '@neko/media/node';
 
@@ -33,7 +38,7 @@ export interface NodeFfmpegCutMediaAdapterOptions {
   readonly process?: FfmpegProcessPort;
   readonly server?: NodeMediaLoopbackServer;
   readonly vp8WebmDirectQualified?: boolean;
-  readonly hardwareVideoBackend?: 'videotoolbox' | 'unavailable';
+  readonly hardwareVideoBackend?: HardwareVideoBackend;
 }
 
 interface PreviewSessionRecord {
@@ -110,7 +115,7 @@ export class NodeFfmpegCutMediaAdapter implements CutMediaRuntimeAdapter {
   private readonly keyframeIndexes = new Map<string, Promise<KeyframeIndex>>();
   private readonly thumbnailCaptures = new Map<string, Promise<{ readonly dataUrl: string }>>();
   private readonly vp8WebmDirectQualified: boolean;
-  private readonly hardwareVideoBackend: 'videotoolbox' | 'unavailable';
+  private readonly hardwareVideoPipeline: HardwareVideoPipeline | undefined;
   private nextSessionId = 0;
   private disposed = false;
 
@@ -122,9 +127,9 @@ export class NodeFfmpegCutMediaAdapter implements CutMediaRuntimeAdapter {
     this.server = options.server ?? new NodeMediaLoopbackServer();
     this.cacheRoot = options.cacheRoot ?? nodePath.join(nodeOs.tmpdir(), 'openneko-cut-media');
     this.vp8WebmDirectQualified = options.vp8WebmDirectQualified ?? true;
-    this.hardwareVideoBackend =
-      options.hardwareVideoBackend ??
-      (process.platform === 'darwin' ? 'videotoolbox' : 'unavailable');
+    this.hardwareVideoPipeline = getHardwareVideoPipeline(
+      options.hardwareVideoBackend ?? resolveHardwareVideoBackend(),
+    );
   }
 
   async probe(source: CutRuntimeMediaSource, signal?: AbortSignal): Promise<CutMediaProbe> {
@@ -265,13 +270,15 @@ export class NodeFfmpegCutMediaAdapter implements CutMediaRuntimeAdapter {
     const probe = await this.probe(source, signal);
     const video = probe.video;
     if (!video) throw new Error('Frame source contains no video stream.');
-    if (this.hardwareVideoBackend !== 'videotoolbox') {
-      throw new CutMediaRuntimeUnavailableError('hardware frame capture backend');
-    }
+    const hardwareVideoPipeline = this.requireHardwareVideoPipeline(
+      'hardware frame capture backend',
+    );
     if (isHdrVideo(video)) {
       throw new CutMediaRuntimeUnavailableError('hardware-only HDR frame capture');
     }
-    const filters = [buildCutFrameFilter(video, options.width, options.height)];
+    const filters = [
+      buildCutFrameFilter(video, options.width, options.height, hardwareVideoPipeline),
+    ];
     let result;
     try {
       result = await this.process.run(
@@ -280,10 +287,7 @@ export class NodeFfmpegCutMediaAdapter implements CutMediaRuntimeAdapter {
           '-v',
           'error',
           '-xerror',
-          '-hwaccel',
-          'videotoolbox',
-          '-hwaccel_output_format',
-          'videotoolbox_vld',
+          ...hardwareVideoPipeline.decodeInputArgs,
           '-ss',
           decimal(timeSeconds),
           '-i',
@@ -303,6 +307,8 @@ export class NodeFfmpegCutMediaAdapter implements CutMediaRuntimeAdapter {
         signal,
       );
     } catch (error) {
+      const failure = hardwareVideoPipeline.classifyFailure(error, video.codecName);
+      if (failure) throw new CutMediaRuntimeUnavailableError(failure.capability);
       throw classifyMediaCommandError(
         error,
         'interval',
@@ -442,15 +448,25 @@ export class NodeFfmpegCutMediaAdapter implements CutMediaRuntimeAdapter {
         try {
           await this.process.run(
             'ffmpeg',
-            buildPreviewArgs(sourcePath, preparedPath, video, profile, {
-              startTimeSeconds: fragment.startTimeSeconds,
-              sourceDurationSeconds: fragment.sourceDurationSeconds,
-            }),
+            buildPreviewArgs(
+              sourcePath,
+              preparedPath,
+              video,
+              profile,
+              {
+                startTimeSeconds: fragment.startTimeSeconds,
+                sourceDurationSeconds: fragment.sourceDurationSeconds,
+              },
+              this.hardwareVideoPipeline,
+            ),
             signal,
           );
         } catch (error) {
           if (profile === 'h264-sdr-transcode') {
-            throw classifyVideoToolboxCommandError(error, video.codecName);
+            const failure = this.requireHardwareVideoPipeline(
+              'hardware video preview backend',
+            ).classifyFailure(error, video.codecName);
+            if (failure) throw new CutMediaRuntimeUnavailableError(failure.capability);
           }
           throw classifyMediaCommandError(error, 'interval', 'prepare preview interval');
         }
@@ -1098,9 +1114,14 @@ export class NodeFfmpegCutMediaAdapter implements CutMediaRuntimeAdapter {
   ): void {
     if (profile !== 'h264-sdr-transcode') return;
     if (signal?.aborted) throw signal.reason;
-    if (this.hardwareVideoBackend !== 'videotoolbox') {
-      throw new CutMediaRuntimeUnavailableError('hardware video preview backend');
+    this.requireHardwareVideoPipeline('hardware video preview backend');
+  }
+
+  private requireHardwareVideoPipeline(capability: string): HardwareVideoPipeline {
+    if (!this.hardwareVideoPipeline) {
+      throw new CutMediaRuntimeUnavailableError(capability);
     }
+    return this.hardwareVideoPipeline;
   }
 }
 
@@ -1110,6 +1131,7 @@ function buildPreviewArgs(
   video: CutMediaVideoStream,
   profile: CutPreviewPreparationProfile,
   interval: { readonly startTimeSeconds: number; readonly sourceDurationSeconds: number },
+  hardwareVideoPipeline: HardwareVideoPipeline | undefined,
 ): readonly string[] {
   if (profile === 'h264-mp4-direct' || profile === 'vp8-webm-direct') {
     throw new Error(`Direct Cut preview profile must not invoke FFmpeg: ${profile}`);
@@ -1119,7 +1141,7 @@ function buildPreviewArgs(
     '-v',
     'error',
     ...(profile === 'h264-sdr-transcode'
-      ? ['-xerror', '-hwaccel', 'videotoolbox', '-hwaccel_output_format', 'videotoolbox_vld']
+      ? ['-xerror', ...requirePreviewHardwareVideoPipeline(hardwareVideoPipeline).decodeInputArgs]
       : []),
     '-ss',
     decimal(interval.startTimeSeconds),
@@ -1149,18 +1171,12 @@ function buildPreviewArgs(
   }
   const fps = Math.max(1, video.framesPerSecond || 30);
   const keyframeInterval = Math.max(1, Math.round(fps * 2));
+  const pipeline = requirePreviewHardwareVideoPipeline(hardwareVideoPipeline);
   return [
     ...base,
     '-vf',
-    buildCutPreviewVideoFilter(video),
-    '-c:v',
-    'h264_videotoolbox',
-    '-allow_sw',
-    '0',
-    '-realtime',
-    '1',
-    '-prio_speed',
-    '1',
+    buildCutPreviewVideoFilter(video, 1280, 720, pipeline.backend),
+    ...pipeline.h264EncoderArgs,
     '-b:v',
     '8M',
     '-profile:v',
@@ -1183,25 +1199,33 @@ function buildPreviewArgs(
 
 export function buildCutPreviewVideoFilter(
   video: CutMediaVideoStream,
-  maxWidth = 1280,
-  maxHeight = 720,
+  maxWidth: number,
+  maxHeight: number,
+  hardwareVideoBackend: QualifiedHardwareVideoBackend,
 ): string {
   const size = fitVideoWithin(video.width, video.height, maxWidth, maxHeight);
-  return [
-    `scale_vt=w=${size.width}:h=${size.height}`,
-    'color_matrix=bt709',
-    'color_primaries=bt709',
-    'color_transfer=bt709',
-  ].join(':');
+  const pipeline = getHardwareVideoPipeline(hardwareVideoBackend);
+  if (!pipeline) throw new Error(`Unknown hardware video backend: ${hardwareVideoBackend}`);
+  return pipeline.buildSdrFilter(size.width, size.height, isHdrVideo(video));
 }
 
 function buildCutFrameFilter(
   video: CutMediaVideoStream,
   maxWidth: number,
   maxHeight: number,
+  hardwareVideoPipeline: HardwareVideoPipeline,
 ): string {
   const size = fitVideoWithin(video.width, video.height, maxWidth, maxHeight);
-  return `scale_vt=w=${size.width}:h=${size.height},hwdownload,format=nv12,format=yuvj420p`;
+  return hardwareVideoPipeline.buildFrameCaptureFilter(size.width, size.height);
+}
+
+function requirePreviewHardwareVideoPipeline(
+  pipeline: HardwareVideoPipeline | undefined,
+): HardwareVideoPipeline {
+  if (!pipeline) {
+    throw new CutMediaRuntimeUnavailableError('hardware video preview backend');
+  }
+  return pipeline;
 }
 
 function fitVideoWithin(
@@ -1246,33 +1270,6 @@ function classifyMediaCommandError(
     return new CutMediaCorruptionError(scope, operation, compactFfmpegDiagnostic(error.stderr));
   }
   return error instanceof Error ? error : new Error(String(error));
-}
-
-function classifyVideoToolboxCommandError(error: unknown, codecName: string): Error {
-  if (error instanceof CutMediaRuntimeUnavailableError) return error;
-  if (error instanceof FfmpegCommandError) {
-    if (
-      /(?:videotoolbox decoder .* not found|doesn't support hardware accelerated .* decoding|failed setup for format videotoolbox|no device available for decoder|\[dec:[^\]]+\][^\n]*function not implemented)/iu.test(
-        error.stderr,
-      )
-    ) {
-      return new CutMediaRuntimeUnavailableError(`${codecName.toUpperCase()} VideoToolbox decoder`);
-    }
-    if (/(?:unknown encoder|encoder .* not found).*h264_videotoolbox/iu.test(error.stderr)) {
-      return new CutMediaRuntimeUnavailableError('H.264 VideoToolbox encoder');
-    }
-    if (/(?:no such filter|filter not found).*scale_vt/iu.test(error.stderr)) {
-      return new CutMediaRuntimeUnavailableError('VideoToolbox scale_vt filter');
-    }
-    if (
-      /(?:parsed_scale_vt|error reinitializing filters|\[vf[^\]]*\][^\n]*function not implemented)/iu.test(
-        error.stderr,
-      )
-    ) {
-      return new CutMediaRuntimeUnavailableError('VideoToolbox video processing pipeline');
-    }
-  }
-  return classifyMediaCommandError(error, 'interval', 'prepare hardware preview interval');
 }
 
 function isMediaCorruptionDiagnostic(stderr: string): boolean {

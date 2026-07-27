@@ -312,24 +312,25 @@ describe('VideoPreviewProvider Node media path', () => {
     );
   });
 
-  it('projects unavailable VideoToolbox decode as a structured playback diagnostic', async () => {
-    service.startPlayback.mockRejectedValueOnce(
-      new MediaRuntimeUnavailableError('AV1 VideoToolbox decoder'),
-    );
-    const { panel, message } = await resolve(provider);
+  it.each(['AV1 VideoToolbox decoder', 'AV1 VAAPI decoder'])(
+    'projects unavailable %s as a structured playback diagnostic',
+    async (capability) => {
+      service.startPlayback.mockRejectedValueOnce(new MediaRuntimeUnavailableError(capability));
+      const { panel, message } = await resolve(provider);
 
-    await message({ type: 'preview:play', startTime: 0, speed: 1 });
+      await message({ type: 'preview:play', startTime: 0, speed: 1 });
 
-    await vi.waitFor(() =>
-      expect(panel.webview.postMessage).toHaveBeenLastCalledWith({
-        type: 'preview:operationFailed',
-        payload: {
-          operation: 'playback',
-          code: 'hardware-decoder-unavailable',
-        },
-      }),
-    );
-  });
+      await vi.waitFor(() =>
+        expect(panel.webview.postMessage).toHaveBeenLastCalledWith({
+          type: 'preview:operationFailed',
+          payload: {
+            operation: 'playback',
+            code: 'hardware-decoder-unavailable',
+          },
+        }),
+      );
+    },
+  );
 
   it('projects playback status and panel visibility into the status bar', async () => {
     const { panel, message } = await resolve(provider);
