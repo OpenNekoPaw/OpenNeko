@@ -1,5 +1,11 @@
 import type { TimelineView } from './projection';
 
+export const CUT_LOUDNESS_TARGET = Object.freeze({
+  integratedLufs: -14,
+  truePeakDbtp: -1,
+  loudnessRangeLu: 11,
+});
+
 export interface CutRuntimeMediaSource {
   readonly workspaceRelativePath: string;
 }
@@ -185,6 +191,18 @@ export interface CutPcmSession {
   readonly stream: CutPcmStreamDescriptor;
 }
 
+export interface CutPcmMixSource {
+  readonly source: CutRuntimeMediaSource;
+  readonly audioStreamIndex?: number;
+  readonly sourceStartSeconds: number;
+  readonly playbackRate: number;
+  readonly gainDb: number;
+  readonly clipPositionSeconds: number;
+  readonly clipDurationSeconds: number;
+  readonly fadeInSeconds: number;
+  readonly fadeOutSeconds: number;
+}
+
 export interface VideoPreviewPort {
   startPreview(
     source: CutRuntimeMediaSource,
@@ -201,14 +219,12 @@ export interface VideoPreviewPort {
 }
 
 export interface AudioPcmStreamPort {
-  startPcm(
-    source: CutRuntimeMediaSource,
+  startPcmMix(
+    sources: readonly CutPcmMixSource[],
     options: {
-      readonly startTimeSeconds: number;
+      readonly timelineStartSeconds: number;
       readonly durationSeconds: number;
-      readonly playbackRate: number;
       readonly startPaused: boolean;
-      readonly audioStreamIndex?: number;
     },
     signal?: AbortSignal,
   ): Promise<CutPcmSession>;

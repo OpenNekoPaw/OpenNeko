@@ -51,6 +51,14 @@ export class MseVideoClient {
     await this.options.video.play();
   }
 
+  async primeForSynchronizedStart(): Promise<void> {
+    if (this.disposed) throw new Error('MSE video client is disposed.');
+    const { descriptor, video } = this.options;
+    await video.play();
+    video.pause();
+    video.currentTime = descriptor.mediaTimeOriginSeconds;
+  }
+
   get currentTimeSeconds(): number {
     return this.options.video.currentTime;
   }

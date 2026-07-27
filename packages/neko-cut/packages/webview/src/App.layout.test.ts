@@ -150,6 +150,30 @@ describe('Cut OTIO Webview boundary', () => {
     expect(app).toMatch(/controller\.preparePreview\(playheadSeconds\)/);
     expect(app).toMatch(/controller\.activatePreview\(generation\)/);
     expect(app.match(/controller\.startPreview\(/g)).toHaveLength(1);
+
+    const connect = app.slice(
+      app.indexOf('const connectPreviewClients'),
+      app.indexOf('const activatePreparedPreview'),
+    );
+    const activation = app.slice(
+      app.indexOf("message['type'] === 'cut:preview-activated'"),
+      app.indexOf('const accepted = controller.acceptHostMessage'),
+    );
+    expect(connect).not.toContain('.startAt(');
+    expect(activation.indexOf('primeForSynchronizedStart()')).toBeGreaterThan(-1);
+    expect(activation.indexOf('primeForSynchronizedStart()')).toBeLessThan(
+      activation.indexOf('.startAt(sharedStartTime)'),
+    );
+    expect(activation.indexOf('.startAt(sharedStartTime)')).toBeGreaterThan(-1);
+    expect(activation.indexOf('.startAt(sharedStartTime)')).toBeLessThan(
+      activation.indexOf('waitForAudioContextTime('),
+    );
+    expect(activation.indexOf('waitForAudioContextTime(')).toBeLessThan(
+      activation.indexOf('videoClient?.play()'),
+    );
+    expect(activation.indexOf('videoClient?.play()')).toBeLessThan(
+      activation.indexOf('playbackSegmentRef.current ='),
+    );
   });
 
   it('disposes Webview playback clients before stopping a discontinuous host preview', () => {

@@ -31,6 +31,11 @@ import {
 } from './previewPlayback';
 import { PreviewAudioContextOwner } from './previewAudioContext';
 import {
+  PreviewFailureGate,
+  previewFailureDiagnostic,
+  type PreviewFailureStage,
+} from './previewFailureGate';
+import {
   MseVideoClient as CutMseVideoClient,
   PcmAudioClient as CutPcmAudioClient,
 } from '@neko/media/browser';
@@ -58,6 +63,8 @@ function App() {
   const activatingPreviewGenerationRef = useRef<number>();
   const waitingPreviewBoundaryRef = useRef<number>();
   const playbackSegmentRef = useRef<PreviewPlaybackSegment>();
+  const previewAttemptRef = useRef<number>();
+  const previewFailureGateRef = useRef<PreviewFailureGate>();
   const volumeRef = useRef(1);
   const { isKeyboardFocused } = useFocusedWebviewRoot(rootRef);
   const { t } = useTranslation();
@@ -81,7 +88,9 @@ function App() {
   const { showToast } = useToast();
   const controller = useCutOtioController();
   previewAudioContextOwnerRef.current ??= new PreviewAudioContextOwner();
+  previewFailureGateRef.current ??= new PreviewFailureGate();
   const previewAudioContextOwner = previewAudioContextOwnerRef.current;
+  const previewFailureGate = previewFailureGateRef.current;
   const previewSplit = usePersistedResize('cut.previewTimelineSplit', 0.5, {
     minSize: 0.2,
     maxSize: 0.8,
@@ -111,8 +120,19 @@ function App() {
     presentationActions.clearDiagnostic();
   }, [diagnostic, presentationActions, showToast, t]);
 
+  const reportPreviewFailure = useCallback(
+    (attempt: number, stage: PreviewFailureStage): void => {
+      if (!previewFailureGate.accept(attempt)) return;
+      presentationActions.setPlaying(false);
+      presentationActions.reportDiagnostic(previewFailureDiagnostic(stage));
+    },
+    [presentationActions, previewFailureGate],
+  );
+
   const connectPreviewClients = useCallback(
     async (message: PreviewStreamMessage): Promise<boolean> => {
+      const attempt = previewAttemptRef.current;
+      if (attempt === undefined) throw new Error('Cut preview attempt is unavailable.');
       const canvas = previewCanvasRef.current;
       if (canvas && !message.video) {
         const context = canvas.getContext('2d');
@@ -134,8 +154,7 @@ function App() {
               playbackRate: message.videoPlaybackRate ?? 1,
               onError: () => {
                 if (previewGenerationRef.current === generation) {
-                  presentationActions.setPlaying(false);
-                  presentationActions.reportDiagnostic({ code: 'preview-failed' });
+                  reportPreviewFailure(attempt, 'video');
                 }
               },
             })
@@ -147,9 +166,6 @@ function App() {
         message.audioStreams.length > 0
           ? await previewAudioContextOwner.contextForConnection()
           : undefined;
-      const mixDestination = audioContext
-        ? await previewAudioContextOwner.mixDestinationForConnection()
-        : undefined;
       const audioClients = message.audioStreams.map((descriptor, index) => {
         const playback = message.audioPlayback[index];
         if (!playback) throw new Error(`Cut preview audio playback ${index} is missing.`);
@@ -157,7 +173,6 @@ function App() {
           descriptor,
           playbackRate: playback.playbackRate,
           volume: volumeRef.current * (audioGainMultipliersRef.current[index] ?? 1),
-          ...(mixDestination ? { destination: mixDestination } : {}),
           gainEnvelope: {
             positionSeconds: playback.positionSeconds,
             clipDurationSeconds: playback.clipDurationSeconds,
@@ -166,21 +181,28 @@ function App() {
           },
           onError: () => {
             if (previewGenerationRef.current === generation) {
-              presentationActions.setPlaying(false);
-              presentationActions.reportDiagnostic({ code: 'preview-failed' });
+              reportPreviewFailure(attempt, 'audio');
             }
           },
         });
       });
       try {
         await Promise.all([
-          ...(videoClient ? [videoClient.connect()] : []),
-          ...audioClients.map((client) => client.prepare(audioContext)),
+          ...(videoClient
+            ? [
+                videoClient.connect().catch((error: unknown) => {
+                  reportPreviewFailure(attempt, 'video');
+                  throw error;
+                }),
+              ]
+            : []),
+          ...audioClients.map((client) =>
+            client.prepare(audioContext).catch((error: unknown) => {
+              reportPreviewFailure(attempt, 'audio');
+              throw error;
+            }),
+          ),
         ]);
-        if (audioContext) {
-          const sharedStartTime = audioContext.currentTime + 0.1;
-          await Promise.all(audioClients.map((client) => client.startAt(sharedStartTime)));
-        }
       } catch (error) {
         if (previewGenerationRef.current === generation) {
           videoClient?.dispose();
@@ -225,7 +247,7 @@ function App() {
       });
       return true;
     },
-    [presentationActions, previewAudioContextOwner],
+    [previewAudioContextOwner, reportPreviewFailure],
   );
 
   const activatePreparedPreview = useCallback(
@@ -239,6 +261,8 @@ function App() {
       }
       if (activatingPreviewGenerationRef.current !== undefined) return;
       const generation = prepared.generation;
+      const attempt = previewAttemptRef.current;
+      if (attempt === undefined) throw new Error('Cut preview attempt is unavailable.');
       activatingPreviewGenerationRef.current = generation;
       waitingPreviewBoundaryRef.current = boundarySeconds;
       presentationActions.seek(boundarySeconds);
@@ -255,12 +279,11 @@ function App() {
         })
         .catch(() => {
           if (activatingPreviewGenerationRef.current !== generation) return;
-          presentationActions.setPlaying(false);
-          presentationActions.reportDiagnostic({ code: 'preview-failed' });
+          reportPreviewFailure(attempt, 'startup');
           controller.stopPreview();
         });
     },
-    [connectPreviewClients, controller, presentationActions, store],
+    [connectPreviewClients, controller, presentationActions, reportPreviewFailure, store],
   );
 
   const finishOrContinuePreview = useCallback(
@@ -296,23 +319,27 @@ function App() {
           preparedPreviewRef.current = undefined;
           activatingPreviewGenerationRef.current = undefined;
           waitingPreviewBoundaryRef.current = undefined;
+          previewAttemptRef.current = undefined;
+          previewFailureGate.invalidate();
           presentationActions.setPlaying(false);
           controller.stopPreview();
         },
       });
     },
-    [activatePreparedPreview, controller, presentationActions],
+    [activatePreparedPreview, controller, presentationActions, previewFailureGate],
   );
 
   useEffect(() => {
     return () => {
+      previewAttemptRef.current = undefined;
+      previewFailureGate.invalidate();
       previewGenerationRef.current += 1;
       disposePreviewClients(previewVideoClientRef, previewAudioClientsRef, previewClockRef);
-      void previewAudioContextOwner.dispose().catch(() => {
-        presentationActions.reportDiagnostic({ code: 'preview-failed' });
+      void previewAudioContextOwner.dispose().catch((error: unknown) => {
+        globalThis.reportError(error);
       });
     };
-  }, [presentationActions, previewAudioContextOwner]);
+  }, [previewAudioContextOwner, previewFailureGate]);
 
   useEffect(() => {
     const receive = (event: MessageEvent<unknown>) => {
@@ -366,37 +393,87 @@ function App() {
         ) {
           return;
         }
-        playbackSegmentRef.current = {
-          timelineStartSeconds: prepared.timelineTimeSeconds,
-          wallStartMilliseconds: performance.now(),
-          segmentEndSeconds: prepared.segmentEndSeconds,
-          timelineEndSeconds: prepared.playbackEndSeconds,
-          preparationLeadSeconds:
-            prepared.video?.preparationProfile === 'h264-sdr-transcode' ? 5 : 0.5,
-          ...(prepared.mediaSourceTimeSeconds !== undefined &&
-          prepared.mediaPlaybackRate !== undefined
-            ? {
-                mediaClock: {
-                  sourceStartSeconds: prepared.mediaSourceTimeSeconds,
-                  playbackRate: prepared.mediaPlaybackRate,
-                },
-              }
-            : {}),
-        };
-        void previewVideoClientRef.current?.play().catch(() => {
-          presentationActions.setPlaying(false);
-          presentationActions.reportDiagnostic({ code: 'preview-failed' });
-          controller.stopPreview();
-        });
-        preparingPreviewGenerationRef.current = undefined;
-        preparedPreviewRef.current = undefined;
-        activatingPreviewGenerationRef.current = undefined;
-        waitingPreviewBoundaryRef.current = undefined;
+        const attempt = previewAttemptRef.current;
+        if (attempt === undefined) throw new Error('Cut preview attempt is unavailable.');
+        const videoClient = previewVideoClientRef.current;
+        const audioClients = previewAudioClientsRef.current;
+        const audioContext = audioClients[0]?.getAudioContext();
+        void (async () => {
+          try {
+            await videoClient?.primeForSynchronizedStart().catch((error: unknown) => {
+              reportPreviewFailure(attempt, 'video');
+              throw error;
+            });
+            if (
+              !store.getState().isPlaying ||
+              activatingPreviewGenerationRef.current !== generation ||
+              preparedPreviewRef.current?.generation !== generation
+            ) {
+              return;
+            }
+            const sharedStartTime = audioContext ? audioContext.currentTime + 0.1 : undefined;
+            if (audioContext && sharedStartTime !== undefined) {
+              await Promise.all(
+                audioClients.map((client) =>
+                  client.startAt(sharedStartTime).catch((error: unknown) => {
+                    reportPreviewFailure(attempt, 'audio');
+                    throw error;
+                  }),
+                ),
+              );
+              await waitForAudioContextTime(audioContext, sharedStartTime);
+            }
+            if (
+              !store.getState().isPlaying ||
+              activatingPreviewGenerationRef.current !== generation ||
+              preparedPreviewRef.current?.generation !== generation
+            ) {
+              return;
+            }
+            await videoClient?.play().catch((error: unknown) => {
+              reportPreviewFailure(attempt, 'video');
+              throw error;
+            });
+            if (
+              !store.getState().isPlaying ||
+              activatingPreviewGenerationRef.current !== generation ||
+              preparedPreviewRef.current?.generation !== generation
+            ) {
+              return;
+            }
+            playbackSegmentRef.current = {
+              timelineStartSeconds: prepared.timelineTimeSeconds,
+              wallStartMilliseconds: performance.now(),
+              segmentEndSeconds: prepared.segmentEndSeconds,
+              timelineEndSeconds: prepared.playbackEndSeconds,
+              preparationLeadSeconds:
+                prepared.video?.preparationProfile === 'h264-sdr-transcode' ? 5 : 0.5,
+              ...(prepared.mediaSourceTimeSeconds !== undefined &&
+              prepared.mediaPlaybackRate !== undefined
+                ? {
+                    mediaClock: {
+                      sourceStartSeconds: prepared.mediaSourceTimeSeconds,
+                      playbackRate: prepared.mediaPlaybackRate,
+                    },
+                  }
+                : {}),
+            };
+            preparingPreviewGenerationRef.current = undefined;
+            preparedPreviewRef.current = undefined;
+            activatingPreviewGenerationRef.current = undefined;
+            waitingPreviewBoundaryRef.current = undefined;
+          } catch {
+            reportPreviewFailure(attempt, 'startup');
+            controller.stopPreview();
+          }
+        })();
         return;
       }
       const accepted = controller.acceptHostMessage(message);
       if (!accepted) return;
       if (message['type'] === 'cut:view' || message['type'] === 'cut:error') {
+        previewAttemptRef.current = undefined;
+        previewFailureGate.invalidate();
         playbackSegmentRef.current = undefined;
         requestedPreviewGenerationRef.current = undefined;
         preparingPreviewGenerationRef.current = undefined;
@@ -434,6 +511,8 @@ function App() {
     connectPreviewClients,
     controller,
     presentationActions,
+    previewFailureGate,
+    reportPreviewFailure,
     showToast,
     store,
     t,
@@ -453,8 +532,9 @@ function App() {
       if (!segment) return;
       const clock = previewClockRef.current?.read();
       if (clock?.discontinuity) {
-        presentationActions.setPlaying(false);
-        presentationActions.reportDiagnostic({ code: 'preview-failed' });
+        const attempt = previewAttemptRef.current;
+        if (attempt === undefined) throw new Error('Cut preview attempt is unavailable.');
+        reportPreviewFailure(attempt, 'synchronization');
         stopPlaybackClients(
           previewVideoClientRef,
           previewAudioClientsRef,
@@ -477,7 +557,7 @@ function App() {
       finishOrContinuePreview(advance, segment);
     }, 50);
     return () => window.clearInterval(timer);
-  }, [controller, finishOrContinuePreview, playing, presentationActions, store, view]);
+  }, [controller, finishOrContinuePreview, playing, reportPreviewFailure, store, view]);
 
   const selected = useMemo(() => findClip(view, selectedClipId), [selectedClipId, view]);
   const selectedTrack = useMemo(() => {
@@ -517,6 +597,8 @@ function App() {
   };
 
   const stopPreview = () => {
+    previewAttemptRef.current = undefined;
+    previewFailureGate.invalidate();
     playbackSegmentRef.current = undefined;
     requestedPreviewGenerationRef.current = undefined;
     preparingPreviewGenerationRef.current = undefined;
@@ -542,10 +624,12 @@ function App() {
       presentationActions.reportDiagnostic({ code: 'project-not-open' });
       return;
     }
+    const attempt = previewFailureGate.begin();
+    previewAttemptRef.current = attempt;
     try {
       previewAudioContextOwner.activateFromUserGesture();
     } catch {
-      presentationActions.reportDiagnostic({ code: 'preview-failed' });
+      reportPreviewFailure(attempt, 'audio');
       return;
     }
     presentationActions.setPlaying(true);
@@ -841,6 +925,11 @@ function isPcmStreamDescriptor(value: unknown): value is CutPcmStreamDescriptor 
 
 function dbToLinearGain(gainDb: number): number {
   return 10 ** (gainDb / 20);
+}
+
+function waitForAudioContextTime(context: AudioContext, contextTime: number): Promise<void> {
+  const delayMilliseconds = Math.max(0, (contextTime - context.currentTime) * 1_000);
+  return new Promise((resolve) => window.setTimeout(resolve, delayMilliseconds));
 }
 
 function isExportTaskSnapshot(value: unknown): value is CutExportTaskSnapshot {

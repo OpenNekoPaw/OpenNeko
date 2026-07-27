@@ -7,14 +7,14 @@ import {
 import {
   EXPORT_JOB_KIND,
   ExportJobError,
-  type ExportEngineProgress,
+  type ExportExecutionProgress,
   type ExportJobCommandInput,
   type ExportJobPort,
   type ExportJobRef,
   type ExportJobResult,
   type ExportJobSnapshot,
   type SubmitExportJobInput,
-  type ExportEnginePort,
+  type ExportExecutorPort,
   type ExportJobResultCommitter,
   type ExportJobStore,
 } from './contracts';
@@ -26,7 +26,7 @@ interface ActiveExport {
 
 export interface ExportJobCoordinatorOptions {
   readonly store: ExportJobStore;
-  readonly engine: ExportEnginePort;
+  readonly executor: ExportExecutorPort;
   readonly resultCommitter: ExportJobResultCommitter;
   readonly createJobId?: () => string;
   readonly now?: () => number;
@@ -88,16 +88,16 @@ export class ExportJobCoordinator implements ExportJobPort {
           `Terminal Export Job ${current.ref.jobId} cannot be cancelled.`,
         );
       }
-      if (!current.engineJobId) {
+      if (!current.executionId) {
         throw new ExportJobError(
           'export-job-cancel-unavailable',
-          `Export Job ${current.ref.jobId} has no Engine identity to cancel.`,
+          `Export Job ${current.ref.jobId} has no executor identity to cancel.`,
         );
       }
-      await this.options.engine.cancelExport({
+      await this.options.executor.cancelExport({
         ref: current.ref,
         request: current.request,
-        engineJobId: current.engineJobId,
+        executionId: current.executionId,
       });
       this.active.get(current.ref.jobId)?.controller.abort(new Error('Export Job cancelled.'));
       return this.commit(current, {
@@ -133,18 +133,18 @@ export class ExportJobCoordinator implements ExportJobPort {
     return this.enqueue(input.ref, async () => {
       const current = await this.getAtExpectedRevision(input);
       if (isTerminalJobPhase(current.phase)) return current;
-      if (!current.engineJobId) {
+      if (!current.executionId) {
         throw new ExportJobError(
           'export-job-reconcile-unavailable',
-          `Export Job ${current.ref.jobId} has no Engine identity to reconcile.`,
+          `Export Job ${current.ref.jobId} has no executor identity to reconcile.`,
         );
       }
-      const progress = await this.options.engine.describeExport({
+      const progress = await this.options.executor.describeExport({
         ref: current.ref,
         request: current.request,
-        engineJobId: current.engineJobId,
+        executionId: current.executionId,
       });
-      return this.applyEngineProgress(current, progress);
+      return this.applyExecutionProgress(current, progress);
     });
   }
 
@@ -165,7 +165,7 @@ export class ExportJobCoordinator implements ExportJobPort {
         recovered.push(snapshot);
         continue;
       }
-      if (snapshot.engineJobId) {
+      if (snapshot.executionId) {
         this.supervise(snapshot, (current, controller) => this.poll(current, controller));
         recovered.push(snapshot);
         continue;
@@ -180,7 +180,7 @@ export class ExportJobCoordinator implements ExportJobPort {
               failure: {
                 code: 'export-outcome-unknown-after-restart',
                 message:
-                  'Export was running when the Host stopped, but no Engine identity was persisted.',
+                  'Export was running when the Host stopped, but no executor identity was persisted.',
                 retryable: false,
               },
             });
@@ -223,22 +223,22 @@ export class ExportJobCoordinator implements ExportJobPort {
           progress: emptyProgress('enqueuing'),
         });
       });
-      const accepted = await this.options.engine.enqueueExport({
+      const accepted = await this.options.executor.enqueueExport({
         ref: initial.ref,
         request: initial.request,
       });
-      if (!accepted.engineJobId.trim()) {
+      if (!accepted.executionId.trim()) {
         throw new ExportJobError(
-          'export-job-engine-identity-mismatch',
-          `Engine returned an empty identity for Export Job ${initial.ref.jobId}.`,
+          'export-job-executor-identity-mismatch',
+          `Export executor returned an empty identity for Export Job ${initial.ref.jobId}.`,
         );
       }
       const waiting = await this.enqueue(initial.ref, async () => {
         const current = await this.options.store.get(initial.ref);
         return this.commit(current, {
           phase: 'running',
-          engineJobId: accepted.engineJobId,
-          progress: { ...enqueuing.progress, stage: 'waiting-engine' },
+          executionId: accepted.executionId,
+          progress: { ...enqueuing.progress, stage: 'waiting-executor' },
         });
       });
       await this.poll(waiting, controller);
@@ -252,19 +252,19 @@ export class ExportJobCoordinator implements ExportJobPort {
     let current = initial;
     try {
       while (!controller.signal.aborted && !isTerminalJobPhase(current.phase)) {
-        if (!current.engineJobId) {
+        if (!current.executionId) {
           throw new ExportJobError(
             'export-job-reconcile-unavailable',
-            `Export Job ${current.ref.jobId} lost its Engine identity.`,
+            `Export Job ${current.ref.jobId} lost its executor identity.`,
           );
         }
-        const progress = await this.options.engine.describeExport({
+        const progress = await this.options.executor.describeExport({
           ref: current.ref,
           request: current.request,
-          engineJobId: current.engineJobId,
+          executionId: current.executionId,
         });
         current = await this.enqueue(current.ref, async () =>
-          this.applyEngineProgress(await this.options.store.get(current.ref), progress),
+          this.applyExecutionProgress(await this.options.store.get(current.ref), progress),
         );
         if (!isTerminalJobPhase(current.phase)) {
           await this.waitForPoll(this.pollIntervalMs, controller.signal);
@@ -276,14 +276,14 @@ export class ExportJobCoordinator implements ExportJobPort {
     }
   }
 
-  private async applyEngineProgress(
+  private async applyExecutionProgress(
     current: ExportJobSnapshot,
-    progress: ExportEngineProgress,
+    progress: ExportExecutionProgress,
   ): Promise<ExportJobSnapshot> {
-    if (!current.engineJobId || progress.engineJobId !== current.engineJobId) {
+    if (!current.executionId || progress.executionId !== current.executionId) {
       throw new ExportJobError(
-        'export-job-engine-identity-mismatch',
-        `Engine progress ${progress.engineJobId} does not match Export Job ${current.ref.jobId}.`,
+        'export-job-executor-identity-mismatch',
+        `Executor progress ${progress.executionId} does not match Export Job ${current.ref.jobId}.`,
       );
     }
     const projected = projectProgress(progress);
@@ -323,8 +323,8 @@ export class ExportJobCoordinator implements ExportJobPort {
         phase: 'cancelled',
         progress: projected,
         failure: {
-          code: 'export-engine-cancelled',
-          message: 'Engine reported the export as cancelled.',
+          code: 'export-executor-cancelled',
+          message: 'Export executor reported the export as cancelled.',
           retryable: true,
         },
       });
@@ -334,15 +334,15 @@ export class ExportJobCoordinator implements ExportJobPort {
         phase: 'failed',
         progress: projected,
         failure: {
-          code: 'export-engine-failed',
-          message: progress.error ?? 'Engine export failed.',
+          code: 'export-executor-failed',
+          message: progress.error ?? 'Export executor failed.',
           retryable: true,
         },
       });
     }
     return this.commit(current, {
       phase: 'running',
-      progress: { ...projected, stage: 'waiting-engine' },
+      progress: { ...projected, stage: 'waiting-executor' },
     });
   }
 
@@ -351,7 +351,7 @@ export class ExportJobCoordinator implements ExportJobPort {
       const current = await this.options.store.get(ref);
       if (isTerminalJobPhase(current.phase)) return current;
       return this.commit(current, {
-        phase: uncertain && current.engineJobId ? 'outcome-unknown' : 'failed',
+        phase: uncertain && current.executionId ? 'outcome-unknown' : 'failed',
         progress: current.progress,
         failure: failureFrom(error, uncertain),
       });
@@ -422,15 +422,15 @@ function emptyProgress(
   };
 }
 
-function projectProgress(progress: ExportEngineProgress): ExportJobSnapshot['progress'] {
+function projectProgress(progress: ExportExecutionProgress): ExportJobSnapshot['progress'] {
   if (!Number.isFinite(progress.progress) || progress.progress < 0 || progress.progress > 100) {
     throw new ExportJobError(
       'export-job-invalid-progress',
-      `Engine export progress must be between 0 and 100, got ${progress.progress}.`,
+      `Export executor progress must be between 0 and 100, got ${progress.progress}.`,
     );
   }
   return {
-    stage: progress.state === 'completed' ? 'completed' : 'waiting-engine',
+    stage: progress.state === 'completed' ? 'completed' : 'waiting-executor',
     percent: progress.progress,
     currentFrame: progress.currentFrame,
     totalFrames: progress.totalFrames,
@@ -453,14 +453,14 @@ function assertMonotonicProgress(
   if (regression) {
     throw new ExportJobError(
       'export-job-invalid-progress',
-      `Engine export ${regression[0]} regressed from ${regression[1]} to ${regression[2]}.`,
+      `Export executor ${regression[0]} regressed from ${regression[1]} to ${regression[2]}.`,
     );
   }
 }
 
 function assertValidExportResult(
   snapshot: ExportJobSnapshot,
-  progress: ExportEngineProgress,
+  progress: ExportExecutionProgress,
   result: ExportJobResult,
 ): void {
   if (result.outputPath !== snapshot.request.config.outputPath) {
@@ -476,7 +476,7 @@ function assertValidExportResult(
   ) {
     throw new ExportJobError(
       'export-job-result-invalid',
-      `Committed totalFrames ${result.totalFrames} does not match Engine totalFrames ${progress.totalFrames}.`,
+      `Committed totalFrames ${result.totalFrames} does not match executor totalFrames ${progress.totalFrames}.`,
     );
   }
   if (
@@ -486,7 +486,7 @@ function assertValidExportResult(
   ) {
     throw new ExportJobError(
       'export-job-result-invalid',
-      `Committed elapsedMs ${result.elapsedMs} does not match Engine elapsedMs ${progress.elapsedMs}.`,
+      `Committed elapsedMs ${result.elapsedMs} does not match executor elapsedMs ${progress.elapsedMs}.`,
     );
   }
 }
@@ -495,7 +495,7 @@ function freezeRequest(input: SubmitExportJobInput): ExportJobSnapshot['request'
   const request = {
     documentUri: input.documentUri,
     config: { ...input.config },
-    engineConfig: structuredClone(input.engineConfig),
+    executionConfig: structuredClone(input.executionConfig),
   };
   deepFreeze(request, new WeakSet<object>());
   return request;

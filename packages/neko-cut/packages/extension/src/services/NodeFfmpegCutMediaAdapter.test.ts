@@ -109,6 +109,7 @@ describe('NodeFfmpegCutMediaAdapter', () => {
     ]);
 
     expect(frame.dataUrl).toMatch(/^data:image\/jpeg;base64,/);
+    expect(frame.dataUrl.length).toBeGreaterThan(2_000);
     expect(waveform.peaks.length).toBeGreaterThanOrEqual(19);
     expect(waveform.peaks.every((peak) => peak >= 0 && peak <= 1)).toBe(true);
   });
@@ -218,7 +219,7 @@ describe('NodeFfmpegCutMediaAdapter', () => {
     expect(waveform.durationSeconds).toBe(10);
   });
 
-  it('prepares H.264 fMP4 and serves it through an opaque ranged URL', async () => {
+  it('prepares a non-zero H.264 seek as a zero-origin VideoToolbox fragment', async () => {
     const adapter = createAdapter();
 
     const session = await adapter.startPreview(
@@ -234,7 +235,7 @@ describe('NodeFfmpegCutMediaAdapter', () => {
     if (!segment) throw new Error('Expected one preview segment.');
     const response = await fetch(segment.url, { headers: { Range: 'bytes=0-31' } });
 
-    expect(session.video.preparationProfile).toBe('h264-fragmented-mp4-copy');
+    expect(session.video.preparationProfile).toBe('h264-sdr-transcode');
     expect(session.video.mimeType).toContain('video/mp4');
     expect(response.status).toBe(206);
     expect((await response.arrayBuffer()).byteLength).toBe(32);
@@ -439,14 +440,44 @@ describe('NodeFfmpegCutMediaAdapter', () => {
     await adapter.stopPreview(session.sessionId);
   });
 
-  it('primes framed float32 PCM before logical playback activation', async () => {
-    const adapter = createAdapter();
-    const session = await adapter.startPcm(
-      { workspaceRelativePath: 'source.mp4' },
+  it('mixes and EBU R128-normalizes one bounded PCM segment before activation', async () => {
+    const delegate = new NodeFfmpegProcess();
+    let streamArgs: readonly string[] | undefined;
+    const process: FfmpegProcessPort = {
+      run: (executable, args, signal) => delegate.run(executable, args, signal),
+      streamFfmpeg: (args, signal) => {
+        streamArgs = args;
+        return delegate.streamFfmpeg(args, signal);
+      },
+    };
+    const adapter = new NodeFfmpegCutMediaAdapter(root, { cacheRoot, process });
+    adapters.push(adapter);
+    const session = await adapter.startPcmMix(
+      [
+        {
+          source: { workspaceRelativePath: 'source.mp4' },
+          sourceStartSeconds: 0.5,
+          playbackRate: 1,
+          gainDb: 3,
+          clipPositionSeconds: 0.5,
+          clipDurationSeconds: 2,
+          fadeInSeconds: 1,
+          fadeOutSeconds: 0.5,
+        },
+        {
+          source: { workspaceRelativePath: 'source.mp4' },
+          sourceStartSeconds: 0.5,
+          playbackRate: 1,
+          gainDb: -6,
+          clipPositionSeconds: 0.5,
+          clipDurationSeconds: 2,
+          fadeInSeconds: 0,
+          fadeOutSeconds: 0,
+        },
+      ],
       {
-        startTimeSeconds: 0.5,
+        timelineStartSeconds: 7.5,
         durationSeconds: 0.25,
-        playbackRate: 1,
         startPaused: true,
       },
     );
@@ -460,19 +491,30 @@ describe('NodeFfmpegCutMediaAdapter', () => {
     await adapter.resumePcm(session.sessionId);
     const bytes = Buffer.from(await bytesPromise);
     expect(primedBeforeResume).toBe(true);
-    expect(bytes.readBigInt64LE(0)).toBe(500_000n);
+    expect(bytes.readBigInt64LE(0)).toBe(7_500_000n);
     expect(bytes.readUInt32LE(16)).toBe(48_000);
     expect(bytes.readUInt16LE(20)).toBe(2);
     expect(bytes.byteLength).toBeGreaterThan(22);
+    const filterGraph = streamArgs?.[streamArgs.indexOf('-filter_complex') + 1];
+    expect(filterGraph).toContain('amix=');
+    expect(filterGraph).toContain('loudnorm=I=-14:TP=-1:LRA=11:linear=false');
+    expect(filterGraph).toContain("volume='");
     await adapter.stopPcm(session.sessionId);
   });
 
   it('exports the lightweight single-video timeline and validates the staged output', async () => {
     const delegate = new NodeFfmpegProcess();
     let exportArgs: readonly string[] | undefined;
+    const loudnessPasses: string[] = [];
     const process: FfmpegProcessPort = {
       run: async (executable, args, signal) => {
-        if (executable === 'ffmpeg' && args.includes('-filter_complex')) exportArgs = args;
+        if (executable === 'ffmpeg') {
+          const filterOption = args.includes('-filter_complex') ? '-filter_complex' : '-af';
+          const filterIndex = args.indexOf(filterOption);
+          const filter = filterIndex >= 0 ? args[filterIndex + 1] : undefined;
+          if (filter?.includes('loudnorm=')) loudnessPasses.push(filter);
+          if (args.includes('-filter_complex') && args.at(-1) !== '-') exportArgs = args;
+        }
         return delegate.run(executable, args, signal);
       },
       streamFfmpeg: (args, signal) => delegate.streamFfmpeg(args, signal),
@@ -504,6 +546,12 @@ describe('NodeFfmpegCutMediaAdapter', () => {
     expect(probe.durationSeconds).toBeCloseTo(1, 1);
     const filterGraph = exportArgs?.[exportArgs.indexOf('-filter_complex') + 1];
     expect(filterGraph).toContain('alimiter=');
+    expect(filterGraph).toContain('measured_I=');
+    expect(filterGraph).toContain('measured_TP=');
+    expect(filterGraph?.indexOf('loudnorm=')).toBeLessThan(filterGraph?.indexOf('alimiter=') ?? -1);
+    expect(loudnessPasses).toHaveLength(3);
+    expect(loudnessPasses[0]).toContain('print_format=json');
+    expect(loudnessPasses[1]).toContain('linear=true');
   }, 30_000);
 
   it('rejects workspace traversal before starting FFmpeg', async () => {

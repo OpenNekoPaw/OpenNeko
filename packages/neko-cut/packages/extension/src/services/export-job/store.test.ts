@@ -35,10 +35,10 @@ describe('persistent ExportJobStore', () => {
       phase: 'running',
       revision: 2,
       updatedAt: 2,
-      engineJobId: 'engine-job-1',
+      executionId: 'execution-1',
       progress: {
         ...initial.progress,
-        stage: 'waiting-engine',
+        stage: 'waiting-executor',
         percent: 30,
         currentFrame: 30,
         totalFrames: 100,
@@ -90,7 +90,7 @@ describe('persistent ExportJobStore', () => {
     await metadata.dispose();
   });
 
-  it('rejects secret-bearing Engine config before persistence', async () => {
+  it('rejects secret-bearing executor config before persistence', async () => {
     const metadata = await createMetadata();
     const store = createPersistentExportJobStore({
       metadataStore: metadata,
@@ -103,7 +103,7 @@ describe('persistent ExportJobStore', () => {
         ...initial,
         request: {
           ...initial.request,
-          engineConfig: { apiKey: 'must-not-enter-sqlite' },
+          executionConfig: { apiKey: 'must-not-enter-sqlite' },
         },
       }),
     ).rejects.toMatchObject({
@@ -182,7 +182,7 @@ function snapshot(): ExportJobSnapshot {
         includeAudio: true,
         audioSampleRate: 48_000,
       },
-      engineConfig: {
+      executionConfig: {
         timeline: { version: 1, tracks: [] },
         output: { path: '/workspace/output/final.mp4' },
       },

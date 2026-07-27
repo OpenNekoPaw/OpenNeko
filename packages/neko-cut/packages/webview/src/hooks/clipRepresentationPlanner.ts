@@ -78,7 +78,7 @@ export function buildClipRepresentationRequests(
   ];
 }
 
-export function selectThumbnailDensity(pixelsPerSecond: number): CutThumbnailDensity {
+function selectThumbnailDensity(pixelsPerSecond: number): CutThumbnailDensity {
   const normalized = Number.isFinite(pixelsPerSecond)
     ? Math.max(CUT_THUMBNAIL_DENSITIES[0], pixelsPerSecond)
     : CUT_THUMBNAIL_DENSITIES[0];

@@ -21,6 +21,13 @@ export const diagnostics = {
   'diagnostic.media-path-invalid': 'The media path is outside the authorized workspace.',
   'diagnostic.media-unavailable': 'The selected media is unavailable.',
   'diagnostic.preview-failed': 'Preview playback failed.',
+  'diagnostic.preview-video-failed':
+    'Video preview failed. Check hardware decoding support and the source media.',
+  'diagnostic.preview-audio-failed':
+    'Preview audio failed. Check the source audio stream and try playback again.',
+  'diagnostic.preview-sync-failed':
+    'Preview lost audio/video synchronization. Stop and start playback again.',
+  'diagnostic.preview-start-failed': 'Preview could not start. Stop playback and try again.',
   'diagnostic.export-failed': 'The Cut could not be exported.',
   'diagnostic.separate-audio-failed': 'Audio could not be separated from this Clip.',
   'diagnostic.fullscreen-failed': 'The Preview could not enter fullscreen.',
