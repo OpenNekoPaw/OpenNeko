@@ -775,6 +775,69 @@ describe('PlaybackWorkspace', () => {
     );
   });
 
+  it('preserves active video playback when the Host plan settles after Play', async () => {
+    vscodeApi = { postMessage: vi.fn() };
+    (window as unknown as { vscodeApi?: unknown }).vscodeApi = vscodeApi;
+    resetVSCodeApi();
+
+    await act(async () => {
+      useCanvasStore.setState({
+        canvasData: mediaRouteCanvas(),
+        selection: { nodeIds: ['media-a'], connectionIds: [] },
+      });
+      usePlaybackStore.getState().revealPlaybackWorkspace();
+      root.render(<PlaybackWorkspace canvasPane={<div data-testid="canvas-pane">Canvas</div>} />);
+      await Promise.resolve();
+    });
+
+    const request = vscodeApi.postMessage.mock.calls.find(
+      ([message]) =>
+        typeof message === 'object' &&
+        message !== null &&
+        (message as { type?: unknown }).type === 'playback:getPreviewPlan',
+    )?.[0] as { requestId?: string } | undefined;
+    expect(request?.requestId).toEqual(expect.any(String));
+
+    act(() => {
+      host
+        .querySelector<HTMLButtonElement>(
+          '[data-testid="canvas-playback-controller"] button[title="Play"]',
+        )
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    const previewBefore = host.querySelector<HTMLElement>('[data-testid="preview-surface"]');
+    if (!previewBefore) throw new Error('playing preview surface was not rendered');
+    const playbackRequestId = previewBefore.dataset.playbackRequestId;
+    expect(previewBefore.dataset.playbackState).toBe('playing');
+
+    await act(async () => {
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: {
+            type: 'playback:previewPlanResult',
+            requestId: request?.requestId,
+            plan: createCanvasPlaybackPlan({
+              canvas: mediaRouteCanvas(),
+              selectedNodeId: 'media-a',
+              adapterId: 'auto',
+            }),
+          },
+        }),
+      );
+      await Promise.resolve();
+    });
+
+    const previewAfter = host.querySelector<HTMLElement>('[data-testid="preview-surface"]');
+    expect(usePlaybackStore.getState().playbackSession).toMatchObject({
+      stale: false,
+      playbackState: 'playing',
+    });
+    expect(previewAfter).toBe(previewBefore);
+    expect(previewAfter?.dataset.playbackRequestId).toBe(playbackRequestId);
+    expect(previewAfter?.dataset.playbackState).toBe('playing');
+  });
+
   it('drops a stale host Storyline plan immediately when Canvas topology changes', async () => {
     vscodeApi = { postMessage: vi.fn() };
     (window as unknown as { vscodeApi?: unknown }).vscodeApi = vscodeApi;
