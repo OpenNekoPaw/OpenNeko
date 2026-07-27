@@ -75,5 +75,50 @@ driver. Device execution remains the explicit platform smoke-test risk.
 
 PR #12 at `8be49b259bbbc9ba4e2da9e7ed19d6904b95621b` failed in TypeScript Tests
 because Ubuntu could not spawn the macOS-only VideoToolbox path. The platform
-strategy and Linux build closure are not yet pushed. Task 4.4 remains open until
-the focused commits are pushed and the replacement GitHub Actions run passes.
+strategy and Linux build closure were pushed through
+`a17e59c4353e56567f2128d50e4233579035bf2e`.
+
+GitHub Actions run `30278225006` passed all 11 required checks:
+
+- TypeScript Tests passed in 6 minutes 3 seconds.
+- `darwin-arm64` VSIX packaging passed in 6 minutes 27 seconds.
+- `linux-x64` VSIX packaging built and qualified the VAAPI runtime, then passed
+  in 7 minutes 37 seconds.
+- Build & Lint, Code Quality, OpenSpec Validation, Dependency Review, both
+  Local Metadata Runtime jobs, promotion validation, and the final Merge Gate
+  passed.
+
+Manual Gate was skipped as expected for a pull request event. No required check
+failed or was skipped.
+
+### Release test dependency regression
+
+Release run
+[`30279883704`](https://github.com/OpenNekoPaw/OpenNeko/actions/runs/30279883704)
+failed in `Release Tests` because that job invoked `pnpm test` without first
+installing FFmpeg. The Cut adapter integration suite generates real media
+fixtures in `beforeAll`, so the missing workflow dependency surfaced as
+`spawn ffmpeg ENOENT`. Pull-request CI already installed FFmpeg from
+`scripts/act/media-runtime-packages.txt`; the Release workflow had drifted from
+that shared dependency contract.
+
+The failure was reproduced locally with an isolated `PATH` that omitted FFmpeg.
+The suite failed before its 19 integration tests with the same
+`spawn ffmpeg ENOENT` error. The fix keeps the real integration coverage and
+adds the shared dependency installation to `release-tests`; it does not skip,
+mock, or silently downgrade the media path.
+
+Regression evidence:
+
+- Before the workflow fix,
+  `node --test scripts/test-orchestration/native-build-dependencies.test.mjs`
+  failed because `release-tests` had no media dependency installation step.
+- After the fix,
+  `node --test scripts/test-orchestration/native-build-dependencies.test.mjs
+scripts/test-orchestration/release-source.test.mjs` passed all 10 tests.
+- `CI=1 pnpm ci:local` passed the complete local gate, including all 28
+  repository test tasks and the workflow dependency contract.
+
+A new remote Release verification requires the workflow fix to be merged and a
+new validated tag to be created. Re-running `v0.0.5` would execute its original
+tagged workflow source and cannot validate this change.

@@ -41,6 +41,12 @@ planning inject a specific strategy. They do not depend on the machine running
 Vitest. A real hardware smoke runs only where the matching device exists and is
 separate from portable unit coverage.
 
+Media integration tests still use real FFmpeg to generate deterministic source
+fixtures. Every remote job that invokes the repository test graph must install
+that executable through the shared `scripts/act/media-runtime-packages.txt`
+list. CI, Release, and the prepared `act` image do not maintain separate package
+facts.
+
 ## Linux runtime closure
 
 The Linux FFmpeg bundle enables VAAPI and libdrm at build time. Its descriptor
@@ -75,3 +81,7 @@ devices, drivers, source decoder support, filter support, or encoder support
 fail the media operation with a backend-specific capability diagnostic. No
 failure is retried through `libx264`, software scale, software tone mapping, or
 another hidden backend.
+
+Missing test-only FFmpeg is a workflow dependency failure and must fail before
+the test graph is accepted. Tests must not silently skip the affected media
+integration suite.
