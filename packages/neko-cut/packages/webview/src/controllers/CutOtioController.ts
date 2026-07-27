@@ -1,4 +1,4 @@
-import { isCutUserDiagnostic } from '@neko-cut/domain';
+import { CUT_THUMBNAIL_DENSITIES, isCutUserDiagnostic } from '@neko-cut/domain';
 import type {
   CutClipRepresentationRequest,
   CutClipRepresentationResult,
@@ -504,12 +504,9 @@ export class CutOtioController {
     this.store.setState((state) => {
       const representations = new Map(state.representations);
       for (const result of results) {
-        representations.set(
-          representationKey(currentView.revision, result.clipId, result.kind),
-          result,
-        );
+        representations.set(representationKey(currentView.revision, result), result);
       }
-      return { representations };
+      return { representations: pruneRepresentationCache(representations) };
     });
     return true;
   }
@@ -564,7 +561,7 @@ function retainRepresentations(
     const previousClip = findClipProjection(previous, result.clipId);
     const nextClip = findClipProjection(next, result.clipId);
     if (!previousClip || !nextClip || !sameRepresentationInput(previousClip, nextClip)) continue;
-    retained.set(representationKey(next.revision, result.clipId, result.kind), result);
+    retained.set(representationKey(next.revision, result), result);
   }
   return retained;
 }
@@ -605,6 +602,7 @@ function sameRepresentationInput(
   return (
     previous.trackKind === next.trackKind &&
     previous.clip.targetUrl === next.clip.targetUrl &&
+    previous.clip.startSeconds === next.clip.startSeconds &&
     previous.clip.sourceStartSeconds === next.clip.sourceStartSeconds &&
     previous.clip.durationSeconds === next.clip.durationSeconds &&
     previous.clip.playbackRate === next.clip.playbackRate
@@ -801,41 +799,82 @@ function isExportSettings(value: unknown): boolean {
 function isRepresentationResult(value: unknown): value is CutClipRepresentationResult {
   if (!isRecord(value) || typeof value['clipId'] !== 'string') return false;
   if (value['kind'] !== 'thumbnail' && value['kind'] !== 'waveform') return false;
-  if (value['status'] === 'unavailable') return typeof value['message'] === 'string';
-  if (value['status'] === 'partial') {
-    if (value['kind'] === 'waveform') {
+  if (value['kind'] === 'thumbnail') {
+    if (
+      !CUT_THUMBNAIL_DENSITIES.some((density) => density === value['density']) ||
+      !Number.isSafeInteger(value['tileIndex']) ||
+      typeof value['tileIndex'] !== 'number' ||
+      value['tileIndex'] < 0
+    ) {
+      return false;
+    }
+    if (value['status'] === 'unavailable') {
       return (
-        isRecord(value['waveform']) &&
-        Array.isArray(value['waveform']['peaks']) &&
-        isRecord(value['waveform']['partial']) &&
-        typeof value['waveform']['partial']['availableDurationSeconds'] === 'number' &&
-        (value['waveform']['partial']['failureScope'] === 'source' ||
-          value['waveform']['partial']['failureScope'] === 'stream' ||
-          value['waveform']['partial']['failureScope'] === 'interval') &&
-        typeof value['waveform']['partial']['message'] === 'string'
+        typeof value['message'] === 'string' &&
+        isOptionalRepresentationFailureScope(value['failureScope'])
       );
     }
     return (
-      Array.isArray(value['thumbnails']) &&
-      value['thumbnails'].length > 0 &&
-      Array.isArray(value['failures']) &&
-      value['failures'].length > 0 &&
-      value['failures'].every(
-        (failure) =>
-          isRecord(failure) &&
-          typeof failure['sourceTimeSeconds'] === 'number' &&
-          (failure['failureScope'] === 'source' ||
-            failure['failureScope'] === 'stream' ||
-            failure['failureScope'] === 'interval' ||
-            failure['failureScope'] === 'operation') &&
-          typeof failure['message'] === 'string',
-      )
+      value['status'] === 'ready' &&
+      typeof value['sourceTimeSeconds'] === 'number' &&
+      typeof value['dataUrl'] === 'string'
+    );
+  }
+  if (
+    !Number.isInteger(value['peaksPerSecond']) ||
+    typeof value['peaksPerSecond'] !== 'number' ||
+    value['peaksPerSecond'] < 1
+  ) {
+    return false;
+  }
+  if (value['status'] === 'unavailable') {
+    return (
+      typeof value['message'] === 'string' &&
+      isOptionalRepresentationFailureScope(value['failureScope'])
+    );
+  }
+  if (value['status'] === 'partial') {
+    return (
+      isRecord(value['waveform']) &&
+      Array.isArray(value['waveform']['peaks']) &&
+      isRecord(value['waveform']['partial']) &&
+      typeof value['waveform']['partial']['availableDurationSeconds'] === 'number' &&
+      (value['waveform']['partial']['failureScope'] === 'source' ||
+        value['waveform']['partial']['failureScope'] === 'stream' ||
+        value['waveform']['partial']['failureScope'] === 'interval') &&
+      typeof value['waveform']['partial']['message'] === 'string'
     );
   }
   if (value['status'] !== 'ready') return false;
-  return value['kind'] === 'thumbnail'
-    ? Array.isArray(value['thumbnails'])
-    : isRecord(value['waveform']) && Array.isArray(value['waveform']['peaks']);
+  return isRecord(value['waveform']) && Array.isArray(value['waveform']['peaks']);
+}
+
+function isOptionalRepresentationFailureScope(value: unknown): boolean {
+  return (
+    value === undefined ||
+    value === 'source' ||
+    value === 'stream' ||
+    value === 'interval' ||
+    value === 'operation'
+  );
+}
+
+const MAX_CACHED_THUMBNAIL_TILES = 256;
+
+function pruneRepresentationCache(
+  representations: Map<string, CutClipRepresentationResult>,
+): Map<string, CutClipRepresentationResult> {
+  let thumbnailCount = [...representations.values()].filter(
+    (result) => result.kind === 'thumbnail',
+  ).length;
+  if (thumbnailCount <= MAX_CACHED_THUMBNAIL_TILES) return representations;
+  for (const [key, result] of representations) {
+    if (result.kind !== 'thumbnail') continue;
+    representations.delete(key);
+    thumbnailCount -= 1;
+    if (thumbnailCount <= MAX_CACHED_THUMBNAIL_TILES) break;
+  }
+  return representations;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

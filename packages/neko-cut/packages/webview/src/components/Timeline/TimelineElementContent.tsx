@@ -1,5 +1,10 @@
 import { memo } from 'react';
-import type { TimelineClipView, TimelineTrackView } from '@neko-cut/domain';
+import {
+  CUT_THUMBNAIL_TILE_WIDTH,
+  type CutThumbnailDensity,
+  type TimelineClipView,
+  type TimelineTrackView,
+} from '@neko-cut/domain';
 import { Badge } from '@neko/ui/primitives';
 import type { ClipRepresentationState } from '../../hooks/useClipRepresentations';
 import { useTranslation } from '../../i18n/I18nContext';
@@ -57,15 +62,26 @@ function renderDerivedVisual(props: TimelineElementContentProps): React.ReactNod
   }
   if (representation.kind === 'thumbnail') {
     return (
-      <div className="cut-basic-thumbnails" aria-hidden="true">
-        {representation.thumbnails.map((thumbnail) => (
-          <img
-            alt=""
-            draggable={false}
-            key={`${thumbnail.sourceTimeSeconds}-${thumbnail.dataUrl.length}`}
-            src={thumbnail.dataUrl}
-          />
-        ))}
+      <div
+        className="cut-basic-thumbnails"
+        data-thumbnail-density={representation.density}
+        aria-hidden="true"
+      >
+        {representation.tiles.map((tile) => {
+          if (tile.status !== 'ready') return null;
+          const layout = thumbnailTileLayout(props.clip, tile.density, tile.tileIndex, props.width);
+          if (!layout) return null;
+          return (
+            <img
+              alt=""
+              data-thumbnail-tile-index={tile.tileIndex}
+              draggable={false}
+              key={`${tile.density}:${tile.tileIndex}`}
+              src={tile.dataUrl}
+              style={layout}
+            />
+          );
+        })}
       </div>
     );
   }
@@ -94,4 +110,24 @@ function renderDerivedVisual(props: TimelineElementContentProps): React.ReactNod
       <path d={path} />
     </svg>
   );
+}
+
+export function thumbnailTileLayout(
+  clip: TimelineClipView,
+  density: CutThumbnailDensity,
+  tileIndex: number,
+  clipWidth: number,
+): { readonly left: number; readonly width: number } | undefined {
+  const tileDurationSeconds = CUT_THUMBNAIL_TILE_WIDTH / density;
+  const tileStartSeconds = tileIndex * tileDurationSeconds;
+  const intersectionStart = Math.max(tileStartSeconds, clip.startSeconds);
+  const intersectionEnd = Math.min(
+    tileStartSeconds + tileDurationSeconds,
+    clip.startSeconds + clip.durationSeconds,
+  );
+  if (intersectionEnd <= intersectionStart || clip.durationSeconds <= 0) return undefined;
+  return {
+    left: ((intersectionStart - clip.startSeconds) / clip.durationSeconds) * clipWidth,
+    width: ((intersectionEnd - intersectionStart) / clip.durationSeconds) * clipWidth,
+  };
 }

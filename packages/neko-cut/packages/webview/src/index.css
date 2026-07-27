@@ -1269,13 +1269,13 @@ body[data-vscode-theme-kind="vscode-light"] .nk-select {
 .cut-basic-thumbnails {
   position: absolute;
   inset: 0;
-  display: flex;
+  overflow: hidden;
   opacity: 1;
 }
 
 .cut-basic-thumbnails img {
-  min-width: 0;
-  flex: 1 1 0;
+  position: absolute;
+  height: 100%;
   object-fit: cover;
 }
 

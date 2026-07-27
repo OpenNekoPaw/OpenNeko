@@ -35,18 +35,21 @@ describe('Cut Clip representations', () => {
   it('bounds the Webview request contract', () => {
     expect(
       readClipRepresentationRequests([
-        { clipId: 'video-clip', kind: 'thumbnail', sampleCount: 2 },
+        { clipId: 'video-clip', kind: 'thumbnail', density: 64, tileIndex: 0 },
         { clipId: 'audio-clip', kind: 'waveform', peaksPerSecond: 20 },
       ]),
     ).toHaveLength(2);
     expect(() =>
+      readClipRepresentationRequests([{ clipId: 'video-clip', kind: 'thumbnail', sampleCount: 2 }]),
+    ).toThrow('bounded options');
+    expect(() =>
       readClipRepresentationRequests([
-        { clipId: 'video-clip', kind: 'thumbnail', sampleCount: 100 },
+        { clipId: 'video-clip', kind: 'thumbnail', density: 63, tileIndex: 0 },
       ]),
     ).toThrow('bounded options');
   });
 
-  it('derives source-range thumbnails and waveform through media ports', async () => {
+  it('maps timeline tiles to the Clip source range through media ports', async () => {
     const captureFrame = vi.fn(async (_source, timeSeconds: number) => ({
       dataUrl: `data:image/jpeg;base64,${timeSeconds}`,
     }));
@@ -58,7 +61,8 @@ describe('Cut Clip representations', () => {
     const results = await generateClipRepresentations({
       view,
       requests: [
-        { clipId: 'video-clip', kind: 'thumbnail', sampleCount: 2 },
+        { clipId: 'video-clip', kind: 'thumbnail', density: 64, tileIndex: 0 },
+        { clipId: 'video-clip', kind: 'thumbnail', density: 64, tileIndex: 1 },
         { clipId: 'audio-clip', kind: 'waveform', peaksPerSecond: 20 },
       ],
       ports: { captureFrame, generateWaveform },
@@ -66,8 +70,8 @@ describe('Cut Clip representations', () => {
     });
 
     expect(captureFrame.mock.calls.map((call) => call.slice(1, 3))).toEqual([
-      [2, { width: 160, height: 90 }],
-      [4, { width: 160, height: 90 }],
+      [2.25, { width: 160, height: 90 }],
+      [4.25, { width: 160, height: 90 }],
     ]);
     expect(generateWaveform).toHaveBeenCalledWith(
       { workspaceRelativePath: 'audio.wav' },
@@ -75,20 +79,70 @@ describe('Cut Clip representations', () => {
       undefined,
     );
     expect(results).toMatchObject([
-      { clipId: 'video-clip', kind: 'thumbnail', status: 'ready' },
+      {
+        clipId: 'video-clip',
+        kind: 'thumbnail',
+        status: 'ready',
+        density: 64,
+        tileIndex: 0,
+        sourceTimeSeconds: 2.25,
+      },
+      {
+        clipId: 'video-clip',
+        kind: 'thumbnail',
+        status: 'ready',
+        density: 64,
+        tileIndex: 1,
+        sourceTimeSeconds: 4.25,
+      },
       {
         clipId: 'audio-clip',
         kind: 'waveform',
         status: 'ready',
+        peaksPerSecond: 20,
         waveform: { peaks: [0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9] },
       },
     ]);
   });
 
+  it('maps tile time through the Clip playback rate', async () => {
+    const videoTrack = view.tracks[0];
+    if (!videoTrack) throw new Error('Video Track fixture is missing.');
+    const videoClip = videoTrack.items[0];
+    if (!videoClip || videoClip.kind !== 'clip') {
+      throw new Error('Video Clip fixture is missing.');
+    }
+    const captureFrame = vi.fn(async () => ({
+      dataUrl: 'data:image/jpeg;base64,tile',
+    }));
+
+    await generateClipRepresentations({
+      view: {
+        ...view,
+        tracks: [
+          {
+            ...videoTrack,
+            items: [{ ...videoClip, playbackRate: 2 }],
+          },
+        ],
+      },
+      requests: [{ clipId: 'video-clip', kind: 'thumbnail', density: 64, tileIndex: 0 }],
+      ports: { captureFrame, generateWaveform: vi.fn() },
+      resolveSource: async () => ({ workspaceRelativePath: 'shot.mp4' }),
+    });
+
+    expect(captureFrame).toHaveBeenCalledWith(
+      { workspaceRelativePath: 'shot.mp4' },
+      3.5,
+      { width: 160, height: 90 },
+      undefined,
+    );
+  });
+
   it('returns per-Clip unavailable diagnostics without fabricating data', async () => {
     const results = await generateClipRepresentations({
       view,
-      requests: [{ clipId: 'audio-clip', kind: 'thumbnail', sampleCount: 1 }],
+      requests: [{ clipId: 'audio-clip', kind: 'thumbnail', density: 64, tileIndex: 0 }],
       ports: {
         captureFrame: vi.fn(),
         generateWaveform: vi.fn(),
@@ -100,14 +154,16 @@ describe('Cut Clip representations', () => {
         clipId: 'audio-clip',
         kind: 'thumbnail',
         status: 'unavailable',
+        density: 64,
+        tileIndex: 0,
         message: 'thumbnail is incompatible with a Audio Clip.',
       },
     ]);
   });
 
-  it('preserves valid thumbnails when another bounded frame fails', async () => {
+  it('isolates a damaged tile without invalidating a neighboring tile', async () => {
     const captureFrame = vi.fn(async (_source, timeSeconds: number) => {
-      if (timeSeconds === 2) {
+      if (timeSeconds === 2.25) {
         throw new CutMediaCorruptionError(
           'interval',
           'capture frame',
@@ -119,7 +175,10 @@ describe('Cut Clip representations', () => {
 
     const results = await generateClipRepresentations({
       view,
-      requests: [{ clipId: 'video-clip', kind: 'thumbnail', sampleCount: 2 }],
+      requests: [
+        { clipId: 'video-clip', kind: 'thumbnail', density: 64, tileIndex: 0 },
+        { clipId: 'video-clip', kind: 'thumbnail', density: 64, tileIndex: 1 },
+      ],
       ports: { captureFrame, generateWaveform: vi.fn() },
       resolveSource: async () => ({ workspaceRelativePath: 'shot.mp4' }),
     });
@@ -128,23 +187,49 @@ describe('Cut Clip representations', () => {
       {
         clipId: 'video-clip',
         kind: 'thumbnail',
-        status: 'partial',
-        thumbnails: [
-          {
-            sourceTimeSeconds: 4,
-            dataUrl: 'data:image/jpeg;base64,4',
-          },
-        ],
-        failures: [
-          {
-            sourceTimeSeconds: 2,
-            failureScope: 'interval',
-            message:
-              'Media corruption in interval while attempting capture frame. Invalid NAL unit at the requested frame.',
-          },
-        ],
+        status: 'unavailable',
+        density: 64,
+        tileIndex: 0,
+        failureScope: 'interval',
+        message:
+          'Media corruption in interval while attempting capture frame. Invalid NAL unit at the requested frame.',
+      },
+      {
+        clipId: 'video-clip',
+        kind: 'thumbnail',
+        status: 'ready',
+        density: 64,
+        tileIndex: 1,
+        sourceTimeSeconds: 4.25,
+        dataUrl: 'data:image/jpeg;base64,4.25',
       },
     ]);
+  });
+
+  it('bounds concurrent frame capture for a virtual tile batch', async () => {
+    let active = 0;
+    let maximumActive = 0;
+    const captureFrame = vi.fn(async () => {
+      active += 1;
+      maximumActive = Math.max(maximumActive, active);
+      await new Promise((resolve) => setTimeout(resolve, 2));
+      active -= 1;
+      return { dataUrl: 'data:image/jpeg;base64,tile' };
+    });
+
+    await generateClipRepresentations({
+      view,
+      requests: Array.from({ length: 12 }, () => ({
+        clipId: 'video-clip',
+        kind: 'thumbnail' as const,
+        density: 64 as const,
+        tileIndex: 0,
+      })),
+      ports: { captureFrame, generateWaveform: vi.fn() },
+      resolveSource: async () => ({ workspaceRelativePath: 'shot.mp4' }),
+    });
+
+    expect(maximumActive).toBe(4);
   });
 
   it('projects only the available prefix of a partially decoded waveform', async () => {
@@ -172,6 +257,7 @@ describe('Cut Clip representations', () => {
         clipId: 'audio-clip',
         kind: 'waveform',
         status: 'partial',
+        peaksPerSecond: 2,
         waveform: {
           peaks: [0.2, 0.3, 0.4],
           durationSeconds: 4,

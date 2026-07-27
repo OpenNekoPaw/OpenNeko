@@ -385,6 +385,7 @@ describe('CutOtioController', () => {
           clipId: 'clip-1',
           kind: 'waveform',
           status: 'ready',
+          peaksPerSecond: 1,
           waveform: { peaks: [0.2], durationSeconds: 1, peaksPerSecond: 1 },
         },
       ],
@@ -408,7 +409,10 @@ describe('CutOtioController', () => {
           clipId: 'clip-1',
           kind: 'thumbnail',
           status: 'ready',
-          thumbnails: [{ sourceTimeSeconds: 0, dataUrl: 'data:image/png;base64,thumb' }],
+          density: 64,
+          tileIndex: 0,
+          sourceTimeSeconds: 0,
+          dataUrl: 'data:image/png;base64,thumb',
         },
       ],
     });
@@ -426,11 +430,93 @@ describe('CutOtioController', () => {
       },
     });
 
-    expect(store.getState().representations.get('5:clip-1:thumbnail')).toMatchObject({
+    expect(store.getState().representations.get('5:clip-1:thumbnail:64:0')).toMatchObject({
       clipId: 'clip-1',
       status: 'ready',
     });
     expect(store.getState().view?.tracks[0]).toBe(previousTrack);
+  });
+
+  it('stores independent thumbnail tiles and rejects the removed Clip-wide result schema', () => {
+    const store = createCutPresentationStore();
+    const controller = new CutOtioController(store, { postMessage: vi.fn() });
+    const current = createView();
+    controller.acceptHostMessage({ type: 'cut:view', view: current });
+
+    controller.acceptHostMessage({
+      type: 'cut:representations',
+      documentUri: current.documentUri,
+      sessionId: current.sessionId,
+      revision: current.revision,
+      results: [
+        {
+          clipId: 'clip-1',
+          kind: 'thumbnail',
+          status: 'ready',
+          density: 64,
+          tileIndex: 0,
+          sourceTimeSeconds: 0.5,
+          dataUrl: 'data:image/jpeg;base64,tile-0',
+        },
+        {
+          clipId: 'clip-1',
+          kind: 'thumbnail',
+          status: 'ready',
+          density: 64,
+          tileIndex: 1,
+          sourceTimeSeconds: 2.5,
+          dataUrl: 'data:image/jpeg;base64,tile-1',
+        },
+      ],
+    });
+
+    expect([...store.getState().representations.keys()]).toEqual([
+      '4:clip-1:thumbnail:64:0',
+      '4:clip-1:thumbnail:64:1',
+    ]);
+    expect(() =>
+      controller.acceptHostMessage({
+        type: 'cut:representations',
+        documentUri: current.documentUri,
+        sessionId: current.sessionId,
+        revision: current.revision,
+        results: [
+          {
+            clipId: 'clip-1',
+            kind: 'thumbnail',
+            status: 'ready',
+            thumbnails: [{ sourceTimeSeconds: 0, dataUrl: 'data:image/jpeg;base64,legacy' }],
+          },
+        ],
+      }),
+    ).toThrow('invalid Clip representations');
+  });
+
+  it('bounds the disposable thumbnail tile cache', () => {
+    const store = createCutPresentationStore();
+    const controller = new CutOtioController(store, { postMessage: vi.fn() });
+    const current = createView();
+    controller.acceptHostMessage({ type: 'cut:view', view: current });
+
+    controller.acceptHostMessage({
+      type: 'cut:representations',
+      documentUri: current.documentUri,
+      sessionId: current.sessionId,
+      revision: current.revision,
+      results: Array.from({ length: 257 }, (_, tileIndex) => ({
+        clipId: 'clip-1',
+        kind: 'thumbnail',
+        status: 'ready',
+        density: 64,
+        tileIndex,
+        sourceTimeSeconds: tileIndex,
+        dataUrl: `data:image/jpeg;base64,${tileIndex}`,
+      })),
+    });
+
+    expect(store.getState().representations.size).toBe(256);
+    expect(store.getState().representations.has('4:clip-1:thumbnail:64:0')).toBe(false);
+    expect(store.getState().representations.has('4:clip-1:thumbnail:64:256')).toBe(true);
   });
 
   it('does not reuse stale Track or Clip projections when edit state changes', () => {

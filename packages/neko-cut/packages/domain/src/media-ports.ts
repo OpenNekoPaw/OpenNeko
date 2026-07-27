@@ -81,11 +81,18 @@ export interface AudioWaveformPort {
   ): Promise<CutWaveform>;
 }
 
+export const CUT_THUMBNAIL_TILE_WIDTH = 160;
+export const CUT_THUMBNAIL_TILE_HEIGHT = 90;
+export const CUT_THUMBNAIL_DENSITIES = [8, 16, 32, 64, 128, 256, 512] as const;
+
+export type CutThumbnailDensity = (typeof CUT_THUMBNAIL_DENSITIES)[number];
+
 export type CutClipRepresentationRequest =
   | {
       readonly clipId: string;
       readonly kind: 'thumbnail';
-      readonly sampleCount: number;
+      readonly density: CutThumbnailDensity;
+      readonly tileIndex: number;
     }
   | {
       readonly clipId: string;
@@ -98,41 +105,39 @@ export type CutClipRepresentationResult =
       readonly clipId: string;
       readonly kind: 'thumbnail';
       readonly status: 'ready';
-      readonly thumbnails: readonly {
-        readonly sourceTimeSeconds: number;
-        readonly dataUrl: string;
-      }[];
-    }
-  | {
-      readonly clipId: string;
-      readonly kind: 'thumbnail';
-      readonly status: 'partial';
-      readonly thumbnails: readonly {
-        readonly sourceTimeSeconds: number;
-        readonly dataUrl: string;
-      }[];
-      readonly failures: readonly {
-        readonly sourceTimeSeconds: number;
-        readonly failureScope: CutRepresentationFailureScope;
-        readonly message: string;
-      }[];
+      readonly density: CutThumbnailDensity;
+      readonly tileIndex: number;
+      readonly sourceTimeSeconds: number;
+      readonly dataUrl: string;
     }
   | {
       readonly clipId: string;
       readonly kind: 'waveform';
       readonly status: 'ready';
+      readonly peaksPerSecond: number;
       readonly waveform: CutWaveform;
     }
   | {
       readonly clipId: string;
       readonly kind: 'waveform';
       readonly status: 'partial';
+      readonly peaksPerSecond: number;
       readonly waveform: CutWaveform & { readonly partial: NonNullable<CutWaveform['partial']> };
     }
   | {
       readonly clipId: string;
-      readonly kind: 'thumbnail' | 'waveform';
+      readonly kind: 'thumbnail';
       readonly status: 'unavailable';
+      readonly density: CutThumbnailDensity;
+      readonly tileIndex: number;
+      readonly message: string;
+      readonly failureScope?: CutRepresentationFailureScope;
+    }
+  | {
+      readonly clipId: string;
+      readonly kind: 'waveform';
+      readonly status: 'unavailable';
+      readonly peaksPerSecond: number;
       readonly message: string;
       readonly failureScope?: CutRepresentationFailureScope;
     };
