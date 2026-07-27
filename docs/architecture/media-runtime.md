@@ -40,10 +40,12 @@ domain controller
   构成证明。当前 Preview 将 AV1 标记为不合格。VP9/WebM 不是产品优先格式；
   仅在 MP4 VP9 能力成立时允许无重编码 remux 为 MP4。
 - 10-bit、HDR10/PQ、HLG、HEVC、AV1、VP9：probe 与音频 PCM 可由 FFmpeg
-  处理。未命中合格 native/remux profile 的视频只能进入完整硬件闭包：
-  VideoToolbox 硬解、`scale_vt` 和 `h264_videotoolbox`，并以 `-allow_sw 0`
-  禁止软件编码回退。`libx264`、CPU `scale`、`zscale`、`tonemap` 以及
-  `hwdownload` 不得进入实时预览或预览代理路径。
+  处理。未命中合格 native/remux profile 的视频只能进入目标平台的完整硬件闭包：
+  `darwin-arm64` 使用 VideoToolbox 硬解、`scale_vt` 和
+  `h264_videotoolbox -allow_sw 0`；`linux-x64` 使用 VAAPI 硬解、
+  HDR 时使用 `tonemap_vaapi`，随后使用 `scale_vaapi` 和 `h264_vaapi`。
+  `libx264`、CPU `scale`、`zscale`、`tonemap` 以及编码前 `hwdownload`
+  不得进入实时预览或预览代理路径。
 - 硬件 decoder/filter/encoder 缺失或拒绝源 profile 时返回
   `MediaRuntimeUnavailableError`。HDR 截帧需要 CPU filter/readback 时独立
   失败，不得阻塞另一个已合格播放路径，也不得回退旧 Engine。
@@ -78,9 +80,14 @@ Cut Webview 将授权 URL 直接赋给 active/standby `<video>`。Chromium 负�
 generation 滚动时，Host 转移 video session ownership，只退休旧 PCM session。
 
 H.264 容器不兼容时完成 `-c:v copy` 的有界 MP4 后再发布普通 Range URL。
-不兼容 codec 固定使用 VideoToolbox 解码、`scale_vt` 与
-`h264_videotoolbox -allow_sw 0`，完成 seekable session file 后走同一个
-`<video src>` contract；不允许 CPU fallback。
+不兼容 codec 使用已验证的目标平台硬件 backend，完成 seekable session file
+后走同一个 `<video src>` contract；不允许 CPU fallback。平台命令、能力名和
+错误分类统一由 `@neko/media/node` backend strategy 拥有，Cut 不复制平台分支。
+
+当前发布 target 是 `darwin-arm64` 与 `linux-x64`。Windows 尚未进入发布矩阵；
+未来 Windows target 必须通过同一 strategy 接入完整且设备兼容的
+decode/filter/encode 闭包。`d3d11va` 只表达硬解能力，不能单独充当通用 Windows
+硬件转码 backend。
 
 Cut 导出复用相同的 Clip 音频事实，但对完整节目执行两遍响度处理：第一遍
 测量 integrated loudness、true peak、loudness range、threshold 与 target
@@ -99,8 +106,8 @@ Float32 样本的字节后缀、当前窗口和返回的 peaks。工作内存不
 
 开发 stage 必须由显式 `NEKO_FFMPEG_PATH` / `NEKO_FFPROBE_PATH` 生成，发布
 payload 必须包含目标平台专属的已验证 runtime bundle；两者都不是 PATH
-fallback。descriptor 冻结 target、FFmpeg/ffprobe 版本、可执行文件与许可证
-SHA-256、SPDX 和必要 codec/filter signature。Composition root 在任何产品
+fallback。v2 descriptor 冻结 target、FFmpeg/ffprobe 版本、可执行文件与许可证
+SHA-256、SPDX 和必要 hardware accelerator/codec/filter signature。Composition root 在任何产品
 feature 激活前校验 descriptor、真实路径、checksum 与运行时资格，再注入精确
 可执行路径。`NodeMediaRuntime.qualify()` 报告直接依赖的
 decoder/encoder/filter，包括 `loudnorm`、`ebur128`、`alimiter`、AAC、FLAC、

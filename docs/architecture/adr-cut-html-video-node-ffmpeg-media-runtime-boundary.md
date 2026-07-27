@@ -24,13 +24,13 @@ HTTP Range 调度、媒体缓存、demux、decoder backpressure 和 GOP 回收�
 
 ## 五层分析
 
-| 层   | 决策 |
-| ---- | ---- |
+| 层   | 决策                                                                                                                            |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------- |
 | 职责 | Cut Core 解释 OTIO；Host 授权文件并运行 FFprobe/FFmpeg；Chromium 管理视频数据面；Webview 只管理双槽预热、切换和 Timeline 同步。 |
-| 依赖 | Webview 只接收 opaque loopback URL 和 runtime-neutral descriptor，不接收路径、FFmpeg DTO 或视频字节。 |
-| 接口 | 视频 descriptor 只有 URL、MIME、profile、source-time origin 和 Clip duration；PCM 使用独立 descriptor。 |
-| 扩展 | 新 codec 通过 Host preparation profile 加入，但输出仍实现同一个普通 Range 文件契约。 |
-| 测试 | 单元测试证明 direct path 不启动 FFmpeg，路径测试证明无 MSE/fetch，真实 Webview 验证 CSP、Range、首帧、边界和取消。 |
+| 依赖 | Webview 只接收 opaque loopback URL 和 runtime-neutral descriptor，不接收路径、FFmpeg DTO 或视频字节。                           |
+| 接口 | 视频 descriptor 只有 URL、MIME、profile、source-time origin 和 Clip duration；PCM 使用独立 descriptor。                         |
+| 扩展 | 新 codec 通过 Host preparation profile 加入，但输出仍实现同一个普通 Range 文件契约。                                            |
+| 测试 | 单元测试证明 direct path 不启动 FFmpeg，路径测试证明无 MSE/fetch，真实 Webview 验证 CSP、Range、首帧、边界和取消。              |
 
 ## 决策
 
@@ -72,9 +72,9 @@ buffer window，也不把完整文件读入应用内存。Node 只按浏览器�
 
 当前直接播放白名单：
 
-| Profile | Host 行为 | Webview 行为 |
-| ------- | --------- | ------------ |
-| H.264/AVC、8-bit、YUV 4:2:0、SDR、MP4/M4V | 注册原文件 | 原生 Range seek/play |
+| Profile                                    | Host 行为  | Webview 行为         |
+| ------------------------------------------ | ---------- | -------------------- |
+| H.264/AVC、8-bit、YUV 4:2:0、SDR、MP4/M4V  | 注册原文件 | 原生 Range seek/play |
 | 已通过目标 VS Code runtime 验证的 VP8 WebM | 注册原文件 | 原生 Range seek/play |
 
 非零 Clip source start 直接进入 descriptor 的 `mediaTimeOriginSeconds`。Chromium
@@ -97,9 +97,12 @@ qualified original file
 ```
 
 H.264 容器不兼容时，FFmpeg 从可解码随机访问点开始，以 `-c:v copy` 生成有界 MP4。
-其他 codec 或不合格 profile 使用 VideoToolbox decode、`scale_vt` 和
-`h264_videotoolbox -allow_sw 0`。`libx264`、CPU scale、CPU tone-map 和自动
-fallback 不属于预览路径。
+其他 codec 或不合格 profile 使用目标平台已验证的完整硬件闭包：
+`darwin-arm64` 使用 VideoToolbox decode、`scale_vt` 和
+`h264_videotoolbox -allow_sw 0`；`linux-x64` 使用 VAAPI decode、
+HDR 时的 `tonemap_vaapi`、`scale_vaapi` 和 `h264_vaapi`。`libx264`、CPU scale、CPU tone-map 和自动
+fallback 不属于预览路径。平台参数与错误分类由 `@neko/media/node` 统一拥有，
+Cut adapter 不维护平台分支。
 
 prepared output 必须完整、可 seek 且通过文件注册后才能发布 descriptor。它是
 session-owned 临时文件，stop/dispose 时删除。该路径接受比 direct source 更高的

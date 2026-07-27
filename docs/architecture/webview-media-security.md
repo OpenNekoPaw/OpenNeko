@@ -61,8 +61,9 @@ VS Code Webview 的静态直接视频基线是 H.264 与 VP8。容器扩展名�
   VP9/WebM 必须先 remux 为 MP4，并且只在 MP4 VP9 能力成立时使用。
 - 10-bit、HEVC、AV1、HDR10/HLG 源可以被 ffprobe/FFmpeg 识别和离线处理；
   未命中已验证 MP4 profile 的 10-bit/HDR 或非基线 codec 进入 Webview 前
-  只能使用 VideoToolbox decode、`scale_vt` 与 `h264_videotoolbox` 组成的
-  硬件 preview 闭包。缺少或拒绝任一能力时返回明确 capability diagnostic；
+  只能使用目标平台已验证的完整硬件闭包：macOS 为 VideoToolbox decode、
+  `scale_vt` 与 `h264_videotoolbox`，Linux 为 VAAPI decode、HDR 时的
+  `tonemap_vaapi`、`scale_vaapi` 与 `h264_vaapi`。缺少或拒绝任一能力时返回明确 capability diagnostic；
   不使用 CPU filter/encoder，不回退旧实现，也不把错误色彩转换当成功。
 - 局部坏帧不等于全文件损坏。frame/waveform 操作可以返回有效前缀或有效
   区间，但必须携带 partial diagnostic；播放跨入损坏区间时必须可见失败。
