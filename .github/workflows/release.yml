@@ -99,6 +99,12 @@ jobs:
       - name: Verify retired media runtime is absent from product composition
         run: pnpm check:engine-retirement-boundary
 
+      - name: Install Linux media runtime build dependencies
+        if: ${{ matrix.target == 'linux-x64' }}
+        run: |
+          sudo apt-get update
+          xargs sudo apt-get install -y --no-install-recommends < scripts/media-runtime-build-packages.txt
+
       - name: Build verified FFmpeg runtime
         run: scripts/build-media-runtime.sh ${{ matrix.target }} .tmp/release-media-runtime/${{ matrix.target }}
 

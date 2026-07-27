@@ -18,10 +18,7 @@ describe('OpenNeko media runtime closure', () => {
 
     assert.equal(verified.descriptor.ffmpegVersion, '8.1.2');
     writeFileSync(join(root, 'bin', 'ffmpeg'), 'modified');
-    assert.throws(
-      () => assertRuntimeDirectory(root, 'darwin-arm64'),
-      /checksum mismatch/u,
-    );
+    assert.throws(() => assertRuntimeDirectory(root, 'darwin-arm64'), /checksum mismatch/u);
   });
 
   it('requires an explicit verified bundle for packaged payloads', () => {
@@ -30,6 +27,16 @@ describe('OpenNeko media runtime closure', () => {
       () => stagePackagedMediaRuntime(stageRoot, 'linux-x64', undefined),
       /requires NEKO_MEDIA_RUNTIME_ROOT/u,
     );
+  });
+
+  it('rejects the pre-accelerator v1 descriptor schema', () => {
+    const root = createFixtureRuntime();
+    const descriptorPath = join(root, 'descriptor.json');
+    const descriptor = JSON.parse(readFileSync(descriptorPath, 'utf8'));
+    descriptor.schemaVersion = 'openneko.media-runtime.v1';
+    writeFileSync(descriptorPath, JSON.stringify(descriptor), 'utf8');
+
+    assert.throws(() => assertRuntimeDirectory(root, 'darwin-arm64'), /descriptor is invalid/u);
   });
 
   it('rejects a descriptor that weakens the target capability floor', () => {
@@ -46,9 +53,64 @@ describe('OpenNeko media runtime closure', () => {
       /weakens required filters capability loudnorm/u,
     );
   });
+
+  it('requires the VAAPI encoder and scale filter for linux-x64', () => {
+    const root = createFixtureRuntime('linux-x64');
+    const descriptorPath = join(root, 'descriptor.json');
+    const descriptor = JSON.parse(readFileSync(descriptorPath, 'utf8'));
+    descriptor.requiredCapabilities.encoders = descriptor.requiredCapabilities.encoders.filter(
+      (encoder) => encoder !== 'h264Vaapi',
+    );
+    writeFileSync(descriptorPath, JSON.stringify(descriptor), 'utf8');
+
+    assert.throws(
+      () => assertRuntimeDirectory(root, 'linux-x64'),
+      /weakens required encoders capability h264Vaapi/u,
+    );
+  });
+
+  it('requires the VAAPI decode accelerator for linux-x64', () => {
+    const root = createFixtureRuntime('linux-x64');
+    const descriptorPath = join(root, 'descriptor.json');
+    const descriptor = JSON.parse(readFileSync(descriptorPath, 'utf8'));
+    descriptor.requiredCapabilities.hardwareAccelerators =
+      descriptor.requiredCapabilities.hardwareAccelerators.filter(
+        (accelerator) => accelerator !== 'vaapi',
+      );
+    writeFileSync(descriptorPath, JSON.stringify(descriptor), 'utf8');
+
+    assert.throws(
+      () => assertRuntimeDirectory(root, 'linux-x64'),
+      /weakens required hardwareAccelerators capability vaapi/u,
+    );
+  });
+
+  it('requires the VAAPI HDR tone-map filter for linux-x64', () => {
+    const root = createFixtureRuntime('linux-x64');
+    const descriptorPath = join(root, 'descriptor.json');
+    const descriptor = JSON.parse(readFileSync(descriptorPath, 'utf8'));
+    descriptor.requiredCapabilities.filters = descriptor.requiredCapabilities.filters.filter(
+      (filter) => filter !== 'tonemapVaapi',
+    );
+    writeFileSync(descriptorPath, JSON.stringify(descriptor), 'utf8');
+
+    assert.throws(
+      () => assertRuntimeDirectory(root, 'linux-x64'),
+      /weakens required filters capability tonemapVaapi/u,
+    );
+  });
+
+  it('enables the Linux VAAPI and libdrm build closure explicitly', () => {
+    const source = readFileSync('scripts/build-media-runtime.sh', 'utf8');
+
+    assert.match(source, /--enable-vaapi/u);
+    assert.match(source, /--enable-libdrm/u);
+    assert.match(source, /--pkg-config-flags=--static/u);
+    assert.match(source, /--retry-all-errors/u);
+  });
 });
 
-function createFixtureRuntime() {
+function createFixtureRuntime(target = 'darwin-arm64') {
   const root = mkdtempSync(join(tmpdir(), 'openneko-media-runtime-'));
   mkdirSync(join(root, 'bin'));
   const ffmpeg = Buffer.from('ffmpeg');
@@ -61,7 +123,7 @@ function createFixtureRuntime() {
     join(root, 'descriptor.json'),
     `${JSON.stringify({
       schemaVersion: MEDIA_RUNTIME_DESCRIPTOR_SCHEMA,
-      target: 'darwin-arm64',
+      target,
       ffmpegVersion: '8.1.2',
       ffprobeVersion: '8.1.2',
       license: { spdx: 'GPL-3.0-or-later', file: 'LICENSE', sha256: sha256(license) },
@@ -70,9 +132,13 @@ function createFixtureRuntime() {
         ffprobe: { file: 'bin/ffprobe', sha256: sha256(ffprobe) },
       },
       requiredCapabilities: {
+        hardwareAccelerators: target === 'darwin-arm64' ? ['videoToolbox'] : ['vaapi'],
         decoders: ['h264', 'hevc', 'av1', 'vp8', 'vp9', 'aac', 'mp3', 'flac', 'dts'],
-        encoders: ['h264VideoToolbox', 'aac'],
-        filters: ['alimiter', 'loudnorm', 'ebur128', 'scaleVt'],
+        encoders: target === 'darwin-arm64' ? ['h264VideoToolbox', 'aac'] : ['h264Vaapi', 'aac'],
+        filters:
+          target === 'darwin-arm64'
+            ? ['alimiter', 'loudnorm', 'ebur128', 'scaleVt']
+            : ['alimiter', 'loudnorm', 'ebur128', 'scaleVaapi', 'tonemapVaapi'],
       },
     })}\n`,
   );

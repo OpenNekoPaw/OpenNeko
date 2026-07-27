@@ -11,13 +11,19 @@ import {
 } from 'node:fs';
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
 
-export const MEDIA_RUNTIME_DESCRIPTOR_SCHEMA = 'openneko.media-runtime.v1';
+export const MEDIA_RUNTIME_DESCRIPTOR_SCHEMA = 'openneko.media-runtime.v2';
 
 const COMMON_REQUIRED = Object.freeze({
   decoders: Object.freeze(['h264', 'hevc', 'av1', 'vp8', 'vp9', 'aac', 'mp3', 'flac', 'dts']),
   encoders: Object.freeze(['aac']),
   filters: Object.freeze(['alimiter', 'loudnorm', 'ebur128']),
 });
+const CAPABILITY_SECTIONS = Object.freeze([
+  'hardwareAccelerators',
+  'decoders',
+  'encoders',
+  'filters',
+]);
 
 export function stageDevelopmentMediaRuntime(stageRoot, target, environment = process.env) {
   const ffmpeg = environment.NEKO_FFMPEG_PATH?.trim();
@@ -94,7 +100,7 @@ export function assertRuntimeDirectory(runtimeRoot, target, options = {}) {
         `Media runtime ffprobe version mismatch: expected ${descriptor.ffprobeVersion}, received ${actual.ffprobeVersion}.`,
       );
     }
-    for (const section of ['decoders', 'encoders', 'filters']) {
+    for (const section of CAPABILITY_SECTIONS) {
       for (const capability of descriptor.requiredCapabilities[section]) {
         if (!actual[section].has(capability)) {
           throw new Error(`Media runtime is missing required ${section} capability ${capability}.`);
@@ -114,7 +120,7 @@ export function createMediaRuntimeDescriptor({
 }) {
   const capabilities = inspectCapabilities(ffmpeg, ffprobe);
   const requiredCapabilities = requiredCapabilitiesForTarget(target);
-  for (const section of ['decoders', 'encoders', 'filters']) {
+  for (const section of CAPABILITY_SECTIONS) {
     for (const capability of requiredCapabilities[section]) {
       if (!capabilities[section].has(capability)) {
         throw new Error(`Media runtime is missing required ${section} capability ${capability}.`);
@@ -142,12 +148,17 @@ export function createMediaRuntimeDescriptor({
 function inspectCapabilities(ffmpeg, ffprobe) {
   const ffmpegVersion = run(ffmpeg, ['-hide_banner', '-version']);
   const ffprobeVersion = run(ffprobe, ['-hide_banner', '-version']);
+  const hardwareAcceleratorText = run(ffmpeg, ['-hide_banner', '-hwaccels']);
   const decoderText = run(ffmpeg, ['-hide_banner', '-decoders']);
   const encoderText = run(ffmpeg, ['-hide_banner', '-encoders']);
   const filterText = run(ffmpeg, ['-hide_banner', '-filters']);
   return Object.freeze({
     ffmpegVersion: ffmpegVersion.split(/\r?\n/u)[0] ?? '',
     ffprobeVersion: ffprobeVersion.split(/\r?\n/u)[0] ?? '',
+    hardwareAccelerators: capabilitySet(hardwareAcceleratorText, {
+      videoToolbox: 'videotoolbox',
+      vaapi: 'vaapi',
+    }),
     decoders: capabilitySet(decoderText, {
       h264: 'h264',
       hevc: 'hevc',
@@ -162,6 +173,7 @@ function inspectCapabilities(ffmpeg, ffprobe) {
     encoders: capabilitySet(encoderText, {
       h264: 'h264',
       h264VideoToolbox: 'h264_videotoolbox',
+      h264Vaapi: 'h264_vaapi',
       aac: 'aac',
     }),
     filters: capabilitySet(filterText, {
@@ -169,6 +181,8 @@ function inspectCapabilities(ffmpeg, ffprobe) {
       loudnorm: 'loudnorm',
       ebur128: 'ebur128',
       scaleVt: 'scale_vt',
+      scaleVaapi: 'scale_vaapi',
+      tonemapVaapi: 'tonemap_vaapi',
     }),
   });
 }
@@ -178,14 +192,15 @@ function requiredCapabilitiesForTarget(target) {
     throw new Error(`Unsupported media runtime target: ${target}.`);
   }
   return Object.freeze({
+    hardwareAccelerators: Object.freeze([target === 'darwin-arm64' ? 'videoToolbox' : 'vaapi']),
     decoders: COMMON_REQUIRED.decoders,
     encoders: Object.freeze([
       ...COMMON_REQUIRED.encoders,
-      ...(target === 'darwin-arm64' ? ['h264VideoToolbox'] : []),
+      ...(target === 'darwin-arm64' ? ['h264VideoToolbox'] : ['h264Vaapi']),
     ]),
     filters: Object.freeze([
       ...COMMON_REQUIRED.filters,
-      ...(target === 'darwin-arm64' ? ['scaleVt'] : []),
+      ...(target === 'darwin-arm64' ? ['scaleVt'] : ['scaleVaapi', 'tonemapVaapi']),
     ]),
   });
 }
@@ -204,7 +219,7 @@ function assertDescriptor(descriptor, target) {
     throw new Error(`Media runtime descriptor is invalid for ${target}.`);
   }
   const required = requiredCapabilitiesForTarget(target);
-  for (const section of ['decoders', 'encoders', 'filters']) {
+  for (const section of CAPABILITY_SECTIONS) {
     if (!Array.isArray(descriptor.requiredCapabilities[section])) {
       throw new Error(`Media runtime descriptor ${section} capability signature is invalid.`);
     }

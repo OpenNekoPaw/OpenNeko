@@ -49,3 +49,30 @@ test('Turbo actions cache remains remote-only when act uses direct cache mounts'
     assert.equal(cacheStep.if, "${{ env.ACT != 'true' }}");
   }
 });
+
+test('Linux packaging workflows share the VAAPI build dependency list', async () => {
+  const [ciSource, releaseSource, packageList] = await Promise.all([
+    readFile('.github/workflows/ci.yml', 'utf8'),
+    readFile('.github/workflows/release.yml', 'utf8'),
+    readFile('scripts/media-runtime-build-packages.txt', 'utf8'),
+  ]);
+  assert.deepEqual(packageList.split(/\s+/u).filter(Boolean), [
+    'libdrm-dev',
+    'libva-dev',
+    'pkg-config',
+  ]);
+
+  for (const [workflowSource, jobName] of [
+    [ciSource, 'package-openneko-vsix'],
+    [releaseSource, 'release-openneko'],
+  ]) {
+    const workflow = parse(workflowSource);
+    const step = workflow.jobs[jobName].steps.find(
+      (candidate) => candidate.name === 'Install Linux media runtime build dependencies',
+    );
+    assert.ok(step, `expected ${jobName} to install Linux media runtime build dependencies`);
+    assert.equal(step.if, "${{ matrix.target == 'linux-x64' }}");
+    assert.match(step.run, /scripts\/media-runtime-build-packages\.txt/u);
+    assert.match(step.run, /--no-install-recommends/u);
+  }
+});

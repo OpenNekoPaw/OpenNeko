@@ -11,6 +11,9 @@ source_root="${work_root}/ffmpeg-${ffmpeg_version}"
 install_root="${work_root}/install"
 
 curl --fail --location --silent --show-error \
+  --retry 5 \
+  --retry-all-errors \
+  --retry-delay 2 \
   "https://ffmpeg.org/releases/ffmpeg-${ffmpeg_version}.tar.xz" \
   --output "${archive}"
 actual_sha256="$(shasum -a 256 "${archive}" | awk '{print $1}')"
@@ -34,7 +37,12 @@ configure_args=(
 if [[ "${target}" == "darwin-arm64" ]]; then
   configure_args+=("--enable-videotoolbox" "--enable-audiotoolbox")
 elif [[ "${target}" == "linux-x64" ]]; then
-  configure_args+=("--disable-x86asm")
+  configure_args+=(
+    "--disable-x86asm"
+    "--enable-vaapi"
+    "--enable-libdrm"
+    "--pkg-config-flags=--static"
+  )
 else
   echo "Unsupported media runtime target: ${target}." >&2
   exit 1
