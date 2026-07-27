@@ -273,7 +273,9 @@ export class PcmAudioClient {
   private async consume(stream: ReadableStream<Uint8Array>, start: Promise<number>): Promise<void> {
     const reader = stream.getReader();
     let pending: Uint8Array<ArrayBufferLike> = new Uint8Array();
-    let firstPacket = true;
+    const prebuffer: ParsedPcmPacket[] = [];
+    let prebufferDurationSeconds = 0;
+    let started = false;
     try {
       for (;;) {
         const result = await reader.read();
@@ -283,10 +285,16 @@ export class PcmAudioClient {
           const parsed = parsePacket(pending);
           if (!parsed) break;
           pending = pending.subarray(parsed.consumedBytes);
-          if (firstPacket) {
-            firstPacket = false;
+          if (!started) {
+            prebuffer.push(parsed.packet);
+            prebufferDurationSeconds += packetDurationSeconds(parsed.packet);
+            if (prebufferDurationSeconds < PREBUFFER_SECONDS) continue;
             this.resolvePendingPreparation();
             this.nextPlayTime = await start;
+            started = true;
+            for (const packet of prebuffer) this.schedule(packet);
+            prebuffer.length = 0;
+            continue;
           }
           await this.waitForScheduleCapacity();
           this.schedule(parsed.packet);
@@ -294,6 +302,13 @@ export class PcmAudioClient {
       }
       if (pending.byteLength !== 0) {
         throw new Error('PCM stream ended with an incomplete frame.');
+      }
+      if (!started && prebuffer.length > 0) {
+        this.resolvePendingPreparation();
+        this.nextPlayTime = await start;
+        started = true;
+        for (const packet of prebuffer) this.schedule(packet);
+        prebuffer.length = 0;
       }
       this.inputEnded = true;
       this.notifyPlaybackEndIfComplete();
@@ -426,6 +441,12 @@ export class PcmAudioClient {
     }
     return context.currentTime;
   }
+}
+
+function packetDurationSeconds(packet: ParsedPcmPacket): number {
+  const frames = packet.samples.length / packet.channels;
+  if (!Number.isInteger(frames) || frames <= 0) throw new Error('Invalid PCM sample count.');
+  return frames / packet.sampleRate;
 }
 
 export function parsePcmPackets(bytes: Uint8Array): {

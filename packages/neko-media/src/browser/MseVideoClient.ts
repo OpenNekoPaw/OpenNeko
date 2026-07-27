@@ -75,9 +75,14 @@ export class MseVideoClient {
   async primeForSynchronizedStart(): Promise<void> {
     if (this.disposed) throw new Error('MSE video client is disposed.');
     const { descriptor, video } = this.options;
-    await video.play();
-    video.pause();
     video.currentTime = descriptor.mediaTimeOriginSeconds;
+    await video.play();
+    try {
+      await waitForPresentedFrame(video, this.abortController.signal);
+    } finally {
+      video.pause();
+    }
+    await presentExactFrame(video, descriptor.mediaTimeOriginSeconds, this.abortController.signal);
   }
 
   get currentTimeSeconds(): number {
@@ -119,6 +124,42 @@ export class MseVideoClient {
       new Error(`Cut video element failed${mediaError ? ` (code ${mediaError.code})` : ''}.`),
     );
   };
+}
+
+function waitForPresentedFrame(video: HTMLVideoElement, signal: AbortSignal): Promise<void> {
+  if (signal.aborted) return Promise.reject(abortError(signal));
+  if (typeof video.requestVideoFrameCallback !== 'function') {
+    return waitForEvent(video, 'timeupdate', signal);
+  }
+  return new Promise<void>((resolve, reject) => {
+    const onFrame = (): void => {
+      cleanup();
+      resolve();
+    };
+    const onAbort = (): void => {
+      cleanup();
+      reject(abortError(signal));
+    };
+    const cleanup = (): void => {
+      if (typeof video.cancelVideoFrameCallback === 'function') {
+        video.cancelVideoFrameCallback(callbackId);
+      }
+      signal.removeEventListener('abort', onAbort);
+    };
+    signal.addEventListener('abort', onAbort, { once: true });
+    const callbackId = video.requestVideoFrameCallback(onFrame);
+  });
+}
+
+async function presentExactFrame(
+  video: HTMLVideoElement,
+  timeSeconds: number,
+  signal: AbortSignal,
+): Promise<void> {
+  if (Math.abs(video.currentTime - timeSeconds) <= Number.EPSILON) return;
+  const presented = waitForPresentedFrame(video, signal);
+  video.currentTime = timeSeconds;
+  await presented;
 }
 
 async function appendUrl(

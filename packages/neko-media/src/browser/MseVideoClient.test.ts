@@ -4,14 +4,26 @@ import { MseVideoClient } from './MseVideoClient';
 describe('MseVideoClient synchronized start', () => {
   it('warms the muted decoder and restores the descriptor origin before playback', async () => {
     const events: string[] = [];
+    const pendingFrames: Array<() => void> = [];
+    let currentTime = 3;
     const video = {
-      currentTime: 3,
       play: vi.fn(async () => {
         events.push('play');
+        currentTime = 0.12;
       }),
       pause: vi.fn(() => {
         events.push('pause');
       }),
+      requestVideoFrameCallback: vi.fn((callback: () => void) => {
+        pendingFrames.push(callback);
+        return pendingFrames.length;
+      }),
+      get currentTime() {
+        return currentTime;
+      },
+      set currentTime(value: number) {
+        currentTime = value;
+      },
     } as unknown as HTMLVideoElement;
     const client = new MseVideoClient({
       video,
@@ -34,7 +46,19 @@ describe('MseVideoClient synchronized start', () => {
       playbackRate: 1,
     });
 
-    await client.primeForSynchronizedStart();
+    let primed = false;
+    const prime = client.primeForSynchronizedStart().then(() => {
+      primed = true;
+    });
+    await Promise.resolve();
+
+    expect(primed).toBe(false);
+    pendingFrames.shift()?.();
+    await Promise.resolve();
+    expect(primed).toBe(false);
+    expect(video.currentTime).toBe(0);
+    pendingFrames.shift()?.();
+    await prime;
 
     expect(events).toEqual(['play', 'pause']);
     expect(video.currentTime).toBe(0);

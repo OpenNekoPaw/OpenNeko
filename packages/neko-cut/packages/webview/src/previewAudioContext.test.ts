@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { PreviewAudioContextOwner } from './previewAudioContext';
+import { PreviewAudioContextOwner, previewAudioStartTime } from './previewAudioContext';
 
 describe('PreviewAudioContextOwner', () => {
   it('reuses one user-gesture-started context across preview generations', async () => {
@@ -27,5 +27,27 @@ describe('PreviewAudioContextOwner', () => {
     await expect(owner.contextForConnection()).rejects.toThrow(
       'Cut preview AudioContext has not been activated by a user gesture.',
     );
+  });
+});
+
+describe('previewAudioStartTime', () => {
+  it('keeps a cold Web Audio start at least 50 ms ahead', () => {
+    expect(
+      previewAudioStartTime({
+        currentTime: 2,
+        baseLatency: 0.005,
+        outputLatency: 0.005,
+      } as AudioContext),
+    ).toBeCloseTo(2.05);
+  });
+
+  it('includes reported device latency plus a scheduling margin', () => {
+    expect(
+      previewAudioStartTime({
+        currentTime: 2,
+        baseLatency: 0.04,
+        outputLatency: 0.03,
+      } as AudioContext),
+    ).toBeCloseTo(2.09);
   });
 });

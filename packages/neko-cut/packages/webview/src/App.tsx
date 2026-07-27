@@ -31,7 +31,7 @@ import {
   type PreviewPlaybackAdvance,
   type PreviewPlaybackSegment,
 } from './previewPlayback';
-import { PreviewAudioContextOwner } from './previewAudioContext';
+import { PreviewAudioContextOwner, previewAudioStartTime } from './previewAudioContext';
 import {
   PreviewFailureGate,
   previewFailureDiagnostic,
@@ -190,6 +190,7 @@ function App() {
       });
       try {
         await client.connect();
+        await client.primeForSynchronizedStart();
         return { client, slot };
       } catch (error) {
         client.dispose();
@@ -621,12 +622,6 @@ function App() {
         const startContext = audioContext ?? retiringAudioClients[0]?.getAudioContext();
         void (async () => {
           try {
-            if (prepared.video) {
-              await videoClient?.primeForSynchronizedStart().catch((error: unknown) => {
-                reportPreviewFailure(attempt, 'video');
-                throw error;
-              });
-            }
             if (
               !store.getState().isPlaying ||
               activatingPreviewGenerationRef.current !== generation ||
@@ -634,7 +629,7 @@ function App() {
             ) {
               return;
             }
-            const sharedStartTime = startContext ? startContext.currentTime + 0.02 : undefined;
+            const sharedStartTime = startContext ? previewAudioStartTime(startContext) : undefined;
             if (audioContext && sharedStartTime !== undefined) {
               await Promise.all(
                 audioClients.map((client) =>

@@ -1,5 +1,8 @@
 export type PreviewAudioContextFactory = () => AudioContext;
 
+const MINIMUM_AUDIO_START_LEAD_SECONDS = 0.05;
+const AUDIO_SCHEDULING_MARGIN_SECONDS = 0.02;
+
 export class PreviewAudioContextOwner {
   private context: AudioContext | undefined;
   private ready: Promise<void> | undefined;
@@ -38,4 +41,20 @@ export class PreviewAudioContextOwner {
       await context.close();
     }
   }
+}
+
+export function previewAudioStartTime(context: AudioContext): number {
+  const baseLatency = finiteNonNegative(context.baseLatency);
+  const outputLatency = finiteNonNegative(context.outputLatency);
+  return (
+    context.currentTime +
+    Math.max(
+      MINIMUM_AUDIO_START_LEAD_SECONDS,
+      baseLatency + outputLatency + AUDIO_SCHEDULING_MARGIN_SECONDS,
+    )
+  );
+}
+
+function finiteNonNegative(value: number | undefined): number {
+  return value !== undefined && Number.isFinite(value) && value >= 0 ? value : 0;
 }

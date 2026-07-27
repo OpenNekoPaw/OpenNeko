@@ -181,10 +181,13 @@ describe('Cut OTIO Webview boundary', () => {
       app.indexOf('const accepted = controller.acceptHostMessage'),
     );
     expect(connect).not.toContain('.startAt(');
-    expect(activation.indexOf('primeForSynchronizedStart()')).toBeGreaterThan(-1);
-    expect(activation.indexOf('primeForSynchronizedStart()')).toBeLessThan(
-      activation.indexOf('.startAt(sharedStartTime)'),
-    );
+    expect(
+      app.slice(
+        app.indexOf('const preparePreviewVideoClient'),
+        app.indexOf('const disposePreparedVideoGeneration'),
+      ),
+    ).toContain('primeForSynchronizedStart()');
+    expect(activation).not.toContain('primeForSynchronizedStart()');
     expect(activation.indexOf('.startAt(sharedStartTime)')).toBeGreaterThan(-1);
     expect(activation.indexOf('.startAt(sharedStartTime)')).toBeLessThan(
       activation.indexOf('waitForAudioContextTime('),
