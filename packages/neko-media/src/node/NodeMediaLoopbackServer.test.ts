@@ -67,26 +67,28 @@ describe('NodeMediaLoopbackServer', () => {
     const root = await mkdtemp(path.join(tmpdir(), 'cut-media-server-'));
     roots.push(root);
     const filePath = path.join(root, 'segment.mp4');
-    // Keep the response active beyond any platform loopback socket buffer.
     await writeFile(filePath, '');
-    await truncate(filePath, 1024 * 1024 * 1024);
+    await truncate(filePath, 32 * 1024 * 1024);
     const server = new NodeMediaLoopbackServer();
     servers.push(server);
     const registration = await server.registerFile(filePath, 'video/mp4');
 
     await new Promise<void>((resolve, reject) => {
       const request = get(registration.url, { headers: { Range: 'bytes=0-' } }, (response) => {
-        response.once('aborted', resolve);
         response.once('error', (error) => {
-          if ((error as NodeJS.ErrnoException).code === 'ECONNRESET') resolve();
-          else reject(error);
+          if ((error as NodeJS.ErrnoException).code !== 'ECONNRESET') reject(error);
         });
-        server.unregister(registration.token);
+        response.once('close', () => {
+          try {
+            expect(response.complete).toBe(false);
+            resolve();
+          } catch (error) {
+            reject(error);
+          }
+        });
+        response.once('data', () => server.unregister(registration.token));
       });
-      request.once('error', (error) => {
-        if ((error as NodeJS.ErrnoException).code === 'ECONNRESET') resolve();
-        else reject(error);
-      });
+      request.once('error', reject);
     });
 
     expect((await fetch(registration.url)).status).toBe(404);
