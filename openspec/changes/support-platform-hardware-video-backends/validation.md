@@ -90,3 +90,35 @@ GitHub Actions run `30278225006` passed all 11 required checks:
 
 Manual Gate was skipped as expected for a pull request event. No required check
 failed or was skipped.
+
+### Release test dependency regression
+
+Release run
+[`30279883704`](https://github.com/OpenNekoPaw/OpenNeko/actions/runs/30279883704)
+failed in `Release Tests` because that job invoked `pnpm test` without first
+installing FFmpeg. The Cut adapter integration suite generates real media
+fixtures in `beforeAll`, so the missing workflow dependency surfaced as
+`spawn ffmpeg ENOENT`. Pull-request CI already installed FFmpeg from
+`scripts/act/media-runtime-packages.txt`; the Release workflow had drifted from
+that shared dependency contract.
+
+The failure was reproduced locally with an isolated `PATH` that omitted FFmpeg.
+The suite failed before its 19 integration tests with the same
+`spawn ffmpeg ENOENT` error. The fix keeps the real integration coverage and
+adds the shared dependency installation to `release-tests`; it does not skip,
+mock, or silently downgrade the media path.
+
+Regression evidence:
+
+- Before the workflow fix,
+  `node --test scripts/test-orchestration/native-build-dependencies.test.mjs`
+  failed because `release-tests` had no media dependency installation step.
+- After the fix,
+  `node --test scripts/test-orchestration/native-build-dependencies.test.mjs
+scripts/test-orchestration/release-source.test.mjs` passed all 10 tests.
+- `CI=1 pnpm ci:local` passed the complete local gate, including all 28
+  repository test tasks and the workflow dependency contract.
+
+A new remote Release verification requires the workflow fix to be merged and a
+new validated tag to be created. Re-running `v0.0.5` would execute its original
+tagged workflow source and cannot validate this change.

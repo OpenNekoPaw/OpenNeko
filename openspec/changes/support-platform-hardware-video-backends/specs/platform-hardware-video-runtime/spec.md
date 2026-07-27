@@ -49,6 +49,20 @@ required by its target hardware video backend.
 - **THEN** it SHALL inject the backend being tested
 - **AND** SHALL NOT infer the expected backend from the test runner platform
 
+### Requirement: Remote media integration tests declare their FFmpeg dependency
+
+Every remote workflow job that executes the media integration test graph SHALL
+install FFmpeg from the repository-owned shared test dependency list.
+
+#### Scenario: Release tests generate media fixtures
+
+- **WHEN** the Release Tests job invokes the repository test graph
+- **THEN** it SHALL install the shared media runtime test dependencies first
+- **AND** it SHALL NOT rely on the runner image PATH implicitly containing
+  FFmpeg
+- **AND** media integration tests SHALL NOT be skipped to hide a missing
+  dependency
+
 ### Requirement: New platform targets provide a complete hardware closure
 
 A new release platform SHALL add hardware video support through the shared

@@ -18,6 +18,8 @@ which caused Ubuntu CI to fail before reaching the behavior under test.
 - Require the packaged FFmpeg descriptor to prove the encoder and filter
   capabilities for its declared backend.
 - Make Media and Cut tests inject the backend whose behavior they assert.
+- Make every remote job that runs the media integration suite install the same
+  declared FFmpeg test dependency before invoking the tests.
 - Keep software video decode, scale, tone-map, and encode fallback forbidden.
 - Keep Windows outside the current release target list. A future Windows target
   must add a qualified complete QSV, AMF, NVENC, or other hardware closure
@@ -27,7 +29,7 @@ which caused Ubuntu CI to fail before reaching the behavior under test.
 
 - Affected code: `packages/neko-media`, `packages/neko-cut`,
   `scripts/media-runtime-closure.mjs`, `scripts/build-media-runtime.sh`, and
-  platform packaging workflows.
+  CI/release workflows.
 - Affected contracts: media runtime qualification and packaged runtime
   capability floors.
 - No Webview message, HTML video descriptor, PCM, project data, or user path
