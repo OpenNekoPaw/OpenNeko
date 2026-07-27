@@ -219,8 +219,13 @@ jobs:
       - name: Verify retired media runtime is absent from product composition
         run: pnpm check:engine-retirement-boundary
 
+      - name: Build verified FFmpeg runtime
+        run: scripts/build-media-runtime.sh ${{ matrix.target }} .tmp/release-media-runtime/${{ matrix.target }}
+
       - name: Assemble OpenNeko platform VSIX
         run: node scripts/package-openneko-platform.mjs --target ${{ matrix.target }}
+        env:
+          NEKO_MEDIA_RUNTIME_ROOT: ${{ github.workspace }}/.tmp/release-media-runtime/${{ matrix.target }}
 
       - uses: actions/upload-artifact@v6
         with:

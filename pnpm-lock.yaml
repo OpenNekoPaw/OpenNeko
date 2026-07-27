@@ -203,6 +203,9 @@ importers:
       '@neko/generation':
         specifier: workspace:*
         version: link:../../packages/neko-generation
+      '@neko/media':
+        specifier: workspace:*
+        version: link:../../packages/neko-media
       '@neko/platform':
         specifier: workspace:*
         version: link:../../packages/neko-agent/packages/platform

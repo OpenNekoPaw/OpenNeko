@@ -61,6 +61,7 @@ const config: KnipConfig = {
         'scripts/compile-ts-vsix.mjs',
         'scripts/project-release-version.mjs',
         'scripts/prepare-vscode-media-fixture.mjs',
+        'scripts/prepare-media-runtime-bundle.mjs',
         'scripts/smoke-vscode-targets.mjs',
         'scripts/smoke-webview-builds.mjs',
         'scripts/stage-openneko-dev-extension.mjs',

@@ -75,9 +75,27 @@ describe('NodeMediaRuntime', () => {
     await expect(runtime.qualify()).resolves.toEqual({
       ffmpegVersion: 'ffmpeg version qualified',
       ffprobeVersion: 'ffprobe version qualified',
-      decoders: { h264: true, hevc: true, av1: true, vp8: true, vp9: true },
-      encoders: { h264: true, aac: true },
-      filters: { zscale: false, tonemap: true, sidedata: false, alimiter: false },
+      decoders: {
+        h264: true,
+        hevc: true,
+        av1: true,
+        vp8: true,
+        vp9: true,
+        aac: true,
+        mp3: true,
+        flac: true,
+        dts: true,
+      },
+      encoders: { h264: true, h264VideoToolbox: true, aac: true },
+      filters: {
+        zscale: false,
+        tonemap: true,
+        sidedata: false,
+        alimiter: false,
+        loudnorm: true,
+        ebur128: true,
+        scaleVt: true,
+      },
     });
   });
 
@@ -311,15 +329,23 @@ class QualificationProcess implements FfmpegProcessPort {
     }
     if (command === '-decoders') {
       return {
-        stdout: Buffer.from(' V h264\n V hevc\n V av1\n V vp8\n V vp9\n'),
+        stdout: Buffer.from(
+          ' V h264\n V hevc\n V av1\n V vp8\n V vp9\n A aac\n A mp3\n A flac\n A dca\n',
+        ),
         stderr: '',
       };
     }
     if (command === '-encoders') {
-      return { stdout: Buffer.from(' V libx264\n A aac\n'), stderr: '' };
+      return {
+        stdout: Buffer.from(' V libx264\n V h264_videotoolbox\n A aac\n'),
+        stderr: '',
+      };
     }
     if (command === '-filters') {
-      return { stdout: Buffer.from(' T tonemap\n'), stderr: '' };
+      return {
+        stdout: Buffer.from(' T tonemap\n A loudnorm\n A ebur128\n V scale_vt\n'),
+        stderr: '',
+      };
     }
     throw new Error(`Unexpected qualification command: ${args.join(' ')}`);
   }
@@ -410,9 +436,15 @@ class HardwareDecoderUnavailableProcess extends ProfilePreparationProcess {
   }
 }
 
-class PartialFrameProcess implements FfmpegProcessPort {
-  async run(executable: 'ffmpeg' | 'ffprobe', args: readonly string[]): Promise<FfmpegRunResult> {
-    if (executable === 'ffprobe') return { stdout: VIDEO_PROBE, stderr: '' };
+class PartialFrameProcess extends QualificationProcess {
+  override async run(
+    executable: 'ffmpeg' | 'ffprobe',
+    args: readonly string[],
+  ): Promise<FfmpegRunResult> {
+    if (executable === 'ffprobe' && args.at(-1) !== '-version') {
+      return { stdout: VIDEO_PROBE, stderr: '' };
+    }
+    if (args.at(-1)?.startsWith('-')) return super.run(executable, args);
     const seekIndex = args.indexOf('-ss');
     const timestamp = args[seekIndex + 1];
     if (timestamp === '1') {
@@ -421,14 +453,20 @@ class PartialFrameProcess implements FfmpegProcessPort {
     return { stdout: Buffer.from([0xff, 0xd8, 0xff, 0xd9]), stderr: '' };
   }
 
-  streamFfmpeg(): RunningProcess {
+  override streamFfmpeg(): RunningProcess {
     throw new Error('Unexpected streaming command.');
   }
 }
 
-class EmptyFrameProcess implements FfmpegProcessPort {
-  async run(executable: 'ffmpeg' | 'ffprobe', args: readonly string[]): Promise<FfmpegRunResult> {
-    if (executable === 'ffprobe') return { stdout: VIDEO_PROBE, stderr: '' };
+class EmptyFrameProcess extends QualificationProcess {
+  override async run(
+    executable: 'ffmpeg' | 'ffprobe',
+    args: readonly string[],
+  ): Promise<FfmpegRunResult> {
+    if (executable === 'ffprobe' && args.at(-1) !== '-version') {
+      return { stdout: VIDEO_PROBE, stderr: '' };
+    }
+    if (args.at(-1)?.startsWith('-')) return super.run(executable, args);
     throw new FfmpegCommandError(
       'ffmpeg',
       args,
@@ -438,7 +476,7 @@ class EmptyFrameProcess implements FfmpegProcessPort {
     );
   }
 
-  streamFfmpeg(): RunningProcess {
+  override streamFfmpeg(): RunningProcess {
     throw new Error('Unexpected streaming command.');
   }
 }

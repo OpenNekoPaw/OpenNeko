@@ -118,9 +118,14 @@ export interface MediaRuntimeQualification {
     readonly av1: boolean;
     readonly vp8: boolean;
     readonly vp9: boolean;
+    readonly aac: boolean;
+    readonly mp3: boolean;
+    readonly flac: boolean;
+    readonly dts: boolean;
   };
   readonly encoders: {
     readonly h264: boolean;
+    readonly h264VideoToolbox: boolean;
     readonly aac: boolean;
   };
   readonly filters: {
@@ -128,6 +133,9 @@ export interface MediaRuntimeQualification {
     readonly tonemap: boolean;
     readonly sidedata: boolean;
     readonly alimiter: boolean;
+    readonly loudnorm: boolean;
+    readonly ebur128: boolean;
+    readonly scaleVt: boolean;
   };
 }
 

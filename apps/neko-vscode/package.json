@@ -39,6 +39,7 @@
   "dependencies": {
     "@neko/agent": "workspace:*",
     "@neko/generation": "workspace:*",
+    "@neko/media": "workspace:*",
     "@neko/platform": "workspace:*",
     "@neko/shared": "workspace:*"
   },

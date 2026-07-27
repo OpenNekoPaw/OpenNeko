@@ -18,6 +18,7 @@ import {
   stageOpenNekoApplicationRuntime,
   writeMergedLocalizations,
 } from './package-openneko-platform.mjs';
+import { stageDevelopmentMediaRuntime } from './media-runtime-closure.mjs';
 
 const repositoryRoot = resolve(import.meta.dirname, '..');
 const applicationRoot = join(repositoryRoot, 'apps', 'neko-vscode');
@@ -40,6 +41,7 @@ export function stageOpenNekoDevExtension(stageRoot = OPENNEKO_DEV_STAGE_ROOT) {
   mkdirSync(featureStageRoot, { recursive: true });
 
   stageOpenNekoApplicationRuntime(stageRoot);
+  stageDevelopmentMediaRuntime(stageRoot, resolveHostTarget());
   cpSync(join(applicationRoot, 'README.md'), join(stageRoot, 'README.md'));
   cpSync(join(applicationRoot, 'LICENSE'), join(stageRoot, 'LICENSE'));
   writeJson(join(stageRoot, 'package.json'), createComposedManifest());
@@ -54,6 +56,12 @@ export function stageOpenNekoDevExtension(stageRoot = OPENNEKO_DEV_STAGE_ROOT) {
     stageRoot,
     featurePackages: Object.freeze(featureRoots.map(([packageName]) => packageName)),
   });
+}
+
+function resolveHostTarget(platform = process.platform, arch = process.arch) {
+  if (platform === 'darwin' && arch === 'arm64') return 'darwin-arm64';
+  if (platform === 'linux' && arch === 'x64') return 'linux-x64';
+  throw new Error(`Unsupported OpenNeko development target ${platform}-${arch}.`);
 }
 
 function buildOpenNekoDevExtension() {

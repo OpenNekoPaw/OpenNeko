@@ -123,11 +123,16 @@ export class NodeMediaRuntime {
             av1: hasListedCapability(decoderText, 'av1'),
             vp8: hasListedCapability(decoderText, 'vp8'),
             vp9: hasListedCapability(decoderText, 'vp9'),
+            aac: hasListedCapability(decoderText, 'aac'),
+            mp3: hasListedCapability(decoderText, 'mp3'),
+            flac: hasListedCapability(decoderText, 'flac'),
+            dts: hasListedCapability(decoderText, 'dca'),
           },
           encoders: {
             h264:
               hasListedCapability(encoderText, 'libx264') ||
               hasListedCapability(encoderText, 'h264'),
+            h264VideoToolbox: hasListedCapability(encoderText, 'h264_videotoolbox'),
             aac: hasListedCapability(encoderText, 'aac'),
           },
           filters: {
@@ -135,6 +140,9 @@ export class NodeMediaRuntime {
             tonemap: hasListedCapability(filterText, 'tonemap'),
             sidedata: hasListedCapability(filterText, 'sidedata'),
             alimiter: hasListedCapability(filterText, 'alimiter'),
+            loudnorm: hasListedCapability(filterText, 'loudnorm'),
+            ebur128: hasListedCapability(filterText, 'ebur128'),
+            scaleVt: hasListedCapability(filterText, 'scale_vt'),
           },
         };
       } catch (error) {
@@ -170,6 +178,14 @@ export class NodeMediaRuntime {
     const probe = await this.probe(sourcePath, signal);
     const video = probe.video;
     if (!video) throw new Error('Frame source contains no video stream.');
+    this.assertHardwareVideoBackend();
+    const qualification = await this.qualify(signal);
+    if (!qualification.filters.scaleVt) {
+      throw new MediaRuntimeUnavailableError(
+        'VideoToolbox scale_vt filter',
+        'Bounded frame capture requires hardware scaling before single-frame readback.',
+      );
+    }
     if (isHdr(video)) {
       throw new MediaRuntimeUnavailableError(
         'hardware-only HDR frame capture',
@@ -186,6 +202,11 @@ export class NodeMediaRuntime {
         [
           '-v',
           'error',
+          '-xerror',
+          '-hwaccel',
+          'videotoolbox',
+          '-hwaccel_output_format',
+          'videotoolbox_vld',
           '-ss',
           decimal(timeSeconds),
           '-i',
@@ -798,7 +819,7 @@ function compactDiagnostic(stderr: string): string {
 function videoFilter(video: MediaVideoStream, maxWidth = 1280, maxHeight = 720): string {
   const size = fitVideoWithin(video.width, video.height, maxWidth, maxHeight);
   if (!isHdr(video)) {
-    return `scale=${size.width}:${size.height}:flags=lanczos,format=yuv420p`;
+    return `scale_vt=w=${size.width}:h=${size.height},hwdownload,format=nv12,format=yuvj420p`;
   }
   return [
     `zscale=w=${size.width}:h=${size.height}:t=linear:npl=100`,
