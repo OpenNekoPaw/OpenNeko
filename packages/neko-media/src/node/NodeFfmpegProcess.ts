@@ -75,7 +75,7 @@ export class NodeFfmpegProcess implements FfmpegProcessPort {
     throwIfAborted(signal);
     const child = this.spawn('ffmpeg', args);
     const output = new PassThrough();
-    child.stdout.pipe(output);
+    child.stdout.pipe(output, { end: false });
     const abort = (): void => {
       child.kill('SIGKILL');
     };
@@ -109,7 +109,10 @@ export class NodeFfmpegProcess implements FfmpegProcessPort {
         signal?.removeEventListener('abort', abort);
       }
     })();
-    void completion.catch((error: unknown) => output.destroy(asError(error)));
+    void completion.then(
+      () => output.end(),
+      (error: unknown) => output.destroy(asError(error)),
+    );
     return {
       stdout: output,
       completion,

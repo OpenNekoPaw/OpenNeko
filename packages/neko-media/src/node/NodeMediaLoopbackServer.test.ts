@@ -63,6 +63,33 @@ describe('NodeMediaLoopbackServer', () => {
     expect(laterResponse.status).toBe(206);
   });
 
+  it('aborts an open Range response when its file token is revoked', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'cut-media-server-'));
+    roots.push(root);
+    const filePath = path.join(root, 'segment.mp4');
+    await writeFile(filePath, Buffer.alloc(8 * 1024 * 1024));
+    const server = new NodeMediaLoopbackServer();
+    servers.push(server);
+    const registration = await server.registerFile(filePath, 'video/mp4');
+
+    await new Promise<void>((resolve, reject) => {
+      const request = get(registration.url, { headers: { Range: 'bytes=0-' } }, (response) => {
+        response.once('aborted', resolve);
+        response.once('error', (error) => {
+          if ((error as NodeJS.ErrnoException).code === 'ECONNRESET') resolve();
+          else reject(error);
+        });
+        server.unregister(registration.token);
+      });
+      request.once('error', (error) => {
+        if ((error as NodeJS.ErrnoException).code === 'ECONNRESET') resolve();
+        else reject(error);
+      });
+    });
+
+    expect((await fetch(registration.url)).status).toBe(404);
+  });
+
   it('frames PCM only after explicit priming and rejects a second consumer', async () => {
     const server = new NodeMediaLoopbackServer();
     servers.push(server);

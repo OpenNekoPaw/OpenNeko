@@ -10,6 +10,7 @@ import { ConsoleLogger, type ILogger } from '@neko/shared';
 interface RegisteredFile {
   readonly path: string;
   readonly contentType: string;
+  readonly abortController: AbortController;
 }
 
 interface PcmRegistration {
@@ -62,7 +63,7 @@ export class NodeMediaLoopbackServer {
     if (!metadata.isFile()) throw new Error('Cut media registration requires a file.');
     const port = await this.ensureStarted();
     const token = this.createToken();
-    this.files.set(token, { path, contentType });
+    this.files.set(token, { path, contentType, abortController: new AbortController() });
     return { token, url: `http://${HOST}:${port}${FILE_PREFIX}${token}` };
   }
 
@@ -86,7 +87,11 @@ export class NodeMediaLoopbackServer {
   }
 
   unregister(token: string): void {
-    this.files.delete(token);
+    const file = this.files.get(token);
+    if (file) {
+      this.files.delete(token);
+      file.abortController.abort(new Error('Media file session was stopped.'));
+    }
     const pcm = this.pcmStreams.get(token);
     if (!pcm) return;
     this.pcmStreams.delete(token);
@@ -95,8 +100,8 @@ export class NodeMediaLoopbackServer {
   }
 
   async dispose(): Promise<void> {
+    for (const token of [...this.files.keys()]) this.unregister(token);
     for (const token of [...this.pcmStreams.keys()]) this.unregister(token);
-    this.files.clear();
     await this.startPromise?.catch(() => undefined);
     const server = this.server;
     this.server = undefined;
@@ -110,7 +115,9 @@ export class NodeMediaLoopbackServer {
 
   private createToken(): string {
     let token = randomUUID();
-    while (this.files.has(token) || this.pcmStreams.has(token)) token = randomUUID();
+    while (this.files.has(token) || this.pcmStreams.has(token)) {
+      token = randomUUID();
+    }
     return token;
   }
 
@@ -208,7 +215,17 @@ export class NodeMediaLoopbackServer {
       response.end();
       return;
     }
-    await pipeline(createReadStream(registration.path, range), response);
+    try {
+      await pipeline(createReadStream(registration.path, range), response, {
+        signal: registration.abortController.signal,
+      });
+    } catch (error) {
+      if (registration.abortController.signal.aborted) {
+        if (!response.destroyed) response.destroy();
+        return;
+      }
+      throw error;
+    }
   }
 
   private async servePcm(
