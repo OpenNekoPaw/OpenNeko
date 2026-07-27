@@ -58,6 +58,17 @@ Five-layer analysis:
 
 ## Decisions
 
+### Development staging owns the pre-launch process boundary
+
+VS Code starts `preLaunchTask` as a separate process and does not propagate the
+Extension Host launch configuration's `env` object into that task. The
+developer-local product and feature build tasks therefore receive the same
+explicit FFmpeg and ffprobe paths through their own `options.env`. Development
+staging still qualifies and copies those executables into the generated product
+closure; it does not discover a PATH executable or weaken packaged runtime
+verification. A local configuration regression test requires launch and task
+environment identities to remain equal.
+
 ### PCM uses a bounded prepare/start scheduler
 
 `PcmAudioClient.prepare()` obtains the response, creates audio nodes, and waits

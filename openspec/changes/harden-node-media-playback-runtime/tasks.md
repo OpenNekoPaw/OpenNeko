@@ -53,6 +53,8 @@
       missing HDR/audio capabilities in orchestration tests.
 - [x] 4.4 Include `loudnorm`, `ebur128`, `alimiter`, AAC, FLAC, and DTS decode
       in the staged runtime capability signature.
+- [x] 4.5 Pass the explicit development runtime identity through the VS Code
+      pre-launch task process boundary and add a local configuration regression.
 
 ## 5. Native Preview Qualification
 

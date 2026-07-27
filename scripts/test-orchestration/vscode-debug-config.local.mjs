@@ -156,16 +156,36 @@ test(
     skip: !hasLocalVSCodeConfiguration,
   },
   async () => {
-    const [taskConfiguration, packageManifest] = await Promise.all([
+    const [launchConfiguration, taskConfiguration, packageManifest] = await Promise.all([
+      readWorkspaceJson('.vscode/launch.json'),
       readWorkspaceJson('.vscode/tasks.json'),
       readWorkspaceJson('package.json'),
     ]);
     const productDevTask = taskConfiguration.tasks.find(
       (task) => task.label === 'build:product-dev',
     );
+    const developmentConfiguration = launchConfiguration.configurations.find(
+      (configuration) => configuration.name === 'Debug Dev (All)',
+    );
+    const featureConfiguration = launchConfiguration.configurations.find(
+      (configuration) => configuration.name === 'Debug Feature Packages (All)',
+    );
+    const featureDevTask = taskConfiguration.tasks.find(
+      (task) => task.label === 'build:feature-dev',
+    );
     assert.equal(
       productDevTask?.command,
       'pnpm prepare:vscode-media-fixture && pnpm build:vscode:dev',
+    );
+    assert.deepEqual(
+      productDevTask?.options?.env,
+      developmentConfiguration?.env,
+      'the product pre-launch task must receive the explicit media runtime paths because launch env is not inherited by preLaunchTask',
+    );
+    assert.deepEqual(
+      featureDevTask?.options?.env,
+      featureConfiguration?.env,
+      'the feature pre-launch task must receive the explicit fixture runtime paths because launch env is not inherited by preLaunchTask',
     );
     assert.equal(
       typeof packageManifest.scripts['prepare:vscode-media-fixture'],

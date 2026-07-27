@@ -15,6 +15,9 @@ wholly unreadable source.
 - Freeze one qualified FFmpeg runtime contract for development and packaged
   OpenNeko: exact executable identity, required codecs/filters, target identity,
   integrity metadata, and fail-visible activation diagnostics.
+- Pass the explicit development FFmpeg/ffprobe identity through the VS Code
+  pre-launch task boundary; launch-configuration environment does not propagate
+  to that separate process.
 - Require HDR10/PQ and HLG sources to use either a changing-frame-qualified
   native MP4 profile or an all-hardware preview closure. On darwin the closure
   is VideoToolbox decode, `scale_vt`, and `h264_videotoolbox` with software

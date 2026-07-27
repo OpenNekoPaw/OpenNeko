@@ -28,6 +28,14 @@ metadata.
 - **THEN** media activation fails before feature activation
 - **AND** Cut does not degrade to compressor-only or limiter-only output
 
+#### Scenario: VS Code development pre-launch staging
+
+- **WHEN** `Debug Dev (All)` runs its product build task
+- **THEN** the task receives the same explicit FFmpeg and ffprobe identity as
+  the Extension Host launch
+- **AND** the generated development extension stages and qualifies that runtime
+- **AND** it does not depend on launch-environment inheritance or PATH fallback
+
 ### Requirement: Video processing is hardware-only
 
 HDR10/PQ and HLG sources SHALL use either a narrowly qualified native Webview
