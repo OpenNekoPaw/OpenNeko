@@ -43,4 +43,4 @@ WebM）。HEVC、AV1、10-bit、HDR10/HLG、非常见容器和不受 Electron �
 10-bit/HDR 原样显示在 8-bit SDR 预览路径；源素材与最终导出仍保持独立。
 
 架构决策见
-`docs/architecture/adr-cut-mse-node-ffmpeg-media-runtime-boundary.md`。
+`docs/architecture/adr-cut-html-video-node-ffmpeg-media-runtime-boundary.md`。

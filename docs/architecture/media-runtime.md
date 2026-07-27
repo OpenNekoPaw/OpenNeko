@@ -13,7 +13,8 @@ fallback。
 - `@neko/media`：host-neutral probe、视频 descriptor、PCM、波形和失败范围契约。
 - `@neko/media/node`：FFmpeg/ffprobe 子进程、取消、诊断、tokenized loopback
   HTTP、Range、PCM framing 和临时会话生命周期。
-- `@neko/media/browser`：MSE 与 Web Audio 消费，不接触 Node、VS Code 或本地路径。
+- `@neko/media/browser`：原生 HTML video 生命周期与 Web Audio 消费，不接触
+  Node、VS Code 或本地路径。
 - Preview、Canvas、Cut、Tools、Assets、Agent：各自拥有领域 port、操作编排和
   session identity；不得重建万能媒体 client。
 - Webview：消费授权 URL 和 descriptor。媒体字节不通过 `postMessage`，本地路径
@@ -25,7 +26,7 @@ domain controller
   -> @neko/media/node
   -> ffprobe / FFmpeg
   -> opaque loopback HTTP Range / PCM
-  -> Webview <video> / MSE / Web Audio
+  -> Webview <video src> / Web Audio
 ```
 
 ## 格式与质量策略
@@ -66,10 +67,20 @@ Cut 将当前十秒有界预览段内的所有可听 Clip 一次提交给 Host�
 Timeline 主时钟；不再建立逐 Clip mix bus，也不使用
 `DynamicsCompressorNode` 冒充响度标准化。
 
-Cut 的 H.264 片段仅在源时间为 0 时使用 fMP4 stream-copy。非零 seek 若直接
-copy，片段可能从 0 开始携带不可独立解码的 P/B 帧、首个关键帧落在数秒后；
-因此该路径固定使用 VideoToolbox 解码、`scale_vt` 与
-`h264_videotoolbox -allow_sw 0` 生成零起点有界片段，不允许 CPU fallback。
+Cut 的 compatible H.264 MP4 和已验证 VP8 WebM 直接注册原文件 Range URL。
+descriptor 携带 Clip source-time origin；Chromium 根据容器索引和 byte Range
+完成关键帧 pre-roll。非零 seek 不启动 FFmpeg，不生成 GOP fragment，也不把
+源文件读入应用内存。
+
+Cut Webview 将授权 URL 直接赋给 active/standby `<video>`。Chromium 负责 Range
+调度、缓存、demux、decoder backpressure 和 seek；Cut 不调用视频 `fetch()`，
+不创建 `MediaSource`/`SourceBuffer`，也不维护缓冲窗口。同一 Clip 的 PCM
+generation 滚动时，Host 转移 video session ownership，只退休旧 PCM session。
+
+H.264 容器不兼容时完成 `-c:v copy` 的有界 MP4 后再发布普通 Range URL。
+不兼容 codec 固定使用 VideoToolbox 解码、`scale_vt` 与
+`h264_videotoolbox -allow_sw 0`，完成 seekable session file 后走同一个
+`<video src>` contract；不允许 CPU fallback。
 
 Cut 导出复用相同的 Clip 音频事实，但对完整节目执行两遍响度处理：第一遍
 测量 integrated loudness、true peak、loudness range、threshold 与 target
@@ -108,12 +119,14 @@ DTS 与当前平台硬件视频闭包；缺少任一必要能力会阻断媒体 
 ## 安全与生命周期
 
 - Loopback 只监听 `127.0.0.1`，URL 使用不可预测 session token，不暴露路径。
-- 文件响应支持标准 byte Range；PCM 每个 token 只允许一个消费者。Chromium
-  在 seek/替换资源时关闭旧 Range response 属于正常取消；只有连接仍有效时的
-  流关闭或真实文件 IO 失败才记录为 loopback 错误。
+- 文件响应支持标准 byte Range，并允许 Chromium 重复或并发请求同一 token；
+  PCM 每个 token 只允许一个消费者。Chromium 在 seek/替换资源时关闭旧 Range
+  response 属于正常取消；只有连接仍有效时的流关闭、FFmpeg 失败或真实文件 IO
+  失败才记录为 loopback 错误。
 - Webview CSP 仅为媒体/文档 entry 开放 loopback，其他 entry 保持关闭。
 - stop、seek、替换或 Extension dispose 必须终止子进程、撤销 token、结束 HTTP
-  响应并删除 session 临时文件。未知 session 必须 fail-visible。
+  响应并删除不再由其他 operation 拥有的 session 临时文件。未知 session 必须
+  fail-visible。
 
 ## 验证
 

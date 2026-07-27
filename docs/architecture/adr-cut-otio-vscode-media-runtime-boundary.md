@@ -10,7 +10,7 @@
 
 Desktop Cut 与未来媒体 adapter 由独立 OpenSpec/ADR 决定。本 ADR 只要求新的 OTIO/Cut Core contract 不依赖当前 Neko Engine，以便未来替换或删除媒体实现时不重写工程模型。
 
-后续实施（2026-07-26）：[`adr-cut-mse-node-ffmpeg-media-runtime-boundary.md`](adr-cut-mse-node-ffmpeg-media-runtime-boundary.md) 已通过 MSE、Node/FFmpeg、代理和 PCM 替换 Cut Engine media adapter；本文只继续约束 OTIO 工程和领域 port。
+后续实施（2026-07-27）：[`adr-cut-html-video-node-ffmpeg-media-runtime-boundary.md`](adr-cut-html-video-node-ffmpeg-media-runtime-boundary.md) 已通过原生 HTML video Range、Node/FFmpeg preparation 和 PCM 替换 Cut Engine media adapter；本文只继续约束 OTIO 工程和领域 port。
 
 ## 决策摘要
 

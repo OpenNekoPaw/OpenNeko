@@ -19,11 +19,13 @@ Webview 不是文件系统 owner，也不是 FFmpeg host：
   Webview 的 versioned、变化帧验证结果直放窄化 MP4 profile，或将非优先的
   VP9/WebM 无重编码 remux 为 VP9/MP4；其他视频只能通过完整硬件闭包生成
   H.264 SDR preview。硬件能力不足时明确失败，不使用软件 proxy。
-  Cut 的非原生预览使用有界时间区间，不要求预先转完整文件。
+  Cut 的非原生预览使用有界时间区间，并在 Host 完成 seekable file 后发布。
 - 音频统一由 FFmpeg 解码为 framed float32 PCM，再由
   `PcmAudioClient`/Web Audio 消费；浏览器 codec 支持不是音频真值。
-- Cut 使用 MSE 视频；Preview 和 Canvas 可使用授权 HTTP Range URL。音频
-  clock 是有音频场景的主时钟，视频按阈值校正。
+- Cut、Preview 和 Canvas 都使用授权 HTTP Range URL 与原生 `<video src>`。
+  音频 clock 是有音频场景的主时钟，视频按阈值校正。
+- Chromium 负责视频 Range、缓存、demux 和 decoder backpressure。Webview 不
+  fetch 视频、不创建 `MediaSource`/`SourceBuffer`，Host 不提供第二条 MSE 路径。
 - token、URL、session、blob 和 Webview URI 都是运行态句柄，不得进入
   `.nkc`、OTIO 或其他持久项目事实。
 
@@ -36,7 +38,7 @@ Webview 不是文件系统 owner，也不是 FFmpeg host：
 - 需要 Node media 的入口只开放
   `connect-src http://127.0.0.1:*`；需要原生 `<video src>` 的入口同时开放
   `media-src http://127.0.0.1:*`。
-- MSE/临时媒体只开放 `blob:`；小型 poster/thumbnail 可开放 `data:`。
+- 小型 poster/thumbnail 可按入口开放 `data:` 或 `blob:`；视频不通过 blob。
 - PDF/EPUB 等确实需要 worker/frame 的入口单独开放对应 directive。
 - 不开放 `file:`、宽泛 `http:`、宽泛 `ws:`、`*` 或生产
   `unsafe-eval`。
@@ -77,6 +79,15 @@ loopback file endpoint 必须：
 - 在 session stop/dispose 后拒绝访问；
 - 禁止把大媒体整体转成 base64/data URI 或无界内存 blob。
 
+Cut native video endpoint 必须：
+
+- compatible H.264 MP4/qualified VP8 WebM 直接注册原文件，不启动 FFmpeg；
+- 允许同一 token 的 HEAD、重复 GET、开放/闭合 Range 和浏览器并发读取；
+- remux/硬件转换只有在 seekable session file 完成后才能注册；
+- generation 替换、stop 或 dispose 时撤销 token 并删除 session file；
+- Webview 只接受 `http://127.0.0.1` descriptor，不接受任意网络 URL；
+- same-Clip PCM generation 转移 video file session owner，不重设 `src`。
+
 PCM endpoint 必须先发送协议 header，再发送固定格式 frame。播放器在收到
 首个可调度 PCM frame 前不能宣称音频 clock ready；abort/seek/stop 是正常
 EOF，真实 FFmpeg stderr 或协议截断则是可见错误。浏览器 consumer 必须有界
@@ -91,8 +102,8 @@ ResourceRef / workspace-relative path
   -> NodeMediaRuntime probe
   -> direct H.264/VP8 | changing-frame-qualified native MP4
      | non-priority VP9/WebM->MP4 remux | hardware-only H.264 preview
-  -> tokenized Range descriptor + optional PCM descriptor
-  -> Webview <video>/MSE + PcmAudioClient
+  -> tokenized Range + optional PCM descriptor
+  -> Webview <video src> + PcmAudioClient
   -> stop/dispose on discontinuity
 ```
 

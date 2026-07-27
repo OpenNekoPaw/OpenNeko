@@ -5,7 +5,7 @@
 更新日期：2026-07-26
 范围：拟议中的 `apps/neko-desktop`、现有领域子包、Desktop Host bridge、本地媒体运行时，以及 OpenCode、Zed、Craft Agents、Goose、MiniMax Hub 等外部参考的采用边界。
 
-媒体边界更新（2026-07-26）：Rust Engine 与旧 TypeScript client 已退役。VS Code 当前使用共享 `@neko/media`、Node/FFmpeg、tokenized loopback Range/PCM 与浏览器媒体客户端；拟议 Desktop 必须复用相同 host-neutral ports，并由 [`media-runtime.md`](media-runtime.md) 与 [`adr-cut-mse-node-ffmpeg-media-runtime-boundary.md`](adr-cut-mse-node-ffmpeg-media-runtime-boundary.md) 约束。不得从历史 ADR 恢复 Rust Engine、NKV、双 adapter 或自动 fallback。
+媒体边界更新（2026-07-27）：Rust Engine 与旧 TypeScript client 已退役。VS Code 当前使用共享 `@neko/media`、Node/FFmpeg、tokenized loopback Range/PCM 与浏览器媒体客户端；拟议 Desktop 必须复用相同 host-neutral ports，并由 [`media-runtime.md`](media-runtime.md) 与 [`adr-cut-html-video-node-ffmpeg-media-runtime-boundary.md`](adr-cut-html-video-node-ffmpeg-media-runtime-boundary.md) 约束。不得从历史 ADR 恢复 Rust Engine、NKV、双 adapter 或自动 fallback。
 
 ## 背景
 

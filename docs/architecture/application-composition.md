@@ -15,7 +15,7 @@ OpenNeko 将可安装产品与可复用平台、领域包分开。当前只有�
 | OpenNeko for VS Code | `apps/neko-vscode`                                                                                                                                              | Extension Pack 清单、保留扩展组合、VSIX 打包和发布验收                              | 领域 Extension、Custom Editor、Webview root、领域命令/provider 实现        |
 | 共享平台             | `packages/neko-types`、`packages/neko-host`、`packages/neko-media`、`packages/neko-content`、`packages/neko-ui`、`packages/neko-entity`、`packages/neko-search` | host-neutral contract、Node/browser 媒体 runtime、内容语义、共享 UI、实体与搜索服务 | 产品生命周期、产品清单、领域实现、对 `apps/*` 的依赖                       |
 | 保留领域包           | `packages/neko-agent`、`packages/neko-assets`、`packages/neko-canvas`、`packages/neko-cut`、`packages/neko-preview`、`packages/neko-tools`                      | 领域 core、authoring、validation、capability、包自有 host adapter 和 UI root        | 产品组合、对 `apps/*` 的依赖、平行应用级领域实现                           |
-| Media runtime        | `packages/neko-media`                                                                                                                                           | 媒体 contract、FFmpeg process、loopback Range/PCM、browser MSE/PCM client           | 产品导航、项目事实、领域 timeline、UI                                      |
+| Media runtime        | `packages/neko-media`                                                                                                                                           | 媒体 contract、FFmpeg process、loopback Range/PCM、browser HTML video/PCM client    | 产品导航、项目事实、领域 timeline、UI                                      |
 
 ## 依赖方向
 

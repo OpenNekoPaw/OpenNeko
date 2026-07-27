@@ -18,13 +18,24 @@
 - [x] 2.3 Add prepared-generation gain retirement to `PcmAudioClient` and keep
       adjacent generations on one shared `AudioContext`.
 
-## 3. GOP-aware video preparation
+## 3. Native Range video preparation
 
-- [x] 3.1 Add source-fingerprint-owned keyframe index reuse in the Node adapter.
-- [x] 3.2 Replace the non-zero H.264 transcode rule with preceding-keyframe
-      fragment copy and explicit requested offset.
-- [ ] 3.3 Remove the fixed ten-second video boundary and keep buffering bounded
-      independently from OTIO input boundaries.
+- [x] 3.1 Replace the Cut MSE descriptor with one authorized native Range URL,
+      source-time origin, duration, MIME, and preparation profile.
+- [x] 3.2 Publish compatible H.264 MP4 and qualified VP8 WebM directly from the
+      original source without FFmpeg or Clip-scoped preview files.
+- [x] 3.3 Publish remux and hardware-converted intervals only as completed,
+      seekable, session-owned Range files.
+- [x] 3.4 Replace `MseVideoClient` with a native HTML video lifecycle client
+      that loads, seeks, primes a real frame, plays, pauses, and disposes.
+- [x] 3.5 Remove Cut's single-consumer media stream, incremental fetch,
+      `SourceBuffer`, and buffer-window implementation.
+- [x] 3.6 Remove the fixed ten-second video boundary and keep video ownership
+      aligned with OTIO input boundaries.
+- [x] 3.7 Transfer the video file session across same-Clip PCM generations so
+      retiring an audio window does not revoke retained native video.
+- [x] 3.8 Allow only `http://127.0.0.1:*` in the Cut Webview `media-src` CSP and
+      reject non-loopback video descriptors.
 
 ## 4. Webview generation ownership
 
@@ -34,15 +45,21 @@
 - [x] 4.3 Keep one monotonic Timeline clock through promotion and dispose the
       old generation afterward.
 - [x] 4.4 Add latest-only paused seek generation and paused promotion.
+- [x] 4.5 Separate pause from full stop so PCM retirement retains the authorized
+      native video session and same-Clip seek can use `currentTime`.
+- [x] 4.6 Add path regressions proving pause cannot revoke the current video
+      token and cross-Clip paused promotion transfers the replacement owner.
+- [x] 4.7 Route Timeline ruler gestures and track clicks through the same
+      media-aware seek coordinator used by preview controls and shortcuts.
 
 ## 5. Validation
 
 - [x] 5.1 Run focused `@neko/media` and Cut tests/typechecks/builds.
 - [x] 5.2 Run `pnpm build`, `pnpm test`, `pnpm check`, OpenSpec, legacy-debt,
       and unused-code gates.
-- [x] 5.3 Validate `cut-basic.otio` only in `~/Git/neko-test` through the real
+- [ ] 5.3 Validate `cut-basic.otio` only in `~/Git/neko-test` through the real
       Extension Development Host and CDP Webview lane.
-- [x] 5.4 Record same-Clip handoff, Clip switch, paused seek, audio peak, A/V
+- [ ] 5.4 Record same-Clip handoff, Clip switch, paused seek, audio peak, A/V
       synchronization, and console evidence.
 
 ## 6. Cold-start and derived-representation follow-up

@@ -58,7 +58,8 @@ runtime 入口。
 - 通用入口只包含 probe、prepared media、PCM、失败范围和生命周期契约。
 - `@neko/media/node` 拥有 FFmpeg/ffprobe 进程与 opaque loopback
   Range/PCM session，不依赖 VS Code 或产品包。
-- `@neko/media/browser` 拥有 MSE/PCM client，不访问 Node、VS Code 或本地路径。
+- `@neko/media/browser` 拥有原生 HTML video 生命周期与 PCM client，不访问
+  Node、VS Code 或本地路径。
 - Preview、Canvas、Tools、Agent、Assets 与 Cut 必须通过各自的窄领域端口组合
   这些能力，不得重新创建宽泛 `EngineClient` facade。
 
@@ -134,7 +135,7 @@ Webview 负责浏览器沙箱内的 UI、用户交互和可恢复展示状态。
 `packages/neko-engine` 与 `packages/neko-client` 已删除。当前媒体边界由
 `@neko/media`、领域 port 和 FFmpeg adapter 组成；不存在 Engine fallback。
 
-- H.264/Range、MSE、PCM、抽帧、波形、转码和导出遵循
+- H.264/Range、原生 HTML video、PCM、抽帧、波形、转码和导出遵循
   [`media-runtime.md`](media-runtime.md)。
 - OTIO、Canvas 文档、Agent 会话和其他项目事实由 owning domain 持有，FFmpeg
   只是有界执行 adapter。

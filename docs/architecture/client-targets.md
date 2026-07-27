@@ -39,7 +39,7 @@ Preview、Assets、Agent、Cut 和 Canvas。
 VS Code Webview 只消费 Extension Host 授权的 loopback URL、媒体
 descriptor 和短生命周期 token。工作区文件访问、FFmpeg/ffprobe 进程、
 Range、PCM、代理与导出由 Extension Host 中的 `@neko/media/node`
-adapter 拥有；Webview 只使用浏览器 `<video>`、MSE 和 PCM client，不直接
+adapter 拥有；Webview 只使用浏览器 `<video src>` 和 PCM client，不直接
 访问 Node、文件路径或启动 FFmpeg。
 
 ## 已移除目标

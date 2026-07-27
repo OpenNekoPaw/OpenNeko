@@ -70,27 +70,26 @@ PCM decoding, and export.
   the proxy
 - **AND** it does not report the input media as corrupt or unsupported
 
-### Requirement: Preview uses declared MSE preparation
+### Requirement: Preview uses declared native Range preparation
 
-Video preview SHALL use an explicit versioned MSE descriptor and opaque loopback
-URLs. The Webview SHALL render it with a muted `<video>` element.
+Video preview SHALL use an explicit versioned native video descriptor and one
+opaque loopback Range URL. The Webview SHALL assign it directly to a muted
+`<video>` element without application-level video byte fetching or buffering.
 
 #### Scenario: H.264 input
 
 - **WHEN** an H.264 source is compatible with the preview profile
-- **THEN** the adapter packages or remuxes it without video re-encoding where
-  possible
-- **AND** reports an H.264 MSE MIME type
+- **THEN** the adapter publishes the original compatible MP4 without video
+  re-encoding or Clip-scoped preprocessing
+- **AND** reports an H.264 video MIME type and source-time origin
 
 #### Scenario: Long Clip or locally corrupt suffix
 
-- **WHEN** the next OTIO input boundary is farther than the bounded preview
-  preparation window
-- **THEN** the host prepares only the next window and exposes its end as the
-  active segment boundary
-- **AND** the Webview requests the following window before that boundary
-- **AND** corruption outside the prepared window does not prevent an earlier
-  valid window from playing
+- **WHEN** the next OTIO input boundary is farther than the current PCM window
+- **THEN** the active native video resource remains connected through that
+  input boundary
+- **AND** only the PCM generation rolls forward
+- **AND** Chromium bounds video reads through native Range requests
 
 #### Scenario: Unsupported input codec
 
@@ -101,8 +100,8 @@ URLs. The Webview SHALL render it with a muted `<video>` element.
 
 #### Scenario: VP8 qualification
 
-- **WHEN** the target VS Code/Electron Webview passes the real VP8 WebM MSE
-  fixture
+- **WHEN** the target VS Code/Electron Webview passes the real VP8 WebM native
+  `<video src>` fixture
 - **THEN** VP8 may use the direct WebM preparation profile
 - **ELSE** VP8 uses the explicit H.264 transcode profile
 

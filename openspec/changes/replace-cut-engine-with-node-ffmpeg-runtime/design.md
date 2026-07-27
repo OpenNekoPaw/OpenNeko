@@ -8,8 +8,9 @@
   Electron, WebSocket, or Engine DTOs.
 - The Extension Host owns trusted workspace path resolution, ffprobe/FFmpeg
   processes, cache/session lifecycle, cancellation, and loopback HTTP delivery.
-- The Webview owns MSE buffering, `<video>` rendering, Web Audio playback, and
-  recoverable presentation state.
+- Chromium owns Range scheduling, demux, buffering, and decode. The Webview
+  owns `<video>` lifecycle, Web Audio playback, and recoverable presentation
+  state.
 - OpenNeko owns the preview clock and maps media timestamps to OTIO timeline
   time.
 - OTIO remains the project/edit model; FFmpeg is an execution adapter, not a
@@ -24,7 +25,7 @@ flowchart LR
   Adapter["Node/FFmpeg adapter"]
   Server["Loopback media server"]
   Webview["Cut Webview"]
-  Browser["MSE video + Web Audio"]
+  Browser["native HTML video + Web Audio"]
   Ffmpeg["ffprobe / FFmpeg"]
 
   Extension --> CutDomain
@@ -51,11 +52,10 @@ The frozen contract exposes:
 - `AudioPcmStreamPort.startPcm/resumePcm/stopPcm`
 - `ExportJobPort.export`
 
-Preview results use an explicit MSE descriptor:
+Preview results use an explicit native video descriptor:
 
 - MIME type
-- initialization segment URL
-- ordered media segment URLs and time ranges
+- one opaque loopback Range URL
 - session identity and prepared media time origin
 
 PCM results use an explicit HTTP descriptor:
@@ -81,9 +81,9 @@ mismatched sessions fail visibly.
 ### 5. Testing
 
 - Contract tests cover path containment, probe projection, command construction,
-  segment descriptors, PCM framing, cancellation, cleanup, and export
+  native video descriptors, PCM framing, cancellation, cleanup, and export
   validation.
-- Webview tests cover MSE append order, muted video, PCM clock selection,
+- Webview tests cover native source assignment, muted video, PCM clock selection,
   timeline mapping, drift handling, and disposal.
 - Path assertions prove the Node adapter is selected and the poisoned Engine Cut
   path is never invoked.
@@ -97,13 +97,13 @@ mismatched sessions fail visibly.
 
 1. Cut resolves an OTIO media reference through the Extension Host.
 2. The adapter probes the source and selects one declared preparation profile.
-3. FFmpeg creates MSE-compatible video segments for the active preview interval.
-4. The loopback server exposes opaque session URLs.
-5. The Webview appends video segments to MSE and keeps `<video>` muted.
+3. The Host registers the compatible source or completes a prepared file.
+4. The loopback server exposes one opaque Range URL per video session.
+5. The Webview assigns that URL directly to a muted `<video>`.
 6. FFmpeg decodes each audible input to framed PCM over loopback HTTP.
 7. OpenNeko selects the primary PCM clock when available, otherwise the video
    clock, then maps it to OTIO time.
-8. Stop/cancel tears down processes, responses, object URLs, audio nodes, and
+8. Stop/cancel tears down processes, responses, media sources, audio nodes, and
    temporary artifacts.
 
 There is no legacy Engine retry or automatic adapter fallback at any step.
@@ -112,9 +112,9 @@ There is no legacy Engine retry or automatic adapter fallback at any step.
 
 | Source                               | Initial preview action                                   |
 | ------------------------------------ | -------------------------------------------------------- |
-| H.264 compatible fragmented MP4      | package/copy into the MSE segment contract               |
+| H.264 compatible MP4                 | authorize the original file as a native Range resource  |
 | H.264 incompatible container         | remux into fragmented MP4                                |
-| VP8 after real Webview qualification | package into WebM MSE segments                           |
+| VP8 WebM after real Webview qualification | authorize the original file as a native Range resource |
 | VP8 before qualification             | explicitly transcode to H.264 SDR preview                |
 | HEVC, AV1, other video               | explicitly transcode to H.264 SDR preview                |
 | 10-bit/HDR requiring H.264 proxy     | tone-map and convert to the declared SDR preview profile |
