@@ -49,6 +49,7 @@ export class PcmAudioClient {
   private state: 'idle' | 'preparing' | 'prepared' | 'started' = 'idle';
   private inputEnded = false;
   private playbackEndNotified = false;
+  private retirementTimer: ReturnType<typeof setTimeout> | undefined;
   private disposed = false;
 
   constructor(private readonly options: PcmAudioClientOptions) {
@@ -195,6 +196,42 @@ export class PcmAudioClient {
     return this.gainNode;
   }
 
+  retireAt(contextTime: number, fadeDurationSeconds = 0.01): void {
+    if (this.disposed) return;
+    const context = this.audioContext;
+    const gainNode = this.gainNode;
+    if (!context || !gainNode) {
+      this.dispose();
+      return;
+    }
+    if (!Number.isFinite(contextTime) || contextTime < context.currentTime) {
+      throw new Error('PCM retirement time must be a finite AudioContext time in the future.');
+    }
+    assertNonNegativeFinite(fadeDurationSeconds, 'PCM retirement fade duration');
+    this.disposed = true;
+    const stopped = new Error('PCM audio client was retired.');
+    this.rejectPendingPreparation(stopped);
+    this.rejectPendingStart(stopped);
+    this.rejectPendingFirstScheduled(stopped);
+    this.abortController.abort(stopped);
+    const endTime = contextTime + fadeDurationSeconds;
+    gainNode.gain.cancelScheduledValues(contextTime);
+    gainNode.gain.setValueAtTime(gainNode.gain.value, contextTime);
+    gainNode.gain.linearRampToValueAtTime(0, endTime);
+    for (const source of this.scheduledSources) {
+      try {
+        source.stop(endTime);
+      } catch {
+        // An already-ended Web Audio source has no remaining resource to retire.
+      }
+    }
+    const delayMilliseconds = Math.max(0, (endTime - context.currentTime) * 1000);
+    this.retirementTimer = setTimeout(() => {
+      this.retirementTimer = undefined;
+      this.releaseAudioNodes(false);
+    }, delayMilliseconds);
+  }
+
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
@@ -203,11 +240,21 @@ export class PcmAudioClient {
     this.rejectPendingStart(stopped);
     this.rejectPendingFirstScheduled(stopped);
     this.abortController.abort(stopped);
+    this.releaseAudioNodes(true);
+  }
+
+  private releaseAudioNodes(stopImmediately: boolean): void {
+    if (this.retirementTimer) {
+      clearTimeout(this.retirementTimer);
+      this.retirementTimer = undefined;
+    }
     for (const source of this.scheduledSources) {
-      try {
-        source.stop();
-      } catch {
-        // An already-ended Web Audio source has no remaining resource to stop.
+      if (stopImmediately) {
+        try {
+          source.stop();
+        } catch {
+          // An already-ended Web Audio source has no remaining resource to stop.
+        }
       }
       source.disconnect();
     }

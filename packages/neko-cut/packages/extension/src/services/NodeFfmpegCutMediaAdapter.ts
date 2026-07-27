@@ -93,6 +93,11 @@ interface LoudnessMeasurement {
   readonly targetOffsetLu: number;
 }
 
+interface KeyframeIndex {
+  readonly fingerprint: string;
+  readonly timestampsSeconds: readonly number[];
+}
+
 const PCM_SAMPLE_RATE = 48_000;
 const PCM_CHANNELS = 2;
 
@@ -101,6 +106,7 @@ export class NodeFfmpegCutMediaAdapter implements CutMediaRuntimeAdapter {
   private readonly server: NodeMediaLoopbackServer;
   private readonly cacheRoot: string;
   private readonly sessions = new Map<string, SessionRecord>();
+  private readonly keyframeIndexes = new Map<string, Promise<KeyframeIndex>>();
   private readonly vp8WebmDirectQualified: boolean;
   private readonly hardwareVideoBackend: 'videotoolbox' | 'unavailable';
   private adapterRootPromise: Promise<string> | undefined;
@@ -321,12 +327,22 @@ export class NodeFfmpegCutMediaAdapter implements CutMediaRuntimeAdapter {
     const sourcePath = this.resolveSource(source);
     const probe = await this.probe(source, signal);
     if (!probe.video) throw new Error('Preview source contains no video stream.');
-    const profile = this.selectPreparationProfile(
-      sourcePath,
-      probe.video,
-      options.startTimeSeconds,
-    );
+    const profile = this.selectPreparationProfile(sourcePath, probe.video);
     this.assertPreviewRuntimeCapabilities(profile, signal);
+    const sourceDuration = options.durationSeconds * options.playbackRate;
+    const fragment =
+      profile === 'h264-fragmented-mp4-copy' || profile === 'h264-fragmented-mp4-remux'
+        ? await this.resolveH264Fragment(
+            sourcePath,
+            options.startTimeSeconds,
+            sourceDuration,
+            signal,
+          )
+        : {
+            startTimeSeconds: options.startTimeSeconds,
+            sourceDurationSeconds: sourceDuration,
+            mediaTimeOriginSeconds: 0,
+          };
     const sessionId = this.newSessionId('preview');
     const directory = await nodeFs.mkdtemp(
       nodePath.join(await this.adapterRoot(), `${sessionId}-`),
@@ -334,13 +350,12 @@ export class NodeFfmpegCutMediaAdapter implements CutMediaRuntimeAdapter {
     const webm = profile === 'vp8-webm-direct';
     const outputPath = nodePath.join(directory, webm ? 'preview.webm' : 'preview.mp4');
     try {
-      const sourceDuration = options.durationSeconds * options.playbackRate;
       try {
         await this.process.run(
           'ffmpeg',
           buildPreviewArgs(sourcePath, outputPath, probe.video, profile, {
-            startTimeSeconds: options.startTimeSeconds,
-            sourceDurationSeconds: sourceDuration,
+            startTimeSeconds: fragment.startTimeSeconds,
+            sourceDurationSeconds: fragment.sourceDurationSeconds,
           }),
           signal,
         );
@@ -371,13 +386,13 @@ export class NodeFfmpegCutMediaAdapter implements CutMediaRuntimeAdapter {
               ? 'video/mp4; codecs="avc1.640029"'
               : h264MimeType(probe.video),
           preparationProfile: profile,
-          mediaTimeOriginSeconds: 0,
+          mediaTimeOriginSeconds: fragment.mediaTimeOriginSeconds,
           durationSeconds: options.durationSeconds,
           segments: [
             {
               index: 0,
               startTimeSeconds: 0,
-              endTimeSeconds: options.durationSeconds,
+              endTimeSeconds: fragment.mediaTimeOriginSeconds + sourceDuration,
               url: registration.url,
             },
           ],
@@ -564,7 +579,8 @@ export class NodeFfmpegCutMediaAdapter implements CutMediaRuntimeAdapter {
     );
     filters.push(
       `[${mixedLabel}]atrim=duration=${decimal(options.durationSeconds)},` +
-        `${realtimeLoudnessNormalizer()},aresample=${PCM_SAMPLE_RATE},` +
+        `aformat=sample_fmts=flt:channel_layouts=stereo,` +
+        `${realtimeLoudnessNormalizer()},aresample=${PCM_SAMPLE_RATE},${peakLimiter()},` +
         `aformat=sample_fmts=flt:channel_layouts=stereo[pcmout]`,
     );
     const process = this.process.streamFfmpeg(
@@ -604,15 +620,116 @@ export class NodeFfmpegCutMediaAdapter implements CutMediaRuntimeAdapter {
   private selectPreparationProfile(
     sourcePath: string,
     video: CutMediaVideoStream,
-    startTimeSeconds: number,
   ): CutPreviewPreparationProfile {
     if (video.codecName === 'vp8' && this.vp8WebmDirectQualified) return 'vp8-webm-direct';
     if (video.codecName !== 'h264') return 'h264-sdr-transcode';
-    if (startTimeSeconds > 0) return 'h264-sdr-transcode';
     const extension = nodePath.extname(sourcePath).toLowerCase();
     return extension === '.mp4' || extension === '.m4v'
       ? 'h264-fragmented-mp4-copy'
       : 'h264-fragmented-mp4-remux';
+  }
+
+  private async resolveH264Fragment(
+    sourcePath: string,
+    requestedStartTimeSeconds: number,
+    requestedDurationSeconds: number,
+    signal?: AbortSignal,
+  ): Promise<{
+    readonly startTimeSeconds: number;
+    readonly sourceDurationSeconds: number;
+    readonly mediaTimeOriginSeconds: number;
+  }> {
+    if (requestedStartTimeSeconds === 0) {
+      return {
+        startTimeSeconds: 0,
+        sourceDurationSeconds: requestedDurationSeconds,
+        mediaTimeOriginSeconds: 0,
+      };
+    }
+    const timestamps = await this.keyframes(sourcePath, signal);
+    const preceding = timestamps.reduce<number | undefined>(
+      (nearest, candidate) =>
+        candidate <= requestedStartTimeSeconds && (nearest === undefined || candidate > nearest)
+          ? candidate
+          : nearest,
+      undefined,
+    );
+    if (preceding === undefined) {
+      throw new CutMediaCorruptionError(
+        'interval',
+        'prepare GOP-aligned H.264 preview',
+        `No random-access frame precedes ${decimal(requestedStartTimeSeconds)} seconds.`,
+      );
+    }
+    const mediaTimeOriginSeconds = Math.max(0, requestedStartTimeSeconds - preceding);
+    return {
+      startTimeSeconds: preceding,
+      sourceDurationSeconds: mediaTimeOriginSeconds + requestedDurationSeconds,
+      mediaTimeOriginSeconds,
+    };
+  }
+
+  private async keyframes(sourcePath: string, signal?: AbortSignal): Promise<readonly number[]> {
+    const stat = await nodeFs.stat(sourcePath);
+    const fingerprint = `${stat.size}:${stat.mtimeMs}`;
+    const cached = this.keyframeIndexes.get(sourcePath);
+    if (cached) {
+      const index = await cached;
+      if (index.fingerprint === fingerprint) return index.timestampsSeconds;
+      this.keyframeIndexes.delete(sourcePath);
+    }
+    const pending = this.readKeyframes(sourcePath, fingerprint, signal);
+    this.keyframeIndexes.set(sourcePath, pending);
+    try {
+      return (await pending).timestampsSeconds;
+    } catch (error) {
+      if (this.keyframeIndexes.get(sourcePath) === pending) {
+        this.keyframeIndexes.delete(sourcePath);
+      }
+      throw error;
+    }
+  }
+
+  private async readKeyframes(
+    sourcePath: string,
+    fingerprint: string,
+    signal?: AbortSignal,
+  ): Promise<KeyframeIndex> {
+    let result;
+    try {
+      result = await this.process.run(
+        'ffprobe',
+        [
+          '-v',
+          'error',
+          '-select_streams',
+          'v:0',
+          '-skip_frame',
+          'nokey',
+          '-show_entries',
+          'frame=best_effort_timestamp_time',
+          '-of',
+          'csv=p=0',
+          sourcePath,
+        ],
+        signal,
+      );
+    } catch (error) {
+      throw classifyMediaCommandError(error, 'interval', 'index H.264 random-access frames');
+    }
+    const timestampsSeconds = result.stdout
+      .toString('utf8')
+      .split(/\r?\n/u)
+      .map(Number)
+      .filter((value) => Number.isFinite(value) && value >= 0);
+    if (timestampsSeconds.length === 0) {
+      throw new CutMediaCorruptionError(
+        'stream',
+        'index H.264 random-access frames',
+        'FFprobe returned no usable random-access timestamps.',
+      );
+    }
+    return { fingerprint, timestampsSeconds };
   }
 
   private async buildExportArgs(
@@ -742,7 +859,7 @@ export class NodeFfmpegCutMediaAdapter implements CutMediaRuntimeAdapter {
     if (audioLabels.length > 0) {
       const measurement = await this.measureMixedLoudness(inputArgs, audioFilters, signal);
       audioFilters.push(
-        `[amaster]${measuredLoudnessNormalizer(measurement)},${exportPeakLimiter()}[aout]`,
+        `[amaster]${measuredLoudnessNormalizer(measurement)},${peakLimiter()}[aout]`,
       );
     }
     return [
@@ -1221,7 +1338,7 @@ function toFloat32(buffer: Buffer): Float32Array {
   return new Float32Array(copy);
 }
 
-function exportPeakLimiter(): string {
+function peakLimiter(): string {
   return 'alimiter=limit=0.891251:attack=5:release=50:level=0:latency=1';
 }
 

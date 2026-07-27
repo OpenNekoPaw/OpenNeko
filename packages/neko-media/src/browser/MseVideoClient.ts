@@ -51,6 +51,27 @@ export class MseVideoClient {
     await this.options.video.play();
   }
 
+  pause(): void {
+    if (this.disposed) throw new Error('MSE video client is disposed.');
+    this.options.video.pause();
+  }
+
+  seek(timeSeconds: number): void {
+    if (this.disposed) throw new Error('MSE video client is disposed.');
+    if (!this.canSeek(timeSeconds)) {
+      throw new Error('MSE video seek time is outside the prepared interval.');
+    }
+    this.options.video.currentTime = this.options.descriptor.mediaTimeOriginSeconds + timeSeconds;
+  }
+
+  canSeek(timeSeconds: number): boolean {
+    return (
+      Number.isFinite(timeSeconds) &&
+      timeSeconds >= 0 &&
+      timeSeconds <= this.options.descriptor.durationSeconds
+    );
+  }
+
   async primeForSynchronizedStart(): Promise<void> {
     if (this.disposed) throw new Error('MSE video client is disposed.');
     const { descriptor, video } = this.options;
@@ -60,7 +81,10 @@ export class MseVideoClient {
   }
 
   get currentTimeSeconds(): number {
-    return this.options.video.currentTime;
+    return Math.max(
+      0,
+      this.options.video.currentTime - this.options.descriptor.mediaTimeOriginSeconds,
+    );
   }
 
   set playbackRate(rate: number) {

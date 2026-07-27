@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { PcmAudioClient, parsePcmPackets } from './PcmAudioClient';
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllGlobals();
 });
 
@@ -129,6 +130,30 @@ describe('parsePcmPackets', () => {
     expect(stopped).toHaveLength(starts.length);
   });
 
+  it('retires a generation with a gain ramp before scheduled sources stop', async () => {
+    vi.useFakeTimers();
+    const { stream, controller } = controlledStream();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({ ok: true, status: 200, body: stream })),
+    );
+    const starts: number[] = [];
+    const stopped: number[] = [];
+    const ramps: Array<{ value: number; time: number }> = [];
+    const client = createClient();
+    const prepared = client.prepare(fakeAudioContext(starts, stopped, [], [], [], ramps));
+    controller.enqueue(packet(0n, 20_000n, 48_000, 2));
+    await prepared;
+    await client.startAt(0.75);
+
+    client.retireAt(0.8, 0.01);
+
+    expect(ramps).toEqual([{ value: 0, time: 0.81 }]);
+    expect(stopped).toEqual([0.81]);
+    await vi.advanceTimersByTimeAsync(310);
+    vi.useRealTimers();
+  });
+
   it('reports playback end only after the final scheduled source has ended', async () => {
     const { stream, controller } = controlledStream();
     vi.stubGlobal(
@@ -252,6 +277,7 @@ function fakeAudioContext(
   gainValues: number[] = [],
   curves: Float32Array[] = [],
   scheduledSources: Array<{ onended: (() => void) | null }> = [],
+  ramps: Array<{ value: number; time: number }> = [],
 ): AudioContext {
   const gainNode = {
     gain: {
@@ -264,6 +290,7 @@ function fakeAudioContext(
       setValueAtTime: vi.fn((value: number) => gainValues.push(value)),
       cancelScheduledValues: vi.fn(),
       setValueCurveAtTime: vi.fn((curve: Float32Array) => curves.push(curve)),
+      linearRampToValueAtTime: vi.fn((value: number, time: number) => ramps.push({ value, time })),
     },
     connect: vi.fn(),
     disconnect: vi.fn(),
@@ -283,7 +310,7 @@ function fakeAudioContext(
         connect: vi.fn(),
         disconnect: vi.fn(),
         start: (time: number) => starts.push(time),
-        stop: () => stopped.push(1),
+        stop: (time = 0) => stopped.push(time),
         onended: null as (() => void) | null,
       };
       scheduledSources.push(source);

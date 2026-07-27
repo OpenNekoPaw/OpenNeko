@@ -21,6 +21,7 @@ describe('NodeFfmpegCutMediaAdapter', () => {
   let cacheRoot: string;
   let sourcePath: string;
   let vp8Path: string;
+  let surroundPath: string;
   const adapters: NodeFfmpegCutMediaAdapter[] = [];
 
   beforeAll(async () => {
@@ -30,6 +31,7 @@ describe('NodeFfmpegCutMediaAdapter', () => {
     await mkdir(path.join(root, 'exports'));
     sourcePath = path.join(root, 'source.mp4');
     vp8Path = path.join(root, 'source.webm');
+    surroundPath = path.join(root, 'surround.wav');
     const process = new NodeFfmpegProcess();
     await process.run('ffmpeg', [
       '-y',
@@ -64,6 +66,18 @@ describe('NodeFfmpegCutMediaAdapter', () => {
       'libvpx',
       '-an',
       vp8Path,
+    ]);
+    await process.run('ffmpeg', [
+      '-y',
+      '-v',
+      'error',
+      '-f',
+      'lavfi',
+      '-i',
+      'aevalsrc=0.7*sin(2*PI*440*t)|0.7*sin(2*PI*440*t)|0.7*sin(2*PI*440*t)|0.7*sin(2*PI*440*t)|0.7*sin(2*PI*440*t)|0.7*sin(2*PI*440*t):s=48000:d=1:c=5.1',
+      '-c:a',
+      'pcm_s24le',
+      surroundPath,
     ]);
   }, 30_000);
 
@@ -219,7 +233,7 @@ describe('NodeFfmpegCutMediaAdapter', () => {
     expect(waveform.durationSeconds).toBe(10);
   });
 
-  it('prepares a non-zero H.264 seek as a zero-origin VideoToolbox fragment', async () => {
+  it('prepares a non-zero compatible H.264 seek from the preceding GOP without transcoding', async () => {
     const adapter = createAdapter();
 
     const session = await adapter.startPreview(
@@ -235,8 +249,9 @@ describe('NodeFfmpegCutMediaAdapter', () => {
     if (!segment) throw new Error('Expected one preview segment.');
     const response = await fetch(segment.url, { headers: { Range: 'bytes=0-31' } });
 
-    expect(session.video.preparationProfile).toBe('h264-sdr-transcode');
+    expect(session.video.preparationProfile).toBe('h264-fragmented-mp4-copy');
     expect(session.video.mimeType).toContain('video/mp4');
+    expect(session.video.mediaTimeOriginSeconds).toBeCloseTo(0.25, 2);
     expect(response.status).toBe(206);
     expect((await response.arrayBuffer()).byteLength).toBe(32);
     await adapter.resumePreview(session.sessionId);
@@ -498,7 +513,49 @@ describe('NodeFfmpegCutMediaAdapter', () => {
     const filterGraph = streamArgs?.[streamArgs.indexOf('-filter_complex') + 1];
     expect(filterGraph).toContain('amix=');
     expect(filterGraph).toContain('loudnorm=I=-14:TP=-1:LRA=11:linear=false');
+    expect(filterGraph).toContain('aformat=sample_fmts=flt:channel_layouts=stereo');
+    expect(filterGraph).toContain('alimiter=limit=0.891251');
+    const downmixIndex =
+      filterGraph?.indexOf('aformat=sample_fmts=flt:channel_layouts=stereo') ?? -1;
+    const loudnessIndex = filterGraph?.indexOf('loudnorm=') ?? -1;
+    const resampleIndex = filterGraph?.indexOf('aresample=48000') ?? -1;
+    const limiterIndex = filterGraph?.indexOf('alimiter=') ?? -1;
+    expect(downmixIndex).toBeGreaterThan(-1);
+    expect(downmixIndex).toBeLessThan(loudnessIndex);
+    expect(loudnessIndex).toBeLessThan(resampleIndex);
+    expect(resampleIndex).toBeLessThan(limiterIndex);
     expect(filterGraph).toContain("volume='");
+    await adapter.stopPcm(session.sessionId);
+  });
+
+  it('keeps multichannel-to-stereo realtime PCM within full scale', async () => {
+    const adapter = createAdapter();
+    const session = await adapter.startPcmMix(
+      [
+        {
+          source: { workspaceRelativePath: 'surround.wav' },
+          sourceStartSeconds: 0,
+          playbackRate: 1,
+          gainDb: 0,
+          clipPositionSeconds: 0,
+          clipDurationSeconds: 1,
+          fadeInSeconds: 0,
+          fadeOutSeconds: 0,
+        },
+      ],
+      {
+        timelineStartSeconds: 0,
+        durationSeconds: 0.5,
+        startPaused: false,
+      },
+    );
+
+    const response = await fetch(session.stream.streamUrl);
+    const peak = maxFramedPcmPeak(Buffer.from(await response.arrayBuffer()));
+
+    expect(peak).toBeLessThanOrEqual(1);
+    expect(peak).toBeLessThanOrEqual(0.891252);
+    expect(peak).toBeGreaterThan(0);
     await adapter.stopPcm(session.sessionId);
   });
 
@@ -601,3 +658,24 @@ describe('NodeFfmpegCutMediaAdapter', () => {
     };
   }
 });
+
+function maxFramedPcmPeak(bytes: Buffer): number {
+  let offset = 0;
+  let peak = 0;
+  while (offset < bytes.byteLength) {
+    if (bytes.byteLength - offset < 22) throw new Error('PCM packet header is incomplete.');
+    const durationMicroseconds = Number(bytes.readBigInt64LE(offset + 8));
+    const sampleRate = bytes.readUInt32LE(offset + 16);
+    const channels = bytes.readUInt16LE(offset + 20);
+    const frames = Math.round((durationMicroseconds / 1_000_000) * sampleRate);
+    const payloadBytes = frames * channels * Float32Array.BYTES_PER_ELEMENT;
+    const payloadStart = offset + 22;
+    const payloadEnd = payloadStart + payloadBytes;
+    if (payloadEnd > bytes.byteLength) throw new Error('PCM packet payload is incomplete.');
+    for (let sampleOffset = payloadStart; sampleOffset < payloadEnd; sampleOffset += 4) {
+      peak = Math.max(peak, Math.abs(bytes.readFloatLE(sampleOffset)));
+    }
+    offset = payloadEnd;
+  }
+  return peak;
+}
