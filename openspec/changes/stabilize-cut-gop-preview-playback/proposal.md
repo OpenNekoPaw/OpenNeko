@@ -24,8 +24,11 @@ periodic re-encoding.
   cache a lightweight keyframe index, start compatible fragments at the
   preceding random-access point, and expose the requested media offset.
 - Preconnect the next bounded video/PCM generation without mutating the active
-  clients; promote it only after browser media and the first PCM packet are
-  ready.
+  clients; promote it only after the standby decoder has produced its first
+  frame and PCM has accumulated a bounded scheduling reserve.
+- Persist hardware-derived thumbnail tiles under a source-fingerprint cache so
+  viewport overscan and density changes do not repeatedly capture unchanged
+  frames.
 - Keep the active picture while paused seek prepares the latest requested
   generation, then atomically replace it. Older seek generations are cancelled.
 - Keep one monotonic Timeline clock through generation handoff so the playhead
@@ -55,5 +58,7 @@ periodic re-encoding.
   continuous Timeline clock.
 - `packages/neko-media/src/browser`: prepared PCM retirement and MSE client
   lifecycle primitives.
+- `packages/neko-cut/packages/extension`: source-fingerprint thumbnail cache
+  ownership in addition to session media preparation.
 - No OTIO schema migration, CPU video fallback, proxy-file workflow, WebM
   priority change, or Neko Engine path is introduced.

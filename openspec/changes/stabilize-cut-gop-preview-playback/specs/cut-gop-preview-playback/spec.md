@@ -39,7 +39,10 @@ time window while the same Clip and playback mapping remain active.
 - **WHEN** playback approaches an actual Clip or mapping boundary
 - **THEN** Cut SHALL prepare and connect the next generation without mutating
   the active generation
-- **AND** SHALL promote only a browser-ready replacement
+- **AND** the hidden standby decoder SHALL produce its first frame before the
+  boundary
+- **AND** decoder priming SHALL NOT run as part of boundary activation
+- **AND** Cut SHALL promote only a browser-ready replacement
 - **AND** SHALL retire the old generation after promotion
 
 ### Requirement: Paused seek preserves a valid picture
@@ -78,6 +81,33 @@ final peak safety after resampling.
 
 - **WHEN** adjacent PCM generations hand off on one Timeline
 - **THEN** they SHALL use the same `AudioContext` clock
+- **AND** the replacement SHALL buffer at least 100 ms of schedulable PCM
+  before reporting readiness
 - **AND** Cut SHALL NOT stop the old generation at an arbitrary sample before
   the replacement is ready
 - **AND** retirement SHALL use a bounded gain ramp that prevents a discontinuity
+
+### Requirement: Thumbnail derivation is virtualized and fingerprint cached
+
+Cut SHALL derive only bounded viewport thumbnail tiles and SHALL reuse unchanged
+hardware-derived tiles across Webview sessions.
+
+#### Scenario: Viewport requests an unchanged tile
+
+- **WHEN** a tile with the same source fingerprint, timestamp, dimensions, and
+  quality was previously captured
+- **THEN** the Node adapter SHALL return the cached JPEG
+- **AND** SHALL NOT launch another frame-capture command
+
+#### Scenario: Source media changes
+
+- **WHEN** the source size or modification time changes
+- **THEN** the previous thumbnail cache entry SHALL NOT match
+- **AND** Cut SHALL capture a new hardware-derived tile
+
+#### Scenario: Timeline scrolls or changes density
+
+- **WHEN** the visible range or selected thumbnail density changes
+- **THEN** Cut SHALL request only the viewport plus bounded overscan
+- **AND** previous in-memory density tiles MAY remain disposable cache entries
+- **AND** the Webview SHALL NOT read or write workspace files directly

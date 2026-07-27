@@ -79,6 +79,12 @@ new PCM at the handoff time, then retires the old generation after a short gain
 ramp. Missing standby readiness holds the last valid picture and reports
 buffering; it never clears the current surface first.
 
+Browser-ready means more than MSE append completion. The standby video client
+must decode and present one frame while hidden, pause on that decoded frame,
+and restore its requested media origin before it can be promoted. Decoder
+priming therefore belongs to standby preparation and never runs after the Host
+activation acknowledgement at the Timeline boundary.
+
 ### 4. Paused seek is a latest-only prepared generation
 
 Paused seek updates the requested Timeline position and starts a non-autoplay
@@ -110,12 +116,34 @@ Adjacent generations use a small Web Audio gain ramp during retirement so an
 arbitrary non-zero sample is not cut to zero. The shared `AudioContext` remains
 the clock owner.
 
+PCM preparation must accumulate a bounded scheduling reserve before it reports
+readiness. One 20 ms packet is not readiness: the cold FFmpeg/loopback path can
+miss the next scheduling deadline even when the first packet arrived. The
+browser client buffers at least 100 ms without starting playback, then schedules
+that reserve against the explicit shared handoff time.
+
+### 6. Thumbnail cache follows the same source fingerprint rule
+
+Timeline virtualization remains the request owner: it requests the visible
+range plus bounded overscan at the density selected for the current zoom. The
+Node adapter owns a durable disposable thumbnail cache under its configured
+cache root. A cache entry is keyed by the source-relative identity, source
+size/mtime fingerprint, requested timestamp, dimensions, and quality.
+
+The cache stores only the JPEG result produced by the existing hardware frame
+capture path. It is not project state and may be deleted at any time. A source
+fingerprint change produces a different key, so stale media frames cannot be
+returned. Concurrent identical requests share one in-flight capture.
+
 ## Reuse audit
 
 - Reuse `NodeMediaRuntime.keyframes` semantics; Cut does not create a second
   public keyframe contract.
 - Extend the existing `MseVideoClient` and `PcmAudioClient` lifecycle rather
   than adding package-local browser transports.
+- Keep `useClipRepresentations` as the viewport/density planner and add caching
+  at the existing Node adapter boundary rather than introducing a Webview file
+  cache.
 - Keep `CutPreviewClock` as the synchronization primitive and move generation
   ownership into one Cut coordinator path.
 - Keep the existing Node/FFmpeg adapter as the only Cut media implementation;
@@ -135,6 +163,9 @@ the clock owner.
 - Dynamic loudness state cannot be perfectly continuous across independently
   prepared PCM generations. Export remains the authoritative two-pass program
   loudness result.
+- Thumbnail cache files are disposable and can grow across many source
+  fingerprints. A later storage-budget policy may prune old fingerprints; the
+  correctness contract does not depend on cache survival.
 
 ## Runtime verification
 

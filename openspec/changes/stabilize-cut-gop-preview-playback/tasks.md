@@ -44,3 +44,15 @@
       Extension Development Host and CDP Webview lane.
 - [x] 5.4 Record same-Clip handoff, Clip switch, paused seek, audio peak, A/V
       synchronization, and console evidence.
+
+## 6. Cold-start and derived-representation follow-up
+
+- [x] 6.1 Add a red-capable PCM test proving readiness waits for at least
+      100 ms instead of the first 20 ms packet.
+- [x] 6.2 Prime the hidden standby decoder before Host activation and add a
+      regression proving boundary activation does not prime again.
+- [x] 6.3 Add a source-fingerprint thumbnail cache with concurrent-request
+      reuse and source-change invalidation tests.
+- [x] 6.4 Re-run focused and repository gates, then record cold first playback,
+      Clip-boundary frame cadence, and thumbnail cache evidence in the real
+      VS Code Webview.
