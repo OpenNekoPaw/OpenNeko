@@ -68,6 +68,9 @@
 - [x] 6.5 Update current architecture, domain, package, and release docs.
 - [x] 6.6 Remove stale Engine ownership claims and unrelated Engine fixtures
       while retaining explicit fail-closed retirement guards.
+- [ ] 6.7 Rename Cut export orchestration from Engine vocabulary to executor /
+      execution vocabulary and reject persisted pre-release Engine-shaped
+      snapshots instead of supporting a compatibility read.
 
 ## 7. Validate
 

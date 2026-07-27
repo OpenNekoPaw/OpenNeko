@@ -42,6 +42,8 @@ Five-layer analysis:
   are ready.
 - Preserve positive gain and live fades while preventing uncontrolled output
   peaks in preview and export.
+- Apply one explicit EBU R128 loudness target to Cut preview and export without
+  treating a compressor or limiter as loudness normalization.
 - Make every non-native preview depend on one verified, all-hardware video
   processing closure with no CPU fallback.
 - Preserve valid-prefix evidence for partially damaged sources.
@@ -51,8 +53,7 @@ Five-layer analysis:
 - Restore Neko Engine, WebCodecs, or browser-native audio as a fallback.
 - Add WebM as a preferred playback profile; WebM files are diagnostic coverage
   only and continue through the declared proxy policy.
-- Implement professional loudness mastering, LUFS target normalization, DTS-HD
-  passthrough, subtitle rendering, or new OTIO effects.
+- Implement DTS-HD passthrough, subtitle rendering, or new OTIO effects.
 - Modify, repair, or commit user-provided media.
 
 ## Decisions
@@ -67,10 +68,15 @@ the reader stops pulling while scheduled lead is above the high-water mark and
 resumes below the low-water mark. Disposal aborts fetch and stops/disconnects
 every scheduled source.
 
-Cut prepares all clients concurrently, computes one future context start only
-after every first packet is ready, and starts all clients with that exact value.
-The first audible client remains the timeline master, while every other client
-is checked against it for a bounded inter-track offset.
+Cut now publishes one Host-mixed PCM client for each bounded interval. The
+client computes one future context start after its first packet is ready. Once
+the Host confirms activation, Cut primes the muted decoder without advancing
+the Timeline, schedules the PCM master, and invokes video playback at that same
+future context time; neither clock runs during connection or before generation
+ownership is active. The packet PTS is the Timeline master clock. Per-Clip
+scheduling jitter cannot
+become an inter-track offset because individual Clip streams never cross the
+Host/Webview boundary.
 
 Alternatives rejected:
 
@@ -81,20 +87,38 @@ Alternatives rejected:
 - Suspending the shared `AudioContext` as a buffer control deadlocks playback
   clocks and affects all tracks.
 
-### Cut owns one preview mix bus
+### Cut owns one EBU R128 master path
 
-The shared Cut audio owner creates one input bus and one
-`DynamicsCompressorNode` configured as a conservative peak limiter. PCM client
-gain nodes connect to that bus instead of directly to the destination.
-Positive linear gain is allowed; non-finite or negative gain fails visibly.
-Clip fade-in/out is scheduled against the shared start time and current
-position in the clip.
+Cut sends the exact audible sources for one bounded preview segment to a
+Host-owned FFmpeg mix. The graph retains per-clip trim, speed, gain, fade, and
+timeline delay, applies `amix=normalize=0`, then runs `loudnorm` in streaming
+dynamic mode at `I=-14`, `TP=-1`, and `LRA=11`. The resulting single stereo
+48 kHz PCM stream is the browser clock. The Webview does not recreate clip
+mixing and does not insert `DynamicsCompressorNode`; its gain node is only the
+user monitor-volume control.
 
-Export retains per-clip trim, speed, gain, fade, and delay, then applies
-`amix=normalize=0` followed by `alimiter`. This preserves intentional mix
-levels while preventing final full-scale overflow. LUFS normalization remains
-a separate mastering feature because it changes program loudness rather than
-only protecting peaks.
+The preview segment is capped by the existing ten-second preparation window,
+so the Host does not read an entire long source before playback. Dynamic
+`loudnorm` is intentionally the realtime approximation: it follows EBU R128
+measurement and true-peak constraints, but it cannot know the final integrated
+loudness of future, unplayed segments.
+
+Export retains the same clip graph and first runs `loudnorm` measurement over
+the complete mixed program. A second pass supplies `measured_I`,
+`measured_TP`, `measured_LRA`, `measured_thresh`, and `offset` to linear
+`loudnorm`, followed by `alimiter` only as final sample-peak protection.
+Failure to parse complete measurement output aborts export; there is no
+one-pass or limiter-only fallback. The target is an explicit Cut contract,
+not a hidden FFmpeg default.
+
+Cut panel preview lifecycle operations are serialized per panel. A newer
+generation updates the generation fence immediately, while start, prepare,
+activate, and stop use the same operation queue. Stop removes the owned
+active/prepared records before awaiting adapter cleanup and de-duplicates
+record identity. An older in-flight build can therefore fail its generation
+check, but concurrent callbacks and panel disposal cannot stop the replacement
+record or stop one adapter session twice. Different panels retain independent
+queues.
 
 ### Waveform peaks are aggregated directly from the decode stream
 
@@ -161,7 +185,16 @@ AV1 fixture cannot provide that evidence because decode is rejected first. A
 source may still use an independently qualified native HDR route. Native video
 remains muted; audio continues through OpenNeko PCM.
 
-Poster capture is an independent operation. Its failure may leave the player
+SDR poster and timeline-thumbnail capture use hardware decode and `scale_vt`,
+then perform one bounded `hwdownload` for JPEG encoding. This single-frame
+readback is not a software proxy or stream transcode: the operation requests
+one timestamp, retains no decoded stream, and cannot fall back to CPU video
+decode or scaling. A host without the declared hardware backend reports capture
+unavailable before inspecting HDR metadata.
+
+HDR poster capture remains disabled because its readback also requires a
+qualified HDR color-conversion contract. Poster capture is an independent
+operation. Its failure may leave the player
 without a poster, but cannot invalidate a separately qualified playback path.
 Extension event callbacks consume every rejected promise and project the
 operation and diagnostic to the Webview; they never return an unobserved async
@@ -239,10 +272,13 @@ selected stream cannot produce any valid prefix.
   duration-scaled allocation.
 - Waveform output still contains `duration * peaksPerSecond` numbers by
   contract; only decoded PCM working memory becomes duration-independent.
-- A dynamics compressor is not a broadcast loudness workflow; it is explicit
-  peak protection until LUFS mastering is designed.
+- Realtime dynamic normalization can differ slightly between adjacent
+  ten-second preparation windows. Export is the authoritative two-pass
+  integrated-loudness result.
 - Hardware-only preview intentionally rejects codecs that Chrome can decode
   only in software. This includes AV1 Main10 on the validated Apple M2 host.
+- Hardware-decoded SDR thumbnails still pay one bounded GPU-to-CPU readback and
+  JPEG encode per requested tile; they never create or cache a full proxy.
 - `scale_vt` availability does not prove acceptable HDR-to-SDR output; that
   graph remains unqualified until real-host color and changing-frame evidence
   exists.

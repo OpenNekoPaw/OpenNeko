@@ -50,18 +50,34 @@ domain controller
   48 kHz stereo float32 PCM。源 codec 和通道数仍由 probe 报告。
 
 PCM 浏览器调度采用显式 `prepare -> startAt` 两阶段：先取得首包，再由拥有
-timeline 的调用方选择未来 `AudioContext` 时间。调度超前量以 1 秒高水位、
+timeline 的调用方在 Host 确认 generation activation 后选择未来
+`AudioContext` 时间。Webview 先预热静音视频 decoder 但不推进 Timeline，再在
+该时间同时启动视频与唯一 PCM master，避免冷启动和连接阶段的音频时钟抢跑。
+调度超前量以 1 秒高水位、
 0.5 秒低水位限制，HTTP reader 通过背压停止继续拉取，因此内存和
 `AudioBufferSourceNode` 数量不随素材时长增长。输入 EOF 不等于播放 EOF；
 只有最后一个已调度 source 实际结束后才通知播放完成，stop/seek/dispose 则
 立即中止 fetch 并停止、断开全部 source。
 
-Cut 的所有活动 PCM 轨道先并发 prepare，再共享同一个 `startAt` barrier。
-音频时钟是有音频预览的主时钟，静音 `<video>` 按漂移阈值校正。轨道 gain
-和 fade 在 Web Audio 中实时应用，允许正增益；所有轨道进入 Cut-owned mix
-bus 和显式 peak limiter。FFmpeg 导出使用同一 gain/fade 事实，在
-`amix=normalize=0` 后使用 `alimiter`。这只提供峰值保护，不宣称 LUFS
-响度母带处理。
+Cut 将当前十秒有界预览段内的所有可听 Clip 一次提交给 Host。FFmpeg 先应用
+每个 Clip 的 trim、速度、gain 与 fade，以 `amix=normalize=0` 合成唯一 master，
+再使用 EBU R128 `loudnorm` 动态模式统一到 `I=-14 LUFS`、`TP=-1 dBTP`、
+`LRA=11 LU`。Webview 只消费一条 48 kHz stereo PCM，保留用户监听音量和
+Timeline 主时钟；不再建立逐 Clip mix bus，也不使用
+`DynamicsCompressorNode` 冒充响度标准化。
+
+Cut 的 H.264 片段仅在源时间为 0 时使用 fMP4 stream-copy。非零 seek 若直接
+copy，片段可能从 0 开始携带不可独立解码的 P/B 帧、首个关键帧落在数秒后；
+因此该路径固定使用 VideoToolbox 解码、`scale_vt` 与
+`h264_videotoolbox -allow_sw 0` 生成零起点有界片段，不允许 CPU fallback。
+
+Cut 导出复用相同的 Clip 音频事实，但对完整节目执行两遍响度处理：第一遍
+测量 integrated loudness、true peak、loudness range、threshold 与 target
+offset；第二遍把全部测量字段传给线性 `loudnorm`。`alimiter` 只位于标准化
+之后，作为最终峰值安全层。导出暂存文件会再次测量，只有 integrated loudness
+位于目标 ±0.5 LU 且 true peak 不超过目标容差时才原子发布。测量缺失、非有限
+或验收不合格都会终止导出，不回退到 limiter-only 路径。实时动态模式只能在
+当前有界段内逼近目标；完整导出的两遍结果才是最终节目响度事实。
 
 波形生成使用同一个 FFmpeg 解码事实，但不缓存完整 PCM：Node 直接消费
 `f32le` stdout，以一个 peak window 聚合并丢弃已处理样本，只保留不足一个
@@ -70,12 +86,15 @@ Float32 样本的字节后缀、当前窗口和返回的 peaks。工作内存不
 有效 PCM 后失败时返回 `partial/stream` 与可用时长；取消或首个样本前失败则
 继续 fail-visible。
 
-本地 PATH 只用于开发发现；发布闭包必须提供或明确要求经资格验证的 FFmpeg/
-ffprobe，并单独审计 codec license。`NEKO_FFMPEG_PATH` 和
-`NEKO_FFPROBE_PATH` 是测试/打包注入点，不是运行时 fallback 链。
-`NodeMediaRuntime.qualify()` 是可执行资格入口，报告 FFmpeg/ffprobe 版本、直接
-依赖的 decoder/encoder/filter；缺少能力返回 `MediaRuntimeUnavailableError`，
-不归类为媒体损坏。
+开发 stage 必须由显式 `NEKO_FFMPEG_PATH` / `NEKO_FFPROBE_PATH` 生成，发布
+payload 必须包含目标平台专属的已验证 runtime bundle；两者都不是 PATH
+fallback。descriptor 冻结 target、FFmpeg/ffprobe 版本、可执行文件与许可证
+SHA-256、SPDX 和必要 codec/filter signature。Composition root 在任何产品
+feature 激活前校验 descriptor、真实路径、checksum 与运行时资格，再注入精确
+可执行路径。`NodeMediaRuntime.qualify()` 报告直接依赖的
+decoder/encoder/filter，包括 `loudnorm`、`ebur128`、`alimiter`、AAC、FLAC、
+DTS 与当前平台硬件视频闭包；缺少任一必要能力会阻断媒体 feature 激活，不归类
+为素材损坏。
 
 ## 损坏与部分结果
 

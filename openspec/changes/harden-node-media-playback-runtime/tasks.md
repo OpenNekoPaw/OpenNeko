@@ -20,6 +20,13 @@
 - [x] 2.3 Start all Cut PCM clients at one post-prepare `AudioContext` time and
       validate secondary clocks against the primary clock.
 - [x] 2.4 Add a Cut-owned mix bus, allow positive gain, and schedule clip fades.
+- [x] 2.5 Replace per-Clip browser mixing with one bounded Host mixed PCM
+      segment and remove `DynamicsCompressorNode` from the Webview.
+- [x] 2.6 Apply the declared realtime EBU R128 target after the complete segment
+      mix, retaining browser monitor volume and the PCM timeline clock.
+- [x] 2.7 Serialize preview lifecycle operations per panel and claim each
+      generation before asynchronous cleanup so rapid seek/stop cannot retire
+      the replacement session or stop one resource twice.
 
 ## 3. FFmpeg Preview and Export
 
@@ -32,16 +39,20 @@
       without downgrading successful prefix operations.
 - [x] 3.4 Replace whole-output waveform buffering with bounded incremental peak
       aggregation over the cancellable FFmpeg stream.
+- [x] 3.5 Replace limiter-only Cut export with fail-visible two-pass EBU R128
+      `loudnorm`; keep `alimiter` only after measured normalization.
 
 ## 4. Runtime Closure
 
-- [ ] 4.1 Define verified FFmpeg runtime descriptors for darwin-arm64 and
+- [x] 4.1 Define verified FFmpeg runtime descriptors for darwin-arm64 and
       linux-x64, including exact version, executable hashes, license metadata, and
       capability signature.
-- [ ] 4.2 Stage the selected runtime into development/release payloads and make
+- [x] 4.2 Stage the selected runtime into development/release payloads and make
       the composition root inject it before feature activation.
-- [ ] 4.3 Reject packaged PATH fallback, wrong target, checksum mismatch, and
+- [x] 4.3 Reject packaged PATH fallback, wrong target, checksum mismatch, and
       missing HDR/audio capabilities in orchestration tests.
+- [x] 4.4 Include `loudnorm`, `ebur128`, `alimiter`, AAC, FLAC, and DTS decode
+      in the staged runtime capability signature.
 
 ## 5. Native Preview Qualification
 
@@ -51,7 +62,7 @@
       narrowly named native MP4 profiles into the Node media runtime.
 - [x] 5.3 Observe Preview message promises and project capture-frame versus
       playback failures without an Extension Host unhandled rejection.
-- [ ] 5.4 Inject the qualified development FFmpeg/ffprobe pair explicitly from
+- [x] 5.4 Inject the qualified development FFmpeg/ffprobe pair explicitly from
       the VS Code development composition.
 - [x] 5.5 Treat response-side Chromium Range cancellation as an expected
       transport boundary without hiding real loopback failures.
@@ -75,6 +86,14 @@
       hardware-required routes skip HDR poster extraction and surface only the
       higher-priority playback capability diagnostic when decode is
       unavailable.
+- [x] 5.12 Move SDR poster and Cut thumbnail capture to VideoToolbox decode plus
+      `scale_vt` and one bounded frame readback; reject CPU fallback and check
+      hardware availability before HDR metadata.
+- [x] 5.13 Give each Cut preview attempt one failure latch and stage-specific
+      localized video, audio, synchronization, or startup diagnostics so
+      concurrent callbacks cannot stack generic notices; keep superseded
+      representation cancellation out of the user-error channel; prepare
+      non-zero H.264 seeks as zero-origin VideoToolbox fragments.
 
 ## 6. Validation
 
@@ -101,3 +120,6 @@
       `~/Git/neko-test/cases/4K.mp4`: opening the hardware-required AV1 source
       emits no HDR poster diagnostic, Play emits one hardware-decoder alert,
       and CDP observes no concurrent poster status.
+- [x] 6.10 Re-run Cut in the real `~/Git/neko-test` Extension Development Host,
+      exercise rapid seek/stop and a segment boundary, and assert one PCM
+      master, progressing video, and no duplicate preview-failure notice.

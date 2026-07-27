@@ -31,6 +31,14 @@ deletion target.
 - **WHEN** a product package introduces a prohibited Engine reference
 - **THEN** the quality gate fails and reports the file and matched surface
 
+#### Scenario: Persisted Cut export uses retired Engine fields
+
+- **WHEN** Cut reads a pre-release Export Job snapshot containing
+  `engineJobId` or `engineConfig`
+- **THEN** persistence decoding rejects it with an actionable retired-schema
+  diagnostic
+- **AND** no compatibility DTO or Engine-named executor path resumes the job
+
 #### Scenario: Canonical path test runs
 
 - **WHEN** a rebuilt media feature test executes

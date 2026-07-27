@@ -37,9 +37,15 @@ wholly unreadable source.
 - Replace whole-stream waveform buffering with incremental peak aggregation
   over FFmpeg stdout, preserving completed peaks and bounded trailing samples
   when a damaged source fails after a valid prefix.
-- Route Cut PCM tracks through one preview mix bus, preserve the domain's
-  `-60..+24 dB` gain range, apply live fades, and protect preview/export output
-  with the same explicit peak-limiting policy.
+- Move Cut preview mixing into one Host-owned FFmpeg PCM stream so clip gain,
+  fades, overlap summing, and EBU R128 normalization are applied to the exact
+  audible segment before browser scheduling. The Webview remains the clock and
+  bounded PCM consumer; it no longer pretends that a
+  `DynamicsCompressorNode` is a loudness normalizer.
+- Normalize Cut preview to the declared streaming target with FFmpeg
+  `loudnorm` dynamic mode, and normalize export with a measured two-pass
+  `loudnorm` graph. Peak limiting remains a safety stage, not the loudness
+  algorithm.
 - Classify bounded no-frame/early-EOF results as interval corruption while
   retaining successful probe, frame, PCM, waveform, and preview-prefix
   evidence.
@@ -53,7 +59,8 @@ wholly unreadable source.
 ### New Capabilities
 
 - `bounded-synchronized-pcm-playback`: Defines bounded browser PCM buffering,
-  shared multi-track start, mix-bus ownership, and disposal.
+  Host-owned segment mixing, EBU R128 loudness policy, clock ownership, and
+  disposal.
 - `streaming-media-waveform`: Defines incremental waveform aggregation,
   cancellation, and partial-prefix behavior without retaining decoded PCM.
 - `qualified-hdr-media-runtime`: Defines reproducible FFmpeg qualification,

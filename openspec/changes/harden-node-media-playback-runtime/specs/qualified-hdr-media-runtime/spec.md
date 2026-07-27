@@ -21,6 +21,13 @@ metadata.
 - **THEN** media activation fails with an actionable diagnostic
 - **AND** it does not fall back to PATH, Neko Engine, or browser-native audio
 
+#### Scenario: Required audio mastering capability is absent
+
+- **WHEN** the staged runtime lacks `loudnorm`, `ebur128`, `alimiter`, AAC,
+  FLAC, or DTS decoding required by the media contract
+- **THEN** media activation fails before feature activation
+- **AND** Cut does not degrade to compressor-only or limiter-only output
+
 ### Requirement: Video processing is hardware-only
 
 HDR10/PQ and HLG sources SHALL use either a narrowly qualified native Webview
@@ -213,3 +220,25 @@ successful results from unaffected intervals.
 - **WHEN** ffprobe cannot read the source/container
 - **THEN** the operation reports source corruption
 - **AND** does not present the file as partially validated.
+
+### Requirement: Thumbnail capture uses hardware decode with bounded readback
+
+SDR poster and timeline-thumbnail capture SHALL use the declared hardware
+decoder and hardware scaling filter, followed by one bounded frame readback for
+JPEG encoding. It MUST NOT fall back to software video decode, software scale,
+full-stream transcode, or proxy generation.
+
+#### Scenario: SDR thumbnail is requested
+
+- **WHEN** the source decoder and `scale_vt` are available
+- **THEN** FFmpeg selects VideoToolbox before input decode
+- **AND** reads back only the requested frame after hardware scaling
+- **AND** publishes only the bounded JPEG result
+
+#### Scenario: Hardware capture backend is absent
+
+- **WHEN** a thumbnail or poster is requested without a qualified hardware
+  backend
+- **THEN** capture fails with a runtime-unavailable diagnostic before HDR
+  classification
+- **AND** no CPU capture command is attempted
