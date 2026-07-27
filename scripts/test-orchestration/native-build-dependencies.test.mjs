@@ -11,21 +11,23 @@ test('the workflow and prepared act image share the media runtime dependency lis
     readFile('scripts/act/Dockerfile', 'utf8'),
   ]);
   const workflow = parse(workflowSource);
-  const mediaRuntimeDependencyStep = workflow.jobs.build.steps.find(
-    (step) => step.name === 'Install media runtime dependency',
-  );
   const mediaRuntimePackages = packageList.split(/\s+/u).filter(Boolean);
 
-  assert.ok(
-    mediaRuntimeDependencyStep,
-    'expected the build job to install the media runtime dependency',
-  );
   assert.deepEqual(mediaRuntimePackages, ['ffmpeg']);
-  assert.match(mediaRuntimeDependencyStep.run, /scripts\/act\/media-runtime-packages\.txt/u);
-  assert.equal(
-    mediaRuntimeDependencyStep.if,
-    "${{ env.ACT != 'true' || env.ACT_NATIVE_DEPS_READY != 'true' }}",
-  );
+  for (const jobName of ['build', 'test-ts']) {
+    const mediaRuntimeDependencyStep = workflow.jobs[jobName].steps.find(
+      (step) => step.name === 'Install media runtime dependency',
+    );
+    assert.ok(
+      mediaRuntimeDependencyStep,
+      `expected the ${jobName} job to install the media runtime dependency`,
+    );
+    assert.match(mediaRuntimeDependencyStep.run, /scripts\/act\/media-runtime-packages\.txt/u);
+    assert.equal(
+      mediaRuntimeDependencyStep.if,
+      "${{ env.ACT != 'true' || env.ACT_NATIVE_DEPS_READY != 'true' }}",
+    );
+  }
   assert.match(dockerfile, /COPY media-runtime-packages\.txt/u);
   assert.match(dockerfile, /xargs apt-get install -y/u);
 });

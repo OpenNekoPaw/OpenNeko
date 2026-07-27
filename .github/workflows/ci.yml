@@ -120,6 +120,12 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      - name: Install media runtime dependency
+        if: ${{ env.ACT != 'true' || env.ACT_NATIVE_DEPS_READY != 'true' }}
+        run: |
+          sudo apt-get update
+          xargs sudo apt-get install -y < scripts/act/media-runtime-packages.txt
+
       - name: Run TypeScript tests
         run: |
           if [ "${ACT:-}" = "true" ]; then
