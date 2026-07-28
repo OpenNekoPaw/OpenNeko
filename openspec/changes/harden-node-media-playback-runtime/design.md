@@ -2,10 +2,10 @@
 
 The canonical media route is Extension Host `NodeMediaRuntime` or a narrow
 domain adapter, tokenized loopback HTTP, muted browser video, and OpenNeko-owned
-PCM audio. Real files show that H.264/AAC/MP3 and 5.1-to-stereo PCM work, AV1
-Main10 PQ frame decoding works, HDR proxy preparation fails on the current
-Homebrew FFmpeg because it lacks `zscale`, and one H.264/AAC file has a valid
-prefix but overstated container duration.
+PCM audio. Real files show that H.264/AAC/MP3 and 5.1-to-stereo PCM work. AV1
+Main10 PQ can advance Electron's native clock while its composed frame remains
+frozen, and Apple M2 VideoToolbox rejects the same source decoder. One
+H.264/AAC file has a valid prefix but overstated container duration.
 
 Five-layer analysis:
 
@@ -42,7 +42,10 @@ Five-layer analysis:
   are ready.
 - Preserve positive gain and live fades while preventing uncontrolled output
   peaks in preview and export.
-- Make HDR proxy success depend on a verified FFmpeg capability closure.
+- Apply one explicit EBU R128 loudness target to Cut preview and export without
+  treating a compressor or limiter as loudness normalization.
+- Make every non-native preview depend on one verified, all-hardware video
+  processing closure with no CPU fallback.
 - Preserve valid-prefix evidence for partially damaged sources.
 
 **Non-Goals:**
@@ -50,11 +53,21 @@ Five-layer analysis:
 - Restore Neko Engine, WebCodecs, or browser-native audio as a fallback.
 - Add WebM as a preferred playback profile; WebM files are diagnostic coverage
   only and continue through the declared proxy policy.
-- Implement professional loudness mastering, LUFS target normalization, DTS-HD
-  passthrough, subtitle rendering, or new OTIO effects.
+- Implement DTS-HD passthrough, subtitle rendering, or new OTIO effects.
 - Modify, repair, or commit user-provided media.
 
 ## Decisions
+
+### Development staging owns the pre-launch process boundary
+
+VS Code starts `preLaunchTask` as a separate process and does not propagate the
+Extension Host launch configuration's `env` object into that task. The
+developer-local product and feature build tasks therefore receive the same
+explicit FFmpeg and ffprobe paths through their own `options.env`. Development
+staging still qualifies and copies those executables into the generated product
+closure; it does not discover a PATH executable or weaken packaged runtime
+verification. A local configuration regression test requires launch and task
+environment identities to remain equal.
 
 ### PCM uses a bounded prepare/start scheduler
 
@@ -66,10 +79,15 @@ the reader stops pulling while scheduled lead is above the high-water mark and
 resumes below the low-water mark. Disposal aborts fetch and stops/disconnects
 every scheduled source.
 
-Cut prepares all clients concurrently, computes one future context start only
-after every first packet is ready, and starts all clients with that exact value.
-The first audible client remains the timeline master, while every other client
-is checked against it for a bounded inter-track offset.
+Cut now publishes one Host-mixed PCM client for each bounded interval. The
+client computes one future context start after its first packet is ready. Once
+the Host confirms activation, Cut primes the muted decoder without advancing
+the Timeline, schedules the PCM master, and invokes video playback at that same
+future context time; neither clock runs during connection or before generation
+ownership is active. The packet PTS is the Timeline master clock. Per-Clip
+scheduling jitter cannot
+become an inter-track offset because individual Clip streams never cross the
+Host/Webview boundary.
 
 Alternatives rejected:
 
@@ -80,20 +98,38 @@ Alternatives rejected:
 - Suspending the shared `AudioContext` as a buffer control deadlocks playback
   clocks and affects all tracks.
 
-### Cut owns one preview mix bus
+### Cut owns one EBU R128 master path
 
-The shared Cut audio owner creates one input bus and one
-`DynamicsCompressorNode` configured as a conservative peak limiter. PCM client
-gain nodes connect to that bus instead of directly to the destination.
-Positive linear gain is allowed; non-finite or negative gain fails visibly.
-Clip fade-in/out is scheduled against the shared start time and current
-position in the clip.
+Cut sends the exact audible sources for one bounded preview segment to a
+Host-owned FFmpeg mix. The graph retains per-clip trim, speed, gain, fade, and
+timeline delay, applies `amix=normalize=0`, then runs `loudnorm` in streaming
+dynamic mode at `I=-14`, `TP=-1`, and `LRA=11`. The resulting single stereo
+48 kHz PCM stream is the browser clock. The Webview does not recreate clip
+mixing and does not insert `DynamicsCompressorNode`; its gain node is only the
+user monitor-volume control.
 
-Export retains per-clip trim, speed, gain, fade, and delay, then applies
-`amix=normalize=0` followed by `alimiter`. This preserves intentional mix
-levels while preventing final full-scale overflow. LUFS normalization remains
-a separate mastering feature because it changes program loudness rather than
-only protecting peaks.
+The preview segment is capped by the existing ten-second preparation window,
+so the Host does not read an entire long source before playback. Dynamic
+`loudnorm` is intentionally the realtime approximation: it follows EBU R128
+measurement and true-peak constraints, but it cannot know the final integrated
+loudness of future, unplayed segments.
+
+Export retains the same clip graph and first runs `loudnorm` measurement over
+the complete mixed program. A second pass supplies `measured_I`,
+`measured_TP`, `measured_LRA`, `measured_thresh`, and `offset` to linear
+`loudnorm`, followed by `alimiter` only as final sample-peak protection.
+Failure to parse complete measurement output aborts export; there is no
+one-pass or limiter-only fallback. The target is an explicit Cut contract,
+not a hidden FFmpeg default.
+
+Cut panel preview lifecycle operations are serialized per panel. A newer
+generation updates the generation fence immediately, while start, prepare,
+activate, and stop use the same operation queue. Stop removes the owned
+active/prepared records before awaiting adapter cleanup and de-duplicates
+record identity. An older in-flight build can therefore fail its generation
+check, but concurrent callbacks and panel disposal cannot stop the replacement
+record or stop one adapter session twice. Different panels retain independent
+queues.
 
 ### Waveform peaks are aggregated directly from the decode stream
 
@@ -119,12 +155,112 @@ Alternatives rejected:
 - A temporary PCM file changes RAM pressure into unbounded disk IO and adds
   cleanup state without improving the single-pass aggregation.
 
-### HDR is an explicit qualified proxy
+### Video processing is hardware-only
 
-HDR10/PQ and HLG sources are never direct-play inputs. The proxy graph converts
-to linear light with `zscale`, tone maps in float RGB, converts to BT.709, and
-encodes H.264/yuv420p. Qualification requires the source decoder, H.264 encoder,
-`zscale`, and `tonemap` before starting work.
+HDR10/PQ and HLG sources are not made direct-play inputs from probe facts
+alone. Preview Webview readiness reports narrowly named MP4 codec capabilities.
+`canPlayType()` alone is not qualification: the real VS Code Electron host
+reported `probably` for AV1 Main10, advanced `currentTime`, and filled Range
+buffers while the composed video frame remained frozen. Preview therefore
+reports AV1 MP4 as unqualified until a source-specific test proves changing
+decoded pixels over time. The host may select `av1-mp4-direct` only after that
+stronger qualification exists. It may select `vp9-mp4-remux` when MP4 VP9 is
+reported because that path has real-host frame-output evidence. WebM VP9 is not
+selected from `canPlayType(video/webm)` because the same host reported
+`probably` for the 10-bit Profile 2 fixture while decode still failed with
+media error 4. The validated VP9 route remuxes without re-encoding into MP4.
+
+Any source that cannot use a qualified native or remux route may use an H.264
+SDR preview only when one hardware backend owns the complete video-processing
+closure. On darwin that closure is VideoToolbox hardware decode, `scale_vt`
+hardware color conversion/scaling, and `h264_videotoolbox` hardware encode.
+FFmpeg receives a VideoToolbox hardware output format and the encoder receives
+`allow_sw=false`; decoded frames never cross into a CPU video filter and the
+encoder cannot silently select its software implementation. `libx264`, `scale`,
+`zscale`, and `tonemap` are forbidden in this path.
+
+The runtime does not fall back from this hardware closure to software decode,
+software filters, or software encode. Hardware decoder rejection is a runtime
+capability failure, not source corruption. This is observable on the current
+Apple M2 validation host: VideoToolbox reports no AV1 decoder for the AV1
+Main10/PQ fixture even though Chrome can software-decode it. That fixture
+therefore fails visibly instead of direct-playing a frozen frame or generating
+a CPU proxy.
+
+`scale_vt` is not described as the former float-RGB tone-map graph. A real
+VideoToolbox-only smoke proves hardware decode, scaling/color conversion, and
+hardware encode remain connected without `hwdownload`, and ffprobe observes
+BT.709 output metadata. Acceptable HDR-to-SDR visual quality still requires a
+supported HDR hardware decoder and real-host image comparison; the Apple M2
+AV1 fixture cannot provide that evidence because decode is rejected first. A
+source may still use an independently qualified native HDR route. Native video
+remains muted; audio continues through OpenNeko PCM.
+
+SDR poster and timeline-thumbnail capture use hardware decode and `scale_vt`,
+then perform one bounded `hwdownload` for JPEG encoding. This single-frame
+readback is not a software proxy or stream transcode: the operation requests
+one timestamp, retains no decoded stream, and cannot fall back to CPU video
+decode or scaling. A host without the declared hardware backend reports capture
+unavailable before inspecting HDR metadata.
+
+HDR poster capture remains disabled because its readback also requires a
+qualified HDR color-conversion contract. Poster capture is an independent
+operation. Its failure may leave the player
+without a poster, but cannot invalidate a separately qualified playback path.
+Extension event callbacks consume every rejected promise and project the
+operation and diagnostic to the Webview; they never return an unobserved async
+callback promise to the VS Code event emitter.
+
+Preview derives poster policy from the canonical video preparation plan before
+requesting frame extraction. Qualified direct/remux routes may request the
+optional poster independently. A route planned as `h264-sdr-transcode` does not
+request an HDR poster: playback preparation is the first source-specific
+hardware qualification, and the prepared video's first frame becomes the
+visual surface after success. If hardware decode is unavailable, Preview emits
+only the playback capability diagnostic. It does not perform a second HDR
+capture check or retain a stale poster diagnostic beside the playback failure.
+
+Preview operation failures cross the Host/Webview boundary as stable diagnostic
+codes rather than user-facing `Error.message` strings. An unavailable hardware
+decoder is a non-crashing playback limitation: the mounted video element,
+transport controls, metadata, and editor session remain present while a
+localized notice explains that software fallback is disabled and recommends a
+hardware-supported device or H.264 source. Hardware-only HDR poster capture is
+an informational notice; it explains that no cover frame was generated and
+that playback may still be attempted. Unknown failures use a generic localized
+operation notice while the Host logger retains implementation details.
+
+The native video file session is editor-scoped and remains stable across seek
+and speed changes. A seek updates `<video>.currentTime`, allowing Chromium to
+issue a Range request against the already prepared source; it does not remux,
+transcode, revoke, or republish the video file. Only the PCM session is replaced
+for the requested media time and rate. This is especially important for VP9
+WebM input because its one-time MP4 remux may be large.
+
+PCM replacement is generation-owned and serialized. A newer request supersedes
+an in-flight preparation, stops its unpublished PCM session, and is the only
+generation allowed to publish. The Webview applies the same ownership rule to
+asynchronous descriptor connection: a rejected superseded generation cleans up
+its own PCM client but cannot replace the current player with an error view.
+Clearing `<video src>` remains an intentional final-disposal or source-change
+reset, so its empty-source media event must not become a user-visible decode
+failure or unmount the element. Intentional PCM termination aborts the owning
+process signal before killing FFmpeg so a normal seek cannot surface as an
+unhandled `SIGKILL` command failure.
+
+PCM v1 is a finite generation, not a resumable connection. When its scheduled
+tail completes, Preview marks that generation spent and stops using it as the
+playback clock. The editor-scoped video descriptor, `<video src>`, and shared
+`AudioContext` remain alive. Replaying from EOF requests a new PCM generation
+at zero while retaining the same video URL; it must not call `resume()` on the
+spent PCM client or republish the video file.
+
+Chromium may cancel an obsolete HTTP Range response while seeking or replacing
+the selected source. The loopback server treats a response-side
+`ERR_STREAM_PREMATURE_CLOSE` after the client connection has closed as expected
+transport cancellation. It must not emit an error diagnostic or attempt a 500
+response for that case. File IO failures, invalid ranges, and premature stream
+closure while the client is still connected remain visible failures.
 
 Development may select explicit `NEKO_FFMPEG_PATH` and
 `NEKO_FFPROBE_PATH`. Packaged OpenNeko must select repository-staged
@@ -147,10 +283,19 @@ selected stream cannot produce any valid prefix.
   duration-scaled allocation.
 - Waveform output still contains `duration * peaksPerSecond` numbers by
   contract; only decoded PCM working memory becomes duration-independent.
-- A dynamics compressor is not a broadcast loudness workflow; it is explicit
-  peak protection until LUFS mastering is designed.
-- Tone-mapped SDR preview does not preserve HDR display output. Source metadata
-  and 10-bit decode remain intact; only the VS Code preview proxy is SDR.
+- Realtime dynamic normalization can differ slightly between adjacent
+  ten-second preparation windows. Export is the authoritative two-pass
+  integrated-loudness result.
+- Hardware-only preview intentionally rejects codecs that Chrome can decode
+  only in software. This includes AV1 Main10 on the validated Apple M2 host.
+- Hardware-decoded SDR thumbnails still pay one bounded GPU-to-CPU readback and
+  JPEG encode per requested tile; they never create or cache a full proxy.
+- `scale_vt` availability does not prove acceptable HDR-to-SDR output; that
+  graph remains unqualified until real-host color and changing-frame evidence
+  exists.
+- Retaining controls after a capability failure allows seeking and retrying,
+  but it does not imply that the same unsupported source will become playable
+  without a source or hardware change.
 - Shipping FFmpeg has binary-size and license-notice costs. The staged
   descriptor and release audit make those costs visible and reviewable.
 
@@ -161,8 +306,10 @@ selected stream cannot produce any valid prefix.
    realtime envelopes.
 3. Align export peak protection and add output validation.
 4. Tighten HDR qualification and corruption classification.
-5. Add packaged runtime descriptor/staging and composition-root selection.
-6. Run real-media matrix, full gates, and isolated VS Code Webview acceptance.
+5. Add Webview-to-host native codec qualification and operation-scoped Preview
+   failure projection.
+6. Add packaged runtime descriptor/staging and composition-root selection.
+7. Run real-media matrix, full gates, and VS Code Webview acceptance.
 
 No project schema migration is required. Old preview messages are internal and
 pre-release; unknown shapes fail visibly instead of using compatibility

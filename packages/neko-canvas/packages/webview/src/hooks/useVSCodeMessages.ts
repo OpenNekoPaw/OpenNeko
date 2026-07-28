@@ -11,7 +11,6 @@ import type {
   CanvasData,
   CanvasNode,
   CanonicalCanvasNodeType,
-  OperationSource,
   CanvasCreateCompositeRequest,
   CanvasCreateConnectionRequest,
   CanvasDeriveNodeRequest,
@@ -24,6 +23,7 @@ import type {
   ProjectionSourceChangeEvent,
   CanvasHostAppliedDocumentMessage,
 } from '@neko/shared';
+import type { CanvasOperationSource } from '@neko-canvas/domain';
 import {
   isCanvasNodeType,
   isJsonPointerPath,
@@ -86,7 +86,7 @@ export interface UseVSCodeMessagesOptions {
   isComposingRef?: React.MutableRefObject<boolean>;
 }
 
-function withOperationSource<T>(source: OperationSource, run: () => T): T {
+function withOperationSource<T>(source: CanvasOperationSource, run: () => T): T {
   return useCanvasOperationStore.getState().withOperationSource(source, run);
 }
 

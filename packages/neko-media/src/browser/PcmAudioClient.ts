@@ -49,6 +49,7 @@ export class PcmAudioClient {
   private state: 'idle' | 'preparing' | 'prepared' | 'started' = 'idle';
   private inputEnded = false;
   private playbackEndNotified = false;
+  private retirementTimer: ReturnType<typeof setTimeout> | undefined;
   private disposed = false;
 
   constructor(private readonly options: PcmAudioClientOptions) {
@@ -195,6 +196,42 @@ export class PcmAudioClient {
     return this.gainNode;
   }
 
+  retireAt(contextTime: number, fadeDurationSeconds = 0.01): void {
+    if (this.disposed) return;
+    const context = this.audioContext;
+    const gainNode = this.gainNode;
+    if (!context || !gainNode) {
+      this.dispose();
+      return;
+    }
+    if (!Number.isFinite(contextTime) || contextTime < context.currentTime) {
+      throw new Error('PCM retirement time must be a finite AudioContext time in the future.');
+    }
+    assertNonNegativeFinite(fadeDurationSeconds, 'PCM retirement fade duration');
+    this.disposed = true;
+    const stopped = new Error('PCM audio client was retired.');
+    this.rejectPendingPreparation(stopped);
+    this.rejectPendingStart(stopped);
+    this.rejectPendingFirstScheduled(stopped);
+    this.abortController.abort(stopped);
+    const endTime = contextTime + fadeDurationSeconds;
+    gainNode.gain.cancelScheduledValues(contextTime);
+    gainNode.gain.setValueAtTime(gainNode.gain.value, contextTime);
+    gainNode.gain.linearRampToValueAtTime(0, endTime);
+    for (const source of this.scheduledSources) {
+      try {
+        source.stop(endTime);
+      } catch {
+        // An already-ended Web Audio source has no remaining resource to retire.
+      }
+    }
+    const delayMilliseconds = Math.max(0, (endTime - context.currentTime) * 1000);
+    this.retirementTimer = setTimeout(() => {
+      this.retirementTimer = undefined;
+      this.releaseAudioNodes(false);
+    }, delayMilliseconds);
+  }
+
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
@@ -203,11 +240,21 @@ export class PcmAudioClient {
     this.rejectPendingStart(stopped);
     this.rejectPendingFirstScheduled(stopped);
     this.abortController.abort(stopped);
+    this.releaseAudioNodes(true);
+  }
+
+  private releaseAudioNodes(stopImmediately: boolean): void {
+    if (this.retirementTimer) {
+      clearTimeout(this.retirementTimer);
+      this.retirementTimer = undefined;
+    }
     for (const source of this.scheduledSources) {
-      try {
-        source.stop();
-      } catch {
-        // An already-ended Web Audio source has no remaining resource to stop.
+      if (stopImmediately) {
+        try {
+          source.stop();
+        } catch {
+          // An already-ended Web Audio source has no remaining resource to stop.
+        }
       }
       source.disconnect();
     }
@@ -226,7 +273,9 @@ export class PcmAudioClient {
   private async consume(stream: ReadableStream<Uint8Array>, start: Promise<number>): Promise<void> {
     const reader = stream.getReader();
     let pending: Uint8Array<ArrayBufferLike> = new Uint8Array();
-    let firstPacket = true;
+    const prebuffer: ParsedPcmPacket[] = [];
+    let prebufferDurationSeconds = 0;
+    let started = false;
     try {
       for (;;) {
         const result = await reader.read();
@@ -236,10 +285,16 @@ export class PcmAudioClient {
           const parsed = parsePacket(pending);
           if (!parsed) break;
           pending = pending.subarray(parsed.consumedBytes);
-          if (firstPacket) {
-            firstPacket = false;
+          if (!started) {
+            prebuffer.push(parsed.packet);
+            prebufferDurationSeconds += packetDurationSeconds(parsed.packet);
+            if (prebufferDurationSeconds < PREBUFFER_SECONDS) continue;
             this.resolvePendingPreparation();
             this.nextPlayTime = await start;
+            started = true;
+            for (const packet of prebuffer) this.schedule(packet);
+            prebuffer.length = 0;
+            continue;
           }
           await this.waitForScheduleCapacity();
           this.schedule(parsed.packet);
@@ -247,6 +302,13 @@ export class PcmAudioClient {
       }
       if (pending.byteLength !== 0) {
         throw new Error('PCM stream ended with an incomplete frame.');
+      }
+      if (!started && prebuffer.length > 0) {
+        this.resolvePendingPreparation();
+        this.nextPlayTime = await start;
+        started = true;
+        for (const packet of prebuffer) this.schedule(packet);
+        prebuffer.length = 0;
       }
       this.inputEnded = true;
       this.notifyPlaybackEndIfComplete();
@@ -379,6 +441,12 @@ export class PcmAudioClient {
     }
     return context.currentTime;
   }
+}
+
+function packetDurationSeconds(packet: ParsedPcmPacket): number {
+  const frames = packet.samples.length / packet.channels;
+  if (!Number.isInteger(frames) || frames <= 0) throw new Error('Invalid PCM sample count.');
+  return frames / packet.sampleRate;
 }
 
 export function parsePcmPackets(bytes: Uint8Array): {

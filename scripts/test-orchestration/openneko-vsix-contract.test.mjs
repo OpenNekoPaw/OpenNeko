@@ -78,13 +78,10 @@ describe('single OpenNeko VSIX contract', () => {
       manifest.contributes.iconThemes[0].path,
       './dist/features/neko-tools/themes/neko-file-icon-theme.json',
     );
-    assert.equal(
-      manifest.contributes.languages[0].configuration,
-      './dist/features/neko-tools/language-configuration.json',
-    );
+    assert.equal(manifest.contributes.languages[0].configuration, undefined);
     assert.deepEqual(manifest.contributes.languages[0].icon, {
-      light: './dist/features/neko-tools/themes/icons/file-timeline.svg',
-      dark: './dist/features/neko-tools/themes/icons/file-timeline.svg',
+      light: './dist/features/neko-tools/themes/icons/file-canvas.svg',
+      dark: './dist/features/neko-tools/themes/icons/file-canvas.svg',
     });
   });
 

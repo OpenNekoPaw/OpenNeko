@@ -121,7 +121,10 @@ describe('resolvePreviewSelection', () => {
       ],
     };
 
-    expect(resolvePreviewSelection(longClip, 0).segmentEndSeconds).toBe(10);
+    expect(resolvePreviewSelection(longClip, 0)).toMatchObject({
+      segmentEndSeconds: 10,
+      videoSegmentEndSeconds: 120,
+    });
     expect(resolvePreviewSelection(longClip, 10).segmentEndSeconds).toBe(20);
     expect(resolvePreviewSelection(longClip, 115).segmentEndSeconds).toBe(120);
   });

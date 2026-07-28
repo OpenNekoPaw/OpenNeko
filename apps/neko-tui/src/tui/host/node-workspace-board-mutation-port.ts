@@ -3,7 +3,7 @@ import * as path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import {
   ProjectFileStore,
-  createDefaultProjectFormatCodecRegistry,
+  createNkcProjectFormatCodecRegistry,
   createEmptyCanvasData,
   type CanvasData,
 } from '@neko/shared';
@@ -16,7 +16,7 @@ import {
 export class NodeWorkspaceBoardMutationPort implements CanvasWorkspaceBoardMutationPort {
   private readonly workspaceRoot: string;
   private readonly store = new ProjectFileStore({
-    registry: createDefaultProjectFormatCodecRegistry(),
+    registry: createNkcProjectFormatCodecRegistry(),
     fileOps: {
       readFile: fs.readFile,
       writeFile: async (filePath, content) => {
@@ -52,7 +52,9 @@ export class NodeWorkspaceBoardMutationPort implements CanvasWorkspaceBoardMutat
     }
     const loaded = await this.store.load<CanvasData>({ filePath, formatId: 'nkc' });
     if (!loaded.ok || !loaded.document) {
-      throw new Error(`Failed to load Canvas document ${input.documentUri}: ${formatDiagnostics(loaded.diagnostics)}`);
+      throw new Error(
+        `Failed to load Canvas document ${input.documentUri}: ${formatDiagnostics(loaded.diagnostics)}`,
+      );
     }
     return {
       documentUri: input.documentUri,

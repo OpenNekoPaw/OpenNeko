@@ -1,14 +1,17 @@
+import * as nodeCrypto from 'node:crypto';
 import * as nodeFs from 'node:fs/promises';
 import * as nodeOs from 'node:os';
 import * as nodePath from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   resolveTimelinePlaybackEndSeconds,
+  CUT_LOUDNESS_TARGET,
   type CutExportRequest,
   type CutMediaAudioStream,
   type CutMediaProbe,
   type CutMediaRuntimeAdapter,
   type CutMediaVideoStream,
+  type CutPcmMixSource,
   type CutPreviewPreparationProfile,
   type CutRuntimeMediaSource,
   type TimelineClipView,
@@ -21,7 +24,12 @@ import {
   NodeMediaLoopbackServer,
   NodeFfmpegProcess,
   createPcmPacketTransform,
+  getHardwareVideoPipeline,
+  resolveHardwareVideoBackend,
   type FfmpegProcessPort,
+  type HardwareVideoBackend,
+  type HardwareVideoPipeline,
+  type QualifiedHardwareVideoBackend,
   type RunningProcess,
 } from '@neko/media/node';
 
@@ -30,12 +38,13 @@ export interface NodeFfmpegCutMediaAdapterOptions {
   readonly process?: FfmpegProcessPort;
   readonly server?: NodeMediaLoopbackServer;
   readonly vp8WebmDirectQualified?: boolean;
+  readonly hardwareVideoBackend?: HardwareVideoBackend;
 }
 
 interface PreviewSessionRecord {
   readonly kind: 'preview';
   readonly token: string;
-  readonly directory: string;
+  readonly preparedDirectory?: string;
   state: 'paused' | 'active';
 }
 
@@ -82,10 +91,17 @@ interface ExportInput {
   readonly hasAudio: boolean;
 }
 
-interface CutFfmpegQualification {
-  readonly decoders: ReadonlySet<string>;
-  readonly encoders: ReadonlySet<string>;
-  readonly filters: ReadonlySet<string>;
+interface LoudnessMeasurement {
+  readonly inputIntegratedLufs: number;
+  readonly inputTruePeakDbtp: number;
+  readonly inputLoudnessRangeLu: number;
+  readonly inputThresholdLufs: number;
+  readonly targetOffsetLu: number;
+}
+
+interface KeyframeIndex {
+  readonly fingerprint: string;
+  readonly timestampsSeconds: readonly number[];
 }
 
 const PCM_SAMPLE_RATE = 48_000;
@@ -96,9 +112,10 @@ export class NodeFfmpegCutMediaAdapter implements CutMediaRuntimeAdapter {
   private readonly server: NodeMediaLoopbackServer;
   private readonly cacheRoot: string;
   private readonly sessions = new Map<string, SessionRecord>();
+  private readonly keyframeIndexes = new Map<string, Promise<KeyframeIndex>>();
+  private readonly thumbnailCaptures = new Map<string, Promise<{ readonly dataUrl: string }>>();
   private readonly vp8WebmDirectQualified: boolean;
-  private adapterRootPromise: Promise<string> | undefined;
-  private qualificationPromise: Promise<CutFfmpegQualification> | undefined;
+  private readonly hardwareVideoPipeline: HardwareVideoPipeline | undefined;
   private nextSessionId = 0;
   private disposed = false;
 
@@ -110,6 +127,9 @@ export class NodeFfmpegCutMediaAdapter implements CutMediaRuntimeAdapter {
     this.server = options.server ?? new NodeMediaLoopbackServer();
     this.cacheRoot = options.cacheRoot ?? nodePath.join(nodeOs.tmpdir(), 'openneko-cut-media');
     this.vp8WebmDirectQualified = options.vp8WebmDirectQualified ?? true;
+    this.hardwareVideoPipeline = getHardwareVideoPipeline(
+      options.hardwareVideoBackend ?? resolveHardwareVideoBackend(),
+    );
   }
 
   async probe(source: CutRuntimeMediaSource, signal?: AbortSignal): Promise<CutMediaProbe> {
@@ -165,13 +185,100 @@ export class NodeFfmpegCutMediaAdapter implements CutMediaRuntimeAdapter {
     assertNonNegativeFinite(timeSeconds, 'frame time');
     assertPositiveInteger(options.width, 'frame width');
     assertPositiveInteger(options.height, 'frame height');
+    signal?.throwIfAborted();
+    const sourcePath = this.resolveSource(source);
+    const stat = await nodeFs.stat(sourcePath);
+    const cacheKey = nodeCrypto
+      .createHash('sha256')
+      .update(
+        JSON.stringify({
+          source: source.workspaceRelativePath,
+          size: stat.size,
+          mtimeMs: stat.mtimeMs,
+          timeSeconds,
+          width: options.width,
+          height: options.height,
+        }),
+      )
+      .digest('hex');
+    const existing = this.thumbnailCaptures.get(cacheKey);
+    if (existing) return existing;
+    const pending = this.captureFrameCached(
+      source,
+      sourcePath,
+      timeSeconds,
+      options,
+      cacheKey,
+      signal,
+    );
+    this.thumbnailCaptures.set(cacheKey, pending);
+    try {
+      return await pending;
+    } finally {
+      if (this.thumbnailCaptures.get(cacheKey) === pending) {
+        this.thumbnailCaptures.delete(cacheKey);
+      }
+    }
+  }
+
+  private async captureFrameCached(
+    source: CutRuntimeMediaSource,
+    sourcePath: string,
+    timeSeconds: number,
+    options: { readonly width: number; readonly height: number },
+    cacheKey: string,
+    signal?: AbortSignal,
+  ): Promise<{ readonly dataUrl: string }> {
+    const directory = nodePath.join(this.cacheRoot, 'thumbnails');
+    const cachePath = nodePath.join(directory, `${cacheKey}.jpg`);
+    try {
+      const cached = await nodeFs.readFile(cachePath);
+      if (cached.byteLength > 0) {
+        return { dataUrl: `data:image/jpeg;base64,${cached.toString('base64')}` };
+      }
+      await nodeFs.rm(cachePath, { force: true });
+    } catch (error) {
+      if (!hasNodeErrorCode(error, 'ENOENT')) throw error;
+    }
+    signal?.throwIfAborted();
+    const captured = await this.captureFrameUncached(
+      source,
+      sourcePath,
+      timeSeconds,
+      options,
+      signal,
+    );
+    const jpeg = Buffer.from(captured.dataUrl.slice('data:image/jpeg;base64,'.length), 'base64');
+    await nodeFs.mkdir(directory, { recursive: true });
+    const temporaryPath = `${cachePath}.${nodeCrypto.randomUUID()}.tmp`;
+    try {
+      await nodeFs.writeFile(temporaryPath, jpeg);
+      await nodeFs.rename(temporaryPath, cachePath);
+    } finally {
+      await nodeFs.rm(temporaryPath, { force: true });
+    }
+    return captured;
+  }
+
+  private async captureFrameUncached(
+    source: CutRuntimeMediaSource,
+    sourcePath: string,
+    timeSeconds: number,
+    options: { readonly width: number; readonly height: number },
+    signal?: AbortSignal,
+  ): Promise<{ readonly dataUrl: string }> {
     const probe = await this.probe(source, signal);
     const video = probe.video;
     if (!video) throw new Error('Frame source contains no video stream.');
+    const hardwareVideoPipeline = this.requireHardwareVideoPipeline(
+      'hardware frame capture backend',
+    );
     if (isHdrVideo(video)) {
-      await this.assertPreviewRuntimeCapabilities(video, 'h264-sdr-transcode', signal);
+      throw new CutMediaRuntimeUnavailableError('hardware-only HDR frame capture');
     }
-    const filters = [buildCutPreviewVideoFilter(video, options.width, options.height)];
+    const filters = [
+      buildCutFrameFilter(video, options.width, options.height, hardwareVideoPipeline),
+    ];
     let result;
     try {
       result = await this.process.run(
@@ -179,10 +286,12 @@ export class NodeFfmpegCutMediaAdapter implements CutMediaRuntimeAdapter {
         [
           '-v',
           'error',
+          '-xerror',
+          ...hardwareVideoPipeline.decodeInputArgs,
           '-ss',
           decimal(timeSeconds),
           '-i',
-          this.resolveSource(source),
+          sourcePath,
           '-map',
           '0:v:0',
           '-frames:v',
@@ -198,6 +307,8 @@ export class NodeFfmpegCutMediaAdapter implements CutMediaRuntimeAdapter {
         signal,
       );
     } catch (error) {
+      const failure = hardwareVideoPipeline.classifyFailure(error, video.codecName);
+      if (failure) throw new CutMediaRuntimeUnavailableError(failure.capability);
       throw classifyMediaCommandError(
         error,
         'interval',
@@ -304,64 +415,94 @@ export class NodeFfmpegCutMediaAdapter implements CutMediaRuntimeAdapter {
     validatePreviewInterval(options);
     const sourcePath = this.resolveSource(source);
     const probe = await this.probe(source, signal);
-    if (!probe.video) throw new Error('Preview source contains no video stream.');
-    const profile = this.selectPreparationProfile(sourcePath, probe.video);
-    await this.assertPreviewRuntimeCapabilities(probe.video, profile, signal);
+    const video = probe.video;
+    if (!video) throw new Error('Preview source contains no video stream.');
+    const profile = this.selectPreparationProfile(sourcePath, video);
+    this.assertPreviewRuntimeCapabilities(profile, signal);
+    const sourceDuration = options.durationSeconds * options.playbackRate;
     const sessionId = this.newSessionId('preview');
-    const directory = await nodeFs.mkdtemp(
-      nodePath.join(await this.adapterRoot(), `${sessionId}-`),
-    );
     const webm = profile === 'vp8-webm-direct';
-    const outputPath = nodePath.join(directory, webm ? 'preview.webm' : 'preview.mp4');
+    const direct = profile === 'h264-mp4-direct' || webm;
+    let preparedDirectory: string | undefined;
+    let registration: Awaited<ReturnType<NodeMediaLoopbackServer['registerFile']>> | undefined;
     try {
-      const sourceDuration = options.durationSeconds * options.playbackRate;
-      try {
-        await this.process.run(
-          'ffmpeg',
-          buildPreviewArgs(sourcePath, outputPath, probe.video, profile, {
-            startTimeSeconds: options.startTimeSeconds,
-            sourceDurationSeconds: sourceDuration,
-          }),
-          signal,
-        );
-      } catch (error) {
-        throw classifyMediaCommandError(error, 'interval', 'prepare preview interval');
+      let preparedPath = sourcePath;
+      let mediaTimeOriginSeconds = options.startTimeSeconds;
+      if (!direct) {
+        const fragment =
+          profile === 'h264-mp4-remux'
+            ? await this.resolveH264Fragment(
+                sourcePath,
+                options.startTimeSeconds,
+                sourceDuration,
+                signal,
+              )
+            : {
+                startTimeSeconds: options.startTimeSeconds,
+                sourceDurationSeconds: sourceDuration,
+                mediaTimeOriginSeconds: 0,
+              };
+        await nodeFs.mkdir(this.cacheRoot, { recursive: true });
+        preparedDirectory = await nodeFs.mkdtemp(nodePath.join(this.cacheRoot, 'preview-'));
+        preparedPath = nodePath.join(preparedDirectory, 'preview.mp4');
+        try {
+          await this.process.run(
+            'ffmpeg',
+            buildPreviewArgs(
+              sourcePath,
+              preparedPath,
+              video,
+              profile,
+              {
+                startTimeSeconds: fragment.startTimeSeconds,
+                sourceDurationSeconds: fragment.sourceDurationSeconds,
+              },
+              this.hardwareVideoPipeline,
+            ),
+            signal,
+          );
+        } catch (error) {
+          if (profile === 'h264-sdr-transcode') {
+            const failure = this.requireHardwareVideoPipeline(
+              'hardware video preview backend',
+            ).classifyFailure(error, video.codecName);
+            if (failure) throw new CutMediaRuntimeUnavailableError(failure.capability);
+          }
+          throw classifyMediaCommandError(error, 'interval', 'prepare preview interval');
+        }
+        mediaTimeOriginSeconds = fragment.mediaTimeOriginSeconds;
       }
-      const registration = await this.server.registerFile(
-        outputPath,
+      registration = await this.server.registerFile(
+        preparedPath,
         webm ? 'video/webm' : 'video/mp4',
       );
       this.sessions.set(sessionId, {
         kind: 'preview',
         token: registration.token,
-        directory,
+        ...(preparedDirectory ? { preparedDirectory } : {}),
         state: options.startPaused ? 'paused' : 'active',
       });
       return {
         sessionId,
         video: {
           version: 1 as const,
-          transport: 'http-mse' as const,
+          transport: 'http' as const,
+          url: registration.url,
           mimeType: webm
             ? 'video/webm; codecs="vp8"'
             : profile === 'h264-sdr-transcode'
               ? 'video/mp4; codecs="avc1.640029"'
-              : h264MimeType(probe.video),
+              : h264MimeType(video),
           preparationProfile: profile,
-          mediaTimeOriginSeconds: 0,
+          mediaTimeOriginSeconds,
           durationSeconds: options.durationSeconds,
-          segments: [
-            {
-              index: 0,
-              startTimeSeconds: 0,
-              endTimeSeconds: options.durationSeconds,
-              url: registration.url,
-            },
-          ],
         },
       };
     } catch (error) {
-      await nodeFs.rm(directory, { recursive: true, force: true });
+      if (registration) this.server.unregister(registration.token);
+      if (preparedDirectory) {
+        await nodeFs.rm(preparedDirectory, { recursive: true, force: true });
+      }
       throw error;
     }
   }
@@ -378,33 +519,45 @@ export class NodeFfmpegCutMediaAdapter implements CutMediaRuntimeAdapter {
     const session = this.requireSession(sessionId, 'preview');
     this.sessions.delete(sessionId);
     this.server.unregister(session.token);
-    await nodeFs.rm(session.directory, { recursive: true, force: true });
+    if (session.preparedDirectory) {
+      await nodeFs.rm(session.preparedDirectory, { recursive: true, force: true });
+    }
   }
 
-  async startPcm(
-    source: CutRuntimeMediaSource,
+  async startPcmMix(
+    sources: readonly CutPcmMixSource[],
     options: {
-      readonly startTimeSeconds: number;
+      readonly timelineStartSeconds: number;
       readonly durationSeconds: number;
-      readonly playbackRate: number;
       readonly startPaused: boolean;
-      readonly audioStreamIndex?: number;
     },
     signal?: AbortSignal,
   ) {
     this.assertUsable();
-    validatePreviewInterval(options);
-    const sourcePath = this.resolveSource(source);
-    const probe = await this.probe(source, signal);
-    const audioStream =
-      options.audioStreamIndex === undefined
-        ? probe.audioStreams[0]
-        : probe.audioStreams.find(
-            (candidate) => candidate.streamIndex === options.audioStreamIndex,
-          );
-    if (!audioStream) throw new Error('PCM source contains no selected audio stream.');
+    assertNonNegativeFinite(options.timelineStartSeconds, 'PCM timeline start');
+    assertPositiveFinite(options.durationSeconds, 'PCM duration');
+    if (sources.length === 0) throw new Error('PCM mix requires at least one audible source.');
+    const resolvedSources = await Promise.all(
+      sources.map(async (source) => {
+        validatePcmMixSource(source);
+        const sourcePath = this.resolveSource(source.source);
+        const probe = await this.probePath(sourcePath, signal);
+        const audioStream =
+          source.audioStreamIndex === undefined
+            ? probe.audioStreams[0]
+            : probe.audioStreams.find(
+                (candidate) => candidate.streamIndex === source.audioStreamIndex,
+              );
+        if (!audioStream) throw new Error('PCM mix source contains no selected audio stream.');
+        return {
+          ...source,
+          sourcePath,
+          audioStreamIndex: audioStream.streamIndex,
+        };
+      }),
+    );
     const registration = await this.server.registerPcm((streamSignal) =>
-      this.createPcmProcess(sourcePath, audioStream.streamIndex, options, streamSignal),
+      this.createPcmMixProcess(resolvedSources, options, streamSignal),
     );
     const sessionId = this.newSessionId('pcm');
     registration.prime();
@@ -458,6 +611,10 @@ export class NodeFfmpegCutMediaAdapter implements CutMediaRuntimeAdapter {
       await this.process.run('ffmpeg', args, signal);
       const result = await this.probeAbsolute(stagingPath, signal);
       validateExportProbe(result, playbackEnd, request.settings.framesPerSecond);
+      if (request.settings.includeAudio && result.hasAudio) {
+        const measuredOutput = await this.measureRenderedLoudness(stagingPath, signal);
+        assertExportLoudness(measuredOutput);
+      }
       await replaceOutputAtomically(stagingPath, outputPath, jobId);
       return { outputWorkspaceRelativePath: request.outputWorkspaceRelativePath };
     } finally {
@@ -472,42 +629,74 @@ export class NodeFfmpegCutMediaAdapter implements CutMediaRuntimeAdapter {
     this.sessions.clear();
     for (const [, session] of records) this.server.unregister(session.token);
     await Promise.all(
-      records
-        .filter((entry): entry is [string, PreviewSessionRecord] => entry[1].kind === 'preview')
-        .map(([, session]) => nodeFs.rm(session.directory, { recursive: true, force: true })),
+      records.flatMap(([, session]) =>
+        session.kind === 'preview' && session.preparedDirectory
+          ? [nodeFs.rm(session.preparedDirectory, { recursive: true, force: true })]
+          : [],
+      ),
     );
     await this.server.dispose();
-    if (this.adapterRootPromise) {
-      await nodeFs.rm(await this.adapterRootPromise, { recursive: true, force: true });
-    }
   }
 
-  private createPcmProcess(
-    sourcePath: string,
-    streamIndex: number,
+  private createPcmMixProcess(
+    sources: readonly (CutPcmMixSource & {
+      readonly sourcePath: string;
+      readonly audioStreamIndex: number;
+    })[],
     options: {
-      readonly startTimeSeconds: number;
+      readonly timelineStartSeconds: number;
       readonly durationSeconds: number;
-      readonly playbackRate: number;
     },
     signal: AbortSignal,
   ): RunningProcess {
-    const sourceDuration = options.durationSeconds * options.playbackRate;
-    const filter = atempoFilter(options.playbackRate);
+    const inputArgs: string[] = [];
+    const filters: string[] = [];
+    const labels: string[] = [];
+    sources.forEach((source, inputIndex) => {
+      const sourceDuration = options.durationSeconds * source.playbackRate;
+      inputArgs.push(
+        '-ss',
+        decimal(source.sourceStartSeconds),
+        '-t',
+        decimal(sourceDuration),
+        '-i',
+        source.sourcePath,
+      );
+      const label = `pcm${inputIndex}`;
+      filters.push(
+        `[${inputIndex}:${source.audioStreamIndex}]` +
+          [
+            `atrim=duration=${decimal(sourceDuration)}`,
+            'asetpts=PTS-STARTPTS',
+            ...atempoFilterChain(source.playbackRate),
+            previewVolumeFilter(source),
+          ].join(',') +
+          `[${label}]`,
+      );
+      labels.push(`[${label}]`);
+    });
+    const mixedLabel = 'pcmmix';
+    filters.push(
+      labels.length === 1
+        ? `${labels[0]}anull[${mixedLabel}]`
+        : `${labels.join('')}amix=inputs=${labels.length}:duration=longest:normalize=0[${mixedLabel}]`,
+    );
+    filters.push(
+      `[${mixedLabel}]atrim=duration=${decimal(options.durationSeconds)},` +
+        `aformat=sample_fmts=flt:channel_layouts=stereo,` +
+        `${realtimeLoudnessNormalizer()},aresample=${PCM_SAMPLE_RATE},${peakLimiter()},` +
+        `aformat=sample_fmts=flt:channel_layouts=stereo[pcmout]`,
+    );
     const process = this.process.streamFfmpeg(
       [
         '-v',
         'error',
-        '-ss',
-        decimal(options.startTimeSeconds),
-        '-t',
-        decimal(sourceDuration),
-        '-i',
-        sourcePath,
+        ...inputArgs,
+        '-filter_complex',
+        filters.join(';'),
         '-map',
-        `0:${streamIndex}`,
+        '[pcmout]',
         '-vn',
-        ...(filter ? ['-af', filter] : []),
         '-ac',
         String(PCM_CHANNELS),
         '-ar',
@@ -521,8 +710,8 @@ export class NodeFfmpegCutMediaAdapter implements CutMediaRuntimeAdapter {
     const framed = createPcmPacketTransform({
       sampleRate: PCM_SAMPLE_RATE,
       channels: PCM_CHANNELS,
-      startTimeSeconds: options.startTimeSeconds,
-      playbackRate: options.playbackRate,
+      startTimeSeconds: options.timelineStartSeconds,
+      playbackRate: 1,
     });
     process.stdout.pipe(framed);
     return {
@@ -536,12 +725,122 @@ export class NodeFfmpegCutMediaAdapter implements CutMediaRuntimeAdapter {
     sourcePath: string,
     video: CutMediaVideoStream,
   ): CutPreviewPreparationProfile {
-    if (video.codecName === 'vp8' && this.vp8WebmDirectQualified) return 'vp8-webm-direct';
-    if (video.codecName !== 'h264') return 'h264-sdr-transcode';
     const extension = nodePath.extname(sourcePath).toLowerCase();
-    return extension === '.mp4' || extension === '.m4v'
-      ? 'h264-fragmented-mp4-copy'
-      : 'h264-fragmented-mp4-remux';
+    if (
+      video.codecName === 'vp8' &&
+      extension === '.webm' &&
+      this.vp8WebmDirectQualified &&
+      isQualifiedNativeVideo(video)
+    ) {
+      return 'vp8-webm-direct';
+    }
+    if (video.codecName !== 'h264' || !isQualifiedNativeVideo(video)) {
+      return 'h264-sdr-transcode';
+    }
+    return extension === '.mp4' || extension === '.m4v' ? 'h264-mp4-direct' : 'h264-mp4-remux';
+  }
+
+  private async resolveH264Fragment(
+    sourcePath: string,
+    requestedStartTimeSeconds: number,
+    requestedDurationSeconds: number,
+    signal?: AbortSignal,
+  ): Promise<{
+    readonly startTimeSeconds: number;
+    readonly sourceDurationSeconds: number;
+    readonly mediaTimeOriginSeconds: number;
+  }> {
+    if (requestedStartTimeSeconds === 0) {
+      return {
+        startTimeSeconds: 0,
+        sourceDurationSeconds: requestedDurationSeconds,
+        mediaTimeOriginSeconds: 0,
+      };
+    }
+    const timestamps = await this.keyframes(sourcePath, signal);
+    const preceding = timestamps.reduce<number | undefined>(
+      (nearest, candidate) =>
+        candidate <= requestedStartTimeSeconds && (nearest === undefined || candidate > nearest)
+          ? candidate
+          : nearest,
+      undefined,
+    );
+    if (preceding === undefined) {
+      throw new CutMediaCorruptionError(
+        'interval',
+        'prepare GOP-aligned H.264 preview',
+        `No random-access frame precedes ${decimal(requestedStartTimeSeconds)} seconds.`,
+      );
+    }
+    const mediaTimeOriginSeconds = Math.max(0, requestedStartTimeSeconds - preceding);
+    return {
+      startTimeSeconds: preceding,
+      sourceDurationSeconds: mediaTimeOriginSeconds + requestedDurationSeconds,
+      mediaTimeOriginSeconds,
+    };
+  }
+
+  private async keyframes(sourcePath: string, signal?: AbortSignal): Promise<readonly number[]> {
+    const stat = await nodeFs.stat(sourcePath);
+    const fingerprint = `${stat.size}:${stat.mtimeMs}`;
+    const cached = this.keyframeIndexes.get(sourcePath);
+    if (cached) {
+      const index = await cached;
+      if (index.fingerprint === fingerprint) return index.timestampsSeconds;
+      this.keyframeIndexes.delete(sourcePath);
+    }
+    const pending = this.readKeyframes(sourcePath, fingerprint, signal);
+    this.keyframeIndexes.set(sourcePath, pending);
+    try {
+      return (await pending).timestampsSeconds;
+    } catch (error) {
+      if (this.keyframeIndexes.get(sourcePath) === pending) {
+        this.keyframeIndexes.delete(sourcePath);
+      }
+      throw error;
+    }
+  }
+
+  private async readKeyframes(
+    sourcePath: string,
+    fingerprint: string,
+    signal?: AbortSignal,
+  ): Promise<KeyframeIndex> {
+    let result;
+    try {
+      result = await this.process.run(
+        'ffprobe',
+        [
+          '-v',
+          'error',
+          '-select_streams',
+          'v:0',
+          '-skip_frame',
+          'nokey',
+          '-show_entries',
+          'frame=best_effort_timestamp_time',
+          '-of',
+          'csv=p=0',
+          sourcePath,
+        ],
+        signal,
+      );
+    } catch (error) {
+      throw classifyMediaCommandError(error, 'interval', 'index H.264 random-access frames');
+    }
+    const timestampsSeconds = result.stdout
+      .toString('utf8')
+      .split(/\r?\n/u)
+      .map(Number)
+      .filter((value) => Number.isFinite(value) && value >= 0);
+    if (timestampsSeconds.length === 0) {
+      throw new CutMediaCorruptionError(
+        'stream',
+        'index H.264 random-access frames',
+        'FFprobe returned no usable random-access timestamps.',
+      );
+    }
+    return { fingerprint, timestampsSeconds };
   }
 
   private async buildExportArgs(
@@ -582,7 +881,7 @@ export class NodeFfmpegCutMediaAdapter implements CutMediaRuntimeAdapter {
         });
       }
     }
-    const filters: string[] = [];
+    const videoFilters: string[] = [];
     const videoTrack = tracks.find((track) => track.kind === 'Video');
     const videoLabels: string[] = [];
     let videoCursor = 0;
@@ -597,11 +896,11 @@ export class NodeFfmpegCutMediaAdapter implements CutMediaRuntimeAdapter {
             : undefined;
         const label = `vseg${videoLabels.length}`;
         if (!input) {
-          filters.push(
+          videoFilters.push(
             `color=c=black:s=${settings.width}x${settings.height}:r=${decimal(settings.framesPerSecond)}:d=${decimal(duration)}[${label}]`,
           );
         } else {
-          filters.push(
+          videoFilters.push(
             `[${input.inputIndex}:v:0]setpts=(PTS-STARTPTS)/${decimal(input.clip.playbackRate)},` +
               `scale=${settings.width}:${settings.height}:force_original_aspect_ratio=decrease,` +
               `pad=${settings.width}:${settings.height}:(ow-iw)/2:(oh-ih)/2:black,` +
@@ -615,22 +914,23 @@ export class NodeFfmpegCutMediaAdapter implements CutMediaRuntimeAdapter {
     }
     if (videoCursor < playbackEnd) {
       const label = `vseg${videoLabels.length}`;
-      filters.push(
+      videoFilters.push(
         `color=c=black:s=${settings.width}x${settings.height}:r=${decimal(settings.framesPerSecond)}:d=${decimal(playbackEnd - videoCursor)}[${label}]`,
       );
       videoLabels.push(`[${label}]`);
     }
     if (videoLabels.length === 0) {
-      filters.push(
+      videoFilters.push(
         `color=c=black:s=${settings.width}x${settings.height}:r=${decimal(settings.framesPerSecond)}:d=${decimal(playbackEnd)}[vout]`,
       );
     } else if (videoLabels.length === 1) {
-      filters.push(`${videoLabels[0]}null[vout]`);
+      videoFilters.push(`${videoLabels[0]}null[vout]`);
     } else {
-      filters.push(`${videoLabels.join('')}concat=n=${videoLabels.length}:v=1:a=0[vout]`);
+      videoFilters.push(`${videoLabels.join('')}concat=n=${videoLabels.length}:v=1:a=0[vout]`);
     }
 
     const audioLabels: string[] = [];
+    const audioFilters: string[] = [];
     if (settings.includeAudio) {
       for (const input of inputs) {
         const { clip, track } = input;
@@ -641,33 +941,37 @@ export class NodeFfmpegCutMediaAdapter implements CutMediaRuntimeAdapter {
           (track.kind === 'Audio' || track.kind === 'Video');
         if (!audible) continue;
         const label = `aseg${audioLabels.length}`;
-        const audioFilters = [
+        const clipFilters = [
           `atrim=duration=${decimal(clip.durationSeconds * clip.playbackRate)}`,
           'asetpts=PTS-STARTPTS',
           ...atempoFilterChain(clip.playbackRate),
           `volume=${decimal(10 ** (clip.audio.gainDb / 20))}`,
         ];
         if (clip.audio.fadeInSeconds > 0) {
-          audioFilters.push(`afade=t=in:st=0:d=${decimal(clip.audio.fadeInSeconds)}`);
+          clipFilters.push(`afade=t=in:st=0:d=${decimal(clip.audio.fadeInSeconds)}`);
         }
         if (clip.audio.fadeOutSeconds > 0) {
-          audioFilters.push(
+          clipFilters.push(
             `afade=t=out:st=${decimal(Math.max(0, clip.durationSeconds - clip.audio.fadeOutSeconds))}:d=${decimal(clip.audio.fadeOutSeconds)}`,
           );
         }
-        audioFilters.push(`adelay=${Math.round(clip.startSeconds * 1_000)}:all=1`);
-        filters.push(`[${input.inputIndex}:a:0]${audioFilters.join(',')}[${label}]`);
+        clipFilters.push(`adelay=${Math.round(clip.startSeconds * 1_000)}:all=1`);
+        audioFilters.push(`[${input.inputIndex}:a:0]${clipFilters.join(',')}[${label}]`);
         audioLabels.push(`[${label}]`);
       }
       if (audioLabels.length === 1) {
-        filters.push(
-          `${audioLabels[0]}atrim=duration=${decimal(playbackEnd)},${exportPeakLimiter()}[aout]`,
-        );
+        audioFilters.push(`${audioLabels[0]}atrim=duration=${decimal(playbackEnd)}[amaster]`);
       } else if (audioLabels.length > 1) {
-        filters.push(
-          `${audioLabels.join('')}amix=inputs=${audioLabels.length}:duration=longest:normalize=0,atrim=duration=${decimal(playbackEnd)},${exportPeakLimiter()}[aout]`,
+        audioFilters.push(
+          `${audioLabels.join('')}amix=inputs=${audioLabels.length}:duration=longest:normalize=0,atrim=duration=${decimal(playbackEnd)}[amaster]`,
         );
       }
+    }
+    if (audioLabels.length > 0) {
+      const measurement = await this.measureMixedLoudness(inputArgs, audioFilters, signal);
+      audioFilters.push(
+        `[amaster]${measuredLoudnessNormalizer(measurement)},${peakLimiter()}[aout]`,
+      );
     }
     return [
       '-y',
@@ -675,7 +979,7 @@ export class NodeFfmpegCutMediaAdapter implements CutMediaRuntimeAdapter {
       'error',
       ...inputArgs,
       '-filter_complex',
-      filters.join(';'),
+      [...videoFilters, ...audioFilters].join(';'),
       '-map',
       '[vout]',
       ...(audioLabels.length > 0 ? ['-map', '[aout]'] : []),
@@ -701,6 +1005,54 @@ export class NodeFfmpegCutMediaAdapter implements CutMediaRuntimeAdapter {
       '+faststart',
       stagingPath,
     ];
+  }
+
+  private async measureMixedLoudness(
+    inputArgs: readonly string[],
+    audioFilters: readonly string[],
+    signal?: AbortSignal,
+  ): Promise<LoudnessMeasurement> {
+    const result = await this.process.run(
+      'ffmpeg',
+      [
+        '-v',
+        'info',
+        ...inputArgs,
+        '-filter_complex',
+        [...audioFilters, `[amaster]${measurementLoudnessNormalizer()}[ameasure]`].join(';'),
+        '-map',
+        '[ameasure]',
+        '-f',
+        'null',
+        '-',
+      ],
+      signal,
+    );
+    return parseLoudnessMeasurement(result.stderr);
+  }
+
+  private async measureRenderedLoudness(
+    outputPath: string,
+    signal?: AbortSignal,
+  ): Promise<LoudnessMeasurement> {
+    const result = await this.process.run(
+      'ffmpeg',
+      [
+        '-v',
+        'info',
+        '-i',
+        outputPath,
+        '-map',
+        '0:a:0',
+        '-af',
+        measurementLoudnessNormalizer(),
+        '-f',
+        'null',
+        '-',
+      ],
+      signal,
+    );
+    return parseLoudnessMeasurement(result.stderr);
   }
 
   private async probeAbsolute(path: string, signal?: AbortSignal): Promise<CutMediaProbe> {
@@ -752,54 +1104,24 @@ export class NodeFfmpegCutMediaAdapter implements CutMediaRuntimeAdapter {
     return `cut-${kind}-${this.nextSessionId}`;
   }
 
-  private adapterRoot(): Promise<string> {
-    this.adapterRootPromise ??= nodeFs
-      .mkdir(this.cacheRoot, { recursive: true })
-      .then(() => nodeFs.mkdtemp(nodePath.join(this.cacheRoot, 'document-')));
-    return this.adapterRootPromise;
-  }
-
   private assertUsable(): void {
     if (this.disposed) throw new Error('Node/FFmpeg Cut media adapter is disposed.');
   }
 
-  private async assertPreviewRuntimeCapabilities(
-    video: CutMediaVideoStream,
+  private assertPreviewRuntimeCapabilities(
     profile: CutPreviewPreparationProfile,
     signal?: AbortSignal,
-  ): Promise<void> {
-    if (profile !== 'h264-sdr-transcode' || !isHdrVideo(video)) return;
+  ): void {
+    if (profile !== 'h264-sdr-transcode') return;
     if (signal?.aborted) throw signal.reason;
-    this.qualificationPromise ??= this.qualifyFfmpeg();
-    const qualification = await this.qualificationPromise;
-    if (!qualification.decoders.has(video.codecName)) {
-      throw new CutMediaRuntimeUnavailableError(`${video.codecName} decoder`);
-    }
-    if (!qualification.encoders.has('libx264') && !qualification.encoders.has('h264')) {
-      throw new CutMediaRuntimeUnavailableError('H.264 preview encoder');
-    }
-    for (const required of ['zscale', 'tonemap', 'sidedata']) {
-      if (!qualification.filters.has(required)) {
-        throw new CutMediaRuntimeUnavailableError(`HDR preview filter ${required}`);
-      }
-    }
+    this.requireHardwareVideoPipeline('hardware video preview backend');
   }
 
-  private async qualifyFfmpeg(): Promise<CutFfmpegQualification> {
-    const [decoders, encoders, filters] = await Promise.all([
-      this.process.run('ffmpeg', ['-hide_banner', '-decoders']),
-      this.process.run('ffmpeg', ['-hide_banner', '-encoders']),
-      this.process.run('ffmpeg', ['-hide_banner', '-filters']),
-    ]);
-    return {
-      decoders: parseFfmpegCapabilityNames(
-        `${decoders.stdout.toString('utf8')}\n${decoders.stderr}`,
-      ),
-      encoders: parseFfmpegCapabilityNames(
-        `${encoders.stdout.toString('utf8')}\n${encoders.stderr}`,
-      ),
-      filters: parseFfmpegCapabilityNames(`${filters.stdout.toString('utf8')}\n${filters.stderr}`),
-    };
+  private requireHardwareVideoPipeline(capability: string): HardwareVideoPipeline {
+    if (!this.hardwareVideoPipeline) {
+      throw new CutMediaRuntimeUnavailableError(capability);
+    }
+    return this.hardwareVideoPipeline;
   }
 }
 
@@ -809,11 +1131,18 @@ function buildPreviewArgs(
   video: CutMediaVideoStream,
   profile: CutPreviewPreparationProfile,
   interval: { readonly startTimeSeconds: number; readonly sourceDurationSeconds: number },
+  hardwareVideoPipeline: HardwareVideoPipeline | undefined,
 ): readonly string[] {
+  if (profile === 'h264-mp4-direct' || profile === 'vp8-webm-direct') {
+    throw new Error(`Direct Cut preview profile must not invoke FFmpeg: ${profile}`);
+  }
   const base = [
     '-y',
     '-v',
     'error',
+    ...(profile === 'h264-sdr-transcode'
+      ? ['-xerror', ...requirePreviewHardwareVideoPipeline(hardwareVideoPipeline).decodeInputArgs]
+      : []),
     '-ss',
     decimal(interval.startTimeSeconds),
     '-t',
@@ -826,10 +1155,7 @@ function buildPreviewArgs(
     '-sn',
     '-dn',
   ];
-  if (profile === 'vp8-webm-direct') {
-    return [...base, '-c:v', 'copy', '-avoid_negative_ts', 'make_zero', '-f', 'webm', outputPath];
-  }
-  if (profile === 'h264-fragmented-mp4-copy' || profile === 'h264-fragmented-mp4-remux') {
+  if (profile === 'h264-mp4-remux') {
     return [
       ...base,
       '-c:v',
@@ -837,7 +1163,7 @@ function buildPreviewArgs(
       '-avoid_negative_ts',
       'make_zero',
       '-movflags',
-      '+frag_keyframe+empty_moov+default_base_moof',
+      '+faststart',
       '-f',
       'mp4',
       outputPath,
@@ -845,14 +1171,14 @@ function buildPreviewArgs(
   }
   const fps = Math.max(1, video.framesPerSecond || 30);
   const keyframeInterval = Math.max(1, Math.round(fps * 2));
+  const pipeline = requirePreviewHardwareVideoPipeline(hardwareVideoPipeline);
   return [
     ...base,
     '-vf',
-    buildCutPreviewVideoFilter(video),
-    '-c:v',
-    'libx264',
-    '-preset',
-    'ultrafast',
+    buildCutPreviewVideoFilter(video, 1280, 720, pipeline.backend),
+    ...pipeline.h264EncoderArgs,
+    '-b:v',
+    '8M',
     '-profile:v',
     'high',
     '-level:v',
@@ -864,7 +1190,7 @@ function buildPreviewArgs(
     '-sc_threshold',
     '0',
     '-movflags',
-    '+frag_keyframe+empty_moov+default_base_moof',
+    '+faststart',
     '-f',
     'mp4',
     outputPath,
@@ -873,23 +1199,33 @@ function buildPreviewArgs(
 
 export function buildCutPreviewVideoFilter(
   video: CutMediaVideoStream,
-  maxWidth = 1280,
-  maxHeight = 720,
+  maxWidth: number,
+  maxHeight: number,
+  hardwareVideoBackend: QualifiedHardwareVideoBackend,
 ): string {
   const size = fitVideoWithin(video.width, video.height, maxWidth, maxHeight);
-  if (!isHdrVideo(video)) {
-    return `scale=${size.width}:${size.height}:flags=lanczos,format=yuv420p`;
+  const pipeline = getHardwareVideoPipeline(hardwareVideoBackend);
+  if (!pipeline) throw new Error(`Unknown hardware video backend: ${hardwareVideoBackend}`);
+  return pipeline.buildSdrFilter(size.width, size.height, isHdrVideo(video));
+}
+
+function buildCutFrameFilter(
+  video: CutMediaVideoStream,
+  maxWidth: number,
+  maxHeight: number,
+  hardwareVideoPipeline: HardwareVideoPipeline,
+): string {
+  const size = fitVideoWithin(video.width, video.height, maxWidth, maxHeight);
+  return hardwareVideoPipeline.buildFrameCaptureFilter(size.width, size.height);
+}
+
+function requirePreviewHardwareVideoPipeline(
+  pipeline: HardwareVideoPipeline | undefined,
+): HardwareVideoPipeline {
+  if (!pipeline) {
+    throw new CutMediaRuntimeUnavailableError('hardware video preview backend');
   }
-  return [
-    `zscale=w=${size.width}:h=${size.height}:t=linear:npl=100`,
-    'format=gbrpf32le',
-    'zscale=p=bt709',
-    'tonemap=hable:desat=0',
-    'zscale=t=bt709:m=bt709:r=tv',
-    'sidedata=mode=delete:type=MASTERING_DISPLAY_METADATA',
-    'sidedata=mode=delete:type=CONTENT_LIGHT_LEVEL',
-    'format=yuv420p',
-  ].join(',');
+  return pipeline;
 }
 
 function fitVideoWithin(
@@ -911,21 +1247,18 @@ function evenDimension(value: number): number {
 
 function isHdrVideo(video: CutMediaVideoStream): boolean {
   return (
-    video.bitDepth !== undefined &&
-    video.bitDepth > 8 &&
-    (video.color?.colorTransfer === 'smpte2084' || video.color?.colorTransfer === 'arib-std-b67')
+    video.color?.colorTransfer === 'smpte2084' || video.color?.colorTransfer === 'arib-std-b67'
   );
 }
 
-function parseFfmpegCapabilityNames(output: string): ReadonlySet<string> {
-  const names = new Set<string>();
-  for (const line of output.split(/\r?\n/u)) {
-    const fields = line.trim().split(/\s+/u);
-    const flags = fields[0];
-    const name = fields[1];
-    if (flags && name && /^[A-Z.]{1,6}$/u.test(flags)) names.add(name);
-  }
-  return names;
+function isQualifiedNativeVideo(video: CutMediaVideoStream): boolean {
+  return (
+    (video.bitDepth ?? 8) <= 8 &&
+    !isHdrVideo(video) &&
+    (video.pixelFormat === 'yuv420p' ||
+      video.pixelFormat === 'yuvj420p' ||
+      video.pixelFormat === 'nv12')
+  );
 }
 
 function classifyMediaCommandError(
@@ -1098,13 +1431,128 @@ function toFloat32(buffer: Buffer): Float32Array {
   return new Float32Array(copy);
 }
 
-function atempoFilter(playbackRate: number): string | undefined {
-  const filters = atempoFilterChain(playbackRate);
-  return filters.length > 0 ? filters.join(',') : undefined;
+function peakLimiter(): string {
+  return 'alimiter=limit=0.891251:attack=5:release=50:level=0:latency=1';
 }
 
-function exportPeakLimiter(): string {
-  return 'alimiter=limit=0.891251:attack=5:release=50:level=0:latency=1';
+function realtimeLoudnessNormalizer(): string {
+  return (
+    `loudnorm=I=${CUT_LOUDNESS_TARGET.integratedLufs}:` +
+    `TP=${CUT_LOUDNESS_TARGET.truePeakDbtp}:LRA=${CUT_LOUDNESS_TARGET.loudnessRangeLu}:` +
+    'linear=false:print_format=summary'
+  );
+}
+
+function measurementLoudnessNormalizer(): string {
+  return (
+    `loudnorm=I=${CUT_LOUDNESS_TARGET.integratedLufs}:` +
+    `TP=${CUT_LOUDNESS_TARGET.truePeakDbtp}:LRA=${CUT_LOUDNESS_TARGET.loudnessRangeLu}:` +
+    'print_format=json'
+  );
+}
+
+function measuredLoudnessNormalizer(measurement: LoudnessMeasurement): string {
+  return (
+    `loudnorm=I=${CUT_LOUDNESS_TARGET.integratedLufs}:` +
+    `TP=${CUT_LOUDNESS_TARGET.truePeakDbtp}:LRA=${CUT_LOUDNESS_TARGET.loudnessRangeLu}:` +
+    `measured_I=${decimal(measurement.inputIntegratedLufs)}:` +
+    `measured_TP=${decimal(measurement.inputTruePeakDbtp)}:` +
+    `measured_LRA=${decimal(measurement.inputLoudnessRangeLu)}:` +
+    `measured_thresh=${decimal(measurement.inputThresholdLufs)}:` +
+    `offset=${decimal(measurement.targetOffsetLu)}:` +
+    'linear=true:print_format=summary'
+  );
+}
+
+function parseLoudnessMeasurement(stderr: string): LoudnessMeasurement {
+  const blocks = stderr.match(/\{\s*"input_i"[\s\S]*?\}/gu);
+  const block = blocks?.at(-1);
+  if (!block) {
+    throw new Error('FFmpeg loudnorm did not emit an EBU R128 measurement object.');
+  }
+  let value: unknown;
+  try {
+    value = JSON.parse(block);
+  } catch (error) {
+    throw new Error('FFmpeg loudnorm emitted invalid EBU R128 measurement JSON.', {
+      cause: error,
+    });
+  }
+  if (!isRecord(value)) {
+    throw new Error('FFmpeg loudnorm measurement must be an object.');
+  }
+  return {
+    inputIntegratedLufs: readFiniteLoudnessValue(value, 'input_i'),
+    inputTruePeakDbtp: readFiniteLoudnessValue(value, 'input_tp'),
+    inputLoudnessRangeLu: readFiniteLoudnessValue(value, 'input_lra'),
+    inputThresholdLufs: readFiniteLoudnessValue(value, 'input_thresh'),
+    targetOffsetLu: readFiniteLoudnessValue(value, 'target_offset'),
+  };
+}
+
+function readFiniteLoudnessValue(value: Readonly<Record<string, unknown>>, key: string): number {
+  const raw = value[key];
+  const parsed =
+    typeof raw === 'number' ? raw : typeof raw === 'string' ? Number.parseFloat(raw) : Number.NaN;
+  if (!Number.isFinite(parsed)) {
+    throw new Error(`FFmpeg loudnorm measurement ${key} is not finite.`);
+  }
+  return parsed;
+}
+
+function assertExportLoudness(measurement: LoudnessMeasurement): void {
+  const integratedDelta = Math.abs(
+    measurement.inputIntegratedLufs - CUT_LOUDNESS_TARGET.integratedLufs,
+  );
+  if (integratedDelta > 0.5) {
+    throw new Error(
+      `Cut export integrated loudness is ${decimal(measurement.inputIntegratedLufs)} LUFS; ` +
+        `expected ${CUT_LOUDNESS_TARGET.integratedLufs} LUFS ±0.5 LU.`,
+    );
+  }
+  if (measurement.inputTruePeakDbtp > CUT_LOUDNESS_TARGET.truePeakDbtp + 0.1) {
+    throw new Error(
+      `Cut export true peak is ${decimal(measurement.inputTruePeakDbtp)} dBTP; ` +
+        `expected at most ${CUT_LOUDNESS_TARGET.truePeakDbtp} dBTP.`,
+    );
+  }
+}
+
+function previewVolumeFilter(source: CutPcmMixSource): string {
+  const baseGain = decimal(10 ** (source.gainDb / 20));
+  const factors: string[] = [baseGain];
+  if (source.fadeInSeconds > 0) {
+    factors.push(
+      `min(1\\,(t+${decimal(source.clipPositionSeconds)})/${decimal(source.fadeInSeconds)})`,
+    );
+  }
+  if (source.fadeOutSeconds > 0) {
+    factors.push(
+      `max(0\\,min(1\\,(${decimal(source.clipDurationSeconds)}-t-${decimal(source.clipPositionSeconds)})/${decimal(source.fadeOutSeconds)}))`,
+    );
+  }
+  return factors.length === 1 ? `volume=${baseGain}` : `volume='${factors.join('*')}':eval=frame`;
+}
+
+function validatePcmMixSource(source: CutPcmMixSource): void {
+  assertNonNegativeFinite(source.sourceStartSeconds, 'PCM source start');
+  assertPositiveFinite(source.playbackRate, 'PCM playback rate');
+  if (!Number.isFinite(source.gainDb) || source.gainDb < -60 || source.gainDb > 24) {
+    throw new Error('PCM source gain must be finite and between -60 dB and +24 dB.');
+  }
+  assertNonNegativeFinite(source.clipPositionSeconds, 'PCM Clip position');
+  assertPositiveFinite(source.clipDurationSeconds, 'PCM Clip duration');
+  if (source.clipPositionSeconds >= source.clipDurationSeconds) {
+    throw new Error('PCM Clip position must be before Clip duration.');
+  }
+  assertNonNegativeFinite(source.fadeInSeconds, 'PCM fade in');
+  assertNonNegativeFinite(source.fadeOutSeconds, 'PCM fade out');
+  if (
+    source.fadeInSeconds > source.clipDurationSeconds ||
+    source.fadeOutSeconds > source.clipDurationSeconds
+  ) {
+    throw new Error('PCM fade duration must not exceed Clip duration.');
+  }
 }
 
 function atempoFilterChain(playbackRate: number): string[] {
@@ -1236,4 +1684,8 @@ function isMissingFileError(error: unknown): boolean {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function hasNodeErrorCode(error: unknown, code: string): boolean {
+  return isRecord(error) && error['code'] === code;
 }

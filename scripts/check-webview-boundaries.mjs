@@ -169,7 +169,7 @@ for (const root of webviewRoots) {
           rule: 'webview-no-extension-implementation-import',
           file: rel,
           message:
-            'Webview source must not import Extension implementation modules. Share contracts through @neko/shared, @neko/proto, or package-local typed message facades.',
+            'Webview source must not import Extension implementation modules. Share contracts through @neko/shared or package-owned L0 typed message facades.',
         });
       }
     }
@@ -268,9 +268,7 @@ function readImportSpecifiers(content) {
 }
 
 function stripComments(content) {
-  return content
-    .replace(/\/\*[\s\S]*?\*\//g, '')
-    .replace(/(^|[^:])\/\/.*$/gm, '$1');
+  return content.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
 }
 
 function pointsToExtensionImplementation(specifier) {

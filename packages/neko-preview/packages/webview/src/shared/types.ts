@@ -13,7 +13,11 @@ import type {
   PreviewVariant,
   PreviewVariantRequest,
 } from '@neko/shared';
-import type { HtmlVideoDescriptor, PcmStreamDescriptor } from '@neko/media';
+import type {
+  HtmlVideoDescriptor,
+  HtmlVideoNativeCapabilities,
+  PcmStreamDescriptor,
+} from '@neko/media';
 
 // =============================================================================
 // Media Info (from Extension probe)
@@ -64,6 +68,24 @@ export interface PreviewFrameDataMessage {
   };
 }
 
+export type PreviewOperation = 'captureFrame' | 'playback' | 'protocol';
+
+export type PreviewOperationDiagnosticCode =
+  | 'hardware-decoder-unavailable'
+  | 'hardware-preview-unavailable'
+  | 'hdr-poster-unavailable'
+  | 'frame-capture-failed'
+  | 'playback-failed'
+  | 'protocol-failed';
+
+export interface PreviewOperationFailedMessage {
+  type: 'preview:operationFailed';
+  payload: {
+    operation: PreviewOperation;
+    code: PreviewOperationDiagnosticCode;
+  };
+}
+
 export interface PreviewWaveformMessage {
   type: 'preview:waveform';
   payload: {
@@ -105,6 +127,7 @@ export type ExtensionMessage =
   | PreviewInitMessage
   | PreviewPlaybackReadyMessage
   | PreviewFrameDataMessage
+  | PreviewOperationFailedMessage
   | PreviewWaveformMessage
   | PreviewLyricsMessage
   | PanoramaInitMessage
@@ -118,6 +141,7 @@ export type ExtensionMessage =
 
 export interface ReadyMessage {
   type: 'ready';
+  nativeVideoCapabilities?: HtmlVideoNativeCapabilities;
 }
 
 export interface PlayMessage {
@@ -147,11 +171,6 @@ export interface SeekMessage {
 export interface SpeedMessage {
   type: 'preview:speed';
   speed: number;
-}
-
-export interface CaptureFrameMessage {
-  type: 'preview:captureFrame';
-  time: number;
 }
 
 export interface StatusUpdateMessage {
@@ -198,7 +217,6 @@ export type WebviewMessage =
   | StopMessage
   | SeekMessage
   | SpeedMessage
-  | CaptureFrameMessage
   | StatusUpdateMessage
   | EofMessage
   | PanoramaConfirmProjectionMessage

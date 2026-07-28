@@ -4,7 +4,7 @@
  */
 
 import { memo, useRef, useState, useCallback, useEffect } from 'react';
-import type { ImageDiffDetails } from '@neko/shared';
+import type { ImageDiffDetails } from '@neko-tools/contracts';
 import type { ImageDiffViewerProps } from './types';
 
 // =============================================================================
@@ -196,18 +196,14 @@ const OverlayView = memo(function OverlayView({
 interface OnionSkinViewProps {
   currentSrc: string;
   previousSrc: string;
-  heatmapSrc?: string;
   zoom: number;
 }
 
 const OnionSkinView = memo(function OnionSkinView({
   currentSrc,
-  previousSrc: _previousSrc,
-  heatmapSrc,
+  previousSrc,
   zoom,
 }: OnionSkinViewProps) {
-  const [showHeatmap, setShowHeatmap] = useState(true);
-
   return (
     <div className="tools-card relative m-2 flex-1 overflow-hidden">
       <img
@@ -217,43 +213,13 @@ const OnionSkinView = memo(function OnionSkinView({
         style={{ transform: `scale(${zoom})`, transformOrigin: 'center' }}
         draggable={false}
       />
-      {heatmapSrc && showHeatmap && (
-        <img
-          src={heatmapSrc}
-          alt="Difference heatmap"
-          className="absolute inset-0 w-full h-full object-contain mix-blend-multiply"
-          style={{
-            transform: `scale(${zoom})`,
-            transformOrigin: 'center',
-            opacity: 0.7,
-          }}
-          draggable={false}
-        />
-      )}
-      <button
-        type="button"
-        className="tools-overlay-chip absolute top-2 right-2 px-2 py-1 text-xs transition-[filter] hover:brightness-110"
-        onClick={() => setShowHeatmap(!showHeatmap)}
-      >
-        {showHeatmap ? 'Hide' : 'Show'} Heatmap
-      </button>
-      {showHeatmap && (
-        <div className="tools-overlay-chip absolute bottom-2 left-2 flex items-center gap-2 px-2 py-1 text-xs">
-          <span>Difference:</span>
-          <div className="flex items-center gap-1">
-            <div className="w-3 h-3 bg-green-500 rounded-sm" />
-            <span>Low</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <div className="w-3 h-3 bg-yellow-500 rounded-sm" />
-            <span>Medium</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <div className="w-3 h-3 bg-red-500 rounded-sm" />
-            <span>High</span>
-          </div>
-        </div>
-      )}
+      <img
+        src={previousSrc}
+        alt="Previous version onion skin"
+        className="absolute inset-0 w-full h-full object-contain mix-blend-difference opacity-50"
+        style={{ transform: `scale(${zoom})`, transformOrigin: 'center' }}
+        draggable={false}
+      />
     </div>
   );
 });
@@ -294,10 +260,6 @@ const ImageDetails = memo(function ImageDetails({ details }: ImageDetailsProps) 
           <div className="mb-1 text-[var(--tools-fg-secondary)]">Similarity</div>
           <div className="text-blue-400">{(details.structuralSimilarity * 100).toFixed(2)}%</div>
         </div>
-        <div>
-          <div className="mb-1 text-[var(--tools-fg-secondary)]">Color Diff</div>
-          <div className="text-purple-400">{(details.colorHistogramDiff * 100).toFixed(2)}%</div>
-        </div>
       </div>
     </div>
   );
@@ -312,7 +274,6 @@ export const ImageDiffViewer = memo(function ImageDiffViewer({
   currentSrc,
   previousSrc,
   details,
-  heatmapSrc,
   sliderPosition = 0.5,
   onSliderChange,
   overlayOpacity = 0.5,
@@ -372,12 +333,7 @@ export const ImageDiffViewer = memo(function ImageDiffViewer({
         />
       )}
       {viewMode === 'onion-skin' && (
-        <OnionSkinView
-          currentSrc={currentSrc}
-          previousSrc={previousSrc}
-          heatmapSrc={heatmapSrc}
-          zoom={zoom}
-        />
+        <OnionSkinView currentSrc={currentSrc} previousSrc={previousSrc} zoom={zoom} />
       )}
       <ImageDetails details={details} />
     </div>

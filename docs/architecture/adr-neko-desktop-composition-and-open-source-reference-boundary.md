@@ -5,7 +5,7 @@
 更新日期：2026-07-27
 范围：实施中的 `apps/neko-desktop`、现有领域子包、Desktop Host bridge、本地媒体运行时、专业工具 handoff/MCP/Computer Use，以及 OpenCode、Zed、Craft Agents、Goose、Kun、Cindy、MiniMax Hub 等外部参考的采用边界。
 
-媒体边界更新（2026-07-27）：Rust Engine 与旧 TypeScript client 已退役。VS Code 当前使用共享 `@neko/media`、Node/FFmpeg、tokenized loopback Range/PCM 与浏览器媒体客户端；拟议 Desktop 必须复用相同 host-neutral ports，并由 [`media-runtime.md`](media-runtime.md)、[`adr-cut-mse-node-ffmpeg-media-runtime-boundary.md`](adr-cut-mse-node-ffmpeg-media-runtime-boundary.md) 与 [`adr-neko-desktop-media-capability-and-security-boundary.md`](adr-neko-desktop-media-capability-and-security-boundary.md) 约束。Desktop 可以替换 VS Code 特有的资源 transport 和 CSP envelope，但不能从 Electron 推断 10-bit/HDR 或广格式 direct playback；不得从历史 ADR 恢复 Rust Engine、NKV、双 adapter 或自动 fallback。
+媒体边界更新（2026-07-27）：Rust Engine 与旧 TypeScript client 已退役。VS Code 当前使用共享 `@neko/media`、Node/FFmpeg、tokenized loopback Range/PCM 与浏览器媒体客户端；Desktop 必须复用相同 host-neutral ports，并由 [`media-runtime.md`](media-runtime.md)、[`adr-cut-html-video-node-ffmpeg-media-runtime-boundary.md`](adr-cut-html-video-node-ffmpeg-media-runtime-boundary.md) 与 [`adr-neko-desktop-media-capability-and-security-boundary.md`](adr-neko-desktop-media-capability-and-security-boundary.md) 约束。Desktop 可以替换 VS Code 特有的资源 transport 和 CSP envelope，但不能从 Electron 推断 10-bit/HDR 或广格式 direct playback；不得从历史 ADR 恢复 Rust Engine、NKV、双 adapter 或自动 fallback。
 
 ## 背景
 
@@ -74,7 +74,7 @@ Desktop 优先复用以下公共能力：
 | 素材、实体与搜索                   | `packages/neko-assets`、`packages/neko-entity`、`packages/neko-search` | 复用 domain service 与 DTO；为 Desktop 组合 React 素材管理面，不复用 VS Code TreeView 宿主实现           |
 | Preview                            | `packages/neko-preview`                                                | 保留只读投影职责；把完整 root 的宿主通信抽到 adapter                                                     |
 | Host、UI 与基础能力                | `packages/neko-host`、`packages/neko-ui`、`packages/neko-types`        | 扩展现有公共 ports/primitives，不在 Desktop 建第二套 host framework、design system、i18n、日志或错误类型 |
-| 媒体执行与跨层契约                 | `packages/neko-media`、领域窄 ports、`packages/neko-proto`             | 复用 Node/FFmpeg 与浏览器媒体客户端；Desktop 只新增 secure custom protocol transport 与 capability projection，不恢复旧 Engine/client |
+| 媒体执行与跨层契约                 | `packages/neko-media`、领域窄 ports、package-owned L0 contracts        | 复用 Node/FFmpeg 与浏览器媒体客户端；宿主只实现授权、生命周期和组合，不恢复旧 Engine/client              |
 | 专业工具 handoff、MCP 与 Computer Use | owning domain export、Desktop Host、`packages/neko-agent` Tool Call/MCP、现有 External Processor | 领域 owner 冻结 revision/导出，Desktop 发现并启动应用；Agent 复用唯一 Tool Call/MCP，Computer Use 由 Host 受控执行；GUI app 不冒充 External Processor |
 
 当前复用成熟度不同：Agent Web UI 已存在 `AgentHostRuntimeAdapter` 与 `electron` host kind，可作为第一阶段入口；Canvas、Cut、Preview 的完整 UI root 仍有较强 VS Code `postMessage` 耦合；Assets 的主要宿主 UI 仍偏向 VS Code TreeView。后两类必须先完成宿主适配器和公共入口收敛，不能在 Desktop 中复制一套平行实现。
@@ -314,7 +314,7 @@ attachment/capability epoch，拒绝所有迟到消息并释放订阅。
 
 依赖：renderer 只能依赖浏览器安全的公共入口；preload 依赖 Electron 并暴露窄桥；main 依赖 Host/application service 但不依赖 React；功能包之间不直接导入私有实现。
 
-接口：先定义 Desktop application id、Host ports、IPC schema/version、instance identity、domain adapter 和 lifecycle/error contract，再接具体 UI。媒体 descriptor 由 `@neko/media`/领域 ports 定义；Proto 只保留仍有真实跨层消费者的静态领域契约。
+接口：先定义 Desktop application id、Host ports、IPC schema/version、instance identity、domain adapter 和 lifecycle/error contract，再接具体 UI。媒体 descriptor 由 `@neko/media`/领域 ports 定义；其他跨层消息使用 owning package 的 L0 contract，不恢复已退役 Proto。
 
 扩展：新领域通过公共 capability 或 domain adapter 接入；新宿主通过实现相同 ports 接入。只有出现第二个真实实现或稳定变化点时才新增 registry/factory，不预建插件平台。
 
@@ -357,7 +357,7 @@ attachment/capability epoch，拒绝所有迟到消息并释放订阅。
 - React StrictMode 重复 mount/unmount 不产生双订阅、双 command 或后台执行；Project badge
   和 Home Activity 在分页、关闭 Tab、renderer reload 与多窗口下仍来自 Host 摘要 projection；
 - 使用隔离 fixture 的 Playwright Electron 运行态场景：启动、workspace、Agent session、Canvas/Cut/Preview、media session lifecycle 与退出清理；
-- Desktop 媒体按精确 Electron/Chromium、OS、架构、GPU、显示器和 FFmpeg 构建验证 custom protocol Range、direct/MSE/PCM、SDR baseline 与显式 proxy；HDR/10-bit 只能由真实输出链证据接受，不能由“可播放”或 screenshot 接受；
+- Desktop 媒体按精确 Electron/Chromium、OS、架构、GPU、显示器和 FFmpeg 构建验证 custom protocol Range、direct/prepared-file/PCM、SDR baseline 与平台硬件 preparation；HDR/10-bit 只能由真实输出链证据接受，不能由“可播放”或 screenshot 接受；
 - CSP/security 场景证明 renderer 保持 sandbox、context isolation、`webSecurity`，custom scheme 不启用 `bypassCSP`，并拒绝 `file://`、任意路径、任意 localhost 与未知 token；
 - 专业工具场景证明 frozen revision、durable exchange bundle、明确 target app/version、无 shell 注入、应用缺失/版本不兼容 diagnostic、MCP/Computer Use explicit document/session/window identity、mutation evidence 和显式 round-trip review；
 - UI “Open in…” 与 Agent automation 必须命中同一 Professional Tool application service；Computer Use 复用唯一 Tool Call/Approval，支持 Pause/Stop/Take over，GUI app 不进入 External Processor runner，MCP 不创建第二套 manager；

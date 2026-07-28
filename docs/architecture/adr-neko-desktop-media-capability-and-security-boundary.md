@@ -4,18 +4,18 @@
 
 日期：2026-07-27
 
-范围：拟议中的 `apps/neko-desktop`、Electron main/preload/renderer、`@neko/media`、
+范围：实施中的 `apps/neko-desktop`、Electron main/preload/renderer、`@neko/media`、
 Node/FFmpeg、Preview、Canvas、Cut、10-bit/HDR/SDR、音视频格式、按需读取与 CSP。
 
 ## 背景
 
 当前 VS Code 媒体路径已经收敛为 `@neko/media`、Node/FFmpeg、tokenized
-loopback HTTP、Range、MSE、`<video>` 和 Web Audio。VS Code Webview 额外受到
+loopback HTTP、Range、原生 `<video src>` 和 Web Audio。VS Code Webview 额外受到
 `asWebviewUri()`、iframe、宿主 CSP、URL safety 和 Extension/Webview 通信边界约束。
 
 Electron 让 OpenNeko 自己拥有 main/preload/renderer、custom protocol、窗口和 CSP
 配置，因此可以解除这些 VS Code 特有限制。但 Electron renderer 仍是 Chromium
-renderer：HTML media、MSE、浏览器 codec、GPU compositor、OS 色彩管理和显示器输出
+renderer：HTML media、浏览器 codec、GPU compositor、OS 色彩管理和显示器输出
 链路并不会因为离开 VS Code 自动变成专业媒体 surface。
 
 因此必须分别回答三件事：
@@ -33,7 +33,7 @@ renderer：HTML media、MSE、浏览器 codec、GPU compositor、OS 色彩管理
 | 10-bit | **部分解决**：FFmpeg 输入、处理和导出可以支持；Electron/Chromium 最终 10-bit 输出仍需逐目标资格验证 | 默认只承诺 SDR 预览；通过真实显示链验证后才启用 10-bit/HDR 监看 |
 | HDR / SDR | **部分解决**：可正确识别、保留、tone-map 和导出；native HDR preview 不是 Electron 的静态保证 | 明确区分 SDR reference preview、HDR-qualified preview、source-fidelity export |
 | Webview 无法按需读内容 | **可以解决宿主层**：Desktop 使用安全流式 custom protocol 和 Range；简单预览可直接使用 `<video>` | 不使用绝对路径、`file://`、整文件 Blob 或媒体字节 IPC |
-| Webview 音视频格式限制 | **总体覆盖可扩大，但 direct playback 不会自动扩大**：FFmpeg 负责广格式，`<video>` 只播放通过资格验证的 profile | probe 后显式 direct/remux/proxy/reject，不做失败后的隐藏 fallback |
+| Webview 音视频格式限制 | **总体覆盖可扩大，但 direct playback 不会自动扩大**：FFmpeg 负责广格式，`<video>` 只播放通过资格验证的 profile | probe 后显式 direct/remux/hardware-prepared/reject，不做失败后的隐藏 fallback |
 | VS Code CSP | **可以移除 VS Code 特有摩擦，但不能移除 CSP** | Desktop 自己定义最小 CSP；保持 sandbox、context isolation、`webSecurity` 和 sender validation |
 
 Desktop 的价值是获得宿主、transport、版本和打包闭包控制权，不是绕过 Chromium
@@ -45,7 +45,7 @@ Desktop 的价值是获得宿主、transport、版本和打包闭包控制权，
 | --- | --- |
 | 职责 | `@neko/media` 与领域窄 port 拥有 probe、playback plan 和质量语义；Desktop Host 只拥有授权 transport、Electron lifecycle 和 capability projection。 |
 | 依赖 | renderer 只依赖浏览器安全 contract，不读取本地路径或 Node/Electron API；main 不解释 OTIO、Canvas 或项目事实。 |
-| 接口 | source、preview、export capability 分离；descriptor 明确 direct/remux/proxy、色彩模式、transport、session identity 和 diagnostic。 |
+| 接口 | source、preview、export capability 分离；descriptor 明确 direct/remux/hardware-prepared、色彩模式、transport、session identity 和 diagnostic。 |
 | 扩展 | codec、HDR output 和平台通过真实 fixture 资格矩阵扩展；同一 release/target 只选择一个 canonical plan，不保留自动 fallback。 |
 | 测试 | 同一 fixture 覆盖 probe、按需读取、实际 seek/decode、色彩输出、代理、CSP、取消与资源释放；“可播放”和截图不能作为 HDR 证据。 |
 
@@ -62,17 +62,17 @@ source ContentLocator
   -> @neko/media/node + FFprobe
   -> explicit MediaPlaybackPlan
      ├─ direct browser profile
-     ├─ MSE segment profile
-     ├─ SDR proxy profile
+     ├─ lossless remux profile
+     ├─ hardware-prepared SDR file
      └─ explicit unsupported diagnostic
 
 VS Code Host
   -> tokenized loopback HTTP Range / PCM
-  -> Webview <video> / MSE / Web Audio
+  -> Webview <video src> / Web Audio
 
 Desktop Host
   -> secure streaming custom protocol Range / PCM
-  -> Electron renderer <video> / MSE / Web Audio
+  -> Electron renderer <video src> / Web Audio
 ```
 
 `MediaPlaybackPlan` 由 probe 后的 source facts、发布能力矩阵和当前 capability snapshot
@@ -111,7 +111,7 @@ Host 必须从 FFprobe 读取并保留至少以下源事实：
 
 | 模式 | 适用条件 | 行为 |
 | --- | --- | --- |
-| `sdr-reference-preview` | 所有受支持平台的基线 | SDR 直接播放；HDR 使用命名 tone-map profile 转换为 8-bit BT.709 SDR 代理 |
+| `sdr-reference-preview` | 所有受支持平台的基线 | SDR 直接播放；HDR 仅通过目标平台已验证的完整硬件闭包转换为 8-bit BT.709 SDR seekable 文件 |
 | `hdr-qualified-preview` | 当前 Electron/Chromium、OS、GPU、显示器和 codec fixture 全部通过 | 保留 HDR 输入并使用已验证 `<video>`/compositor 输出；UI 显示“已验证 HDR 监看” |
 | `source-fidelity-export` | owning domain 的输出 profile 通过 | 独立于当前预览，保留或显式转换 10-bit/HDR metadata，并回读验证 |
 
@@ -124,7 +124,7 @@ runtime 更新后，旧 snapshot 失效；在无法可靠观察变化的平台�
 文件正常播放或截到看似正确的 screenshot，都不能证明 HDR 输出正确。截图通常经过
 桌面合成或 tone-map，只能验证 UI，不作为 luminance、色域或 bit depth 证据。
 
-### 4. Desktop 简单预览可以直接使用 `<video>`，Cut 继续使用 MSE
+### 4. Desktop 视频统一使用 `<video src>` 与普通 Range 文件
 
 Desktop 不把 `/absolute/path` 或 `file://` 交给 renderer。Electron main 在应用
 ready 前注册 `neko-media:` 一类 custom scheme，在实际 renderer session/partition 上
@@ -147,12 +147,13 @@ Electron 官方说明启用 `stream` 的 custom protocol 可让 `<video>` / `<au
 
 | Surface | Desktop video path | Audio path |
 | --- | --- | --- |
-| Preview / Canvas 简单线性预览 | 合格 direct profile 可用 `neko-media:` URL 直接进入 `<video>`；否则显式代理 | 第一阶段继续复用 PCM，简单只读预览若未来放宽需独立资格验证 |
-| Cut | keyframe-aligned init/media segment 经 custom protocol fetch 进入 MSE | 所有启用轨道继续走 48 kHz stereo float32 PCM 与 Cut-owned clock |
+| Preview / Canvas 简单线性预览 | 合格 direct profile 可用 `neko-media:` URL 直接进入 `<video>`；否则先完成 lossless remux 或平台硬件 preparation | 第一阶段继续复用 PCM，简单只读预览若未来放宽需独立资格验证 |
+| Cut | 原文件或完整 prepared file 经 custom protocol Range 进入 active/standby `<video>` | 当前有界段由 Host 混合为唯一 48 kHz stereo float32 PCM master，并由 Cut-owned clock 调度 |
 | Frame / thumbnail / waveform | FFmpeg 派生 operation | FFmpeg PCM/peak 聚合 |
 | Export | FFmpeg typed export plan | FFmpeg typed export plan |
 
-直接 `<video>` 是合格 profile 的 fast path，不是所有格式的 canonical decoder。
+原生 `<video src>` 是唯一视频消费路径；合格 profile 直接注册源文件，其他输入必须
+先完成 seekable prepared file，不能恢复 MSE、整文件 fetch 或隐藏 CPU fallback。
 
 ### 5. Desktop 格式覆盖由 FFmpeg 扩大，不由 Electron 承诺
 
@@ -168,18 +169,19 @@ Electron + Chromium version
 + packaged FFmpeg build and license closure
 + codec/container/profile/bit depth/color mode
 + real fixture result
-= accepted direct/remux/proxy/reject plan
+= accepted direct/remux/hardware-prepared/reject plan
 ```
 
-运行时 `canPlayType()`、`MediaSource.isTypeSupported()` 和
-`navigator.mediaCapabilities.decodingInfo()` 用于确认 manifest 未失效；任一结果
-冲突时 fail-visible 或选择 manifest 已定义的 SDR proxy，不做播放失败后的临时重试链。
+运行时 `canPlayType()` 和 `navigator.mediaCapabilities.decodingInfo()` 用于确认
+manifest 未失效；任一结果冲突时 fail-visible 或选择 manifest 已定义的平台硬件
+preparation，不做播放失败后的临时重试链。
 
 第一阶段继续以 H.264 8-bit SDR MP4 和已通过资格验证的 VP8 作为 direct profile。
 HEVC、AV1、VP9 Profile 2、ProRes、10-bit 和 HDR 即使在某台设备上偶然可播放，也只有
 在新的 release-target fixture 进入 manifest 后才能 direct。总体产品仍可通过 FFmpeg
-remux、转码、PCM 或明确拒绝支持更多输入；打包 FFmpeg 的 decoder/encoder/filter 和
-codec license 必须单独审计。
+remux、目标平台完整硬件 decode/filter/encode 闭包、PCM 或明确拒绝支持更多输入；
+实时预览和预览代理不得使用 `libx264`、CPU scale/tone-map 或 `hwdownload`
+fallback。打包 FFmpeg 的 decoder/encoder/filter 和 codec license 必须单独审计。
 
 ### 6. Desktop 解决 VS Code CSP 问题的方式是自己拥有策略，不是关闭策略
 
@@ -193,8 +195,8 @@ Desktop 不再受 VS Code Webview 注入的 CSP source、`asWebviewUri()` 和 if
   `sandbox: true`、`webSecurity: true`；
 - 应用页面使用受控 secure custom protocol，不使用 `file://`；
 - CSP 默认 `default-src 'none'`，按构建需要开放 `script-src 'self'`、样式和字体；
-- `media-src` 只开放 `neko-media:` 与确有 MSE 需求的 `blob:`；
-- `connect-src` 只开放 typed product endpoint 与 MSE/PCM 所需 `neko-media:`；
+- `media-src` 只开放 `neko-media:`；
+- `connect-src` 只开放 typed product endpoint 与 PCM 所需 `neko-media:`；
 - 不启用 `bypassCSP`、`unsafe-eval`、任意 localhost、任意 `data:` 或宽泛 `*`；
 - preload 只暴露版本化窄 API，所有 IPC 校验 sender、schema、instance identity、
   trust 和取消；
@@ -212,7 +214,7 @@ Desktop 不再受 VS Code Webview 注入的 CSP source、`asWebviewUri()` 和 if
 | --- | --- | --- |
 | SDR direct | H.264 8-bit BT.709 MP4、VP8 WebM | 首帧、连续播放、随机 seek、Range 命中、A/V 行为、取消 |
 | 10-bit/HDR | HEVC Main10 PQ、AV1 Main10 PQ、VP9 Profile 2 HLG | source probe 正确；默认 SDR tone-map；只有目标显示链通过才启用 HDR |
-| 广格式 | ProRes MOV、MKV、MPEG-4 Part 2、可接受的图像序列 | direct/remux/proxy/reject 与 manifest 一致 |
+| 广格式 | ProRes MOV、MKV、MPEG-4 Part 2、可接受的图像序列 | direct/remux/hardware-prepared/reject 与 manifest 一致 |
 | Audio | AAC、MP3、Opus/Vorbis、FLAC、PCM、5.1 | direct 提示不影响 Cut PCM；downmix、PTS、seek、资源释放正确 |
 | Transport | 大文件、长 GOP、损坏尾部、并发 session | GET/HEAD/206、闭区间、非全量读取、背压、token/owner/过期、取消 |
 | CSP / trust | 合法 `neko-media:`、任意 `file:`、任意 localhost、注入脚本、未知 IPC | 只允许最小资源；禁止项 fail-visible；无 `bypassCSP`/`webSecurity=false` |
@@ -235,13 +237,14 @@ Chromium 升级、FFmpeg 构建变化、direct manifest 变化均触发重新验
 
 ## 当前状态与进入实现的门槛
 
-截至 2026-07-27，仓库没有 `apps/neko-desktop`，因此只能确认设计上可以解除
+截至 2026-07-27，`apps/neko-desktop` 已进入 Phase 1 foundation 实施，但尚未实现
+media custom protocol、领域媒体 adapter 或发布资格。因此只能确认设计上可以解除
 VS Code 的按需读取和 CSP 宿主限制，不能宣称 Desktop 已经解决 10-bit、HDR 或广格式
 direct playback。
 
-进入 Desktop 实施前至少完成：
+进入 Desktop 媒体实施前至少完成：
 
-1. 打包 Electron spike：custom protocol + direct `<video>` + MSE + PCM；
+1. 打包 Electron spike：custom protocol + direct/prepared `<video src>` + PCM；
 2. `darwin-arm64` 与 `linux-x64` 的 SDR transport/codec matrix；Windows 若恢复，
    必须先完成独立平台准入；
 3. 至少一个明确硬件/显示器组合的 HDR/10-bit spike，或明确第一阶段只发布 SDR 预览；
@@ -259,7 +262,7 @@ Electron renderer 同时保留两条自动 fallback 路径。
 
 - [`media-runtime.md`](media-runtime.md)
 - [`webview-media-security.md`](webview-media-security.md)
-- [`adr-cut-mse-node-ffmpeg-media-runtime-boundary.md`](adr-cut-mse-node-ffmpeg-media-runtime-boundary.md)
+- [`adr-cut-html-video-node-ffmpeg-media-runtime-boundary.md`](adr-cut-html-video-node-ffmpeg-media-runtime-boundary.md)
 - [`adr-neko-desktop-composition-and-open-source-reference-boundary.md`](adr-neko-desktop-composition-and-open-source-reference-boundary.md)
 - [`../../openspec/changes/define-desktop-media-capability-boundary/`](../../openspec/changes/define-desktop-media-capability-boundary/)
 

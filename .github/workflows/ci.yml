@@ -120,6 +120,12 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      - name: Install media runtime dependency
+        if: ${{ env.ACT != 'true' || env.ACT_NATIVE_DEPS_READY != 'true' }}
+        run: |
+          sudo apt-get update
+          xargs sudo apt-get install -y < scripts/act/media-runtime-packages.txt
+
       - name: Run TypeScript tests
         run: |
           if [ "${ACT:-}" = "true" ]; then
@@ -134,23 +140,6 @@ jobs:
           name: coverage-reports
           path: packages/**/coverage/
           retention-days: 14
-
-  proto-check:
-    name: Proto Types Sync
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-
-      - uses: actions/setup-node@v5
-        with:
-          node-version-file: .node-version
-          package-manager-cache: false
-
-      - name: Enable Corepack
-        run: corepack enable
-
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm check:proto-sync
 
   code-quality:
     name: Code Quality
@@ -236,8 +225,19 @@ jobs:
       - name: Verify retired media runtime is absent from product composition
         run: pnpm check:engine-retirement-boundary
 
+      - name: Install Linux media runtime build dependencies
+        if: ${{ matrix.target == 'linux-x64' }}
+        run: |
+          sudo apt-get update
+          xargs sudo apt-get install -y --no-install-recommends < scripts/media-runtime-build-packages.txt
+
+      - name: Build verified FFmpeg runtime
+        run: scripts/build-media-runtime.sh ${{ matrix.target }} .tmp/release-media-runtime/${{ matrix.target }}
+
       - name: Assemble OpenNeko platform VSIX
         run: node scripts/package-openneko-platform.mjs --target ${{ matrix.target }}
+        env:
+          NEKO_MEDIA_RUNTIME_ROOT: ${{ github.workspace }}/.tmp/release-media-runtime/${{ matrix.target }}
 
       - uses: actions/upload-artifact@v6
         with:
@@ -253,7 +253,6 @@ jobs:
       - build
       - local-metadata-runtime
       - test-ts
-      - proto-check
       - code-quality
       - openspec-check
       - package-openneko-vsix
@@ -274,7 +273,6 @@ jobs:
           build
           local-metadata-runtime
           test-ts
-          proto-check
           code-quality
           openspec-check
           package-openneko-vsix
@@ -287,7 +285,6 @@ jobs:
       - build
       - local-metadata-runtime
       - test-ts
-      - proto-check
       - code-quality
       - openspec-check
       - package-openneko-vsix
@@ -310,7 +307,6 @@ jobs:
           build
           local-metadata-runtime
           test-ts
-          proto-check
           code-quality
           openspec-check
           package-openneko-vsix

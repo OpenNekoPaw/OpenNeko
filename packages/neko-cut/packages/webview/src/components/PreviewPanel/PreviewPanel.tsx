@@ -7,6 +7,8 @@ export interface PreviewPanelProps {
   readonly projectWidth?: number;
   readonly projectHeight?: number;
   readonly videoRef?: Ref<HTMLVideoElement>;
+  readonly secondaryVideoRef?: Ref<HTMLVideoElement>;
+  readonly activeVideoSlot?: 0 | 1;
 }
 
 export interface PreviewPanelRef {
@@ -15,7 +17,14 @@ export interface PreviewPanelRef {
 
 export const PreviewPanel = memo(
   forwardRef<HTMLCanvasElement, PreviewPanelProps>(function PreviewPanel(
-    { title, projectWidth = 1920, projectHeight = 1080, videoRef },
+    {
+      title,
+      projectWidth = 1920,
+      projectHeight = 1080,
+      videoRef,
+      secondaryVideoRef,
+      activeVideoSlot = 0,
+    },
     canvasRef,
   ) {
     const { t } = useTranslation();
@@ -38,8 +47,22 @@ export const PreviewPanel = memo(
               muted
               playsInline
               preload="auto"
-              className="absolute inset-0 block h-full w-full bg-black object-contain"
+              className={`absolute inset-0 block h-full w-full bg-black object-contain ${
+                activeVideoSlot === 0 ? 'opacity-100' : 'pointer-events-none opacity-0'
+              }`}
               aria-label={title ?? t('preview.noProjectLoaded')}
+              aria-hidden={activeVideoSlot !== 0}
+            />
+            <video
+              ref={secondaryVideoRef}
+              muted
+              playsInline
+              preload="auto"
+              className={`absolute inset-0 block h-full w-full bg-black object-contain ${
+                activeVideoSlot === 1 ? 'opacity-100' : 'pointer-events-none opacity-0'
+              }`}
+              aria-label={title ?? t('preview.noProjectLoaded')}
+              aria-hidden={activeVideoSlot !== 1}
             />
             {title ? null : (
               <span className="pointer-events-none absolute text-sm text-vscode-description">

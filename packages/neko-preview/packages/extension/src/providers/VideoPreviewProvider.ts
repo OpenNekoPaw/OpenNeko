@@ -1,12 +1,17 @@
 import * as vscode from 'vscode';
+import { MediaRuntimeUnavailableError, type HtmlVideoNativeCapabilities } from '@neko/media';
 import { PreviewService, type MediaInfo, type PreviewPlayback } from '../services/PreviewService';
 import type { StatusBarManager } from '../ui/StatusBarManager';
+import { getLogger } from '../utils/logger';
+import { LatestPlaybackGeneration } from './LatestPlaybackGeneration';
 import {
   createReadonlyPreviewDocument,
   getPreviewErrorHtml,
   getPreviewFileName,
   setupPreviewWebviewPanel,
 } from './previewProviderHelper';
+
+const logger = getLogger('VideoPreview');
 
 export class VideoPreviewProvider implements vscode.CustomReadonlyEditorProvider {
   static readonly viewType = 'neko.videoPreview';
@@ -47,89 +52,160 @@ export class VideoPreviewProvider implements vscode.CustomReadonlyEditorProvider
     const fileName = getPreviewFileName(filePath);
     this.statusBar.show({ fileName, duration: 0 });
     const mediaInfoPromise = this.resolveMediaInfo(filePath, fileName, panel);
-    let playback: PreviewPlayback | undefined;
-
-    const stopPlayback = async (): Promise<void> => {
-      if (!playback || !this.previewService) return;
-      const active = playback;
-      playback = undefined;
-      await this.previewService.stopPlayback(active);
-    };
+    let videoPlayback: PreviewPlayback | undefined;
+    let nativeVideoCapabilities: HtmlVideoNativeCapabilities | undefined;
+    const pcmGenerations = new LatestPlaybackGeneration<PreviewPlayback>(async (playback) => {
+      const service = this.previewService;
+      if (!service) throw new Error('Node/FFmpeg Preview adapter is unavailable.');
+      await service.stopPlayback(playback);
+    });
 
     const startPlayback = async (startTime: number, speed: number): Promise<void> => {
-      const mediaInfo = await mediaInfoPromise;
-      if (!mediaInfo || !this.previewService) return;
-      await stopPlayback();
-      playback = await this.previewService.startPlayback(
-        filePath,
-        mediaInfo,
-        'video',
-        startTime,
-        speed,
-      );
-      if (!playback.video) {
-        await this.previewService.stopPlayback(playback);
-        playback = undefined;
-        throw new Error('Video preview did not produce a browser video descriptor.');
-      }
-      await panel.webview.postMessage({
-        type: 'preview:playbackReady',
-        payload: {
-          ...(playback.video ? { video: playback.video } : {}),
-          ...(playback.audio ? { audio: playback.audio } : {}),
-          startTime,
-          playbackRate: speed,
+      await pcmGenerations.replace(
+        async () => {
+          const mediaInfo = await mediaInfoPromise;
+          const service = this.previewService;
+          if (!mediaInfo || !service) {
+            throw new Error('Node/FFmpeg Preview adapter is unavailable.');
+          }
+          if (!videoPlayback) {
+            const initial = await service.startPlayback(
+              filePath,
+              mediaInfo,
+              'video',
+              startTime,
+              speed,
+              {
+                ...(nativeVideoCapabilities ? { nativeVideoCapabilities } : {}),
+              },
+            );
+            if (!initial.videoSessionId || !initial.video) {
+              await service.stopPlayback(initial);
+              throw new Error('Video preview did not produce a browser video descriptor.');
+            }
+            videoPlayback = {
+              videoSessionId: initial.videoSessionId,
+              video: initial.video,
+            };
+            return {
+              ...(initial.audioSessionId ? { audioSessionId: initial.audioSessionId } : {}),
+              ...(initial.audio ? { audio: initial.audio } : {}),
+            };
+          }
+          return service.startPlayback(filePath, mediaInfo, 'audio', startTime, speed);
         },
-      });
+        async (pcmPlayback) => {
+          const video = videoPlayback?.video;
+          if (!video) throw new Error('Video preview descriptor is unavailable.');
+          await panel.webview.postMessage({
+            type: 'preview:playbackReady',
+            payload: {
+              video,
+              ...(pcmPlayback.audio ? { audio: pcmPlayback.audio } : {}),
+              startTime,
+              playbackRate: speed,
+            },
+          });
+        },
+      );
     };
 
-    const messageDisposable = panel.webview.onDidReceiveMessage(
-      async (message: Record<string, unknown>) => {
-        switch (message['type']) {
-          case 'ready': {
-            const mediaInfo = await mediaInfoPromise;
-            if (!mediaInfo) return;
-            await panel.webview.postMessage({
-              type: 'preview:init',
-              payload: { mediaInfo, displayName: fileName },
-            });
-            return;
-          }
-          case 'preview:play':
-            await startPlayback(numberOr(message['startTime'], 0), numberOr(message['speed'], 1));
-            return;
-          case 'preview:seek':
-            await startPlayback(numberOr(message['time'], 0), numberOr(message['speed'], 1));
-            return;
-          case 'preview:stop':
-            await stopPlayback();
-            return;
-          case 'preview:captureFrame': {
-            if (!this.previewService) return;
-            const imageDataUrl = await this.previewService.captureFrame(
-              filePath,
-              numberOr(message['time'], 0),
-            );
+    const stopPlayback = async (): Promise<void> => {
+      await pcmGenerations.stop();
+      const activeVideo = videoPlayback;
+      videoPlayback = undefined;
+      if (!activeVideo) return;
+      const service = this.previewService;
+      if (!service) throw new Error('Node/FFmpeg Preview adapter is unavailable.');
+      await service.stopPlayback(activeVideo);
+    };
+
+    const reportOperationFailure = async (
+      error: unknown,
+      operation: 'captureFrame' | 'playback' | 'protocol',
+    ): Promise<void> => {
+      const failure = error instanceof Error ? error.message : String(error);
+      logger.error(`Video preview ${operation} operation failed.`, error);
+      try {
+        await panel.webview.postMessage({
+          type: 'preview:operationFailed',
+          payload: {
+            operation,
+            code: videoPreviewDiagnosticCode(error, operation),
+          },
+        });
+      } catch (reportError) {
+        const reportFailure =
+          reportError instanceof Error ? reportError.message : String(reportError);
+        panel.webview.html = getPreviewErrorHtml(
+          `Failed to report video preview failure: ${reportFailure}. Original failure: ${failure}`,
+        );
+        this.statusBar.hide();
+      }
+    };
+
+    const handleMessage = async (message: Record<string, unknown>): Promise<void> => {
+      switch (message['type']) {
+        case 'ready': {
+          nativeVideoCapabilities = parseNativeVideoCapabilities(
+            message['nativeVideoCapabilities'],
+          );
+          const mediaInfo = await mediaInfoPromise;
+          if (!mediaInfo) return;
+          const service = this.previewService;
+          if (!service) throw new Error('Node/FFmpeg Preview adapter is unavailable.');
+          const preparationProfile = await service.planVideo(filePath, {
+            ...(nativeVideoCapabilities ? { nativeVideoCapabilities } : {}),
+          });
+          await panel.webview.postMessage({
+            type: 'preview:init',
+            payload: { mediaInfo, displayName: fileName },
+          });
+          if (preparationProfile === 'h264-sdr-transcode') return;
+          try {
+            const imageDataUrl = await service.captureFrame(filePath, 0);
             await panel.webview.postMessage({
               type: 'preview:frameData',
               payload: { imageDataUrl },
             });
-            return;
+          } catch (error) {
+            await reportOperationFailure(error, 'captureFrame');
           }
-          case 'preview:pause':
-          case 'preview:resume':
-          case 'preview:speed':
-          case 'preview:eof':
-            return;
-          case 'preview:statusUpdate':
-            this.statusBar.updatePlayback(
-              playbackState(message['playbackState']),
-              numberOr(message['currentTime'], 0),
-            );
-            return;
-          default:
-            throw new Error(`Unknown video preview message: ${String(message['type'])}`);
+          return;
         }
+        case 'preview:play':
+          await startPlayback(numberOr(message['startTime'], 0), numberOr(message['speed'], 1));
+          return;
+        case 'preview:seek':
+          await startPlayback(numberOr(message['time'], 0), numberOr(message['speed'], 1));
+          return;
+        case 'preview:stop':
+          await stopPlayback();
+          return;
+        case 'preview:pause':
+        case 'preview:resume':
+        case 'preview:speed':
+          return;
+        case 'preview:eof':
+          await pcmGenerations.stop();
+          return;
+        case 'preview:statusUpdate':
+          this.statusBar.updatePlayback(
+            playbackState(message['playbackState']),
+            numberOr(message['currentTime'], 0),
+          );
+          return;
+        default:
+          throw new Error(`Unknown video preview message: ${String(message['type'])}`);
+      }
+    };
+
+    const messageDisposable = panel.webview.onDidReceiveMessage(
+      (message: Record<string, unknown>) => {
+        void handleMessage(message).catch((error: unknown) => {
+          const operation = previewOperation(message['type']);
+          void reportOperationFailure(error, operation);
+        });
       },
     );
 
@@ -146,7 +222,9 @@ export class VideoPreviewProvider implements vscode.CustomReadonlyEditorProvider
     panel.onDidDispose(() => {
       messageDisposable.dispose();
       viewStateDisposable.dispose();
-      void stopPlayback();
+      void stopPlayback().catch((error: unknown) => {
+        logger.error('Failed to dispose video preview playback.', error);
+      });
       this.statusBar.hide();
     });
   }
@@ -199,4 +277,49 @@ function playbackState(value: unknown): 'playing' | 'paused' | 'stopped' {
     return value;
   }
   throw new Error(`Invalid preview playback state: ${String(value)}`);
+}
+
+function parseNativeVideoCapabilities(value: unknown): HtmlVideoNativeCapabilities | undefined {
+  if (value === undefined) return undefined;
+  if (value === null || typeof value !== 'object') {
+    throw new Error('Invalid native video capability payload.');
+  }
+  const version = Reflect.get(value, 'version');
+  const av1Mp4 = Reflect.get(value, 'av1Mp4');
+  const vp9Mp4 = Reflect.get(value, 'vp9Mp4');
+  if (version !== 1 || typeof av1Mp4 !== 'boolean' || typeof vp9Mp4 !== 'boolean') {
+    throw new Error('Invalid native video capability payload.');
+  }
+  return { version, av1Mp4, vp9Mp4 };
+}
+
+function previewOperation(value: unknown): 'captureFrame' | 'playback' | 'protocol' {
+  if (value === 'preview:play' || value === 'preview:seek' || value === 'preview:stop') {
+    return 'playback';
+  }
+  return 'protocol';
+}
+
+function videoPreviewDiagnosticCode(
+  error: unknown,
+  operation: 'captureFrame' | 'playback' | 'protocol',
+):
+  | 'hardware-decoder-unavailable'
+  | 'hardware-preview-unavailable'
+  | 'hdr-poster-unavailable'
+  | 'frame-capture-failed'
+  | 'playback-failed'
+  | 'protocol-failed' {
+  if (error instanceof MediaRuntimeUnavailableError) {
+    if (error.capability === 'hardware-only HDR frame capture') {
+      return 'hdr-poster-unavailable';
+    }
+    if (/ decoder$/u.test(error.capability)) {
+      return 'hardware-decoder-unavailable';
+    }
+    return 'hardware-preview-unavailable';
+  }
+  if (operation === 'captureFrame') return 'frame-capture-failed';
+  if (operation === 'playback') return 'playback-failed';
+  return 'protocol-failed';
 }

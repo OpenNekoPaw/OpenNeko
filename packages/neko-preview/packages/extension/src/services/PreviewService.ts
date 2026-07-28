@@ -13,7 +13,12 @@ import {
   type UpdatePreviewAssetMetadataRequest,
 } from '@neko/shared';
 import { NodeMediaRuntime } from '@neko/media/node';
-import type { HtmlVideoDescriptor, PcmStreamDescriptor } from '@neko/media';
+import type {
+  HtmlVideoDescriptor,
+  HtmlVideoNativeCapabilities,
+  HtmlVideoPreparationProfile,
+  PcmStreamDescriptor,
+} from '@neko/media';
 import type { MediaInfo } from '../types/api';
 
 export type { MediaInfo } from '../types/api';
@@ -33,11 +38,16 @@ export interface PreviewPlayback {
 
 export type PreviewPlaybackKind = 'video' | 'audio';
 
+export interface PreviewPlaybackOptions {
+  readonly nativeVideoCapabilities?: HtmlVideoNativeCapabilities;
+}
+
 export type PreviewMediaRuntime = Pick<
   NodeMediaRuntime,
   | 'probe'
   | 'captureFrame'
   | 'generateWaveform'
+  | 'planVideo'
   | 'prepareVideo'
   | 'publishFile'
   | 'startPcm'
@@ -88,11 +98,19 @@ export class PreviewService implements vscode.Disposable {
     kind: PreviewPlaybackKind,
     startTimeSeconds = 0,
     playbackRate = 1,
+    options: PreviewPlaybackOptions = {},
   ): Promise<PreviewPlayback> {
     this.assertAvailable();
     const remainingDuration = Math.max(0, mediaInfo.duration - startTimeSeconds);
     if (remainingDuration <= 0) throw new Error('Preview start is outside the media duration.');
-    const video = kind === 'video' ? await this.runtime.prepareVideo(filePath) : undefined;
+    const video =
+      kind === 'video'
+        ? options.nativeVideoCapabilities
+          ? await this.runtime.prepareVideo(filePath, {
+              nativeCapabilities: options.nativeVideoCapabilities,
+            })
+          : await this.runtime.prepareVideo(filePath)
+        : undefined;
     try {
       const audio = mediaInfo.hasAudio
         ? await this.runtime.startPcm(filePath, {
@@ -109,6 +127,18 @@ export class PreviewService implements vscode.Disposable {
       if (video) await this.runtime.stop(video.sessionId);
       throw error;
     }
+  }
+
+  async planVideo(
+    filePath: string,
+    options: PreviewPlaybackOptions = {},
+  ): Promise<HtmlVideoPreparationProfile> {
+    this.assertAvailable();
+    return this.runtime.planVideo(filePath, {
+      ...(options.nativeVideoCapabilities
+        ? { nativeCapabilities: options.nativeVideoCapabilities }
+        : {}),
+    });
   }
 
   async stopPlayback(playback: {

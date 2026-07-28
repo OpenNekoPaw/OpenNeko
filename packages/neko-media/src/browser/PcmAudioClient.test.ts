@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { PcmAudioClient, parsePcmPackets } from './PcmAudioClient';
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllGlobals();
 });
 
@@ -77,6 +78,28 @@ describe('parsePcmPackets', () => {
     client.dispose();
   });
 
+  it('does not report a cold stream prepared until 100 ms of PCM is buffered', async () => {
+    const { stream, controller } = controlledStream();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({ ok: true, status: 200, body: stream })),
+    );
+    const client = createClient();
+    let isPrepared = false;
+    const prepared = client.prepare(fakeAudioContext([])).then(() => {
+      isPrepared = true;
+    });
+
+    controller.enqueue(concatenateMany(prebufferPackets().slice(0, 4)));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(isPrepared).toBe(false);
+
+    controller.enqueue(prebufferPackets()[4]!);
+    await prepared;
+    expect(isPrepared).toBe(true);
+    client.dispose();
+  });
+
   it('prepares concurrent tracks before starting both at one shared context time', async () => {
     const streams = [controlledStream(), controlledStream()];
     let fetchIndex = 0;
@@ -93,13 +116,13 @@ describe('parsePcmPackets', () => {
     const clients = [createClient(), createClient()];
 
     const prepared = clients.map((client) => client.prepare(context));
-    streams.forEach(({ controller }, index) =>
-      controller.enqueue(packet(BigInt(1_000_000 + index * 500_000), 20_000n, 48_000, 2)),
-    );
+    streams.forEach(({ controller }, index) => {
+      controller.enqueue(concatenateMany(prebufferPackets(BigInt(1_000_000 + index * 500_000))));
+    });
     await Promise.all(prepared);
     await Promise.all(clients.map((client) => client.startAt(1.25)));
 
-    expect(starts).toEqual([1.25, 1.25]);
+    expect(starts).toEqual([1.25, 1.27, 1.29, 1.31, 1.33, 1.25, 1.27, 1.29, 1.31, 1.33]);
     clients.forEach((client) => client.dispose());
   });
 
@@ -129,6 +152,30 @@ describe('parsePcmPackets', () => {
     expect(stopped).toHaveLength(starts.length);
   });
 
+  it('retires a generation with a gain ramp before scheduled sources stop', async () => {
+    vi.useFakeTimers();
+    const { stream, controller } = controlledStream();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({ ok: true, status: 200, body: stream })),
+    );
+    const starts: number[] = [];
+    const stopped: number[] = [];
+    const ramps: Array<{ value: number; time: number }> = [];
+    const client = createClient();
+    const prepared = client.prepare(fakeAudioContext(starts, stopped, [], [], [], ramps));
+    controller.enqueue(concatenateMany(prebufferPackets()));
+    await prepared;
+    await client.startAt(0.75);
+
+    client.retireAt(0.8, 0.01);
+
+    expect(ramps).toEqual([{ value: 0, time: 0.81 }]);
+    expect(stopped).toEqual([0.81, 0.81, 0.81, 0.81, 0.81]);
+    await vi.advanceTimersByTimeAsync(310);
+    vi.useRealTimers();
+  });
+
   it('reports playback end only after the final scheduled source has ended', async () => {
     const { stream, controller } = controlledStream();
     vi.stubGlobal(
@@ -151,14 +198,14 @@ describe('parsePcmPackets', () => {
       onPlaybackEnd,
     });
     const prepared = client.prepare(fakeAudioContext([], [], [], [], scheduledSources));
-    controller.enqueue(packet(0n, 20_000n, 48_000, 2));
+    controller.enqueue(concatenateMany(prebufferPackets()));
     controller.close();
     await prepared;
     await client.startAt(0.75);
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(onPlaybackEnd).not.toHaveBeenCalled();
-    scheduledSources[0]?.onended?.();
+    scheduledSources.forEach((source) => source.onended?.());
     expect(onPlaybackEnd).toHaveBeenCalledTimes(1);
     client.dispose();
   });
@@ -172,7 +219,7 @@ describe('parsePcmPackets', () => {
     const gainValues: number[] = [];
     const client = createClient(2);
     const prepared = client.prepare(fakeAudioContext([], [], gainValues));
-    controller.enqueue(packet(0n, 20_000n, 48_000, 2));
+    controller.enqueue(concatenateMany(prebufferPackets()));
     await prepared;
     await client.startAt(0.75);
 
@@ -206,7 +253,7 @@ describe('parsePcmPackets', () => {
       },
     });
     const prepared = client.prepare(fakeAudioContext([], [], [], curves));
-    controller.enqueue(packet(1_000_000n, 20_000n, 48_000, 2));
+    controller.enqueue(concatenateMany(prebufferPackets(1_000_000n)));
     await prepared;
     await client.startAt(0.75);
 
@@ -252,6 +299,7 @@ function fakeAudioContext(
   gainValues: number[] = [],
   curves: Float32Array[] = [],
   scheduledSources: Array<{ onended: (() => void) | null }> = [],
+  ramps: Array<{ value: number; time: number }> = [],
 ): AudioContext {
   const gainNode = {
     gain: {
@@ -264,6 +312,7 @@ function fakeAudioContext(
       setValueAtTime: vi.fn((value: number) => gainValues.push(value)),
       cancelScheduledValues: vi.fn(),
       setValueCurveAtTime: vi.fn((curve: Float32Array) => curves.push(curve)),
+      linearRampToValueAtTime: vi.fn((value: number, time: number) => ramps.push({ value, time })),
     },
     connect: vi.fn(),
     disconnect: vi.fn(),
@@ -283,7 +332,7 @@ function fakeAudioContext(
         connect: vi.fn(),
         disconnect: vi.fn(),
         start: (time: number) => starts.push(time),
-        stop: () => stopped.push(1),
+        stop: (time = 0) => stopped.push(time),
         onended: null as (() => void) | null,
       };
       scheduledSources.push(source);
@@ -302,6 +351,12 @@ function packet(pts: bigint, duration: bigint, sampleRate: number, channels: num
   view.setUint32(16, sampleRate, true);
   view.setUint16(20, channels, true);
   return bytes;
+}
+
+function prebufferPackets(startPts = 0n): readonly Uint8Array[] {
+  return Array.from({ length: 5 }, (_, index) =>
+    packet(startPts + BigInt(index * 20_000), 20_000n, 48_000, 2),
+  );
 }
 
 function concatenate(left: Uint8Array, right: Uint8Array): Uint8Array {

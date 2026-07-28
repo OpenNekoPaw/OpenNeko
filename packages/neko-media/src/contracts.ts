@@ -40,28 +40,6 @@ export interface MediaProbe {
   readonly audioStreams: readonly MediaAudioStream[];
 }
 
-export interface MseVideoSegment {
-  readonly index: number;
-  readonly url: string;
-  readonly startTimeSeconds: number;
-  readonly endTimeSeconds: number;
-}
-
-export interface MseVideoDescriptor {
-  readonly version: 1;
-  readonly transport: 'http-mse';
-  readonly mimeType: string;
-  readonly preparationProfile:
-    | 'h264-fragmented-mp4-copy'
-    | 'h264-fragmented-mp4-remux'
-    | 'vp8-webm-direct'
-    | 'h264-sdr-transcode';
-  readonly mediaTimeOriginSeconds: number;
-  readonly durationSeconds: number;
-  readonly initSegmentUrl?: string;
-  readonly segments: readonly MseVideoSegment[];
-}
-
 export interface PcmStreamDescriptor {
   readonly version: 1;
   readonly transport: 'http';
@@ -72,7 +50,22 @@ export interface PcmStreamDescriptor {
 }
 
 export type HtmlVideoPreparationProfile =
-  'h264-mp4-direct' | 'vp8-webm-direct' | 'h264-mp4-remux' | 'h264-sdr-transcode';
+  | 'h264-mp4-direct'
+  | 'av1-mp4-direct'
+  | 'vp8-webm-direct'
+  | 'h264-mp4-remux'
+  | 'vp9-mp4-remux'
+  | 'h264-sdr-transcode';
+
+export interface HtmlVideoNativeCapabilities {
+  readonly version: 1;
+  readonly av1Mp4: boolean;
+  readonly vp9Mp4: boolean;
+}
+
+export interface HtmlVideoPreparationOptions {
+  readonly nativeCapabilities?: HtmlVideoNativeCapabilities;
+}
 
 export interface HtmlVideoDescriptor {
   readonly version: 1;
@@ -97,14 +90,25 @@ export interface WaveformResult {
 export interface MediaRuntimeQualification {
   readonly ffmpegVersion: string;
   readonly ffprobeVersion: string;
+  readonly hardwareAccelerators: {
+    readonly videoToolbox: boolean;
+    readonly vaapi: boolean;
+  };
   readonly decoders: {
     readonly h264: boolean;
     readonly hevc: boolean;
     readonly av1: boolean;
     readonly vp8: boolean;
+    readonly vp9: boolean;
+    readonly aac: boolean;
+    readonly mp3: boolean;
+    readonly flac: boolean;
+    readonly dts: boolean;
   };
   readonly encoders: {
     readonly h264: boolean;
+    readonly h264VideoToolbox: boolean;
+    readonly h264Vaapi: boolean;
     readonly aac: boolean;
   };
   readonly filters: {
@@ -112,6 +116,11 @@ export interface MediaRuntimeQualification {
     readonly tonemap: boolean;
     readonly sidedata: boolean;
     readonly alimiter: boolean;
+    readonly loudnorm: boolean;
+    readonly ebur128: boolean;
+    readonly scaleVt: boolean;
+    readonly scaleVaapi: boolean;
+    readonly tonemapVaapi: boolean;
   };
 }
 

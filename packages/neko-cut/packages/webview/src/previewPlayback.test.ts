@@ -3,6 +3,7 @@ import {
   advancePreviewPlayback,
   applyPreviewPlaybackAdvance,
   finishPreviewPlaybackSegment,
+  previewPreparationLeadSeconds,
   shouldAcceptPreviewReady,
 } from './previewPlayback';
 
@@ -94,6 +95,23 @@ describe('advancePreviewPlayback', () => {
     });
   });
 
+  it('activates at the edit boundary when a finite media clock ends within one scheduler tick', () => {
+    expect(
+      advancePreviewPlayback(
+        {
+          timelineStartSeconds: 0,
+          wallStartMilliseconds: 0,
+          segmentEndSeconds: 5.03,
+          timelineEndSeconds: 10,
+          mediaClock: { sourceStartSeconds: 0, playbackRate: 1 },
+        },
+        100_000,
+        5,
+        5,
+      ),
+    ).toEqual({ kind: 'segment-boundary', playheadSeconds: 5.03 });
+  });
+
   it('holds the current boundary while the replacement media clock is not ready', () => {
     const segment = {
       timelineStartSeconds: 4,
@@ -130,6 +148,15 @@ describe('advancePreviewPlayback', () => {
         timelineEndSeconds: 9,
       }),
     ).toEqual({ kind: 'timeline-end', playheadSeconds: 9 });
+  });
+});
+
+describe('previewPreparationLeadSeconds', () => {
+  it('uses short native lead for direct files and longer Host preparation lead otherwise', () => {
+    expect(previewPreparationLeadSeconds('h264-mp4-direct')).toBe(0.5);
+    expect(previewPreparationLeadSeconds('h264-mp4-remux')).toBe(2);
+    expect(previewPreparationLeadSeconds('h264-sdr-transcode')).toBe(5);
+    expect(previewPreparationLeadSeconds('vp8-webm-direct')).toBe(0.5);
   });
 });
 

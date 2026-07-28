@@ -3,8 +3,8 @@ import type { CutExportSettings, CutExportTaskSnapshot, CutUserDiagnostic } from
 import { isTerminalJobPhase } from '@neko/shared/job-lifecycle';
 import {
   ExportJobCoordinator,
-  type ExportEnginePort,
-  type ExportEngineProgress,
+  type ExportExecutorPort,
+  type ExportExecutionProgress,
   type ExportJobCommandInput,
   type ExportJobResultCommitter,
   type ExportJobSnapshot,
@@ -29,7 +29,7 @@ interface ActiveExecution {
   readonly controller: AbortController;
   readonly startedAt: number;
   readonly outputWorkspaceRelativePath: string;
-  state: ExportEngineProgress['state'];
+  state: ExportExecutionProgress['state'];
   error?: string;
 }
 
@@ -45,7 +45,7 @@ export class CutExportTaskRegistry {
   private readonly snapshots = new Map<string, ExportJobSnapshot>();
   private readonly tasks = new Map<string, CutExportTaskSnapshot>();
   private readonly observers = new Map<string, AsyncIterator<ExportJobSnapshot>>();
-  private readonly engine = new DirectCutExportEngine();
+  private readonly executor = new DirectCutExportExecutor();
 
   constructor(private readonly options: CutExportTaskRegistryOptions) {
     const resultCommitter: ExportJobResultCommitter = {
@@ -57,7 +57,7 @@ export class CutExportTaskRegistry {
     };
     this.coordinator = new ExportJobCoordinator({
       store: options.store,
-      engine: this.engine,
+      executor: this.executor,
       resultCommitter,
       ...(options.createJobId ? { createJobId: options.createJobId } : {}),
       ...(options.pollIntervalMs ? { pollIntervalMs: options.pollIntervalMs } : {}),
@@ -66,7 +66,7 @@ export class CutExportTaskRegistry {
 
   async start(input: StartCutExportTask): Promise<CutExportTaskSnapshot> {
     const executionKey = randomUUID();
-    this.engine.register(executionKey, {
+    this.executor.register(executionKey, {
       run: input.run,
       outputWorkspaceRelativePath: input.outputWorkspaceRelativePath,
     });
@@ -84,7 +84,7 @@ export class CutExportTaskRegistry {
         includeAudio: input.settings.includeAudio,
         audioSampleRate: input.settings.audioSampleRate,
       },
-      engineConfig: {
+      executionConfig: {
         executionKey,
         sessionId: input.sessionId,
         sourceRevision: input.sourceRevision,
@@ -168,7 +168,7 @@ export class CutExportTaskRegistry {
   }
 }
 
-class DirectCutExportEngine implements ExportEnginePort {
+class DirectCutExportExecutor implements ExportExecutorPort {
   private readonly pending = new Map<string, PendingExecution>();
   private readonly active = new Map<string, ActiveExecution>();
 
@@ -182,8 +182,8 @@ class DirectCutExportEngine implements ExportEnginePort {
   async enqueueExport(input: {
     readonly ref: { readonly kind: 'export'; readonly jobId: string };
     readonly request: ExportJobSnapshot['request'];
-  }): Promise<{ readonly engineJobId: string }> {
-    const executionKey = readExecutionKey(input.request.engineConfig);
+  }): Promise<{ readonly executionId: string }> {
+    const executionKey = readExecutionKey(input.request.executionConfig);
     const execution = this.pending.get(executionKey);
     if (!execution) {
       throw new Error(
@@ -212,17 +212,19 @@ class DirectCutExportEngine implements ExportEnginePort {
         active.error = error instanceof Error ? error.message : String(error);
       },
     );
-    return { engineJobId: input.ref.jobId };
+    return { executionId: input.ref.jobId };
   }
 
-  async describeExport(input: { readonly engineJobId: string }): Promise<ExportEngineProgress> {
-    const active = this.active.get(input.engineJobId);
+  async describeExport(input: { readonly executionId: string }): Promise<ExportExecutionProgress> {
+    const active = this.active.get(input.executionId);
     if (!active) {
-      throw new Error(`Cut Engine export ${input.engineJobId} is unavailable for reconciliation.`);
+      throw new Error(
+        `Cut export execution ${input.executionId} is unavailable for reconciliation.`,
+      );
     }
     const elapsedMs = Math.max(0, Date.now() - active.startedAt);
     return {
-      engineJobId: input.engineJobId,
+      executionId: input.executionId,
       state: active.state,
       progress: active.state === 'completed' ? 100 : 0,
       currentFrame: 0,
@@ -233,10 +235,10 @@ class DirectCutExportEngine implements ExportEnginePort {
     };
   }
 
-  async cancelExport(input: { readonly engineJobId: string }): Promise<void> {
-    const active = this.active.get(input.engineJobId);
+  async cancelExport(input: { readonly executionId: string }): Promise<void> {
+    const active = this.active.get(input.executionId);
     if (!active) {
-      throw new Error(`Cut Engine export ${input.engineJobId} is unavailable for cancellation.`);
+      throw new Error(`Cut export execution ${input.executionId} is unavailable for cancellation.`);
     }
     active.controller.abort(new Error('Cut export cancelled.'));
     active.state = 'cancelled';
@@ -244,8 +246,8 @@ class DirectCutExportEngine implements ExportEnginePort {
 }
 
 function projectTask(snapshot: ExportJobSnapshot): CutExportTaskSnapshot {
-  const sessionId = readString(snapshot.request.engineConfig, 'sessionId');
-  const sourceRevision = readPositiveInteger(snapshot.request.engineConfig, 'sourceRevision');
+  const sessionId = readString(snapshot.request.executionConfig, 'sessionId');
+  const sourceRevision = readPositiveInteger(snapshot.request.executionConfig, 'sourceRevision');
   const config = snapshot.request.config;
   return {
     jobId: snapshot.ref.jobId,

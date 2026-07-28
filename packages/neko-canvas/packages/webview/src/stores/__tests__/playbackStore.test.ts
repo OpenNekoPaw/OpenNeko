@@ -92,6 +92,30 @@ describe('playbackStore storyline session state', () => {
       playheadMs: 0,
     });
   });
+
+  it('clears Host-plan freshness without cancelling an active transport', () => {
+    usePlaybackStore.getState().revealPlaybackWorkspace();
+    usePlaybackStore.getState().setPlaybackWorkspacePlaybackState('playing');
+
+    usePlaybackStore.getState().markPlaybackWorkspaceStale(false);
+
+    expect(usePlaybackStore.getState().playbackSession).toMatchObject({
+      stale: false,
+      playbackState: 'playing',
+    });
+
+    usePlaybackStore.getState().markPlaybackWorkspaceStale(true);
+    expect(usePlaybackStore.getState().playbackSession).toMatchObject({
+      stale: true,
+      playbackState: 'stale',
+    });
+
+    usePlaybackStore.getState().markPlaybackWorkspaceStale(false);
+    expect(usePlaybackStore.getState().playbackSession).toMatchObject({
+      stale: false,
+      playbackState: 'idle',
+    });
+  });
 });
 
 function canvasData(): CanvasData {

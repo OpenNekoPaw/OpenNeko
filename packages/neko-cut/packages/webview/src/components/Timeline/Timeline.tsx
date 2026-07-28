@@ -57,6 +57,7 @@ import {
 
 export interface TimelineProps {
   readonly onOpenPackage: () => void;
+  readonly onSeek: (seconds: number) => void;
 }
 
 interface DragUi {
@@ -592,7 +593,7 @@ export function Timeline(props: TimelineProps) {
     if (!row || !scroller) return;
     const seconds =
       (event.clientX - row.getBoundingClientRect().left - TRACK_HEADER_WIDTH) / pixelsPerSecond;
-    actions.seek(Math.max(0, Math.min(view?.durationSeconds ?? 0, seconds)));
+    props.onSeek(Math.max(0, Math.min(view?.durationSeconds ?? 0, seconds)));
   };
   const dropMedia = (event: React.DragEvent) => {
     event.preventDefault();
@@ -745,7 +746,7 @@ export function Timeline(props: TimelineProps) {
         ref={scrollRef}
       >
         <TimelineRuler
-          onSeek={actions.seek}
+          onSeek={props.onSeek}
           pixelsPerSecond={pixelsPerSecond}
           totalDuration={duration}
         />

@@ -29,29 +29,54 @@ enough buffered audio.
   ends
 - **AND** consumers do not dispose and truncate the queued tail
 
-### Requirement: Multi-track PCM starts from one barrier
+### Requirement: Cut publishes one generation-owned PCM master
 
-Cut SHALL prepare every audible input before choosing one shared future
-`AudioContext` start time.
+Cut SHALL mix all audible inputs for the bounded interval in the Host and SHALL
+publish exactly one PCM master whose PTS is the Timeline clock. Preview
+start/prepare/activate/stop operations for one panel SHALL have one serialized
+resource owner.
 
-#### Scenario: PCM first packets arrive at different times
+#### Scenario: Overlapping audible inputs are prepared
 
-- **WHEN** concurrent tracks finish first-packet preparation at different wall
-  times
-- **THEN** all tracks receive the same `startAt` context time
-- **AND** arrival jitter does not become an audible track offset
+- **WHEN** multiple Video/Audio Clips are audible in the current interval
+- **THEN** FFmpeg applies their source timing, speed, gain, and fades before
+  producing one mixed PCM stream
+- **AND** the Webview schedules only that master stream at one future
+  `AudioContext` time
+- **AND** a non-zero H.264 seek is emitted as a zero-origin VideoToolbox
+  fragment rather than a stream-copy fragment whose first decodable keyframe
+  starts after zero
+- **AND** after Host activation the Webview starts muted video at that same
+  future audio time rather than allowing PCM to run before video startup
 
-#### Scenario: Secondary track drifts
+#### Scenario: Rapid seek and stop supersede an in-flight generation
 
-- **WHEN** a secondary PCM clock differs from the primary beyond the declared
-  tolerance
-- **THEN** preview fails visibly or rebuilds the interval
-- **AND** it does not continue while monitoring only the first track
+- **WHEN** a newer panel operation arrives while an older generation is
+  preparing, activating, or stopping
+- **THEN** the operations execute in order for that panel
+- **AND** each session record is claimed before asynchronous cleanup and is
+  stopped at most once
+- **AND** a generation explicitly superseded during hardware preparation or
+  before activation is treated as controlled cancellation, not a user error
+- **AND** independent panels remain independently concurrent
 
-### Requirement: Preview and export share gain and peak policy
+#### Scenario: One preview attempt fails through multiple asynchronous clients
+
+- **WHEN** video, audio, connection, or activation callbacks observe the same
+  preview-attempt failure
+- **THEN** the Webview accepts exactly one failure for that attempt
+- **AND** the notice identifies the failing playback stage instead of stacking
+  repeated generic preview-failed notices
+- **AND** intentional cancellation of a superseded thumbnail request is not
+  projected as a Cut error and does not stop playback
+- **AND** a later user-started attempt can report its own failure independently
+
+### Requirement: Preview and export share gain and loudness policy
 
 Cut SHALL preserve clip gain, apply clip fades, sum tracks through one owned mix
-bus, and apply explicit peak protection in both realtime preview and export.
+graph, and apply the declared EBU R128 target in both realtime preview and
+export. Peak limiting SHALL remain a separate safety stage and SHALL NOT be
+reported as loudness normalization.
 
 #### Scenario: Clip has positive gain
 
@@ -63,9 +88,27 @@ bus, and apply explicit peak protection in both realtime preview and export.
 #### Scenario: Multiple loud tracks overlap
 
 - **WHEN** summed samples could exceed full scale
-- **THEN** the preview mix bus and FFmpeg export apply their declared limiter
-- **AND** neither path silently normalizes every input or allows uncontrolled
-  output clipping
+- **THEN** Cut mixes the sources before applying one program loudness target
+- **AND** neither path silently normalizes every input independently
+- **AND** final peak protection prevents uncontrolled output clipping
+
+#### Scenario: Realtime preview is prepared
+
+- **WHEN** one or more audible Clips overlap the bounded preview interval
+- **THEN** the Host emits one mixed PCM stream normalized with EBU R128
+  `loudnorm` dynamic mode at `I=-14`, `TP=-1`, and `LRA=11`
+- **AND** the Webview does not insert `DynamicsCompressorNode`
+- **AND** it does not read future media beyond the bounded preview segment
+
+#### Scenario: Export includes audio
+
+- **WHEN** Cut exports a program with at least one audible source
+- **THEN** FFmpeg measures the complete mixed program in a first `loudnorm`
+  pass
+- **AND** the render pass supplies all measured fields to linear `loudnorm`
+- **AND** `alimiter` is applied only after normalization as final peak safety
+- **AND** invalid or incomplete measurement output fails visibly rather than
+  falling back to limiter-only export
 
 #### Scenario: Playback begins inside a fade
 

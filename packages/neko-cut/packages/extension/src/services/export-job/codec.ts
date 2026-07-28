@@ -20,7 +20,7 @@ const JOB_PHASES: ReadonlySet<string> = new Set([
 const JOB_STAGES: ReadonlySet<string> = new Set([
   'queued',
   'enqueuing',
-  'waiting-engine',
+  'waiting-executor',
   'committing-output',
   'completed',
 ]);
@@ -42,6 +42,11 @@ export function decodeExportJobSnapshot(serialized: string): ExportJobSnapshot {
   } catch (error) {
     throw invalidPersistence('Persisted Export Job snapshot is not valid JSON.', error);
   }
+  if (isRecord(value) && ('engineJobId' in value || hasRetiredExecutionShape(value))) {
+    throw invalidPersistence(
+      'Persisted Export Job uses the retired Engine schema and cannot be resumed. Retry the export to create an executor-owned job.',
+    );
+  }
   if (!isExportJobSnapshot(value)) {
     throw invalidPersistence('Persisted Export Job snapshot violates schema version 1.');
   }
@@ -55,7 +60,7 @@ function isExportJobSnapshot(value: unknown): value is ExportJobSnapshot {
   const retryOf = value['retryOf'];
   const phase = value['phase'];
   const failure = value['failure'];
-  const engineJobId = value['engineJobId'];
+  const executionId = value['executionId'];
   const result = value['result'];
   if (
     !isExportRef(ref) ||
@@ -67,7 +72,7 @@ function isExportJobSnapshot(value: unknown): value is ExportJobSnapshot {
     (retryOf !== undefined && (!isExportRef(retryOf) || retryOf.jobId === ref.jobId)) ||
     !isExportJobRequest(value['request']) ||
     !isExportProgress(value['progress']) ||
-    (engineJobId !== undefined && !isNonEmptyString(engineJobId)) ||
+    (executionId !== undefined && !isNonEmptyString(executionId)) ||
     (result !== undefined && !isExportResult(result)) ||
     (failure !== undefined && !isFailure(failure))
   ) {
@@ -90,8 +95,13 @@ function isExportJobRequest(value: unknown): boolean {
     isRecord(value) &&
     isNonEmptyString(value['documentUri']) &&
     isExportConfig(value['config']) &&
-    isJsonRecord(value['engineConfig'])
+    isJsonRecord(value['executionConfig'])
   );
+}
+
+function hasRetiredExecutionShape(value: Readonly<Record<string, unknown>>): boolean {
+  const request = value['request'];
+  return isRecord(request) && 'engineConfig' in request;
 }
 
 function isExportConfig(value: unknown): value is ExportConfig {

@@ -5,7 +5,7 @@
 - [x] 1.1 Create proposal, design, delta spec, and implementation task list.
 - [x] 1.2 Record the H.264/VP8, explicit remux/transcode, PCM-only audio, and
       OpenNeko clock policy.
-- [x] 1.3 Update and freeze Cut media port types with MSE and HTTP PCM
+- [x] 1.3 Update and freeze Cut media port types with native Range video and HTTP PCM
       descriptors.
 - [x] 1.4 Validate OpenSpec artifacts and architecture links.
 
@@ -23,12 +23,12 @@
 
 ## 3. Validate the real VS Code Webview
 
-- [x] 3.1 Replace the Engine WebSocket preview client with MSE `<video>` and HTTP
+- [x] 3.1 Replace the Engine WebSocket preview client with native `<video src>` and HTTP
       PCM clients.
 - [x] 3.2 Implement and test OpenNeko timeline clock ownership and drift policy.
 - [x] 3.3 Validate H.264 preview, PCM audio, seek/resume, frame capture, waveform,
       and explicit transcode in an Extension Development Host.
-- [x] 3.4 Run a VP8 WebM MSE fixture and record direct-support qualification or
+- [x] 3.4 Run a VP8 WebM native video fixture and record direct-support qualification or
       retain explicit H.264 transcode.
 
 ## 4. Switch the composition root

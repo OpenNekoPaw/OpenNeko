@@ -2,14 +2,36 @@ import { memo, useCallback } from 'react';
 import { NumberPropertyRow, PanelSection, PropertyRow, SliderPropertyRow } from '@neko/ui/creative';
 import { Checkbox } from '@neko/ui/primitives';
 import { useTranslation } from '../../i18n/I18nContext';
-import type { TimelineElement } from '../../types';
+
+export interface CutClipPropertyDraft {
+  readonly id: string;
+  readonly type: 'media' | 'audio' | 'subtitle';
+  readonly name: string;
+  readonly duration: number;
+  readonly startTime: number;
+  readonly trimStart: number;
+  readonly trimEnd: number;
+  readonly speed?: {
+    readonly speed: number;
+    readonly preservePitch: boolean;
+    readonly reverse: boolean;
+  };
+  readonly audio?: {
+    readonly volume: number;
+    readonly pan: number;
+    readonly muted: boolean;
+    readonly fadeIn: number;
+    readonly fadeOut: number;
+    readonly gain: number;
+  };
+}
 
 export interface PropertyPanelProps {
   readonly mode: 'basic';
-  readonly element: TimelineElement | null;
+  readonly element: CutClipPropertyDraft | null;
   readonly currentTime: number;
-  readonly onElementChange: (elementId: string, changes: Partial<TimelineElement>) => void;
-  readonly onElementCommit?: (elementId: string, changes: Partial<TimelineElement>) => void;
+  readonly onElementChange: (elementId: string, changes: Partial<CutClipPropertyDraft>) => void;
+  readonly onElementCommit?: (elementId: string, changes: Partial<CutClipPropertyDraft>) => void;
 }
 
 export const PropertyPanel = memo(function PropertyPanel(props: PropertyPanelProps) {
@@ -17,13 +39,13 @@ export const PropertyPanel = memo(function PropertyPanel(props: PropertyPanelPro
   const { element, onElementChange, onElementCommit } = props;
   const disabled = !element;
   const preview = useCallback(
-    (changes: Partial<TimelineElement>) => {
+    (changes: Partial<CutClipPropertyDraft>) => {
       if (element) onElementChange(element.id, changes);
     },
     [element, onElementChange],
   );
   const commit = useCallback(
-    (changes: Partial<TimelineElement>) => {
+    (changes: Partial<CutClipPropertyDraft>) => {
       if (element) onElementCommit?.(element.id, changes);
     },
     [element, onElementCommit],
@@ -219,7 +241,7 @@ export const PropertyPanel = memo(function PropertyPanel(props: PropertyPanelPro
   );
 });
 
-function constantSpeed(element: TimelineElement, speed: number) {
+function constantSpeed(element: CutClipPropertyDraft, speed: number) {
   return {
     speed,
     preservePitch: element.speed?.preservePitch ?? true,

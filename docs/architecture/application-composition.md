@@ -13,14 +13,14 @@ VS Code 客户端；`apps/neko-desktop` 已进入 Phase 1 foundation 实施，�
 
 ## 当前组合根
 
-| 层级 | Canonical root | 拥有 | 不得拥有 |
-| --- | --- | --- | --- |
-| OpenNeko TUI | `apps/neko-tui` | 终端生命周期、workspace 选择、命令路由、Node/headless 组合、TUI 打包 | AgentSession 语义、领域 capability 实现、React/Webview UI、VS Code adapter |
-| OpenNeko for VS Code | `apps/neko-vscode` | Extension Pack 清单、保留扩展组合、VSIX 打包和发布验收 | 领域 Extension、Custom Editor、Webview root、领域命令/provider 实现 |
-| OpenNeko Desktop foundation | `apps/neko-desktop` | Electron main/preload/renderer、安全 bridge、窗口/AppHost 生命周期、Electron Host ports、Desktop 打包 | 领域事实、跨领域万能 command router、VS Code transport、Phase 2/3 能力 |
-| 共享平台 | `packages/neko-types`、`packages/neko-host`、`packages/neko-media`、`packages/neko-content`、`packages/neko-proto`、`packages/neko-ui`、`packages/neko-entity`、`packages/neko-search` | host-neutral contract、Node/browser 媒体 runtime、内容语义、共享 UI、实体与搜索服务 | 产品生命周期、产品清单、领域实现、对 `apps/*` 的依赖 |
-| 保留领域包 | `packages/neko-agent`、`packages/neko-assets`、`packages/neko-canvas`、`packages/neko-cut`、`packages/neko-preview`、`packages/neko-tools` | 领域 core、authoring、validation、capability、包自有 host adapter 和 UI root | 产品组合、对 `apps/*` 的依赖、平行应用级领域实现 |
-| Media runtime | `packages/neko-media` | 媒体 contract、FFmpeg process、loopback Range/PCM、browser MSE/PCM client | 产品导航、项目事实、领域 timeline、UI |
+| 层级                 | Canonical root                                                                                                                                                  | 拥有                                                                                | 不得拥有                                                                   |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| OpenNeko TUI         | `apps/neko-tui`                                                                                                                                                 | 终端生命周期、workspace 选择、命令路由、Node/headless 组合、TUI 打包                | AgentSession 语义、领域 capability 实现、React/Webview UI、VS Code adapter |
+| OpenNeko for VS Code | `apps/neko-vscode`                                                                                                                                              | Extension Pack 清单、保留扩展组合、VSIX 打包和发布验收                              | 领域 Extension、Custom Editor、Webview root、领域命令/provider 实现        |
+| OpenNeko Desktop foundation | `apps/neko-desktop`                                                                                                                                      | Electron main/preload/renderer、安全 bridge、窗口/AppHost 生命周期、Electron Host ports、Desktop 打包 | 领域事实、跨领域万能 command router、VS Code transport、Phase 2/3 能力 |
+| 共享平台             | `packages/neko-types`、`packages/neko-host`、`packages/neko-media`、`packages/neko-content`、`packages/neko-ui`、`packages/neko-entity`、`packages/neko-search` | host-neutral contract、Node/browser 媒体 runtime、内容语义、共享 UI、实体与搜索服务 | 产品生命周期、产品清单、领域实现、对 `apps/*` 的依赖                       |
+| 保留领域包           | `packages/neko-agent`、`packages/neko-assets`、`packages/neko-canvas`、`packages/neko-cut`、`packages/neko-preview`、`packages/neko-tools`                      | 领域 core、authoring、validation、capability、包自有 host adapter 和 UI root        | 产品组合、对 `apps/*` 的依赖、平行应用级领域实现                           |
+| Media runtime        | `packages/neko-media`                                                                                                                                           | 媒体 contract、FFmpeg process、loopback Range/PCM、browser HTML video/PCM client    | 产品导航、项目事实、领域 timeline、UI                                      |
 
 ## 依赖方向
 
@@ -41,9 +41,9 @@ packages/* -X-> apps/*
 
 ## 产品矩阵
 
-| 产品 | 当前职责 | 真实宿主验证 |
-| --- | --- | --- |
-| OpenNeko TUI | Agent-first 终端与 headless authoring 入口 | 聚焦 TUI build/test 和真实 Agent evaluation |
+| 产品                 | 当前职责                                                                          | 真实宿主验证                                                                          |
+| -------------------- | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| OpenNeko TUI         | Agent-first 终端与 headless authoring 入口                                        | 聚焦 TUI build/test 和真实 Agent evaluation                                           |
 | OpenNeko for VS Code | Tools、Preview、Assets、Agent、Cut、Canvas 与 Node/FFmpeg 媒体 adapter 的发布组合 | Extension build/package、Extension Development Host、聚焦 Webview functional scenario |
 | OpenNeko Desktop | Phase 1 foundation；当前只交付安全宿主、typed bridge 和最小 renderer bootstrap，不代表领域功能或发布支持 | arm64 macOS Forge package、真实 Electron 启动/reload/close/quit smoke、contract/security test |
 

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { AudioStreamConfig } from '@neko/shared';
+import type { AudioStreamConfig } from '@neko-tools/contracts';
 import type { PcmAudioClient } from '@neko/media/browser';
 import { useMediaDiffRuntime } from '../runtime/MediaDiffRuntimeContext';
 import { getLogger } from '../utils/logger';

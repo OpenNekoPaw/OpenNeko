@@ -1,8 +1,7 @@
 import * as vscode from 'vscode';
-import type { MediaDiffRequest } from '@neko/shared';
+import { parseMediaDiffRequest, type MediaDiffRequest } from '@neko-tools/contracts';
 
 export interface IMediaDiffEditorMessageHandler extends vscode.Disposable {
-  initializeDiff(ref?: string): Promise<void>;
   handleMessage(message: MediaDiffRequest): Promise<void>;
   disposeAsync(): Promise<void>;
 }
@@ -16,6 +15,7 @@ export interface IMediaDiffEditorSession extends vscode.Disposable {
 export interface IMediaDiffEditorSessionOptions {
   webviewPanel: vscode.WebviewPanel;
   documentUri: vscode.Uri;
+  sessionId: string;
   previousUri?: vscode.Uri;
 }
 
@@ -33,6 +33,7 @@ export class MediaDiffEditorSession implements IMediaDiffEditorSession {
   constructor(
     private readonly webviewPanel: vscode.WebviewPanel,
     private readonly messageHandler: IMediaDiffEditorMessageHandler,
+    private readonly sessionId: string,
   ) {}
 
   attach(onDidDispose: () => void): void {
@@ -43,7 +44,7 @@ export class MediaDiffEditorSession implements IMediaDiffEditorSession {
     this.isAttached = true;
     this.disposables.push(
       this.webviewPanel.webview.onDidReceiveMessage(async (message) => {
-        await this.messageHandler.handleMessage(message as MediaDiffRequest);
+        await this.messageHandler.handleMessage(parseMediaDiffRequest(message, this.sessionId));
       }),
       this.webviewPanel.onDidDispose(() => {
         void this.disposeAsync().finally(onDidDispose);
@@ -51,16 +52,13 @@ export class MediaDiffEditorSession implements IMediaDiffEditorSession {
     );
   }
 
-  async start(requiresRecompare: boolean = false): Promise<void> {
+  async start(_requiresRecompare: boolean = false): Promise<void> {
     if (this.isDisposed) {
       return;
     }
 
-    if (requiresRecompare) {
-      return;
-    }
-
-    await this.messageHandler.initializeDiff();
+    // The Webview sends the initial request after installing its listener so
+    // every response is correlated to an explicit request identity.
   }
 
   async disposeAsync(): Promise<void> {

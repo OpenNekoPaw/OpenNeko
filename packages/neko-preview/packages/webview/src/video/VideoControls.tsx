@@ -3,7 +3,7 @@
  *
  * Two-row layout:
  *   Row 1: ProgressBar (full-width)
- *   Row 2: [Play] [Volume] [Time] — spacer — [Speed] [Stats] [PiP] [Connection]
+ *   Row 2: [Play] [Volume] [Time] — spacer — [Speed] [Stats] [PiP]
  */
 
 import { useCallback } from 'react';
@@ -30,7 +30,6 @@ interface VideoControlsProps {
   duration: number;
   speed: number;
   volume: number;
-  isConnected: boolean;
   isPiPActive?: boolean;
   showStats?: boolean;
   onTogglePlay: () => void;
@@ -49,7 +48,6 @@ export function VideoControls({
   duration,
   speed,
   volume,
-  isConnected,
   isPiPActive = false,
   showStats = false,
   onTogglePlay,
@@ -203,14 +201,6 @@ export function VideoControls({
             >
               <PictureInPictureIcon className="w-4 h-4" />
             </MacIconButton>
-          )}
-
-          {/* Connection indicator */}
-          {!isConnected && (
-            <span
-              className="inline-block w-2 h-2 rounded-full bg-[var(--vscode-errorForeground,#f44)] shrink-0"
-              title={t('preview.video.disconnected')}
-            />
           )}
         </div>
       </div>

@@ -3,6 +3,7 @@ import * as vscode from 'vscode';
 import { PreviewService, type MediaInfo, type PreviewPlayback } from '../services/PreviewService';
 import type { StatusBarManager } from '../ui/StatusBarManager';
 import { getLogger } from '../utils/logger';
+import { LatestPlaybackGeneration } from './LatestPlaybackGeneration';
 import {
   createReadonlyPreviewDocument,
   getPreviewErrorHtml,
@@ -54,83 +55,111 @@ export class AudioPreviewProvider implements vscode.CustomReadonlyEditorProvider
     const fileName = getPreviewFileName(filePath);
     this.statusBar.show({ fileName, duration: 0 });
     const mediaInfoPromise = this.resolveMediaInfo(filePath, fileName, panel);
-    let playback: PreviewPlayback | undefined;
-
-    const stopPlayback = async (): Promise<void> => {
-      if (!playback || !this.previewService) return;
-      const active = playback;
-      playback = undefined;
-      await this.previewService.stopPlayback(active);
-    };
+    const playbackGenerations = new LatestPlaybackGeneration<PreviewPlayback>(async (playback) => {
+      const service = this.previewService;
+      if (!service) throw new Error('Node/FFmpeg Preview adapter is unavailable.');
+      await service.stopPlayback(playback);
+    });
     const startPlayback = async (startTime: number, speed: number): Promise<void> => {
-      const mediaInfo = await mediaInfoPromise;
-      if (!mediaInfo || !this.previewService) return;
-      await stopPlayback();
-      playback = await this.previewService.startPlayback(
-        filePath,
-        mediaInfo,
-        'audio',
-        startTime,
-        speed,
+      await playbackGenerations.replace(
+        async () => {
+          const mediaInfo = await mediaInfoPromise;
+          const service = this.previewService;
+          if (!mediaInfo || !service) {
+            throw new Error('Node/FFmpeg Preview adapter is unavailable.');
+          }
+          return service.startPlayback(filePath, mediaInfo, 'audio', startTime, speed);
+        },
+        async (playback) => {
+          if (!playback.audio) throw new Error('Audio preview produced no PCM stream.');
+          await panel.webview.postMessage({
+            type: 'preview:playbackReady',
+            payload: { audio: playback.audio, startTime, playbackRate: speed },
+          });
+        },
       );
-      if (!playback.audio) throw new Error('Audio preview produced no PCM stream.');
-      await panel.webview.postMessage({
-        type: 'preview:playbackReady',
-        payload: { audio: playback.audio, startTime, playbackRate: speed },
-      });
+    };
+    const stopPlayback = (): Promise<void> => playbackGenerations.stop();
+
+    const handleMessage = async (message: Record<string, unknown>): Promise<void> => {
+      switch (message['type']) {
+        case 'ready': {
+          const mediaInfo = await mediaInfoPromise;
+          if (!mediaInfo || !this.previewService) return;
+          await panel.webview.postMessage({
+            type: 'preview:init',
+            payload: { mediaInfo, displayName: fileName },
+          });
+          try {
+            const waveform = await this.resolveWaveform(filePath, this.previewService);
+            await panel.webview.postMessage({
+              type: 'preview:waveform',
+              payload: waveform,
+            });
+          } catch (error) {
+            logger.error('Waveform generation failed.', error);
+          }
+          const lrcContent = await readLyrics(filePath, mediaInfo);
+          if (lrcContent) {
+            await panel.webview.postMessage({
+              type: 'preview:lyrics',
+              payload: { lrcContent },
+            });
+          }
+          return;
+        }
+        case 'preview:play':
+          await startPlayback(numberOr(message['startTime'], 0), numberOr(message['speed'], 1));
+          return;
+        case 'preview:seek':
+          await startPlayback(numberOr(message['time'], 0), numberOr(message['speed'], 1));
+          return;
+        case 'preview:stop':
+          await stopPlayback();
+          return;
+        case 'preview:pause':
+        case 'preview:resume':
+        case 'preview:speed':
+          return;
+        case 'preview:eof':
+          await stopPlayback();
+          return;
+        case 'preview:statusUpdate':
+          this.statusBar.updatePlayback(
+            playbackState(message['playbackState']),
+            numberOr(message['currentTime'], 0),
+          );
+          return;
+        default:
+          throw new Error(`Unknown audio preview message: ${String(message['type'])}`);
+      }
     };
 
     const messageDisposable = panel.webview.onDidReceiveMessage(
-      async (message: Record<string, unknown>) => {
-        switch (message['type']) {
-          case 'ready': {
-            const mediaInfo = await mediaInfoPromise;
-            if (!mediaInfo || !this.previewService) return;
-            await panel.webview.postMessage({
-              type: 'preview:init',
-              payload: { mediaInfo, displayName: fileName },
-            });
-            try {
-              const waveform = await this.resolveWaveform(filePath, this.previewService);
-              await panel.webview.postMessage({
-                type: 'preview:waveform',
-                payload: waveform,
-              });
-            } catch (error) {
-              logger.error('Waveform generation failed.', error);
-            }
-            const lrcContent = await readLyrics(filePath, mediaInfo);
-            if (lrcContent) {
-              await panel.webview.postMessage({
-                type: 'preview:lyrics',
-                payload: { lrcContent },
-              });
-            }
-            return;
-          }
-          case 'preview:play':
-            await startPlayback(numberOr(message['startTime'], 0), numberOr(message['speed'], 1));
-            return;
-          case 'preview:seek':
-            await startPlayback(numberOr(message['time'], 0), numberOr(message['speed'], 1));
-            return;
-          case 'preview:stop':
-            await stopPlayback();
-            return;
-          case 'preview:pause':
-          case 'preview:resume':
-          case 'preview:speed':
-          case 'preview:eof':
-            return;
-          case 'preview:statusUpdate':
-            this.statusBar.updatePlayback(
-              playbackState(message['playbackState']),
-              numberOr(message['currentTime'], 0),
+      (message: Record<string, unknown>) => {
+        const handling = handleMessage(message);
+        void handling.catch((error: unknown) => {
+          const failure = error instanceof Error ? error.message : String(error);
+          const operation = audioPreviewOperation(message['type']);
+          logger.error(`Audio preview ${operation} operation failed.`, error);
+          void Promise.resolve(
+            panel.webview.postMessage({
+              type: 'preview:operationFailed',
+              payload: {
+                operation,
+                code: operation === 'playback' ? 'playback-failed' : 'protocol-failed',
+              },
+            }),
+          ).catch((reportError: unknown) => {
+            const reportFailure =
+              reportError instanceof Error ? reportError.message : String(reportError);
+            panel.webview.html = getPreviewErrorHtml(
+              `Failed to report audio preview failure: ${reportFailure}. Original failure: ${failure}`,
             );
-            return;
-          default:
-            throw new Error(`Unknown audio preview message: ${String(message['type'])}`);
-        }
+            this.statusBar.hide();
+          });
+        });
+        return handling;
       },
     );
 
@@ -147,7 +176,9 @@ export class AudioPreviewProvider implements vscode.CustomReadonlyEditorProvider
     panel.onDidDispose(() => {
       messageDisposable.dispose();
       viewStateDisposable.dispose();
-      void stopPlayback();
+      void stopPlayback().catch((error: unknown) => {
+        logger.error('Failed to dispose audio preview playback.', error);
+      });
       this.statusBar.hide();
     });
   }
@@ -202,4 +233,16 @@ function playbackState(value: unknown): 'playing' | 'paused' | 'stopped' {
     return value;
   }
   throw new Error(`Invalid preview playback state: ${String(value)}`);
+}
+
+function audioPreviewOperation(value: unknown): 'playback' | 'protocol' {
+  if (
+    value === 'preview:play' ||
+    value === 'preview:seek' ||
+    value === 'preview:stop' ||
+    value === 'preview:eof'
+  ) {
+    return 'playback';
+  }
+  return 'protocol';
 }

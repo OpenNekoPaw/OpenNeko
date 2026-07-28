@@ -203,26 +203,3 @@ export function getActionsForElementType(
     return typeMatch && multiSelectMatch;
   }).sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0));
 }
-
-/**
- * Map TimelineElement type to AIActionElementType
- */
-export function mapElementTypeToAIType(
-  elementType: 'media' | 'text' | 'audio' | 'shape' | 'subtitle',
-  mediaType?: 'video' | 'image',
-): AIActionElementType {
-  switch (elementType) {
-    case 'media':
-      return mediaType === 'image' ? 'image' : 'video';
-    case 'text':
-      return 'text';
-    case 'audio':
-      return 'audio';
-    case 'shape':
-      return 'shape';
-    case 'subtitle':
-      return 'text';
-    default:
-      return 'video';
-  }
-}

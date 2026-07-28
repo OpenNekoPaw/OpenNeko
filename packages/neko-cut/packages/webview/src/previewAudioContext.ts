@@ -1,10 +1,11 @@
 export type PreviewAudioContextFactory = () => AudioContext;
 
+const MINIMUM_AUDIO_START_LEAD_SECONDS = 0.05;
+const AUDIO_SCHEDULING_MARGIN_SECONDS = 0.02;
+
 export class PreviewAudioContextOwner {
   private context: AudioContext | undefined;
   private ready: Promise<void> | undefined;
-  private mixInput: GainNode | undefined;
-  private limiter: DynamicsCompressorNode | undefined;
 
   constructor(
     private readonly createContext: PreviewAudioContextFactory = () => new AudioContext(),
@@ -32,34 +33,28 @@ export class PreviewAudioContextOwner {
     return context;
   }
 
-  async mixDestinationForConnection(): Promise<AudioNode> {
-    const context = await this.contextForConnection();
-    if (!this.mixInput || !this.limiter) {
-      const mixInput = context.createGain();
-      const limiter = context.createDynamicsCompressor();
-      limiter.threshold.value = -1;
-      limiter.knee.value = 0;
-      limiter.ratio.value = 20;
-      limiter.attack.value = 0.003;
-      limiter.release.value = 0.1;
-      mixInput.connect(limiter);
-      limiter.connect(context.destination);
-      this.mixInput = mixInput;
-      this.limiter = limiter;
-    }
-    return this.mixInput;
-  }
-
   async dispose(): Promise<void> {
     const context = this.context;
-    this.mixInput?.disconnect();
-    this.limiter?.disconnect();
-    this.mixInput = undefined;
-    this.limiter = undefined;
     this.context = undefined;
     this.ready = undefined;
     if (context && context.state !== 'closed') {
       await context.close();
     }
   }
+}
+
+export function previewAudioStartTime(context: AudioContext): number {
+  const baseLatency = finiteNonNegative(context.baseLatency);
+  const outputLatency = finiteNonNegative(context.outputLatency);
+  return (
+    context.currentTime +
+    Math.max(
+      MINIMUM_AUDIO_START_LEAD_SECONDS,
+      baseLatency + outputLatency + AUDIO_SCHEDULING_MARGIN_SECONDS,
+    )
+  );
+}
+
+function finiteNonNegative(value: number | undefined): number {
+  return value !== undefined && Number.isFinite(value) && value >= 0 ? value : 0;
 }

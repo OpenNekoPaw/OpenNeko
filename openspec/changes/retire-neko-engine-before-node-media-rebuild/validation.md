@@ -2,6 +2,11 @@
 
 Date: 2026-07-26
 
+Directory policy update (2026-07-27): the repository-local fixture evidence
+below is historical. Current and future runtime acceptance opens only
+`${HOME}/Git/neko-test`; generated media fixtures are confined to
+`.neko/.functional/media-runtime` below that root.
+
 ## Accepted checkpoint
 
 - The OpenNeko product feature list contains Tools, Preview, Assets, Cut,

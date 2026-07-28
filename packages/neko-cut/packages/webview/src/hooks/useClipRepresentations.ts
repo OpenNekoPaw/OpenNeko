@@ -2,13 +2,34 @@ import { useEffect, useMemo, useState, type RefObject } from 'react';
 import type {
   CutClipRepresentationRequest,
   CutClipRepresentationResult,
+  CutThumbnailDensity,
   TimelineView,
 } from '@neko-cut/domain';
 import { TRACK_HEADER_WIDTH } from '../components/Timeline/timelineMath';
 import { useCutOtioController } from '../controllers/CutOtioControllerContext';
 import { representationKey, useCutPresentationStore } from '../stores/cut-presentation-store';
+import { buildClipRepresentationRequests } from './clipRepresentationPlanner';
 
-export type ClipRepresentationState = CutClipRepresentationResult | { readonly status: 'loading' };
+type ThumbnailRequest = Extract<CutClipRepresentationRequest, { readonly kind: 'thumbnail' }>;
+type ThumbnailResult = Extract<CutClipRepresentationResult, { readonly kind: 'thumbnail' }>;
+type WaveformResult = Extract<CutClipRepresentationResult, { readonly kind: 'waveform' }>;
+
+export type ThumbnailTileState =
+  ThumbnailResult | (ThumbnailRequest & { readonly status: 'loading' });
+
+export interface ThumbnailClipRepresentationState {
+  readonly kind: 'thumbnail';
+  readonly status: 'loading' | 'ready' | 'partial' | 'unavailable';
+  readonly density: CutThumbnailDensity;
+  readonly tiles: readonly ThumbnailTileState[];
+}
+
+export type ClipRepresentationState =
+  | ThumbnailClipRepresentationState
+  | WaveformResult
+  | (Extract<CutClipRepresentationRequest, { readonly kind: 'waveform' }> & {
+      readonly status: 'loading';
+    });
 
 export function useClipRepresentations(input: {
   readonly view?: TimelineView;
@@ -39,15 +60,14 @@ export function useClipRepresentations(input: {
   }, [input.pixelsPerSecond, input.timelineRef]);
 
   const requests = useMemo(
-    () => buildRequests(input.view, visibleRange, input.pixelsPerSecond),
+    () => buildClipRepresentationRequests(input.view, visibleRange, input.pixelsPerSecond),
     [input.pixelsPerSecond, input.view, visibleRange.end, visibleRange.start],
   );
 
   useEffect(() => {
     if (!input.view || requests.length === 0) return;
     const missing = requests.filter(
-      (request) =>
-        !received.has(representationKey(input.view!.revision, request.clipId, request.kind)),
+      (request) => !received.has(representationKey(input.view!.revision, request)),
     );
     if (missing.length === 0) return;
     const timer = window.setTimeout(() => controller.requestRepresentations(missing), 80);
@@ -58,52 +78,45 @@ export function useClipRepresentations(input: {
     const states = new Map<string, ClipRepresentationState>();
     const view = input.view;
     if (!view) return states;
+    const thumbnailTiles = new Map<string, ThumbnailTileState[]>();
     for (const request of requests) {
+      const result = received.get(representationKey(view.revision, request));
+      if (request.kind === 'thumbnail') {
+        const tiles = thumbnailTiles.get(request.clipId) ?? [];
+        const tile =
+          result?.kind === 'thumbnail'
+            ? result
+            : ({ ...request, status: 'loading' } satisfies ThumbnailTileState);
+        tiles.push(tile);
+        thumbnailTiles.set(request.clipId, tiles);
+        continue;
+      }
       states.set(
         request.clipId,
-        received.get(representationKey(view.revision, request.clipId, request.kind)) ?? {
-          status: 'loading',
-        },
+        result?.kind === 'waveform' ? result : { ...request, status: 'loading' },
       );
+    }
+    for (const [clipId, tiles] of thumbnailTiles) {
+      const firstTile = tiles[0];
+      if (!firstTile) {
+        throw new Error(`Thumbnail tile group ${clipId} is empty.`);
+      }
+      const readyCount = tiles.filter((tile) => tile.status === 'ready').length;
+      const unavailableCount = tiles.filter((tile) => tile.status === 'unavailable').length;
+      states.set(clipId, {
+        kind: 'thumbnail',
+        status:
+          readyCount === tiles.length
+            ? 'ready'
+            : readyCount > 0
+              ? 'partial'
+              : unavailableCount === tiles.length
+                ? 'unavailable'
+                : 'loading',
+        density: firstTile.density,
+        tiles,
+      });
     }
     return states;
   }, [input.view, received, requests]);
-}
-
-function buildRequests(
-  view: TimelineView | undefined,
-  visibleRange: { readonly start: number; readonly end: number },
-  pixelsPerSecond: number,
-): readonly CutClipRepresentationRequest[] {
-  if (!view) return [];
-  const result: CutClipRepresentationRequest[] = [];
-  for (const track of view.tracks) {
-    if (track.kind === 'Subtitle') continue;
-    for (const item of track.items) {
-      if (
-        item.kind !== 'clip' ||
-        item.startSeconds + item.durationSeconds < visibleRange.start ||
-        item.startSeconds > visibleRange.end
-      )
-        continue;
-      if (track.kind === 'Video') {
-        result.push({
-          clipId: item.clipId,
-          kind: 'thumbnail',
-          sampleCount: Math.max(
-            1,
-            Math.min(8, Math.ceil((item.durationSeconds * pixelsPerSecond) / 96)),
-          ),
-        });
-      } else {
-        result.push({
-          clipId: item.clipId,
-          kind: 'waveform',
-          peaksPerSecond: Math.max(1, Math.min(100, Math.round(pixelsPerSecond / 3))),
-        });
-      }
-      if (result.length === 24) return result;
-    }
-  }
-  return result;
 }

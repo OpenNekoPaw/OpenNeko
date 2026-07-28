@@ -2,7 +2,6 @@ import * as vscode from 'vscode';
 import type { ServiceCollection } from '../base/serviceCollection';
 import { bootstrapCoreServices } from './bootstrapCoreServices';
 import { bootstrapMediaDiff } from './bootstrapMediaDiff';
-import { bootstrapMediaLsp } from './bootstrapMediaLsp';
 import { registerNekoToolsCommands } from './registerCommands';
 import { WebviewKeyboardContextService } from '../services/WebviewKeyboardContextService';
 
@@ -24,16 +23,10 @@ export function bootstrapNekoToolsExtension(
     coreServices.scheduler,
     coreServices.tempFileService,
   );
-  bootstrapMediaLsp(
-    context,
-    coreServices.services,
-    coreServices.mediaRuntimeService,
-    coreServices.workspaceIO,
-    coreServices.scheduler,
-  );
   registerNekoToolsCommands(context, {
     i18n: coreServices.i18n,
     errorHandler: coreServices.errorHandler,
+    mediaRuntimeService: coreServices.mediaRuntimeService,
   });
   const webviewKeyboardContextService = new WebviewKeyboardContextService(
     coreServices.logger.child('WebviewKeyboardContext'),

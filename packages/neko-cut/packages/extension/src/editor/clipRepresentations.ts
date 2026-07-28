@@ -1,18 +1,24 @@
-import { CutMediaCorruptionError } from '@neko-cut/domain';
+import {
+  CUT_THUMBNAIL_DENSITIES,
+  CUT_THUMBNAIL_TILE_HEIGHT,
+  CUT_THUMBNAIL_TILE_WIDTH,
+  CutMediaCorruptionError,
+} from '@neko-cut/domain';
 import type {
   CutRepresentationFailureScope,
   AudioWaveformPort,
   CutClipRepresentationRequest,
   CutClipRepresentationResult,
   CutRuntimeMediaSource,
+  CutThumbnailDensity,
   FrameCapturePort,
   TimelineClipView,
   TimelineView,
 } from '@neko-cut/domain';
 
 const MAX_REQUESTS = 24;
-const MAX_THUMBNAILS = 8;
 const MAX_PEAKS_PER_SECOND = 100;
+const MAX_CONCURRENT_REPRESENTATIONS = 4;
 
 export interface ClipRepresentationPorts extends FrameCapturePort, AudioWaveformPort {}
 
@@ -28,15 +34,16 @@ export function readClipRepresentationRequests(
     }
     if (
       candidate['kind'] === 'thumbnail' &&
-      Number.isInteger(candidate['sampleCount']) &&
-      typeof candidate['sampleCount'] === 'number' &&
-      candidate['sampleCount'] >= 1 &&
-      candidate['sampleCount'] <= MAX_THUMBNAILS
+      isThumbnailDensity(candidate['density']) &&
+      Number.isSafeInteger(candidate['tileIndex']) &&
+      typeof candidate['tileIndex'] === 'number' &&
+      candidate['tileIndex'] >= 0
     ) {
       return {
         clipId: candidate['clipId'],
         kind: 'thumbnail',
-        sampleCount: candidate['sampleCount'],
+        density: candidate['density'],
+        tileIndex: candidate['tileIndex'],
       };
     }
     if (
@@ -63,8 +70,18 @@ export async function generateClipRepresentations(input: {
   readonly resolveSource: (targetUrl: string) => Promise<CutRuntimeMediaSource>;
   readonly signal?: AbortSignal;
 }): Promise<readonly CutClipRepresentationResult[]> {
-  return Promise.all(
-    input.requests.map(async (request): Promise<CutClipRepresentationResult> => {
+  const resolvedSources = new Map<string, Promise<CutRuntimeMediaSource>>();
+  const resolveSource = (targetUrl: string): Promise<CutRuntimeMediaSource> => {
+    const existing = resolvedSources.get(targetUrl);
+    if (existing) return existing;
+    const pending = input.resolveSource(targetUrl);
+    resolvedSources.set(targetUrl, pending);
+    return pending;
+  };
+  return mapWithConcurrency(
+    input.requests,
+    MAX_CONCURRENT_REPRESENTATIONS,
+    async (request): Promise<CutClipRepresentationResult> => {
       const located = findClip(input.view, request.clipId);
       if (!located) {
         return unavailable(request, `Clip ${request.clipId} is unavailable.`);
@@ -79,7 +96,7 @@ export async function generateClipRepresentations(input: {
         );
       }
       try {
-        const source = await input.resolveSource(located.clip.targetUrl);
+        const source = await resolveSource(located.clip.targetUrl);
         if (request.kind === 'waveform') {
           const waveform = await input.ports.generateWaveform(
             source,
@@ -98,66 +115,58 @@ export async function generateClipRepresentations(input: {
             clipId: request.clipId,
             kind: 'waveform',
             status: sliced.partial ? 'partial' : 'ready',
+            peaksPerSecond: request.peaksPerSecond,
             waveform: sliced,
           };
         }
-        const thumbnails = [];
-        const failures: {
-          sourceTimeSeconds: number;
-          failureScope: CutRepresentationFailureScope;
-          message: string;
-        }[] = [];
-        for (let index = 0; index < request.sampleCount; index += 1) {
-          const sourceTimeSeconds =
-            located.clip.sourceStartSeconds +
-            (located.clip.durationSeconds * (index + 0.5)) / request.sampleCount;
-          try {
-            const frame = await input.ports.captureFrame(
-              source,
-              sourceTimeSeconds,
-              { width: 160, height: 90 },
-              input.signal,
-            );
-            thumbnails.push({ sourceTimeSeconds, dataUrl: frame.dataUrl });
-          } catch (error) {
-            if (input.signal?.aborted) throw error;
-            failures.push({
-              sourceTimeSeconds,
-              failureScope: error instanceof CutMediaCorruptionError ? error.scope : 'operation',
-              message: error instanceof Error ? error.message : String(error),
-            });
-          }
-        }
-        if (thumbnails.length === 0) {
-          const firstFailure = failures[0];
+        const sourceTimeSeconds = resolveTileSourceTime(located.clip, request);
+        if (sourceTimeSeconds === undefined) {
           return unavailable(
             request,
-            firstFailure
-              ? `All requested thumbnail frames failed. ${firstFailure.message}`
-              : 'All requested thumbnail frames failed.',
-            commonFailureScope(failures),
+            `Thumbnail tile ${request.tileIndex} does not intersect Clip ${request.clipId}.`,
           );
         }
-        if (failures.length > 0) {
-          return {
-            clipId: request.clipId,
-            kind: 'thumbnail',
-            status: 'partial',
-            thumbnails,
-            failures,
-          };
-        }
+        const frame = await input.ports.captureFrame(
+          source,
+          sourceTimeSeconds,
+          { width: CUT_THUMBNAIL_TILE_WIDTH, height: CUT_THUMBNAIL_TILE_HEIGHT },
+          input.signal,
+        );
         return {
           clipId: request.clipId,
           kind: 'thumbnail',
           status: 'ready',
-          thumbnails,
+          density: request.density,
+          tileIndex: request.tileIndex,
+          sourceTimeSeconds,
+          dataUrl: frame.dataUrl,
         };
       } catch (error) {
-        return unavailable(request, error instanceof Error ? error.message : String(error));
+        if (input.signal?.aborted) throw error;
+        return unavailable(
+          request,
+          error instanceof Error ? error.message : String(error),
+          error instanceof CutMediaCorruptionError ? error.scope : undefined,
+        );
       }
-    }),
+    },
   );
+}
+
+function resolveTileSourceTime(
+  clip: TimelineClipView,
+  request: Extract<CutClipRepresentationRequest, { readonly kind: 'thumbnail' }>,
+): number | undefined {
+  const tileDurationSeconds = CUT_THUMBNAIL_TILE_WIDTH / request.density;
+  const tileStartSeconds = request.tileIndex * tileDurationSeconds;
+  const intersectionStart = Math.max(tileStartSeconds, clip.startSeconds);
+  const intersectionEnd = Math.min(
+    tileStartSeconds + tileDurationSeconds,
+    clip.startSeconds + clip.durationSeconds,
+  );
+  if (intersectionEnd <= intersectionStart) return undefined;
+  const clipTimeSeconds = (intersectionStart + intersectionEnd) / 2 - clip.startSeconds;
+  return clip.sourceStartSeconds + clipTimeSeconds * clip.playbackRate;
 }
 
 function sliceWaveform(
@@ -207,20 +216,48 @@ function unavailable(
   message: string,
   failureScope?: CutRepresentationFailureScope,
 ): CutClipRepresentationResult {
-  return {
-    clipId: request.clipId,
-    kind: request.kind,
-    status: 'unavailable',
-    message,
-    ...(failureScope ? { failureScope } : {}),
-  };
+  return request.kind === 'thumbnail'
+    ? {
+        clipId: request.clipId,
+        kind: request.kind,
+        status: 'unavailable',
+        density: request.density,
+        tileIndex: request.tileIndex,
+        message,
+        ...(failureScope ? { failureScope } : {}),
+      }
+    : {
+        clipId: request.clipId,
+        kind: request.kind,
+        status: 'unavailable',
+        peaksPerSecond: request.peaksPerSecond,
+        message,
+        ...(failureScope ? { failureScope } : {}),
+      };
 }
 
-function commonFailureScope(
-  failures: readonly { readonly failureScope: CutRepresentationFailureScope }[],
-): CutRepresentationFailureScope {
-  const first = failures[0]?.failureScope ?? 'operation';
-  return failures.every((failure) => failure.failureScope === first) ? first : 'operation';
+async function mapWithConcurrency<T, R>(
+  values: readonly T[],
+  concurrency: number,
+  map: (value: T) => Promise<R>,
+): Promise<readonly R[]> {
+  const results = new Array<R>(values.length);
+  let nextIndex = 0;
+  const workers = Array.from({ length: Math.min(concurrency, values.length) }, async () => {
+    while (nextIndex < values.length) {
+      const index = nextIndex;
+      nextIndex += 1;
+      const value = values[index];
+      if (value === undefined) throw new Error(`Missing representation request at ${index}.`);
+      results[index] = await map(value);
+    }
+  });
+  await Promise.all(workers);
+  return results;
+}
+
+function isThumbnailDensity(value: unknown): value is CutThumbnailDensity {
+  return CUT_THUMBNAIL_DENSITIES.some((density) => density === value);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

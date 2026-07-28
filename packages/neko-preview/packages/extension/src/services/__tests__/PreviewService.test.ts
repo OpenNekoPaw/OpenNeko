@@ -36,6 +36,7 @@ function createRuntime(): PreviewMediaRuntime {
       durationSeconds: 12,
       sampleRate: 48_000,
     })),
+    planVideo: vi.fn(async () => 'h264-mp4-direct'),
     prepareVideo: vi.fn(async () => ({
       sessionId: 'video-session',
       video: {
@@ -108,6 +109,41 @@ describe('PreviewService Node media adapter', () => {
     await service.stopPlayback(playback);
     expect(runtime.stop).toHaveBeenCalledWith('video-session');
     expect(runtime.stop).toHaveBeenCalledWith('audio-session');
+  });
+
+  it('forwards the active Webview MP4 capabilities to video preparation', async () => {
+    const mediaInfo = await service.probeMedia('/fixture/input.mp4');
+    const nativeVideoCapabilities = {
+      version: 1,
+      av1Mp4: true,
+      vp9Mp4: true,
+    } as const;
+
+    await service.startPlayback('/fixture/input.mp4', mediaInfo, 'video', 0, 1, {
+      nativeVideoCapabilities,
+    });
+
+    expect(runtime.prepareVideo).toHaveBeenCalledWith('/fixture/input.mp4', {
+      nativeCapabilities: nativeVideoCapabilities,
+    });
+  });
+
+  it('uses the canonical runtime plan before Preview chooses poster capture', async () => {
+    const nativeVideoCapabilities = {
+      version: 1,
+      av1Mp4: false,
+      vp9Mp4: false,
+    } as const;
+
+    await expect(
+      service.planVideo('/fixture/input.mp4', { nativeVideoCapabilities }),
+    ).resolves.toBe('h264-mp4-direct');
+
+    expect(runtime.planVideo).toHaveBeenCalledWith('/fixture/input.mp4', {
+      nativeCapabilities: nativeVideoCapabilities,
+    });
+    expect(runtime.captureFrame).not.toHaveBeenCalled();
+    expect(runtime.prepareVideo).not.toHaveBeenCalled();
   });
 
   it('uses the owning provider kind instead of media dimensions to select video preparation', async () => {

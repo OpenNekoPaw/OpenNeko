@@ -6,7 +6,7 @@
 
 本文记录 Cut 从 NKV/NKC 和宽功能面收敛为 OTIO 轻量剪辑器的目标架构，并定义 VS Code 与 Desktop 仅在媒体运行时 adapter 上分化的过渡边界。它补充 [`package-boundaries.md`](package-boundaries.md)、[`webview-media-security.md`](webview-media-security.md) 和 [`adr-neko-desktop-composition-and-open-source-reference-boundary.md`](adr-neko-desktop-composition-and-open-source-reference-boundary.md)。
 
-后续决策（2026-07-26）：本文关于 Desktop WebCodecs 主路径、VS Code 长期保留 Engine、严格 H.264/8-bit/SDR media profile、宿主媒体 runtime 分化和不建设代理关系的目标，已被 [`adr-cut-mse-node-ffmpeg-media-runtime-boundary.md`](adr-cut-mse-node-ffmpeg-media-runtime-boundary.md) 取代。本文的 OTIO 工程、轻量产品面、host-neutral ports、显式 identity、媒体数据不走普通 IPC、fail-visible 和无双实现 fallback 约束继续有效。
+后续决策（2026-07-27）：本文关于 Desktop WebCodecs 主路径、VS Code 长期保留 Engine、严格 H.264/8-bit/SDR media profile、宿主媒体 runtime 分化和不建设代理关系的目标，已被 [`adr-cut-html-video-node-ffmpeg-media-runtime-boundary.md`](adr-cut-html-video-node-ffmpeg-media-runtime-boundary.md) 取代。本文的 OTIO 工程、轻量产品面、host-neutral ports、显式 identity、媒体数据不走普通 IPC、fail-visible 和无双实现 fallback 约束继续有效。
 
 本文取代以下尚未实施或已不再成立的目标：
 

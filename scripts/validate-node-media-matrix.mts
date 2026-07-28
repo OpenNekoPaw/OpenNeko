@@ -1,15 +1,17 @@
 #!/usr/bin/env node
 
 import { readdir } from 'node:fs/promises';
-import { resolve } from 'node:path';
+import { homedir } from 'node:os';
+import { isAbsolute, join, relative, resolve } from 'node:path';
 import { NodeMediaRuntime } from '@neko/media/node';
 
 const arguments_ = process.argv.slice(2);
 const includeWebm = arguments_.includes('--include-webm');
-const mediaRoot = resolve(
-  arguments_.find((argument) => !argument.startsWith('--')) ??
-    '.tmp/vscode-test-workspaces/media-runtime/media',
+const testWorkspaceRoot = resolve(homedir(), 'Git', 'neko-test');
+const mediaRoot = resolveUserPath(
+  arguments_.find((argument) => !argument.startsWith('--')) ?? join(testWorkspaceRoot, 'cases'),
 );
+assertInsideTestWorkspace(mediaRoot);
 const runtime = new NodeMediaRuntime();
 const rows: Array<Record<string, unknown>> = [];
 const skipped: string[] = [];
@@ -115,4 +117,16 @@ function sampleTimes(duration: number): number[] {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function resolveUserPath(value: string): string {
+  return resolve(value === '~' ? homedir() : value.replace(/^~(?=\/)/u, homedir()));
+}
+
+function assertInsideTestWorkspace(candidate: string): void {
+  const relativePath = relative(testWorkspaceRoot, candidate);
+  if (relativePath === '' || (!relativePath.startsWith('..') && !isAbsolute(relativePath))) {
+    return;
+  }
+  throw new Error(`Media validation directory must be inside ${testWorkspaceRoot}: ${candidate}`);
 }

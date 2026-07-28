@@ -3,7 +3,7 @@ import * as vscode from 'vscode';
 import {
   applyCanvasHeadlessAuthoringOperations,
   assertNoRuntimeResourceIdentity,
-  createDefaultProjectFormatCodecRegistry,
+  createNkcProjectFormatCodecRegistry,
   createEmptyCanvasData,
   hashStableValue,
   nkcSourcePathPolicy,
@@ -75,7 +75,7 @@ export class CanvasProjectAuthoringService implements CanvasWorkspaceBoardMutati
 
   constructor(private readonly options: CanvasProjectAuthoringServiceOptions) {
     this.projectFileStore = new ProjectFileStore({
-      registry: createDefaultProjectFormatCodecRegistry(),
+      registry: createNkcProjectFormatCodecRegistry(),
       fileOps: this.projectFileAdapter.fileOps,
       resolveAuthorizedWrite: options.resolveAuthorizedWrite,
       logger: options.logger,

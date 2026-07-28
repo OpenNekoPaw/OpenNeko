@@ -189,8 +189,11 @@ export const usePlaybackStore = create<PlaybackStore>((set, get) => ({
       playbackSession: {
         ...prev.playbackSession,
         stale,
-        playbackState: stale ? 'stale' : 'idle',
-        ...(stale ? { visible: prev.playbackSession.visible } : {}),
+        playbackState: stale
+          ? 'stale'
+          : prev.playbackSession.playbackState === 'stale'
+            ? 'idle'
+            : prev.playbackSession.playbackState,
       },
     }));
   },

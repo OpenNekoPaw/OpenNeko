@@ -36,9 +36,9 @@ interface KeyframeDiff {
  * Merges adjacent keyframes by averaging their similarity scores.
  */
 function downsampleKeyframeDiffs(
-  keyframeDiffs: KeyframeDiff[],
+  keyframeDiffs: readonly KeyframeDiff[],
   maxCount: number = 500,
-): KeyframeDiff[] {
+): readonly KeyframeDiff[] {
   if (keyframeDiffs.length <= maxCount) {
     return keyframeDiffs;
   }
@@ -70,7 +70,7 @@ interface SeekControlsProps {
   onSeek: (time: number) => void;
   isPlaying: boolean;
   onPlayPause: () => void;
-  diffRegions?: Array<{ start: number; end: number }>;
+  diffRegions?: readonly { start: number; end: number }[];
   /** Disable Play while git show is extracting the previous version */
   isFetchingPrevious?: boolean;
 }
@@ -148,7 +148,7 @@ interface VideoDetailsProps {
     };
     fps: { current: number; previous: number };
     codec?: { current: string; previous: string };
-    keyframeDiffs?: Array<{ time: number; similarity: number }>;
+    keyframeDiffs?: readonly { time: number; similarity: number }[];
   };
 }
 

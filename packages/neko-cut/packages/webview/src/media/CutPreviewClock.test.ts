@@ -52,6 +52,21 @@ describe('CutPreviewClock', () => {
     expect(reading).toEqual({ mediaTimeSeconds: 6.5, discontinuity: false });
   });
 
+  it('keeps a retained same-Clip video clock continuous across a PCM generation boundary', () => {
+    const video = videoClock(10.25, 1);
+    const reading = new CutPreviewClock({
+      primaryAudio: audioClock(20.25),
+      video,
+      primaryMediaOriginSeconds: 20,
+      primaryPlaybackRate: 1,
+      videoPlaybackRate: 1,
+      videoClockOriginSeconds: 10,
+    }).read();
+
+    expect(reading.videoDriftSeconds).toBeCloseTo(0);
+    expect(reading.discontinuity).toBe(false);
+  });
+
   it('reports a secondary PCM track that diverges from the primary timeline clock', () => {
     const reading = new CutPreviewClock({
       primaryAudio: audioClock(11),

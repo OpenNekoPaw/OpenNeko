@@ -6,10 +6,6 @@ import type { IScheduler as SchedulerContract } from '../contracts/IScheduler';
 import type { ITempFileService as TempFileServiceContract } from '../contracts/ITempFileService';
 import type { IWorkspaceIO as WorkspaceIOContract } from '../contracts/IWorkspaceIO';
 import type { IMediaDiffService as MediaDiffServiceContract } from '../media-diff/services/MediaDiffService';
-import type {
-  IMediaProbeCache as MediaProbeCacheContract,
-  IMediaWorkspaceIndex as MediaWorkspaceIndexContract,
-} from '../media-lsp/services/types';
 
 export const IRootLogger = createServiceId<ILogger>('nekoTools.rootLogger');
 export const IExtensionErrorHandler = createServiceId<IErrorHandler>(
@@ -26,10 +22,4 @@ export const ITempFileService = createServiceId<TempFileServiceContract>(
 );
 export const IMediaDiffService = createServiceId<MediaDiffServiceContract>(
   'nekoTools.mediaDiffService',
-);
-export const IMediaProbeCache = createServiceId<MediaProbeCacheContract>(
-  'nekoTools.mediaProbeCache',
-);
-export const IMediaWorkspaceIndex = createServiceId<MediaWorkspaceIndexContract>(
-  'nekoTools.mediaWorkspaceIndex',
 );

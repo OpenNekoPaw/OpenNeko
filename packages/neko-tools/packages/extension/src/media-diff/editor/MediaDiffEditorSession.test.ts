@@ -46,7 +46,6 @@ function createMockWebviewPanel() {
 
 function createMockMessageHandler(): IMediaDiffEditorMessageHandler {
   return {
-    initializeDiff: vi.fn().mockResolvedValue(undefined),
     handleMessage: vi.fn().mockResolvedValue(undefined),
     dispose: vi.fn(),
     disposeAsync: vi.fn().mockResolvedValue(undefined),
@@ -58,10 +57,10 @@ describe('MediaDiffEditorSession', () => {
     vi.clearAllMocks();
   });
 
-  it('should attach listeners and initialize diff when recompare is not required', async () => {
+  it('attaches listeners without starting an uncorrelated host-side analysis', async () => {
     const { panel, webview } = createMockWebviewPanel();
     const handler = createMockMessageHandler();
-    const session = new MediaDiffEditorSession(panel, handler);
+    const session = new MediaDiffEditorSession(panel, handler, 'session-1');
     const onDidDispose = vi.fn();
 
     session.attach(onDidDispose);
@@ -69,24 +68,23 @@ describe('MediaDiffEditorSession', () => {
 
     expect(panel.webview.onDidReceiveMessage).toHaveBeenCalledTimes(1);
     expect(panel.onDidDispose).toHaveBeenCalledTimes(1);
-    expect(handler.initializeDiff).toHaveBeenCalledTimes(1);
     expect(webview.postMessage).not.toHaveBeenCalled();
   });
 
   it('should skip initializeDiff when session requires recompare', async () => {
     const { panel } = createMockWebviewPanel();
     const handler = createMockMessageHandler();
-    const session = new MediaDiffEditorSession(panel, handler);
+    const session = new MediaDiffEditorSession(panel, handler, 'session-1');
 
     await session.start(true);
 
-    expect(handler.initializeDiff).not.toHaveBeenCalled();
+    expect(handler.handleMessage).not.toHaveBeenCalled();
   });
 
   it('should dispose listeners and handler only once', async () => {
     const { panel, receiveDisposable, disposeDisposable } = createMockWebviewPanel();
     const handler = createMockMessageHandler();
-    const session = new MediaDiffEditorSession(panel, handler);
+    const session = new MediaDiffEditorSession(panel, handler, 'session-1');
 
     session.attach(vi.fn());
     await session.disposeAsync();
@@ -111,8 +109,7 @@ describe('MediaDiffEditorSessionFactory', () => {
     const mediaRuntime = {} as IToolsMediaRuntime;
     const mediaRuntimeService: IMediaRuntimeService = {
       runtime: mediaRuntime,
-      diff: vi.fn(),
-      detectSilence: vi.fn(),
+      compare: vi.fn(),
       probe: vi.fn(),
     };
     const tempFileService: ITempFileService = {
@@ -137,12 +134,14 @@ describe('MediaDiffEditorSessionFactory', () => {
     const session = await factory.createSession({
       webviewPanel: panel,
       documentUri,
+      sessionId: 'session-1',
       previousUri,
     });
 
     expect(createMessageHandler).toHaveBeenCalledWith({
       webview: panel.webview,
       documentUri,
+      sessionId: 'session-1',
       diffService,
       mediaRuntime,
       scheduler,
@@ -151,7 +150,7 @@ describe('MediaDiffEditorSessionFactory', () => {
     });
 
     await session.start(false);
-    expect(messageHandler.initializeDiff).toHaveBeenCalledTimes(1);
+    expect(messageHandler.handleMessage).not.toHaveBeenCalled();
   });
 
   it('should rethrow message handler factory failures', async () => {
@@ -160,8 +159,7 @@ describe('MediaDiffEditorSessionFactory', () => {
     const diffService = {} as MediaDiffService;
     const mediaRuntimeService: IMediaRuntimeService = {
       runtime: {} as IToolsMediaRuntime,
-      diff: vi.fn(),
-      detectSilence: vi.fn(),
+      compare: vi.fn(),
       probe: vi.fn(),
     };
     const tempFileService: ITempFileService = {
@@ -188,6 +186,7 @@ describe('MediaDiffEditorSessionFactory', () => {
       factory.createSession({
         webviewPanel: panel,
         documentUri,
+        sessionId: 'session-1',
       }),
     ).rejects.toThrow('handler failure');
   });

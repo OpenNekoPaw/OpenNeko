@@ -1,6 +1,6 @@
 import { execFile, spawn } from 'child_process';
 import { createWriteStream } from 'fs';
-import type { GitCommitInfo } from '@neko/shared';
+import type { GitCommitInfo } from '@neko-tools/contracts';
 
 export interface GitCliTarget {
   cwd: string;
@@ -34,7 +34,7 @@ function execGitText(
           return;
         }
 
-        resolve(typeof stdout === 'string' ? stdout : stdout.toString('utf8'));
+        resolve(stdout);
       },
     );
   });

@@ -6,7 +6,7 @@
 export through `packages/neko-engine`. That path couples the lightweight Cut
 editor to a Rust runtime even though the VS Code Extension Host can own file IO
 and FFmpeg orchestration directly, while the Webview can render supported media
-through `<video>`/MSE and Web Audio.
+through native `<video src>` and Web Audio.
 
 The replacement must remain explicit and fail-visible. Unsupported codecs are
 normalized by a declared remux/transcode preparation step; the runtime must not
@@ -14,10 +14,10 @@ silently fall back to the old Engine adapter.
 
 ## What Changes
 
-- Freeze host-neutral Cut media ports for probe, frame capture, waveform, MSE
-  preview preparation, HTTP PCM streaming, and export.
+- Freeze host-neutral Cut media ports for probe, frame capture, waveform,
+  native Range video preparation, HTTP PCM streaming, and export.
 - Add a Node/FFmpeg Extension Host adapter and a loopback media server.
-- Use `<video>` + MSE for video and Web Audio PCM for all audible audio.
+- Use native `<video src>` for video and Web Audio PCM for all audible audio.
 - Make OpenNeko's preview clock the synchronization authority.
 - Switch the Cut composition root once to the Node/FFmpeg adapter.
 - Poison and then remove the legacy Cut Engine adapter, connection, routes,
@@ -32,8 +32,8 @@ silently fall back to the old Engine adapter.
 - Direct preview codec allowlist: H.264 and VP8.
 - H.264 in an incompatible container is remuxed when possible.
 - VP8 is enabled only after the target VS Code/Electron Webview passes the real
-  MSE WebM fixture; until then preparation explicitly transcodes it to the H.264
-  preview profile.
+  native WebM video fixture; until then preparation explicitly transcodes it to
+  the H.264 preview profile.
 - Other video codecs are explicitly transcoded to the H.264 preview profile.
 - All audible tracks, including audio embedded in video assets, are decoded to
   PCM and synchronized by OpenNeko. The `<video>` element remains muted.
@@ -66,7 +66,7 @@ silently fall back to the old Engine adapter.
 - Affected packages: `neko-cut`, potentially `neko-client`, `neko-proto`,
   `neko-engine`, and `apps/neko-vscode`.
 - Affected architecture decision:
-  `docs/architecture/adr-cut-mse-node-ffmpeg-media-runtime-boundary.md`.
+  `docs/architecture/adr-cut-html-video-node-ffmpeg-media-runtime-boundary.md`.
 - This change supersedes the Cut-specific current-state Engine implementation
   described by `redefine-openneko-lightweight-editing`; it preserves that
   change's media-port boundary and single-adapter invariant.

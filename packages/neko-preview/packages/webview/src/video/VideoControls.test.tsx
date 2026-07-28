@@ -58,7 +58,6 @@ describe('VideoControls', () => {
         <VideoControls
           currentTime={15}
           duration={126}
-          isConnected={true}
           isPlaying={true}
           onSeek={vi.fn()}
           onSpeedChange={vi.fn()}
@@ -74,5 +73,25 @@ describe('VideoControls', () => {
 
     expect(volumeSlider?.className).toContain('w-20');
     expect(volumeSlider?.className).not.toContain('w-15');
+  });
+
+  it('does not project internal playback-session state as an Engine connection dot', () => {
+    act(() => {
+      root.render(
+        <VideoControls
+          currentTime={0}
+          duration={126}
+          isPlaying={false}
+          onSeek={vi.fn()}
+          onSpeedChange={vi.fn()}
+          onTogglePlay={vi.fn()}
+          onVolumeChange={vi.fn()}
+          speed={1}
+          volume={1}
+        />,
+      );
+    });
+
+    expect(host.querySelector('[title="preview.video.disconnected"]')).toBeNull();
   });
 });

@@ -15,7 +15,6 @@ import {
 import {
   type CanvasCreativeScope,
   type CanvasImportAssetRequest,
-  getPanoramicPreviewRoute,
   type DocumentArchiveResourceRef,
   type CanvasMarkdownCapabilityInput,
   type ResourceRef,
@@ -527,10 +526,7 @@ function registerCommands(context: vscode.ExtensionContext): void {
       const audioExts = ['mp3', 'wav', 'ogg', 'flac', 'aac', 'm4a', 'wma', 'opus'];
 
       try {
-        const panoramicRoute = getPanoramicPreviewRoute({ filePath: uri.fsPath });
-        if (panoramicRoute) {
-          await vscode.commands.executeCommand('vscode.openWith', uri, panoramicRoute.viewType);
-        } else if (videoExts.includes(ext)) {
+        if (videoExts.includes(ext)) {
           await vscode.commands.executeCommand('vscode.openWith', uri, 'neko.videoPreview');
         } else if (audioExts.includes(ext)) {
           await vscode.commands.executeCommand('vscode.openWith', uri, 'neko.audioPreview');

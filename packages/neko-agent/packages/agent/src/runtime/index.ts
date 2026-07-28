@@ -197,14 +197,6 @@ export {
 } from './capability/external-processor-runtime';
 
 export {
-  createTimelineContextRuntime,
-  type BuildTimelineContextPacketInput,
-  type TimelineContextEditorLike,
-  type TimelineContextRuntime,
-  type TimelineContextRuntimeOptions,
-} from './turn/timeline-context-runtime';
-
-export {
   createAgentTurnContext,
   inferAgentTurnProjectType,
   type AgentTurnActiveEditorLike,
@@ -421,8 +413,6 @@ export {
   createCanvasSelectionContextPacket,
   createMediaAttachmentContextPacket,
   createTextContextPacket,
-  createTimelineContextPacketFromEditor,
-  createTimelineSelectionContextPacket,
   createToolProducedMultimodalEvidenceFeedback,
   filterToolsByModalityAvailability,
   loadPacketMediaPayloads,
@@ -434,9 +424,6 @@ export {
   type CombineMultimodalContextPacketsOptions,
   type MediaAttachmentContextInput,
   type TextContextInput,
-  type TimelineEditorContextInput,
-  type TimelineSelectionContextElement,
-  type TimelineSelectionContextOptions,
   type ToolProducedMultimodalEvidenceInput,
 } from './turn/multimodal-context-packet';
 

@@ -26,7 +26,17 @@ const preview: MessageBundle = {
   'preview.video.hideStats': '隐藏统计 (D)',
   'preview.video.pipButton': '画中画',
   'preview.video.exitPip': '退出画中画',
-  'preview.video.disconnected': '已断开',
+  'preview.video.hardwareDecoderUnavailableTitle': '当前设备无法硬件解码 {codec}',
+  'preview.video.hardwareDecoderUnavailableDescription':
+    'OpenNeko 未使用软件转码。请改用支持 {codec} 硬件解码的设备，或提供 H.264 版本；这不代表源文件已经损坏。',
+  'preview.video.hardwarePreviewUnavailableTitle': '硬件视频预览不可用',
+  'preview.video.hardwarePreviewUnavailableDescription':
+    '当前环境缺少所需的硬件视频处理能力，OpenNeko 没有回退到 CPU 转码。',
+  'preview.video.playbackFailedTitle': '无法开始视频预览',
+  'preview.video.playbackFailedDescription': '播放器仍然可用，请检查素材后重试。',
+  'preview.video.hdrPosterUnavailableTitle': '未生成 HDR 封面帧',
+  'preview.video.hdrPosterUnavailableDescription':
+    '为避免使用 CPU 转换，OpenNeko 跳过了 HDR 截帧；这不代表源文件损坏，仍可继续尝试播放。',
   // Audio player
   'preview.audio.loading': '正在加载音频...',
   'preview.audio.error': '错误：{error}',
@@ -48,6 +58,8 @@ const preview: MessageBundle = {
   'preview.audio.viewLyrics': '歌词',
   'preview.audio.viewWaveform': '波形',
   'preview.audio.viewSpectrum': '频谱',
+  'preview.audio.playbackFailed': '无法开始音频播放。',
+  'preview.audio.protocolFailed': '无法识别音频预览请求。',
   // Document shared
   'preview.document.sendContentToAgent': '发送内容到 Agent',
   'preview.document.sendFileToAgent': '发送文件到 Agent',

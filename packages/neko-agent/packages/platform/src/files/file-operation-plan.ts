@@ -1,7 +1,6 @@
 import * as path from 'path';
-import { getPanoramicPreviewRoute } from '@neko/shared';
 
-export type FileOpenViewer = 'default' | 'video' | 'audio' | 'panoramic-image' | 'panoramic-video';
+export type FileOpenViewer = 'default' | 'video' | 'audio';
 export type NekoSettingsFileSource = 'personal' | 'project' | 'local';
 
 export interface OpenFilePlan {
@@ -79,10 +78,6 @@ export function stripFileProtocol(filePath: string): string {
 }
 
 export function detectFileOpenViewer(filePath: string): FileOpenViewer {
-  const panoramicRoute = getPanoramicPreviewRoute({ filePath });
-  if (panoramicRoute?.kind === 'image') return 'panoramic-image';
-  if (panoramicRoute?.kind === 'video') return 'panoramic-video';
-
   const extension = path.extname(filePath).replace(/^\./, '').toLowerCase();
   if (VIDEO_EXTENSIONS.has(extension)) return 'video';
   if (AUDIO_EXTENSIONS.has(extension)) return 'audio';

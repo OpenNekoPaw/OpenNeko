@@ -213,9 +213,9 @@ describe('@neko/ui TreeView', () => {
           items={[
             {
               id: 'shot',
-              label: 'shot.nkv',
+              label: 'shot.otio',
               description: '2 KB',
-              title: 'cuts/shot.nkv · timeline · 2 KB',
+              title: 'cuts/shot.otio · timeline · 2 KB',
             },
           ]}
           showStaticStateIndicators={false}
@@ -224,8 +224,8 @@ describe('@neko/ui TreeView', () => {
     });
 
     const row = host.querySelector<HTMLElement>('[data-tree-item-id="shot"]');
-    expect(row?.getAttribute('title')).toBe('cuts/shot.nkv · timeline · 2 KB');
-    expect(row?.getAttribute('aria-label')).toBe('cuts/shot.nkv · timeline · 2 KB');
+    expect(row?.getAttribute('title')).toBe('cuts/shot.otio · timeline · 2 KB');
+    expect(row?.getAttribute('aria-label')).toBe('cuts/shot.otio · timeline · 2 KB');
     expect(host.querySelector('[data-tree-item-description="true"]')?.textContent).toBe('2 KB');
     expect(host.querySelector('[title="2 KB"]')).toBeNull();
   });

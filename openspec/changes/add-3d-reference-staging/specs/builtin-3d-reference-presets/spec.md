@@ -61,7 +61,7 @@ Preset binaries, textures, and panoramic resources SHALL load only when selected
 
 #### Scenario: Open a non-3D Preview entry
 
-- **WHEN** the creator opens a document, audio, video, or ordinary panoramic preview without starting 3D Reference
+- **WHEN** the creator opens a document, audio, video, or ordinary image without starting 3D Reference
 - **THEN** the entry does not fetch, decode, or instantiate any built-in 3D preset asset
 
 ### Requirement: Third-party preset provenance is auditable

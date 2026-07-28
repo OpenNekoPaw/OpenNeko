@@ -1,25 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
-import { PreviewAudioContextOwner } from './previewAudioContext';
+import { PreviewAudioContextOwner, previewAudioStartTime } from './previewAudioContext';
 
 describe('PreviewAudioContextOwner', () => {
   it('reuses one user-gesture-started context across preview generations', async () => {
-    const input = { connect: vi.fn(), disconnect: vi.fn() };
-    const limiter = {
-      threshold: { value: 0 },
-      knee: { value: 0 },
-      ratio: { value: 0 },
-      attack: { value: 0 },
-      release: { value: 0 },
-      connect: vi.fn(),
-      disconnect: vi.fn(),
-    };
     const context = {
       state: 'suspended',
-      destination: {},
       resume: vi.fn(async () => undefined),
       close: vi.fn(async () => undefined),
-      createGain: vi.fn(() => input),
-      createDynamicsCompressor: vi.fn(() => limiter),
     } as unknown as AudioContext;
     const factory = vi.fn(() => context);
     const owner = new PreviewAudioContextOwner(factory);
@@ -30,16 +17,7 @@ describe('PreviewAudioContextOwner', () => {
     expect(factory).toHaveBeenCalledOnce();
     expect(context.resume).toHaveBeenCalledOnce();
     expect(context.close).not.toHaveBeenCalled();
-    expect(await owner.mixDestinationForConnection()).toBe(input);
-    expect(await owner.mixDestinationForConnection()).toBe(input);
-    expect(context.createGain).toHaveBeenCalledOnce();
-    expect(context.createDynamicsCompressor).toHaveBeenCalledOnce();
-    expect(limiter.threshold.value).toBe(-1);
-    expect(limiter.ratio.value).toBe(20);
-
     await owner.dispose();
-    expect(input.disconnect).toHaveBeenCalledOnce();
-    expect(limiter.disconnect).toHaveBeenCalledOnce();
     expect(context.close).toHaveBeenCalledOnce();
   });
 
@@ -49,5 +27,27 @@ describe('PreviewAudioContextOwner', () => {
     await expect(owner.contextForConnection()).rejects.toThrow(
       'Cut preview AudioContext has not been activated by a user gesture.',
     );
+  });
+});
+
+describe('previewAudioStartTime', () => {
+  it('keeps a cold Web Audio start at least 50 ms ahead', () => {
+    expect(
+      previewAudioStartTime({
+        currentTime: 2,
+        baseLatency: 0.005,
+        outputLatency: 0.005,
+      } as AudioContext),
+    ).toBeCloseTo(2.05);
+  });
+
+  it('includes reported device latency plus a scheduling margin', () => {
+    expect(
+      previewAudioStartTime({
+        currentTime: 2,
+        baseLatency: 0.04,
+        outputLatency: 0.03,
+      } as AudioContext),
+    ).toBeCloseTo(2.09);
   });
 });

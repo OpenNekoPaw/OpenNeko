@@ -31,6 +31,14 @@ deletion target.
 - **WHEN** a product package introduces a prohibited Engine reference
 - **THEN** the quality gate fails and reports the file and matched surface
 
+#### Scenario: Persisted Cut export uses retired Engine fields
+
+- **WHEN** Cut reads a pre-release Export Job snapshot containing
+  `engineJobId` or `engineConfig`
+- **THEN** persistence decoding rejects it with an actionable retired-schema
+  diagnostic
+- **AND** no compatibility DTO or Engine-named executor path resumes the job
+
 #### Scenario: Canonical path test runs
 
 - **WHEN** a rebuilt media feature test executes
@@ -115,15 +123,18 @@ removed and replacements pass canonical-path validation.
 - **AND** the consumer must be removed or rebuilt without restoring product
   Engine composition
 
-### Requirement: Runtime validation uses an isolated generated workspace
+### Requirement: Runtime validation uses the canonical test workspace
 
-The system SHALL generate and use a dedicated synthetic media workspace for
-Extension Development Host and Webview validation.
+The system SHALL use `${HOME}/Git/neko-test` as the only Extension Development
+Host and Webview validation workspace. Generated synthetic media SHALL be
+confined to its marker-owned `.neko/.functional/media-runtime` subtree.
 
 #### Scenario: Media runtime acceptance starts
 
 - **WHEN** a developer starts the media runtime validation launch
 - **THEN** the prelaunch task rebuilds
-  `.tmp/vscode-test-workspaces/media-runtime`
-- **AND** the Development Host opens only that fixture workspace
-- **AND** it does not use `neko-test` or a normal user workspace
+  `${HOME}/Git/neko-test/.neko/.functional/media-runtime`
+- **AND** the Development Host opens only `${HOME}/Git/neko-test`
+- **AND** it does not use a repository-local or other workspace
+- **AND** fixture replacement does not delete the workspace root or
+  user-provided media

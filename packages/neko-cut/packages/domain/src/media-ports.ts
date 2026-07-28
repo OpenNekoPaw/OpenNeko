@@ -1,5 +1,11 @@
 import type { TimelineView } from './projection';
 
+export const CUT_LOUDNESS_TARGET = Object.freeze({
+  integratedLufs: -14,
+  truePeakDbtp: -1,
+  loudnessRangeLu: 11,
+});
+
 export interface CutRuntimeMediaSource {
   readonly workspaceRelativePath: string;
 }
@@ -81,11 +87,18 @@ export interface AudioWaveformPort {
   ): Promise<CutWaveform>;
 }
 
+export const CUT_THUMBNAIL_TILE_WIDTH = 160;
+export const CUT_THUMBNAIL_TILE_HEIGHT = 90;
+export const CUT_THUMBNAIL_DENSITIES = [8, 16, 32, 64, 128, 256, 512] as const;
+
+export type CutThumbnailDensity = (typeof CUT_THUMBNAIL_DENSITIES)[number];
+
 export type CutClipRepresentationRequest =
   | {
       readonly clipId: string;
       readonly kind: 'thumbnail';
-      readonly sampleCount: number;
+      readonly density: CutThumbnailDensity;
+      readonly tileIndex: number;
     }
   | {
       readonly clipId: string;
@@ -98,67 +111,54 @@ export type CutClipRepresentationResult =
       readonly clipId: string;
       readonly kind: 'thumbnail';
       readonly status: 'ready';
-      readonly thumbnails: readonly {
-        readonly sourceTimeSeconds: number;
-        readonly dataUrl: string;
-      }[];
-    }
-  | {
-      readonly clipId: string;
-      readonly kind: 'thumbnail';
-      readonly status: 'partial';
-      readonly thumbnails: readonly {
-        readonly sourceTimeSeconds: number;
-        readonly dataUrl: string;
-      }[];
-      readonly failures: readonly {
-        readonly sourceTimeSeconds: number;
-        readonly failureScope: CutRepresentationFailureScope;
-        readonly message: string;
-      }[];
+      readonly density: CutThumbnailDensity;
+      readonly tileIndex: number;
+      readonly sourceTimeSeconds: number;
+      readonly dataUrl: string;
     }
   | {
       readonly clipId: string;
       readonly kind: 'waveform';
       readonly status: 'ready';
+      readonly peaksPerSecond: number;
       readonly waveform: CutWaveform;
     }
   | {
       readonly clipId: string;
       readonly kind: 'waveform';
       readonly status: 'partial';
+      readonly peaksPerSecond: number;
       readonly waveform: CutWaveform & { readonly partial: NonNullable<CutWaveform['partial']> };
     }
   | {
       readonly clipId: string;
-      readonly kind: 'thumbnail' | 'waveform';
+      readonly kind: 'thumbnail';
       readonly status: 'unavailable';
+      readonly density: CutThumbnailDensity;
+      readonly tileIndex: number;
+      readonly message: string;
+      readonly failureScope?: CutRepresentationFailureScope;
+    }
+  | {
+      readonly clipId: string;
+      readonly kind: 'waveform';
+      readonly status: 'unavailable';
+      readonly peaksPerSecond: number;
       readonly message: string;
       readonly failureScope?: CutRepresentationFailureScope;
     };
 
 export type CutPreviewPreparationProfile =
-  | 'h264-fragmented-mp4-copy'
-  | 'h264-fragmented-mp4-remux'
-  | 'vp8-webm-direct'
-  | 'h264-sdr-transcode';
+  'h264-mp4-direct' | 'h264-mp4-remux' | 'vp8-webm-direct' | 'h264-sdr-transcode';
 
-export interface CutMseSegmentDescriptor {
-  readonly index: number;
-  readonly startTimeSeconds: number;
-  readonly endTimeSeconds: number;
-  readonly url: string;
-}
-
-export interface CutMseVideoDescriptor {
+export interface CutHtmlVideoDescriptor {
   readonly version: 1;
-  readonly transport: 'http-mse';
+  readonly transport: 'http';
+  readonly url: string;
   readonly mimeType: string;
   readonly preparationProfile: CutPreviewPreparationProfile;
   readonly mediaTimeOriginSeconds: number;
   readonly durationSeconds: number;
-  readonly initSegmentUrl?: string;
-  readonly segments: readonly CutMseSegmentDescriptor[];
 }
 
 export interface CutPcmStreamDescriptor {
@@ -172,12 +172,24 @@ export interface CutPcmStreamDescriptor {
 
 export interface CutPreviewSession {
   readonly sessionId: string;
-  readonly video: CutMseVideoDescriptor;
+  readonly video: CutHtmlVideoDescriptor;
 }
 
 export interface CutPcmSession {
   readonly sessionId: string;
   readonly stream: CutPcmStreamDescriptor;
+}
+
+export interface CutPcmMixSource {
+  readonly source: CutRuntimeMediaSource;
+  readonly audioStreamIndex?: number;
+  readonly sourceStartSeconds: number;
+  readonly playbackRate: number;
+  readonly gainDb: number;
+  readonly clipPositionSeconds: number;
+  readonly clipDurationSeconds: number;
+  readonly fadeInSeconds: number;
+  readonly fadeOutSeconds: number;
 }
 
 export interface VideoPreviewPort {
@@ -196,14 +208,12 @@ export interface VideoPreviewPort {
 }
 
 export interface AudioPcmStreamPort {
-  startPcm(
-    source: CutRuntimeMediaSource,
+  startPcmMix(
+    sources: readonly CutPcmMixSource[],
     options: {
-      readonly startTimeSeconds: number;
+      readonly timelineStartSeconds: number;
       readonly durationSeconds: number;
-      readonly playbackRate: number;
       readonly startPaused: boolean;
-      readonly audioStreamIndex?: number;
     },
     signal?: AbortSignal,
   ): Promise<CutPcmSession>;

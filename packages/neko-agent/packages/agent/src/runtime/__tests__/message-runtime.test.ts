@@ -1479,11 +1479,10 @@ describe('message runtime helpers', () => {
     });
   });
 
-  it('builds agent context patch with canvas packet taking precedence over timeline packet', () => {
+  it('builds agent context patch with the owning canvas packet', () => {
     expect(
       buildAgentTurnContextPatch({
         imageAttachments: [{ type: 'base64', media_type: 'image/png', data: 'abc' }],
-        timelineContextPacket: { kind: 'timeline' },
         canvasNodes: [{ nodeId: 'node-1', type: 'media', summary: 'Hero frame' }],
         canvasContextPacket: { kind: 'canvas' },
         executionMetadata: { traceId: 'trace-1' },
@@ -1495,18 +1494,6 @@ describe('message runtime helpers', () => {
       },
       multimodalContextPacket: { kind: 'canvas' },
       metadata: { traceId: 'trace-1' },
-    });
-  });
-
-  it('builds agent context patch with timeline packet when no canvas packet exists', () => {
-    expect(
-      buildAgentTurnContextPatch({
-        imageAttachments: [],
-        timelineContextPacket: { kind: 'timeline' },
-        canvasNodes: [],
-      }),
-    ).toEqual({
-      multimodalContextPacket: { kind: 'timeline' },
     });
   });
 

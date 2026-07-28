@@ -130,8 +130,8 @@ describe('QualityCapabilityProvider', () => {
   it('routes project targets through the owning facade without content materialization', async () => {
     const projectRef = {
       domain: 'cut' as const,
-      documentUri: 'file:///workspace/edit.nkv',
-      projectRevision: 'nkv:edit-v1',
+      documentUri: 'file:///workspace/edit.otio',
+      projectRevision: 'otio:edit-v1',
       contentDigest: 'edit-v1',
     };
     const projectTarget = {

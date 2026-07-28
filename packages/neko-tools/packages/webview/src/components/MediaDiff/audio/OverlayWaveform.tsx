@@ -12,7 +12,7 @@ import { useTranslation } from '../../../i18n/I18nContext';
 // =============================================================================
 
 export interface DiffRegionOverlayProps {
-  regions: Array<{ start: number; end: number }>;
+  regions: readonly { start: number; end: number }[];
   duration: number;
   width: number;
   height: number;
@@ -77,8 +77,8 @@ export const DiffRegionOverlay = memo(function DiffRegionOverlay({
 // =============================================================================
 
 interface OverlayWaveformProps {
-  currentWaveform: number[];
-  previousWaveform: number[];
+  currentWaveform: readonly number[];
+  previousWaveform: readonly number[];
   currentTime: number;
   duration: number;
   zoom: number;
@@ -148,7 +148,7 @@ export const OverlayWaveform = memo(function OverlayWaveform({
     ctx.stroke();
 
     // Helper to draw a waveform with viewport
-    const drawWaveform = (peaks: number[], fillStyle: string) => {
+    const drawWaveform = (peaks: readonly number[], fillStyle: string) => {
       const startIdx = Math.floor(startFraction * peaks.length);
       const visibleCount = Math.ceil(visibleFraction * peaks.length);
       const peaksPerPixel = visibleCount / width;

@@ -16,6 +16,7 @@ import {
   type OpenNekoAiHostRuntime,
   type OpenNekoAiHostServices,
 } from './ai-host-runtime';
+import { configureOpenNekoMediaRuntime } from './media-host-runtime';
 
 const requireFeature = createRequire(__filename);
 
@@ -55,6 +56,7 @@ let aiHostRuntime: OpenNekoAiHostRuntime | undefined;
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   await assertNoStandaloneFeatureConflicts();
+  await configureOpenNekoMediaRuntime(context.extensionUri.fsPath);
   for (const command of RETIRED_ENGINE_COMMANDS) {
     context.subscriptions.push(
       vscode.commands.registerCommand(command, () => {

@@ -41,7 +41,7 @@ Preview、Assets、Agent、Cut 和 Canvas。
 VS Code Webview 只消费 Extension Host 授权的 loopback URL、媒体
 descriptor 和短生命周期 token。工作区文件访问、FFmpeg/ffprobe 进程、
 Range、PCM、代理与导出由 Extension Host 中的 `@neko/media/node`
-adapter 拥有；Webview 只使用浏览器 `<video>`、MSE 和 PCM client，不直接
+adapter 拥有；Webview 只使用浏览器 `<video src>` 和 PCM client，不直接
 访问 Node、文件路径或启动 FFmpeg。
 
 ## OpenNeko Desktop foundation
@@ -66,16 +66,16 @@ OpenSpec 和真实运行证据，不能从 foundation 或路线图文字推断�
 
 ## 共享与组合边界
 
-- `@neko/shared`、`@neko/host`、`@neko/media`、`@neko/proto`、`@neko/content`、`@neko/entity`、`@neko/search` 提供 host-neutral 能力。
+- `@neko/shared`、`@neko/host`、`@neko/media`、`@neko/content`、`@neko/entity`、`@neko/search` 提供 host-neutral 能力。
 - `@neko/ui` 只提供浏览器/React 公共原语，不拥有 contribution registry、产品生命周期或宿主权限。
 - 不存在 Workbench Core 或 Market Core 组合层；保留功能包直接暴露 package-owned adapter，应用根只做显式组合。
 - 跨客户端共享可变单例、active-state 切换或应用间内部导入都不是允许的复用方式。
 
 ## 验证重点
 
-| 客户端 | 最低验证 |
-| --- | --- |
-| TUI | 聚焦 build/test；涉及 Agent 行为时运行真实脚本 evaluation |
+| 客户端  | 最低验证                                                                                                          |
+| ------- | ----------------------------------------------------------------------------------------------------------------- |
+| TUI     | 聚焦 build/test；涉及 Agent 行为时运行真实脚本 evaluation                                                         |
 | VS Code | 保留扩展 build/package、manifest/release 校验；涉及 Webview 时运行 Extension Development Host functional scenario |
 | Desktop | Forge package、contract/security test、隔离 Electron 启动/reload/close/quit smoke；领域功能按 owning package 增加场景 |
 

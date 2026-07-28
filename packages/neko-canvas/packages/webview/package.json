@@ -17,6 +17,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@neko-canvas/domain": "workspace:*",
     "@neko/media": "workspace:*",
     "@neko/shared": "workspace:*",
     "@neko/ui": "workspace:*",

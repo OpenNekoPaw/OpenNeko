@@ -3,9 +3,7 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { PropertyPanel, type PropertyPanelProps } from './PropertyPanel';
-import type { TimelineElement } from '../../types';
-import { ENGINE_DEFAULT_TRANSFORM } from '../../types';
+import { PropertyPanel, type CutClipPropertyDraft, type PropertyPanelProps } from './PropertyPanel';
 
 vi.mock('../../i18n/I18nContext', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
@@ -73,14 +71,6 @@ describe('Cut PropertyPanel retained basic UI', () => {
     const subtitle = {
       ...createElement(),
       type: 'subtitle' as const,
-      text: 'Subtitle',
-      fontSize: 48,
-      fontFamily: 'Arial',
-      color: '#ffffff',
-      backgroundColor: 'transparent',
-      textAlign: 'center' as const,
-      strokeColor: 'transparent',
-      strokeWidth: 0,
     };
     act(() => root.render(<PropertyPanel {...props({ element: subtitle })} />));
 
@@ -138,24 +128,15 @@ function props(overrides: Partial<PropertyPanelProps> = {}): PropertyPanelProps 
   };
 }
 
-function createElement(): TimelineElement {
+function createElement(): CutClipPropertyDraft {
   return {
     id: 'clip-1',
     type: 'media',
     name: 'Clip',
-    src: '../media/clip.mp4',
-    mediaType: 'video',
     duration: 3,
     startTime: 0,
     trimStart: 0,
     trimEnd: 0,
-    transform: ENGINE_DEFAULT_TRANSFORM,
-    opacity: 1,
-    blendMode: 'normal',
-    effects: [],
-    muted: false,
-    hidden: false,
-    locked: false,
     speed: { speed: 1, preservePitch: true, reverse: false },
     audio: { volume: 1, pan: 0, muted: false, fadeIn: 0, fadeOut: 0, gain: 0 },
   };

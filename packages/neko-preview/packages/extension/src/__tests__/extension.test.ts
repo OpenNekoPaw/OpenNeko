@@ -129,24 +129,6 @@ vi.mock('../providers/AudioPreviewProvider', () => {
   return { AudioPreviewProvider: ctor };
 });
 
-vi.mock('../providers/PanoramicImagePreviewProvider', () => {
-  const ctor = vi.fn().mockImplementation(function (this: Record<string, unknown>) {
-    this.setPreviewService = vi.fn();
-    this.dispose = vi.fn();
-  });
-  (ctor as unknown as Record<string, string>).viewType = 'neko.preview.panoramicImage';
-  return { PanoramicImagePreviewProvider: ctor };
-});
-
-vi.mock('../providers/PanoramicVideoPreviewProvider', () => {
-  const ctor = vi.fn().mockImplementation(function (this: Record<string, unknown>) {
-    this.setPreviewService = vi.fn();
-    this.dispose = vi.fn();
-  });
-  (ctor as unknown as Record<string, string>).viewType = 'neko.preview.panoramicVideo';
-  return { PanoramicVideoPreviewProvider: ctor };
-});
-
 vi.mock('../providers/model/ModelPreviewProvider', () => {
   const ctor = vi.fn().mockImplementation(function (this: Record<string, unknown>) {
     this.dispose = vi.fn();
@@ -169,7 +151,6 @@ import { activate, deactivate } from '../extension';
 import { PreviewService } from '../services/PreviewService';
 import { VideoPreviewProvider } from '../providers/VideoPreviewProvider';
 import { AudioPreviewProvider } from '../providers/AudioPreviewProvider';
-import { PanoramicImagePreviewProvider } from '../providers/PanoramicImagePreviewProvider';
 import { ModelPreviewProvider } from '../providers/model/ModelPreviewProvider';
 import * as vscode from 'vscode';
 
@@ -281,8 +262,10 @@ describe('extension', () => {
 
       expect(registeredCommands).toContain('neko.preview.openVideo');
       expect(registeredCommands).toContain('neko.preview.openAudio');
-      expect(registeredCommands).toContain('neko.preview.openPanoramicImage');
       expect(registeredCommands).toContain('neko.preview.openThreeReferenceGuide');
+      expect(registeredCommands).not.toContain('neko.preview.openPanoramicImage');
+      expect(registeredCommands).not.toContain('neko.preview.openPanoramicVideo');
+      expect(registeredCommands).not.toContain('neko.preview.openBestPanoramic');
     });
 
     it('opens an explicit no-source mannequin guide without selecting a model file', async () => {
@@ -323,11 +306,9 @@ describe('extension', () => {
 
       const videoResolver = vi.mocked(VideoPreviewProvider).mock.calls[0]?.[2];
       const audioResolver = vi.mocked(AudioPreviewProvider).mock.calls[0]?.[2];
-      const panoramicResolver = vi.mocked(PanoramicImagePreviewProvider).mock.calls[0]?.[2];
 
       expect(videoResolver).toBeTypeOf('function');
       expect(audioResolver).toBe(videoResolver);
-      expect(panoramicResolver).toBe(videoResolver);
       await videoResolver?.();
       await audioResolver?.();
       expect(PreviewService.tryCreate).toHaveBeenCalledTimes(1);

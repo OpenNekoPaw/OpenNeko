@@ -32,7 +32,7 @@ OpenNeko 采用“架构优先、契约优先、风险分级、证据驱动”�
 | ---- | ----------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
 | L0   | 文档、文案、低风险单文件修复                                            | 聚焦检查、文档 review 或截图。                                               |
 | L1   | 局部组件、hook、service、state 逻辑                                     | 聚焦单元测试和相关包 build/typecheck。                                       |
-| L2   | Webview/Extension message、共享包、公共类型、媒体 port、跨包契约       | 契约测试、message/schema 测试、依赖边界检查和相关包 build。                  |
+| L2   | Webview/Extension message、共享包、公共类型、媒体 port、跨包契约        | 契约测试、message/schema 测试、依赖边界检查和相关包 build。                  |
 | L3   | Rust Engine、Proto、媒体流、渲染、项目格式、AI workflow、打包、资源访问 | 架构 review、单元/契约/集成测试、smoke 或 fixture 验证，必要时性能/UX 证据。 |
 | L4   | release、安装、重大 UX、核心创作工作流                                  | 完整本地/CI 门禁、安装或运行 smoke、UX 证据和明确残余风险。                  |
 
@@ -77,29 +77,29 @@ main 分支保护必须将 GitHub Actions `Merge Gate` 配置为唯一 required 
 
 按影响范围选择最小可靠验证，并在交付说明或 PR 中记录命令和结果。
 
-| 范围                            | 推荐命令                                                      |
-| ------------------------------- | ------------------------------------------------------------- |
-| TS / Webview / Extension 提交前 | `pnpm gate:local`                                             |
-| Manual/Merge 源码门禁本地复现   | `pnpm gate:remote`                                            |
-| Rust Engine                     | `pnpm ci:local:rust`                                          |
-| Proto 契约                      | `pnpm ci:local:proto`                                         |
-| 架构边界                        | `pnpm check`                                                  |
-| 未使用/冗余代码                 | `pnpm check:unused`                                           |
-| Agent 边界                      | `pnpm check:agent-boundaries`                                 |
-| Agent eval harness（key-free）  | `pnpm test:agent:eval`                                        |
-| 本机 VS Code 配置审计           | `pnpm test:local:vscode`                                      |
-| 本机 Webview/GUI target 预检    | `pnpm test:local:ui`                                          |
-| 真实 API/provider Agent case    | `pnpm test:local:api -- --mode ...`                           |
-| 3D Route A 边界                 | `pnpm check:3d-route-a-boundaries`                            |
-| 残留/债务关键词扫描             | `pnpm check:legacy-debt`                                      |
-| 代码债务台账                    | `pnpm check:legacy-debt:ledger`                               |
-| 质量门禁组合                    | `pnpm check:quality`                                          |
-| Engine runtime smoke            | `pnpm smoke:engine`                                           |
-| Webview build smoke             | `pnpm smoke:webview`                                          |
-| Webview target smoke            | `pnpm smoke:webview:targets`                                  |
-| VS Code debugger target smoke   | `pnpm smoke:vscode:targets -- --skill <skill>`                |
-| Webview functional acceptance   | 本地 Extension Development Host + `vscode-extension-debugger` |
-| GitHub Actions 形状预检         | `pnpm ci:act`                                                 |
+| 范围                            | 推荐命令                                                            |
+| ------------------------------- | ------------------------------------------------------------------- |
+| TS / Webview / Extension 提交前 | `pnpm gate:local`                                                   |
+| Manual/Merge 源码门禁本地复现   | `pnpm gate:remote`                                                  |
+| Rust Engine                     | `pnpm ci:local:rust`                                                |
+| Wire/跨层契约                   | owning package contract tests + `pnpm check:application-boundaries` |
+| 架构边界                        | `pnpm check`                                                        |
+| 未使用/冗余代码                 | `pnpm check:unused`                                                 |
+| Agent 边界                      | `pnpm check:agent-boundaries`                                       |
+| Agent eval harness（key-free）  | `pnpm test:agent:eval`                                              |
+| 本机 VS Code 配置审计           | `pnpm test:local:vscode`                                            |
+| 本机 Webview/GUI target 预检    | `pnpm test:local:ui`                                                |
+| 真实 API/provider Agent case    | `pnpm test:local:api -- --mode ...`                                 |
+| 3D Route A 边界                 | `pnpm check:3d-route-a-boundaries`                                  |
+| 残留/债务关键词扫描             | `pnpm check:legacy-debt`                                            |
+| 代码债务台账                    | `pnpm check:legacy-debt:ledger`                                     |
+| 质量门禁组合                    | `pnpm check:quality`                                                |
+| Engine runtime smoke            | `pnpm smoke:engine`                                                 |
+| Webview build smoke             | `pnpm smoke:webview`                                                |
+| Webview target smoke            | `pnpm smoke:webview:targets`                                        |
+| VS Code debugger target smoke   | `pnpm smoke:vscode:targets -- --skill <skill>`                      |
+| Webview functional acceptance   | 本地 Extension Development Host + `vscode-extension-debugger`       |
+| GitHub Actions 形状预检         | `pnpm ci:act`                                                       |
 
 `ci:local` 是 `gate:local` 的兼容别名，`ci:remote` 是 `gate:remote` 的兼容别名，`check:ci` 是远程源码门禁的基础组合。`act` 只是本地 Linux job 形状预检，不替代 GitHub Actions。Rust macOS runner和平台打包以 `Manual Gate` / `Merge Gate` 为准；正式发布只由 main 历史上的版本标签触发。
 
@@ -201,7 +201,7 @@ Webview/React 变更新增组件前，review 必须确认已经做过组件复�
 
 新功能涉及组件样式、主题、国际化、日志、错误/诊断、配置、路径、文件保存/读写、资源授权、缓存、DTO 或跨包契约时，review 必须确认已经做过公共基础能力审计：
 
-- 是否优先复用或更新 `@neko/shared`、`@neko/ui`、`@neko/media`、`@neko/proto`、`@neko/entity`、`@neko/search`、project-file-io、resource cache 或既有 domain service。
+- 是否优先复用或更新 `@neko/shared`、`@neko/ui`、`@neko/media`、`@neko/entity`、`@neko/search`、project-file-io、resource cache 或既有 domain service。
 - 是否避免了 package-local design system、theme token、i18n runtime、logger/error 类型、项目文件 IO、cache manager、path resolver、Engine HTTP/WS client 或共享 DTO 的并行实现。
 - 如果公共入口缺少能力，是否优先扩展公共契约、公共 adapter、公共 hook/primitive 或 domain service，而不是复制一份功能包私有实现。
 - 如果能力留在 owning package，是否说明了业务边界、依赖方向、后续提取条件和验证命令。

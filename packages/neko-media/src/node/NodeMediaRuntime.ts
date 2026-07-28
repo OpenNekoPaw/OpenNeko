@@ -4,6 +4,7 @@ import * as path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import type {
   HtmlVideoDescriptor,
+  HtmlVideoPreparationOptions,
   HtmlVideoPreparationProfile,
   FrameCaptureResult,
   MediaAudioStream,
@@ -21,12 +22,19 @@ import {
   type RunningProcess,
 } from './NodeFfmpegProcess';
 import { NodeMediaLoopbackServer, createPcmPacketTransform } from './NodeMediaLoopbackServer';
+import {
+  getHardwareVideoPipeline,
+  resolveHardwareVideoBackend,
+  type HardwareVideoBackend,
+  type HardwareVideoPipeline,
+} from './HardwareVideoPipeline';
 
 export interface NodeMediaRuntimeOptions {
   readonly cacheRoot?: string;
   readonly process?: FfmpegProcessPort;
   readonly server?: NodeMediaLoopbackServer;
   readonly vp8WebmDirectQualified?: boolean;
+  readonly hardwareVideoBackend?: HardwareVideoBackend;
 }
 
 interface FileSession {
@@ -81,6 +89,7 @@ export class NodeMediaRuntime {
   private readonly server: NodeMediaLoopbackServer;
   private readonly cacheRoot: string;
   private readonly vp8WebmDirectQualified: boolean;
+  private readonly hardwareVideoPipeline: HardwareVideoPipeline | undefined;
   private readonly sessions = new Map<string, Session>();
   private rootPromise: Promise<string> | undefined;
   private qualificationPromise: Promise<MediaRuntimeQualification> | undefined;
@@ -91,6 +100,9 @@ export class NodeMediaRuntime {
     this.server = options.server ?? new NodeMediaLoopbackServer();
     this.cacheRoot = options.cacheRoot ?? path.join(os.tmpdir(), 'openneko-media');
     this.vp8WebmDirectQualified = options.vp8WebmDirectQualified ?? true;
+    this.hardwareVideoPipeline = getHardwareVideoPipeline(
+      options.hardwareVideoBackend ?? resolveHardwareVideoBackend(),
+    );
   }
 
   async qualify(signal?: AbortSignal): Promise<MediaRuntimeQualification> {
@@ -98,29 +110,43 @@ export class NodeMediaRuntime {
     if (signal?.aborted) throw signal.reason;
     this.qualificationPromise ??= (async () => {
       try {
-        const [ffmpegVersion, ffprobeVersion, decoders, encoders, filters] = await Promise.all([
-          this.process.run('ffmpeg', ['-hide_banner', '-version']),
-          this.process.run('ffprobe', ['-hide_banner', '-version']),
-          this.process.run('ffmpeg', ['-hide_banner', '-decoders']),
-          this.process.run('ffmpeg', ['-hide_banner', '-encoders']),
-          this.process.run('ffmpeg', ['-hide_banner', '-filters']),
-        ]);
+        const [ffmpegVersion, ffprobeVersion, hardwareAccelerators, decoders, encoders, filters] =
+          await Promise.all([
+            this.process.run('ffmpeg', ['-hide_banner', '-version']),
+            this.process.run('ffprobe', ['-hide_banner', '-version']),
+            this.process.run('ffmpeg', ['-hide_banner', '-hwaccels']),
+            this.process.run('ffmpeg', ['-hide_banner', '-decoders']),
+            this.process.run('ffmpeg', ['-hide_banner', '-encoders']),
+            this.process.run('ffmpeg', ['-hide_banner', '-filters']),
+          ]);
+        const hardwareAcceleratorText = hardwareAccelerators.stdout.toString('utf8');
         const decoderText = decoders.stdout.toString('utf8');
         const encoderText = encoders.stdout.toString('utf8');
         const filterText = filters.stdout.toString('utf8');
         return {
           ffmpegVersion: firstLine(ffmpegVersion.stdout),
           ffprobeVersion: firstLine(ffprobeVersion.stdout),
+          hardwareAccelerators: {
+            videoToolbox: hasListedCapability(hardwareAcceleratorText, 'videotoolbox'),
+            vaapi: hasListedCapability(hardwareAcceleratorText, 'vaapi'),
+          },
           decoders: {
             h264: hasListedCapability(decoderText, 'h264'),
             hevc: hasListedCapability(decoderText, 'hevc'),
             av1: hasListedCapability(decoderText, 'av1'),
             vp8: hasListedCapability(decoderText, 'vp8'),
+            vp9: hasListedCapability(decoderText, 'vp9'),
+            aac: hasListedCapability(decoderText, 'aac'),
+            mp3: hasListedCapability(decoderText, 'mp3'),
+            flac: hasListedCapability(decoderText, 'flac'),
+            dts: hasListedCapability(decoderText, 'dca'),
           },
           encoders: {
             h264:
               hasListedCapability(encoderText, 'libx264') ||
               hasListedCapability(encoderText, 'h264'),
+            h264VideoToolbox: hasListedCapability(encoderText, 'h264_videotoolbox'),
+            h264Vaapi: hasListedCapability(encoderText, 'h264_vaapi'),
             aac: hasListedCapability(encoderText, 'aac'),
           },
           filters: {
@@ -128,6 +154,11 @@ export class NodeMediaRuntime {
             tonemap: hasListedCapability(filterText, 'tonemap'),
             sidedata: hasListedCapability(filterText, 'sidedata'),
             alimiter: hasListedCapability(filterText, 'alimiter'),
+            loudnorm: hasListedCapability(filterText, 'loudnorm'),
+            ebur128: hasListedCapability(filterText, 'ebur128'),
+            scaleVt: hasListedCapability(filterText, 'scale_vt'),
+            scaleVaapi: hasListedCapability(filterText, 'scale_vaapi'),
+            tonemapVaapi: hasListedCapability(filterText, 'tonemap_vaapi'),
           },
         };
       } catch (error) {
@@ -163,10 +194,27 @@ export class NodeMediaRuntime {
     const probe = await this.probe(sourcePath, signal);
     const video = probe.video;
     if (!video) throw new Error('Frame source contains no video stream.');
-    if (isHdr(video)) await this.assertHdrFilterCapabilities(signal);
-    const filters: string[] = [
-      videoFilter(video, options.width ?? video.width, options.height ?? video.height),
-    ];
+    const hardwareVideoPipeline = this.requireHardwareVideoPipeline();
+    const qualification = await this.qualify(signal);
+    if (!qualification.filters[hardwareVideoPipeline.filterCapability]) {
+      throw new MediaRuntimeUnavailableError(
+        `${hardwareVideoPipeline.displayName} hardware scale filter`,
+        'Bounded frame capture requires hardware scaling before single-frame readback.',
+      );
+    }
+    if (isHdr(video)) {
+      throw new MediaRuntimeUnavailableError(
+        'hardware-only HDR frame capture',
+        'HDR frame capture would require a CPU video-filter/readback path and is disabled.',
+      );
+    }
+    const size = fitVideoWithin(
+      video.width,
+      video.height,
+      options.width ?? video.width,
+      options.height ?? video.height,
+    );
+    const filters = [hardwareVideoPipeline.buildFrameCaptureFilter(size.width, size.height)];
     const quality = Math.max(2, Math.min(31, Math.round(31 - (options.quality ?? 80) * 0.29)));
     try {
       const output = await this.process.run(
@@ -174,6 +222,8 @@ export class NodeMediaRuntime {
         [
           '-v',
           'error',
+          '-xerror',
+          ...hardwareVideoPipeline.decodeInputArgs,
           '-ss',
           decimal(timeSeconds),
           '-i',
@@ -198,6 +248,8 @@ export class NodeMediaRuntime {
       }
       return `data:image/jpeg;base64,${output.stdout.toString('base64')}`;
     } catch (error) {
+      const failure = hardwareVideoPipeline.classifyFailure(error, video.codecName);
+      if (failure) throw new MediaRuntimeUnavailableError(failure.capability);
       throw classifyCommandError(error, 'interval', 'capture frame');
     }
   }
@@ -311,6 +363,7 @@ export class NodeMediaRuntime {
 
   async prepareVideo(
     sourcePath: string,
+    options: HtmlVideoPreparationOptions = {},
     signal?: AbortSignal,
   ): Promise<{
     readonly sessionId: string;
@@ -320,41 +373,42 @@ export class NodeMediaRuntime {
     const probe = await this.probe(sourcePath, signal);
     const video = probe.video;
     if (!video) throw new Error('Video source contains no video stream.');
-    const profile = this.selectVideoProfile(sourcePath, probe);
+    const profile = this.selectVideoProfile(sourcePath, probe, options);
     let preparedPath = sourcePath;
     let directory: string | undefined;
-    if (profile === 'h264-mp4-remux' || profile === 'h264-sdr-transcode') {
+    if (
+      profile === 'h264-mp4-remux' ||
+      profile === 'vp9-mp4-remux' ||
+      profile === 'h264-sdr-transcode'
+    ) {
       directory = await fs.mkdtemp(path.join(await this.runtimeRoot(), 'preview-'));
       preparedPath = path.join(directory, 'preview.mp4');
       try {
-        if (profile === 'h264-sdr-transcode') {
-          await this.assertVideoTranscodeCapabilities(video, signal);
-        }
+        const hardwareVideoPipeline =
+          profile === 'h264-sdr-transcode' ? this.requireHardwareVideoPipeline() : undefined;
         await this.process.run(
           'ffmpeg',
           [
             '-y',
             '-v',
             'error',
+            ...(profile === 'h264-sdr-transcode'
+              ? [
+                  '-xerror',
+                  ...requirePreparedHardwareVideoPipeline(hardwareVideoPipeline).decodeInputArgs,
+                ]
+              : []),
             '-i',
             sourcePath,
             '-map',
             '0:v:0',
             '-an',
-            ...(profile === 'h264-mp4-remux'
+            ...(profile === 'h264-mp4-remux' || profile === 'vp9-mp4-remux'
               ? ['-c:v', 'copy']
-              : [
-                  '-vf',
-                  videoFilter(video),
-                  '-c:v',
-                  'libx264',
-                  '-preset',
-                  'ultrafast',
-                  '-crf',
-                  '23',
-                  '-pix_fmt',
-                  'yuv420p',
-                ]),
+              : hardwareVideoTranscodeArgs(
+                  video,
+                  requirePreparedHardwareVideoPipeline(hardwareVideoPipeline),
+                )),
             '-movflags',
             '+faststart',
             preparedPath,
@@ -363,6 +417,14 @@ export class NodeMediaRuntime {
         );
       } catch (error) {
         await fs.rm(directory, { recursive: true, force: true });
+        if (profile === 'h264-sdr-transcode') {
+          const failure = this.requireHardwareVideoPipeline().classifyFailure(
+            error,
+            video.codecName,
+          );
+          if (failure) throw new MediaRuntimeUnavailableError(failure.capability);
+          throw classifyCommandError(error, 'stream', 'prepare hardware video');
+        }
         throw classifyCommandError(error, 'stream', 'prepare video');
       }
     }
@@ -387,6 +449,17 @@ export class NodeMediaRuntime {
         durationSeconds: probe.durationSeconds,
       },
     };
+  }
+
+  async planVideo(
+    sourcePath: string,
+    options: HtmlVideoPreparationOptions = {},
+    signal?: AbortSignal,
+  ): Promise<HtmlVideoPreparationProfile> {
+    this.assertUsable();
+    const probe = await this.probe(sourcePath, signal);
+    if (!probe.video) throw new Error('Video source contains no video stream.');
+    return this.selectVideoProfile(sourcePath, probe, options);
   }
 
   async publishFile(
@@ -572,13 +645,27 @@ export class NodeMediaRuntime {
     return { stdout: framed, completion, terminate: () => raw.terminate() };
   }
 
-  private selectVideoProfile(sourcePath: string, probe: MediaProbe): HtmlVideoPreparationProfile {
+  private selectVideoProfile(
+    sourcePath: string,
+    probe: MediaProbe,
+    options: HtmlVideoPreparationOptions,
+  ): HtmlVideoPreparationProfile {
     const video = probe.video;
     if (!video) throw new Error('Video source contains no video stream.');
     const extension = path.extname(sourcePath).toLowerCase();
     const mp4 = extension === '.mp4' || extension === '.m4v';
     if (video.codecName === 'h264' && (video.bitDepth ?? 8) <= 8 && !isHdr(video)) {
       return mp4 ? 'h264-mp4-direct' : 'h264-mp4-remux';
+    }
+    if (video.codecName === 'av1' && mp4 && options.nativeCapabilities?.av1Mp4 === true) {
+      return 'av1-mp4-direct';
+    }
+    if (
+      video.codecName === 'vp9' &&
+      extension === '.webm' &&
+      options.nativeCapabilities?.vp9Mp4 === true
+    ) {
+      return 'vp9-mp4-remux';
     }
     if (
       this.vp8WebmDirectQualified &&
@@ -592,34 +679,14 @@ export class NodeMediaRuntime {
     return 'h264-sdr-transcode';
   }
 
-  private async assertVideoTranscodeCapabilities(
-    video: MediaVideoStream,
-    signal?: AbortSignal,
-  ): Promise<void> {
-    const qualification = await this.qualify(signal);
-    if (!qualification.encoders.h264) {
-      throw new MediaRuntimeUnavailableError('H.264 preview encoder');
+  private requireHardwareVideoPipeline(): HardwareVideoPipeline {
+    if (!this.hardwareVideoPipeline) {
+      throw new MediaRuntimeUnavailableError(
+        'hardware video preview backend',
+        'Video preview requires an all-hardware backend; CPU transcoding is disabled.',
+      );
     }
-    const decoder = decoderQualificationKey(video.codecName);
-    if (decoder && !qualification.decoders[decoder]) {
-      throw new MediaRuntimeUnavailableError(`${video.codecName} decoder`);
-    }
-    if (isHdr(video)) {
-      for (const required of ['zscale', 'tonemap', 'sidedata'] as const) {
-        if (!qualification.filters[required]) {
-          throw new MediaRuntimeUnavailableError(`HDR preview filter ${required}`);
-        }
-      }
-    }
-  }
-
-  private async assertHdrFilterCapabilities(signal?: AbortSignal): Promise<void> {
-    const qualification = await this.qualify(signal);
-    for (const required of ['zscale', 'tonemap', 'sidedata'] as const) {
-      if (!qualification.filters[required]) {
-        throw new MediaRuntimeUnavailableError(`HDR frame filter ${required}`);
-      }
-    }
+    return this.hardwareVideoPipeline;
   }
 
   private runtimeRoot(): Promise<string> {
@@ -746,20 +813,27 @@ function compactDiagnostic(stderr: string): string {
   return stderr.trim().split(/\r?\n/u).slice(-6).join('\n') || 'Media decode failed.';
 }
 
-function videoFilter(video: MediaVideoStream, maxWidth = 1280, maxHeight = 720): string {
-  const size = fitVideoWithin(video.width, video.height, maxWidth, maxHeight);
-  if (!isHdr(video)) {
-    return `scale=${size.width}:${size.height}:flags=lanczos,format=yuv420p`;
-  }
+function hardwareVideoTranscodeArgs(
+  video: MediaVideoStream,
+  pipeline: HardwareVideoPipeline,
+): readonly string[] {
+  const size = fitVideoWithin(video.width, video.height, 1280, 720);
   return [
-    `zscale=w=${size.width}:h=${size.height}:t=linear:npl=100`,
-    'format=gbrpf32le',
-    'tonemap=tonemap=hable:desat=0',
-    'zscale=p=bt709:t=bt709:m=bt709:r=tv',
-    'sidedata=mode=delete:type=MASTERING_DISPLAY_METADATA',
-    'sidedata=mode=delete:type=CONTENT_LIGHT_LEVEL',
-    'format=yuv420p',
-  ].join(',');
+    '-vf',
+    pipeline.buildSdrFilter(size.width, size.height, isHdr(video)),
+    ...pipeline.h264EncoderArgs,
+    '-b:v',
+    '8M',
+  ];
+}
+
+function requirePreparedHardwareVideoPipeline(
+  pipeline: HardwareVideoPipeline | undefined,
+): HardwareVideoPipeline {
+  if (!pipeline) {
+    throw new Error('Hardware transcode profile requires a hardware video pipeline.');
+  }
+  return pipeline;
 }
 
 function fitVideoWithin(
@@ -781,15 +855,6 @@ function isHdr(video: MediaVideoStream): boolean {
     video.color.transfer === 'arib-std-b67' ||
     video.color.primaries === 'bt2020'
   );
-}
-
-function decoderQualificationKey(
-  codecName: string,
-): keyof MediaRuntimeQualification['decoders'] | undefined {
-  if (codecName === 'h264' || codecName === 'hevc' || codecName === 'av1' || codecName === 'vp8') {
-    return codecName;
-  }
-  return undefined;
 }
 
 function hasListedCapability(output: string, name: string): boolean {

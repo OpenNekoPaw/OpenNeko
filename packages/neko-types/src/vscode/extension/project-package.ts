@@ -96,7 +96,6 @@ const LOCAL_FILE_EXTENSIONS = new Set([
   '.nkentity',
   '.nkexpr',
   '.nkbind',
-  '.nkv',
   '.obj',
   '.ogg',
   '.ogv',
@@ -623,8 +622,7 @@ function shouldScanNestedReferences(filePath: string): boolean {
     lower.endsWith('.nkcut') ||
     lower.endsWith('.nkeffect') ||
     lower.endsWith('.nkentity') ||
-    lower.endsWith('.nkexpr') ||
-    lower.endsWith('.nkv')
+    lower.endsWith('.nkexpr')
   );
 }
 

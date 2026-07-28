@@ -147,7 +147,7 @@ Compressed decoders are not introduced solely for the initial low-poly catalog. 
 
 ### Reuse panorama and content-access boundaries without reusing provider lifecycle
 
-3D Reference extracts/reuses package-local panorama detection/authorization helpers and shared content-access projection. It does not instantiate `PanoramicImagePreviewProvider` inside `ModelPreviewProvider` or create nested custom editors. The Three runtime consumes an exact authorized equirectangular resource and owns only temporary environment texture/projection state.
+3D Reference owns a package-local panorama environment source-authorization helper and reuses shared content-access projection. Standalone panoramic Preview custom editors are retired and are not a dependency. The Three runtime consumes an exact authorized equirectangular resource and owns only temporary environment texture/projection state.
 
 ### Keep pose semantics declared and bounded
 

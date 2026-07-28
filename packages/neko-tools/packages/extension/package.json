@@ -7,12 +7,12 @@
   "exports": {
     ".": "./src/bootstrap/index.ts",
     "./media-diff": "./src/media-diff/index.ts",
-    "./media-lsp": "./src/media-lsp/index.ts",
     "./*": "./src/*"
   },
   "dependencies": {
     "@neko/media": "workspace:*",
-    "@neko/shared": "workspace:*"
+    "@neko/shared": "workspace:*",
+    "@neko-tools/contracts": "workspace:*"
   },
   "license": "AGPL-3.0-or-later"
 }

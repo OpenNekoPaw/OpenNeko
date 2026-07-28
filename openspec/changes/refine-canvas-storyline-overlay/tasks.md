@@ -27,7 +27,9 @@
 
 - [x] 5.1 Run focused Canvas Webview tests and build
 - [x] 5.2 Run OpenSpec, architecture and diff quality checks
-- [x] 5.3 Validate the top Overlay, mode switching, source-node reveal and Preview playback in an isolated Extension Development Host without `neko-test`
+- [x] 5.3 Validate the top Overlay, mode switching, source-node reveal and
+      Preview playback; future reruns use only the `~/Git/neko-test`
+      Extension Development Host with a scenario-owned functional subtree
 - [x] 5.4 Record executed commands, runtime evidence and remaining risks
 
 ## 6. Preview Isolation and Locale Follow-up

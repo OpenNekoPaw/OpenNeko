@@ -14,8 +14,8 @@ interface AudioDetailsProps {
     channels: { current: number; previous: number };
     bitrate?: { current: number; previous: number };
     silenceRegions?: {
-      current: Array<{ start: number; end: number }>;
-      previous: Array<{ start: number; end: number }>;
+      readonly current: readonly { start: number; end: number }[];
+      readonly previous: readonly { start: number; end: number }[];
     };
   };
 }

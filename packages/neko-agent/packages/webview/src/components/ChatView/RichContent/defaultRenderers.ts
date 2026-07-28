@@ -7,8 +7,6 @@ import { richContentRegistry } from './RichContentRegistry';
 import {
   imageRendererEntry,
   imageGridRendererEntry,
-  panoramicImageRendererEntry,
-  panoramicVideoRendererEntry,
   videoRendererEntry,
   audioRendererEntry,
   storyboardRendererEntry,
@@ -29,8 +27,6 @@ export function registerDefaultRenderers(): void {
 
   richContentRegistry.register(imageRendererEntry);
   richContentRegistry.register(imageGridRendererEntry);
-  richContentRegistry.register(panoramicImageRendererEntry);
-  richContentRegistry.register(panoramicVideoRendererEntry);
   richContentRegistry.register(videoRendererEntry);
   richContentRegistry.register(audioRendererEntry);
   richContentRegistry.register(storyboardRendererEntry);

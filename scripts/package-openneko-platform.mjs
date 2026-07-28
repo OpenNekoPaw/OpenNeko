@@ -19,6 +19,10 @@ import {
   openNekoArtifactName,
 } from './openneko-vsix-contract.mjs';
 import { assertEmbeddedRuntimeClosure } from './embedded-runtime-closure.mjs';
+import {
+  assertStagedMediaRuntime,
+  stagePackagedMediaRuntime,
+} from './media-runtime-closure.mjs';
 
 const repoRoot = resolve(import.meta.dirname, '..');
 const appRoot = join(repoRoot, 'apps', 'neko-vscode');
@@ -120,8 +124,10 @@ function packageOpenNekoPlatform({ target }, command = runCommand) {
   }
 
   stageOpenNekoApplicationRuntime(stageRoot);
+  stagePackagedMediaRuntime(stageRoot, target, process.env.NEKO_MEDIA_RUNTIME_ROOT?.trim());
   assertOpenNekoPayloadClosure(listFiles(stageRoot), target);
   assertEmbeddedRuntimeClosure(stageRoot, target);
+  assertStagedMediaRuntime(stageRoot, target, { qualify: true });
   cpSync(join(appRoot, 'README.md'), join(stageRoot, 'README.md'));
   cpSync(join(appRoot, 'LICENSE'), join(stageRoot, 'LICENSE'));
   writeJson(join(stageRoot, 'package.json'), manifest);

@@ -6,7 +6,6 @@
  * skill configurations.
  *
  * Categories:
- * - TIMELINE: neko-cut timeline operations
  * - CANVAS: neko-canvas node/generation operations
  * - MEDIA: platform-level media generation (GenerateImage, etc.)
  * - PIPELINE: pipeline orchestration and diagnostics
@@ -16,41 +15,6 @@
  * - TRANSCRIBE: speech-to-text tools
  * - SYSTEM: system/utility tools (file ops, skill discovery)
  */
-
-// =============================================================================
-// NekoCut — Timeline Operations
-// =============================================================================
-
-export const TOOL_NAMES_TIMELINE = {
-  GET_TIMELINE_INFO: 'GetTimelineInfo',
-  CUT_GET_TIMELINE_INFO: 'cut.getTimelineInfo',
-  CUT_IMPORT_CANVAS_DRAFT: 'cut.importCanvasDraft',
-  CUT_REVEAL_TIMELINE: 'cut.revealTimeline',
-  GET_ELEMENT_INFO: 'GetElementInfo',
-  LIST_TIMELINE_ELEMENTS: 'ListTimelineElements',
-  LIST_EFFECTS: 'ListEffects',
-  LIST_TRANSITIONS: 'ListTransitions',
-  ADD_TIMELINE_ELEMENT: 'AddTimelineElement',
-  UPDATE_TIMELINE_ELEMENT: 'UpdateTimelineElement',
-  DELETE_TIMELINE_ELEMENT: 'DeleteTimelineElement',
-  TRIM_ELEMENT: 'TrimElement',
-  SPLIT_ELEMENT: 'SplitElement',
-  ADD_EFFECT: 'AddEffect',
-  UPDATE_EFFECT: 'UpdateEffect',
-  REMOVE_EFFECT: 'RemoveEffect',
-  SET_TRANSITION: 'SetTransition',
-  REMOVE_TRANSITION: 'RemoveTransition',
-  ADD_TRACK: 'AddTrack',
-  DELETE_TRACK: 'DeleteTrack',
-  REORDER_TRACKS: 'ReorderTracks',
-  SET_TRACK_PROPERTIES: 'SetTrackProperties',
-  SET_COLOR_CORRECTION: 'SetColorCorrection',
-  RESET_COLOR_CORRECTION: 'ResetColorCorrection',
-  SET_AUDIO_PROPERTIES: 'SetAudioProperties',
-  ADD_AUDIO_KEYFRAME: 'AddAudioKeyframe',
-  SEPARATE_AUDIO: 'SeparateAudio',
-  SET_PLAYBACK_SPEED: 'SetPlaybackSpeed',
-} as const;
 
 // =============================================================================
 // NekoCanvas — Canvas Operations
@@ -200,10 +164,9 @@ export const TOOL_NAMES_EXECUTION = {
 
 /**
  * All registered tool names as a flat constant object.
- * Use individual category objects (TOOL_NAMES_TIMELINE, etc.) for category-scoped access.
+ * Use individual category objects for category-scoped access.
  */
 export const TOOL_NAMES = {
-  ...TOOL_NAMES_TIMELINE,
   ...TOOL_NAMES_CANVAS,
   ...TOOL_NAMES_MEDIA,
   ...TOOL_NAMES_QUALITY,

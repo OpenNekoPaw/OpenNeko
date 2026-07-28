@@ -1,79 +1,101 @@
 #!/usr/bin/env node
 
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-export const MEDIA_FIXTURE_RELATIVE_ROOT = '.tmp/vscode-test-workspaces/media-runtime';
+export const MEDIA_TEST_WORKSPACE_RELATIVE_ROOT = 'Git/neko-test';
+export const MEDIA_FIXTURE_RELATIVE_ROOT = '.neko/.functional/media-runtime';
 
-const repositoryRoot = resolve(import.meta.dirname, '..');
-const fixtureRoot = resolve(repositoryRoot, MEDIA_FIXTURE_RELATIVE_ROOT);
-const mediaRoot = join(fixtureRoot, 'media');
-const projectRoot = join(fixtureRoot, 'projects');
-const ffmpegPath = process.env.NEKO_FFMPEG_PATH || 'ffmpeg';
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  prepareMediaFixture();
+}
 
-assertSafeFixtureRoot(fixtureRoot);
-rmSync(fixtureRoot, { recursive: true, force: true });
-mkdirSync(mediaRoot, { recursive: true });
-mkdirSync(projectRoot, { recursive: true });
+export function resolveMediaFixtureLayout(homeDirectory = homedir()) {
+  const workspaceRoot = resolve(homeDirectory, MEDIA_TEST_WORKSPACE_RELATIVE_ROOT);
+  return {
+    workspaceRoot,
+    fixtureRoot: resolve(workspaceRoot, MEDIA_FIXTURE_RELATIVE_ROOT),
+  };
+}
 
-writeJson(join(fixtureRoot, '.openneko-fixture.json'), {
-  schemaVersion: 1,
-  kind: 'openneko-vscode-media-runtime',
-  synthetic: true,
-  repositoryRelativeRoot: MEDIA_FIXTURE_RELATIVE_ROOT,
-});
+export function prepareMediaFixture() {
+  const { workspaceRoot, fixtureRoot } = resolveMediaFixtureLayout();
+  const mediaRoot = join(fixtureRoot, 'media');
+  const projectRoot = join(fixtureRoot, 'projects');
+  const ffmpegPath = process.env.NEKO_FFMPEG_PATH || 'ffmpeg';
 
-runFfmpeg([
-  '-f',
-  'lavfi',
-  '-i',
-  'testsrc2=size=640x360:rate=30:duration=6',
-  '-f',
-  'lavfi',
-  '-i',
-  'sine=frequency=440:sample_rate=48000:duration=6',
-  '-c:v',
-  'libx264',
-  '-pix_fmt',
-  'yuv420p',
-  '-preset',
-  'veryfast',
-  '-c:a',
-  'aac',
-  '-b:a',
-  '128k',
-  '-movflags',
-  '+faststart',
-  '-shortest',
-  join(mediaRoot, 'h264-aac.mp4'),
-]);
+  assertSafeFixtureRoot(fixtureRoot);
+  mkdirSync(workspaceRoot, { recursive: true });
+  replaceOwnedFixtureRoot(fixtureRoot);
+  mkdirSync(mediaRoot, { recursive: true });
+  mkdirSync(projectRoot, { recursive: true });
 
-runFfmpeg([
-  '-f',
-  'lavfi',
-  '-i',
-  'sine=frequency=880:sample_rate=48000:duration=6',
-  '-c:a',
-  'pcm_s16le',
-  join(mediaRoot, 'audio.wav'),
-]);
+  writeJson(join(fixtureRoot, '.openneko-fixture.json'), {
+    schemaVersion: 1,
+    kind: 'openneko-vscode-media-runtime',
+    synthetic: true,
+    workspaceRoot: '${HOME}/Git/neko-test',
+    workspaceRelativeRoot: MEDIA_FIXTURE_RELATIVE_ROOT,
+  });
 
-writeJson(join(projectRoot, 'h264-pcm.otio'), createCutFixture());
-writeJson(join(projectRoot, 'canvas-media.nkc'), createCanvasFixture());
-writeFileSync(
-  join(fixtureRoot, 'README.md'),
-  [
-    '# OpenNeko VS Code media fixture',
-    '',
-    'This directory is generated, isolated, synthetic, and disposable.',
-    'It must not contain user workspace files or credentials.',
-    '',
-  ].join('\n'),
-  'utf8',
-);
+  runFfmpeg(ffmpegPath, [
+    '-f',
+    'lavfi',
+    '-i',
+    'testsrc2=size=640x360:rate=30:duration=6',
+    '-f',
+    'lavfi',
+    '-i',
+    'sine=frequency=440:sample_rate=48000:duration=6',
+    '-c:v',
+    'h264_videotoolbox',
+    '-allow_sw',
+    '0',
+    '-realtime',
+    '1',
+    '-b:v',
+    '2M',
+    '-pix_fmt',
+    'yuv420p',
+    '-c:a',
+    'aac',
+    '-b:a',
+    '128k',
+    '-movflags',
+    '+faststart',
+    '-shortest',
+    join(mediaRoot, 'h264-aac.mp4'),
+  ]);
 
-process.stdout.write(`${fixtureRoot}\n`);
+  runFfmpeg(ffmpegPath, [
+    '-f',
+    'lavfi',
+    '-i',
+    'sine=frequency=880:sample_rate=48000:duration=6',
+    '-c:a',
+    'pcm_s16le',
+    join(mediaRoot, 'audio.wav'),
+  ]);
+
+  writeJson(join(projectRoot, 'h264-pcm.otio'), createCutFixture());
+  writeJson(join(projectRoot, 'canvas-media.nkc'), createCanvasFixture());
+  writeFileSync(
+    join(fixtureRoot, 'README.md'),
+    [
+      '# OpenNeko VS Code media fixture',
+      '',
+      'This directory is generated, isolated, synthetic, and disposable.',
+      'It must not contain user workspace files or credentials.',
+      '',
+    ].join('\n'),
+    'utf8',
+  );
+
+  process.stdout.write(`${fixtureRoot}\n`);
+}
 
 function createCutFixture() {
   return {
@@ -181,7 +203,7 @@ function createClip(name, targetUrl, clipId) {
   };
 }
 
-function runFfmpeg(args) {
+function runFfmpeg(ffmpegPath, args) {
   const result = spawnSync(ffmpegPath, ['-hide_banner', '-loglevel', 'error', '-y', ...args], {
     encoding: 'utf8',
   });
@@ -201,8 +223,38 @@ function writeJson(filePath, value) {
 }
 
 function assertSafeFixtureRoot(candidate) {
-  const expectedParent = resolve(repositoryRoot, '.tmp', 'vscode-test-workspaces');
-  if (dirname(candidate) !== expectedParent || candidate === expectedParent) {
+  const expected = resolve(
+    homedir(),
+    MEDIA_TEST_WORKSPACE_RELATIVE_ROOT,
+    MEDIA_FIXTURE_RELATIVE_ROOT,
+  );
+  if (candidate !== expected) {
     throw new Error(`Refusing to replace unsafe fixture directory: ${candidate}`);
   }
+}
+
+function replaceOwnedFixtureRoot(candidate) {
+  if (!existsSync(candidate)) return;
+  const markerPath = join(candidate, '.openneko-fixture.json');
+  let marker;
+  try {
+    marker = JSON.parse(readFileSync(markerPath, 'utf8'));
+  } catch (error) {
+    throw new Error(`Refusing to replace unowned fixture directory: ${candidate}`, {
+      cause: error,
+    });
+  }
+  if (!isOwnedFixtureMarker(marker)) {
+    throw new Error(`Refusing to replace fixture with an invalid ownership marker: ${candidate}`);
+  }
+  rmSync(candidate, { recursive: true });
+}
+
+export function isOwnedFixtureMarker(marker) {
+  return (
+    marker?.schemaVersion === 1 &&
+    marker?.kind === 'openneko-vscode-media-runtime' &&
+    marker?.workspaceRoot === '${HOME}/Git/neko-test' &&
+    marker?.workspaceRelativeRoot === MEDIA_FIXTURE_RELATIVE_ROOT
+  );
 }

@@ -1,8 +1,10 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, rm, truncate, writeFile } from 'node:fs/promises';
+import { get } from 'node:http';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
-import { Readable } from 'node:stream';
-import { afterEach, describe, expect, it } from 'vitest';
+import { PassThrough, Readable } from 'node:stream';
+import type { ILogger } from '@neko/shared';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { NodeMediaLoopbackServer, createPcmPacketTransform } from './NodeMediaLoopbackServer';
 
 describe('NodeMediaLoopbackServer', () => {
@@ -33,6 +35,63 @@ describe('NodeMediaLoopbackServer', () => {
     expect(response.headers.get('content-range')).toBe('bytes 2-5/10');
     expect(response.headers.get('access-control-allow-private-network')).toBe('true');
     expect(await response.text()).toBe('2345');
+  });
+
+  it('does not report a browser-aborted Range response as a loopback failure', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'cut-media-server-'));
+    roots.push(root);
+    const filePath = path.join(root, 'segment.mp4');
+    await writeFile(filePath, Buffer.alloc(4 * 1024 * 1024));
+    const { logger, error } = createTestLogger();
+    const server = new NodeMediaLoopbackServer(logger);
+    servers.push(server);
+    const registration = await server.registerFile(filePath, 'video/mp4');
+
+    await new Promise<void>((resolve, reject) => {
+      const request = get(registration.url, { headers: { Range: 'bytes=0-' } }, (response) => {
+        response.destroy();
+        resolve();
+      });
+      request.once('error', reject);
+    });
+    await new Promise((resolve) => setTimeout(resolve, 25));
+
+    expect(error).not.toHaveBeenCalled();
+    const laterResponse = await fetch(registration.url, {
+      headers: { Range: 'bytes=2-5' },
+    });
+    expect(laterResponse.status).toBe(206);
+  });
+
+  it('aborts an open Range response when its file token is revoked', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'cut-media-server-'));
+    roots.push(root);
+    const filePath = path.join(root, 'segment.mp4');
+    await writeFile(filePath, '');
+    await truncate(filePath, 32 * 1024 * 1024);
+    const server = new NodeMediaLoopbackServer();
+    servers.push(server);
+    const registration = await server.registerFile(filePath, 'video/mp4');
+
+    await new Promise<void>((resolve, reject) => {
+      const request = get(registration.url, { headers: { Range: 'bytes=0-' } }, (response) => {
+        response.once('error', (error) => {
+          if ((error as NodeJS.ErrnoException).code !== 'ECONNRESET') reject(error);
+        });
+        response.once('close', () => {
+          try {
+            expect(response.complete).toBe(false);
+            resolve();
+          } catch (error) {
+            reject(error);
+          }
+        });
+        response.once('data', () => server.unregister(registration.token));
+      });
+      request.once('error', reject);
+    });
+
+    expect((await fetch(registration.url)).status).toBe(404);
   });
 
   it('frames PCM only after explicit priming and rejects a second consumer', async () => {
@@ -87,6 +146,49 @@ describe('NodeMediaLoopbackServer', () => {
     expect(streamCreated).toBe(false);
   });
 
+  it('cancels PCM ownership when the browser disconnects during a seek', async () => {
+    const { logger, error } = createTestLogger();
+    const server = new NodeMediaLoopbackServer(logger);
+    servers.push(server);
+    let processSignal: AbortSignal | undefined;
+    const stdout = new PassThrough();
+    let settleCompletion!: () => void;
+    const completion = new Promise<void>((resolve) => {
+      settleCompletion = resolve;
+    });
+    const terminate = vi.fn(() => {
+      stdout.end();
+      settleCompletion();
+    });
+    const registration = await server.registerPcm((signal) => {
+      processSignal = signal;
+      signal.addEventListener(
+        'abort',
+        () => {
+          stdout.end();
+          settleCompletion();
+        },
+        { once: true },
+      );
+      return { stdout, completion, terminate };
+    });
+    registration.prime();
+
+    await new Promise<void>((resolve, reject) => {
+      const request = get(registration.url, (response) => {
+        response.once('data', () => {
+          response.destroy();
+          resolve();
+        });
+        stdout.write(Buffer.alloc(64));
+      });
+      request.once('error', reject);
+    });
+    await vi.waitFor(() => expect(processSignal?.aborted).toBe(true));
+
+    expect(error).not.toHaveBeenCalled();
+  });
+
   it('revokes tokens and rejects unsafe or unknown routes', async () => {
     const root = await mkdtemp(path.join(tmpdir(), 'cut-media-server-'));
     roots.push(root);
@@ -102,3 +204,20 @@ describe('NodeMediaLoopbackServer', () => {
     expect((await fetch(`${registration.url}/../../secret`)).status).toBe(404);
   });
 });
+
+function createTestLogger(): {
+  readonly logger: ILogger;
+  readonly error: ReturnType<typeof vi.fn>;
+} {
+  const error = vi.fn<(message: string, errorOrData?: unknown) => void>();
+  const logger: ILogger = {
+    source: 'test',
+    debug: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+    error,
+    child: () => logger,
+    setLevel: vi.fn(),
+  };
+  return { logger, error };
+}
