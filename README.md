@@ -72,6 +72,7 @@ Formal releases are triggered by GitHub `v*` tags reachable from main. The tag i
 ## Documentation and Contributing
 
 - [Documentation index](./docs/README.md)
+- [Desktop development roadmap](./ROADMAP.md)
 - [Active product and feature changes](./openspec/changes/)
 - [Repository development rules](./AGENTS.md)
 

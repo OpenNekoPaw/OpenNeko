@@ -10,6 +10,7 @@
   },
   "exports": {
     ".": "./src/index.ts",
+    "./logger": "./src/logger/index.ts",
     "./path": "./src/path/index.ts",
     "./job-lifecycle": "./src/job-lifecycle/index.ts",
     "./local-metadata": "./src/local-metadata/index.ts",
@@ -36,6 +37,7 @@
     "./types/creative-ai-invocation": "./src/types/creative-ai-invocation.ts",
     "./types/npc-test-bench": "./src/types/npc-test-bench.ts",
     "./types/agent-autoheal": "./src/types/agent-autoheal.ts",
+    "./types/storage": "./src/types/storage.ts",
     "./vscode/extension/command-args": "./src/vscode/extension/command-args.ts",
     "./vscode/extension/local-resource-access": "./src/vscode/extension/local-resource-access.ts",
     "./vscode/extension/node-content-read-service": "./src/vscode/extension/node-content-read-service.ts",

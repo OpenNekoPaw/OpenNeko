@@ -8,6 +8,7 @@
     "./*": "./src/*"
   },
   "dependencies": {
+    "@neko/host": "workspace:*",
     "@neko/shared": "workspace:*"
   },
   "devDependencies": {

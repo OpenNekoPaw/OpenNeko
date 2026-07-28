@@ -27,6 +27,11 @@ overrides:
   vite-plugin-static-copy: 4.0.1
   vitest: 4.1.2
 
+packageExtensions:
+  '@electron-forge/plugin-fuses@7.11.2':
+    peerDependencies:
+      '@electron/fuses': ^1.0.0 || ^2.0.0
+
 ignoredBuiltDependencies:
   - esbuild
   - sharp

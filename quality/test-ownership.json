@@ -11,6 +11,13 @@
       "closingCondition": "Adopt shared Vitest coverage when the composition runtime gains tests that require the VS Code mock environment."
     },
     {
+      "path": "apps/neko-desktop",
+      "owner": "apps/neko-desktop",
+      "mode": "self",
+      "sourceScope": "src/**/*.{ts,tsx}",
+      "testScope": "src/**/*.test.{ts,tsx}"
+    },
+    {
       "path": "apps/neko-tui",
       "owner": "apps/neko-tui",
       "mode": "self",

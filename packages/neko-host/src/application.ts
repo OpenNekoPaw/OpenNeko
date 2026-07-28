@@ -2,7 +2,7 @@ import type { HostDiagnostic } from './ports';
 
 export const NEKO_APPLICATION_CONTRACT_VERSION = 1 as const;
 
-export const NEKO_APPLICATION_IDS = ['neko-home', 'neko-tui', 'neko-vscode'] as const;
+export const NEKO_APPLICATION_IDS = ['neko-desktop', 'neko-tui', 'neko-vscode'] as const;
 
 export type NekoApplicationId = (typeof NEKO_APPLICATION_IDS)[number];
 
@@ -222,7 +222,7 @@ function readOptionalIdentityFields(
 
 function requireApplicationId(value: unknown): NekoApplicationId {
   switch (value) {
-    case 'neko-home':
+    case 'neko-desktop':
     case 'neko-tui':
     case 'neko-vscode':
       return value;

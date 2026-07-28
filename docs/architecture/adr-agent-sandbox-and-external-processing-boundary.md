@@ -2,11 +2,18 @@
 
 状态：Accepted
 日期：2026-06-23
-范围：`neko-agent` 工具执行、文件访问、外部图片/视频处理器、用户脚本、Market/Skill 能力注入、Webview 资源投影。
+范围：`neko-agent` 工具执行、文件访问、外部图片/视频处理器、用户脚本、Market/Skill 能力注入、Webview 资源投影，以及拟议 Desktop 专业工具集成的相邻边界。
 
 本文记录 OpenNeko 对 Agent 沙箱、外部命令和用户处理器接口的稳定决策。它补充 [`agent.md`](agent.md)、[`cache-file-access-and-paths.md`](cache-file-access-and-paths.md)、[`webview-media-security.md`](webview-media-security.md) 与 [`marketplace.md`](marketplace.md)。
 
 > 2026-07-23：路径、资源、trust、approval、进程隔离和用户数据保护约束继续有效；五类来源、通用 package registry 和完整 processor extension framework 是否保留，改由 [`adr-agent-runtime-single-authority-and-simplification-boundary.md`](adr-agent-runtime-single-authority-and-simplification-boundary.md) 的真实消费者证明与迁移审计约束。缺少真实多来源消费者时，不得仅为 `developer-mode.one-shot-command` 维持完整通用框架；简化也不得静默删除已有 project/personal manifest。
+
+> 2026-07-27：长生命周期 GUI 专业应用、native document/session、直接打开与
+> MCP/Computer Use
+> automation 不属于 External Processor。它们由
+> [`adr-neko-desktop-professional-tool-handoff-and-mcp-boundary.md`](adr-neko-desktop-professional-tool-handoff-and-mcp-boundary.md)
+> 定义；只有固定 executable/argv、Host-owned output 的 headless 原子 operation
+> 继续进入本 ADR 的 processor runtime。
 
 ## 背景
 
@@ -273,6 +280,29 @@ P0/P1 必须提供基础 GC 策略，不能等待完整 workflow engine 后再�
 | Active protection | 当前 Agent turn、approval UI 或后续 processor input 正在引用的 locator 必须跳过 |
 | Ledger after GC   | 删除文件后 locator resolve 必须 fail-visible，不能继续返回成功路径              |
 
+### 3.1 专业 GUI 应用不进入 External Processor
+
+DaVinci Resolve、剪映/CapCut、Photoshop、Live2D Cubism、Blender、Unity 和
+ComfyUI UI 等长期交互应用拥有自己的 document/project/session、用户操作和保存语义，
+不能由一次 processor invocation、Host output directory 或 process exit 表达。
+
+Desktop 对这类工具使用 Professional Tool 的 launch、exchange 和 MCP/API/Computer
+Use automation facet。External Processor 只保留非交互、固定参数、可取消且输出由
+Host 分配的原子能力。
+同一产品可以同时提供两种明确能力，例如 Blender GUI 项目 handoff 与 Blender headless
+render；二者不能共享 active document、output ownership 或 lifecycle identity。
+
+Professional Tool handoff 只接收已由 owning domain 导出的 durable
+`ContentLocator`/bundle。需要把 processor candidate 交给专业应用时，必须先 promotion；
+专业应用返回的修改也必须经 owning domain validate/import/review，不能重新进入
+`ProcessorOutputLocator` 后静默覆盖长期事实。
+
+Computer Use 也不属于 processor runner。它复用 Agent Tool Call、permission、approval、
+取消和 transcript，只由 Desktop Host 对 handoff 绑定的明确应用/窗口执行受限观察与
+输入。它不得继承 processor 的任意 executable/path/env 权限，也不得把截图、焦点或
+输入已发送当作成功；详细 target binding、用户接管、隐私和 evidence 规则由专业工具
+ADR 定义。
+
 ### 4. 执行级沙箱分阶段引入
 
 Neko 不以完整 OS 沙箱作为第一阶段目标。当前优先级是完整资源/工具沙箱；执行级隔离按风险渐进：
@@ -322,10 +352,10 @@ Developer Mode 可以允许本地命令和更宽的 processor 调试能力，但
 | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `agent-types`                  | 定义 processor manifest v2、invocation/result locator、ownership、tool permission projection 与 diagnostic contract。                            |
 | `agent` runtime                | 做 tool orchestration、permission mode、approval request、processor capability injection；只传递 locator/ownership intent，保持 host-agnostic。  |
-| ExternalProcessorOutputStorage | Extension Host 内部分配/解析 processor output，并把 promotion 委托给 owning durable writer；不向 Agent 返回物理路径。                            |
-| Extension Host                 | 实现 PathAccessPolicy、processor output storage、processor execution adapter、durable writer binding、VS Code URI/FS 权限和 Webview projection。 |
+| ExternalProcessorOutputStorage | Host 内部分配/解析 processor output，并把 promotion 委托给 owning durable writer；不向 Agent 返回物理路径。                                      |
+| Host runtime                   | 当前 VS Code Extension、未来 Desktop 分别实现 PathAccessPolicy、processor execution、durable writer 与宿主资源 projection。                      |
 | Host derived maintenance       | 管理可回收 processor output/representation 的 ledger、quota 与 GC；不拥有 promoted durable source。                                              |
-| Engine                         | 处理内置高性能媒体、stream、Range、probe、transcode/export；不是任意 shell 代理。                                                                |
+| `@neko/media/node`             | 处理内置媒体 stream、Range、probe、transcode/export；不是任意 shell 代理。                                                                        |
 | Webview                        | 只展示 projected resource、approval UI、diagnostic；不构造本地路径，不直接访问 FS。                                                              |
 | Market/Skill                   | 声明 trust、permissions、allowed tools、processor requirements；不能靠 prompt 文案取得权限。                                                     |
 

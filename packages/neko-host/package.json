@@ -7,6 +7,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./application": "./src/application.ts",
+    "./ports": "./src/ports.ts",
+    "./projection-attachment": "./src/projection-attachment.ts",
     "./*": "./src/*"
   },
   "scripts": {

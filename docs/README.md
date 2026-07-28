@@ -7,6 +7,7 @@
 | 想了解                        | 先读                                                                       |
 | ----------------------------- | -------------------------------------------------------------------------- |
 | 项目定位和包分组              | [`../README_CN.md`](../README_CN.md)                                       |
+| Desktop 分期开发路线          | [`../ROADMAP_CN.md`](../ROADMAP_CN.md)                                     |
 | 系统分层和硬约束              | [`architecture/README.md`](architecture/README.md)                         |
 | 仓库工作规则                  | [`../AGENTS.md`](../AGENTS.md)                                             |
 | 子包边界、UI 层和公共代码规范 | [`architecture/package-boundaries.md`](architecture/package-boundaries.md) |

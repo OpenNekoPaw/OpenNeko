@@ -72,6 +72,7 @@ pnpm gate:local
 ## 文档与参与
 
 - [文档导航](./docs/README.md)
+- [Desktop 开发路线图](./ROADMAP_CN.md)
 - [进行中的产品与功能变更](./openspec/changes/)
 - [仓库开发规则](./AGENTS.md)
 

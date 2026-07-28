@@ -11,25 +11,29 @@ import {
   type NekoApplicationStorageMigrationEntry,
 } from '../application';
 
-const homeIdentity: NekoApplicationIdentity = {
+const desktopIdentity: NekoApplicationIdentity = {
   schemaVersion: NEKO_APPLICATION_CONTRACT_VERSION,
-  applicationId: 'neko-home',
-  instanceId: 'home-instance-1',
+  applicationId: 'neko-desktop',
+  instanceId: 'desktop-instance-1',
   version: '0.0.1',
 };
 
 describe('Neko application contracts', () => {
   it('parses known application identity and rejects unknown application identity', () => {
-    expect(parseNekoApplicationIdentity(homeIdentity)).toEqual(homeIdentity);
+    expect(parseNekoApplicationIdentity(desktopIdentity)).toEqual(desktopIdentity);
     expectContractError(
-      () => parseNekoApplicationIdentity({ ...homeIdentity, applicationId: 'neko-studio' }),
+      () => parseNekoApplicationIdentity({ ...desktopIdentity, applicationId: 'neko-studio' }),
+      'unknown-application-identity',
+    );
+    expectContractError(
+      () => parseNekoApplicationIdentity({ ...desktopIdentity, applicationId: 'neko-home' }),
       'unknown-application-identity',
     );
   });
 
   it('rejects unsupported schema versions', () => {
     expectContractError(
-      () => parseNekoApplicationIdentity({ ...homeIdentity, schemaVersion: 2 }),
+      () => parseNekoApplicationIdentity({ ...desktopIdentity, schemaVersion: 2 }),
       'unsupported-application-contract-version',
     );
   });
@@ -40,7 +44,7 @@ describe('Neko application contracts', () => {
         parseNekoApplicationHandoffRequest({
           schemaVersion: 1,
           requestId: 'handoff-1',
-          source: homeIdentity,
+          source: desktopIdentity,
           target: { toolId: 'neko-vscode' },
         }),
       'invalid-application-contract',
@@ -54,10 +58,10 @@ describe('Neko application contracts', () => {
           {
             schemaVersion: 1,
             requestId: 'handoff-1',
-            source: { ...homeIdentity, instanceId: 'stale-home' },
+            source: { ...desktopIdentity, instanceId: 'stale-desktop' },
             target: { toolId: 'neko-vscode', workspaceId: 'workspace-1' },
           },
-          { expectedSource: homeIdentity },
+          { expectedSource: desktopIdentity },
         ),
       'stale-application-instance',
     );
@@ -69,7 +73,7 @@ describe('Neko application contracts', () => {
         {
           schemaVersion: 1,
           requestId: 'handoff-1',
-          source: homeIdentity,
+          source: desktopIdentity,
           target: {
             toolId: 'neko-vscode',
             workspaceId: 'workspace-1',
@@ -80,7 +84,7 @@ describe('Neko application contracts', () => {
             editorId: 'neko.canvas',
           },
         },
-        { expectedSource: homeIdentity },
+        { expectedSource: desktopIdentity },
       ),
     ).toMatchObject({ requestId: 'handoff-1', target: { workspaceId: 'workspace-1' } });
   });
@@ -103,14 +107,14 @@ describe('Neko application contracts', () => {
         owner: `owner:${category}`,
         disposition: category === 'rebuildable-cache' ? 'rebuild' : 'reuse',
         sourceIdentity: `standalone-v0:${category}`,
-        targetIdentity: `home:${category}`,
+        targetIdentity: `desktop:${category}`,
       }),
     );
     expect(
       validateNekoApplicationStorageMigrationPlan({
         schemaVersion: 1,
         sourceApplicationId: 'standalone-v0',
-        targetApplicationId: 'neko-home',
+        targetApplicationId: 'neko-desktop',
         entries,
       }),
     ).toEqual([]);
@@ -118,7 +122,7 @@ describe('Neko application contracts', () => {
     const diagnostics = validateNekoApplicationStorageMigrationPlan({
       schemaVersion: 1,
       sourceApplicationId: 'standalone-v0',
-      targetApplicationId: 'neko-home',
+      targetApplicationId: 'neko-desktop',
       entries: entries.filter((entry) => entry.category !== 'credentials'),
     });
     expect(diagnostics).toEqual([
@@ -134,7 +138,7 @@ function validHandoff() {
   return parseNekoApplicationHandoffRequest({
     schemaVersion: 1,
     requestId: 'handoff-1',
-    source: homeIdentity,
+    source: desktopIdentity,
     target: { toolId: 'neko-vscode', workspaceId: 'workspace-1' },
   });
 }

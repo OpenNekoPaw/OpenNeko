@@ -88,12 +88,14 @@ const config: KnipConfig = {
         'src/local-metadata/node-workspace-identity.ts',
         'src/local-metadata/sqlite/index.ts',
         'src/local-metadata/testing/index.ts',
+        'src/logger/index.ts',
         'src/nkc/index.ts',
         'src/nkv/index.ts',
         'src/path/index.ts',
         'src/project-authoring/index.ts',
         'src/project-file-io/index.ts',
         'src/theme/index.ts',
+        'src/types/storage.ts',
         'src/vscode/index.ts',
         'src/vscode/extension/index.ts',
       ],
@@ -171,6 +173,17 @@ const config: KnipConfig = {
       entry: ['src/host-adapter/index.tsx', 'src/retained.ts'],
     },
     'packages/neko-agent/packages/extension': {},
+    'apps/neko-desktop': {
+      entry: [
+        'forge.config.ts',
+        'vite.main.config.ts',
+        'vite.preload.config.ts',
+        'vite.renderer.config.ts',
+        'src/main/index.ts',
+        'src/preload/index.ts',
+      ],
+      ignore: ['src/renderer/styles.css'],
+    },
     'apps/neko-tui': {
       // Knip's Bun plugin treats `bun test <file>` as a directory project root.
       // The dedicated Bun adapter suite is exercised by the application/CI script.

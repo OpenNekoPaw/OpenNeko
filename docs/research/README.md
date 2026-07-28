@@ -14,4 +14,4 @@
 
 | 文档 | 内容 |
 | --- | --- |
-| [`desktop-agent-client-architecture-reference-2026-07-22.md`](desktop-agent-client-architecture-reference-2026-07-22.md) | OpenCode、Zed、Craft Agents、Goose 的会话/Thread、Tab/Panel/Window、Agent backend 与 OpenNeko 可复用边界 |
+| [`desktop-agent-client-architecture-reference-2026-07-22.md`](desktop-agent-client-architecture-reference-2026-07-22.md) | OpenCode、Zed、Craft Agents、Goose、Kun、Cindy 的会话/Thread、Tab/Panel/Window、前端状态 authority、事件竞态、Agent backend、扩展、Computer Use 与 OpenNeko 可复用边界 |

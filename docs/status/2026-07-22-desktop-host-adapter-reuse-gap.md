@@ -6,6 +6,21 @@
 
 本文是代码审计快照，不是实施计划或长期架构事实。目标架构见 [`../architecture/adr-neko-desktop-composition-and-open-source-reference-boundary.md`](../architecture/adr-neko-desktop-composition-and-open-source-reference-boundary.md)。
 
+> 后续状态（2026-07-27）：本文的 Rust Engine、`EngineClient`、NKV、通用 Agent
+> Task/BackgroundWork 和全局 Activity 结论已经失效。当前媒体路径是
+> `@neko/media` + Node/FFmpeg + 浏览器媒体客户端；执行路径使用 Agent Run/Tool Call 与
+> owning-domain Job/Run，Home 只消费 Activity/Attention 摘要。请以更新后的
+> [Desktop composition ADR](../architecture/adr-neko-desktop-composition-and-open-source-reference-boundary.md)、
+> [Home/Profile UX ADR](../architecture/adr-neko-desktop-home-project-profile-ux-boundary.md)、
+> [media runtime](../architecture/media-runtime.md) 和
+> [Tool Call/Domain Job ADR](../architecture/adr-agent-tool-call-domain-job-lifecycle-boundary.md)
+> 为准。下文只保留 2026-07-22 当日耦合规模和迁移背景，不得作为恢复旧包或旧 runtime 的依据。
+>
+> Foundation 状态更新（2026-07-27）：`bootstrap-neko-desktop-foundation` 已新增
+> `apps/neko-desktop`、canonical `neko-desktop` identity、`ElectronNekoHostPorts`、
+> typed preload bridge、window registry 和安全 Electron package。下表的 application
+> identity 与通用 Electron Host 缺口已关闭；领域 adapter 缺口仍然有效。
+
 ## 结论
 
 当前代码与 Desktop 方向在契约和依赖分层上兼容，但尚未达到“增加一个 Electron bridge 即可运行全部 VS Code 子包”的程度：
@@ -22,8 +37,8 @@
 
 | 能力 | 当前证据 | 复用成熟度 | 缺口 |
 | --- | --- | --- | --- |
-| Application identity | `NEKO_APPLICATION_IDS` 仍只有 `neko-home`、`neko-tui`、`neko-vscode` | 阻塞 | 通过实施 OpenSpec 删除或 poison `neko-home`，新增唯一 `neko-desktop`；不得保留别名 fallback |
-| 通用 Host ports | `NekoHostKind` 已包含 `electron`；`NekoHostPorts` 已覆盖 environment、workspace、files、paths、policy、secrets、external、diagnostics | 契约可复用 | 尚无正式 `ElectronNekoHostPorts`；Node adapter 在 TUI application 内，需审计后把稳定 Node 基础能力提升到中立 owner |
+| Application identity | `NEKO_APPLICATION_IDS` 已收敛为 `neko-desktop`、`neko-tui`、`neko-vscode`；`neko-home` 只有拒绝测试和历史文档引用 | Foundation 已关闭 | 后续领域 operation 继续携带显式 application/window/project/runtime identity |
+| 通用 Host ports | `NekoHostKind` 包含 `electron`；`apps/neko-desktop` 已实现 environment、workspace、files、paths、policy、external、diagnostics | Foundation 已关闭 | secret、project catalog 和领域 runtime 按 owning change 接入；不把 Desktop/TUI 差异提前抽成错误通用层 |
 | Agent core/platform | Agent session、Pi、Skill、tool、task、memory 和 capability 位于 host-neutral 包，TUI 已有真实消费者 | 高 | Desktop 需要自己的 application composition、storage/secret/content ports 和生命周期 |
 | Agent Webview | `AgentHostKind` 已包含 `electron`；`AgentWebviewRoot` 接受 `hostRuntimeAdapter`；Webview 有边界测试阻止直接 VS Code transport 扩散 | 中高 | 只有 VS Code transport 和 Electron 测试替身；缺正式 Electron adapter、route classification 和 Host controller |
 | Agent Host router | Extension router 覆盖全部 VS Code Webview message | 中低 | router 仍依赖 `vscode.env`、`vscode.Webview`、Extension services；需拆为 host-neutral controller 与 VS Code effects，不得复制一份 Electron router |

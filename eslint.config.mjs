@@ -24,7 +24,12 @@ export default tseslint.config(
 
   // TypeScript files
   {
-    files: ['packages/**/src/**/*.ts', 'packages/**/src/**/*.tsx'],
+    files: [
+      'apps/**/src/**/*.ts',
+      'apps/**/src/**/*.tsx',
+      'packages/**/src/**/*.ts',
+      'packages/**/src/**/*.tsx',
+    ],
     extends: [...tseslint.configs.recommended],
     linterOptions: {
       reportUnusedDisableDirectives: 'off',
@@ -71,7 +76,12 @@ export default tseslint.config(
   //           detect-non-literal-fs-filename (194 false positives in Extension Host)
   {
     ...security.configs.recommended,
-    files: ['packages/**/src/**/*.ts', 'packages/**/src/**/*.tsx'],
+    files: [
+      'apps/**/src/**/*.ts',
+      'apps/**/src/**/*.tsx',
+      'packages/**/src/**/*.ts',
+      'packages/**/src/**/*.tsx',
+    ],
     rules: {
       ...security.configs.recommended.rules,
       'security/detect-object-injection': 'off',
@@ -85,7 +95,12 @@ export default tseslint.config(
 
   // React hooks rules — applied to both .tsx and hook .ts files
   {
-    files: ['packages/**/src/**/*.tsx', 'packages/**/src/**/use*.ts'],
+    files: [
+      'apps/**/src/**/*.tsx',
+      'apps/**/src/**/use*.ts',
+      'packages/**/src/**/*.tsx',
+      'packages/**/src/**/use*.ts',
+    ],
     plugins: {
       'react-hooks': reactHooks,
     },

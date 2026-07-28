@@ -6,6 +6,10 @@ const repoRoot = resolve(new URL('..', import.meta.url).pathname);
 
 const extensionBaselines = [
   {
+    owner: 'Desktop application',
+    path: 'apps/neko-desktop/tsconfig.json',
+  },
+  {
     owner: 'Agent extension',
     path: 'packages/neko-agent/packages/extension/tsconfig.json',
   },

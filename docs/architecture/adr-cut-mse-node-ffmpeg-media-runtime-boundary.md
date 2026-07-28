@@ -221,6 +221,13 @@ HDR proxy 必须明确转换 primaries、transfer、matrix、range、mastering d
 
 剪映、DaVinci Resolve、FCPXML、AAF 或其他工程格式属于独立交换 adapter。adapter 只映射 OTIO 能明确表达的语义，并对不支持的字段和媒体转换给出 diagnostic；它们不能改变 Cut 内部项目事实或让 FFmpeg 解释完整 OTIO。
 
+拟议 Desktop 的 “Open in DaVinci/剪映” 必须先冻结明确 OTIO revision，经目标版本
+验证过的交换 adapter 生成 durable bundle，再由 Professional Tool service 启动应用。
+Agent 的 timeline/project/import/render 操作通过现有 MCP Manager 和同一 application
+service 执行，必须绑定明确 external session/document；外部保存结果只可经显式
+round-trip 创建新的 Cut candidate/revision。完整边界见
+[`adr-neko-desktop-professional-tool-handoff-and-mcp-boundary.md`](adr-neko-desktop-professional-tool-handoff-and-mcp-boundary.md)。
+
 ### 10. Neko Engine 按职责迁移，不立即整体删除
 
 实施本 ADR 时，VS Code composition root 将现有 Cut Engine preview adapter 替换为唯一的 Host Node/FFmpeg adapter。替换必须按 OpenSpec：

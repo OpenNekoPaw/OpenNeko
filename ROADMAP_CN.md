@@ -1,0 +1,195 @@
+# OpenNeko Desktop 开发路线图
+
+状态：方向性路线，不承诺发布日期
+
+更新日期：2026-07-27
+
+本文只定义开发顺序、阶段边界和完成门禁。当前已发布/可运行事实仍以
+[`README_CN.md`](README_CN.md)、[`docs/architecture/client-targets.md`](docs/architecture/client-targets.md)
+和代码为准：仓库已建立 `apps/neko-desktop`，P1.1 foundation 与 P1.2 Shell/Project state
+已实现；Phase 1 领域接入仍在进行，因此 Desktop 尚不是受支持发布产品。Windows 仍不在
+当前发布闭集中，专业工具、插件和 Desktop MCP 集成也尚未实现。
+
+每个阶段必须拆成边界明确的 OpenSpec change，不允许用一个长期巨型 change 同时开发 Shell、
+跨平台、插件和全部专业工具。
+
+## 总体顺序
+
+```text
+阶段 1：Desktop 前端与子包接入
+  -> 稳定 Shell、状态协议和真实内容创作纵向路径
+
+阶段 2：跨平台资格验证
+  -> macOS / Linux / Windows 的真实安装、媒体、GPU、文件与发布证据
+
+阶段 3：MCP、插件与专业工具生态
+  -> ComfyUI / NLE / Blender / Unity / Photoshop / Live2D 等受控集成
+```
+
+后续阶段可以提前做只读调研和 spike，但不得绕过前一阶段的公共契约和验收门禁进入产品路径。
+
+## 阶段 1：前端界面与现有子包功能接入
+
+开发提案与实施切片：
+[`plan-neko-desktop-phase-1-delivery`](openspec/changes/plan-neko-desktop-phase-1-delivery/)。
+
+### 目标
+
+建立新的 `apps/neko-desktop`，完成 Home、Project Tabs、Content Project 和 Context Dock，
+并把现有保留子包通过公共入口和 host-neutral adapter 接入。第一阶段交付的是可完成真实创作
+流程的 Desktop，不是静态原型或由 mock/no-op 支撑的页面集合。
+
+当前进度：P1.1 与 P1.2 已完成实现和 `darwin-arm64` packaged runtime 验证；下一切片是
+P1.3 Agent 与 Home 纵向路径。P1.3-P1.7 完成前，不声明 Phase 1 完成。
+
+### 范围
+
+| 能力 | 第一阶段接入要求 |
+| --- | --- |
+| Desktop Shell | Electron main/preload/renderer、AppHost、typed IPC、安全自定义协议、窗口/菜单/文件选择、Home、Project Tabs、Context Dock、Activity/Attention |
+| 前端状态 | Host authoritative snapshot、按 owner 的 Renderer replica、Window/View store、snapshot-first attachment、sequence/revision/CAS、迟到响应拒绝 |
+| Agent | 复用 Pi、AgentSession、Conversation projection、Tool Call、Approval、Skill 与现有 `AgentHostRuntimeAdapter`；不建立第二套 Agent runtime |
+| Assets / Content / Media Library | 复用 `ContentLocator`、workspace-linked library、缩略图/metadata 和受控文件授权；不复制 catalog |
+| Canvas | 接入完整 Canvas Root、`.nkc` 事实、节点/素材/候选操作和 Agent capability；不使用简化占位 surface |
+| Cut | 接入完整 Cut Root、OTIO、预览、音频、代理和 ExportJob；不恢复 Engine/client |
+| Preview / Media | 接入文档、图片、音视频和标准 3D 只读预览，使用 `@neko/media`、Node/FFmpeg 和安全 Range/PCM transport |
+| Generation / Quality | 接入 GenerationJob、candidate/review、质量检查和明确失败诊断 |
+| Chara / Entity | 只接入已经实现的角色对话、表现、证据和 representation binding；未实现的 CharacterProject/Version 明确标为 unavailable |
+| Tools / Diagnostics | 接入日志、诊断、能力状态和可恢复错误，不增加运行时控制台式产品表面 |
+| Interactive World | 在 `neko-world` canonical owner、project/run/save contract 实现前保持 unavailable；不得用 Canvas/Preview 空壳冒充 |
+
+### 建议实施切片
+
+1. Desktop bootstrap、application id、Electron 安全基线和 Host ports。
+2. Shell、Project/Window/View identity、前端 projection attachment 与持久 Window state。
+3. Agent + Home Conversation/Activity 首条纵向路径。
+4. Media Library + Canvas 首条创作与 candidate 路径。
+5. Cut + Preview + Generation/Quality 的预览、生成、导出闭环。
+6. Chara/Entity 当前能力和 Tools/Diagnostics 接入。
+7. Content Project 端到端验收、资源释放、崩溃恢复与可访问性收口。
+
+每个切片使用独立或边界清晰的一组 OpenSpec；子包接入必须先完成公共 UI/host adapter
+复用审计，不能在 Desktop 复制 package-local store、文件 IO、媒体 client 或 DTO。
+
+### 完成门禁
+
+- `apps/neko-desktop` 通过 main/preload/renderer build、typecheck、package 和安全测试。
+- Home → Content Project → Agent/Media Library/Canvas/Cut/Preview → Generation/Export 至少
+  有一条使用真实 workspace 和真实 owning service 的完整路径。
+- Project Tab、Conversation、Run、Tool Call、Job、Window 和 View identity 不混用；快速
+  切换/关闭、跨窗口订阅、自动保存、renderer reload 和 StrictMode 不产生重复执行或错写。
+- 缺失 Character/World 能力返回 unavailable diagnostic，不创建空项目或 no-op success。
+- Desktop 不导入 VS Code Extension 私有实现，不恢复旧 Desktop、Workbench、Engine 或 client。
+- 第一阶段只在实施 OpenSpec 指定的参考平台做产品验收，不因此声明完整跨平台支持。
+
+## 阶段 2：跨平台能力与发布资格
+
+### 目标
+
+在不分叉领域逻辑和 Renderer 的前提下，让同一个 Desktop 应用通过 macOS、Linux 和 Windows
+的真实平台资格验证。Electron 能启动、交叉编译成功或单元测试通过都不等于平台支持。
+
+### 平台顺序
+
+| 目标 | 计划 | 资格边界 |
+| --- | --- | --- |
+| `darwin-arm64` | 第一参考平台 | 签名、公证、更新、Keychain、GPU/媒体、文件关联和真实创作流程 |
+| `linux-x64` | 第二资格平台 | 明确 glibc/发行版范围、包格式、桌面集成、FFmpeg/字体/音频/GPU 和真实创作流程 |
+| `win32-x64` | 第三资格平台 | 通过独立 platform-contract OpenSpec 恢复；验证安装/卸载、签名、更新、路径、长路径、进程、凭据、GPU/媒体和真实创作流程 |
+
+当前仓库支持闭集仍是 `darwin-arm64` 与 `linux-x64`，Windows 仍为 deferred。只有 Windows
+OpenSpec、真实 Windows runner/host 证据和发布契约全部通过后，才能修改该闭集；不得直接
+恢复旧 Windows loader、artifact 或 fallback。
+
+### 横切能力
+
+- Electron/Node/native module 与 FFmpeg 打包；
+- code signing、notarization、installer、update、deep link 和 file association；
+- 路径、权限、secret storage、进程发现/启动、窗口标识和系统通知；
+- Chromium/GPU、direct/MSE/PCM、Range、SDR baseline 与平台 capability snapshot；
+- 10-bit/HDR、codec、显示器和色彩链的真实设备证据；
+- 菜单、快捷键、输入法、字体、DPI、多屏、可访问性和崩溃恢复；
+- 每个平台独立的日志、诊断、fixture 和发布 artifact 验证。
+
+### 完成门禁
+
+- 每个平台在真实 runner 或真实设备上完成安装、首次启动、升级和卸载验证。
+- 同一隔离 fixture 通过 Shell、Agent、Canvas、Cut、Preview、媒体和导出 E2E。
+- 平台差异只存在于窄 Host adapter/capability policy；领域包和项目格式不出现 OS 分叉。
+- unsupported OS/architecture/version fail-visible，不尝试其他平台 artifact 或静默降级。
+- 每个发布 artifact 有平台身份、依赖闭包、签名和校验信息。
+
+## 阶段 3：MCP、插件和专业工具生态
+
+### 目标
+
+在稳定 Desktop Host、状态协议和跨平台基线上，建立受控扩展与专业工具集成。内置子包继续
+承担 AI 原生轻量创作；高级剪辑、调色、分层图像、Live2D、3D、游戏工程和复杂节点工作流
+交给外部专业软件。
+
+### 3.1 MCP 与贡献契约
+
+- 复用现有唯一 MCP Manager、Agent Tool Call、Approval、Skill 和 capability catalog。
+- MCP server/project 配置经过 schema、workspace trust、规范化 digest、权限和生命周期校验。
+- UI “Open in…” 与 Agent automation 复用同一 Professional Tool application service。
+- MCP/API 优先；Computer Use 是明确选择的补充 transport，不允许静默 fallback。
+
+### 3.2 插件运行与 UI
+
+- 版本化 manifest、兼容范围、来源、签名/校验、安装、启用、更新、卸载和诊断。
+- Node 扩展运行在独立、受控进程；插件面板运行在 sandbox/Webview 和专属 partition。
+- 插件只通过 capability/contribution slot 提交 intent，不获取 Shell store、任意 IPC、
+  runtime token、绝对路径或领域私有对象。
+- 权限撤销、卸载或崩溃会推进 capability/attachment epoch，并拒绝迟到消息。
+- 第一版槽位限于 Tool/Capability、conversation inline result、Context Dock facet、
+  editor surface 和管理页 projection；不得任意增加顶层导航或修改 Shell DOM。
+
+### 3.3 专业工具接入
+
+每个适配器按实际能力声明支持等级：
+
+```text
+L1 Discover / Launch
+L2 Export and Open
+L3 MCP or stable vendor API automation
+L4 Explicit Computer Use for remaining visible UI
+L5 Round-trip import / relink / review with evidence
+```
+
+计划按以下切片交付：
+
+| 切片 | 工具 | 最小目标 |
+| --- | --- | --- |
+| 3A | ComfyUI | 发现本地服务、受控 workflow/input、API/MCP 执行、进度、输出归档和显式导入 |
+| 3B | DaVinci Resolve 与一个剪映/CapCut 目标 | 从 Cut frozen revision 导出稳定交换包、启动/打开、可验证自动化和 round-trip review |
+| 3C | Blender | 受控工程/素材交换、稳定 API/MCP/脚本入口、明确 scene/document identity 和产物回收 |
+| 3D | Unity | 受控 project/package handoff、Editor/CLI/MCP 操作、明确 project/scene identity 和构建/导出证据 |
+| 3E | Photoshop、Live2D Cubism 等 | 按各自公开稳定接口和交换格式增加 adapter，不通过私有格式猜测或像素坐标宏伪造支持 |
+
+精确交换格式、支持版本、平台矩阵和自动化接口由每个工具的实施 OpenSpec 决定。一个工具
+在某个平台只有 L1/L2 时必须如实展示，不能因为另一个平台达到 L3/L5 就宣称全平台完整支持。
+
+### Computer Use 门禁
+
+- 绑定 Tool Call、应用、进程、窗口、文档、target epoch 和 observation revision。
+- 高风险动作进入现有 Approval；Pause、Stop、Take over 必须可见且即时生效。
+- 用户接管、焦点/文档变化或应用重启会使旧动作失效。
+- 结果优先使用 API/MCP、产物或语义 UI 证据；截图和鼠标位置不能单独证明完成。
+- 不记录无关窗口、凭据或跨应用观察，不允许任意全桌面坐标宏。
+
+### 完成门禁
+
+- MCP、插件和专业工具不创建第二套 Agent、Task、MCP Manager 或项目事实源。
+- 插件安装/卸载/权限/崩溃和旧消息有隔离、恢复和安全测试。
+- ComfyUI、一个 NLE、Blender 和 Unity 各完成至少一条真实纵向集成；剪映/CapCut、
+  Photoshop、Live2D 按上述切片完成各自声明的 capability level。
+- 每个适配器在真实软件版本和真实目标平台验证 discover、launch、交换、自动化、失败诊断
+  与适用的 round-trip；未安装、版本不兼容和 outcome unknown 均 fail-visible。
+
+## 不进入三阶段默认范围
+
+- 云端多租户控制面、团队同步和远程执行平台；
+- 复制 DaVinci、Photoshop、Blender、Unity 或 ComfyUI 的完整内置专业能力；
+- Code OSS Workbench、任意 DOM 插件或第二套 Extension Host；
+- 未经独立领域设计的空壳 Interactive World；
+- 仅依据 mock、截图、交叉编译或开发机偶然成功作出的支持声明。

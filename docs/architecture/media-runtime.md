@@ -28,6 +28,25 @@ domain controller
   -> Webview <video> / MSE / Web Audio
 ```
 
+上述 transport 是当前 VS Code 实现，不是所有宿主的固定协议。拟议 Desktop
+继续复用相同 probe、plan、PCM 和质量契约，但目标 transport 是 Electron secure
+streaming custom protocol：
+
+```text
+Desktop domain controller
+  -> domain media port
+  -> @neko/media/node
+  -> ffprobe / FFmpeg
+  -> explicit direct / MSE / SDR proxy plan
+  -> opaque custom-protocol Range / PCM
+  -> Electron renderer <video> / MSE / Web Audio
+```
+
+Desktop custom protocol 只替换授权 transport，不创建第二套媒体策略。它仍需支持
+GET/HEAD、206、closed Range、token/owner/session、取消、背压和资源释放，不得暴露
+绝对路径或使用 `file://`。完整边界见
+[`adr-neko-desktop-media-capability-and-security-boundary.md`](adr-neko-desktop-media-capability-and-security-boundary.md)。
+
 ## 格式与质量策略
 
 - H.264 8-bit SDR MP4：`<video>` + HTTP Range 直接播放。
@@ -36,6 +55,9 @@ domain controller
 - 其他容器或 codec：显式 remux 或转码为声明的 H.264 SDR preview profile。
 - 10-bit、HDR10/PQ、HLG、HEVC、AV1、VP9：probe、截帧和 PCM 可由 FFmpeg
   解码；用于 8-bit H.264 预览时必须显式 tone-map，不能伪装成原生 HDR 监看。
+- 拟议 Desktop 也不因 Electron 而自动扩大 direct profile。只有精确 release target
+  的真实 fixture 和输出链资格验证通过后，才能增加 direct codec 或
+  `hdr-qualified-preview`；否则继续使用 SDR proxy。
 - HDR-to-SDR profile 必须先验证 `zscale` 与 `tonemap`。缺少过滤器时返回
   `MediaRuntimeUnavailableError`，不得回退旧 Engine 或使用错误色彩转换。
 - AAC、MP3、FLAC、PCM 以及 FFmpeg 构建可解码的多声道音轨统一解码为
@@ -83,6 +105,8 @@ ffprobe，并单独审计 codec license。`NEKO_FFMPEG_PATH` 和
 - Loopback 只监听 `127.0.0.1`，URL 使用不可预测 session token，不暴露路径。
 - 文件响应支持标准 byte Range；PCM 每个 token 只允许一个消费者。
 - Webview CSP 仅为媒体/文档 entry 开放 loopback，其他 entry 保持关闭。
+- Desktop renderer 保持 sandbox、context isolation、`webSecurity` 与严格 CSP；
+  custom scheme 不启用 `bypassCSP`，只向已授权 `neko-media:` 和 MSE `blob:` 开放。
 - stop、seek、替换或 Extension dispose 必须终止子进程、撤销 token、结束 HTTP
   响应并删除 session 临时文件。未知 session 必须 fail-visible。
 
@@ -93,3 +117,6 @@ ffprobe，并单独审计 codec license。`NEKO_FFMPEG_PATH` 和
 - `pnpm validate:media-matrix .tmp/vscode-test-workspaces/media-runtime/media`
 - 真实 Extension Development Host + 隔离 fixture workspace，验证 Range、
   `<video>`、PCM、seek、Cut 和 CSP；普通浏览器不能替代。
+- 拟议 Desktop 必须在打包 Electron runtime 与每个声明支持的平台独立验证 custom
+  protocol、Range、direct/MSE/PCM、CSP 和生命周期；HDR/10-bit 需要真实显示链
+  证据，不能由播放状态或 screenshot 推断。

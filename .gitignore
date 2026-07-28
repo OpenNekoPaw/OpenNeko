@@ -30,6 +30,7 @@ node_modules/
 dist/
 out/
 build/
+.vite/
 *.vsix
 vsix-artifacts/
 /neko
