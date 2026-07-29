@@ -122,7 +122,7 @@ export interface WorkbenchWebviewRuntimeFrameProps {
 }
 
 export type ControlledWorkbenchDockPresentation = 'hidden' | 'docked' | 'overlay';
-export type ControlledWorkbenchMainSplit = 'none' | 'horizontal' | 'vertical';
+export type ControlledWorkbenchMainSplit = 'none' | 'columns' | 'rows';
 
 export interface ControlledWorkbenchResizeBinding {
   readonly label: string;
@@ -140,6 +140,8 @@ export interface ControlledWorkbenchShellProps {
   readonly main: ReactNode;
   readonly secondaryMain?: ReactNode;
   readonly mainSplit?: ControlledWorkbenchMainSplit;
+  readonly mainSplitRatio?: number;
+  readonly mainSplitResize?: ControlledWorkbenchResizeBinding;
   readonly leftDock?: ReactNode;
   readonly leftDockPresentation?: ControlledWorkbenchDockPresentation;
   readonly leftDockWidth?: number;
@@ -206,6 +208,8 @@ export function ControlledWorkbenchShell({
   leftDockWidth = 320,
   main,
   mainSplit = 'none',
+  mainSplitRatio = 0.5,
+  mainSplitResize,
   primarySidebar,
   primarySidebarResize,
   primarySidebarVisible = true,
@@ -250,16 +254,25 @@ export function ControlledWorkbenchShell({
     enabled: Boolean(timeline && timelineVisible),
     size: timelineHeight,
   });
+  const mainSplitResizeState = useControlledWorkbenchResize({
+    binding: mainSplitResize,
+    edge: effectiveSplit === 'rows' ? 'top' : 'left',
+    enabled: effectiveSplit !== 'none',
+    mode: 'ratio',
+    size: mainSplitRatio,
+  });
   const shellStyle: React.CSSProperties & {
     '--neko-controlled-primary-width': string;
     '--neko-controlled-left-dock-width': string;
     '--neko-controlled-right-dock-width': string;
     '--neko-controlled-timeline-height': string;
+    '--neko-controlled-main-split-ratio': string;
   } = {
     '--neko-controlled-primary-width': `${primaryResize.size}px`,
     '--neko-controlled-left-dock-width': `${leftResize.size}px`,
     '--neko-controlled-right-dock-width': `${rightResize.size}px`,
     '--neko-controlled-timeline-height': `${timelineResizeState.size}px`,
+    '--neko-controlled-main-split-ratio': `${mainSplitResizeState.size * 100}%`,
   };
 
   return (
@@ -311,10 +324,25 @@ export function ControlledWorkbenchShell({
           ) : null}
         </aside>
       ) : null}
-      <div className="neko-controlled-workbench-main">
+      <div
+        ref={(element) => {
+          mainSplitResizeState.containerRef.current = element;
+        }}
+        className="neko-controlled-workbench-main"
+        data-resizing={mainSplitResizeState.isResizing ? 'true' : 'false'}
+      >
         <div className="neko-controlled-workbench-main__primary">{main}</div>
         {secondaryMain ? (
-          <div className="neko-controlled-workbench-main__secondary">{secondaryMain}</div>
+          <>
+            <div className="neko-controlled-workbench-main__secondary">{secondaryMain}</div>
+            {mainSplitResize && effectiveSplit !== 'none' ? (
+              <ResizeHandle
+                className={`neko-controlled-workbench-main-split-handle neko-controlled-workbench-main-split-handle--${effectiveSplit}`}
+                handleProps={mainSplitResizeState.handleProps}
+                label={mainSplitResize.label}
+              />
+            ) : null}
+          </>
         ) : null}
       </div>
       {rightDock ? (
@@ -363,11 +391,13 @@ function useControlledWorkbenchResize({
   binding,
   edge,
   enabled,
+  mode = 'pixel',
   size,
 }: {
   readonly binding?: ControlledWorkbenchResizeBinding;
-  readonly edge: 'left' | 'right' | 'bottom';
+  readonly edge: 'left' | 'right' | 'top' | 'bottom';
   readonly enabled: boolean;
+  readonly mode?: 'pixel' | 'ratio';
   readonly size: number;
 }) {
   const [liveSize, setLiveSize] = useState(size);
@@ -378,7 +408,7 @@ function useControlledWorkbenchResize({
 
   return useResizable<HTMLElement>({
     edge,
-    mode: 'pixel',
+    mode,
     size: liveSize,
     minSize: binding?.minSize,
     maxSize: binding?.maxSize,

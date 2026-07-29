@@ -172,6 +172,12 @@ export const zhCN = {
   'workspace.resizeLeftDock': '调整左侧栏宽度',
   'workspace.resizeRightDock': '调整右侧栏宽度',
   'workspace.resizeTimeline': '调整时间线高度',
+  'workspace.resizeMainSplit': '调整主面板分栏',
+  'workspace.mainTabs.label': '已打开的创作文档',
+  'workspace.mainTabs.empty': '没有打开的创作文档',
+  'workspace.mainTabs.close': '关闭 {name}',
+  'workspace.mainTabs.splitRight': '将当前标签移至右侧分栏',
+  'workspace.mainTabs.splitDown': '将当前标签移至下方分栏',
   'workspace.primaryNavigation': '项目导航',
   'workspace.creativeMain': '创作主面板',
   'workspace.creativeMainDetail':

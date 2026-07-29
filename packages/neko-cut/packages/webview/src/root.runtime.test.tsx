@@ -68,6 +68,38 @@ describe('CutWebviewRoot runtime projection', () => {
     expect(timelineTarget.querySelector('[aria-label="Video 1"]')).not.toBeNull();
     expect(timelineTarget.querySelector('[aria-label="Subtitle 1"]')).not.toBeNull();
   });
+
+  it('renders the package-owned Timeline without duplicating the editor surface', async () => {
+    const listeners = new Set<(message: unknown) => void>();
+    const bridge: CutWebviewHostBridge = {
+      postIntent: (intent) => {
+        if (intent.type !== 'cut:ready') return;
+        queueMicrotask(() => {
+          for (const listener of listeners) {
+            listener({
+              type: 'cut:runtime-snapshot',
+              view: createFourTrackView(),
+              dirty: false,
+              presentation: DEFAULT_CUT_HOST_PRESENTATION,
+            });
+          }
+        });
+      },
+      subscribe: (listener) => {
+        listeners.add(listener);
+        return () => listeners.delete(listener);
+      },
+    };
+
+    await act(async () => {
+      root.render(<CutWebviewRoot bridge={bridge} locale="zh-cn" presentation="timeline-only" />);
+      await Promise.resolve();
+    });
+
+    expect(container.querySelector('[data-cut-presentation="timeline-only"]')).not.toBeNull();
+    expect(container.querySelector('.cut-basic-timeline-region--host')).not.toBeNull();
+    expect(container.querySelector('.cut-basic-preview')).toBeNull();
+  });
 });
 
 function createFourTrackView(): TimelineView {

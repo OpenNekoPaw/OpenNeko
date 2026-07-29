@@ -1,10 +1,7 @@
 import { lazy, Suspense, useMemo } from 'react';
 import { useTranslation } from '@neko/shared/i18n/react';
 import { createCutHostRuntimeWebviewBridge } from '@neko/webview/runtime-bridge';
-import type {
-  DesktopProjectCatalogItem,
-  DesktopShellProjection,
-} from '../shared/shell-contract';
+import type { DesktopProjectCatalogItem, DesktopShellProjection } from '../shared/shell-contract';
 import type { DesktopWorkbenchViewRef } from '../shared/workbench-contract';
 import { createDesktopCutSessionId } from '../shared/cut-bridge-contract';
 import { createElectronCutHostRuntime } from './desktop-cut-host-runtime';
@@ -15,11 +12,13 @@ const CutWebviewRoot = lazy(async () => {
 });
 
 export function DesktopCutSurface({
+  presentation = 'editor',
   project,
   projection,
   timelineTarget,
   view,
 }: {
+  readonly presentation?: 'editor' | 'timeline-only';
   readonly project: DesktopProjectCatalogItem;
   readonly projection: DesktopShellProjection;
   readonly timelineTarget?: Element;
@@ -64,6 +63,7 @@ export function DesktopCutSurface({
       <CutWebviewRoot
         bridge={bridge}
         locale={locale}
+        presentation={presentation}
         timelineTarget={timelineTarget}
       />
     </Suspense>

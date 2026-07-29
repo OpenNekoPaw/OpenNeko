@@ -23,6 +23,9 @@ import {
 } from '../shared/shell-contract';
 import {
   createDefaultDesktopWorkbenchLayout,
+  getActiveMainView,
+  openOrFocusMainView,
+  setWorkbenchDisplayMode,
   type DesktopWorkbenchLayoutProjection,
 } from '../shared/workbench-contract';
 
@@ -33,7 +36,7 @@ afterEach(async () => {
 });
 
 describe('DesktopCutRuntime', () => {
-  it('focuses one existing Cut View when the same OTIO document is opened again', async () => {
+  it('keeps Chat + Canvas active while binding the lower Timeline to one Cut document', async () => {
     const workspacePath = await realpath(await mkdtemp(path.join(tmpdir(), 'openneko-cut-focus-')));
     roots.push(workspacePath);
     const documentId = 'cuts/story.otio';
@@ -65,7 +68,17 @@ describe('DesktopCutRuntime', () => {
       displayName: 'Fixture',
       locator: { kind: 'relative' as const, value: '.' },
     };
-    let workbench = createDefaultDesktopWorkbenchLayout('window-1');
+    let workbench = openOrFocusMainView(createDefaultDesktopWorkbenchLayout('window-1'), {
+      viewId: 'canvas:project-view-1:board',
+      viewEpoch: 1,
+      projectId: 'project-1',
+      workspaceId: 'workspace-1',
+      kind: 'canvas',
+      ownerId: 'canvas:project-view-1',
+      displayLabel: 'board.nkc',
+      documentId: 'boards/board.nkc',
+    });
+    workbench = setWorkbenchDisplayMode(workbench, 'chat-main');
     const project = {
       projectId: 'project-1',
       workspaceId: 'workspace-1',
@@ -145,13 +158,19 @@ describe('DesktopCutRuntime', () => {
     };
 
     await runtime.open({ identity, item, absolutePath: documentPath });
-    const firstViewId = workbench.main.activeViewId;
+    const firstViewId = workbench.main.views.find(
+      (view) => view.kind === 'cut' && view.documentId === documentId,
+    )?.viewId;
     await runtime.open({ identity, item, absolutePath: documentPath });
 
     expect(firstViewId).toMatch(/^cut:project-view-1:/u);
-    expect(workbench.main.activeViewId).toBe(firstViewId);
-    expect(workbench.main.views).toHaveLength(1);
-    expect(workbench.timeline.visible).toBe(true);
+    expect(getActiveMainView(workbench)?.kind).toBe('canvas');
+    expect(workbench.display.mode).toBe('chat-main');
+    expect(workbench.main.views).toHaveLength(2);
+    expect(workbench.timeline).toMatchObject({
+      presentation: 'docked',
+      ownerViewId: firstViewId,
+    });
 
     const secondDocumentId = 'cuts/alternate.otio';
     const secondDocumentPath = path.join(workspacePath, secondDocumentId);
@@ -178,12 +197,17 @@ describe('DesktopCutRuntime', () => {
       item: secondItem,
       absolutePath: secondDocumentPath,
     });
-    const secondViewId = workbench.main.activeViewId;
+    const secondViewId = workbench.main.views.find(
+      (view) => view.kind === 'cut' && view.documentId === secondDocumentId,
+    )?.viewId;
     expect(secondViewId).not.toBe(firstViewId);
     expect(workbench.main.views.filter((view) => view.kind === 'cut')).toHaveLength(2);
+    expect(getActiveMainView(workbench)?.kind).toBe('canvas');
+    expect(workbench.timeline.ownerViewId).toBe(secondViewId);
 
     await runtime.open({ identity, item, absolutePath: documentPath });
-    expect(workbench.main.activeViewId).toBe(firstViewId);
+    expect(getActiveMainView(workbench)?.kind).toBe('canvas');
+    expect(workbench.timeline.ownerViewId).toBe(firstViewId);
     expect(workbench.main.views.filter((view) => view.kind === 'cut')).toHaveLength(2);
     await runtime.dispose();
   });

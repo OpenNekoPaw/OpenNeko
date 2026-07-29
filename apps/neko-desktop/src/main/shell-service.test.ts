@@ -8,6 +8,7 @@ import {
   DesktopShellStateRepository,
   type DesktopShellStateFilePort,
 } from './shell-state-repository';
+import { DESKTOP_PRIMARY_MAIN_GROUP_ID } from '../shared/workbench-contract';
 
 describe('DesktopShellService', () => {
   it('starts at Home by default without deleting restored project tabs', async () => {
@@ -50,19 +51,14 @@ describe('DesktopShellService', () => {
       status: 'ready',
       ownerSlice: 'P1.3',
     });
-    expect(
-      projection.domains.find((domain) => domain.surface === 'media-library'),
-    ).toEqual({
+    expect(projection.domains.find((domain) => domain.surface === 'media-library')).toEqual({
       surface: 'media-library',
       status: 'ready',
       ownerSlice: 'P1.4',
     });
     expect(
       projection.domains
-        .filter(
-          (domain) =>
-            domain.surface !== 'agent' && domain.surface !== 'media-library',
-        )
+        .filter((domain) => domain.surface !== 'agent' && domain.surface !== 'media-library')
         .every((domain) => domain.status === 'unavailable'),
     ).toBe(true);
     expect(() => fixture.service.setAgentCapabilityReady(false)).toThrow(
@@ -182,6 +178,83 @@ describe('DesktopShellService', () => {
     expect(fixture.registry.resolve).toHaveBeenCalledTimes(2);
   });
 
+  it('removes the Project-owned Workbench Views while Home is active', async () => {
+    const file = createMemoryFile();
+    const first = createFixture(file);
+    const windowId = await first.service.claimWindowId();
+    first.service.setRendererEpoch(windowId, 1);
+    const initial = await first.service.getProjection(windowId);
+    const opened = await first.service.openContent(
+      windowId,
+      '/workspace/demo',
+      initial.endpointEpoch,
+      initial.window.revision,
+    );
+    const project = opened.projection.catalog.projects[0]!;
+    const tab = opened.projection.window.tabs[0]!;
+    const current = opened.projection.window.workbench;
+    const withCanvas = await first.service.updateWorkbench(
+      windowId,
+      opened.projection.endpointEpoch,
+      opened.projection.window.revision,
+      current.revision,
+      {
+        ...current,
+        revision: current.revision + 1,
+        main: {
+          views: [
+            {
+              viewId: 'canvas:view-1:main',
+              viewEpoch: tab.viewEpoch,
+              projectId: project.projectId,
+              workspaceId: project.workspaceId,
+              kind: 'canvas',
+              ownerId: 'canvas:project-1',
+              displayLabel: 'main.nkc',
+              documentId: 'boards/main.nkc',
+            },
+          ],
+          groups: [
+            {
+              groupId: DESKTOP_PRIMARY_MAIN_GROUP_ID,
+              viewIds: ['canvas:view-1:main'],
+              activeViewId: 'canvas:view-1:main',
+            },
+          ],
+          activeGroupId: DESKTOP_PRIMARY_MAIN_GROUP_ID,
+        },
+      },
+    );
+    const home = await first.service.activateHome(
+      windowId,
+      withCanvas.endpointEpoch,
+      withCanvas.window.revision,
+    );
+
+    const removed = await first.service.removeRecentProject(
+      windowId,
+      project.projectId,
+      home.endpointEpoch,
+      home.window.revision,
+      home.catalog.revision,
+    );
+
+    expect(removed.window.workbench.main.views).toEqual([]);
+    first.service.releaseWindow(windowId);
+    await first.service.dispose();
+
+    const restored = createFixture(file);
+    const restoredWindowId = await restored.service.claimWindowId();
+    restored.service.setRendererEpoch(restoredWindowId, 1);
+    await expect(restored.service.getProjection(restoredWindowId)).resolves.toMatchObject({
+      catalog: { projects: [] },
+      window: {
+        activeTarget: { kind: 'home' },
+        workbench: { main: { views: [] } },
+      },
+    });
+  });
+
   it('rejects a stale Project catalog removal without changing Project or Tab state', async () => {
     const fixture = createFixture();
     const windowId = await fixture.service.claimWindowId();
@@ -205,7 +278,7 @@ describe('DesktopShellService', () => {
       ),
     ).rejects.toMatchObject({ code: 'desktop-shell-stale-revision' });
 
-    expect((await fixture.service.getProjection(windowId))).toEqual(opened.projection);
+    expect(await fixture.service.getProjection(windowId)).toEqual(opened.projection);
   });
 
   it('rejects stale Window revisions without changing state', async () => {
@@ -377,7 +450,8 @@ describe('DesktopShellService', () => {
 
     expect(updated.window.activeTarget).toEqual({ kind: 'home' });
     expect(updated.window.workbench.primarySidebar.visible).toBe(false);
-    expect(updated.window.workbench.main.views[0]?.viewEpoch).toBe(2);
+    expect(updated.window.tabs[0]?.viewEpoch).toBe(2);
+    expect(updated.window.workbench.main.views).toEqual([]);
     await expect(
       fixture.service.updateWorkbench(
         windowId,
@@ -399,7 +473,7 @@ describe('DesktopShellService', () => {
     });
   });
 
-  it('restores a persisted temporary Preview View to the owning Agent View', async () => {
+  it('drops a persisted temporary Preview View without inventing a Main owner', async () => {
     const file = createMemoryFile();
     const first = createFixture(file);
     const windowId = await first.service.claimWindowId();
@@ -420,12 +494,6 @@ describe('DesktopShellService', () => {
       {
         ...current,
         revision: current.revision + 1,
-        preset: 'preview-focus',
-        agent: {
-          ...current.agent,
-          presentation: 'dock',
-          dockPresentation: 'hidden',
-        },
         main: {
           views: [
             {
@@ -435,12 +503,19 @@ describe('DesktopShellService', () => {
               workspaceId: opened.workspace.workspaceId,
               kind: 'preview',
               ownerId: 'preview-session:temporary-1',
+              displayLabel: 'resource-1',
               documentId: 'resource-1',
               previewPresentation: 'temporary',
             },
           ],
-          activeViewId: 'preview:view-1',
-          split: 'none',
+          groups: [
+            {
+              groupId: DESKTOP_PRIMARY_MAIN_GROUP_ID,
+              viewIds: ['preview:view-1'],
+              activeViewId: 'preview:view-1',
+            },
+          ],
+          activeGroupId: DESKTOP_PRIMARY_MAIN_GROUP_ID,
         },
       },
     );
@@ -453,14 +528,13 @@ describe('DesktopShellService', () => {
     const projection = await restored.service.getProjection(restoredWindow);
 
     expect(projection.window.workbench).toMatchObject({
-      preset: 'agent-focus',
-      agent: { presentation: 'main' },
+      display: { mode: 'chat-only' },
       main: {
-        views: [
+        views: [],
+        groups: [
           {
-            kind: 'agent',
-            viewId: projection.window.tabs[0]?.viewId,
-            projectId: projection.catalog.projects[0]?.projectId,
+            groupId: DESKTOP_PRIMARY_MAIN_GROUP_ID,
+            viewIds: [],
           },
         ],
       },
@@ -490,7 +564,6 @@ describe('DesktopShellService', () => {
       {
         ...current,
         revision: current.revision + 1,
-        preset: 'preview-focus',
         main: {
           views: [
             {
@@ -500,12 +573,19 @@ describe('DesktopShellService', () => {
               workspaceId: opened.workspace.workspaceId,
               kind: 'preview',
               ownerId: 'preview-session:pinned-1',
+              displayLabel: 'resource-1',
               documentId: 'resource-1',
               previewPresentation: 'pinned',
             },
           ],
-          activeViewId: 'preview:view-1:pinned',
-          split: 'none',
+          groups: [
+            {
+              groupId: DESKTOP_PRIMARY_MAIN_GROUP_ID,
+              viewIds: ['preview:view-1:pinned'],
+              activeViewId: 'preview:view-1:pinned',
+            },
+          ],
+          activeGroupId: DESKTOP_PRIMARY_MAIN_GROUP_ID,
         },
       },
     );
@@ -624,10 +704,7 @@ describe('DesktopShellService', () => {
   });
 });
 
-function createFixture(
-  file = createMemoryFile(),
-  startupTarget: 'home' | 'restore' = 'home',
-) {
+function createFixture(file = createMemoryFile(), startupTarget: 'home' | 'restore' = 'home') {
   let identity = 0;
   const resolution: DesktopWorkspaceResolution = {
     workspaceId: '11111111-1111-4111-8111-111111111111',

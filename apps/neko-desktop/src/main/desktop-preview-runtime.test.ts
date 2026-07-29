@@ -2,17 +2,17 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import {
-  PREVIEW_HOST_RUNTIME_ROUTES,
-  PREVIEW_HOST_RUNTIME_VERSION,
-} from '@neko-preview/contracts';
+import { PREVIEW_HOST_RUNTIME_ROUTES, PREVIEW_HOST_RUNTIME_VERSION } from '@neko-preview/contracts';
 import type { ResourceBrowserIdentity } from 'neko-assets/resource-browser/contract';
-import { createDefaultDesktopWorkbenchLayout } from '../shared/workbench-contract';
-import { DesktopMediaDescriptorRegistry } from './desktop-media-protocol';
 import {
-  DesktopPreviewRuntime,
-  type DesktopPreviewShellPort,
-} from './desktop-preview-runtime';
+  DESKTOP_PRIMARY_MAIN_GROUP_ID,
+  DESKTOP_SECONDARY_MAIN_GROUP_ID,
+  createDefaultDesktopWorkbenchLayout,
+  getActiveMainView,
+  openOrFocusMainView,
+} from '../shared/workbench-contract';
+import { DesktopMediaDescriptorRegistry } from './desktop-media-protocol';
+import { DesktopPreviewRuntime, type DesktopPreviewShellPort } from './desktop-preview-runtime';
 
 const roots: string[] = [];
 const resourceIdentity: ResourceBrowserIdentity = {
@@ -36,27 +36,25 @@ describe('DesktopPreviewRuntime', () => {
     const secondPath = path.join(root, 'second.glb');
     await writeFile(firstPath, '{"first":true}');
     await writeFile(secondPath, 'glb');
-    let workbench = createDefaultDesktopWorkbenchLayout('window-1');
+    let workbench = openOrFocusMainView(createDefaultDesktopWorkbenchLayout('window-1'), {
+      viewId: 'canvas:project-view-1:board',
+      viewEpoch: 1,
+      projectId: 'project-1',
+      workspaceId: 'workspace-1',
+      kind: 'canvas',
+      ownerId: 'canvas:project-view-1',
+      displayLabel: 'board.nkc',
+      documentId: 'boards/board.nkc',
+    });
     workbench = {
       ...workbench,
-      revision: 1,
       resourceDock: {
         ...workbench.resourceDock,
         presentation: 'docked',
       },
-      main: {
-        views: [
-          {
-            viewId: 'project-view-1',
-            viewEpoch: 1,
-            projectId: 'project-1',
-            workspaceId: 'workspace-1',
-            kind: 'agent',
-            ownerId: 'project-view-1',
-          },
-        ],
-        activeViewId: 'project-view-1',
-        split: 'none',
+      display: {
+        ...workbench.display,
+        mode: 'chat-main',
       },
     };
     let windowRevision = 1;
@@ -113,13 +111,18 @@ describe('DesktopPreviewRuntime', () => {
     if (first.status !== 'ready') throw new Error('Expected a ready Preview.');
     expect(mediaRegistry.authorize(10, first.descriptor.descriptorId)).toBe(true);
     expect(workbench).toMatchObject({
-      preset: 'preview-focus',
       resourceDock: { presentation: 'docked' },
+      display: { mode: 'chat-main' },
       main: {
-        activeViewId: 'preview:project-view-1:temporary',
         views: [
-          { kind: 'agent', ownerId: 'project-view-1' },
+          { kind: 'canvas', ownerId: 'canvas:project-view-1' },
           { kind: 'preview', ownerId: 'preview-session:one' },
+        ],
+        groups: [
+          {
+            groupId: DESKTOP_PRIMARY_MAIN_GROUP_ID,
+            activeViewId: 'preview:project-view-1:temporary',
+          },
         ],
       },
     });
@@ -134,7 +137,7 @@ describe('DesktopPreviewRuntime', () => {
     expect(mediaRegistry.authorize(10, first.descriptor.descriptorId)).toBe(false);
     expect(mediaRegistry.authorize(10, second.descriptor.descriptorId)).toBe(true);
     expect(workbench.main.views).toEqual([
-      expect.objectContaining({ kind: 'agent', ownerId: 'project-view-1' }),
+      expect.objectContaining({ kind: 'canvas', ownerId: 'canvas:project-view-1' }),
       expect.objectContaining({ kind: 'preview', ownerId: 'preview-session:two' }),
     ]);
     await expect(
@@ -189,11 +192,22 @@ describe('DesktopPreviewRuntime', () => {
       identity: third.identity,
     });
     expect(side.presentation).toBe('side');
+    expect(workbench.display.mode).toBe('chat-main');
     expect(workbench.main).toMatchObject({
-      activeViewId: 'project-view-1',
-      sideViewId: side.identity.viewId,
-      split: 'horizontal',
+      activeGroupId: DESKTOP_SECONDARY_MAIN_GROUP_ID,
+      split: { axis: 'columns', ratio: 0.5 },
+      groups: [
+        {
+          groupId: DESKTOP_PRIMARY_MAIN_GROUP_ID,
+        },
+        {
+          groupId: DESKTOP_SECONDARY_MAIN_GROUP_ID,
+          activeViewId: side.identity.viewId,
+          viewIds: [side.identity.viewId],
+        },
+      ],
     });
+    expect(getActiveMainView(workbench)?.viewId).toBe(side.identity.viewId);
 
     await runtime.execute('window-1', {
       schemaVersion: PREVIEW_HOST_RUNTIME_VERSION,
@@ -219,9 +233,7 @@ describe('DesktopPreviewRuntime', () => {
       status: 'unsupported',
       diagnostic: { code: 'preview-unsupported-kind' },
     });
-    expect(JSON.stringify(unsupported)).not.toMatch(
-      /absolutePath|must-not-be-opened|neko-media:/u,
-    );
+    expect(JSON.stringify(unsupported)).not.toMatch(/absolutePath|must-not-be-opened|neko-media:/u);
 
     endpointEpoch = 'endpoint-2';
     const recovered = await runtime.getSnapshot('window-1', {

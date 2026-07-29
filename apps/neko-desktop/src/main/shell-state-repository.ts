@@ -7,13 +7,16 @@ import type {
 } from '../shared/shell-contract';
 import {
   createDefaultDesktopWorkbenchLayout,
+  migrateDesktopWorkbenchV1,
   parseDesktopWorkbenchLayout,
   type DesktopWorkbenchLayoutProjection,
 } from '../shared/workbench-contract';
 
-export const DESKTOP_SHELL_STATE_VERSION = 2 as const;
+export const DESKTOP_SHELL_STATE_VERSION = 3 as const;
 // Version 1 remains readable because it contains user-owned local Project and Window state.
 const DESKTOP_SHELL_STATE_V1 = 1 as const;
+// Version 2 carries the prelaunch Workbench v1 presentation.
+const DESKTOP_SHELL_STATE_V2 = 2 as const;
 
 export interface DesktopStoredProject {
   readonly projectId: string;
@@ -54,10 +57,7 @@ export interface DesktopShellStateFilePort {
 export class DesktopShellStateError extends Error {
   readonly code: 'desktop-shell-invalid-state' | 'desktop-shell-stale-storage-revision';
 
-  constructor(
-    code: DesktopShellStateError['code'],
-    message: string,
-  ) {
+  constructor(code: DesktopShellStateError['code'], message: string) {
     super(message);
     this.name = 'DesktopShellStateError';
     this.code = code;
@@ -145,16 +145,16 @@ function parseDesktopShellStoredState(value: unknown): DesktopShellStoredState {
   const sourceVersion = record['schemaVersion'];
   if (
     sourceVersion !== DESKTOP_SHELL_STATE_VERSION &&
+    sourceVersion !== DESKTOP_SHELL_STATE_V2 &&
     sourceVersion !== DESKTOP_SHELL_STATE_V1
   ) {
     throw invalidState(
       `Unsupported Desktop Shell state version '${String(record['schemaVersion'])}'.`,
     );
   }
-  const projects = requireArray(
-    record['projects'],
-    'Desktop Shell projects must be an array.',
-  ).map(parseStoredProject);
+  const projects = requireArray(record['projects'], 'Desktop Shell projects must be an array.').map(
+    parseStoredProject,
+  );
   const projectIds = new Set<string>();
   const workspaceIds = new Set<string>();
   for (const project of projects) {
@@ -164,10 +164,9 @@ function parseDesktopShellStoredState(value: unknown): DesktopShellStoredState {
     projectIds.add(project.projectId);
     workspaceIds.add(project.workspaceId);
   }
-  const windows = requireArray(
-    record['windows'],
-    'Desktop Shell windows must be an array.',
-  ).map((item) => parseStoredWindow(item, projectIds, sourceVersion));
+  const windows = requireArray(record['windows'], 'Desktop Shell windows must be an array.').map(
+    (item) => parseStoredWindow(item, projectIds, sourceVersion),
+  );
   const windowIds = new Set<string>();
   for (const window of windows) {
     if (windowIds.has(window.windowId)) {
@@ -253,6 +252,7 @@ function parseStoredWindow(
   projectIds: ReadonlySet<string>,
   sourceVersion:
     | typeof DESKTOP_SHELL_STATE_VERSION
+    | typeof DESKTOP_SHELL_STATE_V2
     | typeof DESKTOP_SHELL_STATE_V1,
 ): DesktopStoredWindow {
   const record = requireRecord(value, 'Desktop stored Window must be an object.');
@@ -282,7 +282,11 @@ function parseStoredWindow(
   const workbench =
     sourceVersion === DESKTOP_SHELL_STATE_V1
       ? createDefaultDesktopWorkbenchLayout(windowId)
-      : parseStoredWorkbench(record['workbench'], windowId);
+      : parseStoredWorkbench(
+          record['workbench'],
+          windowId,
+          sourceVersion === DESKTOP_SHELL_STATE_V2,
+        );
   return {
     windowId,
     revision: requireNonNegativeInteger(
@@ -298,10 +302,11 @@ function parseStoredWindow(
 function parseStoredWorkbench(
   value: unknown,
   windowId: string,
+  migrateV1: boolean,
 ): DesktopWorkbenchLayoutProjection {
   let workbench: DesktopWorkbenchLayoutProjection;
   try {
-    workbench = parseDesktopWorkbenchLayout(value);
+    workbench = migrateV1 ? migrateDesktopWorkbenchV1(value) : parseDesktopWorkbenchLayout(value);
   } catch (error) {
     throw invalidState(
       `Desktop stored Workbench layout is invalid: ${
@@ -391,10 +396,5 @@ function invalidState(message: string): DesktopShellStateError {
 }
 
 function hasNodeErrorCode(error: unknown, code: string): boolean {
-  return (
-    typeof error === 'object' &&
-    error !== null &&
-    'code' in error &&
-    error.code === code
-  );
+  return typeof error === 'object' && error !== null && 'code' in error && error.code === code;
 }

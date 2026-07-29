@@ -20,6 +20,7 @@ import {
   Tooltip,
   TooltipProvider,
   WarningIcon,
+  WorkbenchEditorTabs,
 } from '@neko/ui';
 import { useTranslation } from '@neko/shared/i18n/react';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -36,14 +37,23 @@ import type {
 import {
   APPLICATION_PRIMARY_SIDEBAR_DEFAULT_WIDTH,
   DESKTOP_WORKBENCH_LIMITS,
+  closeMainView,
+  getActiveMainView,
+  hideWorkbenchTimeline,
+  openOrFocusMainView,
+  reorderMainView,
+  resizeMainSplit,
+  setWorkbenchDisplayMode,
+  showWorkbenchTimeline,
+  splitMainView,
   type DesktopWorkbenchLayoutProjection,
+  type DesktopWorkbenchMainGroup,
 } from '../shared/workbench-contract';
 import { DesktopAgentSurface } from './DesktopAgentSurface';
 import { DesktopResourceBrowserSurface } from './DesktopResourceBrowserSurface';
 import { DesktopPreviewSurface } from './DesktopPreviewSurface';
 import { DesktopCanvasSurface } from './DesktopCanvasSurface';
 import { DesktopCutSurface } from './DesktopCutSurface';
-import { DESKTOP_DEFAULT_CANVAS_DOCUMENT_ID } from '../shared/canvas-bridge-contract';
 import { DesktopSettingsSurface } from './DesktopSettingsSurface';
 
 type ShellState =
@@ -1055,38 +1065,34 @@ function ContentProjectWorkspace({
   readonly project: DesktopProjectCatalogItem;
 }): JSX.Element {
   const { t } = useTranslation();
-  const [cutTimelineTarget, setCutTimelineTarget] =
-    useState<HTMLDivElement | null>(null);
-  const agentCapability = projection.domains.find(
-    (candidate) => candidate.surface === 'agent',
-  );
-  const canvasCapability = projection.domains.find(
-    (candidate) => candidate.surface === 'canvas',
-  );
+  const [cutTimelineTarget, setCutTimelineTarget] = useState<HTMLDivElement | null>(null);
+  const agentCapability = projection.domains.find((candidate) => candidate.surface === 'agent');
+  const canvasCapability = projection.domains.find((candidate) => candidate.surface === 'canvas');
   const assetsCapability = projection.domains.find(
     (candidate) => candidate.surface === 'media-library',
   );
-  const previewCapability = projection.domains.find(
-    (candidate) => candidate.surface === 'preview',
-  );
-  const cutCapability = projection.domains.find(
-    (candidate) => candidate.surface === 'cut',
-  );
-  const tab = projection.window.tabs.find(
-    (candidate) => candidate.projectId === project.projectId,
-  );
+  const previewCapability = projection.domains.find((candidate) => candidate.surface === 'preview');
+  const cutCapability = projection.domains.find((candidate) => candidate.surface === 'cut');
+  const tab = projection.window.tabs.find((candidate) => candidate.projectId === project.projectId);
   if (!tab) {
     throw new Error(`Content Project '${project.projectId}' has no Window-owned View.`);
   }
   const workbench = projection.window.workbench;
-  const activeMainView = workbench.main.views.find(
-    (candidate) => candidate.viewId === workbench.main.activeViewId,
+  const primaryGroup = workbench.main.groups[0];
+  if (!primaryGroup) {
+    throw new Error('Desktop Workbench requires a primary Main Group.');
+  }
+  const secondaryGroup = workbench.main.groups[1];
+  const primaryMainView = workbench.main.views.find(
+    (candidate) => candidate.viewId === primaryGroup.activeViewId,
   );
-  const sideMainView = workbench.main.views.find(
-    (candidate) => candidate.viewId === workbench.main.sideViewId,
+  const secondaryMainView = workbench.main.views.find(
+    (candidate) => candidate.viewId === secondaryGroup?.activeViewId,
   );
-  const agentMain =
-    workbench.agent.presentation === 'main' && activeMainView?.kind !== 'preview';
+  const timelineOwner = workbench.main.views.find(
+    (candidate) => candidate.viewId === workbench.timeline.ownerViewId,
+  );
+  const agentMain = workbench.display.mode === 'chat-only';
   const agentDock = (
     <AgentWorkspaceSurface
       agentReady={agentCapability?.status === 'ready'}
@@ -1096,7 +1102,7 @@ function ContentProjectWorkspace({
       tab={tab}
     />
   );
-  const resourceDock = (
+  const resourceDock =
     assetsCapability?.status === 'ready' ? (
       <DesktopResourceBrowserSurface
         onOpenCanvasDocument={(documentId, presentation) =>
@@ -1122,32 +1128,31 @@ function ContentProjectWorkspace({
             : 'desktop-media-library-not-mounted'
         }
       />
-    )
+    );
+  const leftDock = createProjectDock(workbench, 'left', agentDock, resourceDock);
+  const rightDock = createProjectDock(workbench, 'right', agentDock, resourceDock);
+  const mainSurface = agentMain ? (
+    agentDock
+  ) : (
+    <MainViewGroupSurface
+      actions={actions}
+      allowCutRuntime
+      canvasCapability={canvasCapability}
+      cutCapability={cutCapability}
+      group={primaryGroup}
+      pending={pending}
+      previewCapability={previewCapability}
+      project={project}
+      projection={projection}
+      timelineTarget={
+        primaryMainView?.viewId === timelineOwner?.viewId
+          ? (cutTimelineTarget ?? undefined)
+          : undefined
+      }
+      workbench={workbench}
+    />
   );
-  const leftDock = createProjectDock(
-    workbench,
-    'left',
-    agentDock,
-    resourceDock,
-  );
-  const rightDock = createProjectDock(
-    workbench,
-    'right',
-    agentDock,
-    resourceDock,
-  );
-  const mainSurface = renderWorkbenchMainView({
-    allowCutRuntime: true,
-    agentMain,
-    agentSurface: agentDock,
-    canvasCapability,
-    previewCapability,
-    cutCapability,
-    project,
-    projection,
-    timelineTarget: cutTimelineTarget ?? undefined,
-    view: activeMainView,
-  });
+  const timelineOwnerRenderedInMain = timelineOwner?.viewId === primaryMainView?.viewId;
 
   return (
     <ControlledWorkbenchShell
@@ -1181,31 +1186,45 @@ function ContentProjectWorkspace({
       main={
         <div className="project-main-host">
           <div className="project-main-host__content">{mainSurface}</div>
-          <ProjectWorkbenchControls
-            actions={actions}
-            pending={pending}
-            project={project}
-            projection={projection}
-          />
+          <ProjectWorkbenchControls actions={actions} pending={pending} projection={projection} />
         </div>
       }
       secondaryMain={
-        sideMainView
-          ? renderWorkbenchMainView({
-              allowCutRuntime: false,
-              agentMain: false,
-              agentSurface: agentDock,
-              canvasCapability,
-              previewCapability,
-              cutCapability,
-              project,
-              projection,
-              timelineTarget: undefined,
-              view: sideMainView,
-            })
-          : undefined
+        !agentMain && secondaryGroup ? (
+          <MainViewGroupSurface
+            actions={actions}
+            allowCutRuntime={false}
+            canvasCapability={canvasCapability}
+            cutCapability={cutCapability}
+            group={secondaryGroup}
+            pending={pending}
+            previewCapability={previewCapability}
+            project={project}
+            projection={projection}
+            timelineTarget={
+              secondaryMainView?.viewId === timelineOwner?.viewId
+                ? (cutTimelineTarget ?? undefined)
+                : undefined
+            }
+            workbench={workbench}
+          />
+        ) : undefined
       }
-      mainSplit={workbench.main.split}
+      mainSplit={workbench.main.split?.axis ?? 'none'}
+      mainSplitRatio={workbench.main.split?.ratio}
+      mainSplitResize={
+        pending || !workbench.main.split
+          ? undefined
+          : {
+              label: t('workspace.resizeMainSplit'),
+              minSize: DESKTOP_WORKBENCH_LIMITS.mainSplitRatio.min,
+              maxSize: DESKTOP_WORKBENCH_LIMITS.mainSplitRatio.max,
+              onResizeEnd: (ratio) => {
+                if (ratio === workbench.main.split?.ratio) return;
+                actions.onUpdateWorkbench(resizeMainSplit(workbench, ratio));
+              },
+            }
+      }
       leftDock={leftDock?.content}
       leftDockPresentation={leftDock?.presentation}
       leftDockWidth={leftDock?.width}
@@ -1233,24 +1252,33 @@ function ContentProjectWorkspace({
             })
       }
       timeline={
-        activeMainView?.kind === 'cut' && cutCapability?.status === 'ready' ? (
-          <div
-            className="desktop-cut-timeline-slot"
-            data-testid="desktop-cut-timeline-slot"
-            ref={setCutTimelineTarget}
-          />
+        timelineOwner?.kind === 'cut' && cutCapability?.status === 'ready' ? (
+          timelineOwnerRenderedInMain ? (
+            <div
+              className="desktop-cut-timeline-slot"
+              data-testid="desktop-cut-timeline-slot"
+              ref={setCutTimelineTarget}
+            />
+          ) : (
+            <DesktopCutSurface
+              presentation="timeline-only"
+              project={project}
+              projection={projection}
+              view={timelineOwner}
+            />
+          )
         ) : (
           <TimelinePlaceholder
             diagnostic={
-              projection.domains.find((candidate) => candidate.surface === 'cut')
-                ?.status === 'unavailable'
+              projection.domains.find((candidate) => candidate.surface === 'cut')?.status ===
+              'unavailable'
                 ? 'desktop-domain-surface-unavailable'
                 : 'desktop-cut-timeline-not-mounted'
             }
           />
         )
       }
-      timelineVisible={workbench.timeline.visible && activeMainView?.kind === 'cut'}
+      timelineVisible={workbench.timeline.presentation === 'docked'}
       timelineHeight={workbench.timeline.height}
       timelineResize={
         pending
@@ -1269,10 +1297,110 @@ function ContentProjectWorkspace({
   );
 }
 
+function MainViewGroupSurface({
+  actions,
+  allowCutRuntime,
+  canvasCapability,
+  cutCapability,
+  group,
+  pending,
+  previewCapability,
+  project,
+  projection,
+  timelineTarget,
+  workbench,
+}: {
+  readonly actions: ShellActions;
+  readonly allowCutRuntime: boolean;
+  readonly canvasCapability: DesktopShellProjection['domains'][number] | undefined;
+  readonly cutCapability: DesktopShellProjection['domains'][number] | undefined;
+  readonly group: DesktopWorkbenchMainGroup;
+  readonly pending: boolean;
+  readonly previewCapability: DesktopShellProjection['domains'][number] | undefined;
+  readonly project: DesktopProjectCatalogItem;
+  readonly projection: DesktopShellProjection;
+  readonly timelineTarget?: Element;
+  readonly workbench: DesktopWorkbenchLayoutProjection;
+}): JSX.Element {
+  const { t } = useTranslation();
+  const views = group.viewIds.map((viewId) => {
+    const view = workbench.main.views.find((candidate) => candidate.viewId === viewId);
+    if (!view) {
+      throw new Error(`Desktop Main Group references missing View '${viewId}'.`);
+    }
+    return view;
+  });
+  const activeView = views.find((view) => view.viewId === group.activeViewId);
+  const canSplit = Boolean(activeView && activeView.kind !== 'cut' && group.viewIds.length > 1);
+  return (
+    <section
+      className="project-main-group"
+      data-main-group={group.groupId}
+      data-active={workbench.main.activeGroupId === group.groupId ? 'true' : 'false'}
+    >
+      <header className="project-main-group__tabs">
+        <WorkbenchEditorTabs
+          activeId={group.activeViewId}
+          emptyLabel={t('workspace.mainTabs.empty')}
+          label={t('workspace.mainTabs.label')}
+          tabs={views.map((view) => ({
+            id: view.viewId,
+            label: view.displayLabel,
+            closeLabel: t('workspace.mainTabs.close', { name: view.displayLabel }),
+          }))}
+          onClose={(viewId) => {
+            actions.onUpdateWorkbench(closeMainView(workbench, viewId));
+          }}
+          onReorder={(sourceViewId, targetViewId) => {
+            actions.onUpdateWorkbench(
+              reorderMainView(workbench, group.groupId, sourceViewId, targetViewId),
+            );
+          }}
+          onSelect={(viewId) => {
+            const view = views.find((candidate) => candidate.viewId === viewId);
+            if (!view) throw new Error(`Desktop Main Tab '${viewId}' is unavailable.`);
+            actions.onUpdateWorkbench(openOrFocusMainView(workbench, view));
+          }}
+        />
+        <div className="project-main-group__actions">
+          <WorkbenchIconButton
+            disabled={pending || !canSplit}
+            icon={<RightPanelIcon size={15} />}
+            label={t('workspace.mainTabs.splitRight')}
+            onClick={() => {
+              if (!activeView) throw new Error('Desktop Main split requires an active View.');
+              actions.onUpdateWorkbench(splitMainView(workbench, activeView.viewId, 'columns'));
+            }}
+          />
+          <WorkbenchIconButton
+            disabled={pending || !canSplit}
+            icon={<GridIcon size={15} />}
+            label={t('workspace.mainTabs.splitDown')}
+            onClick={() => {
+              if (!activeView) throw new Error('Desktop Main split requires an active View.');
+              actions.onUpdateWorkbench(splitMainView(workbench, activeView.viewId, 'rows'));
+            }}
+          />
+        </div>
+      </header>
+      <div className="project-main-group__content">
+        {renderWorkbenchMainView({
+          allowCutRuntime,
+          canvasCapability,
+          previewCapability,
+          cutCapability,
+          project,
+          projection,
+          timelineTarget,
+          view: activeView,
+        })}
+      </div>
+    </section>
+  );
+}
+
 function renderWorkbenchMainView({
   allowCutRuntime,
-  agentMain,
-  agentSurface,
   canvasCapability,
   previewCapability,
   cutCapability,
@@ -1282,8 +1410,6 @@ function renderWorkbenchMainView({
   view,
 }: {
   readonly allowCutRuntime: boolean;
-  readonly agentMain: boolean;
-  readonly agentSurface: JSX.Element;
   readonly canvasCapability: DesktopShellProjection['domains'][number] | undefined;
   readonly previewCapability: DesktopShellProjection['domains'][number] | undefined;
   readonly cutCapability: DesktopShellProjection['domains'][number] | undefined;
@@ -1316,7 +1442,6 @@ function renderWorkbenchMainView({
       />
     );
   }
-  if (agentMain) return agentSurface;
   return (
     <CreativeMainPlaceholder
       canvasDiagnostic={
@@ -1332,43 +1457,45 @@ function renderWorkbenchMainView({
 function ProjectWorkbenchControls({
   actions,
   pending,
-  project,
   projection,
 }: {
   readonly actions: ShellActions;
   readonly pending: boolean;
-  readonly project: DesktopProjectCatalogItem;
   readonly projection: DesktopShellProjection;
 }): JSX.Element {
   const { t } = useTranslation();
   const workbench = projection.window.workbench;
+  const activeMainView = getActiveMainView(workbench);
+  const timelineOwnerViewId =
+    workbench.timeline.ownerViewId ??
+    (activeMainView?.kind === 'cut'
+      ? activeMainView.viewId
+      : workbench.main.views.find((view) => view.kind === 'cut')?.viewId);
   return (
     <div
       className="project-workbench-controls project-layout-controls"
       aria-label={t('workspace.layoutControls')}
     >
       <div className="project-layout-control-group">
-        <WorkbenchDisplayMenu
-          actions={actions}
-          disabled={pending}
-          project={project}
-          projection={projection}
-        />
+        <WorkbenchDisplayMenu actions={actions} disabled={pending} projection={projection} />
         <WorkbenchIconButton
-          disabled={pending}
-          active={workbench.timeline.visible}
+          disabled={pending || !timelineOwnerViewId}
+          active={workbench.timeline.presentation === 'docked'}
           icon={<GridIcon size={16} />}
           label={t('workspace.timeline')}
-          onClick={() =>
-            actions.onUpdateWorkbench({
-              ...workbench,
-              revision: workbench.revision + 1,
-              timeline: {
-                ...workbench.timeline,
-                visible: !workbench.timeline.visible,
-              },
-            })
-          }
+          onClick={() => {
+            actions.onUpdateWorkbench(
+              workbench.timeline.presentation === 'docked'
+                ? hideWorkbenchTimeline(workbench)
+                : showWorkbenchTimeline(
+                    workbench,
+                    timelineOwnerViewId ??
+                      (() => {
+                        throw new Error('Desktop Timeline has no owning Cut View.');
+                      })(),
+                  ),
+            );
+          }}
         />
       </div>
     </div>
@@ -1404,64 +1531,24 @@ function WorkbenchIconButton({
   );
 }
 
-type WorkbenchDisplayMode =
-  | 'chat-main-left'
-  | 'chat-main-right'
-  | 'chat-only'
-  | 'main-only';
-
-type WorkbenchMainComposition =
-  | 'canvas'
-  | 'timeline'
-  | 'model'
-  | 'canvas-timeline'
-  | 'canvas-model';
+type WorkbenchDisplayMode = 'chat-main-left' | 'chat-main-right' | 'chat-only' | 'main-only';
 
 function WorkbenchDisplayMenu({
   actions,
   disabled,
-  project,
   projection,
 }: {
   readonly actions: ShellActions;
   readonly disabled: boolean;
-  readonly project: DesktopProjectCatalogItem;
   readonly projection: DesktopShellProjection;
 }): JSX.Element {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const workbench = projection.window.workbench;
   const mode = getWorkbenchDisplayMode(workbench);
-  const composition = getWorkbenchMainComposition(workbench);
-  const canvasReady = projection.domains.some(
-    (domain) => domain.surface === 'canvas' && domain.status === 'ready',
-  );
-  const cutReady = projection.domains.some(
-    (domain) => domain.surface === 'cut' && domain.status === 'ready',
-  );
-  const previewReady = projection.domains.some(
-    (domain) => domain.surface === 'preview' && domain.status === 'ready',
-  );
-  const hasCreativeMain = workbench.main.views.some((view) => view.kind !== 'agent');
-  const hasCutView =
-    cutReady && workbench.main.views.some((view) => view.kind === 'cut');
-  const hasModelView =
-    previewReady && workbench.main.views.some(isModelPreviewView);
+  const hasCreativeMain = workbench.main.views.length > 0;
   const selectMode = (nextMode: WorkbenchDisplayMode): void => {
-    actions.onUpdateWorkbench(
-      applyWorkbenchDisplayMode(workbench, project, projection, nextMode),
-    );
-    setOpen(false);
-  };
-  const selectComposition = (nextComposition: WorkbenchMainComposition): void => {
-    actions.onUpdateWorkbench(
-      applyWorkbenchMainComposition(
-        workbench,
-        project,
-        projection,
-        nextComposition,
-      ),
-    );
+    actions.onUpdateWorkbench(applyWorkbenchDisplayMode(workbench, nextMode));
     setOpen(false);
   };
   return (
@@ -1481,20 +1568,14 @@ function WorkbenchDisplayMenu({
         </button>
       }
     >
-      <div
-        className="project-display-menu"
-        role="menu"
-        aria-label={t('workspace.displayMode')}
-      >
+      <div className="project-display-menu" role="menu" aria-label={t('workspace.displayMode')}>
         <strong>{t('workspace.displayMode')}</strong>
         <DisplayMenuButton
           checked={mode === 'chat-main-left' || mode === 'chat-main-right'}
-          disabled={!hasCreativeMain && !canvasReady}
+          disabled={!hasCreativeMain}
           label={t('workspace.chatAndMain')}
           onClick={() =>
-            selectMode(
-              mode === 'chat-main-right' ? 'chat-main-right' : 'chat-main-left',
-            )
+            selectMode(mode === 'chat-main-right' ? 'chat-main-right' : 'chat-main-left')
           }
         />
         <div className="project-display-menu__nested">
@@ -1516,41 +1597,9 @@ function WorkbenchDisplayMenu({
         />
         <DisplayMenuButton
           checked={mode === 'main-only'}
-          disabled={!hasCreativeMain && !canvasReady}
+          disabled={!hasCreativeMain}
           label={t('workspace.mainOnly')}
           onClick={() => selectMode('main-only')}
-        />
-        <div className="project-display-menu__separator" />
-        <strong>{t('workspace.mainPanel')}</strong>
-        <DisplayMenuButton
-          checked={composition === 'canvas'}
-          disabled={!canvasReady}
-          label={t('workspace.canvas')}
-          onClick={() => selectComposition('canvas')}
-        />
-        <DisplayMenuButton
-          checked={composition === 'timeline'}
-          disabled={!hasCutView}
-          label={t('workspace.timeline')}
-          onClick={() => selectComposition('timeline')}
-        />
-        <DisplayMenuButton
-          checked={composition === 'model'}
-          disabled={!hasModelView}
-          label={t('workspace.model')}
-          onClick={() => selectComposition('model')}
-        />
-        <DisplayMenuButton
-          checked={composition === 'canvas-timeline'}
-          disabled={!canvasReady || !hasCutView}
-          label={t('workspace.canvasAndTimeline')}
-          onClick={() => selectComposition('canvas-timeline')}
-        />
-        <DisplayMenuButton
-          checked={composition === 'canvas-model'}
-          disabled={!canvasReady || !hasModelView}
-          label={t('workspace.canvasAndModel')}
-          onClick={() => selectComposition('canvas-model')}
         />
       </div>
     </Popover>
@@ -1636,12 +1685,10 @@ function createProjectDock(
       readonly width: number;
     }
   | undefined {
-  const agentPresentation = workbench.agent.dockPresentation;
+  const agentPresentation =
+    workbench.display.mode === 'chat-main' ? ('docked' as const) : ('hidden' as const);
   const agentPosition =
-    workbench.agent.presentation === 'dock' &&
-    agentPresentation !== 'hidden'
-      ? workbench.agent.dockPosition
-      : undefined;
+    workbench.display.mode === 'chat-main' ? workbench.display.chatPosition : undefined;
   const resourcePresentation = workbench.resourceDock.presentation;
   const resourcePosition =
     resourcePresentation === 'hidden'
@@ -1659,7 +1706,7 @@ function createProjectDock(
       ),
       owner: 'agent',
       presentation: requireVisibleDockPresentation(agentPresentation, 'Agent'),
-      width: workbench.agent.width,
+      width: workbench.display.chatWidth,
     };
   }
   if (resourcePosition !== position) return undefined;
@@ -1695,10 +1742,8 @@ function createProjectDockResizeBinding({
     minSize: DESKTOP_WORKBENCH_LIMITS.dockWidth.min,
     maxSize: DESKTOP_WORKBENCH_LIMITS.dockWidth.max,
     onResizeEnd: (width: number) => {
-      const agentChanged =
-        dock.owner === 'agent' && workbench.agent.width !== width;
-      const resourcesChanged =
-        dock.owner === 'resources' && workbench.resourceDock.width !== width;
+      const agentChanged = dock.owner === 'agent' && workbench.display.chatWidth !== width;
+      const resourcesChanged = dock.owner === 'resources' && workbench.resourceDock.width !== width;
       if (!agentChanged && !resourcesChanged) return;
       actions.onUpdateWorkbench(resizeProjectDockWorkbench(workbench, dock.owner, width));
     },
@@ -1754,18 +1799,20 @@ export function resizeProjectDockWorkbench(
   return {
     ...workbench,
     revision: workbench.revision + 1,
-    agent: owner === 'agent'
-      ? {
-          ...workbench.agent,
-          width,
-        }
-      : workbench.agent,
-    resourceDock: owner === 'resources'
-      ? {
-          ...workbench.resourceDock,
-          width,
-        }
-      : workbench.resourceDock,
+    display:
+      owner === 'agent'
+        ? {
+            ...workbench.display,
+            chatWidth: width,
+          }
+        : workbench.display,
+    resourceDock:
+      owner === 'resources'
+        ? {
+            ...workbench.resourceDock,
+            width,
+          }
+        : workbench.resourceDock,
   };
 }
 
@@ -1781,10 +1828,7 @@ export function setResourceDockPresentationWorkbench(
   presentation: 'hidden' | 'docked' | 'overlay',
 ): DesktopWorkbenchLayoutProjection {
   const agentPosition =
-    workbench.agent.presentation === 'dock' &&
-    workbench.agent.dockPresentation !== 'hidden'
-      ? workbench.agent.dockPosition
-      : undefined;
+    workbench.display.mode === 'chat-main' ? workbench.display.chatPosition : undefined;
   return {
     ...workbench,
     revision: workbench.revision + 1,
@@ -1814,50 +1858,22 @@ function requireVisibleDockPresentation(
 }
 
 function isPreviewMainActive(workbench: DesktopWorkbenchLayoutProjection): boolean {
-  return workbench.main.views.some(
-    (view) =>
-      view.viewId === workbench.main.activeViewId &&
-      view.kind === 'preview',
-  );
+  return getActiveMainView(workbench)?.kind === 'preview';
 }
 
 export function activateWorkbenchMainView(
   workbench: DesktopWorkbenchLayoutProjection,
   view: DesktopWorkbenchLayoutProjection['main']['views'][number],
-  views: ReadonlyArray<DesktopWorkbenchLayoutProjection['main']['views'][number]> =
-    workbench.main.views,
 ): DesktopWorkbenchLayoutProjection {
-  const preset =
-    view.kind === 'agent'
-      ? 'agent-focus'
-      : view.kind === 'preview'
-        ? 'preview-focus'
-        : view.kind === 'cut'
-          ? 'cut-focus'
-          : 'canvas-focus';
+  const activated = openOrFocusMainView(workbench, view);
   return {
-    ...workbench,
-    revision: workbench.revision + 1,
-    preset,
-    agent: {
-      ...workbench.agent,
-      presentation: view.kind === 'agent' ? 'main' : 'dock',
-    },
+    ...activated,
     resourceDock: {
-      ...workbench.resourceDock,
+      ...activated.resourceDock,
       presentation:
-        view.kind !== 'preview' && workbench.resourceDock.presentation === 'overlay'
+        view.kind !== 'preview' && activated.resourceDock.presentation === 'overlay'
           ? 'docked'
-          : workbench.resourceDock.presentation,
-    },
-    main: {
-      views,
-      activeViewId: view.viewId,
-      split: 'none',
-    },
-    timeline: {
-      ...workbench.timeline,
-      visible: view.kind === 'cut',
+          : activated.resourceDock.presentation,
     },
   };
 }
@@ -1865,304 +1881,28 @@ export function activateWorkbenchMainView(
 function getWorkbenchDisplayMode(
   workbench: DesktopWorkbenchLayoutProjection,
 ): WorkbenchDisplayMode {
-  if (workbench.agent.presentation === 'main') return 'chat-only';
-  if (workbench.agent.dockPresentation === 'hidden') return 'main-only';
-  return workbench.agent.dockPosition === 'left'
-    ? 'chat-main-left'
-    : 'chat-main-right';
+  if (workbench.display.mode === 'chat-only') return 'chat-only';
+  if (workbench.display.mode === 'main-only') return 'main-only';
+  return workbench.display.chatPosition === 'left' ? 'chat-main-left' : 'chat-main-right';
 }
 
 export function applyWorkbenchDisplayMode(
   workbench: DesktopWorkbenchLayoutProjection,
-  project: DesktopProjectCatalogItem,
-  projection: DesktopShellProjection,
   mode: WorkbenchDisplayMode,
 ): DesktopWorkbenchLayoutProjection {
-  if (mode === 'chat-only') {
-    return createAgentMainWorkbench(workbench, project, projection);
-  }
-  const mainWorkbench = ensureCreativeMainWorkbench(workbench, project, projection);
-  if (mode === 'main-only') {
-    return {
-      ...mainWorkbench,
-      agent: {
-        ...mainWorkbench.agent,
-        presentation: 'dock',
-        dockPresentation: 'hidden',
-      },
-    };
-  }
-  const agentPosition = mode === 'chat-main-left' ? 'left' : 'right';
-  return {
-    ...mainWorkbench,
-    agent: {
-      ...mainWorkbench.agent,
-      presentation: 'dock',
-      dockPresentation: 'docked',
-      dockPosition: agentPosition,
-    },
-    resourceDock:
-      mainWorkbench.resourceDock.presentation === 'hidden'
-        ? mainWorkbench.resourceDock
-        : {
-            ...mainWorkbench.resourceDock,
-            position: oppositeDockPosition(agentPosition),
-          },
-  };
-}
-
-function ensureCreativeMainWorkbench(
-  workbench: DesktopWorkbenchLayoutProjection,
-  project: DesktopProjectCatalogItem,
-  projection: DesktopShellProjection,
-): DesktopWorkbenchLayoutProjection {
-  const activeView = workbench.main.views.find(
-    (view) => view.viewId === workbench.main.activeViewId,
-  );
-  if (activeView && activeView.kind !== 'agent') {
-    return {
-      ...workbench,
-      revision: workbench.revision + 1,
-    };
-  }
-  return createCanvasMainWorkbench(workbench, project, projection);
-}
-
-function getWorkbenchMainComposition(
-  workbench: DesktopWorkbenchLayoutProjection,
-): WorkbenchMainComposition | undefined {
-  const activeView = workbench.main.views.find(
-    (view) => view.viewId === workbench.main.activeViewId,
-  );
-  const sideView = workbench.main.views.find(
-    (view) => view.viewId === workbench.main.sideViewId,
-  );
-  if (
-    activeView?.kind === 'cut' &&
-    sideView?.kind === 'canvas' &&
-    workbench.timeline.visible
-  ) {
-    return 'canvas-timeline';
-  }
-  if (
-    activeView?.kind === 'canvas' &&
-    sideView !== undefined &&
-    isModelPreviewView(sideView)
-  ) {
-    return 'canvas-model';
-  }
-  if (activeView?.kind === 'cut' && workbench.timeline.visible) return 'timeline';
-  if (activeView?.kind === 'canvas') return 'canvas';
-  if (activeView !== undefined && isModelPreviewView(activeView)) return 'model';
-  return undefined;
-}
-
-export function applyWorkbenchMainComposition(
-  workbench: DesktopWorkbenchLayoutProjection,
-  project: DesktopProjectCatalogItem,
-  projection: DesktopShellProjection,
-  composition: WorkbenchMainComposition,
-): DesktopWorkbenchLayoutProjection {
-  const agent = {
-    ...workbench.agent,
-    presentation: 'dock' as const,
-    dockPresentation:
-      workbench.agent.presentation === 'main'
-        ? ('docked' as const)
-        : workbench.agent.dockPresentation,
-  };
-  if (composition === 'canvas') {
-    const canvasWorkbench = createCanvasMainWorkbench(workbench, project, projection);
-    return {
-      ...canvasWorkbench,
-      agent,
-      timeline: {
-        ...canvasWorkbench.timeline,
-        visible: false,
-      },
-    };
-  }
-
-  const requiredView = findRequiredCompositionView(workbench, composition);
-  if (composition === 'timeline') {
-    return {
-      ...workbench,
-      revision: workbench.revision + 1,
-      preset: 'cut-focus',
-      agent,
-      main: {
-        views: workbench.main.views,
-        activeViewId: requiredView.viewId,
-        split: 'none',
-      },
-      timeline: {
-        ...workbench.timeline,
-        visible: true,
-      },
-    };
-  }
-  if (composition === 'model') {
-    return {
-      ...workbench,
-      revision: workbench.revision + 1,
-      preset: 'preview-focus',
-      agent,
-      main: {
-        views: workbench.main.views,
-        activeViewId: requiredView.viewId,
-        split: 'none',
-      },
-      timeline: {
-        ...workbench.timeline,
-        visible: false,
-      },
-    };
-  }
-
-  const canvasWorkbench = createCanvasMainWorkbench(workbench, project, projection);
-  const canvasView = findLastWorkbenchView(canvasWorkbench, 'canvas');
-  if (!canvasView) {
-    throw new Error('Desktop Main composition requires an open Canvas View.');
-  }
-  if (composition === 'canvas-timeline') {
-    return {
-      ...canvasWorkbench,
-      preset: 'canvas-cut',
-      agent,
-      main: {
-        ...canvasWorkbench.main,
-        activeViewId: requiredView.viewId,
-        sideViewId: canvasView.viewId,
-        split: 'horizontal',
-      },
-      timeline: {
-        ...canvasWorkbench.timeline,
-        visible: true,
-      },
-    };
-  }
-  return {
-    ...canvasWorkbench,
-    preset: 'canvas-preview',
-    agent,
-    main: {
-      ...canvasWorkbench.main,
-      activeViewId: canvasView.viewId,
-      sideViewId: requiredView.viewId,
-      split: 'horizontal',
-    },
-    timeline: {
-      ...canvasWorkbench.timeline,
-      visible: false,
-    },
-  };
-}
-
-function findRequiredCompositionView(
-  workbench: DesktopWorkbenchLayoutProjection,
-  composition: Exclude<WorkbenchMainComposition, 'canvas'>,
-): DesktopWorkbenchLayoutProjection['main']['views'][number] {
-  const view =
-    composition === 'timeline' || composition === 'canvas-timeline'
-      ? findLastWorkbenchView(workbench, 'cut')
-      : findLastModelPreviewView(workbench);
-  if (!view) {
-    throw new Error(
-      `Desktop Main composition '${composition}' requires an open owning View.`,
-    );
-  }
-  return view;
-}
-
-function findLastWorkbenchView(
-  workbench: DesktopWorkbenchLayoutProjection,
-  kind: DesktopWorkbenchLayoutProjection['main']['views'][number]['kind'],
-): DesktopWorkbenchLayoutProjection['main']['views'][number] | undefined {
-  for (let index = workbench.main.views.length - 1; index >= 0; index -= 1) {
-    const view = workbench.main.views[index];
-    if (view?.kind === kind) return view;
-  }
-  return undefined;
-}
-
-function findLastModelPreviewView(
-  workbench: DesktopWorkbenchLayoutProjection,
-): DesktopWorkbenchLayoutProjection['main']['views'][number] | undefined {
-  for (let index = workbench.main.views.length - 1; index >= 0; index -= 1) {
-    const view = workbench.main.views[index];
-    if (view !== undefined && isModelPreviewView(view)) return view;
-  }
-  return undefined;
-}
-
-function isModelPreviewView(
-  view: DesktopWorkbenchLayoutProjection['main']['views'][number],
-): boolean {
-  return view.kind === 'preview' && view.previewContentKind === 'model';
-}
-
-function createCanvasMainWorkbench(
-  workbench: DesktopWorkbenchLayoutProjection,
-  project: DesktopProjectCatalogItem,
-  projection: DesktopShellProjection,
-): DesktopWorkbenchLayoutProjection {
-  const tab = requireProjectTab(projection, project.projectId);
-  const canvasView = {
-    viewId: `canvas:${tab.viewId}`,
-    viewEpoch: tab.viewEpoch,
-    projectId: project.projectId,
-    workspaceId: project.workspaceId,
-    kind: 'canvas' as const,
-    ownerId: `canvas:${project.projectId}`,
-    documentId: DESKTOP_DEFAULT_CANVAS_DOCUMENT_ID,
-  };
-  const views = upsertOpenWorkbenchView(workbench.main.views, canvasView);
-  return {
-    ...workbench,
-    revision: workbench.revision + 1,
-    preset: 'canvas-agent',
-    agent: {
-      ...workbench.agent,
-      presentation: 'dock',
-      dockPresentation: 'docked',
-    },
-    main: {
-      views,
-      activeViewId: canvasView.viewId,
-      split: 'none',
-    },
-  };
-}
-
-function createAgentMainWorkbench(
-  workbench: DesktopWorkbenchLayoutProjection,
-  project: DesktopProjectCatalogItem,
-  projection: DesktopShellProjection,
-): DesktopWorkbenchLayoutProjection {
-  const tab = requireProjectTab(projection, project.projectId);
-  const agentView = {
-    viewId: tab.viewId,
-    viewEpoch: tab.viewEpoch,
-    projectId: project.projectId,
-    workspaceId: project.workspaceId,
-    kind: 'agent' as const,
-    ownerId: tab.viewId,
-  };
-  return {
-    ...workbench,
-    revision: workbench.revision + 1,
-    preset: 'agent-focus',
-    agent: {
-      ...workbench.agent,
-      presentation: 'main',
-      dockPresentation: 'hidden',
-    },
-    main: {
-      views: upsertOpenWorkbenchView(workbench.main.views, agentView),
-      activeViewId: agentView.viewId,
-      split: 'none',
-    },
-  };
+  if (mode === 'chat-only') return setWorkbenchDisplayMode(workbench, 'chat-only');
+  if (mode === 'main-only') return setWorkbenchDisplayMode(workbench, 'main-only');
+  const chatPosition = mode === 'chat-main-left' ? 'left' : 'right';
+  const displayed = setWorkbenchDisplayMode(workbench, 'chat-main', chatPosition);
+  return displayed.resourceDock.presentation === 'hidden'
+    ? displayed
+    : {
+        ...displayed,
+        resourceDock: {
+          ...displayed.resourceDock,
+          position: oppositeDockPosition(chatPosition),
+        },
+      };
 }
 
 export function openCanvasDocumentWorkbench(input: {
@@ -2193,53 +1933,12 @@ export function openCanvasDocumentWorkbench(input: {
       workspaceId: project.workspaceId,
       kind: 'canvas' as const,
       ownerId: `canvas:${project.projectId}`,
+      displayLabel: documentId.split(/[\\/]/u).at(-1) ?? documentId,
       documentId,
     } satisfies DesktopWorkbenchLayoutProjection['main']['views'][number]);
-  const views = upsertOpenWorkbenchView(workbench.main.views, canvasView);
-  if (presentation === 'side') {
-    const active = views.find((view) => view.viewId === workbench.main.activeViewId);
-    if (!active || active.kind !== 'canvas' || active.viewId === canvasView.viewId) {
-      throw new Error(
-        'Opening a Canvas to the side requires a different active Canvas View.',
-      );
-    }
-    return {
-      ...workbench,
-      revision: workbench.revision + 1,
-      preset: 'canvas-preview',
-      agent: {
-        ...workbench.agent,
-        presentation: 'dock',
-      },
-      main: {
-        views,
-        activeViewId: active.viewId,
-        sideViewId: canvasView.viewId,
-        split: 'horizontal',
-      },
-    };
-  }
-  return {
-    ...workbench,
-    revision: workbench.revision + 1,
-    preset: 'canvas-focus',
-    agent: {
-      ...workbench.agent,
-      presentation: 'dock',
-    },
-    main: {
-      views,
-      activeViewId: canvasView.viewId,
-      split: 'none',
-    },
-  };
-}
-
-function upsertOpenWorkbenchView(
-  views: DesktopWorkbenchLayoutProjection['main']['views'],
-  next: DesktopWorkbenchLayoutProjection['main']['views'][number],
-): readonly DesktopWorkbenchLayoutProjection['main']['views'][number][] {
-  return [...views.filter((view) => view.viewId !== next.viewId), next].slice(-8);
+  return openOrFocusMainView(workbench, canvasView, {
+    ...(presentation === 'side' ? { splitAxis: 'columns' as const } : {}),
+  });
 }
 
 function stableViewSuffix(value: string): string {

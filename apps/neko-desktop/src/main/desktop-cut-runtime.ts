@@ -39,7 +39,12 @@ import type {
   ResourceBrowserItem,
 } from 'neko-assets/resource-browser/contract';
 import type { DesktopShellService } from './shell-service';
-import type { DesktopWorkbenchLayoutProjection } from '../shared/workbench-contract';
+import {
+  getActiveMainView,
+  openOrFocusMainView,
+  showWorkbenchTimeline,
+  type DesktopWorkbenchLayoutProjection,
+} from '../shared/workbench-contract';
 import { createDesktopCutSessionId } from '../shared/cut-bridge-contract';
 import { resolveDesktopWorkspaceContentLocator } from './desktop-content-locator';
 import type { DesktopMediaDescriptorRegistry } from './desktop-media-protocol';
@@ -149,31 +154,18 @@ export class DesktopCutRuntime {
       workspaceId: project.workspaceId,
       kind: 'cut' as const,
       ownerId,
+      displayLabel: input.item.label,
       documentId: locator.path,
     };
-    const workbench: DesktopWorkbenchLayoutProjection = {
-      ...current.window.workbench,
+    const activeBeforeOpen = getActiveMainView(current.window.workbench);
+    let workbench = openOrFocusMainView(current.window.workbench, view);
+    if (activeBeforeOpen?.kind === 'canvas') {
+      workbench = openOrFocusMainView(workbench, activeBeforeOpen);
+    }
+    workbench = showWorkbenchTimeline(workbench, view.viewId);
+    workbench = {
+      ...workbench,
       revision: current.window.workbench.revision + 1,
-      preset: 'cut-focus',
-      agent: {
-        ...current.window.workbench.agent,
-        presentation: 'dock',
-        dockPresentation: 'hidden',
-      },
-      main: {
-        views: [
-          ...current.window.workbench.main.views.filter(
-            (candidate) => candidate.viewId !== view.viewId,
-          ),
-          view,
-        ].slice(-8),
-        activeViewId: view.viewId,
-        split: 'none',
-      },
-      timeline: {
-        ...current.window.workbench.timeline,
-        visible: true,
-      },
     };
     await this.options.shell.updateWorkbench(
       input.identity.windowId,

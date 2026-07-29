@@ -5,7 +5,6 @@ import type { DesktopShellProjection } from '../shared/shell-contract';
 import {
   activateWorkbenchMainView,
   applyWorkbenchDisplayMode,
-  applyWorkbenchMainComposition,
   DesktopShellView,
   nextResourceDockPresentation,
   openCanvasDocumentWorkbench,
@@ -15,7 +14,15 @@ import {
   setResourceDockPresentationWorkbench,
 } from './DesktopShell';
 import { createDesktopI18n } from './i18n';
-import { createDefaultDesktopWorkbenchLayout } from '../shared/workbench-contract';
+import {
+  DESKTOP_PRIMARY_MAIN_GROUP_ID,
+  DESKTOP_SECONDARY_MAIN_GROUP_ID,
+  createDefaultDesktopWorkbenchLayout,
+  getActiveMainView,
+  openOrFocusMainView,
+  showWorkbenchTimeline,
+  splitMainView,
+} from '../shared/workbench-contract';
 import {
   DEFAULT_DESKTOP_APPLICATION_PREFERENCES,
   DESKTOP_APPLICATION_SETTINGS_CONTRACT_VERSION,
@@ -24,36 +31,26 @@ import { DesktopApplicationSettingsProvider } from './application-settings-conte
 
 describe('DesktopShellView', () => {
   it('reopens Resources as an overlay while a full Preview owns Main', () => {
-    const workbench = createDefaultDesktopWorkbenchLayout('window-1');
+    const workbench = openOrFocusMainView(createDefaultDesktopWorkbenchLayout('window-1'), {
+      viewId: 'preview-1',
+      viewEpoch: 1,
+      projectId: 'project-1',
+      workspaceId: 'workspace-1',
+      kind: 'preview',
+      ownerId: 'preview-session-1',
+      displayLabel: 'resource-1',
+      documentId: 'resource-1',
+    });
 
-    expect(
-      nextResourceDockPresentation({
-        ...workbench,
-        preset: 'preview-focus',
-        main: {
-          views: [
-            {
-              viewId: 'preview-1',
-              viewEpoch: 1,
-              projectId: 'project-1',
-              workspaceId: 'workspace-1',
-              kind: 'preview',
-              ownerId: 'preview-session-1',
-              documentId: 'resource-1',
-            },
-          ],
-          activeViewId: 'preview-1',
-          split: 'none',
-        },
-      }),
-    ).toBe('overlay');
-    expect(nextResourceDockPresentation(workbench)).toBe('docked');
+    expect(nextResourceDockPresentation(workbench)).toBe('overlay');
+    expect(nextResourceDockPresentation(createDefaultDesktopWorkbenchLayout('window-1'))).toBe(
+      'docked',
+    );
   });
 
-  it('restores the selected Main preset and a visible dock after Preview closes', () => {
+  it('activates an attached creative Main tab and normalizes an overlay Resource dock', () => {
     const workbench = {
       ...createDefaultDesktopWorkbenchLayout('window-1'),
-      preset: 'preview-focus' as const,
       resourceDock: {
         ...createDefaultDesktopWorkbenchLayout('window-1').resourceDock,
         presentation: 'overlay' as const,
@@ -66,13 +63,20 @@ describe('DesktopShellView', () => {
       workspaceId: 'workspace-1',
       kind: 'canvas' as const,
       ownerId: 'canvas-session-1',
+      displayLabel: 'main.nkc',
       documentId: 'boards/main.nkc',
     };
 
-    expect(activateWorkbenchMainView(workbench, canvasView, [canvasView])).toMatchObject({
-      preset: 'canvas-focus',
+    expect(activateWorkbenchMainView(workbench, canvasView)).toMatchObject({
       resourceDock: { presentation: 'docked' },
-      main: { activeViewId: 'canvas-1', split: 'none' },
+      main: {
+        groups: [
+          {
+            groupId: DESKTOP_PRIMARY_MAIN_GROUP_ID,
+            activeViewId: 'canvas-1',
+          },
+        ],
+      },
     });
   });
 
@@ -95,9 +99,9 @@ describe('DesktopShellView', () => {
       revision: 9,
       timeline: { height: 320 },
     });
-    expect(agent.agent.width).toBe(400);
+    expect(agent.display.chatWidth).toBe(400);
     expect(agent.resourceDock.width).toBe(workbench.resourceDock.width);
-    expect(resources.agent.width).toBe(workbench.agent.width);
+    expect(resources.display.chatWidth).toBe(workbench.display.chatWidth);
     expect(resources.resourceDock.width).toBe(440);
   });
 
@@ -107,22 +111,17 @@ describe('DesktopShellView', () => {
     if (!project) {
       throw new Error('Desktop Shell fixture requires one project.');
     }
-    const projectProjection: DesktopShellProjection = {
-      ...projection,
-      window: {
-        ...projection.window,
-        tabs: [
-          {
-            tabId: 'tab-1',
-            projectId: project.projectId,
-            viewId: 'view-1',
-            viewEpoch: 1,
-          },
-        ],
-      },
-    };
     const workbench = {
-      ...createDefaultDesktopWorkbenchLayout('window-1'),
+      ...openOrFocusMainView(createDefaultDesktopWorkbenchLayout('window-1'), {
+        viewId: 'canvas:view-1:main',
+        viewEpoch: 1,
+        projectId: project.projectId,
+        workspaceId: project.workspaceId,
+        kind: 'canvas',
+        ownerId: 'canvas:view-1',
+        displayLabel: 'main.nkc',
+        documentId: 'boards/main.nkc',
+      }),
       resourceDock: {
         presentation: 'docked' as const,
         position: 'right' as const,
@@ -131,16 +130,11 @@ describe('DesktopShellView', () => {
     };
 
     const revealed = setResourceDockPresentationWorkbench(workbench, 'docked');
-    const chatRight = applyWorkbenchDisplayMode(
-      revealed,
-      project,
-      projectProjection,
-      'chat-main-right',
-    );
+    const chatRight = applyWorkbenchDisplayMode(revealed, 'chat-main-right');
 
-    expect(revealed.agent.dockPosition).toBe('left');
+    expect(revealed.display.chatPosition).toBe('left');
     expect(revealed.resourceDock.position).toBe('right');
-    expect(chatRight.agent.dockPosition).toBe('right');
+    expect(chatRight.display.chatPosition).toBe('right');
     expect(chatRight.resourceDock.position).toBe('left');
   });
 
@@ -149,7 +143,6 @@ describe('DesktopShellView', () => {
     const project = projection.catalog.projects[0]!;
     const workbench = {
       ...createDefaultDesktopWorkbenchLayout('window-1'),
-      preset: 'cut-focus' as const,
       main: {
         views: [
           {
@@ -159,21 +152,34 @@ describe('DesktopShellView', () => {
             workspaceId: project.workspaceId,
             kind: 'cut' as const,
             ownerId: 'cut-session:story',
+            displayLabel: 'story.otio',
             documentId: 'cuts/story.otio',
           },
         ],
-        activeViewId: 'cut:view-1:story',
-        split: 'none' as const,
+        groups: [
+          {
+            groupId: DESKTOP_PRIMARY_MAIN_GROUP_ID,
+            viewIds: ['cut:view-1:story'],
+            activeViewId: 'cut:view-1:story',
+          },
+        ],
+        activeGroupId: DESKTOP_PRIMARY_MAIN_GROUP_ID,
       },
-      timeline: { visible: true, height: 280 },
+      timeline: {
+        presentation: 'docked' as const,
+        ownerViewId: 'cut:view-1:story',
+        height: 280,
+      },
+      display: {
+        ...createDefaultDesktopWorkbenchLayout('window-1').display,
+        mode: 'main-only' as const,
+      },
     };
     const markup = renderShell(
       <DesktopShellView
         projection={{
           ...projection,
-          domains: [
-            { surface: 'cut', status: 'ready', ownerSlice: 'P1.5' },
-          ],
+          domains: [{ surface: 'cut', status: 'ready', ownerSlice: 'P1.5' }],
           window: {
             ...projection.window,
             activeTarget: { kind: 'project', tabId: 'tab-1' },
@@ -193,6 +199,8 @@ describe('DesktopShellView', () => {
 
     expect(markup).toContain('data-testid="desktop-cut-timeline-slot"');
     expect(markup).toContain('data-timeline-visible="true"');
+    expect(markup).toContain('Open creative documents');
+    expect(markup).toContain('story.otio');
     expect(markup).not.toContain('desktop-cut-timeline-not-mounted');
   });
 
@@ -312,6 +320,7 @@ describe('DesktopShellView', () => {
     expect(markup).toContain('desktop-domain-surface-unavailable');
     expect(markup).toContain('Workbench layout controls');
     expect(markup).toContain('Display');
+    expect(markup).not.toContain('Main panel');
     expect(markup).toContain('Desktop settings');
     expect(markup).toContain('Start creating');
     expect(markup).toContain('Asset Center');
@@ -398,32 +407,38 @@ describe('DesktopShellView', () => {
             workbench: {
               ...createDefaultDesktopWorkbenchLayout('window-1'),
               revision: 2,
-              preset: 'canvas-agent',
               primarySidebar: { visible: false, width: 240 },
               resourceDock: {
                 presentation: 'overlay',
                 position: 'left',
                 width: 320,
               },
-              agent: {
-                presentation: 'dock',
-                dockPresentation: 'docked',
-                dockPosition: 'right',
-                width: 360,
+              display: {
+                mode: 'chat-main',
+                chatPosition: 'right',
+                chatWidth: 360,
               },
               main: {
                 views: [
                   {
-                    viewId: 'view-1',
+                    viewId: 'canvas:view-1:main',
                     viewEpoch: 1,
                     projectId: 'content:workspace-1',
                     workspaceId: 'workspace-1',
-                    kind: 'agent',
-                    ownerId: 'view-1',
+                    kind: 'canvas',
+                    ownerId: 'canvas:view-1',
+                    displayLabel: 'main.nkc',
+                    documentId: 'boards/main.nkc',
                   },
                 ],
-                activeViewId: 'view-1',
-                split: 'none',
+                groups: [
+                  {
+                    groupId: DESKTOP_PRIMARY_MAIN_GROUP_ID,
+                    viewIds: ['canvas:view-1:main'],
+                    activeViewId: 'canvas:view-1:main',
+                  },
+                ],
+                activeGroupId: DESKTOP_PRIMARY_MAIN_GROUP_ID,
               },
             },
           },
@@ -436,6 +451,7 @@ describe('DesktopShellView', () => {
     expect(markup).toContain('data-primary-sidebar-placement="flush"');
     expect(markup).toContain('data-primary-sidebar-hover-reveal="true"');
     expect(markup).toContain('data-primary-sidebar-expanded-width="240"');
+    expect(markup).toContain('home-brand-toggle');
     expect(markup).toContain('Recent projects');
     expect(markup).toContain('Recent Agent conversations');
     expect(markup).toContain('data-left-presentation="docked"');
@@ -469,11 +485,10 @@ describe('DesktopShellView', () => {
                 position: 'right',
                 width: 320,
               },
-              agent: {
-                presentation: 'dock',
-                dockPresentation: 'docked',
-                dockPosition: 'right',
-                width: 380,
+              display: {
+                mode: 'chat-main',
+                chatPosition: 'right',
+                chatWidth: 380,
               },
             },
           },
@@ -482,18 +497,12 @@ describe('DesktopShellView', () => {
     );
 
     expect(markup).not.toContain('project-dock-stack');
-    expect(markup).toContain(
-      'neko-controlled-workbench-dock--left" data-presentation="docked"',
-    );
-    expect(markup).toContain(
-      'neko-controlled-workbench-dock--right" data-presentation="docked"',
-    );
+    expect(markup).toContain('neko-controlled-workbench-dock--left" data-presentation="docked"');
+    expect(markup).toContain('neko-controlled-workbench-dock--right" data-presentation="docked"');
     expect(markup).toMatch(
       /neko-controlled-workbench-dock--left[\s\S]*data-dock-owner="resources"/u,
     );
-    expect(markup).toMatch(
-      /neko-controlled-workbench-dock--right[\s\S]*data-dock-owner="agent"/u,
-    );
+    expect(markup).toMatch(/neko-controlled-workbench-dock--right[\s\S]*data-dock-owner="agent"/u);
   });
 
   it('mounts the package-owned Resource Browser when the Main runtime is ready', () => {
@@ -607,14 +616,22 @@ describe('DesktopShellView', () => {
     });
 
     expect(duplicate.main.views).toHaveLength(1);
-    expect(duplicate.main.activeViewId).toBe(duplicate.main.views[0]?.viewId);
+    expect(getActiveMainView(duplicate)?.viewId).toBe(duplicate.main.views[0]?.viewId);
     expect(side.main.views).toHaveLength(2);
-    expect(side.main.activeViewId).toBe(duplicate.main.activeViewId);
-    expect(side.main.sideViewId).not.toBe(side.main.activeViewId);
-    expect(side.main.split).toBe('horizontal');
+    expect(side.main.groups).toMatchObject([
+      {
+        groupId: DESKTOP_PRIMARY_MAIN_GROUP_ID,
+        activeViewId: getActiveMainView(duplicate)?.viewId,
+      },
+      {
+        groupId: DESKTOP_SECONDARY_MAIN_GROUP_ID,
+        activeViewId: getActiveMainView(side)?.viewId,
+      },
+    ]);
+    expect(side.main.split).toEqual({ axis: 'columns', ratio: 0.5 });
   });
 
-  it('composes package-owned Canvas, Cut Timeline and Model Views without alternate renderers', () => {
+  it('composes package-owned Canvas, Cut Timeline and Model Views through tab Groups', () => {
     const home = homeProjection();
     const project = home.catalog.projects[0]!;
     const projection: DesktopShellProjection = {
@@ -631,105 +648,63 @@ describe('DesktopShellView', () => {
         ],
       },
     };
-    const workbench = {
-      ...projection.window.workbench,
-      main: {
-        views: [
-          {
-            viewId: 'cut:view-1:story',
-            viewEpoch: 1,
-            projectId: project.projectId,
-            workspaceId: project.workspaceId,
-            kind: 'cut' as const,
-            ownerId: 'cut-session:story',
-            documentId: 'cuts/story.otio',
-          },
-          {
-            viewId: 'preview:view-1:model',
-            viewEpoch: 1,
-            projectId: project.projectId,
-            workspaceId: project.workspaceId,
-            kind: 'preview' as const,
-            ownerId: 'preview-session:model',
-            documentId: 'models/character.glb',
-            previewContentKind: 'model' as const,
-          },
-        ],
-        activeViewId: 'cut:view-1:story',
-        split: 'none' as const,
-      },
-    };
-
-    const canvasWithTimeline = applyWorkbenchMainComposition(
-      workbench,
+    const canvas = openCanvasDocumentWorkbench({
+      documentId: 'boards/main.nkc',
+      presentation: 'main',
       project,
       projection,
-      'canvas-timeline',
+      workbench: projection.window.workbench,
+    });
+    const cut = {
+      viewId: 'cut:view-1:story',
+      viewEpoch: 1,
+      projectId: project.projectId,
+      workspaceId: project.workspaceId,
+      kind: 'cut' as const,
+      ownerId: 'cut-session:story',
+      displayLabel: 'story.otio',
+      documentId: 'cuts/story.otio',
+    };
+    const withCutTab = openOrFocusMainView(canvas, cut);
+    const canvasWithTimeline = showWorkbenchTimeline(
+      splitMainView(withCutTab, cut.viewId, 'rows'),
+      cut.viewId,
     );
     expect(canvasWithTimeline).toMatchObject({
-      preset: 'canvas-cut',
-      agent: { presentation: 'dock', dockPresentation: 'docked' },
       main: {
-        activeViewId: 'cut:view-1:story',
-        split: 'horizontal',
+        activeGroupId: DESKTOP_SECONDARY_MAIN_GROUP_ID,
+        split: { axis: 'rows', ratio: 0.5 },
       },
-      timeline: { visible: true },
+      timeline: { presentation: 'docked', ownerViewId: 'cut:view-1:story' },
     });
     expect(
-      canvasWithTimeline.main.views.find(
-        (view) => view.viewId === canvasWithTimeline.main.sideViewId,
-      )?.kind,
-    ).toBe('canvas');
+      canvasWithTimeline.main.groups.find(
+        (group) => group.groupId === DESKTOP_SECONDARY_MAIN_GROUP_ID,
+      )?.viewIds,
+    ).toEqual([cut.viewId]);
 
-    const canvasWithModel = applyWorkbenchMainComposition(
-      workbench,
-      project,
-      projection,
-      'canvas-model',
-    );
-    expect(canvasWithModel).toMatchObject({
-      preset: 'canvas-preview',
-      main: { split: 'horizontal' },
-      timeline: { visible: false },
+    const model = {
+      viewId: 'preview:view-1:model',
+      viewEpoch: 1,
+      projectId: project.projectId,
+      workspaceId: project.workspaceId,
+      kind: 'preview' as const,
+      ownerId: 'preview-session:model',
+      displayLabel: 'character.glb',
+      documentId: 'models/character.glb',
+      previewContentKind: 'model' as const,
+    };
+    const canvasWithModel = openOrFocusMainView(canvas, model, {
+      splitAxis: 'columns',
     });
-    expect(
-      canvasWithModel.main.views.find(
-        (view) => view.viewId === canvasWithModel.main.activeViewId,
-      )?.kind,
-    ).toBe('canvas');
-    expect(
-      canvasWithModel.main.views.find(
-        (view) => view.viewId === canvasWithModel.main.sideViewId,
-      )?.documentId,
-    ).toBe('models/character.glb');
+    expect(canvasWithModel.main.split).toEqual({ axis: 'columns', ratio: 0.5 });
+    expect(getActiveMainView(canvasWithModel)?.documentId).toBe('models/character.glb');
   });
 
-  it('fails visibly when a Main composition has no owning Timeline or Model View', () => {
-    const projection = homeProjection();
-    const project = projection.catalog.projects[0]!;
-    const projectProjection: DesktopShellProjection = {
-      ...projection,
-      window: {
-        ...projection.window,
-        tabs: [
-          {
-            tabId: 'tab-1',
-            projectId: project.projectId,
-            viewId: 'view-1',
-            viewEpoch: 1,
-          },
-        ],
-      },
-    };
-
+  it('fails visibly when Timeline has no attached Cut owner', () => {
     expect(() =>
-      applyWorkbenchMainComposition(
-        projectProjection.window.workbench,
-        project,
-        projectProjection,
-        'timeline',
-      ),
-    ).toThrow("Desktop Main composition 'timeline' requires an open owning View.");
+      showWorkbenchTimeline(createDefaultDesktopWorkbenchLayout('window-1'), 'cut:missing'),
+    ).toThrow("Desktop Main View 'cut:missing' does not exist.");
   });
 });
 

@@ -116,7 +116,14 @@ describe('editor workbench shell primitives', () => {
           }}
           main={<div data-testid="main" />}
           secondaryMain={<div data-testid="secondary-main" />}
-          mainSplit="horizontal"
+          mainSplit="columns"
+          mainSplitRatio={0.4}
+          mainSplitResize={{
+            label: 'Resize Main split',
+            minSize: 0.25,
+            maxSize: 0.75,
+            onResizeEnd: vi.fn(),
+          }}
           leftDock={<div data-testid="left-dock" />}
           leftDockPresentation="overlay"
           leftDockResize={{
@@ -151,10 +158,11 @@ describe('editor workbench shell primitives', () => {
     expect(shell?.dataset['primaryVisible']).toBe('true');
     expect(shell?.dataset['leftPresentation']).toBe('overlay');
     expect(shell?.dataset['rightPresentation']).toBe('docked');
-    expect(shell?.dataset['mainSplit']).toBe('horizontal');
+    expect(shell?.dataset['mainSplit']).toBe('columns');
     expect(shell?.dataset['timelineVisible']).toBe('true');
     expect(shell?.style.getPropertyValue('--neko-controlled-primary-width')).toBe('232px');
     expect(shell?.style.getPropertyValue('--neko-controlled-timeline-height')).toBe('220px');
+    expect(shell?.style.getPropertyValue('--neko-controlled-main-split-ratio')).toBe('40%');
     expect(
       host.querySelector('.neko-controlled-workbench-main__primary [data-testid="main"]'),
     ).not.toBeNull();
@@ -169,8 +177,9 @@ describe('editor workbench shell primitives', () => {
     expect(
       host.querySelector('.neko-controlled-workbench-dock--right[data-presentation="docked"]'),
     ).not.toBeNull();
-    expect(host.querySelectorAll('[role="separator"]')).toHaveLength(4);
+    expect(host.querySelectorAll('[role="separator"]')).toHaveLength(5);
     expect(host.querySelector('[aria-label="Resize primary"]')).not.toBeNull();
+    expect(host.querySelector('[aria-label="Resize Main split"]')).not.toBeNull();
     expect(host.querySelector('[aria-label="Resize timeline"]')).not.toBeNull();
   });
 
@@ -232,7 +241,7 @@ describe('editor workbench shell primitives', () => {
           primarySidebar={<div data-testid="primary" />}
           primarySidebarVisible={false}
           main={<div data-testid="main" />}
-          mainSplit="vertical"
+          mainSplit="rows"
           leftDock={<div data-testid="left-dock" />}
           leftDockPresentation="hidden"
           leftDockResize={{

@@ -277,16 +277,24 @@ describe('DesktopApplication', () => {
       main: {
         views: [
           {
-            viewId: 'view-1',
+            viewId: 'cut:view-1:story',
             viewEpoch: 1,
             projectId: 'content:workspace-1',
             workspaceId: 'workspace-1',
-            kind: 'agent' as const,
-            ownerId: 'view-1',
+            kind: 'cut' as const,
+            ownerId: 'cut-session:story',
+            displayLabel: 'story.otio',
+            documentId: 'cuts/story.otio',
           },
         ],
-        activeViewId: 'view-1',
-        split: 'none' as const,
+        groups: [
+          {
+            groupId: 'main:primary',
+            viewIds: ['cut:view-1:story'],
+            activeViewId: 'cut:view-1:story',
+          },
+        ],
+        activeGroupId: 'main:primary',
       },
     };
     const projection: DesktopShellProjection = {
@@ -394,7 +402,10 @@ describe('DesktopApplication', () => {
     expect(update).toHaveBeenCalledWith(
       expect.objectContaining({
         revision: 2,
-        timeline: expect.objectContaining({ visible: true }),
+        timeline: expect.objectContaining({
+          presentation: 'docked',
+          ownerViewId: 'cut:view-1:story',
+        }),
       }),
       2,
       1,

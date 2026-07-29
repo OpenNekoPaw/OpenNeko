@@ -22,12 +22,8 @@ describe('DesktopShellStateRepository', () => {
   it('atomically persists state and rejects stale repository instances', async () => {
     const directory = await createTemporaryDirectory();
     const statePath = path.join(directory, 'desktop-shell-state.json');
-    const first = new DesktopShellStateRepository(
-      createNodeDesktopShellStateFilePort(statePath),
-    );
-    const second = new DesktopShellStateRepository(
-      createNodeDesktopShellStateFilePort(statePath),
-    );
+    const first = new DesktopShellStateRepository(createNodeDesktopShellStateFilePort(statePath));
+    const second = new DesktopShellStateRepository(createNodeDesktopShellStateFilePort(statePath));
     const initial = await first.read();
     const committed = await first.commit(0, withPrimaryWindow(initial, 'window-1'));
 
@@ -96,14 +92,98 @@ describe('DesktopShellStateRepository', () => {
 
     const migrated = await repository.read();
 
-    expect(migrated.schemaVersion).toBe(2);
-    expect(migrated.windows[0]?.workbench).toEqual(
-      createDefaultDesktopWorkbenchLayout('window-1'),
-    );
+    expect(migrated.schemaVersion).toBe(3);
+    expect(migrated.windows[0]?.workbench).toEqual(createDefaultDesktopWorkbenchLayout('window-1'));
     await repository.commit(0, { ...migrated, storageRevision: 1 });
     expect(JSON.parse(content)).toMatchObject({
+      schemaVersion: 3,
+      windows: [{ workbench: { schemaVersion: 2, display: { mode: 'chat-only' } } }],
+    });
+  });
+
+  it('migrates the version 2 single-Main Workbench into explicit View Groups', async () => {
+    let content = JSON.stringify({
       schemaVersion: 2,
-      windows: [{ workbench: { preset: 'agent-focus' } }],
+      storageRevision: 0,
+      catalogRevision: 0,
+      primaryWindowId: 'window-1',
+      projects: [],
+      windows: [
+        {
+          windowId: 'window-1',
+          revision: 0,
+          activeTarget: { kind: 'home' },
+          tabs: [],
+          workbench: {
+            schemaVersion: 1,
+            windowId: 'window-1',
+            revision: 4,
+            preset: 'canvas-cut',
+            primarySidebar: { visible: true, width: 240 },
+            resourceDock: { presentation: 'hidden', position: 'right', width: 320 },
+            agent: {
+              presentation: 'dock',
+              dockPresentation: 'docked',
+              dockPosition: 'left',
+              width: 360,
+            },
+            main: {
+              views: [
+                {
+                  viewId: 'canvas-1',
+                  viewEpoch: 1,
+                  projectId: 'project-1',
+                  workspaceId: 'workspace-1',
+                  kind: 'canvas',
+                  ownerId: 'canvas-1',
+                  documentId: 'boards/main.nkc',
+                },
+                {
+                  viewId: 'cut-1',
+                  viewEpoch: 1,
+                  projectId: 'project-1',
+                  workspaceId: 'workspace-1',
+                  kind: 'cut',
+                  ownerId: 'cut-1',
+                  documentId: 'cuts/main.otio',
+                },
+              ],
+              activeViewId: 'canvas-1',
+              sideViewId: 'cut-1',
+              split: 'vertical',
+            },
+            timeline: { visible: true, height: 240 },
+          },
+        },
+      ],
+    });
+    const repository = new DesktopShellStateRepository({
+      readTextIfExists: async () => content,
+      writeTextAtomic: async (next) => {
+        content = next;
+      },
+    });
+
+    const migrated = await repository.read();
+
+    expect(migrated).toMatchObject({
+      schemaVersion: 3,
+      windows: [
+        {
+          workbench: {
+            schemaVersion: 2,
+            display: { mode: 'chat-main', chatPosition: 'left' },
+            main: {
+              groups: [
+                { viewIds: ['canvas-1'], activeViewId: 'canvas-1' },
+                { viewIds: ['cut-1'], activeViewId: 'cut-1' },
+              ],
+              split: { axis: 'rows', ratio: 0.5 },
+            },
+            timeline: { presentation: 'docked', ownerViewId: 'cut-1' },
+          },
+        },
+      ],
     });
   });
 });

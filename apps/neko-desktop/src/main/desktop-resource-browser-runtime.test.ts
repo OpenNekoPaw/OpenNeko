@@ -23,6 +23,7 @@ const canvasView: DesktopWorkbenchViewRef = {
   workspaceId: 'workspace-1',
   kind: 'canvas',
   ownerId: 'canvas:board-a',
+  displayLabel: 'a.nkc',
   documentId: 'boards/a.nkc',
 };
 

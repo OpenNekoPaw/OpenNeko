@@ -17,7 +17,12 @@ import type {
   ResourceBrowserIdentity,
   ResourceBrowserItem,
 } from 'neko-assets/resource-browser/contract';
-import type { DesktopWorkbenchLayoutProjection } from '../shared/workbench-contract';
+import {
+  closeMainView,
+  findMainGroupForView,
+  openOrFocusMainView,
+  type DesktopWorkbenchLayoutProjection,
+} from '../shared/workbench-contract';
 import {
   parseDesktopPreviewBootstrapRequest,
   type DesktopPreviewBootstrapRequest,
@@ -110,8 +115,7 @@ export class DesktopPreviewRuntime {
     if (
       viewId !== expectedViewId ||
       (input.target &&
-        input.target.expectedWorkbenchRevision !==
-          shellProjection.window.workbench.revision)
+        input.target.expectedWorkbenchRevision !== shellProjection.window.workbench.revision)
     ) {
       throw new Error('Desktop Preview target View or workbench revision is stale.');
     }
@@ -181,57 +185,26 @@ export class DesktopPreviewRuntime {
       workspaceId: project.workspaceId,
       kind: 'preview',
       ownerId: sessionId,
+      displayLabel: input.item.label,
       documentId: input.item.resourceId,
       previewPresentation: presentation,
       ...(contentKind === undefined ? {} : { previewContentKind: contentKind }),
     };
-    const companion =
-      presentation === 'side'
-        ? currentWorkbench.main.views.find(
-            (candidate) =>
-              candidate.viewId === currentWorkbench.main.activeViewId &&
-              candidate.kind !== 'preview',
-          )
-        : undefined;
-    if (presentation === 'side' && !companion) {
+    let workbench: DesktopWorkbenchLayoutProjection;
+    try {
+      workbench = openOrFocusMainView(currentWorkbench, previewView, {
+        ...(presentation === 'side' ? { splitAxis: 'columns' as const } : {}),
+        replaceTemporaryPreview: presentation === 'temporary',
+      });
+      workbench = {
+        ...workbench,
+        revision: currentWorkbench.revision + 1,
+      };
+    } catch (error) {
       this.sessions.delete(sessionId);
       this.options.mediaRegistry.releaseSession(sessionId);
-      throw new Error('Desktop side Preview requires an active non-Preview Main View.');
+      throw error;
     }
-    const retainedViews = currentWorkbench.main.views.filter(
-      (view) =>
-        view.viewId !== viewId &&
-        (view.kind !== 'preview' ||
-          view.projectId !== project.projectId ||
-          view.previewPresentation !== presentation),
-    );
-    const workbench: DesktopWorkbenchLayoutProjection = {
-      ...currentWorkbench,
-      revision: currentWorkbench.revision + 1,
-      preset: 'preview-focus',
-      agent: {
-        ...currentWorkbench.agent,
-        presentation: 'dock',
-        dockPresentation: 'hidden',
-      },
-      resourceDock: {
-        ...currentWorkbench.resourceDock,
-        presentation:
-          presentation === 'temporary'
-            ? currentWorkbench.resourceDock.presentation
-            : 'hidden',
-      },
-      main: {
-        views: [...retainedViews, previewView].slice(-8),
-        activeViewId: presentation === 'side' ? companion?.viewId : viewId,
-        ...(presentation === 'side' ? { sideViewId: viewId } : {}),
-        split: presentation === 'side' ? 'horizontal' : 'none',
-      },
-      timeline: {
-        ...currentWorkbench.timeline,
-        visible: false,
-      },
-    };
     try {
       await this.options.shell.updateWorkbench(
         input.identity.windowId,
@@ -326,19 +299,9 @@ export class DesktopPreviewRuntime {
       case PREVIEW_HOST_RUNTIME_ROUTES.snapshotGet:
         return session.projection;
       case PREVIEW_HOST_RUNTIME_ROUTES.viewPin:
-        return this.updatePresentation(
-          session,
-          shellProjection,
-          view,
-          'pinned',
-        );
+        return this.updatePresentation(session, shellProjection, view, 'pinned');
       case PREVIEW_HOST_RUNTIME_ROUTES.viewOpen:
-        return this.updatePresentation(
-          session,
-          shellProjection,
-          view,
-          'side',
-        );
+        return this.updatePresentation(session, shellProjection, view, 'side');
       case PREVIEW_HOST_RUNTIME_ROUTES.viewClose:
         return this.closeSession(session, shellProjection, view);
       case PREVIEW_HOST_RUNTIME_ROUTES.contentResolve:
@@ -356,14 +319,9 @@ export class DesktopPreviewRuntime {
     }
   }
 
-  reconcileWorkbench(
-    windowId: string,
-    workbench: DesktopWorkbenchLayoutProjection,
-  ): void {
+  reconcileWorkbench(windowId: string, workbench: DesktopWorkbenchLayoutProjection): void {
     const attachedSessionIds = new Set(
-      workbench.main.views
-        .filter((view) => view.kind === 'preview')
-        .map((view) => view.ownerId),
+      workbench.main.views.filter((view) => view.kind === 'preview').map((view) => view.ownerId),
     );
     for (const [sessionId, session] of this.sessions) {
       if (session.identity.windowId !== windowId || attachedSessionIds.has(sessionId)) {
@@ -434,55 +392,22 @@ export class DesktopPreviewRuntime {
       viewId: nextViewId,
       previewPresentation: presentation,
     };
-    const views = currentWorkbench.main.views.map((candidate) =>
-      candidate.viewId === view.viewId ? nextView : candidate,
-    );
-    const companion =
-      presentation === 'side'
-        ? views.find(
-            (candidate) =>
-              candidate.viewId === currentWorkbench.main.activeViewId &&
-              candidate.viewId !== nextViewId &&
-              candidate.previewPresentation !== 'temporary',
-          ) ??
-          [...views]
-            .reverse()
-            .find(
-              (candidate) =>
-                candidate.viewId !== nextViewId &&
-                candidate.kind !== 'preview',
-            ) ??
-          [...views]
-            .reverse()
-            .find(
-              (candidate) =>
-                candidate.viewId !== nextViewId &&
-                candidate.previewPresentation !== 'temporary',
-            )
-        : undefined;
-    if (presentation === 'side' && !companion) {
-      throw new Error('Desktop side Preview requires an existing Main View.');
+    const sourceGroup = findMainGroupForView(currentWorkbench, view.viewId);
+    if (!sourceGroup) {
+      throw new Error('Desktop Preview View has no Main Group.');
     }
-    const workbench: DesktopWorkbenchLayoutProjection = {
-      ...currentWorkbench,
+    let workbench = closeMainView(currentWorkbench, view.viewId);
+    workbench = openOrFocusMainView(workbench, nextView, {
+      groupId: workbench.main.groups.some((group) => group.groupId === sourceGroup.groupId)
+        ? sourceGroup.groupId
+        : workbench.main.activeGroupId,
+      ...(presentation === 'side' && workbench.main.groups.length === 1
+        ? { splitAxis: 'columns' as const }
+        : {}),
+    });
+    workbench = {
+      ...workbench,
       revision: currentWorkbench.revision + 1,
-      preset:
-        presentation === 'side' && companion?.kind === 'canvas'
-          ? 'canvas-preview'
-          : 'preview-focus',
-      main:
-        presentation === 'side'
-          ? {
-              views,
-              activeViewId: companion?.viewId,
-              sideViewId: nextViewId,
-              split: 'horizontal',
-            }
-          : {
-              views,
-              activeViewId: nextViewId,
-              split: 'none',
-            },
     };
     const previousIdentity = session.identity;
     const previousProjection = session.projection;
@@ -510,30 +435,7 @@ export class DesktopPreviewRuntime {
     view: DesktopWorkbenchLayoutProjection['main']['views'][number],
   ): Promise<PreviewProjection> {
     const currentWorkbench = shellProjection.window.workbench;
-    const views = currentWorkbench.main.views.filter(
-      (candidate) => candidate.viewId !== view.viewId,
-    );
-    const nextActive =
-      currentWorkbench.main.activeViewId === view.viewId
-        ? views.find((candidate) => candidate.viewId === currentWorkbench.main.sideViewId) ??
-          views.at(-1)
-        : views.find(
-            (candidate) => candidate.viewId === currentWorkbench.main.activeViewId,
-          );
-    const workbench: DesktopWorkbenchLayoutProjection = {
-      ...currentWorkbench,
-      revision: currentWorkbench.revision + 1,
-      main: nextActive
-        ? {
-            views,
-            activeViewId: nextActive.viewId,
-            split: 'none',
-          }
-        : {
-            views,
-            split: 'none',
-          },
-    };
+    const workbench = closeMainView(currentWorkbench, view.viewId);
     const closedProjection = parsePreviewProjection({
       schemaVersion: PREVIEW_HOST_RUNTIME_VERSION,
       identity: {

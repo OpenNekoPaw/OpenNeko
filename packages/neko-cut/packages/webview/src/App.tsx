@@ -70,10 +70,11 @@ interface PendingVideoPromotion {
 }
 
 export interface CutAppProps {
+  readonly presentation?: 'editor' | 'timeline-only';
   readonly timelineTarget?: Element;
 }
 
-function App({ timelineTarget }: CutAppProps) {
+function App({ presentation = 'editor', timelineTarget }: CutAppProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const previewCanvasRef = useRef<HTMLCanvasElement>(null);
   const previewVideoRef = useRef<HTMLVideoElement>(null);
@@ -1079,6 +1080,20 @@ function App({ timelineTarget }: CutAppProps) {
 
   const previewTitle = selected?.name ?? view?.name;
   const previewSource = selected?.targetUrl;
+  if (presentation === 'timeline-only') {
+    return (
+      <div
+        ref={rootRef}
+        className="relative h-full bg-vscode-bg"
+        data-cut-presentation="timeline-only"
+        data-neko-keyboard-focused={isKeyboardFocused ? 'true' : 'false'}
+      >
+        <section className="cut-basic-timeline-region cut-basic-timeline-region--host">
+          <Timeline onOpenPackage={linkMediaToSelectedTrack} onSeek={seek} />
+        </section>
+      </div>
+    );
+  }
   return (
     <div
       ref={rootRef}

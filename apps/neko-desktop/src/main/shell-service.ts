@@ -18,6 +18,7 @@ import {
   type DesktopUnavailableProjectProfile,
 } from '../shared/shell-contract';
 import {
+  closeMainView,
   createDefaultDesktopWorkbenchLayout,
   parseDesktopWorkbenchLayout,
   type DesktopWorkbenchLayoutProjection,
@@ -616,30 +617,35 @@ export class DesktopShellService {
     expectedEndpointEpoch: string,
     expectedWindowRevision: number,
   ): Promise<DesktopShellProjection> {
-    return this.mutateWindow(windowId, expectedEndpointEpoch, expectedWindowRevision, (window, state) => {
-      if (!window.tabs.some((tab) => tab.tabId === tabId)) {
-        throw new Error(`Unknown Desktop Project Tab '${tabId}' for Window '${windowId}'.`);
-      }
-      const tab = window.tabs.find((candidate) => candidate.tabId === tabId);
-      if (!tab) {
-        throw new Error(`Unknown Desktop Project Tab '${tabId}' for Window '${windowId}'.`);
-      }
-      const project = requireStoredProject(state, tab.projectId);
-      const workbench = attachAgentWorkbench(window.workbench, project, tab);
-      if (
-        window.activeTarget.kind === 'project' &&
-        window.activeTarget.tabId === tabId &&
-        workbench === window.workbench
-      ) {
-        return window;
-      }
-      return {
-        ...window,
-        revision: window.revision + 1,
-        activeTarget: { kind: 'project', tabId },
-        workbench,
-      };
-    });
+    return this.mutateWindow(
+      windowId,
+      expectedEndpointEpoch,
+      expectedWindowRevision,
+      (window, state) => {
+        if (!window.tabs.some((tab) => tab.tabId === tabId)) {
+          throw new Error(`Unknown Desktop Project Tab '${tabId}' for Window '${windowId}'.`);
+        }
+        const tab = window.tabs.find((candidate) => candidate.tabId === tabId);
+        if (!tab) {
+          throw new Error(`Unknown Desktop Project Tab '${tabId}' for Window '${windowId}'.`);
+        }
+        const project = requireStoredProject(state, tab.projectId);
+        const workbench = attachProjectWorkbench(window.workbench, project);
+        if (
+          window.activeTarget.kind === 'project' &&
+          window.activeTarget.tabId === tabId &&
+          workbench === window.workbench
+        ) {
+          return window;
+        }
+        return {
+          ...window,
+          revision: window.revision + 1,
+          activeTarget: { kind: 'project', tabId },
+          workbench,
+        };
+      },
+    );
   }
 
   async activateHome(
@@ -663,40 +669,44 @@ export class DesktopShellService {
     expectedEndpointEpoch: string,
     expectedWindowRevision: number,
   ): Promise<DesktopShellProjection> {
-    return this.mutateWindow(windowId, expectedEndpointEpoch, expectedWindowRevision, (window, state) => {
-      const tabIndex = window.tabs.findIndex((tab) => tab.tabId === tabId);
-      if (tabIndex < 0) {
-        throw new Error(`Unknown Desktop Project Tab '${tabId}' for Window '${windowId}'.`);
-      }
-      const tabs = window.tabs.filter((tab) => tab.tabId !== tabId);
-      const wasActive =
-        window.activeTarget.kind === 'project' && window.activeTarget.tabId === tabId;
-      const nextActiveTab = tabs[Math.min(tabIndex, tabs.length - 1)];
-      const nextWorkbench =
-        wasActive && nextActiveTab
-          ? attachAgentWorkbench(
-              window.workbench,
-              requireStoredProject(state, nextActiveTab.projectId),
-              nextActiveTab,
-            )
-          : wasActive
-            ? {
-                ...createDefaultDesktopWorkbenchLayout(window.windowId),
-                revision: window.workbench.revision + 1,
-              }
-            : window.workbench;
-      return {
-        ...window,
-        revision: window.revision + 1,
-        tabs,
-        activeTarget: wasActive
-          ? nextActiveTab
-            ? { kind: 'project', tabId: nextActiveTab.tabId }
-            : { kind: 'home' }
-          : window.activeTarget,
-        workbench: nextWorkbench,
-      };
-    });
+    return this.mutateWindow(
+      windowId,
+      expectedEndpointEpoch,
+      expectedWindowRevision,
+      (window, state) => {
+        const tabIndex = window.tabs.findIndex((tab) => tab.tabId === tabId);
+        if (tabIndex < 0) {
+          throw new Error(`Unknown Desktop Project Tab '${tabId}' for Window '${windowId}'.`);
+        }
+        const tabs = window.tabs.filter((tab) => tab.tabId !== tabId);
+        const wasActive =
+          window.activeTarget.kind === 'project' && window.activeTarget.tabId === tabId;
+        const nextActiveTab = tabs[Math.min(tabIndex, tabs.length - 1)];
+        const nextWorkbench =
+          wasActive && nextActiveTab
+            ? attachProjectWorkbench(
+                window.workbench,
+                requireStoredProject(state, nextActiveTab.projectId),
+              )
+            : wasActive
+              ? {
+                  ...createDefaultDesktopWorkbenchLayout(window.windowId),
+                  revision: window.workbench.revision + 1,
+                }
+              : window.workbench;
+        return {
+          ...window,
+          revision: window.revision + 1,
+          tabs,
+          activeTarget: wasActive
+            ? nextActiveTab
+              ? { kind: 'project', tabId: nextActiveTab.tabId }
+              : { kind: 'home' }
+            : window.activeTarget,
+          workbench: nextWorkbench,
+        };
+      },
+    );
   }
 
   async updateWorkbench(
@@ -782,17 +792,6 @@ export class DesktopShellService {
             throw new DesktopShellContractError(
               'desktop-shell-project-identity-mismatch',
               `Desktop Workbench View '${view.viewId}' has a stale epoch.`,
-            );
-          }
-          if (
-            view.kind === 'agent' &&
-            (view.viewId !== tab.viewId ||
-              view.ownerId !== tab.viewId ||
-              persistedViewEpoch !== tab.viewEpoch)
-          ) {
-            throw new DesktopShellContractError(
-              'desktop-shell-project-identity-mismatch',
-              'Desktop Agent Workbench View does not match its Host-owned Project attachment.',
             );
           }
           return {
@@ -1013,7 +1012,8 @@ function removeProjectFromWindow(
   const removedTabIndexes = window.tabs.flatMap((tab, index) =>
     tab.projectId === projectId ? [index] : [],
   );
-  if (removedTabIndexes.length === 0) return window;
+  const workbench = detachProjectWorkbench(window.workbench, projectId);
+  if (removedTabIndexes.length === 0 && workbench === window.workbench) return window;
   const tabs = window.tabs.filter((tab) => tab.projectId !== projectId);
   const activeTarget = window.activeTarget;
   const activeTab =
@@ -1026,6 +1026,7 @@ function removeProjectFromWindow(
       ...window,
       revision: window.revision + 1,
       tabs,
+      workbench,
     };
   }
   const firstRemovedTabIndex = removedTabIndexes[0];
@@ -1041,15 +1042,22 @@ function removeProjectFromWindow(
       ? { kind: 'project', tabId: nextActiveTab.tabId }
       : { kind: 'home' },
     workbench: nextActiveTab
-      ? attachAgentWorkbench(
-          window.workbench,
-          requireStoredProject(state, nextActiveTab.projectId),
-          nextActiveTab,
-        )
-      : {
-          ...createDefaultDesktopWorkbenchLayout(window.windowId),
-          revision: window.workbench.revision + 1,
-        },
+      ? attachProjectWorkbench(workbench, requireStoredProject(state, nextActiveTab.projectId))
+      : workbench,
+  };
+}
+
+function detachProjectWorkbench(
+  current: DesktopWorkbenchLayoutProjection,
+  projectId: string,
+): DesktopWorkbenchLayoutProjection {
+  if (!current.main.views.some((view) => view.projectId === projectId)) {
+    return current;
+  }
+  return {
+    ...createDefaultDesktopWorkbenchLayout(current.windowId),
+    revision: current.revision + 1,
+    primarySidebar: current.primarySidebar,
   };
 }
 
@@ -1153,7 +1161,7 @@ function openContentProject(
   };
   const activeAlready =
     window.activeTarget.kind === 'project' && window.activeTarget.tabId === tab.tabId;
-  const workbench = attachAgentWorkbench(window.workbench, project, tab);
+  const workbench = attachProjectWorkbench(window.workbench, project);
   if (
     existingProject &&
     !projectChanged &&
@@ -1182,48 +1190,29 @@ function openContentProject(
   };
 }
 
-function attachAgentWorkbench(
+function attachProjectWorkbench(
   current: DesktopWorkbenchLayoutProjection,
   project: DesktopStoredProject,
-  tab: DesktopStoredWindow['tabs'][number],
 ): DesktopWorkbenchLayoutProjection {
-  const currentView = current.main.views[0];
   if (
-    current.preset === 'agent-focus' &&
-    current.agent.presentation === 'main' &&
-    current.main.views.length === 1 &&
-    currentView?.kind === 'agent' &&
-    currentView.viewId === tab.viewId &&
-    currentView.viewEpoch === tab.viewEpoch &&
-    currentView.projectId === project.projectId &&
-    currentView.workspaceId === project.workspaceId &&
-    current.main.activeViewId === tab.viewId &&
-    current.main.split === 'none'
+    current.main.views.every(
+      (view) => view.projectId === project.projectId && view.workspaceId === project.workspaceId,
+    )
   ) {
     return current;
   }
+  const reset = createDefaultDesktopWorkbenchLayout(current.windowId);
   return {
-    ...current,
+    ...reset,
     revision: current.revision + 1,
-    preset: 'agent-focus',
-    agent: {
-      ...current.agent,
-      presentation: 'main',
-      dockPresentation: 'hidden',
+    primarySidebar: current.primarySidebar,
+    resourceDock: {
+      ...current.resourceDock,
+      presentation: 'hidden',
     },
-    main: {
-      views: [
-        {
-          viewId: tab.viewId,
-          viewEpoch: tab.viewEpoch,
-          projectId: project.projectId,
-          workspaceId: project.workspaceId,
-          kind: 'agent',
-          ownerId: tab.viewId,
-        },
-      ],
-      activeViewId: tab.viewId,
-      split: 'none',
+    display: {
+      ...current.display,
+      mode: 'chat-only',
     },
   };
 }
@@ -1247,7 +1236,17 @@ function restoreTransientWorkbench(
         `Desktop active Project Tab '${activeTabId}' is unavailable during Workbench restore.`,
       );
     }
-    return attachAgentWorkbench(window.workbench, requireStoredProject(state, tab.projectId), tab);
+    let restored = window.workbench;
+    for (const view of window.workbench.main.views) {
+      if (
+        view.kind === 'preview' &&
+        view.previewPresentation === 'temporary' &&
+        view.ownerId.startsWith('preview-session:')
+      ) {
+        restored = closeMainView(restored, view.viewId);
+      }
+    }
+    return restored;
   }
   return {
     ...createDefaultDesktopWorkbenchLayout(window.windowId),

@@ -187,6 +187,12 @@ export const en = {
   'workspace.resizeLeftDock': 'Resize left sidebar',
   'workspace.resizeRightDock': 'Resize right sidebar',
   'workspace.resizeTimeline': 'Resize Timeline',
+  'workspace.resizeMainSplit': 'Resize Main split',
+  'workspace.mainTabs.label': 'Open creative documents',
+  'workspace.mainTabs.empty': 'No creative document',
+  'workspace.mainTabs.close': 'Close {name}',
+  'workspace.mainTabs.splitRight': 'Move active tab to a right split',
+  'workspace.mainTabs.splitDown': 'Move active tab to a lower split',
   'workspace.primaryNavigation': 'Project navigation',
   'workspace.creativeMain': 'Creative main surface',
   'workspace.creativeMainDetail':

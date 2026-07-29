@@ -18,12 +18,14 @@ import './index.css';
 export interface CutWebviewRootProps {
   readonly locale?: SupportedLocale;
   readonly bridge: CutWebviewHostBridge;
+  readonly presentation?: 'editor' | 'timeline-only';
   readonly timelineTarget?: Element;
 }
 
 export function CutWebviewRoot({
   bridge,
   locale,
+  presentation,
   timelineTarget,
 }: CutWebviewRootProps): ReactElement {
   useEffect(() => {
@@ -40,7 +42,7 @@ export function CutWebviewRoot({
             <CutPresentationStoreProvider>
               <CutWebviewHostBridgeProvider bridge={bridge}>
                 <CutOtioControllerProvider>
-                  <App timelineTarget={timelineTarget} />
+                  <App presentation={presentation} timelineTarget={timelineTarget} />
                 </CutOtioControllerProvider>
               </CutWebviewHostBridgeProvider>
             </CutPresentationStoreProvider>

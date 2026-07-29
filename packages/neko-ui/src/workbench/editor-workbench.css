@@ -1,9 +1,9 @@
 .neko-editor-workbench-shell {
   display: grid;
   grid-template-areas:
-    "title title title title"
-    "activity sidebar editor secondary"
-    "status status status status";
+    'title title title title'
+    'activity sidebar editor secondary'
+    'status status status status';
   grid-template-columns: 52px 320px minmax(460px, 1fr) minmax(340px, 400px);
   grid-template-rows: 34px minmax(0, 1fr) 24px;
   width: 100vw;
@@ -14,132 +14,132 @@
   background: var(--neko-workbench-background, #f2f3f5);
 }
 
-.neko-editor-workbench-shell[data-has-bottom="true"] {
+.neko-editor-workbench-shell[data-has-bottom='true'] {
   grid-template-areas:
-    "title title title title"
-    "activity sidebar editor secondary"
-    "activity sidebar bottom secondary"
-    "status status status status";
+    'title title title title'
+    'activity sidebar editor secondary'
+    'activity sidebar bottom secondary'
+    'status status status status';
   grid-template-rows: 34px minmax(0, 1fr) 196px 24px;
 }
 
-.neko-editor-workbench-shell[data-activity-visible="true"][data-sidebar-visible="true"][data-secondary-visible="false"] {
+.neko-editor-workbench-shell[data-activity-visible='true'][data-sidebar-visible='true'][data-secondary-visible='false'] {
   grid-template-areas:
-    "title title title"
-    "activity sidebar editor"
-    "status status status";
+    'title title title'
+    'activity sidebar editor'
+    'status status status';
   grid-template-columns: 52px 320px minmax(460px, 1fr);
   min-width: 760px;
 }
 
-.neko-editor-workbench-shell[data-activity-visible="true"][data-sidebar-visible="true"][data-secondary-visible="false"][data-has-bottom="true"] {
+.neko-editor-workbench-shell[data-activity-visible='true'][data-sidebar-visible='true'][data-secondary-visible='false'][data-has-bottom='true'] {
   grid-template-areas:
-    "title title title"
-    "activity sidebar editor"
-    "activity sidebar bottom"
-    "status status status";
+    'title title title'
+    'activity sidebar editor'
+    'activity sidebar bottom'
+    'status status status';
 }
 
-.neko-editor-workbench-shell[data-activity-visible="true"][data-sidebar-visible="false"][data-secondary-visible="true"] {
+.neko-editor-workbench-shell[data-activity-visible='true'][data-sidebar-visible='false'][data-secondary-visible='true'] {
   grid-template-areas:
-    "title title title"
-    "activity editor secondary"
-    "status status status";
+    'title title title'
+    'activity editor secondary'
+    'status status status';
   grid-template-columns: 52px minmax(460px, 1fr) minmax(340px, 400px);
   min-width: 860px;
 }
 
-.neko-editor-workbench-shell[data-activity-visible="true"][data-sidebar-visible="false"][data-secondary-visible="true"][data-has-bottom="true"] {
+.neko-editor-workbench-shell[data-activity-visible='true'][data-sidebar-visible='false'][data-secondary-visible='true'][data-has-bottom='true'] {
   grid-template-areas:
-    "title title title"
-    "activity editor secondary"
-    "activity bottom secondary"
-    "status status status";
+    'title title title'
+    'activity editor secondary'
+    'activity bottom secondary'
+    'status status status';
 }
 
-.neko-editor-workbench-shell[data-activity-visible="true"][data-sidebar-visible="false"][data-secondary-visible="false"] {
+.neko-editor-workbench-shell[data-activity-visible='true'][data-sidebar-visible='false'][data-secondary-visible='false'] {
   grid-template-areas:
-    "title title"
-    "activity editor"
-    "status status";
+    'title title'
+    'activity editor'
+    'status status';
   grid-template-columns: 52px minmax(460px, 1fr);
   min-width: 560px;
 }
 
-.neko-editor-workbench-shell[data-activity-visible="true"][data-sidebar-visible="false"][data-secondary-visible="false"][data-has-bottom="true"] {
+.neko-editor-workbench-shell[data-activity-visible='true'][data-sidebar-visible='false'][data-secondary-visible='false'][data-has-bottom='true'] {
   grid-template-areas:
-    "title title"
-    "activity editor"
-    "activity bottom"
-    "status status";
+    'title title'
+    'activity editor'
+    'activity bottom'
+    'status status';
 }
 
-.neko-editor-workbench-shell[data-activity-visible="false"][data-sidebar-visible="true"][data-secondary-visible="true"] {
+.neko-editor-workbench-shell[data-activity-visible='false'][data-sidebar-visible='true'][data-secondary-visible='true'] {
   grid-template-areas:
-    "title title title"
-    "sidebar editor secondary"
-    "status status status";
+    'title title title'
+    'sidebar editor secondary'
+    'status status status';
   grid-template-columns: 320px minmax(460px, 1fr) minmax(340px, 400px);
   min-width: 880px;
 }
 
-.neko-editor-workbench-shell[data-activity-visible="false"][data-sidebar-visible="true"][data-secondary-visible="true"][data-has-bottom="true"] {
+.neko-editor-workbench-shell[data-activity-visible='false'][data-sidebar-visible='true'][data-secondary-visible='true'][data-has-bottom='true'] {
   grid-template-areas:
-    "title title title"
-    "sidebar editor secondary"
-    "sidebar bottom secondary"
-    "status status status";
+    'title title title'
+    'sidebar editor secondary'
+    'sidebar bottom secondary'
+    'status status status';
 }
 
-.neko-editor-workbench-shell[data-activity-visible="false"][data-sidebar-visible="true"][data-secondary-visible="false"] {
+.neko-editor-workbench-shell[data-activity-visible='false'][data-sidebar-visible='true'][data-secondary-visible='false'] {
   grid-template-areas:
-    "title title"
-    "sidebar editor"
-    "status status";
+    'title title'
+    'sidebar editor'
+    'status status';
   grid-template-columns: 320px minmax(460px, 1fr);
   min-width: 760px;
 }
 
-.neko-editor-workbench-shell[data-activity-visible="false"][data-sidebar-visible="true"][data-secondary-visible="false"][data-has-bottom="true"] {
+.neko-editor-workbench-shell[data-activity-visible='false'][data-sidebar-visible='true'][data-secondary-visible='false'][data-has-bottom='true'] {
   grid-template-areas:
-    "title title"
-    "sidebar editor"
-    "sidebar bottom"
-    "status status";
+    'title title'
+    'sidebar editor'
+    'sidebar bottom'
+    'status status';
 }
 
-.neko-editor-workbench-shell[data-activity-visible="false"][data-sidebar-visible="false"][data-secondary-visible="true"] {
+.neko-editor-workbench-shell[data-activity-visible='false'][data-sidebar-visible='false'][data-secondary-visible='true'] {
   grid-template-areas:
-    "title title"
-    "editor secondary"
-    "status status";
+    'title title'
+    'editor secondary'
+    'status status';
   grid-template-columns: minmax(460px, 1fr) minmax(340px, 400px);
   min-width: 820px;
 }
 
-.neko-editor-workbench-shell[data-activity-visible="false"][data-sidebar-visible="false"][data-secondary-visible="true"][data-has-bottom="true"] {
+.neko-editor-workbench-shell[data-activity-visible='false'][data-sidebar-visible='false'][data-secondary-visible='true'][data-has-bottom='true'] {
   grid-template-areas:
-    "title title"
-    "editor secondary"
-    "bottom secondary"
-    "status status";
+    'title title'
+    'editor secondary'
+    'bottom secondary'
+    'status status';
 }
 
-.neko-editor-workbench-shell[data-activity-visible="false"][data-sidebar-visible="false"][data-secondary-visible="false"] {
+.neko-editor-workbench-shell[data-activity-visible='false'][data-sidebar-visible='false'][data-secondary-visible='false'] {
   grid-template-areas:
-    "title"
-    "editor"
-    "status";
+    'title'
+    'editor'
+    'status';
   grid-template-columns: minmax(460px, 1fr);
   min-width: 520px;
 }
 
-.neko-editor-workbench-shell[data-activity-visible="false"][data-sidebar-visible="false"][data-secondary-visible="false"][data-has-bottom="true"] {
+.neko-editor-workbench-shell[data-activity-visible='false'][data-sidebar-visible='false'][data-secondary-visible='false'][data-has-bottom='true'] {
   grid-template-areas:
-    "title"
-    "editor"
-    "bottom"
-    "status";
+    'title'
+    'editor'
+    'bottom'
+    'status';
 }
 
 .neko-editor-workbench-title {
@@ -193,7 +193,7 @@
   background: var(--vscode-editor-background, #ffffff);
 }
 
-.neko-workbench-webview-runtime-frame[data-neko-webview-runtime="agent"] .h-screen {
+.neko-workbench-webview-runtime-frame[data-neko-webview-runtime='agent'] .h-screen {
   height: 100%;
 }
 
@@ -201,10 +201,10 @@
   position: relative;
   display: grid;
   grid-template-areas:
-    "title title title title"
-    "primary left main right"
-    "primary left timeline right"
-    "status status status status";
+    'title title title title'
+    'primary left main right'
+    'primary left timeline right'
+    'status status status status';
   grid-template-columns:
     var(--neko-controlled-primary-width)
     var(--neko-controlled-left-dock-width)
@@ -224,7 +224,7 @@
   background: var(--neko-workbench-background, #f7f8fa);
 }
 
-.neko-controlled-workbench-shell[data-primary-visible="false"] {
+.neko-controlled-workbench-shell[data-primary-visible='false'] {
   grid-template-columns:
     0
     var(--neko-controlled-left-dock-width)
@@ -232,8 +232,8 @@
     var(--neko-controlled-right-dock-width);
 }
 
-.neko-controlled-workbench-shell[data-left-presentation="hidden"],
-.neko-controlled-workbench-shell[data-left-presentation="overlay"] {
+.neko-controlled-workbench-shell[data-left-presentation='hidden'],
+.neko-controlled-workbench-shell[data-left-presentation='overlay'] {
   grid-template-columns:
     var(--neko-controlled-primary-width)
     0
@@ -241,8 +241,8 @@
     var(--neko-controlled-right-dock-width);
 }
 
-.neko-controlled-workbench-shell[data-primary-visible="false"][data-left-presentation="hidden"],
-.neko-controlled-workbench-shell[data-primary-visible="false"][data-left-presentation="overlay"] {
+.neko-controlled-workbench-shell[data-primary-visible='false'][data-left-presentation='hidden'],
+.neko-controlled-workbench-shell[data-primary-visible='false'][data-left-presentation='overlay'] {
   grid-template-columns:
     0
     0
@@ -250,8 +250,8 @@
     var(--neko-controlled-right-dock-width);
 }
 
-.neko-controlled-workbench-shell[data-right-presentation="hidden"],
-.neko-controlled-workbench-shell[data-right-presentation="overlay"] {
+.neko-controlled-workbench-shell[data-right-presentation='hidden'],
+.neko-controlled-workbench-shell[data-right-presentation='overlay'] {
   grid-template-columns:
     var(--neko-controlled-primary-width)
     var(--neko-controlled-left-dock-width)
@@ -259,8 +259,8 @@
     0;
 }
 
-.neko-controlled-workbench-shell[data-primary-visible="false"][data-right-presentation="hidden"],
-.neko-controlled-workbench-shell[data-primary-visible="false"][data-right-presentation="overlay"] {
+.neko-controlled-workbench-shell[data-primary-visible='false'][data-right-presentation='hidden'],
+.neko-controlled-workbench-shell[data-primary-visible='false'][data-right-presentation='overlay'] {
   grid-template-columns:
     0
     var(--neko-controlled-left-dock-width)
@@ -268,10 +268,10 @@
     0;
 }
 
-.neko-controlled-workbench-shell[data-left-presentation="hidden"][data-right-presentation="hidden"],
-.neko-controlled-workbench-shell[data-left-presentation="overlay"][data-right-presentation="hidden"],
-.neko-controlled-workbench-shell[data-left-presentation="hidden"][data-right-presentation="overlay"],
-.neko-controlled-workbench-shell[data-left-presentation="overlay"][data-right-presentation="overlay"] {
+.neko-controlled-workbench-shell[data-left-presentation='hidden'][data-right-presentation='hidden'],
+.neko-controlled-workbench-shell[data-left-presentation='overlay'][data-right-presentation='hidden'],
+.neko-controlled-workbench-shell[data-left-presentation='hidden'][data-right-presentation='overlay'],
+.neko-controlled-workbench-shell[data-left-presentation='overlay'][data-right-presentation='overlay'] {
   grid-template-columns:
     var(--neko-controlled-primary-width)
     0
@@ -279,14 +279,14 @@
     0;
 }
 
-.neko-controlled-workbench-shell[data-primary-visible="false"][data-left-presentation="hidden"][data-right-presentation="hidden"],
-.neko-controlled-workbench-shell[data-primary-visible="false"][data-left-presentation="overlay"][data-right-presentation="hidden"],
-.neko-controlled-workbench-shell[data-primary-visible="false"][data-left-presentation="hidden"][data-right-presentation="overlay"],
-.neko-controlled-workbench-shell[data-primary-visible="false"][data-left-presentation="overlay"][data-right-presentation="overlay"] {
+.neko-controlled-workbench-shell[data-primary-visible='false'][data-left-presentation='hidden'][data-right-presentation='hidden'],
+.neko-controlled-workbench-shell[data-primary-visible='false'][data-left-presentation='overlay'][data-right-presentation='hidden'],
+.neko-controlled-workbench-shell[data-primary-visible='false'][data-left-presentation='hidden'][data-right-presentation='overlay'],
+.neko-controlled-workbench-shell[data-primary-visible='false'][data-left-presentation='overlay'][data-right-presentation='overlay'] {
   grid-template-columns: 0 0 minmax(420px, 1fr) 0;
 }
 
-.neko-controlled-workbench-shell[data-timeline-visible="false"] {
+.neko-controlled-workbench-shell[data-timeline-visible='false'] {
   grid-template-rows: auto minmax(0, 1fr) 0 auto;
 }
 
@@ -305,6 +305,7 @@
 }
 
 .neko-controlled-workbench-main {
+  position: relative;
   grid-area: main;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -321,14 +322,62 @@
   overflow: hidden;
 }
 
-.neko-controlled-workbench-shell[data-main-split="horizontal"]
-  .neko-controlled-workbench-main {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+.neko-controlled-workbench-shell[data-main-split='columns'] .neko-controlled-workbench-main {
+  grid-template-columns:
+    minmax(0, var(--neko-controlled-main-split-ratio))
+    minmax(0, calc(100% - var(--neko-controlled-main-split-ratio)));
 }
 
-.neko-controlled-workbench-shell[data-main-split="vertical"]
-  .neko-controlled-workbench-main {
-  grid-template-rows: repeat(2, minmax(0, 1fr));
+.neko-controlled-workbench-shell[data-main-split='rows'] .neko-controlled-workbench-main {
+  grid-template-rows:
+    minmax(0, var(--neko-controlled-main-split-ratio))
+    minmax(0, calc(100% - var(--neko-controlled-main-split-ratio)));
+}
+
+.neko-controlled-workbench-main-split-handle {
+  position: absolute;
+  z-index: 14;
+}
+
+.neko-controlled-workbench-main-split-handle::after {
+  position: absolute;
+  content: '';
+  background: transparent;
+  transition: background-color 120ms ease;
+}
+
+.neko-controlled-workbench-main-split-handle:hover::after,
+.neko-controlled-workbench-main[data-resizing='true']
+  > .neko-controlled-workbench-main-split-handle::after {
+  background: var(--neko-accent, #2f7d68);
+}
+
+.neko-controlled-workbench-main-split-handle--columns {
+  top: 0;
+  bottom: 0;
+  left: calc(var(--neko-controlled-main-split-ratio) - 4px);
+  width: 8px;
+}
+
+.neko-controlled-workbench-main-split-handle--columns::after {
+  top: 0;
+  bottom: 0;
+  left: 3px;
+  width: 2px;
+}
+
+.neko-controlled-workbench-main-split-handle--rows {
+  right: 0;
+  bottom: calc(100% - var(--neko-controlled-main-split-ratio) - 4px);
+  left: 0;
+  height: 8px;
+}
+
+.neko-controlled-workbench-main-split-handle--rows::after {
+  top: 3px;
+  right: 0;
+  left: 0;
+  height: 2px;
 }
 
 .neko-controlled-workbench-dock {
@@ -350,32 +399,26 @@
   border-left: 1px solid var(--neko-border, #d8dde4);
 }
 
-.neko-controlled-workbench-dock[data-presentation="hidden"] {
+.neko-controlled-workbench-dock[data-presentation='hidden'] {
   display: none;
 }
 
-.neko-controlled-workbench-dock[data-presentation="overlay"] {
+.neko-controlled-workbench-dock[data-presentation='overlay'] {
   position: absolute;
   z-index: 1200;
   top: 0;
   bottom: 0;
-  width: min(
-    var(--neko-controlled-left-dock-width),
-    calc(100% - 48px)
-  );
+  width: min(var(--neko-controlled-left-dock-width), calc(100% - 48px));
   box-shadow: 0 14px 34px rgb(23 35 48 / 18%);
 }
 
-.neko-controlled-workbench-dock--left[data-presentation="overlay"] {
+.neko-controlled-workbench-dock--left[data-presentation='overlay'] {
   left: 0;
 }
 
-.neko-controlled-workbench-dock--right[data-presentation="overlay"] {
+.neko-controlled-workbench-dock--right[data-presentation='overlay'] {
   right: 0;
-  width: min(
-    var(--neko-controlled-right-dock-width),
-    calc(100% - 48px)
-  );
+  width: min(var(--neko-controlled-right-dock-width), calc(100% - 48px));
 }
 
 .neko-controlled-workbench-timeline {
@@ -394,13 +437,13 @@
 
 .neko-controlled-workbench-resize-handle::after {
   position: absolute;
-  content: "";
+  content: '';
   background: transparent;
   transition: background-color 120ms ease;
 }
 
 .neko-controlled-workbench-resize-handle:hover::after,
-[data-resizing="true"] > .neko-controlled-workbench-resize-handle::after {
+[data-resizing='true'] > .neko-controlled-workbench-resize-handle::after {
   background: var(--neko-accent, #2f7d68);
 }
 
@@ -441,7 +484,7 @@
   height: 2px;
 }
 
-.neko-controlled-workbench-shell[data-timeline-visible="false"]
+.neko-controlled-workbench-shell[data-timeline-visible='false']
   .neko-controlled-workbench-timeline {
   display: none;
 }
@@ -480,7 +523,7 @@
 }
 
 .neko-workbench-activity-button:hover,
-.neko-workbench-activity-button[data-active="true"] {
+.neko-workbench-activity-button[data-active='true'] {
   color: var(--neko-accent, #1687d9);
   border-color: var(--neko-focus-muted, #b9d9f4);
   background: var(--neko-accent-muted, #e8f3ff);
@@ -559,7 +602,7 @@
   outline-offset: -2px;
 }
 
-.neko-workbench-editor-tab[data-active="true"] {
+.neko-workbench-editor-tab[data-active='true'] {
   color: var(--vscode-foreground, #1d2b38);
   background: var(--vscode-editor-background, #ffffff);
   font-weight: 700;
@@ -686,7 +729,7 @@
 }
 
 .neko-workbench-list-card:hover,
-.neko-workbench-list-card[data-selected="true"] {
+.neko-workbench-list-card[data-selected='true'] {
   border-color: var(--neko-focus-muted, #70afe6);
   background: var(--neko-hover, #eef7ff);
 }
@@ -798,27 +841,27 @@
   line-height: 15px;
 }
 
-.neko-workbench-list-card__badge[data-tone="neutral"] {
+.neko-workbench-list-card__badge[data-tone='neutral'] {
   color: #4b5968;
   background: #e7edf4;
 }
 
-.neko-workbench-list-card__badge[data-tone="info"] {
+.neko-workbench-list-card__badge[data-tone='info'] {
   color: #145f96;
   background: #dbefff;
 }
 
-.neko-workbench-list-card__badge[data-tone="success"] {
+.neko-workbench-list-card__badge[data-tone='success'] {
   color: #0f6b45;
   background: #ddf8e9;
 }
 
-.neko-workbench-list-card__badge[data-tone="warning"] {
+.neko-workbench-list-card__badge[data-tone='warning'] {
   color: #7a5309;
   background: #fff0c2;
 }
 
-.neko-workbench-list-card__badge[data-tone="danger"] {
+.neko-workbench-list-card__badge[data-tone='danger'] {
   color: #9e2636;
   background: #ffe3e7;
 }
@@ -882,7 +925,7 @@
 }
 
 .neko-workbench-thumbnail-strip__item:hover,
-.neko-workbench-thumbnail-strip__item[data-selected="true"] {
+.neko-workbench-thumbnail-strip__item[data-selected='true'] {
   border-color: var(--neko-focus-muted, #5aa8e8);
   background: var(--neko-hover, #eef7ff);
 }
@@ -1006,7 +1049,7 @@
 
 .neko-toolbar-btn:hover,
 .neko-toolbar-btn.active,
-.neko-toolbar-btn[aria-pressed="true"] {
+.neko-toolbar-btn[aria-pressed='true'] {
   border-color: var(--neko-focus-muted, #b8dcfb);
   color: var(--vscode-foreground, #111827);
   background: var(--neko-hover, #eef7ff);
@@ -1072,19 +1115,19 @@
 @media (max-width: 1220px) {
   .neko-editor-workbench-shell {
     grid-template-areas:
-      "title title title title"
-      "activity sidebar editor secondary"
-      "status status status status";
+      'title title title title'
+      'activity sidebar editor secondary'
+      'status status status status';
     grid-template-columns: 52px 280px minmax(340px, 1fr) 320px;
     grid-template-rows: 34px minmax(0, 1fr) 24px;
   }
 
-  .neko-editor-workbench-shell[data-has-bottom="true"] {
+  .neko-editor-workbench-shell[data-has-bottom='true'] {
     grid-template-areas:
-      "title title title title"
-      "activity sidebar editor secondary"
-      "activity sidebar bottom secondary"
-      "status status status status";
+      'title title title title'
+      'activity sidebar editor secondary'
+      'activity sidebar bottom secondary'
+      'status status status status';
     grid-template-rows: 34px minmax(0, 1fr) 180px 24px;
   }
 }
