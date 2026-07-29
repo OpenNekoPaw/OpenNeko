@@ -421,9 +421,7 @@ code {
   inset: 0 auto 0 0;
   width: 100%;
   height: 100%;
-  transition:
-    width 150ms ease,
-    box-shadow 150ms ease;
+  transition: box-shadow 150ms ease;
 }
 
 .application-primary-sidebar-frame[data-primary-sidebar-hover-reveal='true']
