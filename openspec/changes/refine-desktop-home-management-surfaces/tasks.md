@@ -76,6 +76,15 @@
 - [x] 9.3 Re-run the fast lateral pointer repro in the real Desktop Electron host, then run Desktop
       tests, typecheck, package build, strict OpenSpec validation and diff checks.
 
+## 10. Home primary-sidebar mutation authority
+
+- [x] 10.1 Add red-capable Shell service coverage proving Home may persist a primary-sidebar-only
+      mutation without an active Content Project and rejects other Workbench mutations.
+- [x] 10.2 Allow only that Window-owned presentation mutation on Home while preserving Project/View
+      identity validation for the complete Workbench path.
+- [x] 10.3 Re-run the Home collapse action in the real Desktop Electron host, then run Desktop tests,
+      typecheck, package build, strict OpenSpec validation and diff checks.
+
 ## Validation evidence
 
 - Packaged the production Electron application with `pnpm --filter @neko/app-desktop package`.
@@ -109,6 +118,17 @@
 - Added a red-capable renderer style regression that failed on `width 150ms ease` before the fix and
   passes only when the expanded hit width is immediate.
 - Re-ran `pnpm --filter @neko/app-desktop test` (45 files / 214 tests),
+  `pnpm --filter @neko/app-desktop typecheck`,
+  `pnpm --filter @neko/app-desktop package`,
+  `pnpm exec openspec validate refine-desktop-home-management-surfaces --strict`, and
+  `git diff --check`.
+- Added a red-capable Shell service regression for the real restored-project shape: an active
+  Project is returned to Home, the Renderer epoch advances, and Home persists only the application
+  primary-sidebar slice while a Resource Dock mutation still fails visibly.
+- Restarted the real Desktop Electron Main process and verified Home can expand and collapse the
+  shared primary sidebar without an active Content Project or an error diagnostic; moving the
+  pointer back to Main restores the compact rail.
+- Re-ran `pnpm --filter @neko/app-desktop test` (45 files / 215 tests),
   `pnpm --filter @neko/app-desktop typecheck`,
   `pnpm --filter @neko/app-desktop package`,
   `pnpm exec openspec validate refine-desktop-home-management-surfaces --strict`, and

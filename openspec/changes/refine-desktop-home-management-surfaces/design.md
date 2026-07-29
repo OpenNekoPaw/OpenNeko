@@ -121,6 +121,21 @@ Codex 风格任务入口。Start Creating 改为独立的 task launchpad：
 内容主面板、Agent、Resource、Cut/Timeline、Canvas 和 Preview/Model 属于 Workbench 内容组件，
 它们之间可以保留 8px 间隔；最靠近一级侧栏的第一个内容组件不得再增加左侧间隔。
 
+### 10. Home may mutate only the application primary-sidebar slice
+
+`window.workbench.primarySidebar` 是 Window Shell presentation authority，不要求当前激活 Content
+Project。Home 的折叠操作继续使用唯一 `workbench:update` canonical path，但 Main 必须把 Home
+mutation 限制为：
+
+- `windowId`、Window revision 与 Workbench revision 仍通过现有 CAS 校验；
+- 除 Workbench revision 和 `primarySidebar` 外，其余 Workbench projection 必须与当前存储状态
+  完全一致；
+- Home 尝试修改 Main views、Agent、Resource Dock、Timeline 或 preset 时必须 fail-visible；
+- Project 激活时继续执行完整 Project/View identity 校验。
+
+这样 primary-sidebar 状态仍由同一 Window Workbench authority 持久化，同时不会把 Home 当成
+伪 Content Project，也不会为一个按钮增加第二套 IPC 或 Renderer local state。
+
 ## Risks / Trade-offs
 
 - 跨项目资产查询可能较慢，因此结果按项目惰性加载并限制数量，不建立缓存真值。

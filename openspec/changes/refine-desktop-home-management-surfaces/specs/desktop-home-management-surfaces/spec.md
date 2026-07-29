@@ -134,3 +134,11 @@ border, radius, outer inset or panel gap. Both surfaces MUST consume the same
 - **WHEN** Main, Agent, Resources, Timeline, Canvas, Cut, Preview or Model surfaces are composed
 - **THEN** content panels MAY retain the Desktop panel gap between one another
 - **AND** the first content panel next to the primary sidebar SHALL be flush with that sidebar
+
+#### Scenario: User persistently collapses the sidebar from Home
+
+- **GIVEN** Home is the active Shell target
+- **WHEN** the user toggles the application primary sidebar
+- **THEN** Main SHALL accept and persist the primary-sidebar-only Workbench mutation
+- **AND** no active Content Project SHALL be required
+- **AND** any Home mutation of Project-owned Workbench slices SHALL fail visibly
