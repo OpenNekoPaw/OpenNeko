@@ -2,14 +2,15 @@
 
 Status: directional roadmap; no release dates are promised.
 
-Updated: 2026-07-27
+Updated: 2026-07-28
 
 This roadmap defines delivery order and qualification gates. Current product facts remain defined by
 [`README.md`](README.md), [`docs/architecture/client-targets.md`](docs/architecture/client-targets.md),
-and the codebase: `apps/neko-desktop` now contains the P1.1 foundation and P1.2 Shell/Project state,
-but Phase 1 domain integration is still in progress and Desktop is not a supported release product.
-Windows is not in the current release matrix, and Desktop professional-tool/plugin integrations are
-not implemented.
+and the codebase: `apps/neko-desktop` now contains the P1.1 foundation and P1.2 Shell/Project state.
+P1.3 Agent + Home deterministic implementation is in place, but the production controller
+composition and real-Host acceptance remain incomplete. Phase 1 domain integration is still in
+progress and Desktop is not a supported release product. Windows is not in the current release
+matrix, and Desktop professional-tool/plugin integrations are not implemented.
 
 Each phase must be split into bounded OpenSpec changes. Shell, cross-platform work, the plugin
 runtime, and every professional-tool adapter must not be developed as one permanent umbrella change.
@@ -25,7 +26,9 @@ Assets/Content/Media Library, Canvas, Cut, Preview/Media, Generation/Quality, Ch
 Tools/Diagnostics.
 
 Current progress: P1.1 and P1.2 have implementation and packaged `darwin-arm64` runtime evidence.
-P1.3 Agent and Home integration is next; Phase 1 remains incomplete until P1.3-P1.7 pass.
+P1.3 Agent and Home tasks 1-5 have deterministic implementation; acceptance remains blocked on
+Evaluation observability, the production controller composition, provider cost authorization, and
+graphical Host runtime evidence. Phase 1 remains incomplete until P1.3-P1.7 pass.
 
 The phase is complete only when:
 

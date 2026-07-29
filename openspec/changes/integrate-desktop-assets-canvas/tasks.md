@@ -1,0 +1,125 @@
+## 1. Contract And Reuse Audit
+
+- [x] 1.1 Audit Desktop Shell, `@neko/ui` workbench, Assets Extension/Tree providers, Canvas Root/
+      Custom Editor, Content/Entity/Search services and Workspace Board authoring; record each
+      production path as reuse, extract, replace or poison
+- [x] 1.2 Define versioned L0 workbench, Resource Browser and Canvas runtime contracts with explicit
+      Project/Workspace/Window/View/document/session/epoch/revision identity
+- [x] 1.3 Add parsers/builders and producer/consumer tests for valid payloads, unknown versions,
+      stale identity, absolute-path rejection and exhaustive Host route coverage
+- [x] 1.4 Add architecture/debt guards preventing Desktop renderer imports of Node/Electron/VS Code,
+      Assets browser imports of VS Code and production Canvas Root global VS Code API fallback
+
+## 2. Controlled Desktop Workbench
+
+- [x] 2.1 Enhance the existing `@neko/ui` workbench primitive with primary sidebar, controlled
+      Agent/Resource Dock, bounded Main split, Timeline slot and compact/overlay presentation without
+      adding domain semantics
+- [x] 2.2 Extend Window layout projection and revision/CAS persistence for sidebar visibility, dock
+      positions/sizes, Agent main/dock presentation, Main Views/split and Timeline visibility/height
+- [x] 2.3 Replace visual Project Tabs and narrow Activity Rail with the shared primary sidebar while
+      preserving Host-owned ProjectTab/View attachment identity and exact Home/Project navigation
+- [x] 2.4 Implement deterministic layout presets, dock show/hide, compact-window behavior and
+      localized accessible controls
+- [x] 2.5 Add shared UI and Desktop React tests for presets, minimum width, overlay, keyboard/focus,
+      project switching and absence of duplicated domain state
+- [x] 2.6 Collapse the primary sidebar to an icon rail, constrain layout choices to Chat + Main/
+      only Chat/only Main plus controlled Canvas/Timeline/Model Main compositions while keeping
+      Resource facets independent, remove separate move-left/right controls and the global
+      Header/unified workspace Tab row in favor of owner-local tabs, and move the package-owned
+      Canvas/Model viewport tools to bottom horizontal toolbars without changing their command owners
+
+## 3. Assets Resource Browser
+
+- [x] 3.1 Extract host-neutral linked-library, search, metadata/thumbnail and Entity presenter ports
+      from VS Code-specific Assets services without creating a second catalog or cache
+- [x] 3.2 Implement the package-owned Resource Browser controller/projection/Root with Files, Media
+      and Entity facets, including Character Entity representation projection
+- [x] 3.3 Migrate VS Code Tree providers/commands to consume the same services/presenter and poison
+      duplicate identity/search rules
+- [x] 3.4 Implement Desktop Main/preload fixed Assets namespace, sender-derived authorization,
+      source picker, search, reveal and projected thumbnail/metadata effects
+- [x] 3.5 Mount Resource Browser Root in Resource Dock and implement selection, search, refresh,
+      preview intent and explicit add-to-Canvas target actions
+- [x] 3.6 Test linked libraries, Entity bindings, locator containment, symlink escape, projection
+      authorization, cancellation, unavailable Chara actions and no path leakage
+
+## 4. Canvas Runtime And Root
+
+- [x] 4.1 Define the Canvas host runtime provider over the existing `.nkc` domain/session,
+      authoring, content projection, source picker, preview/reveal and presentation-state contracts
+- [x] 4.2 Refactor `CanvasWebviewRoot`, hooks, stores, delegates and toolbars to consume the injected
+      runtime; remove module-global VS Code API use from the production Root
+- [x] 4.3 Migrate the VS Code Custom Editor adapter to the same runtime and retain save/dirty/undo/
+      redo, preview, playback, source-add, drag/drop and authoring behavior
+- [x] 4.4 Implement Desktop Canvas Main/preload bridge and AppHost composition with sender-bound
+      document session, expected revision, command id, subscription and disposal
+- [x] 4.5 Replace `CanvasHostAdapterSurface` in the Desktop ready path with the full Canvas Root and
+      poison fixed/demo Canvas success
+- [x] 4.6 Add Canvas runtime/Root/adapter producer-consumer tests for snapshot-first recovery,
+      mutation, save, stale revision/epoch, unsupported effect and cleanup
+
+## 5. Resource-To-Canvas And Multi-View
+
+- [x] 5.1 Implement explicit Resource Browser drag/add intent to a selected Canvas document through
+      stable ContentLocator/representation identity and owning Canvas authoring
+- [x] 5.2 Integrate candidate/accept and Workspace Board delivery through existing owner operations
+      without renderer-owned candidate or delivery state
+- [x] 5.3 Implement compact Canvas View switcher, duplicate-document focus, close/save semantics and
+      default single rendered Canvas
+- [x] 5.4 Implement explicit side-open for at most two different Canvas documents with independent
+      document sessions and View presentation state
+- [x] 5.5 Pause/release hidden Canvas preview/media resources and recover allowed viewport/selection
+      state without persisting document facts in the Window layout
+- [x] 5.6 Test resource placement, cancellation, stale target, provenance, duplicate focus, dual
+      Canvas isolation, close/reopen and no active/recent Canvas fallback
+
+## 6. Recovery, Evaluation And Qualification
+
+- [x] 6.1 Add renderer reload, Project close/reopen, app restart and multi-window tests proving
+      Assets/Canvas owner recovery, fenced mutation and no duplicate import/delivery/acceptance
+- [x] 6.2 Record the Agent evaluation disposition for Resource/Canvas routing; run focused evaluation
+      if Tool/capability behavior changes, or document the exact external observability blocker
+- [x] 6.3 Run Assets, Content, Entity, Canvas, shared UI and Desktop tests/typechecks/builds plus
+      architecture, legacy-debt, unused-code and strict OpenSpec validation
+- [x] 6.4 Record the explicit Desktop-only acceptance waiver: the user excluded VS Code plugin
+      runtime testing, so no Extension Development Host evidence is claimed and that runtime remains
+      a documented residual risk
+- [x] 6.5 Validate the packaged Electron Project → Resource Dock → Canvas add/undo → package-owned
+      Preview scenario, and cover save/reopen plus dual-Canvas isolation through canonical-path tests
+- [x] 6.6 Run `pnpm build`, `pnpm test`, `pnpm check`, `pnpm check:quality` and `git diff --check`;
+      update current-capability docs and mark Phase 1 program 4.x only when every gate passes
+- [x] 6.7 Fix the Desktop Vite development renderer dependency closure, dynamic-style CSP nonce
+      authorization, shared Canvas Root StrictMode lifetime and post-close sender identity cleanup
+      so package Roots cannot fail or lose styles during development startup and window disposal
+      cannot access destroyed Electron objects; add regression guards and revalidate the visible
+      Desktop Canvas path
+- [x] 6.8 Restore the package-owned Canvas icon stylesheet and make the package-owned Model Viewer
+      renderer/source Host lifecycle safe under Desktop React StrictMode; verify real Canvas add,
+      undo/redo and GLB Preview behavior without widening workspace authorization to the renderer
+- [x] 6.9 Replace the Resource Browser drag path that still called the VS Code-only
+      `project:addSource` route with a portable ContentLocator drag contract and the owning Canvas
+      Host `project-content` intent at the actual drop position; cover payload privacy and path use
+
+## 7. Independent Agent And Resource Sidebars
+
+- [x] 7.1 Add a red-capable Desktop Shell regression proving visible Agent and Resource owners never
+      render in one vertical dock stack or share one resize owner.
+- [x] 7.2 Replace the multi-owner `project-dock-stack` path with deterministic independent left/right
+      sidebar placement while preserving each owner Root, width and visibility.
+- [x] 7.3 Normalize Chat placement and Resource reveal transitions so a same-side restored layout
+      keeps Agent on the declared Chat side and places Resource on the opposite side.
+- [x] 7.4 Run Desktop and shared UI tests/typecheck, strict OpenSpec validation, production Electron
+      packaging and a real Desktop scenario with Agent and Resource visible together.
+
+## 8. Unified Primary Navigation
+
+- [x] 8.1 Add failing Desktop Shell regressions for shared Home/Project navigation, absence of the
+      Creative surfaces section and a non-duplicated footer.
+- [x] 8.2 Reuse one primary sidebar structure and style contract for Home and Content Project,
+      including brand/collapse, Start creating, Activity, Asset center and authoritative recents.
+- [x] 8.3 Route Project Asset center to the independent Resource Browser, preserve Project
+      activation/close semantics, and reduce the footer to real attention/display/timeline/settings
+      controls without simulated Plugin/Skill actions.
+- [ ] 8.4 Run Desktop tests/typecheck, strict OpenSpec validation, production package build and a
+      real Electron Home/Project navigation scenario.

@@ -22,7 +22,8 @@ until the exact release target and output chain qualify an HDR preview profile.
 #### Scenario: HDR source is displayed on an unqualified target
 
 - **WHEN** FFprobe identifies PQ or HLG content and the current output chain is not qualified
-- **THEN** the playback plan selects a named HDR-to-SDR proxy
+- **THEN** the playback plan selects an explicit platform-hardware HDR-to-SDR prepared file or
+  returns an actionable unavailable diagnostic
 - **AND** the UI identifies the state as HDR source with SDR preview
 - **AND** HDR export eligibility remains independently determined by the export adapter
 
@@ -36,21 +37,23 @@ and cleanup. It MUST NOT expose local paths or use `file://`.
 #### Scenario: User seeks within a large local video
 
 - **WHEN** the renderer seeks to a time that is not currently buffered
-- **THEN** `<video>` or MSE requests only the authorized byte or media segment range
+- **THEN** native `<video src>` requests only the authorized byte range
 - **AND** the handler returns a valid 206 response without exposing the source path
 - **AND** cancellation closes the response and associated resources
 
 ### Requirement: Direct playback MUST use an explicit release manifest
 
-The Host MUST choose direct, remux, proxy or reject from FFprobe facts and a
+The Host MUST choose direct, remux, platform-hardware prepared file or reject from FFprobe facts and a
 fixture-backed manifest keyed by Electron/Chromium, OS, architecture, packaged
 FFmpeg and media profile. Browser capability APIs MAY invalidate or narrow the
-manifest but MUST NOT silently expand it.
+manifest but MUST NOT silently expand it. Native `<video src>` MUST be the only
+renderer video path; `MediaSource`, `SourceBuffer`, whole-video fetch and CPU
+fallback MUST NOT return success.
 
 #### Scenario: A codec plays on one developer machine
 
 - **WHEN** a non-manifest HEVC, AV1, VP9, ProRes, 10-bit or HDR profile happens to play
-- **THEN** the release plan continues to use its declared proxy or reject path
+- **THEN** the release plan continues to use its declared platform-hardware prepared-file or reject path
 - **AND** direct playback is enabled only after a new target fixture is accepted
 
 ### Requirement: Desktop MUST retain strict renderer security

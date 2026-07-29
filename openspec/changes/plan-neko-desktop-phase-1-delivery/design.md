@@ -8,7 +8,7 @@ Phase 1 的产品范围已在 [`ROADMAP_CN.md`](../../../ROADMAP_CN.md) 中确�
 | 能力 | 当前可复用事实 | Phase 1 缺口 |
 | --- | --- | --- |
 | Application/Host | `NekoHostPorts` 已覆盖 environment/workspace/files/paths/policy/secrets/external/diagnostics；host kind 已包含 Electron | application id 仍有 `neko-home`，没有正式 Electron Host ports、AppHost 和 IPC |
-| Agent | Pi/AgentSession/Tool/Skill/Conversation authority host-neutral；`AgentWebviewRoot` 接受 `AgentHostRuntimeAdapter`；已有 attachment/sequence/revision | Extension router 仍混入 VS Code effects；没有正式 Electron route coverage、storage/secret/content composition |
+| Agent | Pi conversation runtime/Pi Session、Product Turn Bridge、Tool/Skill/Conversation authority host-neutral；`AgentWebviewRoot` 接受 `AgentHostRuntimeAdapter`；已有 attachment/sequence/revision | Extension router 仍混入 VS Code effects；没有正式 Electron route coverage、storage/secret/content composition |
 | Assets/Content | `@neko/content`、Entity、Search、workspace-linked Media Library 和 local metadata 可复用 | 产品 UI 主要是 VS Code TreeView/Provider，没有 Desktop browser-safe Root |
 | Canvas | `.nkc`、domain、`./root`、`./host-adapter` 存在 | 完整 Root 仍依赖 VS Code message transport；简化 HostAdapterSurface 不是 authoring runtime |
 | Cut | OTIO、domain、`./root`、`./host-adapter`、`@neko/media` 路径存在 | 完整 Root 仍依赖 VS Code transport；简化 surface 不是编辑/导出 runtime |
@@ -69,6 +69,11 @@ P1.1 Desktop foundation and application identity
 P1.4 与 P1.5 在 P1.2/P1.3 稳定后可以并行，但各自仍是唯一 canonical adapter 迁移，不能
 在 Desktop 旁路复制 UI/store。P1.6 只能使用前面建立的 Host/projection/command contract。
 P1.7 只做收口、验收和缺口清零，不在验收阶段重新设计基础接口。
+
+用户请求的 Home 管理 Surface 通过补充 change
+`refine-desktop-home-management-surfaces` 实施：开始创作复用 Project + Agent canonical
+path，资产中心聚合各项目 Assets source，插件页只管理 Pi Skill 与当前内置 domain capability。
+该补充不建立 Phase 3 外部 Plugin Host、Marketplace 或扩展执行成功路径。
 
 建议实施 change 名称：
 
@@ -203,20 +208,58 @@ Renderer
   -> package UI Roots
 ```
 
-顶部结构：
+Desktop 使用一个可展开/折叠为图标轨道的一级侧边栏承载 Home、创建入口、项目导航、最近工作、
+素材中心、角色、Skill、Activity 和设置。折叠只改变 Shell 展示密度，不销毁 Project/View
+attachment，也不复制另一套 Activity Rail。Home 是固定、不可关闭的启动 Surface；Content Project 在
+同一 Shell 内切换，但不再通过第二套顶部 Project Tab 暴露。Window 仍保存每个打开 Project
+的 `ProjectTabId`/`ViewId` 作为恢复和 owner attachment identity；该 identity 是状态契约，
+不要求渲染成视觉 Tab。Content Project 不渲染全局 Header 或统一工作区 Tab 行；窗口顶部只保留
+macOS traffic lights 所需的透明拖拽区。Conversation Tab、Canvas/Preview 文档 switcher 与
+Cut/Timeline Tab 必须由 owning package 在各自 surface 内渲染，Shell 不复制或合并这些 Tab。
 
 ```text
-[Home] [Content Project A] [Content Project B] [+]
-
-Home
-  Overview / Activity & Conversations / Media Library
-
-Content Project
-  Project Navigation | Canvas/Cut/Preview surface | Context Dock
+Primary Sidebar | Resource Dock | Main Creative Surface | Agent Dock
+                                  +---------------------+
+                                  | Cut Timeline Panel  |
+                                  +---------------------+
 ```
 
-Home 固定且不可关闭。同一项目在同一 Window 只有一个 Project Tab。Project 内文档和
-Surface 通过项目树、面包屑或受控 view switcher 管理，不进入顶层 Project Tab。
+Content Project 的受控 slot 为：
+
+- 一级侧边栏：Shell-owned、可显隐，只拥有全局导航与稳定 Project/Conversation 快速入口；
+- 主创作区：Canvas、Cut Stage、Preview、Agent Main 和后续 Character/World Surface；
+- Agent Dock：同一 Conversation/CharacterRun View 可停靠左/右、隐藏或作为唯一 Chat
+  presentation 占据可用工作区；它不嵌套进 Main Creative Surface，也不增加 Desktop-owned
+  Agent header、连接提示、配置入口或 onboarding；
+- Resource Dock：目录树、Media Library、Search 和 Entity projection，可停靠左/右；
+- Timeline Panel：Cut-owned 底部面板，可显隐和调整高度；
+- Overlay：只用于资源选择、Quick Look、菜单和小窗口临时面板，不拥有持久领域事实。
+
+Phase 1 的展示菜单只控制 Chat 与 Main Creative Surface 的组合：Chat + 主面板可选择
+Chat 左/右，也可选择 only Chat 或 only Main。它不提供独立的“移到左侧/右侧”工具按钮。
+主面板由已有 owner View 组成，可展示 Canvas、Cut Stage + Timeline、Model Preview，
+以及受控的 Canvas + Timeline 或 Canvas + Model 双视图；组合只复用既有
+Canvas/Cut/Preview Root、View identity 与至多一个 `sideViewId`，不创建第二套 viewer/editor。
+Preview owner 将 `previewContentKind` 投影到 View metadata；Renderer 不得从 opaque
+`resourceId`、本地路径或文件名猜测 Model 能力。
+Files、Media Library 与 Entity 是 Resource owner 内的独立 facet/入口，不进入 Chat/Main
+preset，也不因主创作 View 切换而改变 authority。Phase 1 不建立 VS Code 式任意 Dock tree、
+无限分栏或跨 slot 拖拽。Project 内文档通过项目树、
+面包屑或领域内紧凑 View switcher 管理。Canvas/Cut/Preview 可以打开多个不同文档，但同一
+文档在同一 Window Phase 1 聚焦既有 View，不创建重复 View。
+
+macOS 参考平台使用隐藏 inset titlebar，仅保留 traffic lights 与透明拖拽区；Renderer
+不渲染全局 titlebar/header，也不显示 Electron/系统默认边框。布局、设置和 surface 入口收敛到
+一级侧边栏或 owning panel header。Canvas 和 Model Viewer 继续由 owning package
+提供同一套工具组件，但主 viewport 工具栏统一为底部居中的横向 icon toolbar；宿主只提供
+尺寸和 slot，不复制按钮、命令或 capability 判断。
+
+Canvas 默认显示一个 Board，显式“在侧边打开”时最多同时显示两个不同 Board。Cut 可以保持
+多个独立 `.otio` 打开，但 Phase 1 每次只渲染一个 Cut；优先支持 Canvas + Cut，而不是
+Cut + Cut。通用 Preview 默认复用主创作区的临时 Preview View，固定后成为持久 View，显式
+“在侧边打开”时与 Canvas/Cut 并排；Canvas 节点和 Cut Clip 继续使用 owning Surface 内嵌
+Preview。Canvas 与 Cut 只通过显式 URI/revision handoff 和 source mapping 关联，不建立
+一对一绑定或实时双向同步。
 
 projection attachment 复用当前 Agent 已验证的协议语义并提升最小 host-neutral primitive：
 
@@ -235,18 +278,24 @@ Host/domain authority 与 renderer replica；不得创建全局 `desktopStore` �
 | Owner | P1 child change 的 canonical 工作 |
 | --- | --- |
 | Agent | 把 Extension router 的 host-neutral orchestration 收敛到 Agent owner；VS Code 和 Electron 注入不同 effects；实现 Electron route coverage；复用 `AgentWebviewRoot`、Conversation projection 和 Tab render runtime |
-| Assets/Content | 复用 ContentLocator、workspace-linked library、Entity/Search/local metadata；在 Assets owning package 建 browser-safe management Root；Desktop 不包装 TreeView |
-| Canvas | 让完整 `CanvasRoot` 注入 versioned `CanvasHostAdapter`；迁移 Root 内直接 VS Code transport；删除/poison 被替代的简化演示成功路径；`.nkc`/domain 保持真值 |
-| Cut | 让完整 `CutRoot` 注入 versioned `CutHostAdapter`；复用 OTIO、Cut command、ExportJob 和 `@neko/media`；删除固定演示 timeline 成功路径 |
-| Preview | 建立 package-owned `PreviewRoot`/descriptor lifecycle，组合现有格式 renderer；只消费 Host 授权 ContentLocator/media descriptor |
-| Media | 在 Electron main 注册安全 custom protocol，实现 token/owner/session/GET/HEAD/Range/206/cancel/backpressure；direct/remux/proxy/PCM 由现有 playback plan 决定 |
-| Generation/Quality | 只通过 GenerationJob/Quality owner 的 command 和 projection 接入 Agent、Canvas、Activity；不建立 Desktop task |
+| Assets/Content | 复用 ContentLocator、workspace-linked library、Entity/Search/local metadata；在 Assets owning package 建 browser-safe management Root，并作为独立 Resource Dock projection 接入；Desktop 不包装 TreeView |
+| Canvas | 让完整 `CanvasRoot` 注入 versioned `CanvasHostAdapter`；迁移 Root 内直接 VS Code transport；删除/poison 被替代的简化演示成功路径；`.nkc`/domain 保持真值；支持不同 Board 的领域内 View switcher 与显式双栏 |
+| Cut | 让完整 `CutRoot` 注入 versioned `CutHostAdapter`；复用 OTIO、Cut command、ExportJob 和 `@neko/media`；删除固定演示 timeline 成功路径；Cut Stage 与底部 Timeline 仍由同一 Cut session 拥有 |
+| Preview | 建立 package-owned `PreviewRoot`/descriptor lifecycle，组合现有格式 renderer；只消费 Host 授权 ContentLocator/media descriptor；提供临时、固定和显式侧边 Preview View，不默认覆盖 Canvas |
+| Media | 在 Electron main 注册安全 custom protocol，实现 token/owner/session/GET/HEAD/Range/206/cancel/backpressure；direct/remux/hardware-prepared file/PCM 由现有 playback plan 决定，renderer 视频只使用原生 `<video src>` |
+| Generation/Quality | 只通过 GenerationJob/Quality owner 的 command 和 projection 接入 Agent、Canvas、Activity；P1.3 只消费已有 Job link/status，P1.6 才组合具体领域 port；不建立 Desktop task |
 | Chara/Entity | 复用现有 Chara application/core 和 Entity binding，通过 Agent/Context Dock 投影当前已实现能力；不创建 CharacterProject/Version 或独立空编辑器 |
 | Tools/Diagnostics | 将媒体比较/metadata/diagnostic 的 browser-safe presenter 与 Host effect 分离；日志和错误使用公共 Logger/Errors，不暴露绝对路径或 runtime console |
 
 每个 child change 必须同时迁移 VS Code 使用方到同一 Root/contract，或证明为什么 UI 语义和
 生命周期不同而保留 package-local 实现。Desktop 不能长期维护一套与 VS Code 完整 Root
 平行的简化实现。
+
+Character Dialogue/Embody 使用 Chara-owned session 和独立 Agent Tab kind，但投影在同一个
+Agent Shell；不得建模为普通 conversation mode。Resource Dock 可以提供由 Entity authority
+投影的“角色”分类和显式 Roleplay/引用入口，但不创建第二套 Chara 素材 catalog。完整
+CharacterProject/Version、Character Studio、持久 CharacterRun、Companion projection 和
+World 多角色运行不属于 Phase 1，必须保持 unavailable。
 
 ### 8. Phase 1 的真实纵向路径
 
@@ -270,7 +319,7 @@ launch Desktop
 
 “完成”必须同时证明 UI 结果和执行路径：
 
-- Agent 命中 Pi/AgentSession canonical path；
+- Agent 命中 Pi conversation runtime、Pi Session 与 Product Turn Bridge canonical path；
 - Assets/Canvas/Cut/Preview 命中各自 public adapter；
 - Generation/Export 命中 owning Job；
 - Desktop media 命中 secure custom protocol/`@neko/media`；

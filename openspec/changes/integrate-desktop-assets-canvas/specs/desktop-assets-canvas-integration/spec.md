@@ -1,0 +1,123 @@
+## ADDED Requirements
+
+### Requirement: Assets owns the Desktop Resource Browser
+
+Assets SHALL provide a browser-safe Resource Browser Root and immutable projection over
+workspace-linked Media Library, Search, Entity and metadata services. Desktop SHALL compose this Root
+through public contracts and MUST NOT import VS Code TreeView providers, commands or Extension
+implementation.
+
+#### Scenario: Resource Dock opens
+
+- **WHEN** a Content Project with complete Assets effects reveals the Resource Dock
+- **THEN** the Assets Root obtains a snapshot containing stable resource and Entity identities
+- **AND** no absolute path, VS Code object, Host handle or duplicate asset catalog enters renderer state
+
+#### Scenario: Character resources are listed
+
+- **WHEN** the Resource Browser selects its Character Entity facet
+- **THEN** it projects Creative Entity identity and representation bindings from Entity authority
+- **AND** it does not create a Chara asset category, CharacterProject, CharacterRun or inferred playable state
+
+### Requirement: Resource operations use sender-bound Host effects
+
+Desktop MUST route resource search, import/link, source selection, thumbnail/metadata projection,
+reveal and write operations through fixed versioned Assets effects. Main SHALL derive Window, View,
+Workspace and renderer epoch from the sender and SHALL validate locator containment, trust, owner and
+request schema.
+
+#### Scenario: User searches linked media
+
+- **WHEN** the Resource Browser submits a query for its explicit Workspace
+- **THEN** the owning search service returns stable ContentLocator-based results and authorized metadata
+- **AND** renderer does not submit or receive a workspace root, source path, cache path or `file://` URL
+
+#### Scenario: A locator escapes the workspace grant
+
+- **WHEN** a forged, stale or symlink-escaping locator is requested
+- **THEN** Main rejects the operation with a typed diagnostic
+- **AND** it does not fall back to an active workspace, raw filesystem access or label-based identity
+
+### Requirement: Canvas Root consumes one injected host runtime
+
+The complete package-owned Canvas Root SHALL consume a versioned browser-safe Canvas runtime supplied
+by its Host. VS Code and Electron SHALL adapt their effects to that runtime. Production Canvas code
+MUST NOT require a module-global VS Code API, direct Extension command or Desktop demo surface.
+
+#### Scenario: Desktop mounts a Canvas
+
+- **WHEN** the startup audit confirms the complete Canvas runtime and an explicit document View
+- **THEN** Desktop mounts the full Canvas Root and obtains its authoritative document snapshot
+- **AND** `CanvasHostAdapterSurface`, fixed nodes, global VS Code API and active editor do not participate
+
+#### Scenario: VS Code opens the same Canvas contract
+
+- **WHEN** the VS Code Custom Editor opens an `.nkc`
+- **THEN** its adapter supplies the same Canvas runtime semantics
+- **AND** existing VS Code save, edit, preview and authoring behavior remains covered
+
+### Requirement: Canvas authoring is explicit and revisioned
+
+Every Canvas mutation SHALL carry explicit Project, document/session, command and expected revision
+identity. The Canvas owner SHALL validate and apply the mutation, persist `.nkc` facts and publish the
+new revision. Missing, stale or mismatched identity MUST fail visibly.
+
+#### Scenario: Resource is added to Canvas
+
+- **WHEN** the user adds a Resource Browser item to an explicit Canvas document
+- **THEN** the Resource identity is projected and the Canvas authoring service applies the matching node
+  mutation at the expected revision
+- **AND** cancellation or failure leaves Canvas unchanged
+
+#### Scenario: Resource is dragged onto Canvas
+
+- **WHEN** the user drags a previewable Resource Browser item onto an explicit Canvas position
+- **THEN** the drag payload contains only a validated portable ContentLocator and presentation name
+- **AND** the Canvas Host applies `project-content` to that explicit document/session at the actual
+  drop position
+- **AND** no absolute path, file URL, VS Code `project:addSource` route or active-Canvas fallback
+  participates
+
+#### Scenario: A stale Canvas View submits an edit
+
+- **WHEN** the View sends a mutation with an old document revision or View epoch
+- **THEN** Host rejects it and obtains a new authoritative snapshot
+- **AND** it does not apply last-write-wins or mutate the currently active Canvas
+
+### Requirement: Workspace Board and candidate ownership remain canonical
+
+Agent Workspace Board delivery, generated candidates and acceptance SHALL continue through their
+existing owning Canvas/domain operations. Desktop SHALL display owner projections and SHALL NOT create
+a renderer-owned candidate list, delivery ledger or acceptance shortcut.
+
+#### Scenario: A generated candidate is accepted
+
+- **WHEN** the user accepts a candidate projected for an explicit Board
+- **THEN** the owning acceptance operation commits the result and Canvas observes its stable provenance
+- **AND** Desktop does not copy generated bytes, infer another Board or mark an optimistic local success
+
+### Requirement: Assets and Canvas recover without duplicate work
+
+Closing/reopening a View, renderer reload and application restart SHALL recover Resource Browser
+projection, open Canvas Views and `.nkc` document facts from their owners. Recovery MUST NOT repeat
+import, delivery, candidate acceptance or Canvas mutation.
+
+#### Scenario: Application restarts after Canvas save
+
+- **WHEN** Desktop restarts after a resource was placed and the Canvas was saved
+- **THEN** the Project reattaches the exact workspace, Assets projection and Canvas document/session
+- **AND** the resource placement appears once with no duplicate import or mutation
+
+### Requirement: P1.4 qualification proves the canonical path
+
+The change SHALL provide producer/consumer, authorization, identity, revision, persistence, lifecycle,
+architecture and UI tests plus an isolated Electron fixture scenario. Existing VS Code Canvas behavior
+SHALL be revalidated through Extension Development Host when Webview behavior changes.
+
+#### Scenario: Desktop Assets and Canvas qualification runs
+
+- **WHEN** the fixture opens a Project, searches/imports media, opens Canvas, places a resource,
+  saves/reopens and explicitly opens a second Canvas to the side
+- **THEN** visible state and durable facts succeed
+- **AND** evidence proves Assets services/Root, Content/Entity owners, Canvas runtime/domain and fixed
+  Desktop bridge were used while VS Code, active-object, demo/mock and path fallbacks remained poisoned

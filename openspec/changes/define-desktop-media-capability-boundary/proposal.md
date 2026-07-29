@@ -3,7 +3,7 @@
 OpenNeko 已决定拟议 Desktop 使用 Electron 组合现有领域包与 `@neko/media`，
 但现有文档尚未区分“解除 VS Code Webview 宿主限制”和“解除 Chromium
 媒体/色彩限制”。如果把 Electron 中 `<video>` 能打开文件等同于 10-bit、HDR、
-格式兼容或专业监看正确，后续实现会绕过现有 probe、代理、PCM、安全授权和
+格式兼容或专业监看正确，后续实现会绕过现有 probe、硬件 preparation、PCM、安全授权和
 显式能力矩阵。
 
 本变更只定义 Desktop 媒体、色彩、按需读取和 CSP 的目标边界及运行态验证要求，
@@ -17,8 +17,8 @@ OpenNeko 已决定拟议 Desktop 使用 Electron 组合现有领域包与 `@neko
   10-bit/HDR 输出正确。
 - 为 Desktop 选择安全自定义媒体协议作为目标按需读取路径，并保留 Range、token、
   owner、取消和生命周期约束。
-- 规定 `<video>` 只承担通过资格验证的 direct profile；其他格式继续由 FFprobe/
-  FFmpeg 显式 remux、代理或拒绝。
+- 规定原生 `<video src>` 是唯一 renderer 视频路径；其他格式继续由 FFprobe/
+  FFmpeg 显式选择 direct、remux、平台硬件 prepared file 或拒绝。
 - 保留严格 CSP、sandbox、context isolation 和 `webSecurity`；不得通过
   `bypassCSP`、`file://` 或关闭安全策略解决媒体访问。
 - 增加按目标 Electron/Chromium、OS、架构、GPU、显示器和 FFmpeg 构建执行的

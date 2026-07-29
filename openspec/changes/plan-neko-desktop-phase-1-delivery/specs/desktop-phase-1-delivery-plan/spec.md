@@ -113,6 +113,89 @@ and View epoch, continuous sequence, and base revision.
   original View epoch
 - **AND** it cannot mutate View B or the new View A instance
 
+### Requirement: Desktop workbench uses controlled creative surfaces
+
+Desktop MUST provide one hideable primary sidebar plus controlled Main Creative Surface, Agent Dock,
+Resource Dock and Cut Timeline Panel slots. Agent and Resource docks MAY move between supported left
+and right positions, the Main area MAY expose an explicit bounded split, and the Timeline MAY change
+visibility and height. Phase 1 MUST NOT implement an arbitrary IDE dock tree, unlimited editor groups,
+or renderer-owned domain lifecycle.
+
+The primary sidebar MUST collapse to one icon rail without creating a second navigation owner. The
+Agent conversation surface MUST remain a Chat dock/workspace region outside the Main Creative
+Surface. Desktop-owned configuration, onboarding and connection entry points MUST NOT be rendered
+inside the package Agent surface. The controlled display menu MUST compose Chat with one Main
+Creative Surface, Chat only, or Main only; Chat placement MAY be selected as a preset, but Desktop
+MUST NOT expose separate move-left or move-right toolbar buttons. The Main Creative Surface MUST
+reuse owner Views to present Canvas, Cut Stage with Timeline, Model Preview, Canvas with Timeline,
+or Canvas with Model without creating alternate viewers or editors. Files, Media and Entity remain
+independent Resource facets.
+
+#### Scenario: User changes a workbench preset
+
+- **WHEN** the user switches between focus, Canvas-and-Agent, Canvas-and-Resources,
+  Canvas-and-Preview or Canvas-and-Cut layouts
+- **THEN** Window/View state records only presentation placement, visibility and sizing
+- **AND** Conversation, Canvas, Cut, Preview, Entity and Job facts remain owned by their domains
+
+#### Scenario: User collapses the primary sidebar
+
+- **WHEN** the user toggles the expanded primary sidebar
+- **THEN** Desktop retains a compact icon rail with Home, project and settings navigation
+- **AND** Project/View attachments, dock owners and domain runtimes are not recreated
+
+#### Scenario: User composes Chat and the Main Creative Surface
+
+- **WHEN** the user selects Chat + Main, Chat only, Main only, or an available Main composition
+- **THEN** Desktop changes only Window-owned placement, visibility, active View, side View and
+  Timeline presentation
+- **AND** Canvas, Cut and Preview continue rendering their package-owned Roots and commands
+- **AND** unavailable Timeline or Model Views remain disabled until an owning document is opened
+
+#### Scenario: Content Project renders owner-local navigation
+
+- **WHEN** Desktop renders an open Content Project
+- **THEN** it leaves only the transparent macOS traffic-light drag region above the workbench and
+  does not render a global Header or unified workspace Tab row
+- **AND** Agent conversations, Canvas/Preview documents and Cut/Timeline views expose tabs or compact
+  switchers only inside their owning surfaces
+
+#### Scenario: User selects a Chat and Main presentation
+
+- **WHEN** the user chooses Chat-left, Chat-right, only-Chat or only-Main
+- **THEN** Desktop changes only Chat dock visibility/position and creative surface presentation
+- **AND** Resource Files, Media and Entity facets remain independently selectable and are not
+  encoded into the Chat/Main preset
+
+#### Scenario: Desktop embeds a Canvas or Model viewport
+
+- **WHEN** the package-owned Canvas or Model Root renders its primary viewport tools
+- **THEN** the owning package renders one bottom-centered horizontal icon toolbar
+- **AND** Desktop does not copy, remove or replace package commands based on visual placement
+
+#### Scenario: A narrow window cannot display every dock
+
+- **WHEN** available width cannot preserve the minimum Main Creative Surface
+- **THEN** Desktop keeps one dock visible and presents another requested dock as an explicit temporary
+  overlay or hidden region
+- **AND** it does not silently resize the main surface below its supported minimum or duplicate owner state
+
+#### Scenario: Multiple creative documents are opened
+
+- **WHEN** the user opens multiple different Canvas, Cut or Preview documents
+- **THEN** the owning domain keeps independent document/session identity and Desktop exposes a compact
+  project-tree or domain View switcher
+- **AND** Phase 1 focuses an existing View for the same document, renders at most two Canvas views,
+  renders at most one Cut, and does not create a second domain store
+
+#### Scenario: A resource is previewed while authoring
+
+- **WHEN** the user single-clicks, pins or explicitly opens a resource to the side
+- **THEN** Desktop respectively reuses a temporary Preview View, retains a persistent Preview View, or
+  creates a bounded side-by-side Preview View
+- **AND** generic Preview does not default to covering Canvas while Canvas-node and Cut-clip previews
+  remain inside their owning surfaces
+
 ### Requirement: Each retained package enters through its owning public path
 
 Phase 1 MUST integrate Agent, Assets/Content/Media Library, Canvas, Cut, Preview/Media,
@@ -136,6 +219,14 @@ MUST remain behind the VS Code adapter and MUST NOT enter Desktop.
 - **AND** Renderer does not receive a raw path, `file://` URL, arbitrary localhost URL, cache path, or
   Engine/client token
 
+#### Scenario: Agent searches a project Entity
+
+- **WHEN** the Desktop Agent composer requests mention candidates by canonical name or alias
+- **THEN** Main reads the project Entity authority and returns a stable Entity reference with its
+  optional authorized representation ContentLocator
+- **AND** Entity results are combined with workspace file results without treating Entity names as
+  filenames or creating a second Entity catalog
+
 #### Scenario: Generation or export is observed
 
 - **WHEN** Agent, Canvas, or Cut starts Generation or Export work
@@ -153,8 +244,8 @@ synthetic workspace data and MUST assert both user-visible results and the canon
 #### Scenario: Phase 1 qualification runs
 
 - **WHEN** the final Phase 1 functional scenario executes on `darwin-arm64`
-- **THEN** it exercises real Host ports, public package adapters, Pi/AgentSession, owning Jobs,
-  `@neko/media`, and secure Desktop content transport
+- **THEN** it exercises real Host ports, public package adapters, Pi conversation runtime, Pi Session,
+  Product Turn Bridge, owning Jobs, `@neko/media`, and secure Desktop content transport
 - **AND** poisoned VS Code transport, `neko-home`, Engine/client, mock stores, and demo surfaces are
   not involved
 

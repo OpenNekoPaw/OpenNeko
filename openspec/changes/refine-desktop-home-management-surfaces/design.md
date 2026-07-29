@@ -1,0 +1,80 @@
+## Context
+
+Desktop 已有四个可复用 owner：
+
+1. Shell Project catalog 拥有最近项目和打开/恢复；
+2. Agent Home projection 拥有跨项目会话摘要，Pi SkillHost 拥有 Skill discovery；
+3. Assets Resource Browser source 拥有目录、workspace-linked Media Library 与 Entity 查询；
+4. Shell domain capability projection 表示 Agent/Assets/Canvas/Cut/Preview 等内置组合状态。
+
+缺口是 Home 没有把这些 owner 组合成管理 Surface。历史 Plugin Host ADR 已被当前架构取代，
+Phase 1 也明确不建立外部 Plugin Host，因此“插件”不能被实现成假的安装器或可执行扩展商店。
+
+## Goals / Non-Goals
+
+**Goals:**
+
+- Home 与 Content Project 使用同一 Desktop-native 一级侧栏视觉和折叠行为。
+- 开始创作可携带用户意图进入真实项目 Agent composer。
+- 资产中心按项目聚合真实 source，并能跳转到项目 Resource Dock。
+- 插件页展示真实 Skill catalog 与内置扩展可用性。
+- 全部创作展示完整 Project/Conversation 聚合，而不是再维护一份最近记录。
+
+**Non-Goals:**
+
+- 新增第二套 Agent composer、conversation authority 或自动发送模型请求。
+- 建立跨项目可写的全局 Entity/素材 catalog。
+- 实现外部扩展安装、activation、permission、sandbox UI 或 Marketplace。
+- 把项目绝对路径、Skill 物理路径或 credential 投影到 Renderer。
+
+## Five-Layer Analysis
+
+| 层 | 决策 |
+| --- | --- |
+| 职责 | Shell 只拥有导航；Agent/Assets owner 提供只读管理投影；项目事实仍按 workspace 隔离。 |
+| 依赖 | Renderer 只消费 purpose-scoped Home bridge；Main 组合 Agent/Assets public service。 |
+| 接口 | 所有查询携带显式 project/workspace identity；返回 ContentLocator 或安全摘要，不返回绝对路径。 |
+| 扩展 | “扩展”只投影当前内置 domain capability；未来 Plugin Host 通过新 OpenSpec 替换 unavailable 状态。 |
+| 测试 | 覆盖 project identity、source 复用、初始输入一次性 handoff、空 catalog、i18n 与 UI 路由。 |
+
+## Decisions
+
+### 1. Home navigation is Shell-owned, data is not
+
+`HomeSection` 只选择四个固定 Surface。资产和插件数据通过 owner adapter 读取，不能写入
+Window layout 或 Renderer local storage。进入项目后仍使用原 Resource Dock/Agent Root。
+
+### 2. Start creation performs a project-scoped handoff
+
+Home composer 必须先确定 Content Project。用户可选择 catalog 项目，或通过文件夹选择器新增
+项目。Shell 打开/聚焦 Project 后把文本作为一次性 `initialInput` 交给 Agent Root 的 tabless
+composer；它不自动发送，不绕过模型/permission/approval 配置，也不在 Home 创建 conversation。
+
+### 3. Asset Center is a federated read projection
+
+全局资产中心按 Project 分组，复用同一个 Assets Resource Browser projection source 查询：
+
+- Directory：workspace 真实目录；
+- Media：workspace-linked Media Library；
+- Assets：Entity 与其授权 representation。
+
+Home 只显示有限结果与来源项目，进一步编辑/预览时打开该项目的 Resource Dock。查询失败以
+项目级 diagnostic 展示，不静默返回空成功。
+
+### 4. Plugins distinguishes Skills from executable extensions
+
+Skill tab 通过项目 workspace 的 Pi SkillHost discovery 返回 name、description、source 和
+enabled/trusted 状态，删除 locator/fingerprint/物理路径。Extensions tab 只列 Shell 已组合的
+内置 domain capability 与 ready/unavailable 状态。当前没有外部 Plugin Host 时页面明确显示
+不可安装，而不是伪造 Marketplace 或把 Webview `pluginsAvailable` 当作安装记录。
+
+### 5. All creations reuses existing projections
+
+全部创作由 Project catalog 与 Agent Home conversation projection组成；点击项目或会话继续
+使用现有 open/focus 路径。Activity attention 作为列表状态显示，不保留独立一级入口。
+
+## Risks / Trade-offs
+
+- 跨项目资产查询可能较慢，因此结果按项目惰性加载并限制数量，不建立缓存真值。
+- Home 初始输入只预填不自动发送，多一步确认但保留 Agent 权限与模型成本边界。
+- 扩展页在 Phase 1 只能显示内置组合能力；外部扩展管理仍需独立 Plugin Host change。

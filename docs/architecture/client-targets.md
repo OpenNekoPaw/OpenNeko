@@ -2,9 +2,9 @@
 
 状态：Accepted
 
-更新日期：2026-07-27
+更新日期：2026-07-28
 对应变更：`retire-neko-engine-before-node-media-rebuild`、
-`bootstrap-neko-desktop-foundation`
+`bootstrap-neko-desktop-foundation`、`integrate-desktop-agent-home`
 
 OpenNeko 当前发布支持仍只覆盖 TUI 和 VS Code。Desktop 已开始 Phase 1 foundation
 实施，但在领域子包完成接入和资格验收前不构成受支持客户端。三个组合根复用
@@ -44,14 +44,21 @@ Range、PCM、代理与导出由 Extension Host 中的 `@neko/media/node`
 adapter 拥有；Webview 只使用浏览器 `<video src>` 和 PCM client，不直接
 访问 Node、文件路径或启动 FFmpeg。
 
-## OpenNeko Desktop foundation
+## OpenNeko Desktop Phase 1
 
 `apps/neko-desktop` 当前拥有 Electron main/preload/renderer、typed bridge、窗口/AppHost
-生命周期、Electron Host ports、安全策略和 arm64 macOS 打包基线。当前 renderer 只显示
-真实 bootstrap projection，不包含 mock 项目、Agent 或编辑器功能。
+生命周期、Electron Host ports、安全策略、Shell/Project state 和 arm64 macOS 打包基线。
+P1.3 已实现真实 Pi conversation authority/Session/lease、HostSecret-backed credential、
+sender-bound Agent IPC、workspace content effects、package-owned Agent Root、Home
+Activity/Attention projection 以及 reload/restart/disposal 规则；renderer 不拥有
+Conversation、Run、Tool、Job 或 credential 事实。
 
-Desktop 尚不拥有 Phase 1 后续 Shell/领域接入、Phase 2 跨平台发布或 Phase 3
-MCP/插件/专业工具能力，因此不得从应用可启动推断这些功能已经支持。
+这些实现尚不构成可用的生产 Agent：Electron 启动组合根还没有注入完整
+`DesktopAgentControllerComposition`，startup audit 会保持 Agent capability
+fail-visible `unavailable`；真实 provider/model、VS Code Development Host 和 Electron
+functional 证据也尚未完成。Desktop 尚不拥有 P1.4-P1.7 后续领域接入、Phase 2 跨平台
+发布或 Phase 3 MCP/插件/专业工具能力，因此不得从应用可启动或确定性测试通过推断这些
+功能已经支持。
 
 ## 已移除与后续目标
 

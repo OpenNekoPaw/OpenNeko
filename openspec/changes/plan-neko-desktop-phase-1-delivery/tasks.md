@@ -27,39 +27,55 @@
       snapshot/ack/sequence/revision/epoch recovery, WindowStore, ViewStore and CAS persistence
 - [x] 2.4 Test duplicate Project open, multi-window owner subscription, rapid switch/close/reopen,
       StrictMode, autosave, stale response, renderer crash and app recovery
+- [x] 2.5 Apply `refine-desktop-home-management-surfaces` to provide real Start Creating, federated
+      Asset Center, Skill/built-in extension availability and All Creations pages without enabling
+      the Phase 3 external Plugin Host
 
 ## 3. P1.3 Agent And Home
 
-- [ ] 3.1 Create `integrate-desktop-agent-home` and audit every Agent Webview-to-Host route as
+- [x] 3.1 Create `integrate-desktop-agent-home` and audit every Agent Webview-to-Host route as
       implemented, unsupported or host-inapplicable for Electron
-- [ ] 3.2 Move Host-neutral Agent orchestration out of VS Code effects, keep one controller, and
+- [x] 3.2 Move Host-neutral Agent orchestration out of VS Code effects, keep one controller, and
       implement the Electron runtime/storage/secret/content adapters
-- [ ] 3.3 Integrate `AgentWebviewRoot`, Conversation/Tab projections, Tool Call, Approval, Skill,
-      GenerationJob links and Home Conversation/Activity summaries
+- [x] 3.3 Integrate `AgentWebviewRoot`, Conversation/Tab projections, Tool Call, Approval, Skill,
+      existing GenerationJob link/status consumption and Home Conversation/Activity summaries;
+      keep concrete GenerationJob Desktop composition in P1.6
 - [ ] 3.4 Run producer/consumer tests, poisoned VS Code-route Desktop tests, Agent package checks,
       focused real Agent evaluation where behavior changes, and Electron Agent functional scenarios
 
 ## 4. P1.4 Assets, Content And Canvas
 
-- [ ] 4.1 Create `integrate-desktop-assets-canvas` and define an Assets-owned browser Root over
-      ContentLocator, Media Library, Entity/Search and local metadata services
-- [ ] 4.2 Define and inject the canonical `CanvasHostAdapter` into the full Canvas Root; migrate
+- [x] 4.1 Create `integrate-desktop-assets-canvas` and define an Assets-owned browser Root over
+      ContentLocator, Media Library, Entity/Search and local metadata services; update the Shell to
+      the primary-sidebar/Main/Agent-Dock/Resource-Dock controlled workbench contract
+- [x] 4.2 Define and inject the canonical `CanvasHostAdapter` into the full Canvas Root; migrate
       direct VS Code transport and remove/poison replaced demo success paths
-- [ ] 4.3 Implement import/link, search, thumbnail/metadata, drag/drop, Canvas placement,
-      candidate/accept and workspace Board delivery through owning contracts
-- [ ] 4.4 Test public-entry dependencies, workspace authorization, ContentLocator-only identity,
-      Canvas persistence/reopen, candidate ownership and VS Code Canvas regression scenarios
+- [x] 4.3 Implement import/link, search, thumbnail/metadata, drag/drop, Canvas placement,
+      candidate/accept and workspace Board delivery through owning contracts; support compact
+      multi-Board switching, duplicate-open focus and at most two explicitly split Canvas views
+- [x] 4.4 Test public-entry dependencies, workspace authorization, ContentLocator-only identity,
+      Canvas persistence/reopen and candidate ownership; record the user-requested Desktop-only
+      acceptance waiver and retain VS Code Canvas runtime validation as residual risk
+- [x] 4.5 Refine the Desktop creative workbench to a collapsible primary icon rail, transparent
+      traffic-light drag region with no global Header or unified workspace Tab row, owner-local
+      Agent/creative/Timeline tabs, Agent-only dock presentation, Chat + Main display presets,
+      controlled Canvas/Timeline/Model Main compositions without separate move-left/right buttons,
+      independent Files/Media/Entity resource facets and package-owned bottom horizontal
+      Canvas/Model toolbars; preserve all owner identities and command paths
 
 ## 5. P1.5 Cut, Preview And Media
 
-- [ ] 5.1 Create `integrate-desktop-cut-preview-media` with canonical Cut/Preview adapters and the
+- [x] 5.1 Create `integrate-desktop-cut-preview-media` with canonical Cut/Preview adapters and the
       Desktop secure custom media protocol contract
 - [ ] 5.2 Inject the full Cut Root, preserve OTIO/Cut command/ExportJob authority, migrate direct
-      VS Code transport, and remove/poison fixed demo timeline success
+      VS Code transport, and remove/poison fixed demo timeline success; support multiple open Cut
+      documents with one rendered Cut Stage/Timeline session in Phase 1
 - [ ] 5.3 Build the package-owned Preview Root/descriptor lifecycle over existing document/media/3D
-      renderers and Host-authorized ContentLocator projections
+      renderers and Host-authorized ContentLocator projections; implement temporary, pinned and
+      explicit side-by-side Preview Views while keeping Canvas/Cut-owned previews embedded
 - [ ] 5.4 Implement and test GET/HEAD/closed Range/206/token/owner/session/cancel/backpressure,
-      direct/remux/proxy/MSE/PCM, SDR baseline, seek, export and resource cleanup
+      direct/remux/hardware-prepared file/PCM, native `<video src>`, SDR baseline, seek, export and
+      resource cleanup; poison `MediaSource`, `SourceBuffer`, whole-video fetch and CPU fallback
 - [ ] 5.5 Run Cut/Preview producer-consumer tests, Node/FFmpeg integration, Electron fixture media
       scenarios and existing VS Code Extension Development Host regressions
 
@@ -70,7 +86,9 @@
 - [ ] 6.2 Integrate GenerationJob and Quality Gate without a Desktop Task authority; project progress
       to Agent/Canvas/Activity and preserve candidate/evidence ownership
 - [ ] 6.3 Integrate only current Chara Dialogue/Embody/evidence/profile and Entity binding through
-      Agent/Context Dock; keep CharacterProject/Version and World unavailable
+      Agent/Context Dock; include Entity-authority-backed Agent mention search with stable Entity
+      identity and optional representation ContentLocator; keep CharacterProject/Version and World
+      unavailable
 - [ ] 6.4 Separate Tools browser presenters from VS Code effects and integrate media comparison,
       metadata, logs and fail-visible diagnostics without leaking paths or runtime consoles
 - [ ] 6.5 Run domain tests, Agent evaluation where routing changes, UI adapter tests and unsupported
@@ -82,8 +100,9 @@
       the authoritative end-to-end scenario
 - [ ] 7.2 Verify launch → Content Project → Agent → Media Library → Canvas candidate/accept →
       Preview → Cut → Export → Activity/result → close/reopen/restart
-- [ ] 7.3 Assert canonical-path counters/poisoning for Pi/AgentSession, package adapters, owning Jobs,
-      `@neko/media` and Desktop protocol; prove legacy/demo/VS Code routes did not participate
+- [ ] 7.3 Assert canonical-path counters/poisoning for Pi conversation runtime, Pi Session, Product
+      Turn Bridge, package adapters, owning Jobs, `@neko/media` and Desktop protocol; prove
+      legacy/demo/VS Code routes did not participate
 - [ ] 7.4 Verify `darwin-arm64` package/install/startup, dependency closure, IME/keyboard/DPI/
       accessibility, renderer crash, app quit and resource release
 - [ ] 7.5 Run all applicable package tests, `pnpm build`, `pnpm test`, `pnpm check`,

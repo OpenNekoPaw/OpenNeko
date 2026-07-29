@@ -2,13 +2,14 @@
 
 状态：方向性路线，不承诺发布日期
 
-更新日期：2026-07-27
+更新日期：2026-07-28
 
 本文只定义开发顺序、阶段边界和完成门禁。当前已发布/可运行事实仍以
 [`README_CN.md`](README_CN.md)、[`docs/architecture/client-targets.md`](docs/architecture/client-targets.md)
 和代码为准：仓库已建立 `apps/neko-desktop`，P1.1 foundation 与 P1.2 Shell/Project state
-已实现；Phase 1 领域接入仍在进行，因此 Desktop 尚不是受支持发布产品。Windows 仍不在
-当前发布闭集中，专业工具、插件和 Desktop MCP 集成也尚未实现。
+已实现；P1.3 Agent + Home 已完成确定性实现，但生产 controller composition 与真实宿主
+验收尚未收口。Phase 1 领域接入仍在进行，因此 Desktop 尚不是受支持发布产品。Windows
+仍不在当前发布闭集中，专业工具、插件和 Desktop MCP 集成也尚未实现。
 
 每个阶段必须拆成边界明确的 OpenSpec change，不允许用一个长期巨型 change 同时开发 Shell、
 跨平台、插件和全部专业工具。
@@ -39,8 +40,10 @@
 并把现有保留子包通过公共入口和 host-neutral adapter 接入。第一阶段交付的是可完成真实创作
 流程的 Desktop，不是静态原型或由 mock/no-op 支撑的页面集合。
 
-当前进度：P1.1 与 P1.2 已完成实现和 `darwin-arm64` packaged runtime 验证；下一切片是
-P1.3 Agent 与 Home 纵向路径。P1.3-P1.7 完成前，不声明 Phase 1 完成。
+当前进度：P1.1 与 P1.2 已完成实现和 `darwin-arm64` packaged runtime 验证；P1.3 Agent
+与 Home 已完成 tasks 1-5 的确定性实现，仍受 Evaluation 可观测性、生产 controller
+composition、provider 成本授权和图形宿主运行证据阻塞。P1.3-P1.7 完成前，不声明
+Phase 1 完成。
 
 ### 范围
 
@@ -106,7 +109,7 @@ OpenSpec、真实 Windows runner/host 证据和发布契约全部通过后，才
 - Electron/Node/native module 与 FFmpeg 打包；
 - code signing、notarization、installer、update、deep link 和 file association；
 - 路径、权限、secret storage、进程发现/启动、窗口标识和系统通知；
-- Chromium/GPU、direct/MSE/PCM、Range、SDR baseline 与平台 capability snapshot；
+- Chromium/GPU、direct/remux/hardware-prepared file/PCM、Range、SDR baseline 与平台 capability snapshot；
 - 10-bit/HDR、codec、显示器和色彩链的真实设备证据；
 - 菜单、快捷键、输入法、字体、DPI、多屏、可访问性和崩溃恢复；
 - 每个平台独立的日志、诊断、fixture 和发布 artifact 验证。
