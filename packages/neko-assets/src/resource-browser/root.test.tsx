@@ -700,6 +700,39 @@ describe('ResourceBrowserRoot', () => {
     expect(screen.queryByRole('button', { name: 'Open Canvas' })).toBeNull();
     expect(onOpenCanvas).toHaveBeenCalledTimes(1);
   });
+
+  it('dispatches one Canvas open when the user double-clicks a document', async () => {
+    const canvasProjection: ResourceBrowserProjection = {
+      ...projection,
+      identity: {
+        ...projection.identity,
+        projectId: 'project-canvas-double-click',
+        workspaceId: 'workspace-canvas-double-click',
+      },
+      facet: 'files',
+      items: [
+        {
+          resourceId: 'content:board',
+          facet: 'files',
+          role: 'content',
+          depth: 0,
+          kind: 'document',
+          label: 'board.nkc',
+          locator: { kind: 'workspace-file', path: 'neko/boards/board.nkc' },
+          capabilities: ['preview', 'reveal'],
+        },
+      ],
+    };
+    const runtime = createRuntime(canvasProjection);
+    const onOpenCanvas = vi.fn();
+    render(<ResourceBrowserRoot runtime={runtime} locale="en" onOpenCanvas={onOpenCanvas} />);
+
+    const canvasDocument = await screen.findByText('board.nkc');
+    fireEvent.click(canvasDocument, { detail: 1 });
+    fireEvent.click(canvasDocument, { detail: 2 });
+
+    expect(onOpenCanvas).toHaveBeenCalledTimes(1);
+  });
 });
 
 function createRuntime(snapshot = projection): ResourceBrowserHostRuntime & {

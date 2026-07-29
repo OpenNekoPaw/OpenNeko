@@ -446,8 +446,9 @@ export function ResourceBrowserRoot({
                       }
                     : {})}
                   style={viewMode === 'list' ? { paddingLeft: 7 + item.depth * 14 } : undefined}
-                  onClick={() => {
+                  onClick={(event) => {
                     setSelectedId(item.resourceId);
+                    if (event.detail > 1) return;
                     if (item.role === 'directory' || item.role === 'library-root') {
                       if (navigableFacet && projection.query.length === 0) {
                         if (viewMode === 'list') {
