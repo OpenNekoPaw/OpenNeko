@@ -48,25 +48,25 @@ describe('Agent Evaluation change-to-suite selector', () => {
     expect(
       selectEvaluationCoverage([
         '.codex/skills/storyboard/SKILL.md',
-        'packages/neko-agent/packages/agent/src/prompt/system-prompt.ts',
-        'packages/neko-agent/packages/extension/src/tools/readImageTool.ts',
-        'packages/neko-agent/packages/platform/src/service/shared-service-adapter.ts',
-        'packages/neko-agent/packages/platform/src/llm/adapter/openai-adapter.ts',
-        'packages/neko-agent/packages/agent/src/session/agent-session.ts',
-        'packages/neko-agent/packages/agent/src/subagent/task-tool.ts',
-        'packages/neko-agent/packages/agent/src/runtime/session/execution-ownership.ts',
-        'packages/neko-agent/packages/platform/src/media/media-generation-executor.ts',
-        'packages/neko-agent/packages/platform/src/media/generated-output-adoption.ts',
+        'packages/neko-agent-runtime/src/prompt/system-prompt.ts',
+        'apps/neko-vscode/src/features/agent/tools/readImageTool.ts',
+        'packages/neko-platform/src/service/shared-service-adapter.ts',
+        'packages/neko-platform/src/llm/adapter/openai-adapter.ts',
+        'packages/neko-agent-runtime/src/session/agent-session.ts',
+        'packages/neko-agent-runtime/src/subagent/task-tool.ts',
+        'packages/neko-agent-runtime/src/runtime/session/execution-ownership.ts',
+        'packages/neko-platform/src/media/media-generation-executor.ts',
+        'packages/neko-platform/src/media/generated-output-adoption.ts',
         'packages/neko-content/src/document/read-document-tool.ts',
         'packages/neko-content/src/document/read-image-tool.ts',
-        'packages/neko-agent/packages/agent/src/pi/event-projector.ts',
-        'packages/neko-agent/packages/agent/src/pi/timeline-projector.ts',
-        'packages/neko-agent/packages/agent/src/runtime/turn/multimodal-context-packet.ts',
-        'packages/neko-agent/packages/agent/src/runtime/capability/capability-runtime-bindings.ts',
-        'packages/neko-agent/packages/agent/src/runtime/projection/conversation-projection-store.ts',
-        'packages/neko-agent/packages/agent-types/src/conversation-projection.ts',
-        'packages/neko-agent/packages/extension/src/chat/message/piAgentStreamProcessor.ts',
-        'packages/neko-agent/packages/webview/src/render-runtime/conversation-projection-replica.ts',
+        'packages/neko-agent-runtime/src/pi/event-projector.ts',
+        'packages/neko-agent-runtime/src/pi/timeline-projector.ts',
+        'packages/neko-agent-runtime/src/runtime/turn/multimodal-context-packet.ts',
+        'packages/neko-agent-runtime/src/runtime/capability/capability-runtime-bindings.ts',
+        'packages/neko-agent-runtime/src/runtime/projection/conversation-projection-store.ts',
+        'packages/neko-agent-types/src/conversation-projection.ts',
+        'apps/neko-vscode/src/features/agent/chat/message/piAgentStreamProcessor.ts',
+        'packages/neko-agent-webview/src/render-runtime/conversation-projection-replica.ts',
         'apps/neko-tui/src/tui/adapters/pi-event-adapter.ts',
         'apps/neko-tui/src/tui/host/node-media-generation-delivery-host.ts',
         'apps/neko-tui/src/tui/core/debug-automation/types.ts',
@@ -159,8 +159,8 @@ describe('Agent Evaluation change-to-suite selector', () => {
   it('deduplicates files owned by the same behavior and suite', () => {
     expect(
       selectEvaluationCoverage([
-        'packages/neko-agent/packages/agent/src/session/agent-session.ts',
-        'packages/neko-agent/packages/agent/src/session/conversation-control-runtime.ts',
+        'packages/neko-agent-runtime/src/session/agent-session.ts',
+        'packages/neko-agent-runtime/src/session/conversation-control-runtime.ts',
       ]),
     ).toEqual([
       {
@@ -168,8 +168,8 @@ describe('Agent Evaluation change-to-suite selector', () => {
         suiteId: 'agent-runtime.workflow-controller',
         suiteIds: ['agent-runtime.single-message-tui', 'agent-runtime.workflow-controller'],
         changedPaths: [
-          'packages/neko-agent/packages/agent/src/session/agent-session.ts',
-          'packages/neko-agent/packages/agent/src/session/conversation-control-runtime.ts',
+          'packages/neko-agent-runtime/src/session/agent-session.ts',
+          'packages/neko-agent-runtime/src/session/conversation-control-runtime.ts',
         ],
       },
     ]);
@@ -177,12 +177,12 @@ describe('Agent Evaluation change-to-suite selector', () => {
 
   it('fails unknown behavior paths instead of selecting a default suite', () => {
     expect(() =>
-      selectEvaluationCoverage(['packages/neko-agent/packages/agent/src/unknown/new-runtime.ts']),
+      selectEvaluationCoverage(['packages/neko-agent-runtime/src/unknown/new-runtime.ts']),
     ).toThrow('unmapped-coverage');
   });
 
   it('requires exactly one reviewed decision for each selected behavior', () => {
-    const paths = ['packages/neko-agent/packages/agent/src/session/agent-session.ts'];
+    const paths = ['packages/neko-agent-runtime/src/session/agent-session.ts'];
     const valid = decision('session-workflows', 'agent-runtime.workflow-controller');
     expect(validateAuthoringCoverage(paths, [valid]).selections).toHaveLength(1);
     expect(() => validateAuthoringCoverage(paths, [])).toThrow('exactly one Evaluation decision');

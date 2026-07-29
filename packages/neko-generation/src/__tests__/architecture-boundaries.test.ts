@@ -36,17 +36,17 @@ describe('@neko/generation architecture boundaries', () => {
 
   it('poisons the retired Platform Job implementation and Host compatibility imports', () => {
     const retiredPaths = [
-      'packages/neko-agent/packages/platform/src/media/generation-job-contracts.ts',
-      'packages/neko-agent/packages/platform/src/media/generation-job-coordinator.ts',
-      'packages/neko-agent/packages/platform/src/media/generation-job-codec.ts',
-      'packages/neko-agent/packages/platform/src/media/generation-job-migrations.ts',
-      'packages/neko-agent/packages/platform/src/media/generation-job-store.ts',
+      'packages/neko-platform/src/media/generation-job-contracts.ts',
+      'packages/neko-platform/src/media/generation-job-coordinator.ts',
+      'packages/neko-platform/src/media/generation-job-codec.ts',
+      'packages/neko-platform/src/media/generation-job-migrations.ts',
+      'packages/neko-platform/src/media/generation-job-store.ts',
     ];
     expect(retiredPaths.filter((file) => existsSync(resolve(workspaceRoot, file)))).toEqual([]);
 
     const platformEntries = [
-      resolve(workspaceRoot, 'packages/neko-agent/packages/platform/src/index.ts'),
-      resolve(workspaceRoot, 'packages/neko-agent/packages/platform/src/media/index.ts'),
+      resolve(workspaceRoot, 'packages/neko-platform/src/index.ts'),
+      resolve(workspaceRoot, 'packages/neko-platform/src/media/index.ts'),
     ];
     const forbiddenExports = [
       /\bGenerationJob\w*/,
@@ -65,7 +65,7 @@ describe('@neko/generation architecture boundaries', () => {
 
     const hostRoots = [
       resolve(workspaceRoot, 'apps/neko-tui/src'),
-      resolve(workspaceRoot, 'packages/neko-agent/packages/extension/src'),
+      resolve(workspaceRoot, 'apps/neko-vscode/src/features/agent'),
     ];
     const violations = hostRoots.flatMap((root) =>
       sourceFiles(root).flatMap((file) => {
@@ -92,11 +92,11 @@ describe('@neko/generation architecture boundaries', () => {
       'packages/neko-types/src/domain-activity/projector.ts',
       'packages/neko-generation/src/job/activity.ts',
       'packages/neko-generation/src/job/activity-port.ts',
-      'packages/neko-agent/packages/agent-types/src/domain-activity-protocol.ts',
-      'packages/neko-agent/packages/extension/src/chat/activity/domainActivityAttachmentServer.ts',
-      'packages/neko-agent/packages/extension/src/chat/router/domainActivityRoutes.ts',
-      'packages/neko-agent/packages/webview/src/components/DomainActivityView.tsx',
-      'packages/neko-agent/packages/webview/src/hooks/useDomainActivity.ts',
+      'packages/neko-agent-types/src/domain-activity-protocol.ts',
+      'apps/neko-vscode/src/features/agent/chat/activity/domainActivityAttachmentServer.ts',
+      'apps/neko-vscode/src/features/agent/chat/router/domainActivityRoutes.ts',
+      'packages/neko-agent-webview/src/components/DomainActivityView.tsx',
+      'packages/neko-agent-webview/src/hooks/useDomainActivity.ts',
     ];
     expect(retiredPaths.filter((file) => existsSync(resolve(workspaceRoot, file)))).toEqual([]);
 
@@ -104,10 +104,10 @@ describe('@neko/generation architecture boundaries', () => {
       'apps/neko-vscode/src',
       'packages/neko-types/src/domain-activity',
       'packages/neko-generation/src',
-      'packages/neko-agent/packages/agent-types/src',
-      'packages/neko-agent/packages/extension/src',
-      'packages/neko-agent/packages/webview/src',
-      'packages/neko-cut/packages/extension/src',
+      'packages/neko-agent-types/src',
+      'apps/neko-vscode/src/features/agent',
+      'packages/neko-agent-webview/src',
+      'apps/neko-vscode/src/features/cut',
     ];
     const forbidden = [
       /@neko\/shared\/domain-activity/u,
@@ -136,8 +136,8 @@ describe('@neko/generation architecture boundaries', () => {
 
   it('keeps Agent and domain entry points on the canonical GenerationJob path', () => {
     const retiredCanvasGenerationPaths = [
-      'packages/neko-canvas/packages/domain/src/canvas-generation-runtime.ts',
-      'packages/neko-canvas/packages/extension/src/canvasCreativeAiExecutor.ts',
+      'packages/neko-canvas-domain/src/canvas-generation-runtime.ts',
+      'apps/neko-vscode/src/features/canvas/canvasCreativeAiExecutor.ts',
     ];
     expect(
       retiredCanvasGenerationPaths.filter((file) => existsSync(resolve(workspaceRoot, file))),
@@ -145,42 +145,37 @@ describe('@neko/generation architecture boundaries', () => {
 
     const sources = new Map(
       [
-        'packages/neko-agent/packages/platform/src/media/media-agent-tools.ts',
-        'packages/neko-agent/packages/extension/src/services/mediaTurnBridge.ts',
-        'packages/neko-canvas/packages/extension/src/agentCapabilityProvider.ts',
-        'packages/neko-canvas/packages/extension/src/editor/canvasEditorProvider.ts',
-        'packages/neko-cut/packages/extension/src/extension.ts',
-        'packages/neko-cut/packages/extension/src/editor/CutExportTaskRegistry.ts',
+        'packages/neko-platform/src/media/media-agent-tools.ts',
+        'apps/neko-vscode/src/features/agent/services/mediaTurnBridge.ts',
+        'apps/neko-vscode/src/features/canvas/agentCapabilityProvider.ts',
+        'apps/neko-vscode/src/features/canvas/editor/canvasEditorProvider.ts',
+        'apps/neko-vscode/src/features/cut/extension.ts',
+        'apps/neko-vscode/src/features/cut/editor/CutExportTaskRegistry.ts',
       ].map((file) => [file, readFileSync(resolve(workspaceRoot, file), 'utf8')]),
     );
     const allEntrySource = [...sources.values()].join('\n');
-    const agentToolSource = sources.get(
-      'packages/neko-agent/packages/platform/src/media/media-agent-tools.ts',
-    );
-    const cutSource = sources.get('packages/neko-cut/packages/extension/src/extension.ts');
+    const agentToolSource = sources.get('packages/neko-platform/src/media/media-agent-tools.ts');
+    const cutSource = sources.get('apps/neko-vscode/src/features/cut/extension.ts');
     const canvasEditorSource = sources.get(
-      'packages/neko-canvas/packages/extension/src/editor/canvasEditorProvider.ts',
+      'apps/neko-vscode/src/features/canvas/editor/canvasEditorProvider.ts',
     );
     const cutExportRegistrySource = sources.get(
-      'packages/neko-cut/packages/extension/src/editor/CutExportTaskRegistry.ts',
+      'apps/neko-vscode/src/features/cut/editor/CutExportTaskRegistry.ts',
     );
 
     expect(agentToolSource).toContain('jobs.submitGeneration');
     expect(agentToolSource).toContain('jobs.observeGeneration');
     expect(agentToolSource).not.toMatch(/\bmedia\.generate(?:Image|Video|Audio)\s*\(/u);
     expect(
-      sources.get('packages/neko-agent/packages/extension/src/services/mediaTurnBridge.ts'),
+      sources.get('apps/neko-vscode/src/features/agent/services/mediaTurnBridge.ts'),
     ).not.toMatch(/\bsubmitMediaTurn\b|\bplatform\.media\b/u);
     expect(
       existsSync(
-        resolve(
-          workspaceRoot,
-          'packages/neko-agent/packages/platform/src/media/media-turn-dispatcher.ts',
-        ),
+        resolve(workspaceRoot, 'packages/neko-platform/src/media/media-turn-dispatcher.ts'),
       ),
     ).toBe(false);
     expect(
-      sources.get('packages/neko-canvas/packages/extension/src/agentCapabilityProvider.ts'),
+      sources.get('apps/neko-vscode/src/features/canvas/agentCapabilityProvider.ts'),
     ).not.toMatch(/\bensureProjectModel\b|neko\.project\.models\./u);
     expect(canvasEditorSource).toContain("requestedAction: 'create-job'");
     expect(canvasEditorSource).toContain("'neko.agent.sendContext'");
@@ -204,7 +199,7 @@ describe('@neko/generation architecture boundaries', () => {
       'packages/neko-types/src/types/canvas-workspace-board.ts',
       'packages/neko-types/src/utils/canvasWorkspaceBoardProjection.ts',
       'packages/neko-types/src/types/creative-ai-invocation.ts',
-      'packages/neko-agent/packages/agent/src/runtime/turn/creator-visible-artifact-collector.ts',
+      'packages/neko-agent-runtime/src/runtime/turn/creator-visible-artifact-collector.ts',
     ];
     const forbiddenImports = [
       /from ['"][^'"]*resource-cache['"]/u,

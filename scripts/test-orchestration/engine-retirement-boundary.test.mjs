@@ -6,7 +6,7 @@ import { checkEngineRetirementBoundary } from '../check-engine-retirement-bounda
 describe('Engine product retirement boundary', () => {
   it('accepts the repository removal-first composition', async () => {
     assert.deepEqual(await checkEngineRetirementBoundary(undefined, async () => []), {
-      featureManifestCount: 6,
+      featureManifestCount: 1,
       retiredCommandCount: 3,
     });
   });
@@ -42,14 +42,14 @@ describe('Engine product retirement boundary', () => {
   it('rejects production source imports of the retired Engine client', async () => {
     const files = createValidFixture();
     files.set(
-      'packages/neko-preview/packages/extension/src/services/PreviewService.ts',
+      'apps/neko-vscode/src/features/preview/services/PreviewService.ts',
       "import { EngineClient } from '@neko/neko-client';",
     );
 
     await assert.rejects(
       checkEngineRetirementBoundary(
         (file) => Promise.resolve(files.get(file)),
-        async () => ['packages/neko-preview/packages/extension/src/services/PreviewService.ts'],
+        async () => ['apps/neko-vscode/src/features/preview/services/PreviewService.ts'],
       ),
       /PreviewService\.ts: @neko\/neko-client import/u,
     );
@@ -57,14 +57,7 @@ describe('Engine product retirement boundary', () => {
 });
 
 function createValidFixture() {
-  const manifests = [
-    'packages/neko-agent/package.json',
-    'packages/neko-assets/package.json',
-    'packages/neko-canvas/package.json',
-    'packages/neko-cut/package.json',
-    'packages/neko-preview/package.json',
-    'packages/neko-tools/package.json',
-  ];
+  const manifests = ['apps/neko-vscode/package.json'];
   return new Map([
     [
       'scripts/package-groups.json',
@@ -74,7 +67,7 @@ function createValidFixture() {
       'apps/neko-vscode/src/extension.ts',
       [
         "const FEATURE_ORDER = ['neko-tools'];",
-        "const RETIRED_FEATURE_IDS = Object.freeze(['neko.neko-engine']);",
+        "const retiredFeatureIds = ['neko.neko-engine'];",
         "const commands = ['neko.engine.ensureFrameServer', 'neko.engine.extractThumbnail',",
         "'neko.engine.probeInternal',];",
         'throw new Error(`Retired media command ${command} cannot be used`);',

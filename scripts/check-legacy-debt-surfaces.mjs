@@ -23,7 +23,7 @@ const requiredSemanticClasses = [
 const allowedSemanticClasses = new Set([...requiredSemanticClasses, 'needs-review']);
 const failingProductionSemanticClasses = new Set(['delete-now', 'migrate-now', 'needs-review']);
 const retiredAssetCatalogBoundaryPathPatterns = [
-  'packages/neko-agent/packages/extension/src/services/projectMentionSearch.ts',
+  'apps/neko-vscode/src/features/agent/services/projectMentionSearch.ts',
   'packages/neko-types/src/local-metadata/node-workspace-storage-inspection.ts',
   'packages/neko-types/src/types/asset/workspace-linked-media-library.ts',
   'packages/neko-types/src/types/content-locator.ts',
@@ -31,7 +31,7 @@ const retiredAssetCatalogBoundaryPathPatterns = [
 // Match both the owning boundary and its rejection marker so unrelated debt in the same file fails.
 const explicitBoundaryRejectionRules = [
   {
-    path: 'packages/neko-canvas/packages/extension/src/canvasmediacontentlocator.ts',
+    path: 'apps/neko-vscode/src/features/canvas/canvasmediacontentlocator.ts',
     markers: ['legacy semantic projections'],
   },
   {
@@ -902,7 +902,13 @@ function isTestPath(file) {
 }
 
 function isAgentGovernedPath(file) {
-  return file.startsWith('packages/neko-agent/') || file.startsWith('apps/neko-tui/');
+  return (
+    file.startsWith('apps/neko-tui/') ||
+    file.startsWith('apps/neko-vscode/src/features/agent/') ||
+    file.startsWith('packages/neko-agent-') ||
+    file.startsWith('packages/neko-ai-sdk/') ||
+    file.startsWith('packages/neko-platform/')
+  );
 }
 
 function getPackageName(file) {
@@ -1065,7 +1071,7 @@ function validateLedgerEntry(entry, errors, warnings) {
       errors.push(`${id}: every path must be a string.`);
       continue;
     }
-    if (path.startsWith('packages/neko-agent/')) {
+    if (isAgentGovernedPath(path)) {
       errors.push(
         `${id}: Agent path belongs in agent-code-debt-lcd-register.json, not ${ledgerPath}.`,
       );
@@ -1348,7 +1354,7 @@ function runSelfTest() {
     },
     {
       value: classifySurface(
-        'packages/neko-preview/packages/webview/src/Viewer.tsx',
+        'packages/neko-preview-webview/src/Viewer.tsx',
         'const fallbackLabel = "Open";',
         'fallback',
       ),
@@ -1380,7 +1386,7 @@ function runSelfTest() {
     },
     {
       value: classifySurface(
-        'packages/neko-agent/packages/agent/src/skill/legacy-skill-migration.ts',
+        'packages/neko-agent-runtime/src/skill/legacy-skill-migration.ts',
         "const LEGACY_MANIFEST_FILE = 'manifest.json';",
         'legacy',
       ),
@@ -1441,7 +1447,7 @@ function runSelfTest() {
     {
       value: buildQualityGate([
         {
-          file: 'packages/neko-agent/packages/agent/src/runtime.ts',
+          file: 'packages/neko-agent-runtime/src/runtime.ts',
           packageName: '@neko/agent',
           lineNumber: 1,
           term: 'legacy',
@@ -1462,7 +1468,7 @@ function runSelfTest() {
     },
     {
       value: classifySurface(
-        'packages/neko-canvas/packages/webview/src/components/content/creatorPresentation.ts',
+        'packages/neko-canvas-webview/src/components/content/creatorPresentation.ts',
         'referenceMedia: semanticRow.referenceMedia || summarizeLegacyReferenceMedia(data),',
         'legacy',
       ),
@@ -1498,7 +1504,7 @@ function runSelfTest() {
     },
     {
       value: retiredAssetCatalogAllowlist(
-        'packages/neko-canvas/packages/extension/src/runtime.ts',
+        'apps/neko-vscode/src/features/canvas/runtime.ts',
       ),
       expected: undefined,
     },

@@ -11,14 +11,6 @@
  */
 export { BaseOutlineProvider } from './baseOutlineProvider';
 export type { IOutlineProvider } from './baseOutlineProvider';
-export {
-  EmbeddedFeatureRegistry,
-  installEmbeddedFeatureRegistry,
-  requireNekoExtension,
-  resolveNekoExtension,
-  waitForNekoExtensionActivation,
-} from './embedded-feature-registry';
-export type { EmbeddedFeatureRegistration, NekoExtension } from './embedded-feature-registry';
 
 // Logger (OutputChannel transport + log level config)
 export {
@@ -32,10 +24,6 @@ export type { LogLevelSettingSnapshot } from './logger';
 
 // Error reporter (showErrorMessage wrapper)
 export { VSCodeErrorHandler } from './error-reporter';
-export {
-  REGISTER_AGENT_CAPABILITIES_COMMAND,
-  registerOptionalAgentCapabilityProvider,
-} from './optional-agent-capability-registration';
 
 // i18n bridge (locale detection + webview injection)
 export { getVSCodeLocale, injectLocaleAttribute } from './i18n-bridge';

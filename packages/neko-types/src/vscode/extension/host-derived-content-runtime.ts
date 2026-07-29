@@ -47,7 +47,7 @@ export type HostDerivedContentTarget =
 
 export interface CreateHostDerivedContentRuntimeOptions {
   readonly target: HostDerivedContentTarget;
-  readonly context?: vscode.ExtensionContext;
+  readonly context?: Pick<vscode.ExtensionContext, 'globalStorageUri'>;
   readonly extensionUri?: vscode.Uri;
   readonly localResourceAccess?: LocalResourceAccessService;
   readonly localResourceAccessOptions?: Partial<DefaultLocalResourceAccessServiceOptions>;
@@ -102,7 +102,7 @@ export async function createHostDerivedContentRuntime(
   options: CreateHostDerivedContentRuntimeOptions,
 ): Promise<HostDerivedContentRuntime> {
   const context = options.context;
-  const extensionUri = options.extensionUri ?? context?.extensionUri;
+  const extensionUri = options.extensionUri;
   const logger = options.logger;
   const localResourceAccess =
     options.localResourceAccess ??
@@ -239,7 +239,7 @@ async function createMetadataBinding(
 
 function createCacheOptions(
   target: HostDerivedContentTarget,
-  context: vscode.ExtensionContext | undefined,
+  context: Pick<vscode.ExtensionContext, 'globalStorageUri'> | undefined,
   metadataBinding: HostDerivedContentMetadataBinding,
 ) {
   if (target.kind === 'workspace') {
@@ -267,7 +267,7 @@ function createCacheOptions(
 function createLocalResourceAccessIfConfigured(
   options: CreateHostDerivedContentRuntimeOptions,
   extensionUri: vscode.Uri | undefined,
-  context: vscode.ExtensionContext | undefined,
+  context: Pick<vscode.ExtensionContext, 'globalStorageUri'> | undefined,
 ): LocalResourceAccessService | undefined {
   if (!extensionUri) return undefined;
   const localOptions = options.localResourceAccessOptions;

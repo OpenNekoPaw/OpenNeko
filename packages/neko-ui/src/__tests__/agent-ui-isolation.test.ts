@@ -7,18 +7,18 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = join(__dirname, '../../../..');
 
 const agentCriticalFiles = [
-  'packages/neko-agent/packages/webview/src/components/ChatView/index.tsx',
-  'packages/neko-agent/packages/webview/src/components/ChatView/InputArea/InputArea.tsx',
-  'packages/neko-agent/packages/webview/src/components/ChatView/InputArea/ModelSelector.tsx',
-  'packages/neko-agent/packages/webview/src/components/ChatView/InputArea/ModeSelector.tsx',
-  'packages/neko-agent/packages/webview/src/components/ChatView/InputArea/SessionModeSelector.tsx',
-  'packages/neko-agent/packages/webview/src/components/ChatView/InputArea/ModeConfigBar.tsx',
-  'packages/neko-agent/packages/webview/src/components/ChatView/InputArea/ModelTagList.tsx',
-  'packages/neko-agent/packages/webview/src/components/ChatView/InputArea/EntryPromptMenu.tsx',
-  'packages/neko-agent/packages/webview/src/components/ChatView/InputArea/MentionMenu.tsx',
-  'packages/neko-agent/packages/webview/src/components/ChatView/InputArea/SlashCommandMenu.tsx',
-  'packages/neko-agent/packages/webview/src/components/ChatView/InputArea/AmbientCanvasContextBar.tsx',
-  'packages/neko-agent/packages/webview/src/components/ChatView/InputArea/UsageIndicator.tsx',
+  'packages/neko-agent-webview/src/components/ChatView/index.tsx',
+  'packages/neko-agent-webview/src/components/ChatView/InputArea/InputArea.tsx',
+  'packages/neko-agent-webview/src/components/ChatView/InputArea/ModelSelector.tsx',
+  'packages/neko-agent-webview/src/components/ChatView/InputArea/ModeSelector.tsx',
+  'packages/neko-agent-webview/src/components/ChatView/InputArea/SessionModeSelector.tsx',
+  'packages/neko-agent-webview/src/components/ChatView/InputArea/ModeConfigBar.tsx',
+  'packages/neko-agent-webview/src/components/ChatView/InputArea/ModelTagList.tsx',
+  'packages/neko-agent-webview/src/components/ChatView/InputArea/EntryPromptMenu.tsx',
+  'packages/neko-agent-webview/src/components/ChatView/InputArea/MentionMenu.tsx',
+  'packages/neko-agent-webview/src/components/ChatView/InputArea/SlashCommandMenu.tsx',
+  'packages/neko-agent-webview/src/components/ChatView/InputArea/AmbientCanvasContextBar.tsx',
+  'packages/neko-agent-webview/src/components/ChatView/InputArea/UsageIndicator.tsx',
 ];
 
 describe('Agent UI isolation guardrail', () => {

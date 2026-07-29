@@ -36,18 +36,22 @@ export function stageDevelopmentMediaRuntime(stageRoot, target, environment = pr
   const license =
     environment.NEKO_FFMPEG_LICENSE_PATH?.trim() || discoverDevelopmentLicense(ffmpeg);
   const spdx = environment.NEKO_FFMPEG_LICENSE_SPDX?.trim() || 'GPL-3.0-or-later';
+  const ffmpegSource = realpathSync(ffmpeg);
+  const ffprobeSource = realpathSync(ffprobe);
+  const licenseSource = realpathSync(license);
+  const licenseFileName = basename(licenseSource);
   const runtimeRoot = join(stageRoot, 'dist', 'media-runtime', target);
   mkdirSync(join(runtimeRoot, 'bin'), { recursive: true });
-  cpSync(ffmpeg, join(runtimeRoot, 'bin', 'ffmpeg'));
-  cpSync(ffprobe, join(runtimeRoot, 'bin', 'ffprobe'));
-  cpSync(license, join(runtimeRoot, basename(license)));
+  copyResolvedDevelopmentFile(ffmpegSource, join(runtimeRoot, 'bin', 'ffmpeg'));
+  copyResolvedDevelopmentFile(ffprobeSource, join(runtimeRoot, 'bin', 'ffprobe'));
+  copyResolvedDevelopmentFile(licenseSource, join(runtimeRoot, licenseFileName));
   chmodSync(join(runtimeRoot, 'bin', 'ffmpeg'), 0o755);
   chmodSync(join(runtimeRoot, 'bin', 'ffprobe'), 0o755);
   const descriptor = createMediaRuntimeDescriptor({
     target,
     ffmpeg: join(runtimeRoot, 'bin', 'ffmpeg'),
     ffprobe: join(runtimeRoot, 'bin', 'ffprobe'),
-    license: join(runtimeRoot, basename(license)),
+    license: join(runtimeRoot, licenseFileName),
     spdx,
   });
   writeFileSync(
@@ -57,6 +61,10 @@ export function stageDevelopmentMediaRuntime(stageRoot, target, environment = pr
   );
   assertStagedMediaRuntime(stageRoot, target, { qualify: true });
   return Object.freeze({ runtimeRoot, descriptor });
+}
+
+export function copyResolvedDevelopmentFile(source, destination) {
+  cpSync(realpathSync(source), destination);
 }
 
 export function stagePackagedMediaRuntime(stageRoot, target, runtimeSourceRoot) {

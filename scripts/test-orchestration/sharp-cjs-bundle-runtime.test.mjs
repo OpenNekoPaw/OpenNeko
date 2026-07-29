@@ -20,11 +20,7 @@ afterEach(async () => {
 
 describe('Sharp CommonJS bundle runtime', () => {
   it('keeps Sharp external in every owning bundle and executes from its staged closure', async () => {
-    const [agentManifest, applicationManifest] = await Promise.all([
-      readJson('packages/neko-agent/package.json'),
-      readJson('apps/neko-vscode/package.json'),
-    ]);
-    assert.match(agentManifest.scripts['compile:extension'], /--external:sharp/u);
+    const applicationManifest = await readJson('apps/neko-vscode/package.json');
     assert.match(applicationManifest.scripts.compile, /--external:sharp/u);
 
     const root = await mkdtemp(join(tmpdir(), 'openneko-sharp-cjs-bundle-'));
@@ -32,7 +28,7 @@ describe('Sharp CommonJS bundle runtime', () => {
     const outputRoot = join(root, 'dist');
     const bundlePath = join(outputRoot, 'extension.cjs');
     const transportPath = resolve(
-      'packages/neko-agent/packages/ai-sdk/src/image-batch-transport.ts',
+      'packages/neko-ai-sdk/src/image-batch-transport.ts',
     );
     await build({
       stdin: {

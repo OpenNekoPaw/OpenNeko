@@ -1,8 +1,6 @@
 packages:
   - apps/*
   - packages/*
-  - packages/*/packages/*
-  - packages/*/test-utils
 
 shamefullyHoist: true
 publicHoistPattern:

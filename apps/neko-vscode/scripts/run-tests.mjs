@@ -17,7 +17,12 @@ nodeArguments.push(
   fileURLToPath(new URL('./manifest.test.mjs', import.meta.url)),
   fileURLToPath(new URL('../src/ai-host-runtime.test.ts', import.meta.url)),
   fileURLToPath(new URL('../src/media-host-runtime.test.ts', import.meta.url)),
-  fileURLToPath(new URL('../src/scoped-extension-context.test.ts', import.meta.url)),
+  fileURLToPath(new URL('../src/feature-runtime-context.test.ts', import.meta.url)),
+  fileURLToPath(new URL('../src/feature-port-contracts.test.ts', import.meta.url)),
+  fileURLToPath(new URL('../src/state-layout.test.ts', import.meta.url)),
+  fileURLToPath(new URL('../src/kernel/capability-contribution.test.ts', import.meta.url)),
+  fileURLToPath(new URL('../src/kernel/capability-invocation.test.ts', import.meta.url)),
+  fileURLToPath(new URL('../src/kernel/host-kernel.test.ts', import.meta.url)),
 );
 
 const result = spawnSync(process.execPath, nodeArguments, { stdio: 'inherit' });

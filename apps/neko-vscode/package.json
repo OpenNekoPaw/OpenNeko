@@ -15,35 +15,1114 @@
   },
   "main": "./dist/extension.js",
   "activationEvents": [
-    "onStartupFinished"
+    "onCommand:neko.agent.characterDialogue",
+    "onCommand:neko.agent.clearDndPayload",
+    "onCommand:neko.agent.embodyCharacter",
+    "onCommand:neko.agent.refreshModels",
+    "onCommand:neko.agent.registerCapabilities",
+    "onCommand:neko.agent.registerSlashCommands",
+    "onCommand:neko.agent.sendContext",
+    "onCommand:neko.assets.queryMediaLibrary",
+    "onCommand:neko.entity.addAlias",
+    "onCommand:neko.entity.bindAsset",
+    "onCommand:neko.entity.confirmCandidate",
+    "onCommand:neko.entity.dismissCandidate",
+    "onCommand:neko.entity.getEntity",
+    "onCommand:neko.entity.getEntityDetail",
+    "onCommand:neko.entity.inspectEntity",
+    "onCommand:neko.entity.listCandidates",
+    "onCommand:neko.entity.listEntities",
+    "onCommand:neko.entity.mergeCandidate",
+    "onCommand:neko.entity.proposeCandidate",
+    "onCommand:neko.entity.rejectCandidate",
+    "onCommand:neko.entity.removeAlias",
+    "onCommand:neko.entity.renameEntity",
+    "onCommand:neko.entity.resolveByName",
+    "onCommand:neko.entity.setDefaultBinding",
+    "onCommand:neko.entity.triggerBindingWidgetAction",
+    "onCommand:neko.entity.updateMetadata",
+    "onCommand:neko.entity.upsertVisualDraft",
+    "onCommand:neko.entityInspector.follow",
+    "onCommand:neko.preview.revealDocumentLocator",
+    "onInstallKind:media.voice-pack",
+    "onInstallType:endpoint",
+    "onInstallType:model",
+    "onInstallType:processor",
+    "onInstallType:provider",
+    "onInstallType:shader",
+    "onInstallType:skill"
   ],
   "categories": [
+    "Machine Learning",
     "Other",
     "Visualization"
   ],
   "keywords": [
-    "video",
-    "editor",
-    "canvas",
+    "3d",
+    "agent",
     "ai",
+    "asset",
+    "assets",
+    "assistant",
+    "audio",
+    "canvas",
+    "cbz",
+    "compare",
     "creative",
+    "creative-entity",
+    "design",
+    "diff",
+    "document",
+    "docx",
+    "editing",
+    "editor",
+    "epub",
     "filmmaking",
-    "local-first"
+    "gltf",
+    "image",
+    "library",
+    "llm",
+    "local-first",
+    "mcp",
+    "media",
+    "model",
+    "pdf",
+    "player",
+    "preview",
+    "timeline",
+    "video"
   ],
   "scripts": {
     "vscode:prepublish": "pnpm run compile && node scripts/validate-manifest.mjs",
-    "compile": "esbuild ./src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --external:sharp --format=cjs --platform=node && node ../../scripts/stage-sharp-runtime.mjs --output-root dist",
-    "test": "node scripts/run-tests.mjs",
+    "compile": "node scripts/stage-feature-resources.mjs --build && esbuild ./src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --external:sharp --format=cjs --platform=node && node ../../scripts/stage-sharp-runtime.mjs --output-root dist",
+    "typecheck": "tsc --noEmit",
+    "test": "node scripts/run-tests.mjs && vitest run",
     "package": "node ../../scripts/package-openneko-platform.mjs"
   },
   "dependencies": {
+    "@neko-agent/types": "workspace:*",
+    "@neko-canvas/domain": "workspace:*",
+    "@neko-cut/domain": "workspace:*",
+    "@neko-tools/contracts": "workspace:*",
     "@neko/agent": "workspace:*",
+    "@neko/ai-sdk": "workspace:*",
+    "@neko/chara": "workspace:*",
+    "@neko/content": "workspace:*",
+    "@neko/entity": "workspace:*",
     "@neko/generation": "workspace:*",
     "@neko/media": "workspace:*",
     "@neko/platform": "workspace:*",
-    "@neko/shared": "workspace:*"
+    "@neko/quality": "workspace:*",
+    "@neko/search": "workspace:*",
+    "@neko/shared": "workspace:*",
+    "sharp": "^0.35.3"
   },
   "devDependencies": {
+    "@types/vscode": "^1.125.0",
+    "adm-zip": "^0.6.0",
     "esbuild": "^0.19.8"
+  },
+  "files": [
+    "dist/**",
+    "package.nls.json",
+    "package.nls.zh-cn.json",
+    "l10n/**",
+    "README.md",
+    "LICENSE"
+  ],
+  "contributes": {
+    "themes": [
+      {
+        "label": "Neko macOS Dark",
+        "uiTheme": "vs-dark",
+        "path": "./dist/features/neko-tools/themes/neko-macos-dark-color-theme.json"
+      },
+      {
+        "label": "Neko macOS Light",
+        "uiTheme": "vs",
+        "path": "./dist/features/neko-tools/themes/neko-macos-light-color-theme.json"
+      }
+    ],
+    "iconThemes": [
+      {
+        "id": "neko-file-icons",
+        "label": "Neko File Icons",
+        "path": "./dist/features/neko-tools/themes/neko-file-icon-theme.json"
+      }
+    ],
+    "languages": [
+      {
+        "id": "neko-canvas-file",
+        "aliases": [
+          "Neko Canvas"
+        ],
+        "extensions": [
+          ".nkc"
+        ],
+        "icon": {
+          "light": "./dist/features/neko-tools/themes/icons/file-canvas.svg",
+          "dark": "./dist/features/neko-tools/themes/icons/file-canvas.svg"
+        }
+      },
+      {
+        "id": "epub",
+        "extensions": [
+          ".epub"
+        ]
+      }
+    ],
+    "customEditors": [
+      {
+        "viewType": "neko.mediaDiff",
+        "displayName": "Media Diff",
+        "selector": [
+          {
+            "filenamePattern": "*.{png,jpg,jpeg,gif,webp,bmp,svg,mp4,mov,avi,mkv,webm,m4v,mp3,wav,ogg,flac,aac,m4a}"
+          }
+        ],
+        "priority": "option"
+      },
+      {
+        "viewType": "neko.modelPreview",
+        "displayName": "%neko.preview.modelPreview.displayName%",
+        "selector": [
+          {
+            "filenamePattern": "*.{glb,gltf,obj,stl,ply}"
+          }
+        ],
+        "priority": "default"
+      },
+      {
+        "viewType": "neko.videoPreview",
+        "displayName": "%neko.preview.videoPreview.displayName%",
+        "selector": [
+          {
+            "filenamePattern": "*.{mp4,mov,avi,mkv,webm,m4v,ts,flv,wmv}"
+          }
+        ],
+        "priority": "default"
+      },
+      {
+        "viewType": "neko.audioPreview",
+        "displayName": "%neko.preview.audioPreview.displayName%",
+        "selector": [
+          {
+            "filenamePattern": "*.{mp3,wav,ogg,flac,aac,m4a,wma,opus}"
+          }
+        ],
+        "priority": "default"
+      },
+      {
+        "viewType": "neko.pdfPreview",
+        "displayName": "%neko.preview.pdfPreview.displayName%",
+        "selector": [
+          {
+            "filenamePattern": "*.pdf"
+          }
+        ],
+        "priority": "default"
+      },
+      {
+        "viewType": "neko.cbzPreview",
+        "displayName": "%neko.preview.cbzPreview.displayName%",
+        "selector": [
+          {
+            "filenamePattern": "*.cbz"
+          }
+        ],
+        "priority": "default"
+      },
+      {
+        "viewType": "neko.epubPreview",
+        "displayName": "%neko.preview.epubPreview.displayName%",
+        "selector": [
+          {
+            "filenamePattern": "*.epub"
+          }
+        ],
+        "priority": "default"
+      },
+      {
+        "viewType": "neko.docxPreview",
+        "displayName": "%neko.preview.docxPreview.displayName%",
+        "selector": [
+          {
+            "filenamePattern": "*.docx"
+          }
+        ],
+        "priority": "default"
+      },
+      {
+        "viewType": "neko.cut.otioEditor",
+        "displayName": "Neko Cut",
+        "selector": [
+          {
+            "filenamePattern": "*.otio"
+          }
+        ],
+        "priority": "default"
+      },
+      {
+        "viewType": "neko.canvasEditor",
+        "displayName": "Canvas Editor",
+        "selector": [
+          {
+            "filenamePattern": "*.nkc"
+          }
+        ],
+        "priority": "default"
+      }
+    ],
+    "commands": [
+      {
+        "command": "neko.tools.compareFiles",
+        "title": "%neko.tools.compareFiles.title%",
+        "category": "Neko Tools"
+      },
+      {
+        "command": "neko.tools.compareImages",
+        "title": "%neko.tools.compareImages.title%",
+        "category": "Neko Tools"
+      },
+      {
+        "command": "neko.tools.compareVideos",
+        "title": "%neko.tools.compareVideos.title%",
+        "category": "Neko Tools"
+      },
+      {
+        "command": "neko.tools.compareAudio",
+        "title": "%neko.tools.compareAudio.title%",
+        "category": "Neko Tools"
+      },
+      {
+        "command": "neko.tools.showMediaInfo",
+        "title": "%neko.tools.showMediaInfo.title%",
+        "category": "Neko Tools"
+      },
+      {
+        "command": "neko.preview.openThreeReferenceGuide",
+        "title": "%neko.preview.openThreeReferenceGuide.title%",
+        "category": "Neko Preview"
+      },
+      {
+        "command": "neko.preview.openVideo",
+        "title": "%neko.preview.openVideo.title%",
+        "category": "Neko Preview"
+      },
+      {
+        "command": "neko.preview.openAudio",
+        "title": "%neko.preview.openAudio.title%",
+        "category": "Neko Preview"
+      },
+      {
+        "command": "neko.preview.openPdf",
+        "title": "%neko.preview.openPdf.title%",
+        "category": "Neko Preview"
+      },
+      {
+        "command": "neko.preview.openCbz",
+        "title": "%neko.preview.openCbz.title%",
+        "category": "Neko Preview"
+      },
+      {
+        "command": "neko.preview.openEpub",
+        "title": "%neko.preview.openEpub.title%",
+        "category": "Neko Preview"
+      },
+      {
+        "command": "neko.preview.openDocx",
+        "title": "%neko.preview.openDocx.title%",
+        "category": "Neko Preview"
+      },
+      {
+        "command": "neko.epub.goToChapter",
+        "title": "%neko.preview.goToChapter.title%",
+        "category": "Neko Preview"
+      },
+      {
+        "command": "neko.assets.previewMedia",
+        "title": "%neko.assets.previewMedia%",
+        "category": "Neko"
+      },
+      {
+        "command": "neko.assets.addToTimeline",
+        "title": "%neko.assets.addToTimeline%",
+        "category": "Neko",
+        "icon": "$(play)"
+      },
+      {
+        "command": "neko.assets.addToCanvas",
+        "title": "%neko.assets.addToCanvas%",
+        "category": "Neko",
+        "icon": "$(layout)"
+      },
+      {
+        "command": "neko.assets.addMediaLibrary",
+        "title": "%neko.assets.addMediaLibrary%",
+        "category": "Neko",
+        "icon": "$(plus)"
+      },
+      {
+        "command": "neko.assets.removeMediaLibrary",
+        "title": "%neko.assets.removeMediaLibrary%",
+        "category": "Neko"
+      },
+      {
+        "command": "neko.assets.relinkMediaLibrary",
+        "title": "%neko.assets.relinkMediaLibrary%",
+        "category": "Neko"
+      },
+      {
+        "command": "neko.assets.deleteMediaLibraryFile",
+        "title": "%neko.assets.deleteMediaLibraryFile%",
+        "category": "Neko",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "neko.assets.copyToMediaLibrary",
+        "title": "%neko.assets.copyToMediaLibrary%",
+        "category": "Neko"
+      },
+      {
+        "command": "neko.assets.revealFileInOS",
+        "title": "%neko.assets.revealFileInOS%",
+        "category": "Neko"
+      },
+      {
+        "command": "neko.assets.copyFilePath",
+        "title": "%neko.assets.copyFilePath%",
+        "category": "Neko"
+      },
+      {
+        "command": "neko.assets.copyFileReference",
+        "title": "%neko.assets.copyFileReference%",
+        "category": "Neko"
+      },
+      {
+        "command": "neko.assets.revealMediaLibraryFile",
+        "title": "%neko.assets.revealMediaLibraryFile%",
+        "category": "Neko"
+      },
+      {
+        "command": "neko.assets.previewMediaLibraryFile",
+        "title": "%neko.assets.previewMediaLibraryFile%",
+        "category": "Neko"
+      },
+      {
+        "command": "neko.assets.addToTimelineFromLibrary",
+        "title": "%neko.assets.addToTimelineFromLibrary%",
+        "category": "Neko",
+        "icon": "$(play)"
+      },
+      {
+        "command": "neko.assets.addToCanvasFromLibrary",
+        "title": "%neko.assets.addToCanvasFromLibrary%",
+        "category": "Neko",
+        "icon": "$(layout)"
+      },
+      {
+        "command": "neko.assets.refreshMediaLibraries",
+        "title": "%neko.assets.refreshMediaLibraries%",
+        "category": "Neko",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "neko.assets.searchMediaLibrary",
+        "title": "%neko.assets.searchMediaLibrary%",
+        "category": "Neko",
+        "icon": "$(search)"
+      },
+      {
+        "command": "neko.assets.directory.reveal",
+        "title": "%neko.assets.directory.reveal%",
+        "category": "Neko"
+      },
+      {
+        "command": "neko.assets.addToAgent",
+        "title": "%neko.assets.addToAgent%",
+        "category": "Neko",
+        "icon": "$(comment-add)"
+      },
+      {
+        "command": "neko.entityBrowser.refresh",
+        "title": "%neko.entityBrowser.refresh%",
+        "category": "Neko",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "neko.entityBrowser.inspect",
+        "title": "%neko.entityBrowser.inspect%",
+        "category": "Neko",
+        "icon": "$(inspect)"
+      },
+      {
+        "command": "neko.entityBrowser.rename",
+        "title": "%neko.entityBrowser.rename%",
+        "category": "Neko",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "neko.entityBrowser.editAppearance",
+        "title": "%neko.entityBrowser.editAppearance%",
+        "category": "Neko",
+        "icon": "$(symbol-color)"
+      },
+      {
+        "command": "neko.entityBrowser.createCandidate",
+        "title": "%neko.entityBrowser.createCandidate%",
+        "category": "Neko",
+        "icon": "$(add)"
+      },
+      {
+        "command": "neko.cut.newProject",
+        "title": "%neko.cut.newProject.title%",
+        "category": "NekoCut"
+      },
+      {
+        "command": "neko.cut.previewMedia",
+        "title": "%neko.cut.previewMedia.title%",
+        "category": "NekoCut"
+      },
+      {
+        "command": "neko.canvas.new",
+        "title": "%neko.canvas.new.title%",
+        "category": "NekoCanvas"
+      },
+      {
+        "command": "neko.canvas.previewMedia",
+        "title": "%neko.canvas.previewMedia.title%",
+        "category": "NekoCanvas"
+      },
+      {
+        "command": "neko.canvas.revealPlaybackWorkspace",
+        "title": "%neko.canvas.revealPlaybackWorkspace.title%",
+        "category": "NekoCanvas"
+      },
+      {
+        "command": "neko.canvas.deleteSelected",
+        "title": "%neko.canvas.deleteSelected.title%",
+        "category": "NekoCanvas"
+      },
+      {
+        "command": "neko.canvas.escape",
+        "title": "%neko.canvas.escape.title%",
+        "category": "NekoCanvas"
+      },
+      {
+        "command": "neko.canvas.selectAll",
+        "title": "%neko.canvas.selectAll.title%",
+        "category": "NekoCanvas"
+      },
+      {
+        "command": "neko.canvas.undo",
+        "title": "%neko.canvas.undo.title%",
+        "category": "NekoCanvas"
+      },
+      {
+        "command": "neko.canvas.redo",
+        "title": "%neko.canvas.redo.title%",
+        "category": "NekoCanvas"
+      },
+      {
+        "command": "neko.canvas.selectNodeFromOutline",
+        "title": "%neko.canvas.selectNodeFromOutline.title%",
+        "category": "NekoCanvas"
+      },
+      {
+        "command": "neko.canvas.selectConnectionFromOutline",
+        "title": "%neko.canvas.selectConnectionFromOutline.title%",
+        "category": "NekoCanvas"
+      },
+      {
+        "command": "neko.canvas.resetZoom",
+        "title": "%neko.canvas.resetZoom.title%",
+        "category": "NekoCanvas"
+      },
+      {
+        "command": "neko.canvas.deleteNodeFromOutline",
+        "title": "%neko.canvas.deleteNodeFromOutline.title%",
+        "category": "NekoCanvas"
+      },
+      {
+        "command": "neko.ai.chat",
+        "title": "%neko.ai.chat.title%",
+        "icon": "$(comment-discussion)",
+        "category": "NekoAgent"
+      },
+      {
+        "command": "neko.agent.showLogs",
+        "title": "%neko.agent.showLogs.title%",
+        "icon": "$(output)",
+        "category": "NekoAgent"
+      },
+      {
+        "command": "neko.ai.generateImage",
+        "title": "%neko.ai.generateImage.title%",
+        "category": "NekoAgent: AI"
+      },
+      {
+        "command": "neko.ai.generateVideo",
+        "title": "%neko.ai.generateVideo.title%",
+        "category": "NekoAgent: AI"
+      },
+      {
+        "command": "neko.ai.generateTTS",
+        "title": "%neko.ai.generateTTS.title%",
+        "category": "NekoAgent: AI"
+      },
+      {
+        "command": "neko.ai.generateMusic",
+        "title": "%neko.ai.generateMusic.title%",
+        "category": "NekoAgent: AI"
+      },
+      {
+        "command": "neko.ai.generateCharacter",
+        "title": "%neko.ai.generateCharacter.title%",
+        "category": "NekoAgent: AI"
+      },
+      {
+        "command": "neko.ai.transferStyle",
+        "title": "%neko.ai.transferStyle.title%",
+        "category": "NekoAgent: AI"
+      },
+      {
+        "command": "neko.ai.enhanceVideo",
+        "title": "%neko.ai.enhanceVideo.title%",
+        "category": "NekoAgent: AI"
+      },
+      {
+        "command": "neko.ai.optimizeAudio",
+        "title": "%neko.ai.optimizeAudio.title%",
+        "category": "NekoAgent: AI"
+      },
+      {
+        "command": "neko.ai.analyzeImage",
+        "title": "%neko.ai.analyzeImage.title%",
+        "category": "NekoAgent: AI"
+      },
+      {
+        "command": "neko.ai.extractImageText",
+        "title": "%neko.ai.extractImageText.title%",
+        "category": "NekoAgent: AI"
+      },
+      {
+        "command": "neko.ai.analyzeVideo",
+        "title": "%neko.ai.analyzeVideo.title%",
+        "category": "NekoAgent: AI"
+      },
+      {
+        "command": "neko.ai.extractVideoSummary",
+        "title": "%neko.ai.extractVideoSummary.title%",
+        "category": "NekoAgent: AI"
+      },
+      {
+        "command": "neko.ai.generateScript",
+        "title": "%neko.ai.generateScript.title%",
+        "category": "NekoAgent: AI"
+      },
+      {
+        "command": "neko.ai.optimizeScript",
+        "title": "%neko.ai.optimizeScript.title%",
+        "category": "NekoAgent: AI"
+      },
+      {
+        "command": "neko.ai.generateStoryboard",
+        "title": "%neko.ai.generateStoryboard.title%",
+        "category": "NekoAgent: AI"
+      },
+      {
+        "command": "neko.ai.generateSubtitles",
+        "title": "%neko.ai.generateSubtitles.title%",
+        "category": "NekoAgent: AI"
+      },
+      {
+        "command": "neko.script.generate",
+        "title": "%neko.script.generate.title%",
+        "category": "NekoAgent: Script"
+      },
+      {
+        "command": "neko.script.optimize",
+        "title": "%neko.script.optimize.title%",
+        "category": "NekoAgent: Script"
+      },
+      {
+        "command": "neko.script.generateImage",
+        "title": "%neko.script.generateImage.title%",
+        "category": "NekoAgent: Script"
+      },
+      {
+        "command": "neko.script.generateVideo",
+        "title": "%neko.script.generateVideo.title%",
+        "category": "NekoAgent: Script"
+      },
+      {
+        "command": "neko.ai.summarizeDocument",
+        "title": "%neko.ai.summarizeDocument.title%",
+        "category": "NekoAgent: AI"
+      },
+      {
+        "command": "neko.ai.chatWithDocument",
+        "title": "%neko.ai.chatWithDocument.title%",
+        "category": "NekoAgent: AI"
+      },
+      {
+        "command": "neko.agent.createFromFile",
+        "title": "%neko.agent.createFromFile.title%",
+        "category": "NekoAgent: Creation"
+      },
+      {
+        "command": "neko.agent.retryCreation",
+        "title": "%neko.agent.retryCreation.title%",
+        "category": "NekoAgent: Creation"
+      },
+      {
+        "command": "neko.agent.addToContext",
+        "title": "%neko.agent.addToContext.title%",
+        "category": "NekoAgent: AI",
+        "icon": "$(comment-add)"
+      },
+      {
+        "command": "neko.agent.debug.startTimelineProjectionAcceptance",
+        "title": "%neko.agent.debug.startTimelineProjectionAcceptance.title%",
+        "category": "NekoAgent: Development",
+        "enablement": "neko.agent.timelineProjectionAcceptanceEnabled"
+      },
+      {
+        "command": "neko.agent.debug.continueTimelineProjectionAcceptance",
+        "title": "%neko.agent.debug.continueTimelineProjectionAcceptance.title%",
+        "category": "NekoAgent: Development",
+        "enablement": "neko.agent.timelineProjectionAcceptanceEnabled"
+      },
+      {
+        "command": "neko.agent.debug.cancelTimelineProjectionAcceptance",
+        "title": "%neko.agent.debug.cancelTimelineProjectionAcceptance.title%",
+        "category": "NekoAgent: Development",
+        "enablement": "neko.agent.timelineProjectionAcceptanceEnabled"
+      }
+    ],
+    "menus": {
+      "explorer/context": [
+        {
+          "command": "neko.tools.compareFiles",
+          "group": "3_compare@1",
+          "when": "listMultiSelection && resourceExtname =~ /\\.(png|jpg|jpeg|gif|webp|bmp|svg|mp4|mov|avi|mkv|webm|m4v|mp3|wav|ogg|flac|aac|m4a)$/i"
+        },
+        {
+          "command": "neko.tools.showMediaInfo",
+          "group": "neko@1",
+          "when": "resourceExtname =~ /\\.(png|jpg|jpeg|gif|webp|bmp|svg|mp4|mov|avi|mkv|webm|m4v|mp3|wav|ogg|flac|aac|m4a)$/i"
+        },
+        {
+          "command": "neko.assets.previewMedia",
+          "when": "resourceExtname =~ /\\.(mp4|mov|avi|mkv|webm|m4v|ts|flv|wmv|mp3|wav|ogg|flac|aac|m4a|wma|opus)$/i",
+          "group": "3_nekoOps@1"
+        },
+        {
+          "command": "neko.assets.addToTimeline",
+          "when": "resourceExtname =~ /\\.(mp4|mov|avi|mkv|webm|m4v|mp3|wav|ogg|flac|aac|m4a|png|jpg|jpeg|gif|webp)$/i",
+          "group": "3_nekoOps@2"
+        },
+        {
+          "command": "neko.assets.addToCanvas",
+          "when": "resourceExtname =~ /\\.(png|jpg|jpeg|gif|webp|svg|bmp|mp4|mov|webm)$/i",
+          "group": "3_nekoOps@3"
+        },
+        {
+          "command": "neko.agent.addToContext",
+          "group": "9_nekoai@0",
+          "when": "!explorerResourceIsFolder"
+        },
+        {
+          "command": "neko.ai.summarizeDocument",
+          "group": "9_nekoai@1",
+          "when": "resourceExtname =~ /\\.pdf|\\.docx|\\.doc|\\.epub|\\.pptx|\\.ppt|\\.xlsx|\\.xls|\\.fdx|\\.txt|\\.md|\\.fountain/"
+        },
+        {
+          "command": "neko.ai.chatWithDocument",
+          "group": "9_nekoai@2",
+          "when": "resourceExtname =~ /\\.pdf|\\.docx|\\.doc|\\.epub|\\.pptx|\\.ppt|\\.xlsx|\\.xls|\\.fdx|\\.txt|\\.md|\\.fountain/"
+        },
+        {
+          "command": "neko.agent.createFromFile",
+          "group": "9_nekoai@3",
+          "when": "resourceExtname =~ /\\.fountain|\\.md|\\.txt|\\.pdf|\\.docx/"
+        },
+        {
+          "command": "neko.ai.analyzeImage",
+          "group": "9_nekoai@4",
+          "when": "resourceExtname =~ /\\.png|\\.jpg|\\.jpeg|\\.gif|\\.webp|\\.bmp/"
+        },
+        {
+          "command": "neko.ai.extractImageText",
+          "group": "9_nekoai@5",
+          "when": "resourceExtname =~ /\\.png|\\.jpg|\\.jpeg|\\.gif|\\.webp|\\.bmp/"
+        },
+        {
+          "command": "neko.ai.analyzeVideo",
+          "group": "9_nekoai@6",
+          "when": "resourceExtname =~ /\\.mp4|\\.mov|\\.mkv|\\.avi|\\.webm|\\.m4v/"
+        },
+        {
+          "command": "neko.ai.generateSubtitles",
+          "group": "9_nekoai@7",
+          "when": "resourceExtname =~ /\\.mp4|\\.mov|\\.mkv|\\.avi|\\.webm|\\.m4v/"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "neko.assets.addMediaLibrary",
+          "when": "view == neko.mediaLibraries",
+          "group": "navigation"
+        },
+        {
+          "command": "neko.assets.refreshMediaLibraries",
+          "when": "view == neko.mediaLibraries",
+          "group": "overflow"
+        },
+        {
+          "command": "neko.assets.searchMediaLibrary",
+          "when": "view == neko.mediaLibraries",
+          "group": "overflow"
+        },
+        {
+          "command": "neko.entityBrowser.refresh",
+          "when": "view == neko.entityBrowser",
+          "group": "navigation"
+        },
+        {
+          "command": "neko.entityBrowser.createCandidate",
+          "when": "view == neko.entityBrowser",
+          "group": "navigation@2"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "neko.assets.removeMediaLibrary",
+          "when": "viewItem == mediaLibrary || viewItem == mediaLibrary:offline",
+          "group": "inline"
+        },
+        {
+          "command": "neko.assets.relinkMediaLibrary",
+          "when": "viewItem == mediaLibrary || viewItem == mediaLibrary:offline",
+          "group": "1_modify"
+        },
+        {
+          "command": "neko.assets.previewMediaLibraryFile",
+          "when": "viewItem =~ /^mediaLibrary:file:/",
+          "group": "2_preview"
+        },
+        {
+          "command": "neko.assets.deleteMediaLibraryFile",
+          "when": "viewItem =~ /^mediaLibrary:file:/",
+          "group": "9_delete"
+        },
+        {
+          "command": "neko.assets.copyToMediaLibrary",
+          "when": "viewItem =~ /^mediaLibrary:file:/",
+          "group": "3_actions@3"
+        },
+        {
+          "command": "neko.assets.addToTimelineFromLibrary",
+          "when": "viewItem =~ /^mediaLibrary:file:(video|audio|image|sequence)$/",
+          "group": "3_actions"
+        },
+        {
+          "command": "neko.assets.addToCanvasFromLibrary",
+          "when": "viewItem =~ /^mediaLibrary:file:(video|image|sequence)$/",
+          "group": "3_actions"
+        },
+        {
+          "command": "neko.assets.revealFileInOS",
+          "when": "viewItem =~ /^mediaLibrary:file:/",
+          "group": "4_utils"
+        },
+        {
+          "command": "neko.assets.copyFilePath",
+          "when": "viewItem =~ /^mediaLibrary:file:/",
+          "group": "4_utils"
+        },
+        {
+          "command": "neko.assets.copyFileReference",
+          "when": "viewItem =~ /^mediaLibrary:file:/",
+          "group": "4_utils@2"
+        },
+        {
+          "command": "neko.assets.directory.reveal",
+          "when": "viewItem == mediaLibrary:directory",
+          "group": "4_utils@1"
+        },
+        {
+          "command": "neko.assets.addToAgent",
+          "when": "viewItem =~ /^mediaLibrary:file:/",
+          "group": "5_agent@1"
+        },
+        {
+          "command": "neko.entityBrowser.inspect",
+          "when": "viewItem == entityBrowser:entity || viewItem == entityBrowser:candidate",
+          "group": "inline"
+        },
+        {
+          "command": "neko.entityBrowser.rename",
+          "when": "viewItem == entityBrowser:entity",
+          "group": "2_modify@1"
+        },
+        {
+          "command": "neko.entityBrowser.editAppearance",
+          "when": "viewItem == entityBrowser:entity",
+          "group": "2_modify@2"
+        },
+        {
+          "command": "neko.canvas.deleteNodeFromOutline",
+          "when": "view == neko.canvasOutline && viewItem == canvasNode",
+          "group": "2_manage@1"
+        }
+      ],
+      "neko.explorer.newProject": [
+        {
+          "command": "neko.canvas.new",
+          "group": "1@3"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "neko.ai.chat",
+          "group": "navigation"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "neko.script.generate",
+          "group": "neko@1",
+          "when": "editorLangId =~ /markdown|plaintext|txt/"
+        },
+        {
+          "command": "neko.script.optimize",
+          "group": "neko@2",
+          "when": "editorLangId =~ /markdown|plaintext|txt/"
+        },
+        {
+          "command": "neko.script.generateImage",
+          "group": "neko@3",
+          "when": "editorLangId =~ /markdown|plaintext|txt/"
+        },
+        {
+          "command": "neko.script.generateVideo",
+          "group": "neko@4",
+          "when": "editorLangId =~ /markdown|plaintext|txt/"
+        },
+        {
+          "command": "neko.agent.createFromFile",
+          "group": "neko@5",
+          "when": "editorLangId =~ /markdown|plaintext|txt|nekostory/"
+        },
+        {
+          "command": "neko.ai.summarizeDocument",
+          "group": "neko@6",
+          "when": "editorLangId == nekostory"
+        },
+        {
+          "command": "neko.ai.chatWithDocument",
+          "group": "neko@7",
+          "when": "editorLangId == nekostory"
+        }
+      ]
+    },
+    "views": {
+      "explorer": [
+        {
+          "id": "neko.epubOutline",
+          "name": "%neko.preview.epubOutline.name%",
+          "when": "neko.epubEditorActive"
+        },
+        {
+          "id": "neko.canvasOutline",
+          "name": "%neko.canvas.outline.title%",
+          "when": "activeCustomEditorId == 'neko.canvasEditor'",
+          "icon": "$(list-tree)"
+        }
+      ],
+      "neko-asset-manager": [
+        {
+          "id": "neko.mediaLibraries",
+          "name": "%neko.views.mediaLibraries.name%",
+          "contextualTitle": "%neko.views.mediaLibraries.contextualTitle%"
+        },
+        {
+          "id": "neko.entityBrowser",
+          "name": "%neko.entityBrowser.name%",
+          "contextualTitle": "%neko.entityBrowser.contextualTitle%"
+        },
+        {
+          "id": "neko.entityInspector",
+          "name": "%neko.entityInspector.name%",
+          "contextualTitle": "%neko.entityInspector.name%",
+          "type": "webview"
+        }
+      ],
+      "neko-assistant": [
+        {
+          "type": "webview",
+          "id": "neko.aiAssistant",
+          "name": "%neko.aiAssistant.name%",
+          "contextualTitle": "%neko.aiAssistant.contextualTitle%"
+        }
+      ]
+    },
+    "neko.installTargets": [
+      {
+        "type": "media",
+        "kind": "voice-pack",
+        "activationEvent": "onInstallKind:media.voice-pack"
+      },
+      {
+        "type": "shader",
+        "activationEvent": "onInstallType:shader"
+      },
+      {
+        "type": "skill",
+        "activationEvent": "onInstallType:skill"
+      },
+      {
+        "type": "endpoint",
+        "activationEvent": "onInstallType:endpoint"
+      },
+      {
+        "type": "provider",
+        "activationEvent": "onInstallType:provider"
+      },
+      {
+        "type": "model",
+        "activationEvent": "onInstallType:model"
+      },
+      {
+        "type": "processor",
+        "activationEvent": "onInstallType:processor"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "neko-asset-manager",
+          "title": "%neko.resources.title%",
+          "icon": "$(file-media)"
+        }
+      ],
+      "panel": [
+        {
+          "id": "neko-assistant",
+          "title": "OpenNeko AI",
+          "icon": "$(hubot)"
+        }
+      ]
+    },
+    "configuration": [
+      {
+        "title": "Neko Media Library",
+        "properties": {
+          "neko.entityInspector.autoFollow": {
+            "type": "boolean",
+            "default": false,
+            "description": "%neko.entityInspector.autoFollow.description%"
+          }
+        }
+      },
+      {
+        "title": "NekoCut",
+        "properties": {
+          "neko.cut.defaultProjectRoot": {
+            "type": "string",
+            "default": "projects/cut",
+            "description": "Workspace-relative directory used only for new .otio documents."
+          }
+        }
+      },
+      {
+        "title": "NekoAgent",
+        "properties": {
+          "neko.agent.provider": {
+            "type": "string",
+            "enum": [
+              "anthropic",
+              "openai",
+              "google",
+              "azure",
+              "ollama",
+              "neko-gateway",
+              "custom-newapi",
+              "ollama-local"
+            ],
+            "default": "ollama-local",
+            "description": "Default AI provider"
+          },
+          "neko.agent.model": {
+            "type": "string",
+            "default": "ollama-local-default-chat",
+            "description": "Default model to use"
+          },
+          "neko.agent.apiKey.anthropic": {
+            "type": "string",
+            "default": "",
+            "description": "Anthropic API key"
+          },
+          "neko.agent.apiKey.openai": {
+            "type": "string",
+            "default": "",
+            "description": "OpenAI API key"
+          },
+          "neko.agent.media.outputDir": {
+            "type": "string",
+            "default": "",
+            "description": "Directory to save generated media. Defaults to <workspace>/neko/generated/file"
+          },
+          "neko.agent.media.showSaveNotification": {
+            "type": "boolean",
+            "default": true,
+            "description": "Show a notification when generated media is saved to disk"
+          },
+          "neko.agent.mcp.servers": {
+            "type": "array",
+            "default": [],
+            "description": "MCP server configurations",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "description": "Server name"
+                },
+                "transport": {
+                  "type": "string",
+                  "enum": [
+                    "stdio",
+                    "http"
+                  ],
+                  "description": "Transport type"
+                },
+                "command": {
+                  "type": "string",
+                  "description": "Command to run (for stdio)"
+                },
+                "args": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "Command arguments"
+                },
+                "url": {
+                  "type": "string",
+                  "description": "Server URL (for http)"
+                },
+                "enabled": {
+                  "type": "boolean",
+                  "default": true,
+                  "description": "Whether the server is enabled"
+                }
+              }
+            }
+          }
+        }
+      }
+    ]
   }
 }

@@ -10,8 +10,8 @@ const extensionBaselines = [
     path: 'apps/neko-desktop/tsconfig.json',
   },
   {
-    owner: 'Agent extension',
-    path: 'packages/neko-agent/packages/extension/tsconfig.json',
+    owner: 'VS Code application',
+    path: 'apps/neko-vscode/tsconfig.json',
   },
   {
     owner: 'Chara domain package',

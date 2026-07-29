@@ -7,34 +7,34 @@ const repoRoot = process.cwd();
 
 const checkedRoots = [
   'packages/neko-types/src',
-  'packages/neko-agent/packages/extension/src',
-  'packages/neko-agent/packages/agent-types/src',
-  'packages/neko-agent/packages/agent/src',
-  'packages/neko-agent/packages/platform/src',
+  'apps/neko-vscode/src/features/agent',
+  'packages/neko-agent-types/src',
+  'packages/neko-agent-runtime/src',
+  'packages/neko-platform/src',
   'packages/neko-chara/src',
   'packages/neko-generation/src',
   'packages/neko-quality/src',
-  'packages/neko-canvas/packages/extension/src',
-  'packages/neko-cut/packages/extension/src',
-  'packages/neko-preview/packages/extension/src',
-  'packages/neko-assets/src',
-  'packages/neko-tools/packages/extension/src',
+  'apps/neko-vscode/src/features/canvas',
+  'apps/neko-vscode/src/features/cut',
+  'apps/neko-vscode/src/features/preview',
+  'apps/neko-vscode/src/features/assets',
+  'apps/neko-vscode/src/features/tools',
   'apps/neko-tui/src',
 ];
 
 const featurePackageRoots = [
-  'packages/neko-agent/packages/extension/src',
-  'packages/neko-agent/packages/agent-types/src',
-  'packages/neko-agent/packages/agent/src',
-  'packages/neko-agent/packages/platform/src',
+  'apps/neko-vscode/src/features/agent',
+  'packages/neko-agent-types/src',
+  'packages/neko-agent-runtime/src',
+  'packages/neko-platform/src',
   'packages/neko-chara/src',
   'packages/neko-generation/src',
   'packages/neko-quality/src',
-  'packages/neko-canvas/packages/extension/src',
-  'packages/neko-cut/packages/extension/src',
-  'packages/neko-preview/packages/extension/src',
-  'packages/neko-assets/src',
-  'packages/neko-tools/packages/extension/src',
+  'apps/neko-vscode/src/features/canvas',
+  'apps/neko-vscode/src/features/cut',
+  'apps/neko-vscode/src/features/preview',
+  'apps/neko-vscode/src/features/assets',
+  'apps/neko-vscode/src/features/tools',
   'apps/neko-tui/src',
 ];
 
@@ -73,7 +73,7 @@ const generatedCacheDiagnosticTestMarkers = [
   'ingest-cache-output',
 ];
 
-const allowedFiles = new Set(['packages/neko-agent/packages/extension/src/__mocks__/vscode.ts']);
+const allowedFiles = new Set(['apps/neko-vscode/src/features/agent/__mocks__/vscode.ts']);
 
 if (process.argv.includes('--self-test')) {
   runSelfTest();
@@ -114,39 +114,39 @@ function runSelfTest() {
   const cases = [
     {
       name: 'feature package direct shared cache service fails',
-      file: 'packages/neko-canvas/packages/extension/src/editor/example.ts',
+      file: 'apps/neko-vscode/src/features/canvas/editor/example.ts',
       content: "import { VSCodeResourceCacheService } from '@neko/shared/vscode/extension';\n",
       expectedSymbols: ['ResourceCacheService'],
     },
     {
       name: 'feature package narrow local resource capability passes',
-      file: 'packages/neko-canvas/packages/extension/src/editor/example.ts',
+      file: 'apps/neko-vscode/src/features/canvas/editor/example.ts',
       content:
         "import { createDefaultLocalResourceAccessService } from '@neko/shared/vscode/extension';\n",
       expectedSymbols: [],
     },
     {
       name: 'feature package legacy broad content runtime fails',
-      file: 'packages/neko-canvas/packages/extension/src/editor/example.ts',
+      file: 'apps/neko-vscode/src/features/canvas/editor/example.ts',
       content: "import { createHostContentAccessRuntime } from '@neko/shared/vscode/extension';\n",
       expectedSymbols: ['createHostContentAccessRuntime'],
     },
     {
       name: 'test file direct service mention passes',
-      file: 'packages/neko-canvas/packages/extension/src/__tests__/protocol.test.ts',
+      file: 'apps/neko-vscode/src/features/canvas/__tests__/protocol.test.ts',
       content: "expect(source).not.toContain('VSCodeResourceCacheService');\n",
       expectedSymbols: [],
     },
     {
       name: 'feature package cache provider fails',
-      file: 'packages/neko-canvas/packages/extension/src/editor/new-provider.ts',
+      file: 'apps/neko-vscode/src/features/canvas/editor/new-provider.ts',
       content:
         "import { DocumentResourceCacheProvider, type ResourceCacheProvider } from '@neko/shared/vscode/extension';\n",
       expectedSymbols: ['DocumentResourceCacheProvider', 'ResourceCacheProvider'],
     },
     {
       name: 'processor cache root fails',
-      file: 'packages/neko-agent/packages/agent-types/src/new-processor.ts',
+      file: 'packages/neko-agent-types/src/new-processor.ts',
       content: "const allowedOutputRoots = ['resourceCache'];\n",
       expectedSymbols: ["'resourceCache'"],
     },
@@ -158,13 +158,13 @@ function runSelfTest() {
     },
     {
       name: 'former migration owner fails after the allowlist is emptied',
-      file: 'packages/neko-canvas/packages/extension/src/editor/canvasEditorProvider.ts',
+      file: 'apps/neko-vscode/src/features/canvas/editor/canvasEditorProvider.ts',
       content: "import { DocumentResourceCacheProvider } from '@neko/shared/vscode/extension';\n",
       expectedSymbols: ['DocumentResourceCacheProvider', 'ResourceCacheProvider'],
     },
     {
       name: 'durable generated cache path fails',
-      file: 'packages/neko-agent/packages/extension/src/generated.ts',
+      file: 'apps/neko-vscode/src/features/agent/generated.ts',
       content:
         "const asset = { kind: 'generated-asset', path: '.neko/.cache/generated/shot.png', promoted: true };\n",
       expectedSymbols: ['.neko/.cache/generated'],

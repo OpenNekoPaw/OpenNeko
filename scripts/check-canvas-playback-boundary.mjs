@@ -6,18 +6,18 @@ import { resolve } from 'node:path';
 const repoRoot = process.cwd();
 
 const files = {
-  manifest: 'packages/neko-canvas/package.json',
-  extension: 'packages/neko-canvas/packages/extension/src/extension.ts',
-  provider: 'packages/neko-canvas/packages/extension/src/editor/canvasEditorProvider.ts',
+  manifest: 'apps/neko-vscode/package.json',
+  extension: 'apps/neko-vscode/src/features/canvas/extension.ts',
+  provider: 'apps/neko-vscode/src/features/canvas/editor/canvasEditorProvider.ts',
   workspace:
-    'packages/neko-canvas/packages/webview/src/components/playback/PlaybackWorkspace.tsx',
+    'packages/neko-canvas-webview/src/components/playback/PlaybackWorkspace.tsx',
 };
 
 const sources = Object.fromEntries(
   Object.entries(files).map(([key, path]) => [key, readFileSync(resolve(repoRoot, path), 'utf8')]),
 );
 const legacyBridgePath =
-  'packages/neko-canvas/packages/extension/src/editor/narrativePreviewBridge.ts';
+  'apps/neko-vscode/src/features/canvas/editor/narrativePreviewBridge.ts';
 
 const failures = [];
 

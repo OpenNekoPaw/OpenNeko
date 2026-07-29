@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { describe, it } from 'node:test';
 
 const ROOT_PACKAGE_PATH = 'package.json';
-const CANVAS_DOMAIN_PACKAGE_PATH = 'packages/neko-canvas/packages/domain/package.json';
+const CANVAS_DOMAIN_PACKAGE_PATH = 'packages/neko-canvas-domain/package.json';
 
 describe('coverage command orchestration', () => {
   it('does not duplicate the Vitest run mode owned by a package', async () => {

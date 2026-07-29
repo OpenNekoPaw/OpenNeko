@@ -64,7 +64,7 @@ export interface VSCodeLoggerOptions {
 export function createVSCodeLogger(
   channelName: string,
   source: string,
-  context: vscode.ExtensionContext,
+  context: Pick<vscode.ExtensionContext, 'subscriptions'>,
   level: LogLevel = LogLevel.Info,
   options: VSCodeLoggerOptions = {},
 ): ConsoleLogger {
@@ -186,7 +186,10 @@ export function inspectLogLevelSetting(
  * Also sets `process.env.RUST_LOG` so the Rust engine picks up the level
  * on next `init_tracing()` call.
  */
-export function watchLogLevel(logger: ConsoleLogger, context: vscode.ExtensionContext): void {
+export function watchLogLevel(
+  logger: ConsoleLogger,
+  context: Pick<vscode.ExtensionContext, 'subscriptions' | 'extensionMode'>,
+): void {
   syncRustLogEnv(resolveLogLevelSetting(context.extensionMode));
 
   context.subscriptions.push(

@@ -11,7 +11,7 @@ function read(relativePath: string): string {
 describe('Canvas Board package boundaries', () => {
   it('keeps Agent on public shared/Canvas API contracts', () => {
     const source = read(
-      'packages/neko-agent/packages/extension/src/services/workspaceBoardProjectionHost.ts',
+      'apps/neko-vscode/src/features/agent/services/workspaceBoardProjectionHost.ts',
     );
 
     expect(source).toContain("from '@neko/shared'");
@@ -23,7 +23,7 @@ describe('Canvas Board package boundaries', () => {
 
   it('keeps Canvas Board services independent from Agent runtime internals', () => {
     const source = ['workspaceBoardProjector.ts', 'canvasProjectAuthoringService.ts']
-      .map((file) => read(`packages/neko-canvas/packages/extension/src/services/${file}`))
+      .map((file) => read(`apps/neko-vscode/src/features/canvas/services/${file}`))
       .join('\n');
 
     expect(source).not.toMatch(/from ['"]@neko\/agent/);
@@ -35,11 +35,11 @@ describe('Canvas Board package boundaries', () => {
     const deletedPaths = [
       'apps/neko-tui/src/tui/host/node-workspace-board-projector.ts',
       'apps/neko-tui/src/tui/host/node-media-task-delivery-host.ts',
-      'packages/neko-agent/packages/extension/src/services/agentCanvasBoardCoordinator.ts',
-      'packages/neko-canvas/packages/extension/src/services/canvasBoardIndexService.ts',
-      'packages/neko-canvas/packages/extension/src/services/canvasBoardResolverService.ts',
-      'packages/neko-canvas/packages/extension/src/services/canvasBoardDeliveryService.ts',
-      'packages/neko-canvas/packages/extension/src/services/canvasBoardProjection.ts',
+      'apps/neko-vscode/src/features/agent/services/agentCanvasBoardCoordinator.ts',
+      'apps/neko-vscode/src/features/canvas/services/canvasBoardIndexService.ts',
+      'apps/neko-vscode/src/features/canvas/services/canvasBoardResolverService.ts',
+      'apps/neko-vscode/src/features/canvas/services/canvasBoardDeliveryService.ts',
+      'apps/neko-vscode/src/features/canvas/services/canvasBoardProjection.ts',
     ];
 
     for (const relativePath of deletedPaths) {
@@ -49,7 +49,7 @@ describe('Canvas Board package boundaries', () => {
 
   it('keeps generated-only and direct Canvas Board writer APIs out of Host production paths', () => {
     const vscodeHost = read(
-      'packages/neko-agent/packages/extension/src/services/workspaceBoardProjectionHost.ts',
+      'apps/neko-vscode/src/features/agent/services/workspaceBoardProjectionHost.ts',
     );
 
     expect(vscodeHost).not.toMatch(/projectGeneratedAssets|projectGeneratedAsset/);

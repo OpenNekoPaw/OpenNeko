@@ -57,9 +57,9 @@ describe('neko-chara architecture boundaries', () => {
       'packages/neko-entity/src/characterPurposeOperations.ts',
       'packages/neko-entity/src/embody-character-session.ts',
       'packages/neko-entity/src/projections/npcProfileAssembler.ts',
-      'packages/neko-agent/packages/extension/src/chat/characterDialogueController.ts',
-      'packages/neko-agent/packages/extension/src/chat/embodyCharacterController.ts',
-      'packages/neko-agent/packages/extension/src/evidence/characterEvidenceLoader.ts',
+      'apps/neko-vscode/src/features/agent/chat/characterDialogueController.ts',
+      'apps/neko-vscode/src/features/agent/chat/embodyCharacterController.ts',
+      'apps/neko-vscode/src/features/agent/evidence/characterEvidenceLoader.ts',
     ];
 
     expect(retired.filter((file) => existsSync(resolve(workspaceRoot, file)))).toEqual([]);

@@ -24,7 +24,10 @@ describe('neko-search architecture boundaries', () => {
 
   it('keeps Agent mention projection from parsing cache files directly', () => {
     const source = readFileSync(
-      resolve(packageRoot, '../neko-agent/packages/extension/src/services/projectMentionSearch.ts'),
+      resolve(
+        packageRoot,
+        '../../apps/neko-vscode/src/features/agent/services/projectMentionSearch.ts',
+      ),
       'utf8',
     );
 
@@ -37,9 +40,9 @@ describe('neko-search architecture boundaries', () => {
 
   it('keeps Agent and Webview consumers behind the semantic coverage facade', () => {
     const consumerRoots = [
-      resolve(packageRoot, '../neko-agent/packages/agent/src'),
-      resolve(packageRoot, '../neko-agent/packages/extension/src'),
-      resolve(packageRoot, '../neko-agent/packages/webview/src'),
+      resolve(packageRoot, '../neko-agent-runtime/src'),
+      resolve(packageRoot, '../../apps/neko-vscode/src/features/agent'),
+      resolve(packageRoot, '../neko-agent-webview/src'),
     ];
     const files = consumerRoots.flatMap((root) => listTypeScriptFiles(root));
 

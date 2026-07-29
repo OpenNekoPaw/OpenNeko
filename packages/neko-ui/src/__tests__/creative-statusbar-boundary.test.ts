@@ -11,12 +11,12 @@ function readRepoSource(path: string): string {
 describe('creative workbench StatusBar boundary', () => {
   it('keeps Cut export snapshots in the Webview and document/task state in the native StatusBar', () => {
     const provider = readRepoSource(
-      'packages/neko-cut/packages/extension/src/editor/CutOtioEditorProvider.ts',
+      'apps/neko-vscode/src/features/cut/editor/CutOtioEditorProvider.ts',
     );
-    const extension = readRepoSource('packages/neko-cut/packages/extension/src/extension.ts');
-    const statusBar = readRepoSource('packages/neko-cut/packages/extension/src/views/statusBar.ts');
-    const app = readRepoSource('packages/neko-cut/packages/webview/src/App.tsx');
-    const css = readRepoSource('packages/neko-cut/packages/webview/src/index.css');
+    const extension = readRepoSource('apps/neko-vscode/src/features/cut/extension.ts');
+    const statusBar = readRepoSource('apps/neko-vscode/src/features/cut/views/statusBar.ts');
+    const app = readRepoSource('packages/neko-cut-webview/src/App.tsx');
+    const css = readRepoSource('packages/neko-cut-webview/src/index.css');
 
     expect(provider).toMatch(/type: 'cut:export-task'/);
     expect(provider).toMatch(/type: 'cut:error'/);
@@ -37,12 +37,12 @@ describe('creative workbench StatusBar boundary', () => {
 
   it('projects generic Canvas selection and projection state to the native StatusBar', () => {
     const statusBar = readRepoSource(
-      'packages/neko-canvas/packages/extension/src/views/canvasStatusBar.ts',
+      'apps/neko-vscode/src/features/canvas/views/canvasStatusBar.ts',
     );
     const provider = readRepoSource(
-      'packages/neko-canvas/packages/extension/src/editor/canvasEditorProvider.ts',
+      'apps/neko-vscode/src/features/canvas/editor/canvasEditorProvider.ts',
     );
-    const app = readRepoSource('packages/neko-canvas/packages/webview/src/CanvasApp.tsx');
+    const app = readRepoSource('packages/neko-canvas-webview/src/CanvasApp.tsx');
 
     expect(statusBar).toMatch(/class CanvasStatusBar/);
     expect(statusBar).toMatch(/projectionSummary/);

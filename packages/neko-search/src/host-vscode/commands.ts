@@ -26,7 +26,7 @@ const TEXT_DOCUMENT_REFRESH_DEBOUNCE_MS = 400;
 const FILE_WATCHER_REFRESH_DEBOUNCE_MS = 300;
 
 export function registerProjectSearchService(
-  context: vscode.ExtensionContext,
+  context: Pick<vscode.ExtensionContext, 'subscriptions'>,
   options: {
     readonly resolveThumbnailUri?: (filePath: string) => string | undefined;
     readonly resolvePath?: (filePath: string) => Promise<string>;
@@ -101,7 +101,7 @@ export function registerProjectSearchService(
 }
 
 export function registerProjectSearchWatchers(
-  context: vscode.ExtensionContext,
+  context: Pick<vscode.ExtensionContext, 'subscriptions'>,
   service: ProjectCacheSearchService,
 ): vscode.Disposable[] {
   const disposables: vscode.Disposable[] = [];

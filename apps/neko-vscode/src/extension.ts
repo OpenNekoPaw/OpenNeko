@@ -1,61 +1,63 @@
-import { createRequire } from 'node:module';
-import { readFileSync } from 'node:fs';
-
-import {
-  EmbeddedFeatureRegistry,
-  installEmbeddedFeatureRegistry,
-} from '@neko/shared/vscode/extension';
 import * as vscode from 'vscode';
 
-import {
-  createScopedExtensionContext,
-  type ScopedExtensionContext,
-} from './scoped-extension-context';
-import {
-  createOpenNekoAiHostRuntime,
-  type OpenNekoAiHostRuntime,
-  type OpenNekoAiHostServices,
-} from './ai-host-runtime';
+import { createOpenNekoAiHostRuntime, createOpenNekoCutHostRuntime } from './ai-host-runtime';
+import { createVSCodeCapabilityContribution } from './adapters/vscode-capability-availability';
 import { configureOpenNekoMediaRuntime } from './media-host-runtime';
+import { HostKernel } from './kernel/host-kernel';
+import { createLazyCapability } from './kernel/lazy-capability';
+import { defineFeature, featureRef } from './kernel/types';
+import {
+  createFeatureRuntimeChildScope,
+  createFeatureRuntimeScope,
+  type FeatureRuntimeContext,
+  type FeatureRuntimeScope,
+  type StateNamespaceId,
+} from './feature-runtime-context';
+import { bootstrapNekoToolsExtension } from './features/tools/bootstrap';
+import {
+  activate as activatePreview,
+  deactivate as deactivatePreview,
+} from './features/preview/extension';
+import {
+  activate as activateAssets,
+  deactivate as deactivateAssets,
+} from './features/assets/extension';
+import { activate as activateCut, deactivate as deactivateCut } from './features/cut/extension';
+import {
+  activate as activateCanvas,
+  deactivate as deactivateCanvas,
+} from './features/canvas/extension';
+import {
+  deactivate as deactivateAgent,
+  startNekoAgentRuntime,
+  type NekoAgentAiHostPort,
+  type NekoAgentHostServices,
+  type NekoAgentRuntime,
+} from './features/agent';
+import { registerLazyNekoAgentSurface } from './features/agent/lazy-surface';
+import { verifyStateLayout } from './state-layout';
 
-const requireFeature = createRequire(__filename);
-
-const FEATURE_ORDER = Object.freeze([
-  'neko-tools',
-  'neko-preview',
-  'neko-assets',
-  'neko-cut',
-  'neko-canvas',
-  'neko-agent',
-]);
-
-const FEATURE_IDS = FEATURE_ORDER.map((packageName) => `neko.${packageName}`);
-const RETIRED_FEATURE_IDS = Object.freeze(['neko.neko-engine']);
 const RETIRED_ENGINE_COMMANDS = Object.freeze([
   'neko.engine.ensureFrameServer',
   'neko.engine.extractThumbnail',
   'neko.engine.probeInternal',
 ]);
 
-interface EmbeddedFeatureModule {
-  activate(
-    context: vscode.ExtensionContext,
-    hostServices?: OpenNekoAiHostServices,
-  ): Promise<unknown> | unknown;
-  deactivate?(): Promise<void> | void;
-}
+const toolsRef = featureRef<void>('neko.tools');
+const previewRef = featureRef<Awaited<ReturnType<typeof activatePreview>>>('neko.preview');
+const assetsRef = featureRef<Awaited<ReturnType<typeof activateAssets>>>('neko.assets');
+const cutRef = featureRef<Awaited<ReturnType<typeof activateCut>>>('neko.cut');
+const canvasRef = featureRef<Awaited<ReturnType<typeof activateCanvas>>>('neko.canvas');
+const agentRef = featureRef<ReturnType<typeof registerLazyNekoAgentSurface>>('neko.agent');
 
-interface ActivatedFeature {
-  readonly id: string;
-  readonly module: EmbeddedFeatureModule;
-  readonly scopedContext: ScopedExtensionContext;
-}
+type NekoAgentStaticHostServices = Omit<NekoAgentHostServices, keyof NekoAgentAiHostPort>;
 
-const activatedFeatures: ActivatedFeature[] = [];
-let aiHostRuntime: OpenNekoAiHostRuntime | undefined;
+let kernel: HostKernel | undefined;
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
+  if (kernel) throw new Error('OpenNeko is already active.');
   await assertNoStandaloneFeatureConflicts();
+  await verifyStateLayout(context.globalState);
   await configureOpenNekoMediaRuntime(context.extensionUri.fsPath);
   for (const command of RETIRED_ENGINE_COMMANDS) {
     context.subscriptions.push(
@@ -67,80 +69,187 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     );
   }
 
-  const registry = new EmbeddedFeatureRegistry();
-  context.subscriptions.push(installEmbeddedFeatureRegistry(registry));
-  aiHostRuntime = await createOpenNekoAiHostRuntime();
-
-  try {
-    for (const packageName of FEATURE_ORDER) {
-      const id = `neko.${packageName}`;
-      const featureUri = vscode.Uri.joinPath(context.extensionUri, 'dist', 'features', packageName);
-      const scopedContext = createScopedExtensionContext(context, {
-        featureId: id,
-        featureUri,
-        joinPath: vscode.Uri.joinPath,
+  let agentStartInput:
+    | {
+        readonly context: FeatureRuntimeContext;
+        readonly services: NekoAgentStaticHostServices;
+      }
+    | undefined;
+  const agentRuntimeCapability = createLazyCapability({
+    id: 'neko.capability.agent-runtime',
+    dependencies: {},
+    async start(owner, signal): Promise<NekoAgentRuntime> {
+      const input = agentStartInput;
+      if (!input) {
+        throw new Error('Agent runtime capability was requested before its feature registered.');
+      }
+      const hostRuntime = await createOpenNekoAiHostRuntime();
+      owner.add(hostRuntime);
+      signal.throwIfAborted();
+      const runtimeScope = createFeatureRuntimeChildScope(input.context, signal);
+      owner.add(runtimeScope);
+      const runtime = await startNekoAgentRuntime(runtimeScope.context, {
+        ...hostRuntime.agent,
+        ...input.services,
       });
-      const featureModule = loadFeatureModule(context, packageName);
-      const packageJSON = readFeatureManifest(context, packageName);
-      activatedFeatures.push({ id, module: featureModule, scopedContext });
-      context.subscriptions.push(
-        registry.register({
-          id,
-          extensionUri: featureUri,
-          packageJSON,
-          activate: () => featureModule.activate(scopedContext.context, aiHostRuntime?.services),
-        }),
-      );
-    }
-
-    await registry.activateAll(FEATURE_IDS);
+      owner.add({ dispose: deactivateAgent });
+      return runtime;
+    },
+  });
+  const definitions = [
+    defineFeature({
+      ref: toolsRef,
+      dependencies: {},
+      async register({ owner, signal }) {
+        const scoped = createFeatureContext(context, 'neko.neko-tools', 'neko-tools', signal);
+        owner.add(scoped);
+        const activation = bootstrapNekoToolsExtension(scoped.context);
+        owner.add(activation);
+        return { exports: undefined };
+      },
+    }),
+    defineFeature({
+      ref: previewRef,
+      dependencies: {},
+      async register({ owner, signal }) {
+        const scoped = createFeatureContext(context, 'neko.neko-preview', 'neko-preview', signal);
+        owner.add(scoped);
+        const exports = await activatePreview(scoped.context);
+        owner.add({ dispose: deactivatePreview });
+        return { exports };
+      },
+    }),
+    defineFeature({
+      ref: assetsRef,
+      dependencies: {},
+      async register({ owner, signal }) {
+        const scoped = createFeatureContext(context, 'neko.neko-assets', 'neko-assets', signal);
+        owner.add(scoped);
+        const exports = await activateAssets(scoped.context);
+        owner.add({ dispose: deactivateAssets });
+        return { exports };
+      },
+    }),
+    defineFeature({
+      ref: cutRef,
+      dependencies: {},
+      async register({ owner, signal }) {
+        const scoped = createFeatureContext(context, 'neko.neko-cut', 'neko-cut', signal);
+        owner.add(scoped);
+        const cutHostRuntime = await createOpenNekoCutHostRuntime();
+        owner.add(cutHostRuntime);
+        const exports = await activateCut(scoped.context, cutHostRuntime.services);
+        owner.add({ dispose: deactivateCut });
+        return { exports };
+      },
+    }),
+    defineFeature({
+      ref: canvasRef,
+      dependencies: {
+        preview: previewRef,
+        assets: assetsRef,
+        cut: cutRef,
+      },
+      async register({ owner, signal }, { preview, assets, cut }) {
+        const scoped = createFeatureContext(context, 'neko.neko-canvas', 'neko-canvas', signal);
+        owner.add(scoped);
+        const exports = await activateCanvas(scoped.context, {
+          mediaRepresentation: assets.mediaRepresentation,
+          previewVariants: preview,
+          cut,
+        });
+        owner.add({ dispose: deactivateCanvas });
+        return { exports };
+      },
+    }),
+    defineFeature({
+      ref: agentRef,
+      dependencies: {
+        assets: assetsRef,
+        canvas: canvasRef,
+      },
+      async register({ owner, signal }, { assets, canvas }) {
+        const scoped = createFeatureContext(context, 'neko.neko-agent', 'neko-agent', signal);
+        owner.add(scoped);
+        agentStartInput = {
+          context: scoped.context,
+          services: {
+            canvas: canvas.api,
+            internalCapabilityProviders: [...assets.agentCapabilities, canvas.agentCapability],
+            isFeatureAvailable: isRetainedFeatureAvailable,
+          },
+        };
+        const contribution = await createVSCodeCapabilityContribution({
+          capability: agentRuntimeCapability,
+          owner,
+          contextKey: 'neko.capability.agent-runtime',
+          label: 'OpenNeko Agent',
+        });
+        const exports = registerLazyNekoAgentSurface({
+          context: scoped.context,
+          capabilityId: agentRuntimeCapability.id,
+          contribution,
+        });
+        return { exports };
+      },
+    }),
+  ] as const;
+  const nextKernel = new HostKernel(definitions, {
+    capabilities: [agentRuntimeCapability],
+  });
+  kernel = nextKernel;
+  try {
+    await nextKernel.registerAll();
   } catch (error) {
-    try {
-      await disposeActivationState();
-    } catch (cleanupError) {
-      throw new AggregateError(
-        [error, cleanupError],
-        'OpenNeko activation and rollback both failed.',
-      );
-    }
+    kernel = undefined;
     throw error;
   }
 }
 
-export async function deactivate(): Promise<void> {
-  await disposeActivationState();
+function isRetainedFeatureAvailable(featureId: string): boolean {
+  return RETAINED_FEATURE_EXTENSION_IDS.has(featureId);
 }
 
-async function disposeActivationState(): Promise<void> {
-  const errors: unknown[] = [];
-  for (const feature of [...activatedFeatures].reverse()) {
-    try {
-      await feature.module.deactivate?.();
-    } catch (error) {
-      errors.push(new Error(`Failed to deactivate ${feature.id}`, { cause: error }));
-    }
-    try {
-      feature.scopedContext.dispose();
-    } catch (error) {
-      errors.push(error);
-    }
-  }
-  activatedFeatures.length = 0;
-  try {
-    await aiHostRuntime?.dispose();
-  } catch (error) {
-    errors.push(error);
-  }
-  aiHostRuntime = undefined;
-  if (errors.length > 0) {
-    throw new AggregateError(errors, 'OpenNeko embedded feature deactivation failed.');
-  }
+const RETAINED_FEATURE_EXTENSION_IDS = new Set([
+  'neko.neko-tools',
+  'neko.neko-preview',
+  'neko.neko-assets',
+  'neko.neko-cut',
+  'neko.neko-canvas',
+  'neko.neko-agent',
+]);
+
+export async function deactivate(): Promise<void> {
+  const activeKernel = kernel;
+  kernel = undefined;
+  await activeKernel?.dispose();
+}
+
+function createFeatureContext(
+  context: vscode.ExtensionContext,
+  stateNamespaceId: StateNamespaceId,
+  resourceDirectory: string,
+  signal: AbortSignal,
+): FeatureRuntimeScope {
+  return createFeatureRuntimeScope(context, {
+    stateNamespaceId,
+    resourceUri: vscode.Uri.joinPath(context.extensionUri, 'dist', 'features', resourceDirectory),
+    signal,
+    joinPath: vscode.Uri.joinPath,
+  });
 }
 
 async function assertNoStandaloneFeatureConflicts(): Promise<void> {
-  const installed = [...FEATURE_IDS, ...RETIRED_FEATURE_IDS].filter((id) =>
-    vscode.extensions.getExtension(id),
-  );
+  const retiredFeatureIds = [
+    'neko.neko-tools',
+    'neko.neko-preview',
+    'neko.neko-assets',
+    'neko.neko-cut',
+    'neko.neko-canvas',
+    'neko.neko-agent',
+    'neko.neko-engine',
+  ];
+  const installed = retiredFeatureIds.filter((id) => vscode.extensions.getExtension(id));
   if (installed.length === 0) return;
 
   const action = await vscode.window.showErrorMessage(
@@ -153,30 +262,5 @@ async function assertNoStandaloneFeatureConflicts(): Promise<void> {
   }
   throw new Error(
     `OpenNeko activation blocked by separately installed feature extensions: ${installed.join(', ')}`,
-  );
-}
-
-function loadFeatureModule(
-  context: vscode.ExtensionContext,
-  packageName: string,
-): EmbeddedFeatureModule {
-  const path = context.asAbsolutePath(`dist/features/${packageName}/dist/extension.js`);
-  const moduleValue: unknown = requireFeature(path);
-  if (!isEmbeddedFeatureModule(moduleValue)) {
-    throw new Error(`Embedded feature ${packageName} does not export activate(): ${path}`);
-  }
-  return moduleValue;
-}
-
-function readFeatureManifest(context: vscode.ExtensionContext, packageName: string): unknown {
-  const path = context.asAbsolutePath(`dist/features/${packageName}/package.json`);
-  return JSON.parse(readFileSync(path, 'utf8'));
-}
-
-function isEmbeddedFeatureModule(value: unknown): value is EmbeddedFeatureModule {
-  return (
-    value !== null &&
-    typeof value === 'object' &&
-    typeof Reflect.get(value, 'activate') === 'function'
   );
 }

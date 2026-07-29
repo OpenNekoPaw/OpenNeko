@@ -9,8 +9,9 @@ import {
   resolveHostTarget,
 } from '../package-openneko-platform.mjs';
 
-const nekoCutManifest = JSON.parse(
-  readFileSync(new URL('../../packages/neko-cut/package.json', import.meta.url), 'utf8'),
+const featureResourceStager = readFileSync(
+  new URL('../../apps/neko-vscode/scripts/stage-feature-resources.mjs', import.meta.url),
+  'utf8',
 );
 
 describe('OpenNeko platform assembler', () => {
@@ -35,6 +36,7 @@ describe('OpenNeko platform assembler', () => {
       'dist/**',
       'package.nls.json',
       'package.nls.zh-cn.json',
+      'l10n/**',
       'README.md',
       'LICENSE',
     ]);
@@ -66,12 +68,9 @@ describe('OpenNeko platform assembler', () => {
     );
   });
 
-  it('builds the Cut Webview before copying its release payload', () => {
-    assert.equal(nekoCutManifest.scripts['vscode:prepublish'], 'pnpm run compile');
-    assert.equal(
-      nekoCutManifest.scripts['compile:webview'],
-      'cd packages/webview && pnpm run build',
-    );
-    assert.match(nekoCutManifest.scripts.compile, /compile:webview.*copy:webview/u);
+  it('builds and stages the Cut Webview without an internal VSIX', () => {
+    assert.match(featureResourceStager, /packages\/neko-cut-webview.*run.*build/su);
+    assert.match(featureResourceStager, /packages\/neko-cut-webview\/dist/u);
+    assert.doesNotMatch(featureResourceStager, /\bvsce\b|\.vsix/u);
   });
 });

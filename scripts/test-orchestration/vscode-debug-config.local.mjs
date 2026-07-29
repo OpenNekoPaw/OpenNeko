@@ -124,24 +124,20 @@ test(
       'build:product-dev',
       'Debug Dev (All) must stage the composed product before launch',
     );
-    const featureConfiguration = launchConfiguration.configurations.find(
-      (configuration) => configuration.name === 'Debug Feature Packages (All)',
-    );
-    assert.ok(
-      featureConfiguration,
-      'Standalone feature diagnostics must use the explicit Debug Feature Packages (All) name',
-    );
-    assert.ok(
-      featureConfiguration.args.some((argument) =>
-        argument.startsWith('--extensionDevelopmentPath=${workspaceFolder}/packages/'),
+    assert.equal(
+      launchConfiguration.configurations.some(
+        (configuration) => configuration.name === 'Debug Feature Packages (All)',
       ),
-      'Debug Feature Packages (All) must retain the package-local extension roots',
+      false,
+      'the retired standalone feature-extension debug path must not remain available',
     );
-    assert.ok(
-      featureConfiguration.args.includes(canonicalTestWorkspaceArgument),
-      'Debug Feature Packages (All) must open the canonical neko-test workspace',
+    assert.equal(
+      JSON.stringify(launchConfiguration).includes(
+        '--extensionDevelopmentPath=${workspaceFolder}/packages/',
+      ),
+      false,
+      'the single-extension launch must not activate package-local extension roots',
     );
-    assert.equal(featureConfiguration.preLaunchTask, 'build:feature-dev');
     assert.equal(
       JSON.stringify(launchConfiguration).includes('neko-dashboard'),
       false,
@@ -167,12 +163,6 @@ test(
     const developmentConfiguration = launchConfiguration.configurations.find(
       (configuration) => configuration.name === 'Debug Dev (All)',
     );
-    const featureConfiguration = launchConfiguration.configurations.find(
-      (configuration) => configuration.name === 'Debug Feature Packages (All)',
-    );
-    const featureDevTask = taskConfiguration.tasks.find(
-      (task) => task.label === 'build:feature-dev',
-    );
     assert.equal(
       productDevTask?.command,
       'pnpm prepare:vscode-media-fixture && pnpm build:vscode:dev',
@@ -182,10 +172,10 @@ test(
       developmentConfiguration?.env,
       'the product pre-launch task must receive the explicit media runtime paths because launch env is not inherited by preLaunchTask',
     );
-    assert.deepEqual(
-      featureDevTask?.options?.env,
-      featureConfiguration?.env,
-      'the feature pre-launch task must receive the explicit fixture runtime paths because launch env is not inherited by preLaunchTask',
+    assert.equal(
+      taskConfiguration.tasks.some((task) => task.label === 'build:feature-dev'),
+      false,
+      'the retired standalone feature build task must not remain available',
     );
     assert.equal(
       typeof packageManifest.scripts['prepare:vscode-media-fixture'],
@@ -213,7 +203,7 @@ test(
   },
 );
 
-test('product development staging rebuilds feature bundles without stale Turbo outputs', async () => {
+test('product development staging rebuilds the app-owned extension and resources', async () => {
   const stageScript = await readFile(
     path.join(repositoryRoot, 'scripts/stage-openneko-dev-extension.mjs'),
     'utf8',
@@ -221,12 +211,12 @@ test('product development staging rebuilds feature bundles without stale Turbo o
 
   assert.match(
     stageScript,
-    /'turbo',\s*'run',\s*'compile',\s*'--force'/u,
-    'product development staging must force current workspace sources into feature bundles',
+    /'pnpm',\s*\['--dir',\s*'apps\/neko-vscode',\s*'run',\s*'compile'\]/u,
+    'product development staging must compile the app-owned extension',
   );
-  assert.match(
+  assert.doesNotMatch(
     stageScript,
-    /OPENNEKO_FEATURE_PACKAGES\.map/u,
-    'product development staging must compile the composed feature package set',
+    /OPENNEKO_FEATURE_PACKAGES|turbo.*compile/u,
+    'product development staging must not rebuild internal extension packages',
   );
 });

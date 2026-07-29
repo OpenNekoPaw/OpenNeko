@@ -4,12 +4,7 @@ import { readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 
 const PRODUCT_FEATURE_MANIFESTS = Object.freeze([
-  'packages/neko-agent/package.json',
-  'packages/neko-assets/package.json',
-  'packages/neko-canvas/package.json',
-  'packages/neko-cut/package.json',
-  'packages/neko-preview/package.json',
-  'packages/neko-tools/package.json',
+  'apps/neko-vscode/package.json',
 ]);
 
 const RETIRED_COMMANDS = Object.freeze([
@@ -19,12 +14,7 @@ const RETIRED_COMMANDS = Object.freeze([
 ]);
 
 const PRODUCT_SOURCE_ROOTS = Object.freeze([
-  'packages/neko-agent',
-  'packages/neko-assets',
-  'packages/neko-canvas',
-  'packages/neko-cut',
-  'packages/neko-preview',
-  'packages/neko-tools',
+  'apps/neko-vscode/src/features',
 ]);
 
 const PROHIBITED_SOURCE_SURFACES = Object.freeze([
@@ -71,17 +61,9 @@ export async function checkEngineRetirementBoundary(
     throw new Error('OpenNeko packager still accepts or resolves an Engine payload.');
   }
   const turbo = JSON.parse(turboText);
-  for (const packageName of [
-    'neko-agent',
-    'neko-assets',
-    'neko-canvas',
-    'neko-cut',
-    'neko-preview',
-    'neko-tools',
-  ]) {
-    const dependencies = turbo.tasks?.[`${packageName}#compile`]?.dependsOn ?? [];
-    if (dependencies.includes('neko-engine#compile')) {
-      throw new Error(`${packageName} compile still schedules the retired Engine.`);
+  for (const [task, definition] of Object.entries(turbo.tasks ?? {})) {
+    if ((definition.dependsOn ?? []).includes('neko-engine#compile')) {
+      throw new Error(`${task} still schedules the retired Engine.`);
     }
   }
 
@@ -94,7 +76,7 @@ export async function checkEngineRetirementBoundary(
     );
   }
 
-  if (!compositionText.includes("const RETIRED_FEATURE_IDS = Object.freeze(['neko.neko-engine'])")) {
+  if (!compositionText.includes("'neko.neko-engine'")) {
     throw new Error('OpenNeko does not reject a separately installed retired Engine extension.');
   }
   for (const command of RETIRED_COMMANDS) {

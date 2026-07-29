@@ -1,12 +1,6 @@
 import * as path from 'node:path';
-import {
-  verifyMediaRuntimeDirectory,
-  type VerifiedMediaRuntime,
-} from '@neko/media/node';
-import {
-  installVerifiedMediaRuntimePaths,
-  resolveMediaRuntimeTarget,
-} from './media-host-contract';
+import { verifyMediaRuntimeDirectory, type VerifiedMediaRuntime } from '@neko/media/node';
+import { installVerifiedMediaRuntimePaths, resolveMediaRuntimeTarget } from './media-host-contract';
 
 export async function configureOpenNekoMediaRuntime(
   extensionRoot: string,

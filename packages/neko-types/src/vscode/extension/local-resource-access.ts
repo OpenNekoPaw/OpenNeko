@@ -40,7 +40,7 @@ export interface LocalResourceAccessOptions {
 
 export interface DefaultLocalResourceAccessServiceOptions {
   readonly extensionUri: vscode.Uri;
-  readonly context?: vscode.ExtensionContext;
+  readonly context?: Pick<vscode.ExtensionContext, 'globalStorageUri'>;
   readonly extensionAssetSegments?: readonly string[];
   readonly includeExtensionCache?: boolean;
   readonly includeWorkspaceCache?: boolean;
@@ -279,7 +279,7 @@ export function createExtensionAssetLocalResourceRootProvider(
 }
 
 export function createExtensionCacheLocalResourceRootProvider(
-  context: vscode.ExtensionContext,
+  context: Pick<vscode.ExtensionContext, 'globalStorageUri'>,
   ...segments: string[]
 ): LocalResourceRootProvider {
   const uri =

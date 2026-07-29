@@ -8,17 +8,16 @@ import {
   readFileSync,
   readdirSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 import {
-  OPENNEKO_FEATURE_PACKAGES,
-  composeOpenNekoManifest,
-  mergeOpenNekoLocalization,
+  assertCanonicalOpenNekoManifest,
   openNekoArtifactName,
 } from './openneko-vsix-contract.mjs';
-import { assertEmbeddedRuntimeClosure } from './embedded-runtime-closure.mjs';
+import { assertApplicationRuntimeClosure } from './application-runtime-closure.mjs';
 import {
   assertStagedMediaRuntime,
   stagePackagedMediaRuntime,
@@ -57,16 +56,28 @@ export function assertOpenNekoPayloadClosure(files, target) {
       `OpenNeko ${target} payload contains retired Engine files: ${engineFiles.join(', ')}.`,
     );
   }
+  const internalExtensionPayloads = files.filter((file) =>
+    /(?:^|[/\\])dist[/\\]features[/\\][^/\\]+[/\\](?:package\.json|extension\.js)$/u.test(
+      file,
+    ),
+  );
+  if (internalExtensionPayloads.length > 0) {
+    throw new Error(
+      `OpenNeko ${target} payload contains internal extension entries: ${internalExtensionPayloads.join(', ')}.`,
+    );
+  }
+  const internalArchives = files.filter((file) => file.endsWith('.vsix'));
+  if (internalArchives.length > 0) {
+    throw new Error(
+      `OpenNeko ${target} payload contains internal VSIX archives: ${internalArchives.join(', ')}.`,
+    );
+  }
   return Object.freeze({ fileCount: files.length });
 }
 
 export function createComposedManifest() {
-  const appManifest = readJson(join(appRoot, 'package.json'));
-  const featureManifests = OPENNEKO_FEATURE_PACKAGES.map((packageName) => [
-    packageName,
-    readJson(join(repoRoot, 'packages', packageName, 'package.json')),
-  ]);
-  const manifest = composeOpenNekoManifest({ appManifest, featureManifests });
+  const manifest = structuredClone(readJson(join(appRoot, 'package.json')));
+  assertCanonicalOpenNekoManifest(manifest);
   delete manifest.dependencies;
   delete manifest.devDependencies;
   delete manifest.scripts;
@@ -78,55 +89,18 @@ function packageOpenNekoPlatform({ target }, command = runCommand) {
   const manifest = createComposedManifest();
   const version = manifest.version;
   const buildRoot = join(repoRoot, '.tmp', 'openneko-vsix', target);
-  const payloadRoot = join(buildRoot, 'payloads');
-  const extractRoot = join(buildRoot, 'extracted');
   const stageRoot = join(buildRoot, 'stage');
   const artifactRoot = join(repoRoot, 'vsix-artifacts');
   rmSync(buildRoot, { recursive: true, force: true });
-  mkdirSync(payloadRoot, { recursive: true });
-  mkdirSync(extractRoot, { recursive: true });
   mkdirSync(stageRoot, { recursive: true });
   mkdirSync(artifactRoot, { recursive: true });
 
   command('pnpm', ['--dir', 'apps/neko-vscode', 'run', 'compile'], repoRoot);
 
-  const payloads = new Map();
-  for (const packageName of OPENNEKO_FEATURE_PACKAGES) {
-    const outputPath = join(payloadRoot, `${packageName}.vsix`);
-    command(
-      'pnpm',
-      [
-        '--dir',
-        `packages/${packageName}`,
-        'exec',
-        'vsce',
-        'package',
-        '--no-dependencies',
-        '--allow-missing-repository',
-        '--skip-license',
-        '--out',
-        outputPath,
-      ],
-      repoRoot,
-    );
-    assertFile(outputPath, `Feature payload was not produced: ${packageName}`);
-    payloads.set(packageName, outputPath);
-  }
-
-  for (const packageName of OPENNEKO_FEATURE_PACKAGES) {
-    const payloadPath = payloads.get(packageName);
-    if (!payloadPath) throw new Error(`Missing embedded feature payload: ${packageName}`);
-    const featureExtractRoot = join(extractRoot, packageName);
-    command('unzip', ['-q', '-o', payloadPath, '-d', featureExtractRoot], repoRoot);
-    const extensionRoot = join(featureExtractRoot, 'extension');
-    assertDirectory(extensionRoot, `VSIX payload has no extension root: ${payloadPath}`);
-    cpSync(extensionRoot, join(stageRoot, 'dist', 'features', packageName), { recursive: true });
-  }
-
   stageOpenNekoApplicationRuntime(stageRoot);
   stagePackagedMediaRuntime(stageRoot, target, process.env.NEKO_MEDIA_RUNTIME_ROOT?.trim());
   assertOpenNekoPayloadClosure(listFiles(stageRoot), target);
-  assertEmbeddedRuntimeClosure(stageRoot, target);
+  assertApplicationRuntimeClosure(stageRoot, target);
   assertStagedMediaRuntime(stageRoot, target, { qualify: true });
   cpSync(join(appRoot, 'README.md'), join(stageRoot, 'README.md'));
   cpSync(join(appRoot, 'LICENSE'), join(stageRoot, 'LICENSE'));
@@ -165,22 +139,23 @@ export function stageOpenNekoApplicationRuntime(stageRoot) {
   assertFile(sourceBundle, 'OpenNeko application bundle is missing.');
   assertFile(sourceManifest, 'OpenNeko application runtime closure manifest is missing.');
   assertDirectory(sourceNodeModules, 'OpenNeko application runtime node_modules is missing.');
-  mkdirSync(targetDist, { recursive: true });
-  rmSync(join(targetDist, 'node_modules'), { recursive: true, force: true });
-  cpSync(sourceBundle, join(targetDist, 'extension.js'));
-  cpSync(sourceManifest, join(targetDist, 'runtime-closure.json'));
-  cpSync(sourceNodeModules, join(targetDist, 'node_modules'), { recursive: true });
+  rmSync(targetDist, { recursive: true, force: true });
+  cpSync(sourceDist, targetDist, { recursive: true });
 }
 
 export function writeMergedLocalizations(stageRoot) {
-  for (const fileName of ['package.nls.json', 'package.nls.zh-cn.json']) {
-    const entries = [];
-    for (const packageName of OPENNEKO_FEATURE_PACKAGES) {
-      const path = join(repoRoot, 'packages', packageName, fileName);
-      if (existsSync(path)) entries.push([`${packageName}/${fileName}`, readJson(path)]);
+  for (const fileName of [
+    'package.nls.json',
+    'package.nls.zh-cn.json',
+    'l10n/bundle.l10n.json',
+    'l10n/bundle.l10n.zh-cn.json',
+  ]) {
+    const source = join(appRoot, fileName);
+    if (existsSync(source)) {
+      const target = join(stageRoot, fileName);
+      mkdirSync(resolve(target, '..'), { recursive: true });
+      cpSync(source, target);
     }
-    if (entries.length > 0)
-      writeJson(join(stageRoot, fileName), mergeOpenNekoLocalization(entries));
   }
 }
 
@@ -208,7 +183,7 @@ function assertFile(path, message) {
 }
 
 function assertDirectory(path, message) {
-  if (!existsSync(path)) throw new Error(message);
+  if (!existsSync(path) || !statSync(path).isDirectory()) throw new Error(message);
 }
 
 function runCommand(command, args, cwd) {

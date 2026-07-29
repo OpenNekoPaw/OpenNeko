@@ -5,17 +5,17 @@ import { describe, expect, it } from 'vitest';
 const repoRoot = path.resolve(__dirname, '../../../../../..');
 
 const migratedExtensionFiles = [
-  'packages/neko-agent/packages/extension/src',
-  'packages/neko-canvas/packages/extension/src',
-  'packages/neko-cut/packages/extension/src',
-  'packages/neko-tools/packages/extension/src',
-  'packages/neko-preview/packages/extension/src',
+  'apps/neko-vscode/src/features/agent',
+  'apps/neko-vscode/src/features/canvas',
+  'apps/neko-vscode/src/features/cut',
+  'apps/neko-vscode/src/features/tools',
+  'apps/neko-vscode/src/features/preview',
 ] as const;
 
 const allowedLocalResourceRootFiles = new Set([
-  'packages/neko-canvas/packages/extension/src/editor/canvasEditorProvider.ts',
-  'packages/neko-tools/packages/extension/src/asset-diff/editor/AssetVariantDiffEditorProvider.ts',
-  'packages/neko-agent/packages/extension/src/services/localResourceAccess.ts',
+  'apps/neko-vscode/src/features/canvas/editor/canvasEditorProvider.ts',
+  'apps/neko-vscode/src/features/tools/asset-diff/editor/AssetVariantDiffEditorProvider.ts',
+  'apps/neko-vscode/src/features/agent/services/localResourceAccess.ts',
 ]);
 
 describe('local resource access guardrails', () => {

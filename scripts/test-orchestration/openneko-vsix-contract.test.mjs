@@ -3,11 +3,9 @@ import { readFile } from 'node:fs/promises';
 import { describe, it } from 'node:test';
 
 import {
-  OPENNEKO_FEATURE_PACKAGES,
+  assertCanonicalOpenNekoManifest,
   assertOpenNekoReleaseArtifacts,
-  composeOpenNekoManifest,
   expectedOpenNekoArtifacts,
-  mergeOpenNekoLocalization,
   openNekoArtifactName,
 } from '../openneko-vsix-contract.mjs';
 
@@ -34,83 +32,37 @@ describe('single OpenNeko VSIX contract', () => {
     );
   });
 
-  it('composes the real retained manifests without internal extension dependencies', async () => {
-    const appManifest = await readJson('apps/neko-vscode/package.json');
-    const featureManifests = await Promise.all(
-      OPENNEKO_FEATURE_PACKAGES.map(async (packageName) => [
-        packageName,
-        await readJson(`packages/${packageName}/package.json`),
-      ]),
-    );
-    const redundantActivationEvents = featureManifests.flatMap(([packageName, manifest]) =>
-      findRedundantActivationEvents(manifest).map(
-        (activationEvent) => `${packageName}: ${activationEvent}`,
-      ),
-    );
-
-    assert.deepEqual(redundantActivationEvents, []);
-
-    const manifest = composeOpenNekoManifest({ appManifest, featureManifests });
-
-    assert.equal(manifest.main, './dist/extension.js');
-    assert.deepEqual(manifest.files, [
-      'dist/**',
-      'package.nls.json',
-      'package.nls.zh-cn.json',
-      'README.md',
-      'LICENSE',
-    ]);
-    assert.equal(manifest.extensionPack, undefined);
+  it('accepts the app-owned canonical manifest', async () => {
+    const manifest = JSON.parse(await readFile('apps/neko-vscode/package.json', 'utf8'));
+    const result = assertCanonicalOpenNekoManifest(manifest);
+    assert.ok(result.contributionSections.includes('commands'));
+    assert.ok(result.contributionSections.includes('customEditors'));
+    assert.ok(manifest.contributes.commands.length > 50);
     assert.equal(
-      manifest.extensionDependencies?.some((id) => id.startsWith('neko.')) ?? false,
-      false,
+      manifest.contributes.themes[0].path,
+      './dist/features/neko-tools/themes/neko-macos-dark-color-theme.json',
     );
-    assert.ok(manifest.contributes.commands.length > 0);
-    assert.ok(manifest.contributes.customEditors.length > 0);
-    assert.deepEqual(
-      manifest.contributes.themes.map(({ path }) => path),
-      [
-        './dist/features/neko-tools/themes/neko-macos-dark-color-theme.json',
-        './dist/features/neko-tools/themes/neko-macos-light-color-theme.json',
-      ],
-    );
-    assert.equal(
-      manifest.contributes.iconThemes[0].path,
-      './dist/features/neko-tools/themes/neko-file-icon-theme.json',
-    );
-    assert.equal(manifest.contributes.languages[0].configuration, undefined);
-    assert.deepEqual(manifest.contributes.languages[0].icon, {
-      light: './dist/features/neko-tools/themes/icons/file-canvas.svg',
-      dark: './dist/features/neko-tools/themes/icons/file-canvas.svg',
-    });
   });
 
-  it('fails visibly for contribution and localization collisions', () => {
-    const manifests = OPENNEKO_FEATURE_PACKAGES.map((packageName) => [
-      packageName,
-      {
-        version: '0.0.2',
-        contributes: {},
-      },
-    ]);
-    manifests[0][1].contributes = { commands: [{ command: 'neko.test', title: 'One' }] };
-    manifests[1][1].contributes = { commands: [{ command: 'neko.test', title: 'Two' }] };
-
+  it('rejects manifests that reintroduce multiple extension owners', () => {
+    const valid = {
+      name: 'neko-suite',
+      publisher: 'neko',
+      main: './dist/extension.js',
+      files: ['dist/**', 'l10n/**', 'package.nls.json', 'package.nls.zh-cn.json'],
+      contributes: { commands: [{ command: 'neko.test', title: 'Test' }] },
+    };
     assert.throws(
       () =>
-        composeOpenNekoManifest({
-          appManifest: { name: 'neko-suite', version: '0.0.2' },
-          featureManifests: manifests,
+        assertCanonicalOpenNekoManifest({
+          ...valid,
+          extensionDependencies: ['neko.neko-agent'],
         }),
-      /commands:command=neko\.test conflicts/u,
+      /separately installed/u,
     );
     assert.throws(
-      () =>
-        mergeOpenNekoLocalization([
-          ['neko-agent/package.nls.json', { displayName: 'Agent' }],
-          ['neko-assets/package.nls.json', { displayName: 'Assets' }],
-        ]),
-      /Localization key displayName conflicts/u,
+      () => assertCanonicalOpenNekoManifest({ ...valid, contributes: {} }),
+      /must own all retained contributions/u,
     );
   });
 
@@ -126,24 +78,3 @@ describe('single OpenNeko VSIX contract', () => {
     }
   });
 });
-
-async function readJson(path) {
-  return JSON.parse(await readFile(path, 'utf8'));
-}
-
-function findRedundantActivationEvents(manifest) {
-  const contributes = manifest.contributes ?? {};
-  const inferredActivationEvents = new Set([
-    ...(contributes.commands ?? []).map(({ command }) => `onCommand:${command}`),
-    ...(contributes.authentication ?? []).map(({ id }) => `onAuthenticationRequest:${id}`),
-    ...(contributes.languages ?? []).map(({ id }) => `onLanguage:${id}`),
-    ...(contributes.customEditors ?? []).map(({ viewType }) => `onCustomEditor:${viewType}`),
-    ...Object.values(contributes.views ?? {})
-      .flat()
-      .map(({ id }) => `onView:${id}`),
-  ]);
-
-  return (manifest.activationEvents ?? []).filter((activationEvent) =>
-    inferredActivationEvents.has(activationEvent),
-  );
-}

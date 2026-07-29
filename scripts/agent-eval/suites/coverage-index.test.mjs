@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { NodeExecutionEnv } from '@earendil-works/pi-agent-core/node';
-import { PiSkillHost } from '../../../packages/neko-agent/packages/agent/src/pi/skill-host.ts';
+import { PiSkillHost } from '../../../packages/neko-agent-runtime/src/pi/skill-host.ts';
 import { discoverSuites } from './discovery.mjs';
 import { EXPECTED_BUILTIN_SKILLS, loadCoverageIndex } from './coverage-index.mjs';
 

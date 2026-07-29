@@ -6,36 +6,36 @@ import { dirname, join, relative, resolve } from 'node:path';
 const repoRoot = process.cwd();
 
 const packageRoots = {
-  webview: 'packages/neko-agent/packages/webview/src',
-  extension: 'packages/neko-agent/packages/extension/src',
-  agent: 'packages/neko-agent/packages/agent/src',
+  webview: 'packages/neko-agent-webview/src',
+  extension: 'apps/neko-vscode/src/features/agent',
+  agent: 'packages/neko-agent-runtime/src',
   generation: 'packages/neko-generation/src',
-  platform: 'packages/neko-agent/packages/platform/src',
-  'ai-sdk': 'packages/neko-agent/packages/ai-sdk/src',
-  'agent-types': 'packages/neko-agent/packages/agent-types/src',
+  platform: 'packages/neko-platform/src',
+  'ai-sdk': 'packages/neko-ai-sdk/src',
+  'agent-types': 'packages/neko-agent-types/src',
   tui: 'apps/neko-tui/src',
-  assets: 'packages/neko-assets/src',
+  assets: 'apps/neko-vscode/src/features/assets',
 };
 
 const packageDirs = {
-  webview: 'packages/neko-agent/packages/webview',
-  extension: 'packages/neko-agent/packages/extension',
+  webview: 'packages/neko-agent-webview',
+  extension: 'apps/neko-vscode/src/features/agent',
 };
 
 const hostAgnosticScopes = new Set(['agent', 'generation', 'platform', 'ai-sdk', 'agent-types']);
 const agentContentAccessResidualScopes = new Set(['extension', 'agent', 'agent-types', 'webview']);
 
 const retiredTranscriptAuthorityFiles = [
-  'packages/neko-agent/packages/agent/src/session/conversation-manager.ts',
-  'packages/neko-agent/packages/agent/src/session/conversation-resume-storage.ts',
-  'packages/neko-agent/packages/agent/src/session/history-hydration.ts',
-  'packages/neko-agent/packages/agent/src/session/journal-projection.ts',
-  'packages/neko-agent/packages/agent/src/session/journal-reader.ts',
-  'packages/neko-agent/packages/agent/src/session/journal-storage.ts',
-  'packages/neko-agent/packages/agent/src/session/journal-writer.ts',
-  'packages/neko-agent/packages/agent/src/session/node-sqlite-conversation-storage.ts',
-  'packages/neko-agent/packages/agent/src/session/sqlite-conversation-storage.ts',
-  'packages/neko-agent/packages/extension/src/chat/extensionConversationResume.ts',
+  'packages/neko-agent-runtime/src/session/conversation-manager.ts',
+  'packages/neko-agent-runtime/src/session/conversation-resume-storage.ts',
+  'packages/neko-agent-runtime/src/session/history-hydration.ts',
+  'packages/neko-agent-runtime/src/session/journal-projection.ts',
+  'packages/neko-agent-runtime/src/session/journal-reader.ts',
+  'packages/neko-agent-runtime/src/session/journal-storage.ts',
+  'packages/neko-agent-runtime/src/session/journal-writer.ts',
+  'packages/neko-agent-runtime/src/session/node-sqlite-conversation-storage.ts',
+  'packages/neko-agent-runtime/src/session/sqlite-conversation-storage.ts',
+  'apps/neko-vscode/src/features/agent/chat/extensionConversationResume.ts',
   'apps/neko-tui/src/tui/host/tui-sqlite-conversation-storage.ts',
 ];
 
@@ -52,16 +52,16 @@ const retiredTranscriptAuthoritySymbols = [
 ];
 
 const retiredLegacyChatFiles = [
-  'packages/neko-assets/src/services/LLMClassifier.ts',
-  'packages/neko-agent/packages/platform/src/service/internal-chat-runtime.ts',
-  'packages/neko-agent/packages/ai-sdk/src/bridge/index.ts',
-  'packages/neko-agent/packages/ai-sdk/src/bridge/legacy-image-model.ts',
-  'packages/neko-agent/packages/ai-sdk/src/bridge/legacy-video-model.ts',
-  'packages/neko-agent/packages/ai-sdk/src/bridge/legacy-video-model.test.ts',
-  'packages/neko-agent/packages/ai-sdk/src/bridge/legacy-speech-model.ts',
+  'apps/neko-vscode/src/features/assets/services/LLMClassifier.ts',
+  'packages/neko-platform/src/service/internal-chat-runtime.ts',
+  'packages/neko-ai-sdk/src/bridge/index.ts',
+  'packages/neko-ai-sdk/src/bridge/legacy-image-model.ts',
+  'packages/neko-ai-sdk/src/bridge/legacy-video-model.ts',
+  'packages/neko-ai-sdk/src/bridge/legacy-video-model.test.ts',
+  'packages/neko-ai-sdk/src/bridge/legacy-speech-model.ts',
   'apps/neko-tui/src/tui/host/node-perception-pipeline.ts',
-  'packages/neko-agent/packages/platform/src/perception/gemini-video-understanding-client.ts',
-  'packages/neko-agent/packages/platform/src/perception/__tests__/gemini-video-understanding-client.test.ts',
+  'packages/neko-platform/src/perception/gemini-video-understanding-client.ts',
+  'packages/neko-platform/src/perception/__tests__/gemini-video-understanding-client.test.ts',
 ];
 
 const retiredLegacyChatSymbols = [
@@ -78,15 +78,15 @@ const retiredLegacyChatSymbols = [
 
 const retiredTimelineProjectionAuthorityFiles = [
   'packages/neko-types/src/types/agent-message.ts',
-  'packages/neko-agent/packages/agent/src/runtime/stream/agent-event-stream-runtime.ts',
-  'packages/neko-agent/packages/agent/src/runtime/stream/agent-stream-state.ts',
-  'packages/neko-agent/packages/agent/src/runtime/stream/agent-turn-timeline-accumulator.ts',
-  'packages/neko-agent/packages/extension/src/chat/message/agentStreamProcessor.ts',
-  'packages/neko-agent/packages/extension/src/debug/streamLifecycleAcceptance.ts',
-  'packages/neko-agent/packages/extension/src/debug/streamLifecycleAcceptance.test.ts',
-  'packages/neko-agent/packages/webview/src/handlers/legacy-active-content-handlers.ts',
-  'packages/neko-agent/packages/webview/src/presenters/message-presenter.ts',
-  'packages/neko-agent/packages/webview/src/presenters/tool-result-backfill-presenter.ts',
+  'packages/neko-agent-runtime/src/runtime/stream/agent-event-stream-runtime.ts',
+  'packages/neko-agent-runtime/src/runtime/stream/agent-stream-state.ts',
+  'packages/neko-agent-runtime/src/runtime/stream/agent-turn-timeline-accumulator.ts',
+  'apps/neko-vscode/src/features/agent/chat/message/agentStreamProcessor.ts',
+  'apps/neko-vscode/src/features/agent/debug/streamLifecycleAcceptance.ts',
+  'apps/neko-vscode/src/features/agent/debug/streamLifecycleAcceptance.test.ts',
+  'packages/neko-agent-webview/src/handlers/legacy-active-content-handlers.ts',
+  'packages/neko-agent-webview/src/presenters/message-presenter.ts',
+  'packages/neko-agent-webview/src/presenters/tool-result-backfill-presenter.ts',
 ];
 
 const retiredTimelineProjectionAuthoritySymbols = [
@@ -112,21 +112,21 @@ const retiredTimelineProjectionAcceptanceCommands = [
 
 const retiredPromptFrameworkFiles = [
   'packages/neko-types/src/types/prompt.ts',
-  'packages/neko-agent/packages/agent/src/prompt/prompt-manager.ts',
-  'packages/neko-agent/packages/agent/src/prompt/system-prompt-composer.ts',
-  'packages/neko-agent/packages/agent/src/prompt/system-prompt-composer-types.ts',
-  'packages/neko-agent/packages/agent/src/prompt/context.ts',
-  'packages/neko-agent/packages/agent/src/prompt/composer/module-orchestrator.ts',
-  'packages/neko-agent/packages/agent/src/prompt/registry/module-manifest.ts',
-  'packages/neko-agent/packages/agent/src/prompt/registry/module-registry.ts',
-  'packages/neko-agent/packages/agent/src/prompt/registry/section-cache.ts',
-  'packages/neko-agent/packages/agent/src/prompt/modules/environment/agents-md-module.ts',
-  'packages/neko-agent/packages/agent/src/prompt/modules/environment/subpackage-fragments-module.ts',
-  'packages/neko-agent/packages/agent/src/prompt/modules/ephemeral/creative-version-log-module.ts',
-  'packages/neko-agent/packages/agent/src/prompt/modules/ephemeral/validation-guidance-module.ts',
-  'packages/neko-agent/packages/agent/src/prompt/modules/memory/memory-project-module.ts',
-  'packages/neko-agent/packages/agent/src/prompt/modules/memory/memory-recall-module.ts',
-  'packages/neko-agent/packages/platform/src/service/prompt-manager.ts',
+  'packages/neko-agent-runtime/src/prompt/prompt-manager.ts',
+  'packages/neko-agent-runtime/src/prompt/system-prompt-composer.ts',
+  'packages/neko-agent-runtime/src/prompt/system-prompt-composer-types.ts',
+  'packages/neko-agent-runtime/src/prompt/context.ts',
+  'packages/neko-agent-runtime/src/prompt/composer/module-orchestrator.ts',
+  'packages/neko-agent-runtime/src/prompt/registry/module-manifest.ts',
+  'packages/neko-agent-runtime/src/prompt/registry/module-registry.ts',
+  'packages/neko-agent-runtime/src/prompt/registry/section-cache.ts',
+  'packages/neko-agent-runtime/src/prompt/modules/environment/agents-md-module.ts',
+  'packages/neko-agent-runtime/src/prompt/modules/environment/subpackage-fragments-module.ts',
+  'packages/neko-agent-runtime/src/prompt/modules/ephemeral/creative-version-log-module.ts',
+  'packages/neko-agent-runtime/src/prompt/modules/ephemeral/validation-guidance-module.ts',
+  'packages/neko-agent-runtime/src/prompt/modules/memory/memory-project-module.ts',
+  'packages/neko-agent-runtime/src/prompt/modules/memory/memory-recall-module.ts',
+  'packages/neko-platform/src/service/prompt-manager.ts',
 ];
 
 const retiredPromptFrameworkSymbols = [
@@ -203,10 +203,10 @@ const runnerIndividualEventProperties = [
 ];
 
 const runnerIndividualEventAllowedFiles = new Set([
-  'packages/neko-agent/packages/extension/src/ai/agentRunner.ts',
-  'packages/neko-agent/packages/extension/src/ai/agentRunnerVscodeEventBridge.ts',
-  'packages/neko-agent/packages/extension/src/ai/agentRunner.test.ts',
-  'packages/neko-agent/packages/extension/src/ai/agentRunnerVscodeEventBridge.test.ts',
+  'apps/neko-vscode/src/features/agent/ai/agentRunner.ts',
+  'apps/neko-vscode/src/features/agent/ai/agentRunnerVscodeEventBridge.ts',
+  'apps/neko-vscode/src/features/agent/ai/agentRunner.test.ts',
+  'apps/neko-vscode/src/features/agent/ai/agentRunnerVscodeEventBridge.test.ts',
 ]);
 
 const forbiddenAgentContentAccessResiduals = [
@@ -421,7 +421,7 @@ function runSelfTest() {
       scope: 'extension',
       file: resolve(
         repoRoot,
-        'packages/neko-agent/packages/extension/src/ai/agentRunnerVscodeEventBridge.ts',
+        'apps/neko-vscode/src/features/agent/ai/agentRunnerVscodeEventBridge.ts',
       ),
       content: 'this.onDidStopEmitter.fire();\n',
       expectedRuleIds: [],
@@ -467,7 +467,7 @@ function runSelfTest() {
       scope: 'extension',
       file: resolve(
         repoRoot,
-        'packages/neko-agent/packages/extension/src/chat/message/agentTurnBridge.ts',
+        'apps/neko-vscode/src/features/agent/chat/message/agentTurnBridge.ts',
       ),
       content: 'return runAgentTurnRuntime(input);\n',
       expectedRuleIds: ['extension-pi-turn-bridge-no-legacy-runtime'],
@@ -477,7 +477,7 @@ function runSelfTest() {
       scope: 'extension',
       file: resolve(
         repoRoot,
-        'packages/neko-agent/packages/extension/src/ai/vscodePiRuntimeManager.ts',
+        'apps/neko-vscode/src/features/agent/ai/vscodePiRuntimeManager.ts',
       ),
       content: 'return new GenericAdapter(config);\n',
       expectedRuleIds: ['extension-pi-provider-no-legacy-chat'],
@@ -487,7 +487,7 @@ function runSelfTest() {
       scope: 'extension',
       file: resolve(
         repoRoot,
-        'packages/neko-agent/packages/extension/src/tools/qualityCapabilityProvider.ts',
+        'apps/neko-vscode/src/features/agent/tools/qualityCapabilityProvider.ts',
       ),
       content:
         'const service = platform.createService();\nresolveModelForPurpose("image.understand");\n',
@@ -498,7 +498,7 @@ function runSelfTest() {
       scope: 'extension',
       file: resolve(
         repoRoot,
-        'packages/neko-agent/packages/extension/src/tools/perceptionCapabilityProvider.ts',
+        'apps/neko-vscode/src/features/agent/tools/perceptionCapabilityProvider.ts',
       ),
       content:
         'const service = platform.createService();\nresolveModelForPurpose("image.understand");\nconst modelId = args["modelId"];\n',
@@ -509,7 +509,7 @@ function runSelfTest() {
       scope: 'platform',
       file: resolve(
         repoRoot,
-        'packages/neko-agent/packages/platform/src/media/media-agent-tools.ts',
+        'packages/neko-platform/src/media/media-agent-tools.ts',
       ),
       content:
         'const mediaModels = options?.metadata?.mediaModels;\nreturn argProviderId ?? runtimeTarget?.providerId;\n',
@@ -520,7 +520,7 @@ function runSelfTest() {
       scope: 'platform',
       file: resolve(
         repoRoot,
-        'packages/neko-agent/packages/platform/src/media/media-task-executor.ts',
+        'packages/neko-platform/src/media/media-task-executor.ts',
       ),
       content: 'const providers = new ProviderRegistry(config);\n',
       expectedRuleIds: ['platform-media-no-legacy-chat-registry'],
@@ -578,7 +578,7 @@ function runSelfTest() {
     {
       name: 'designated Pi Skill boundary may recognize Skill locators',
       scope: 'agent',
-      file: resolve(repoRoot, 'packages/neko-agent/packages/agent/src/pi/conversation-runtime.ts'),
+      file: resolve(repoRoot, 'packages/neko-agent-runtime/src/pi/conversation-runtime.ts'),
       content: "const namespace = '/__neko_skills/';\n",
       expectedRuleIds: [],
     },
@@ -632,7 +632,7 @@ function runSelfTest() {
   for (const testCase of centralizedToolCases) {
     const violations = findLegacyCentralizedToolRegistrationViolationsFromContent(
       testCase.content,
-      'packages/neko-agent/packages/extension/src/bootstrap/toolBootstrap.ts',
+      'apps/neko-vscode/src/features/agent/bootstrap/toolBootstrap.ts',
     );
     const actualIds = [...new Set(violations.map((violation) => violation.ruleId))].sort();
     const expectedIds = [...testCase.expectedRuleIds].sort();
@@ -652,7 +652,7 @@ function runSelfTest() {
       exceptions: [
         {
           id: 'missing-owner',
-          file: 'packages/neko-agent/packages/extension/src/ai/example.ts',
+          file: 'apps/neko-vscode/src/features/agent/ai/example.ts',
           reason: 'Missing required lifecycle fields.',
           tracking: 'openspec:test',
           introducedAt: '2026-05-04',
@@ -764,7 +764,7 @@ function runSelfTest() {
       register: createSelfTestLcdRegister([
         createSelfTestLcdEntry({
           id: 'LCD-009',
-          surface: 'packages/neko-agent/packages/ai-sdk/src/bridge/*',
+          surface: 'packages/neko-ai-sdk/src/bridge/*',
           kind: 'migration-adapter',
           status: 'active',
           sunsetProviders: [],
@@ -777,7 +777,7 @@ function runSelfTest() {
       register: createSelfTestLcdRegister([
         createSelfTestLcdEntry({
           id: 'LCD-009',
-          surface: 'packages/neko-agent/packages/ai-sdk/src/bridge/*',
+          surface: 'packages/neko-ai-sdk/src/bridge/*',
           kind: 'migration-adapter',
           status: 'active',
           sunsetProviders: [
@@ -1233,7 +1233,7 @@ function hasNonEmptyString(value) {
 function createSelfTestCompatibilityException(overrides) {
   return {
     id: 'self-test-compatibility-exception',
-    file: 'packages/neko-agent/packages/extension/src/ai/selfTest.ts',
+    file: 'apps/neko-vscode/src/features/agent/ai/selfTest.ts',
     reason: 'Self-test compatibility exception.',
     owner: 'neko-agent-runtime',
     tracking: 'openspec:self-test',
@@ -1281,7 +1281,7 @@ function createSelfTestProviderSunsetRow(overrides) {
     nativeSupportStatus: 'self-test status',
     migrationConditions: ['self-test condition'],
     removalTrigger: 'self-test removal trigger',
-    protectingTests: ['packages/neko-agent/packages/ai-sdk/src/resolve.test.ts'],
+    protectingTests: ['packages/neko-ai-sdk/src/resolve.test.ts'],
     ...overrides,
   };
 }
@@ -1392,9 +1392,9 @@ function isWebviewCompatibilityShimCandidate(relativeFile) {
     return true;
   }
   return [
-    'packages/neko-agent/packages/webview/src/utils/message-helpers.ts',
-    'packages/neko-agent/packages/webview/src/components/ChatView/ToolCallDisplay/media-extractors.ts',
-    'packages/neko-agent/packages/webview/src/components/ChatView/ToolCallDisplay/tool-constants.ts',
+    'packages/neko-agent-webview/src/utils/message-helpers.ts',
+    'packages/neko-agent-webview/src/components/ChatView/ToolCallDisplay/media-extractors.ts',
+    'packages/neko-agent-webview/src/components/ChatView/ToolCallDisplay/tool-constants.ts',
   ].includes(relativeFile);
 }
 
@@ -1466,7 +1466,7 @@ function findPiAgentTurnBridgeLegacyViolations(scope, file, content) {
   const source = stripComments(content);
   if (
     scope === 'platform' &&
-    relativeFile.startsWith('packages/neko-agent/packages/platform/src/media/') &&
+    relativeFile.startsWith('packages/neko-platform/src/media/') &&
     !isTestOrFixtureFile(relativeFile)
   ) {
     const forbidden = [
@@ -1500,10 +1500,10 @@ function findPiAgentTurnBridgeLegacyViolations(scope, file, content) {
   if (scope !== 'extension') return [];
   if (
     relativeFile ===
-      'packages/neko-agent/packages/extension/src/tools/qualityCapabilityProvider.ts' ||
+      'apps/neko-vscode/src/features/agent/tools/qualityCapabilityProvider.ts' ||
     relativeFile ===
-      'packages/neko-agent/packages/extension/src/tools/perceptionCapabilityProvider.ts' ||
-    relativeFile === 'packages/neko-agent/packages/extension/src/index.ts'
+      'apps/neko-vscode/src/features/agent/tools/perceptionCapabilityProvider.ts' ||
+    relativeFile === 'apps/neko-vscode/src/features/agent/index.ts'
   ) {
     const forbidden = [
       'platform.createService',
@@ -1529,7 +1529,7 @@ function findPiAgentTurnBridgeLegacyViolations(scope, file, content) {
       }));
     if (violations.length > 0) return violations;
   }
-  if (relativeFile === 'packages/neko-agent/packages/extension/src/ai/vscodePiRuntimeManager.ts') {
+  if (relativeFile === 'apps/neko-vscode/src/features/agent/ai/vscodePiRuntimeManager.ts') {
     const forbidden = [
       'GenericAdapter',
       'AdapterRegistry',
@@ -1548,7 +1548,7 @@ function findPiAgentTurnBridgeLegacyViolations(scope, file, content) {
       }));
   }
   if (
-    relativeFile !== 'packages/neko-agent/packages/extension/src/chat/message/agentTurnBridge.ts'
+    relativeFile !== 'apps/neko-vscode/src/features/agent/chat/message/agentTurnBridge.ts'
   ) {
     return [];
   }
@@ -1661,7 +1661,7 @@ function findRetiredTimelineProjectionAuthorityFileViolations() {
 }
 
 function findRetiredTimelineProjectionAcceptanceCommandViolations() {
-  const manifestPath = 'packages/neko-agent/package.json';
+  const manifestPath = 'apps/neko-vscode/package.json';
   const manifest = readFileSync(resolve(repoRoot, manifestPath), 'utf8');
   return retiredTimelineProjectionAcceptanceCommands
     .filter((command) => manifest.includes(command))
@@ -1707,8 +1707,8 @@ function findSkillLocatorBoundaryViolations(scope, file, content) {
   const relativeFile = relative(repoRoot, file).replaceAll('\\', '/');
   if (isTestOrFixtureFile(relativeFile)) return [];
   const designatedFiles = new Set([
-    'packages/neko-agent/packages/agent/src/pi/skill-host.ts',
-    'packages/neko-agent/packages/agent/src/pi/conversation-runtime.ts',
+    'packages/neko-agent-runtime/src/pi/skill-host.ts',
+    'packages/neko-agent-runtime/src/pi/conversation-runtime.ts',
   ]);
   if (designatedFiles.has(relativeFile)) return [];
   return [
@@ -1775,7 +1775,7 @@ function stripComments(content) {
 function findLegacyCentralizedToolRegistrationViolations() {
   const file = resolve(
     repoRoot,
-    'packages/neko-agent/packages/extension/src/bootstrap/toolBootstrap.ts',
+    'apps/neko-vscode/src/features/agent/bootstrap/toolBootstrap.ts',
   );
   const content = readFileSync(file, 'utf8');
   const relativeFile = relative(repoRoot, file);
@@ -1866,6 +1866,6 @@ function pointsIntoPackage(file, specifier, packageKey) {
 }
 
 function fakeFile(scope, path) {
-  const root = packageRoots[scope] ?? 'packages/neko-agent/packages/agent/src';
+  const root = packageRoots[scope] ?? 'packages/neko-agent-runtime/src';
   return resolve(repoRoot, root, path.replace(/^src\//, ''));
 }

@@ -1,12 +1,20 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import {
+  lstatSync,
+  mkdtempSync,
+  mkdirSync,
+  readFileSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
 import {
   MEDIA_RUNTIME_DESCRIPTOR_SCHEMA,
   assertRuntimeDirectory,
+  copyResolvedDevelopmentFile,
   stagePackagedMediaRuntime,
 } from '../media-runtime-closure.mjs';
 
@@ -27,6 +35,21 @@ describe('OpenNeko media runtime closure', () => {
       () => stagePackagedMediaRuntime(stageRoot, 'linux-x64', undefined),
       /requires NEKO_MEDIA_RUNTIME_ROOT/u,
     );
+  });
+
+  it('dereferences development executable symlinks into the owned stage', () => {
+    const root = mkdtempSync(join(tmpdir(), 'openneko-media-symlink-'));
+    const source = join(root, 'ffmpeg-real');
+    const link = join(root, 'ffmpeg');
+    const destination = join(root, 'stage', 'ffmpeg');
+    writeFileSync(source, 'runtime');
+    symlinkSync(source, link);
+    mkdirSync(join(root, 'stage'));
+
+    copyResolvedDevelopmentFile(link, destination);
+
+    assert.equal(lstatSync(destination).isSymbolicLink(), false);
+    assert.equal(readFileSync(destination, 'utf8'), 'runtime');
   });
 
   it('rejects the pre-accelerator v1 descriptor schema', () => {

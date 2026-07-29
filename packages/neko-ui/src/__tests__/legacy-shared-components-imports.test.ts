@@ -16,7 +16,7 @@ const sharedComponentsSpecifier = '@neko/shared/components';
 
 const legacySharedComponentsAllowlist: readonly SharedComponentsImportAllowance[] = [
   {
-    filePath: 'packages/neko-agent/packages/webview/src/components/ChatView/DropZone.tsx',
+    filePath: 'packages/neko-agent-webview/src/components/ChatView/DropZone.tsx',
     importNames: ['FileDropResult', 'useFileDrop'],
   },
   {

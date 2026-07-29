@@ -4,12 +4,10 @@ import * as vscode from 'vscode';
 import { ToolRegistry } from '@neko/agent';
 import {
   createPersistentGenerationJobStore,
-  createPurposeGenerationJobPort,
   GENERATION_JOB_MIGRATIONS,
   GenerationJobCoordinator,
   type GenerationJobPort,
   type MediaGenerationResult,
-  type PurposeGenerationJobPort,
 } from '@neko/generation';
 import {
   buildMediaGenerationDeliverySettingsPlan,
@@ -41,27 +39,40 @@ import {
   LocalMetadataGeneratedOutputProjectionStore,
   type GeneratedOutputProjectionRejection,
 } from '@neko/shared/local-metadata/node';
-
-export interface OpenNekoAiHostServices {
-  readonly platform: Platform;
-  readonly toolRegistry: ToolRegistry;
-  readonly generationJobs?: GenerationJobPort;
-  readonly purposeGenerationJobs?: PurposeGenerationJobPort;
-  readonly generatedAssets?: GeneratedAssetCatalog;
-  readonly resolveGenerationResult?: (locator: GeneratedOutputContentLocator) => {
-    readonly path: string;
-    readonly asset: GeneratedAsset;
-  };
-  readonly resolveGenerationResultPath?: (locator: GeneratedOutputContentLocator) => string;
-  readonly localMetadata?: {
-    readonly metadataStore: LocalMetadataStore;
-    readonly workspaceId: string;
-  };
-}
+import type { NekoAgentAiHostPort } from './features/agent';
+import type { NekoCutHostServices } from './features/cut/extension';
 
 export interface OpenNekoAiHostRuntime {
-  readonly services: OpenNekoAiHostServices;
+  readonly agent: NekoAgentAiHostPort;
   dispose(): Promise<void>;
+}
+
+export interface OpenNekoCutHostRuntime {
+  readonly services: NekoCutHostServices;
+  dispose(): Promise<void>;
+}
+
+export async function createOpenNekoCutHostRuntime(): Promise<OpenNekoCutHostRuntime> {
+  const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  if (!workspaceRoot) {
+    return {
+      services: {},
+      dispose: async () => undefined,
+    };
+  }
+  const metadata = await createNodeWorkspaceResourceCacheMetadataBinding({
+    homedir: os.homedir(),
+    workDir: workspaceRoot,
+  });
+  return {
+    services: {
+      localMetadata: {
+        metadataStore: metadata.metadataStore,
+        workspaceId: metadata.workspaceId,
+      },
+    },
+    dispose: () => metadata.dispose(),
+  };
 }
 
 export async function createOpenNekoAiHostRuntime(): Promise<OpenNekoAiHostRuntime> {
@@ -82,7 +93,7 @@ export async function createOpenNekoAiHostRuntime(): Promise<OpenNekoAiHostRunti
   });
   if (!workspaceRoot) {
     return {
-      services: { platform, toolRegistry },
+      agent: { platform, toolRegistry },
       dispose: async () => {
         platform.dispose();
       },
@@ -146,12 +157,6 @@ export async function createOpenNekoAiHostRuntime(): Promise<OpenNekoAiHostRunti
     const generationJobs: GenerationJobPort = coordinator;
     await coordinator.recoverPersistedGenerationJobs();
     registerMediaAgentTools(toolRegistry, generationJobs);
-    const purposeGenerationJobs = createPurposeGenerationJobPort({
-      jobs: generationJobs,
-      bindings: {
-        resolveGenerationBinding: (purpose) => platform.config.resolveModelRefForPurpose(purpose),
-      },
-    });
     const resolveGenerationResult = (locator: GeneratedOutputContentLocator) => {
       const asset = generatedAssetIndex.get(locator.outputId);
       if (!asset?.lifecycle || !contentLocatorsEqual(asset.lifecycle.contentLocator, locator)) {
@@ -162,18 +167,12 @@ export async function createOpenNekoAiHostRuntime(): Promise<OpenNekoAiHostRunti
       return { path: asset.path, asset };
     };
     return {
-      services: {
+      agent: {
         platform,
         toolRegistry,
         generationJobs,
-        purposeGenerationJobs,
         generatedAssets: generatedAssetIndex,
         resolveGenerationResult,
-        resolveGenerationResultPath: (ref) => resolveGenerationResult(ref).path,
-        localMetadata: {
-          metadataStore: metadata.metadataStore,
-          workspaceId: metadata.workspaceId,
-        },
       },
       dispose: async () => {
         const failures: unknown[] = [];

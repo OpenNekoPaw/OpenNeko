@@ -23,9 +23,7 @@ describe('project file I/O guardrails', () => {
   });
 
   it('keeps migrated nk* editor persistence on the shared project file store', () => {
-    const migratedFiles = [
-      'packages/neko-canvas/packages/extension/src/editor/canvasEditorProvider.ts',
-    ];
+    const migratedFiles = ['apps/neko-vscode/src/features/canvas/editor/canvasEditorProvider.ts'];
 
     for (const file of migratedFiles) {
       expect(readSource(file), file).toContain('ProjectFileStore');
@@ -34,9 +32,7 @@ describe('project file I/O guardrails', () => {
   });
 
   it('keeps migrated nk* save lifecycles on the shared save session', () => {
-    const sessionFiles = [
-      'packages/neko-canvas/packages/extension/src/editor/canvasEditorProvider.ts',
-    ];
+    const sessionFiles = ['apps/neko-vscode/src/features/canvas/editor/canvasEditorProvider.ts'];
 
     for (const file of sessionFiles) {
       expect(readSource(file), file).toContain('ProjectFileSaveSession');
@@ -61,7 +57,7 @@ describe('project file I/O guardrails', () => {
 
   it('prevents migrated editor paths from reintroducing direct nk* JSON persistence', () => {
     const forbiddenByFile: Record<string, readonly RegExp[]> = {
-      'packages/neko-canvas/packages/extension/src/editor/canvasEditorProvider.ts': [
+      'apps/neko-vscode/src/features/canvas/editor/canvasEditorProvider.ts': [
         /content\.trim\(\)\s*\?\s*loadNkc\(content\)/,
         /workspace\.fs\.writeFile\(targetUri,\s*Buffer\.from\(content/,
       ],
@@ -77,7 +73,7 @@ describe('project file I/O guardrails', () => {
 
   it('keeps open/load project paths read-only until an explicit save/import request', () => {
     const readOnlyMethods: Record<string, readonly string[]> = {
-      'packages/neko-canvas/packages/extension/src/editor/canvasEditorProvider.ts': [
+      'apps/neko-vscode/src/features/canvas/editor/canvasEditorProvider.ts': [
         'openCustomDocument',
         'loadCanvasProject',
       ],
@@ -105,7 +101,7 @@ describe('project file I/O guardrails', () => {
 
   it('prevents custom editor save from acknowledging before a durable record is available', () => {
     const saveContracts: Record<string, RegExp> = {
-      'packages/neko-canvas/packages/extension/src/editor/canvasEditorProvider.ts':
+      'apps/neko-vscode/src/features/canvas/editor/canvasEditorProvider.ts':
         /projectFileSession\.save\(/,
     };
 
@@ -121,15 +117,15 @@ describe('project file I/O guardrails', () => {
     }
 
     expect(
-      readSource('packages/neko-canvas/packages/extension/src/editor/canvasEditorProvider.ts'),
+      readSource('apps/neko-vscode/src/features/canvas/editor/canvasEditorProvider.ts'),
       'Canvas save must request a live Webview snapshot before ProjectFileSaveSession.save',
     ).toMatch(/requestCanvasProjectSnapshot\(/);
   });
 
   it('keeps migrated editor source acquisition on the canonical project:addSource path', () => {
     const migratedProductionFiles = [
-      'packages/neko-canvas/packages/webview/src/hooks/useDragDrop.ts',
-      'packages/neko-canvas/packages/extension/src/editor/canvasEditorProvider.ts',
+      'packages/neko-canvas-webview/src/hooks/useDragDrop.ts',
+      'apps/neko-vscode/src/features/canvas/editor/canvasEditorProvider.ts',
     ];
 
     const forbiddenLegacyPatterns = [
@@ -156,9 +152,7 @@ describe('project file I/O guardrails', () => {
       }
     }
 
-    const durableWebviewSourceAddFiles = [
-      'packages/neko-canvas/packages/webview/src/hooks/useDragDrop.ts',
-    ];
+    const durableWebviewSourceAddFiles = ['packages/neko-canvas-webview/src/hooks/useDragDrop.ts'];
     for (const file of durableWebviewSourceAddFiles) {
       expect(
         readSource(file),
@@ -167,8 +161,8 @@ describe('project file I/O guardrails', () => {
     }
 
     const canonicalSourceAddFiles = [
-      'packages/neko-canvas/packages/webview/src/hooks/useDragDrop.ts',
-      'packages/neko-canvas/packages/extension/src/editor/canvasEditorProvider.ts',
+      'packages/neko-canvas-webview/src/hooks/useDragDrop.ts',
+      'apps/neko-vscode/src/features/canvas/editor/canvasEditorProvider.ts',
     ];
     for (const file of canonicalSourceAddFiles) {
       expect(readSource(file), `${file} should use the canonical add-source protocol`).toMatch(
@@ -179,15 +173,15 @@ describe('project file I/O guardrails', () => {
 
   it('keeps picker/import source acquisition on the canonical add-source path', () => {
     const canvasSource = readSource(
-      'packages/neko-canvas/packages/extension/src/editor/canvasEditorProvider.ts',
+      'apps/neko-vscode/src/features/canvas/editor/canvasEditorProvider.ts',
     );
     const canvasAddActionCatalogSource = readSource(
-      'packages/neko-canvas/packages/webview/src/utils/canvasAddActions.ts',
+      'packages/neko-canvas-webview/src/utils/canvasAddActions.ts',
     );
     const canvasAddActionPopoverSource = readSource(
-      'packages/neko-canvas/packages/webview/src/components/toolbar/CanvasAddActionPopover.tsx',
+      'packages/neko-canvas-webview/src/components/toolbar/CanvasAddActionPopover.tsx',
     );
-    const canvasAppSource = readSource('packages/neko-canvas/packages/webview/src/CanvasApp.tsx');
+    const canvasAppSource = readSource('packages/neko-canvas-webview/src/CanvasApp.tsx');
     expect(canvasSource).toContain('private async resolveCanvasProjectSourceAddRequest(');
     expect(canvasSource).toContain('private createCanvasProjectSourcePickerFilters(');
     expect(canvasSource).toContain('this.createCanvasPickerSourceAddRequest(uri, documentUri');
@@ -220,7 +214,7 @@ describe('project file I/O guardrails', () => {
       /createCanvasDroppedAssetFromProjectAddSource|postMessage\(\{\s*type:\s*'dropAssets'|path:\s*uri\.(?:fsPath|path)/,
     );
     const canvasWebviewMessagesSource = readSource(
-      'packages/neko-canvas/packages/webview/src/hooks/useVSCodeMessages.ts',
+      'packages/neko-canvas-webview/src/hooks/useVSCodeMessages.ts',
     );
     expect(canvasWebviewMessagesSource).not.toMatch(
       /case ['"](?:addMedia|dropMedia|dropAssets)['"]/,
@@ -242,7 +236,7 @@ describe('project file I/O guardrails', () => {
       "| 'add-source'",
     );
     expect(
-      readSource('packages/neko-canvas/packages/extension/src/editor/canvasEditorProvider.ts'),
+      readSource('apps/neko-vscode/src/features/canvas/editor/canvasEditorProvider.ts'),
     ).toContain("value === 'add-source'");
   });
 });

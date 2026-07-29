@@ -6,6 +6,20 @@ import { fileURLToPath } from 'node:url';
 
 const repoRoot = process.cwd();
 const sourceExtensions = new Set(['.js', '.jsx', '.mjs', '.mts', '.ts', '.tsx']);
+const reusableFeaturePackageRoots = [
+  'packages/neko-agent-runtime/src/',
+  'packages/neko-agent-test-utils/src/',
+  'packages/neko-agent-types/src/',
+  'packages/neko-agent-webview/src/',
+  'packages/neko-ai-sdk/src/',
+  'packages/neko-canvas-domain/src/',
+  'packages/neko-canvas-webview/src/',
+  'packages/neko-cut-domain/src/',
+  'packages/neko-cut-webview/src/',
+  'packages/neko-preview-webview/src/',
+  'packages/neko-tools-contracts/src/',
+  'packages/neko-tools-webview/src/',
+];
 const removedFeaturePackagePaths = [
   'packages/neko-audio',
   'packages/neko-auth',
@@ -19,19 +33,19 @@ const removedFeaturePackagePaths = [
 ];
 const removedProductContractRules = [
   {
-    file: 'packages/neko-agent/packages/agent-types/src/extension-command-contract.ts',
+    file: 'packages/neko-agent-types/src/extension-command-contract.ts',
     tokens: ['NEKO_PUPPET_EXTENSION_ID'],
   },
   {
-    file: 'packages/neko-agent/packages/agent-types/src/external-processor.ts',
+    file: 'packages/neko-agent-types/src/external-processor.ts',
     tokens: ["'market'", 'registerMarketExternalProcessorPackages'],
   },
   {
-    file: 'packages/neko-agent/packages/agent/src/provider/provider-card-runtime.ts',
+    file: 'packages/neko-agent-runtime/src/provider/provider-card-runtime.ts',
     tokens: ["layer: 'market'", 'marketRegistration', 'readonly market:'],
   },
   {
-    file: 'packages/neko-tools/package.json',
+    file: 'apps/neko-vscode/package.json',
     tokens: [
       'neko-audio-file',
       'neko-sketch-file',
@@ -45,7 +59,7 @@ const removedProductContractRules = [
     ],
   },
   {
-    file: 'packages/neko-tools/themes/neko-file-icon-theme.json',
+    file: 'apps/neko-vscode/resources/features/neko-tools/themes/neko-file-icon-theme.json',
     tokens: [
       '_neko_sketch',
       '_neko_puppet',
@@ -93,7 +107,7 @@ const removedProductContractRules = [
     tokens: ["| 'sketch'", "| 'puppet'"],
   },
   {
-    file: 'packages/neko-assets/src/extension.ts',
+    file: 'apps/neko-vscode/src/features/assets/extension.ts',
     tokens: ['neko.assets.promoteRecording', 'RecordingPromotionService'],
   },
   {
@@ -152,8 +166,8 @@ const removedProductContractFiles = [
   'packages/neko-types/src/types/recording-artifact.ts',
   'packages/neko-types/src/types/tracking.ts',
   'packages/neko-types/src/types/__tests__/tracking-contracts.test.ts',
-  'packages/neko-assets/src/services/RecordingPromotionService.ts',
-  'packages/neko-assets/src/services/RecordingPromotionService.test.ts',
+  'apps/neko-vscode/src/features/assets/services/RecordingPromotionService.ts',
+  'apps/neko-vscode/src/features/assets/services/RecordingPromotionService.test.ts',
   'packages/neko-types/src/local-metadata/sqlite/market-installation-schema.ts',
   'packages/neko-types/src/local-metadata/__tests__/market-installation-repository.test.ts',
   'packages/neko-types/src/types/live-compositor.ts',
@@ -180,11 +194,11 @@ const removedProductContractFiles = [
   'packages/neko-types/src/types/element.ts',
   'packages/neko-types/src/types/mediaDiffProtocol.ts',
   'packages/neko-tools/language-configuration.json',
-  'packages/neko-tools/packages/extension/src/bootstrap/bootstrapMediaLsp.ts',
-  'packages/neko-tools/packages/extension/src/media-lsp/index.ts',
-  'packages/neko-tools/packages/extension/src/media-diff/services/analyzers/TimelineDiffAnalyzer.ts',
-  'packages/neko-tools/packages/webview/src/components/MediaDiff/TimelineDiffViewer.tsx',
-  'packages/neko-agent/packages/agent/src/runtime/turn/timeline-context-runtime.ts',
+  'apps/neko-vscode/src/features/tools/bootstrap/bootstrapMediaLsp.ts',
+  'apps/neko-vscode/src/features/tools/media-lsp/index.ts',
+  'apps/neko-vscode/src/features/tools/media-diff/services/analyzers/TimelineDiffAnalyzer.ts',
+  'packages/neko-tools-webview/src/components/MediaDiff/TimelineDiffViewer.tsx',
+  'packages/neko-agent-runtime/src/runtime/turn/timeline-context-runtime.ts',
   'packages/neko-types/src/generated/scene.engine.ts',
   'packages/neko-types/src/generated/__tests__/scene-contract.test.ts',
   'packages/neko-types/src/generated/__fixtures__/scene-character-v0.json',
@@ -203,8 +217,8 @@ const removedProductContractFiles = [
   'packages/neko-types/src/vscode/extension/templates/glb-template.ts',
   'packages/neko-entity/src/providers/story.ts',
   'packages/neko-ui/src/viewport/index.ts',
-  'packages/neko-assets/src/market/VoicePackInstallTarget.ts',
-  'packages/neko-preview/packages/extension/src/providers/model/modelPreviewProtocol.ts',
+  'apps/neko-vscode/src/features/assets/market/VoicePackInstallTarget.ts',
+  'apps/neko-vscode/src/features/preview/providers/model/modelPreviewProtocol.ts',
   'packages/neko-tools/themes/icons/file-model.svg',
   'packages/neko-tools/themes/icons/file-puppet.svg',
   'packages/neko-tools/themes/icons/file-sketch.svg',
@@ -232,6 +246,16 @@ export function findApplicationBoundaryViolations(file, content) {
         file: normalizedFile,
         specifier,
         message: 'Reusable packages must not import application composition roots.',
+      });
+    }
+
+    if (isReusableFeaturePackageSource(normalizedFile) && specifier === 'vscode') {
+      findings.push({
+        ruleId: 'reusable-feature-packages-must-not-import-vscode',
+        file: normalizedFile,
+        specifier,
+        message:
+          'Reusable feature domain, contract, runtime, and Webview packages must receive host-neutral ports instead of importing VS Code.',
       });
     }
 
@@ -491,6 +515,10 @@ function reachesAnotherApplication(file, specifier) {
   return Boolean(match?.[1] && match[1] !== currentApp);
 }
 
+function isReusableFeaturePackageSource(file) {
+  return reusableFeaturePackageRoots.some((root) => file.startsWith(root));
+}
+
 function* walk(root) {
   for (const entry of readdirSync(root, { withFileTypes: true })) {
     if (entry.name === 'node_modules' || entry.name === 'dist' || entry.name === 'coverage')
@@ -538,6 +566,12 @@ function runSelfTest() {
       file: 'packages/neko-host/src/index.ts',
       content: "export { start } from '../../../apps/neko-vscode/src/main';\n",
       expected: ['packages-must-not-depend-on-applications'],
+    },
+    {
+      name: 'reusable feature package VS Code import fails',
+      file: 'packages/neko-agent-runtime/src/runtime.ts',
+      content: "import type * as vscode from 'vscode';\n",
+      expected: ['reusable-feature-packages-must-not-import-vscode'],
     },
     {
       name: 'application cross import fails',

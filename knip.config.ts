@@ -9,35 +9,39 @@ const config: KnipConfig = {
   ignoreBinaries: [
     // Root package scripts invoke this local CI wrapper directly.
     'scripts/act-ci.sh',
+    // pnpm --dir invokes package scripts; these are not standalone binaries.
+    'compile',
+    'typecheck',
   ],
   ignoreDependencies: [
     '@fission-ai/openspec', // Used by the `openspec` CLI invoked in development workflow.
     '@types/vscode', // Provided by VSCode runtime
     'esbuild', // Used as CLI bundler, not imported
     '@img/sharp-wasm32', // Sharp WASM fallback
+    '@vscode/vsce', // Invoked through `pnpm exec vsce` by the platform packager.
     'clsx',
   ],
   ignoreIssues: {
     // Internal editor API surfaces: intentionally exported for feature modules
-    'packages/neko-cut/packages/webview/src/types.ts': ['exports'],
-    'packages/neko-cut/packages/webview/src/types/**/*.ts': ['exports'],
-    'packages/neko-cut/packages/webview/src/constants.ts': ['exports'],
-    'packages/neko-cut/packages/webview/src/utils/index.ts': ['exports'],
-    'packages/neko-cut/packages/webview/src/utils/vscodeApi.ts': ['exports'],
-    'packages/neko-cut/packages/webview/src/utils/speed.ts': ['exports'],
-    'packages/neko-cut/packages/webview/src/utils/waveform.ts': ['exports'],
-    'packages/neko-cut/packages/webview/src/utils/pyramidThumbnail.ts': ['exports'],
+    'packages/neko-cut-webview/src/types.ts': ['exports'],
+    'packages/neko-cut-webview/src/types/**/*.ts': ['exports'],
+    'packages/neko-cut-webview/src/constants.ts': ['exports'],
+    'packages/neko-cut-webview/src/utils/index.ts': ['exports'],
+    'packages/neko-cut-webview/src/utils/vscodeApi.ts': ['exports'],
+    'packages/neko-cut-webview/src/utils/speed.ts': ['exports'],
+    'packages/neko-cut-webview/src/utils/waveform.ts': ['exports'],
+    'packages/neko-cut-webview/src/utils/pyramidThumbnail.ts': ['exports'],
     // Logger facades expose test-injection hooks for package Webview tests.
-    'packages/neko-canvas/packages/webview/src/utils/logger.ts': ['exports'],
-    'packages/neko-cut/packages/webview/src/utils/logger.ts': ['exports'],
-    'packages/neko-preview/packages/webview/src/utils/logger.ts': ['exports'],
-    'packages/neko-tools/packages/webview/src/utils/logger.ts': ['exports'],
+    'packages/neko-canvas-webview/src/utils/logger.ts': ['exports'],
+    'packages/neko-cut-webview/src/utils/logger.ts': ['exports'],
+    'packages/neko-preview-webview/src/utils/logger.ts': ['exports'],
+    'packages/neko-tools-webview/src/utils/logger.ts': ['exports'],
     // Vitest aliases this file as the complete `vscode` module, so property reads are dynamic.
     'packages/neko-entity/src/testing/vscode.ts': ['exports'],
     // Shared contract files consumed as package-level type surfaces
-    'packages/neko-canvas/packages/webview/src/types/extendedCanvas.ts': ['exports'],
-    'packages/neko-preview/packages/extension/src/types/document-messages.ts': ['exports'],
-    'packages/neko-preview/packages/webview/src/shared/document-types.ts': ['exports'],
+    'packages/neko-canvas-webview/src/types/extendedCanvas.ts': ['exports'],
+    'apps/neko-vscode/src/features/preview/types/document-messages.ts': ['exports'],
+    'packages/neko-preview-webview/src/shared/document-types.ts': ['exports'],
   },
 
   workspaces: {
@@ -56,6 +60,7 @@ const config: KnipConfig = {
         'scripts/check-neko-agent-boundaries.mjs',
         'scripts/check-openspec.mjs',
         'scripts/check-release-channels.mjs',
+        'scripts/check-single-extension-architecture.mjs',
         'scripts/check-strict-tsconfig.mjs',
         'scripts/check-webview-boundaries.mjs',
         'scripts/compile-ts-vsix.mjs',
@@ -155,23 +160,10 @@ const config: KnipConfig = {
       ],
     },
 
-    // ── Extension parent packages ─────────────────────
-    // These are VSCode manifest wrappers; entry from sub-packages.
-    'packages/neko-cut': {},
-    'packages/neko-agent': {
-      entry: ['scripts/copy-builtin-skills.mjs'],
-    },
-    'packages/neko-canvas': {},
-    'packages/neko-tools': {},
-    'packages/neko-preview': {},
-    'packages/neko-assets': {},
-
-    // ── Extension sub-packages ────────────────────────
-    'packages/neko-cut/packages/extension': {},
-    'packages/neko-cut/packages/webview': {
+    // ── Top-level reusable packages ───────────────────
+    'packages/neko-cut-webview': {
       entry: ['src/host-adapter/index.tsx', 'src/retained.ts'],
     },
-    'packages/neko-agent/packages/extension': {},
     'apps/neko-desktop': {
       entry: [
         'forge.config.ts',
@@ -188,17 +180,17 @@ const config: KnipConfig = {
       // The dedicated Bun adapter suite is exercised by the application/CI script.
       bun: false,
     },
-    'packages/neko-agent/packages/webview': {
+    'packages/neko-agent-webview': {
       ignore: [
         // Barrel exports
         'src/components/ChatView/InputArea/index.ts',
         'src/config/index.ts',
       ],
     },
-    'packages/neko-agent/packages/platform': {
+    'packages/neko-platform': {
       entry: ['src/index.ts', 'src/files/index.ts', 'src/media/index.ts'],
     },
-    'packages/neko-agent/packages/agent': {
+    'packages/neko-agent-runtime': {
       entry: [
         'src/index.ts',
         'src/approval/index.ts',
@@ -209,9 +201,8 @@ const config: KnipConfig = {
         'src/workspace/index.ts',
       ],
     },
-    'packages/neko-agent/test-utils': {},
-    'packages/neko-canvas/packages/extension': {},
-    'packages/neko-canvas/packages/webview': {
+    'packages/neko-agent-test-utils': {},
+    'packages/neko-canvas-webview': {
       entry: ['src/host-adapter/index.tsx'],
       ignore: [
         // Barrel exports
@@ -221,13 +212,10 @@ const config: KnipConfig = {
         'src/components/panels/PropertyPanel.tsx',
       ],
     },
-    'packages/neko-tools/packages/contracts': {
+    'packages/neko-tools-contracts': {
       entry: ['src/index.ts'],
     },
-    'packages/neko-tools/packages/extension': {
-      entry: ['src/bootstrap/index.ts', 'src/media-diff/index.ts'],
-    },
-    'packages/neko-tools/packages/webview': {
+    'packages/neko-tools-webview': {
       entry: ['src/mediaDiff.tsx'],
       ignore: [
         // Barrel exports and internal utilities
@@ -235,7 +223,7 @@ const config: KnipConfig = {
         'src/components/MediaDiff/VideoFrameRenderer.tsx',
       ],
     },
-    'packages/neko-preview/packages/webview': {
+    'packages/neko-preview-webview': {
       entry: [
         'scripts/three-reference-preset-feasibility.mts',
         'src/audio/main.tsx',
@@ -248,13 +236,17 @@ const config: KnipConfig = {
         'src/host-adapter/index.tsx',
       ],
     },
-    'packages/neko-preview/packages/extension': {},
 
     // ── Skills (CLI scripts, not imported) ───────────────
     // Skills are excluded from analysis - they are runtime scripts, not imported modules
     // ── Skip packages ─────────────────────────────────
     'apps/neko-vscode': {
-      entry: ['package.json', 'scripts/run-tests.mjs', 'scripts/validate-manifest.mjs'],
+      entry: [
+        'package.json',
+        'scripts/run-tests.mjs',
+        'scripts/stage-feature-resources.mjs',
+        'scripts/validate-manifest.mjs',
+      ],
     },
   },
 };
