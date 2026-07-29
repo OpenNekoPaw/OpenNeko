@@ -200,6 +200,13 @@
       "testScope": "packages/extension and webview tests"
     },
     {
+      "path": "packages/neko-preview/packages/contracts",
+      "owner": "packages/neko-preview/packages/contracts",
+      "mode": "self",
+      "sourceScope": "src/**/*.ts",
+      "testScope": "src/**/*.test.ts"
+    },
+    {
       "path": "packages/neko-preview/packages/webview",
       "owner": "packages/neko-preview",
       "mode": "aggregated",

@@ -29,9 +29,7 @@ describe('ElectronNekoHostPorts', () => {
       ]),
       trust: 'unknown',
     });
-    expect(() => host.paths.resolvePath({ path: 'relative.txt' })).toThrow(
-      'without a workspace',
-    );
+    expect(() => host.paths.resolvePath({ path: 'relative.txt' })).toThrow('without a workspace');
   });
 
   it('uses variable-backed paths and real filesystem operations', async () => {
@@ -44,9 +42,7 @@ describe('ElectronNekoHostPorts', () => {
     await host.files.writeText(filePath, 'hello');
 
     await expect(host.files.readText(filePath)).resolves.toBe('hello');
-    expect(host.paths.contractPath({ absolutePath: filePath })).toBe(
-      '${WORKSPACE}/hello.txt',
-    );
+    expect(host.paths.contractPath({ absolutePath: filePath })).toBe('${WORKSPACE}/hello.txt');
     expect(host.paths.resolvePath({ path: '${WORKSPACE}/hello.txt' })).toEqual({
       type: 'local',
       path: filePath,
@@ -69,6 +65,31 @@ describe('ElectronNekoHostPorts', () => {
       allowed: false,
       diagnostic: { code: 'desktop-host-access-denied-managed-storage' },
     });
+  });
+
+  it('exposes only an explicitly injected Host secret boundary', async () => {
+    const root = await createTemporaryRoot();
+    const values = new Map<string, string>();
+    const host = createElectronNekoHostPorts({
+      homedir: root,
+      nekoHome: path.join(root, '.neko'),
+      version: '0.0.1',
+      logger: createLogger(),
+      secrets: {
+        get: async (key) => values.get(key),
+        set: async (key, value) => {
+          values.set(key, value);
+        },
+        delete: async (key) => {
+          values.delete(key);
+        },
+      },
+    });
+
+    await host.secrets?.set('fixture', 'host-only');
+
+    await expect(host.secrets?.get('fixture')).resolves.toBe('host-only');
+    expect(JSON.stringify(await host.environment.getRuntimeInfo())).not.toContain('host-only');
   });
 });
 

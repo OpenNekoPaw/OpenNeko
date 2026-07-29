@@ -1,5 +1,15 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import {
+  createDesktopAgentBootstrapRequest,
+  createDesktopAgentMessageRequest,
+  DESKTOP_AGENT_CHANNELS,
+  DesktopAgentContractError,
+  parseDesktopAgentBootstrapProjection,
+  parseDesktopAgentMessageEvent,
+  parseDesktopAgentMessageResult,
+  type OpenNekoDesktopAgentBridge,
+} from '../shared/agent-contract';
+import {
   createDesktopBootstrapRequest,
   DESKTOP_BRIDGE_CHANNELS,
   parseDesktopBootstrapProjection,
@@ -9,9 +19,11 @@ import {
 } from '../shared/bridge-contract';
 import {
   createDesktopProfileRequest,
+  createDesktopProjectOpenRequest,
   createDesktopShellRequest,
   createDesktopTabMutationRequest,
   createDesktopWindowMutationRequest,
+  createDesktopWorkbenchMutationRequest,
   DESKTOP_SHELL_CHANNELS,
   parseDesktopOpenContentResult,
   parseDesktopProfileRequestResult,
@@ -24,11 +36,162 @@ import {
   advanceDesktopShellProjectionCursor,
   type DesktopShellProjectionCursor,
 } from '../shared/projection-revision';
+import {
+  advanceDesktopAgentBootstrapCursor,
+  isSameDesktopAgentEventConnection,
+  type DesktopAgentEventCursor,
+} from './desktop-agent-event-cursor';
+import { preserveDesktopBootstrapEventSequence } from './desktop-runtime-event-cursor';
+import {
+  parseResourceBrowserChildrenRequest,
+  parseResourceBrowserIntentRequest,
+  parseResourceBrowserProjection,
+  parseResourceBrowserProjectionEvent,
+  parseResourceBrowserSearchRequest,
+  parseResourceBrowserSnapshotRequest,
+  parseResourceBrowserThumbnailRequest,
+  parseResourceBrowserThumbnailResult,
+  type ResourceBrowserIdentity,
+} from 'neko-assets/resource-browser/contract';
+import {
+  DESKTOP_RESOURCE_BROWSER_CHANNELS,
+  isSameResourceBrowserIdentity,
+  type OpenNekoDesktopResourceBrowserBridge,
+} from '../shared/resource-browser-bridge-contract';
+import {
+  DESKTOP_PREVIEW_CHANNELS,
+  parseDesktopPreviewBootstrapRequest,
+  parseDesktopPreviewProjection,
+  parseDesktopPreviewRuntimeRequest,
+  type OpenNekoDesktopPreviewBridge,
+} from '../shared/preview-bridge-contract';
+import type { PreviewRuntimeIdentity } from '@neko-preview/contracts';
+import {
+  parseCanvasHostIntentRequest,
+  parseCanvasHostIntentResult,
+  parseCanvasHostProjectionEvent,
+  parseCanvasHostSnapshot,
+  type CanvasHostProjectionEvent,
+  type CanvasHostRuntimeIdentity,
+} from '@neko-canvas/domain';
+import {
+  DESKTOP_CANVAS_CHANNELS,
+  isSameCanvasHostIdentity,
+  parseDesktopCanvasHostIdentity,
+  parseDesktopCanvasPreviewVariantRequest,
+  parseDesktopCanvasPreviewVariantResult,
+  type OpenNekoDesktopCanvasBridge,
+} from '../shared/canvas-bridge-contract';
+import {
+  parseCutHostRuntimeProjectionEvent,
+  parseCutHostRuntimeRequest,
+  parseCutHostRuntimeResult,
+  parseCutHostRuntimeSnapshot,
+  type CutHostRuntimeIdentity,
+} from '@neko-cut/domain';
+import {
+  DESKTOP_CUT_CHANNELS,
+  isSameCutHostIdentity,
+  parseDesktopCutHostIdentity,
+  type OpenNekoDesktopCutBridge,
+} from '../shared/cut-bridge-contract';
+import {
+  createDesktopHomeAssetSearchRequest,
+  createDesktopHomePluginsRequest,
+  DESKTOP_HOME_MANAGEMENT_CHANNELS,
+  parseDesktopHomeAssetSearchResult,
+  parseDesktopHomePluginsResult,
+  type OpenNekoDesktopHomeManagementBridge,
+} from '../shared/home-management-contract';
 
 let requestSequence = 0;
 let latestShellProjection: DesktopShellProjectionCursor | undefined;
+let currentAgentEventCursor: DesktopAgentEventCursor | undefined;
+const agentListeners = new Set<Parameters<OpenNekoDesktopAgentBridge['agent']['subscribe']>[0]>();
+let currentResourceIdentity: ResourceBrowserIdentity | undefined;
+let currentResourceEventSequence = 0;
+const resourceListeners = new Set<
+  Parameters<OpenNekoDesktopResourceBrowserBridge['resources']['subscribe']>[0]
+>();
+const currentPreviewIdentities = new Map<string, PreviewRuntimeIdentity>();
+const currentCanvasIdentities = new Map<string, CanvasHostRuntimeIdentity>();
+const currentCanvasEventSequences = new Map<string, number>();
+const canvasListeners = new Set<{
+  readonly identity: CanvasHostRuntimeIdentity;
+  readonly listener: Parameters<OpenNekoDesktopCanvasBridge['canvas']['subscribe']>[1];
+}>();
+const currentCutIdentities = new Map<string, CutHostRuntimeIdentity>();
+const currentCutEventSequences = new Map<string, number>();
+const cutListeners = new Set<{
+  readonly identity: CutHostRuntimeIdentity;
+  readonly listener: Parameters<OpenNekoDesktopCutBridge['cut']['subscribe']>[1];
+}>();
 
-const bridge: OpenNekoDesktopBridge & OpenNekoDesktopShellBridge = {
+const bridge: OpenNekoDesktopBridge &
+  OpenNekoDesktopShellBridge &
+  OpenNekoDesktopAgentBridge &
+  OpenNekoDesktopResourceBrowserBridge &
+  OpenNekoDesktopPreviewBridge &
+  OpenNekoDesktopCanvasBridge &
+  OpenNekoDesktopCutBridge &
+  OpenNekoDesktopHomeManagementBridge = {
+  agent: {
+    async getBootstrap(projectId, viewId, viewEpoch) {
+      const request = createDesktopAgentBootstrapRequest(
+        nextRequestId('desktop-agent-bootstrap'),
+        projectId,
+        viewId,
+        viewEpoch,
+      );
+      const response: unknown = await ipcRenderer.invoke(
+        DESKTOP_AGENT_CHANNELS.bootstrapGet,
+        request,
+      );
+      const projection = parseDesktopAgentBootstrapProjection(response, request.requestId);
+      currentAgentEventCursor =
+        projection.status === 'ready'
+          ? advanceDesktopAgentBootstrapCursor(currentAgentEventCursor, projection.connection)
+          : undefined;
+      return projection;
+    },
+    send(message) {
+      const connection = currentAgentEventCursor?.connection;
+      if (!connection) {
+        throw new DesktopAgentContractError(
+          'desktop-agent-identity-mismatch',
+          'Desktop Agent send requires a ready sender-bound bootstrap.',
+        );
+      }
+      const request = createDesktopAgentMessageRequest(
+        nextRequestId('desktop-agent-message'),
+        connection,
+        message,
+      );
+      void ipcRenderer
+        .invoke(DESKTOP_AGENT_CHANNELS.messageSend, request)
+        .then((response: unknown) => {
+          const result = parseDesktopAgentMessageResult(response, request.requestId);
+          if (result.status === 'unavailable') {
+            emitAgentMessage({
+              type: 'globalError',
+              message: result.diagnostic.message,
+            });
+          }
+        })
+        .catch((error: unknown) => {
+          emitAgentMessage({
+            type: 'globalError',
+            message: describeError(error),
+          });
+        });
+    },
+    subscribe(listener) {
+      agentListeners.add(listener);
+      return () => {
+        agentListeners.delete(listener);
+      };
+    },
+  },
   bootstrap: {
     async get() {
       requestSequence += 1;
@@ -50,6 +213,236 @@ const bridge: OpenNekoDesktopBridge & OpenNekoDesktopShellBridge = {
       return () => {
         ipcRenderer.removeListener(DESKTOP_BRIDGE_CHANNELS.lifecycleEvent, handler);
       };
+    },
+  },
+  home: {
+    assets: {
+      async search(input) {
+        const request = createDesktopHomeAssetSearchRequest(
+          nextRequestId('desktop-home-assets'),
+          input,
+        );
+        const response: unknown = await ipcRenderer.invoke(
+          DESKTOP_HOME_MANAGEMENT_CHANNELS.assetsSearch,
+          request,
+        );
+        return parseDesktopHomeAssetSearchResult(response, request.requestId);
+      },
+    },
+    plugins: {
+      async list(projectId) {
+        const request = createDesktopHomePluginsRequest(
+          nextRequestId('desktop-home-plugins'),
+          projectId,
+        );
+        const response: unknown = await ipcRenderer.invoke(
+          DESKTOP_HOME_MANAGEMENT_CHANNELS.pluginsList,
+          request,
+        );
+        return parseDesktopHomePluginsResult(response, request.requestId);
+      },
+    },
+  },
+  resources: {
+    async getSnapshot(value) {
+      const request = parseResourceBrowserSnapshotRequest(value);
+      const response: unknown = await ipcRenderer.invoke(
+        DESKTOP_RESOURCE_BROWSER_CHANNELS.snapshotGet,
+        request,
+      );
+      const projection = parseResourceBrowserProjection(response);
+      if (!isSameResourceBrowserIdentity(projection.identity, request.identity)) {
+        throw new Error('Desktop Resource Browser snapshot owner identity does not match.');
+      }
+      currentResourceIdentity = projection.identity;
+      currentResourceEventSequence = 0;
+      return projection;
+    },
+    async search(value) {
+      const request = parseResourceBrowserSearchRequest(value);
+      requireCurrentResourceIdentity(request.identity);
+      const response: unknown = await ipcRenderer.invoke(
+        DESKTOP_RESOURCE_BROWSER_CHANNELS.search,
+        request,
+      );
+      return parseResourceBrowserProjection(response);
+    },
+    async children(value) {
+      const request = parseResourceBrowserChildrenRequest(value);
+      requireCurrentResourceIdentity(request.identity);
+      const response: unknown = await ipcRenderer.invoke(
+        DESKTOP_RESOURCE_BROWSER_CHANNELS.children,
+        request,
+      );
+      return parseResourceBrowserProjection(response);
+    },
+    async resolveThumbnail(value) {
+      const request = parseResourceBrowserThumbnailRequest(value);
+      requireCurrentResourceIdentity(request.identity);
+      const response: unknown = await ipcRenderer.invoke(
+        DESKTOP_RESOURCE_BROWSER_CHANNELS.thumbnailResolve,
+        request,
+      );
+      const result = parseResourceBrowserThumbnailResult(response);
+      if (
+        !isSameResourceBrowserIdentity(result.identity, request.identity) ||
+        result.requestId !== request.requestId ||
+        result.resourceId !== request.resourceId ||
+        result.descriptorId !== request.descriptorId ||
+        result.revision !== request.revision
+      ) {
+        throw new Error('Desktop Resource Browser thumbnail result identity does not match.');
+      }
+      return result;
+    },
+    async execute(value) {
+      const request = parseResourceBrowserIntentRequest(value);
+      requireCurrentResourceIdentity(request.identity);
+      const response: unknown = await ipcRenderer.invoke(
+        DESKTOP_RESOURCE_BROWSER_CHANNELS.execute,
+        request,
+      );
+      return parseResourceBrowserProjection(response);
+    },
+    subscribe(listener) {
+      resourceListeners.add(listener);
+      return () => {
+        resourceListeners.delete(listener);
+      };
+    },
+  },
+  preview: {
+    async getSnapshot(value) {
+      const request = parseDesktopPreviewBootstrapRequest(value);
+      const response: unknown = await ipcRenderer.invoke(
+        DESKTOP_PREVIEW_CHANNELS.snapshotGet,
+        request,
+      );
+      const projection = parseDesktopPreviewProjection(response);
+      if (
+        projection.identity.projectId !== request.projectId ||
+        projection.identity.workspaceId !== request.workspaceId ||
+        projection.identity.viewId !== request.viewId ||
+        projection.identity.viewEpoch !== request.viewEpoch ||
+        projection.identity.sessionId !== request.sessionId ||
+        projection.identity.endpointEpoch !== request.endpointEpoch
+      ) {
+        throw new Error('Desktop Preview projection owner identity does not match.');
+      }
+      currentPreviewIdentities.set(
+        previewIdentityKey(projection.identity),
+        projection.identity,
+      );
+      return projection;
+    },
+    async execute(value) {
+      const request = parseDesktopPreviewRuntimeRequest(value);
+      const key = previewIdentityKey(request.identity);
+      const identity = currentPreviewIdentities.get(key);
+      if (!identity || !isSamePreviewIdentity(request.identity, identity)) {
+        throw new Error('Desktop Preview request requires a current owner-bound snapshot.');
+      }
+      const response: unknown = await ipcRenderer.invoke(
+        DESKTOP_PREVIEW_CHANNELS.requestExecute,
+        request,
+      );
+      const projection = parseDesktopPreviewProjection(response);
+      currentPreviewIdentities.delete(key);
+      currentPreviewIdentities.set(
+        previewIdentityKey(projection.identity),
+        projection.identity,
+      );
+      return projection;
+    },
+  },
+  canvas: {
+    async getSnapshot(value) {
+      const identity = parseDesktopCanvasHostIdentity(value);
+      const response: unknown = await ipcRenderer.invoke(
+        DESKTOP_CANVAS_CHANNELS.snapshotGet,
+        identity,
+      );
+      const snapshot = parseCanvasHostSnapshot(response);
+      if (!isSameCanvasHostIdentity(snapshot.identity, identity)) {
+        throw new Error('Desktop Canvas snapshot owner identity does not match.');
+      }
+      const key = canvasIdentityKey(snapshot.identity);
+      currentCanvasIdentities.set(key, snapshot.identity);
+      currentCanvasEventSequences.set(
+        key,
+        preserveDesktopBootstrapEventSequence(currentCanvasEventSequences.get(key)),
+      );
+      return snapshot;
+    },
+    async executeIntent(value) {
+      const request = parseCanvasHostIntentRequest(value);
+      const identity = currentCanvasIdentities.get(canvasIdentityKey(request.identity));
+      if (!identity || !isSameCanvasHostIdentity(request.identity, identity)) {
+        throw new Error('Desktop Canvas intent requires a current owner-bound snapshot.');
+      }
+      const response: unknown = await ipcRenderer.invoke(
+        DESKTOP_CANVAS_CHANNELS.intentExecute,
+        request,
+      );
+      return parseCanvasHostIntentResult(response, request.requestId, request.commandId);
+    },
+    async resolvePreviewVariant(value) {
+      const request = parseDesktopCanvasPreviewVariantRequest(value);
+      const identity = currentCanvasIdentities.get(canvasIdentityKey(request.identity));
+      if (!identity || !isSameCanvasHostIdentity(request.identity, identity)) {
+        throw new Error('Desktop Canvas preview requires a current owner-bound snapshot.');
+      }
+      const response: unknown = await ipcRenderer.invoke(
+        DESKTOP_CANVAS_CHANNELS.previewVariantResolve,
+        request,
+      );
+      return parseDesktopCanvasPreviewVariantResult(response, request.requestId);
+    },
+    subscribe(identity, listener) {
+      const entry = { identity: parseDesktopCanvasHostIdentity(identity), listener };
+      canvasListeners.add(entry);
+      return () => canvasListeners.delete(entry);
+    },
+  },
+  cut: {
+    async getSnapshot(value) {
+      const identity = parseDesktopCutHostIdentity(value);
+      const response: unknown = await ipcRenderer.invoke(
+        DESKTOP_CUT_CHANNELS.snapshotGet,
+        identity,
+      );
+      const snapshot = parseCutHostRuntimeSnapshot(response);
+      if (!isSameCutHostIdentity(snapshot.identity, identity)) {
+        throw new Error('Desktop Cut snapshot owner identity does not match.');
+      }
+      const key = cutIdentityKey(snapshot.identity);
+      currentCutIdentities.set(key, snapshot.identity);
+      currentCutEventSequences.set(
+        key,
+        preserveDesktopBootstrapEventSequence(currentCutEventSequences.get(key)),
+      );
+      return snapshot;
+    },
+    async execute(value) {
+      const request = parseCutHostRuntimeRequest(value);
+      const identity = currentCutIdentities.get(cutIdentityKey(request.identity));
+      if (!identity || !isSameCutHostIdentity(request.identity, identity)) {
+        throw new Error('Desktop Cut request requires a current owner-bound snapshot.');
+      }
+      const response: unknown = await ipcRenderer.invoke(
+        DESKTOP_CUT_CHANNELS.requestExecute,
+        request,
+      );
+      const result = parseCutHostRuntimeResult(response);
+      if (!isSameCutHostIdentity(result.snapshot.identity, identity)) {
+        throw new Error('Desktop Cut response owner identity does not match.');
+      }
+      return result;
+    },
+    subscribe(identity, listener) {
+      const entry = { identity: parseDesktopCutHostIdentity(identity), listener };
+      cutListeners.add(entry);
+      return () => cutListeners.delete(entry);
     },
   },
   shell: {
@@ -85,6 +478,22 @@ const bridge: OpenNekoDesktopBridge & OpenNekoDesktopShellBridge = {
       );
       const response: unknown = await ipcRenderer.invoke(
         DESKTOP_SHELL_CHANNELS.projectOpenContent,
+        request,
+      );
+      const result = parseDesktopOpenContentResult(response, request.requestId);
+      rememberShellProjection(result.projection);
+      return result;
+    },
+    async open(projectId) {
+      const context = requireShellMutationContext();
+      const request = createDesktopProjectOpenRequest(
+        nextRequestId('desktop-project-catalog-open'),
+        projectId,
+        context.endpointEpoch,
+        context.windowRevision,
+      );
+      const response: unknown = await ipcRenderer.invoke(
+        DESKTOP_SHELL_CHANNELS.projectOpenCatalog,
         request,
       );
       const result = parseDesktopOpenContentResult(response, request.requestId);
@@ -146,8 +555,24 @@ const bridge: OpenNekoDesktopBridge & OpenNekoDesktopShellBridge = {
         context.endpointEpoch,
         expectedWindowRevision,
       );
+      const response: unknown = await ipcRenderer.invoke(DESKTOP_SHELL_CHANNELS.tabClose, request);
+      return rememberShellProjection(
+        parseDesktopShellResponse(response, request.requestId).projection,
+      );
+    },
+  },
+  workbench: {
+    async update(workbench, expectedWindowRevision, expectedWorkbenchRevision) {
+      const context = requireShellMutationContext();
+      const request = createDesktopWorkbenchMutationRequest(
+        nextRequestId('desktop-workbench-update'),
+        context.endpointEpoch,
+        expectedWindowRevision,
+        expectedWorkbenchRevision,
+        workbench,
+      );
       const response: unknown = await ipcRenderer.invoke(
-        DESKTOP_SHELL_CHANNELS.tabClose,
+        DESKTOP_SHELL_CHANNELS.workbenchUpdate,
         request,
       );
       return rememberShellProjection(
@@ -157,6 +582,89 @@ const bridge: OpenNekoDesktopBridge & OpenNekoDesktopShellBridge = {
   },
 };
 
+ipcRenderer.on(
+  DESKTOP_AGENT_CHANNELS.messageEvent,
+  (_event: Electron.IpcRendererEvent, value: unknown): void => {
+    const event = parseDesktopAgentMessageEvent(value);
+    const current = currentAgentEventCursor;
+    if (!current || !isSameDesktopAgentEventConnection(event.connection, current.connection)) {
+      emitAgentMessage({
+        type: 'globalError',
+        message: 'Desktop Agent rejected an event for a stale or foreign connection.',
+      });
+      return;
+    }
+    if (event.sequence !== current.sequence + 1) {
+      emitAgentMessage({
+        type: 'globalError',
+        message: `Desktop Agent event sequence ${event.sequence} does not follow ${current.sequence}.`,
+      });
+      return;
+    }
+    currentAgentEventCursor = {
+      connection: current.connection,
+      sequence: event.sequence,
+    };
+    emitAgentMessage(event.message);
+  },
+);
+
+ipcRenderer.on(
+  DESKTOP_CUT_CHANNELS.projectionEvent,
+  (_event: Electron.IpcRendererEvent, value: unknown): void => {
+    const event = parseCutHostRuntimeProjectionEvent(value);
+    const key = cutIdentityKey(event.snapshot.identity);
+    const identity = currentCutIdentities.get(key);
+    if (!identity || !isSameCutHostIdentity(event.snapshot.identity, identity)) {
+      return;
+    }
+    const sequence = currentCutEventSequences.get(key) ?? 0;
+    if (event.sequence !== sequence + 1) {
+      return;
+    }
+    currentCutEventSequences.set(key, event.sequence);
+    for (const entry of cutListeners) {
+      if (isSameCutHostIdentity(entry.identity, identity)) entry.listener(event);
+    }
+  },
+);
+
+ipcRenderer.on(
+  DESKTOP_RESOURCE_BROWSER_CHANNELS.projectionEvent,
+  (_event: Electron.IpcRendererEvent, value: unknown): void => {
+    const event = parseResourceBrowserProjectionEvent(value);
+    const identity = currentResourceIdentity;
+    if (!identity || !isSameResourceBrowserIdentity(event.projection.identity, identity)) {
+      return;
+    }
+    if (event.sequence !== currentResourceEventSequence + 1) {
+      return;
+    }
+    currentResourceEventSequence = event.sequence;
+    for (const listener of resourceListeners) listener(event);
+  },
+);
+
+ipcRenderer.on(
+  DESKTOP_CANVAS_CHANNELS.projectionEvent,
+  (_event: Electron.IpcRendererEvent, value: unknown): void => {
+    const event: CanvasHostProjectionEvent = parseCanvasHostProjectionEvent(value);
+    const key = canvasIdentityKey(event.snapshot.identity);
+    const identity = currentCanvasIdentities.get(key);
+    if (!identity || !isSameCanvasHostIdentity(event.snapshot.identity, identity)) {
+      return;
+    }
+    const sequence = currentCanvasEventSequences.get(key) ?? 0;
+    if (event.sequence !== sequence + 1) {
+      return;
+    }
+    currentCanvasEventSequences.set(key, event.sequence);
+    for (const entry of canvasListeners) {
+      if (isSameCanvasHostIdentity(entry.identity, identity)) entry.listener(event);
+    }
+  },
+);
+
 contextBridge.exposeInMainWorld('openNekoDesktop', bridge);
 
 function nextRequestId(prefix: string): string {
@@ -164,15 +672,14 @@ function nextRequestId(prefix: string): string {
   return `${prefix}-${Date.now()}-${requestSequence}`;
 }
 
-function rememberShellProjection<T extends {
-  readonly endpointEpoch: string;
-  readonly projectionRevision: number;
-  readonly window: { readonly revision: number };
-}>(projection: T): T {
-  latestShellProjection = advanceDesktopShellProjectionCursor(
-    latestShellProjection,
-    projection,
-  );
+function rememberShellProjection<
+  T extends {
+    readonly endpointEpoch: string;
+    readonly projectionRevision: number;
+    readonly window: { readonly revision: number };
+  },
+>(projection: T): T {
+  latestShellProjection = advanceDesktopShellProjectionCursor(latestShellProjection, projection);
   return projection;
 }
 
@@ -184,4 +691,68 @@ function requireShellMutationContext(): {
     throw new Error('Desktop Shell mutation requires an authoritative snapshot.');
   }
   return latestShellProjection;
+}
+
+function emitAgentMessage(
+  message: Parameters<Parameters<OpenNekoDesktopAgentBridge['agent']['subscribe']>[0]>[0],
+): void {
+  for (const listener of agentListeners) listener(message);
+}
+
+function describeError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function requireCurrentResourceIdentity(identity: ResourceBrowserIdentity): void {
+  const current = currentResourceIdentity;
+  if (!current || !isSameResourceBrowserIdentity(identity, current)) {
+    throw new Error('Desktop Resource Browser request requires a current owner-bound snapshot.');
+  }
+}
+
+function canvasIdentityKey(identity: CanvasHostRuntimeIdentity): string {
+  return [
+    identity.windowId,
+    identity.viewId,
+    String(identity.viewEpoch),
+    identity.documentId,
+    identity.sessionId,
+    identity.endpointEpoch,
+  ].join(':');
+}
+
+function cutIdentityKey(identity: CutHostRuntimeIdentity): string {
+  return [
+    identity.windowId,
+    identity.viewId,
+    String(identity.viewEpoch),
+    identity.documentId,
+    identity.sessionId,
+    identity.endpointEpoch,
+  ].join(':');
+}
+
+function previewIdentityKey(identity: PreviewRuntimeIdentity): string {
+  return [
+    identity.windowId,
+    identity.sessionId,
+    identity.endpointEpoch,
+  ].join(':');
+}
+
+function isSamePreviewIdentity(
+  left: PreviewRuntimeIdentity,
+  right: PreviewRuntimeIdentity,
+): boolean {
+  return (
+    left.projectId === right.projectId &&
+    left.workspaceId === right.workspaceId &&
+    left.windowId === right.windowId &&
+    left.viewId === right.viewId &&
+    left.viewEpoch === right.viewEpoch &&
+    left.documentId === right.documentId &&
+    left.sessionId === right.sessionId &&
+    left.endpointEpoch === right.endpointEpoch &&
+    left.revision === right.revision
+  );
 }

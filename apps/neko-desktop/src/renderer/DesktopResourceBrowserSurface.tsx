@@ -1,0 +1,77 @@
+import { lazy, Suspense, useMemo } from 'react';
+import { useTranslation } from '@neko/shared/i18n/react';
+import type {
+  DesktopProjectCatalogItem,
+  DesktopProjectTabProjection,
+  DesktopShellProjection,
+} from '../shared/shell-contract';
+import { createDesktopResourceBrowserIdentity } from '../shared/resource-browser-bridge-contract';
+import { createElectronResourceBrowserHostRuntime } from './desktop-resource-browser-host-runtime';
+
+const ResourceBrowserRoot = lazy(async () => {
+  const module = await import('neko-assets/resource-browser/root');
+  return { default: module.ResourceBrowserRoot };
+});
+
+export function DesktopResourceBrowserSurface({
+  onOpenCanvasDocument,
+  project,
+  projection,
+  tab,
+}: {
+  readonly onOpenCanvasDocument: (documentId: string, presentation: 'main' | 'side') => void;
+  readonly project: DesktopProjectCatalogItem;
+  readonly projection: DesktopShellProjection;
+  readonly tab: DesktopProjectTabProjection;
+}): JSX.Element {
+  const { locale, t } = useTranslation();
+  const runtime = useMemo(
+    () =>
+      createElectronResourceBrowserHostRuntime({
+        bridge: window.openNekoDesktop,
+        identity: createDesktopResourceBrowserIdentity({
+          projectId: project.projectId,
+          workspaceId: project.workspaceId,
+          windowId: projection.window.windowId,
+          projectViewId: tab.viewId,
+          projectViewEpoch: tab.viewEpoch,
+          endpointEpoch: projection.endpointEpoch,
+        }),
+      }),
+    [
+      project.projectId,
+      project.workspaceId,
+      projection.endpointEpoch,
+      projection.window.windowId,
+      tab.viewEpoch,
+      tab.viewId,
+    ],
+  );
+  return (
+    <div className="desktop-resource-browser-root" data-owner-root="assets">
+      <Suspense
+        fallback={
+          <div className="resource-dock-loading" role="status">
+            {t('workspace.assets.loading')}
+          </div>
+        }
+      >
+        <ResourceBrowserRoot
+          runtime={runtime}
+          locale={locale}
+          previewTarget={{
+            viewId: `preview:${tab.viewId}:temporary`,
+            presentation: 'temporary',
+            expectedWorkbenchRevision: projection.window.workbench.revision,
+          }}
+          onOpenCanvas={(item, presentation) => {
+            if (item.facet === 'entities' || item.locator.kind !== 'workspace-file') {
+              throw new Error('Canvas documents require a workspace-file ContentLocator.');
+            }
+            onOpenCanvasDocument(item.locator.path, presentation);
+          }}
+        />
+      </Suspense>
+    </div>
+  );
+}

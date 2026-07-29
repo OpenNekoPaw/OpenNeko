@@ -18,6 +18,7 @@ import type {
   HostPathPort,
   HostPathResolveRequest,
   HostRuntimeInfo,
+  HostSecretPort,
   HostWorkspacePort,
   HostWorkspaceSnapshot,
   HostWorkspaceTrust,
@@ -39,6 +40,7 @@ export interface ElectronNekoHostPortsOptions {
   readonly env?: Readonly<Record<string, string | undefined>>;
   readonly openExternal?: (uri: string) => Promise<void>;
   readonly revealPath?: (targetPath: string) => void;
+  readonly secrets?: HostSecretPort;
 }
 
 export interface ElectronNekoHostPorts extends NekoHostPorts {
@@ -74,6 +76,7 @@ export function createElectronNekoHostPorts(
         authorizedReadRoots: workspaceRoot ? [workspaceRoot] : [],
       }),
     },
+    ...(options.secrets === undefined ? {} : { secrets: options.secrets }),
     ...(options.openExternal || options.revealPath
       ? {
           external: createDesktopExternalPort({
@@ -103,9 +106,7 @@ function createDesktopPathVariables(input: {
   return variables;
 }
 
-function createDesktopEnvironmentPort(
-  options: ElectronNekoHostPortsOptions,
-): HostEnvironmentPort {
+function createDesktopEnvironmentPort(options: ElectronNekoHostPortsOptions): HostEnvironmentPort {
   return {
     getHostIdentity(): NekoHostIdentity {
       return {

@@ -1,4 +1,8 @@
 import type { HostDiagnostic } from '@neko/host/ports';
+import {
+  parseDesktopWorkbenchLayout,
+  type DesktopWorkbenchLayoutProjection,
+} from './workbench-contract';
 
 export const DESKTOP_SHELL_CONTRACT_VERSION = 1 as const;
 
@@ -6,10 +10,12 @@ export const DESKTOP_SHELL_CHANNELS = {
   snapshotGet: 'openneko:desktop:shell:snapshot:get',
   projectionEvent: 'openneko:desktop:shell:projection:event',
   projectOpenContent: 'openneko:desktop:project:content:open',
+  projectOpenCatalog: 'openneko:desktop:project:catalog:open',
   projectRequestProfile: 'openneko:desktop:project:profile:request',
   homeActivate: 'openneko:desktop:home:activate',
   tabActivate: 'openneko:desktop:tab:activate',
   tabClose: 'openneko:desktop:tab:close',
+  workbenchUpdate: 'openneko:desktop:workbench:update',
 } as const;
 
 export type DesktopProjectProfile = 'content' | 'character' | 'world';
@@ -34,6 +40,10 @@ export interface DesktopShellRequest {
 export interface DesktopWindowMutationRequest extends DesktopShellRequest {
   readonly expectedEndpointEpoch: string;
   readonly expectedWindowRevision: number;
+}
+
+export interface DesktopProjectOpenRequest extends DesktopWindowMutationRequest {
+  readonly projectId: string;
 }
 
 export interface DesktopProjectCatalogItem {
@@ -66,6 +76,7 @@ export interface DesktopWindowShellProjection {
   readonly revision: number;
   readonly activeTarget: DesktopWindowActiveTarget;
   readonly tabs: readonly DesktopProjectTabProjection[];
+  readonly workbench: DesktopWorkbenchLayoutProjection;
 }
 
 export interface DesktopAttentionProjection {
@@ -74,12 +85,90 @@ export interface DesktopAttentionProjection {
   readonly running: number;
 }
 
-export interface DesktopDomainCapabilityProjection {
+export type DesktopAgentHomeAttentionStatus =
+  | 'none'
+  | 'needs-input'
+  | 'needs-review'
+  | 'running';
+
+export type DesktopAgentHomeActivityKind =
+  | 'conversation-updated'
+  | 'turn-running'
+  | 'turn-completed'
+  | 'turn-cancelled'
+  | 'turn-failed'
+  | 'tool-confirmation-required';
+
+export interface DesktopAgentHomeNavigationIdentity {
+  readonly projectId: string;
+  readonly workspaceId: string;
+  readonly conversationId: string;
+}
+
+export interface DesktopAgentHomeActivitySummary {
+  readonly kind: DesktopAgentHomeActivityKind;
+  readonly occurredAt: string;
+  readonly turnId?: string;
+  readonly runId?: string;
+  readonly toolCallId?: string;
+  readonly generationJob?: {
+    readonly jobId: string;
+    readonly revision: number;
+    readonly phase: string;
+  };
+}
+
+export interface DesktopAgentHomeConversationSummary {
+  readonly navigation: DesktopAgentHomeNavigationIdentity;
+  readonly title: string;
+  readonly updatedAt: string;
+  readonly attention: DesktopAgentHomeAttentionStatus;
+  readonly lastActivity: DesktopAgentHomeActivitySummary;
+}
+
+export interface DesktopAgentHomeProjection {
+  readonly revision: number;
+  readonly conversations: readonly DesktopAgentHomeConversationSummary[];
+  readonly attention: DesktopAttentionProjection;
+}
+
+export type DesktopReadyDomainCapabilityProjection =
+  | {
+      readonly surface: 'agent';
+      readonly status: 'ready';
+      readonly ownerSlice: 'P1.3';
+    }
+  | {
+      readonly surface: 'media-library';
+      readonly status: 'ready';
+      readonly ownerSlice: 'P1.4';
+    }
+  | {
+      readonly surface: 'canvas';
+      readonly status: 'ready';
+      readonly ownerSlice: 'P1.4';
+    }
+  | {
+      readonly surface: 'preview';
+      readonly status: 'ready';
+      readonly ownerSlice: 'P1.5';
+    }
+  | {
+      readonly surface: 'cut';
+      readonly status: 'ready';
+      readonly ownerSlice: 'P1.5';
+    };
+
+export interface DesktopUnavailableDomainCapabilityProjection {
   readonly surface: DesktopDomainSurface;
   readonly status: 'unavailable';
   readonly ownerSlice: 'P1.3' | 'P1.4' | 'P1.5' | 'P1.6';
   readonly diagnosticCode: 'desktop-domain-surface-unavailable';
 }
+
+export type DesktopDomainCapabilityProjection =
+  | DesktopReadyDomainCapabilityProjection
+  | DesktopUnavailableDomainCapabilityProjection;
 
 export interface DesktopShellProjection {
   readonly schemaVersion: typeof DESKTOP_SHELL_CONTRACT_VERSION;
@@ -88,7 +177,7 @@ export interface DesktopShellProjection {
   readonly projectionRevision: number;
   readonly catalog: DesktopProjectCatalogProjection;
   readonly window: DesktopWindowShellProjection;
-  readonly attention: DesktopAttentionProjection;
+  readonly agentHome: DesktopAgentHomeProjection;
   readonly domains: readonly DesktopDomainCapabilityProjection[];
 }
 
@@ -120,6 +209,11 @@ export interface DesktopTabMutationRequest extends DesktopShellRequest {
   readonly expectedWindowRevision: number;
 }
 
+export interface DesktopWorkbenchMutationRequest extends DesktopWindowMutationRequest {
+  readonly expectedWorkbenchRevision: number;
+  readonly workbench: DesktopWorkbenchLayoutProjection;
+}
+
 export interface DesktopShellProjectionEvent {
   readonly schemaVersion: typeof DESKTOP_SHELL_CONTRACT_VERSION;
   readonly applicationInstanceId: string;
@@ -136,12 +230,20 @@ export interface OpenNekoDesktopShellBridge {
   };
   readonly projects: {
     openContent(): Promise<DesktopOpenContentResult>;
+    open(projectId: string): Promise<DesktopOpenContentResult>;
     requestProfile(profile: DesktopUnavailableProjectProfile): Promise<DesktopProfileRequestResult>;
   };
   readonly tabs: {
     activateHome(expectedWindowRevision: number): Promise<DesktopShellProjection>;
     activate(tabId: string, expectedWindowRevision: number): Promise<DesktopShellProjection>;
     close(tabId: string, expectedWindowRevision: number): Promise<DesktopShellProjection>;
+  };
+  readonly workbench: {
+    update(
+      workbench: DesktopWorkbenchLayoutProjection,
+      expectedWindowRevision: number,
+      expectedWorkbenchRevision: number,
+    ): Promise<DesktopShellProjection>;
   };
 }
 
@@ -150,7 +252,9 @@ export class DesktopShellContractError extends Error {
     | 'invalid-desktop-shell-payload'
     | 'unsupported-desktop-shell-version'
     | 'desktop-shell-request-mismatch'
-    | 'desktop-shell-stale-revision';
+    | 'desktop-shell-stale-revision'
+    | 'desktop-shell-project-not-found'
+    | 'desktop-shell-project-identity-mismatch';
 
   constructor(
     code: DesktopShellContractError['code'],
@@ -217,6 +321,51 @@ export function createDesktopWindowMutationRequest(
   };
 }
 
+export function createDesktopWorkbenchMutationRequest(
+  requestId: string,
+  expectedEndpointEpoch: string,
+  expectedWindowRevision: number,
+  expectedWorkbenchRevision: number,
+  workbench: DesktopWorkbenchLayoutProjection,
+): DesktopWorkbenchMutationRequest {
+  const request = createDesktopWindowMutationRequest(
+    requestId,
+    expectedEndpointEpoch,
+    expectedWindowRevision,
+  );
+  const parsedWorkbench = parseDesktopWorkbenchLayout(workbench);
+  const expectedRevision = requireNonNegativeInteger(
+    expectedWorkbenchRevision,
+    'Desktop expected Workbench revision must be a non-negative integer.',
+  );
+  if (parsedWorkbench.revision !== expectedRevision + 1) {
+    throw invalidPayload(
+      'Desktop Workbench mutation must advance the expected Workbench revision exactly once.',
+    );
+  }
+  return {
+    ...request,
+    expectedWorkbenchRevision: expectedRevision,
+    workbench: parsedWorkbench,
+  };
+}
+
+export function createDesktopProjectOpenRequest(
+  requestId: string,
+  projectId: string,
+  expectedEndpointEpoch: string,
+  expectedWindowRevision: number,
+): DesktopProjectOpenRequest {
+  return {
+    ...createDesktopWindowMutationRequest(
+      requestId,
+      expectedEndpointEpoch,
+      expectedWindowRevision,
+    ),
+    projectId: requireNonEmptyString(projectId, 'Desktop Project identity is required.'),
+  };
+}
+
 export function parseDesktopShellRequest(value: unknown): DesktopShellRequest {
   const record = requireRecord(value, 'Desktop Shell request must be an object.');
   requireVersion(record['schemaVersion']);
@@ -266,6 +415,34 @@ export function parseDesktopWindowMutationRequest(
       record['expectedWindowRevision'],
       'Desktop expected Window revision must be a non-negative integer.',
     ),
+  );
+}
+
+export function parseDesktopProjectOpenRequest(value: unknown): DesktopProjectOpenRequest {
+  const record = requireRecord(value, 'Desktop Project open request must be an object.');
+  const request = parseDesktopWindowMutationRequest(record);
+  return createDesktopProjectOpenRequest(
+    request.requestId,
+    requireNonEmptyString(record['projectId'], 'Desktop Project identity is required.'),
+    request.expectedEndpointEpoch,
+    request.expectedWindowRevision,
+  );
+}
+
+export function parseDesktopWorkbenchMutationRequest(
+  value: unknown,
+): DesktopWorkbenchMutationRequest {
+  const record = requireRecord(value, 'Desktop Workbench mutation request must be an object.');
+  const request = parseDesktopWindowMutationRequest(record);
+  return createDesktopWorkbenchMutationRequest(
+    request.requestId,
+    request.expectedEndpointEpoch,
+    request.expectedWindowRevision,
+    requireNonNegativeInteger(
+      record['expectedWorkbenchRevision'],
+      'Desktop expected Workbench revision must be a non-negative integer.',
+    ),
+    parseDesktopWorkbenchLayout(record['workbench']),
   );
 }
 
@@ -338,9 +515,13 @@ export function parseDesktopShellProjection(value: unknown): DesktopShellProject
     'Desktop Project catalog projection is required.',
   );
   const windowRecord = requireRecord(record['window'], 'Desktop Window projection is required.');
+  const agentHomeRecord = requireRecord(
+    record['agentHome'],
+    'Desktop Agent Home projection is required.',
+  );
   const attentionRecord = requireRecord(
-    record['attention'],
-    'Desktop Attention projection is required.',
+    agentHomeRecord['attention'],
+    'Desktop Agent Home Attention projection is required.',
   );
   const projects = requireArray(
     catalogRecord['projects'],
@@ -351,6 +532,14 @@ export function parseDesktopShellProjection(value: unknown): DesktopShellProject
     'Desktop Project Tabs must be an array.',
   ).map(parseProjectTab);
   const activeTarget = parseActiveTarget(windowRecord['activeTarget']);
+  const workbench = parseDesktopWorkbenchLayout(windowRecord['workbench']);
+  const windowId = requireNonEmptyString(
+    windowRecord['windowId'],
+    'Desktop Window identity is required.',
+  );
+  if (workbench.windowId !== windowId) {
+    throw invalidPayload('Desktop Workbench projection belongs to another Window.');
+  }
   if (
     activeTarget.kind === 'project' &&
     !tabs.some((tab) => tab.tabId === activeTarget.tabId)
@@ -360,6 +549,18 @@ export function parseDesktopShellProjection(value: unknown): DesktopShellProject
   const projectIds = new Set(projects.map((project) => project.projectId));
   if (tabs.some((tab) => !projectIds.has(tab.projectId))) {
     throw invalidPayload('Desktop Project Tab references an unknown Project.');
+  }
+  if (workbench.main.views.some((view) => !projectIds.has(view.projectId))) {
+    throw invalidPayload('Desktop Workbench View references an unknown Project.');
+  }
+  if (activeTarget.kind === 'project') {
+    const activeTab = tabs.find((tab) => tab.tabId === activeTarget.tabId);
+    if (
+      !activeTab ||
+      workbench.main.views.some((view) => view.projectId !== activeTab.projectId)
+    ) {
+      throw invalidPayload('Desktop Workbench View belongs to another active Project.');
+    }
   }
   return {
     schemaVersion: DESKTOP_SHELL_CONTRACT_VERSION,
@@ -383,36 +584,158 @@ export function parseDesktopShellProjection(value: unknown): DesktopShellProject
       projects,
     },
     window: {
-      windowId: requireNonEmptyString(
-        windowRecord['windowId'],
-        'Desktop Window identity is required.',
-      ),
+      windowId,
       revision: requireNonNegativeInteger(
         windowRecord['revision'],
         'Desktop Window revision must be a non-negative integer.',
       ),
       activeTarget,
       tabs,
+      workbench,
     },
-    attention: {
-      needsInput: requireNonNegativeInteger(
-        attentionRecord['needsInput'],
-        'Desktop Attention needsInput count is invalid.',
+    agentHome: {
+      revision: requireNonNegativeInteger(
+        agentHomeRecord['revision'],
+        'Desktop Agent Home revision must be a non-negative integer.',
       ),
-      needsReview: requireNonNegativeInteger(
-        attentionRecord['needsReview'],
-        'Desktop Attention needsReview count is invalid.',
-      ),
-      running: requireNonNegativeInteger(
-        attentionRecord['running'],
-        'Desktop Attention running count is invalid.',
-      ),
+      conversations: requireArray(
+        agentHomeRecord['conversations'],
+        'Desktop Agent Home conversations must be an array.',
+      ).map(parseAgentHomeConversationSummary),
+      attention: {
+        needsInput: requireNonNegativeInteger(
+          attentionRecord['needsInput'],
+          'Desktop Attention needsInput count is invalid.',
+        ),
+        needsReview: requireNonNegativeInteger(
+          attentionRecord['needsReview'],
+          'Desktop Attention needsReview count is invalid.',
+        ),
+        running: requireNonNegativeInteger(
+          attentionRecord['running'],
+          'Desktop Attention running count is invalid.',
+        ),
+      },
     },
     domains: requireArray(
       record['domains'],
       'Desktop domain capability projection must be an array.',
-    ).map(parseDomainCapability),
+    ).map(parseDesktopDomainCapabilityProjection),
   };
+}
+
+function parseAgentHomeConversationSummary(
+  value: unknown,
+): DesktopAgentHomeConversationSummary {
+  const record = requireRecord(
+    value,
+    'Desktop Agent Home conversation summary must be an object.',
+  );
+  const navigation = requireRecord(
+    record['navigation'],
+    'Desktop Agent Home navigation identity is required.',
+  );
+  const lastActivity = requireRecord(
+    record['lastActivity'],
+    'Desktop Agent Home last activity is required.',
+  );
+  const attention = record['attention'];
+  if (
+    attention !== 'none' &&
+    attention !== 'needs-input' &&
+    attention !== 'needs-review' &&
+    attention !== 'running'
+  ) {
+    throw invalidPayload('Desktop Agent Home attention status is invalid.');
+  }
+  const kind = lastActivity['kind'];
+  if (
+    kind !== 'conversation-updated' &&
+    kind !== 'turn-running' &&
+    kind !== 'turn-completed' &&
+    kind !== 'turn-cancelled' &&
+    kind !== 'turn-failed' &&
+    kind !== 'tool-confirmation-required'
+  ) {
+    throw invalidPayload('Desktop Agent Home activity kind is invalid.');
+  }
+  return {
+    navigation: {
+      projectId: requireNonEmptyString(
+        navigation['projectId'],
+        'Desktop Agent Home Project identity is required.',
+      ),
+      workspaceId: requireNonEmptyString(
+        navigation['workspaceId'],
+        'Desktop Agent Home Workspace identity is required.',
+      ),
+      conversationId: requireNonEmptyString(
+        navigation['conversationId'],
+        'Desktop Agent Home Conversation identity is required.',
+      ),
+    },
+    title: requireNonEmptyString(
+      record['title'],
+      'Desktop Agent Home conversation title is required.',
+    ),
+    updatedAt: requireIsoDateString(
+      record['updatedAt'],
+      'Desktop Agent Home conversation updatedAt is invalid.',
+    ),
+    attention,
+    lastActivity: {
+      kind,
+      occurredAt: requireIsoDateString(
+        lastActivity['occurredAt'],
+        'Desktop Agent Home activity occurredAt is invalid.',
+      ),
+      ...readOptionalIdentity(lastActivity, 'turnId'),
+      ...readOptionalIdentity(lastActivity, 'runId'),
+      ...readOptionalIdentity(lastActivity, 'toolCallId'),
+      ...parseOptionalGenerationJob(lastActivity['generationJob']),
+    },
+  };
+}
+
+function parseOptionalGenerationJob(
+  value: unknown,
+): Pick<DesktopAgentHomeActivitySummary, 'generationJob'> | Record<string, never> {
+  if (value === undefined) return {};
+  const record = requireRecord(
+    value,
+    'Desktop Agent Home GenerationJob summary must be an object.',
+  );
+  return {
+    generationJob: {
+      jobId: requireNonEmptyString(
+        record['jobId'],
+        'Desktop Agent Home GenerationJob identity is required.',
+      ),
+      revision: requireNonNegativeInteger(
+        record['revision'],
+        'Desktop Agent Home GenerationJob revision is invalid.',
+      ),
+      phase: requireNonEmptyString(
+        record['phase'],
+        'Desktop Agent Home GenerationJob phase is required.',
+      ),
+    },
+  };
+}
+
+function readOptionalIdentity(
+  record: Record<string, unknown>,
+  key: 'turnId' | 'runId' | 'toolCallId',
+): Partial<Record<'turnId' | 'runId' | 'toolCallId', string>> {
+  const value = record[key];
+  if (value === undefined) return {};
+  return { [key]: requireNonEmptyString(value, `Desktop Agent Home ${key} is invalid.`) };
+}
+
+function requireIsoDateString(value: unknown, message: string): string {
+  const date = requireNonEmptyString(value, message);
+  if (Number.isNaN(Date.parse(date))) throw invalidPayload(message);
+  return date;
 }
 
 export function parseDesktopShellProjectionEvent(
@@ -506,10 +829,36 @@ function parseActiveTarget(value: unknown): DesktopWindowActiveTarget {
   throw invalidPayload('Desktop Window active target is invalid.');
 }
 
-function parseDomainCapability(value: unknown): DesktopDomainCapabilityProjection {
+export function parseDesktopDomainCapabilityProjection(
+  value: unknown,
+): DesktopDomainCapabilityProjection {
   const record = requireRecord(value, 'Desktop domain capability must be an object.');
   const surface = requireDomainSurface(record['surface']);
   const ownerSlice = requireOwnerSlice(record['ownerSlice']);
+  if (record['status'] === 'ready') {
+    const isReadyCapability =
+      (surface === 'agent' && ownerSlice === 'P1.3') ||
+      (surface === 'media-library' && ownerSlice === 'P1.4') ||
+      (surface === 'canvas' && ownerSlice === 'P1.4') ||
+      (surface === 'cut' && ownerSlice === 'P1.5') ||
+      (surface === 'preview' && ownerSlice === 'P1.5');
+    if (!isReadyCapability) {
+      throw invalidPayload(
+        `Desktop domain capability '${surface}' cannot be ready in owner slice '${ownerSlice}'.`,
+      );
+    }
+    if (surface === 'agent') return { surface, status: 'ready', ownerSlice: 'P1.3' };
+    if (surface === 'media-library') {
+      return { surface, status: 'ready', ownerSlice: 'P1.4' };
+    }
+    if (surface === 'canvas') {
+      return { surface, status: 'ready', ownerSlice: 'P1.4' };
+    }
+    if (surface === 'cut') {
+      return { surface, status: 'ready', ownerSlice: 'P1.5' };
+    }
+    return { surface, status: 'ready', ownerSlice: 'P1.5' };
+  }
   if (
     record['status'] !== 'unavailable' ||
     record['diagnosticCode'] !== 'desktop-domain-surface-unavailable'

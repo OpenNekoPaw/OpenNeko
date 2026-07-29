@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
   createDesktopProfileRequest,
+  createDesktopProjectOpenRequest,
   createDesktopTabMutationRequest,
   DesktopShellContractError,
   parseDesktopShellProjection,
   parseDesktopShellProjectionEvent,
 } from './shell-contract';
+import { createDefaultDesktopWorkbenchLayout } from './workbench-contract';
 
 describe('Desktop Shell contract', () => {
   it('creates fixed profile and revision-bound Tab requests', () => {
@@ -22,6 +24,20 @@ describe('Desktop Shell contract', () => {
       expectedEndpointEpoch: 'app-1:window-1:1',
       tabId: 'tab-1',
       expectedWindowRevision: 4,
+    });
+    expect(
+      createDesktopProjectOpenRequest(
+        'request-3',
+        'content:workspace-1',
+        'app-1:window-1:1',
+        5,
+      ),
+    ).toEqual({
+      schemaVersion: 1,
+      requestId: 'request-3',
+      expectedEndpointEpoch: 'app-1:window-1:1',
+      expectedWindowRevision: 5,
+      projectId: 'content:workspace-1',
     });
   });
 
@@ -67,6 +83,67 @@ describe('Desktop Shell contract', () => {
       }),
     ).toThrowError(DesktopShellContractError);
   });
+
+  it('accepts ready domains only in their owning Phase 1 slices', () => {
+    expect(
+      parseDesktopShellProjection({
+        ...validProjection(),
+        domains: [
+          {
+            surface: 'agent',
+            status: 'ready',
+            ownerSlice: 'P1.3',
+          },
+        ],
+      }).domains,
+    ).toEqual([{ surface: 'agent', status: 'ready', ownerSlice: 'P1.3' }]);
+    expect(
+      parseDesktopShellProjection({
+        ...validProjection(),
+        domains: [
+          {
+            surface: 'media-library',
+            status: 'ready',
+            ownerSlice: 'P1.4',
+          },
+        ],
+      }).domains,
+    ).toEqual([
+      { surface: 'media-library', status: 'ready', ownerSlice: 'P1.4' },
+    ]);
+    expect(
+      parseDesktopShellProjection({
+        ...validProjection(),
+        domains: [
+          {
+            surface: 'canvas',
+            status: 'ready',
+            ownerSlice: 'P1.4',
+          },
+        ],
+      }).domains,
+    ).toEqual([{ surface: 'canvas', status: 'ready', ownerSlice: 'P1.4' }]);
+    expect(
+      parseDesktopShellProjection({
+        ...validProjection(),
+        domains: [
+          {
+            surface: 'cut',
+            status: 'ready',
+            ownerSlice: 'P1.5',
+          },
+          {
+            surface: 'preview',
+            status: 'ready',
+            ownerSlice: 'P1.5',
+          },
+        ],
+      }).domains,
+    ).toEqual([
+      { surface: 'cut', status: 'ready', ownerSlice: 'P1.5' },
+      { surface: 'preview', status: 'ready', ownerSlice: 'P1.5' },
+    ]);
+  });
 });
 
 function validProjection() {
@@ -100,8 +177,13 @@ function validProjection() {
           viewEpoch: 1,
         },
       ],
+      workbench: createDefaultDesktopWorkbenchLayout('window-1'),
     },
-    attention: { needsInput: 0, needsReview: 0, running: 0 },
+    agentHome: {
+      revision: 0,
+      conversations: [],
+      attention: { needsInput: 0, needsReview: 0, running: 0 },
+    },
     domains: [
       {
         surface: 'agent' as const,

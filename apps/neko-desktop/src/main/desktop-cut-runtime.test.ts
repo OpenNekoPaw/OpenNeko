@@ -1,0 +1,890 @@
+import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import * as path from 'node:path';
+import { pathToFileURL } from 'node:url';
+import {
+  CUT_HOST_RUNTIME_ROUTES,
+  CUT_HOST_RUNTIME_VERSION,
+  DEFAULT_CUT_HOST_PRESENTATION,
+  applyCutCommand,
+  createOtioTimeline,
+  parseOtio,
+  serializeOtio,
+  type CutHostRuntimeIdentity,
+} from '@neko-cut/domain';
+import { ConsoleLogger } from '@neko/shared/logger';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { createElectronNekoHostPorts } from './electron-host-ports';
+import { DesktopCutRuntime } from './desktop-cut-runtime';
+import { DesktopMediaDescriptorRegistry } from './desktop-media-protocol';
+import {
+  DESKTOP_SHELL_CONTRACT_VERSION,
+  type DesktopShellProjection,
+} from '../shared/shell-contract';
+import {
+  createDefaultDesktopWorkbenchLayout,
+  type DesktopWorkbenchLayoutProjection,
+} from '../shared/workbench-contract';
+
+const roots: string[] = [];
+
+afterEach(async () => {
+  for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true });
+});
+
+describe('DesktopCutRuntime', () => {
+  it('focuses one existing Cut View when the same OTIO document is opened again', async () => {
+    const workspacePath = await realpath(await mkdtemp(path.join(tmpdir(), 'openneko-cut-focus-')));
+    roots.push(workspacePath);
+    const documentId = 'cuts/story.otio';
+    const documentPath = path.join(workspacePath, documentId);
+    await mkdir(path.dirname(documentPath), { recursive: true });
+    await writeFile(
+      documentPath,
+      serializeOtio(
+        createOtioTimeline('Story', {
+          profile: '1080p30',
+          editRateNumerator: 30,
+          editRateDenominator: 1,
+          width: 1920,
+          height: 1080,
+        }),
+      ),
+    );
+    const identity = {
+      projectId: 'project-1',
+      workspaceId: 'workspace-1',
+      windowId: 'window-1',
+      viewId: 'project-view-1',
+      viewEpoch: 1,
+      endpointEpoch: 'endpoint-1',
+    };
+    const workspace = {
+      workspaceId: 'workspace-1',
+      workspacePath,
+      displayName: 'Fixture',
+      locator: { kind: 'relative' as const, value: '.' },
+    };
+    let workbench = createDefaultDesktopWorkbenchLayout('window-1');
+    const project = {
+      projectId: 'project-1',
+      workspaceId: 'workspace-1',
+      profile: 'content' as const,
+      displayName: 'Fixture',
+      createdAt: '2026-07-29T00:00:00.000Z',
+      updatedAt: '2026-07-29T00:00:00.000Z',
+    };
+    const getProjection = (): DesktopShellProjection => ({
+      schemaVersion: DESKTOP_SHELL_CONTRACT_VERSION,
+      applicationInstanceId: 'application-1',
+      endpointEpoch: 'endpoint-1',
+      projectionRevision: workbench.revision,
+      catalog: {
+        revision: 1,
+        projects: [project],
+      },
+      window: {
+        windowId: 'window-1',
+        revision: workbench.revision,
+        activeTarget: { kind: 'project', tabId: 'tab-1' },
+        tabs: [
+          {
+            tabId: 'tab-1',
+            projectId: 'project-1',
+            viewId: 'project-view-1',
+            viewEpoch: 1,
+          },
+        ],
+        workbench,
+      },
+      agentHome: {
+        revision: 0,
+        conversations: [],
+        attention: { needsInput: 0, needsReview: 0, running: 0 },
+      },
+      domains: [],
+    });
+    const updateWorkbench = vi.fn(
+      async (
+        _windowId: string,
+        _endpointEpoch: string,
+        _windowRevision: number,
+        _workbenchRevision: number,
+        next: DesktopWorkbenchLayoutProjection,
+      ) => {
+        workbench = next;
+        return getProjection();
+      },
+    );
+    const runtime = new DesktopCutRuntime({
+      shell: {
+        getProjection: vi.fn(async () => getProjection()),
+        updateWorkbench,
+        resolveAgentWorkspace: vi.fn(async () => workspace),
+        resolveCutViewGrant: vi.fn(),
+      },
+      host: createElectronNekoHostPorts({
+        homedir: workspacePath,
+        nekoHome: path.join(workspacePath, '.neko-home'),
+        workspaceRoot: workspacePath,
+        version: 'test',
+        logger: new ConsoleLogger('DesktopCutRuntimeFocusTest'),
+      }),
+      mediaRegistry: new DesktopMediaDescriptorRegistry(),
+      resolveWebContentsId: () => 10,
+    });
+    const item = {
+      resourceId: 'resource-story',
+      facet: 'files' as const,
+      role: 'content' as const,
+      depth: 0,
+      kind: 'file' as const,
+      label: 'story.otio',
+      locator: { kind: 'workspace-file' as const, path: documentId },
+      capabilities: ['open-cut'] as const,
+    };
+
+    await runtime.open({ identity, item, absolutePath: documentPath });
+    const firstViewId = workbench.main.activeViewId;
+    await runtime.open({ identity, item, absolutePath: documentPath });
+
+    expect(firstViewId).toMatch(/^cut:project-view-1:/u);
+    expect(workbench.main.activeViewId).toBe(firstViewId);
+    expect(workbench.main.views).toHaveLength(1);
+    expect(workbench.timeline.visible).toBe(true);
+
+    const secondDocumentId = 'cuts/alternate.otio';
+    const secondDocumentPath = path.join(workspacePath, secondDocumentId);
+    await writeFile(
+      secondDocumentPath,
+      serializeOtio(
+        createOtioTimeline('Alternate', {
+          profile: '1080p30',
+          editRateNumerator: 30,
+          editRateDenominator: 1,
+          width: 1920,
+          height: 1080,
+        }),
+      ),
+    );
+    const secondItem = {
+      ...item,
+      resourceId: 'resource-alternate',
+      label: 'alternate.otio',
+      locator: { kind: 'workspace-file' as const, path: secondDocumentId },
+    };
+    await runtime.open({
+      identity,
+      item: secondItem,
+      absolutePath: secondDocumentPath,
+    });
+    const secondViewId = workbench.main.activeViewId;
+    expect(secondViewId).not.toBe(firstViewId);
+    expect(workbench.main.views.filter((view) => view.kind === 'cut')).toHaveLength(2);
+
+    await runtime.open({ identity, item, absolutePath: documentPath });
+    expect(workbench.main.activeViewId).toBe(firstViewId);
+    expect(workbench.main.views.filter((view) => view.kind === 'cut')).toHaveLength(2);
+    await runtime.dispose();
+  });
+
+  it('opens one owner-bound OTIO session and applies package-owned Cut commands', async () => {
+    const workspacePath = await mkdtemp(path.join(tmpdir(), 'openneko-cut-'));
+    roots.push(workspacePath);
+    const documentId = 'cuts/story.otio';
+    const documentPath = path.join(workspacePath, documentId);
+    await mkdir(path.dirname(documentPath), { recursive: true });
+    await writeFile(
+      documentPath,
+      serializeOtio(
+        createOtioTimeline('Story', {
+          profile: '1080p30',
+          editRateNumerator: 30,
+          editRateDenominator: 1,
+          width: 1920,
+          height: 1080,
+        }),
+      ),
+    );
+    const identity = createIdentity(documentId);
+    const authority = { current: identity };
+    const runtime = createRuntime(
+      workspacePath,
+      identity,
+      undefined,
+      undefined,
+      undefined,
+      authority,
+    );
+    const initial = await runtime.getSnapshot('window-1', identity);
+    const events: unknown[] = [];
+    await runtime.subscribe('window-1', identity, (event) => events.push(event));
+
+    const next = await runtime.execute('window-1', {
+      schemaVersion: CUT_HOST_RUNTIME_VERSION,
+      requestId: 'request-1',
+      commandId: 'command-1',
+      route: CUT_HOST_RUNTIME_ROUTES.commandExecute,
+      identity,
+      expectedRevision: 0,
+      payload: {
+        type: 'add-track',
+        trackId: 'audio-1',
+        trackKind: 'Audio',
+        name: 'Audio 1',
+      },
+    });
+
+    expect(initial.document).toMatchObject({
+      documentUri: documentId,
+      sessionId: identity.sessionId,
+      revision: 0,
+    });
+    expect(next.snapshot.document).toMatchObject({
+      revision: 1,
+      tracks: expect.arrayContaining([
+        expect.objectContaining({ trackId: 'audio-1', kind: 'Audio' }),
+      ]),
+    });
+    expect(events).toEqual([
+      expect.objectContaining({
+        sequence: 1,
+        snapshot: expect.objectContaining({ revision: 1 }),
+      }),
+    ]);
+
+    const recoveredIdentity = {
+      ...identity,
+      endpointEpoch: 'endpoint-2',
+    };
+    authority.current = recoveredIdentity;
+    await expect(runtime.getSnapshot('window-1', recoveredIdentity)).resolves.toMatchObject({
+      identity: { endpointEpoch: 'endpoint-2' },
+      revision: 1,
+    });
+    await expect(runtime.getSnapshot('window-1', identity)).rejects.toThrow('stale Cut authority');
+  });
+
+  it('rejects stale revisions without mutating the session', async () => {
+    const workspacePath = await mkdtemp(path.join(tmpdir(), 'openneko-cut-stale-'));
+    roots.push(workspacePath);
+    const documentId = 'story.otio';
+    await writeFile(
+      path.join(workspacePath, documentId),
+      serializeOtio(
+        createOtioTimeline('Story', {
+          profile: '1080p30',
+          editRateNumerator: 30,
+          editRateDenominator: 1,
+          width: 1920,
+          height: 1080,
+        }),
+      ),
+    );
+    const identity = createIdentity(documentId);
+    const runtime = createRuntime(workspacePath, identity);
+    await runtime.getSnapshot('window-1', identity);
+
+    await expect(
+      runtime.execute('window-1', {
+        schemaVersion: CUT_HOST_RUNTIME_VERSION,
+        requestId: 'stale-request',
+        commandId: 'stale-command',
+        route: CUT_HOST_RUNTIME_ROUTES.undo,
+        identity,
+        expectedRevision: 3,
+      }),
+    ).rejects.toThrow('stale');
+    expect((await runtime.getSnapshot('window-1', identity)).revision).toBe(0);
+  });
+
+  it('owns command idempotency, history, dirty, save and presentation in one session', async () => {
+    const workspacePath = await mkdtemp(path.join(tmpdir(), 'openneko-cut-session-flows-'));
+    roots.push(workspacePath);
+    const documentId = 'story.otio';
+    const documentPath = path.join(workspacePath, documentId);
+    await writeFile(
+      documentPath,
+      serializeOtio(
+        createOtioTimeline('Story', {
+          profile: '1080p30',
+          editRateNumerator: 30,
+          editRateDenominator: 1,
+          width: 1920,
+          height: 1080,
+        }),
+      ),
+    );
+    const identity = createIdentity(documentId);
+    const runtime = createRuntime(workspacePath, identity);
+    const events: Array<{ readonly sequence: number }> = [];
+    await runtime.subscribe('window-1', identity, (event) => events.push(event));
+
+    const commandRequest = {
+      schemaVersion: CUT_HOST_RUNTIME_VERSION,
+      requestId: 'command-request',
+      commandId: 'command-idempotency-key',
+      route: CUT_HOST_RUNTIME_ROUTES.commandExecute,
+      identity,
+      expectedRevision: 0,
+      payload: {
+        type: 'add-track',
+        trackId: 'audio-1',
+        trackKind: 'Audio',
+        name: 'Audio 1',
+      },
+    } as const;
+    const changed = await runtime.execute('window-1', commandRequest);
+    const replayed = await runtime.execute('window-1', {
+      ...commandRequest,
+      requestId: 'command-replay-request',
+    });
+    expect(replayed).toEqual(changed);
+    expect(changed.snapshot).toMatchObject({ revision: 1, dirty: true });
+    expect(events).toHaveLength(1);
+
+    const presentation = {
+      ...DEFAULT_CUT_HOST_PRESENTATION,
+      previewVolume: 0.35,
+      pixelsPerSecond: 180,
+      snappingEnabled: false,
+      overviewVisible: false,
+    };
+    const presented = await runtime.execute('window-1', {
+      schemaVersion: CUT_HOST_RUNTIME_VERSION,
+      requestId: 'presentation-request',
+      commandId: 'presentation-command',
+      route: CUT_HOST_RUNTIME_ROUTES.presentationUpdate,
+      identity,
+      expectedRevision: 1,
+      payload: presentation,
+    });
+    expect(presented.snapshot).toMatchObject({
+      revision: 1,
+      dirty: true,
+      presentation,
+    });
+
+    const saved = await runtime.execute('window-1', {
+      schemaVersion: CUT_HOST_RUNTIME_VERSION,
+      requestId: 'save-request',
+      commandId: 'save-command',
+      route: CUT_HOST_RUNTIME_ROUTES.save,
+      identity,
+      expectedRevision: 1,
+    });
+    expect(saved.snapshot).toMatchObject({ revision: 1, dirty: false, presentation });
+    const persisted = parseOtio(await readFile(documentPath));
+    expect(persisted.ok).toBe(true);
+    if (!persisted.ok) throw new Error('Saved OTIO fixture did not parse.');
+    expect(persisted.document.tracks.children).toEqual(
+      expect.arrayContaining([expect.objectContaining({ name: 'Audio 1' })]),
+    );
+
+    const undone = await runtime.execute('window-1', {
+      schemaVersion: CUT_HOST_RUNTIME_VERSION,
+      requestId: 'undo-request',
+      commandId: 'undo-command',
+      route: CUT_HOST_RUNTIME_ROUTES.undo,
+      identity,
+      expectedRevision: 1,
+    });
+    expect(undone.snapshot).toMatchObject({ revision: 2, dirty: true });
+    expect(
+      (undone.snapshot.document as { readonly tracks: readonly { readonly name: string }[] })
+        .tracks,
+    ).not.toEqual(expect.arrayContaining([expect.objectContaining({ name: 'Audio 1' })]));
+
+    const redone = await runtime.execute('window-1', {
+      schemaVersion: CUT_HOST_RUNTIME_VERSION,
+      requestId: 'redo-request',
+      commandId: 'redo-command',
+      route: CUT_HOST_RUNTIME_ROUTES.redo,
+      identity,
+      expectedRevision: 2,
+    });
+    expect(redone.snapshot).toMatchObject({ revision: 3, dirty: true });
+    expect(events.map((event) => event.sequence)).toEqual([1, 2, 3, 4, 5]);
+  });
+
+  it('resolves Timeline representation requests through the package-owned media adapter', async () => {
+    const workspacePath = await mkdtemp(path.join(tmpdir(), 'openneko-cut-representations-'));
+    roots.push(workspacePath);
+    const documentId = 'story.otio';
+    await writeFile(
+      path.join(workspacePath, documentId),
+      serializeOtio(
+        createOtioTimeline('Story', {
+          profile: '1080p30',
+          editRateNumerator: 30,
+          editRateDenominator: 1,
+          width: 1920,
+          height: 1080,
+        }),
+      ),
+    );
+    const identity = createIdentity(documentId);
+    const dispose = vi.fn(async () => undefined);
+    const runtime = createRuntime(workspacePath, identity, () => ({
+      captureFrame: vi.fn(),
+      generateWaveform: vi.fn(),
+      dispose,
+    }));
+
+    await runtime.getSnapshot('window-1', identity);
+    const result = await runtime.execute('window-1', {
+      schemaVersion: CUT_HOST_RUNTIME_VERSION,
+      requestId: 'representation-request',
+      commandId: 'representation-command',
+      route: CUT_HOST_RUNTIME_ROUTES.representationResolve,
+      identity,
+      expectedRevision: 0,
+      payload: {
+        type: 'cut:request-representations',
+        documentUri: documentId,
+        sessionId: identity.sessionId,
+        expectedRevision: 0,
+        requests: [{ clipId: 'missing-clip', kind: 'thumbnail', density: 64, tileIndex: 0 }],
+      },
+    });
+
+    expect(result).toMatchObject({
+      snapshot: { revision: 0 },
+      output: {
+        type: 'representations',
+        revision: 0,
+        results: [
+          {
+            clipId: 'missing-clip',
+            kind: 'thumbnail',
+            status: 'unavailable',
+          },
+        ],
+      },
+    });
+    expect(dispose).toHaveBeenCalledOnce();
+  });
+
+  it('projects package-owned Cut preview streams through owner-bound Desktop media URLs', async () => {
+    const workspacePath = await realpath(
+      await mkdtemp(path.join(tmpdir(), 'openneko-cut-preview-')),
+    );
+    roots.push(workspacePath);
+    const documentId = 'story.otio';
+    await writeFile(path.join(workspacePath, 'media.mp4'), 'fixture');
+    const document = applyCutCommand(
+      createOtioTimeline('Story', {
+        profile: '1080p30',
+        editRateNumerator: 30,
+        editRateDenominator: 1,
+        width: 1920,
+        height: 1080,
+      }),
+      {
+        type: 'link-media',
+        clipId: 'video-clip-1',
+        name: 'Shot',
+        targetUrl: 'media.mp4',
+        durationFrames: 150,
+        rate: 30,
+        trackId: 'video-1',
+        timelineStartFrames: 0,
+        overlapPolicy: 'reject',
+      },
+    );
+    await writeFile(path.join(workspacePath, documentId), serializeOtio(document));
+    const identity = createIdentity(documentId);
+    const stopPreview = vi.fn(async () => undefined);
+    const mediaAdapter = {
+      probe: vi.fn(async () => ({
+        durationSeconds: 5,
+        width: 1920,
+        height: 1080,
+        framesPerSecond: 30,
+        hasVideo: true,
+        hasAudio: false,
+        audioStreams: [],
+      })),
+      startPreview: vi.fn(async () => ({
+        sessionId: 'video-session-1',
+        video: {
+          version: 1 as const,
+          transport: 'http' as const,
+          url: 'http://127.0.0.1:4123/v1/cut-media/file/video-session-1',
+          mimeType: 'video/mp4',
+          preparationProfile: 'h264-mp4-direct' as const,
+          mediaTimeOriginSeconds: 0,
+          durationSeconds: 5,
+        },
+      })),
+      resumePreview: vi.fn(async () => undefined),
+      stopPreview,
+      startPcmMix: vi.fn(),
+      resumePcm: vi.fn(async () => undefined),
+      stopPcm: vi.fn(async () => undefined),
+      captureFrame: vi.fn(),
+      generateWaveform: vi.fn(),
+      export: vi.fn(),
+      dispose: vi.fn(async () => undefined),
+    };
+    const runtime = createRuntime(workspacePath, identity, undefined, () => mediaAdapter);
+    await runtime.getSnapshot('window-1', identity);
+
+    const result = await runtime.execute('window-1', {
+      schemaVersion: CUT_HOST_RUNTIME_VERSION,
+      requestId: 'preview-request',
+      commandId: 'preview-command',
+      route: CUT_HOST_RUNTIME_ROUTES.previewStart,
+      identity,
+      expectedRevision: 0,
+      payload: {
+        type: 'cut:preview-start',
+        documentUri: documentId,
+        sessionId: identity.sessionId,
+        expectedRevision: 0,
+        timelineTimeSeconds: 0,
+        generation: 1,
+        playbackMode: 'playing',
+      },
+    });
+
+    expect(result.output).toMatchObject({
+      type: 'preview',
+      message: {
+        type: 'cut:preview-ready',
+        generation: 1,
+        video: {
+          transport: 'authorized',
+          url: expect.stringMatching(
+            /^neko-media:\/\/desktop\/media%3A[A-Za-z0-9-]+\/preview\.mp4$/u,
+          ),
+        },
+      },
+    });
+    expect(mediaAdapter.startPreview).toHaveBeenCalledOnce();
+    await runtime.dispose();
+    expect(stopPreview).toHaveBeenCalledWith('video-session-1');
+  });
+
+  it('adds one authorized resource to the exact Cut session and fences stale targets', async () => {
+    const workspacePath = await realpath(
+      await mkdtemp(path.join(tmpdir(), 'openneko-cut-resource-')),
+    );
+    roots.push(workspacePath);
+    const documentId = 'story.otio';
+    await writeFile(
+      path.join(workspacePath, documentId),
+      serializeOtio(
+        createOtioTimeline('Story', {
+          profile: '1080p30',
+          editRateNumerator: 30,
+          editRateDenominator: 1,
+          width: 1920,
+          height: 1080,
+        }),
+      ),
+    );
+    await mkdir(path.join(workspacePath, 'media'));
+    await writeFile(path.join(workspacePath, 'media', 'clip.mp4'), 'fixture');
+    const identity = createIdentity(documentId);
+    const dispose = vi.fn(async () => undefined);
+    const probe = vi.fn(async () => ({
+      durationSeconds: 4,
+      width: 1920,
+      height: 1080,
+      framesPerSecond: 30,
+      hasVideo: true,
+      hasAudio: true,
+      audioStreams: [],
+    }));
+    const runtime = createRuntime(
+      workspacePath,
+      identity,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      () => ({ probe, dispose }),
+    );
+    const resourceIdentity = {
+      projectId: identity.projectId,
+      workspaceId: identity.workspaceId,
+      windowId: identity.windowId,
+      viewId: 'resource-browser:project-view-1',
+      viewEpoch: 1,
+      endpointEpoch: identity.endpointEpoch,
+    };
+    const item = {
+      resourceId: 'content:clip',
+      facet: 'media' as const,
+      role: 'content' as const,
+      depth: 0,
+      kind: 'video' as const,
+      label: 'clip.mp4',
+      locator: { kind: 'workspace-file' as const, path: 'media/clip.mp4' },
+      capabilities: ['preview', 'add-to-cut'] as const,
+    };
+    const target = {
+      viewId: identity.viewId,
+      viewEpoch: identity.viewEpoch,
+      documentId: identity.documentId,
+      sessionId: identity.sessionId,
+      expectedRevision: 0,
+    };
+
+    const changed = await runtime.addResource({ resourceIdentity, item, target });
+    const replayed = await runtime.addResource({ resourceIdentity, item, target });
+
+    expect(changed).toMatchObject({
+      revision: 1,
+      document: {
+        tracks: expect.arrayContaining([
+          expect.objectContaining({
+            kind: 'Video',
+            items: [
+              expect.objectContaining({
+                kind: 'clip',
+                name: 'clip.mp4',
+                durationSeconds: 4,
+              }),
+            ],
+          }),
+        ]),
+      },
+    });
+    expect(replayed).toEqual(changed);
+    expect(probe).toHaveBeenCalledOnce();
+    expect(dispose).toHaveBeenCalledOnce();
+
+    const videoTrack = (
+      changed.document as {
+        readonly tracks: readonly { readonly kind: string; readonly trackId: string }[];
+      }
+    ).tracks.find((track) => track.kind === 'Video');
+    if (!videoTrack) throw new Error('Desktop Cut fixture has no Video Track.');
+    const dropped = await runtime.execute('window-1', {
+      schemaVersion: CUT_HOST_RUNTIME_VERSION,
+      requestId: 'drop-media-request',
+      commandId: 'drop-media-command',
+      route: CUT_HOST_RUNTIME_ROUTES.mediaDrop,
+      identity,
+      expectedRevision: 1,
+      payload: {
+        type: 'cut:drop-link-media',
+        trackId: videoTrack.trackId,
+        uris: [pathToFileURL(path.join(workspacePath, 'media', 'clip.mp4')).href],
+        timelineStartFrames: 120,
+        overlapPolicy: 'insert',
+      },
+    });
+    expect(dropped.snapshot).toMatchObject({ revision: 2 });
+    expect(probe).toHaveBeenCalledTimes(2);
+    expect(dispose).toHaveBeenCalledTimes(2);
+
+    await expect(
+      runtime.addResource({
+        resourceIdentity,
+        item,
+        target: {
+          ...target,
+          sessionId: 'cut-session:another-view:1',
+          expectedRevision: 2,
+        },
+      }),
+    ).rejects.toThrow('stale Cut authority');
+    expect((await runtime.getSnapshot('window-1', identity)).revision).toBe(2);
+  });
+
+  it('starts, projects and cancels the extracted package-owned ExportJob', async () => {
+    const workspacePath = await mkdtemp(path.join(tmpdir(), 'openneko-cut-export-'));
+    roots.push(workspacePath);
+    const documentId = 'story.otio';
+    await writeFile(
+      path.join(workspacePath, documentId),
+      serializeOtio(
+        createOtioTimeline('Story', {
+          profile: '1080p30',
+          editRateNumerator: 30,
+          editRateDenominator: 1,
+          width: 1920,
+          height: 1080,
+        }),
+      ),
+    );
+    const identity = createIdentity(documentId);
+    let exportSignal: AbortSignal | undefined;
+    const exportMediaAdapter = createExportMediaAdapter(
+      (signal) =>
+        new Promise<void>(() => {
+          exportSignal = signal;
+        }),
+    );
+    const runtime = createRuntime(
+      workspacePath,
+      identity,
+      undefined,
+      undefined,
+      () => exportMediaAdapter,
+    );
+    await runtime.getSnapshot('window-1', identity);
+
+    const started = await runtime.execute('window-1', {
+      schemaVersion: CUT_HOST_RUNTIME_VERSION,
+      requestId: 'export-start-request',
+      commandId: 'export-start-command',
+      route: CUT_HOST_RUNTIME_ROUTES.exportStart,
+      identity,
+      expectedRevision: 0,
+      payload: {
+        type: 'cut:export-start',
+        documentUri: documentId,
+        sessionId: identity.sessionId,
+        expectedRevision: 0,
+        settings: {
+          outputName: 'story-final',
+          container: 'mp4',
+          width: 1920,
+          height: 1080,
+          framesPerSecond: 30,
+          videoBitrate: 8_000_000,
+          includeAudio: true,
+          audioBitrate: 192_000,
+          audioSampleRate: 48_000,
+        },
+      },
+    });
+    const task = started.snapshot.export.tasks[0];
+    expect(task).toMatchObject({
+      documentUri: documentId,
+      sessionId: identity.sessionId,
+      sourceRevision: 0,
+      outputWorkspaceRelativePath: 'exports/story-final.mp4',
+      status: 'running',
+    });
+    await vi.waitFor(() => expect(exportSignal).toBeDefined());
+    expect(exportMediaAdapter.export).toHaveBeenCalledWith(
+      expect.objectContaining({
+        timeline: expect.objectContaining({
+          documentUri: pathToFileURL(await realpath(path.join(workspacePath, documentId))).href,
+        }),
+      }),
+      expect.any(AbortSignal),
+    );
+    if (!task) throw new Error('Desktop Cut Export Job fixture is missing.');
+
+    await vi.waitFor(async () => {
+      const cancelled = await runtime.execute('window-1', {
+        schemaVersion: CUT_HOST_RUNTIME_VERSION,
+        requestId: 'export-cancel-request',
+        commandId: 'export-cancel-command',
+        route: CUT_HOST_RUNTIME_ROUTES.exportCancel,
+        identity,
+        expectedRevision: 0,
+        payload: {
+          type: 'cut:export-cancel',
+          documentUri: documentId,
+          sessionId: identity.sessionId,
+          expectedRevision: 0,
+          jobId: task.jobId,
+        },
+      });
+      expect(cancelled.snapshot.export.tasks).toEqual([
+        expect.objectContaining({ jobId: task.jobId, status: 'cancelled' }),
+      ]);
+    });
+    expect(exportSignal?.aborted).toBe(true);
+    await runtime.dispose();
+  });
+});
+
+function createRuntime(
+  workspacePath: string,
+  identity: CutHostRuntimeIdentity,
+  createMediaAdapter?: ConstructorParameters<typeof DesktopCutRuntime>[0]['createMediaAdapter'],
+  createPreviewMediaAdapter?: ConstructorParameters<
+    typeof DesktopCutRuntime
+  >[0]['createPreviewMediaAdapter'],
+  createExportMediaAdapter?: ConstructorParameters<
+    typeof DesktopCutRuntime
+  >[0]['createExportMediaAdapter'],
+  identityAuthority?: { current: CutHostRuntimeIdentity },
+  createAuthoringMediaAdapter?: ConstructorParameters<
+    typeof DesktopCutRuntime
+  >[0]['createAuthoringMediaAdapter'],
+): DesktopCutRuntime {
+  const workspace = {
+    workspaceId: 'workspace-1',
+    workspacePath,
+    displayName: 'Fixture',
+    locator: { kind: 'relative' as const, value: '.' },
+  };
+  return new DesktopCutRuntime({
+    shell: {
+      getProjection: vi.fn(),
+      updateWorkbench: vi.fn(),
+      resolveAgentWorkspace: vi.fn(async () => workspace),
+      resolveCutViewGrant: vi.fn(async (_windowId, requestedIdentity) => {
+        const authoritative = identityAuthority?.current ?? identity;
+        if (
+          requestedIdentity.endpointEpoch !== authoritative.endpointEpoch ||
+          requestedIdentity.sessionId !== authoritative.sessionId
+        ) {
+          throw new Error('Desktop fixture rejected stale Cut authority.');
+        }
+        return { identity: authoritative, workspace };
+      }),
+    },
+    host: createElectronNekoHostPorts({
+      homedir: workspacePath,
+      nekoHome: path.join(workspacePath, '.neko-home'),
+      workspaceRoot: workspacePath,
+      version: 'test',
+      logger: new ConsoleLogger('DesktopCutRuntimeTest'),
+    }),
+    mediaRegistry: new DesktopMediaDescriptorRegistry(),
+    resolveWebContentsId: () => 10,
+    ...(createMediaAdapter ? { createMediaAdapter } : {}),
+    ...(createPreviewMediaAdapter ? { createPreviewMediaAdapter } : {}),
+    ...(createExportMediaAdapter ? { createExportMediaAdapter } : {}),
+    ...(createAuthoringMediaAdapter ? { createAuthoringMediaAdapter } : {}),
+  });
+}
+
+function createExportMediaAdapter(
+  run: (signal: AbortSignal) => Promise<void>,
+): NonNullable<
+  ReturnType<
+    NonNullable<ConstructorParameters<typeof DesktopCutRuntime>[0]['createExportMediaAdapter']>
+  >
+> {
+  return {
+    probe: vi.fn(),
+    captureFrame: vi.fn(),
+    generateWaveform: vi.fn(),
+    startPreview: vi.fn(),
+    resumePreview: vi.fn(async () => undefined),
+    stopPreview: vi.fn(async () => undefined),
+    startPcmMix: vi.fn(),
+    resumePcm: vi.fn(async () => undefined),
+    stopPcm: vi.fn(async () => undefined),
+    export: vi.fn(async (request, signal) => {
+      if (!signal) throw new Error('Export cancellation signal is required.');
+      await run(signal);
+      return { outputWorkspaceRelativePath: request.outputWorkspaceRelativePath };
+    }),
+    dispose: vi.fn(async () => undefined),
+  };
+}
+
+function createIdentity(documentId: string): CutHostRuntimeIdentity {
+  return {
+    projectId: 'project-1',
+    workspaceId: 'workspace-1',
+    windowId: 'window-1',
+    viewId: 'cut-view-1',
+    viewEpoch: 1,
+    documentId,
+    sessionId: 'cut-session:cut-view-1:1',
+    endpointEpoch: 'endpoint-1',
+  };
+}

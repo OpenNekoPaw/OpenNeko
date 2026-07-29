@@ -6,6 +6,7 @@ import {
   DESKTOP_APP_HOST,
   DESKTOP_APP_ORIGIN,
   DESKTOP_APP_SCHEME,
+  DESKTOP_MEDIA_SCHEME,
 } from './security';
 import { resolveDesktopRendererAsset } from './renderer-asset-path';
 
@@ -28,6 +29,17 @@ export function registerDesktopAppScheme(): void {
         secure: true,
         supportFetchAPI: true,
         corsEnabled: false,
+        bypassCSP: false,
+      },
+    },
+    {
+      scheme: DESKTOP_MEDIA_SCHEME,
+      privileges: {
+        standard: true,
+        secure: true,
+        supportFetchAPI: true,
+        corsEnabled: true,
+        stream: true,
         bypassCSP: false,
       },
     },

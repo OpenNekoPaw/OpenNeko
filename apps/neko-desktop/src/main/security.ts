@@ -17,9 +17,14 @@ export interface DesktopWindowSecurityTarget {
   };
 }
 
+export interface DesktopContentSecurityPolicyOptions {
+  readonly viteDevelopmentNonce?: string;
+}
+
 export const DESKTOP_APP_SCHEME = 'neko-app';
 export const DESKTOP_APP_HOST = 'desktop';
 export const DESKTOP_APP_ORIGIN = `${DESKTOP_APP_SCHEME}://${DESKTOP_APP_HOST}`;
+export const DESKTOP_MEDIA_SCHEME = 'neko-media';
 
 export function createDesktopWebPreferences(preloadPath: string): WebPreferences {
   if (preloadPath.trim().length === 0) {
@@ -55,24 +60,32 @@ export function isAllowedDesktopRendererUrl(url: string, allowedOrigin: string):
   }
 }
 
-export function createDesktopContentSecurityPolicy(allowedOrigin: string): string {
+export function createDesktopContentSecurityPolicy(
+  allowedOrigin: string,
+  options: DesktopContentSecurityPolicyOptions = {},
+): string {
   const connectSources =
     allowedOrigin.startsWith('http://') || allowedOrigin.startsWith('https://')
       ? `'self' ${allowedOrigin} ${toWebSocketOrigin(allowedOrigin)}`
       : "'self'";
+  const nonceSource = options.viteDevelopmentNonce
+    ? `'nonce-${validateContentSecurityPolicyNonce(options.viteDevelopmentNonce)}'`
+    : undefined;
+  const scriptSources = nonceSource ? `'self' ${nonceSource}` : "'self'";
+  const styleSources = nonceSource ? `'self' ${nonceSource}` : "'self'";
   return [
     "default-src 'none'",
     "base-uri 'none'",
     "object-src 'none'",
-    "frame-src 'none'",
+    `frame-src ${DESKTOP_MEDIA_SCHEME}:`,
     "frame-ancestors 'none'",
     "form-action 'none'",
-    "script-src 'self'",
-    "style-src 'self'",
-    "img-src 'self' data:",
+    `script-src ${scriptSources}`,
+    `style-src ${styleSources}`,
+    `img-src 'self' data: blob: ${DESKTOP_MEDIA_SCHEME}:`,
     "font-src 'self'",
-    `connect-src ${connectSources}`,
-    "media-src 'none'",
+    `connect-src ${connectSources} blob: ${DESKTOP_MEDIA_SCHEME}:`,
+    `media-src ${DESKTOP_MEDIA_SCHEME}:`,
     "worker-src 'none'",
   ].join('; ');
 }
@@ -80,6 +93,7 @@ export function createDesktopContentSecurityPolicy(allowedOrigin: string): strin
 export function configureDesktopWindowSecurity(
   window: DesktopWindowSecurityTarget,
   allowedOrigin: string,
+  policyOptions?: DesktopContentSecurityPolicyOptions,
 ): () => void {
   const webContents = window.webContents;
   webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
@@ -96,7 +110,7 @@ export function configureDesktopWindowSecurity(
     callback(false);
   });
 
-  const csp = createDesktopContentSecurityPolicy(allowedOrigin);
+  const csp = createDesktopContentSecurityPolicy(allowedOrigin, policyOptions);
   const responseFilter = { urls: [`${allowedOrigin}/*`] };
   targetSession.webRequest.onHeadersReceived(responseFilter, (details, callback) => {
     callback({
@@ -111,6 +125,13 @@ export function configureDesktopWindowSecurity(
     if (webContents.isDestroyed()) return;
     webContents.removeListener('will-navigate', onWillNavigate);
   };
+}
+
+function validateContentSecurityPolicyNonce(nonce: string): string {
+  if (!/^[A-Za-z0-9+/_-]+={0,2}$/.test(nonce)) {
+    throw new Error('Desktop CSP nonce must be a non-empty base64-compatible value.');
+  }
+  return nonce;
 }
 
 function toWebSocketOrigin(origin: string): string {

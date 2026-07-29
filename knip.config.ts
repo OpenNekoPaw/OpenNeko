@@ -212,7 +212,12 @@ const config: KnipConfig = {
     'packages/neko-agent/test-utils': {},
     'packages/neko-canvas/packages/extension': {},
     'packages/neko-canvas/packages/webview': {
-      entry: ['src/host-adapter/index.tsx'],
+      entry: [
+        'src/host-adapter/index.tsx',
+        'src/main.tsx',
+        'src/root.tsx',
+        'src/test/setupCanvasStoreScope.ts',
+      ],
       ignore: [
         // Barrel exports
         'src/utils/index.ts',

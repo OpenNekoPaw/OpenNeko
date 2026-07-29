@@ -5,8 +5,15 @@ import type {
   DesktopProjectTabProjection,
   DesktopWindowActiveTarget,
 } from '../shared/shell-contract';
+import {
+  createDefaultDesktopWorkbenchLayout,
+  parseDesktopWorkbenchLayout,
+  type DesktopWorkbenchLayoutProjection,
+} from '../shared/workbench-contract';
 
-export const DESKTOP_SHELL_STATE_VERSION = 1 as const;
+export const DESKTOP_SHELL_STATE_VERSION = 2 as const;
+// Version 1 remains readable because it contains user-owned local Project and Window state.
+const DESKTOP_SHELL_STATE_V1 = 1 as const;
 
 export interface DesktopStoredProject {
   readonly projectId: string;
@@ -27,6 +34,7 @@ export interface DesktopStoredWindow {
   readonly revision: number;
   readonly activeTarget: DesktopWindowActiveTarget;
   readonly tabs: readonly DesktopProjectTabProjection[];
+  readonly workbench: DesktopWorkbenchLayoutProjection;
 }
 
 export interface DesktopShellStoredState {
@@ -134,7 +142,11 @@ function createEmptyDesktopShellState(): DesktopShellStoredState {
 
 function parseDesktopShellStoredState(value: unknown): DesktopShellStoredState {
   const record = requireRecord(value, 'Desktop Shell state must be an object.');
-  if (record['schemaVersion'] !== DESKTOP_SHELL_STATE_VERSION) {
+  const sourceVersion = record['schemaVersion'];
+  if (
+    sourceVersion !== DESKTOP_SHELL_STATE_VERSION &&
+    sourceVersion !== DESKTOP_SHELL_STATE_V1
+  ) {
     throw invalidState(
       `Unsupported Desktop Shell state version '${String(record['schemaVersion'])}'.`,
     );
@@ -155,7 +167,7 @@ function parseDesktopShellStoredState(value: unknown): DesktopShellStoredState {
   const windows = requireArray(
     record['windows'],
     'Desktop Shell windows must be an array.',
-  ).map((item) => parseStoredWindow(item, projectIds));
+  ).map((item) => parseStoredWindow(item, projectIds, sourceVersion));
   const windowIds = new Set<string>();
   for (const window of windows) {
     if (windowIds.has(window.windowId)) {
@@ -239,6 +251,9 @@ function parseStoredProject(value: unknown): DesktopStoredProject {
 function parseStoredWindow(
   value: unknown,
   projectIds: ReadonlySet<string>,
+  sourceVersion:
+    | typeof DESKTOP_SHELL_STATE_VERSION
+    | typeof DESKTOP_SHELL_STATE_V1,
 ): DesktopStoredWindow {
   const record = requireRecord(value, 'Desktop stored Window must be an object.');
   const tabs = requireArray(record['tabs'], 'Desktop stored Project Tabs must be an array.').map(
@@ -260,18 +275,44 @@ function parseStoredWindow(
   if (activeTarget.kind === 'project' && !tabIds.has(activeTarget.tabId)) {
     throw invalidState('Desktop active Project Tab is not present in its Window.');
   }
+  const windowId = requireNonEmptyString(
+    record['windowId'],
+    'Desktop stored Window identity is required.',
+  );
+  const workbench =
+    sourceVersion === DESKTOP_SHELL_STATE_V1
+      ? createDefaultDesktopWorkbenchLayout(windowId)
+      : parseStoredWorkbench(record['workbench'], windowId);
   return {
-    windowId: requireNonEmptyString(
-      record['windowId'],
-      'Desktop stored Window identity is required.',
-    ),
+    windowId,
     revision: requireNonNegativeInteger(
       record['revision'],
       'Desktop stored Window revision is invalid.',
     ),
     activeTarget,
     tabs,
+    workbench,
   };
+}
+
+function parseStoredWorkbench(
+  value: unknown,
+  windowId: string,
+): DesktopWorkbenchLayoutProjection {
+  let workbench: DesktopWorkbenchLayoutProjection;
+  try {
+    workbench = parseDesktopWorkbenchLayout(value);
+  } catch (error) {
+    throw invalidState(
+      `Desktop stored Workbench layout is invalid: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+  }
+  if (workbench.windowId !== windowId) {
+    throw invalidState('Desktop stored Workbench belongs to another Window.');
+  }
+  return workbench;
 }
 
 function parseStoredTab(value: unknown): DesktopProjectTabProjection {

@@ -1,0 +1,804 @@
+import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+import {
+  createAssistantMessageEventStream,
+  createModels,
+  createProvider,
+  type Api,
+  type AssistantMessage,
+  type Context,
+  type Model,
+  type SimpleStreamOptions,
+} from '@earendil-works/pi-ai';
+import { resolveAgentModelPolicy, type PiProductAgentEvent } from '@neko/agent/pi';
+import type { Tool } from '@neko/shared';
+import { afterEach, describe, expect, it } from 'vitest';
+import {
+  createDesktopAgentAppHostComposition,
+  projectDesktopAgentHomeConversationSummary,
+  type DesktopAgentAppHostComposition,
+} from './desktop-agent-app-host-composition';
+import { createDesktopAgentCredentialRuntime } from './desktop-agent-credential-runtime';
+import type { DesktopWorkspaceResolution } from './desktop-workspace-registry';
+
+const MODEL: Model<'openai-completions'> = {
+  id: 'main',
+  name: 'Main',
+  api: 'openai-completions',
+  provider: 'fixture',
+  baseUrl: 'https://fixture.invalid/v1',
+  reasoning: false,
+  input: ['text'],
+  cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+  contextWindow: 8_192,
+  maxTokens: 2_048,
+};
+
+describe('DesktopAgentAppHostComposition', () => {
+  const roots: string[] = [];
+  const compositions: DesktopAgentAppHostComposition[] = [];
+
+  afterEach(async () => {
+    await Promise.allSettled(compositions.splice(0).map((composition) => composition.dispose()));
+    await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
+  });
+
+  it('runs the canonical Pi Session, Skill, projection and terminal checkpoint path', async () => {
+    const fixture = await createFixture();
+    const prompts: string[] = [];
+    const models = createFixtureModels((_model, context) => {
+      prompts.push(lastUserPrompt(context));
+      return completedStream(assistant('completed by Pi'));
+    });
+    const policy = fixturePolicy();
+    const workspace = await fixture.composition.attachWorkspace(fixture.workspace);
+    const protectedSecret = 'must-not-enter-pi-storage';
+    await fixture.composition.credentialRuntime.credentials.replace(
+      'fixture',
+      { type: 'api_key', key: protectedSecret },
+      'interactive',
+    );
+    workspace.tools.register(fixtureTool());
+    expect(await fixture.composition.attachWorkspace(fixture.workspace)).toBe(workspace);
+    expect(workspace.tools.list().map((tool) => tool.name)).toEqual(['DesktopFixtureTool']);
+    await workspace.openConversation({
+      conversationId: 'conversation-1',
+      models,
+      initialModelPolicy: policy,
+      baseSystemPrompt: 'Desktop Agent fixture',
+    });
+    const evidence = workspace.readConversationEvidence('conversation-1');
+    const observedEvents: PiProductAgentEvent[] = [];
+
+    const first = await workspace.executeTurn({
+      conversationId: 'conversation-1',
+      prompt: 'hello',
+      modelPolicy: policy,
+      permissionPolicy: allowTools(),
+      workspaceTrusted: true,
+      locale: 'en',
+      events: {
+        emit: (event) => {
+          observedEvents.push(event);
+        },
+      },
+    });
+    const skill = await workspace.executeTurn({
+      conversationId: 'conversation-1',
+      prompt: 'ignored for explicit Skill',
+      skillName: 'desktop-fixture',
+      modelPolicy: policy,
+      permissionPolicy: allowTools(),
+      workspaceTrusted: true,
+      locale: 'en',
+    });
+
+    expect(evidence).toMatchObject({
+      workspaceId: fixture.workspace.workspaceId,
+      conversationId: 'conversation-1',
+      branchId: 'main',
+      writerEpoch: 1,
+    });
+    expect(evidence.piSessionId).toBeTruthy();
+    expect(first.path).toEqual({
+      runtime: 'pi-conversation-runtime',
+      transcript: 'pi-session',
+      metadata: 'sqlite',
+      projection: 'conversation-projection-store',
+    });
+    expect(first.durability).toBe('durable');
+    expect(skill.durability).toBe('durable');
+    expect(first.projection.turns[0]?.items).toContainEqual(
+      expect.objectContaining({
+        kind: 'assistant_text',
+        payload: expect.objectContaining({ content: 'completed by Pi' }),
+      }),
+    );
+    expect(skill.projection.turns).toHaveLength(2);
+    expect(prompts).toEqual(['hello', expect.stringContaining('Desktop composition Skill body')]);
+    expect(observedEvents.map((event) => event.type)).toContain('turn.persistence');
+    expect(JSON.stringify(first)).not.toContain(fixture.workspace.workspacePath);
+    await expect(
+      stat(join(fixture.userDataRoot, 'agent', 'pi', 'metadata.sqlite')),
+    ).resolves.toMatchObject({ size: expect.any(Number) });
+    const sessions = await readdir(join(fixture.userDataRoot, 'agent', 'pi', 'sessions'), {
+      recursive: true,
+    });
+    expect(sessions.some((entry) => entry.endsWith('.jsonl'))).toBe(true);
+    const piStorage = [
+      await readFile(join(fixture.userDataRoot, 'agent', 'pi', 'metadata.sqlite')),
+      ...(await Promise.all(
+        sessions
+          .filter((entry) => entry.endsWith('.jsonl'))
+          .map((entry) => readFile(join(fixture.userDataRoot, 'agent', 'pi', 'sessions', entry))),
+      )),
+    ];
+    expect(piStorage.every((content) => !content.includes(protectedSecret))).toBe(true);
+  });
+
+  it('isolates conversation runtime and projection owners within one workspace', async () => {
+    const fixture = await createFixture();
+    const models = createFixtureModels((_model, context) =>
+      completedStream(assistant(`reply:${lastUserPrompt(context)}`)),
+    );
+    const policy = fixturePolicy();
+    const workspace = await fixture.composition.attachWorkspace(fixture.workspace);
+    await Promise.all(
+      ['conversation-a', 'conversation-b'].map((conversationId) =>
+        workspace.openConversation({
+          conversationId,
+          models,
+          initialModelPolicy: policy,
+          baseSystemPrompt: 'Desktop Agent fixture',
+        }),
+      ),
+    );
+
+    await workspace.executeTurn({
+      conversationId: 'conversation-a',
+      prompt: 'alpha',
+      modelPolicy: policy,
+      permissionPolicy: allowTools(),
+      workspaceTrusted: true,
+      locale: 'en',
+    });
+    await workspace.executeTurn({
+      conversationId: 'conversation-b',
+      prompt: 'beta',
+      modelPolicy: policy,
+      permissionPolicy: allowTools(),
+      workspaceTrusted: true,
+      locale: 'en',
+    });
+
+    expect(
+      workspace
+        .listConversations()
+        .map((record) => record.conversationId)
+        .sort(),
+    ).toEqual(['conversation-a', 'conversation-b']);
+    expect(JSON.stringify(workspace.readConversationProjection('conversation-a'))).toContain(
+      'reply:alpha',
+    );
+    expect(JSON.stringify(workspace.readConversationProjection('conversation-a'))).not.toContain(
+      'reply:beta',
+    );
+    expect(JSON.stringify(workspace.readConversationProjection('conversation-b'))).toContain(
+      'reply:beta',
+    );
+    expect(workspace.readConversationEvidence('conversation-a').piSessionId).not.toBe(
+      workspace.readConversationEvidence('conversation-b').piSessionId,
+    );
+    const home = fixture.composition.readHomeProjection();
+    expect(home.conversations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          navigation: {
+            projectId: `content:${fixture.workspace.workspaceId}`,
+            workspaceId: fixture.workspace.workspaceId,
+            conversationId: 'conversation-a',
+          },
+          attention: 'none',
+          lastActivity: expect.objectContaining({ kind: 'turn-completed' }),
+        }),
+      ]),
+    );
+    expect(home.attention).toEqual({ needsInput: 0, needsReview: 0, running: 0 });
+    expect(JSON.stringify(home)).not.toContain('reply:alpha');
+    expect(JSON.stringify(home)).not.toContain(fixture.workspace.workspacePath);
+  });
+
+  it('reports no active turn for a durable conversation that has not opened a Pi runtime', async () => {
+    const fixture = await createFixture();
+    const workspace = await fixture.composition.attachWorkspace(fixture.workspace);
+    await workspace.createConversation('conversation-cold');
+
+    expect(workspace.readActiveTurn('conversation-cold')).toBeUndefined();
+    await expect(
+      Promise.resolve().then(() => workspace.readContextTokenCount('conversation-cold')),
+    ).resolves.toBe(0);
+    expect(() => workspace.readActiveTurn('conversation-missing')).toThrow(
+      "conversation 'conversation-missing' does not exist",
+    );
+  });
+
+  it('projects active-run Attention from the conversation owner without copying Timeline state', async () => {
+    const fixture = await createFixture();
+    const stream = createAssistantMessageEventStream();
+    const models = createFixtureModels(() => stream);
+    const policy = fixturePolicy();
+    const workspace = await fixture.composition.attachWorkspace(fixture.workspace);
+    await workspace.openConversation({
+      conversationId: 'conversation-running',
+      models,
+      initialModelPolicy: policy,
+      baseSystemPrompt: 'Desktop Agent fixture',
+    });
+    const runningProjection = new Promise<void>((resolve) => {
+      const unsubscribe = fixture.composition.subscribeHomeProjection(() => {
+        if (fixture.composition.readHomeProjection().attention.running === 1) {
+          unsubscribe();
+          resolve();
+        }
+      });
+    });
+
+    const operation = workspace.executeTurn({
+      conversationId: 'conversation-running',
+      prompt: 'stay active',
+      modelPolicy: policy,
+      permissionPolicy: allowTools(),
+      workspaceTrusted: true,
+      locale: 'en',
+    });
+    await runningProjection;
+
+    expect(fixture.composition.readHomeProjection()).toMatchObject({
+      attention: { needsInput: 0, needsReview: 0, running: 1 },
+      conversations: [
+        {
+          attention: 'running',
+          lastActivity: {
+            kind: 'turn-running',
+          },
+        },
+      ],
+    });
+    const message = assistant('finished');
+    stream.push({ type: 'start', partial: message });
+    stream.push({ type: 'done', reason: 'stop', message });
+    await operation;
+    expect(fixture.composition.readHomeProjection().attention.running).toBe(0);
+  });
+
+  it('projects an immutable GenerationJob link/status without creating a Desktop Job owner', () => {
+    const summary = projectDesktopAgentHomeConversationSummary(
+      {
+        workspaceId: 'workspace-1',
+        conversationId: 'conversation-generation',
+        title: 'Generation',
+        activeBranchId: 'main',
+        createdAt: '2026-07-28T00:00:00.000Z',
+        updatedAt: '2026-07-28T00:01:00.000Z',
+      },
+      {
+        conversationId: 'conversation-generation',
+        projectionVersion: 1,
+        turns: [
+          {
+            turnId: 'turn-1',
+            runId: 'run-1',
+            messageId: 'message-1',
+            items: [
+              {
+                conversationId: 'conversation-generation',
+                turnId: 'turn-1',
+                runId: 'run-1',
+                messageId: 'message-1',
+                itemId: 'tool-generation-1',
+                sequence: 1,
+                itemRevision: 2,
+                kind: 'tool_call',
+                status: 'succeeded',
+                payload: {
+                  toolCall: {
+                    id: 'tool-call-1',
+                    name: 'GenerateImage',
+                    arguments: {},
+                    result: {
+                      success: true,
+                      data: {
+                        generationJob: {
+                          kind: 'generation-job',
+                          jobId: 'generation-1',
+                          revision: 4,
+                          phase: 'succeeded',
+                        },
+                      },
+                    },
+                  },
+                },
+                createdAt: 1,
+                updatedAt: 2,
+              },
+            ],
+            completion: { status: 'completed', completedAt: 3 },
+          },
+        ],
+      },
+      undefined,
+    );
+
+    expect(summary.lastActivity.generationJob).toEqual({
+      jobId: 'generation-1',
+      revision: 4,
+      phase: 'succeeded',
+    });
+    expect(JSON.stringify(summary)).not.toContain('CancelGenerationJob');
+  });
+
+  it('projects Tool confirmation as needs-input Attention ahead of the active run', () => {
+    const summary = projectDesktopAgentHomeConversationSummary(
+      {
+        workspaceId: 'workspace-1',
+        conversationId: 'conversation-confirmation',
+        title: 'Confirmation',
+        activeBranchId: 'main',
+        createdAt: '2026-07-28T00:00:00.000Z',
+        updatedAt: '2026-07-28T00:01:00.000Z',
+      },
+      {
+        conversationId: 'conversation-confirmation',
+        projectionVersion: 1,
+        turns: [
+          {
+            turnId: 'turn-1',
+            runId: 'run-1',
+            messageId: 'message-1',
+            items: [
+              {
+                conversationId: 'conversation-confirmation',
+                turnId: 'turn-1',
+                runId: 'run-1',
+                messageId: 'message-1',
+                itemId: 'tool-confirmation-1',
+                sequence: 1,
+                itemRevision: 2,
+                kind: 'tool_call',
+                status: 'pending',
+                payload: {
+                  toolCall: {
+                    id: 'tool-call-1',
+                    name: 'WriteDocument',
+                    arguments: {},
+                    pendingConfirmation: true,
+                    confirmation: {
+                      action: 'WriteDocument',
+                      description: 'Write the document',
+                      details: { confirmationId: 'confirmation-1' },
+                    },
+                  },
+                },
+                createdAt: 1,
+                updatedAt: 2,
+              },
+            ],
+          },
+        ],
+      },
+      { turnId: 'turn-1', runId: 'run-1' },
+    );
+
+    expect(summary).toMatchObject({
+      attention: 'needs-input',
+      lastActivity: {
+        kind: 'tool-confirmation-required',
+        turnId: 'turn-1',
+        runId: 'run-1',
+        toolCallId: 'tool-call-1',
+      },
+    });
+  });
+
+  it('cancels only the explicitly identified Desktop conversation run and persists cancellation', async () => {
+    const fixture = await createFixture();
+    let startedResolve: (() => void) | undefined;
+    const started = new Promise<void>((resolve) => {
+      startedResolve = resolve;
+    });
+    const models = createFixtureModels((_model, _context, options) => {
+      const stream = createAssistantMessageEventStream();
+      queueMicrotask(() => {
+        stream.push({ type: 'start', partial: assistant('waiting') });
+        startedResolve?.();
+        options?.signal?.addEventListener(
+          'abort',
+          () => {
+            stream.push({
+              type: 'error',
+              reason: 'aborted',
+              error: { ...assistant('cancelled'), stopReason: 'aborted' },
+            });
+          },
+          { once: true },
+        );
+      });
+      return stream;
+    });
+    const workspace = await fixture.composition.attachWorkspace(fixture.workspace);
+    await workspace.openConversation({
+      conversationId: 'conversation-cancel',
+      models,
+      initialModelPolicy: fixturePolicy(),
+      baseSystemPrompt: 'Desktop Agent fixture',
+    });
+    const operation = workspace.executeTurn({
+      conversationId: 'conversation-cancel',
+      prompt: 'wait',
+      modelPolicy: fixturePolicy(),
+      permissionPolicy: allowTools(),
+      workspaceTrusted: true,
+      locale: 'en',
+    });
+    await started;
+
+    expect(() =>
+      workspace.cancelTurn('conversation-cancel', {
+        turnId: 'identity-other',
+        runId: 'identity-2',
+      }),
+    ).toThrow('does not own the active turn');
+    workspace.cancelTurn('conversation-cancel', {
+      turnId: 'identity-1',
+      runId: 'identity-2',
+    });
+    const result = await operation;
+
+    expect(result.durability).toBe('durable');
+    expect(result.projection.turns[0]?.completion?.status).toBe('cancelled');
+    expect(fixture.composition.readHomeProjection().conversations[0]?.lastActivity.kind).toBe(
+      'turn-cancelled',
+    );
+  });
+
+  it('restores one Pi Session across AppHost restart without duplicating the prior turn', async () => {
+    const fixture = await createFixture();
+    const firstModels = createFixtureModels(() => completedStream(assistant('before reply')));
+    const firstWorkspace = await fixture.composition.attachWorkspace(fixture.workspace);
+    await firstWorkspace.openConversation({
+      conversationId: 'conversation-restart',
+      models: firstModels,
+      initialModelPolicy: fixturePolicy(),
+      baseSystemPrompt: 'Desktop Agent fixture',
+    });
+    await firstWorkspace.executeTurn({
+      conversationId: 'conversation-restart',
+      prompt: 'before restart',
+      modelPolicy: fixturePolicy(),
+      permissionPolicy: allowTools(),
+      workspaceTrusted: true,
+      locale: 'en',
+    });
+    const firstEvidence = firstWorkspace.readConversationEvidence('conversation-restart');
+    await fixture.composition.dispose();
+
+    const observedContexts: Context[] = [];
+    const second = createComposition(fixture, 'desktop-host-restarted');
+    compositions.push(second);
+    const secondModels = createFixtureModels((_model, context) => {
+      observedContexts.push(context);
+      return completedStream(assistant('after reply'));
+    });
+    const secondWorkspace = await second.attachWorkspace(fixture.workspace);
+    await secondWorkspace.openConversation({
+      conversationId: 'conversation-restart',
+      models: secondModels,
+      initialModelPolicy: fixturePolicy(),
+      baseSystemPrompt: 'Desktop Agent fixture',
+    });
+    const secondEvidence = secondWorkspace.readConversationEvidence('conversation-restart');
+    await secondWorkspace.executeTurn({
+      conversationId: 'conversation-restart',
+      prompt: 'after restart',
+      modelPolicy: fixturePolicy(),
+      permissionPolicy: allowTools(),
+      workspaceTrusted: true,
+      locale: 'en',
+    });
+
+    expect(secondEvidence.piSessionId).toBe(firstEvidence.piSessionId);
+    expect(secondEvidence.writerEpoch).toBe(1);
+    expect(secondWorkspace.listConversations()).toHaveLength(1);
+    expect(JSON.stringify(observedContexts)).toContain('before restart');
+    expect(JSON.stringify(observedContexts).match(/before restart/g)).toHaveLength(1);
+  });
+
+  it('flushes an active cancelled turn before AppHost disposal releases its lease and projection', async () => {
+    const fixture = await createFixture();
+    let startedResolve: (() => void) | undefined;
+    const started = new Promise<void>((resolve) => {
+      startedResolve = resolve;
+    });
+    const models = createFixtureModels((_model, _context, options) => {
+      const stream = createAssistantMessageEventStream();
+      queueMicrotask(() => {
+        stream.push({ type: 'start', partial: assistant('waiting for quit') });
+        startedResolve?.();
+        options?.signal?.addEventListener(
+          'abort',
+          () => {
+            stream.push({
+              type: 'error',
+              reason: 'aborted',
+              error: { ...assistant('quit cancelled'), stopReason: 'aborted' },
+            });
+          },
+          { once: true },
+        );
+      });
+      return stream;
+    });
+    const workspace = await fixture.composition.attachWorkspace(fixture.workspace);
+    await workspace.openConversation({
+      conversationId: 'conversation-quit',
+      models,
+      initialModelPolicy: fixturePolicy(),
+      baseSystemPrompt: 'Desktop Agent fixture',
+    });
+    const operation = workspace.executeTurn({
+      conversationId: 'conversation-quit',
+      prompt: 'wait for quit',
+      modelPolicy: fixturePolicy(),
+      permissionPolicy: allowTools(),
+      workspaceTrusted: true,
+      locale: 'en',
+    });
+    await started;
+
+    await fixture.composition.dispose();
+    const terminal = await operation;
+
+    expect(terminal.durability).toBe('durable');
+    expect(terminal.projection.turns[0]?.completion?.status).toBe('cancelled');
+    const replacement = createComposition(fixture, 'desktop-host-after-quit');
+    compositions.push(replacement);
+    const replacementWorkspace = await replacement.attachWorkspace(fixture.workspace);
+    await expect(
+      replacementWorkspace.openConversation({
+        conversationId: 'conversation-quit',
+        models: createFixtureModels(() => completedStream(assistant('restored'))),
+        initialModelPolicy: fixturePolicy(),
+        baseSystemPrompt: 'Desktop Agent fixture',
+      }),
+    ).resolves.toBeUndefined();
+  });
+
+  it('rejects a second Host while the first owns the fenced conversation lease', async () => {
+    const fixture = await createFixture();
+    const second = createComposition(fixture, 'desktop-host-2');
+    compositions.push(second);
+    const models = createFixtureModels(() => completedStream(assistant('unused')));
+    const policy = fixturePolicy();
+    const firstWorkspace = await fixture.composition.attachWorkspace(fixture.workspace);
+    const secondWorkspace = await second.attachWorkspace(fixture.workspace);
+    await firstWorkspace.openConversation({
+      conversationId: 'conversation-fenced',
+      models,
+      initialModelPolicy: policy,
+      baseSystemPrompt: 'Desktop Agent fixture',
+    });
+
+    await expect(
+      secondWorkspace.openConversation({
+        conversationId: 'conversation-fenced',
+        models,
+        initialModelPolicy: policy,
+        baseSystemPrompt: 'Desktop Agent fixture',
+      }),
+    ).rejects.toMatchObject({ code: 'lease-held' });
+    expect(firstWorkspace.readConversationEvidence('conversation-fenced').writerEpoch).toBe(1);
+  });
+
+  it('releases owned runtime, lease, projection and SQLite handles on disposal', async () => {
+    const fixture = await createFixture();
+    const models = createFixtureModels(() => completedStream(assistant('unused')));
+    const workspace = await fixture.composition.attachWorkspace(fixture.workspace);
+    await workspace.openConversation({
+      conversationId: 'conversation-dispose',
+      models,
+      initialModelPolicy: fixturePolicy(),
+      baseSystemPrompt: 'Desktop Agent fixture',
+    });
+
+    await fixture.composition.dispose();
+
+    expect(() => workspace.listConversations()).toThrow('disposed');
+    expect(() => workspace.readConversationProjection('conversation-dispose')).toThrow('disposed');
+    await expect(fixture.composition.attachWorkspace(fixture.workspace)).rejects.toThrow(
+      'composition is disposed',
+    );
+  });
+
+  async function createFixture() {
+    const root = await mkdtemp(join(tmpdir(), 'neko-desktop-agent-'));
+    roots.push(root);
+    const userHome = join(root, 'home');
+    const userDataRoot = join(userHome, '.neko');
+    const workspacePath = join(root, 'workspace');
+    await mkdir(join(workspacePath, '.agents', 'skills', 'desktop-fixture'), {
+      recursive: true,
+    });
+    await writeFile(
+      join(workspacePath, '.agents', 'skills', 'desktop-fixture', 'SKILL.md'),
+      [
+        '---',
+        'name: desktop-fixture',
+        'description: Desktop composition fixture',
+        '---',
+        'Desktop composition Skill body',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    let identity = 0;
+    const workspace: DesktopWorkspaceResolution = {
+      workspaceId: '11111111-1111-4111-8111-111111111111',
+      workspacePath,
+      displayName: 'Fixture',
+      locator: { kind: 'variable', value: '${HOME}/workspace' },
+    };
+    const composition = createDesktopAgentAppHostComposition({
+      userDataRoot,
+      userHome,
+      hostId: 'desktop-host-1',
+      credentialRuntime: createTestCredentialRuntime(),
+      createIdentity: () => `identity-${(identity += 1)}`,
+    });
+    compositions.push(composition);
+    return { root, userHome, userDataRoot, workspace, composition };
+  }
+});
+
+function createComposition(
+  fixture: {
+    readonly userDataRoot: string;
+    readonly userHome: string;
+  },
+  hostId: string,
+): DesktopAgentAppHostComposition {
+  return createDesktopAgentAppHostComposition({
+    userDataRoot: fixture.userDataRoot,
+    userHome: fixture.userHome,
+    hostId,
+    credentialRuntime: createTestCredentialRuntime(),
+  });
+}
+
+function createTestCredentialRuntime() {
+  const secrets = new Map<string, string>();
+  return createDesktopAgentCredentialRuntime({
+    secrets: {
+      get: async (key) => secrets.get(key),
+      set: async (key, value) => {
+        secrets.set(key, value);
+      },
+      delete: async (key) => {
+        secrets.delete(key);
+      },
+    },
+    prompt: {
+      text: async () => null,
+      select: async () => null,
+      notify: () => undefined,
+    },
+  });
+}
+
+function fixturePolicy() {
+  return resolveAgentModelPolicy({
+    catalog: [
+      {
+        model: MODEL,
+        capabilities: ['llm.chat', 'tools'],
+        credentialState: 'configured',
+      },
+    ],
+    userBindings: {
+      'agent.main': { providerId: MODEL.provider, modelId: MODEL.id },
+    },
+  });
+}
+
+function allowTools() {
+  return { preflight: () => ({ allowed: true as const }) };
+}
+
+function fixtureTool(): Tool {
+  return {
+    name: 'DesktopFixtureTool',
+    description: 'Proves the workspace-scoped canonical Tool registry owner.',
+    parameters: {
+      type: 'object',
+      properties: {},
+      additionalProperties: false,
+    },
+    category: 'system',
+    isReadOnly: true,
+    execute: async () => ({ success: true, data: { owner: 'desktop-workspace' } }),
+  };
+}
+
+function createFixtureModels(
+  streamSimple: (
+    model: Model<Api>,
+    context: Context,
+    options?: SimpleStreamOptions,
+  ) => ReturnType<typeof createAssistantMessageEventStream>,
+) {
+  const models = createModels();
+  models.setProvider(
+    createProvider({
+      id: MODEL.provider,
+      models: [MODEL],
+      auth: {
+        apiKey: {
+          name: 'Fixture',
+          resolve: async () => ({ auth: { apiKey: 'redacted-fixture' } }),
+        },
+      },
+      api: {
+        stream: streamSimple,
+        streamSimple,
+      },
+    }),
+  );
+  return models;
+}
+
+function assistant(text: string): AssistantMessage {
+  return {
+    role: 'assistant',
+    content: [{ type: 'text', text }],
+    api: 'openai-completions',
+    provider: MODEL.provider,
+    model: MODEL.id,
+    usage: {
+      input: 1,
+      output: 1,
+      cacheRead: 0,
+      cacheWrite: 0,
+      totalTokens: 2,
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+    },
+    stopReason: 'stop',
+    timestamp: Date.now(),
+  };
+}
+
+function completedStream(message: AssistantMessage) {
+  const stream = createAssistantMessageEventStream();
+  queueMicrotask(() => {
+    stream.push({ type: 'start', partial: message });
+    stream.push({ type: 'done', reason: 'stop', message });
+  });
+  return stream;
+}
+
+function lastUserPrompt(context: Context): string {
+  let message: Context['messages'][number] | undefined;
+  for (let index = context.messages.length - 1; index >= 0; index -= 1) {
+    const candidate = context.messages[index];
+    if (candidate?.role === 'user') {
+      message = candidate;
+      break;
+    }
+  }
+  if (!message) throw new Error('Fixture Pi stream received no user prompt.');
+  if (typeof message.content === 'string') return message.content;
+  return message.content
+    .filter((content) => content.type === 'text')
+    .map((content) => content.text)
+    .join('');
+}

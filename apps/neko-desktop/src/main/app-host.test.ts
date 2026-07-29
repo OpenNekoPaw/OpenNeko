@@ -1,9 +1,27 @@
 import { describe, expect, it, vi } from 'vitest';
+import { createToolRegistry } from '@neko/agent/tool-registry';
+import { createOpenNekoPiModels } from '@neko/agent/pi';
 import type { ILogger } from '@neko/shared/logger';
+import { createDesktopAgentBootstrapRequest } from '../shared/agent-contract';
 import { createDesktopBootstrapRequest } from '../shared/bridge-contract';
-import { createDesktopWindowMutationRequest } from '../shared/shell-contract';
+import {
+  createDesktopHomeAssetSearchRequest,
+  createDesktopHomePluginsRequest,
+} from '../shared/home-management-contract';
+import {
+  createDesktopProjectOpenRequest,
+  createDesktopWindowMutationRequest,
+} from '../shared/shell-contract';
 import { DesktopAppHost } from './app-host';
-import type { DesktopWorkspaceRegistry } from './desktop-workspace-registry';
+import type {
+  DesktopAgentAppHostComposition,
+  DesktopAgentWorkspaceRuntime,
+} from './desktop-agent-app-host-composition';
+import { createDesktopAgentCredentialRuntime } from './desktop-agent-credential-runtime';
+import type {
+  DesktopWorkspaceRegistry,
+  DesktopWorkspaceResolution,
+} from './desktop-workspace-registry';
 import { createElectronNekoHostPorts } from './electron-host-ports';
 import { DESKTOP_APP_ORIGIN } from './security';
 import { DesktopShellService } from './shell-service';
@@ -29,6 +47,7 @@ describe('DesktopAppHost', () => {
       instanceId: 'app-1',
       logger,
       shell: createShellService('app-1'),
+      agent: createAgentComposition(),
     });
     appHost.windows.register({
       windowId: 'window-1',
@@ -66,6 +85,7 @@ describe('DesktopAppHost', () => {
 
   it('fails visibly after disposal', async () => {
     const logger = createLogger();
+    const agent = createAgentComposition();
     const appHost = new DesktopAppHost({
       host: createElectronNekoHostPorts({
         homedir: '/Users/fixture',
@@ -77,9 +97,11 @@ describe('DesktopAppHost', () => {
       instanceId: 'app-1',
       logger,
       shell: createShellService('app-1'),
+      agent,
     });
     await appHost.dispose();
 
+    expect(agent.dispose).toHaveBeenCalledOnce();
     await expect(
       appHost.createBootstrapProjection(
         {
@@ -111,6 +133,25 @@ describe('DesktopAppHost', () => {
     ).rejects.toThrow("Unknown Desktop IPC sender '11'");
     expect(selectWorkspace).not.toHaveBeenCalled();
     expect(fixture.registry.resolve).not.toHaveBeenCalled();
+  });
+
+  it('rejects an unknown sender before resolving a Home asset query', async () => {
+    const fixture = await createShellAppHost();
+
+    await expect(
+      fixture.appHost.searchHomeAssets(
+        {
+          webContentsId: 11,
+          frameUrl: `${DESKTOP_APP_ORIGIN}/index.html`,
+        },
+        createDesktopHomeAssetSearchRequest('assets-1', {
+          projectId: 'content:workspace-1',
+          facet: 'media',
+          query: '',
+          limit: 20,
+        }),
+      ),
+    ).rejects.toThrow("Unknown Desktop IPC sender '11'");
   });
 
   it('rejects a replaced renderer before opening the workspace picker', async () => {
@@ -156,6 +197,206 @@ describe('DesktopAppHost', () => {
     });
     expect(selectWorkspace).toHaveBeenCalledOnce();
     expect(fixture.registry.resolve).not.toHaveBeenCalled();
+    expect(fixture.agent.attachWorkspace).not.toHaveBeenCalled();
+  });
+
+  it('attaches the Agent composition with the workspace resolution used by Shell', async () => {
+    const fixture = await createShellAppHost();
+    const resolution = createWorkspaceResolution();
+    fixture.registry.resolve.mockResolvedValue(resolution);
+
+    const result = await fixture.appHost.openContentProject(
+      fixture.sender,
+      createDesktopWindowMutationRequest(
+        'request-1',
+        fixture.projection.endpointEpoch,
+        fixture.projection.window.revision,
+      ),
+      async () => resolution.workspacePath,
+    );
+
+    expect(result.status).toBe('opened');
+    expect(fixture.agent.attachWorkspace).toHaveBeenCalledWith(resolution);
+  });
+
+  it('reopens a catalog Project and reattaches its exact Agent workspace', async () => {
+    const fixture = await createShellAppHost();
+    const resolution = createWorkspaceResolution();
+    fixture.registry.resolve.mockResolvedValue(resolution);
+    const opened = await fixture.appHost.openContentProject(
+      fixture.sender,
+      createDesktopWindowMutationRequest(
+        'open-1',
+        fixture.projection.endpointEpoch,
+        fixture.projection.window.revision,
+      ),
+      async () => resolution.workspacePath,
+    );
+    const tab = opened.projection.window.tabs[0]!;
+    const project = opened.projection.catalog.projects[0]!;
+    const closed = await fixture.appHost.shell.closeTab(
+      fixture.windowId,
+      tab.tabId,
+      opened.projection.endpointEpoch,
+      opened.projection.window.revision,
+    );
+
+    const reopened = await fixture.appHost.openCatalogProject(
+      fixture.sender,
+      createDesktopProjectOpenRequest(
+        'reopen-1',
+        project.projectId,
+        closed.endpointEpoch,
+        closed.window.revision,
+      ),
+    );
+
+    expect(reopened).toMatchObject({
+      requestId: 'reopen-1',
+      status: 'opened',
+      projection: {
+        window: {
+          activeTarget: { kind: 'project' },
+          tabs: [{ projectId: project.projectId }],
+        },
+      },
+    });
+    expect(fixture.agent.attachWorkspace).toHaveBeenLastCalledWith(resolution);
+    expect(fixture.agent.attachWorkspace).toHaveBeenCalledTimes(2);
+  });
+
+  it('projects only sanitized Skill metadata through the Home Plugins contract', async () => {
+    const fixture = await createShellAppHost();
+    const resolution = createWorkspaceResolution();
+    fixture.registry.resolve.mockResolvedValue(resolution);
+    const opened = await fixture.appHost.openContentProject(
+      fixture.sender,
+      createDesktopWindowMutationRequest(
+        'open-1',
+        fixture.projection.endpointEpoch,
+        fixture.projection.window.revision,
+      ),
+      async () => resolution.workspacePath,
+    );
+    const project = opened.projection.catalog.projects[0];
+    if (!project) throw new Error('Expected an opened Project.');
+    const runtime = {
+      ...createAgentWorkspaceRuntime(project.workspaceId),
+      listSkills: vi.fn(async () => [
+        {
+          name: 'story-planner',
+          description: 'Plan a story.',
+          source: { kind: 'project' as const },
+          trusted: true,
+          enabled: true,
+          fingerprint: 'must-stay-in-main',
+          locator: {
+            kind: 'skill' as const,
+            value: '/workspace/demo/.agents/skills/story-planner/SKILL.md',
+            fingerprint: 'must-stay-in-main',
+          },
+        },
+      ]),
+    };
+    fixture.agent.attachWorkspace.mockResolvedValue(runtime);
+
+    const result = await fixture.appHost.listHomePlugins(
+      fixture.sender,
+      createDesktopHomePluginsRequest('plugins-1', project.projectId),
+    );
+
+    expect(result.skills).toEqual([
+      {
+        name: 'story-planner',
+        description: 'Plan a story.',
+        source: 'project',
+        trusted: true,
+        enabled: true,
+      },
+    ]);
+    expect(JSON.stringify(result)).not.toContain('must-stay-in-main');
+    expect(JSON.stringify(result)).not.toContain('/workspace/demo');
+    expect(result.externalPluginHost).toBe('unavailable');
+  });
+
+  it('derives the Agent View grant from Shell and keeps incomplete startup unavailable', async () => {
+    const fixture = await createShellAppHost();
+    const resolution = createWorkspaceResolution();
+    fixture.registry.resolve.mockResolvedValue(resolution);
+    const opened = await fixture.appHost.openContentProject(
+      fixture.sender,
+      createDesktopWindowMutationRequest(
+        'open-1',
+        fixture.projection.endpointEpoch,
+        fixture.projection.window.revision,
+      ),
+      async () => resolution.workspacePath,
+    );
+    const tab = opened.projection.window.tabs[0];
+    if (!tab) throw new Error('Expected an opened Project Tab.');
+
+    await expect(
+      fixture.appHost.createAgentBootstrap(
+        fixture.sender,
+        createDesktopAgentBootstrapRequest(
+          'agent-1',
+          tab.projectId,
+          tab.viewId,
+          tab.viewEpoch,
+        ),
+        vi.fn(),
+      ),
+    ).resolves.toMatchObject({
+      requestId: 'agent-1',
+      status: 'unavailable',
+      diagnostic: {
+        code: 'desktop-agent-capability-unavailable',
+      },
+    });
+  });
+
+  it('rejects forged and stale Agent View identities before creating a connection', async () => {
+    const fixture = await createShellAppHost();
+    const resolution = createWorkspaceResolution();
+    fixture.registry.resolve.mockResolvedValue(resolution);
+    const opened = await fixture.appHost.openContentProject(
+      fixture.sender,
+      createDesktopWindowMutationRequest(
+        'open-1',
+        fixture.projection.endpointEpoch,
+        fixture.projection.window.revision,
+      ),
+      async () => resolution.workspacePath,
+    );
+    const tab = opened.projection.window.tabs[0];
+    if (!tab) throw new Error('Expected an opened Project Tab.');
+    const publish = vi.fn();
+
+    await expect(
+      fixture.appHost.createAgentBootstrap(
+        fixture.sender,
+        createDesktopAgentBootstrapRequest(
+          'agent-forged',
+          tab.projectId,
+          'view-forged',
+          tab.viewEpoch,
+        ),
+        publish,
+      ),
+    ).rejects.toMatchObject({ code: 'desktop-agent-identity-mismatch' });
+    await expect(
+      fixture.appHost.createAgentBootstrap(
+        fixture.sender,
+        createDesktopAgentBootstrapRequest(
+          'agent-stale',
+          tab.projectId,
+          tab.viewId,
+          tab.viewEpoch + 1,
+        ),
+        publish,
+      ),
+    ).rejects.toMatchObject({ code: 'desktop-agent-stale-view-epoch' });
+    expect(publish).not.toHaveBeenCalled();
   });
 });
 
@@ -210,6 +451,7 @@ function createShellFixture(applicationInstanceId: string): {
 async function createShellAppHost() {
   const logger = createLogger();
   const fixture = createShellFixture('app-1');
+  const agent = createAgentComposition();
   const appHost = new DesktopAppHost({
     host: createElectronNekoHostPorts({
       homedir: '/Users/fixture',
@@ -221,6 +463,7 @@ async function createShellAppHost() {
     instanceId: 'app-1',
     logger,
     shell: fixture.service,
+    agent,
   });
   const windowId = await appHost.shell.claimWindowId();
   appHost.windows.register({
@@ -232,6 +475,7 @@ async function createShellAppHost() {
   appHost.shell.setRendererEpoch(windowId, lifecycle.rendererEpoch);
   return {
     appHost,
+    agent,
     registry: fixture.registry,
     windowId,
     sender: {
@@ -239,5 +483,99 @@ async function createShellAppHost() {
       frameUrl: `${DESKTOP_APP_ORIGIN}/index.html`,
     },
     projection: await appHost.shell.getProjection(windowId),
+  };
+}
+
+function createAgentComposition(): DesktopAgentAppHostComposition & {
+  readonly attachWorkspace: ReturnType<typeof vi.fn>;
+  readonly dispose: ReturnType<typeof vi.fn>;
+} {
+  const credentialRuntime = createDesktopAgentCredentialRuntime({
+    secrets: {
+      get: async () => undefined,
+      set: async () => undefined,
+      delete: async () => undefined,
+    },
+    prompt: {
+      text: async () => null,
+      select: async () => null,
+      notify: () => undefined,
+    },
+  });
+  return {
+    credentialRuntime,
+    attachWorkspace: vi.fn(async (workspace: DesktopWorkspaceResolution) =>
+      createAgentWorkspaceRuntime(workspace.workspaceId),
+    ),
+    getWorkspace: vi.fn(() => undefined),
+    readHomeProjection: vi.fn(() => ({
+      revision: 0,
+      conversations: [],
+      attention: { needsInput: 0, needsReview: 0, running: 0 },
+    })),
+    subscribeHomeProjection: vi.fn(() => () => undefined),
+    dispose: vi.fn(async () => undefined),
+  };
+}
+
+function createAgentWorkspaceRuntime(workspaceId: string): DesktopAgentWorkspaceRuntime {
+  const unavailable = async (): Promise<never> => {
+    throw new Error('Agent workspace runtime operation is not expected by this AppHost test.');
+  };
+  return {
+    workspaceId,
+    workspace: {
+      ...createWorkspaceResolution(),
+      workspaceId,
+    },
+    models: createTestPiModels(),
+    tools: createToolRegistry(),
+    createConversation: unavailable,
+    deleteConversation: unavailable,
+    clearAllConversations: unavailable,
+    openConversation: unavailable,
+    startTurn: () => {
+      throw new Error('Agent turn start is not expected by this AppHost test.');
+    },
+    executeTurn: unavailable,
+    cancelTurn: () => {
+      throw new Error('Agent cancellation is not expected by this AppHost test.');
+    },
+    readActiveTurn: () => undefined,
+    readConversationEntries: unavailable,
+    readContextTokenCount: () => {
+      throw new Error('Agent context read is not expected by this AppHost test.');
+    },
+    clearContext: unavailable,
+    compactContext: unavailable,
+    listSkills: unavailable,
+    listConversations: () => [],
+    readConversationEvidence: () => {
+      throw new Error('Agent evidence is not expected by this AppHost test.');
+    },
+    readConversationProjection: () => {
+      throw new Error('Agent projection is not expected by this AppHost test.');
+    },
+    subscribeConversationProjection: () => {
+      throw new Error('Agent projection subscription is not expected by this AppHost test.');
+    },
+    dispose: async () => undefined,
+  };
+}
+
+function createTestPiModels() {
+  return createOpenNekoPiModels({
+    read: async () => undefined,
+    modify: async (_providerId, operation) => operation(undefined),
+    delete: async () => undefined,
+  });
+}
+
+function createWorkspaceResolution(): DesktopWorkspaceResolution {
+  return {
+    workspaceId: '11111111-1111-4111-8111-111111111111',
+    workspacePath: '/workspace/demo',
+    displayName: 'Demo',
+    locator: { kind: 'variable', value: '${HOME}/workspace/demo' },
   };
 }

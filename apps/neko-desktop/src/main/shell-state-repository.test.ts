@@ -8,6 +8,7 @@ import {
   DesktopShellStateRepository,
   type DesktopShellStoredState,
 } from './shell-state-repository';
+import { createDefaultDesktopWorkbenchLayout } from '../shared/workbench-contract';
 
 const temporaryDirectories: string[] = [];
 
@@ -61,12 +62,49 @@ describe('DesktopShellStateRepository', () => {
               viewEpoch: 1,
             },
           ],
+          workbench: createDefaultDesktopWorkbenchLayout('window-1'),
         },
       ],
     };
 
     await expect(repository.commit(0, invalid)).rejects.toBeInstanceOf(DesktopShellStateError);
     expect((await repository.read()).storageRevision).toBe(0);
+  });
+
+  it('migrates the version 1 Window state by adding a default Workbench layout', async () => {
+    let content = JSON.stringify({
+      schemaVersion: 1,
+      storageRevision: 0,
+      catalogRevision: 0,
+      primaryWindowId: 'window-1',
+      projects: [],
+      windows: [
+        {
+          windowId: 'window-1',
+          revision: 0,
+          activeTarget: { kind: 'home' },
+          tabs: [],
+        },
+      ],
+    });
+    const repository = new DesktopShellStateRepository({
+      readTextIfExists: async () => content,
+      writeTextAtomic: async (next) => {
+        content = next;
+      },
+    });
+
+    const migrated = await repository.read();
+
+    expect(migrated.schemaVersion).toBe(2);
+    expect(migrated.windows[0]?.workbench).toEqual(
+      createDefaultDesktopWorkbenchLayout('window-1'),
+    );
+    await repository.commit(0, { ...migrated, storageRevision: 1 });
+    expect(JSON.parse(content)).toMatchObject({
+      schemaVersion: 2,
+      windows: [{ workbench: { preset: 'agent-focus' } }],
+    });
   });
 });
 
@@ -84,6 +122,7 @@ function withPrimaryWindow(
         revision: 0,
         activeTarget: { kind: 'home' },
         tabs: [],
+        workbench: createDefaultDesktopWorkbenchLayout(windowId),
       },
     ],
   };

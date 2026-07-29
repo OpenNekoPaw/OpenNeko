@@ -47,6 +47,22 @@ describe('Desktop security policy', () => {
     expect(policy).not.toContain('http:');
     expect(policy).not.toContain('https:');
     expect(policy).not.toContain('file:');
+    expect(policy).toContain("img-src 'self' data: blob: neko-media:");
+    expect(policy).toContain("connect-src 'self' blob: neko-media:");
+  });
+
+  it('authorizes only the configured Vite development resource nonce', () => {
+    const policy = createDesktopContentSecurityPolicy('http://localhost:5173', {
+      viteDevelopmentNonce: 'openneko-vite-development',
+    });
+
+    expect(policy).toContain(
+      "script-src 'self' 'nonce-openneko-vite-development'",
+    );
+    expect(policy).toContain(
+      "style-src 'self' 'nonce-openneko-vite-development'",
+    );
+    expect(policy).not.toContain("'unsafe-inline'");
   });
 
   it('disposes navigation security after Electron destroys the WebContents', () => {
