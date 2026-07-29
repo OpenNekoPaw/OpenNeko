@@ -5,6 +5,7 @@ import { nekoDesignTokens } from '@neko/shared/theme';
 import {
   applyResolvedDesktopTheme,
   desktopNativeThemeTokens,
+  startDesktopTheme,
   startDesktopSystemTheme,
 } from './desktop-theme';
 
@@ -40,16 +41,22 @@ describe('Desktop system theme', () => {
   );
 
   it('follows operating-system appearance changes and releases the listener', () => {
-    const listeners = new Set<(event: MediaQueryListEvent) => void>();
+    const listeners = new Set<(event: { readonly matches: boolean }) => void>();
     const mediaQuery = {
       matches: false,
       addEventListener: vi.fn(
-        (_type: 'change', listener: (event: MediaQueryListEvent) => void) => {
+        (
+          _type: 'change',
+          listener: (event: { readonly matches: boolean }) => void,
+        ) => {
           listeners.add(listener);
         },
       ),
       removeEventListener: vi.fn(
-        (_type: 'change', listener: (event: MediaQueryListEvent) => void) => {
+        (
+          _type: 'change',
+          listener: (event: { readonly matches: boolean }) => void,
+        ) => {
           listeners.delete(listener);
         },
       ),
@@ -60,12 +67,55 @@ describe('Desktop system theme', () => {
 
     mediaQuery.matches = true;
     for (const listener of listeners) {
-      listener({ matches: true } as MediaQueryListEvent);
+      listener({ matches: true });
     }
     expect(document.documentElement.dataset.nekoTheme).toBe('dark');
 
     dispose();
     expect(mediaQuery.removeEventListener).toHaveBeenCalledTimes(1);
     expect(listeners.size).toBe(0);
+  });
+
+  it('honors explicit appearance until the preference returns to system', () => {
+    const listeners = new Set<(event: { readonly matches: boolean }) => void>();
+    const mediaQuery = {
+      matches: false,
+      addEventListener: vi.fn(
+        (
+          _type: 'change',
+          listener: (event: { readonly matches: boolean }) => void,
+        ) => {
+          listeners.add(listener);
+        },
+      ),
+      removeEventListener: vi.fn(
+        (
+          _type: 'change',
+          listener: (event: { readonly matches: boolean }) => void,
+        ) => {
+          listeners.delete(listener);
+        },
+      ),
+    };
+    const controller = startDesktopTheme(document, 'dark', mediaQuery);
+    expect(document.documentElement.dataset.nekoTheme).toBe('dark');
+
+    mediaQuery.matches = false;
+    for (const listener of listeners) {
+      listener({ matches: false });
+    }
+    expect(document.documentElement.dataset.nekoTheme).toBe('dark');
+
+    controller.update('light');
+    expect(document.documentElement.dataset.nekoTheme).toBe('light');
+    controller.update('system');
+    expect(document.documentElement.dataset.nekoTheme).toBe('light');
+
+    mediaQuery.matches = true;
+    for (const listener of listeners) {
+      listener({ matches: true });
+    }
+    expect(document.documentElement.dataset.nekoTheme).toBe('dark');
+    controller.dispose();
   });
 });

@@ -96,6 +96,62 @@ describe('DesktopApplication', () => {
     container.remove();
   });
 
+  it('opens application Settings from Home without requiring a Project and returns to Home', async () => {
+    const projection = createProjection();
+    Object.defineProperty(window, 'openNekoDesktop', {
+      configurable: true,
+      value: {
+        agent: {
+          getBootstrap: vi.fn(),
+          send: vi.fn(),
+          subscribe: vi.fn(() => () => undefined),
+        },
+        bootstrap: { get: vi.fn() },
+        lifecycle: { subscribe: vi.fn(() => () => undefined) },
+        settings: createSettingsBridgeMock(),
+        home: createHomeBridgeMock(),
+        shell: {
+          getSnapshot: vi.fn(async () => projection),
+          subscribe: vi.fn(() => () => undefined),
+        },
+        projects: {
+          open: vi.fn(),
+          openContent: vi.fn(),
+          requestProfile: vi.fn(),
+        },
+        tabs: {
+          activateHome: vi.fn(),
+          activate: vi.fn(),
+          close: vi.fn(),
+        },
+        workbench: { update: vi.fn() },
+        resources: createResourceBridgeMock(),
+        preview: createPreviewBridgeMock(),
+        canvas: createCanvasBridgeMock(),
+        cut: createCutBridgeMock(),
+      } satisfies typeof window.openNekoDesktop,
+    });
+    const container = document.createElement('div');
+    document.body.append(container);
+    const root = createRoot(container);
+    await act(async () => root.render(<TestApplication />));
+
+    const settingsButton = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Desktop settings"]',
+    );
+    expect(settingsButton?.disabled).toBe(false);
+    await act(async () => settingsButton?.click());
+    expect(container.textContent).toContain('Startup destination');
+
+    const back = [...container.querySelectorAll('button')].find(
+      (button) => button.textContent?.trim() === 'Back to OpenNeko',
+    );
+    await act(async () => back?.click());
+    expect(container.textContent).toContain('Start creating');
+    await act(async () => root.unmount());
+    container.remove();
+  });
+
   it('sends layout controls through the revision-bound Workbench bridge', async () => {
     const base = createProjection();
     const workbench = {

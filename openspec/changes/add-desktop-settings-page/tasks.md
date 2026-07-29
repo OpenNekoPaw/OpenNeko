@@ -10,12 +10,12 @@
 
 ## 3. Desktop settings experience
 
-- [ ] 3.1 Add a standalone responsive Settings surface with back navigation, category navigation, search, General, Appearance, Creative, and Agent sections using shared UI/theme primitives.
-- [ ] 3.2 Replace the old settings-button-to-Agent-config path, apply theme and locale updates live, and preserve the prior Home section or project surface when returning.
-- [ ] 3.3 Pass the resource browser display default through its public Root contract without overriding existing per-project display state.
-- [ ] 3.4 Add and update English and Chinese translations plus focused accessibility and interaction tests.
+- [x] 3.1 Add a standalone responsive Settings surface with back navigation, category navigation, search, General, Appearance, Creative, and Agent sections using shared UI/theme primitives.
+- [x] 3.2 Replace the old settings-button-to-Agent-config path, apply theme and locale updates live, and preserve the prior Home section or project surface when returning.
+- [x] 3.3 Pass the resource browser display default through its public Root contract without overriding existing per-project display state.
+- [x] 3.4 Add and update English and Chinese translations plus focused accessibility and interaction tests.
 
 ## 4. Validation and delivery
 
-- [ ] 4.1 Run focused Desktop and Assets tests, Desktop/Assets typecheck, boundary checks, strict OpenSpec validation, production Electron packaging, and `git diff --check`.
-- [ ] 4.2 Verify Home and `/Users/feng/Git/neko-test` Settings flows in real Electron for light/dark, locale, persistence, return navigation, startup target, resource default, and Agent advanced config ownership; record remaining risk.
+- [x] 4.1 Run focused Desktop and Assets tests, Desktop/Assets typecheck, boundary checks, strict OpenSpec validation, production Electron packaging, and `git diff --check`.
+- [x] 4.2 Verify Home and `/Users/feng/Git/neko-test` Settings flows in real Electron for light/dark, locale, persistence, return navigation, startup target, resource default, and Agent advanced config ownership; record remaining risk.

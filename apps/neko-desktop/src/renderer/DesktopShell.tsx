@@ -39,6 +39,7 @@ import { DesktopPreviewSurface } from './DesktopPreviewSurface';
 import { DesktopCanvasSurface } from './DesktopCanvasSurface';
 import { DesktopCutSurface } from './DesktopCutSurface';
 import { DESKTOP_DEFAULT_CANVAS_DOCUMENT_ID } from '../shared/canvas-bridge-contract';
+import { DesktopSettingsSurface } from './DesktopSettingsSurface';
 
 type ShellState =
   | { readonly kind: 'loading' }
@@ -65,6 +66,8 @@ export function DesktopApplication(): JSX.Element {
   const { t } = useTranslation();
   const [state, setState] = useState<ShellState>({ kind: 'loading' });
   const [homeSection, setHomeSection] = useState<HomeSection>('create');
+  const [applicationSurface, setApplicationSurface] =
+    useState<'workspace' | 'settings'>('workspace');
   const [pending, setPending] = useState(false);
   const [diagnostic, setDiagnostic] = useState<string>();
   const [agentNavigationTarget, setAgentNavigationTarget] =
@@ -162,6 +165,7 @@ export function DesktopApplication(): JSX.Element {
   const activeProject = resolveActiveProject(projection);
   const actions: ShellActions = {
     onHome: (section = 'create') => {
+      setApplicationSurface('workspace');
       setHomeSection(section);
       setAgentNavigationTarget(undefined);
       setAgentInitialInput(undefined);
@@ -170,6 +174,7 @@ export function DesktopApplication(): JSX.Element {
       );
     },
     onOpenProject: () => {
+      setApplicationSurface('workspace');
       setAgentNavigationTarget(undefined);
       setAgentInitialInput(undefined);
       void runMutation(async () => {
@@ -178,6 +183,7 @@ export function DesktopApplication(): JSX.Element {
       });
     },
     onOpenRecent: (projectId) => {
+      setApplicationSurface('workspace');
       const tab = projection.window.tabs.find(
         (candidate) => candidate.projectId === projectId,
       );
@@ -197,6 +203,7 @@ export function DesktopApplication(): JSX.Element {
       });
     },
     onOpenConversation: (conversation) => {
+      setApplicationSurface('workspace');
       const { navigation } = conversation;
       const tab = projection.window.tabs.find(
         (candidate) =>
@@ -294,27 +301,8 @@ export function DesktopApplication(): JSX.Element {
         ),
       ),
     onOpenSettings: () => {
-      const activeTarget = projection.window.activeTarget;
-      const activeTab =
-        activeTarget.kind === 'project'
-          ? projection.window.tabs.find(
-              (tab) => tab.tabId === activeTarget.tabId,
-            )
-          : projection.window.tabs[0];
-      if (!activeTab) {
-        setDiagnostic(t('shell.settingsNeedProject'));
-        return;
-      }
       setDiagnostic(undefined);
-      void window.openNekoDesktop.agent
-        .getBootstrap(activeTab.projectId, activeTab.viewId, activeTab.viewEpoch)
-        .then((bootstrap) => {
-          if (bootstrap.status === 'unavailable') {
-            throw new Error(bootstrap.diagnostic.message);
-          }
-          window.openNekoDesktop.agent.send({ type: 'openUserConfigFile' });
-        })
-        .catch((error: unknown) => setDiagnostic(describeError(error)));
+      setApplicationSurface('settings');
     },
   };
 
@@ -327,7 +315,11 @@ export function DesktopApplication(): JSX.Element {
             <span>{diagnostic}</span>
           </div>
         ) : null}
-        {activeProject ? (
+        {applicationSurface === 'settings' ? (
+          <DesktopSettingsSurface
+            onBack={() => setApplicationSurface('workspace')}
+          />
+        ) : activeProject ? (
           <ContentProjectWorkspace
             actions={actions}
             pending={pending}
@@ -1439,7 +1431,6 @@ function ProjectPrimarySidebar({
   readonly projection: DesktopShellProjection;
   readonly compact: boolean;
 }): JSX.Element {
-  const { t } = useTranslation();
   const workbench = projection.window.workbench;
   const togglePrimarySidebar = (): void => {
     actions.onUpdateWorkbench({
@@ -2392,19 +2383,11 @@ function PrimarySidebarFooter({
   readonly projection: DesktopShellProjection;
 }): JSX.Element {
   const { t } = useTranslation();
-  const settingsAvailable = projection.window.tabs.length > 0;
   return (
     <div className="home-navigation-footer">
       {compact ? null : <AttentionSummary projection={projection} />}
-      <Tooltip
-        content={
-          settingsAvailable
-            ? t('shell.settingsLabel')
-            : t('shell.settingsNeedProject')
-        }
-      >
+      <Tooltip content={t('shell.settingsLabel')}>
         <IconButton
-          disabled={!settingsAvailable}
           label={t('shell.settingsLabel')}
           icon={<SettingsIcon size={16} />}
           onClick={onOpenSettings}

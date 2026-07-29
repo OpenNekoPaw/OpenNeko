@@ -7,6 +7,7 @@ import type {
 } from '../shared/shell-contract';
 import { createDesktopResourceBrowserIdentity } from '../shared/resource-browser-bridge-contract';
 import { createElectronResourceBrowserHostRuntime } from './desktop-resource-browser-host-runtime';
+import { useDesktopApplicationSettings } from './application-settings-context';
 
 const ResourceBrowserRoot = lazy(async () => {
   const module = await import('neko-assets/resource-browser/root');
@@ -25,6 +26,7 @@ export function DesktopResourceBrowserSurface({
   readonly tab: DesktopProjectTabProjection;
 }): JSX.Element {
   const { locale, t } = useTranslation();
+  const applicationSettings = useDesktopApplicationSettings();
   const runtime = useMemo(
     () =>
       createElectronResourceBrowserHostRuntime({
@@ -59,6 +61,9 @@ export function DesktopResourceBrowserSurface({
         <ResourceBrowserRoot
           runtime={runtime}
           locale={locale}
+          defaultViewMode={
+            applicationSettings.projection.preferences.resourceBrowserView
+          }
           previewTarget={{
             viewId: `preview:${tab.viewId}:temporary`,
             presentation: 'temporary',

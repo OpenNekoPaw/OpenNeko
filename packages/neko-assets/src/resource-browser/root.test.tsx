@@ -237,6 +237,37 @@ describe('ResourceBrowserRoot', () => {
     expect(runtime.search).not.toHaveBeenCalled();
   });
 
+  it('uses the Desktop default view only when no project-scoped view has been saved', async () => {
+    const defaultProjection: ResourceBrowserProjection = {
+      ...projection,
+      identity: {
+        ...projection.identity,
+        projectId: 'project-desktop-default-grid',
+        workspaceId: 'workspace-desktop-default-grid',
+      },
+    };
+    const runtime = createRuntime(defaultProjection);
+    const first = render(
+      <ResourceBrowserRoot runtime={runtime} locale="en" defaultViewMode="grid" />,
+    );
+    await screen.findByText('cat.png');
+    expect(
+      document.querySelector('.neko-resource-browser__items')?.getAttribute('data-view-mode'),
+    ).toBe('grid');
+
+    fireEvent.click(screen.getByRole('button', { name: 'List view' }));
+    expect(
+      document.querySelector('.neko-resource-browser__items')?.getAttribute('data-view-mode'),
+    ).toBe('list');
+    first.unmount();
+
+    render(<ResourceBrowserRoot runtime={runtime} locale="en" defaultViewMode="grid" />);
+    await screen.findByText('cat.png');
+    expect(
+      document.querySelector('.neko-resource-browser__items')?.getAttribute('data-view-mode'),
+    ).toBe('list');
+  });
+
   it('restores the project-scoped query after the Resource Dock remounts', async () => {
     const queryProjection: ResourceBrowserProjection = {
       ...projection,

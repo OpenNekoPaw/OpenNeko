@@ -3,6 +3,7 @@ import {
   DESKTOP_BACKGROUND_COLORS,
   type DesktopResolvedTheme,
 } from '../shared/desktop-presentation-contract';
+import type { DesktopThemePreference } from '../shared/application-settings-contract';
 
 export const DESKTOP_DARK_THEME_QUERY = '(prefers-color-scheme: dark)';
 
@@ -16,6 +17,11 @@ export interface DesktopThemeMediaQuery {
     type: 'change',
     listener: (event: { readonly matches: boolean }) => void,
   ): void;
+}
+
+export interface DesktopThemeController {
+  update(preference: DesktopThemePreference): void;
+  dispose(): void;
 }
 
 const desktopThemeGeometryTokens = {
@@ -194,21 +200,43 @@ export function startDesktopSystemTheme(
   target: Document,
   providedMediaQuery?: DesktopThemeMediaQuery,
 ): () => void {
+  return startDesktopTheme(target, 'system', providedMediaQuery).dispose;
+}
+
+export function startDesktopTheme(
+  target: Document,
+  initialPreference: DesktopThemePreference,
+  providedMediaQuery?: DesktopThemeMediaQuery,
+): DesktopThemeController {
   const mediaQuery =
     providedMediaQuery ?? target.defaultView?.matchMedia(DESKTOP_DARK_THEME_QUERY);
   if (!mediaQuery) {
     throw new Error('Desktop system theme requires matchMedia support.');
   }
-  const applySystemTheme = (event: { readonly matches: boolean }): void => {
-    applyResolvedDesktopTheme(target, event.matches ? 'dark' : 'light');
+  let preference = initialPreference;
+  const applyPreference = (matches: boolean): void => {
+    applyResolvedDesktopTheme(
+      target,
+      preference === 'system' ? (matches ? 'dark' : 'light') : preference,
+    );
   };
-  applySystemTheme(mediaQuery);
+  const applySystemTheme = (event: { readonly matches: boolean }): void => {
+    if (preference === 'system') applyPreference(event.matches);
+  };
+  applyPreference(mediaQuery.matches);
   mediaQuery.addEventListener('change', applySystemTheme);
   let disposed = false;
-  return () => {
-    if (disposed) return;
-    disposed = true;
-    mediaQuery.removeEventListener('change', applySystemTheme);
+  return {
+    update(nextPreference) {
+      if (disposed) throw new Error('Desktop theme controller is disposed.');
+      preference = nextPreference;
+      applyPreference(mediaQuery.matches);
+    },
+    dispose() {
+      if (disposed) return;
+      disposed = true;
+      mediaQuery.removeEventListener('change', applySystemTheme);
+    },
   };
 }
 

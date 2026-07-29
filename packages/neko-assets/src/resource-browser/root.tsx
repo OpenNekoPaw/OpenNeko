@@ -46,6 +46,7 @@ import './style.css';
 export interface ResourceBrowserRootProps {
   readonly runtime: ResourceBrowserHostRuntime;
   readonly locale: SupportedLocale;
+  readonly defaultViewMode?: 'list' | 'grid';
   readonly previewTarget?: {
     readonly viewId: string;
     readonly presentation: 'temporary' | 'side';
@@ -70,6 +71,7 @@ interface ResourceBrowserDisplayState {
 const displayStateByProject = new Map<string, ResourceBrowserDisplayState>();
 
 export function ResourceBrowserRoot({
+  defaultViewMode = 'list',
   locale,
   onOpenCanvas,
   previewTarget,
@@ -83,7 +85,7 @@ export function ResourceBrowserRoot({
   const [selectedId, setSelectedId] = useState<string | undefined>(initialDisplayState?.selectedId);
   const [pending, setPending] = useState(false);
   const [viewMode, setViewMode] = useState<'list' | 'grid'>(
-    initialDisplayState?.viewMode ?? 'list',
+    initialDisplayState?.viewMode ?? defaultViewMode,
   );
   const [expandedIds, setExpandedIds] = useState<ReadonlySet<string>>(
     () => initialDisplayState?.expandedIds ?? new Set(),
@@ -139,11 +141,19 @@ export function ResourceBrowserRoot({
     restoringDisplayState.current = true;
     const saved = displayStateByProject.get(displayStateKey);
     setQuery(saved?.query ?? '');
-    setViewMode(saved?.viewMode ?? 'list');
+    setViewMode(saved?.viewMode ?? defaultViewMode);
     setExpandedIds(saved?.expandedIds ?? new Set());
     setSelectedId(saved?.selectedId);
     setActiveContainerByFacet(saved?.activeContainerByFacet ?? {});
-  }, [activeContainerByFacet, expandedIds, displayStateKey, selectedId, query, viewMode]);
+  }, [
+    activeContainerByFacet,
+    defaultViewMode,
+    expandedIds,
+    displayStateKey,
+    selectedId,
+    query,
+    viewMode,
+  ]);
 
   useEffect(() => {
     if (restoringDisplayState.current) {

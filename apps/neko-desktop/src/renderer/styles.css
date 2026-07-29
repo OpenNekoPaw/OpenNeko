@@ -101,6 +101,282 @@ code {
   transform: translateX(-50%);
 }
 
+.desktop-settings {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  grid-template-columns: 248px minmax(0, 1fr);
+  color: var(--neko-fg);
+  background: var(--neko-desktop-window);
+}
+
+.desktop-settings__navigation {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  gap: 12px;
+  padding: 54px 14px 18px;
+  border-right: 1px solid var(--neko-desktop-border);
+  background: var(--neko-desktop-chrome);
+  -webkit-app-region: drag;
+}
+
+.desktop-settings__navigation button,
+.desktop-settings__navigation input {
+  -webkit-app-region: no-drag;
+}
+
+.desktop-settings__back {
+  display: flex;
+  min-height: 32px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--neko-desktop-radius-control);
+  color: var(--neko-desktop-text-muted);
+  background: transparent;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.desktop-settings__back:hover {
+  color: var(--neko-fg);
+  background: var(--neko-desktop-control-hover);
+}
+
+.desktop-settings__search {
+  display: flex;
+  min-height: 34px;
+  align-items: center;
+  gap: 7px;
+  padding: 0 10px;
+  border: 1px solid var(--neko-desktop-border);
+  border-radius: 9px;
+  color: var(--neko-desktop-text-subtle);
+  background: var(--neko-desktop-control);
+}
+
+.desktop-settings__search:focus-within {
+  border-color: color-mix(in srgb, var(--neko-accent) 46%, var(--neko-desktop-border));
+  box-shadow: var(--neko-desktop-focus-ring);
+}
+
+.desktop-settings__search input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  color: var(--neko-fg);
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+}
+
+.desktop-settings__search input::placeholder {
+  color: var(--neko-desktop-text-subtle);
+}
+
+.desktop-settings__navigation nav {
+  display: grid;
+  gap: 4px;
+}
+
+.desktop-settings__navigation nav button {
+  display: flex;
+  min-height: 36px;
+  align-items: center;
+  gap: 10px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 9px;
+  color: var(--neko-desktop-text-muted);
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  font-size: 12px;
+}
+
+.desktop-settings__navigation nav button:hover {
+  color: var(--neko-fg);
+  background: var(--neko-desktop-control-hover);
+}
+
+.desktop-settings__navigation nav button.is-active {
+  color: var(--neko-fg);
+  background: var(--neko-desktop-control-pressed);
+  font-weight: 650;
+}
+
+.desktop-settings__content {
+  min-width: 0;
+  overflow: auto;
+  padding: 58px clamp(28px, 6vw, 88px) 72px;
+}
+
+.desktop-settings__title,
+.desktop-settings__group,
+.desktop-settings__diagnostic,
+.desktop-settings__empty {
+  width: min(760px, 100%);
+  margin-inline: auto;
+}
+
+.desktop-settings__title {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 34px;
+}
+
+.desktop-settings__title-icon {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid var(--neko-desktop-border);
+  border-radius: 10px;
+  color: var(--neko-desktop-text-muted);
+  background: var(--neko-desktop-surface);
+  box-shadow: var(--neko-desktop-shadow-surface);
+}
+
+.desktop-settings__title h1,
+.desktop-settings__group h2 {
+  margin: 0;
+  font-weight: 680;
+  letter-spacing: -0.02em;
+}
+
+.desktop-settings__title h1 {
+  font-size: 24px;
+}
+
+.desktop-settings__title p,
+.desktop-settings__group-heading p,
+.desktop-settings__row p,
+.desktop-settings__row small,
+.desktop-settings__authority {
+  color: var(--neko-desktop-text-muted);
+}
+
+.desktop-settings__title p,
+.desktop-settings__group-heading p {
+  margin: 5px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.desktop-settings__group {
+  margin-bottom: 28px;
+}
+
+.desktop-settings__group-heading {
+  margin-bottom: 10px;
+  padding-inline: 2px;
+}
+
+.desktop-settings__group-heading h2 {
+  font-size: 14px;
+}
+
+.desktop-settings__card {
+  overflow: hidden;
+  border: 1px solid var(--neko-desktop-border);
+  border-radius: 13px;
+  background: var(--neko-desktop-surface);
+  box-shadow: var(--neko-desktop-shadow-surface);
+}
+
+.desktop-settings__row {
+  display: flex;
+  min-height: 64px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 13px 15px;
+}
+
+.desktop-settings__row + .desktop-settings__row {
+  border-top: 1px solid var(--neko-desktop-border);
+}
+
+.desktop-settings__row > span,
+.desktop-settings__row > div {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.desktop-settings__row strong {
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.desktop-settings__row small,
+.desktop-settings__row p {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.desktop-settings__row select,
+.desktop-settings__action {
+  min-height: 30px;
+  flex: 0 0 auto;
+  border: 1px solid var(--neko-desktop-border);
+  border-radius: 8px;
+  color: var(--neko-fg);
+  background: var(--neko-desktop-control);
+  font: inherit;
+  font-size: 11px;
+}
+
+.desktop-settings__row select {
+  max-width: 210px;
+  padding: 0 28px 0 10px;
+}
+
+.desktop-settings__action {
+  padding: 0 12px;
+  cursor: pointer;
+}
+
+.desktop-settings__action:hover:not(:disabled) {
+  background: var(--neko-desktop-control-hover);
+}
+
+.desktop-settings__action:disabled,
+.desktop-settings__row select:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+.desktop-settings__authority {
+  margin: 0;
+  padding: 0 15px 14px;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.desktop-settings__diagnostic {
+  margin-bottom: 18px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--neko-danger) 28%, transparent);
+  border-radius: 9px;
+  color: var(--neko-desktop-danger-foreground);
+  background: var(--neko-desktop-danger-surface);
+  font-size: 11px;
+}
+
+.desktop-settings__empty {
+  padding: 56px 20px;
+  color: var(--neko-desktop-text-muted);
+  text-align: center;
+  font-size: 12px;
+}
+
 .brand-mark,
 .home-hero-mark {
   display: inline-grid;
@@ -1546,6 +1822,14 @@ button.home-management-card:hover {
 }
 
 @media (max-width: 720px) {
+  .desktop-settings {
+    grid-template-columns: 190px minmax(0, 1fr);
+  }
+
+  .desktop-settings__content {
+    padding-inline: 22px;
+  }
+
   .project-workspace.neko-controlled-workbench-shell {
     grid-template-columns: 0 0 minmax(320px, 1fr) 0;
   }
