@@ -60,3 +60,27 @@ their facts into a second Home store.
 - **WHEN** the user selects a Project or Conversation
 - **THEN** Desktop uses the existing Project open/focus or Conversation navigation identity
 - **AND** duplicate Project or Conversation owner instances are not created
+
+### Requirement: Desktop enters Home by default
+
+Desktop MUST use Home as the default startup destination. A pre-release settings migration MUST map
+the legacy restore-by-default state to Home while preserving unrelated Desktop preferences. A restore
+destination MAY only take effect after it has been explicitly stored by the current settings version.
+
+#### Scenario: Existing pre-release installation starts after upgrade
+
+- **WHEN** Desktop reads a version 1 application settings record whose startup destination is restore
+- **THEN** the version 2 projection uses Home and preserves theme, locale, resource view and revision
+- **AND** Shell activates Home without deleting the restored Project tabs
+
+### Requirement: Start Creating uses the compact Agent Home composition
+
+Start Creating MUST present one compact Agent intent composer with its Project scope control and real
+shortcut actions. It MUST NOT render an oversized branding hero, accent glow, duplicate Agent panel,
+or a shortcut that succeeds without invoking a real command or prefill.
+
+#### Scenario: User opens Home
+
+- **WHEN** Start Creating is the active Home section
+- **THEN** Desktop renders the task heading, intent composer, Project selector and real shortcut actions
+- **AND** submitting still follows the existing one-shot Project Agent handoff

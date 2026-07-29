@@ -73,8 +73,26 @@ enabled/trusted 状态，删除 locator/fingerprint/物理路径。Extensions ta
 全部创作由 Project catalog 与 Agent Home conversation projection组成；点击项目或会话继续
 使用现有 open/focus 路径。Activity attention 作为列表状态显示，不保留独立一级入口。
 
+### 6. Home is the default application entry
+
+Desktop 的新安装默认启动目标是 Home。预发布 application settings v1 中继承旧默认值
+`restore` 的状态在 v2 读取时迁移为 `home`；主题、语言、资源视图和 storage revision 保留。
+用户在 v2 设置页显式选择“恢复上次项目”后，后续启动仍尊重该选择。这样既修复旧默认污染，
+也不让 Shell 绕过 Settings authority 或静默改写新版用户选择。该单版本迁移由 Desktop
+Application Settings Repository 拥有；当稳定版不再接受任何 v1 预发布设置文件时删除，
+验收以 v1 migration test 和 v2 explicit-restore test 为准。
+
+### 7. Start Creating is a compact Agent Home surface
+
+Start Creating 使用单一居中的 Agent intent composer。标题只表达当前任务，不承担放大品牌
+展示；项目选择位于 composer footer，发送继续使用一次性 handoff。真实快捷操作在 composer
+下方以紧凑 action rows 展示，并只执行打开项目或预填意图。背景只使用 Desktop theme surface
+与现有轻量网格，不使用强调色光晕制造假的运行状态。
+
 ## Risks / Trade-offs
 
 - 跨项目资产查询可能较慢，因此结果按项目惰性加载并限制数量，不建立缓存真值。
 - Home 初始输入只预填不自动发送，多一步确认但保留 Agent 权限与模型成本边界。
 - 扩展页在 Phase 1 只能显示内置组合能力；外部扩展管理仍需独立 Plugin Host change。
+- v1 的 `restore` 无法区分旧默认与用户显式选择；本项目尚未发布，因此迁移统一采用新的 Home
+  默认。需要恢复项目的用户可在 v2 设置页重新显式选择一次。

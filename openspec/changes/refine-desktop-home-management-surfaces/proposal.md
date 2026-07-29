@@ -14,6 +14,9 @@ Desktop Home 当前只有“开始创作 / 动态 / 资产中心”三个入口�
 - “插件”展示 Pi SkillHost 的 personal/project/builtin Skill catalog，以及 Desktop 已组合
   内置领域扩展的真实 capability 状态。外部扩展安装、启用和 Plugin Host 执行保持不可用。
 - “全部创作”聚合 Project catalog 与 Agent Home conversation projection。
+- Desktop 新安装与本次预发布设置迁移后首先进入 Home，不再把历史项目恢复作为隐式默认。
+- “开始创作”收敛为紧凑的 Agent Home 起始面：项目作用域属于 composer 控件，快捷意图属于
+  composer 下方的真实操作，不再使用放大的品牌 Hero、装饰性光晕或伪工作区入口。
 
 ## Capabilities
 
@@ -28,7 +31,8 @@ Desktop Home 当前只有“开始创作 / 动态 / 资产中心”三个入口�
 
 ## Impact
 
-- `apps/neko-desktop` Shell contract、Main composition、preload bridge、Home renderer 和 i18n
+- `apps/neko-desktop` application settings migration、Shell contract、Main composition、preload
+  bridge、Home renderer 和 i18n
 - Agent public Root 增加一次性初始输入 presentation handoff
 - Assets 继续复用现有 Resource Browser source，不复制文件扫描、Media Library 或 Entity
   catalog
