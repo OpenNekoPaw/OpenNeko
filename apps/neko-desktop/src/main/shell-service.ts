@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { isDeepStrictEqual } from 'node:util';
 import type { HostDiagnostic } from '@neko/host/ports';
 import {
   DesktopAgentContractError,
@@ -730,10 +731,30 @@ export class DesktopShellService {
           );
         }
         if (window.activeTarget.kind !== 'project') {
-          throw new DesktopShellContractError(
-            'desktop-shell-project-identity-mismatch',
-            'Desktop Workbench mutation requires an active Content Project.',
+          const projectedWorkbench = projectWorkbench(
+            window.workbench,
+            rendererEpochOffset,
           );
+          const allowedHomeMutation: DesktopWorkbenchLayoutProjection = {
+            ...projectedWorkbench,
+            revision: parsed.revision,
+            primarySidebar: parsed.primarySidebar,
+          };
+          if (!isDeepStrictEqual(parsed, allowedHomeMutation)) {
+            throw new DesktopShellContractError(
+              'desktop-shell-project-identity-mismatch',
+              'Desktop Home may only mutate the application primary sidebar.',
+            );
+          }
+          return {
+            ...window,
+            revision: window.revision + 1,
+            workbench: {
+              ...window.workbench,
+              revision: parsed.revision,
+              primarySidebar: parsed.primarySidebar,
+            },
+          };
         }
         const activeTabId = window.activeTarget.tabId;
         const tab = window.tabs.find(
@@ -1066,19 +1087,29 @@ function projectShellState(
         ...tab,
         viewEpoch: tab.viewEpoch + Math.max(0, rendererEpoch - 1),
       })),
-      workbench: {
-        ...window.workbench,
-        main: {
-          ...window.workbench.main,
-          views: window.workbench.main.views.map((view) => ({
-            ...view,
-            viewEpoch: view.viewEpoch + Math.max(0, rendererEpoch - 1),
-          })),
-        },
-      },
+      workbench: projectWorkbench(
+        window.workbench,
+        Math.max(0, rendererEpoch - 1),
+      ),
     },
     agentHome,
     domains: domainCapabilities,
+  };
+}
+
+function projectWorkbench(
+  workbench: DesktopWorkbenchLayoutProjection,
+  rendererEpochOffset: number,
+): DesktopWorkbenchLayoutProjection {
+  return {
+    ...workbench,
+    main: {
+      ...workbench.main,
+      views: workbench.main.views.map((view) => ({
+        ...view,
+        viewEpoch: view.viewEpoch + rendererEpochOffset,
+      })),
+    },
   };
 }
 

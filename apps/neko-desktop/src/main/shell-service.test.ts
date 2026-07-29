@@ -339,6 +339,66 @@ describe('DesktopShellService', () => {
     });
   });
 
+  it('persists only the application primary sidebar while Home is active', async () => {
+    const fixture = createFixture();
+    const windowId = await fixture.service.claimWindowId();
+    fixture.service.setRendererEpoch(windowId, 1);
+    const initial = await fixture.service.getProjection(windowId);
+    const opened = await fixture.service.openContent(
+      windowId,
+      '/workspace/demo',
+      initial.endpointEpoch,
+      initial.window.revision,
+    );
+    const home = await fixture.service.activateHome(
+      windowId,
+      opened.projection.endpointEpoch,
+      opened.projection.window.revision,
+    );
+    fixture.service.setRendererEpoch(windowId, 2);
+    const reattachedHome = await fixture.service.getProjection(windowId);
+    const current = reattachedHome.window.workbench;
+    const collapsed = {
+      ...current,
+      revision: current.revision + 1,
+      primarySidebar: {
+        ...current.primarySidebar,
+        visible: false,
+      },
+    };
+
+    const updated = await fixture.service.updateWorkbench(
+      windowId,
+      reattachedHome.endpointEpoch,
+      home.window.revision,
+      current.revision,
+      collapsed,
+    );
+
+    expect(updated.window.activeTarget).toEqual({ kind: 'home' });
+    expect(updated.window.workbench.primarySidebar.visible).toBe(false);
+    expect(updated.window.workbench.main.views[0]?.viewEpoch).toBe(2);
+    await expect(
+      fixture.service.updateWorkbench(
+        windowId,
+        updated.endpointEpoch,
+        updated.window.revision,
+        updated.window.workbench.revision,
+        {
+          ...updated.window.workbench,
+          revision: updated.window.workbench.revision + 1,
+          resourceDock: {
+            ...updated.window.workbench.resourceDock,
+            presentation: 'overlay',
+          },
+        },
+      ),
+    ).rejects.toMatchObject({
+      code: 'desktop-shell-project-identity-mismatch',
+      message: 'Desktop Home may only mutate the application primary sidebar.',
+    });
+  });
+
   it('restores a persisted temporary Preview View to the owning Agent View', async () => {
     const file = createMemoryFile();
     const first = createFixture(file);
