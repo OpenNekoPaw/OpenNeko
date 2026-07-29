@@ -50,6 +50,15 @@ describe('Canvas creative workbench layout boundary', () => {
     expect(appSource).toMatch(/<InfiniteCanvas/);
   });
 
+  it('keeps Canvas layout overrides stronger than lazily loaded shared Workbench styles', () => {
+    expect(cssSource).toMatch(
+      /\.canvas-webview-root \.canvas-workbench-body\s*\{[^}]*display:\s*flex;/s,
+    );
+    expect(cssSource).toMatch(
+      /\.canvas-webview-root \.canvas-main-panel,\s*\.canvas-webview-root \.canvas-main-surface\s*\{[^}]*display:\s*flex;/s,
+    );
+  });
+
   it('keeps CanvasApp subscribed through focused store selectors', () => {
     expect(appSource).not.toMatch(/useCanvasStore\(\)/);
     expect(appSource).toMatch(/useCanvasStore\(\(state\) => state\.canvasData\)/);
