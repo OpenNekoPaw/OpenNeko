@@ -1,0 +1,21 @@
+{
+  "name": "@neko-preview/contracts",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@neko/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.3",
+    "vitest": "^4.1.2"
+  },
+  "license": "AGPL-3.0-or-later"
+}

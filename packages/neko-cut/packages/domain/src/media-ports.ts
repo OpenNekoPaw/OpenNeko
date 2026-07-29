@@ -153,7 +153,7 @@ export type CutPreviewPreparationProfile =
 
 export interface CutHtmlVideoDescriptor {
   readonly version: 1;
-  readonly transport: 'http';
+  readonly transport: 'http' | 'authorized';
   readonly url: string;
   readonly mimeType: string;
   readonly preparationProfile: CutPreviewPreparationProfile;
@@ -163,7 +163,7 @@ export interface CutHtmlVideoDescriptor {
 
 export interface CutPcmStreamDescriptor {
   readonly version: 1;
-  readonly transport: 'http';
+  readonly transport: 'http' | 'authorized';
   readonly protocol: 'neko-pcm-f32le-v1';
   readonly streamUrl: string;
   readonly sampleRate: number;

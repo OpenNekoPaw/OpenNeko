@@ -17,7 +17,7 @@ export function CanvasAddActionPopover({
   return (
     <Popover
       align="start"
-      side="right"
+      side="top"
       open={open}
       onOpenChange={setOpen}
       trigger={

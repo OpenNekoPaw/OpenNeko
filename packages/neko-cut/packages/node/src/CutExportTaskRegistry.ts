@@ -9,7 +9,7 @@ import {
   type ExportJobResultCommitter,
   type ExportJobSnapshot,
   type ExportJobStore,
-} from '../services/export-job';
+} from './export-job';
 
 export interface StartCutExportTask {
   readonly documentUri: string;

@@ -137,18 +137,31 @@ describe('Canvas creative workbench layout boundary', () => {
 
   it('uses the shared theme-colored floating-toolbar recipe and keeps only Canvas placement local', () => {
     expect(cssSource).toMatch(
-      /\.canvas-floating-toolbar-host\s*\{[^}]*left:\s*16px;[^}]*bottom:\s*16px;/s,
+      /\.canvas-floating-toolbar-host\s*\{[^}]*bottom:\s*16px;[^}]*left:\s*50%;/s,
     );
     expect(cssSource).toMatch(
-      /\.canvas-floating-toolbar\.neko-vtoolbar\s*\{[^}]*height:\s*auto;[^}]*max-height:\s*100%;/s,
+      /\.canvas-floating-toolbar\.neko-htoolbar\s*\{[^}]*width:\s*max-content;[^}]*max-width:\s*100%;[^}]*pointer-events:\s*auto;/s,
     );
     expect(toolbarSource).toMatch(/className="canvas-floating-toolbar neko-floating-toolbar/);
-    expect(toolbarSource).toMatch(/data-orientation="vertical"/);
+    expect(toolbarSource).toMatch(/data-orientation="horizontal"/);
     expect(toolbarSource).toMatch(/className="canvas-toolbar-mode-group neko-toolbar-mode-group"/);
     expect(cssSource).not.toMatch(/\.canvas-floating-toolbar \.neko-toolbar-btn/);
     expect(cssSource).not.toMatch(/\.canvas-toolbar-mode-group\s*\{/);
-    expect(appSource).toMatch(/data-canvas-toolbar-host="left"/);
-    expect(appSource).not.toMatch(/data-canvas-toolbar-host="right"/);
+    expect(appSource).toMatch(/data-canvas-toolbar-host="bottom"/);
+    expect(appSource).not.toMatch(/data-canvas-toolbar-host="left"/);
+  });
+
+  it('scopes embedded Canvas theme and element resets to the package-owned Root', () => {
+    expect(cssSource).toContain('.canvas-webview-root {');
+    expect(cssSource).toContain('.canvas-webview-root *:focus-visible');
+    expect(cssSource).toContain('.canvas-webview-root input');
+    expect(cssSource).not.toMatch(/\n:root\s*\{/);
+    expect(cssSource).not.toMatch(/\n\*:focus-visible\s*\{/);
+  });
+
+  it('ships the icon stylesheet required by package-owned Canvas controls', () => {
+    expect(cssSource).toContain('@import "@neko/ui/icons/codicon.css";');
+    expect(addActionPopoverSource).toContain('createCanvasAddActionIcon');
   });
 
   it('creates nodes through canonical add action ids', () => {
@@ -367,7 +380,7 @@ describe('Canvas creative workbench layout boundary', () => {
     expect(appSource).toMatch(/reportAction\('togglePlaybackWorkspace', 'overlay'\)/);
     expect(appSource).toMatch(/reportAction\('openExport', t\('toolbar\.export'\)\)/);
     expect(appSource).toMatch(
-      /reportAction\('openPackage', t\('toolbar\.package'\), undefined, canvasData\)/,
+      /reportAction\(\s*'openPackage',\s*t\('toolbar\.package'\),\s*undefined,\s*canvasData,\s*\)/,
     );
     expect(toolbarSource).not.toMatch(/data-canvas-toolbar-action="toggle-right-node-tree"/);
     expect(toolbarSource).not.toMatch(/data-canvas-toolbar-target="right-panel"/);

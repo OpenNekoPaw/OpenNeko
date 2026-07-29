@@ -5,7 +5,8 @@
  * 保持现有 historyStore 快照式 undo/redo 不变，同时为 dirty 标记和 AI/source 标注提供统一协议。
  */
 
-import { create } from 'zustand';
+import { create, createStore, type StateCreator } from 'zustand';
+import type { StoreApi } from 'zustand/vanilla';
 import type { CanvasNode, CanvasConnection } from '@neko/shared';
 import type {
   CanvasEditOperation,
@@ -13,31 +14,38 @@ import type {
   CanvasOperationMeta,
   CanvasOperationSource,
 } from '@neko-canvas/domain';
-import { getGlobalVSCodeApi } from '../utils/vscode';
 
 // =============================================================================
 // Extension Sync
 // =============================================================================
 
-function postMessage(message: Record<string, unknown>): void {
-  const vscode = getGlobalVSCodeApi();
-  if (vscode) {
-    vscode.postMessage(message);
-  }
+export interface CanvasOperationMessagePort {
+  postMessage(message: Record<string, unknown>): void;
 }
 
-function syncOperationToExtension(op: CanvasEditOperation): void {
-  postMessage({ type: 'operationApplied', operation: op });
+function postMessage(
+  port: CanvasOperationMessagePort | undefined,
+  message: Record<string, unknown>,
+): void {
+  port?.postMessage(message);
+}
+
+function syncOperationToExtension(
+  port: CanvasOperationMessagePort | undefined,
+  op: CanvasEditOperation,
+): void {
+  postMessage(port, { type: 'operationApplied', operation: op });
 }
 
 function syncContentNodeDeltaToExtension(
+  port: CanvasOperationMessagePort | undefined,
   removedNodeIds: readonly string[],
   restoredNodeIds: readonly string[],
 ): void {
   const removed = [...new Set(removedNodeIds)];
   const restored = [...new Set(restoredNodeIds)];
   if (removed.length === 0 && restored.length === 0) return;
-  postMessage({
+  postMessage(port, {
     type: 'canvasContentNodeDeltaApplied',
     removedNodeIds: removed,
     restoredNodeIds: restored,
@@ -47,20 +55,6 @@ function syncContentNodeDeltaToExtension(
 // =============================================================================
 // Meta Helper
 // =============================================================================
-
-let counter = 0;
-
-function createMeta(
-  source: CanvasOperationSource = 'user',
-  description?: string,
-): CanvasOperationMeta {
-  return {
-    id: `canvas-op-${Date.now()}-${++counter}`,
-    timestamp: Date.now(),
-    source,
-    description,
-  };
-}
 
 // =============================================================================
 // Store
@@ -97,112 +91,138 @@ export interface CanvasOperationStore {
   recordDirty: (description: string) => void;
 }
 
-export const useCanvasOperationStore = create<CanvasOperationStore>((set, get) => ({
-  operationSourceOverride: null,
+function createCanvasOperationState(
+  resolvePort: () => CanvasOperationMessagePort | undefined,
+): StateCreator<CanvasOperationStore> {
+  let counter = 0;
+  const createMeta = (
+    source: CanvasOperationSource = 'user',
+    description?: string,
+  ): CanvasOperationMeta => ({
+    id: `canvas-op-${Date.now()}-${++counter}`,
+    timestamp: Date.now(),
+    source,
+    description,
+  });
 
-  recordOperation: (op) => {
-    const { operationSourceOverride } = get();
-    const nextOperation = operationSourceOverride
-      ? {
-          ...op,
-          meta: {
-            ...op.meta,
-            source: operationSourceOverride,
-          },
-        }
-      : op;
-    syncOperationToExtension(nextOperation);
-  },
+  return (set, get) => ({
+    operationSourceOverride: null,
 
-  withOperationSource: (source, run) => {
-    const previous = get().operationSourceOverride;
-    set({ operationSourceOverride: source });
-    try {
-      return run();
-    } finally {
-      set({ operationSourceOverride: previous });
-    }
-  },
+    recordOperation: (op) => {
+      const { operationSourceOverride } = get();
+      const nextOperation = operationSourceOverride
+        ? {
+            ...op,
+            meta: {
+              ...op.meta,
+              source: operationSourceOverride,
+            },
+          }
+        : op;
+      syncOperationToExtension(resolvePort(), nextOperation);
+    },
 
-  recordNodeAdd: (node) => {
-    get().recordOperation({
-      type: 'canvas.node.add',
-      meta: createMeta('user', `Add node: ${node.type}`),
-      payload: { node },
-    });
-  },
+    withOperationSource: (source, run) => {
+      const previous = get().operationSourceOverride;
+      set({ operationSourceOverride: source });
+      try {
+        return run();
+      } finally {
+        set({ operationSourceOverride: previous });
+      }
+    },
 
-  recordNodeRemove: (nodeId, node, connections) => {
-    const index = 0; // index not critical for audit
-    get().recordOperation({
-      type: 'canvas.node.remove',
-      meta: createMeta('user', `Remove node: ${node.type}`),
-      payload: { nodeId },
-      before: { node, connections, index },
-    });
-  },
+    recordNodeAdd: (node) => {
+      get().recordOperation({
+        type: 'canvas.node.add',
+        meta: createMeta('user', `Add node: ${node.type}`),
+        payload: { node },
+      });
+    },
 
-  recordNodeUpdate: (nodeId, updates, before) => {
-    get().recordOperation({
-      type: 'canvas.node.update',
-      meta: createMeta('user', 'Update node'),
-      payload: { nodeId, updates },
-      before: { updates: before },
-    });
-  },
+    recordNodeRemove: (nodeId, node, connections) => {
+      const index = 0; // index not critical for audit
+      get().recordOperation({
+        type: 'canvas.node.remove',
+        meta: createMeta('user', `Remove node: ${node.type}`),
+        payload: { nodeId },
+        before: { node, connections, index },
+      });
+    },
 
-  recordNodeReorder: (nodeId, newZIndex, oldZIndex) => {
-    get().recordOperation({
-      type: 'canvas.node.reorder',
-      meta: createMeta('user', 'Reorder node'),
-      payload: { nodeId, newZIndex },
-      before: { oldZIndex },
-    });
-  },
+    recordNodeUpdate: (nodeId, updates, before) => {
+      get().recordOperation({
+        type: 'canvas.node.update',
+        meta: createMeta('user', 'Update node'),
+        payload: { nodeId, updates },
+        before: { updates: before },
+      });
+    },
 
-  recordNodeGroup: (groupNode, childIds) => {
-    get().recordOperation({
-      type: 'canvas.node.group',
-      meta: createMeta('user', 'Group nodes'),
-      payload: { groupNode, childIds },
-    });
-  },
+    recordNodeReorder: (nodeId, newZIndex, oldZIndex) => {
+      get().recordOperation({
+        type: 'canvas.node.reorder',
+        meta: createMeta('user', 'Reorder node'),
+        payload: { nodeId, newZIndex },
+        before: { oldZIndex },
+      });
+    },
 
-  recordNodeUngroup: (groupId, groupNode, childIds) => {
-    get().recordOperation({
-      type: 'canvas.node.ungroup',
-      meta: createMeta('user', 'Ungroup nodes'),
-      payload: { groupId },
-      before: { groupNode, childIds },
-    });
-  },
+    recordNodeGroup: (groupNode, childIds) => {
+      get().recordOperation({
+        type: 'canvas.node.group',
+        meta: createMeta('user', 'Group nodes'),
+        payload: { groupNode, childIds },
+      });
+    },
 
-  recordConnectionAdd: (connection) => {
-    get().recordOperation({
-      type: 'canvas.connection.add',
-      meta: createMeta('user', 'Add connection'),
-      payload: { connection },
-    });
-  },
+    recordNodeUngroup: (groupId, groupNode, childIds) => {
+      get().recordOperation({
+        type: 'canvas.node.ungroup',
+        meta: createMeta('user', 'Ungroup nodes'),
+        payload: { groupId },
+        before: { groupNode, childIds },
+      });
+    },
 
-  recordConnectionRemove: (connectionId, connection) => {
-    get().recordOperation({
-      type: 'canvas.connection.remove',
-      meta: createMeta('user', 'Remove connection'),
-      payload: { connectionId },
-      before: { connection },
-    });
-  },
+    recordConnectionAdd: (connection) => {
+      get().recordOperation({
+        type: 'canvas.connection.add',
+        meta: createMeta('user', 'Add connection'),
+        payload: { connection },
+      });
+    },
 
-  recordContentNodeDelta: (removedNodeIds, restoredNodeIds = []) => {
-    syncContentNodeDeltaToExtension(removedNodeIds, restoredNodeIds);
-  },
+    recordConnectionRemove: (connectionId, connection) => {
+      get().recordOperation({
+        type: 'canvas.connection.remove',
+        meta: createMeta('user', 'Remove connection'),
+        payload: { connectionId },
+        before: { connection },
+      });
+    },
 
-  recordDirty: (description) => {
-    get().recordOperation({
-      type: 'batch',
-      meta: createMeta('user', description),
-      payload: { operations: [] },
-    });
-  },
-}));
+    recordContentNodeDelta: (removedNodeIds, restoredNodeIds = []) => {
+      syncContentNodeDeltaToExtension(resolvePort(), removedNodeIds, restoredNodeIds);
+    },
+
+    recordDirty: (description) => {
+      get().recordOperation({
+        type: 'batch',
+        meta: createMeta('user', description),
+        payload: { operations: [] },
+      });
+    },
+  });
+}
+
+export type CanvasOperationStoreApi = StoreApi<CanvasOperationStore>;
+
+export function createCanvasOperationStore(
+  port: CanvasOperationMessagePort,
+): CanvasOperationStoreApi {
+  return createStore(createCanvasOperationState(() => port));
+}
+
+/** Test/default standalone store. Production Roots use CanvasStoreScopeProvider. */
+export const useCanvasOperationStore = create(createCanvasOperationState(() => undefined));

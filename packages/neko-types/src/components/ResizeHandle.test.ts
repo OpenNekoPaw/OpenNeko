@@ -18,10 +18,15 @@ describe('ResizeHandle', () => {
       },
     };
 
-    const element = ResizeHandle({ handleProps, className: 'w-1 hover:bg-accent' });
+    const element = ResizeHandle({
+      handleProps,
+      className: 'w-1 hover:bg-accent',
+      label: 'Resize sidebar',
+    });
 
     expect(element.type).toBe('div');
     expect(element.props.className).toBe('w-1 hover:bg-accent');
+    expect(element.props['aria-label']).toBe('Resize sidebar');
     expect(element.props.role).toBe('separator');
     expect(element.props['aria-orientation']).toBe('vertical');
     expect(element.props.tabIndex).toBeUndefined();

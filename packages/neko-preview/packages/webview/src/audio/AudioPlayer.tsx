@@ -18,7 +18,117 @@ import type {
 } from '../shared/types';
 import { parseLrc, type LrcLine } from './lrc-parser';
 
-export function AudioPlayer() {
+export interface AudioPlayerProps {
+  readonly sourceUrl?: string;
+  readonly displayName?: string;
+}
+
+export function AudioPlayer({ sourceUrl, displayName }: AudioPlayerProps = {}) {
+  return sourceUrl ? (
+    <SourceAudioPlayer sourceUrl={sourceUrl} displayName={displayName ?? ''} />
+  ) : (
+    <EngineAudioPlayer />
+  );
+}
+
+function SourceAudioPlayer({
+  sourceUrl,
+  displayName,
+}: Required<Pick<AudioPlayerProps, 'sourceUrl' | 'displayName'>>) {
+  const { t } = useTranslation();
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const [duration, setDuration] = useState(0);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [volume, setVolume] = useState(1);
+  const [speed, setSpeed] = useState(1);
+  const [error, setError] = useState<string>();
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    return () => audio?.pause();
+  }, [sourceUrl]);
+
+  const togglePlay = useCallback(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    setError(undefined);
+    if (audio.paused) {
+      void audio.play().catch(() => {
+        setIsPlaying(false);
+        setError(t('preview.audio.playbackFailed'));
+      });
+    } else {
+      audio.pause();
+    }
+  }, [t]);
+  const seek = useCallback(
+    (time: number) => {
+      const audio = audioRef.current;
+      if (!audio) return;
+      audio.currentTime = Math.max(0, Math.min(duration, time));
+      setCurrentTime(audio.currentTime);
+    },
+    [duration],
+  );
+  const changeVolume = useCallback((next: number) => {
+    setVolume(next);
+    if (audioRef.current) audioRef.current.volume = next;
+  }, []);
+  const changeSpeed = useCallback((next: number) => {
+    setSpeed(next);
+    if (audioRef.current) audioRef.current.playbackRate = next;
+  }, []);
+
+  return (
+    <div className="neko-audio-bg flex flex-col items-center w-full h-full px-8 pt-6 pb-5 overflow-hidden">
+      <audio
+        ref={audioRef}
+        src={sourceUrl}
+        preload="metadata"
+        onLoadedMetadata={(event) => {
+          setDuration(
+            Number.isFinite(event.currentTarget.duration) ? event.currentTarget.duration : 0,
+          );
+          setError(undefined);
+        }}
+        onTimeUpdate={(event) => setCurrentTime(event.currentTarget.currentTime)}
+        onPlay={() => setIsPlaying(true)}
+        onPause={() => setIsPlaying(false)}
+        onEnded={() => setIsPlaying(false)}
+        onError={() => {
+          setIsPlaying(false);
+          setError(t('preview.audio.playbackFailed'));
+        }}
+      />
+      <div className="relative flex-1 flex items-center justify-center w-full min-h-[120px] py-2">
+        <CoverView fileName={displayName} isPlaying={isPlaying} />
+      </div>
+      <div className="flex flex-col items-center gap-1 pt-3 pb-1 shrink-0 w-full max-w-[400px]">
+        <div className="font-semibold text-[17px] text-neko-preview-text-primary whitespace-nowrap overflow-hidden text-ellipsis max-w-full text-center tracking-[-0.01em]">
+          {displayName}
+        </div>
+        {error ? <div className="text-xs text-red-400">{error}</div> : null}
+      </div>
+      <div className="shrink-0 w-full">
+        <AudioControls
+          isPlaying={isPlaying}
+          currentTime={currentTime}
+          duration={duration}
+          volume={volume}
+          speed={speed}
+          onTogglePlay={togglePlay}
+          onSeek={seek}
+          onScrub={setCurrentTime}
+          onVolumeChange={changeVolume}
+          onSpeedChange={changeSpeed}
+        />
+      </div>
+    </div>
+  );
+}
+
+function EngineAudioPlayer() {
   const { t } = useTranslation();
   const { postMessage } = useVscodeReady();
   const [mediaInfo, setMediaInfo] = useState<MediaInfo>();

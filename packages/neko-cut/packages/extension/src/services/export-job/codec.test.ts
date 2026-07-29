@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { decodeExportJobSnapshot } from './codec';
+import { decodeExportJobSnapshot } from '@neko-cut/node';
 
 describe('Export Job persistence codec', () => {
   it('rejects the retired Engine snapshot instead of resuming through compatibility fields', () => {

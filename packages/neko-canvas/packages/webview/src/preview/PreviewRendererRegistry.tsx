@@ -19,9 +19,9 @@ import {
   InlineAudioPlayer,
   type AudioPlayerLayout,
 } from '../components/media/InlineAudioPlayer';
-import { usePlaybackStore } from '../stores/playbackStore';
+import { usePlaybackStoreApi } from '../stores/canvasStoreScope';
 import type { PlaybackSurfaceKind } from '../stores/playbackStore';
-import { getGlobalVSCodeApi } from '../utils/vscode';
+import { useOptionalCanvasHost } from '../host-runtime';
 import { t } from '../i18n';
 
 export interface PreviewRendererProps {
@@ -66,7 +66,8 @@ function useResolvedVariant(
   source: PreviewSourceDescriptor,
   role?: PreviewSourceDescriptor['role'],
 ): RuntimePreviewVariant | undefined {
-  const resolver = useMemo(() => new WebviewPreviewResolver(), []);
+  const host = useOptionalCanvasHost();
+  const resolver = useMemo(() => new WebviewPreviewResolver(host), [host]);
   const [variant, setVariant] = useState<RuntimePreviewVariant | undefined>();
 
   useEffect(() => {
@@ -90,12 +91,13 @@ function useCaptureFrame(
   nodeId: string,
   resourceRef: ResourceRef | undefined,
 ): string | null {
+  const host = useOptionalCanvasHost();
   const [frameUrl, setFrameUrl] = useState<string | null>(null);
   const requestedRef = useRef(false);
 
   useEffect(() => {
     if (!assetPath || requestedRef.current) return;
-    const vscode = getGlobalVSCodeApi();
+    const vscode = host;
     if (!vscode) return;
 
     requestedRef.current = true;
@@ -120,7 +122,7 @@ function useCaptureFrame(
     });
 
     return () => window.removeEventListener('message', handleMessage);
-  }, [assetPath, nodeId, resourceRef]);
+  }, [assetPath, host, nodeId, resourceRef]);
 
   return frameUrl;
 }
@@ -175,6 +177,8 @@ function useMediaStream(
   resourceRef: ResourceRef | undefined,
   knownDuration: number,
 ) {
+  const host = useOptionalCanvasHost();
+  const playbackStoreApi = usePlaybackStoreApi();
   const [surfaceId] = useState(() => createPlaybackSurfaceId(mediaType));
   const [stream, setStream] = useState<MediaStreamState | null>(null);
   const [mediaDescription, setMediaDescription] = useState<MediaDescription>(() => ({
@@ -208,7 +212,7 @@ function useMediaStream(
   const [savedStartTime] = useState(() => {
     const sourceKey = createMediaPlaybackSourceKey(assetPath, resourceRef);
     if (!sourceKey) return 0;
-    const playbackStore = usePlaybackStore.getState();
+    const playbackStore = playbackStoreApi.getState();
     return (
       (playbackStore.activePlayback?.sourceKey === sourceKey
         ? playbackStore.activePlayback.currentTime
@@ -223,7 +227,7 @@ function useMediaStream(
 
   const postPlaybackRequest = useCallback(
     (mediaInfo: Record<string, unknown>, startTime: number) => {
-      const vscode = getGlobalVSCodeApi();
+      const vscode = host;
       if (!vscode) return;
       vscode.postMessage({
         type: 'media:play',
@@ -236,11 +240,11 @@ function useMediaStream(
         speed: 1.0,
       });
     },
-    [assetPath, mediaType, resourceRef, surfaceId],
+    [assetPath, host, mediaType, resourceRef, surfaceId],
   );
 
   useEffect(() => {
-    const vscode = getGlobalVSCodeApi();
+    const vscode = host;
     const sourceKey = createMediaPlaybackSourceKey(assetPath, resourceRef);
     if (!vscode || !sourceKey) {
       setProbing(false);
@@ -316,7 +320,7 @@ function useMediaStream(
         if (!audio) closePlaybackAudioContext();
         streamDurationRef.current = description.duration;
         setMediaDescription(description);
-        usePlaybackStore.getState().startActivePlayback({
+        playbackStoreApi.getState().startActivePlayback({
           sourceKey,
           ...(assetPath ? { assetPath } : {}),
           mediaType,
@@ -354,6 +358,7 @@ function useMediaStream(
     assetPath,
     closePlaybackAudioContext,
     knownDuration,
+    host,
     mediaType,
     postPlaybackRequest,
     primePlaybackAudioContext,
@@ -364,11 +369,11 @@ function useMediaStream(
 
   const startPlayback = useCallback(
     (resumeFromTime?: number) => {
-      const vscode = getGlobalVSCodeApi();
+      const vscode = host;
       const sourceKey = createMediaPlaybackSourceKey(assetPath, resourceRef);
       if (!vscode || !sourceKey) return;
 
-      const playbackStore = usePlaybackStore.getState();
+      const playbackStore = playbackStoreApi.getState();
       const active = playbackStore.activePlayback;
       if (active && active.sourceKey === sourceKey && active.surfaceId !== surfaceId) {
         playbackStore.requestHandoff({
@@ -404,6 +409,7 @@ function useMediaStream(
     },
     [
       assetPath,
+      host,
       mediaType,
       postPlaybackRequest,
       primePlaybackAudioContext,
@@ -416,7 +422,7 @@ function useMediaStream(
 
   const pausePlayback = useCallback(
     (currentTime: number) => {
-      const vscode = getGlobalVSCodeApi();
+      const vscode = host;
       const sourceKey = createMediaPlaybackSourceKey(assetPath, resourceRef);
       if (!vscode || !sourceKey) return;
       vscode.postMessage({ type: 'media:pause', nodeId: surfaceId });
@@ -425,32 +431,32 @@ function useMediaStream(
         currentTime,
         updatedAtMs: getMonotonicTimeMs(),
       };
-      usePlaybackStore.getState().savePlayback(sourceKey, {
+      playbackStoreApi.getState().savePlayback(sourceKey, {
         currentTime,
         duration: streamDurationRef.current,
         wasPlaying: true,
       });
-      usePlaybackStore.getState().updateActivePlayback(sourceKey, surfaceId, {
+      playbackStoreApi.getState().updateActivePlayback(sourceKey, surfaceId, {
         currentTime,
         isPlaying: false,
       });
       currentTimeRef.current = currentTime;
     },
-    [assetPath, resourceRef, surfaceId],
+    [assetPath, host, resourceRef, surfaceId],
   );
 
   const resumePlayback = useCallback(() => {
-    const vscode = getGlobalVSCodeApi();
+    const vscode = host;
     const sourceKey = createMediaPlaybackSourceKey(assetPath, resourceRef);
     if (!vscode || !sourceKey) return;
     vscode.postMessage({ type: 'media:resume', nodeId: surfaceId });
     isPausedRef.current = false;
-    usePlaybackStore.getState().updateActivePlayback(sourceKey, surfaceId, { isPlaying: true });
-  }, [assetPath, resourceRef, surfaceId]);
+    playbackStoreApi.getState().updateActivePlayback(sourceKey, surfaceId, { isPlaying: true });
+  }, [assetPath, host, resourceRef, surfaceId]);
 
   const seekPlayback = useCallback(
     (time: number) => {
-      const vscode = getGlobalVSCodeApi();
+      const vscode = host;
       const sourceKey = createMediaPlaybackSourceKey(assetPath, resourceRef);
       if (!vscode || !sourceKey) return;
       vscode.postMessage({ type: 'media:seek', nodeId: surfaceId, time });
@@ -458,10 +464,10 @@ function useMediaStream(
         currentTime: time,
         updatedAtMs: getMonotonicTimeMs(),
       };
-      usePlaybackStore.getState().updateActivePlayback(sourceKey, surfaceId, { currentTime: time });
+      playbackStoreApi.getState().updateActivePlayback(sourceKey, surfaceId, { currentTime: time });
       currentTimeRef.current = time;
     },
-    [assetPath, resourceRef, surfaceId],
+    [assetPath, host, resourceRef, surfaceId],
   );
 
   const updatePlaybackProgress = useCallback(
@@ -477,7 +483,7 @@ function useMediaStream(
       if (!shouldSync) return false;
 
       lastProgressSyncRef.current = { currentTime, updatedAtMs: now };
-      usePlaybackStore.getState().updateActivePlayback(sourceKey, surfaceId, {
+      playbackStoreApi.getState().updateActivePlayback(sourceKey, surfaceId, {
         currentTime,
         duration: streamDurationRef.current,
       });
@@ -492,13 +498,13 @@ function useMediaStream(
     (currentTime: number) => {
       if (stoppedPlaybackRef.current) return;
       stoppedPlaybackRef.current = true;
-      const vscode = getGlobalVSCodeApi();
+      const vscode = host;
       if (vscode && createMediaPlaybackSourceKey(assetPath, resourceRef)) {
         vscode.postMessage({ type: 'media:stop', nodeId: surfaceId });
       }
       const sourceKey = createMediaPlaybackSourceKey(assetPath, resourceRef);
       if (sourceKey) {
-        const playbackStore = usePlaybackStore.getState();
+        const playbackStore = playbackStoreApi.getState();
         playbackStore.savePlayback(sourceKey, {
           currentTime,
           duration: streamDurationRef.current,
@@ -514,7 +520,7 @@ function useMediaStream(
       isPausedRef.current = false;
       closePlaybackAudioContext();
     },
-    [assetPath, closePlaybackAudioContext, resourceRef, surfaceId],
+    [assetPath, closePlaybackAudioContext, host, resourceRef, surfaceId],
   );
 
   useEffect(() => closePlaybackAudioContext, [closePlaybackAudioContext]);
@@ -609,13 +615,14 @@ function usePlaybackHandoff({
   startPlayback,
   stopPlayback,
 }: PlaybackHandoffOptions): void {
+  const playbackStoreApi = usePlaybackStoreApi();
   const sourceKey = createMediaPlaybackSourceKey(assetPath, resourceRef);
   const requestedMountHandoffRef = useRef(false);
   const handledHandoffRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!sourceKey || !stream) return;
-    const unsubscribe = usePlaybackStore.subscribe((state) => {
+    const unsubscribe = playbackStoreApi.subscribe((state) => {
       const request = state.handoffRequest;
       const requestKey = request ? handoffRequestKey(request) : null;
       if (
@@ -633,14 +640,14 @@ function usePlaybackHandoff({
 
   useEffect(() => {
     if (!sourceKey || stream || probing) return;
-    const unsubscribe = usePlaybackStore.subscribe((state) => {
+    const unsubscribe = playbackStoreApi.subscribe((state) => {
       const request = state.handoffRequest;
       if (
         request?.sourceKey === sourceKey &&
         request.toKind === surfaceKind &&
         state.activePlayback === null
       ) {
-        const consumed = usePlaybackStore.getState().consumeHandoff(sourceKey, surfaceKind);
+        const consumed = playbackStoreApi.getState().consumeHandoff(sourceKey, surfaceKind);
         if (consumed) {
           startPlayback(consumed.startTime);
         }
@@ -652,7 +659,7 @@ function usePlaybackHandoff({
   useEffect(() => {
     if (surfaceKind !== 'overlay' || !sourceKey || stream || probing) return;
     if (requestedMountHandoffRef.current) return;
-    const active = usePlaybackStore.getState().activePlayback;
+    const active = playbackStoreApi.getState().activePlayback;
     if (
       active &&
       active.sourceKey === sourceKey &&
@@ -660,7 +667,7 @@ function usePlaybackHandoff({
       active.isPlaying
     ) {
       requestedMountHandoffRef.current = true;
-      usePlaybackStore.getState().requestHandoff({
+      playbackStoreApi.getState().requestHandoff({
         sourceKey,
         ...(assetPath ? { assetPath } : {}),
         mediaType,
@@ -674,7 +681,7 @@ function usePlaybackHandoff({
   useEffect(() => {
     if (!stream) return;
     return () => {
-      const active = usePlaybackStore.getState().activePlayback;
+      const active = playbackStoreApi.getState().activePlayback;
       if (
         surfaceKind === 'overlay' &&
         sourceKey &&
@@ -682,7 +689,7 @@ function usePlaybackHandoff({
         active.surfaceId === surfaceId &&
         active.isPlaying
       ) {
-        usePlaybackStore.getState().requestHandoff({
+        playbackStoreApi.getState().requestHandoff({
           sourceKey,
           ...(assetPath ? { assetPath } : {}),
           mediaType,
@@ -1154,11 +1161,10 @@ function getStableSafeUrl(source: PreviewSourceDescriptor): string | undefined {
   return isSafeWebviewUrl(url) ? url : undefined;
 }
 
-function renderFallbackPreview({
-  source,
-  delegateActions,
-  chrome = 'contained',
-}: PreviewRendererProps): React.ReactNode {
+function renderFallbackPreview(
+  { source, delegateActions, chrome = 'contained' }: PreviewRendererProps,
+  host?: ReturnType<typeof useOptionalCanvasHost>,
+): React.ReactNode {
   return (
     <div
       className={
@@ -1177,7 +1183,10 @@ function renderFallbackPreview({
           onMouseDown={(event) => event.stopPropagation()}
           onClick={(event) => {
             event.stopPropagation();
-            dispatchPreviewDelegate({ action: delegateActions[0]!, asset: source.asset });
+            dispatchPreviewDelegate(host, {
+              action: delegateActions[0]!,
+              asset: source.asset,
+            });
           }}
         >
           Open
@@ -1188,5 +1197,6 @@ function renderFallbackPreview({
 }
 
 function FallbackPreviewRenderer(props: PreviewRendererProps): React.ReactNode {
-  return renderFallbackPreview(props);
+  const host = useOptionalCanvasHost();
+  return renderFallbackPreview(props, host);
 }

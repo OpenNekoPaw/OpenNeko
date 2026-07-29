@@ -12,6 +12,7 @@ import type {
   CutUserDiagnostic,
   TimelineView,
 } from '@neko-cut/domain';
+import { DEFAULT_CUT_HOST_PRESENTATION } from '@neko-cut/domain';
 import { createStore, type StoreApi } from 'zustand/vanilla';
 import { useStore } from 'zustand';
 
@@ -52,6 +53,7 @@ export interface CutClipGestureDraft {
 
 export interface CutPresentationState {
   readonly view?: TimelineView;
+  readonly dirty: boolean;
   readonly selection?: CutPresentationSelection;
   readonly selectedClips: readonly CutPresentationClipSelection[];
   readonly clipboard?: CutPresentationClipboard;
@@ -102,14 +104,15 @@ const CutPresentationStoreContext = createContext<CutPresentationStore | undefin
 
 export function createCutPresentationStore(): CutPresentationStore {
   return createStore<CutPresentationState>()((set, get) => ({
+    dirty: false,
     playheadSeconds: 0,
     isPlaying: false,
-    previewVolume: 1,
-    previewMuted: false,
-    pixelsPerSecond: 80,
-    snappingEnabled: true,
+    previewVolume: DEFAULT_CUT_HOST_PRESENTATION.previewVolume,
+    previewMuted: DEFAULT_CUT_HOST_PRESENTATION.previewMuted,
+    pixelsPerSecond: DEFAULT_CUT_HOST_PRESENTATION.pixelsPerSecond,
+    snappingEnabled: DEFAULT_CUT_HOST_PRESENTATION.snappingEnabled,
     placementMode: 'sequence',
-    overviewVisible: true,
+    overviewVisible: DEFAULT_CUT_HOST_PRESENTATION.overviewVisible,
     inspectorVisible: true,
     selectedClips: [],
     exportTasks: [],

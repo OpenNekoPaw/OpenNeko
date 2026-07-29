@@ -9,7 +9,7 @@
 import { useCallback } from 'react';
 import { hasEditableActiveElement } from '@neko/ui/keyboard';
 import type { CanvasNode } from '@neko/shared';
-import { useCanvasStore } from '../stores/canvasStore';
+import { useCanvasStoreApi } from '../stores/canvasStoreScope';
 import type { VSCodeAPI } from './useVSCodeMessages';
 import { isEditorLevelKeyboardAction } from './keyboardActionPolicy';
 
@@ -51,6 +51,7 @@ export interface UseKeyboardActionsReturn {
 // =============================================================================
 
 export function useKeyboardActions(options: UseKeyboardActionsOptions): UseKeyboardActionsReturn {
+  const canvasStore = useCanvasStoreApi();
   const {
     selectedNodeIds,
     selectedConnectionIds,
@@ -101,7 +102,7 @@ export function useKeyboardActions(options: UseKeyboardActionsOptions): UseKeybo
       if (action.startsWith('deleteNode:')) {
         const nodeId = action.slice('deleteNode:'.length);
         if (nodeId) {
-          useCanvasStore.getState().removeNode(nodeId);
+          canvasStore.getState().removeNode(nodeId);
           reportAction('deleteNode', `Deleted node from outline`);
         }
         return;
@@ -125,7 +126,7 @@ export function useKeyboardActions(options: UseKeyboardActionsOptions): UseKeybo
           break;
         case 'selectAll':
           if (nodes.length > 0) {
-            const { selectNodes } = useCanvasStore.getState();
+            const { selectNodes } = canvasStore.getState();
             selectNodes(nodes.map((n) => n.id));
           }
           break;
@@ -162,6 +163,7 @@ export function useKeyboardActions(options: UseKeyboardActionsOptions): UseKeybo
       }
     },
     [
+      canvasStore,
       isKeyboardFocusedRef,
       isComposingRef,
       selectedNodeIds,

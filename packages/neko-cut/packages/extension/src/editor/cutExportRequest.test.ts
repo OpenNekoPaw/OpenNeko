@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { TimelineView } from '@neko-cut/domain';
-import { freezeCutExportRequest } from './cutExportRequest';
+import { freezeCutExportRequest } from '@neko-cut/node';
 
 const view: TimelineView = {
   documentUri: 'file:///workspace/project.otio',

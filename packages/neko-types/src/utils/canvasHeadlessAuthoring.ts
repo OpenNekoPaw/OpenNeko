@@ -35,6 +35,7 @@ import type {
 } from '../types/canvas-headless-authoring';
 import { CANVAS_HEADLESS_AUTHORING_CONTRACT_VERSION } from '../types/canvas-headless-authoring';
 import type { JsonPointerPath } from '../types/canvas-layered';
+import { validateContentLocator } from '../types/content-locator';
 import { isDocumentArchiveResourceRef } from '../types/document-reading';
 import { isResourceRef } from '../types/resource-cache';
 import { isJsonPointerPath, writeJsonPointer } from './fieldBinding';
@@ -810,11 +811,13 @@ function readMediaType(record: Record<string, unknown>): {
 }
 
 function readResourceFields(record: Record<string, unknown>) {
+  const contentLocator = validateContentLocator(record['contentLocator']);
   return {
     ...(isResourceRef(record['resourceRef']) ? { resourceRef: record['resourceRef'] } : {}),
     ...(isDocumentArchiveResourceRef(record['documentResourceRef'])
       ? { documentResourceRef: record['documentResourceRef'] }
       : {}),
+    ...(contentLocator.ok ? { contentLocator: contentLocator.locator } : {}),
   };
 }
 

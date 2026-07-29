@@ -161,6 +161,20 @@ export function configureModelRendererColorPipeline(
   renderer.toneMappingExposure = 1;
 }
 
+export interface DisposableModelRenderer {
+  readonly renderLists: { dispose(): void };
+  dispose(): void;
+}
+
+export function disposeModelRenderer(renderer: DisposableModelRenderer): void {
+  // React StrictMode intentionally tears effects down and starts them again on
+  // the same canvas. forceContextLoss() makes that canvas permanently return a
+  // lost context, so release Three-owned resources and let DOM ownership retire
+  // the context when the canvas is actually removed.
+  renderer.renderLists.dispose();
+  renderer.dispose();
+}
+
 export function createGeometryMaterial(geometry: THREE.BufferGeometry): THREE.MeshStandardMaterial {
   const vertexColors = geometry.hasAttribute('color');
   return new THREE.MeshStandardMaterial({
@@ -517,13 +531,19 @@ class BrowserThreeModelRuntime implements ThreeModelRuntimePort {
 
   constructor(canvas: HTMLCanvasElement, callbacks: ThreeModelRuntimeCallbacks = {}) {
     this.callbacks = callbacks;
-    this.renderer = new THREE.WebGLRenderer({
-      canvas,
-      antialias: true,
-      alpha: false,
-      preserveDrawingBuffer: false,
-      powerPreference: 'high-performance',
-    });
+    canvas.addEventListener('webglcontextlost', this.handleContextLost);
+    try {
+      this.renderer = new THREE.WebGLRenderer({
+        canvas,
+        antialias: true,
+        alpha: false,
+        preserveDrawingBuffer: false,
+        powerPreference: 'high-performance',
+      });
+    } catch (error) {
+      canvas.removeEventListener('webglcontextlost', this.handleContextLost);
+      throw error;
+    }
     configureModelRendererColorPipeline(this.renderer);
     this.renderer.setPixelRatio(getModelPixelRatio(window.devicePixelRatio || 1, false));
     this.orbit = new OrbitControls(this.camera, canvas);
@@ -550,7 +570,6 @@ class BrowserThreeModelRuntime implements ThreeModelRuntimePort {
     this.orbit.addEventListener('change', this.handleOrbitChange);
     this.orbit.addEventListener('start', this.beginOrbitInteraction);
     this.orbit.addEventListener('end', this.endOrbitInteraction);
-    canvas.addEventListener('webglcontextlost', this.handleContextLost);
     this.scene.add(this.environmentLight, this.transformHelper);
     this.camera.position.set(0, 0.15, 3.5);
     this.orbit.update();
@@ -924,9 +943,7 @@ class BrowserThreeModelRuntime implements ThreeModelRuntimePort {
       this.scene.remove(light, light.target);
     }
     this.scene.remove(this.environmentLight);
-    this.renderer.renderLists.dispose();
-    this.renderer.dispose();
-    this.renderer.forceContextLoss();
+    disposeModelRenderer(this.renderer);
   }
 
   private frameBounds(bounds: THREE.Box3, cameraPreset?: ModelPreviewCameraPreset): void {

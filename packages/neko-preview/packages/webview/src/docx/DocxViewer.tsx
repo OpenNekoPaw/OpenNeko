@@ -12,7 +12,7 @@ import { DocumentContextMenu, useDocumentContextActions } from '../shared/Docume
 import { imgSrcToBase64 } from '../shared/imageToBase64';
 import { useTranslation } from '../i18n/I18nContext';
 
-export const DocxViewer: FC = () => {
+export const DocxViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) => {
   const { t } = useTranslation();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -32,14 +32,14 @@ export const DocxViewer: FC = () => {
   });
 
   useExtensionMessage((msg) => {
-    if (msg.type === 'document:data') {
+    if (!sourceUrl && msg.type === 'document:data') {
       void loadDocxFromUrl(msg.payload.url);
     }
   });
 
   useEffect(() => {
-    postMessage({ type: 'ready' } as never);
-  }, []);
+    if (!sourceUrl) postMessage({ type: 'ready' } as never);
+  }, [sourceUrl]);
 
   /** Load DOCX from a localhost URL — fetch full file, then render. */
   const loadDocxFromUrl = useCallback(async (url: string) => {
@@ -76,18 +76,22 @@ export const DocxViewer: FC = () => {
     }
   }, []);
 
+  useEffect(() => {
+    if (sourceUrl) void loadDocxFromUrl(sourceUrl);
+  }, [loadDocxFromUrl, sourceUrl]);
+
   const zoomIn = useCallback(() => setScale((s) => Math.min(s + 0.1, 3)), []);
   const zoomOut = useCallback(() => setScale((s) => Math.max(s - 0.1, 0.5)), []);
 
   useEffect(() => {
-    if (loading) return;
+    if (loading || sourceUrl) return;
     postMessage({
       type: 'document:statusUpdate',
       payload: {
         zoom: Math.round(scale * 100),
       },
     });
-  }, [loading, scale]);
+  }, [loading, scale, sourceUrl]);
 
   const [rightClickedImageSrc, setRightClickedImageSrc] = useState<string | null>(null);
 
@@ -138,7 +142,7 @@ export const DocxViewer: FC = () => {
   if (error) {
     return (
       <div
-        className="flex h-screen items-center justify-center"
+        className="flex h-full items-center justify-center"
         style={{ color: 'var(--vscode-errorForeground)' }}
       >
         {t('preview.document.error', { error })}
@@ -150,7 +154,7 @@ export const DocxViewer: FC = () => {
     <DocumentContextMenu actions={contextActions} onContextMenuTarget={handleContextMenuTarget}>
       <div
         data-testid={!loading ? 'docx-preview-ready' : undefined}
-        className="flex h-screen flex-col"
+        className="flex h-full flex-col"
         style={{ background: 'var(--vscode-editor-background)' }}
       >
         {/* Toolbar */}

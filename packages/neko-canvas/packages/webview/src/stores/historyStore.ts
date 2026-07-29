@@ -6,7 +6,8 @@
  * not viewport or selection changes.
  */
 
-import { create } from 'zustand';
+import { create, createStore, type StateCreator } from 'zustand';
+import type { StoreApi } from 'zustand/vanilla';
 import type { CanvasData } from '@neko/shared';
 
 // =============================================================================
@@ -65,7 +66,7 @@ function deserializeWithViewport(
 // Store
 // =============================================================================
 
-export const useHistoryStore = create<HistoryStore>((set, get) => ({
+const createHistoryState: StateCreator<HistoryStore> = (set, get) => ({
   undoStack: [],
   redoStack: [],
   maxHistory: 50,
@@ -128,4 +129,13 @@ export const useHistoryStore = create<HistoryStore>((set, get) => ({
   clear: () => {
     set({ undoStack: [], redoStack: [] });
   },
-}));
+});
+
+export type HistoryStoreApi = StoreApi<HistoryStore>;
+
+export function createHistoryStore(): HistoryStoreApi {
+  return createStore(createHistoryState);
+}
+
+/** Test/default standalone store. Production Roots use CanvasStoreScopeProvider. */
+export const useHistoryStore = create(createHistoryState);

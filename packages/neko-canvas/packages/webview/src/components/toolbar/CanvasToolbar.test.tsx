@@ -51,15 +51,15 @@ describe('CanvasToolbar', () => {
     host.remove();
   });
 
-  it('renders as the shared floating vertical toolbar surface', () => {
+  it('renders as the shared floating horizontal toolbar surface', () => {
     act(() => {
       root.render(<CanvasToolbar onUndo={() => undefined} onRedo={() => undefined} />);
     });
 
     const toolbar = host.querySelector('.canvas-floating-toolbar');
-    expect(toolbar?.classList.contains('neko-vtoolbar')).toBe(true);
+    expect(toolbar?.classList.contains('neko-htoolbar')).toBe(true);
     expect(toolbar?.classList.contains('neko-floating-toolbar')).toBe(true);
-    expect(toolbar?.getAttribute('data-orientation')).toBe('vertical');
+    expect(toolbar?.getAttribute('data-orientation')).toBe('horizontal');
     expect(toolbar?.getAttribute('aria-label')).toBe('Canvas tools');
     expect(host.querySelectorAll('.neko-toolbar-btn').length).toBeGreaterThan(0);
     expect(host.querySelector('[data-canvas-toolbar-action="select-tool"]')).not.toBeNull();

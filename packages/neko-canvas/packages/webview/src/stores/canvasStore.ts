@@ -1,4 +1,5 @@
-import { create } from 'zustand';
+import { create, createStore, type StateCreator } from 'zustand';
+import type { StoreApi } from 'zustand/vanilla';
 import type {
   CanvasData,
   CanvasNode,
@@ -23,8 +24,8 @@ import {
   getNodeParentId,
   isContainerNode,
 } from '@neko/shared';
-import { useHistoryStore } from './historyStore';
-import { useCanvasOperationStore } from './canvasOperationStore';
+import { useHistoryStore, type HistoryStoreApi } from './historyStore';
+import { useCanvasOperationStore, type CanvasOperationStoreApi } from './canvasOperationStore';
 import {
   addContainerChild,
   releaseContainerChildren,
@@ -195,16 +196,6 @@ function normalizeCanvasConnectionInput(
   };
 }
 
-/** Record current state to history before a mutation */
-function recordHistory(canvasData: CanvasData | null): void {
-  if (!canvasData) return;
-  useHistoryStore.getState().pushState(canvasData);
-}
-
-function recordCanvasDirty(description: string): void {
-  useCanvasOperationStore.getState().recordDirty(description);
-}
-
 function arePositionsEqual(
   a: { x: number; y: number } | undefined,
   b: { x: number; y: number } | undefined,
@@ -322,866 +313,889 @@ function clampNodeUpdateSize(node: CanvasNode, updates: CanvasNodeUpdates): Canv
 // Store
 // =============================================================================
 
-export const useCanvasStore = create<CanvasStore>((set, get) => ({
-  // ==================== Initial State ====================
-  canvasData: null,
-  selection: { nodeIds: [], connectionIds: [] },
-  // ==================== Data Actions ====================
-  setCanvasData: (data) => {
-    set({ canvasData: normalizeCanvasData(data) });
-  },
-
-  updateCanvasData: (updates, options) => {
-    const { canvasData } = get();
+function createCanvasState(
+  historyStore: HistoryStoreApi,
+  operationStore: CanvasOperationStoreApi,
+): StateCreator<CanvasStore> {
+  const recordHistory = (canvasData: CanvasData | null): void => {
     if (!canvasData) return;
-    set({
-      canvasData: normalizeCanvasData({
-        ...canvasData,
-        ...updates,
-      }),
-    });
-    if (options?.dirty !== false) {
-      recordCanvasDirty('Update canvas data');
-    }
-  },
+    historyStore.getState().pushState(canvasData);
+  };
+  const recordCanvasDirty = (description: string): void => {
+    operationStore.getState().recordDirty(description);
+  };
 
-  setPlaybackEntry: (nodeId) => {
-    const { canvasData } = get();
-    if (!canvasData || !canvasData.nodes.some((node) => node.id === nodeId)) return;
-    if (
-      canvasData.playback?.entryIds?.[0] === nodeId &&
-      canvasData.playback.entryIds.length === 1
-    ) {
-      return;
-    }
+  return (set, get) => ({
+    // ==================== Initial State ====================
+    canvasData: null,
+    selection: { nodeIds: [], connectionIds: [] },
+    // ==================== Data Actions ====================
+    setCanvasData: (data) => {
+      set({ canvasData: normalizeCanvasData(data) });
+    },
 
-    recordHistory(canvasData);
-    set({
-      canvasData: normalizeCanvasData({
-        ...canvasData,
-        playback: {
-          ...(canvasData.playback ?? { version: 1 }),
-          version: 1,
-          entryIds: [nodeId],
-        },
-      }),
-    });
-    recordCanvasDirty('Update canvas playback entry');
-  },
+    updateCanvasData: (updates, options) => {
+      const { canvasData } = get();
+      if (!canvasData) return;
+      set({
+        canvasData: normalizeCanvasData({
+          ...canvasData,
+          ...updates,
+        }),
+      });
+      if (options?.dirty !== false) {
+        recordCanvasDirty('Update canvas data');
+      }
+    },
 
-  // ==================== Node Actions ====================
-  addNode: (node) => {
-    const { canvasData } = get();
-    if (!canvasData) return '';
+    setPlaybackEntry: (nodeId) => {
+      const { canvasData } = get();
+      if (!canvasData || !canvasData.nodes.some((node) => node.id === nodeId)) return;
+      if (
+        canvasData.playback?.entryIds?.[0] === nodeId &&
+        canvasData.playback.entryIds.length === 1
+      ) {
+        return;
+      }
 
-    recordHistory(canvasData);
+      recordHistory(canvasData);
+      set({
+        canvasData: normalizeCanvasData({
+          ...canvasData,
+          playback: {
+            ...(canvasData.playback ?? { version: 1 }),
+            version: 1,
+            entryIds: [nodeId],
+          },
+        }),
+      });
+      recordCanvasDirty('Update canvas playback entry');
+    },
 
-    const id = generateId();
-    const newNode = clampNodeStoredSize({ ...node, id } as CanvasNode);
+    // ==================== Node Actions ====================
+    addNode: (node) => {
+      const { canvasData } = get();
+      if (!canvasData) return '';
 
-    set({
-      canvasData: normalizeCanvasData({
-        ...canvasData,
-        nodes: [...canvasData.nodes, newNode],
-      }),
-    });
+      recordHistory(canvasData);
 
-    useCanvasOperationStore.getState().recordNodeAdd(newNode);
-    return id;
-  },
-
-  addNodes: (nodes) => {
-    const { canvasData } = get();
-    if (!canvasData) return [];
-
-    recordHistory(canvasData);
-
-    const ids: string[] = [];
-    const newNodes = nodes.map((node) => {
       const id = generateId();
-      ids.push(id);
-      return clampNodeStoredSize({ ...node, id } as CanvasNode);
-    });
-
-    set({
-      canvasData: normalizeCanvasData({
-        ...canvasData,
-        nodes: [...canvasData.nodes, ...newNodes],
-      }),
-    });
-
-    const ops = useCanvasOperationStore.getState();
-    for (const node of newNodes) {
-      ops.recordNodeAdd(node);
-    }
-    return ids;
-  },
-
-  updateNode: (id, updates) => {
-    const { canvasData } = get();
-    if (!canvasData) return;
-
-    recordHistory(canvasData);
-
-    const oldNode = canvasData.nodes.find((n) => n.id === id);
-    const before: CanvasNodeUpdates = {};
-    if (oldNode) {
-      for (const key of Object.keys(updates) as Array<keyof CanvasNodeUpdates>) {
-        Object.assign(before, { [key]: oldNode[key] });
-      }
-    }
-    const normalizedUpdates = oldNode ? clampNodeUpdateSize(oldNode, updates) : updates;
-
-    set({
-      canvasData: {
-        ...canvasData,
-        nodes: canvasData.nodes.map((node) =>
-          node.id === id ? ({ ...node, ...normalizedUpdates } as CanvasNode) : node,
-        ),
-      },
-    });
-
-    useCanvasOperationStore.getState().recordNodeUpdate(id, normalizedUpdates, before);
-  },
-
-  updateNodeData: (id, data) => {
-    const { canvasData } = get();
-    if (!canvasData) return;
-
-    recordHistory(canvasData);
-
-    const oldNode = canvasData.nodes.find((n) => n.id === id);
-    const before: Partial<CanvasNode> = {};
-    if (oldNode) {
-      before.data = oldNode.data;
-    }
-
-    set({
-      canvasData: {
-        ...canvasData,
-        nodes: canvasData.nodes.map((node) =>
-          node.id === id
-            ? ({
-                ...node,
-                data: { ...node.data, ...data },
-              } as CanvasNode)
-            : node,
-        ),
-      },
-    });
-
-    useCanvasOperationStore
-      .getState()
-      .recordNodeUpdate(id, { data: { ...oldNode?.data, ...data } }, before);
-  },
-
-  removeNode: (id) => {
-    const { canvasData, selection } = get();
-    if (!canvasData) return;
-
-    const removedNode = canvasData.nodes.find((n) => n.id === id);
-    if (!removedNode) return;
-    recordHistory(canvasData);
-
-    const removedNodeIds = new Set([removedNode.id]);
-    const removedConnections = canvasData.connections.filter(
-      (conn) => removedNodeIds.has(conn.sourceId) || removedNodeIds.has(conn.targetId),
-    );
-
-    const membershipNodes = removedNode.parentId
-      ? removeContainerChild(canvasData.nodes, removedNode.parentId, id).nodes
-      : canvasData.nodes;
-    let nextNodes: CanvasNode[];
-    if (isContainerNode(removedNode)) {
-      nextNodes = releaseContainerChildren(membershipNodes, id).nodes.filter(
-        (node) => node.id !== id,
-      );
-    } else {
-      nextNodes = membershipNodes.filter((node) => node.id !== id);
-    }
-
-    set({
-      canvasData: {
-        ...canvasData,
-        nodes: nextNodes,
-        connections: filterConnectionsTouchingNodeIds(canvasData.connections, removedNodeIds),
-      },
-      selection: {
-        ...selection,
-        nodeIds: selection.nodeIds.filter((nodeId) => !removedNodeIds.has(nodeId)),
-      },
-    });
-
-    useCanvasOperationStore.getState().recordNodeRemove(id, removedNode, removedConnections);
-    useCanvasOperationStore.getState().recordContentNodeDelta([...removedNodeIds]);
-  },
-
-  moveNodeEnd: (id, position) => {
-    const { canvasData } = get();
-    if (!canvasData) return;
-
-    const oldNode = canvasData.nodes.find((n) => n.id === id);
-    if (!oldNode || arePositionsEqual(oldNode.position, position)) return;
-    recordHistory(canvasData);
-
-    if (isContainerNode(oldNode)) {
-      const dx = position.x - oldNode.position.x;
-      const dy = position.y - oldNode.position.y;
-      const translatedNodes = translateContainerSubtree(canvasData.nodes, id, { x: dx, y: dy });
-      const nextNodes = syncNodeContainerMembership(translatedNodes, id);
-      set({ canvasData: { ...canvasData, nodes: nextNodes } });
-    } else {
-      const movedNodes = canvasData.nodes.map((node) =>
-        node.id === id ? { ...node, position } : node,
-      );
-      const nextNodes = syncNodeContainerMembership(movedNodes, id);
-      set({ canvasData: { ...canvasData, nodes: nextNodes } });
-    }
-
-    useCanvasOperationStore
-      .getState()
-      .recordNodeUpdate(id, { position }, { position: oldNode.position });
-  },
-
-  resizeNodeEnd: (id, size, position) => {
-    const { canvasData } = get();
-    if (!canvasData) return;
-
-    const oldNode = canvasData.nodes.find((n) => n.id === id);
-    if (!oldNode) return;
-    const minimumSize = clampNodeSize(size, resolveNodeMinSize(oldNode));
-    const spatialClamp =
-      getContainerPolicyName(oldNode) === 'group'
-        ? clampSpatialGroupResize(canvasData.nodes, id, minimumSize, position)
-        : { size: minimumSize, position };
-    if (
-      areSizesEqual(oldNode.size, spatialClamp.size) &&
-      arePositionsEqual(oldNode.position, spatialClamp.position)
-    ) {
-      return;
-    }
-    recordHistory(canvasData);
-
-    set({
-      canvasData: {
-        ...canvasData,
-        nodes: canvasData.nodes.map((node) =>
-          node.id === id
-            ? { ...node, size: spatialClamp.size, position: spatialClamp.position }
-            : node,
-        ),
-      },
-    });
-
-    useCanvasOperationStore
-      .getState()
-      .recordNodeUpdate(
-        id,
-        { size: spatialClamp.size, position: spatialClamp.position },
-        { size: oldNode.size, position: oldNode.position },
-      );
-  },
-
-  rotateNodeEnd: (id, rotation) => {
-    const { canvasData } = get();
-    if (!canvasData) return;
-
-    const oldNode = canvasData.nodes.find((n) => n.id === id);
-    if (!oldNode || (oldNode.rotation ?? 0) === rotation) return;
-    recordHistory(canvasData);
-
-    set({
-      canvasData: {
-        ...canvasData,
-        nodes: canvasData.nodes.map((node) => (node.id === id ? { ...node, rotation } : node)),
-      },
-    });
-
-    useCanvasOperationStore
-      .getState()
-      .recordNodeUpdate(id, { rotation }, { rotation: oldNode.rotation });
-  },
-
-  updateNodePorts: (id, ports) => {
-    const { canvasData } = get();
-    if (!canvasData) return;
-
-    const oldNode = canvasData.nodes.find((n) => n.id === id);
-    recordHistory(canvasData);
-
-    set({
-      canvasData: {
-        ...canvasData,
-        nodes: canvasData.nodes.map((node) => (node.id === id ? { ...node, ports } : node)),
-      },
-    });
-
-    if (oldNode) {
-      useCanvasOperationStore.getState().recordNodeUpdate(id, { ports }, { ports: oldNode.ports });
-    }
-  },
-
-  // ==================== Reorder Actions ====================
-  reorderNode: (id, newZIndex) => {
-    const { canvasData } = get();
-    if (!canvasData) return;
-
-    const oldNode = canvasData.nodes.find((n) => n.id === id);
-    recordHistory(canvasData);
-
-    set({
-      canvasData: {
-        ...canvasData,
-        nodes: canvasData.nodes.map((node) =>
-          node.id === id ? { ...node, zIndex: newZIndex } : node,
-        ),
-      },
-    });
-
-    if (oldNode) {
-      useCanvasOperationStore.getState().recordNodeReorder(id, newZIndex, oldNode.zIndex);
-    }
-  },
-
-  // ==================== Group Actions ====================
-  groupNodes: (childIds) => {
-    const { canvasData } = get();
-    if (!canvasData || childIds.length === 0) return '';
-
-    recordHistory(canvasData);
-
-    // Calculate bounding box of children
-    const children = canvasData.nodes.filter((n) => childIds.includes(n.id));
-    if (children.length === 0) return '';
-
-    let minX = Infinity,
-      minY = Infinity,
-      maxX = -Infinity,
-      maxY = -Infinity;
-    for (const child of children) {
-      minX = Math.min(minX, child.position.x);
-      minY = Math.min(minY, child.position.y);
-      maxX = Math.max(maxX, child.position.x + child.size.width);
-      maxY = Math.max(maxY, child.position.y + child.size.height);
-    }
-
-    const padding = 20;
-    const id = generateId();
-    const maxZ = Math.max(...canvasData.nodes.map((n) => n.zIndex), 0);
-
-    const groupNode = {
-      id,
-      type: 'group' as const,
-      position: { x: minX - padding, y: minY - padding },
-      size: { width: maxX - minX + padding * 2, height: maxY - minY + padding * 2 },
-      zIndex: maxZ + 1,
-      locked: false,
-      container: {
-        policy: 'group' as const,
-        childIds,
-      },
-      data: {
-        label: 'Group',
-      },
-    };
-
-    const nextNodes = [...canvasData.nodes, groupNode as CanvasNode];
-    let linkedNodes = nextNodes;
-    for (const childId of childIds) {
-      linkedNodes = addContainerChild(linkedNodes, id, childId).nodes;
-    }
-
-    set({
-      canvasData: {
-        ...canvasData,
-        nodes: linkedNodes,
-      },
-      selection: { nodeIds: [id], connectionIds: [] },
-    });
-
-    useCanvasOperationStore.getState().recordNodeGroup(groupNode as CanvasNode, childIds);
-    return id;
-  },
-
-  removeChildFromContainer: (containerId, childId) => {
-    const { canvasData } = get();
-    if (!canvasData) return;
-
-    const container = canvasData.nodes.find((n) => n.id === containerId);
-    if (!container) return;
-
-    recordHistory(canvasData);
-
-    const nextNodes = removeContainerChild(canvasData.nodes, containerId, childId).nodes;
-
-    set({
-      canvasData: {
-        ...canvasData,
-        nodes: nextNodes,
-        connections: canvasData.connections,
-      },
-    });
-    recordCanvasDirty('Remove child from container');
-  },
-
-  reorderGroupChildren: (groupId, childIds, autoLayout = false) => {
-    const { canvasData } = get();
-    if (!canvasData) {
-      throw new Error('Canvas data is unavailable');
-    }
-    const result = reorderContainerChildren(canvasData.nodes, groupId, childIds);
-    if (result.error) {
-      throw new Error(result.error);
-    }
-    if (!result.changed) {
-      return { changed: false };
-    }
-    const nodes = autoLayout
-      ? autoArrangeContainer(result.nodes, { containerId: groupId, mode: 'sequence' })
-      : result.nodes;
-    recordHistory(canvasData);
-    set({ canvasData: { ...canvasData, nodes } });
-    recordCanvasDirty('Reorder Group children');
-    return { changed: true };
-  },
-
-  ungroupNodes: (groupId) => {
-    const { canvasData } = get();
-    if (!canvasData) return;
-
-    const groupNode = canvasData.nodes.find((n) => n.id === groupId);
-    if (!groupNode || (groupNode.type as string) !== 'group') return;
-
-    recordHistory(canvasData);
-
-    const childIds = getContainerChildIds(groupNode);
-    const releasedNodes = releaseContainerChildren(canvasData.nodes, groupId).nodes;
-
-    set({
-      canvasData: {
-        ...canvasData,
-        nodes: releasedNodes.filter((n) => n.id !== groupId),
-        // Remove connections to/from the group node
-        connections: canvasData.connections.filter(
-          (c) => c.sourceId !== groupId && c.targetId !== groupId,
-        ),
-      },
-      selection: { nodeIds: childIds, connectionIds: [] },
-    });
-
-    useCanvasOperationStore.getState().recordContentNodeDelta([groupId]);
-    useCanvasOperationStore.getState().recordNodeUngroup(groupId, groupNode, childIds);
-  },
-
-  arrangeGroup: (groupId, sort) => {
-    const { canvasData } = get();
-    if (!canvasData) return;
-    const nextNodes = arrangeSpatialGroup(canvasData.nodes, groupId, sort);
-    if (nextNodes === canvasData.nodes) return;
-    recordHistory(canvasData);
-    set({ canvasData: { ...canvasData, nodes: nextNodes } });
-    recordCanvasDirty('Arrange spatial Group');
-  },
-
-  fitGroupToContent: (groupId) => {
-    const { canvasData } = get();
-    if (!canvasData) return;
-    const nextNodes = fitSpatialGroupToContent(canvasData.nodes, groupId);
-    if (nextNodes === canvasData.nodes) return;
-    recordHistory(canvasData);
-    set({ canvasData: { ...canvasData, nodes: nextNodes } });
-    recordCanvasDirty('Fit spatial Group to content');
-  },
-
-  setGroupCollapsed: (groupId, collapsed) => {
-    const { canvasData } = get();
-    if (!canvasData) return;
-    const nextNodes = setSpatialGroupCollapsed(canvasData.nodes, groupId, collapsed);
-    if (nextNodes === canvasData.nodes) return;
-    recordHistory(canvasData);
-    set({ canvasData: { ...canvasData, nodes: nextNodes } });
-    recordCanvasDirty(collapsed ? 'Collapse spatial Group' : 'Expand spatial Group');
-  },
-
-  // ==================== Connection Actions ====================
-  addConnection: (connection) => {
-    const { canvasData } = get();
-    if (!canvasData) return { ok: false, reason: 'missing-canvas' };
-    const validation = validateCanvasConnectionDraft(
-      canvasData.nodes,
-      canvasData.connections,
-      connection,
-    );
-    if (!validation.ok) return validation;
-
-    recordHistory(canvasData);
-
-    const id = generateId();
-    const newConnection: CanvasConnection = normalizeCanvasConnectionInput(connection, id);
-
-    set({
-      canvasData: {
-        ...canvasData,
-        connections: [...canvasData.connections, newConnection],
-      },
-    });
-
-    useCanvasOperationStore.getState().recordConnectionAdd(newConnection);
-    return { ok: true, connectionId: id };
-  },
-
-  updateConnection: (id, updates) => {
-    const { canvasData } = get();
-    if (!canvasData) return { ok: false, reason: 'missing-canvas' };
-    const oldConnection = canvasData.connections.find((conn) => conn.id === id);
-    if (!oldConnection) return { ok: false, reason: 'missing-connection' };
-    const nextConnection = { ...oldConnection, ...updates };
-    if (JSON.stringify(oldConnection) === JSON.stringify(nextConnection)) {
-      return { ok: true, connectionId: id };
-    }
-    const validation = validateCanvasConnectionDraft(
-      canvasData.nodes,
-      canvasData.connections,
-      nextConnection,
-      { ignoreConnectionId: id },
-    );
-    if (!validation.ok) return validation;
-
-    recordHistory(canvasData);
-
-    set({
-      canvasData: {
-        ...canvasData,
-        connections: canvasData.connections.map((conn) => (conn.id === id ? nextConnection : conn)),
-      },
-    });
-    recordCanvasDirty('Update connection');
-    return { ok: true, connectionId: id };
-  },
-
-  removeConnection: (id) => {
-    const { canvasData, selection } = get();
-    if (!canvasData) return;
-
-    const removedConnection = canvasData.connections.find((c) => c.id === id);
-    if (!removedConnection) return;
-    recordHistory(canvasData);
-
-    set({
-      canvasData: {
-        ...canvasData,
-        connections: canvasData.connections.filter((conn) => conn.id !== id),
-      },
-      selection: {
-        ...selection,
-        connectionIds: selection.connectionIds.filter((connId) => connId !== id),
-      },
-    });
-
-    useCanvasOperationStore.getState().recordConnectionRemove(id, removedConnection);
-  },
-
-  // ==================== Derive Actions ====================
-  deriveSuccessorNode: (sourceNodeId, targetType?) => {
-    const result = get().deriveNode({
-      sourceNodeId,
-      targetType: targetType as CanvasNode['type'] | undefined,
-    });
-    return result?.nodeId ?? null;
-  },
-
-  deriveNode: (request) => {
-    const { canvasData } = get();
-    if (!canvasData) return null;
-
-    const mutation = deriveCanvasNode(
-      {
-        nodes: canvasData.nodes,
-        connections: canvasData.connections,
-        generateId,
-      },
-      request,
-    );
-    recordHistory(canvasData);
-
-    set({
-      canvasData: normalizeCanvasData({
-        ...canvasData,
-        nodes: mutation.nodes,
-        connections: mutation.connections,
-      }),
-      selection: { nodeIds: [mutation.result.nodeId], connectionIds: [] },
-    });
-
-    useCanvasOperationStore.getState().recordNodeAdd(mutation.result.node as CanvasNode);
-    if (mutation.result.connectionId) {
-      const connection = mutation.connections.find(
-        (item) => item.id === mutation.result.connectionId,
-      );
-      if (connection) {
-        useCanvasOperationStore.getState().recordConnectionAdd(connection);
-      }
-    }
-
-    return mutation.result;
-  },
-
-  createComposite: (request) => {
-    const { canvasData } = get();
-    if (!canvasData) return null;
-
-    const mutation = createCanvasComposite(
-      {
-        nodes: canvasData.nodes,
-        connections: canvasData.connections,
-        generateId,
-      },
-      request,
-    );
-    recordHistory(canvasData);
-
-    set({
-      canvasData: normalizeCanvasData({
-        ...canvasData,
-        nodes: mutation.nodes,
-        connections: mutation.connections,
-      }),
-      selection: { nodeIds: [mutation.result.containerId], connectionIds: [] },
-    });
-
-    const previousNodeIds = new Set(canvasData.nodes.map((node) => node.id));
-    const addedNodes = mutation.nodes.filter((node) => !previousNodeIds.has(node.id));
-    for (const node of addedNodes) {
-      useCanvasOperationStore.getState().recordNodeAdd(node);
-    }
-    const previousConnectionIds = new Set(
-      canvasData.connections.map((connection) => connection.id),
-    );
-    const addedConnections = mutation.connections.filter(
-      (connection) => !previousConnectionIds.has(connection.id),
-    );
-    for (const connection of addedConnections) {
-      useCanvasOperationStore.getState().recordConnectionAdd(connection);
-    }
-
-    return mutation.result;
-  },
-
-  updateBlock: (request) => {
-    const { canvasData } = get();
-    if (!canvasData) return null;
-
-    const node = canvasData.nodes.find((candidate) => candidate.id === request.nodeId);
-    if (!node) {
-      throw new Error(`Node "${request.nodeId}" not found`);
-    }
-
-    const result = updateCanvasBlock(node, request);
-    recordHistory(canvasData);
-
-    set({
-      canvasData: {
-        ...canvasData,
-        nodes: canvasData.nodes.map((candidate) =>
-          candidate.id === request.nodeId ? result.node : candidate,
-        ),
-      },
-    });
-
-    useCanvasOperationStore
-      .getState()
-      .recordNodeUpdate(
-        request.nodeId,
-        { data: result.data } as Partial<CanvasNode>,
-        { data: node.data } as Partial<CanvasNode>,
-      );
-
-    return {
-      nodeId: result.nodeId,
-      changed: result.changed,
-      data: result.data,
-    };
-  },
-
-  extractStructuredContent: (request) => {
-    const { canvasData, selection } = get();
-    const nodes = canvasData?.nodes ?? [];
-    return extractStructuredCanvasContent(nodes, canvasData?.connections ?? [], {
-      ...request,
-      nodeIds:
-        request.nodeIds ??
-        (selection.nodeIds.length > 0 ? selection.nodeIds : nodes.map((node) => node.id)),
-    });
-  },
-
-  applyAgentContent: (payload) => {
-    const { canvasData } = get();
-    if (!canvasData) return null;
-
-    const mutation = applyCanvasAgentContent(
-      {
-        nodes: canvasData.nodes,
-        connections: canvasData.connections,
-        generateId,
-      },
-      payload,
-    );
-    recordHistory(canvasData);
-
-    set({
-      canvasData: normalizeCanvasData({
-        ...canvasData,
-        nodes: mutation.nodes,
-        connections: mutation.connections,
-      }),
-      selection: mutation.result.nodeId
-        ? { nodeIds: [mutation.result.nodeId], connectionIds: [] }
-        : get().selection,
-    });
-
-    const previousNodeIds = new Set(canvasData.nodes.map((node) => node.id));
-    const ops = useCanvasOperationStore.getState();
-    for (const node of mutation.nodes) {
-      if (!previousNodeIds.has(node.id)) {
+      const newNode = clampNodeStoredSize({ ...node, id } as CanvasNode);
+
+      set({
+        canvasData: normalizeCanvasData({
+          ...canvasData,
+          nodes: [...canvasData.nodes, newNode],
+        }),
+      });
+
+      operationStore.getState().recordNodeAdd(newNode);
+      return id;
+    },
+
+    addNodes: (nodes) => {
+      const { canvasData } = get();
+      if (!canvasData) return [];
+
+      recordHistory(canvasData);
+
+      const ids: string[] = [];
+      const newNodes = nodes.map((node) => {
+        const id = generateId();
+        ids.push(id);
+        return clampNodeStoredSize({ ...node, id } as CanvasNode);
+      });
+
+      set({
+        canvasData: normalizeCanvasData({
+          ...canvasData,
+          nodes: [...canvasData.nodes, ...newNodes],
+        }),
+      });
+
+      const ops = operationStore.getState();
+      for (const node of newNodes) {
         ops.recordNodeAdd(node);
       }
-    }
-    if (mutation.result.nodeId && previousNodeIds.has(mutation.result.nodeId)) {
-      const before = canvasData.nodes.find((node) => node.id === mutation.result.nodeId);
-      const after = mutation.nodes.find((node) => node.id === mutation.result.nodeId);
-      if (before && after) {
-        ops.recordNodeUpdate(
-          mutation.result.nodeId,
-          { data: after.data } as Partial<CanvasNode>,
-          { data: before.data } as Partial<CanvasNode>,
-        );
+      return ids;
+    },
+
+    updateNode: (id, updates) => {
+      const { canvasData } = get();
+      if (!canvasData) return;
+
+      recordHistory(canvasData);
+
+      const oldNode = canvasData.nodes.find((n) => n.id === id);
+      const before: CanvasNodeUpdates = {};
+      if (oldNode) {
+        for (const key of Object.keys(updates) as Array<keyof CanvasNodeUpdates>) {
+          Object.assign(before, { [key]: oldNode[key] });
+        }
       }
-    }
+      const normalizedUpdates = oldNode ? clampNodeUpdateSize(oldNode, updates) : updates;
 
-    return mutation.result;
-  },
-
-  // ==================== Selection Actions ====================
-  selectNode: (id, multi = false) => {
-    const { selection } = get();
-
-    if (multi) {
-      const isSelected = selection.nodeIds.includes(id);
       set({
-        selection: {
-          ...selection,
-          nodeIds: isSelected
-            ? selection.nodeIds.filter((nodeId) => nodeId !== id)
-            : [...selection.nodeIds, id],
+        canvasData: {
+          ...canvasData,
+          nodes: canvasData.nodes.map((node) =>
+            node.id === id ? ({ ...node, ...normalizedUpdates } as CanvasNode) : node,
+          ),
         },
       });
-    } else {
+
+      operationStore.getState().recordNodeUpdate(id, normalizedUpdates, before);
+    },
+
+    updateNodeData: (id, data) => {
+      const { canvasData } = get();
+      if (!canvasData) return;
+
+      recordHistory(canvasData);
+
+      const oldNode = canvasData.nodes.find((n) => n.id === id);
+      const before: Partial<CanvasNode> = {};
+      if (oldNode) {
+        before.data = oldNode.data;
+      }
+
       set({
+        canvasData: {
+          ...canvasData,
+          nodes: canvasData.nodes.map((node) =>
+            node.id === id
+              ? ({
+                  ...node,
+                  data: { ...node.data, ...data },
+                } as CanvasNode)
+              : node,
+          ),
+        },
+      });
+
+      operationStore
+        .getState()
+        .recordNodeUpdate(id, { data: { ...oldNode?.data, ...data } }, before);
+    },
+
+    removeNode: (id) => {
+      const { canvasData, selection } = get();
+      if (!canvasData) return;
+
+      const removedNode = canvasData.nodes.find((n) => n.id === id);
+      if (!removedNode) return;
+      recordHistory(canvasData);
+
+      const removedNodeIds = new Set([removedNode.id]);
+      const removedConnections = canvasData.connections.filter(
+        (conn) => removedNodeIds.has(conn.sourceId) || removedNodeIds.has(conn.targetId),
+      );
+
+      const membershipNodes = removedNode.parentId
+        ? removeContainerChild(canvasData.nodes, removedNode.parentId, id).nodes
+        : canvasData.nodes;
+      let nextNodes: CanvasNode[];
+      if (isContainerNode(removedNode)) {
+        nextNodes = releaseContainerChildren(membershipNodes, id).nodes.filter(
+          (node) => node.id !== id,
+        );
+      } else {
+        nextNodes = membershipNodes.filter((node) => node.id !== id);
+      }
+
+      set({
+        canvasData: {
+          ...canvasData,
+          nodes: nextNodes,
+          connections: filterConnectionsTouchingNodeIds(canvasData.connections, removedNodeIds),
+        },
+        selection: {
+          ...selection,
+          nodeIds: selection.nodeIds.filter((nodeId) => !removedNodeIds.has(nodeId)),
+        },
+      });
+
+      operationStore.getState().recordNodeRemove(id, removedNode, removedConnections);
+      operationStore.getState().recordContentNodeDelta([...removedNodeIds]);
+    },
+
+    moveNodeEnd: (id, position) => {
+      const { canvasData } = get();
+      if (!canvasData) return;
+
+      const oldNode = canvasData.nodes.find((n) => n.id === id);
+      if (!oldNode || arePositionsEqual(oldNode.position, position)) return;
+      recordHistory(canvasData);
+
+      if (isContainerNode(oldNode)) {
+        const dx = position.x - oldNode.position.x;
+        const dy = position.y - oldNode.position.y;
+        const translatedNodes = translateContainerSubtree(canvasData.nodes, id, { x: dx, y: dy });
+        const nextNodes = syncNodeContainerMembership(translatedNodes, id);
+        set({ canvasData: { ...canvasData, nodes: nextNodes } });
+      } else {
+        const movedNodes = canvasData.nodes.map((node) =>
+          node.id === id ? { ...node, position } : node,
+        );
+        const nextNodes = syncNodeContainerMembership(movedNodes, id);
+        set({ canvasData: { ...canvasData, nodes: nextNodes } });
+      }
+
+      operationStore.getState().recordNodeUpdate(id, { position }, { position: oldNode.position });
+    },
+
+    resizeNodeEnd: (id, size, position) => {
+      const { canvasData } = get();
+      if (!canvasData) return;
+
+      const oldNode = canvasData.nodes.find((n) => n.id === id);
+      if (!oldNode) return;
+      const minimumSize = clampNodeSize(size, resolveNodeMinSize(oldNode));
+      const spatialClamp =
+        getContainerPolicyName(oldNode) === 'group'
+          ? clampSpatialGroupResize(canvasData.nodes, id, minimumSize, position)
+          : { size: minimumSize, position };
+      if (
+        areSizesEqual(oldNode.size, spatialClamp.size) &&
+        arePositionsEqual(oldNode.position, spatialClamp.position)
+      ) {
+        return;
+      }
+      recordHistory(canvasData);
+
+      set({
+        canvasData: {
+          ...canvasData,
+          nodes: canvasData.nodes.map((node) =>
+            node.id === id
+              ? { ...node, size: spatialClamp.size, position: spatialClamp.position }
+              : node,
+          ),
+        },
+      });
+
+      operationStore
+        .getState()
+        .recordNodeUpdate(
+          id,
+          { size: spatialClamp.size, position: spatialClamp.position },
+          { size: oldNode.size, position: oldNode.position },
+        );
+    },
+
+    rotateNodeEnd: (id, rotation) => {
+      const { canvasData } = get();
+      if (!canvasData) return;
+
+      const oldNode = canvasData.nodes.find((n) => n.id === id);
+      if (!oldNode || (oldNode.rotation ?? 0) === rotation) return;
+      recordHistory(canvasData);
+
+      set({
+        canvasData: {
+          ...canvasData,
+          nodes: canvasData.nodes.map((node) => (node.id === id ? { ...node, rotation } : node)),
+        },
+      });
+
+      operationStore.getState().recordNodeUpdate(id, { rotation }, { rotation: oldNode.rotation });
+    },
+
+    updateNodePorts: (id, ports) => {
+      const { canvasData } = get();
+      if (!canvasData) return;
+
+      const oldNode = canvasData.nodes.find((n) => n.id === id);
+      recordHistory(canvasData);
+
+      set({
+        canvasData: {
+          ...canvasData,
+          nodes: canvasData.nodes.map((node) => (node.id === id ? { ...node, ports } : node)),
+        },
+      });
+
+      if (oldNode) {
+        operationStore.getState().recordNodeUpdate(id, { ports }, { ports: oldNode.ports });
+      }
+    },
+
+    // ==================== Reorder Actions ====================
+    reorderNode: (id, newZIndex) => {
+      const { canvasData } = get();
+      if (!canvasData) return;
+
+      const oldNode = canvasData.nodes.find((n) => n.id === id);
+      recordHistory(canvasData);
+
+      set({
+        canvasData: {
+          ...canvasData,
+          nodes: canvasData.nodes.map((node) =>
+            node.id === id ? { ...node, zIndex: newZIndex } : node,
+          ),
+        },
+      });
+
+      if (oldNode) {
+        operationStore.getState().recordNodeReorder(id, newZIndex, oldNode.zIndex);
+      }
+    },
+
+    // ==================== Group Actions ====================
+    groupNodes: (childIds) => {
+      const { canvasData } = get();
+      if (!canvasData || childIds.length === 0) return '';
+
+      recordHistory(canvasData);
+
+      // Calculate bounding box of children
+      const children = canvasData.nodes.filter((n) => childIds.includes(n.id));
+      if (children.length === 0) return '';
+
+      let minX = Infinity,
+        minY = Infinity,
+        maxX = -Infinity,
+        maxY = -Infinity;
+      for (const child of children) {
+        minX = Math.min(minX, child.position.x);
+        minY = Math.min(minY, child.position.y);
+        maxX = Math.max(maxX, child.position.x + child.size.width);
+        maxY = Math.max(maxY, child.position.y + child.size.height);
+      }
+
+      const padding = 20;
+      const id = generateId();
+      const maxZ = Math.max(...canvasData.nodes.map((n) => n.zIndex), 0);
+
+      const groupNode = {
+        id,
+        type: 'group' as const,
+        position: { x: minX - padding, y: minY - padding },
+        size: { width: maxX - minX + padding * 2, height: maxY - minY + padding * 2 },
+        zIndex: maxZ + 1,
+        locked: false,
+        container: {
+          policy: 'group' as const,
+          childIds,
+        },
+        data: {
+          label: 'Group',
+        },
+      };
+
+      const nextNodes = [...canvasData.nodes, groupNode as CanvasNode];
+      let linkedNodes = nextNodes;
+      for (const childId of childIds) {
+        linkedNodes = addContainerChild(linkedNodes, id, childId).nodes;
+      }
+
+      set({
+        canvasData: {
+          ...canvasData,
+          nodes: linkedNodes,
+        },
         selection: { nodeIds: [id], connectionIds: [] },
       });
-    }
-  },
 
-  selectConnection: (id, multi = false) => {
-    const { selection } = get();
+      operationStore.getState().recordNodeGroup(groupNode as CanvasNode, childIds);
+      return id;
+    },
 
-    if (multi) {
-      const isSelected = selection.connectionIds.includes(id);
+    removeChildFromContainer: (containerId, childId) => {
+      const { canvasData } = get();
+      if (!canvasData) return;
+
+      const container = canvasData.nodes.find((n) => n.id === containerId);
+      if (!container) return;
+
+      recordHistory(canvasData);
+
+      const nextNodes = removeContainerChild(canvasData.nodes, containerId, childId).nodes;
+
       set({
-        selection: {
-          ...selection,
-          connectionIds: isSelected
-            ? selection.connectionIds.filter((connId) => connId !== id)
-            : [...selection.connectionIds, id],
+        canvasData: {
+          ...canvasData,
+          nodes: nextNodes,
+          connections: canvasData.connections,
         },
       });
-    } else {
+      recordCanvasDirty('Remove child from container');
+    },
+
+    reorderGroupChildren: (groupId, childIds, autoLayout = false) => {
+      const { canvasData } = get();
+      if (!canvasData) {
+        throw new Error('Canvas data is unavailable');
+      }
+      const result = reorderContainerChildren(canvasData.nodes, groupId, childIds);
+      if (result.error) {
+        throw new Error(result.error);
+      }
+      if (!result.changed) {
+        return { changed: false };
+      }
+      const nodes = autoLayout
+        ? autoArrangeContainer(result.nodes, { containerId: groupId, mode: 'sequence' })
+        : result.nodes;
+      recordHistory(canvasData);
+      set({ canvasData: { ...canvasData, nodes } });
+      recordCanvasDirty('Reorder Group children');
+      return { changed: true };
+    },
+
+    ungroupNodes: (groupId) => {
+      const { canvasData } = get();
+      if (!canvasData) return;
+
+      const groupNode = canvasData.nodes.find((n) => n.id === groupId);
+      if (!groupNode || (groupNode.type as string) !== 'group') return;
+
+      recordHistory(canvasData);
+
+      const childIds = getContainerChildIds(groupNode);
+      const releasedNodes = releaseContainerChildren(canvasData.nodes, groupId).nodes;
+
       set({
-        selection: { nodeIds: [], connectionIds: [id] },
+        canvasData: {
+          ...canvasData,
+          nodes: releasedNodes.filter((n) => n.id !== groupId),
+          // Remove connections to/from the group node
+          connections: canvasData.connections.filter(
+            (c) => c.sourceId !== groupId && c.targetId !== groupId,
+          ),
+        },
+        selection: { nodeIds: childIds, connectionIds: [] },
       });
-    }
-  },
 
-  selectNodes: (ids) => {
-    set({
-      selection: { nodeIds: ids, connectionIds: [] },
-    });
-  },
+      operationStore.getState().recordContentNodeDelta([groupId]);
+      operationStore.getState().recordNodeUngroup(groupId, groupNode, childIds);
+    },
 
-  clearSelection: () => {
-    set({
-      selection: { nodeIds: [], connectionIds: [] },
-    });
-  },
+    arrangeGroup: (groupId, sort) => {
+      const { canvasData } = get();
+      if (!canvasData) return;
+      const nextNodes = arrangeSpatialGroup(canvasData.nodes, groupId, sort);
+      if (nextNodes === canvasData.nodes) return;
+      recordHistory(canvasData);
+      set({ canvasData: { ...canvasData, nodes: nextNodes } });
+      recordCanvasDirty('Arrange spatial Group');
+    },
 
-  deleteSelected: () => {
-    const { selection, canvasData } = get();
-    if (!canvasData) return;
-    if (selection.nodeIds.length === 0 && selection.connectionIds.length === 0) return;
+    fitGroupToContent: (groupId) => {
+      const { canvasData } = get();
+      if (!canvasData) return;
+      const nextNodes = fitSpatialGroupToContent(canvasData.nodes, groupId);
+      if (nextNodes === canvasData.nodes) return;
+      recordHistory(canvasData);
+      set({ canvasData: { ...canvasData, nodes: nextNodes } });
+      recordCanvasDirty('Fit spatial Group to content');
+    },
 
-    recordHistory(canvasData);
+    setGroupCollapsed: (groupId, collapsed) => {
+      const { canvasData } = get();
+      if (!canvasData) return;
+      const nextNodes = setSpatialGroupCollapsed(canvasData.nodes, groupId, collapsed);
+      if (nextNodes === canvasData.nodes) return;
+      recordHistory(canvasData);
+      set({ canvasData: { ...canvasData, nodes: nextNodes } });
+      recordCanvasDirty(collapsed ? 'Collapse spatial Group' : 'Expand spatial Group');
+    },
 
-    const deletion = deleteCanvasSelection(canvasData.nodes, new Set(selection.nodeIds));
-    const connectionsToRemove = new Set(selection.connectionIds);
+    // ==================== Connection Actions ====================
+    addConnection: (connection) => {
+      const { canvasData } = get();
+      if (!canvasData) return { ok: false, reason: 'missing-canvas' };
+      const validation = validateCanvasConnectionDraft(
+        canvasData.nodes,
+        canvasData.connections,
+        connection,
+      );
+      if (!validation.ok) return validation;
 
-    set({
-      canvasData: {
-        ...canvasData,
-        nodes: deletion.nodes,
-        connections: canvasData.connections.filter(
-          (conn) =>
-            !connectionsToRemove.has(conn.id) &&
-            !deletion.removedNodeIds.has(conn.sourceId) &&
-            !deletion.removedNodeIds.has(conn.targetId),
-        ),
-      },
-      selection: { nodeIds: [], connectionIds: [] },
-    });
-    useCanvasOperationStore.getState().recordContentNodeDelta([...deletion.removedNodeIds]);
-    recordCanvasDirty('Delete selection');
-  },
+      recordHistory(canvasData);
 
-  // ==================== History Actions ====================
-  undo: () => {
-    const { canvasData } = get();
-    if (!canvasData) return;
+      const id = generateId();
+      const newConnection: CanvasConnection = normalizeCanvasConnectionInput(connection, id);
 
-    const previousState = useHistoryStore.getState().undo(canvasData);
-    if (previousState) {
       set({
-        canvasData: previousState,
+        canvasData: {
+          ...canvasData,
+          connections: [...canvasData.connections, newConnection],
+        },
+      });
+
+      operationStore.getState().recordConnectionAdd(newConnection);
+      return { ok: true, connectionId: id };
+    },
+
+    updateConnection: (id, updates) => {
+      const { canvasData } = get();
+      if (!canvasData) return { ok: false, reason: 'missing-canvas' };
+      const oldConnection = canvasData.connections.find((conn) => conn.id === id);
+      if (!oldConnection) return { ok: false, reason: 'missing-connection' };
+      const nextConnection = { ...oldConnection, ...updates };
+      if (JSON.stringify(oldConnection) === JSON.stringify(nextConnection)) {
+        return { ok: true, connectionId: id };
+      }
+      const validation = validateCanvasConnectionDraft(
+        canvasData.nodes,
+        canvasData.connections,
+        nextConnection,
+        { ignoreConnectionId: id },
+      );
+      if (!validation.ok) return validation;
+
+      recordHistory(canvasData);
+
+      set({
+        canvasData: {
+          ...canvasData,
+          connections: canvasData.connections.map((conn) =>
+            conn.id === id ? nextConnection : conn,
+          ),
+        },
+      });
+      recordCanvasDirty('Update connection');
+      return { ok: true, connectionId: id };
+    },
+
+    removeConnection: (id) => {
+      const { canvasData, selection } = get();
+      if (!canvasData) return;
+
+      const removedConnection = canvasData.connections.find((c) => c.id === id);
+      if (!removedConnection) return;
+      recordHistory(canvasData);
+
+      set({
+        canvasData: {
+          ...canvasData,
+          connections: canvasData.connections.filter((conn) => conn.id !== id),
+        },
+        selection: {
+          ...selection,
+          connectionIds: selection.connectionIds.filter((connId) => connId !== id),
+        },
+      });
+
+      operationStore.getState().recordConnectionRemove(id, removedConnection);
+    },
+
+    // ==================== Derive Actions ====================
+    deriveSuccessorNode: (sourceNodeId, targetType?) => {
+      const result = get().deriveNode({
+        sourceNodeId,
+        targetType: targetType as CanvasNode['type'] | undefined,
+      });
+      return result?.nodeId ?? null;
+    },
+
+    deriveNode: (request) => {
+      const { canvasData } = get();
+      if (!canvasData) return null;
+
+      const mutation = deriveCanvasNode(
+        {
+          nodes: canvasData.nodes,
+          connections: canvasData.connections,
+          generateId,
+        },
+        request,
+      );
+      recordHistory(canvasData);
+
+      set({
+        canvasData: normalizeCanvasData({
+          ...canvasData,
+          nodes: mutation.nodes,
+          connections: mutation.connections,
+        }),
+        selection: { nodeIds: [mutation.result.nodeId], connectionIds: [] },
+      });
+
+      operationStore.getState().recordNodeAdd(mutation.result.node as CanvasNode);
+      if (mutation.result.connectionId) {
+        const connection = mutation.connections.find(
+          (item) => item.id === mutation.result.connectionId,
+        );
+        if (connection) {
+          operationStore.getState().recordConnectionAdd(connection);
+        }
+      }
+
+      return mutation.result;
+    },
+
+    createComposite: (request) => {
+      const { canvasData } = get();
+      if (!canvasData) return null;
+
+      const mutation = createCanvasComposite(
+        {
+          nodes: canvasData.nodes,
+          connections: canvasData.connections,
+          generateId,
+        },
+        request,
+      );
+      recordHistory(canvasData);
+
+      set({
+        canvasData: normalizeCanvasData({
+          ...canvasData,
+          nodes: mutation.nodes,
+          connections: mutation.connections,
+        }),
+        selection: { nodeIds: [mutation.result.containerId], connectionIds: [] },
+      });
+
+      const previousNodeIds = new Set(canvasData.nodes.map((node) => node.id));
+      const addedNodes = mutation.nodes.filter((node) => !previousNodeIds.has(node.id));
+      for (const node of addedNodes) {
+        operationStore.getState().recordNodeAdd(node);
+      }
+      const previousConnectionIds = new Set(
+        canvasData.connections.map((connection) => connection.id),
+      );
+      const addedConnections = mutation.connections.filter(
+        (connection) => !previousConnectionIds.has(connection.id),
+      );
+      for (const connection of addedConnections) {
+        operationStore.getState().recordConnectionAdd(connection);
+      }
+
+      return mutation.result;
+    },
+
+    updateBlock: (request) => {
+      const { canvasData } = get();
+      if (!canvasData) return null;
+
+      const node = canvasData.nodes.find((candidate) => candidate.id === request.nodeId);
+      if (!node) {
+        throw new Error(`Node "${request.nodeId}" not found`);
+      }
+
+      const result = updateCanvasBlock(node, request);
+      recordHistory(canvasData);
+
+      set({
+        canvasData: {
+          ...canvasData,
+          nodes: canvasData.nodes.map((candidate) =>
+            candidate.id === request.nodeId ? result.node : candidate,
+          ),
+        },
+      });
+
+      operationStore
+        .getState()
+        .recordNodeUpdate(
+          request.nodeId,
+          { data: result.data } as Partial<CanvasNode>,
+          { data: node.data } as Partial<CanvasNode>,
+        );
+
+      return {
+        nodeId: result.nodeId,
+        changed: result.changed,
+        data: result.data,
+      };
+    },
+
+    extractStructuredContent: (request) => {
+      const { canvasData, selection } = get();
+      const nodes = canvasData?.nodes ?? [];
+      return extractStructuredCanvasContent(nodes, canvasData?.connections ?? [], {
+        ...request,
+        nodeIds:
+          request.nodeIds ??
+          (selection.nodeIds.length > 0 ? selection.nodeIds : nodes.map((node) => node.id)),
+      });
+    },
+
+    applyAgentContent: (payload) => {
+      const { canvasData } = get();
+      if (!canvasData) return null;
+
+      const mutation = applyCanvasAgentContent(
+        {
+          nodes: canvasData.nodes,
+          connections: canvasData.connections,
+          generateId,
+        },
+        payload,
+      );
+      recordHistory(canvasData);
+
+      set({
+        canvasData: normalizeCanvasData({
+          ...canvasData,
+          nodes: mutation.nodes,
+          connections: mutation.connections,
+        }),
+        selection: mutation.result.nodeId
+          ? { nodeIds: [mutation.result.nodeId], connectionIds: [] }
+          : get().selection,
+      });
+
+      const previousNodeIds = new Set(canvasData.nodes.map((node) => node.id));
+      const ops = operationStore.getState();
+      for (const node of mutation.nodes) {
+        if (!previousNodeIds.has(node.id)) {
+          ops.recordNodeAdd(node);
+        }
+      }
+      if (mutation.result.nodeId && previousNodeIds.has(mutation.result.nodeId)) {
+        const before = canvasData.nodes.find((node) => node.id === mutation.result.nodeId);
+        const after = mutation.nodes.find((node) => node.id === mutation.result.nodeId);
+        if (before && after) {
+          ops.recordNodeUpdate(
+            mutation.result.nodeId,
+            { data: after.data } as Partial<CanvasNode>,
+            { data: before.data } as Partial<CanvasNode>,
+          );
+        }
+      }
+
+      return mutation.result;
+    },
+
+    // ==================== Selection Actions ====================
+    selectNode: (id, multi = false) => {
+      const { selection } = get();
+
+      if (multi) {
+        const isSelected = selection.nodeIds.includes(id);
+        set({
+          selection: {
+            ...selection,
+            nodeIds: isSelected
+              ? selection.nodeIds.filter((nodeId) => nodeId !== id)
+              : [...selection.nodeIds, id],
+          },
+        });
+      } else {
+        set({
+          selection: { nodeIds: [id], connectionIds: [] },
+        });
+      }
+    },
+
+    selectConnection: (id, multi = false) => {
+      const { selection } = get();
+
+      if (multi) {
+        const isSelected = selection.connectionIds.includes(id);
+        set({
+          selection: {
+            ...selection,
+            connectionIds: isSelected
+              ? selection.connectionIds.filter((connId) => connId !== id)
+              : [...selection.connectionIds, id],
+          },
+        });
+      } else {
+        set({
+          selection: { nodeIds: [], connectionIds: [id] },
+        });
+      }
+    },
+
+    selectNodes: (ids) => {
+      set({
+        selection: { nodeIds: ids, connectionIds: [] },
+      });
+    },
+
+    clearSelection: () => {
+      set({
         selection: { nodeIds: [], connectionIds: [] },
       });
-      useCanvasOperationStore
-        .getState()
-        .recordContentNodeDelta(
-          findRemovedCanvasNodeIds(canvasData, previousState),
-          findRemovedCanvasNodeIds(previousState, canvasData),
-        );
-      recordCanvasDirty('Undo canvas edit');
-    }
-  },
+    },
 
-  redo: () => {
-    const { canvasData } = get();
-    if (!canvasData) return;
+    deleteSelected: () => {
+      const { selection, canvasData } = get();
+      if (!canvasData) return;
+      if (selection.nodeIds.length === 0 && selection.connectionIds.length === 0) return;
 
-    const nextState = useHistoryStore.getState().redo(canvasData);
-    if (nextState) {
+      recordHistory(canvasData);
+
+      const deletion = deleteCanvasSelection(canvasData.nodes, new Set(selection.nodeIds));
+      const connectionsToRemove = new Set(selection.connectionIds);
+
       set({
-        canvasData: nextState,
+        canvasData: {
+          ...canvasData,
+          nodes: deletion.nodes,
+          connections: canvasData.connections.filter(
+            (conn) =>
+              !connectionsToRemove.has(conn.id) &&
+              !deletion.removedNodeIds.has(conn.sourceId) &&
+              !deletion.removedNodeIds.has(conn.targetId),
+          ),
+        },
         selection: { nodeIds: [], connectionIds: [] },
       });
-      useCanvasOperationStore
-        .getState()
-        .recordContentNodeDelta(
-          findRemovedCanvasNodeIds(canvasData, nextState),
-          findRemovedCanvasNodeIds(nextState, canvasData),
-        );
-      recordCanvasDirty('Redo canvas edit');
-    }
-  },
-}));
+      operationStore.getState().recordContentNodeDelta([...deletion.removedNodeIds]);
+      recordCanvasDirty('Delete selection');
+    },
+
+    // ==================== History Actions ====================
+    undo: () => {
+      const { canvasData } = get();
+      if (!canvasData) return;
+
+      const previousState = historyStore.getState().undo(canvasData);
+      if (previousState) {
+        set({
+          canvasData: previousState,
+          selection: { nodeIds: [], connectionIds: [] },
+        });
+        operationStore
+          .getState()
+          .recordContentNodeDelta(
+            findRemovedCanvasNodeIds(canvasData, previousState),
+            findRemovedCanvasNodeIds(previousState, canvasData),
+          );
+        recordCanvasDirty('Undo canvas edit');
+      }
+    },
+
+    redo: () => {
+      const { canvasData } = get();
+      if (!canvasData) return;
+
+      const nextState = historyStore.getState().redo(canvasData);
+      if (nextState) {
+        set({
+          canvasData: nextState,
+          selection: { nodeIds: [], connectionIds: [] },
+        });
+        operationStore
+          .getState()
+          .recordContentNodeDelta(
+            findRemovedCanvasNodeIds(canvasData, nextState),
+            findRemovedCanvasNodeIds(nextState, canvasData),
+          );
+        recordCanvasDirty('Redo canvas edit');
+      }
+    },
+  });
+}
+
+export type CanvasStoreApi = StoreApi<CanvasStore>;
+
+export function createCanvasStore(
+  historyStore: HistoryStoreApi,
+  operationStore: CanvasOperationStoreApi,
+): CanvasStoreApi {
+  return createStore(createCanvasState(historyStore, operationStore));
+}
+
+/** Test/default standalone store. Production Roots use CanvasStoreScopeProvider. */
+export const useCanvasStore = create(createCanvasState(useHistoryStore, useCanvasOperationStore));
 
 function findRemovedCanvasNodeIds(previous: CanvasData, next: CanvasData): readonly string[] {
   const nextNodeIds = new Set(next.nodes.map((node) => node.id));

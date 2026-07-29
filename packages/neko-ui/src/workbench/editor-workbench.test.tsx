@@ -4,6 +4,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  ControlledWorkbenchShell,
   EditorWorkbenchShell,
   WorkbenchActivityBar,
   WorkbenchEditorTabs,
@@ -98,6 +99,168 @@ describe('editor workbench shell primitives', () => {
     expect(
       host.querySelector('.neko-editor-workbench-editor [data-testid="editor"]'),
     ).not.toBeNull();
+  });
+
+  it('renders controlled primary, split Main, movable docks and Timeline slots', () => {
+    act(() => {
+      root.render(
+        <ControlledWorkbenchShell
+          titleBar={<div data-testid="title" />}
+          primarySidebar={<div data-testid="primary" />}
+          primarySidebarWidth={232}
+          primarySidebarResize={{
+            label: 'Resize primary',
+            minSize: 208,
+            maxSize: 360,
+            onResizeEnd: vi.fn(),
+          }}
+          main={<div data-testid="main" />}
+          secondaryMain={<div data-testid="secondary-main" />}
+          mainSplit="horizontal"
+          leftDock={<div data-testid="left-dock" />}
+          leftDockPresentation="overlay"
+          leftDockResize={{
+            label: 'Resize left',
+            minSize: 280,
+            maxSize: 520,
+            onResizeEnd: vi.fn(),
+          }}
+          rightDock={<div data-testid="right-dock" />}
+          rightDockPresentation="docked"
+          rightDockResize={{
+            label: 'Resize right',
+            minSize: 280,
+            maxSize: 520,
+            onResizeEnd: vi.fn(),
+          }}
+          timeline={<div data-testid="timeline" />}
+          timelineVisible
+          timelineHeight={220}
+          timelineResize={{
+            label: 'Resize timeline',
+            minSize: 160,
+            maxSize: 480,
+            onResizeEnd: vi.fn(),
+          }}
+          statusBar={<div data-testid="status" />}
+        />,
+      );
+    });
+
+    const shell = host.querySelector<HTMLElement>('[data-neko-controlled-workbench="true"]');
+    expect(shell?.dataset['primaryVisible']).toBe('true');
+    expect(shell?.dataset['leftPresentation']).toBe('overlay');
+    expect(shell?.dataset['rightPresentation']).toBe('docked');
+    expect(shell?.dataset['mainSplit']).toBe('horizontal');
+    expect(shell?.dataset['timelineVisible']).toBe('true');
+    expect(shell?.style.getPropertyValue('--neko-controlled-primary-width')).toBe('232px');
+    expect(shell?.style.getPropertyValue('--neko-controlled-timeline-height')).toBe('220px');
+    expect(
+      host.querySelector('.neko-controlled-workbench-main__primary [data-testid="main"]'),
+    ).not.toBeNull();
+    expect(
+      host.querySelector(
+        '.neko-controlled-workbench-main__secondary [data-testid="secondary-main"]',
+      ),
+    ).not.toBeNull();
+    expect(
+      host.querySelector('.neko-controlled-workbench-dock--left[data-presentation="overlay"]'),
+    ).not.toBeNull();
+    expect(
+      host.querySelector('.neko-controlled-workbench-dock--right[data-presentation="docked"]'),
+    ).not.toBeNull();
+    expect(host.querySelectorAll('[role="separator"]')).toHaveLength(4);
+    expect(host.querySelector('[aria-label="Resize primary"]')).not.toBeNull();
+    expect(host.querySelector('[aria-label="Resize timeline"]')).not.toBeNull();
+  });
+
+  it('updates a panel live and emits one final resize size', () => {
+    const onResizeEnd = vi.fn();
+
+    act(() => {
+      root.render(
+        <ControlledWorkbenchShell
+          primarySidebar={<div data-testid="primary" />}
+          primarySidebarWidth={232}
+          primarySidebarResize={{
+            label: 'Resize primary',
+            minSize: 208,
+            maxSize: 360,
+            onResizeEnd,
+          }}
+          main={<div data-testid="main" />}
+        />,
+      );
+    });
+
+    const shell = host.querySelector<HTMLElement>('[data-neko-controlled-workbench="true"]');
+    const panel = host.querySelector<HTMLElement>('.neko-controlled-workbench-primary');
+    const handle = host.querySelector<HTMLElement>('[aria-label="Resize primary"]');
+    expect(shell).not.toBeNull();
+    expect(panel).not.toBeNull();
+    expect(handle).not.toBeNull();
+    if (!shell || !panel || !handle) return;
+
+    panel.getBoundingClientRect = () =>
+      ({
+        left: 0,
+        right: 232,
+        top: 0,
+        bottom: 600,
+        width: 232,
+        height: 600,
+        x: 0,
+        y: 0,
+        toJSON: () => undefined,
+      }) as DOMRect;
+
+    act(() => {
+      dispatchPointer(handle, 'pointerdown', 1, 232, 0);
+      dispatchPointer(handle, 'pointermove', 1, 300, 0);
+      dispatchPointer(handle, 'pointerup', 1, 300, 0);
+    });
+
+    expect(onResizeEnd).toHaveBeenCalledOnce();
+    expect(onResizeEnd).toHaveBeenCalledWith(300);
+    expect(shell.style.getPropertyValue('--neko-controlled-primary-width')).toBe('300px');
+  });
+
+  it('collapses absent or explicitly hidden controlled Workbench zones', () => {
+    act(() => {
+      root.render(
+        <ControlledWorkbenchShell
+          primarySidebar={<div data-testid="primary" />}
+          primarySidebarVisible={false}
+          main={<div data-testid="main" />}
+          mainSplit="vertical"
+          leftDock={<div data-testid="left-dock" />}
+          leftDockPresentation="hidden"
+          leftDockResize={{
+            label: 'Resize hidden left',
+            onResizeEnd: vi.fn(),
+          }}
+          rightDock={<div data-testid="right-dock" />}
+          rightDockPresentation="hidden"
+          rightDockResize={{
+            label: 'Resize hidden right',
+            onResizeEnd: vi.fn(),
+          }}
+          timeline={<div data-testid="timeline" />}
+          timelineVisible={false}
+          timelineResize={{
+            label: 'Resize hidden timeline',
+            onResizeEnd: vi.fn(),
+          }}
+        />,
+      );
+    });
+
+    const shell = host.querySelector<HTMLElement>('[data-neko-controlled-workbench="true"]');
+    expect(shell?.dataset['primaryVisible']).toBe('false');
+    expect(shell?.dataset['mainSplit']).toBe('none');
+    expect(shell?.dataset['timelineVisible']).toBe('false');
+    expect(host.querySelector('.neko-controlled-workbench-primary')).toBeNull();
+    expect(host.querySelector('[role="separator"]')).toBeNull();
   });
 
   it('renders reusable activity buttons, tabs, cards, thumbnails, and status chrome', () => {
@@ -229,6 +392,22 @@ describe('editor workbench shell primitives', () => {
     expect(onTabReorder).toHaveBeenCalledWith('a', 'b');
   });
 });
+
+function dispatchPointer(
+  target: HTMLElement,
+  type: 'pointerdown' | 'pointermove' | 'pointerup',
+  pointerId: number,
+  clientX: number,
+  clientY: number,
+): void {
+  const event = new Event(type, { bubbles: true, cancelable: true });
+  Object.defineProperties(event, {
+    pointerId: { value: pointerId },
+    clientX: { value: clientX },
+    clientY: { value: clientY },
+  });
+  target.dispatchEvent(event);
+}
 
 function createTestDataTransfer(): DataTransfer {
   const values = new Map<string, string>();

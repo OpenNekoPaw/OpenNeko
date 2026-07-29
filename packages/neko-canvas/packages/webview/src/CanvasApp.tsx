@@ -17,9 +17,13 @@ import type {
   ProjectedCanvasStatus,
 } from '@neko/shared';
 import { createCanvasAgentActiveContext } from './utils/canvasAgentOperations';
-import { useCanvasStore } from './stores/canvasStore';
-import { usePlaybackStore } from './stores/playbackStore';
-import { useRuntimeViewportStore } from './stores/runtimeViewportStore';
+import {
+  useCanvasStoreApi,
+  usePlaybackStoreApi,
+  useScopedCanvasStore as useCanvasStore,
+  useScopedPlaybackStore as usePlaybackStore,
+  useScopedRuntimeViewportStore as useRuntimeViewportStore,
+} from './stores/canvasStoreScope';
 import { InfiniteCanvas, ZoomControls, MiniMap } from './components';
 import { ContextMenu } from './components/common/ContextMenu';
 import { CanvasToolbar } from './components/toolbar/CanvasToolbar';
@@ -34,19 +38,15 @@ import {
 } from './hooks/useCanvasKeyboardController';
 import { useKeyboardActions } from './hooks/useKeyboardActions';
 import {
-  applyCanvasAddSourceResult,
-  createCanvasFilePickerAddSourceInput,
   createCanvasProjectSourceAddClient,
-  getCanvasFilePickerDefaultName,
   type CanvasProjectSourceAddClient,
 } from './hooks/useDragDrop';
 import { useDragDrop } from './hooks/useDragDrop';
 import { useContextMenu } from './hooks/useContextMenu';
 import { useThrottledCanvasViewport } from './hooks/useThrottledCanvasViewport';
-import type { VSCodeAPI } from './hooks/useVSCodeMessages';
 import { buildCanvasNode } from './utils/nodeFactory';
 import { getCanvasAddAction, type CanvasAddActionId } from './utils/canvasAddActions';
-import { getGlobalVSCodeApi } from './utils/vscode';
+import type { CanvasWebviewHostPort } from './host-runtime';
 import { DEFAULT_RUNTIME_VIEWPORT } from './stores/runtimeViewportStore';
 import {
   screenToCanvas as screenToCanvasMath,
@@ -80,8 +80,6 @@ const DEFAULT_CANVAS_DATA: CanvasData = {
 
 const logger = getLogger('CanvasApp');
 
-const vscode: VSCodeAPI = getGlobalVSCodeApi();
-
 // =============================================================================
 // Component
 // =============================================================================
@@ -89,7 +87,18 @@ const vscode: VSCodeAPI = getGlobalVSCodeApi();
 /**
  * Canvas App - Main application component (orchestrator)
  */
-export function CanvasApp() {
+export interface CanvasAppProps {
+  readonly host: CanvasWebviewHostPort;
+}
+
+export function CanvasApp({ host: vscode }: CanvasAppProps) {
+  const canOpenHostExport = vscode.supportsMessage('canvasAction');
+  const canOpenHostPlayback =
+    vscode.supportsMessage('playback:getPreviewPlan') && vscode.supportsMessage('media:probe');
+  const canSendToAgent = vscode.supportsMessage('sendToAgent');
+  const canOpenBoardRef = vscode.supportsMessage('openCanvasBoardRef');
+  const canvasStoreApi = useCanvasStoreApi();
+  const playbackStoreApi = usePlaybackStoreApi();
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
   const canvasContainerRef = useRef<HTMLDivElement | null>(null);
   const [canvasContainerElement, setCanvasContainerElement] = useState<HTMLDivElement | null>(null);
@@ -313,42 +322,21 @@ export function CanvasApp() {
 
   const requestCanvasFilePickerSource = useCallback(
     (actionId: CanvasAddActionId, position: { x: number; y: number }) => {
-      const client = getCanvasProjectSourceAddClient();
-      if (!client) return;
       const action = getCanvasAddAction(actionId);
       if (action.mode !== 'source') {
         throw new Error(`Canvas add action "${actionId}" does not bind a source`);
       }
-      const nodeType = action.nodeType;
-      const mediaType = action.mediaType;
-
-      void client
-        .addSource(createCanvasFilePickerAddSourceInput(nodeType, position, mediaType))
-        .then((result) => {
-          if (result.ok && result.durablePath && action.nodeType === 'file') {
-            const title = result.durablePath.split('/').pop() || t('node.file');
-            addFileAt(position, result.durablePath, title);
-            return;
-          }
-          if (result.ok && result.durablePath && action.nodeType === 'canvas-embed') {
-            const title = result.durablePath.split('/').pop() || t('node.subcanvas');
-            addCanvasEmbedAt(position, result.durablePath, title);
-            return;
-          }
-          applyCanvasAddSourceResult({
-            result,
-            sourceNameHint: getCanvasFilePickerDefaultName(nodeType, mediaType),
-            mediaTypeHint: mediaType,
-            dropPosition: position,
-            addMediaAt,
-            onDropAssets: handleDropAssets,
-          });
-        })
-        .catch((error: unknown) => {
-          logger.warn('Canvas file-picker add-source failed', error);
-        });
+      const sourceKind =
+        action.nodeType === 'canvas-embed'
+          ? 'canvas'
+          : action.nodeType === 'file'
+            ? 'document'
+            : (action.mediaType ?? 'document');
+      void vscode.requestSource(sourceKind, position).catch((error: unknown) => {
+        logger.warn('Canvas file-picker add-source failed', error);
+      });
     },
-    [addCanvasEmbedAt, addFileAt, addMediaAt, getCanvasProjectSourceAddClient, handleDropAssets],
+    [vscode],
   );
 
   const addActionAt = useCallback(
@@ -396,6 +384,7 @@ export function CanvasApp() {
     addMediaAt,
     onDropAssets: handleDropAssets,
     addSourceClient: getCanvasProjectSourceAddClient() ?? undefined,
+    projectContent: vscode.projectContent,
   });
 
   // =========================================================================
@@ -422,8 +411,12 @@ export function CanvasApp() {
           DEFAULT_RUNTIME_VIEWPORT,
       );
     },
+    onHostPresentation: (presentation) => {
+      setViewport(presentation.viewport);
+      selectNodes([...presentation.selectedNodeIds]);
+    },
     onProjectionStatus: (status: ProjectedCanvasStatus) => {
-      const state = useCanvasStore.getState();
+      const state = canvasStoreApi.getState();
       if (!state.canvasData) return;
       state.updateCanvasData(
         {
@@ -437,7 +430,7 @@ export function CanvasApp() {
       );
     },
     onProjectionSourceChanged: () => {
-      const state = useCanvasStore.getState();
+      const state = canvasStoreApi.getState();
       if (!state.canvasData?.projected) return;
       state.updateCanvasData(
         {
@@ -455,27 +448,27 @@ export function CanvasApp() {
     isKeyboardFocusedRef,
     isComposingRef,
     getNodes: (type) => {
-      const allNodes = useCanvasStore.getState().canvasData?.nodes ?? [];
+      const allNodes = canvasStoreApi.getState().canvasData?.nodes ?? [];
       return type ? allNodes.filter((n) => n.type === type) : allNodes;
     },
-    getNode: (id) => useCanvasStore.getState().canvasData?.nodes.find((n) => n.id === id),
-    updateNode: (id, data) => useCanvasStore.getState().updateNodeData(id, data),
+    getNode: (id) => canvasStoreApi.getState().canvasData?.nodes.find((n) => n.id === id),
+    updateNode: (id, data) => canvasStoreApi.getState().updateNodeData(id, data),
     createNode: (nodeSpec) => {
-      const currentNodes = useCanvasStore.getState().canvasData?.nodes ?? [];
+      const currentNodes = canvasStoreApi.getState().canvasData?.nodes ?? [];
       const node = buildCanvasNode({
         type: nodeSpec.type,
         position: nodeSpec.position,
         data: nodeSpec.data,
         zIndex: currentNodes.length,
       });
-      return useCanvasStore.getState().addNode(node);
+      return canvasStoreApi.getState().addNode(node);
     },
-    deriveNode: (request) => useCanvasStore.getState().deriveNode(request),
+    deriveNode: (request) => canvasStoreApi.getState().deriveNode(request),
     createConnection: (request) => {
       if (!request.sourceId || !request.targetId) {
         throw new Error('Connection sourceId and targetId are required');
       }
-      const result = useCanvasStore.getState().addConnection({
+      const result = canvasStoreApi.getState().addConnection({
         sourceId: request.sourceId,
         targetId: request.targetId,
         type: request.type ?? 'reference',
@@ -487,19 +480,19 @@ export function CanvasApp() {
         throw new Error(`Canvas connection rejected: ${result.reason}`);
       }
       const connectionId = result.connectionId;
-      const connection = useCanvasStore
+      const connection = canvasStoreApi
         .getState()
         .canvasData?.connections.find((item) => item.id === connectionId);
       return { connectionId, connection };
     },
-    createComposite: (request) => useCanvasStore.getState().createComposite(request),
+    createComposite: (request) => canvasStoreApi.getState().createComposite(request),
     reorderGroupChildren: (groupId, childIds, autoLayout) =>
-      useCanvasStore.getState().reorderGroupChildren(groupId, childIds, autoLayout),
-    updateBlock: (request) => useCanvasStore.getState().updateBlock(request),
+      canvasStoreApi.getState().reorderGroupChildren(groupId, childIds, autoLayout),
+    updateBlock: (request) => canvasStoreApi.getState().updateBlock(request),
     extractStructuredContent: (request) =>
-      useCanvasStore.getState().extractStructuredContent(request),
+      canvasStoreApi.getState().extractStructuredContent(request),
     getActiveContext: (request) => {
-      const state = useCanvasStore.getState();
+      const state = canvasStoreApi.getState();
       return createCanvasAgentActiveContext({
         nodes: state.canvasData?.nodes ?? [],
         connections: state.canvasData?.connections ?? [],
@@ -516,7 +509,7 @@ export function CanvasApp() {
         request,
       });
     },
-    applyAgentContent: (payload) => useCanvasStore.getState().applyAgentContent(payload),
+    applyAgentContent: (payload) => canvasStoreApi.getState().applyAgentContent(payload),
   });
 
   // =========================================================================
@@ -572,24 +565,33 @@ export function CanvasApp() {
 
   /** Send selected nodes as context to the Agent panel */
   const handleSendToAgent = useCallback(() => {
-    vscode?.postMessage({
+    vscode.postMessage({
       type: 'sendToAgent',
       nodeIds: selectedNodeIds,
       action: 'context',
     });
-  }, [selectedNodeIds]);
+  }, [selectedNodeIds, vscode]);
 
-  const handleDocumentOpen = useCallback((docPath: string) => {
-    vscode?.postMessage({ type: 'openDocument', docPath });
-  }, []);
+  const handleDocumentOpen = useCallback(
+    (docPath: string) => {
+      void vscode.previewResource({ kind: 'workspace-file', path: docPath });
+    },
+    [vscode],
+  );
 
-  const handleCanvasEmbedOpen = useCallback((canvasPath: string) => {
-    vscode?.postMessage({ type: 'openDocument', docPath: canvasPath });
-  }, []);
+  const handleCanvasEmbedOpen = useCallback(
+    (canvasPath: string) => {
+      void vscode.previewResource({ kind: 'workspace-file', path: canvasPath });
+    },
+    [vscode],
+  );
 
-  const handleCanvasBoardRefOpen = useCallback((ref: CanvasBoardRef) => {
-    vscode?.postMessage({ type: 'openCanvasBoardRef', ref });
-  }, []);
+  const handleCanvasBoardRefOpen = useCallback(
+    (ref: CanvasBoardRef) => {
+      vscode.postMessage({ type: 'openCanvasBoardRef', ref });
+    },
+    [vscode],
+  );
 
   // =========================================================================
   // Context menu
@@ -624,7 +626,7 @@ export function CanvasApp() {
     handleUngroup,
     undo,
     redo,
-    onSendToAgent: handleSendToAgent,
+    onSendToAgent: canSendToAgent ? handleSendToAgent : undefined,
     onSetPlaybackEntry: setPlaybackEntry,
   });
 
@@ -672,6 +674,7 @@ export function CanvasApp() {
     onSelectAll: () => handleKeyboardAction('selectAll'),
     onUndo: () => handleKeyboardAction('undo'),
     onRedo: () => handleKeyboardAction('redo'),
+    onSave: () => vscode?.postMessage({ type: 'requestSave' }),
     onCopy: () => handleKeyboardAction('copy'),
     onCut: () => handleKeyboardAction('cut'),
     onPaste: () => handleKeyboardAction('paste'),
@@ -775,7 +778,7 @@ export function CanvasApp() {
     if (!projectionHealthKey) return;
     void requestProjectionWriteBack([]).then(
       () => {
-        useCanvasStore.getState().updateCanvasData(
+        canvasStoreApi.getState().updateCanvasData(
           {
             projectionStatus: { state: 'clean', updatedAt: Date.now() },
           } as Partial<CanvasData>,
@@ -783,7 +786,7 @@ export function CanvasApp() {
         );
       },
       (error) => {
-        useCanvasStore.getState().updateCanvasData(
+        canvasStoreApi.getState().updateCanvasData(
           {
             projectionStatus: {
               state: 'writeback-error',
@@ -850,7 +853,7 @@ export function CanvasApp() {
   );
   const handleConnectionComplete = useCallback(
     (connection: Omit<CanvasConnection, 'id'>): CanvasConnectionMutationResult =>
-      useCanvasStore.getState().addConnection(connection),
+      canvasStoreApi.getState().addConnection(connection),
     [],
   );
   const handleMarqueeSelect = useCallback(
@@ -917,7 +920,7 @@ export function CanvasApp() {
   }
 
   const handleTogglePlaybackWorkspace = useCallback(() => {
-    if (usePlaybackStore.getState().playbackSession.visible) {
+    if (playbackStoreApi.getState().playbackSession.visible) {
       hidePlaybackWorkspace();
     } else {
       revealPlaybackWorkspace({ focusOwner: 'route' });
@@ -991,7 +994,7 @@ export function CanvasApp() {
                 onDragLeave={handleDragLeave}
                 onDrop={handleDrop}
               >
-                {canvasData && (
+                {canvasData && canOpenBoardRef && (
                   <CanvasBoardNavigationBar
                     canvasData={canvasData}
                     onOpenBoardRef={handleCanvasBoardRefOpen}
@@ -1022,21 +1025,38 @@ export function CanvasApp() {
                   isGridVisible={isGridVisible}
                 />
 
-                <div className="canvas-floating-toolbar-host" data-canvas-toolbar-host="left">
+                <div className="canvas-floating-toolbar-host" data-canvas-toolbar-host="bottom">
                   <CanvasToolbar
                     onUndo={undo}
                     onRedo={redo}
                     isSelectMode={interactionTool === 'select'}
                     onSelectTool={selectInteractionTool}
                     onSelectAddAction={handleSelectAddAction}
-                    playbackWorkspaceVisible={playbackWorkspaceVisible}
-                    onTogglePlaybackWorkspace={handleTogglePlaybackWorkspace}
-                    onOpenExport={() => {
-                      reportAction('openExport', t('toolbar.export'));
-                    }}
-                    onOpenPackage={() => {
-                      reportAction('openPackage', t('toolbar.package'), undefined, canvasData);
-                    }}
+                    playbackWorkspaceVisible={
+                      canOpenHostPlayback ? playbackWorkspaceVisible : undefined
+                    }
+                    onTogglePlaybackWorkspace={
+                      canOpenHostPlayback ? handleTogglePlaybackWorkspace : undefined
+                    }
+                    onOpenExport={
+                      canOpenHostExport
+                        ? () => {
+                            reportAction('openExport', t('toolbar.export'));
+                          }
+                        : undefined
+                    }
+                    onOpenPackage={
+                      canOpenHostExport
+                        ? () => {
+                            reportAction(
+                              'openPackage',
+                              t('toolbar.package'),
+                              undefined,
+                              canvasData,
+                            );
+                          }
+                        : undefined
+                    }
                     isPanMode={isPanMode}
                     onTogglePanMode={togglePanMode}
                   />

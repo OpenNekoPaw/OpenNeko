@@ -14,6 +14,7 @@ export interface UseCanvasKeyboardControllerOptions {
   readonly onSelectAll: () => void;
   readonly onUndo: () => void;
   readonly onRedo: () => void;
+  readonly onSave: () => void;
   readonly onCopy: () => void;
   readonly onCut: () => void;
   readonly onPaste: () => void;
@@ -37,6 +38,7 @@ export function useCanvasKeyboardController({
   onPaste,
   onPasteInPlace,
   onRedo,
+  onSave,
   onSelectAll,
   onSpacePanEnd,
   onSpacePanStart,
@@ -68,6 +70,7 @@ export function useCanvasKeyboardController({
       }),
       createEditorBinding('undo', { key: 'KeyZ', primary: true }, onUndo),
       createEditorBinding('redo', { key: 'KeyZ', primary: true, shift: true }, onRedo),
+      createEditorBinding('save', { key: 'KeyS', primary: true }, onSave),
       createEditorBinding('copy', { key: 'KeyC', primary: true }, onCopy),
       createEditorBinding('cut', { key: 'KeyX', primary: true }, onCut, {
         when: (current) => current.canDeleteSelection,
@@ -95,6 +98,7 @@ export function useCanvasKeyboardController({
       onPaste,
       onPasteInPlace,
       onRedo,
+      onSave,
       onSelectAll,
       onSpacePanStart,
       onTogglePanMode,

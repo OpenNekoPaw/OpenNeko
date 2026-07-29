@@ -1,4 +1,6 @@
 import type { LocalMetadataSqlRow, LocalMetadataStore } from '@neko/shared';
+
+// Storage remains injected so the owning Host selects its metadata backend.
 import {
   assertInitialJobSnapshot,
   assertJobRef,

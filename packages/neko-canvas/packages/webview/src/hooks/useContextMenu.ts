@@ -9,9 +9,11 @@ import { useCallback, useState } from 'react';
 import type { CanvasNode } from '@neko/shared';
 import { buildCanvasMenuItems, buildNodeMenuItems } from '../components/common/ContextMenu';
 import type { MenuEntry } from '../components/common/ContextMenu';
-import { useClipboardStore } from '../stores/clipboardStore';
-import { useCanvasStore } from '../stores/canvasStore';
-import { useHistoryStore } from '../stores/historyStore';
+import {
+  useCanvasStoreApi,
+  useClipboardStoreApi,
+  useHistoryStoreApi,
+} from '../stores/canvasStoreScope';
 import type { CanvasAddActionId } from '../utils/canvasAddActions';
 
 // =============================================================================
@@ -57,6 +59,9 @@ export interface UseContextMenuReturn {
 // =============================================================================
 
 export function useContextMenu(options: UseContextMenuOptions): UseContextMenuReturn {
+  const canvasStore = useCanvasStoreApi();
+  const clipboardStore = useClipboardStoreApi();
+  const historyStore = useHistoryStoreApi();
   const {
     selectedNodeIds,
     nodes,
@@ -96,7 +101,7 @@ export function useContextMenu(options: UseContextMenuOptions): UseContextMenuRe
           ? [contextNodeId]
           : selectedNodeIds;
       if (contextNodeId && !selectedNodeIds.includes(contextNodeId)) {
-        useCanvasStore.getState().selectNode(contextNodeId);
+        canvasStore.getState().selectNode(contextNodeId);
       }
       const showNodeMenu = clickedOnNode;
 
@@ -107,7 +112,7 @@ export function useContextMenu(options: UseContextMenuOptions): UseContextMenuRe
         onAddAction: addActionAt,
         onDelete: deleteSelected,
         onSelectAll: () => {
-          const { selectNodes } = useCanvasStore.getState();
+          const { selectNodes } = canvasStore.getState();
           selectNodes(nodes.map((n) => n.id));
         },
         onFitContent: handleFitContent,
@@ -127,9 +132,9 @@ export function useContextMenu(options: UseContextMenuOptions): UseContextMenuRe
           (nodes.find((n) => n.id === effectiveSelectedNodeIds[0])?.type as string) === 'group',
         onUndo: undo,
         onRedo: redo,
-        canPaste: useClipboardStore.getState().canPaste(),
-        canUndo: useHistoryStore.getState().canUndo(),
-        canRedo: useHistoryStore.getState().canRedo(),
+        canPaste: clipboardStore.getState().canPaste(),
+        canUndo: historyStore.getState().canUndo(),
+        canRedo: historyStore.getState().canRedo(),
         onSendToAgent,
       };
 
@@ -139,6 +144,9 @@ export function useContextMenu(options: UseContextMenuOptions): UseContextMenuRe
     },
     [
       screenToCanvas,
+      canvasStore,
+      clipboardStore,
+      historyStore,
       selectedNodeIds,
       nodes,
       addActionAt,

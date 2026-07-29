@@ -65,8 +65,8 @@ describe('WebviewPreviewResolver', () => {
 
   it('resolves relative image poster paths for video posters instead of the video source', async () => {
     vi.useFakeTimers();
-    const { postMessage } = installPreviewMock();
-    const resolver = new WebviewPreviewResolver();
+    const { host, postMessage } = installPreviewMock();
+    const resolver = new WebviewPreviewResolver(host);
 
     const promise = resolver.resolve({
       source: {
@@ -94,8 +94,8 @@ describe('WebviewPreviewResolver', () => {
 
   it('cleans up pending runtime variant requests on dispose', async () => {
     vi.useFakeTimers();
-    const { postMessage } = installPreviewMock();
-    const resolver = new WebviewPreviewResolver();
+    const { host, postMessage } = installPreviewMock();
+    const resolver = new WebviewPreviewResolver(host);
 
     const promise = resolver.resolve({
       source: {
@@ -119,7 +119,7 @@ describe('WebviewPreviewResolver', () => {
 
   it('requests panoramic FOV variants without persisting returned runtime URLs', async () => {
     vi.useFakeTimers();
-    const { postMessage } = installPreviewMock();
+    const { host, postMessage } = installPreviewMock();
     let messageHandler: ((event: MessageEvent) => void) | undefined;
     const addEventListener = window.addEventListener.bind(window);
     window.addEventListener = vi.fn(
@@ -131,7 +131,7 @@ describe('WebviewPreviewResolver', () => {
         addEventListener(_type, listener);
       },
     );
-    const resolver = new WebviewPreviewResolver();
+    const resolver = new WebviewPreviewResolver(host);
     const source = {
       id: 'node:pano',
       role: 'panorama-fov-crop' as const,
@@ -164,10 +164,44 @@ describe('WebviewPreviewResolver', () => {
     expect(JSON.stringify(source)).not.toContain('token');
   });
 
+  it('receives runtime variants through an instance-scoped Host subscription', async () => {
+    let listener: ((message: unknown) => void) | undefined;
+    const unsubscribe = vi.fn();
+    const host = {
+      subscribe: vi.fn((nextListener: (message: unknown) => void) => {
+        listener = nextListener;
+        return unsubscribe;
+      }),
+      postMessage: vi.fn((message: unknown) => {
+        const request = message as { requestId: string };
+        queueMicrotask(() => {
+          listener?.({
+            type: 'preview:variantResolved',
+            requestId: request.requestId,
+            url: 'data:image/png;base64,Y2F0',
+          });
+        });
+      }),
+    };
+    const resolver = new WebviewPreviewResolver(host);
+
+    const variant = await resolver.resolve({
+      source: {
+        id: 'node:desktop',
+        role: 'image',
+        asset: { kind: 'asset-identity', path: 'media/cat.png', mediaType: 'image' },
+      },
+    });
+
+    expect(host.subscribe).toHaveBeenCalledTimes(1);
+    expect(variant.runtimeUrl).toBe('data:image/png;base64,Y2F0');
+    expect(unsubscribe).toHaveBeenCalledTimes(1);
+  });
+
   it('passes document resource refs to runtime preview resolution without storing them on asset identity', async () => {
     vi.useFakeTimers();
-    const { postMessage } = installPreviewMock();
-    const resolver = new WebviewPreviewResolver();
+    const { host, postMessage } = installPreviewMock();
+    const resolver = new WebviewPreviewResolver(host);
     const documentResourceRef = {
       kind: 'document-entry',
       source: { filePath: '${BOOKS}/comic.epub', format: 'epub' },
@@ -196,8 +230,8 @@ describe('WebviewPreviewResolver', () => {
 
   it('requests runtime previews from document resource refs without an asset path', async () => {
     vi.useFakeTimers();
-    const { postMessage } = installPreviewMock();
-    const resolver = new WebviewPreviewResolver();
+    const { host, postMessage } = installPreviewMock();
+    const resolver = new WebviewPreviewResolver(host);
     const documentResourceRef = {
       kind: 'document-entry',
       source: { filePath: '${BOOKS}/comic.epub', format: 'epub' },
@@ -228,8 +262,8 @@ describe('WebviewPreviewResolver', () => {
 
   it('requests source variants for source-image review previews', async () => {
     vi.useFakeTimers();
-    const { postMessage } = installPreviewMock();
-    const resolver = new WebviewPreviewResolver();
+    const { host, postMessage } = installPreviewMock();
+    const resolver = new WebviewPreviewResolver(host);
 
     const promise = resolver.resolve({
       source: {
@@ -251,10 +285,13 @@ describe('WebviewPreviewResolver', () => {
   });
 });
 
-function installPreviewMock(): { postMessage: ReturnType<typeof vi.fn> } {
+function installPreviewMock(): {
+  host: ReturnType<typeof createMockVSCodeApi>;
+  postMessage: ReturnType<typeof vi.fn>;
+} {
   const api = createMockVSCodeApi();
   const postMessage = vi.fn(api.postMessage);
   api.postMessage = postMessage;
   mockWindow = installMockWebviewWindow(api);
-  return { postMessage };
+  return { host: api, postMessage };
 }

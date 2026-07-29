@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 import { CutMediaCorruptionError, type TimelineView } from '@neko-cut/domain';
-import { generateClipRepresentations, readClipRepresentationRequests } from './clipRepresentations';
+import { generateClipRepresentations, readClipRepresentationRequests } from '@neko-cut/node';
 
 const view: TimelineView = {
   documentUri: 'file:///workspace/project.otio',

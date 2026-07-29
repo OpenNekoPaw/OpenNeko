@@ -1,6 +1,6 @@
 export interface HtmlVideoClientDescriptor {
   readonly version: 1;
-  readonly transport: 'http';
+  readonly transport: 'http' | 'authorized';
   readonly url: string;
   readonly mimeType: string;
   readonly mediaTimeOriginSeconds: number;
@@ -220,14 +220,17 @@ function waitForEvent(target: EventTarget, eventName: string, signal: AbortSigna
 }
 
 function validateDescriptor(descriptor: HtmlVideoClientDescriptor): void {
-  if (descriptor.version !== 1 || descriptor.transport !== 'http') {
+  if (
+    descriptor.version !== 1 ||
+    (descriptor.transport !== 'http' && descriptor.transport !== 'authorized')
+  ) {
     throw new Error('Unsupported Cut HTML video descriptor version.');
   }
   if (!descriptor.mimeType.startsWith('video/')) {
     throw new Error('Cut HTML video descriptor requires a video MIME type.');
   }
   if (
-    !isLoopbackUrl(descriptor.url) ||
+    !isDescriptorUrl(descriptor.url, descriptor.transport) ||
     !Number.isFinite(descriptor.mediaTimeOriginSeconds) ||
     descriptor.mediaTimeOriginSeconds < 0 ||
     !Number.isFinite(descriptor.durationSeconds) ||
@@ -237,10 +240,15 @@ function validateDescriptor(descriptor: HtmlVideoClientDescriptor): void {
   }
 }
 
-function isLoopbackUrl(value: string): boolean {
+function isDescriptorUrl(
+  value: string,
+  transport: HtmlVideoClientDescriptor['transport'],
+): boolean {
   try {
     const url = new URL(value);
-    return url.protocol === 'http:' && url.hostname === '127.0.0.1';
+    return transport === 'http'
+      ? url.protocol === 'http:' && url.hostname === '127.0.0.1'
+      : url.protocol === 'neko-media:' && url.hostname === 'desktop';
   } catch {
     return false;
   }

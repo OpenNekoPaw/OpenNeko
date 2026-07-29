@@ -5,7 +5,8 @@
  * ID remapping on paste, and position offset to avoid overlap.
  */
 
-import { create } from 'zustand';
+import { create, createStore, type StateCreator } from 'zustand';
+import type { StoreApi } from 'zustand/vanilla';
 import type { CanvasNode, CanvasConnection } from '@neko/shared';
 import { getContainerChildIds, getNodeParentId } from '@neko/shared';
 
@@ -152,7 +153,7 @@ const DUPLICATE_OFFSET = { x: 20, y: 20 };
 // Store
 // =============================================================================
 
-export const useClipboardStore = create<ClipboardStore>((set, get) => ({
+const createClipboardState: StateCreator<ClipboardStore> = (set, get) => ({
   clipboard: null,
 
   canPaste: () => {
@@ -208,7 +209,16 @@ export const useClipboardStore = create<ClipboardStore>((set, get) => ({
   clear: () => {
     set({ clipboard: null });
   },
-}));
+});
+
+export type ClipboardStoreApi = StoreApi<ClipboardStore>;
+
+export function createClipboardStore(): ClipboardStoreApi {
+  return createStore(createClipboardState);
+}
+
+/** Test/default standalone store. Production Roots use CanvasStoreScopeProvider. */
+export const useClipboardStore = create(createClipboardState);
 
 function expandSelectionWithContainerDescendants(
   selectedNodeIds: readonly string[],

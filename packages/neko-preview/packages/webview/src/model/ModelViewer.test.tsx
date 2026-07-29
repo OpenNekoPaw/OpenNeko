@@ -13,6 +13,7 @@ import { installMockWebviewWindow } from '@neko/shared/vscode/test-utils';
 import { I18nProvider } from '../i18n/I18nContext';
 import { i18nService } from '../i18n';
 import { ModelViewer } from './ModelViewer';
+import { createVscodeModelViewerHost } from './vscodeModelViewerHost';
 import type {
   ThreeModelRuntimeCallbacks,
   ThreeModelRuntimeFactory,
@@ -81,7 +82,11 @@ describe('ModelViewer', () => {
     await act(async () => {
       root.render(
         <I18nProvider service={i18nService}>
-          <ModelViewer runtimeFactory={factory} sessionId="session-1" />
+          <ModelViewer
+            host={createVscodeModelViewerHost()}
+            runtimeFactory={factory}
+            sessionId="session-1"
+          />
         </I18nProvider>,
       );
     });
@@ -264,6 +269,7 @@ describe('ModelViewer', () => {
       root.render(
         <I18nProvider service={i18nService}>
           <ModelViewer
+            host={createVscodeModelViewerHost()}
             runtimeFactory={{ create: vi.fn(() => runtime.value) }}
             sessionId="session-guide"
           />
@@ -326,7 +332,11 @@ describe('ModelViewer', () => {
     await act(async () => {
       root.render(
         <I18nProvider service={i18nService}>
-          <ModelViewer runtimeFactory={{ create: () => runtime.value }} sessionId="session-1" />
+          <ModelViewer
+            host={createVscodeModelViewerHost()}
+            runtimeFactory={{ create: () => runtime.value }}
+            sessionId="session-1"
+          />
         </I18nProvider>,
       );
     });
@@ -463,6 +473,7 @@ describe('ModelViewer', () => {
       root.render(
         <I18nProvider service={i18nService}>
           <ModelViewer
+            host={createVscodeModelViewerHost()}
             runtimeFactory={{
               create: vi.fn((_canvas, nextCallbacks) => {
                 callbacks = nextCallbacks;
@@ -487,6 +498,48 @@ describe('ModelViewer', () => {
     mockWindow.dispose();
   });
 
+  it('contains renderer initialization failures inside the Model Viewer session', async () => {
+    const mockWindow = installMockWebviewWindow();
+    const container = document.createElement('div');
+    document.body.append(container);
+    const root = ReactDOM.createRoot(container);
+
+    await act(async () => {
+      root.render(
+        <I18nProvider service={i18nService}>
+          <ModelViewer
+            host={createVscodeModelViewerHost()}
+            runtimeFactory={{
+              create: () => {
+                throw new Error('WebGL precision probe failed.');
+              },
+            }}
+            sessionId="session-renderer-unavailable"
+          />
+        </I18nProvider>,
+      );
+    });
+
+    expect(container.querySelector('[data-testid="model-preview-ready"]')).toHaveProperty(
+      'dataset.viewerStatus',
+      'error',
+    );
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain(
+      'WebGL precision probe failed.',
+    );
+    expect(mockWindow.api.postedMessages).toContainEqual({
+      type: '3d-reference/diagnostic',
+      diagnostic: expect.objectContaining({
+        code: 'renderer-unavailable',
+        severity: 'error',
+        identity: { sessionId: 'session-renderer-unavailable' },
+      }),
+    });
+
+    await act(async () => root.unmount());
+    mockWindow.dispose();
+  });
+
   it('switches scene, camera, light, and node inspectors while staging stays temporary', async () => {
     const mockWindow = installMockWebviewWindow();
     const runtime = fakeRuntime();
@@ -503,7 +556,11 @@ describe('ModelViewer', () => {
     await act(async () => {
       root.render(
         <I18nProvider service={i18nService}>
-          <ModelViewer runtimeFactory={factory} sessionId="session-1" />
+          <ModelViewer
+            host={createVscodeModelViewerHost()}
+            runtimeFactory={factory}
+            sessionId="session-1"
+          />
         </I18nProvider>,
       );
     });
@@ -694,7 +751,11 @@ describe('ModelViewer', () => {
     await act(async () => {
       firstRoot.render(
         <I18nProvider service={i18nService}>
-          <ModelViewer runtimeFactory={factory} sessionId="session-1" />
+          <ModelViewer
+            host={createVscodeModelViewerHost()}
+            runtimeFactory={factory}
+            sessionId="session-1"
+          />
         </I18nProvider>,
       );
     });
@@ -708,7 +769,11 @@ describe('ModelViewer', () => {
     await act(async () => {
       secondRoot.render(
         <I18nProvider service={i18nService}>
-          <ModelViewer runtimeFactory={factory} sessionId="session-2" />
+          <ModelViewer
+            host={createVscodeModelViewerHost()}
+            runtimeFactory={factory}
+            sessionId="session-2"
+          />
         </I18nProvider>,
       );
     });

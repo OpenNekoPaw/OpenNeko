@@ -1,5 +1,7 @@
 import type { CutExportSettings, TimelineView } from '@neko-cut/domain';
 
+// Freeze authoring state before asynchronous export execution starts.
+
 export interface CutExportIdentity {
   readonly documentUri: string;
   readonly sessionId: string;

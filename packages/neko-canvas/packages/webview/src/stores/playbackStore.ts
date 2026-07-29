@@ -1,4 +1,5 @@
-import { create } from 'zustand';
+import { create, createStore, type StateCreator } from 'zustand';
+import type { StoreApi } from 'zustand/vanilla';
 
 interface NodePlaybackState {
   currentTime: number;
@@ -57,7 +58,7 @@ interface ActivePlaybackState {
   updatedAt: number;
 }
 
-interface PlaybackStore {
+export interface PlaybackStore {
   playbacks: Map<string, NodePlaybackState>;
   activePlayback: ActivePlaybackState | null;
   handoffRequest: PlaybackHandoffRequest | null;
@@ -98,7 +99,7 @@ interface PlaybackStore {
 
 const STALE_TIMEOUT_MS = 60_000;
 
-export const usePlaybackStore = create<PlaybackStore>((set, get) => ({
+const createPlaybackState: StateCreator<PlaybackStore> = (set, get) => ({
   playbacks: new Map(),
   activePlayback: null,
   handoffRequest: null,
@@ -290,7 +291,16 @@ export const usePlaybackStore = create<PlaybackStore>((set, get) => ({
     set({ handoffRequest: null });
     return request;
   },
-}));
+});
+
+export type PlaybackStoreApi = StoreApi<PlaybackStore>;
+
+export function createPlaybackStore(): PlaybackStoreApi {
+  return createStore(createPlaybackState);
+}
+
+/** Test/default standalone store. Production Roots use CanvasStoreScopeProvider. */
+export const usePlaybackStore = create(createPlaybackState);
 
 function withSavedPlayback(
   playbacks: Map<string, NodePlaybackState>,

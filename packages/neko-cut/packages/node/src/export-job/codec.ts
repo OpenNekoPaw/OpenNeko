@@ -1,4 +1,6 @@
 import { serializeLocalMetadataJson } from '@neko/shared';
+
+// Persisted snapshots use one codec in every Node-based Host.
 import type { JobFailureSummary, JobPhase } from '@neko/shared/job-lifecycle';
 import {
   EXPORT_JOB_KIND,

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
+import { createPortal } from 'react-dom';
 import type {
   CutCommand,
   CutExportTaskSnapshot,
@@ -44,6 +45,7 @@ import {
 import { CutPreviewClock } from './media/CutPreviewClock';
 import type { CutPreviewAudioPlayback } from './controllers/CutOtioController';
 import { useCutOtioController } from './controllers/CutOtioControllerContext';
+import { useCutWebviewHostBridge } from './controllers/CutWebviewHostBridgeContext';
 import {
   useCutPresentationStore,
   useCutPresentationStoreApi,
@@ -67,7 +69,11 @@ interface PendingVideoPromotion {
   readonly retained: boolean;
 }
 
-function App() {
+export interface CutAppProps {
+  readonly timelineTarget?: Element;
+}
+
+function App({ timelineTarget }: CutAppProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const previewCanvasRef = useRef<HTMLCanvasElement>(null);
   const previewVideoRef = useRef<HTMLVideoElement>(null);
@@ -115,8 +121,12 @@ function App() {
   const playheadSeconds = useCutPresentationStore((state) => state.playheadSeconds);
   const placementMode = useCutPresentationStore((state) => state.placementMode);
   const playing = useCutPresentationStore((state) => state.isPlaying);
-  const volume = useCutPresentationStore((state) => (state.previewMuted ? 0 : state.previewVolume));
+  const previewVolume = useCutPresentationStore((state) => state.previewVolume);
   const previewMuted = useCutPresentationStore((state) => state.previewMuted);
+  const volume = previewMuted ? 0 : previewVolume;
+  const pixelsPerSecond = useCutPresentationStore((state) => state.pixelsPerSecond);
+  const snappingEnabled = useCutPresentationStore((state) => state.snappingEnabled);
+  const overviewVisible = useCutPresentationStore((state) => state.overviewVisible);
   const diagnostic = useCutPresentationStore((state) => state.diagnostic);
   const presentationActions = useCutPresentationStore((state) => state.actions);
   const selectedClipId = selection?.kind === 'clip' ? selection.clipId : undefined;
@@ -126,6 +136,7 @@ function App() {
       : undefined;
   const { showToast } = useToast();
   const controller = useCutOtioController();
+  const hostBridge = useCutWebviewHostBridge();
   previewAudioContextOwnerRef.current ??= new PreviewAudioContextOwner();
   previewFailureGateRef.current ??= new PreviewFailureGate();
   const previewAudioContextOwner = previewAudioContextOwnerRef.current;
@@ -158,6 +169,25 @@ function App() {
     showToast(translateCutDiagnostic(t, diagnostic), 'error');
     presentationActions.clearDiagnostic();
   }, [diagnostic, presentationActions, showToast, t]);
+
+  useEffect(() => {
+    if (!view) return;
+    controller.updatePresentation({
+      previewVolume,
+      previewMuted,
+      pixelsPerSecond,
+      snappingEnabled,
+      overviewVisible,
+    });
+  }, [
+    controller,
+    overviewVisible,
+    pixelsPerSecond,
+    previewMuted,
+    previewVolume,
+    snappingEnabled,
+    view,
+  ]);
 
   const reportPreviewFailure = useCallback(
     (attempt: number, stage: PreviewFailureStage): void => {
@@ -534,9 +564,9 @@ function App() {
   ]);
 
   useEffect(() => {
-    const receive = (event: MessageEvent<unknown>) => {
-      if (!isRecord(event.data)) return;
-      const message = event.data;
+    const receive = (value: unknown) => {
+      if (!isRecord(value)) return;
+      const message = value;
       if (message['type'] === 'cut:preview-ready' && isPreviewStreamMessage(message)) {
         const requestMode = requestedPreviewModeRef.current;
         if (
@@ -728,7 +758,11 @@ function App() {
       }
       const accepted = controller.acceptHostMessage(message);
       if (!accepted) return;
-      if (message['type'] === 'cut:view' || message['type'] === 'cut:error') {
+      if (
+        message['type'] === 'cut:view' ||
+        message['type'] === 'cut:runtime-snapshot' ||
+        message['type'] === 'cut:error'
+      ) {
         previewAttemptRef.current = undefined;
         requestedPreviewModeRef.current = undefined;
         previewFailureGate.invalidate();
@@ -769,9 +803,9 @@ function App() {
         }
       }
     };
-    window.addEventListener('message', receive);
+    const unsubscribe = hostBridge.subscribe(receive);
     controller.ready();
-    return () => window.removeEventListener('message', receive);
+    return unsubscribe;
   }, [
     activatePreparedPreview,
     connectPreviewClients,
@@ -788,6 +822,7 @@ function App() {
     showToast,
     store,
     t,
+    hostBridge,
   ]);
 
   useEffect(() => {
@@ -1061,7 +1096,10 @@ function App() {
             className="cut-basic-editor"
             data-resizing={previewResize.isResizing ? 'true' : 'false'}
           >
-            <section className="cut-basic-upper-workspace" style={{ flex: previewSplit.size }}>
+            <section
+              className="cut-basic-upper-workspace"
+              style={{ flex: timelineTarget ? 1 : previewSplit.size }}
+            >
               <div className="cut-basic-preview-region">
                 <PreviewPanel
                   ref={previewCanvasRef}
@@ -1114,13 +1152,29 @@ function App() {
                 </aside>
               ) : null}
             </section>
-            <ResizeHandle
-              handleProps={previewResize.handleProps}
-              className="cut-basic-preview-resize-handle"
-            />
-            <section className="cut-basic-timeline-region" style={{ flex: 1 - previewSplit.size }}>
-              <Timeline onOpenPackage={linkMediaToSelectedTrack} onSeek={seek} />
-            </section>
+            {timelineTarget ? (
+              createPortal(
+                <div className="cut-webview-root cut-timeline-portal-root">
+                  <section className="cut-basic-timeline-region cut-basic-timeline-region--host">
+                    <Timeline onOpenPackage={linkMediaToSelectedTrack} onSeek={seek} />
+                  </section>
+                </div>,
+                timelineTarget,
+              )
+            ) : (
+              <>
+                <ResizeHandle
+                  handleProps={previewResize.handleProps}
+                  className="cut-basic-preview-resize-handle"
+                />
+                <section
+                  className="cut-basic-timeline-region"
+                  style={{ flex: 1 - previewSplit.size }}
+                >
+                  <Timeline onOpenPackage={linkMediaToSelectedTrack} onSeek={seek} />
+                </section>
+              </>
+            )}
           </div>
         }
       />
@@ -1240,8 +1294,8 @@ function isHtmlVideoDescriptor(value: unknown): value is CutHtmlVideoDescriptor 
   return (
     isRecord(value) &&
     value['version'] === 1 &&
-    value['transport'] === 'http' &&
-    isLoopbackHttpUrl(value['url']) &&
+    isCutMediaTransport(value['transport']) &&
+    isCutMediaUrl(value['url'], value['transport']) &&
     typeof value['mimeType'] === 'string' &&
     typeof value['preparationProfile'] === 'string' &&
     isNonNegativeFinite(value['mediaTimeOriginSeconds']) &&
@@ -1249,26 +1303,35 @@ function isHtmlVideoDescriptor(value: unknown): value is CutHtmlVideoDescriptor 
   );
 }
 
-function isLoopbackHttpUrl(value: unknown): value is string {
-  if (typeof value !== 'string') return false;
-  try {
-    const url = new URL(value);
-    return url.protocol === 'http:' && url.hostname === '127.0.0.1';
-  } catch {
-    return false;
-  }
-}
-
 function isPcmStreamDescriptor(value: unknown): value is CutPcmStreamDescriptor {
   return (
     isRecord(value) &&
     value['version'] === 1 &&
-    value['transport'] === 'http' &&
+    isCutMediaTransport(value['transport']) &&
+    isCutMediaUrl(value['streamUrl'], value['transport']) &&
     value['protocol'] === 'neko-pcm-f32le-v1' &&
-    typeof value['streamUrl'] === 'string' &&
     typeof value['sampleRate'] === 'number' &&
     typeof value['channels'] === 'number'
   );
+}
+
+function isCutMediaTransport(value: unknown): value is CutHtmlVideoDescriptor['transport'] {
+  return value === 'http' || value === 'authorized';
+}
+
+function isCutMediaUrl(
+  value: unknown,
+  transport: CutHtmlVideoDescriptor['transport'],
+): value is string {
+  if (typeof value !== 'string') return false;
+  try {
+    const url = new URL(value);
+    return transport === 'http'
+      ? url.protocol === 'http:' && url.hostname === '127.0.0.1'
+      : url.protocol === 'neko-media:' && url.hostname === 'desktop';
+  } catch {
+    return false;
+  }
 }
 
 function dbToLinearGain(gainDb: number): number {

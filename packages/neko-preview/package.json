@@ -190,6 +190,7 @@
     "@types/vscode": "^1.125.0",
     "@neko/content": "workspace:*",
     "@neko/media": "workspace:*",
+    "@neko-preview/contracts": "workspace:*",
     "@neko/shared": "workspace:*",
     "esbuild": "^0.19.8",
     "typescript": "^5.3.2",

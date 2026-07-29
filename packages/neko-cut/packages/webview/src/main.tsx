@@ -1,6 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { CutWebviewRoot } from './root';
+import { createVSCodeCutWebviewHostBridge } from './controllers/vscode-cut-webview-host-bridge';
 import { getLogger } from '@/utils/logger';
 
 const logger = getLogger('NekoSuite');
@@ -11,7 +12,7 @@ try {
   if (rootElement) {
     ReactDOM.createRoot(rootElement).render(
       <React.StrictMode>
-        <CutWebviewRoot />
+        <CutWebviewRoot bridge={createVSCodeCutWebviewHostBridge()} />
       </React.StrictMode>,
     );
   } else {

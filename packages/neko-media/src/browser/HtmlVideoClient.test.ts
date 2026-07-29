@@ -27,6 +27,23 @@ describe('HtmlVideoClient', () => {
     expect(mediaSource).not.toHaveBeenCalled();
   });
 
+  it('accepts an owner-authorized Desktop media descriptor', async () => {
+    const video = createVideoStub();
+    const client = new HtmlVideoClient({
+      video,
+      descriptor: {
+        ...createDescriptor(0),
+        transport: 'authorized',
+        url: 'neko-media://desktop/media%3Apreview/preview.mp4',
+      },
+      playbackRate: 1,
+    });
+
+    await client.connect();
+
+    expect(video.src).toBe('neko-media://desktop/media%3Apreview/preview.mp4');
+  });
+
   it('warms the muted decoder and restores the descriptor origin before playback', async () => {
     const video = createVideoStub();
     const client = new HtmlVideoClient({

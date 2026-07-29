@@ -1,8 +1,12 @@
-import { getGlobalVSCodeApi } from '../utils/vscode';
+interface PreviewMessagePort {
+  postMessage(message: unknown): void;
+}
 import type { PreviewDelegateRequest } from './types';
 
-export function dispatchPreviewDelegate(request: PreviewDelegateRequest): void {
-  const vscode = getGlobalVSCodeApi();
+export function dispatchPreviewDelegate(
+  vscode: PreviewMessagePort | undefined,
+  request: PreviewDelegateRequest,
+): void {
   if (!vscode) {
     return;
   }

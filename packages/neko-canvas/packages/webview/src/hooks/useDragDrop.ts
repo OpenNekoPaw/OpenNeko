@@ -7,11 +7,13 @@
 
 import { useCallback, useRef } from 'react';
 import {
+  CONTENT_LOCATOR_DRAG_MIME,
   createProjectSourceAddClient,
   inferCanvasDroppedAssetKind,
   inferCanvasMediaType,
   inferCanvasTextFileFormat,
   isMediaLibraryDragData,
+  parseContentLocatorDragData,
   type ProjectSourceAddClient,
   type ProjectSourceAddClientInput,
   type ProjectSourceAddResult,
@@ -41,6 +43,10 @@ export interface UseDragDropOptions {
   ) => void;
   onDropAssets?: (assets: CanvasDroppedAsset[], position?: { x: number; y: number }) => void;
   addSourceClient?: ProjectSourceAddClient;
+  projectContent?: (
+    locator: ReturnType<typeof parseContentLocatorDragData>['locator'],
+    position: { readonly x: number; readonly y: number },
+  ) => Promise<unknown>;
   onError?: (message: string) => void;
 }
 
@@ -67,7 +73,20 @@ export function useDragDrop(options: UseDragDropOptions): UseDragDropReturn {
       // Save drop position for when extension responds
       dropPositionRef.current = screenToCanvas(event.clientX, event.clientY);
 
-      if (result.type === 'json' && isMediaLibraryDragData(result.data)) {
+      if (result.type === 'json' && isContentLocatorDragPayload(result.data)) {
+        const position = dropPositionRef.current ?? { x: 0, y: 0 };
+        const projectContent = options.projectContent;
+        if (!projectContent) {
+          onError?.('Canvas Host does not support ContentLocator drops.');
+          return;
+        }
+        try {
+          const payload = parseContentLocatorDragData(result.data);
+          await projectContent(payload.locator, position);
+        } catch (error: unknown) {
+          onError?.(error instanceof Error ? error.message : String(error));
+        }
+      } else if (result.type === 'json' && isMediaLibraryDragData(result.data)) {
         const items = result.data.files.map((file) => ({ files: [file] }));
         const addSourceClient =
           options.addSourceClient ?? createCanvasProjectSourceAddClient(vscode);
@@ -161,16 +180,35 @@ export function useDragDrop(options: UseDragDropOptions): UseDragDropReturn {
   // empty — so we always notify the extension host to check for a pending DnD payload.
   const handleDropWithCrossExtension = useCallback(
     (e: React.DragEvent) => {
+      const contentLocatorDrop = readCanvasContentLocatorDrop(e.dataTransfer);
+      if (contentLocatorDrop) {
+        e.preventDefault();
+        e.stopPropagation();
+        const position = screenToCanvas(e.clientX, e.clientY);
+        dropPositionRef.current = position;
+        try {
+          const projectContent = options.projectContent;
+          if (!projectContent) {
+            throw new Error('Canvas Host does not support ContentLocator drops.');
+          }
+          void projectContent(contentLocatorDrop.locator, position).catch((error: unknown) => {
+            onError?.(error instanceof Error ? error.message : String(error));
+          });
+        } catch (error: unknown) {
+          onError?.(error instanceof Error ? error.message : String(error));
+        }
+        return;
+      }
       // Let useFileDrop handle file/URI/asset drops first
       const hasExternalDropPayload = hasCanvasExternalDropPayload(e.dataTransfer);
       dropProps.onDrop(e);
 
       // Also ask the extension host if there is a cross-extension DnD payload
-      if (vscode && !hasExternalDropPayload) {
+      if (vscode && !hasExternalDropPayload && (vscode.supportsMessage?.('dnd:drop') ?? true)) {
         vscode.postMessage({ type: 'dnd:drop' });
       }
     },
-    [dropProps, vscode],
+    [dropProps, onError, options.projectContent, screenToCanvas, vscode],
   );
 
   return {
@@ -519,8 +557,26 @@ export function hasCanvasExternalDropPayload(dataTransfer: Pick<DataTransfer, 't
   const types = Array.from(dataTransfer.types);
   return (
     types.includes('Files') ||
+    types.includes(CONTENT_LOCATOR_DRAG_MIME) ||
     types.includes('text/uri-list') ||
     types.includes('application/json') ||
     types.includes('text/plain')
+  );
+}
+
+export function readCanvasContentLocatorDrop(
+  dataTransfer: Pick<DataTransfer, 'getData'>,
+): ReturnType<typeof parseContentLocatorDragData> | undefined {
+  const raw = dataTransfer.getData(CONTENT_LOCATOR_DRAG_MIME);
+  if (!raw) return undefined;
+  return parseContentLocatorDragData(JSON.parse(raw) as unknown);
+}
+
+function isContentLocatorDragPayload(value: unknown): boolean {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    !Array.isArray(value) &&
+    (value as Record<string, unknown>)['type'] === 'content-locator'
   );
 }

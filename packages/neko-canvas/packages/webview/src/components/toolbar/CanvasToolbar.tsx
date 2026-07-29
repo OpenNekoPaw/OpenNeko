@@ -1,5 +1,5 @@
 /**
- * CanvasToolbar - Floating vertical canvas toolbar
+ * CanvasToolbar - Floating bottom canvas toolbar
  *
  * Provides quick access to:
  * - Select / Hand tools
@@ -11,9 +11,9 @@
  */
 
 import { getKeyboardBoundaryMetadata } from '@neko/ui/keyboard';
-import { ToolbarButton, ToolbarSeparator, VerticalToolbar } from '@neko/ui/primitives';
+import { HorizontalToolbar, ToolbarButton, ToolbarSeparator } from '@neko/ui/primitives';
 import { StorylineIcon } from '@neko/shared/icons';
-import { useHistoryStore } from '../../stores/historyStore';
+import { useScopedHistoryStore as useHistoryStore } from '../../stores/canvasStoreScope';
 import { t } from '../../i18n';
 import { DownloadIcon, UndoIcon, RedoIcon, PackageIcon, PointerIcon } from '@neko/ui/icons';
 import type { CanvasAddActionId } from '../../utils/canvasAddActions';
@@ -66,16 +66,16 @@ export function CanvasToolbar({
     playbackWorkspaceVisible !== undefined && onTogglePlaybackWorkspace !== undefined;
 
   return (
-    <VerticalToolbar
+    <HorizontalToolbar
       className="canvas-floating-toolbar neko-floating-toolbar relative z-20"
-      data-orientation="vertical"
-      width={48}
+      data-orientation="horizontal"
+      height={48}
       aria-label={t('toolbar.leftRail')}
       {...getKeyboardBoundaryMetadata({
         scope: 'popover',
         ownerId: 'canvas-toolbar',
         priority: 20,
-        ownedKeys: ['Enter', 'Escape', 'Space', 'Tab', 'ArrowUp', 'ArrowDown'],
+        ownedKeys: ['Enter', 'Escape', 'Space', 'Tab', 'ArrowLeft', 'ArrowRight'],
       })}
     >
       <div
@@ -106,12 +106,12 @@ export function CanvasToolbar({
 
       {onSelectAddAction && (
         <>
-          <ToolbarSeparator />
+          <ToolbarSeparator orientation="vertical" />
           <CanvasAddActionPopover onSelectAction={onSelectAddAction} />
         </>
       )}
 
-      <ToolbarSeparator />
+      <ToolbarSeparator orientation="vertical" />
 
       <ToolbarButton
         data-canvas-toolbar-action="undo"
@@ -133,7 +133,7 @@ export function CanvasToolbar({
 
       {canControlPlaybackWorkspace ? (
         <>
-          <ToolbarSeparator />
+          <ToolbarSeparator orientation="vertical" />
 
           <ToolbarButton
             aria-controls="canvas-playback-overlay"
@@ -153,7 +153,7 @@ export function CanvasToolbar({
         </>
       ) : null}
 
-      {(onOpenExport || onOpenPackage) && <ToolbarSeparator />}
+      {(onOpenExport || onOpenPackage) && <ToolbarSeparator orientation="vertical" />}
 
       {onOpenExport && (
         <ToolbarButton
@@ -174,7 +174,7 @@ export function CanvasToolbar({
           onClick={onOpenPackage}
         />
       )}
-    </VerticalToolbar>
+    </HorizontalToolbar>
   );
 }
 

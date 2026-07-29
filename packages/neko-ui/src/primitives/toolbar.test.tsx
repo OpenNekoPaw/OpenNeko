@@ -2,7 +2,13 @@ import React from 'react';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ToolbarButton, ToolbarSeparator, ToolbarSpacer, VerticalToolbar } from './index';
+import {
+  HorizontalToolbar,
+  ToolbarButton,
+  ToolbarSeparator,
+  ToolbarSpacer,
+  VerticalToolbar,
+} from './index';
 
 describe('@neko/ui toolbar primitives', () => {
   let host: HTMLDivElement;
@@ -33,6 +39,21 @@ describe('@neko/ui toolbar primitives', () => {
     const toolbar = host.querySelector<HTMLDivElement>('.neko-vtoolbar');
     expect(toolbar?.className).toContain('custom-toolbar');
     expect(toolbar?.style.width).toBe('56px');
+    expect(toolbar?.textContent).toContain('Body');
+  });
+
+  it('renders the shared horizontal toolbar shell class and height', () => {
+    act(() => {
+      root.render(
+        <HorizontalToolbar className="custom-toolbar" height={52}>
+          Body
+        </HorizontalToolbar>,
+      );
+    });
+
+    const toolbar = host.querySelector<HTMLDivElement>('.neko-htoolbar');
+    expect(toolbar?.className).toContain('custom-toolbar');
+    expect(toolbar?.style.height).toBe('52px');
     expect(toolbar?.textContent).toContain('Body');
   });
 

@@ -36,7 +36,7 @@ describe('SelectionContextToolbar', () => {
 
     expect(markup).toContain('data-selection-overflow="true"');
     expect(markup).not.toContain('data-selection-action="node:edit-media"');
-    expect(markup).toContain('data-selection-action="selection:quick-generate"');
+    expect(markup).not.toContain('data-selection-action="selection:quick-generate"');
     expect(markup).toContain('data-selection-action="node:open-media-preview"');
     expect(markup).toContain('data-selection-action="node:duplicate"');
     expect(markup).not.toContain('data-selection-action="node:copy-to-media-library"');

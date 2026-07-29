@@ -197,9 +197,8 @@ describe('project file I/O guardrails', () => {
     expect(canvasAddActionCatalogSource).toContain("id: 'import'");
     expect(canvasAddActionCatalogSource).toContain("id: 'reference'");
     expect(canvasAddActionCatalogSource).not.toContain("'job-card'");
-    expect(canvasAppSource).toContain(
-      'createCanvasFilePickerAddSourceInput(nodeType, position, mediaType)',
-    );
+    expect(canvasAppSource).toContain('vscode.requestSource(sourceKind, position)');
+    expect(canvasAppSource).not.toContain('createCanvasFilePickerAddSourceInput(');
     for (const caseName of [
       'pickMedia',
       'pickCanvasDocument',

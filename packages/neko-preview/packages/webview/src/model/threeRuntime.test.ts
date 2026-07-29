@@ -10,6 +10,7 @@ import {
   createExactUrlModifier,
   createGeometryMaterial,
   createRenderScheduler,
+  disposeModelRenderer,
   disposeObjectTree,
   getModelGroundGridLayout,
   getModelCameraGuidePose,
@@ -103,6 +104,20 @@ describe('Three model runtime helpers', () => {
       toneMapping: THREE.NeutralToneMapping,
       toneMappingExposure: 1,
     });
+  });
+
+  it('disposes renderer resources without irreversibly losing a reusable React canvas context', () => {
+    const renderer = {
+      renderLists: { dispose: vi.fn() },
+      dispose: vi.fn(),
+      forceContextLoss: vi.fn(),
+    };
+
+    disposeModelRenderer(renderer);
+
+    expect(renderer.renderLists.dispose).toHaveBeenCalledOnce();
+    expect(renderer.dispose).toHaveBeenCalledOnce();
+    expect(renderer.forceContextLoss).not.toHaveBeenCalled();
   });
 
   it('coalesces invalidations and stops rendering while the viewport is idle', () => {

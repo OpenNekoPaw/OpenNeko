@@ -7,7 +7,7 @@ import {
   type CanvasPlaybackPlan,
 } from '@neko/shared';
 import { t } from '../../i18n';
-import { useCanvasStore } from '../../stores/canvasStore';
+import { useScopedCanvasStore as useCanvasStore } from '../../stores/canvasStoreScope';
 
 const DEFAULT_UNIT_DURATION_MS = 1200;
 

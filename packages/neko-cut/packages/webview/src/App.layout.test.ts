@@ -31,10 +31,23 @@ describe('Cut OTIO Webview boundary', () => {
     expect(app).toMatch(/<PreviewControls/);
     expect(app).toMatch(/<PropertyPanelInline/);
     expect(app).toMatch(/<Timeline/);
+    expect(app).toMatch(/createPortal\(/);
+    expect(app).toMatch(/timelineTarget/);
     expect(timeline).toMatch(/<TimelineControls/);
     expect(timeline).toMatch(/<TimelineMinimap/);
     expect(timeline).toMatch(/<TimelineRuler/);
     expect(timeline).toMatch(/<TimelineTrack/);
+  });
+
+  it('scopes standalone Webview resets and theme tokens to the embeddable Cut root', () => {
+    expect(root).toMatch(/className="cut-webview-root"/);
+    expect(styles).toMatch(/\.cut-webview-root\s*\{/);
+    expect(styles).not.toMatch(/(^|\n)\s*:root\s*\{/);
+    expect(styles).not.toMatch(/(^|\n)\s*html,\s*body,\s*#root\s*\{/);
+    expect(styles).not.toMatch(/(^|\n)\s*body\s*\{/);
+    expect(styles).not.toMatch(/(^|\n)\s*#root\s*\{/);
+    expect(styles).not.toMatch(/(^|\n)\s*::selection\s*\{/);
+    expect(styles).not.toMatch(/(^|\n)\s*::-webkit-scrollbar\s*\{/);
   });
 
   it('uses a document-scoped presentation store without restoring ProjectData authority', () => {

@@ -1,5 +1,8 @@
+import { useEffect, useState } from 'react';
 import type React from 'react';
 import type { ReactNode } from 'react';
+import { useResizable } from '../hooks';
+import { ResizeHandle } from '../primitives';
 import { cn } from '../utils';
 
 export interface EditorWorkbenchShellProps {
@@ -118,6 +121,41 @@ export interface WorkbenchWebviewRuntimeFrameProps {
   readonly className?: string;
 }
 
+export type ControlledWorkbenchDockPresentation = 'hidden' | 'docked' | 'overlay';
+export type ControlledWorkbenchMainSplit = 'none' | 'horizontal' | 'vertical';
+
+export interface ControlledWorkbenchResizeBinding {
+  readonly label: string;
+  readonly minSize?: number;
+  readonly maxSize?: number;
+  readonly onResizeEnd: (size: number) => void;
+}
+
+export interface ControlledWorkbenchShellProps {
+  readonly titleBar?: ReactNode;
+  readonly primarySidebar?: ReactNode;
+  readonly primarySidebarVisible?: boolean;
+  readonly primarySidebarWidth?: number;
+  readonly primarySidebarResize?: ControlledWorkbenchResizeBinding;
+  readonly main: ReactNode;
+  readonly secondaryMain?: ReactNode;
+  readonly mainSplit?: ControlledWorkbenchMainSplit;
+  readonly leftDock?: ReactNode;
+  readonly leftDockPresentation?: ControlledWorkbenchDockPresentation;
+  readonly leftDockWidth?: number;
+  readonly leftDockResize?: ControlledWorkbenchResizeBinding;
+  readonly rightDock?: ReactNode;
+  readonly rightDockPresentation?: ControlledWorkbenchDockPresentation;
+  readonly rightDockWidth?: number;
+  readonly rightDockResize?: ControlledWorkbenchResizeBinding;
+  readonly timeline?: ReactNode;
+  readonly timelineVisible?: boolean;
+  readonly timelineHeight?: number;
+  readonly timelineResize?: ControlledWorkbenchResizeBinding;
+  readonly statusBar?: ReactNode;
+  readonly className?: string;
+}
+
 export function EditorWorkbenchShell({
   activityBar,
   activityBarVisible = true,
@@ -158,6 +196,196 @@ export function EditorWorkbenchShell({
       {statusBar ? <div className="neko-editor-workbench-status">{statusBar}</div> : null}
     </main>
   );
+}
+
+export function ControlledWorkbenchShell({
+  className,
+  leftDock,
+  leftDockPresentation = 'hidden',
+  leftDockResize,
+  leftDockWidth = 320,
+  main,
+  mainSplit = 'none',
+  primarySidebar,
+  primarySidebarResize,
+  primarySidebarVisible = true,
+  primarySidebarWidth = 240,
+  rightDock,
+  rightDockPresentation = 'hidden',
+  rightDockResize,
+  rightDockWidth = 320,
+  secondaryMain,
+  statusBar,
+  timeline,
+  timelineHeight = 240,
+  timelineResize,
+  timelineVisible = false,
+  titleBar,
+}: ControlledWorkbenchShellProps): React.ReactElement {
+  const hasSecondaryMain = Boolean(secondaryMain);
+  const effectiveSplit = hasSecondaryMain ? mainSplit : 'none';
+  const leftPresentation = leftDock ? leftDockPresentation : 'hidden';
+  const rightPresentation = rightDock ? rightDockPresentation : 'hidden';
+  const primaryResize = useControlledWorkbenchResize({
+    binding: primarySidebarResize,
+    edge: 'left',
+    enabled: Boolean(primarySidebar && primarySidebarVisible),
+    size: primarySidebarWidth,
+  });
+  const leftResize = useControlledWorkbenchResize({
+    binding: leftDockResize,
+    edge: 'left',
+    enabled: Boolean(leftDock && leftPresentation !== 'hidden'),
+    size: leftDockWidth,
+  });
+  const rightResize = useControlledWorkbenchResize({
+    binding: rightDockResize,
+    edge: 'right',
+    enabled: Boolean(rightDock && rightPresentation !== 'hidden'),
+    size: rightDockWidth,
+  });
+  const timelineResizeState = useControlledWorkbenchResize({
+    binding: timelineResize,
+    edge: 'bottom',
+    enabled: Boolean(timeline && timelineVisible),
+    size: timelineHeight,
+  });
+  const shellStyle: React.CSSProperties & {
+    '--neko-controlled-primary-width': string;
+    '--neko-controlled-left-dock-width': string;
+    '--neko-controlled-right-dock-width': string;
+    '--neko-controlled-timeline-height': string;
+  } = {
+    '--neko-controlled-primary-width': `${primaryResize.size}px`,
+    '--neko-controlled-left-dock-width': `${leftResize.size}px`,
+    '--neko-controlled-right-dock-width': `${rightResize.size}px`,
+    '--neko-controlled-timeline-height': `${timelineResizeState.size}px`,
+  };
+
+  return (
+    <main
+      className={cn('neko-controlled-workbench-shell', className)}
+      data-neko-controlled-workbench="true"
+      data-primary-visible={primarySidebar && primarySidebarVisible ? 'true' : 'false'}
+      data-left-presentation={leftPresentation}
+      data-right-presentation={rightPresentation}
+      data-main-split={effectiveSplit}
+      data-timeline-visible={timeline && timelineVisible ? 'true' : 'false'}
+      style={shellStyle}
+    >
+      {titleBar ? <div className="neko-controlled-workbench-title">{titleBar}</div> : null}
+      {primarySidebar && primarySidebarVisible ? (
+        <div
+          ref={(element) => {
+            primaryResize.containerRef.current = element;
+          }}
+          className="neko-controlled-workbench-primary"
+          data-resizing={primaryResize.isResizing ? 'true' : 'false'}
+        >
+          {primarySidebar}
+          {primarySidebarResize ? (
+            <ResizeHandle
+              className="neko-controlled-workbench-resize-handle neko-controlled-workbench-resize-handle--right"
+              handleProps={primaryResize.handleProps}
+              label={primarySidebarResize.label}
+            />
+          ) : null}
+        </div>
+      ) : null}
+      {leftDock ? (
+        <aside
+          ref={(element) => {
+            leftResize.containerRef.current = element;
+          }}
+          className="neko-controlled-workbench-dock neko-controlled-workbench-dock--left"
+          data-presentation={leftPresentation}
+          data-resizing={leftResize.isResizing ? 'true' : 'false'}
+        >
+          {leftDock}
+          {leftDockResize && leftPresentation !== 'hidden' ? (
+            <ResizeHandle
+              className="neko-controlled-workbench-resize-handle neko-controlled-workbench-resize-handle--right"
+              handleProps={leftResize.handleProps}
+              label={leftDockResize.label}
+            />
+          ) : null}
+        </aside>
+      ) : null}
+      <div className="neko-controlled-workbench-main">
+        <div className="neko-controlled-workbench-main__primary">{main}</div>
+        {secondaryMain ? (
+          <div className="neko-controlled-workbench-main__secondary">{secondaryMain}</div>
+        ) : null}
+      </div>
+      {rightDock ? (
+        <aside
+          ref={(element) => {
+            rightResize.containerRef.current = element;
+          }}
+          className="neko-controlled-workbench-dock neko-controlled-workbench-dock--right"
+          data-presentation={rightPresentation}
+          data-resizing={rightResize.isResizing ? 'true' : 'false'}
+        >
+          {rightDock}
+          {rightDockResize && rightPresentation !== 'hidden' ? (
+            <ResizeHandle
+              className="neko-controlled-workbench-resize-handle neko-controlled-workbench-resize-handle--left"
+              handleProps={rightResize.handleProps}
+              label={rightDockResize.label}
+            />
+          ) : null}
+        </aside>
+      ) : null}
+      {timeline ? (
+        <div
+          ref={(element) => {
+            timelineResizeState.containerRef.current = element;
+          }}
+          className="neko-controlled-workbench-timeline"
+          data-resizing={timelineResizeState.isResizing ? 'true' : 'false'}
+        >
+          {timeline}
+          {timelineResize && timelineVisible ? (
+            <ResizeHandle
+              className="neko-controlled-workbench-resize-handle neko-controlled-workbench-resize-handle--top"
+              handleProps={timelineResizeState.handleProps}
+              label={timelineResize.label}
+            />
+          ) : null}
+        </div>
+      ) : null}
+      {statusBar ? <div className="neko-controlled-workbench-status">{statusBar}</div> : null}
+    </main>
+  );
+}
+
+function useControlledWorkbenchResize({
+  binding,
+  edge,
+  enabled,
+  size,
+}: {
+  readonly binding?: ControlledWorkbenchResizeBinding;
+  readonly edge: 'left' | 'right' | 'bottom';
+  readonly enabled: boolean;
+  readonly size: number;
+}) {
+  const [liveSize, setLiveSize] = useState(size);
+
+  useEffect(() => {
+    setLiveSize(size);
+  }, [size]);
+
+  return useResizable<HTMLElement>({
+    edge,
+    mode: 'pixel',
+    size: liveSize,
+    minSize: binding?.minSize,
+    maxSize: binding?.maxSize,
+    disabled: !enabled || !binding,
+    onSizeChange: setLiveSize,
+    onResizeEnd: binding?.onResizeEnd,
+  });
 }
 
 export function WorkbenchWebviewRuntimeFrame({

@@ -7,6 +7,7 @@
   "main": "dist/index.js",
   "exports": {
     "./host-adapter": "./src/host-adapter/index.tsx",
+    "./host-runtime": "./src/host-runtime/index.ts",
     "./root": "./src/root.tsx"
   },
   "scripts": {

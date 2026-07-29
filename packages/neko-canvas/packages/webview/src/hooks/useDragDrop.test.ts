@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { CONTENT_LOCATOR_DRAG_MIME } from '@neko/shared';
 import {
   applyCanvasAddSourceResult,
   createCanvasFilePickerAddSourceInput,
@@ -6,6 +7,7 @@ import {
   createCanvasMediaAddSourceInput,
   getCanvasFilePickerDefaultName,
   hasCanvasExternalDropPayload,
+  readCanvasContentLocatorDrop,
 } from './useDragDrop';
 
 describe('useDragDrop external payload detection', () => {
@@ -26,12 +28,36 @@ describe('useDragDrop external payload detection', () => {
         types: ['application/json'] as unknown as DataTransfer['types'],
       }),
     ).toBe(true);
+    expect(
+      hasCanvasExternalDropPayload({
+        types: [CONTENT_LOCATOR_DRAG_MIME] as unknown as DataTransfer['types'],
+      }),
+    ).toBe(true);
   });
 
   it('leaves empty cross-extension drops for the extension-host DnD fallback', () => {
     expect(hasCanvasExternalDropPayload({ types: [] as unknown as DataTransfer['types'] })).toBe(
       false,
     );
+  });
+
+  it('parses the portable Resource Browser payload for the Canvas runtime path', () => {
+    const payload = JSON.stringify({
+      schemaVersion: 1,
+      type: 'content-locator',
+      locator: { kind: 'workspace-file', path: 'media/cat.png' },
+      name: 'cat.png',
+    });
+    expect(
+      readCanvasContentLocatorDrop({
+        getData: (type) => (type === CONTENT_LOCATOR_DRAG_MIME ? payload : ''),
+      }),
+    ).toEqual({
+      schemaVersion: 1,
+      type: 'content-locator',
+      locator: { kind: 'workspace-file', path: 'media/cat.png' },
+      name: 'cat.png',
+    });
   });
 });
 

@@ -21,6 +21,28 @@ function emptyCanvas(): CanvasData {
 }
 
 describe('canvasHeadlessAuthoring canonical planner', () => {
+  it('preserves a portable ContentLocator when creating durable media nodes', () => {
+    const created = planCanvasNodeCreation(
+      { canvasData: emptyCanvas(), generateId: () => 'media-locator-node' },
+      {
+        type: 'media',
+        data: {
+          assetPath: 'media/cat.png',
+          mediaType: 'image',
+          contentLocator: { kind: 'workspace-file', path: 'media/cat.png' },
+        },
+      },
+    );
+
+    expect(created.result.node).toMatchObject({
+      type: 'media',
+      data: {
+        assetPath: 'media/cat.png',
+        contentLocator: { kind: 'workspace-file', path: 'media/cat.png' },
+      },
+    });
+  });
+
   it('creates all canonical node projections from valid data', () => {
     let canvas = emptyCanvas();
     const generateId = ids();

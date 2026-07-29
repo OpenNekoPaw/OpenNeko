@@ -4,7 +4,7 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
+.model-preview {
   --neko-surface: color-mix(
     in srgb,
     var(--vscode-editor-background) 96%,
@@ -16,30 +16,24 @@
   --neko-accent-muted: color-mix(in srgb, var(--vscode-button-background) 10%, transparent);
 }
 
-*,
-*::before,
-*::after {
+.model-preview,
+.model-preview *,
+.model-preview *::before,
+.model-preview *::after {
   box-sizing: border-box;
 }
 
-html,
-body,
-#root {
-  width: 100%;
-  height: 100%;
+.model-preview {
   margin: 0;
   overflow: hidden;
-}
-
-body {
   color: var(--vscode-foreground);
   background: var(--vscode-editor-background);
   font-family: var(--vscode-font-family);
   font-size: var(--vscode-font-size, 13px);
 }
 
-button,
-input {
+.model-preview button,
+.model-preview input {
   font: inherit;
 }
 

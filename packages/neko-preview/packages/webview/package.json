@@ -4,7 +4,8 @@
   "version": "0.0.1",
   "type": "module",
   "exports": {
-    "./host-adapter": "./src/host-adapter/index.tsx"
+    "./host-adapter": "./src/host-adapter/index.tsx",
+    "./root": "./src/root/index.tsx"
   },
   "scripts": {
     "dev": "vite",
@@ -13,6 +14,7 @@
   },
   "dependencies": {
     "@neko/media": "workspace:*",
+    "@neko-preview/contracts": "workspace:*",
     "@neko/shared": "workspace:*",
     "@neko/ui": "workspace:*",
     "@vscode/codicons": "0.0.45",

@@ -1,5 +1,8 @@
 import type { CanvasPreviewRole, PreviewVariantRole } from '@neko/shared';
-import { getGlobalVSCodeApi } from '../utils/vscode';
+interface PreviewMessagePort {
+  postMessage(message: unknown): void;
+  subscribe?(listener: (message: unknown) => void): () => void;
+}
 import type { PreviewResolveRequest, PreviewResolver, RuntimePreviewVariant } from './types';
 
 const SAFE_URL_RE = /^(data:|blob:|https?:)/;
@@ -36,6 +39,8 @@ const ROLE_TO_ENGINE_ROLE: Partial<Record<CanvasPreviewRole, PreviewVariantRole>
 
 export class WebviewPreviewResolver implements PreviewResolver {
   private readonly pending = new Set<RuntimeVariantRequest>();
+
+  constructor(private readonly host?: PreviewMessagePort) {}
 
   async resolve(request: PreviewResolveRequest): Promise<RuntimePreviewVariant> {
     const role = request.role ?? request.source.role;
@@ -81,7 +86,7 @@ export class WebviewPreviewResolver implements PreviewResolver {
   }
 
   private requestRuntimeVariant(input: RuntimeVariantInput): Promise<string | undefined> {
-    const request = createRuntimeVariantRequest(input, () => {
+    const request = createRuntimeVariantRequest(this.host, input, () => {
       this.pending.delete(request);
     });
     this.pending.add(request);
@@ -162,10 +167,10 @@ interface RuntimeVariantRequest {
 }
 
 function createRuntimeVariantRequest(
+  vscode: PreviewMessagePort | undefined,
   { sourceId, assetPath, role, mediaType, documentResourceRef, resourceRef }: RuntimeVariantInput,
   onSettled: () => void,
 ): RuntimeVariantRequest {
-  const vscode = getGlobalVSCodeApi();
   const engineRole = ROLE_TO_ENGINE_ROLE[role] ?? 'thumbnail';
 
   if (!vscode) {
@@ -184,28 +189,35 @@ function createRuntimeVariantRequest(
       return;
     }
     settled = true;
-    window.clearTimeout(timeout);
-    window.removeEventListener('message', handleMessage);
+    globalThis.clearTimeout(timeout);
+    unsubscribe();
     onSettled();
     resolvePromise(value);
   };
 
-  const timeout = window.setTimeout(() => {
+  const timeout = globalThis.setTimeout(() => {
     settle(undefined);
   }, 5000);
 
-  const handleMessage = (event: MessageEvent) => {
-    const message = event.data as { type?: string; requestId?: string; url?: string };
+  const handleMessage = (value: unknown) => {
+    const message = value as { type?: string; requestId?: string; url?: string };
     if (message.type !== 'preview:variantResolved' || message.requestId !== requestId) {
       return;
     }
 
     settle(message.url);
   };
+  const handleWindowMessage = (event: MessageEvent): void => handleMessage(event.data);
+  let unsubscribe: () => void = () => {};
 
   const promise = new Promise<string | undefined>((resolve) => {
     resolvePromise = resolve;
-    window.addEventListener('message', handleMessage);
+    if (vscode.subscribe) {
+      unsubscribe = vscode.subscribe(handleMessage);
+    } else {
+      window.addEventListener('message', handleWindowMessage);
+      unsubscribe = () => window.removeEventListener('message', handleWindowMessage);
+    }
     try {
       vscode.postMessage({
         type: 'preview:resolveVariant',

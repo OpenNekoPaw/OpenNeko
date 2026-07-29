@@ -28,7 +28,7 @@ export interface CutMediaImportFileSystem {
   rm(filePath: string, options: { force: true }): Promise<void>;
 }
 
-const nodeFileSystem: CutMediaImportFileSystem = {
+const defaultFileSystem: CutMediaImportFileSystem = {
   realpath: (filePath) => nodeFs.realpath(filePath),
   stat: (filePath) => nodeFs.stat(filePath),
   mkdir: (filePath, options) => nodeFs.mkdir(filePath, options),
@@ -49,7 +49,7 @@ export class CutWorkspaceMediaImporter {
 
   static async create(
     workspaceRoot: string,
-    fileSystem: CutMediaImportFileSystem = nodeFileSystem,
+    fileSystem: CutMediaImportFileSystem = defaultFileSystem,
   ): Promise<CutWorkspaceMediaImporter> {
     const lexicalRoot = nodePath.resolve(workspaceRoot);
     const realRoot = nodePath.resolve(await fileSystem.realpath(lexicalRoot));

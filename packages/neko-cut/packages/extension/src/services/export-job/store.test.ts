@@ -5,8 +5,11 @@ import { resolveGlobalStorageLayout, type LocalMetadataStore } from '@neko/share
 import { createNodeSqliteLocalMetadataStore } from '@neko/shared/local-metadata/node-sqlite-local-metadata-store';
 import { M1_LOCAL_METADATA_MIGRATIONS } from '@neko/shared/local-metadata/sqlite';
 import { afterEach, describe, expect, it } from 'vitest';
-import type { ExportJobSnapshot } from './contracts';
-import { createPersistentExportJobStore, EXPORT_JOB_MIGRATIONS } from './store';
+import {
+  createPersistentExportJobStore,
+  EXPORT_JOB_MIGRATIONS,
+  type ExportJobSnapshot,
+} from '@neko-cut/node';
 
 const WORKSPACE_ID = '7416ff87-264b-4817-88a6-a9b97690911e';
 const temporaryDirectories: string[] = [];

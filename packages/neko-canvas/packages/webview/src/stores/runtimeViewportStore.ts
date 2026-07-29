@@ -1,4 +1,5 @@
-import { create } from 'zustand';
+import { create, createStore, type StateCreator } from 'zustand';
+import type { StoreApi } from 'zustand/vanilla';
 import type { CanvasViewport } from '@neko/shared';
 
 export interface RuntimeViewportState {
@@ -22,7 +23,7 @@ function clampRuntimeZoom(zoom: number): number {
   return Math.max(MIN_RUNTIME_ZOOM, Math.min(MAX_RUNTIME_ZOOM, zoom));
 }
 
-export const useRuntimeViewportStore = create<RuntimeViewportState>((set) => ({
+const createRuntimeViewportState: StateCreator<RuntimeViewportState> = (set) => ({
   viewport: DEFAULT_RUNTIME_VIEWPORT,
   seededDocumentKey: null,
 
@@ -70,4 +71,13 @@ export const useRuntimeViewportStore = create<RuntimeViewportState>((set) => ({
       seededDocumentKey: documentKey,
     });
   },
-}));
+});
+
+export type RuntimeViewportStoreApi = StoreApi<RuntimeViewportState>;
+
+export function createRuntimeViewportStore(): RuntimeViewportStoreApi {
+  return createStore(createRuntimeViewportState);
+}
+
+/** Test/default standalone store. Production Roots use CanvasStoreScopeProvider. */
+export const useRuntimeViewportStore = create(createRuntimeViewportState);

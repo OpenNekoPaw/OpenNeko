@@ -174,6 +174,7 @@ export * from './content-access';
 
 // Durable storage-neutral content locators
 export * from './content-locator';
+export * from './content-locator-drag';
 export * from './content-io';
 
 // Rebuildable Media Library file/resource projections

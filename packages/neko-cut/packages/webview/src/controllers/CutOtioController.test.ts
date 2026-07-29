@@ -1,4 +1,4 @@
-import type { TimelineView } from '@neko-cut/domain';
+import { DEFAULT_CUT_HOST_PRESENTATION, type TimelineView } from '@neko-cut/domain';
 import { describe, expect, it, vi } from 'vitest';
 import { createCutPresentationStore } from '../stores/cut-presentation-store';
 import { CutOtioController } from './CutOtioController';
@@ -42,6 +42,76 @@ describe('CutOtioController', () => {
       expectedRevision: 4,
       command: { type: 'rename-clip', clipId: 'clip-1', name: 'Renamed' },
     });
+  });
+
+  it('accepts dirty/presentation snapshots and serializes presentation with save intents', () => {
+    const store = createCutPresentationStore();
+    const postMessage = vi.fn();
+    const controller = new CutOtioController(store, { postMessage });
+    const view = createView();
+    const initialPresentation = {
+      ...DEFAULT_CUT_HOST_PRESENTATION,
+      previewVolume: 0.5,
+      pixelsPerSecond: 120,
+    };
+
+    expect(
+      controller.acceptHostMessage({
+        type: 'cut:runtime-snapshot',
+        view,
+        dirty: true,
+        presentation: initialPresentation,
+      }),
+    ).toBe(true);
+    expect(store.getState()).toMatchObject({
+      dirty: true,
+      previewVolume: 0.5,
+      pixelsPerSecond: 120,
+    });
+
+    const nextPresentation = {
+      ...initialPresentation,
+      snappingEnabled: false,
+      overviewVisible: false,
+    };
+    controller.updatePresentation(nextPresentation);
+    controller.save();
+    expect(postMessage).toHaveBeenNthCalledWith(1, {
+      type: 'cut:presentation-update',
+      clientMutationId: 'session-1:1',
+      documentUri: view.documentUri,
+      sessionId: view.sessionId,
+      expectedRevision: view.revision,
+      presentation: nextPresentation,
+    });
+
+    controller.acceptHostMessage({
+      type: 'cut:runtime-snapshot',
+      view,
+      dirty: true,
+      presentation: nextPresentation,
+    });
+    controller.acceptHostMessage({
+      type: 'cut:mutation-result',
+      clientMutationId: 'session-1:1',
+      succeeded: true,
+      revision: view.revision,
+    });
+    expect(postMessage).toHaveBeenNthCalledWith(2, {
+      type: 'cut:save',
+      clientMutationId: 'session-1:2',
+      documentUri: view.documentUri,
+      sessionId: view.sessionId,
+      expectedRevision: view.revision,
+    });
+
+    controller.acceptHostMessage({
+      type: 'cut:runtime-snapshot',
+      view,
+      dirty: false,
+      presentation: nextPresentation,
+    });
+    expect(store.getState().dirty).toBe(false);
   });
 
   it('enters sequence mode through a trailing-Gap trim and reverts on failure', () => {

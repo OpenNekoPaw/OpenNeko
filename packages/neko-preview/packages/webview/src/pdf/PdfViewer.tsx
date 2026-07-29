@@ -36,7 +36,7 @@ type ViewMode = 'scroll' | 'single';
 const VIEW_MODES: ViewMode[] = ['scroll', 'single'];
 const VIEW_MODE_ICONS: Record<ViewMode, string> = { scroll: '⇕', single: '⊡' };
 
-export const PdfViewer: FC = () => {
+export const PdfViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) => {
   const { t } = useTranslation();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -70,7 +70,7 @@ export const PdfViewer: FC = () => {
     if (m.type === 'document:restoreState') {
       initPersistedStore(m.payload as Record<string, unknown>);
       notifySubscribers();
-    } else if (msg.type === 'document:data') {
+    } else if (!sourceUrl && msg.type === 'document:data') {
       void loadPdfFromUrl(msg.payload.url);
     } else if (msg.type === 'document:navigate') {
       const locator = msg.payload.locator;
@@ -87,8 +87,8 @@ export const PdfViewer: FC = () => {
   });
 
   useEffect(() => {
-    postMessage({ type: 'ready' } as never);
-  }, []);
+    if (!sourceUrl) postMessage({ type: 'ready' } as never);
+  }, [sourceUrl]);
 
   const loadPdfFromUrl = useCallback(
     async (url: string) => {
@@ -125,6 +125,10 @@ export const PdfViewer: FC = () => {
     },
     [],
   );
+
+  useEffect(() => {
+    if (sourceUrl) void loadPdfFromUrl(sourceUrl);
+  }, [loadPdfFromUrl, sourceUrl]);
 
   useEffect(() => {
     const pdf = pdfDocRef.current;
@@ -417,7 +421,7 @@ export const PdfViewer: FC = () => {
   if (error) {
     return (
       <div
-        className="flex h-screen items-center justify-center"
+        className="flex h-full items-center justify-center"
         style={{ color: 'var(--vscode-errorForeground)' }}
       >
         {t('preview.document.error', { error })}
@@ -428,7 +432,7 @@ export const PdfViewer: FC = () => {
   if (loading) {
     return (
       <div
-        className="flex h-screen items-center justify-center"
+        className="flex h-full items-center justify-center"
         style={{ color: 'var(--vscode-foreground)' }}
       >
         {t('preview.pdf.loading')}
@@ -441,7 +445,7 @@ export const PdfViewer: FC = () => {
       <div
         data-testid="pdf-preview-ready"
         data-page-count={numPages}
-        className="flex h-screen flex-col"
+        className="flex h-full flex-col"
         style={{ background: 'var(--vscode-editor-background)' }}
       >
         {/* Toolbar */}

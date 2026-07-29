@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   THREE_REFERENCE_PROTOCOL_VERSION,
   isThreeReferenceDiagnostic,
@@ -21,7 +21,6 @@ import {
   type ThreeReferenceStagingSnapshot,
 } from '@neko/shared';
 import { useTranslation } from '../i18n/I18nContext';
-import { getVscodeApi } from '../shared/vscodeApi';
 import {
   browserThreeRuntimeFactory,
   DEFAULT_MODEL_VIEW_STATE,
@@ -48,6 +47,7 @@ import {
   type ModelCameraPlacementId,
   type ModelLightPlacementId,
 } from './modelCreationPresets';
+import type { ModelViewerHostPort } from './modelViewerHost';
 import type { ModelSceneSelection } from './modelSceneSelection';
 import { ModelInspectorPanel } from './components/ModelInspectorPanel';
 import { ModelScenePanel } from './components/ModelScenePanel';
@@ -60,6 +60,7 @@ import {
 } from './components/ModelViewportControls';
 
 export interface ModelViewerProps {
+  readonly host: ModelViewerHostPort;
   readonly runtimeFactory?: ThreeModelRuntimeFactory;
   readonly sessionId?: string;
 }
@@ -67,6 +68,7 @@ export interface ModelViewerProps {
 type ViewerStatus = 'waiting' | 'loading' | 'ready' | 'error';
 
 export function ModelViewer({
+  host,
   runtimeFactory = browserThreeRuntimeFactory,
   sessionId: sessionIdOverride,
 }: ModelViewerProps): React.JSX.Element {
@@ -95,7 +97,6 @@ export function ModelViewer({
   const [panoramaRuntime, setPanoramaRuntime] = useState<ThreeReferencePanoramaRuntimeDescriptor>();
   const [outputPreview, setOutputPreview] = useState<string>();
   const sessionId = sessionIdOverride ?? document.body.dataset.modelSessionId;
-  const vscode = useMemo(() => getVscodeApi(), []);
 
   useEffect(() => {
     stagingRef.current = staging;
@@ -138,60 +139,74 @@ export function ModelViewer({
       });
       return;
     }
-    const runtime = runtimeFactory.create(canvas, {
-      onTransformChanged(nodePath, transform) {
-        setStaging((current) => {
-          if (!current) return current;
-          const next = patchModelTransform(current, nodePath, transform);
-          stagingRef.current = next;
-          const referenceStaging = referenceStagingRef.current;
-          if (!referenceStaging) throw new Error('3D Reference staging is unavailable.');
-          referenceStagingRef.current = postState(vscode, next, referenceStaging);
-          return next;
-        });
-      },
-      onLightPositionChanged(lightId, position) {
-        setStaging((current) => {
-          if (!current) return current;
-          const light = current.lightRig.lights.find((entry) => entry.id === lightId);
-          if (!light) throw new Error(`Unknown Model Preview light: ${lightId}`);
-          const next = updateModelLight(current, { ...light, position });
-          stagingRef.current = next;
-          const referenceStaging = referenceStagingRef.current;
-          if (!referenceStaging) throw new Error('3D Reference staging is unavailable.');
-          referenceStagingRef.current = postState(vscode, next, referenceStaging);
-          return next;
-        });
-      },
-      onCameraPositionChanged(cameraId, position) {
-        setStaging((current) => {
-          if (!current) return current;
-          const camera = current.cameraPresets.find((entry) => entry.id === cameraId);
-          if (!camera) throw new Error(`Unknown Model Preview camera: ${cameraId}`);
-          const next = updateModelCamera(current, { ...camera, position });
-          stagingRef.current = next;
-          const referenceStaging = referenceStagingRef.current;
-          if (!referenceStaging) throw new Error('3D Reference staging is unavailable.');
-          referenceStagingRef.current = postState(vscode, next, referenceStaging);
-          return next;
-        });
-      },
-      onViewChanged: setViewState,
-      onDiagnostic(message) {
-        setDiagnostic({ code: 'load-failed', message, severity: 'error' });
-      },
-      onRendererLost() {
-        const diagnostic = {
-          code: 'renderer-lost' as const,
-          message: 'The 3D Reference renderer context was lost.',
-          severity: 'error' as const,
-          identity: { sessionId },
-        };
-        setDiagnostic(diagnostic);
-        setStatus('error');
-        vscode.postMessage({ type: '3d-reference/diagnostic', diagnostic });
-      },
-    });
+    let runtime: ThreeModelRuntimePort;
+    try {
+      runtime = runtimeFactory.create(canvas, {
+        onTransformChanged(nodePath, transform) {
+          setStaging((current) => {
+            if (!current) return current;
+            const next = patchModelTransform(current, nodePath, transform);
+            stagingRef.current = next;
+            const referenceStaging = referenceStagingRef.current;
+            if (!referenceStaging) throw new Error('3D Reference staging is unavailable.');
+            referenceStagingRef.current = postState(host, next, referenceStaging);
+            return next;
+          });
+        },
+        onLightPositionChanged(lightId, position) {
+          setStaging((current) => {
+            if (!current) return current;
+            const light = current.lightRig.lights.find((entry) => entry.id === lightId);
+            if (!light) throw new Error(`Unknown Model Preview light: ${lightId}`);
+            const next = updateModelLight(current, { ...light, position });
+            stagingRef.current = next;
+            const referenceStaging = referenceStagingRef.current;
+            if (!referenceStaging) throw new Error('3D Reference staging is unavailable.');
+            referenceStagingRef.current = postState(host, next, referenceStaging);
+            return next;
+          });
+        },
+        onCameraPositionChanged(cameraId, position) {
+          setStaging((current) => {
+            if (!current) return current;
+            const camera = current.cameraPresets.find((entry) => entry.id === cameraId);
+            if (!camera) throw new Error(`Unknown Model Preview camera: ${cameraId}`);
+            const next = updateModelCamera(current, { ...camera, position });
+            stagingRef.current = next;
+            const referenceStaging = referenceStagingRef.current;
+            if (!referenceStaging) throw new Error('3D Reference staging is unavailable.');
+            referenceStagingRef.current = postState(host, next, referenceStaging);
+            return next;
+          });
+        },
+        onViewChanged: setViewState,
+        onDiagnostic(message) {
+          setDiagnostic({ code: 'load-failed', message, severity: 'error' });
+        },
+        onRendererLost() {
+          const diagnostic = {
+            code: 'renderer-lost' as const,
+            message: 'The 3D Reference renderer context was lost.',
+            severity: 'error' as const,
+            identity: { sessionId },
+          };
+          setDiagnostic(diagnostic);
+          setStatus('error');
+          host.postMessage({ type: '3d-reference/diagnostic', diagnostic });
+        },
+      });
+    } catch (error) {
+      const diagnostic = {
+        code: 'renderer-unavailable' as const,
+        message: error instanceof Error ? error.message : String(error),
+        severity: 'error' as const,
+        identity: { sessionId },
+      };
+      setDiagnostic(diagnostic);
+      setStatus('error');
+      host.postMessage({ type: '3d-reference/diagnostic', diagnostic });
+      return;
+    }
     runtimeRef.current = runtime;
     const resize = () => {
       const bounds = canvas.getBoundingClientRect();
@@ -201,14 +216,14 @@ export function ModelViewer({
     observer.observe(canvas);
     resize();
 
-    const onMessage = (event: MessageEvent<unknown>) => {
-      const message = parseExtensionMessage(event.data);
+    const disposeMessages = host.subscribe((value) => {
+      const message = parseExtensionMessage(value);
       if (!message) return;
       void handleExtensionMessage({
         message,
         runtime,
         sessionId,
-        vscode,
+        host,
         setStatus,
         setStaging,
         setFacts,
@@ -223,27 +238,26 @@ export function ModelViewer({
         stagingRef,
         referenceStagingRef,
       });
-    };
-    window.addEventListener('message', onMessage);
-    vscode.postMessage({
+    });
+    host.postMessage({
       type: '3d-reference/ready',
       protocolVersion: THREE_REFERENCE_PROTOCOL_VERSION,
       sessionId,
     });
     return () => {
       observer.disconnect();
-      window.removeEventListener('message', onMessage);
+      disposeMessages();
       runtime.dispose();
       runtimeRef.current = undefined;
     };
-  }, [runtimeFactory, sessionId, vscode]);
+  }, [host, runtimeFactory, sessionId]);
 
   const updateStaging = (next: ModelPreviewStagingState) => {
     stagingRef.current = next;
     setStaging(next);
     const referenceStaging = referenceStagingRef.current;
     if (!referenceStaging) throw new Error('3D Reference staging is unavailable.');
-    const nextReferenceStaging = postState(vscode, next, referenceStaging);
+    const nextReferenceStaging = postState(host, next, referenceStaging);
     referenceStagingRef.current = nextReferenceStaging;
     setReferenceStaging(nextReferenceStaging);
   };
@@ -256,8 +270,8 @@ export function ModelViewer({
     const next = { ...candidate, revision: current.revision + 1 };
     referenceStagingRef.current = next;
     setReferenceStaging(next);
-    vscode.setState({ threeReferenceStaging: next });
-    vscode.postMessage({ type: '3d-reference/staging-changed', staging: next });
+    host.setState({ threeReferenceStaging: next });
+    host.postMessage({ type: '3d-reference/staging-changed', staging: next });
   };
   const controlsDisabled = !staging || status !== 'ready';
   const duplicateCamera = (cameraId: string): void => {
@@ -407,7 +421,7 @@ export function ModelViewer({
           onPanoramaRequest={() => {
             const current = referenceStagingRef.current;
             if (!current) throw new Error('3D Reference staging is unavailable.');
-            vscode.postMessage({
+            host.postMessage({
               type: '3d-reference/panorama-picker-requested',
               identity: referenceIdentityOf(current),
             });
@@ -415,7 +429,7 @@ export function ModelViewer({
           onPresetRequest={(presetId) => {
             const current = referenceStagingRef.current;
             if (!current) throw new Error('3D Reference staging is unavailable.');
-            vscode.postMessage({
+            host.postMessage({
               type: '3d-reference/preset-subject-requested',
               identity: referenceIdentityOf(current),
               presetId,
@@ -468,7 +482,7 @@ export function ModelViewer({
             );
             if (!image) throw new Error('3D Reference runtime produced no capture image.');
             setOutputPreview(image);
-            vscode.postMessage({
+            host.postMessage({
               type: '3d-reference/capture-requested',
               requestId: crypto.randomUUID(),
               identity: referenceIdentityOf(current),
@@ -527,7 +541,7 @@ async function handleExtensionMessage(input: {
   readonly message: ThreeReferenceExtensionMessage;
   readonly runtime: ThreeModelRuntimePort;
   readonly sessionId: string;
-  readonly vscode: ReturnType<typeof getVscodeApi>;
+  readonly host: ModelViewerHostPort;
   readonly setStatus: (status: ViewerStatus) => void;
   readonly setStaging: (state: ModelPreviewStagingState) => void;
   readonly setFacts: (facts: NormalizedModelFacts | undefined) => void;
@@ -579,7 +593,7 @@ async function handleExtensionMessage(input: {
           input.setNodes([]);
         }
         input.setStatus('ready');
-        input.vscode.postMessage({
+        input.host.postMessage({
           type: '3d-reference/load-completed',
           identity: referenceIdentityOf(message.staging),
           ...(facts ? { facts } : {}),
@@ -637,7 +651,7 @@ async function handleExtensionMessage(input: {
     if (isViewerFatalDiagnostic(diagnostic.code)) {
       input.setStatus('error');
     }
-    input.vscode.postMessage({
+    input.host.postMessage({
       type: '3d-reference/diagnostic',
       diagnostic: {
         code: 'source-load-failed',
@@ -691,7 +705,7 @@ function toModelDiagnostic(
 }
 
 function postState(
-  vscode: ReturnType<typeof getVscodeApi>,
+  host: ModelViewerHostPort,
   viewportStaging: ModelPreviewStagingState,
   staging: ThreeReferenceStagingSnapshot,
 ): ThreeReferenceStagingSnapshot {
@@ -710,8 +724,8 @@ function postState(
       aspectRatio: staging.camera.aspectRatio,
     },
   };
-  vscode.setState({ threeReferenceStaging: next });
-  vscode.postMessage({ type: '3d-reference/staging-changed', staging: next });
+  host.setState({ threeReferenceStaging: next });
+  host.postMessage({ type: '3d-reference/staging-changed', staging: next });
   return next;
 }
 

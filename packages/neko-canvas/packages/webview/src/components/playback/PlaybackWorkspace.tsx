@@ -16,9 +16,12 @@ import { PlayIcon } from '@neko/ui/icons';
 import { getKeyboardBoundaryMetadata } from '@neko/ui/keyboard';
 import { IconButton } from '@neko/ui/primitives';
 import { t } from '../../i18n';
-import { useCanvasStore } from '../../stores/canvasStore';
-import { usePlaybackStore } from '../../stores/playbackStore';
-import { useRuntimeViewportStore } from '../../stores/runtimeViewportStore';
+import {
+  usePlaybackStoreApi,
+  useScopedCanvasStore as useCanvasStore,
+  useScopedPlaybackStore as usePlaybackStore,
+  useScopedRuntimeViewportStore as useRuntimeViewportStore,
+} from '../../stores/canvasStoreScope';
 import { PreviewSurface } from '../../preview/PreviewRendererRegistry';
 import type {
   PreviewPlaybackControl,
@@ -33,7 +36,7 @@ import {
   type CanvasPlaybackRequest,
   type PlaybackCompletionSignal,
 } from './CanvasPlaybackController';
-import { getGlobalVSCodeApi } from '../../utils/vscode';
+import { useOptionalCanvasHost } from '../../host-runtime';
 import { buildStorylineGraphLayout, type StorylineGraphLayout } from './storylineGraphLayout';
 
 const HOST_PLAYBACK_PLAN_TIMEOUT_MS = 5_000;
@@ -49,6 +52,8 @@ export interface PlaybackWorkspaceProps {
 }
 
 export function PlaybackWorkspace({ canvasPane, className }: PlaybackWorkspaceProps) {
+  const host = useOptionalCanvasHost();
+  const playbackStoreApi = usePlaybackStoreApi();
   const canvasPaneRef = useRef<HTMLDivElement | null>(null);
   const canvasData = useCanvasStore((state) => state.canvasData);
   const selectedNodeId = useCanvasStore((state) => state.selection.nodeIds[0]);
@@ -125,7 +130,7 @@ export function PlaybackWorkspace({ canvasPane, className }: PlaybackWorkspacePr
     if (!session.visible || !canvasData) {
       return;
     }
-    const vscode = getGlobalVSCodeApi();
+    const vscode = host;
     if (!vscode) {
       setHostPlanState({ plan: null, stale: false, sourceCanvasData: null });
       return;
@@ -186,10 +191,10 @@ export function PlaybackWorkspace({ canvasPane, className }: PlaybackWorkspacePr
       window.clearTimeout(timeoutId);
       window.removeEventListener('message', handleMessage);
     };
-  }, [canvasData, markStale, session.visible]);
+  }, [canvasData, host, markStale, session.visible]);
 
   useEffect(() => {
-    if (usePlaybackStore.getState().playbackSession.stale) {
+    if (playbackStoreApi.getState().playbackSession.stale) {
       markStale(false);
     }
     setHostPlanState({ plan: null, stale: false, sourceCanvasData: null });
@@ -229,8 +234,8 @@ export function PlaybackWorkspace({ canvasPane, className }: PlaybackWorkspacePr
   useEffect(() => {
     if (!session.visible) return;
     const handleWindowBlur = () => {
-      if (usePlaybackStore.getState().playbackSession.playbackState === 'playing') {
-        usePlaybackStore.getState().setPlaybackWorkspacePlaybackState('paused');
+      if (playbackStoreApi.getState().playbackSession.playbackState === 'playing') {
+        playbackStoreApi.getState().setPlaybackWorkspacePlaybackState('paused');
       }
     };
     window.addEventListener('blur', handleWindowBlur);

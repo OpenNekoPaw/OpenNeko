@@ -1,3 +1,6 @@
+/* prettier-ignore */
+@import "@neko/ui/icons/codicon.css";
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -6,15 +9,17 @@
    CSS Custom Properties — macOS-inspired theme layer on top of VSCode tokens
    ============================================================================= */
 
-:root {
+.canvas-webview-root {
   /* ── Canvas ─────────────────────────────────────────────────────────────── */
-  --canvas-bg: color-mix(
-    in srgb,
-    var(--vscode-editor-background, #1c1c1e) 94%,
-    var(--neko-surface) 6%
+  --canvas-bg: var(
+    --neko-canvas-background,
+    color-mix(in srgb, var(--vscode-editor-background, #1c1c1e) 94%, var(--neko-surface) 6%)
   );
-  --canvas-grid: color-mix(in srgb, var(--neko-fg) 10%, transparent);
-  --canvas-grid-major: color-mix(in srgb, var(--neko-fg) 18%, transparent);
+  --canvas-grid: var(--neko-canvas-grid, color-mix(in srgb, var(--neko-fg) 10%, transparent));
+  --canvas-grid-major: var(
+    --neko-canvas-grid-major,
+    color-mix(in srgb, var(--neko-fg) 18%, transparent)
+  );
   --canvas-vignette: radial-gradient(
     circle at 50% 24%,
     color-mix(in srgb, var(--neko-accent) 8%, transparent),
@@ -141,8 +146,10 @@
   --radius-2xl: 24px;
 }
 
-body.vscode-high-contrast,
-body[data-vscode-theme-kind='vscode-high-contrast'] {
+body.vscode-high-contrast .canvas-webview-root,
+body[data-vscode-theme-kind='vscode-high-contrast'] .canvas-webview-root,
+.canvas-webview-root.vscode-high-contrast,
+.canvas-webview-root[data-vscode-theme-kind='vscode-high-contrast'] {
   --canvas-grid: var(--neko-border);
   --canvas-grid-major: var(--neko-border);
   --glass-bg-light: var(--glass-bg);
@@ -160,9 +167,10 @@ body[data-vscode-theme-kind='vscode-high-contrast'] {
    Base reset
    ============================================================================= */
 
-html,
-body,
-#root {
+html.canvas-webview-document,
+html.canvas-webview-document body,
+html.canvas-webview-document #root,
+.canvas-webview-root {
   width: 100%;
   height: 100%;
   margin: 0;
@@ -952,46 +960,48 @@ body,
 
 .canvas-floating-toolbar-host {
   position: absolute;
-  top: 16px;
-  left: 16px;
   bottom: 16px;
+  left: 50%;
   z-index: 20;
   display: flex;
   align-items: center;
+  max-width: calc(100% - 32px);
+  transform: translateX(-50%);
   pointer-events: none;
 }
 
-.canvas-floating-toolbar.neko-vtoolbar {
-  height: auto;
-  max-height: 100%;
-  overflow-x: hidden;
-  overflow-y: auto;
+.canvas-floating-toolbar.neko-htoolbar {
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  pointer-events: auto;
 }
 
 /* =============================================================================
    Scrollbar — macOS thin style
    ============================================================================= */
 
-::-webkit-scrollbar {
+.canvas-webview-root ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 
-::-webkit-scrollbar-track {
+.canvas-webview-root ::-webkit-scrollbar-track {
   background: transparent;
 }
 
-::-webkit-scrollbar-thumb {
+.canvas-webview-root ::-webkit-scrollbar-thumb {
   background: var(--scrollbar-bg);
   border-radius: 100px;
   transition: background 0.2s ease;
 }
 
-::-webkit-scrollbar-thumb:hover {
+.canvas-webview-root ::-webkit-scrollbar-thumb:hover {
   background: var(--scrollbar-hover);
 }
 
-::-webkit-scrollbar-corner {
+.canvas-webview-root ::-webkit-scrollbar-corner {
   background: transparent;
 }
 
@@ -999,7 +1009,7 @@ body,
    Focus ring — macOS blue ring
    ============================================================================= */
 
-*:focus-visible {
+.canvas-webview-root *:focus-visible {
   outline: 2px solid var(--accent-blue);
   outline-offset: -2px;
   border-radius: 4px;
@@ -1009,9 +1019,9 @@ body,
    Inputs — macOS-style inset field
    ============================================================================= */
 
-input,
-textarea,
-select {
+.canvas-webview-root input,
+.canvas-webview-root textarea,
+.canvas-webview-root select {
   font-family: var(
     --vscode-font-family,
     -apple-system,
@@ -1032,9 +1042,9 @@ select {
   outline: none;
 }
 
-input:focus,
-textarea:focus,
-select:focus {
+.canvas-webview-root input:focus,
+.canvas-webview-root textarea:focus,
+.canvas-webview-root select:focus {
   border-color: var(--accent-blue) !important;
   box-shadow: 0 0 0 2.5px var(--control-focus-ring);
   outline: none;

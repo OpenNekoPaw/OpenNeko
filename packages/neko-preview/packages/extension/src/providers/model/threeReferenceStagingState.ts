@@ -7,6 +7,8 @@ import {
 } from '@neko/shared';
 import type { ThreeReferencePresetCatalogEntry } from './threeReferencePresetCatalog';
 
+export { createSourceModelStaging } from '@neko-preview/contracts';
+
 const FRONT_CAMERA = {
   cameraId: 'camera-front',
   position: { x: 0, y: 0.15, z: 3.5 },
@@ -14,13 +16,6 @@ const FRONT_CAMERA = {
   fieldOfViewDeg: 45,
   aspectRatio: 1,
 } as const;
-
-export function createSourceModelStaging(
-  sessionId: string,
-  subject: Extract<ThreeReferenceSubject, { readonly kind: 'source-model' }>,
-): ThreeReferenceStagingSnapshot {
-  return assertValidStaging(createBaseStaging(sessionId, subject, ['appearance', 'camera']));
-}
 
 export function createBuiltinPresetStaging(
   sessionId: string,
@@ -100,7 +95,7 @@ function createBaseStaging(
 
 function assertValidStaging(staging: ThreeReferenceStagingSnapshot): ThreeReferenceStagingSnapshot {
   if (!isThreeReferenceStagingSnapshot(staging)) {
-    throw new Error(`Invalid initial 3D Reference staging for ${staging.subject.kind}.`);
+    throw new Error('Invalid initial 3D Reference staging.');
   }
   return staging;
 }

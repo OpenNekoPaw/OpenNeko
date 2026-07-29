@@ -1,5 +1,7 @@
 import type { LocalMetadataMigration } from '@neko/shared';
 
+// The schema is shared by all Node-based Cut Hosts.
+
 export const EXPORT_JOB_MIGRATIONS: readonly LocalMetadataMigration[] = [
   {
     namespace: 'cut-export-jobs',

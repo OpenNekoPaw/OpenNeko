@@ -59,5 +59,11 @@ export { Tooltip, TooltipProvider } from './tooltip';
 export type { TooltipProps, TooltipProviderProps } from './tooltip';
 export { ToggleGroup } from './toggle-group';
 export type { ToggleGroupOption, ToggleGroupProps } from './toggle-group';
-export { ToolbarButton, ToolbarSeparator, ToolbarSpacer, VerticalToolbar } from './toolbar';
-export type { ToolbarButtonProps, VerticalToolbarProps } from './toolbar';
+export {
+  HorizontalToolbar,
+  ToolbarButton,
+  ToolbarSeparator,
+  ToolbarSpacer,
+  VerticalToolbar,
+} from './toolbar';
+export type { HorizontalToolbarProps, ToolbarButtonProps, VerticalToolbarProps } from './toolbar';

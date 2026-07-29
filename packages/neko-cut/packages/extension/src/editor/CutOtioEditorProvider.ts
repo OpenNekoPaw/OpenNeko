@@ -23,16 +23,20 @@ import {
   type LocalResourceAccessService,
 } from '@neko/shared/vscode/extension';
 import { CutOtioDocument, VSCodeCutDocumentStorage } from './CutOtioDocument';
-import { generateClipRepresentations, readClipRepresentationRequests } from './clipRepresentations';
-import { resolvePreviewSelection } from './previewSelection';
+import {
+  CutExportTaskRegistry,
+  CutWorkspaceMediaPaths,
+  NodeFfmpegCutMediaAdapter,
+  freezeCutExportRequest,
+  generateClipRepresentations,
+  readCutExportSettings,
+  readClipRepresentationRequests,
+  resolvePreviewSelection,
+} from '@neko-cut/node';
 import { PreviewOperationQueue } from './PreviewOperationQueue';
 import { executeCutWorkbenchHistory } from './cutHistory';
-import { CutExportTaskRegistry } from './CutExportTaskRegistry';
-import { freezeCutExportRequest, readCutExportSettings } from './cutExportRequest';
-import type { ExportJobStore } from '../services/export-job';
-import { CutWorkspaceMediaImporter } from '../services/CutWorkspaceMediaImporter';
-import { CutWorkspaceMediaPaths } from '../services/CutWorkspaceMediaPaths';
-import { NodeFfmpegCutMediaAdapter } from '../services/NodeFfmpegCutMediaAdapter';
+import type { ExportJobStore } from '@neko-cut/node';
+import { CutWorkspaceMediaImporter } from '@neko-cut/node';
 import { handleError } from '../base';
 import { projectCutAgentContext, type CutAgentSelection } from './cutAgentContext';
 import { buildDuplicateClipCommands, buildPasteClipCommands } from './cutClipboardCommands';
@@ -374,18 +378,23 @@ export class CutOtioEditorProvider implements vscode.CustomEditorProvider<CutOti
         ) {
           throw new Error('Invalid Cut preview intent.');
         }
+        const timelineTimeSeconds = value['timelineTimeSeconds'];
+        const generation = value['generation'];
+        const retainedVideoClipId =
+          typeof value['retainedVideoClipId'] === 'string'
+            ? value['retainedVideoClipId']
+            : undefined;
+        const startPlaying = value['playbackMode'] === 'playing';
         assertCurrentIdentity(document.session.view(), identity);
-        this.previewGenerations.set(panel, value['generation']);
+        this.previewGenerations.set(panel, generation);
         await this.previewOperations.run(panel, () =>
           this.startPanelPreview(
             document,
             panel,
-            value['timelineTimeSeconds'],
-            value['generation'],
-            typeof value['retainedVideoClipId'] === 'string'
-              ? value['retainedVideoClipId']
-              : undefined,
-            value['playbackMode'] === 'playing',
+            timelineTimeSeconds,
+            generation,
+            retainedVideoClipId,
+            startPlaying,
           ),
         );
         return;
@@ -397,15 +406,12 @@ export class CutOtioEditorProvider implements vscode.CustomEditorProvider<CutOti
         ) {
           throw new Error('Invalid Cut preview prepare intent.');
         }
+        const timelineTimeSeconds = value['timelineTimeSeconds'];
+        const generation = value['generation'];
         assertCurrentIdentity(document.session.view(), identity);
-        this.previewGenerations.set(panel, value['generation']);
+        this.previewGenerations.set(panel, generation);
         await this.previewOperations.run(panel, () =>
-          this.preparePanelPreview(
-            document,
-            panel,
-            value['timelineTimeSeconds'],
-            value['generation'],
-          ),
+          this.preparePanelPreview(document, panel, timelineTimeSeconds, generation),
         );
         return;
       }
@@ -413,9 +419,10 @@ export class CutOtioEditorProvider implements vscode.CustomEditorProvider<CutOti
         if (typeof value['generation'] !== 'number') {
           throw new Error('Invalid Cut preview activation intent.');
         }
+        const generation = value['generation'];
         assertCurrentIdentity(document.session.view(), identity);
         await this.previewOperations.run(panel, () =>
-          this.activatePanelPreview(document, panel, value['generation']),
+          this.activatePanelPreview(document, panel, generation),
         );
         return;
       }

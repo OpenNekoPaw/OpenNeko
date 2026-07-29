@@ -94,6 +94,7 @@ export function CanvasEmbedNode({
             {canvasTitle || fileName || t('canvasEmbed.defaultTitle')}
           </span>
           <button
+            disabled={!onOpenCanvas}
             onClick={(e) => {
               e.stopPropagation();
               onOpenCanvas?.(canvasPath);
@@ -105,7 +106,8 @@ export function CanvasEmbedNode({
               border: '1px solid var(--node-border)',
               backgroundColor: 'transparent',
               color: 'var(--neko-fg-secondary)',
-              cursor: 'pointer',
+              cursor: onOpenCanvas ? 'pointer' : 'not-allowed',
+              opacity: onOpenCanvas ? 1 : 0.55,
               flexShrink: 0,
             }}
           >

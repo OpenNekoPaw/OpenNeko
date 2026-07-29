@@ -17,6 +17,14 @@ import { usePlaybackStore } from '../stores/playbackStore';
 (globalThis as { React?: typeof React }).React = React;
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 
+const canvasHostMock = vi.hoisted(() => ({
+  current: undefined as { postMessage(message: unknown): void } | undefined,
+}));
+
+vi.mock('../host-runtime', () => ({
+  useOptionalCanvasHost: () => canvasHostMock.current,
+}));
+
 type InlineVideoPlayerMockProps = {
   readonly audioContext?: AudioContext;
   readonly duration: number;
@@ -127,6 +135,7 @@ describe('PreviewSurface media playback control', () => {
       api.postedMessages.push(message);
     });
     api.postMessage = postMessage;
+    canvasHostMock.current = api;
     mockWindow = installMockWebviewWindow(api);
     audioContextMocks.length = 0;
     Object.assign(globalThis, {
@@ -150,6 +159,7 @@ describe('PreviewSurface media playback control', () => {
     });
     host.remove();
     mockWindow.dispose();
+    canvasHostMock.current = undefined;
     resetVSCodeApi();
     vi.restoreAllMocks();
   });

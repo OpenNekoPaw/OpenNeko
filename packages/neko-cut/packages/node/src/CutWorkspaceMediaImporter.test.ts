@@ -8,7 +8,7 @@ import {
   type CutMediaImportFileSystem,
 } from './CutWorkspaceMediaImporter';
 
-describe('CutWorkspaceMediaImporter', () => {
+describe('Cut Workspace media importer', () => {
   it('keeps workspace media in place without creating an import directory', async () => {
     const fixture = await createFixture();
     const source = nodePath.join(fixture.workspace, 'cases', 'shot.mp4');

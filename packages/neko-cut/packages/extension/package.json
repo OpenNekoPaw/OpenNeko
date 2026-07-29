@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@neko-cut/domain": "workspace:*",
+    "@neko-cut/node": "workspace:*",
     "@neko/media": "workspace:*",
     "@neko/shared": "workspace:*"
   },

@@ -29,6 +29,33 @@ export const VerticalToolbar = forwardRef<HTMLDivElement, VerticalToolbarProps>(
   },
 );
 
+export interface HorizontalToolbarProps extends Omit<
+  React.HTMLAttributes<HTMLDivElement>,
+  'children'
+> {
+  readonly height?: number;
+  readonly children: React.ReactNode;
+  readonly className?: string;
+}
+
+export const HorizontalToolbar = forwardRef<HTMLDivElement, HorizontalToolbarProps>(
+  function HorizontalToolbar(
+    { children, className, height = 48, style, ...toolbarProps },
+    ref,
+  ): React.ReactElement {
+    return (
+      <div
+        {...toolbarProps}
+        ref={ref}
+        className={cn('neko-htoolbar', className)}
+        style={{ ...style, height }}
+      >
+        {children}
+      </div>
+    );
+  },
+);
+
 export interface ToolbarButtonProps extends Omit<
   React.ButtonHTMLAttributes<HTMLButtonElement>,
   'children' | 'title'

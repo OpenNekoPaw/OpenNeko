@@ -38,6 +38,16 @@ interface EpubSection {
 import { useTranslation } from '../i18n/I18nContext';
 import { getLogger } from '../utils/logger';
 
+// epub.js expects querySelectorAll() results to expose Array#map. Keep this
+// compatibility requirement with the embeddable viewer instead of an entrypoint.
+if (typeof NodeList !== 'undefined' && !('map' in NodeList.prototype)) {
+  Object.defineProperty(NodeList.prototype, 'map', {
+    configurable: true,
+    value: Array.prototype.map,
+    writable: true,
+  });
+}
+
 const logger = getLogger('EpubViewer');
 
 interface TocItem {
@@ -81,12 +91,15 @@ function matchesHref(a: string, b: string): boolean {
  * Custom request function for epub.js that uses fetch() instead of XMLHttpRequest.
  * VSCode webview service workers can block XHR to localhost; fetch works reliably.
  */
-async function fetchForEpub(url: string, type?: string): Promise<unknown> {
+export async function fetchForEpub(url: string, type?: string): Promise<unknown> {
   const resp = await fetch(url);
   if (!resp.ok) throw new Error(`${resp.status} ${resp.statusText}: ${url}`);
 
-  if (type === 'blob' || type === 'binary') {
+  if (type === 'blob') {
     return resp.blob();
+  }
+  if (type === 'binary') {
+    return resp.arrayBuffer();
   }
   if (type === 'json') {
     return resp.json();
@@ -158,7 +171,7 @@ function calculateWaterfallPageMetrics(
   return { currentPage, pageCount };
 }
 
-export const EpubViewer: FC = () => {
+export const EpubViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) => {
   const { t } = useTranslation();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -185,7 +198,9 @@ export const EpubViewer: FC = () => {
   // Rendition mode refs (paginated)
   const viewerRef = useRef<HTMLDivElement>(null);
   const bookRef = useRef<Book | null>(null);
+  const bookLoadEpochRef = useRef(0);
   const renditionRef = useRef<Rendition | null>(null);
+  const restoreChapterRef = useRef<() => void>(() => undefined);
   const tocRef = useRef<TocItem[]>([]);
   const loadingRef = useRef(false);
   const pendingHrefRef = useRef<string | null>(null);
@@ -506,7 +521,7 @@ export const EpubViewer: FC = () => {
     if (m.type === 'document:restoreState') {
       initPersistedStore(m.payload as Record<string, unknown>);
       notifySubscribers();
-    } else if (msg.type === 'document:data') {
+    } else if (!sourceUrl && msg.type === 'document:data') {
       void loadEpubFromUrl(msg.payload.url);
     } else if (msg.type === 'epub:navigate') {
       const href = (msg as { type: string; payload: { href: string } }).payload.href;
@@ -547,7 +562,7 @@ export const EpubViewer: FC = () => {
   // =========================================================================
 
   useEffect(() => {
-    postMessage({ type: 'ready' } as never);
+    if (!sourceUrl) postMessage({ type: 'ready' } as never);
 
     const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
       if (!loadingRef.current) return;
@@ -560,14 +575,17 @@ export const EpubViewer: FC = () => {
     window.addEventListener('unhandledrejection', handleUnhandledRejection);
 
     return () => {
+      bookLoadEpochRef.current += 1;
       window.removeEventListener('unhandledrejection', handleUnhandledRejection);
       if (chapterLayoutFrameRef.current !== null) {
         cancelAnimationFrame(chapterLayoutFrameRef.current);
       }
       renditionRef.current?.destroy();
+      renditionRef.current = null;
       bookRef.current?.destroy();
+      bookRef.current = null;
     };
-  }, []);
+  }, [sourceUrl]);
 
   // =========================================================================
   // Rendition helpers (paginated mode)
@@ -716,9 +734,6 @@ export const EpubViewer: FC = () => {
         });
       }
     }
-    tocRef.current = tocItems;
-
-    // Collect spine entries for waterfall mode
     const entries: SpineEntry[] = [];
     const spineItems = (
       book.spine as unknown as { items: Array<{ index: number; href?: string; url?: string }> }
@@ -731,16 +746,17 @@ export const EpubViewer: FC = () => {
         }
       }
     }
-    spineEntriesRef.current = entries;
-    setChapterCount(entries.length || tocItems.length);
-
-    return tocItems;
+    return { entries, tocItems };
   }, []);
 
   /** Init book — unified entry point for all modes */
   const initBook = useCallback(
-    async (book: Book) => {
-      const tocItems = await extractBookMetadata(book);
+    async (book: Book, isCurrent: () => boolean): Promise<boolean> => {
+      const { entries, tocItems } = await extractBookMetadata(book);
+      if (!isCurrent()) return false;
+      tocRef.current = tocItems;
+      spineEntriesRef.current = entries;
+      setChapterCount(entries.length || tocItems.length);
 
       if (viewMode === 'waterfall') {
         // Destroy any existing rendition
@@ -760,6 +776,7 @@ export const EpubViewer: FC = () => {
       } else {
         await renderBook(book, tocItems);
       }
+      return isCurrent();
     },
     [viewMode, extractBookMetadata, renderBook],
   );
@@ -769,7 +786,7 @@ export const EpubViewer: FC = () => {
   // =========================================================================
 
   /** Navigate to persisted chapter after load */
-  const restoreChapter = () => {
+  restoreChapterRef.current = () => {
     const pendingHref = pendingHrefRef.current;
     if (pendingHref) {
       pendingHrefRef.current = null;
@@ -801,9 +818,15 @@ export const EpubViewer: FC = () => {
     });
   };
 
-  /** Load EPUB from the Preview Node host's directory-style URL. */
+  /** Load EPUB from either the Preview Node host or an embeddable archive URL. */
   const loadEpubFromUrl = useCallback(
     async (url: string) => {
+      const loadEpoch = bookLoadEpochRef.current + 1;
+      bookLoadEpochRef.current = loadEpoch;
+      renditionRef.current?.destroy();
+      renditionRef.current = null;
+      bookRef.current?.destroy();
+      bookRef.current = null;
       try {
         setLoading(true);
         loadingRef.current = true;
@@ -819,19 +842,28 @@ export const EpubViewer: FC = () => {
           ) => Promise<object>,
         });
         bookRef.current = book;
-        await initBook(book);
+        const isCurrent = () => bookLoadEpochRef.current === loadEpoch && bookRef.current === book;
+        const initialized = await initBook(book, isCurrent);
+        if (!initialized) {
+          book.destroy();
+          return;
+        }
         setLoading(false);
         loadingRef.current = false;
-        // Restore persisted chapter position
-        restoreChapter();
+        restoreChapterRef.current();
       } catch (err) {
+        if (bookLoadEpochRef.current !== loadEpoch) return;
         setError(err instanceof Error ? err.message : String(err));
         setLoading(false);
         loadingRef.current = false;
       }
     },
-    [initBook, restoreChapter],
+    [initBook],
   );
+
+  useEffect(() => {
+    if (sourceUrl) void loadEpubFromUrl(sourceUrl);
+  }, [loadEpubFromUrl, sourceUrl]);
 
   useEffect(() => {
     if (loading) return;
@@ -1385,7 +1417,7 @@ export const EpubViewer: FC = () => {
   if (error) {
     return (
       <div
-        className="flex h-screen items-center justify-center"
+        className="flex h-full items-center justify-center"
         style={{ color: 'var(--vscode-errorForeground)' }}
       >
         {t('preview.document.error', { error })}
@@ -1403,7 +1435,7 @@ export const EpubViewer: FC = () => {
       <div
         data-testid={!loading ? 'epub-preview-ready' : undefined}
         data-spine-count={spineEntriesRef.current.length}
-        className="flex h-screen flex-col"
+        className="flex h-full flex-col"
         style={{ background: 'var(--vscode-editor-background)' }}
       >
         {/* Toolbar */}

@@ -30,6 +30,7 @@ interface UseResizableBaseOptions {
   maxSize?: number;
   disabled?: boolean;
   calculateSize?: (event: ResizePointerPosition, containerRect: ResizeRect) => number;
+  onResizeEnd?: (size: number) => void;
 }
 
 export interface UseResizableControlledOptions extends UseResizableBaseOptions {
@@ -236,9 +237,14 @@ export function useResizable<TElement extends HTMLElement = HTMLElement>(
   optionsRef.current = options;
 
   const currentSize = isControlled ? options.size : internalSize;
+  const latestSizeRef = useRef(currentSize);
+  if (!isResizing) {
+    latestSizeRef.current = currentSize;
+  }
 
   const commitSize = useCallback((nextSize: number) => {
     const latestOptions = optionsRef.current;
+    latestSizeRef.current = nextSize;
     if (latestOptions.size === undefined) {
       setInternalSize(nextSize);
     }
@@ -302,6 +308,7 @@ export function useResizable<TElement extends HTMLElement = HTMLElement>(
 
       flushPendingSize();
       activePointerIdRef.current = null;
+      optionsRef.current.onResizeEnd?.(latestSizeRef.current);
       if (mountedRef.current) {
         setIsResizing(false);
       }

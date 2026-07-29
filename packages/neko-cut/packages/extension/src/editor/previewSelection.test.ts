@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { TimelineClipView, TimelineView } from '@neko-cut/domain';
-import { resolvePreviewPlaybackEnd, resolvePreviewSelection } from './previewSelection';
+import { resolvePreviewPlaybackEnd, resolvePreviewSelection } from '@neko-cut/node';
 
 function clip(
   clipId: string,

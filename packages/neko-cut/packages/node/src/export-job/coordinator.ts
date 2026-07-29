@@ -1,4 +1,6 @@
 import { randomUUID } from 'node:crypto';
+
+// Export lifecycle ownership is independent from either desktop Host UI.
 import {
   isTerminalJobPhase,
   JobLifecycleError,

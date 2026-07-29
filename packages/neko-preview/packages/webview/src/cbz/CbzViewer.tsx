@@ -32,7 +32,7 @@ function naturalSort(a: string, b: string): number {
   return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
 }
 
-export const CbzViewer: FC = () => {
+export const CbzViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) => {
   const { t } = useTranslation();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -95,7 +95,7 @@ export const CbzViewer: FC = () => {
     if (m.type === 'document:restoreState') {
       initPersistedStore(m.payload as Record<string, unknown>);
       notifySubscribers();
-    } else if (msg.type === 'document:data') {
+    } else if (!sourceUrl && msg.type === 'document:data') {
       void loadCbzFromUrl(msg.payload.url);
     } else if (msg.type === 'document:navigate') {
       const locator = msg.payload.locator;
@@ -112,8 +112,8 @@ export const CbzViewer: FC = () => {
   });
 
   useEffect(() => {
-    postMessage({ type: 'ready' } as never);
-  }, []);
+    if (!sourceUrl) postMessage({ type: 'ready' } as never);
+  }, [sourceUrl]);
 
   /** Load CBZ from a localhost URL — zip.js HttpReader uses Range requests. */
   const loadCbzFromUrl = useCallback(async (url: string) => {
@@ -142,6 +142,10 @@ export const CbzViewer: FC = () => {
       setLoading(false);
     }
   }, []);
+
+  useEffect(() => {
+    if (sourceUrl) void loadCbzFromUrl(sourceUrl);
+  }, [loadCbzFromUrl, sourceUrl]);
 
   // Decode a single page into a Blob URL
   const decodePage = useCallback(async (index: number, entries: Entry[]) => {
@@ -505,7 +509,7 @@ export const CbzViewer: FC = () => {
   if (error) {
     return (
       <div
-        className="flex h-screen items-center justify-center"
+        className="flex h-full items-center justify-center"
         style={{ color: 'var(--vscode-errorForeground)' }}
       >
         {t('preview.document.error', { error })}
@@ -516,7 +520,7 @@ export const CbzViewer: FC = () => {
   if (loading) {
     return (
       <div
-        className="flex h-screen items-center justify-center"
+        className="flex h-full items-center justify-center"
         style={{ color: 'var(--vscode-foreground)' }}
       >
         {t('preview.cbz.loading')}
@@ -539,7 +543,7 @@ export const CbzViewer: FC = () => {
       <div
         data-testid="cbz-preview-ready"
         data-page-count={totalPages}
-        className="flex h-screen flex-col"
+        className="flex h-full flex-col"
         style={{ background: 'var(--vscode-editor-background)' }}
       >
         {/* Toolbar */}

@@ -14,7 +14,7 @@ import {
   createPersistentExportJobStore,
   EXPORT_JOB_MIGRATIONS,
   type ExportJobStore,
-} from './services/export-job';
+} from '@neko-cut/node';
 
 export interface NekoCutHostServices {
   readonly localMetadata?: {

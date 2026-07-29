@@ -3,6 +3,7 @@ export * from './commands';
 export * from './diagnostics';
 export * from './document';
 export * from './export-tasks';
+export * from './host-runtime-contract';
 export * from './metadata';
 export * from './media-ports';
 export * from './projection';

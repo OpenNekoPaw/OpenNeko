@@ -17,7 +17,168 @@ import type { PreviewOperationDiagnosticCode } from '../shared/types';
 const CONTROLS_HIDE_DELAY = 3000;
 const VIDEO_SYNC_THRESHOLD_SECONDS = 0.08;
 
-export function VideoPlayer() {
+export interface VideoPlayerProps {
+  readonly sourceUrl?: string;
+  readonly displayName?: string;
+}
+
+export function VideoPlayer({ sourceUrl, displayName }: VideoPlayerProps = {}) {
+  return sourceUrl ? (
+    <SourceVideoPlayer sourceUrl={sourceUrl} displayName={displayName ?? ''} />
+  ) : (
+    <EngineVideoPlayer />
+  );
+}
+
+function SourceVideoPlayer({
+  sourceUrl,
+}: Required<Pick<VideoPlayerProps, 'sourceUrl'>> & Pick<VideoPlayerProps, 'displayName'>) {
+  const { t } = useTranslation();
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const hideTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const [duration, setDuration] = useState(0);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [speed, setSpeed] = useState(1);
+  const [volume, setVolume] = useState(1);
+  const [controlsVisible, setControlsVisible] = useState(true);
+  const [isPiPActive, setIsPiPActive] = useState(false);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    const entered = () => setIsPiPActive(true);
+    const left = () => setIsPiPActive(false);
+    video.addEventListener('enterpictureinpicture', entered);
+    video.addEventListener('leavepictureinpicture', left);
+    return () => {
+      video.pause();
+      video.removeEventListener('enterpictureinpicture', entered);
+      video.removeEventListener('leavepictureinpicture', left);
+    };
+  }, [sourceUrl]);
+
+  const togglePlay = useCallback(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    setFailed(false);
+    if (video.paused) {
+      void video.play().catch(() => {
+        setIsPlaying(false);
+        setFailed(true);
+      });
+    } else {
+      video.pause();
+    }
+  }, []);
+  const seek = useCallback(
+    (time: number) => {
+      const video = videoRef.current;
+      if (!video) return;
+      video.currentTime = Math.max(0, Math.min(duration, time));
+      setCurrentTime(video.currentTime);
+    },
+    [duration],
+  );
+  const changeSpeed = useCallback((next: number) => {
+    setSpeed(next);
+    if (videoRef.current) videoRef.current.playbackRate = next;
+  }, []);
+  const changeVolume = useCallback((next: number) => {
+    setVolume(next);
+    if (videoRef.current) videoRef.current.volume = next;
+  }, []);
+  const togglePiP = useCallback(async () => {
+    const video = videoRef.current;
+    if (!video || !document.pictureInPictureEnabled) return;
+    if (document.pictureInPictureElement) await document.exitPictureInPicture();
+    else await video.requestPictureInPicture();
+  }, []);
+  const showControls = useCallback(() => {
+    setControlsVisible(true);
+    if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
+    if (isPlaying) {
+      hideTimerRef.current = setTimeout(() => setControlsVisible(false), CONTROLS_HIDE_DELAY);
+    }
+  }, [isPlaying]);
+
+  return (
+    <div className="absolute inset-0 bg-black" onMouseMove={showControls}>
+      <div className="absolute inset-0 flex items-center justify-center overflow-hidden">
+        <video
+          ref={videoRef}
+          className="max-w-full max-h-full object-contain"
+          src={sourceUrl}
+          playsInline
+          preload="metadata"
+          onLoadedMetadata={(event) => {
+            setDuration(
+              Number.isFinite(event.currentTarget.duration) ? event.currentTarget.duration : 0,
+            );
+            setFailed(false);
+          }}
+          onTimeUpdate={(event) => setCurrentTime(event.currentTarget.currentTime)}
+          onPlay={() => setIsPlaying(true)}
+          onPause={() => setIsPlaying(false)}
+          onEnded={() => setIsPlaying(false)}
+          onError={() => {
+            setIsPlaying(false);
+            setFailed(true);
+          }}
+        />
+        {!isPlaying && !failed ? (
+          <button
+            type="button"
+            className="absolute inset-0 flex items-center justify-center"
+            onClick={togglePlay}
+            aria-label={t('preview.video.playButton')}
+          >
+            <span className="w-16 h-16 rounded-full bg-white/15 flex items-center justify-center">
+              <PlayIcon className="w-8 h-8 text-white" />
+            </span>
+          </button>
+        ) : null}
+        {failed ? (
+          <div
+            className="pointer-events-none absolute inset-0 flex items-center justify-center px-4 pb-16"
+            role="alert"
+          >
+            <EmptyState
+              className="w-full max-w-md rounded-xl border border-[var(--vscode-inputValidation-warningBorder,var(--vscode-panel-border))] bg-[var(--vscode-editor-background)] shadow-xl"
+              icon={<WarningIcon size={28} />}
+              title={t('preview.video.playbackFailedTitle')}
+              description={t('preview.video.playbackFailedDescription')}
+            />
+          </div>
+        ) : null}
+      </div>
+      <div
+        className={`absolute bottom-0 left-0 right-0 transition-opacity ${
+          controlsVisible ? 'opacity-100' : 'opacity-0'
+        }`}
+      >
+        <VideoControls
+          isPlaying={isPlaying}
+          currentTime={currentTime}
+          duration={duration}
+          speed={speed}
+          volume={volume}
+          isPiPActive={isPiPActive}
+          onTogglePlay={togglePlay}
+          onSeek={seek}
+          onScrub={setCurrentTime}
+          onSpeedChange={changeSpeed}
+          onVolumeChange={changeVolume}
+          onTogglePiP={document.pictureInPictureEnabled ? () => void togglePiP() : undefined}
+          visible={controlsVisible}
+        />
+      </div>
+    </div>
+  );
+}
+
+function EngineVideoPlayer() {
   const { t } = useTranslation();
   const readyMessageRef = useRef<ReadyMessage>();
   readyMessageRef.current ??= createVideoReadyMessage();

@@ -6,14 +6,18 @@ import {
   type ReactElement,
 } from 'react';
 import { useCutPresentationStoreApi } from '../stores/cut-presentation-store';
-import { postMessage } from '../utils/vscodeApi';
 import { CutOtioController } from './CutOtioController';
+import { useCutWebviewHostBridge } from './CutWebviewHostBridgeContext';
 
 const CutOtioControllerContext = createContext<CutOtioController | undefined>(undefined);
 
 export function CutOtioControllerProvider({ children }: PropsWithChildren): ReactElement {
   const store = useCutPresentationStoreApi();
-  const controller = useMemo(() => new CutOtioController(store, { postMessage }), [store]);
+  const hostBridge = useCutWebviewHostBridge();
+  const controller = useMemo(
+    () => new CutOtioController(store, { postMessage: hostBridge.postIntent }),
+    [hostBridge, store],
+  );
   return (
     <CutOtioControllerContext.Provider value={controller}>
       {children}

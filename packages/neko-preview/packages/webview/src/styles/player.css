@@ -12,7 +12,8 @@
    Theme Variables - macOS Design Tokens
    ================= */
 
-:root {
+.neko-preview-root,
+.neko-preview-root__status {
   /* Dark theme (default) */
   --neko-glass: rgba(255, 255, 255, 0.08);
   --neko-glass-hover: rgba(255, 255, 255, 0.12);
@@ -31,9 +32,12 @@
 }
 
 /* Light theme override */
-body.vscode-light,
-body[data-vscode-theme-kind="vscode-light"],
-body[data-vscode-theme-kind="vscode-high-contrast-light"] {
+body.vscode-light .neko-preview-root,
+body.vscode-light .neko-preview-root__status,
+body[data-vscode-theme-kind="vscode-light"] .neko-preview-root,
+body[data-vscode-theme-kind="vscode-light"] .neko-preview-root__status,
+body[data-vscode-theme-kind="vscode-high-contrast-light"] .neko-preview-root,
+body[data-vscode-theme-kind="vscode-high-contrast-light"] .neko-preview-root__status {
   --neko-glass: rgba(0, 0, 0, 0.05);
   --neko-glass-hover: rgba(0, 0, 0, 0.08);
   --neko-glass-active: rgba(0, 0, 0, 0.12);
@@ -50,8 +54,10 @@ body[data-vscode-theme-kind="vscode-high-contrast-light"] {
 }
 
 /* High contrast theme override */
-body.vscode-high-contrast,
-body[data-vscode-theme-kind="vscode-high-contrast"] {
+body.vscode-high-contrast .neko-preview-root,
+body.vscode-high-contrast .neko-preview-root__status,
+body[data-vscode-theme-kind="vscode-high-contrast"] .neko-preview-root,
+body[data-vscode-theme-kind="vscode-high-contrast"] .neko-preview-root__status {
   --neko-glass: rgba(255, 255, 255, 0.15);
   --neko-glass-hover: rgba(255, 255, 255, 0.25);
   --neko-glass-active: rgba(255, 255, 255, 0.35);
@@ -67,16 +73,23 @@ body[data-vscode-theme-kind="vscode-high-contrast"] {
 }
 
 /* Reset */
-*,
-*::before,
-*::after {
+.neko-preview-root,
+.neko-preview-root *,
+.neko-preview-root *::before,
+.neko-preview-root *::after,
+.neko-preview-root__status,
+.neko-preview-root__status *,
+.neko-preview-root__status *::before,
+.neko-preview-root__status *::after {
 	box-sizing: border-box;
 	margin: 0;
 	padding: 0;
 }
 
-html,
-body {
+.neko-preview-root,
+.neko-preview-root__status {
+	width: 100%;
+	height: 100%;
 	margin: 0;
 	padding: 0;
 	overflow: hidden;
@@ -84,12 +97,6 @@ body {
 	color: var(--vscode-editor-foreground, #cccccc);
 	font-family: var(--vscode-font-family, -apple-system, BlinkMacSystemFont, sans-serif);
 	font-size: var(--vscode-font-size, 13px);
-}
-
-#root {
-	position: fixed;
-	inset: 0;
-	overflow: hidden;
 }
 
 /* ==========================================================================

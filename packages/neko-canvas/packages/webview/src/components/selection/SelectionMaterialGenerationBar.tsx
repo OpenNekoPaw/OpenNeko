@@ -2,7 +2,7 @@ import { useMemo, type ReactNode } from 'react';
 import type { CanvasNode, CanvasViewport } from '@neko/shared';
 import { Button } from '@neko/ui/primitives';
 import { RefreshIcon } from '@neko/shared/icons';
-import { getGlobalVSCodeApi } from '../../utils/vscode';
+import { useOptionalCanvasHost } from '../../host-runtime';
 import { t } from '../../i18n';
 import {
   resolveCanvasMaterialPresentation,
@@ -24,6 +24,7 @@ export function SelectionMaterialGenerationBar({
   viewportSize,
   hidden = false,
 }: SelectionMaterialGenerationBarProps): ReactNode {
+  const host = useOptionalCanvasHost();
   const selectedNode =
     selectedNodeIds.length === 1
       ? nodes.find((candidate) => candidate.id === selectedNodeIds[0])
@@ -32,7 +33,13 @@ export function SelectionMaterialGenerationBar({
     () => (selectedNode ? resolveCanvasMaterialPresentation(selectedNode, nodes) : undefined),
     [nodes, selectedNode],
   );
-  if (hidden || !selectedNode || material?.source !== 'generated' || !material.generation) {
+  if (
+    hidden ||
+    !host?.supportsMessage('sendToAgent') ||
+    !selectedNode ||
+    material?.source !== 'generated' ||
+    !material.generation
+  ) {
     return null;
   }
 
@@ -68,7 +75,7 @@ export function SelectionMaterialGenerationBar({
           variant="default"
           leadingIcon={<RefreshIcon size={14} />}
           onClick={() =>
-            getGlobalVSCodeApi()?.postMessage({
+            host?.postMessage({
               type: 'sendToAgent',
               nodeIds: [generationTargetNodeId],
               action: 'generate',

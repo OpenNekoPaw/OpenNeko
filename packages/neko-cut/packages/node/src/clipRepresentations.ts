@@ -111,10 +111,22 @@ export async function generateClipRepresentations(input: {
           if (sliced.partial && sliced.peaks.length === 0) {
             return unavailable(request, sliced.partial.message, sliced.partial.failureScope);
           }
+          if (sliced.partial) {
+            return {
+              clipId: request.clipId,
+              kind: 'waveform',
+              status: 'partial',
+              peaksPerSecond: request.peaksPerSecond,
+              waveform: {
+                ...sliced,
+                partial: sliced.partial,
+              },
+            };
+          }
           return {
             clipId: request.clipId,
             kind: 'waveform',
-            status: sliced.partial ? 'partial' : 'ready',
+            status: 'ready',
             peaksPerSecond: request.peaksPerSecond,
             waveform: sliced,
           };

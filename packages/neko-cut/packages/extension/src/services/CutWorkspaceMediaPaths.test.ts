@@ -3,7 +3,7 @@ import * as nodeFs from 'node:fs/promises';
 import * as nodeOs from 'node:os';
 import * as nodePath from 'node:path';
 import { applyCutCommand, createOtioTimeline } from '@neko-cut/domain';
-import { CutMediaPathError, CutWorkspaceMediaPaths } from './CutWorkspaceMediaPaths';
+import { CutMediaPathError, CutWorkspaceMediaPaths } from '@neko-cut/node';
 
 describe('CutWorkspaceMediaPaths', () => {
   let temporaryRoot: string;

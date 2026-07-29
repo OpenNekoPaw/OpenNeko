@@ -500,14 +500,18 @@ function parsePacket(
 function validateDescriptor(descriptor: PcmStreamDescriptor): void {
   if (
     descriptor.version !== 1 ||
-    descriptor.transport !== 'http' ||
+    (descriptor.transport !== 'http' && descriptor.transport !== 'authorized') ||
     descriptor.protocol !== 'neko-pcm-f32le-v1'
   ) {
     throw new Error('Unsupported PCM descriptor version.');
   }
   const url = new URL(descriptor.streamUrl);
-  if (url.protocol !== 'http:' || url.hostname !== '127.0.0.1') {
-    throw new Error('PCM descriptor must use loopback HTTP.');
+  const validUrl =
+    descriptor.transport === 'http'
+      ? url.protocol === 'http:' && url.hostname === '127.0.0.1'
+      : url.protocol === 'neko-media:' && url.hostname === 'desktop';
+  if (!validUrl) {
+    throw new Error('PCM descriptor URL does not match its transport.');
   }
   if (descriptor.sampleRate <= 0 || descriptor.channels <= 0) {
     throw new Error('PCM descriptor contains invalid audio metadata.');

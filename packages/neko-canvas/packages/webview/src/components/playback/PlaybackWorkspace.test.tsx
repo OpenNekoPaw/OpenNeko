@@ -33,6 +33,11 @@ vi.mock('@neko/ui/icons', () => ({
   WarningIcon: ({ size = 16 }: { size?: number }) => <span data-icon="warning">{size}</span>,
 }));
 
+vi.mock('../../host-runtime', () => ({
+  useOptionalCanvasHost: () =>
+    (window as unknown as { vscodeApi?: { postMessage(message: unknown): void } }).vscodeApi,
+}));
+
 vi.mock('../../preview/PreviewRendererRegistry', () => ({
   PreviewSurface: ({
     source,

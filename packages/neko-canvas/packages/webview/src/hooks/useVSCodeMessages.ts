@@ -7,6 +7,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { hasEditableActiveElement, isKeyboardFocusMessage } from '@neko/ui/keyboard';
+import type { CanvasHostPresentationState } from '@neko-canvas/domain';
 import type {
   CanvasData,
   CanvasNode,
@@ -21,9 +22,7 @@ import type {
   CanvasUpdateBlockRequest,
   ProjectedCanvasStatus,
   ProjectionSourceChangeEvent,
-  CanvasHostAppliedDocumentMessage,
 } from '@neko/shared';
-import type { CanvasOperationSource } from '@neko-canvas/domain';
 import {
   isCanvasNodeType,
   isJsonPointerPath,
@@ -31,8 +30,11 @@ import {
   PROJECT_FILE_SNAPSHOT_RESPONSE,
 } from '@neko/shared';
 import { setLocale } from '../i18n';
-import { useCanvasStore } from '../stores/canvasStore';
-import { useCanvasOperationStore } from '../stores/canvasOperationStore';
+import {
+  useCanvasOperationStoreApi,
+  useCanvasStoreApi,
+  useHistoryStoreApi,
+} from '../stores/canvasStoreScope';
 import { isEditorLevelKeyboardAction } from './keyboardActionPolicy';
 
 // =============================================================================
@@ -44,6 +46,8 @@ export type VSCodeAPI = {
   postMessage: (message: unknown) => void;
   getState: () => unknown;
   setState: (state: unknown) => void;
+  supportsMessage?: (messageType: string) => boolean;
+  subscribe?: (listener: (message: unknown) => void) => () => void;
 } | null;
 
 export interface UseVSCodeMessagesOptions {
@@ -79,15 +83,13 @@ export interface UseVSCodeMessagesOptions {
   onProjectionSourceChanged?: (event: ProjectionSourceChangeEvent) => void;
   /** Called after a Canvas document payload has been normalized and applied. */
   onCanvasDataLoaded?: (data: CanvasData) => void;
+  /** Restores session-owned viewport and selection without mutating the .nkc document. */
+  onHostPresentation?: (presentation: CanvasHostPresentationState) => void;
   /** Called after the extension confirms that the current custom document save completed. */
   onSaved?: () => void;
   onKeyboardFocusChange?: (focused: boolean) => void;
   isKeyboardFocusedRef?: React.MutableRefObject<boolean>;
   isComposingRef?: React.MutableRefObject<boolean>;
-}
-
-function withOperationSource<T>(source: CanvasOperationSource, run: () => T): T {
-  return useCanvasOperationStore.getState().withOperationSource(source, run);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -96,6 +98,36 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((item) => typeof item === 'string');
+}
+
+function parseHostPresentation(value: unknown): CanvasHostPresentationState {
+  if (!isRecord(value)) {
+    throw new Error('Canvas Host presentation is invalid.');
+  }
+  const viewport = value['viewport'];
+  if (!isRecord(viewport)) {
+    throw new Error('Canvas Host presentation is invalid.');
+  }
+  const pan = viewport['pan'];
+  if (
+    !isRecord(pan) ||
+    typeof pan['x'] !== 'number' ||
+    !Number.isFinite(pan['x']) ||
+    typeof pan['y'] !== 'number' ||
+    !Number.isFinite(pan['y']) ||
+    typeof viewport['zoom'] !== 'number' ||
+    !Number.isFinite(viewport['zoom']) ||
+    !isStringArray(value['selectedNodeIds'])
+  ) {
+    throw new Error('Canvas Host presentation is invalid.');
+  }
+  return {
+    viewport: {
+      pan: { x: pan['x'], y: pan['y'] },
+      zoom: viewport['zoom'],
+    },
+    selectedNodeIds: value['selectedNodeIds'],
+  };
 }
 
 function normalizeFieldBinding(value: unknown): FieldBinding | undefined {
@@ -158,6 +190,9 @@ export interface CanvasLoadDiagnostic {
 // =============================================================================
 
 export function useVSCodeMessages(options: UseVSCodeMessagesOptions): UseVSCodeMessagesReturn {
+  const canvasStore = useCanvasStoreApi();
+  const historyStore = useHistoryStoreApi();
+  const operationStore = useCanvasOperationStoreApi();
   const {
     vscode,
     defaultCanvasData,
@@ -178,6 +213,7 @@ export function useVSCodeMessages(options: UseVSCodeMessagesOptions): UseVSCodeM
     onProjectionStatus,
     onProjectionSourceChanged,
     onCanvasDataLoaded,
+    onHostPresentation,
     onSaved,
     onKeyboardFocusChange,
     isKeyboardFocusedRef,
@@ -221,6 +257,8 @@ export function useVSCodeMessages(options: UseVSCodeMessagesOptions): UseVSCodeM
   onProjectionSourceChangedRef.current = onProjectionSourceChanged;
   const onCanvasDataLoadedRef = useRef(onCanvasDataLoaded);
   onCanvasDataLoadedRef.current = onCanvasDataLoaded;
+  const onHostPresentationRef = useRef(onHostPresentation);
+  onHostPresentationRef.current = onHostPresentation;
   const onSavedRef = useRef(onSaved);
   onSavedRef.current = onSaved;
   const onKeyboardFocusChangeRef = useRef(onKeyboardFocusChange);
@@ -237,8 +275,10 @@ export function useVSCodeMessages(options: UseVSCodeMessagesOptions): UseVSCodeM
           isComposingRefRef.current.current = composing;
         }
       };
-      const handleMessage = (event: MessageEvent) => {
-        const message = event.data;
+      const handleMessage = (message: unknown) => {
+        if (!isRecord(message) || typeof message.type !== 'string') {
+          throw new Error('Canvas Host emitted an invalid message.');
+        }
         if (isKeyboardFocusMessage(message)) {
           if (isKeyboardFocusedRefRef.current) {
             isKeyboardFocusedRefRef.current.current = message.focused;
@@ -247,7 +287,7 @@ export function useVSCodeMessages(options: UseVSCodeMessagesOptions): UseVSCodeM
           return;
         }
         if (isProjectFileSnapshotRequestMessage(message)) {
-          const document = useCanvasStore.getState().canvasData;
+          const document = canvasStore.getState().canvasData;
           vscode.postMessage({
             type: PROJECT_FILE_SNAPSHOT_RESPONSE,
             requestId: message.requestId,
@@ -256,6 +296,16 @@ export function useVSCodeMessages(options: UseVSCodeMessagesOptions): UseVSCodeM
           });
           return;
         }
+        const applyHostDocument = (canvasData: CanvasData): void => {
+          const current = canvasStore.getState().canvasData;
+          if (current && !areCanvasHistoryStatesEqual(current, canvasData)) {
+            historyStore.getState().pushState(current);
+          }
+          setCanvasData(canvasData);
+          onCanvasDataLoadedRef.current?.(canvasData);
+          setIsReady(true);
+          vscode.postMessage({ type: 'canvasDataReady' });
+        };
         switch (message.type) {
           case 'update': {
             if (!isCanvasDocumentPayload(message.data)) {
@@ -268,10 +318,7 @@ export function useVSCodeMessages(options: UseVSCodeMessagesOptions): UseVSCodeM
             }
             const canvasData = message.data;
             setLoadDiagnostic(null);
-            setCanvasData(canvasData);
-            onCanvasDataLoadedRef.current?.(canvasData);
-            setIsReady(true);
-            vscode.postMessage({ type: 'canvasDataReady' });
+            applyHostDocument(canvasData);
             break;
           }
           case 'canvas.loadFailed': {
@@ -288,11 +335,15 @@ export function useVSCodeMessages(options: UseVSCodeMessagesOptions): UseVSCodeM
             break;
           }
           case 'canvas.hostAppliedDocument': {
-            const hostMessage = message as CanvasHostAppliedDocumentMessage;
-            setCanvasData(hostMessage.data);
-            onCanvasDataLoadedRef.current?.(hostMessage.data);
-            setIsReady(true);
-            vscode.postMessage({ type: 'canvasDataReady' });
+            if (!isCanvasDocumentPayload(message.data)) {
+              throw new Error('Canvas Host applied message does not contain a valid document.');
+            }
+            applyHostDocument(message.data);
+            break;
+          }
+          case 'canvas.hostPresentation': {
+            const presentation = parseHostPresentation(message.presentation);
+            onHostPresentationRef.current?.(presentation);
             break;
           }
           case 'keyboardAction':
@@ -363,7 +414,7 @@ export function useVSCodeMessages(options: UseVSCodeMessagesOptions): UseVSCodeM
           case 'nodes.update': {
             const requestId = message._requestId as number | undefined;
             if (requestId === undefined) break;
-            withOperationSource('ai', () => {
+            operationStore.getState().withOperationSource('ai', () => {
               updateNodeRef.current?.(
                 message.nodeId as string,
                 (message.data as Record<string, unknown>) ?? {},
@@ -393,7 +444,7 @@ export function useVSCodeMessages(options: UseVSCodeMessagesOptions): UseVSCodeM
               break;
             }
             try {
-              const id = withOperationSource(
+              const id = operationStore.getState().withOperationSource(
                 'ai',
                 () =>
                   createNodeRef.current?.({
@@ -416,7 +467,7 @@ export function useVSCodeMessages(options: UseVSCodeMessagesOptions): UseVSCodeM
             const requestId = message._requestId as number | undefined;
             if (requestId === undefined) break;
             try {
-              const result = withOperationSource('ai', () =>
+              const result = operationStore.getState().withOperationSource('ai', () =>
                 deriveNodeRef.current?.(
                   (message.payload as CanvasDeriveNodeRequest | undefined) ?? {
                     sourceNodeId: '',
@@ -440,7 +491,7 @@ export function useVSCodeMessages(options: UseVSCodeMessagesOptions): UseVSCodeM
             const requestId = message._requestId as number | undefined;
             if (requestId === undefined) break;
             try {
-              const result = withOperationSource('ai', () =>
+              const result = operationStore.getState().withOperationSource('ai', () =>
                 createConnectionRef.current?.(
                   (message.payload as CanvasCreateConnectionRequest | undefined) ?? {
                     sourceId: '',
@@ -465,7 +516,7 @@ export function useVSCodeMessages(options: UseVSCodeMessagesOptions): UseVSCodeM
             const requestId = message._requestId as number | undefined;
             if (requestId === undefined) break;
             try {
-              const result = withOperationSource('ai', () =>
+              const result = operationStore.getState().withOperationSource('ai', () =>
                 createCompositeRef.current?.(
                   (message.payload as CanvasCreateCompositeRequest | undefined) ?? {
                     children: [],
@@ -500,9 +551,11 @@ export function useVSCodeMessages(options: UseVSCodeMessagesOptions): UseVSCodeM
               const groupId = payload.groupId;
               const childIds = payload.childIds;
               const autoLayout = payload.autoLayout === true;
-              const result = withOperationSource('ai', () =>
-                reorderGroupChildrenRef.current?.(groupId, childIds, autoLayout),
-              );
+              const result = operationStore
+                .getState()
+                .withOperationSource('ai', () =>
+                  reorderGroupChildrenRef.current?.(groupId, childIds, autoLayout),
+                );
               if (!isRecord(result)) {
                 throw new Error('Group reorder failed');
               }
@@ -520,9 +573,11 @@ export function useVSCodeMessages(options: UseVSCodeMessagesOptions): UseVSCodeM
             const requestId = message._requestId as number | undefined;
             if (requestId === undefined) break;
             try {
-              const result = withOperationSource('ai', () =>
-                updateBlockRef.current?.(normalizeUpdateBlockRequest(message.payload)),
-              );
+              const result = operationStore
+                .getState()
+                .withOperationSource('ai', () =>
+                  updateBlockRef.current?.(normalizeUpdateBlockRequest(message.payload)),
+                );
               if (!isRecord(result)) {
                 throw new Error('Block update failed');
               }
@@ -583,7 +638,7 @@ export function useVSCodeMessages(options: UseVSCodeMessagesOptions): UseVSCodeM
             const requestId = message._requestId as number | undefined;
             if (requestId === undefined) break;
             try {
-              const result = withOperationSource('ai', () =>
+              const result = operationStore.getState().withOperationSource('ai', () =>
                 applyAgentContentRef.current?.(
                   (message.payload as CanvasAgentContentPayload | undefined) ?? {
                     kind: 'text',
@@ -611,11 +666,17 @@ export function useVSCodeMessages(options: UseVSCodeMessagesOptions): UseVSCodeM
       const handleCompositionEnd = (): void => setComposing(false);
       window.addEventListener('compositionstart', handleCompositionStart);
       window.addEventListener('compositionend', handleCompositionEnd);
-      window.addEventListener('message', handleMessage);
+      const handleWindowMessage = (event: MessageEvent): void => handleMessage(event.data);
+      const unsubscribe = vscode.subscribe
+        ? vscode.subscribe(handleMessage)
+        : (() => {
+            window.addEventListener('message', handleWindowMessage);
+            return () => window.removeEventListener('message', handleWindowMessage);
+          })();
       vscode.postMessage({ type: 'ready' });
 
       return () => {
-        window.removeEventListener('message', handleMessage);
+        unsubscribe();
         window.removeEventListener('compositionstart', handleCompositionStart);
         window.removeEventListener('compositionend', handleCompositionEnd);
       };
@@ -624,7 +685,7 @@ export function useVSCodeMessages(options: UseVSCodeMessagesOptions): UseVSCodeM
       onCanvasDataLoadedRef.current?.(defaultCanvasData);
       setIsReady(true);
     }
-  }, [vscode, setCanvasData, defaultCanvasData]);
+  }, [canvasStore, defaultCanvasData, historyStore, operationStore, setCanvasData, vscode]);
 
   return { isReady, loadDiagnostic, keyboardActionRef };
 }
@@ -638,4 +699,10 @@ function isCanvasDocumentPayload(value: unknown): value is CanvasData {
     Array.isArray(value.nodes) &&
     Array.isArray(value.connections)
   );
+}
+
+function areCanvasHistoryStatesEqual(left: CanvasData, right: CanvasData): boolean {
+  const { viewport: _leftViewport, ...leftDocument } = left;
+  const { viewport: _rightViewport, ...rightDocument } = right;
+  return JSON.stringify(leftDocument) === JSON.stringify(rightDocument);
 }

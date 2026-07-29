@@ -9,6 +9,8 @@ import {
   type UseVSCodeMessagesOptions,
   type VSCodeAPI,
 } from './useVSCodeMessages';
+import { useCanvasStore } from '../stores/canvasStore';
+import { useHistoryStore } from '../stores/historyStore';
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 
@@ -119,6 +121,51 @@ describe('useVSCodeMessages keyboard action guards', () => {
 
     expect(setCanvasData).toHaveBeenCalledWith(DEFAULT_CANVAS_DATA);
     expect(vscode.postMessage).toHaveBeenCalledWith({ type: 'canvasDataReady' });
+  });
+
+  it('records an authoritative Host document replacement in Canvas undo history', () => {
+    const currentCanvas: CanvasData = {
+      ...DEFAULT_CANVAS_DATA,
+      nodes: [
+        {
+          id: 'node-1',
+          type: 'markdown',
+          position: { x: 0, y: 0 },
+          size: { width: 240, height: 160 },
+          zIndex: 1,
+          data: { content: 'Existing note' },
+        },
+      ],
+    };
+    const hostCanvas: CanvasData = {
+      ...currentCanvas,
+      nodes: [
+        ...currentCanvas.nodes,
+        {
+          id: 'node-2',
+          type: 'markdown',
+          position: { x: 240, y: 0 },
+          size: { width: 240, height: 160 },
+          zIndex: 2,
+          data: { content: 'Host-added note' },
+        },
+      ],
+    };
+    useCanvasStore.setState({ canvasData: currentCanvas });
+    useHistoryStore.getState().clear();
+
+    act(() => {
+      root.render(<VSCodeMessageHarness action={action} isComposingRef={isComposingRef} />);
+    });
+    act(() => {
+      postHostMessage({ type: 'update', data: hostCanvas });
+    });
+
+    expect(useHistoryStore.getState().canUndo()).toBe(true);
+    expect(useHistoryStore.getState().undo(hostCanvas)?.nodes).toEqual(currentCanvas.nodes);
+
+    useCanvasStore.setState({ canvasData: null });
+    useHistoryStore.getState().clear();
   });
 
   it('keeps the current Canvas when an update message has no valid document payload', () => {

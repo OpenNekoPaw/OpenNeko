@@ -7,6 +7,7 @@ import type {
 import { FileIcon } from '@neko/shared/icons';
 import { MarkdownDocumentView } from '@neko/ui/markdown';
 import { t } from '../../i18n';
+import { useOptionalCanvasHost } from '../../host-runtime';
 import { PreviewSurface } from '../../preview/PreviewRendererRegistry';
 import { BaseNode } from './BaseNode';
 import type { NodeRendererCommonProps } from './nodeRendererTypes';
@@ -59,9 +60,19 @@ export function MarkdownNode({
 }
 
 export function MediaNode({ node, isSelected, ...baseProps }: CanonicalNodeProps<MediaCanvasNode>) {
+  const host = useOptionalCanvasHost();
   const source = node.data.runtimeAssetPath || node.data.assetPath;
   const mediaType = node.data.mediaType ?? 'image';
-  const previewRole = mediaType === 'audio' ? 'audio-waveform' : 'video-proxy';
+  const previewRole =
+    mediaType === 'image'
+      ? 'image'
+      : host?.supportsMessage('media:probe')
+        ? mediaType === 'audio'
+          ? 'audio-waveform'
+          : 'video-proxy'
+        : mediaType === 'video'
+          ? 'video-poster'
+          : 'unavailable';
   const title =
     node.data.title || node.data.assetPath.split('/').pop() || resolveMediaTypeLabel(mediaType);
   return (
@@ -98,13 +109,6 @@ export function MediaNode({ node, isSelected, ...baseProps }: CanonicalNodeProps
             >
               {resolveMediaTypeLabel(mediaType)}
             </div>
-          ) : mediaType === 'image' ? (
-            <img
-              src={source}
-              alt={node.data.title ?? ''}
-              className="h-full w-full object-contain"
-              draggable={false}
-            />
           ) : (
             <PreviewSurface
               source={{
@@ -228,7 +232,7 @@ export function FileNode({
       {...baseProps}
       presentation="foundational"
       opaqueSurface
-      onActivate={node.data.path ? () => onOpen?.(node.data.path) : undefined}
+      onActivate={node.data.path && onOpen ? () => onOpen(node.data.path) : undefined}
     >
       <div className="flex h-full flex-col items-center justify-center gap-3 p-3 text-center">
         <span style={{ color: 'var(--node-fg-secondary)' }}>

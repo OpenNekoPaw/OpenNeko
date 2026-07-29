@@ -3,12 +3,8 @@ import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import {
-  CutMediaCorruptionError,
-  CutMediaRuntimeUnavailableError,
-  type TimelineView,
-} from '@neko-cut/domain';
-import { NodeFfmpegCutMediaAdapter, buildCutPreviewVideoFilter } from './NodeFfmpegCutMediaAdapter';
+import { type TimelineView } from '@neko-cut/domain';
+import { NodeFfmpegCutMediaAdapter, buildCutPreviewVideoFilter } from '@neko-cut/node';
 import {
   FfmpegCommandError,
   NodeFfmpegProcess,
@@ -264,7 +260,7 @@ describe('NodeFfmpegCutMediaAdapter', () => {
         width: 160,
         height: 90,
       }),
-    ).rejects.toMatchObject<CutMediaCorruptionError>({
+    ).rejects.toMatchObject({
       name: 'CutMediaCorruptionError',
       scope: 'interval',
       operation: 'capture frame at 139 seconds',
@@ -677,7 +673,7 @@ describe('NodeFfmpegCutMediaAdapter', () => {
           startPaused: true,
         },
       ),
-    ).rejects.toMatchObject<CutMediaRuntimeUnavailableError>({
+    ).rejects.toMatchObject({
       name: 'CutMediaRuntimeUnavailableError',
       capability: 'AV1 VideoToolbox decoder',
     });

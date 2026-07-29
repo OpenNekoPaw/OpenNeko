@@ -9,6 +9,7 @@ import {
   CutOtioControllerProvider,
   useCutOtioController,
 } from '../../controllers/CutOtioControllerContext';
+import { CutWebviewHostBridgeProvider } from '../../controllers/CutWebviewHostBridgeContext';
 import {
   createCutPresentationStore,
   CutPresentationStoreProvider,
@@ -22,7 +23,6 @@ import { projectCanvasPresetId } from './projectCanvasPresets';
 
 const postMessage = vi.hoisted(() => vi.fn());
 
-vi.mock('../../utils/vscodeApi', () => ({ postMessage }));
 vi.mock('../../i18n/I18nContext', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
@@ -139,14 +139,16 @@ describe('PropertyPanelInline OTIO adapter', () => {
     act(() => {
       root.render(
         <CutPresentationStoreProvider store={store}>
-          <CutOtioControllerProvider>
-            <ControllerCapture
-              onController={(value) => {
-                controller = value;
-              }}
-            />
-            <PropertyPanelInline mode="basic" />
-          </CutOtioControllerProvider>
+          <TestHostBridge>
+            <CutOtioControllerProvider>
+              <ControllerCapture
+                onController={(value) => {
+                  controller = value;
+                }}
+              />
+              <PropertyPanelInline mode="basic" />
+            </CutOtioControllerProvider>
+          </TestHostBridge>
         </CutPresentationStoreProvider>,
       );
     });
@@ -211,14 +213,16 @@ describe('PropertyPanelInline OTIO adapter', () => {
     act(() => {
       root.render(
         <CutPresentationStoreProvider store={store}>
-          <CutOtioControllerProvider>
-            <ControllerCapture
-              onController={(value) => {
-                controller = value;
-              }}
-            />
-            <PropertyPanelInline mode="basic" />
-          </CutOtioControllerProvider>
+          <TestHostBridge>
+            <CutOtioControllerProvider>
+              <ControllerCapture
+                onController={(value) => {
+                  controller = value;
+                }}
+              />
+              <PropertyPanelInline mode="basic" />
+            </CutOtioControllerProvider>
+          </TestHostBridge>
         </CutPresentationStoreProvider>,
       );
     });
@@ -276,9 +280,11 @@ describe('PropertyPanelInline OTIO adapter', () => {
     act(() => {
       root.render(
         <CutPresentationStoreProvider store={store}>
-          <CutOtioControllerProvider>
-            <PropertyPanelInline mode="basic" />
-          </CutOtioControllerProvider>
+          <TestHostBridge>
+            <CutOtioControllerProvider>
+              <PropertyPanelInline mode="basic" />
+            </CutOtioControllerProvider>
+          </TestHostBridge>
         </CutPresentationStoreProvider>,
       );
     });
@@ -299,14 +305,16 @@ describe('PropertyPanelInline OTIO adapter', () => {
     act(() => {
       root.render(
         <CutPresentationStoreProvider store={store}>
-          <CutOtioControllerProvider>
-            <ControllerCapture
-              onController={(value) => {
-                controller = value;
-              }}
-            />
-            <PropertyPanelInline mode="basic" />
-          </CutOtioControllerProvider>
+          <TestHostBridge>
+            <CutOtioControllerProvider>
+              <ControllerCapture
+                onController={(value) => {
+                  controller = value;
+                }}
+              />
+              <PropertyPanelInline mode="basic" />
+            </CutOtioControllerProvider>
+          </TestHostBridge>
         </CutPresentationStoreProvider>,
       );
     });
@@ -362,9 +370,11 @@ describe('PropertyPanelInline OTIO adapter', () => {
     act(() => {
       root.render(
         <CutPresentationStoreProvider store={store}>
-          <CutOtioControllerProvider>
-            <PropertyPanelInline mode="basic" />
-          </CutOtioControllerProvider>
+          <TestHostBridge>
+            <CutOtioControllerProvider>
+              <PropertyPanelInline mode="basic" />
+            </CutOtioControllerProvider>
+          </TestHostBridge>
         </CutPresentationStoreProvider>,
       );
     });
@@ -402,9 +412,11 @@ describe('PropertyPanelInline OTIO adapter', () => {
       act(() => {
         root.render(
           <CutPresentationStoreProvider store={store}>
-            <CutOtioControllerProvider>
-              <PropertyPanelInline mode="basic" />
-            </CutOtioControllerProvider>
+            <TestHostBridge>
+              <CutOtioControllerProvider>
+                <PropertyPanelInline mode="basic" />
+              </CutOtioControllerProvider>
+            </TestHostBridge>
           </CutPresentationStoreProvider>,
         );
       });
@@ -438,6 +450,19 @@ describe('PropertyPanelInline OTIO adapter', () => {
     act(() => button?.click());
   }
 });
+
+function TestHostBridge({ children }: { readonly children: React.ReactNode }) {
+  return (
+    <CutWebviewHostBridgeProvider
+      bridge={{
+        postIntent: postMessage,
+        subscribe: () => () => undefined,
+      }}
+    >
+      {children}
+    </CutWebviewHostBridgeProvider>
+  );
+}
 
 function ControllerCapture(props: {
   readonly onController: (controller: CutOtioController) => void;

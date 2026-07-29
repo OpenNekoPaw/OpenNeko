@@ -15,10 +15,16 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
-    include: ['packages/extension/src/**/*.test.ts'],
+    include: [
+      'packages/extension/src/**/*.test.ts',
+      'packages/node/src/**/*.test.ts',
+    ],
     exclude: ['**/node_modules/**', '**/dist/**'],
     coverage: sharedCoverage({
-      include: ['packages/extension/src/**/*.{ts,tsx}'],
+      include: [
+        'packages/extension/src/**/*.{ts,tsx}',
+        'packages/node/src/**/*.ts',
+      ],
     }),
   },
 });

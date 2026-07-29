@@ -105,10 +105,12 @@ describe('useResizable hook lifecycle', () => {
 
   it('flushes the latest resize value when pointer capture ends before animation frame', () => {
     const onSizeChange = vi.fn();
+    const onResizeEnd = vi.fn();
 
     renderHarness({
       size: 240,
       onSizeChange,
+      onResizeEnd,
       captureWidth: 800,
       captureHeight: 400,
     });
@@ -123,6 +125,8 @@ describe('useResizable hook lifecycle', () => {
 
     expect(onSizeChange).toHaveBeenCalledTimes(1);
     expect(onSizeChange).toHaveBeenLastCalledWith(310);
+    expect(onResizeEnd).toHaveBeenCalledOnce();
+    expect(onResizeEnd).toHaveBeenCalledWith(310);
     expect(animationFrameCallbacks.size).toBe(0);
   });
 
@@ -154,10 +158,12 @@ describe('useResizable hook lifecycle', () => {
 
   it('stops resizing on lostpointercapture and duplicate end events are safe', () => {
     const onSizeChange = vi.fn();
+    const onResizeEnd = vi.fn();
 
     renderHarness({
       size: 240,
       onSizeChange,
+      onResizeEnd,
       captureWidth: 800,
       captureHeight: 400,
     });
@@ -172,6 +178,8 @@ describe('useResizable hook lifecycle', () => {
 
     expect(latest?.isResizing).toBe(false);
     expect(onSizeChange).not.toHaveBeenCalled();
+    expect(onResizeEnd).toHaveBeenCalledOnce();
+    expect(onResizeEnd).toHaveBeenCalledWith(240);
   });
 
   it('updates uncontrolled size from pointer movement', () => {
@@ -203,6 +211,7 @@ describe('useResizable hook lifecycle', () => {
     size?: number;
     initialSize?: number;
     onSizeChange?: (size: number) => void;
+    onResizeEnd?: (size: number) => void;
     edge?: 'right' | 'top';
     mode?: 'pixel' | 'ratio';
     minSize?: number;
@@ -229,6 +238,7 @@ describe('useResizable hook lifecycle', () => {
               minSize,
               maxSize,
               onSizeChange: options.onSizeChange ?? vi.fn(),
+              onResizeEnd: options.onResizeEnd,
             }
           : {
               edge,
@@ -237,6 +247,7 @@ describe('useResizable hook lifecycle', () => {
               minSize,
               maxSize,
               onSizeChange: options.onSizeChange,
+              onResizeEnd: options.onResizeEnd,
             };
       const result = useResizable(resizeOptions);
 

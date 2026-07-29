@@ -4,6 +4,7 @@ export {
   MainPanelControlLayer,
 } from './creative-workbench';
 export {
+  ControlledWorkbenchShell,
   EditorWorkbenchShell,
   WorkbenchActivityBar,
   WorkbenchEditorTabs,
@@ -39,6 +40,10 @@ export type {
   MainPanelControlPlacement,
 } from './creative-workbench';
 export type {
+  ControlledWorkbenchDockPresentation,
+  ControlledWorkbenchMainSplit,
+  ControlledWorkbenchResizeBinding,
+  ControlledWorkbenchShellProps,
   EditorWorkbenchShellProps,
   WorkbenchActivityBarProps,
   WorkbenchActivityItem,

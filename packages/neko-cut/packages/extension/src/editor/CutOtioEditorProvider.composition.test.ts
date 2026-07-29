@@ -9,7 +9,9 @@ describe('Cut media composition root', () => {
       'utf8',
     );
 
-    expect(source).toContain('import { NodeFfmpegCutMediaAdapter }');
+    expect(source).toMatch(
+      /import\s*\{[\s\S]*NodeFfmpegCutMediaAdapter[\s\S]*\}\s*from '@neko-cut\/node';/,
+    );
     expect(source).toContain('new NodeFfmpegCutMediaAdapter(');
     expect(source).not.toContain('NekoEngineCutMediaAdapter');
     expect(source).not.toContain('EngineConnection');

@@ -1,0 +1,22 @@
+{
+  "name": "@neko-cut/node",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@neko-cut/domain": "workspace:*",
+    "@neko/media": "workspace:*",
+    "@neko/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.3"
+  },
+  "license": "AGPL-3.0-or-later"
+}

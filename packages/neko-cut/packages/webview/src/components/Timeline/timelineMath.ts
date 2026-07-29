@@ -93,7 +93,8 @@ export function buildRulerTicks(duration: number, pixelsPerSecond: number): read
   if (duration <= 0 || pixelsPerSecond <= 0) return [{ seconds: 0, major: true, label: '00:00' }];
   const minorStep =
     RULER_STEPS_SECONDS.find((candidate) => candidate * pixelsPerSecond >= 12) ??
-    RULER_STEPS_SECONDS[RULER_STEPS_SECONDS.length - 1];
+    RULER_STEPS_SECONDS[RULER_STEPS_SECONDS.length - 1] ??
+    1;
   const majorEvery = Math.max(1, Math.ceil(72 / (minorStep * pixelsPerSecond)));
   const count = Math.ceil(duration / minorStep);
   const ticks: RulerTick[] = [];

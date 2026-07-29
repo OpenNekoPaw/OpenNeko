@@ -12,7 +12,7 @@
   /* --------------------------------------------------------------------------
      Design tokens — dark (default, macOS Sonoma dark)
      -------------------------------------------------------------------------- */
-  :root {
+  .cut-webview-root {
     /* Surface hierarchy */
     --nk-bg:               var(--vscode-editor-background, #1C1C1E);
     --nk-bg-elevated:      var(--vscode-sideBar-background, #2C2C2E);
@@ -111,9 +111,7 @@
   /* --------------------------------------------------------------------------
      Light mode overrides
      -------------------------------------------------------------------------- */
-  body.vscode-light,
-  body[data-vscode-theme-kind="vscode-light"],
-  body[data-vscode-theme-kind="vscode-high-contrast-light"] {
+  :where(.vscode-light, [data-vscode-theme-kind="vscode-light"], [data-vscode-theme-kind="vscode-high-contrast-light"]) .cut-webview-root {
     --nk-bg:               var(--vscode-editor-background, #F2F2F7);
     --nk-bg-elevated:      var(--vscode-sideBar-background, #FFFFFF);
     --nk-bg-panel:         var(--vscode-panel-background, #F8F8FA);
@@ -186,8 +184,7 @@
   /* --------------------------------------------------------------------------
      High contrast overrides
      -------------------------------------------------------------------------- */
-  body.vscode-high-contrast,
-  body[data-vscode-theme-kind="vscode-high-contrast"] {
+  :where(.vscode-high-contrast, [data-vscode-theme-kind="vscode-high-contrast"]) .cut-webview-root {
     --nk-bg:               #000000;
     --nk-bg-elevated:      #111111;
     --nk-bg-panel:         #0A0A0A;
@@ -214,19 +211,21 @@
   /* --------------------------------------------------------------------------
      Global reset & base styles
      -------------------------------------------------------------------------- */
-  *, *::before, *::after {
+  .cut-webview-root,
+  .cut-webview-root *,
+  .cut-webview-root *::before,
+  .cut-webview-root *::after {
     box-sizing: border-box;
     margin: 0;
     padding: 0;
   }
 
-  html, body, #root {
+  .cut-webview-root {
     width: 100%;
     height: 100%;
     overflow: hidden;
-  }
-
-  body {
+    display: flex;
+    flex-direction: column;
     font-family: var(--vscode-font-family, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif);
     font-size: var(--vscode-font-size, 13px);
     background-color: var(--nk-bg);
@@ -236,13 +235,8 @@
     -moz-osx-font-smoothing: grayscale;
   }
 
-  #root {
-    display: flex;
-    flex-direction: column;
-  }
-
   /* Text selection */
-  ::selection {
+  .cut-webview-root ::selection {
     background: rgba(10, 132, 255, 0.35);
     color: inherit;
   }
@@ -252,30 +246,30 @@
    Scrollbar — macOS thin overlay style
    ============================================================================= */
 
-::-webkit-scrollbar {
+.cut-webview-root ::-webkit-scrollbar {
   width: 7px;
   height: 7px;
 }
 
-::-webkit-scrollbar-track {
+.cut-webview-root ::-webkit-scrollbar-track {
   background: transparent;
 }
 
-::-webkit-scrollbar-thumb {
+.cut-webview-root ::-webkit-scrollbar-thumb {
   background: var(--nk-scrollbar);
   border-radius: var(--nk-r-full);
   transition: background 0.2s ease;
 }
 
-::-webkit-scrollbar-thumb:hover {
+.cut-webview-root ::-webkit-scrollbar-thumb:hover {
   background: var(--nk-scrollbar-hover);
 }
 
-::-webkit-scrollbar-thumb:active {
+.cut-webview-root ::-webkit-scrollbar-thumb:active {
   background: var(--vscode-scrollbarSlider-activeBackground, rgba(255, 255, 255, 0.45));
 }
 
-::-webkit-scrollbar-corner {
+.cut-webview-root ::-webkit-scrollbar-corner {
   background: transparent;
 }
 
@@ -292,7 +286,7 @@
    Focus ring — macOS blue ring
    ============================================================================= */
 
-*:focus-visible {
+.cut-webview-root *:focus-visible {
   outline: 2px solid var(--nk-border-focus);
   outline-offset: -1px;
   border-radius: var(--nk-r-xs);
@@ -591,8 +585,7 @@
 }
 
 /* Light mode select arrow */
-body.vscode-light .nk-select,
-body[data-vscode-theme-kind="vscode-light"] .nk-select {
+:where(.vscode-light, [data-vscode-theme-kind="vscode-light"]) .cut-webview-root .nk-select {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' fill='none'%3E%3Cpath d='M1 1l4 4 4-4' stroke='rgba(0,0,0,0.38)' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
 }
 
@@ -956,6 +949,17 @@ body[data-vscode-theme-kind="vscode-light"] .nk-select {
   display: flex;
   min-height: 150px;
   overflow: hidden;
+}
+
+.cut-timeline-portal-root,
+.cut-basic-timeline-region--host {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+
+.cut-basic-timeline-region--host {
+  flex: 1 1 auto;
 }
 
 /* Timeline */

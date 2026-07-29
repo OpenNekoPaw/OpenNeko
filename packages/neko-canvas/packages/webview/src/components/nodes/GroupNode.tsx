@@ -8,7 +8,7 @@ import {
 } from '@neko/shared';
 import { toCodiconClassName } from '@neko/ui/icons';
 import { BaseNode } from './BaseNode';
-import { useCanvasStore } from '../../stores/canvasStore';
+import { useScopedCanvasStore as useCanvasStore } from '../../stores/canvasStoreScope';
 import { t } from '../../i18n';
 import type { ConnectionDragTargetState } from '../../hooks/useConnectionDrag';
 

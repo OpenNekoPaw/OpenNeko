@@ -4,8 +4,8 @@ import {
   CutMediaRuntimeUnavailableError,
   type CutUserDiagnostic,
 } from '@neko-cut/domain';
-import { CutMediaImportError } from '../services/CutWorkspaceMediaImporter';
-import { CutMediaPathError } from '../services/CutWorkspaceMediaPaths';
+import { CutMediaImportError } from '@neko-cut/node';
+import { CutMediaPathError } from '@neko-cut/node';
 
 export function toCutUserDiagnostic(error: unknown, operation: string): CutUserDiagnostic {
   if (error instanceof CutCommandError) return { code: error.code };

@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { CutExportTaskSnapshot } from '@neko-cut/domain';
-import { CutExportTaskRegistry } from './CutExportTaskRegistry';
-import { createInMemoryExportJobStore } from '../services/export-job';
+import { CutExportTaskRegistry, createInMemoryExportJobStore } from '@neko-cut/node';
 
 describe('CutExportTaskRegistry', () => {
   it('owns an export after the Webview request returns and publishes terminal state', async () => {

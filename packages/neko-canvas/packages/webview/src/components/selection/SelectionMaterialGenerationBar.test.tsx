@@ -11,6 +11,11 @@ import { SelectionMaterialGenerationBar } from './SelectionMaterialGenerationBar
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 
+vi.mock('../../host-runtime', () => ({
+  useOptionalCanvasHost: () =>
+    (window as unknown as { vscodeApi?: { postMessage(message: unknown): void } }).vscodeApi,
+}));
+
 const resourceRef = createResourceRef({
   id: 'generated-image-1',
   scope: 'project',
@@ -22,7 +27,13 @@ const resourceRef = createResourceRef({
 });
 
 describe('SelectionMaterialGenerationBar', () => {
-  beforeEach(() => setLocale('en'));
+  beforeEach(() => {
+    setLocale('en');
+    (window as unknown as { vscodeApi?: unknown }).vscodeApi = {
+      postMessage: vi.fn(),
+      supportsMessage: (messageType: string) => messageType === 'sendToAgent',
+    };
+  });
 
   it('shows prompt metadata and quick generation for generated canonical media', () => {
     const node = mediaNode('generated-media', {
@@ -61,7 +72,10 @@ describe('SelectionMaterialGenerationBar', () => {
 
   it('routes generate again through the Agent with explicit provenance', () => {
     const postMessage = vi.fn();
-    (window as unknown as { vscodeApi?: unknown }).vscodeApi = { postMessage };
+    (window as unknown as { vscodeApi?: unknown }).vscodeApi = {
+      postMessage,
+      supportsMessage: (messageType: string) => messageType === 'sendToAgent',
+    };
     resetVSCodeApi();
     const host = document.createElement('div');
     document.body.appendChild(host);

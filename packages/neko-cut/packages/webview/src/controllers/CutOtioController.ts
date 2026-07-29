@@ -1,4 +1,8 @@
-import { CUT_THUMBNAIL_DENSITIES, isCutUserDiagnostic } from '@neko-cut/domain';
+import {
+  CUT_THUMBNAIL_DENSITIES,
+  isCutUserDiagnostic,
+  parseCutHostPresentationState,
+} from '@neko-cut/domain';
 import type {
   CutClipRepresentationRequest,
   CutClipRepresentationResult,
@@ -6,6 +10,7 @@ import type {
   CutExportTaskSnapshot,
   CutExportSettings,
   CutHtmlVideoDescriptor,
+  CutHostPresentationState,
   CutPcmStreamDescriptor,
   OtioTrackKind,
   TimelineView,
@@ -47,6 +52,11 @@ export type CutWebviewIntent =
   | ({ readonly type: 'cut:command'; readonly command: CutCommand } & CutMutationIdentity)
   | ({ readonly type: 'cut:batch'; readonly commands: readonly CutCommand[] } & CutMutationIdentity)
   | ({ readonly type: 'cut:undo' | 'cut:redo' } & CutMutationIdentity)
+  | ({ readonly type: 'cut:save' } & CutMutationIdentity)
+  | ({
+      readonly type: 'cut:presentation-update';
+      readonly presentation: CutHostPresentationState;
+    } & CutMutationIdentity)
   | ({
       readonly type: 'cut:add-track';
       readonly trackKind: 'Audio' | 'Subtitle';
@@ -149,6 +159,7 @@ export class CutOtioController {
     readonly playbackMode: 'playing' | 'paused';
   };
   private previewGeneration = 0;
+  private acceptedPresentation?: CutHostPresentationState;
 
   constructor(
     private readonly store: CutPresentationStore,
@@ -197,6 +208,24 @@ export class CutOtioController {
 
   redo(): void {
     this.enqueueMutation((identity) => ({ type: 'cut:redo', ...identity }));
+  }
+
+  save(): void {
+    this.enqueueMutation((identity) => ({ type: 'cut:save', ...identity }));
+  }
+
+  updatePresentation(presentation: CutHostPresentationState): void {
+    const normalized = parseCutHostPresentationState(presentation);
+    if (!this.acceptedPresentation) return;
+    if (sameCutHostPresentation(this.acceptedPresentation, normalized)) {
+      return;
+    }
+    this.acceptedPresentation = normalized;
+    this.enqueueMutation((identity) => ({
+      type: 'cut:presentation-update',
+      ...identity,
+      presentation: normalized,
+    }));
   }
 
   addTrack(trackKind: Extract<OtioTrackKind, 'Audio' | 'Subtitle'>): void {
@@ -371,6 +400,24 @@ export class CutOtioController {
 
   acceptHostMessage(value: unknown): boolean {
     if (!isRecord(value) || typeof value['type'] !== 'string') return false;
+    if (
+      value['type'] === 'cut:runtime-snapshot' &&
+      isTimelineView(value['view']) &&
+      typeof value['dirty'] === 'boolean'
+    ) {
+      const presentation = parseCutHostPresentationState(value['presentation']);
+      this.acceptedPresentation = presentation;
+      this.acceptView(value['view']);
+      this.store.setState({
+        dirty: value['dirty'],
+        previewVolume: presentation.previewVolume,
+        previewMuted: presentation.previewMuted,
+        pixelsPerSecond: presentation.pixelsPerSecond,
+        snappingEnabled: presentation.snappingEnabled,
+        overviewVisible: presentation.overviewVisible,
+      });
+      return true;
+    }
     if (value['type'] === 'cut:view' && isTimelineView(value['view'])) {
       this.acceptView(value['view']);
       return true;
@@ -560,6 +607,19 @@ export class CutOtioController {
       expectedRevision: view.revision,
     };
   }
+}
+
+function sameCutHostPresentation(
+  left: CutHostPresentationState,
+  right: CutHostPresentationState,
+): boolean {
+  return (
+    left.previewVolume === right.previewVolume &&
+    left.previewMuted === right.previewMuted &&
+    left.pixelsPerSecond === right.pixelsPerSecond &&
+    left.snappingEnabled === right.snappingEnabled &&
+    left.overviewVisible === right.overviewVisible
+  );
 }
 
 function hasAnyGap(view: TimelineView): boolean {
@@ -788,8 +848,8 @@ function isHtmlVideoDescriptor(value: unknown): value is CutHtmlVideoDescriptor 
   return (
     isRecord(value) &&
     value['version'] === 1 &&
-    value['transport'] === 'http' &&
-    isLoopbackHttpUrl(value['url']) &&
+    isCutMediaTransport(value['transport']) &&
+    isCutMediaUrl(value['url'], value['transport']) &&
     typeof value['mimeType'] === 'string' &&
     typeof value['preparationProfile'] === 'string' &&
     isNonNegativeFinite(value['mediaTimeOriginSeconds']) &&
@@ -797,26 +857,35 @@ function isHtmlVideoDescriptor(value: unknown): value is CutHtmlVideoDescriptor 
   );
 }
 
-function isLoopbackHttpUrl(value: unknown): value is string {
-  if (typeof value !== 'string') return false;
-  try {
-    const url = new URL(value);
-    return url.protocol === 'http:' && url.hostname === '127.0.0.1';
-  } catch {
-    return false;
-  }
-}
-
 function isPcmStreamDescriptor(value: unknown): value is CutPcmStreamDescriptor {
   return (
     isRecord(value) &&
     value['version'] === 1 &&
-    value['transport'] === 'http' &&
+    isCutMediaTransport(value['transport']) &&
+    isCutMediaUrl(value['streamUrl'], value['transport']) &&
     value['protocol'] === 'neko-pcm-f32le-v1' &&
-    typeof value['streamUrl'] === 'string' &&
     typeof value['sampleRate'] === 'number' &&
     typeof value['channels'] === 'number'
   );
+}
+
+function isCutMediaTransport(value: unknown): value is CutHtmlVideoDescriptor['transport'] {
+  return value === 'http' || value === 'authorized';
+}
+
+function isCutMediaUrl(
+  value: unknown,
+  transport: CutHtmlVideoDescriptor['transport'],
+): value is string {
+  if (typeof value !== 'string') return false;
+  try {
+    const url = new URL(value);
+    return transport === 'http'
+      ? url.protocol === 'http:' && url.hostname === '127.0.0.1'
+      : url.protocol === 'neko-media:' && url.hostname === 'desktop';
+  } catch {
+    return false;
+  }
 }
 
 function isExportTaskSnapshot(value: unknown): value is CutExportTaskSnapshot {

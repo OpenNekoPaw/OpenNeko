@@ -1,5 +1,5 @@
 import { useMemo, useState, type ReactNode } from 'react';
-import type { CanvasNode, CanvasViewport } from '@neko/shared';
+import { isContentLocator, type CanvasNode, type CanvasViewport } from '@neko/shared';
 import { Button, IconButton, Popover } from '@neko/ui/primitives';
 import {
   CopyIcon,
@@ -11,10 +11,12 @@ import {
   TrashIcon,
   ZoomInIcon,
 } from '@neko/shared/icons';
-import { useCanvasStore } from '../../stores/canvasStore';
-import { useClipboardStore } from '../../stores/clipboardStore';
-import { useHistoryStore } from '../../stores/historyStore';
-import { getGlobalVSCodeApi } from '../../utils/vscode';
+import {
+  useCanvasStoreApi,
+  useClipboardStoreApi,
+  useHistoryStoreApi,
+} from '../../stores/canvasStoreScope';
+import { useOptionalCanvasHost } from '../../host-runtime';
 import { t } from '../../i18n';
 
 interface SelectionContextToolbarProps {
@@ -43,12 +45,19 @@ export function SelectionContextToolbar({
   viewportSize,
   hidden = false,
 }: SelectionContextToolbarProps): ReactNode {
+  const host = useOptionalCanvasHost();
+  const canvasStore = useCanvasStoreApi();
+  const clipboardStore = useClipboardStoreApi();
+  const historyStore = useHistoryStoreApi();
   const [overflowOpen, setOverflowOpen] = useState(false);
   const selectedNodes = useMemo(
     () => selectedNodeIds.flatMap((id) => nodes.find((node) => node.id === id) ?? []),
     [nodes, selectedNodeIds],
   );
-  const actions = useMemo(() => resolveActions(selectedNodes), [selectedNodes]);
+  const actions = useMemo(
+    () => resolveActions(selectedNodes, host, canvasStore, clipboardStore, historyStore),
+    [canvasStore, clipboardStore, historyStore, host, selectedNodes],
+  );
   if (hidden || selectedNodes.length === 0 || actions.length === 0) return null;
 
   const position = resolveToolbarPosition(selectedNodes, viewport, viewportSize);
@@ -120,24 +129,34 @@ export function SelectionContextToolbar({
   );
 }
 
-function resolveActions(selectedNodes: readonly CanvasNode[]): ToolbarAction[] {
+function resolveActions(
+  selectedNodes: readonly CanvasNode[],
+  host: ReturnType<typeof useOptionalCanvasHost>,
+  canvasStore: ReturnType<typeof useCanvasStoreApi>,
+  clipboardStore: ReturnType<typeof useClipboardStoreApi>,
+  historyStore: ReturnType<typeof useHistoryStoreApi>,
+): ToolbarAction[] {
   const selectedIds = selectedNodes.map((node) => node.id);
   if (selectedNodes.length > 1) {
     return [
-      createQuickGenerateAction(selectedIds),
+      ...(host?.supportsMessage('sendToAgent')
+        ? [createQuickGenerateAction(selectedIds, host)]
+        : []),
       {
         key: 'group-selection',
         label: t('menu.group'),
         icon: <LayersIcon size={14} />,
-        run: () => useCanvasStore.getState().groupNodes(selectedIds),
+        run: () => canvasStore.getState().groupNodes(selectedIds),
       },
-      createDeleteAction(selectedIds),
+      createDeleteAction(selectedIds, canvasStore),
     ];
   }
 
   const node = selectedNodes[0];
   if (!node) return [];
-  const actions: ToolbarAction[] = [createQuickGenerateAction([node.id])];
+  const actions: ToolbarAction[] = host?.supportsMessage('sendToAgent')
+    ? [createQuickGenerateAction([node.id], host)]
+    : [];
   if (
     node.type === 'media' &&
     (node.data.runtimeAssetPath ||
@@ -145,12 +164,20 @@ function resolveActions(selectedNodes: readonly CanvasNode[]): ToolbarAction[] {
       node.data.resourceRef ||
       node.data.documentResourceRef)
   ) {
+    const contentLocator = isContentLocator(node.data.contentLocator)
+      ? node.data.contentLocator
+      : undefined;
     actions.push({
       key: 'node:open-media-preview',
       label: t('action.openPreview'),
       icon: <PlayIcon size={14} />,
-      run: () =>
-        getGlobalVSCodeApi()?.postMessage({
+      run: () => {
+        if (contentLocator) {
+          void host?.previewResource(contentLocator);
+          return;
+        }
+        if (!host?.supportsMessage('openMediaPreview')) return;
+        host?.postMessage({
           type: 'openMediaPreview',
           nodeId: node.id,
           assetPath: node.data.runtimeAssetPath || node.data.assetPath,
@@ -159,27 +186,29 @@ function resolveActions(selectedNodes: readonly CanvasNode[]): ToolbarAction[] {
           ...(node.data.documentResourceRef
             ? { documentResourceRef: node.data.documentResourceRef }
             : {}),
-        }),
+        });
+      },
     });
   }
   if (node.type === 'file' && node.data.path) {
+    const path = node.data.path;
     actions.push({
       key: 'node:open-in-editor',
       label: t('action.open'),
       icon: <OpenIcon size={14} />,
-      run: () =>
-        getGlobalVSCodeApi()?.postMessage({ type: 'openDocument', docPath: node.data.path }),
+      run: () => void host?.previewResource({ kind: 'workspace-file', path }),
     });
   }
   if (node.type === 'canvas-embed' && node.data.canvasPath) {
+    const path = node.data.canvasPath;
     actions.push({
       key: 'node:open-in-editor',
       label: t('action.open'),
       icon: <OpenIcon size={14} />,
       run: () =>
-        getGlobalVSCodeApi()?.postMessage({
-          type: 'openDocument',
-          docPath: node.data.canvasPath,
+        void host?.previewResource({
+          kind: 'workspace-file',
+          path,
         }),
     });
   }
@@ -189,31 +218,34 @@ function resolveActions(selectedNodes: readonly CanvasNode[]): ToolbarAction[] {
         key: 'group:fit',
         label: t('group.fitToContent'),
         icon: <ZoomInIcon size={14} />,
-        run: () => useCanvasStore.getState().fitGroupToContent(node.id),
+        run: () => canvasStore.getState().fitGroupToContent(node.id),
       },
       {
         key: 'group:toggle',
         label: node.container?.collapsed ? t('group.expand') : t('group.collapse'),
         icon: <LayersIcon size={14} />,
         run: () =>
-          useCanvasStore.getState().setGroupCollapsed(node.id, node.container?.collapsed !== true),
+          canvasStore.getState().setGroupCollapsed(node.id, node.container?.collapsed !== true),
       },
     );
   }
-  actions.push(createDuplicateAction(node.id), {
-    ...createDeleteAction([node.id]),
+  actions.push(createDuplicateAction(node.id, canvasStore, clipboardStore, historyStore), {
+    ...createDeleteAction([node.id], canvasStore),
     overflowOnly: true,
   });
   return actions;
 }
 
-function createQuickGenerateAction(nodeIds: readonly string[]): ToolbarAction {
+function createQuickGenerateAction(
+  nodeIds: readonly string[],
+  host: ReturnType<typeof useOptionalCanvasHost>,
+): ToolbarAction {
   return {
     key: 'selection:quick-generate',
     label: t('action.quickGenerate'),
     icon: <RefreshIcon size={14} />,
     run: () =>
-      getGlobalVSCodeApi()?.postMessage({
+      host?.postMessage({
         type: 'sendToAgent',
         nodeIds: [...nodeIds],
         action: 'generate',
@@ -221,38 +253,46 @@ function createQuickGenerateAction(nodeIds: readonly string[]): ToolbarAction {
   };
 }
 
-function createDuplicateAction(nodeId: string): ToolbarAction {
+function createDuplicateAction(
+  nodeId: string,
+  canvasStore: ReturnType<typeof useCanvasStoreApi>,
+  clipboardStore: ReturnType<typeof useClipboardStoreApi>,
+  historyStore: ReturnType<typeof useHistoryStoreApi>,
+): ToolbarAction {
   return {
     key: 'node:duplicate',
     label: t('action.duplicateShort'),
     icon: <CopyIcon size={14} />,
     run: () => {
-      const canvasStore = useCanvasStore.getState();
-      const canvasData = canvasStore.canvasData;
+      const canvasState = canvasStore.getState();
+      const canvasData = canvasState.canvasData;
       if (!canvasData) return;
-      const result = useClipboardStore
+      const result = clipboardStore
         .getState()
         .duplicate([nodeId], canvasData.nodes, canvasData.connections);
       if (!result) return;
-      useHistoryStore.getState().pushState(canvasData);
-      canvasStore.setCanvasData({
+      historyStore.getState().pushState(canvasData);
+      canvasState.setCanvasData({
         ...canvasData,
         nodes: [...canvasData.nodes, ...result.nodes],
         connections: [...canvasData.connections, ...result.connections],
       });
-      canvasStore.selectNodes(result.nodes.map((node) => node.id));
+      canvasState.selectNodes(result.nodes.map((node) => node.id));
     },
   };
 }
 
-function createDeleteAction(nodeIds: readonly string[]): ToolbarAction {
+function createDeleteAction(
+  nodeIds: readonly string[],
+  canvasStore: ReturnType<typeof useCanvasStoreApi>,
+): ToolbarAction {
   return {
     key: 'delete-selection',
     label: t('menu.delete'),
     icon: <TrashIcon size={14} />,
     danger: true,
     run: () => {
-      const store = useCanvasStore.getState();
+      const store = canvasStore.getState();
       store.selectNodes([...nodeIds]);
       store.deleteSelected();
     },

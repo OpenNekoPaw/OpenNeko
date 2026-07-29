@@ -42,7 +42,7 @@ export interface MediaProbe {
 
 export interface PcmStreamDescriptor {
   readonly version: 1;
-  readonly transport: 'http';
+  readonly transport: 'http' | 'authorized';
   readonly protocol: 'neko-pcm-f32le-v1';
   readonly streamUrl: string;
   readonly sampleRate: number;

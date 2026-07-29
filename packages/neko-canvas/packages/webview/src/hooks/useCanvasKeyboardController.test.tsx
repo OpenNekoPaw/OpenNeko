@@ -41,6 +41,7 @@ describe('useCanvasKeyboardController', () => {
       window.dispatchEvent(createKeyEvent('a', 'KeyA', { ctrlKey: true }));
       window.dispatchEvent(createKeyEvent('z', 'KeyZ', { ctrlKey: true }));
       window.dispatchEvent(createKeyEvent('z', 'KeyZ', { ctrlKey: true, shiftKey: true }));
+      window.dispatchEvent(createKeyEvent('s', 'KeyS', { ctrlKey: true }));
       window.dispatchEvent(createKeyEvent('g', 'KeyG', { ctrlKey: true }));
     });
 
@@ -48,6 +49,7 @@ describe('useCanvasKeyboardController', () => {
     expect(options.onSelectAll).toHaveBeenCalledTimes(1);
     expect(options.onUndo).toHaveBeenCalledTimes(1);
     expect(options.onRedo).toHaveBeenCalledTimes(1);
+    expect(options.onSave).toHaveBeenCalledTimes(1);
   });
 
   it('does not mutate editor state while a nested input has DOM focus', () => {
@@ -222,6 +224,7 @@ function createOptions(
     onSelectAll: vi.fn(),
     onUndo: vi.fn(),
     onRedo: vi.fn(),
+    onSave: vi.fn(),
     onCopy: vi.fn(),
     onCut: vi.fn(),
     onPaste: vi.fn(),

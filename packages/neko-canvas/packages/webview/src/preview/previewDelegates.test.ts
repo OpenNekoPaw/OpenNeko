@@ -9,9 +9,10 @@ import { dispatchPreviewDelegate } from './previewDelegates';
 describe('dispatchPreviewDelegate', () => {
   const mockWindows: MockWebviewWindow[] = [];
   let postMessage: (message: unknown) => void;
+  let api: ReturnType<typeof createMockVSCodeApi>;
 
   beforeEach(() => {
-    const api = createMockVSCodeApi();
+    api = createMockVSCodeApi();
     postMessage = vi.fn();
     api.postMessage = postMessage;
     mockWindows.push(installMockWebviewWindow(api));
@@ -24,7 +25,7 @@ describe('dispatchPreviewDelegate', () => {
   });
 
   it('delegates through the VSCode message boundary', () => {
-    dispatchPreviewDelegate({
+    dispatchPreviewDelegate(api, {
       action: { id: 'open', label: 'Open', target: 'preview' },
       asset: { kind: 'asset-identity', path: 'pano.exr', mediaType: 'image' },
     });
