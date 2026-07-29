@@ -1,14 +1,17 @@
 import {
+  CameraIcon,
   CheckIcon,
   ControlledWorkbenchShell,
   FolderIcon,
   GridIcon,
   IconButton,
   InfoIcon,
+  LayersIcon,
   PackageIcon,
   PlusIcon,
   Popover,
   RightPanelIcon,
+  ScissorsIcon,
   SearchIcon,
   SendIcon,
   SettingsIcon,
@@ -486,7 +489,7 @@ function HomeWorkspace({
         onToggle={() => setNavigationCollapsed((value) => !value)}
         projection={projection}
       />
-      <main className="home-main dotted-surface">
+      <main className="home-main" data-home-surface="application">
         {section === 'create' ? (
           <HomeStartCreating actions={actions} pending={pending} projection={projection} />
         ) : section === 'assets' ? (
@@ -528,20 +531,20 @@ function HomeStartCreating({
       <section
         className="home-start"
         aria-labelledby="home-start-title"
-        data-home-composition="agent-start"
+        data-home-composition="task-launchpad"
       >
-        <header className="home-agent-heading">
-          <span className="home-agent-heading-icon" aria-hidden="true">
-            <StorylineIcon size={20} />
+        <header className="home-launchpad-heading">
+          <span className="home-launchpad-heading-icon" aria-hidden="true">
+            <StorylineIcon size={24} />
           </span>
           <div>
-            <span className="home-agent-heading-label">{t('home.start.agentLabel')}</span>
             <h1 id="home-start-title">{t('home.start.title')}</h1>
             <p>{t('home.start.subtitle')}</p>
           </div>
         </header>
         <form
-          className="home-agent-composer"
+          className="home-task-composer"
+          data-agent-entry="project-handoff"
           onSubmit={(event) => {
             event.preventDefault();
             actions.onStartConversation(projectId || undefined, input);
@@ -553,22 +556,34 @@ function HomeStartCreating({
             value={input}
             onChange={(event) => setInput(event.currentTarget.value)}
           />
-          <div className="home-agent-composer-footer">
-            <label>
-              <FolderIcon size={16} />
-              <select
-                aria-label={t('home.start.projectLabel')}
-                value={projectId}
-                onChange={(event) => setProjectId(event.currentTarget.value)}
+          <div className="home-task-composer-footer">
+            <div className="home-task-composer-scope">
+              <button
+                type="button"
+                className="home-open-project-button"
+                onClick={actions.onOpenProject}
+                disabled={pending}
               >
-                <option value="">{t('home.start.chooseWorkspace')}</option>
-                {projection.catalog.projects.map((project) => (
-                  <option key={project.projectId} value={project.projectId}>
-                    {project.displayName}
-                  </option>
-                ))}
-              </select>
-            </label>
+                <PlusIcon size={15} />
+                {t('home.openProject')}
+              </button>
+              <span className="home-composer-divider" aria-hidden="true" />
+              <label>
+                <FolderIcon size={16} />
+                <select
+                  aria-label={t('home.start.projectLabel')}
+                  value={projectId}
+                  onChange={(event) => setProjectId(event.currentTarget.value)}
+                >
+                  <option value="">{t('home.start.chooseWorkspace')}</option>
+                  {projection.catalog.projects.map((project) => (
+                    <option key={project.projectId} value={project.projectId}>
+                      {project.displayName}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
             <IconButton
               disabled={pending || input.trim().length === 0}
               label={t('home.start.submit')}
@@ -577,28 +592,113 @@ function HomeStartCreating({
             />
           </div>
         </form>
-        <div className="home-start-shortcuts">
-          <button type="button" onClick={actions.onOpenProject} disabled={pending}>
-            <PlusIcon size={16} />
-            {t('home.openProject')}
-          </button>
-          <button
-            type="button"
-            onClick={() => setInput(t('home.start.prompt.plan'))}
-            disabled={pending}
-          >
-            {t('home.start.shortcut.plan')}
-          </button>
-          <button
-            type="button"
-            onClick={() => setInput(t('home.start.prompt.assets'))}
-            disabled={pending}
-          >
-            {t('home.start.shortcut.assets')}
-          </button>
-        </div>
+        <section className="home-common-intents" aria-labelledby="home-common-intents-title">
+          <h2 id="home-common-intents-title">{t('home.start.commonTasks')}</h2>
+          <div className="home-intent-actions">
+            <HomeIntentButton
+              icon={<StorylineIcon size={16} />}
+              label={t('home.start.shortcut.plan')}
+              onClick={() => setInput(t('home.start.prompt.plan'))}
+              pending={pending}
+            />
+            <HomeIntentButton
+              icon={<PackageIcon size={16} />}
+              label={t('home.start.shortcut.assets')}
+              onClick={() => setInput(t('home.start.prompt.assets'))}
+              pending={pending}
+            />
+            <HomeIntentButton
+              icon={<LayersIcon size={16} />}
+              label={t('home.start.shortcut.character')}
+              onClick={() => setInput(t('home.start.prompt.character'))}
+              pending={pending}
+            />
+            <HomeIntentButton
+              icon={<ScissorsIcon size={16} />}
+              label={t('home.start.shortcut.video')}
+              onClick={() => setInput(t('home.start.prompt.video'))}
+              pending={pending}
+            />
+          </div>
+        </section>
+        <section className="home-quick-starts" aria-labelledby="home-quick-starts-title">
+          <header>
+            <div>
+              <h2 id="home-quick-starts-title">{t('home.start.quickStarts')}</h2>
+              <p>{t('home.start.quickStartsDescription')}</p>
+            </div>
+          </header>
+          <div className="home-template-grid">
+            <HomeTemplateButton
+              description={t('home.start.template.storyboard.description')}
+              icon={<CameraIcon size={18} />}
+              label={t('home.start.template.storyboard.title')}
+              onClick={() => setInput(t('home.start.prompt.storyboard'))}
+              pending={pending}
+            />
+            <HomeTemplateButton
+              description={t('home.start.template.character.description')}
+              icon={<LayersIcon size={18} />}
+              label={t('home.start.template.character.title')}
+              onClick={() => setInput(t('home.start.prompt.characterKit'))}
+              pending={pending}
+            />
+            <HomeTemplateButton
+              description={t('home.start.template.video.description')}
+              icon={<ScissorsIcon size={18} />}
+              label={t('home.start.template.video.title')}
+              onClick={() => setInput(t('home.start.prompt.videoPlan'))}
+              pending={pending}
+            />
+          </div>
+        </section>
       </section>
     </div>
+  );
+}
+
+function HomeIntentButton({
+  icon,
+  label,
+  onClick,
+  pending,
+}: {
+  readonly icon: JSX.Element;
+  readonly label: string;
+  readonly onClick: () => void;
+  readonly pending: boolean;
+}): JSX.Element {
+  return (
+    <button type="button" onClick={onClick} disabled={pending}>
+      {icon}
+      <span>{label}</span>
+    </button>
+  );
+}
+
+function HomeTemplateButton({
+  description,
+  icon,
+  label,
+  onClick,
+  pending,
+}: {
+  readonly description: string;
+  readonly icon: JSX.Element;
+  readonly label: string;
+  readonly onClick: () => void;
+  readonly pending: boolean;
+}): JSX.Element {
+  return (
+    <button type="button" onClick={onClick} disabled={pending}>
+      <span className="home-template-icon" aria-hidden="true">
+        {icon}
+      </span>
+      <span>
+        <strong>{label}</strong>
+        <small>{description}</small>
+      </span>
+    </button>
   );
 }
 

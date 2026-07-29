@@ -74,9 +74,8 @@ export const en = {
   'home.workspace': 'Workspace',
   'home.projects': 'Projects',
   'home.openProject': 'Open project',
-  'home.start.title': 'Start creating',
-  'home.start.agentLabel': 'Neko Agent',
-  'home.start.subtitle': 'Open a content workspace to plan, create, and review with Neko Agent.',
+  'home.start.title': 'Create with OpenNeko',
+  'home.start.subtitle': 'Turn an idea into a project with Neko Agent and your creative tools.',
   'home.start.action': 'Choose workspace',
   'home.start.inputLabel': 'Creation intent',
   'home.start.inputPlaceholder':
@@ -87,8 +86,29 @@ export const en = {
   'home.start.projectHandoffFailed': 'The selected workspace did not open a Project view.',
   'home.start.shortcut.plan': 'Plan a creation',
   'home.start.shortcut.assets': 'Organize assets',
+  'home.start.shortcut.character': 'Create a character',
+  'home.start.shortcut.video': 'Plan a video',
   'home.start.prompt.plan': 'Help me plan this creation from concept to deliverables.',
   'home.start.prompt.assets': 'Review the project assets and propose an organization plan.',
+  'home.start.prompt.character':
+    'Help me create a character profile, relationships, visual references, and voice direction.',
+  'home.start.prompt.video':
+    'Help me plan a video from story structure and required media through editing and delivery.',
+  'home.start.commonTasks': 'Common creation tasks',
+  'home.start.quickStarts': 'Quick starts',
+  'home.start.quickStartsDescription': 'Start from a focused creative brief.',
+  'home.start.template.storyboard.title': 'Storyboard a concept',
+  'home.start.template.storyboard.description': 'Develop scenes, shots, and visual rhythm.',
+  'home.start.template.character.title': 'Build a character kit',
+  'home.start.template.character.description': 'Profile, relationships, references, and voice.',
+  'home.start.template.video.title': 'Prepare a video plan',
+  'home.start.template.video.description': 'Media requirements, edit structure, and delivery.',
+  'home.start.prompt.storyboard':
+    'Turn my concept into a storyboard with scenes, shots, visual direction, and pacing.',
+  'home.start.prompt.characterKit':
+    'Build a complete character kit with profile, relationships, visual references, and voice direction.',
+  'home.start.prompt.videoPlan':
+    'Create a video production plan covering media requirements, edit structure, audio, and delivery.',
   'home.quickStart': 'Quick start',
   'home.recentProjects': 'Recent projects',
   'home.recentContentProjects': 'Recent content projects',

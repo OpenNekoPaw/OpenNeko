@@ -200,7 +200,12 @@ describe('DesktopShellView', () => {
     const markup = renderShell(<DesktopShellView projection={homeProjection()} />);
 
     expect(markup).toContain('Creation intent');
-    expect(markup).toContain('data-home-composition="agent-start"');
+    expect(markup).toContain('data-home-composition="task-launchpad"');
+    expect(markup).toContain('data-home-surface="application"');
+    expect(markup).toContain('Create with OpenNeko');
+    expect(markup).toContain('Common creation tasks');
+    expect(markup).toContain('Quick starts');
+    expect(markup).not.toContain('home-main dotted-surface');
     expect(markup).not.toContain('home-hero-mark');
     expect(markup).not.toContain('home-hero');
     expect(markup).toContain('Demo Project');

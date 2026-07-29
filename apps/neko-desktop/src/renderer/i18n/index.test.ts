@@ -12,8 +12,8 @@ describe('Desktop renderer i18n', () => {
     const en = createDesktopI18n('en');
     const zhCN = createDesktopI18n('zh-cn');
 
-    expect(en.t('home.start.title')).toBe('Start creating');
-    expect(zhCN.t('home.start.title')).toBe('开始创作');
+    expect(en.t('home.start.title')).toBe('Create with OpenNeko');
+    expect(zhCN.t('home.start.title')).toBe('与 OpenNeko 一起创作');
     expect(zhCN.t('workspace.canvas.unavailable')).toBe('画布尚不可用');
     expect(zhCN.t('shell.openProject')).not.toBe('shell.openProject');
   });
