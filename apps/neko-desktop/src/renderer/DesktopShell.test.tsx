@@ -216,7 +216,20 @@ describe('DesktopShellView', () => {
   });
 
   it('uses one application primary sidebar contract on Home and in a Content Project', () => {
-    const projection = homeProjection();
+    const baseProjection = homeProjection();
+    const projection: DesktopShellProjection = {
+      ...baseProjection,
+      window: {
+        ...baseProjection.window,
+        workbench: {
+          ...baseProjection.window.workbench,
+          primarySidebar: {
+            visible: true,
+            width: 288,
+          },
+        },
+      },
+    };
     const openTab = {
       tabId: 'tab-1',
       projectId: 'content:workspace-1',
@@ -249,6 +262,14 @@ describe('DesktopShellView', () => {
     const homeSidebar = extractPrimarySidebar(homeMarkup);
     const projectSidebar = extractPrimarySidebar(projectMarkup);
 
+    for (const markup of [homeMarkup, projectMarkup]) {
+      expect(markup).toContain('class="application-primary-sidebar-frame"');
+      expect(markup).toContain('data-primary-sidebar-frame="application"');
+      expect(markup).toContain('data-primary-sidebar-placement="flush"');
+      expect(markup).toContain('data-primary-sidebar-default-width="240"');
+      expect(markup).toContain('data-primary-sidebar-width="288"');
+      expect(markup).toContain('data-primary-sidebar-hover-reveal="false"');
+    }
     for (const sidebar of [homeSidebar, projectSidebar]) {
       expect(sidebar).toContain('home-navigation project-primary-sidebar');
       expect(sidebar).toContain('Start creating');
@@ -412,6 +433,11 @@ describe('DesktopShellView', () => {
 
     expect(markup).toContain('data-primary-visible="true"');
     expect(markup).toContain('project-primary-sidebar--compact');
+    expect(markup).toContain('data-primary-sidebar-placement="flush"');
+    expect(markup).toContain('data-primary-sidebar-hover-reveal="true"');
+    expect(markup).toContain('data-primary-sidebar-expanded-width="240"');
+    expect(markup).toContain('Recent projects');
+    expect(markup).toContain('Recent Agent conversations');
     expect(markup).toContain('data-left-presentation="docked"');
     expect(markup).toContain('data-right-presentation="docked"');
     expect(markup).toContain('Creative main surface');

@@ -1,6 +1,7 @@
 import type { PreviewContentKind } from '@neko-preview/contracts';
 
 export const DESKTOP_WORKBENCH_CONTRACT_VERSION = 1 as const;
+export const APPLICATION_PRIMARY_SIDEBAR_DEFAULT_WIDTH = 240;
 
 export const DESKTOP_WORKBENCH_LIMITS = {
   primarySidebarWidth: { min: 208, max: 360 },
@@ -95,7 +96,7 @@ export function createDefaultDesktopWorkbenchLayout(
     preset: 'agent-focus',
     primarySidebar: {
       visible: true,
-      width: 240,
+      width: APPLICATION_PRIMARY_SIDEBAR_DEFAULT_WIDTH,
     },
     resourceDock: {
       presentation: 'hidden',

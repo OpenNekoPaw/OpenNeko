@@ -403,13 +403,41 @@ code {
   display: grid;
   width: 100%;
   height: 100%;
-  grid-template-columns: 240px minmax(0, 1fr);
-  padding: 8px;
-  gap: 8px;
+  grid-template-columns: auto minmax(0, 1fr);
 }
 
-.home-layout[data-navigation-collapsed='true'] {
-  grid-template-columns: 64px minmax(0, 1fr);
+.application-primary-sidebar-frame {
+  position: relative;
+  z-index: 20;
+  width: 240px;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: visible;
+}
+
+.application-primary-sidebar-frame > .home-navigation {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 100%;
+  height: 100%;
+  transition:
+    width 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.application-primary-sidebar-frame[data-primary-sidebar-hover-reveal='true']
+  > .home-navigation {
+  width: 64px;
+}
+
+.application-primary-sidebar-frame[data-primary-sidebar-hover-reveal='true']:is(
+    :hover,
+    :focus-within
+  )
+  > .home-navigation {
+  width: var(--application-primary-sidebar-expanded-width);
+  box-shadow: var(--neko-desktop-shadow-overlay);
 }
 
 .home-navigation {
@@ -418,11 +446,7 @@ code {
   flex-direction: column;
   gap: 6px;
   padding: 44px 12px 12px;
-  border: 1px solid var(--neko-desktop-border);
-  border-radius: var(--neko-desktop-radius-frame);
   background: var(--neko-desktop-chrome);
-  box-shadow: var(--neko-desktop-shadow-surface);
-  backdrop-filter: var(--neko-glass-blur);
   -webkit-app-region: drag;
 }
 
@@ -461,6 +485,12 @@ code {
   margin-left: 0;
 }
 
+.home-navigation--compact .home-brand strong,
+.home-navigation--compact .home-recent-navigation,
+.home-navigation--compact .attention-summary {
+  display: none;
+}
+
 .home-navigation--compact .home-primary-navigation {
   width: 100%;
 }
@@ -477,6 +507,85 @@ code {
 .home-navigation--compact .home-navigation-footer {
   justify-content: center;
   width: 100%;
+}
+
+.application-primary-sidebar-frame[data-primary-sidebar-hover-reveal='true']:is(
+    :hover,
+    :focus-within
+  )
+  .home-navigation--compact {
+  align-items: stretch;
+  padding-inline: 12px;
+}
+
+.application-primary-sidebar-frame[data-primary-sidebar-hover-reveal='true']:is(
+    :hover,
+    :focus-within
+  )
+  .home-navigation--compact
+  .home-brand {
+  flex-direction: row;
+  gap: 9px;
+  padding: 0 8px 8px;
+}
+
+.application-primary-sidebar-frame[data-primary-sidebar-hover-reveal='true']:is(
+    :hover,
+    :focus-within
+  )
+  .home-navigation--compact
+  .home-brand
+  > button {
+  margin-left: auto;
+}
+
+.application-primary-sidebar-frame[data-primary-sidebar-hover-reveal='true']:is(
+    :hover,
+    :focus-within
+  )
+  .home-navigation--compact
+  :is(.home-brand strong, .attention-summary) {
+  display: flex;
+}
+
+.application-primary-sidebar-frame[data-primary-sidebar-hover-reveal='true']:is(
+    :hover,
+    :focus-within
+  )
+  .home-navigation--compact
+  .home-recent-navigation {
+  display: block;
+  width: 100%;
+  flex: 1 1 auto;
+}
+
+.application-primary-sidebar-frame[data-primary-sidebar-hover-reveal='true']:is(
+    :hover,
+    :focus-within
+  )
+  .home-navigation--compact
+  .home-nav-button {
+  justify-content: flex-start;
+  padding: 0 10px;
+}
+
+.application-primary-sidebar-frame[data-primary-sidebar-hover-reveal='true']:is(
+    :hover,
+    :focus-within
+  )
+  .home-navigation--compact
+  .home-nav-button
+  span {
+  display: inline;
+}
+
+.application-primary-sidebar-frame[data-primary-sidebar-hover-reveal='true']:is(
+    :hover,
+    :focus-within
+  )
+  .home-navigation--compact
+  .home-navigation-footer {
+  justify-content: space-between;
 }
 
 .home-primary-navigation {
@@ -637,10 +746,7 @@ code {
   min-width: 0;
   min-height: 0;
   overflow: auto;
-  border: 1px solid var(--neko-desktop-border);
-  border-radius: var(--neko-desktop-radius-frame);
   background-color: var(--neko-desktop-main);
-  box-shadow: var(--neko-desktop-shadow-surface);
 }
 
 .home-overview {
@@ -1274,12 +1380,21 @@ button.home-management-card:hover {
 }
 
 .project-workspace .neko-controlled-workbench-main {
-  margin: 8px;
+  margin: 8px 8px 8px 0;
   border: 1px solid var(--neko-desktop-border);
   border-radius: var(--neko-desktop-radius-frame);
   background: var(--neko-desktop-main);
   box-shadow: var(--neko-desktop-shadow-surface);
   isolation: isolate;
+}
+
+.project-workspace[data-left-presentation='docked'] .neko-controlled-workbench-main {
+  margin-left: 8px;
+}
+
+.project-workspace .neko-controlled-workbench-primary {
+  z-index: 20;
+  overflow: visible;
 }
 
 .project-workspace .neko-controlled-workbench-main__primary,
@@ -1301,7 +1416,7 @@ button.home-management-card:hover {
 }
 
 .project-workspace .neko-controlled-workbench-dock--left {
-  padding: 8px 0 8px 8px;
+  padding: 8px 0;
 }
 
 .project-workspace .neko-controlled-workbench-dock--right {
@@ -1326,12 +1441,16 @@ button.home-management-card:hover {
 }
 
 .project-workspace .neko-controlled-workbench-timeline {
-  margin: 0 8px 8px;
+  margin: 0 8px 8px 0;
   overflow: hidden;
   border: 1px solid var(--neko-desktop-border);
   border-radius: var(--neko-desktop-radius-panel);
   background: var(--neko-desktop-surface);
   box-shadow: var(--neko-desktop-shadow-surface);
+}
+
+.project-workspace[data-left-presentation='docked'] .neko-controlled-workbench-timeline {
+  margin-left: 8px;
 }
 
 .project-workspace[data-timeline-visible='true'] .neko-controlled-workbench-main {

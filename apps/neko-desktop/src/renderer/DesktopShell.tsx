@@ -34,6 +34,7 @@ import type {
   DesktopHomePluginsResult,
 } from '../shared/home-management-contract';
 import {
+  APPLICATION_PRIMARY_SIDEBAR_DEFAULT_WIDTH,
   DESKTOP_WORKBENCH_LIMITS,
   type DesktopWorkbenchLayoutProjection,
 } from '../shared/workbench-contract';
@@ -471,24 +472,30 @@ function HomeWorkspace({
   readonly onOpenRecent: (projectId: string) => void;
   readonly onOpenConversation: (conversation: DesktopAgentHomeConversationSummary) => void;
 }): JSX.Element {
-  const [navigationCollapsed, setNavigationCollapsed] = useState(false);
+  const workbench = projection.window.workbench;
+  const navigationCollapsed = !workbench.primarySidebar.visible;
   return (
     <div
       className="home-layout"
       data-navigation-collapsed={navigationCollapsed ? 'true' : 'false'}
     >
-      <ApplicationPrimarySidebar
-        activeSection={section}
+      <ApplicationPrimarySidebarFrame
         compact={navigationCollapsed}
-        onNavigate={onSectionChange}
-        onDeleteConversation={actions.onDeleteConversation}
-        onOpenConversation={onOpenConversation}
-        onOpenRecent={onOpenRecent}
-        onRemoveRecentProject={actions.onRemoveRecentProject}
-        onOpenSettings={actions.onOpenSettings}
-        onToggle={() => setNavigationCollapsed((value) => !value)}
-        projection={projection}
-      />
+        expandedWidth={workbench.primarySidebar.width}
+      >
+        <ApplicationPrimarySidebar
+          activeSection={section}
+          compact={navigationCollapsed}
+          onNavigate={onSectionChange}
+          onDeleteConversation={actions.onDeleteConversation}
+          onOpenConversation={onOpenConversation}
+          onOpenRecent={onOpenRecent}
+          onRemoveRecentProject={actions.onRemoveRecentProject}
+          onOpenSettings={actions.onOpenSettings}
+          onToggle={() => actions.onUpdateWorkbench(togglePrimarySidebarWorkbench(workbench))}
+          projection={projection}
+        />
+      </ApplicationPrimarySidebarFrame>
       <main className="home-main" data-home-surface="application">
         {section === 'create' ? (
           <HomeStartCreating actions={actions} pending={pending} projection={projection} />
@@ -1592,29 +1599,27 @@ function ProjectPrimarySidebar({
 }): JSX.Element {
   const workbench = projection.window.workbench;
   const togglePrimarySidebar = (): void => {
-    actions.onUpdateWorkbench({
-      ...workbench,
-      revision: workbench.revision + 1,
-      primarySidebar: {
-        ...workbench.primarySidebar,
-        visible: !workbench.primarySidebar.visible,
-      },
-    });
+    actions.onUpdateWorkbench(togglePrimarySidebarWorkbench(workbench));
   };
   return (
-    <ApplicationPrimarySidebar
-      activeProjectId={project.projectId}
+    <ApplicationPrimarySidebarFrame
       compact={compact}
-      disabled={pending}
-      onNavigate={actions.onHome}
-      onDeleteConversation={actions.onDeleteConversation}
-      onOpenConversation={actions.onOpenConversation}
-      onOpenRecent={actions.onOpenRecent}
-      onRemoveRecentProject={actions.onRemoveRecentProject}
-      onOpenSettings={actions.onOpenSettings}
-      onToggle={togglePrimarySidebar}
-      projection={projection}
-    />
+      expandedWidth={workbench.primarySidebar.width}
+    >
+      <ApplicationPrimarySidebar
+        activeProjectId={project.projectId}
+        compact={compact}
+        disabled={pending}
+        onNavigate={actions.onHome}
+        onDeleteConversation={actions.onDeleteConversation}
+        onOpenConversation={actions.onOpenConversation}
+        onOpenRecent={actions.onOpenRecent}
+        onRemoveRecentProject={actions.onRemoveRecentProject}
+        onOpenSettings={actions.onOpenSettings}
+        onToggle={togglePrimarySidebar}
+        projection={projection}
+      />
+    </ApplicationPrimarySidebarFrame>
   );
 }
 
@@ -1710,6 +1715,19 @@ export function resizePrimarySidebarWorkbench(
     primarySidebar: {
       ...workbench.primarySidebar,
       width,
+    },
+  };
+}
+
+export function togglePrimarySidebarWorkbench(
+  workbench: DesktopWorkbenchLayoutProjection,
+): DesktopWorkbenchLayoutProjection {
+  return {
+    ...workbench,
+    revision: workbench.revision + 1,
+    primarySidebar: {
+      ...workbench.primarySidebar,
+      visible: !workbench.primarySidebar.visible,
     },
   };
 }
@@ -2491,23 +2509,53 @@ function ApplicationPrimarySidebar({
           onClick={() => onNavigate('creations')}
         />
       </nav>
-      {compact ? null : (
-        <PrimaryRecentNavigation
-          activeProjectId={activeProjectId}
-          disabled={disabled}
-          onDeleteConversation={onDeleteConversation}
-          onOpenConversation={onOpenConversation}
-          onOpenRecent={onOpenRecent}
-          onRemoveRecentProject={onRemoveRecentProject}
-          projection={projection}
-        />
-      )}
+      <PrimaryRecentNavigation
+        activeProjectId={activeProjectId}
+        disabled={disabled}
+        onDeleteConversation={onDeleteConversation}
+        onOpenConversation={onOpenConversation}
+        onOpenRecent={onOpenRecent}
+        onRemoveRecentProject={onRemoveRecentProject}
+        projection={projection}
+      />
       <PrimarySidebarFooter
         compact={compact}
         onOpenSettings={onOpenSettings}
         projection={projection}
       />
     </aside>
+  );
+}
+
+function ApplicationPrimarySidebarFrame({
+  children,
+  compact,
+  expandedWidth,
+}: {
+  readonly children: JSX.Element;
+  readonly compact: boolean;
+  readonly expandedWidth: number;
+}): JSX.Element {
+  const width = compact ? 64 : expandedWidth;
+  const frameStyle: React.CSSProperties & {
+    '--application-primary-sidebar-expanded-width': string;
+  } = {
+    '--application-primary-sidebar-expanded-width': `${expandedWidth}px`,
+    width,
+  };
+  return (
+    <div
+      className="application-primary-sidebar-frame"
+      data-primary-sidebar-frame="application"
+      data-primary-sidebar-placement="flush"
+      data-primary-sidebar-default-width={APPLICATION_PRIMARY_SIDEBAR_DEFAULT_WIDTH}
+      data-primary-sidebar-expanded-width={expandedWidth}
+      data-primary-sidebar-hover-reveal={compact ? 'true' : 'false'}
+      data-primary-sidebar-width={width}
+      style={frameStyle}
+    >
+      {children}
+    </div>
   );
 }
 
@@ -2524,7 +2572,7 @@ function PrimarySidebarBrand({
   return (
     <div className="home-brand">
       <span className="brand-mark" aria-hidden="true">N</span>
-      {compact ? null : <strong>{t('app.name')}</strong>}
+      <strong>{t('app.name')}</strong>
       <IconButton
         disabled={disabled}
         label={
@@ -2551,7 +2599,7 @@ function PrimarySidebarFooter({
   const { t } = useTranslation();
   return (
     <div className="home-navigation-footer">
-      {compact ? null : <AttentionSummary projection={projection} />}
+      <AttentionSummary projection={projection} />
       <Tooltip content={t('shell.settingsLabel')}>
         <IconButton
           label={t('shell.settingsLabel')}
