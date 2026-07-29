@@ -19,8 +19,10 @@ import {
 } from '../shared/bridge-contract';
 import {
   DESKTOP_SHELL_CONTRACT_VERSION,
+  parseDesktopConversationDeleteRequest,
   parseDesktopProfileRequest,
   parseDesktopProjectOpenRequest,
+  parseDesktopProjectRemoveRecentRequest,
   parseDesktopShellRequest,
   parseDesktopTabMutationRequest,
   parseDesktopWorkbenchMutationRequest,
@@ -359,6 +361,54 @@ export class DesktopAppHost {
       requestId: request.requestId,
       status: 'opened',
       projection: opened.projection,
+    };
+  }
+
+  async removeRecentProject(
+    sender: DesktopSenderIdentity,
+    payload: unknown,
+  ): Promise<DesktopShellResponse> {
+    this.requireActive();
+    const request = parseDesktopProjectRemoveRecentRequest(payload);
+    const window = this.windows.resolveSender(sender);
+    return {
+      schemaVersion: DESKTOP_SHELL_CONTRACT_VERSION,
+      requestId: request.requestId,
+      projection: await this.shell.removeRecentProject(
+        window.windowId,
+        request.projectId,
+        request.expectedEndpointEpoch,
+        request.expectedWindowRevision,
+        request.expectedCatalogRevision,
+      ),
+    };
+  }
+
+  async deleteHomeConversation(
+    sender: DesktopSenderIdentity,
+    payload: unknown,
+  ): Promise<DesktopShellResponse> {
+    this.requireActive();
+    const request = parseDesktopConversationDeleteRequest(payload);
+    const window = this.windows.resolveSender(sender);
+    await this.shell.assertAgentHomeConversation(
+      window.windowId,
+      request.expectedEndpointEpoch,
+      request.expectedWindowRevision,
+      request.expectedAgentHomeRevision,
+      request.navigation,
+    );
+    const workspaceResolution = await this.shell.resolveAgentWorkspace(
+      request.navigation.workspaceId,
+    );
+    const workspace =
+      this.agent.getWorkspace(request.navigation.workspaceId) ??
+      (await this.agent.attachWorkspace(workspaceResolution));
+    await workspace.deleteConversation(request.navigation.conversationId);
+    return {
+      schemaVersion: DESKTOP_SHELL_CONTRACT_VERSION,
+      requestId: request.requestId,
+      projection: await this.shell.getProjection(window.windowId),
     };
   }
 

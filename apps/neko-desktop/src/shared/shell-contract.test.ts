@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+  createDesktopConversationDeleteRequest,
   createDesktopProfileRequest,
   createDesktopProjectOpenRequest,
+  createDesktopProjectRemoveRecentRequest,
   createDesktopTabMutationRequest,
   DesktopShellContractError,
   parseDesktopShellProjection,
@@ -38,6 +40,46 @@ describe('Desktop Shell contract', () => {
       expectedEndpointEpoch: 'app-1:window-1:1',
       expectedWindowRevision: 5,
       projectId: 'content:workspace-1',
+    });
+    expect(
+      createDesktopProjectRemoveRecentRequest(
+        'request-4',
+        'content:workspace-1',
+        'app-1:window-1:1',
+        5,
+        3,
+      ),
+    ).toEqual({
+      schemaVersion: 1,
+      requestId: 'request-4',
+      expectedEndpointEpoch: 'app-1:window-1:1',
+      expectedWindowRevision: 5,
+      expectedCatalogRevision: 3,
+      projectId: 'content:workspace-1',
+    });
+    expect(
+      createDesktopConversationDeleteRequest(
+        'request-5',
+        {
+          projectId: 'content:workspace-1',
+          workspaceId: 'workspace-1',
+          conversationId: 'conversation-1',
+        },
+        'app-1:window-1:1',
+        5,
+        7,
+      ),
+    ).toEqual({
+      schemaVersion: 1,
+      requestId: 'request-5',
+      expectedEndpointEpoch: 'app-1:window-1:1',
+      expectedWindowRevision: 5,
+      expectedAgentHomeRevision: 7,
+      navigation: {
+        projectId: 'content:workspace-1',
+        workspaceId: 'workspace-1',
+        conversationId: 'conversation-1',
+      },
     });
   });
 

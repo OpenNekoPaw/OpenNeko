@@ -7,6 +7,7 @@ import {
 import {
   DESKTOP_SHELL_CONTRACT_VERSION,
   DesktopShellContractError,
+  type DesktopAgentHomeNavigationIdentity,
   type DesktopDomainCapabilityProjection,
   type DesktopAgentHomeProjection,
   type DesktopProfileRequestResult,
@@ -417,6 +418,97 @@ export class DesktopShellService {
       if (window.revision !== expectedWindowRevision) {
         throw staleWindowRevision(windowId, expectedWindowRevision, window.revision);
       }
+    });
+  }
+
+  async assertAgentHomeConversation(
+    windowId: string,
+    expectedEndpointEpoch: string,
+    expectedWindowRevision: number,
+    expectedAgentHomeRevision: number,
+    navigation: DesktopAgentHomeNavigationIdentity,
+  ): Promise<void> {
+    return this.enqueue(async () => {
+      this.requireActive();
+      this.assertMutationContext(windowId, expectedEndpointEpoch);
+      const state = await this.options.stateRepository.read();
+      const window = requireStoredWindow(state, windowId);
+      if (window.revision !== expectedWindowRevision) {
+        throw staleWindowRevision(windowId, expectedWindowRevision, window.revision);
+      }
+      const agentHome = this.readAgentHomeProjection();
+      if (agentHome.revision !== expectedAgentHomeRevision) {
+        throw new DesktopShellContractError(
+          'desktop-shell-stale-revision',
+          `Desktop Agent Home revision ${expectedAgentHomeRevision} is stale; current revision is ${agentHome.revision}.`,
+        );
+      }
+      const project = state.projects.find(
+        (candidate) =>
+          candidate.projectId === navigation.projectId &&
+          candidate.workspaceId === navigation.workspaceId,
+      );
+      if (!project) {
+        throw new DesktopShellContractError(
+          'desktop-shell-project-identity-mismatch',
+          `Desktop Agent Home conversation '${navigation.conversationId}' belongs to an unknown Project or Workspace.`,
+        );
+      }
+      const conversation = agentHome.conversations.find(
+        (candidate) =>
+          candidate.navigation.projectId === navigation.projectId &&
+          candidate.navigation.workspaceId === navigation.workspaceId &&
+          candidate.navigation.conversationId === navigation.conversationId,
+      );
+      if (!conversation) {
+        throw new DesktopShellContractError(
+          'desktop-shell-conversation-not-found',
+          `Desktop Agent Home conversation '${navigation.conversationId}' is not present in the authoritative projection.`,
+        );
+      }
+      this.assertMutationContext(windowId, expectedEndpointEpoch);
+    });
+  }
+
+  async removeRecentProject(
+    windowId: string,
+    projectId: string,
+    expectedEndpointEpoch: string,
+    expectedWindowRevision: number,
+    expectedCatalogRevision: number,
+  ): Promise<DesktopShellProjection> {
+    return this.enqueue(async () => {
+      this.requireActive();
+      this.assertMutationContext(windowId, expectedEndpointEpoch);
+      const state = await this.options.stateRepository.read();
+      const requestingWindow = requireStoredWindow(state, windowId);
+      if (requestingWindow.revision !== expectedWindowRevision) {
+        throw staleWindowRevision(
+          windowId,
+          expectedWindowRevision,
+          requestingWindow.revision,
+        );
+      }
+      if (state.catalogRevision !== expectedCatalogRevision) {
+        throw new DesktopShellContractError(
+          'desktop-shell-stale-revision',
+          `Desktop Project catalog revision ${expectedCatalogRevision} is stale; current revision is ${state.catalogRevision}.`,
+        );
+      }
+      requireStoredProject(state, projectId);
+      const windows = state.windows.map((window) =>
+        removeProjectFromWindow(window, state, projectId),
+      );
+      this.assertMutationContext(windowId, expectedEndpointEpoch);
+      const committed = await this.options.stateRepository.commit(state.storageRevision, {
+        ...state,
+        storageRevision: state.storageRevision + 1,
+        catalogRevision: state.catalogRevision + 1,
+        projects: state.projects.filter((project) => project.projectId !== projectId),
+        windows,
+      });
+      await this.emitAll(committed);
+      return this.projectWindow(committed, windowId);
     });
   }
 
@@ -890,6 +982,54 @@ export class DesktopShellService {
     );
     return result;
   }
+}
+
+function removeProjectFromWindow(
+  window: DesktopStoredWindow,
+  state: DesktopShellStoredState,
+  projectId: string,
+): DesktopStoredWindow {
+  const removedTabIndexes = window.tabs.flatMap((tab, index) =>
+    tab.projectId === projectId ? [index] : [],
+  );
+  if (removedTabIndexes.length === 0) return window;
+  const tabs = window.tabs.filter((tab) => tab.projectId !== projectId);
+  const activeTarget = window.activeTarget;
+  const activeTab =
+    activeTarget.kind === 'project'
+      ? window.tabs.find((tab) => tab.tabId === activeTarget.tabId)
+      : undefined;
+  const activeProjectRemoved = activeTab?.projectId === projectId;
+  if (!activeProjectRemoved) {
+    return {
+      ...window,
+      revision: window.revision + 1,
+      tabs,
+    };
+  }
+  const firstRemovedTabIndex = removedTabIndexes[0];
+  if (firstRemovedTabIndex === undefined) {
+    throw new Error('Removed project tabs must include their original indexes.');
+  }
+  const nextActiveTab = tabs[Math.min(firstRemovedTabIndex, tabs.length - 1)];
+  return {
+    ...window,
+    revision: window.revision + 1,
+    tabs,
+    activeTarget: nextActiveTab
+      ? { kind: 'project', tabId: nextActiveTab.tabId }
+      : { kind: 'home' },
+    workbench: nextActiveTab
+      ? attachAgentWorkbench(
+          window.workbench,
+          requireStoredProject(state, nextActiveTab.projectId),
+          nextActiveTab,
+        )
+      : {
+          ...createDefaultDesktopWorkbenchLayout(window.windowId),
+          revision: window.workbench.revision + 1,
+        },
+  };
 }
 
 function projectShellState(

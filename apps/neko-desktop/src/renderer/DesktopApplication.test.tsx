@@ -61,8 +61,10 @@ describe('DesktopApplication', () => {
         projects: {
           open: vi.fn(),
           openContent: vi.fn(),
+          removeRecent: vi.fn(),
           requestProfile: vi.fn(),
         },
+        conversations: { delete: vi.fn() },
         tabs: {
           activateHome: vi.fn(),
           activate: vi.fn(),
@@ -117,8 +119,10 @@ describe('DesktopApplication', () => {
         projects: {
           open: vi.fn(),
           openContent: vi.fn(),
+          removeRecent: vi.fn(),
           requestProfile: vi.fn(),
         },
+        conversations: { delete: vi.fn() },
         tabs: {
           activateHome: vi.fn(),
           activate: vi.fn(),
@@ -149,6 +153,119 @@ describe('DesktopApplication', () => {
     await act(async () => back?.click());
     expect(container.textContent).toContain('Start creating');
     await act(async () => root.unmount());
+    container.remove();
+  });
+
+  it('exposes distinct cleanup actions for recent Projects and Agent conversations', async () => {
+    const base = createProjection();
+    const projection: DesktopShellProjection = {
+      ...base,
+      catalog: {
+        revision: 1,
+        projects: [
+          {
+            projectId: 'content:workspace-1',
+            workspaceId: 'workspace-1',
+            profile: 'content',
+            displayName: 'Fixture',
+            createdAt: '2026-07-28T00:00:00.000Z',
+            updatedAt: '2026-07-28T00:00:00.000Z',
+          },
+        ],
+      },
+      agentHome: {
+        revision: 1,
+        attention: { needsInput: 0, needsReview: 0, running: 0 },
+        conversations: [
+          {
+            navigation: {
+              projectId: 'content:workspace-1',
+              workspaceId: 'workspace-1',
+              conversationId: 'conversation-1',
+            },
+            title: 'Conversation one',
+            updatedAt: '2026-07-28T00:01:00.000Z',
+            attention: 'none',
+            lastActivity: {
+              kind: 'conversation-updated',
+              occurredAt: '2026-07-28T00:01:00.000Z',
+            },
+          },
+        ],
+      },
+    };
+    const open = vi.fn();
+    const removeRecent = vi.fn(async () => projection);
+    const deleteConversation = vi.fn(async () => projection);
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    Object.defineProperty(window, 'openNekoDesktop', {
+      configurable: true,
+      value: {
+        agent: {
+          getBootstrap: vi.fn(),
+          send: vi.fn(),
+          subscribe: vi.fn(() => () => undefined),
+        },
+        bootstrap: { get: vi.fn() },
+        lifecycle: { subscribe: vi.fn(() => () => undefined) },
+        settings: createSettingsBridgeMock(),
+        home: createHomeBridgeMock(),
+        shell: {
+          getSnapshot: vi.fn(async () => projection),
+          subscribe: vi.fn(() => () => undefined),
+        },
+        projects: {
+          open,
+          openContent: vi.fn(),
+          removeRecent,
+          requestProfile: vi.fn(),
+        },
+        conversations: { delete: deleteConversation },
+        tabs: {
+          activateHome: vi.fn(),
+          activate: vi.fn(),
+          close: vi.fn(),
+        },
+        workbench: { update: vi.fn() },
+        resources: createResourceBridgeMock(),
+        preview: createPreviewBridgeMock(),
+        canvas: createCanvasBridgeMock(),
+        cut: createCutBridgeMock(),
+      } satisfies typeof window.openNekoDesktop,
+    });
+    const container = document.createElement('div');
+    document.body.append(container);
+    const root = createRoot(container);
+
+    await act(async () => root.render(<TestApplication />));
+
+    const removeProjectButton = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Remove Fixture from recent projects"]',
+    );
+    const deleteConversationButton = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Delete conversation Conversation one"]',
+    );
+    expect(removeProjectButton).not.toBeNull();
+    expect(deleteConversationButton).not.toBeNull();
+
+    await act(async () => removeProjectButton?.click());
+    expect(removeRecent).toHaveBeenCalledWith('content:workspace-1', 0, 1);
+    expect(open).not.toHaveBeenCalled();
+
+    await act(async () => deleteConversationButton?.click());
+    expect(deleteConversation).toHaveBeenCalledWith(
+      {
+        projectId: 'content:workspace-1',
+        workspaceId: 'workspace-1',
+        conversationId: 'conversation-1',
+      },
+      0,
+      1,
+    );
+    expect(open).not.toHaveBeenCalled();
+
+    await act(async () => root.unmount());
+    confirm.mockRestore();
     container.remove();
   });
 
@@ -245,8 +362,10 @@ describe('DesktopApplication', () => {
         projects: {
           open: vi.fn(),
           openContent: vi.fn(),
+          removeRecent: vi.fn(),
           requestProfile: vi.fn(),
         },
+        conversations: { delete: vi.fn() },
         tabs: {
           activateHome: vi.fn(),
           activate: vi.fn(),
@@ -371,8 +490,10 @@ describe('DesktopApplication', () => {
         projects: {
           open: vi.fn(),
           openContent: vi.fn(),
+          removeRecent: vi.fn(),
           requestProfile: vi.fn(),
         },
+        conversations: { delete: vi.fn() },
         tabs: {
           activateHome: vi.fn(),
           activate,
@@ -497,8 +618,10 @@ describe('DesktopApplication', () => {
         projects: {
           open,
           openContent: vi.fn(),
+          removeRecent: vi.fn(),
           requestProfile: vi.fn(),
         },
+        conversations: { delete: vi.fn() },
         tabs: {
           activateHome: vi.fn(),
           activate,

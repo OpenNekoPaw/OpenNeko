@@ -139,6 +139,75 @@ describe('DesktopShellService', () => {
     expect(secondEvents).toHaveBeenCalled();
   });
 
+  it('removes one recent Project and all of its cross-window Tabs without deleting workspace files', async () => {
+    const fixture = createFixture();
+    const firstWindow = await fixture.service.claimWindowId();
+    const secondWindow = await fixture.service.claimWindowId();
+    fixture.service.setRendererEpoch(firstWindow, 1);
+    fixture.service.setRendererEpoch(secondWindow, 1);
+    const firstInitial = await fixture.service.getProjection(firstWindow);
+    const secondInitial = await fixture.service.getProjection(secondWindow);
+    const firstOpened = await fixture.service.openContent(
+      firstWindow,
+      '/workspace/demo',
+      firstInitial.endpointEpoch,
+      firstInitial.window.revision,
+    );
+    await fixture.service.openContent(
+      secondWindow,
+      '/workspace/demo',
+      secondInitial.endpointEpoch,
+      secondInitial.window.revision,
+    );
+    const project = firstOpened.projection.catalog.projects[0]!;
+
+    const removed = await fixture.service.removeRecentProject(
+      firstWindow,
+      project.projectId,
+      firstOpened.projection.endpointEpoch,
+      firstOpened.projection.window.revision,
+      firstOpened.projection.catalog.revision,
+    );
+    const secondProjection = await fixture.service.getProjection(secondWindow);
+
+    expect(removed.catalog.projects).toEqual([]);
+    expect(removed.window).toMatchObject({
+      activeTarget: { kind: 'home' },
+      tabs: [],
+    });
+    expect(secondProjection.window).toMatchObject({
+      activeTarget: { kind: 'home' },
+      tabs: [],
+    });
+    expect(fixture.registry.resolve).toHaveBeenCalledTimes(2);
+  });
+
+  it('rejects a stale Project catalog removal without changing Project or Tab state', async () => {
+    const fixture = createFixture();
+    const windowId = await fixture.service.claimWindowId();
+    fixture.service.setRendererEpoch(windowId, 1);
+    const initial = await fixture.service.getProjection(windowId);
+    const opened = await fixture.service.openContent(
+      windowId,
+      '/workspace/demo',
+      initial.endpointEpoch,
+      initial.window.revision,
+    );
+    const project = opened.projection.catalog.projects[0]!;
+
+    await expect(
+      fixture.service.removeRecentProject(
+        windowId,
+        project.projectId,
+        opened.projection.endpointEpoch,
+        opened.projection.window.revision,
+        opened.projection.catalog.revision - 1,
+      ),
+    ).rejects.toMatchObject({ code: 'desktop-shell-stale-revision' });
+
+    expect((await fixture.service.getProjection(windowId))).toEqual(opened.projection);
+  });
+
   it('rejects stale Window revisions without changing state', async () => {
     const fixture = createFixture();
     const windowId = await fixture.service.claimWindowId();

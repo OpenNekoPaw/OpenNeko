@@ -18,8 +18,10 @@ import {
   type OpenNekoDesktopBridge,
 } from '../shared/bridge-contract';
 import {
+  createDesktopConversationDeleteRequest,
   createDesktopProfileRequest,
   createDesktopProjectOpenRequest,
+  createDesktopProjectRemoveRecentRequest,
   createDesktopShellRequest,
   createDesktopTabMutationRequest,
   createDesktopWindowMutationRequest,
@@ -566,6 +568,23 @@ const bridge: OpenNekoDesktopBridge &
       rememberShellProjection(result.projection);
       return result;
     },
+    async removeRecent(projectId, expectedWindowRevision, expectedCatalogRevision) {
+      const context = requireShellMutationContext();
+      const request = createDesktopProjectRemoveRecentRequest(
+        nextRequestId('desktop-project-remove-recent'),
+        projectId,
+        context.endpointEpoch,
+        expectedWindowRevision,
+        expectedCatalogRevision,
+      );
+      const response: unknown = await ipcRenderer.invoke(
+        DESKTOP_SHELL_CHANNELS.projectRemoveRecent,
+        request,
+      );
+      return rememberShellProjection(
+        parseDesktopShellResponse(response, request.requestId).projection,
+      );
+    },
     async requestProfile(profile) {
       const request = createDesktopProfileRequest(
         nextRequestId('desktop-project-profile'),
@@ -578,6 +597,25 @@ const bridge: OpenNekoDesktopBridge &
       const result = parseDesktopProfileRequestResult(response, request.requestId);
       rememberShellProjection(result.projection);
       return result;
+    },
+  },
+  conversations: {
+    async delete(navigation, expectedWindowRevision, expectedAgentHomeRevision) {
+      const context = requireShellMutationContext();
+      const request = createDesktopConversationDeleteRequest(
+        nextRequestId('desktop-conversation-delete'),
+        navigation,
+        context.endpointEpoch,
+        expectedWindowRevision,
+        expectedAgentHomeRevision,
+      );
+      const response: unknown = await ipcRenderer.invoke(
+        DESKTOP_SHELL_CHANNELS.conversationDelete,
+        request,
+      );
+      return rememberShellProjection(
+        parseDesktopShellResponse(response, request.requestId).projection,
+      );
     },
   },
   tabs: {

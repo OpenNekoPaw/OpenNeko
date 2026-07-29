@@ -250,7 +250,7 @@ describe('DesktopShellView', () => {
       expect(sidebar).toContain('Recent projects');
       expect(sidebar).toContain('Recent Agent conversations');
       expect(sidebar).toContain('Desktop settings');
-      expect(sidebar).toContain('Close project');
+      expect(sidebar).toContain('Remove Demo Project from recent projects');
       expect(sidebar).not.toContain('project-primary-brand-copy');
       expect(sidebar).not.toContain('project-layout-controls');
     }

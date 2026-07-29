@@ -152,8 +152,10 @@ function installBridge(getBootstrap: typeof window.openNekoDesktop.agent.getBoot
       projects: {
         open: vi.fn(),
         openContent: vi.fn(),
+        removeRecent: vi.fn(),
         requestProfile: vi.fn(),
       },
+      conversations: { delete: vi.fn() },
       tabs: {
         activateHome: vi.fn(),
         activate: vi.fn(),

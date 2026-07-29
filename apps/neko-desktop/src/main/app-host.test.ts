@@ -14,6 +14,7 @@ import {
   createDesktopHomePluginsRequest,
 } from '../shared/home-management-contract';
 import {
+  createDesktopConversationDeleteRequest,
   createDesktopProjectOpenRequest,
   createDesktopWindowMutationRequest,
 } from '../shared/shell-contract';
@@ -349,6 +350,73 @@ describe('DesktopAppHost', () => {
     expect(fixture.agent.attachWorkspace).toHaveBeenCalledTimes(2);
   });
 
+  it('deletes a recent conversation through the exact Agent workspace authority', async () => {
+    const fixture = await createShellAppHost();
+    const resolution = createWorkspaceResolution();
+    fixture.registry.resolve.mockResolvedValue(resolution);
+    const opened = await fixture.appHost.openContentProject(
+      fixture.sender,
+      createDesktopWindowMutationRequest(
+        'open-1',
+        fixture.projection.endpointEpoch,
+        fixture.projection.window.revision,
+      ),
+      async () => resolution.workspacePath,
+    );
+    const project = opened.projection.catalog.projects[0]!;
+    const navigation = {
+      projectId: project.projectId,
+      workspaceId: project.workspaceId,
+      conversationId: 'conversation-1',
+    };
+    fixture.agent.readHomeProjection.mockReturnValue({
+      revision: 1,
+      conversations: [
+        {
+          navigation,
+          title: 'Conversation one',
+          updatedAt: '2026-07-29T00:00:00.000Z',
+          attention: 'none',
+          lastActivity: {
+            kind: 'conversation-updated',
+            occurredAt: '2026-07-29T00:00:00.000Z',
+          },
+        },
+      ],
+      attention: { needsInput: 0, needsReview: 0, running: 0 },
+    });
+    const runtime = createAgentWorkspaceRuntime(project.workspaceId);
+    const deleteConversation = vi.fn(async () => {
+      fixture.agent.readHomeProjection.mockReturnValue({
+        revision: 2,
+        conversations: [],
+        attention: { needsInput: 0, needsReview: 0, running: 0 },
+      });
+    });
+    fixture.agent.getWorkspace.mockReturnValue({
+      ...runtime,
+      deleteConversation,
+    });
+    const projection = await fixture.appHost.shell.getProjection(fixture.windowId);
+
+    const result = await fixture.appHost.deleteHomeConversation(
+      fixture.sender,
+      createDesktopConversationDeleteRequest(
+        'conversation-delete-1',
+        navigation,
+        projection.endpointEpoch,
+        projection.window.revision,
+        projection.agentHome.revision,
+      ),
+    );
+
+    expect(deleteConversation).toHaveBeenCalledWith('conversation-1');
+    expect(result.projection.agentHome).toMatchObject({
+      revision: 2,
+      conversations: [],
+    });
+  });
+
   it('projects only sanitized Skill metadata through the Home Plugins contract', async () => {
     const fixture = await createShellAppHost();
     const resolution = createWorkspaceResolution();
@@ -588,6 +656,8 @@ function createSettingsService(): DesktopApplicationSettingsService {
 
 function createAgentComposition(): DesktopAgentAppHostComposition & {
   readonly attachWorkspace: ReturnType<typeof vi.fn>;
+  readonly getWorkspace: ReturnType<typeof vi.fn>;
+  readonly readHomeProjection: ReturnType<typeof vi.fn>;
   readonly dispose: ReturnType<typeof vi.fn>;
 } {
   const credentialRuntime = createDesktopAgentCredentialRuntime({

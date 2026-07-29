@@ -161,6 +161,16 @@ export function registerDesktopIpc(
       appHost.openCatalogProject(requireSender(event), payload),
   );
   ipcMain.handle(
+    DESKTOP_SHELL_CHANNELS.projectRemoveRecent,
+    (event: IpcMainInvokeEvent, payload: unknown) =>
+      appHost.removeRecentProject(requireSender(event), payload),
+  );
+  ipcMain.handle(
+    DESKTOP_SHELL_CHANNELS.conversationDelete,
+    (event: IpcMainInvokeEvent, payload: unknown) =>
+      appHost.deleteHomeConversation(requireSender(event), payload),
+  );
+  ipcMain.handle(
     DESKTOP_SHELL_CHANNELS.projectRequestProfile,
     (event: IpcMainInvokeEvent, payload: unknown) =>
       appHost.requestProjectProfile(requireSender(event), payload),
@@ -208,6 +218,8 @@ export function registerDesktopIpc(
       DESKTOP_HOME_MANAGEMENT_CHANNELS.pluginsList,
       DESKTOP_SHELL_CHANNELS.projectOpenContent,
       DESKTOP_SHELL_CHANNELS.projectOpenCatalog,
+      DESKTOP_SHELL_CHANNELS.projectRemoveRecent,
+      DESKTOP_SHELL_CHANNELS.conversationDelete,
       DESKTOP_SHELL_CHANNELS.projectRequestProfile,
       DESKTOP_SHELL_CHANNELS.homeActivate,
       DESKTOP_SHELL_CHANNELS.tabActivate,

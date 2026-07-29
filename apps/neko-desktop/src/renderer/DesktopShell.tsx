@@ -13,6 +13,7 @@ import {
   SendIcon,
   SettingsIcon,
   StorylineIcon,
+  TrashIcon,
   Tooltip,
   TooltipProvider,
   WarningIcon,
@@ -56,8 +57,11 @@ interface ShellActions {
   readonly onOpenConversation: (
     conversation: DesktopAgentHomeConversationSummary,
   ) => void;
+  readonly onDeleteConversation: (
+    conversation: DesktopAgentHomeConversationSummary,
+  ) => void;
   readonly onStartConversation: (projectId: string | undefined, input: string) => void;
-  readonly onCloseTab: (tabId: string) => void;
+  readonly onRemoveRecentProject: (project: DesktopProjectCatalogItem) => void;
   readonly onUpdateWorkbench: (workbench: DesktopWorkbenchLayoutProjection) => void;
   readonly onOpenSettings: () => void;
 }
@@ -243,6 +247,33 @@ export function DesktopApplication(): JSX.Element {
         return result.projection;
       });
     },
+    onDeleteConversation: (conversation) => {
+      if (
+        !globalThis.confirm(
+          t('shell.deleteConversationConfirm', {
+            conversation: conversation.title,
+          }),
+        )
+      ) {
+        return;
+      }
+      void runMutation(async () => {
+        const nextProjection = await window.openNekoDesktop.conversations.delete(
+          conversation.navigation,
+          projection.window.revision,
+          projection.agentHome.revision,
+        );
+        if (
+          agentNavigationTarget?.navigation.conversationId ===
+            conversation.navigation.conversationId &&
+          agentNavigationTarget.navigation.workspaceId ===
+            conversation.navigation.workspaceId
+        ) {
+          setAgentNavigationTarget(undefined);
+        }
+        return nextProjection;
+      });
+    },
     onStartConversation: (projectId, input) => {
       const value = input.trim();
       if (!value) return;
@@ -288,10 +319,29 @@ export function DesktopApplication(): JSX.Element {
         return result.projection;
       });
     },
-    onCloseTab: (tabId) =>
-      void runMutation(() =>
-        window.openNekoDesktop.tabs.close(tabId, projection.window.revision),
-      ),
+    onRemoveRecentProject: (project) => {
+      if (
+        !globalThis.confirm(
+          t('shell.removeRecentProjectConfirm', {
+            project: project.displayName,
+          }),
+        )
+      ) {
+        return;
+      }
+      void runMutation(async () => {
+        const nextProjection = await window.openNekoDesktop.projects.removeRecent(
+          project.projectId,
+          projection.window.revision,
+          projection.catalog.revision,
+        );
+        if (activeProject?.projectId === project.projectId) {
+          setAgentNavigationTarget(undefined);
+          setAgentInitialInput(undefined);
+        }
+        return nextProjection;
+      });
+    },
     onUpdateWorkbench: (workbench) =>
       void runMutation(() =>
         window.openNekoDesktop.workbench.update(
@@ -372,8 +422,9 @@ export function DesktopShellView({
     onOpenProject: () => undefined,
     onOpenRecent: () => undefined,
     onOpenConversation: () => undefined,
+    onDeleteConversation: () => undefined,
     onStartConversation: () => undefined,
-    onCloseTab: () => undefined,
+    onRemoveRecentProject: () => undefined,
     onUpdateWorkbench: () => undefined,
     onOpenSettings: () => undefined,
   };
@@ -426,10 +477,11 @@ function HomeWorkspace({
       <ApplicationPrimarySidebar
         activeSection={section}
         compact={navigationCollapsed}
-        onCloseTab={actions.onCloseTab}
         onNavigate={onSectionChange}
+        onDeleteConversation={actions.onDeleteConversation}
         onOpenConversation={onOpenConversation}
         onOpenRecent={onOpenRecent}
+        onRemoveRecentProject={actions.onRemoveRecentProject}
         onOpenSettings={actions.onOpenSettings}
         onToggle={() => setNavigationCollapsed((value) => !value)}
         projection={projection}
@@ -1447,10 +1499,11 @@ function ProjectPrimarySidebar({
       activeProjectId={project.projectId}
       compact={compact}
       disabled={pending}
-      onCloseTab={actions.onCloseTab}
       onNavigate={actions.onHome}
+      onDeleteConversation={actions.onDeleteConversation}
       onOpenConversation={actions.onOpenConversation}
       onOpenRecent={actions.onOpenRecent}
+      onRemoveRecentProject={actions.onRemoveRecentProject}
       onOpenSettings={actions.onOpenSettings}
       onToggle={togglePrimarySidebar}
       projection={projection}
@@ -2259,10 +2312,11 @@ function ApplicationPrimarySidebar({
   activeSection,
   compact,
   disabled = false,
-  onCloseTab,
+  onDeleteConversation,
   onNavigate,
   onOpenConversation,
   onOpenRecent,
+  onRemoveRecentProject,
   onOpenSettings,
   onToggle,
   projection,
@@ -2271,12 +2325,15 @@ function ApplicationPrimarySidebar({
   readonly activeSection?: HomeSection;
   readonly compact: boolean;
   readonly disabled?: boolean;
-  readonly onCloseTab: (tabId: string) => void;
   readonly onNavigate: (section: HomeSection) => void;
+  readonly onDeleteConversation: (
+    conversation: DesktopAgentHomeConversationSummary,
+  ) => void;
   readonly onOpenConversation: (
     conversation: DesktopAgentHomeConversationSummary,
   ) => void;
   readonly onOpenRecent: (projectId: string) => void;
+  readonly onRemoveRecentProject: (project: DesktopProjectCatalogItem) => void;
   readonly onOpenSettings: () => void;
   readonly onToggle: () => void;
   readonly projection: DesktopShellProjection;
@@ -2330,9 +2387,11 @@ function ApplicationPrimarySidebar({
       {compact ? null : (
         <PrimaryRecentNavigation
           activeProjectId={activeProjectId}
-          onCloseTab={onCloseTab}
+          disabled={disabled}
+          onDeleteConversation={onDeleteConversation}
           onOpenConversation={onOpenConversation}
           onOpenRecent={onOpenRecent}
+          onRemoveRecentProject={onRemoveRecentProject}
           projection={projection}
         />
       )}
@@ -2426,17 +2485,23 @@ function HomeNavigationButton({
 
 function PrimaryRecentNavigation({
   activeProjectId,
-  onCloseTab,
+  disabled = false,
+  onDeleteConversation,
   onOpenConversation,
   onOpenRecent,
+  onRemoveRecentProject,
   projection,
 }: {
   readonly activeProjectId?: string;
-  readonly onCloseTab?: (tabId: string) => void;
+  readonly disabled?: boolean;
+  readonly onDeleteConversation: (
+    conversation: DesktopAgentHomeConversationSummary,
+  ) => void;
   readonly onOpenConversation: (
     conversation: DesktopAgentHomeConversationSummary,
   ) => void;
   readonly onOpenRecent: (projectId: string) => void;
+  readonly onRemoveRecentProject: (project: DesktopProjectCatalogItem) => void;
   readonly projection: DesktopShellProjection;
 }): JSX.Element {
   const { t } = useTranslation();
@@ -2447,9 +2512,6 @@ function PrimaryRecentNavigation({
         <span>{projection.catalog.projects.length}</span>
       </div>
       {projection.catalog.projects.slice(0, 6).map((project) => {
-        const tab = projection.window.tabs.find(
-          (candidate) => candidate.projectId === project.projectId,
-        );
         return (
           <div
             className="primary-recent-project-row"
@@ -2459,19 +2521,21 @@ function PrimaryRecentNavigation({
             <button
               type="button"
               className="home-project-link"
+              disabled={disabled}
               onClick={() => onOpenRecent(project.projectId)}
             >
               <FolderIcon size={15} />
               <span>{project.displayName}</span>
             </button>
-            {tab && onCloseTab ? (
-              <IconButton
-                size="xs"
-                label={t('shell.closeProjectTab')}
-                icon={<span aria-hidden="true">×</span>}
-                onClick={() => onCloseTab(tab.tabId)}
-              />
-            ) : null}
+            <IconButton
+              disabled={disabled}
+              size="xs"
+              label={t('shell.removeRecentProject', {
+                project: project.displayName,
+              })}
+              icon={<TrashIcon size={13} />}
+              onClick={() => onRemoveRecentProject(project)}
+            />
           </div>
         );
       })}
@@ -2480,21 +2544,35 @@ function PrimaryRecentNavigation({
         <span>{projection.agentHome.conversations.length}</span>
       </div>
       {projection.agentHome.conversations.slice(0, 8).map((conversation) => (
-        <button
-          type="button"
-          className="home-project-link home-conversation-link"
+        <div
+          className="primary-recent-project-row primary-recent-conversation-row"
           key={`${conversation.navigation.workspaceId}:${conversation.navigation.conversationId}`}
-          onClick={() => onOpenConversation(conversation)}
         >
-          <StorylineIcon size={15} />
-          <span>{conversation.title}</span>
-          {conversation.attention !== 'none' ? (
-            <span
-              className={`home-conversation-attention is-${conversation.attention}`}
-              aria-label={formatAttention(conversation.attention, t)}
-            />
-          ) : null}
-        </button>
+          <button
+            type="button"
+            className="home-project-link home-conversation-link"
+            disabled={disabled}
+            onClick={() => onOpenConversation(conversation)}
+          >
+            <StorylineIcon size={15} />
+            <span>{conversation.title}</span>
+            {conversation.attention !== 'none' ? (
+              <span
+                className={`home-conversation-attention is-${conversation.attention}`}
+                aria-label={formatAttention(conversation.attention, t)}
+              />
+            ) : null}
+          </button>
+          <IconButton
+            disabled={disabled}
+            size="xs"
+            label={t('shell.deleteConversation', {
+              conversation: conversation.title,
+            })}
+            icon={<TrashIcon size={13} />}
+            onClick={() => onDeleteConversation(conversation)}
+          />
+        </div>
       ))}
     </div>
   );

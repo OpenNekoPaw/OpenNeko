@@ -6,6 +6,11 @@ export const zhCN = {
   'shell.unavailable': '桌面工作台不可用',
   'shell.openProjects': '已打开的项目',
   'shell.closeProjectTab': '关闭项目标签',
+  'shell.removeRecentProject': '从最近项目中移除 {project}',
+  'shell.removeRecentProjectConfirm':
+    '要从最近项目中移除“{project}”吗？此操作不会删除项目文件。',
+  'shell.deleteConversation': '删除会话 {conversation}',
+  'shell.deleteConversationConfirm': '要永久删除会话“{conversation}”吗？此操作无法撤销。',
   'shell.openProject': '打开内容项目',
   'shell.settingsUnavailable': '当前版本尚未接入设置',
   'shell.settingsLabel': 'Desktop 设置',

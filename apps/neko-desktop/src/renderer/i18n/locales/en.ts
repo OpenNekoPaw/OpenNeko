@@ -6,6 +6,12 @@ export const en = {
   'shell.unavailable': 'Desktop Shell unavailable',
   'shell.openProjects': 'Open projects',
   'shell.closeProjectTab': 'Close project tab',
+  'shell.removeRecentProject': 'Remove {project} from recent projects',
+  'shell.removeRecentProjectConfirm':
+    'Remove “{project}” from recent projects? Project files will not be deleted.',
+  'shell.deleteConversation': 'Delete conversation {conversation}',
+  'shell.deleteConversationConfirm':
+    'Permanently delete the conversation “{conversation}”? This cannot be undone.',
   'shell.openProject': 'Open content project',
   'shell.settingsUnavailable': 'Settings are not available in this build',
   'shell.settingsLabel': 'Desktop settings',

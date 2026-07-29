@@ -11,7 +11,9 @@ export const DESKTOP_SHELL_CHANNELS = {
   projectionEvent: 'openneko:desktop:shell:projection:event',
   projectOpenContent: 'openneko:desktop:project:content:open',
   projectOpenCatalog: 'openneko:desktop:project:catalog:open',
+  projectRemoveRecent: 'openneko:desktop:project:recent:remove',
   projectRequestProfile: 'openneko:desktop:project:profile:request',
+  conversationDelete: 'openneko:desktop:home:conversation:delete',
   homeActivate: 'openneko:desktop:home:activate',
   tabActivate: 'openneko:desktop:tab:activate',
   tabClose: 'openneko:desktop:tab:close',
@@ -44,6 +46,10 @@ export interface DesktopWindowMutationRequest extends DesktopShellRequest {
 
 export interface DesktopProjectOpenRequest extends DesktopWindowMutationRequest {
   readonly projectId: string;
+}
+
+export interface DesktopProjectRemoveRecentRequest extends DesktopProjectOpenRequest {
+  readonly expectedCatalogRevision: number;
 }
 
 export interface DesktopProjectCatalogItem {
@@ -103,6 +109,11 @@ export interface DesktopAgentHomeNavigationIdentity {
   readonly projectId: string;
   readonly workspaceId: string;
   readonly conversationId: string;
+}
+
+export interface DesktopConversationDeleteRequest extends DesktopWindowMutationRequest {
+  readonly expectedAgentHomeRevision: number;
+  readonly navigation: DesktopAgentHomeNavigationIdentity;
 }
 
 export interface DesktopAgentHomeActivitySummary {
@@ -231,7 +242,19 @@ export interface OpenNekoDesktopShellBridge {
   readonly projects: {
     openContent(): Promise<DesktopOpenContentResult>;
     open(projectId: string): Promise<DesktopOpenContentResult>;
+    removeRecent(
+      projectId: string,
+      expectedWindowRevision: number,
+      expectedCatalogRevision: number,
+    ): Promise<DesktopShellProjection>;
     requestProfile(profile: DesktopUnavailableProjectProfile): Promise<DesktopProfileRequestResult>;
+  };
+  readonly conversations: {
+    delete(
+      navigation: DesktopAgentHomeNavigationIdentity,
+      expectedWindowRevision: number,
+      expectedAgentHomeRevision: number,
+    ): Promise<DesktopShellProjection>;
   };
   readonly tabs: {
     activateHome(expectedWindowRevision: number): Promise<DesktopShellProjection>;
@@ -254,7 +277,8 @@ export class DesktopShellContractError extends Error {
     | 'desktop-shell-request-mismatch'
     | 'desktop-shell-stale-revision'
     | 'desktop-shell-project-not-found'
-    | 'desktop-shell-project-identity-mismatch';
+    | 'desktop-shell-project-identity-mismatch'
+    | 'desktop-shell-conversation-not-found';
 
   constructor(
     code: DesktopShellContractError['code'],
@@ -366,6 +390,48 @@ export function createDesktopProjectOpenRequest(
   };
 }
 
+export function createDesktopProjectRemoveRecentRequest(
+  requestId: string,
+  projectId: string,
+  expectedEndpointEpoch: string,
+  expectedWindowRevision: number,
+  expectedCatalogRevision: number,
+): DesktopProjectRemoveRecentRequest {
+  return {
+    ...createDesktopProjectOpenRequest(
+      requestId,
+      projectId,
+      expectedEndpointEpoch,
+      expectedWindowRevision,
+    ),
+    expectedCatalogRevision: requireNonNegativeInteger(
+      expectedCatalogRevision,
+      'Desktop expected Project catalog revision must be a non-negative integer.',
+    ),
+  };
+}
+
+export function createDesktopConversationDeleteRequest(
+  requestId: string,
+  navigation: DesktopAgentHomeNavigationIdentity,
+  expectedEndpointEpoch: string,
+  expectedWindowRevision: number,
+  expectedAgentHomeRevision: number,
+): DesktopConversationDeleteRequest {
+  return {
+    ...createDesktopWindowMutationRequest(
+      requestId,
+      expectedEndpointEpoch,
+      expectedWindowRevision,
+    ),
+    expectedAgentHomeRevision: requireNonNegativeInteger(
+      expectedAgentHomeRevision,
+      'Desktop expected Agent Home revision must be a non-negative integer.',
+    ),
+    navigation: parseDesktopAgentHomeNavigationIdentity(navigation),
+  };
+}
+
 export function parseDesktopShellRequest(value: unknown): DesktopShellRequest {
   const record = requireRecord(value, 'Desktop Shell request must be an object.');
   requireVersion(record['schemaVersion']);
@@ -426,6 +492,46 @@ export function parseDesktopProjectOpenRequest(value: unknown): DesktopProjectOp
     requireNonEmptyString(record['projectId'], 'Desktop Project identity is required.'),
     request.expectedEndpointEpoch,
     request.expectedWindowRevision,
+  );
+}
+
+export function parseDesktopProjectRemoveRecentRequest(
+  value: unknown,
+): DesktopProjectRemoveRecentRequest {
+  const record = requireRecord(
+    value,
+    'Desktop Project remove-recent request must be an object.',
+  );
+  const request = parseDesktopProjectOpenRequest(record);
+  return createDesktopProjectRemoveRecentRequest(
+    request.requestId,
+    request.projectId,
+    request.expectedEndpointEpoch,
+    request.expectedWindowRevision,
+    requireNonNegativeInteger(
+      record['expectedCatalogRevision'],
+      'Desktop expected Project catalog revision must be a non-negative integer.',
+    ),
+  );
+}
+
+export function parseDesktopConversationDeleteRequest(
+  value: unknown,
+): DesktopConversationDeleteRequest {
+  const record = requireRecord(
+    value,
+    'Desktop Agent Home conversation delete request must be an object.',
+  );
+  const request = parseDesktopWindowMutationRequest(record);
+  return createDesktopConversationDeleteRequest(
+    request.requestId,
+    parseDesktopAgentHomeNavigationIdentity(record['navigation']),
+    request.expectedEndpointEpoch,
+    request.expectedWindowRevision,
+    requireNonNegativeInteger(
+      record['expectedAgentHomeRevision'],
+      'Desktop expected Agent Home revision must be a non-negative integer.',
+    ),
   );
 }
 
@@ -631,10 +737,7 @@ function parseAgentHomeConversationSummary(
     value,
     'Desktop Agent Home conversation summary must be an object.',
   );
-  const navigation = requireRecord(
-    record['navigation'],
-    'Desktop Agent Home navigation identity is required.',
-  );
+  const navigation = parseDesktopAgentHomeNavigationIdentity(record['navigation']);
   const lastActivity = requireRecord(
     record['lastActivity'],
     'Desktop Agent Home last activity is required.',
@@ -661,18 +764,7 @@ function parseAgentHomeConversationSummary(
   }
   return {
     navigation: {
-      projectId: requireNonEmptyString(
-        navigation['projectId'],
-        'Desktop Agent Home Project identity is required.',
-      ),
-      workspaceId: requireNonEmptyString(
-        navigation['workspaceId'],
-        'Desktop Agent Home Workspace identity is required.',
-      ),
-      conversationId: requireNonEmptyString(
-        navigation['conversationId'],
-        'Desktop Agent Home Conversation identity is required.',
-      ),
+      ...navigation,
     },
     title: requireNonEmptyString(
       record['title'],
@@ -694,6 +786,29 @@ function parseAgentHomeConversationSummary(
       ...readOptionalIdentity(lastActivity, 'toolCallId'),
       ...parseOptionalGenerationJob(lastActivity['generationJob']),
     },
+  };
+}
+
+function parseDesktopAgentHomeNavigationIdentity(
+  value: unknown,
+): DesktopAgentHomeNavigationIdentity {
+  const navigation = requireRecord(
+    value,
+    'Desktop Agent Home navigation identity is required.',
+  );
+  return {
+    projectId: requireNonEmptyString(
+      navigation['projectId'],
+      'Desktop Agent Home Project identity is required.',
+    ),
+    workspaceId: requireNonEmptyString(
+      navigation['workspaceId'],
+      'Desktop Agent Home Workspace identity is required.',
+    ),
+    conversationId: requireNonEmptyString(
+      navigation['conversationId'],
+      'Desktop Agent Home Conversation identity is required.',
+    ),
   };
 }
 
