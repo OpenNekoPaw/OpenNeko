@@ -100,6 +100,24 @@ Codex 风格任务入口。Start Creating 改为独立的 task launchpad：
 - Home 使用纯 Desktop surface；点阵背景只属于 Canvas/创作工作区，不能作为 Home 的信息架构；
 - 所有模板数据留在 Home presentation，不创建新的 workflow runtime 或第二套 Agent authority。
 
+### 9. Primary sidebar owns one shared frame contract
+
+只复用 `ApplicationPrimarySidebar` 内部内容不足以保证视觉一致：Home 与 Project 还必须共享
+同一个 `ApplicationPrimarySidebarFrame`。一级侧栏是贴边应用导航层，不是 Workbench 内容面板，
+因此 frame 不得添加外边距、圆角、边框或卡片阴影：
+
+- frame 统一拥有贴边定位以及 expanded/compact 几何；
+- `window.workbench.primarySidebar` 是 Home 与 Project 共同的宽度和显隐 authority；Project
+  resize 或任一路径折叠后，切换页面仍保留相同的当前几何；
+- compact frame 固定占用 64px；pointer hover 或 keyboard focus 临时把侧栏 overlay 展开到持久化
+  宽度，不改变 Workbench grid，也不写入显隐设置；
+- Home section 与当前 Project 的 active state 继续表达不同导航语义，不为追求像素相同伪造选中项；
+- 共享 frame 只负责 presentation；Workbench 负责 resize、显隐状态和持久化，不再由 Home
+  保存第二份页面局部状态。
+
+内容主面板、Agent、Resource、Cut/Timeline、Canvas 和 Preview/Model 属于 Workbench 内容组件，
+它们之间可以保留 8px 间隔；最靠近一级侧栏的第一个内容组件不得再增加左侧间隔。
+
 ## Risks / Trade-offs
 
 - 跨项目资产查询可能较慢，因此结果按项目惰性加载并限制数量，不建立缓存真值。

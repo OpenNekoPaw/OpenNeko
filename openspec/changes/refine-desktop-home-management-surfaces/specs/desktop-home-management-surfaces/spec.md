@@ -98,3 +98,32 @@ same composer; Home MUST NOT expose fake model, Skill, provider or execution con
 - **THEN** the main surface uses the application Home background without the canvas dot grid
 - **AND** common intents and quick templates are visible without opening a Project
 - **AND** choosing one changes the existing composer input instead of creating another Agent UI
+
+### Requirement: Home and Project share the complete primary-sidebar frame
+
+Home and Content Project MUST render the application primary sidebar through the same component and
+the same frame contract. The shared frame MUST be flush with the application edge without a card
+border, radius, outer inset or panel gap. Both surfaces MUST consume the same
+`window.workbench.primarySidebar` authority for current width and visibility.
+
+#### Scenario: User moves between Home and a Project
+
+- **WHEN** the user opens Home and then enters a Content Project
+- **THEN** both primary sidebars use the same application frame marker and Desktop theme tokens
+- **AND** resizing or collapsing the Project sidebar is preserved when the user returns to Home
+- **AND** active navigation reflects the current Home section or Project identity without changing
+  the sidebar frame
+
+#### Scenario: User temporarily reveals a collapsed primary sidebar
+
+- **GIVEN** the primary sidebar is persistently collapsed to the compact rail
+- **WHEN** the user hovers the rail or moves keyboard focus into it
+- **THEN** the complete sidebar SHALL overlay the adjacent content at the persisted expanded width
+- **AND** leaving hover and focus SHALL restore the compact rail without changing persisted state
+- **AND** the adjacent Workbench content SHALL NOT move
+
+#### Scenario: Workbench panels keep spacing independently from primary navigation
+
+- **WHEN** Main, Agent, Resources, Timeline, Canvas, Cut, Preview or Model surfaces are composed
+- **THEN** content panels MAY retain the Desktop panel gap between one another
+- **AND** the first content panel next to the primary sidebar SHALL be flush with that sidebar

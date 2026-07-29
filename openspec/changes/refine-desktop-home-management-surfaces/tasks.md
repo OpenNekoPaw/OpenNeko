@@ -49,6 +49,24 @@
 - [x] 6.3 Re-run focused Desktop tests, typecheck, strict OpenSpec validation, production package
       build and real Electron visual acceptance.
 
+## 7. Shared primary-sidebar frame correction
+
+- [x] 7.1 Add a red-capable renderer regression requiring Home and Project to use the same sidebar
+      frame contract and current expanded geometry.
+- [x] 7.2 Move inset/frame geometry out of the two host layouts into one shared sidebar frame and
+      use one Workbench-owned width/visibility projection while preserving navigation semantics.
+- [x] 7.3 Re-run focused Desktop tests, typecheck, strict OpenSpec validation, production package
+      build and real Electron Home/Project visual acceptance.
+
+## 8. Flush compact rail and hover reveal
+
+- [x] 8.1 Add red-capable renderer regressions for the flush frame marker, compact hover-reveal
+      contract and complete compact-sidebar projection.
+- [x] 8.2 Remove card frame/inset styling from the application sidebar, keep Workbench-only panel
+      gaps, and implement non-persistent hover/focus overlay reveal for the compact rail.
+- [x] 8.3 Verify fixed-expanded, compact and hover-expanded states in the real Desktop Electron host,
+      then re-run Desktop tests, typecheck, package build, strict OpenSpec validation and diff checks.
+
 ## Validation evidence
 
 - Packaged the production Electron application with `pnpm --filter @neko/app-desktop package`.
@@ -70,6 +88,11 @@
   the shared collapsible `ApplicationPrimarySidebar`, renders a plain application surface instead of
   the Canvas dot grid, exposes common creation intents and quick-start templates, and prefills the
   existing project-scoped Agent composer from a template without creating a second Agent runtime.
+- Verified Home and Project in the real Desktop Electron host use the same flush primary-sidebar
+  geometry. Fixed-expanded and compact states preserve one Workbench-owned width/visibility
+  projection; hovering or focusing the compact rail temporarily reveals the full sidebar over the
+  main surface without changing the persisted state or shifting the workspace layout. Only
+  Workbench content components retain the eight-pixel panel gap.
 - Re-ran `pnpm --filter @neko/app-desktop test` (44 files / 213 tests),
   `pnpm --filter @neko/app-desktop typecheck`,
   `pnpm --filter @neko/app-desktop package`,
