@@ -1,3 +1,9 @@
+> **Superseded implementation note:** The single-public-VSIX outcome remains valid, but
+> `consolidate-vscode-single-extension-package` replaces the build-only feature VSIX,
+> simulated scoped `ExtensionContext`, and embedded registry mechanisms described below.
+> The canonical implementation now uses app-internal feature modules, narrow runtime
+> projections, direct typed composition, and direct application staging.
+
 ## Why
 
 GitHub Release currently exposes the product as an extension pack plus seven separately installable VSIX files. That distribution leaks internal package boundaries to users and does not provide one offline-installable OpenNeko product artifact per supported platform.

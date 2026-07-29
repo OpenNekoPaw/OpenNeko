@@ -1,3 +1,8 @@
+> **Superseded packaging note:** The offline runtime-closure requirements remain valid,
+> but `consolidate-vscode-single-extension-package` replaces per-feature embedded
+> payloads with one application staging tree. Runtime owners now stage into that tree;
+> no internal feature VSIX or `dist/features/*` payload is canonical.
+
 ## Why
 
 The unified OpenNeko VSIX embeds feature payloads but excludes `node_modules`, while several compiled features still resolve runtime packages by bare specifier. Engine therefore fails during activation, and Agent/Assets fail later when loading Sharp or document parsers even though their JavaScript bundles were produced successfully.

@@ -1,3 +1,9 @@
+> **Superseded packaging note:** The target-exact offline closure decisions remain
+> applicable, but their per-feature embedded-payload location is historical. See
+> `consolidate-vscode-single-extension-package` for the canonical single application
+> staging tree. Engine-specific details below are also historical after Engine
+> retirement.
+
 ## Context
 
 OpenNeko's application root copies seven build-only feature VSIX payloads beneath `dist/features/<feature>`. Each feature bundle is loaded from that scoped directory, but the final product intentionally contains no general workspace `node_modules` tree. This contract is currently incomplete:

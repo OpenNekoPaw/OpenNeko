@@ -6,7 +6,7 @@
 
 本文记录 OpenNeko 将 VS Code 产品收敛为单一扩展、将 workspace 收敛为 `apps/*` 与 `packages/*` 两个单层分组，并重新明确 App、共享 Package、Host adapter 和 `@neko/shared` 所有权的目标边界。
 
-具体实施由 [`consolidate-vscode-single-extension-package`](../../openspec/changes/consolidate-vscode-single-extension-package/) 及其后继变更跟踪。在这些变更完成前，本文描述目标架构，不表示当前嵌入式功能扩展、二级 workspace 或 shared 聚合已经移除。
+单扩展运行时、直接打包和 workspace 单层化由 [`consolidate-vscode-single-extension-package`](../../openspec/changes/consolidate-vscode-single-extension-package/) 跟踪。`@neko/shared` 所有权拆分必须在实施前建立独立后继 OpenSpec，暂定标识为 `decompose-neko-shared-ownership`，不得把 shared 大爆炸清理塞入单扩展切换。在这些变更完成前，本文描述目标架构，不表示当前嵌入式功能扩展、二级 workspace 或 shared 聚合已经移除。
 
 ## 背景
 
@@ -20,7 +20,7 @@ OpenNeko 当前已经只发布一个平台 VSIX，但源码、构建和运行时
 
 这些边界没有提供进程隔离：功能 JavaScript 与原生模块仍运行在同一个 VS Code Extension Host。它们反而增加了 manifest 合并、资源路径、状态投影、构建闭包和跨功能发现协议的复杂度。
 
-与此同时，Desktop 和 TUI 已经直接复用 Agent、Canvas、Preview 等 domain/runtime/UI 能力。原本嵌套在 `packages/neko-agent/packages/*`、`packages/neko-canvas/packages/*` 等目录中的子包已成为跨应用能力，继续把它们表示成某个 VS Code 功能父包的内部成员会产生错误的所有权暗示。
+与此同时，TUI 已经直接复用 Agent runtime、Agent contract 和 Canvas domain；Desktop 当前仍处于 Phase 1 foundation，但其目标组合同样要求从顶层 package 复用 host-neutral domain/runtime/UI，而不是依赖 VS Code feature container。原本嵌套在 `packages/neko-agent/packages/*`、`packages/neko-canvas/packages/*` 等目录中的部分子包已经具有跨应用或跨 runtime 消费者，继续把它们表示成某个 VS Code 功能父包的内部成员会产生错误的所有权暗示。Preview 等当前仍主要服务 VS Code 的能力则必须按真实消费者重新分类，不能用未来复用假设证明其 package 归属。
 
 `packages/neko-types` 的 npm identity 是 `@neko/shared`。它同时包含 L0 类型与工具、React UI、VS Code adapter、SQLite/local metadata、项目文件 IO、配置和多个领域的 contract，已经超出单一 shared 基础包的职责。
 
@@ -154,9 +154,11 @@ feature adapter 不得横向 import sibling feature adapter。跨功能依赖只
 
 不得以删除 embedded registry 为名重新创建通用 `FeatureRegistry`、字符串 capability lookup 或万能 services container。
 
+类型化 composition wiring 是依赖图的唯一事实来源。若生命周期、诊断或释放需要 `FeatureId` / `CapabilityId` metadata，该 metadata 必须由同一个类型化 composition definition 派生，或通过双向测试证明与实际注入边完全一致；不得人工维护一份 descriptor DAG，再由另一套代码独立完成依赖注入。
+
 ### 5. Extension 激活采用轻量注册，重型能力按需创建
 
-扩展 activation 只完成必要的契约校验和轻量注册：
+扩展 activation 只完成必要的契约校验和轻量 feature registration：
 
 - commands；
 - views/providers；
@@ -167,7 +169,12 @@ feature adapter 不得横向 import sibling feature adapter。跨功能依赖只
 
 AI、generation、metadata、media 等重型 runtime 默认在首次真实使用时创建。调用方接收 typed lazy port 或明确 factory，不读取全局 runtime singleton。
 
-故障粒度以 capability 和资源 owner 为准，不以整个 Agent、Canvas 或其他产品功能为粗粒度 optional 标记。
+静态 feature registration 与 lazy capability runtime 是两个不同生命周期：
+
+- manifest、contribution、依赖图、state namespace 或轻量 registration 违约属于应用契约失败，必须回滚已注册资源并拒绝扩展 activation；
+- lazy capability 按 owner 声明依赖、取消、诊断和资源作用域；可恢复初始化失败只使该 capability 及其显式依赖 capability unavailable；
+- Agent、Canvas 等产品 feature 不得作为粗粒度 `optional` 开关。一个 metadata、generation 或 media capability 失败，不得默认撤销该 feature 已成功注册的独立命令、视图或编辑器；
+- 用户调用 unavailable capability 时必须获得包含 capability identity 和根因的明确 diagnostic，不得返回空结果、成功 no-op 或回退旧实现。
 
 ### 6. Host 使用 consumer-owned narrow ports
 
@@ -224,7 +231,7 @@ Agent、Canvas、Cut、Preview、Assets 等领域分别定义自己需要的窄 
 
 Extension Host、Webview、Node/native 和 host-neutral domain 继续保持真实运行边界。Webview 不得访问 Node 或 VS Code API，Extension Host 不得导入 React renderer，reusable package 不得依赖 App。
 
-可捕获的 JavaScript/capability 初始化异常可以通过 owner-scoped disposable、cancellation 和 diagnostic 隔离。以下失败仍属于进程级故障，不能通过 package 层级恢复：
+可捕获的 lazy capability 初始化异常可以通过 owner-scoped disposable、cancellation 和 diagnostic 隔离。静态 feature registration 的契约错误仍会使整个扩展 activation 失败。以下失败属于进程级故障，不能通过 package 层级恢复：
 
 - N-API/native segfault；
 - Extension Host OOM 或退出；
@@ -251,13 +258,13 @@ packager 不再创建或解包内部 feature VSIX。缺失资源、重复 contri
 
 ### 10. 状态 identity 优先保持，不默认执行大迁移
 
-现有 feature memento、secret 和 storage namespace 已使用稳定 feature ID。新实现优先复用相同 key 与路径规则，而不是为了移除 scoped `ExtensionContext` 改写用户状态 identity。
+现有 feature memento、secret 和 storage namespace 已使用 `neko.<feature>` 形式的稳定值。新实现必须把这些值冻结为独立的 `StateNamespaceId`：它们可以沿用历史 extension ID 字符串以保持 key/path 不变，但不再表示可安装扩展 identity，也不得被用于 extension discovery。新实现优先复用相同 key 与路径规则，而不是为了移除 scoped `ExtensionContext` 改写用户状态 identity。
 
 只有确实发生 identity 或存储布局变更时，才执行版本化、幂等、可重试迁移。迁移 marker 必须在所有原子步骤成功后提交；失败时保留源数据和明确 diagnostic，不得静默丢失项目文件、设置、凭据或有价值的本地状态。
 
 ## 实施顺序
 
-本决策不采用一次性大爆炸迁移。实施拆为三个连续、各自拥有唯一 canonical path 的变更。
+本决策不采用一次性大爆炸迁移。实施拆为三个连续阶段；每个阶段可以由一个或多个 OpenSpec 承载，但必须拥有唯一 canonical path，且前一阶段完成并验证后才能切换下一阶段的 workspace 或 public export 边界。
 
 ### 阶段一：单扩展运行时与直接打包
 
@@ -278,6 +285,7 @@ packager 不再创建或解包内部 feature VSIX。缺失资源、重复 contri
 
 ### 阶段三：Shared 所有权清理
 
+- 实施前创建并验证独立 `decompose-neko-shared-ownership` OpenSpec，记录每个 export、consumer 和目标 owner。
 - 先迁 VS Code 和 React/UI 内容。
 - 再按 owning domain 迁移 Agent、Canvas、Media、Entity、Content contract。
 - 最后拆分 local metadata 和 project runtime。
@@ -330,6 +338,17 @@ packager 不再创建或解包内部 feature VSIX。缺失资源、重复 contri
 
 不采用。三者影响面不同，合并实施会显著增加回归、冲突和回滚成本。分阶段不代表保留双路径；每个阶段仍必须收敛自己的 canonical boundary。
 
+## 转为 Accepted 的条件
+
+本文保持 `Proposed`，直到：
+
+- 配套 OpenSpec 明确区分静态 feature registration 与 lazy capability failure，且依赖 metadata 与类型化 wiring 不再形成双重事实来源；
+- 单扩展、direct staging、状态 identity 和 workspace 单层化的任务顺序与本文三个阶段一致；
+- 已退役 Rust Engine/Engine readiness 不再出现在该变更的目标 contract、任务或验收中；
+- 冲突的 active OpenSpec 已更新、关闭或明确被本变更取代，旧 embedded path 不能继续作为接受方案；
+- `decompose-neko-shared-ownership` 后继 OpenSpec 已在第三阶段实施前创建并通过严格校验；
+- 当前态架构文档保留清晰的 Proposed 目标链接；阶段完成后再将 application composition、package boundaries、构建和发布文档切换为新 canonical fact。
+
 ## 验证要求
 
 完成目标架构至少需要证明：
@@ -342,6 +361,6 @@ packager 不再创建或解包内部 feature VSIX。缺失资源、重复 contri
 - `@neko/host` 不引入具体宿主实现或领域包；
 - `@neko/shared` 根入口不重新聚合领域、React 或 VS Code API；
 - state identity 保持或通过版本化迁移验证；
-- 最终平台 VSIX 在隔离 Extension Development Host 中完成 contribution、Webview、runtime closure、故障 diagnostic 和释放验收。
+- 最终平台 VSIX 在隔离 Extension Development Host 中完成 contribution、Webview、Node/FFmpeg 与其他 target-native runtime closure、capability failure diagnostic 和释放验收。
 
 适用门禁包括 `pnpm build`、`pnpm test`、`pnpm check`、`pnpm check:legacy-debt`、`pnpm check:unused`，以及真实 Extension Development Host 场景。涉及 Agent capability/host routing 时，还必须运行聚焦 Agent evaluation。

@@ -1,3 +1,8 @@
+> **Historical completion record:** These checks proved the former embedded-payload
+> closure. The active replacement must re-prove equivalent closure in the direct
+> application staging tree; completion here does not permit restoring feature VSIX or
+> `dist/features/*`.
+
 ## 1. Regression Contracts
 
 - [x] 1.1 Add a release orchestration test that rejects Engine's internal bare runtime import

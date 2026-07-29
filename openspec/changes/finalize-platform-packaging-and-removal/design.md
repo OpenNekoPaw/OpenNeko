@@ -1,3 +1,9 @@
+> **Superseded implementation note:** This design records the earlier transition to one
+> public VSIX. Its embedded feature registry, simulated scoped `ExtensionContext`, and
+> feature-VSIX assembly decisions are no longer canonical. See
+> `consolidate-vscode-single-extension-package` for the direct Host Kernel and
+> application-staging design.
+
 ## Context
 
 OpenNeko for VS Code is currently a pure `neko.neko-suite` extension pack. Engine, Tools, Preview, Assets, Agent, Cut, and Canvas are seven independent extensions with separate manifests, activation functions, Webview payloads, storage contexts, and cross-extension discovery through `vscode.extensions.getExtension(...)`. CI and Release therefore expose eight or nine VSIX files even though users perceive one product.

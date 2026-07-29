@@ -1,3 +1,8 @@
+> **Historical completion record:** These checked tasks describe the superseded
+> embedded-feature implementation. They do not authorize retaining feature VSIX,
+> simulated scoped-context, or registry paths; replacement work is tracked by
+> `consolidate-vscode-single-extension-package`.
+
 ## 1. Contracts And Regression Guards
 
 - [x] 1.1 Add deterministic tests for the two final artifact names, exact feature membership, manifest composition, and rejection of separate public feature VSIX files

@@ -8,10 +8,10 @@ Desktop/TUI 仍需要复用 host-neutral domain、runtime 和 UI 能力，因此
 
 - **BREAKING** 将 VS Code 产品收敛为一个扩展 manifest、一个 Extension Host 入口、一个真实 `ExtensionContext` 和一个反向释放的应用生命周期；不再把内部功能作为可激活的嵌入式扩展。
 - **BREAKING** 移除 `packages/<feature>/packages/*` 形式的二级 workspace。需要被 Desktop、TUI 或其他产品复用的 domain/runtime/UI 包迁移为顶层 `packages/*` workspace；仅服务 VS Code 的 activation、command、view、custom editor、Webview panel 和 host adapter 迁入 `apps/neko-vscode/src/features/*`。
-- **BREAKING** 删除临时功能 VSIX 的打包、解包和运行时加载链路；最终 VSIX 直接包含应用 bundle、功能 Webview/媒体资源、Node runtime 依赖和目标平台 Engine closure。
-- 用类型化的 Host Kernel 和显式 feature descriptor/capability dependency graph 替代 embedded feature registry、scoped context 和内部 marketplace-style API discovery。
+- **BREAKING** 删除临时功能 VSIX 的打包、解包和运行时加载链路；最终 VSIX 直接包含应用 bundle、功能 Webview/媒体资源、Node runtime 依赖和目标平台 FFmpeg/Sharp 等 runtime closure。
+- 用类型化的 Host Kernel、由 composition wiring 派生的 registration plan 和显式 lazy capability dependency graph 替代 embedded feature registry、scoped context 和内部 marketplace-style API discovery。
 - 将当前宽泛的 AI/Host services bag 拆为按功能注入的最小 ports；保留 `@neko/host` 作为 host-neutral contract，不引入统一万能 Host 接口或 service locator。
-- 明确失败隔离：应用内核、manifest、契约和必需运行时失败时整扩展激活失败；可选 feature/capability 失败只禁用其自身及显式依赖者，并产生可见 diagnostic，不静默降级。
+- 明确失败隔离：应用内核、manifest、契约、state namespace、轻量 feature registration 和必需 runtime closure 失败时整扩展激活失败；可恢复 lazy capability 初始化失败只禁用该 capability 及其显式 capability 依赖者，并产生可见 diagnostic，不静默降级或撤销独立 surface。
 - 为原 scoped storage、memento、secret 和 global-storage identity 定义显式复用或迁移规则；迁移失败时 fail-closed，禁止静默丢失用户数据。
 - 更新 workspace、构建、边界检查、架构文档和 VS Code 运行态验收，使“单层 workspace + 单扩展应用内部模块”成为唯一 canonical path。
 
@@ -25,9 +25,11 @@ Desktop/TUI 仍需要复用 host-neutral domain、runtime 和 UI 能力，因此
 
 None. 当前稳定 specs 尚未包含 VS Code 单 VSIX 架构能力；本变更将替代活跃变更 `finalize-platform-packaging-and-removal` 中的 embedded feature/scoped context/临时 VSIX 方案，同时保留其单一公开平台 VSIX 目标。
 
+本变更不执行 `@neko/shared` 的领域所有权拆分。该工作必须由独立后继变更 `decompose-neko-shared-ownership` 在实施前定义 export inventory、目标 owner、consumer migration 和防回流验证。
+
 ## Impact
 
 - 主要影响 `apps/neko-vscode`、现有功能 extension 入口、根 workspace 配置、Turborepo 构建图、`scripts/package-openneko-platform.mjs`、VS Code L1 registry/context 辅助代码、CI/Release 校验和架构文档。
-- 可复用的 Agent、Canvas、Cut、Preview、Tools 等 domain/runtime/UI 能力仍是独立顶层包，Desktop/TUI 不依赖 `apps/neko-vscode`，Webview 仍遵守浏览器沙箱边界。
+- 经真实消费者审计确认可复用的 Agent、Canvas、Cut、Preview、Tools 等 domain/runtime/UI 能力成为独立顶层包或 owning-package subpath；仅服务 VS Code 的部分迁入 App。Desktop/TUI 不依赖 `apps/neko-vscode`，Webview 仍遵守浏览器沙箱边界。
 - 对用户保持一个 `OpenNeko-<platform>-<version>.vsix` 的安装与升级体验；内部扩展 API、包路径和测试 fixture 会发生预发布破坏性调整。
-- 迁移风险集中在贡献清单合并、Webview/本地资源路径、Engine/Sharp/FFmpeg 离线闭包、功能激活顺序、Disposable 所有权和旧状态 identity；这些边界必须通过结构测试、包内容检查与 Extension Development Host 验收。
+- 迁移风险集中在贡献清单合并、Webview/本地资源路径、FFmpeg/Sharp/文档解析器等离线闭包、功能注册顺序、lazy capability 生命周期、Disposable 所有权和旧状态 identity；这些边界必须通过结构测试、包内容检查与 Extension Development Host 验收。
