@@ -62,3 +62,23 @@ The contract is prelaunch and can be extended in place. Existing persisted Proje
 ## Open Questions
 
 None.
+
+## Verification
+
+- `pnpm --filter @neko/app-desktop test:run`: 44 test files and 211 tests passed, including Renderer action isolation, Shell cross-Window reconciliation and stale-revision rejection, and authority-backed Agent conversation deletion.
+- `pnpm --filter @neko/app-desktop typecheck`: passed.
+- `pnpm --filter @neko/app-desktop lint`: passed with one pre-existing `desktop-cut-runtime.ts` unsafe-regex warning and no warning in the changed path.
+- `pnpm --filter @neko/app-desktop build`: Electron production package completed for macOS arm64.
+- `pnpm check:agent-boundaries`: passed for 1,198 checked files with no findings.
+- `pnpm exec openspec validate add-desktop-sidebar-cleanup-actions --strict`: passed.
+- `git diff --check`: passed.
+- Actual Electron runtime: the stale temporary fixture was removed from the recent-Project catalog while its files remained untouched; the recent count changed from three to two. The conversation cleanup action displayed the localized irreversible-deletion confirmation and was cancelled to avoid mutating real user conversation data.
+
+## Evaluation Disposition
+
+Real Neko Agent Evaluation is **excluded**. The change does not alter prompts, Skills, capability or Tool routing, provider/model selection, turn execution, queues, recovery, or Agent event projection. The only Agent boundary call is the existing authority-owned deterministic `deleteConversation` operation, whose exact workspace/conversation routing and refreshed Home projection are covered by AppHost integration tests. No legacy or active-workspace fallback can produce success for a mismatched identity.
+
+## Residual Risk
+
+- Real conversation data was not deleted during manual acceptance because the operation is irreversible. The authority mutation itself is verified through deterministic integration tests using an isolated workspace runtime.
+- Removing a recent Project intentionally does not delete its files or Agent conversations. Reopening the same workspace restores the Project catalog entry.
