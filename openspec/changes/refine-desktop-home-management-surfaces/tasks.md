@@ -39,6 +39,16 @@
 - [x] 5.3 Run focused Desktop tests, typecheck, production package build, strict OpenSpec validation,
       diff checks and packaged Electron startup/visual acceptance.
 
+## 6. Agent Home task-launch correction
+
+- [x] 6.1 Add a red-capable renderer regression that rejects the old heading/composer/three-button
+      skeleton and requires the task-launch composition, shared composer prefills and non-canvas Home
+      surface.
+- [x] 6.2 Recompose Start Creating as a Codex-inspired Desktop task launchpad with real common-intent
+      and quick-template prefills while preserving the existing Project Agent handoff.
+- [x] 6.3 Re-run focused Desktop tests, typecheck, strict OpenSpec validation, production package
+      build and real Electron visual acceptance.
+
 ## Validation evidence
 
 - Packaged the production Electron application with `pnpm --filter @neko/app-desktop package`.
@@ -56,6 +66,10 @@
 - Restarted the real Electron Main process and verified through macOS accessibility plus screenshot
   evidence that OpenNeko opens on the compact Start Creating Agent Home with the Project selector and
   real shortcuts; no oversized N Hero, accent glow, Project workbench, or VS Code host was present.
+- Re-ran the real Electron application after the task-launch correction and verified that Home uses
+  the shared collapsible `ApplicationPrimarySidebar`, renders a plain application surface instead of
+  the Canvas dot grid, exposes common creation intents and quick-start templates, and prefills the
+  existing project-scoped Agent composer from a template without creating a second Agent runtime.
 - Re-ran `pnpm --filter @neko/app-desktop test` (44 files / 213 tests),
   `pnpm --filter @neko/app-desktop typecheck`,
   `pnpm --filter @neko/app-desktop package`,

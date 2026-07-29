@@ -84,3 +84,17 @@ or a shortcut that succeeds without invoking a real command or prefill.
 - **WHEN** Start Creating is the active Home section
 - **THEN** Desktop renders the task heading, intent composer, Project selector and real shortcut actions
 - **AND** submitting still follows the existing one-shot Project Agent handoff
+
+### Requirement: Agent Home is a recognizable task launchpad
+
+Start Creating MUST use a distinct Desktop task-launch layout rather than the Workspace canvas
+surface. It MUST present a creation-oriented heading, one Project-scoped composer, a compact set of
+common creation intents and a quick-template shelf. Every intent or template action MUST prefill the
+same composer; Home MUST NOT expose fake model, Skill, provider or execution controls.
+
+#### Scenario: User compares Home with a Project workspace
+
+- **WHEN** the user opens Start Creating
+- **THEN** the main surface uses the application Home background without the canvas dot grid
+- **AND** common intents and quick templates are visible without opening a Project
+- **AND** choosing one changes the existing composer input instead of creating another Agent UI

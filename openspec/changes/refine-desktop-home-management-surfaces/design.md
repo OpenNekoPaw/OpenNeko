@@ -89,6 +89,17 @@ Start Creating 使用单一居中的 Agent intent composer。标题只表达当�
 下方以紧凑 action rows 展示，并只执行打开项目或预填意图。背景只使用 Desktop theme surface
 与现有轻量网格，不使用强调色光晕制造假的运行状态。
 
+### 8. Home is a task launchpad, not a blank canvas
+
+上一版修正只缩小了 Hero，仍保留“标题 + 空白输入框 + 少量按钮”的旧骨架，无法形成用户要求的
+Codex 风格任务入口。Start Creating 改为独立的 task launchpad：
+
+- 主标题表达“与 OpenNeko 一起创作”，不重复侧栏导航名称；
+- composer 仍只拥有输入、项目作用域和提交，不伪造模型、Skill 或 provider 配置；
+- 常用创作意图与快速模板都只预填同一个 composer，保持一次性项目 Agent handoff；
+- Home 使用纯 Desktop surface；点阵背景只属于 Canvas/创作工作区，不能作为 Home 的信息架构；
+- 所有模板数据留在 Home presentation，不创建新的 workflow runtime 或第二套 Agent authority。
+
 ## Risks / Trade-offs
 
 - 跨项目资产查询可能较慢，因此结果按项目惰性加载并限制数量，不建立缓存真值。

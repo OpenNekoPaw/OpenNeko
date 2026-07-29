@@ -17,6 +17,9 @@ Desktop Home 当前只有“开始创作 / 动态 / 资产中心”三个入口�
 - Desktop 新安装与本次预发布设置迁移后首先进入 Home，不再把历史项目恢复作为隐式默认。
 - “开始创作”收敛为紧凑的 Agent Home 起始面：项目作用域属于 composer 控件，快捷意图属于
   composer 下方的真实操作，不再使用放大的品牌 Hero、装饰性光晕或伪工作区入口。
+- Agent Home 使用可辨识的任务启动布局：一个明确的创作标题、项目作用域 composer、常用创作
+  意图和快速模板区。Home 主区域使用纯 Desktop surface，不再把工作区画布的点阵背景误用为
+  首页背景。
 
 ## Capabilities
 
