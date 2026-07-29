@@ -425,71 +425,23 @@ function HomeWorkspace({
   readonly onOpenRecent: (projectId: string) => void;
   readonly onOpenConversation: (conversation: DesktopAgentHomeConversationSummary) => void;
 }): JSX.Element {
-  const { t } = useTranslation();
   const [navigationCollapsed, setNavigationCollapsed] = useState(false);
   return (
     <div
       className="home-layout"
       data-navigation-collapsed={navigationCollapsed ? 'true' : 'false'}
     >
-      <aside
-        className={`home-navigation ${navigationCollapsed ? 'home-navigation--compact' : ''}`}
-      >
-        <PrimarySidebarBrand
-          compact={navigationCollapsed}
-          onToggle={() => setNavigationCollapsed((value) => !value)}
-        />
-        <nav className="home-primary-navigation" aria-label={t('home.label')}>
-          <HomeNavigationButton
-            active={section === 'create'}
-            label={t('home.overview')}
-            icon={<PlusIcon size={17} />}
-            onClick={() => onSectionChange('create')}
-          />
-          <HomeNavigationButton
-            active={section === 'assets'}
-            label={t('home.mediaLibrary')}
-            icon={<SearchIcon size={17} />}
-            onClick={() => onSectionChange('assets')}
-          />
-          <HomeNavigationButton
-            active={section === 'plugins'}
-            label={t('home.plugins')}
-            icon={<PackageIcon size={17} />}
-            onClick={() => onSectionChange('plugins')}
-          />
-          <HomeNavigationButton
-            active={section === 'creations'}
-            label={t('home.allCreations')}
-            icon={<FolderIcon size={17} />}
-            onClick={() => onSectionChange('creations')}
-          />
-        </nav>
-        {navigationCollapsed ? null : (
-          <PrimaryRecentNavigation
-            onOpenConversation={onOpenConversation}
-            onOpenRecent={onOpenRecent}
-            projection={projection}
-          />
-        )}
-        <div className="home-navigation-footer">
-          {navigationCollapsed ? null : <AttentionSummary projection={projection} />}
-          <Tooltip
-            content={
-              projection.window.tabs.length > 0
-                ? t('shell.settingsLabel')
-                : t('shell.settingsNeedProject')
-            }
-          >
-            <IconButton
-              disabled={projection.window.tabs.length === 0}
-              label={t('shell.settingsLabel')}
-              icon={<SettingsIcon size={16} />}
-              onClick={actions.onOpenSettings}
-            />
-          </Tooltip>
-        </div>
-      </aside>
+      <ApplicationPrimarySidebar
+        activeSection={section}
+        compact={navigationCollapsed}
+        onCloseTab={actions.onCloseTab}
+        onNavigate={onSectionChange}
+        onOpenConversation={onOpenConversation}
+        onOpenRecent={onOpenRecent}
+        onOpenSettings={actions.onOpenSettings}
+        onToggle={() => setNavigationCollapsed((value) => !value)}
+        projection={projection}
+      />
       <main className="home-main dotted-surface">
         {section === 'create' ? (
           <HomeStartCreating actions={actions} pending={pending} projection={projection} />
@@ -1026,6 +978,18 @@ function ContentProjectWorkspace({
     agentDock,
     resourceDock,
   );
+  const mainSurface = renderWorkbenchMainView({
+    allowCutRuntime: true,
+    agentMain,
+    agentSurface: agentDock,
+    canvasCapability,
+    previewCapability,
+    cutCapability,
+    project,
+    projection,
+    timelineTarget: cutTimelineTarget ?? undefined,
+    view: activeMainView,
+  });
 
   return (
     <ControlledWorkbenchShell
@@ -1056,18 +1020,17 @@ function ContentProjectWorkspace({
               },
             }
       }
-      main={renderWorkbenchMainView({
-        allowCutRuntime: true,
-        agentMain,
-        agentSurface: agentDock,
-        canvasCapability,
-        previewCapability,
-        cutCapability,
-        project,
-        projection,
-        timelineTarget: cutTimelineTarget ?? undefined,
-        view: activeMainView,
-      })}
+      main={
+        <div className="project-main-host">
+          <div className="project-main-host__content">{mainSurface}</div>
+          <ProjectWorkbenchControls
+            actions={actions}
+            pending={pending}
+            project={project}
+            projection={projection}
+          />
+        </div>
+      }
       secondaryMain={
         sideMainView
           ? renderWorkbenchMainView({
@@ -1208,15 +1171,13 @@ function renderWorkbenchMainView({
   );
 }
 
-function ProjectSidebarControls({
+function ProjectWorkbenchControls({
   actions,
-  compact,
   pending,
   project,
   projection,
 }: {
   readonly actions: ShellActions;
-  readonly compact: boolean;
   readonly pending: boolean;
   readonly project: DesktopProjectCatalogItem;
   readonly projection: DesktopShellProjection;
@@ -1225,10 +1186,9 @@ function ProjectSidebarControls({
   const workbench = projection.window.workbench;
   return (
     <div
-      className="home-navigation-footer project-layout-controls"
+      className="project-workbench-controls project-layout-controls"
       aria-label={t('workspace.layoutControls')}
     >
-      {compact ? null : <AttentionSummary projection={projection} />}
       <div className="project-layout-control-group">
         <WorkbenchDisplayMenu
           actions={actions}
@@ -1251,12 +1211,6 @@ function ProjectSidebarControls({
               },
             })
           }
-        />
-        <WorkbenchIconButton
-          disabled={pending}
-          icon={<SettingsIcon size={16} />}
-          label={t('shell.settingsLabel')}
-          onClick={actions.onOpenSettings}
         />
       </div>
     </div>
@@ -1498,63 +1452,18 @@ function ProjectPrimarySidebar({
     });
   };
   return (
-    <aside
-      className={`home-navigation project-primary-sidebar ${
-        compact ? 'home-navigation--compact project-primary-sidebar--compact' : ''
-      }`}
-    >
-      <PrimarySidebarBrand
-        compact={compact}
-        disabled={pending}
-        onToggle={togglePrimarySidebar}
-        subtitle={project.displayName}
-      />
-      <nav
-        className="home-primary-navigation"
-        aria-label={t('workspace.primaryNavigation')}
-      >
-        <HomeNavigationButton
-          active={false}
-          label={t('home.overview')}
-          icon={<PlusIcon size={17} />}
-          onClick={() => actions.onHome('create')}
-        />
-        <HomeNavigationButton
-          active={false}
-          label={t('home.mediaLibrary')}
-          icon={<SearchIcon size={17} />}
-          onClick={() => actions.onHome('assets')}
-        />
-        <HomeNavigationButton
-          active={false}
-          label={t('home.plugins')}
-          icon={<PackageIcon size={17} />}
-          onClick={() => actions.onHome('plugins')}
-        />
-        <HomeNavigationButton
-          active={false}
-          label={t('home.allCreations')}
-          icon={<FolderIcon size={17} />}
-          onClick={() => actions.onHome('creations')}
-        />
-      </nav>
-      {compact ? null : (
-        <PrimaryRecentNavigation
-          activeProjectId={project.projectId}
-          onCloseTab={actions.onCloseTab}
-          onOpenConversation={actions.onOpenConversation}
-          onOpenRecent={actions.onOpenRecent}
-          projection={projection}
-        />
-      )}
-      <ProjectSidebarControls
-        actions={actions}
-        compact={compact}
-        pending={pending}
-        project={project}
-        projection={projection}
-      />
-    </aside>
+    <ApplicationPrimarySidebar
+      activeProjectId={project.projectId}
+      compact={compact}
+      disabled={pending}
+      onCloseTab={actions.onCloseTab}
+      onNavigate={actions.onHome}
+      onOpenConversation={actions.onOpenConversation}
+      onOpenRecent={actions.onOpenRecent}
+      onOpenSettings={actions.onOpenSettings}
+      onToggle={togglePrimarySidebar}
+      projection={projection}
+    />
   );
 }
 
@@ -2354,29 +2263,111 @@ function EmptySummary({
   );
 }
 
+function ApplicationPrimarySidebar({
+  activeProjectId,
+  activeSection,
+  compact,
+  disabled = false,
+  onCloseTab,
+  onNavigate,
+  onOpenConversation,
+  onOpenRecent,
+  onOpenSettings,
+  onToggle,
+  projection,
+}: {
+  readonly activeProjectId?: string;
+  readonly activeSection?: HomeSection;
+  readonly compact: boolean;
+  readonly disabled?: boolean;
+  readonly onCloseTab: (tabId: string) => void;
+  readonly onNavigate: (section: HomeSection) => void;
+  readonly onOpenConversation: (
+    conversation: DesktopAgentHomeConversationSummary,
+  ) => void;
+  readonly onOpenRecent: (projectId: string) => void;
+  readonly onOpenSettings: () => void;
+  readonly onToggle: () => void;
+  readonly projection: DesktopShellProjection;
+}): JSX.Element {
+  const { t } = useTranslation();
+  return (
+    <aside
+      className={`home-navigation project-primary-sidebar ${
+        compact ? 'home-navigation--compact project-primary-sidebar--compact' : ''
+      }`}
+      data-primary-sidebar="application"
+    >
+      <PrimarySidebarBrand
+        compact={compact}
+        disabled={disabled}
+        onToggle={onToggle}
+      />
+      <nav
+        className="home-primary-navigation"
+        aria-label={t('workspace.primaryNavigation')}
+      >
+        <HomeNavigationButton
+          active={activeSection === 'create'}
+          disabled={disabled}
+          label={t('home.overview')}
+          icon={<PlusIcon size={17} />}
+          onClick={() => onNavigate('create')}
+        />
+        <HomeNavigationButton
+          active={activeSection === 'assets'}
+          disabled={disabled}
+          label={t('home.mediaLibrary')}
+          icon={<SearchIcon size={17} />}
+          onClick={() => onNavigate('assets')}
+        />
+        <HomeNavigationButton
+          active={activeSection === 'plugins'}
+          disabled={disabled}
+          label={t('home.plugins')}
+          icon={<PackageIcon size={17} />}
+          onClick={() => onNavigate('plugins')}
+        />
+        <HomeNavigationButton
+          active={activeSection === 'creations'}
+          disabled={disabled}
+          label={t('home.allCreations')}
+          icon={<FolderIcon size={17} />}
+          onClick={() => onNavigate('creations')}
+        />
+      </nav>
+      {compact ? null : (
+        <PrimaryRecentNavigation
+          activeProjectId={activeProjectId}
+          onCloseTab={onCloseTab}
+          onOpenConversation={onOpenConversation}
+          onOpenRecent={onOpenRecent}
+          projection={projection}
+        />
+      )}
+      <PrimarySidebarFooter
+        compact={compact}
+        onOpenSettings={onOpenSettings}
+        projection={projection}
+      />
+    </aside>
+  );
+}
+
 function PrimarySidebarBrand({
   compact,
   disabled = false,
   onToggle,
-  subtitle,
 }: {
   readonly compact: boolean;
   readonly disabled?: boolean;
   readonly onToggle: () => void;
-  readonly subtitle?: string;
 }): JSX.Element {
   const { t } = useTranslation();
   return (
     <div className="home-brand">
       <span className="brand-mark" aria-hidden="true">N</span>
-      {compact ? null : subtitle ? (
-        <span className="project-primary-brand-copy">
-          <strong>{t('app.name')}</strong>
-          <small>{subtitle}</small>
-        </span>
-      ) : (
-        <strong>{t('app.name')}</strong>
-      )}
+      {compact ? null : <strong>{t('app.name')}</strong>}
       <IconButton
         disabled={disabled}
         label={
@@ -2387,6 +2378,38 @@ function PrimarySidebarBrand({
         icon={<RightPanelIcon size={16} />}
         onClick={onToggle}
       />
+    </div>
+  );
+}
+
+function PrimarySidebarFooter({
+  compact,
+  onOpenSettings,
+  projection,
+}: {
+  readonly compact: boolean;
+  readonly onOpenSettings: () => void;
+  readonly projection: DesktopShellProjection;
+}): JSX.Element {
+  const { t } = useTranslation();
+  const settingsAvailable = projection.window.tabs.length > 0;
+  return (
+    <div className="home-navigation-footer">
+      {compact ? null : <AttentionSummary projection={projection} />}
+      <Tooltip
+        content={
+          settingsAvailable
+            ? t('shell.settingsLabel')
+            : t('shell.settingsNeedProject')
+        }
+      >
+        <IconButton
+          disabled={!settingsAvailable}
+          label={t('shell.settingsLabel')}
+          icon={<SettingsIcon size={16} />}
+          onClick={onOpenSettings}
+        />
+      </Tooltip>
     </div>
   );
 }

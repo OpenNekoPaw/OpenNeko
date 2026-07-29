@@ -121,5 +121,5 @@
 - [x] 8.3 Route Project Asset center to the independent Resource Browser, preserve Project
       activation/close semantics, and reduce the footer to real attention/display/timeline/settings
       controls without simulated Plugin/Skill actions.
-- [ ] 8.4 Run Desktop tests/typecheck, strict OpenSpec validation, production package build and a
+- [x] 8.4 Run Desktop tests/typecheck, strict OpenSpec validation, production package build and a
       real Electron Home/Project navigation scenario.

@@ -202,6 +202,55 @@ describe('DesktopShellView', () => {
     expect(markup).not.toContain('/Users/private');
   });
 
+  it('uses one application primary sidebar contract on Home and in a Content Project', () => {
+    const projection = homeProjection();
+    const openTab = {
+      tabId: 'tab-1',
+      projectId: 'content:workspace-1',
+      viewId: 'view-1',
+      viewEpoch: 1,
+    };
+    const homeMarkup = renderShell(
+      <DesktopShellView
+        projection={{
+          ...projection,
+          window: {
+            ...projection.window,
+            tabs: [openTab],
+          },
+        }}
+      />,
+    );
+    const projectMarkup = renderShell(
+      <DesktopShellView
+        projection={{
+          ...projection,
+          window: {
+            ...projection.window,
+            activeTarget: { kind: 'project', tabId: openTab.tabId },
+            tabs: [openTab],
+          },
+        }}
+      />,
+    );
+    const homeSidebar = extractPrimarySidebar(homeMarkup);
+    const projectSidebar = extractPrimarySidebar(projectMarkup);
+
+    for (const sidebar of [homeSidebar, projectSidebar]) {
+      expect(sidebar).toContain('home-navigation project-primary-sidebar');
+      expect(sidebar).toContain('Start creating');
+      expect(sidebar).toContain('Asset Center');
+      expect(sidebar).toContain('Plugins');
+      expect(sidebar).toContain('All creations');
+      expect(sidebar).toContain('Recent projects');
+      expect(sidebar).toContain('Recent Agent conversations');
+      expect(sidebar).toContain('Desktop settings');
+      expect(sidebar).toContain('Close project');
+      expect(sidebar).not.toContain('project-primary-brand-copy');
+      expect(sidebar).not.toContain('project-layout-controls');
+    }
+  });
+
   it('renders a Content Project shell with explicit unavailable domain state', () => {
     const projection = homeProjection();
     const markup = renderShell(
@@ -239,7 +288,7 @@ describe('DesktopShellView', () => {
     expect(markup).toContain('home-navigation project-primary-sidebar');
     expect(markup).not.toContain('project-capabilities');
     expect(markup).not.toContain('Creative surfaces');
-    expect(markup.match(/project-layout-icon-button/gu)).toHaveLength(3);
+    expect(markup.match(/project-layout-icon-button/gu)).toHaveLength(2);
     expect(markup).not.toContain('project-workbench-header');
     expect(markup).not.toContain('project-view-switcher');
     expect(markup).not.toContain('project-view-navigation');
@@ -650,6 +699,16 @@ function renderShell(node: JSX.Element): string {
   return renderToStaticMarkup(
     <I18nProvider service={i18n.i18nService}>{node}</I18nProvider>,
   );
+}
+
+function extractPrimarySidebar(markup: string): string {
+  const match = markup.match(
+    /<aside[^>]*data-primary-sidebar="application"[^>]*>[\s\S]*?<\/aside>/u,
+  );
+  if (!match) {
+    throw new Error('Desktop Shell markup does not contain the application primary sidebar.');
+  }
+  return match[0];
 }
 
 function homeProjection(): DesktopShellProjection {
