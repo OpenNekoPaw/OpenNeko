@@ -20,6 +20,6 @@ Canvas 当前工具栏占用整列高度，视觉重量与实际操作数量不�
 
 ## Impact
 
-- 影响 `packages/neko-canvas/packages/webview` 的 Canvas shell 组合、工具栏组件、视口输入 hook、样式及其测试。
+- 影响 `packages/neko-canvas-webview` 的 Canvas shell 组合、工具栏组件、视口输入 hook、样式及其测试。
 - 不修改 `.nkc` 数据、Extension/Webview message、Engine 或 Proto 契约。
 - 不增加第三方依赖；继续复用 `@neko/ui` 的垂直工具栏 primitive 与现有主题 token。

@@ -27,8 +27,8 @@ Commands:
 ```bash
 node --experimental-strip-types --test apps/neko-vscode/src/ai-host-runtime.test.ts
 pnpm exec vitest run \
-  packages/neko-agent/packages/platform/src/media/__tests__/generated-asset-index.test.ts \
-  packages/neko-agent/packages/extension/src/host-generated-asset-catalog.test.ts
+  packages/neko-platform/src/media/__tests__/generated-asset-index.test.ts \
+  apps/neko-vscode/src/features/agent/host-generated-asset-catalog.test.ts
 pnpm build:vscode:dev
 pnpm smoke:vscode:targets -- --skill vscode-extension-debugger --require-webview
 node .codex/skills/vscode-extension-debugger/scripts/cdp-client.js snapshot <agent-target>
@@ -146,7 +146,7 @@ explicit process launch outside the canonical development configuration.
 Commands:
 
 ```bash
-pnpm --dir packages/neko-agent/packages/agent exec vitest run \
+pnpm --dir packages/neko-agent-runtime exec vitest run \
   src/pi/__tests__/openneko-tool.test.ts
 pnpm exec vitest run \
   scripts/agent-eval/suites/agent-runtime/workflow-controller/media-tool-terminal-result.test.mjs
@@ -154,7 +154,7 @@ node scripts/agent-eval/protocol-smoke.mjs \
   --suite agent-runtime.workflow-controller \
   --case media-tool-terminal-result \
   --run-id p0-locator-handoff-pass-20260725
-pnpm --dir packages/neko-agent/packages/webview exec vitest run \
+pnpm --dir packages/neko-agent-webview exec vitest run \
   src/components/ChatView/ToolCallDisplay/ToolCallDisplay.test.tsx \
   src/presenters/__tests__/tool-call-presenter.test.ts
 pnpm build:vscode:dev
@@ -205,7 +205,7 @@ Focused results:
 Commands:
 
 ```bash
-pnpm --dir packages/neko-agent/packages/webview exec vitest run \
+pnpm --dir packages/neko-agent-webview exec vitest run \
   src/components/ChatView/ToolCallDisplay/ToolCallDisplay.test.tsx \
   src/presenters/__tests__/tool-call-presenter.test.ts
 pnpm build:vscode:dev
@@ -241,10 +241,10 @@ Commands:
 
 ```bash
 pnpm exec vitest run \
-  packages/neko-agent/packages/extension/src/services/generatedAssetOpenResolver.test.ts \
-  packages/neko-agent/packages/extension/src/host-generated-asset-catalog.test.ts
+  apps/neko-vscode/src/features/agent/services/generatedAssetOpenResolver.test.ts \
+  apps/neko-vscode/src/features/agent/host-generated-asset-catalog.test.ts
 pnpm exec vitest run \
-  packages/neko-agent/packages/platform/src/media/__tests__/generated-asset-index.test.ts
+  packages/neko-platform/src/media/__tests__/generated-asset-index.test.ts
 pnpm --filter @neko-agent/extension test:run
 pnpm --filter @neko/shared test -- --run
 pnpm check:strict-extensions

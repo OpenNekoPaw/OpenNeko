@@ -89,7 +89,7 @@ Manual screenshots were kept outside the repository at `/tmp/neko-3d-reference-t
 ## Focused validation completed
 
 ```text
-pnpm exec vitest run packages/neko-preview/packages/extension/src/__tests__/webviewHtmlCsp.test.ts packages/neko-preview/packages/webview/src/model/buildOwnership.test.ts
+pnpm exec vitest run apps/neko-vscode/src/features/preview/__tests__/webviewHtmlCsp.test.ts packages/neko-preview-webview/src/model/buildOwnership.test.ts
 # 2 files, 19 tests passed
 
 pnpm --dir packages/neko-preview build
@@ -133,13 +133,13 @@ pnpm --filter neko-preview build
 pnpm check
 # Knip and dependency-cruiser passed; 1,549 modules / 5,533 dependencies, no violations
 
-pnpm exec vitest run packages/neko-agent/packages/agent/src/runtime/__tests__/message-runtime.test.ts
+pnpm exec vitest run packages/neko-agent-runtime/src/runtime/__tests__/message-runtime.test.ts
 # 1 file, 68 tests passed
 
-pnpm exec vitest run packages/neko-agent/packages/extension/src/chat/message/__tests__/attachmentProcessor.test.ts packages/neko-agent/packages/extension/src/chat/__tests__/chatProvider.test.ts
+pnpm exec vitest run apps/neko-vscode/src/features/agent/chat/message/__tests__/attachmentProcessor.test.ts apps/neko-vscode/src/features/agent/chat/__tests__/chatProvider.test.ts
 # 2 files, 45 tests passed
 
-pnpm exec vitest run packages/neko-agent/packages/webview/src/presenters/__tests__/reference-token-presenter.test.ts packages/neko-agent/packages/webview/src/components/ChatView/InputArea/AgentContextChip.test.tsx
+pnpm exec vitest run packages/neko-agent-webview/src/presenters/__tests__/reference-token-presenter.test.ts packages/neko-agent-webview/src/components/ChatView/InputArea/AgentContextChip.test.tsx
 # 2 files, 9 tests passed
 
 pnpm --dir packages/neko-agent run compile
@@ -172,7 +172,7 @@ pnpm --dir packages/neko-preview exec vitest run packages/extension/src/provider
 pnpm exec vitest run packages/neko-types/src/types/__tests__/three-reference.test.ts
 # shared 3D Reference contract: 1 file / 5 tests
 
-pnpm exec tsc -p packages/neko-preview/packages/webview/tsconfig.json --noEmit
+pnpm exec tsc -p packages/neko-preview-webview/tsconfig.json --noEmit
 # passed
 
 pnpm --dir packages/neko-preview compile

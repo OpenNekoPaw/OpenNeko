@@ -65,7 +65,7 @@ domain 负责。
 - Shared: `packages/neko-types/src/job-lifecycle/` 与显式 package export。
 - Generation: `packages/neko-generation/` 的 recoverable Job domain、
   provider capability 和持久 store adapter。
-- Cut: `packages/neko-cut/packages/extension/src/services/ExportService.ts` 及其 host-neutral
+- Cut: `apps/neko-vscode/src/features/cut/services/ExportService.ts` 及其 host-neutral
   ExportJob coordinator/store 边界。
 - Agent: 领域 Job Tool contribution、linked/detached Tool Call adapter、path facts 和
   no-direct-execution/no-Task fallback 验证。

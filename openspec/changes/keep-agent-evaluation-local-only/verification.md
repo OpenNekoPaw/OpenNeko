@@ -17,7 +17,7 @@
 
 ## Repository Baseline Outside This Change
 
-`pnpm check:test-orchestration` ran 79 tests: 72 passed and 7 failed outside this change. The new local-only boundary suite passed 2/2. Existing failures reference removed or unowned workspace inventory and functional scenarios for `apps/neko-home`, `packages/neko-story`, `packages/neko-audio`, `packages/neko-market`, and other absent products, plus the new unowned `packages/neko-canvas/packages/domain` workspace. None of those ownership, coverage, or scenario files are changed by this OpenSpec.
+`pnpm check:test-orchestration` ran 79 tests: 72 passed and 7 failed outside this change. The new local-only boundary suite passed 2/2. Existing failures reference removed or unowned workspace inventory and functional scenarios for `apps/neko-home`, `packages/neko-story`, `packages/neko-audio`, `packages/neko-market`, and other absent products, plus the new unowned `packages/neko-canvas-domain` workspace. None of those ownership, coverage, or scenario files are changed by this OpenSpec.
 
 `pnpm check:legacy-debt` failed on the existing baseline with 202 blocking occurrences (194 `migrate-now`, 8 `needs-review`). This change does not add the affected production code paths.
 

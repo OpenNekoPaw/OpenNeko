@@ -7,6 +7,11 @@
 
 本文定义当前保留 workspace 的依赖方向、公共能力 owner，以及 TUI、VS Code Extension/Webview 和 Node/FFmpeg 媒体运行时的边界。包名、入口和示例只描述当前保留实现；已移除产品不构成兼容要求。
 
+> 本文记录当前已接受 package graph。单一 VS Code 扩展、`apps/*` / `packages/*`
+> 单层 workspace 以及 `@neko/shared` 所有权收敛的目标由
+> [`adr-single-extension-single-level-workspace-and-shared-ownership-boundary.md`](adr-single-extension-single-level-workspace-and-shared-ownership-boundary.md)
+> 跟踪；该 ADR 仍为 Proposed，迁移完成前不得把目标目录或 owner 当作当前实现。
+
 ## 分层与依赖方向
 
 | 层级            | 主要包                                                                                                                | 可依赖                                  | 不得依赖                                              |

@@ -36,7 +36,7 @@ None. The pruned workspace has no surviving base OpenSpec capability catalog; th
 
 ## Impact
 
-- Agent packages: `packages/neko-agent/packages/agent`, `platform`, `ai-sdk`, `agent-types`, `extension`, and `webview`.
+- Agent packages: `packages/neko-agent-runtime`, `platform`, `ai-sdk`, `agent-types`, `extension`, and `webview`.
 - Hosts: `apps/neko-tui` and the VS Code Agent extension adapters.
 - Shared product contracts: conversation/turn/run/task identities, permission/approval, Capability/MCP, ResourceRef, model configuration, and event projection.
 - Dependencies and distribution: root lockfile, extension bundle size/startup, Pi/provider SDK licenses, secret handling, and provenance.

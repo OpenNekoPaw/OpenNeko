@@ -21,6 +21,6 @@ Canvas 节点库当前把 Media、Document、Script、Model、CanvasEmbed 和 Pr
 
 ## Impact
 
-- 影响 `packages/neko-canvas/packages/webview` 的 NodeLibrary 分组、渲染、i18n 与交互测试。
+- 影响 `packages/neko-canvas-webview` 的 NodeLibrary 分组、渲染、i18n 与交互测试。
 - 继续复用现有 `NodeLibraryCreationPolicy`、`project:addSource`、文件分类和稳定 `ResourceRef` 创建路径。
 - 不改变 `.nkc`、Extension/Webview message、Proto、Engine、容器模型或已存在引用节点的读取与渲染。

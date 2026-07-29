@@ -27,7 +27,7 @@
 ## Impact
 
 - 新增 `packages/neko-quality` 和 Agent Extension workspace dependency。
-- 删除 `packages/neko-agent/packages/extension/src/capabilities/quality` 下除 canonical Tool adapter 外的实现。
+- 删除 `apps/neko-vscode/src/features/agent/capabilities/quality` 下除 canonical Tool adapter 外的实现。
 - 删除 `packages/neko-types/src/types/quality/qa-types.ts` 及旧 export；canonical `media-quality.ts` 和 `project-quality.ts` contract 继续保留。
 - 移动 ProjectQuality orchestration 及其测试。
 - 更新 dependency-cruiser、Knip、strict tsconfig、测试 ownership、Agent architecture guard、package boundary 文档和 lockfile。

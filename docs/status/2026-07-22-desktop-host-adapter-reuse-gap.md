@@ -35,18 +35,18 @@
 
 ## 证据与成熟度
 
-| 能力 | 当前证据 | 复用成熟度 | 缺口 |
-| --- | --- | --- | --- |
-| Application identity | `NEKO_APPLICATION_IDS` 已收敛为 `neko-desktop`、`neko-tui`、`neko-vscode`；`neko-home` 只有拒绝测试和历史文档引用 | Foundation 已关闭 | 后续领域 operation 继续携带显式 application/window/project/runtime identity |
-| 通用 Host ports | `NekoHostKind` 包含 `electron`；`apps/neko-desktop` 已实现 environment、workspace、files、paths、policy、external、diagnostics | Foundation 已关闭 | secret、project catalog 和领域 runtime 按 owning change 接入；不把 Desktop/TUI 差异提前抽成错误通用层 |
-| Agent core/platform | Agent session、Pi、Skill、tool、task、memory 和 capability 位于 host-neutral 包，TUI 已有真实消费者 | 高 | Desktop 需要自己的 application composition、storage/secret/content ports 和生命周期 |
-| Agent Webview | `AgentHostKind` 已包含 `electron`；`AgentWebviewRoot` 接受 `hostRuntimeAdapter`；Webview 有边界测试阻止直接 VS Code transport 扩散 | 中高 | 只有 VS Code transport 和 Electron 测试替身；缺正式 Electron adapter、route classification 和 Host controller |
-| Agent Host router | Extension router 覆盖全部 VS Code Webview message | 中低 | router 仍依赖 `vscode.env`、`vscode.Webview`、Extension services；需拆为 host-neutral controller 与 VS Code effects，不得复制一份 Electron router |
-| Canvas | `./root` 和 `./host-adapter` 均有公共导出，`.nkc` 与 authoring contract 可保留 | 中低 | 完整 Root 不接收 adapter；代码扫描发现 27 个 Webview 源文件直接或间接使用 VS Code message transport；现有 HostAdapterSurface 只渲染简化节点投影 |
-| Cut | `./root` 和 `./host-adapter` 均有公共导出，`.nkv` 与时间线领域能力可保留 | 中低 | 完整 Root 不接收 adapter；代码扫描发现 29 个 Webview 源文件使用 VS Code message transport；现有 HostAdapterSurface 包含固定演示时间线，不是编辑 runtime |
-| Preview | 格式渲染组件、Three.js 和媒体消费能力可选择复用 | 低到中 | 包只导出简化 `./host-adapter`，没有统一完整 Root；代码扫描发现 16 个 Webview 源文件使用 VS Code message transport；不同格式仍由独立入口启动 |
-| Assets/Entity/Search | `@neko/asset`、`@neko/entity`、`@neko/search` 是可复用 core/service | 中高 | `neko-assets` 产品面仍是 VS Code Extension，代码扫描发现 20 个源文件直接导入 `vscode`；TreeProvider、DecorationProvider 和 VS Code Webview 不能复用于 Desktop |
-| Engine | Rust Engine、`EngineClient` 和 Proto 已有清晰权威边界 | 高 | Electron main/AppHost 需要负责 Engine 发现、token、descriptor、取消和退出清理；renderer 仍只能消费授权投影 |
+| 能力                 | 当前证据                                                                                                                           | 复用成熟度        | 缺口                                                                                                                                                          |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Application identity | `NEKO_APPLICATION_IDS` 已收敛为 `neko-desktop`、`neko-tui`、`neko-vscode`；`neko-home` 只有拒绝测试和历史文档引用                  | Foundation 已关闭 | 后续领域 operation 继续携带显式 application/window/project/runtime identity                                                                                   |
+| 通用 Host ports      | `NekoHostKind` 包含 `electron`；`apps/neko-desktop` 已实现 environment、workspace、files、paths、policy、external、diagnostics     | Foundation 已关闭 | secret、project catalog 和领域 runtime 按 owning change 接入；不把 Desktop/TUI 差异提前抽成错误通用层                                                         |
+| Agent core/platform  | Agent session、Pi、Skill、tool、task、memory 和 capability 位于 host-neutral 包，TUI 已有真实消费者                                | 高                | Desktop 需要自己的 application composition、storage/secret/content ports 和生命周期                                                                           |
+| Agent Webview        | `AgentHostKind` 已包含 `electron`；`AgentWebviewRoot` 接受 `hostRuntimeAdapter`；Webview 有边界测试阻止直接 VS Code transport 扩散 | 中高              | 只有 VS Code transport 和 Electron 测试替身；缺正式 Electron adapter、route classification 和 Host controller                                                 |
+| Agent Host router    | Extension router 覆盖全部 VS Code Webview message                                                                                  | 中低              | router 仍依赖 `vscode.env`、`vscode.Webview`、Extension services；需拆为 host-neutral controller 与 VS Code effects，不得复制一份 Electron router             |
+| Canvas               | `./root` 和 `./host-adapter` 均有公共导出，`.nkc` 与 authoring contract 可保留                                                     | 中低              | 完整 Root 不接收 adapter；代码扫描发现 27 个 Webview 源文件直接或间接使用 VS Code message transport；现有 HostAdapterSurface 只渲染简化节点投影               |
+| Cut                  | `./root` 和 `./host-adapter` 均有公共导出，`.nkv` 与时间线领域能力可保留                                                           | 中低              | 完整 Root 不接收 adapter；代码扫描发现 29 个 Webview 源文件使用 VS Code message transport；现有 HostAdapterSurface 包含固定演示时间线，不是编辑 runtime       |
+| Preview              | 格式渲染组件、Three.js 和媒体消费能力可选择复用                                                                                    | 低到中            | 包只导出简化 `./host-adapter`，没有统一完整 Root；代码扫描发现 16 个 Webview 源文件使用 VS Code message transport；不同格式仍由独立入口启动                   |
+| Assets/Entity/Search | `@neko/asset`、`@neko/entity`、`@neko/search` 是可复用 core/service                                                                | 中高              | `neko-assets` 产品面仍是 VS Code Extension，代码扫描发现 20 个源文件直接导入 `vscode`；TreeProvider、DecorationProvider 和 VS Code Webview 不能复用于 Desktop |
+| Engine               | Rust Engine、`EngineClient` 和 Proto 已有清晰权威边界                                                                              | 高                | Electron main/AppHost 需要负责 Engine 发现、token、descriptor、取消和退出清理；renderer 仍只能消费授权投影                                                    |
 
 文件计数来自 2026-07-22 对生产目录的 `rg` 静态扫描，只用于描述耦合规模，不代表独立迁移任务数量。
 
@@ -54,11 +54,11 @@
 
 当前和目标设计中至少存在三类不同 adapter，不能压成万能 bridge：
 
-| 层级 | 职责 | 示例 |
-| --- | --- | --- |
-| Host capability port | 文件、路径、workspace、trust、secret、external、diagnostic | `NekoHostPorts`、未来 `ElectronNekoHostPorts` |
+| 层级                       | 职责                                                                           | 示例                                                  |
+| -------------------------- | ------------------------------------------------------------------------------ | ----------------------------------------------------- |
+| Host capability port       | 文件、路径、workspace、trust、secret、external、diagnostic                     | `NekoHostPorts`、未来 `ElectronNekoHostPorts`         |
 | Domain application adapter | 把宿主能力组合成 Agent、Canvas、Cut、Preview、Assets 的 operation 和 lifecycle | `AgentHostController`、`CanvasHostAdapter` 等目标边界 |
-| UI transport adapter | 在 renderer/Webview 与 Host controller 间传递版本化消息和可恢复展示状态 | `AgentHostRuntimeAdapter`、未来领域 UI adapter |
+| UI transport adapter       | 在 renderer/Webview 与 Host controller 间传递版本化消息和可恢复展示状态        | `AgentHostRuntimeAdapter`、未来领域 UI adapter        |
 
 VS Code 和 Desktop 的目标调用链为：
 
@@ -99,11 +99,11 @@ Extension 和 Electron adapter 可以不同，但 domain controller、项目事�
 - [`../architecture/adr-neko-desktop-composition-and-open-source-reference-boundary.md`](../architecture/adr-neko-desktop-composition-and-open-source-reference-boundary.md)
 - `packages/neko-host/src/ports.ts`
 - `packages/neko-host/src/application.ts`
-- `packages/neko-agent/packages/agent-types/src/agent-host-runtime-adapter.ts`
-- `packages/neko-agent/packages/webview/src/root.tsx`
-- `packages/neko-agent/packages/extension/src/chat/router/`
-- `packages/neko-canvas/packages/webview/src/root.tsx`
-- `packages/neko-cut/packages/webview/src/root.tsx`
-- `packages/neko-preview/packages/webview/`
+- `packages/neko-agent-types/src/agent-host-runtime-adapter.ts`
+- `packages/neko-agent-webview/src/root.tsx`
+- `apps/neko-vscode/src/features/agent/chat/router/`
+- `packages/neko-canvas-webview/src/root.tsx`
+- `packages/neko-cut-webview/src/root.tsx`
+- `packages/neko-preview-webview/`
 - `packages/neko-assets/packages/asset/`
-- `packages/neko-assets/src/providers/`
+- `apps/neko-vscode/src/features/assets/providers/`

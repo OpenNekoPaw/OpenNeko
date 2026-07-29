@@ -25,6 +25,6 @@ Canvas 当前把媒体数据端口和叙事关系连接混在同一套拖拽交�
 ## Impact
 
 - 共享 Canvas playback/connection 投影：`packages/neko-types`。
-- Canvas Webview 节点框架、连接拖拽、Store mutation、Storyline 布局与相关测试：`packages/neko-canvas/packages/webview`。
+- Canvas Webview 节点框架、连接拖拽、Store mutation、Storyline 布局与相关测试：`packages/neko-canvas-webview`。
 - 不修改 `.nkc` schema；继续使用既有 `CanvasConnection`、node-scoped endpoint 和 `sequence | reference | derived-from` 类型。
 - 不修改 Extension/Engine 通信，不新增第二套故事线或连接事实模型。

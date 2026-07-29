@@ -10,12 +10,12 @@
 
 ## 证据来源
 
-- `packages/neko-assets/src/services/AssetFileImportService.ts`
-- `packages/neko-assets/src/services/MediaLibrarySearchService.ts`
-- `packages/neko-assets/src/providers/MediaLibraryTreeProvider.ts`
-- `packages/neko-assets/src/services/MediaLibrarySettingsService.ts`
+- `apps/neko-vscode/src/features/assets/services/AssetFileImportService.ts`
+- `apps/neko-vscode/src/features/assets/services/MediaLibrarySearchService.ts`
+- `apps/neko-vscode/src/features/assets/providers/MediaLibraryTreeProvider.ts`
+- `apps/neko-vscode/src/features/assets/services/MediaLibrarySettingsService.ts`
 - `packages/neko-search/src/host-vscode/commands.ts`
-- `packages/neko-tools/packages/extension/src/media-lsp/services/MediaWorkspaceIndex.ts`
+- `apps/neko-vscode/src/features/tools/media-lsp/services/MediaWorkspaceIndex.ts`
 - `packages/neko-entity/src/core/contributionAutomation.ts`
 - `packages/neko-entity/src/core/paths.ts`
 - `packages/neko-types/src/local-metadata/sqlite/search-projection-schema.ts`

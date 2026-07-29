@@ -6,7 +6,7 @@
 - `pnpm --filter @neko-canvas/webview build`
 - `pnpm --filter @neko-canvas/extension build`
 - `pnpm --filter neko-canvas compile`
-- `pnpm exec vitest run packages/neko-canvas/packages/extension/src packages/neko-canvas/packages/webview/src/components/nodes/CanonicalContentNodes.test.ts packages/neko-canvas/packages/webview/src/components/selection/SelectionMaterialGenerationBar.test.tsx packages/neko-canvas/packages/webview/src/components/playback packages/neko-canvas/packages/webview/src/stores/__tests__/playbackStore.test.ts`
+- `pnpm exec vitest run apps/neko-vscode/src/features/canvas packages/neko-canvas-webview/src/components/nodes/CanonicalContentNodes.test.ts packages/neko-canvas-webview/src/components/selection/SelectionMaterialGenerationBar.test.tsx packages/neko-canvas-webview/src/components/playback packages/neko-canvas-webview/src/stores/__tests__/playbackStore.test.ts`
 - `pnpm build`
 - `pnpm test`
 - `pnpm check`

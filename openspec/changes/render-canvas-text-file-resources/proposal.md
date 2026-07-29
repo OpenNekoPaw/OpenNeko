@@ -26,7 +26,7 @@ None.
 
 - `packages/neko-types`: Canvas dropped-asset and document-kind contracts.
 - `packages/neko-canvas/packages/extension`: source-picker validation and bounded text-file reads.
-- `packages/neko-canvas/packages/webview`: file resource state, message handling, Markdown/plain-text renderers, TextNode display/edit projection, and low-chrome node layout.
+- `packages/neko-canvas-webview`: file resource state, message handling, Markdown/plain-text renderers, TextNode display/edit projection, and low-chrome node layout.
 - Existing `NodeHeader` and `GroupNode` presentation paths are extended rather than introducing package-local duplicate header components.
 - `packages/neko-ui` / `packages/neko-markdown`: existing shared normalized Markdown contracts and rendering primitives are audited and reused or minimally extended; Canvas must not import Agent-private renderers.
 - Canvas package documentation, focused Webview/Extension tests, and Extension Development Host runtime acceptance.

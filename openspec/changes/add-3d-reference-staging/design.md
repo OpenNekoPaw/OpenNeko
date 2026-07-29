@@ -102,7 +102,7 @@ Alternative: keep `model-preview` and add `3d-guide`. Rejected because two nearl
 
 #### Mannequin feasibility decision (2026-07-19)
 
-The bounded spike at `packages/neko-preview/packages/webview/scripts/three-reference-preset-feasibility.mts` compares a corrected Preview-owned procedural mannequin against one externally downloaded, fingerprint-pinned rigged GLB. The external input is Khronos `RiggedSimple` (`CC-BY-4.0`, © 2017 Cesium, SHA-256 `3a79dabb67bb0cd598a18d08b954d9d357c27c30672f82ef5d3f4e7fe6ca3401`); it is never copied into the repository or selected as a product preset.
+The bounded spike at `packages/neko-preview-webview/scripts/three-reference-preset-feasibility.mts` compares a corrected Preview-owned procedural mannequin against one externally downloaded, fingerprint-pinned rigged GLB. The external input is Khronos `RiggedSimple` (`CC-BY-4.0`, © 2017 Cesium, SHA-256 `3a79dabb67bb0cd598a18d08b954d9d357c27c30672f82ef5d3f4e7fe6ca3401`); it is never copied into the repository or selected as a product preset.
 
 Measured on Node `v25.6.1`, macOS arm64, over 25 construction/parse samples after five warmups; timing below is the observed median range across three isolated runs:
 
@@ -122,7 +122,7 @@ Decision: use project-owned procedural geometry for the mannequin family. The in
 Reproduction downloads the audited input outside the repository and runs:
 
 ```bash
-pnpm --dir packages/neko-preview/packages/webview exec tsx scripts/three-reference-preset-feasibility.mts /tmp/neko-3d-reference-spike/RiggedSimple.glb
+pnpm --dir packages/neko-preview-webview exec tsx scripts/three-reference-preset-feasibility.mts /tmp/neko-3d-reference-spike/RiggedSimple.glb
 ```
 
 Preview Extension owns a code-declared catalog with preset ID/version, packaged fingerprint, kind, allowed purposes, scale, capability descriptor, asset path, provenance, and license. Staging stores only identity/version. Extension projects exact bundled files with `webview.asWebviewUri()` and sends identity-bearing URIs; Webview never guesses paths.

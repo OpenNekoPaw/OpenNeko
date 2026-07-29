@@ -12,7 +12,7 @@ Before the store fix, both focused tests failed with the same contract violation
 After the directional stale transition was implemented:
 
 ```text
-pnpm --dir packages/neko-canvas/packages/webview exec vitest run \
+pnpm --dir packages/neko-canvas-webview exec vitest run \
   src/stores/__tests__/playbackStore.test.ts \
   src/components/playback/PlaybackWorkspace.test.tsx \
   -t "clears Host-plan freshness|preserves active video playback when the Host plan settles"
@@ -23,10 +23,10 @@ pnpm --dir packages/neko-canvas/packages/webview exec vitest run \
 ### Package gates
 
 ```text
-pnpm --dir packages/neko-canvas/packages/webview test
+pnpm --dir packages/neko-canvas-webview test
 56 files passed, 335 tests passed
 
-pnpm --dir packages/neko-canvas/packages/webview build
+pnpm --dir packages/neko-canvas-webview build
 passed
 
 pnpm --dir packages/neko-canvas test

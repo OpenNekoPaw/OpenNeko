@@ -28,10 +28,10 @@
 
 ## Impact
 
-- `packages/neko-agent/packages/platform`: 增加受验证的 purpose binding 写入契约。
+- `packages/neko-platform`: 增加受验证的 purpose binding 写入契约。
 - `packages/neko-agent/packages/extension`: 组合角色模型准备端口、VS Code 模型选择和配置持久化。
 - `packages/neko-chara`: 在角色 session 启动/继续边界调用注入的模型准备端口。
-- `packages/neko-agent/packages/agent-types` / Webview wire contract 不新增角色模型选择消息。
+- `packages/neko-agent-types` / Webview wire contract 不新增角色模型选择消息。
 - `~/.neko/config.toml`: 仅在用户从 VS Code Quick Pick 明确选择后写入
   `default_model_purposes.character_dialogue` 与
   `default_model_purposes.character_profile`；已有有效绑定保持不变。

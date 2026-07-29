@@ -33,7 +33,7 @@
 ## Verification Notes
 
 - `node scripts/check-legacy-debt-surfaces.mjs --self-test`, `pnpm check:legacy-debt`, `pnpm check:legacy-debt:ledger`, and `pnpm check:agent-boundaries` pass.
-- `pnpm --dir packages/neko-cut/packages/webview test` passes with 26 files and 489 tests. `pnpm ci:local:proto` and the `act` `proto-check` job pass.
+- `pnpm --dir packages/neko-cut-webview test` passes with 26 files and 489 tests. `pnpm ci:local:proto` and the `act` `proto-check` job pass.
 - `pnpm check:unused` passes after the user-owned TUI mutation-port migration landed. `pnpm --dir packages/neko-types test` passes with 183 files and 1570 tests.
-- `check:quality` passes all gates except the user-owned Agent Webview boundary finding for `packages/neko-agent/packages/webview/src/components/AppShell.tsx` importing an obsolete keyboard reporter; that path is outside this change.
+- `check:quality` passes all gates except the user-owned Agent Webview boundary finding for `packages/neko-agent-webview/src/components/AppShell.tsx` importing an obsolete keyboard reporter; that path is outside this change.
 - `pnpm format:check`, `pnpm lint` (0 errors, existing warnings), and the TypeScript/Webview build tasks pass locally. Native Rust build was stopped while waiting on an existing Cargo lock held by another user process; the committed host-api Clippy fix remains present.

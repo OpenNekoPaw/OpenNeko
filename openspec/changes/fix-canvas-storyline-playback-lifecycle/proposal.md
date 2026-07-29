@@ -22,5 +22,5 @@ None.
 
 ## Impact
 
-- `packages/neko-canvas/packages/webview`: playback session store semantics and focused Storyline tests.
+- `packages/neko-canvas-webview`: playback session store semantics and focused Storyline tests.
 - No Extension Host message, media adapter, codec, Engine, project schema, or CPU-transcode fallback changes.

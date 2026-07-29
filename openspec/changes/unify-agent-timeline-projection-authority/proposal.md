@@ -31,8 +31,8 @@ Pi 已经是 OpenNeko 唯一 Agent 执行路径，但同一个活跃 Turn 的显
 
 ## Impact
 
-- Contracts: `packages/neko-agent/packages/agent-types/src/agent-turn-timeline.ts`、`conversation-projection.ts`、Webview protocol 和 projection attachment frames。
-- Runtime: `packages/neko-agent/packages/agent/src/pi`、`runtime/projection`、`runtime/stream`。
+- Contracts: `packages/neko-agent-types/src/agent-turn-timeline.ts`、`conversation-projection.ts`、Webview protocol 和 projection attachment frames。
+- Runtime: `packages/neko-agent-runtime/src/pi`、`runtime/projection`、`runtime/stream`。
 - VS Code Host: Pi stream processing、conversation bridge、projection attachment、resource display projection、debug acceptance 和 lifecycle cleanup。
 - Webview: active conversation state、stream/tool handlers、Tab render runtime、Markdown session registry、presenters 和 tests。
 - TUI: Pi event adapter、Timeline projector、conversation/agent stores、terminal artifact projection 和 debug facts。

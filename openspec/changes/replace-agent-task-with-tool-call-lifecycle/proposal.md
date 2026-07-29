@@ -32,7 +32,7 @@
 
 ## Impact
 
-- Agent runtime：`packages/neko-agent/packages/agent` 的 Tool bridge、Pi event projection、取消和 subagent/background-agent supervision。
+- Agent runtime：`packages/neko-agent-runtime` 的 Tool bridge、Pi event projection、取消和 subagent/background-agent supervision。
 - Agent platform：媒体 Tool、media executor、TaskManager、TaskRef、continuation 和恢复路径。
 - Hosts/UI：TUI、VS Code、拟议 Desktop 的页面关闭、caller-owned Job、Tool/Agent Run 投影和显式中断操作。
 - 创作领域：Canvas 直接 AI 动作、Cut `ExportJobPort`、Assets import/index 以及未来 Character/World run。

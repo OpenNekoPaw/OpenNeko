@@ -38,7 +38,7 @@
 8. `@electron/fuses` v2 reader 可命名并验证 Electron 43 全部 9 个 V1 fuse；严格配置启用
    `WasmTrapHandlers`，并按 macOS 分发资源契约关闭 browser-specific V8 snapshot。曾启用
    该 snapshot 的故障注入在主进程初始化阶段稳定产生 `Error loading V8 startup snapshot
-   file` / `SIGTRAP`，最终配置下 packaged app 正常启动。
+file` / `SIGTRAP`，最终配置下 packaged app 正常启动。
 
 测试只使用合成 workspace；完成后已将该目录移入废纸篓。renderer projection、文档与证据
 摘要不包含 fixture 的绝对路径或用户私有配置。
@@ -51,7 +51,7 @@
 - `pnpm --filter @neko/app-desktop package`：通过；运行态验证后发现远端 checksum 请求
   不稳定，现已固定参考平台归档 SHA-256，并由 architecture test 锁定。
 - `pnpm --filter @neko/host test:run`：5 个测试文件、15 个用例通过。
-- `pnpm exec vitest run packages/neko-agent/packages/agent-types/src`：11 个测试文件、98 个
+- `pnpm exec vitest run packages/neko-agent-types/src`：11 个测试文件、98 个
   用例通过。
 - `pnpm build`：9/9 Turbo tasks 通过。
 - `pnpm test`：28/28 Turbo tasks 通过。

@@ -21,6 +21,6 @@ Canvas 普通节点的 Header 与正文采用不同拖拽语义：Header 会移�
 
 ## Impact
 
-- 影响 `packages/neko-canvas/packages/webview` 的 `BaseNode`、`NodeShell` 与节点拖拽回归测试。
+- 影响 `packages/neko-canvas-webview` 的 `BaseNode`、`NodeShell` 与节点拖拽回归测试。
 - 不改变 `.nkc` 数据、跨层 message、Extension Host、Engine、Proto 或公共包契约。
 - Webview 运行态需要验证普通节点正文拖拽、容器内节点拖拽和交互控件不误触节点移动。

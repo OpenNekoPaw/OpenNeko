@@ -25,7 +25,7 @@ None.
 ## Impact
 
 - `packages/neko-preview/packages/extension`: document preview transport, provider lifecycle, activation/disposal, and tests.
-- `packages/neko-preview/packages/webview`: EPUB archive request contract and document viewer runtime tests.
+- `packages/neko-preview-webview`: EPUB archive request contract and document viewer runtime tests.
 - `packages/neko-content`: existing Node document access remains the shared archive-entry boundary; no browser-safe export gains Node APIs.
 - `packages/neko-engine` and `@neko/neko-client`: document preview callers are removed, while media consumers and Engine contracts remain unchanged.
 - Active pruning OpenSpec documentation must be reconciled so it no longer claims Engine ownership for document preview transport.

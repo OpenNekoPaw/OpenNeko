@@ -43,16 +43,16 @@ This inventory maps every product-visible ResourceCache use to its target respon
 
 The following product roots currently contain prohibited cache ownership and require migration:
 
-- `packages/neko-agent/packages/extension/src/services/agentContentAccessRuntime.ts`
-- `packages/neko-agent/packages/extension/src/services/resourceCacheStartupGcService.ts`
-- `packages/neko-agent/packages/extension/src/services/processorResourcePort.ts`
-- `packages/neko-agent/packages/extension/src/services/externalProcessorHostAdapter.ts`
-- `packages/neko-agent/packages/agent-types/src/external-processor.ts`
-- `packages/neko-agent/packages/agent/src/runtime/capability/external-processor-runtime.ts`
-- `packages/neko-agent/packages/platform/src/media/generated-asset-index.ts`
-- `packages/neko-agent/packages/platform/src/media/generated-asset-resource-resolver.ts`
-- `packages/neko-canvas/packages/extension/src/editor/canvasEditorProvider.ts`
-- `packages/neko-canvas/packages/extension/src/extension.ts`
+- `apps/neko-vscode/src/features/agent/services/agentContentAccessRuntime.ts`
+- `apps/neko-vscode/src/features/agent/services/resourceCacheStartupGcService.ts`
+- `apps/neko-vscode/src/features/agent/services/processorResourcePort.ts`
+- `apps/neko-vscode/src/features/agent/services/externalProcessorHostAdapter.ts`
+- `packages/neko-agent-types/src/external-processor.ts`
+- `packages/neko-agent-runtime/src/runtime/capability/external-processor-runtime.ts`
+- `packages/neko-platform/src/media/generated-asset-index.ts`
+- `packages/neko-platform/src/media/generated-asset-resource-resolver.ts`
+- `apps/neko-vscode/src/features/canvas/editor/canvasEditorProvider.ts`
+- `apps/neko-vscode/src/features/canvas/extension.ts`
 - `apps/neko-tui/src/tui/host/node-content-access-runtime.ts`
 - `apps/neko-tui/src/tui/host/node-resource-cache-startup-gc.ts`
 - `apps/neko-tui/src/tui/host/tui-local-metadata-binding.ts`

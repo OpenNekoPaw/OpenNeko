@@ -21,6 +21,6 @@ Agent 首页“生成素材”入口在用户尚未选择图片、视频或声�
 
 ## Impact
 
-- `packages/neko-agent/packages/webview`：`ConversationController`、`InputArea`、`ChatWorkspace` 的 entry intent 与首次 Tab 初始化投影。
+- `packages/neko-agent-webview`：`ConversationController`、`InputArea`、`ChatWorkspace` 的 entry intent 与首次 Tab 初始化投影。
 - 新增局部 Webview 回归测试和 Extension Development Host 真实交互验收。
 - 不修改 Extension/Webview message、Proto、持久 conversation 数据或 Agent runtime。

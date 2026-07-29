@@ -3,7 +3,7 @@
 ## Evaluation Scope
 
 - **Change/feature:** Agent 通过 VS Code Webview `@` 搜索选中 Entity 后，在 turn 边界读取 canonical `CreativeEntity` 项目事实，而不是只把搜索 label/summary 发给 provider。
-- **Authoring decision:** `create` 一个 Entity context grounding 的真实行为 case 目前被 Evaluation ownership 与输入可观测性阻塞。`change-selector.mjs` 对 `packages/neko-agent/packages/agent/src/runtime/turn/message-runtime.ts` 返回 `unmapped-coverage`，且 canonical TUI controller 没有等价的 VS Code Webview Entity attachment 输入操作；不得把普通文本、direct turn injection 或 mock provider 当作替代证据。
+- **Authoring decision:** `create` 一个 Entity context grounding 的真实行为 case 目前被 Evaluation ownership 与输入可观测性阻塞。`change-selector.mjs` 对 `packages/neko-agent-runtime/src/runtime/turn/message-runtime.ts` 返回 `unmapped-coverage`，且 canonical TUI controller 没有等价的 VS Code Webview Entity attachment 输入操作；不得把普通文本、direct turn injection 或 mock provider 当作替代证据。
 - **User behavior:** 用户选择 Entity 引用后，Agent turn 能看到该 workspace 中该 Entity 的 canonical name、kind、aliases、status 和 metadata。
 - **Canonical path:** Project Search thin projection → Webview `AgentContextPayload(type = "entity")` → Extension conversation/workspace resolution → Entity facade `getEntity` → strict resolved Entity context → Agent turn formatter → provider prompt。
 - **Forbidden fallback:** Webview 自报的 resolved snapshot、薄 label/summary、active workspace、多根目录猜测、kind 不匹配结果、缺失 Entity 和未确认 Entity 均不得作为成功上下文进入 provider。
@@ -31,7 +31,7 @@
 ### Evaluation Scope
 
 - **Change/feature:** 角色扮演选择器提交 confirmed character Entity 的稳定 ID 后，Character Dialogue 直接形成 `CreativeEntityRef` 并启动 canonical profile assembly。
-- **Authoring decision:** `create`，但被 Evaluation ownership 与 canonical input 阻塞。`change-selector.mjs` 对 `packages/neko-agent/packages/extension/src/chat/characterDialogueController.ts` 返回 `unmapped-coverage`；canonical TUI controller 也没有等价的 VS Code roleplay Entity selection operation。
+- **Authoring decision:** `create`，但被 Evaluation ownership 与 canonical input 阻塞。`change-selector.mjs` 对 `apps/neko-vscode/src/features/agent/chat/characterDialogueController.ts` 返回 `unmapped-coverage`；canonical TUI controller 也没有等价的 VS Code roleplay Entity selection operation。
 - **Canonical path:** Project Search confirmed Entity → Webview roleplay selection → `startCharacterDialogueFromSlash(entity:<id>)` → Webview router → Character Dialogue explicit `CreativeEntityRef` → canonical profile assembler。
 - **Forbidden fallback:** 把 stable ID 当名称交给 `resolveByName()`、Quick Pick、active Entity、projected label、其他 workspace 或 direct/mock turn injection。
 

@@ -28,12 +28,12 @@ Header 的高频会话操作因此不能直接创建角色会话。
 
 ## Impact
 
-- `packages/neko-agent/packages/webview`: Header、ConversationController、角色选择展示、
+- `packages/neko-agent-webview`: Header、ConversationController、角色选择展示、
   i18n、样式和测试。
 - `packages/neko-entity`: Project Search adapter 的 exact item identity 过滤及回归测试。
 - `scripts/stage-openneko-dev-extension.mjs` 与对应本地调试配置门禁：仅开发 stage 禁用
   feature bundle cache 命中；release 构建缓存策略不变，`.vscode` 配置无需新增入口。
-- `packages/neko-agent/packages/agent-types`、Extension message schema 与 `@neko/chara`
+- `packages/neko-agent-types`、Extension message schema 与 `@neko/chara`
   public contract 不变；继续复用现有 `searchProjectFiles`、`confirmRoleplayCandidate` 和
   `startCharacterDialogueFromSlash` 消息。
 - 需要 Extension Development Host 验证按钮、菜单、角色选择和标签创建，不以普通浏览器代替。

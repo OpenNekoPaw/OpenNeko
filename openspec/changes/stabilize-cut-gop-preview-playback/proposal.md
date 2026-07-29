@@ -59,11 +59,11 @@ periodic re-encoding.
 
 ## Impact
 
-- `packages/neko-cut/packages/domain`: Cut preview descriptor and media-port
+- `packages/neko-cut-domain`: Cut preview descriptor and media-port
   facts.
 - `packages/neko-cut/packages/extension`: keyframe indexing, preview selection,
   FFmpeg graph order, and panel generation ownership.
-- `packages/neko-cut/packages/webview`: standby media clients, paused seek, and
+- `packages/neko-cut-webview`: standby media clients, paused seek, and
   continuous Timeline clock.
 - `packages/neko-media/src/browser`: prepared PCM retirement and a native HTML
   video lifecycle client.

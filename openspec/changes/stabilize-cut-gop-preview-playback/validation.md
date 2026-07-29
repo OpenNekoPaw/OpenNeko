@@ -17,9 +17,9 @@ Current automated evidence:
 - `pnpm --filter @neko/media exec vitest run`: 7 files, 42 tests passed.
 - `pnpm --filter @neko/media typecheck`: passed.
 - `pnpm --dir packages/neko-cut exec vitest run`: 25 files, 119 tests passed.
-- `pnpm --dir packages/neko-cut/packages/webview exec vitest run`: 30 files,
+- `pnpm --dir packages/neko-cut-webview exec vitest run`: 30 files,
   238 tests passed.
-- `pnpm exec tsc --noEmit -p packages/neko-cut/packages/webview/tsconfig.json`:
+- `pnpm exec tsc --noEmit -p packages/neko-cut-webview/tsconfig.json`:
   passed.
 - `pnpm --dir packages/neko-cut compile`: passed.
 - `pnpm build`: 8 build tasks passed.
@@ -46,9 +46,9 @@ synchronization coverage.
 - `pnpm --filter @neko/media exec vitest run`: 6 files, 37 tests passed.
 - `pnpm --filter @neko/media typecheck`: passed.
 - `pnpm --dir packages/neko-cut exec vitest run`: 25 files, 113 tests passed.
-- `pnpm --dir packages/neko-cut/packages/webview exec vitest run`: 30 files,
+- `pnpm --dir packages/neko-cut-webview exec vitest run`: 30 files,
   236 tests passed.
-- `pnpm exec tsc --noEmit -p packages/neko-cut/packages/webview/tsconfig.json`:
+- `pnpm exec tsc --noEmit -p packages/neko-cut-webview/tsconfig.json`:
   passed.
 - `pnpm --dir packages/neko-cut compile`: passed.
 - `NEKO_FFMPEG_PATH=/opt/homebrew/opt/ffmpeg-full/bin/ffmpeg
@@ -115,6 +115,7 @@ the current worktree. Its page target was
 
 This focused run closes the seek/token regression only. The broader task 5.3
 and 5.4 playback, audio peak, and A/V synchronization acceptance remains open.
+
 - No Cut alert or media element error was present after the scenarios. VS Code
   container warnings about `local-network-access` remain classified as benign
   host warnings by the debugger skill.

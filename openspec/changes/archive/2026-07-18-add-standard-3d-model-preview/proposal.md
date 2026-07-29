@@ -27,7 +27,7 @@ None.
 ## Impact
 
 - `packages/neko-preview/package.json`, localization, Extension activation, provider registration, model-specific source projection, and Webview message contracts.
-- `packages/neko-preview/packages/webview`: a new Vite entry, Three.js dependency, format loaders, renderer lifecycle, staging UI, screenshot capture, accessibility, and tests.
+- `packages/neko-preview-webview`: a new Vite entry, Three.js dependency, format loaders, renderer lifecycle, staging UI, screenshot capture, accessibility, and tests.
 - `packages/neko-types`: only the minimal cross-extension Model Preview context contract required by `neko.agent.sendContext`; no Scene/Engine DTOs or new project format.
 - `packages/neko-agent`: context ingestion/presentation for the new typed payload and deterministic projection to Agent-visible source, image, and semantic staging evidence.
 - `scripts`, Turbo/build ownership, VS Code functional fixtures, package documentation, and quality/debt guards that prove removed Engine Model/Scene paths remain absent.

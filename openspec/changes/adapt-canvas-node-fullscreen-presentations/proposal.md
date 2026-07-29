@@ -23,5 +23,5 @@ None.
 
 ## Impact
 
-- `packages/neko-canvas/packages/webview`: node descriptor metadata, selection/NodeHeader fullscreen availability, `ContentOverlay`, media preview sizing, text display/edit projection, styles, and focused runtime tests.
+- `packages/neko-canvas-webview`: node descriptor metadata, selection/NodeHeader fullscreen availability, `ContentOverlay`, media preview sizing, text display/edit projection, styles, and focused runtime tests.
 - No Engine, Proto, project-format, durable node-schema, or Extension Host message changes.

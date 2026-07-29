@@ -28,7 +28,7 @@ scenario-owned `.neko/.functional` subtree.
 
 `pnpm check:canvas-playback-boundary` cannot currently execute its assertions.
 The script still reads the deleted
-`packages/neko-canvas/packages/extension/src/editor/narrativePreviewBridge.ts`
+`apps/neko-vscode/src/features/canvas/editor/narrativePreviewBridge.ts`
 and exits with `ENOENT`. That file was removed by the preceding Canvas
 simplification work; this Overlay change does not recreate a compatibility path
 to satisfy the stale check.

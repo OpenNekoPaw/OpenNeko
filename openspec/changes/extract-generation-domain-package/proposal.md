@@ -1,7 +1,7 @@
 ## Why
 
 媒体生成的请求、provider capability、结果和可恢复 `GenerationJob` 当前位于
-`packages/neko-agent/packages/platform/src/media`。但它们同时被 Agent Tool、TUI direct
+`packages/neko-platform/src/media`。但它们同时被 Agent Tool、TUI direct
 mode、VS Code direct generation 和未来 Canvas/Character consumer 使用；继续嵌套在
 `neko-agent` 会把 Agent 错误表达为所有生成模型与异步生成事实的 owner。
 
@@ -42,7 +42,7 @@ Generation 会拥有用户文件、credential mutation 和 Host watcher；若创
 ## Impact
 
 - 新包：`packages/neko-generation/`。
-- 迁出：`packages/neko-agent/packages/platform/src/media/generation-job-*` 与 generation
+- 迁出：`packages/neko-platform/src/media/generation-job-*` 与 generation
   contract types。
 - 消费者：`apps/neko-tui`、`packages/neko-agent/packages/extension`、Platform media runtime。
 - 配置：仍使用 `~/.neko/config.toml`、`.neko/config.toml` 和 Host credential store；不增加

@@ -84,7 +84,7 @@ Date: 2026-07-26
   - Red evidence: the new Canvas node waveform-card assertion failed before
     the explicit layout was implemented.
   - Passed after implementation: 4 files, 33 tests.
-- `pnpm test` in `packages/neko-canvas/packages/webview`
+- `pnpm test` in `packages/neko-canvas-webview`
   - Passed: 56 files, 321 tests.
 - `pnpm test` in `packages/neko-canvas`
   - Passed: 19 files, 102 tests, including the Extension protocol path.
@@ -206,7 +206,7 @@ packages; neither warning class failed a changed package.
   `pnpm exec vitest run src/components/playback/PlaybackWorkspace.test.tsx src/preview/PreviewRendererRegistry.test.tsx`
   passed 2 files / 29 tests.
 - `pnpm exec vitest run` in
-  `packages/neko-canvas/packages/webview` passed 56 files / 323 tests.
+  `packages/neko-canvas-webview` passed 56 files / 323 tests.
 - `pnpm --filter @neko-canvas/webview build` and
   `pnpm --dir packages/neko-canvas compile` passed. The latter rebuilt and
   copied the Webview assets consumed by the Extension Development Host.
@@ -257,7 +257,7 @@ packages; neither warning class failed a changed package.
   `pnpm exec vitest run src/components/playback/PlaybackWorkspace.test.tsx src/CanvasApp.layout.test.ts`
   passed 2 files / 43 tests.
 - `pnpm exec vitest run` in
-  `packages/neko-canvas/packages/webview` passed 56 files / 324 tests.
+  `packages/neko-canvas-webview` passed 56 files / 324 tests.
 - `pnpm --filter @neko-canvas/webview build`,
   `pnpm --dir packages/neko-canvas compile`,
   `pnpm check:legacy-debt`, `pnpm check:unused`,

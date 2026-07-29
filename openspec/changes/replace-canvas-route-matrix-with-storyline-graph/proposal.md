@@ -35,7 +35,7 @@ Canvas 路线浮层同时提供 Storyline 与 Matrix，但 Matrix 的路线族�
 
 ## Impact
 
-- 影响 `packages/neko-canvas/packages/webview` 的 Playback workspace、Toolbar、Zustand session、路线投影组件、样式、国际化和测试。
+- 影响 `packages/neko-canvas-webview` 的 Playback workspace、Toolbar、Zustand session、路线投影组件、样式、国际化和测试。
 - 影响 `packages/neko-types` 的共享图标入口，新增无 Canvas 业务状态的通用 Storyline 图标。
 - 删除 `RouteStoryboardMatrixView`、`routeStoryboardMatrix` 及 Matrix-only store API，不保留隐藏开关或 compatibility fallback。
 - 不修改 `.nkc` schema、`CanvasPlaybackPlan`、`CanvasPlaybackRouteCandidate`、`CanvasPlaybackUnit`、Extension/Webview message、Engine、Proto 或 Cut handoff。

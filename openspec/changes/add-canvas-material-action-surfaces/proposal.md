@@ -22,7 +22,7 @@ Canvas 素材节点目前只投影少量通用节点动作，引用素材缺少�
 
 ## Impact
 
-- `packages/neko-canvas/packages/webview`: selection toolbar、节点能力解析、生成上下文 UI、typed Webview message 与相关测试。
+- `packages/neko-canvas-webview`: selection toolbar、节点能力解析、生成上下文 UI、typed Webview message 与相关测试。
 - `packages/neko-canvas/packages/extension`: 素材库提升消息处理、稳定资源解析、结果诊断与路径级测试。
 - `packages/neko-types`: 仅在现有生成素材元数据不足以表达稳定来源时最小化扩展共享类型；不新增 provider/model SDK 依赖。
 - `packages/neko-assets`: 复用现有 `NekoAssetsAPI.importFile()`，不改变其资产事实所有权。
