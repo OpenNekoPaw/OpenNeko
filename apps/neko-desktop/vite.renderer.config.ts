@@ -34,6 +34,20 @@ export default defineConfig({
         ),
       },
       {
+        find: /^neko-assets\/resource-browser\/root$/,
+        replacement: path.resolve(
+          import.meta.dirname,
+          '../../packages/neko-assets/src/resource-browser/root.tsx',
+        ),
+      },
+      {
+        find: /^neko-assets\/resource-browser\/contract$/,
+        replacement: path.resolve(
+          import.meta.dirname,
+          '../../packages/neko-assets/src/resource-browser/contract.ts',
+        ),
+      },
+      {
         find: /^@neko-agent\/webview\/root$/,
         replacement: path.resolve(
           import.meta.dirname,

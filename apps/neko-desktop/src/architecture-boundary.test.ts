@@ -244,6 +244,16 @@ describe('Desktop architecture boundaries', () => {
     expect(rendererConfig).toContain(
       "'../../packages/neko-preview/packages/webview/src/root/index.tsx'",
     );
+    expect(rendererConfig).toContain("find: /^neko-assets\\/resource-browser\\/root$/");
+    expect(rendererConfig).toContain(
+      "'../../packages/neko-assets/src/resource-browser/root.tsx'",
+    );
+    expect(rendererConfig).toContain(
+      "find: /^neko-assets\\/resource-browser\\/contract$/",
+    );
+    expect(rendererConfig).toContain(
+      "'../../packages/neko-assets/src/resource-browser/contract.ts'",
+    );
   });
 
   it('releases window resources through the registered sender identity after Electron closes', () => {
