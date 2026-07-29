@@ -75,6 +75,7 @@ export const en = {
   'home.projects': 'Projects',
   'home.openProject': 'Open project',
   'home.start.title': 'Start creating',
+  'home.start.agentLabel': 'Neko Agent',
   'home.start.subtitle': 'Open a content workspace to plan, create, and review with Neko Agent.',
   'home.start.action': 'Choose workspace',
   'home.start.inputLabel': 'Creation intent',

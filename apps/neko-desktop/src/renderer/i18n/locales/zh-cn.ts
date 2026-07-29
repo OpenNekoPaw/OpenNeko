@@ -68,6 +68,7 @@ export const zhCN = {
   'home.projects': '项目',
   'home.openProject': '打开项目',
   'home.start.title': '开始创作',
+  'home.start.agentLabel': 'Neko Agent',
   'home.start.subtitle': '打开内容工作区，与 Neko Agent 一起规划、创作和审阅。',
   'home.start.action': '选择工作区',
   'home.start.inputLabel': '创作意图',

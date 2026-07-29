@@ -200,6 +200,9 @@ describe('DesktopShellView', () => {
     const markup = renderShell(<DesktopShellView projection={homeProjection()} />);
 
     expect(markup).toContain('Creation intent');
+    expect(markup).toContain('data-home-composition="agent-start"');
+    expect(markup).not.toContain('home-hero-mark');
+    expect(markup).not.toContain('home-hero');
     expect(markup).toContain('Demo Project');
     expect(markup).toContain('Asset Center');
     expect(markup).toContain('Plugins');

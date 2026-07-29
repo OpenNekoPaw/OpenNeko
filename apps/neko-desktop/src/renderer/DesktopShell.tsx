@@ -525,14 +525,21 @@ function HomeStartCreating({
   const [input, setInput] = useState('');
   return (
     <div className="home-overview">
-      <section className="home-start" aria-labelledby="home-start-title">
-        <div className="home-hero">
-          <span className="home-hero-mark" aria-hidden="true">N</span>
+      <section
+        className="home-start"
+        aria-labelledby="home-start-title"
+        data-home-composition="agent-start"
+      >
+        <header className="home-agent-heading">
+          <span className="home-agent-heading-icon" aria-hidden="true">
+            <StorylineIcon size={20} />
+          </span>
           <div>
+            <span className="home-agent-heading-label">{t('home.start.agentLabel')}</span>
             <h1 id="home-start-title">{t('home.start.title')}</h1>
             <p>{t('home.start.subtitle')}</p>
           </div>
-        </div>
+        </header>
         <form
           className="home-agent-composer"
           onSubmit={(event) => {
