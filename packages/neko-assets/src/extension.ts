@@ -871,11 +871,18 @@ function registerMediaLibraryCommands(
       if (items.length === 0) return;
       const filePath = items[0].filePath;
       const mediaType = detectMediaType(filePath);
+      const contentLocator = { kind: 'workspace-file' as const, path: filePath };
+      if (!isContentLocator(contentLocator)) {
+        vscode.window.showWarningMessage(
+          'Media library file reference requires a workspace-backed content identity.',
+        );
+        return;
+      }
       await vscode.env.clipboard.writeText(
         JSON.stringify(
           {
             kind: 'media-library-file-reference',
-            path: filePath,
+            contentLocator,
             name: path.basename(filePath),
             mediaType,
             source: {

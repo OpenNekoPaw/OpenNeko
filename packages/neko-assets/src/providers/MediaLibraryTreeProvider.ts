@@ -34,6 +34,10 @@ import { buildMetadataTooltipLines } from '../utils/formatters';
 import { createThumbnailTooltip } from '../utils/thumbnailTooltip';
 import { getPreviewViewType } from '../utils/preview';
 import { t } from '../i18n';
+import {
+  presentResourceBrowserContentItem,
+  type ResourceBrowserContentItem,
+} from '../resource-browser';
 
 // =============================================================================
 // Dependencies
@@ -102,6 +106,7 @@ class DirectoryItem extends vscode.TreeItem {
 class MediaFileItem extends vscode.TreeItem {
   readonly type = 'file' as const;
   readonly filePath: string;
+  readonly resourceItem: ResourceBrowserContentItem;
 
   constructor(
     public readonly projection: MediaLibraryProjectionEntry & {
@@ -112,7 +117,10 @@ class MediaFileItem extends vscode.TreeItem {
     metadata?: MediaFileMetadata,
     thumbnailUri?: vscode.Uri | null,
   ) {
-    super(fileName, vscode.TreeItemCollapsibleState.None);
+    const resourceItem = presentResourceBrowserContentItem(projection, 'media');
+    super(resourceItem.label, vscode.TreeItemCollapsibleState.None);
+    this.resourceItem = resourceItem;
+    this.id = resourceItem.resourceId;
     this.filePath = projection.locator.path;
 
     const mediaType = detectMediaType(this.filePath);

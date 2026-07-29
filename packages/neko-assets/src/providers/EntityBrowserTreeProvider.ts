@@ -6,6 +6,7 @@ import {
   type CreativeEntityKind,
   type EntityFacadeTreeItem,
 } from '@neko/shared';
+import { presentResourceBrowserEntityItem } from '../resource-browser';
 
 export type EntityBrowserTreeItem =
   EntityBrowserGroupItem | EntityBrowserEntityItem | EntityBrowserUnavailableItem;
@@ -34,6 +35,7 @@ export class EntityBrowserEntityItem extends vscode.TreeItem {
     translate: EntityBrowserTranslate = vscode.l10n.t,
   ) {
     super(item.label, vscode.TreeItemCollapsibleState.None);
+    this.id = item.id;
     this.description = item.status;
     this.tooltip = [item.label, item.summary, item.aliases?.join(', ')].filter(Boolean).join('\n');
     this.contextValue = item.entityRef ? 'entityBrowser:entity' : 'entityBrowser:candidate';
@@ -192,10 +194,21 @@ function entityToTreeItem(
   const aliases = Array.isArray(entity['aliases'])
     ? entity['aliases'].filter((alias): alias is string => typeof alias === 'string')
     : [];
+  const resourceItem = presentResourceBrowserEntityItem(
+    {
+      id: entity['id'],
+      kind,
+      canonicalName: entity['canonicalName'],
+      ...(typeof entity['displayName'] === 'string' ? { displayName: entity['displayName'] } : {}),
+      aliases,
+      status,
+      metadata: isRecord(entity['metadata']) ? entity['metadata'] : {},
+    },
+    [],
+  );
   return {
-    id: `entity:${entity['id']}`,
-    label:
-      typeof entity['displayName'] === 'string' ? entity['displayName'] : entity['canonicalName'],
+    id: resourceItem.resourceId,
+    label: resourceItem.label,
     kind,
     status,
     entityRef: {
