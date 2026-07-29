@@ -291,6 +291,12 @@ describe('DesktopShellView', () => {
       expect(sidebar).not.toContain('project-primary-brand-copy');
       expect(sidebar).not.toContain('project-layout-controls');
     }
+    expect(homeSidebar).not.toContain('data-workbench-display-control="primary-sidebar"');
+    expect(projectSidebar).toContain('data-workbench-display-control="primary-sidebar"');
+    expect(projectSidebar).toContain('aria-label="Display"');
+    expect(projectSidebar).toMatch(
+      /data-workbench-display-control="primary-sidebar"[\s\S]*aria-label="Desktop settings"/u,
+    );
   });
 
   it('renders a Content Project shell with explicit unavailable domain state', () => {
@@ -318,9 +324,11 @@ describe('DesktopShellView', () => {
     expect(markup).toContain('Demo Project');
     expect(markup).toContain('Agent unavailable');
     expect(markup).toContain('desktop-domain-surface-unavailable');
-    expect(markup).toContain('Workbench layout controls');
     expect(markup).toContain('Display');
     expect(markup).not.toContain('Main panel');
+    expect(markup).toContain('data-workbench-display-control="primary-sidebar"');
+    expect(markup).not.toContain('project-workbench-controls');
+    expect(markup).not.toMatch(/<button[^>]*aria-label="Timeline"/u);
     expect(markup).toContain('Desktop settings');
     expect(markup).toContain('Start creating');
     expect(markup).toContain('Asset Center');
@@ -331,7 +339,7 @@ describe('DesktopShellView', () => {
     expect(markup).toContain('home-navigation project-primary-sidebar');
     expect(markup).not.toContain('project-capabilities');
     expect(markup).not.toContain('Creative surfaces');
-    expect(markup.match(/project-layout-icon-button/gu)).toHaveLength(2);
+    expect(markup).not.toContain('project-layout-icon-button');
     expect(markup).not.toContain('project-workbench-header');
     expect(markup).not.toContain('project-view-switcher');
     expect(markup).not.toContain('project-view-navigation');
@@ -452,6 +460,7 @@ describe('DesktopShellView', () => {
     expect(markup).toContain('data-primary-sidebar-hover-reveal="true"');
     expect(markup).toContain('data-primary-sidebar-expanded-width="240"');
     expect(markup).toContain('home-brand-toggle');
+    expect(markup).toContain('data-workbench-display-control="primary-sidebar"');
     expect(markup).toContain('Recent projects');
     expect(markup).toContain('Recent Agent conversations');
     expect(markup).toContain('data-left-presentation="docked"');

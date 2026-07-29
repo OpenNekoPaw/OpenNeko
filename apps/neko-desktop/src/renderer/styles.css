@@ -507,6 +507,10 @@ code {
   width: 100%;
 }
 
+.home-navigation--compact .home-navigation-footer__actions {
+  flex-direction: column;
+}
+
 .application-primary-sidebar-frame[data-primary-sidebar-hover-reveal='true']:is(
     :hover,
     :focus-within
@@ -584,6 +588,15 @@ code {
   .home-navigation--compact
   .home-navigation-footer {
   justify-content: space-between;
+}
+
+.application-primary-sidebar-frame[data-primary-sidebar-hover-reveal='true']:is(
+    :hover,
+    :focus-within
+  )
+  .home-navigation--compact
+  .home-navigation-footer__actions {
+  flex-direction: row;
 }
 
 .home-primary-navigation {
@@ -708,6 +721,17 @@ code {
   margin-top: auto;
   padding: 9px 5px 0;
   border-top: 1px solid var(--neko-desktop-border);
+}
+
+.home-navigation-footer__actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.project-display-menu-trigger[aria-expanded='true'] {
+  color: var(--neko-fg);
+  background: var(--neko-desktop-control-pressed);
 }
 
 .attention-summary {
@@ -1464,12 +1488,6 @@ button.home-management-card:hover {
   background: color-mix(in srgb, var(--neko-accent) 72%, transparent);
 }
 
-.project-layout-controls {
-  min-width: 0;
-  flex: 0 0 auto;
-  margin-top: auto;
-}
-
 .project-main-host {
   position: relative;
   width: 100%;
@@ -1499,6 +1517,7 @@ button.home-management-card:hover {
 .project-main-group__tabs {
   display: flex;
   min-width: 0;
+  min-height: 38px;
   flex: 0 0 auto;
   align-items: stretch;
   background: var(--neko-desktop-chrome);
@@ -1516,6 +1535,7 @@ button.home-management-card:hover {
   gap: 2px;
   padding: 0 4px;
   border-bottom: 1px solid var(--neko-desktop-border);
+  background: var(--neko-desktop-chrome);
 }
 
 .project-main-group__actions button {
@@ -1543,60 +1563,6 @@ button.home-management-card:hover {
   min-height: 0;
   flex: 1 1 auto;
   overflow: hidden;
-}
-
-.project-workbench-controls {
-  position: absolute;
-  z-index: 20;
-  top: 46px;
-  right: 10px;
-  margin: 0;
-  padding: 3px;
-  border: 1px solid var(--neko-desktop-border);
-  border-radius: var(--neko-desktop-radius-control);
-  background: color-mix(in srgb, var(--neko-desktop-surface) 88%, transparent);
-  box-shadow: var(--neko-desktop-shadow-surface);
-  backdrop-filter: var(--neko-glass-blur);
-}
-
-.project-layout-control-group {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-}
-
-.project-layout-controls button {
-  display: inline-flex;
-  width: 34px;
-  height: 34px;
-  min-height: 34px;
-  flex: 0 0 auto;
-  justify-content: center;
-  align-items: center;
-  padding: 0;
-  border: 1px solid transparent;
-  border-radius: var(--neko-desktop-radius-control);
-  color: var(--neko-fg-secondary);
-  background: transparent;
-  cursor: pointer;
-}
-
-.project-layout-controls button:hover,
-.project-layout-controls button[aria-pressed='true'] {
-  border-color: var(--neko-desktop-border);
-  color: var(--neko-fg);
-  background: var(--neko-desktop-control-hover);
-}
-
-.project-layout-controls button[aria-pressed='true'] {
-  border-color: color-mix(in srgb, var(--neko-accent) 24%, transparent);
-  color: color-mix(in srgb, var(--neko-accent) 78%, var(--neko-fg));
-  background: var(--neko-accent-soft);
-}
-
-.project-layout-controls button:disabled {
-  cursor: wait;
-  opacity: 0.55;
 }
 
 .project-display-menu {
@@ -2077,8 +2043,7 @@ button.home-management-card:hover {
     margin: 0 4px 4px;
   }
 
-  .project-workbench-heading span,
-  .project-layout-controls button span {
+  .project-workbench-heading span {
     display: none;
   }
 }
@@ -2097,7 +2062,6 @@ button.home-management-card:hover {
 @media (prefers-reduced-transparency: reduce) {
   .home-navigation,
   .project-primary-sidebar,
-  .project-workbench-controls,
   .shell-diagnostic {
     background: var(--neko-desktop-surface-muted);
     backdrop-filter: none;

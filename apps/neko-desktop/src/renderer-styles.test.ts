@@ -12,4 +12,12 @@ describe('Desktop renderer styles', () => {
     expect(frameRule?.groups?.body).toBeDefined();
     expect(frameRule?.groups?.body).not.toMatch(/transition\s*:[^;]*\bwidth\b/u);
   });
+
+  it('keeps project layout controls in the primary-sidebar footer rather than over Main content', () => {
+    expect(styles).toMatch(/\.home-navigation-footer__actions\s*\{[\s\S]*?display\s*:\s*flex/u);
+    expect(styles).toMatch(
+      /\.home-navigation--compact\s+\.home-navigation-footer__actions\s*\{[\s\S]*?flex-direction\s*:\s*column/u,
+    );
+    expect(styles).not.toMatch(/\.project-workbench-controls\s*\{/u);
+  });
 });

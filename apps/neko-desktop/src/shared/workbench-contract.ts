@@ -753,19 +753,6 @@ export function showWorkbenchTimeline(
   });
 }
 
-export function hideWorkbenchTimeline(
-  workbench: DesktopWorkbenchLayoutProjection,
-): DesktopWorkbenchLayoutProjection {
-  return parseDesktopWorkbenchLayout({
-    ...workbench,
-    revision: workbench.revision + 1,
-    timeline: {
-      presentation: 'hidden',
-      height: workbench.timeline.height,
-    },
-  });
-}
-
 export function getActiveMainView(
   workbench: DesktopWorkbenchLayoutProjection,
   groupId = workbench.main.activeGroupId,

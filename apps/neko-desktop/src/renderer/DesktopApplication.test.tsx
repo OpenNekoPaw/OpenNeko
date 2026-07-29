@@ -31,6 +31,7 @@ vi.mock('./DesktopAgentSurface', () => ({
 describe('DesktopApplication', () => {
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
 
   it('owns exactly one Shell subscription while mounted under React StrictMode', async () => {
@@ -269,7 +270,15 @@ describe('DesktopApplication', () => {
     container.remove();
   });
 
-  it('sends layout controls through the revision-bound Workbench bridge', async () => {
+  it('sends primary-sidebar display selection through the revision-bound Workbench bridge', async () => {
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe(): void {}
+        unobserve(): void {}
+        disconnect(): void {}
+      },
+    );
     const base = createProjection();
     const workbench = {
       ...createDefaultDesktopWorkbenchLayout('window-1'),
@@ -391,21 +400,30 @@ describe('DesktopApplication', () => {
     const root = createRoot(container);
 
     await act(async () => root.render(<TestApplication />));
-    const timeline = [...container.querySelectorAll('button')].find(
-      (button) => button.getAttribute('aria-label') === 'Timeline',
+    const display = [...container.querySelectorAll('button')].find(
+      (button) => button.getAttribute('aria-label') === 'Display',
     );
-    expect(timeline).toBeDefined();
+    expect(display).toBeDefined();
+    expect(
+      [...container.querySelectorAll('button')].some(
+        (button) => button.getAttribute('aria-label') === 'Timeline',
+      ),
+    ).toBe(false);
     await act(async () => {
-      timeline?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      display?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    const mainOnly = [...document.body.querySelectorAll('button')].find(
+      (button) => button.textContent === 'Main only',
+    );
+    expect(mainOnly).toBeDefined();
+    await act(async () => {
+      mainOnly?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
     expect(update).toHaveBeenCalledWith(
       expect.objectContaining({
         revision: 2,
-        timeline: expect.objectContaining({
-          presentation: 'docked',
-          ownerViewId: 'cut:view-1:story',
-        }),
+        display: expect.objectContaining({ mode: 'main-only' }),
       }),
       2,
       1,

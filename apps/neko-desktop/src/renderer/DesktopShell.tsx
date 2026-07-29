@@ -39,12 +39,10 @@ import {
   DESKTOP_WORKBENCH_LIMITS,
   closeMainView,
   getActiveMainView,
-  hideWorkbenchTimeline,
   openOrFocusMainView,
   reorderMainView,
   resizeMainSplit,
   setWorkbenchDisplayMode,
-  showWorkbenchTimeline,
   splitMainView,
   type DesktopWorkbenchLayoutProjection,
   type DesktopWorkbenchMainGroup,
@@ -1186,7 +1184,6 @@ function ContentProjectWorkspace({
       main={
         <div className="project-main-host">
           <div className="project-main-host__content">{mainSurface}</div>
-          <ProjectWorkbenchControls actions={actions} pending={pending} projection={projection} />
         </div>
       }
       secondaryMain={
@@ -1454,54 +1451,6 @@ function renderWorkbenchMainView({
   );
 }
 
-function ProjectWorkbenchControls({
-  actions,
-  pending,
-  projection,
-}: {
-  readonly actions: ShellActions;
-  readonly pending: boolean;
-  readonly projection: DesktopShellProjection;
-}): JSX.Element {
-  const { t } = useTranslation();
-  const workbench = projection.window.workbench;
-  const activeMainView = getActiveMainView(workbench);
-  const timelineOwnerViewId =
-    workbench.timeline.ownerViewId ??
-    (activeMainView?.kind === 'cut'
-      ? activeMainView.viewId
-      : workbench.main.views.find((view) => view.kind === 'cut')?.viewId);
-  return (
-    <div
-      className="project-workbench-controls project-layout-controls"
-      aria-label={t('workspace.layoutControls')}
-    >
-      <div className="project-layout-control-group">
-        <WorkbenchDisplayMenu actions={actions} disabled={pending} projection={projection} />
-        <WorkbenchIconButton
-          disabled={pending || !timelineOwnerViewId}
-          active={workbench.timeline.presentation === 'docked'}
-          icon={<GridIcon size={16} />}
-          label={t('workspace.timeline')}
-          onClick={() => {
-            actions.onUpdateWorkbench(
-              workbench.timeline.presentation === 'docked'
-                ? hideWorkbenchTimeline(workbench)
-                : showWorkbenchTimeline(
-                    workbench,
-                    timelineOwnerViewId ??
-                      (() => {
-                        throw new Error('Desktop Timeline has no owning Cut View.');
-                      })(),
-                  ),
-            );
-          }}
-        />
-      </div>
-    </div>
-  );
-}
-
 function WorkbenchIconButton({
   active,
   disabled,
@@ -1556,16 +1505,17 @@ function WorkbenchDisplayMenu({
       align="end"
       open={open}
       onOpenChange={setOpen}
+      side="right"
       trigger={
-        <button
-          type="button"
-          className="project-layout-icon-button"
+        <IconButton
+          className="project-display-menu-trigger"
+          data-workbench-display-control="primary-sidebar"
           disabled={disabled}
-          aria-label={t('workspace.displayMode')}
+          icon={<RightPanelIcon size={16} />}
+          label={t('workspace.displayMode')}
+          title={t('workspace.displayMode')}
           aria-expanded={open}
-        >
-          <RightPanelIcon size={16} />
-        </button>
+        />
       }
     >
       <div className="project-display-menu" role="menu" aria-label={t('workspace.displayMode')}>
@@ -1667,6 +1617,9 @@ function ProjectPrimarySidebar({
         onOpenSettings={actions.onOpenSettings}
         onToggle={togglePrimarySidebar}
         projection={projection}
+        layoutControl={
+          <WorkbenchDisplayMenu actions={actions} disabled={pending} projection={projection} />
+        }
       />
     </ApplicationPrimarySidebarFrame>
   );
@@ -2144,6 +2097,7 @@ function ApplicationPrimarySidebar({
   onOpenSettings,
   onToggle,
   projection,
+  layoutControl,
 }: {
   readonly activeProjectId?: string;
   readonly activeSection?: HomeSection;
@@ -2161,6 +2115,7 @@ function ApplicationPrimarySidebar({
   readonly onOpenSettings: () => void;
   readonly onToggle: () => void;
   readonly projection: DesktopShellProjection;
+  readonly layoutControl?: JSX.Element;
 }): JSX.Element {
   const { t } = useTranslation();
   return (
@@ -2218,7 +2173,7 @@ function ApplicationPrimarySidebar({
         projection={projection}
       />
       <PrimarySidebarFooter
-        compact={compact}
+        layoutControl={layoutControl}
         onOpenSettings={onOpenSettings}
         projection={projection}
       />
@@ -2287,11 +2242,11 @@ function PrimarySidebarBrand({
 }
 
 function PrimarySidebarFooter({
-  compact,
+  layoutControl,
   onOpenSettings,
   projection,
 }: {
-  readonly compact: boolean;
+  readonly layoutControl?: JSX.Element;
   readonly onOpenSettings: () => void;
   readonly projection: DesktopShellProjection;
 }): JSX.Element {
@@ -2299,13 +2254,16 @@ function PrimarySidebarFooter({
   return (
     <div className="home-navigation-footer">
       <AttentionSummary projection={projection} />
-      <Tooltip content={t('shell.settingsLabel')}>
-        <IconButton
-          label={t('shell.settingsLabel')}
-          icon={<SettingsIcon size={16} />}
-          onClick={onOpenSettings}
-        />
-      </Tooltip>
+      <div className="home-navigation-footer__actions">
+        {layoutControl}
+        <Tooltip content={t('shell.settingsLabel')}>
+          <IconButton
+            label={t('shell.settingsLabel')}
+            icon={<SettingsIcon size={16} />}
+            onClick={onOpenSettings}
+          />
+        </Tooltip>
+      </div>
     </div>
   );
 }
