@@ -16,3 +16,11 @@
 - [x] 3.2 Run applicable dependency, legacy-debt, and unused-export quality gates and classify baseline failures.
 - [x] 3.3 Package and inspect the real Electron Desktop with a synthetic fixture, verifying tab hierarchy, sidebar menu placement, compact access, and absence of floating/Timeline controls.
 - [x] 3.4 Complete the Neko quality self-review and record remaining visual or runtime risk.
+
+## 4. Creative runtime lifecycle regression
+
+- [x] 4.1 Add a red-capable renderer lifecycle test that reproduces Cut editor unmount, Timeline-only remount, and state reload on Main tab activation.
+- [x] 4.2 Render open Main views as a stable keyed stack and use active selection only for visibility and accessibility.
+- [x] 4.3 Attach the Timeline target to its owning Cut view by group membership and remove the duplicate Timeline-only runtime path.
+- [x] 4.4 Verify close still unmounts the removed view runtime and add stable stack styling coverage.
+- [x] 4.5 Run focused/full Desktop tests, typecheck/build, strict OpenSpec validation, quality review, and real Electron Cut/Canvas tab-switch acceptance.

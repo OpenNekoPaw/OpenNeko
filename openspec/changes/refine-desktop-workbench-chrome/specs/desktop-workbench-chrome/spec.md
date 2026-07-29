@@ -69,3 +69,27 @@ The system SHALL preserve the display-mode button's accessible name, tooltip, an
 - **WHEN** the primary sidebar is compact
 - **THEN** the display-mode control SHALL remain available as an icon action
 - **AND** its accessible label and tooltip SHALL identify it as the display-mode selector
+
+### Requirement: Main tab activation preserves creative runtime identity
+
+The system SHALL treat Main tab activation as a visibility selection and SHALL keep every open Main view's keyed runtime mounted until that view is closed or removed from its group.
+
+#### Scenario: Switching away from Cut preserves its runtime
+
+- **GIVEN** a Cut view owns both Preview and a docked Timeline
+- **WHEN** the user activates another Main tab
+- **THEN** the original Cut editor runtime SHALL remain mounted with the same view identity and epoch
+- **AND** Desktop SHALL NOT create a second Timeline-only Cut runtime
+
+#### Scenario: Timeline remains attached to its Cut owner
+
+- **GIVEN** a docked Timeline names an open Cut view as its owner
+- **WHEN** another view in the same Main group is active
+- **THEN** the Timeline portal target SHALL remain attached to the owning Cut root
+- **AND** Preview playback and Timeline commands SHALL continue through that single Cut bridge
+
+#### Scenario: Closing a tab releases its runtime
+
+- **WHEN** an open Main view is closed and removed from its group
+- **THEN** its keyed runtime SHALL unmount and dispose
+- **AND** no hidden orphan runtime SHALL remain

@@ -12,6 +12,7 @@ This change crosses the shared UI primitive and the Desktop renderer, but it doe
 - Place project layout selection in the application primary sidebar footer immediately above Settings.
 - Remove content-overlay layout controls and the standalone Timeline toggle.
 - Preserve the existing Workbench display-mode state owner and Cut-owned Timeline behavior.
+- Keep open creative view instances mounted across tab activation and bind Cut Timeline to the owning Cut instance.
 - Keep the implementation reusable, accessible, and testable without introducing a Desktop-local tab system.
 
 **Non-Goals:**
@@ -59,11 +60,20 @@ Desktop only aligns its group action strip with the shared tab height and theme 
 
 Component and renderer tests assert semantic ownership and absence of the removed controls. CSS tests assert the stable selectors that encode active and close-button behavior. The packaged Electron application provides black-box evidence for visual hierarchy and menu placement. VS Code Webview debugging is not applicable because this surface is the Electron Desktop shell, not an Extension Webview.
 
+### 6. Tab activation selects visibility, not runtime ownership
+
+Each Main group renders a stable keyed stack for every open view in that group. The active view controls which stack item is visible and accessible; it does not control whether the view runtime exists. Closing a view or removing it from the group remains the lifecycle boundary that unmounts and disposes its runtime.
+
+Cut Preview and Timeline are two regions of the same Cut root. The Timeline portal target is supplied to the Cut owner according to group membership, even while another tab is active. Desktop does not mount a second `timeline-only` Cut root when the owning Cut view is already retained in a Main group.
+
+This follows the repository's instance-ownership rule: active selection is a display projection, not a mutable-state owner. A runtime registry is unnecessary because React keys and the canonical Main group view list already define identity and lifecycle.
+
 ## Risks / Trade-offs
 
 - **Shared tab styling can affect another future consumer** → Keep the styles expressed through existing Workbench theme variables and validate all current `@neko/ui` tests.
 - **Compact sidebar can make the layout icon ambiguous** → Retain the tooltip and accessible label, and place the control consistently next to Settings.
 - **Removing the Timeline toggle eliminates manual hide/show from general chrome** → Preserve Cut-owned automatic Timeline presentation and cover that projection path in existing Workbench tests.
+- **Retaining open views consumes more renderer resources than active-only mounting** → Bound lifetime to the explicit open-tab list, hide inactive surfaces from layout and accessibility, and dispose immediately when a tab closes.
 - **Existing dirty Home/Agent edits overlap Desktop files** → Use focused patches, inspect the final diff, and avoid rewriting unrelated hunks.
 
 ## Migration Plan
@@ -73,6 +83,7 @@ Component and renderer tests assert semantic ownership and absence of the remove
 3. Remove obsolete floating control markup and CSS.
 4. Refine shared tab styles and focused tests.
 5. Build and run the packaged Desktop application against a synthetic project fixture.
+6. Add a lifecycle regression test that switches from Cut to Canvas and proves the same Cut root remains attached to Timeline.
 
 Rollback restores the former trigger placement and shared tab styles; no stored data migration is needed.
 

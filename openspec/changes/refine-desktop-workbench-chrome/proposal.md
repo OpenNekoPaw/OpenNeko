@@ -8,6 +8,7 @@ The Desktop Workbench currently mixes global layout controls with document conte
 - Move the Chat/Main display-mode trigger from the floating main-content control to the project primary sidebar footer, adjacent to Settings.
 - Remove the standalone Timeline toggle from the Workbench chrome; Cut continues to own Timeline visibility through its explicit Workbench view state.
 - Keep display-mode state project-Workbench-scoped rather than persisting it as an application setting.
+- Preserve each open Main view's runtime instance across tab activation so Cut Preview and Timeline remain attached to one owner and switching tabs does not reload creative state.
 - Add focused component, renderer, style, and runtime acceptance coverage for the new ownership and visual hierarchy.
 
 ## Capabilities
@@ -23,5 +24,5 @@ None.
 ## Impact
 
 - `packages/neko-ui` shared Workbench editor-tab styles and tests.
-- `apps/neko-desktop` project primary sidebar composition, layout menu placement, renderer styles, localization, and tests.
+- `apps/neko-desktop` project primary sidebar composition, layout menu placement, stable Main-view lifecycle, renderer styles, localization, and tests.
 - No Workbench persistence schema, Extension/Engine bridge, project file, or application-settings contract changes.
