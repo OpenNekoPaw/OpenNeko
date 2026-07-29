@@ -1030,8 +1030,18 @@ describe('message runtime helpers', () => {
         { relativePath: 'docs\\intro.md' },
       ]),
     ).toEqual([
-      { path: 'src/app.ts', name: 'app.ts', type: 'file', source: 'workspace', icon: 'TS' },
-      { path: 'docs/intro.md', name: 'intro.md', type: 'file' },
+      {
+        locator: { kind: 'workspace-file', path: 'src/app.ts' },
+        name: 'app.ts',
+        type: 'file',
+        source: 'workspace',
+        icon: 'TS',
+      },
+      {
+        locator: { kind: 'workspace-file', path: 'docs/intro.md' },
+        name: 'intro.md',
+        type: 'file',
+      },
     ]);
   });
 
@@ -1065,7 +1075,10 @@ describe('message runtime helpers', () => {
           summary: 'Media: Hero portrait',
           source: 'media-library',
           icon: '🎭',
-          filePath: 'neko\\assets\\Characters\\hero.png',
+          contentLocator: {
+            kind: 'workspace-file',
+            path: 'neko/assets/Characters/hero.png',
+          },
           mediaType: 'image',
           entityType: 'character',
           navigationData: { partition: 'media-library' },
@@ -1079,7 +1092,10 @@ describe('message runtime helpers', () => {
         summary: 'Media: Hero portrait',
         source: 'media-library',
         icon: '🎭',
-        filePath: 'neko/assets/Characters/hero.png',
+        contentLocator: {
+          kind: 'workspace-file',
+          path: 'neko/assets/Characters/hero.png',
+        },
         mediaType: 'image',
         entityType: 'character',
         navigationData: { partition: 'media-library' },
@@ -1099,7 +1115,13 @@ describe('message runtime helpers', () => {
       type: 'projectFiles',
       conversationId: 'conv-1',
       filter: '',
-      files: [{ path: 'src/app.ts', name: 'app.ts', type: 'file' }],
+      files: [
+        {
+          locator: { kind: 'workspace-file', path: 'src/app.ts' },
+          name: 'app.ts',
+          type: 'file',
+        },
+      ],
       mentionExtras: [
         {
           type: 'canvas-node',
@@ -1126,7 +1148,10 @@ describe('message runtime helpers', () => {
             summary: 'Media: reference image',
             searchText: '灯神 genie reference concept',
             source: 'media-library',
-            filePath: 'neko/assets/References/reference-01.png',
+            contentLocator: {
+              kind: 'workspace-file',
+              path: 'neko/assets/References/reference-01.png',
+            },
             mediaType: 'image',
           },
         ],
@@ -1144,7 +1169,10 @@ describe('message runtime helpers', () => {
           summary: 'Media: reference image',
           searchText: '灯神 genie reference concept',
           source: 'media-library',
-          filePath: 'neko/assets/References/reference-01.png',
+          contentLocator: {
+            kind: 'workspace-file',
+            path: 'neko/assets/References/reference-01.png',
+          },
           mediaType: 'image',
         },
       ],
@@ -1169,8 +1197,16 @@ describe('message runtime helpers', () => {
       conversationId: 'conv-1',
       filter: 'app',
       files: [
-        { path: 'src/app.ts', name: 'app.ts', type: 'file' },
-        { path: 'docs/intro.md', name: 'intro.md', type: 'file' },
+        {
+          locator: { kind: 'workspace-file', path: 'src/app.ts' },
+          name: 'app.ts',
+          type: 'file',
+        },
+        {
+          locator: { kind: 'workspace-file', path: 'docs/intro.md' },
+          name: 'intro.md',
+          type: 'file',
+        },
       ],
       mentionExtras: [
         {
@@ -1252,7 +1288,13 @@ describe('message runtime helpers', () => {
       type: 'projectFiles',
       filter: 'hero',
       purpose: 'entry',
-      files: [{ path: 'assets/hero.png', name: 'hero.png', type: 'file' }],
+      files: [
+        {
+          locator: { kind: 'workspace-file', path: 'assets/hero.png' },
+          name: 'hero.png',
+          type: 'file',
+        },
+      ],
       mentionExtras: [],
     });
     expect(searchProjectFiles).toHaveBeenCalledWith({
@@ -1806,7 +1848,7 @@ describe('message runtime helpers', () => {
           id: 'f1',
           label: 'notes.txt',
           summary: 'File: notes.txt',
-          data: { filePath: '/tmp/notes.txt' },
+          data: { contentLocator: { kind: 'workspace-file', path: 'notes.txt' } },
         },
         {
           type: 'canvas-node',
@@ -1829,7 +1871,7 @@ describe('message runtime helpers', () => {
         id: 'f1',
         label: 'notes.txt',
         summary: 'File: notes.txt',
-        navigationData: { filePath: '/tmp/notes.txt' },
+        contentLocator: { kind: 'workspace-file', path: 'notes.txt' },
       },
       {
         type: 'canvas-node',
@@ -1854,7 +1896,7 @@ describe('message runtime helpers', () => {
             id: 'f1',
             label: 'img.png',
             summary: '',
-            data: { filePath: '/tmp/img.png' },
+            data: { contentLocator: { kind: 'workspace-file', path: 'images/img.png' } },
           },
         ],
       },
@@ -1864,7 +1906,12 @@ describe('message runtime helpers', () => {
     });
 
     expect(result.userMessage.contextReferences).toEqual([
-      { type: 'file', id: 'f1', label: 'img.png', navigationData: { filePath: '/tmp/img.png' } },
+      {
+        type: 'file',
+        id: 'f1',
+        label: 'img.png',
+        contentLocator: { kind: 'workspace-file', path: 'images/img.png' },
+      },
     ]);
   });
 
@@ -1872,13 +1919,13 @@ describe('message runtime helpers', () => {
     const result = await prepareAgentMessageDispatch({
       request: {
         conversationId: 'conv-1',
-        messageText: 'analyze @${A}/books/story.epub',
+        messageText: 'analyze @books/story.epub',
         sessionMode: 'agent',
         fileReferences: [
           {
-            id: 'file-ref:${A}/books/story.epub',
+            id: 'file-ref:books/story.epub',
             label: 'story.epub',
-            path: '${A}/books/story.epub',
+            contentLocator: { kind: 'workspace-file', path: 'books/story.epub' },
             mediaType: 'document',
           },
         ],
@@ -1891,14 +1938,11 @@ describe('message runtime helpers', () => {
     expect(result.userMessage.contextReferences).toEqual([
       {
         type: 'file',
-        id: 'file-ref:${A}/books/story.epub',
+        id: 'file-ref:books/story.epub',
         label: 'story.epub',
-        summary: '${A}/books/story.epub',
+        summary: 'books/story.epub',
         mediaType: 'document',
-        navigationData: {
-          path: '${A}/books/story.epub',
-          filePath: '${A}/books/story.epub',
-        },
+        contentLocator: { kind: 'workspace-file', path: 'books/story.epub' },
       },
     ]);
   });

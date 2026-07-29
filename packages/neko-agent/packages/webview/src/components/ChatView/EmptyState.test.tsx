@@ -13,6 +13,8 @@ const translations: Record<string, string> = {
   'chat.emptyState.entry.startChatHelper': 'Chat helper',
   'chat.emptyState.entry.generateAssetsHelper': 'Asset helper',
   'chat.emptyState.entry.roleplayHelper': 'Roleplay helper',
+  'chat.emptyState.desktopDockTitle': 'Hi, create with chat',
+  'chat.emptyState.desktopDockDescription': 'Describe an idea or mention a resource.',
 };
 
 vi.mock('@/i18n/I18nContext', () => ({
@@ -70,5 +72,14 @@ describe('EmptyState', () => {
     expect(screen.getByRole('button', { name: /Roleplay/ }).getAttribute('aria-pressed')).toBe(
       'true',
     );
+  });
+
+  it('renders the Desktop dock greeting without package configuration or entry actions', () => {
+    render(<EmptyState presentation="desktop-dock" />);
+
+    expect(screen.getByRole('heading', { name: 'Hi, create with chat' })).toBeTruthy();
+    expect(screen.getByText('Describe an idea or mention a resource.')).toBeTruthy();
+    expect(screen.queryByRole('button')).toBeNull();
+    expect(screen.queryByText('AI responses may be inaccurate.')).toBeNull();
   });
 });

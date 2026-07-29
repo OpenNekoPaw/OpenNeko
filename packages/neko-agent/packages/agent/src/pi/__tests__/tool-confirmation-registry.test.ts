@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { PiToolConfirmationRegistry } from './piToolConfirmationRegistry';
+import { PiToolConfirmationRegistry } from '../tool-confirmation-registry';
 
 describe('PiToolConfirmationRegistry', () => {
   it('resolves the exact pending ToolCall decision', async () => {

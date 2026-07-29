@@ -35,6 +35,46 @@ export {
 } from './capability/agent-content-access-runtime';
 
 export {
+  AGENT_CONFIG_CONTROLLER_ROUTE_TYPES,
+  AGENT_CONTENT_CONTROLLER_ROUTE_TYPES,
+  AGENT_CONVERSATION_CONTROLLER_ROUTE_TYPES,
+  AGENT_PROJECTION_CONTROLLER_ROUTE_TYPES,
+  AGENT_SHARED_CONTROLLER_ROUTE_TYPES,
+  AGENT_SKILL_CONTROLLER_ROUTE_TYPES,
+  createAgentHostMessageController,
+  tryHandleAgentConfigControllerRoute,
+  tryHandleAgentContentControllerRoute,
+  tryHandleAgentConversationControllerRoute,
+  tryHandleAgentProjectionControllerRoute,
+  tryHandleAgentSkillControllerRoute,
+  type AgentConfigControllerEffectPort,
+  type AgentConfigControllerMessage,
+  type AgentConfigControllerRouteOperation,
+  type AgentConversationControllerEffectPort,
+  type AgentContentControllerMessage,
+  type AgentContentControllerEffectPort,
+  type AgentContentControllerRouteOperation,
+  type AgentConversationControllerMessage,
+  type AgentConversationControllerRouteOperation,
+  type AgentConversationControllerTurnRequest,
+  type AgentHostConnectionIdentity,
+  type AgentHostMessageController,
+  type AgentHostControllerConnection,
+  type AgentHostControllerEffectPorts,
+  type AgentHostControllerSubscription,
+  type AgentHostRouteEffectContext,
+  type AgentHostRouteEffectPort,
+  type AgentProjectionControllerMessage,
+  type AgentProjectionControllerEffectPort,
+  type AgentProjectionControllerRouteOperation,
+  type AgentSharedControllerMissingRouteCoverage,
+  type AgentSharedControllerUnexpectedRouteCoverage,
+  type AgentSkillControllerMessage,
+  type AgentSkillControllerEffectPort,
+  type AgentSkillControllerRouteOperation,
+} from './host-controller';
+
+export {
   createAgentDocumentReaderModuleUnavailableError,
   type AgentDocumentReaderHostSurface,
 } from './document-module-diagnostics';
@@ -70,6 +110,16 @@ export {
   type ConversationProjectionListener,
   type ConversationProjectionStore,
 } from './projection/conversation-projection-store';
+
+export {
+  ProjectionAttachmentProtocolError,
+  createConversationProjectionAttachmentServer,
+  type ConversationProjectionAttachmentHostFrame,
+  type ConversationProjectionAttachmentServer,
+  type ConversationProjectionAttachmentServerOptions,
+} from './projection/conversation-projection-attachment-server';
+
+export { projectPiConversationEntries } from './projection/pi-conversation-history-projector';
 
 export {
   ExecutionOwnershipRegistryError,

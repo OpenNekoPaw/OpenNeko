@@ -13,7 +13,7 @@ import {
   type WebviewFoundationThemeKind,
 } from '@neko/ui/foundation';
 import { NEKO_AGENT_HOST_MESSAGE_EVENT } from '@neko-agent/types/host-message-event';
-import { AgentHostRuntimeProvider } from './host-runtime-context';
+import { AgentHostRuntimeProvider } from '@/host-runtime-context';
 import type { AgentHostRuntimeAdapter } from './messages';
 import { setAgentHostRuntimeAdapter } from './messages';
 import '@/index.css';
@@ -24,12 +24,18 @@ export interface AgentWebviewRootProps {
   readonly locale?: SupportedLocale;
   readonly hostRuntimeAdapter?: AgentHostRuntimeAdapter;
   readonly foundation?: WebviewFoundationContextValue;
+  readonly initialConversation?: { readonly id: string; readonly title: string };
+  readonly initialInput?: { readonly id: string; readonly value: string };
+  readonly presentation?: 'default' | 'desktop-dock';
 }
 
 export function AgentWebviewRoot({
   foundation,
   hostRuntimeAdapter,
+  initialConversation,
+  initialInput,
   locale,
+  presentation = 'default',
 }: AgentWebviewRootProps): ReactElement {
   useLayoutEffect(() => {
     if (!hostRuntimeAdapter) {
@@ -68,7 +74,11 @@ export function AgentWebviewRoot({
       >
         <AgentHostRuntimeProvider adapter={hostRuntimeAdapter}>
           <I18nProvider service={i18nService}>
-            <AppShell />
+            <AppShell
+              initialConversation={initialConversation}
+              initialInput={initialInput}
+              presentation={presentation}
+            />
           </I18nProvider>
         </AgentHostRuntimeProvider>
       </AgentWebviewFoundationBoundary>

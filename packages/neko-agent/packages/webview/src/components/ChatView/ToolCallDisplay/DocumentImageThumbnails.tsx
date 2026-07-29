@@ -15,11 +15,10 @@ function DocumentImageThumbnailsComponent({ thumbnails }: DocumentImageThumbnail
     useMessageActions();
 
   const handleOpen = useCallback((thumbnail: DocumentImageThumbnailProjection) => {
-    if (!thumbnail.locator) return;
+    if (!thumbnail.locator || !thumbnail.contentLocator) return;
     AgentHostMessages.revealDocumentLocator({
-      filePath: thumbnail.filePath,
+      contentLocator: thumbnail.contentLocator,
       locator: thumbnail.locator,
-      ...(thumbnail.source ? { source: thumbnail.source } : {}),
     });
   }, []);
 
@@ -43,11 +42,11 @@ function DocumentImageThumbnailsComponent({ thumbnails }: DocumentImageThumbnail
             >
               <button
                 type="button"
-                disabled={!thumbnail.locator}
+                disabled={!thumbnail.locator || !thumbnail.contentLocator}
                 onClick={() => handleOpen(thumbnail)}
                 className="block w-full disabled:cursor-default"
                 title={
-                  thumbnail.locator
+                  thumbnail.locator && thumbnail.contentLocator
                     ? `Open ${title || thumbnail.label}`
                     : [title || thumbnail.path, thumbnail.previewDiagnostic]
                         .filter(Boolean)

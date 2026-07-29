@@ -47,6 +47,7 @@ import {
   buildInvalidWebviewPayloadMessage,
   requireActiveConversationTabBinding,
   updateTabStateRuntime,
+  type AgentHostConnectionIdentity,
 } from '@neko/agent/runtime';
 import { setActiveCanvasAmbientScope } from '../services/canvasAmbientContext';
 import { postPluginsAvailable } from '../services/pluginTransferBridge';
@@ -69,12 +70,12 @@ import {
   type AgentLocalResourceAccess,
 } from '../services/localResourceAccess';
 import type { GeneratedAssetCatalog } from '@neko/platform/media/generated-asset-index';
-import { handleChatWebviewMessage } from './chatWebviewMessageRouter';
+import { createVSCodeAgentHostMessageController } from './vscodeAgentHostMessageController';
 import {
   createConversationProjectionAttachmentServer,
   ProjectionAttachmentProtocolError,
   type ConversationProjectionAttachmentServer,
-} from './projection/conversationProjectionAttachmentServer';
+} from '@neko/agent/runtime';
 import { projectConversationProjectionAttachmentFrameForWebview } from './message/webviewResourceProjection';
 import {
   getCapabilityDiscoveryService,
@@ -84,8 +85,9 @@ import {
   AGENT_WEBVIEW_PROTOCOL_VERSION,
   NEKO_AI_ASSISTANT_FOCUS_COMMAND,
   buildAgentSessionDiagnosticMessage,
+  buildGlobalErrorMessage,
   normalizeTabState,
-  parseWebviewToExtensionMessage,
+  parseAgentWebviewToHostMessage,
   type ActivateConversationWebviewMessage,
   type OpenTab,
   type ProjectionAttachmentKey,
@@ -697,6 +699,15 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
       );
     }
     const endpointEpoch = randomUUID();
+    const connectionIdentity: AgentHostConnectionIdentity = {
+      hostKind: 'vscode',
+      applicationId: 'neko.vscode-extension',
+      windowId: vscode.env.sessionId,
+      viewId: ChatViewProvider.viewType,
+      workspaceId: this._options.localMetadata?.workspaceId ?? 'vscode-empty-window',
+      rendererEpoch: endpointEpoch,
+      connectionId: randomUUID(),
+    };
     this._projectionEndpointEpoch = endpointEpoch;
     this._projectionEndpointRealmId = undefined;
     this._projectionAttachmentServer = this._createProjectionAttachmentServer(
@@ -708,10 +719,47 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
     if (this._configBridge) {
       this._webviewDisposables.push(this._configBridge.registerWebview(postMessageFn));
     }
+    const projectionAttachments = this._projectionAttachmentServer;
+    const agentHostController = createVSCodeAgentHostMessageController({
+      webview,
+      connectionIdentity,
+      projectionAttachments,
+      announceProjectionEndpoint: (protocolVersion, realmId) =>
+        this._announceProjectionEndpoint(webview, protocolVersion, realmId),
+      reportProjectionProtocolError: (error, key) =>
+        this._reportProjectionProtocolError(webview, error, key),
+      messages: this._messages,
+      characterDialogue: this._characterDialogue,
+      embodyCharacter: this._embodyCharacter,
+      skillHandler: this._skillHandler,
+      fileOperationHandler: this._fileOperationHandler,
+      settingsHandler: this._settingsHandler,
+      contextHandler: this._contextHandler,
+      slashCommandHandler: this._slashCommandHandler,
+      conversationMessageHandler: this._conversationMessageHandler,
+      dndBroker: this._dndBroker,
+      sendConfigState: () => this._requireConfigBridge().sendConfigState(postMessageFn),
+      refreshConfigSnapshot: () => this._refreshConfigSnapshot(postMessageFn),
+      openUserConfigFile: () => this._requireConfigBridge().openUserConfigFile(),
+      sendTabState: () => this._sendTabState(),
+      activateConversation: (message) => this._activateConversation(message),
+      updateTabState: (message) =>
+        this._updateTabState(
+          message.openTabs,
+          message.activeTabId,
+          message.expectedTabStateRevision,
+        ),
+      setKeyboardFocused: (focused) => this._setKeyboardFocused(focused),
+      setKeyboardEditable: (editable) => this._setKeyboardEditable(editable),
+      syncCanvasAmbientScopeFromActiveConversation: () =>
+        this._syncCanvasAmbientScopeFromActiveConversation(),
+      resolveLifecycleCapabilityDescriptor: (capabilityId) =>
+        getCapabilityDiscoveryService().getLifecycleCapabilityDescriptor(capabilityId),
+    });
 
     this._webviewDisposables.push(
       webview.onDidReceiveMessage(async (raw: unknown) => {
-        const message = parseWebviewToExtensionMessage(raw);
+        const message = parseAgentWebviewToHostMessage(raw);
         if (!message) {
           const invalidMessage =
             buildMissingSessionIdentityDiagnostic(raw) ?? buildInvalidWebviewPayloadMessage(raw);
@@ -728,57 +776,18 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
           postPluginsAvailable(webview);
         }
 
-        if (message.type === 'webviewKeyboardFocus') {
-          void this._setKeyboardFocused(message.focused);
-          return;
+        try {
+          await agentHostController.handle(message);
+        } catch (error) {
+          logger.error('Agent Host controller route failed', {
+            route: message.type,
+            connectionId: connectionIdentity.connectionId,
+            error,
+          });
+          const diagnostic =
+            error instanceof Error ? error.message : 'Agent Host controller route failed.';
+          await webview.postMessage(buildGlobalErrorMessage(diagnostic));
         }
-
-        if (message.type === 'webviewKeyboardEditable') {
-          void this._setKeyboardEditable(message.editable);
-          return;
-        }
-
-        // 1. Delegate config messages to ConfigBridge
-        if (this._configBridge) {
-          const handled = await this._configBridge.handleMessage(message, postMessageFn);
-          if (handled) return;
-        }
-
-        const projectionAttachments = this._projectionAttachmentServer;
-        if (!projectionAttachments) {
-          throw new Error('Projection attachment server is unavailable for the active Webview.');
-        }
-        handleChatWebviewMessage(message, {
-          webview,
-          projectionAttachments,
-          announceProjectionEndpoint: (protocolVersion, realmId) =>
-            this._announceProjectionEndpoint(webview, protocolVersion, realmId),
-          reportProjectionProtocolError: (error, key) =>
-            this._reportProjectionProtocolError(webview, error, key),
-          messages: this._messages,
-          characterDialogue: this._characterDialogue,
-          embodyCharacter: this._embodyCharacter,
-          skillHandler: this._skillHandler,
-          fileOperationHandler: this._fileOperationHandler,
-          settingsHandler: this._settingsHandler,
-          contextHandler: this._contextHandler,
-          slashCommandHandler: this._slashCommandHandler,
-          conversationMessageHandler: this._conversationMessageHandler,
-          dndBroker: this._dndBroker,
-          refreshConfigSnapshot: () => this._refreshConfigSnapshot(webview, postMessageFn),
-          sendTabState: () => this._sendTabState(),
-          activateConversation: (message) => this._activateConversation(message),
-          updateTabState: (message) =>
-            this._updateTabState(
-              message.openTabs,
-              message.activeTabId,
-              message.expectedTabStateRevision,
-            ),
-          syncCanvasAmbientScopeFromActiveConversation: () =>
-            this._syncCanvasAmbientScopeFromActiveConversation(),
-          resolveLifecycleCapabilityDescriptor: (capabilityId) =>
-            getCapabilityDiscoveryService().getLifecycleCapabilityDescriptor(capabilityId),
-        });
       }),
     );
   }
@@ -867,17 +876,21 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
     this._flushPendingMessages();
   }
 
-  private _refreshConfigSnapshot(
-    webview: vscode.Webview,
+  private async _refreshConfigSnapshot(
     postMessage: (message: unknown) => Thenable<boolean>,
-  ): void {
-    if (!this._platform) return;
-    this._platform.config.reloadConfig();
-    const conversationId = this._conversations.getActiveId();
-    if (conversationId) {
-      void this._settingsHandler.sendSettings(webview, { conversationId });
+  ): Promise<void> {
+    if (!this._platform) {
+      throw new Error('Agent platform is unavailable for config refresh.');
     }
-    void this._configBridge?.sendConfigState(postMessage);
+    this._platform.config.reloadConfig();
+    await this._requireConfigBridge().sendConfigState(postMessage);
+  }
+
+  private _requireConfigBridge(): ConfigBridge {
+    if (!this._configBridge) {
+      throw new Error('Agent config bridge is unavailable.');
+    }
+    return this._configBridge;
   }
 
   // ============================================================================

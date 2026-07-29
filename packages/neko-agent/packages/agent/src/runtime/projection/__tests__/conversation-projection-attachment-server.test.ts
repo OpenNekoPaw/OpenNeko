@@ -7,8 +7,8 @@ import type {
   ProjectionAttachmentKey,
 } from '@neko-agent/types';
 import { applyConversationProjectionPatch } from '@neko-agent/types';
-import { createConversationProjectionStore } from '@neko/agent/runtime';
-import { createConversationProjectionAttachmentServer } from '../conversationProjectionAttachmentServer';
+import { createConversationProjectionStore } from '../conversation-projection-store';
+import { createConversationProjectionAttachmentServer } from '../conversation-projection-attachment-server';
 
 type HostFrame = ProjectionAttachmentHostFrame<
   ConversationProjectionSnapshot,

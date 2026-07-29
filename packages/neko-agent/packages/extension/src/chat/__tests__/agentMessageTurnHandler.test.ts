@@ -1435,7 +1435,7 @@ describe('AgentMessageTurnHandler', () => {
         filter: 'app',
         files: [
           {
-            path: 'src/app.ts',
+            locator: { kind: 'workspace-file', path: 'src/app.ts' },
             name: 'app.ts',
             type: 'file',
             source: 'workspace',
@@ -1547,7 +1547,10 @@ describe('AgentMessageTurnHandler', () => {
             label: 'Hero portrait',
             source: 'media-library',
             mediaType: 'image',
-            filePath: 'neko/assets/Characters/hero.png',
+            contentLocator: {
+              kind: 'workspace-file',
+              path: 'neko/assets/Characters/hero.png',
+            },
             thumbnailUri: 'webview:/workspace/thumbs/hero.png',
           }),
           expect.objectContaining({
@@ -1556,10 +1559,12 @@ describe('AgentMessageTurnHandler', () => {
             label: 'hero-shot.mp4',
             source: 'media-library',
             mediaType: 'video',
-            filePath: 'neko/assets/Footage/hero-shot.mp4',
+            contentLocator: {
+              kind: 'workspace-file',
+              path: 'neko/assets/Footage/hero-shot.mp4',
+            },
             navigationData: expect.objectContaining({
-              filePath: 'neko/assets/Footage/hero-shot.mp4',
-              portablePath: 'neko/assets/Footage/hero-shot.mp4',
+              partition: 'media-library',
             }),
             thumbnailUri: 'webview:/workspace/.neko/.cache/resources/thumbnails/hero-shot.jpg',
           }),

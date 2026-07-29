@@ -1,4 +1,4 @@
-import type { AgentContextPayload, ChatModelOption } from '@neko/shared';
+import type { AgentContextPayload, ChatModelOption, ContentLocator } from '@neko/shared';
 import type { SettingsState } from './ui';
 import type {
   AgentMediaModelCategory,
@@ -76,7 +76,7 @@ export interface ProjectMentionItem {
   kind: ProjectMentionItemKind;
   label: string;
   description?: string;
-  filePath?: string;
+  contentLocator?: ContentLocator;
   icon?: string;
   source?: ProjectMentionSource;
   mediaType?: ProjectMentionMediaType;

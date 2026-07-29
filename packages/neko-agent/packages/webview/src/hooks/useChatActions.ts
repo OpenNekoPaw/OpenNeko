@@ -36,6 +36,7 @@ import {
 } from '@neko-agent/types';
 import { projectMessageModelSelection } from '../presenters/config-message-presenter';
 import { projectContextReferencesFromPayloads } from '../presenters/context-reference-presenter';
+import { projectContentLocatorPath } from '../presenters/content-locator-presenter';
 import { toAttachmentTypeFromPathReference } from '../presenters/reference-token-presenter';
 import { isDocumentFile, type AgentContextPayload, type ChatModelOption } from '@neko/shared';
 
@@ -450,14 +451,18 @@ function projectFileReferenceAttachments(
 ): MessageAttachment[] {
   return (
     references
-      ?.filter((reference) => !isDocumentFile(reference.path))
+      ?.filter((reference) => !isDocumentFile(projectContentLocatorPath(reference.contentLocator)))
       .map((reference) => {
-        const type = toAttachmentTypeFromPathReference(reference);
+        const path = projectContentLocatorPath(reference.contentLocator);
+        const type = toAttachmentTypeFromPathReference({
+          path,
+          mediaType: reference.mediaType,
+        });
         return {
           id: reference.id,
           name: reference.label,
           type,
-          path: reference.path,
+          path,
           ...(reference.thumbnailUri && type === 'image'
             ? { preview: reference.thumbnailUri }
             : {}),
@@ -470,18 +475,18 @@ function projectFileReferenceContextReferences(
   references: readonly SelectedFileReference[] | undefined,
 ): MessageContextReference[] {
   return (
-    references?.map((reference) => ({
-      type: fileReferenceContextType(reference),
-      id: reference.id,
-      label: reference.label,
-      summary: reference.path,
-      ...(reference.thumbnailUri ? { thumbnailUri: reference.thumbnailUri } : {}),
-      ...(reference.mediaType ? { mediaType: reference.mediaType } : {}),
-      navigationData: {
-        path: reference.path,
-        filePath: reference.path,
-      },
-    })) ?? []
+    references?.map((reference) => {
+      const path = projectContentLocatorPath(reference.contentLocator);
+      return {
+        type: fileReferenceContextType(reference),
+        id: reference.id,
+        label: reference.label,
+        summary: path,
+        ...(reference.thumbnailUri ? { thumbnailUri: reference.thumbnailUri } : {}),
+        ...(reference.mediaType ? { mediaType: reference.mediaType } : {}),
+        contentLocator: reference.contentLocator,
+      };
+    }) ?? []
   );
 }
 

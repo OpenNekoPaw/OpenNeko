@@ -48,15 +48,15 @@ export class SettingsHandler {
     webview: vscode.Webview,
     options: { readonly conversationId: string; readonly reloadConfig?: boolean },
   ): Promise<void> {
-    if (!this.deps.platform) return;
     try {
+      const platform = this.requirePlatform();
       if (options.reloadConfig === true) {
-        this.deps.platform.config.reloadConfig();
+        platform.config.reloadConfig();
       }
 
       const conversationSettings = this.requireConversationSettings();
       const message = buildAssistantSettingsRuntimeDataMessage({
-        getSettingsData: () => this.deps.platform?.config.getAssistantSettingsData(),
+        getSettingsData: () => platform.config.getAssistantSettingsData(),
       });
       if (message) {
         const snapshot = conversationSettings.snapshotForConversation(options.conversationId);
@@ -164,6 +164,14 @@ export class SettingsHandler {
       throw new Error('Conversation settings runtime is not initialized');
     }
     return settings;
+  }
+
+  private requirePlatform(): Platform {
+    const platform = this.deps.platform;
+    if (!platform) {
+      throw new Error('Agent platform is not initialized');
+    }
+    return platform;
   }
 }
 

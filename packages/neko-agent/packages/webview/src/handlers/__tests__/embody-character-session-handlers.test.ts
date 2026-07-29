@@ -2,7 +2,7 @@ import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import { describe, expect, it } from 'vitest';
 import type {
   EmbodyCharacterSessionProjection,
-  ExtensionToWebviewMessage,
+  AgentHostToWebviewMessage,
   OpenTab,
 } from '@neko-agent/types';
 import type { Message } from '@neko-agent/types';
@@ -78,7 +78,7 @@ describe('Embody Character session handlers', () => {
 
 function dispatch(
   handlers: readonly HandlerRegistration[],
-  message: ExtensionToWebviewMessage,
+  message: AgentHostToWebviewMessage,
   context: MessageHandlerContext,
 ): void {
   const registration = handlers.find((handler) => handler.type === message.type);

@@ -6,7 +6,7 @@
 
 import type { MutableRefObject } from 'react';
 import type { AgentContextPayload } from '@neko/shared';
-import type { ExtensionToWebviewMessage, MessageOfType } from './messages';
+import type { AgentHostToWebviewMessage, MessageOfType } from './messages';
 import type {
   Message,
   ConversationSummary,
@@ -215,13 +215,13 @@ export interface MessageHandlerContext
   setShowOnboarding: React.Dispatch<React.SetStateAction<boolean>>;
 }
 
-export type WebviewMessageType = ExtensionToWebviewMessage['type'];
+export type WebviewMessageType = AgentHostToWebviewMessage['type'];
 
 /**
  * Type guard that keeps the runtime dispatch boundary aligned with the protocol union.
  */
 function isMessageOfType<T extends WebviewMessageType>(
-  message: ExtensionToWebviewMessage,
+  message: AgentHostToWebviewMessage,
   type: T,
 ): message is MessageOfType<T> {
   return message.type === type;
@@ -251,7 +251,7 @@ export type TypedMessageHandler<T extends WebviewMessageType> = (
  * concrete type/handler pairing at the module boundary.
  */
 export type ProtocolMessageDispatcher = (
-  message: ExtensionToWebviewMessage,
+  message: AgentHostToWebviewMessage,
   context: MessageHandlerContext,
 ) => void;
 

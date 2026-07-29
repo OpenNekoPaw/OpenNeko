@@ -532,8 +532,9 @@ function selectUniqueAliasRef(
   const refs = imageIndex.aliases.get(normalized) ?? [];
   const batchKeys = new Set(refs.map((ref) => ref.batchKey));
   if (refs.length === 0) return { status: 'none' };
-  if (batchKeys.size === 1 && refs.length === 1) return { status: 'unique', ref: refs[0] };
-  if (batchKeys.size === 1) return { status: 'unique', ref: refs[0] };
+  const first = refs[0];
+  if (!first) return { status: 'none' };
+  if (batchKeys.size === 1) return { status: 'unique', ref: first };
   return { status: 'ambiguous' };
 }
 

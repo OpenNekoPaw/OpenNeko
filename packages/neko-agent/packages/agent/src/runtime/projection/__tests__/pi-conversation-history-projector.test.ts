@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import type { PiConversationTranscriptEntry } from '@neko/agent/pi';
-
-import { projectPiConversationEntries } from './piConversationHistoryProjection';
+import type { PiConversationTranscriptEntry } from '../../../pi';
+import { projectPiConversationEntries } from '../pi-conversation-history-projector';
 
 describe('projectPiConversationEntries', () => {
   it('projects the active Pi branch with stable entry ids and tool results', () => {

@@ -1,5 +1,5 @@
 import { act, render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SettingsState } from '@neko-agent/types';
 import type {
   WebviewKeyboardEditableReporter,
@@ -7,7 +7,10 @@ import type {
 } from '@neko/ui/keyboard';
 import { AppShell } from './AppShell';
 
-const hostRuntimeMocks = vi.hoisted(() => ({ send: vi.fn() }));
+const hostRuntimeMocks = vi.hoisted(() => ({
+  hostKind: 'vscode' as 'electron' | 'vscode',
+  send: vi.fn(),
+}));
 const keyboardMocks = vi.hoisted(() => ({
   useReportWebviewKeyboardEditable: vi.fn<(reporter: WebviewKeyboardEditableReporter) => void>(),
   useReportWebviewKeyboardFocus:
@@ -16,7 +19,7 @@ const keyboardMocks = vi.hoisted(() => ({
 
 vi.mock('@/host-runtime-context', () => ({
   useAgentHostRuntimeAdapter: () => ({
-    hostKind: 'vscode',
+    hostKind: hostRuntimeMocks.hostKind,
     runtimeId: 'app-shell-test',
     send: hostRuntimeMocks.send,
     subscribe: vi.fn(),
@@ -34,7 +37,9 @@ vi.mock('@neko/ui/keyboard', async () => {
 });
 
 vi.mock('@/components/Header', () => ({
-  Header: () => <div data-testid="header" />,
+  Header: ({ showAccountBar }: { readonly showAccountBar?: boolean }) => (
+    <div data-testid="header" data-show-account-bar={String(showAccountBar)} />
+  ),
 }));
 
 vi.mock('@/components/OnboardingFlow', () => ({
@@ -43,11 +48,21 @@ vi.mock('@/components/OnboardingFlow', () => ({
 
 vi.mock('./ConversationController', () => ({
   ConversationController: (props: {
+    initialConversation?: { readonly id: string; readonly title: string };
+    initialInput?: { readonly id: string; readonly value: string };
+    emptyStatePresentation?: 'default' | 'desktop-dock';
     setSettings: React.Dispatch<React.SetStateAction<SettingsState>>;
     setHasConfigSnapshot: React.Dispatch<React.SetStateAction<boolean>>;
     renderHeader: (props: Record<string, never>) => React.ReactNode;
   }) => (
     <div>
+      <span data-testid="initial-conversation">
+        {props.initialConversation
+          ? `${props.initialConversation.id}:${props.initialConversation.title}`
+          : 'none'}
+      </span>
+      <span data-testid="empty-state-presentation">{props.emptyStatePresentation}</span>
+      <span data-testid="initial-input">{props.initialInput?.value ?? 'none'}</span>
       {props.renderHeader({})}
       <button
         type="button"
@@ -87,6 +102,27 @@ vi.mock('./ConversationController', () => ({
 }));
 
 describe('AppShell onboarding lifecycle', () => {
+  beforeEach(() => {
+    hostRuntimeMocks.hostKind = 'vscode';
+    hostRuntimeMocks.send.mockClear();
+    keyboardMocks.useReportWebviewKeyboardEditable.mockClear();
+    keyboardMocks.useReportWebviewKeyboardFocus.mockClear();
+  });
+
+  it('passes an explicit host navigation target to the conversation owner', () => {
+    render(<AppShell initialConversation={{ id: 'conversation-1', title: 'Conversation one' }} />);
+
+    expect(screen.getByTestId('initial-conversation').textContent).toBe(
+      'conversation-1:Conversation one',
+    );
+  });
+
+  it('passes a Desktop creation handoff to the conversation owner', () => {
+    render(<AppShell initialInput={{ id: 'handoff-1', value: 'Create a storyboard' }} />);
+
+    expect(screen.getByTestId('initial-input').textContent).toBe('Create a storyboard');
+  });
+
   it('routes shared keyboard reports through the Agent host runtime adapter', () => {
     render(<AppShell />);
 
@@ -107,6 +143,16 @@ describe('AppShell onboarding lifecycle', () => {
       type: 'webviewKeyboardEditable',
       editable: true,
     });
+  });
+
+  it('does not register VS Code keyboard bridge reporters for Electron', () => {
+    hostRuntimeMocks.hostKind = 'electron';
+
+    render(<AppShell />);
+
+    expect(keyboardMocks.useReportWebviewKeyboardFocus.mock.calls.at(-1)?.[1]).toBeNull();
+    expect(keyboardMocks.useReportWebviewKeyboardEditable.mock.calls.at(-1)?.[0]).toBeNull();
+    expect(hostRuntimeMocks.send).not.toHaveBeenCalled();
   });
 
   it('does not show onboarding before the first config snapshot arrives', () => {
@@ -136,5 +182,23 @@ describe('AppShell onboarding lifecycle', () => {
     });
 
     expect(screen.queryByTestId('onboarding')).toBeNull();
+  });
+
+  it('keeps configuration and onboarding outside the Desktop dock presentation', () => {
+    render(<AppShell presentation="desktop-dock" />);
+
+    act(() => {
+      screen.getByTestId('empty-config').click();
+    });
+
+    expect(screen.queryByTestId('onboarding')).toBeNull();
+    expect(screen.getByTestId('header').getAttribute('data-show-account-bar')).toBe('false');
+    expect(screen.getByTestId('empty-state-presentation').textContent).toBe('desktop-dock');
+    expect(
+      screen
+        .getByTestId('header')
+        .closest('[data-presentation]')
+        ?.getAttribute('data-presentation'),
+    ).toBe('desktop-dock');
   });
 });

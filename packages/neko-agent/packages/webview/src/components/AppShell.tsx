@@ -22,15 +22,30 @@ import { useConfigState, useResourceState } from '@/hooks';
 import { useAgentHostRuntimeAdapter } from '@/host-runtime-context';
 import { ConversationController } from './ConversationController';
 
-export function AppShell() {
+export interface AppShellProps {
+  readonly initialConversation?: { readonly id: string; readonly title: string };
+  readonly initialInput?: { readonly id: string; readonly value: string };
+  readonly presentation?: 'default' | 'desktop-dock';
+}
+
+export function AppShell({
+  initialConversation,
+  initialInput,
+  presentation = 'default',
+}: AppShellProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const hostRuntimeAdapter = useAgentHostRuntimeAdapter();
   const keyboardReporter = useMemo(
-    () => ({
-      postMessage(message: WebviewKeyboardFocusMessage | WebviewKeyboardEditableMessage): void {
-        hostRuntimeAdapter.send(message);
-      },
-    }),
+    () =>
+      hostRuntimeAdapter.hostKind === 'vscode'
+        ? {
+            postMessage(
+              message: WebviewKeyboardFocusMessage | WebviewKeyboardEditableMessage,
+            ): void {
+              hostRuntimeAdapter.send(message);
+            },
+          }
+        : null,
     [hostRuntimeAdapter],
   );
   useReportWebviewKeyboardFocus(rootRef, keyboardReporter);
@@ -73,10 +88,10 @@ export function AppShell() {
         provider.requiresApiKey === false),
   );
   useEffect(() => {
-    if (hasConfigSnapshot && !isAiConfigured) {
+    if (presentation === 'default' && hasConfigSnapshot && !isAiConfigured) {
       setShowOnboarding(true);
     }
-  }, [hasConfigSnapshot, isAiConfigured]);
+  }, [hasConfigSnapshot, isAiConfigured, presentation]);
 
   // Auto-dismiss onboarding when AI becomes configured
   useEffect(() => {
@@ -88,9 +103,13 @@ export function AppShell() {
   return (
     <div
       ref={rootRef}
+      data-presentation={presentation}
       className="flex flex-col h-screen bg-[var(--vscode-sideBar-background,var(--vscode-editor-background))] text-[var(--vscode-foreground)]"
     >
       <ConversationController
+        emptyStatePresentation={presentation === 'desktop-dock' ? 'desktop-dock' : 'default'}
+        initialConversation={initialConversation}
+        initialInput={initialInput}
         settings={settings}
         hasConfigSnapshot={hasConfigSnapshot}
         setSettings={setSettings}
@@ -113,10 +132,13 @@ export function AppShell() {
             {...headerProps}
             configuredProviders={settings.configuredProviders}
             onOpenOnboarding={() => setShowOnboarding(true)}
+            showAccountBar={presentation === 'default'}
           />
         )}
       />
-      {showOnboarding && <OnboardingFlow onComplete={() => setShowOnboarding(false)} />}
+      {presentation === 'default' && showOnboarding ? (
+        <OnboardingFlow onComplete={() => setShowOnboarding(false)} />
+      ) : null}
     </div>
   );
 }

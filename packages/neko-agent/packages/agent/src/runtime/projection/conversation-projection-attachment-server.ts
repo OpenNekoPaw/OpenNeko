@@ -11,7 +11,7 @@ import type {
   ProjectionSnapshotFrame,
 } from '@neko-agent/types';
 import { isSameProjectionAttachment } from '@neko-agent/types';
-import type { ConversationProjectionStore } from '@neko/agent/runtime';
+import type { ConversationProjectionStore } from './conversation-projection-store';
 
 export type ConversationProjectionAttachmentHostFrame = ProjectionAttachmentHostFrame<
   ConversationProjectionSnapshot,

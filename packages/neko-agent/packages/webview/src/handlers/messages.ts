@@ -21,7 +21,7 @@ export type {
   ConversationListMessage,
   ConversationSnapshotMessage,
   ErrorMessage,
-  ExtensionToWebviewMessage,
+  AgentHostToWebviewMessage,
   ExternalMessage,
   GlobalErrorMessage,
   HistoryClearedMessage,

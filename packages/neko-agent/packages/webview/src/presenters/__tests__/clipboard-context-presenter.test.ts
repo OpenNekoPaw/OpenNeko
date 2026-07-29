@@ -10,6 +10,7 @@ describe('clipboard-context-presenter', () => {
         document: {
           filePath: '/books/a.epub',
           source: { filePath: '/books/a.epub', format: 'epub' },
+          contentLocator: { kind: 'workspace-file', path: 'books/a.epub' },
           locator: { kind: 'chapter', chapterHref: 'Page_1', spineIndex: 1 },
           resourceRef: {
             kind: 'document-entry',
@@ -35,14 +36,13 @@ describe('clipboard-context-presenter', () => {
 
     expect(payload).toEqual({
       type: 'image',
-      id: 'document-image:/books/a.epub:image/Page_1.jpg:chapter:Page_1@1',
+      id: 'document-image:books/a.epub:image/Page_1.jpg:chapter:Page_1@1',
       label: 'chapter:Page_1@1',
       summary: 'Document image: a.epub#chapter:Page_1@1',
       data: {
         kind: 'document-image-reference',
         document: {
-          filePath: '/books/a.epub',
-          source: { filePath: '/books/a.epub', format: 'epub' },
+          contentLocator: { kind: 'workspace-file', path: 'books/a.epub' },
           locator: { kind: 'chapter', chapterHref: 'Page_1', spineIndex: 1 },
           resourceRef: {
             kind: 'document-entry',
@@ -57,6 +57,7 @@ describe('clipboard-context-presenter', () => {
           height: 2133,
           byteSize: 1024,
           mimeType: 'image/jpeg',
+          contentLocator: { kind: 'workspace-file', path: 'books/a.epub' },
           resourceRef: {
             kind: 'document-entry',
             source: { filePath: '/books/a.epub', format: 'epub' },
@@ -66,7 +67,6 @@ describe('clipboard-context-presenter', () => {
         },
         navigationData: {
           source: 'epub',
-          filePath: '/books/a.epub',
           entryPath: 'image/Page_1.jpg',
         },
       },
@@ -95,12 +95,13 @@ describe('clipboard-context-presenter', () => {
     expect(payload).toBeNull();
   });
 
-  it('projects media library reference JSON while preserving portable paths', () => {
+  it('projects media library references from Host-issued content locators', () => {
     const payload = projectClipboardTextToContextPayload(
       JSON.stringify({
         kind: 'media-library-file-reference',
         path: '${REFS}/hero.png',
         resolvedPath: '/mnt/media/hero.png',
+        contentLocator: { kind: 'workspace-file', path: 'references/hero.png' },
         name: 'hero.png',
         mediaType: 'image',
         source: { partition: 'media-library', variable: 'REFS' },
@@ -109,22 +110,33 @@ describe('clipboard-context-presenter', () => {
 
     expect(payload).toEqual({
       type: 'media',
-      id: 'media-library-file:${REFS}/hero.png:/mnt/media/hero.png',
+      id: 'media-library-file:references/hero.png',
       label: 'hero.png',
       summary: 'Media: hero.png (image)',
       data: expect.objectContaining({
         kind: 'media-library-file-reference',
-        path: '${REFS}/hero.png',
-        resolvedPath: '/mnt/media/hero.png',
+        contentLocator: { kind: 'workspace-file', path: 'references/hero.png' },
         source: { partition: 'media-library', variable: 'REFS' },
         navigationData: {
           source: 'media-library',
           partition: 'media-library',
-          portablePath: '${REFS}/hero.png',
-          filePath: '/mnt/media/hero.png',
         },
       }),
     });
+  });
+
+  it('rejects media library clipboard references without Host-issued identity', () => {
+    expect(
+      projectClipboardTextToContextPayload(
+        JSON.stringify({
+          kind: 'media-library-file-reference',
+          path: '${REFS}/hero.png',
+          resolvedPath: '/mnt/media/hero.png',
+          name: 'hero.png',
+          mediaType: 'image',
+        }),
+      ),
+    ).toBeNull();
   });
 
   it('rejects legacy Asset reference clipboard payloads', () => {

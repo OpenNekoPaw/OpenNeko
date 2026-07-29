@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type {
   AgentSessionDiagnosticMessage,
   ConversationSummary,
-  ExtensionToWebviewMessage,
+  AgentHostToWebviewMessage,
   OpenTab,
 } from '@neko-agent/types';
 import type { Message } from '@neko-agent/types';
@@ -324,7 +324,7 @@ describe('character role context isolation', () => {
 
 function dispatch(
   handlers: readonly HandlerRegistration[],
-  message: ExtensionToWebviewMessage,
+  message: AgentHostToWebviewMessage,
   context: MessageHandlerContext,
 ): void {
   const registration = handlers.find((handler) => handler.type === message.type);

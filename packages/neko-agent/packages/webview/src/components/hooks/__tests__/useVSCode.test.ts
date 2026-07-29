@@ -417,6 +417,30 @@ describe('messages', () => {
           args: 'changed files',
         });
       });
+
+      it('posts file operations with canonical content locators', () => {
+        const contentLocator = { kind: 'workspace-file' as const, path: 'books/a.pdf' };
+        const locator = { kind: 'page' as const, pageNumber: 2, pageIndex: 1 };
+
+        AgentHostMessages.openFile(contentLocator, { preview: true });
+        AgentHostMessages.revealDocumentLocator({ contentLocator, locator });
+        AgentHostMessages.revealFile(contentLocator);
+
+        expect(mockPostMessage).toHaveBeenCalledWith({
+          type: 'openFile',
+          contentLocator,
+          options: { preview: true },
+        });
+        expect(mockPostMessage).toHaveBeenCalledWith({
+          type: 'revealDocumentLocator',
+          contentLocator,
+          locator,
+        });
+        expect(mockPostMessage).toHaveBeenCalledWith({
+          type: 'revealFile',
+          contentLocator,
+        });
+      });
     });
   });
 });

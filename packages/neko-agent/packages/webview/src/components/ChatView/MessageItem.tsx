@@ -110,6 +110,7 @@ function MessageContextReferenceDisplay({ reference }: { reference: MessageConte
         AgentHostMessages.revealContextSource(
           reference.type,
           reference.id,
+          reference.contentLocator,
           reference.navigationData,
         )
       }

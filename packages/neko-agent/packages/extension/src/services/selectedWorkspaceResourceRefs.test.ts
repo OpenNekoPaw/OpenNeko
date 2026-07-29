@@ -2,17 +2,22 @@ import { describe, expect, it } from 'vitest';
 import { createSelectedWorkspaceResourceRefs } from './selectedWorkspaceResourceRefs';
 
 describe('createSelectedWorkspaceResourceRefs', () => {
-  it('creates stable workspace refs and rejects paths outside the workspace', () => {
+  it('creates stable workspace refs and ignores non-workspace content', () => {
     const refs = createSelectedWorkspaceResourceRefs('/workspace/project', [
       {
         id: 'script:1',
-        path: '/workspace/project/scripts/story.md',
+        contentLocator: { kind: 'workspace-file', path: 'scripts/story.md' },
         label: 'story.md',
         mediaType: 'text',
       },
       {
         id: 'outside:1',
-        path: '/workspace/other/private.md',
+        contentLocator: {
+          kind: 'package-resource',
+          packageId: 'private',
+          revision: '1',
+          resourcePath: 'private.md',
+        },
         label: 'private.md',
       },
     ]);

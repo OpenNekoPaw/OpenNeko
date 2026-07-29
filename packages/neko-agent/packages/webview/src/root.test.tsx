@@ -16,10 +16,19 @@ vi.mock('@/components/ErrorBoundary', () => ({
 vi.mock('@/components/AppShell', async () => {
   const { useWebviewFoundation } =
     await vi.importActual<typeof import('@neko/ui/foundation')>('@neko/ui/foundation');
+  const { useAgentHostRuntimeAdapter } =
+    await vi.importActual<typeof import('@/host-runtime-context')>('@/host-runtime-context');
   return {
-    AppShell: () => {
+    AppShell: ({ presentation }: { readonly presentation?: string }) => {
       const foundation = useWebviewFoundation();
-      return <span data-testid="foundation-runtime">{foundation.runtimeId}</span>;
+      const adapter = useAgentHostRuntimeAdapter();
+      return (
+        <>
+          <span data-testid="foundation-runtime">{foundation.runtimeId}</span>
+          <span data-testid="adapter-runtime">{adapter.runtimeId}</span>
+          <span data-testid="presentation">{presentation}</span>
+        </>
+      );
     },
   };
 });
@@ -40,6 +49,7 @@ describe('AgentWebviewRoot foundation wiring', () => {
     );
 
     expect(screen.getByTestId('foundation-runtime').textContent).toBe('host-foundation');
+    expect(screen.getByTestId('adapter-runtime').textContent).toBe('adapter-foundation');
   });
 
   it('uses an explicit host foundation when the Desktop root provides one', () => {
@@ -61,6 +71,19 @@ describe('AgentWebviewRoot foundation wiring', () => {
     expect(screen.getByTestId('foundation-runtime').textContent).toBe(
       'neko.agent.webview.electron',
     );
+    expect(screen.getByTestId('adapter-runtime').textContent).toBe('adapter-foundation');
+  });
+
+  it('forwards the Desktop dock presentation to the package-owned shell', () => {
+    render(
+      <AgentWebviewRoot
+        hostRuntimeAdapter={createAdapter('desktop-adapter')}
+        locale="en"
+        presentation="desktop-dock"
+      />,
+    );
+
+    expect(screen.getByTestId('presentation').textContent).toBe('desktop-dock');
   });
 });
 

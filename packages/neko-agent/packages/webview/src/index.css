@@ -191,6 +191,22 @@
   --agent-warning-fg: var(--vscode-inputValidation-warningForeground, #ffd60a);
 }
 
+[data-presentation='desktop-dock'] {
+  --agent-bg: var(
+    --neko-desktop-surface,
+    var(--vscode-sideBar-background, var(--fallback-sidebar-bg))
+  );
+  --agent-elevated: var(
+    --neko-desktop-surface-raised,
+    var(--vscode-editorWidget-background, var(--fallback-panel-bg))
+  );
+  --agent-input-bg: var(--neko-desktop-surface-raised, var(--agent-elevated));
+  --agent-overlay-radius: var(--neko-desktop-radius-panel, 12px);
+  --agent-overlay-shadow: var(--neko-desktop-shadow-overlay, var(--neko-shadow-lg));
+  --agent-menu-row-min-height: 32px;
+  --agent-menu-row-radius: var(--neko-desktop-radius-control, 8px);
+}
+
 body.vscode-high-contrast,
 body[data-vscode-theme-kind='vscode-high-contrast'] {
   --agent-elevated: var(--vscode-panel-background, var(--fallback-panel-bg));

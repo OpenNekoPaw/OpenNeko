@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import {
   NEKO_PLUGIN_EXTENSION_IDS,
   buildAgentCapabilityLifecycleResultMessage,
-  type WebviewToExtensionMessage,
+  type AgentWebviewToHostMessage,
 } from '@neko-agent/types';
 import {
   createAgentCapabilityLifecycleDiagnostic,
@@ -25,61 +25,16 @@ import { resolveNekoExtension } from '@neko/shared/vscode/extension';
 import { buildRuntimePluginSlashCommandDispatch } from '@neko/agent/runtime';
 import { getLogger } from '../../base';
 import { sendGeneratedAssetToPlugin } from '../../services/pluginTransferBridge';
-import type { ChatWebviewMessageRouterDeps } from './types';
+import type { VSCodeAgentHostControllerDeps } from './types';
 import { resolveRequiredConversationId } from './conversationId';
 
-const logger = getLogger('ChatWebviewMessageRouter');
+const logger = getLogger('VSCodeAgentHostMessageController');
 
 export function tryHandleFileAndPluginRoute(
-  message: WebviewToExtensionMessage,
-  deps: ChatWebviewMessageRouterDeps,
+  message: AgentWebviewToHostMessage,
+  deps: VSCodeAgentHostControllerDeps,
 ): boolean {
   switch (message.type) {
-    case 'openFile':
-      deps.fileOperationHandler.handleOpenFile(message.filePath);
-      return true;
-
-    case 'revealDocumentLocator':
-      deps.fileOperationHandler.handleRevealDocumentLocator({
-        filePath: message.filePath,
-        locator: message.locator,
-        ...(message.source ? { source: message.source } : {}),
-      });
-      return true;
-
-    case 'revealFile':
-      deps.fileOperationHandler.handleRevealFile(message.filePath);
-      return true;
-
-    case 'openConfigFile':
-      deps.fileOperationHandler.handleOpenConfigFile();
-      return true;
-
-    case 'openUrl':
-      deps.fileOperationHandler.handleOpenUrl(message.url);
-      return true;
-
-    case 'revealContextSource': {
-      const nav = message.navigationData;
-      const filePath = nav?.['filePath'] ?? nav?.['path'];
-      const resolvedPath = nav?.['resolvedPath'];
-      if (message.contextType === 'media' && nav?.['partition'] === 'media-library' && filePath) {
-        void vscode.commands.executeCommand(
-          'neko.assets.revealMediaLibraryFile',
-          resolvedPath ?? filePath,
-        );
-      } else if (filePath) {
-        deps.fileOperationHandler.handleOpenFile(resolvedPath ?? filePath);
-      } else if (message.contextType === 'canvas-node' && nav?.['nodeId']) {
-        void vscode.commands.executeCommand('neko.canvas.selectNodeFromOutline', nav['nodeId']);
-      }
-      return true;
-    }
-
-    case 'downloadSvg':
-      deps.fileOperationHandler.handleDownloadSvg(message.svg, message.filename);
-      return true;
-
     case 'sendToPlugin':
       void sendGeneratedAssetToPlugin(
         message.target,
@@ -117,8 +72,8 @@ export function tryHandleFileAndPluginRoute(
 }
 
 async function invokeAgentCapabilityLifecycle(
-  message: Extract<WebviewToExtensionMessage, { type: 'invokeAgentCapabilityLifecycle' }>,
-  deps: ChatWebviewMessageRouterDeps,
+  message: Extract<AgentWebviewToHostMessage, { type: 'invokeAgentCapabilityLifecycle' }>,
+  deps: VSCodeAgentHostControllerDeps,
 ): Promise<void> {
   try {
     const lifecycleResult = await invokeAgentCapabilityLifecycleBackend(message.invocation, deps);
@@ -156,7 +111,7 @@ async function invokeAgentCapabilityLifecycle(
 
 async function invokeAgentCapabilityLifecycleBackend(
   invocation: AgentCapabilityInvocationInput,
-  deps: ChatWebviewMessageRouterDeps,
+  deps: VSCodeAgentHostControllerDeps,
 ): Promise<AgentCapabilityInvocationResult> {
   if (!isCanvasMarkdownLifecycleInvocation(invocation)) {
     return createBlockedCanvasMarkdownLifecycleResult(
@@ -177,7 +132,7 @@ async function invokeCanvasMarkdownLifecycleCapability(
   sourceInvocation: AgentCapabilityInvocationInput & {
     payload: CanvasMarkdownCapabilityInput;
   },
-  deps: ChatWebviewMessageRouterDeps,
+  deps: VSCodeAgentHostControllerDeps,
 ): Promise<AgentCapabilityInvocationResult> {
   const input = sourceInvocation.payload;
   const descriptor = deps.resolveLifecycleCapabilityDescriptor?.(input.capabilityId);

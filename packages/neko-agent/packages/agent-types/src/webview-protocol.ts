@@ -16,13 +16,14 @@ import type {
   CanvasMarkdownResourceRef,
   CanvasNodeType,
   ChatModelOption,
+  ContentLocator,
   DocumentLocator,
-  DocumentSourceRef,
   MessageAttachment,
   ModelType,
   NpcTranscriptArtifact,
   SkillSummary,
   StoryboardTable,
+  WorkspaceFileContentLocator,
 } from '@neko/shared';
 import type { StoryboardTextCue, StoryboardVoiceCue } from '@neko/shared';
 import {
@@ -31,11 +32,12 @@ import {
   isCanvasMarkdownCapabilityTarget,
   isCanvasMarkdownResourceRef,
   isCanvasNodeType,
+  isContentLocator,
   isThreeReferenceContextData,
   isResourceRef,
+  normalizeWorkspaceContentPath,
   parseDocumentArchiveResourceRef,
   parseDocumentLocator,
-  parseDocumentSourceRef,
   normalizeCanonicalStoryboardTable,
   validateCanonicalStoryboardTable,
 } from '@neko/shared';
@@ -245,20 +247,19 @@ export interface UpdateTabStateWebviewMessage {
 
 export interface OpenFileWebviewMessage {
   type: 'openFile';
-  filePath: string;
+  contentLocator: ContentLocator;
   options?: { preview?: boolean; line?: number; column?: number };
 }
 
 export interface RevealDocumentLocatorWebviewMessage {
   type: 'revealDocumentLocator';
-  filePath: string;
+  contentLocator: ContentLocator;
   locator: DocumentLocator;
-  source?: DocumentSourceRef;
 }
 
-export interface FilePathWebviewMessage {
+export interface RevealFileWebviewMessage {
   type: 'revealFile';
-  filePath: string;
+  contentLocator: ContentLocator;
 }
 
 export interface OpenUrlWebviewMessage {
@@ -415,6 +416,7 @@ export interface RevealContextSourceWebviewMessage {
   type: 'revealContextSource';
   contextType: AgentContextType;
   contextId: string;
+  contentLocator?: ContentLocator;
   navigationData?: Record<string, string>;
 }
 
@@ -448,7 +450,7 @@ export interface ProjectionEndpointReadyMessage {
 
 export const AGENT_WEBVIEW_PROTOCOL_VERSION = 1 as const;
 
-export type WebviewToExtensionMessage =
+export type AgentWebviewToHostMessage =
   | SendMessageWebviewMessage
   | SearchProjectFilesWebviewMessage
   | ConfirmToolWebviewMessage
@@ -465,7 +467,7 @@ export type WebviewToExtensionMessage =
   | UpdateTabStateWebviewMessage
   | OpenFileWebviewMessage
   | RevealDocumentLocatorWebviewMessage
-  | FilePathWebviewMessage
+  | RevealFileWebviewMessage
   | OpenUrlWebviewMessage
   | SendToPluginWebviewMessage
   | InvokeAgentCapabilityLifecycleWebviewMessage
@@ -489,7 +491,7 @@ export type WebviewToExtensionMessage =
   | ProjectionDetachMessage;
 
 export interface ProjectFileMentionInfo {
-  path: string;
+  locator: WorkspaceFileContentLocator;
   name: string;
   type: 'file' | 'folder';
   icon?: string;
@@ -515,7 +517,7 @@ export interface ProjectMentionExtra {
   thumbnailUri?: string;
   source?: ProjectMentionSource;
   icon?: string;
-  filePath?: string;
+  contentLocator?: ContentLocator;
   mediaType?: ProjectMentionMediaType;
   entityType?: string;
   navigationData?: Record<string, string>;
@@ -900,7 +902,7 @@ export interface AmbientCanvasUpdateMessage {
   nodes?: AmbientCanvasNode[];
 }
 
-export type ExtensionToWebviewMessage =
+export type AgentHostToWebviewMessage =
   | MessageQueuedMessage
   | MessageQueueSnapshotMessage
   | QueuedMessageEditRequestedMessage
@@ -942,8 +944,8 @@ export type ExtensionToWebviewMessage =
   | ProjectionEndpointReadyMessage
   | ConversationProjectionAttachmentHostFrame;
 
-export type MessageOfType<T extends ExtensionToWebviewMessage['type']> = Extract<
-  ExtensionToWebviewMessage,
+export type MessageOfType<T extends AgentHostToWebviewMessage['type']> = Extract<
+  AgentHostToWebviewMessage,
   { type: T }
 >;
 
@@ -998,13 +1000,15 @@ const QUEUED_MESSAGE_ACTION_TYPES: readonly QueuedMessageActionWebviewMessage['t
   'promoteQueuedMessage',
   'cancelQueuedMessage',
 ];
-export const WEBVIEW_TO_EXTENSION_MESSAGE_TYPES = [
+export const AGENT_WEBVIEW_TO_HOST_MESSAGE_TYPES = [
   'sendMessage',
   'searchProjectFiles',
   'confirmTool',
   ...CONVERSATION_ONLY_MESSAGE_TYPES,
   'getMessageQueue',
   ...QUEUED_MESSAGE_ACTION_TYPES,
+  'editQueuedMessage',
+  'deleteConversation',
   ...EMPTY_MESSAGE_TYPES,
   'getSettings',
   'getConversationSnapshot',
@@ -1035,7 +1039,7 @@ export const WEBVIEW_TO_EXTENSION_MESSAGE_TYPES = [
   'projectionAttach',
   'projectionSnapshotAck',
   'projectionDetach',
-] as const satisfies readonly WebviewToExtensionMessage['type'][];
+] as const satisfies readonly AgentWebviewToHostMessage['type'][];
 
 const DRAG_MEDIA_TYPES: ReadonlyArray<DragStartWebviewMessage['asset']['mediaType']> = [
   'image',
@@ -1354,7 +1358,7 @@ function cloneAgentQueuedMessageItem(
   return { ...item, conversationId: itemConversationId };
 }
 
-export function parseWebviewToExtensionMessage(raw: unknown): WebviewToExtensionMessage | null {
+export function parseAgentWebviewToHostMessage(raw: unknown): AgentWebviewToHostMessage | null {
   if (!isRecord(raw) || typeof raw.type !== 'string') return null;
 
   const type = raw.type;
@@ -1425,7 +1429,7 @@ export function parseWebviewToExtensionMessage(raw: unknown): WebviewToExtension
     case 'revealDocumentLocator':
       return parseRevealDocumentLocatorMessage(raw);
     case 'revealFile':
-      return parseFilePathMessage('revealFile', raw);
+      return parseRevealFileMessage(raw);
     case 'openUrl':
       return parseOpenUrlMessage(raw);
     case 'sendToPlugin':
@@ -1514,7 +1518,7 @@ export function parseSendMessageWebviewMessage(raw: unknown): SendMessageWebview
     raw.attachments === undefined
       ? undefined
       : Array.isArray(raw.attachments)
-        ? (raw.attachments as MessageAttachment[])
+        ? parseMessageAttachments(raw.attachments)
         : null;
   if (attachments === null) return null;
 
@@ -1579,10 +1583,53 @@ function parseAgentFileReferences(raw: readonly unknown[]): AgentFileReference[]
   return references;
 }
 
+function parseMessageAttachments(raw: readonly unknown[]): MessageAttachment[] | null {
+  const attachments: MessageAttachment[] = [];
+  for (const item of raw) {
+    const attachment = parseMessageAttachment(item);
+    if (!attachment) return null;
+    attachments.push(attachment);
+  }
+  return attachments;
+}
+
+function parseMessageAttachment(raw: unknown): MessageAttachment | null {
+  if (!isRecord(raw)) return null;
+  if (!hasOnlyKeys(raw, ['id', 'name', 'type', 'path', 'size', 'preview'])) return null;
+  if (!isNonEmptyString(raw.id) || !isNonEmptyString(raw.name)) return null;
+  if (raw.type !== 'file' && raw.type !== 'image' && raw.type !== 'video' && raw.type !== 'audio') {
+    return null;
+  }
+  const path =
+    raw.path === undefined
+      ? undefined
+      : typeof raw.path === 'string'
+        ? normalizeWorkspaceContentPath(raw.path)
+        : null;
+  if (raw.path !== undefined && (path === null || path === undefined || path !== raw.path)) {
+    return null;
+  }
+  if (
+    raw.size !== undefined &&
+    (typeof raw.size !== 'number' || !Number.isFinite(raw.size) || raw.size < 0)
+  ) {
+    return null;
+  }
+  if (raw.preview !== undefined && typeof raw.preview !== 'string') return null;
+  return {
+    id: raw.id,
+    name: raw.name,
+    type: raw.type,
+    ...(path ? { path } : {}),
+    ...(raw.size !== undefined ? { size: raw.size } : {}),
+    ...(raw.preview !== undefined ? { preview: raw.preview } : {}),
+  };
+}
+
 function isAgentFileReference(raw: unknown): raw is AgentFileReference {
   if (!isRecord(raw)) return false;
   if (!isNonEmptyString(raw.id)) return false;
-  if (!isNonEmptyString(raw.path)) return false;
+  if (!isContentLocator(raw.contentLocator)) return false;
   if (!isNonEmptyString(raw.label)) return false;
   if (raw.mediaType !== undefined && !isAgentFileReferenceMediaType(raw.mediaType)) return false;
   if (raw.source !== undefined && !isAgentFileReferenceSource(raw.source)) return false;
@@ -1774,33 +1821,28 @@ function parseQueuedMessageActionMessage(
 }
 
 function parseOpenFileMessage(raw: Record<string, unknown>): OpenFileWebviewMessage | null {
-  const filePath = requiredString(raw.filePath);
+  const contentLocator = isContentLocator(raw.contentLocator) ? raw.contentLocator : undefined;
   const options = raw.options === undefined ? undefined : parseOpenFileOptions(raw.options);
-  if (!filePath || options === null) return null;
-  return { type: 'openFile', filePath, ...(options !== undefined ? { options } : {}) };
+  if (!contentLocator || options === null) return null;
+  return { type: 'openFile', contentLocator, ...(options !== undefined ? { options } : {}) };
 }
 
 function parseRevealDocumentLocatorMessage(
   raw: Record<string, unknown>,
 ): RevealDocumentLocatorWebviewMessage | null {
-  const filePath = requiredString(raw.filePath);
+  const contentLocator = isContentLocator(raw.contentLocator) ? raw.contentLocator : undefined;
   const locator = parseDocumentLocator(raw.locator);
-  const source = raw.source === undefined ? undefined : parseDocumentSourceRef(raw.source);
-  if (!filePath || !locator || (raw.source !== undefined && source === undefined)) return null;
+  if (!contentLocator || !locator) return null;
   return {
     type: 'revealDocumentLocator',
-    filePath,
+    contentLocator,
     locator,
-    ...(source !== undefined ? { source } : {}),
   };
 }
 
-function parseFilePathMessage(
-  type: FilePathWebviewMessage['type'],
-  raw: Record<string, unknown>,
-): FilePathWebviewMessage | null {
-  const filePath = requiredString(raw.filePath);
-  return filePath ? { type, filePath } : null;
+function parseRevealFileMessage(raw: Record<string, unknown>): RevealFileWebviewMessage | null {
+  const contentLocator = isContentLocator(raw.contentLocator) ? raw.contentLocator : undefined;
+  return contentLocator ? { type: 'revealFile', contentLocator } : null;
 }
 
 function parseOpenUrlMessage(raw: Record<string, unknown>): OpenUrlWebviewMessage | null {
@@ -2738,17 +2780,42 @@ function parseRevealContextSourceMessage(
 ): RevealContextSourceWebviewMessage | null {
   if (!isAgentContextType(raw.contextType)) return null;
   if (typeof raw.contextId !== 'string') return null;
-  const navigationData =
-    raw.navigationData !== undefined && isRecord(raw.navigationData)
-      ? (raw.navigationData as Record<string, string>)
-      : undefined;
+  const contentLocator =
+    raw.contentLocator === undefined
+      ? undefined
+      : isContentLocator(raw.contentLocator)
+        ? raw.contentLocator
+        : null;
+  if (contentLocator === null) return null;
+  const navigationData = parseContextNavigationData(raw.navigationData);
+  if (navigationData === null) return null;
   return {
     type: 'revealContextSource',
     contextType: raw.contextType,
     contextId: raw.contextId,
+    ...(contentLocator ? { contentLocator } : {}),
     ...(navigationData ? { navigationData } : {}),
   };
 }
+
+function parseContextNavigationData(value: unknown): Record<string, string> | undefined | null {
+  if (value === undefined) return undefined;
+  if (!isRecord(value)) return null;
+  const navigationData: Record<string, string> = {};
+  for (const [key, item] of Object.entries(value)) {
+    if (PATH_NAVIGATION_KEYS.has(key) || typeof item !== 'string') return null;
+    navigationData[key] = item;
+  }
+  return navigationData;
+}
+
+const PATH_NAVIGATION_KEYS = new Set([
+  'filePath',
+  'path',
+  'resolvedPath',
+  'portablePath',
+  'projectRoot',
+]);
 
 function isAgentContextType(value: unknown): value is AgentContextType {
   return (
@@ -3153,6 +3220,10 @@ function optionalSearchProjectFilesPurpose(
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function hasOnlyKeys(value: Record<string, unknown>, allowed: readonly string[]): boolean {
+  return Object.keys(value).every((key) => allowed.includes(key));
 }
 
 function includesString<T extends string>(values: readonly T[], value: string): value is T {

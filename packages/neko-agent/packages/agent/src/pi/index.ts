@@ -91,6 +91,7 @@ export {
   type PiTimelineProjectorOptions,
 } from './timeline-projector';
 export {
+  estimatePiConversationContextTokens,
   PiConversationRuntime,
   type ExecutePiConversationSkillInput,
   type ExecutePiConversationTurnInput,
@@ -104,6 +105,7 @@ export {
   OpenNekoCredentialError,
   OpenNekoCredentialStore,
   PiProviderAuthController,
+  parsePersistedUserCredential,
   type AuthInteraction,
   type CredentialProvenance,
   type CredentialStatus,
@@ -138,4 +140,8 @@ export {
   type PiToolResultImageBatchOptions,
   type ProjectOpenNekoToolOptions,
 } from './openneko-tool';
+export {
+  PI_TOOL_CONFIRMATION_DEFAULT_TIMEOUT_MS,
+  PiToolConfirmationRegistry,
+} from './tool-confirmation-registry';
 export type { AuthEvent, AuthPrompt } from '@earendil-works/pi-ai';

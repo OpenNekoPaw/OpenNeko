@@ -4,7 +4,7 @@
  * Manages registration and dispatch of message handlers.
  */
 
-import type { ExtensionToWebviewMessage } from './messages';
+import type { AgentHostToWebviewMessage } from './messages';
 import type {
   HandlerRegistration,
   MessageHandler,
@@ -17,7 +17,7 @@ import { defineHandler } from './types';
 /**
  * Message handler registry
  *
- * Dispatches typed ExtensionToWebviewMessage to registered handlers.
+ * Dispatches typed AgentHostToWebviewMessage to registered handlers.
  */
 export class MessageHandlerRegistry {
   private handlers: Map<WebviewMessageType, ProtocolMessageDispatcher> = new Map();
@@ -43,7 +43,7 @@ export class MessageHandlerRegistry {
    * Handle a typed message from the Extension Host.
    * @returns true if handled, false if no handler found
    */
-  handle(message: ExtensionToWebviewMessage, context: MessageHandlerContext): boolean {
+  handle(message: AgentHostToWebviewMessage, context: MessageHandlerContext): boolean {
     const handler = this.handlers.get(message.type);
     if (handler) {
       handler(message, context);

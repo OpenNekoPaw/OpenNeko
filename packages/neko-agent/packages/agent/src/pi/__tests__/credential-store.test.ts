@@ -11,10 +11,32 @@ import {
   NodeSqliteUserCredentialPersistence,
   OpenNekoCredentialStore,
   PiProviderAuthController,
+  parsePersistedUserCredential,
   type UserCredentialPersistence,
 } from '../credential-store';
 
 describe('OpenNekoCredentialStore', () => {
+  it('parses the Host persistence boundary without accepting unknown credential schema', () => {
+    expect(
+      parsePersistedUserCredential({
+        credential: { type: 'api_key', key: 'secret' },
+        provenance: 'interactive',
+        updatedAt: '2026-07-28T00:00:00.000Z',
+      }),
+    ).toEqual({
+      credential: { type: 'api_key', key: 'secret' },
+      provenance: 'interactive',
+      updatedAt: '2026-07-28T00:00:00.000Z',
+    });
+    expect(() =>
+      parsePersistedUserCredential({
+        credential: { type: 'api_key', key: 42 },
+        provenance: 'interactive',
+        updatedAt: 'not-a-date',
+      }),
+    ).toThrow('invalid schema');
+  });
+
   it('retains Pi built-in OAuth providers instead of reimplementing their flows', () => {
     const oauthProviders = builtinProviders().filter(
       (provider) => provider.auth.oauth !== undefined,

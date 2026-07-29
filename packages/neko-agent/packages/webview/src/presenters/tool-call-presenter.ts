@@ -109,6 +109,7 @@ export interface ToolCallDisplayProjection {
   copyText: string | null;
   isFileTool: boolean;
   filePath: string | null;
+  fileContentLocator: ContentLocator | null;
   summary: string;
   isPending: boolean;
   isSuccess: boolean;
@@ -189,6 +190,10 @@ export function projectToolCallDisplayState(
     copyText,
     isFileTool: isFileTool(toolCall.name),
     filePath: extractToolFilePath(toolCall.arguments) || extractToolFilePath(toolCall.result?.data),
+    fileContentLocator:
+      extractToolContentLocator(toolCall.arguments) ??
+      extractToolContentLocator(toolCall.result?.data) ??
+      null,
     summary: getToolSummary(toolCall.name, toolCall.arguments),
     isPending: !toolCall.result,
     isSuccess: resultSuccess,
@@ -743,6 +748,16 @@ function formatDocumentImageReferenceJson(input: {
 function parseStableContentLocator(value: unknown): ContentLocator | undefined {
   const result = validateContentLocator(value);
   return result.ok ? result.locator : undefined;
+}
+
+function extractToolContentLocator(value: unknown): ContentLocator | undefined {
+  const record = asRecord(value);
+  if (!record) return undefined;
+  return (
+    parseStableContentLocator(record.contentLocator) ??
+    parseStableContentLocator(asRecord(record.assetRef)?.contentLocator) ??
+    parseStableContentLocator(asRecord(record.output)?.contentLocator)
+  );
 }
 
 function describeContentLocatorForDisplay(locator: ContentLocator): {

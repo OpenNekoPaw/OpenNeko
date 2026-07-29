@@ -122,7 +122,9 @@ async function projectSearchItemToMentionCandidate(
       ...(item.searchText ? { searchText: item.searchText } : {}),
       ...(source ? { source } : {}),
       ...(item.icon ? { icon: item.icon } : {}),
-      ...(referencePath ? { filePath: referencePath } : {}),
+      ...(referencePath
+        ? { contentLocator: { kind: 'workspace-file' as const, path: referencePath } }
+        : {}),
       ...(mediaType ? { mediaType } : {}),
       ...(entityType ? { entityType } : {}),
       ...(thumbnailUri ? { thumbnailUri } : {}),
@@ -173,36 +175,22 @@ function projectMentionNavigationData(
   const sourceId =
     rawSourceId && isLocalAbsolutePath(rawSourceId) ? (referencePath ?? undefined) : rawSourceId;
 
-  if (referencePath) {
-    navigationData['path'] = referencePath;
-    navigationData['filePath'] = referencePath;
-    navigationData['portablePath'] = referencePath;
-  } else {
-    removeAbsoluteNavigationPath(navigationData, 'path');
-    removeAbsoluteNavigationPath(navigationData, 'filePath');
-    removeAbsoluteNavigationPath(navigationData, 'portablePath');
-  }
-
+  delete navigationData['path'];
+  delete navigationData['filePath'];
+  delete navigationData['portablePath'];
   delete navigationData['resolvedPath'];
   delete navigationData['variable'];
+  delete navigationData['projectRoot'];
 
   return stringifyNavigationData({
     ...navigationData,
     projectSearchItemId: item.id,
-    projectRoot: item.projectRoot,
     partition: item.source.partition,
     ...(sourceId ? { sourceId } : {}),
     sourceKind: item.source.sourceKind,
     refId: item.source.refId,
     freshness: item.freshness,
   });
-}
-
-function removeAbsoluteNavigationPath(data: Record<string, unknown>, key: string): void {
-  const value = readString(data[key]);
-  if (value && isLocalAbsolutePath(value)) {
-    delete data[key];
-  }
 }
 
 function contractWithProjectRoot(filePath: string, projectRoot: string): string | undefined {

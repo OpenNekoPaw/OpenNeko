@@ -335,6 +335,7 @@ describe('agent architecture boundary guards', () => {
     const allowedRuntimeSubdirectories = new Set([
       '__tests__',
       'capability',
+      'host-controller',
       'projection',
       'session',
       'stream',
@@ -348,7 +349,14 @@ describe('agent architecture boundary guards', () => {
     expect(runtimeSubdirectories).toEqual([]);
 
     const readme = readFileSync(join(agentSrc, 'runtime/README.md'), 'utf-8');
-    for (const name of ['session/', 'turn/', 'capability/', 'stream/', 'projection/']) {
+    for (const name of [
+      'session/',
+      'turn/',
+      'capability/',
+      'host-controller/',
+      'stream/',
+      'projection/',
+    ]) {
       expect(readme).toContain(name);
     }
   });

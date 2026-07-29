@@ -202,6 +202,12 @@ const runnerIndividualEventProperties = [
   'onDidSubAgentEvent',
 ];
 
+const retiredAgentHostWireSymbols = [
+  'WebviewToExtensionMessage',
+  'ExtensionToWebviewMessage',
+  'parseWebviewToExtensionMessage',
+];
+
 const runnerIndividualEventAllowedFiles = new Set([
   'packages/neko-agent/packages/extension/src/ai/agentRunner.ts',
   'packages/neko-agent/packages/extension/src/ai/agentRunnerVscodeEventBridge.ts',
@@ -317,6 +323,7 @@ function runBoundaryCheck() {
       findings.push(...findRunnerIndividualEventUsageViolations(scope, file, content));
       findings.push(...findWebviewReExportShimViolations(scope, file, content));
       findings.push(...findHostNeutralResidualViolations(scope, file, content));
+      findings.push(...findRetiredAgentHostWireViolations(file, content));
       findings.push(...findAgentContentAccessResidualViolations(scope, file, content));
       findings.push(...findCanvasBoardRetiredPathViolations(scope, file, content));
       findings.push(...findPiAgentTurnBridgeLegacyViolations(scope, file, content));
@@ -406,8 +413,15 @@ function runSelfTest() {
       scope: 'webview',
       file: fakeFile('webview', 'src/messages/index.ts'),
       content:
-        "import { getVSCodeAPI } from '@neko/shared/vscode';\nimport type { WebviewToExtensionMessage } from '@neko-agent/types';\n",
+        "import { getVSCodeAPI } from '@neko/shared/vscode';\nimport type { AgentWebviewToHostMessage } from '@neko-agent/types';\n",
       expectedRuleIds: [],
+    },
+    {
+      name: 'retired Extension-named Agent wire contract fails',
+      scope: 'agent-types',
+      file: fakeFile('agent-types', 'src/webview-protocol.ts'),
+      content: 'export type WebviewToExtensionMessage = { type: "sendMessage" };\n',
+      expectedRuleIds: ['agent-host-wire-no-extension-names'],
     },
     {
       name: 'extension consumer using individual runner event fails',
@@ -591,6 +605,7 @@ function runSelfTest() {
       ...findRunnerIndividualEventUsageViolations(testCase.scope, testCase.file, testCase.content),
       ...findWebviewReExportShimViolations(testCase.scope, testCase.file, testCase.content),
       ...findHostNeutralResidualViolations(testCase.scope, testCase.file, testCase.content),
+      ...findRetiredAgentHostWireViolations(testCase.file, testCase.content),
       ...findAgentContentAccessResidualViolations(testCase.scope, testCase.file, testCase.content),
       ...findCanvasBoardRetiredPathViolations(testCase.scope, testCase.file, testCase.content),
       ...findPiAgentTurnBridgeLegacyViolations(testCase.scope, testCase.file, testCase.content),
@@ -1435,6 +1450,25 @@ function findHostNeutralResidualViolations(scope, file, content) {
     });
   }
 
+  return violations;
+}
+
+function findRetiredAgentHostWireViolations(file, content) {
+  const relativeFile = relative(repoRoot, file);
+  const source = stripComments(content);
+  const violations = [];
+  for (const symbol of retiredAgentHostWireSymbols) {
+    if (!source.includes(symbol)) {
+      continue;
+    }
+    violations.push({
+      ruleId: 'agent-host-wire-no-extension-names',
+      file: relativeFile,
+      specifier: symbol,
+      reason:
+        'The canonical Agent Webview wire contract is Host-owned; Extension-named message unions and parsers are retired.',
+    });
+  }
   return violations;
 }
 

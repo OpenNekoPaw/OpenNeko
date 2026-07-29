@@ -11,6 +11,7 @@ import { randomUUID } from 'node:crypto';
 import * as vscode from 'vscode';
 
 import { createConversationId } from '@neko/agent';
+import { projectPiConversationEntries, type AgentContentAccessRuntime } from '@neko/agent/runtime';
 import type {
   CheckpointPiExternalTurnInput,
   PiConversationCatalogRecord,
@@ -18,14 +19,12 @@ import type {
   PiTurnCheckpointRecord,
 } from '@neko/agent/pi';
 import { buildAgentSessionDiagnosticMessage, type Message } from '@neko-agent/types';
-import type { AgentContentAccessRuntime } from '@neko/agent/runtime';
 
 import type { AgentLocalResourceAccess } from '../services/localResourceAccess';
 import {
   projectMessagesForWebviewResourceDisplay,
   type WebviewResourceProjectionOptions,
 } from './message/webviewResourceProjection';
-import { projectPiConversationEntries } from './message/piConversationHistoryProjection';
 export interface PiConversationPresentationCatalogItem extends PiConversationCatalogRecord {
   readonly messageCount: number;
 }

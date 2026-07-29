@@ -19,12 +19,9 @@ import {
   stripFileProtocol,
   type SaveDialogFilterPlan,
 } from '@neko/platform/files';
-import type { DocumentLocator, DocumentSourceRef } from '@neko/shared';
+import type { ContentLocator, DocumentLocator } from '@neko/shared';
 import { getLogger, handleError } from '../../base';
-import {
-  resolveGeneratedAssetOpenPath,
-  type GeneratedAssetLookup,
-} from '../../services/generatedAssetOpenResolver';
+import type { GeneratedAssetLookup } from '../../services/generatedAssetOpenResolver';
 
 const logger = getLogger('FileOperationHandler');
 
@@ -46,11 +43,9 @@ export class FileOperationHandler {
     Object.assign(this.deps, partial);
   }
 
-  async handleOpenFile(filePath: string): Promise<void> {
-    if (!filePath) return;
-
+  async handleOpenFile(contentLocator: ContentLocator): Promise<void> {
     try {
-      const plan = createOpenFilePlan(this._resolveOpenFilePath(filePath));
+      const plan = createOpenFilePlan(this._resolveContentLocatorPath(contentLocator));
       if (!plan) return;
       const uri = this._uriForOpenFilePath(plan.cleanPath);
 
@@ -68,17 +63,18 @@ export class FileOperationHandler {
   }
 
   async handleRevealDocumentLocator(input: {
-    readonly filePath: string;
+    readonly contentLocator: ContentLocator;
     readonly locator: DocumentLocator;
-    readonly source?: DocumentSourceRef;
   }): Promise<void> {
-    if (!input.filePath) return;
-
     try {
-      await vscode.commands.executeCommand('neko.preview.revealDocumentLocator', input);
+      const filePath = this._resolveContentLocatorPath(input.contentLocator);
+      await vscode.commands.executeCommand('neko.preview.revealDocumentLocator', {
+        filePath,
+        locator: input.locator,
+      });
     } catch (error) {
       logger.warn('Failed to reveal document locator, opening file instead:', error);
-      await this.handleOpenFile(input.filePath);
+      await this.handleOpenFile(input.contentLocator);
     }
   }
 
@@ -104,11 +100,9 @@ export class FileOperationHandler {
     }
   }
 
-  async handleRevealFile(filePath: string): Promise<void> {
-    if (!filePath) return;
-
+  async handleRevealFile(contentLocator: ContentLocator): Promise<void> {
     try {
-      const cleanPath = stripFileProtocol(filePath);
+      const cleanPath = stripFileProtocol(this._resolveContentLocatorPath(contentLocator));
       const uri = vscode.Uri.file(cleanPath);
       await vscode.commands.executeCommand('revealFileInOS', uri);
     } catch (error) {
@@ -150,13 +144,21 @@ export class FileOperationHandler {
     return vscode.Uri.file(cleanPath);
   }
 
-  private _resolveOpenFilePath(filePath: string): string {
-    const resolved = resolveGeneratedAssetOpenPath(filePath, this.deps.generatedAssetLookup);
-    if (resolved) return resolved;
-    if (filePath.startsWith('generated-assets/')) {
-      throw new Error(`Generated asset is not available for opening: ${filePath}`);
+  private _resolveContentLocatorPath(locator: ContentLocator): string {
+    switch (locator.kind) {
+      case 'workspace-file':
+        return locator.path;
+      case 'document-entry':
+        return locator.source.path;
+      case 'generated-output': {
+        const indexedPath = this.deps.generatedAssetLookup?.get(locator.outputId)?.path;
+        return indexedPath ?? locator.path;
+      }
+      case 'package-resource':
+        throw new Error(
+          `Package resource '${locator.packageId}/${locator.resourcePath}' cannot be opened as a workspace file.`,
+        );
     }
-    return filePath;
   }
 
   private async _openFilePath(filePath: string): Promise<void> {

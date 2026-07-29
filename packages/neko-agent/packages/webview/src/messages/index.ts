@@ -18,14 +18,14 @@ import {
 import type {
   AgentHostRuntimeAdapter,
   AgentHostRuntimeSubscription,
-  ExtensionToWebviewMessage,
+  AgentHostToWebviewMessage,
   InvokeAgentCapabilityLifecycleWebviewMessage,
   RequestCanvasAuthoringHandoffWebviewMessage,
   PluginTransferPayload,
   SendMessageWebviewMessage,
-  WebviewToExtensionMessage,
+  AgentWebviewToHostMessage,
 } from '@neko-agent/types';
-import type { DocumentLocator, DocumentSourceRef } from '@neko/shared';
+import type { ContentLocator, DocumentLocator } from '@neko/shared';
 import type { AgentContextType } from '@neko/shared';
 
 export type { AgentHostRuntimeAdapter, AgentHostRuntimeSubscription, VSCodeAPI };
@@ -41,13 +41,13 @@ export function createVSCodeAgentHostRuntimeAdapter(
   return {
     hostKind: 'vscode',
     runtimeId: options.runtimeId ?? 'neko.agent.webview.vscode',
-    send(message: WebviewToExtensionMessage): void {
+    send(message: AgentWebviewToHostMessage): void {
       postRawMessage(message);
     },
     subscribe(
-      listener: (message: ExtensionToWebviewMessage) => void,
+      listener: (message: AgentHostToWebviewMessage) => void,
     ): AgentHostRuntimeSubscription {
-      const handleMessage = (event: MessageEvent<ExtensionToWebviewMessage>) => {
+      const handleMessage = (event: MessageEvent<AgentHostToWebviewMessage>) => {
         listener(event.data);
       };
       window.addEventListener('message', handleMessage);
@@ -57,10 +57,10 @@ export function createVSCodeAgentHostRuntimeAdapter(
         },
       };
     },
-    getState<T>(): T | undefined {
-      return getVSCodeState<T>();
+    getState(): unknown {
+      return getVSCodeState<unknown>();
     },
-    setState<T>(state: T): void {
+    setState(state: unknown): void {
       setVSCodeState(state);
     },
   };
@@ -85,10 +85,10 @@ export function getAgentHostRuntimeAdapter(): AgentHostRuntimeAdapter {
 }
 
 export function postMessage(message: unknown): void {
-  postWebviewMessage(message as WebviewToExtensionMessage);
+  postWebviewMessage(message as AgentWebviewToHostMessage);
 }
 
-function postWebviewMessage(message: WebviewToExtensionMessage): void {
+function postWebviewMessage(message: AgentWebviewToHostMessage): void {
   currentAgentHostRuntimeAdapter.send(message);
 }
 
@@ -100,7 +100,7 @@ function requireConversationId(messageType: string, conversationId: string): str
 }
 
 function postConversationMessage<
-  TMessage extends WebviewToExtensionMessage & {
+  TMessage extends AgentWebviewToHostMessage & {
     readonly conversationId: string;
   },
 >(message: TMessage): void {
@@ -359,24 +359,22 @@ export const AgentHostMessages = {
 
   /**
    * Open a file in VSCode editor
-   * @param filePath - The file path to open
+   * @param contentLocator - Host-issued content identity to open
    * @param options - Optional options (preview, line number, etc.)
    */
-  openFile: (filePath: string, options?: { preview?: boolean; line?: number; column?: number }) => {
-    postWebviewMessage({ type: 'openFile', filePath, options });
+  openFile: (
+    contentLocator: ContentLocator,
+    options?: { preview?: boolean; line?: number; column?: number },
+  ) => {
+    postWebviewMessage({ type: 'openFile', contentLocator, options });
   },
 
   /** Open a document preview and jump to a semantic locator when supported. */
-  revealDocumentLocator: (input: {
-    filePath: string;
-    locator: DocumentLocator;
-    source?: DocumentSourceRef;
-  }) => {
+  revealDocumentLocator: (input: { contentLocator: ContentLocator; locator: DocumentLocator }) => {
     postWebviewMessage({
       type: 'revealDocumentLocator',
-      filePath: input.filePath,
+      contentLocator: input.contentLocator,
       locator: input.locator,
-      ...(input.source ? { source: input.source } : {}),
     });
   },
 
@@ -485,20 +483,22 @@ export const AgentHostMessages = {
   },
 
   /** Reveal a file in the OS file manager */
-  revealFile: (filePath: string) => {
-    postWebviewMessage({ type: 'revealFile', filePath });
+  revealFile: (contentLocator: ContentLocator) => {
+    postWebviewMessage({ type: 'revealFile', contentLocator });
   },
 
   /** Navigate to the source of a context reference (canvas node, file, etc.) */
   revealContextSource: (
     contextType: AgentContextType,
     contextId: string,
+    contentLocator?: ContentLocator,
     navigationData?: Record<string, string>,
   ) => {
     postWebviewMessage({
       type: 'revealContextSource',
       contextType,
       contextId,
+      ...(contentLocator ? { contentLocator } : {}),
       ...(navigationData ? { navigationData } : {}),
     });
   },

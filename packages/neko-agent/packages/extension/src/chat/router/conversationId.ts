@@ -2,7 +2,7 @@ import type * as vscode from 'vscode';
 import { resolveRequiredConversationRoute } from '@neko/agent/runtime';
 import { getLogger } from '../../base';
 
-const logger = getLogger('ChatWebviewMessageRouter');
+const logger = getLogger('VSCodeAgentHostMessageController');
 
 export function resolveRequiredConversationId(
   webview: vscode.Webview,

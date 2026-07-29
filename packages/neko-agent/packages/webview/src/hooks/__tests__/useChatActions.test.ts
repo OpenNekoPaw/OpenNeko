@@ -707,7 +707,7 @@ describe('useChatActions', () => {
           {
             id: 'file-ref:assets/ref file.zip',
             label: 'ref file.zip',
-            path: 'assets/ref file.zip',
+            contentLocator: { kind: 'workspace-file', path: 'assets/ref file.zip' },
           },
         ],
       });
@@ -725,10 +725,7 @@ describe('useChatActions', () => {
             label: 'ref file.zip',
             type: 'file',
             summary: 'assets/ref file.zip',
-            navigationData: {
-              path: 'assets/ref file.zip',
-              filePath: 'assets/ref file.zip',
-            },
+            contentLocator: { kind: 'workspace-file', path: 'assets/ref file.zip' },
           }),
         ],
         attachments: [
@@ -757,7 +754,10 @@ describe('useChatActions', () => {
           {
             id: 'file-ref:assets/ref file.zip',
             label: 'ref file.zip',
-            path: 'assets/ref file.zip',
+            contentLocator: {
+              kind: 'workspace-file',
+              path: 'assets/ref file.zip',
+            },
           },
         ],
       }),
@@ -791,13 +791,13 @@ describe('useChatActions', () => {
 
     act(() => {
       result.current.handleSend({
-        messageText: '分析 @${A}/books/story.epub',
+        messageText: '分析 @books/story.epub',
         displayMessageText: '分析',
         fileReferences: [
           {
-            id: 'file-ref:${A}/books/story.epub',
+            id: 'file-ref:books/story.epub',
             label: 'story.epub',
-            path: '${A}/books/story.epub',
+            contentLocator: { kind: 'workspace-file', path: 'books/story.epub' },
             mediaType: 'document',
           },
         ],
@@ -811,15 +811,12 @@ describe('useChatActions', () => {
         content: '分析',
         contextReferences: [
           expect.objectContaining({
-            id: 'file-ref:${A}/books/story.epub',
+            id: 'file-ref:books/story.epub',
             label: 'story.epub',
             type: 'file',
-            summary: '${A}/books/story.epub',
+            summary: 'books/story.epub',
             mediaType: 'document',
-            navigationData: {
-              path: '${A}/books/story.epub',
-              filePath: '${A}/books/story.epub',
-            },
+            contentLocator: { kind: 'workspace-file', path: 'books/story.epub' },
           }),
         ],
       }),
@@ -832,12 +829,15 @@ describe('useChatActions', () => {
     expect(vscodeMocks.sendMessage).toHaveBeenCalledWith(
       expect.objectContaining({
         conversationId: 'conv-doc',
-        message: '分析 @${A}/books/story.epub',
+        message: '分析 @books/story.epub',
         fileReferences: [
           {
-            id: 'file-ref:${A}/books/story.epub',
+            id: 'file-ref:books/story.epub',
             label: 'story.epub',
-            path: '${A}/books/story.epub',
+            contentLocator: {
+              kind: 'workspace-file',
+              path: 'books/story.epub',
+            },
             mediaType: 'document',
           },
         ],
@@ -871,13 +871,13 @@ describe('useChatActions', () => {
 
     act(() => {
       result.current.handleSend({
-        messageText: '@${A}/books/story.epub',
+        messageText: '@books/story.epub',
         displayMessageText: '',
         fileReferences: [
           {
-            id: 'file-ref:${A}/books/story.epub',
+            id: 'file-ref:books/story.epub',
             label: 'story.epub',
-            path: '${A}/books/story.epub',
+            contentLocator: { kind: 'workspace-file', path: 'books/story.epub' },
             mediaType: 'document',
           },
         ],
@@ -891,9 +891,10 @@ describe('useChatActions', () => {
         content: '',
         contextReferences: [
           expect.objectContaining({
-            id: 'file-ref:${A}/books/story.epub',
+            id: 'file-ref:books/story.epub',
             label: 'story.epub',
-            summary: '${A}/books/story.epub',
+            summary: 'books/story.epub',
+            contentLocator: { kind: 'workspace-file', path: 'books/story.epub' },
           }),
         ],
       }),
@@ -901,12 +902,12 @@ describe('useChatActions', () => {
     expect(vscodeMocks.sendMessage).toHaveBeenCalledWith(
       expect.objectContaining({
         conversationId: 'conv-doc-only',
-        message: '@${A}/books/story.epub',
+        message: '@books/story.epub',
         fileReferences: [
           {
-            id: 'file-ref:${A}/books/story.epub',
+            id: 'file-ref:books/story.epub',
             label: 'story.epub',
-            path: '${A}/books/story.epub',
+            contentLocator: { kind: 'workspace-file', path: 'books/story.epub' },
             mediaType: 'document',
           },
         ],
@@ -946,13 +947,13 @@ describe('useChatActions', () => {
           {
             id: 'file-ref:assets/1.png',
             label: '1.png',
-            path: 'assets/1.png',
+            contentLocator: { kind: 'workspace-file', path: 'assets/1.png' },
             mediaType: 'image',
           },
           {
             id: 'file-ref:cases/1080P.mp4',
             label: '1080P.mp4',
-            path: 'cases/1080P.mp4',
+            contentLocator: { kind: 'workspace-file', path: 'cases/1080P.mp4' },
             mediaType: 'video',
           },
         ],
@@ -1013,7 +1014,7 @@ describe('useChatActions', () => {
           {
             id: 'file-ref:cases/1080P.mp4',
             label: '1080P.mp4',
-            path: 'cases/1080P.mp4',
+            contentLocator: { kind: 'workspace-file', path: 'cases/1080P.mp4' },
           },
         ],
       });

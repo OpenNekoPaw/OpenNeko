@@ -18,7 +18,7 @@ import {
   resolveVSCodePiPurposeModelUse,
   resolveVSCodePiTurnModelPolicy,
 } from './vscodePiRuntimeManager';
-import { projectPiConversationEntries } from '../chat/message/piConversationHistoryProjection';
+import { projectPiConversationEntries } from '@neko/agent/runtime';
 
 const configuredProvider: Provider = {
   id: 'configured-newapi',

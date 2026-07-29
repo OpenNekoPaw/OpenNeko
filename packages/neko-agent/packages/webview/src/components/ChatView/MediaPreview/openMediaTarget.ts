@@ -2,8 +2,7 @@ import { AgentHostMessages } from '@/messages';
 
 export function openMediaTarget(target: string): void {
   if (isHostFileOpenTarget(target)) {
-    AgentHostMessages.openFile(target);
-    return;
+    throw new Error('Host file open requires a ContentLocator.');
   }
 
   AgentHostMessages.openUrl(target);

@@ -6,6 +6,7 @@ interface EmptyStateProps {
   selectedAction?: EmptyStateEntryAction;
   disabled?: boolean;
   onEntryAction?: (action: EmptyStateEntryAction) => void;
+  presentation?: 'default' | 'desktop-dock';
 }
 
 const EMPTY_STATE_ENTRIES: readonly {
@@ -34,9 +35,31 @@ export function EmptyState({
   selectedAction = 'start-chat',
   disabled = false,
   onEntryAction,
+  presentation = 'default',
 }: EmptyStateProps) {
   const { t } = useTranslation();
   const selectedEntry = EMPTY_STATE_ENTRIES.find((entry) => entry.action === selectedAction);
+
+  if (presentation === 'desktop-dock') {
+    return (
+      <div className="agent-empty-state agent-empty-state--desktop-dock flex min-h-0 flex-1 select-none items-end overflow-y-auto px-4 pb-4">
+        <section
+          className="agent-empty-panel w-full min-w-0"
+          aria-labelledby="neko-agent-empty-title"
+        >
+          <h2
+            id="neko-agent-empty-title"
+            className="agent-empty-title text-[15px] font-semibold leading-6 text-[var(--agent-fg)]"
+          >
+            {t('chat.emptyState.desktopDockTitle')}
+          </h2>
+          <p className="mt-1 text-[12px] leading-5 text-[var(--agent-empty-muted)]">
+            {t('chat.emptyState.desktopDockDescription')}
+          </p>
+        </section>
+      </div>
+    );
+  }
 
   return (
     <div className="agent-empty-state flex min-h-0 flex-1 select-none items-center justify-center overflow-y-auto px-3 py-5 sm:px-4 sm:py-7">

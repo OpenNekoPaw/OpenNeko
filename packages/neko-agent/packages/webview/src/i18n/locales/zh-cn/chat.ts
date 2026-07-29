@@ -59,6 +59,8 @@ export const chat = {
   'chat.emptyState.description':
     '可以从一个灵感、素材或角色出发，和 Agent 一起发展故事主题、角色关系、世界观与场景氛围；也可以继续生成角色图、场景图、视频素材、配音、音效和环境声。',
   'chat.emptyState.disclaimer': 'AI 回复可能不准确。',
+  'chat.emptyState.desktopDockTitle': 'Hi，用对话开启创作',
+  'chat.emptyState.desktopDockDescription': '描述灵感、引用项目素材，或提及一个角色。',
   'chat.emptyState.entry.startChat': '开始对话',
   'chat.emptyState.entry.generateAssets': '生成素材',
   'chat.emptyState.entry.roleplay': '角色扮演',
@@ -579,6 +581,7 @@ export const chat = {
   'chat.helpMessage':
     '**可用命令：**\n- `/clear` - 清除对话历史\n- `/new` - 开始新对话\n- `/resume` - 恢复之前的对话\n- `/help` - 显示帮助信息\n- `/compact` - 压缩对话以节省上下文\n- `/status` - 显示状态信息\n- `/model` - 选择 AI 模型\n- `/plan` - 进入计划模式\n- `/mcp` - 管理 MCP 服务器\n- `/settings` - 打开设置\n\n**技能：**\n- 使用 `$skill-name` 显式激活 Skill 生命周期记录\n- 活跃记录会显示槽位、归属方、是否可清除、锁定原因和过期信息\n- 使用 `/skills` 列出或查看技能；清除动作只会移除策略允许清理的记录\n\n**提示：**\n- 使用 `@` 引用文件\n- 点击 📎 按钮添加附件\n- 按 Enter 发送，Shift+Enter 换行',
   'chat.conversation.loading': '正在加载会话历史…',
+  'chat.conversation.navigationTargetUnavailable': '当前工作区中没有这条对话。',
   'chat.attachFile': '添加附件',
   'chat.referenceFile': '使用 @ 引用文件',
   'chat.usage.tokens': '上下文估算',

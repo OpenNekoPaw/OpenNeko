@@ -4,7 +4,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AgentContextPayload, ChatModelOption, MessageAttachment } from '@neko/shared';
 import type { ConversationKind, MediaUnderstandingModels, SessionMode } from '@neko-agent/types';
 import { InputAreaProvider } from '@/components/ChatView/InputAreaContext';
-import { DEFAULT_COMPOSER_MENU_STATE, DEFAULT_GENERATION_PARAMS } from './types';
+import {
+  DEFAULT_COMPOSER_MENU_STATE,
+  DEFAULT_GENERATION_PARAMS,
+  type MentionItem,
+  type SelectedFileReference,
+} from './types';
 import { InputArea } from './InputArea';
 
 const vscodeMocks = vi.hoisted(() => ({
@@ -1522,7 +1527,10 @@ describe('InputArea composer controls', () => {
         fileReferences: [
           expect.objectContaining({
             label: '【CG】游戏角色.zip',
-            path: 'assets/【CG】游戏角色.zip',
+            contentLocator: {
+              kind: 'workspace-file',
+              path: 'assets/【CG】游戏角色.zip',
+            },
           }),
         ],
       }),
@@ -1567,7 +1575,10 @@ describe('InputArea composer controls', () => {
         fileReferences: [
           expect.objectContaining({
             label: 'Hero portrait',
-            path: 'neko/assets/Characters/hero.png',
+            contentLocator: {
+              kind: 'workspace-file',
+              path: 'neko/assets/Characters/hero.png',
+            },
             mediaType: 'image',
             source: 'media-library',
           }),
@@ -1636,7 +1647,10 @@ describe('InputArea composer controls', () => {
         fileReferences: [
           expect.objectContaining({
             label: '按键 黑脸.exp3.json',
-            path: 'assets/live2d/按键 黑脸.exp3.json',
+            contentLocator: {
+              kind: 'workspace-file',
+              path: 'assets/live2d/按键 黑脸.exp3.json',
+            },
           }),
         ],
       }),
@@ -2123,7 +2137,7 @@ function Harness({
   readonly conversationKind?: ConversationKind;
   readonly onRemoveContextChip?: (id: string) => void;
   readonly onAddContextChip?: React.ComponentProps<typeof InputAreaProvider>['onAddContextChip'];
-  readonly mentionItems?: React.ComponentProps<typeof InputAreaProvider>['mentionItems'];
+  readonly mentionItems?: readonly LegacyMentionItem[];
   readonly onRequestFiles?: React.ComponentProps<typeof InputAreaProvider>['onRequestFiles'];
   readonly onMediaModelSelect?: React.ComponentProps<
     typeof InputAreaProvider
@@ -2144,9 +2158,7 @@ function Harness({
   readonly availableModels?: ChatModelOption[];
   readonly availableMediaModels?: ChatModelOption[];
   readonly mediaUnderstandingModels?: MediaUnderstandingModels;
-  readonly selectedFileReferences?: React.ComponentProps<
-    typeof InputArea
-  >['selectedFileReferences'];
+  readonly selectedFileReferences?: readonly LegacySelectedFileReference[];
   readonly onSelectedFileReferencesChange?: React.ComponentProps<
     typeof InputArea
   >['onSelectedFileReferencesChange'];
@@ -2180,7 +2192,7 @@ function Harness({
       mediaModelCallCount={0}
       skills={skills}
       onRequestFiles={onRequestFiles}
-      mentionItems={mentionItems}
+      mentionItems={mentionItems.map(normalizeMentionItem)}
       onAddContextChip={onAddContextChip}
       contextChips={contextChips}
       onRemoveContextChip={onRemoveContextChip}
@@ -2191,11 +2203,42 @@ function Harness({
       onGenParamsChange={onGenParamsChange}
     >
       {injectInputReferenceProps(children, {
-        selectedFileReferences,
+        selectedFileReferences: selectedFileReferences.map(normalizeSelectedFileReference),
         onSelectedFileReferencesChange,
       })}
     </InputAreaProvider>
   );
+}
+
+type LegacyMentionItem = Omit<MentionItem, 'contentLocator'> & {
+  readonly contentLocator?: MentionItem['contentLocator'];
+  readonly filePath?: string;
+};
+
+type LegacySelectedFileReference = Omit<SelectedFileReference, 'contentLocator'> & {
+  readonly contentLocator?: SelectedFileReference['contentLocator'];
+  readonly path?: string;
+};
+
+function normalizeMentionItem(item: LegacyMentionItem): MentionItem {
+  const { filePath, ...rest } = item;
+  return {
+    ...rest,
+    ...(rest.contentLocator
+      ? { contentLocator: rest.contentLocator }
+      : filePath
+        ? { contentLocator: { kind: 'workspace-file', path: filePath } }
+        : {}),
+  };
+}
+
+function normalizeSelectedFileReference(
+  reference: LegacySelectedFileReference,
+): SelectedFileReference {
+  const { path, ...rest } = reference;
+  if (rest.contentLocator) return { ...rest, contentLocator: rest.contentLocator };
+  if (!path) throw new Error(`Selected file reference '${reference.id}' requires a path.`);
+  return { ...rest, contentLocator: { kind: 'workspace-file', path } };
 }
 
 function injectInputReferenceProps(

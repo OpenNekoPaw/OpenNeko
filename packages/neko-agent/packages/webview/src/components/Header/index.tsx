@@ -30,6 +30,7 @@ interface HeaderProps {
   // AccountBar props (replaces settings gear)
   configuredProviders: ConfiguredProvider[];
   onOpenOnboarding: () => void;
+  showAccountBar?: boolean;
 }
 
 export function Header({
@@ -51,6 +52,7 @@ export function Header({
   protectedConversationCount,
   configuredProviders,
   onOpenOnboarding,
+  showAccountBar = true,
 }: HeaderProps) {
   const { t } = useTranslation();
 
@@ -95,8 +97,12 @@ export function Header({
           protectedConversationCount={protectedConversationCount}
         />
 
-        {/* AccountBar — replaces settings gear */}
-        <AccountBar configuredProviders={configuredProviders} onOpenOnboarding={onOpenOnboarding} />
+        {showAccountBar ? (
+          <AccountBar
+            configuredProviders={configuredProviders}
+            onOpenOnboarding={onOpenOnboarding}
+          />
+        ) : null}
       </div>
     </header>
   );

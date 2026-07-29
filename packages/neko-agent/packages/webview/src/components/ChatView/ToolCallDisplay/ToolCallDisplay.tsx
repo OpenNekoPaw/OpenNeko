@@ -57,8 +57,8 @@ function ToolCallDisplayComponent({
     setIsExpanded((prev) => !prev);
   }, []);
 
-  const handleOpenFile = useCallback((filePath: string) => {
-    AgentHostMessages.openFile(filePath);
+  const handleOpenFile = useCallback((contentLocator: import('@neko/shared').ContentLocator) => {
+    AgentHostMessages.openFile(contentLocator);
   }, []);
 
   const handleCopyText = useCallback((text: string) => {
@@ -97,6 +97,7 @@ function ToolCallDisplayComponent({
     copyText,
     isFileTool,
     filePath,
+    fileContentLocator,
     summary,
     isPending,
     isSuccess,
@@ -232,11 +233,11 @@ function ToolCallDisplayComponent({
           )}
           <span className="flex-1" />
 
-          {isFileTool && filePath && isSuccess && (
+          {isFileTool && filePath && fileContentLocator && isSuccess && (
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                handleOpenFile(filePath);
+                handleOpenFile(fileContentLocator);
               }}
               className={compactActionClass}
               title={`Open ${filePath}`}

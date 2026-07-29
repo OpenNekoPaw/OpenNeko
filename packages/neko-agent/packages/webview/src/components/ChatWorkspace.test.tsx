@@ -688,7 +688,13 @@ describe('ChatWorkspace pending send', () => {
     const runtimeB = createTabRenderRuntime({ tabId: 'tab-b', conversationId: 'conv-b' });
     runtimeA.store.updateState({
       attachedFiles: [{ id: 'asset-a', name: 'a.png', type: 'image', preview: 'data-a' }],
-      selectedFileReferences: [{ id: 'file-a', path: 'a.md', label: 'a.md' }],
+      selectedFileReferences: [
+        {
+          id: 'file-a',
+          contentLocator: { kind: 'workspace-file', path: 'a.md' },
+          label: 'a.md',
+        },
+      ],
     });
     const { getByTestId, rerender } = render(
       <ChatWorkspace

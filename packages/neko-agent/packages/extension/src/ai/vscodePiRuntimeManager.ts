@@ -6,6 +6,7 @@ import type { AssistantExecutionMode, Model, Provider } from '@neko/platform';
 import { TOOL_NAMES_QUALITY, type IToolRegistry, type Tool } from '@neko/shared';
 import {
   NodePiConversationAuthority,
+  PiToolConfirmationRegistry,
   PiConversationRuntime,
   createNodePiSkillHost,
   createOpenNekoPiModels,
@@ -39,7 +40,6 @@ import {
   type SkillHostRecord,
   type SkillSourceRoot,
 } from '@neko/agent/pi';
-import { PiToolConfirmationRegistry } from './piToolConfirmationRegistry';
 
 type PiThinkingLevel = NonNullable<AgentModelPolicy['agent.main']['parameters']['thinkingLevel']>;
 type VSCodePiToolPurpose = Extract<

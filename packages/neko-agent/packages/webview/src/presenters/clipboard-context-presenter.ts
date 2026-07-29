@@ -1,9 +1,11 @@
 import type {
   AgentContextPayload,
+  ContentLocator,
   DocumentArchiveResourceRef,
   DocumentLocator,
 } from '@neko/shared';
-import { parseDocumentArchiveResourceRef } from '@neko/shared';
+import { isContentLocator, parseDocumentArchiveResourceRef } from '@neko/shared';
+import { projectContentLocatorPath } from './content-locator-presenter';
 
 export function projectClipboardTextToContextPayload(text: string): AgentContextPayload | null {
   const value = parseJsonObject(text);
@@ -24,25 +26,26 @@ function projectDocumentImageReference(value: Record<string, unknown>): AgentCon
   if (!document || !image) return null;
 
   const source = asRecord(document.source);
-  const filePath = readString(document.filePath) ?? readString(source?.filePath);
-
   const locator = parseDocumentLocator(document.locator);
   const resourceRef =
     parseStableDocumentArchiveResourceRef(image.resourceRef) ??
     parseStableDocumentArchiveResourceRef(document.resourceRef);
-  if (!filePath || !resourceRef) return null;
+  const contentLocator =
+    parseStableContentLocator(image.contentLocator) ??
+    parseStableContentLocator(document.contentLocator);
+  if (!contentLocator || !resourceRef) return null;
 
   const label = locator
     ? formatDocumentLocator(locator)
     : resourceRef?.entryPath
       ? basename(resourceRef.entryPath)
-      : basename(filePath);
+      : basename(projectContentLocatorPath(contentLocator));
   const sourceFormat = readString(source?.format);
+  const contentPath = projectContentLocatorPath(contentLocator);
   const data = {
     kind: 'document-image-reference',
     document: {
-      filePath,
-      ...(source ? { source } : {}),
+      contentLocator,
       ...(locator ? { locator } : {}),
       ...(resourceRef ? { resourceRef } : {}),
     },
@@ -53,19 +56,19 @@ function projectDocumentImageReference(value: Record<string, unknown>): AgentCon
       ...optionalNumberField('byteSize', image.byteSize),
       ...optionalStringField('mimeType', image.mimeType),
       ...(resourceRef ? { resourceRef } : {}),
+      contentLocator,
     },
     navigationData: {
       source: sourceFormat ?? 'document',
-      filePath,
       ...(resourceRef?.entryPath ? { entryPath: resourceRef.entryPath } : {}),
     },
   };
 
   return {
     type: 'image',
-    id: stableContextId('document-image', filePath, resourceRef.entryPath ?? label, label),
+    id: stableContextId('document-image', contentPath, resourceRef.entryPath ?? label, label),
     label,
-    summary: `Document image: ${basename(filePath)}#${label}`,
+    summary: `Document image: ${basename(contentPath)}#${label}`,
     data,
   };
 }
@@ -73,34 +76,35 @@ function projectDocumentImageReference(value: Record<string, unknown>): AgentCon
 function projectMediaLibraryFileReference(
   value: Record<string, unknown>,
 ): AgentContextPayload | null {
-  const path = readString(value.path);
-  const resolvedPath = readString(value.resolvedPath) ?? path;
-  if (!path || !resolvedPath) return null;
+  const contentLocator = parseStableContentLocator(value.contentLocator);
+  if (!contentLocator) return null;
 
   const mediaType = readString(value.mediaType);
-  const label = readString(value.name) ?? basename(resolvedPath);
+  const contentPath = projectContentLocatorPath(contentLocator);
+  const label = readString(value.name) ?? basename(contentPath);
   const data = {
     kind: 'media-library-file-reference',
-    path,
-    resolvedPath,
+    contentLocator,
     ...(mediaType ? { mediaType } : {}),
     ...optionalStringField('name', value.name),
     ...(asRecord(value.source) ? { source: asRecord(value.source) } : {}),
     navigationData: {
       source: 'media-library',
       partition: 'media-library',
-      portablePath: path,
-      filePath: resolvedPath,
     },
   };
 
   return {
     type: 'media',
-    id: stableContextId('media-library-file', path, resolvedPath),
+    id: stableContextId('media-library-file', contentPath),
     label,
     summary: mediaType ? `Media: ${label} (${mediaType})` : `Media: ${label}`,
     data,
   };
+}
+
+function parseStableContentLocator(value: unknown): ContentLocator | undefined {
+  return isContentLocator(value) ? value : undefined;
 }
 
 function parseJsonObject(text: string): Record<string, unknown> | null {

@@ -1,58 +1,15 @@
 import * as vscode from 'vscode';
 import type { AgentContextPayload } from '@neko/shared';
 import { normalizeAgentRuntimePromptLocale } from '@neko/agent/runtime';
-import { buildGlobalErrorMessage, type WebviewToExtensionMessage } from '@neko-agent/types';
-import { getLogger } from '../../base';
-import type { ChatWebviewMessageRouterDeps } from './types';
-import { resolveRequiredConversationId } from './conversationId';
-
-const logger = getLogger('ChatMessageRoutes');
+import type { AgentWebviewToHostMessage } from '@neko-agent/types';
+import type { VSCodeAgentHostControllerDeps } from './types';
+import { submitVSCodeAgentTurn } from './conversationControllerEffects';
 
 export function tryHandleMessageRoute(
-  message: WebviewToExtensionMessage,
-  deps: ChatWebviewMessageRouterDeps,
+  message: AgentWebviewToHostMessage,
+  deps: VSCodeAgentHostControllerDeps,
 ): boolean {
-  const { webview } = deps;
-
   switch (message.type) {
-    case 'sendMessage':
-      if (deps.characterDialogue?.hasSession(message.conversationId)) {
-        void deps.characterDialogue.routeUserMessage(message.conversationId, message.message);
-        return true;
-      }
-      if (deps.embodyCharacter?.hasSession(message.conversationId)) {
-        void deps.embodyCharacter.routeUserMessage(message.conversationId, message.message);
-        return true;
-      }
-      dispatchAgentMessageTurn(deps, {
-        conversationId: message.conversationId,
-        messageText: message.message,
-        sessionMode: message.sessionMode,
-        chatModel: message.chatModel,
-        agentModels: message.agentModels,
-        llmConfig: message.llmConfig,
-        mediaModel: message.mediaModel,
-        purposeModels: message.purposeModels,
-        attachments: message.attachments,
-        contextPayloads: message.contextPayloads,
-        fileReferences: message.fileReferences,
-        promptId: message.promptId,
-        locale: vscode.env.language,
-      });
-      return true;
-
-    case 'searchProjectFiles': {
-      const allowsTablessSearch = message.purpose === 'roleplay' || message.purpose === 'entry';
-      const conversationId = allowsTablessSearch
-        ? message.conversationId
-        : resolveRequiredConversationId(webview, message, 'searchProjectFiles');
-      if (!allowsTablessSearch && !conversationId) return true;
-      deps.messages?.searchProjectFiles(webview, message.filter, conversationId, {
-        purpose: message.purpose,
-      });
-      return true;
-    }
-
     case 'startCharacterDialogueFromSlash':
       void deps.characterDialogue?.launchFromSlash({ args: message.args });
       return true;
@@ -66,25 +23,18 @@ export function tryHandleMessageRoute(
       });
       return true;
 
-    case 'mermaidError': {
-      const conversationId = resolveRequiredConversationId(
-        webview,
-        message,
-        'report Mermaid error',
-      );
-      if (!conversationId) return true;
-      dispatchAgentMessageTurn(deps, {
-        conversationId,
-        messageText: message.feedbackMessage,
-        sessionMode: 'agent',
-        locale: vscode.env.language,
-      });
+    case 'exitCharacterDialogueSession':
+      void deps.characterDialogue?.exit(message.sessionId);
       return true;
-    }
+
+    case 'exitEmbodyCharacterSession':
+      void deps.embodyCharacter?.exit(message.sessionId);
+      return true;
 
     case 'requestCanvasAuthoringHandoff': {
       const locale = vscode.env.language;
-      dispatchAgentMessageTurn(deps, {
+      submitVSCodeAgentTurn(deps, {
+        source: 'user-message',
         conversationId: message.conversationId,
         messageText: buildCanvasAuthoringHandoffPrompt(message, locale),
         sessionMode: 'agent',
@@ -99,26 +49,8 @@ export function tryHandleMessageRoute(
   }
 }
 
-function dispatchAgentMessageTurn(
-  deps: ChatWebviewMessageRouterDeps,
-  request: Parameters<
-    NonNullable<ChatWebviewMessageRouterDeps['messages']>['handleUserMessage']
-  >[1],
-): void {
-  const operation = deps.messages?.handleUserMessage(deps.webview, request);
-  if (!operation) return;
-  void operation.catch((error: unknown) => {
-    logger.error('Agent message route failed:', error);
-    const message = error instanceof Error ? error.message : 'Agent message route failed.';
-    void Promise.resolve(deps.webview.postMessage(buildGlobalErrorMessage(message))).catch(
-      (postError: unknown) =>
-        logger.error('Failed to project Agent message route error:', postError),
-    );
-  });
-}
-
 type CanvasAuthoringHandoffRouteMessage = Omit<
-  Extract<WebviewToExtensionMessage, { type: 'requestCanvasAuthoringHandoff' }>,
+  Extract<AgentWebviewToHostMessage, { type: 'requestCanvasAuthoringHandoff' }>,
   'type'
 >;
 

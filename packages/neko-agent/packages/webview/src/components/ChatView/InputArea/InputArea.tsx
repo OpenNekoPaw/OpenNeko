@@ -57,7 +57,13 @@ import { projectInputAreaUi } from '@/presenters/input-area-presenter';
 import { isOptimisticQueuedMessageItem } from '@/presenters/message-queue-presenter';
 import { projectComposerModeConfig } from '@/presenters/composer-mode-config-presenter';
 import { projectClipboardTextToContextPayload } from '@/presenters/clipboard-context-presenter';
-import type { AgentContextPayload, ChatModelOption } from '@neko/shared';
+import {
+  contentLocatorKey,
+  type AgentContextPayload,
+  type ChatModelOption,
+  type ContentLocator,
+} from '@neko/shared';
+import { projectContentLocatorPath } from '@/presenters/content-locator-presenter';
 import type {
   AgentLlmConfig,
   AgentModelSlots,
@@ -494,7 +500,7 @@ export function InputArea({
 
     // Check for slash command
     if (allowCommandMenus && value.startsWith('/')) {
-      const filter = value.slice(1).split(' ')[0];
+      const filter = value.slice(1).split(' ')[0] ?? '';
       setSlashFilter(filter);
       setShowSlashMenu(true);
       setShowSkillMenu(false);
@@ -504,7 +510,7 @@ export function InputArea({
     }
 
     if (allowCommandMenus && value.startsWith('$')) {
-      const filter = value.slice(1).split(' ')[0];
+      const filter = value.slice(1).split(' ')[0] ?? '';
       setSkillFilter(filter);
       setShowSkillMenu(true);
       setShowSlashMenu(false);
@@ -556,7 +562,11 @@ export function InputArea({
       }
       if (e.key === 'Tab' || (e.key === 'Enter' && !e.shiftKey)) {
         e.preventDefault();
-        selectSlashCommand(filteredCommands[selectedCommandIndex]);
+        const selectedCommand = filteredCommands[selectedCommandIndex];
+        if (!selectedCommand) {
+          throw new Error('Selected Agent slash command is outside the filtered catalog.');
+        }
+        selectSlashCommand(selectedCommand);
         return;
       }
       if (e.key === 'Escape') {
@@ -697,20 +707,26 @@ export function InputArea({
   };
 
   const addSelectedFileReference = (item: MentionItem) => {
-    if (!item.filePath) return;
+    if (!item.contentLocator) return;
     const reference = projectSelectedFileReference(item);
     replaceActiveMention('');
     updateSelectedFileReferences((prev) =>
-      prev.some((existing) => existing.path === reference.path) ? prev : [...prev, reference],
+      prev.some(
+        (existing) =>
+          contentLocatorKey(existing.contentLocator) ===
+          contentLocatorKey(reference.contentLocator),
+      )
+        ? prev
+        : [...prev, reference],
     );
     setShowAtMenu(false);
     textareaRef.current?.focus();
   };
 
-  /** Handle selection from MentionMenu — path-backed items become @file tokens; others create a context chip. */
+  /** Handle selection from MentionMenu — locator-backed items become file tokens. */
   const handleMentionSelect = (item: MentionItem) => {
     closeEntryPromptMenu();
-    if (item.filePath) {
+    if (item.contentLocator) {
       addSelectedFileReference(item);
     } else if (item.contextPayload) {
       if (!onAddContextChip) {
@@ -843,6 +859,7 @@ export function InputArea({
 
       for (let i = 0; i < items.length; i++) {
         const item = items[i];
+        if (!item) continue;
         if (item.type.startsWith('image/')) {
           e.preventDefault();
           const file = item.getAsFile();
@@ -1200,10 +1217,13 @@ function resizeTextarea(textarea: HTMLTextAreaElement, value: string): void {
 export type { MessageAttachment, ProjectFile, SelectedFileReference };
 
 function projectSelectedFileReference(item: MentionItem): SelectedFileReference {
-  const path = item.filePath ?? item.label;
+  if (!item.contentLocator) {
+    throw new Error(`File mention '${item.id}' requires a content locator.`);
+  }
+  const path = projectContentLocatorPath(item.contentLocator);
   return {
     id: `file-ref:${path}`,
-    path,
+    contentLocator: item.contentLocator,
     label: item.label || getReferenceBasename(path),
     ...(item.mediaType ? { mediaType: item.mediaType } : {}),
     ...(item.source ? { source: item.source } : {}),
@@ -1216,8 +1236,9 @@ function promoteCompletedFileReferencesFromInput(
   mentionItems: readonly MentionItem[],
   existingReferences: SelectedFileReference[],
 ): { value: string; references: SelectedFileReference[] } {
-  const candidates = mentionItems.filter((item): item is MentionItem & { filePath: string } =>
-    Boolean(item.filePath),
+  const candidates = mentionItems.filter(
+    (item): item is MentionItem & { contentLocator: ContentLocator } =>
+      Boolean(item.contentLocator),
   );
   if (candidates.length === 0 || !input.includes('@')) {
     return { value: input, references: existingReferences };
@@ -1228,13 +1249,21 @@ function promoteCompletedFileReferencesFromInput(
   let changed = false;
 
   const sortedCandidates = [...candidates].sort(
-    (left, right) => right.filePath.length - left.filePath.length,
+    (left, right) =>
+      projectContentLocatorPath(right.contentLocator).length -
+      projectContentLocatorPath(left.contentLocator).length,
   );
   for (const item of sortedCandidates) {
-    const token = `@${item.filePath}`;
+    const itemPath = projectContentLocatorPath(item.contentLocator);
+    const token = `@${itemPath}`;
     const pattern = new RegExp(`${escapeRegExp(token)}(?=$|\\s)`, 'g');
     nextValue = nextValue.replace(pattern, () => {
-      if (!references.some((reference) => reference.path === item.filePath)) {
+      if (
+        !references.some(
+          (reference) =>
+            contentLocatorKey(reference.contentLocator) === contentLocatorKey(item.contentLocator),
+        )
+      ) {
         references.push(projectSelectedFileReference(item));
       }
       changed = true;
@@ -1541,7 +1570,9 @@ function appendSelectedFileReferencesToMessage(
 ): string {
   if (references.length === 0) return input;
   const referenceText = references
-    .map((reference) => formatFileReferencePath(reference.path))
+    .map((reference) =>
+      formatFileReferencePath(projectContentLocatorPath(reference.contentLocator)),
+    )
     .join(' ');
   return [input.trim(), referenceText].filter(Boolean).join(' ');
 }

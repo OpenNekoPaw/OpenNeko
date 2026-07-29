@@ -12,10 +12,12 @@ vi.mock('@/messages', () => ({
 }));
 
 describe('openMediaTarget', () => {
-  it('opens generated asset refs through the file channel', () => {
-    openMediaTarget('generated-assets/asset-1.png');
+  it('rejects generated asset refs without a Host-issued locator', () => {
+    expect(() => openMediaTarget('generated-assets/asset-1.png')).toThrow(
+      'Host file open requires a ContentLocator.',
+    );
 
-    expect(mockVSCodeMessages.openFile).toHaveBeenCalledWith('generated-assets/asset-1.png');
+    expect(mockVSCodeMessages.openFile).not.toHaveBeenCalled();
     expect(mockVSCodeMessages.openUrl).not.toHaveBeenCalled();
   });
 });

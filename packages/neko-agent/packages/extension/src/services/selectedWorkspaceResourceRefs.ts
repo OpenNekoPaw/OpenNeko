@@ -1,4 +1,3 @@
-import * as path from 'node:path';
 import { createResourceFingerprint, createResourceRef, type ResourceRef } from '@neko/shared';
 import type { AgentFileReference } from '@neko-agent/types';
 
@@ -9,11 +8,11 @@ export interface SelectedWorkspaceResourceRef {
 }
 
 export function createSelectedWorkspaceResourceRefs(
-  workspaceRoot: string,
+  _workspaceRoot: string,
   references: readonly AgentFileReference[],
 ): readonly SelectedWorkspaceResourceRef[] {
   return references.flatMap((reference) => {
-    const relativePath = normalizeSelectedWorkspacePath(workspaceRoot, reference.path);
+    const relativePath = selectedWorkspacePath(reference);
     if (!relativePath) return [];
     return [
       {
@@ -37,16 +36,14 @@ export function createSelectedWorkspaceResourceRefs(
   });
 }
 
-function normalizeSelectedWorkspacePath(
-  workspaceRoot: string,
-  candidate: string,
-): string | undefined {
-  const absolutePath = path.isAbsolute(candidate)
-    ? path.resolve(candidate)
-    : path.resolve(workspaceRoot, candidate);
-  const relativePath = path.relative(workspaceRoot, absolutePath);
-  if (!relativePath || relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
-    return undefined;
+function selectedWorkspacePath(reference: AgentFileReference): string | undefined {
+  switch (reference.contentLocator.kind) {
+    case 'workspace-file':
+    case 'generated-output':
+      return reference.contentLocator.path;
+    case 'document-entry':
+      return reference.contentLocator.source.path;
+    case 'package-resource':
+      return undefined;
   }
-  return relativePath.split(path.sep).join('/');
 }

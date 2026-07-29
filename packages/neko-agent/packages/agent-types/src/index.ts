@@ -97,17 +97,25 @@ export {
 } from './extension-command-contract';
 export type {
   AgentHostKind,
+  AgentHostRouteCoverageAuditInput,
   AgentHostRouteCoverageDiagnostic,
   AgentHostRouteCoverageInput,
+  AgentHostRouteFutureOwner,
   AgentHostRouteSupport,
+  AgentHostRouteSupportRecord,
+  AgentHostRouteUnavailableDiagnostic,
+  AgentHostRouteUnavailableSupport,
   AgentHostRuntimeAdapter,
   AgentHostRuntimeSubscription,
   AgentWebviewToHostMessageType,
   AgentWebviewToHostMessageTypeCoverage,
 } from './agent-host-runtime-adapter';
 export {
-  AGENT_WEBVIEW_TO_HOST_MESSAGE_TYPES,
+  ELECTRON_AGENT_HOST_ROUTE_COVERAGE,
+  ELECTRON_AGENT_HOST_UNSUPPORTED_ROUTE_OWNERS,
   createAgentHostRouteCoverageDiagnostics,
+  createAgentHostRouteUnavailableDiagnostic,
+  createElectronAgentHostRouteUnavailableDiagnostic,
 } from './agent-host-runtime-adapter';
 export type { EnabledStateRecord } from './enabled-state';
 
@@ -409,10 +417,10 @@ export type {
   DragStartWebviewMessage,
   EmptyWebviewMessage,
   ErrorMessage,
-  ExtensionToWebviewMessage,
+  AgentHostToWebviewMessage,
   ExternalMessage,
   ActivateConversationWebviewMessage,
-  FilePathWebviewMessage,
+  RevealFileWebviewMessage,
   GetConversationSnapshotWebviewMessage,
   GlobalErrorMessage,
   HistoryClearedMessage,
@@ -475,10 +483,11 @@ export type {
   TabStateMessage,
   UpdateSettingsWebviewMessage,
   UpdateTabStateWebviewMessage,
-  WebviewToExtensionMessage,
+  AgentWebviewToHostMessage,
 } from './webview-protocol';
 export type { AgentConfigDiagnostic, AgentConfigDiagnosticCode } from './config-diagnostic';
 export {
+  AGENT_WEBVIEW_TO_HOST_MESSAGE_TYPES,
   buildAmbientCanvasUpdateMessage,
   parseAmbientCanvasUpdateNodes,
   buildAgentPhaseMessage,
@@ -507,10 +516,9 @@ export {
   buildTabStateMessage,
   isSessionMode,
   parseSendMessageWebviewMessage,
-  parseWebviewToExtensionMessage,
+  parseAgentWebviewToHostMessage,
   AGENT_WEBVIEW_PROTOCOL_VERSION,
   NEKO_AGENT_HOST_MESSAGE_EVENT,
-  WEBVIEW_TO_EXTENSION_MESSAGE_TYPES,
 } from './webview-protocol';
 
 // Builtin slash command metadata shared across runtime + UI surfaces

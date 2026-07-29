@@ -138,6 +138,22 @@ describe('SettingsHandler', () => {
     });
   });
 
+  it('fails visibly when the Agent platform is unavailable', async () => {
+    const handler = new SettingsHandler({
+      conversationSettings: conversationSettings as never,
+    });
+
+    await handler.sendSettings(webview as never, {
+      conversationId: 'conversation-a',
+    });
+
+    expect(webview.postMessage).toHaveBeenCalledWith({
+      type: 'settingsUpdated',
+      success: false,
+      error: 'Agent platform is not initialized',
+    });
+  });
+
   it('surfaces conversation-specific validation failures', async () => {
     conversationSettings.updateConversation.mockImplementation(() => {
       throw new Error('Invalid model for conversation-b');

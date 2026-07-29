@@ -3,9 +3,11 @@ import {
   isThreeReferenceContextData,
   type AgentContextPayload,
   type AttachmentType,
+  type ContentLocator,
   type MessageAttachment,
   type ThreeReferenceContextData,
 } from '@neko/shared';
+import { projectContentLocatorPath } from './content-locator-presenter';
 
 export type ReferenceTokenProjectionKind =
   'file' | 'image' | 'video' | 'audio' | 'canvas' | 'clip' | 'entity';
@@ -38,6 +40,7 @@ export interface MessageContextReferenceTokenInput {
   summary?: string;
   thumbnailUri?: string;
   mediaType?: ReferenceMediaType;
+  contentLocator?: ContentLocator;
   navigationData?: Record<string, string>;
 }
 
@@ -108,7 +111,9 @@ function formatThreeReferenceMeta(data: ThreeReferenceContextData): string {
 export function projectMessageContextReferenceToken(
   reference: MessageContextReferenceTokenInput,
 ): ReferenceTokenProjection {
-  const path = reference.navigationData?.filePath ?? reference.navigationData?.path;
+  const path = reference.contentLocator
+    ? projectContentLocatorPath(reference.contentLocator)
+    : undefined;
   const pathToken = path
     ? projectPathReferenceToken({
         path,

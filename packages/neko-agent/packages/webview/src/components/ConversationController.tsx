@@ -25,7 +25,7 @@ import {
 } from 'react';
 import {
   NEKO_AGENT_HOST_MESSAGE_EVENT,
-  type ExtensionToWebviewMessage,
+  type AgentHostToWebviewMessage,
   SettingsState,
   AgentState,
   type AgentSessionDiagnosticMessage,
@@ -126,6 +126,9 @@ interface HeaderRenderProps {
 
 export interface ConversationControllerProps {
   // From AppShell (config + resource state)
+  initialConversation?: { readonly id: string; readonly title: string };
+  initialInput?: { readonly id: string; readonly value: string };
+  emptyStatePresentation?: 'default' | 'desktop-dock';
   settings: SettingsState;
   hasConfigSnapshot: boolean;
   setSettings: React.Dispatch<React.SetStateAction<SettingsState>>;
@@ -173,6 +176,9 @@ function applyConversationSettingsSnapshot(
 }
 
 export function ConversationController({
+  emptyStatePresentation = 'default',
+  initialConversation,
+  initialInput,
   settings,
   hasConfigSnapshot,
   setSettings,
@@ -237,6 +243,10 @@ export function ConversationController({
     new Map(),
   );
   const [globalError, setGlobalError] = useState<string | null>(null);
+  const [initialNavigationHydration, setInitialNavigationHydration] = useState({
+    conversationList: false,
+    tabState: false,
+  });
   const [foregroundAvailabilityByConversation, setForegroundAvailabilityByConversation] = useState<
     Map<string, ForegroundConversationAvailability>
   >(() => new Map());
@@ -269,6 +279,14 @@ export function ConversationController({
     entryInputValueRef.current = value;
     setEntryInputValue(value);
   }, []);
+  const appliedInitialInputRef = useRef<string>();
+  useEffect(() => {
+    const normalizedInput = initialInput?.value.trim();
+    if (!initialInput || !normalizedInput || openTabs.length > 0) return;
+    if (appliedInitialInputRef.current === initialInput.id) return;
+    appliedInitialInputRef.current = initialInput.id;
+    updateEntryInputValue(normalizedInput);
+  }, [initialInput, openTabs.length, updateEntryInputValue]);
   const addEntryContextReference = useCallback((payload: AgentContextPayload) => {
     setEntryContextReferences((current) =>
       current.some((reference) => reference.id === payload.id) ? current : [...current, payload],
@@ -789,6 +807,12 @@ export function ConversationController({
       if (type === 'externalMessage' || type === 'prefillInput' || type === 'ambientCanvasUpdate') {
         return;
       }
+      if (type === 'conversationList' || type === 'tabState') {
+        setInitialNavigationHydration((current) => ({
+          ...current,
+          [type]: true,
+        }));
+      }
       controllerMessageHandlerRef.current(event);
     };
 
@@ -798,11 +822,17 @@ export function ConversationController({
 
   useEffect(() => {
     const handleScopedDesktopHostMessage = (event: Event) => {
-      const message = (event as CustomEvent<ExtensionToWebviewMessage>).detail;
+      const message = (event as CustomEvent<AgentHostToWebviewMessage>).detail;
       if (!message?.type) return;
+      if (message.type === 'conversationList' || message.type === 'tabState') {
+        setInitialNavigationHydration((current) => ({
+          ...current,
+          [message.type]: true,
+        }));
+      }
       controllerMessageHandlerRef.current({
         data: message,
-      } as MessageEvent<ExtensionToWebviewMessage>);
+      } as MessageEvent<AgentHostToWebviewMessage>);
     };
 
     window.addEventListener(NEKO_AGENT_HOST_MESSAGE_EVENT, handleScopedDesktopHostMessage);
@@ -1186,6 +1216,32 @@ export function ConversationController({
       );
     },
   });
+  const activatedInitialConversationRef = useRef<string>();
+  useEffect(() => {
+    if (
+      !initialConversation ||
+      !initialNavigationHydration.conversationList ||
+      !initialNavigationHydration.tabState
+    ) {
+      return;
+    }
+    const navigationKey = `${initialConversation.id}\u0000${initialConversation.title}`;
+    if (activatedInitialConversationRef.current === navigationKey) return;
+    activatedInitialConversationRef.current = navigationKey;
+    const conversation = conversations.find((candidate) => candidate.id === initialConversation.id);
+    if (!conversation) {
+      setGlobalError(t('chat.conversation.navigationTargetUnavailable'));
+      return;
+    }
+    handleOpenTab(conversation.id, initialConversation.title || conversation.title);
+  }, [
+    conversations,
+    handleOpenTab,
+    initialConversation,
+    initialNavigationHydration.conversationList,
+    initialNavigationHydration.tabState,
+    t,
+  ]);
 
   const tabConversationIds = useMemo(
     () => [...new Set(openTabs.map((tab) => tab.conversationId))],
@@ -1301,6 +1357,7 @@ export function ConversationController({
         openTabs.length === 0 ? (
           <div className="flex min-h-0 flex-1 flex-col">
             <EmptyState
+              presentation={emptyStatePresentation}
               selectedAction={entryAction}
               disabled={isForegroundConversationActivationPending}
               onEntryAction={handleEntryAction}

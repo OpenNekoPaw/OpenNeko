@@ -11,9 +11,9 @@
 
 import { useState, useCallback, memo } from 'react';
 import { ChevronDownIcon as ChevronIcon } from '@neko/shared/icons';
-import { AgentHostMessages } from '@/messages';
 import { SendToMenu, type PluginsAvailable } from '@/components/ChatView/SendToMenu';
 import { projectStoryboardScenesAssetBatch } from '@/presenters/storyboard-transfer-presenter';
+import { openMediaTarget } from './openMediaTarget';
 
 /** A single shot within a scene */
 export interface StoryboardShot {
@@ -87,11 +87,7 @@ function SceneGroup({
 
   const handleOpenShot = useCallback((shot: StoryboardShot) => {
     const pathToOpen = shot.localPath ?? shot.url;
-    if (pathToOpen.startsWith('/') || /^[A-Za-z]:[\\/]/.test(pathToOpen)) {
-      AgentHostMessages.openFile(pathToOpen);
-    } else {
-      AgentHostMessages.openUrl(pathToOpen);
-    }
+    openMediaTarget(pathToOpen);
   }, []);
 
   // Determine grid columns based on shot count

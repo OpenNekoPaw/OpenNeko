@@ -19,6 +19,28 @@ export interface PersistedUserCredential {
   readonly updatedAt: string;
 }
 
+export function parsePersistedUserCredential(value: unknown): PersistedUserCredential {
+  if (!isRecord(value)) {
+    throw new TypeError('Persisted credential must be a record.');
+  }
+  const credential = value['credential'];
+  const provenance = value['provenance'];
+  const updatedAt = value['updatedAt'];
+  if (
+    !isCredential(credential) ||
+    !isCredentialProvenance(provenance) ||
+    typeof updatedAt !== 'string' ||
+    !isIsoDate(updatedAt)
+  ) {
+    throw new TypeError('Persisted credential has an invalid schema.');
+  }
+  return Object.freeze({
+    credential: structuredClone(credential),
+    provenance,
+    updatedAt,
+  });
+}
+
 export interface UserCredentialPersistence {
   read(providerId: string): Promise<PersistedUserCredential | undefined>;
   modify(
@@ -402,10 +424,7 @@ export class NodeSqliteUserCredentialPersistence implements UserCredentialPersis
       throw new TypeError('Credential SQLite row has an invalid schema.');
     }
     const credential: unknown = JSON.parse(credentialJson);
-    if (!isCredential(credential)) {
-      throw new TypeError('Credential SQLite row contains an invalid Pi credential.');
-    }
-    return Object.freeze({ credential: structuredClone(credential), provenance, updatedAt });
+    return parsePersistedUserCredential({ credential, provenance, updatedAt });
   }
 
   private async enqueue<TResult>(operation: () => Promise<TResult>): Promise<TResult> {
@@ -490,6 +509,11 @@ function isCredential(value: unknown): value is Credential {
     typeof value['expires'] === 'number' &&
     Number.isFinite(value['expires'])
   );
+}
+
+function isIsoDate(value: string): boolean {
+  const timestamp = Date.parse(value);
+  return Number.isFinite(timestamp) && new Date(timestamp).toISOString() === value;
 }
 
 function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {

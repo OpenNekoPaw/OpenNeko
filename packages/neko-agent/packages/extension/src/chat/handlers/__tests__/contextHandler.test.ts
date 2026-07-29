@@ -41,15 +41,13 @@ describe('ContextHandler', () => {
   });
 
   describe('getTokenCount', () => {
-    it('should return 0 when agentManager is unavailable', () => {
+    it('fails visibly when agentManager is unavailable', () => {
       handler = new ContextHandler({ conversations: conversations as any });
-      handler.getTokenCount(webview as any, 'conv-1');
 
-      expect(webview.postMessage).toHaveBeenCalledWith({
-        type: 'contextTokenCount',
-        conversationId: 'conv-1',
-        tokenCount: 0,
-      });
+      expect(() => handler.getTokenCount(webview as any, 'conv-1')).toThrow(
+        'Agent manager is unavailable for context token count.',
+      );
+      expect(webview.postMessage).not.toHaveBeenCalled();
     });
 
     it('should ignore missing conversationId', () => {

@@ -8,6 +8,7 @@ import type {
   AgentCapabilityInvocationResult,
   AgentContextType,
   ArtifactExtensionMap,
+  ContentLocator,
   MessageAttachment,
   PerceptionCard,
   StoryboardPlanOverlay,
@@ -157,6 +158,7 @@ export interface MessageContextReference {
   summary?: string;
   thumbnailUri?: string;
   mediaType?: AgentFileReferenceMediaType;
+  contentLocator?: ContentLocator;
   navigationData?: Record<string, string>;
 }
 
@@ -172,7 +174,7 @@ export type AgentFileReferenceMediaType =
 
 export interface AgentFileReference {
   id: string;
-  path: string;
+  contentLocator: ContentLocator;
   label: string;
   mediaType?: AgentFileReferenceMediaType;
   source?: AgentFileReferenceSource;

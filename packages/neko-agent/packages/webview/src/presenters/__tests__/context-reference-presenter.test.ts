@@ -28,18 +28,20 @@ describe('context-reference-presenter', () => {
     ]);
   });
 
-  it('uses resolvedPath as filePath while retaining portable path data', () => {
+  it('keeps a stable content locator and strips path-shaped navigation metadata', () => {
     const payload: AgentContextPayload = {
       type: 'media',
       id: 'media-1',
       label: 'Hero reference',
       summary: 'Media: Hero reference',
       data: {
-        path: '${REFS}/hero.png',
-        resolvedPath: '/mnt/media/hero.png',
+        contentLocator: {
+          kind: 'workspace-file',
+          path: 'neko/assets/References/hero.png',
+        },
         navigationData: {
           partition: 'media-library',
-          portablePath: '${REFS}/hero.png',
+          resolvedPath: '/mnt/media/hero.png',
         },
       },
     };
@@ -50,12 +52,11 @@ describe('context-reference-presenter', () => {
         id: 'media-1',
         label: 'Hero reference',
         summary: 'Media: Hero reference',
-        navigationData: {
-          path: '${REFS}/hero.png',
-          filePath: '/mnt/media/hero.png',
-          partition: 'media-library',
-          portablePath: '${REFS}/hero.png',
+        contentLocator: {
+          kind: 'workspace-file',
+          path: 'neko/assets/References/hero.png',
         },
+        navigationData: { partition: 'media-library' },
       },
     ]);
   });

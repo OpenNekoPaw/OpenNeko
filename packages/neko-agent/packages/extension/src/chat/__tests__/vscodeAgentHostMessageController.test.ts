@@ -1,17 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
 import {
-  CHAT_WEBVIEW_MESSAGE_ROUTER_TYPES,
-  handleChatWebviewMessage,
-  type ChatWebviewMessageRouterDeps,
-} from '../chatWebviewMessageRouter';
+  createVSCodeAgentHostMessageController,
+  VSCODE_AGENT_HOST_ROUTE_TYPES,
+  type VSCodeAgentHostControllerDeps,
+} from '../vscodeAgentHostMessageController';
 import {
+  AGENT_WEBVIEW_TO_HOST_MESSAGE_TYPES,
   createAgentHostRouteCoverageDiagnostics,
-  WEBVIEW_TO_EXTENSION_MESSAGE_TYPES,
-  type WebviewToExtensionMessage,
+  type AgentWebviewToHostMessage,
 } from '@neko-agent/types';
 import type { AgentCapabilityLifecycleDescriptor } from '@neko/shared';
-import { CONFIG_BRIDGE_MESSAGE_TYPES } from '../../services/configBridge';
 import { sendGeneratedAssetToPlugin } from '../../services/pluginTransferBridge';
 
 vi.mock('vscode', async () => await import('../../__mocks__/vscode'));
@@ -24,19 +23,12 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-type RoutedWebviewMessageType =
-  (typeof CHAT_WEBVIEW_MESSAGE_ROUTER_TYPES)[number] | (typeof CONFIG_BRIDGE_MESSAGE_TYPES)[number];
 type UnroutedWebviewMessageType = Exclude<
-  WebviewToExtensionMessage['type'],
-  RoutedWebviewMessageType
->;
-type DuplicateBridgeMessageType = Extract<
-  (typeof CHAT_WEBVIEW_MESSAGE_ROUTER_TYPES)[number],
-  (typeof CONFIG_BRIDGE_MESSAGE_TYPES)[number]
+  AgentWebviewToHostMessage['type'],
+  (typeof VSCODE_AGENT_HOST_ROUTE_TYPES)[number]
 >;
 type AssertNever<T extends never> = T;
 type _AllWebviewMessagesRouted = AssertNever<UnroutedWebviewMessageType>;
-type _NoBridgeMessageOverlap = AssertNever<DuplicateBridgeMessageType>;
 
 function createCanvasLifecycleDescriptor(capabilityId: string): AgentCapabilityLifecycleDescriptor {
   return {
@@ -95,9 +87,18 @@ function mockCanvasExtension(invoke: ReturnType<typeof vi.fn>): void {
   } as never);
 }
 
-function createDeps(): ChatWebviewMessageRouterDeps {
+function createDeps(): VSCodeAgentHostControllerDeps {
   return {
     webview: { postMessage: vi.fn().mockResolvedValue(true) } as any,
+    connectionIdentity: {
+      hostKind: 'vscode',
+      applicationId: 'test-app',
+      windowId: 'test-window',
+      viewId: 'test-view',
+      workspaceId: 'test-workspace',
+      rendererEpoch: 'test-renderer',
+      connectionId: 'test-connection',
+    },
     projectionAttachments: {
       attach: vi.fn().mockResolvedValue(undefined),
       acknowledge: vi.fn().mockResolvedValue(undefined),
@@ -168,10 +169,14 @@ function createDeps(): ChatWebviewMessageRouterDeps {
     dndBroker: {
       setPayload: vi.fn(),
     } as any,
-    refreshConfigSnapshot: vi.fn(),
+    sendConfigState: vi.fn().mockResolvedValue(undefined),
+    refreshConfigSnapshot: vi.fn().mockResolvedValue(undefined),
+    openUserConfigFile: vi.fn().mockResolvedValue(undefined),
     sendTabState: vi.fn(),
     activateConversation: vi.fn(),
     updateTabState: vi.fn(),
+    setKeyboardFocused: vi.fn(),
+    setKeyboardEditable: vi.fn(),
     syncCanvasAmbientScopeFromActiveConversation: vi.fn(),
     resolveLifecycleCapabilityDescriptor: vi.fn((capabilityId: string) =>
       capabilityId.startsWith('canvas.')
@@ -181,27 +186,31 @@ function createDeps(): ChatWebviewMessageRouterDeps {
   };
 }
 
+function handleVSCodeAgentHostMessage(
+  message: AgentWebviewToHostMessage,
+  deps: VSCodeAgentHostControllerDeps,
+): Promise<void> {
+  return createVSCodeAgentHostMessageController(deps).handle(message);
+}
+
 async function flushAsyncWork(): Promise<void> {
   await new Promise<void>((resolve) => setImmediate(resolve));
 }
 
-describe('handleChatWebviewMessage', () => {
-  it('keeps every webview-to-extension message assigned to exactly one bridge', () => {
-    const chatTypes = new Set<string>(CHAT_WEBVIEW_MESSAGE_ROUTER_TYPES);
-    const configTypes = new Set<string>(CONFIG_BRIDGE_MESSAGE_TYPES);
-    const duplicated = [...chatTypes].filter((type) => configTypes.has(type));
-    const covered = new Set([...chatTypes, ...configTypes]);
-    const missing = WEBVIEW_TO_EXTENSION_MESSAGE_TYPES.filter((type) => !covered.has(type));
+describe('VS Code Agent Host message controller composition', () => {
+  it('keeps every Webview-to-Host message assigned to the canonical Host composition', () => {
+    const chatTypes = new Set<string>(VSCODE_AGENT_HOST_ROUTE_TYPES);
+    const missing = AGENT_WEBVIEW_TO_HOST_MESSAGE_TYPES.filter((type) => !chatTypes.has(type));
 
-    expect(duplicated).toEqual([]);
     expect(missing).toEqual([]);
-    expect(configTypes.has('getSkills')).toBe(false);
+    expect(chatTypes.size).toBe(VSCODE_AGENT_HOST_ROUTE_TYPES.length);
     expect(chatTypes.has('getSkills')).toBe(true);
+    expect(chatTypes.has('getConfig')).toBe(true);
   });
 
   it('classifies every VSCode Agent host route as implemented', () => {
-    const implementedRoutes: Partial<Record<WebviewToExtensionMessage['type'], 'implemented'>> = {};
-    for (const type of [...CHAT_WEBVIEW_MESSAGE_ROUTER_TYPES, ...CONFIG_BRIDGE_MESSAGE_TYPES]) {
+    const implementedRoutes: Partial<Record<AgentWebviewToHostMessage['type'], 'implemented'>> = {};
+    for (const type of VSCODE_AGENT_HOST_ROUTE_TYPES) {
       implementedRoutes[type] = 'implemented';
     }
 
@@ -213,10 +222,21 @@ describe('handleChatWebviewMessage', () => {
     ).toEqual([]);
   });
 
+  it('keeps keyboard focus and editability as injected VS Code effects', async () => {
+    const deps = createDeps();
+    const controller = createVSCodeAgentHostMessageController(deps);
+
+    await controller.handle({ type: 'webviewKeyboardFocus', focused: true });
+    await controller.handle({ type: 'webviewKeyboardEditable', editable: true });
+
+    expect(deps.setKeyboardFocused).toHaveBeenCalledWith(true);
+    expect(deps.setKeyboardEditable).toHaveBeenCalledWith(true);
+  });
+
   it('routes explicit conversation snapshot reads without foreground activation', () => {
     const deps = createDeps();
 
-    handleChatWebviewMessage(
+    handleVSCodeAgentHostMessage(
       { type: 'getConversationSnapshot', conversationId: 'conv-background' },
       deps,
     );
@@ -238,7 +258,7 @@ describe('handleChatWebviewMessage', () => {
       creativityPreset: 'creative' as const,
     };
 
-    handleChatWebviewMessage(
+    handleVSCodeAgentHostMessage(
       {
         type: 'sendMessage',
         conversationId: 'conv-1',
@@ -285,8 +305,8 @@ describe('handleChatWebviewMessage', () => {
   it('routes message queue commands with explicit conversation scope', () => {
     const deps = createDeps();
 
-    handleChatWebviewMessage({ type: 'getMessageQueue', conversationId: 'conv-1' }, deps);
-    handleChatWebviewMessage(
+    handleVSCodeAgentHostMessage({ type: 'getMessageQueue', conversationId: 'conv-1' }, deps);
+    handleVSCodeAgentHostMessage(
       {
         type: 'promoteQueuedMessage',
         conversationId: 'conv-1',
@@ -294,7 +314,7 @@ describe('handleChatWebviewMessage', () => {
       },
       deps,
     );
-    handleChatWebviewMessage(
+    handleVSCodeAgentHostMessage(
       {
         type: 'cancelQueuedMessage',
         conversationId: 'conv-1',
@@ -302,7 +322,7 @@ describe('handleChatWebviewMessage', () => {
       },
       deps,
     );
-    handleChatWebviewMessage(
+    handleVSCodeAgentHostMessage(
       {
         type: 'editQueuedMessage',
         tabId: 'tab-1',
@@ -338,7 +358,7 @@ describe('handleChatWebviewMessage', () => {
     const deps = createDeps();
     vi.mocked(deps.characterDialogue!.hasSession).mockReturnValue(true);
 
-    handleChatWebviewMessage(
+    handleVSCodeAgentHostMessage(
       {
         type: 'sendMessage',
         conversationId: 'npc-session-1',
@@ -356,7 +376,7 @@ describe('handleChatWebviewMessage', () => {
     const deps = createDeps();
     vi.mocked(deps.embodyCharacter!.hasSession).mockReturnValue(true);
 
-    handleChatWebviewMessage(
+    handleVSCodeAgentHostMessage(
       {
         type: 'sendMessage',
         conversationId: 'embody-session-1',
@@ -376,7 +396,7 @@ describe('handleChatWebviewMessage', () => {
   it('routes roleplay candidate search without requiring an ordinary conversation', () => {
     const deps = createDeps();
 
-    handleChatWebviewMessage(
+    handleVSCodeAgentHostMessage(
       {
         type: 'searchProjectFiles',
         filter: '',
@@ -396,7 +416,7 @@ describe('handleChatWebviewMessage', () => {
   it('routes entry mention search without requiring an ordinary conversation', () => {
     const deps = createDeps();
 
-    handleChatWebviewMessage(
+    handleVSCodeAgentHostMessage(
       {
         type: 'searchProjectFiles',
         filter: 'hero',
@@ -418,10 +438,27 @@ describe('handleChatWebviewMessage', () => {
     );
   });
 
+  it('rejects ordinary project search without falling back to an active conversation', async () => {
+    const deps = createDeps();
+    const controller = createVSCodeAgentHostMessageController(deps);
+
+    await controller.handle({
+      type: 'searchProjectFiles',
+      filter: 'hero',
+      conversationId: '',
+    });
+
+    expect(deps.messages?.searchProjectFiles).not.toHaveBeenCalled();
+    expect(deps.webview.postMessage).toHaveBeenCalledWith({
+      type: 'globalError',
+      message: 'Cannot search project files without an explicit conversationId.',
+    });
+  });
+
   it('routes entry roleplay launches directly to Character Dialogue without an ordinary tab', () => {
     const deps = createDeps();
 
-    handleChatWebviewMessage(
+    handleVSCodeAgentHostMessage(
       {
         type: 'startCharacterDialogueFromSlash',
         args: 'entity:char-xiaoju --roleplay --skip-enrich',
@@ -439,7 +476,7 @@ describe('handleChatWebviewMessage', () => {
   it('routes explicit Candidate confirmation to Character Dialogue without trusting Candidate facts', () => {
     const deps = createDeps();
 
-    handleChatWebviewMessage(
+    handleVSCodeAgentHostMessage(
       {
         type: 'confirmRoleplayCandidate',
         projectSearchItemId: 'entity-projection:semantic-xiaoju',
@@ -458,7 +495,7 @@ describe('handleChatWebviewMessage', () => {
   it('routes Character Dialogue exit events to the Character Dialogue controller', () => {
     const deps = createDeps();
 
-    handleChatWebviewMessage(
+    handleVSCodeAgentHostMessage(
       { type: 'exitCharacterDialogueSession', sessionId: 'npc-session-1' },
       deps,
     );
@@ -469,7 +506,7 @@ describe('handleChatWebviewMessage', () => {
   it('routes Embody Character exit events to the Embody controller', () => {
     const deps = createDeps();
 
-    handleChatWebviewMessage(
+    handleVSCodeAgentHostMessage(
       { type: 'exitEmbodyCharacterSession', sessionId: 'embody-session-1' },
       deps,
     );
@@ -491,7 +528,7 @@ describe('handleChatWebviewMessage', () => {
       },
     };
 
-    handleChatWebviewMessage(message, deps);
+    handleVSCodeAgentHostMessage(message, deps);
 
     expect(deps.activateConversation).toHaveBeenCalledWith(message);
     expect(deps.conversationMessageHandler.handleSwitchConversation).not.toHaveBeenCalled();
@@ -500,7 +537,7 @@ describe('handleChatWebviewMessage', () => {
   it('routes delete conversation activation intent to the conversation handler', () => {
     const deps = createDeps();
 
-    handleChatWebviewMessage(
+    handleVSCodeAgentHostMessage(
       { type: 'deleteConversation', conversationId: 'conv-2', activateNext: false },
       deps,
     );
@@ -516,7 +553,7 @@ describe('handleChatWebviewMessage', () => {
     const deps = createDeps();
     vi.mocked(vscode.commands.executeCommand).mockClear();
 
-    handleChatWebviewMessage(
+    handleVSCodeAgentHostMessage(
       {
         type: 'invokePluginSlashCommand',
         extensionId: 'neko.canvas',
@@ -538,7 +575,7 @@ describe('handleChatWebviewMessage', () => {
   it('routes builtin slash commands with explicit conversation context', () => {
     const deps = createDeps();
 
-    handleChatWebviewMessage(
+    handleVSCodeAgentHostMessage(
       {
         type: 'invokeSlashCommand',
         command: 'as',
@@ -560,7 +597,7 @@ describe('handleChatWebviewMessage', () => {
     const deps = createDeps();
     vi.mocked(vscode.commands.executeCommand).mockClear();
 
-    handleChatWebviewMessage(
+    handleVSCodeAgentHostMessage(
       {
         type: 'invokeSkill',
         skillName: 'quality-review',
@@ -583,7 +620,7 @@ describe('handleChatWebviewMessage', () => {
   it('routes sendToPlugin with the media type hint intact', () => {
     const deps = createDeps();
 
-    handleChatWebviewMessage(
+    handleVSCodeAgentHostMessage(
       {
         type: 'sendToPlugin',
         target: 'canvas',
@@ -611,7 +648,7 @@ describe('handleChatWebviewMessage', () => {
       ],
     };
 
-    handleChatWebviewMessage(
+    handleVSCodeAgentHostMessage(
       {
         type: 'sendToPlugin',
         target: 'cut',
@@ -628,7 +665,7 @@ describe('handleChatWebviewMessage', () => {
     const invoke = vi.fn();
     mockCanvasExtension(invoke);
 
-    handleChatWebviewMessage(
+    handleVSCodeAgentHostMessage(
       {
         type: 'requestCanvasAuthoringHandoff',
         requestId: 'req-1',
@@ -712,7 +749,7 @@ describe('handleChatWebviewMessage', () => {
     const deps = createDeps();
     const canonicalStoryboard = createCanonicalStoryboardHandoffFixture();
 
-    handleChatWebviewMessage(
+    handleVSCodeAgentHostMessage(
       {
         type: 'requestCanvasAuthoringHandoff',
         requestId: 'req-canonical-storyboard',
@@ -782,7 +819,7 @@ describe('handleChatWebviewMessage', () => {
   it('treats Markdown wording as normal document intent rather than structured production', async () => {
     const deps = createDeps();
 
-    handleChatWebviewMessage(
+    handleVSCodeAgentHostMessage(
       {
         type: 'requestCanvasAuthoringHandoff',
         requestId: 'req-markdown-source-format',
@@ -818,7 +855,7 @@ describe('handleChatWebviewMessage', () => {
     const invoke = vi.fn();
     mockCanvasExtension(invoke);
 
-    handleChatWebviewMessage(
+    handleVSCodeAgentHostMessage(
       {
         type: 'requestCanvasAuthoringHandoff',
         requestId: 'authoring-1',
@@ -922,7 +959,7 @@ describe('handleChatWebviewMessage', () => {
   it('keeps Markdown projection hints as Agent handoff metadata instead of Canvas validation authority', async () => {
     const deps = createDeps();
 
-    handleChatWebviewMessage(
+    handleVSCodeAgentHostMessage(
       {
         type: 'requestCanvasAuthoringHandoff',
         requestId: 'markdown-projection-1',
@@ -1092,7 +1129,7 @@ describe('handleChatWebviewMessage', () => {
     const invoke = vi.fn();
     mockCanvasExtension(invoke);
 
-    handleChatWebviewMessage(
+    handleVSCodeAgentHostMessage(
       {
         type: 'invokeAgentCapabilityLifecycle',
         requestId: 'req-apply',
@@ -1143,7 +1180,7 @@ describe('handleChatWebviewMessage', () => {
     const invoke = vi.fn();
     mockCanvasExtension(invoke);
 
-    handleChatWebviewMessage(
+    handleVSCodeAgentHostMessage(
       {
         type: 'invokeAgentCapabilityLifecycle',
         requestId: 'req-no-descriptor',
@@ -1189,7 +1226,7 @@ describe('handleChatWebviewMessage', () => {
     const invoke = vi.fn().mockResolvedValue({});
     mockCanvasExtension(invoke);
 
-    handleChatWebviewMessage(
+    handleVSCodeAgentHostMessage(
       {
         type: 'invokeAgentCapabilityLifecycle',
         requestId: 'req-invalid-canvas-result',
@@ -1242,7 +1279,7 @@ describe('handleChatWebviewMessage', () => {
     });
     mockCanvasExtension(invoke);
 
-    handleChatWebviewMessage(
+    handleVSCodeAgentHostMessage(
       {
         type: 'invokeAgentCapabilityLifecycle',
         requestId: 'req-missing-canvas-refs',
@@ -1296,7 +1333,7 @@ describe('handleChatWebviewMessage', () => {
     });
     mockCanvasExtension(invoke);
 
-    handleChatWebviewMessage(
+    handleVSCodeAgentHostMessage(
       {
         type: 'invokeAgentCapabilityLifecycle',
         requestId: 'req-apply-approved',
@@ -1349,7 +1386,7 @@ describe('handleChatWebviewMessage', () => {
     const invoke = vi.fn();
     mockCanvasExtension(invoke);
 
-    handleChatWebviewMessage(
+    handleVSCodeAgentHostMessage(
       {
         type: 'invokeAgentCapabilityLifecycle',
         requestId: 'req-retired-storyboard',
@@ -1403,7 +1440,7 @@ describe('handleChatWebviewMessage', () => {
     });
     mockCanvasExtension(invoke);
 
-    handleChatWebviewMessage(
+    handleVSCodeAgentHostMessage(
       {
         type: 'invokeAgentCapabilityLifecycle',
         requestId: 'follow-up-approved',
@@ -1451,20 +1488,18 @@ describe('handleChatWebviewMessage', () => {
     const deps = createDeps();
     const locator = { kind: 'page' as const, pageNumber: 2, pageIndex: 1 };
 
-    handleChatWebviewMessage(
+    handleVSCodeAgentHostMessage(
       {
         type: 'revealDocumentLocator',
-        filePath: '/books/a.pdf',
+        contentLocator: { kind: 'workspace-file', path: 'books/a.pdf' },
         locator,
-        source: { filePath: '/books/a.pdf', format: 'pdf' },
       },
       deps,
     );
 
     expect(deps.fileOperationHandler.handleRevealDocumentLocator).toHaveBeenCalledWith({
-      filePath: '/books/a.pdf',
+      contentLocator: { kind: 'workspace-file', path: 'books/a.pdf' },
       locator,
-      source: { filePath: '/books/a.pdf', format: 'pdf' },
     });
   });
 
@@ -1472,15 +1507,17 @@ describe('handleChatWebviewMessage', () => {
     const deps = createDeps();
     vi.mocked(vscode.commands.executeCommand).mockClear();
 
-    handleChatWebviewMessage(
+    handleVSCodeAgentHostMessage(
       {
         type: 'revealContextSource',
         contextType: 'media',
         contextId: 'media-1',
+        contentLocator: {
+          kind: 'workspace-file',
+          path: 'neko/assets/References/hero.png',
+        },
         navigationData: {
           partition: 'media-library',
-          filePath: '${REFS}/hero.png',
-          resolvedPath: '/refs/hero.png',
         },
       },
       deps,
@@ -1488,7 +1525,7 @@ describe('handleChatWebviewMessage', () => {
 
     expect(vscode.commands.executeCommand).toHaveBeenCalledWith(
       'neko.assets.revealMediaLibraryFile',
-      '/refs/hero.png',
+      'neko/assets/References/hero.png',
     );
     expect(deps.fileOperationHandler.handleOpenFile).not.toHaveBeenCalled();
   });
@@ -1497,12 +1534,12 @@ describe('handleChatWebviewMessage', () => {
     const deps = createDeps();
     vi.mocked(vscode.commands.executeCommand).mockClear();
 
-    handleChatWebviewMessage(
+    handleVSCodeAgentHostMessage(
       {
         type: 'invokePluginSlashCommand',
         extensionId: 'neko.canvas',
         commandId: 'batch',
-      } as WebviewToExtensionMessage,
+      } as AgentWebviewToHostMessage,
       deps,
     );
 
@@ -1516,7 +1553,7 @@ describe('handleChatWebviewMessage', () => {
   it('routes getSkills to the chat skill handler', () => {
     const deps = createDeps();
 
-    handleChatWebviewMessage({ type: 'getSkills' }, deps);
+    handleVSCodeAgentHostMessage({ type: 'getSkills' }, deps);
 
     expect(deps.skillHandler.sendSkillsList).toHaveBeenCalledWith(deps.webview);
   });
@@ -1524,10 +1561,41 @@ describe('handleChatWebviewMessage', () => {
   it('routes lifecycle config snapshot refresh without calling settings directly', () => {
     const deps = createDeps();
 
-    handleChatWebviewMessage({ type: 'refreshConfigSnapshot' }, deps);
+    handleVSCodeAgentHostMessage({ type: 'refreshConfigSnapshot' }, deps);
 
     expect(deps.refreshConfigSnapshot).toHaveBeenCalledTimes(1);
     expect(deps.settingsHandler.sendSettings).not.toHaveBeenCalled();
+  });
+
+  it('routes config reads and file interactions through injected VS Code effects', () => {
+    const deps = createDeps();
+
+    handleVSCodeAgentHostMessage({ type: 'getConfig' }, deps);
+    handleVSCodeAgentHostMessage({ type: 'openUserConfigFile' }, deps);
+    handleVSCodeAgentHostMessage({ type: 'openConfigFile' }, deps);
+
+    expect(deps.sendConfigState).toHaveBeenCalledTimes(1);
+    expect(deps.openUserConfigFile).toHaveBeenCalledTimes(1);
+    expect(deps.fileOperationHandler.handleOpenConfigFile).toHaveBeenCalledTimes(1);
+  });
+
+  it('routes explicit context operations through injected VS Code effects', () => {
+    const deps = createDeps();
+
+    handleVSCodeAgentHostMessage(
+      { type: 'getContextTokenCount', conversationId: 'conversation-1' },
+      deps,
+    );
+    handleVSCodeAgentHostMessage(
+      { type: 'compressContext', conversationId: 'conversation-1' },
+      deps,
+    );
+
+    expect(deps.contextHandler.getTokenCount).toHaveBeenCalledWith(deps.webview, 'conversation-1');
+    expect(deps.contextHandler.compressContext).toHaveBeenCalledWith(
+      deps.webview,
+      'conversation-1',
+    );
   });
 });
 

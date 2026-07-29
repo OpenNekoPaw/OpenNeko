@@ -17,6 +17,10 @@ System contracts are defined by:
 - `turn/`: input, attachment, context, artifact collection and product-routing helpers around one Pi turn.
 - `capability/`: consumption of `AgentCapabilityProvider` contributions and Host-injected content/external
   processor/research ports.
+- `host-controller/`: Host-neutral Agent message connection identity, typed transport, shared
+  conversation/turn/queue/Tool/Mermaid/config/settings/Skill/context/content/projection routing
+  and responsibility-specific effect ports. It cannot import VS Code, Electron, Pi instances,
+  projection owners or concrete Host effects.
 - `stream/`: reserved owner for host-neutral Pi event-stream state and background observation when those
   collaborators require a directory; it must not become a second event bus or transport layer.
 - `projection/`: conversation-owned authoritative projection state, operation buffering and immutable
@@ -60,13 +64,14 @@ Task continuation or duplicate Journal. Those concepts must not be reintroduced 
 
 ## Canonical files
 
-| Category               | Files                                                                                                                                                                                                                                                                                                    |
-| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Session product state  | `session/agent-message-queue.ts`, `session/conversation-run-registry.ts`, `session/execution-ownership.ts`                                                                                                                                                                                               |
-| Turn adapters          | `turn/message-runtime.ts`, `turn/agent-turn-context.ts`, `turn/multimodal-context-packet.ts`, `turn/timeline-context-runtime.ts`, `turn/canvas-ambient-context-runtime.ts`, `turn/context-control-runtime.ts`, `turn/workspace-input-processor-runtime.ts`, `turn/creator-visible-artifact-collector.ts` |
-| Capability consumption | `capability/capability-registry-runtime.ts`, `capability/capability-runtime-bindings.ts`, `capability/capability-runtime-registries.ts`, `capability/agent-content-access-runtime.ts`, `capability/external-processor-runtime.ts`                                                                        |
-| Projection             | `projection/conversation-projection-store.ts`, `projection/conversation-projection-operation-buffer.ts`                                                                                                                                                                                                  |
-| Root collaborators     | `agent-entry-intent-runtime.ts`, `agent-state-runtime.ts`, `config-bridge-runtime.ts`, `conversation-route-runtime.ts`, `conversation-tab-runtime.ts`, `plugin-transfer-runtime.ts`, `subagent-event-runtime.ts`, `document-module-diagnostics.ts`                                                       |
+| Category               | Files                                                                                                                                                                                                                                                                                                                                                   |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Session product state  | `session/agent-message-queue.ts`, `session/conversation-run-registry.ts`, `session/execution-ownership.ts`                                                                                                                                                                                                                                              |
+| Turn adapters          | `turn/message-runtime.ts`, `turn/agent-turn-context.ts`, `turn/multimodal-context-packet.ts`, `turn/timeline-context-runtime.ts`, `turn/canvas-ambient-context-runtime.ts`, `turn/context-control-runtime.ts`, `turn/workspace-input-processor-runtime.ts`, `turn/creator-visible-artifact-collector.ts`                                                |
+| Capability consumption | `capability/capability-registry-runtime.ts`, `capability/capability-runtime-bindings.ts`, `capability/capability-runtime-registries.ts`, `capability/agent-content-access-runtime.ts`, `capability/external-processor-runtime.ts`                                                                                                                       |
+| Host controller        | `host-controller/agent-host-controller-contract.ts`, `host-controller/agent-host-message-controller.ts`, `host-controller/agent-conversation-controller.ts`, `host-controller/agent-config-controller.ts`, `host-controller/agent-skill-controller.ts`, `host-controller/agent-content-controller.ts`, `host-controller/agent-projection-controller.ts` |
+| Projection             | `projection/conversation-projection-store.ts`, `projection/conversation-projection-operation-buffer.ts`                                                                                                                                                                                                                                                 |
+| Root collaborators     | `agent-entry-intent-runtime.ts`, `agent-state-runtime.ts`, `config-bridge-runtime.ts`, `conversation-route-runtime.ts`, `conversation-tab-runtime.ts`, `plugin-transfer-runtime.ts`, `subagent-event-runtime.ts`, `document-module-diagnostics.ts`                                                                                                      |
 
 `runtime/index.ts` exposes retained product adapters only. `Executor`, `AgentSession` and `AgentRunner`
 public surfaces are intentionally absent.

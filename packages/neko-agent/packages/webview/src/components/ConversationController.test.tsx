@@ -410,6 +410,114 @@ vi.mock('@/components/ChatView/InputArea', async () => {
 });
 
 describe('ConversationController entry state', () => {
+  it('prefills a host handoff exactly once without creating or sending a conversation', () => {
+    vi.clearAllMocks();
+    const view = render(
+      <ConversationController
+        {...createProps()}
+        initialInput={{ id: 'handoff-1', value: 'Plan a short film' }}
+      />,
+    );
+
+    expect(screen.getByRole('textbox')).toHaveProperty('value', 'Plan a short film');
+    expect(vscodeMocks.newConversation).not.toHaveBeenCalled();
+
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Edited plan' } });
+    view.rerender(
+      <ConversationController
+        {...createProps()}
+        initialInput={{ id: 'handoff-1', value: 'Plan a short film' }}
+      />,
+    );
+
+    expect(screen.getByRole('textbox')).toHaveProperty('value', 'Edited plan');
+    expect(vscodeMocks.newConversation).not.toHaveBeenCalled();
+  });
+
+  it('activates an explicit host navigation target only after catalog and tab state hydrate', () => {
+    vi.clearAllMocks();
+    render(
+      <ConversationController
+        {...createProps()}
+        initialConversation={{ id: 'conversation-1', title: 'Conversation one' }}
+      />,
+    );
+
+    act(() => {
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: {
+            type: 'conversationList',
+            conversations: [
+              {
+                id: 'conversation-1',
+                title: 'Conversation one',
+                createdAt: '2026-07-28T00:00:00.000Z',
+                updatedAt: '2026-07-28T00:01:00.000Z',
+                messageCount: 1,
+              },
+            ],
+          },
+        }),
+      );
+    });
+
+    expect(vscodeMocks.activateConversation).not.toHaveBeenCalled();
+
+    act(() => {
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: {
+            type: 'tabState',
+            revision: 0,
+            tabState: { openTabs: [], activeTabId: null },
+          },
+        }),
+      );
+    });
+
+    expect(vscodeMocks.activateConversation).toHaveBeenCalledTimes(1);
+    expect(vscodeMocks.activateConversation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        conversationId: 'conversation-1',
+        expectedTabStateRevision: 0,
+      }),
+    );
+  });
+
+  it('fails visibly without activating another conversation when the navigation target is missing', () => {
+    vi.clearAllMocks();
+    render(
+      <ConversationController
+        {...createProps()}
+        initialConversation={{ id: 'missing-conversation', title: 'Missing conversation' }}
+      />,
+    );
+
+    act(() => {
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: {
+            type: 'conversationList',
+            conversations: [],
+          },
+        }),
+      );
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: {
+            type: 'tabState',
+            revision: 0,
+            tabState: { openTabs: [], activeTabId: null },
+          },
+        }),
+      );
+    });
+
+    expect(vscodeMocks.activateConversation).not.toHaveBeenCalled();
+    expect(screen.getByText('chat.conversation.navigationTargetUnavailable')).toBeTruthy();
+  });
+
   it('keeps the tabless composer pending until the global config snapshot arrives', () => {
     render(<ConversationController {...createProps({ hasConfigSnapshot: false })} />);
 

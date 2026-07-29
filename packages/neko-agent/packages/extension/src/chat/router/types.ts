@@ -5,13 +5,14 @@ import type {
   UpdateTabStateWebviewMessage,
 } from '@neko-agent/types';
 import type { AgentCapabilityLifecycleDescriptor } from '@neko/shared';
+import type { AgentHostConnectionIdentity } from '@neko/agent/runtime';
 import type { DragDropBroker } from '../../services/DragDropBroker';
 import type { AgentMessageTurnHandler } from '../agentMessageTurnHandler';
 import type {
   CharacterDialogueController,
   EmbodyCharacterController,
 } from '@neko/chara/host-vscode';
-import type { ConversationProjectionAttachmentServer } from '../projection/conversationProjectionAttachmentServer';
+import type { ConversationProjectionAttachmentServer } from '@neko/agent/runtime';
 import type {
   ContextHandler,
   ConversationMessageHandler,
@@ -21,8 +22,9 @@ import type {
   SlashCommandHandler,
 } from '../handlers';
 
-export interface ChatWebviewMessageRouterDeps {
+export interface VSCodeAgentHostControllerDeps {
   readonly webview: vscode.Webview;
+  readonly connectionIdentity: AgentHostConnectionIdentity;
   readonly projectionAttachments: ConversationProjectionAttachmentServer;
   readonly announceProjectionEndpoint: (protocolVersion: number, realmId: string) => void;
   readonly reportProjectionProtocolError: (error: Error, key: ProjectionAttachmentKey) => void;
@@ -36,10 +38,14 @@ export interface ChatWebviewMessageRouterDeps {
   readonly slashCommandHandler: SlashCommandHandler;
   readonly conversationMessageHandler: ConversationMessageHandler;
   readonly dndBroker: DragDropBroker;
-  readonly refreshConfigSnapshot: () => void;
+  readonly sendConfigState: () => Promise<void>;
+  readonly refreshConfigSnapshot: () => Promise<void>;
+  readonly openUserConfigFile: () => Promise<void>;
   readonly sendTabState: () => void;
   readonly activateConversation: (message: ActivateConversationWebviewMessage) => void;
   readonly updateTabState: (message: UpdateTabStateWebviewMessage) => void;
+  readonly setKeyboardFocused: (focused: boolean) => void | Promise<void>;
+  readonly setKeyboardEditable: (editable: boolean) => void | Promise<void>;
   readonly syncCanvasAmbientScopeFromActiveConversation: () => void;
   readonly resolveLifecycleCapabilityDescriptor?: (
     capabilityId: string,

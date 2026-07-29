@@ -1,7 +1,7 @@
 import type {
   AgentHostRuntimeAdapter,
   ConversationProjectionAttachmentHostFrame,
-  ExtensionToWebviewMessage,
+  AgentHostToWebviewMessage,
   ProjectionAttachmentKey,
 } from '@neko-agent/types';
 import { AGENT_WEBVIEW_PROTOCOL_VERSION, isSameProjectionAttachment } from '@neko-agent/types';
@@ -94,7 +94,7 @@ class DefaultProjectionEndpointController implements ProjectionEndpointControlle
     }
   }
 
-  private acceptHostMessage(message: ExtensionToWebviewMessage): void {
+  private acceptHostMessage(message: AgentHostToWebviewMessage): void {
     if (message.type === 'projectionEndpointReady') {
       if (message.protocolVersion !== AGENT_WEBVIEW_PROTOCOL_VERSION) {
         throw new Error(

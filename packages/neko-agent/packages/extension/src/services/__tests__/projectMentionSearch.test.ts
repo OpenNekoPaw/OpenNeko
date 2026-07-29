@@ -112,9 +112,9 @@ describe('projectMentionSearch', () => {
           type: 'character',
           label: '小橘',
           source: 'story',
-          filePath: 'cases/test.fountain',
+          contentLocator: { kind: 'workspace-file', path: 'cases/test.fountain' },
           navigationData: expect.objectContaining({
-            filePath: 'cases/test.fountain',
+            partition: 'story-symbols',
           }),
         }),
         expect.objectContaining({
@@ -127,8 +127,11 @@ describe('projectMentionSearch', () => {
           navigationData: expect.objectContaining({
             partition: 'media-library',
             sourceId: 'neko/assets/Characters/xiaoju.png',
-            filePath: 'neko/assets/Characters/xiaoju.png',
           }),
+          contentLocator: {
+            kind: 'workspace-file',
+            path: 'neko/assets/Characters/xiaoju.png',
+          },
         }),
         expect.objectContaining({
           type: 'entity',
@@ -523,11 +526,12 @@ describe('projectMentionSearch', () => {
         label: 'book.epub',
         source: 'media-library',
         mediaType: 'document',
-        filePath: 'neko/assets/EPUBS/Blame/book.epub',
+        contentLocator: {
+          kind: 'workspace-file',
+          path: 'neko/assets/EPUBS/Blame/book.epub',
+        },
         navigationData: expect.objectContaining({
           partition: 'media-library',
-          filePath: 'neko/assets/EPUBS/Blame/book.epub',
-          portablePath: 'neko/assets/EPUBS/Blame/book.epub',
           sourceId: 'neko/assets/EPUBS/Blame/book.epub',
         }),
       }),
@@ -592,10 +596,8 @@ describe('projectMentionSearch', () => {
         label: '[Kmoe][浪客行]卷01.epub',
         source: 'media-library',
         mediaType: 'document',
-        filePath: linkedPath,
+        contentLocator: { kind: 'workspace-file', path: linkedPath },
         navigationData: expect.objectContaining({
-          filePath: linkedPath,
-          portablePath: linkedPath,
           sourceId: linkedPath,
         }),
       }),

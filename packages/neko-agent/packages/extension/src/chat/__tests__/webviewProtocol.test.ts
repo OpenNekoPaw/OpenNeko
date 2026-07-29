@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseSendMessageWebviewMessage, parseWebviewToExtensionMessage } from '@neko-agent/types';
+import { parseSendMessageWebviewMessage, parseAgentWebviewToHostMessage } from '@neko-agent/types';
 
 describe('parseSendMessageWebviewMessage', () => {
   it('accepts explicit conversation and model refs', () => {
@@ -119,10 +119,10 @@ describe('parseSendMessageWebviewMessage', () => {
   });
 });
 
-describe('parseWebviewToExtensionMessage', () => {
+describe('parseAgentWebviewToHostMessage', () => {
   it('delegates valid sendMessage payloads to the explicit model-ref parser', () => {
     expect(
-      parseWebviewToExtensionMessage({
+      parseAgentWebviewToHostMessage({
         type: 'sendMessage',
         conversationId: 'conv-1',
         message: 'hello',
@@ -140,7 +140,7 @@ describe('parseWebviewToExtensionMessage', () => {
 
   it('rejects legacy sendMessage provider/model fields at the shared boundary', () => {
     expect(
-      parseWebviewToExtensionMessage({
+      parseAgentWebviewToHostMessage({
         type: 'sendMessage',
         conversationId: 'conv-1',
         message: 'hello',
@@ -153,14 +153,14 @@ describe('parseWebviewToExtensionMessage', () => {
 
   it('accepts conversation-scoped message queue commands', () => {
     expect(
-      parseWebviewToExtensionMessage({
+      parseAgentWebviewToHostMessage({
         type: 'getMessageQueue',
         conversationId: 'conv-1',
       }),
     ).toEqual({ type: 'getMessageQueue', conversationId: 'conv-1' });
 
     expect(
-      parseWebviewToExtensionMessage({
+      parseAgentWebviewToHostMessage({
         type: 'promoteQueuedMessage',
         conversationId: 'conv-1',
         queueItemId: 'queue-1',
@@ -172,7 +172,7 @@ describe('parseWebviewToExtensionMessage', () => {
     });
 
     expect(
-      parseWebviewToExtensionMessage({
+      parseAgentWebviewToHostMessage({
         type: 'cancelQueuedMessage',
         conversationId: 'conv-1',
         queueItemId: 'queue-1',
@@ -184,7 +184,7 @@ describe('parseWebviewToExtensionMessage', () => {
     });
 
     expect(
-      parseWebviewToExtensionMessage({
+      parseAgentWebviewToHostMessage({
         type: 'editQueuedMessage',
         tabId: 'tab-1',
         conversationId: 'conv-1',
@@ -200,7 +200,7 @@ describe('parseWebviewToExtensionMessage', () => {
 
   it('accepts conversation-scoped plugin slash commands', () => {
     expect(
-      parseWebviewToExtensionMessage({
+      parseAgentWebviewToHostMessage({
         type: 'invokePluginSlashCommand',
         extensionId: 'neko.canvas',
         commandId: 'batch',
@@ -218,31 +218,31 @@ describe('parseWebviewToExtensionMessage', () => {
 
   it('rejects conversation-bound messages without conversationId', () => {
     expect(
-      parseWebviewToExtensionMessage({
+      parseAgentWebviewToHostMessage({
         type: 'cancelTask',
         taskId: 'task-1',
       }),
     ).toBeNull();
     expect(
-      parseWebviewToExtensionMessage({
+      parseAgentWebviewToHostMessage({
         type: 'cancelTask',
         conversationId: 'conv-1',
         taskId: 'task-1',
       }),
     ).toBeNull();
     expect(
-      parseWebviewToExtensionMessage({
+      parseAgentWebviewToHostMessage({
         type: 'getMessageQueue',
       }),
     ).toBeNull();
     expect(
-      parseWebviewToExtensionMessage({
+      parseAgentWebviewToHostMessage({
         type: 'promoteQueuedMessage',
         queueItemId: 'queue-1',
       }),
     ).toBeNull();
     expect(
-      parseWebviewToExtensionMessage({
+      parseAgentWebviewToHostMessage({
         type: 'cancelQueuedMessage',
         conversationId: 'conv-1',
       }),
@@ -299,12 +299,12 @@ describe('parseWebviewToExtensionMessage', () => {
       { type: 'invokePluginSlashCommand', extensionId: 'neko.canvas', commandId: 'batch' },
     ],
   ])('rejects %s without explicit conversation scope', (_name, payload) => {
-    expect(parseWebviewToExtensionMessage(payload)).toBeNull();
+    expect(parseAgentWebviewToHostMessage(payload)).toBeNull();
   });
 
   it('rejects plugin slash commands without conversationId', () => {
     expect(
-      parseWebviewToExtensionMessage({
+      parseAgentWebviewToHostMessage({
         type: 'invokePluginSlashCommand',
         extensionId: 'neko.canvas',
         commandId: 'batch',
@@ -313,14 +313,14 @@ describe('parseWebviewToExtensionMessage', () => {
   });
 
   it('accepts webview keyboard ownership messages without conversation scope', () => {
-    expect(parseWebviewToExtensionMessage({ type: 'webviewKeyboardFocus', focused: true })).toEqual(
+    expect(parseAgentWebviewToHostMessage({ type: 'webviewKeyboardFocus', focused: true })).toEqual(
       {
         type: 'webviewKeyboardFocus',
         focused: true,
       },
     );
     expect(
-      parseWebviewToExtensionMessage({ type: 'webviewKeyboardEditable', editable: true }),
+      parseAgentWebviewToHostMessage({ type: 'webviewKeyboardEditable', editable: true }),
     ).toEqual({
       type: 'webviewKeyboardEditable',
       editable: true,
@@ -330,7 +330,7 @@ describe('parseWebviewToExtensionMessage', () => {
   it('accepts canonical Storyboard Canvas handoff without flattening scene or media ownership', () => {
     const canonicalStoryboard = createCanonicalStoryboardHandoffFixture();
     expect(
-      parseWebviewToExtensionMessage({
+      parseAgentWebviewToHostMessage({
         type: 'requestCanvasAuthoringHandoff',
         requestId: 'request-storyboard-1',
         conversationId: 'conv-1',
@@ -371,7 +371,7 @@ describe('parseWebviewToExtensionMessage', () => {
     const shot = canonicalStoryboard.scenes[0]!.shots[0]!;
 
     expect(
-      parseWebviewToExtensionMessage({
+      parseAgentWebviewToHostMessage({
         type: 'requestCanvasAuthoringHandoff',
         requestId: 'request-storyboard-flat-scenes',
         conversationId: 'conv-1',
@@ -394,7 +394,7 @@ describe('parseWebviewToExtensionMessage', () => {
   it('rejects malformed or runtime-only canonical Storyboard Canvas handoffs', () => {
     const canonicalStoryboard = createCanonicalStoryboardHandoffFixture();
     expect(
-      parseWebviewToExtensionMessage({
+      parseAgentWebviewToHostMessage({
         type: 'requestCanvasAuthoringHandoff',
         requestId: 'request-storyboard-invalid-revision',
         conversationId: 'conv-1',
@@ -407,7 +407,7 @@ describe('parseWebviewToExtensionMessage', () => {
     const scene = canonicalStoryboard.scenes[0]!;
     const shot = scene.shots[0]!;
     expect(
-      parseWebviewToExtensionMessage({
+      parseAgentWebviewToHostMessage({
         type: 'requestCanvasAuthoringHandoff',
         requestId: 'request-storyboard-runtime-ref',
         conversationId: 'conv-1',
@@ -439,7 +439,7 @@ describe('parseWebviewToExtensionMessage', () => {
 
   it('accepts tab state updates with explicit tab-to-conversation mapping', () => {
     expect(
-      parseWebviewToExtensionMessage({
+      parseAgentWebviewToHostMessage({
         type: 'updateTabState',
         expectedTabStateRevision: 3,
         openTabs: [{ id: 'tab-1', title: 'Chat', conversationId: 'conv-1' }],

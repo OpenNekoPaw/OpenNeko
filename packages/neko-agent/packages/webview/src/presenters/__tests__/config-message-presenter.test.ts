@@ -183,7 +183,7 @@ describe('config message presenter', () => {
         conversationId: 'conv-1',
         files: [
           {
-            path: 'src/index.ts',
+            locator: { kind: 'workspace-file', path: 'src/index.ts' },
             name: 'index.ts',
             type: 'file',
             icon: 'TS',
@@ -206,7 +206,10 @@ describe('config message presenter', () => {
             searchText: '小橘 alias',
             source: 'media-library',
             icon: '🎭',
-            filePath: 'neko/assets/Characters/hero.png',
+            contentLocator: {
+              kind: 'workspace-file',
+              path: 'neko/assets/Characters/hero.png',
+            },
             mediaType: 'image',
             entityType: 'character',
             navigationData: { partition: 'media-library' },
@@ -216,7 +219,7 @@ describe('config message presenter', () => {
     ).toEqual({
       projectFiles: [
         {
-          path: 'src/index.ts',
+          locator: { kind: 'workspace-file', path: 'src/index.ts' },
           name: 'index.ts',
           type: 'file',
           icon: 'TS',
@@ -225,11 +228,11 @@ describe('config message presenter', () => {
       ],
       mentionItems: [
         {
-          id: 'file:src/index.ts',
+          id: 'file:["workspace-file","src/index.ts",null,null]',
           kind: 'file',
           label: 'index.ts',
           description: 'src/index.ts',
-          filePath: 'src/index.ts',
+          contentLocator: { kind: 'workspace-file', path: 'src/index.ts' },
           icon: 'TS',
           source: 'workspace',
         },
@@ -270,7 +273,10 @@ describe('config message presenter', () => {
               label: 'Hero portrait',
               summary: 'Media: Hero portrait',
               source: 'media-library',
-              filePath: 'neko/assets/Characters/hero.png',
+              contentLocator: {
+                kind: 'workspace-file',
+                path: 'neko/assets/Characters/hero.png',
+              },
               mediaType: 'image',
               entityType: 'character',
               navigationData: { partition: 'media-library' },
@@ -278,7 +284,10 @@ describe('config message presenter', () => {
           },
           icon: '🎭',
           source: 'media-library',
-          filePath: 'neko/assets/Characters/hero.png',
+          contentLocator: {
+            kind: 'workspace-file',
+            path: 'neko/assets/Characters/hero.png',
+          },
           mediaType: 'image',
           entityType: 'character',
           navigationData: { partition: 'media-library' },

@@ -87,6 +87,10 @@ export interface PiConversationCompactionResult {
   readonly ratio: number;
 }
 
+export function estimatePiConversationContextTokens(messages: readonly AgentMessage[]): number {
+  return estimateContextTokens([...messages]).tokens;
+}
+
 interface ActiveTurn {
   readonly identity: PiToolRunIdentity;
   readonly projector: PiEventProjector;
@@ -148,7 +152,7 @@ export class PiConversationRuntime {
   }
 
   get contextTokenCount(): number {
-    return estimateContextTokens(this.agent.state.messages).tokens;
+    return estimatePiConversationContextTokens(this.agent.state.messages);
   }
 
   async execute(input: ExecutePiConversationTurnInput): Promise<void> {

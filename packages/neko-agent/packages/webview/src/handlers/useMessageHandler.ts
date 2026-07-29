@@ -33,7 +33,7 @@ import type {
 } from '@/components/ChatView/InputArea/types';
 import type { ActivationProgressTimeline } from '@/presenters/activation-progress-presenter';
 import type { ConversationRenderCoordinator } from '@/render-lifecycle/conversation-render-coordinator';
-import type { ExtensionToWebviewMessage } from './messages';
+import type { AgentHostToWebviewMessage } from './messages';
 import {
   bindConversationRenderRuntimeLifecycle,
   createConversationRenderRuntimeLifecycle,
@@ -146,7 +146,7 @@ export interface UseMessageHandlerProps {
  * Hook return type
  */
 export interface UseMessageHandlerReturn {
-  handleMessage: (event: MessageEvent<ExtensionToWebviewMessage>) => void;
+  handleMessage: (event: MessageEvent<AgentHostToWebviewMessage>) => void;
   disposeConversationRendering: (
     conversationId: string,
     reason: 'conversation-delete' | 'confirmed-empty-conversation',
@@ -343,7 +343,7 @@ export function useMessageHandler(props: UseMessageHandlerProps): UseMessageHand
 
   // Message handler function
   const handleMessage = useCallback(
-    (event: MessageEvent<ExtensionToWebviewMessage>): void => {
+    (event: MessageEvent<AgentHostToWebviewMessage>): void => {
       const message = event.data;
       if (!message || !message.type) return;
       rejectLegacyActiveContentMessage(message);

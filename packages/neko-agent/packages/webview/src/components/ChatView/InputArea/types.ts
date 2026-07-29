@@ -136,7 +136,7 @@ export const DEFAULT_COMPOSER_MENU_STATE: Readonly<ComposerMenuState> = {
 
 // Project file for @ reference
 export interface ProjectFile {
-  path: string;
+  locator: import('@neko/shared').WorkspaceFileContentLocator;
   name: string;
   type: 'file' | 'folder';
   icon?: string;
@@ -150,7 +150,7 @@ export type MentionItemKind =
 
 /**
  * Unified item shown in the @mention popup.
- * Items with filePath become @path reference tokens; other context-backed items create AgentContextChip.
+ * Items with a content locator become file reference tokens; other context-backed items create AgentContextChip.
  */
 export interface MentionItem {
   /** Stable unique key */
@@ -160,8 +160,8 @@ export interface MentionItem {
   label: string;
   /** Secondary hint text */
   description?: string;
-  /** Path sent as an @ reference when this item is selected. */
-  filePath?: string;
+  /** Stable Host-issued content identity used when this item is selected. */
+  contentLocator?: import('@neko/shared').ContentLocator;
   /** Optional icon supplied by host protocol */
   icon?: string;
   /** Source index that produced this candidate */

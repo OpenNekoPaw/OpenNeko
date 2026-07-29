@@ -334,15 +334,12 @@ describe('MessageItem reference rendering', () => {
         ...createMessage({ role: 'user', content: '分析' }),
         contextReferences: [
           {
-            id: 'file-ref:${A}/books/story.epub',
+            id: 'file-ref:books/story.epub',
             type: 'file',
             label: 'story.epub',
-            summary: '${A}/books/story.epub',
+            summary: 'books/story.epub',
             mediaType: 'document',
-            navigationData: {
-              path: '${A}/books/story.epub',
-              filePath: '${A}/books/story.epub',
-            },
+            contentLocator: { kind: 'workspace-file', path: 'books/story.epub' },
           },
         ],
       },
@@ -355,7 +352,7 @@ describe('MessageItem reference rendering', () => {
     const token = document.querySelector('[data-agent-reference-token="true"]');
     expect(token?.getAttribute('data-reference-kind')).toBe('file');
     expect(screen.getByText('story.epub')).toBeTruthy();
-    expect(screen.getByText('${A}/books')).toBeTruthy();
+    expect(screen.getByText('books')).toBeTruthy();
   });
 });
 

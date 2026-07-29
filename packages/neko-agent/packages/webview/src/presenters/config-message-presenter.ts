@@ -1,10 +1,13 @@
 import {
+  contentLocatorKey,
+  isContentLocator,
   resolveAgentTokenBudget,
   type AgentContextPayload,
   type ChatModelOption,
   type ModelSourceGroup,
   type ModelType,
 } from '@neko/shared';
+import { projectContentLocatorPath } from './content-locator-presenter';
 import type {
   AgentMediaModelCategory,
   AgentMediaModelSelections,
@@ -326,16 +329,19 @@ export function projectProjectFilesMessage(
   translate: Translate = t,
 ): ProjectFilesProjection {
   const projectFiles = (message.files ?? []).filter(isProjectFileMentionInfo);
-  const fileMentions = projectFiles.map((file) => ({
-    id: `file:${file.path}`,
-    kind: 'file' as const,
-    label: file.name,
-    description: file.path,
-    filePath: file.path,
-    ...(file.icon ? { icon: file.icon } : {}),
-    ...(file.source ? { source: file.source } : {}),
-    ...(file.mediaType ? { mediaType: file.mediaType } : {}),
-  }));
+  const fileMentions = projectFiles.map((file) => {
+    const displayPath = projectContentLocatorPath(file.locator);
+    return {
+      id: `file:${contentLocatorKey(file.locator)}`,
+      kind: 'file' as const,
+      label: file.name,
+      description: displayPath,
+      contentLocator: file.locator,
+      ...(file.icon ? { icon: file.icon } : {}),
+      ...(file.source ? { source: file.source } : {}),
+      ...(file.mediaType ? { mediaType: file.mediaType } : {}),
+    };
+  });
 
   const extraMentions = (message.mentionExtras ?? [])
     .filter(isProjectMentionExtra)
@@ -347,7 +353,7 @@ export function projectProjectFilesMessage(
       contextPayload: toAgentContextPayload(extra),
       ...(extra.icon ? { icon: extra.icon } : {}),
       ...(extra.source ? { source: extra.source } : {}),
-      ...(extra.filePath ? { filePath: extra.filePath } : {}),
+      ...(extra.contentLocator ? { contentLocator: extra.contentLocator } : {}),
       ...(extra.mediaType ? { mediaType: extra.mediaType } : {}),
       ...(extra.entityType ? { entityType: extra.entityType } : {}),
       ...(extra.navigationData ? { navigationData: extra.navigationData } : {}),
@@ -356,7 +362,7 @@ export function projectProjectFilesMessage(
         extra.label,
         extra.summary,
         extra.searchText,
-        extra.filePath,
+        extra.contentLocator ? projectContentLocatorPath(extra.contentLocator) : undefined,
         extra.mediaType,
         extra.entityType,
         ...(extra.navigationData ? Object.values(extra.navigationData) : []),
@@ -706,7 +712,7 @@ function toAgentContextPayload(extra: ProjectMentionExtra): AgentContextPayload 
       label: extra.label,
       summary: extra.summary,
       ...(extra.source ? { source: extra.source } : {}),
-      ...(extra.filePath ? { filePath: extra.filePath } : {}),
+      ...(extra.contentLocator ? { contentLocator: extra.contentLocator } : {}),
       ...(extra.mediaType ? { mediaType: extra.mediaType } : {}),
       ...(extra.entityType ? { entityType: extra.entityType } : {}),
       ...(extra.navigationData ? { navigationData: extra.navigationData } : {}),
@@ -857,7 +863,8 @@ function isProjectFileMentionInfo(value: unknown): value is ProjectFileMentionIn
   const record = asRecord(value);
   return Boolean(
     record &&
-    readString(record, 'path') &&
+    isContentLocator(record.locator) &&
+    record.locator.kind === 'workspace-file' &&
     readString(record, 'name') &&
     (record.type === 'file' || record.type === 'folder') &&
     (record.icon === undefined || typeof record.icon === 'string') &&
@@ -878,7 +885,7 @@ function isProjectMentionExtra(value: unknown): value is ProjectMentionExtra {
     (record.thumbnailUri === undefined || typeof record.thumbnailUri === 'string') &&
     (record.source === undefined || isProjectMentionSource(record.source)) &&
     (record.icon === undefined || typeof record.icon === 'string') &&
-    (record.filePath === undefined || typeof record.filePath === 'string') &&
+    (record.contentLocator === undefined || isContentLocator(record.contentLocator)) &&
     (record.mediaType === undefined || isProjectMentionMediaType(record.mediaType)) &&
     (record.entityType === undefined || typeof record.entityType === 'string') &&
     (record.navigationData === undefined || isStringRecord(record.navigationData)),

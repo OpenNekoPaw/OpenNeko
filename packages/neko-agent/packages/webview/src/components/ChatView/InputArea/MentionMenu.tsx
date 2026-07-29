@@ -22,6 +22,7 @@ import type { MentionItem } from './types';
 import { useClickOutsideSingle } from './useClickOutside';
 import { useTranslation } from '@/i18n/I18nContext';
 import type { AgentContextPayload } from '@neko/shared';
+import { projectContentLocatorPath } from '@/presenters/content-locator-presenter';
 
 const KIND_ICONS: Record<string, string> = {
   file: 'file',
@@ -150,7 +151,7 @@ export function MentionMenu({
   const flat = sections.flatMap((s) => s.items);
 
   const handleSelect = (item: MentionItem) => {
-    if (item.filePath) {
+    if (item.contentLocator) {
       onSelectFile(item);
     } else if (item.contextPayload) {
       onSelectContext(item.contextPayload);
@@ -253,7 +254,7 @@ export function getFilteredMentionItems(items: MentionItem[], filter: string): M
         !filter ||
         item.label.toLowerCase().includes(lc) ||
         (item.description ?? '').toLowerCase().includes(lc) ||
-        (item.filePath ?? '').toLowerCase().includes(lc) ||
+        mentionItemPath(item).toLowerCase().includes(lc) ||
         (item.entityType ?? '').toLowerCase().includes(lc) ||
         (item.mediaType ?? '').toLowerCase().includes(lc) ||
         (item.searchText ?? '').toLowerCase().includes(lc) ||
@@ -270,8 +271,9 @@ export function getFilteredMentionItems(items: MentionItem[], filter: string): M
 }
 
 export function getMentionIcon(item: MentionItem): string {
-  if (item.filePath && (!item.icon || isGenericMentionIcon(item.icon))) {
-    return getFilePathIcon(item.filePath);
+  const path = mentionItemPath(item);
+  if (path && (!item.icon || isGenericMentionIcon(item.icon))) {
+    return getFilePathIcon(path);
   }
   if (item.icon) return item.icon;
   if (item.mediaType) return getMediaTypeIcon(item.mediaType);
@@ -289,7 +291,7 @@ function getMediaTypeIcon(mediaType: NonNullable<MentionItem['mediaType']>): str
 
 function getFilePathIcon(filePath: string): string {
   const ext = getFileExtension(filePath);
-  if (!ext) return KIND_ICONS.file;
+  if (!ext) return KIND_ICONS.file ?? 'file';
   if (['ts', 'tsx', 'js', 'jsx', 'mjs', 'cjs'].includes(ext)) return 'TS';
   if (['rs', 'toml'].includes(ext)) return 'RS';
   if (['json', 'jsonc'].includes(ext)) return '{}';
@@ -305,7 +307,7 @@ function getFilePathIcon(filePath: string): string {
   if (['pdf', 'doc', 'docx', 'ppt', 'pptx', 'xls', 'xlsx', 'epub'].includes(ext)) {
     return ext.toUpperCase().slice(0, 4);
   }
-  return KIND_ICONS.file;
+  return KIND_ICONS.file ?? 'file';
 }
 
 function buildMentionSections(items: MentionItem[]): MentionSection[] {
@@ -326,7 +328,8 @@ function buildMentionSections(items: MentionItem[]): MentionSection[] {
 }
 
 function getMentionInlineMeta(item: MentionItem): string | undefined {
-  if (item.filePath) return getMentionFilePathMeta(item.label, item.filePath);
+  const path = mentionItemPath(item);
+  if (path) return getMentionFilePathMeta(item.label, path);
   if (item.description && item.description !== item.label) return item.description;
   if (item.contextPayload?.summary && item.contextPayload.summary !== item.label) {
     return item.contextPayload.summary;
@@ -341,7 +344,8 @@ function getMentionFilePathMeta(label: string, filePath: string): string | undef
 }
 
 function getMentionRowTitle(item: MentionItem, inlineMeta: string | undefined): string {
-  if (item.filePath) return normalizeMentionPath(item.filePath);
+  const path = mentionItemPath(item);
+  if (path) return normalizeMentionPath(path);
   if (inlineMeta) return `${item.label} ${inlineMeta}`;
   return item.label;
 }
@@ -423,7 +427,8 @@ function getMentionGlyph(item: MentionItem, isSelected: boolean): MentionGlyphPr
 }
 
 function getMentionToneKey(item: MentionItem): string {
-  const extension = item.filePath ? getFileExtension(item.filePath) : undefined;
+  const path = mentionItemPath(item);
+  const extension = path ? getFileExtension(path) : undefined;
   if (extension) {
     if (
       [
@@ -557,7 +562,7 @@ function MentionCharacterIcon({ className }: { readonly className?: string }) {
 function scoreMentionItem(item: MentionItem, filter: string): number {
   if (!filter) return 0;
   const label = item.label.toLowerCase();
-  const path = item.filePath?.toLowerCase() ?? '';
+  const path = mentionItemPath(item).toLowerCase();
   if (label === filter || path === filter) return 0;
   if (label.startsWith(filter)) return 1;
   if (getFileName(path).startsWith(filter)) return 2;
@@ -571,10 +576,14 @@ function compareMentionTieBreakers(left: MentionItem, right: MentionItem): numbe
   const labelOrder = compareMentionText(left.label, right.label);
   if (labelOrder !== 0) return labelOrder;
 
-  const pathOrder = compareMentionText(left.filePath ?? '', right.filePath ?? '');
+  const pathOrder = compareMentionText(mentionItemPath(left), mentionItemPath(right));
   if (pathOrder !== 0) return pathOrder;
 
   return compareMentionText(left.id, right.id);
+}
+
+function mentionItemPath(item: MentionItem): string {
+  return item.contentLocator ? projectContentLocatorPath(item.contentLocator) : '';
 }
 
 function compareMentionText(left: string, right: string): number {

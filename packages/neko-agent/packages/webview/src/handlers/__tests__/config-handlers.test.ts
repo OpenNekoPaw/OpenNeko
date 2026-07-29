@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ExtensionToWebviewMessage } from '@neko-agent/types';
+import type { AgentHostToWebviewMessage } from '@neko-agent/types';
 import { configHandlers } from '../config-handlers';
 import type { MessageHandlerContext } from '../types';
 import { ConversationRenderCoordinator } from '@/render-lifecycle/conversation-render-coordinator';
@@ -260,7 +260,7 @@ describe('configHandlers', () => {
   });
 });
 
-function dispatch(message: ExtensionToWebviewMessage, context: MessageHandlerContext): void {
+function dispatch(message: AgentHostToWebviewMessage, context: MessageHandlerContext): void {
   const registration = configHandlers.find((handler) => handler.type === message.type);
   expect(registration).toBeDefined();
   registration?.handler(message, context);

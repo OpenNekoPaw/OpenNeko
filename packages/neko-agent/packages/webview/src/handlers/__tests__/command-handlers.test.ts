@@ -1,6 +1,6 @@
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ExtensionToWebviewMessage } from '@neko-agent/types';
+import type { AgentHostToWebviewMessage } from '@neko-agent/types';
 import type { Message } from '@neko-agent/types';
 import type { AgentWorkItemStore } from '@/components/AgentWorkItem';
 import type { PluginsAvailable } from '@/components/ChatView/SendToMenu';
@@ -184,7 +184,7 @@ describe('command handlers conversation isolation', () => {
 
 function dispatch(
   handlers: readonly HandlerRegistration[],
-  message: ExtensionToWebviewMessage,
+  message: AgentHostToWebviewMessage,
   context: MessageHandlerContext,
 ): void {
   const registration = handlers.find((handler) => handler.type === message.type);

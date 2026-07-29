@@ -36,12 +36,13 @@ export class ContextHandler {
    * Get context token count for a conversation
    */
   getTokenCount(webview: vscode.Webview, conversationId: string): void {
+    const agentManager = this.requireAgentManager();
     sendAgentContextTokenCount({
       conversationId,
       postMessage: (message) => {
         void webview.postMessage(message);
       },
-      getTokenCount: (id: string) => this.deps.agentManager?.getContextTokenCount(id) ?? 0,
+      getTokenCount: (id: string) => agentManager.getContextTokenCount(id),
       onMissingConversationId: () => {
         logger.warn('Rejected getTokenCount without conversationId');
       },
@@ -64,5 +65,13 @@ export class ContextHandler {
         logger.warn('Rejected compressContext without conversationId');
       },
     });
+  }
+
+  private requireAgentManager(): IAgentManager {
+    const agentManager = this.deps.agentManager;
+    if (!agentManager) {
+      throw new Error('Agent manager is unavailable for context token count.');
+    }
+    return agentManager;
   }
 }

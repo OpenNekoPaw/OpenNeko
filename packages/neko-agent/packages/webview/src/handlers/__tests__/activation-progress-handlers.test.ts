@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { ExtensionToWebviewMessage } from '@neko-agent/types';
+import type { AgentHostToWebviewMessage } from '@neko-agent/types';
 import type { AgentCapabilityActivationProgressEvent } from '@neko/shared';
 import { activationProgressHandlers } from '../activation-progress-handlers';
 import type { MessageHandlerContext } from '../types';
@@ -47,7 +47,7 @@ describe('activationProgressHandlers', () => {
   });
 });
 
-function dispatch(message: ExtensionToWebviewMessage, context: MessageHandlerContext): void {
+function dispatch(message: AgentHostToWebviewMessage, context: MessageHandlerContext): void {
   const registration = activationProgressHandlers.find((handler) => handler.type === message.type);
   expect(registration).toBeDefined();
   registration?.handler(message, context);

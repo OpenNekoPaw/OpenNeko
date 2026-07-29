@@ -1,5 +1,5 @@
-import type { PiConversationTranscriptEntry } from '@neko/agent/pi';
 import type { ContentBlock, Message, ToolCall } from '@neko-agent/types';
+import type { PiConversationTranscriptEntry } from '../../pi';
 
 export function projectPiConversationEntries(
   entries: readonly PiConversationTranscriptEntry[],

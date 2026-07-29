@@ -53,10 +53,15 @@ export function parseConversationId(conversationId: string): ParsedConversationI
   if (!matched) {
     return null;
   }
+  const workDirHash = matched[1];
+  const ulid = matched[2];
+  if (!workDirHash || !ulid) {
+    throw new Error('Canonical conversation id parser lost a required capture group.');
+  }
 
   return {
-    workDirHash: matched[1],
-    ulid: matched[2],
+    workDirHash,
+    ulid,
   };
 }
 

@@ -4,6 +4,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { FileOperationHandler } from '../fileOperationHandler';
+import type { WorkspaceFileContentLocator } from '@neko/shared';
 
 vi.mock('vscode', async () => await import('../../../__mocks__/vscode'));
 
@@ -18,6 +19,10 @@ vi.mock('../../../base', () => ({
   handleError: vi.fn(),
 }));
 
+function workspaceFile(path: string): WorkspaceFileContentLocator {
+  return { kind: 'workspace-file', path };
+}
+
 describe('FileOperationHandler', () => {
   let handler: FileOperationHandler;
 
@@ -27,26 +32,31 @@ describe('FileOperationHandler', () => {
   });
 
   describe('handleOpenFile', () => {
-    it('should do nothing for empty path', async () => {
+    it('should reject package resources that are not workspace-backed', async () => {
       const { commands } = await import('vscode');
-      await handler.handleOpenFile('');
+      await handler.handleOpenFile({
+        kind: 'package-resource',
+        packageId: 'builtin',
+        revision: '1',
+        resourcePath: 'readme.md',
+      });
 
       expect(commands.executeCommand).not.toHaveBeenCalled();
     });
 
-    it('should strip file:// protocol', async () => {
+    it('should resolve workspace-relative locators inside the workspace', async () => {
       const { commands } = await import('vscode');
-      await handler.handleOpenFile('file:///tmp/test.txt');
+      await handler.handleOpenFile(workspaceFile('tmp/test.txt'));
 
       expect(commands.executeCommand).toHaveBeenCalledWith(
         'vscode.open',
-        expect.objectContaining({ fsPath: '/tmp/test.txt' }),
+        expect.objectContaining({ fsPath: '/mock/workspace/tmp/test.txt' }),
       );
     });
 
     it('should open video with neko preview', async () => {
       const { commands } = await import('vscode');
-      await handler.handleOpenFile('/tmp/video.mp4');
+      await handler.handleOpenFile(workspaceFile('tmp/video.mp4'));
 
       expect(commands.executeCommand).toHaveBeenCalledWith(
         'vscode.openWith',
@@ -57,7 +67,7 @@ describe('FileOperationHandler', () => {
 
     it('should open audio with neko audio preview', async () => {
       const { commands } = await import('vscode');
-      await handler.handleOpenFile('/tmp/audio.mp3');
+      await handler.handleOpenFile(workspaceFile('tmp/audio.mp3'));
 
       expect(commands.executeCommand).toHaveBeenCalledWith(
         'vscode.openWith',
@@ -68,12 +78,12 @@ describe('FileOperationHandler', () => {
 
     it('should not route panorama-named media to retired panoramic viewers', async () => {
       const { commands } = await import('vscode');
-      await handler.handleOpenFile('/tmp/skybox.hdr');
+      await handler.handleOpenFile(workspaceFile('tmp/skybox.hdr'));
 
       expect(commands.executeCommand).toHaveBeenCalledWith('vscode.open', expect.any(Object));
 
       vi.clearAllMocks();
-      await handler.handleOpenFile('/tmp/tour_360.mp4');
+      await handler.handleOpenFile(workspaceFile('tmp/tour_360.mp4'));
 
       expect(commands.executeCommand).toHaveBeenCalledWith(
         'vscode.openWith',
@@ -84,7 +94,7 @@ describe('FileOperationHandler', () => {
 
     it('should open non-media files with default editor', async () => {
       const { commands } = await import('vscode');
-      await handler.handleOpenFile('/tmp/readme.md');
+      await handler.handleOpenFile(workspaceFile('tmp/readme.md'));
 
       expect(commands.executeCommand).toHaveBeenCalledWith('vscode.open', expect.any(Object));
     });
@@ -100,7 +110,13 @@ describe('FileOperationHandler', () => {
         },
       } as never);
 
-      await handler.handleOpenFile('generated-assets/asset-1.png');
+      await handler.handleOpenFile({
+        kind: 'generated-output',
+        outputId: 'asset-1',
+        revision: 'rev-1',
+        digest: 'a'.repeat(64),
+        path: 'neko/generated/image/task_1.png',
+      });
 
       expect(commands.executeCommand).toHaveBeenCalledWith(
         'vscode.open',
@@ -112,7 +128,7 @@ describe('FileOperationHandler', () => {
       const { commands } = await import('vscode');
       for (const ext of ['mov', 'avi', 'mkv', 'webm']) {
         vi.clearAllMocks();
-        await handler.handleOpenFile(`/tmp/video.${ext}`);
+        await handler.handleOpenFile(workspaceFile(`tmp/video.${ext}`));
         expect(commands.executeCommand).toHaveBeenCalledWith(
           'vscode.openWith',
           expect.any(Object),
@@ -125,7 +141,7 @@ describe('FileOperationHandler', () => {
       const { commands } = await import('vscode');
       for (const ext of ['wav', 'ogg', 'flac', 'aac']) {
         vi.clearAllMocks();
-        await handler.handleOpenFile(`/tmp/audio.${ext}`);
+        await handler.handleOpenFile(workspaceFile(`tmp/audio.${ext}`));
         expect(commands.executeCommand).toHaveBeenCalledWith(
           'vscode.openWith',
           expect.any(Object),
@@ -157,15 +173,13 @@ describe('FileOperationHandler', () => {
       const locator = { kind: 'page' as const, pageNumber: 2, pageIndex: 1 };
 
       await handler.handleRevealDocumentLocator({
-        filePath: '/tmp/book.pdf',
+        contentLocator: workspaceFile('tmp/book.pdf'),
         locator,
-        source: { filePath: '/tmp/book.pdf', format: 'pdf' },
       });
 
       expect(commands.executeCommand).toHaveBeenCalledWith('neko.preview.revealDocumentLocator', {
-        filePath: '/tmp/book.pdf',
+        filePath: 'tmp/book.pdf',
         locator,
-        source: { filePath: '/tmp/book.pdf', format: 'pdf' },
       });
     });
   });

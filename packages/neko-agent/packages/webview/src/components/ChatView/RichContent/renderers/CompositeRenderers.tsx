@@ -749,11 +749,11 @@ function AssetGalleryRendererComponent({
               <span className="min-w-0 flex-1 truncate text-[10px] text-[var(--agent-fg-secondary)]">
                 {media.caption ?? section.heading ?? media.label ?? media.assetId ?? 'Asset'}
               </span>
-              {media.localPath && (
+              {canOpenMedia(media) && (
                 <button
                   type="button"
                   className="rounded border border-[var(--agent-input-border)] px-1.5 py-0.5 text-[10px] text-[var(--agent-fg)] hover:bg-[var(--agent-hover)]"
-                  onClick={() => AgentHostMessages.openFile(media.localPath!)}
+                  onClick={() => openMedia(media)}
                 >
                   Open
                 </button>
@@ -1045,17 +1045,17 @@ function Diagnostics({
 }
 
 function openMedia(media: ResolvedCompositeMedia): void {
-  if (media.localPath) {
-    AgentHostMessages.openFile(media.localPath);
-    return;
-  }
-  if (media.src) {
+  if (isExternalOpenUrl(media.src)) {
     AgentHostMessages.openUrl(media.src);
   }
 }
 
 function canOpenMedia(media: ResolvedCompositeMedia): boolean {
-  return Boolean(media.localPath || media.src);
+  return isExternalOpenUrl(media.src);
+}
+
+function isExternalOpenUrl(value: string): boolean {
+  return value.startsWith('https://') || value.startsWith('http://');
 }
 
 function dedupeDiagnostics(

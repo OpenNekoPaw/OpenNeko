@@ -170,6 +170,9 @@ export function useTabManager({
       if (isClosingActiveTab && newTabs.length > 0) {
         const newActiveIndex = Math.min(tabIndex, newTabs.length - 1);
         const newActiveTab = newTabs[newActiveIndex];
+        if (!newActiveTab) {
+          throw new Error('Agent Tab activation target is missing after close.');
+        }
         setActiveTabId(newActiveTab.id);
         if (isCharacterRoleTab(newActiveTab)) {
           persistTabState(newTabs, newActiveTab.id);

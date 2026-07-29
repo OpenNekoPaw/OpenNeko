@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
-  AGENT_WEBVIEW_TO_HOST_MESSAGE_TYPES,
+  ELECTRON_AGENT_HOST_ROUTE_COVERAGE,
+  ELECTRON_AGENT_HOST_UNSUPPORTED_ROUTE_OWNERS,
   createAgentHostRouteCoverageDiagnostics,
-  type AgentHostRouteSupport,
+  createAgentHostRouteUnavailableDiagnostic,
+  createElectronAgentHostRouteUnavailableDiagnostic,
 } from '../agent-host-runtime-adapter';
+import { AGENT_WEBVIEW_TO_HOST_MESSAGE_TYPES } from '../webview-protocol';
 
 describe('Agent host runtime adapter contracts', () => {
   it('lists route types exactly once', () => {
@@ -35,18 +38,89 @@ describe('Agent host runtime adapter contracts', () => {
   });
 
   it('accepts complete route classifications', () => {
-    const routes = Object.fromEntries(
-      AGENT_WEBVIEW_TO_HOST_MESSAGE_TYPES.map((messageType) => [
-        messageType,
-        'implemented' satisfies AgentHostRouteSupport,
-      ]),
-    );
-
     expect(
       createAgentHostRouteCoverageDiagnostics({
-        hostKind: 'vscode',
-        routes,
+        hostKind: 'electron',
+        routes: ELECTRON_AGENT_HOST_ROUTE_COVERAGE,
       }),
     ).toEqual([]);
+  });
+
+  it('freezes the P1.3 Electron route support matrix', () => {
+    const supportCounts = Object.values(ELECTRON_AGENT_HOST_ROUTE_COVERAGE).reduce(
+      (counts, support) => ({ ...counts, [support]: counts[support] + 1 }),
+      {
+        implemented: 0,
+        unsupported: 0,
+        'host-inapplicable': 0,
+      },
+    );
+
+    expect(supportCounts).toEqual({
+      implemented: 41,
+      unsupported: 8,
+      'host-inapplicable': 3,
+    });
+    expect(ELECTRON_AGENT_HOST_UNSUPPORTED_ROUTE_OWNERS).toEqual({
+      sendToPlugin: 'Phase 3',
+      invokeAgentCapabilityLifecycle: 'P1.4',
+      requestCanvasAuthoringHandoff: 'P1.4',
+      invokePluginSlashCommand: 'Phase 3',
+      startCharacterDialogueFromSlash: 'P1.6',
+      confirmRoleplayCandidate: 'P1.6',
+      exitCharacterDialogueSession: 'P1.6',
+      exitEmbodyCharacterSession: 'P1.6',
+    });
+  });
+
+  it('builds typed unavailable diagnostics with future ownership', () => {
+    expect(
+      createAgentHostRouteUnavailableDiagnostic({
+        hostKind: 'electron',
+        messageType: 'requestCanvasAuthoringHandoff',
+        support: 'unsupported',
+        owner: ELECTRON_AGENT_HOST_UNSUPPORTED_ROUTE_OWNERS.requestCanvasAuthoringHandoff,
+      }),
+    ).toEqual({
+      code: 'agent-host-route-unsupported',
+      severity: 'error',
+      hostKind: 'electron',
+      messageType: 'requestCanvasAuthoringHandoff',
+      support: 'unsupported',
+      owner: 'P1.4',
+      message:
+        "Agent route 'requestCanvasAuthoringHandoff' is unsupported for host 'electron'. It is owned by P1.4.",
+    });
+
+    expect(
+      createAgentHostRouteUnavailableDiagnostic({
+        hostKind: 'electron',
+        messageType: 'dnd:start',
+        support: 'host-inapplicable',
+      }),
+    ).toEqual({
+      code: 'agent-host-route-inapplicable',
+      severity: 'error',
+      hostKind: 'electron',
+      messageType: 'dnd:start',
+      support: 'host-inapplicable',
+      message: "Agent route 'dnd:start' is host-inapplicable for host 'electron'.",
+    });
+  });
+
+  it('applies the Electron unavailable-route emission policy', () => {
+    expect(createElectronAgentHostRouteUnavailableDiagnostic('sendMessage')).toBeNull();
+    expect(
+      createElectronAgentHostRouteUnavailableDiagnostic('requestCanvasAuthoringHandoff'),
+    ).toMatchObject({
+      code: 'agent-host-route-unsupported',
+      messageType: 'requestCanvasAuthoringHandoff',
+      owner: 'P1.4',
+    });
+    expect(createElectronAgentHostRouteUnavailableDiagnostic('dnd:start')).toMatchObject({
+      code: 'agent-host-route-inapplicable',
+      messageType: 'dnd:start',
+      support: 'host-inapplicable',
+    });
   });
 });

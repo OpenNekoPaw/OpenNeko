@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { MentionMenu, getFilteredMentionItems, getMentionIcon } from './MentionMenu';
 import type { MentionItem } from './types';
+import { projectContentLocatorPath } from '@/presenters/content-locator-presenter';
 
 const translations: Record<string, string> = {
   'chat.input.mentionHint': 'Search mentions',
@@ -26,12 +27,14 @@ vi.mock('@/i18n/I18nContext', () => ({
   }),
 }));
 
-function mention(overrides: Partial<MentionItem>): MentionItem {
+function mention(overrides: Partial<MentionItem> & { readonly filePath?: string }): MentionItem {
+  const { filePath, ...itemOverrides } = overrides;
   return {
     id: 'item-1',
     kind: 'file',
     label: 'Item',
-    ...overrides,
+    ...itemOverrides,
+    ...(filePath ? { contentLocator: { kind: 'workspace-file' as const, path: filePath } } : {}),
   };
 }
 
@@ -118,7 +121,9 @@ describe('MentionMenu icon projection', () => {
           mention({ id: 'root', label: 'index.ts', filePath: 'index.ts' }),
         ],
         'index',
-      ).map((item) => item.filePath),
+      ).map((item) =>
+        item.contentLocator ? projectContentLocatorPath(item.contentLocator) : undefined,
+      ),
     ).toEqual(['index.ts', 'src/a/index.ts', 'src/z/index.ts']);
   });
 

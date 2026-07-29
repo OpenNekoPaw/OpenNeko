@@ -6,7 +6,7 @@ import {
   buildQueuedMessageEditRequestedMessage,
   parseAmbientCanvasUpdateNodes,
   parseSendMessageWebviewMessage,
-  parseWebviewToExtensionMessage,
+  parseAgentWebviewToHostMessage,
 } from '../webview-protocol';
 
 const cacheResourceRef = createResourceRef({
@@ -45,7 +45,7 @@ describe('webview protocol parser', () => {
 
   it('preserves explicit Cut target identity and revision in plugin transfers', () => {
     expect(
-      parseWebviewToExtensionMessage({
+      parseAgentWebviewToHostMessage({
         type: 'sendToPlugin',
         target: 'cut',
         payload: {
@@ -71,7 +71,7 @@ describe('webview protocol parser', () => {
 
   it('accepts explicit projection endpoint discovery', () => {
     expect(
-      parseWebviewToExtensionMessage({
+      parseAgentWebviewToHostMessage({
         type: 'projectionEndpointDiscover',
         protocolVersion: AGENT_WEBVIEW_PROTOCOL_VERSION,
         realmId: 'realm-1',
@@ -81,16 +81,16 @@ describe('webview protocol parser', () => {
       protocolVersion: AGENT_WEBVIEW_PROTOCOL_VERSION,
       realmId: 'realm-1',
     });
-    expect(parseWebviewToExtensionMessage({ type: 'projectionEndpointDiscover' })).toBeNull();
+    expect(parseAgentWebviewToHostMessage({ type: 'projectionEndpointDiscover' })).toBeNull();
     expect(
-      parseWebviewToExtensionMessage({
+      parseAgentWebviewToHostMessage({
         type: 'projectionEndpointDiscover',
         protocolVersion: AGENT_WEBVIEW_PROTOCOL_VERSION + 1,
         realmId: 'realm-1',
       }),
     ).toBeNull();
     expect(
-      parseWebviewToExtensionMessage({
+      parseAgentWebviewToHostMessage({
         type: 'projectionEndpointDiscover',
         protocolVersion: AGENT_WEBVIEW_PROTOCOL_VERSION,
         realmId: '',
@@ -106,12 +106,12 @@ describe('webview protocol parser', () => {
       conversationId: 'conv-1',
     };
 
-    expect(parseWebviewToExtensionMessage({ type: 'projectionAttach', key })).toEqual({
+    expect(parseAgentWebviewToHostMessage({ type: 'projectionAttach', key })).toEqual({
       type: 'projectionAttach',
       key,
     });
     expect(
-      parseWebviewToExtensionMessage({
+      parseAgentWebviewToHostMessage({
         type: 'projectionSnapshotAck',
         key,
         sequence: 0,
@@ -124,7 +124,7 @@ describe('webview protocol parser', () => {
       projectionVersion: 3,
     });
     expect(
-      parseWebviewToExtensionMessage({
+      parseAgentWebviewToHostMessage({
         type: 'projectionDetach',
         key,
         reason: 'endpoint-replaced',
@@ -134,7 +134,7 @@ describe('webview protocol parser', () => {
 
   it('rejects the removed Timeline snapshot recovery message', () => {
     expect(
-      parseWebviewToExtensionMessage({
+      parseAgentWebviewToHostMessage({
         type: 'requestAgentTurnTimelineSnapshot',
         schemaVersion: 2,
         connectionEpoch: 'epoch-1',
@@ -157,14 +157,14 @@ describe('webview protocol parser', () => {
 
     for (const field of ['endpointEpoch', 'attachmentId', 'tabId', 'conversationId'] as const) {
       expect(
-        parseWebviewToExtensionMessage({
+        parseAgentWebviewToHostMessage({
           type: 'projectionAttach',
           key: { ...key, [field]: '' },
         }),
       ).toBeNull();
     }
     expect(
-      parseWebviewToExtensionMessage({
+      parseAgentWebviewToHostMessage({
         type: 'projectionSnapshotAck',
         key,
         sequence: 1,
@@ -172,7 +172,7 @@ describe('webview protocol parser', () => {
       }),
     ).toBeNull();
     expect(
-      parseWebviewToExtensionMessage({
+      parseAgentWebviewToHostMessage({
         type: 'projectionSnapshotAck',
         key,
         sequence: 0,
@@ -180,7 +180,7 @@ describe('webview protocol parser', () => {
       }),
     ).toBeNull();
     expect(
-      parseWebviewToExtensionMessage({
+      parseAgentWebviewToHostMessage({
         type: 'projectionSnapshotAck',
         key,
         sequence: 0,
@@ -188,7 +188,7 @@ describe('webview protocol parser', () => {
       }),
     ).toBeNull();
     expect(
-      parseWebviewToExtensionMessage({
+      parseAgentWebviewToHostMessage({
         type: 'projectionDetach',
         key,
         reason: 'visibility-changed',
@@ -197,7 +197,7 @@ describe('webview protocol parser', () => {
   });
   it('accepts tabless project search purposes and rejects unknown search purposes', () => {
     expect(
-      parseWebviewToExtensionMessage({
+      parseAgentWebviewToHostMessage({
         type: 'searchProjectFiles',
         filter: '',
         purpose: 'roleplay',
@@ -208,7 +208,7 @@ describe('webview protocol parser', () => {
       purpose: 'roleplay',
     });
     expect(
-      parseWebviewToExtensionMessage({
+      parseAgentWebviewToHostMessage({
         type: 'searchProjectFiles',
         filter: 'hero',
         purpose: 'entry',
@@ -219,13 +219,13 @@ describe('webview protocol parser', () => {
       purpose: 'entry',
     });
     expect(
-      parseWebviewToExtensionMessage({
+      parseAgentWebviewToHostMessage({
         type: 'searchProjectFiles',
         filter: '',
       }),
     ).toBeNull();
     expect(
-      parseWebviewToExtensionMessage({
+      parseAgentWebviewToHostMessage({
         type: 'searchProjectFiles',
         filter: '',
         conversationId: 'conv-1',
@@ -236,21 +236,21 @@ describe('webview protocol parser', () => {
 
   it('requires explicit conversation scope for settings reads and writes', () => {
     expect(
-      parseWebviewToExtensionMessage({
+      parseAgentWebviewToHostMessage({
         type: 'getSettings',
         conversationId: 'conv-1',
       }),
     ).toEqual({ type: 'getSettings', conversationId: 'conv-1' });
-    expect(parseWebviewToExtensionMessage({ type: 'getSettings' })).toBeNull();
+    expect(parseAgentWebviewToHostMessage({ type: 'getSettings' })).toBeNull();
     expect(
-      parseWebviewToExtensionMessage({
+      parseAgentWebviewToHostMessage({
         type: 'getConversationSnapshot',
         conversationId: 'conv-1',
       }),
     ).toEqual({ type: 'getConversationSnapshot', conversationId: 'conv-1' });
-    expect(parseWebviewToExtensionMessage({ type: 'getConversationSnapshot' })).toBeNull();
+    expect(parseAgentWebviewToHostMessage({ type: 'getConversationSnapshot' })).toBeNull();
     expect(
-      parseWebviewToExtensionMessage({
+      parseAgentWebviewToHostMessage({
         type: 'updateSettings',
         conversationId: 'conv-1',
         settings: { executionMode: 'auto' },
@@ -261,7 +261,7 @@ describe('webview protocol parser', () => {
       settings: { executionMode: 'auto' },
     });
     expect(
-      parseWebviewToExtensionMessage({
+      parseAgentWebviewToHostMessage({
         type: 'updateSettings',
         settings: { executionMode: 'auto' },
       }),
@@ -270,7 +270,7 @@ describe('webview protocol parser', () => {
 
   it('accepts starting Character Dialogue from slash args without conversation scope', () => {
     expect(
-      parseWebviewToExtensionMessage({
+      parseAgentWebviewToHostMessage({
         type: 'startCharacterDialogueFromSlash',
         args: 'entity:char-xiaoju --roleplay',
       }),
@@ -282,7 +282,7 @@ describe('webview protocol parser', () => {
 
   it('accepts an explicit roleplay Candidate confirmation with stable Search identity', () => {
     expect(
-      parseWebviewToExtensionMessage({
+      parseAgentWebviewToHostMessage({
         type: 'confirmRoleplayCandidate',
         projectSearchItemId: 'entity-projection:semantic-xiaoju',
         initialUserMessage: '你好，小橘',
@@ -293,7 +293,7 @@ describe('webview protocol parser', () => {
       initialUserMessage: '你好，小橘',
     });
     expect(
-      parseWebviewToExtensionMessage({
+      parseAgentWebviewToHostMessage({
         type: 'confirmRoleplayCandidate',
         projectSearchItemId: '',
       }),
@@ -302,7 +302,7 @@ describe('webview protocol parser', () => {
 
   it('accepts message queue commands with explicit conversation and item scope', () => {
     expect(
-      parseWebviewToExtensionMessage({
+      parseAgentWebviewToHostMessage({
         type: 'getMessageQueue',
         conversationId: 'conv-1',
       }),
@@ -312,7 +312,7 @@ describe('webview protocol parser', () => {
     });
 
     expect(
-      parseWebviewToExtensionMessage({
+      parseAgentWebviewToHostMessage({
         type: 'promoteQueuedMessage',
         conversationId: 'conv-1',
         queueItemId: 'queue-1',
@@ -324,7 +324,7 @@ describe('webview protocol parser', () => {
     });
 
     expect(
-      parseWebviewToExtensionMessage({
+      parseAgentWebviewToHostMessage({
         type: 'cancelQueuedMessage',
         conversationId: 'conv-1',
         queueItemId: 'queue-1',
@@ -336,7 +336,7 @@ describe('webview protocol parser', () => {
     });
 
     expect(
-      parseWebviewToExtensionMessage({
+      parseAgentWebviewToHostMessage({
         type: 'editQueuedMessage',
         tabId: 'tab-1',
         conversationId: 'conv-1',
@@ -425,38 +425,38 @@ describe('webview protocol parser', () => {
 
   it('rejects legacy Task action identities even when conversationId is present', () => {
     expect(
-      parseWebviewToExtensionMessage({
+      parseAgentWebviewToHostMessage({
         type: 'cancelTask',
         conversationId: 'conv-1',
         taskId: 'task-1',
       }),
     ).toBeNull();
-    expect(parseWebviewToExtensionMessage({ type: 'cancelTask', taskId: 'task-1' })).toBeNull();
+    expect(parseAgentWebviewToHostMessage({ type: 'cancelTask', taskId: 'task-1' })).toBeNull();
   });
 
   it('rejects message queue commands without required explicit scope', () => {
-    expect(parseWebviewToExtensionMessage({ type: 'getMessageQueue' })).toBeNull();
+    expect(parseAgentWebviewToHostMessage({ type: 'getMessageQueue' })).toBeNull();
     expect(
-      parseWebviewToExtensionMessage({
+      parseAgentWebviewToHostMessage({
         type: 'promoteQueuedMessage',
         queueItemId: 'queue-1',
       }),
     ).toBeNull();
     expect(
-      parseWebviewToExtensionMessage({
+      parseAgentWebviewToHostMessage({
         type: 'cancelQueuedMessage',
         conversationId: 'conv-1',
       }),
     ).toBeNull();
     expect(
-      parseWebviewToExtensionMessage({
+      parseAgentWebviewToHostMessage({
         type: 'editQueuedMessage',
         conversationId: 'conv-1',
         queueItemId: 'queue-1',
       }),
     ).toBeNull();
     expect(
-      parseWebviewToExtensionMessage({
+      parseAgentWebviewToHostMessage({
         type: 'editQueuedMessage',
         tabId: 'tab-1',
         conversationId: 'conv-1',
@@ -651,6 +651,150 @@ describe('webview protocol parser', () => {
         },
       ],
     });
+  });
+
+  it('accepts canonical attachment paths and rejects local path authority', () => {
+    const base = {
+      type: 'sendMessage',
+      conversationId: 'conv-1',
+      message: 'inspect',
+      sessionMode: 'agent',
+    };
+    expect(
+      parseSendMessageWebviewMessage({
+        ...base,
+        attachments: [
+          {
+            id: 'attachment-1',
+            name: 'hero.png',
+            type: 'image',
+            path: 'assets/hero.png',
+            size: 1024,
+          },
+        ],
+      }),
+    ).toMatchObject({
+      attachments: [{ path: 'assets/hero.png', type: 'image' }],
+    });
+
+    for (const attachment of [
+      { id: 'a', name: 'a', type: 'file', path: '/tmp/a.txt' },
+      { id: 'a', name: 'a', type: 'file', path: 'C:\\tmp\\a.txt' },
+      { id: 'a', name: 'a', type: 'file', path: 'file:///tmp/a.txt' },
+      { id: 'a', name: 'a', type: 'file', path: '../a.txt' },
+      { id: 'a', name: 'a', type: 'file', resolvedPath: '/tmp/a.txt' },
+    ]) {
+      expect(
+        parseSendMessageWebviewMessage({
+          ...base,
+          attachments: [attachment],
+        }),
+      ).toBeNull();
+    }
+  });
+
+  it('accepts canonical content routes and rejects legacy path authority', () => {
+    const contentLocator = { kind: 'workspace-file', path: 'books/a.pdf' };
+    const locator = { kind: 'page', pageNumber: 2, pageIndex: 1 };
+    expect(
+      parseAgentWebviewToHostMessage({
+        type: 'openFile',
+        contentLocator,
+        options: { preview: true, line: 4 },
+      }),
+    ).toEqual({
+      type: 'openFile',
+      contentLocator,
+      options: { preview: true, line: 4 },
+    });
+    expect(
+      parseAgentWebviewToHostMessage({
+        type: 'revealDocumentLocator',
+        contentLocator,
+        locator,
+      }),
+    ).toEqual({
+      type: 'revealDocumentLocator',
+      contentLocator,
+      locator,
+    });
+    expect(
+      parseAgentWebviewToHostMessage({
+        type: 'revealFile',
+        contentLocator,
+      }),
+    ).toEqual({
+      type: 'revealFile',
+      contentLocator,
+    });
+
+    for (const payload of [
+      { type: 'openFile', filePath: '/tmp/a.pdf' },
+      { type: 'revealFile', filePath: 'books/a.pdf' },
+      { type: 'revealDocumentLocator', filePath: 'books/a.pdf', locator },
+      {
+        type: 'openFile',
+        contentLocator: { kind: 'workspace-file', path: '/tmp/a.pdf' },
+      },
+      {
+        type: 'revealFile',
+        contentLocator: { kind: 'workspace-file', path: '../a.pdf' },
+      },
+    ]) {
+      expect(parseAgentWebviewToHostMessage(payload)).toBeNull();
+    }
+  });
+
+  it('rejects legacy file references and unknown message types', () => {
+    expect(
+      parseSendMessageWebviewMessage({
+        type: 'sendMessage',
+        conversationId: 'conv-1',
+        message: 'inspect',
+        sessionMode: 'agent',
+        fileReferences: [{ id: 'ref-1', label: 'a.txt', path: 'a.txt' }],
+      }),
+    ).toBeNull();
+    expect(
+      parseAgentWebviewToHostMessage({
+        type: 'futureAgentRoute',
+        schemaVersion: 2,
+      }),
+    ).toBeNull();
+  });
+
+  it('rejects path authority and non-string values in context navigation data', () => {
+    const base = {
+      type: 'revealContextSource',
+      contextType: 'media',
+      contextId: 'media-1',
+      contentLocator: { kind: 'workspace-file', path: 'assets/hero.png' },
+    };
+    expect(
+      parseAgentWebviewToHostMessage({
+        ...base,
+        navigationData: { partition: 'media-library' },
+      }),
+    ).toEqual({
+      ...base,
+      navigationData: { partition: 'media-library' },
+    });
+
+    for (const navigationData of [
+      { filePath: '/tmp/a.png' },
+      { path: 'assets/a.png' },
+      { resolvedPath: '/tmp/a.png' },
+      { portablePath: '${ASSETS}/a.png' },
+      { projectRoot: '/workspace' },
+      { partition: 1 },
+    ]) {
+      expect(
+        parseAgentWebviewToHostMessage({
+          ...base,
+          navigationData,
+        }),
+      ).toBeNull();
+    }
   });
 
   it('accepts a validated purpose-aware 3D reference context', () => {
@@ -980,7 +1124,7 @@ describe('webview protocol parser', () => {
     ];
 
     expect(
-      parseWebviewToExtensionMessage({
+      parseAgentWebviewToHostMessage({
         type: 'updateTabState',
         expectedTabStateRevision: 3,
         openTabs,
@@ -999,7 +1143,7 @@ describe('webview protocol parser', () => {
     });
 
     expect(
-      parseWebviewToExtensionMessage({
+      parseAgentWebviewToHostMessage({
         type: 'updateTabState',
         expectedTabStateRevision: 3,
         openTabs: [

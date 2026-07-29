@@ -31,6 +31,7 @@ import {
 import type {
   AgentContextPayload,
   CanvasNodeType,
+  ContentLocator,
   DocumentContextData,
   DocumentLocator,
   MessageAttachment,
@@ -43,6 +44,7 @@ import type {
 } from '@neko/shared';
 import {
   isAgentResolvedEntityContextData,
+  isContentLocator,
   isDocumentFile,
   isThreeReferenceContextData,
   projectThreeReferenceMediaControls,
@@ -399,7 +401,7 @@ export interface AgentProjectMentionCandidate {
   readonly searchText?: string;
   readonly source?: ProjectMentionSource;
   readonly icon?: string;
-  readonly filePath?: string;
+  readonly contentLocator?: ContentLocator;
   readonly mediaType?: ProjectMentionMediaType;
   readonly entityType?: string;
   readonly thumbnailUri?: string;
@@ -734,11 +736,13 @@ export function projectContextReferences(
   if (!payloads || payloads.length === 0) return undefined;
   return payloads.map((payload) => {
     const navigationData = extractContextNavigationData(payload);
+    const contentLocator = extractContextContentLocator(payload);
     return {
       type: payload.type,
       id: payload.id,
       label: payload.label,
       ...(payload.summary ? { summary: payload.summary } : {}),
+      ...(contentLocator ? { contentLocator } : {}),
       ...(navigationData ? { navigationData } : {}),
     };
   });
@@ -809,17 +813,15 @@ function projectUserMessageContextReferences(input: {
 function projectFileReferenceContextReference(
   reference: AgentFileReference,
 ): MessageContextReference {
+  const displayPath = contentLocatorDisplayPath(reference.contentLocator);
   return {
     type: fileReferenceContextType(reference),
     id: reference.id,
     label: reference.label,
-    summary: reference.path,
+    summary: displayPath,
     ...(reference.thumbnailUri ? { thumbnailUri: reference.thumbnailUri } : {}),
     ...(reference.mediaType ? { mediaType: reference.mediaType } : {}),
-    navigationData: {
-      path: reference.path,
-      filePath: reference.path,
-    },
+    contentLocator: reference.contentLocator,
   };
 }
 
@@ -843,10 +845,13 @@ function extractContextNavigationData(
   const data = payload.data as Record<string, unknown> | null | undefined;
   if (!data || typeof data !== 'object') return undefined;
   const nav: Record<string, string> = {};
-  if (typeof data['filePath'] === 'string') nav['filePath'] = data['filePath'];
-  if (typeof data['path'] === 'string') nav['path'] = data['path'];
   if (payload.type === 'canvas-node') nav['nodeId'] = payload.id;
   return Object.keys(nav).length > 0 ? nav : undefined;
+}
+
+function extractContextContentLocator(payload: AgentContextPayload): ContentLocator | undefined {
+  const data = payload.data as Record<string, unknown> | null | undefined;
+  return data && isContentLocator(data['contentLocator']) ? data['contentLocator'] : undefined;
 }
 
 export async function prepareAgentMessageDispatch(
@@ -1449,7 +1454,7 @@ export function projectAgentFileMentions(
   return files.map((file) => {
     const relativePath = normalizeRelativeProjectPath(file.relativePath);
     return {
-      path: relativePath,
+      locator: { kind: 'workspace-file', path: relativePath },
       name: getProjectPathBaseName(relativePath),
       type: 'file',
       ...(file.icon ? { icon: file.icon } : {}),
@@ -1521,9 +1526,7 @@ export function projectAgentMentionExtras(
         ...(candidate.searchText ? { searchText: candidate.searchText } : {}),
         ...(candidate.source ? { source: candidate.source } : {}),
         ...(candidate.icon ? { icon: candidate.icon } : {}),
-        ...(candidate.filePath
-          ? { filePath: normalizeRelativeProjectPath(candidate.filePath) }
-          : {}),
+        ...(candidate.contentLocator ? { contentLocator: candidate.contentLocator } : {}),
         ...(candidate.mediaType ? { mediaType: candidate.mediaType } : {}),
         ...(candidate.entityType ? { entityType: candidate.entityType } : {}),
         ...(candidate.thumbnailUri ? { thumbnailUri: candidate.thumbnailUri } : {}),
@@ -2004,11 +2007,23 @@ function summarizeFileReferences(
   return (references ?? []).map((reference) => ({
     id: reference.id,
     label: reference.label,
-    path: reference.path,
+    contentLocator: reference.contentLocator,
     mediaType: reference.mediaType,
     source: reference.source,
     hasThumbnail: typeof reference.thumbnailUri === 'string' && reference.thumbnailUri.length > 0,
   }));
+}
+
+function contentLocatorDisplayPath(locator: ContentLocator): string {
+  switch (locator.kind) {
+    case 'workspace-file':
+    case 'generated-output':
+      return locator.path;
+    case 'document-entry':
+      return `${locator.source.path}#${locator.entryPath}`;
+    case 'package-resource':
+      return `${locator.packageId}/${locator.resourcePath}`;
+  }
 }
 
 function summarizeBase64Images(

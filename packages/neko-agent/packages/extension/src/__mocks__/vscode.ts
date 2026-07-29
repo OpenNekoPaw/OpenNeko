@@ -44,6 +44,7 @@ export const extensions = {
 // env mock
 export const env = {
   language: 'zh-cn',
+  sessionId: 'vscode-test-session',
   openExternal: vi.fn().mockResolvedValue(true),
 };
 

@@ -1,4 +1,4 @@
-const DEFAULT_CONFIRMATION_TIMEOUT_MS = 5 * 60 * 1000;
+export const PI_TOOL_CONFIRMATION_DEFAULT_TIMEOUT_MS = 5 * 60 * 1000;
 
 interface PendingConfirmation {
   readonly resolve: (approved: boolean) => void;
@@ -8,7 +8,7 @@ interface PendingConfirmation {
 export class PiToolConfirmationRegistry {
   private readonly pending = new Map<string, PendingConfirmation>();
 
-  constructor(private readonly timeoutMs: number = DEFAULT_CONFIRMATION_TIMEOUT_MS) {
+  constructor(private readonly timeoutMs: number = PI_TOOL_CONFIRMATION_DEFAULT_TIMEOUT_MS) {
     if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
       throw new Error('Pi tool confirmation timeout must be a positive finite number.');
     }

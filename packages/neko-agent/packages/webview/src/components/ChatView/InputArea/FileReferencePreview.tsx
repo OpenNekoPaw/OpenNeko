@@ -1,5 +1,6 @@
 import type { SelectedFileReference } from './types';
 import { projectPathReferenceToken } from '@/presenters/reference-token-presenter';
+import { projectContentLocatorPath } from '@/presenters/content-locator-presenter';
 import { ReferenceToken } from './ReferenceToken';
 
 interface FileReferencePreviewProps {
@@ -27,7 +28,7 @@ function FileReferenceToken({
   readonly onRemove: (id: string) => void;
 }) {
   const projection = projectPathReferenceToken({
-    path: reference.path,
+    path: projectContentLocatorPath(reference.contentLocator),
     label: reference.label,
     mediaType: reference.mediaType,
     thumbnailUri: reference.thumbnailUri,

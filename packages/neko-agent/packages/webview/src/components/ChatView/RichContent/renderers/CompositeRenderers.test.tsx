@@ -670,7 +670,7 @@ describe('composite rich content renderers', () => {
 
     expect(screen.getByText('Generated assets')).toBeTruthy();
     expect(screen.getByText('Final')).toBeTruthy();
-    expect(screen.getByText('Open')).toBeTruthy();
+    expect(screen.queryByText('Open')).toBeNull();
   });
 
   it('renders an image fallback when a gallery asset has no preview src', () => {

@@ -1,5 +1,5 @@
 import type { MessageContextReference } from '@neko-agent/types';
-import type { AgentContextPayload } from '@neko/shared';
+import { isContentLocator, type AgentContextPayload, type ContentLocator } from '@neko/shared';
 
 export function projectContextReferencesFromPayloads(
   payloads: AgentContextPayload[] | undefined,
@@ -7,11 +7,13 @@ export function projectContextReferencesFromPayloads(
   if (!payloads || payloads.length === 0) return undefined;
   return payloads.map((payload) => {
     const navigationData = projectContextNavigationData(payload);
+    const contentLocator = projectContextContentLocator(payload);
     return {
       type: payload.type,
       id: payload.id,
       label: payload.label,
       summary: payload.summary,
+      ...(contentLocator ? { contentLocator } : {}),
       ...(Object.keys(navigationData).length > 0 ? { navigationData } : {}),
     };
   });
@@ -22,14 +24,10 @@ function projectContextNavigationData(payload: AgentContextPayload): Record<stri
   const nav: Record<string, string> = {};
 
   if (data && typeof data === 'object') {
-    copyStringField(nav, 'filePath', data.filePath);
-    copyStringField(nav, 'path', data.path);
-    if (typeof data.resolvedPath === 'string') nav.filePath = data.resolvedPath;
-
     const embeddedNavigation = data.navigationData;
     if (embeddedNavigation && typeof embeddedNavigation === 'object') {
       for (const [key, value] of Object.entries(embeddedNavigation)) {
-        if (typeof value === 'string') nav[key] = value;
+        if (typeof value === 'string' && !isPathNavigationKey(key)) nav[key] = value;
       }
     }
   }
@@ -44,12 +42,23 @@ function projectContextNavigationData(payload: AgentContextPayload): Record<stri
   return nav;
 }
 
+function projectContextContentLocator(payload: AgentContextPayload): ContentLocator | undefined {
+  const data = readRecord(payload.data);
+  return data && isContentLocator(data.contentLocator) ? data.contentLocator : undefined;
+}
+
+function isPathNavigationKey(key: string): boolean {
+  return (
+    key === 'filePath' ||
+    key === 'path' ||
+    key === 'resolvedPath' ||
+    key === 'portablePath' ||
+    key === 'projectRoot'
+  );
+}
+
 function readRecord(value: unknown): Record<string, unknown> | undefined {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : undefined;
-}
-
-function copyStringField(target: Record<string, string>, key: string, value: unknown): void {
-  if (typeof value === 'string') target[key] = value;
 }

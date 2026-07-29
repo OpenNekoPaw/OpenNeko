@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type {
   AgentHostRuntimeAdapter,
-  ExtensionToWebviewMessage,
+  AgentHostToWebviewMessage,
   ProjectionAttachmentKey,
-  WebviewToExtensionMessage,
+  AgentWebviewToHostMessage,
 } from '@neko-agent/types';
 import {
   createProjectionEndpointController,
@@ -12,9 +12,9 @@ import {
 import { createTabRenderRuntimeRegistry } from '../tab-render-runtime';
 
 function createHost() {
-  const sent: WebviewToExtensionMessage[] = [];
+  const sent: AgentWebviewToHostMessage[] = [];
   const events: string[] = [];
-  let listener: ((message: ExtensionToWebviewMessage) => void) | null = null;
+  let listener: ((message: AgentHostToWebviewMessage) => void) | null = null;
   const host: AgentHostRuntimeAdapter = {
     hostKind: 'vscode',
     runtimeId: 'test-runtime',
@@ -41,7 +41,7 @@ function createHost() {
     host,
     sent,
     events,
-    emit(message: ExtensionToWebviewMessage) {
+    emit(message: AgentHostToWebviewMessage) {
       if (!listener) throw new Error('Host listener is not subscribed.');
       listener(message);
     },
@@ -71,14 +71,14 @@ function createHarness(
   return { registry, host, controller, errors, bindings };
 }
 
-function attachMessages(sent: readonly WebviewToExtensionMessage[]) {
+function attachMessages(sent: readonly AgentWebviewToHostMessage[]) {
   return sent.filter(
-    (message): message is Extract<WebviewToExtensionMessage, { type: 'projectionAttach' }> =>
+    (message): message is Extract<AgentWebviewToHostMessage, { type: 'projectionAttach' }> =>
       message.type === 'projectionAttach',
   );
 }
 
-function snapshotFrame(key: ProjectionAttachmentKey, version = 0): ExtensionToWebviewMessage {
+function snapshotFrame(key: ProjectionAttachmentKey, version = 0): AgentHostToWebviewMessage {
   return {
     type: 'projectionSnapshot',
     key,
