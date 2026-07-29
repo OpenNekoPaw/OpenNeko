@@ -1,12 +1,12 @@
 ## 1. Settings contract and persistence
 
-- [ ] 1.1 Define the versioned Desktop application settings contract, defaults, request/response/event parsers, optimistic revision errors, and authority-isolation tests.
-- [ ] 1.2 Implement the atomic Desktop settings repository and service with serialized updates, subscriptions, invalid-file diagnostics, and persistence tests.
+- [x] 1.1 Define the versioned Desktop application settings contract, defaults, request/response/event parsers, optimistic revision errors, and authority-isolation tests.
+- [x] 1.2 Implement the atomic Desktop settings repository and service with serialized updates, subscriptions, invalid-file diagnostics, and persistence tests.
 
 ## 2. Host composition and runtime projection
 
-- [ ] 2.1 Add sender-bound AppHost and IPC/preload settings routes, event sequencing, lifecycle disposal, and producer/consumer contract tests.
-- [ ] 2.2 Apply theme and startup preferences in Electron Main, expose the Agent-owned advanced config action without writing Desktop settings, and test both ownership paths.
+- [x] 2.1 Add sender-bound AppHost and IPC/preload settings routes, event sequencing, lifecycle disposal, and producer/consumer contract tests.
+- [x] 2.2 Apply theme and startup preferences in Electron Main, expose the Agent-owned advanced config action without writing Desktop settings, and test both ownership paths.
 
 ## 3. Desktop settings experience
 

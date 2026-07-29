@@ -81,6 +81,14 @@ import {
   type DesktopHomeAssetSearchResult,
   type DesktopHomePluginsResult,
 } from '../shared/home-management-contract';
+import {
+  DESKTOP_APPLICATION_SETTINGS_CONTRACT_VERSION,
+  parseDesktopApplicationSettingsRequest,
+  parseDesktopApplicationSettingsUpdateRequest,
+  type DesktopAgentAdvancedSettingsResult,
+  type DesktopApplicationSettingsResponse,
+} from '../shared/application-settings-contract';
+import type { DesktopApplicationSettingsService } from './application-settings-service';
 
 export interface DesktopAppHostOptions {
   readonly host: NekoHostPorts;
@@ -93,6 +101,8 @@ export interface DesktopAppHostOptions {
   readonly preview?: DesktopPreviewRuntime;
   readonly canvas?: DesktopCanvasRuntime;
   readonly cut?: DesktopCutRuntime;
+  readonly settings: DesktopApplicationSettingsService;
+  readonly openAgentAdvancedSettings: () => Promise<void>;
   readonly instanceId?: string;
 }
 
@@ -106,6 +116,7 @@ export class DesktopAppHost {
   readonly preview: DesktopPreviewRuntime | undefined;
   readonly canvas: DesktopCanvasRuntime | undefined;
   readonly cut: DesktopCutRuntime | undefined;
+  readonly settings: DesktopApplicationSettingsService;
   private readonly resourceSubscriptions = new Map<number, () => void>();
   private readonly canvasSubscriptions = new Map<number, Map<string, () => void>>();
   private readonly cutSubscriptions = new Map<number, Map<string, () => void>>();
@@ -129,12 +140,59 @@ export class DesktopAppHost {
     this.preview = options.preview;
     this.canvas = options.canvas;
     this.cut = options.cut;
+    this.settings = options.settings;
     this.shell.setAgentHomeProjectionSource(this.agent);
     this.shell.setAgentCapabilityReady(this.agentBridge.startup.ready);
     this.shell.setResourceBrowserCapabilityReady(this.resourceBrowser !== undefined);
     this.shell.setPreviewCapabilityReady(this.preview !== undefined);
     this.shell.setCanvasCapabilityReady(this.canvas !== undefined);
     this.shell.setCutCapabilityReady(this.cut !== undefined);
+  }
+
+  createApplicationSettingsSnapshot(
+    sender: DesktopSenderIdentity,
+    payload: unknown,
+  ): DesktopApplicationSettingsResponse {
+    this.requireActive();
+    const request = parseDesktopApplicationSettingsRequest(payload);
+    this.windows.resolveSender(sender);
+    return {
+      schemaVersion: DESKTOP_APPLICATION_SETTINGS_CONTRACT_VERSION,
+      requestId: request.requestId,
+      projection: this.settings.current,
+    };
+  }
+
+  async updateApplicationSettings(
+    sender: DesktopSenderIdentity,
+    payload: unknown,
+  ): Promise<DesktopApplicationSettingsResponse> {
+    this.requireActive();
+    const request = parseDesktopApplicationSettingsUpdateRequest(payload);
+    this.windows.resolveSender(sender);
+    return {
+      schemaVersion: DESKTOP_APPLICATION_SETTINGS_CONTRACT_VERSION,
+      requestId: request.requestId,
+      projection: await this.settings.update(
+        request.expectedRevision,
+        request.preferences,
+      ),
+    };
+  }
+
+  async openAgentAdvancedSettings(
+    sender: DesktopSenderIdentity,
+    payload: unknown,
+  ): Promise<DesktopAgentAdvancedSettingsResult> {
+    this.requireActive();
+    const request = parseDesktopApplicationSettingsRequest(payload);
+    this.windows.resolveSender(sender);
+    await this.options.openAgentAdvancedSettings();
+    return {
+      schemaVersion: DESKTOP_APPLICATION_SETTINGS_CONTRACT_VERSION,
+      requestId: request.requestId,
+      status: 'opened',
+    };
   }
 
   async createBootstrapProjection(
@@ -685,6 +743,11 @@ export class DesktopAppHost {
     }
     try {
       await this.shell.dispose();
+    } catch (error) {
+      errors.push(error);
+    }
+    try {
+      await this.settings.dispose();
     } catch (error) {
       errors.push(error);
     }

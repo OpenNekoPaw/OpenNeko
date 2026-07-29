@@ -46,6 +46,16 @@ import { DesktopCanvasRuntime } from './desktop-canvas-runtime';
 import { DesktopCutRuntime } from './desktop-cut-runtime';
 import { createDesktopWorkspaceFileLocator } from './desktop-content-locator';
 import { createDesktopNativeThemeController } from './desktop-native-theme';
+import {
+  createNodeDesktopApplicationSettingsFilePort,
+  DesktopApplicationSettingsRepository,
+} from './application-settings-repository';
+import { DesktopApplicationSettingsService } from './application-settings-service';
+import {
+  DESKTOP_APPLICATION_SETTINGS_CHANNELS,
+  type DesktopApplicationSettingsProjectionEvent,
+} from '../shared/application-settings-contract';
+import { buildConfigFilePath } from '@neko/platform/files';
 
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string | undefined;
 declare const MAIN_WINDOW_VITE_NAME: string;
@@ -74,6 +84,15 @@ async function startDesktop(): Promise<void> {
   const homedir = app.getPath('home');
   const userData = app.getPath('userData');
   const globalStorage = resolveGlobalStorageLayout(homedir);
+  const applicationSettings = new DesktopApplicationSettingsService(
+    new DesktopApplicationSettingsRepository(
+      createNodeDesktopApplicationSettingsFilePort(
+        path.join(userData, 'state', 'desktop-application-settings.v1.json'),
+      ),
+    ),
+  );
+  const initialApplicationSettings = await applicationSettings.initialize();
+  nativeTheme.themeSource = initialApplicationSettings.preferences.theme;
   const applicationInstanceId = randomUUID();
   const secrets = createEncryptedDesktopSecretPort({
     filePath: path.join(userData, 'secrets', 'agent-credentials.v1.json'),
@@ -130,6 +149,7 @@ async function startDesktop(): Promise<void> {
       createNodeDesktopShellStateFilePort(path.join(userData, 'state', 'desktop-shell-state.json')),
     ),
     workspaceRegistry,
+    startupTarget: initialApplicationSettings.preferences.startupTarget,
   });
   const agentComposition = createDesktopAgentAppHostComposition({
     userDataRoot: globalStorage.root,
@@ -141,6 +161,9 @@ async function startDesktop(): Promise<void> {
   const nativeThemeController = createDesktopNativeThemeController({
     nativeTheme,
     listWindows: () => windowsById.values(),
+  });
+  applicationSettings.subscribe((event) => {
+    nativeTheme.themeSource = event.projection.preferences.theme;
   });
   const requireOwnerWindow = (windowId: string): BrowserWindow => {
     const owner = windowsById.get(windowId);
@@ -369,6 +392,8 @@ async function startDesktop(): Promise<void> {
     preview: previewRuntime,
     canvas: canvasRuntime,
     cut: cutRuntime,
+    settings: applicationSettings,
+    openAgentAdvancedSettings: () => openHostPath(buildConfigFilePath(homedir)),
     instanceId: applicationInstanceId,
   });
   if (!appHost.agentBridge.startup.ready) {
@@ -451,6 +476,12 @@ async function startDesktop(): Promise<void> {
           disposeShellSubscription();
           appHost.shell.releaseWindow(registration.windowId);
         },
+      });
+      const disposeSettingsSubscription = appHost.settings.subscribe((event) =>
+        sendApplicationSettingsProjectionEvent(createdWindow, event),
+      );
+      appHost.windows.addDisposable(registration.windowId, {
+        dispose: disposeSettingsSubscription,
       });
       appHost.windows.addDisposable(registration.windowId, {
         dispose: () => {
@@ -656,5 +687,17 @@ function sendLifecycleEvent(window: BrowserWindow, event: DesktopLifecycleEvent)
 function sendShellProjectionEvent(window: BrowserWindow, event: DesktopShellProjectionEvent): void {
   if (!window.isDestroyed()) {
     window.webContents.send(DESKTOP_SHELL_CHANNELS.projectionEvent, event);
+  }
+}
+
+function sendApplicationSettingsProjectionEvent(
+  window: BrowserWindow,
+  event: DesktopApplicationSettingsProjectionEvent,
+): void {
+  if (!window.isDestroyed()) {
+    window.webContents.send(
+      DESKTOP_APPLICATION_SETTINGS_CHANNELS.projectionEvent,
+      event,
+    );
   }
 }

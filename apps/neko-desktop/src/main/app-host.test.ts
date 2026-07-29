@@ -5,6 +5,11 @@ import type { ILogger } from '@neko/shared/logger';
 import { createDesktopAgentBootstrapRequest } from '../shared/agent-contract';
 import { createDesktopBootstrapRequest } from '../shared/bridge-contract';
 import {
+  DEFAULT_DESKTOP_APPLICATION_PREFERENCES,
+  createDesktopApplicationSettingsRequest,
+  createDesktopApplicationSettingsUpdateRequest,
+} from '../shared/application-settings-contract';
+import {
   createDesktopHomeAssetSearchRequest,
   createDesktopHomePluginsRequest,
 } from '../shared/home-management-contract';
@@ -29,8 +34,83 @@ import {
   DesktopShellStateRepository,
   type DesktopShellStateFilePort,
 } from './shell-state-repository';
+import {
+  DesktopApplicationSettingsRepository,
+  type DesktopApplicationSettingsFilePort,
+} from './application-settings-repository';
+import { DesktopApplicationSettingsService } from './application-settings-service';
 
 describe('DesktopAppHost', () => {
+  it('keeps Desktop settings sender-bound and opens Agent configuration through its owner action', async () => {
+    const logger = createLogger();
+    const settings = createSettingsService();
+    await settings.initialize();
+    const openAgentAdvancedSettings = vi.fn(async () => undefined);
+    const appHost = new DesktopAppHost({
+      host: createElectronNekoHostPorts({
+        homedir: '/Users/fixture',
+        nekoHome: '/Users/fixture/.openneko',
+        version: '0.0.1',
+        logger,
+      }),
+      version: '0.0.1',
+      instanceId: 'app-1',
+      logger,
+      shell: createShellService('app-1'),
+      agent: createAgentComposition(),
+      settings,
+      openAgentAdvancedSettings,
+    });
+    appHost.windows.register({
+      windowId: 'window-1',
+      webContentsId: 10,
+      allowedOrigin: DESKTOP_APP_ORIGIN,
+    });
+    const sender = {
+      webContentsId: 10,
+      frameUrl: `${DESKTOP_APP_ORIGIN}/index.html`,
+    };
+
+    expect(
+      appHost.createApplicationSettingsSnapshot(
+        sender,
+        createDesktopApplicationSettingsRequest('settings-get-1'),
+      ).projection.preferences,
+    ).toEqual(DEFAULT_DESKTOP_APPLICATION_PREFERENCES);
+    const updated = await appHost.updateApplicationSettings(
+      sender,
+      createDesktopApplicationSettingsUpdateRequest('settings-update-1', 0, {
+        ...DEFAULT_DESKTOP_APPLICATION_PREFERENCES,
+        theme: 'dark',
+      }),
+    );
+    expect(updated.projection).toMatchObject({
+      revision: 1,
+      preferences: { theme: 'dark' },
+    });
+    await expect(
+      appHost.openAgentAdvancedSettings(
+        sender,
+        createDesktopApplicationSettingsRequest('settings-agent-1'),
+      ),
+    ).resolves.toMatchObject({ status: 'opened' });
+    expect(openAgentAdvancedSettings).toHaveBeenCalledOnce();
+    await expect(
+      appHost.updateApplicationSettings(
+        {
+          webContentsId: 11,
+          frameUrl: `${DESKTOP_APP_ORIGIN}/index.html`,
+        },
+        createDesktopApplicationSettingsUpdateRequest(
+          'settings-foreign-1',
+          1,
+          DEFAULT_DESKTOP_APPLICATION_PREFERENCES,
+        ),
+      ),
+    ).rejects.toThrow(/Unknown Desktop IPC sender/);
+    await appHost.dispose();
+  });
+
   it('derives bootstrap identity from the registered sender and redacts host environment', async () => {
     const logger = createLogger();
     const host = createElectronNekoHostPorts({
@@ -48,6 +128,8 @@ describe('DesktopAppHost', () => {
       logger,
       shell: createShellService('app-1'),
       agent: createAgentComposition(),
+      settings: createSettingsService(),
+      openAgentAdvancedSettings: vi.fn(async () => undefined),
     });
     appHost.windows.register({
       windowId: 'window-1',
@@ -98,6 +180,8 @@ describe('DesktopAppHost', () => {
       logger,
       shell: createShellService('app-1'),
       agent,
+      settings: createSettingsService(),
+      openAgentAdvancedSettings: vi.fn(async () => undefined),
     });
     await appHost.dispose();
 
@@ -443,6 +527,7 @@ function createShellFixture(applicationInstanceId: string): {
       applicationInstanceId,
       stateRepository: new DesktopShellStateRepository(file),
       workspaceRegistry: registry,
+      startupTarget: 'restore',
       createIdentity: () => 'window-1',
     }),
   };
@@ -464,6 +549,8 @@ async function createShellAppHost() {
     logger,
     shell: fixture.service,
     agent,
+    settings: createSettingsService(),
+    openAgentAdvancedSettings: vi.fn(async () => undefined),
   });
   const windowId = await appHost.shell.claimWindowId();
   appHost.windows.register({
@@ -484,6 +571,19 @@ async function createShellAppHost() {
     },
     projection: await appHost.shell.getProjection(windowId),
   };
+}
+
+function createSettingsService(): DesktopApplicationSettingsService {
+  let content: string | null = null;
+  const file: DesktopApplicationSettingsFilePort = {
+    readTextIfExists: async () => content,
+    writeTextAtomic: async (next) => {
+      content = next;
+    },
+  };
+  return new DesktopApplicationSettingsService(
+    new DesktopApplicationSettingsRepository(file),
+  );
 }
 
 function createAgentComposition(): DesktopAgentAppHostComposition & {

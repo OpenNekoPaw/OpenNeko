@@ -7,6 +7,7 @@ import { DESKTOP_PREVIEW_CHANNELS } from '../shared/preview-bridge-contract';
 import { DESKTOP_CANVAS_CHANNELS } from '../shared/canvas-bridge-contract';
 import { DESKTOP_CUT_CHANNELS } from '../shared/cut-bridge-contract';
 import { DESKTOP_HOME_MANAGEMENT_CHANNELS } from '../shared/home-management-contract';
+import { DESKTOP_APPLICATION_SETTINGS_CHANNELS } from '../shared/application-settings-contract';
 import type { DesktopAppHost } from './app-host';
 
 export function registerDesktopIpc(
@@ -15,6 +16,21 @@ export function registerDesktopIpc(
     readonly selectContentWorkspace: (event: IpcMainInvokeEvent) => Promise<string | undefined>;
   },
 ): () => void {
+  ipcMain.handle(
+    DESKTOP_APPLICATION_SETTINGS_CHANNELS.snapshotGet,
+    (event: IpcMainInvokeEvent, payload: unknown) =>
+      appHost.createApplicationSettingsSnapshot(requireSender(event), payload),
+  );
+  ipcMain.handle(
+    DESKTOP_APPLICATION_SETTINGS_CHANNELS.update,
+    (event: IpcMainInvokeEvent, payload: unknown) =>
+      appHost.updateApplicationSettings(requireSender(event), payload),
+  );
+  ipcMain.handle(
+    DESKTOP_APPLICATION_SETTINGS_CHANNELS.agentAdvancedOpen,
+    (event: IpcMainInvokeEvent, payload: unknown) =>
+      appHost.openAgentAdvancedSettings(requireSender(event), payload),
+  );
   ipcMain.handle(
     DESKTOP_AGENT_CHANNELS.bootstrapGet,
     (event: IpcMainInvokeEvent, payload: unknown) =>
@@ -171,6 +187,9 @@ export function registerDesktopIpc(
     for (const channel of [
       DESKTOP_AGENT_CHANNELS.bootstrapGet,
       DESKTOP_AGENT_CHANNELS.messageSend,
+      DESKTOP_APPLICATION_SETTINGS_CHANNELS.snapshotGet,
+      DESKTOP_APPLICATION_SETTINGS_CHANNELS.update,
+      DESKTOP_APPLICATION_SETTINGS_CHANNELS.agentAdvancedOpen,
       DESKTOP_RESOURCE_BROWSER_CHANNELS.snapshotGet,
       DESKTOP_RESOURCE_BROWSER_CHANNELS.children,
       DESKTOP_RESOURCE_BROWSER_CHANNELS.search,

@@ -10,6 +10,32 @@ import {
 } from './shell-state-repository';
 
 describe('DesktopShellService', () => {
+  it('starts at Home without deleting restored project tabs when configured', async () => {
+    const file = createMemoryFile();
+    const first = createFixture(file);
+    const windowId = await first.service.claimWindowId();
+    first.service.setRendererEpoch(windowId, 1);
+    const projection = await first.service.getProjection(windowId);
+    const opened = await first.service.openContent(
+      windowId,
+      '/workspace/demo',
+      projection.endpointEpoch,
+      projection.window.revision,
+    );
+    expect(opened.projection.window.activeTarget.kind).toBe('project');
+    first.service.releaseWindow(windowId);
+    await first.service.dispose();
+
+    const second = createFixture(file, 'home');
+    const restoredWindowId = await second.service.claimWindowId();
+    second.service.setRendererEpoch(restoredWindowId, 1);
+    const restored = await second.service.getProjection(restoredWindowId);
+
+    expect(restored.window.activeTarget).toEqual({ kind: 'home' });
+    expect(restored.window.tabs).toHaveLength(1);
+    expect(restored.catalog.projects).toHaveLength(1);
+  });
+
   it('projects only fully composed Agent and Resource Browser capabilities as ready', async () => {
     const fixture = createFixture();
     fixture.service.setAgentCapabilityReady(true);
@@ -469,7 +495,10 @@ describe('DesktopShellService', () => {
   });
 });
 
-function createFixture(file = createMemoryFile()) {
+function createFixture(
+  file = createMemoryFile(),
+  startupTarget: 'home' | 'restore' = 'restore',
+) {
   let identity = 0;
   const resolution: DesktopWorkspaceResolution = {
     workspaceId: '11111111-1111-4111-8111-111111111111',
@@ -491,6 +520,7 @@ function createFixture(file = createMemoryFile()) {
       applicationInstanceId,
       stateRepository: new DesktopShellStateRepository(file),
       workspaceRegistry: registry,
+      startupTarget,
       createIdentity: () => `identity-${(identity += 1)}`,
       now: () => '2026-07-27T00:00:00.000Z',
     }),

@@ -6,7 +6,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { I18nProvider } from '@neko/shared/i18n/react';
 import { createDefaultDesktopWorkbenchLayout } from '../shared/workbench-contract';
 import type { DesktopShellProjection } from '../shared/shell-contract';
+import {
+  DEFAULT_DESKTOP_APPLICATION_PREFERENCES,
+  DESKTOP_APPLICATION_SETTINGS_CONTRACT_VERSION,
+} from '../shared/application-settings-contract';
 import { DesktopApplication } from './DesktopShell';
+import { DesktopApplicationSettingsProvider } from './application-settings-context';
 import { createDesktopI18n } from './i18n';
 
 vi.mock('./DesktopAgentSurface', () => ({
@@ -47,6 +52,7 @@ describe('DesktopApplication', () => {
         },
         bootstrap: { get: vi.fn() },
         lifecycle: { subscribe: vi.fn(() => () => undefined) },
+        settings: createSettingsBridgeMock(),
         home: createHomeBridgeMock(),
         shell: {
           getSnapshot: vi.fn(async () => projection),
@@ -174,6 +180,7 @@ describe('DesktopApplication', () => {
         },
         bootstrap: { get: vi.fn() },
         lifecycle: { subscribe: vi.fn(() => () => undefined) },
+        settings: createSettingsBridgeMock(),
         home: createHomeBridgeMock(),
         shell: {
           getSnapshot: vi.fn(async () => projection),
@@ -299,6 +306,7 @@ describe('DesktopApplication', () => {
         },
         bootstrap: { get: vi.fn() },
         lifecycle: { subscribe: vi.fn(() => () => undefined) },
+        settings: createSettingsBridgeMock(),
         home: createHomeBridgeMock(),
         shell: {
           getSnapshot: vi.fn(async () => projection),
@@ -424,6 +432,7 @@ describe('DesktopApplication', () => {
         },
         bootstrap: { get: vi.fn() },
         lifecycle: { subscribe: vi.fn(() => () => undefined) },
+        settings: createSettingsBridgeMock(),
         home: createHomeBridgeMock(),
         shell: {
           getSnapshot: vi.fn(async () => projection),
@@ -474,7 +483,20 @@ function TestApplication(): JSX.Element {
   const i18n = createDesktopI18n('en');
   return (
     <I18nProvider service={i18n.i18nService}>
-      <DesktopApplication />
+      <DesktopApplicationSettingsProvider
+        value={{
+          projection: {
+            schemaVersion: DESKTOP_APPLICATION_SETTINGS_CONTRACT_VERSION,
+            revision: 0,
+            eventSequence: 0,
+            preferences: DEFAULT_DESKTOP_APPLICATION_PREFERENCES,
+          },
+          update: vi.fn(),
+          openAgentAdvanced: vi.fn(),
+        }}
+      >
+        <DesktopApplication />
+      </DesktopApplicationSettingsProvider>
     </I18nProvider>
   );
 }
@@ -486,6 +508,15 @@ function createResourceBridgeMock() {
     resolveThumbnail: vi.fn(),
     search: vi.fn(),
     execute: vi.fn(),
+    subscribe: vi.fn(() => () => undefined),
+  };
+}
+
+function createSettingsBridgeMock() {
+  return {
+    get: vi.fn(),
+    update: vi.fn(),
+    openAgentAdvanced: vi.fn(),
     subscribe: vi.fn(() => () => undefined),
   };
 }

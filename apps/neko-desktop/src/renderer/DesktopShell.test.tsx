@@ -16,6 +16,11 @@ import {
 } from './DesktopShell';
 import { createDesktopI18n } from './i18n';
 import { createDefaultDesktopWorkbenchLayout } from '../shared/workbench-contract';
+import {
+  DEFAULT_DESKTOP_APPLICATION_PREFERENCES,
+  DESKTOP_APPLICATION_SETTINGS_CONTRACT_VERSION,
+} from '../shared/application-settings-contract';
+import { DesktopApplicationSettingsProvider } from './application-settings-context';
 
 describe('DesktopShellView', () => {
   it('reopens Resources as an overlay while a full Preview owns Main', () => {
@@ -697,7 +702,22 @@ describe('DesktopShellView', () => {
 function renderShell(node: JSX.Element): string {
   const i18n = createDesktopI18n('en');
   return renderToStaticMarkup(
-    <I18nProvider service={i18n.i18nService}>{node}</I18nProvider>,
+    <I18nProvider service={i18n.i18nService}>
+      <DesktopApplicationSettingsProvider
+        value={{
+          projection: {
+            schemaVersion: DESKTOP_APPLICATION_SETTINGS_CONTRACT_VERSION,
+            revision: 0,
+            eventSequence: 0,
+            preferences: DEFAULT_DESKTOP_APPLICATION_PREFERENCES,
+          },
+          update: async () => undefined,
+          openAgentAdvanced: async () => undefined,
+        }}
+      >
+        {node}
+      </DesktopApplicationSettingsProvider>
+    </I18nProvider>,
   );
 }
 

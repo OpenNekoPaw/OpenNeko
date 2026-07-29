@@ -103,6 +103,17 @@ import {
   parseDesktopHomePluginsResult,
   type OpenNekoDesktopHomeManagementBridge,
 } from '../shared/home-management-contract';
+import {
+  createDesktopApplicationSettingsRequest,
+  createDesktopApplicationSettingsUpdateRequest,
+  DESKTOP_APPLICATION_SETTINGS_CHANNELS,
+  DesktopApplicationSettingsContractError,
+  parseDesktopAgentAdvancedSettingsResult,
+  parseDesktopApplicationSettingsProjectionEvent,
+  parseDesktopApplicationSettingsResponse,
+  type DesktopApplicationSettingsProjection,
+  type OpenNekoDesktopApplicationSettingsBridge,
+} from '../shared/application-settings-contract';
 
 let requestSequence = 0;
 let latestShellProjection: DesktopShellProjectionCursor | undefined;
@@ -126,6 +137,10 @@ const cutListeners = new Set<{
   readonly identity: CutHostRuntimeIdentity;
   readonly listener: Parameters<OpenNekoDesktopCutBridge['cut']['subscribe']>[1];
 }>();
+let currentSettingsProjection: DesktopApplicationSettingsProjection | undefined;
+const settingsListeners = new Set<
+  Parameters<OpenNekoDesktopApplicationSettingsBridge['settings']['subscribe']>[0]
+>();
 
 const bridge: OpenNekoDesktopBridge &
   OpenNekoDesktopShellBridge &
@@ -134,7 +149,8 @@ const bridge: OpenNekoDesktopBridge &
   OpenNekoDesktopPreviewBridge &
   OpenNekoDesktopCanvasBridge &
   OpenNekoDesktopCutBridge &
-  OpenNekoDesktopHomeManagementBridge = {
+  OpenNekoDesktopHomeManagementBridge &
+  OpenNekoDesktopApplicationSettingsBridge = {
   agent: {
     async getBootstrap(projectId, viewId, viewEpoch) {
       const request = createDesktopAgentBootstrapRequest(
@@ -212,6 +228,56 @@ const bridge: OpenNekoDesktopBridge &
       ipcRenderer.on(DESKTOP_BRIDGE_CHANNELS.lifecycleEvent, handler);
       return () => {
         ipcRenderer.removeListener(DESKTOP_BRIDGE_CHANNELS.lifecycleEvent, handler);
+      };
+    },
+  },
+  settings: {
+    async get() {
+      const request = createDesktopApplicationSettingsRequest(
+        nextRequestId('desktop-application-settings'),
+      );
+      const response: unknown = await ipcRenderer.invoke(
+        DESKTOP_APPLICATION_SETTINGS_CHANNELS.snapshotGet,
+        request,
+      );
+      const projection = parseDesktopApplicationSettingsResponse(
+        response,
+        request.requestId,
+      ).projection;
+      currentSettingsProjection = projection;
+      return projection;
+    },
+    async update(preferences, expectedRevision) {
+      const request = createDesktopApplicationSettingsUpdateRequest(
+        nextRequestId('desktop-application-settings-update'),
+        expectedRevision,
+        preferences,
+      );
+      const response: unknown = await ipcRenderer.invoke(
+        DESKTOP_APPLICATION_SETTINGS_CHANNELS.update,
+        request,
+      );
+      const projection = parseDesktopApplicationSettingsResponse(
+        response,
+        request.requestId,
+      ).projection;
+      currentSettingsProjection = projection;
+      return projection;
+    },
+    async openAgentAdvanced() {
+      const request = createDesktopApplicationSettingsRequest(
+        nextRequestId('desktop-agent-advanced-settings'),
+      );
+      const response: unknown = await ipcRenderer.invoke(
+        DESKTOP_APPLICATION_SETTINGS_CHANNELS.agentAdvancedOpen,
+        request,
+      );
+      parseDesktopAgentAdvancedSettingsResult(response, request.requestId);
+    },
+    subscribe(listener) {
+      settingsListeners.add(listener);
+      return () => {
+        settingsListeners.delete(listener);
       };
     },
   },
@@ -581,6 +647,22 @@ const bridge: OpenNekoDesktopBridge &
     },
   },
 };
+
+ipcRenderer.on(
+  DESKTOP_APPLICATION_SETTINGS_CHANNELS.projectionEvent,
+  (_event: Electron.IpcRendererEvent, value: unknown): void => {
+    const event = parseDesktopApplicationSettingsProjectionEvent(value);
+    const current = currentSettingsProjection;
+    if (current && event.sequence !== current.eventSequence + 1) {
+      throw new DesktopApplicationSettingsContractError(
+        'desktop-application-settings-event-sequence',
+        `Desktop settings event sequence ${event.sequence} does not follow ${current.eventSequence}.`,
+      );
+    }
+    currentSettingsProjection = event.projection;
+    for (const listener of settingsListeners) listener(event);
+  },
+);
 
 ipcRenderer.on(
   DESKTOP_AGENT_CHANNELS.messageEvent,

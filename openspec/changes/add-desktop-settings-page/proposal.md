@@ -19,7 +19,7 @@ Desktop 当前把“设置”操作直接映射到 Agent 拥有的 `config.toml`
 
 ### Modified Capabilities
 
-<!-- No accepted capability requirements are modified. The system-theme behavior remains the default and is extended by the new Desktop settings capability with an explicit user override. -->
+<!-- No accepted capability requirements are modified. Light remains the product default, while the settings capability adds explicit system/light/dark selection. -->
 
 ## Impact
 

@@ -36,6 +36,7 @@ import {
   createDesktopCanvasSessionId,
 } from '../shared/canvas-bridge-contract';
 import { createDesktopCutSessionId } from '../shared/cut-bridge-contract';
+import type { DesktopStartupTargetPreference } from '../shared/application-settings-contract';
 
 const UNAVAILABLE_DOMAIN_CAPABILITIES: readonly DesktopDomainCapabilityProjection[] = [
   unavailableDomain('agent', 'P1.3'),
@@ -54,6 +55,7 @@ export interface DesktopShellServiceOptions {
   readonly applicationInstanceId: string;
   readonly stateRepository: DesktopShellStateRepository;
   readonly workspaceRegistry: DesktopWorkspaceRegistry;
+  readonly startupTarget: DesktopStartupTargetPreference;
   readonly createIdentity?: () => string;
   readonly now?: () => string;
 }
@@ -202,7 +204,15 @@ export class DesktopShellService {
       }
       const restoredWindow = requireStoredWindow(state, windowId);
       const restoredWorkbench = restoreTransientWorkbench(state, restoredWindow);
-      if (restoredWorkbench !== restoredWindow.workbench) {
+      const restoredActiveTarget =
+        this.options.startupTarget === 'home' &&
+        restoredWindow.activeTarget.kind !== 'home'
+          ? ({ kind: 'home' } as const)
+          : restoredWindow.activeTarget;
+      if (
+        restoredWorkbench !== restoredWindow.workbench ||
+        restoredActiveTarget !== restoredWindow.activeTarget
+      ) {
         await this.options.stateRepository.commit(state.storageRevision, {
           ...state,
           storageRevision: state.storageRevision + 1,
@@ -211,6 +221,7 @@ export class DesktopShellService {
               ? {
                   ...window,
                   revision: window.revision + 1,
+                  activeTarget: restoredActiveTarget,
                   workbench: restoredWorkbench,
                 }
               : window,
