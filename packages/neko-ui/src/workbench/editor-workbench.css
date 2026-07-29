@@ -572,32 +572,46 @@
 
 .neko-workbench-editor-tabs {
   display: flex;
-  align-items: end;
-  gap: 1px;
   min-width: 0;
-  min-height: 34px;
+  min-height: 38px;
+  align-items: stretch;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+  overscroll-behavior-x: contain;
   border-bottom: 1px solid var(--neko-border, #d8dde4);
-  background: var(--neko-workbench-tabs-background, #f1f3f6);
+  background: var(--neko-workbench-tabs-background, var(--neko-workbench-chrome, #f1f3f6));
 }
 
 .neko-workbench-editor-tab {
+  position: relative;
   display: inline-flex;
+  min-width: 112px;
+  max-width: 220px;
+  height: 38px;
+  flex: 0 1 180px;
   align-items: center;
-  gap: 7px;
-  max-width: 190px;
-  height: 33px;
+  gap: 6px;
   overflow: hidden;
   border: 0;
   border-right: 1px solid var(--neko-border, #d8dde4);
-  padding: 0 14px;
+  padding: 0 9px 0 12px;
   color: var(--vscode-descriptionForeground, #627080);
-  background: var(--neko-workbench-tab-inactive, #eef1f5);
+  background: transparent;
   cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+.neko-workbench-editor-tab:not([data-active='true']):hover {
+  color: var(--vscode-foreground, #1d2b38);
+  background: var(--vscode-list-hoverBackground, rgba(90, 93, 94, 0.08));
+}
+
 .neko-workbench-editor-tab:focus-visible {
+  z-index: 1;
   outline: 1px solid var(--vscode-focusBorder, var(--neko-accent, #1687d9));
   outline-offset: -2px;
 }
@@ -605,7 +619,18 @@
 .neko-workbench-editor-tab[data-active='true'] {
   color: var(--vscode-foreground, #1d2b38);
   background: var(--vscode-editor-background, #ffffff);
-  font-weight: 700;
+  font-weight: 650;
+}
+
+.neko-workbench-editor-tab[data-active='true']::after {
+  position: absolute;
+  right: 10px;
+  bottom: 0;
+  left: 10px;
+  height: 2px;
+  border-radius: 999px 999px 0 0;
+  background: var(--vscode-focusBorder, var(--neko-accent, #1687d9));
+  content: '';
 }
 
 .neko-workbench-editor-tab__icon {
@@ -615,6 +640,8 @@
 }
 
 .neko-workbench-editor-tab__label {
+  min-width: 0;
+  flex: 1 1 auto;
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -632,7 +659,17 @@
   cursor: pointer;
   font: inherit;
   line-height: 1;
-  opacity: 0.72;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 120ms ease,
+    background-color 120ms ease;
+}
+
+.neko-workbench-editor-tab:is([data-active='true'], :hover, :focus-visible, :focus-within)
+  .neko-workbench-editor-tab__close {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .neko-workbench-editor-tab__close:hover,
