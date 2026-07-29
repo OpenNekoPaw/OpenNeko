@@ -1081,15 +1081,17 @@ function ContentProjectWorkspace({
     throw new Error('Desktop Workbench requires a primary Main Group.');
   }
   const secondaryGroup = workbench.main.groups[1];
-  const primaryMainView = workbench.main.views.find(
-    (candidate) => candidate.viewId === primaryGroup.activeViewId,
-  );
-  const secondaryMainView = workbench.main.views.find(
-    (candidate) => candidate.viewId === secondaryGroup?.activeViewId,
-  );
   const timelineOwner = workbench.main.views.find(
     (candidate) => candidate.viewId === workbench.timeline.ownerViewId,
   );
+  const timelineOwnerGroup = timelineOwner
+    ? workbench.main.groups.find((group) => group.viewIds.includes(timelineOwner.viewId))
+    : undefined;
+  if (timelineOwner && !timelineOwnerGroup) {
+    throw new Error(
+      `Desktop Timeline owner '${timelineOwner.viewId}' is not attached to a Main group.`,
+    );
+  }
   const agentMain = workbench.display.mode === 'chat-only';
   const agentDock = (
     <AgentWorkspaceSurface
@@ -1142,15 +1144,15 @@ function ContentProjectWorkspace({
       previewCapability={previewCapability}
       project={project}
       projection={projection}
-      timelineTarget={
-        primaryMainView?.viewId === timelineOwner?.viewId
-          ? (cutTimelineTarget ?? undefined)
-          : undefined
+      timelineOwnerViewId={
+        timelineOwnerGroup?.groupId === primaryGroup.groupId ? timelineOwner?.viewId : undefined
       }
+      timelineTarget={cutTimelineTarget ?? undefined}
       workbench={workbench}
     />
   );
-  const timelineOwnerRenderedInMain = timelineOwner?.viewId === primaryMainView?.viewId;
+  const timelineOwnerRenderedInMain =
+    timelineOwner?.kind === 'cut' && timelineOwnerGroup?.groupId === primaryGroup.groupId;
 
   return (
     <ControlledWorkbenchShell
@@ -1198,11 +1200,12 @@ function ContentProjectWorkspace({
             previewCapability={previewCapability}
             project={project}
             projection={projection}
-            timelineTarget={
-              secondaryMainView?.viewId === timelineOwner?.viewId
-                ? (cutTimelineTarget ?? undefined)
+            timelineOwnerViewId={
+              timelineOwnerGroup?.groupId === secondaryGroup.groupId
+                ? timelineOwner?.viewId
                 : undefined
             }
+            timelineTarget={cutTimelineTarget ?? undefined}
             workbench={workbench}
           />
         ) : undefined
@@ -1257,11 +1260,8 @@ function ContentProjectWorkspace({
               ref={setCutTimelineTarget}
             />
           ) : (
-            <DesktopCutSurface
-              presentation="timeline-only"
-              project={project}
-              projection={projection}
-              view={timelineOwner}
+            <TimelinePlaceholder
+              diagnostic="desktop-cut-timeline-owner-not-mounted-in-primary-main"
             />
           )
         ) : (
@@ -1304,6 +1304,7 @@ function MainViewGroupSurface({
   previewCapability,
   project,
   projection,
+  timelineOwnerViewId,
   timelineTarget,
   workbench,
 }: {
@@ -1316,6 +1317,7 @@ function MainViewGroupSurface({
   readonly previewCapability: DesktopShellProjection['domains'][number] | undefined;
   readonly project: DesktopProjectCatalogItem;
   readonly projection: DesktopShellProjection;
+  readonly timelineOwnerViewId?: string;
   readonly timelineTarget?: Element;
   readonly workbench: DesktopWorkbenchLayoutProjection;
 }): JSX.Element {
@@ -1381,16 +1383,40 @@ function MainViewGroupSurface({
         </div>
       </header>
       <div className="project-main-group__content">
-        {renderWorkbenchMainView({
-          allowCutRuntime,
-          canvasCapability,
-          previewCapability,
-          cutCapability,
-          project,
-          projection,
-          timelineTarget,
-          view: activeView,
-        })}
+        {views.length === 0
+          ? renderWorkbenchMainView({
+              allowCutRuntime,
+              canvasCapability,
+              previewCapability,
+              cutCapability,
+              project,
+              projection,
+              view: undefined,
+            })
+          : views.map((view) => {
+              const active = view.viewId === activeView?.viewId;
+              return (
+                <div
+                  className="project-main-view-stack__item"
+                  data-active={active ? 'true' : 'false'}
+                  data-main-view-id={view.viewId}
+                  hidden={!active}
+                  key={`${view.viewId}:${view.viewEpoch}`}
+                >
+                  {renderWorkbenchMainView({
+                    allowCutRuntime,
+                    canvasCapability,
+                    previewCapability,
+                    cutCapability,
+                    project,
+                    projection,
+                    timelineTarget:
+                      view.viewId === timelineOwnerViewId ? timelineTarget : undefined,
+                    view,
+                  })}
+                </div>
+              );
+            })}
       </div>
     </section>
   );
