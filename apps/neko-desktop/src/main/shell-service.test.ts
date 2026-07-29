@@ -10,7 +10,7 @@ import {
 } from './shell-state-repository';
 
 describe('DesktopShellService', () => {
-  it('starts at Home without deleting restored project tabs when configured', async () => {
+  it('starts at Home by default without deleting restored project tabs', async () => {
     const file = createMemoryFile();
     const first = createFixture(file);
     const windowId = await first.service.claimWindowId();
@@ -26,7 +26,7 @@ describe('DesktopShellService', () => {
     first.service.releaseWindow(windowId);
     await first.service.dispose();
 
-    const second = createFixture(file, 'home');
+    const second = createFixture(file);
     const restoredWindowId = await second.service.claimWindowId();
     second.service.setRendererEpoch(restoredWindowId, 1);
     const restored = await second.service.getProjection(restoredWindowId);
@@ -566,7 +566,7 @@ describe('DesktopShellService', () => {
 
 function createFixture(
   file = createMemoryFile(),
-  startupTarget: 'home' | 'restore' = 'restore',
+  startupTarget: 'home' | 'restore' = 'home',
 ) {
   let identity = 0;
   const resolution: DesktopWorkspaceResolution = {

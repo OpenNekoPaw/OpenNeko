@@ -1,4 +1,4 @@
-export const DESKTOP_APPLICATION_SETTINGS_CONTRACT_VERSION = 1 as const;
+export const DESKTOP_APPLICATION_SETTINGS_CONTRACT_VERSION = 2 as const;
 
 export const DESKTOP_APPLICATION_SETTINGS_CHANNELS = {
   snapshotGet: 'openneko:desktop:settings:snapshot:get',
@@ -90,7 +90,7 @@ export class DesktopApplicationSettingsContractError extends Error {
 export const DEFAULT_DESKTOP_APPLICATION_PREFERENCES: DesktopApplicationPreferences = {
   theme: 'light',
   locale: 'system',
-  startupTarget: 'restore',
+  startupTarget: 'home',
   resourceBrowserView: 'list',
 };
 

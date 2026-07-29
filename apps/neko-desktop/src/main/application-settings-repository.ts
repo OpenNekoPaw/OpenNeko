@@ -111,25 +111,40 @@ export function parseDesktopApplicationSettingsStoredState(
   if (keys.length !== expected.length || keys.some((key, index) => key !== expected[index])) {
     throw invalidState(`Desktop application settings have unexpected fields: ${keys.join(', ')}.`);
   }
-  if (record['schemaVersion'] !== DESKTOP_APPLICATION_SETTINGS_CONTRACT_VERSION) {
+  const schemaVersion = record['schemaVersion'];
+  if (
+    schemaVersion !== 1 &&
+    schemaVersion !== DESKTOP_APPLICATION_SETTINGS_CONTRACT_VERSION
+  ) {
     throw new DesktopApplicationSettingsContractError(
       'unsupported-desktop-application-settings-version',
-      `Unsupported Desktop application settings version '${String(record['schemaVersion'])}'.`,
+      `Unsupported Desktop application settings version '${String(schemaVersion)}'.`,
     );
   }
-  const storageRevision = record['storageRevision'];
-  if (
-    typeof storageRevision !== 'number' ||
-    !Number.isSafeInteger(storageRevision) ||
-    storageRevision < 0
-  ) {
-    throw invalidState('Desktop application settings storage revision is invalid.');
+  const storageRevision = parseStorageRevision(record['storageRevision']);
+  if (schemaVersion === 1) {
+    const legacy = parseDesktopApplicationPreferences(record['preferences']);
+    return {
+      schemaVersion: DESKTOP_APPLICATION_SETTINGS_CONTRACT_VERSION,
+      storageRevision,
+      preferences: {
+        ...legacy,
+        startupTarget: 'home',
+      },
+    };
   }
   return {
     schemaVersion: DESKTOP_APPLICATION_SETTINGS_CONTRACT_VERSION,
     storageRevision,
     preferences: parseDesktopApplicationPreferences(record['preferences']),
   };
+}
+
+function parseStorageRevision(value: unknown): number {
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0) {
+    throw invalidState('Desktop application settings storage revision is invalid.');
+  }
+  return value;
 }
 
 function hasNodeErrorCode(error: unknown, code: string): boolean {

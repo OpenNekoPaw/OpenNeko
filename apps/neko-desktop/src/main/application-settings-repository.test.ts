@@ -15,11 +15,62 @@ describe('Desktop application settings persistence', () => {
     const repository = new DesktopApplicationSettingsRepository(file);
 
     await expect(repository.read()).resolves.toEqual({
-      schemaVersion: 1,
+      schemaVersion: 2,
       storageRevision: 0,
       preferences: DEFAULT_DESKTOP_APPLICATION_PREFERENCES,
     });
     expect(file.reads()).toBe(1);
+    expect((await repository.read()).preferences.startupTarget).toBe('home');
+  });
+
+  it('migrates the pre-release restore default to Home without discarding other preferences', async () => {
+    const repository = new DesktopApplicationSettingsRepository(
+      createMemoryFile(
+        JSON.stringify({
+          schemaVersion: 1,
+          storageRevision: 8,
+          preferences: {
+            theme: 'dark',
+            locale: 'zh-cn',
+            startupTarget: 'restore',
+            resourceBrowserView: 'grid',
+          },
+        }),
+      ),
+    );
+
+    await expect(repository.read()).resolves.toEqual({
+      schemaVersion: 2,
+      storageRevision: 8,
+      preferences: {
+        theme: 'dark',
+        locale: 'zh-cn',
+        startupTarget: 'home',
+        resourceBrowserView: 'grid',
+      },
+    });
+  });
+
+  it('preserves an explicit restore preference stored by the current settings version', async () => {
+    const repository = new DesktopApplicationSettingsRepository(
+      createMemoryFile(
+        JSON.stringify({
+          schemaVersion: 2,
+          storageRevision: 9,
+          preferences: {
+            theme: 'light',
+            locale: 'system',
+            startupTarget: 'restore',
+            resourceBrowserView: 'list',
+          },
+        }),
+      ),
+    );
+
+    await expect(repository.read()).resolves.toMatchObject({
+      schemaVersion: 2,
+      preferences: { startupTarget: 'restore' },
+    });
   });
 
   it('persists complete validated settings and rejects stale updates', async () => {
