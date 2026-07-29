@@ -67,6 +67,15 @@
 - [x] 8.3 Verify fixed-expanded, compact and hover-expanded states in the real Desktop Electron host,
       then re-run Desktop tests, typecheck, package build, strict OpenSpec validation and diff checks.
 
+## 9. Continuous hover hit region
+
+- [x] 9.1 Add a red-capable style regression proving hover reveal does not animate the sidebar hit
+      width.
+- [x] 9.2 Make the complete persisted expanded width immediately pointer-active while keeping
+      non-geometric overlay feedback.
+- [x] 9.3 Re-run the fast lateral pointer repro in the real Desktop Electron host, then run Desktop
+      tests, typecheck, package build, strict OpenSpec validation and diff checks.
+
 ## Validation evidence
 
 - Packaged the production Electron application with `pnpm --filter @neko/app-desktop package`.
@@ -93,7 +102,13 @@
   projection; hovering or focusing the compact rail temporarily reveals the full sidebar over the
   main surface without changing the persisted state or shifting the workspace layout. Only
   Workbench content components retain the eight-pixel panel gap.
-- Re-ran `pnpm --filter @neko/app-desktop test` (44 files / 213 tests),
+- Reproduced the hover race in the real Electron host by moving once from `x=20` on the compact rail
+  to `x=250` inside the intended overlay: the animated hit width collapsed before the pointer
+  arrived. After removing the geometric transition, the same fast lateral movement retained the
+  complete overlay on both Home and Project, while moving to Main still restored the compact rail.
+- Added a red-capable renderer style regression that failed on `width 150ms ease` before the fix and
+  passes only when the expanded hit width is immediate.
+- Re-ran `pnpm --filter @neko/app-desktop test` (45 files / 214 tests),
   `pnpm --filter @neko/app-desktop typecheck`,
   `pnpm --filter @neko/app-desktop package`,
   `pnpm exec openspec validate refine-desktop-home-management-surfaces --strict`, and

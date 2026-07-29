@@ -111,6 +111,9 @@ Codex 风格任务入口。Start Creating 改为独立的 task launchpad：
   resize 或任一路径折叠后，切换页面仍保留相同的当前几何；
 - compact frame 固定占用 64px；pointer hover 或 keyboard focus 临时把侧栏 overlay 展开到持久化
   宽度，不改变 Workbench grid，也不写入显隐设置；
+- hover overlay 的实际命中宽度必须在进入 rail 时立即扩展到持久化宽度；不得对 width 做过渡，
+  否则快速横向移动会越过正在增长的命中边界并错误触发收回。视觉缓动只能作用于不改变
+  pointer hit-testing 的阴影或内容表现；
 - Home section 与当前 Project 的 active state 继续表达不同导航语义，不为追求像素相同伪造选中项；
 - 共享 frame 只负责 presentation；Workbench 负责 resize、显隐状态和持久化，不再由 Home
   保存第二份页面局部状态。

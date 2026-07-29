@@ -122,6 +122,13 @@ border, radius, outer inset or panel gap. Both surfaces MUST consume the same
 - **AND** leaving hover and focus SHALL restore the compact rail without changing persisted state
 - **AND** the adjacent Workbench content SHALL NOT move
 
+#### Scenario: User moves quickly across the revealed sidebar
+
+- **GIVEN** hovering the compact rail has triggered the temporary overlay
+- **WHEN** the pointer moves laterally from the rail into any point inside the persisted expanded width
+- **THEN** the overlay hit region SHALL already cover that complete width
+- **AND** the sidebar SHALL NOT collapse because a width animation lags behind the pointer
+
 #### Scenario: Workbench panels keep spacing independently from primary navigation
 
 - **WHEN** Main, Agent, Resources, Timeline, Canvas, Cut, Preview or Model surfaces are composed
