@@ -4,7 +4,7 @@
  * Unified logging abstraction for all OpenNeko packages.
  *
  * Layer 0 (this module): ILogger interface + ConsoleLogger default
- * Layer 1 (vscode/extension/logger): OutputChannelTransport for Extension Host
+ * Host transports are injected by the Desktop composition root.
  */
 export { LogLevel } from './types';
 export type { ILogger, ILogTransport, LogEntry, LoggerFactory } from './types';

@@ -351,7 +351,7 @@ export const AgentHostMessages = {
   },
 
   /**
-   * Invoke a plugin slash command registered by an external extension.
+   * Invoke a plugin slash command registered by an installed Desktop plugin.
    * Desktop host routes it to the owning plugin runtime.
    * @param pluginId - The plugin that registered the command
    * @param commandId   - The command id (without /)
@@ -373,7 +373,7 @@ export const AgentHostMessages = {
   },
 
   // -------------------------------------------------------------------------
-  // Outbound actions previously sent via direct vscode.postMessage
+  // Outbound actions routed through the injected Desktop host port
   // -------------------------------------------------------------------------
 
   /** Open an external URL in the default browser */
@@ -381,7 +381,7 @@ export const AgentHostMessages = {
     postWebviewMessage({ type: 'openUrl', url });
   },
 
-  /** Send generated content to another extension (canvas, cut, explorer). */
+  /** Send generated content to another package-owned Desktop surface. */
   sendToPlugin: (
     target: string,
     assetPathOrPayload: string | PluginTransferPayload,

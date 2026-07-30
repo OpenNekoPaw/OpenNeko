@@ -104,7 +104,7 @@ class NodeSqliteConnectionFactory implements SqliteConnectionFactory {
       throw new LocalMetadataError({
         code: 'metadata-unsupported-runtime',
         operation: 'open-node-sqlite',
-        message: 'The Extension Host does not expose the required node:sqlite module',
+        message: 'The Desktop runtime does not expose the required node:sqlite module',
         cause: error,
       });
     }

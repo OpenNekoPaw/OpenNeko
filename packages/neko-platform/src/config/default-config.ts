@@ -2,7 +2,7 @@
  * Default Configuration
  *
  * Provides default user configuration data for explicit tooling.
- * VS Code Agent runtime does not create or rewrite user config files.
+ * Desktop Agent runtime does not create or rewrite user config files.
  */
 
 import type { UnifiedConfig } from '@neko/shared';

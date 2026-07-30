@@ -42,7 +42,7 @@ export function projectLocalMetadataUserDiagnostic(
         'local-metadata-unsupported-runtime',
         'error',
         'Local metadata is unavailable in this runtime.',
-        'Update to a supported VS Code, Node, or Bun version and restart Neko.',
+        'Update to a supported OpenNeko Desktop runtime and restart the application.',
         ['update-runtime'],
       );
     case 'duplicate-workspace-identity':

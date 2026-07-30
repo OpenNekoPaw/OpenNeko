@@ -6,7 +6,7 @@
  *   - Variable paths:  "${TEAM_FOOTAGE}/scene01/clip.mp4"  (expanded via variables map)
  *   - Remote URLs:     "https://cdn.example.com/asset.hdr"
  *
- * Zero dependencies — usable in Extension Host, CLI, and Engine contexts.
+ * Zero dependencies - usable in Desktop Main, CLI, and media runtime contexts.
  */
 
 // Match ${VAR}/rest — allows optional leading / (macOS fsPath adds it)

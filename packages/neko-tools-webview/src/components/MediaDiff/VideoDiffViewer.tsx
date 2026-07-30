@@ -305,7 +305,7 @@ export const VideoDiffViewer = memo(function VideoDiffViewer({
       onTimeChange?.(time);
       // Local reset: arm seek filter, flush buffer, reset decoders
       streamingRef.current?.seek(time);
-      // Tell the Extension Host to replace both Node media sessions at the new time.
+      // Tell the Desktop host to replace both Node media sessions at the new time.
       onStreamControl?.('seek', { time });
     },
     [onTimeChange, onStreamControl],

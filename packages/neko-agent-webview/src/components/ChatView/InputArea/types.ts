@@ -27,8 +27,7 @@ export interface SlashCommand {
 }
 
 /**
- * Plugin slash command registered by an external extension via
- * `vscode.commands.executeCommand('neko.agent.registerSlashCommands', ...)`.
+ * Plugin slash command registered by an installed Desktop plugin.
  */
 export interface PluginSlashCommandDef {
   id: string;

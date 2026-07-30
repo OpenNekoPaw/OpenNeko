@@ -37,9 +37,9 @@ export interface CanvasToolbarProps {
   /** Unified Storyline Overlay visibility, controlled from the floating toolbar. */
   playbackWorkspaceVisible?: boolean;
   onTogglePlaybackWorkspace?: () => void;
-  /** Opens the Extension Host-owned rendered export picker */
+  /** Opens the Desktop host-owned rendered export picker */
   onOpenExport?: () => void;
-  /** Opens the Extension Host-owned no-engine project package flow */
+  /** Opens the Desktop host-owned project package flow */
   onOpenPackage?: () => void;
   /** Hand tool (drag-to-pan) mode */
   isPanMode?: boolean;

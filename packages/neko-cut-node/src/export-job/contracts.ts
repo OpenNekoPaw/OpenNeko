@@ -1,6 +1,6 @@
 import type { JobRef, JobSnapshotBase, VersionedJobStore } from '@neko/shared/job-lifecycle';
 
-// Host-neutral Export Job contracts shared by Electron and VS Code composition roots.
+// Host-neutral Export Job contracts composed by Desktop Main.
 
 export const EXPORT_JOB_KIND = 'export' as const;
 

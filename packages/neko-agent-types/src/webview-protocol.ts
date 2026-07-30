@@ -1,8 +1,9 @@
 /**
  * Webview and Desktop host protocol contracts.
  *
- * This file is the shared schema for values that cross the VS Code webview
- * boundary. Keep it dependency-light and validate data at the Desktop host edge.
+ * This file is the shared schema for values that cross the Desktop
+ * Main/preload/renderer boundary. Keep it dependency-light and validate data
+ * at the Desktop host edge.
  */
 
 import type {

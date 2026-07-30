@@ -2,8 +2,8 @@
  * Error Handler - Pluggable error reporting strategy
  *
  * Extends the existing BaseError system with a unified error display interface.
- * Extension Host: VSCodeErrorHandler (showErrorMessage + OutputChannel)
- * Webview: ErrorBoundary + toast notifications
+ * Desktop Main: host-owned diagnostic projection and logging
+ * Renderer: ErrorBoundary + toast notifications
  *
  * Layer 0: Zero dependencies (except BaseError from same package).
  */
@@ -32,7 +32,7 @@ export interface ErrorDisplayOptions {
  * Error handler interface - pluggable error reporting strategy
  *
  * Follows Strategy pattern:
- * - VSCodeErrorHandler: showErrorMessage + OutputChannel logging
+ * - Desktop host adapter: typed diagnostic projection and logging
  * - TestErrorHandler: collect errors for assertions
  */
 export interface IErrorHandler {

@@ -96,7 +96,6 @@ export interface ProjectFileSaveResponse<TDocument = unknown> {
 export type ProjectFileSaveReason =
   | 'manual'
   | 'autosave'
-  | 'vscode-save'
   | 'import'
   | 'migration'
   | 'add-source'

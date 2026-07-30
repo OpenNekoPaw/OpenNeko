@@ -1,7 +1,7 @@
 /**
  * useKeyboardActions - Keyboard shortcut dispatch handler
  *
- * Maps explicit keyboard action strings from Extension Host command routing to
+ * Maps explicit keyboard action strings from Desktop host routing to
  * the corresponding canvas operations. Local DOM keyboard shortcuts are owned
  * by useCanvasKeyboardController.
  */

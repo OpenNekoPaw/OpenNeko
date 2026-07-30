@@ -151,19 +151,6 @@ export function isGeneratedStoryboard(asset: GeneratedAsset): asset is Generated
   return asset.type === 'generated-storyboard';
 }
 
-// -----------------------------------------------------------------------------
-// Webview-safe variant (with pre-computed webviewUri)
-// -----------------------------------------------------------------------------
-
-/**
- * A GeneratedAsset augmented with a webview-safe URI.
- * Created by the Desktop host before sending to a renderer.
- */
-export type WebviewGeneratedAsset<T extends BaseGeneratedAsset = GeneratedAsset> = T & {
-  /** `vscode-resource://` URI safe for use in `<img>`, `<video>`, `<audio>` src */
-  webviewUri: string;
-};
-
 export type GeneratedImageWithoutPath = Omit<GeneratedImage, 'path'>;
 export type GeneratedAudioWithoutPath = Omit<GeneratedAudio, 'path'>;
 export type GeneratedVideoWithoutPath = Omit<GeneratedVideo, 'path'>;
