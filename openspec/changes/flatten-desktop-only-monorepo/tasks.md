@@ -2,9 +2,9 @@
 
 - [x] 1.1 Add repository topology tests that require one Desktop app, first-level packages and no
       executable VS Code/TUI/VSIX path.
-- [ ] 1.2 Commit the Desktop-only OpenSpec artifacts and merge `refactor-monorepo` with an explicit
+- [x] 1.2 Commit the Desktop-only OpenSpec artifacts and merge `refactor-monorepo` with an explicit
       superseding `ours` merge.
-- [ ] 1.3 Record the retained package move inventory and verify every Desktop dependency has one
+- [x] 1.3 Record the retained package move inventory and verify every Desktop dependency has one
       target owner before deleting any host package.
 
 ## 2. First-Level Package Topology
