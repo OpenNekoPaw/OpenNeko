@@ -15,7 +15,7 @@
       contracts/Webview packages to first-level target directories.
 - [x] 2.3 Update workspace globs, path-based root scripts, TypeScript/build/test configuration and
       Desktop dependencies for the moved packages.
-- [ ] 2.4 Run package-resolution, moved-package typecheck/build and focused producer/consumer tests;
+- [x] 2.4 Run package-resolution, moved-package typecheck/build and focused producer/consumer tests;
       prove no nested workspace package remains.
 
 ## 3. Removed Host Paths
