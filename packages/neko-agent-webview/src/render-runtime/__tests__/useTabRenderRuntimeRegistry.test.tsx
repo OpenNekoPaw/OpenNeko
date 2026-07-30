@@ -1,6 +1,8 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
+import type { ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
-import type { OpenTab } from '@neko-agent/types';
+import type { AgentHostRuntimeAdapter, OpenTab } from '@neko-agent/types';
+import { AgentHostRuntimeProvider } from '../../host-runtime-context';
 import { useTabRenderRuntimeRegistry } from '../useTabRenderRuntimeRegistry';
 import { TAB_RENDER_REALM_STATE_VERSION } from '../tab-render-realm-state';
 
@@ -8,6 +10,28 @@ const tabA: OpenTab = { id: 'tab-a', title: 'A', conversationId: 'conv-a' };
 const tabB: OpenTab = { id: 'tab-b', title: 'B', conversationId: 'conv-b' };
 
 describe('useTabRenderRuntimeRegistry', () => {
+  it('uses the injected Desktop adapter during the first render', () => {
+    const host: AgentHostRuntimeAdapter = {
+      hostKind: 'electron',
+      runtimeId: 'desktop-runtime',
+      send: vi.fn(),
+      subscribe: vi.fn(() => ({ dispose: vi.fn() })),
+      getState: vi.fn(() => undefined),
+      setState: vi.fn(),
+    };
+    const wrapper = ({ children }: { readonly children: ReactNode }) => (
+      <AgentHostRuntimeProvider adapter={host}>{children}</AgentHostRuntimeProvider>
+    );
+
+    const { result, unmount } = renderHook(() => useTabRenderRuntimeRegistry([tabA], 'tab-a'), {
+      wrapper,
+    });
+
+    expect(result.current.require('tab-a').store.getSnapshot().visibility).toBe('visible');
+    expect(host.getState).toHaveBeenCalledOnce();
+    unmount();
+  });
+
   it('retains Tab runtimes across activation and disposes them with the Webview root', async () => {
     const host = { getState: () => undefined, setState: vi.fn() };
     const { result, rerender, unmount } = renderHook(

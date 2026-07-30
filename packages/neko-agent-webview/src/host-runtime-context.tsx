@@ -21,9 +21,13 @@ export function AgentHostRuntimeProvider({
 }
 
 export function useAgentHostRuntimeAdapter(): AgentHostRuntimeAdapter {
-  const adapter = useContext(AgentHostRuntimeContext);
+  const adapter = useOptionalAgentHostRuntimeAdapter();
   if (!adapter) {
     throw new Error('Agent host runtime adapter provider is missing.');
   }
   return adapter;
+}
+
+export function useOptionalAgentHostRuntimeAdapter(): AgentHostRuntimeAdapter | null {
+  return useContext(AgentHostRuntimeContext);
 }

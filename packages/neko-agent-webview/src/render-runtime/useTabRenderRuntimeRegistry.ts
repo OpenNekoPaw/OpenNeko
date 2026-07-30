@@ -4,7 +4,7 @@ import {
   createTabRenderRuntimeRegistry,
   type TabRenderRuntimeRegistry,
 } from './tab-render-runtime';
-import { getAgentHostRuntimeAdapter } from '@/messages';
+import { useOptionalAgentHostRuntimeAdapter } from '@/host-runtime-context';
 import {
   createTabRenderRealmStateCoordinator,
   type TabRenderRealmStateHost,
@@ -19,15 +19,20 @@ interface RegistryRootLease {
 export function useTabRenderRuntimeRegistry(
   openTabs: readonly OpenTab[],
   activeTabId: string | null,
-  host: TabRenderRealmStateHost = getAgentHostRuntimeAdapter(),
+  host?: TabRenderRealmStateHost,
 ): TabRenderRuntimeRegistry {
+  const injectedHost = useOptionalAgentHostRuntimeAdapter();
+  const resolvedHost = host ?? injectedHost;
+  if (!resolvedHost) {
+    throw new Error('Tab render runtime registry requires an injected Agent host runtime adapter.');
+  }
   const registryRef = useRef<TabRenderRuntimeRegistry>();
   const rootLeaseRef = useRef<RegistryRootLease>({ generation: 0, active: false });
   const realmStateRef = useRef<TabRenderRealmStateCoordinator>();
   const [, publishReconciliation] = useReducer((revision: number) => revision + 1, 0);
   registryRef.current ??= createTabRenderRuntimeRegistry();
   const registry = registryRef.current;
-  realmStateRef.current ??= createTabRenderRealmStateCoordinator(host, registry);
+  realmStateRef.current ??= createTabRenderRealmStateCoordinator(resolvedHost, registry);
   const realmState = realmStateRef.current;
 
   useLayoutEffect(() => {

@@ -58,6 +58,14 @@ vi.mock('@/host-runtime-context', () => ({
     getState: () => undefined,
     setState: vi.fn(),
   }),
+  useOptionalAgentHostRuntimeAdapter: () => ({
+    hostKind: 'electron',
+    runtimeId: 'conversation-controller-test',
+    send: vi.fn(),
+    subscribe: vi.fn(() => ({ dispose: vi.fn() })),
+    getState: () => undefined,
+    setState: vi.fn(),
+  }),
 }));
 
 vi.mock('@/i18n/I18nContext', () => ({
