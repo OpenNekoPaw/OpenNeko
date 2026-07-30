@@ -613,6 +613,8 @@ describe('DesktopShellView', () => {
           getSnapshot: vi.fn(),
           children: vi.fn(),
           resolveThumbnail: vi.fn(),
+          resolveQuickPreview: vi.fn(),
+          releaseQuickPreview: vi.fn(),
           search: vi.fn(),
           execute: vi.fn(),
           subscribe: vi.fn(() => () => undefined),

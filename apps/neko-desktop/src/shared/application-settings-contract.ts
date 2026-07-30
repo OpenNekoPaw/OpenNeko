@@ -175,7 +175,7 @@ export function parseDesktopApplicationPreferences(
   };
 }
 
-export function parseDesktopApplicationSettingsProjection(
+function parseDesktopApplicationSettingsProjection(
   value: unknown,
 ): DesktopApplicationSettingsProjection {
   const record = requireExactRecord(

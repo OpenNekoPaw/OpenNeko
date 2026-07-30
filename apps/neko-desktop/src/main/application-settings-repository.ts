@@ -91,7 +91,7 @@ export function createNodeDesktopApplicationSettingsFilePort(
   };
 }
 
-export function createDefaultDesktopApplicationSettingsState(): DesktopApplicationSettingsStoredState {
+function createDefaultDesktopApplicationSettingsState(): DesktopApplicationSettingsStoredState {
   return {
     schemaVersion: DESKTOP_APPLICATION_SETTINGS_CONTRACT_VERSION,
     storageRevision: 0,
@@ -99,7 +99,7 @@ export function createDefaultDesktopApplicationSettingsState(): DesktopApplicati
   };
 }
 
-export function parseDesktopApplicationSettingsStoredState(
+function parseDesktopApplicationSettingsStoredState(
   value: unknown,
 ): DesktopApplicationSettingsStoredState {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
@@ -123,12 +123,12 @@ export function parseDesktopApplicationSettingsStoredState(
   }
   const storageRevision = parseStorageRevision(record['storageRevision']);
   if (schemaVersion === 1) {
-    const legacy = parseDesktopApplicationPreferences(record['preferences']);
+    const migratedPreferences = parseDesktopApplicationPreferences(record['preferences']);
     return {
       schemaVersion: DESKTOP_APPLICATION_SETTINGS_CONTRACT_VERSION,
       storageRevision,
       preferences: {
-        ...legacy,
+        ...migratedPreferences,
         startupTarget: 'home',
       },
     };

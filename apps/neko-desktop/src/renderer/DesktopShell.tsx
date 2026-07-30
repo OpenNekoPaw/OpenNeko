@@ -82,8 +82,9 @@ export function DesktopApplication(): JSX.Element {
   const { t } = useTranslation();
   const [state, setState] = useState<ShellState>({ kind: 'loading' });
   const [homeSection, setHomeSection] = useState<HomeSection>('create');
-  const [applicationSurface, setApplicationSurface] =
-    useState<'workspace' | 'settings'>('workspace');
+  const [applicationSurface, setApplicationSurface] = useState<'workspace' | 'settings'>(
+    'workspace',
+  );
   const [pending, setPending] = useState(false);
   const [diagnostic, setDiagnostic] = useState<string>();
   const [agentNavigationTarget, setAgentNavigationTarget] =
@@ -185,9 +186,7 @@ export function DesktopApplication(): JSX.Element {
       setHomeSection(section);
       setAgentNavigationTarget(undefined);
       setAgentInitialInput(undefined);
-      void runMutation(() =>
-        window.openNekoDesktop.tabs.activateHome(projection.window.revision),
-      );
+      void runMutation(() => window.openNekoDesktop.tabs.activateHome(projection.window.revision));
     },
     onOpenProject: () => {
       setApplicationSurface('workspace');
@@ -200,9 +199,7 @@ export function DesktopApplication(): JSX.Element {
     },
     onOpenRecent: (projectId) => {
       setApplicationSurface('workspace');
-      const tab = projection.window.tabs.find(
-        (candidate) => candidate.projectId === projectId,
-      );
+      const tab = projection.window.tabs.find((candidate) => candidate.projectId === projectId);
       if (tab) {
         setAgentNavigationTarget(undefined);
         setAgentInitialInput(undefined);
@@ -278,8 +275,7 @@ export function DesktopApplication(): JSX.Element {
         if (
           agentNavigationTarget?.navigation.conversationId ===
             conversation.navigation.conversationId &&
-          agentNavigationTarget.navigation.workspaceId ===
-            conversation.navigation.workspaceId
+          agentNavigationTarget.navigation.workspaceId === conversation.navigation.workspaceId
         ) {
           setAgentNavigationTarget(undefined);
         }
@@ -294,14 +290,9 @@ export function DesktopApplication(): JSX.Element {
         nextAgentHandoffId.current += 1;
         const handoffId = `home-agent-input:${nextAgentHandoffId.current}`;
         if (projectId) {
-          const tab = projection.window.tabs.find(
-            (candidate) => candidate.projectId === projectId,
-          );
+          const tab = projection.window.tabs.find((candidate) => candidate.projectId === projectId);
           const nextProjection = tab
-            ? await window.openNekoDesktop.tabs.activate(
-                tab.tabId,
-                projection.window.revision,
-              )
+            ? await window.openNekoDesktop.tabs.activate(tab.tabId, projection.window.revision)
             : (await window.openNekoDesktop.projects.open(projectId)).projection;
           setAgentInitialInput({
             handoffId,
@@ -378,9 +369,7 @@ export function DesktopApplication(): JSX.Element {
           </div>
         ) : null}
         {applicationSurface === 'settings' ? (
-          <DesktopSettingsSurface
-            onBack={() => setApplicationSurface('workspace')}
-          />
+          <DesktopSettingsSurface onBack={() => setApplicationSurface('workspace')} />
         ) : activeProject ? (
           <ContentProjectWorkspace
             actions={actions}
@@ -526,9 +515,7 @@ function HomeStartCreating({
   readonly pending: boolean;
 }): JSX.Element {
   const { t } = useTranslation();
-  const [projectId, setProjectId] = useState(
-    projection.catalog.projects[0]?.projectId ?? '',
-  );
+  const [projectId, setProjectId] = useState(projection.catalog.projects[0]?.projectId ?? '');
   const [input, setInput] = useState('');
   return (
     <div className="home-overview">
@@ -1437,7 +1424,7 @@ export function parseHomeAssetSortOption(value: string): HomeAssetSortOption {
   }
 }
 
-export function parseMediaLibraryLocationKind(
+function parseMediaLibraryLocationKind(
   value: string,
 ): DesktopHomeMediaLibraryLocationKind {
   switch (value) {
@@ -1470,35 +1457,6 @@ export function parseHomeProjectSortOption(value: string): HomeProjectSortOption
     default:
       throw new Error(`Unknown Home project sort option: ${value}`);
   }
-}
-
-function ProjectSelector({
-  onChange,
-  projectId,
-  projects,
-}: {
-  readonly onChange: (projectId: string) => void;
-  readonly projectId: string;
-  readonly projects: readonly DesktopProjectCatalogItem[];
-}): JSX.Element {
-  const { t } = useTranslation();
-  return (
-    <label className="home-project-selector">
-      <FolderIcon size={16} />
-      <select
-        aria-label={t('home.start.projectLabel')}
-        value={projectId}
-        onChange={(event) => onChange(event.currentTarget.value)}
-      >
-        <option value="">{t('home.start.chooseProject')}</option>
-        {projects.map((project) => (
-          <option key={project.projectId} value={project.projectId}>
-            {project.displayName}
-          </option>
-        ))}
-      </select>
-    </label>
-  );
 }
 
 function HomeManagementEmpty({
@@ -2207,7 +2165,7 @@ export function resizePrimarySidebarWorkbench(
   };
 }
 
-export function togglePrimarySidebarWorkbench(
+function togglePrimarySidebarWorkbench(
   workbench: DesktopWorkbenchLayoutProjection,
 ): DesktopWorkbenchLayoutProjection {
   return {
@@ -2421,11 +2379,7 @@ function CreativeMainPlaceholder({
   );
 }
 
-function ResourceDockUnavailable({
-  diagnostic,
-}: {
-  readonly diagnostic: string;
-}): JSX.Element {
+function ResourceDockUnavailable({ diagnostic }: { readonly diagnostic: string }): JSX.Element {
   const { t } = useTranslation();
   return (
     <section className="resource-dock" aria-label={t('workspace.resources')}>
@@ -2437,9 +2391,15 @@ function ResourceDockUnavailable({
         <span>{t('home.unavailable')}</span>
       </header>
       <div className="resource-dock-tabs" role="tablist" aria-label={t('workspace.resourceFacets')}>
-        <span role="tab" aria-selected="true">{t('workspace.files')}</span>
-        <span role="tab" aria-selected="false">{t('workspace.media')}</span>
-        <span role="tab" aria-selected="false">{t('workspace.entities')}</span>
+        <span role="tab" aria-selected="true">
+          {t('workspace.files')}
+        </span>
+        <span role="tab" aria-selected="false">
+          {t('workspace.media')}
+        </span>
+        <span role="tab" aria-selected="false">
+          {t('workspace.entities')}
+        </span>
       </div>
       <div className="resource-dock-empty">
         <FolderIcon size={23} />
@@ -2451,11 +2411,7 @@ function ResourceDockUnavailable({
   );
 }
 
-function TimelinePlaceholder({
-  diagnostic,
-}: {
-  readonly diagnostic: string;
-}): JSX.Element {
+function TimelinePlaceholder({ diagnostic }: { readonly diagnostic: string }): JSX.Element {
   const { t } = useTranslation();
   return (
     <section className="timeline-placeholder" aria-label={t('workspace.timeline')}>
@@ -2510,70 +2466,6 @@ function AgentWorkspaceSurface({
   );
 }
 
-function AgentConversationSummaryList({
-  limit = true,
-  projection,
-  onOpenConversation,
-}: {
-  readonly limit?: boolean;
-  readonly projection: DesktopShellProjection;
-  readonly onOpenConversation: (conversation: DesktopAgentHomeConversationSummary) => void;
-}): JSX.Element {
-  const { locale, t } = useTranslation();
-  const conversations = limit
-    ? projection.agentHome.conversations.slice(0, 5)
-    : projection.agentHome.conversations;
-  return (
-    <section className="project-section" aria-labelledby="agent-conversations-title">
-      <div className="section-heading">
-        <h2 id="agent-conversations-title">{t('home.recentConversations')}</h2>
-        <span>{projection.agentHome.conversations.length}</span>
-      </div>
-      {conversations.length > 0 ? (
-        <div className="recent-projects">
-          {conversations.map((conversation) => (
-            <button
-              type="button"
-              className="recent-project-row"
-              key={`${conversation.navigation.workspaceId}:${conversation.navigation.conversationId}`}
-              onClick={() => onOpenConversation(conversation)}
-            >
-              <StorylineIcon size={17} />
-              <span className="recent-project-name">{conversation.title}</span>
-              <span className="recent-project-kind">
-                {formatAttention(conversation.attention, t)}
-              </span>
-              <span className="recent-project-date">
-                {formatProjectDate(conversation.updatedAt, locale)}
-              </span>
-            </button>
-          ))}
-        </div>
-      ) : (
-        <EmptySummary
-          icon={<StorylineIcon size={22} />}
-          label={t('home.noConversations')}
-        />
-      )}
-    </section>
-  );
-}
-
-function EmptySummary({
-  icon,
-  label,
-}: {
-  readonly icon: JSX.Element;
-  readonly label: string;
-}): JSX.Element {
-  return (
-    <div className="empty-projects">
-      {icon}
-      <p>{label}</p>
-    </div>
-  );
-}
-
 function ApplicationPrimarySidebar({
   activeProjectId,
   activeSection,
@@ -2594,12 +2486,8 @@ function ApplicationPrimarySidebar({
   readonly compact: boolean;
   readonly disabled?: boolean;
   readonly onNavigate: (section: HomeSection) => void;
-  readonly onDeleteConversation: (
-    conversation: DesktopAgentHomeConversationSummary,
-  ) => void;
-  readonly onOpenConversation: (
-    conversation: DesktopAgentHomeConversationSummary,
-  ) => void;
+  readonly onDeleteConversation: (conversation: DesktopAgentHomeConversationSummary) => void;
+  readonly onOpenConversation: (conversation: DesktopAgentHomeConversationSummary) => void;
   readonly onOpenRecent: (projectId: string) => void;
   readonly onRemoveRecentProject: (project: DesktopProjectCatalogItem) => void;
   readonly onOpenSettings: () => void;
@@ -2615,15 +2503,8 @@ function ApplicationPrimarySidebar({
       }`}
       data-primary-sidebar="application"
     >
-      <PrimarySidebarBrand
-        compact={compact}
-        disabled={disabled}
-        onToggle={onToggle}
-      />
-      <nav
-        className="home-primary-navigation"
-        aria-label={t('workspace.primaryNavigation')}
-      >
+      <PrimarySidebarBrand compact={compact} disabled={disabled} onToggle={onToggle} />
+      <nav className="home-primary-navigation" aria-label={t('workspace.primaryNavigation')}>
         <HomeNavigationButton
           active={activeSection === 'create'}
           disabled={disabled}
@@ -2715,15 +2596,14 @@ function PrimarySidebarBrand({
   const { t } = useTranslation();
   return (
     <div className="home-brand">
-      <span className="brand-mark" aria-hidden="true">N</span>
+      <span className="brand-mark" aria-hidden="true">
+        N
+      </span>
       <strong>{t('app.name')}</strong>
       <IconButton
+        className="home-brand-toggle"
         disabled={disabled}
-        label={
-          compact
-            ? t('workspace.expandSidebar')
-            : t('workspace.collapseSidebar')
-        }
+        label={compact ? t('workspace.expandSidebar') : t('workspace.collapseSidebar')}
         icon={<RightPanelIcon size={16} />}
         onClick={onToggle}
       />
@@ -2796,12 +2676,8 @@ function PrimaryRecentNavigation({
 }: {
   readonly activeProjectId?: string;
   readonly disabled?: boolean;
-  readonly onDeleteConversation: (
-    conversation: DesktopAgentHomeConversationSummary,
-  ) => void;
-  readonly onOpenConversation: (
-    conversation: DesktopAgentHomeConversationSummary,
-  ) => void;
+  readonly onDeleteConversation: (conversation: DesktopAgentHomeConversationSummary) => void;
+  readonly onOpenConversation: (conversation: DesktopAgentHomeConversationSummary) => void;
   readonly onOpenRecent: (projectId: string) => void;
   readonly onRemoveRecentProject: (project: DesktopProjectCatalogItem) => void;
   readonly projection: DesktopShellProjection;
@@ -2892,10 +2768,7 @@ function AttentionSummary({
     projection.agentHome.attention.running;
   return (
     <Tooltip content={t('shell.activityAttention')}>
-      <div
-        className="attention-summary"
-        aria-label={t('shell.attentionItems', { count: total })}
-      >
+      <div className="attention-summary" aria-label={t('shell.attentionItems', { count: total })}>
         <span className={total > 0 ? 'has-attention' : ''} />
         <span>{total}</span>
       </div>
@@ -2911,9 +2784,7 @@ function formatAttention(
 }
 
 function camelCase(value: string): string {
-  return value.replace(/-([a-z])/g, (_match, character: string) =>
-    character.toUpperCase(),
-  );
+  return value.replace(/-([a-z])/g, (_match, character: string) => character.toUpperCase());
 }
 
 function ShellStatus({
@@ -2927,7 +2798,9 @@ function ShellStatus({
 }): JSX.Element {
   return (
     <main className="shell-status">
-      <span className="brand-mark" aria-hidden="true">N</span>
+      <span className="brand-mark" aria-hidden="true">
+        N
+      </span>
       <h1>{title}</h1>
       <p className={error ? 'is-error' : ''}>{message}</p>
     </main>
@@ -2939,9 +2812,7 @@ function resolveActiveProject(
 ): DesktopProjectCatalogItem | undefined {
   const activeTarget = projection.window.activeTarget;
   if (activeTarget.kind === 'home') return undefined;
-  const tab = projection.window.tabs.find(
-    (candidate) => candidate.tabId === activeTarget.tabId,
-  );
+  const tab = projection.window.tabs.find((candidate) => candidate.tabId === activeTarget.tabId);
   if (!tab) throw new Error('Desktop Shell active Tab is missing from its projection.');
   const project = projection.catalog.projects.find(
     (candidate) => candidate.projectId === tab.projectId,

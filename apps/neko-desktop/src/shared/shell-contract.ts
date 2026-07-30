@@ -944,7 +944,7 @@ function parseActiveTarget(value: unknown): DesktopWindowActiveTarget {
   throw invalidPayload('Desktop Window active target is invalid.');
 }
 
-export function parseDesktopDomainCapabilityProjection(
+function parseDesktopDomainCapabilityProjection(
   value: unknown,
 ): DesktopDomainCapabilityProjection {
   const record = requireRecord(value, 'Desktop domain capability must be an object.');

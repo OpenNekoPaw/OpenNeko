@@ -11,8 +11,10 @@ Desktop Home 当前只有“开始创作 / 动态 / 资产中心”三个入口�
   package-owned Agent Root 的 tabless composer，不创建第二套对话运行时。
 - “资产中心”作为全局导航与检索 Surface，按已授权 Content Project 聚合真实目录、Media
   Library 与 Entity source；事实仍归各项目 owner，Home 不创建全局素材副本。
-- “插件”展示 Pi SkillHost 的 personal/project/builtin Skill catalog，以及 Desktop 已组合
-  内置领域扩展的真实 capability 状态。外部扩展安装、启用和 Plugin Host 执行保持不可用。
+- “插件”展示与 Agent 执行共享同一 Pi SkillHost discovery 的 personal/project/builtin Skill
+  catalog；Desktop 打包产物显式携带 builtin Skill source。第二个页签只展示 Desktop 已组合
+  内置领域能力的真实 capability 状态，不伪装成已安装插件。外部扩展安装、启用和 Plugin Host
+  执行保持不可用。
 - “全部创作”聚合 Project catalog 与 Agent Home conversation projection。
 - Desktop 新安装与本次预发布设置迁移后首先进入 Home，不再把历史项目恢复作为隐式默认。
 - “开始创作”收敛为紧凑的 Agent Home 起始面：项目作用域属于 composer 控件，快捷意图属于
@@ -36,7 +38,8 @@ Desktop Home 当前只有“开始创作 / 动态 / 资产中心”三个入口�
 
 - `apps/neko-desktop` application settings migration、Shell contract、Main composition、preload
   bridge、Home renderer 和 i18n
-- Agent public Root 增加一次性初始输入 presentation handoff
+- Agent public Root 增加一次性初始输入 presentation handoff；Desktop composition 注入打包后的
+  builtin Skill source
 - Assets 继续复用现有 Resource Browser source，不复制文件扫描、Media Library 或 Entity
   catalog
 - 不新增 Plugin Host、Marketplace、外部扩展执行或全局 Entity authority

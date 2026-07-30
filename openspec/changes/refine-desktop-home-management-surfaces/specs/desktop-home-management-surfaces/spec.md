@@ -50,6 +50,32 @@ remain unavailable and MUST NOT be represented as a successful Marketplace.
   status
 - **AND** no external extension enable/install action is offered without an owning runtime
 
+#### Scenario: Packaged Desktop discovers the Agent Skill catalog
+
+- **GIVEN** Desktop is running from a production package
+- **WHEN** the user opens or refreshes the Skill catalog for a Project
+- **THEN** Main SHALL discover packaged builtin, personal and Project Skills through the same Pi
+  SkillHost path used by Agent turns
+- **AND** Project Skills SHALL shadow same-name personal and builtin Skills
+- **AND** a missing packaged builtin Skill root SHALL fail visibly rather than return a successful
+  partial catalog
+
+#### Scenario: Skill discovery reports safe diagnostics
+
+- **WHEN** Pi SkillHost encounters invalid or duplicate Skill records
+- **THEN** Home SHALL show a diagnostic summary grouped by safe code/source
+- **AND** the Renderer SHALL NOT receive a Skill physical path, locator, fingerprint or raw diagnostic
+  message
+- **AND** Home SHALL NOT claim an enabled or trusted setting until a real settings/trust authority
+  owns that state
+
+#### Scenario: User views Desktop built-in capabilities
+
+- **WHEN** the user selects the second Plugins page tab
+- **THEN** Desktop SHALL label the rows as built-in capabilities rather than installed extensions
+- **AND** each availability value SHALL come from the Shell domain capability projection
+- **AND** the unavailable external Plugin Host notice SHALL remain visible
+
 ### Requirement: All Creations reuses catalog and conversation authorities
 
 All Creations MUST render the Project catalog and Agent Home conversation summaries without copying
@@ -129,6 +155,22 @@ border, radius, outer inset or panel gap. Both surfaces MUST consume the same
 - **THEN** the overlay hit region SHALL already cover that complete width
 - **AND** the sidebar SHALL NOT collapse because a width animation lags behind the pointer
 
+#### Scenario: User crosses non-control space in the revealed sidebar
+
+- **GIVEN** the compact rail has temporarily revealed the complete sidebar
+- **WHEN** the pointer crosses navigation gaps, headings, scrolling whitespace or footer whitespace
+- **THEN** those sidebar regions SHALL continue to participate in pointer hit testing
+- **AND** only the dedicated top window-drag strip MAY suppress pointer events
+- **AND** the temporary overlay SHALL remain revealed until the pointer leaves its complete bounds
+
+#### Scenario: Sidebar visibility control follows the expanded presentation
+
+- **GIVEN** the primary sidebar is persistently collapsed to the compact rail
+- **WHEN** neither pointer hover nor keyboard focus temporarily reveals it
+- **THEN** the visibility toggle SHALL NOT be shown as a fixed rail action
+- **AND** fixed-expanded or temporarily expanded presentation SHALL show the toggle at the top-right
+  of the brand row
+
 #### Scenario: Workbench panels keep spacing independently from primary navigation
 
 - **WHEN** Main, Agent, Resources, Timeline, Canvas, Cut, Preview or Model surfaces are composed
@@ -142,3 +184,17 @@ border, radius, outer inset or panel gap. Both surfaces MUST consume the same
 - **THEN** Main SHALL accept and persist the primary-sidebar-only Workbench mutation
 - **AND** no active Content Project SHALL be required
 - **AND** any Home mutation of Project-owned Workbench slices SHALL fail visibly
+
+### Requirement: Desktop light appearance uses neutral surfaces
+
+Desktop light appearance MUST use a Codex-like neutral hierarchy for the native window, application
+chrome, Main, panels, controls and selection states. Brand green MUST NOT tint large surfaces or
+ordinary hover, pressed, selection and focus states.
+
+#### Scenario: User opens Desktop in light appearance
+
+- **WHEN** Desktop resolves the light appearance
+- **THEN** Main SHALL use white and application chrome SHALL use a subtle neutral gray
+- **AND** raised, muted, border, shadow, control and compatibility tokens SHALL remain hue-neutral
+- **AND** the Electron native background SHALL match the Renderer window token during startup
+- **AND** brand color MAY remain on the OpenNeko mark or explicit semantic status only

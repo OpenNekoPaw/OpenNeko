@@ -85,8 +85,44 @@
 - [x] 10.3 Re-run the Home collapse action in the real Desktop Electron host, then run Desktop tests,
       typecheck, package build, strict OpenSpec validation and diff checks.
 
+## 11. Real Desktop Skill catalog
+
+- [x] 11.1 Add red-capable coverage for packaged/development builtin Skill root resolution, required
+      builtin-root discovery, sanitized catalog diagnostics and honest built-in-capability labels.
+- [x] 11.2 Package `packages/neko-skills/skills`, inject its resolved resource root into the production
+      Desktop Agent composition, and project the real Pi SkillHost catalog without fake
+      enabled/trusted state.
+- [x] 11.3 Add an explicit catalog refresh action, safe discovery diagnostics and built-in capability
+      wording while keeping external Plugin Host actions unavailable.
+- [x] 11.4 Run focused Desktop tests/typecheck, Agent eval harness self-tests, production package
+      resource inspection, strict OpenSpec validation, diff checks and real Electron Plugins
+      acceptance; record any real-provider exclusion.
+
+## 12. Expanded-only sidebar visibility control
+
+- [x] 12.1 Add red-capable renderer/style coverage proving the compact rail hides the visibility
+      control and the complete sidebar interaction surface is excluded from Electron's native drag
+      region.
+- [x] 12.2 Show the visibility control only for fixed or temporary expanded presentation, and move
+      native window dragging to the dedicated top strip without changing persisted sidebar state.
+- [x] 12.3 Re-run fast pointer movement through sidebar gaps in the real Desktop Electron host, then
+      run focused Desktop tests, typecheck, strict OpenSpec validation and diff checks.
+
+## 13. Neutral light appearance
+
+- [x] 13.1 Add red-capable theme coverage for the neutral native window, Desktop surfaces,
+      interaction states and VS Code compatibility projection.
+- [x] 13.2 Replace the green-tinted light palette with a Codex-like neutral hierarchy while
+      preserving brand color as an explicit accent and leaving dark appearance unchanged.
+- [x] 13.3 Repackage and inspect Home plus Project surfaces in the real Desktop Electron host, then
+      run Desktop tests, typecheck, strict OpenSpec validation and diff checks.
+
 ## Validation evidence
 
+- Repackaged and restarted the production Electron host, then inspected both Agent Home and an
+  OpenNeko Project workbench. The light appearance now uses a white main canvas, neutral-gray
+  sidebar/panel hierarchy and neutral interaction states; green remains limited to the brand mark
+  and explicit Agent status accents.
 - Packaged the production Electron application with `pnpm --filter @neko/app-desktop package`.
 - Opened `/Users/feng/Git/neko-test` in an isolated packaged application instance and verified:
   Start Creating prefills the existing Agent composer without sending, Directory search resolves
@@ -133,3 +169,30 @@
   `pnpm --filter @neko/app-desktop package`,
   `pnpm exec openspec validate refine-desktop-home-management-surfaces --strict`, and
   `git diff --check`.
+- Added red-capable Desktop coverage for development/packaged builtin Skill roots, project-first
+  precedence, missing-root failure, sanitized discovery diagnostics and honest capability labels.
+  The Home contract v2 no longer exposes always-true `enabled` / `trusted` fields.
+- Packaged all 13 canonical builtin Skills under
+  `OpenNeko.app/Contents/Resources/skills`; an isolated packaged Desktop run over `neko-test`
+  discovered 5 personal and 13 builtin Skills through Pi SkillHost. Refresh re-ran discovery, and
+  the second tab showed Shell-owned capability readiness under the “内置能力” label.
+- Ran focused Desktop tests (49 passing before packaging; final affected-path run 8 passing),
+  complete Desktop tests (46 files / 221 tests), Desktop typecheck, scoped lint, production package,
+  `pnpm test:agent:eval` (40 files / 282 tests plus 24-suite dry-run),
+  strict OpenSpec validation and `git diff --check`.
+- Real-provider evaluation is excluded because this change does not alter Skill prompt, selection,
+  invocation or tool routing semantics; Electron resource packaging and Home projection are proven
+  by deterministic producer/consumer tests and the packaged runtime.
+- After this validation, the parallel `refine-desktop-main-view-groups` work changed Workbench
+  contracts in the shared worktree. A subsequent full Desktop typecheck fails on that unfinished
+  change's `activeViewId` / `groups` / `agent` migration; the affected Plugin/Skill tests, scoped
+  lint, OpenSpec validation and diff check remain green.
+- Added red-capable renderer and style coverage for the expanded-only visibility control and the
+  Electron native drag boundary. The compact rail now omits the control, while temporary and fixed
+  expanded presentations render it in the brand row.
+- Repackaged and opened the real Desktop Electron application, then moved the pointer quickly from
+  the compact rail through a non-control blank region into the expanded overlay. The sidebar
+  retained its hover state, exposed the top-right visibility control, and collapsed again only
+  after the pointer exited to Main.
+- Re-ran focused Desktop tests (2 files / 20 tests), complete Desktop tests (46 files / 227 tests),
+  Desktop typecheck, production packaging, strict OpenSpec validation and `git diff --check`.

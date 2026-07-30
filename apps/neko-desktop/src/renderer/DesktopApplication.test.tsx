@@ -994,6 +994,8 @@ function createResourceBridgeMock() {
     getSnapshot: vi.fn(),
     children: vi.fn(),
     resolveThumbnail: vi.fn(),
+    resolveQuickPreview: vi.fn(),
+    releaseQuickPreview: vi.fn(),
     search: vi.fn(),
     execute: vi.fn(),
     subscribe: vi.fn(() => () => undefined),
@@ -1035,8 +1037,10 @@ function createPreviewBridgeMock() {
 function createCanvasBridgeMock() {
   return {
     getSnapshot: vi.fn(),
+    resolveMaterialActions: vi.fn(),
     executeIntent: vi.fn(),
     resolvePreviewVariant: vi.fn(),
+    executeMediaRequest: vi.fn(),
     subscribe: vi.fn(() => () => undefined),
   };
 }

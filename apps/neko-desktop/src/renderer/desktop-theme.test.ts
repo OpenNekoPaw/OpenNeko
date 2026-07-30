@@ -40,6 +40,24 @@ describe('Desktop system theme', () => {
     },
   );
 
+  it('projects a neutral Codex-like light surface hierarchy', () => {
+    applyResolvedDesktopTheme(document, 'light');
+
+    const style = document.documentElement.style;
+    expect(style.getPropertyValue('--neko-desktop-window')).toBe('#f7f7f6');
+    expect(style.getPropertyValue('--neko-desktop-chrome')).toBe(
+      'rgba(247, 247, 246, 0.94)',
+    );
+    expect(style.getPropertyValue('--neko-desktop-main')).toBe('#ffffff');
+    expect(style.getPropertyValue('--neko-desktop-surface-muted')).toBe(
+      '#f3f3f2',
+    );
+    expect(style.getPropertyValue('--vscode-list-activeSelectionBackground')).toBe(
+      '#e8e8e7',
+    );
+    expect(style.getPropertyValue('--vscode-focusBorder')).toBe('#6d716f');
+  });
+
   it('follows operating-system appearance changes and releases the listener', () => {
     const listeners = new Set<(event: { readonly matches: boolean }) => void>();
     const mediaQuery = {

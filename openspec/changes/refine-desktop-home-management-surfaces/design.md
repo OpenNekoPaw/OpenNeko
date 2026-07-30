@@ -64,9 +64,11 @@ Home 只显示有限结果与来源项目，进一步编辑/预览时打开该�
 ### 4. Plugins distinguishes Skills from executable extensions
 
 Skill tab 通过项目 workspace 的 Pi SkillHost discovery 返回 name、description、source 和
-enabled/trusted 状态，删除 locator/fingerprint/物理路径。Extensions tab 只列 Shell 已组合的
-内置 domain capability 与 ready/unavailable 状态。当前没有外部 Plugin Host 时页面明确显示
-不可安装，而不是伪造 Marketplace 或把 Webview `pluginsAvailable` 当作安装记录。
+discovery diagnostic 摘要，删除 locator/fingerprint/物理路径。当前 policy 只返回可用记录，
+且没有 Desktop Skill enablement/trust 设置 authority，因此 Home contract 不投影恒为 true 的
+`enabled/trusted` 伪状态。Built-in capabilities tab 只列 Shell 已组合的内置 domain capability
+与 ready/unavailable 状态。当前没有外部 Plugin Host 时页面明确显示不可安装，而不是伪造
+Marketplace、把内置 capability 称为已安装插件，或把 Webview `pluginsAvailable` 当作安装记录。
 
 ### 5. All creations reuses existing projections
 
@@ -114,6 +116,11 @@ Codex 风格任务入口。Start Creating 改为独立的 task launchpad：
 - hover overlay 的实际命中宽度必须在进入 rail 时立即扩展到持久化宽度；不得对 width 做过渡，
   否则快速横向移动会越过正在增长的命中边界并错误触发收回。视觉缓动只能作用于不改变
   pointer hit-testing 的阴影或内容表现；
+- compact rail 不显示固定的显隐按钮；固定展开或 pointer/keyboard 临时展开时，显隐按钮才在
+  顶部品牌行右侧出现；
+- 整个 sidebar 内容区是交互区域，必须从 Electron 原生 window drag region 排除。窗口拖拽只由
+  顶部交通灯旁的专用空白带拥有，不能让 section 间隙、列表标题、滚动空白或 footer 吞掉
+  pointer enter/leave，破坏临时展开状态；
 - Home section 与当前 Project 的 active state 继续表达不同导航语义，不为追求像素相同伪造选中项；
 - 共享 frame 只负责 presentation；Workbench 负责 resize、显隐状态和持久化，不再由 Home
   保存第二份页面局部状态。
@@ -136,10 +143,45 @@ mutation 限制为：
 这样 primary-sidebar 状态仍由同一 Window Workbench authority 持久化，同时不会把 Home 当成
 伪 Content Project，也不会为一个按钮增加第二套 IPC 或 Renderer local state。
 
+### 11. Desktop packages and resolves one canonical builtin Skill source
+
+开发态与打包态都必须把 `packages/neko-skills/skills` 作为 Desktop builtin Skill authority：
+
+- Electron Forge 将该目录复制到只读 application resources 的固定 `skills` 目录；
+- Main composition 根据 `app.isPackaged` 从 `process.resourcesPath/skills` 或 monorepo
+  application path 解析 root，并把它显式注入 Desktop Agent composition；
+- 配置了 builtin root 但目录缺失时 discovery 必须 fail-visible，不能把缺失的生产依赖静默
+  解释为空 catalog；
+- Home list 与 Agent turn 继续调用同一个 `discoverSkills` canonical path，使用相同
+  project-first / personal-second / builtin-last precedence；
+- Home 只投影 Skill name、description、source，以及按 source/code 聚合且不含 path/message 的
+  diagnostic 摘要；重复 Skill warning 同样只投影安全计数；
+- 用户点击刷新时重新执行真实 discovery，不保留 Renderer mock、fixture 或缓存真值。
+
+本次不改变 Skill prompt、model selection、tool routing 或 invocation protocol。Agent evaluation
+采用 `excluded`：Electron resource packaging 与 Home catalog 只能由确定性 Desktop
+producer/consumer、真实文件 discovery 和打包产物检查证明；现有
+`agent-runtime.skill-runtime` 继续覆盖未改变的 Pi Skill injection 语义。
+
+### 12. Light appearance uses a neutral Codex-like hierarchy
+
+Desktop 浅色主题的应用背景、Main、侧栏、内容 Surface、控件和选中态必须使用中性灰阶，
+不能把品牌绿色混入大面积 Surface 或常规交互状态：
+
+- Main 和主要内容 Surface 以白色为基准；
+- 一级侧栏与辅助 Surface 只使用轻微暖中性灰建立层级；
+- hover、pressed、selection、border、shadow 与 focus ring 使用无色相的黑白透明度或中性灰；
+- 品牌绿只保留给品牌标记或显式语义状态，不作为浅色主题的默认 focus/selection authority；
+- Electron 原生窗口清屏色、Renderer token 与嵌入子包使用的 VS Code compatibility token 必须
+  同步，避免启动清屏、Desktop Shell 与 package-owned Surface 出现不同色调。
+
+暗色主题不属于本次色板校正范围。
+
 ## Risks / Trade-offs
 
 - 跨项目资产查询可能较慢，因此结果按项目惰性加载并限制数量，不建立缓存真值。
 - Home 初始输入只预填不自动发送，多一步确认但保留 Agent 权限与模型成本边界。
 - 扩展页在 Phase 1 只能显示内置组合能力；外部扩展管理仍需独立 Plugin Host change。
+- Skill catalog 每次刷新都会访问三个本地 source；目录规模有限，暂不增加 cache/watch authority。
 - v1 的 `restore` 无法区分旧默认与用户显式选择；本项目尚未发布，因此迁移统一采用新的 Home
   默认。需要恢复项目的用户可在 v2 设置页重新显式选择一次。

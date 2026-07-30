@@ -534,12 +534,7 @@ describe('DesktopAppHost', () => {
     await expect(
       fixture.appHost.createAgentBootstrap(
         fixture.sender,
-        createDesktopAgentBootstrapRequest(
-          'agent-1',
-          tab.projectId,
-          tab.viewId,
-          tab.viewEpoch,
-        ),
+        createDesktopAgentBootstrapRequest('agent-1', tab.projectId, tab.viewId, tab.viewEpoch),
         vi.fn(),
       ),
     ).resolves.toMatchObject({
@@ -693,9 +688,7 @@ function createSettingsService(): DesktopApplicationSettingsService {
       content = next;
     },
   };
-  return new DesktopApplicationSettingsService(
-    new DesktopApplicationSettingsRepository(file),
-  );
+  return new DesktopApplicationSettingsService(new DesktopApplicationSettingsRepository(file));
 }
 
 function createAgentComposition(): DesktopAgentAppHostComposition & {

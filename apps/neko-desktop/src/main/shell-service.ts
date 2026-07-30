@@ -1,10 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import type { HostDiagnostic } from '@neko/host/ports';
-import {
-  DesktopAgentContractError,
-  type DesktopAgentViewIdentity,
-} from '../shared/agent-contract';
+import { DesktopAgentContractError, type DesktopAgentViewIdentity } from '../shared/agent-contract';
 import {
   DESKTOP_SHELL_CONTRACT_VERSION,
   DesktopShellContractError,
@@ -35,9 +32,7 @@ import type {
 } from './desktop-workspace-registry';
 import type { CanvasHostRuntimeIdentity } from '@neko-canvas/domain';
 import type { CutHostRuntimeIdentity } from '@neko-cut/domain';
-import {
-  createDesktopCanvasSessionId,
-} from '../shared/canvas-bridge-contract';
+import { createDesktopCanvasSessionId } from '../shared/canvas-bridge-contract';
 import { createDesktopCutSessionId } from '../shared/cut-bridge-contract';
 import type { DesktopStartupTargetPreference } from '../shared/application-settings-contract';
 
@@ -132,7 +127,9 @@ export class DesktopShellService {
   setPreviewCapabilityReady(ready: boolean): void {
     this.requireActive();
     if (this.activeWindows.size > 0) {
-      throw new Error('Desktop Preview capability must be configured before any Window is claimed.');
+      throw new Error(
+        'Desktop Preview capability must be configured before any Window is claimed.',
+      );
     }
     this.previewCapabilityReady = ready;
   }
@@ -208,8 +205,7 @@ export class DesktopShellService {
       const restoredWindow = requireStoredWindow(state, windowId);
       const restoredWorkbench = restoreTransientWorkbench(state, restoredWindow);
       const restoredActiveTarget =
-        this.options.startupTarget === 'home' &&
-        restoredWindow.activeTarget.kind !== 'home'
+        this.options.startupTarget === 'home' && restoredWindow.activeTarget.kind !== 'home'
           ? ({ kind: 'home' } as const)
           : restoredWindow.activeTarget;
       if (
@@ -348,10 +344,7 @@ export class DesktopShellService {
       throw new Error('Desktop Canvas capability is unavailable.');
     }
     const projection = await this.getProjection(windowId);
-    if (
-      identity.windowId !== windowId ||
-      identity.endpointEpoch !== projection.endpointEpoch
-    ) {
+    if (identity.windowId !== windowId || identity.endpointEpoch !== projection.endpointEpoch) {
       throw new Error('Desktop Canvas Window or renderer identity is stale.');
     }
     const view = projection.window.workbench.main.views.find(
@@ -382,10 +375,7 @@ export class DesktopShellService {
       throw new Error('Desktop Cut capability is unavailable.');
     }
     const projection = await this.getProjection(windowId);
-    if (
-      identity.windowId !== windowId ||
-      identity.endpointEpoch !== projection.endpointEpoch
-    ) {
+    if (identity.windowId !== windowId || identity.endpointEpoch !== projection.endpointEpoch) {
       throw new Error('Desktop Cut Window or renderer identity is stale.');
     }
     const view = projection.window.workbench.main.views.find(
@@ -485,11 +475,7 @@ export class DesktopShellService {
       const state = await this.options.stateRepository.read();
       const requestingWindow = requireStoredWindow(state, windowId);
       if (requestingWindow.revision !== expectedWindowRevision) {
-        throw staleWindowRevision(
-          windowId,
-          expectedWindowRevision,
-          requestingWindow.revision,
-        );
+        throw staleWindowRevision(windowId, expectedWindowRevision, requestingWindow.revision);
       }
       if (state.catalogRevision !== expectedCatalogRevision) {
         throw new DesktopShellContractError(
@@ -731,20 +717,14 @@ export class DesktopShellService {
             window.workbench.revision,
           );
         }
-        if (
-          parsed.windowId !== windowId ||
-          parsed.revision !== expectedWorkbenchRevision + 1
-        ) {
+        if (parsed.windowId !== windowId || parsed.revision !== expectedWorkbenchRevision + 1) {
           throw new DesktopShellContractError(
             'desktop-shell-project-identity-mismatch',
             'Desktop Workbench mutation has invalid Window or revision identity.',
           );
         }
         if (window.activeTarget.kind !== 'project') {
-          const projectedWorkbench = projectWorkbench(
-            window.workbench,
-            rendererEpochOffset,
-          );
+          const projectedWorkbench = projectWorkbench(window.workbench, rendererEpochOffset);
           const allowedHomeMutation: DesktopWorkbenchLayoutProjection = {
             ...projectedWorkbench,
             revision: parsed.revision,
@@ -767,9 +747,7 @@ export class DesktopShellService {
           };
         }
         const activeTabId = window.activeTarget.tabId;
-        const tab = window.tabs.find(
-          (candidate) => candidate.tabId === activeTabId,
-        );
+        const tab = window.tabs.find((candidate) => candidate.tabId === activeTabId);
         if (!tab) {
           throw new DesktopShellContractError(
             'desktop-shell-project-identity-mismatch',
@@ -778,10 +756,7 @@ export class DesktopShellService {
         }
         const project = requireStoredProject(state, tab.projectId);
         const normalizedViews = parsed.main.views.map((view) => {
-          if (
-            view.projectId !== project.projectId ||
-            view.workspaceId !== project.workspaceId
-          ) {
+          if (view.projectId !== project.projectId || view.workspaceId !== project.workspaceId) {
             throw new DesktopShellContractError(
               'desktop-shell-project-identity-mismatch',
               `Desktop Workbench View '${view.viewId}' belongs to another Project.`,
@@ -828,10 +803,7 @@ export class DesktopShellService {
     windowId: string,
     expectedEndpointEpoch: string,
     expectedWindowRevision: number,
-    mutate: (
-      window: DesktopStoredWindow,
-      state: DesktopShellStoredState,
-    ) => DesktopStoredWindow,
+    mutate: (window: DesktopStoredWindow, state: DesktopShellStoredState) => DesktopStoredWindow,
   ): Promise<DesktopShellProjection> {
     return this.enqueue(async () => {
       this.requireActive();
@@ -900,10 +872,7 @@ export class DesktopShellService {
           ownerSlice: 'P1.3',
         };
       }
-      if (
-        capability.surface === 'media-library' &&
-        this.resourceBrowserCapabilityReady
-      ) {
+      if (capability.surface === 'media-library' && this.resourceBrowserCapabilityReady) {
         return {
           surface: 'media-library',
           status: 'ready',
@@ -1095,10 +1064,7 @@ function projectShellState(
         ...tab,
         viewEpoch: tab.viewEpoch + Math.max(0, rendererEpoch - 1),
       })),
-      workbench: projectWorkbench(
-        window.workbench,
-        Math.max(0, rendererEpoch - 1),
-      ),
+      workbench: projectWorkbench(window.workbench, Math.max(0, rendererEpoch - 1)),
     },
     agentHome,
     domains: domainCapabilities,

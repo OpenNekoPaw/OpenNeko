@@ -13,6 +13,23 @@ describe('Desktop renderer styles', () => {
     expect(frameRule?.groups?.body).not.toMatch(/transition\s*:[^;]*\bwidth\b/u);
   });
 
+  it('keeps the sidebar interactive outside the dedicated native drag strip', () => {
+    const navigationRule = styles.match(/(?:^|\n)\.home-navigation\s*\{(?<body>[\s\S]*?)\n\}/u);
+    const dragStripRule = styles.match(/\.home-navigation::before\s*\{(?<body>[\s\S]*?)\n\}/u);
+
+    expect(navigationRule?.groups?.body).toMatch(/-webkit-app-region\s*:\s*no-drag/u);
+    expect(dragStripRule?.groups?.body).toMatch(/-webkit-app-region\s*:\s*drag/u);
+  });
+
+  it('hides the visibility control on the idle compact rail and reveals it with the sidebar', () => {
+    expect(styles).toMatch(
+      /\.home-navigation--compact\s+\.home-brand-toggle\s*\{[\s\S]*?display\s*:\s*none/u,
+    );
+    expect(styles).toMatch(
+      /data-primary-sidebar-hover-reveal='true'[\s\S]*?:is\(\s*:hover,\s*:focus-within\s*\)[\s\S]*?\.home-brand-toggle\s*\{[\s\S]*?display\s*:\s*inline-flex/u,
+    );
+  });
+
   it('presents the Home Agent handoff as one focused responsive composer', () => {
     const composerRule = styles.match(/\.home-task-composer\s*\{(?<body>[\s\S]*?)\n\}/u);
     const inputRule = styles.match(/\.home-task-composer textarea\s*\{(?<body>[\s\S]*?)\n\}/u);

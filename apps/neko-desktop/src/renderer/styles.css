@@ -424,8 +424,7 @@ code {
   transition: box-shadow 150ms ease;
 }
 
-.application-primary-sidebar-frame[data-primary-sidebar-hover-reveal='true']
-  > .home-navigation {
+.application-primary-sidebar-frame[data-primary-sidebar-hover-reveal='true'] > .home-navigation {
   width: 64px;
 }
 
@@ -445,6 +444,14 @@ code {
   gap: 6px;
   padding: 44px 12px 12px;
   background: var(--neko-desktop-chrome);
+  -webkit-app-region: no-drag;
+}
+
+.home-navigation::before {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 36px;
+  content: '';
   -webkit-app-region: drag;
 }
 
@@ -479,7 +486,8 @@ code {
   padding-inline: 0;
 }
 
-.home-navigation--compact .home-brand > button {
+.home-navigation--compact .home-brand-toggle {
+  display: none;
   margin-left: 0;
 }
 
@@ -536,8 +544,8 @@ code {
     :focus-within
   )
   .home-navigation--compact
-  .home-brand
-  > button {
+  .home-brand-toggle {
+  display: inline-flex;
   margin-left: auto;
 }
 
