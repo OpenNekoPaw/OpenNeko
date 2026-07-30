@@ -101,7 +101,7 @@ process.stdout.write(
       mediaRoot,
       rows,
       skipped,
-      policy: includeWebm ? 'include-webm' : 'prefer-vscode-playback-formats',
+      policy: includeWebm ? 'include-webm' : 'prefer-desktop-playback-formats',
     },
     null,
     2,
