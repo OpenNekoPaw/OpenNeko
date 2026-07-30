@@ -130,8 +130,8 @@ export function PlaybackWorkspace({ canvasPane, className }: PlaybackWorkspacePr
     if (!session.visible || !canvasData) {
       return;
     }
-    const vscode = host;
-    if (!vscode || !(vscode.supportsMessage?.('playback:getPreviewPlan') ?? true)) {
+    const hostPort = host;
+    if (!hostPort || !(hostPort.supportsMessage?.('playback:getPreviewPlan') ?? true)) {
       setHostPlanState({ plan: null, stale: false, sourceCanvasData: null });
       return;
     }
@@ -180,7 +180,7 @@ export function PlaybackWorkspace({ canvasPane, className }: PlaybackWorkspacePr
     window.addEventListener('message', handleMessage);
     queueMicrotask(() => {
       if (cancelled) return;
-      vscode.postMessage({
+      hostPort.postMessage({
         type: 'playback:getPreviewPlan',
         requestId,
       });

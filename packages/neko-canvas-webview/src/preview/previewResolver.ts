@@ -167,13 +167,13 @@ interface RuntimeVariantRequest {
 }
 
 function createRuntimeVariantRequest(
-  vscode: PreviewMessagePort | undefined,
+  hostPort: PreviewMessagePort | undefined,
   { sourceId, assetPath, role, mediaType, documentResourceRef, resourceRef }: RuntimeVariantInput,
   onSettled: () => void,
 ): RuntimeVariantRequest {
   const engineRole = ROLE_TO_ENGINE_ROLE[role] ?? 'thumbnail';
 
-  if (!vscode) {
+  if (!hostPort) {
     return {
       promise: Promise.resolve(undefined as string | undefined).finally(onSettled),
       dispose: () => {},
@@ -212,14 +212,14 @@ function createRuntimeVariantRequest(
 
   const promise = new Promise<string | undefined>((resolve) => {
     resolvePromise = resolve;
-    if (vscode.subscribe) {
-      unsubscribe = vscode.subscribe(handleMessage);
+    if (hostPort.subscribe) {
+      unsubscribe = hostPort.subscribe(handleMessage);
     } else {
       window.addEventListener('message', handleWindowMessage);
       unsubscribe = () => window.removeEventListener('message', handleWindowMessage);
     }
     try {
-      vscode.postMessage({
+      hostPort.postMessage({
         type: 'preview:resolveVariant',
         requestId,
         sourceId,

@@ -7,6 +7,10 @@
     ".": "./src/index.ts",
     "./*": "./src/*"
   },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
   "dependencies": {
     "@ai-sdk/openai": "^3.0.2",
     "@ai-sdk/provider": "^3.0.8",
@@ -16,7 +20,8 @@
     "undici": "^7.16.0"
   },
   "devDependencies": {
-    "typescript": "^5.8.3"
+    "typescript": "^5.8.3",
+    "vitest": "^4.1.2"
   },
   "license": "AGPL-3.0-or-later"
 }

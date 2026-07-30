@@ -1,10 +1,7 @@
-import { execFile } from 'node:child_process';
 import { readdir, readFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { promisify } from 'node:util';
 
-const execFileAsync = promisify(execFile);
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const matrixPath = join(repositoryRoot, 'quality', 'local-metadata-runtime-matrix.json');
 const packageRoot = join(repositoryRoot, 'packages');
@@ -47,22 +44,14 @@ async function collectPackageJsonPaths(directory) {
   return paths;
 }
 
-export async function validateLocalMetadataRuntimeMatrix({ probeBun = false } = {}) {
+export async function validateLocalMetadataRuntimeMatrix() {
   const errors = [];
   const matrix = await readJson(matrixPath);
   if (!isRecord(matrix) || matrix.version !== 1 || !isRecord(matrix.minimums)) {
     return ['Runtime matrix must be a version 1 object with minimums'];
   }
   const minimumNode = matrix.minimums.node;
-  const minimumBun = matrix.minimums.bun;
-  const minimumVscode = matrix.minimums.vscode;
-  const vscodeTypes = matrix.minimums.vscodeTypes;
-  if (
-    typeof minimumNode !== 'string' ||
-    typeof minimumBun !== 'string' ||
-    typeof minimumVscode !== 'string' ||
-    typeof vscodeTypes !== 'string'
-  ) {
+  if (typeof minimumNode !== 'string') {
     return ['Runtime matrix minimum versions must be strings'];
   }
 
@@ -80,7 +69,7 @@ export async function validateLocalMetadataRuntimeMatrix({ probeBun = false } = 
     }
     targetKeys.add(`${target.host}:${target.os}:${target.arch}`);
   }
-  const expectedHosts = ['vscode-extension', 'node-cli', 'bun-tui'];
+  const expectedHosts = ['electron-main'];
   const expectedPlatforms = [
     ['darwin', 'arm64'],
     ['linux', 'x64'],
@@ -92,15 +81,12 @@ export async function validateLocalMetadataRuntimeMatrix({ probeBun = false } = 
       }
     }
   }
-  if (targetKeys.size !== 6) errors.push(`Runtime matrix must contain 6 unique targets`);
+  if (targetKeys.size !== 2) errors.push(`Runtime matrix must contain 2 unique targets`);
 
   for (const packageJsonPath of await collectPackageJsonPaths(packageRoot)) {
     const packageJson = await readJson(packageJsonPath);
     if (!isRecord(packageJson)) continue;
     const engines = isRecord(packageJson.engines) ? packageJson.engines : null;
-    if (engines && typeof engines.vscode === 'string' && engines.vscode !== `^${minimumVscode}`) {
-      errors.push(`${packageJsonPath} must declare VS Code ^${minimumVscode}`);
-    }
     const development = isRecord(packageJson.devDependencies) ? packageJson.devDependencies : null;
     if (development && typeof development['@types/node'] === 'string') {
       if (development['@types/node'] !== `^${minimumNode.split('.')[0]}.0.0`) {
@@ -108,22 +94,15 @@ export async function validateLocalMetadataRuntimeMatrix({ probeBun = false } = 
       }
     }
     if (development && typeof development['@types/vscode'] === 'string') {
-      if (development['@types/vscode'] !== `^${vscodeTypes}`) {
-        errors.push(`${packageJsonPath} must use @types/vscode ^${vscodeTypes}`);
-      }
+      errors.push(`${packageJsonPath} must not depend on @types/vscode`);
     }
   }
 
-  const tuiPackage = await readFile(
-    join(repositoryRoot, 'apps', 'neko-tui', 'package.json'),
-    'utf8',
+  const desktopPackage = await readJson(
+    join(repositoryRoot, 'apps', 'neko-desktop', 'package.json'),
   );
-  const tuiBuild = await readFile(
-    join(repositoryRoot, 'apps', 'neko-tui', 'tsup.config.ts'),
-    'utf8',
-  );
-  if (!tuiPackage.includes('"node": ">=24.0.0"') || !tuiBuild.includes("target: 'node24'")) {
-    errors.push('OpenNeko TUI runtime and bundle targets must be node24');
+  if (desktopPackage.engines?.node !== `>=${minimumNode}`) {
+    errors.push(`OpenNeko Desktop must declare Node >=${minimumNode}`);
   }
 
   if (!isVersionAtLeast(process.versions.node, minimumNode)) {
@@ -139,33 +118,15 @@ export async function validateLocalMetadataRuntimeMatrix({ probeBun = false } = 
     }
   }
 
-  if (probeBun) {
-    try {
-      const versionResult = await execFileAsync('bun', ['--version']);
-      const bunVersion = versionResult.stdout.trim();
-      if (!isVersionAtLeast(bunVersion, minimumBun)) {
-        errors.push(`Bun ${minimumBun}+ is required; received ${bunVersion}`);
-      }
-      await execFileAsync('bun', [
-        '-e',
-        "import { Database } from 'bun:sqlite'; const db = new Database(':memory:'); db.run('CREATE TABLE runtime_probe (id TEXT PRIMARY KEY) STRICT'); db.close();",
-      ]);
-    } catch (error) {
-      errors.push(`bun:sqlite runtime probe failed: ${String(error)}`);
-    }
-  }
-
   return errors;
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const errors = await validateLocalMetadataRuntimeMatrix({
-    probeBun: process.argv.includes('--probe-bun'),
-  });
+  const errors = await validateLocalMetadataRuntimeMatrix();
   if (errors.length > 0) {
     for (const error of errors) console.error(error);
     process.exitCode = 1;
   } else {
-    console.log('Local metadata runtime matrix is valid (6 targets).');
+    console.log('Local metadata runtime matrix is valid (2 Desktop targets).');
   }
 }

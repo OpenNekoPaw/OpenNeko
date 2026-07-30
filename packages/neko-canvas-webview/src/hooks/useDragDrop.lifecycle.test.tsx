@@ -95,7 +95,7 @@ function DragDropHarness({
 
 function createOptions(projectContent: UseDragDropOptions['projectContent']): UseDragDropOptions {
   return {
-    vscode: null,
+    hostPort: null,
     screenToCanvas: (screenX, screenY) => ({ x: screenX - 10, y: screenY - 20 }),
     addMediaAt: vi.fn(),
     projectContent,

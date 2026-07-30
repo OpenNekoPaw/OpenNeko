@@ -72,7 +72,7 @@ import { getLogger } from './utils/logger';
 import type { CanvasConnectionMutationResult } from './utils/canvasConnectionAuthoring';
 
 // =============================================================================
-// Constants & VSCode API
+// Constants & Host API
 // =============================================================================
 
 const DEFAULT_CANVAS_DATA: CanvasData = {
@@ -96,11 +96,11 @@ export interface CanvasAppProps {
   readonly host: CanvasWebviewHostPort;
 }
 
-export function CanvasApp({ host: vscode }: CanvasAppProps) {
-  const canOpenHostExport = vscode.supportsMessage('canvasAction');
-  const canOpenHostPlayback = vscode.supportsMessage('media:probe');
-  const canSendToAgent = vscode.supportsMessage('sendToAgent');
-  const canOpenBoardRef = vscode.supportsMessage('openCanvasBoardRef');
+export function CanvasApp({ host: hostPort }: CanvasAppProps) {
+  const canOpenHostExport = hostPort.supportsMessage('canvasAction');
+  const canOpenHostPlayback = hostPort.supportsMessage('media:probe');
+  const canSendToAgent = hostPort.supportsMessage('sendToAgent');
+  const canOpenBoardRef = hostPort.supportsMessage('openCanvasBoardRef');
   const canvasStoreApi = useCanvasStoreApi();
   const playbackStoreApi = usePlaybackStoreApi();
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
@@ -121,10 +121,10 @@ export function CanvasApp({ host: vscode }: CanvasAppProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const { isKeyboardFocused, isKeyboardFocusedRef, setKeyboardFocused } = useFocusedWebviewRoot(
     rootRef,
-    vscode ? false : true,
+    hostPort ? false : true,
   );
-  useReportWebviewKeyboardFocus(rootRef, vscode);
-  useReportWebviewKeyboardEditable(vscode);
+  useReportWebviewKeyboardFocus(rootRef, hostPort);
+  useReportWebviewKeyboardEditable(hostPort);
 
   const canvasData = useCanvasStore((state) => state.canvasData);
   const selection = useCanvasStore((state) => state.selection);
@@ -214,8 +214,8 @@ export function CanvasApp({ host: vscode }: CanvasAppProps) {
 
   const reportAction = useCallback(
     (action: string, label: string, detail?: string, data?: unknown) => {
-      if (!vscode) return;
-      vscode.postMessage({ type: 'canvasAction', action, label, detail, data });
+      if (!hostPort) return;
+      hostPort.postMessage({ type: 'canvasAction', action, label, detail, data });
     },
     [],
   );
@@ -234,14 +234,14 @@ export function CanvasApp({ host: vscode }: CanvasAppProps) {
 
   const requestProjectionWriteBack = useCallback(
     (changes: unknown[]): Promise<unknown> => {
-      if (!vscode || !canvasData?.projected) {
+      if (!hostPort || !canvasData?.projected) {
         return Promise.reject(new Error('Projected Canvas is not active'));
       }
       const source = (canvasData as { projectionSource?: unknown }).projectionSource;
       const requestId = ++projectionRequestIdRef.current;
       return new Promise((resolve, reject) => {
         projectionResolversRef.current.set(requestId, { resolve, reject });
-        vscode.postMessage({
+        hostPort.postMessage({
           type: 'projection.writeBack',
           _requestId: requestId,
           source,
@@ -316,10 +316,10 @@ export function CanvasApp({ host: vscode }: CanvasAppProps) {
   );
 
   const getCanvasProjectSourceAddClient = useCallback(() => {
-    if (!vscode) return null;
+    if (!hostPort) return null;
     const existing = canvasProjectSourceAddClientRef.current;
     if (existing) return existing;
-    const client = createCanvasProjectSourceAddClient(vscode);
+    const client = createCanvasProjectSourceAddClient(hostPort);
     canvasProjectSourceAddClientRef.current = client;
     return client;
   }, []);
@@ -337,11 +337,13 @@ export function CanvasApp({ host: vscode }: CanvasAppProps) {
       if (!action.sourceKind) {
         throw new Error(`Canvas source action "${actionId}" has no source kind`);
       }
-      void vscode.requestSource(action.sourceKind, sourceMode, position).catch((error: unknown) => {
-        logger.warn('Canvas file-picker add-source failed', error);
-      });
+      void hostPort
+        .requestSource(action.sourceKind, sourceMode, position)
+        .catch((error: unknown) => {
+          logger.warn('Canvas file-picker add-source failed', error);
+        });
     },
-    [vscode],
+    [hostPort],
   );
 
   const addActionAt = useCallback(
@@ -359,7 +361,7 @@ export function CanvasApp({ host: vscode }: CanvasAppProps) {
           throw new Error(`Canvas source action "${actionId}" has no source kind`);
         }
         if (sourceMode === 'create') {
-          void vscode
+          void hostPort
             .requestGenerationDraft(action.sourceKind, position, selectedNodeIds)
             .catch((error: unknown) => {
               logger.warn('Canvas Generation draft request failed', error);
@@ -380,7 +382,7 @@ export function CanvasApp({ host: vscode }: CanvasAppProps) {
           throw new Error(`Direct creation is not supported for Canvas action "${action.id}"`);
       }
     },
-    [addMarkdownAt, addTableAt, requestCanvasFilePickerSource, selectedNodeIds, vscode],
+    [addMarkdownAt, addTableAt, requestCanvasFilePickerSource, selectedNodeIds, hostPort],
   );
 
   const handleSelectAddAction = useCallback(
@@ -389,7 +391,7 @@ export function CanvasApp({ host: vscode }: CanvasAppProps) {
     },
     [addActionAt, getViewportCenter],
   );
-  const authoringCapabilities = vscode.getAuthoringCapabilities();
+  const authoringCapabilities = hostPort.getAuthoringCapabilities();
   const availableGenerationKinds = authoringCapabilities.generationMediaKinds.filter(
     (kind): kind is CanvasAddSourceKind => kind !== 'document',
   );
@@ -406,20 +408,20 @@ export function CanvasApp({ host: vscode }: CanvasAppProps) {
     handleDragLeave,
     handleDrop,
   } = useDragDrop({
-    vscode,
+    hostPort,
     screenToCanvas,
     addMediaAt,
     onDropAssets: handleDropAssets,
     addSourceClient: getCanvasProjectSourceAddClient() ?? undefined,
-    projectContent: vscode.projectContent,
+    projectContent: hostPort.projectContent,
   });
 
   // =========================================================================
-  // VSCode messages
+  // Host messages
   // =========================================================================
 
   const { isReady, loadDiagnostic, keyboardActionRef } = useCanvasHostMessages({
-    vscode,
+    hostPort,
     defaultCanvasData: DEFAULT_CANVAS_DATA,
     setCanvasData,
     onRevealPlaybackWorkspace: ({ routeId, currentUnitId }) => {
@@ -433,7 +435,7 @@ export function CanvasApp({ host: vscode }: CanvasAppProps) {
       const documentKey = createCanvasViewportSnapshotKey(data);
       seedViewportFromDocument(
         documentKey,
-        readCanvasViewportSnapshot(vscode, documentKey) ??
+        readCanvasViewportSnapshot(hostPort, documentKey) ??
           data.viewport ??
           DEFAULT_RUNTIME_VIEWPORT,
       );
@@ -592,32 +594,32 @@ export function CanvasApp({ host: vscode }: CanvasAppProps) {
 
   /** Send selected nodes as context to the Agent panel */
   const handleSendToAgent = useCallback(() => {
-    vscode.postMessage({
+    hostPort.postMessage({
       type: 'sendToAgent',
       nodeIds: selectedNodeIds,
       action: 'context',
     });
-  }, [selectedNodeIds, vscode]);
+  }, [selectedNodeIds, hostPort]);
 
   const handleDocumentOpen = useCallback(
     (docPath: string) => {
-      void vscode.previewResource({ kind: 'workspace-file', path: docPath });
+      void hostPort.previewResource({ kind: 'workspace-file', path: docPath });
     },
-    [vscode],
+    [hostPort],
   );
 
   const handleCanvasEmbedOpen = useCallback(
     (canvasPath: string) => {
-      void vscode.previewResource({ kind: 'workspace-file', path: canvasPath });
+      void hostPort.previewResource({ kind: 'workspace-file', path: canvasPath });
     },
-    [vscode],
+    [hostPort],
   );
 
   const handleCanvasBoardRefOpen = useCallback(
     (ref: CanvasBoardRef) => {
-      vscode.postMessage({ type: 'openCanvasBoardRef', ref });
+      hostPort.postMessage({ type: 'openCanvasBoardRef', ref });
     },
-    [vscode],
+    [hostPort],
   );
 
   // =========================================================================
@@ -662,7 +664,7 @@ export function CanvasApp({ host: vscode }: CanvasAppProps) {
   // =========================================================================
 
   const { handleKeyboardAction } = useKeyboardActions({
-    vscode,
+    hostPort,
     selectedNodeIds,
     selectedConnectionIds,
     nodes,
@@ -701,7 +703,7 @@ export function CanvasApp({ host: vscode }: CanvasAppProps) {
     onSelectAll: () => handleKeyboardAction('selectAll'),
     onUndo: () => handleKeyboardAction('undo'),
     onRedo: () => handleKeyboardAction('redo'),
-    onSave: () => vscode?.postMessage({ type: 'requestSave' }),
+    onSave: () => hostPort?.postMessage({ type: 'requestSave' }),
     onCopy: () => handleKeyboardAction('copy'),
     onCut: () => handleKeyboardAction('cut'),
     onPaste: () => handleKeyboardAction('paste'),
@@ -712,11 +714,11 @@ export function CanvasApp({ host: vscode }: CanvasAppProps) {
     onTogglePanMode: togglePanMode,
   });
 
-  // Keep ref in sync with latest handler (for VSCode message dispatch)
+  // Keep ref in sync with latest handler (for Host message dispatch)
   keyboardActionRef.current = handleKeyboardAction;
 
   useEffect(() => {
-    if (!vscode || !canvasData) {
+    if (!hostPort || !canvasData) {
       viewportSnapshotPolicyRef.current?.cancel();
       viewportSnapshotPolicyRef.current = null;
       return;
@@ -726,7 +728,7 @@ export function CanvasApp({ host: vscode }: CanvasAppProps) {
     viewportSnapshotPolicyRef.current?.cancel();
     viewportSnapshotPolicyRef.current = createViewportSnapshotPolicy({
       writer: {
-        writeSnapshot: (snapshot) => writeCanvasViewportSnapshot(vscode, documentKey, snapshot),
+        writeSnapshot: (snapshot) => writeCanvasViewportSnapshot(hostPort, documentKey, snapshot),
       },
     });
 
@@ -734,18 +736,18 @@ export function CanvasApp({ host: vscode }: CanvasAppProps) {
       viewportSnapshotPolicyRef.current?.flush('close');
       viewportSnapshotPolicyRef.current = null;
     };
-  }, [canvasData, vscode]);
+  }, [canvasData, hostPort]);
 
   useEffect(() => {
     viewportSnapshotPolicyRef.current?.schedule(viewport);
   }, [viewport]);
 
   useEffect(() => {
-    if (!vscode) return;
+    if (!hostPort) return;
     const flushViewportSnapshot = () => viewportSnapshotPolicyRef.current?.flush('blur');
     window.addEventListener('blur', flushViewportSnapshot);
     return () => window.removeEventListener('blur', flushViewportSnapshot);
-  }, [vscode]);
+  }, [hostPort]);
 
   // =========================================================================
   // Sync status to extension
@@ -753,7 +755,7 @@ export function CanvasApp({ host: vscode }: CanvasAppProps) {
 
   const lastSyncRef = useRef<string>('');
   useEffect(() => {
-    if (!vscode) return;
+    if (!hostPort) return;
     const handleMessage = (event: MessageEvent) => {
       const message = event.data as { type?: unknown; _requestId?: unknown; error?: unknown };
       if (message.type !== '_response' || typeof message._requestId !== 'number') return;
@@ -771,7 +773,7 @@ export function CanvasApp({ host: vscode }: CanvasAppProps) {
   }, []);
 
   useEffect(() => {
-    if (!vscode || !canvasData) return;
+    if (!hostPort || !canvasData) return;
     const projectionStatus = (canvasData as { projectionStatus?: ProjectedCanvasStatus })
       .projectionStatus;
     const canvasSnapshotFingerprint = JSON.stringify({
@@ -782,7 +784,7 @@ export function CanvasApp({ host: vscode }: CanvasAppProps) {
     const fingerprint = `${canvasSnapshotFingerprint}:${selectedNodeIds.join(',')}:${projectionStatus?.state ?? 'none'}:${projectionStatus?.message ?? ''}`;
     if (fingerprint === lastSyncRef.current) return;
     lastSyncRef.current = fingerprint;
-    vscode.postMessage({
+    hostPort.postMessage({
       type: 'canvasStatus',
       data: {
         version: canvasData.version,
@@ -833,12 +835,12 @@ export function CanvasApp({ host: vscode }: CanvasAppProps) {
 
   const lastSelectionRef = useRef<string>('');
   useEffect(() => {
-    if (!vscode || !canvasData) return;
+    if (!hostPort || !canvasData) return;
     const selKey = selectedNodeIds.join(',');
     if (selKey === lastSelectionRef.current) return;
     lastSelectionRef.current = selKey;
     const selectedNodes = nodes.filter((n) => selectedNodeIds.includes(n.id));
-    vscode.postMessage({ type: 'selectionChange', nodes: selectedNodes });
+    hostPort.postMessage({ type: 'selectionChange', nodes: selectedNodes });
   }, [selectedNodeIds, nodes, canvasData]);
 
   // =========================================================================

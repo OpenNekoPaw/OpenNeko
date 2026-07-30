@@ -181,7 +181,7 @@ export function Connection({
             textAnchor="middle"
             fill="var(--toolbar-fg)"
             fontSize={10}
-            fontFamily="var(--vscode-font-family)"
+            fontFamily="var(--hostPort-font-family)"
             style={{ pointerEvents: 'none' }}
           >
             {connection.label}

@@ -1,5 +1,5 @@
 /**
- * useCanvasHostMessages - Handle VSCode extension ↔ webview communication
+ * useCanvasHostMessages - Handle Host extension ↔ webview communication
  *
  * Manages message listeners for canvas updates, keyboard actions,
  * locale changes, and media additions from the extension host.
@@ -41,7 +41,7 @@ import { isEditorLevelKeyboardAction } from './keyboardActionPolicy';
 // Types
 // =============================================================================
 
-/** VSCode API handle (only available in webview context) */
+/** Host API handle (only available in webview context) */
 export type CanvasHostMessagePort = {
   postMessage: (message: unknown) => void;
   getState: () => unknown;
@@ -51,7 +51,7 @@ export type CanvasHostMessagePort = {
 } | null;
 
 export interface UseCanvasHostMessagesOptions {
-  vscode: CanvasHostMessagePort;
+  hostPort: CanvasHostMessagePort;
   defaultCanvasData: CanvasData;
   setCanvasData: (data: CanvasData) => void;
   /** Reveals the same-Webview Canvas playback workspace from host commands or Agent actions. */
@@ -196,7 +196,7 @@ export function useCanvasHostMessages(
   const historyStore = useHistoryStoreApi();
   const operationStore = useCanvasOperationStoreApi();
   const {
-    vscode,
+    hostPort,
     defaultCanvasData,
     setCanvasData,
     onRevealPlaybackWorkspace,
@@ -271,7 +271,7 @@ export function useCanvasHostMessages(
   isComposingRefRef.current = isComposingRef;
 
   useEffect(() => {
-    if (vscode) {
+    if (hostPort) {
       const setComposing = (composing: boolean): void => {
         if (isComposingRefRef.current) {
           isComposingRefRef.current.current = composing;
@@ -290,7 +290,7 @@ export function useCanvasHostMessages(
         }
         if (isProjectFileSnapshotRequestMessage(message)) {
           const document = canvasStore.getState().canvasData;
-          vscode.postMessage({
+          hostPort.postMessage({
             type: PROJECT_FILE_SNAPSHOT_RESPONSE,
             requestId: message.requestId,
             ok: Boolean(document),
@@ -306,7 +306,7 @@ export function useCanvasHostMessages(
           setCanvasData(canvasData);
           onCanvasDataLoadedRef.current?.(canvasData);
           setIsReady(true);
-          vscode.postMessage({ type: 'canvasDataReady' });
+          hostPort.postMessage({ type: 'canvasDataReady' });
         };
         switch (message.type) {
           case 'update': {
@@ -395,7 +395,7 @@ export function useCanvasHostMessages(
             if (requestId === undefined) break;
             const typeFilter = message.nodeType as string | undefined;
             if (typeFilter !== undefined && !isCanvasNodeType(typeFilter)) {
-              vscode.postMessage({
+              hostPort.postMessage({
                 type: '_response',
                 _requestId: requestId,
                 error: `Unsupported Canvas node type "${typeFilter}"`,
@@ -403,14 +403,14 @@ export function useCanvasHostMessages(
               break;
             }
             const nodes = getNodesRef.current?.(typeFilter) ?? [];
-            vscode.postMessage({ type: '_response', _requestId: requestId, nodes });
+            hostPort.postMessage({ type: '_response', _requestId: requestId, nodes });
             break;
           }
           case 'nodes.get': {
             const requestId = message._requestId as number | undefined;
             if (requestId === undefined) break;
             const node = getNodeRef.current?.(message.nodeId as string) ?? null;
-            vscode.postMessage({ type: '_response', _requestId: requestId, node });
+            hostPort.postMessage({ type: '_response', _requestId: requestId, node });
             break;
           }
           case 'nodes.update': {
@@ -422,7 +422,7 @@ export function useCanvasHostMessages(
                 (message.data as Record<string, unknown>) ?? {},
               );
             });
-            vscode.postMessage({ type: '_response', _requestId: requestId, success: true });
+            hostPort.postMessage({ type: '_response', _requestId: requestId, success: true });
             break;
           }
           case 'nodes.create': {
@@ -438,7 +438,7 @@ export function useCanvasHostMessages(
               | undefined) ?? { data: {} };
             const type = payload.type ?? 'markdown';
             if (!isCanvasNodeType(type)) {
-              vscode.postMessage({
+              hostPort.postMessage({
                 type: '_response',
                 _requestId: requestId,
                 error: `Unsupported Canvas node type "${String(type)}"`,
@@ -455,9 +455,9 @@ export function useCanvasHostMessages(
                     data: payload.data ?? {},
                   }) ?? '',
               );
-              vscode.postMessage({ type: '_response', _requestId: requestId, nodeId: id });
+              hostPort.postMessage({ type: '_response', _requestId: requestId, nodeId: id });
             } catch (error) {
-              vscode.postMessage({
+              hostPort.postMessage({
                 type: '_response',
                 _requestId: requestId,
                 error: error instanceof Error ? error.message : String(error),
@@ -479,9 +479,9 @@ export function useCanvasHostMessages(
               if (!isRecord(result)) {
                 throw new Error('Derive operation failed');
               }
-              vscode.postMessage({ type: '_response', _requestId: requestId, ...result });
+              hostPort.postMessage({ type: '_response', _requestId: requestId, ...result });
             } catch (error) {
-              vscode.postMessage({
+              hostPort.postMessage({
                 type: '_response',
                 _requestId: requestId,
                 error: error instanceof Error ? error.message : String(error),
@@ -504,9 +504,9 @@ export function useCanvasHostMessages(
               if (!isRecord(result)) {
                 throw new Error('Connection creation failed');
               }
-              vscode.postMessage({ type: '_response', _requestId: requestId, ...result });
+              hostPort.postMessage({ type: '_response', _requestId: requestId, ...result });
             } catch (error) {
-              vscode.postMessage({
+              hostPort.postMessage({
                 type: '_response',
                 _requestId: requestId,
                 error: error instanceof Error ? error.message : String(error),
@@ -528,9 +528,9 @@ export function useCanvasHostMessages(
               if (!isRecord(result)) {
                 throw new Error('Composite creation failed');
               }
-              vscode.postMessage({ type: '_response', _requestId: requestId, ...result });
+              hostPort.postMessage({ type: '_response', _requestId: requestId, ...result });
             } catch (error) {
-              vscode.postMessage({
+              hostPort.postMessage({
                 type: '_response',
                 _requestId: requestId,
                 error: error instanceof Error ? error.message : String(error),
@@ -561,9 +561,9 @@ export function useCanvasHostMessages(
               if (!isRecord(result)) {
                 throw new Error('Group reorder failed');
               }
-              vscode.postMessage({ type: '_response', _requestId: requestId, ...result });
+              hostPort.postMessage({ type: '_response', _requestId: requestId, ...result });
             } catch (error) {
-              vscode.postMessage({
+              hostPort.postMessage({
                 type: '_response',
                 _requestId: requestId,
                 error: error instanceof Error ? error.message : String(error),
@@ -583,9 +583,9 @@ export function useCanvasHostMessages(
               if (!isRecord(result)) {
                 throw new Error('Block update failed');
               }
-              vscode.postMessage({ type: '_response', _requestId: requestId, ...result });
+              hostPort.postMessage({ type: '_response', _requestId: requestId, ...result });
             } catch (error) {
-              vscode.postMessage({
+              hostPort.postMessage({
                 type: '_response',
                 _requestId: requestId,
                 error: error instanceof Error ? error.message : String(error),
@@ -606,9 +606,9 @@ export function useCanvasHostMessages(
               if (!isRecord(result)) {
                 throw new Error('Structured content extraction failed');
               }
-              vscode.postMessage({ type: '_response', _requestId: requestId, ...result });
+              hostPort.postMessage({ type: '_response', _requestId: requestId, ...result });
             } catch (error) {
-              vscode.postMessage({
+              hostPort.postMessage({
                 type: '_response',
                 _requestId: requestId,
                 error: error instanceof Error ? error.message : String(error),
@@ -626,9 +626,9 @@ export function useCanvasHostMessages(
               if (!isRecord(result)) {
                 throw new Error('Active context query failed');
               }
-              vscode.postMessage({ type: '_response', _requestId: requestId, ...result });
+              hostPort.postMessage({ type: '_response', _requestId: requestId, ...result });
             } catch (error) {
-              vscode.postMessage({
+              hostPort.postMessage({
                 type: '_response',
                 _requestId: requestId,
                 error: error instanceof Error ? error.message : String(error),
@@ -651,9 +651,9 @@ export function useCanvasHostMessages(
               if (!isRecord(result)) {
                 throw new Error('Agent content application failed');
               }
-              vscode.postMessage({ type: '_response', _requestId: requestId, ...result });
+              hostPort.postMessage({ type: '_response', _requestId: requestId, ...result });
             } catch (error) {
-              vscode.postMessage({
+              hostPort.postMessage({
                 type: '_response',
                 _requestId: requestId,
                 error: error instanceof Error ? error.message : String(error),
@@ -669,13 +669,13 @@ export function useCanvasHostMessages(
       window.addEventListener('compositionstart', handleCompositionStart);
       window.addEventListener('compositionend', handleCompositionEnd);
       const handleWindowMessage = (event: MessageEvent): void => handleMessage(event.data);
-      const unsubscribe = vscode.subscribe
-        ? vscode.subscribe(handleMessage)
+      const unsubscribe = hostPort.subscribe
+        ? hostPort.subscribe(handleMessage)
         : (() => {
             window.addEventListener('message', handleWindowMessage);
             return () => window.removeEventListener('message', handleWindowMessage);
           })();
-      vscode.postMessage({ type: 'ready' });
+      hostPort.postMessage({ type: 'ready' });
 
       return () => {
         unsubscribe();
@@ -687,7 +687,7 @@ export function useCanvasHostMessages(
       onCanvasDataLoadedRef.current?.(defaultCanvasData);
       setIsReady(true);
     }
-  }, [canvasStore, defaultCanvasData, historyStore, operationStore, setCanvasData, vscode]);
+  }, [canvasStore, defaultCanvasData, historyStore, operationStore, setCanvasData, hostPort]);
 
   return { isReady, loadDiagnostic, keyboardActionRef };
 }

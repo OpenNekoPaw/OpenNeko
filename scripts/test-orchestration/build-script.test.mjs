@@ -7,7 +7,7 @@ import test from 'node:test';
 
 const repositoryRoot = path.resolve(import.meta.dirname, '../..');
 
-test('development build accepts an empty dev-only package group and forwards separate Turbo filters', async () => {
+test('build script targets the workspace and optional Desktop package only', async () => {
   const temporaryDirectory = await mkdtemp(path.join(tmpdir(), 'neko-build-script-'));
   const capturePath = path.join(temporaryDirectory, 'pnpm-arguments.json');
   const fakePnpmPath = path.join(temporaryDirectory, 'pnpm');
@@ -23,7 +23,7 @@ test('development build accepts an empty dev-only package group and forwards sep
     );
     await chmod(fakePnpmPath, 0o755);
 
-    const result = spawnSync('bash', ['./build.sh', '--dev', '--skip-package'], {
+    const result = spawnSync('bash', ['./build.sh', '--package'], {
       cwd: repositoryRoot,
       encoding: 'utf8',
       env: {
@@ -39,18 +39,9 @@ test('development build accepts an empty dev-only package group and forwards sep
       `build.sh exited ${result.status}\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`,
     );
 
-    const packageGroups = JSON.parse(
-      await readFile(path.join(repositoryRoot, 'scripts/package-groups.json'), 'utf8'),
-    );
     const forwardedArguments = JSON.parse(await readFile(capturePath, 'utf8'));
 
-    assert.deepEqual(forwardedArguments, [
-      'exec',
-      'turbo',
-      'run',
-      'compile',
-      ...packageGroups.packages.buildRelease.map((packageName) => `--filter=${packageName}`),
-    ]);
+    assert.deepEqual(forwardedArguments, ['package:desktop']);
   } finally {
     await rm(temporaryDirectory, { recursive: true, force: true });
   }

@@ -1,185 +1,31 @@
 #!/usr/bin/env bash
 
-# OpenNeko Build Script
-# Uses Turborepo for caching + parallel builds
-set -e
+set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PACKAGE_DESKTOP=0
 
-echo "🔨 Building OpenNeko..."
-
-# =============================================================================
-# Extension classification
-# =============================================================================
-
-read_package_group() {
-  node "$SCRIPT_DIR/scripts/read-package-group.mjs" "$1"
-}
-
-read_package_group_into() {
-  local array_name="$1"
-  local group_path="$2"
-  local item
-  local group_output
-
-  eval "$array_name=()"
-  group_output="$(read_package_group "$group_path")"
-  while IFS= read -r item; do
-    [ -n "$item" ] && eval "$array_name+=(\"\$item\")"
-  done <<< "$group_output"
-
-  return 0
-}
-
-read_package_group_into RELEASE_PACKAGES packages.buildRelease
-read_package_group_into DEV_ONLY_PACKAGES packages.devOnly
-
-detect_host_target() {
-  case "$(uname -s)-$(uname -m)" in
-    Darwin-arm64) echo "darwin-arm64" ;;
-    Linux-x86_64|Linux-amd64) echo "linux-x64" ;;
-    *) return 1 ;;
-  esac
-}
-
-# =============================================================================
-# Parse arguments
-# =============================================================================
-
-BUILD_ALL=0
-BUILD_DEV=0
-BUILD_PACKAGE=""
-SKIP_PACKAGE=0
-TARGET_PLATFORM=""
 while [[ $# -gt 0 ]]; do
   case $1 in
-    --all) BUILD_ALL=1; shift ;;
-    --dev) BUILD_DEV=1; shift ;;
-    --package) BUILD_PACKAGE="$2"; shift 2 ;;
-    --skip-package) SKIP_PACKAGE=1; shift ;;
-    --target) TARGET_PLATFORM="$2"; shift 2 ;;
+    --package)
+      PACKAGE_DESKTOP=1
+      shift
+      ;;
     --help|-h)
-      echo "Usage: ./build.sh [options]"
-      echo ""
-      echo "Options:"
-      echo "  --all              Build the complete OpenNeko application (${#RELEASE_PACKAGES[@]} embedded features)"
-      echo "  --dev              Build ALL extensions including dev-only (+ ${#DEV_ONLY_PACKAGES[@]} packages)"
-      echo "  --package <name>   Build specific package (e.g., neko-cut)"
-      echo "  --target <platform> Platform target for the OpenNeko VSIX (darwin-arm64|linux-x64)"
-      echo "  --skip-package     Compile only, skip VSIX packaging"
-      echo "  (no options)       Build neko-cut only (default)"
-      echo ""
-      echo "Release packages: ${RELEASE_PACKAGES[*]}"
-      echo "Dev-only packages: ${DEV_ONLY_PACKAGES[*]}"
+      echo "Usage: ./build.sh [--package]"
+      echo "  --package  Build the Electron application package after the workspace build"
       exit 0
       ;;
-    *) echo "Unknown option: $1"; exit 1 ;;
+    *)
+      echo "Unknown option: $1" >&2
+      exit 2
+      ;;
   esac
 done
 
-# =============================================================================
-# Helper functions
-# =============================================================================
+cd "$SCRIPT_DIR"
+pnpm build
 
-# Package single extension to VSIX
-package_extension() {
-  local pkg=$1
-  local pkg_dir="packages/$pkg"
-  if [ ! -d "$pkg_dir" ]; then
-    echo "  ⚠️  $pkg_dir not found, skipping"
-    return 0
-  fi
-
-  echo "  📦 $pkg"
-  (cd "$pkg_dir" && npx @vscode/vsce package --allow-missing-repository --no-dependencies 2>/dev/null)
-  cp -f "$pkg_dir"/*.vsix . 2>/dev/null || true
-}
-
-# Package a list of extensions
-package_list() {
-  echo ""
-  echo "📦 Packaging VSIX..."
-  for pkg in "$@"; do
-    package_extension "$pkg"
-  done
-}
-
-package_openneko() {
-  local target="$TARGET_PLATFORM"
-  if [ -z "$target" ] && ! target="$(detect_host_target)"; then
-    echo "Unsupported host: $(uname -s)-$(uname -m). Pass --target for a supported build host." >&2
-    return 1
-  fi
-  case "$target" in
-    darwin-arm64|linux-x64) ;;
-    *)
-      echo "Unsupported OpenNeko target: $target" >&2
-      return 1
-      ;;
-  esac
-
-  echo ""
-  echo "📦 Packaging OpenNeko ($target)..."
-  node "$SCRIPT_DIR/scripts/package-openneko-platform.mjs" --target "$target"
-}
-
-# =============================================================================
-# Main
-# =============================================================================
-
-main() {
-  local filters=()
-  local packages=()
-  local package_name
-
-  cd "$SCRIPT_DIR"
-
-  if [ -n "$BUILD_PACKAGE" ]; then
-    # Single package
-    filters=("--filter=${BUILD_PACKAGE}...")
-    packages=("$BUILD_PACKAGE")
-  elif [ "$BUILD_DEV" = "1" ]; then
-    # All packages (release + dev-only)
-    packages=("${RELEASE_PACKAGES[@]}" "${DEV_ONLY_PACKAGES[@]}")
-  elif [ "$BUILD_ALL" = "1" ]; then
-    # Release-ready only
-    packages=("${RELEASE_PACKAGES[@]}")
-  else
-    # Default: neko-cut + dependencies
-    filters=("--filter=neko-cut...")
-    packages=("neko-cut")
-  fi
-
-  if [ "${#filters[@]}" = "0" ]; then
-    for package_name in "${packages[@]}"; do
-      filters+=("--filter=${package_name}")
-    done
-  fi
-
-  # Turbo handles: dependency resolution, parallel execution, caching
-  echo "⚡ Running turbo compile (cached + parallel)..."
-  pnpm exec turbo run compile "${filters[@]}"
-
-  # Package VSIX (not cacheable — depends on dist/ content)
-  if [ "$SKIP_PACKAGE" = "0" ]; then
-    if [ "$BUILD_ALL" = "1" ] || [ "$BUILD_DEV" = "1" ]; then
-      package_openneko
-    else
-      package_list "${packages[@]}"
-    fi
-  fi
-
-  echo ""
-  echo "✅ Build complete!"
-  if [ "$BUILD_DEV" = "1" ] && [ "${#DEV_ONLY_PACKAGES[@]}" -gt "0" ]; then
-    echo "⚠️  Dev build: includes ${DEV_ONLY_PACKAGES[*]} (not release-ready)"
-  fi
-  echo ""
-  if [ "$BUILD_ALL" = "1" ] || [ "$BUILD_DEV" = "1" ]; then
-    ls -la vsix-artifacts/OpenNeko-*.vsix 2>/dev/null || echo "No OpenNeko VSIX generated."
-  else
-    ls -la neko-*.vsix 2>/dev/null || echo "No VSIX files generated."
-  fi
-}
-
-main
+if [ "$PACKAGE_DESKTOP" -eq 1 ]; then
+  pnpm package:desktop
+fi

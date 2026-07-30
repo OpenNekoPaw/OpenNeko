@@ -223,10 +223,10 @@ describe('Canvas creative workbench layout boundary', () => {
     expect(appSource).toMatch(/revealPlaybackWorkspace\(\{ focusOwner: 'route' \}\)/);
     expect(appSource).not.toMatch(/panes:/);
     expect(appSource).toMatch(
-      /const canOpenHostPlayback = vscode\.supportsMessage\('media:probe'\)/,
+      /const canOpenHostPlayback = hostPort\.supportsMessage\('media:probe'\)/,
     );
     expect(playbackWorkspaceSource).toMatch(
-      /if \(!vscode \|\| !\(vscode\.supportsMessage\?\.\('playback:getPreviewPlan'\) \?\? true\)\)/,
+      /if \(!hostPort \|\| !\(hostPort\.supportsMessage\?\.\('playback:getPreviewPlan'\) \?\? true\)\)/,
     );
   });
 

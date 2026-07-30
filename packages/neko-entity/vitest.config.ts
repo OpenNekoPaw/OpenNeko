@@ -12,7 +12,6 @@ export default defineConfig({
   resolve: {
     alias: {
       '@neko/shared': path.resolve(__dirname, '../neko-types/src'),
-      'vscode': path.resolve(__dirname, 'src/testing/vscode.ts'),
     },
   },
 });

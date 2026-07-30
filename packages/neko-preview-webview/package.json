@@ -9,7 +9,8 @@
     "./root": "./src/root/index.tsx"
   },
   "scripts": {
-    "build": "tsc --noEmit"
+    "build": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "@neko/media": "workspace:*",
@@ -35,7 +36,8 @@
     "postcss": "^8.4.32",
     "tailwindcss": "^3.3.6",
     "typescript": "^5.3.2",
-    "vite": "^6.4.2"
+    "vite": "^6.4.2",
+    "vitest": "^4.1.2"
   },
   "license": "AGPL-3.0-or-later"
 }

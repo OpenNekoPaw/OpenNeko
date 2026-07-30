@@ -327,7 +327,7 @@ function AggregateConnectionBadge({
         textAnchor="middle"
         fill="var(--toolbar-fg)"
         fontSize={9}
-        fontFamily="var(--vscode-font-family)"
+        fontFamily="var(--hostPort-font-family)"
       >
         {count}
       </text>
@@ -364,7 +364,7 @@ function InternalConnectionBadge({ node, count }: { node: CanvasNode; count: num
         textAnchor="middle"
         fill="var(--toolbar-fg)"
         fontSize={9}
-        fontFamily="var(--vscode-font-family)"
+        fontFamily="var(--hostPort-font-family)"
       >
         {count}
       </text>

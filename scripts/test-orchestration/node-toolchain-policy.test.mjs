@@ -45,13 +45,11 @@ test('Node toolchain pin is shared by every GitHub Actions workflow', async () =
 });
 
 test('Exact development pin does not raise the Node 24 runtime contract', async () => {
-  const [rootPackage, tuiPackage, tuiBuild] = await Promise.all([
+  const [rootPackage, desktopPackage] = await Promise.all([
     readFile(path.join(repositoryRoot, 'package.json'), 'utf8').then(JSON.parse),
-    readFile(path.join(repositoryRoot, 'apps/neko-tui/package.json'), 'utf8').then(JSON.parse),
-    readFile(path.join(repositoryRoot, 'apps/neko-tui/tsup.config.ts'), 'utf8'),
+    readFile(path.join(repositoryRoot, 'apps/neko-desktop/package.json'), 'utf8').then(JSON.parse),
   ]);
 
   assert.equal(rootPackage.engines?.node, '>=24.0.0');
-  assert.equal(tuiPackage.engines?.node, '>=24.0.0');
-  assert.match(tuiBuild, /target: 'node24'/u);
+  assert.equal(desktopPackage.engines?.node, '>=24.0.0');
 });

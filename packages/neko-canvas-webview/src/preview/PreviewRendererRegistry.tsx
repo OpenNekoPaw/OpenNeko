@@ -99,8 +99,8 @@ function useCaptureFrame(
 
   useEffect(() => {
     if (!assetPath || requestedRef.current) return;
-    const vscode = host;
-    if (!vscode) return;
+    const hostPort = host;
+    if (!hostPort) return;
 
     requestedRef.current = true;
 
@@ -114,8 +114,8 @@ function useCaptureFrame(
       }
     };
 
-    const unsubscribe = vscode.subscribe(handleMessage);
-    vscode.postMessage({
+    const unsubscribe = hostPort.subscribe(handleMessage);
+    hostPort.postMessage({
       type: 'media:captureFrame',
       nodeId,
       assetPath,
@@ -232,10 +232,10 @@ function useMediaStream(
 
   const postPlaybackRequest = useCallback(
     (mediaInfo: Record<string, unknown>, startTime: number) => {
-      const vscode = host;
-      if (!vscode) return;
+      const hostPort = host;
+      if (!hostPort) return;
       playbackRequestSentRef.current = true;
-      vscode.postMessage({
+      hostPort.postMessage({
         type: 'media:play',
         nodeId: surfaceId,
         ...(assetPath ? { assetPath } : {}),
@@ -250,9 +250,9 @@ function useMediaStream(
   );
 
   useEffect(() => {
-    const vscode = host;
+    const hostPort = host;
     const sourceKey = createMediaPlaybackSourceKey(assetPath, resourceRef);
-    if (!vscode || !sourceKey) {
+    if (!hostPort || !sourceKey) {
       setProbing(false);
       return;
     }
@@ -266,7 +266,7 @@ function useMediaStream(
       if (probeRequested) return;
       probeRequested = true;
       setProbing(true);
-      vscode.postMessage({
+      hostPort.postMessage({
         type: 'media:probe',
         nodeId: surfaceId,
         ...(assetPath ? { assetPath } : {}),
@@ -360,7 +360,7 @@ function useMediaStream(
       }
     };
 
-    const unsubscribe = vscode.subscribe(handleMessage);
+    const unsubscribe = hostPort.subscribe(handleMessage);
     requestProbe();
 
     return () => {
@@ -383,9 +383,9 @@ function useMediaStream(
 
   const startPlayback = useCallback(
     (resumeFromTime?: number) => {
-      const vscode = host;
+      const hostPort = host;
       const sourceKey = createMediaPlaybackSourceKey(assetPath, resourceRef);
-      if (!vscode || !sourceKey) return;
+      if (!hostPort || !sourceKey) return;
 
       const playbackStore = playbackStoreApi.getState();
       if (persistence === 'surface') {
@@ -441,10 +441,10 @@ function useMediaStream(
 
   const pausePlayback = useCallback(
     (currentTime: number) => {
-      const vscode = host;
+      const hostPort = host;
       const sourceKey = createMediaPlaybackSourceKey(assetPath, resourceRef);
-      if (!vscode || !sourceKey) return;
-      vscode.postMessage({ type: 'media:pause', nodeId: surfaceId });
+      if (!hostPort || !sourceKey) return;
+      hostPort.postMessage({ type: 'media:pause', nodeId: surfaceId });
       isPausedRef.current = true;
       lastProgressSyncRef.current = {
         currentTime,
@@ -467,10 +467,10 @@ function useMediaStream(
   );
 
   const resumePlayback = useCallback(() => {
-    const vscode = host;
+    const hostPort = host;
     const sourceKey = createMediaPlaybackSourceKey(assetPath, resourceRef);
-    if (!vscode || !sourceKey) return;
-    vscode.postMessage({ type: 'media:resume', nodeId: surfaceId });
+    if (!hostPort || !sourceKey) return;
+    hostPort.postMessage({ type: 'media:resume', nodeId: surfaceId });
     isPausedRef.current = false;
     if (persistence === 'surface') {
       playbackStoreApi.getState().updateActivePlayback(sourceKey, surfaceId, { isPlaying: true });
@@ -479,10 +479,10 @@ function useMediaStream(
 
   const seekPlayback = useCallback(
     (time: number) => {
-      const vscode = host;
+      const hostPort = host;
       const sourceKey = createMediaPlaybackSourceKey(assetPath, resourceRef);
-      if (!vscode || !sourceKey) return;
-      vscode.postMessage({ type: 'media:seek', nodeId: surfaceId, time });
+      if (!hostPort || !sourceKey) return;
+      hostPort.postMessage({ type: 'media:seek', nodeId: surfaceId, time });
       lastProgressSyncRef.current = {
         currentTime: time,
         updatedAtMs: getMonotonicTimeMs(),
@@ -528,9 +528,9 @@ function useMediaStream(
       pendingPlaybackStartRef.current = null;
       playbackRequestSentRef.current = false;
       stoppedPlaybackRef.current = true;
-      const vscode = host;
-      if (playbackRequestSent && vscode && createMediaPlaybackSourceKey(assetPath, resourceRef)) {
-        vscode.postMessage({ type: 'media:stop', nodeId: surfaceId });
+      const hostPort = host;
+      if (playbackRequestSent && hostPort && createMediaPlaybackSourceKey(assetPath, resourceRef)) {
+        hostPort.postMessage({ type: 'media:stop', nodeId: surfaceId });
       }
       const sourceKey = createMediaPlaybackSourceKey(assetPath, resourceRef);
       if (playbackRequestSent && sourceKey && persistence === 'surface') {

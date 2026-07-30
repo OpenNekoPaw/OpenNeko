@@ -4,7 +4,7 @@ export default defineConfig({
   build: {
     sourcemap: true,
     rollupOptions: {
-      external: ['electron'],
+      external: ['electron', 'sharp'],
       output: {
         entryFileNames: 'main.cjs',
       },

@@ -9,7 +9,6 @@ const SHARED_GATE_JOBS = Object.freeze([
   'test-ts',
   'code-quality',
   'openspec-check',
-  'package-openneko-vsix',
 ]);
 
 describe('development/main quality gate orchestration', () => {
@@ -19,7 +18,7 @@ describe('development/main quality gate orchestration', () => {
 
     assert.equal(
       scripts['gate:local'],
-      'pnpm check:build && pnpm test && pnpm check:repository-quality && pnpm test:local:vscode',
+      'pnpm check:build && pnpm test && pnpm check:repository-quality',
     );
     assert.equal(scripts['gate:remote'], 'pnpm check:ci');
     assert.equal(scripts['ci:local'], 'pnpm gate:local');
@@ -66,14 +65,14 @@ describe('development/main quality gate orchestration', () => {
     assert.match(mergeCommand, /promotion-source dependency-review/u);
   });
 
-  it('does not path-skip deterministic validation or supported-platform packaging', async () => {
+  it('does not path-skip deterministic validation', async () => {
     const workflow = parse(await readFile('.github/workflows/ci.yml', 'utf8'));
 
     assert.equal(workflow.jobs?.changes, undefined);
     for (const jobName of ['test-rust', 'cargo-deny', 'openspec-check']) {
       assert.equal(workflow.jobs?.[jobName]?.if, undefined, `${jobName} must always run`);
     }
-    assert.equal(workflow.jobs?.['package-openneko-vsix']?.if, undefined);
+    assert.equal(workflow.jobs?.['package-openneko-vsix'], undefined);
     assert.equal(workflow.jobs?.['package-ts-vsix'], undefined);
     assert.equal(workflow.jobs?.['package-engine-vsix'], undefined);
   });

@@ -3,6 +3,10 @@
   "private": true,
   "version": "0.0.1",
   "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
   "dependencies": {
     "@neko-agent/types": "workspace:*",
     "@neko/ai-sdk": "workspace:*",
@@ -11,7 +15,8 @@
     "ai": "^6.0.134"
   },
   "devDependencies": {
-    "@neko/agent": "workspace:*"
+    "@neko/agent": "workspace:*",
+    "vitest": "^4.1.2"
   },
   "exports": {
     ".": "./src/index.ts",

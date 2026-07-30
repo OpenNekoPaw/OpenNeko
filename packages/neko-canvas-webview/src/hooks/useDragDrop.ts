@@ -1,7 +1,7 @@
 /**
  * useDragDrop - Drag & drop handling for canvas
  *
- * Handles drag-and-drop of files from the VSCode explorer, native
+ * Handles drag-and-drop of files from the Host explorer, native
  * file system, and Media Library into the canvas.
  */
 
@@ -34,7 +34,7 @@ import type { CanvasHostMessagePort } from './useCanvasHostMessages';
 export type CanvasProjectSourceAddClient = ProjectSourceAddClient;
 
 export interface UseDragDropOptions {
-  vscode: CanvasHostMessagePort;
+  hostPort: CanvasHostMessagePort;
   screenToCanvas: (screenX: number, screenY: number) => { x: number; y: number };
   addMediaAt: (
     pos: { x: number; y: number },
@@ -68,7 +68,7 @@ export interface UseDragDropReturn {
 // =============================================================================
 
 export function useDragDrop(options: UseDragDropOptions): UseDragDropReturn {
-  const { vscode, screenToCanvas, addMediaAt, onError } = options;
+  const { hostPort, screenToCanvas, addMediaAt, onError } = options;
 
   const dropPositionRef = useRef<{ x: number; y: number } | null>(null);
 
@@ -101,7 +101,7 @@ export function useDragDrop(options: UseDragDropOptions): UseDragDropReturn {
       } else if (result.type === 'json' && isMediaLibraryDragData(result.data)) {
         const items = result.data.files.map((file) => ({ files: [file] }));
         const addSourceClient =
-          options.addSourceClient ?? createCanvasProjectSourceAddClient(vscode);
+          options.addSourceClient ?? createCanvasProjectSourceAddClient(hostPort);
         const pos = dropPositionRef.current ?? { x: 0, y: 0 };
         for (let i = 0; i < items.length; i++) {
           const item = items[i];
@@ -129,7 +129,7 @@ export function useDragDrop(options: UseDragDropOptions): UseDragDropReturn {
         }
       } else if (result.type === 'uri-list' && result.uris) {
         const addSourceClient =
-          options.addSourceClient ?? createCanvasProjectSourceAddClient(vscode);
+          options.addSourceClient ?? createCanvasProjectSourceAddClient(hostPort);
         const pos = dropPositionRef.current ?? { x: 0, y: 0 };
         for (let i = 0; i < result.uris.length; i++) {
           const sourceUri = result.uris[i];
@@ -153,7 +153,7 @@ export function useDragDrop(options: UseDragDropOptions): UseDragDropReturn {
         }
       } else if (result.type === 'native-file' && result.files) {
         const addSourceClient =
-          options.addSourceClient ?? createCanvasProjectSourceAddClient(vscode);
+          options.addSourceClient ?? createCanvasProjectSourceAddClient(hostPort);
         const pos = dropPositionRef.current;
         for (let i = 0; i < result.files.length; i++) {
           const file = result.files[i];
@@ -183,7 +183,7 @@ export function useDragDrop(options: UseDragDropOptions): UseDragDropReturn {
       }
     },
     [
-      vscode,
+      hostPort,
       screenToCanvas,
       addMediaAt,
       options.addSourceClient,
@@ -198,7 +198,7 @@ export function useDragDrop(options: UseDragDropOptions): UseDragDropReturn {
   });
 
   // Wrap the drop handler to also check for cross-extension DnD payload (ADR-5 P1).
-  // When a drag originates from another VSCode webview iframe, the dataTransfer is
+  // When a drag originates from another Host webview iframe, the dataTransfer is
   // empty — so we always notify the extension host to check for a pending DnD payload.
   const handleDropWithCrossExtension = useCallback(
     (e: React.DragEvent) => {
@@ -207,11 +207,11 @@ export function useDragDrop(options: UseDragDropOptions): UseDragDropReturn {
       dropProps.onDrop(e);
 
       // Also ask the extension host if there is a cross-extension DnD payload
-      if (vscode && !hasExternalDropPayload && (vscode.supportsMessage?.('dnd:drop') ?? true)) {
-        vscode.postMessage({ type: 'dnd:drop' });
+      if (hostPort && !hasExternalDropPayload && (hostPort.supportsMessage?.('dnd:drop') ?? true)) {
+        hostPort.postMessage({ type: 'dnd:drop' });
       }
     },
-    [dropProps, vscode],
+    [dropProps, hostPort],
   );
 
   return {
@@ -545,9 +545,9 @@ function isCanvasAddSourceAssetKind(value: unknown): value is 'media' | 'text' |
 }
 
 export function createCanvasProjectSourceAddClient(
-  vscode: CanvasHostMessagePort,
+  hostPort: CanvasHostMessagePort,
 ): ProjectSourceAddClient {
-  if (!vscode) {
+  if (!hostPort) {
     return {
       async addSource(input) {
         return {
@@ -568,7 +568,7 @@ export function createCanvasProjectSourceAddClient(
 
   return createProjectSourceAddClient({
     postMessage: (message) => {
-      vscode.postMessage(message);
+      hostPort.postMessage(message);
     },
     addMessageListener: (listener) => {
       const handleMessage = (event: MessageEvent) => listener(event.data);

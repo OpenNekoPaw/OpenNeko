@@ -49,7 +49,7 @@ describe('fetchForEpub', () => {
     const archive = readFileSync(
       resolve(
         import.meta.dirname,
-        '../../../../../../scripts/agent-eval/shared-fixtures/document-image-workspace/synthetic-document.epub',
+        '../../../../scripts/agent-eval/shared-fixtures/document-image-workspace/synthetic-document.epub',
       ),
     );
     vi.stubGlobal(

@@ -99,7 +99,7 @@ describe('useCanvasHostMessages keyboard action guards', () => {
   });
 
   it('acknowledges canvas data readiness after applying an update message', () => {
-    const vscode = createVSCodeApi();
+    const hostPort = createVSCodeApi();
     const setCanvasData = vi.fn();
 
     act(() => {
@@ -108,7 +108,7 @@ describe('useCanvasHostMessages keyboard action guards', () => {
           action={action}
           isComposingRef={isComposingRef}
           options={{
-            vscode,
+            hostPort,
             setCanvasData,
           }}
         />,
@@ -120,7 +120,7 @@ describe('useCanvasHostMessages keyboard action guards', () => {
     });
 
     expect(setCanvasData).toHaveBeenCalledWith(DEFAULT_CANVAS_DATA);
-    expect(vscode.postMessage).toHaveBeenCalledWith({ type: 'canvasDataReady' });
+    expect(hostPort.postMessage).toHaveBeenCalledWith({ type: 'canvasDataReady' });
   });
 
   it('records an authoritative Host document replacement in Canvas undo history', () => {
@@ -169,7 +169,7 @@ describe('useCanvasHostMessages keyboard action guards', () => {
   });
 
   it('keeps the current Canvas when an update message has no valid document payload', () => {
-    const vscode = createVSCodeApi();
+    const hostPort = createVSCodeApi();
     const setCanvasData = vi.fn();
 
     act(() => {
@@ -178,7 +178,7 @@ describe('useCanvasHostMessages keyboard action guards', () => {
           action={action}
           isComposingRef={isComposingRef}
           options={{
-            vscode,
+            hostPort,
             setCanvasData,
           }}
         />,
@@ -193,18 +193,18 @@ describe('useCanvasHostMessages keyboard action guards', () => {
     expect(document.querySelector('[data-testid="load-diagnostic"]')?.textContent).toBe(
       'canvas.project.invalid-update:Canvas update message does not contain a valid document.',
     );
-    expect(vscode.postMessage).not.toHaveBeenCalledWith({ type: 'canvasDataReady' });
+    expect(hostPort.postMessage).not.toHaveBeenCalledWith({ type: 'canvasDataReady' });
   });
 
   it('projects a typed load diagnostic without acknowledging canvas readiness', () => {
-    const vscode = createVSCodeApi();
+    const hostPort = createVSCodeApi();
 
     act(() => {
       root.render(
         <VSCodeMessageHarness
           action={action}
           isComposingRef={isComposingRef}
-          options={{ vscode }}
+          options={{ hostPort }}
         />,
       );
     });
@@ -222,11 +222,11 @@ describe('useCanvasHostMessages keyboard action guards', () => {
     expect(document.querySelector('[data-testid="load-diagnostic"]')?.textContent).toBe(
       'canvas.project.invalid-json:Canvas project contains invalid JSON.',
     );
-    expect(vscode.postMessage).not.toHaveBeenCalledWith({ type: 'canvasDataReady' });
+    expect(hostPort.postMessage).not.toHaveBeenCalledWith({ type: 'canvasDataReady' });
   });
 
   it('applies host-authored Canvas document updates from headless authoring', () => {
-    const vscode = createVSCodeApi();
+    const hostPort = createVSCodeApi();
     const setCanvasData = vi.fn();
     const hostAppliedData: CanvasData = {
       ...DEFAULT_CANVAS_DATA,
@@ -239,7 +239,7 @@ describe('useCanvasHostMessages keyboard action guards', () => {
           action={action}
           isComposingRef={isComposingRef}
           options={{
-            vscode,
+            hostPort,
             setCanvasData,
           }}
         />,
@@ -256,7 +256,7 @@ describe('useCanvasHostMessages keyboard action guards', () => {
     });
 
     expect(setCanvasData).toHaveBeenCalledWith(hostAppliedData);
-    expect(vscode.postMessage).toHaveBeenCalledWith({ type: 'canvasDataReady' });
+    expect(hostPort.postMessage).toHaveBeenCalledWith({ type: 'canvasDataReady' });
   });
 
   it('notifies the app when the extension confirms a custom document save', () => {
@@ -307,7 +307,7 @@ describe('useCanvasHostMessages keyboard action guards', () => {
   });
 
   it('creates canvas connections from host node operation requests', () => {
-    const vscode = createVSCodeApi();
+    const hostPort = createVSCodeApi();
     const createConnection = vi.fn(() => ({
       connectionId: 'connection-1',
     }));
@@ -318,7 +318,7 @@ describe('useCanvasHostMessages keyboard action guards', () => {
           action={action}
           isComposingRef={isComposingRef}
           options={{
-            vscode,
+            hostPort,
             createConnection,
           }}
         />,
@@ -342,7 +342,7 @@ describe('useCanvasHostMessages keyboard action guards', () => {
       targetId: 'scene-2',
       type: 'sequence',
     });
-    expect(vscode.postMessage).toHaveBeenCalledWith({
+    expect(hostPort.postMessage).toHaveBeenCalledWith({
       type: '_response',
       _requestId: 7,
       connectionId: 'connection-1',
@@ -378,7 +378,7 @@ function createOptions(
   options: Partial<UseCanvasHostMessagesOptions> = {},
 ): UseCanvasHostMessagesOptions {
   return {
-    vscode: createVSCodeApi(),
+    hostPort: createVSCodeApi(),
     defaultCanvasData: DEFAULT_CANVAS_DATA,
     setCanvasData: vi.fn(),
     isComposingRef,

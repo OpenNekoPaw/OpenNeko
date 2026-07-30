@@ -12,7 +12,6 @@ const config: KnipConfig = {
   ],
   ignoreDependencies: [
     '@fission-ai/openspec', // Used by the `openspec` CLI invoked in development workflow.
-    '@types/vscode', // Provided by VSCode runtime
     'esbuild', // Used as CLI bundler, not imported
     '@img/sharp-wasm32', // Sharp WASM fallback
     'clsx',
@@ -23,7 +22,6 @@ const config: KnipConfig = {
     'packages/neko-cut-webview/src/types/**/*.ts': ['exports'],
     'packages/neko-cut-webview/src/constants.ts': ['exports'],
     'packages/neko-cut-webview/src/utils/index.ts': ['exports'],
-    'packages/neko-cut-webview/src/utils/vscodeApi.ts': ['exports'],
     'packages/neko-cut-webview/src/utils/speed.ts': ['exports'],
     'packages/neko-cut-webview/src/utils/waveform.ts': ['exports'],
     'packages/neko-cut-webview/src/utils/pyramidThumbnail.ts': ['exports'],
@@ -32,11 +30,8 @@ const config: KnipConfig = {
     'packages/neko-cut-webview/src/utils/logger.ts': ['exports'],
     'packages/neko-preview-webview/src/utils/logger.ts': ['exports'],
     'packages/neko-tools-webview/src/utils/logger.ts': ['exports'],
-    // Vitest aliases this file as the complete `vscode` module, so property reads are dynamic.
-    'packages/neko-entity/src/testing/vscode.ts': ['exports'],
     // Shared contract files consumed as package-level type surfaces
     'packages/neko-canvas-webview/src/types/extendedCanvas.ts': ['exports'],
-    'packages/neko-preview/packages/extension/src/types/document-messages.ts': ['exports'],
     'packages/neko-preview-webview/src/shared/document-types.ts': ['exports'],
   },
 
@@ -46,28 +41,20 @@ const config: KnipConfig = {
         'scripts/agent-eval/ablation/run.mjs',
         'scripts/agent-eval/canvas-json-check.mjs',
         'scripts/agent-eval/fixtures/generate-synthetic-document-image-epub.mjs',
-        'scripts/agent-eval/protocol-smoke.mjs',
         'scripts/agent-eval/validators/file-validator-cli.mjs',
-        'scripts/assert-openneko-release-artifacts.mjs',
         'scripts/check-application-boundaries.mjs',
         'scripts/check-canvas-playback-boundary.mjs',
         'scripts/check-content-access-boundaries.mjs',
+        'scripts/check-desktop-only-topology.mjs',
+        'scripts/check-engine-retirement-boundary.mjs',
         'scripts/check-*-debt-surfaces.mjs',
+        'scripts/check-local-metadata-runtime-matrix.mjs',
         'scripts/check-neko-agent-boundaries.mjs',
         'scripts/check-openspec.mjs',
-        'scripts/check-release-channels.mjs',
         'scripts/check-strict-tsconfig.mjs',
         'scripts/check-webview-boundaries.mjs',
-        'scripts/compile-ts-vsix.mjs',
-        'scripts/project-release-version.mjs',
-        'scripts/prepare-vscode-media-fixture.mjs',
         'scripts/prepare-media-runtime-bundle.mjs',
-        'scripts/smoke-vscode-targets.mjs',
         'scripts/smoke-webview-builds.mjs',
-        'scripts/stage-openneko-dev-extension.mjs',
-        'scripts/test-orchestration/fixtures/*.ts',
-        'scripts/test-orchestration/vscode-debug-config.local.mjs',
-        'scripts/test-orchestration/vscode-media-fixture-paths.local.mjs',
         'scripts/validate-node-media-matrix.mts',
         'scripts/validate-node-media-waveform.mts',
       ],
@@ -95,8 +82,6 @@ const config: KnipConfig = {
         'src/project-file-io/index.ts',
         'src/theme/index.ts',
         'src/types/storage.ts',
-        'src/vscode/index.ts',
-        'src/vscode/extension/index.ts',
       ],
       ignoreDependencies: ['react', 'react-dom', 'tailwindcss'], // Optional peer dependencies
     },
@@ -105,13 +90,7 @@ const config: KnipConfig = {
     },
     'packages/neko-media': {},
     'packages/neko-chara': {
-      entry: [
-        'src/index.ts',
-        'src/application/index.ts',
-        'src/core/index.ts',
-        'src/host-vscode/index.ts',
-        'src/testing/index.ts',
-      ],
+      entry: ['src/index.ts', 'src/application/index.ts', 'src/core/index.ts', 'src/testing/index.ts'],
     },
     'packages/neko-generation': {},
     'packages/neko-quality': {},
@@ -119,7 +98,6 @@ const config: KnipConfig = {
       entry: [
         'src/index.ts',
         'src/core/index.ts',
-        'src/host-vscode/index.ts',
         'src/providers/index.ts',
         'src/projections/index.ts',
         'src/search/index.ts',
@@ -130,7 +108,6 @@ const config: KnipConfig = {
       entry: [
         'src/index.ts',
         'src/core/index.ts',
-        'src/host-vscode/index.ts',
         'src/providers/index.ts',
         'src/testing/index.ts',
       ],
@@ -155,23 +132,10 @@ const config: KnipConfig = {
       ],
     },
 
-    // ── Extension parent packages ─────────────────────
-    // These are VSCode manifest wrappers; entry from sub-packages.
-    'packages/neko-cut': {},
-    'packages/neko-agent': {
-      entry: ['scripts/copy-builtin-skills.mjs'],
-    },
-    'packages/neko-canvas': {},
-    'packages/neko-tools': {},
-    'packages/neko-preview': {},
     'packages/neko-assets': {},
-
-    // ── Extension sub-packages ────────────────────────
-    'packages/neko-cut/packages/extension': {},
     'packages/neko-cut-webview': {
       entry: ['src/host-adapter/index.tsx', 'src/retained.ts'],
     },
-    'packages/neko-agent/packages/extension': {},
     'apps/neko-desktop': {
       entry: [
         'forge.config.ts',
@@ -182,11 +146,6 @@ const config: KnipConfig = {
         'src/preload/index.ts',
       ],
       ignore: ['src/renderer/styles.css'],
-    },
-    'apps/neko-tui': {
-      // Knip's Bun plugin treats `bun test <file>` as a directory project root.
-      // The dedicated Bun adapter suite is exercised by the application/CI script.
-      bun: false,
     },
     'packages/neko-agent-webview': {
       ignore: [
@@ -210,7 +169,6 @@ const config: KnipConfig = {
       ],
     },
     'packages/neko-agent-test-utils': {},
-    'packages/neko-canvas/packages/extension': {},
     'packages/neko-canvas-webview': {
       entry: [
         'src/host-adapter/index.tsx',
@@ -228,9 +186,6 @@ const config: KnipConfig = {
     },
     'packages/neko-tools-contracts': {
       entry: ['src/index.ts'],
-    },
-    'packages/neko-tools/packages/extension': {
-      entry: ['src/bootstrap/index.ts', 'src/media-diff/index.ts'],
     },
     'packages/neko-tools-webview': {
       entry: ['src/mediaDiff.tsx'],
@@ -252,14 +207,6 @@ const config: KnipConfig = {
         'src/model/main.tsx',
         'src/host-adapter/index.tsx',
       ],
-    },
-    'packages/neko-preview/packages/extension': {},
-
-    // ── Skills (CLI scripts, not imported) ───────────────
-    // Skills are excluded from analysis - they are runtime scripts, not imported modules
-    // ── Skip packages ─────────────────────────────────
-    'apps/neko-vscode': {
-      entry: ['package.json', 'scripts/run-tests.mjs', 'scripts/validate-manifest.mjs'],
     },
   },
 };

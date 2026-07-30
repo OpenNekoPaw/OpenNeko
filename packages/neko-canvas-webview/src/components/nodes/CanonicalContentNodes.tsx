@@ -221,7 +221,7 @@ export function JobNode({ node, isSelected, ...baseProps }: CanonicalNodeProps<J
           <span>r{node.data.revision}</span>
         </div>
         {node.data.diagnostic ? (
-          <div style={{ color: 'var(--vscode-errorForeground)' }}>{node.data.diagnostic}</div>
+          <div style={{ color: 'var(--hostPort-errorForeground)' }}>{node.data.diagnostic}</div>
         ) : null}
       </div>
     </BaseNode>

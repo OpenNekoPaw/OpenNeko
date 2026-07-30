@@ -9,14 +9,6 @@ QUICK=0
 FIX=0
 RELEASE=0
 
-detect_vscode_target() {
-  case "$(uname -s)-$(uname -m)" in
-    Darwin-arm64) echo "darwin-arm64" ;;
-    Linux-x86_64|Linux-amd64) echo "linux-x64" ;;
-    *) return 1 ;;
-  esac
-}
-
 while [[ $# -gt 0 ]]; do
   case $1 in
     --ts) shift ;;
@@ -72,13 +64,7 @@ run_step "check:deps" pnpm check:deps
 run_step "check:quality" pnpm check:quality
 
 if [ "$RELEASE" -eq 1 ]; then
-  if ! VSCODE_TARGET="$(detect_vscode_target)"; then
-    echo "Unsupported release host: $(uname -s)-$(uname -m)." >&2
-    FAILED=1
-  else
-    run_step "package OpenNeko ($VSCODE_TARGET)" \
-      node "$SCRIPT_DIR/scripts/package-openneko-platform.mjs" --target "$VSCODE_TARGET"
-  fi
+  run_step "package desktop" pnpm package:desktop
 fi
 
 echo ""

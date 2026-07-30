@@ -20,12 +20,8 @@ afterEach(async () => {
 
 describe('Sharp CommonJS bundle runtime', () => {
   it('keeps Sharp external in every owning bundle and executes from its staged closure', async () => {
-    const [agentManifest, applicationManifest] = await Promise.all([
-      readJson('packages/neko-agent/package.json'),
-      readJson('apps/neko-vscode/package.json'),
-    ]);
-    assert.match(agentManifest.scripts['compile:extension'], /--external:sharp/u);
-    assert.match(applicationManifest.scripts.compile, /--external:sharp/u);
+    const desktopMainConfig = await readFile('apps/neko-desktop/vite.main.config.ts', 'utf8');
+    assert.match(desktopMainConfig, /external:\s*\[['"]electron['"], ['"]sharp['"]\]/u);
 
     const root = await mkdtemp(join(tmpdir(), 'openneko-sharp-cjs-bundle-'));
     temporaryRoots.push(root);
@@ -66,7 +62,3 @@ describe('Sharp CommonJS bundle runtime', () => {
     assert.deepEqual([...results[0].bytes.subarray(0, 3)], [0xff, 0xd8, 0xff]);
   });
 });
-
-async function readJson(path) {
-  return JSON.parse(await readFile(path, 'utf8'));
-}

@@ -7,13 +7,13 @@ import { describe, it } from 'node:test';
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const REMOTE_GATE_ROOTS = Object.freeze(['check:ci', 'gate:remote', 'ci:remote']);
 const LOCAL_RUNTIME_SCRIPTS = Object.freeze([
-  'test:local:vscode',
-  'test:local:ui',
+  'dev:desktop',
+  'package:desktop',
   'test:local:api',
 ]);
 
-describe('VS Code functional workflow boundary', () => {
-  it('does not replace built-in Extension Debug with a workflow-owned code launch', async () => {
+describe('Desktop functional workflow boundary', () => {
+  it('keeps removed VS Code runtime commands out of workflows', async () => {
     const workflowRoot = join(repoRoot, '.github/workflows');
     const workflowNames = (await readdir(workflowRoot)).filter(
       (name) => name.endsWith('.yml') || name.endsWith('.yaml'),
@@ -57,7 +57,6 @@ describe('VS Code functional workflow boundary', () => {
       ...workflowRoots,
     ]);
 
-    assert.match(scripts['gate:local'] ?? '', /test:local:vscode/u);
     for (const localScript of LOCAL_RUNTIME_SCRIPTS) {
       assert.equal(typeof scripts[localScript], 'string', `missing local script: ${localScript}`);
       assert.equal(

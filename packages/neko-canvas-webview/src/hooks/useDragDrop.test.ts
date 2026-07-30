@@ -88,7 +88,7 @@ describe('useDragDrop add-source contract', () => {
         listeners.delete(type);
       }),
     } as unknown as Window & typeof globalThis;
-    const vscode = {
+    const hostPort = {
       postMessage: vi.fn((message: unknown) => {
         posted.push(message);
       }),
@@ -98,7 +98,7 @@ describe('useDragDrop add-source contract', () => {
     try {
       const addMediaAt = vi.fn();
       const onDropAssets = vi.fn();
-      const client = createCanvasProjectSourceAddClient(vscode);
+      const client = createCanvasProjectSourceAddClient(hostPort);
 
       const promise = client.addSource({
         requestId: 'first-add',
@@ -315,7 +315,7 @@ describe('useDragDrop add-source contract', () => {
           },
         ],
       },
-      sourceNameHint: 'blob:vscode-runtime',
+      sourceNameHint: 'blob:hostPort-runtime',
       mediaTypeHint: 'video',
       dropPosition: { x: 10, y: 20 },
       addMediaAt,

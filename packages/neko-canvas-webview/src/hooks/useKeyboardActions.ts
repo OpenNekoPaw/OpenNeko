@@ -18,7 +18,7 @@ import { isEditorLevelKeyboardAction } from './keyboardActionPolicy';
 // =============================================================================
 
 export interface UseKeyboardActionsOptions {
-  vscode: CanvasHostMessagePort;
+  hostPort: CanvasHostMessagePort;
   selectedNodeIds: string[];
   selectedConnectionIds: string[];
   nodes: CanvasNode[];

@@ -4,14 +4,14 @@ interface PreviewMessagePort {
 import type { PreviewDelegateRequest } from './types';
 
 export function dispatchPreviewDelegate(
-  vscode: PreviewMessagePort | undefined,
+  hostPort: PreviewMessagePort | undefined,
   request: PreviewDelegateRequest,
 ): void {
-  if (!vscode) {
+  if (!hostPort) {
     return;
   }
 
-  vscode.postMessage({
+  hostPort.postMessage({
     type: 'preview:delegateAction',
     action: request.action,
     asset: request.asset,

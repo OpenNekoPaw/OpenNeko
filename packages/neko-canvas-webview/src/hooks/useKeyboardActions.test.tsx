@@ -47,11 +47,11 @@ describe('useKeyboardActions explicit action mapping', () => {
     expect(options.reportAction).toHaveBeenCalledWith('deleteNode', 'Deleted 1 node(s)');
   });
 
-  it('guards VSCode keyboard actions while text editing but still allows targeted outline actions', () => {
+  it('guards Host keyboard actions while text editing but still allows targeted outline actions', () => {
     const isComposingRef = { current: false };
     options = {
       ...options,
-      vscode: createVSCodeApi(),
+      hostPort: createVSCodeApi(),
       isComposingRef,
     };
 
@@ -82,11 +82,11 @@ describe('useKeyboardActions explicit action mapping', () => {
     input.remove();
   });
 
-  it('guards VSCode keyboard actions while IME composition is active', () => {
+  it('guards Host keyboard actions while IME composition is active', () => {
     const isComposingRef = { current: true };
     options = {
       ...options,
-      vscode: createVSCodeApi(),
+      hostPort: createVSCodeApi(),
       isComposingRef,
     };
 
@@ -126,7 +126,7 @@ function KeyboardHarness({
 
 function createOptions(): UseKeyboardActionsOptions {
   return {
-    vscode: null,
+    hostPort: null,
     selectedNodeIds: ['node-1'],
     selectedConnectionIds: [],
     nodes: [{ id: 'node-1' }, { id: 'node-2' }] as UseKeyboardActionsOptions['nodes'],
@@ -148,7 +148,7 @@ function createOptions(): UseKeyboardActionsOptions {
   };
 }
 
-function createVSCodeApi(): NonNullable<UseKeyboardActionsOptions['vscode']> {
+function createVSCodeApi(): NonNullable<UseKeyboardActionsOptions['hostPort']> {
   return {
     postMessage: vi.fn(),
     getState: vi.fn(),
