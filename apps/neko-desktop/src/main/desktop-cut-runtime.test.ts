@@ -590,6 +590,112 @@ describe('DesktopCutRuntime', () => {
     expect(stopPreview).toHaveBeenCalledWith('video-session-1');
   });
 
+  it('stops active PCM before disposing its media adapter when the Cut view closes', async () => {
+    const workspacePath = await realpath(
+      await mkdtemp(path.join(tmpdir(), 'openneko-cut-close-pcm-')),
+    );
+    roots.push(workspacePath);
+    const documentId = 'story.otio';
+    await writeFile(path.join(workspacePath, 'audio.aac'), 'fixture');
+    const withAudioTrack = applyCutCommand(
+      createOtioTimeline('Story', {
+        profile: '1080p30',
+        editRateNumerator: 30,
+        editRateDenominator: 1,
+        width: 1920,
+        height: 1080,
+      }),
+      {
+        type: 'add-track',
+        trackId: 'audio-1',
+        trackKind: 'Audio',
+        name: 'Audio 1',
+      },
+    );
+    const document = applyCutCommand(withAudioTrack, {
+      type: 'link-media',
+      clipId: 'audio-clip-1',
+      name: 'Audio',
+      targetUrl: 'audio.aac',
+      durationFrames: 180,
+      rate: 30,
+      trackId: 'audio-1',
+      timelineStartFrames: 0,
+      overlapPolicy: 'reject',
+    });
+    await writeFile(path.join(workspacePath, documentId), serializeOtio(document));
+    const identity = createIdentity(documentId);
+    const stopFailure = new Error('PCM stop failed.');
+    let failStopPcm: (() => void) | undefined;
+    const pcmStopped = new Promise<void>((_resolve, reject) => {
+      failStopPcm = () => reject(stopFailure);
+    });
+    const stopPcm = vi.fn(() => pcmStopped);
+    const dispose = vi.fn(async () => undefined);
+    const mediaAdapter = {
+      probe: vi.fn(),
+      startPreview: vi.fn(),
+      resumePreview: vi.fn(async () => undefined),
+      stopPreview: vi.fn(async () => undefined),
+      startPcmMix: vi.fn(async () => ({
+        sessionId: 'pcm-session-1',
+        stream: {
+          version: 1 as const,
+          transport: 'http' as const,
+          protocol: 'neko-pcm-f32le-v1' as const,
+          streamUrl: 'http://127.0.0.1/pcm-session-1',
+          sampleRate: 48_000,
+          channels: 2,
+        },
+      })),
+      resumePcm: vi.fn(async () => undefined),
+      stopPcm,
+      captureFrame: vi.fn(),
+      generateWaveform: vi.fn(),
+      export: vi.fn(),
+      dispose,
+    };
+    const runtime = createRuntime(workspacePath, identity, undefined, () => mediaAdapter);
+    await runtime.getSnapshot('window-1', identity);
+    await runtime.execute('window-1', {
+      schemaVersion: CUT_HOST_RUNTIME_VERSION,
+      requestId: 'preview-start-request',
+      commandId: 'preview-start-command',
+      route: CUT_HOST_RUNTIME_ROUTES.previewStart,
+      identity,
+      expectedRevision: 0,
+      payload: {
+        type: 'cut:preview-start',
+        documentUri: documentId,
+        sessionId: identity.sessionId,
+        expectedRevision: 0,
+        timelineTimeSeconds: 0,
+        generation: 1,
+        playbackMode: 'playing',
+      },
+    });
+    await runtime.execute('window-1', {
+      schemaVersion: CUT_HOST_RUNTIME_VERSION,
+      requestId: 'preview-activate-request',
+      commandId: 'preview-activate-command',
+      route: CUT_HOST_RUNTIME_ROUTES.previewActivate,
+      identity,
+      expectedRevision: 0,
+      payload: {
+        type: 'cut:preview-activate',
+        generation: 1,
+      },
+    });
+
+    runtime.reconcileWorkbench('window-1', createDefaultDesktopWorkbenchLayout('window-1'));
+    await vi.waitFor(() => expect(stopPcm).toHaveBeenCalledWith('pcm-session-1'));
+    const disposeCallsBeforePcmSettled = dispose.mock.calls.length;
+    failStopPcm?.();
+    await expect(runtime.dispose()).rejects.toThrow('Desktop Cut sessions could not be disposed.');
+    expect(disposeCallsBeforePcmSettled).toBe(0);
+    expect(dispose).toHaveBeenCalledOnce();
+  });
+
   it('adds one authorized resource to the exact Cut session and fences stale targets', async () => {
     const workspacePath = await realpath(
       await mkdtemp(path.join(tmpdir(), 'openneko-cut-resource-')),

@@ -210,10 +210,9 @@ export class CutPreviewRuntimeController {
     this.active = undefined;
     this.prepared = undefined;
     this.disposed = true;
-    const results = await Promise.allSettled([
-      ...records.map((record) => this.stopRecord(record)),
-      this.options.mediaAdapter.dispose(),
-    ]);
+    const stopResults = await Promise.allSettled(records.map((record) => this.stopRecord(record)));
+    const disposeResult = await Promise.allSettled([this.options.mediaAdapter.dispose()]);
+    const results = [...stopResults, ...disposeResult];
     const failures = results.flatMap((result) =>
       result.status === 'rejected' ? [result.reason] : [],
     );
