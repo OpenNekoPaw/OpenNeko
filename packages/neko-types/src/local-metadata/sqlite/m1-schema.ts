@@ -53,7 +53,7 @@ export const M1_LOCAL_METADATA_MIGRATIONS: readonly LocalMetadataMigration[] = [
     ownership: 'system',
     destructive: false,
     statements: [
-      'ALTER TABLE conversations RENAME TO conversations_legacy_host_sources',
+      'ALTER TABLE conversations RENAME TO conversations_removed_host_sources',
       'DROP INDEX conversations_workspace_updated_idx',
       `CREATE TABLE conversations (
         conversation_id TEXT PRIMARY KEY NOT NULL,
@@ -84,8 +84,8 @@ export const M1_LOCAL_METADATA_MIGRATIONS: readonly LocalMetadataMigration[] = [
         model,
         created_at,
         updated_at
-      FROM conversations_legacy_host_sources`,
-      'DROP TABLE conversations_legacy_host_sources',
+      FROM conversations_removed_host_sources`,
+      'DROP TABLE conversations_removed_host_sources',
       `CREATE INDEX conversations_workspace_updated_idx
         ON conversations(workspace_id, updated_at DESC)`,
     ],

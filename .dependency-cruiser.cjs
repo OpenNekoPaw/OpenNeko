@@ -40,81 +40,28 @@ module.exports = {
       },
     },
 
-    // ── Rule 3: Webview must not import vscode ─────────
+    // ── Rule 3: Webview packages must not import host modules ─────────
     {
-      name: 'webview-no-vscode',
-      comment: 'Webview packages run in browser sandbox and cannot access the vscode module',
+      name: 'webview-no-host-modules',
+      comment: 'Webview packages run in the renderer sandbox and cannot access host modules',
       severity: 'error',
       from: {
-        path: 'packages/.+/packages/webview/',
+        path: '^packages/(?:neko-(?:agent|canvas|cut|preview|tools)-webview|neko-assets)/',
       },
       to: {
-        path: '^vscode$',
+        path: '^(?:electron|vscode)$',
       },
     },
 
-    // ── Rule 4: Extension must not import React ────────
-    {
-      name: 'extension-no-react',
-      comment: 'Extension host packages must not import React or DOM libraries',
-      severity: 'error',
-      from: {
-        path: 'packages/.+/packages/extension/',
-      },
-      to: {
-        path: '^react(-dom)?$',
-      },
-    },
-
-    // ── Rule 5: No cross-extension dependencies ────────
-    // Each pair explicitly forbids cross-references between different extensions.
-    // Same-extension internal imports are allowed.
-    {
-      name: 'no-cross-extension-deps-cut',
-      comment: 'neko-cut extension must not depend on other extension packages',
-      severity: 'warn',
-      from: { path: '^packages/neko-cut/packages/extension/' },
-      to: {
-        path: '^packages/(?!neko-cut/)[^/]+/packages/extension/',
-      },
-    },
-    {
-      name: 'no-cross-extension-deps-agent',
-      comment: 'neko-agent extension must not depend on other extension packages',
-      severity: 'warn',
-      from: { path: '^packages/neko-agent/packages/extension/' },
-      to: {
-        path: '^packages/(?!neko-agent/)[^/]+/packages/extension/',
-      },
-    },
-    {
-      name: 'no-cross-extension-deps-canvas',
-      comment: 'neko-canvas extension must not depend on other extension packages',
-      severity: 'warn',
-      from: { path: '^packages/neko-canvas/packages/extension/' },
-      to: {
-        path: '^packages/(?!neko-canvas/)[^/]+/packages/extension/',
-      },
-    },
-    {
-      name: 'no-cross-extension-deps-preview',
-      comment: 'neko-preview extension must not depend on other extension packages',
-      severity: 'warn',
-      from: { path: '^packages/neko-preview/' },
-      to: {
-        path: '^packages/(?!neko-preview/)[^/]+/packages/extension/',
-      },
-    },
-
-    // ── Rule 6: Character domain ownership ────────────
+    // ── Rule 4: Character and Quality domain ownership ────────────
     {
       name: 'chara-no-agent-runtime-implementation',
       comment:
-        'neko-chara may consume Agent contracts, but must not depend on Agent runtime, platform, Extension, Webview, or provider implementations',
+        'neko-chara may consume Agent contracts, but must not depend on Agent runtime, platform, Webview, or provider implementations',
       severity: 'error',
       from: { path: '^packages/neko-chara/' },
       to: {
-        path: '^packages/neko-agent/packages/(?!agent-types/)',
+        path: '^packages/neko-(?:agent-runtime|ai-sdk|platform|agent-webview)/',
       },
     },
     {
@@ -123,7 +70,7 @@ module.exports = {
         'Generic Agent runtime packages remain domain-neutral; only the host composition package may depend on neko-chara',
       severity: 'error',
       from: {
-        path: '^packages/neko-agent/packages/(agent|ai-sdk|platform|webview|agent-types)/',
+        path: '^packages/neko-(?:agent-runtime|ai-sdk|platform|agent-webview|agent-types)/',
       },
       to: {
         path: '^packages/neko-chara/',
@@ -146,7 +93,7 @@ module.exports = {
         'Generic Agent runtime packages remain Quality-neutral; only host composition may depend on neko-quality',
       severity: 'error',
       from: {
-        path: '^packages/neko-agent/packages/(agent|ai-sdk|platform|webview|agent-types)/',
+        path: '^packages/neko-(?:agent-runtime|ai-sdk|platform|agent-webview|agent-types)/',
       },
       to: {
         path: '^packages/neko-quality/',

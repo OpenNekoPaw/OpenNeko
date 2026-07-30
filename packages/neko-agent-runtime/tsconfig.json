@@ -15,7 +15,9 @@
     "resolveJsonModule": true,
     "noEmit": true,
     "baseUrl": ".",
-    "types": ["node"]
+    "types": ["node"],
+    "strictNullChecks": true,
+    "noImplicitAny": true
   },
   "include": ["src/**/*", "src/**/*.d.ts"],
   "exclude": ["node_modules", "dist"]

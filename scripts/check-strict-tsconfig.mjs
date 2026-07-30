@@ -4,14 +4,14 @@ import { relative, resolve } from 'node:path';
 
 const repoRoot = resolve(new URL('..', import.meta.url).pathname);
 
-const extensionBaselines = [
+const strictBaselines = [
   {
     owner: 'Desktop application',
     path: 'apps/neko-desktop/tsconfig.json',
   },
   {
-    owner: 'Agent extension',
-    path: 'packages/neko-agent/packages/extension/tsconfig.json',
+    owner: 'Agent runtime',
+    path: 'packages/neko-agent-runtime/tsconfig.json',
   },
   {
     owner: 'Chara domain package',
@@ -25,7 +25,7 @@ const extensionBaselines = [
 
 let failed = false;
 
-for (const baseline of extensionBaselines) {
+for (const baseline of strictBaselines) {
   const absolutePath = resolve(repoRoot, baseline.path);
   const config = JSON.parse(readFileSync(absolutePath, 'utf8'));
   const options = config.compilerOptions ?? {};
