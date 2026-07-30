@@ -42,7 +42,7 @@ function ImageGridCardComponent({
     [localPaths, openOnClick, urls],
   );
 
-  /** Notify Extension Host that a drag operation started (ADR-5 P1 DnD). */
+  /** Notify the Desktop host that a drag operation started (ADR-5 P1 DnD). */
   const handleDragStart = useCallback(
     (index: number) => {
       const localPath = localPaths?.[index];

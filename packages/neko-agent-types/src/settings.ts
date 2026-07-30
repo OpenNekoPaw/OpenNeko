@@ -1,5 +1,5 @@
 /**
- * Settings Types — Extension-layer settings (AIAssistantSettings + defaults)
+ * Settings Types - Desktop Agent settings (AIAssistantSettings + defaults)
  */
 
 export type ShellExecutionMode = 'plan' | 'ask' | 'auto';

@@ -226,7 +226,7 @@ describe('conversation-tab-runtime', () => {
             id: 'plugin.cmd',
             name: 'Plugin command',
             description: 'Run plugin command',
-            extensionId: 'neko.plugin',
+            pluginId: 'neko.plugin',
           },
         ],
       }),
@@ -252,7 +252,7 @@ describe('conversation-tab-runtime', () => {
                 id: 'plugin.cmd',
                 name: 'Plugin command',
                 description: 'Run plugin command',
-                extensionId: 'neko.plugin',
+                pluginId: 'neko.plugin',
               },
             ],
           },
@@ -315,7 +315,7 @@ describe('conversation-tab-runtime', () => {
           id: 'plugin.cmd',
           name: 'Plugin command',
           description: 'Run plugin command',
-          extensionId: 'neko.plugin',
+          pluginId: 'neko.plugin',
         },
       ]),
     ).toEqual({
@@ -325,7 +325,7 @@ describe('conversation-tab-runtime', () => {
           id: 'plugin.cmd',
           name: 'Plugin command',
           description: 'Run plugin command',
-          extensionId: 'neko.plugin',
+          pluginId: 'neko.plugin',
         },
       ],
     });
@@ -347,7 +347,7 @@ describe('conversation-tab-runtime', () => {
       severity: 'error',
       action: 'projectionEndpointDiscover',
       message:
-        'Agent Webview protocol mismatch: Extension expects v1, Webview sent no version. Reload the Webview.',
+        'Agent Webview protocol mismatch: Desktop host expects v1, Webview sent no version. Reload the Webview.',
     });
   });
 });

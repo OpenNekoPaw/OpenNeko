@@ -1,26 +1,26 @@
 /** Typed window messaging for embeddable preview viewers. */
 
 import { useEffect, useCallback, useRef } from 'react';
-import type { WebviewMessage, ExtensionMessage, ReadyMessage } from './types';
+import type { WebviewMessage, HostMessage, ReadyMessage } from './types';
 import { getBrowserHostState } from './browserHostState';
 
 /**
- * Send a message to the Extension Host
+ * Send a message to the Desktop host.
  */
 export function postMessage(message: WebviewMessage): void {
   getBrowserHostState().postMessage(message);
 }
 
 /**
- * Hook to listen for messages from the Extension Host
+ * Listen for messages from the Desktop host.
  */
-export function useExtensionMessage(handler: (message: ExtensionMessage) => void): void {
+export function useHostMessage(handler: (message: HostMessage) => void): void {
   const handlerRef = useRef(handler);
   handlerRef.current = handler;
 
   useEffect(() => {
     const listener = (event: MessageEvent) => {
-      const message = event.data as ExtensionMessage;
+      const message = event.data as HostMessage;
       if (message && typeof message.type === 'string') {
         handlerRef.current(message);
       }

@@ -111,7 +111,7 @@ export interface INekoPaths {
 
 /**
  * Join path segments using forward slashes. Callers working on Windows
- * typically pass forward-slash project roots already (VSCode / git); if
+ * typically pass forward-slash project roots already (Desktop / git); if
  * they don't, the caller should `path.resolve()` before invoking.
  */
 function join(a: string, ...rest: string[]): string {

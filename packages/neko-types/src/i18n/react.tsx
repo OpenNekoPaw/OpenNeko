@@ -2,7 +2,7 @@
  * i18n React Bindings
  *
  * React Provider + hooks wrapping II18nService for webview context.
- * Layer 2: Depends on React + DOM (window.addEventListener).
+ * Layer 2: Depends on React.
  *
  * Import via: @neko/shared/i18n/react
  *
@@ -32,8 +32,7 @@ interface I18nProviderProps {
  * I18n Provider component
  *
  * Wraps an II18nService instance and provides `t()` to the component tree.
- * Automatically listens for runtime locale changes via `window.message`
- * events (sent by VSCode extension host via postMessage).
+ * Locale changes flow through the injected service owned by Desktop composition.
  *
  * Usage:
  * ```tsx
@@ -47,24 +46,6 @@ interface I18nProviderProps {
  */
 export function I18nProvider({ children, service }: I18nProviderProps) {
   const [locale, setLocaleState] = useState<SupportedLocale>(service.locale);
-
-  // Listen for locale changes from VSCode extension host via postMessage
-  useEffect(() => {
-    const handleMessage = (event: MessageEvent) => {
-      const message = event.data;
-      if (
-        message &&
-        typeof message === 'object' &&
-        message.type === 'setLocale' &&
-        message.locale
-      ) {
-        service.setLocale(message.locale as SupportedLocale);
-      }
-    };
-
-    window.addEventListener('message', handleMessage);
-    return () => window.removeEventListener('message', handleMessage);
-  }, [service]);
 
   // Sync React state when locale changes on the service (from any source)
   useEffect(() => {

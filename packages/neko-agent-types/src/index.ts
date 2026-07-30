@@ -85,16 +85,9 @@ export type {
   SlashCommandResultProjectionOptions,
 } from './command-result-contract';
 export {
-  NEKO_AGENT_LLM_GENERATE_COMMAND,
-  NEKO_AGENT_REGISTER_CAPABILITIES_COMMAND,
-  NEKO_AGENT_REFRESH_EXTERNAL_PROCESSORS_COMMAND,
-  NEKO_AGENT_REGISTER_EXTERNAL_PROCESSOR_CONTRIBUTION_COMMAND,
-  NEKO_AGENT_REGISTER_SLASH_COMMANDS_COMMAND,
-  NEKO_AGENT_UNREGISTER_EXTERNAL_PROCESSOR_PACKAGE_COMMAND,
-  NEKO_AI_ASSISTANT_FOCUS_COMMAND,
-  buildPluginSlashCommandCommand,
-  type PluginSlashCommandCommandInput,
-} from './extension-command-contract';
+  buildPluginSlashCommandId,
+  type PluginSlashCommandIdInput,
+} from './plugin-command-contract';
 export type {
   AgentHostKind,
   AgentHostRouteCoverageAuditInput,
@@ -242,7 +235,7 @@ export type {
   ExternalProcessorDiscoveryResult,
   ExternalProcessorEntry,
   ExternalProcessorEnvProfile,
-  ExternalProcessorExtensionContribution,
+  ExternalProcessorPluginContribution,
   ExternalProcessorInputDeclaration,
   ExternalProcessorInvocation,
   ExternalProcessorInvocationInputBinding,
@@ -286,7 +279,7 @@ export {
   matchesExternalProcessorSecretEnvPattern,
   parseExternalProcessorManifestJson,
   registerBuiltinExternalProcessors,
-  registerExtensionExternalProcessorContributions,
+  registerPluginExternalProcessorContributions,
   registerPersonalExternalProcessorManifests,
   registerProjectExternalProcessorManifests,
   validateExternalProcessorManifest,
@@ -588,7 +581,7 @@ export {
   type ResolveActiveTabConversationIdInput,
 } from './tab-state-projector';
 export {
-  NEKO_PLUGIN_EXTENSION_IDS,
+  NEKO_PLUGIN_IDS,
   type NekoPluginKey,
   type PluginTransferAssetRef,
   type PluginTransferAuthoringPayloadBase,

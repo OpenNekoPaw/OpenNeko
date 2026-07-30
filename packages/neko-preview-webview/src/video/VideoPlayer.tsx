@@ -7,7 +7,7 @@ import type {
   MediaInfo,
   ReadyMessage,
 } from '../shared/types';
-import { useExtensionMessage, useHostReady } from '../shared/useHostMessage';
+import { useHostMessage, useHostReady } from '../shared/useHostMessage';
 import { useTranslation } from '../i18n/I18nContext';
 import { VideoControls } from './VideoControls';
 import { EmptyState } from '@neko/ui/primitives';
@@ -331,7 +331,7 @@ function EngineVideoPlayer() {
     [disposeClients, finishPlayback],
   );
 
-  useExtensionMessage((message) => {
+  useHostMessage((message) => {
     switch (message.type) {
       case 'preview:init': {
         const info = (message as PreviewInitMessage).payload.mediaInfo;

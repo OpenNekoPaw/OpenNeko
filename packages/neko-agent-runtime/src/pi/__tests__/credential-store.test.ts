@@ -77,7 +77,7 @@ describe('OpenNekoCredentialStore', () => {
     await rm(root, { recursive: true, force: true });
   });
 
-  it('shares one program-level durable view across TUI and VS Code consumers', async () => {
+  it('shares one program-level durable view across Desktop runtime consumers', async () => {
     const persistence = new InMemoryUserCredentialPersistence();
     const programStore = new OpenNekoCredentialStore(persistence, () => 1_800_000_000_000);
     const tuiConsumer = programStore;

@@ -328,7 +328,7 @@ export function projectThreeReferenceMediaControls(
   };
 }
 
-export type ThreeReferenceExtensionMessage =
+export type ThreeReferenceHostMessage =
   | {
       readonly type: '3d-reference/session-init';
       readonly protocolVersion: typeof THREE_REFERENCE_PROTOCOL_VERSION;

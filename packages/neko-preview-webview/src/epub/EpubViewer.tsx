@@ -7,13 +7,13 @@
  *
  * Features:
  * - Right-click context menu → send selection / page to AI
- * - Chapter navigation via toolbar and epub:navigate message from extension
- * - TOC via VSCode Outline (DocumentSymbolProvider in extension host)
+ * - Chapter navigation via toolbar and host messages
+ * - Table of contents navigation
  */
 
 import { useState, useEffect, useRef, useCallback, type FC } from 'react';
 import ePub, { type Book, type Rendition } from 'epubjs';
-import { useExtensionMessage, postMessage } from '../shared/useHostMessage';
+import { useHostMessage, postMessage } from '../shared/useHostMessage';
 import { useDocumentSelection, type DocumentSelection } from '../shared/useDocumentSelection';
 import { DocumentContextMenu, useDocumentContextActions } from '../shared/DocumentContextMenu';
 import { imgSrcToBase64 } from '../shared/imageToBase64';
@@ -89,7 +89,7 @@ function matchesHref(a: string, b: string): boolean {
 
 /**
  * Custom request function for epub.js that uses fetch() instead of XMLHttpRequest.
- * VSCode webview service workers can block XHR to localhost; fetch works reliably.
+ * The embedded renderer uses fetch so archive URLs share one request path.
  */
 export async function fetchForEpub(url: string, type?: string): Promise<unknown> {
   const resp = await fetch(url);
@@ -126,7 +126,7 @@ export async function fetchForEpub(url: string, type?: string): Promise<unknown>
   return text;
 }
 
-/** VSCode theme CSS applied to waterfall chapter content */
+/** Neko theme CSS applied to waterfall chapter content */
 const WATERFALL_THEME_CSS = `
   .epub-chapter-content {
     background: var(--neko-editor-background) !important;
@@ -513,10 +513,10 @@ export const EpubViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =
   );
 
   // =========================================================================
-  // Extension ↔ Webview messaging
+  // Desktop host and renderer messaging
   // =========================================================================
 
-  useExtensionMessage((msg) => {
+  useHostMessage((msg) => {
     const m = msg as unknown as { type: string; payload: Record<string, unknown> };
     if (m.type === 'document:restoreState') {
       initPersistedStore(m.payload as Record<string, unknown>);
@@ -600,7 +600,7 @@ export const EpubViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =
 
   const setupRendition = useCallback(
     (rendition: Rendition, tocItems: TocItem[]) => {
-      rendition.themes.register('vscode', {
+      rendition.themes.register('neko', {
         body: {
           background: 'var(--neko-editor-background) !important',
           color: 'var(--neko-editor-foreground) !important',
@@ -616,7 +616,7 @@ export const EpubViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =
           margin: '0 auto !important',
         },
       });
-      rendition.themes.select('vscode');
+      rendition.themes.select('neko');
 
       rendition.on('relocated', (location: { start: { href: string } }) => {
         const chapter = tocItems.find((item) => matchesHref(location.start.href, item.href));
@@ -831,8 +831,7 @@ export const EpubViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =
         setLoading(true);
         loadingRef.current = true;
         setError(null);
-        // Use custom requestMethod with fetch instead of epub.js's default XMLHttpRequest.
-        // VSCode webview service worker can interfere with XHR to localhost.
+        // Use one fetch-based request path for Desktop and embeddable archive URLs.
         const book = ePub(url, {
           requestMethod: fetchForEpub as (
             url: string,

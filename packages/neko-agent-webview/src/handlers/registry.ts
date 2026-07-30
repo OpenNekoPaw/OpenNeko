@@ -40,7 +40,7 @@ export class MessageHandlerRegistry {
   }
 
   /**
-   * Handle a typed message from the Extension Host.
+   * Handle a typed message from the Desktop host.
    * @returns true if handled, false if no handler found
    */
   handle(message: AgentHostToWebviewMessage, context: MessageHandlerContext): boolean {

@@ -7,7 +7,7 @@ import {
   matchesExternalProcessorSecretEnvPattern,
   parseExternalProcessorManifestJson,
   registerBuiltinExternalProcessors,
-  registerExtensionExternalProcessorContributions,
+  registerPluginExternalProcessorContributions,
   registerPersonalExternalProcessorManifests,
   registerProjectExternalProcessorManifests,
   validateExternalProcessorManifest,
@@ -156,7 +156,7 @@ describe('external processor contract', () => {
 
   it('exposes root alias and secret env helpers', () => {
     expect(isExternalProcessorRootAlias('resourceCache')).toBe(false);
-    expect(isExternalProcessorRootAlias('extensionPrivateResources')).toBe(true);
+    expect(isExternalProcessorRootAlias('pluginPrivateResources')).toBe(true);
     expect(isExternalProcessorRootAlias('tmp')).toBe(false);
     expect(matchesExternalProcessorSecretEnvPattern('NPM_TOKEN')).toBe(true);
     expect(matchesExternalProcessorSecretEnvPattern('CUDA_VISIBLE_DEVICES')).toBe(false);
@@ -235,17 +235,17 @@ describe('external processor registry', () => {
       events.push(event.kind);
     });
     registry.upsert(
-      { sourceScope: 'extension', agentCapabilitySource: 'plugin', sourceId: 'neko-tools' },
+      { sourceScope: 'plugin', agentCapabilitySource: 'plugin', sourceId: 'neko-tools' },
       validManifest,
       { enabled: true },
     );
 
-    const change = registry.unregister({ id: 'upscale-image' }, 'Extension deactivated');
+    const change = registry.unregister({ id: 'upscale-image' }, 'Plugin deactivated');
 
     expect(change).toEqual(
       expect.objectContaining({
         kind: 'unregistered',
-        registrationId: 'extension:neko-tools:upscale-image',
+        registrationId: 'plugin:neko-tools:upscale-image',
       }),
     );
     expect(registry.list({ includeDisabled: true }).processors).toEqual([]);
@@ -270,7 +270,7 @@ describe('external processor registry', () => {
     );
   });
 
-  it('covers unregister lifecycle for project, personal, and extension sources', () => {
+  it('covers unregister lifecycle for project, personal, and plugin sources', () => {
     const registry = createExternalProcessorRegistry();
     registry.upsert(
       { sourceScope: 'project', agentCapabilitySource: 'local', sourceId: 'workspace-1' },
@@ -281,8 +281,8 @@ describe('external processor registry', () => {
       { ...validManifest, id: 'personal-upscale' },
     );
     registry.upsert(
-      { sourceScope: 'extension', agentCapabilitySource: 'plugin', sourceId: 'neko.neko-tools' },
-      { ...validManifest, id: 'extension-upscale' },
+      { sourceScope: 'plugin', agentCapabilitySource: 'plugin', sourceId: 'neko.tools' },
+      { ...validManifest, id: 'plugin-upscale' },
     );
 
     expect(registry.unregister({ id: 'upscale-image' }, 'Project file deleted')).toEqual(
@@ -298,10 +298,10 @@ describe('external processor registry', () => {
         registrationId: 'personal:user-local:personal-upscale',
       }),
     );
-    expect(registry.unregister({ id: 'extension-upscale' }, 'Extension deactivated')).toEqual(
+    expect(registry.unregister({ id: 'plugin-upscale' }, 'Plugin deactivated')).toEqual(
       expect.objectContaining({
         kind: 'unregistered',
-        registrationId: 'extension:neko.neko-tools:extension-upscale',
+        registrationId: 'plugin:neko.tools:plugin-upscale',
       }),
     );
     expect(registry.list({ includeDisabled: true }).processors).toEqual([]);
@@ -413,13 +413,13 @@ describe('external processor registry', () => {
     );
   });
 
-  it('projects extension contributions through plugin source', () => {
+  it('projects plugin contributions through plugin source', () => {
     const registry = createExternalProcessorRegistry();
-    const result = registerExtensionExternalProcessorContributions({
+    const result = registerPluginExternalProcessorContributions({
       registry,
       contributions: [
         {
-          extensionId: 'neko.neko-tools',
+          pluginId: 'neko.tools',
           trustLevel: 'community',
           manifest: validManifest,
         },
@@ -429,21 +429,21 @@ describe('external processor registry', () => {
     expect(result.diagnostics).toEqual([]);
     expect(result.registrations[0]).toEqual(
       expect.objectContaining({
-        registrationId: 'extension:neko.neko-tools:upscale-image',
-        sourceScope: 'extension',
+        registrationId: 'plugin:neko.tools:upscale-image',
+        sourceScope: 'plugin',
         agentCapabilitySource: 'plugin',
         trustLevel: 'community',
       }),
     );
   });
 
-  it('does not let extension contributions self-declare core trust', () => {
+  it('does not let plugin contributions self-declare core trust', () => {
     const registry = createExternalProcessorRegistry();
-    const result = registerExtensionExternalProcessorContributions({
+    const result = registerPluginExternalProcessorContributions({
       registry,
       contributions: [
         {
-          extensionId: 'neko.neko-tools',
+          pluginId: 'neko.tools',
           trustLevel: 'core',
           manifest: validManifest,
         },

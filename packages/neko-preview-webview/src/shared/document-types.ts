@@ -13,7 +13,7 @@ import type {
 } from '@neko/shared';
 
 // =============================================================================
-// Extension → Webview
+// Desktop host → Webview
 // =============================================================================
 
 export interface DocumentDataMessage {
@@ -40,11 +40,11 @@ export interface EpubNavigateMessage {
   payload: { href: string };
 }
 
-export type DocumentExtensionMessage =
+export type DocumentHostMessage =
   DocumentDataMessage | DocumentRestoreStateMessage | DocumentNavigateMessage | EpubNavigateMessage;
 
 // =============================================================================
-// Webview → Extension
+// Webview → Desktop host
 // =============================================================================
 
 export interface DocumentReadyMessage {

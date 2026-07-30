@@ -1,4 +1,4 @@
-import type { KeyboardKey, ShortcutKeySpec, VSCodeKeybindingFormatOptions } from './types';
+import type { KeyboardKey, ShortcutKeySpec, KeybindingFormatOptions } from './types';
 
 const KEY_ALIASES: ReadonlyMap<string, KeyboardKey> = new Map([
   ['space', 'Space'],
@@ -47,7 +47,7 @@ const KEY_ALIASES: ReadonlyMap<string, KeyboardKey> = new Map([
   ['slash', 'Slash'],
 ]);
 
-const KEY_TO_VSCODE: ReadonlyMap<KeyboardKey, string> = new Map([
+const KEY_TO_PORTABLE: ReadonlyMap<KeyboardKey, string> = new Map([
   ['Space', 'space'],
   ['Delete', 'delete'],
   ['Backspace', 'backspace'],
@@ -76,13 +76,13 @@ const KEY_TO_VSCODE: ReadonlyMap<KeyboardKey, string> = new Map([
 ]);
 
 /**
- * Parse a VSCode-style keybinding string into the Webview shortcut contract.
+ * Parse a portable keybinding string into the Webview shortcut contract.
  *
  * This is intentionally lossy: platform-specific primary modifiers such as
  * `ctrl`, `cmd`, and `meta` are normalized to `primary` so Webview shortcut
  * tables can use one cross-platform Cmd/Ctrl policy.
  */
-export function parseVSCodeKeybinding(value: string): ShortcutKeySpec {
+export function parseKeybinding(value: string): ShortcutKeySpec {
   const tokens = value
     .trim()
     .split('+')
@@ -140,9 +140,9 @@ export function parseVSCodeKeybinding(value: string): ShortcutKeySpec {
   return compactShortcutKeySpec({ key, primary, ctrl, meta, shift, alt });
 }
 
-export function formatVSCodeKeybinding(
+export function formatKeybinding(
   spec: ShortcutKeySpec,
-  options: VSCodeKeybindingFormatOptions = {},
+  options: KeybindingFormatOptions = {},
 ): string {
   const primaryModifier = options.primaryModifier ?? 'ctrl';
   const modifiers = [
@@ -153,7 +153,7 @@ export function formatVSCodeKeybinding(
     spec.alt ? 'alt' : undefined,
   ].filter((token): token is string => Boolean(token));
 
-  return [...modifiers, formatVSCodeKey(spec.key)].join('+');
+  return [...modifiers, formatPortableKey(spec.key)].join('+');
 }
 
 export function serializeShortcutKeySpec(spec: ShortcutKeySpec): string {
@@ -230,8 +230,8 @@ export function normalizeKeyboardKey(value: string): KeyboardKey {
   return token as KeyboardKey;
 }
 
-function formatVSCodeKey(key: KeyboardKey): string {
-  const mapped = KEY_TO_VSCODE.get(key);
+function formatPortableKey(key: KeyboardKey): string {
+  const mapped = KEY_TO_PORTABLE.get(key);
   if (mapped) {
     return mapped;
   }

@@ -854,7 +854,7 @@ describe('config message presenter', () => {
             id: 'cmd-1',
             name: '/plugin',
             description: 'Run plugin command',
-            extensionId: 'plugin.test',
+            pluginId: 'plugin.test',
           },
         ],
       }),
@@ -863,7 +863,7 @@ describe('config message presenter', () => {
         id: 'cmd-1',
         name: '/plugin',
         description: 'Run plugin command',
-        extensionId: 'plugin.test',
+        pluginId: 'plugin.test',
       },
     ]);
 

@@ -12,7 +12,7 @@ import {
   type ModelPreviewSourceDescriptor,
   type ModelPreviewStagingState,
   type NormalizedModelFacts,
-  type ThreeReferenceExtensionMessage,
+  type ThreeReferenceHostMessage,
   type ThreeReferencePanelSubject,
   type ThreeReferencePanoramaRuntimeDescriptor,
   type ThreeReferencePresetOption,
@@ -217,9 +217,9 @@ export function ModelViewer({
     resize();
 
     const disposeMessages = host.subscribe((value) => {
-      const message = parseExtensionMessage(value);
+      const message = parseHostMessage(value);
       if (!message) return;
-      void handleExtensionMessage({
+      void handleHostMessage({
         message,
         runtime,
         sessionId,
@@ -537,8 +537,8 @@ export function ModelViewer({
   );
 }
 
-async function handleExtensionMessage(input: {
-  readonly message: ThreeReferenceExtensionMessage;
+async function handleHostMessage(input: {
+  readonly message: ThreeReferenceHostMessage;
   readonly runtime: ThreeModelRuntimePort;
   readonly sessionId: string;
   readonly host: ModelViewerHostPort;
@@ -684,10 +684,7 @@ function isViewerFatalDiagnostic(code: string): boolean {
 }
 
 function toModelDiagnostic(
-  diagnostic: Extract<
-    ThreeReferenceExtensionMessage,
-    { type: '3d-reference/diagnostic' }
-  >['diagnostic'],
+  diagnostic: Extract<ThreeReferenceHostMessage, { type: '3d-reference/diagnostic' }>['diagnostic'],
 ): ModelPreviewDiagnostic {
   return {
     code:
@@ -736,7 +733,7 @@ function referenceIdentityOf(staging: ThreeReferenceStagingSnapshot) {
   };
 }
 
-function parseExtensionMessage(value: unknown): ThreeReferenceExtensionMessage | undefined {
+function parseHostMessage(value: unknown): ThreeReferenceHostMessage | undefined {
   if (!isRecord(value) || typeof value['type'] !== 'string') return undefined;
   switch (value['type']) {
     case '3d-reference/session-init':

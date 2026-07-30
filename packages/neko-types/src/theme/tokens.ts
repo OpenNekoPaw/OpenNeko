@@ -93,7 +93,7 @@ export const nekoCSSTokens = {
     'neko-diff-removed-fg': 'var(--neko-gitDecoration-deletedResourceForeground)',
     'neko-diff-modified-fg': 'var(--neko-gitDecoration-modifiedResourceForeground)',
 
-    // Charts (status color encoding, aligned with opencode TUI semantic tokens)
+    // Charts (status color encoding)
     'neko-chart-green': 'var(--neko-charts-green)',
     'neko-chart-red': 'var(--neko-charts-red)',
     'neko-chart-blue': 'var(--neko-charts-blue)',

@@ -1,7 +1,7 @@
 /**
  * useChatActions - Chat message sending, cancellation, and copy
  *
- * Sends messages directly to Extension; compatible text sends are queued by the runtime.
+ * Sends messages to the Desktop host; compatible text sends are queued by the runtime.
  * Model configuration is locked for the duration of a running Agent turn.
  */
 
@@ -127,7 +127,7 @@ export function useChatActions({
     return false;
   }, []);
 
-  // Send a user message — always send directly to Extension.
+  // Send a user message directly to the Desktop host.
   // AgentRunner handles queueing if the agent is already running.
   const handleSend = useCallback(
     (input?: PendingSendInput) => {

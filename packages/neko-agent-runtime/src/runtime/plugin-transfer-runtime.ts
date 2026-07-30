@@ -1,8 +1,8 @@
 import {
-  buildPluginSlashCommandCommand,
+  buildPluginSlashCommandId,
   buildPluginSlashCommandInvocation,
   buildPluginsAvailableMessage,
-  NEKO_PLUGIN_EXTENSION_IDS,
+  NEKO_PLUGIN_IDS,
   type InvokePluginSlashCommandWebviewMessage,
   type NekoPluginKey,
   type PluginSlashCommandDef,
@@ -37,13 +37,13 @@ export interface RuntimePluginSlashCommandDispatch {
 }
 
 interface RuntimePluginSlashCommandRegistryEntry {
-  readonly extensionId: string;
+  readonly pluginId: string;
   readonly commands: readonly PluginSlashCommandDef[];
 }
 
 export interface RuntimePluginSlashCommandRegistry {
-  register(extensionId: string, commands: readonly PluginSlashCommandDef[]): void;
-  unregister(extensionId: string): boolean;
+  register(pluginId: string, commands: readonly PluginSlashCommandDef[]): void;
+  unregister(pluginId: string): boolean;
   getAll(): RegisteredPluginSlashCommand[];
   clear(): void;
 }
@@ -83,7 +83,7 @@ export function buildRuntimePluginSlashCommandDispatch(
   message: InvokePluginSlashCommandWebviewMessage,
 ): RuntimePluginSlashCommandDispatch {
   return {
-    command: buildPluginSlashCommandCommand(message),
+    command: buildPluginSlashCommandId(message),
     invocation: buildPluginSlashCommandInvocation(message),
   };
 }
@@ -96,9 +96,9 @@ export function buildRuntimePluginsAvailableMessage(
 
 function projectRuntimeNekoPluginsAvailable(input: ProjectPluginsAvailableInput): PluginsAvailable {
   return Object.fromEntries(
-    Object.entries(NEKO_PLUGIN_EXTENSION_IDS).map(([plugin, extensionId]) => [
+    Object.entries(NEKO_PLUGIN_IDS).map(([plugin, pluginId]) => [
       plugin,
-      input.hasExtension(extensionId),
+      input.hasPlugin(pluginId),
     ]),
   ) as Record<NekoPluginKey, boolean>;
 }
@@ -106,24 +106,24 @@ function projectRuntimeNekoPluginsAvailable(input: ProjectPluginsAvailableInput)
 class DefaultRuntimePluginSlashCommandRegistry implements RuntimePluginSlashCommandRegistry {
   private readonly entries = new Map<string, RuntimePluginSlashCommandRegistryEntry>();
 
-  register(extensionId: string, commands: readonly PluginSlashCommandDef[]): void {
-    this.entries.set(extensionId, {
-      extensionId,
+  register(pluginId: string, commands: readonly PluginSlashCommandDef[]): void {
+    this.entries.set(pluginId, {
+      pluginId,
       commands: commands.map((command) => ({ ...command })),
     });
   }
 
-  unregister(extensionId: string): boolean {
-    return this.entries.delete(extensionId);
+  unregister(pluginId: string): boolean {
+    return this.entries.delete(pluginId);
   }
 
   getAll(): RegisteredPluginSlashCommand[] {
     return Array.from(this.entries.values())
-      .sort((a, b) => a.extensionId.localeCompare(b.extensionId))
+      .sort((a, b) => a.pluginId.localeCompare(b.pluginId))
       .flatMap((entry) =>
         entry.commands.map((command) => ({
           ...command,
-          extensionId: entry.extensionId,
+          pluginId: entry.pluginId,
         })),
       );
   }

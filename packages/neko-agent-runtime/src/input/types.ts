@@ -81,7 +81,7 @@ export interface InputProcessorOptions {
   /** Whether to include language hints in code blocks */
   includeLanguageHints?: boolean;
 
-  /** Custom file reader (for testing or VSCode integration) */
+  /** Custom file reader for host composition and tests. */
   fileReader?: IFileReader;
 }
 

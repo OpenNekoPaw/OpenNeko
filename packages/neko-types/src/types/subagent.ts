@@ -56,11 +56,11 @@ export interface SubAgentInfo {
 }
 
 // =============================================================================
-// Message Types (Extension <-> WebView)
+// Message Types (Desktop host <-> Webview)
 // =============================================================================
 
 /**
- * SubAgent event sent from Extension to WebView
+ * SubAgent event sent from the Desktop host to Webview.
  */
 export interface SubAgentEventMessage {
   type: 'subAgentEvent';

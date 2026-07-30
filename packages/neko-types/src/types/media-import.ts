@@ -76,7 +76,7 @@ export interface ImportResult {
 }
 
 /**
- * Domain packages implement this contract; host layers own filesystem, VSCode,
+ * Domain packages implement this contract; Desktop host layers own filesystem,
  * dialog, ZIP, and command orchestration.
  */
 export interface ImportHandler {

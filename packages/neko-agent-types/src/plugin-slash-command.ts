@@ -6,11 +6,11 @@ export interface PluginSlashCommandDef {
 }
 
 export interface RegisteredPluginSlashCommand extends PluginSlashCommandDef {
-  extensionId: string;
+  pluginId: string;
 }
 
 export interface PluginSlashCommandInvocation {
-  extensionId: string;
+  pluginId: string;
   commandId: string;
   conversationId: string;
   args?: string;

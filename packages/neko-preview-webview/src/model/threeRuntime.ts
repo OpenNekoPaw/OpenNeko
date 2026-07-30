@@ -1549,7 +1549,7 @@ export function createExactUrlModifier(
   return (url) => {
     // GLTFLoader materializes GLB-embedded images as panel-local object URLs.
     // Source-declared dependencies have already been enumerated and validated by
-    // the Extension, so blob: here is a browser-owned projection, not a fallback
+    // the Desktop host, so blob: here is a browser-owned projection, not a fallback
     // path to an undeclared file or network resource.
     if (url.startsWith('data:') || url.startsWith('blob:')) return url;
     if (projected.has(url)) return url;

@@ -27,11 +27,11 @@ export {
   useReportWebviewKeyboardFocus,
 } from './focused-webview';
 export {
-  formatVSCodeKeybinding,
+  formatKeybinding,
   matchesShortcutKeySpec,
   normalizeKeyboardEventKey,
   normalizeKeyboardKey,
-  parseVSCodeKeybinding,
+  parseKeybinding,
   serializeShortcutKeySpec,
 } from './key-spec';
 export type {
@@ -56,5 +56,5 @@ export type {
   KeyboardShortcutContext,
   ShortcutBinding,
   ShortcutKeySpec,
-  VSCodeKeybindingFormatOptions,
+  KeybindingFormatOptions,
 } from './types';

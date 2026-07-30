@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { PcmAudioClient } from '@neko/media/browser';
-import { useExtensionMessage, useHostReady } from '../shared/useHostMessage';
+import { useHostMessage, useHostReady } from '../shared/useHostMessage';
 import { useTranslation } from '../i18n/I18nContext';
 import { CoverView } from './CoverView';
 import { LyricsView } from './LyricsView';
@@ -298,7 +298,7 @@ function EngineAudioPlayer() {
     };
   }, [disposeClient, postMessage]);
 
-  useExtensionMessage((message) => {
+  useHostMessage((message) => {
     switch (message.type) {
       case 'preview:init': {
         const init = message as PreviewInitMessage;

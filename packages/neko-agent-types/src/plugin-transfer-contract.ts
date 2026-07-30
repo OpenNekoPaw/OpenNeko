@@ -7,12 +7,12 @@ import type {
   StoryboardVoiceCue,
 } from '@neko/shared';
 
-export const NEKO_PLUGIN_EXTENSION_IDS = {
-  canvas: 'neko.neko-canvas',
-  cut: 'neko.neko-cut',
+export const NEKO_PLUGIN_IDS = {
+  canvas: 'neko.canvas',
+  cut: 'neko.cut',
 } as const;
 
-export type NekoPluginKey = keyof typeof NEKO_PLUGIN_EXTENSION_IDS;
+export type NekoPluginKey = keyof typeof NEKO_PLUGIN_IDS;
 
 export type PluginTransferTarget = NekoPluginKey | 'explorer';
 
@@ -152,5 +152,5 @@ export type PluginTransferCommandPlan =
     };
 
 export interface ProjectPluginsAvailableInput {
-  readonly hasExtension: (extensionId: string) => boolean;
+  readonly hasPlugin: (pluginId: string) => boolean;
 }

@@ -15,7 +15,7 @@ export type SupportedLocale = 'en' | 'zh-cn';
  *
  * Design decision: flat key structure (dot-separated) over nested objects.
  * Reasons:
- * 1. Consistent with VSCode l10n bundle.l10n.json format
+ * 1. Stable dot-separated keys shared across packages
  * 2. Easier to achieve type safety (string literal union)
  * 3. Simpler lookup logic (no recursive resolution)
  *

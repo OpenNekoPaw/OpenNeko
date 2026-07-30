@@ -555,7 +555,7 @@ describe('ChatWorkspace pending send', () => {
     });
   });
 
-  it('routes queued message controls through the VSCode message facade', () => {
+  it('routes queued message controls through the Desktop host facade', () => {
     const { getByTestId } = render(<ChatWorkspace {...createProps()} />);
 
     fireEvent.click(getByTestId('promote-queued'));

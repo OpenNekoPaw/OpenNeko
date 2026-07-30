@@ -4,7 +4,6 @@
  * Unified internationalization for all OpenNeko packages.
  *
  * Layer 0 (this module): II18nService interface + I18nService default implementation
- * Layer 1 (vscode/extension/i18n-bridge): VSCode locale detection for Extension Host
  * Layer 2 (i18n/webview): detectWebviewLocale() — requires DOM
  * Layer 2 (i18n/react): I18nProvider + useI18n + useTranslation — requires React
  *

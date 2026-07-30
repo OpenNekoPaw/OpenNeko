@@ -11,7 +11,7 @@ export interface FileDropOptions {
   accept?: string[];
   /** Max file size in bytes (native files only). Oversized files are skipped. */
   maxSize?: number;
-  /** Parse `text/uri-list` from VSCode explorer drops (default true). */
+  /** Parse `text/uri-list` from file-manager drops (default true). */
   parseUriList?: boolean;
   /** Parse supported structured JSON drag payloads (default true). */
   parseJson?: boolean;
@@ -69,11 +69,11 @@ function parseUriList(raw: string): string[] {
 // ── Hook ─────────────────────────────────────────────────────────────────────
 
 /**
- * Unified HTML5 file-drop hook for VSCode webviews.
+ * Unified HTML5 file-drop hook for Desktop creative surfaces.
  *
  * Handles three drop sources:
- *   1. VSCode explorer / external URI lists (`text/uri-list`)
- *   2. Structured extension payloads (ordered JSON MIME types)
+ *   1. File-manager / external URI lists (`text/uri-list`)
+ *   2. Structured host payloads (ordered JSON MIME types)
  *   3. Native File objects (filesystem drag)
  *
  * ```tsx
@@ -148,7 +148,7 @@ export function useFileDrop(
     const maxSize = opts?.maxSize;
     const dt = e.dataTransfer;
 
-    // Priority 1: structured extension payloads
+    // Priority 1: structured host payloads
     if (doJson) {
       const structuredMimeTypes = opts?.structuredMimeTypes ?? ['application/json'];
       for (const mimeType of structuredMimeTypes) {
@@ -164,7 +164,7 @@ export function useFileDrop(
       }
     }
 
-    // Priority 2: text/uri-list (VSCode explorer)
+    // Priority 2: text/uri-list (file manager)
     if (doUriList) {
       const uriStr = dt.getData('text/uri-list') || dt.getData('text/plain');
       if (uriStr) {

@@ -1,13 +1,13 @@
 /**
  * Persisted state hook for document viewers.
  *
- * Uses postMessage to delegate persistence to the Extension Host,
+ * Uses host messages to delegate persistence to Desktop,
  * which stores state in workspaceState (survives tab close/reopen
- * and VSCode restarts within the same workspace).
+ * and Desktop restarts within the same workspace).
  *
  * Flow:
- *   Extension → Webview: document:restoreState { state } (on open)
- *   Webview → Extension: document:saveState { state }   (debounced)
+ *   Desktop → Webview: document:restoreState { state } (on open)
+ *   Webview → Desktop: document:saveState { state }   (debounced)
  */
 
 import { useState, useCallback, useRef, useEffect } from 'react';

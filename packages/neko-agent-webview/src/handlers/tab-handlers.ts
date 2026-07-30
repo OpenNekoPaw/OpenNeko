@@ -1,7 +1,7 @@
 /**
  * Tab State Handlers
  *
- * Handles tab state restoration from extension host.
+ * Handles tab state restoration from the Desktop host.
  */
 
 import { defineHandler } from './types';

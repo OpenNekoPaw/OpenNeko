@@ -2,7 +2,7 @@
  * Configuration Index
  *
  * Re-exports all configuration modules for easy importing.
- * Configuration data is loaded from platform via Extension-Webview messaging.
+ * Configuration data is loaded through the Desktop host runtime adapter.
  */
 
 // Provider UI metadata (display info for UI)

@@ -3,8 +3,8 @@
  *
  * Host-agnostic DTOs for explicit capability activation and activation progress
  * reporting. These contracts describe how a capability becomes active; they do
- * not describe prompt content and must stay usable by Extension, Webview, CLI,
- * and runtime tests without importing runtime internals.
+ * not describe prompt content and must stay usable by Desktop, Webview, and
+ * runtime tests without importing runtime internals.
  */
 
 export const AGENT_CAPABILITY_ACTIVATION_SOURCES = ['user-explicit', 'agent-tool'] as const;

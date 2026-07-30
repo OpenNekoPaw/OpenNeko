@@ -97,5 +97,5 @@ export interface PluginSlashCommandProjection {
   name: string;
   description: string;
   icon?: string;
-  extensionId: string;
+  pluginId: string;
 }

@@ -1,5 +1,5 @@
 /**
- * Extension → Webview Message Contracts
+ * Desktop host → Webview message contracts
  *
  * Shared protocol definitions live in @neko-agent/types. This module remains
  * as a local compatibility barrel for existing handler imports.

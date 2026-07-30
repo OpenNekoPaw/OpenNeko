@@ -2,7 +2,7 @@
  * useTabManager - Tab lifecycle management
  *
  * Handles opening, closing, and switching tabs,
- * plus persistence of tab state to extension host.
+ * plus persistence of tab state to the Desktop host.
  */
 
 import { useRef, useCallback } from 'react';

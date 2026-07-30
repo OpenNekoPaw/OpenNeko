@@ -3,7 +3,7 @@
  *
  * Host-agnostic DTOs for representing active Skill records and projecting them
  * into Agent turn prompt/tool/model state. These contracts intentionally live
- * below the Agent runtime so Extension, Webview, CLI, and tests can share the
+ * below the Agent runtime so Desktop, Webview, and tests can share the
  * same lifecycle vocabulary without importing runtime internals.
  */
 

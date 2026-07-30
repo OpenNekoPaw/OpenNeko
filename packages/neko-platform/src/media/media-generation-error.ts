@@ -2,7 +2,7 @@
  * Media generation error normalization.
  *
  * AI SDK/provider errors often carry useful fields as non-enumerable
- * properties. Normalize them before logging so Extension Host logs stay
+ * properties. Normalize them before logging so Desktop host logs stay
  * actionable instead of printing only `Object`.
  */
 

@@ -41,10 +41,3 @@ export * from './entity-uri/index';
 
 // Format SDKs (load/validate/migrate/save project files)
 export * from './nkc/index';
-
-// VSCode Webview API is NOT exported from main entry to avoid
-// requiring DOM types in Node.js consumers.
-// Use subpath import instead: import { ... } from '@neko/shared/vscode';
-//
-// VSCode Extension Host API (OutputChannelTransport, VSCodeErrorHandler, etc.)
-// Use subpath import: import { ... } from '@neko/shared/vscode/extension';

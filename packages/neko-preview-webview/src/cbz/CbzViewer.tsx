@@ -10,7 +10,7 @@
 
 import { useState, useEffect, useRef, useCallback, type FC } from 'react';
 import { type Entry, BlobWriter, ZipReader, HttpReader } from '@zip.js/zip.js';
-import { useExtensionMessage, postMessage } from '../shared/useHostMessage';
+import { useHostMessage, postMessage } from '../shared/useHostMessage';
 import { useDocumentSelection } from '../shared/useDocumentSelection';
 import { DocumentContextMenu, useDocumentContextActions } from '../shared/DocumentContextMenu';
 import {
@@ -90,7 +90,7 @@ export const CbzViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =>
   // Which page index the region selection is on (for waterfall mode)
   const [selectionPageIdx, setSelectionPageIdx] = useState(0);
 
-  useExtensionMessage((msg) => {
+  useHostMessage((msg) => {
     const m = msg as unknown as { type: string; payload: Record<string, unknown> };
     if (m.type === 'document:restoreState') {
       initPersistedStore(m.payload as Record<string, unknown>);

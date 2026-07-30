@@ -1,5 +1,5 @@
 // =============================================================================
-// Configuration Types (Shared between Extension and WebView)
+// Configuration types shared between the Desktop host and Webview.
 // =============================================================================
 
 // =============================================================================
@@ -473,7 +473,7 @@ export interface PromptPresetConfig {
   builtin?: boolean;
   /** Source of the prompt configuration */
   source?: PromptSource;
-  /** File path for user/project prompts (used for "Open in VSCode" feature) */
+  /** File path for opening user/project prompts in the Desktop file workflow. */
   filePath?: string;
   /** Internal prompts are not shown in the UI */
   internal?: boolean;

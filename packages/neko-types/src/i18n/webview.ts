@@ -12,7 +12,7 @@ import { I18nService, normalizeLocale } from './core';
 import type { II18nService, MessageBundle, SupportedLocale } from './types';
 
 /**
- * Detect locale from a VSCode webview's DOM attribute
+ * Detect locale from the Desktop-injected DOM attribute.
  *
  * Desktop injects `data-neko-locale` on the <html> element.
  * Returns 'en' if attribute is missing or not in browser context.

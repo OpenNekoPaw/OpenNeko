@@ -6,7 +6,7 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo, type FC } from 'react';
 import { renderAsync } from 'docx-preview';
-import { useExtensionMessage, postMessage } from '../shared/useHostMessage';
+import { useHostMessage, postMessage } from '../shared/useHostMessage';
 import { useDocumentSelection } from '../shared/useDocumentSelection';
 import { DocumentContextMenu, useDocumentContextActions } from '../shared/DocumentContextMenu';
 import { imgSrcToBase64 } from '../shared/imageToBase64';
@@ -31,7 +31,7 @@ export const DocxViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =
     getLocator: getSelectionLocator,
   });
 
-  useExtensionMessage((msg) => {
+  useHostMessage((msg) => {
     if (!sourceUrl && msg.type === 'document:data') {
       void loadDocxFromUrl(msg.payload.url);
     }

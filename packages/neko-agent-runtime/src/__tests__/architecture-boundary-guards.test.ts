@@ -250,7 +250,7 @@ describe('agent architecture boundary guards', () => {
     expect(violations).toEqual([]);
   });
 
-  it('keeps runtime collaborators independent from VSCode, React, Webview, and Extension modules', () => {
+  it('keeps runtime collaborators independent from host UI modules', () => {
     const sourceFiles = listFiles(join(agentSrc, 'runtime'))
       .filter((file) => (file.endsWith('.ts') || file.endsWith('.tsx')) && !isTestFile(file))
       .map((file) => ({
@@ -433,7 +433,7 @@ describe('agent architecture boundary guards', () => {
     expect(violations).toEqual([]);
   });
 
-  it('keeps Extension as host adapter rather than runtime collaborator implementation', () => {
+  it('keeps removed host adapters from re-owning runtime collaborators', () => {
     const source = readSourceFiles(extensionSrc, (file) => !isTestFile(file));
 
     expect(source).not.toMatch(

@@ -32,7 +32,7 @@ describe('slash-command-catalog', () => {
           id: 'batch',
           name: '/batch',
           description: 'Batch render current selection',
-          extensionId: 'neko.canvas',
+          pluginId: 'neko.canvas',
         },
       ],
     );
@@ -70,7 +70,7 @@ describe('slash-command-catalog', () => {
           id: 'as-plugin',
           name: '/as-plugin',
           description: 'Plugin command with similar prefix',
-          extensionId: 'neko.test',
+          pluginId: 'neko.test',
         },
       ],
     );
@@ -103,7 +103,7 @@ describe('slash-command-catalog', () => {
           id: 'status',
           name: '/status',
           description: 'Plugin status override',
-          extensionId: 'neko.canvas',
+          pluginId: 'neko.canvas',
         },
       ],
     );
@@ -244,7 +244,7 @@ describe('slash-command-catalog', () => {
           id: 'batch',
           name: '/batch',
           description: 'Batch render current selection',
-          extensionId: 'neko.canvas',
+          pluginId: 'neko.canvas',
         },
       ],
     );

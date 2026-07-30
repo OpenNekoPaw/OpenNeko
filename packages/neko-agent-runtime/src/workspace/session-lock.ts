@@ -19,7 +19,7 @@
  *   - `force: true` lets callers take over explicitly. Useful after
  *     the user confirms "yes, close the other one."
  *   - FS ops injected (read / write / unlink / mkdir) so the agent
- *     package stays Node-free. Extension layer wires node:fs/promises.
+ *     package stays Node-free. Desktop composition wires node:fs/promises.
  */
 
 // =============================================================================

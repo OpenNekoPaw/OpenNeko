@@ -49,13 +49,13 @@ export function useSlashCommands({
       const args = extractSlashCommandArgs(inputValue, command);
 
       // Handle plugin commands (registered by external extensions)
-      if (command.source === 'plugin' && command.extensionId) {
+      if (command.source === 'plugin' && command.pluginId) {
         if (!activeConversationId) {
           return;
         }
         clearInput();
         AgentHostMessages.invokePluginSlashCommand(
-          command.extensionId,
+          command.pluginId,
           command.commandId ?? command.id,
           activeConversationId,
           args,

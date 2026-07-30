@@ -20,7 +20,7 @@ describe('multimodal perception architecture boundary guard', () => {
     }
   });
 
-  it('keeps runtime perception services independent from Webview and Extension APIs', () => {
+  it('keeps runtime perception services independent from Webview and host UI APIs', () => {
     const files = listSourceFiles(join(REPO_ROOT, 'packages/neko-agent-runtime/src/perception'));
 
     for (const file of files) {

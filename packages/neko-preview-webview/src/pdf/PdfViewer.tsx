@@ -9,7 +9,7 @@
 import { useState, useEffect, useRef, useCallback, type FC } from 'react';
 import * as pdfjsLib from 'pdfjs-dist';
 import { TextLayer } from 'pdfjs-dist';
-import { useExtensionMessage, postMessage } from '../shared/useHostMessage';
+import { useHostMessage, postMessage } from '../shared/useHostMessage';
 import { useDocumentSelection } from '../shared/useDocumentSelection';
 import { DocumentContextMenu, useDocumentContextActions } from '../shared/DocumentContextMenu';
 import {
@@ -65,7 +65,7 @@ export const PdfViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =>
     pageNumber: currentPage,
   });
 
-  useExtensionMessage((msg) => {
+  useHostMessage((msg) => {
     const m = msg as unknown as { type: string; payload: Record<string, unknown> };
     if (m.type === 'document:restoreState') {
       initPersistedStore(m.payload as Record<string, unknown>);

@@ -13,7 +13,7 @@ export const EXTERNAL_PROCESSOR_SCHEMA_VERSION = 2;
 export const EXTERNAL_PROCESSOR_ROOT_ALIASES = [
   'workspace',
   'mediaLibrary',
-  'extensionPrivateResources',
+  'pluginPrivateResources',
 ] as const;
 
 export type ExternalProcessorRootAlias = (typeof EXTERNAL_PROCESSOR_ROOT_ALIASES)[number];
@@ -22,7 +22,7 @@ export const EXTERNAL_PROCESSOR_SOURCE_SCOPES = [
   'builtin',
   'project',
   'personal',
-  'extension',
+  'plugin',
 ] as const;
 
 export type ExternalProcessorSourceScope = (typeof EXTERNAL_PROCESSOR_SOURCE_SCOPES)[number];
@@ -258,8 +258,8 @@ export interface ExternalProcessorPersonalRegistry {
   readonly entries: readonly ExternalProcessorPersonalRegistryEntry[];
 }
 
-export interface ExternalProcessorExtensionContribution {
-  readonly extensionId: string;
+export interface ExternalProcessorPluginContribution {
+  readonly pluginId: string;
   readonly contributionId?: string;
   readonly trustLevel?: AgentCapabilityTrustLevel;
   readonly manifest: ExternalProcessorManifest;
@@ -496,9 +496,9 @@ export function registerPersonalExternalProcessorManifests(input: {
   return { registrations, diagnostics };
 }
 
-export function registerExtensionExternalProcessorContributions(input: {
+export function registerPluginExternalProcessorContributions(input: {
   readonly registry: ExternalProcessorRegistry;
-  readonly contributions: readonly ExternalProcessorExtensionContribution[];
+  readonly contributions: readonly ExternalProcessorPluginContribution[];
 }): ExternalProcessorDiscoveryResult {
   const registrations: ExternalProcessorRegistration[] = [];
   const diagnostics: ExternalProcessorDiagnostic[] = [];
@@ -511,18 +511,18 @@ export function registerExtensionExternalProcessorContributions(input: {
         diagnostic(
           'untrusted-processor',
           'warning',
-          `Extension processor "${contribution.extensionId}" cannot self-declare core trust.`,
+          `Plugin processor "${contribution.pluginId}" cannot self-declare core trust.`,
           undefined,
-          { extensionId: contribution.extensionId },
+          { pluginId: contribution.pluginId },
         ),
       );
     }
     registrations.push(
       input.registry.upsert(
         {
-          sourceScope: 'extension',
+          sourceScope: 'plugin',
           agentCapabilitySource: 'plugin',
-          sourceId: contribution.extensionId,
+          sourceId: contribution.pluginId,
           trustLevel,
         },
         contribution.manifest,

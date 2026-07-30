@@ -1,8 +1,8 @@
 /**
- * Engine-first preview contracts shared by Extension Host, Webview-facing code,
+ * Engine-first preview contracts shared by the Desktop host, Webview-facing code,
  * and engine clients.
  *
- * Keep this file platform-neutral: no DOM, React, or VSCode types.
+ * Keep this file platform-neutral: no DOM, React, or host API types.
  */
 
 export type PreviewAssetKind = 'image' | 'video' | 'audio' | 'document' | 'unknown';

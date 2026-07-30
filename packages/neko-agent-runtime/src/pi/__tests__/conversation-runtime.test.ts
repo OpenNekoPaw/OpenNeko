@@ -48,7 +48,7 @@ describe('PiConversationRuntime', () => {
     authority = await NodePiConversationAuthority.create({
       userDataRoot: root,
       workspaceId: 'workspace-1',
-      hostId: 'tui',
+      hostId: 'desktop-main',
     });
     skillEnv = new NodeExecutionEnv({ cwd: root });
   });
@@ -550,7 +550,7 @@ describe('PiConversationRuntime', () => {
     authority = await NodePiConversationAuthority.create({
       userDataRoot: root,
       workspaceId: 'workspace-1',
-      hostId: 'tui',
+      hostId: 'desktop-main',
       leaseTtlMs: 1_000,
     });
     const lease = authority.acquireLease('conversation-1');
@@ -615,7 +615,7 @@ describe('PiConversationRuntime', () => {
     authority = await NodePiConversationAuthority.create({
       userDataRoot: root,
       workspaceId: 'workspace-1',
-      hostId: 'tui',
+      hostId: 'desktop-main',
       leaseTtlMs: 1_000,
     });
     const lease = authority.acquireLease('conversation-1');
@@ -637,7 +637,7 @@ describe('PiConversationRuntime', () => {
     const otherHost = await NodePiConversationAuthority.create({
       userDataRoot: root,
       workspaceId: 'workspace-1',
-      hostId: 'vscode',
+      hostId: 'desktop-renderer',
       leaseTtlMs: 1_000,
     });
 

@@ -1,10 +1,10 @@
 /**
  * Preview message protocol types
  *
- * Defines the postMessage contract between Extension and Webview.
+ * Defines the message contract between the Desktop host and Webview.
  */
 
-import type { DocumentExtensionMessage, DocumentWebviewMessage } from './document-types';
+import type { DocumentHostMessage, DocumentWebviewMessage } from './document-types';
 import type {
   PanoramaCoverageAngle,
   PanoramaViewState,
@@ -20,7 +20,7 @@ import type {
 } from '@neko/media';
 
 // =============================================================================
-// Media Info (from Extension probe)
+// Media Info (from Desktop host probe)
 // =============================================================================
 
 export interface MediaInfo {
@@ -40,7 +40,7 @@ export interface MediaInfo {
 }
 
 // =============================================================================
-// Extension → Webview Messages
+// Desktop host → Webview messages
 // =============================================================================
 
 export interface PreviewInitMessage {
@@ -123,7 +123,7 @@ export interface PanoramaErrorMessage {
   };
 }
 
-export type ExtensionMessage =
+export type HostMessage =
   | PreviewInitMessage
   | PreviewPlaybackReadyMessage
   | PreviewFrameDataMessage
@@ -133,10 +133,10 @@ export type ExtensionMessage =
   | PanoramaInitMessage
   | PanoramaVariantReadyMessage
   | PanoramaErrorMessage
-  | DocumentExtensionMessage;
+  | DocumentHostMessage;
 
 // =============================================================================
-// Webview → Extension Messages
+// Webview → Desktop host messages
 // =============================================================================
 
 export interface ReadyMessage {

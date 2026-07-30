@@ -22,8 +22,8 @@ export interface SlashCommand {
   source?: CommandSource;
   /** Backing Skill ID if source is 'command-artifact' */
   skillId?: string;
-  /** Extension ID if source is 'plugin' */
-  extensionId?: string;
+  /** Plugin ID if source is 'plugin'. */
+  pluginId?: string;
 }
 
 /**
@@ -35,7 +35,7 @@ export interface PluginSlashCommandDef {
   name: string;
   description: string;
   icon?: string;
-  extensionId: string;
+  pluginId: string;
 }
 
 /**

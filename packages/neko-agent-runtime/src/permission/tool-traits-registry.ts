@@ -5,7 +5,7 @@
  * Used by PermissionRuleMatcher to make conditional decisions in auto mode.
  *
  * Decoupled from Tool definitions so that:
- * 1. Extension tools without traits can still be covered
+ * 1. Plugin tools without traits can still be covered
  * 2. MCP tools can have inferred traits
  * 3. Traits can be overridden per-session
  */

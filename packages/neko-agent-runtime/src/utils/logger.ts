@@ -1,8 +1,7 @@
 /**
  * Agent Logger - Global logger registry
  *
- * Default: ConsoleLogger for standalone usage.
- * Extension injects VSCode OutputChannel logger via setRootLogger().
+ * Desktop composition injects the application logger via setRootLogger().
  */
 import { createLoggerRegistry } from '@neko/shared';
 

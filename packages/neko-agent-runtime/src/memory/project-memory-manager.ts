@@ -198,12 +198,12 @@ export class FileProjectMemoryManager implements IProjectMemoryManager {
 }
 
 // =============================================================================
-// Factory for Node.js environments (TUI + Extension Host)
+// Factory for the Desktop Node host
 // =============================================================================
 
 /**
  * Create a FileProjectMemoryManager wired to Node.js `fs/promises`.
- * Works in both TUI (CLI) and Extension Host (Node.js runtime).
+ * Runs in the Desktop main-process Node.js runtime.
  *
  * @param filePath Absolute path to the memory file (e.g. `workDir/.neko/memory.md`)
  */

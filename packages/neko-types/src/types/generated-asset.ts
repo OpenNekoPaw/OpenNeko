@@ -157,7 +157,7 @@ export function isGeneratedStoryboard(asset: GeneratedAsset): asset is Generated
 
 /**
  * A GeneratedAsset augmented with a webview-safe URI.
- * Created by the extension host via `toWebviewAsset()` before sending to webview.
+ * Created by the Desktop host before sending to a renderer.
  */
 export type WebviewGeneratedAsset<T extends BaseGeneratedAsset = GeneratedAsset> = T & {
   /** `vscode-resource://` URI safe for use in `<img>`, `<video>`, `<audio>` src */

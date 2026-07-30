@@ -242,7 +242,7 @@ function MermaidBlockComponent({ code }: MermaidBlockProps) {
     }
   }, [code]);
 
-  // Download as SVG — delegate to Extension Host, fall back to browser download
+  // Download as SVG through the Desktop host, with a browser-owned export path.
   const handleDownload = useCallback(() => {
     if (!svg) return;
 

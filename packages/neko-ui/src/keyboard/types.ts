@@ -115,6 +115,6 @@ export interface KeyboardDispatcherOptions {
   readonly stopOnComposition?: boolean;
 }
 
-export interface VSCodeKeybindingFormatOptions {
+export interface KeybindingFormatOptions {
   readonly primaryModifier?: 'ctrl' | 'cmd' | 'meta';
 }

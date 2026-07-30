@@ -1,7 +1,7 @@
 import {
   THREE_REFERENCE_PROTOCOL_VERSION,
   type ModelPreviewSourceDescriptor,
-  type ThreeReferenceExtensionMessage,
+  type ThreeReferenceHostMessage,
   type ThreeReferencePanelSubject,
 } from '@neko/shared';
 import { createSourceModelStaging } from '@neko-preview/contracts';
@@ -33,7 +33,7 @@ export function createSourceModelViewerHost(input: {
           if (initialized) return;
           initialized = true;
           const readyEpoch = subscriptionEpoch;
-          const init: ThreeReferenceExtensionMessage = {
+          const init: ThreeReferenceHostMessage = {
             type: '3d-reference/session-init',
             protocolVersion: THREE_REFERENCE_PROTOCOL_VERSION,
             panelSubject,

@@ -83,7 +83,7 @@ export * from './tool-injection';
 // Hook types (file-based hooks for agent automation)
 export * from './hook';
 
-// Media protocol types (Extension ↔ Webview media processing IPC)
+// Media protocol types (Desktop host ↔ Webview media processing IPC)
 
 // Media Library file metadata and package manifests
 export * from './media-file';

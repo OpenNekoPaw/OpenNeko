@@ -5,7 +5,7 @@
  */
 
 /**
- * Theme kind (matches VSCode ColorThemeKind values)
+ * Theme kind shared by Desktop creative surfaces.
  */
 export type ThemeKind = 'light' | 'dark' | 'high-contrast' | 'high-contrast-light';
 

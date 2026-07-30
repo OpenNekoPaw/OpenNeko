@@ -72,7 +72,7 @@ vi.mock('../i18n/I18nContext', () => ({
 }));
 
 vi.mock('../shared/useHostMessage', () => ({
-  useExtensionMessage: (handler: (message: unknown) => void) => {
+  useHostMessage: (handler: (message: unknown) => void) => {
     messageHandlers.clear();
     messageHandlers.add(handler);
   },

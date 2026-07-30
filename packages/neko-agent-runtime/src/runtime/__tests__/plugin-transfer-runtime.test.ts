@@ -91,15 +91,15 @@ describe('plugin transfer runtime', () => {
     expect(
       buildRuntimePluginSlashCommandDispatch({
         type: 'invokePluginSlashCommand',
-        extensionId: 'neko.neko-canvas',
+        pluginId: 'neko.canvas',
         commandId: 'batch',
         conversationId: 'conv-1',
         args: 'selected shots',
       }),
     ).toEqual({
-      command: 'neko.neko-canvas.slashCommand.batch',
+      command: 'neko.canvas.slashCommand.batch',
       invocation: {
-        extensionId: 'neko.neko-canvas',
+        pluginId: 'neko.canvas',
         commandId: 'batch',
         conversationId: 'conv-1',
         args: 'selected shots',
@@ -107,7 +107,7 @@ describe('plugin transfer runtime', () => {
     });
   });
 
-  it('aggregates plugin slash commands in stable extension order', () => {
+  it('aggregates plugin slash commands in stable plugin order', () => {
     const registry = createRuntimePluginSlashCommandRegistry();
 
     registry.register('neko.z', [
@@ -123,18 +123,18 @@ describe('plugin transfer runtime', () => {
         name: '/batch',
         description: 'Batch generate',
         icon: 'image',
-        extensionId: 'neko.a',
+        pluginId: 'neko.a',
       },
       {
         id: 'export',
         name: '/export',
         description: 'Export storyboard',
-        extensionId: 'neko.z',
+        pluginId: 'neko.z',
       },
     ]);
   });
 
-  it('replaces and unregisters plugin slash commands by extension', () => {
+  it('replaces and unregisters plugin slash commands by plugin', () => {
     const registry = createRuntimePluginSlashCommandRegistry();
 
     registry.register('neko.canvas', [
@@ -149,7 +149,7 @@ describe('plugin transfer runtime', () => {
         id: 'export',
         name: '/export',
         description: 'Export storyboard',
-        extensionId: 'neko.canvas',
+        pluginId: 'neko.canvas',
       },
     ]);
     expect(registry.unregister('neko.canvas')).toBe(true);
@@ -160,7 +160,7 @@ describe('plugin transfer runtime', () => {
   it('projects installed neko plugins to a webview message', () => {
     expect(
       buildRuntimePluginsAvailableMessage({
-        hasExtension: (extensionId) => extensionId === 'neko.neko-canvas',
+        hasPlugin: (pluginId) => pluginId === 'neko.canvas',
       }),
     ).toEqual({
       type: 'pluginsAvailable',

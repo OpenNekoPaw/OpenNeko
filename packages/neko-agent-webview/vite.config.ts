@@ -48,8 +48,8 @@ export default defineConfig({
           }
           return 'assets/[name]-[hash].[ext]';
         },
-        // Entry and imported chunks share content-addressed paths so the
-        // VSCode resource proxy cannot mix assets from different builds.
+        // Entry and imported chunks share content-addressed paths so Desktop
+        // cannot mix assets from different builds.
       },
     },
     modulePreload: false,

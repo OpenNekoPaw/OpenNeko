@@ -211,7 +211,7 @@ export function buildInvalidWebviewPayloadMessage(raw: unknown): AgentSessionDia
     return buildAgentSessionDiagnosticMessage({
       code: 'webview-protocol-mismatch',
       action: messageType,
-      message: `Agent Webview protocol mismatch: Extension expects v${AGENT_WEBVIEW_PROTOCOL_VERSION}, Webview sent ${receivedVersion === null ? 'no version' : `v${receivedVersion}`}. Reload the Webview.`,
+      message: `Agent Webview protocol mismatch: Desktop host expects v${AGENT_WEBVIEW_PROTOCOL_VERSION}, Webview sent ${receivedVersion === null ? 'no version' : `v${receivedVersion}`}. Reload the Webview.`,
     });
   }
   const keys = readMessageKeys(raw);

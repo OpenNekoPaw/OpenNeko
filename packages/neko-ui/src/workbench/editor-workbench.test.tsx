@@ -34,7 +34,7 @@ describe('editor workbench shell primitives', () => {
     host.remove();
   });
 
-  it('renders VSCode-compatible workbench zones as reusable slots', () => {
+  it('renders Desktop workbench zones as reusable slots', () => {
     act(() => {
       root.render(
         <EditorWorkbenchShell
@@ -359,7 +359,7 @@ describe('editor workbench shell primitives', () => {
     expect(onThumbSelect).toHaveBeenCalledWith('thumb');
   });
 
-  it('supports VSCode-style tab close and drag reorder callbacks', () => {
+  it('supports portable tab close and drag reorder callbacks', () => {
     const onTabSelect = vi.fn();
     const onTabClose = vi.fn();
     const onTabReorder = vi.fn();

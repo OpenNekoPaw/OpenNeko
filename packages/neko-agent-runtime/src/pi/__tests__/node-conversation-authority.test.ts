@@ -25,7 +25,7 @@ describe('NodePiConversationAuthority', () => {
   });
 
   it('stores Pi JSONL and SQLite under the user root and reopens by product identities', async () => {
-    const authority = await createAuthority('vscode');
+    const authority = await createAuthority('desktop-primary');
     const lease = authority.acquireLease('conversation-1');
     const session = await authority.createConversation({
       lease,
@@ -59,7 +59,7 @@ describe('NodePiConversationAuthority', () => {
 
     await authority.dispose();
     authorities.splice(authorities.indexOf(authority), 1);
-    const reopenedAuthority = await createAuthority('vscode-reopened');
+    const reopenedAuthority = await createAuthority('desktop-reopened');
     await expect(
       reopenedAuthority.readBranchEntries('conversation-1', 'branch-main'),
     ).resolves.toEqual([
@@ -73,7 +73,7 @@ describe('NodePiConversationAuthority', () => {
   });
 
   it('keeps conversation, branch, and Pi Session identities distinct across history', async () => {
-    const authority = await createAuthority('tui');
+    const authority = await createAuthority('desktop-secondary');
     const lease = authority.acquireLease('conversation-1');
     const main = await authority.createConversation({
       lease,
@@ -116,23 +116,23 @@ describe('NodePiConversationAuthority', () => {
   });
 
   it('fences stale cross-Host writers with monotonically increasing epochs', async () => {
-    const vscode = await createAuthority('vscode');
-    const tui = await createAuthority('tui');
-    const vscodeLease = vscode.acquireLease('conversation-1');
-    await vscode.createConversation({
-      lease: vscodeLease,
+    const primary = await createAuthority('desktop-primary');
+    const secondary = await createAuthority('desktop-secondary');
+    const primaryLease = primary.acquireLease('conversation-1');
+    await primary.createConversation({
+      lease: primaryLease,
       conversationId: 'conversation-1',
       branchId: 'branch-main',
     });
 
-    expect(() => tui.acquireLease('conversation-1')).toThrowError(
+    expect(() => secondary.acquireLease('conversation-1')).toThrowError(
       expect.objectContaining({ code: 'lease-held' }),
     );
-    const tuiLease = tui.acquireLease('conversation-1', { takeover: true });
-    expect(tuiLease.epoch).toBe(vscodeLease.epoch + 1);
+    const secondaryLease = secondary.acquireLease('conversation-1', { takeover: true });
+    expect(secondaryLease.epoch).toBe(primaryLease.epoch + 1);
     await expect(
-      vscode.checkpointTurn({
-        lease: vscodeLease,
+      primary.checkpointTurn({
+        lease: primaryLease,
         conversationId: 'conversation-1',
         branchId: 'branch-main',
         turnId: 'turn-stale',
@@ -140,25 +140,25 @@ describe('NodePiConversationAuthority', () => {
         messages: [{ role: 'user', content: 'must not persist', timestamp: now }],
       }),
     ).rejects.toMatchObject({ code: 'lease-stale' });
-    expect(vscode.getTurnDurability('conversation-1', 'turn-stale')).toBe('persistence-delayed');
-    expect((await vscode.buildContext('conversation-1', 'branch-main')).messages).toHaveLength(0);
+    expect(primary.getTurnDurability('conversation-1', 'turn-stale')).toBe('persistence-delayed');
+    expect((await primary.buildContext('conversation-1', 'branch-main')).messages).toHaveLength(0);
 
-    const recoveredLease = vscode.acquireLease('conversation-1', { takeover: true });
-    await vscode.backfillTurnCheckpoint({
+    const recoveredLease = primary.acquireLease('conversation-1', { takeover: true });
+    await primary.backfillTurnCheckpoint({
       lease: recoveredLease,
       conversationId: 'conversation-1',
       branchId: 'branch-main',
       turnId: 'turn-stale',
       terminalState: 'failed',
     });
-    expect(vscode.getTurnDurability('conversation-1', 'turn-stale')).toBe('durable');
-    expect(vscode.readCheckpoint('conversation-1', 'turn-stale')?.writerEpoch).toBe(
+    expect(primary.getTurnDurability('conversation-1', 'turn-stale')).toBe('durable');
+    expect(primary.readCheckpoint('conversation-1', 'turn-stale')?.writerEpoch).toBe(
       recoveredLease.epoch,
     );
   });
 
   it('keeps terminal checkpoints idempotent without duplicating Pi messages', async () => {
-    const authority = await createAuthority('tui');
+    const authority = await createAuthority('desktop-secondary');
     const lease = authority.acquireLease('conversation-1');
     await authority.createConversation({
       lease,
@@ -187,7 +187,7 @@ describe('NodePiConversationAuthority', () => {
   });
 
   it('restores the active Pi leaf when compaction metadata cannot commit', async () => {
-    const authority = await createAuthority('tui');
+    const authority = await createAuthority('desktop-secondary');
     const lease = authority.acquireLease('conversation-1');
     const session = await authority.createConversation({
       lease,
@@ -253,7 +253,7 @@ describe('NodePiConversationAuthority', () => {
   });
 
   it('expires leases and supports replaceable read-only catalog projections', async () => {
-    const authority = await createAuthority('vscode', 100);
+    const authority = await createAuthority('desktop-primary', 100);
     let lease: ConversationExecutionLease = authority.acquireLease('conversation-1');
     await authority.createConversation({
       lease,
@@ -278,7 +278,7 @@ describe('NodePiConversationAuthority', () => {
   });
 
   it('fails visibly when a lease targets a missing conversation title', async () => {
-    const authority = await createAuthority('tui');
+    const authority = await createAuthority('desktop-secondary');
     const lease = authority.acquireLease('missing-conversation');
 
     expect(() =>
@@ -287,7 +287,7 @@ describe('NodePiConversationAuthority', () => {
   });
 
   it('deletes catalog metadata and every mapped Pi Session through the fenced writer', async () => {
-    const authority = await createAuthority('vscode');
+    const authority = await createAuthority('desktop-primary');
     const lease = authority.acquireLease('conversation-delete');
     const main = await authority.createConversation({
       lease,

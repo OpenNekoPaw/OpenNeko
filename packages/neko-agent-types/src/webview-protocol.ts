@@ -1,8 +1,8 @@
 /**
- * Webview ↔ Extension protocol contracts.
+ * Webview and Desktop host protocol contracts.
  *
  * This file is the shared schema for values that cross the VS Code webview
- * boundary. Keep it dependency-light and validate data at the Extension edge.
+ * boundary. Keep it dependency-light and validate data at the Desktop host edge.
  */
 
 import type {
@@ -385,7 +385,7 @@ export interface InvokeSkillWebviewMessage {
 
 export interface InvokePluginSlashCommandWebviewMessage {
   type: 'invokePluginSlashCommand';
-  extensionId: string;
+  pluginId: string;
   commandId: string;
   conversationId: string;
   args?: string;
@@ -775,7 +775,7 @@ export interface PluginCommandsMessage {
     name: string;
     description: string;
     icon?: string;
-    extensionId: string;
+    pluginId: string;
   }>;
 }
 
@@ -2670,14 +2670,14 @@ function parseInvokeSkillMessage(raw: Record<string, unknown>): InvokeSkillWebvi
 function parseInvokePluginSlashCommandMessage(
   raw: Record<string, unknown>,
 ): InvokePluginSlashCommandWebviewMessage | null {
-  const extensionId = requiredString(raw.extensionId);
+  const pluginId = requiredString(raw.pluginId);
   const commandId = requiredString(raw.commandId);
   const conversationId = requiredString(raw.conversationId);
   const args = optionalStringStrict(raw.args);
-  if (!extensionId || !commandId || !conversationId || args === null) return null;
+  if (!pluginId || !commandId || !conversationId || args === null) return null;
   return {
     type: 'invokePluginSlashCommand',
-    extensionId,
+    pluginId,
     commandId,
     conversationId,
     ...(args !== undefined ? { args } : {}),
@@ -2728,7 +2728,7 @@ export function buildPluginSlashCommandInvocation(
   message: InvokePluginSlashCommandWebviewMessage,
 ): PluginSlashCommandInvocation {
   return {
-    extensionId: message.extensionId,
+    pluginId: message.pluginId,
     commandId: message.commandId,
     conversationId: message.conversationId,
     ...(message.args !== undefined ? { args: message.args } : {}),

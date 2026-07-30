@@ -1,37 +1,32 @@
 import { describe, expect, it } from 'vitest';
 import {
-  formatVSCodeKeybinding,
+  formatKeybinding,
   matchesShortcutKeySpec,
   normalizeKeyboardKey,
-  parseVSCodeKeybinding,
+  parseKeybinding,
   serializeShortcutKeySpec,
 } from './key-spec';
 
 describe('keyboard key specs', () => {
-  it('parses VSCode-style keybinding strings into structured specs', () => {
-    expect(parseVSCodeKeybinding('ctrl+a')).toEqual({ key: 'KeyA', primary: true });
-    expect(parseVSCodeKeybinding('meta+shift+z')).toEqual({
+  it('parses portable keybinding strings into structured specs', () => {
+    expect(parseKeybinding('ctrl+a')).toEqual({ key: 'KeyA', primary: true });
+    expect(parseKeybinding('meta+shift+z')).toEqual({
       key: 'KeyZ',
       primary: true,
       shift: true,
     });
-    expect(parseVSCodeKeybinding('cmdOrCtrl+Space')).toEqual({
+    expect(parseKeybinding('cmdOrCtrl+Space')).toEqual({
       key: 'Space',
       primary: true,
     });
   });
 
-  it('formats structured specs back to VSCode keybinding strings', () => {
-    expect(formatVSCodeKeybinding({ key: 'KeyZ', primary: true, shift: true })).toBe(
-      'ctrl+shift+z',
-    );
+  it('formats structured specs back to portable keybinding strings', () => {
+    expect(formatKeybinding({ key: 'KeyZ', primary: true, shift: true })).toBe('ctrl+shift+z');
     expect(
-      formatVSCodeKeybinding(
-        { key: 'KeyZ', primary: true, shift: true },
-        { primaryModifier: 'cmd' },
-      ),
+      formatKeybinding({ key: 'KeyZ', primary: true, shift: true }, { primaryModifier: 'cmd' }),
     ).toBe('cmd+shift+z');
-    expect(formatVSCodeKeybinding({ key: 'Space' })).toBe('space');
+    expect(formatKeybinding({ key: 'Space' })).toBe('space');
   });
 
   it('serializes shortcut specs with stable modifier ordering', () => {

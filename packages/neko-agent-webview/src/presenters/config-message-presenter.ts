@@ -936,7 +936,7 @@ function isPluginSlashCommandProjection(value: unknown): value is PluginSlashCom
     readString(record, 'id') &&
     readString(record, 'name') &&
     readString(record, 'description') &&
-    readString(record, 'extensionId') &&
+    readString(record, 'pluginId') &&
     (record.icon === undefined || typeof record.icon === 'string'),
   );
 }

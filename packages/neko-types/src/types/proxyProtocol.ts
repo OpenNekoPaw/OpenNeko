@@ -8,7 +8,7 @@
  * transcoding (H.264, 1Mbps, 1/4 resolution capped at 960x540).
  *
  * Flow:
- *   Webview → Extension (ProxyService) → Engine (videos:proxy)
+ *   Webview → Desktop host (ProxyService) → Engine (videos:proxy)
  */
 
 // =============================================================================

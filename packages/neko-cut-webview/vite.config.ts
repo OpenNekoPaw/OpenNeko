@@ -14,7 +14,7 @@ export default defineConfig(({ command }) => {
         targets: [],
       }),
     ],
-    // Use relative paths for VSCode webview compatibility
+    // Keep emitted assets relocatable inside the Desktop bundle.
     base: './',
     resolve: {
       preserveSymlinks: true,
@@ -27,7 +27,7 @@ export default defineConfig(({ command }) => {
     server: {
       port: 5173,
       strictPort: true,
-      // Allow CORS for VSCode Webview (vscode-webview:// origin)
+      // Allow the package-local development server to be embedded by Desktop.
       cors: true,
       headers: {
         'Access-Control-Allow-Origin': '*',
@@ -45,7 +45,7 @@ export default defineConfig(({ command }) => {
       },
     },
     worker: {
-      // Inline workers as base64 data URLs to avoid cross-origin issues in VSCode WebView
+      // Emit workers with the same relocatable asset policy as the main bundle.
       format: 'es',
       rollupOptions: {
         output: {
@@ -77,7 +77,7 @@ export default defineConfig(({ command }) => {
     },
     build: {
       outDir: 'dist',
-      // Disable CSS code splitting to avoid preload issues in VSCode webview
+      // Keep the embedded creative surface stylesheet atomic.
       cssCodeSplit: false,
       rollupOptions: {
         input: {
@@ -91,7 +91,7 @@ export default defineConfig(({ command }) => {
         // Externalize dynamically imported modules that are not available in webview
         external: isBuild ? [] : [],
       },
-      // Disable module preload polyfill which causes issues in VSCode webview
+      // Desktop owns module loading for embedded creative surfaces.
       modulePreload: false,
     },
     // Optimize dependencies

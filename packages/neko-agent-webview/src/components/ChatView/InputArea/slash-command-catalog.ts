@@ -19,7 +19,7 @@ export interface SlashCommandCatalogItem {
   icon: string;
   source: SlashCommandSource;
   skillId?: string;
-  extensionId?: string;
+  pluginId?: string;
   descriptionKind: SlashCommandDescriptionKind;
 }
 
@@ -308,13 +308,13 @@ function projectSkillInvocation(skill: SkillSummary): SkillInvocationCatalogItem
 
 function projectPluginSlashCommand(def: RegisteredPluginSlashCommand): SlashCommandCatalogItem {
   return {
-    id: `plugin:${def.extensionId}:${def.id}`,
+    id: `plugin:${def.pluginId}:${def.id}`,
     commandId: def.id,
     name: def.name.startsWith('/') ? def.name : `/${def.name}`,
     descriptionKey: def.description,
     icon: def.icon || '🔌',
     source: 'plugin',
-    extensionId: def.extensionId,
+    pluginId: def.pluginId,
     descriptionKind: 'literal',
   };
 }

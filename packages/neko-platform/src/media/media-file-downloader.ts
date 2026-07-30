@@ -2,8 +2,8 @@
  * Media File Downloader
  *
  * Shared utility for downloading remote media outputs to local filesystem.
- * Used by both the VSCode Extension and TUI after background task completion.
- * Has no dependency on VSCode APIs or readline — pure Node.js.
+ * Used by the Desktop Node host after background task completion.
+ * Has no dependency on renderer APIs.
  */
 
 import * as fs from 'node:fs/promises';
@@ -68,7 +68,7 @@ export function detectMediaExtension(
 export interface DownloadMediaOptions {
   /**
    * Optional transcoding callback for formats incompatible with the host environment
-   * (e.g. raw Opus → MP3 for Electron webview). TUI callers can omit this.
+   * (e.g. raw Opus → MP3 for the Electron renderer).
    */
   transcodeFile?: (
     srcPath: string,

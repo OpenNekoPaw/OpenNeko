@@ -250,7 +250,7 @@ export type SkillCatalogActionId =
 export type SkillCatalogEditableSource = Extract<SkillCatalogSource, 'project' | 'personal'>;
 
 export interface SkillCatalogAction {
-  /** Typed host-resolved action id. Never a VSCode command id or file path. */
+  /** Typed host-resolved action id. Never a host command id or file path. */
   readonly id: SkillCatalogActionId;
   /** Optional display hint. A host UI may localize by action id instead. */
   readonly label?: string;
@@ -311,7 +311,7 @@ export interface SkillCatalogEntry {
 }
 
 export interface SkillCatalogRef {
-  readonly extensionId: string;
+  readonly pluginId: string;
   readonly id: string;
   readonly source: SkillCatalogSource;
 }
@@ -336,7 +336,7 @@ export interface SkillCatalogProjectable {
 }
 
 export interface SkillCatalogProjectionOptions {
-  readonly extensionId?: string;
+  readonly pluginId?: string;
   readonly id?: string;
   readonly displayName?: string;
   readonly source?: SkillCatalogSource;
@@ -1264,12 +1264,12 @@ export function isEditableSkillCatalogSource(value: unknown): value is SkillCata
 export function isSkillCatalogRef(value: unknown): value is SkillCatalogRef {
   if (!isRecord(value)) return false;
   for (const key of Object.keys(value)) {
-    if (key !== 'extensionId' && key !== 'id' && key !== 'source') {
+    if (key !== 'pluginId' && key !== 'id' && key !== 'source') {
       return false;
     }
   }
   return (
-    typeof value.extensionId === 'string' &&
+    typeof value.pluginId === 'string' &&
     typeof value.id === 'string' &&
     isSkillCatalogSource(value.source)
   );

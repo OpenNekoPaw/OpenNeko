@@ -357,19 +357,19 @@ export const AgentHostMessages = {
   /**
    * Invoke a plugin slash command registered by an external extension.
    * Desktop host routes it to the owning plugin runtime.
-   * @param extensionId - The extension that registered the command
+   * @param pluginId - The plugin that registered the command
    * @param commandId   - The command id (without /)
    * @param args        - Optional arguments string
    */
   invokePluginSlashCommand: (
-    extensionId: string,
+    pluginId: string,
     commandId: string,
     conversationId: string,
     args?: string,
   ) => {
     postConversationMessage({
       type: 'invokePluginSlashCommand',
-      extensionId,
+      pluginId,
       commandId,
       conversationId,
       args,
@@ -461,7 +461,7 @@ export const AgentHostMessages = {
     });
   },
 
-  /** Notify Extension Host that a drag operation started (DnD) */
+  /** Notify the Desktop host that a drag operation started. */
   dndStart: (asset: { path: string; mediaType: 'image' | 'video' | 'audio'; name: string }) => {
     postWebviewMessage({ type: 'dnd:start', asset });
   },
