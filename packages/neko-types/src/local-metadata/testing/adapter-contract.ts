@@ -28,8 +28,8 @@ export async function runLocalMetadataAdapterContract(
 
   const firstMigration = await source.migrateNamespace(M1_LOCAL_METADATA_MIGRATIONS);
   assert(firstMigration.previousVersion === 0, 'M1 previous version must be zero');
-  assert(firstMigration.currentVersion === 2, 'M1 current version must be two');
-  assert(firstMigration.appliedVersions.length === 2, 'M1 must apply both core migrations');
+  assert(firstMigration.currentVersion === 3, 'M1 current version must be three');
+  assert(firstMigration.appliedVersions.length === 3, 'M1 must apply all three core migrations');
   await source.migrateNamespace(RESOURCE_CACHE_MIGRATIONS);
   await source.migrateNamespace(MEDIA_METADATA_MIGRATIONS);
 
@@ -166,7 +166,7 @@ export async function runLocalMetadataAdapterContract(
 
   const destructiveMigration: LocalMetadataMigration = {
     namespace: 'core',
-    version: 3,
+    version: 4,
     name: 'rebuild-conversation-order-index',
     checksum: 'sha256:adapter-contract-rebuild-conversation-order-index',
     ownership: 'cache',
