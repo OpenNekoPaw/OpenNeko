@@ -4,16 +4,23 @@ import type {
   CanvasHostProjectionEvent,
   CanvasHostRuntimeIdentity,
   CanvasHostSnapshot,
+  CanvasMaterialActionResolution,
+  CanvasMaterialActionResolutionRequest,
 } from '@neko-canvas/domain';
+import type {
+  HtmlVideoDescriptor,
+  HtmlVideoPreparationProfile,
+  PcmStreamDescriptor,
+} from '@neko/media';
 
 export const DESKTOP_CANVAS_CHANNELS = {
   snapshotGet: 'open-neko:canvas:snapshot-get',
+  materialActionsResolve: 'open-neko:canvas:material-actions-resolve',
   intentExecute: 'open-neko:canvas:intent-execute',
   previewVariantResolve: 'open-neko:canvas:preview-variant-resolve',
+  mediaRequestExecute: 'open-neko:canvas:media-request-execute',
   projectionEvent: 'open-neko:canvas:projection-event',
 } as const;
-
-export const DESKTOP_DEFAULT_CANVAS_DOCUMENT_ID = 'neko/boards/workspace.nkc';
 
 export function createDesktopCanvasSessionId(viewId: string, viewEpoch: number): string {
   return `canvas-session:${viewId}:${viewEpoch}`;
@@ -40,10 +47,16 @@ export function parseDesktopCanvasHostIdentity(value: unknown): CanvasHostRuntim
 export interface OpenNekoDesktopCanvasBridge {
   readonly canvas: {
     getSnapshot(identity: CanvasHostRuntimeIdentity): Promise<CanvasHostSnapshot>;
+    resolveMaterialActions(
+      request: CanvasMaterialActionResolutionRequest,
+    ): Promise<CanvasMaterialActionResolution>;
     executeIntent(request: CanvasHostIntentRequest): Promise<CanvasHostIntentResult>;
     resolvePreviewVariant(
       request: DesktopCanvasPreviewVariantRequest,
     ): Promise<DesktopCanvasPreviewVariantResult>;
+    executeMediaRequest(
+      request: DesktopCanvasMediaRequest,
+    ): Promise<DesktopCanvasMediaResponse | undefined>;
     subscribe(
       identity: CanvasHostRuntimeIdentity,
       listener: (event: CanvasHostProjectionEvent) => void,
@@ -66,6 +79,80 @@ export interface DesktopCanvasPreviewVariantResult {
   readonly requestId: string;
   readonly url: string;
 }
+
+export interface DesktopCanvasMediaInfo {
+  readonly duration: number;
+  readonly width: number;
+  readonly height: number;
+  readonly fps: number;
+  readonly codec: string;
+  readonly format: string;
+  readonly hasAudio: boolean;
+  readonly bitrate?: number;
+  readonly audioCodec?: string;
+  readonly audioSampleRate?: number;
+  readonly audioChannels?: number;
+}
+
+interface DesktopCanvasMediaRequestBase {
+  readonly identity: CanvasHostRuntimeIdentity;
+  readonly nodeId: string;
+}
+
+interface DesktopCanvasMediaSourceRequest extends DesktopCanvasMediaRequestBase {
+  readonly locator: {
+    readonly kind: 'workspace-file';
+    readonly path: string;
+  };
+}
+
+export type DesktopCanvasMediaRequest =
+  | (DesktopCanvasMediaSourceRequest & {
+      readonly type: 'media:probe';
+      readonly mediaType: 'video' | 'audio';
+    })
+  | (DesktopCanvasMediaSourceRequest & {
+      readonly type: 'media:play';
+      readonly mediaType: 'video' | 'audio';
+      readonly mediaInfo: DesktopCanvasMediaInfo;
+      readonly startTime: number;
+      readonly speed: number;
+    })
+  | (DesktopCanvasMediaSourceRequest & {
+      readonly type: 'media:captureFrame';
+      readonly time: number;
+    })
+  | (DesktopCanvasMediaRequestBase & {
+      readonly type: 'media:seek';
+      readonly time: number;
+    })
+  | (DesktopCanvasMediaRequestBase & {
+      readonly type: 'media:pause' | 'media:resume' | 'media:stop';
+    });
+
+export type DesktopCanvasMediaResponse =
+  | {
+      readonly type: 'media:probeResult';
+      readonly nodeId: string;
+      readonly mediaInfo?: DesktopCanvasMediaInfo;
+      readonly error?: string;
+    }
+  | {
+      readonly type: 'media:streamReady';
+      readonly nodeId: string;
+      readonly mediaInfo?: DesktopCanvasMediaInfo;
+      readonly video?: HtmlVideoDescriptor;
+      readonly audio?: PcmStreamDescriptor;
+      readonly startTime?: number;
+      readonly playbackRate?: number;
+      readonly error?: string;
+    }
+  | {
+      readonly type: 'media:captureFrameResult';
+      readonly nodeId: string;
+      readonly dataUrl?: string;
+      readonly error?: string;
+    };
 
 export function parseDesktopCanvasPreviewVariantRequest(
   value: unknown,
@@ -114,6 +201,114 @@ export function parseDesktopCanvasPreviewVariantResult(
   return { requestId, url: value['url'] };
 }
 
+export function parseDesktopCanvasMediaRequest(value: unknown): DesktopCanvasMediaRequest {
+  if (!isRecord(value)) {
+    throw new Error('Desktop Canvas media request must be an object.');
+  }
+  const identity = parseDesktopCanvasHostIdentity(value['identity']);
+  const nodeId = requireIdentity(value['nodeId'], 'media node');
+  const type = value['type'];
+  if (type === 'media:pause' || type === 'media:resume' || type === 'media:stop') {
+    return { identity, nodeId, type };
+  }
+  if (type === 'media:seek') {
+    return { identity, nodeId, type, time: requireNonNegativeNumber(value['time'], 'seek time') };
+  }
+  const locator = parseWorkspaceFileLocator(value['locator']);
+  if (type === 'media:captureFrame') {
+    return {
+      identity,
+      nodeId,
+      type,
+      locator,
+      time: requireNonNegativeNumber(value['time'], 'capture time'),
+    };
+  }
+  const mediaType = value['mediaType'];
+  if (mediaType !== 'video' && mediaType !== 'audio') {
+    throw new Error('Desktop Canvas media type must be video or audio.');
+  }
+  if (type === 'media:probe') {
+    return { identity, nodeId, type, locator, mediaType };
+  }
+  if (type === 'media:play') {
+    return {
+      identity,
+      nodeId,
+      type,
+      locator,
+      mediaType,
+      mediaInfo: parseDesktopCanvasMediaInfo(value['mediaInfo']),
+      startTime: requireNonNegativeNumber(value['startTime'], 'playback start'),
+      speed: requirePositiveNumber(value['speed'], 'playback speed'),
+    };
+  }
+  throw new Error('Desktop Canvas media request type is unsupported.');
+}
+
+export function parseDesktopCanvasMediaResponse(
+  value: unknown,
+  nodeId: string,
+): DesktopCanvasMediaResponse | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (!isRecord(value) || value['nodeId'] !== nodeId) {
+    throw new Error('Desktop Canvas media response owner does not match.');
+  }
+  const error = value['error'];
+  if (error !== undefined && (typeof error !== 'string' || error.length === 0)) {
+    throw new Error('Desktop Canvas media response error is invalid.');
+  }
+  if (value['type'] === 'media:probeResult') {
+    const mediaInfo =
+      value['mediaInfo'] === undefined
+        ? undefined
+        : parseDesktopCanvasMediaInfo(value['mediaInfo']);
+    if (!error && !mediaInfo) throw new Error('Desktop Canvas media probe response is incomplete.');
+    return {
+      type: 'media:probeResult',
+      nodeId,
+      ...(mediaInfo ? { mediaInfo } : {}),
+      ...(error ? { error } : {}),
+    };
+  }
+  if (value['type'] === 'media:streamReady') {
+    const mediaInfo =
+      value['mediaInfo'] === undefined
+        ? undefined
+        : parseDesktopCanvasMediaInfo(value['mediaInfo']);
+    const video = parseOptionalVideoDescriptor(value['video']);
+    const audio = parseOptionalAudioDescriptor(value['audio']);
+    if (!error && (!mediaInfo || (!video && !audio))) {
+      throw new Error('Desktop Canvas media stream response is incomplete.');
+    }
+    return {
+      type: 'media:streamReady',
+      nodeId,
+      ...(mediaInfo ? { mediaInfo } : {}),
+      ...(video ? { video } : {}),
+      ...(audio ? { audio } : {}),
+      ...(typeof value['startTime'] === 'number' ? { startTime: value['startTime'] } : {}),
+      ...(typeof value['playbackRate'] === 'number'
+        ? { playbackRate: value['playbackRate'] }
+        : {}),
+      ...(error ? { error } : {}),
+    };
+  }
+  if (value['type'] === 'media:captureFrameResult') {
+    const dataUrl = value['dataUrl'];
+    if (!error && (typeof dataUrl !== 'string' || !dataUrl.startsWith('data:image/'))) {
+      throw new Error('Desktop Canvas captured frame response is invalid.');
+    }
+    return {
+      type: 'media:captureFrameResult',
+      nodeId,
+      ...(typeof dataUrl === 'string' ? { dataUrl } : {}),
+      ...(error ? { error } : {}),
+    };
+  }
+  throw new Error('Desktop Canvas media response type is unsupported.');
+}
+
 export function isSameCanvasHostIdentity(
   left: CanvasHostRuntimeIdentity,
   right: CanvasHostRuntimeIdentity,
@@ -140,6 +335,139 @@ function requireIdentity(value: unknown, label: string): string {
 function requirePositiveInteger(value: unknown, label: string): number {
   if (!Number.isSafeInteger(value) || typeof value !== 'number' || value < 1) {
     throw new Error(`Desktop Canvas ${label} must be a positive integer.`);
+  }
+  return value;
+}
+
+function parseWorkspaceFileLocator(value: unknown): {
+  readonly kind: 'workspace-file';
+  readonly path: string;
+} {
+  if (
+    !isRecord(value) ||
+    value['kind'] !== 'workspace-file' ||
+    typeof value['path'] !== 'string' ||
+    !isPortableRelativePath(value['path'])
+  ) {
+    throw new Error('Desktop Canvas media requires a portable workspace-file ContentLocator.');
+  }
+  return { kind: 'workspace-file', path: value['path'] };
+}
+
+function parseDesktopCanvasMediaInfo(value: unknown): DesktopCanvasMediaInfo {
+  if (!isRecord(value)) throw new Error('Desktop Canvas mediaInfo must be an object.');
+  const duration = requireNonNegativeNumber(value['duration'], 'media duration');
+  const width = requireNonNegativeNumber(value['width'], 'media width');
+  const height = requireNonNegativeNumber(value['height'], 'media height');
+  const fps = requireNonNegativeNumber(value['fps'], 'media fps');
+  if (
+    typeof value['codec'] !== 'string' ||
+    typeof value['format'] !== 'string' ||
+    typeof value['hasAudio'] !== 'boolean'
+  ) {
+    throw new Error('Desktop Canvas mediaInfo is invalid.');
+  }
+  return {
+    duration,
+    width,
+    height,
+    fps,
+    codec: value['codec'],
+    format: value['format'],
+    hasAudio: value['hasAudio'],
+    ...(value['bitrate'] === undefined
+      ? {}
+      : { bitrate: requireNonNegativeNumber(value['bitrate'], 'media bitrate') }),
+    ...(typeof value['audioCodec'] === 'string' ? { audioCodec: value['audioCodec'] } : {}),
+    ...(value['audioSampleRate'] === undefined
+      ? {}
+      : {
+          audioSampleRate: requirePositiveNumber(
+            value['audioSampleRate'],
+            'media audio sample rate',
+          ),
+        }),
+    ...(value['audioChannels'] === undefined
+      ? {}
+      : {
+          audioChannels: requirePositiveNumber(
+            value['audioChannels'],
+            'media audio channel count',
+          ),
+        }),
+  };
+}
+
+function parseOptionalVideoDescriptor(value: unknown): HtmlVideoDescriptor | undefined {
+  if (value === undefined) return undefined;
+  if (
+    !isRecord(value) ||
+    value['version'] !== 1 ||
+    value['transport'] !== 'http' ||
+    typeof value['url'] !== 'string' ||
+    typeof value['mimeType'] !== 'string' ||
+    typeof value['durationSeconds'] !== 'number' ||
+    !isHtmlVideoPreparationProfile(value['preparationProfile'])
+  ) {
+    throw new Error('Desktop Canvas video descriptor is invalid.');
+  }
+  return {
+    version: 1,
+    transport: 'http',
+    url: value['url'],
+    mimeType: value['mimeType'],
+    preparationProfile: value['preparationProfile'],
+    durationSeconds: requireNonNegativeNumber(
+      value['durationSeconds'],
+      'video descriptor duration',
+    ),
+  };
+}
+
+function parseOptionalAudioDescriptor(value: unknown): PcmStreamDescriptor | undefined {
+  if (value === undefined) return undefined;
+  if (
+    !isRecord(value) ||
+    value['version'] !== 1 ||
+    value['transport'] !== 'http' ||
+    value['protocol'] !== 'neko-pcm-f32le-v1' ||
+    typeof value['streamUrl'] !== 'string' ||
+    typeof value['sampleRate'] !== 'number' ||
+    typeof value['channels'] !== 'number'
+  ) {
+    throw new Error('Desktop Canvas audio descriptor is invalid.');
+  }
+  return {
+    version: 1,
+    transport: 'http',
+    protocol: 'neko-pcm-f32le-v1',
+    streamUrl: value['streamUrl'],
+    sampleRate: requirePositiveNumber(value['sampleRate'], 'audio descriptor sample rate'),
+    channels: requirePositiveNumber(value['channels'], 'audio descriptor channel count'),
+  };
+}
+
+function isHtmlVideoPreparationProfile(value: unknown): value is HtmlVideoPreparationProfile {
+  return (
+    value === 'h264-mp4-direct' ||
+    value === 'av1-mp4-direct' ||
+    value === 'vp8-webm-direct' ||
+    value === 'h264-mp4-remux' ||
+    value === 'vp9-mp4-remux' ||
+    value === 'h264-sdr-transcode'
+  );
+}
+
+function requireNonNegativeNumber(value: unknown, label: string): number {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
+    throw new Error(`Desktop Canvas ${label} must be a non-negative number.`);
+  }
+  return value;
+}
+
+function requirePositiveNumber(value: unknown, label: string): number {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
+    throw new Error(`Desktop Canvas ${label} must be a positive number.`);
   }
   return value;
 }

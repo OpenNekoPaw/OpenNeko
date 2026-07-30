@@ -16,6 +16,7 @@ import {
 import type {
   ResourceBrowserIdentity,
   ResourceBrowserItem,
+  ResourceBrowserQuickPreviewDescriptor,
 } from 'neko-assets/resource-browser/contract';
 import {
   closeMainView,
@@ -72,8 +73,13 @@ interface DesktopPreviewSession {
   projection: PreviewProjection;
 }
 
+interface DesktopTransientPreviewSession {
+  readonly windowId: string;
+}
+
 export class DesktopPreviewRuntime {
   private readonly sessions = new Map<string, DesktopPreviewSession>();
+  private readonly transientSessions = new Map<string, DesktopTransientPreviewSession>();
   private readonly createIdentity: () => string;
   private disposed = false;
 
@@ -227,6 +233,79 @@ export class DesktopPreviewRuntime {
     }
   }
 
+  async openQuickPreview(input: {
+    readonly identity: ResourceBrowserIdentity;
+    readonly item: ResourceBrowserItem;
+    readonly absolutePath: string;
+  }): Promise<{
+    readonly previewSessionId: string;
+    readonly descriptor: ResourceBrowserQuickPreviewDescriptor;
+  }> {
+    this.requireActive();
+    const shellProjection = await this.options.shell.getProjection(input.identity.windowId);
+    const project = shellProjection.catalog.projects.find(
+      (candidate) =>
+        candidate.projectId === input.identity.projectId &&
+        candidate.workspaceId === input.identity.workspaceId,
+    );
+    const tab = shellProjection.window.tabs.find(
+      (candidate) => candidate.projectId === input.identity.projectId,
+    );
+    if (
+      !project ||
+      !tab ||
+      shellProjection.endpointEpoch !== input.identity.endpointEpoch ||
+      input.identity.viewEpoch !== tab.viewEpoch
+    ) {
+      throw new Error('Desktop quick Preview Resource owner is stale.');
+    }
+    const contentKind = detectPreviewContentKind(input.item.label);
+    const mediaType = getPreviewMediaType(input.item.label);
+    if (
+      (contentKind !== 'image' && contentKind !== 'video' && contentKind !== 'audio') ||
+      !mediaType
+    ) {
+      throw new Error(`Desktop quick Preview does not support '${input.item.label}'.`);
+    }
+    const file = await stat(input.absolutePath);
+    if (!file.isFile()) throw new Error('Desktop quick Preview source is not a file.');
+    const previewSessionId = `preview-hover:${this.createIdentity()}`;
+    const revision = `${file.mtimeMs}:${file.size}`;
+    const descriptorId = this.options.mediaRegistry.register({
+      webContentsId: this.options.resolveWebContentsId(input.identity.windowId),
+      windowId: input.identity.windowId,
+      viewId: input.identity.viewId,
+      sessionId: previewSessionId,
+      revision,
+      absolutePath: input.absolutePath,
+      mediaType,
+    });
+    this.transientSessions.set(previewSessionId, {
+      windowId: input.identity.windowId,
+    });
+    return {
+      previewSessionId,
+      descriptor: {
+        descriptorId,
+        revision,
+        contentKind,
+        mediaType,
+        displayName: input.item.label,
+        byteLength: file.size,
+      },
+    };
+  }
+
+  releaseQuickPreview(windowId: string, previewSessionId: string): void {
+    this.requireActive();
+    const session = this.transientSessions.get(previewSessionId);
+    if (!session || session.windowId !== windowId) {
+      throw new Error(`Desktop quick Preview session '${previewSessionId}' is unavailable.`);
+    }
+    this.options.mediaRegistry.releaseSession(previewSessionId);
+    this.transientSessions.delete(previewSessionId);
+  }
+
   async getSnapshot(
     windowId: string,
     value: DesktopPreviewBootstrapRequest | unknown,
@@ -317,6 +396,11 @@ export class DesktopPreviewRuntime {
       this.options.mediaRegistry.releaseSession(sessionId);
       this.sessions.delete(sessionId);
     }
+    for (const [sessionId, session] of this.transientSessions) {
+      if (session.windowId !== windowId) continue;
+      this.options.mediaRegistry.releaseSession(sessionId);
+      this.transientSessions.delete(sessionId);
+    }
   }
 
   reconcileWorkbench(windowId: string, workbench: DesktopWorkbenchLayoutProjection): void {
@@ -339,6 +423,10 @@ export class DesktopPreviewRuntime {
       this.options.mediaRegistry.releaseSession(sessionId);
     }
     this.sessions.clear();
+    for (const sessionId of this.transientSessions.keys()) {
+      this.options.mediaRegistry.releaseSession(sessionId);
+    }
+    this.transientSessions.clear();
   }
 
   private releasePresentationSession(

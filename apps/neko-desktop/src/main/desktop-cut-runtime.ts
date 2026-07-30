@@ -34,7 +34,9 @@ import {
   type CutPreviewRuntimeEvent,
 } from '@neko-cut/node';
 import type { NekoHostPorts } from '@neko/host/ports';
+import type { WorkspaceFileContentLocator } from '@neko/shared';
 import type {
+  ResourceBrowserContentItem,
   ResourceBrowserIdentity,
   ResourceBrowserItem,
 } from 'neko-assets/resource-browser/contract';
@@ -60,6 +62,10 @@ interface DesktopCutRuntimeEntry {
   presentation: CutHostPresentationState;
   sequence: number;
 }
+
+type DesktopCutOpenResourceItem = ResourceBrowserContentItem & {
+  readonly locator: WorkspaceFileContentLocator;
+};
 
 export class DesktopCutRuntime {
   private readonly sessions = new Map<string, DesktopCutRuntimeEntry>();
@@ -102,17 +108,22 @@ export class DesktopCutRuntime {
     });
   }
 
+  supportsOpen(item: ResourceBrowserItem): item is DesktopCutOpenResourceItem {
+    this.requireActive();
+    if (item.facet === 'entities') return false;
+    return (
+      item.locator.kind === 'workspace-file' &&
+      item.locator.path.toLocaleLowerCase().endsWith('.otio')
+    );
+  }
+
   async open(input: {
     readonly identity: ResourceBrowserIdentity;
     readonly item: ResourceBrowserItem;
     readonly absolutePath: string;
   }): Promise<void> {
     this.requireActive();
-    if (
-      input.item.facet === 'entities' ||
-      input.item.locator.kind !== 'workspace-file' ||
-      !input.item.locator.path.toLocaleLowerCase().endsWith('.otio')
-    ) {
+    if (!this.supportsOpen(input.item)) {
       throw new Error('Desktop Cut requires a workspace-file OTIO ContentLocator.');
     }
     const locator = input.item.locator;

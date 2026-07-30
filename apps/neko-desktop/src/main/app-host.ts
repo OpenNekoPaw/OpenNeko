@@ -48,6 +48,10 @@ import type {
   ResourceBrowserIntentRequest,
   ResourceBrowserProjection,
   ResourceBrowserProjectionEvent,
+  ResourceBrowserQuickPreviewReleaseRequest,
+  ResourceBrowserQuickPreviewReleaseResult,
+  ResourceBrowserQuickPreviewRequest,
+  ResourceBrowserQuickPreviewResult,
   ResourceBrowserSearchRequest,
   ResourceBrowserSnapshotRequest,
   ResourceBrowserThumbnailRequest,
@@ -55,18 +59,17 @@ import type {
 } from 'neko-assets/resource-browser/contract';
 import type { DesktopResourceBrowserRuntime } from './desktop-resource-browser-runtime';
 import type { DesktopPreviewRuntime } from './desktop-preview-runtime';
-import type {
-  PreviewProjection,
-  PreviewRuntimeRequest,
-} from '@neko-preview/contracts';
+import type { PreviewProjection, PreviewRuntimeRequest } from '@neko-preview/contracts';
 import type {
   CanvasHostIntentResult,
   CanvasHostProjectionEvent,
   CanvasHostRuntimeIdentity,
   CanvasHostSnapshot,
+  CanvasMaterialActionResolution,
 } from '@neko-canvas/domain';
 import {
   parseDesktopCanvasHostIdentity,
+  type DesktopCanvasMediaResponse,
   type DesktopCanvasPreviewVariantResult,
 } from '../shared/canvas-bridge-contract';
 import type { DesktopCanvasRuntime } from './desktop-canvas-runtime';
@@ -75,9 +78,7 @@ import type {
   CutHostRuntimeResult,
   CutHostRuntimeSnapshot,
 } from '@neko-cut/domain';
-import {
-  parseDesktopCutHostIdentity,
-} from '../shared/cut-bridge-contract';
+import { parseDesktopCutHostIdentity } from '../shared/cut-bridge-contract';
 import type { DesktopCutRuntime } from './desktop-cut-runtime';
 import {
   DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION,
@@ -187,10 +188,7 @@ export class DesktopAppHost {
     return {
       schemaVersion: DESKTOP_APPLICATION_SETTINGS_CONTRACT_VERSION,
       requestId: request.requestId,
-      projection: await this.settings.update(
-        request.expectedRevision,
-        request.preferences,
-      ),
+      projection: await this.settings.update(request.expectedRevision, request.preferences),
     };
   }
 
@@ -734,6 +732,24 @@ export class DesktopAppHost {
     return this.requireResourceBrowser().resolveThumbnail(window.windowId, payload);
   }
 
+  async resolveResourceBrowserQuickPreview(
+    sender: DesktopSenderIdentity,
+    payload: ResourceBrowserQuickPreviewRequest | unknown,
+  ): Promise<ResourceBrowserQuickPreviewResult> {
+    this.requireActive();
+    const window = this.windows.resolveSender(sender);
+    return this.requireResourceBrowser().resolveQuickPreview(window.windowId, payload);
+  }
+
+  async releaseResourceBrowserQuickPreview(
+    sender: DesktopSenderIdentity,
+    payload: ResourceBrowserQuickPreviewReleaseRequest | unknown,
+  ): Promise<ResourceBrowserQuickPreviewReleaseResult> {
+    this.requireActive();
+    const window = this.windows.resolveSender(sender);
+    return this.requireResourceBrowser().releaseQuickPreview(window.windowId, payload);
+  }
+
   async executeResourceBrowser(
     sender: DesktopSenderIdentity,
     payload: ResourceBrowserIntentRequest | unknown,
@@ -792,6 +808,15 @@ export class DesktopAppHost {
     return this.requireCanvas().executeIntent(window.windowId, payload);
   }
 
+  async resolveCanvasMaterialActions(
+    sender: DesktopSenderIdentity,
+    payload: unknown,
+  ): Promise<CanvasMaterialActionResolution> {
+    this.requireActive();
+    const window = this.windows.resolveSender(sender);
+    return this.requireCanvas().resolveMaterialActions(window.windowId, payload);
+  }
+
   async resolveCanvasPreviewVariant(
     sender: DesktopSenderIdentity,
     payload: unknown,
@@ -799,6 +824,15 @@ export class DesktopAppHost {
     this.requireActive();
     const window = this.windows.resolveSender(sender);
     return this.requireCanvas().resolvePreviewVariant(window.windowId, payload);
+  }
+
+  async executeCanvasMediaRequest(
+    sender: DesktopSenderIdentity,
+    payload: unknown,
+  ): Promise<DesktopCanvasMediaResponse | undefined> {
+    this.requireActive();
+    const window = this.windows.resolveSender(sender);
+    return this.requireCanvas().executeMediaRequest(window.windowId, payload);
   }
 
   async getCutSnapshot(
@@ -904,7 +938,7 @@ export class DesktopAppHost {
       errors.push(error);
     }
     try {
-      this.canvas?.dispose();
+      await this.canvas?.dispose();
     } catch (error) {
       errors.push(error);
     }

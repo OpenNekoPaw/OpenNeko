@@ -1,9 +1,6 @@
 import * as path from 'node:path';
 import type { NekoHostPorts } from '@neko/host/ports';
-import {
-  detectPreviewContentKind,
-  type PreviewContentKind,
-} from '@neko-preview/contracts';
+import { detectPreviewContentKind, type PreviewContentKind } from '@neko-preview/contracts';
 import {
   createWorkspaceLinkedMediaLibrary,
   listWorkspaceLinkedMediaLibraries,
@@ -190,10 +187,8 @@ export function createDesktopResourceBrowserReadSource(
         }),
     },
     media: {
-      search: async ({ query, limit }) =>
-        listWorkspaceProjection(options, query, limit, true),
-      children: async ({ parent, limit }) =>
-        readMediaLibraryChildren(options, parent, limit),
+      search: async ({ query, limit }) => listWorkspaceProjection(options, query, limit, true),
+      children: async ({ parent, limit }) => readMediaLibraryChildren(options, parent, limit),
     },
     entities: {
       list: async () =>
@@ -245,15 +240,15 @@ export function createDesktopResourceBrowserProjectionSource(
       });
     },
     async preview({ identity, item, target }): Promise<void> {
-      const absolutePath = await resolveAuthorizedItemPath(options.workspace, item);
+      const absolutePath = await resolveDesktopResourceBrowserItemPath(options.workspace, item);
       await options.openPreview({ identity, item, absolutePath, target });
     },
     async openCut({ identity, item }): Promise<void> {
-      const absolutePath = await resolveAuthorizedItemPath(options.workspace, item);
+      const absolutePath = await resolveDesktopResourceBrowserItemPath(options.workspace, item);
       await options.openCut({ identity, item, absolutePath });
     },
     async reveal({ item }): Promise<void> {
-      const absolutePath = await resolveAuthorizedItemPath(options.workspace, item);
+      const absolutePath = await resolveDesktopResourceBrowserItemPath(options.workspace, item);
       const external = options.host.external;
       if (!external?.revealPath) {
         throw new Error('Desktop Resource Browser reveal capability is unavailable.');
@@ -261,7 +256,7 @@ export function createDesktopResourceBrowserProjectionSource(
       await external.revealPath(absolutePath);
     },
     async resolveThumbnail({ item }): Promise<string> {
-      const absolutePath = await resolveAuthorizedItemPath(options.workspace, item);
+      const absolutePath = await resolveDesktopResourceBrowserItemPath(options.workspace, item);
       return options.createThumbnail(absolutePath);
     },
     addToCanvas: options.addToCanvas,
@@ -307,9 +302,7 @@ async function listWorkspaceProjection(
     );
   }
   if (mediaOnly) {
-    const libraries = await listWorkspaceLinkedMediaLibraries(
-      options.workspace.workspacePath,
-    );
+    const libraries = await listWorkspaceLinkedMediaLibraries(options.workspace.workspacePath);
     for (const library of libraries) {
       if (entries.length >= limit) break;
       const rootIndex = entries.length;
@@ -320,8 +313,7 @@ async function listWorkspaceProjection(
           library.availability === 'available'
             ? library.workspacePath
             : (library.diagnostic?.message ?? 'Media library is unavailable.'),
-        availability:
-          library.availability === 'available' ? 'available' : 'unavailable',
+        availability: library.availability === 'available' ? 'available' : 'unavailable',
         ...(library.availability === 'unavailable'
           ? { diagnostic: { code: 'resource-inaccessible' as const } }
           : {}),
@@ -333,14 +325,8 @@ async function listWorkspaceProjection(
       });
       const libraryMatchesQuery =
         !normalizedQuery ||
-        `${library.name} ${library.workspacePath}`
-          .toLocaleLowerCase()
-          .includes(normalizedQuery);
-      if (
-        library.availability !== 'available' ||
-        entries.length >= limit ||
-        !normalizedQuery
-      ) {
+        `${library.name} ${library.workspacePath}`.toLocaleLowerCase().includes(normalizedQuery);
+      if (library.availability !== 'available' || entries.length >= limit || !normalizedQuery) {
         if (!libraryMatchesQuery) entries.splice(rootIndex, 1);
         continue;
       }
@@ -348,19 +334,21 @@ async function listWorkspaceProjection(
         options.workspace.workspacePath,
         ...library.workspacePath.split('/'),
       );
-      entries.push(...(await searchResourceBrowserContentTree({
-        absoluteRoot,
-        locatorPrefix: library.workspacePath,
-        query,
-        limit: Math.min(limit - entries.length, FILE_SCAN_LIMIT),
-        rootDepth: 0,
-        excludedDirectoryNames: EXCLUDED_DIRECTORIES,
-        files: options.host.files,
-        joinAbsolutePath: path.join,
-        relativePath: path.relative,
-        classify: (locatorPath) => classifyContent(locatorPath, true),
-        libraryName: library.name,
-      })));
+      entries.push(
+        ...(await searchResourceBrowserContentTree({
+          absoluteRoot,
+          locatorPrefix: library.workspacePath,
+          query,
+          limit: Math.min(limit - entries.length, FILE_SCAN_LIMIT),
+          rootDepth: 0,
+          excludedDirectoryNames: EXCLUDED_DIRECTORIES,
+          files: options.host.files,
+          joinAbsolutePath: path.join,
+          relativePath: path.relative,
+          classify: (locatorPath) => classifyContent(locatorPath, true),
+          libraryName: library.name,
+        })),
+      );
       if (!libraryMatchesQuery && entries.length === rootIndex + 1) {
         entries.splice(rootIndex, 1);
       }
@@ -378,9 +366,7 @@ async function readMediaLibraryChildren(
     throw new Error('Resource Browser Media parent must use a workspace locator.');
   }
   const parentPath = parent.locator.path;
-  const libraries = await listWorkspaceLinkedMediaLibraries(
-    options.workspace.workspacePath,
-  );
+  const libraries = await listWorkspaceLinkedMediaLibraries(options.workspace.workspacePath);
   const library = libraries.find(
     (candidate) =>
       candidate.name === parent.libraryName ||
@@ -390,10 +376,10 @@ async function readMediaLibraryChildren(
   if (!library || library.availability !== 'available') {
     throw new Error('Resource Browser Media parent library is unavailable.');
   }
-  const absoluteRoot = await resolveDesktopWorkspaceContentLocator(
-    options.workspace,
-    { kind: 'workspace-file', path: library.workspacePath },
-  );
+  const absoluteRoot = await resolveDesktopWorkspaceContentLocator(options.workspace, {
+    kind: 'workspace-file',
+    path: library.workspacePath,
+  });
   return readResourceBrowserContentChildren({
     absoluteRoot,
     absoluteDirectory: await resolveDesktopWorkspaceContentLocator(
@@ -546,12 +532,11 @@ function isCutDocument(locatorPath: string): boolean {
   return path.posix.extname(locatorPath).toLocaleLowerCase() === '.otio';
 }
 
-async function resolveAuthorizedItemPath(
+export async function resolveDesktopResourceBrowserItemPath(
   workspace: DesktopWorkspaceResolution,
   item: Parameters<ResourceBrowserInteractionPort['preview']>[0]['item'],
 ): Promise<string> {
-  const locator =
-    item.facet === 'entities' ? item.representationLocator : item.locator;
+  const locator = item.facet === 'entities' ? item.representationLocator : item.locator;
   if (!locator) {
     throw new Error('Desktop Resource Browser item has no local presentation.');
   }

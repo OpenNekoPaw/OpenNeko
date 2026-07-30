@@ -74,6 +74,12 @@ export function presentResourceBrowserEntityItem(
     role: 'entity',
     depth: 0,
     ...(representationLocator ? { representationLocator } : {}),
+    ...(binding
+      ? {
+          representationBindingId: binding.id,
+          representationRole: binding.role,
+        }
+      : {}),
     ...(representationLocator
       ? {
           thumbnail: {

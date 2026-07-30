@@ -47,6 +47,10 @@ import { preserveDesktopBootstrapEventSequence } from './desktop-runtime-event-c
 import {
   parseResourceBrowserChildrenRequest,
   parseResourceBrowserIntentRequest,
+  parseResourceBrowserQuickPreviewReleaseRequest,
+  parseResourceBrowserQuickPreviewReleaseResult,
+  parseResourceBrowserQuickPreviewRequest,
+  parseResourceBrowserQuickPreviewResult,
   parseResourceBrowserProjection,
   parseResourceBrowserProjectionEvent,
   parseResourceBrowserSearchRequest,
@@ -71,6 +75,8 @@ import type { PreviewRuntimeIdentity } from '@neko-preview/contracts';
 import {
   parseCanvasHostIntentRequest,
   parseCanvasHostIntentResult,
+  parseCanvasMaterialActionResolution,
+  parseCanvasMaterialActionResolutionRequest,
   parseCanvasHostProjectionEvent,
   parseCanvasHostSnapshot,
   type CanvasHostProjectionEvent,
@@ -80,6 +86,8 @@ import {
   DESKTOP_CANVAS_CHANNELS,
   isSameCanvasHostIdentity,
   parseDesktopCanvasHostIdentity,
+  parseDesktopCanvasMediaRequest,
+  parseDesktopCanvasMediaResponse,
   parseDesktopCanvasPreviewVariantRequest,
   parseDesktopCanvasPreviewVariantResult,
   type OpenNekoDesktopCanvasBridge,
@@ -426,6 +434,42 @@ const bridge: OpenNekoDesktopBridge &
       }
       return result;
     },
+    async resolveQuickPreview(value) {
+      const request = parseResourceBrowserQuickPreviewRequest(value);
+      requireCurrentResourceIdentity(request.identity);
+      const response: unknown = await ipcRenderer.invoke(
+        DESKTOP_RESOURCE_BROWSER_CHANNELS.quickPreviewResolve,
+        request,
+      );
+      const result = parseResourceBrowserQuickPreviewResult(response);
+      if (
+        !isSameResourceBrowserIdentity(result.identity, request.identity) ||
+        result.requestId !== request.requestId ||
+        result.resourceId !== request.resourceId
+      ) {
+        throw new Error('Desktop Resource Browser quick preview result identity does not match.');
+      }
+      return result;
+    },
+    async releaseQuickPreview(value) {
+      const request = parseResourceBrowserQuickPreviewReleaseRequest(value);
+      requireCurrentResourceIdentity(request.identity);
+      const response: unknown = await ipcRenderer.invoke(
+        DESKTOP_RESOURCE_BROWSER_CHANNELS.quickPreviewRelease,
+        request,
+      );
+      const result = parseResourceBrowserQuickPreviewReleaseResult(response);
+      if (
+        !isSameResourceBrowserIdentity(result.identity, request.identity) ||
+        result.requestId !== request.requestId ||
+        result.previewSessionId !== request.previewSessionId
+      ) {
+        throw new Error(
+          'Desktop Resource Browser quick preview release result identity does not match.',
+        );
+      }
+      return result;
+    },
     async execute(value) {
       const request = parseResourceBrowserIntentRequest(value);
       requireCurrentResourceIdentity(request.identity);
@@ -460,10 +504,7 @@ const bridge: OpenNekoDesktopBridge &
       ) {
         throw new Error('Desktop Preview projection owner identity does not match.');
       }
-      currentPreviewIdentities.set(
-        previewIdentityKey(projection.identity),
-        projection.identity,
-      );
+      currentPreviewIdentities.set(previewIdentityKey(projection.identity), projection.identity);
       return projection;
     },
     async execute(value) {
@@ -479,10 +520,7 @@ const bridge: OpenNekoDesktopBridge &
       );
       const projection = parseDesktopPreviewProjection(response);
       currentPreviewIdentities.delete(key);
-      currentPreviewIdentities.set(
-        previewIdentityKey(projection.identity),
-        projection.identity,
-      );
+      currentPreviewIdentities.set(previewIdentityKey(projection.identity), projection.identity);
       return projection;
     },
   },
@@ -504,6 +542,20 @@ const bridge: OpenNekoDesktopBridge &
         preserveDesktopBootstrapEventSequence(currentCanvasEventSequences.get(key)),
       );
       return snapshot;
+    },
+    async resolveMaterialActions(value) {
+      const request = parseCanvasMaterialActionResolutionRequest(value);
+      const identity = currentCanvasIdentities.get(canvasIdentityKey(request.identity));
+      if (!identity || !isSameCanvasHostIdentity(request.identity, identity)) {
+        throw new Error(
+          'Desktop Canvas material action resolution requires a current owner-bound snapshot.',
+        );
+      }
+      const response: unknown = await ipcRenderer.invoke(
+        DESKTOP_CANVAS_CHANNELS.materialActionsResolve,
+        request,
+      );
+      return parseCanvasMaterialActionResolution(response, request.requestId);
     },
     async executeIntent(value) {
       const request = parseCanvasHostIntentRequest(value);
@@ -528,6 +580,18 @@ const bridge: OpenNekoDesktopBridge &
         request,
       );
       return parseDesktopCanvasPreviewVariantResult(response, request.requestId);
+    },
+    async executeMediaRequest(value) {
+      const request = parseDesktopCanvasMediaRequest(value);
+      const identity = currentCanvasIdentities.get(canvasIdentityKey(request.identity));
+      if (!identity || !isSameCanvasHostIdentity(request.identity, identity)) {
+        throw new Error('Desktop Canvas media request requires a current owner-bound snapshot.');
+      }
+      const response: unknown = await ipcRenderer.invoke(
+        DESKTOP_CANVAS_CHANNELS.mediaRequestExecute,
+        request,
+      );
+      return parseDesktopCanvasMediaResponse(response, request.nodeId);
     },
     subscribe(identity, listener) {
       const entry = { identity: parseDesktopCanvasHostIdentity(identity), listener };
@@ -916,11 +980,7 @@ function cutIdentityKey(identity: CutHostRuntimeIdentity): string {
 }
 
 function previewIdentityKey(identity: PreviewRuntimeIdentity): string {
-  return [
-    identity.windowId,
-    identity.sessionId,
-    identity.endpointEpoch,
-  ].join(':');
+  return [identity.windowId, identity.sessionId, identity.endpointEpoch].join(':');
 }
 
 function isSamePreviewIdentity(

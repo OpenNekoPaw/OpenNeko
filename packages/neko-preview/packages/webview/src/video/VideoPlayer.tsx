@@ -20,11 +20,26 @@ const VIDEO_SYNC_THRESHOLD_SECONDS = 0.08;
 export interface VideoPlayerProps {
   readonly sourceUrl?: string;
   readonly displayName?: string;
+  readonly autoPlay?: boolean;
+  readonly compact?: boolean;
+  readonly muted?: boolean;
 }
 
-export function VideoPlayer({ sourceUrl, displayName }: VideoPlayerProps = {}) {
+export function VideoPlayer({
+  sourceUrl,
+  displayName,
+  autoPlay = false,
+  compact = false,
+  muted = false,
+}: VideoPlayerProps = {}) {
   return sourceUrl ? (
-    <SourceVideoPlayer sourceUrl={sourceUrl} displayName={displayName ?? ''} />
+    <SourceVideoPlayer
+      sourceUrl={sourceUrl}
+      displayName={displayName ?? ''}
+      autoPlay={autoPlay}
+      compact={compact}
+      muted={muted}
+    />
   ) : (
     <EngineVideoPlayer />
   );
@@ -32,7 +47,11 @@ export function VideoPlayer({ sourceUrl, displayName }: VideoPlayerProps = {}) {
 
 function SourceVideoPlayer({
   sourceUrl,
-}: Required<Pick<VideoPlayerProps, 'sourceUrl'>> & Pick<VideoPlayerProps, 'displayName'>) {
+  autoPlay,
+  compact,
+  muted,
+}: Required<Pick<VideoPlayerProps, 'sourceUrl' | 'autoPlay' | 'compact' | 'muted'>> &
+  Pick<VideoPlayerProps, 'displayName'>) {
   const { t } = useTranslation();
   const videoRef = useRef<HTMLVideoElement>(null);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout>>();
@@ -48,6 +67,15 @@ function SourceVideoPlayer({
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
+    video.muted = muted;
+    video.defaultMuted = muted;
+    if (autoPlay) {
+      setFailed(false);
+      void video.play().catch(() => {
+        setIsPlaying(false);
+        setFailed(true);
+      });
+    }
     const entered = () => setIsPiPActive(true);
     const left = () => setIsPiPActive(false);
     video.addEventListener('enterpictureinpicture', entered);
@@ -57,7 +85,7 @@ function SourceVideoPlayer({
       video.removeEventListener('enterpictureinpicture', entered);
       video.removeEventListener('leavepictureinpicture', left);
     };
-  }, [sourceUrl]);
+  }, [autoPlay, muted, sourceUrl]);
 
   const togglePlay = useCallback(() => {
     const video = videoRef.current;
@@ -127,7 +155,7 @@ function SourceVideoPlayer({
             setFailed(true);
           }}
         />
-        {!isPlaying && !failed ? (
+        {!compact && !isPlaying && !failed ? (
           <button
             type="button"
             className="absolute inset-0 flex items-center justify-center"
@@ -153,27 +181,29 @@ function SourceVideoPlayer({
           </div>
         ) : null}
       </div>
-      <div
-        className={`absolute bottom-0 left-0 right-0 transition-opacity ${
-          controlsVisible ? 'opacity-100' : 'opacity-0'
-        }`}
-      >
-        <VideoControls
-          isPlaying={isPlaying}
-          currentTime={currentTime}
-          duration={duration}
-          speed={speed}
-          volume={volume}
-          isPiPActive={isPiPActive}
-          onTogglePlay={togglePlay}
-          onSeek={seek}
-          onScrub={setCurrentTime}
-          onSpeedChange={changeSpeed}
-          onVolumeChange={changeVolume}
-          onTogglePiP={document.pictureInPictureEnabled ? () => void togglePiP() : undefined}
-          visible={controlsVisible}
-        />
-      </div>
+      {!compact ? (
+        <div
+          className={`absolute bottom-0 left-0 right-0 transition-opacity ${
+            controlsVisible ? 'opacity-100' : 'opacity-0'
+          }`}
+        >
+          <VideoControls
+            isPlaying={isPlaying}
+            currentTime={currentTime}
+            duration={duration}
+            speed={speed}
+            volume={volume}
+            isPiPActive={isPiPActive}
+            onTogglePlay={togglePlay}
+            onSeek={seek}
+            onScrub={setCurrentTime}
+            onSpeedChange={changeSpeed}
+            onVolumeChange={changeVolume}
+            onTogglePiP={document.pictureInPictureEnabled ? () => void togglePiP() : undefined}
+            visible={controlsVisible}
+          />
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -157,6 +157,16 @@ describe('DesktopCutRuntime', () => {
       capabilities: ['open-cut'] as const,
     };
 
+    expect(runtime.supportsOpen(item)).toBe(true);
+    expect(
+      runtime.supportsOpen({
+        ...item,
+        resourceId: 'resource-video',
+        label: 'video.mp4',
+        locator: { kind: 'workspace-file', path: 'media/video.mp4' },
+      }),
+    ).toBe(false);
+
     await runtime.open({ identity, item, absolutePath: documentPath });
     const firstViewId = workbench.main.views.find(
       (view) => view.kind === 'cut' && view.documentId === documentId,

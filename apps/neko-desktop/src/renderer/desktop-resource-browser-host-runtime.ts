@@ -24,6 +24,12 @@ export function createElectronResourceBrowserHostRuntime(input: {
     resolveThumbnail(request) {
       return input.bridge.resources.resolveThumbnail(request);
     },
+    resolveQuickPreview(request) {
+      return input.bridge.resources.resolveQuickPreview(request);
+    },
+    releaseQuickPreview(request) {
+      return input.bridge.resources.releaseQuickPreview(request);
+    },
     subscribe(listener) {
       return input.bridge.resources.subscribe((event) => {
         if (isSameIdentity(event.projection.identity, input.identity)) listener(event);
@@ -41,10 +47,7 @@ export function createElectronResourceBrowserHostRuntime(input: {
   };
 }
 
-function isSameIdentity(
-  left: ResourceBrowserIdentity,
-  right: ResourceBrowserIdentity,
-): boolean {
+function isSameIdentity(left: ResourceBrowserIdentity, right: ResourceBrowserIdentity): boolean {
   return (
     left.projectId === right.projectId &&
     left.workspaceId === right.workspaceId &&

@@ -21,11 +21,23 @@ import { parseLrc, type LrcLine } from './lrc-parser';
 export interface AudioPlayerProps {
   readonly sourceUrl?: string;
   readonly displayName?: string;
+  readonly autoPlay?: boolean;
+  readonly compact?: boolean;
 }
 
-export function AudioPlayer({ sourceUrl, displayName }: AudioPlayerProps = {}) {
+export function AudioPlayer({
+  sourceUrl,
+  displayName,
+  autoPlay = false,
+  compact = false,
+}: AudioPlayerProps = {}) {
   return sourceUrl ? (
-    <SourceAudioPlayer sourceUrl={sourceUrl} displayName={displayName ?? ''} />
+    <SourceAudioPlayer
+      sourceUrl={sourceUrl}
+      displayName={displayName ?? ''}
+      autoPlay={autoPlay}
+      compact={compact}
+    />
   ) : (
     <EngineAudioPlayer />
   );
@@ -34,7 +46,9 @@ export function AudioPlayer({ sourceUrl, displayName }: AudioPlayerProps = {}) {
 function SourceAudioPlayer({
   sourceUrl,
   displayName,
-}: Required<Pick<AudioPlayerProps, 'sourceUrl' | 'displayName'>>) {
+  autoPlay,
+  compact,
+}: Required<Pick<AudioPlayerProps, 'sourceUrl' | 'displayName' | 'autoPlay' | 'compact'>>) {
   const { t } = useTranslation();
   const audioRef = useRef<HTMLAudioElement>(null);
   const [duration, setDuration] = useState(0);
@@ -46,8 +60,15 @@ function SourceAudioPlayer({
 
   useEffect(() => {
     const audio = audioRef.current;
+    if (audio && autoPlay) {
+      setError(undefined);
+      void audio.play().catch(() => {
+        setIsPlaying(false);
+        setError(t('preview.audio.playbackFailed'));
+      });
+    }
     return () => audio?.pause();
-  }, [sourceUrl]);
+  }, [autoPlay, sourceUrl, t]);
 
   const togglePlay = useCallback(() => {
     const audio = audioRef.current;
@@ -81,7 +102,13 @@ function SourceAudioPlayer({
   }, []);
 
   return (
-    <div className="neko-audio-bg flex flex-col items-center w-full h-full px-8 pt-6 pb-5 overflow-hidden">
+    <div
+      className={
+        compact
+          ? 'neko-audio-bg flex items-center w-full h-full px-3 overflow-hidden'
+          : 'neko-audio-bg flex flex-col items-center w-full h-full px-8 pt-6 pb-5 overflow-hidden'
+      }
+    >
       <audio
         ref={audioRef}
         src={sourceUrl}
@@ -101,29 +128,39 @@ function SourceAudioPlayer({
           setError(t('preview.audio.playbackFailed'));
         }}
       />
-      <div className="relative flex-1 flex items-center justify-center w-full min-h-[120px] py-2">
-        <CoverView fileName={displayName} isPlaying={isPlaying} />
-      </div>
-      <div className="flex flex-col items-center gap-1 pt-3 pb-1 shrink-0 w-full max-w-[400px]">
+      {!compact ? (
+        <div className="relative flex-1 flex items-center justify-center w-full min-h-[120px] py-2">
+          <CoverView fileName={displayName} isPlaying={isPlaying} />
+        </div>
+      ) : null}
+      <div
+        className={
+          compact
+            ? 'min-w-0 flex-1'
+            : 'flex flex-col items-center gap-1 pt-3 pb-1 shrink-0 w-full max-w-[400px]'
+        }
+      >
         <div className="font-semibold text-[17px] text-neko-preview-text-primary whitespace-nowrap overflow-hidden text-ellipsis max-w-full text-center tracking-[-0.01em]">
           {displayName}
         </div>
         {error ? <div className="text-xs text-red-400">{error}</div> : null}
       </div>
-      <div className="shrink-0 w-full">
-        <AudioControls
-          isPlaying={isPlaying}
-          currentTime={currentTime}
-          duration={duration}
-          volume={volume}
-          speed={speed}
-          onTogglePlay={togglePlay}
-          onSeek={seek}
-          onScrub={setCurrentTime}
-          onVolumeChange={changeVolume}
-          onSpeedChange={changeSpeed}
-        />
-      </div>
+      {!compact ? (
+        <div className="shrink-0 w-full">
+          <AudioControls
+            isPlaying={isPlaying}
+            currentTime={currentTime}
+            duration={duration}
+            volume={volume}
+            speed={speed}
+            onTogglePlay={togglePlay}
+            onSeek={seek}
+            onScrub={setCurrentTime}
+            onVolumeChange={changeVolume}
+            onSpeedChange={changeSpeed}
+          />
+        </div>
+      ) : null}
     </div>
   );
 }

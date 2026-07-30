@@ -126,9 +126,15 @@ importers:
       '@neko/entity':
         specifier: workspace:*
         version: link:../../packages/neko-entity
+      '@neko/generation':
+        specifier: workspace:*
+        version: link:../../packages/neko-generation
       '@neko/host':
         specifier: workspace:*
         version: link:../../packages/neko-host
+      '@neko/media':
+        specifier: workspace:*
+        version: link:../../packages/neko-media
       '@neko/platform':
         specifier: workspace:*
         version: link:../../packages/neko-agent/packages/platform
@@ -901,6 +907,9 @@ importers:
       '@neko/media':
         specifier: workspace:*
         version: link:../../../neko-media
+      '@neko/shared':
+        specifier: workspace:*
+        version: link:../../../neko-types
     devDependencies:
       '@types/node':
         specifier: ^24.0.0

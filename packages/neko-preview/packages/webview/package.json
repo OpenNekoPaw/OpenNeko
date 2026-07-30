@@ -4,6 +4,7 @@
   "version": "0.0.1",
   "type": "module",
   "exports": {
+    "./epubjs-vite-patch-plugin": "./epubjs-vite-patch-plugin.ts",
     "./host-adapter": "./src/host-adapter/index.tsx",
     "./root": "./src/root/index.tsx"
   },

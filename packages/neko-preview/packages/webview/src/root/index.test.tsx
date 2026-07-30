@@ -10,7 +10,12 @@ import {
   type PreviewProjection,
   type PreviewRuntimeIdentity,
 } from '@neko-preview/contracts';
-import { PreviewRoot, createPreviewMediaUrl, getPreviewViewerRegistry } from './index';
+import {
+  PreviewRoot,
+  QuickPreviewSurface,
+  createPreviewMediaUrl,
+  getPreviewViewerRegistry,
+} from './index';
 const playerStyles = readFileSync(resolve(__dirname, '../styles/player.css'), 'utf8');
 const modelStyles = readFileSync(resolve(__dirname, '../model/model.css'), 'utf8');
 const rootStyles = readFileSync(resolve(__dirname, './style.css'), 'utf8');
@@ -178,6 +183,81 @@ describe('PreviewRoot', () => {
     );
     expect(container.querySelector('.absolute.inset-0.bg-black')).toBeTruthy();
     expect(container.querySelector('[aria-label="Play (Space)"]')).toBeTruthy();
+  });
+
+  it('renders image quick preview from the opaque package-owned descriptor', async () => {
+    const container = document.createElement('div');
+    document.body.append(container);
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(
+        <QuickPreviewSurface
+          locale="en"
+          descriptor={{
+            descriptorId: 'descriptor-image-hover',
+            revision: 'revision-1',
+            contentKind: 'image',
+            mediaType: 'image/png',
+            displayName: 'hover.png',
+            byteLength: 42,
+          }}
+        />,
+      );
+    });
+
+    expect(container.querySelector('img')?.getAttribute('src')).toBe(
+      'neko-media://desktop/descriptor-image-hover/hover.png',
+    );
+    expect(container.querySelector('.neko-preview-quick')).toBeTruthy();
+  });
+
+  it('autoplays compact video and audio quick previews and pauses them on unmount', async () => {
+    const play = vi
+      .spyOn(HTMLMediaElement.prototype, 'play')
+      .mockImplementation(async () => undefined);
+    const pause = vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => undefined);
+    const container = document.createElement('div');
+    document.body.append(container);
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(
+        <QuickPreviewSurface
+          locale="en"
+          descriptor={{
+            descriptorId: 'descriptor-video-hover',
+            revision: 'revision-1',
+            contentKind: 'video',
+            mediaType: 'video/mp4',
+            displayName: 'hover.mp4',
+            byteLength: 42,
+          }}
+        />,
+      );
+    });
+    const video = container.querySelector('video');
+    expect(video?.muted).toBe(true);
+    expect(play).toHaveBeenCalledOnce();
+
+    await act(async () => {
+      root.render(
+        <QuickPreviewSurface
+          locale="en"
+          descriptor={{
+            descriptorId: 'descriptor-audio-hover',
+            revision: 'revision-1',
+            contentKind: 'audio',
+            mediaType: 'audio/aac',
+            displayName: 'hover.aac',
+            byteLength: 42,
+          }}
+        />,
+      );
+    });
+    expect(container.querySelector('audio')).toBeTruthy();
+    expect(play).toHaveBeenCalledTimes(2);
+
+    await act(async () => root.unmount());
+    expect(pause).toHaveBeenCalled();
   });
 });
 

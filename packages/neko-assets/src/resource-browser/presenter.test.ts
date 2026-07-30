@@ -58,6 +58,8 @@ describe('Resource Browser presenter', () => {
         kind: 'workspace-file',
         path: 'characters/neko.png',
       },
+      representationBindingId: 'confirmed-active',
+      representationRole: 'portrait',
       capabilities: ['preview', 'add-to-canvas', 'add-to-agent'],
     });
   });

@@ -17,6 +17,10 @@ import {
   type ResourceBrowserIntentRequest,
   type ResourceBrowserProjection,
   type ResourceBrowserProjectionEvent,
+  type ResourceBrowserQuickPreviewReleaseRequest,
+  type ResourceBrowserQuickPreviewReleaseResult,
+  type ResourceBrowserQuickPreviewRequest,
+  type ResourceBrowserQuickPreviewResult,
   type ResourceBrowserSearchRequest,
   type ResourceBrowserThumbnailRequest,
   type ResourceBrowserThumbnailResult,
@@ -167,6 +171,18 @@ export class ResourceBrowserController implements ResourceBrowserHostRuntime {
         descriptor: item.thumbnail,
       }),
     });
+  }
+
+  async resolveQuickPreview(
+    _request: ResourceBrowserQuickPreviewRequest,
+  ): Promise<ResourceBrowserQuickPreviewResult> {
+    throw new Error('Resource Browser quick Preview requires a Host-owned descriptor runtime.');
+  }
+
+  async releaseQuickPreview(
+    _request: ResourceBrowserQuickPreviewReleaseRequest,
+  ): Promise<ResourceBrowserQuickPreviewReleaseResult> {
+    throw new Error('Resource Browser quick Preview requires a Host-owned descriptor runtime.');
   }
 
   async execute(request: ResourceBrowserIntentRequest): Promise<ResourceBrowserProjection> {

@@ -1,5 +1,12 @@
+import { createHash, randomUUID } from 'node:crypto';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
+import type {
+  ContentFingerprint,
+  ContentIoDiagnostic,
+  ContentLocator,
+  ContentReadService,
+} from '@neko/shared';
 import type { DesktopHomeMediaLibraryLocationKind } from '../shared/home-management-contract';
 
 const LOCATION_KINDS = ['local', 'nas', 'cloud'] as const;
@@ -12,6 +19,22 @@ export interface DesktopGlobalMediaLibraryConnection {
   readonly availability: 'available' | 'unavailable';
   readonly modifiedAt?: string;
 }
+
+export type DesktopGlobalMediaLibraryCopyResult =
+  | {
+      readonly status: 'copied';
+      readonly source: ContentLocator;
+      readonly globalLibraryId: string;
+      readonly entryId: string;
+      readonly byteLength: number;
+      readonly fingerprint: ContentFingerprint;
+    }
+  | {
+      readonly status: 'unavailable';
+      readonly source: ContentLocator;
+      readonly globalLibraryId: string;
+      readonly diagnostic: ContentIoDiagnostic;
+    };
 
 export async function createDesktopGlobalMediaLibraryConnection(input: {
   readonly mediaLibraryRoot: string;
@@ -116,7 +139,88 @@ export async function resolveDesktopGlobalMediaLibraryTarget(input: {
   return target;
 }
 
-export function createDesktopGlobalMediaLibraryId(
+/**
+ * Copies content into an explicitly selected Desktop-global Media Library.
+ * The returned entryId is portable; the physical target path never leaves this owner.
+ */
+export async function copyDesktopGlobalMediaLibraryContent(input: {
+  readonly mediaLibraryRoot: string;
+  readonly globalLibraryId: string;
+  readonly source: ContentLocator;
+  readonly destinationDirectory: string;
+  readonly fileName: string;
+  readonly conflict: 'fail-if-exists' | 'replace';
+  readonly reader: ContentReadService;
+  readonly maxBytes?: number;
+  readonly signal?: AbortSignal;
+}): Promise<DesktopGlobalMediaLibraryCopyResult> {
+  if (input.signal?.aborted) return copyUnavailable(input, 'content-cancelled');
+  if (!isPortableDirectory(input.destinationDirectory) || !isSafeFileName(input.fileName)) {
+    return copyUnavailable(input, 'content-unauthorized');
+  }
+
+  const source = await input.reader.read(input.source, {
+    ...(input.maxBytes !== undefined ? { maxBytes: input.maxBytes } : {}),
+    ...(input.signal ? { signal: input.signal } : {}),
+  });
+  if (source.status === 'unavailable') {
+    return copyUnavailable(input, source.diagnostic.code);
+  }
+  if (source.offset !== 0) return copyUnavailable(input, 'content-read-failed');
+
+  try {
+    const libraryRoot = await resolveDesktopGlobalMediaLibraryTarget({
+      mediaLibraryRoot: input.mediaLibraryRoot,
+      libraryId: input.globalLibraryId,
+    });
+    const resolvedLibraryRoot = await fs.realpath(libraryRoot);
+    const resolvedDestinationDirectory = await ensureContainedDirectory(
+      resolvedLibraryRoot,
+      portableSegments(input.destinationDirectory),
+    );
+
+    const destinationPath = path.join(resolvedDestinationDirectory, input.fileName);
+    const temporaryPath = path.join(
+      resolvedDestinationDirectory,
+      `.${input.fileName}.${randomUUID()}.tmp`,
+    );
+    try {
+      const handle = await fs.open(temporaryPath, 'wx', 0o600);
+      try {
+        if (input.signal?.aborted) return copyUnavailable(input, 'content-cancelled');
+        await handle.writeFile(source.bytes);
+        await handle.sync();
+      } finally {
+        await handle.close();
+      }
+      if (input.signal?.aborted) return copyUnavailable(input, 'content-cancelled');
+      if (input.conflict === 'fail-if-exists') {
+        await fs.link(temporaryPath, destinationPath);
+        await fs.rm(temporaryPath);
+      } else {
+        await fs.rename(temporaryPath, destinationPath);
+      }
+    } finally {
+      await fs.rm(temporaryPath, { force: true }).catch(() => undefined);
+    }
+
+    return {
+      status: 'copied',
+      source: input.source,
+      globalLibraryId: input.globalLibraryId,
+      entryId: [...portableSegments(input.destinationDirectory), input.fileName].join('/'),
+      byteLength: source.bytes.byteLength,
+      fingerprint: {
+        strategy: 'sha256',
+        value: `sha256:${createHash('sha256').update(source.bytes).digest('hex')}`,
+      },
+    };
+  } catch (error: unknown) {
+    return copyUnavailable(input, copyDiagnosticCode(error));
+  }
+}
+
+function createDesktopGlobalMediaLibraryId(
   locationKind: DesktopHomeMediaLibraryLocationKind,
   name: string,
 ): string {
@@ -139,7 +243,7 @@ export function parseDesktopGlobalMediaLibraryId(libraryId: string): {
   };
 }
 
-export function resolveDesktopGlobalMediaLibraryLinkPath(input: {
+function resolveDesktopGlobalMediaLibraryLinkPath(input: {
   readonly mediaLibraryRoot: string;
   readonly libraryId: string;
 }): string {
@@ -167,6 +271,100 @@ function requireMediaLibraryName(value: string): string {
     throw new Error('Desktop global Media Library name is invalid.');
   }
   return value;
+}
+
+function isPortableDirectory(value: string): boolean {
+  if (value !== value.normalize('NFC')) return false;
+  if (value === '') return true;
+  if (value.startsWith('/') || value.endsWith('/') || value.includes('\\')) return false;
+  return portableSegments(value).every(
+    (segment) => segment.length > 0 && segment !== '.' && segment !== '..',
+  );
+}
+
+function portableSegments(value: string): readonly string[] {
+  return value === '' ? [] : value.split('/');
+}
+
+function isSafeFileName(value: string): boolean {
+  return (
+    value.length > 0 &&
+    value === value.normalize('NFC') &&
+    value !== '.' &&
+    value !== '..' &&
+    !value.includes('/') &&
+    !value.includes('\\')
+  );
+}
+
+function isInside(candidate: string, root: string): boolean {
+  const relative = path.relative(root, candidate);
+  return (
+    relative === '' ||
+    (relative !== '..' && !path.isAbsolute(relative) && !relative.startsWith(`..${path.sep}`))
+  );
+}
+
+async function ensureContainedDirectory(
+  resolvedRoot: string,
+  segments: readonly string[],
+): Promise<string> {
+  let current = resolvedRoot;
+  for (const segment of segments) {
+    const candidate = path.join(current, segment);
+    try {
+      const existing = await fs.lstat(candidate);
+      if (!existing.isDirectory() || existing.isSymbolicLink()) {
+        throw unauthorizedPathError();
+      }
+    } catch (error: unknown) {
+      if (!isNodeError(error, 'ENOENT')) throw error;
+      await fs.mkdir(candidate);
+    }
+    const resolvedCandidate = await fs.realpath(candidate);
+    if (!isInside(resolvedCandidate, resolvedRoot)) throw unauthorizedPathError();
+    current = resolvedCandidate;
+  }
+  return current;
+}
+
+function unauthorizedPathError(): Error & { readonly code: 'EACCES' } {
+  return Object.assign(new Error('Global Media Library destination is unauthorized.'), {
+    code: 'EACCES' as const,
+  });
+}
+
+function copyUnavailable(
+  input: {
+    readonly source: ContentLocator;
+    readonly globalLibraryId: string;
+  },
+  code: ContentIoDiagnostic['code'],
+): Extract<DesktopGlobalMediaLibraryCopyResult, { status: 'unavailable' }> {
+  return {
+    status: 'unavailable',
+    source: input.source,
+    globalLibraryId: input.globalLibraryId,
+    diagnostic: { code },
+  };
+}
+
+function copyDiagnosticCode(error: unknown): ContentIoDiagnostic['code'] {
+  if (isNodeError(error, 'EEXIST')) return 'content-conflict';
+  if (isNodeError(error, 'ENOENT') || isNodeError(error, 'ENOTDIR')) return 'content-missing';
+  if (isNodeError(error, 'EACCES') || isNodeError(error, 'EPERM')) {
+    return 'content-unauthorized';
+  }
+  return 'content-write-failed';
+}
+
+function isNodeError(error: unknown, code: string): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    Reflect.get(error, 'code') === code
+  );
 }
 
 async function pathExists(targetPath: string): Promise<boolean> {

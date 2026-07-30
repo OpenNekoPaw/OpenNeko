@@ -1,13 +1,17 @@
+import * as path from 'node:path';
 import type { NekoHostPorts } from '@neko/host/ports';
 import {
   createCanvasHostIntentRequest,
   type CanvasHostIntentResult,
   type CanvasHostRuntimeIdentity,
 } from '@neko-canvas/domain';
+import type { CanvasMaterialMediaKind } from '@neko/shared';
 import {
   assertResourceBrowserIdentity,
   parseResourceBrowserChildrenRequest,
   parseResourceBrowserIntentRequest,
+  parseResourceBrowserQuickPreviewReleaseRequest,
+  parseResourceBrowserQuickPreviewRequest,
   parseResourceBrowserSearchRequest,
   parseResourceBrowserSnapshotRequest,
   parseResourceBrowserThumbnailRequest,
@@ -17,6 +21,10 @@ import {
   type ResourceBrowserIntentRequest,
   type ResourceBrowserProjection,
   type ResourceBrowserProjectionEvent,
+  type ResourceBrowserQuickPreviewReleaseRequest,
+  type ResourceBrowserQuickPreviewReleaseResult,
+  type ResourceBrowserQuickPreviewRequest,
+  type ResourceBrowserQuickPreviewResult,
   type ResourceBrowserSearchRequest,
   type ResourceBrowserSnapshotRequest,
   type ResourceBrowserThumbnailRequest,
@@ -30,9 +38,9 @@ import {
   resolveDesktopGlobalMediaLibraryTarget,
 } from './desktop-global-media-library-files';
 import {
-  createDesktopResourceBrowserReadSource,
   createDesktopResourceBrowserProjectionSource,
   readDesktopGlobalMediaLibraryChildren,
+  resolveDesktopResourceBrowserItemPath,
   searchDesktopGlobalAssetCatalog,
   searchDesktopGlobalMediaLibraries,
   type DesktopResourceBrowserSourceOptions,
@@ -58,6 +66,15 @@ export interface DesktopResourceBrowserRuntimeOptions {
   readonly selectSource: (windowId: string) => Promise<string | undefined>;
   readonly selectGlobalMediaLibrarySource: (windowId: string) => Promise<string | undefined>;
   readonly createThumbnail: (absolutePath: string) => Promise<string>;
+  readonly openQuickPreview: (input: {
+    readonly identity: ResourceBrowserIdentity;
+    readonly item: ResourceBrowserItem;
+    readonly absolutePath: string;
+  }) => Promise<{
+    readonly previewSessionId: string;
+    readonly descriptor: ResourceBrowserQuickPreviewResult['descriptor'];
+  }>;
+  readonly releaseQuickPreview: (windowId: string, previewSessionId: string) => void;
   readonly canvas: {
     executeIntent(windowId: string, payload: unknown): Promise<CanvasHostIntentResult>;
   };
@@ -113,6 +130,53 @@ export class DesktopResourceBrowserRuntime {
   ): Promise<ResourceBrowserThumbnailResult> {
     const request = parseResourceBrowserThumbnailRequest(value);
     return (await this.resolveController(windowId, request.identity)).resolveThumbnail(request);
+  }
+
+  async resolveQuickPreview(
+    windowId: string,
+    value: ResourceBrowserQuickPreviewRequest | unknown,
+  ): Promise<ResourceBrowserQuickPreviewResult> {
+    const request = parseResourceBrowserQuickPreviewRequest(value);
+    const controller = await this.resolveController(windowId, request.identity);
+    const projection = await controller.getSnapshot();
+    const item = projection.items.find((candidate) => candidate.resourceId === request.resourceId);
+    if (!item || (item.kind !== 'image' && item.kind !== 'video' && item.kind !== 'audio')) {
+      throw new Error('Desktop Resource Browser quick preview item is unavailable or unsupported.');
+    }
+    const workspace = await this.options.shell.resolveProjectWorkspace(request.identity.projectId);
+    if (workspace.workspaceId !== request.identity.workspaceId) {
+      throw new Error('Desktop Resource Browser quick preview Workspace is stale.');
+    }
+    const absolutePath = await resolveDesktopResourceBrowserItemPath(workspace, item);
+    const opened = await this.options.openQuickPreview({
+      identity: request.identity,
+      item,
+      absolutePath,
+    });
+    return {
+      schemaVersion: request.schemaVersion,
+      requestId: request.requestId,
+      identity: request.identity,
+      resourceId: request.resourceId,
+      previewSessionId: opened.previewSessionId,
+      descriptor: opened.descriptor,
+    };
+  }
+
+  async releaseQuickPreview(
+    windowId: string,
+    value: ResourceBrowserQuickPreviewReleaseRequest | unknown,
+  ): Promise<ResourceBrowserQuickPreviewReleaseResult> {
+    const request = parseResourceBrowserQuickPreviewReleaseRequest(value);
+    await this.resolveController(windowId, request.identity);
+    this.options.releaseQuickPreview(windowId, request.previewSessionId);
+    return {
+      schemaVersion: request.schemaVersion,
+      requestId: request.requestId,
+      identity: request.identity,
+      previewSessionId: request.previewSessionId,
+      status: 'released',
+    };
   }
 
   async execute(
@@ -398,6 +462,11 @@ export function createDesktopResourceToCanvasInteraction(options: {
     if (!locator) {
       throw new Error('Resource Browser item has no Canvas representation.');
     }
+    if (locator.kind === 'generated-output') {
+      throw new Error(
+        'Generated Resource Browser results require the Generation-owned commit path.',
+      );
+    }
     const commandIdentity = [
       'resource-browser',
       resourceIdentity.viewId,
@@ -412,13 +481,77 @@ export function createDesktopResourceToCanvasInteraction(options: {
         commandId: commandIdentity,
         expectedRevision: target.expectedRevision,
         identity: canvasIdentity,
-        intent: { type: 'project-content', locator },
+        intent: {
+          type: 'author-material',
+          request: {
+            kind: 'direct-reference',
+            identity: {
+              projectId: canvasIdentity.projectId,
+              canvasId: canvasIdentity.documentId,
+              canvasSessionId: canvasIdentity.sessionId,
+            },
+            locator,
+            mediaKind: resourceItemMediaKind(item),
+            title: item.label,
+            ...(item.facet === 'entities'
+              ? {
+                  entity: {
+                    entityId: item.entityRef.entityId,
+                    bindingId: requireEntityRepresentationBindingId(item),
+                    role: requireEntityRepresentationRole(item),
+                  },
+                }
+              : {}),
+          },
+        },
       }),
     );
     if (result.status === 'rejected') {
       throw new Error(result.diagnostic.message);
     }
   };
+}
+
+function requireEntityRepresentationBindingId(
+  item: Extract<ResourceBrowserItem, { readonly facet: 'entities' }>,
+): string {
+  if (!item.representationBindingId) {
+    throw new Error('Resource Browser Entity has no active representation binding identity.');
+  }
+  return item.representationBindingId;
+}
+
+function requireEntityRepresentationRole(
+  item: Extract<ResourceBrowserItem, { readonly facet: 'entities' }>,
+) {
+  if (!item.representationRole) {
+    throw new Error('Resource Browser Entity has no active representation role.');
+  }
+  return item.representationRole;
+}
+
+function resourceItemMediaKind(item: ResourceBrowserItem): CanvasMaterialMediaKind {
+  switch (item.kind) {
+    case 'image':
+    case 'video':
+    case 'audio':
+    case 'document':
+      return item.kind;
+    case 'file': {
+      const extension = path.extname(item.label).toLocaleLowerCase();
+      if (extension === '.glb' || extension === '.gltf' || extension === '.vrm') {
+        return 'model';
+      }
+      return 'other';
+    }
+    case 'directory':
+    case 'character':
+    case 'scene':
+    case 'object':
+    case 'location':
+    case 'style':
+      return 'other';
+  }
 }
 
 function resourceBrowserControllerKey(identity: ResourceBrowserIdentity): string {

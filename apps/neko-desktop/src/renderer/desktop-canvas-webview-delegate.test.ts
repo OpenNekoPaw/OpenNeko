@@ -56,13 +56,74 @@ describe('Desktop Canvas Webview delegate', () => {
     });
   });
 
+  it('routes the package-owned media preview protocol through the owner-bound Desktop bridge', async () => {
+    const executeMediaRequest = vi.fn(async () => ({
+      type: 'media:probeResult',
+      nodeId: 'audio-1',
+      mediaInfo: {
+        duration: 12,
+        width: 0,
+        height: 0,
+        fps: 0,
+        codec: 'aac',
+        format: 'aac',
+        hasAudio: true,
+      },
+    }));
+    vi.stubGlobal('openNekoDesktop', {
+      canvas: {
+        resolvePreviewVariant: vi.fn(),
+        executeMediaRequest,
+      },
+    });
+    const delegate = createDesktopCanvasWebviewDelegate(identity);
+    const message = vi.fn();
+    delegate.subscribe(message);
+
+    expect(delegate.supportsMessage('media:probe')).toBe(true);
+    expect(delegate.supportsMessage('media:play')).toBe(true);
+    expect(delegate.supportsMessage('media:captureFrame')).toBe(true);
+    expect(delegate.supportsMessage('media:stop')).toBe(true);
+
+    delegate.postMessage({
+      type: 'media:probe',
+      nodeId: 'audio-1',
+      assetPath: 'media/test.aac',
+      mediaType: 'audio',
+    });
+
+    await vi.waitFor(() => expect(message).toHaveBeenCalled());
+    expect(executeMediaRequest).toHaveBeenCalledWith({
+      identity,
+      type: 'media:probe',
+      nodeId: 'audio-1',
+      locator: { kind: 'workspace-file', path: 'media/test.aac' },
+      mediaType: 'audio',
+    });
+    expect(message.mock.calls.at(-1)?.[0]).toMatchObject({
+      type: 'media:probeResult',
+      nodeId: 'audio-1',
+      mediaInfo: { codec: 'aac', hasAudio: true },
+    });
+  });
+
   it('rejects unsupported messages and escaping paths instead of silently ignoring them', () => {
     vi.stubGlobal('openNekoDesktop', {
       canvas: { resolvePreviewVariant: vi.fn() },
     });
     const delegate = createDesktopCanvasWebviewDelegate(identity);
 
-    expect(() => delegate.postMessage({ type: 'media:play' })).toThrow('unsupported message');
+    expect(() => delegate.postMessage({ type: 'desktop:unknown' })).toThrow(
+      'unsupported message',
+    );
+    expect(() =>
+      delegate.postMessage({
+        type: 'media:probe',
+        nodeId: 'video-1',
+        assetPath: '../cat.mp4',
+        mediaType: 'video',
+      }),
+    ).toThrow('media source is invalid');
     expect(() =>
       delegate.postMessage({
         type: 'preview:resolveVariant',

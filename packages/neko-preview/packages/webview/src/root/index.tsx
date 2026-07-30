@@ -31,6 +31,53 @@ export interface PreviewRootProps {
   readonly locale: SupportedLocale;
 }
 
+export interface QuickPreviewSurfaceProps {
+  readonly descriptor: PreviewMediaDescriptor;
+  readonly locale: SupportedLocale;
+}
+
+export function QuickPreviewSurface({
+  descriptor,
+  locale,
+}: QuickPreviewSurfaceProps): ReactElement {
+  useEffect(() => {
+    setLocale(locale);
+  }, [locale]);
+  const sourceUrl = createPreviewMediaUrl(descriptor.descriptorId, descriptor.displayName);
+  return (
+    <section
+      className="neko-preview-quick"
+      data-preview-kind={descriptor.contentKind}
+      aria-label={descriptor.displayName}
+    >
+      {descriptor.contentKind === 'image' ? (
+        <img src={sourceUrl} alt={descriptor.displayName} />
+      ) : null}
+      {descriptor.contentKind === 'video' ? (
+        <I18nProvider service={i18nService}>
+          <VideoPlayer
+            sourceUrl={sourceUrl}
+            displayName={descriptor.displayName}
+            autoPlay
+            compact
+            muted
+          />
+        </I18nProvider>
+      ) : null}
+      {descriptor.contentKind === 'audio' ? (
+        <I18nProvider service={i18nService}>
+          <AudioPlayer
+            sourceUrl={sourceUrl}
+            displayName={descriptor.displayName}
+            autoPlay
+            compact
+          />
+        </I18nProvider>
+      ) : null}
+    </section>
+  );
+}
+
 type PreviewRootState =
   | { readonly kind: 'loading' }
   | { readonly kind: 'ready'; readonly projection: PreviewProjection }

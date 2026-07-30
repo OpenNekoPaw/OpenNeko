@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CONTENT_LOCATOR_DRAG_MIME } from '@neko/shared';
@@ -82,6 +82,86 @@ describe('ResourceBrowserRoot', () => {
       }),
     );
     expect(document.querySelector('.neko-resource-browser__actions')).toBeNull();
+  });
+
+  it('opens a package-owned quick preview on hover and releases it on leave', async () => {
+    const runtime = createRuntime();
+    const renderQuickPreview = vi.fn((descriptor) => (
+      <div data-testid="quick-preview">{descriptor.displayName}</div>
+    ));
+    render(
+      <ResourceBrowserRoot runtime={runtime} locale="en" renderQuickPreview={renderQuickPreview} />,
+    );
+
+    const row = (await screen.findByText('cat.png')).closest('.neko-resource-browser__item-row');
+    expect(row).toBeTruthy();
+    fireEvent.pointerEnter(row!);
+
+    await waitFor(() => expect(runtime.resolveQuickPreview).toHaveBeenCalledOnce());
+    expect((await screen.findByTestId('quick-preview')).textContent).toBe('preview.png');
+
+    fireEvent.pointerLeave(row!);
+    await waitFor(() =>
+      expect(runtime.releaseQuickPreview).toHaveBeenCalledWith(
+        expect.objectContaining({
+          route: 'quick-preview.release',
+          previewSessionId: 'hover:content:cat',
+        }),
+      ),
+    );
+    expect(screen.queryByTestId('quick-preview')).toBeNull();
+  });
+
+  it('releases a stale quick preview result that resolves after pointer leave', async () => {
+    const runtime = createRuntime();
+    let resolvePreview: (() => void) | undefined;
+    runtime.resolveQuickPreview.mockImplementation((request) =>
+      new Promise<void>((resolve) => {
+        resolvePreview = resolve;
+      }).then(() => ({
+        schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
+        requestId: request.requestId,
+        identity: request.identity,
+        resourceId: request.resourceId,
+        previewSessionId: `stale:${request.resourceId}`,
+        descriptor: {
+          descriptorId: `descriptor:${request.resourceId}`,
+          revision: 'revision-1',
+          contentKind: 'image' as const,
+          mediaType: 'image/png',
+          displayName: 'stale.png',
+          byteLength: 128,
+        },
+      })),
+    );
+    render(
+      <ResourceBrowserRoot
+        runtime={runtime}
+        locale="en"
+        renderQuickPreview={(descriptor) => (
+          <div data-testid="quick-preview">{descriptor.displayName}</div>
+        )}
+      />,
+    );
+
+    const row = (await screen.findByText('cat.png')).closest('.neko-resource-browser__item-row');
+    expect(row).toBeTruthy();
+    fireEvent.pointerEnter(row!);
+    await waitFor(() => expect(runtime.resolveQuickPreview).toHaveBeenCalledOnce());
+    fireEvent.pointerLeave(row!);
+
+    await act(async () => {
+      resolvePreview?.();
+    });
+    await waitFor(() =>
+      expect(runtime.releaseQuickPreview).toHaveBeenCalledWith(
+        expect.objectContaining({
+          route: 'quick-preview.release',
+          previewSessionId: 'stale:content:cat',
+        }),
+      ),
+    );
+    expect(screen.queryByTestId('quick-preview')).toBeNull();
   });
 
   it('drags a portable ContentLocator without exposing an absolute path', async () => {
@@ -740,6 +820,8 @@ function createRuntime(snapshot = projection): ResourceBrowserHostRuntime & {
   readonly search: ReturnType<typeof vi.fn>;
   readonly execute: ReturnType<typeof vi.fn>;
   readonly resolveThumbnail: ReturnType<typeof vi.fn>;
+  readonly resolveQuickPreview: ReturnType<typeof vi.fn>;
+  readonly releaseQuickPreview: ReturnType<typeof vi.fn>;
 } {
   return {
     identity: snapshot.identity,
@@ -752,6 +834,28 @@ function createRuntime(snapshot = projection): ResourceBrowserHostRuntime & {
       descriptorId: request.descriptorId,
       revision: request.revision,
       dataUrl: 'data:image/png;base64,aW1hZ2U=',
+    })),
+    resolveQuickPreview: vi.fn(async (request) => ({
+      schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
+      requestId: request.requestId,
+      identity: request.identity,
+      resourceId: request.resourceId,
+      previewSessionId: `hover:${request.resourceId}`,
+      descriptor: {
+        descriptorId: `descriptor:${request.resourceId}`,
+        revision: 'revision-1',
+        contentKind: 'image' as const,
+        mediaType: 'image/png',
+        displayName: 'preview.png',
+        byteLength: 128,
+      },
+    })),
+    releaseQuickPreview: vi.fn(async (request) => ({
+      schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
+      requestId: request.requestId,
+      identity: request.identity,
+      previewSessionId: request.previewSessionId,
+      status: 'released' as const,
     })),
     subscribe: vi.fn(() => () => undefined),
     children: vi.fn(async () => snapshot),

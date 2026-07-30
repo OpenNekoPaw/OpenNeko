@@ -1,16 +1,20 @@
 import {
+  isEntityRepresentationRole,
   isCreativeEntityKind,
   validateContentLocator,
   type ContentLocator,
   type CreativeEntityKind,
+  type EntityRepresentationRole,
 } from '@neko/shared';
 
-export const RESOURCE_BROWSER_CONTRACT_VERSION = 4 as const;
+export const RESOURCE_BROWSER_CONTRACT_VERSION = 6 as const;
 
 export const RESOURCE_BROWSER_ROUTES = {
   snapshotGet: 'snapshot.get',
   children: 'children',
   thumbnailResolve: 'thumbnail.resolve',
+  quickPreviewResolve: 'quick-preview.resolve',
+  quickPreviewRelease: 'quick-preview.release',
   search: 'search',
   refresh: 'refresh',
   addSource: 'source.add',
@@ -86,6 +90,8 @@ export interface ResourceBrowserEntityItem extends ResourceBrowserItemBase {
   readonly entityStatus: 'confirmed';
   readonly representationAvailability: 'active' | 'unbound';
   readonly representationLocator?: ContentLocator;
+  readonly representationBindingId?: string;
+  readonly representationRole?: EntityRepresentationRole;
 }
 
 export type ResourceBrowserItem = ResourceBrowserContentItem | ResourceBrowserEntityItem;
@@ -140,6 +146,44 @@ export interface ResourceBrowserThumbnailResult {
   readonly dataUrl: string;
 }
 
+export type ResourceBrowserQuickPreviewKind = 'image' | 'video' | 'audio';
+
+export interface ResourceBrowserQuickPreviewDescriptor {
+  readonly descriptorId: string;
+  readonly revision: string;
+  readonly contentKind: ResourceBrowserQuickPreviewKind;
+  readonly mediaType: string;
+  readonly displayName: string;
+  readonly byteLength: number;
+}
+
+export interface ResourceBrowserQuickPreviewRequest extends ResourceBrowserRequest {
+  readonly route: typeof RESOURCE_BROWSER_ROUTES.quickPreviewResolve;
+  readonly resourceId: string;
+}
+
+export interface ResourceBrowserQuickPreviewResult {
+  readonly schemaVersion: typeof RESOURCE_BROWSER_CONTRACT_VERSION;
+  readonly requestId: string;
+  readonly identity: ResourceBrowserIdentity;
+  readonly resourceId: string;
+  readonly previewSessionId: string;
+  readonly descriptor: ResourceBrowserQuickPreviewDescriptor;
+}
+
+export interface ResourceBrowserQuickPreviewReleaseRequest extends ResourceBrowserRequest {
+  readonly route: typeof RESOURCE_BROWSER_ROUTES.quickPreviewRelease;
+  readonly previewSessionId: string;
+}
+
+export interface ResourceBrowserQuickPreviewReleaseResult {
+  readonly schemaVersion: typeof RESOURCE_BROWSER_CONTRACT_VERSION;
+  readonly requestId: string;
+  readonly identity: ResourceBrowserIdentity;
+  readonly previewSessionId: string;
+  readonly status: 'released';
+}
+
 export interface ResourceBrowserIntentRequest extends ResourceBrowserRequest {
   readonly route:
     | typeof RESOURCE_BROWSER_ROUTES.refresh
@@ -184,6 +228,12 @@ export interface ResourceBrowserHostRuntime {
   resolveThumbnail(
     request: ResourceBrowserThumbnailRequest,
   ): Promise<ResourceBrowserThumbnailResult>;
+  resolveQuickPreview(
+    request: ResourceBrowserQuickPreviewRequest,
+  ): Promise<ResourceBrowserQuickPreviewResult>;
+  releaseQuickPreview(
+    request: ResourceBrowserQuickPreviewReleaseRequest,
+  ): Promise<ResourceBrowserQuickPreviewReleaseResult>;
   subscribe(listener: (event: ResourceBrowserProjectionEvent) => void): () => void;
   children(request: ResourceBrowserChildrenRequest): Promise<ResourceBrowserProjection>;
   search(request: ResourceBrowserSearchRequest): Promise<ResourceBrowserProjection>;
@@ -265,6 +315,34 @@ export function createResourceBrowserThumbnailRequest(input: {
     resourceId: input.resourceId,
     descriptorId: input.descriptor.descriptorId,
     revision: input.descriptor.revision,
+  });
+}
+
+export function createResourceBrowserQuickPreviewRequest(input: {
+  readonly requestId: string;
+  readonly identity: ResourceBrowserIdentity;
+  readonly resourceId: string;
+}): ResourceBrowserQuickPreviewRequest {
+  return parseResourceBrowserQuickPreviewRequest({
+    schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
+    requestId: input.requestId,
+    identity: input.identity,
+    route: RESOURCE_BROWSER_ROUTES.quickPreviewResolve,
+    resourceId: input.resourceId,
+  });
+}
+
+export function createResourceBrowserQuickPreviewReleaseRequest(input: {
+  readonly requestId: string;
+  readonly identity: ResourceBrowserIdentity;
+  readonly previewSessionId: string;
+}): ResourceBrowserQuickPreviewReleaseRequest {
+  return parseResourceBrowserQuickPreviewReleaseRequest({
+    schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
+    requestId: input.requestId,
+    identity: input.identity,
+    route: RESOURCE_BROWSER_ROUTES.quickPreviewRelease,
+    previewSessionId: input.previewSessionId,
   });
 }
 
@@ -355,6 +433,135 @@ export function parseResourceBrowserThumbnailResult(
       'Resource Browser thumbnail revision is required.',
     ),
     dataUrl,
+  };
+}
+
+export function parseResourceBrowserQuickPreviewRequest(
+  value: unknown,
+): ResourceBrowserQuickPreviewRequest {
+  const record = requireRecord(value, 'Resource Browser quick preview request must be an object.');
+  requireVersion(record['schemaVersion']);
+  if (record['route'] !== RESOURCE_BROWSER_ROUTES.quickPreviewResolve) {
+    throw invalidPayload('Resource Browser quick preview route is invalid.');
+  }
+  return {
+    schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
+    requestId: requireNonEmptyString(
+      record['requestId'],
+      'Resource Browser request identity is required.',
+    ),
+    identity: parseResourceBrowserIdentity(record['identity']),
+    route: RESOURCE_BROWSER_ROUTES.quickPreviewResolve,
+    resourceId: requireOpaqueIdentity(
+      record['resourceId'],
+      'Resource Browser quick preview resource identity is required.',
+    ),
+  };
+}
+
+export function parseResourceBrowserQuickPreviewReleaseRequest(
+  value: unknown,
+): ResourceBrowserQuickPreviewReleaseRequest {
+  const record = requireRecord(
+    value,
+    'Resource Browser quick preview release request must be an object.',
+  );
+  requireVersion(record['schemaVersion']);
+  if (record['route'] !== RESOURCE_BROWSER_ROUTES.quickPreviewRelease) {
+    throw invalidPayload('Resource Browser quick preview release route is invalid.');
+  }
+  return {
+    schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
+    requestId: requireNonEmptyString(
+      record['requestId'],
+      'Resource Browser request identity is required.',
+    ),
+    identity: parseResourceBrowserIdentity(record['identity']),
+    route: RESOURCE_BROWSER_ROUTES.quickPreviewRelease,
+    previewSessionId: requireOpaqueIdentity(
+      record['previewSessionId'],
+      'Resource Browser quick preview session identity is required.',
+    ),
+  };
+}
+
+export function parseResourceBrowserQuickPreviewResult(
+  value: unknown,
+): ResourceBrowserQuickPreviewResult {
+  const record = requireRecord(value, 'Resource Browser quick preview result must be an object.');
+  requireVersion(record['schemaVersion']);
+  const descriptor = requireRecord(
+    record['descriptor'],
+    'Resource Browser quick preview descriptor is required.',
+  );
+  const contentKind = descriptor['contentKind'];
+  if (contentKind !== 'image' && contentKind !== 'video' && contentKind !== 'audio') {
+    throw invalidPayload('Resource Browser quick preview kind is invalid.');
+  }
+  return {
+    schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
+    requestId: requireNonEmptyString(
+      record['requestId'],
+      'Resource Browser request identity is required.',
+    ),
+    identity: parseResourceBrowserIdentity(record['identity']),
+    resourceId: requireOpaqueIdentity(
+      record['resourceId'],
+      'Resource Browser quick preview resource identity is required.',
+    ),
+    previewSessionId: requireOpaqueIdentity(
+      record['previewSessionId'],
+      'Resource Browser quick preview session identity is required.',
+    ),
+    descriptor: {
+      descriptorId: requireOpaqueIdentity(
+        descriptor['descriptorId'],
+        'Resource Browser quick preview descriptor identity is required.',
+      ),
+      revision: requireOpaqueIdentity(
+        descriptor['revision'],
+        'Resource Browser quick preview revision is required.',
+      ),
+      contentKind,
+      mediaType: requireNonEmptyString(
+        descriptor['mediaType'],
+        'Resource Browser quick preview media type is required.',
+      ),
+      displayName: requireNonEmptyString(
+        descriptor['displayName'],
+        'Resource Browser quick preview display name is required.',
+      ),
+      byteLength: requireNonNegativeInteger(
+        descriptor['byteLength'],
+        'Resource Browser quick preview byte length must be a non-negative integer.',
+      ),
+    },
+  };
+}
+
+export function parseResourceBrowserQuickPreviewReleaseResult(
+  value: unknown,
+): ResourceBrowserQuickPreviewReleaseResult {
+  const record = requireRecord(
+    value,
+    'Resource Browser quick preview release result must be an object.',
+  );
+  requireVersion(record['schemaVersion']);
+  if (record['status'] !== 'released') {
+    throw invalidPayload('Resource Browser quick preview release status is invalid.');
+  }
+  return {
+    schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
+    requestId: requireNonEmptyString(
+      record['requestId'],
+      'Resource Browser request identity is required.',
+    ),
+    identity: parseResourceBrowserIdentity(record['identity']),
+    previewSessionId: requireOpaqueIdentity(
+      record['previewSessionId'],
+      'Resource Browser quick preview session identity is required.',
+    ),
+    status: 'released',
   };
 }
 
@@ -673,15 +880,22 @@ function parseResourceBrowserItem(value: unknown): ResourceBrowserItem {
     if (base.role !== 'entity') {
       throw invalidPayload('Resource Browser Entity item role is invalid.');
     }
+    const representationAvailability = requireRepresentationAvailability(
+      record['representationAvailability'],
+    );
+    const representation = readEntityRepresentation(
+      representationAvailability,
+      record['representationLocator'],
+      record['representationBindingId'],
+      record['representationRole'],
+    );
     return {
       ...base,
       facet,
       entityRef,
       entityStatus: requireConfirmedEntityStatus(record['entityStatus']),
-      representationAvailability: requireRepresentationAvailability(
-        record['representationAvailability'],
-      ),
-      ...readOptionalLocator(record['representationLocator'], 'representationLocator'),
+      representationAvailability,
+      ...representation,
     };
   }
   if (facet === 'all') {
@@ -760,11 +974,35 @@ function readOptionalThumbnail(value: unknown): {
   };
 }
 
-function readOptionalLocator(
-  value: unknown,
-  field: string,
-): { readonly representationLocator?: ContentLocator } {
-  return value === undefined ? {} : { representationLocator: requireContentLocator(value, field) };
+function readEntityRepresentation(
+  availability: 'active' | 'unbound',
+  locator: unknown,
+  bindingId: unknown,
+  role: unknown,
+):
+  | {
+      readonly representationLocator: ContentLocator;
+      readonly representationBindingId: string;
+      readonly representationRole: EntityRepresentationRole;
+    }
+  | Record<string, never> {
+  if (availability === 'unbound') {
+    if (locator !== undefined || bindingId !== undefined || role !== undefined) {
+      throw invalidPayload('Unbound Resource Browser Entity must not contain representation data.');
+    }
+    return {};
+  }
+  if (!isEntityRepresentationRole(role)) {
+    throw invalidPayload('Resource Browser Entity representation role is invalid.');
+  }
+  return {
+    representationLocator: requireContentLocator(locator, 'representationLocator'),
+    representationBindingId: requireOpaqueIdentity(
+      bindingId,
+      'Resource Browser Entity representation binding identity is required.',
+    ),
+    representationRole: role,
+  };
 }
 
 function requireContentLocator(value: unknown, field: string): ContentLocator {

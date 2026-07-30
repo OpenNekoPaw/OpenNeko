@@ -10,6 +10,8 @@ export function createElectronCanvasHostRuntime(
   return {
     identity: { ...identity },
     getSnapshot: () => window.openNekoDesktop.canvas.getSnapshot(identity),
+    resolveMaterialActions: (request) =>
+      window.openNekoDesktop.canvas.resolveMaterialActions(request),
     subscribe: (listener) => window.openNekoDesktop.canvas.subscribe(identity, listener),
     executeIntent: (request: CanvasHostIntentRequest) =>
       window.openNekoDesktop.canvas.executeIntent(request),

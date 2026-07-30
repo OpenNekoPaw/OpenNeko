@@ -194,9 +194,7 @@ describe('Desktop Resource Browser source', () => {
       host,
     });
 
-    await expect(
-      source.files.list({ identity, query: 'brief', limit: 20 }),
-    ).resolves.toEqual([
+    await expect(source.files.list({ identity, query: 'brief', limit: 20 })).resolves.toEqual([
       expect.objectContaining({
         label: 'brief.md',
         locator: { kind: 'workspace-file', path: 'brief.md' },
@@ -274,10 +272,10 @@ describe('Desktop Resource Browser source', () => {
     expect(media).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-        locator: {
-          kind: 'workspace-file',
-          path: 'neko/assets/Voice/voice.wav',
-        },
+          locator: {
+            kind: 'workspace-file',
+            path: 'neko/assets/Voice/voice.wav',
+          },
         }),
       ]),
     );
@@ -294,23 +292,19 @@ describe('Desktop Resource Browser source', () => {
     });
     expect(
       allMedia.some(
-        (entry) =>
-          entry.locator.kind === 'workspace-file' &&
-          entry.locator.path === 'index.ts',
+        (entry) => entry.locator.kind === 'workspace-file' && entry.locator.path === 'index.ts',
       ),
     ).toBe(false);
     expect(
       allMedia.some(
         (entry) =>
-          entry.locator.kind === 'workspace-file' &&
-          entry.locator.path === 'coverage/favicon.png',
+          entry.locator.kind === 'workspace-file' && entry.locator.path === 'coverage/favicon.png',
       ),
     ).toBe(false);
     expect(
       allMedia.some(
         (entry) =>
-          entry.locator.kind === 'workspace-file' &&
-          entry.locator.path === 'workspace-only.mp4',
+          entry.locator.kind === 'workspace-file' && entry.locator.path === 'workspace-only.mp4',
       ),
     ).toBe(false);
     expect(JSON.stringify({ media, entityProjection })).not.toContain(fixture.root);
@@ -405,9 +399,7 @@ describe('Desktop Resource Browser source', () => {
       query: '',
       limit: 20,
     });
-    const editorialRoot = mediaRoots.find(
-      (entry) => entry.libraryName === 'Editorial',
-    );
+    const editorialRoot = mediaRoots.find((entry) => entry.libraryName === 'Editorial');
     if (!editorialRoot) throw new Error('Missing Editorial library fixture.');
     const media = await composition.source.media.children({
       identity,
@@ -520,13 +512,9 @@ describe('Desktop Resource Browser source', () => {
       selectSource: async () => selected,
     });
 
-    await expect(
-      composition.interactions.addSource({ identity }),
-    ).resolves.toBe('added');
+    await expect(composition.interactions.addSource({ identity })).resolves.toBe('added');
 
-    const link = await lstat(
-      path.join(fixture.workspace, 'neko', 'assets', 'Media Source'),
-    );
+    const link = await lstat(path.join(fixture.workspace, 'neko', 'assets', 'Media Source'));
     expect(link.isSymbolicLink()).toBe(true);
   });
 
@@ -557,9 +545,9 @@ describe('Desktop Resource Browser source', () => {
     await expect(
       composition.interactions.relinkSource({ identity, item: libraryItem }),
     ).resolves.toBe('relinked');
-    expect(
-      await realpath(path.join(fixture.workspace, 'neko', 'assets', 'First')),
-    ).toBe(await realpath(second));
+    expect(await realpath(path.join(fixture.workspace, 'neko', 'assets', 'First'))).toBe(
+      await realpath(second),
+    );
 
     await composition.interactions.removeSource({ identity, item: libraryItem });
     await expect(
@@ -691,8 +679,7 @@ function createComposition(
     openPreview: effects.openPreview ?? (async () => undefined),
     openCut: effects.openCut ?? (async () => undefined),
     selectSource: effects.selectSource ?? (async () => undefined),
-    createThumbnail:
-      effects.createThumbnail ?? (async () => 'data:image/png;base64,aW1hZ2U='),
+    createThumbnail: effects.createThumbnail ?? (async () => 'data:image/png;base64,aW1hZ2U='),
     addToCanvas: async () => undefined,
     addToCut: async () => undefined,
   });

@@ -1,14 +1,7 @@
 import { randomUUID } from 'node:crypto';
+import { lstat, realpath } from 'node:fs/promises';
 import * as path from 'node:path';
-import {
-  app,
-  BrowserWindow,
-  dialog,
-  nativeImage,
-  nativeTheme,
-  safeStorage,
-  shell,
-} from 'electron';
+import { app, BrowserWindow, dialog, nativeImage, nativeTheme, safeStorage, shell } from 'electron';
 import { ConsoleLogger } from '@neko/shared/logger';
 import { DESKTOP_BRIDGE_CHANNELS, type DesktopLifecycleEvent } from '../shared/bridge-contract';
 import { DESKTOP_SHELL_CHANNELS, type DesktopShellProjectionEvent } from '../shared/shell-contract';
@@ -42,9 +35,10 @@ import {
   registerDesktopMediaProtocol,
 } from './desktop-media-protocol';
 import { DesktopPreviewRuntime } from './desktop-preview-runtime';
+import { DesktopCanvasGenerationRuntime } from './desktop-canvas-generation-runtime';
 import { DesktopCanvasRuntime } from './desktop-canvas-runtime';
+import { DesktopCanvasMediaRuntime } from './desktop-canvas-media-runtime';
 import { DesktopCutRuntime } from './desktop-cut-runtime';
-import { createDesktopWorkspaceFileLocator } from './desktop-content-locator';
 import { createDesktopNativeThemeController } from './desktop-native-theme';
 import {
   createNodeDesktopApplicationSettingsFilePort,
@@ -57,6 +51,11 @@ import {
 } from '../shared/application-settings-contract';
 import { buildConfigFilePath } from '@neko/platform/files';
 import { resolveDesktopBuiltinSkillRoot } from './desktop-builtin-skill-root';
+import { listWorkspaceLinkedMediaLibraries } from '@neko/shared/node/workspace-linked-media-libraries';
+import {
+  listDesktopGlobalMediaLibraryConnections,
+  resolveDesktopGlobalMediaLibraryTarget,
+} from './desktop-global-media-library-files';
 
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string | undefined;
 declare const MAIN_WINDOW_VITE_NAME: string;
@@ -188,55 +187,6 @@ async function startDesktop(): Promise<void> {
     mediaRegistry,
     resolveWebContentsId: (windowId) => requireOwnerWindow(windowId).webContents.id,
   });
-  const canvasRuntime = new DesktopCanvasRuntime({
-    shell: shellService,
-    host,
-    requestSource: async ({ identity, sourceKind, workspace }) => {
-      const owner = requireOwnerWindow(identity.windowId);
-      const chinese = app.getLocale().toLocaleLowerCase().startsWith('zh');
-      const result = await dialog.showOpenDialog(owner, {
-        title: chinese ? '添加到画布' : 'Add to Canvas',
-        buttonLabel: chinese ? '添加' : 'Add',
-        properties: ['openFile'],
-        filters: canvasSourceFilters(sourceKind),
-      });
-      if (result.canceled) return undefined;
-      const selectedPath = result.filePaths[0];
-      if (!selectedPath) {
-        throw new Error('Desktop Canvas source picker returned no file.');
-      }
-      return createDesktopWorkspaceFileLocator(workspace, selectedPath);
-    },
-    previewResource: async ({ absolutePath, identity, locator }) => {
-      if (locator.kind !== 'workspace-file') {
-        throw new Error('Desktop Canvas Preview requires a workspace-file ContentLocator.');
-      }
-      const label = path.basename(absolutePath);
-      await previewRuntime.open({
-        identity: {
-          projectId: identity.projectId,
-          workspaceId: identity.workspaceId,
-          windowId: identity.windowId,
-          viewId: `resource-browser:${identity.viewId}`,
-          viewEpoch: identity.viewEpoch,
-          endpointEpoch: identity.endpointEpoch,
-        },
-        item: {
-          resourceId: `canvas-content:${identity.documentId}:${locator.path}`,
-          facet: 'files',
-          role: 'content',
-          depth: 0,
-          kind: 'file',
-          label,
-          locator,
-          capabilities: ['preview'],
-        },
-        absolutePath,
-      });
-    },
-    createPreviewVariant: ({ absolutePath }) =>
-      createDesktopThumbnailDataUrl(absolutePath, { width: 640, height: 400 }),
-  });
   const cutRuntime = new DesktopCutRuntime({
     shell: shellService,
     host,
@@ -263,18 +213,11 @@ async function startDesktop(): Promise<void> {
       });
       return result.canceled ? undefined : result.filePaths;
     },
-    selectExportDestination: async ({
-      identity,
-      workspacePath,
-      outputName,
-      container,
-    }) => {
+    selectExportDestination: async ({ identity, workspacePath, outputName, container }) => {
       const owner = requireOwnerWindow(identity.windowId);
       const fileName = `${outputName.replace(/\.(?:mp4|mov)$/iu, '')}.${container}`;
       const result = await dialog.showSaveDialog(owner, {
-        title: app.getLocale().toLocaleLowerCase().startsWith('zh')
-          ? '导出 Cut'
-          : 'Export Cut',
+        title: app.getLocale().toLocaleLowerCase().startsWith('zh') ? '导出 Cut' : 'Export Cut',
         defaultPath: path.join(workspacePath, 'exports', fileName),
         filters:
           container === 'mov'
@@ -294,6 +237,189 @@ async function startDesktop(): Promise<void> {
       return relativePath.split(path.sep).join('/');
     },
   });
+  const canvasUsesChineseLabels = app.getLocale().toLocaleLowerCase().startsWith('zh');
+  const canvasGenerationRuntime = new DesktopCanvasGenerationRuntime({ homedir });
+  const canvasRuntime = new DesktopCanvasRuntime({
+    shell: shellService,
+    host,
+    globalMediaLibraryRoot: globalStorage.mediaLibraries,
+    materialActionLabels: {
+      preview: canvasUsesChineseLabels ? '预览' : 'Preview',
+      reveal: canvasUsesChineseLabels ? '在访达中显示' : 'Reveal in Finder',
+      openInCut: canvasUsesChineseLabels ? '在剪辑中打开' : 'Open in Cut',
+      copyToProjectMediaLibrary: canvasUsesChineseLabels
+        ? '复制到项目媒体库'
+        : 'Copy to project Media Library',
+      copyToGlobalMediaLibrary: canvasUsesChineseLabels
+        ? '复制到全局媒体库'
+        : 'Copy to global Media Library',
+      regenerate: canvasUsesChineseLabels ? '重新生成' : 'Regenerate',
+    },
+    generation: canvasGenerationRuntime,
+    media: new DesktopCanvasMediaRuntime({
+      mediaRegistry,
+      resolveWebContentsId: (windowId) => requireOwnerWindow(windowId).webContents.id,
+    }),
+    requestSource: async ({ identity, sourceKind, sourceMode, workspace }) => {
+      const owner = requireOwnerWindow(identity.windowId);
+      const chinese = app.getLocale().toLocaleLowerCase().startsWith('zh');
+      const result = await dialog.showOpenDialog(owner, {
+        title: chinese ? '添加到画布' : 'Add to Canvas',
+        buttonLabel: chinese ? '添加' : 'Add',
+        ...(sourceMode === 'reference' ? { defaultPath: workspace.workspacePath } : {}),
+        properties: ['openFile'],
+        filters: canvasSourceFilters(sourceKind),
+      });
+      if (result.canceled) return undefined;
+      const selectedPath = result.filePaths[0];
+      if (!selectedPath) {
+        throw new Error('Desktop Canvas source picker returned no file.');
+      }
+      if (sourceMode === 'reference') {
+        const relativePath = path.relative(workspace.workspacePath, selectedPath);
+        if (
+          !relativePath ||
+          relativePath === '..' ||
+          relativePath.startsWith(`..${path.sep}`) ||
+          path.isAbsolute(relativePath)
+        ) {
+          throw new Error(
+            'Desktop Canvas reference selection must belong to the active workspace.',
+          );
+        }
+        return {
+          kind: 'workspace-reference',
+          locator: {
+            kind: 'workspace-file',
+            path: relativePath.split(path.sep).join('/'),
+          },
+          title: path.basename(selectedPath),
+        };
+      }
+      return {
+        kind: 'external-import',
+        source: {
+          absolutePath: selectedPath,
+          sourceName: path.basename(selectedPath),
+        },
+      };
+    },
+    requestProjectMediaLibraryCopy: async ({
+      identity,
+      workspace,
+      suggestedFileName,
+    }) => {
+      const libraries = (await listWorkspaceLinkedMediaLibraries(workspace.workspacePath)).filter(
+        (library) => library.availability === 'available',
+      );
+      const library = await selectCanvasMediaLibrary({
+        owner: requireOwnerWindow(identity.windowId),
+        title: canvasUsesChineseLabels ? '选择项目媒体库' : 'Select project Media Library',
+        names: libraries.map((candidate) => candidate.name),
+      });
+      if (!library) return undefined;
+      const selected = libraries.find((candidate) => candidate.name === library);
+      if (!selected) throw new Error('Selected project Media Library is no longer available.');
+      const targetRoot = await realpath(
+        path.join(workspace.workspacePath, ...selected.workspacePath.split('/')),
+      );
+      const destination = await selectCanvasMediaLibraryDestination({
+        owner: requireOwnerWindow(identity.windowId),
+        title: canvasUsesChineseLabels
+          ? '复制到项目媒体库'
+          : 'Copy to project Media Library',
+        targetRoot,
+        suggestedFileName,
+      });
+      return destination ? { libraryName: selected.name, ...destination } : undefined;
+    },
+    requestGlobalMediaLibraryCopy: async ({ identity, suggestedFileName }) => {
+      const libraries = (
+        await listDesktopGlobalMediaLibraryConnections(globalStorage.mediaLibraries)
+      ).filter((library) => library.availability === 'available');
+      const libraryId = await selectCanvasMediaLibrary({
+        owner: requireOwnerWindow(identity.windowId),
+        title: canvasUsesChineseLabels ? '选择全局媒体库' : 'Select global Media Library',
+        names: libraries.map((candidate) => candidate.name),
+        identities: libraries.map((candidate) => candidate.libraryId),
+      });
+      if (!libraryId) return undefined;
+      const targetRoot = await resolveDesktopGlobalMediaLibraryTarget({
+        mediaLibraryRoot: globalStorage.mediaLibraries,
+        libraryId,
+      });
+      const destination = await selectCanvasMediaLibraryDestination({
+        owner: requireOwnerWindow(identity.windowId),
+        title: canvasUsesChineseLabels
+          ? '复制到全局媒体库'
+          : 'Copy to global Media Library',
+        targetRoot,
+        suggestedFileName,
+      });
+      return destination ? { globalLibraryId: libraryId, ...destination } : undefined;
+    },
+    previewResource: async ({ absolutePath, identity, locator }) => {
+      const label = path.basename(absolutePath);
+      await previewRuntime.open({
+        identity: {
+          projectId: identity.projectId,
+          workspaceId: identity.workspaceId,
+          windowId: identity.windowId,
+          viewId: `resource-browser:${identity.viewId}`,
+          viewEpoch: identity.viewEpoch,
+          endpointEpoch: identity.endpointEpoch,
+        },
+        item: {
+          resourceId: `canvas-content:${identity.documentId}:${JSON.stringify(locator)}`,
+          facet: 'files',
+          role: 'content',
+          depth: 0,
+          kind: 'file',
+          label,
+          locator,
+          capabilities: ['preview'],
+        },
+        absolutePath,
+      });
+    },
+    resolveCut: async ({ absolutePath, identity, target }) =>
+      cutRuntime.supportsOpen({
+        resourceId: `canvas-content:${identity.documentId}:${target.nodeId}`,
+        facet: 'files',
+        role: 'content',
+        depth: 0,
+        kind: 'file',
+        label: path.basename(absolutePath),
+        locator: target.locator,
+        capabilities: ['open-cut'],
+      }),
+    openInCut: async ({ absolutePath, identity, target }) => {
+      const item = {
+        resourceId: `canvas-content:${identity.documentId}:${target.nodeId}`,
+        facet: 'files' as const,
+        role: 'content' as const,
+        depth: 0,
+        kind: 'file' as const,
+        label: path.basename(absolutePath),
+        locator: target.locator,
+        capabilities: ['open-cut'] as const,
+      };
+      await cutRuntime.open({
+        identity: {
+          projectId: identity.projectId,
+          workspaceId: identity.workspaceId,
+          windowId: identity.windowId,
+          viewId: `canvas-material:${identity.viewId}`,
+          viewEpoch: identity.viewEpoch,
+          endpointEpoch: identity.endpointEpoch,
+        },
+        item,
+        absolutePath,
+      });
+    },
+    createPreviewVariant: ({ absolutePath }) =>
+      createDesktopThumbnailDataUrl(absolutePath, { width: 640, height: 400 }),
+  });
   const resourceBrowser = new DesktopResourceBrowserRuntime({
     globalAssetRoot: globalStorage.assets,
     globalMediaLibraryRoot: globalStorage.mediaLibraries,
@@ -304,6 +430,9 @@ async function startDesktop(): Promise<void> {
       addResource: (input) => cutRuntime.addResource(input).then(() => undefined),
     },
     openPreview: (input) => previewRuntime.open(input).then(() => undefined),
+    openQuickPreview: (input) => previewRuntime.openQuickPreview(input),
+    releaseQuickPreview: (windowId, previewSessionId) =>
+      previewRuntime.releaseQuickPreview(windowId, previewSessionId),
     openCut: (input) => cutRuntime.open(input),
     createThumbnail: (targetPath) =>
       createDesktopThumbnailDataUrl(targetPath, { width: 160, height: 100 }),
@@ -663,6 +792,95 @@ async function startDesktop(): Promise<void> {
   }
 }
 
+async function selectCanvasMediaLibrary(input: {
+  readonly owner: BrowserWindow;
+  readonly title: string;
+  readonly names: readonly string[];
+  readonly identities?: readonly string[];
+}): Promise<string | undefined> {
+  if (input.names.length === 0) {
+    throw new Error('No writable Media Library destination is available.');
+  }
+  if (input.identities && input.identities.length !== input.names.length) {
+    throw new Error('Desktop Media Library selection identities are inconsistent.');
+  }
+  const cancelLabel = app.getLocale().toLocaleLowerCase().startsWith('zh') ? '取消' : 'Cancel';
+  const result = await dialog.showMessageBox(input.owner, {
+    type: 'question',
+    title: input.title,
+    message: input.title,
+    buttons: [...input.names, cancelLabel],
+    cancelId: input.names.length,
+    defaultId: 0,
+    noLink: true,
+  });
+  if (result.response === input.names.length) return undefined;
+  const selected = input.identities?.[result.response] ?? input.names[result.response];
+  if (!selected) throw new Error('Desktop Media Library selection is invalid.');
+  return selected;
+}
+
+async function selectCanvasMediaLibraryDestination(input: {
+  readonly owner: BrowserWindow;
+  readonly title: string;
+  readonly targetRoot: string;
+  readonly suggestedFileName: string;
+}): Promise<
+  | {
+      readonly destinationDirectory: string;
+      readonly fileName: string;
+      readonly conflictPolicy: 'fail-if-exists' | 'replace';
+    }
+  | undefined
+> {
+  const resolvedRoot = await realpath(input.targetRoot);
+  const result = await dialog.showSaveDialog(input.owner, {
+    title: input.title,
+    defaultPath: path.join(resolvedRoot, input.suggestedFileName),
+  });
+  if (result.canceled || !result.filePath) return undefined;
+  const relativePath = path.relative(resolvedRoot, result.filePath);
+  if (
+    !relativePath ||
+    relativePath === '..' ||
+    relativePath.startsWith(`..${path.sep}`) ||
+    path.isAbsolute(relativePath)
+  ) {
+    throw new Error('Desktop Media Library copy target must remain inside the selected library.');
+  }
+  const fileName = path.basename(relativePath).normalize('NFC');
+  const nativeDirectory = path.dirname(relativePath);
+  const destinationDirectory =
+    nativeDirectory === '.'
+      ? ''
+      : nativeDirectory
+          .split(path.sep)
+          .map((segment) => segment.normalize('NFC'))
+          .join('/');
+  return {
+    destinationDirectory,
+    fileName,
+    conflictPolicy: (await desktopPathExists(result.filePath)) ? 'replace' : 'fail-if-exists',
+  };
+}
+
+async function desktopPathExists(targetPath: string): Promise<boolean> {
+  try {
+    await lstat(targetPath);
+    return true;
+  } catch (error: unknown) {
+    if (
+      typeof error === 'object' &&
+      error !== null &&
+      'code' in error &&
+      Reflect.get(error, 'code') === 'ENOENT'
+    ) {
+      return false;
+    }
+    throw error;
+  }
+}
+
 function readDevelopmentUrl(): string | undefined {
   return typeof MAIN_WINDOW_VITE_DEV_SERVER_URL === 'undefined'
     ? undefined
@@ -683,7 +901,7 @@ async function createDesktopThumbnailDataUrl(
 }
 
 function canvasSourceFilters(
-  sourceKind: 'image' | 'video' | 'audio' | 'document' | 'canvas',
+  sourceKind: 'image' | 'video' | 'audio' | 'model' | 'document' | 'canvas',
 ): Array<{ readonly name: string; readonly extensions: string[] }> {
   switch (sourceKind) {
     case 'image':
@@ -694,6 +912,8 @@ function canvasSourceFilters(
       return [{ name: 'Videos', extensions: ['avi', 'm4v', 'mkv', 'mov', 'mp4', 'webm'] }];
     case 'audio':
       return [{ name: 'Audio', extensions: ['aac', 'flac', 'm4a', 'mp3', 'ogg', 'opus', 'wav'] }];
+    case 'model':
+      return [{ name: '3D Models', extensions: ['glb', 'gltf', 'obj', 'ply', 'stl'] }];
     case 'canvas':
       return [{ name: 'Neko Canvas', extensions: ['nkc'] }];
     case 'document':
@@ -718,9 +938,6 @@ function sendApplicationSettingsProjectionEvent(
   event: DesktopApplicationSettingsProjectionEvent,
 ): void {
   if (!window.isDestroyed()) {
-    window.webContents.send(
-      DESKTOP_APPLICATION_SETTINGS_CHANNELS.projectionEvent,
-      event,
-    );
+    window.webContents.send(DESKTOP_APPLICATION_SETTINGS_CHANNELS.projectionEvent, event);
   }
 }

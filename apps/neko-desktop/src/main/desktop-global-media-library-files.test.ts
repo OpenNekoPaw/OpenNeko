@@ -2,7 +2,9 @@ import { lstat, mkdtemp, mkdir, readFile, rm, symlink, writeFile } from 'node:fs
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
+import type { ContentLocator, ContentReadService } from '@neko/shared';
 import {
+  copyDesktopGlobalMediaLibraryContent,
   createDesktopGlobalMediaLibraryConnection,
   listDesktopGlobalMediaLibraryConnections,
   removeDesktopGlobalMediaLibraryConnection,
@@ -97,6 +99,122 @@ describe('Desktop global Media Library connections', () => {
       resolveDesktopGlobalMediaLibraryTarget({ mediaLibraryRoot: registry, libraryId }),
     ).resolves.toBe(await pathResolve(source));
   });
+
+  it('copies source bytes into an explicit global library destination without changing source identity', async () => {
+    const root = await createFixture();
+    const sourceDirectory = path.join(root, 'Footage');
+    const registry = path.join(root, 'registry');
+    await mkdir(sourceDirectory);
+    const { libraryId } = await createDesktopGlobalMediaLibraryConnection({
+      mediaLibraryRoot: registry,
+      sourceDirectory,
+      locationKind: 'local',
+    });
+    const source: ContentLocator = { kind: 'workspace-file', path: 'shots/source.mp4' };
+
+    const result = await copyDesktopGlobalMediaLibraryContent({
+      mediaLibraryRoot: registry,
+      globalLibraryId: libraryId,
+      source,
+      destinationDirectory: 'Sequences/Opening',
+      fileName: 'source.mp4',
+      conflict: 'fail-if-exists',
+      reader: createReader(source, 'copied-bytes'),
+    });
+
+    expect(result).toMatchObject({
+      status: 'copied',
+      source,
+      globalLibraryId: libraryId,
+      entryId: 'Sequences/Opening/source.mp4',
+      byteLength: 12,
+      fingerprint: { strategy: 'sha256' },
+    });
+    await expect(
+      readFile(path.join(sourceDirectory, 'Sequences', 'Opening', 'source.mp4'), 'utf8'),
+    ).resolves.toBe('copied-bytes');
+  });
+
+  it('requires an explicit replace policy before overwriting a global library entry', async () => {
+    const root = await createFixture();
+    const sourceDirectory = path.join(root, 'Footage');
+    const registry = path.join(root, 'registry');
+    await mkdir(sourceDirectory);
+    await writeFile(path.join(sourceDirectory, 'shot.mp4'), 'existing');
+    const { libraryId } = await createDesktopGlobalMediaLibraryConnection({
+      mediaLibraryRoot: registry,
+      sourceDirectory,
+      locationKind: 'nas',
+    });
+    const source: ContentLocator = { kind: 'workspace-file', path: 'incoming/shot.mp4' };
+
+    await expect(
+      copyDesktopGlobalMediaLibraryContent({
+        mediaLibraryRoot: registry,
+        globalLibraryId: libraryId,
+        source,
+        destinationDirectory: '',
+        fileName: 'shot.mp4',
+        conflict: 'fail-if-exists',
+        reader: createReader(source, 'replacement'),
+      }),
+    ).resolves.toMatchObject({
+      status: 'unavailable',
+      diagnostic: { code: 'content-conflict' },
+    });
+    await expect(readFile(path.join(sourceDirectory, 'shot.mp4'), 'utf8')).resolves.toBe(
+      'existing',
+    );
+
+    await expect(
+      copyDesktopGlobalMediaLibraryContent({
+        mediaLibraryRoot: registry,
+        globalLibraryId: libraryId,
+        source,
+        destinationDirectory: '',
+        fileName: 'shot.mp4',
+        conflict: 'replace',
+        reader: createReader(source, 'replacement'),
+      }),
+    ).resolves.toMatchObject({ status: 'copied' });
+    await expect(readFile(path.join(sourceDirectory, 'shot.mp4'), 'utf8')).resolves.toBe(
+      'replacement',
+    );
+  });
+
+  it('rejects destination directory links that escape the connected global library', async () => {
+    const root = await createFixture();
+    const sourceDirectory = path.join(root, 'Footage');
+    const outsideDirectory = path.join(root, 'outside');
+    const registry = path.join(root, 'registry');
+    await mkdir(sourceDirectory);
+    await mkdir(outsideDirectory);
+    await symlink(outsideDirectory, path.join(sourceDirectory, 'escape'));
+    const { libraryId } = await createDesktopGlobalMediaLibraryConnection({
+      mediaLibraryRoot: registry,
+      sourceDirectory,
+      locationKind: 'cloud',
+    });
+    const source: ContentLocator = { kind: 'workspace-file', path: 'incoming/shot.mp4' };
+
+    await expect(
+      copyDesktopGlobalMediaLibraryContent({
+        mediaLibraryRoot: registry,
+        globalLibraryId: libraryId,
+        source,
+        destinationDirectory: 'escape',
+        fileName: 'shot.mp4',
+        conflict: 'fail-if-exists',
+        reader: createReader(source, 'must-not-escape'),
+      }),
+    ).resolves.toMatchObject({
+      status: 'unavailable',
+      diagnostic: { code: 'content-unauthorized' },
+    });
+    await expect(readFile(path.join(outsideDirectory, 'shot.mp4'))).rejects.toMatchObject({
+      code: 'ENOENT',
+    });
+  });
 });
 
 async function createFixture(): Promise<string> {
@@ -107,4 +225,23 @@ async function createFixture(): Promise<string> {
 
 async function pathResolve(targetPath: string): Promise<string> {
   return (await import('node:fs/promises')).realpath(targetPath);
+}
+
+function createReader(source: ContentLocator, value: string): ContentReadService {
+  return {
+    stat: async () => ({
+      status: 'ready',
+      locator: source,
+      byteLength: value.length,
+      fingerprint: { strategy: 'sha256', value: 'sha256:source' },
+    }),
+    read: async () => ({
+      status: 'ready',
+      locator: source,
+      bytes: new TextEncoder().encode(value),
+      offset: 0,
+      totalByteLength: value.length,
+      fingerprint: { strategy: 'sha256', value: 'sha256:source' },
+    }),
+  };
 }

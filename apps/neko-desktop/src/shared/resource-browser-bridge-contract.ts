@@ -4,6 +4,10 @@ import type {
   ResourceBrowserIntentRequest,
   ResourceBrowserProjection,
   ResourceBrowserProjectionEvent,
+  ResourceBrowserQuickPreviewReleaseRequest,
+  ResourceBrowserQuickPreviewReleaseResult,
+  ResourceBrowserQuickPreviewRequest,
+  ResourceBrowserQuickPreviewResult,
   ResourceBrowserSearchRequest,
   ResourceBrowserSnapshotRequest,
   ResourceBrowserThumbnailRequest,
@@ -14,6 +18,8 @@ export const DESKTOP_RESOURCE_BROWSER_CHANNELS = {
   snapshotGet: 'openneko:resources:snapshot:get',
   children: 'openneko:resources:children',
   thumbnailResolve: 'openneko:resources:thumbnail:resolve',
+  quickPreviewResolve: 'openneko:resources:quick-preview:resolve',
+  quickPreviewRelease: 'openneko:resources:quick-preview:release',
   search: 'openneko:resources:search',
   execute: 'openneko:resources:execute',
   projectionEvent: 'openneko:resources:projection:event',
@@ -25,6 +31,12 @@ export interface OpenNekoDesktopResourceBrowserBridge {
     resolveThumbnail(
       request: ResourceBrowserThumbnailRequest,
     ): Promise<ResourceBrowserThumbnailResult>;
+    resolveQuickPreview(
+      request: ResourceBrowserQuickPreviewRequest,
+    ): Promise<ResourceBrowserQuickPreviewResult>;
+    releaseQuickPreview(
+      request: ResourceBrowserQuickPreviewReleaseRequest,
+    ): Promise<ResourceBrowserQuickPreviewReleaseResult>;
     children(request: ResourceBrowserChildrenRequest): Promise<ResourceBrowserProjection>;
     search(request: ResourceBrowserSearchRequest): Promise<ResourceBrowserProjection>;
     execute(request: ResourceBrowserIntentRequest): Promise<ResourceBrowserProjection>;

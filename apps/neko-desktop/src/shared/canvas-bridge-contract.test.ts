@@ -3,6 +3,8 @@ import {
   createDesktopCanvasSessionId,
   isSameCanvasHostIdentity,
   parseDesktopCanvasHostIdentity,
+  parseDesktopCanvasMediaRequest,
+  parseDesktopCanvasMediaResponse,
   parseDesktopCanvasPreviewVariantRequest,
   parseDesktopCanvasPreviewVariantResult,
 } from './canvas-bridge-contract';
@@ -76,5 +78,42 @@ describe('Desktop Canvas bridge contract', () => {
         'preview-1',
       ),
     ).toThrow('preview result is invalid');
+  });
+
+  it('parses owner-bound Canvas media requests and rejects escaping paths', () => {
+    const request = {
+      identity,
+      type: 'media:probe',
+      nodeId: 'audio-1',
+      locator: { kind: 'workspace-file', path: 'cases/test.aac' },
+      mediaType: 'audio',
+    };
+    expect(parseDesktopCanvasMediaRequest(request)).toEqual(request);
+    expect(() =>
+      parseDesktopCanvasMediaRequest({
+        ...request,
+        locator: { kind: 'workspace-file', path: '../test.aac' },
+      }),
+    ).toThrow('portable workspace-file');
+  });
+
+  it('parses package media responses without accepting mismatched node ownership', () => {
+    const response = {
+      type: 'media:probeResult',
+      nodeId: 'audio-1',
+      mediaInfo: {
+        duration: 12,
+        width: 0,
+        height: 0,
+        fps: 0,
+        codec: 'aac',
+        format: 'aac',
+        hasAudio: true,
+      },
+    };
+    expect(parseDesktopCanvasMediaResponse(response, 'audio-1')).toEqual(response);
+    expect(() => parseDesktopCanvasMediaResponse(response, 'audio-2')).toThrow(
+      'owner does not match',
+    );
   });
 });

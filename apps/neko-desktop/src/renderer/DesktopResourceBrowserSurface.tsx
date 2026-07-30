@@ -14,6 +14,11 @@ const ResourceBrowserRoot = lazy(async () => {
   return { default: module.ResourceBrowserRoot };
 });
 
+const QuickPreviewSurface = lazy(async () => {
+  const module = await import('@neko/preview-webview/root');
+  return { default: module.QuickPreviewSurface };
+});
+
 export function DesktopResourceBrowserSurface({
   onOpenCanvasDocument,
   project,
@@ -61,9 +66,7 @@ export function DesktopResourceBrowserSurface({
         <ResourceBrowserRoot
           runtime={runtime}
           locale={locale}
-          defaultViewMode={
-            applicationSettings.projection.preferences.resourceBrowserView
-          }
+          defaultViewMode={applicationSettings.projection.preferences.resourceBrowserView}
           previewTarget={{
             viewId: `preview:${tab.viewId}:temporary`,
             presentation: 'temporary',
@@ -75,6 +78,11 @@ export function DesktopResourceBrowserSurface({
             }
             onOpenCanvasDocument(item.locator.path, presentation);
           }}
+          renderQuickPreview={(descriptor) => (
+            <Suspense fallback={null}>
+              <QuickPreviewSurface descriptor={descriptor} locale={locale} />
+            </Suspense>
+          )}
         />
       </Suspense>
     </div>

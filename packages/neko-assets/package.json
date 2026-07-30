@@ -55,6 +55,7 @@
   ],
   "main": "./dist/extension.js",
   "exports": {
+    "./media-library-copy": "./src/services/MediaLibraryCopyService.ts",
     "./resource-browser": "./src/resource-browser/index.ts",
     "./resource-browser/contract": "./src/resource-browser/contract.ts",
     "./resource-browser/controller": "./src/resource-browser/controller.ts",

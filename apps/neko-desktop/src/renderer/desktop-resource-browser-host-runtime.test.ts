@@ -27,8 +27,7 @@ const projection: ResourceBrowserProjection = {
 describe('Electron Resource Browser Host runtime', () => {
   it('builds snapshot requests and filters foreign events', async () => {
     let publish:
-      | Parameters<OpenNekoDesktopResourceBrowserBridge['resources']['subscribe']>[0]
-      | undefined;
+      Parameters<OpenNekoDesktopResourceBrowserBridge['resources']['subscribe']>[0] | undefined;
     const bridge: OpenNekoDesktopResourceBrowserBridge = {
       resources: {
         getSnapshot: vi.fn(async () => projection),
@@ -41,6 +40,28 @@ describe('Electron Resource Browser Host runtime', () => {
           descriptorId: request.descriptorId,
           revision: request.revision,
           dataUrl: 'data:image/png;base64,aW1hZ2U=',
+        })),
+        resolveQuickPreview: vi.fn(async (request) => ({
+          schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
+          requestId: request.requestId,
+          identity: request.identity,
+          resourceId: request.resourceId,
+          previewSessionId: 'hover-1',
+          descriptor: {
+            descriptorId: 'descriptor-1',
+            revision: 'revision-1',
+            contentKind: 'video' as const,
+            mediaType: 'video/mp4',
+            displayName: 'clip.mp4',
+            byteLength: 100,
+          },
+        })),
+        releaseQuickPreview: vi.fn(async (request) => ({
+          schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
+          requestId: request.requestId,
+          identity: request.identity,
+          previewSessionId: request.previewSessionId,
+          status: 'released' as const,
         })),
         search: vi.fn(async () => projection),
         execute: vi.fn(async () => projection),

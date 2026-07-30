@@ -40,14 +40,12 @@ export function registerDesktopIpc(
         }
       }),
   );
-  ipcMain.handle(
-    DESKTOP_CUT_CHANNELS.snapshotGet,
-    (event: IpcMainInvokeEvent, payload: unknown) =>
-      appHost.getCutSnapshot(requireSender(event), payload, (cutEvent) => {
-        if (!event.sender.isDestroyed()) {
-          event.sender.send(DESKTOP_CUT_CHANNELS.projectionEvent, cutEvent);
-        }
-      }),
+  ipcMain.handle(DESKTOP_CUT_CHANNELS.snapshotGet, (event: IpcMainInvokeEvent, payload: unknown) =>
+    appHost.getCutSnapshot(requireSender(event), payload, (cutEvent) => {
+      if (!event.sender.isDestroyed()) {
+        event.sender.send(DESKTOP_CUT_CHANNELS.projectionEvent, cutEvent);
+      }
+    }),
   );
   ipcMain.handle(
     DESKTOP_CUT_CHANNELS.requestExecute,
@@ -79,6 +77,16 @@ export function registerDesktopIpc(
       appHost.resolveResourceBrowserThumbnail(requireSender(event), payload),
   );
   ipcMain.handle(
+    DESKTOP_RESOURCE_BROWSER_CHANNELS.quickPreviewResolve,
+    (event: IpcMainInvokeEvent, payload: unknown) =>
+      appHost.resolveResourceBrowserQuickPreview(requireSender(event), payload),
+  );
+  ipcMain.handle(
+    DESKTOP_RESOURCE_BROWSER_CHANNELS.quickPreviewRelease,
+    (event: IpcMainInvokeEvent, payload: unknown) =>
+      appHost.releaseResourceBrowserQuickPreview(requireSender(event), payload),
+  );
+  ipcMain.handle(
     DESKTOP_RESOURCE_BROWSER_CHANNELS.execute,
     (event: IpcMainInvokeEvent, payload: unknown) =>
       appHost.executeResourceBrowser(requireSender(event), payload),
@@ -103,6 +111,11 @@ export function registerDesktopIpc(
       }),
   );
   ipcMain.handle(
+    DESKTOP_CANVAS_CHANNELS.materialActionsResolve,
+    (event: IpcMainInvokeEvent, payload: unknown) =>
+      appHost.resolveCanvasMaterialActions(requireSender(event), payload),
+  );
+  ipcMain.handle(
     DESKTOP_CANVAS_CHANNELS.intentExecute,
     (event: IpcMainInvokeEvent, payload: unknown) =>
       appHost.executeCanvasIntent(requireSender(event), payload),
@@ -111,6 +124,11 @@ export function registerDesktopIpc(
     DESKTOP_CANVAS_CHANNELS.previewVariantResolve,
     (event: IpcMainInvokeEvent, payload: unknown) =>
       appHost.resolveCanvasPreviewVariant(requireSender(event), payload),
+  );
+  ipcMain.handle(
+    DESKTOP_CANVAS_CHANNELS.mediaRequestExecute,
+    (event: IpcMainInvokeEvent, payload: unknown) =>
+      appHost.executeCanvasMediaRequest(requireSender(event), payload),
   );
   ipcMain.handle(
     DESKTOP_AGENT_CHANNELS.messageSend,
@@ -229,12 +247,16 @@ export function registerDesktopIpc(
       DESKTOP_RESOURCE_BROWSER_CHANNELS.children,
       DESKTOP_RESOURCE_BROWSER_CHANNELS.search,
       DESKTOP_RESOURCE_BROWSER_CHANNELS.thumbnailResolve,
+      DESKTOP_RESOURCE_BROWSER_CHANNELS.quickPreviewResolve,
+      DESKTOP_RESOURCE_BROWSER_CHANNELS.quickPreviewRelease,
       DESKTOP_RESOURCE_BROWSER_CHANNELS.execute,
       DESKTOP_PREVIEW_CHANNELS.snapshotGet,
       DESKTOP_PREVIEW_CHANNELS.requestExecute,
       DESKTOP_CANVAS_CHANNELS.snapshotGet,
+      DESKTOP_CANVAS_CHANNELS.materialActionsResolve,
       DESKTOP_CANVAS_CHANNELS.intentExecute,
       DESKTOP_CANVAS_CHANNELS.previewVariantResolve,
+      DESKTOP_CANVAS_CHANNELS.mediaRequestExecute,
       DESKTOP_CUT_CHANNELS.snapshotGet,
       DESKTOP_CUT_CHANNELS.requestExecute,
       DESKTOP_BRIDGE_CHANNELS.bootstrapGet,

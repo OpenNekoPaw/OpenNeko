@@ -29,6 +29,60 @@ afterEach(async () => {
 });
 
 describe('DesktopPreviewRuntime', () => {
+  it('authorizes and releases a transient media descriptor without mutating the workbench', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'openneko-preview-hover-'));
+    roots.push(root);
+    const mediaPath = path.join(root, 'hover.mp4');
+    await writeFile(mediaPath, 'video');
+    const workbench = createDefaultDesktopWorkbenchLayout('window-1');
+    const updateWorkbench = vi.fn();
+    const shell: DesktopPreviewShellPort = {
+      getProjection: async () => ({
+        endpointEpoch: 'endpoint-1',
+        catalog: {
+          projects: [{ projectId: 'project-1', workspaceId: 'workspace-1' }],
+        },
+        window: {
+          windowId: 'window-1',
+          revision: 1,
+          tabs: [{ projectId: 'project-1', viewId: 'project-view-1', viewEpoch: 1 }],
+          workbench,
+        },
+      }),
+      updateWorkbench,
+    };
+    const mediaRegistry = new DesktopMediaDescriptorRegistry();
+    const runtime = new DesktopPreviewRuntime({
+      shell,
+      mediaRegistry,
+      resolveWebContentsId: () => 10,
+      createIdentity: () => 'hover-one',
+    });
+
+    const opened = await runtime.openQuickPreview({
+      identity: resourceIdentity,
+      item: { ...createItem('hover.mp4', 'content:hover'), kind: 'video' },
+      absolutePath: mediaPath,
+    });
+
+    expect(opened).toMatchObject({
+      previewSessionId: 'preview-hover:hover-one',
+      descriptor: {
+        contentKind: 'video',
+        mediaType: 'video/mp4',
+        displayName: 'hover.mp4',
+      },
+    });
+    expect(mediaRegistry.authorize(10, opened.descriptor.descriptorId)).toBe(true);
+    expect(updateWorkbench).not.toHaveBeenCalled();
+
+    runtime.releaseQuickPreview('window-1', opened.previewSessionId);
+    expect(mediaRegistry.authorize(10, opened.descriptor.descriptorId)).toBe(false);
+    expect(() => runtime.releaseQuickPreview('window-1', opened.previewSessionId)).toThrow(
+      'is unavailable',
+    );
+  });
+
   it('opens one temporary owner-bound Preview View and releases the replaced descriptor', async () => {
     const root = await mkdtemp(path.join(tmpdir(), 'openneko-preview-runtime-'));
     roots.push(root);

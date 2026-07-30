@@ -198,6 +198,26 @@
   border-radius: 7px;
 }
 
+.neko-resource-browser__quick-preview {
+  position: absolute;
+  z-index: 20;
+  top: 100%;
+  right: 4px;
+  width: min(260px, calc(100% - 8px));
+  height: 150px;
+  margin-top: 4px;
+  overflow: hidden;
+  border: 1px solid var(--neko-border, #d7ddda);
+  border-radius: 10px;
+  background: var(--vscode-editor-background, #fff);
+  box-shadow: 0 14px 32px rgb(0 0 0 / 18%);
+  pointer-events: none;
+}
+
+.neko-resource-browser__quick-preview[data-preview-kind='audio'] {
+  height: 64px;
+}
+
 .neko-resource-browser__items[data-view-mode='list'] .neko-resource-browser__item-row {
   border: 0;
   border-radius: 6px;

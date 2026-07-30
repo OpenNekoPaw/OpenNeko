@@ -1,8 +1,8 @@
 import react from '@vitejs/plugin-react';
+import { createEpubJsPatchPlugin } from '@neko/preview-webview/epubjs-vite-patch-plugin';
 import { defineConfig } from 'vite';
 import path from 'node:path';
 import { DESKTOP_VITE_CSP_NONCE } from './src/shared/vite-development-security';
-import { createEpubJsPatchPlugin } from '../../packages/neko-preview/packages/webview/epubjs-vite-patch-plugin';
 
 export default defineConfig({
   plugins: [react(), createEpubJsPatchPlugin()],

@@ -21,6 +21,7 @@ import {
   VolumeIcon,
 } from '@neko/shared/icons';
 import React, {
+  useCallback,
   useEffect,
   useRef,
   useState,
@@ -28,17 +29,21 @@ import React, {
   type FormEvent,
   type KeyboardEvent,
   type ReactElement,
+  type ReactNode,
 } from 'react';
 import {
   RESOURCE_BROWSER_CONTRACT_VERSION,
   RESOURCE_BROWSER_ROUTES,
   createResourceBrowserChildrenRequest,
+  createResourceBrowserQuickPreviewReleaseRequest,
+  createResourceBrowserQuickPreviewRequest,
   createResourceBrowserSearchRequest,
   createResourceBrowserThumbnailRequest,
   type ResourceBrowserFacet,
   type ResourceBrowserHostRuntime,
   type ResourceBrowserItem,
   type ResourceBrowserProjection,
+  type ResourceBrowserQuickPreviewResult,
 } from './contract';
 import { getResourceBrowserLabels } from './labels';
 import './style.css';
@@ -53,6 +58,9 @@ export interface ResourceBrowserRootProps {
     readonly expectedWorkbenchRevision: number;
   };
   readonly onOpenCanvas?: (item: ResourceBrowserItem, presentation: 'main' | 'side') => void;
+  readonly renderQuickPreview?: (
+    descriptor: ResourceBrowserQuickPreviewResult['descriptor'],
+  ) => ReactNode;
 }
 
 type ResourceBrowserRootState =
@@ -75,6 +83,7 @@ export function ResourceBrowserRoot({
   locale,
   onOpenCanvas,
   previewTarget,
+  renderQuickPreview,
   runtime,
 }: ResourceBrowserRootProps): ReactElement {
   const labels = getResourceBrowserLabels(locale);
@@ -97,6 +106,87 @@ export function ResourceBrowserRoot({
   const eventSequence = useRef(0);
   const activeDisplayStateKey = useRef(displayStateKey);
   const restoringDisplayState = useRef(false);
+  const quickPreviewGeneration = useRef(0);
+  const quickPreviewTimer = useRef<ReturnType<typeof setTimeout>>();
+  const quickPreviewSession = useRef<string>();
+  const [quickPreview, setQuickPreview] = useState<{
+    readonly resourceId: string;
+    readonly result: ResourceBrowserQuickPreviewResult;
+  }>();
+
+  const releaseQuickPreview = useCallback(
+    (surfaceActive = true): void => {
+      quickPreviewGeneration.current += 1;
+      if (quickPreviewTimer.current) {
+        clearTimeout(quickPreviewTimer.current);
+        quickPreviewTimer.current = undefined;
+      }
+      const previewSessionId = quickPreviewSession.current;
+      quickPreviewSession.current = undefined;
+      setQuickPreview(undefined);
+      if (!previewSessionId) return;
+      void runtime
+        .releaseQuickPreview(
+          createResourceBrowserQuickPreviewReleaseRequest({
+            requestId: `resource-quick-preview-release-${quickPreviewGeneration.current}`,
+            identity: runtime.identity,
+            previewSessionId,
+          }),
+        )
+        .catch((error: unknown) => {
+          if (surfaceActive) setState({ kind: 'error', message: describeError(error) });
+        });
+    },
+    [runtime],
+  );
+
+  const beginQuickPreview = (item: ResourceBrowserItem): void => {
+    if (
+      !renderQuickPreview ||
+      (item.kind !== 'image' && item.kind !== 'video' && item.kind !== 'audio')
+    ) {
+      return;
+    }
+    releaseQuickPreview();
+    const generation = quickPreviewGeneration.current;
+    quickPreviewTimer.current = setTimeout(() => {
+      quickPreviewTimer.current = undefined;
+      void runtime
+        .resolveQuickPreview(
+          createResourceBrowserQuickPreviewRequest({
+            requestId: `resource-quick-preview-${generation}`,
+            identity: runtime.identity,
+            resourceId: item.resourceId,
+          }),
+        )
+        .then((result) => {
+          if (generation !== quickPreviewGeneration.current) {
+            return runtime.releaseQuickPreview(
+              createResourceBrowserQuickPreviewReleaseRequest({
+                requestId: `resource-quick-preview-stale-${generation}`,
+                identity: runtime.identity,
+                previewSessionId: result.previewSessionId,
+              }),
+            );
+          }
+          quickPreviewSession.current = result.previewSessionId;
+          setQuickPreview({ resourceId: item.resourceId, result });
+          return undefined;
+        })
+        .catch((error: unknown) => {
+          if (generation === quickPreviewGeneration.current) {
+            setState({ kind: 'error', message: describeError(error) });
+          }
+        });
+    }, 180);
+  };
+
+  useEffect(
+    () => () => {
+      releaseQuickPreview(false);
+    },
+    [releaseQuickPreview],
+  );
 
   useEffect(() => {
     let active = true;
@@ -426,6 +516,8 @@ export function ResourceBrowserRoot({
               <div
                 className="neko-resource-browser__item-row"
                 data-selected={item.resourceId === selectedId ? 'true' : 'false'}
+                onPointerEnter={() => beginQuickPreview(item)}
+                onPointerLeave={() => releaseQuickPreview()}
               >
                 <button
                   type="button"
@@ -543,6 +635,14 @@ export function ResourceBrowserRoot({
                       <TrashIcon size={13} />
                     </button>
                   </span>
+                ) : null}
+                {quickPreview?.resourceId === item.resourceId && renderQuickPreview ? (
+                  <div
+                    className="neko-resource-browser__quick-preview"
+                    data-preview-kind={quickPreview.result.descriptor.contentKind}
+                  >
+                    {renderQuickPreview(quickPreview.result.descriptor)}
+                  </div>
                 ) : null}
               </div>
             </React.Fragment>
@@ -800,13 +900,13 @@ function ResourceBrowserThumbnail({
           ) : null}
         </>
       ) : (
-        <ResourceBrowserFallbackIcon kind={item.kind} />
+        <ResourceBrowserPlaceholderIcon kind={item.kind} />
       )}
     </span>
   );
 }
 
-function ResourceBrowserFallbackIcon({
+function ResourceBrowserPlaceholderIcon({
   kind,
 }: {
   readonly kind: ResourceBrowserItem['kind'];
