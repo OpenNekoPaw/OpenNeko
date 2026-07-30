@@ -31,19 +31,14 @@ describe('neko-chara architecture boundaries', () => {
     }
   });
 
-  it('keeps the VS Code adapter independent from Agent Extension implementation', () => {
-    const files = listTypeScriptFiles(resolve(packageRoot, 'src/host-vscode'));
-    const forbidden = [
-      /from ['"]@neko-agent\/extension/,
-      /packages\/neko-agent\/packages\/extension/,
-      /from ['"][^'"]*\/chat\/chatProvider['"]/,
-    ];
+  it('keeps removed host adapters absent from package exports', () => {
+    expect(existsSync(resolve(packageRoot, 'src/host-vscode'))).toBe(false);
 
-    for (const file of files) {
-      const source = readFileSync(file, 'utf8');
-      for (const pattern of forbidden) {
-        expect(source, `${relative(packageRoot, file)} matches ${pattern}`).not.toMatch(pattern);
-      }
+    for (const file of ['package.json', 'src/index.ts']) {
+      const source = readFileSync(resolve(packageRoot, file), 'utf8');
+      expect(source, `${file} must not expose a removed host adapter`).not.toMatch(
+        /host-vscode|from ['"]vscode['"]|@neko-agent\/extension/,
+      );
     }
   });
 

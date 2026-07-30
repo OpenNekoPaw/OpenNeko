@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 const packageRoot = resolve(__dirname, '../..');
 
 describe('neko-search architecture boundaries', () => {
-  it('keeps core free of VSCode and feature package imports', () => {
+  it('keeps core free of host modules and feature package imports', () => {
     const files = [
       ...listTypeScriptFiles(resolve(packageRoot, 'src/core')),
       ...listTypeScriptFiles(resolve(packageRoot, 'src/providers')),
@@ -13,6 +13,7 @@ describe('neko-search architecture boundaries', () => {
     for (const file of files) {
       const source = readFileSync(file, 'utf8');
       expect(source, relative(packageRoot, file)).not.toMatch(/from ['"]vscode['"]/);
+      expect(source, relative(packageRoot, file)).not.toMatch(/from ['"]electron['"]/);
       expect(source, relative(packageRoot, file)).not.toMatch(/from ['"]@neko\/agent/);
       expect(source, relative(packageRoot, file)).not.toMatch(/from ['"]@neko-agent\//);
       expect(source, relative(packageRoot, file)).not.toMatch(/from ['"]neko-story/);
@@ -22,13 +23,14 @@ describe('neko-search architecture boundaries', () => {
     }
   });
 
-  it('keeps Agent mention projection from parsing cache files directly', () => {
+  it('keeps the Agent capability provider from parsing cache files directly', () => {
     const source = readFileSync(
-      resolve(packageRoot, '../neko-agent/packages/extension/src/services/projectMentionSearch.ts'),
+      resolve(packageRoot, 'src/agentHeadlessCapabilityProvider.ts'),
       'utf8',
     );
 
-    expect(source).toContain('PROJECT_SEARCH_QUERY_COMMAND');
+    expect(source).toContain('createProjectSearchHeadlessCapabilityProvider');
+    expect(source).toContain('runtime.query(query)');
     expect(source).not.toContain('resolveStorageLayout');
     expect(source).not.toContain('asset-graph.json');
     expect(source).not.toContain('search-index.json');
@@ -37,9 +39,8 @@ describe('neko-search architecture boundaries', () => {
 
   it('keeps Agent and Webview consumers behind the semantic coverage facade', () => {
     const consumerRoots = [
-      resolve(packageRoot, '../neko-agent/packages/agent/src'),
-      resolve(packageRoot, '../neko-agent/packages/extension/src'),
-      resolve(packageRoot, '../neko-agent/packages/webview/src'),
+      resolve(packageRoot, '../neko-agent-runtime/src'),
+      resolve(packageRoot, '../neko-agent-webview/src'),
     ];
     const files = consumerRoots.flatMap((root) => listTypeScriptFiles(root));
 
