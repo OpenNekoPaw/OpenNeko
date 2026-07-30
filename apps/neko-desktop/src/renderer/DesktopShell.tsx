@@ -23,7 +23,7 @@ import {
   WorkbenchEditorTabs,
 } from '@neko/ui';
 import { useTranslation } from '@neko/shared/i18n/react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type {
   DesktopAgentHomeConversationSummary,
   DesktopProjectCatalogItem,
@@ -32,7 +32,9 @@ import type {
 import type {
   DesktopHomeAssetFacet,
   DesktopHomeAssetSearchResult,
+  DesktopHomePluginItem,
   DesktopHomePluginsResult,
+  DesktopHomeSkillItem,
 } from '../shared/home-management-contract';
 import {
   APPLICATION_PRIMARY_SIDEBAR_DEFAULT_WIDTH,
@@ -59,19 +61,15 @@ type ShellState =
   | { readonly kind: 'ready'; readonly projection: DesktopShellProjection }
   | { readonly kind: 'error'; readonly message: string };
 
-type HomeSection = 'create' | 'assets' | 'plugins' | 'creations';
+type HomeSection = 'create' | 'assets' | 'plugins' | 'projects';
 type TranslationFunction = ReturnType<typeof useTranslation>['t'];
 
 interface ShellActions {
   readonly onHome: (section?: HomeSection) => void;
   readonly onOpenProject: () => void;
   readonly onOpenRecent: (projectId: string) => void;
-  readonly onOpenConversation: (
-    conversation: DesktopAgentHomeConversationSummary,
-  ) => void;
-  readonly onDeleteConversation: (
-    conversation: DesktopAgentHomeConversationSummary,
-  ) => void;
+  readonly onOpenConversation: (conversation: DesktopAgentHomeConversationSummary) => void;
+  readonly onDeleteConversation: (conversation: DesktopAgentHomeConversationSummary) => void;
   readonly onStartConversation: (projectId: string | undefined, input: string) => void;
   readonly onRemoveRecentProject: (project: DesktopProjectCatalogItem) => void;
   readonly onUpdateWorkbench: (workbench: DesktopWorkbenchLayoutProjection) => void;
@@ -483,10 +481,7 @@ function HomeWorkspace({
   const workbench = projection.window.workbench;
   const navigationCollapsed = !workbench.primarySidebar.visible;
   return (
-    <div
-      className="home-layout"
-      data-navigation-collapsed={navigationCollapsed ? 'true' : 'false'}
-    >
+    <div className="home-layout" data-navigation-collapsed={navigationCollapsed ? 'true' : 'false'}>
       <ApplicationPrimarySidebarFrame
         compact={navigationCollapsed}
         expandedWidth={workbench.primarySidebar.width}
@@ -508,19 +503,11 @@ function HomeWorkspace({
         {section === 'create' ? (
           <HomeStartCreating actions={actions} pending={pending} projection={projection} />
         ) : section === 'assets' ? (
-          <HomeAssetCenter
-            interactive={interactive}
-            onOpenProject={onOpenRecent}
-            projection={projection}
-          />
+          <HomeAssetCenter interactive={interactive} />
         ) : section === 'plugins' ? (
-          <HomePlugins interactive={interactive} projection={projection} />
+          <HomePlugins interactive={interactive} />
         ) : (
-          <HomeAllCreations
-            onOpenConversation={onOpenConversation}
-            onOpenRecent={onOpenRecent}
-            projection={projection}
-          />
+          <HomeAllProjects onOpenRecent={onOpenRecent} projection={projection} />
         )}
       </main>
     </div>
@@ -717,31 +704,37 @@ function HomeTemplateButton({
   );
 }
 
-function HomeAssetCenter({
-  interactive,
-  onOpenProject,
-  projection,
-}: {
-  readonly interactive: boolean;
-  readonly onOpenProject: (projectId: string) => void;
-  readonly projection: DesktopShellProjection;
-}): JSX.Element {
-  const { t } = useTranslation();
-  const [projectId, setProjectId] = useState(
-    projection.catalog.projects[0]?.projectId ?? '',
-  );
-  const [facet, setFacet] = useState<DesktopHomeAssetFacet>('files');
+type HomeAssetSortOption = 'name-ascending' | 'name-descending' | 'modified-descending';
+type HomeNamedSortOption = 'name-ascending' | 'name-descending';
+type HomeProjectSortOption =
+  'updated-descending' | 'updated-ascending' | 'name-ascending' | 'name-descending';
+
+function HomeAssetCenter({ interactive }: { readonly interactive: boolean }): JSX.Element {
+  const { locale, t } = useTranslation();
+  const [facet, setFacet] = useState<DesktopHomeAssetFacet>('libraries');
   const [query, setQuery] = useState('');
+  const [sort, setSort] = useState<HomeAssetSortOption>('name-ascending');
   const [result, setResult] = useState<DesktopHomeAssetSearchResult>();
   const [error, setError] = useState<string>();
   useEffect(() => {
-    if (!interactive || !projectId) return;
+    if (!interactive) return;
     let active = true;
     setError(undefined);
     setResult(undefined);
     const timeout = window.setTimeout(() => {
       void window.openNekoDesktop.home.assets
-        .search({ projectId, facet, query, limit: 80 })
+        .search({
+          facet,
+          query,
+          sortBy: sort === 'modified-descending' ? 'modifiedAt' : 'name',
+          sortDirection:
+            sort === 'name-descending'
+              ? 'descending'
+              : sort === 'modified-descending'
+                ? 'descending'
+                : 'ascending',
+          limit: 120,
+        })
         .then((value) => {
           if (active) setResult(value);
         })
@@ -753,7 +746,7 @@ function HomeAssetCenter({
       active = false;
       window.clearTimeout(timeout);
     };
-  }, [facet, interactive, projectId, query]);
+  }, [facet, interactive, query, sort]);
   return (
     <div className="home-management-page">
       <header className="home-management-header">
@@ -762,11 +755,6 @@ function HomeAssetCenter({
           <h1>{t('home.mediaLibrary')}</h1>
           <p>{t('home.assets.description')}</p>
         </div>
-        <ProjectSelector
-          projectId={projectId}
-          projects={projection.catalog.projects}
-          onChange={setProjectId}
-        />
       </header>
       <div className="home-management-toolbar">
         <label className="home-search-field">
@@ -778,25 +766,34 @@ function HomeAssetCenter({
             onChange={(event) => setQuery(event.currentTarget.value)}
           />
         </label>
-        <div className="home-segmented-control" aria-label={t('home.assets.facets')}>
-          {(['files', 'media', 'entities'] as const).map((value) => (
-            <button
-              type="button"
-              className={facet === value ? 'is-active' : ''}
-              key={value}
-              onClick={() => setFacet(value)}
+        <div className="home-management-toolbar-actions">
+          <label className="home-sort-control">
+            <span>{t('home.sort.label')}</span>
+            <select
+              aria-label={t('home.assets.sort')}
+              value={sort}
+              onChange={(event) => setSort(parseHomeAssetSortOption(event.currentTarget.value))}
             >
-              {t(`home.assets.${value}`)}
-            </button>
-          ))}
+              <option value="name-ascending">{t('home.sort.nameAscending')}</option>
+              <option value="name-descending">{t('home.sort.nameDescending')}</option>
+              <option value="modified-descending">{t('home.sort.newest')}</option>
+            </select>
+          </label>
+          <div className="home-segmented-control" aria-label={t('home.assets.facets')}>
+            {(['libraries', 'assets'] as const).map((value) => (
+              <button
+                type="button"
+                className={facet === value ? 'is-active' : ''}
+                key={value}
+                onClick={() => setFacet(value)}
+              >
+                {t(`home.assets.${value}`)}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
-      {!projectId ? (
-        <HomeManagementEmpty
-          icon={<FolderIcon size={22} />}
-          label={t('home.assets.noProject')}
-        />
-      ) : error || result?.status === 'error' ? (
+      {error || result?.status === 'error' ? (
         <div className="home-management-diagnostic" role="alert">
           <WarningIcon size={17} />
           <span>{error ?? (result?.status === 'error' ? result.diagnostic.message : '')}</span>
@@ -804,26 +801,18 @@ function HomeAssetCenter({
       ) : (
         <div className="home-management-grid">
           {(result?.status === 'ready' ? result.items : []).map((item) => (
-            <button
-              type="button"
-              className="home-management-card"
-              key={item.id}
-              onClick={() => onOpenProject(projectId)}
-            >
+            <article className="home-management-card" key={item.id}>
               <span className="home-management-card-icon">
-                {item.kind === 'entity' ? (
-                  <StorylineIcon size={18} />
-                ) : item.kind === 'directory' ? (
-                  <FolderIcon size={18} />
-                ) : (
-                  <GridIcon size={18} />
-                )}
+                {item.kind === 'library' ? <FolderIcon size={18} /> : <GridIcon size={18} />}
               </span>
               <span>
                 <strong>{item.label}</strong>
-                <small>{item.description ?? item.mediaType ?? item.kind}</small>
+                <small>
+                  {item.description ?? item.mediaType ?? item.kind}
+                  {item.modifiedAt ? ` · ${formatProjectDate(item.modifiedAt, locale)}` : ''}
+                </small>
               </span>
-            </button>
+            </article>
           ))}
           {result?.status === 'ready' && result.items.length === 0 ? (
             <HomeManagementEmpty
@@ -837,26 +826,20 @@ function HomeAssetCenter({
   );
 }
 
-function HomePlugins({
-  interactive,
-  projection,
-}: {
-  readonly interactive: boolean;
-  readonly projection: DesktopShellProjection;
-}): JSX.Element {
+function HomePlugins({ interactive }: { readonly interactive: boolean }): JSX.Element {
   const { t } = useTranslation();
-  const [projectId, setProjectId] = useState(
-    projection.catalog.projects[0]?.projectId ?? '',
-  );
-  const [tab, setTab] = useState<'skills' | 'extensions'>('skills');
+  const [tab, setTab] = useState<'skills' | 'plugins'>('skills');
+  const [query, setQuery] = useState('');
+  const [sort, setSort] = useState<HomeNamedSortOption>('name-ascending');
+  const [catalogRevision, setCatalogRevision] = useState(0);
   const [result, setResult] = useState<DesktopHomePluginsResult>();
   const [error, setError] = useState<string>();
   useEffect(() => {
-    if (!interactive || !projectId) return;
+    if (!interactive) return;
     let active = true;
     setError(undefined);
     void window.openNekoDesktop.home.plugins
-      .list(projectId)
+      .list()
       .then((value) => {
         if (active) setResult(value);
       })
@@ -866,8 +849,21 @@ function HomePlugins({
     return () => {
       active = false;
     };
-  }, [interactive, projectId]);
-  const extensions = result?.extensions ?? projection.domains;
+  }, [catalogRevision, interactive]);
+  const normalizedQuery = query.trim().toLocaleLowerCase();
+  const skills = useMemo(
+    () => filterAndSortHomeSkills(result?.skills ?? [], normalizedQuery, sort),
+    [normalizedQuery, result?.skills, sort],
+  );
+  const plugins = useMemo(
+    () => filterAndSortHomePlugins(result?.plugins ?? [], normalizedQuery, sort),
+    [normalizedQuery, result?.plugins, sort],
+  );
+  const discoveryIssueCount =
+    (result?.skillDiscovery.diagnostics.reduce(
+      (total, diagnostic) => total + diagnostic.count,
+      0,
+    ) ?? 0) + (result?.skillDiscovery.duplicateCount ?? 0);
   return (
     <div className="home-management-page">
       <header className="home-management-header">
@@ -876,131 +872,338 @@ function HomePlugins({
           <h1>{t('home.plugins')}</h1>
           <p>{t('home.plugins.description')}</p>
         </div>
-        <ProjectSelector
-          projectId={projectId}
-          projects={projection.catalog.projects}
-          onChange={setProjectId}
-        />
+        <div className="home-management-header-actions">
+          <button
+            type="button"
+            className="home-management-refresh"
+            disabled={!interactive}
+            onClick={() => setCatalogRevision((revision) => revision + 1)}
+          >
+            {t('home.plugins.refresh')}
+          </button>
+        </div>
       </header>
-      <div className="home-segmented-control home-management-tabs">
-        <button
-          type="button"
-          className={tab === 'skills' ? 'is-active' : ''}
-          onClick={() => setTab('skills')}
-        >
-          {t('home.plugins.skills')}
-        </button>
-        <button
-          type="button"
-          className={tab === 'extensions' ? 'is-active' : ''}
-          onClick={() => setTab('extensions')}
-        >
-          {t('home.plugins.extensions')}
-        </button>
+      <div className="home-management-toolbar">
+        <label className="home-search-field">
+          <SearchIcon size={16} />
+          <input
+            aria-label={t('home.plugins.search')}
+            placeholder={t('home.plugins.search')}
+            value={query}
+            onChange={(event) => setQuery(event.currentTarget.value)}
+          />
+        </label>
+        <div className="home-management-toolbar-actions">
+          <label className="home-sort-control">
+            <span>{t('home.sort.label')}</span>
+            <select
+              aria-label={t('home.plugins.sort')}
+              value={sort}
+              onChange={(event) => setSort(parseHomeNamedSortOption(event.currentTarget.value))}
+            >
+              <option value="name-ascending">{t('home.sort.nameAscending')}</option>
+              <option value="name-descending">{t('home.sort.nameDescending')}</option>
+            </select>
+          </label>
+          <div className="home-segmented-control" aria-label={t('home.plugins.tabs')}>
+            <button
+              type="button"
+              className={tab === 'skills' ? 'is-active' : ''}
+              onClick={() => setTab('skills')}
+            >
+              {t('home.plugins.skills')}
+            </button>
+            <button
+              type="button"
+              className={tab === 'plugins' ? 'is-active' : ''}
+              onClick={() => setTab('plugins')}
+            >
+              {t('home.plugins.plugins')}
+            </button>
+          </div>
+        </div>
       </div>
       {error ? (
         <div className="home-management-diagnostic" role="alert">
           <WarningIcon size={17} />
           <span>{error}</span>
         </div>
-      ) : tab === 'skills' ? (
-        <div className="home-management-grid">
-          {(result?.skills ?? []).map((skill) => (
-            <article className="home-management-card" key={`${skill.source}:${skill.name}`}>
-              <span className="home-management-card-icon"><PackageIcon size={18} /></span>
-              <span>
-                <strong>{skill.name}</strong>
-                <small>{skill.description || skill.source}</small>
-              </span>
-              <span className="home-status-badge">{t(`home.plugins.source.${skill.source}`)}</span>
-            </article>
-          ))}
-          {result && result.skills.length === 0 ? (
-            <HomeManagementEmpty
-              icon={<PackageIcon size={22} />}
-              label={t('home.plugins.noSkills')}
-            />
-          ) : null}
-        </div>
       ) : (
         <>
-          <div className="home-management-grid">
-            {extensions.map((extension) => (
-              <article className="home-management-card" key={extension.surface}>
-                <span className="home-management-card-icon"><GridIcon size={18} /></span>
-                <span>
-                  <strong>{extension.surface}</strong>
-                  <small>{t('home.plugins.builtin')}</small>
-                </span>
-                <span className={`home-status-badge is-${extension.status}`}>
-                  {extension.status === 'ready'
-                    ? t('home.available')
-                    : t('home.unavailable')}
-                </span>
-              </article>
-            ))}
-          </div>
-          <div className="home-plugin-host-notice">
-            <InfoIcon size={17} />
-            <span>{t('home.plugins.externalUnavailable')}</span>
-          </div>
+          {discoveryIssueCount > 0 ? (
+            <div className="home-management-diagnostic" role="alert">
+              <WarningIcon size={17} />
+              <span>{t('home.plugins.discoveryIssues', { count: discoveryIssueCount })}</span>
+            </div>
+          ) : null}
+          {tab === 'skills' ? (
+            <div className="home-management-grid">
+              {skills.map((skill) => (
+                <article className="home-management-card" key={`${skill.source}:${skill.name}`}>
+                  <span className="home-management-card-icon">
+                    <PackageIcon size={18} />
+                  </span>
+                  <span>
+                    <strong>{skill.name}</strong>
+                    <small>{skill.description || skill.source}</small>
+                  </span>
+                  <span className="home-status-badge">
+                    {t(`home.plugins.source.${skill.source}`)}
+                  </span>
+                </article>
+              ))}
+              {result && skills.length === 0 ? (
+                <HomeManagementEmpty
+                  icon={<PackageIcon size={22} />}
+                  label={t('home.plugins.noSkills')}
+                />
+              ) : null}
+            </div>
+          ) : (
+            <>
+              <div className="home-management-grid">
+                {plugins.map((plugin) => (
+                  <article className="home-management-card" key={plugin.id}>
+                    <span className="home-management-card-icon">
+                      <GridIcon size={18} />
+                    </span>
+                    <span>
+                      <strong>{plugin.name}</strong>
+                      <small>{t('home.plugins.builtin')}</small>
+                    </span>
+                    <span className={`home-status-badge is-${plugin.status}`}>
+                      {plugin.status === 'ready' ? t('home.available') : t('home.unavailable')}
+                    </span>
+                  </article>
+                ))}
+                {result && plugins.length === 0 ? (
+                  <HomeManagementEmpty
+                    icon={<PackageIcon size={22} />}
+                    label={t('home.plugins.noPlugins')}
+                  />
+                ) : null}
+              </div>
+              <div className="home-plugin-host-notice">
+                <InfoIcon size={17} />
+                <span>{t('home.plugins.externalUnavailable')}</span>
+              </div>
+            </>
+          )}
         </>
       )}
     </div>
   );
 }
 
-function HomeAllCreations({
-  onOpenConversation,
+function HomeAllProjects({
   onOpenRecent,
   projection,
 }: {
-  readonly onOpenConversation: (conversation: DesktopAgentHomeConversationSummary) => void;
   readonly onOpenRecent: (projectId: string) => void;
   readonly projection: DesktopShellProjection;
 }): JSX.Element {
   const { locale, t } = useTranslation();
+  const [query, setQuery] = useState('');
+  const [sort, setSort] = useState<HomeProjectSortOption>('updated-descending');
+  const [view, setView] = useState<'grid' | 'list'>('grid');
+  const normalizedQuery = query.trim().toLocaleLowerCase();
+  const projects = useMemo(
+    () => filterAndSortHomeProjects(projection.catalog.projects, normalizedQuery, sort),
+    [normalizedQuery, projection.catalog.projects, sort],
+  );
   return (
     <div className="home-management-page">
       <header className="home-management-header">
         <div>
-          <p className="section-label">{t('home.creations.eyebrow')}</p>
-          <h1>{t('home.allCreations')}</h1>
-          <p>{t('home.creations.description')}</p>
+          <p className="section-label">{t('home.projects.eyebrow')}</p>
+          <h1>{t('home.allProjects')}</h1>
+          <p>{t('home.projects.description')}</p>
         </div>
       </header>
-      <div className="home-summary-grid home-creations-grid">
-        <section className="project-section" aria-labelledby="all-projects-title">
-          <div className="section-heading">
-            <h2 id="all-projects-title">{t('home.recentContentProjects')}</h2>
-            <span>{projection.catalog.projects.length}</span>
+      <div className="home-management-toolbar">
+        <label className="home-search-field">
+          <SearchIcon size={16} />
+          <input
+            aria-label={t('home.projects.search')}
+            placeholder={t('home.projects.search')}
+            value={query}
+            onChange={(event) => setQuery(event.currentTarget.value)}
+          />
+        </label>
+        <div className="home-management-toolbar-actions">
+          <label className="home-sort-control">
+            <span>{t('home.sort.label')}</span>
+            <select
+              aria-label={t('home.projects.sort')}
+              value={sort}
+              onChange={(event) => setSort(parseHomeProjectSortOption(event.currentTarget.value))}
+            >
+              <option value="updated-descending">{t('home.sort.newest')}</option>
+              <option value="updated-ascending">{t('home.sort.oldest')}</option>
+              <option value="name-ascending">{t('home.sort.nameAscending')}</option>
+              <option value="name-descending">{t('home.sort.nameDescending')}</option>
+            </select>
+          </label>
+          <div className="home-segmented-control" aria-label={t('home.projects.view')}>
+            <button
+              type="button"
+              className={view === 'grid' ? 'is-active' : ''}
+              aria-pressed={view === 'grid'}
+              onClick={() => setView('grid')}
+            >
+              {t('home.view.grid')}
+            </button>
+            <button
+              type="button"
+              className={view === 'list' ? 'is-active' : ''}
+              aria-pressed={view === 'list'}
+              onClick={() => setView('list')}
+            >
+              {t('home.view.list')}
+            </button>
           </div>
-          <div className="recent-projects">
-            {projection.catalog.projects.map((project) => (
-              <button
-                type="button"
-                className="recent-project-row"
-                key={project.projectId}
-                onClick={() => onOpenRecent(project.projectId)}
-              >
-                <FolderIcon size={17} />
-                <span className="recent-project-name">{project.displayName}</span>
-                <span className="recent-project-kind">{t('home.content')}</span>
-                <span className="recent-project-date">
-                  {formatProjectDate(project.updatedAt, locale)}
-                </span>
-              </button>
-            ))}
-          </div>
-        </section>
-        <AgentConversationSummaryList
-          limit={false}
-          projection={projection}
-          onOpenConversation={onOpenConversation}
-        />
+        </div>
       </div>
+      {projects.length === 0 ? (
+        <HomeManagementEmpty icon={<FolderIcon size={22} />} label={t('home.projects.noResults')} />
+      ) : view === 'list' ? (
+        <div className="recent-projects home-project-list">
+          {projects.map((project) => (
+            <button
+              type="button"
+              className="recent-project-row"
+              key={project.projectId}
+              onClick={() => onOpenRecent(project.projectId)}
+            >
+              <FolderIcon size={17} />
+              <span className="recent-project-name">{project.displayName}</span>
+              <span className="recent-project-kind">{t('home.content')}</span>
+              <span className="recent-project-date">
+                {formatProjectDate(project.updatedAt, locale)}
+              </span>
+            </button>
+          ))}
+        </div>
+      ) : (
+        <div className="home-management-grid home-project-grid">
+          {projects.map((project) => (
+            <button
+              type="button"
+              className="home-management-card home-project-card"
+              key={project.projectId}
+              onClick={() => onOpenRecent(project.projectId)}
+            >
+              <span className="home-management-card-icon">
+                <FolderIcon size={18} />
+              </span>
+              <span>
+                <strong>{project.displayName}</strong>
+                <small>
+                  {t('home.content')} · {formatProjectDate(project.updatedAt, locale)}
+                </small>
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
+}
+
+export function filterAndSortHomeSkills(
+  skills: readonly DesktopHomeSkillItem[],
+  query: string,
+  sort: HomeNamedSortOption,
+): readonly DesktopHomeSkillItem[] {
+  return filterAndSortHomeNamedItems(
+    skills,
+    query,
+    sort,
+    (skill) => `${skill.name} ${skill.description} ${skill.source}`,
+  );
+}
+
+export function filterAndSortHomePlugins(
+  plugins: readonly DesktopHomePluginItem[],
+  query: string,
+  sort: HomeNamedSortOption,
+): readonly DesktopHomePluginItem[] {
+  return filterAndSortHomeNamedItems(
+    plugins,
+    query,
+    sort,
+    (plugin) => `${plugin.name} ${plugin.description} ${plugin.status}`,
+  );
+}
+
+export function filterAndSortHomeProjects(
+  projects: readonly DesktopProjectCatalogItem[],
+  query: string,
+  sort: HomeProjectSortOption,
+): readonly DesktopProjectCatalogItem[] {
+  const normalizedQuery = query.trim().toLocaleLowerCase();
+  return [...projects]
+    .filter((project) => project.displayName.toLocaleLowerCase().includes(normalizedQuery))
+    .sort((left, right) => {
+      if (sort === 'name-ascending' || sort === 'name-descending') {
+        const compared =
+          left.displayName.localeCompare(right.displayName) ||
+          left.projectId.localeCompare(right.projectId);
+        return sort === 'name-ascending' ? compared : -compared;
+      }
+      const compared =
+        Date.parse(left.updatedAt) - Date.parse(right.updatedAt) ||
+        left.projectId.localeCompare(right.projectId);
+      return sort === 'updated-ascending' ? compared : -compared;
+    });
+}
+
+function filterAndSortHomeNamedItems<T extends { readonly name: string }>(
+  items: readonly T[],
+  query: string,
+  sort: HomeNamedSortOption,
+  searchableText: (item: T) => string,
+): readonly T[] {
+  const normalizedQuery = query.trim().toLocaleLowerCase();
+  return [...items]
+    .filter((item) => searchableText(item).toLocaleLowerCase().includes(normalizedQuery))
+    .sort((left, right) => {
+      const compared = left.name.localeCompare(right.name);
+      return sort === 'name-ascending' ? compared : -compared;
+    });
+}
+
+export function parseHomeAssetSortOption(value: string): HomeAssetSortOption {
+  switch (value) {
+    case 'name-ascending':
+    case 'name-descending':
+    case 'modified-descending':
+      return value;
+    default:
+      throw new Error(`Unknown Home asset sort option: ${value}`);
+  }
+}
+
+export function parseHomeNamedSortOption(value: string): HomeNamedSortOption {
+  switch (value) {
+    case 'name-ascending':
+    case 'name-descending':
+      return value;
+    default:
+      throw new Error(`Unknown Home catalog sort option: ${value}`);
+  }
+}
+
+export function parseHomeProjectSortOption(value: string): HomeProjectSortOption {
+  switch (value) {
+    case 'updated-descending':
+    case 'updated-ascending':
+    case 'name-ascending':
+    case 'name-descending':
+      return value;
+    default:
+      throw new Error(`Unknown Home project sort option: ${value}`);
+  }
 }
 
 function ProjectSelector({
@@ -1021,7 +1224,7 @@ function ProjectSelector({
         value={projectId}
         onChange={(event) => onChange(event.currentTarget.value)}
       >
-        <option value="">{t('home.assets.noProject')}</option>
+        <option value="">{t('home.start.chooseProject')}</option>
         {projects.map((project) => (
           <option key={project.projectId} value={project.projectId}>
             {project.displayName}
@@ -1167,9 +1370,7 @@ function ContentProjectWorkspace({
         />
       }
       primarySidebarVisible
-      primarySidebarWidth={
-        workbench.primarySidebar.visible ? workbench.primarySidebar.width : 64
-      }
+      primarySidebarWidth={workbench.primarySidebar.visible ? workbench.primarySidebar.width : 64}
       primarySidebarResize={
         pending || !workbench.primarySidebar.visible
           ? undefined
@@ -1260,9 +1461,7 @@ function ContentProjectWorkspace({
               ref={setCutTimelineTarget}
             />
           ) : (
-            <TimelinePlaceholder
-              diagnostic="desktop-cut-timeline-owner-not-mounted-in-primary-main"
-            />
+            <TimelinePlaceholder diagnostic="desktop-cut-timeline-owner-not-mounted-in-primary-main" />
           )
         ) : (
           <TimelinePlaceholder
@@ -1697,8 +1896,7 @@ function createProjectDock(
     ),
     owner: 'resources',
     presentation:
-      resourcePresentation === 'overlay' &&
-      !isPreviewMainActive(workbench)
+      resourcePresentation === 'overlay' && !isPreviewMainActive(workbench)
         ? 'docked'
         : requireVisibleDockPresentation(resourcePresentation, 'Resources'),
     width: workbench.resourceDock.width,
@@ -2182,11 +2380,11 @@ function ApplicationPrimarySidebar({
           onClick={() => onNavigate('plugins')}
         />
         <HomeNavigationButton
-          active={activeSection === 'creations'}
+          active={activeSection === 'projects'}
           disabled={disabled}
-          label={t('home.allCreations')}
+          label={t('home.allProjects')}
           icon={<FolderIcon size={17} />}
-          onClick={() => onNavigate('creations')}
+          onClick={() => onNavigate('projects')}
         />
       </nav>
       <PrimaryRecentNavigation

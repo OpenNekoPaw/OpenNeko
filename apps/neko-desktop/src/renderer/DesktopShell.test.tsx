@@ -6,8 +6,14 @@ import {
   activateWorkbenchMainView,
   applyWorkbenchDisplayMode,
   DesktopShellView,
+  filterAndSortHomePlugins,
+  filterAndSortHomeProjects,
+  filterAndSortHomeSkills,
   nextResourceDockPresentation,
   openCanvasDocumentWorkbench,
+  parseHomeAssetSortOption,
+  parseHomeNamedSortOption,
+  parseHomeProjectSortOption,
   resizePrimarySidebarWorkbench,
   resizeProjectDockWorkbench,
   resizeTimelineWorkbench,
@@ -30,6 +36,74 @@ import {
 import { DesktopApplicationSettingsProvider } from './application-settings-context';
 
 describe('DesktopShellView', () => {
+  it('rejects unknown Home catalog sort options', () => {
+    expect(parseHomeAssetSortOption('modified-descending')).toBe('modified-descending');
+    expect(parseHomeNamedSortOption('name-descending')).toBe('name-descending');
+    expect(parseHomeProjectSortOption('updated-ascending')).toBe('updated-ascending');
+    expect(() => parseHomeAssetSortOption('recent')).toThrow('Unknown Home asset sort option');
+    expect(() => parseHomeNamedSortOption('recent')).toThrow('Unknown Home catalog sort option');
+    expect(() => parseHomeProjectSortOption('recent')).toThrow('Unknown Home project sort option');
+  });
+
+  it('filters and deterministically sorts global capability and Project catalogs', () => {
+    expect(
+      filterAndSortHomeSkills(
+        [
+          { name: 'Video', description: 'Edit clips', source: 'builtin' },
+          { name: 'Audio', description: 'Mix sound', source: 'personal' },
+        ],
+        'personal',
+        'name-ascending',
+      ).map((skill) => skill.name),
+    ).toEqual(['Audio']);
+    expect(
+      filterAndSortHomePlugins(
+        [
+          {
+            id: 'preview',
+            name: 'Preview',
+            description: 'P1.5',
+            kind: 'builtin',
+            status: 'ready',
+          },
+          {
+            id: 'agent',
+            name: 'Agent',
+            description: 'P1.3',
+            kind: 'builtin',
+            status: 'unavailable',
+          },
+        ],
+        '',
+        'name-descending',
+      ).map((plugin) => plugin.name),
+    ).toEqual(['Preview', 'Agent']);
+    expect(
+      filterAndSortHomeProjects(
+        [
+          {
+            projectId: 'content:older',
+            workspaceId: 'older',
+            profile: 'content',
+            displayName: 'Older',
+            createdAt: '2026-01-01T00:00:00.000Z',
+            updatedAt: '2026-01-02T00:00:00.000Z',
+          },
+          {
+            projectId: 'content:newer',
+            workspaceId: 'newer',
+            profile: 'content',
+            displayName: 'Newer',
+            createdAt: '2026-01-01T00:00:00.000Z',
+            updatedAt: '2026-07-02T00:00:00.000Z',
+          },
+        ],
+        '',
+        'updated-descending',
+      ).map((project) => project.displayName),
+    ).toEqual(['Newer', 'Older']);
+  });
+
   it('reopens Resources as an overlay while a full Preview owns Main', () => {
     const workbench = openOrFocusMainView(createDefaultDesktopWorkbenchLayout('window-1'), {
       viewId: 'preview-1',
@@ -219,7 +293,7 @@ describe('DesktopShellView', () => {
     expect(markup).toContain('Demo Project');
     expect(markup).toContain('Asset Center');
     expect(markup).toContain('Plugins');
-    expect(markup).toContain('All creations');
+    expect(markup).toContain('All projects');
     expect(markup).not.toContain('/Users/private');
   });
 
@@ -283,7 +357,7 @@ describe('DesktopShellView', () => {
       expect(sidebar).toContain('Start creating');
       expect(sidebar).toContain('Asset Center');
       expect(sidebar).toContain('Plugins');
-      expect(sidebar).toContain('All creations');
+      expect(sidebar).toContain('All projects');
       expect(sidebar).toContain('Recent projects');
       expect(sidebar).toContain('Recent Agent conversations');
       expect(sidebar).toContain('Desktop settings');
@@ -333,7 +407,7 @@ describe('DesktopShellView', () => {
     expect(markup).toContain('Start creating');
     expect(markup).toContain('Asset Center');
     expect(markup).toContain('Plugins');
-    expect(markup).toContain('All creations');
+    expect(markup).toContain('All projects');
     expect(markup).toContain('Recent projects');
     expect(markup).toContain('Recent Agent conversations');
     expect(markup).toContain('home-navigation project-primary-sidebar');
@@ -350,7 +424,7 @@ describe('DesktopShellView', () => {
     expect(markup).not.toContain('Ask Neko Agent about this project');
   });
 
-  it('renders owner-derived Agent Activity summaries without Timeline payloads', () => {
+  it('renders All Projects as a searchable sortable Project-only grid without conversations', () => {
     const projection = homeProjection();
     const markup = renderShell(
       <DesktopShellView
@@ -385,14 +459,20 @@ describe('DesktopShellView', () => {
             ],
           },
         }}
-        homeSection="creations"
+        homeSection="projects"
       />,
     );
+    const projectCatalogMarkup = markup.slice(markup.indexOf('<main class="home-main"'));
 
-    expect(markup).toContain('All creations');
-    expect(markup).toContain('Storyboard review');
-    expect(markup).toContain('Needs input');
-    expect(markup).not.toContain('Timeline payload must stay owner-only');
+    expect(projectCatalogMarkup).toContain('All projects');
+    expect(projectCatalogMarkup).toContain('Search projects');
+    expect(projectCatalogMarkup).toContain('Recently updated');
+    expect(projectCatalogMarkup).toContain('Grid');
+    expect(projectCatalogMarkup).toContain('List');
+    expect(projectCatalogMarkup).toContain('Demo Project');
+    expect(projectCatalogMarkup).not.toContain('Storyboard review');
+    expect(projectCatalogMarkup).not.toContain('Needs input');
+    expect(projectCatalogMarkup).not.toContain('Timeline payload must stay owner-only');
   });
 
   it('projects movable Agent/Resource docks without duplicating domain state', () => {
@@ -581,8 +661,39 @@ describe('DesktopShellView', () => {
     expect(markup).toContain('开始创作');
     expect(markup).toContain('资产中心');
     expect(markup).toContain('插件');
-    expect(markup).toContain('全部创作');
+    expect(markup).toContain('所有项目');
     expect(markup).not.toContain('Start creating');
+  });
+
+  it('renders global Skills and Plugins controls without a Project selector', () => {
+    const i18n = createDesktopI18n('zh-cn');
+    const markup = renderToStaticMarkup(
+      <I18nProvider service={i18n.i18nService}>
+        <DesktopShellView projection={homeProjection()} homeSection="plugins" />
+      </I18nProvider>,
+    );
+
+    expect(markup).toContain('搜索 Skill 或插件');
+    expect(markup).toContain('Skill 与插件排序');
+    expect(markup).toContain('能力分类');
+    expect(markup).not.toContain('选择项目');
+    expect(markup).toContain('刷新 Skill');
+  });
+
+  it('renders global Asset Center facets and sorting without Project resources', () => {
+    const i18n = createDesktopI18n('zh-cn');
+    const markup = renderToStaticMarkup(
+      <I18nProvider service={i18n.i18nService}>
+        <DesktopShellView projection={homeProjection()} homeSection="assets" />
+      </I18nProvider>,
+    );
+
+    expect(markup).toContain('全局媒体与资产');
+    expect(markup).toContain('搜索全局资产');
+    expect(markup).toContain('媒体库');
+    expect(markup).toContain('资产排序');
+    expect(markup).not.toContain('选择项目');
+    expect(markup).not.toContain('检索已授权项目');
   });
 
   it('focuses duplicate Canvas documents and renders a second document only on explicit side-open', () => {

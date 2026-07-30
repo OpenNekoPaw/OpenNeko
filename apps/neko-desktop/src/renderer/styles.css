@@ -1196,6 +1196,32 @@ code {
   font-size: 12px;
 }
 
+.home-management-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.home-management-refresh {
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--neko-desktop-border);
+  border-radius: 999px;
+  color: var(--neko-fg-secondary);
+  background: var(--neko-desktop-surface-raised);
+  font-size: 11px;
+}
+
+.home-management-refresh:hover:not(:disabled) {
+  color: var(--neko-fg);
+  background: var(--neko-desktop-control-hover);
+}
+
+.home-management-refresh:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
 .home-project-selector {
   flex: 0 0 auto;
   min-height: 36px;
@@ -1212,6 +1238,35 @@ code {
   justify-content: space-between;
   gap: 12px;
   margin-bottom: 16px;
+}
+
+.home-management-toolbar-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.home-sort-control {
+  display: inline-flex;
+  min-height: 38px;
+  align-items: center;
+  gap: 7px;
+  padding: 0 10px;
+  border: 1px solid var(--neko-desktop-border);
+  border-radius: 11px;
+  color: var(--neko-fg-secondary);
+  background: var(--neko-desktop-surface-raised);
+  font-size: 10px;
+}
+
+.home-sort-control select {
+  max-width: 150px;
+  border: 0;
+  outline: 0;
+  color: var(--neko-fg);
+  background: transparent;
+  font: inherit;
 }
 
 .home-search-field {
@@ -1373,8 +1428,19 @@ button.home-management-card:hover {
   font-size: 11px;
 }
 
-.home-creations-grid {
-  margin-top: 0;
+.home-project-list {
+  padding: 10px;
+  border: 1px solid var(--neko-desktop-border);
+  border-radius: 14px;
+  background: var(--neko-desktop-surface-raised);
+}
+
+.home-project-grid {
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+}
+
+.home-project-card {
+  min-height: 84px;
 }
 
 @media (max-width: 820px) {
@@ -1382,6 +1448,16 @@ button.home-management-card:hover {
   .home-management-toolbar {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .home-management-header-actions {
+    align-items: stretch;
+  }
+
+  .home-management-toolbar-actions {
+    align-items: stretch;
+    justify-content: flex-start;
+    flex-wrap: wrap;
   }
 
   .home-search-field {
