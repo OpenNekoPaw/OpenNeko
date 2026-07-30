@@ -29,26 +29,26 @@ const forbiddenBridgePatterns = [
     rule: 'webview-no-direct-acquire-vscode-api',
     pattern: /\bacquireVsCodeApi\b/,
     message:
-      'Production Webview source must not reference acquireVsCodeApi() directly. Use @neko/shared/vscode directly or a package-local typed facade that delegates to it.',
+      'Production Webview source must not reference acquireVsCodeApi() directly. Use the package-owned typed Desktop host port.',
   },
   {
     rule: 'webview-no-global-vscode-api-shim',
     pattern: /__vscode_api__|__vscodeApi/,
     message:
-      'Production Webview source must not use legacy global VS Code API shims. Import @neko/shared/vscode or an owning package typed facade instead.',
+      'Production Webview source must not use removed global VS Code API shims. Use the package-owned typed Desktop host port.',
   },
   {
     rule: 'webview-no-window-vscode-bridge',
     pattern: /\bwindow\s*\.\s*vscode(?:Api)?\b/,
     message:
-      'Production Webview source must not read window.vscode or window.vscodeApi directly. Route transport through @neko/shared/vscode or a typed facade.',
+      'Production Webview source must not read removed window.vscode bridges. Route transport through the injected Desktop host port.',
   },
   {
     rule: 'webview-no-package-local-mock-bridge-fallback',
     pattern:
       /\[mock postMessage\]|VSCode Webview API not available, using mock|acquireVsCodeApi not available, using mock/,
     message:
-      'Production Webview source must not implement package-local mock postMessage fallback. Shared bridge no-op behavior and shared test utilities own non-VS Code behavior.',
+      'Production Webview source must not implement package-local mock transport fallback. Package-owned test adapters must inject an explicit host port.',
   },
 ];
 const forbiddenFoundationPatterns = [
@@ -150,7 +150,7 @@ for (const root of webviewRoots) {
           rule: 'webview-no-vscode-import',
           file: rel,
           message:
-            'Webview source runs in the browser sandbox and must not import vscode. Request host capabilities through typed postMessage or @neko/shared/vscode.',
+            'Webview source runs in the renderer sandbox and must not import vscode. Request host capabilities through its typed Desktop host port.',
         });
       }
 
@@ -160,7 +160,7 @@ for (const root of webviewRoots) {
           rule: 'webview-no-node-import',
           file: rel,
           message:
-            'Webview source must not import Node modules. Move filesystem/workspace work to the Extension Host and call it through a typed message facade.',
+            'Webview source must not import Node modules. Move filesystem/workspace work to Desktop Main and call it through a typed host port.',
         });
       }
 
@@ -205,7 +205,8 @@ process.stdout.write(
 function findWebviewRoots(packagesRoot) {
   const roots = [];
   for (const packageName of readdirSync(packagesRoot)) {
-    const sourceRoot = join(packagesRoot, packageName, 'packages', 'webview', 'src');
+    if (!packageName.endsWith('-webview') && packageName !== 'neko-assets') continue;
+    const sourceRoot = join(packagesRoot, packageName, 'src');
     if (existsDirectory(sourceRoot)) {
       roots.push(sourceRoot);
     }

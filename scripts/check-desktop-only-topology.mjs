@@ -106,12 +106,21 @@ async function readProductionSources(repositoryRoot) {
     await Promise.all(
       roots.map((root) => findFiles(root, (filePath) => /\.(?:[cm]?[jt]sx?)$/u.test(filePath))),
     )
-  ).flat();
+  )
+    .flat()
+    .filter((filePath) => !isTestSourcePath(filePath));
   return Promise.all(
     sourcePaths.map(async (filePath) => ({
       path: toRepositoryPath(repositoryRoot, filePath),
       content: await readFile(filePath, 'utf8'),
     })),
+  );
+}
+
+function isTestSourcePath(filePath) {
+  return (
+    filePath.includes(`${path.sep}__tests__${path.sep}`) ||
+    /\.(?:test|spec)\.[cm]?[jt]sx?$/u.test(filePath)
   );
 }
 

@@ -559,15 +559,15 @@
       "surface": "Semantic coverage tool planning.fallback normal-tool-analysis contract",
       "kind": "stray-surface",
       "semanticClass": "current-bridge",
-      "status": "active",
+      "status": "removed",
       "owner": "neko-agent-search",
       "replacement": "@neko/search semantic coverage capability provider planning contract.",
-      "removeAfter": "Remove the planning.fallback field only after semantic coverage planning moves to canonical package capability metadata and tool result consumers no longer inspect normal-tool-analysis.",
+      "removeAfter": "Removed after semantic coverage moved to @neko/search and no retained consumer inspected normal-tool-analysis or planning.fallback.",
       "tests": [
-        "pnpm --dir packages/neko-agent exec vitest run packages/extension/src/tools/__tests__/semanticCoverageTool.test.ts",
-        "rg -n \"normal-tool-analysis|planning:|fallback\" packages/neko-agent/packages/extension/src/tools/semanticCoverageTool.ts packages/neko-agent/packages/extension/src/tools/__tests__/semanticCoverageTool.test.ts"
+        "pnpm --dir packages/neko-search exec vitest run",
+        "rg -n \"normal-tool-analysis|planning\\\\.fallback\" packages/neko-search packages/neko-agent-runtime packages/neko-agent-types packages/neko-agent-webview"
       ],
-      "notes": "This is a current Agent tool planning bridge, not dead code."
+      "notes": "The canonical headless capability provider now delegates directly to the Search runtime."
     },
     {
       "id": "LCD-029",

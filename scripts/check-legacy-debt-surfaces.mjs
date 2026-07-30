@@ -23,17 +23,12 @@ const requiredSemanticClasses = [
 const allowedSemanticClasses = new Set([...requiredSemanticClasses, 'needs-review']);
 const failingProductionSemanticClasses = new Set(['delete-now', 'migrate-now', 'needs-review']);
 const retiredAssetCatalogBoundaryPathPatterns = [
-  'packages/neko-agent/packages/extension/src/services/projectMentionSearch.ts',
   'packages/neko-types/src/local-metadata/node-workspace-storage-inspection.ts',
   'packages/neko-types/src/types/asset/workspace-linked-media-library.ts',
   'packages/neko-types/src/types/content-locator.ts',
 ];
 // Match both the owning boundary and its rejection marker so unrelated debt in the same file fails.
 const explicitBoundaryRejectionRules = [
-  {
-    path: 'packages/neko-canvas/packages/extension/src/canvasmediacontentlocator.ts',
-    markers: ['legacy semantic projections'],
-  },
   {
     path: 'packages/neko-generation/src/job/codec.ts',
     markers: [
@@ -106,7 +101,6 @@ const requiredLedgerEntryFields = [
 const excludedDirectories = new Set([
   '.git',
   '.turbo',
-  '.vscode-test',
   'coverage',
   'dist',
   'node_modules',
@@ -922,8 +916,7 @@ function isAgentGovernedPath(file) {
     file.startsWith('packages/neko-agent-types/') ||
     file.startsWith('packages/neko-agent-webview/') ||
     file.startsWith('packages/neko-ai-sdk/') ||
-    file.startsWith('packages/neko-platform/') ||
-    file.startsWith('apps/neko-tui/')
+    file.startsWith('packages/neko-platform/')
   );
 }
 
@@ -1410,14 +1403,6 @@ function runSelfTest() {
     },
     {
       value: classifySurface(
-        'apps/neko-tui/src/tui/host/tui-local-metadata-binding.ts',
-        'legacyProxyRoot: storageLayout.project.local.cache.proxies,',
-        'legacy',
-      ),
-      expected: 'boundary-canonicalizer',
-    },
-    {
-      value: classifySurface(
         'packages/neko-media/src/node/NodeMediaRuntime.ts',
         'fallback to software encoding when hardware fails',
         'fallback',
@@ -1547,12 +1532,6 @@ function runSelfTest() {
     {
       value: retiredAssetCatalogAllowlist('packages/neko-types/src/types/content-locator.ts'),
       expected: 'boundary-rejection',
-    },
-    {
-      value: retiredAssetCatalogAllowlist(
-        'packages/neko-canvas/packages/extension/src/runtime.ts',
-      ),
-      expected: undefined,
     },
     {
       value: matchesGlob(

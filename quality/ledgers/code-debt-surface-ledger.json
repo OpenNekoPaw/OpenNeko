@@ -240,15 +240,15 @@
     {
       "id": "LCDR-004",
       "package": "@neko/types",
-      "surface": "Canvas shared contract legacy mirrors such as generated media fields, childIds, anchors, presets, and playback route fallback",
+      "surface": "Canvas shared contract and material migration legacy mirrors such as generated media fields, childIds, anchors, and playback route fallback",
       "semanticClass": "migrate-now",
       "action": "migrate",
       "status": "active",
       "owner": "neko-types",
       "paths": [
         "packages/neko-types/src/types/canvas.ts",
-        "packages/neko-types/src/types/canvas-presets.ts",
-        "packages/neko-types/src/types/canvas-playback.ts"
+        "packages/neko-types/src/types/canvas-playback.ts",
+        "packages/neko-types/src/nkc/canvas-material-migration.ts"
       ],
       "replacement": "Canonical Canvas node metadata, container childPlacements, content metadata, port-based connection fields, and required CanvasPlaybackPlan.routeCandidates.",
       "removeCondition": "Canvas Webview and fixtures consume only canonical Canvas contract fields; legacy playback route derivation has been removed and routeCandidates are required.",
@@ -256,8 +256,8 @@
         "commands": [
           "pnpm --dir packages/neko-types exec vitest run src/types/__tests__/canvas.test.ts src/types/__tests__/canvas-playback.test.ts",
           "pnpm --dir packages/neko-canvas-webview exec vitest run src/components/playback/CanvasPlaybackController.test.tsx",
-          "pnpm --dir packages/neko-canvas exec vitest run packages/extension/src/editor/narrativePreviewBridge.test.ts",
-          "rg -i \"childIds|legacy anchor|generatedImage|generatedVideoUrl|legacy-entry|deriveLegacyCanvasPlaybackRoute|routeCandidates\\\\?:|route candidates are absent\" packages/neko-types/src/types/canvas*.ts packages/neko-canvas/packages"
+          "pnpm --dir packages/neko-canvas-domain exec vitest run",
+          "rg -i \"childIds|legacy anchor|generatedImage|generatedVideoUrl|legacy-entry|deriveLegacyCanvasPlaybackRoute|routeCandidates\\\\?:|route candidates are absent\" packages/neko-types/src/types/canvas*.ts packages/neko-types/src/nkc/canvas-material-migration.ts packages/neko-canvas-domain packages/neko-canvas-webview"
         ]
       },
       "stalePatterns": [
@@ -266,8 +266,9 @@
           "paths": [
             "packages/neko-types/src/types/canvas-playback.ts",
             "packages/neko-types/src/types/__tests__/canvas-playback.test.ts",
-            "packages/neko-canvas/packages/**/*.ts",
-            "packages/neko-canvas/packages/**/*.tsx"
+            "packages/neko-canvas-domain/**/*.ts",
+            "packages/neko-canvas-webview/**/*.ts",
+            "packages/neko-canvas-webview/**/*.tsx"
           ]
         }
       ]
