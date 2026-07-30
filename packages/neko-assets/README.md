@@ -1,6 +1,6 @@
 # Neko Assets
 
-Neko Assets owns the VS Code Media Library surface and composes the Creative Entity browser. It does not maintain an Asset catalog or a second semantic identity model.
+Neko Assets owns the Desktop Media Library surface and composes the Creative Entity browser. It does not maintain an Asset catalog or a second semantic identity model.
 
 ## Responsibilities
 
@@ -22,6 +22,9 @@ Neko Assets owns the VS Code Media Library surface and composes the Creative Ent
 
 ## Runtime
 
-`src/extension.ts` is the VS Code composition root. `WorkspaceLinkedMediaLibraryService` manages links, `MediaLibraryTreeProvider` projects the tree, `MediaLibrarySearchService` owns search/recent projections, and `SemanticSourceDiscoveryService` emits reviewable semantic evidence without writing Entity facts.
+Desktop Main composes the package's host-neutral services through public entries.
+`WorkspaceLinkedMediaLibraryService` manages links, `MediaLibrarySearchService` owns search/recent
+projections, and `SemanticSourceDiscoveryService` emits reviewable semantic evidence without writing
+Entity facts. The package-owned renderer root projects those services through typed Desktop IPC.
 
 Legacy Asset catalog data is handled only by the explicit inspection and migration facilities in `@neko/shared`; normal Neko Assets runtime does not read it.

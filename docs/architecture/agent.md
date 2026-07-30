@@ -1,10 +1,10 @@
 # Agent 横切架构
 
-更新日期：2026-07-26
+更新日期：2026-07-31
 
-本文件定义 OpenNeko Agent 的系统级边界。实现细节见
-[`packages/neko-agent/ARCHITECTURE.md`](../../packages/neko-agent/ARCHITECTURE.md)，目标 ADR
-见 [`adr-pi-agent-runtime.md`](adr-pi-agent-runtime.md)。
+本文件定义 OpenNeko Agent 的系统级边界。运行时包级边界见
+[`packages/neko-agent-runtime/src/runtime/README.md`](../../packages/neko-agent-runtime/src/runtime/README.md)，
+目标 ADR 见 [`adr-pi-agent-runtime.md`](adr-pi-agent-runtime.md)。
 
 Pi 是唯一 canonical Agent、主模型、Tool 调度、Skill 读取和 transcript/context 执行路径。
 `AgentSession`、`AgentExecutor`、Think/Act/ReAct、Platform chat adapter、Vercel AI SDK chat
@@ -18,13 +18,13 @@ Agent 是领域无关智能运行内核，不是创作领域。它负责：
 - Prompt、Pi Skill Host、MCP、Tool/Capability bridge、permission/approval；
 - flat model-purpose snapshot 和 Pi provider/model/credential projection；
 - memory/context 输入、稳定资源引用和 conversation Timeline；
-- TUI、VS Code 与 headless Host 共用的 host-neutral contract。
+- Desktop Main/preload/renderer 共用的 host-neutral contract。
 
 Agent 不拥有：
 
 - Canvas、Cut、Assets、Preview、Character、Generation、Quality、Entity、Search 或 Engine 事实；
 - 领域 Job 的 snapshot、retry/reconciliation、结果提交或历史页面；
-- workspace 文件 IO、VS Code/Webview 生命周期或 React 状态；
+- workspace 文件 IO、Electron/renderer 生命周期或 React 状态；
 - 第二套 transcript、Skill cache、provider chat registry 或通用 TaskManager。
 
 领域能力通过 typed Capability、Tool、domain port 和稳定 `ResourceRef`/ContentLocator 注入。
@@ -34,34 +34,30 @@ Agent 不拥有：
 | 维度 | 约束                                                                                                                                                                                                                            |
 | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 职责 | Pi 拥有 generic Agent execution、Tool scheduling、Skill read 和 transcript/context；OpenNeko Agent 拥有产品 identity、policy 与 projection；领域包拥有执行和事实；Host 拥有 IO、trust、credential interaction 与 UI transport。 |
-| 依赖 | Webview 只依赖共享 contract；Extension/TUI composition 依赖 host-neutral runtime 和具体领域 port；Agent core 不依赖 VS Code、React 或具体领域实现；领域包不反向依赖 Agent。                                                     |
+| 依赖 | Renderer 只依赖共享 contract；Desktop Main composition 依赖 host-neutral runtime 和具体领域 port；Agent core 不依赖 Electron、React 或具体领域实现；领域包不反向依赖 Agent。                                                    |
 | 接口 | conversation/branch/turn/run/tool-call identity、Tool schema、model-purpose snapshot、Capability contribution、domain Job port、Timeline patch 和 ResourceRef 分层定义；禁止自由 JSON 和 active-state fallback。                |
 | 扩展 | 新 provider 通过 Pi registration 或 owning media runtime 接入；新 Skill 使用 Pi `SKILL.md`；新领域能力先由 owning package 定义 contract，再通过 contribution 注入。                                                             |
-| 测试 | deterministic path/schema/identity/permission/legacy-poison 测试证明 canonical path；key-free evaluation 验证 harness；真实 TUI/Extension Host 场景证明模型与 UI 行为。                                                         |
+| 测试 | deterministic path/schema/identity/permission/legacy-poison 测试证明 canonical path；key-free evaluation 验证 harness；真实 Desktop complete-session 场景证明模型与 UI 行为。                                                   |
 
 ## 分层与依赖方向
 
 ```text
-Webview projection
+Desktop renderer projection
   -> agent-types contract
-  -> Extension Host adapter
+  -> typed preload IPC
+       -> Desktop Main adapter
        -> host-neutral Agent product runtime
             -> Pi Agent / Session / Skills / AI
             -> OpenNeko permission and Capability bridge
             -> injected domain ports
-
-Terminal TUI / headless Host
-  -> same host-neutral Agent product runtime
-  -> same Pi and product contracts
 ```
 
 | 层                    | 负责                                                                                                 | 不负责                                                         |
 | --------------------- | ---------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
-| `agent-types`         | Webview/Extension/runtime 消息、Timeline、identity 和 projection contract                            | runtime、VS Code、React、provider SDK                          |
+| `agent-types`         | renderer/Main/runtime 消息、Timeline、identity 和 projection contract                                | runtime、Electron、React、provider SDK                         |
 | `agent`               | Pi composition、Prompt、Skill Host、Tool/Capability bridge、permission、memory/context、产品事件投影 | Host API、领域执行、第二套 Agent loop                          |
-| `extension`           | VS Code command、Webview bridge、workspace trust、resource/URI、credential interaction、disposal     | Agent 决策、领域事实                                           |
-| `webview`             | Chat/Timeline/settings/confirmation UI 和可恢复展示状态                                              | IO、Tool/provider 执行、持久事实                               |
-| `apps/neko-tui`       | Terminal/headless composition、输入、投影、debug/evaluation driver                                   | 第二套 runtime 或业务规则                                      |
+| `apps/neko-desktop`   | Main composition、typed preload IPC、workspace trust、credential、resource authorization、disposal   | Agent 决策、领域事实                                           |
+| `agent-webview`       | Chat/Timeline/settings/confirmation UI 和可恢复展示状态                                              | IO、Tool/provider 执行、持久事实                               |
 | `platform` / `ai-sdk` | 迁移中的配置投影、媒体 provider implementation 和必要辅助能力                                        | 主模型 chat fallback、Agent transcript、GenerationJob contract |
 
 ## Canonical runtime
@@ -86,7 +82,7 @@ Host input
 
 | Identity          | Owner                           | 含义                                             |
 | ----------------- | ------------------------------- | ------------------------------------------------ |
-| `tabId`           | Webview/Extension               | view binding，只选择投影                         |
+| `tabId`           | Desktop renderer                | view binding，只选择投影                         |
 | `conversationId`  | OpenNeko conversation aggregate | conversation runtime 与 catalog identity         |
 | `branchId`        | OpenNeko branch metadata        | active/historical branch identity                |
 | Pi `sessionId`    | Pi Session                      | 一条 branch 的 JSONL transcript/context identity |
@@ -99,8 +95,8 @@ Host input
 immutable in-flight snapshot、event subscription、projection 和日志 partition。active tab 只选择
 展示，不得切换共享单例参数来模拟多个 conversation。
 
-TUI 与 VS Code 可观察同一 conversation，但只有持有当前
-`ConversationExecutionLease` epoch 的 Host 可以执行 turn 或提交 checkpoint。takeover 产生更高
+多个 Desktop view 可观察同一 conversation，但只有持有当前
+`ConversationExecutionLease` epoch 的 runtime owner 可以执行 turn 或提交 checkpoint。takeover 产生更高
 epoch，旧 writer 必须 fail-visible。
 
 ### Transcript 与产品事实
@@ -151,8 +147,8 @@ Pi 支持的主模型和 bounded understanding model 使用 Pi streaming provide
 Generation/edit/TTS 等由领域 runtime 执行的 purpose 只携带 owning runtime 所需的精确
 provider/model binding，不伪造成 Pi chat model。
 
-OpenNeko 实现一个用户级 CredentialStore，TUI 与 VS Code 共享持久 contract，并提供不同的
-Host interaction adapter。secret 不进入 workspace fact、SQLite conversation metadata、
+OpenNeko 实现一个用户级 CredentialStore，由 Desktop Main 的 `HostSecretPort` adapter 接入
+OS 保护存储。secret 不进入 workspace fact、SQLite conversation metadata、
 Pi Session、日志或 evaluation fact。NewAPI/OneAPI chat 通过 Pi OpenAI-compatible projection；
 其媒体生成和异步 task protocol 留在 Generation/provider owner。
 
@@ -213,17 +209,17 @@ Agent 不直接读写 JobStore，不建立通用 Job/Task dispatcher、global Ac
 active/latest fallback。Tool Call 返回后，后续 describe/observe/cancel/retry 使用带精确
 JobRef/revision 的新 Tool Call。
 
-## Webview 与 Host 边界
+## Renderer 与 Host 边界
 
-- Webview 不访问 Node.js/VS Code API，不读取文件、credential、SQLite 或 provider。
-- Extension 通过 `postMessage` 传递 typed intent/projection，资源经 `asWebviewUri()` 投影。
-- Webview Tab 拥有独立 store、attachment 和 React subtree；切换只改变可见性。
-- Extension/Node Host 拥有 workspace IO、path containment、trust、credential interaction、
-  LocalMetadata、runtime composition 和 `Disposable`。
-- 模型/Webview 只接收稳定 identity、ResourceRef/ContentLocator 和脱敏 diagnostic；绝对路径、
+- Renderer 不访问 Node.js/Electron API，不读取文件、credential、SQLite 或 provider。
+- Preload 只暴露 sender-bound typed IPC；Main 负责 intent validation 与授权资源投影。
+- Renderer Tab 拥有独立 store、attachment 和 React subtree；切换只改变可见性。
+- Desktop Main 拥有 workspace IO、path containment、trust、credential interaction、
+  LocalMetadata、runtime composition 和显式资源释放。
+- 模型/renderer 只接收稳定 identity、ResourceRef/ContentLocator 和脱敏 diagnostic；绝对路径、
   cache path、token、SQLite row 与 runtime handle 不穿透边界。
-- Webview/CSP/焦点/消息/视觉验收必须使用 Extension Development Host；浏览器/Vite 只可做
-  纯浏览器兼容辅助。
+- Renderer/CSP/焦点/IPC/视觉验收必须使用打包 Electron 与隔离 fixture；普通浏览器/Vite 不能
+  替代 Desktop 运行态验收。
 
 ## Grounding 与创作领域
 
@@ -248,12 +244,12 @@ DAG、plan authorization 或领域 project state。Canvas、Cut、Preview 等 su
 - Pi Session authority、lease fencing、checkpoint durability；
 - Skill trust/locator/receipt/no-cache；
 - canonical provider/domain port 被命中，legacy path 被 poison；
-- TUI 与 Webview projection 的 producer/consumer contract。
+- Desktop Main/preload/renderer projection 的 producer/consumer contract。
 
 `pnpm test:agent:eval` 只验证 key-free harness、schema、fixture 和 hard gate，不能描述为真实
-Agent 行为。真实行为结论需要 configured-provider TUI case，并记录 effective model、usage/cost、
-artifact/path fact 与 no-fallback evidence。VS Code UI 行为必须另用 Extension Development Host
-与合成 fixture workspace 验收。
+Agent 行为。真实行为结论需要 configured-provider Desktop complete-session case，并记录
+effective model、usage/cost、artifact/path fact 与 no-fallback evidence。Desktop UI 行为必须
+使用打包 Electron 与合成 fixture workspace 验收。
 
 ## 禁止恢复的路径
 

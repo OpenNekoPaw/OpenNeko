@@ -6,9 +6,8 @@ or concrete domain execution.
 
 System contracts are defined by:
 
-- [`docs/architecture/agent.md`](../../../../../../docs/architecture/agent.md)
-- [`docs/architecture/adr-pi-agent-runtime.md`](../../../../../../docs/architecture/adr-pi-agent-runtime.md)
-- [`packages/neko-agent/ARCHITECTURE.md`](../../../../ARCHITECTURE.md)
+- [`docs/architecture/agent.md`](../../../../docs/architecture/agent.md)
+- [`docs/architecture/adr-pi-agent-runtime.md`](../../../../docs/architecture/adr-pi-agent-runtime.md)
 
 ## Allowed categories
 
@@ -80,7 +79,7 @@ public surfaces are intentionally absent.
 
 | Identity          | Owner                           | Scope                              |
 | ----------------- | ------------------------------- | ---------------------------------- |
-| `tabId`           | Webview/Extension               | view binding only                  |
+| `tabId`           | Desktop renderer                | view binding only                  |
 | `conversationId`  | OpenNeko conversation aggregate | complete conversation runtime      |
 | `branchId`        | OpenNeko product metadata       | active or historical branch        |
 | Pi `sessionId`    | Pi Session                      | one branch transcript/context tree |
@@ -101,6 +100,6 @@ and projection.
 - Workspace logs are diagnostic only and cannot hydrate a conversation.
 - Historical LocalMetadata task rows retained for Canvas delivery protect user data but cannot become a
   generic Agent Task runtime.
-- VS Code `workspaceState` stores view projection such as tabs and selection, never Agent/session/Job facts.
+- Desktop window/tab state stores view projection such as tabs and selection, never Agent/session/Job facts.
 - A persisted fact must not contain provider secrets, Webview URIs, runtime handles, absolute cache paths or
   process-local Skill locators.

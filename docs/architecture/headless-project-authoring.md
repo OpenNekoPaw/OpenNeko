@@ -1,9 +1,9 @@
 # 无 UI 项目创作边界
 
 状态：Accepted
-更新日期：2026-07-17
+更新日期：2026-07-31
 
-Neko 项目文件是持久创作事实。来自 Agent、Assets、TUI、VS Code command 或后台任务的写入必须在没有打开 Webview、可见 Custom Editor 或 UI snapshot 时仍可执行。Webview 是交互投影，不是后台 authoring executor。
+Neko 项目文件是持久创作事实。来自 Agent、Assets、Desktop action 或后台任务的写入必须在没有打开 renderer surface 或 UI snapshot 时仍可执行。Renderer 是交互投影，不是后台 authoring executor。
 
 当前保留且适用此边界的编辑领域是 Canvas 与 Cut。未来其他项目格式进入 workspace 时，必须通过新的 contract 和测试加入，不能复用已移除 Sketch、Audio、Model、Puppet 或 Story 的旧命令。
 
@@ -19,14 +19,14 @@ Neko 项目文件是持久创作事实。来自 Agent、Assets、TUI、VS Code c
 
 ## Canonical authoring path
 
-| 包     | Canonical path                                                                                             | 禁止路径                                                                       |
-| ------ | ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| Canvas | `CanvasProjectAuthoringService`、Canvas authoring capability、`NekoCanvasAPI` 的持久写入 API               | 用 Webview 私有 node mutation 充当 Agent/Assets/TUI executor                   |
-| Cut    | VS Code Canvas 通过 shared `NekoCutAPI.routes.handoff` 创建新 `.otio`，或追加到已打开的显式 URI + revision | Agent/TUI authoring、active/recent target、隐藏 editor、Webview import message |
+| 包     | Canonical path                                                                                   | 禁止路径                                                    |
+| ------ | ------------------------------------------------------------------------------------------------ | ----------------------------------------------------------- |
+| Canvas | `CanvasProjectAuthoringService`、Canvas authoring capability、`NekoCanvasAPI` 的持久写入 API     | 用 renderer 私有 node mutation 充当 Agent/Assets executor   |
+| Cut    | Desktop Main 通过 shared `NekoCutAPI.routes.handoff` 创建新 `.otio`，或追加到显式 URI + revision | active/recent target、隐藏 surface、renderer import message |
 
 共享层只拥有 client-neutral target、result、diagnostic、operation classification 和测试 poison helper。领域 edit planning、codec、source policy 与项目 mutation 留在 owning package。
 
-旧 UI-shaped command 只能被删除、作为调用 canonical authoring 的薄 UI wrapper，或作为 fail-closed migration diagnostic；不得向 Webview 发送 mutation 后报告持久成功。
+旧 UI-shaped command 只能被删除、作为调用 canonical authoring 的薄 UI wrapper，或作为 fail-closed migration diagnostic；不得向 renderer 发送 mutation 后报告持久成功。
 
 ## Target 与 reveal
 
@@ -41,22 +41,21 @@ Neko 项目文件是持久创作事实。来自 Agent、Assets、TUI、VS Code c
 
 ## Client adapter
 
-- VS Code adapter：command 注册、`vscode.Uri` 转换、Custom Editor reveal 和已打开 Webview 同步。
-- TUI adapter：文本 diagnostic 与 filesystem/workspace target 选择，不假设 Webview。
+- Desktop adapter：Main-owned 文件系统操作、typed IPC、surface reveal 和已打开 renderer 同步。
 - Agent adapter：capability schema、审批/生命周期和 diagnostic projection。
 - Assets adapter：把稳定 Asset/Entity/Resource identity 投影为 owning package authoring request。
 
-Authoring core 不导入 VS Code window API、Webview panel、React、DOM 或终端 UI。TUI 不直接改写 package JSON；VS Code 不通过打开隐藏 editor 制造成功条件；所有 adapter 都使用相同的 `target`、`source`、`reveal` 和 `provenance` 语义。
+Authoring core 不导入 Electron、React 或 DOM。Desktop 不通过打开隐藏 surface 制造成功条件；所有 adapter 都使用相同的 `target`、`source`、`reveal` 和 `provenance` 语义。
 
 ## Source identity
 
-持久事实可以保存 stable `ResourceRef`、`ContentFileSourceRef`、asset/entity ID、workspace-relative path、`${VAR}/path` 或 project-owned JSON。不得保存 Webview URI、blob URL、cache/temp path、Engine token、stream id、Range URL、preview URL 或未晋升的生成缓存产物。
+持久事实可以保存 stable `ResourceRef`、`ContentFileSourceRef`、asset/entity ID、workspace-relative path、`${VAR}/path` 或 project-owned JSON。不得保存 renderer URI、blob URL、cache/temp path、Engine token、stream id、Range URL、preview URL 或未晋升的生成缓存产物。
 
 Canvas Board 的二进制生成媒体必须先提交到项目拥有的稳定生成目录并取得 durable identity；未指定目标时只能使用定义好的 workspace board，不能从 active/recent UI 状态、conversation binding 或 runtime group 猜测写入目标。
 
 ## 验证
 
-- `document-authoring` 在没有 active Webview 时成功；
+- `document-authoring` 在没有 active renderer surface 时成功；
 - save/reopen 能恢复持久事实；
 - 旧 UI-bound route 被删除、poison 或断言未使用；
 - core service 没有 UI/host import；

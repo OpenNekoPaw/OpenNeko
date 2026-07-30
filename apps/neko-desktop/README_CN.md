@@ -27,8 +27,8 @@ Agent + Home，以及 P1.4 Assets + Canvas 的确定性实现：
 - package-owned Cut runtime，接收合法视频 locator 并拥有编辑/导出生命周期；
 - workspace-owned Generation runtime，持久化 Job、恢复 observation、提交
   `generated-output`，并仅在精确 Job/locator authority 可解析时允许重新生成；
-- Desktop 与 VS Code 共用 Canvas Root、Toolbar、Add popover 和 `@neko/ui` primitives；
-  Desktop Tailwind 显式扫描 Canvas source，package CSS 以 Root marker 隔离；
+- Desktop renderer 复用 package-owned Canvas Root、Toolbar、Add popover 和 `@neko/ui`
+  primitives；Desktop Tailwind 显式扫描 Canvas source，package CSS 以 Root marker 隔离；
 - Character/World、Cut/Timeline 的明确 unavailable 状态。
 
 P1.3 的生产 Electron 已注入完整 `DesktopAgentControllerComposition`，并声明
@@ -39,8 +39,8 @@ Workspace 和新 View。Content Project 在 catalog 与 Tab state 完成 hydrati
 不回退到当前 active conversation。重启后也由同一 locator 惰性重连，identity 漂移会被拒绝。
 加密端口只在实际 credential 操作时触发 macOS safeStorage/Keychain 检查。
 
-完整 provider-backed 宿主验收仍未完成：真实 provider/model 调用尚未获得成本授权，VS Code
-Development Host 也仍缺运行证据。确定性测试、key-free Evaluation harness、production
+完整 provider-backed 宿主验收仍未完成：真实 provider/model 调用尚未获得成本授权，且当前
+没有 Desktop complete-session evaluation driver。确定性测试、key-free Evaluation harness、production
 package 和无模型成本的 Electron Shell/Agent Root 路径不能替代真实模型、Tool approval 与
 checkpoint/cleanup 的完整验收。
 Canvas 工具栏按宿主 capability 显示。Desktop 当前已接通 source-add、selection/pan、

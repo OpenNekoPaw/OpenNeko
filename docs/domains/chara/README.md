@@ -1,6 +1,6 @@
 # Chara 领域
 
-Chara 是 Character 创作与运行语义的 owner。当前第一阶段实现位于 `packages/neko-chara`，已从 Entity 和 Agent Extension 收回 Character Dialogue、Embody、角色证据、Profile Assembly、角色 purpose operation 和 VS Code 角色编排。
+Chara 是 Character 创作与运行语义的 owner。当前第一阶段实现位于 `packages/neko-chara`，已从 Entity 和旧 Agent 宿主实现收回 Character Dialogue、Embody、角色证据、Profile Assembly、角色 purpose operation 和角色编排。
 
 阅读路径：
 
