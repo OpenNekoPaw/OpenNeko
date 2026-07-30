@@ -1519,6 +1519,25 @@ button.home-management-card:hover {
   margin-bottom: 14px;
 }
 
+.home-management-path {
+  display: flex;
+  min-height: 34px;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+  color: var(--neko-fg-secondary);
+  font-size: 11px;
+}
+
+.home-management-path button {
+  min-height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--neko-desktop-border);
+  border-radius: 8px;
+  color: var(--neko-fg);
+  background: var(--neko-desktop-control);
+}
+
 .home-plugin-host-notice {
   margin-top: 14px;
 }

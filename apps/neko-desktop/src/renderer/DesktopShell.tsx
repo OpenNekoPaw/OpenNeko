@@ -30,8 +30,10 @@ import type {
   DesktopShellProjection,
 } from '../shared/shell-contract';
 import type {
-  DesktopHomeAssetFacet,
   DesktopHomeAssetSearchResult,
+  DesktopHomeMediaLibraryItem,
+  DesktopHomeMediaLibraryLocationKind,
+  DesktopHomeMediaLibrarySearchResult,
   DesktopHomePluginItem,
   DesktopHomePluginsResult,
   DesktopHomeSkillItem,
@@ -726,11 +728,17 @@ type HomeProjectSortOption =
 
 function HomeAssetCenter({ interactive }: { readonly interactive: boolean }): JSX.Element {
   const { locale, t } = useTranslation();
-  const [facet, setFacet] = useState<DesktopHomeAssetFacet>('libraries');
+  const [catalog, setCatalog] = useState<'mediaLibraries' | 'assets'>('mediaLibraries');
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState<HomeAssetSortOption>('name-ascending');
+  const [locationKind, setLocationKind] =
+    useState<DesktopHomeMediaLibraryLocationKind>('local');
+  const [selectedLibrary, setSelectedLibrary] = useState<DesktopHomeMediaLibraryItem>();
+  const [relativePath, setRelativePath] = useState('');
   const [catalogRevision, setCatalogRevision] = useState(0);
-  const [result, setResult] = useState<DesktopHomeAssetSearchResult>();
+  const [assetResult, setAssetResult] = useState<DesktopHomeAssetSearchResult>();
+  const [mediaLibraryResult, setMediaLibraryResult] =
+    useState<DesktopHomeMediaLibrarySearchResult>();
   const [error, setError] = useState<string>();
   const [mutationDiagnostic, setMutationDiagnostic] = useState<string>();
   const [mutationNotice, setMutationNotice] = useState<string>();
@@ -739,24 +747,40 @@ function HomeAssetCenter({ interactive }: { readonly interactive: boolean }): JS
     if (!interactive) return;
     let active = true;
     setError(undefined);
-    setResult(undefined);
+    setAssetResult(undefined);
+    setMediaLibraryResult(undefined);
     const timeout = window.setTimeout(() => {
-      void window.openNekoDesktop.home.assets
-        .search({
-          facet,
-          query,
-          sortBy: sort === 'modified-descending' ? 'modifiedAt' : 'name',
-          sortDirection:
-            sort === 'name-descending'
-              ? 'descending'
-              : sort === 'modified-descending'
-                ? 'descending'
-                : 'ascending',
-          limit: 120,
-        })
-        .then((value) => {
-          if (active) setResult(value);
-        })
+      const sortInput = {
+        sortBy: sort === 'modified-descending' ? ('modifiedAt' as const) : ('name' as const),
+        sortDirection:
+          sort === 'name-descending' || sort === 'modified-descending'
+            ? ('descending' as const)
+            : ('ascending' as const),
+        limit: 120,
+      };
+      const request =
+        catalog === 'assets'
+          ? window.openNekoDesktop.home.assets
+              .search({ query, ...sortInput })
+              .then((value) => {
+                if (active) setAssetResult(value);
+              })
+          : selectedLibrary && query.length === 0
+            ? window.openNekoDesktop.home.mediaLibraries
+                .children({
+                  libraryId: selectedLibrary.libraryId,
+                  relativePath,
+                  ...sortInput,
+                })
+                .then((value) => {
+                  if (active) setMediaLibraryResult(value);
+                })
+            : window.openNekoDesktop.home.mediaLibraries
+                .search({ query, ...sortInput })
+                .then((value) => {
+                  if (active) setMediaLibraryResult(value);
+                });
+      void request
         .catch((reason: unknown) => {
           if (active) setError(describeError(reason));
         });
@@ -765,14 +789,15 @@ function HomeAssetCenter({ interactive }: { readonly interactive: boolean }): JS
       active = false;
       window.clearTimeout(timeout);
     };
-  }, [catalogRevision, facet, interactive, query, sort]);
+  }, [catalog, catalogRevision, interactive, query, relativePath, selectedLibrary, sort]);
 
   const addLibrary = useCallback(async (): Promise<void> => {
     setMutationDiagnostic(undefined);
     setMutationNotice(undefined);
     setPendingAction('add');
     try {
-      const mutation = await window.openNekoDesktop.home.assets.addLibrary();
+      const mutation =
+        await window.openNekoDesktop.home.mediaLibraries.addLibrary(locationKind);
       if (mutation.status === 'cancelled') {
         setMutationNotice(t('home.assets.addCancelled'));
         return;
@@ -784,17 +809,19 @@ function HomeAssetCenter({ interactive }: { readonly interactive: boolean }): JS
     } finally {
       setPendingAction(undefined);
     }
-  }, [t]);
+  }, [locationKind, t]);
 
   const removeLibrary = useCallback(
-    async (item: Extract<DesktopHomeAssetSearchResult, { status: 'ready' }>['items'][number]) => {
+    async (item: DesktopHomeMediaLibraryItem) => {
       if (!window.confirm(t('home.assets.removeConfirm', { name: item.label }))) return;
       setMutationDiagnostic(undefined);
       setMutationNotice(undefined);
       setPendingAction(`remove:${item.id}`);
       try {
-        await window.openNekoDesktop.home.assets.removeLibrary(item.id);
+        await window.openNekoDesktop.home.mediaLibraries.removeLibrary(item.libraryId);
         setMutationNotice(t('home.assets.removed'));
+        setSelectedLibrary(undefined);
+        setRelativePath('');
         setCatalogRevision((revision) => revision + 1);
       } catch (reason: unknown) {
         setMutationDiagnostic(describeError(reason));
@@ -806,12 +833,12 @@ function HomeAssetCenter({ interactive }: { readonly interactive: boolean }): JS
   );
 
   const revealLibrary = useCallback(
-    async (item: Extract<DesktopHomeAssetSearchResult, { status: 'ready' }>['items'][number]) => {
+    async (item: DesktopHomeMediaLibraryItem) => {
       setMutationDiagnostic(undefined);
       setMutationNotice(undefined);
       setPendingAction(`reveal:${item.id}`);
       try {
-        await window.openNekoDesktop.home.assets.revealLibrary(item.id);
+        await window.openNekoDesktop.home.mediaLibraries.revealLibrary(item.libraryId);
         setMutationNotice(t('home.assets.revealed'));
       } catch (reason: unknown) {
         setMutationDiagnostic(describeError(reason));
@@ -821,13 +848,31 @@ function HomeAssetCenter({ interactive }: { readonly interactive: boolean }): JS
     },
     [t],
   );
+  const activeResult = catalog === 'assets' ? assetResult : mediaLibraryResult;
+  const leaveDirectory = (): void => {
+    if (relativePath) {
+      const segments = relativePath.split('/');
+      segments.pop();
+      setRelativePath(segments.join('/'));
+      return;
+    }
+    setSelectedLibrary(undefined);
+  };
   return (
     <div className="home-management-page">
       <header className="home-management-header">
         <div>
           <p className="section-label">{t('home.assets.eyebrow')}</p>
-          <h1>{t('home.mediaLibrary')}</h1>
-          <p>{t('home.assets.description')}</p>
+          <h1>
+            {catalog === 'mediaLibraries'
+              ? t('home.mediaLibraries.title')
+              : t('home.assetLibrary.title')}
+          </h1>
+          <p>
+            {catalog === 'mediaLibraries'
+              ? t('home.mediaLibraries.description')
+              : t('home.assetLibrary.description')}
+          </p>
         </div>
         <div className="home-management-header-actions">
           <button
@@ -838,16 +883,34 @@ function HomeAssetCenter({ interactive }: { readonly interactive: boolean }): JS
           >
             {t('home.assets.refresh')}
           </button>
-          {facet === 'libraries' ? (
-            <button
-              type="button"
-              className="home-management-primary-action"
-              disabled={!interactive || pendingAction !== undefined}
-              onClick={() => void addLibrary()}
-            >
-              <PlusIcon size={14} />
-              {pendingAction === 'add' ? t('home.assets.adding') : t('home.assets.add')}
-            </button>
+          {catalog === 'mediaLibraries' ? (
+            <>
+              <label className="home-sort-control">
+                <span>{t('home.mediaLibraries.locationType')}</span>
+                <select
+                  aria-label={t('home.mediaLibraries.locationType')}
+                  value={locationKind}
+                  onChange={(event) =>
+                    setLocationKind(
+                      parseMediaLibraryLocationKind(event.currentTarget.value),
+                    )
+                  }
+                >
+                  <option value="local">{t('home.mediaLibraries.local')}</option>
+                  <option value="nas">{t('home.mediaLibraries.nas')}</option>
+                  <option value="cloud">{t('home.mediaLibraries.cloud')}</option>
+                </select>
+              </label>
+              <button
+                type="button"
+                className="home-management-primary-action"
+                disabled={!interactive || pendingAction !== undefined}
+                onClick={() => void addLibrary()}
+              >
+                <PlusIcon size={14} />
+                {pendingAction === 'add' ? t('home.assets.adding') : t('home.assets.add')}
+              </button>
+            </>
           ) : null}
         </div>
       </header>
@@ -855,8 +918,17 @@ function HomeAssetCenter({ interactive }: { readonly interactive: boolean }): JS
         <label className="home-search-field">
           <SearchIcon size={16} />
           <input
-            aria-label={t('home.assets.search')}
-            placeholder={t('home.assets.search')}
+            key={catalog}
+            aria-label={
+              catalog === 'mediaLibraries'
+                ? t('home.mediaLibraries.search')
+                : t('home.assetLibrary.search')
+            }
+            placeholder={
+              catalog === 'mediaLibraries'
+                ? t('home.mediaLibraries.search')
+                : t('home.assetLibrary.search')
+            }
             value={query}
             onChange={(event) => setQuery(event.currentTarget.value)}
           />
@@ -875,19 +947,37 @@ function HomeAssetCenter({ interactive }: { readonly interactive: boolean }): JS
             </select>
           </label>
           <div className="home-segmented-control" aria-label={t('home.assets.facets')}>
-            {(['libraries', 'assets'] as const).map((value) => (
+            {(['mediaLibraries', 'assets'] as const).map((value) => (
               <button
                 type="button"
-                className={facet === value ? 'is-active' : ''}
+                className={catalog === value ? 'is-active' : ''}
                 key={value}
-                onClick={() => setFacet(value)}
+                onClick={() => {
+                  setCatalog(value);
+                  setQuery('');
+                  setSelectedLibrary(undefined);
+                  setRelativePath('');
+                }}
               >
-                {t(`home.assets.${value}`)}
+                {value === 'mediaLibraries'
+                  ? t('home.mediaLibraries.title')
+                  : t('home.assetLibrary.title')}
               </button>
             ))}
           </div>
         </div>
       </div>
+      {catalog === 'mediaLibraries' && selectedLibrary ? (
+        <div className="home-management-path">
+          <button type="button" onClick={leaveDirectory}>
+            {t('home.mediaLibraries.back')}
+          </button>
+          <span>
+            {selectedLibrary.label}
+            {relativePath ? ` / ${relativePath}` : ''}
+          </span>
+        </div>
+      ) : null}
       {mutationDiagnostic ? (
         <div className="home-management-diagnostic" role="alert">
           <WarningIcon size={17} />
@@ -899,17 +989,24 @@ function HomeAssetCenter({ interactive }: { readonly interactive: boolean }): JS
           <span>{mutationNotice}</span>
         </div>
       ) : null}
-      {error || result?.status === 'error' ? (
+      {error || activeResult?.status === 'error' ? (
         <div className="home-management-diagnostic" role="alert">
           <WarningIcon size={17} />
-          <span>{error ?? (result?.status === 'error' ? result.diagnostic.message : '')}</span>
+          <span>
+            {error ??
+              (activeResult?.status === 'error' ? activeResult.diagnostic.message : '')}
+          </span>
         </div>
       ) : (
         <div className="home-management-grid">
-          {(result?.status === 'ready' ? result.items : []).map((item) => (
+          {(activeResult?.status === 'ready' ? activeResult.items : []).map((item) => (
             <article className="home-management-card" key={item.id}>
               <span className="home-management-card-icon">
-                {item.kind === 'library' ? <FolderIcon size={18} /> : <GridIcon size={18} />}
+                {item.kind === 'library' || item.kind === 'directory' ? (
+                  <FolderIcon size={18} />
+                ) : (
+                  <GridIcon size={18} />
+                )}
               </span>
               <span>
                 <strong>{item.label}</strong>
@@ -918,8 +1015,18 @@ function HomeAssetCenter({ interactive }: { readonly interactive: boolean }): JS
                   {item.modifiedAt ? ` · ${formatProjectDate(item.modifiedAt, locale)}` : ''}
                 </small>
               </span>
-              {item.kind === 'library' ? (
+              {catalog === 'mediaLibraries' && item.kind === 'library' ? (
                 <span className="home-management-card-actions">
+                  <button
+                    type="button"
+                    disabled={item.availability !== 'available'}
+                    onClick={() => {
+                      setSelectedLibrary(item);
+                      setRelativePath('');
+                    }}
+                  >
+                    {t('home.mediaLibraries.browse')}
+                  </button>
                   <button
                     type="button"
                     disabled={pendingAction !== undefined}
@@ -941,13 +1048,29 @@ function HomeAssetCenter({ interactive }: { readonly interactive: boolean }): JS
                       : t('home.assets.remove')}
                   </button>
                 </span>
+              ) : catalog === 'mediaLibraries' && item.kind === 'directory' ? (
+                <span className="home-management-card-actions">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedLibrary(item);
+                      setRelativePath(item.relativePath);
+                    }}
+                  >
+                    {t('home.mediaLibraries.openFolder')}
+                  </button>
+                </span>
               ) : null}
             </article>
           ))}
-          {result?.status === 'ready' && result.items.length === 0 ? (
+          {activeResult?.status === 'ready' && activeResult.items.length === 0 ? (
             <HomeManagementEmpty
               icon={<SearchIcon size={22} />}
-              label={t('home.assets.noResults')}
+              label={
+                catalog === 'mediaLibraries'
+                  ? t('home.mediaLibraries.noResults')
+                  : t('home.assetLibrary.noResults')
+              }
             />
           ) : null}
         </div>
@@ -1311,6 +1434,19 @@ export function parseHomeAssetSortOption(value: string): HomeAssetSortOption {
       return value;
     default:
       throw new Error(`Unknown Home asset sort option: ${value}`);
+  }
+}
+
+export function parseMediaLibraryLocationKind(
+  value: string,
+): DesktopHomeMediaLibraryLocationKind {
+  switch (value) {
+    case 'local':
+    case 'nas':
+    case 'cloud':
+      return value;
+    default:
+      throw new Error(`Unknown Media Library location kind: ${value}`);
   }
 }
 

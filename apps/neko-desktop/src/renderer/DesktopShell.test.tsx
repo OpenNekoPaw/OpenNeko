@@ -692,7 +692,7 @@ describe('DesktopShellView', () => {
     expect(markup).toContain('刷新 Skill');
   });
 
-  it('renders global Asset Center facets and sorting without Project resources', () => {
+  it('renders independent Media Library and Asset Library controls without Project resources', () => {
     const i18n = createDesktopI18n('zh-cn');
     const markup = renderToStaticMarkup(
       <I18nProvider service={i18n.i18nService}>
@@ -700,9 +700,11 @@ describe('DesktopShellView', () => {
       </I18nProvider>,
     );
 
-    expect(markup).toContain('全局媒体与资产');
-    expect(markup).toContain('搜索全局资产');
+    expect(markup).toContain('全局内容库');
+    expect(markup).toContain('搜索已连接目录与文件');
     expect(markup).toContain('媒体库');
+    expect(markup).toContain('资产库');
+    expect(markup).toContain('位置类型');
     expect(markup).toContain('资产排序');
     expect(markup).not.toContain('选择项目');
     expect(markup).not.toContain('检索已授权项目');

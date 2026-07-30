@@ -144,6 +144,10 @@ function installBridge(getBootstrap: typeof window.openNekoDesktop.agent.getBoot
       home: {
         assets: {
           search: vi.fn(),
+        },
+        mediaLibraries: {
+          search: vi.fn(),
+          children: vi.fn(),
           addLibrary: vi.fn(),
           removeLibrary: vi.fn(),
           revealLibrary: vi.fn(),

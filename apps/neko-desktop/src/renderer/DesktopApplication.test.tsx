@@ -237,41 +237,75 @@ describe('DesktopApplication', () => {
     container.remove();
   });
 
-  it('adds, reveals, and moves a global media library to the system trash from Asset Center', async () => {
+  it('keeps Media Library directory connections independent from the Asset Library', async () => {
     const projection = createProjection();
-    const search = vi.fn(async () => ({
-      schemaVersion: 4 as const,
-      requestId: 'assets-search',
-      facet: 'libraries' as const,
+    const mediaSearch = vi.fn(async () => ({
+      schemaVersion: 5 as const,
+      requestId: 'media-search',
       status: 'ready' as const,
       items: [
         {
-          id: 'library:Footage',
+          id: 'media-library:local:Footage:root',
+          libraryId: 'media-library:local:Footage',
           label: 'Footage',
-          description: '.',
+          description: 'local',
           kind: 'library' as const,
+          locationKind: 'local' as const,
+          relativePath: '',
           mediaType: 'directory',
           availability: 'available' as const,
         },
       ],
     }));
+    const children = vi.fn(async () => ({
+      schemaVersion: 5 as const,
+      requestId: 'media-children',
+      status: 'ready' as const,
+      items: [
+        {
+          id: 'media-library:local:Footage:shots',
+          libraryId: 'media-library:local:Footage',
+          label: 'shots',
+          description: '.',
+          kind: 'directory' as const,
+          locationKind: 'local' as const,
+          relativePath: 'shots',
+          mediaType: 'directory',
+          availability: 'available' as const,
+        },
+      ],
+    }));
+    const assetSearch = vi.fn(async () => ({
+      schemaVersion: 5 as const,
+      requestId: 'asset-search',
+      status: 'ready' as const,
+      items: [
+        {
+          id: 'asset:owned.png',
+          label: 'owned.png',
+          kind: 'asset' as const,
+          mediaType: 'image',
+          availability: 'available' as const,
+        },
+      ],
+    }));
     const addLibrary = vi.fn(async () => ({
-      schemaVersion: 4 as const,
-      requestId: 'assets-add',
+      schemaVersion: 5 as const,
+      requestId: 'media-add',
       status: 'added' as const,
-      libraryId: 'library:Footage',
+      libraryId: 'media-library:local:Footage',
     }));
     const revealLibrary = vi.fn(async () => ({
-      schemaVersion: 4 as const,
-      requestId: 'assets-reveal',
+      schemaVersion: 5 as const,
+      requestId: 'media-reveal',
       status: 'revealed' as const,
-      libraryId: 'library:Footage',
+      libraryId: 'media-library:local:Footage',
     }));
     const removeLibrary = vi.fn(async () => ({
-      schemaVersion: 4 as const,
-      requestId: 'assets-remove',
+      schemaVersion: 5 as const,
+      requestId: 'media-remove',
       status: 'removed' as const,
-      libraryId: 'library:Footage',
+      libraryId: 'media-library:local:Footage',
     }));
     vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValue(true);
     Object.defineProperty(window, 'openNekoDesktop', {
@@ -286,7 +320,14 @@ describe('DesktopApplication', () => {
         lifecycle: { subscribe: vi.fn(() => () => undefined) },
         settings: createSettingsBridgeMock(),
         home: {
-          assets: { search, addLibrary, revealLibrary, removeLibrary },
+          assets: { search: assetSearch },
+          mediaLibraries: {
+            search: mediaSearch,
+            children,
+            addLibrary,
+            revealLibrary,
+            removeLibrary,
+          },
           plugins: { list: vi.fn() },
         },
         shell: {
@@ -326,10 +367,10 @@ describe('DesktopApplication', () => {
     });
 
     const add = [...container.querySelectorAll<HTMLButtonElement>('button')].find((button) =>
-      button.textContent?.includes('Add media library'),
+      button.textContent?.includes('Connect directory'),
     );
     await act(async () => add?.click());
-    expect(addLibrary).toHaveBeenCalledOnce();
+    expect(addLibrary).toHaveBeenCalledWith('local');
     await act(async () => {
       await new Promise((resolve) => window.setTimeout(resolve, 180));
     });
@@ -338,7 +379,29 @@ describe('DesktopApplication', () => {
       button.textContent?.includes('Show in file manager'),
     );
     await act(async () => reveal?.click());
-    expect(revealLibrary).toHaveBeenCalledWith('library:Footage');
+    expect(revealLibrary).toHaveBeenCalledWith('media-library:local:Footage');
+
+    const browse = [...container.querySelectorAll<HTMLButtonElement>('button')].find((button) =>
+      button.textContent?.includes('Browse'),
+    );
+    await act(async () => browse?.click());
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 180));
+    });
+    expect(children).toHaveBeenCalledWith(
+      expect.objectContaining({
+        libraryId: 'media-library:local:Footage',
+        relativePath: '',
+      }),
+    );
+
+    const back = [...container.querySelectorAll<HTMLButtonElement>('button')].find((button) =>
+      button.textContent?.includes('Back'),
+    );
+    await act(async () => back?.click());
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 180));
+    });
 
     const remove = [...container.querySelectorAll<HTMLButtonElement>('button')].find((button) =>
       button.textContent?.includes('Remove'),
@@ -347,13 +410,28 @@ describe('DesktopApplication', () => {
     expect(removeLibrary).not.toHaveBeenCalled();
     await act(async () => remove?.click());
     expect(window.confirm).toHaveBeenCalledWith(
-      'Move the “Footage” media library to the system trash?',
+      'Remove the “Footage” Media Library connection? Source files will not be deleted.',
     );
-    expect(removeLibrary).toHaveBeenCalledWith('library:Footage');
+    expect(removeLibrary).toHaveBeenCalledWith('media-library:local:Footage');
     await act(async () => {
       await new Promise((resolve) => window.setTimeout(resolve, 180));
     });
-    expect(search.mock.calls.length).toBeGreaterThanOrEqual(2);
+    const assetLibrary = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
+      (button) => button.textContent === 'Asset Library',
+    );
+    await act(async () => assetLibrary?.click());
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 180));
+    });
+    expect(
+      container.querySelector<HTMLInputElement>(
+        'input[placeholder="Search creative assets"]',
+      ),
+    ).not.toBeNull();
+    expect(assetSearch).toHaveBeenCalled();
+    expect(assetSearch).toHaveBeenCalledWith(
+      expect.not.objectContaining({ facet: expect.anything() }),
+    );
 
     await act(async () => root.unmount());
     container.remove();
@@ -935,6 +1013,10 @@ function createHomeBridgeMock() {
   return {
     assets: {
       search: vi.fn(),
+    },
+    mediaLibraries: {
+      search: vi.fn(),
+      children: vi.fn(),
       addLibrary: vi.fn(),
       removeLibrary: vi.fn(),
       revealLibrary: vi.fn(),
