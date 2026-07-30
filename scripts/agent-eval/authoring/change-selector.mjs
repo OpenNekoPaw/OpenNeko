@@ -33,25 +33,16 @@ const RULES = Object.freeze([
     'packages/neko-agent-runtime/src/runtime/__tests__/message-runtime.test.ts',
     'packages/neko-agent-runtime/src/runtime/__tests__/multimodal-context-packet.test.ts',
     'packages/neko-agent-runtime/src/runtime/__tests__/timeline-context-runtime.test.ts',
-    'packages/neko-agent/packages/extension/src/chat/message/agentStreamProcessor.ts',
-    'packages/neko-agent/packages/extension/src/chat/message/piAgentStreamProcessor.ts',
-    'packages/neko-agent/packages/extension/src/chat/projection/',
     'packages/neko-agent-webview/src/handlers/legacy-active-content-handlers.ts',
     'packages/neko-agent-webview/src/presenters/conversation-projection-presenter.ts',
     'packages/neko-agent-webview/src/presenters/timeline-projection-presenter.ts',
     'packages/neko-agent-webview/src/render-runtime/',
-    'apps/neko-tui/src/tui/adapters/pi-event-adapter.ts',
-    'apps/neko-tui/src/tui/core/timeline-projector.ts',
   ]),
   rule('tool-result-delivery', 'agent-runtime.stream-delivery', [
     'packages/neko-content/src/document/read-document-tool.ts',
     'packages/neko-content/src/document/read-image-tool.ts',
     'packages/neko-agent-runtime/src/pi/event-projector.ts',
-    'packages/neko-agent/packages/extension/src/chat/message/piAgentStreamProcessor.ts',
-    'apps/neko-tui/src/tui/adapters/pi-event-adapter.ts',
-  ]),
-  rule('tui-debug-facts', 'agent-runtime.single-message-tui', [
-    'apps/neko-tui/src/tui/core/debug-automation/',
+    'apps/neko-desktop/src/main/desktop-agent-bridge-runtime.ts',
   ]),
   regexRule(
     'portable-skill-content',
@@ -70,7 +61,6 @@ const RULES = Object.freeze([
     'packages/neko-quality/src/',
     'packages/neko-agent-runtime/src/tools/',
     'packages/neko-agent-runtime/src/runtime/capability/capability-runtime-bindings.ts',
-    'packages/neko-agent/packages/extension/src/tools/',
     'packages/neko-platform/src/capability/',
     'packages/neko-platform/src/service/shared-service-adapter.ts',
     'packages/neko-agent-types/src/capability',
@@ -84,11 +74,9 @@ const RULES = Object.freeze([
   rule('session-workflows', 'agent-runtime.workflow-controller', [
     'packages/neko-agent-runtime/src/session/',
     'packages/neko-agent-runtime/src/subagent/',
-    'apps/neko-tui/src/tui/hooks/useAgentSession',
-    'apps/neko-tui/src/tui/runtime/',
-    'apps/neko-tui/src/tui/core/message-queue-',
-    'apps/neko-tui/src/tui/presentation/session-control-',
-    'apps/neko-tui/src/tui/presentation/work-queue-',
+    'apps/neko-desktop/src/main/desktop-agent-app-host-composition',
+    'apps/neko-desktop/src/main/desktop-agent-controller-composition',
+    'apps/neko-desktop/src/renderer/DesktopAgentSurface',
   ]),
   rule('tool-call-lifecycle', 'agent-runtime.workflow-controller', [
     'packages/neko-agent-runtime/src/task/',
@@ -98,27 +86,14 @@ const RULES = Object.freeze([
     'packages/neko-platform/src/media/media-agent-tools',
     'packages/neko-platform/src/media/media-generation-executor',
     'packages/neko-platform/src/media/media-turn-dispatcher',
-    'packages/neko-agent/packages/extension/src/services/mediaGenerationDeliveryHost',
-    'packages/neko-agent/packages/extension/src/services/mediaTurnBridge',
-    'apps/neko-tui/src/tui/core/direct-media-runtime',
-    'apps/neko-tui/src/tui/core/tui-media-background-tasks',
-    'apps/neko-tui/src/tui/host/node-media-generation-delivery-host',
-    'apps/neko-tui/src/tui/host/node-media-task-delivery-host',
+    'apps/neko-desktop/src/main/desktop-canvas-generation-runtime',
   ]),
   rule('creative-media-workflow', 'agent-runtime.creative-media-workflow', [
     'packages/neko-platform/src/media/',
   ]),
-  rule('tui-event-projection', 'agent-runtime.stream-delivery', [
-    'apps/neko-tui/src/tui/core/timeline-',
-    'apps/neko-tui/src/tui/markdown/',
-    'apps/neko-tui/src/tui/core/markdown',
-  ]),
-  rule('tui-debug-facts', 'agent-runtime.single-message-tui', [
-    'apps/neko-tui/src/main.ts',
-    'apps/neko-tui/src/application.ts',
-    'apps/neko-tui/package.json',
-    'apps/neko-tui/tsup.config.ts',
-    'apps/neko-tui/src/tui/',
+  rule('desktop-event-projection', 'agent-runtime.stream-delivery', [
+    'apps/neko-desktop/src/preload/desktop-agent-event-cursor',
+    'apps/neko-desktop/src/renderer/desktop-agent-host-runtime-adapter',
   ]),
 ]);
 
@@ -168,10 +143,11 @@ export function isAgentEvaluationRelevantPath(rawPath) {
     path.startsWith('packages/neko-agent-runtime/src/') ||
     path.startsWith('packages/neko-agent-types/src/') ||
     path.startsWith('packages/neko-ai-sdk/src/') ||
-    path.startsWith('apps/neko-tui/') ||
-    path.startsWith('packages/neko-agent/packages/extension/src/chat/') ||
+    path.startsWith('apps/neko-desktop/src/main/desktop-agent') ||
+    path.startsWith('apps/neko-desktop/src/preload/desktop-agent') ||
+    path.startsWith('apps/neko-desktop/src/renderer/DesktopAgent') ||
+    path.startsWith('apps/neko-desktop/src/renderer/desktop-agent') ||
     path.startsWith('packages/neko-agent-webview/src/') ||
-    path.startsWith('packages/neko-agent/packages/extension/src/tools/') ||
     path.startsWith('packages/neko-platform/src/') ||
     path === 'packages/neko-content/src/document/read-document-tool.ts' ||
     path === 'packages/neko-content/src/document/read-image-tool.ts' ||

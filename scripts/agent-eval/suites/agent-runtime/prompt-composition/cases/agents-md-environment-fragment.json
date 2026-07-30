@@ -6,7 +6,7 @@
   "visibility": "public",
   "evidenceContract": {
     "userBehavior": "Apply workspace AGENTS.md guidance as an environment-layer fragment while preserving the base prompt.",
-    "canonicalPath": ["isolated AGENTS.md fixture", "TUI session assembly", "agents-md environment fragment", "assistant marker"],
+    "canonicalPath": ["isolated AGENTS.md fixture", "Desktop Agent session assembly", "agents-md environment fragment", "assistant marker"],
     "forbiddenFallback": ["AGENTS.md replaces base", "fixture content omitted", "hidden prompt body projection"],
     "observables": [{ "ref": "prompt-facts", "kind": "runtime-fact", "description": "Base/environment prompt identities and marker-bearing assistant output.", "required": true }],
     "expectedResult": "Facts contain base and agents-md:override fragments and output follows the fixture marker instruction.",

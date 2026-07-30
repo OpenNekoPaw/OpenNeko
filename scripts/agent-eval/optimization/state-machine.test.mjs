@@ -265,9 +265,9 @@ function buildTarget(revision, sourceFingerprint, recipeFingerprint) {
     sourceFingerprint,
     buildRecipeFingerprint: recipeFingerprint,
     buildCommands: [
-      { command: 'pnpm', args: ['--filter', '@neko/app-tui', 'build'], timeoutMs: 600_000 },
+      { command: 'pnpm', args: ['--filter', '@neko/desktop', 'build'], timeoutMs: 600_000 },
     ],
-    executablePath: 'apps/neko-tui/dist/main.js',
+    executablePath: 'apps/neko-desktop/.vite/build/main.cjs',
     launchCommand: { command: 'node', args: ['{executable}'] },
   };
 }

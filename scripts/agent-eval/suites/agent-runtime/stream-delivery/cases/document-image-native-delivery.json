@@ -7,7 +7,7 @@
   "evidenceContract": {
     "userBehavior": "Read two committed synthetic EPUB images through canonical document-entry contentLocators and deliver one bounded contact sheet to the native multimodal Pi turn.",
     "canonicalPath": [
-      "TUI input queue",
+      "Desktop Agent input queue",
       "Pi Agent Tool schema",
       "ReadDocument imageInfo document-entry contentLocator",
       "ReadImage canonical content locator validation",

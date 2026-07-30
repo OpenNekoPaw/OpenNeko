@@ -6,7 +6,7 @@
   "visibility": "public",
   "evidenceContract": {
     "userBehavior": "In Plan Mode, read an actual screenplay and create source-grounded creator review plus execution-ready animation work units without production side effects.",
-    "canonicalPath": ["TUI Plan execution mode", "screenplay.fountain evidence", "builtin media-production Skill", "creator-review Markdown", "actionable work units"],
+    "canonicalPath": ["Desktop Plan execution mode", "screenplay.fountain evidence", "builtin media-production Skill", "creator-review Markdown", "actionable work units"],
     "forbiddenFallback": ["overall phase summary", "invented screenplay evidence", "media generation", "IDC stage or persona", "executable-plan runtime"],
     "observables": [{ "ref": "production-facts", "kind": "runtime-fact", "description": "Effective Plan Mode, Skill injection, current screenplay evidence, Tool absence, and structured work-unit output.", "required": true }],
     "expectedResult": "The plan separates screenplay facts, interpretation, creator decisions, approval scope, and concrete work units tied to Mara, 23:47, the red umbrella, and the unlit train.",

@@ -1,7 +1,7 @@
 {
   "schema": "neko.agent-eval.scenario.v2",
   "id": "unsupported-field",
-  "suiteId": "agent-runtime.single-message-tui",
+  "suiteId": "agent-runtime.model-binding",
   "caseGroup": "failure",
   "visibility": "public",
   "metadataOnlyJudge": { "kind": "rubric" }

@@ -14,7 +14,7 @@ function output() {
 }
 
 describe('external ablation command', () => {
-  it('validates both committed pilot plans without building or starting a TUI', async () => {
+  it('validates both committed pilot plans without building or starting a Desktop session driver', async () => {
     for (const plan of ['thinking-budget', 'media-production-guidance']) {
       const stdout = output();
       const stderr = output();

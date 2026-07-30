@@ -1,7 +1,7 @@
 {
   "schema": "neko.agent-eval.suite.v2",
   "id": "agent-runtime.stream-delivery",
-  "owner": { "kind": "agent-runtime", "id": "tui-stream-delivery" },
+  "owner": { "kind": "agent-runtime", "id": "desktop-stream-delivery" },
   "target": {
     "kind": "runtime",
     "id": "stream-delivery",

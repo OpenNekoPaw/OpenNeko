@@ -5,7 +5,7 @@
   "caseGroup": "failure",
   "visibility": "public",
   "evidenceContract": {
-    "userBehavior": "Terminate the first TUI Host after a valid Workspace Board delivery is queued, then let a second Host resume it.",
+    "userBehavior": "Terminate the first Desktop Host after a valid Workspace Board delivery is queued, then let a second Host resume it.",
     "canonicalPath": [
       "Host A enqueue",
       "Host A termination",

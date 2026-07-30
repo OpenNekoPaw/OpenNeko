@@ -7,7 +7,7 @@
   "evidenceContract": {
     "userBehavior": "Analyze the selected fixture image through native multimodal ReadImage and inspect the automatically retained Workspace Board analysis record without separately requesting an artifact.",
     "canonicalPath": [
-      "TUI App session owner",
+      "Desktop App session owner",
       "ReadImage with explicit analysis intent",
       "native multimodal turn",
       "terminal native-image-analysis finalizer",

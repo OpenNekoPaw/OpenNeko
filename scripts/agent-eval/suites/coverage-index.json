@@ -22,19 +22,19 @@
     { "kind": "prompt-layer", "id": "ephemeral", "disposition": "excluded", "deterministicValidation": { "command": "pnpm --dir packages/neko-agent-runtime exec vitest run src/session/__tests__/system-prompt-builder.test.ts", "reason": "The canonical Builder has no Orchestrator-owned ephemeral module path; execution-mode selection and non-mutating composition are deterministic and covered by the Builder contract tests." } },
 
     { "kind": "agent-runtime-capability", "id": "evaluation-platform", "disposition": "excluded", "deterministicValidation": { "command": "pnpm test:agent:eval", "reason": "Evaluation platform code is external test infrastructure and cannot change target Agent behavior by itself." } },
-    { "kind": "agent-runtime-capability", "id": "tui-debug-facts", "disposition": "suite", "suiteIds": ["agent-runtime.single-message-tui", "agent-runtime.workflow-controller"] },
+    { "kind": "agent-runtime-capability", "id": "desktop-session-driver", "disposition": "excluded", "deterministicValidation": { "command": "pnpm test:agent:eval", "reason": "Desktop does not yet expose a complete-session evaluation driver; the key-free harness validates schemas and fails real execution as infrastructure-blocked." } },
     { "kind": "agent-runtime-capability", "id": "prompt-composition", "disposition": "suite", "suiteIds": ["agent-runtime.prompt-composition"] },
     { "kind": "agent-runtime-capability", "id": "skill-runtime", "disposition": "suite", "suiteIds": ["agent-runtime.skill-runtime", "skill.storyboard"] },
     { "kind": "agent-runtime-capability", "id": "capability-tool-routing", "disposition": "suite", "suiteIds": ["agent-runtime.perception-routing", "skill.skill-creator", "skill.image", "skill.video"] },
     { "kind": "agent-runtime-capability", "id": "provider-model-routing", "disposition": "suite", "suiteIds": ["agent-runtime.model-binding", "agent-runtime.perception-routing"] },
-    { "kind": "agent-runtime-capability", "id": "session-workflows", "disposition": "suite", "suiteIds": ["agent-runtime.single-message-tui", "agent-runtime.workflow-controller"] },
+    { "kind": "agent-runtime-capability", "id": "session-workflows", "disposition": "suite", "suiteIds": ["agent-runtime.workflow-controller"] },
     { "kind": "agent-runtime-capability", "id": "tool-call-lifecycle", "disposition": "suite", "suiteIds": ["agent-runtime.workflow-controller", "agent-runtime.stream-delivery", "agent-runtime.creative-media-workflow"] },
     { "kind": "agent-runtime-capability", "id": "creative-media-workflow", "disposition": "suite", "suiteIds": ["agent-runtime.creative-media-workflow"] },
     { "kind": "agent-runtime-capability", "id": "media-library-content", "disposition": "suite", "suiteIds": ["agent-runtime.media-library-content", "agent-runtime.stream-delivery"] },
     { "kind": "agent-runtime-capability", "id": "workspace-board-delivery", "disposition": "suite", "suiteIds": ["agent-runtime.creative-media-workflow", "agent-runtime.workflow-controller"] },
     { "kind": "agent-runtime-capability", "id": "timeline-projection-authority", "disposition": "suite", "suiteIds": ["agent-runtime.stream-delivery"] },
     { "kind": "agent-runtime-capability", "id": "tool-result-delivery", "disposition": "suite", "suiteIds": ["agent-runtime.stream-delivery"] },
-    { "kind": "agent-runtime-capability", "id": "tui-event-projection", "disposition": "suite", "suiteIds": ["agent-runtime.stream-delivery", "agent-runtime.tui-markdown"] }
+    { "kind": "agent-runtime-capability", "id": "desktop-event-projection", "disposition": "suite", "suiteIds": ["agent-runtime.stream-delivery"] }
   ],
   "legacyCases": [
     { "id": "cat-play-image-analysis", "disposition": "migrated", "replacements": [{ "suiteId": "skill.image", "caseId": "generate-image" }, { "suiteId": "agent-runtime.perception-routing", "caseId": "external-perception-when-chat-differs" }, { "suiteId": "agent-runtime.creative-media-workflow", "caseId": "image-quality-feedback-iteration" }] },
@@ -51,9 +51,6 @@
     { "id": "native-create-rejects-resource-traversal", "disposition": "migrated", "replacements": [{ "suiteId": "skill.skill-creator", "caseId": "reject-resource-traversal" }] },
     { "id": "native-create-rejects-existing-target", "disposition": "migrated", "replacements": [{ "suiteId": "skill.skill-creator", "caseId": "reject-existing-target" }] },
     { "id": "stream-tool-text-order-and-final-answer", "disposition": "migrated", "replacements": [{ "suiteId": "agent-runtime.stream-delivery", "caseId": "tool-text-order-final-answer" }] },
-    { "id": "active-stream-cancellation", "disposition": "migrated", "replacements": [{ "suiteId": "agent-runtime.stream-delivery", "caseId": "active-stream-cancellation" }] },
-    { "id": "mixed-gfm-unicode-resize", "disposition": "migrated", "replacements": [{ "suiteId": "agent-runtime.tui-markdown", "caseId": "mixed-gfm-unicode-resize" }] },
-    { "id": "incomplete-fence-table-streaming", "disposition": "migrated", "replacements": [{ "suiteId": "agent-runtime.tui-markdown", "caseId": "incomplete-fence-table-streaming" }] },
-    { "id": "unsafe-terminal-controls-in-markdown", "disposition": "migrated", "replacements": [{ "suiteId": "agent-runtime.tui-markdown", "caseId": "unsafe-terminal-controls" }] }
+    { "id": "active-stream-cancellation", "disposition": "migrated", "replacements": [{ "suiteId": "agent-runtime.stream-delivery", "caseId": "active-stream-cancellation" }] }
   ]
 }

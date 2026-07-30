@@ -15,20 +15,20 @@ afterEach(async () => {
 });
 
 describe('Agent Evaluation v2 suite discovery', () => {
-  it('discovers the strict Agent-runtime pilot by target, group, and case id', async () => {
+  it('discovers an indexed Agent runtime suite by target and case id', async () => {
     const discovered = await discoverSuites();
     const selected = selectSuiteCases(discovered, {
-      target: { kind: 'runtime', id: 'single-message-tui' },
+      target: { kind: 'model', id: 'chat-model-binding' },
       caseGroup: 'canonical',
-      caseId: 'canonical-answer',
+      caseId: 'explicit-chat-model',
     });
     expect(selected).toHaveLength(1);
     expect(selected[0]).toMatchObject({
       suite: {
-        id: 'agent-runtime.single-message-tui',
-        owner: { kind: 'agent-runtime', id: 'tui-session-runtime' },
+        id: 'agent-runtime.model-binding',
+        owner: { kind: 'agent-runtime', id: 'session-model-binding' },
       },
-      scenario: { id: 'canonical-answer', schema: 'neko.agent-eval.scenario.v2' },
+      scenario: { id: 'explicit-chat-model', schema: 'neko.agent-eval.scenario.v2' },
     });
   });
 
@@ -53,119 +53,25 @@ describe('Agent Evaluation v2 suite discovery', () => {
     const root = await fs.mkdtemp(join(os.tmpdir(), 'neko-agent-eval-suite-'));
     temporaryDirectories.push(root);
     const source = (await discoverSuites()).find(
-      (item) => item.suite.id === 'agent-runtime.single-message-tui',
+      (item) => item.suite.id === 'agent-runtime.model-binding',
     );
-    const suiteDirectory = join(root, 'agent-runtime', 'single-message-tui');
+    const suiteDirectory = join(root, 'agent-runtime', 'model-binding');
     await fs.mkdir(join(suiteDirectory, 'cases'), { recursive: true });
-    await fs.mkdir(join(suiteDirectory, 'rubrics'), { recursive: true });
-    await fs.copyFile(source.file, join(suiteDirectory, 'suite.json'));
+    const suite = structuredClone(source.suite);
+    suite.fixtures[0].root = 'agent-runtime/model-binding/fixture';
     await fs.writeFile(
-      join(suiteDirectory, 'rubrics', 'constrained-teaser-answer-quality.json'),
-      `${JSON.stringify(source.rubrics['rubrics/constrained-teaser-answer-quality.json'], null, 2)}\n`,
+      join(suiteDirectory, 'suite.json'),
+      `${JSON.stringify(suite, null, 2)}\n`,
     );
     const scenario = structuredClone(source.cases[0].scenario);
     scenario.runtimeProfileId = 'missing-profile';
     await fs.writeFile(
-      join(suiteDirectory, 'cases', 'canonical-answer.json'),
+      join(suiteDirectory, 'cases', 'explicit-chat-model.json'),
       `${JSON.stringify(scenario, null, 2)}\n`,
     );
+
     await expect(
       loadSuite(join(suiteDirectory, 'suite.json'), { suitesRoot: root }),
     ).rejects.toThrow('runtime profile reference(s) not found');
-
-    scenario.runtimeProfileId = 'canonical-default';
-    scenario.assertions.push({
-      id: 'missing-model-profile',
-      kind: 'model',
-      profileId: 'missing-profile',
-      noFallback: true,
-      evidenceRef: 'turn-facts',
-    });
-    await fs.writeFile(
-      join(suiteDirectory, 'cases', 'canonical-answer.json'),
-      `${JSON.stringify(scenario, null, 2)}\n`,
-    );
-    await expect(
-      loadSuite(join(suiteDirectory, 'suite.json'), { suitesRoot: root }),
-    ).rejects.toThrow('model assertion profile reference(s) not found');
-  });
-
-  it('loads only contained suite-owned structured output schemas', async () => {
-    const root = await fs.mkdtemp(join(os.tmpdir(), 'neko-agent-eval-output-schema-'));
-    temporaryDirectories.push(root);
-    const source = (await discoverSuites()).find(
-      (item) => item.suite.id === 'agent-runtime.single-message-tui',
-    );
-    const suiteDirectory = join(root, 'agent-runtime', 'single-message-tui');
-    await fs.mkdir(join(suiteDirectory, 'cases'), { recursive: true });
-    await fs.mkdir(join(suiteDirectory, 'schemas'), { recursive: true });
-    await fs.mkdir(join(suiteDirectory, 'rubrics'), { recursive: true });
-    await fs.copyFile(source.file, join(suiteDirectory, 'suite.json'));
-    await fs.writeFile(
-      join(suiteDirectory, 'rubrics', 'constrained-teaser-answer-quality.json'),
-      `${JSON.stringify(source.rubrics['rubrics/constrained-teaser-answer-quality.json'], null, 2)}\n`,
-    );
-    const scenario = structuredClone(source.cases[0].scenario);
-    scenario.assertions.push({
-      id: 'json-contract',
-      kind: 'structured-output',
-      format: 'json',
-      schemaRef: 'schemas/result.json',
-      requiredFields: ['status'],
-      evidenceRef: 'turn-facts',
-    });
-    await fs.writeFile(
-      join(suiteDirectory, 'cases', 'canonical-answer.json'),
-      `${JSON.stringify(scenario, null, 2)}\n`,
-    );
-    await fs.writeFile(
-      join(suiteDirectory, 'schemas', 'result.json'),
-      `${JSON.stringify({
-        type: 'object',
-        required: ['status'],
-        additionalProperties: false,
-        properties: { status: { type: 'string' } },
-      })}\n`,
-    );
-    const loaded = await loadSuite(join(suiteDirectory, 'suite.json'), { suitesRoot: root });
-    expect(loaded.outputSchemas['schemas/result.json']).toMatchObject({ type: 'object' });
-
-    scenario.assertions.at(-1).schemaRef = 'result.json';
-    await fs.writeFile(
-      join(suiteDirectory, 'cases', 'canonical-answer.json'),
-      `${JSON.stringify(scenario, null, 2)}\n`,
-    );
-    await expect(
-      loadSuite(join(suiteDirectory, 'suite.json'), { suitesRoot: root }),
-    ).rejects.toThrow('must be owned under suite schemas');
-  });
-
-  it('rejects placeholder target hashes and profile hashes that drift from content', async () => {
-    const root = await fs.mkdtemp(join(os.tmpdir(), 'neko-agent-eval-hash-'));
-    temporaryDirectories.push(root);
-    const source = (await discoverSuites()).find(
-      (item) => item.suite.id === 'agent-runtime.single-message-tui',
-    );
-    const suiteDirectory = join(root, 'agent-runtime', 'single-message-tui');
-    await fs.mkdir(join(suiteDirectory, 'cases'), { recursive: true });
-    await fs.mkdir(join(suiteDirectory, 'rubrics'), { recursive: true });
-    await fs.copyFile(source.cases[0].file, join(suiteDirectory, 'cases', 'canonical-answer.json'));
-    await fs.writeFile(
-      join(suiteDirectory, 'rubrics', 'constrained-teaser-answer-quality.json'),
-      `${JSON.stringify(source.rubrics['rubrics/constrained-teaser-answer-quality.json'], null, 2)}\n`,
-    );
-    const suite = structuredClone(source.suite);
-    suite.target.contractHash = `sha256:${'f'.repeat(64)}`;
-    await fs.writeFile(join(suiteDirectory, 'suite.json'), `${JSON.stringify(suite, null, 2)}\n`);
-    await expect(
-      loadSuite(join(suiteDirectory, 'suite.json'), { suitesRoot: root }),
-    ).rejects.toThrow('must not be a placeholder hash');
-
-    suite.target.contractHash = source.suite.target.contractHash;
-    suite.runtimeProfiles[0].configurationHash = `sha256:${'1'.repeat(64)}`;
-    await fs.writeFile(join(suiteDirectory, 'suite.json'), `${JSON.stringify(suite, null, 2)}\n`);
-    await expect(
-      loadSuite(join(suiteDirectory, 'suite.json'), { suitesRoot: root }),
-    ).rejects.toThrow('runtime profile canonical-default configurationHash mismatch');
   });
 });

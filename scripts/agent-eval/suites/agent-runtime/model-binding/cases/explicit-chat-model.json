@@ -6,7 +6,7 @@
   "visibility": "public",
   "evidenceContract": {
     "userBehavior": "Run an Agent turn with an explicitly selected chat provider and model.",
-    "canonicalPath": ["flat agent.main profile", "TUI Pi runtime assembly", "Pi provider/model registration", "effective configuration facts"],
+    "canonicalPath": ["flat agent.main profile", "Desktop Agent runtime assembly", "Pi provider/model registration", "effective configuration facts"],
     "forbiddenFallback": ["configured default model", "active global model", "nested purpose fallback", "Platform GenericAdapter", "mock provider"],
     "observables": [{ "ref": "model-facts", "kind": "runtime-fact", "description": "Requested and effective provider/model identity and configuration digest.", "required": true }],
     "expectedResult": "The actual and effective model identities match the explicit profile without fallback.",

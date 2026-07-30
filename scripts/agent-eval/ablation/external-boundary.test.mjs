@@ -23,7 +23,7 @@ describe('ablation Evaluation ownership boundary', () => {
     expect(source).not.toMatch(/create(?:Standard|Group|Parameter)AblationSuite/u);
   });
 
-  it('poisons the removed Agent and CLI experiment surfaces', async () => {
+  it('poisons removed Agent, TUI, and CLI experiment surfaces', async () => {
     await expect(
       fs.access(join(REPO_ROOT, 'packages/neko-agent-runtime/src/experiment')),
     ).rejects.toThrow();
@@ -35,9 +35,7 @@ describe('ablation Evaluation ownership boundary', () => {
     expect(agentRoot).not.toMatch(/from ['"]\.\/experiment/u);
     expect(agentRoot).not.toContain('ExperimentRunner');
 
-    const tuiSource = await fs.readFile(join(REPO_ROOT, 'apps/neko-tui/src/tui/cli.tsx'), 'utf8');
-    expect(tuiSource).not.toMatch(/\.command\(['"]experiment['"]\)/u);
-    expect(tuiSource).not.toMatch(/core\/experiment/u);
+    await expect(fs.access(join(REPO_ROOT, 'apps/neko-tui/package.json'))).rejects.toThrow();
     await expect(
       fs.access(join(REPO_ROOT, 'packages/neko-agent/packages/cli-tui')),
     ).rejects.toThrow();

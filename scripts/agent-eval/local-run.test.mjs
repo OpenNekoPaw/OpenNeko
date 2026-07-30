@@ -44,12 +44,11 @@ describe('Agent Evaluation local runner', () => {
     ).resolves.toEqual([
       'agent-runtime.model-binding',
       'agent-runtime.perception-routing',
-      'agent-runtime.single-message-tui',
       'agent-runtime.workflow-controller',
     ]);
   });
 
-  it('selects complete TUI runtime coverage for application entry and build changes', async () => {
+  it('selects Desktop Agent composition coverage', async () => {
     const suites = await discoverSuites();
     await expect(
       selectSuiteIds(
@@ -57,14 +56,12 @@ describe('Agent Evaluation local runner', () => {
         suites,
         {
           changedPaths: [
-            'apps/neko-tui/src/main.ts',
-            'apps/neko-tui/src/application.ts',
-            'apps/neko-tui/package.json',
-            'apps/neko-tui/tsup.config.ts',
+            'apps/neko-desktop/src/main/desktop-agent-app-host-composition.ts',
+            'apps/neko-desktop/src/main/desktop-agent-controller-composition.ts',
           ],
         },
       ),
-    ).resolves.toEqual(['agent-runtime.single-message-tui', 'agent-runtime.workflow-controller']);
+    ).resolves.toEqual(['agent-runtime.workflow-controller']);
   });
 
   it('fails visible when a relevant custom Skill has no indexed suite', async () => {
@@ -87,7 +84,7 @@ describe('Agent Evaluation local runner', () => {
         '--mode',
         'focused',
         '--suite',
-        'agent-runtime.single-message-tui',
+        'agent-runtime.workflow-controller',
         '--report-root',
         reportRoot,
       ],

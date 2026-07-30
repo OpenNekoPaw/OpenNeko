@@ -16,7 +16,6 @@ const execFile = promisify(nodeExecFile);
 const scriptPath = fileURLToPath(import.meta.url);
 const DEFAULT_REPORT_ROOT = 'reports/agent-eval';
 const MATRIX_SUITES = Object.freeze([
-  'agent-runtime.single-message-tui',
   'agent-runtime.model-binding',
   'agent-runtime.prompt-composition',
   'agent-runtime.skill-runtime',

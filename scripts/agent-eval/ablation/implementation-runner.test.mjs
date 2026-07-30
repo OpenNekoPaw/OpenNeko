@@ -54,7 +54,7 @@ function plan() {
         executablePath: 'dist/cli.js',
         launchCommand: { command: 'node', args: ['{executable}'] },
       },
-      expectedPath: ['isolated worktree', 'isolated TUI build', 'TUI debug automation'],
+      expectedPath: ['isolated worktree', 'isolated Desktop build', 'Desktop session driver'],
       forbiddenFallback: [
         'working-tree executable',
         '__ablation marker',
@@ -111,7 +111,7 @@ async function selection() {
 }
 
 describe('implementation ablation runner', () => {
-  it('uses isolated executables with the same TUI runner and keeps build identity external', async () => {
+  it('uses isolated executables with the same Desktop session driver and keeps build identity external', async () => {
     const cleanups = [vi.fn(), vi.fn()];
     let preparedIndex = 0;
     const prepareBuild = vi.fn(async () => {
@@ -166,7 +166,7 @@ describe('implementation ablation runner', () => {
     });
   });
 
-  it('cleans a prepared worktree when the TUI run throws', async () => {
+  it('cleans a prepared worktree when the Desktop driver run throws', async () => {
     const cleanup = vi.fn();
     await expect(
       runImplementationAblation(plan(), {

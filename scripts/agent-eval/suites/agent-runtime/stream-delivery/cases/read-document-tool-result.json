@@ -7,7 +7,7 @@
   "evidenceContract": {
     "userBehavior": "Read a committed synthetic document through ReadDocument and deliver its structured Tool result through the Pi runtime.",
     "canonicalPath": [
-      "TUI input queue",
+      "Desktop Agent input queue",
       "Pi Agent Tool schema",
       "ReadDocument",
       "shared Pi Timeline projector",

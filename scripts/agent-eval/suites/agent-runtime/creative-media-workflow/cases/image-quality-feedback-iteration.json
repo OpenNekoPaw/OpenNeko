@@ -8,7 +8,7 @@
     "userBehavior": "Execute an explicitly approved image scope, review the real output, then feed the observed review into a bounded second improvement turn.",
     "canonicalPath": [
       "creator-approved scope",
-      "TUI queue",
+      "Desktop Agent queue",
       "Pi Agent turn",
       "flat image.generate domain-model snapshot",
       "terminal GenerateImage Tool call",

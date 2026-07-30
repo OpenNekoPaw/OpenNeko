@@ -25,8 +25,8 @@ const HASH_B = `sha256:${'b'.repeat(64)}`;
 
 function evidenceContract() {
   return {
-    userBehavior: 'Submit a prompt and receive one final answer through the canonical TUI path.',
-    canonicalPath: ['TUI App owner', 'input queue', 'AgentSession', 'facts'],
+    userBehavior: 'Submit a prompt and receive one final answer through the canonical Desktop path.',
+    canonicalPath: ['Desktop App owner', 'input queue', 'AgentSession', 'facts'],
     forbiddenFallback: ['direct Agent turn runner'],
     observables: [
       {
@@ -136,7 +136,7 @@ describe('agent evaluation v2 strict authoring contracts', () => {
       decision: 'create',
       proposedSuiteId: 'agent-runtime.single-turn',
       target: target(),
-      userBehavior: 'Receive an answer through the complete TUI runtime.',
+      userBehavior: 'Receive an answer through the complete Desktop runtime.',
       evidenceContract: evidenceContract(),
       coverageDelta: coverageDelta(),
     };
@@ -162,7 +162,7 @@ describe('agent evaluation v2 strict authoring contracts', () => {
         decision: decisionKind,
         ...decisionFields,
         target: target(),
-        userBehavior: 'Receive an answer through the complete TUI runtime.',
+        userBehavior: 'Receive an answer through the complete Desktop runtime.',
         evidenceContract: evidenceContract(),
         coverageDelta: coverageDelta(),
       }),
@@ -176,7 +176,7 @@ describe('agent evaluation v2 strict authoring contracts', () => {
       decision: 'create',
       proposedSuiteId: 'agent-runtime.single-turn',
       target: target(),
-      userBehavior: 'Receive an answer through the complete TUI runtime.',
+      userBehavior: 'Receive an answer through the complete Desktop runtime.',
       evidenceContract: evidenceContract(),
       coverageDelta: coverageDelta(),
     };

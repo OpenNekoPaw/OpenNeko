@@ -5,7 +5,7 @@
   "caseGroup": "regression",
   "visibility": "public",
   "evidenceContract": {
-    "userBehavior": "Complete a TUI turn, close its session owner, resume the same conversation, and continue with its persisted history.",
+    "userBehavior": "Complete a Desktop turn, close its session owner, resume the same conversation, and continue with its persisted history.",
     "canonicalPath": [
       "message.submit",
       "session.waitForIdle",
@@ -25,11 +25,11 @@
       {
         "ref": "turn-facts",
         "kind": "runtime-fact",
-        "description": "The resumed TUI owner reports Pi Session authority, SQLite catalog, matching conversation identity, and restored history count before continuation.",
+        "description": "The resumed Desktop owner reports Pi Session authority, SQLite catalog, matching conversation identity, and restored history count before continuation.",
         "required": true
       }
     ],
-    "expectedResult": "A new TUI App/session owner restores the same conversation from Pi Session through the user-level SQLite catalog and completes a continuation turn.",
+    "expectedResult": "A new Desktop App/session owner restores the same conversation from Pi Session through the user-level SQLite catalog and completes a continuation turn.",
     "expectedFailure": "A missing catalog row, non-Pi record source, changed conversation identity, empty restored history, runtime error, or non-idle terminal state fails visibly."
   },
   "fixtureRefs": ["empty-workspace"],

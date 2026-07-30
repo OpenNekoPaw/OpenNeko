@@ -7,8 +7,8 @@
   "evidenceContract": {
     "userBehavior": "Activate the project evaluation-artifact-author Skill and create one deterministic portable Skill package through the canonical native authoring capability.",
     "canonicalPath": [
-      "TUI App session owner",
-      "TUI input queue",
+      "Desktop App session owner",
+      "Desktop Agent input queue",
       "AgentSession",
       "project Skill lifecycle trigger and prompt composition",
       "CreateSkill Tool",

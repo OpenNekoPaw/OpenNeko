@@ -1,7 +1,7 @@
 # Agent Evaluation v2 测试设计指南
 
 本文说明如何把 Prompt、Skill、Capability/Tool、Provider/Model、
-`AgentSession`、任务恢复、产物或 TUI 行为变更转成可执行 Evaluation。
+`AgentSession`、任务恢复、产物或 Desktop 行为变更转成可执行 Evaluation。
 严格字段与 evaluator 以 `schemas/contracts.mjs` 和 runner 实现为准；本文不作为
 平行 schema。
 
@@ -67,7 +67,7 @@ blocked by missing observability；不要把弱文本匹配改写成通过。
 | 稳定性          | 多次采样的通过率、方差、延迟、token、重试是否可接受                            | aggregate report                     |
 | 安全与隐私      | 权限、路径 containment、secret、隐藏 prompt、未授权内容是否泄露                | redaction/adversarial assertions     |
 
-运行时配置矩阵只能声明 canonical TUI 已支持的 session-scoped immutable
+运行时配置矩阵只能声明 canonical Desktop 已支持的 session-scoped immutable
 setting。每个 variant 都必须从 facts 证明 effective config。Evaluation 不向生产
 runtime 添加测试专用开关。需要移除某个内部实现的消融实验，应由外部 Evaluation
 比较隔离 revision/build；Agent 内置代码只拥有正常产品配置和中立指标。
@@ -83,7 +83,7 @@ runtime 添加测试专用开关。需要移除某个内部实现的消融实验
 
 Ablation plan 使用严格 `neko.agent-eval.ablation-plan.v1`，默认只允许一个 baseline
 和单维 variants，最多 20 个 variant。多维 interaction 必须附证据；未知字段、笛卡尔积、
-`__ablation`/eval-only flag、缺失 expected config/build identity 会在启动 TUI 前失败。
+`__ablation`/eval-only flag、缺失 expected config/build identity 会在启动 Desktop driver 前失败。
 
 - configuration variant 只能选择 suite 已声明的 `temperature`、`maxTokens`、
   `thinkingBudget`、`outputFormat` 或 model profile，并同时绑定 profile id/hash；每个
@@ -96,7 +96,7 @@ Ablation plan 使用严格 `neko.agent-eval.ablation-plan.v1`，默认只允许�
   和 quality policy。implementation 只允许 target fingerprint/revision/build identity
   发生计划内差异；其余漂移返回 `non-comparable`。
 - `scenario-rubric` 的 plan ref 必须与 scenario ref 完全一致，并由 suite 声明 Judge
-  profile 和 rubric 文件；mismatch 在 TUI 启动前失败。消融 Prompt/Skill 指导时，用户
+  profile 和 rubric 文件；mismatch 在 Desktop driver 启动前失败。消融 Prompt/Skill 指导时，用户
   prompt 和 invariant hard gates 不得重新注入被移除的内容；该维度的差异由 rubric
   评价。
 - blind Judge 不接收 candidate label、revision、patch、build identity 或 Skill variant
@@ -147,7 +147,7 @@ Capability、Tool、Model、Runtime、Workflow suites 位于
 
 当前 controller 支持 `submit`、延迟 `submit`、`queue`、`wait-for-idle`、`cancel`、`resume`、
 closed-loop `feedback` 和 terminal `resize`。活跃 turn 中的新用户输入必须使用
-`queue`；case 必须以 terminal idle 收敛。每条消息都通过 TUI input queue，不能直接
+`queue`；case 必须以 terminal idle 收敛。每条消息都通过 Desktop Agent input queue，不能直接
 注入 Agent turn 或 history。
 
 当前 hard gates 覆盖 runtime error、fully idle、canonical turn、final answer、
@@ -194,15 +194,13 @@ Skill suites：
 
 Agent-runtime suites：
 
-- `agent-runtime.single-message-tui`；
 - `agent-runtime.prompt-composition`、`agent-runtime.skill-runtime`；
 - `agent-runtime.model-binding`、`agent-runtime.perception-routing`；
-- `agent-runtime.workflow-controller`、`agent-runtime.stream-delivery`、
-  `agent-runtime.tui-markdown`；
+- `agent-runtime.workflow-controller`、`agent-runtime.stream-delivery`；
 - `agent-runtime.creative-media-workflow`。
 
 `suites/coverage-index.json` 是 builtin Skill、Prompt layer、Agent runtime capability
-以及全部 v1 case 的覆盖台账。schema/ephemeral prompt layer 等无法由通用 TUI 控制
+以及全部 v1 case 的覆盖台账。schema/ephemeral prompt layer 等无法由当前 Desktop driver 控制
 设置的状态采用显式 deterministic exclusion；私有 EPUB 等不可提交 fixture 的旧
 case 也必须记录排除原因，不能假装已迁移。
 
@@ -289,7 +287,7 @@ required matrix 包含 optimizer-visible development cases、protected regressio
 policy id/digest/count 的 holdout policy。holdout case ids、输入和结果在候选冻结前不得进入
 optimizer context。候选批准后，Evaluation 才解析 trusted selection，并让 baseline 与
 candidate 使用一致的 fixture、runtime/model、sampling、budget、validator 和 Judge policy
-走真实 TUI。blind A/B 只投影 allowlisted output/artifact/hard-gate evidence，不投影
+走真实 Desktop session driver。blind A/B 只投影 allowlisted output/artifact/hard-gate evidence，不投影
 checkpoint label、report/revision/build identity、fingerprint 或 diff。
 
 最终 acceptance 必须同时满足：canonical hard gates、holdout、protected regression 和

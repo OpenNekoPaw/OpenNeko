@@ -7,7 +7,7 @@
   "evidenceContract": {
     "userBehavior": "Receive a legacy project Asset URI and report its visible rejection without resolving through any retired Asset capability.",
     "canonicalPath": [
-      "TUI input queue",
+      "Desktop Agent input queue",
       "ReadDocument",
       "ContentLocator validation",
       "fail-closed diagnostic"

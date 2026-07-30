@@ -365,8 +365,8 @@ function createVariant(id, role, changes, target) {
     buildTarget: target.buildTarget,
     expectedPath: [
       'detached Git worktree',
-      'isolated TUI build',
-      'TUI App session owner',
+      'isolated Desktop build',
+      'Desktop App session owner',
       'Skill lifecycle',
       'session.facts',
     ],
@@ -374,7 +374,7 @@ function createVariant(id, role, changes, target) {
       'working-tree executable',
       'direct AgentSession runner',
       'optimizer runtime flag',
-      'candidate label in TUI facts',
+      'candidate label in Desktop runtime facts',
     ],
   };
 }

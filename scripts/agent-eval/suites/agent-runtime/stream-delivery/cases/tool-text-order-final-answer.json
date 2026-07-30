@@ -6,7 +6,7 @@
   "visibility": "public",
   "evidenceContract": {
     "userBehavior": "Stream text, execute one Tool, continue streaming a table, and preserve the final answer markers.",
-    "canonicalPath": ["TUI input queue", "Pi Agent event stream", "shared Pi Timeline projector", "conversation projection store", "terminal Timeline presenter", "Markdown session finalize"],
+    "canonicalPath": ["Desktop Agent input queue", "Pi Agent event stream", "shared Pi Timeline projector", "conversation projection store", "terminal Timeline presenter", "Markdown session finalize"],
     "forbiddenFallback": ["textual Tool imitation", "legacy AgentEvent projector", "direct Pi conversation mutation", "terminal Tool-result accumulator", "second Markdown renderer", "result-only marker match"],
     "observables": [{ "ref": "stream-facts", "kind": "runtime-fact", "description": "Exact Timeline identity, monotonic projection/item revisions, Tool result, terminal freeze, Markdown path, structured table, no-fallback, and final answer facts.", "required": true }],
     "expectedResult": "Opening text, Tool result, closing text, table, and final marker preserve canonical order and delivery.",

@@ -6,7 +6,7 @@
   "visibility": "public",
   "evidenceContract": {
     "userBehavior": "Revise a creator-review plan after a material style, technique, cost, and delivery change without executing production side effects.",
-    "canonicalPath": ["TUI Plan execution mode", "current screenplay and plan.md", "creator feedback turn", "revised approval scope", "ordinary Markdown content"],
+    "canonicalPath": ["Desktop Plan execution mode", "current screenplay and plan.md", "creator feedback turn", "revised approval scope", "ordinary Markdown content"],
     "forbiddenFallback": ["old approval reuse", "media generation", "project mutation", "Plan-to-Apply compiler", "IDC transition"],
     "observables": [{ "ref": "replan-facts", "kind": "runtime-fact", "description": "Two canonical turns, updated approval content, no production Tool, and no retired runtime references.", "required": true }],
     "expectedResult": "The final review marks the requested generative-video and 4K delivery change as material and requires renewed creator approval.",

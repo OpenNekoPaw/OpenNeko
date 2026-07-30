@@ -20,8 +20,8 @@ async function plan() {
 
 async function selection() {
   return selectSuiteCases(await discoverSuites(), {
-    suiteId: 'agent-runtime.single-message-tui',
-    caseId: 'canonical-answer',
+    suiteId: 'agent-runtime.model-binding',
+    caseId: 'explicit-chat-model',
   })[0];
 }
 
@@ -33,7 +33,7 @@ function fakeRun(runtimeProfileId, effectiveDigest, overrides = {}) {
       runId: `${runtimeProfileId}-${index}`,
       target: {
         kind: 'runtime',
-        id: 'single-message-tui',
+        id: 'model-binding',
         contractHash: `sha256:${'a'.repeat(64)}`,
       },
       repositoryRevision: 'working-tree',
@@ -41,7 +41,7 @@ function fakeRun(runtimeProfileId, effectiveDigest, overrides = {}) {
       modelIdentity: { providerId: 'openai', modelId: 'gpt-5' },
       effectiveConfiguration: {
         runtimeProfileId,
-        modelProfileId: 'configured-default',
+        modelProfileId: 'nekoapi-gpt-5.5',
         digest: effectiveDigest,
       },
       assertions: [
@@ -49,18 +49,7 @@ function fakeRun(runtimeProfileId, effectiveDigest, overrides = {}) {
         { id: 'idle', status: 'pass', evidenceRefs: ['turn-facts'] },
       ],
     },
-    judge: {
-      overallScore: runtimeProfileId === 'thinking-0' ? 4 : 4.25,
-      providerId: 'openai',
-      modelId: 'gpt-5-mini',
-      profileId: 'content-quality-judge',
-      rubricId: 'constrained-teaser-answer-quality',
-      rubricVersion: 'v1',
-      promptHash: `sha256:${'c'.repeat(64)}`,
-      sampling: { temperature: 0, maxTokens: 1800 },
-    },
   }));
-  const qualityMean = runtimeProfileId === 'thinking-0' ? 4 : 4.25;
   return {
     outcome: 'pass',
     samples,
@@ -73,7 +62,7 @@ function fakeRun(runtimeProfileId, effectiveDigest, overrides = {}) {
       iterations: { total: 6, mean: 2 },
       tools: { calls: 3, successes: 3, failures: 0 },
       retries: { count: 0 },
-      scoreDistribution: { samples: 3, passRate: 1, mean: qualityMean, variance: 0 },
+      scoreDistribution: { samples: 0, passRate: 0 },
     },
     ...overrides,
   };
@@ -109,7 +98,7 @@ describe('configuration ablation runner', () => {
           {
             id: 'thinking-128',
             comparable: true,
-            deltaFromBaseline: { inputTokens: 0, latencyP95Ms: 0, qualityMean: 0.25 },
+            deltaFromBaseline: { inputTokens: 0, latencyP95Ms: 0 },
           },
         ],
       },
@@ -134,7 +123,7 @@ describe('configuration ablation runner', () => {
         });
         result.samples[0].result.effectiveConfiguration = {
           runtimeProfileId: selected.scenario.runtimeProfileId,
-          modelProfileId: 'configured-default',
+        modelProfileId: 'nekoapi-gpt-5.5',
           status: 'missing',
           diagnostic: 'missing fact',
         };
@@ -170,15 +159,14 @@ describe('configuration ablation runner', () => {
     );
   });
 
-  it('creates a key-free dry-run without spawning a TUI', async () => {
+  it('creates a key-free dry-run without starting a Desktop session driver', async () => {
     const dryRun = createConfigurationAblationDryRun(await plan(), await selection());
     expect(dryRun).toMatchObject({
       ok: true,
       dryRun: true,
       planId: 'thinking-budget-pilot',
       quality: {
-        kind: 'scenario-rubric',
-        rubricRef: 'rubrics/constrained-teaser-answer-quality.json',
+        kind: 'hard-gates-only',
       },
       variants: [
         { runtimeProfileId: 'thinking-0', repetitions: 3 },

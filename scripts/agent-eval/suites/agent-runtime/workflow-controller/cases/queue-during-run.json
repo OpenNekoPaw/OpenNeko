@@ -6,7 +6,7 @@
   "visibility": "public",
   "evidenceContract": {
     "userBehavior": "Submit follow-up requests while an Agent turn is running and execute them in queue order.",
-    "canonicalPath": ["TUI App session owner", "message.submit", "TUI input queue", "AgentSession", "session.facts"],
+    "canonicalPath": ["Desktop App session owner", "message.submit", "Desktop Agent input queue", "AgentSession", "session.facts"],
     "forbiddenFallback": ["sequential direct Agent calls", "alternate queue", "direct Agent turn runner"],
     "observables": [{ "ref": "workflow-facts", "kind": "runtime-fact", "description": "Controller steps, queue snapshots, ordered turns, and terminal idle facts.", "required": true }],
     "expectedResult": "The follow-up is queued during the active turn, drains in order, and the session reaches terminal idle.",

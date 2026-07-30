@@ -140,7 +140,7 @@ function createImplementationDelta(plan, runId, runs) {
     outcome: aggregateOutcome(variants),
     variants,
     residualRisk: [
-      'Build identity is external Evaluation evidence and is intentionally absent from TUI facts and blind Judge input.',
+      'Build identity is external Evaluation evidence and is intentionally absent from Desktop runtime facts and blind Judge input.',
       'Ablation deltas remain descriptive; provider variance requires repeated independent runs.',
     ],
   });

@@ -69,7 +69,7 @@ const EXPECTED_PROMPT_LAYERS = Object.freeze([
 ]);
 const EXPECTED_RUNTIME_CAPABILITIES = Object.freeze([
   'evaluation-platform',
-  'tui-debug-facts',
+  'desktop-session-driver',
   'prompt-composition',
   'skill-runtime',
   'capability-tool-routing',
@@ -81,7 +81,7 @@ const EXPECTED_RUNTIME_CAPABILITIES = Object.freeze([
   'workspace-board-delivery',
   'timeline-projection-authority',
   'tool-result-delivery',
-  'tui-event-projection',
+  'desktop-event-projection',
 ]);
 const EXPECTED_LEGACY_CASES = Object.freeze([
   'cat-play-image-analysis',
@@ -99,9 +99,6 @@ const EXPECTED_LEGACY_CASES = Object.freeze([
   'native-create-rejects-existing-target',
   'stream-tool-text-order-and-final-answer',
   'active-stream-cancellation',
-  'mixed-gfm-unicode-resize',
-  'incomplete-fence-table-streaming',
-  'unsafe-terminal-controls-in-markdown',
 ]);
 
 export async function loadCoverageIndex(options = {}) {

@@ -24,11 +24,11 @@ function input() {
     reportId: 'report-1',
     runId: 'run-1',
     suite: {
-      id: 'agent-runtime.single-message-tui',
-      target: { kind: 'runtime', id: 'single-message-tui', contractHash: HASH },
+      id: 'agent-runtime.model-binding',
+      target: { kind: 'runtime', id: 'model-binding', contractHash: HASH },
       repositoryRevision: 'abc123',
     },
-    scenario: { id: 'canonical-answer' },
+    scenario: { id: 'explicit-chat-model' },
     outcome: 'pass',
     facts: {
       history: [{ role: 'system', content: 'hidden prompt' }],

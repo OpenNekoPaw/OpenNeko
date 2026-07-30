@@ -7,7 +7,7 @@
   "evidenceContract": {
     "userBehavior": "Generate an image, wait for the terminal GenerateImage Tool result, inspect its generated-output resource through ReadImage, and continue the same Agent turn without a generic Task.",
     "canonicalPath": [
-      "TUI input queue",
+      "Desktop Agent input queue",
       "PiConversationRuntime",
       "flat image.generate domain-model snapshot",
       "GenerateImage Tool call",

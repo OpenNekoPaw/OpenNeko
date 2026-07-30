@@ -42,7 +42,7 @@
         "modelProfileId": "configured-default",
         "modelConfigurationHash": "sha256:e183fac48c090594694dc19a3e356145a40821960e6f06ad1a4b67e8dfc6f915"
       },
-      "expectedPath": ["TUI App session owner", "session.create runtimeConfig", "ask executionMode", "builtin media-production Skill", "session.facts configuration"],
+      "expectedPath": ["Desktop App session owner", "session.create runtimeConfig", "ask executionMode", "builtin media-production Skill", "session.facts configuration"],
       "forbiddenFallback": ["evaluation-only mode flag", "direct AgentSession runner", "IDC stage", "Plan-to-Apply runtime"]
     },
     {
@@ -59,7 +59,7 @@
         "modelProfileId": "configured-default",
         "modelConfigurationHash": "sha256:e183fac48c090594694dc19a3e356145a40821960e6f06ad1a4b67e8dfc6f915"
       },
-      "expectedPath": ["TUI App session owner", "session.create runtimeConfig", "plan executionMode", "Plan prompt composition", "builtin media-production Skill", "session.facts configuration"],
+      "expectedPath": ["Desktop App session owner", "session.create runtimeConfig", "plan executionMode", "Plan prompt composition", "builtin media-production Skill", "session.facts configuration"],
       "forbiddenFallback": ["evaluation-only mode flag", "direct AgentSession runner", "IDC stage", "Plan-to-Apply runtime"]
     }
   ]

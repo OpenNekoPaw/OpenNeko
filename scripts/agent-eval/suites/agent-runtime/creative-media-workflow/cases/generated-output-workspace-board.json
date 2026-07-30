@@ -7,7 +7,7 @@
   "evidenceContract": {
     "userBehavior": "Generate one image and observe it as a durable workspace file, a stable generated-output ContentLocator, and an ordinary node on the canonical Workspace Board.",
     "canonicalPath": [
-      "TUI App session owner",
+      "Desktop App session owner",
       "terminal GenerateImage Tool call",
       "neko/generated/image workspace file",
       "generated-output ContentLocator",
@@ -25,7 +25,7 @@
       {
         "ref": "workflow-facts",
         "kind": "runtime-fact",
-        "description": "Terminal Tool result, generated-output ContentLocator identity/revision/digest/path, Workspace Board projection, no-fallback, and terminal idle facts from the canonical TUI owner.",
+        "description": "Terminal Tool result, generated-output ContentLocator identity/revision/digest/path, Workspace Board projection, no-fallback, and terminal idle facts from the canonical Desktop owner.",
         "required": true
       },
       {

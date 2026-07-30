@@ -24,8 +24,8 @@ function configurationPlan() {
     schema: ABLATION_SCHEMAS.plan,
     id: 'thinking-budget-pilot',
     mode: 'configuration',
-    suiteId: 'agent-runtime.single-message-tui',
-    caseId: 'canonical-answer',
+    suiteId: 'agent-runtime.model-binding',
+    caseId: 'explicit-chat-model',
     baselineVariantId: 'baseline',
     matrix: { strategy: 'focused', maxVariants: 4 },
     repetitions: 3,
@@ -45,7 +45,7 @@ function configurationPlan() {
           modelProfileId: 'configured-default',
           modelConfigurationHash: HASH_B,
         },
-        expectedPath: ['TUI App session owner', 'session.create runtimeConfig'],
+        expectedPath: ['Desktop App session owner', 'session.create runtimeConfig'],
         forbiddenFallback: ['active session configuration', 'direct AgentSession runner'],
       },
       {
@@ -62,7 +62,7 @@ function configurationPlan() {
           modelProfileId: 'configured-default',
           modelConfigurationHash: HASH_B,
         },
-        expectedPath: ['TUI App session owner', 'session.create runtimeConfig'],
+        expectedPath: ['Desktop App session owner', 'session.create runtimeConfig'],
         forbiddenFallback: ['active session configuration', 'direct AgentSession runner'],
       },
     ],
@@ -103,12 +103,12 @@ function implementationPlan() {
         sourceFingerprint: index === 0 ? HASH_A : HASH_B,
         buildRecipeFingerprint: HASH_C,
         buildCommands: [
-          { command: 'pnpm', args: ['--filter', '@neko/app-tui', 'build'], timeoutMs: 600000 },
+          { command: 'pnpm', args: ['--filter', '@neko/desktop', 'build'], timeoutMs: 600000 },
         ],
-        executablePath: 'apps/neko-tui/dist/main.js',
+        executablePath: 'apps/neko-desktop/.vite/build/main.cjs',
         launchCommand: { command: 'node', args: ['{executable}'] },
       },
-      expectedPath: ['isolated worktree', 'isolated TUI build', 'TUI debug automation'],
+      expectedPath: ['isolated worktree', 'isolated Desktop build', 'Desktop session driver'],
       forbiddenFallback: [
         'working-tree executable',
         '__ablation marker',
@@ -121,11 +121,11 @@ function implementationPlan() {
 function selection(rubricRef) {
   return {
     suite: {
-      id: 'agent-runtime.single-message-tui',
+      id: 'agent-runtime.model-binding',
       judgeProfiles: rubricRef ? [{ id: 'quality-judge' }] : [],
     },
     scenario: {
-      id: 'canonical-answer',
+      id: 'explicit-chat-model',
       ...(rubricRef
         ? {
             rubric: {

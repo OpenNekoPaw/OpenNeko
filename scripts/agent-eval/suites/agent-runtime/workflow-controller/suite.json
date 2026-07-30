@@ -1,10 +1,10 @@
 {
   "schema": "neko.agent-eval.suite.v2",
   "id": "agent-runtime.workflow-controller",
-  "owner": { "kind": "agent-runtime", "id": "tui-workflow-controller" },
+  "owner": { "kind": "agent-runtime", "id": "desktop-workflow-controller" },
   "target": {
     "kind": "workflow",
-    "id": "tui-workflow-controller",
+    "id": "desktop-workflow-controller",
     "contractHash": "sha256:b7141edb3c222d471fefa4bdb61a4117eeb028c6a2e0f39d9b1e9d62ba0a6a55"
   },
   "repositoryRevision": "working-tree",

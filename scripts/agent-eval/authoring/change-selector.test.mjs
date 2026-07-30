@@ -18,7 +18,7 @@ function decision(behaviorId, suiteId) {
     userBehavior: `Exercise ${behaviorId} through the canonical Agent path.`,
     evidenceContract: {
       userBehavior: `Exercise ${behaviorId} through the canonical Agent path.`,
-      canonicalPath: ['TUI App', 'input queue', 'AgentSession'],
+      canonicalPath: ['Desktop App', 'host controller', 'AgentSession'],
       forbiddenFallback: ['direct Agent runner'],
       observables: [
         {
@@ -49,7 +49,7 @@ describe('Agent Evaluation change-to-suite selector', () => {
       selectEvaluationCoverage([
         '.codex/skills/storyboard/SKILL.md',
         'packages/neko-agent-runtime/src/prompt/system-prompt.ts',
-        'packages/neko-agent/packages/extension/src/tools/readImageTool.ts',
+        'packages/neko-agent-runtime/src/tools/read-image-tool.ts',
         'packages/neko-platform/src/service/shared-service-adapter.ts',
         'packages/neko-platform/src/llm/adapter/openai-adapter.ts',
         'packages/neko-agent-runtime/src/session/agent-session.ts',
@@ -65,12 +65,10 @@ describe('Agent Evaluation change-to-suite selector', () => {
         'packages/neko-agent-runtime/src/runtime/capability/capability-runtime-bindings.ts',
         'packages/neko-agent-runtime/src/runtime/projection/conversation-projection-store.ts',
         'packages/neko-agent-types/src/conversation-projection.ts',
-        'packages/neko-agent/packages/extension/src/chat/message/piAgentStreamProcessor.ts',
         'packages/neko-agent-webview/src/render-runtime/conversation-projection-replica.ts',
-        'apps/neko-tui/src/tui/adapters/pi-event-adapter.ts',
-        'apps/neko-tui/src/tui/host/node-media-generation-delivery-host.ts',
-        'apps/neko-tui/src/tui/core/debug-automation/types.ts',
-        'apps/neko-tui/src/tui/markdown/controller.ts',
+        'apps/neko-desktop/src/main/desktop-agent-bridge-runtime.ts',
+        'apps/neko-desktop/src/main/desktop-agent-controller-composition.ts',
+        'apps/neko-desktop/src/preload/desktop-agent-event-cursor.ts',
         'scripts/agent-eval/schemas/contracts.mjs',
       ]),
     ).toEqual(
@@ -94,7 +92,7 @@ describe('Agent Evaluation change-to-suite selector', () => {
         expect.objectContaining({
           behaviorId: 'session-workflows',
           suiteId: 'agent-runtime.workflow-controller',
-          suiteIds: ['agent-runtime.single-message-tui', 'agent-runtime.workflow-controller'],
+          suiteIds: ['agent-runtime.workflow-controller'],
         }),
         expect.objectContaining({
           behaviorId: 'tool-call-lifecycle',
@@ -121,14 +119,9 @@ describe('Agent Evaluation change-to-suite selector', () => {
           suiteIds: ['agent-runtime.stream-delivery'],
         }),
         expect.objectContaining({
-          behaviorId: 'tui-debug-facts',
-          suiteId: 'agent-runtime.single-message-tui',
-          suiteIds: ['agent-runtime.single-message-tui', 'agent-runtime.workflow-controller'],
-        }),
-        expect.objectContaining({
-          behaviorId: 'tui-event-projection',
+          behaviorId: 'desktop-event-projection',
           suiteId: 'agent-runtime.stream-delivery',
-          suiteIds: ['agent-runtime.stream-delivery', 'agent-runtime.tui-markdown'],
+          suiteIds: ['agent-runtime.stream-delivery'],
         }),
         expect.objectContaining({
           behaviorId: 'evaluation-platform',
@@ -138,19 +131,18 @@ describe('Agent Evaluation change-to-suite selector', () => {
     );
   });
 
-  it('maps TUI application entry and build files to every owning runtime suite', () => {
+  it('maps Desktop Agent composition files to the owning runtime suite', () => {
     const paths = [
-      'apps/neko-tui/src/main.ts',
-      'apps/neko-tui/src/application.ts',
-      'apps/neko-tui/package.json',
-      'apps/neko-tui/tsup.config.ts',
+      'apps/neko-desktop/src/main/desktop-agent-app-host-composition.ts',
+      'apps/neko-desktop/src/main/desktop-agent-controller-composition.ts',
+      'apps/neko-desktop/src/renderer/DesktopAgentSurface.tsx',
     ];
     expect(paths.every(isAgentEvaluationRelevantPath)).toBe(true);
     expect(selectEvaluationCoverage(paths)).toEqual([
       {
-        behaviorId: 'tui-debug-facts',
-        suiteId: 'agent-runtime.single-message-tui',
-        suiteIds: ['agent-runtime.single-message-tui', 'agent-runtime.workflow-controller'],
+        behaviorId: 'session-workflows',
+        suiteId: 'agent-runtime.workflow-controller',
+        suiteIds: ['agent-runtime.workflow-controller'],
         changedPaths: paths,
       },
     ]);
@@ -166,7 +158,7 @@ describe('Agent Evaluation change-to-suite selector', () => {
       {
         behaviorId: 'session-workflows',
         suiteId: 'agent-runtime.workflow-controller',
-        suiteIds: ['agent-runtime.single-message-tui', 'agent-runtime.workflow-controller'],
+        suiteIds: ['agent-runtime.workflow-controller'],
         changedPaths: [
           'packages/neko-agent-runtime/src/session/agent-session.ts',
           'packages/neko-agent-runtime/src/session/conversation-control-runtime.ts',

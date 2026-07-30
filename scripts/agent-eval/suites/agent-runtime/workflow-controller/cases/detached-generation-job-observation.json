@@ -7,7 +7,7 @@
   "evidenceContract": {
     "userBehavior": "Submit one detached image Generation Job, then use new Tool Calls to describe and observe the exact returned identity without retrying or using a generic Task.",
     "canonicalPath": [
-      "TUI input queue",
+      "Desktop Agent input queue",
       "PiConversationRuntime",
       "SubmitGenerationJob Tool call",
       "GenerationJobCoordinator",

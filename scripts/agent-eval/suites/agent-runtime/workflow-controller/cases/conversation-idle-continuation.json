@@ -5,7 +5,7 @@
   "caseGroup": "regression",
   "visibility": "public",
   "evidenceContract": {
-    "userBehavior": "Complete a TUI turn, leave the same open conversation idle beyond its writer-lease TTL, and submit a second turn without reopening the session.",
+    "userBehavior": "Complete a Desktop turn, leave the same open conversation idle beyond its writer-lease TTL, and submit a second turn without reopening the session.",
     "canonicalPath": [
       "session.create",
       "message.submit",
@@ -24,11 +24,11 @@
       {
         "ref": "turn-facts",
         "kind": "runtime-fact",
-        "description": "One TUI session and Pi Conversation runtime remain authoritative across both durable turns with no stale-lease diagnostic.",
+        "description": "One Desktop session and Pi Conversation runtime remain authoritative across both durable turns with no stale-lease diagnostic.",
         "required": true
       }
     ],
-    "expectedResult": "The second turn completes durably in the same open TUI conversation after an idle interval longer than the production lease TTL.",
+    "expectedResult": "The second turn completes durably in the same open Desktop conversation after an idle interval longer than the production lease TTL.",
     "expectedFailure": "A stale writer lease, runtime/session recreation, changed conversation identity, runtime error, or non-idle terminal state fails visibly."
   },
   "fixtureRefs": ["empty-workspace"],

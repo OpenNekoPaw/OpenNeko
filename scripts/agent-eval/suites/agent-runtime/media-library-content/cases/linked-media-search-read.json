@@ -7,9 +7,9 @@
   "evidenceContract": {
     "userBehavior": "Search a linked Media Library by its canonical projection and read the selected workspace-relative file through the normal content capability.",
     "canonicalPath": [
-      "TUI input queue",
+      "Desktop Agent input queue",
       "QueryProjectSearch media-library partition",
-      "tui-media-library-files adapter",
+      "desktop-media-library-files adapter",
       "workspace-file locator",
       "ReadImage workspace locator",
       "Host ContentReadService"

@@ -508,7 +508,7 @@ function assertQueueState(assertion, facts) {
   if (assertion.status === 'queued') {
     const minPending = assertion.minPending ?? 1;
     if (step.method !== 'message.submit' || step.queued !== true) {
-      throw new Error(`step ${assertion.stepId} was not accepted by the active TUI queue`);
+      throw new Error(`step ${assertion.stepId} was not accepted by the active Desktop Agent queue`);
     }
     if (!Number.isInteger(queue.pendingCount) || queue.pendingCount < minPending) {
       throw new Error(

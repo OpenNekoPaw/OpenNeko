@@ -7,7 +7,7 @@
   "evidenceContract": {
     "userBehavior": "Explicitly confirm binding an existing generated output directly to a Creative Entity portrait representation.",
     "canonicalPath": [
-      "TUI input queue",
+      "Desktop Agent input queue",
       "GetCreativeEntity",
       "Tool confirmation",
       "BindEntityRepresentation",

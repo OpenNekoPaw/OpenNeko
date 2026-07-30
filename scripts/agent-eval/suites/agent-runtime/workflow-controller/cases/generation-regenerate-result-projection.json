@@ -7,7 +7,7 @@
   "evidenceContract": {
     "userBehavior": "Submit and observe one detached image Generation Job, then regenerate the successful result as a new submitted Job with an edited prompt instead of retrying or mutating the first result.",
     "canonicalPath": [
-      "TUI input queue",
+      "Desktop Agent input queue",
       "PiConversationRuntime",
       "SubmitGenerationJob Tool call",
       "Generation capability binding",
