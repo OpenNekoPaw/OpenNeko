@@ -13,13 +13,13 @@ symlink/junction 表达而无需保存绝对路径 registry。Desktop 全局连�
 
 五层分析：
 
-| 层 | 决策 |
-| --- | --- |
-| 职责 | Media Library owner 管连接与外部目录文件；Asset Library owner 管全局创作素材；Home 只组合两个投影。 |
-| 依赖 | Renderer 只发 typed intent；Main 验证 identity；Node adapter 独占 link、目录选择和文件系统副作用。 |
-| 接口 | 查询使用独立 `mediaLibraries` / `assets` bridge；媒体库 ID 包含类型和安全名称，不携带绝对路径。 |
+| 层   | 决策                                                                                                   |
+| ---- | ------------------------------------------------------------------------------------------------------ |
+| 职责 | Media Library owner 管连接与外部目录文件；Asset Library owner 管全局创作素材；Home 只组合两个投影。    |
+| 依赖 | Renderer 只发 typed intent；Main 验证 identity；Node adapter 独占 link、目录选择和文件系统副作用。     |
+| 接口 | 查询使用独立 `mediaLibraries` / `assets` bridge；媒体库 ID 包含类型和安全名称，不携带绝对路径。        |
 | 扩展 | 当前 `filesystem` adapter 覆盖本地、挂载 NAS 与云盘同步目录；真正远程 provider 以后实现同一连接 port。 |
-| 测试 | 断言不复制源目录、移除只 unlink、资产查询不包含媒体库文件，并 poison v4 mutation。 |
+| 测试 | 断言不复制源目录、移除只 unlink、资产查询不包含媒体库文件，并 poison v4 mutation。                     |
 
 ## Goals / Non-Goals
 
