@@ -22,7 +22,6 @@
     "./tool-registry": "./src/tools/tool-registry.ts",
     "./tools": "./src/tools/index.ts",
     "./workspace": "./src/workspace/index.ts",
-    "./commands/terminal-messages": "./src/commands/terminal-messages.ts",
     "./*": "./src/*"
   },
   "scripts": {

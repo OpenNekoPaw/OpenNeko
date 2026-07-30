@@ -5,7 +5,7 @@
  */
 
 import { vi } from 'vitest';
-import type { AgentSession, CommandContext, ILLMClient } from '@neko/agent';
+import type { AgentSession, ILLMClient } from '@neko/agent';
 
 /**
  * Create mock AgentSession
@@ -26,32 +26,6 @@ export function createMockSession(overrides?: Partial<AgentSession>): AgentSessi
 }
 
 /**
- * Create mock CommandContext
- */
-export function createMockCommandContext(overrides?: Partial<CommandContext>): CommandContext {
-  return {
-    session: createMockSession(),
-    config: {
-      get: vi.fn(),
-      set: vi.fn(),
-      has: vi.fn(),
-      delete: vi.fn(),
-    },
-    logger: {
-      info: vi.fn(),
-      error: vi.fn(),
-      warn: vi.fn(),
-      debug: vi.fn(),
-    },
-    workspace: {
-      rootPath: '/test/workspace',
-      name: 'test-workspace',
-    },
-    ...overrides,
-  } as unknown as CommandContext;
-}
-
-/**
  * Create mock LLM Client
  */
 export function createMockLLMClient(): ILLMClient {
@@ -68,38 +42,6 @@ export function createMockLLMClient(): ILLMClient {
     }),
     abort: vi.fn(),
   } as unknown as ILLMClient;
-}
-
-/**
- * Create mock VSCode API
- */
-export function createMockVSCodeAPI() {
-  return {
-    workspace: {
-      fs: {
-        readFile: vi.fn().mockResolvedValue(new Uint8Array()),
-        writeFile: vi.fn().mockResolvedValue(undefined),
-        delete: vi.fn().mockResolvedValue(undefined),
-        stat: vi.fn().mockResolvedValue({ type: 1, size: 0, ctime: 0, mtime: 0 }),
-      },
-      workspaceFolders: [
-        {
-          uri: { fsPath: '/test/workspace' },
-          name: 'test-workspace',
-          index: 0,
-        },
-      ],
-    },
-    window: {
-      showInformationMessage: vi.fn().mockResolvedValue(undefined),
-      showWarningMessage: vi.fn().mockResolvedValue(undefined),
-      showErrorMessage: vi.fn().mockResolvedValue(undefined),
-    },
-    commands: {
-      registerCommand: vi.fn(),
-      executeCommand: vi.fn().mockResolvedValue(undefined),
-    },
-  };
 }
 
 /**

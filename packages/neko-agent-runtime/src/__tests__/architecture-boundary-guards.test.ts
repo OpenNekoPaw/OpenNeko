@@ -10,6 +10,8 @@ const packageRoot = join(repoRoot, 'packages');
 const agentSrc = join(packageRoot, 'neko-agent-runtime/src');
 const webviewSrc = join(packageRoot, 'neko-agent-webview/src');
 const extensionSrc = join(packageRoot, 'neko-agent/packages/extension/src');
+const desktopMainSrc = join(workspaceRoot, 'apps/neko-desktop/src/main');
+const desktopPreloadSrc = join(workspaceRoot, 'apps/neko-desktop/src/preload');
 const platformSrc = join(packageRoot, 'neko-platform/src');
 const tuiSrc = join(workspaceRoot, 'apps/neko-tui/src/tui');
 const agentTypesSrc = join(packageRoot, 'neko-agent-types/src');
@@ -442,11 +444,17 @@ describe('agent architecture boundary guards', () => {
     );
   });
 
-  it('keeps builtin Skill catalog localization out of the Extension host adapter', () => {
-    const source = stripTypeScriptComments(readFileSync(join(extensionSrc, 'index.ts'), 'utf-8'));
+  it('keeps builtin Skill catalog localization out of the Desktop host adapter', () => {
+    const source = stripTypeScriptComments(
+      [
+        readSourceFiles(desktopMainSrc, (file) => !isTestFile(file)),
+        readSourceFiles(desktopPreloadSrc, (file) => !isTestFile(file)),
+      ].join('\n'),
+    );
 
     expect(source).not.toMatch(/\bBUILTIN_SKILL_LOCALES\b/);
     expect(source).not.toMatch(/\bconst\s+\w*SkillLocales\b/i);
+    expect(listFiles(extensionSrc).filter((file) => /\.[cm]?[jt]sx?$/.test(file))).toEqual([]);
   });
 
   it('keeps creative execution runtimes out of Agent runtime ownership', () => {
@@ -1392,8 +1400,9 @@ describe('agent architecture boundary guards', () => {
     expect(violations).toEqual([]);
   });
 
-  it('keeps Agent Extension from re-owning project search aggregation policy', () => {
-    const sourceFiles = listFiles(extensionSrc)
+  it('keeps Agent and Desktop hosts from re-owning project search aggregation policy', () => {
+    const sourceFiles = [agentSrc, desktopMainSrc, desktopPreloadSrc]
+      .flatMap(listFiles)
       .filter((file) => (file.endsWith('.ts') || file.endsWith('.tsx')) && !isTestFile(file))
       .map((file) => ({
         file,
@@ -1407,8 +1416,6 @@ describe('agent architecture boundary guards', () => {
     );
     expect(shimImportViolations).toEqual([]);
 
-    const adapterPath = join(extensionSrc, 'services/agentProjectSearchAdapters.ts');
-    const adapterSource = stripTypeScriptComments(readFileSync(adapterPath, 'utf-8'));
     const forbiddenLocalPolicyHelpers = [
       /\bfunction\s+dedupeCreativeEntityItems\b/,
       /\bfunction\s+dedupeKeyForProjectSearchItem\b/,
@@ -1420,11 +1427,18 @@ describe('agent architecture boundary guards', () => {
       /\bfunction\s+extractLineBasedScriptCharacters\b/,
       /\bfunction\s+scriptCandidateToSearchItem\b/,
     ];
-    const policyViolations = forbiddenLocalPolicyHelpers
-      .filter((pattern) => pattern.test(adapterSource))
-      .map((pattern) => `${relative(repoRoot, adapterPath)} matches ${pattern}`);
+    const policyViolations = sourceFiles.flatMap(({ file, source }) =>
+      forbiddenLocalPolicyHelpers
+        .filter((pattern) => pattern.test(source))
+        .map((pattern) => `${relative(repoRoot, file)} matches ${pattern}`),
+    );
 
     expect(policyViolations).toEqual([]);
+    expect(existsSync(join(packageRoot, 'neko-search/src/core/aggregation.ts'))).toBe(true);
+    expect(existsSync(join(packageRoot, 'neko-entity/src/projections/projectSearch.ts'))).toBe(
+      true,
+    );
+    expect(listFiles(extensionSrc).filter((file) => /\.[cm]?[jt]sx?$/.test(file))).toEqual([]);
   });
 
   it('keeps removed IDC run control APIs out of Agent source and tests', () => {

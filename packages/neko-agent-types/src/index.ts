@@ -525,7 +525,6 @@ export {
 export type {
   BuiltinSlashCommandName,
   BuiltinSlashCommandCategory,
-  BuiltinSlashCommandSurface,
   BuiltinSlashCommandDefinition,
 } from './builtin-slash-command';
 export {

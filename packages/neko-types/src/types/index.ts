@@ -149,9 +149,6 @@ export * from './proxyProtocol';
 // Engine-first preview contracts
 export * from './preview';
 
-// Extension API types (inter-extension communication)
-export * from './extension-api';
-
 // Generation types (output params + model config)
 export * from './generation';
 

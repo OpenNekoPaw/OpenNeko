@@ -84,8 +84,7 @@ export interface NekoProjectAuthoringResult<TData = unknown> {
 export type NekoProjectAuthoringOperationKind =
   'document-authoring' | 'interactive-editor' | 'projection-only';
 
-export type NekoProjectAuthoringClientKind =
-  'vscode' | 'tui' | 'electron' | 'agent' | 'assets' | 'package-api';
+export type NekoProjectAuthoringClientKind = 'desktop' | 'agent' | 'assets' | 'package-api';
 
 export type NekoProjectAuthoringCommandDisposition =
   'canonical-authoring' | 'ui-only-wrapper' | 'removed' | 'fail-closed-migration-diagnostic';
@@ -152,9 +151,7 @@ export const NEKO_PROJECT_AUTHORING_OPERATION_KINDS = [
 ] as const satisfies readonly NekoProjectAuthoringOperationKind[];
 
 export const NEKO_PROJECT_AUTHORING_CLIENT_KINDS = [
-  'vscode',
-  'tui',
-  'electron',
+  'desktop',
   'agent',
   'assets',
   'package-api',
@@ -184,10 +181,10 @@ export const NEKO_PROJECT_AUTHORING_DEFAULT_STATIC_GUARD_RULES: readonly NekoPro
 
 const CORE_UI_DEPENDENCY_RULES: readonly NekoProjectAuthoringStaticGuardRule[] = [
   {
-    id: 'vscode-window-import',
+    id: 'host-window-import',
     pattern: /vscode\.window\b|\bwindow\.show(?:Information|Warning|Error)Message\b/,
     code: 'authoring-core-ui-dependency',
-    message: 'Core authoring services must keep VSCode window APIs in host adapters.',
+    message: 'Core authoring services must keep host window APIs in Desktop adapters.',
   },
   {
     id: 'react-import',

@@ -570,7 +570,7 @@ function parseDirectBuiltinSlashCommand(
     separatorIndex === -1 ? withoutPrefix : withoutPrefix.slice(0, Math.max(separatorIndex, 0));
   const command = normalizeSlashCommandName(commandToken);
   const definition = command ? getBuiltinSlashCommand(command) : undefined;
-  if (!definition?.availableInExtension) {
+  if (!definition?.availableInDesktop) {
     return null;
   }
 

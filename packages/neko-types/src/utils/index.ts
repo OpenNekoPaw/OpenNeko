@@ -28,10 +28,6 @@ export {
 } from './diff';
 
 export {
-  applyCanvasTimelineSyncToCanvas,
-  buildStoryboardImportTimelineSyncPayload,
-} from './canvasTimelineSync';
-export {
   buildEntityAssetRequirementsFromGeneratedMediaLineage,
   buildVisualIdentityDraftsFromGeneratedMediaLineage,
   type BuildEntityAssetRequirementsFromGeneratedMediaInput,

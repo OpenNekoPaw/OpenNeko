@@ -26,12 +26,6 @@ export {
   type WorkspaceFileIgnoreRules,
 } from './workspace-ignore';
 
-export {
-  VSCodeFileReader,
-  createVSCodeFileReader,
-  type VSCodeWorkspaceAPI,
-} from './vscode-file-reader';
-
 export type {
   FileReference,
   ProcessedInput,
