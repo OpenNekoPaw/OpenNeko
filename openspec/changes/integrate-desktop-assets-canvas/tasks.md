@@ -123,3 +123,79 @@
       controls without simulated Plugin/Skill actions.
 - [x] 8.4 Run Desktop tests/typecheck, strict OpenSpec validation, production package build and a
       real Electron Home/Project navigation scenario.
+
+## 9. Desktop Canvas Media Preview Regression
+
+- [x] 9.1 Add red producer/consumer coverage proving the Desktop Canvas delegate exposes the
+      package-owned media probe/play/capture/stop protocol and rejects stale or escaping sources.
+- [x] 9.2 Compose the existing `@neko/media` Node runtime behind the Desktop Canvas bridge with
+      explicit Canvas session ownership, ContentLocator authorization and deterministic cleanup.
+- [x] 9.3 Restore package-owned audio/video node preview and playback without adding a Desktop-local
+      viewer, Canvas node renderer or fallback path.
+- [x] 9.4 Re-run focused Canvas/Desktop tests and typechecks, package Electron, and verify the
+      audio/video nodes from the isolated `neko-test` fixture workspace in the real Desktop
+      application.
+
+## 10. Canvas Selection Projection Regression
+
+- [x] 10.1 Add a red Host/Webview regression that rapidly commits single- and multi-node selection
+      and proves locally originated projection events cannot replay stale selection into the source
+      Canvas Root.
+- [x] 10.2 Add explicit command origin to the Canvas Host projection contract and preserve it across
+      the domain session plus Desktop producer/consumer bridge.
+- [x] 10.3 Suppress only the source Webview's local command echo while continuing to apply external
+      Agent/Host presentation changes and initial recovery snapshots.
+- [x] 10.4 Run focused Canvas domain/Webview/Desktop tests and typechecks, strict OpenSpec validation
+      and a real Electron single-/multi-selection interaction.
+
+## 11. Transient Hover Media Preview
+
+- [x] 11.1 Add red Canvas Root tests proving audio/video pointer enter starts package-owned playback
+      and pointer leave, View hiding or unmount stops and releases it without document mutation.
+- [x] 11.2 Add red Resource Browser, Preview and Desktop producer/consumer tests for image/audio/video
+      quick preview, exact-item authorization, request fencing and deterministic descriptor cleanup.
+- [x] 11.3 Implement Canvas transient hover playback through the existing `@neko/media` runtime and
+      implement Resource Browser hover state with the package-owned compact Preview surface.
+- [x] 11.4 Run focused Canvas/Assets/Preview/Desktop tests and typechecks, strict OpenSpec validation,
+      package Electron and verify hover playback from the isolated `neko-test` fixture workspace in
+      the real Desktop app.
+
+## 12. Authorized Canvas Playback Descriptor Regression
+
+- [x] 12.1 Add a red Canvas consumer regression using the exact Desktop `authorized`
+      `neko-media://desktop/...` video and PCM descriptors and assert the package-owned players mount.
+- [x] 12.2 Move transport/URL validation to the owning `@neko/media` contract and make the Canvas
+      Host decoder preserve both declared transports without a Desktop-local viewer or fallback.
+- [x] 12.3 Run focused Media/Canvas/Desktop tests and typechecks, strict OpenSpec validation,
+      production Electron packaging and verify playback in the isolated `neko-test` fixture
+      workspace.
+
+## 13. Canvas Content Drop Lifecycle Regression
+
+- [x] 13.1 Add a red Canvas hook regression proving the drop overlay is released before an
+      asynchronous ContentLocator projection settles and the projection is requested exactly once.
+- [x] 13.2 Route ContentLocator drops through the shared drop lifecycle owner without duplicate
+      Canvas mutation, timeout-based hiding or a Desktop-local fallback.
+- [x] 13.3 Run focused Canvas tests and typecheck, strict OpenSpec validation, production Electron
+      packaging and verify Resource Browser → Canvas drop in the isolated `neko-test` fixture
+      workspace.
+
+## 14. Shared Canvas Add-Node Catalog
+
+- [x] 14.1 Add red package-owned tests for the ordered Text/Table/Image/Video/Audio/3D Director
+      catalog, localized menu presentation, canonical Table content and model source intent.
+- [x] 14.2 Replace the legacy grouped menu with the shared flat catalog, apply package-owned Canvas
+      control density, route Text/Table to canonical Markdown nodes and add the real model source
+      producer/consumer contract.
+- [x] 14.3 Run focused Canvas/Desktop tests and typechecks, strict OpenSpec validation and verify
+      the shared menu and node creation in the Desktop fixture.
+
+## 15. Portal Theme And Real Node Path Regression
+
+- [x] 15.1 Add red shared Popover and Canvas layout regressions proving Portal content receives an
+      owner class and uses neutral global Neko surface, border, foreground, hover and shadow tokens.
+- [x] 15.2 Prove every source-backed catalog item projects its typed ContentLocator to a supported
+      canonical Canvas node, while Text and Table retain their real editable Markdown paths.
+- [ ] 15.3 Run focused shared UI/Canvas tests and typechecks, strict OpenSpec validation, production
+      Desktop packaging and a real add-menu/node-creation scenario in the isolated `neko-test`
+      fixture workspace.

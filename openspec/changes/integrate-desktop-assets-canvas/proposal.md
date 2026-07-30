@@ -25,6 +25,9 @@ Canvas 和受控创作布局不一致。继续添加视觉占位会形成第二�
   渲染两个不同 Board，同一 Board 不创建重复 View。
 - Resource Dock 增加 Files/Media/Entity 分区；Character 仅作为 Entity projection，
   不创建 Chara 素材 catalog 或未实现的 CharacterProject/Version。
+- Canvas 音视频节点和 Resource Browser 图片/音频/视频资源增加 package-owned 悬停预览；
+  悬停只创建临时媒体会话，离开、切换条目或卸载时立即停止并释放，不打开 Workbench
+  Preview、不持久化播放状态，也不向 renderer 暴露路径。
 - 保持 Cut、通用 Preview、Generation/Quality 和完整 Chara/World runtime unavailable，
   只保留明确 slot 与 owning-slice diagnostic。
 

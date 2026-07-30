@@ -157,10 +157,13 @@ Tailwind 构建扫描 Canvas package source，并由 Root 提供稳定 scope mar
 reset、token 和 document-only 样式只能作用于该 marker 或独立 Webview document，不能污染
 Desktop Shell。复用 React 组件但漏编译其 utility class 不算复用成功。
 
-工具栏按 `CanvasHostRuntime` 的显式 capability/handler 投影。Desktop 未实现 playback、
-export、package 或 send-to-Agent owner 时，对应控件保持隐藏并暴露 capability unavailable，
+工具栏按 `CanvasHostRuntime` 的显式 capability/handler 投影。Desktop 未实现 export、
+package 或 send-to-Agent owner 时，对应控件保持隐藏并暴露 capability unavailable，
 不得显示无 handler 的假按钮；拥有 source-add、undo/redo、preview 等 handler 的控件必须与
-VS Code 使用同一 `CanvasToolbar`、popover 和交互实现。
+VS Code 使用同一 `CanvasToolbar`、popover 和交互实现。Canvas 内嵌 audio/video Preview
+不是 Desktop 独立 viewer：Desktop adapter 必须复用 P1.5 的 `@neko/media` Node runtime，
+完成 probe、poster/frame capture、HTML video/PCM descriptor、seek/stop 与 session cleanup；
+Canvas Webview 继续只渲染 package-owned `PreviewSurface`。
 
 ### 5. Canvas 多文档由文档 session 与 View identity组合
 
@@ -244,6 +247,12 @@ active object、demo store/surface 未参与。Canvas Webview 的视觉、交互
 Extension Development Host；Electron 场景使用生产 package 或受控 app runtime，不使用普通
 浏览器替代。
 
+Canvas presentation projection 必须携带产生该 revision 的 command identity。Canvas Root
+提交的本地 `update-presentation` / `replace-document` 命令仍由 Host Runtime 接受并成为权威
+快照，但不得作为异步回声重新覆盖同一 Root 已经继续前进的本地选区。初始恢复、其他 Host
+surface、Agent 或外部命令产生的 projection 仍必须回推。不得通过 debounce、清空选区或忽略
+全部 Host presentation 掩盖竞态。
+
 ### 10. Home 与 Content Project 共用一级导航契约
 
 Home 与 Content Project 的一级侧边栏使用同一个信息架构和视觉 primitive：统一的品牌区、
@@ -255,6 +264,65 @@ Home 与 Content Project 的一级侧边栏使用同一个信息架构和视觉 
 嵌入 Agent Dock。折叠控制只存在于品牌区，底部只保留 attention、display、timeline 和统一
 Desktop 设置等实际可用的全局控制，不重复放置折叠或资源入口。Plugin/Skill 等未来入口只有
 在 Desktop 存在真实 owner route 与 capability 后才可显示为可操作项，不得用 no-op 按钮模拟。
+
+### 11. 悬停预览使用临时、owner-released 媒体会话
+
+Canvas Root 和 Resource Browser Root 分别拥有 pointer enter/leave、当前 hover target、
+请求序号与可见性状态。它们不得把 hover 写入 `.nkc`、Resource projection、Workbench layout
+或最近 Preview。Canvas 继续复用 `@neko/media` 的 probe/play/stop 生命周期；Resource
+Browser 通过固定 Host contract 请求精确 ContentLocator 的临时描述符，并由
+`@neko/preview-webview` 的 compact surface 渲染图片、音频和视频。
+
+Desktop renderer 只组合 Assets Root 与 Preview compact surface，不实现 `<img>`、`<audio>`、
+`<video>` viewer。Desktop Main 从 sender、Resource Browser identity 和 resource identity
+解析授权源，向 renderer 返回 opaque descriptor identity；绝对路径、Host secret 和 grant
+不会越过 preload。离开、切换、facet 变化、View 隐藏、Root 卸载、窗口 detach 或 runtime
+dispose 都必须停止播放并释放 descriptor。异步完成结果必须以请求 identity fencing，旧目标
+不得覆盖新目标。
+
+Canvas 的 package-owned Node media runtime 可以继续在 Main 中使用 loopback HTTP
+准备视频与 PCM，但这些 upstream URL 不得进入 renderer。Desktop Canvas adapter 必须把每个
+upstream 注册为绑定 `webContentsId`、Window、Canvas View/session 和 revision 的
+`neko-media:` 描述符；`media:stop`、View detach 与 runtime dispose 释放同一 descriptor
+session。Canvas Webview 只通过注入的 Host subscription 接收 probe/stream 结果，不依赖
+VS Code 宿主才会投递的全局 `window.message`。
+
+Canvas Webview 的 Host boundary decoder 必须接受并保留 `@neko/media` 声明的全部
+`MediaTransport`，包括开发/VS Code 路径的 loopback `http` 和 Desktop sender-bound
+`authorized`。decoder 必须同时校验 transport 与 URL scheme/authority 一致，且回归测试
+必须使用 Desktop 实际返回的 `authorized` + `neko-media://desktop/...` 描述符并断言
+package-owned player 已挂载；只断言 `media:play` 发出不能作为播放成功证据。
+
+### 12. 结构化拖放生命周期只有一个 owner
+
+`useFileDrop` 拥有 drag enter/leave/drop 的计数与遮罩状态；Canvas 不得在它之外为
+ContentLocator 维护提前返回的第二条 drop path。共享 hook 接受调用方声明的有序结构化
+JSON MIME 列表，Canvas 优先声明 portable ContentLocator MIME，并保留
+`application/json` 作为同一 payload 的跨 React Root 表示。一次 drop 必须同步清理遮罩、
+只解析第一个有效表示并只调用一次 Canvas `project-content`，不能等待异步 Host mutation
+完成，也不能用 timer 或 Desktop-local state 强制隐藏。
+
+### 13. 添加节点目录由 Canvas Root 统一拥有
+
+Desktop 与 VS Code 不得各自实现添加节点菜单。`@neko-canvas/webview` 拥有同一扁平目录、
+图标、国际化文本和 intent 路由，两个 Host 只实现来源选择和持久化 effect。Phase 1 目录固定为
+文本、表格、图片、视频、音频和 3D 导演台；菜单顺序、说明与可用状态在两个 Host 中一致。
+弹层视觉继续使用 13px Canvas control 密度，不套用 Desktop 页面卡片或 VS Code editor 菜单
+样式；宿主不得覆写宽度、行高、图标底色或焦点态，从而避免相同组件在两个 Host 中出现尺寸
+和颜色漂移。Radix Popover 通过 Portal 挂载于 Canvas Root 之外，因此 owning Canvas 组件必须
+为共享 Popover 提供显式 content class，并只使用挂载在 document theme boundary 的全局
+`--neko-elevated`、`--neko-border`、`--neko-fg*`、`--neko-hover` 和 shadow token。不得在
+Portal content 中读取只定义于 `.canvas-webview-root` 的 toolbar/control/badge token，也不得
+以硬编码浅色或 Desktop-local 覆写伪造一致性。共享 Popover 通过
+`--neko-popover-background/border/foreground/shadow` 接受 owner surface 投影，避免 Canvas
+依靠 stylesheet 顺序覆盖共享 primitive 的默认 glass surface。
+
+文本和表格是两个用户意图，但都投影为 canonical Markdown node：文本使用空正文，表格使用
+可直接编辑的 GFM 表格模板。不得恢复 legacy `text` / `table` node type。图片、视频和音频
+继续通过 `request-source` 创建 canonical media node。3D 导演台通过显式 `model` source kind
+选择 GLB/glTF/OBJ/STL/PLY，并创建 canonical file reference；模型渲染和 3D staging 继续由
+`@neko/preview-webview` 拥有，不在 Canvas 或 Desktop 中复制 viewer，也不添加无 handler 的
+假按钮。
 
 ## Risks / Trade-offs
 

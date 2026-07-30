@@ -62,6 +62,9 @@
       controlled Canvas/Timeline/Model Main compositions without separate move-left/right buttons,
       independent Files/Media/Entity resource facets and package-owned bottom horizontal
       Canvas/Model toolbars; preserve all owner identities and command paths
+- [ ] 4.6 Reopen the embedded Canvas Preview acceptance path: consume the P1.5 host-neutral media
+      runtime from the Desktop Canvas adapter so audio/video nodes retain the package-owned probe,
+      poster, playback and cleanup behavior of the canonical Canvas Root
 
 ## 5. P1.5 Cut, Preview And Media
 

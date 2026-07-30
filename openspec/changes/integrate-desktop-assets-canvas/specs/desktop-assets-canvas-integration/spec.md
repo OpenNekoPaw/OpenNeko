@@ -1,5 +1,28 @@
 ## ADDED Requirements
 
+### Requirement: Canvas add-node catalog is identical across Desktop and VS Code
+
+The package-owned Canvas Root SHALL render and route one add-node catalog for both Desktop and
+VS Code. The catalog SHALL expose Text, Table, Image, Video, Audio and 3D Director in that order.
+Text and Table SHALL create canonical Markdown nodes, media actions SHALL use their typed source
+intent, and 3D Director SHALL use a model source intent that resolves to a canonical file reference.
+The popover SHALL use compact Canvas control density and explicit Portal-safe global Neko surface,
+border, foreground, hover and shadow tokens; neither Host may substitute host-local sizing, item
+surfaces, colors or focus treatment.
+
+#### Scenario: Both hosts consume the same real add-node intents
+
+- **WHEN** a user opens the Canvas add-node menu in Desktop or VS Code
+- **THEN** both hosts render the same package-owned ordered catalog and localized labels
+- **AND** the popover uses neutral Portal-safe Neko foreground, hover, badge and elevated surface
+  treatment at compact Canvas density without oversized card icons or a duplicate focus outline
+- **AND** Table creates editable GFM table content without a legacy table node type
+- **AND** every menu item reaches an implemented canonical node path rather than adding a label-only
+  placeholder: Text/Table become Markdown, Image/Video/Audio become typed Media and 3D Director
+  becomes a model-backed File reference
+- **AND** 3D Director requests a model source and uses the package-owned model Preview path
+- **AND** neither host renders a local duplicate menu, viewer, no-op item or compatibility fallback
+
 ### Requirement: Assets owns the Desktop Resource Browser
 
 Assets SHALL provide a browser-safe Resource Browser Root and immutable projection over
@@ -38,6 +61,36 @@ request schema.
 - **THEN** Main rejects the operation with a typed diagnostic
 - **AND** it does not fall back to an active workspace, raw filesystem access or label-based identity
 
+### Requirement: Hover media preview is transient and package-owned
+
+Canvas and Assets SHALL own their hover interaction state while package-owned Media and Preview
+components own playback and rendering. Desktop Main SHALL authorize the exact ContentLocator for a
+short-lived preview session. Hover preview MUST NOT open or replace a Workbench Preview View, persist
+playback state, mutate `.nkc` facts, expose an absolute path or introduce a Desktop-local media viewer.
+
+#### Scenario: User hovers a Canvas audio or video node
+
+- **WHEN** the pointer enters a previewable audio or video node
+- **THEN** the Canvas package starts the node's authorized media session from the beginning
+- **AND** leaving the node, hiding its View or unmounting its Root stops playback and releases the
+  stream without changing the Canvas document
+
+#### Scenario: User hovers a Resource Browser media item
+
+- **WHEN** the pointer remains over an image, audio or video resource long enough to request quick
+  preview
+- **THEN** Resource Browser resolves that exact resource through its sender-bound Host runtime and
+  renders it through the package-owned compact Preview surface
+- **AND** leaving the item, switching to another item, changing facet or unmounting the browser
+  cancels stale work, stops playback and releases the descriptor
+
+#### Scenario: Hover target is stale or unsupported
+
+- **WHEN** the resource identity becomes stale, its locator escapes authorization or the item is not
+  an image, audio or video
+- **THEN** the Host rejects or skips quick preview visibly according to the typed contract
+- **AND** it does not fall back to a path, thumbnail-only fake playback or the currently active item
+
 ### Requirement: Canvas Root consumes one injected host runtime
 
 The complete package-owned Canvas Root SHALL consume a versioned browser-safe Canvas runtime supplied
@@ -75,6 +128,8 @@ new revision. Missing, stale or mismatched identity MUST fail visibly.
 - **THEN** the drag payload contains only a validated portable ContentLocator and presentation name
 - **AND** the Canvas Host applies `project-content` to that explicit document/session at the actual
   drop position
+- **AND** the shared drop lifecycle releases the Canvas drag overlay immediately after drop without
+  waiting for the asynchronous Host mutation to settle
 - **AND** no absolute path, file URL, VS Code `project:addSource` route or active-Canvas fallback
   participates
 
