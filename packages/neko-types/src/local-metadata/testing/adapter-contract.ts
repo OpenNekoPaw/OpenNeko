@@ -28,8 +28,8 @@ export async function runLocalMetadataAdapterContract(
 
   const firstMigration = await source.migrateNamespace(M1_LOCAL_METADATA_MIGRATIONS);
   assert(firstMigration.previousVersion === 0, 'M1 previous version must be zero');
-  assert(firstMigration.currentVersion === 1, 'M1 current version must be one');
-  assert(firstMigration.appliedVersions.length === 1, 'M1 must apply exactly one migration');
+  assert(firstMigration.currentVersion === 2, 'M1 current version must be two');
+  assert(firstMigration.appliedVersions.length === 2, 'M1 must apply both core migrations');
   await source.migrateNamespace(RESOURCE_CACHE_MIGRATIONS);
   await source.migrateNamespace(MEDIA_METADATA_MIGRATIONS);
 

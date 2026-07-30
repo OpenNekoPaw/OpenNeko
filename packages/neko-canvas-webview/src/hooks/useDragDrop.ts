@@ -547,25 +547,6 @@ function isCanvasAddSourceAssetKind(value: unknown): value is 'media' | 'text' |
 export function createCanvasProjectSourceAddClient(
   hostPort: CanvasHostMessagePort,
 ): ProjectSourceAddClient {
-  if (!hostPort) {
-    return {
-      async addSource(input) {
-        return {
-          requestId: input.requestId ?? `canvas-add-source-unavailable-${Date.now()}`,
-          ok: false,
-          diagnostics: [
-            {
-              code: 'missing-source',
-              severity: 'error',
-              message: 'Canvas media add requires Extension Host source handling.',
-              recoverability: 'create-asset',
-            },
-          ],
-        };
-      },
-    };
-  }
-
   return createProjectSourceAddClient({
     postMessage: (message) => {
       hostPort.postMessage(message);

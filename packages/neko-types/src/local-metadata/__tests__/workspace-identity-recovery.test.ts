@@ -315,7 +315,7 @@ describe('workspace identity recovery', () => {
           CLONE_WORKSPACE_ID,
           'orphan-journal',
           'Preserved orphan projection',
-          'vscode',
+          'desktop',
           OCCURRED_AT,
           OCCURRED_AT,
         );

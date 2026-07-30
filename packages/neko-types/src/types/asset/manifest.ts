@@ -1384,7 +1384,7 @@ function validateProfilePackageMetadata(
           return;
         }
         if (!isProfilePackageHost(requirement['host'])) {
-          issues.push({ field: `${field}.host`, message: 'must be vscode, cli, or tui' });
+          issues.push({ field: `${field}.host`, message: 'must be desktop' });
         }
       });
     }
