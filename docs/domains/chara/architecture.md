@@ -2,7 +2,10 @@
 
 ## Owner
 
-`@neko/chara` 是当前角色对话、Embody、角色证据、Profile Assembly、角色 purpose operation 和角色会话编排的唯一 owner。`@neko/entity` 只提供通用 Entity 事实、关系、occurrence、representation 和稳定 ref；`neko-agent` 只提供 Pi runtime、Agent contract、Chat transport 与宿主组合。
+`@neko/chara` 是当前角色对话、Embody、角色证据、Profile Assembly、角色 purpose operation
+和角色会话编排的唯一 owner。`@neko/entity` 只提供通用 Entity 事实、关系、occurrence、
+representation 和稳定 ref；`neko-agent` 只提供 Pi runtime 与 Agent contract；具体文件、
+搜索、模型和会话 port 由 Desktop composition 注入。
 
 ## 分层与依赖
 
@@ -14,17 +17,16 @@
   -> chara/core
   -> shared purpose runtime contract
 
-@neko/chara/host-vscode
-  -> chara/application + chara/core
-  -> public Entity/Content/Search host adapters
+apps/neko-desktop (future Chara composition)
+  -> @neko/chara/application
+  -> public Entity/Content/Search ports
   -> @neko-agent/types
-  -> vscode
-
-Agent Extension ChatProvider
-  -> @neko/chara/host-vscode
 ```
 
-Core/Application 不导入 VS Code、React、Agent runtime implementation 或其他领域的 Host implementation。Chara 只能消费 Agent contract，不创建 `RoleplayAgent`、`CharacterAgentExecutor` 或第二套 Tool/Task/Session loop。Agent core/platform/Webview 不反向依赖 Chara；VS Code 产品组合层负责实例化 Chara host adapter。
+Core/Application 不导入 Electron、React、Agent runtime implementation 或其他领域的 Host
+implementation。Chara 只能消费 Agent contract，不创建 `RoleplayAgent`、
+`CharacterAgentExecutor` 或第二套 Tool/Task/Session loop。Agent core/platform/Webview
+不反向依赖 Chara；Desktop 未完成 Chara composition 时必须保持 capability unavailable。
 
 ## 生命周期
 
@@ -39,11 +41,14 @@ Core/Application 不导入 VS Code、React、Agent runtime implementation 或其
 1. Entity 通过稳定 `CreativeEntityRef` 提供 canonical name、display name 和 aliases，不负责角色问题检索或 prompt 组装。
 2. Chara 分别以非空角色名称和别名调用 Project Search，并按稳定 Search item ID 去重。当前回合问题和内部 Entity ID 不得进入 `story-symbols` 查询。
 3. Search 只返回项目内场景或角色 locator；其全局 token 匹配语义不因角色场景而改变，也不负责索引完整对白正文。
-4. Chara Host 校验 locator 的项目边界和受支持扩展名，通过 Content/VS Code 文件边界读取场景正文。
+4. Desktop 注入的 Content/file port 校验 locator 的项目边界和受支持扩展名，并读取场景正文。
 5. Chara Core 按当前回合问题、角色身份、来源权威性、新鲜度和预算排序、去重并裁剪正文。
 6. Character session 只把最终 evidence bundle 注入当前 responder system prompt，不把证据写入 transcript 或持久 profile source。
 
-Profile Assembly 与 Character Dialogue/Embody 的单轮证据加载复用同一 Chara Host adapter。不得恢复 Dashboard evidence reader、宽泛 workspace 搜索、Agent memory 或模型常识 fallback。Search 成功但没有角色场景是合法空证据；Entity/Search 等必需依赖失败必须终止当前启动或回合，并且不得调用 responder。
+Profile Assembly 与 Character Dialogue/Embody 的单轮证据加载复用同一组 Chara application
+ports。不得恢复 Dashboard evidence reader、宽泛 workspace 搜索、Agent memory 或模型常识
+fallback。Search 成功但没有角色场景是合法空证据；Entity/Search 等必需依赖失败必须终止
+当前启动或回合，并且不得调用 responder。
 
 角色模型选择与证据检索是两条独立契约。角色用途使用全局 `character.dialogue` / `character.profile` 精确绑定；Chara 不复制 Agent 会话级模型切换状态，也不在绑定或证据失败时回退 Agent/default model。
 

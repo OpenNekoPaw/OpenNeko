@@ -21,6 +21,6 @@
 
 - [x] 4.1 Update the pruning design/verification to distinguish Node-owned document transport from Rust-owned media transport and record the replacement of the unverified EPUB path.
 - [x] 4.2 Run focused Preview extension/Webview and `@neko/content` tests, affected typechecks/builds, dependency/legacy/unused checks, strict OpenSpec validation, and `git diff --check`.
-- [ ] 4.3 Run real Extension Development Host scenarios for PDF, EPUB, DOCX, and CBZ, capturing DOM/network/console evidence that Node routes load and Engine document routes do not participate.
-  - VS Code Debugger host/controller, loopback route, and no-Engine evidence passed for all four synthetic documents. DOM/network/console capture is blocked by the missing parent renderer CDP endpoint and is recorded in `verification.md`.
+- [ ] 4.3 Run real Electron Desktop scenarios for PDF, EPUB, DOCX, and CBZ, capturing DOM/network/console evidence that Node routes load and retired Engine document routes do not participate.
+  - Previous Extension-host evidence remains historical. Desktop DOM/network/console capture is still required and is tracked in `verification.md`.
 - [x] 4.4 Apply the Neko quality-review gates, resolve actionable findings, and document any remaining repository-baseline blockers or runtime risks.

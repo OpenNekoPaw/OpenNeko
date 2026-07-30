@@ -1,6 +1,6 @@
 {
   "name": "@neko/chara",
-  "description": "Character domain runtime, application services, and host adapters for OpenNeko",
+  "description": "Character domain runtime and host-neutral application services for OpenNeko",
   "private": true,
   "version": "0.0.1",
   "type": "module",

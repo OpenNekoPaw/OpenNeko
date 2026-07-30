@@ -30,24 +30,24 @@ Available generation and understanding features depend on your configured APIs, 
 
 ## Project Status
 
-OpenNeko is currently in **Alpha** and is primarily intended for source-based previews and product validation. The core creative workflow is running, while installation, upgrades, compatibility, interfaces, and project formats may still change. OpenNeko TUI is also used to validate Agents, models, Skills, and workflows.
+OpenNeko is currently in **Alpha** and is primarily intended for source-based previews and product validation. The core creative workflow is running, while installation, upgrades, compatibility, interfaces, and project formats may still change. Electron Desktop is the only product host; Agent, model, Skill, and workflow validation follows the Desktop composition boundary.
 
 ## Start From Source
 
-Requires Node.js 24+, pnpm 10, and VS Code 1.128+; the repository development toolchain is pinned to Node.js 24.18.0 LTS.
+Requires Node.js 24+ and pnpm 10; the repository development toolchain is pinned to Node.js 24.18.0 LTS.
 
 Supported release platforms are limited to:
 
-| System | Architecture | Release target |
-| ------ | ------------ | -------------- |
-| macOS  | ARM64        | `darwin-arm64` |
-| Linux  | x64          | `linux-x64`    |
+| System | Architecture | Current Desktop qualification |
+| ------ | ------------ | ----------------------------- |
+| macOS  | ARM64        | Forge package                 |
 
-Windows support is deferred and no Windows release package is currently provided. Restoring it requires native build, VSIX startup, and Engine media read/export validation on a real Windows environment. Intel Macs, Linux ARM64/musl, and other systems or architectures also do not receive release packages.
+Windows, Linux, and Intel Mac Desktop releases remain deferred. Enabling one requires Electron packaging, application startup, native dependency, and Node/FFmpeg media read/export validation on the corresponding real system.
 
 ```bash
 pnpm install
 pnpm build
+pnpm dev:desktop
 ```
 
 Common validation commands:
@@ -60,14 +60,13 @@ pnpm gate:local
 
 ## Development And Release
 
-Every non-empty branch name other than `main` is a development branch. Ordinary development-branch pushes do not run GitHub Actions; run `pnpm gate:local` before pushing, and dispatch CI manually when GitHub-runner evidence is needed. `main` is the only release branch and accepts Pull Requests from development branches. `Merge Gate` must complete all source checks and produce one complete OpenNeko VSIX for each of `darwin-arm64` and `linux-x64` before merge.
+Every non-empty branch name other than `main` is a development branch. Ordinary development-branch pushes do not run GitHub Actions; run `pnpm gate:local` before pushing, and dispatch CI manually when GitHub-runner evidence is needed. `main` is the only release branch and accepts Pull Requests from development branches. `Merge Gate` must complete all source checks.
 
-Formal releases are triggered by GitHub `v*` tags reachable from main. The tag is the only published-version input, so no manifest-version commit is required first. The Release workflow validates tag ancestry, projects the tag's numeric base version into every publishable manifest inside each ephemeral job, rebuilds `OpenNeko-darwin-arm64-<version>.vsix`, `OpenNeko-linux-x64-<version>.vsix`, and `SHA256SUMS`, then creates the GitHub Release through the `release` environment. Feature-package VSIX files are never published as Release assets.
+The repository now retains only the Electron Desktop build and Forge packaging entry points. Signing, notarization, cross-platform artifacts, or a formal Release workflow require a separate OpenSpec that defines target platforms, version authority, artifact closure, and real installation acceptance.
 
 ## Project Entries
 
-- [OpenNeko Creative Workspace](./apps/neko-vscode/): visual creation, editing, preview, and Agent collaboration.
-- [OpenNeko TUI](./apps/neko-tui/): terminal experiments for Agents, models, Skills, and workflows.
+- [OpenNeko Desktop](./apps/neko-desktop/): the sole application composition root for visual creation, editing, preview, and Agent collaboration.
 
 ## Documentation and Contributing
 

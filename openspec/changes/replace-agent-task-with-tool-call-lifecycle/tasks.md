@@ -20,7 +20,7 @@
 
 - [x] 3.1 Add path tests that poison TaskManager and prove Pi signal, Tool progress, terminal result, and resource cleanup use the new canonical path
 - [x] 3.4 Update and run the focused real Agent Evaluation cases defined in `evaluation.md`; retain canonical-path and no-fallback evidence
-- [ ] 3.5 Validate VS Code Extension Development Host and packaged Desktop lifecycle/streaming scenarios where implemented
+- [ ] 3.5 Validate packaged Electron Desktop lifecycle/streaming scenarios where implemented
 - [x] 3.6 Run affected builds/tests/checks, strict OpenSpec validation, legacy/unused-code gates, and `git diff --check`
 
 ## 4. Deferred producer-triggered changes

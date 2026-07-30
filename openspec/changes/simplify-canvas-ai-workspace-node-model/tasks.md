@@ -37,7 +37,7 @@
 - [x] 5.1 Update Canvas README/architecture and affected Agent/Workspace Board documentation
 - [x] 5.2 Run shared producer/consumer tests and Canvas Webview/Extension builds
 - [x] 5.3 Run `pnpm build`, `pnpm test`, `pnpm check`, legacy-debt and unused-code gates
-- [ ] 5.4 Validate the node catalog, source actions, migration diagnostics, Preview workspace, matrix and media path in Extension Development Host
+- [ ] 5.4 Validate the node catalog, source actions, migration diagnostics, Preview workspace, matrix and media path in Electron Desktop
 
 ## 6. Contextual add actions
 
@@ -45,4 +45,4 @@
 - [x] 6.2 Share one add action catalog between the popover and Canvas context menu
 - [x] 6.3 Remove empty JobCard authoring while retaining Job projection/rendering
 - [x] 6.4 Localize add actions and enforce English/Simplified Chinese key parity
-- [ ] 6.5 Run focused Webview tests, build/quality gates, and Extension Development Host acceptance
+- [ ] 6.5 Run focused Webview tests, build/quality gates, and Electron Desktop acceptance

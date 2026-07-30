@@ -116,6 +116,18 @@ root documentation, validation scripts and production code must describe Desktop
 Repository guards scan executable/configured surfaces rather than treating historical text as a
 runtime dependency.
 
+The following changes are superseded as complete design paths and are archived with `--skip-specs`
+so their VS Code/VSIX requirements cannot enter stable specs:
+
+- `consolidate-vscode-single-extension-package`
+- `finalize-platform-packaging-and-removal`
+- `close-embedded-runtime-dependencies`
+- `standardize-vscode-test-workspace`
+
+Their validation notes remain historical evidence only. Any still-useful native dependency closure
+or fixture isolation requirement must be reintroduced through a Desktop-owned OpenSpec rather than
+continuing an unfinished Extension Development Host task.
+
 ### 5. Webview contracts become host-neutral, not Desktop-local
 
 Retained Webview packages must not call `acquireVsCodeApi`, import `vscode`, or depend on Extension

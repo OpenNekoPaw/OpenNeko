@@ -30,24 +30,24 @@ OpenNeko 面向希望自主掌控项目文件、模型接入和创作流程的�
 
 ## 当前状态
 
-OpenNeko 目前处于 **Alpha** 阶段，以源码体验和产品验证为主。核心创作流程已经可以运行，但安装、升级、兼容性、界面和项目格式仍可能变化。OpenNeko TUI 同时用于验证 Agent、模型、Skill 和工作流。
+OpenNeko 目前处于 **Alpha** 阶段，以源码体验和产品验证为主。核心创作流程已经可以运行，但安装、升级、兼容性、界面和项目格式仍可能变化。Electron Desktop 是唯一产品宿主；Agent、模型、Skill 和工作流验证也以 Desktop 组合边界为准。
 
 ## 从源码开始
 
-要求 Node.js 24+、pnpm 10 和 VS Code 1.128+；仓库开发工具链固定为 Node.js 24.18.0 LTS。
+要求 Node.js 24+ 和 pnpm 10；仓库开发工具链固定为 Node.js 24.18.0 LTS。
 
 支持的平台仅限：
 
-| 系统  | 架构  | 发布目标       |
-| ----- | ----- | -------------- |
-| macOS | ARM64 | `darwin-arm64` |
-| Linux | x64   | `linux-x64`    |
+| 系统  | 架构  | 当前 Desktop 资格 |
+| ----- | ----- | ----------------- |
+| macOS | ARM64 | Forge package     |
 
-Windows 支持暂缓，当前不提供 Windows 发布包。后续恢复前必须在真实 Windows 环境验证原生构建、VSIX 启动以及 Engine 媒体读取和导出路径。Intel Mac、Linux ARM64/musl 及其他系统/架构也不提供发布包。
+Windows、Linux 和 Intel Mac 的 Desktop 发布资格仍暂缓。后续启用前必须在对应真实系统验证 Electron 打包、应用启动、原生依赖以及 Node/FFmpeg 媒体读取和导出路径。
 
 ```bash
 pnpm install
 pnpm build
+pnpm dev:desktop
 ```
 
 常用验证命令：
@@ -60,14 +60,13 @@ pnpm gate:local
 
 ## 开发与发布
 
-除 `main` 外的非空分支名都属于开发分支，普通开发分支 push 不自动运行 GitHub Actions；提交前使用 `pnpm gate:local`，需要 GitHub runner 证据时从 Actions 手动运行 CI。`main` 是唯一发布分支，只接受开发分支到 `main` 的 Pull Request；`Merge Gate` 必须完成完整源码检查，并为 `darwin-arm64`、`linux-x64` 各生成一个完整 OpenNeko VSIX 后才允许合并。
+除 `main` 外的非空分支名都属于开发分支，普通开发分支 push 不自动运行 GitHub Actions；提交前使用 `pnpm gate:local`，需要 GitHub runner 证据时从 Actions 手动运行 CI。`main` 是唯一发布分支，只接受开发分支到 `main` 的 Pull Request；`Merge Gate` 必须完成完整源码检查。
 
-正式发布由 main 历史上的 GitHub `v*` 标签触发，标签是发布版本的唯一输入，无需提前提交 manifest 升版。Release workflow 会校验标签来源，在每个临时 job 中将标签的数值基础版本投影到全部可发布 manifest，重新生成 `OpenNeko-darwin-arm64-<version>.vsix`、`OpenNeko-linux-x64-<version>.vsix` 与 `SHA256SUMS`，然后通过 `release` environment 创建 GitHub Release；功能包 VSIX 不会作为 Release asset 发布。
+当前仓库只保留 Electron Desktop 构建与 Forge 打包入口。新增签名、公证、跨平台产物或正式 Release workflow 前，必须通过独立 OpenSpec 定义目标平台、版本来源、产物闭包和真实安装验收。
 
 ## 项目入口
 
-- [OpenNeko 创作工作台](./apps/neko-vscode/)：图形化创作、编辑、预览与 Agent 协作。
-- [OpenNeko TUI](./apps/neko-tui/)：Agent、模型、Skill 和工作流的终端实验入口。
+- [OpenNeko Desktop](./apps/neko-desktop/)：图形化创作、编辑、预览与 Agent 协作的唯一应用组合根。
 
 ## 文档与参与
 

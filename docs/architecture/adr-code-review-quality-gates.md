@@ -1,10 +1,11 @@
 # ADR: 代码审查与质量门禁
 
 状态：Accepted
-日期：2026-06-15
-范围：全仓库 TypeScript、React Webview、VSCode Extension、Rust Engine、Proto、文档、打包和 OpenSpec 变更。
+日期：2026-07-31
+范围：全仓库 TypeScript、React renderer/Webview、Electron Desktop、Node/FFmpeg、Proto、文档、打包和 OpenSpec 变更。
 
-本文记录当前稳定的代码审查与质量门禁规则。它补充根目录 `AGENTS.md`、`ARCHITECTURE_CN.md`、`CONTRIBUTING_CN.md` 和 `openspec/project.md`，不保存单次实现日志或历史进度。
+本文记录当前稳定的代码审查与质量门禁规则。它补充根目录 `AGENTS.md` 和
+`openspec/project.md`，不保存单次实现日志或历史进度。
 
 ## 决策
 
@@ -18,13 +19,13 @@ OpenNeko 采用“架构优先、契约优先、风险分级、证据驱动”�
 
 多模块改动或新功能还必须做五层分析：
 
-| 层面 | 检查点                                                               |
-| ---- | -------------------------------------------------------------------- |
-| 职责 | 谁拥有数据、行为、生命周期和清理？                                   |
-| 依赖 | L0/L1/L2、Webview/Extension、TS/Rust 和包边界是否正确？              |
-| 接口 | DTO、message、schema、Proto、command 和 extension API 是否小而稳定？ |
-| 扩展 | 下一类相似能力是否能通过 port、registry、strategy 或事件扩展？       |
-| 测试 | 哪些行为由单元、契约、集成、smoke、VSCode 验证或人工证据覆盖？       |
+| 层面 | 检查点                                                         |
+| ---- | -------------------------------------------------------------- |
+| 职责 | 谁拥有数据、行为、生命周期和清理？                             |
+| 依赖 | L0/L1/L2、Main/preload/renderer、TS/Node 和包边界是否正确？    |
+| 接口 | DTO、IPC message、schema、Proto 和 package API 是否小而稳定？  |
+| 扩展 | 下一类相似能力是否能通过 port、registry、strategy 或事件扩展？ |
+| 测试 | 哪些行为由单元、契约、集成、smoke、VSCode 验证或人工证据覆盖？ |
 
 ## 风险等级
 
@@ -32,20 +33,20 @@ OpenNeko 采用“架构优先、契约优先、风险分级、证据驱动”�
 | ---- | ----------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
 | L0   | 文档、文案、低风险单文件修复                                            | 聚焦检查、文档 review 或截图。                                               |
 | L1   | 局部组件、hook、service、state 逻辑                                     | 聚焦单元测试和相关包 build/typecheck。                                       |
-| L2   | Webview/Extension message、共享包、公共类型、媒体 port、跨包契约        | 契约测试、message/schema 测试、依赖边界检查和相关包 build。                  |
-| L3   | Rust Engine、Proto、媒体流、渲染、项目格式、AI workflow、打包、资源访问 | 架构 review、单元/契约/集成测试、smoke 或 fixture 验证，必要时性能/UX 证据。 |
+| L2   | renderer/Desktop IPC、共享包、公共类型、媒体 port、跨包契约             | 契约测试、message/schema 测试、依赖边界检查和相关包 build。                  |
+| L3   | Node/FFmpeg、Proto、媒体流、渲染、项目格式、AI workflow、打包、资源访问 | 架构 review、单元/契约/集成测试、smoke 或 fixture 验证，必要时性能/UX 证据。 |
 | L4   | release、安装、重大 UX、核心创作工作流                                  | 完整本地/CI 门禁、安装或运行 smoke、UX 证据和明确残余风险。                  |
 
 ## 通用检查
 
 - 不新增生产 `any`、不安全 `as Type` 或正式 `console.log` 日志。
 - 不破坏 TypeScript `strict`、`noUncheckedIndexedAccess`、`noImplicitOverride`。
-- 设计复杂度符合本地 VSCode 客户端 + 本地 Rust Engine 的产品边界；避免为了假想云端多租户、分布式服务治理、远程规模或未知未来需求引入无调用方的 interface、factory、registry、strategy、plugin hook、feature flag、配置层或协议层。
-- 防御性代码只覆盖真实运行边界：VSCode/Webview 沙箱、CSP、Extension/Engine 通信、本地文件与路径、媒体 codec/Range、异步取消与资源释放、外部 AI/market provider、用户数据和安全/信任边界；宽泛 `try/catch`、静默默认值、fallback、重复校验、no-op guard 或吞错不能掩盖本应失败的开发错误。
+- 设计复杂度符合本地 Electron Desktop + Node/FFmpeg 的产品边界；避免为了假想云端多租户、分布式服务治理、远程规模或未知未来需求引入无调用方的 interface、factory、registry、strategy、plugin hook、feature flag、配置层或协议层。
+- 防御性代码只覆盖真实运行边界：Main/preload/renderer 隔离、CSP、typed IPC、本地文件与路径、媒体 codec/Range、异步取消与资源释放、外部 AI/market provider、用户数据和安全/信任边界；宽泛 `try/catch`、静默默认值、fallback、重复校验、no-op guard 或吞错不能掩盖本应失败的开发错误。
 - 默认采用 fail-visible：contract mismatch、不可达状态、未实现路径、缺失依赖、非法 message、未知 schema/version、错误配置或未注册 handler/renderer/adapter 应直接抛错、返回明确 diagnostic 或让测试失败；只有保护用户数据、外部 provider、发布兼容或安全/信任边界时，才允许显式恢复、迁移或降级。
-- Webview 不导入 `vscode`、Node API 或 Extension 实现。
-- Extension Host 不导入 React/ReactDOM 或 Webview 实现。
-- TypeScript 不重复 Rust Engine 已拥有的权威计算。
+- Renderer/Webview 不导入 Electron、Node API 或 Desktop Main/preload 实现。
+- Desktop Main 不导入 React/ReactDOM 或 Webview 实现；preload 不暴露通用 IPC/Node 能力。
+- TypeScript domain 层不重复 Node/FFmpeg adapter 已拥有的媒体执行职责。
 - Protobuf 和共享契约仍是跨层类型单一事实来源。
 - 持久项目数据使用相对路径、`${VAR}/path`、stable refs、asset/entity ID 或 document locator，不保存 Webview URI、blob URL、stream ID、preview token 或 engine token。
 - 文件、文档、媒体、模型、缩略图、preview/proxy、导入、导出或跨包传递必须经过 `ContentReadService`、`ContentRepresentationService`、capability-scoped runtime projection、authorized writer、领域媒体 port 或项目文件服务中对应的 owning boundary；功能包只实现 storage-neutral generator/adapter 和领域语义，不重新实现 cache manager、path resolver、Webview URI 投影或 loopback token/Range policy。
@@ -61,89 +62,75 @@ OpenNeko 使用本地开发、手动远程验证和合并验收三类入口。�
 
 | 入口                    | 稳定入口           | 验证范围                                                                                                              | 权威信号                     |
 | ----------------------- | ------------------ | --------------------------------------------------------------------------------------------------------------------- | ---------------------------- |
-| 开发分支本地提交前      | `pnpm gate:local`  | format、lint、build、普通 workspace tests（无 coverage）、仓库质量门禁，以及存在时的本机 VS Code 配置审计             | 本地命令退出码               |
-| 手动 GitHub runner 验证 | `pnpm gate:remote` | coverage 源码门禁、完整 Rust/Proto/OpenSpec、仓库质量和所有支持平台 VSIX 打包；不包含 PR-only dependency review       | GitHub Actions `Manual Gate` |
+| 开发分支本地提交前      | `pnpm gate:local`  | format、lint、build、普通 workspace tests（无 coverage）和仓库质量门禁                                                | 本地命令退出码               |
+| 手动 GitHub runner 验证 | `pnpm gate:remote` | coverage 源码门禁、完整 Proto/OpenSpec 和仓库质量；不包含 GUI、真实 API 或 PR-only dependency review                  | GitHub Actions `Manual Gate` |
 | 开发分支合入 main       | 开发分支到 main PR | 与 Manual Gate 相同的共享 job graph，加唯一 promotion source 和 dependency review；任一 required job 不成功都阻止合并 | GitHub Actions `Merge Gate`  |
 
-`gate:local` 不收集 coverage，用于提交前完整反馈；`check:fast` 只是迭代期快速检查，不能替代提交前门禁。`gate:remote` 提供 Manual/Merge 源码部分的串行本地复现，macOS/Linux package matrix 仍由 GitHub Actions 并行 job 拥有。
+`gate:local` 不收集 coverage，用于提交前完整反馈；`check:fast` 只是迭代期快速检查，不能替代提交前门禁。`gate:remote` 提供 Manual/Merge 源码部分的串行本地复现。
 
 main 分支保护必须将 GitHub Actions `Merge Gate` 配置为唯一 required check，并要求分支与最新 main 同步。Merge Gate 必须验证 base 为 main、head 非空且不为 main；普通开发分支 push 不执行远程 workflow。新增确定性阻断 job 时，必须同步加入 Manual/Merge aggregator 的 `needs` 与 required-success 列表；required job 缺失、跳过、失败、取消或返回未知状态必须 fail-visible。
 
-远端 Manual/Merge Gate 只允许运行干净 checkout 可重现的 build、固定 unit/contract tests、coverage、静态质量与发布矩阵；不得读取 gitignored `.vscode`、启动 VS Code/GUI、依赖真实用户 fixture、读取 provider credential 或访问真实 API。现有 package 单元测试的发现范围仍由 owning package 管理，门禁编排不得借机复制业务测试逻辑。
-
-本地 VS Code 配置审计由 `test:local:vscode` 显式拥有并接入 `gate:local`；配置完全不存在时报告 skip，只存在 `launch.json` / `tasks.json` 之一时 fail-visible。GUI/Extension Development Host 与真实 API/provider 验收分别通过 `test:local:ui`、`test:local:api` 及对应 Skill/runner 显式执行，不作为普通本地 gate 的隐式依赖，避免自动打开窗口、消耗外部额度或读取凭据。
+远端 Manual/Merge Gate 只允许运行干净 checkout 可重现的 build、固定 unit/contract tests、
+coverage 和静态质量；不得启动 Electron GUI、依赖真实用户 fixture、读取 provider credential
+或访问真实 API。现有 package 单元测试的发现范围仍由 owning package 管理，门禁编排不得
+借机复制业务测试逻辑。真实 Desktop UI 与 API/provider 验收由本地显式场景拥有，不作为
+普通 gate 的隐式依赖。
 
 ## 验证命令矩阵
 
 按影响范围选择最小可靠验证，并在交付说明或 PR 中记录命令和结果。
 
-| 范围                            | 推荐命令                                                            |
-| ------------------------------- | ------------------------------------------------------------------- |
-| TS / Webview / Extension 提交前 | `pnpm gate:local`                                                   |
-| Manual/Merge 源码门禁本地复现   | `pnpm gate:remote`                                                  |
-| Rust Engine                     | `pnpm ci:local:rust`                                                |
-| Wire/跨层契约                   | owning package contract tests + `pnpm check:application-boundaries` |
-| 架构边界                        | `pnpm check`                                                        |
-| 未使用/冗余代码                 | `pnpm check:unused`                                                 |
-| Agent 边界                      | `pnpm check:agent-boundaries`                                       |
-| Agent eval harness（key-free）  | `pnpm test:agent:eval`                                              |
-| 本机 VS Code 配置审计           | `pnpm test:local:vscode`                                            |
-| 本机 Webview/GUI target 预检    | `pnpm test:local:ui`                                                |
-| 真实 API/provider Agent case    | `pnpm test:local:api -- --mode ...`                                 |
-| 3D Route A 边界                 | `pnpm check:3d-route-a-boundaries`                                  |
-| 残留/债务关键词扫描             | `pnpm check:legacy-debt`                                            |
-| 代码债务台账                    | `pnpm check:legacy-debt:ledger`                                     |
-| 质量门禁组合                    | `pnpm check:quality`                                                |
-| Engine runtime smoke            | `pnpm smoke:engine`                                                 |
-| Webview build smoke             | `pnpm smoke:webview`                                                |
-| Webview target smoke            | `pnpm smoke:webview:targets`                                        |
-| VS Code debugger target smoke   | `pnpm smoke:vscode:targets -- --skill <skill>`                      |
-| Webview functional acceptance   | 本地 Extension Development Host + `vscode-extension-debugger`       |
-| GitHub Actions 形状预检         | `pnpm ci:act`                                                       |
+| 范围                           | 推荐命令                                                            |
+| ------------------------------ | ------------------------------------------------------------------- |
+| TS / Desktop 提交前            | `pnpm gate:local`                                                   |
+| Manual/Merge 源码门禁本地复现  | `pnpm gate:remote`                                                  |
+| Wire/跨层契约                  | owning package contract tests + `pnpm check:application-boundaries` |
+| 架构边界                       | `pnpm check`                                                        |
+| 未使用/冗余代码                | `pnpm check:unused`                                                 |
+| Agent 边界                     | `pnpm check:agent-boundaries`                                       |
+| Agent eval harness（key-free） | `pnpm test:agent:eval`                                              |
+| 真实 API/provider Agent case   | `pnpm test:local:api -- --mode ...`                                 |
+| 残留/债务关键词扫描            | `pnpm check:legacy-debt`                                            |
+| 代码债务台账                   | `pnpm check:legacy-debt:ledger`                                     |
+| 质量门禁组合                   | `pnpm check:quality`                                                |
+| Webview build smoke            | `pnpm smoke:webview`                                                |
+| Desktop production package     | `pnpm package:desktop`                                              |
+| Renderer functional acceptance | 本地真实 Electron Desktop + 隔离 fixture                            |
+| GitHub Actions 形状预检        | `pnpm ci:act`                                                       |
 
-`ci:local` 是 `gate:local` 的兼容别名，`ci:remote` 是 `gate:remote` 的兼容别名，`check:ci` 是远程源码门禁的基础组合。`act` 只是本地 Linux job 形状预检，不替代 GitHub Actions。Rust macOS runner和平台打包以 `Manual Gate` / `Merge Gate` 为准；正式发布只由 main 历史上的版本标签触发。
+`ci:local` 是 `gate:local` 的别名，`ci:remote` 是 `gate:remote` 的别名，`check:ci` 是远程
+源码门禁的基础组合。`act` 只是本地 Linux job 形状预检，不替代 GitHub Actions。Desktop
+production package 和真实 GUI 场景单独记录，不由普通 CI 隐式启动。
 
 代码债务、边界例外、发布通道等机器可读门禁输入放在 `quality/`，由脚本和 CI 消费；本文只记录质量政策、验证矩阵和人工 review 边界。
 
 开发验证中若新增、修改或移除 `legacy`、`fallback`、`deprecated`、`compat`、`shim`、`dirty`、`hack`、`temporary`、`workaround`、dead code、unused 或 duplicate 相关代码，交付说明或 PR 必须记录 `pnpm check:legacy-debt`、`pnpm check:unused`，或说明已由 `pnpm ci:local` / `pnpm check:quality` 覆盖。
 
-## Agent Debug Automation 证据
+## Agent Evaluation 证据
 
-影响 AgentSession 多轮流程、对话历史、turn 执行、反馈提示词流、Skill 生命周期、Agent-owned Skill 触发、capability/tool 注册或路由、provider/model 路由、controller/judge 行为、异步任务观察、产物生成工作流或真实 API 场景验收的变更，应使用 `.codex/skills/neko-agent-evaluation/SKILL.md` 规划并记录聚焦的 TUI debug automation 证据。
+影响 AgentSession、多轮流程、Prompt/Skill、capability/tool routing、provider/model、异步任务、
+产物生成或 Desktop event projection 的变更，应使用
+`.codex/skills/neko-agent-evaluation/SKILL.md` 规划聚焦 evaluation。
 
-每项受影响行为必须先做一个 `reuse | update | create | excluded` authoring 决策，并记录 target owner、user behavior、canonical path、forbidden fallback、observable evidence、expected result/failure 和九类 coverage delta。changed path 没有 suite owner 时必须 fail-visible；`excluded` 只能用于确定性验证足以证明真实 Agent 行为不会改变的情况。
+`pnpm test:agent:eval` 只验证 strict suite/scenario、runner、assertion/Judge parser、报告和 indexed
+dry-run，是 key-free harness 自测，不等于真实 Agent 行为验收。真实 case 必须复用完整
+Desktop App/session owner，并通过 Desktop Agent input queue 提交消息；直接调用 turn runner、
+替换 runtime assembly 或使用 mock business tool 不能作为证据。
 
-`pnpm test:agent:eval` 验证 strict v2 suite/scenario、runner/protocol、assertion/Judge parser、报告、失败分类和所有 indexed suite dry-run；它是本地显式门禁，不进入 GitHub Actions 或通用 CI 命令，也不等于真实 Agent 行为验收。TUI debug automation 真实 case 同样由开发者在本地显式执行，不提供 mock lane。外部 eval 脚本可以负责 authoring、suite、controller、Judge、check、comparison 和 report，但不得 import Agent、Canvas、media、Skill 或 provider 的业务内部实现来替代真实 TUI 行为。
+当前 Desktop 尚未暴露 complete-session evaluation driver。需要真实 provider-backed case 时，
+runner 必须返回 `infrastructure-blocked`，并在交付说明中记录缺失 owner；不得回退到已移除
+TUI driver、旧 headless runner 或只凭最终文本宣称通过。
 
-debug automation 必须复用完整 TUI App/session owner，并通过 TUI 输入队列提交消息。直接调用 Agent turn runner、绕过 TUI 输入队列或替换 runtime assembly 的结果不能作为 debug automation evidence。
-
-协议 parser、invalid request、stdio framing、timeout classification 等 debug protocol 单元测试可以 key-free；但 Agent behavior acceptance 必须使用真实配置 API，不得使用 mock provider 或 eval-only fake business tools。
-
-Skill suite 必须绑定 portable name、Host source/provenance/root/location 和 Host-computed fingerprint。同名 Skill 不得只按名称或隐藏优先级选择；Market package id、semver、发布、安装和分发状态不能替代本地开发 identity。runtime/model matrix 只能使用 canonical TUI 支持的 session-scoped immutable 配置，并从 facts 证明 requested/effective identity 与 digest；不得新增 eval-only runtime flag。
-
-交付说明或 PR 中的 debug automation 证据应包含：
-
-- suite/case/run id，以及 `reuse/update/create/excluded` decision 或 intended suite。
-- 实际命令，例如 `node scripts/agent-eval/protocol-smoke.mjs --suite <suite-id> --case <case-id>`；脚本应通过通用 debug automation 接口驱动 TUI runtime。
-- `reports/agent-eval/` 下的 `result.json`、`evidence.json`、`artifact-manifest.json`、`quality-report.md`、可选 Judge/aggregate/baseline diff 路径和退出码。
-- target identity/fingerprint、target/controller/Judge provider/model、effective configuration、fixture digest、usage 和 cost availability。
-- hard-gate、no-fallback、artifact validator、dropped-count 和 failure-attribution evidence refs。
-- 若未运行，明确记录阻塞原因，例如 credentials、provider availability、network、quota、model access、local workspace fixture、controller model 或 judge model 不可用。
-- 未执行/blocked suite、skipped stage 和剩余风险。
-
-证据结论必须以当前 runner 实际执行的 assertion evaluator 为准。未知字段或没有 evaluator 的 assertion 必须在 TUI spawn 前 configuration invalid；仅有 dry-run、进程退出码、Judge 高分或非空最终回答不得替代 canonical-path、effective config 和 forbidden-fallback 证据。事实集合有 dropped count 时，依赖该事实的 assertion 必须失败或 blocked。
-
-自然语言 Skill 触发证据必须区分 Agent 主动激活 Skill 和“没有激活但输出看起来不错”。对 `trigger: "natural-language"` 的 Skill case，缺少 Agent-owned activation 应视为 case fail，而不是通过 judge 文本弥补。
-
-Mock-only、direct-turn-injection-only、final-text-only、browser-only、jsdom-only、普通 TUI UI smoke、旧 `neko run` 单轮结果或旧 headless eval 结果不能声称满足 debug automation evidence；它们只能作为相邻验证记录。
-
-GitHub Actions 和 `check:test`、`check:ci`、`ci:local` 等通用 CI 组合不得触发 key-free harness、focused case、重复 matrix、provider-backed behavior、Evaluation credential 或报告上传。所有 Evaluation 必须由开发者从本地 checkout 显式执行；缺少 credential、network、quota、model、config 或 fixture 时必须输出 infrastructure blocked/fail evidence，不能用 mock/default fallback 继续成功。
-
-原始 Evaluation 报告写入 gitignored `reports/agent-eval/`，本地按 14 天保留策略由开发者负责清理。OpenSpec、PR 和长期文档只提交通过 allowlist 的脱敏 summary/baseline；必须移除 credential、hidden prompt body、raw provider config、absolute user path、cache/temp/Webview/runtime handle、raw log 和未授权内容，同时保留稳定 suite/case/run、identity、assertion/artifact refs、failure classification 和 residual risk。
+原始 Evaluation 报告写入 gitignored `reports/agent-eval/`。长期文档只提交脱敏摘要，保留
+suite/case/run、identity、assertion/artifact refs、failure classification 和 residual risk，
+并移除 credential、hidden prompt、raw provider config、绝对用户路径与未授权内容。
 
 ## 新需求可行性检查
 
-L3/L4 变更在大规模实现前必须先证明关键路径可行：可以通过 spike、fixture、失败测试、Engine smoke、Webview target smoke、VSCode debugger Skill target smoke、VSCode 调试证据或原型完成。可行性证据写入 OpenSpec design/tasks；若无法运行，必须记录原因、风险和后续关闭方式。可行性 spike 不能替代最终功能验收。
+L3/L4 变更在大规模实现前必须先证明关键路径可行：可以通过 spike、fixture、失败测试、
+Node/FFmpeg smoke、Desktop package、真实 Electron 场景或原型完成。可行性证据写入
+OpenSpec design/tasks；若无法运行，必须记录原因、风险和后续关闭方式。可行性 spike
+不能替代最终功能验收。
 
 ## Prelaunch 兼容策略
 
@@ -161,29 +148,25 @@ L3/L4 变更在大规模实现前必须先证明关键路径可行：可以通�
 - 新路径验收必须是路径级验收，不得只断言最终结果成功；review 必须确认测试断言 canonical path、新 handler、新 renderer、新 adapter 或新 contract 被命中，并通过 spy、counter、log assertion 或将 legacy path poison 成抛错来证明旧路径未参与。
 - 验证必须证明 canonical path 默认命中；如果 legacy path 仍可触发，必须有显式 feature flag、迁移入口、fail-closed diagnostic、telemetry/log assertion 或测试覆盖，并断言旧路径不会为新路径请求返回成功结果。
 - legacy fixture、旧字段 fallback、旧 message handler、旧 renderer 或旧 command alias 的测试不能作为新路径完成证据，只能作为迁移/诊断证据。
-- VS Code、Node、pnpm、Rust、OS、Webview sandbox、CSP、codec、Range、Engine、Proto、marketplace trust 和安全边界不能以“未发布”为由忽略。
+- Electron、Node、pnpm、OS、renderer sandbox、CSP、codec、Range、FFmpeg、Proto、marketplace trust 和安全边界不能以“未发布”为由忽略。
 - 有价值的本地项目数据、用户设置、trust state、entitlement、插件安装记录和生成产物不能静默丢失；必须迁移、重建、提示确认或 fail-closed。
 
-## Engine 与 Webview 专项约束
+## Desktop 与 Webview 专项约束
 
-Node 媒体运行时变更涉及 FFmpeg job、stream、file access、runtime state、发布闭包或媒体 port contract 时，应单独记录 adapter/browser/fixture/smoke 验证。Webview 变更涉及 runtime behavior、Extension/Webview message、layout、keyboard/focus、i18n、VSCode lifecycle、CSP、媒体 codec 兼容或 Range/seek 读取时，应单独记录 message contract、focused build/test、CSP/HTML helper 测试、loopback file-access 测试，以及通过本地 Extension Development Host 与 `vscode-extension-debugger` 执行的真实功能场景。UI 运行态测试不得进入 CI。
+Node 媒体运行时变更涉及 FFmpeg job、stream、file access、runtime state、发布闭包或媒体
+port contract 时，应单独记录 adapter/browser/fixture/smoke 验证。Renderer/Webview 变更涉及
+runtime behavior、typed IPC、layout、keyboard/focus、i18n、窗口生命周期、CSP、媒体 codec
+或 Range/seek 时，应记录 message contract、focused build/test、CSP/HTML helper、
+loopback file-access 测试和真实 Electron 场景。UI 运行态测试不得进入 CI。
 
-普通浏览器、Chrome、Browser 插件、Playwright 或 Vite/localhost 只能作为热重载和显式浏览器兼容性辅助；它们不经过 VS Code Webview CSP、`webview.asWebviewUri(...)`、Extension/Webview message、焦点生命周期或 VS Code 主题注入，因此不能作为 Extension Webview 视觉/交互变更的默认验收证据。此类变更必须在本地使用 Extension Development Host + `vscode-extension-debugger` Skill 运行受影响的真实功能场景；`pnpm smoke:webview:targets` 只证明 page/Webview target 可发现。若功能场景无法运行，必须记录阻塞条件、剩余风险和关闭方式。
+普通浏览器、Chrome、Browser 插件或 Vite/localhost 只能作为热重载和显式浏览器兼容性
+辅助；它们不经过 preload、sender-bound IPC、Electron CSP、窗口/焦点和应用资源生命周期，
+不能替代 Desktop 验收。
 
-### Webview 功能场景与证据治理
-
-- owning package 维护自己的合成 fixture、用户操作、业务断言、canonical path 和 authoritative side effect；共享 runner 只维护宿主生命周期、CDP adapter、封闭操作 schema、错误分类、脱敏和报告格式。
-- 场景必须通过可见 UI、公开 VS Code/Electron 命令或消息边界和 owning project/Engine service 完成；不得直接写 fixture 文件来伪造 UI 成功，不得调用私有 store/handler，也不得增加 test-only 业务成功入口。
-- 原始 `result.json`、step/assertion evidence、DOM、日志、截图和 side-effect manifest 写入 gitignored `reports/webview-functional/`。本地证据按排障需要短期保留；可信 PR CI artifact 默认保留 14 天，nightly/release 可在对应 workflow 中显式设置不同期限。
-- 截图和 DOM 只能来自隔离 fixture workspace。不得采集普通开发窗口、真实用户工作区、用户配置、凭据、secret storage、token 或无关本机内容；误采集时必须立即删除，不能引用或提交。
-- OpenSpec、PR 和长期文档只提交脱敏摘要，包含 scenario id、命令、宿主/扩展版本、fixture identity、结果、失败分类、证据位置和剩余风险。报告 schema 未知、脱敏失败或证据越出 scenario report root 时必须 fail-visible。
-
-VS Code/Electron 在创建任意 Webview 编辑器或 Webview View 时，可能在 DevTools 中输出以下容器级 warning：
-
-- `Unrecognized feature: 'local-network-access'`
-- `An iframe which has both allow-scripts and allow-same-origin for its sandbox attribute can escape its sandboxing.`
-
-这些 warning 来自 VS Code Workbench 的 Webview iframe 创建逻辑，不由 Neko 的 Webview HTML、CSP、`webview.options` 或业务脚本产生。若堆栈指向 `webviewElement.ts`、`overlayWebview.ts`、`customEditorInput.ts` 或 `webviewEditor.ts`，它们应在运行态验收中作为已知良性容器 warning 过滤；不得把它们当作 Canvas/Cut/Audio/Model 等编辑器保存、路径、媒体或 CSP 的失败证据。仍需追踪 Neko 自身 logger、CSP violation、`preview:*`、`media:*`、`Failed to save NK*` 等业务错误。
+场景必须使用隔离合成 fixture，并通过可见 UI、public Desktop port 和 owning project/media
+service 完成；不得读取真实用户工作区、配置、凭据或增加 test-only 成功入口。OpenSpec/PR
+只提交脱敏摘要，包含 scenario id、命令、Desktop 版本、fixture identity、结果、失败分类、
+证据位置和剩余风险。
 
 ## 组件复用审计
 

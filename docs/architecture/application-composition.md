@@ -2,72 +2,67 @@
 
 状态：Accepted
 
-更新日期：2026-07-28
-对应变更：`retire-neko-engine-before-node-media-rebuild`、
-`bootstrap-neko-desktop-foundation`、`integrate-desktop-agent-home`
+更新日期：2026-07-31
+对应变更：`flatten-desktop-only-monorepo`
 
-OpenNeko 将可安装产品与可复用平台、领域包分开。当前发布产品仍是终端客户端和
-VS Code 客户端；`apps/neko-desktop` 已进入 Phase 1 foundation 实施，但尚未成为
-功能完整或受支持的发布产品。应用目录拥有宿主生命周期、产品清单、打包和发布入口，
-不拥有领域实现。
+OpenNeko 只有一个可执行产品组合根：`apps/neko-desktop`。一级 `packages/*` workspace
+提供 host-neutral contract、领域 runtime、Node adapter 和 browser-safe UI；应用根负责把它们
+组合为 Electron Main、preload 和 renderer 运行时，不拥有第二份领域实现。
 
-## 当前组合根
+## 当前组合
 
-| 层级                 | Canonical root                                                                                                                                                  | 拥有                                                                                | 不得拥有                                                                   |
-| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| OpenNeko TUI         | `apps/neko-tui`                                                                                                                                                 | 终端生命周期、workspace 选择、命令路由、Node/headless 组合、TUI 打包                | AgentSession 语义、领域 capability 实现、React/Webview UI、VS Code adapter |
-| OpenNeko for VS Code | `apps/neko-vscode`                                                                                                                                              | Extension Pack 清单、保留扩展组合、VSIX 打包和发布验收                              | 领域 Extension、Custom Editor、Webview root、领域命令/provider 实现        |
-| OpenNeko Desktop Phase 1 | `apps/neko-desktop`                                                                                                                                      | Electron main/preload/renderer、安全 bridge、Shell/Project state、窗口/AppHost 生命周期、Electron Host ports、Desktop Agent composition、Desktop 打包 | 领域事实、跨领域万能 command router、VS Code transport、Phase 2/3 能力 |
-| 共享平台             | `packages/neko-types`、`packages/neko-host`、`packages/neko-media`、`packages/neko-content`、`packages/neko-ui`、`packages/neko-entity`、`packages/neko-search` | host-neutral contract、Node/browser 媒体 runtime、内容语义、共享 UI、实体与搜索服务 | 产品生命周期、产品清单、领域实现、对 `apps/*` 的依赖                       |
-| 保留领域包           | `packages/neko-agent`、`packages/neko-assets`、`packages/neko-canvas`、`packages/neko-cut`、`packages/neko-preview`、`packages/neko-tools`                      | 领域 core、authoring、validation、capability、包自有 host adapter 和 UI root        | 产品组合、对 `apps/*` 的依赖、平行应用级领域实现                           |
-| Media runtime        | `packages/neko-media`                                                                                                                                           | 媒体 contract、FFmpeg process、loopback Range/PCM、browser HTML video/PCM client    | 产品导航、项目事实、领域 timeline、UI                                      |
+| 层级                | Canonical root                                                           | 拥有                                                                                    | 不得拥有                                                  |
+| ------------------- | ------------------------------------------------------------------------ | --------------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| Desktop application | `apps/neko-desktop`                                                      | Electron 生命周期、Main/preload/renderer、typed IPC、文件与凭据授权、窗口状态、产品打包 | 领域事实副本、跨领域万能 router、package internal imports |
+| Host/runtime        | `packages/neko-host`、`packages/neko-media`、各领域 runtime/node package | host-neutral ports、Node/FFmpeg 执行、资源生命周期                                      | React UI、应用生命周期、对 `apps/*` 的依赖                |
+| Browser UI          | `packages/neko-ui`、一级 `*-webview` package、`packages/neko-assets`     | React UI、交互、browser media client、package-owned Desktop host port                   | Node/Electron API、文件路径、持久事实、后台任务 owner     |
+| L0/domain           | `packages/neko-types` 与各领域 contract/core package                     | 类型契约、领域规则、authoring、validation                                               | Electron、React、应用内部实现                             |
 
 ## 依赖方向
 
 ```text
-apps/*
+apps/neko-desktop
   -> package public entries
-  -> host/platform/domain contracts
-  -> media/content/shared contracts
+  -> host/runtime/domain contracts
+  -> shared or package-owned L0 contracts
 
 packages/* -X-> apps/*
+renderer/webview packages -X-> electron or node:*
 ```
 
-- 应用内可以使用本应用根下的相对导入，但不得进入 `packages/*/src` 或其他应用内部目录。
-- 共享包和领域包不得导入应用实现。
-- 每个领域 surface 仍由 owning package 提供；TUI、VS Code 和 Desktop 只选择其公共
-  adapter/projection，不复制领域逻辑。
-- `@neko/host/application` 是通用应用身份和 handoff 契约，不会仅凭一个 identity 创建或授权产品组合根。
+- 所有保留 workspace package 的 `package.json` 必须直接位于 `packages/<name>`。
+- Desktop 只能通过 package public entry 组合能力，不得导入 `packages/*/src`。
+- Main 拥有文件、凭据、进程、窗口和后台资源；preload 只投影最小 typed port；renderer
+  只拥有浏览器 UI 和可恢复展示状态。
+- 每个 runtime/session/task/editor 实例独立拥有可变状态和资源，active selection 只选择
+  展示投影，不是状态 owner。
+- 缺失 Desktop adapter、未知 IPC message、过期 instance identity 或被移除宿主入口必须
+  fail-visible。
 
-## 产品矩阵
+## 已移除宿主
 
-| 产品                 | 当前职责                                                                          | 真实宿主验证                                                                          |
-| -------------------- | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| OpenNeko TUI         | Agent-first 终端与 headless authoring 入口                                        | 聚焦 TUI build/test 和真实 Agent evaluation                                           |
-| OpenNeko for VS Code | Tools、Preview、Assets、Agent、Cut、Canvas 与 Node/FFmpeg 媒体 adapter 的发布组合 | Extension build/package、Extension Development Host、聚焦 Webview functional scenario |
-| OpenNeko Desktop | Phase 1 实施中；已具备 P1.1/P1.2 和 P1.3 确定性 composition，但生产 Agent controller 尚未完整注入，capability 保持 unavailable | arm64 macOS Forge package、contract/security test；P1.3 仍需真实 provider、VS Code Host 与 Electron functional evidence |
+VS Code Extension、TUI、VSIX、Extension Development Host、`host-vscode` adapter 和
+`acquireVsCodeApi` bridge 不再是产品、开发、测试或发布入口。不得通过 alias、动态 optional
+import、兼容 package、fallback transport、空命令或成功 no-op 恢复这些路径。
 
-旧 Home、旧 Desktop/Studio、Market、Auth、Live、Model、Puppet、Sketch、Story/Scene、
-Dashboard 和 Device 不是当前发布入口。不得用 alias、兼容包、空命令或成功 no-op 恢复
-它们。新的 `apps/neko-desktop` 只按已接受 OpenSpec 分期实施，不继承旧 Desktop 或
-`neko-home` 身份。
+历史归档文档可以保留旧宿主事实；active architecture、当前 OpenSpec 和 executable
+configuration 必须以 Desktop 为唯一 canonical path。
 
-## 生命周期与错误语义
+## 数据与资源
 
-- TUI、VS Code 和 Desktop 分别拥有自己的可变运行时状态、配置投影、异步任务和资源句柄。
-- 领域 operation/event 必须携带其 canonical instance identity；不得回退到“当前 active”实例。
-- 缺失 package adapter、未知 product id、未注册 handler 或被移除的入口必须 fail-visible。
-- Desktop Agent 只有在 Pi runtime 与全部 controller effects 完整注入后才可投影为 ready；
-  缺失 `DesktopAgentControllerComposition` 时生产启动必须保持 unavailable，不注册 partial
-  controller，也不以 renderer mock 补齐。
-- FFmpeg 进程、loopback HTTP 和 stream 的发现、授权、取消与释放由宿主组合层负责；Webview 不拥有这些生命周期。
+- 项目文件和 Desktop settings 是受保护用户数据；宿主清理不得删除、覆盖或静默迁移它们。
+- 已移除的未发布 VS Code/TUI state 不导入 Desktop，也不作为 fallback。
+- FFmpeg/ffprobe、loopback Range/PCM、watcher、临时 URL 和 token 由 Main 或 owning Node
+  adapter 创建、授权、取消和释放。
+- renderer 只消费 opaque descriptor、URL 或短生命周期 handle，不接收 raw local path、
+  credential、SQLite path 或 process handle。
 
-## 验证约束
+## 验证
 
-- 根构建、发布、质量和 smoke 编排只包含保留产品与扩展。
-- Desktop Phase 1 实现进入根构建和质量门禁，但在领域功能完成真实宿主验收前不进入当前
-  发布产品声明。
-- VS Code Extension Pack 与 release channels 必须恰好包含 Tools、Preview、Assets、Agent、Cut 和 Canvas。
-- `workspace:*` 依赖必须唯一解析；应用边界检查必须阻止 package-to-app 和跨应用内部导入。
-- 运行态验收必须使用对应真实宿主；普通浏览器不能替代 VS Code Extension Development
-  Host 或 Electron Desktop。
+- `node scripts/check-desktop-only-topology.mjs` 证明只有一个应用根、一级 package 和无
+  removed-host production path。
+- `pnpm check:application-boundaries` 验证 package-to-app、renderer-to-Node/Electron 和
+  Main-to-React 依赖违规。
+- `pnpm test`、`pnpm build`、`pnpm check` 验证生产者/消费者、workspace resolution 和依赖图。
+- `pnpm package:desktop` 检查 Electron 生产包；涉及用户路径时还需真实 Desktop
+  project-open/creative-surface 场景。

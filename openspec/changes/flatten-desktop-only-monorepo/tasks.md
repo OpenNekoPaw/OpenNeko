@@ -20,24 +20,24 @@
 
 ## 3. Removed Host Paths
 
-- [ ] 3.1 Delete `apps/neko-vscode`, `apps/neko-tui` and aggregate Extension package roots after
+- [x] 3.1 Delete `apps/neko-vscode`, `apps/neko-tui` and aggregate Extension package roots after
       confirming retained code has moved.
-- [ ] 3.2 Delete package-local Extension implementations, `host-vscode` adapters and shared VS Code
+- [x] 3.2 Delete package-local Extension implementations, `host-vscode` adapters and shared VS Code
       L1 helpers; remove their exports, tests and dependencies.
-- [ ] 3.3 Remove `acquireVsCodeApi`, Extension message bootstrap and VS Code-only Webview fallback
+- [x] 3.3 Remove `acquireVsCodeApi`, Extension message bootstrap and VS Code-only Webview fallback
       paths while preserving injected package-owned Desktop runtimes.
-- [ ] 3.4 Add or update Desktop producer/consumer tests proving removed hosts cannot participate in
+- [x] 3.4 Add or update Desktop producer/consumer tests proving removed hosts cannot participate in
       successful Agent, Assets, Canvas, Cut, Preview or Tools paths.
 
 ## 4. Desktop-Only Toolchain And Release
 
-- [ ] 4.1 Remove VSIX/TUI root commands, package groups, staging scripts, smoke tests, dependency
+- [x] 4.1 Remove VSIX/TUI root commands, package groups, staging scripts, smoke tests, dependency
       checks and unused-code configuration; make all active commands Desktop-only.
-- [ ] 4.2 Remove VS Code/TUI dependencies and regenerate the pnpm lockfile from the first-level
+- [x] 4.2 Remove VS Code/TUI dependencies and regenerate the pnpm lockfile from the first-level
       workspace topology.
-- [ ] 4.3 Replace or remove CI/release workflows and validators that package Extension/TUI artifacts;
+- [x] 4.3 Replace or remove CI/release workflows and validators that package Extension/TUI artifacts;
       add Desktop artifact allowlists and fail-visible removed-host guards.
-- [ ] 4.4 Update active architecture, package boundaries, contribution guidance and root README
+- [x] 4.4 Update active architecture, package boundaries, contribution guidance and root README
       documents to identify Desktop as the sole host and first-level packages as canonical.
 
 ## 5. Validation And Quality Review

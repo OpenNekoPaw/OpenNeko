@@ -64,7 +64,7 @@
 - [ ] 9.3 Add `workspace-board-delivery-resume` to `agent-runtime.workflow-controller` for first-Host termination, second-Host fenced takeover, identical delivery identity, single Canvas effect, and terminal idle evidence.
 - [x] 9.4 Extend evaluation-neutral TUI facts with bounded/redacted delivery status, artifact role counts, target kind, writer epoch, Canvas revision/node IDs, diagnostics, dropped counts, and legacy fallback counters.
 - [x] 9.5 Run `pnpm test:agent:eval` and focused dry-runs, then run the three real TUI cases when credentials/network/model access are available; record report paths, effective identities, blocked stages, no-fallback evidence, and residual risk without claiming dry-run as behavior acceptance.
-- [ ] 9.6 Add a focused Extension Development Host functional scenario covering an opened Workspace Board, background/TUI pending delivery, writer ownership, visible flat content graph, user movement preservation, and safe conflict diagnostics; do not substitute a browser/Vite run.
+- [ ] 9.6 Add a focused Electron Desktop functional scenario covering an opened Workspace Board, background pending delivery, writer ownership, visible flat content graph, user movement preservation, and safe conflict diagnostics; do not substitute a browser/Vite run.
 - [x] 9.7 Restore canonical core ownership of the `group` Webview renderer, remove the Storyboard-only registration, add a no-subsystem regression test, and prove in `~/Git/neko-test` under `Debug Dev (All)` that an ordinary Group does not render as unsupported.
 - [x] 9.8 Stabilize and localize the earlier processing-Group path and prove its non-overlap/i18n behavior in external `~/Git/neko-test` Debug Dev; section 11 subsequently replaces Group creation while retaining legacy Group rendering.
 
@@ -99,7 +99,7 @@
 - [x] 13.2 Add a red path-level regression proving that a non-empty authoritative Board cannot be replaced by a Webview snapshot with unconfirmed missing nodes, while an explicitly evidenced user clear remains valid.
 - [x] 13.3 Track per-document node-removal evidence across single delete, batch delete, undo, and redo; clear it at save/revert/Host apply/reload/close boundaries.
 - [x] 13.4 Remove the Webview `update` message fallback to the default empty Canvas and fail visibly on an invalid payload.
-- [ ] 13.5 Run focused Canvas Extension/Webview tests and typecheck/build, then verify save and subsequent Generation delivery in `~/Git/neko-test` through Extension Development Host plus Webview CDP when port `9222` is available.
+- [ ] 13.5 Run focused Canvas Domain/Webview tests and typecheck/build, then verify save and subsequent Generation delivery through an isolated Electron Desktop fixture and renderer diagnostics.
 
 ## 14. Batch-aware Board Layout
 

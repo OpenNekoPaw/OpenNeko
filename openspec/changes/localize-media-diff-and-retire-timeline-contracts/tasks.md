@@ -55,5 +55,5 @@
 - [x] 8.1 Run Tools contract, Extension, Webview, media adapter and package typechecks/tests with canonical-path assertions.
 - [x] 8.2 Run Cut, Agent, Canvas and TUI producer/consumer tests proving OTIO/NKC/explicit-context paths and poisoned NKV/Timeline fallbacks.
 - [x] 8.3 Run `pnpm build`, `pnpm test`, `pnpm check`, `pnpm check:legacy-debt`, `pnpm check:unused`, `pnpm check:openspec` and affected orchestration tests.
-- [ ] 8.4 Run Extension Development Host scenarios with isolated fixtures for image/audio/video compare, Git comparison, cancel/timeout, Media Info, concurrent viewers and disposal.
+- [ ] 8.4 Run Electron Desktop scenarios with isolated fixtures for image/audio/video compare, Git comparison, cancel/timeout, Media Info, concurrent viewers and disposal.
 - [x] 8.5 Record commands, host/version, sanitized evidence, skipped checks and remaining risks; confirm no user project or media bytes changed.

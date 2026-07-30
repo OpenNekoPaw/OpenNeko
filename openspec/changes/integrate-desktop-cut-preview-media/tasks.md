@@ -17,8 +17,7 @@
       with expected revision and command idempotency
 - [x] 2.3 Migrate Cut preview/playback and ExportJob intents without duplicating `@neko/media`,
       Node/FFmpeg or export lifecycle
-- [ ] 2.4 Migrate the VS Code Cut adapter to the same runtime and poison the global/fixed host-adapter
-      production path
+- [x] 2.4 Remove the VS Code Cut adapter and poison the global/fixed host-adapter production path
 - [x] 2.5 Test Cut Root snapshot-first recovery, command fencing, playback/export lifecycle, focus and
       disposal
 
@@ -26,8 +25,8 @@
 
 - [x] 3.1 Define the package-owned Preview Root/runtime and explicit viewer registry over existing
       image, video, audio, document and model viewers
-- [ ] 3.2 Refactor viewer message/state hooks to consume the injected runtime and migrate the VS Code
-      Preview providers to the same contract
+- [x] 3.2 Refactor viewer message/state hooks to consume the injected runtime and remove the VS Code
+      Preview providers
 - [x] 3.3 Implement sender/session/revision-bound `neko-media:` descriptors with MIME, Range,
       cancellation, EOF and cleanup through existing media owners
 - [x] 3.4 Implement temporary, pinned and explicit side Preview Views without replacing Canvas/Cut
@@ -62,8 +61,8 @@
 
 - [x] 6.1 Run Cut, Preview, Media, Assets, shared UI and Desktop tests/typechecks/builds plus
       architecture, legacy-debt, unused-code and strict OpenSpec validation
-- [ ] 6.2 Validate Cut/Preview Webview behavior in an isolated Extension Development Host and record
-      no-old-runtime/no-regression evidence
+- [x] 6.2 Prove removed Extension-host Cut/Preview runtimes cannot participate through topology
+      guards and poisoned no-old-runtime paths
 - [x] 6.3 Validate packaged Electron Resource → Preview → Cut → edit/play → ExportJob → close/reopen
       with canonical-path counters, media cleanup and user-visible evidence
   - 2026-07-29 packaged `darwin-arm64` evidence used the isolated synthetic media workspace:

@@ -106,10 +106,10 @@
       conversation, Tool confirmation, projection, unsupported route and legacy-fallback evidence
 - [x] 6.2 Run focused real Agent evaluation with explicit provider/model/cost authorization when
       available; otherwise record the exact external blocker and residual behavior risk
-- [x] 6.3 Run Agent types/runtime/Extension/Webview and Desktop tests/typechecks/builds plus
+- [x] 6.3 Run Agent types/runtime/Webview and Desktop tests/typechecks/builds plus
       `pnpm test:agent:eval`, architecture, legacy-debt, unused-code and strict OpenSpec gates
-- [ ] 6.4 Validate the existing VS Code Agent path in Extension Development Host with an isolated
-      fixture and record no-regression/no-old-router evidence
+- [x] 6.4 Prove the removed VS Code Agent path cannot participate through Desktop-only topology,
+      poisoned route tests and no-old-router evidence
 - [ ] 6.5 Validate the Electron Content Project → Conversation create/restore → Pi turn → Tool
       approval → Activity → renderer reload scenario, including canonical-path counters and resource
       cleanup

@@ -25,8 +25,8 @@
 - 分析必须覆盖完整调用链和真实运行边界，不能只优化当前文件、当前函数或单个测试暴露出的局部现象；先确认输入、状态、契约、依赖、资源生命周期、错误传播和最终用户路径，再决定修改位置。
 - 抽象只服务于稳定职责、真实边界或明确变化点：接口应精简、可组合、可替换、可测试，不要为单一实现制造无意义层级，也不要为了少写代码把不同职责压进同一接口。
 - 简单改动可直接实现，但仍需保持与现有架构一致。
-- 本项目是本地 VSCode 客户端 + 本地 Rust Engine，不是云端多租户或分布式后端；设计必须按本地产品边界控制复杂度，避免为了假想远程规模、租户隔离、服务治理或未知未来需求引入过度抽象、过度配置、过度防御或多层 indirection。
-- 防御性代码只保护真实边界：VSCode/Webview 沙箱、CSP、Extension/Engine 通信、本地文件与路径、媒体 codec/Range、异步取消与资源释放、外部 AI/market provider、用户数据和安全/信任边界；不要用宽泛 try/catch、静默默认值、fallback、重复校验或 no-op guard 掩盖本应暴露的开发错误。
+- 本项目是本地 Electron Desktop + Node/FFmpeg 媒体运行时，不是云端多租户或分布式后端；设计必须按本地产品边界控制复杂度，避免为了假想远程规模、租户隔离、服务治理或未知未来需求引入过度抽象、过度配置、过度防御或多层 indirection。
+- 防御性代码只保护真实边界：Electron Main/preload/renderer 隔离、CSP、typed IPC、本地文件与路径、媒体 codec/Range、异步取消与资源释放、外部 AI/market provider、用户数据和安全/信任边界；不要用宽泛 try/catch、静默默认值、fallback、重复校验或 no-op guard 掩盖本应暴露的开发错误。
 - 默认采用 fail-visible：契约违背、不可达状态、未实现路径、缺失依赖、非法 message、未知 schema/version 或开发期路径错误应直接抛错、返回明确 diagnostic 或让测试失败；除非保护用户数据、外部 provider、发布兼容或安全/信任边界，不要用兜底值、兼容分支或静默降级把代码问题伪装成成功。
 - 新增功能或非平凡代码修改后，按本文“测试与质量门禁”章节和 `CONTRIBUTING_CN.md` 做自审；可使用项目 skill `.codex/skills/neko-quality-review/SKILL.md`，并在交付说明中列出验证命令与剩余风险。
 
@@ -42,22 +42,20 @@
 
 ## 项目概览
 
-- 本仓库是 `OpenNeko`，一个集成在 VSCode 内的创意工作套件 monorepo。
+- 本仓库是 `OpenNeko`，一个本地优先的 Electron Desktop 创意工作套件 monorepo。
 - 主要技术栈：
   - 前端：React 18、Zustand、Tailwind CSS、Vite
-  - 插件：VSCode Extension API、TypeScript、esbuild
-  - 媒体引擎：Rust（wgpu、FFmpeg、axum、tokio）+ N-API（napi-rs）
-  - 流媒体：H.264 + PCM + fMP4 over WebSocket
+  - Desktop：Electron Main/preload/renderer、TypeScript、Vite
+  - 媒体运行时：Node.js + FFmpeg/ffprobe、loopback Range/PCM
   - AI：Vercel AI SDK + MCP Protocol
   - 类型契约：Protobuf
   - 构建：pnpm 10 + Turborepo 2
   - 测试：Vitest、cargo test
 - 共享基础核心包：
-  - `packages/neko-engine`：Rust 媒体引擎（GPU/FFmpeg/音频/HTTP）
   - `packages/neko-types`：共享基础设施（Logger、i18n、Theme、Errors）
-  - `packages/neko-client`：流媒体客户端与 `EngineClient`
-  - package-owned L0 contracts：Extension/Webview 等跨 runtime 类型契约
-- 保留产品包：`neko-agent`（AI）、`neko-assets`（素材）、`neko-canvas`（画布）、`neko-cut`（视频）、`neko-preview`（授权只读预览）、`neko-tools`（工具与诊断）、`neko-engine`（媒体引擎），以及 `apps/neko-tui` / `apps/neko-vscode` 宿主。完整边界见 `docs/architecture/package-boundaries.md`。
+  - `packages/neko-media`：Node/FFmpeg 与浏览器媒体运行时
+  - package-owned L0 contracts：Desktop Main/preload/renderer 跨 runtime 类型契约
+- 保留能力均位于一级 `packages/*` workspace；`apps/neko-desktop` 是唯一应用组合根。完整边界见 `docs/architecture/package-boundaries.md`。
 
 ## 开发前先读
 
@@ -65,7 +63,7 @@
 - 总体架构先看 `docs/architecture/README.md` 与 `docs/architecture/package-boundaries.md`。
 - 文档导航先看 `docs/README.md`，不要猜测具体文档路径。
 - 系统级架构、ADR 和跨领域约束从 `docs/architecture/README.md` 进入。
-- 子包边界、UI 层、公共代码、Extension/Webview/Engine 约束先看 `docs/architecture/package-boundaries.md`。
+- 子包边界、UI 层、公共代码、Desktop IPC 与 Node/FFmpeg 约束先看 `docs/architecture/package-boundaries.md`。
 - 领域能力、领域架构和跨包领域边界从 `docs/domains/README.md` 进入，再进入 `docs/domains/<domain>/README.md`。
 - 调研、竞品、技术 spike 和 UX 分析从 `docs/research/README.md` 进入。
 - Gap、迁移、健康度和审计快照从 `docs/status/README.md` 进入。
@@ -89,19 +87,18 @@
 ## 架构硬约束
 
 - TypeScript 不要放松以下编译约束：`strict`、`noUncheckedIndexedAccess`、`noImplicitOverride`。
-- Webview 沙箱限制必须遵守：
-  - Webview 不能直接访问 Node.js API。
-  - Webview 不能直接调用 VSCode API。
-  - Webview 资源路径必须通过 `webview.asWebviewUri()` 暴露。
-  - Webview 与 Extension Host 之间通过 `postMessage` 通信。
-- Webview 负责 UI 渲染、用户交互、可恢复展示状态、浏览器图形/GPU 能力和授权媒体流消费；不得拥有工作区文件读写、持久项目事实、权限与信任、后台任务生命周期、运行时实例状态或宿主业务编排。
-- Extension Host 或 host-neutral domain service 负责工作区 IO、持久化、权限、生命周期和业务编排；可跨宿主复用的领域逻辑应进入独立 domain core，不要为了移出 Webview 而全部堆入 Extension Host。
+- Renderer 沙箱限制必须遵守：
+  - Renderer/Webview 包不能直接访问 Node.js 或 Electron API。
+  - 宿主能力只能通过 preload 暴露的最小 typed Desktop port 使用。
+  - 本地资源必须由 Desktop Main 授权，并以 opaque URL、descriptor 或短生命周期 handle 投影。
+- Renderer/Webview 包负责 UI 渲染、用户交互、可恢复展示状态、浏览器图形/GPU 能力和授权媒体流消费；不得拥有工作区文件读写、持久项目事实、权限与信任、后台任务生命周期、运行时实例状态或宿主业务编排。
+- Desktop Main 或 host-neutral domain service 负责工作区 IO、持久化、权限、生命周期和业务编排；可复用的领域逻辑应进入独立 domain core，不要把它们堆入应用组合根。
 - Rust 引擎是计算逻辑和数据模型的权威来源；TypeScript 层负责 UI 与编排，不要重复实现 Rust 已定义的核心计算或数据变换。
 - 当前没有 Proto package；跨层 contract 由 owning package 的 L0 contract 或真实项目 codec 拥有。未来只有存在真实序列化 producer/consumer 时才可通过 OpenSpec 重新引入 Proto。
 - 路径系统只保存相对路径或 `${VAR}/path` 形式，避免写入绝对路径；优先复用 `PathResolver` 与现有设置机制。
 - 遵守共享层级隔离：
   - L0：零依赖基础能力
-  - L1：VSCode 相关能力
+  - L1：host/runtime 能力
   - L2：DOM / React 能力
   - 不要破坏依赖方向
 
@@ -170,14 +167,14 @@
   - 用配置、常量或 schema 管理可变参数
   - 为异步流程补齐错误处理、取消和边界检查
 
-## VSCode 插件专项约束
+## Desktop 专项约束
 
-- Webview 侧不要导入 `vscode`。
-- Extension 侧不要引入 React。
-- Vite/浏览器/Chrome/Playwright 只可作为 Webview 热重载和纯浏览器兼容性辅助；涉及 VS Code Extension Webview 的视觉、交互、CSP、消息、焦点或媒体验证时，必须使用 Extension Development Host + `vscode-extension-debugger` Skill。除非用户明确要求浏览器兼容性测试，不要调用 Chrome/Browser/Playwright 作为默认验证路径，也不要把普通浏览器打开 `localhost` 当作运行态验收。
-- 注意 Webview 状态丢失、异步竞态、内存泄漏和 `postMessage` 丢失等常见问题。
-- 所有 `vscode.Disposable` 资源都要显式释放。
-- 扩展之间不要建立直接依赖，优先走共享层或契约层。
+- Renderer/Webview 侧不得导入 `electron`、`node:*` 或访问 Node globals。
+- Desktop Main 侧不得引入 React。
+- preload 只投影最小、类型化、sender-bound 的 IPC contract；不得暴露通用 `ipcRenderer`、文件系统或 shell 能力。
+- 涉及 Desktop 视觉、交互、CSP、消息、焦点或媒体的验收必须运行真实 Electron 应用；普通浏览器/Vite 只可作为纯浏览器兼容性辅助。
+- 注意 renderer reload 状态、异步竞态、内存泄漏、IPC 丢失与窗口关闭后的资源释放。
+- 所有 Electron listener、窗口、FFmpeg/HTTP session 和文件 watcher 都要显式释放。
 
 ## TODO 与增量实现
 
@@ -199,28 +196,28 @@
 - 新路径验收必须是路径级验收，不得只断言最终结果成功；测试必须断言 canonical path、new handler、new renderer、new adapter 或新 contract 被命中，并通过 spy/counter/log assertion 或将 legacy path poison 成抛错来证明旧路径未参与。
 - 新路径验证必须证明旧路径不会被默认命中；若旧路径仍可被触发，必须有显式 feature flag、migration-only 入口、fail-closed diagnostic、telemetry/log assertion 或迁移测试覆盖，并断言旧路径不会为新路径请求返回成功结果。
 - 测试不得通过 legacy fixture、旧字段 fallback、旧 message handler、旧 renderer 或旧 command alias 让新路径“看似通过”；需要 legacy 覆盖时必须拆成迁移/拒绝/诊断测试。
-- 不能借 prelaunch cleanup 忽略 VS Code、Node、pnpm、Rust、OS、Webview sandbox、CSP、codec、Range、Engine、Proto、marketplace trust 或安全边界。
+- 不能借 prelaunch cleanup 忽略 Electron、Node、pnpm、OS、renderer sandbox、CSP、codec、Range、FFmpeg、Proto、marketplace trust 或安全边界。
 - 不能静默删除或损坏有价值的本地项目数据、用户设置、trust state、entitlement、插件安装记录或生成产物；必须提供迁移、重建、确认或 fail-closed diagnostic。
 
 ## 测试与质量门禁
 
 - 单元测试只是实现级反馈，不代表功能验收完成。新增功能、bug 修复和非平凡重构必须按影响范围完成从局部到系统的验证；若同时命中多种变更类型，验证要求取并集。
 
-| 变更类型                                                                                                                | 最低必要验证                                                                                                                                                                                                                                             |
-| ----------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 纯文档、注释或无运行时影响的元数据                                                                                      | `git diff --check`，并检查相关链接、路径、schema 或文档一致性                                                                                                                                                                                            |
-| 局部 TypeScript 逻辑或 bug 修复                                                                                         | 修复前可失败的聚焦回归/单元测试、受影响包 typecheck/build；涉及调用链时补集成或路径断言                                                                                                                                                                  |
-| 共享 TypeScript 契约、跨包重构或高风险路径                                                                              | 生产者和消费者测试、`pnpm build`、`pnpm test`、`pnpm check`；必要时运行 `pnpm ci:local` 或与远端 CI 对应的聚焦门禁                                                                                                                                       |
-| 残留、兼容层、冗余或依赖清理                                                                                            | `pnpm check:legacy-debt`、`pnpm check:unused`，或说明已由 `pnpm ci:local` / `pnpm check:quality` 覆盖                                                                                                                                                    |
-| Proto、Extension/Engine bridge 或跨层 message                                                                           | 生成物一致性、生产者/消费者测试、契约路径断言，以及受影响运行态或集成验证                                                                                                                                                                                |
-| Rust Engine                                                                                                             | 聚焦 `cargo test`；涉及客户端、媒体协议或跨层行为时增加对应集成/运行态验证                                                                                                                                                                               |
-| Agent evaluation harness、scenario manifest、debug automation 或 facts 契约                                             | `pnpm test:agent:eval`；该命令仅是 key-free harness 自测，不得描述为真实 Agent 行为验收                                                                                                                                                                  |
-| prompt、Skill、capability/tool routing、provider/model、AgentSession、validation/recovery 或 TUI Agent event projection | 按 `.codex/skills/neko-agent-evaluation/SKILL.md` 规划并运行聚焦脚本 evaluation；无法运行真实 case 时记录阻塞条件和残余风险                                                                                                                              |
-| Webview 视觉、交互、CSP、消息、焦点或媒体                                                                               | 受影响构建/测试，加 Extension Development Host + `vscode-extension-debugger` 的聚焦真实场景；`pnpm smoke:webview:targets`/target discovery 仅为环境预检，普通浏览器/Vite/Chrome/Playwright 不能替代 VS Code Webview 运行态验收；UI 运行态测试不得进入 CI |
-| 发布链路或影响面不易限定的高风险改动                                                                                    | `pnpm ci:local` 加所有受影响领域的 evaluation、Extension Development Host/Webview UI 或 Engine 运行态验证                                                                                                                                                |
+| 变更类型                                                                                                                | 最低必要验证                                                                                                                              |
+| ----------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| 纯文档、注释或无运行时影响的元数据                                                                                      | `git diff --check`，并检查相关链接、路径、schema 或文档一致性                                                                             |
+| 局部 TypeScript 逻辑或 bug 修复                                                                                         | 修复前可失败的聚焦回归/单元测试、受影响包 typecheck/build；涉及调用链时补集成或路径断言                                                   |
+| 共享 TypeScript 契约、跨包重构或高风险路径                                                                              | 生产者和消费者测试、`pnpm build`、`pnpm test`、`pnpm check`；必要时运行 `pnpm ci:local` 或与远端 CI 对应的聚焦门禁                        |
+| 残留、兼容层、冗余或依赖清理                                                                                            | `pnpm check:legacy-debt`、`pnpm check:unused`，或说明已由 `pnpm ci:local` / `pnpm check:quality` 覆盖                                     |
+| Proto、Extension/Engine bridge 或跨层 message                                                                           | 生成物一致性、生产者/消费者测试、契约路径断言，以及受影响运行态或集成验证                                                                 |
+| Rust Engine                                                                                                             | 聚焦 `cargo test`；涉及客户端、媒体协议或跨层行为时增加对应集成/运行态验证                                                                |
+| Agent evaluation harness、scenario manifest、debug automation 或 facts 契约                                             | `pnpm test:agent:eval`；该命令仅是 key-free harness 自测，不得描述为真实 Agent 行为验收                                                   |
+| prompt、Skill、capability/tool routing、provider/model、AgentSession、validation/recovery 或 TUI Agent event projection | 按 `.codex/skills/neko-agent-evaluation/SKILL.md` 规划并运行聚焦脚本 evaluation；无法运行真实 case 时记录阻塞条件和残余风险               |
+| Renderer/Webview 视觉、交互、CSP、消息、焦点或媒体                                                                      | 受影响构建/测试，加真实 Electron Desktop 聚焦场景；普通浏览器/Vite/Chrome 不能替代 preload/IPC/窗口生命周期验收；UI 运行态测试不得进入 CI |
+| 发布链路或影响面不易限定的高风险改动                                                                                    | `pnpm ci:local` 加所有受影响领域的 evaluation、Electron Desktop UI 或 Node/FFmpeg 运行态验证                                              |
 
 - 新路径、迁移和 bug 修复必须同时验证结果与执行路径：断言 canonical contract、handler、renderer、adapter 或 Engine path 被命中，并证明 legacy/fallback 路径未参与。
-- 验证应重点发现循环依赖、Layer 0 反向依赖、Webview 依赖 `vscode`、Extension 依赖 React、扩展包交叉依赖等架构违规。
+- 验证应重点发现循环依赖、Layer 0 反向依赖、Renderer/Webview 依赖 Electron/Node、Desktop Main 依赖 React、包到应用反向依赖等架构违规。
 - 验收结论必须列出实际执行的命令、结果和覆盖层级；未执行项需记录不适用原因、阻塞条件和残余风险，不能仅以单元测试通过声明功能完成。
 - Webview 功能场景由 owning package 维护 fixture、用户操作、业务断言和 authoritative side effect；共享 runner 只拥有宿主/CDP/错误策略/报告机制，不得在共享层加入包级业务 shortcut。
 - Webview 功能测试必须使用隔离、合成 fixture workspace；不得采集普通开发窗口、真实用户工作区、凭据或本机私有配置作为截图、DOM、日志或报告证据。
@@ -261,9 +258,9 @@ pnpm check:quality
 pnpm check:legacy-debt
 pnpm check:unused
 
-# Agent 与 Webview 运行态
+# Agent 与 Desktop 运行态
 pnpm test:agent:eval
-pnpm smoke:webview:targets
+pnpm package:desktop
 
 # Rust Engine
 cd packages/neko-engine && cargo test

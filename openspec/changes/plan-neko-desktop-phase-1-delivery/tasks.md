@@ -55,7 +55,7 @@
       multi-Board switching, duplicate-open focus and at most two explicitly split Canvas views
 - [x] 4.4 Test public-entry dependencies, workspace authorization, ContentLocator-only identity,
       Canvas persistence/reopen and candidate ownership; record the user-requested Desktop-only
-      acceptance waiver and retain VS Code Canvas runtime validation as residual risk
+      acceptance waiver and retain real Electron Canvas runtime validation as residual risk
 - [x] 4.5 Refine the Desktop creative workbench to a collapsible primary icon rail, transparent
       traffic-light drag region with no global Header or unified workspace Tab row, owner-local
       Agent/creative/Timeline tabs, Agent-only dock presentation, Chat + Main display presets,
@@ -70,7 +70,7 @@
 
 - [x] 5.1 Create `integrate-desktop-cut-preview-media` with canonical Cut/Preview adapters and the
       Desktop secure custom media protocol contract
-- [ ] 5.2 Inject the full Cut Root, preserve OTIO/Cut command/ExportJob authority, migrate direct
+- [ ] 5.2 Inject the full Cut Root, preserve OTIO/Cut command/ExportJob authority, remove direct
       VS Code transport, and remove/poison fixed demo timeline success; support multiple open Cut
       documents with one rendered Cut Stage/Timeline session in Phase 1
 - [ ] 5.3 Build the package-owned Preview Root/descriptor lifecycle over existing document/media/3D
@@ -79,8 +79,8 @@
 - [ ] 5.4 Implement and test GET/HEAD/closed Range/206/token/owner/session/cancel/backpressure,
       direct/remux/hardware-prepared file/PCM, native `<video src>`, SDR baseline, seek, export and
       resource cleanup; poison `MediaSource`, `SourceBuffer`, whole-video fetch and CPU fallback
-- [ ] 5.5 Run Cut/Preview producer-consumer tests, Node/FFmpeg integration, Electron fixture media
-      scenarios and existing VS Code Extension Development Host regressions
+- [ ] 5.5 Run Cut/Preview producer-consumer tests, Node/FFmpeg integration and isolated Electron
+      fixture media scenarios, proving removed hosts do not participate
 
 ## 6. P1.6 Supporting Creative Domains
 
@@ -92,7 +92,7 @@
       Agent/Context Dock; include Entity-authority-backed Agent mention search with stable Entity
       identity and optional representation ContentLocator; keep CharacterProject/Version and World
       unavailable
-- [ ] 6.4 Separate Tools browser presenters from VS Code effects and integrate media comparison,
+- [ ] 6.4 Separate Tools browser presenters from host effects and integrate Desktop media comparison,
       metadata, logs and fail-visible diagnostics without leaking paths or runtime consoles
 - [ ] 6.5 Run domain tests, Agent evaluation where routing changes, UI adapter tests and unsupported
       capability diagnostics

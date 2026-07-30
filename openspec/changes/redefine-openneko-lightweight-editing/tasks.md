@@ -61,16 +61,16 @@
 - [x] 7.3 Implement the basic timeline, contextual Inspector and controls for link media, split, delete, undo/redo, zoom, fit-all, playback, media export and Video Clip mute.
 - [x] 7.4 Add new Webview tests for temporary-state loss, revision conflicts, manual-mute separation, supported controls, long-timeline navigation and absence guards.
 
-## 8. Connect VS Code Canvas through an explicit Cut target
+## 8. Connect Desktop Canvas through an explicit Cut target
 
 - [x] 8.1 Implement ordered Canvas workspace-contained media/gap routes targeting a new or explicit `.otio` URI/revision.
 - [x] 8.2 Reject stale revisions, unsupported route items and active/recent Cut fallback without partial mutation.
-- [ ] 8.3 Add producer/consumer and Extension Development Host coverage for new-target creation and explicit-target append.
+- [ ] 8.3 Add producer/consumer and Electron Desktop coverage for new-target creation and explicit-target append.
 
 ## 9. Final validation and documentation
 
 - [x] 9.1 Run new OTIO fixtures, command algebra, document-relative link/rebase, workspace containment, copy/move/save-as, multi-document and selected media-adapter tests.
-- [ ] 9.2 Run Extension Development Host scenarios for open/edit/save/reopen, temporary Webview state loss, link, separation/manual mute, playback/export and multi-document isolation.
+- [ ] 9.2 Run Electron Desktop scenarios for open/edit/save/reopen, temporary renderer state loss, link, separation/manual mute, playback/export and multi-document isolation.
 - [x] 9.3 Run affected build/test/check, legacy-debt, unused-code, strict OpenSpec and `git diff --check`.
 - [x] 9.4 Update package/user/architecture docs to the implemented state and attach both the cleanup-gate evidence and final validation evidence.
 
@@ -130,27 +130,27 @@
 - [x] 15.4 Route VS Code Explorer/system file drops through the same Host prepare/validation/probe/ExternalReference command as the file picker.
 - [ ] 15.5 Move the resizable Inspector beside Preview and above the full-width Timeline; add Project/Track/Clip/Gap basic editing controls without restoring the professional property system.
 - [ ] 15.6 Add Timeline context menus and time-placement pointer interaction while retaining trim handles, snapping, autoscroll and cancellation cleanup.
-- [ ] 15.7 Add Core/Extension/Webview regression and path tests for boundary switching, Gap placement, dropped files, duration/speed/audio edits, Inspector layout and context-menu dispatch.
-- [ ] 15.8 Run affected builds/tests/checks, strict OpenSpec and Extension Development Host scenarios covering cross-Clip playback and the restored interactions; record remaining limits.
+- [ ] 15.7 Add Domain/Node/Renderer regression and path tests for boundary switching, Gap placement, dropped files, duration/speed/audio edits, Inspector layout and context-menu dispatch.
+- [ ] 15.8 Run affected builds/tests/checks, strict OpenSpec and Electron Desktop scenarios covering cross-Clip playback and the restored interactions; record remaining limits.
 
 ## 16. Restore the audited core/basic Webview capability set
 
 - [x] 16.1 Re-audit the previous Webview, Extension provider, save path, media services, export panel/service and tests; record the P0/P1/delete matrix in `legacy-webview-capability-audit.md`.
 - [ ] 16.2 Add failing behavior/path tests for edit-dirty-save-reopen, cross-Clip preview, time placement, trim/duration/speed/audio persistence, Explorer/file drop, context-menu dispatch and ExportJob restore/cancel.
-- [ ] 16.3 Adapt the old basic components, keyboard shortcuts and interaction lifecycle to revisioned `TimelineView` and typed intents; do not maintain a parallel minimal implementation or restore writable project Store ownership; leave primary+S to VS Code save.
+- [ ] 16.3 Adapt the old basic components, keyboard shortcuts and interaction lifecycle to revisioned `TimelineView` and typed intents; do not maintain a parallel minimal implementation or restore writable project Store ownership; route primary+S through the typed Desktop save port.
 - [x] 16.4 Replace synchronous foreground export with the document/session/job-scoped `ExportJobCoordinator`, adapt the old config/progress panel to query, background, cancel and resume it, and project explicit versioned Job state into a native VS Code status item that navigates to the owning `.otio`; delete the parallel registry and generic Task compatibility path.
 - [ ] 16.5 Restore P1 selection/clipboard/shortcut/Track productivity only after the P0 edit-save-preview-export paths pass their tests.
-- [ ] 16.6 Run Core/Extension/Webview behavior tests and builds, strict OpenSpec, dependency/legacy/unused gates and isolated Extension Development Host scenarios; keep the change incomplete until all applicable gates pass.
+- [ ] 16.6 Run Domain/Node/Renderer behavior tests and builds, strict OpenSpec, dependency/legacy/unused gates and isolated Electron Desktop scenarios; keep the change incomplete until all applicable gates pass.
 - [ ] 16.7 Restore the canonical `PreviewPanel`, `PreviewControls`, `Timeline`/timeline hooks, `PropertyPanel` and Export subview boundaries; remove parallel `Basic*` replacements and prove shared i18n/theme/error/logger/UI infrastructure remains the only runtime.
 
 ## 17. Restore the previous UI implementation before reconnecting OTIO
 
-- [ ] 17.1 Restore the pre-change Cut Webview `components/`, `hooks/`, i18n and style implementation in one bounded operation while retaining the current OTIO Domain, Extension Host, document session and media adapter.
+- [ ] 17.1 Restore the pre-change Cut Webview `components/`, `hooks/`, i18n and style implementation in one bounded operation while retaining the current OTIO Domain, Desktop Main host port, document session and media adapter.
 - [ ] 17.2 Refactor Zustand into a document-scoped Presentation Store containing the immutable `TimelineView` projection and recoverable UI/gesture state, then introduce one OTIO adapter/controller that routes every retained durable edit through revisioned typed intents; do not restore NKV `ProjectData`, project mutation/history/save or any writable project authority.
 - [ ] 17.3 Reconnect the restored `PreviewPanel`/`PreviewControls`, `Timeline`/Track/Clip/hooks, `PropertyPanel` and Export subviews through that adapter without replacing their DOM, accessibility and interaction lifecycles with minimal JSX.
 - [x] 17.4 Remove only the professional/deferred branches listed by the capability audit, together with their exclusive handlers/locales/styles/tests; retain shared runtime and all basic component behavior tests.
 - [ ] 17.5 Adapt the retained behavior tests for OTIO projections and typed intents, including pointer/keyboard/focus, context menu, resize, selection, clipboard, export and media-session lifecycle; source-string checks alone are insufficient.
-- [ ] 17.6 Run Webview/Cut/Domain tests, builds, dependency/unused/legacy gates, strict OpenSpec and isolated Extension Development Host visual/interaction scenarios before marking 16.7 complete.
+- [ ] 17.6 Run Webview/Cut/Domain tests, builds, dependency/unused/legacy gates, strict OpenSpec and isolated Electron Desktop visual/interaction scenarios before marking 16.7 complete.
 
 ## 18. Repair revision stability, serialization and media-independent preview
 
@@ -159,7 +159,7 @@
 - [x] 18.3 Support audio-only and streamless-gap preview segments; stop normally at timeline end without a missing-Video diagnostic.
 - [x] 18.4 Clamp each Minimap Clip to the timeline range and retain unchanged derived representations across Host revisions.
 - [x] 18.5 Audit Cut i18n/theme/error/logger paths; replace raw Host/Preview/Export error strings with the shared structured diagnostic contract, localize the complete catalog and project recoverable errors through the existing Toast surface only.
-- [ ] 18.6 Run focused Core/Extension/Webview tests and builds, strict OpenSpec, then validate save/backup, Minimap, add-Track/move and audio-only preview in an isolated Extension Development Host.
+- [ ] 18.6 Run focused Domain/Node/Renderer tests and builds, strict OpenSpec, then validate save/backup, Minimap, add-Track/move and audio-only preview in an isolated Electron Desktop.
 
 ## 19. Restore Clip/Track state tools and reversible trim
 
@@ -176,8 +176,8 @@
 - [x] 20.3 Restore Track rename/reorder/mute/lock/hide/delete, Track/Gap/background context menus and Project/Track/Gap Inspector contexts through revisioned Host commands.
 - [ ] 20.4 Replace the legacy Cut AI action helper/handler with shared `AgentContextPayload` projection and `neko.agent.sendContext`; add deterministic contract tests and a focused Agent Evaluation proving explicit target identity and no legacy/active-editor fallback.
 - [x] 20.5 Extend the shared `StatusBarGroup` integration with document/session-scoped Cut status while keeping background export jobs independent; localize all text and navigation commands.
-- [ ] 20.6 Prove shared i18n, VS Code theme tokens, icons/tags/menu/property primitives, ErrorBoundary/Toast/ErrorHandler, logger, `CreativeWorkbenchShell`, resize, keyboard and drag/drop paths remain canonical and no Cut-local replacement runtime exists.
-- [ ] 20.7 Run focused Domain/Codec/Extension/Webview tests and builds, strict OpenSpec, key-free Agent Evaluation validation, dependency/legacy/unused gates and isolated Extension Development Host scenarios for the retained productivity set.
+- [ ] 20.6 Prove shared i18n, canonical `--neko-*` theme tokens, icons/tags/menu/property primitives, ErrorBoundary/Toast/ErrorHandler, logger, `CreativeWorkbenchShell`, resize, keyboard and drag/drop paths remain canonical and no Cut-local replacement runtime exists.
+- [ ] 20.7 Run focused Domain/Codec/Node/Renderer tests and builds, strict OpenSpec, key-free Agent Evaluation validation, dependency/legacy/unused gates and isolated Electron Desktop scenarios for the retained productivity set.
 
 ## 21. Stabilize rapid timeline gestures and compact Track controls
 
@@ -211,7 +211,7 @@
 - [x] 24.4 Restore job-scoped output name, MP4/MOV, aspect-preserving resolution, frame-rate, video bitrate, audio inclusion/bitrate/sample-rate parameters without creating a second project-profile fact; explicitly exclude export-to-Canvas/DaVinci, retain the shared resizable Inspector path, and localize export/status projections through existing shared paths.
 - [x] 24.5 Diagnose and repair stuck Playhead gestures, timeline-end overrun and delayed/interrupted cross-Clip switching across the Webview controller, Host preview boundary and selected media adapter.
 - [x] 24.6 Make Preview workspace background follow existing VS Code theme tokens while preserving the project Canvas/letterbox color semantics.
-- [ ] 24.7 Run focused Domain/Extension/Webview tests and builds, strict OpenSpec and isolated Extension Development Host scenarios for dirty export revision, mixed audio, multiple Clip boundaries, high-frequency Playhead drag, exact timeline stop and light/dark Preview themes; record evidence in `validation.md`.
+- [ ] 24.7 Run focused Domain/Node/Renderer tests and builds, strict OpenSpec and isolated Electron Desktop scenarios for dirty export revision, mixed audio, multiple Clip boundaries, high-frequency Playhead drag, exact timeline stop and light/dark Preview themes; record evidence in `validation.md`.
 - [ ] 24.8 Add save lifecycle/path tests, migrate OTIO persistence from package-local temporary-file replacement to the shared project-file save/authorized writer boundary, and prove normal save preserves the exact Custom Editor document/panel identity while version conflicts remain fail-visible.
 
 ## 25. Correct Timeline placement and presentation extent
