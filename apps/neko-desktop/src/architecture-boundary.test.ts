@@ -254,6 +254,9 @@ describe('Desktop architecture boundaries', () => {
     expect(rendererConfig).toContain(
       "'../../packages/neko-assets/src/resource-browser/contract.ts'",
     );
+    expect(rendererConfig).toMatch(
+      /exclude:\s*\[[^\]]*'@neko-canvas\/domain'[^\]]*'@neko-canvas\/webview\/root'/s,
+    );
   });
 
   it('releases window resources through the registered sender identity after Electron closes', () => {

@@ -93,6 +93,7 @@ export default defineConfig({
   },
   optimizeDeps: {
     exclude: [
+      '@neko-canvas/domain',
       '@neko-canvas/webview/root',
       '@neko/preview-webview/root',
       '@neko/webview/root',
