@@ -68,12 +68,19 @@ Cut Preview and Timeline are two regions of the same Cut root. The Timeline port
 
 This follows the repository's instance-ownership rule: active selection is a display projection, not a mutable-state owner. A runtime registry is unnecessary because React keys and the canonical Main group view list already define identity and lifecycle.
 
+### 7. Closing Cut uses ordered media teardown
+
+Closing a Cut view first stops and settles every active or prepared Preview stream, including PCM sessions, and only then disposes the owning media adapter and its Loopback Server. Stream-stop and adapter disposal are separate lifecycle phases rather than concurrent cleanup operations.
+
+The adapter is still disposed when one or more stream stops fail, and all failures remain visible through the existing aggregate disposal error. This keeps the owning boundary deterministic without masking media failures or adding retry/fallback behavior.
+
 ## Risks / Trade-offs
 
 - **Shared tab styling can affect another future consumer** → Keep the styles expressed through existing Workbench theme variables and validate all current `@neko/ui` tests.
 - **Compact sidebar can make the layout icon ambiguous** → Retain the tooltip and accessible label, and place the control consistently next to Settings.
 - **Removing the Timeline toggle eliminates manual hide/show from general chrome** → Preserve Cut-owned automatic Timeline presentation and cover that projection path in existing Workbench tests.
 - **Retaining open views consumes more renderer resources than active-only mounting** → Bound lifetime to the explicit open-tab list, hide inactive surfaces from layout and accessibility, and dispose immediately when a tab closes.
+- **PCM shutdown can race Loopback Server disposal** → Settle all record-level stops before disposing the shared adapter and cover the order through the Desktop close path.
 - **Existing dirty Home/Agent edits overlap Desktop files** → Use focused patches, inspect the final diff, and avoid rewriting unrelated hunks.
 
 ## Migration Plan

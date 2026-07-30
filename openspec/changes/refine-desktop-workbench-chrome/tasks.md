@@ -24,3 +24,9 @@
 - [x] 4.3 Attach the Timeline target to its owning Cut view by group membership and remove the duplicate Timeline-only runtime path.
 - [x] 4.4 Verify close still unmounts the removed view runtime and add stable stack styling coverage.
 - [x] 4.5 Run focused/full Desktop tests, typecheck/build, strict OpenSpec validation, quality review, and real Electron Cut/Canvas tab-switch acceptance.
+
+## 5. Ordered Cut media teardown
+
+- [x] 5.1 Add a red-capable Desktop close-path test proving media-adapter disposal currently overlaps a pending PCM stop.
+- [x] 5.2 Split Cut Preview disposal into ordered stream-stop and adapter-disposal phases while retaining aggregate failure reporting.
+- [x] 5.3 Run focused media/Desktop regression tests, affected typechecks/build, strict OpenSpec validation, and packaged Electron playback-close acceptance.

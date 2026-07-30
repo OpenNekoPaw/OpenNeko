@@ -93,3 +93,11 @@ The system SHALL treat Main tab activation as a visibility selection and SHALL k
 - **WHEN** an open Main view is closed and removed from its group
 - **THEN** its keyed runtime SHALL unmount and dispose
 - **AND** no hidden orphan runtime SHALL remain
+
+#### Scenario: Closing Cut drains Preview media before adapter disposal
+
+- **GIVEN** a Cut view has an active or prepared Preview with PCM sessions
+- **WHEN** the user closes that Cut tab
+- **THEN** all Preview stream-stop operations SHALL settle before the owning media adapter is disposed
+- **AND** adapter disposal SHALL still run after a stream-stop failure
+- **AND** shutdown failures SHALL remain visible through the Cut disposal diagnostic
