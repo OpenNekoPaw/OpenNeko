@@ -81,8 +81,13 @@ import {
 import type { DesktopCutRuntime } from './desktop-cut-runtime';
 import {
   DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION,
+  parseDesktopHomeAssetAddLibraryRequest,
+  parseDesktopHomeAssetLibraryRequest,
   parseDesktopHomeAssetSearchRequest,
   parseDesktopHomePluginsRequest,
+  type DesktopHomeAssetAddLibraryResult,
+  type DesktopHomeAssetRemoveLibraryResult,
+  type DesktopHomeAssetRevealLibraryResult,
   type DesktopHomeAssetSearchResult,
   type DesktopHomePluginsResult,
 } from '../shared/home-management-contract';
@@ -449,6 +454,67 @@ export class DesktopAppHost {
         diagnostic: { message: describeError(error) },
       };
     }
+  }
+
+  async addHomeMediaLibrary(
+    sender: DesktopSenderIdentity,
+    payload: unknown,
+  ): Promise<DesktopHomeAssetAddLibraryResult> {
+    this.requireActive();
+    const request = parseDesktopHomeAssetAddLibraryRequest(payload);
+    const window = this.windows.resolveSender(sender);
+    const projection = await this.shell.getProjection(window.windowId);
+    const result = await this.requireResourceBrowser().addHomeMediaLibrary({
+      windowId: window.windowId,
+      endpointEpoch: projection.endpointEpoch,
+    });
+    return {
+      schemaVersion: DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION,
+      requestId: request.requestId,
+      ...result,
+    };
+  }
+
+  async removeHomeMediaLibrary(
+    sender: DesktopSenderIdentity,
+    payload: unknown,
+  ): Promise<DesktopHomeAssetRemoveLibraryResult> {
+    this.requireActive();
+    const request = parseDesktopHomeAssetLibraryRequest(payload);
+    const window = this.windows.resolveSender(sender);
+    const projection = await this.shell.getProjection(window.windowId);
+    await this.requireResourceBrowser().removeHomeMediaLibrary({
+      windowId: window.windowId,
+      endpointEpoch: projection.endpointEpoch,
+      libraryId: request.libraryId,
+    });
+    return {
+      schemaVersion: DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION,
+      requestId: request.requestId,
+      status: 'removed',
+      libraryId: request.libraryId,
+    };
+  }
+
+  async revealHomeMediaLibrary(
+    sender: DesktopSenderIdentity,
+    payload: unknown,
+  ): Promise<DesktopHomeAssetRevealLibraryResult> {
+    this.requireActive();
+    const request = parseDesktopHomeAssetLibraryRequest(payload);
+    const window = this.windows.resolveSender(sender);
+    const projection = await this.shell.getProjection(window.windowId);
+    await this.requireResourceBrowser().revealHomeMediaLibrary({
+      windowId: window.windowId,
+      endpointEpoch: projection.endpointEpoch,
+      libraryId: request.libraryId,
+    });
+    return {
+      schemaVersion: DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION,
+      requestId: request.requestId,
+      status: 'revealed',
+      libraryId: request.libraryId,
+    };
   }
 
   async listHomePlugins(

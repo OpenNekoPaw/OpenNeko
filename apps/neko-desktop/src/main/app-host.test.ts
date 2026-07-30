@@ -10,6 +10,8 @@ import {
   createDesktopApplicationSettingsUpdateRequest,
 } from '../shared/application-settings-contract';
 import {
+  createDesktopHomeAssetAddLibraryRequest,
+  createDesktopHomeAssetLibraryRequest,
   createDesktopHomeAssetSearchRequest,
   createDesktopHomePluginsRequest,
 } from '../shared/home-management-contract';
@@ -236,6 +238,33 @@ describe('DesktopAppHost', () => {
           sortDirection: 'ascending',
           limit: 20,
         }),
+      ),
+    ).rejects.toThrow("Unknown Desktop IPC sender '11'");
+  });
+
+  it('rejects unknown senders before any global media-library mutation', async () => {
+    const fixture = await createShellAppHost();
+    const sender = {
+      webContentsId: 11,
+      frameUrl: `${DESKTOP_APP_ORIGIN}/index.html`,
+    };
+
+    await expect(
+      fixture.appHost.addHomeMediaLibrary(
+        sender,
+        createDesktopHomeAssetAddLibraryRequest('assets-add-1'),
+      ),
+    ).rejects.toThrow("Unknown Desktop IPC sender '11'");
+    await expect(
+      fixture.appHost.removeHomeMediaLibrary(
+        sender,
+        createDesktopHomeAssetLibraryRequest('assets-remove-1', 'library:Footage'),
+      ),
+    ).rejects.toThrow("Unknown Desktop IPC sender '11'");
+    await expect(
+      fixture.appHost.revealHomeMediaLibrary(
+        sender,
+        createDesktopHomeAssetLibraryRequest('assets-reveal-1', 'library:Footage'),
       ),
     ).rejects.toThrow("Unknown Desktop IPC sender '11'");
   });

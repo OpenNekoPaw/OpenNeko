@@ -99,8 +99,13 @@ import {
 } from '../shared/cut-bridge-contract';
 import {
   createDesktopHomeAssetSearchRequest,
+  createDesktopHomeAssetAddLibraryRequest,
+  createDesktopHomeAssetLibraryRequest,
   createDesktopHomePluginsRequest,
   DESKTOP_HOME_MANAGEMENT_CHANNELS,
+  parseDesktopHomeAssetAddLibraryResult,
+  parseDesktopHomeAssetRemoveLibraryResult,
+  parseDesktopHomeAssetRevealLibraryResult,
   parseDesktopHomeAssetSearchResult,
   parseDesktopHomePluginsResult,
   type OpenNekoDesktopHomeManagementBridge,
@@ -295,6 +300,38 @@ const bridge: OpenNekoDesktopBridge &
           request,
         );
         return parseDesktopHomeAssetSearchResult(response, request.requestId);
+      },
+      async addLibrary() {
+        const request = createDesktopHomeAssetAddLibraryRequest(
+          nextRequestId('desktop-home-assets-add-library'),
+        );
+        const response: unknown = await ipcRenderer.invoke(
+          DESKTOP_HOME_MANAGEMENT_CHANNELS.assetsAddLibrary,
+          request,
+        );
+        return parseDesktopHomeAssetAddLibraryResult(response, request.requestId);
+      },
+      async removeLibrary(libraryId) {
+        const request = createDesktopHomeAssetLibraryRequest(
+          nextRequestId('desktop-home-assets-remove-library'),
+          libraryId,
+        );
+        const response: unknown = await ipcRenderer.invoke(
+          DESKTOP_HOME_MANAGEMENT_CHANNELS.assetsRemoveLibrary,
+          request,
+        );
+        return parseDesktopHomeAssetRemoveLibraryResult(response, request.requestId);
+      },
+      async revealLibrary(libraryId) {
+        const request = createDesktopHomeAssetLibraryRequest(
+          nextRequestId('desktop-home-assets-reveal-library'),
+          libraryId,
+        );
+        const response: unknown = await ipcRenderer.invoke(
+          DESKTOP_HOME_MANAGEMENT_CHANNELS.assetsRevealLibrary,
+          request,
+        );
+        return parseDesktopHomeAssetRevealLibraryResult(response, request.requestId);
       },
     },
     plugins: {

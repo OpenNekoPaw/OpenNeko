@@ -1,4 +1,14 @@
-import { lstat, mkdtemp, mkdir, realpath, rm, symlink, utimes, writeFile } from 'node:fs/promises';
+import {
+  lstat,
+  mkdtemp,
+  mkdir,
+  readFile,
+  realpath,
+  rm,
+  symlink,
+  utimes,
+  writeFile,
+} from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -9,8 +19,12 @@ import { createElectronNekoHostPorts } from './electron-host-ports';
 import {
   createDesktopResourceBrowserProjectionSource,
   createDesktopResourceBrowserReadSource,
+  importDesktopGlobalMediaLibrary,
+  revealDesktopGlobalMediaLibrary,
   searchDesktopGlobalAssetCatalog,
+  trashDesktopGlobalMediaLibrary,
 } from './desktop-resource-browser-source';
+import { copyDesktopGlobalMediaLibraryDirectory } from './desktop-global-media-library-files';
 
 const temporaryRoots: string[] = [];
 const identity: ResourceBrowserIdentity = {
@@ -82,6 +96,137 @@ describe('Desktop Resource Browser source', () => {
     expect(assets.map((item) => item.label)).toEqual(['new.mp4', 'old.mp4']);
     expect(JSON.stringify(assets)).not.toContain('project-only.mp4');
     expect(JSON.stringify(assets)).not.toContain(fixture.root);
+  });
+
+  it('publishes a copied global media library and keeps staging directories out of catalogs', async () => {
+    const fixture = await createFixture();
+    const sourceDirectory = path.join(fixture.root, 'Footage');
+    const globalAssetRoot = path.join(fixture.root, 'home', '.neko', 'assets');
+    await mkdir(sourceDirectory);
+    await writeFile(path.join(sourceDirectory, 'shot.mp4'), 'shot');
+    await mkdir(path.join(globalAssetRoot, '.openneko-import-incomplete'), { recursive: true });
+    await writeFile(
+      path.join(globalAssetRoot, '.openneko-import-incomplete', 'partial.mp4'),
+      'partial',
+    );
+    const host = createElectronNekoHostPorts({
+      homedir: path.join(fixture.root, 'home'),
+      nekoHome: path.join(fixture.root, 'home', '.neko'),
+      version: '0.0.1',
+      logger: createLogger(),
+    });
+
+    await expect(
+      importDesktopGlobalMediaLibrary({
+        globalAssetRoot,
+        files: host.files,
+        sourceDirectory,
+        operationId: 'operation-1',
+        copyDirectory: copyDesktopGlobalMediaLibraryDirectory,
+      }),
+    ).resolves.toEqual({ libraryId: 'library:Footage' });
+    await expect(readFile(path.join(globalAssetRoot, 'Footage', 'shot.mp4'), 'utf8')).resolves.toBe(
+      'shot',
+    );
+    await expect(
+      searchDesktopGlobalAssetCatalog({
+        globalAssetRoot,
+        files: host.files,
+        facet: 'libraries',
+        query: '',
+        sortBy: 'name',
+        sortDirection: 'ascending',
+        limit: 20,
+      }),
+    ).resolves.toEqual([expect.objectContaining({ id: 'library:Footage', label: 'Footage' })]);
+    const assets = await searchDesktopGlobalAssetCatalog({
+      globalAssetRoot,
+      files: host.files,
+      facet: 'assets',
+      query: '',
+      sortBy: 'name',
+      sortDirection: 'ascending',
+      limit: 20,
+    });
+    expect(assets.map((item) => item.label)).toEqual(['shot.mp4']);
+  });
+
+  it('fails global media-library conflicts before copying or merging', async () => {
+    const fixture = await createFixture();
+    const sourceDirectory = path.join(fixture.root, 'Footage');
+    const globalAssetRoot = path.join(fixture.root, 'home', '.neko', 'assets');
+    await mkdir(sourceDirectory);
+    await mkdir(path.join(globalAssetRoot, 'Footage'), { recursive: true });
+    const host = createElectronNekoHostPorts({
+      homedir: path.join(fixture.root, 'home'),
+      nekoHome: path.join(fixture.root, 'home', '.neko'),
+      version: '0.0.1',
+      logger: createLogger(),
+    });
+    const copyDirectory = vi.fn(async () => undefined);
+
+    await expect(
+      importDesktopGlobalMediaLibrary({
+        globalAssetRoot,
+        files: host.files,
+        sourceDirectory,
+        operationId: 'operation-1',
+        copyDirectory,
+      }),
+    ).rejects.toThrow('already exists');
+    expect(copyDirectory).not.toHaveBeenCalled();
+  });
+
+  it('trashes and reveals only validated physical direct-child libraries', async () => {
+    const fixture = await createFixture();
+    const globalAssetRoot = path.join(fixture.root, 'home', '.neko', 'assets');
+    const libraryPath = path.join(globalAssetRoot, 'Footage');
+    const externalDirectory = path.join(fixture.root, 'external');
+    await mkdir(libraryPath, { recursive: true });
+    await mkdir(externalDirectory);
+    await symlink(externalDirectory, path.join(globalAssetRoot, 'Linked'));
+    const host = createElectronNekoHostPorts({
+      homedir: path.join(fixture.root, 'home'),
+      nekoHome: path.join(fixture.root, 'home', '.neko'),
+      version: '0.0.1',
+      logger: createLogger(),
+    });
+    const trashDirectory = vi.fn(async () => undefined);
+    const revealPath = vi.fn(async () => undefined);
+
+    await trashDesktopGlobalMediaLibrary({
+      globalAssetRoot,
+      files: host.files,
+      libraryId: 'library:Footage',
+      trashDirectory,
+    });
+    await revealDesktopGlobalMediaLibrary({
+      globalAssetRoot,
+      files: host.files,
+      libraryId: 'library:Footage',
+      revealPath,
+    });
+    expect(trashDirectory).toHaveBeenCalledWith(libraryPath);
+    expect(revealPath).toHaveBeenCalledWith(libraryPath);
+
+    await expect(
+      trashDesktopGlobalMediaLibrary({
+        globalAssetRoot,
+        files: host.files,
+        libraryId: 'library:Linked',
+        trashDirectory,
+      }),
+    ).rejects.toThrow('not a physical directory');
+    await expect(
+      revealDesktopGlobalMediaLibrary({
+        globalAssetRoot,
+        files: host.files,
+        libraryId: 'library:../external',
+        revealPath,
+      }),
+    ).rejects.toThrow('name is invalid');
+    expect(trashDirectory).toHaveBeenCalledTimes(1);
+    expect(revealPath).toHaveBeenCalledTimes(1);
   });
 
   it('exposes the same read authority to Home without composing interaction effects', async () => {

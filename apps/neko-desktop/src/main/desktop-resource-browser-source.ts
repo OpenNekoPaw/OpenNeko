@@ -35,6 +35,7 @@ import type {
 } from '../shared/home-management-contract';
 
 const FILE_SCAN_LIMIT = 5_000;
+export const DESKTOP_GLOBAL_MEDIA_LIBRARY_STAGING_PREFIX = '.openneko-import-';
 const EXCLUDED_DIRECTORIES = new Set([
   '.git',
   '.neko',
@@ -89,6 +90,88 @@ export async function searchDesktopGlobalAssetCatalog(input: {
   return items
     .sort((left, right) => compareGlobalAssetItems(left, right, input))
     .slice(0, input.limit);
+}
+
+export function createDesktopGlobalMediaLibraryId(libraryName: string): string {
+  return `library:${requireDesktopGlobalMediaLibraryName(libraryName)}`;
+}
+
+export function parseDesktopGlobalMediaLibraryId(libraryId: string): string {
+  if (!libraryId.startsWith('library:')) {
+    throw new Error('Desktop global media-library identity is invalid.');
+  }
+  return requireDesktopGlobalMediaLibraryName(libraryId.slice('library:'.length));
+}
+
+export async function requireDesktopGlobalMediaLibraryPath(input: {
+  readonly globalAssetRoot: string;
+  readonly files: NekoHostPorts['files'];
+  readonly libraryId: string;
+}): Promise<string> {
+  const libraryName = parseDesktopGlobalMediaLibraryId(input.libraryId);
+  await input.files.createDirectory(input.globalAssetRoot);
+  const entry = (await input.files.readDirectory(input.globalAssetRoot)).find(
+    (candidate) => candidate.name === libraryName,
+  );
+  if (!entry) {
+    throw new Error(`Desktop global media library '${libraryName}' does not exist.`);
+  }
+  if (entry.type !== 'directory') {
+    throw new Error(`Desktop global media library '${libraryName}' is not a physical directory.`);
+  }
+  return path.join(input.globalAssetRoot, libraryName);
+}
+
+export async function importDesktopGlobalMediaLibrary(input: {
+  readonly globalAssetRoot: string;
+  readonly files: NekoHostPorts['files'];
+  readonly sourceDirectory: string;
+  readonly operationId: string;
+  readonly copyDirectory: (sourceDirectory: string, destinationDirectory: string) => Promise<void>;
+}): Promise<{ readonly libraryId: string }> {
+  await input.files.createDirectory(input.globalAssetRoot);
+  const libraryName = requireDesktopGlobalMediaLibraryName(path.basename(input.sourceDirectory));
+  const existingEntry = (await input.files.readDirectory(input.globalAssetRoot)).find(
+    (candidate) => candidate.name === libraryName,
+  );
+  if (existingEntry) {
+    throw new Error(`Desktop global media library '${libraryName}' already exists.`);
+  }
+  const stagingName = `${DESKTOP_GLOBAL_MEDIA_LIBRARY_STAGING_PREFIX}${requireOperationId(input.operationId)}`;
+  const stagingPath = path.join(input.globalAssetRoot, stagingName);
+  const destinationPath = path.join(input.globalAssetRoot, libraryName);
+  try {
+    await input.copyDirectory(input.sourceDirectory, stagingPath);
+    const entriesBeforePublish = await input.files.readDirectory(input.globalAssetRoot);
+    if (entriesBeforePublish.some((entry) => entry.name === libraryName)) {
+      throw new Error(`Desktop global media library '${libraryName}' already exists.`);
+    }
+    await input.files.rename(stagingPath, destinationPath);
+  } catch (error: unknown) {
+    await input.files.delete(stagingPath, { recursive: true, idempotent: true });
+    throw error;
+  }
+  return { libraryId: createDesktopGlobalMediaLibraryId(libraryName) };
+}
+
+export async function trashDesktopGlobalMediaLibrary(input: {
+  readonly globalAssetRoot: string;
+  readonly files: NekoHostPorts['files'];
+  readonly libraryId: string;
+  readonly trashDirectory: (absolutePath: string) => Promise<void>;
+}): Promise<void> {
+  const absolutePath = await requireDesktopGlobalMediaLibraryPath(input);
+  await input.trashDirectory(absolutePath);
+}
+
+export async function revealDesktopGlobalMediaLibrary(input: {
+  readonly globalAssetRoot: string;
+  readonly files: NekoHostPorts['files'];
+  readonly libraryId: string;
+  readonly revealPath: (absolutePath: string) => Promise<void>;
+}): Promise<void> {
+  const absolutePath = await requireDesktopGlobalMediaLibraryPath(input);
+  await input.revealPath(absolutePath);
 }
 
 export function createDesktopResourceBrowserReadSource(
@@ -358,13 +441,14 @@ async function readGlobalLibraries(
   const libraries = entries.filter(
     (entry) =>
       entry.type === 'directory' &&
+      !entry.name.startsWith(DESKTOP_GLOBAL_MEDIA_LIBRARY_STAGING_PREFIX) &&
       (normalizedQuery.length === 0 || entry.name.toLocaleLowerCase().includes(normalizedQuery)),
   );
   return Promise.all(
     libraries.map(async (entry) => {
       const stat = await input.files.stat(path.join(input.globalAssetRoot, entry.name));
       return {
-        id: `library:${entry.name}`,
+        id: createDesktopGlobalMediaLibraryId(entry.name),
         label: entry.name,
         description: '.',
         kind: 'library' as const,
@@ -376,6 +460,28 @@ async function readGlobalLibraries(
       };
     }),
   );
+}
+
+function requireDesktopGlobalMediaLibraryName(value: string): string {
+  if (
+    value.length === 0 ||
+    value !== value.normalize('NFC') ||
+    value === '.' ||
+    value === '..' ||
+    value.includes('/') ||
+    value.includes('\\') ||
+    value.startsWith(DESKTOP_GLOBAL_MEDIA_LIBRARY_STAGING_PREFIX)
+  ) {
+    throw new Error('Desktop global media-library name is invalid.');
+  }
+  return value;
+}
+
+function requireOperationId(value: string): string {
+  if (!/^[A-Za-z0-9-]+$/.test(value)) {
+    throw new Error('Desktop global media-library operation identity is invalid.');
+  }
+  return value;
 }
 
 async function readGlobalAssets(
@@ -397,6 +503,9 @@ async function readGlobalAssets(
     if (entry.role !== 'content') return [];
     if (entry.locator.kind !== 'workspace-file') {
       throw new Error('Desktop global asset catalog produced a non-file locator.');
+    }
+    if (entry.locator.path.split('/')[0]?.startsWith(DESKTOP_GLOBAL_MEDIA_LIBRARY_STAGING_PREFIX)) {
+      return [];
     }
     return [
       {

@@ -144,6 +144,21 @@ export function registerDesktopIpc(
       appHost.searchHomeAssets(requireSender(event), payload),
   );
   ipcMain.handle(
+    DESKTOP_HOME_MANAGEMENT_CHANNELS.assetsAddLibrary,
+    (event: IpcMainInvokeEvent, payload: unknown) =>
+      appHost.addHomeMediaLibrary(requireSender(event), payload),
+  );
+  ipcMain.handle(
+    DESKTOP_HOME_MANAGEMENT_CHANNELS.assetsRemoveLibrary,
+    (event: IpcMainInvokeEvent, payload: unknown) =>
+      appHost.removeHomeMediaLibrary(requireSender(event), payload),
+  );
+  ipcMain.handle(
+    DESKTOP_HOME_MANAGEMENT_CHANNELS.assetsRevealLibrary,
+    (event: IpcMainInvokeEvent, payload: unknown) =>
+      appHost.revealHomeMediaLibrary(requireSender(event), payload),
+  );
+  ipcMain.handle(
     DESKTOP_HOME_MANAGEMENT_CHANNELS.pluginsList,
     (event: IpcMainInvokeEvent, payload: unknown) =>
       appHost.listHomePlugins(requireSender(event), payload),
@@ -215,6 +230,9 @@ export function registerDesktopIpc(
       DESKTOP_BRIDGE_CHANNELS.bootstrapGet,
       DESKTOP_SHELL_CHANNELS.snapshotGet,
       DESKTOP_HOME_MANAGEMENT_CHANNELS.assetsSearch,
+      DESKTOP_HOME_MANAGEMENT_CHANNELS.assetsAddLibrary,
+      DESKTOP_HOME_MANAGEMENT_CHANNELS.assetsRemoveLibrary,
+      DESKTOP_HOME_MANAGEMENT_CHANNELS.assetsRevealLibrary,
       DESKTOP_HOME_MANAGEMENT_CHANNELS.pluginsList,
       DESKTOP_SHELL_CHANNELS.projectOpenContent,
       DESKTOP_SHELL_CHANNELS.projectOpenCatalog,
