@@ -81,14 +81,18 @@ import {
 import type { DesktopCutRuntime } from './desktop-cut-runtime';
 import {
   DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION,
-  parseDesktopHomeAssetAddLibraryRequest,
-  parseDesktopHomeAssetLibraryRequest,
   parseDesktopHomeAssetSearchRequest,
+  parseDesktopHomeMediaLibraryAddRequest,
+  parseDesktopHomeMediaLibraryChildrenRequest,
+  parseDesktopHomeMediaLibraryRequest,
+  parseDesktopHomeMediaLibrarySearchRequest,
   parseDesktopHomePluginsRequest,
-  type DesktopHomeAssetAddLibraryResult,
-  type DesktopHomeAssetRemoveLibraryResult,
-  type DesktopHomeAssetRevealLibraryResult,
   type DesktopHomeAssetSearchResult,
+  type DesktopHomeMediaLibraryAddResult,
+  type DesktopHomeMediaLibraryChildrenResult,
+  type DesktopHomeMediaLibraryRemoveResult,
+  type DesktopHomeMediaLibraryRevealResult,
+  type DesktopHomeMediaLibrarySearchResult,
   type DesktopHomePluginsResult,
 } from '../shared/home-management-contract';
 import {
@@ -432,7 +436,6 @@ export class DesktopAppHost {
       const items = await this.requireResourceBrowser().searchHomeAssets({
         windowId: window.windowId,
         endpointEpoch: projection.endpointEpoch,
-        facet: request.facet,
         query: request.query,
         sortBy: request.sortBy,
         sortDirection: request.sortDirection,
@@ -441,7 +444,6 @@ export class DesktopAppHost {
       return {
         schemaVersion: DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION,
         requestId: request.requestId,
-        facet: request.facet,
         status: 'ready',
         items,
       };
@@ -449,7 +451,71 @@ export class DesktopAppHost {
       return {
         schemaVersion: DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION,
         requestId: request.requestId,
-        facet: request.facet,
+        status: 'error',
+        diagnostic: { message: describeError(error) },
+      };
+    }
+  }
+
+  async searchHomeMediaLibraries(
+    sender: DesktopSenderIdentity,
+    payload: unknown,
+  ): Promise<DesktopHomeMediaLibrarySearchResult> {
+    this.requireActive();
+    const request = parseDesktopHomeMediaLibrarySearchRequest(payload);
+    const window = this.windows.resolveSender(sender);
+    const projection = await this.shell.getProjection(window.windowId);
+    try {
+      return {
+        schemaVersion: DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION,
+        requestId: request.requestId,
+        status: 'ready',
+        items: await this.requireResourceBrowser().searchHomeMediaLibraries({
+          windowId: window.windowId,
+          endpointEpoch: projection.endpointEpoch,
+          query: request.query,
+          sortBy: request.sortBy,
+          sortDirection: request.sortDirection,
+          limit: request.limit,
+        }),
+      };
+    } catch (error: unknown) {
+      return {
+        schemaVersion: DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION,
+        requestId: request.requestId,
+        status: 'error',
+        diagnostic: { message: describeError(error) },
+      };
+    }
+  }
+
+  async readHomeMediaLibraryChildren(
+    sender: DesktopSenderIdentity,
+    payload: unknown,
+  ): Promise<DesktopHomeMediaLibraryChildrenResult> {
+    this.requireActive();
+    const request = parseDesktopHomeMediaLibraryChildrenRequest(payload);
+    const window = this.windows.resolveSender(sender);
+    const projection = await this.shell.getProjection(window.windowId);
+    try {
+      return {
+        schemaVersion: DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION,
+        requestId: request.requestId,
+        status: 'ready',
+        items: await this.requireResourceBrowser().readHomeMediaLibraryChildren({
+          windowId: window.windowId,
+          endpointEpoch: projection.endpointEpoch,
+          libraryId: request.libraryId,
+          relativePath: request.relativePath,
+          sortBy: request.sortBy,
+          sortDirection: request.sortDirection,
+          limit: request.limit,
+        }),
+      };
+    } catch (error: unknown) {
+      return {
+        schemaVersion: DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION,
+        requestId: request.requestId,
         status: 'error',
         diagnostic: { message: describeError(error) },
       };
@@ -459,14 +525,15 @@ export class DesktopAppHost {
   async addHomeMediaLibrary(
     sender: DesktopSenderIdentity,
     payload: unknown,
-  ): Promise<DesktopHomeAssetAddLibraryResult> {
+  ): Promise<DesktopHomeMediaLibraryAddResult> {
     this.requireActive();
-    const request = parseDesktopHomeAssetAddLibraryRequest(payload);
+    const request = parseDesktopHomeMediaLibraryAddRequest(payload);
     const window = this.windows.resolveSender(sender);
     const projection = await this.shell.getProjection(window.windowId);
     const result = await this.requireResourceBrowser().addHomeMediaLibrary({
       windowId: window.windowId,
       endpointEpoch: projection.endpointEpoch,
+      locationKind: request.locationKind,
     });
     return {
       schemaVersion: DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION,
@@ -478,9 +545,9 @@ export class DesktopAppHost {
   async removeHomeMediaLibrary(
     sender: DesktopSenderIdentity,
     payload: unknown,
-  ): Promise<DesktopHomeAssetRemoveLibraryResult> {
+  ): Promise<DesktopHomeMediaLibraryRemoveResult> {
     this.requireActive();
-    const request = parseDesktopHomeAssetLibraryRequest(payload);
+    const request = parseDesktopHomeMediaLibraryRequest(payload);
     const window = this.windows.resolveSender(sender);
     const projection = await this.shell.getProjection(window.windowId);
     await this.requireResourceBrowser().removeHomeMediaLibrary({
@@ -499,9 +566,9 @@ export class DesktopAppHost {
   async revealHomeMediaLibrary(
     sender: DesktopSenderIdentity,
     payload: unknown,
-  ): Promise<DesktopHomeAssetRevealLibraryResult> {
+  ): Promise<DesktopHomeMediaLibraryRevealResult> {
     this.requireActive();
-    const request = parseDesktopHomeAssetLibraryRequest(payload);
+    const request = parseDesktopHomeMediaLibraryRequest(payload);
     const window = this.windows.resolveSender(sender);
     const projection = await this.shell.getProjection(window.windowId);
     await this.requireResourceBrowser().revealHomeMediaLibrary({

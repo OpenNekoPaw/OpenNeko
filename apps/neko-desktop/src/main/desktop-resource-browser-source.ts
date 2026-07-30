@@ -27,15 +27,18 @@ import type {
 import type { DesktopWorkspaceResolution } from './desktop-workspace-registry';
 import { resolveDesktopWorkspaceContentLocator } from './desktop-content-locator';
 import { readDesktopConfirmedEntityResources } from './desktop-entity-resource-query';
+import {
+  listDesktopGlobalMediaLibraryConnections,
+  type DesktopGlobalMediaLibraryConnection,
+} from './desktop-global-media-library-files';
 import type {
-  DesktopHomeAssetFacet,
   DesktopHomeAssetItem,
-  DesktopHomeAssetSort,
+  DesktopHomeCatalogSort,
+  DesktopHomeMediaLibraryItem,
   DesktopHomeSortDirection,
 } from '../shared/home-management-contract';
 
 const FILE_SCAN_LIMIT = 5_000;
-export const DESKTOP_GLOBAL_MEDIA_LIBRARY_STAGING_PREFIX = '.openneko-import-';
 const EXCLUDED_DIRECTORIES = new Set([
   '.git',
   '.neko',
@@ -75,103 +78,92 @@ export type DesktopResourceBrowserReadSourceOptions = Pick<
 export async function searchDesktopGlobalAssetCatalog(input: {
   readonly globalAssetRoot: string;
   readonly files: NekoHostPorts['files'];
-  readonly facet: DesktopHomeAssetFacet;
   readonly query: string;
-  readonly sortBy: DesktopHomeAssetSort;
+  readonly sortBy: DesktopHomeCatalogSort;
   readonly sortDirection: DesktopHomeSortDirection;
   readonly limit: number;
 }): Promise<readonly DesktopHomeAssetItem[]> {
   await input.files.createDirectory(input.globalAssetRoot);
-  const normalizedQuery = input.query.trim().toLocaleLowerCase();
-  const items =
-    input.facet === 'libraries'
-      ? await readGlobalLibraries(input, normalizedQuery)
-      : await readGlobalAssets(input);
-  return items
-    .sort((left, right) => compareGlobalAssetItems(left, right, input))
+  return (await readGlobalAssets(input))
+    .sort((left, right) => compareGlobalCatalogItems(left, right, input))
     .slice(0, input.limit);
 }
 
-export function createDesktopGlobalMediaLibraryId(libraryName: string): string {
-  return `library:${requireDesktopGlobalMediaLibraryName(libraryName)}`;
-}
-
-export function parseDesktopGlobalMediaLibraryId(libraryId: string): string {
-  if (!libraryId.startsWith('library:')) {
-    throw new Error('Desktop global media-library identity is invalid.');
-  }
-  return requireDesktopGlobalMediaLibraryName(libraryId.slice('library:'.length));
-}
-
-export async function requireDesktopGlobalMediaLibraryPath(input: {
-  readonly globalAssetRoot: string;
+export async function searchDesktopGlobalMediaLibraries(input: {
+  readonly mediaLibraryRoot: string;
   readonly files: NekoHostPorts['files'];
-  readonly libraryId: string;
-}): Promise<string> {
-  const libraryName = parseDesktopGlobalMediaLibraryId(input.libraryId);
-  await input.files.createDirectory(input.globalAssetRoot);
-  const entry = (await input.files.readDirectory(input.globalAssetRoot)).find(
-    (candidate) => candidate.name === libraryName,
-  );
-  if (!entry) {
-    throw new Error(`Desktop global media library '${libraryName}' does not exist.`);
-  }
-  if (entry.type !== 'directory') {
-    throw new Error(`Desktop global media library '${libraryName}' is not a physical directory.`);
-  }
-  return path.join(input.globalAssetRoot, libraryName);
-}
-
-export async function importDesktopGlobalMediaLibrary(input: {
-  readonly globalAssetRoot: string;
-  readonly files: NekoHostPorts['files'];
-  readonly sourceDirectory: string;
-  readonly operationId: string;
-  readonly copyDirectory: (sourceDirectory: string, destinationDirectory: string) => Promise<void>;
-}): Promise<{ readonly libraryId: string }> {
-  await input.files.createDirectory(input.globalAssetRoot);
-  const libraryName = requireDesktopGlobalMediaLibraryName(path.basename(input.sourceDirectory));
-  const existingEntry = (await input.files.readDirectory(input.globalAssetRoot)).find(
-    (candidate) => candidate.name === libraryName,
-  );
-  if (existingEntry) {
-    throw new Error(`Desktop global media library '${libraryName}' already exists.`);
-  }
-  const stagingName = `${DESKTOP_GLOBAL_MEDIA_LIBRARY_STAGING_PREFIX}${requireOperationId(input.operationId)}`;
-  const stagingPath = path.join(input.globalAssetRoot, stagingName);
-  const destinationPath = path.join(input.globalAssetRoot, libraryName);
-  try {
-    await input.copyDirectory(input.sourceDirectory, stagingPath);
-    const entriesBeforePublish = await input.files.readDirectory(input.globalAssetRoot);
-    if (entriesBeforePublish.some((entry) => entry.name === libraryName)) {
-      throw new Error(`Desktop global media library '${libraryName}' already exists.`);
+  readonly query: string;
+  readonly sortBy: DesktopHomeCatalogSort;
+  readonly sortDirection: DesktopHomeSortDirection;
+  readonly limit: number;
+}): Promise<readonly DesktopHomeMediaLibraryItem[]> {
+  const connections = await listDesktopGlobalMediaLibraryConnections(input.mediaLibraryRoot);
+  const normalizedQuery = input.query.trim().toLocaleLowerCase();
+  const items: DesktopHomeMediaLibraryItem[] = [];
+  for (const connection of connections) {
+    const rootMatches =
+      normalizedQuery.length === 0 ||
+      `${connection.name} ${connection.locationKind}`
+        .toLocaleLowerCase()
+        .includes(normalizedQuery);
+    if (rootMatches) items.push(projectMediaLibraryRoot(connection));
+    if (
+      normalizedQuery.length === 0 ||
+      connection.availability !== 'available' ||
+      items.length >= input.limit
+    ) {
+      continue;
     }
-    await input.files.rename(stagingPath, destinationPath);
-  } catch (error: unknown) {
-    await input.files.delete(stagingPath, { recursive: true, idempotent: true });
-    throw error;
+    const entries = await searchResourceBrowserContentTree({
+      absoluteRoot: connection.linkPath,
+      locatorPrefix: '',
+      query: input.query,
+      limit: Math.min(input.limit - items.length, FILE_SCAN_LIMIT),
+      rootDepth: -1,
+      excludedDirectoryNames: EXCLUDED_DIRECTORIES,
+      files: input.files,
+      joinAbsolutePath: path.join,
+      relativePath: path.relative,
+      classify: (locatorPath) => classifyContent(locatorPath, false),
+    });
+    items.push(...entries.map((entry) => projectMediaLibraryEntry(connection, entry)));
   }
-  return { libraryId: createDesktopGlobalMediaLibraryId(libraryName) };
+  return items
+    .sort((left, right) => compareGlobalCatalogItems(left, right, input))
+    .slice(0, input.limit);
 }
 
-export async function trashDesktopGlobalMediaLibrary(input: {
-  readonly globalAssetRoot: string;
+export async function readDesktopGlobalMediaLibraryChildren(input: {
+  readonly mediaLibraryRoot: string;
   readonly files: NekoHostPorts['files'];
   readonly libraryId: string;
-  readonly trashDirectory: (absolutePath: string) => Promise<void>;
-}): Promise<void> {
-  const absolutePath = await requireDesktopGlobalMediaLibraryPath(input);
-  await input.trashDirectory(absolutePath);
-}
-
-export async function revealDesktopGlobalMediaLibrary(input: {
-  readonly globalAssetRoot: string;
-  readonly files: NekoHostPorts['files'];
-  readonly libraryId: string;
-  readonly revealPath: (absolutePath: string) => Promise<void>;
-}): Promise<void> {
-  const absolutePath = await requireDesktopGlobalMediaLibraryPath(input);
-  await input.revealPath(absolutePath);
+  readonly relativePath: string;
+  readonly sortBy: DesktopHomeCatalogSort;
+  readonly sortDirection: DesktopHomeSortDirection;
+  readonly limit: number;
+}): Promise<readonly DesktopHomeMediaLibraryItem[]> {
+  const connection = (await listDesktopGlobalMediaLibraryConnections(input.mediaLibraryRoot)).find(
+    (candidate) => candidate.libraryId === input.libraryId,
+  );
+  if (!connection || connection.availability !== 'available') {
+    throw new Error('Desktop global Media Library connection is unavailable.');
+  }
+  const absoluteDirectory = resolveMediaLibraryChildPath(connection.linkPath, input.relativePath);
+  const entries = await readResourceBrowserContentChildren({
+    absoluteRoot: connection.linkPath,
+    absoluteDirectory,
+    locatorPrefix: '',
+    limit: Math.min(input.limit, FILE_SCAN_LIMIT),
+    rootDepth: -1,
+    excludedDirectoryNames: EXCLUDED_DIRECTORIES,
+    files: input.files,
+    joinAbsolutePath: path.join,
+    relativePath: path.relative,
+    classify: (locatorPath) => classifyContent(locatorPath, false),
+  });
+  return entries
+    .map((entry) => projectMediaLibraryEntry(connection, entry))
+    .sort((left, right) => compareGlobalCatalogItems(left, right, input));
 }
 
 export function createDesktopResourceBrowserReadSource(
@@ -433,57 +425,6 @@ function classifyContent(locatorPath: string, mediaOnly: boolean) {
   };
 }
 
-async function readGlobalLibraries(
-  input: Parameters<typeof searchDesktopGlobalAssetCatalog>[0],
-  normalizedQuery: string,
-): Promise<DesktopHomeAssetItem[]> {
-  const entries = await input.files.readDirectory(input.globalAssetRoot);
-  const libraries = entries.filter(
-    (entry) =>
-      entry.type === 'directory' &&
-      !entry.name.startsWith(DESKTOP_GLOBAL_MEDIA_LIBRARY_STAGING_PREFIX) &&
-      (normalizedQuery.length === 0 || entry.name.toLocaleLowerCase().includes(normalizedQuery)),
-  );
-  return Promise.all(
-    libraries.map(async (entry) => {
-      const stat = await input.files.stat(path.join(input.globalAssetRoot, entry.name));
-      return {
-        id: createDesktopGlobalMediaLibraryId(entry.name),
-        label: entry.name,
-        description: '.',
-        kind: 'library' as const,
-        mediaType: 'directory',
-        ...(stat.modifiedAtMs === undefined
-          ? {}
-          : { modifiedAt: new Date(stat.modifiedAtMs).toISOString() }),
-        availability: 'available' as const,
-      };
-    }),
-  );
-}
-
-function requireDesktopGlobalMediaLibraryName(value: string): string {
-  if (
-    value.length === 0 ||
-    value !== value.normalize('NFC') ||
-    value === '.' ||
-    value === '..' ||
-    value.includes('/') ||
-    value.includes('\\') ||
-    value.startsWith(DESKTOP_GLOBAL_MEDIA_LIBRARY_STAGING_PREFIX)
-  ) {
-    throw new Error('Desktop global media-library name is invalid.');
-  }
-  return value;
-}
-
-function requireOperationId(value: string): string {
-  if (!/^[A-Za-z0-9-]+$/.test(value)) {
-    throw new Error('Desktop global media-library operation identity is invalid.');
-  }
-  return value;
-}
-
 async function readGlobalAssets(
   input: Parameters<typeof searchDesktopGlobalAssetCatalog>[0],
 ): Promise<DesktopHomeAssetItem[]> {
@@ -504,9 +445,6 @@ async function readGlobalAssets(
     if (entry.locator.kind !== 'workspace-file') {
       throw new Error('Desktop global asset catalog produced a non-file locator.');
     }
-    if (entry.locator.path.split('/')[0]?.startsWith(DESKTOP_GLOBAL_MEDIA_LIBRARY_STAGING_PREFIX)) {
-      return [];
-    }
     return [
       {
         id: `asset:${entry.locator.path}`,
@@ -521,10 +459,65 @@ async function readGlobalAssets(
   });
 }
 
-function compareGlobalAssetItems(
-  left: DesktopHomeAssetItem,
-  right: DesktopHomeAssetItem,
-  input: Pick<Parameters<typeof searchDesktopGlobalAssetCatalog>[0], 'sortBy' | 'sortDirection'>,
+function projectMediaLibraryRoot(
+  connection: DesktopGlobalMediaLibraryConnection,
+): DesktopHomeMediaLibraryItem {
+  return {
+    id: `${connection.libraryId}:root`,
+    libraryId: connection.libraryId,
+    label: connection.name,
+    description: connection.locationKind,
+    kind: 'library',
+    locationKind: connection.locationKind,
+    relativePath: '',
+    mediaType: 'directory',
+    ...(connection.modifiedAt ? { modifiedAt: connection.modifiedAt } : {}),
+    availability: connection.availability,
+  };
+}
+
+function projectMediaLibraryEntry(
+  connection: DesktopGlobalMediaLibraryConnection,
+  entry: ResourceBrowserContentEntry,
+): DesktopHomeMediaLibraryItem {
+  if (entry.locator.kind !== 'workspace-file') {
+    throw new Error('Desktop global Media Library produced a non-file locator.');
+  }
+  const relativePath = entry.locator.path;
+  return {
+    id: `${connection.libraryId}:${relativePath}`,
+    libraryId: connection.libraryId,
+    label: entry.label,
+    ...(entry.description ? { description: entry.description } : {}),
+    kind: entry.role === 'directory' ? 'directory' : 'file',
+    locationKind: connection.locationKind,
+    relativePath,
+    ...(entry.metadata?.mediaType ? { mediaType: entry.metadata.mediaType } : {}),
+    ...(entry.metadata?.modifiedAt ? { modifiedAt: entry.metadata.modifiedAt } : {}),
+    availability: entry.availability,
+  };
+}
+
+function resolveMediaLibraryChildPath(root: string, relativePath: string): string {
+  const segments = relativePath.split('/').filter(Boolean);
+  if (segments.some((segment) => segment === '.' || segment === '..' || segment.includes('\\'))) {
+    throw new Error('Desktop global Media Library relative path is invalid.');
+  }
+  const resolved = path.resolve(root, ...segments);
+  const relative = path.relative(root, resolved);
+  if (relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
+    throw new Error('Desktop global Media Library relative path escapes its connection root.');
+  }
+  return resolved;
+}
+
+function compareGlobalCatalogItems(
+  left: Pick<DesktopHomeAssetItem, 'id' | 'label' | 'modifiedAt'>,
+  right: Pick<DesktopHomeAssetItem, 'id' | 'label' | 'modifiedAt'>,
+  input: {
+    readonly sortBy: DesktopHomeCatalogSort;
+    readonly sortDirection: DesktopHomeSortDirection;
+  },
 ): number {
   const primary =
     input.sortBy === 'name'

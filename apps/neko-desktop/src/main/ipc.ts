@@ -144,17 +144,27 @@ export function registerDesktopIpc(
       appHost.searchHomeAssets(requireSender(event), payload),
   );
   ipcMain.handle(
-    DESKTOP_HOME_MANAGEMENT_CHANNELS.assetsAddLibrary,
+    DESKTOP_HOME_MANAGEMENT_CHANNELS.mediaLibrariesSearch,
+    (event: IpcMainInvokeEvent, payload: unknown) =>
+      appHost.searchHomeMediaLibraries(requireSender(event), payload),
+  );
+  ipcMain.handle(
+    DESKTOP_HOME_MANAGEMENT_CHANNELS.mediaLibrariesChildren,
+    (event: IpcMainInvokeEvent, payload: unknown) =>
+      appHost.readHomeMediaLibraryChildren(requireSender(event), payload),
+  );
+  ipcMain.handle(
+    DESKTOP_HOME_MANAGEMENT_CHANNELS.mediaLibrariesAdd,
     (event: IpcMainInvokeEvent, payload: unknown) =>
       appHost.addHomeMediaLibrary(requireSender(event), payload),
   );
   ipcMain.handle(
-    DESKTOP_HOME_MANAGEMENT_CHANNELS.assetsRemoveLibrary,
+    DESKTOP_HOME_MANAGEMENT_CHANNELS.mediaLibrariesRemove,
     (event: IpcMainInvokeEvent, payload: unknown) =>
       appHost.removeHomeMediaLibrary(requireSender(event), payload),
   );
   ipcMain.handle(
-    DESKTOP_HOME_MANAGEMENT_CHANNELS.assetsRevealLibrary,
+    DESKTOP_HOME_MANAGEMENT_CHANNELS.mediaLibrariesReveal,
     (event: IpcMainInvokeEvent, payload: unknown) =>
       appHost.revealHomeMediaLibrary(requireSender(event), payload),
   );
@@ -230,9 +240,11 @@ export function registerDesktopIpc(
       DESKTOP_BRIDGE_CHANNELS.bootstrapGet,
       DESKTOP_SHELL_CHANNELS.snapshotGet,
       DESKTOP_HOME_MANAGEMENT_CHANNELS.assetsSearch,
-      DESKTOP_HOME_MANAGEMENT_CHANNELS.assetsAddLibrary,
-      DESKTOP_HOME_MANAGEMENT_CHANNELS.assetsRemoveLibrary,
-      DESKTOP_HOME_MANAGEMENT_CHANNELS.assetsRevealLibrary,
+      DESKTOP_HOME_MANAGEMENT_CHANNELS.mediaLibrariesSearch,
+      DESKTOP_HOME_MANAGEMENT_CHANNELS.mediaLibrariesChildren,
+      DESKTOP_HOME_MANAGEMENT_CHANNELS.mediaLibrariesAdd,
+      DESKTOP_HOME_MANAGEMENT_CHANNELS.mediaLibrariesRemove,
+      DESKTOP_HOME_MANAGEMENT_CHANNELS.mediaLibrariesReveal,
       DESKTOP_HOME_MANAGEMENT_CHANNELS.pluginsList,
       DESKTOP_SHELL_CHANNELS.projectOpenContent,
       DESKTOP_SHELL_CHANNELS.projectOpenCatalog,

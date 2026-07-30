@@ -19,12 +19,14 @@ import { createElectronNekoHostPorts } from './electron-host-ports';
 import {
   createDesktopResourceBrowserProjectionSource,
   createDesktopResourceBrowserReadSource,
-  importDesktopGlobalMediaLibrary,
-  revealDesktopGlobalMediaLibrary,
+  readDesktopGlobalMediaLibraryChildren,
   searchDesktopGlobalAssetCatalog,
-  trashDesktopGlobalMediaLibrary,
+  searchDesktopGlobalMediaLibraries,
 } from './desktop-resource-browser-source';
-import { copyDesktopGlobalMediaLibraryDirectory } from './desktop-global-media-library-files';
+import {
+  createDesktopGlobalMediaLibraryConnection,
+  removeDesktopGlobalMediaLibraryConnection,
+} from './desktop-global-media-library-files';
 
 const temporaryRoots: string[] = [];
 const identity: ResourceBrowserIdentity = {
@@ -43,21 +45,23 @@ afterEach(async () => {
 });
 
 describe('Desktop Resource Browser source', () => {
-  it('searches and sorts only the user-global asset root', async () => {
+  it('keeps Asset Library content independent from connected Media Library files', async () => {
     const fixture = await createFixture();
     const globalAssetRoot = path.join(fixture.root, 'home', '.neko', 'assets');
-    await mkdir(path.join(globalAssetRoot, 'Video'), { recursive: true });
-    await mkdir(path.join(globalAssetRoot, 'Audio'), { recursive: true });
-    await writeFile(path.join(globalAssetRoot, 'Video', 'new.mp4'), 'new');
-    await writeFile(path.join(globalAssetRoot, 'Video', 'old.mp4'), 'old');
+    const globalMediaLibraryRoot = path.join(
+      fixture.root,
+      'home',
+      '.neko',
+      'media-libraries',
+    );
+    const externalLibrary = path.join(fixture.root, 'Footage');
+    await mkdir(path.join(globalAssetRoot, 'Editorial'), { recursive: true });
+    await mkdir(path.join(externalLibrary, 'shots'), { recursive: true });
+    await writeFile(path.join(globalAssetRoot, 'Editorial', 'owned.mp4'), 'owned');
+    await writeFile(path.join(externalLibrary, 'shots', 'external.mp4'), 'external');
     await writeFile(path.join(fixture.workspace, 'project-only.mp4'), 'must-not-appear');
     await utimes(
-      path.join(globalAssetRoot, 'Video', 'old.mp4'),
-      new Date('2026-01-01T00:00:00.000Z'),
-      new Date('2026-01-01T00:00:00.000Z'),
-    );
-    await utimes(
-      path.join(globalAssetRoot, 'Video', 'new.mp4'),
+      path.join(globalAssetRoot, 'Editorial', 'owned.mp4'),
       new Date('2026-07-01T00:00:00.000Z'),
       new Date('2026-07-01T00:00:00.000Z'),
     );
@@ -68,165 +72,106 @@ describe('Desktop Resource Browser source', () => {
       version: '0.0.1',
       logger: createLogger(),
     });
+    const { libraryId } = await createDesktopGlobalMediaLibraryConnection({
+      mediaLibraryRoot: globalMediaLibraryRoot,
+      sourceDirectory: externalLibrary,
+      locationKind: 'nas',
+    });
 
-    await expect(
-      searchDesktopGlobalAssetCatalog({
-        globalAssetRoot,
-        files: host.files,
-        facet: 'libraries',
-        query: '',
-        sortBy: 'name',
-        sortDirection: 'descending',
-        limit: 20,
-      }),
-    ).resolves.toEqual([
-      expect.objectContaining({ id: 'library:Video', label: 'Video', kind: 'library' }),
-      expect.objectContaining({ id: 'library:Audio', label: 'Audio', kind: 'library' }),
-    ]);
     const assets = await searchDesktopGlobalAssetCatalog({
       globalAssetRoot,
       files: host.files,
-      facet: 'assets',
-      query: '.mp4',
-      sortBy: 'modifiedAt',
-      sortDirection: 'descending',
-      limit: 20,
-    });
-
-    expect(assets.map((item) => item.label)).toEqual(['new.mp4', 'old.mp4']);
-    expect(JSON.stringify(assets)).not.toContain('project-only.mp4');
-    expect(JSON.stringify(assets)).not.toContain(fixture.root);
-  });
-
-  it('publishes a copied global media library and keeps staging directories out of catalogs', async () => {
-    const fixture = await createFixture();
-    const sourceDirectory = path.join(fixture.root, 'Footage');
-    const globalAssetRoot = path.join(fixture.root, 'home', '.neko', 'assets');
-    await mkdir(sourceDirectory);
-    await writeFile(path.join(sourceDirectory, 'shot.mp4'), 'shot');
-    await mkdir(path.join(globalAssetRoot, '.openneko-import-incomplete'), { recursive: true });
-    await writeFile(
-      path.join(globalAssetRoot, '.openneko-import-incomplete', 'partial.mp4'),
-      'partial',
-    );
-    const host = createElectronNekoHostPorts({
-      homedir: path.join(fixture.root, 'home'),
-      nekoHome: path.join(fixture.root, 'home', '.neko'),
-      version: '0.0.1',
-      logger: createLogger(),
-    });
-
-    await expect(
-      importDesktopGlobalMediaLibrary({
-        globalAssetRoot,
-        files: host.files,
-        sourceDirectory,
-        operationId: 'operation-1',
-        copyDirectory: copyDesktopGlobalMediaLibraryDirectory,
-      }),
-    ).resolves.toEqual({ libraryId: 'library:Footage' });
-    await expect(readFile(path.join(globalAssetRoot, 'Footage', 'shot.mp4'), 'utf8')).resolves.toBe(
-      'shot',
-    );
-    await expect(
-      searchDesktopGlobalAssetCatalog({
-        globalAssetRoot,
-        files: host.files,
-        facet: 'libraries',
-        query: '',
-        sortBy: 'name',
-        sortDirection: 'ascending',
-        limit: 20,
-      }),
-    ).resolves.toEqual([expect.objectContaining({ id: 'library:Footage', label: 'Footage' })]);
-    const assets = await searchDesktopGlobalAssetCatalog({
-      globalAssetRoot,
-      files: host.files,
-      facet: 'assets',
       query: '',
       sortBy: 'name',
       sortDirection: 'ascending',
       limit: 20,
     });
-    expect(assets.map((item) => item.label)).toEqual(['shot.mp4']);
+    const libraries = await searchDesktopGlobalMediaLibraries({
+      mediaLibraryRoot: globalMediaLibraryRoot,
+      files: host.files,
+      query: '',
+      sortBy: 'name',
+      sortDirection: 'ascending',
+      limit: 20,
+    });
+    const searchMatches = await searchDesktopGlobalMediaLibraries({
+      mediaLibraryRoot: globalMediaLibraryRoot,
+      files: host.files,
+      query: 'external',
+      sortBy: 'name',
+      sortDirection: 'ascending',
+      limit: 20,
+    });
+
+    expect(assets.map((item) => item.label)).toEqual(['owned.mp4']);
+    expect(libraries).toEqual([
+      expect.objectContaining({
+        libraryId,
+        label: 'Footage',
+        kind: 'library',
+        locationKind: 'nas',
+      }),
+    ]);
+    expect(searchMatches).toEqual([
+      expect.objectContaining({
+        libraryId,
+        label: 'external.mp4',
+        relativePath: 'shots/external.mp4',
+        kind: 'file',
+      }),
+    ]);
+    expect(JSON.stringify(assets)).not.toContain('external.mp4');
+    expect(JSON.stringify(libraries)).not.toContain(fixture.root);
   });
 
-  it('fails global media-library conflicts before copying or merging', async () => {
+  it('browses Media Library directories and removes only their connection', async () => {
     const fixture = await createFixture();
-    const sourceDirectory = path.join(fixture.root, 'Footage');
-    const globalAssetRoot = path.join(fixture.root, 'home', '.neko', 'assets');
-    await mkdir(sourceDirectory);
-    await mkdir(path.join(globalAssetRoot, 'Footage'), { recursive: true });
+    const mediaLibraryRoot = path.join(fixture.root, 'home', '.neko', 'media-libraries');
+    const target = path.join(fixture.root, 'References');
+    await mkdir(path.join(target, 'images'), { recursive: true });
+    await writeFile(path.join(target, 'images', 'hero.png'), 'hero');
     const host = createElectronNekoHostPorts({
       homedir: path.join(fixture.root, 'home'),
       nekoHome: path.join(fixture.root, 'home', '.neko'),
+      workspaceRoot: fixture.workspace,
       version: '0.0.1',
       logger: createLogger(),
     });
-    const copyDirectory = vi.fn(async () => undefined);
-
-    await expect(
-      importDesktopGlobalMediaLibrary({
-        globalAssetRoot,
-        files: host.files,
-        sourceDirectory,
-        operationId: 'operation-1',
-        copyDirectory,
-      }),
-    ).rejects.toThrow('already exists');
-    expect(copyDirectory).not.toHaveBeenCalled();
-  });
-
-  it('trashes and reveals only validated physical direct-child libraries', async () => {
-    const fixture = await createFixture();
-    const globalAssetRoot = path.join(fixture.root, 'home', '.neko', 'assets');
-    const libraryPath = path.join(globalAssetRoot, 'Footage');
-    const externalDirectory = path.join(fixture.root, 'external');
-    await mkdir(libraryPath, { recursive: true });
-    await mkdir(externalDirectory);
-    await symlink(externalDirectory, path.join(globalAssetRoot, 'Linked'));
-    const host = createElectronNekoHostPorts({
-      homedir: path.join(fixture.root, 'home'),
-      nekoHome: path.join(fixture.root, 'home', '.neko'),
-      version: '0.0.1',
-      logger: createLogger(),
+    const { libraryId } = await createDesktopGlobalMediaLibraryConnection({
+      mediaLibraryRoot,
+      sourceDirectory: target,
+      locationKind: 'cloud',
     });
-    const trashDirectory = vi.fn(async () => undefined);
-    const revealPath = vi.fn(async () => undefined);
 
-    await trashDesktopGlobalMediaLibrary({
-      globalAssetRoot,
+    const rootEntries = await readDesktopGlobalMediaLibraryChildren({
+      mediaLibraryRoot,
       files: host.files,
-      libraryId: 'library:Footage',
-      trashDirectory,
+      libraryId,
+      relativePath: '',
+      sortBy: 'name',
+      sortDirection: 'ascending',
+      limit: 20,
     });
-    await revealDesktopGlobalMediaLibrary({
-      globalAssetRoot,
+    const imageEntries = await readDesktopGlobalMediaLibraryChildren({
+      mediaLibraryRoot,
       files: host.files,
-      libraryId: 'library:Footage',
-      revealPath,
+      libraryId,
+      relativePath: 'images',
+      sortBy: 'name',
+      sortDirection: 'ascending',
+      limit: 20,
     });
-    expect(trashDirectory).toHaveBeenCalledWith(libraryPath);
-    expect(revealPath).toHaveBeenCalledWith(libraryPath);
+    expect(rootEntries).toEqual([
+      expect.objectContaining({ kind: 'directory', relativePath: 'images' }),
+    ]);
+    expect(imageEntries).toEqual([
+      expect.objectContaining({ kind: 'file', relativePath: 'images/hero.png' }),
+    ]);
 
+    await removeDesktopGlobalMediaLibraryConnection({ mediaLibraryRoot, libraryId });
     await expect(
-      trashDesktopGlobalMediaLibrary({
-        globalAssetRoot,
-        files: host.files,
-        libraryId: 'library:Linked',
-        trashDirectory,
-      }),
-    ).rejects.toThrow('not a physical directory');
-    await expect(
-      revealDesktopGlobalMediaLibrary({
-        globalAssetRoot,
-        files: host.files,
-        libraryId: 'library:../external',
-        revealPath,
-      }),
-    ).rejects.toThrow('name is invalid');
-    expect(trashDirectory).toHaveBeenCalledTimes(1);
-    expect(revealPath).toHaveBeenCalledTimes(1);
+      readFile(path.join(target, 'images', 'hero.png'), 'utf8'),
+    ).resolves.toBe('hero');
   });
 
   it('exposes the same read authority to Home without composing interaction effects', async () => {

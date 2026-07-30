@@ -99,14 +99,18 @@ import {
 } from '../shared/cut-bridge-contract';
 import {
   createDesktopHomeAssetSearchRequest,
-  createDesktopHomeAssetAddLibraryRequest,
-  createDesktopHomeAssetLibraryRequest,
+  createDesktopHomeMediaLibraryAddRequest,
+  createDesktopHomeMediaLibraryChildrenRequest,
+  createDesktopHomeMediaLibraryRequest,
+  createDesktopHomeMediaLibrarySearchRequest,
   createDesktopHomePluginsRequest,
   DESKTOP_HOME_MANAGEMENT_CHANNELS,
-  parseDesktopHomeAssetAddLibraryResult,
-  parseDesktopHomeAssetRemoveLibraryResult,
-  parseDesktopHomeAssetRevealLibraryResult,
   parseDesktopHomeAssetSearchResult,
+  parseDesktopHomeMediaLibraryAddResult,
+  parseDesktopHomeMediaLibraryChildrenResult,
+  parseDesktopHomeMediaLibraryRemoveResult,
+  parseDesktopHomeMediaLibraryRevealResult,
+  parseDesktopHomeMediaLibrarySearchResult,
   parseDesktopHomePluginsResult,
   type OpenNekoDesktopHomeManagementBridge,
 } from '../shared/home-management-contract';
@@ -301,37 +305,62 @@ const bridge: OpenNekoDesktopBridge &
         );
         return parseDesktopHomeAssetSearchResult(response, request.requestId);
       },
-      async addLibrary() {
-        const request = createDesktopHomeAssetAddLibraryRequest(
-          nextRequestId('desktop-home-assets-add-library'),
+    },
+    mediaLibraries: {
+      async search(input) {
+        const request = createDesktopHomeMediaLibrarySearchRequest(
+          nextRequestId('desktop-home-media-libraries'),
+          input,
         );
         const response: unknown = await ipcRenderer.invoke(
-          DESKTOP_HOME_MANAGEMENT_CHANNELS.assetsAddLibrary,
+          DESKTOP_HOME_MANAGEMENT_CHANNELS.mediaLibrariesSearch,
           request,
         );
-        return parseDesktopHomeAssetAddLibraryResult(response, request.requestId);
+        return parseDesktopHomeMediaLibrarySearchResult(response, request.requestId);
+      },
+      async children(input) {
+        const request = createDesktopHomeMediaLibraryChildrenRequest(
+          nextRequestId('desktop-home-media-library-children'),
+          input,
+        );
+        const response: unknown = await ipcRenderer.invoke(
+          DESKTOP_HOME_MANAGEMENT_CHANNELS.mediaLibrariesChildren,
+          request,
+        );
+        return parseDesktopHomeMediaLibraryChildrenResult(response, request.requestId);
+      },
+      async addLibrary(locationKind) {
+        const request = createDesktopHomeMediaLibraryAddRequest(
+          nextRequestId('desktop-home-media-library-add'),
+          locationKind,
+        );
+        const response: unknown = await ipcRenderer.invoke(
+          DESKTOP_HOME_MANAGEMENT_CHANNELS.mediaLibrariesAdd,
+          request,
+        );
+        return parseDesktopHomeMediaLibraryAddResult(response, request.requestId);
       },
       async removeLibrary(libraryId) {
-        const request = createDesktopHomeAssetLibraryRequest(
-          nextRequestId('desktop-home-assets-remove-library'),
+        const request = createDesktopHomeMediaLibraryRequest(
+          nextRequestId('desktop-home-media-library-remove'),
           libraryId,
         );
         const response: unknown = await ipcRenderer.invoke(
-          DESKTOP_HOME_MANAGEMENT_CHANNELS.assetsRemoveLibrary,
+          DESKTOP_HOME_MANAGEMENT_CHANNELS.mediaLibrariesRemove,
           request,
         );
-        return parseDesktopHomeAssetRemoveLibraryResult(response, request.requestId);
+        return parseDesktopHomeMediaLibraryRemoveResult(response, request.requestId);
       },
       async revealLibrary(libraryId) {
-        const request = createDesktopHomeAssetLibraryRequest(
-          nextRequestId('desktop-home-assets-reveal-library'),
+        const request = createDesktopHomeMediaLibraryRequest(
+          nextRequestId('desktop-home-media-library-reveal'),
           libraryId,
         );
         const response: unknown = await ipcRenderer.invoke(
-          DESKTOP_HOME_MANAGEMENT_CHANNELS.assetsRevealLibrary,
+          DESKTOP_HOME_MANAGEMENT_CHANNELS.mediaLibrariesReveal,
           request,
         );
-        return parseDesktopHomeAssetRevealLibraryResult(response, request.requestId);
+        return parseDesktopHomeMediaLibraryRevealResult(response, request.requestId);
       },
     },
     plugins: {

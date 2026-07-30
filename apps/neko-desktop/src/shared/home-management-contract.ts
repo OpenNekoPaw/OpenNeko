@@ -1,16 +1,18 @@
-export const DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION = 4 as const;
+export const DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION = 5 as const;
 
 export const DESKTOP_HOME_MANAGEMENT_CHANNELS = {
   assetsSearch: 'openneko:desktop:home:assets:search',
-  assetsAddLibrary: 'openneko:desktop:home:assets:libraries:add',
-  assetsRemoveLibrary: 'openneko:desktop:home:assets:libraries:remove',
-  assetsRevealLibrary: 'openneko:desktop:home:assets:libraries:reveal',
+  mediaLibrariesSearch: 'openneko:desktop:home:media-libraries:search',
+  mediaLibrariesChildren: 'openneko:desktop:home:media-libraries:children',
+  mediaLibrariesAdd: 'openneko:desktop:home:media-libraries:add',
+  mediaLibrariesRemove: 'openneko:desktop:home:media-libraries:remove',
+  mediaLibrariesReveal: 'openneko:desktop:home:media-libraries:reveal',
   pluginsList: 'openneko:desktop:home:plugins:list',
 } as const;
 
-export type DesktopHomeAssetFacet = 'libraries' | 'assets';
-export type DesktopHomeAssetSort = 'name' | 'modifiedAt';
+export type DesktopHomeCatalogSort = 'name' | 'modifiedAt';
 export type DesktopHomeSortDirection = 'ascending' | 'descending';
+export type DesktopHomeMediaLibraryLocationKind = 'local' | 'nas' | 'cloud';
 
 export interface DesktopHomeManagementRequest {
   readonly schemaVersion: typeof DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION;
@@ -18,9 +20,8 @@ export interface DesktopHomeManagementRequest {
 }
 
 export interface DesktopHomeAssetSearchRequest extends DesktopHomeManagementRequest {
-  readonly facet: DesktopHomeAssetFacet;
   readonly query: string;
-  readonly sortBy: DesktopHomeAssetSort;
+  readonly sortBy: DesktopHomeCatalogSort;
   readonly sortDirection: DesktopHomeSortDirection;
   readonly limit: number;
 }
@@ -29,7 +30,7 @@ export interface DesktopHomeAssetItem {
   readonly id: string;
   readonly label: string;
   readonly description?: string;
-  readonly kind: 'library' | 'asset';
+  readonly kind: 'asset';
   readonly mediaType?: string;
   readonly modifiedAt?: string;
   readonly availability: 'available' | 'unavailable';
@@ -39,25 +40,69 @@ export type DesktopHomeAssetSearchResult =
   | {
       readonly schemaVersion: typeof DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION;
       readonly requestId: string;
-      readonly facet: DesktopHomeAssetFacet;
       readonly status: 'ready';
       readonly items: readonly DesktopHomeAssetItem[];
     }
   | {
       readonly schemaVersion: typeof DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION;
       readonly requestId: string;
-      readonly facet: DesktopHomeAssetFacet;
       readonly status: 'error';
       readonly diagnostic: { readonly message: string };
     };
 
-export interface DesktopHomeAssetAddLibraryRequest extends DesktopHomeManagementRequest {}
+export interface DesktopHomeMediaLibrarySearchRequest extends DesktopHomeManagementRequest {
+  readonly query: string;
+  readonly sortBy: DesktopHomeCatalogSort;
+  readonly sortDirection: DesktopHomeSortDirection;
+  readonly limit: number;
+}
 
-export interface DesktopHomeAssetLibraryRequest extends DesktopHomeManagementRequest {
+export interface DesktopHomeMediaLibraryChildrenRequest extends DesktopHomeManagementRequest {
+  readonly libraryId: string;
+  readonly relativePath: string;
+  readonly sortBy: DesktopHomeCatalogSort;
+  readonly sortDirection: DesktopHomeSortDirection;
+  readonly limit: number;
+}
+
+export interface DesktopHomeMediaLibraryAddRequest extends DesktopHomeManagementRequest {
+  readonly locationKind: DesktopHomeMediaLibraryLocationKind;
+}
+
+export interface DesktopHomeMediaLibraryRequest extends DesktopHomeManagementRequest {
   readonly libraryId: string;
 }
 
-export type DesktopHomeAssetAddLibraryResult =
+export interface DesktopHomeMediaLibraryItem {
+  readonly id: string;
+  readonly libraryId: string;
+  readonly label: string;
+  readonly description?: string;
+  readonly kind: 'library' | 'directory' | 'file';
+  readonly locationKind: DesktopHomeMediaLibraryLocationKind;
+  readonly relativePath: string;
+  readonly mediaType?: string;
+  readonly modifiedAt?: string;
+  readonly availability: 'available' | 'unavailable';
+}
+
+export type DesktopHomeMediaLibrarySearchResult =
+  | {
+      readonly schemaVersion: typeof DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION;
+      readonly requestId: string;
+      readonly status: 'ready';
+      readonly items: readonly DesktopHomeMediaLibraryItem[];
+    }
+  | {
+      readonly schemaVersion: typeof DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION;
+      readonly requestId: string;
+      readonly status: 'error';
+      readonly diagnostic: { readonly message: string };
+    };
+
+export type DesktopHomeMediaLibraryChildrenResult = DesktopHomeMediaLibrarySearchResult;
+
+export type DesktopHomeMediaLibraryAddResult =
   | {
       readonly schemaVersion: typeof DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION;
       readonly requestId: string;
@@ -70,14 +115,14 @@ export type DesktopHomeAssetAddLibraryResult =
       readonly status: 'cancelled';
     };
 
-export interface DesktopHomeAssetRemoveLibraryResult {
+export interface DesktopHomeMediaLibraryRemoveResult {
   readonly schemaVersion: typeof DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION;
   readonly requestId: string;
   readonly status: 'removed';
   readonly libraryId: string;
 }
 
-export interface DesktopHomeAssetRevealLibraryResult {
+export interface DesktopHomeMediaLibraryRevealResult {
   readonly schemaVersion: typeof DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION;
   readonly requestId: string;
   readonly status: 'revealed';
@@ -125,15 +170,31 @@ export interface OpenNekoDesktopHomeManagementBridge {
   readonly home: {
     readonly assets: {
       search(input: {
-        readonly facet: DesktopHomeAssetFacet;
         readonly query: string;
-        readonly sortBy: DesktopHomeAssetSort;
+        readonly sortBy: DesktopHomeCatalogSort;
         readonly sortDirection: DesktopHomeSortDirection;
         readonly limit?: number;
       }): Promise<DesktopHomeAssetSearchResult>;
-      addLibrary(): Promise<DesktopHomeAssetAddLibraryResult>;
-      removeLibrary(libraryId: string): Promise<DesktopHomeAssetRemoveLibraryResult>;
-      revealLibrary(libraryId: string): Promise<DesktopHomeAssetRevealLibraryResult>;
+    };
+    readonly mediaLibraries: {
+      search(input: {
+        readonly query: string;
+        readonly sortBy: DesktopHomeCatalogSort;
+        readonly sortDirection: DesktopHomeSortDirection;
+        readonly limit?: number;
+      }): Promise<DesktopHomeMediaLibrarySearchResult>;
+      children(input: {
+        readonly libraryId: string;
+        readonly relativePath: string;
+        readonly sortBy: DesktopHomeCatalogSort;
+        readonly sortDirection: DesktopHomeSortDirection;
+        readonly limit?: number;
+      }): Promise<DesktopHomeMediaLibraryChildrenResult>;
+      addLibrary(
+        locationKind: DesktopHomeMediaLibraryLocationKind,
+      ): Promise<DesktopHomeMediaLibraryAddResult>;
+      removeLibrary(libraryId: string): Promise<DesktopHomeMediaLibraryRemoveResult>;
+      revealLibrary(libraryId: string): Promise<DesktopHomeMediaLibraryRevealResult>;
     };
     readonly plugins: {
       list(): Promise<DesktopHomePluginsResult>;
@@ -144,9 +205,8 @@ export interface OpenNekoDesktopHomeManagementBridge {
 export function createDesktopHomeAssetSearchRequest(
   requestId: string,
   input: {
-    readonly facet: DesktopHomeAssetFacet;
     readonly query: string;
-    readonly sortBy: DesktopHomeAssetSort;
+    readonly sortBy: DesktopHomeCatalogSort;
     readonly sortDirection: DesktopHomeSortDirection;
     readonly limit?: number;
   },
@@ -154,9 +214,8 @@ export function createDesktopHomeAssetSearchRequest(
   return {
     schemaVersion: DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION,
     requestId: requireNonEmptyString(requestId, 'Desktop Home requestId is required.'),
-    facet: requireFacet(input.facet),
     query: input.query.trim(),
-    sortBy: requireAssetSort(input.sortBy),
+    sortBy: requireCatalogSort(input.sortBy),
     sortDirection: requireSortDirection(input.sortDirection),
     limit: requireLimit(input.limit ?? 60),
   };
@@ -165,68 +224,154 @@ export function createDesktopHomeAssetSearchRequest(
 export function parseDesktopHomeAssetSearchRequest(value: unknown): DesktopHomeAssetSearchRequest {
   const record = requireExactRecord(
     value,
-    ['schemaVersion', 'requestId', 'facet', 'query', 'sortBy', 'sortDirection', 'limit'],
-    'Desktop Home asset request is invalid.',
+    ['schemaVersion', 'requestId', 'query', 'sortBy', 'sortDirection', 'limit'],
+    'Desktop Home Asset Library request is invalid.',
   );
   requireVersion(record['schemaVersion']);
   return createDesktopHomeAssetSearchRequest(
     requireNonEmptyString(record['requestId'], 'Desktop Home requestId is required.'),
     {
-      facet: requireFacet(record['facet']),
       query: requireString(record['query'], 'Desktop Home asset query must be a string.'),
-      sortBy: requireAssetSort(record['sortBy']),
+      sortBy: requireCatalogSort(record['sortBy']),
       sortDirection: requireSortDirection(record['sortDirection']),
       limit: requireLimit(record['limit']),
     },
   );
 }
 
-export function createDesktopHomeAssetAddLibraryRequest(
+export function createDesktopHomeMediaLibrarySearchRequest(
   requestId: string,
-): DesktopHomeAssetAddLibraryRequest {
+  input: {
+    readonly query: string;
+    readonly sortBy: DesktopHomeCatalogSort;
+    readonly sortDirection: DesktopHomeSortDirection;
+    readonly limit?: number;
+  },
+): DesktopHomeMediaLibrarySearchRequest {
   return {
     schemaVersion: DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION,
     requestId: requireNonEmptyString(requestId, 'Desktop Home requestId is required.'),
+    query: input.query.trim(),
+    sortBy: requireCatalogSort(input.sortBy),
+    sortDirection: requireSortDirection(input.sortDirection),
+    limit: requireLimit(input.limit ?? 60),
   };
 }
 
-export function parseDesktopHomeAssetAddLibraryRequest(
+export function parseDesktopHomeMediaLibrarySearchRequest(
   value: unknown,
-): DesktopHomeAssetAddLibraryRequest {
+): DesktopHomeMediaLibrarySearchRequest {
   const record = requireExactRecord(
     value,
-    ['schemaVersion', 'requestId'],
-    'Desktop Home add-library request is invalid.',
+    ['schemaVersion', 'requestId', 'query', 'sortBy', 'sortDirection', 'limit'],
+    'Desktop Home Media Library search request is invalid.',
   );
   requireVersion(record['schemaVersion']);
-  return createDesktopHomeAssetAddLibraryRequest(
+  return createDesktopHomeMediaLibrarySearchRequest(
     requireNonEmptyString(record['requestId'], 'Desktop Home requestId is required.'),
+    {
+      query: requireString(record['query'], 'Desktop Home Media Library query must be a string.'),
+      sortBy: requireCatalogSort(record['sortBy']),
+      sortDirection: requireSortDirection(record['sortDirection']),
+      limit: requireLimit(record['limit']),
+    },
   );
 }
 
-export function createDesktopHomeAssetLibraryRequest(
+export function createDesktopHomeMediaLibraryChildrenRequest(
   requestId: string,
-  libraryId: string,
-): DesktopHomeAssetLibraryRequest {
+  input: {
+    readonly libraryId: string;
+    readonly relativePath: string;
+    readonly sortBy: DesktopHomeCatalogSort;
+    readonly sortDirection: DesktopHomeSortDirection;
+    readonly limit?: number;
+  },
+): DesktopHomeMediaLibraryChildrenRequest {
   return {
     schemaVersion: DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION,
     requestId: requireNonEmptyString(requestId, 'Desktop Home requestId is required.'),
-    libraryId: requireLibraryId(libraryId),
+    libraryId: requireMediaLibraryId(input.libraryId),
+    relativePath: requireRelativePath(input.relativePath),
+    sortBy: requireCatalogSort(input.sortBy),
+    sortDirection: requireSortDirection(input.sortDirection),
+    limit: requireLimit(input.limit ?? 200),
   };
 }
 
-export function parseDesktopHomeAssetLibraryRequest(
+export function parseDesktopHomeMediaLibraryChildrenRequest(
   value: unknown,
-): DesktopHomeAssetLibraryRequest {
+): DesktopHomeMediaLibraryChildrenRequest {
+  const record = requireExactRecord(
+    value,
+    ['schemaVersion', 'requestId', 'libraryId', 'relativePath', 'sortBy', 'sortDirection', 'limit'],
+    'Desktop Home Media Library children request is invalid.',
+  );
+  requireVersion(record['schemaVersion']);
+  return createDesktopHomeMediaLibraryChildrenRequest(
+    requireNonEmptyString(record['requestId'], 'Desktop Home requestId is required.'),
+    {
+      libraryId: requireMediaLibraryId(record['libraryId']),
+      relativePath: requireString(
+        record['relativePath'],
+        'Desktop Home Media Library relative path must be a string.',
+      ),
+      sortBy: requireCatalogSort(record['sortBy']),
+      sortDirection: requireSortDirection(record['sortDirection']),
+      limit: requireLimit(record['limit']),
+    },
+  );
+}
+
+export function createDesktopHomeMediaLibraryAddRequest(
+  requestId: string,
+  locationKind: DesktopHomeMediaLibraryLocationKind,
+): DesktopHomeMediaLibraryAddRequest {
+  return {
+    schemaVersion: DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION,
+    requestId: requireNonEmptyString(requestId, 'Desktop Home requestId is required.'),
+    locationKind: requireMediaLibraryLocationKind(locationKind),
+  };
+}
+
+export function parseDesktopHomeMediaLibraryAddRequest(
+  value: unknown,
+): DesktopHomeMediaLibraryAddRequest {
+  const record = requireExactRecord(
+    value,
+    ['schemaVersion', 'requestId', 'locationKind'],
+    'Desktop Home add Media Library request is invalid.',
+  );
+  requireVersion(record['schemaVersion']);
+  return createDesktopHomeMediaLibraryAddRequest(
+    requireNonEmptyString(record['requestId'], 'Desktop Home requestId is required.'),
+    requireMediaLibraryLocationKind(record['locationKind']),
+  );
+}
+
+export function createDesktopHomeMediaLibraryRequest(
+  requestId: string,
+  libraryId: string,
+): DesktopHomeMediaLibraryRequest {
+  return {
+    schemaVersion: DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION,
+    requestId: requireNonEmptyString(requestId, 'Desktop Home requestId is required.'),
+    libraryId: requireMediaLibraryId(libraryId),
+  };
+}
+
+export function parseDesktopHomeMediaLibraryRequest(
+  value: unknown,
+): DesktopHomeMediaLibraryRequest {
   const record = requireExactRecord(
     value,
     ['schemaVersion', 'requestId', 'libraryId'],
-    'Desktop Home media-library request is invalid.',
+    'Desktop Home Media Library request is invalid.',
   );
   requireVersion(record['schemaVersion']);
-  return createDesktopHomeAssetLibraryRequest(
+  return createDesktopHomeMediaLibraryRequest(
     requireNonEmptyString(record['requestId'], 'Desktop Home requestId is required.'),
-    requireLibraryId(record['libraryId']),
+    requireMediaLibraryId(record['libraryId']),
   );
 }
 
@@ -253,63 +398,45 @@ export function parseDesktopHomeAssetSearchResult(
   value: unknown,
   expectedRequestId: string,
 ): DesktopHomeAssetSearchResult {
-  const base = requireRecord(value, 'Desktop Home asset result must be an object.');
-  requireVersion(base['schemaVersion']);
-  const requestId = requireRequestId(base['requestId'], expectedRequestId);
-  const facet = requireFacet(base['facet']);
-  if (base['status'] === 'error') {
-    const record = requireExactRecord(
-      base,
-      ['schemaVersion', 'requestId', 'facet', 'status', 'diagnostic'],
-      'Desktop Home asset error result is invalid.',
-    );
-    const diagnostic = requireExactRecord(
-      record['diagnostic'],
-      ['message'],
-      'Desktop Home asset diagnostic is invalid.',
-    );
-    return {
-      schemaVersion: DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION,
-      requestId,
-      facet,
-      status: 'error',
-      diagnostic: {
-        message: requireNonEmptyString(
-          diagnostic['message'],
-          'Desktop Home asset diagnostic message is required.',
-        ),
-      },
-    };
-  }
-  const record = requireExactRecord(
-    base,
-    ['schemaVersion', 'requestId', 'facet', 'status', 'items'],
-    'Desktop Home asset ready result is invalid.',
-  );
-  if (record['status'] !== 'ready' || !Array.isArray(record['items'])) {
-    throw new Error('Desktop Home asset result status or items are invalid.');
-  }
-  return {
-    schemaVersion: DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION,
-    requestId,
-    facet,
-    status: 'ready',
-    items: record['items'].map(parseAssetItem),
-  };
+  return parseSearchResult(
+    value,
+    expectedRequestId,
+    'Asset Library',
+    parseAssetItem,
+  ) as DesktopHomeAssetSearchResult;
 }
 
-export function parseDesktopHomeAssetAddLibraryResult(
+export function parseDesktopHomeMediaLibrarySearchResult(
   value: unknown,
   expectedRequestId: string,
-): DesktopHomeAssetAddLibraryResult {
-  const base = requireRecord(value, 'Desktop Home add-library result must be an object.');
+): DesktopHomeMediaLibrarySearchResult {
+  return parseSearchResult(
+    value,
+    expectedRequestId,
+    'Media Library',
+    parseMediaLibraryItem,
+  ) as DesktopHomeMediaLibrarySearchResult;
+}
+
+export function parseDesktopHomeMediaLibraryChildrenResult(
+  value: unknown,
+  expectedRequestId: string,
+): DesktopHomeMediaLibraryChildrenResult {
+  return parseDesktopHomeMediaLibrarySearchResult(value, expectedRequestId);
+}
+
+export function parseDesktopHomeMediaLibraryAddResult(
+  value: unknown,
+  expectedRequestId: string,
+): DesktopHomeMediaLibraryAddResult {
+  const base = requireRecord(value, 'Desktop Home add Media Library result must be an object.');
   requireVersion(base['schemaVersion']);
   const requestId = requireRequestId(base['requestId'], expectedRequestId);
   if (base['status'] === 'cancelled') {
     requireExactRecord(
       base,
       ['schemaVersion', 'requestId', 'status'],
-      'Desktop Home add-library cancelled result is invalid.',
+      'Desktop Home add Media Library cancelled result is invalid.',
     );
     return {
       schemaVersion: DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION,
@@ -320,31 +447,31 @@ export function parseDesktopHomeAssetAddLibraryResult(
   const record = requireExactRecord(
     base,
     ['schemaVersion', 'requestId', 'status', 'libraryId'],
-    'Desktop Home add-library result is invalid.',
+    'Desktop Home add Media Library result is invalid.',
   );
   if (record['status'] !== 'added') {
-    throw new Error('Desktop Home add-library result status is invalid.');
+    throw new Error('Desktop Home add Media Library result status is invalid.');
   }
   return {
     schemaVersion: DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION,
     requestId,
     status: 'added',
-    libraryId: requireLibraryId(record['libraryId']),
+    libraryId: requireMediaLibraryId(record['libraryId']),
   };
 }
 
-export function parseDesktopHomeAssetRemoveLibraryResult(
+export function parseDesktopHomeMediaLibraryRemoveResult(
   value: unknown,
   expectedRequestId: string,
-): DesktopHomeAssetRemoveLibraryResult {
-  return parseDesktopHomeAssetLibraryMutationResult(value, expectedRequestId, 'removed');
+): DesktopHomeMediaLibraryRemoveResult {
+  return parseMediaLibraryMutationResult(value, expectedRequestId, 'removed');
 }
 
-export function parseDesktopHomeAssetRevealLibraryResult(
+export function parseDesktopHomeMediaLibraryRevealResult(
   value: unknown,
   expectedRequestId: string,
-): DesktopHomeAssetRevealLibraryResult {
-  return parseDesktopHomeAssetLibraryMutationResult(value, expectedRequestId, 'revealed');
+): DesktopHomeMediaLibraryRevealResult {
+  return parseMediaLibraryMutationResult(value, expectedRequestId, 'revealed');
 }
 
 export function parseDesktopHomePluginsResult(
@@ -375,7 +502,67 @@ export function parseDesktopHomePluginsResult(
   };
 }
 
-function parseDesktopHomeAssetLibraryMutationResult<TStatus extends 'removed' | 'revealed'>(
+function parseSearchResult<T>(
+  value: unknown,
+  expectedRequestId: string,
+  label: string,
+  parseItem: (value: unknown) => T,
+):
+  | {
+      readonly schemaVersion: typeof DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION;
+      readonly requestId: string;
+      readonly status: 'ready';
+      readonly items: readonly T[];
+    }
+  | {
+      readonly schemaVersion: typeof DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION;
+      readonly requestId: string;
+      readonly status: 'error';
+      readonly diagnostic: { readonly message: string };
+    } {
+  const base = requireRecord(value, `Desktop Home ${label} result must be an object.`);
+  requireVersion(base['schemaVersion']);
+  const requestId = requireRequestId(base['requestId'], expectedRequestId);
+  if (base['status'] === 'error') {
+    const record = requireExactRecord(
+      base,
+      ['schemaVersion', 'requestId', 'status', 'diagnostic'],
+      `Desktop Home ${label} error result is invalid.`,
+    );
+    const diagnostic = requireExactRecord(
+      record['diagnostic'],
+      ['message'],
+      `Desktop Home ${label} diagnostic is invalid.`,
+    );
+    return {
+      schemaVersion: DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION,
+      requestId,
+      status: 'error',
+      diagnostic: {
+        message: requireNonEmptyString(
+          diagnostic['message'],
+          `Desktop Home ${label} diagnostic message is required.`,
+        ),
+      },
+    };
+  }
+  const record = requireExactRecord(
+    base,
+    ['schemaVersion', 'requestId', 'status', 'items'],
+    `Desktop Home ${label} ready result is invalid.`,
+  );
+  if (record['status'] !== 'ready' || !Array.isArray(record['items'])) {
+    throw new Error(`Desktop Home ${label} result status or items are invalid.`);
+  }
+  return {
+    schemaVersion: DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION,
+    requestId,
+    status: 'ready',
+    items: record['items'].map(parseItem),
+  };
+}
+
+function parseMediaLibraryMutationResult<TStatus extends 'removed' | 'revealed'>(
   value: unknown,
   expectedRequestId: string,
   expectedStatus: TStatus,
@@ -388,18 +575,18 @@ function parseDesktopHomeAssetLibraryMutationResult<TStatus extends 'removed' | 
   const record = requireExactRecord(
     value,
     ['schemaVersion', 'requestId', 'status', 'libraryId'],
-    `Desktop Home ${expectedStatus} media-library result is invalid.`,
+    `Desktop Home ${expectedStatus} Media Library result is invalid.`,
   );
   requireVersion(record['schemaVersion']);
   const requestId = requireRequestId(record['requestId'], expectedRequestId);
   if (record['status'] !== expectedStatus) {
-    throw new Error(`Desktop Home media-library result status must be '${expectedStatus}'.`);
+    throw new Error(`Desktop Home Media Library result status must be '${expectedStatus}'.`);
   }
   return {
     schemaVersion: DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION,
     requestId,
     status: expectedStatus,
-    libraryId: requireLibraryId(record['libraryId']),
+    libraryId: requireMediaLibraryId(record['libraryId']),
   };
 }
 
@@ -407,31 +594,79 @@ function parseAssetItem(value: unknown): DesktopHomeAssetItem {
   const record = requireExactRecord(
     value,
     ['id', 'label', 'description', 'kind', 'mediaType', 'modifiedAt', 'availability'],
-    'Desktop Home asset item is invalid.',
+    'Desktop Home Asset Library item is invalid.',
   );
-  const kind = record['kind'];
-  const availability = record['availability'];
-  if (kind !== 'library' && kind !== 'asset') {
-    throw new Error('Desktop Home asset item kind is invalid.');
-  }
-  if (availability !== 'available' && availability !== 'unavailable') {
-    throw new Error('Desktop Home asset item availability is invalid.');
+  if (record['kind'] !== 'asset') {
+    throw new Error('Desktop Home Asset Library item kind is invalid.');
   }
   return {
-    id: requireNonEmptyString(record['id'], 'Desktop Home asset item id is required.'),
-    label: requireNonEmptyString(record['label'], 'Desktop Home asset item label is required.'),
+    id: requireNonEmptyString(record['id'], 'Desktop Home Asset Library item id is required.'),
+    label: requireNonEmptyString(
+      record['label'],
+      'Desktop Home Asset Library item label is required.',
+    ),
     ...(typeof record['description'] === 'string' ? { description: record['description'] } : {}),
-    kind,
+    kind: 'asset',
     ...(typeof record['mediaType'] === 'string' ? { mediaType: record['mediaType'] } : {}),
     ...(typeof record['modifiedAt'] === 'string'
       ? {
           modifiedAt: requireIsoDate(
             record['modifiedAt'],
-            'Desktop Home asset modifiedAt is invalid.',
+            'Desktop Home Asset Library modifiedAt is invalid.',
           ),
         }
       : {}),
-    availability,
+    availability: requireAvailability(record['availability']),
+  };
+}
+
+function parseMediaLibraryItem(value: unknown): DesktopHomeMediaLibraryItem {
+  const record = requireExactRecord(
+    value,
+    [
+      'id',
+      'libraryId',
+      'label',
+      'description',
+      'kind',
+      'locationKind',
+      'relativePath',
+      'mediaType',
+      'modifiedAt',
+      'availability',
+    ],
+    'Desktop Home Media Library item is invalid.',
+  );
+  const kind = record['kind'];
+  if (kind !== 'library' && kind !== 'directory' && kind !== 'file') {
+    throw new Error('Desktop Home Media Library item kind is invalid.');
+  }
+  const libraryId = requireMediaLibraryId(record['libraryId']);
+  const id = requireNonEmptyString(record['id'], 'Desktop Home Media Library item id is required.');
+  if (!id.startsWith(`${libraryId}:`)) {
+    throw new Error('Desktop Home Media Library item identity is invalid.');
+  }
+  return {
+    id,
+    libraryId,
+    label: requireNonEmptyString(
+      record['label'],
+      'Desktop Home Media Library item label is required.',
+    ),
+    ...(typeof record['description'] === 'string' ? { description: record['description'] } : {}),
+    kind,
+    locationKind: requireMediaLibraryLocationKind(record['locationKind']),
+    relativePath: requireRelativePath(record['relativePath']),
+    ...(typeof record['mediaType'] === 'string' ? { mediaType: record['mediaType'] } : {}),
+    ...(typeof record['modifiedAt'] === 'string'
+      ? {
+          modifiedAt: requireIsoDate(
+            record['modifiedAt'],
+            'Desktop Home Media Library modifiedAt is invalid.',
+          ),
+        }
+      : {}),
+    availability: requireAvailability(record['availability']),
   };
 }
 
@@ -482,10 +717,6 @@ function parseSkillDiscovery(value: unknown): DesktopHomeSkillDiscoveryProjectio
   if (!Array.isArray(record['diagnostics'])) {
     throw new Error('Desktop Home Skill discovery projection is invalid.');
   }
-  const duplicateCount = requireNonNegativeInteger(
-    record['duplicateCount'],
-    'Desktop Home Skill duplicate count is invalid.',
-  );
   return {
     diagnostics: record['diagnostics'].map((value) => {
       const diagnostic = requireExactRecord(
@@ -502,7 +733,10 @@ function parseSkillDiscovery(value: unknown): DesktopHomeSkillDiscoveryProjectio
         ),
       };
     }),
-    duplicateCount,
+    duplicateCount: requireNonNegativeInteger(
+      record['duplicateCount'],
+      'Desktop Home Skill duplicate count is invalid.',
+    ),
   };
 }
 
@@ -540,33 +774,46 @@ function requireRequestId(value: unknown, expected: string): string {
   return requestId;
 }
 
-function requireFacet(value: unknown): DesktopHomeAssetFacet {
-  if (value !== 'libraries' && value !== 'assets') {
-    throw new Error('Desktop Home asset facet is invalid.');
-  }
-  return value;
-}
-
-function requireLibraryId(value: unknown): string {
-  const libraryId = requireNonEmptyString(value, 'Desktop Home media-library id is required.');
-  const libraryName = libraryId.startsWith('library:') ? libraryId.slice('library:'.length) : '';
+function requireMediaLibraryId(value: unknown): string {
+  const libraryId = requireNonEmptyString(value, 'Desktop Home Media Library id is required.');
+  const match = /^media-library:(local|nas|cloud):([^:/\\]+)$/.exec(libraryId);
+  const libraryName = match?.[2];
   if (
-    libraryName.length === 0 ||
+    !libraryName ||
     libraryName !== libraryName.normalize('NFC') ||
     libraryName === '.' ||
-    libraryName === '..' ||
-    libraryName.includes('/') ||
-    libraryName.includes('\\') ||
-    libraryName.startsWith('.openneko-import-')
+    libraryName === '..'
   ) {
-    throw new Error('Desktop Home media-library id is invalid.');
+    throw new Error('Desktop Home Media Library id is invalid.');
   }
   return libraryId;
 }
 
-function requireAssetSort(value: unknown): DesktopHomeAssetSort {
+function requireMediaLibraryLocationKind(value: unknown): DesktopHomeMediaLibraryLocationKind {
+  if (value !== 'local' && value !== 'nas' && value !== 'cloud') {
+    throw new Error('Desktop Home Media Library location kind is invalid.');
+  }
+  return value;
+}
+
+function requireRelativePath(value: unknown): string {
+  const relativePath = requireString(
+    value,
+    'Desktop Home Media Library relative path must be a string.',
+  );
+  if (
+    relativePath.startsWith('/') ||
+    relativePath.includes('\\') ||
+    relativePath.split('/').some((segment) => segment === '..' || segment === '.')
+  ) {
+    throw new Error('Desktop Home Media Library relative path is invalid.');
+  }
+  return relativePath;
+}
+
+function requireCatalogSort(value: unknown): DesktopHomeCatalogSort {
   if (value !== 'name' && value !== 'modifiedAt') {
-    throw new Error('Desktop Home asset sort is invalid.');
+    throw new Error('Desktop Home catalog sort is invalid.');
   }
   return value;
 }
@@ -578,9 +825,16 @@ function requireSortDirection(value: unknown): DesktopHomeSortDirection {
   return value;
 }
 
+function requireAvailability(value: unknown): 'available' | 'unavailable' {
+  if (value !== 'available' && value !== 'unavailable') {
+    throw new Error('Desktop Home item availability is invalid.');
+  }
+  return value;
+}
+
 function requireLimit(value: unknown): number {
   if (typeof value !== 'number' || !Number.isInteger(value) || value < 1 || value > 200) {
-    throw new Error('Desktop Home asset limit must be an integer between 1 and 200.');
+    throw new Error('Desktop Home result limit must be an integer between 1 and 200.');
   }
   return value;
 }

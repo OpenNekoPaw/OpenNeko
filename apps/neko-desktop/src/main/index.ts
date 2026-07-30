@@ -57,7 +57,6 @@ import {
 } from '../shared/application-settings-contract';
 import { buildConfigFilePath } from '@neko/platform/files';
 import { resolveDesktopBuiltinSkillRoot } from './desktop-builtin-skill-root';
-import { copyDesktopGlobalMediaLibraryDirectory } from './desktop-global-media-library-files';
 
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string | undefined;
 declare const MAIN_WINDOW_VITE_NAME: string;
@@ -297,6 +296,7 @@ async function startDesktop(): Promise<void> {
   });
   const resourceBrowser = new DesktopResourceBrowserRuntime({
     globalAssetRoot: globalStorage.assets,
+    globalMediaLibraryRoot: globalStorage.mediaLibraries,
     shell: shellService,
     host,
     canvas: canvasRuntime,
@@ -326,8 +326,8 @@ async function startDesktop(): Promise<void> {
       const owner = requireOwnerWindow(windowId);
       const chinese = app.getLocale().toLocaleLowerCase().startsWith('zh');
       const result = await dialog.showOpenDialog(owner, {
-        title: chinese ? '导入全局媒体库' : 'Import Global Media Library',
-        buttonLabel: chinese ? '导入媒体库' : 'Import Library',
+        title: chinese ? '连接媒体库目录' : 'Connect Media Library Directory',
+        buttonLabel: chinese ? '连接目录' : 'Connect Directory',
         properties: ['openDirectory'],
       });
       if (result.canceled) return undefined;
@@ -336,10 +336,6 @@ async function startDesktop(): Promise<void> {
         throw new Error('Desktop global media-library picker returned no directory.');
       }
       return selectedPath;
-    },
-    copyGlobalMediaLibraryDirectory: copyDesktopGlobalMediaLibraryDirectory,
-    trashGlobalMediaLibrary: async (absolutePath) => {
-      await shell.trashItem(absolutePath);
     },
   });
   const agentControllerComposition = createDesktopAgentControllerComposition({

@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto';
 import type { NekoHostPorts } from '@neko/host/ports';
 import {
   createCanvasHostIntentRequest,
@@ -26,37 +25,38 @@ import {
 import { ResourceBrowserController } from 'neko-assets/resource-browser/controller';
 import type { DesktopShellService } from './shell-service';
 import {
+  createDesktopGlobalMediaLibraryConnection,
+  removeDesktopGlobalMediaLibraryConnection,
+  resolveDesktopGlobalMediaLibraryTarget,
+} from './desktop-global-media-library-files';
+import {
   createDesktopResourceBrowserReadSource,
   createDesktopResourceBrowserProjectionSource,
-  importDesktopGlobalMediaLibrary,
-  revealDesktopGlobalMediaLibrary,
+  readDesktopGlobalMediaLibraryChildren,
   searchDesktopGlobalAssetCatalog,
-  trashDesktopGlobalMediaLibrary,
+  searchDesktopGlobalMediaLibraries,
   type DesktopResourceBrowserSourceOptions,
 } from './desktop-resource-browser-source';
 import { resourceBrowserViewId } from '../shared/resource-browser-bridge-contract';
 import { createDesktopCanvasSessionId } from '../shared/canvas-bridge-contract';
 import type { DesktopWorkbenchViewRef } from '../shared/workbench-contract';
 import type {
-  DesktopHomeAssetFacet,
   DesktopHomeAssetItem,
-  DesktopHomeAssetSort,
+  DesktopHomeCatalogSort,
+  DesktopHomeMediaLibraryItem,
+  DesktopHomeMediaLibraryLocationKind,
   DesktopHomeSortDirection,
 } from '../shared/home-management-contract';
 
 export interface DesktopResourceBrowserRuntimeOptions {
   readonly globalAssetRoot: string;
+  readonly globalMediaLibraryRoot: string;
   readonly shell: DesktopShellService;
   readonly host: Pick<NekoHostPorts, 'files' | 'external'>;
   readonly openPreview: DesktopResourceBrowserSourceOptions['openPreview'];
   readonly openCut: DesktopResourceBrowserSourceOptions['openCut'];
   readonly selectSource: (windowId: string) => Promise<string | undefined>;
   readonly selectGlobalMediaLibrarySource: (windowId: string) => Promise<string | undefined>;
-  readonly copyGlobalMediaLibraryDirectory: (
-    sourceDirectory: string,
-    destinationDirectory: string,
-  ) => Promise<void>;
-  readonly trashGlobalMediaLibrary: (absolutePath: string) => Promise<void>;
   readonly createThumbnail: (absolutePath: string) => Promise<string>;
   readonly canvas: {
     executeIntent(windowId: string, payload: unknown): Promise<CanvasHostIntentResult>;
@@ -134,9 +134,8 @@ export class DesktopResourceBrowserRuntime {
   async searchHomeAssets(input: {
     readonly windowId: string;
     readonly endpointEpoch: string;
-    readonly facet: DesktopHomeAssetFacet;
     readonly query: string;
-    readonly sortBy: DesktopHomeAssetSort;
+    readonly sortBy: DesktopHomeCatalogSort;
     readonly sortDirection: DesktopHomeSortDirection;
     readonly limit: number;
   }): Promise<readonly DesktopHomeAssetItem[]> {
@@ -144,8 +143,47 @@ export class DesktopResourceBrowserRuntime {
     return searchDesktopGlobalAssetCatalog({
       globalAssetRoot: this.options.globalAssetRoot,
       files: this.options.host.files,
-      facet: input.facet,
       query: input.query,
+      sortBy: input.sortBy,
+      sortDirection: input.sortDirection,
+      limit: input.limit,
+    });
+  }
+
+  async searchHomeMediaLibraries(input: {
+    readonly windowId: string;
+    readonly endpointEpoch: string;
+    readonly query: string;
+    readonly sortBy: DesktopHomeCatalogSort;
+    readonly sortDirection: DesktopHomeSortDirection;
+    readonly limit: number;
+  }): Promise<readonly DesktopHomeMediaLibraryItem[]> {
+    await this.requireHomeEndpoint(input.windowId, input.endpointEpoch);
+    return searchDesktopGlobalMediaLibraries({
+      mediaLibraryRoot: this.options.globalMediaLibraryRoot,
+      files: this.options.host.files,
+      query: input.query,
+      sortBy: input.sortBy,
+      sortDirection: input.sortDirection,
+      limit: input.limit,
+    });
+  }
+
+  async readHomeMediaLibraryChildren(input: {
+    readonly windowId: string;
+    readonly endpointEpoch: string;
+    readonly libraryId: string;
+    readonly relativePath: string;
+    readonly sortBy: DesktopHomeCatalogSort;
+    readonly sortDirection: DesktopHomeSortDirection;
+    readonly limit: number;
+  }): Promise<readonly DesktopHomeMediaLibraryItem[]> {
+    await this.requireHomeEndpoint(input.windowId, input.endpointEpoch);
+    return readDesktopGlobalMediaLibraryChildren({
+      mediaLibraryRoot: this.options.globalMediaLibraryRoot,
+      files: this.options.host.files,
+      libraryId: input.libraryId,
+      relativePath: input.relativePath,
       sortBy: input.sortBy,
       sortDirection: input.sortDirection,
       limit: input.limit,
@@ -155,6 +193,7 @@ export class DesktopResourceBrowserRuntime {
   async addHomeMediaLibrary(input: {
     readonly windowId: string;
     readonly endpointEpoch: string;
+    readonly locationKind: DesktopHomeMediaLibraryLocationKind;
   }): Promise<
     { readonly status: 'added'; readonly libraryId: string } | { readonly status: 'cancelled' }
   > {
@@ -162,14 +201,12 @@ export class DesktopResourceBrowserRuntime {
     return this.withGlobalMediaLibraryMutation(async () => {
       const sourceDirectory = await this.options.selectGlobalMediaLibrarySource(input.windowId);
       if (!sourceDirectory) return { status: 'cancelled' };
-      const imported = await importDesktopGlobalMediaLibrary({
-        globalAssetRoot: this.options.globalAssetRoot,
-        files: this.options.host.files,
+      const connection = await createDesktopGlobalMediaLibraryConnection({
+        mediaLibraryRoot: this.options.globalMediaLibraryRoot,
         sourceDirectory,
-        operationId: randomUUID(),
-        copyDirectory: this.options.copyGlobalMediaLibraryDirectory,
+        locationKind: input.locationKind,
       });
-      return { status: 'added', libraryId: imported.libraryId };
+      return { status: 'added', libraryId: connection.libraryId };
     });
   }
 
@@ -180,11 +217,9 @@ export class DesktopResourceBrowserRuntime {
   }): Promise<void> {
     await this.requireHomeEndpoint(input.windowId, input.endpointEpoch);
     await this.withGlobalMediaLibraryMutation(async () => {
-      await trashDesktopGlobalMediaLibrary({
-        globalAssetRoot: this.options.globalAssetRoot,
-        files: this.options.host.files,
+      await removeDesktopGlobalMediaLibraryConnection({
+        mediaLibraryRoot: this.options.globalMediaLibraryRoot,
         libraryId: input.libraryId,
-        trashDirectory: this.options.trashGlobalMediaLibrary,
       });
     });
   }
@@ -199,12 +234,12 @@ export class DesktopResourceBrowserRuntime {
     if (!revealPath) {
       throw new Error('Desktop global media-library reveal capability is unavailable.');
     }
-    await revealDesktopGlobalMediaLibrary({
-      globalAssetRoot: this.options.globalAssetRoot,
-      files: this.options.host.files,
-      libraryId: input.libraryId,
-      revealPath,
-    });
+    await revealPath(
+      await resolveDesktopGlobalMediaLibraryTarget({
+        mediaLibraryRoot: this.options.globalMediaLibraryRoot,
+        libraryId: input.libraryId,
+      }),
+    );
   }
 
   detachWindow(windowId: string): void {

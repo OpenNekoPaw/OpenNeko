@@ -10,9 +10,9 @@ import {
   createDesktopApplicationSettingsUpdateRequest,
 } from '../shared/application-settings-contract';
 import {
-  createDesktopHomeAssetAddLibraryRequest,
-  createDesktopHomeAssetLibraryRequest,
   createDesktopHomeAssetSearchRequest,
+  createDesktopHomeMediaLibraryAddRequest,
+  createDesktopHomeMediaLibraryRequest,
   createDesktopHomePluginsRequest,
 } from '../shared/home-management-contract';
 import {
@@ -232,7 +232,6 @@ describe('DesktopAppHost', () => {
           frameUrl: `${DESKTOP_APP_ORIGIN}/index.html`,
         },
         createDesktopHomeAssetSearchRequest('assets-1', {
-          facet: 'assets',
           query: '',
           sortBy: 'name',
           sortDirection: 'ascending',
@@ -252,19 +251,25 @@ describe('DesktopAppHost', () => {
     await expect(
       fixture.appHost.addHomeMediaLibrary(
         sender,
-        createDesktopHomeAssetAddLibraryRequest('assets-add-1'),
+        createDesktopHomeMediaLibraryAddRequest('media-library-add-1', 'local'),
       ),
     ).rejects.toThrow("Unknown Desktop IPC sender '11'");
     await expect(
       fixture.appHost.removeHomeMediaLibrary(
         sender,
-        createDesktopHomeAssetLibraryRequest('assets-remove-1', 'library:Footage'),
+        createDesktopHomeMediaLibraryRequest(
+          'media-library-remove-1',
+          'media-library:local:Footage',
+        ),
       ),
     ).rejects.toThrow("Unknown Desktop IPC sender '11'");
     await expect(
       fixture.appHost.revealHomeMediaLibrary(
         sender,
-        createDesktopHomeAssetLibraryRequest('assets-reveal-1', 'library:Footage'),
+        createDesktopHomeMediaLibraryRequest(
+          'media-library-reveal-1',
+          'media-library:local:Footage',
+        ),
       ),
     ).rejects.toThrow("Unknown Desktop IPC sender '11'");
   });

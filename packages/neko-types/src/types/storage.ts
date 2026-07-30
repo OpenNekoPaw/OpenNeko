@@ -419,6 +419,7 @@ export interface IGlobalStorageLayout {
   readonly root: string;
   readonly database: string;
   readonly assets: string;
+  readonly mediaLibraries: string;
   readonly journals: string;
   readonly logs: string;
   readonly skills: string;
@@ -491,6 +492,7 @@ export function resolveGlobalStorageLayout(homedir: string): IGlobalStorageLayou
     root,
     database: join(root, 'neko.db'),
     assets: join(root, 'assets'),
+    mediaLibraries: join(root, 'media-libraries'),
     journals: join(root, 'journals'),
     logs: join(root, 'logs'),
     skills: join(homedir, '.agents', 'skills'),
