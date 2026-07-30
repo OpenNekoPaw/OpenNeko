@@ -45,4 +45,49 @@ export const M1_LOCAL_METADATA_MIGRATIONS: readonly LocalMetadataMigration[] = [
         ON conversations(workspace_id, updated_at DESC)`,
     ],
   },
+  {
+    namespace: 'core',
+    version: 2,
+    name: 'desktop-conversation-sources',
+    checksum: 'sha256:core-desktop-conversation-sources-v2',
+    ownership: 'system',
+    destructive: false,
+    statements: [
+      'ALTER TABLE conversations RENAME TO conversations_legacy_host_sources',
+      'DROP INDEX conversations_workspace_updated_idx',
+      `CREATE TABLE conversations (
+        conversation_id TEXT PRIMARY KEY NOT NULL,
+        workspace_id TEXT,
+        journal_id TEXT NOT NULL UNIQUE,
+        title TEXT NOT NULL,
+        source TEXT NOT NULL CHECK (source IN ('desktop', 'agent', 'import')),
+        model TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      ) STRICT`,
+      `INSERT INTO conversations (
+        conversation_id,
+        workspace_id,
+        journal_id,
+        title,
+        source,
+        model,
+        created_at,
+        updated_at
+      )
+      SELECT
+        conversation_id,
+        workspace_id,
+        journal_id,
+        title,
+        CASE WHEN source IN ('vscode', 'tui') THEN 'desktop' ELSE source END,
+        model,
+        created_at,
+        updated_at
+      FROM conversations_legacy_host_sources`,
+      'DROP TABLE conversations_legacy_host_sources',
+      `CREATE INDEX conversations_workspace_updated_idx
+        ON conversations(workspace_id, updated_at DESC)`,
+    ],
+  },
 ];

@@ -60,7 +60,7 @@ export interface WorkspaceRegistryRepository {
   markOrphaned(workspaceId: string, orphanedAt: string): Promise<WorkspaceRegistryRecord>;
 }
 
-export type ConversationCatalogSource = 'vscode' | 'tui' | 'agent' | 'import';
+export type ConversationCatalogSource = 'desktop' | 'agent' | 'import';
 
 export interface ConversationCatalogRecord {
   readonly conversationId: string;

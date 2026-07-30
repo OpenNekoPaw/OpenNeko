@@ -166,7 +166,7 @@ export async function runLocalMetadataAdapterContract(
 
   const destructiveMigration: LocalMetadataMigration = {
     namespace: 'core',
-    version: 2,
+    version: 3,
     name: 'rebuild-conversation-order-index',
     checksum: 'sha256:adapter-contract-rebuild-conversation-order-index',
     ownership: 'cache',

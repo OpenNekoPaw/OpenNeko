@@ -267,7 +267,7 @@ function decodeWorkspace(row: SqliteRow): WorkspaceRegistryRecord {
 
 function decodeConversation(row: SqliteRow): ConversationCatalogRecord {
   const source = readString(row, 'source');
-  if (source !== 'vscode' && source !== 'tui' && source !== 'agent' && source !== 'import') {
+  if (source !== 'desktop' && source !== 'agent' && source !== 'import') {
     throw new LocalMetadataError({
       code: 'metadata-integrity-failed',
       operation: 'decode-conversation',
