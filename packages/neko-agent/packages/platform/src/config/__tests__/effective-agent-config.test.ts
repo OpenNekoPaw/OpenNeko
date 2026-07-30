@@ -278,6 +278,7 @@ describe('resolveEffectiveAgentWorkspaceConfigSnapshot', () => {
         {
           id: 'workspace-provider',
           name: 'Workspace Provider',
+          displayName: 'Workspace Provider',
           type: 'generic',
           apiUrl: 'https://workspace.example.test/v1',
           apiKey: 'sk-workspace',

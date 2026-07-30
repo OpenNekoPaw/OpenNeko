@@ -354,6 +354,7 @@ describe('assistant config presenter', () => {
         maxTokens: 4096,
         executionMode: 'auto',
         chatModelOptions: [],
+        modelGroups: [],
         defaultMediaModels: {},
       }),
     ).toEqual({
@@ -371,6 +372,7 @@ describe('assistant config presenter', () => {
       maxTokens: 4096,
       executionMode: 'auto',
       chatModelOptions: [],
+      modelGroups: [],
       defaultMediaModels: {},
     });
 

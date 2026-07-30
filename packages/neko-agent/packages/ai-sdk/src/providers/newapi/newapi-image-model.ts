@@ -22,6 +22,7 @@ import type {
   SharedV3Warning,
 } from '@ai-sdk/provider';
 import type { ProviderConfig } from '../../types';
+import { copyBytesToArrayBuffer } from './newapi-binary';
 
 export class NewAPIImageModel implements ImageModelV3 {
   readonly specificationVersion = 'v3' as const;
@@ -218,7 +219,11 @@ export class NewAPIImageModel implements ImageModelV3 {
     const referenceImageUrl = nekoExtras['referenceImageUrl'] as string | undefined;
     if (referenceImageBase64) {
       const { bytes, mimeType } = decodeBase64OrDataUrl(referenceImageBase64);
-      form.append('image', new Blob([bytes], { type: mimeType }), `image.${extFromMime(mimeType)}`);
+      form.append(
+        'image',
+        new Blob([copyBytesToArrayBuffer(bytes)], { type: mimeType }),
+        `image.${extFromMime(mimeType)}`,
+      );
     } else if (referenceImageUrl) {
       const fetched = await fetchBinary(referenceImageUrl, options.abortSignal);
       if (!fetched) {
@@ -228,7 +233,7 @@ export class NewAPIImageModel implements ImageModelV3 {
       }
       form.append(
         'image',
-        new Blob([fetched.bytes], { type: fetched.mimeType }),
+        new Blob([copyBytesToArrayBuffer(fetched.bytes)], { type: fetched.mimeType }),
         `image.${extFromMime(fetched.mimeType)}`,
       );
     }
@@ -252,7 +257,11 @@ export class NewAPIImageModel implements ImageModelV3 {
             `uploading the raw grayscale would produce incorrect inpaint regions.`,
         );
       }
-      form.append('mask', new Blob([convertResult.bytes], { type: 'image/png' }), 'mask.png');
+      form.append(
+        'mask',
+        new Blob([copyBytesToArrayBuffer(convertResult.bytes)], { type: 'image/png' }),
+        'mask.png',
+      );
     }
 
     // Forward non-standard enhancement fields as extra form parts so NewAPI
@@ -274,7 +283,7 @@ export class NewAPIImageModel implements ImageModelV3 {
       const { bytes, mimeType } = decodeBase64OrDataUrl(controlImageBase64);
       form.append(
         'control_image',
-        new Blob([bytes], { type: mimeType }),
+        new Blob([copyBytesToArrayBuffer(bytes)], { type: mimeType }),
         `control.${extFromMime(mimeType)}`,
       );
     }

@@ -24,6 +24,7 @@ import type {
 } from '@ai-sdk/provider';
 import type { ProviderConfig } from '../../types';
 import { pollUntilDone, POLLING_PRESETS } from '../../polling';
+import { copyBytesToArrayBuffer } from './newapi-binary';
 
 /** POST /v1/videos response */
 interface SoraCreateResponse {
@@ -95,7 +96,9 @@ export class NewAPIVideoModel implements VideoModelV3 {
             ? new Blob([Buffer.from(data, 'base64')], {
                 type: options.image.mediaType ?? 'image/png',
               })
-            : new Blob([data], { type: options.image.mediaType ?? 'image/png' });
+            : new Blob([copyBytesToArrayBuffer(data)], {
+                type: options.image.mediaType ?? 'image/png',
+              });
         formData.append('input_reference', blob, 'input.png');
       } else if (options.image.type === 'url') {
         // For URL references, download and attach as file

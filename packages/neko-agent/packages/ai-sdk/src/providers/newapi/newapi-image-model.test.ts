@@ -128,7 +128,7 @@ describe('NewAPIImageModel', () => {
       seed: undefined,
       files: undefined,
       mask: undefined,
-      providerOptions: undefined,
+      providerOptions: {},
     });
 
     expect(result.images).toEqual([png]);

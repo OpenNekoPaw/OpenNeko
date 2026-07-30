@@ -12,9 +12,11 @@ export interface OllamaModelRefreshLogger {
 
 export interface RefreshOllamaModelsInput {
   readonly config: OllamaModelRefreshConfig;
-  readonly fetch?: typeof fetch;
+  readonly fetch?: OllamaModelFetch;
   readonly logger?: OllamaModelRefreshLogger;
 }
+
+export type OllamaModelFetch = (url: string) => Promise<Response>;
 
 export interface RefreshOllamaModelsResult {
   readonly added: number;
@@ -66,7 +68,7 @@ export async function refreshOllamaModels(
   };
 }
 
-async function listOllamaModels(provider: Provider, request: typeof fetch): Promise<string[]> {
+async function listOllamaModels(provider: Provider, request: OllamaModelFetch): Promise<string[]> {
   const baseUrl = (provider.apiUrl ?? 'http://127.0.0.1:11434')
     .replace(/\/+$/, '')
     .replace(/\/api$/u, '');

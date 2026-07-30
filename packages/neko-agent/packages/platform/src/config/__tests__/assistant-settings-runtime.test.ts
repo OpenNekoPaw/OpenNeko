@@ -20,6 +20,7 @@ describe('assistant-settings-runtime', () => {
         maxTokens: 4096,
         executionMode: 'auto',
         chatModelOptions: [],
+        modelGroups: [],
         defaultMediaModels: {},
       }),
     });

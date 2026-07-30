@@ -91,12 +91,20 @@ export class LiblibMediaAdapter extends BaseMediaAdapter {
     const encoder = new TextEncoder();
     const data = encoder.encode(timestamp);
     const key = encoder.encode(secretKey);
+    if (key.length === 0) {
+      throw new Error('Liblib media provider requires a non-empty secret key.');
+    }
 
     // Simple XOR-based signature for demonstration
     // In production, use proper HmacSHA1 implementation
     let hash = 0;
     for (let i = 0; i < data.length; i++) {
-      hash = ((hash << 5) - hash + data[i] * key[i % key.length]) | 0;
+      const dataByte = data[i];
+      const keyByte = key[i % key.length];
+      if (dataByte === undefined || keyByte === undefined) {
+        throw new Error('Liblib signature byte projection failed.');
+      }
+      hash = ((hash << 5) - hash + dataByte * keyByte) | 0;
     }
 
     return Math.abs(hash).toString(16);
@@ -294,7 +302,8 @@ export class LiblibMediaAdapter extends BaseMediaAdapter {
   private parseWidth(resolution?: string): number | undefined {
     if (!resolution) return undefined;
     const match = resolution.match(/^(\d+)x\d+$/);
-    return match ? parseInt(match[1], 10) : undefined;
+    const width = match?.[1];
+    return width === undefined ? undefined : parseInt(width, 10);
   }
 
   /**
@@ -303,6 +312,7 @@ export class LiblibMediaAdapter extends BaseMediaAdapter {
   private parseHeight(resolution?: string): number | undefined {
     if (!resolution) return undefined;
     const match = resolution.match(/^\d+x(\d+)$/);
-    return match ? parseInt(match[1], 10) : undefined;
+    const height = match?.[1];
+    return height === undefined ? undefined : parseInt(height, 10);
   }
 }
