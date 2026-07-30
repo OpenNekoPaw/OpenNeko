@@ -99,7 +99,7 @@ describe('useCanvasHostMessages keyboard action guards', () => {
   });
 
   it('acknowledges canvas data readiness after applying an update message', () => {
-    const hostPort = createVSCodeApi();
+    const hostPort = createHostPort();
     const setCanvasData = vi.fn();
 
     act(() => {
@@ -169,7 +169,7 @@ describe('useCanvasHostMessages keyboard action guards', () => {
   });
 
   it('keeps the current Canvas when an update message has no valid document payload', () => {
-    const hostPort = createVSCodeApi();
+    const hostPort = createHostPort();
     const setCanvasData = vi.fn();
 
     act(() => {
@@ -197,7 +197,7 @@ describe('useCanvasHostMessages keyboard action guards', () => {
   });
 
   it('projects a typed load diagnostic without acknowledging canvas readiness', () => {
-    const hostPort = createVSCodeApi();
+    const hostPort = createHostPort();
 
     act(() => {
       root.render(
@@ -226,7 +226,7 @@ describe('useCanvasHostMessages keyboard action guards', () => {
   });
 
   it('applies host-authored Canvas document updates from headless authoring', () => {
-    const hostPort = createVSCodeApi();
+    const hostPort = createHostPort();
     const setCanvasData = vi.fn();
     const hostAppliedData: CanvasData = {
       ...DEFAULT_CANVAS_DATA,
@@ -307,7 +307,7 @@ describe('useCanvasHostMessages keyboard action guards', () => {
   });
 
   it('creates canvas connections from host node operation requests', () => {
-    const hostPort = createVSCodeApi();
+    const hostPort = createHostPort();
     const createConnection = vi.fn(() => ({
       connectionId: 'connection-1',
     }));
@@ -378,7 +378,7 @@ function createOptions(
   options: Partial<UseCanvasHostMessagesOptions> = {},
 ): UseCanvasHostMessagesOptions {
   return {
-    hostPort: createVSCodeApi(),
+    hostPort: createHostPort(),
     defaultCanvasData: DEFAULT_CANVAS_DATA,
     setCanvasData: vi.fn(),
     isComposingRef,
@@ -387,7 +387,7 @@ function createOptions(
   };
 }
 
-function createVSCodeApi(): NonNullable<CanvasHostMessagePort> {
+function createHostPort(): CanvasHostMessagePort {
   return {
     postMessage: vi.fn(),
     getState: vi.fn(),

@@ -95,7 +95,11 @@ function DragDropHarness({
 
 function createOptions(projectContent: UseDragDropOptions['projectContent']): UseDragDropOptions {
   return {
-    hostPort: null,
+    hostPort: {
+      postMessage: vi.fn(),
+      getState: vi.fn(),
+      setState: vi.fn(),
+    },
     screenToCanvas: (screenX, screenY) => ({ x: screenX - 10, y: screenY - 20 }),
     addMediaAt: vi.fn(),
     projectContent,

@@ -51,7 +51,7 @@ describe('useKeyboardActions explicit action mapping', () => {
     const isComposingRef = { current: false };
     options = {
       ...options,
-      hostPort: createVSCodeApi(),
+      hostPort: createHostPort(),
       isComposingRef,
     };
 
@@ -86,7 +86,7 @@ describe('useKeyboardActions explicit action mapping', () => {
     const isComposingRef = { current: true };
     options = {
       ...options,
-      hostPort: createVSCodeApi(),
+      hostPort: createHostPort(),
       isComposingRef,
     };
 
@@ -126,7 +126,7 @@ function KeyboardHarness({
 
 function createOptions(): UseKeyboardActionsOptions {
   return {
-    hostPort: null,
+    hostPort: createHostPort(),
     selectedNodeIds: ['node-1'],
     selectedConnectionIds: [],
     nodes: [{ id: 'node-1' }, { id: 'node-2' }] as UseKeyboardActionsOptions['nodes'],
@@ -148,7 +148,7 @@ function createOptions(): UseKeyboardActionsOptions {
   };
 }
 
-function createVSCodeApi(): NonNullable<UseKeyboardActionsOptions['hostPort']> {
+function createHostPort(): UseKeyboardActionsOptions['hostPort'] {
   return {
     postMessage: vi.fn(),
     getState: vi.fn(),

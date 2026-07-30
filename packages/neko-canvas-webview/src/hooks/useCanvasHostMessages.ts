@@ -41,14 +41,14 @@ import { isEditorLevelKeyboardAction } from './keyboardActionPolicy';
 // Types
 // =============================================================================
 
-/** Host API handle (only available in webview context) */
-export type CanvasHostMessagePort = {
+/** Package-owned host message port injected by the application composition root. */
+export interface CanvasHostMessagePort {
   postMessage: (message: unknown) => void;
   getState: () => unknown;
   setState: (state: unknown) => void;
   supportsMessage?: (messageType: string) => boolean;
   subscribe?: (listener: (message: unknown) => void) => () => void;
-} | null;
+}
 
 export interface UseCanvasHostMessagesOptions {
   hostPort: CanvasHostMessagePort;

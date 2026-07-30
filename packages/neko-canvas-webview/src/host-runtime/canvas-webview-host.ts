@@ -18,11 +18,11 @@ import type {
 import type { CanvasHostMessagePort } from '../hooks/useCanvasHostMessages';
 import { createCanvasViewportSnapshotKey } from '../utils/viewportWebviewState';
 
-export interface CanvasWebviewDelegate extends NonNullable<CanvasHostMessagePort> {
+export interface CanvasWebviewDelegate extends CanvasHostMessagePort {
   supportsMessage?(messageType: string): boolean;
 }
 
-export interface CanvasWebviewHostPort extends NonNullable<CanvasHostMessagePort> {
+export interface CanvasWebviewHostPort extends CanvasHostMessagePort {
   supportsMessage(messageType: string): boolean;
   subscribe(listener: (message: unknown) => void): () => void;
   requestSource(
