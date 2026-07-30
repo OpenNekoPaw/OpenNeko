@@ -142,7 +142,12 @@ function installBridge(getBootstrap: typeof window.openNekoDesktop.agent.getBoot
         subscribe: vi.fn(() => () => undefined),
       },
       home: {
-        assets: { search: vi.fn() },
+        assets: {
+          search: vi.fn(),
+          addLibrary: vi.fn(),
+          removeLibrary: vi.fn(),
+          revealLibrary: vi.fn(),
+        },
         plugins: { list: vi.fn() },
       },
       shell: {

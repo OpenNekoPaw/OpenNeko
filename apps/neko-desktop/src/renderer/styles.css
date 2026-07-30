@@ -1222,6 +1222,25 @@ code {
   opacity: 0.5;
 }
 
+.home-management-primary-action {
+  display: inline-flex;
+  min-height: 36px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 13px;
+  border: 1px solid color-mix(in srgb, var(--neko-accent) 45%, var(--neko-desktop-border));
+  border-radius: 999px;
+  color: var(--vscode-button-foreground, #fff);
+  background: var(--neko-accent);
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.home-management-primary-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
 .home-project-selector {
   flex: 0 0 auto;
   min-height: 36px;
@@ -1373,6 +1392,39 @@ button.home-management-card:hover {
   white-space: nowrap;
 }
 
+.home-management-card-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.home-management-card-actions button {
+  display: inline-flex;
+  min-height: 28px;
+  align-items: center;
+  gap: 4px;
+  padding: 0 8px;
+  border: 1px solid var(--neko-desktop-border);
+  border-radius: 8px;
+  color: var(--neko-fg-secondary);
+  background: var(--neko-desktop-control);
+  font-size: 9px;
+}
+
+.home-management-card-actions button:hover:not(:disabled) {
+  color: var(--neko-fg);
+  background: var(--neko-desktop-control-hover);
+}
+
+.home-management-card-actions button.is-danger {
+  color: var(--neko-desktop-danger-foreground);
+}
+
+.home-management-card-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
 .home-management-card strong {
   font-size: 12px;
 }
@@ -1397,6 +1449,7 @@ button.home-management-card:hover {
 }
 
 .home-management-diagnostic,
+.home-management-notice,
 .home-plugin-host-notice {
   display: flex;
   align-items: center;
@@ -1411,6 +1464,15 @@ button.home-management-card:hover {
 
 .home-management-diagnostic {
   color: var(--neko-desktop-danger-foreground);
+}
+
+.home-management-notice {
+  color: var(--neko-accent-strong);
+}
+
+.home-management-diagnostic,
+.home-management-notice {
+  margin-bottom: 14px;
 }
 
 .home-plugin-host-notice {

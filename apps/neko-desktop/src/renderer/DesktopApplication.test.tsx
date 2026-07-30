@@ -157,6 +157,128 @@ describe('DesktopApplication', () => {
     container.remove();
   });
 
+  it('adds, reveals, and moves a global media library to the system trash from Asset Center', async () => {
+    const projection = createProjection();
+    const search = vi.fn(async () => ({
+      schemaVersion: 4 as const,
+      requestId: 'assets-search',
+      facet: 'libraries' as const,
+      status: 'ready' as const,
+      items: [
+        {
+          id: 'library:Footage',
+          label: 'Footage',
+          description: '.',
+          kind: 'library' as const,
+          mediaType: 'directory',
+          availability: 'available' as const,
+        },
+      ],
+    }));
+    const addLibrary = vi.fn(async () => ({
+      schemaVersion: 4 as const,
+      requestId: 'assets-add',
+      status: 'added' as const,
+      libraryId: 'library:Footage',
+    }));
+    const revealLibrary = vi.fn(async () => ({
+      schemaVersion: 4 as const,
+      requestId: 'assets-reveal',
+      status: 'revealed' as const,
+      libraryId: 'library:Footage',
+    }));
+    const removeLibrary = vi.fn(async () => ({
+      schemaVersion: 4 as const,
+      requestId: 'assets-remove',
+      status: 'removed' as const,
+      libraryId: 'library:Footage',
+    }));
+    vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValue(true);
+    Object.defineProperty(window, 'openNekoDesktop', {
+      configurable: true,
+      value: {
+        agent: {
+          getBootstrap: vi.fn(),
+          send: vi.fn(),
+          subscribe: vi.fn(() => () => undefined),
+        },
+        bootstrap: { get: vi.fn() },
+        lifecycle: { subscribe: vi.fn(() => () => undefined) },
+        settings: createSettingsBridgeMock(),
+        home: {
+          assets: { search, addLibrary, revealLibrary, removeLibrary },
+          plugins: { list: vi.fn() },
+        },
+        shell: {
+          getSnapshot: vi.fn(async () => projection),
+          subscribe: vi.fn(() => () => undefined),
+        },
+        projects: {
+          open: vi.fn(),
+          openContent: vi.fn(),
+          removeRecent: vi.fn(),
+          requestProfile: vi.fn(),
+        },
+        conversations: { delete: vi.fn() },
+        tabs: {
+          activateHome: vi.fn(),
+          activate: vi.fn(),
+          close: vi.fn(),
+        },
+        workbench: { update: vi.fn() },
+        resources: createResourceBridgeMock(),
+        preview: createPreviewBridgeMock(),
+        canvas: createCanvasBridgeMock(),
+        cut: createCutBridgeMock(),
+      } satisfies typeof window.openNekoDesktop,
+    });
+    const container = document.createElement('div');
+    document.body.append(container);
+    const root = createRoot(container);
+    await act(async () => root.render(<TestApplication />));
+
+    const assetCenter = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
+      (button) => button.textContent?.includes('Asset Center'),
+    );
+    await act(async () => assetCenter?.click());
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 180));
+    });
+
+    const add = [...container.querySelectorAll<HTMLButtonElement>('button')].find((button) =>
+      button.textContent?.includes('Add media library'),
+    );
+    await act(async () => add?.click());
+    expect(addLibrary).toHaveBeenCalledOnce();
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 180));
+    });
+
+    const reveal = [...container.querySelectorAll<HTMLButtonElement>('button')].find((button) =>
+      button.textContent?.includes('Show in file manager'),
+    );
+    await act(async () => reveal?.click());
+    expect(revealLibrary).toHaveBeenCalledWith('library:Footage');
+
+    const remove = [...container.querySelectorAll<HTMLButtonElement>('button')].find((button) =>
+      button.textContent?.includes('Remove'),
+    );
+    await act(async () => remove?.click());
+    expect(removeLibrary).not.toHaveBeenCalled();
+    await act(async () => remove?.click());
+    expect(window.confirm).toHaveBeenCalledWith(
+      'Move the “Footage” media library to the system trash?',
+    );
+    expect(removeLibrary).toHaveBeenCalledWith('library:Footage');
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 180));
+    });
+    expect(search.mock.calls.length).toBeGreaterThanOrEqual(2);
+
+    await act(async () => root.unmount());
+    container.remove();
+  });
+
   it('exposes distinct cleanup actions for recent Projects and Agent conversations', async () => {
     const base = createProjection();
     const projection: DesktopShellProjection = {
@@ -731,7 +853,12 @@ function createSettingsBridgeMock() {
 
 function createHomeBridgeMock() {
   return {
-    assets: { search: vi.fn() },
+    assets: {
+      search: vi.fn(),
+      addLibrary: vi.fn(),
+      removeLibrary: vi.fn(),
+      revealLibrary: vi.fn(),
+    },
     plugins: { list: vi.fn() },
   };
 }

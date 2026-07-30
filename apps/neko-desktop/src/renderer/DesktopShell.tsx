@@ -714,8 +714,12 @@ function HomeAssetCenter({ interactive }: { readonly interactive: boolean }): JS
   const [facet, setFacet] = useState<DesktopHomeAssetFacet>('libraries');
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState<HomeAssetSortOption>('name-ascending');
+  const [catalogRevision, setCatalogRevision] = useState(0);
   const [result, setResult] = useState<DesktopHomeAssetSearchResult>();
   const [error, setError] = useState<string>();
+  const [mutationDiagnostic, setMutationDiagnostic] = useState<string>();
+  const [mutationNotice, setMutationNotice] = useState<string>();
+  const [pendingAction, setPendingAction] = useState<string>();
   useEffect(() => {
     if (!interactive) return;
     let active = true;
@@ -746,7 +750,62 @@ function HomeAssetCenter({ interactive }: { readonly interactive: boolean }): JS
       active = false;
       window.clearTimeout(timeout);
     };
-  }, [facet, interactive, query, sort]);
+  }, [catalogRevision, facet, interactive, query, sort]);
+
+  const addLibrary = useCallback(async (): Promise<void> => {
+    setMutationDiagnostic(undefined);
+    setMutationNotice(undefined);
+    setPendingAction('add');
+    try {
+      const mutation = await window.openNekoDesktop.home.assets.addLibrary();
+      if (mutation.status === 'cancelled') {
+        setMutationNotice(t('home.assets.addCancelled'));
+        return;
+      }
+      setMutationNotice(t('home.assets.added'));
+      setCatalogRevision((revision) => revision + 1);
+    } catch (reason: unknown) {
+      setMutationDiagnostic(describeError(reason));
+    } finally {
+      setPendingAction(undefined);
+    }
+  }, [t]);
+
+  const removeLibrary = useCallback(
+    async (item: Extract<DesktopHomeAssetSearchResult, { status: 'ready' }>['items'][number]) => {
+      if (!window.confirm(t('home.assets.removeConfirm', { name: item.label }))) return;
+      setMutationDiagnostic(undefined);
+      setMutationNotice(undefined);
+      setPendingAction(`remove:${item.id}`);
+      try {
+        await window.openNekoDesktop.home.assets.removeLibrary(item.id);
+        setMutationNotice(t('home.assets.removed'));
+        setCatalogRevision((revision) => revision + 1);
+      } catch (reason: unknown) {
+        setMutationDiagnostic(describeError(reason));
+      } finally {
+        setPendingAction(undefined);
+      }
+    },
+    [t],
+  );
+
+  const revealLibrary = useCallback(
+    async (item: Extract<DesktopHomeAssetSearchResult, { status: 'ready' }>['items'][number]) => {
+      setMutationDiagnostic(undefined);
+      setMutationNotice(undefined);
+      setPendingAction(`reveal:${item.id}`);
+      try {
+        await window.openNekoDesktop.home.assets.revealLibrary(item.id);
+        setMutationNotice(t('home.assets.revealed'));
+      } catch (reason: unknown) {
+        setMutationDiagnostic(describeError(reason));
+      } finally {
+        setPendingAction(undefined);
+      }
+    },
+    [t],
+  );
   return (
     <div className="home-management-page">
       <header className="home-management-header">
@@ -754,6 +813,27 @@ function HomeAssetCenter({ interactive }: { readonly interactive: boolean }): JS
           <p className="section-label">{t('home.assets.eyebrow')}</p>
           <h1>{t('home.mediaLibrary')}</h1>
           <p>{t('home.assets.description')}</p>
+        </div>
+        <div className="home-management-header-actions">
+          <button
+            type="button"
+            className="home-management-refresh"
+            disabled={!interactive || pendingAction !== undefined}
+            onClick={() => setCatalogRevision((revision) => revision + 1)}
+          >
+            {t('home.assets.refresh')}
+          </button>
+          {facet === 'libraries' ? (
+            <button
+              type="button"
+              className="home-management-primary-action"
+              disabled={!interactive || pendingAction !== undefined}
+              onClick={() => void addLibrary()}
+            >
+              <PlusIcon size={14} />
+              {pendingAction === 'add' ? t('home.assets.adding') : t('home.assets.add')}
+            </button>
+          ) : null}
         </div>
       </header>
       <div className="home-management-toolbar">
@@ -793,6 +873,17 @@ function HomeAssetCenter({ interactive }: { readonly interactive: boolean }): JS
           </div>
         </div>
       </div>
+      {mutationDiagnostic ? (
+        <div className="home-management-diagnostic" role="alert">
+          <WarningIcon size={17} />
+          <span>{mutationDiagnostic}</span>
+        </div>
+      ) : mutationNotice ? (
+        <div className="home-management-notice" role="status">
+          <CheckIcon size={17} />
+          <span>{mutationNotice}</span>
+        </div>
+      ) : null}
       {error || result?.status === 'error' ? (
         <div className="home-management-diagnostic" role="alert">
           <WarningIcon size={17} />
@@ -812,6 +903,30 @@ function HomeAssetCenter({ interactive }: { readonly interactive: boolean }): JS
                   {item.modifiedAt ? ` · ${formatProjectDate(item.modifiedAt, locale)}` : ''}
                 </small>
               </span>
+              {item.kind === 'library' ? (
+                <span className="home-management-card-actions">
+                  <button
+                    type="button"
+                    disabled={pendingAction !== undefined}
+                    onClick={() => void revealLibrary(item)}
+                  >
+                    {pendingAction === `reveal:${item.id}`
+                      ? t('home.assets.revealing')
+                      : t('home.assets.reveal')}
+                  </button>
+                  <button
+                    type="button"
+                    className="is-danger"
+                    disabled={pendingAction !== undefined}
+                    onClick={() => void removeLibrary(item)}
+                  >
+                    <TrashIcon size={13} />
+                    {pendingAction === `remove:${item.id}`
+                      ? t('home.assets.removing')
+                      : t('home.assets.remove')}
+                  </button>
+                </span>
+              ) : null}
             </article>
           ))}
           {result?.status === 'ready' && result.items.length === 0 ? (
