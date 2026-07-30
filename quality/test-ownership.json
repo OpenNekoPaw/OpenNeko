@@ -158,6 +158,13 @@
       "testScope": "packages/extension/src/**/*.test.{ts,tsx}"
     },
     {
+      "path": "packages/neko-cut/packages/node",
+      "owner": "packages/neko-cut",
+      "mode": "aggregated",
+      "sourceScope": "src/**/*.{ts,tsx}",
+      "testScope": "packages/node/src/**/*.test.{ts,tsx}"
+    },
+    {
       "path": "packages/neko-cut/packages/webview",
       "owner": "packages/neko-cut/packages/webview",
       "mode": "self",

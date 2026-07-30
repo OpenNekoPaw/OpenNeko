@@ -18,7 +18,15 @@ Agent + Home，以及 P1.4 Assets + Canvas 的确定性实现：
   metadata/thumbnail、授权预览和显式添加到目标 Canvas；
 - package-owned `CanvasWebviewRoot`、`.nkc` document session、revision/save/undo/redo、
   source picker、资源放置、多个 Canvas View 与最多双栏显示；
+- Canvas 素材入口按 owner 收敛为工作区/已链接媒体库直接引用、全局媒体库显式关联或复制、
+  外部文件原子导入，以及 Generation Job 成功结果投影；`.nkc` 不保存绝对路径、运行时 URL
+  或媒体库真实目标；
+- Canvas selection toolbar 从 Desktop owner action catalog 投影 Preview、Reveal、Cut、
+  Media Library copy 与 Generation 动作，不在 Canvas 中重新实现 viewer、editor 或 provider；
 - package-owned Preview Root，通过授权 URL descriptor 预览图像、音视频、文档与 3D 模型；
+- package-owned Cut runtime，接收合法视频 locator 并拥有编辑/导出生命周期；
+- workspace-owned Generation runtime，持久化 Job、恢复 observation、提交
+  `generated-output`，并仅在精确 Job/locator authority 可解析时允许重新生成；
 - Desktop 与 VS Code 共用 Canvas Root、Toolbar、Add popover 和 `@neko/ui` primitives；
   Desktop Tailwind 显式扫描 Canvas source，package CSS 以 Root marker 隔离；
 - Character/World、Cut/Timeline 的明确 unavailable 状态。
@@ -36,9 +44,20 @@ Development Host 也仍缺运行证据。确定性测试、key-free Evaluation h
 package 和无模型成本的 Electron Shell/Agent Root 路径不能替代真实模型、Tool approval 与
 checkpoint/cleanup 的完整验收。
 Canvas 工具栏按宿主 capability 显示。Desktop 当前已接通 source-add、selection/pan、
-undo/redo、资源放置和 Preview；playback、export、package、send-to-Agent 尚无 Desktop owner，
-因此控件保持隐藏而不是展示不可工作的按钮。Cut/Timeline 编辑 runtime 和其他后续领域能力
-仍未接入；当前 Desktop 是 Phase 1 开发基线，不是已发布产品。
+undo/redo、资源放置、Preview、Cut、Media Library copy 和已提交 Generation result 的
+regenerate。Generation draft/edit-and-generate、playback、Canvas export/package 与
+send-to-Agent 尚无对应 Desktop owner，因此入口保持隐藏而不是展示不可工作的按钮。当前
+Desktop 是 Phase 1 开发基线，不是已发布产品。
+
+### Canvas 素材操作
+
+- **引用**：选择工作区或已链接 Media Library 文件；保留原 locator，不复制、不改源文件。
+- **导入**：选择工作区外文件；Desktop 原子复制到 `neko/imports/<kind>/` 后创建节点。
+- **复制到媒体库**：必须选择项目或全局 Media Library 及冲突策略；该操作不改变当前节点身份。
+- **生成结果**：只显示 Generation owner 已提交的输出。历史 prompt/model 是只读摘要；
+  “重新生成”创建新 Job 和新结果，不覆盖历史节点。
+- **派生编辑**：crop、erase、redraw、denoise、separation、transcode 等 owner 操作必须提交
+  新 locator 和 `derived-from` lineage，不能就地覆盖引用源。
 
 ```bash
 pnpm --filter @neko/app-desktop typecheck

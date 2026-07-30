@@ -61,6 +61,23 @@ binding 不包含 Asset ID、cache/materialized path、runtime token、Webview U
 
 remove library 只删 link。copy/delete 会修改 external target，因此必须有显式目标、授权、conflict policy 与 fingerprint precondition。
 
+## Canvas 与 Media Library 的素材入口
+
+Canvas 不建立自己的 library、catalog 或素材副本 registry。项目中的
+`neko/assets/<libraryName>/...` 是已链接 Media Library 的工作区相对 locator，可以直接引用；
+Canvas 删除节点或执行派生操作都不会修改该外部源文件。
+
+未链接的全局 Media Library 不能把绝对路径或 link target 直接写入 `.nkc`。用户必须先选择：
+
+- 关联整个 library，由 Media Library owner 创建项目 link，再使用项目 locator；
+- 把单个文件复制到明确的项目 Media Library 目标；
+- 把单个文件复制到明确的全局 Media Library 目标，但 Canvas 当前节点仍保持原 locator。
+
+工作区外的普通文件不属于 Media Library copy：Host 先原子导入
+`neko/imports/<kind>/`，再创建 Canvas 节点。旧 `saveCanvasMaterialToAssetLibrary`、
+`AssetLibrary.importFile` 和 promotion handler 在正常创作路径中必须 fail-closed；它们只允许
+由显式迁移/拒绝测试观察，不能作为兼容 fallback。
+
 ## 搜索与 cache
 
 Media Library tree、Search、recent-use、technical metadata、availability、OCR/ASR/vision evidence 都是可重建 projection，以 canonical locator/fingerprint 为键。Discovery 不写 Entity fact。

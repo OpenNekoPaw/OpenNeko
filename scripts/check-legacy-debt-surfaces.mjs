@@ -58,6 +58,19 @@ const explicitBoundaryRejectionRules = [
     path: 'packages/neko-types/src/local-metadata/node-generated-output-projection-binding.ts',
     markers: ['invalid or legacy projection'],
   },
+  {
+    path: 'packages/neko-types/src/nkc/index.ts',
+    markers: [
+      'canvas_material_legacy_evidence_kinds',
+      'inspectlegacycanvasmaterialnodes',
+      'canvasmateriallegacyevidencekind',
+      'canvasmateriallegacyinspection',
+    ],
+  },
+  {
+    path: 'packages/neko-types/src/types/canvas-material-contracts.ts',
+    markers: ['canvas-material-legacy-generation-evidence'],
+  },
 ];
 const retiredAssetCatalogRules = [
   { id: 'catalog-type', pattern: /\b(?:AssetEntity|AssetVariant|AssetFile|AssetSource)\b/g },
@@ -1488,6 +1501,22 @@ function runSelfTest() {
       value: classifySurface(
         'packages/neko-types/src/local-metadata/node-generated-output-projection-binding.ts',
         'Resource contains an invalid or legacy projection.',
+        'legacy',
+      ),
+      expected: 'boundary-canonicalizer',
+    },
+    {
+      value: classifySurface(
+        'packages/neko-types/src/nkc/index.ts',
+        'inspectLegacyCanvasMaterialNodes,',
+        'legacy',
+      ),
+      expected: 'boundary-canonicalizer',
+    },
+    {
+      value: classifySurface(
+        'packages/neko-types/src/types/canvas-material-contracts.ts',
+        "code: 'canvas-material-legacy-generation-evidence',",
         'legacy',
       ),
       expected: 'boundary-canonicalizer',

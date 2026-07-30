@@ -260,6 +260,29 @@ Character 不直接写 World store；跨域 mutation 必须通过显式 world ru
 - 用户 secret 不写入项目文件、日志、Webview state、prompt 或 Skill。
 - 跨包 mutation 通过 facade/port/command 和明确 error contract，不直接写另一个包的私有存储。
 
+## Canvas 素材来源、生命周期与动作组合
+
+Canvas 只拥有节点布局、连接和 durable projection，不拥有素材字节、媒体库 membership、
+Generation recipe、viewer/editor 或 provider execution。素材进入 Canvas 固定为四条路径：
+
+1. 工作区文件和已链接的项目 Media Library 文件直接保存原 `ContentLocator`，不复制字节；
+2. 全局 Media Library 文件先由 Media Library owner 显式关联整个库，或显式复制到项目可授权位置；
+3. 任意工作区外文件由 Host 原子复制到 `neko/imports/<kind>/`，再用新的项目 locator 创建节点；
+4. AI 素材先进入 Generation-owned draft/Job，只有 owner 成功提交的
+   `generated-output` locator 才投影为 Media/File 结果节点。
+
+素材来源只能由 validated locator 推导：`workspace-file`、`document-entry`、
+`package-resource` 是 referenced，`generated-output` 是 generated。扩展名、目录名、
+provenance 文本、历史 prompt 和运行时 URL 都不得成为来源 authority。历史生成摘要只用于
+展示；重新生成必须用稳定 `JobRef<'generation'>` 向 Generation owner 解析权威 recipe，
+并创建新的 Job、output identity 和 lineage，不能覆盖旧结果。
+
+Canvas selection toolbar 只投影 Host 在精确 project/Canvas/revision/selection 上解析出的
+owner capability descriptors。Preview、Cut、媒体/模型和 Generation 继续由各自 package
+执行；Canvas 不导入或复制其 viewer、editor、codec、provider 或文件写入实现。普通引用节点
+只得到适用的读取、复制、交接和非破坏派生动作；生成结果节点在 Generation authority 仍可
+解析时，才额外得到重新生成或进入 Generation/Agent draft 的入口。
+
 ## 验证命令
 
 按改动影响范围组合运行：
