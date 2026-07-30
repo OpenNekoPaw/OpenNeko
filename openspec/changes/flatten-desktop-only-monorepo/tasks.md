@@ -42,11 +42,11 @@
 
 ## 5. Validation And Quality Review
 
-- [ ] 5.1 Run strict OpenSpec validation, diff checks, topology/legacy/unused/dependency gates and
+- [x] 5.1 Run strict OpenSpec validation, diff checks, topology/legacy/unused/dependency gates and
       all affected first-level package tests/typechecks/builds.
-- [ ] 5.2 Run complete Desktop tests, typecheck, lint, production build/package inspection and a
+- [x] 5.2 Run complete Desktop tests, typecheck, lint, production build/package inspection and a
       focused real Electron project-open/creative-surface scenario.
-- [ ] 5.3 Apply the Agent evaluation disposition: run the key-free harness, reuse a real Desktop
+- [x] 5.3 Apply the Agent evaluation disposition: run the key-free harness, reuse a real Desktop
       driver if one exists, or record the missing complete-session owner as a blocking residual risk.
-- [ ] 5.4 Run the L4 Neko quality review, confirm no project/Desktop settings were deleted, document
+- [x] 5.4 Run the L4 Neko quality review, confirm no project/Desktop settings were deleted, document
       removed VS Code/TUI state behavior and list every unexecuted platform validation.
