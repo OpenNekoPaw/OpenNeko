@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   DESKTOP_HOME_MANAGEMENT_CHANNELS,
   DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION,
@@ -23,9 +23,7 @@ vi.mock('electron', () => ({
   },
 }));
 
-beforeAll(async () => {
-  await import('./index');
-});
+await import('./index');
 
 describe('Desktop Home management preload bridge', () => {
   it('routes strict global media-library mutations without exposing absolute paths', async () => {
