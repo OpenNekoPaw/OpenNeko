@@ -16,7 +16,7 @@ afterEach(async () => {
 });
 
 describe('removed product data preservation', () => {
-  it('migrates legacy host conversation sources without losing user records', async () => {
+  it('isolates retired host conversations without importing them into Desktop state', async () => {
     const homedir = await mkdtemp(join(tmpdir(), 'neko-conversation-source-migration-'));
     temporaryDirectories.push(homedir);
     const databasePath = resolveGlobalStorageLayout(homedir).database;
@@ -52,19 +52,60 @@ describe('removed product data preservation', () => {
         '2026-07-01T00:00:00.000Z',
         '2026-07-01T00:00:00.000Z',
       );
+    legacyDatabase
+      .prepare(
+        `INSERT INTO conversations (
+          conversation_id,
+          workspace_id,
+          journal_id,
+          title,
+          source,
+          model,
+          created_at,
+          updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        'agent-conversation',
+        null,
+        'agent-journal',
+        'Agent conversation',
+        'agent',
+        null,
+        '2026-07-02T00:00:00.000Z',
+        '2026-07-02T00:00:00.000Z',
+      );
     legacyDatabase.close();
 
     const current = createNodeSqliteLocalMetadataStore({ homedir });
     await current.open({ databasePath, busyTimeoutMs: 1_000 });
     await current.migrateNamespace(M1_LOCAL_METADATA_MIGRATIONS);
+    await expect(current.repositories.conversations.get('legacy-conversation')).resolves.toBeNull();
     await expect(
-      current.repositories.conversations.get('legacy-conversation'),
+      current.repositories.conversations.get('agent-conversation'),
     ).resolves.toMatchObject({
-      journalId: 'legacy-journal',
-      title: 'Preserved conversation',
-      source: 'desktop',
+      journalId: 'agent-journal',
+      title: 'Agent conversation',
+      source: 'agent',
     });
     await current.dispose();
+
+    const preservedDatabase = new DatabaseSync(databasePath, { readOnly: true });
+    const retiredRow = preservedDatabase
+      .prepare(
+        `SELECT conversation_id, journal_id, title, source
+           FROM retired_host_conversations_v1
+          WHERE conversation_id = ?`,
+      )
+      .get('legacy-conversation');
+    preservedDatabase.close();
+
+    expect(retiredRow).toEqual({
+      conversation_id: 'legacy-conversation',
+      journal_id: 'legacy-journal',
+      title: 'Preserved conversation',
+      source: 'vscode',
+    });
   });
 
   it('keeps old Market table bytes without exposing an active repository', async () => {

@@ -482,7 +482,6 @@ export interface AssetPricing {
 
 export interface AssetCompatibility {
   nekoSuiteVersion?: string;
-  vscodeVersion?: string;
   engineVersion?: string;
   knownIncompatible?: { reason: string; range: string }[];
   upgradeTo?: { packageId: string; version: string };

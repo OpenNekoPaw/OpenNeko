@@ -2,7 +2,7 @@ import type { HostDiagnostic } from './ports';
 
 export const NEKO_APPLICATION_CONTRACT_VERSION = 1 as const;
 
-export const NEKO_APPLICATION_IDS = ['neko-desktop', 'neko-tui', 'neko-vscode'] as const;
+export const NEKO_APPLICATION_IDS = ['neko-desktop'] as const;
 
 export type NekoApplicationId = (typeof NEKO_APPLICATION_IDS)[number];
 
@@ -221,17 +221,13 @@ function readOptionalIdentityFields(
 }
 
 function requireApplicationId(value: unknown): NekoApplicationId {
-  switch (value) {
-    case 'neko-desktop':
-    case 'neko-tui':
-    case 'neko-vscode':
-      return value;
-    default:
-      throw contractError(
-        'unknown-application-identity',
-        `Unknown Neko application '${String(value)}'.`,
-      );
+  if (value === 'neko-desktop') {
+    return value;
   }
+  throw contractError(
+    'unknown-application-identity',
+    `Unknown Neko application '${String(value)}'.`,
+  );
 }
 
 function requireContractVersion(value: unknown): void {

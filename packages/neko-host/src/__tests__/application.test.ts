@@ -21,14 +21,12 @@ const desktopIdentity: NekoApplicationIdentity = {
 describe('Neko application contracts', () => {
   it('parses known application identity and rejects unknown application identity', () => {
     expect(parseNekoApplicationIdentity(desktopIdentity)).toEqual(desktopIdentity);
-    expectContractError(
-      () => parseNekoApplicationIdentity({ ...desktopIdentity, applicationId: 'neko-studio' }),
-      'unknown-application-identity',
-    );
-    expectContractError(
-      () => parseNekoApplicationIdentity({ ...desktopIdentity, applicationId: 'neko-home' }),
-      'unknown-application-identity',
-    );
+    for (const applicationId of ['neko-vscode', 'neko-tui', 'neko-studio', 'neko-home']) {
+      expectContractError(
+        () => parseNekoApplicationIdentity({ ...desktopIdentity, applicationId }),
+        'unknown-application-identity',
+      );
+    }
   });
 
   it('rejects unsupported schema versions', () => {
@@ -45,7 +43,7 @@ describe('Neko application contracts', () => {
           schemaVersion: 1,
           requestId: 'handoff-1',
           source: desktopIdentity,
-          target: { toolId: 'neko-vscode' },
+          target: { toolId: 'desktop-native-tool' },
         }),
       'invalid-application-contract',
     );
@@ -59,7 +57,7 @@ describe('Neko application contracts', () => {
             schemaVersion: 1,
             requestId: 'handoff-1',
             source: { ...desktopIdentity, instanceId: 'stale-desktop' },
-            target: { toolId: 'neko-vscode', workspaceId: 'workspace-1' },
+            target: { toolId: 'desktop-native-tool', workspaceId: 'workspace-1' },
           },
           { expectedSource: desktopIdentity },
         ),
@@ -75,7 +73,7 @@ describe('Neko application contracts', () => {
           requestId: 'handoff-1',
           source: desktopIdentity,
           target: {
-            toolId: 'neko-vscode',
+            toolId: 'desktop-native-tool',
             workspaceId: 'workspace-1',
             projectId: 'project-1',
             resourceId: 'resource-1',
@@ -139,7 +137,7 @@ function validHandoff() {
     schemaVersion: 1,
     requestId: 'handoff-1',
     source: desktopIdentity,
-    target: { toolId: 'neko-vscode', workspaceId: 'workspace-1' },
+    target: { toolId: 'desktop-native-tool', workspaceId: 'workspace-1' },
   });
 }
 

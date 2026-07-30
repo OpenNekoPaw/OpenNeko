@@ -219,7 +219,6 @@ export interface ToolTraits {
 }
 
 export interface ToolRuntimeRequirements {
-  readonly vscode?: boolean;
   readonly activeEditor?: boolean;
   readonly generationJob?: boolean;
   readonly engineBridge?: boolean;
