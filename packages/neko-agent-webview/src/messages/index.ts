@@ -230,12 +230,12 @@ export const AgentHostMessages = {
     postWebviewMessage({ type: 'getSkills' });
   },
 
-  /** Open raw user config in VSCode */
+  /** Open the raw user config in the Desktop editor. */
   openUserConfigFile: () => {
     postWebviewMessage({ type: 'openUserConfigFile' });
   },
 
-  /** Open agent config file in VSCode */
+  /** Open the Agent config file in the Desktop editor. */
   openConfigFile: () => {
     postWebviewMessage({ type: 'openConfigFile' });
   },
@@ -316,7 +316,7 @@ export const AgentHostMessages = {
   // ==========================================================================
 
   /**
-   * Open a file in VSCode editor
+   * Open a file in the Desktop editor.
    * @param contentLocator - Host-issued content identity to open
    * @param options - Optional options (preview, line number, etc.)
    */
@@ -356,7 +356,7 @@ export const AgentHostMessages = {
 
   /**
    * Invoke a plugin slash command registered by an external extension.
-   * Extension host routes it to the registering extension via VSCode command API.
+   * Desktop host routes it to the owning plugin runtime.
    * @param extensionId - The extension that registered the command
    * @param commandId   - The command id (without /)
    * @param args        - Optional arguments string

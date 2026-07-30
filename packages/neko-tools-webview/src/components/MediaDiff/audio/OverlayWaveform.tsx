@@ -272,26 +272,26 @@ export const OverlayWaveform = memo(function OverlayWaveform({
   return (
     <div
       ref={containerRef}
-      className="flex-1 m-2 bg-[var(--vscode-input-background)] rounded border border-[var(--vscode-panel-border)] p-4"
+      className="flex-1 m-2 bg-[var(--neko-input-background)] rounded border border-[var(--neko-panel-border)] p-4"
       onMouseDown={handleMouseDown}
     >
       <div className="flex items-center justify-between mb-2 text-xs">
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-1">
             <div className="w-3 h-3 bg-red-500/50 rounded" />
-            <span className="text-[var(--vscode-descriptionForeground)]">
+            <span className="text-[var(--neko-descriptionForeground)]">
               {t('mediaDiff.audio.previous')}
             </span>
           </div>
           <div className="flex items-center gap-1">
             <div className="w-3 h-3 bg-green-500/50 rounded" />
-            <span className="text-[var(--vscode-descriptionForeground)]">
+            <span className="text-[var(--neko-descriptionForeground)]">
               {t('mediaDiff.audio.current')}
             </span>
           </div>
         </div>
         {zoom > 1 && (
-          <span className="text-[var(--vscode-descriptionForeground)]">{zoom.toFixed(1)}x</span>
+          <span className="text-[var(--neko-descriptionForeground)]">{zoom.toFixed(1)}x</span>
         )}
       </div>
       <canvas
@@ -301,9 +301,9 @@ export const OverlayWaveform = memo(function OverlayWaveform({
         onClick={handleClick}
       />
       {zoom > 1 && (
-        <div className="relative h-2 bg-[var(--vscode-editor-background)] rounded mt-2">
+        <div className="relative h-2 bg-[var(--neko-editor-background)] rounded mt-2">
           <div
-            className="absolute h-full bg-[var(--vscode-button-background)] rounded opacity-60"
+            className="absolute h-full bg-[var(--neko-button-background)] rounded opacity-60"
             style={{
               left: `${scrollOffset * 100}%`,
               width: `${(1 / zoom) * 100}%`,

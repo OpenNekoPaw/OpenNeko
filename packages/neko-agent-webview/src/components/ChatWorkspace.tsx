@@ -773,7 +773,7 @@ export function ChatWorkspace({
     >
       {latestSessionDiagnostic && foregroundConversationAvailability?.kind !== 'unavailable' ? (
         <div
-          className="fixed right-4 top-12 z-50 max-w-[360px] rounded-lg border border-[var(--vscode-inputValidation-errorBorder,var(--agent-border))] bg-[var(--vscode-inputValidation-errorBackground,var(--agent-elevated))] px-3 py-2 text-sm text-[var(--vscode-inputValidation-errorForeground,var(--agent-fg))] shadow-lg animate-slide-in"
+          className="fixed right-4 top-12 z-50 max-w-[360px] rounded-lg border border-[var(--neko-inputValidation-errorBorder,var(--agent-border))] bg-[var(--neko-inputValidation-errorBackground,var(--agent-elevated))] px-3 py-2 text-sm text-[var(--neko-inputValidation-errorForeground,var(--agent-fg))] shadow-lg animate-slide-in"
           role="alert"
         >
           <div className="font-medium">会话错误</div>

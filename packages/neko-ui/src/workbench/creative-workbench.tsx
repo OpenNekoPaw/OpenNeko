@@ -356,8 +356,8 @@ const RIGHT_DOCK_CONTENT_STYLE: React.CSSProperties = {
 const RIGHT_DOCK_GROUPS_SHELL_STYLE: React.CSSProperties = {
   flexShrink: 0,
   padding: '8px 14px 10px',
-  borderBottom: '1px solid var(--vscode-panel-border, var(--neko-border, #3c3c3c))',
-  background: 'var(--vscode-sideBar-background, var(--neko-surface, #f3f3f3))',
+  borderBottom: '1px solid var(--neko-panel-border, var(--neko-border, #3c3c3c))',
+  background: 'var(--neko-sideBar-background, var(--neko-surface, #f3f3f3))',
 };
 
 export function CreativeLeftRail({

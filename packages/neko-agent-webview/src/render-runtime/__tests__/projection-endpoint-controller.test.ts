@@ -16,7 +16,7 @@ function createHost() {
   const events: string[] = [];
   let listener: ((message: AgentHostToWebviewMessage) => void) | null = null;
   const host: AgentHostRuntimeAdapter = {
-    hostKind: 'vscode',
+    hostKind: 'electron',
     runtimeId: 'test-runtime',
     send(message) {
       events.push(`send:${message.type}`);

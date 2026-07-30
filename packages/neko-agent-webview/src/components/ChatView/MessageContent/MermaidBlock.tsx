@@ -1,6 +1,6 @@
 /**
  * MermaidBlock - Mermaid diagram rendering component
- * Renders mermaid diagram from code with VSCode theme support
+ * Renders Mermaid diagrams with the Desktop theme contract.
  * Uses dynamic import to avoid build-time d3 compatibility issues
  *
  * Features:
@@ -44,13 +44,13 @@ async function getMermaid() {
     mermaidLoading = import('mermaid').then((mod) => {
       mermaidInstance = mod;
       // Initialize mermaid with custom theme for better contrast
-      // Using 'base' theme with custom variables for VSCode integration
+      // Use the base theme with Desktop-owned custom variables.
       mod.default.initialize({
         startOnLoad: false,
         theme: 'base',
         securityLevel: 'loose',
-        fontFamily: 'var(--vscode-font-family)',
-        // Custom theme variables for high contrast and VSCode integration
+        fontFamily: 'var(--neko-font-family)',
+        // Custom theme variables preserve high-contrast behavior.
         themeVariables: {
           // Background and text colors - high contrast
           primaryColor: '#4fc3f7',
@@ -280,22 +280,20 @@ Please fix the Mermaid syntax. Common issues:
   const errorHints = error ? getErrorHints(error, code) : [];
 
   return (
-    <div className="relative group my-2 rounded-lg overflow-hidden border border-[var(--vscode-panel-border)]">
+    <div className="relative group my-2 rounded-lg overflow-hidden border border-[var(--neko-panel-border)]">
       {/* Header */}
-      <div className="flex items-center justify-between px-3 py-1.5 bg-[var(--vscode-titleBar-activeBackground)] border-b border-[var(--vscode-panel-border)]">
-        <span className="text-[10px] text-[var(--vscode-descriptionForeground)] uppercase font-medium flex items-center gap-1.5">
+      <div className="flex items-center justify-between px-3 py-1.5 bg-[var(--neko-titleBar-activeBackground)] border-b border-[var(--neko-panel-border)]">
+        <span className="text-[10px] text-[var(--neko-descriptionForeground)] uppercase font-medium flex items-center gap-1.5">
           <MermaidIcon className="w-3.5 h-3.5" />
           Mermaid
-          {error && (
-            <span className="text-[var(--vscode-errorForeground)] normal-case">· Error</span>
-          )}
+          {error && <span className="text-[var(--neko-errorForeground)] normal-case">· Error</span>}
         </span>
         <div className="flex items-center gap-1">
           {/* Download button */}
           {svg && (
             <button
               onClick={handleDownload}
-              className="flex items-center gap-1 px-2 py-0.5 text-[10px] rounded hover:bg-[var(--vscode-toolbar-hoverBackground)] text-[var(--vscode-foreground)] transition-colors"
+              className="flex items-center gap-1 px-2 py-0.5 text-[10px] rounded hover:bg-[var(--neko-toolbar-hoverBackground)] text-[var(--neko-foreground)] transition-colors"
               title="Download SVG"
             >
               <DownloadIcon className="w-3 h-3" />
@@ -305,7 +303,7 @@ Please fix the Mermaid syntax. Common issues:
           {/* Copy button */}
           <button
             onClick={handleCopy}
-            className="flex items-center gap-1 px-2 py-0.5 text-[10px] rounded hover:bg-[var(--vscode-toolbar-hoverBackground)] text-[var(--vscode-foreground)] transition-colors"
+            className="flex items-center gap-1 px-2 py-0.5 text-[10px] rounded hover:bg-[var(--neko-toolbar-hoverBackground)] text-[var(--neko-foreground)] transition-colors"
             title={copied ? 'Copied!' : 'Copy source'}
           >
             {copied ? (
@@ -326,40 +324,40 @@ Please fix the Mermaid syntax. Common issues:
       {/* Diagram content */}
       <div
         ref={containerRef}
-        className="bg-[var(--vscode-editor-background)] min-h-[80px] flex items-center justify-center overflow-x-auto w-full max-w-full"
+        className="bg-[var(--neko-editor-background)] min-h-[80px] flex items-center justify-center overflow-x-auto w-full max-w-full"
       >
         {isRendering ? (
-          <div className="flex items-center gap-2 text-[var(--vscode-descriptionForeground)] py-6">
+          <div className="flex items-center gap-2 text-[var(--neko-descriptionForeground)] py-6">
             <LoadingSpinner className="w-4 h-4 animate-spin" />
             <span className="text-[12px]">Rendering diagram...</span>
           </div>
         ) : error ? (
           <div className="w-full">
             {/* Error card */}
-            <div className="m-3 rounded-lg border border-[var(--vscode-inputValidation-errorBorder)] bg-[color-mix(in_srgb,var(--vscode-inputValidation-errorBackground,#5a1d1d)_30%,transparent)] overflow-hidden">
+            <div className="m-3 rounded-lg border border-[var(--neko-inputValidation-errorBorder)] bg-[color-mix(in_srgb,var(--neko-inputValidation-errorBackground,#5a1d1d)_30%,transparent)] overflow-hidden">
               {/* Error header */}
-              <div className="px-3 py-2 flex items-center gap-2 border-b border-[var(--vscode-inputValidation-errorBorder)] bg-[color-mix(in_srgb,var(--vscode-inputValidation-errorBackground,#5a1d1d)_50%,transparent)]">
-                <ErrorIcon className="w-4 h-4 text-[var(--vscode-errorForeground)]" />
-                <span className="text-[12px] font-medium text-[var(--vscode-errorForeground)]">
+              <div className="px-3 py-2 flex items-center gap-2 border-b border-[var(--neko-inputValidation-errorBorder)] bg-[color-mix(in_srgb,var(--neko-inputValidation-errorBackground,#5a1d1d)_50%,transparent)]">
+                <ErrorIcon className="w-4 h-4 text-[var(--neko-errorForeground)]" />
+                <span className="text-[12px] font-medium text-[var(--neko-errorForeground)]">
                   Failed to render diagram
                 </span>
               </div>
 
               {/* Error content */}
               <div className="p-3 space-y-3">
-                <div className="text-[11px] text-[var(--vscode-foreground)] font-mono bg-[var(--vscode-textCodeBlock-background)] p-2 rounded overflow-x-auto w-full max-w-full break-all">
+                <div className="text-[11px] text-[var(--neko-foreground)] font-mono bg-[var(--neko-textCodeBlock-background)] p-2 rounded overflow-x-auto w-full max-w-full break-all">
                   {error}
                 </div>
 
                 {errorHints.length > 0 && (
                   <div className="space-y-1">
-                    <div className="text-[10px] text-[var(--vscode-descriptionForeground)] font-medium uppercase">
+                    <div className="text-[10px] text-[var(--neko-descriptionForeground)] font-medium uppercase">
                       Possible fixes
                     </div>
-                    <ul className="text-[11px] text-[var(--vscode-foreground)] space-y-1">
+                    <ul className="text-[11px] text-[var(--neko-foreground)] space-y-1">
                       {errorHints.map((hint, i) => (
                         <li key={i} className="flex items-start gap-1.5">
-                          <span className="text-[var(--vscode-charts-yellow)]">•</span>
+                          <span className="text-[var(--neko-charts-yellow)]">•</span>
                           <span>{hint}</span>
                         </li>
                       ))}
@@ -373,8 +371,8 @@ Please fix the Mermaid syntax. Common issues:
                     disabled={feedbackSent}
                     className={`flex items-center gap-1.5 px-2.5 py-1 text-[11px] rounded transition-colors ${
                       feedbackSent
-                        ? 'bg-[var(--vscode-button-secondaryBackground)] text-[var(--vscode-descriptionForeground)] cursor-default'
-                        : 'bg-[var(--vscode-button-background)] text-[var(--vscode-button-foreground)] hover:bg-[var(--vscode-button-hoverBackground)]'
+                        ? 'bg-[var(--neko-button-secondaryBackground)] text-[var(--neko-descriptionForeground)] cursor-default'
+                        : 'bg-[var(--neko-button-background)] text-[var(--neko-button-foreground)] hover:bg-[var(--neko-button-hoverBackground)]'
                     }`}
                     title={feedbackSent ? 'Feedback sent' : 'Ask AI to fix this diagram'}
                   >
@@ -392,7 +390,7 @@ Please fix the Mermaid syntax. Common issues:
                   </button>
                   <button
                     onClick={toggleSource}
-                    className="flex items-center gap-1.5 px-2.5 py-1 text-[11px] rounded bg-[var(--vscode-button-secondaryBackground)] text-[var(--vscode-button-secondaryForeground)] hover:bg-[var(--vscode-button-secondaryHoverBackground)] transition-colors"
+                    className="flex items-center gap-1.5 px-2.5 py-1 text-[11px] rounded bg-[var(--neko-button-secondaryBackground)] text-[var(--neko-button-secondaryForeground)] hover:bg-[var(--neko-button-secondaryHoverBackground)] transition-colors"
                   >
                     <CodeIcon className="w-3 h-3" />
                     <span>{showSource ? 'Hide' : 'Show'} Source</span>
@@ -401,7 +399,7 @@ Please fix the Mermaid syntax. Common issues:
 
                 {showSource && (
                   <div className="mt-2">
-                    <pre className="p-2 text-[10px] bg-[var(--vscode-textCodeBlock-background)] rounded overflow-x-auto max-h-[200px] text-[var(--vscode-foreground)] w-full max-w-full">
+                    <pre className="p-2 text-[10px] bg-[var(--neko-textCodeBlock-background)] rounded overflow-x-auto max-h-[200px] text-[var(--neko-foreground)] w-full max-w-full">
                       <code>{code}</code>
                     </pre>
                   </div>

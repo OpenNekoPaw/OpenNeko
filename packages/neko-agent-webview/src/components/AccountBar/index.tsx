@@ -57,7 +57,7 @@ export function AccountBar({ configuredProviders, onOpenOnboarding }: AccountBar
         className="agent-warning-chip"
         title={t('accountBar.connectTitle')}
       >
-        <span className="w-1.5 h-1.5 rounded-full bg-[var(--vscode-charts-yellow)] flex-shrink-0" />
+        <span className="w-1.5 h-1.5 rounded-full bg-[var(--neko-charts-yellow)] flex-shrink-0" />
         {t('accountBar.connectCta')}
       </button>
     );

@@ -80,11 +80,7 @@ interface CreativeEntityCandidateSummary {
 class CreativeEntityHeadlessCapabilityProvider implements AgentCapabilityProvider {
   readonly id = 'neko-entity';
   readonly version = '1.0.0';
-  readonly hostRequirements = [
-    { host: 'tui' as const },
-    { host: 'cli' as const },
-    { host: 'vscode' as const },
-  ];
+  readonly hostRequirements = [{ host: 'desktop' as const }];
   readonly requirements = { contentAccess: false } as const;
 
   constructor(private readonly runtime: CreativeEntityHeadlessRuntime) {}
@@ -387,7 +383,7 @@ class CreativeEntityReferenceContributor implements AgentReferenceContributor {
             code: 'capability.reference.unavailable',
             reason: 'entity-query-failed',
             message: `Failed to search creative entities: ${String(error)}`,
-            host: 'tui',
+            host: 'desktop',
           },
         ],
       };

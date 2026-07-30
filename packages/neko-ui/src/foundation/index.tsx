@@ -1,6 +1,6 @@
 import { createContext, useContext, type ReactElement, type ReactNode } from 'react';
 
-export type WebviewFoundationHostKind = 'vscode' | 'electron' | 'browser' | 'test';
+export type WebviewFoundationHostKind = 'electron' | 'browser' | 'test';
 export type WebviewFoundationThemeKind = 'light' | 'dark' | 'high-contrast';
 export type WebviewFoundationDiagnosticSeverity = 'info' | 'warning' | 'error';
 

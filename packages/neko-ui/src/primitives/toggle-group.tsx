@@ -47,11 +47,11 @@ export function ToggleGroup({
           key={option.value}
           className={cn(
             'inline-flex h-6 min-w-6 items-center justify-center rounded-[var(--neko-radius-sm,6px)] px-2',
-            'text-xs text-[var(--vscode-descriptionForeground)] outline-none transition-colors',
-            'hover:bg-[var(--neko-hover)] hover:text-[var(--vscode-foreground)]',
-            'focus-visible:ring-2 focus-visible:ring-[var(--vscode-focusBorder)]',
-            'data-[state=on]:bg-[var(--vscode-button-secondaryBackground,var(--vscode-editor-background))]',
-            'data-[state=on]:text-[var(--vscode-foreground)]',
+            'text-xs text-[var(--neko-descriptionForeground)] outline-none transition-colors',
+            'hover:bg-[var(--neko-hover)] hover:text-[var(--neko-foreground)]',
+            'focus-visible:ring-2 focus-visible:ring-[var(--neko-focusBorder)]',
+            'data-[state=on]:bg-[var(--neko-button-secondaryBackground,var(--neko-editor-background))]',
+            'data-[state=on]:text-[var(--neko-foreground)]',
             'data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
           )}
           disabled={option.disabled}

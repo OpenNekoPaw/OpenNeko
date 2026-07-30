@@ -65,10 +65,10 @@ function DiffBlockComponent({ diff, onAccept, onReject }: DiffBlockProps) {
         </span>
 
         {/* Stats */}
-        <span className="text-[10px] text-[var(--vscode-gitDecoration-addedResourceForeground)]">
+        <span className="text-[10px] text-[var(--neko-gitDecoration-addedResourceForeground)]">
           +{projection.stats.added}
         </span>
-        <span className="text-[10px] text-[var(--vscode-gitDecoration-deletedResourceForeground)]">
+        <span className="text-[10px] text-[var(--neko-gitDecoration-deletedResourceForeground)]">
           -{projection.stats.removed}
         </span>
 
@@ -123,7 +123,7 @@ function DiffBlockComponent({ diff, onAccept, onReject }: DiffBlockProps) {
               {onAccept && (
                 <button
                   onClick={() => onAccept(diff.filePath)}
-                  className="vscode-button flex items-center gap-1 px-2 py-0.5 text-[11px] leading-4"
+                  className="neko-button flex items-center gap-1 px-2 py-0.5 text-[11px] leading-4"
                 >
                   <CheckIcon className="w-3 h-3" />
                   {t('diff.accept')}
@@ -132,7 +132,7 @@ function DiffBlockComponent({ diff, onAccept, onReject }: DiffBlockProps) {
               {onReject && (
                 <button
                   onClick={() => onReject(diff.filePath)}
-                  className="vscode-button vscode-button-secondary flex items-center gap-1 px-2 py-0.5 text-[11px] leading-4"
+                  className="neko-button neko-button-secondary flex items-center gap-1 px-2 py-0.5 text-[11px] leading-4"
                 >
                   <XIcon className="w-3 h-3" />
                   {t('diff.reject')}
@@ -168,9 +168,9 @@ function diffBlockOpacityClass(opacity: DiffBlockOpacity): string {
 function diffLineBackgroundClass(tone: DiffLineTone): string {
   switch (tone) {
     case 'add':
-      return 'bg-[var(--vscode-diffEditor-insertedLineBackground)]';
+      return 'bg-[var(--neko-diffEditor-insertedLineBackground)]';
     case 'remove':
-      return 'bg-[var(--vscode-diffEditor-removedLineBackground)]';
+      return 'bg-[var(--neko-diffEditor-removedLineBackground)]';
     case 'context':
       return '';
   }
@@ -179,9 +179,9 @@ function diffLineBackgroundClass(tone: DiffLineTone): string {
 function diffLineTextClass(tone: DiffLineTone): string {
   switch (tone) {
     case 'add':
-      return 'text-[var(--vscode-gitDecoration-addedResourceForeground)]';
+      return 'text-[var(--neko-gitDecoration-addedResourceForeground)]';
     case 'remove':
-      return 'text-[var(--vscode-gitDecoration-deletedResourceForeground)]';
+      return 'text-[var(--neko-gitDecoration-deletedResourceForeground)]';
     case 'context':
       return 'text-[var(--agent-fg)]';
   }

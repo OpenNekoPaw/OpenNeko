@@ -1515,7 +1515,7 @@ export function ConversationController({
       {globalError ? (
         <div
           role="alert"
-          className="fixed right-4 top-12 z-50 max-w-[360px] rounded-lg border border-[var(--vscode-inputValidation-errorBorder,var(--agent-border))] bg-[var(--vscode-inputValidation-errorBackground,var(--agent-elevated))] px-3 py-2 text-sm text-[var(--vscode-inputValidation-errorForeground,var(--agent-fg))] shadow-lg animate-slide-in"
+          className="fixed right-4 top-12 z-50 max-w-[360px] rounded-lg border border-[var(--neko-inputValidation-errorBorder,var(--agent-border))] bg-[var(--neko-inputValidation-errorBackground,var(--agent-elevated))] px-3 py-2 text-sm text-[var(--neko-inputValidation-errorForeground,var(--agent-fg))] shadow-lg animate-slide-in"
         >
           <div className="font-medium">全局错误</div>
           <div className="mt-1 opacity-90">{globalError}</div>

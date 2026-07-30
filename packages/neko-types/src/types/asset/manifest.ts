@@ -258,18 +258,14 @@ export interface ProviderMetadata {
 }
 
 export type ProfilePackageKind = 'artifact' | 'provider-expression';
-export type ProfilePackageHost = 'vscode' | 'cli' | 'tui';
+export type ProfilePackageHost = 'desktop';
 
 export const PROFILE_PACKAGE_KINDS: readonly ProfilePackageKind[] = [
   'artifact',
   'provider-expression',
 ] as const;
 
-export const PROFILE_PACKAGE_HOSTS: readonly ProfilePackageHost[] = [
-  'vscode',
-  'cli',
-  'tui',
-] as const;
+export const PROFILE_PACKAGE_HOSTS: readonly ProfilePackageHost[] = ['desktop'] as const;
 
 export interface ProfilePackageHostRequirement {
   readonly host: ProfilePackageHost;

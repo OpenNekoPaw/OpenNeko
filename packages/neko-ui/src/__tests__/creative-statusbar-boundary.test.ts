@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
@@ -8,50 +8,52 @@ function readRepoSource(path: string): string {
   return readFileSync(resolve(repoRoot, path), 'utf8');
 }
 
-describe('creative workbench StatusBar boundary', () => {
-  it('keeps Cut export snapshots in the Webview and document/task state in the native StatusBar', () => {
-    const provider = readRepoSource(
-      'packages/neko-cut/packages/extension/src/editor/CutOtioEditorProvider.ts',
+describe('creative workbench Desktop host boundary', () => {
+  it('keeps Cut runtime snapshots on the Desktop host bridge', () => {
+    const bridge = readRepoSource(
+      'packages/neko-cut-webview/src/controllers/cut-host-runtime-webview-bridge.ts',
     );
-    const extension = readRepoSource('packages/neko-cut/packages/extension/src/extension.ts');
-    const statusBar = readRepoSource('packages/neko-cut/packages/extension/src/views/statusBar.ts');
     const app = readRepoSource('packages/neko-cut-webview/src/App.tsx');
     const css = readRepoSource('packages/neko-cut-webview/src/index.css');
 
-    expect(provider).toMatch(/type: 'cut:export-task'/);
-    expect(provider).toMatch(/type: 'cut:error'/);
-    expect(provider).toMatch(/diagnostic: toCutUserDiagnostic/);
+    expect(bridge).toMatch(/type: 'cut:runtime-snapshot'/);
+    expect(bridge).toMatch(/type: 'cut:export-tasks'/);
+    expect(bridge).toMatch(/type: 'cut:error'/);
     expect(app).toMatch(/message\['type'\] === 'cut:export-task'/);
     expect(app).toMatch(/translateCutDiagnostic/);
     expect(app).toMatch(/useToast/);
-    expect(statusBar).toMatch(/class StatusBar/);
-    expect(statusBar).toMatch(/StatusBarGroup/);
-    expect(statusBar).toMatch(/updateDocument/);
-    expect(extension).toMatch(/onDocumentStatusUpdate/);
-    expect(extension).toMatch(/onExportTaskUpdate/);
+    expect(
+      existsSync(
+        resolve(
+          repoRoot,
+          'packages/neko-cut/packages/extension/src/editor/CutOtioEditorProvider.ts',
+        ),
+      ),
+    ).toBe(false);
     expect(app).not.toMatch(/cut-basic-error|cut-basic-notice/);
     expect(css).not.toMatch(/\.cut-basic-error|\.cut-basic-notice/);
     expect(app).not.toMatch(/WorkbenchTopBar|cut-statusbar|cut-status-bar/);
     expect(css).not.toMatch(/\.cut-statusbar|\.cut-status-bar|\.cut-topbar/);
   });
 
-  it('projects generic Canvas selection and projection state to the native StatusBar', () => {
-    const statusBar = readRepoSource(
-      'packages/neko-canvas/packages/extension/src/views/canvasStatusBar.ts',
-    );
-    const provider = readRepoSource(
-      'packages/neko-canvas/packages/extension/src/editor/canvasEditorProvider.ts',
+  it('routes Canvas status through the Desktop Webview host', () => {
+    const host = readRepoSource(
+      'packages/neko-canvas-webview/src/host-runtime/canvas-webview-host.ts',
     );
     const app = readRepoSource('packages/neko-canvas-webview/src/CanvasApp.tsx');
 
-    expect(statusBar).toMatch(/class CanvasStatusBar/);
-    expect(statusBar).toMatch(/projectionSummary/);
-    expect(statusBar).not.toMatch(/subsystemSummary/);
-    expect(provider).toMatch(/case 'canvasStatus'/);
-    expect(provider).toMatch(/readCanvasProjectionSummary/);
-    expect(provider).toMatch(/this\.statusBar\.update\(\{/);
+    expect(host).toMatch(/case 'canvasStatus'/);
+    expect(host).toMatch(/executeCanvasStatus/);
     expect(app).toMatch(/type: 'canvasStatus'/);
     expect(app).toMatch(/projectionStatus,/);
+    expect(
+      existsSync(
+        resolve(
+          repoRoot,
+          'packages/neko-canvas/packages/extension/src/editor/canvasEditorProvider.ts',
+        ),
+      ),
+    ).toBe(false);
     expect(app).not.toMatch(/canvas-status-badge|canvas-statusbar|canvas-status-bar/);
     expect(app).not.toMatch(/subsystemStatusBadge|projectionStatusBadge|ProjectionStatusBadge/);
   });

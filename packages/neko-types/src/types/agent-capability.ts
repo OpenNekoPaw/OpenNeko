@@ -4,7 +4,7 @@
  * Defines the contract for sub-packages to provide AI capabilities to neko-agent.
  * Uses a hybrid discovery mechanism:
  * - Static: Sub-packages declare capabilities in package.json `contributes.neko.agentCapabilities`
- * - Dynamic: Sub-packages register providers at runtime via VSCode Command
+ * - Dynamic: Desktop composition registers providers at runtime
  *
  * This protocol replaces the centralized `createXxxTools()` pattern where neko-agent
  * manually imports and registers tools from every sub-package.
@@ -28,7 +28,7 @@ export type AgentCapabilityProtocolVersion = '1.0';
 
 export type AgentCapabilityTrustLevel = 'core' | 'community' | 'untrusted';
 
-export type AgentCapabilityHost = 'vscode' | 'cli' | 'tui';
+export type AgentCapabilityHost = 'desktop';
 
 export type AgentCapabilityLifecycleHook = 'register' | 'activate' | 'deactivate' | 'dispose';
 
@@ -39,7 +39,7 @@ export interface AgentCapabilityHostRequirement {
 }
 
 export interface AgentCapabilityRuntimeRequirements {
-  readonly vscode?: boolean;
+  readonly desktop?: boolean;
   readonly activeEditor?: boolean;
   readonly generationJob?: boolean;
   readonly engineBridge?: boolean;
@@ -56,10 +56,7 @@ export interface AgentCapabilityProtocolMetadata {
   readonly protocolVersion?: AgentCapabilityProtocolVersion;
   /** Trust tier used by future policy enforcement; omitted providers default to core. */
   readonly trustLevel?: AgentCapabilityTrustLevel;
-  /**
-   * Hosts supported by this provider. Omitted means vscode-only for legacy compatibility;
-   * TUI/CLI loaders should require an explicit `tui` or `cli` host requirement.
-   */
+  /** Hosts supported by this provider. Omitted providers use the Desktop host. */
   readonly hostRequirements?: readonly AgentCapabilityHostRequirement[];
   /** Runtime ports or host affordances required before this provider can be loaded. */
   readonly requirements?: AgentCapabilityRuntimeRequirements;
@@ -202,16 +199,14 @@ export interface ICapabilityConfigManager {
 
 /**
  * Context passed to providers when requesting tools.
- * Keeps the provider decoupled from VSCode API and @neko/platform at the type level.
+ * Keeps the provider decoupled from Desktop host APIs and @neko/platform at the type level.
  *
  * Host services are optional. Domain media generation is injected through the
  * owning domain's public Job port, not through this generic context.
  */
 export interface AgentCapabilityContext {
-  /**
-   * Extension context handle (opaque at L0; sub-packages cast to vscode.ExtensionContext at L1).
-   */
-  extensionContext: unknown;
+  /** Opaque host composition context. */
+  hostContext: unknown;
 
   /** Purpose-bound bounded text completion without Pi/provider/auth disclosure. */
   purposeTextRuntime?: ICapabilityPurposeTextRuntime;
@@ -229,12 +224,8 @@ export interface AgentCapabilityContext {
 /**
  * Runtime capability provider implemented by each sub-package.
  *
- * Sub-packages export a class implementing this interface and register it
- * via `vscode.commands.executeCommand('neko.agent.registerCapabilities', provider)`.
- *
- * neko-agent discovers providers through:
- * 1. Static manifest scan → identifies which extensions have capabilities
- * 2. Dynamic registration → receives the provider instance at runtime
+ * Sub-packages export a class implementing this interface. Desktop composition
+ * registers provider instances through the canonical capability registry.
  */
 export interface AgentCapabilityProvider extends AgentCapabilityProtocolMetadata {
   /** Provider ID (must match manifest.id) */
@@ -298,13 +289,12 @@ export interface AgentCapabilityProvider extends AgentCapabilityProtocolMetadata
   getArtifactFacets?(context: AgentCapabilityContext): AgentArtifactFacetsContribution;
 
   /**
-   * Optional terminal-safe reference contributors. TUI consumes these for `@`
-   * suggestions; Webview may adapt them into richer chips/previews elsewhere.
+   * Optional reference contributors for Agent mention suggestions.
    */
   getReferenceContributors?(context: AgentCapabilityContext): readonly AgentReferenceContributor[];
 
   /**
-   * Optional: Cleanup when the provider is unregistered (extension deactivated).
+   * Optional cleanup when the provider is unregistered.
    */
   dispose?(): void;
 }

@@ -313,19 +313,19 @@ function AssistantContentBlocks({
 // Error message card — prominent red styling for API errors, timeouts, etc.
 function ErrorMessageCard({ content }: { content: string }) {
   return (
-    <div className="flex items-start gap-2 px-3 py-2 rounded-lg border border-[var(--vscode-inputValidation-errorBorder,#be1100)] bg-[var(--vscode-inputValidation-errorBackground,rgba(190,17,0,0.1))] text-[13px] leading-relaxed max-w-full">
+    <div className="flex items-start gap-2 px-3 py-2 rounded-lg border border-[var(--neko-inputValidation-errorBorder,#be1100)] bg-[var(--neko-inputValidation-errorBackground,rgba(190,17,0,0.1))] text-[13px] leading-relaxed max-w-full">
       <svg
-        className="w-4 h-4 flex-shrink-0 mt-0.5 text-[var(--vscode-errorForeground,#f14c4c)]"
+        className="w-4 h-4 flex-shrink-0 mt-0.5 text-[var(--neko-errorForeground,#f14c4c)]"
         fill="currentColor"
         viewBox="0 0 16 16"
       >
         <path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm0 12.5a5.5 5.5 0 1 1 0-11 5.5 5.5 0 0 1 0 11zM7.25 5v4h1.5V5h-1.5zm0 5v1.5h1.5V10h-1.5z" />
       </svg>
       <div className="min-w-0">
-        <div className="text-[var(--vscode-errorForeground,#f14c4c)] font-medium text-[12px] mb-0.5">
+        <div className="text-[var(--neko-errorForeground,#f14c4c)] font-medium text-[12px] mb-0.5">
           Error
         </div>
-        <div className="text-[var(--vscode-foreground)] whitespace-pre-wrap break-words text-[12px] opacity-90">
+        <div className="text-[var(--neko-foreground)] whitespace-pre-wrap break-words text-[12px] opacity-90">
           {content}
         </div>
       </div>
@@ -399,15 +399,15 @@ export const MessageItem = memo(function MessageItem({
           {!isGrouped && (
             <div className={`flex items-center gap-2 mb-0.5 ${isUser ? 'flex-row-reverse' : ''}`}>
               <span
-                className={`text-[11px] font-medium ${isUser ? 'text-[var(--vscode-foreground)]' : 'text-[var(--vscode-textLink-foreground)]'}`}
+                className={`text-[11px] font-medium ${isUser ? 'text-[var(--neko-foreground)]' : 'text-[var(--neko-textLink-foreground)]'}`}
               >
                 {identity.displayName}
               </span>
-              <span className="text-[10px] text-[var(--vscode-descriptionForeground)] opacity-0 group-hover:opacity-100 transition-opacity">
+              <span className="text-[10px] text-[var(--neko-descriptionForeground)] opacity-0 group-hover:opacity-100 transition-opacity">
                 {formatTime(message.timestamp)}
               </span>
               {message.editedAt && (
-                <span className="text-[10px] text-[var(--vscode-descriptionForeground)]">
+                <span className="text-[10px] text-[var(--neko-descriptionForeground)]">
                   (edited)
                 </span>
               )}

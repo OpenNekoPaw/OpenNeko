@@ -65,7 +65,7 @@ function ProcessRecordsGroupComponent({
         <div className="min-w-0 flex-1">
           <button
             type="button"
-            className="agent-process-summary flex w-fit max-w-full items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-[11px] text-[var(--agent-fg-secondary)] transition-colors hover:bg-[var(--agent-hover)] focus-visible:outline focus-visible:outline-1 focus-visible:outline-[var(--vscode-focusBorder,var(--agent-accent))]"
+            className="agent-process-summary flex w-fit max-w-full items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-[11px] text-[var(--agent-fg-secondary)] transition-colors hover:bg-[var(--agent-hover)] focus-visible:outline focus-visible:outline-1 focus-visible:outline-[var(--neko-focusBorder,var(--agent-accent))]"
             aria-expanded={isExpanded}
             onClick={toggleExpand}
           >

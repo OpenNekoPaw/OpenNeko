@@ -128,7 +128,7 @@ export function TimelineRuler({
     // Snap to the first tick index at or before visibleStart
     const firstTickIdx = Math.floor(visibleStart / interval);
 
-    ctx.font = `10px var(--vscode-font-family, system-ui, sans-serif)`;
+    ctx.font = `10px var(--neko-font-family, system-ui, sans-serif)`;
     ctx.textBaseline = 'top';
     ctx.fillStyle = fg;
 

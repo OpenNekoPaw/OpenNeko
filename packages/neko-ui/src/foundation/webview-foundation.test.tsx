@@ -45,7 +45,7 @@ describe('WebviewFoundationProvider', () => {
       hostKind: 'electron',
       runtimeId: 'neko.agent.webview.electron',
       locale: 'zh-cn',
-      theme: { kind: 'light', tokens: { '--vscode-editor-background': '#ffffff' } },
+      theme: { kind: 'light', tokens: { '--neko-editor-background': '#ffffff' } },
     });
 
     act(() => {
@@ -75,8 +75,8 @@ describe('WebviewFoundationProvider', () => {
 
   it('lets package roots detect an existing host foundation without creating a duplicate', () => {
     const foundation = createWebviewFoundation({
-      hostKind: 'vscode',
-      runtimeId: 'neko.agent.webview.vscode',
+      hostKind: 'electron',
+      runtimeId: 'neko.agent.webview.electron',
       locale: 'en',
       theme: { kind: 'dark' },
     });
@@ -89,7 +89,7 @@ describe('WebviewFoundationProvider', () => {
       );
     });
 
-    expect(host.textContent).toBe('neko.agent.webview.vscode');
+    expect(host.textContent).toBe('neko.agent.webview.electron');
   });
 });
 

@@ -67,7 +67,7 @@ export function Slider({
       </SliderPrimitive.Track>
       <SliderPrimitive.Thumb
         aria-label={label}
-        className="block h-3.5 w-3.5 rounded-full border border-[var(--neko-border)] bg-[var(--vscode-editor-background)] shadow-[var(--neko-shadow-sm,0_2px_8px_rgba(0,0,0,0.25))] outline-none focus-visible:ring-2 focus-visible:ring-[var(--vscode-focusBorder)] disabled:opacity-50"
+        className="block h-3.5 w-3.5 rounded-full border border-[var(--neko-border)] bg-[var(--neko-editor-background)] shadow-[var(--neko-shadow-sm,0_2px_8px_rgba(0,0,0,0.25))] outline-none focus-visible:ring-2 focus-visible:ring-[var(--neko-focusBorder)] disabled:opacity-50"
       />
     </SliderPrimitive.Root>
   );

@@ -143,7 +143,7 @@ export const DocxViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =
     return (
       <div
         className="flex h-full items-center justify-center"
-        style={{ color: 'var(--vscode-errorForeground)' }}
+        style={{ color: 'var(--neko-errorForeground)' }}
       >
         {t('preview.document.error', { error })}
       </div>
@@ -155,15 +155,15 @@ export const DocxViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =
       <div
         data-testid={!loading ? 'docx-preview-ready' : undefined}
         className="flex h-full flex-col"
-        style={{ background: 'var(--vscode-editor-background)' }}
+        style={{ background: 'var(--neko-editor-background)' }}
       >
         {/* Toolbar */}
         <div
           className="flex items-center gap-2 border-b px-3 py-1.5 text-xs"
           style={{
-            borderColor: 'var(--vscode-panel-border)',
-            color: 'var(--vscode-foreground)',
-            background: 'var(--vscode-sideBar-background)',
+            borderColor: 'var(--neko-panel-border)',
+            color: 'var(--neko-foreground)',
+            background: 'var(--neko-sideBar-background)',
           }}
         >
           <button onClick={zoomOut} className="px-2 py-0.5" title={t('preview.document.zoomOut')}>
@@ -179,7 +179,7 @@ export const DocxViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =
         {loading && (
           <div
             className="flex flex-1 items-center justify-center"
-            style={{ color: 'var(--vscode-foreground)' }}
+            style={{ color: 'var(--neko-foreground)' }}
           >
             {t('preview.docx.loading')}
           </div>

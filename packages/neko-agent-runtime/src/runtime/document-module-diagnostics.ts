@@ -1,4 +1,4 @@
-export type AgentDocumentReaderHostSurface = 'extension' | 'tui' | 'headless';
+export type AgentDocumentReaderHostSurface = 'desktop' | 'headless';
 
 export function createAgentDocumentReaderModuleUnavailableError(input: {
   readonly packageName: string;

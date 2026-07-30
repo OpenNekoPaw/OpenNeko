@@ -29,8 +29,8 @@ export const PreviewPanel = memo(
   ) {
     const { t } = useTranslation();
     return (
-      <div className="cut-preview-panel cut-basic-preview flex h-full min-h-0 flex-col bg-vscode-bg">
-        <div className="cut-preview-stage relative flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-vscode-bg">
+      <div className="cut-preview-panel cut-basic-preview flex h-full min-h-0 flex-col bg-neko-bg">
+        <div className="cut-preview-stage relative flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-neko-bg">
           <div
             className="cut-basic-preview-stage relative flex items-center justify-center overflow-hidden bg-black"
             style={{ aspectRatio: `${projectWidth} / ${projectHeight}` }}
@@ -65,7 +65,7 @@ export const PreviewPanel = memo(
               aria-hidden={activeVideoSlot !== 1}
             />
             {title ? null : (
-              <span className="pointer-events-none absolute text-sm text-vscode-description">
+              <span className="pointer-events-none absolute text-sm text-neko-description">
                 {t('preview.noProjectLoaded')}
               </span>
             )}

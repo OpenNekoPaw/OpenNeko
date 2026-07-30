@@ -53,7 +53,7 @@ describe('CapabilityRegistryRuntime', () => {
         ...createProvider('neko.canvas', []),
         getPromptFragments: () => [fragment],
       },
-      { extensionContext: {}, locale: 'zh' },
+      { hostContext: {}, locale: 'zh' },
     );
 
     expect(runtime.getAllPromptFragments()).toEqual([
@@ -72,14 +72,14 @@ describe('CapabilityRegistryRuntime', () => {
     const removedTool = createTool('RemovedTool');
 
     runtime.registerProvider(createProvider('neko.installed', [installedTool]), {
-      extensionContext: {},
+      hostContext: {},
     });
     runtime.registerProvider(
       {
         ...createProvider('neko.removed', [removedTool]),
         dispose: disposed,
       },
-      { extensionContext: {} },
+      { hostContext: {} },
     );
     runtime.replaceManifests([
       {
@@ -103,10 +103,10 @@ describe('CapabilityRegistryRuntime', () => {
     const runtime = new CapabilityRegistryRuntime({ toolRegistry });
 
     runtime.registerProvider(createProvider('neko.duplicate', [createTool('FirstTool')]), {
-      extensionContext: {},
+      hostContext: {},
     });
     runtime.registerProvider(createProvider('neko.duplicate', [createTool('SecondTool')]), {
-      extensionContext: {},
+      hostContext: {},
     });
 
     expect(runtime.getDiagnostics()).toEqual(
@@ -131,10 +131,10 @@ describe('CapabilityRegistryRuntime', () => {
     const runtime = new CapabilityRegistryRuntime({ toolRegistry });
 
     runtime.registerProvider(createProvider('neko.story', [createTool('GenerateScene')]), {
-      extensionContext: {},
+      hostContext: {},
     });
     runtime.registerProvider(createProvider('neko.canvas', [createTool('GenerateScene')]), {
-      extensionContext: {},
+      hostContext: {},
     });
 
     expect(runtime.getDiagnostics()).toEqual(
@@ -158,10 +158,10 @@ describe('CapabilityRegistryRuntime', () => {
     const runtime = new CapabilityRegistryRuntime({ toolRegistry });
 
     runtime.registerProvider(createProvider('neko.story', [createTool('story.GenerateScene')]), {
-      extensionContext: {},
+      hostContext: {},
     });
     runtime.registerProvider(createProvider('neko.canvas', [createTool('canvas.GenerateScene')]), {
-      extensionContext: {},
+      hostContext: {},
     });
 
     expect(runtime.getDiagnostics()).toEqual(
@@ -215,7 +215,7 @@ describe('CapabilityRegistryRuntime', () => {
         getArtifactProfiles: () => [artifactProfile],
         getProviderCards: () => [providerCard],
       },
-      { extensionContext: {} },
+      { hostContext: {} },
     );
 
     expect(artifactProfileRegistry.get('studio.shot-review', 1)).toEqual(artifactProfile);

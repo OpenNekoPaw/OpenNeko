@@ -14,7 +14,7 @@ import type { II18nService, MessageBundle, SupportedLocale } from './types';
 /**
  * Detect locale from a VSCode webview's DOM attribute
  *
- * VSCode injects `data-vscode-locale` on the <html> element.
+ * Desktop injects `data-neko-locale` on the <html> element.
  * Returns 'en' if attribute is missing or not in browser context.
  *
  * Usage in webview:
@@ -25,7 +25,7 @@ import type { II18nService, MessageBundle, SupportedLocale } from './types';
  */
 export function detectWebviewLocale(): SupportedLocale {
   if (typeof document === 'undefined') return 'en';
-  const attr = document.documentElement.getAttribute('data-vscode-locale');
+  const attr = document.documentElement.getAttribute('data-neko-locale');
   return attr ? normalizeLocale(attr) : 'en';
 }
 

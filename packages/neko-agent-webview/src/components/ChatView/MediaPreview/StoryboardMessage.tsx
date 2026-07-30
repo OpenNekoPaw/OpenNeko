@@ -94,33 +94,31 @@ function SceneGroup({
   const cols = scene.shots.length <= 2 ? scene.shots.length : 3;
 
   return (
-    <div className="rounded border border-[var(--vscode-panel-border)] overflow-hidden">
+    <div className="rounded border border-[var(--neko-panel-border)] overflow-hidden">
       {/* Scene heading */}
       <div
         className="flex items-center gap-1.5 px-2 py-1.5 text-[11px] cursor-pointer
-          bg-[color-mix(in_srgb,var(--vscode-textBlockQuote-background)_95%,#3b82f6)]
-          hover:bg-[var(--vscode-list-hoverBackground)] transition-colors"
+          bg-[color-mix(in_srgb,var(--neko-textBlockQuote-background)_95%,#3b82f6)]
+          hover:bg-[var(--neko-list-hoverBackground)] transition-colors"
         onClick={() => setIsExpanded((prev) => !prev)}
       >
-        <SceneIcon className="w-3 h-3 text-[var(--vscode-charts-blue)] shrink-0" />
-        <span className="font-medium text-[var(--vscode-foreground)]">
-          Scene {scene.sceneIndex}
-        </span>
-        <span className="text-[var(--vscode-descriptionForeground)] truncate flex-1 text-[10px]">
+        <SceneIcon className="w-3 h-3 text-[var(--neko-charts-blue)] shrink-0" />
+        <span className="font-medium text-[var(--neko-foreground)]">Scene {scene.sceneIndex}</span>
+        <span className="text-[var(--neko-descriptionForeground)] truncate flex-1 text-[10px]">
           {scene.heading}
         </span>
-        <span className="text-[10px] text-[var(--vscode-descriptionForeground)] shrink-0">
+        <span className="text-[10px] text-[var(--neko-descriptionForeground)] shrink-0">
           {scene.shots.length} shots
         </span>
         <ChevronIcon
-          className={`w-3 h-3 text-[var(--vscode-descriptionForeground)] transition-transform shrink-0
+          className={`w-3 h-3 text-[var(--neko-descriptionForeground)] transition-transform shrink-0
             ${isExpanded ? 'rotate-180' : ''}`}
         />
       </div>
 
       {/* Shot grid */}
       {isExpanded && (
-        <div className="p-2 bg-[var(--vscode-editor-background)]">
+        <div className="p-2 bg-[var(--neko-editor-background)]">
           <div className="grid gap-1" style={{ gridTemplateColumns: `repeat(${cols}, 1fr)` }}>
             {scene.shots.map((shot) => (
               <div
@@ -148,9 +146,9 @@ function SceneGroup({
               <button
                 onClick={() => onRegenerate(scene.sceneIndex)}
                 className="px-1.5 py-0.5 rounded text-[10px]
-                  bg-[var(--vscode-button-secondaryBackground)]
-                  hover:bg-[var(--vscode-button-secondaryHoverBackground)]
-                  text-[var(--vscode-button-secondaryForeground)]
+                  bg-[var(--neko-button-secondaryBackground)]
+                  hover:bg-[var(--neko-button-secondaryHoverBackground)]
+                  text-[var(--neko-button-secondaryForeground)]
                   transition-colors"
               >
                 ↻ Regenerate

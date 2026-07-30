@@ -817,7 +817,7 @@ function MediaPreview({
       <div className="min-w-0">
         <button
           type="button"
-          className={`min-w-0 items-center justify-center overflow-hidden rounded border border-[var(--agent-divider)] bg-[var(--vscode-editor-background)] disabled:cursor-default ${imagePreviewFrameClassName}`}
+          className={`min-w-0 items-center justify-center overflow-hidden rounded border border-[var(--agent-divider)] bg-[var(--neko-editor-background)] disabled:cursor-default ${imagePreviewFrameClassName}`}
           onClick={() => openMedia(media)}
           disabled={!canOpen}
           title={label}
@@ -883,7 +883,7 @@ function MediaPreview({
     return (
       <button
         type="button"
-        className="flex w-full items-center justify-center rounded border border-[var(--agent-divider)] bg-[var(--vscode-editor-background)] px-2 py-4 text-[10px] text-[var(--agent-fg-secondary)]"
+        className="flex w-full items-center justify-center rounded border border-[var(--agent-divider)] bg-[var(--neko-editor-background)] px-2 py-4 text-[10px] text-[var(--agent-fg-secondary)]"
         onClick={() => openMedia(media)}
         title={label}
       >
@@ -895,7 +895,7 @@ function MediaPreview({
   return (
     <button
       type="button"
-      className="flex w-full items-center justify-center rounded border border-[var(--agent-divider)] bg-[var(--vscode-editor-background)] px-2 py-4 text-[10px] text-[var(--agent-fg-secondary)]"
+      className="flex w-full items-center justify-center rounded border border-[var(--agent-divider)] bg-[var(--neko-editor-background)] px-2 py-4 text-[10px] text-[var(--agent-fg-secondary)]"
       onClick={() => openMedia(media)}
       title={label}
     >
@@ -919,7 +919,7 @@ function MediaPreviewFallbackFrame({
   return (
     <button
       type="button"
-      className={`flex w-full min-w-0 overflow-hidden rounded border border-[var(--agent-divider)] bg-[var(--vscode-editor-background)] disabled:cursor-default ${previewHeightClassName}`}
+      className={`flex w-full min-w-0 overflow-hidden rounded border border-[var(--agent-divider)] bg-[var(--neko-editor-background)] disabled:cursor-default ${previewHeightClassName}`}
       onClick={() => openMedia(media)}
       disabled={!canOpen}
       title={label}

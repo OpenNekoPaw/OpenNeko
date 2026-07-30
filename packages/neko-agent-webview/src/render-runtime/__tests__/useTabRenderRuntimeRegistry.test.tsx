@@ -9,9 +9,10 @@ const tabB: OpenTab = { id: 'tab-b', title: 'B', conversationId: 'conv-b' };
 
 describe('useTabRenderRuntimeRegistry', () => {
   it('retains Tab runtimes across activation and disposes them with the Webview root', async () => {
+    const host = { getState: () => undefined, setState: vi.fn() };
     const { result, rerender, unmount } = renderHook(
       ({ tabs, activeTabId }: { tabs: readonly OpenTab[]; activeTabId: string | null }) =>
-        useTabRenderRuntimeRegistry(tabs, activeTabId),
+        useTabRenderRuntimeRegistry(tabs, activeTabId, host),
       { initialProps: { tabs: [tabA, tabB], activeTabId: 'tab-a' } },
     );
     const runtimeA = result.current.require('tab-a');

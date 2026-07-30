@@ -92,7 +92,7 @@ export const Stepper = forwardRef<HTMLDivElement, StepperProps>(function Stepper
       tabIndex={disabled ? undefined : 0}
     >
       {label ? (
-        <span className="min-w-0 truncate text-[var(--vscode-descriptionForeground)]">{label}</span>
+        <span className="min-w-0 truncate text-[var(--neko-descriptionForeground)]">{label}</span>
       ) : null}
       <button
         aria-label={label ? `Decrease ${label}` : `Decrease ${id}`}
@@ -103,9 +103,9 @@ export const Stepper = forwardRef<HTMLDivElement, StepperProps>(function Stepper
       >
         -
       </button>
-      <span className="min-w-10 text-center tabular-nums text-[var(--vscode-foreground)]">
+      <span className="min-w-10 text-center tabular-nums text-[var(--neko-foreground)]">
         {draft}
-        {unit ? <span className="text-[var(--vscode-descriptionForeground)]">{unit}</span> : null}
+        {unit ? <span className="text-[var(--neko-descriptionForeground)]">{unit}</span> : null}
       </span>
       <button
         aria-label={label ? `Increase ${label}` : `Increase ${id}`}
@@ -130,7 +130,7 @@ export const Stepper = forwardRef<HTMLDivElement, StepperProps>(function Stepper
 const stepperButtonClassName = cn(
   'inline-flex h-6 w-6 items-center justify-center rounded-[var(--neko-radius-sm,6px)]',
   'border border-[var(--neko-border)] bg-[var(--neko-surface)] text-xs',
-  'outline-none hover:bg-[var(--neko-hover)] focus-visible:ring-2 focus-visible:ring-[var(--vscode-focusBorder)]',
+  'outline-none hover:bg-[var(--neko-hover)] focus-visible:ring-2 focus-visible:ring-[var(--neko-focusBorder)]',
   'disabled:cursor-not-allowed disabled:opacity-50',
 );
 

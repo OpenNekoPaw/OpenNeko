@@ -46,8 +46,8 @@ export function Select({
         aria-label={label}
         className={cn(
           'inline-flex h-7 min-w-28 items-center justify-between gap-2 rounded-[var(--neko-radius-sm,6px)]',
-          'border border-[var(--neko-border)] bg-[var(--vscode-dropdown-background)] px-2 text-xs',
-          'text-[var(--vscode-dropdown-foreground)] outline-none focus-visible:border-[var(--vscode-focusBorder)]',
+          'border border-[var(--neko-border)] bg-[var(--neko-dropdown-background)] px-2 text-xs',
+          'text-[var(--neko-dropdown-foreground)] outline-none focus-visible:border-[var(--neko-focusBorder)]',
           'disabled:cursor-not-allowed disabled:opacity-50',
           className,
         )}
@@ -66,7 +66,7 @@ export function Select({
         <SelectPrimitive.Content
           className={cn(
             'z-50 overflow-hidden rounded-[var(--neko-radius-md,8px)] border border-[var(--neko-border)]',
-            'bg-[var(--vscode-dropdown-background)] text-xs text-[var(--vscode-dropdown-foreground)]',
+            'bg-[var(--neko-dropdown-background)] text-xs text-[var(--neko-dropdown-foreground)]',
             'shadow-[var(--neko-shadow-md,0_8px_24px_rgba(0,0,0,0.28))]',
           )}
           position="popper"

@@ -177,7 +177,7 @@ function SendToMenuComponent({
   return (
     <div className={`flex min-w-0 flex-wrap items-center gap-1.5 ${className ?? ''}`}>
       {!hidePrefixLabel && (
-        <span className="shrink-0 text-[10px] text-[var(--vscode-descriptionForeground)]">
+        <span className="shrink-0 text-[10px] text-[var(--neko-descriptionForeground)]">
           {prefixLabel}
         </span>
       )}

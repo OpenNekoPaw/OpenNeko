@@ -11,21 +11,21 @@ export function EmbodyCharacterHeader({ session }: EmbodyCharacterHeaderProps) {
   const active = session.status === 'active';
 
   return (
-    <div className="border-b border-[var(--vscode-panel-border)] bg-[var(--vscode-sideBar-background)]">
+    <div className="border-b border-[var(--neko-panel-border)] bg-[var(--neko-sideBar-background)]">
       <div className="flex items-center gap-2 px-3 py-2">
         <div className="flex min-w-0 flex-1 flex-col">
           <div className="flex min-w-0 items-center gap-2">
-            <span className="truncate text-[13px] font-medium text-[var(--vscode-foreground)]">
+            <span className="truncate text-[13px] font-medium text-[var(--neko-foreground)]">
               {session.displayName}
             </span>
-            <span className="rounded-sm border border-[var(--vscode-panel-border)] px-1.5 py-0.5 text-[10px] uppercase tracking-normal text-[var(--vscode-descriptionForeground)]">
+            <span className="rounded-sm border border-[var(--neko-panel-border)] px-1.5 py-0.5 text-[10px] uppercase tracking-normal text-[var(--neko-descriptionForeground)]">
               {t('characterRole.embody.mode')}
             </span>
-            <span className="rounded-sm border border-[var(--vscode-panel-border)] px-1.5 py-0.5 text-[10px] uppercase tracking-normal text-[var(--vscode-descriptionForeground)]">
+            <span className="rounded-sm border border-[var(--neko-panel-border)] px-1.5 py-0.5 text-[10px] uppercase tracking-normal text-[var(--neko-descriptionForeground)]">
               {t(`characterRole.embody.status.${session.status}`)}
             </span>
           </div>
-          <div className="mt-0.5 truncate text-[11px] text-[var(--vscode-descriptionForeground)]">
+          <div className="mt-0.5 truncate text-[11px] text-[var(--neko-descriptionForeground)]">
             {t('characterRole.embody.description')}
           </div>
         </div>
@@ -33,13 +33,13 @@ export function EmbodyCharacterHeader({ session }: EmbodyCharacterHeaderProps) {
           <button
             type="button"
             onClick={() => AgentHostMessages.exitEmbodyCharacterSession(session.sessionId)}
-            className="rounded px-2 py-1 text-[11px] text-[var(--vscode-foreground)] hover:bg-[var(--vscode-toolbar-hoverBackground)]"
+            className="rounded px-2 py-1 text-[11px] text-[var(--neko-foreground)] hover:bg-[var(--neko-toolbar-hoverBackground)]"
           >
             {t('characterRole.action.exit')}
           </button>
         ) : null}
       </div>
-      <div className="border-t border-[var(--vscode-panel-border)] px-3 py-2 text-[11px] text-[var(--vscode-descriptionForeground)]">
+      <div className="border-t border-[var(--neko-panel-border)] px-3 py-2 text-[11px] text-[var(--neko-descriptionForeground)]">
         <div className="truncate">
           {t('characterRole.embody.scope', { scope: session.scopeSummary.join('; ') })}
         </div>

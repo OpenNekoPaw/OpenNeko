@@ -8,15 +8,15 @@ import { Highlight, themes } from 'prism-react-renderer';
 import { getLogger } from '../../../utils/logger';
 
 function getIsLightTheme(): boolean {
-  const kind = document.body.dataset.vscodeThemeKind;
-  return kind === 'vscode-light' || kind === 'vscode-high-contrast-light';
+  const kind = document.body.dataset.nekoThemeKind;
+  return kind === 'neko-light' || kind === 'neko-high-contrast-light';
 }
 
 function subscribeToThemeChange(callback: () => void): () => void {
   const observer = new MutationObserver(callback);
   observer.observe(document.body, {
     attributes: true,
-    attributeFilter: ['data-vscode-theme-kind'],
+    attributeFilter: ['data-neko-theme-kind'],
   });
   return () => observer.disconnect();
 }
@@ -59,15 +59,15 @@ export function CodeBlock({ code, language = 'text', showLineNumbers = false }: 
   const shouldWrap = !showLineNumbers && shouldWrapCodeBlockLanguage(normalizedLanguage);
 
   return (
-    <div className="relative group my-2 rounded-md overflow-hidden border border-[var(--vscode-panel-border)] w-full max-w-full min-w-0">
+    <div className="relative group my-2 rounded-md overflow-hidden border border-[var(--neko-panel-border)] w-full max-w-full min-w-0">
       {/* Header with language and copy button */}
-      <div className="flex items-center justify-between gap-2 px-3 py-1.5 bg-[var(--vscode-titleBar-activeBackground)] border-b border-[var(--vscode-panel-border)] min-w-0">
-        <span className="min-w-0 truncate text-[10px] text-[var(--vscode-descriptionForeground)] uppercase font-medium">
+      <div className="flex items-center justify-between gap-2 px-3 py-1.5 bg-[var(--neko-titleBar-activeBackground)] border-b border-[var(--neko-panel-border)] min-w-0">
+        <span className="min-w-0 truncate text-[10px] text-[var(--neko-descriptionForeground)] uppercase font-medium">
           {normalizedLanguage}
         </span>
         <button
           onClick={handleCopy}
-          className="flex items-center gap-1 px-2 py-0.5 text-[10px] rounded hover:bg-[var(--vscode-toolbar-hoverBackground)] text-[var(--vscode-foreground)] transition-colors"
+          className="flex items-center gap-1 px-2 py-0.5 text-[10px] rounded hover:bg-[var(--neko-toolbar-hoverBackground)] text-[var(--neko-foreground)] transition-colors"
           title={copied ? 'Copied!' : 'Copy code'}
         >
           {copied ? (
@@ -93,7 +93,7 @@ export function CodeBlock({ code, language = 'text', showLineNumbers = false }: 
             } p-3 m-0 text-[12px] leading-relaxed w-full max-w-full min-w-0`}
             style={{
               ...style,
-              backgroundColor: 'var(--vscode-editor-background)',
+              backgroundColor: 'var(--neko-editor-background)',
               margin: 0,
             }}
           >
@@ -104,7 +104,7 @@ export function CodeBlock({ code, language = 'text', showLineNumbers = false }: 
                 className={showLineNumbers ? 'table-row' : 'block min-w-0'}
               >
                 {showLineNumbers && (
-                  <span className="table-cell pr-4 text-right select-none text-[var(--vscode-editorLineNumber-foreground)] opacity-50">
+                  <span className="table-cell pr-4 text-right select-none text-[var(--neko-editorLineNumber-foreground)] opacity-50">
                     {i + 1}
                   </span>
                 )}

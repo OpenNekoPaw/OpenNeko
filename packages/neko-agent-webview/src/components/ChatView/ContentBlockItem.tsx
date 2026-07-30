@@ -84,11 +84,11 @@ const blockHeaderIconByKind: Record<ContentBlockHeaderIconKind, string> = {
 };
 
 const blockHeaderToneClassByTone: Record<ContentBlockHeaderTone, string> = {
-  purple: 'text-[var(--vscode-charts-purple)]',
-  green: 'text-[var(--vscode-charts-green)]',
-  blue: 'text-[var(--vscode-charts-blue)]',
-  orange: 'text-[var(--vscode-charts-orange)]',
-  yellow: 'text-[var(--vscode-charts-yellow)]',
+  purple: 'text-[var(--neko-charts-purple)]',
+  green: 'text-[var(--neko-charts-green)]',
+  blue: 'text-[var(--neko-charts-blue)]',
+  orange: 'text-[var(--neko-charts-orange)]',
+  yellow: 'text-[var(--neko-charts-yellow)]',
 };
 
 export const ContentBlockItem = memo(function ContentBlockItem({
@@ -148,11 +148,11 @@ export const ContentBlockItem = memo(function ContentBlockItem({
               />
               {projection.header.label}
             </span>
-            <span className="text-[10px] text-[var(--vscode-descriptionForeground)] opacity-0 group-hover:opacity-100 transition-opacity">
+            <span className="text-[10px] text-[var(--neko-descriptionForeground)] opacity-0 group-hover:opacity-100 transition-opacity">
               {projection.header.timestampLabel}
             </span>
             {projection.header.showStreamingBadge && (
-              <span className="text-[10px] text-[var(--vscode-charts-green)] animate-pulse">
+              <span className="text-[10px] text-[var(--neko-charts-green)] animate-pulse">
                 {projection.header.streamingLabel}
               </span>
             )}
@@ -386,12 +386,12 @@ function CanvasLifecycleResultCard({
         <span className="font-medium text-[var(--agent-fg)]">
           Canvas {formatCanvasLifecycleStatus(t, lifecycle.status)}
         </span>
-        <span className="font-mono text-[10px] text-[var(--vscode-descriptionForeground)]">
+        <span className="font-mono text-[10px] text-[var(--neko-descriptionForeground)]">
           {lifecycle.capabilityId}
         </span>
         <CanvasLifecycleDataBadge result={readCanvasMarkdownLifecycleData(lifecycle)} t={t} />
         {!success && (
-          <span className="rounded border border-[var(--vscode-errorForeground)] px-1.5 py-0.5 text-[10px] text-[var(--vscode-errorForeground)]">
+          <span className="rounded border border-[var(--neko-errorForeground)] px-1.5 py-0.5 text-[10px] text-[var(--neko-errorForeground)]">
             {t('chat.canvasLifecycle.blocked')}
           </span>
         )}
@@ -427,7 +427,7 @@ function CanvasLifecycleResultCard({
         </div>
       )}
       {error && (
-        <div className="mt-1.5 rounded border border-[var(--vscode-errorForeground)] px-1.5 py-1 text-[11px] text-[var(--vscode-errorForeground)]">
+        <div className="mt-1.5 rounded border border-[var(--neko-errorForeground)] px-1.5 py-1 text-[11px] text-[var(--neko-errorForeground)]">
           {error}
         </div>
       )}

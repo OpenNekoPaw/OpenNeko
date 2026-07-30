@@ -422,7 +422,7 @@ export const PdfViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =>
     return (
       <div
         className="flex h-full items-center justify-center"
-        style={{ color: 'var(--vscode-errorForeground)' }}
+        style={{ color: 'var(--neko-errorForeground)' }}
       >
         {t('preview.document.error', { error })}
       </div>
@@ -433,7 +433,7 @@ export const PdfViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =>
     return (
       <div
         className="flex h-full items-center justify-center"
-        style={{ color: 'var(--vscode-foreground)' }}
+        style={{ color: 'var(--neko-foreground)' }}
       >
         {t('preview.pdf.loading')}
       </div>
@@ -446,15 +446,15 @@ export const PdfViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =>
         data-testid="pdf-preview-ready"
         data-page-count={numPages}
         className="flex h-full flex-col"
-        style={{ background: 'var(--vscode-editor-background)' }}
+        style={{ background: 'var(--neko-editor-background)' }}
       >
         {/* Toolbar */}
         <div
           className="flex items-center gap-2 border-b px-3 py-1.5 text-xs"
           style={{
-            borderColor: 'var(--vscode-panel-border)',
-            color: 'var(--vscode-foreground)',
-            background: 'var(--vscode-sideBar-background)',
+            borderColor: 'var(--neko-panel-border)',
+            color: 'var(--neko-foreground)',
+            background: 'var(--neko-sideBar-background)',
           }}
         >
           {viewMode !== 'scroll' && (
@@ -497,12 +497,12 @@ export const PdfViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =>
             style={{
               background:
                 viewMode !== 'single'
-                  ? 'var(--vscode-button-background)'
-                  : 'var(--vscode-button-secondaryBackground)',
+                  ? 'var(--neko-button-background)'
+                  : 'var(--neko-button-secondaryBackground)',
               color:
                 viewMode !== 'single'
-                  ? 'var(--vscode-button-foreground)'
-                  : 'var(--vscode-button-secondaryForeground)',
+                  ? 'var(--neko-button-foreground)'
+                  : 'var(--neko-button-secondaryForeground)',
             }}
           >
             {VIEW_MODE_ICONS[viewMode]}
@@ -515,7 +515,7 @@ export const PdfViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =>
           <div
             ref={scrollContainerRef}
             className="flex-1 overflow-auto p-4"
-            style={{ background: 'var(--vscode-editor-background)' }}
+            style={{ background: 'var(--neko-editor-background)' }}
           >
             {pageViewports.map((vp, i) => (
               <div
@@ -526,7 +526,7 @@ export const PdfViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =>
                   width: `${vp.width}px`,
                   height: `${vp.height}px`,
                   margin: '8px auto',
-                  background: 'var(--vscode-editor-background)',
+                  background: 'var(--neko-editor-background)',
                   boxShadow: '0 1px 4px rgba(0,0,0,0.15)',
                 }}
               />
@@ -536,7 +536,7 @@ export const PdfViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =>
           /* Single page mode — centered */
           <div
             className="flex flex-1 items-start justify-center overflow-auto p-4"
-            style={{ background: 'var(--vscode-editor-background)' }}
+            style={{ background: 'var(--neko-editor-background)' }}
           >
             {pageViewports[currentPage - 1] && (
               <div

@@ -77,7 +77,7 @@ describe('AssetManifest v4 contract', () => {
         data: {
           profileKinds: ['artifact', 'provider-expression'],
           trustLevel: 'community',
-          hostRequirements: [{ host: 'vscode' }, { host: 'tui', optional: true }],
+          hostRequirements: [{ host: 'desktop' }],
           profiles: [
             {
               profileId: 'studio.storyboard.v1',
@@ -138,7 +138,7 @@ describe('AssetManifest v4 contract', () => {
         },
         {
           field: 'typeMetadata.data.hostRequirements.0.host',
-          message: 'must be vscode, cli, or tui',
+          message: 'must be desktop',
         },
       ]),
     );

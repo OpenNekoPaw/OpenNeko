@@ -66,8 +66,8 @@ function InlineAudioCard({
     <div
       onClick={handleOpenPreview}
       className={`flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer
-        bg-[color-mix(in_srgb,var(--vscode-textBlockQuote-background)_95%,#a855f7)]
-        hover:bg-[var(--vscode-list-hoverBackground)] transition-colors ${className || ''}`}
+        bg-[color-mix(in_srgb,var(--neko-textBlockQuote-background)_95%,#a855f7)]
+        hover:bg-[var(--neko-list-hoverBackground)] transition-colors ${className || ''}`}
     >
       {/* Hidden audio element — metadata extraction only */}
       <audio
@@ -83,22 +83,20 @@ function InlineAudioCard({
       />
 
       {/* Static waveform placeholder icon */}
-      <AudioWaveformIcon className="w-4 h-4 text-[var(--vscode-charts-purple)] shrink-0" />
+      <AudioWaveformIcon className="w-4 h-4 text-[var(--neko-charts-purple)] shrink-0" />
 
       {/* File name */}
-      <span className="flex-1 truncate text-[11px] text-[var(--vscode-foreground)]">
-        {fileName}
-      </span>
+      <span className="flex-1 truncate text-[11px] text-[var(--neko-foreground)]">{fileName}</span>
 
       {/* Duration */}
       {duration > 0 && (
-        <span className="text-[10px] text-[var(--vscode-descriptionForeground)] tabular-nums shrink-0">
+        <span className="text-[10px] text-[var(--neko-descriptionForeground)] tabular-nums shrink-0">
           {formatTime(duration)}
         </span>
       )}
 
       {/* "Open in Preview" hint */}
-      <span className="text-[9px] text-[var(--vscode-descriptionForeground)] opacity-60 shrink-0">
+      <span className="text-[9px] text-[var(--neko-descriptionForeground)] opacity-60 shrink-0">
         Open in Preview
       </span>
     </div>
@@ -161,27 +159,27 @@ function AudioPlayerComponent({
         className={`flex items-center gap-1.5 px-2 py-1 rounded-t text-[11px] cursor-pointer transition-colors
           ${
             hasError
-              ? 'bg-[color-mix(in_srgb,var(--vscode-textBlockQuote-background)_95%,#ef4444)]'
-              : 'bg-[color-mix(in_srgb,var(--vscode-textBlockQuote-background)_95%,#a855f7)]'
+              ? 'bg-[color-mix(in_srgb,var(--neko-textBlockQuote-background)_95%,#ef4444)]'
+              : 'bg-[color-mix(in_srgb,var(--neko-textBlockQuote-background)_95%,#a855f7)]'
           }
-          hover:bg-[var(--vscode-list-hoverBackground)]
+          hover:bg-[var(--neko-list-hoverBackground)]
           ${!isExpanded ? 'rounded-b' : ''}
         `}
         onClick={toggleExpand}
       >
         {/* Status indicator */}
         {hasError ? (
-          <ErrorIcon className="w-3 h-3 text-[var(--vscode-charts-red)] shrink-0" />
+          <ErrorIcon className="w-3 h-3 text-[var(--neko-charts-red)] shrink-0" />
         ) : (
-          <AudioIcon className="w-3 h-3 text-[var(--vscode-charts-purple)] shrink-0" />
+          <AudioIcon className="w-3 h-3 text-[var(--neko-charts-purple)] shrink-0" />
         )}
 
         {/* File name */}
-        <span className="font-medium text-[var(--vscode-foreground)] truncate">{fileName}</span>
+        <span className="font-medium text-[var(--neko-foreground)] truncate">{fileName}</span>
 
         {/* Duration badge */}
         {duration > 0 && !hasError && (
-          <span className="text-[var(--vscode-descriptionForeground)] text-[10px]">
+          <span className="text-[var(--neko-descriptionForeground)] text-[10px]">
             {formatTime(duration)}
           </span>
         )}
@@ -196,7 +194,7 @@ function AudioPlayerComponent({
               e.stopPropagation();
               handleOpenPreview();
             }}
-            className="px-1.5 py-0.5 rounded bg-[var(--vscode-button-secondaryBackground)] hover:bg-[var(--vscode-button-secondaryHoverBackground)] text-[var(--vscode-button-secondaryForeground)] transition-colors flex items-center gap-1 shrink-0"
+            className="px-1.5 py-0.5 rounded bg-[var(--neko-button-secondaryBackground)] hover:bg-[var(--neko-button-secondaryHoverBackground)] text-[var(--neko-button-secondaryForeground)] transition-colors flex items-center gap-1 shrink-0"
             title="Open in Neko Preview"
           >
             <OpenIcon className="w-3 h-3" />
@@ -206,41 +204,41 @@ function AudioPlayerComponent({
 
         {/* Expand indicator */}
         <ChevronIcon
-          className={`w-3 h-3 text-[var(--vscode-descriptionForeground)] transition-transform shrink-0 ${isExpanded ? 'rotate-180' : ''}`}
+          className={`w-3 h-3 text-[var(--neko-descriptionForeground)] transition-transform shrink-0 ${isExpanded ? 'rotate-180' : ''}`}
         />
       </div>
 
       {/* Expanded content — audio info card with click-to-open */}
       {isExpanded && (
-        <div className="border border-t-0 border-[var(--vscode-panel-border)] rounded-b bg-[var(--vscode-editor-background)] overflow-hidden">
+        <div className="border border-t-0 border-[var(--neko-panel-border)] rounded-b bg-[var(--neko-editor-background)] overflow-hidden">
           {hasError ? (
-            <div className="flex items-center justify-center py-4 text-[var(--vscode-errorForeground)] text-[11px]">
+            <div className="flex items-center justify-center py-4 text-[var(--neko-errorForeground)] text-[11px]">
               <ErrorIcon className="w-4 h-4 mr-2" />
               <span>Failed to load audio</span>
             </div>
           ) : (
             <div
-              className="flex items-center gap-3 p-3 cursor-pointer group hover:bg-[var(--vscode-list-hoverBackground)] transition-colors"
+              className="flex items-center gap-3 p-3 cursor-pointer group hover:bg-[var(--neko-list-hoverBackground)] transition-colors"
               onClick={handleOpenPreview}
             >
               {/* Play button icon */}
-              <div className="flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-full bg-[var(--vscode-button-background)] group-hover:bg-[var(--vscode-button-hoverBackground)] text-[var(--vscode-button-foreground)] transition-colors">
+              <div className="flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-full bg-[var(--neko-button-background)] group-hover:bg-[var(--neko-button-hoverBackground)] text-[var(--neko-button-foreground)] transition-colors">
                 <PlayIcon className="w-4 h-4 ml-0.5" />
               </div>
 
               {/* Audio info */}
               <div className="flex-1 min-w-0">
-                <div className="text-[11px] font-medium text-[var(--vscode-foreground)] truncate">
+                <div className="text-[11px] font-medium text-[var(--neko-foreground)] truncate">
                   {fileName}
                 </div>
-                <div className="text-[10px] text-[var(--vscode-descriptionForeground)]">
+                <div className="text-[10px] text-[var(--neko-descriptionForeground)]">
                   {duration > 0 ? formatTime(duration) : 'Loading...'} · Click to open in Neko
                   Preview
                 </div>
               </div>
 
               {/* Open icon */}
-              <OpenIcon className="w-4 h-4 text-[var(--vscode-descriptionForeground)] group-hover:text-[var(--vscode-foreground)] transition-colors shrink-0" />
+              <OpenIcon className="w-4 h-4 text-[var(--neko-descriptionForeground)] group-hover:text-[var(--neko-foreground)] transition-colors shrink-0" />
             </div>
           )}
         </div>

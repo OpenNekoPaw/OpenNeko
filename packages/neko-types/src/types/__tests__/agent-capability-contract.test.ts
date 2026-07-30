@@ -9,17 +9,17 @@ import type {
   CapabilityDeclaration,
 } from '../index';
 
-describe('agent capability host-agnostic contracts', () => {
-  it('models runtime requirements for TUI filtering', () => {
+describe('agent capability Desktop contracts', () => {
+  it('models Desktop runtime requirements', () => {
     const requirements: AgentCapabilityRuntimeRequirements = {
-      vscode: false,
+      desktop: true,
       activeEditor: false,
       contentAccess: true,
       writableProject: false,
     };
 
     expect(requirements).toEqual({
-      vscode: false,
+      desktop: true,
       activeEditor: false,
       contentAccess: true,
       writableProject: false,
@@ -30,10 +30,10 @@ describe('agent capability host-agnostic contracts', () => {
     const provider: AgentCapabilityProvider = {
       id: 'neko-assets',
       version: '1.0.0',
-      hostRequirements: [{ host: 'tui' }],
+      hostRequirements: [{ host: 'desktop' }],
       requirements: {
         contentAccess: true,
-        vscode: false,
+        desktop: true,
       },
       getTools: () => [],
     };
@@ -57,14 +57,14 @@ describe('agent capability host-agnostic contracts', () => {
       contributionKind: 'tool',
       contributionName: 'cut.revealTimeline',
       code: 'capability.unavailable',
-      reason: 'requires-vscode',
-      message: 'Tool is unavailable in TUI because it requires VSCode.',
-      requirement: 'vscode',
-      host: 'tui',
+      reason: 'requires-content-access',
+      message: 'Tool is unavailable because Desktop content access is not ready.',
+      requirement: 'contentAccess',
+      host: 'desktop',
     };
 
-    expect(diagnostic.reason).toBe('requires-vscode');
-    expect(diagnostic.host).toBe('tui');
+    expect(diagnostic.reason).toBe('requires-content-access');
+    expect(diagnostic.host).toBe('desktop');
   });
 
   it('models provider availability summaries', () => {
@@ -74,8 +74,8 @@ describe('agent capability host-agnostic contracts', () => {
       contributionKind: 'provider',
       code: 'capability.unavailable',
       reason: 'host-not-supported',
-      message: 'Provider is unavailable in TUI.',
-      host: 'tui',
+      message: 'Provider is unavailable in Desktop.',
+      host: 'desktop',
     };
     const summary: AgentCapabilityProviderAvailabilitySummary = {
       providerId: 'neko-cut',
@@ -88,7 +88,7 @@ describe('agent capability host-agnostic contracts', () => {
     expect(summary.skipped).toEqual([diagnostic]);
   });
 
-  it('models terminal-safe reference contributors', async () => {
+  it('models reference contributors', async () => {
     const candidate: AgentReferenceCandidate = {
       id: 'asset:hero',
       label: 'Hero',

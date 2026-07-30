@@ -65,7 +65,7 @@ describe('i18n module', () => {
     it('should detect locale from data attribute', () => {
       const originalGetAttribute = document.documentElement.getAttribute;
       document.documentElement.getAttribute = vi.fn((attr: string) => {
-        if (attr === 'data-vscode-locale') return 'zh-CN';
+        if (attr === 'data-neko-locale') return 'zh-CN';
         return null;
       });
 
@@ -78,7 +78,7 @@ describe('i18n module', () => {
     it('should normalize locale variants to supported locale', () => {
       const originalGetAttribute = document.documentElement.getAttribute;
       document.documentElement.getAttribute = vi.fn((attr: string) => {
-        if (attr === 'data-vscode-locale') return 'ZH-HANS';
+        if (attr === 'data-neko-locale') return 'ZH-HANS';
         return null;
       });
 

@@ -9,17 +9,10 @@
  * Extracted from the former 589-line AIAssistant component (ADR P0.1).
  */
 
-import { useEffect, useMemo, useRef, useState } from 'react';
-import {
-  useReportWebviewKeyboardEditable,
-  useReportWebviewKeyboardFocus,
-  type WebviewKeyboardEditableMessage,
-  type WebviewKeyboardFocusMessage,
-} from '@neko/ui/keyboard';
+import { useEffect, useState } from 'react';
 import { Header } from '@/components/Header';
 import { OnboardingFlow } from '@/components/OnboardingFlow';
 import { useConfigState, useResourceState } from '@/hooks';
-import { useAgentHostRuntimeAdapter } from '@/host-runtime-context';
 import { ConversationController } from './ConversationController';
 
 export interface AppShellProps {
@@ -33,24 +26,6 @@ export function AppShell({
   initialInput,
   presentation = 'default',
 }: AppShellProps) {
-  const rootRef = useRef<HTMLDivElement>(null);
-  const hostRuntimeAdapter = useAgentHostRuntimeAdapter();
-  const keyboardReporter = useMemo(
-    () =>
-      hostRuntimeAdapter.hostKind === 'vscode'
-        ? {
-            postMessage(
-              message: WebviewKeyboardFocusMessage | WebviewKeyboardEditableMessage,
-            ): void {
-              hostRuntimeAdapter.send(message);
-            },
-          }
-        : null,
-    [hostRuntimeAdapter],
-  );
-  useReportWebviewKeyboardFocus(rootRef, keyboardReporter);
-  useReportWebviewKeyboardEditable(keyboardReporter);
-
   const config = useConfigState();
   const resource = useResourceState();
 
@@ -102,9 +77,8 @@ export function AppShell({
 
   return (
     <div
-      ref={rootRef}
       data-presentation={presentation}
-      className="flex flex-col h-screen bg-[var(--vscode-sideBar-background,var(--vscode-editor-background))] text-[var(--vscode-foreground)]"
+      className="flex flex-col h-screen bg-[var(--neko-sideBar-background,var(--neko-editor-background))] text-[var(--neko-foreground)]"
     >
       <ConversationController
         emptyStatePresentation={presentation === 'desktop-dock' ? 'desktop-dock' : 'default'}

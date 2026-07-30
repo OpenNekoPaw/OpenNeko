@@ -164,7 +164,7 @@ export function TreeView({
       aria-label={label}
       className={cn(
         'neko-creative-tree-view relative min-h-0 overflow-auto rounded-[var(--neko-radius-sm,6px)]',
-        'border border-[var(--neko-border)] bg-[var(--vscode-editor-background)]',
+        'border border-[var(--neko-border)] bg-[var(--neko-editor-background)]',
         className,
       )}
       data-neko-tree-view="true"
@@ -287,12 +287,12 @@ function TreeViewRow({
         showStaticStateIndicators
           ? 'grid-cols-[auto_minmax(0,1fr)_auto_auto_auto]'
           : 'grid-cols-[auto_minmax(0,1fr)_auto]',
-        'text-[var(--vscode-foreground)] transition-colors duration-100 hover:bg-[var(--neko-hover)]',
+        'text-[var(--neko-foreground)] transition-colors duration-100 hover:bg-[var(--neko-hover)]',
         row.selected
-          ? 'bg-[var(--vscode-list-activeSelectionBackground,var(--neko-accent-muted))] text-[var(--vscode-list-activeSelectionForeground,var(--vscode-foreground))] before:absolute before:inset-y-[3px] before:left-0 before:w-0.5 before:rounded-full before:bg-[var(--vscode-focusBorder,var(--neko-accent))]'
+          ? 'bg-[var(--neko-list-activeSelectionBackground,var(--neko-accent-muted))] text-[var(--neko-list-activeSelectionForeground,var(--neko-foreground))] before:absolute before:inset-y-[3px] before:left-0 before:w-0.5 before:rounded-full before:bg-[var(--neko-focusBorder,var(--neko-accent))]'
           : null,
-        focused && !row.selected ? 'ring-1 ring-inset ring-[var(--vscode-focusBorder)]' : null,
-        focused && row.selected ? 'ring-1 ring-inset ring-[var(--vscode-focusBorder)]' : null,
+        focused && !row.selected ? 'ring-1 ring-inset ring-[var(--neko-focusBorder)]' : null,
+        focused && row.selected ? 'ring-1 ring-inset ring-[var(--neko-focusBorder)]' : null,
         item.disabled ? 'cursor-not-allowed opacity-50' : 'cursor-default',
       )}
       data-focused={focused ? 'true' : 'false'}
@@ -332,8 +332,8 @@ function TreeViewRow({
         aria-label={row.expanded ? 'Collapse item' : 'Expand item'}
         className={cn(
           'inline-flex h-5 w-5 items-center justify-center rounded-[var(--neko-radius-sm,6px)]',
-          'text-[var(--vscode-descriptionForeground)] outline-none hover:bg-[var(--neko-hover)]',
-          'focus-visible:ring-2 focus-visible:ring-[var(--vscode-focusBorder)]',
+          'text-[var(--neko-descriptionForeground)] outline-none hover:bg-[var(--neko-hover)]',
+          'focus-visible:ring-2 focus-visible:ring-[var(--neko-focusBorder)]',
           !hasChildren ? 'invisible' : null,
         )}
         disabled={!hasChildren || item.disabled}
@@ -353,7 +353,7 @@ function TreeViewRow({
         <span className={cn('truncate', row.selected ? 'font-medium' : null)}>{item.label}</span>
         {item.description ? (
           <span
-            className="min-w-0 shrink truncate text-[var(--vscode-descriptionForeground)]"
+            className="min-w-0 shrink truncate text-[var(--neko-descriptionForeground)]"
             data-tree-item-description="true"
           >
             {item.description}
@@ -364,7 +364,7 @@ function TreeViewRow({
             key={badge.id}
             className={cn(
               'shrink-0 rounded-[var(--neko-radius-sm,6px)] px-1 text-[10px]',
-              'bg-[var(--vscode-badge-background,var(--neko-accent-muted))] text-[var(--vscode-badge-foreground,var(--vscode-foreground))]',
+              'bg-[var(--neko-badge-background,var(--neko-accent-muted))] text-[var(--neko-badge-foreground,var(--neko-foreground))]',
             )}
             title={badge.title}
           >
@@ -378,7 +378,7 @@ function TreeViewRow({
           aria-pressed={visible}
           className={cn(
             'inline-flex h-5 w-5 items-center justify-center rounded-[var(--neko-radius-sm,6px)]',
-            'outline-none hover:bg-[var(--neko-hover)] focus-visible:ring-2 focus-visible:ring-[var(--vscode-focusBorder)]',
+            'outline-none hover:bg-[var(--neko-hover)] focus-visible:ring-2 focus-visible:ring-[var(--neko-focusBorder)]',
             'disabled:cursor-not-allowed disabled:opacity-50',
           )}
           disabled={visibilityDisabled || item.disabled}
@@ -392,7 +392,7 @@ function TreeViewRow({
             aria-hidden="true"
             className={cn(
               'h-2 w-2 rounded-full',
-              visible ? 'bg-[var(--neko-accent)]' : 'bg-[var(--vscode-disabledForeground)]',
+              visible ? 'bg-[var(--neko-accent)]' : 'bg-[var(--neko-disabledForeground)]',
             )}
           />
         </button>
@@ -401,7 +401,7 @@ function TreeViewRow({
           aria-label={visible ? 'Visible' : 'Hidden'}
           className={cn(
             'h-2 w-2 rounded-full',
-            visible ? 'bg-[var(--neko-accent)]' : 'bg-[var(--vscode-disabledForeground)]',
+            visible ? 'bg-[var(--neko-accent)]' : 'bg-[var(--neko-disabledForeground)]',
           )}
           role="img"
         />
@@ -412,7 +412,7 @@ function TreeViewRow({
           aria-pressed={locked}
           className={cn(
             'inline-flex h-5 w-5 items-center justify-center rounded-[var(--neko-radius-sm,6px)]',
-            'outline-none hover:bg-[var(--neko-hover)] focus-visible:ring-2 focus-visible:ring-[var(--vscode-focusBorder)]',
+            'outline-none hover:bg-[var(--neko-hover)] focus-visible:ring-2 focus-visible:ring-[var(--neko-focusBorder)]',
             'disabled:cursor-not-allowed disabled:opacity-50',
           )}
           disabled={lockDisabled || item.disabled}
@@ -448,7 +448,7 @@ function TreeViewRow({
         <span className="flex min-w-0 items-center justify-end gap-1">
           {item.decoration ? (
             <span
-              className="shrink-0 text-[var(--vscode-descriptionForeground)]"
+              className="shrink-0 text-[var(--neko-descriptionForeground)]"
               data-tree-item-decoration="true"
               title={item.decorationTitle}
             >
@@ -461,9 +461,9 @@ function TreeViewRow({
               aria-label={action.label}
               className={cn(
                 'inline-flex h-5 w-5 items-center justify-center rounded-[var(--neko-radius-sm,6px)]',
-                'outline-none hover:bg-[var(--neko-hover)] focus-visible:ring-2 focus-visible:ring-[var(--vscode-focusBorder)]',
+                'outline-none hover:bg-[var(--neko-hover)] focus-visible:ring-2 focus-visible:ring-[var(--neko-focusBorder)]',
                 'disabled:cursor-not-allowed disabled:opacity-50',
-                action.danger ? 'text-[var(--vscode-errorForeground,var(--neko-danger))]' : null,
+                action.danger ? 'text-[var(--neko-errorForeground,var(--neko-danger))]' : null,
               )}
               disabled={action.disabled || item.disabled}
               type="button"

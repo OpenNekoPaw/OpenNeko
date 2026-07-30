@@ -17,12 +17,12 @@ const sizeClassNames = {
 
 const variantClassNames = {
   default:
-    'bg-[var(--neko-accent)] text-[var(--vscode-button-foreground)] hover:bg-[var(--vscode-button-hoverBackground,var(--neko-accent))]',
-  ghost: 'bg-transparent text-[var(--vscode-foreground)] hover:bg-[var(--neko-hover)]',
+    'bg-[var(--neko-accent)] text-[var(--neko-button-foreground)] hover:bg-[var(--neko-button-hoverBackground,var(--neko-accent))]',
+  ghost: 'bg-transparent text-[var(--neko-foreground)] hover:bg-[var(--neko-hover)]',
   secondary:
-    'bg-[var(--neko-surface)] text-[var(--vscode-foreground)] border border-[var(--neko-border)] hover:bg-[var(--neko-hover)]',
+    'bg-[var(--neko-surface)] text-[var(--neko-foreground)] border border-[var(--neko-border)] hover:bg-[var(--neko-hover)]',
   danger:
-    'bg-[var(--neko-danger)] text-[var(--vscode-button-foreground)] hover:bg-[var(--vscode-inputValidation-errorBackground,var(--neko-danger))]',
+    'bg-[var(--neko-danger)] text-[var(--neko-button-foreground)] hover:bg-[var(--neko-inputValidation-errorBackground,var(--neko-danger))]',
 } satisfies Record<NonNullable<PrimitiveBaseProps['variant']>, string>;
 
 export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(function IconButton(
@@ -38,7 +38,7 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(functio
       className={cn(
         'inline-flex shrink-0 items-center justify-center rounded-[var(--neko-radius-sm,6px)]',
         'transition-colors duration-150 outline-none',
-        'focus-visible:ring-2 focus-visible:ring-[var(--vscode-focusBorder)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--vscode-editor-background)]',
+        'focus-visible:ring-2 focus-visible:ring-[var(--neko-focusBorder)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--neko-editor-background)]',
         'disabled:cursor-not-allowed disabled:opacity-50',
         variantClassNames[variant],
         sizeClassNames[size],

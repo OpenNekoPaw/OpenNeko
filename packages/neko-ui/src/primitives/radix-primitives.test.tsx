@@ -61,7 +61,7 @@ describe('@neko/ui Radix-backed primitives', () => {
     const content = document.body.querySelector('.fixture-popover-surface');
     expect(content?.textContent).toContain('Content');
     expect(content?.className).toContain(
-      'bg-[var(--neko-popover-background,var(--neko-glass-bg,var(--vscode-editorWidget-background)))]',
+      'bg-[var(--neko-popover-background,var(--neko-glass-bg,var(--neko-editorWidget-background)))]',
     );
     expect(content?.className).toContain('border-[var(--neko-popover-border,var(--neko-border))]');
   });

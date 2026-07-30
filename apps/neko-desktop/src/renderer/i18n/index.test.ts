@@ -26,6 +26,6 @@ describe('Desktop renderer i18n', () => {
     applyDesktopLocale(document, 'zh-cn');
 
     expect(document.documentElement.lang).toBe('zh-CN');
-    expect(document.documentElement.dataset.vscodeLocale).toBe('zh-cn');
+    expect(document.documentElement.dataset.nekoLocale).toBe('zh-cn');
   });
 });

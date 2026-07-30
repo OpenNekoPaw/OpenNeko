@@ -7,13 +7,13 @@
 .model-preview {
   --neko-surface: color-mix(
     in srgb,
-    var(--vscode-editor-background) 96%,
-    var(--vscode-foreground) 4%
+    var(--neko-editor-background) 96%,
+    var(--neko-foreground) 4%
   );
-  --neko-hover: color-mix(in srgb, var(--vscode-list-hoverBackground) 80%, transparent);
-  --neko-border: var(--vscode-panel-border, var(--vscode-widget-border));
-  --neko-accent: var(--vscode-button-background);
-  --neko-accent-muted: color-mix(in srgb, var(--vscode-button-background) 10%, transparent);
+  --neko-hover: color-mix(in srgb, var(--neko-list-hoverBackground) 80%, transparent);
+  --neko-border: var(--neko-panel-border, var(--neko-widget-border));
+  --neko-accent: var(--neko-button-background);
+  --neko-accent-muted: color-mix(in srgb, var(--neko-button-background) 10%, transparent);
 }
 
 .model-preview,
@@ -26,10 +26,10 @@
 .model-preview {
   margin: 0;
   overflow: hidden;
-  color: var(--vscode-foreground);
-  background: var(--vscode-editor-background);
-  font-family: var(--vscode-font-family);
-  font-size: var(--vscode-font-size, 13px);
+  color: var(--neko-foreground);
+  background: var(--neko-editor-background);
+  font-family: var(--neko-font-family);
+  font-size: var(--neko-font-size, 13px);
 }
 
 .model-preview button,
@@ -44,8 +44,8 @@
   height: 100%;
   min-width: 0;
   min-height: 0;
-  color: var(--vscode-foreground);
-  background: var(--vscode-editor-background);
+  color: var(--neko-foreground);
+  background: var(--neko-editor-background);
 }
 
 .model-preview__scene-panel,
@@ -54,7 +54,7 @@
   min-width: 0;
   min-height: 0;
   flex-direction: column;
-  background: var(--vscode-sideBar-background, var(--vscode-editor-background));
+  background: var(--neko-sideBar-background, var(--neko-editor-background));
 }
 
 .model-preview__scene-panel {
@@ -80,7 +80,7 @@
 .model-preview__panel-header h2,
 .model-preview__inspector-header h1 {
   margin: 0;
-  color: var(--vscode-foreground);
+  color: var(--neko-foreground);
   font-size: 13px;
   font-weight: 650;
   letter-spacing: -0.01em;
@@ -101,7 +101,7 @@
   place-items: center;
   border: 1px solid var(--neko-border);
   border-radius: 7px;
-  color: var(--vscode-descriptionForeground);
+  color: var(--neko-descriptionForeground);
   background: var(--neko-surface);
 }
 
@@ -112,7 +112,7 @@
   place-items: center;
   padding: 0 6px;
   border-radius: 999px;
-  color: var(--vscode-descriptionForeground);
+  color: var(--neko-descriptionForeground);
   background: var(--neko-hover);
   font-size: 10px;
   font-variant-numeric: tabular-nums;
@@ -125,10 +125,10 @@
   gap: 7px;
   margin: 2px 0 10px;
   padding: 0 10px;
-  border: 1px solid var(--vscode-input-border, var(--neko-border));
+  border: 1px solid var(--neko-input-border, var(--neko-border));
   border-radius: 8px;
-  color: var(--vscode-descriptionForeground);
-  background: var(--vscode-input-background);
+  color: var(--neko-descriptionForeground);
+  background: var(--neko-input-background);
   transition:
     border-color 120ms ease,
     box-shadow 120ms ease,
@@ -136,9 +136,9 @@
 }
 
 .model-preview__search:focus-within {
-  border-color: var(--vscode-focusBorder);
-  background: var(--vscode-input-background);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--vscode-focusBorder) 16%, transparent);
+  border-color: var(--neko-focusBorder);
+  background: var(--neko-input-background);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--neko-focusBorder) 16%, transparent);
 }
 
 .model-preview__search input {
@@ -146,13 +146,13 @@
   min-width: 0;
   border: 0;
   outline: 0;
-  color: var(--vscode-input-foreground);
+  color: var(--neko-input-foreground);
   background: transparent;
   font-size: 12px;
 }
 
 .model-preview__search input::placeholder {
-  color: var(--vscode-input-placeholderForeground);
+  color: var(--neko-input-placeholderForeground);
 }
 
 .model-preview__tree {
@@ -172,18 +172,18 @@
   padding: 0;
   border: 0;
   border-radius: 6px;
-  color: var(--vscode-descriptionForeground);
+  color: var(--neko-descriptionForeground);
   background: transparent;
   cursor: pointer;
 }
 
 .model-preview__search-clear:hover {
-  color: var(--vscode-foreground);
+  color: var(--neko-foreground);
   background: var(--neko-hover);
 }
 
 .model-preview__search-clear:focus-visible {
-  outline: 1px solid var(--vscode-focusBorder);
+  outline: 1px solid var(--neko-focusBorder);
   outline-offset: 1px;
 }
 
@@ -194,7 +194,7 @@
 
 .model-preview__tree [data-tree-item-id^='model-group:'] {
   margin-top: 5px;
-  color: var(--vscode-descriptionForeground);
+  color: var(--neko-descriptionForeground);
   font-weight: 650;
 }
 
@@ -212,12 +212,12 @@
 }
 
 .model-preview__tree [data-tree-item-id^='model-selection:camera:'] button {
-  color: var(--vscode-descriptionForeground);
+  color: var(--neko-descriptionForeground);
 }
 
 .model-preview__empty {
   margin: 12px 4px;
-  color: var(--vscode-descriptionForeground);
+  color: var(--neko-descriptionForeground);
   font-size: 12px;
   text-align: center;
 }
@@ -227,7 +227,7 @@
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  background: var(--vscode-editor-background);
+  background: var(--neko-editor-background);
 }
 
 .model-preview__viewport canvas {
@@ -238,7 +238,7 @@
 }
 
 .model-preview__viewport canvas:focus-visible {
-  box-shadow: inset 0 0 0 2px var(--vscode-focusBorder);
+  box-shadow: inset 0 0 0 2px var(--neko-focusBorder);
 }
 
 .model-preview__view-controls {
@@ -291,7 +291,7 @@
 }
 
 .model-preview__orientation-origin {
-  fill: var(--vscode-descriptionForeground);
+  fill: var(--neko-descriptionForeground);
 }
 
 .model-preview__orientation button {
@@ -299,20 +299,20 @@
   padding: 0 10px;
   border: 1px solid var(--neko-border);
   border-radius: 999px;
-  color: var(--vscode-descriptionForeground);
-  background: var(--vscode-editorWidget-background, var(--vscode-editor-background));
+  color: var(--neko-descriptionForeground);
+  background: var(--neko-editorWidget-background, var(--neko-editor-background));
   font-size: 10px;
   cursor: pointer;
 }
 
 .model-preview__orientation button:hover {
-  color: var(--vscode-foreground);
-  border-color: var(--vscode-focusBorder);
+  color: var(--neko-foreground);
+  border-color: var(--neko-focusBorder);
   background: var(--neko-surface);
 }
 
 .model-preview__orientation button:focus-visible {
-  outline: 1px solid var(--vscode-focusBorder);
+  outline: 1px solid var(--neko-focusBorder);
   outline-offset: 2px;
 }
 
@@ -350,7 +350,7 @@
   padding: 0 10px;
   border: 0;
   border-radius: var(--neko-radius-sm, 6px);
-  color: var(--vscode-menu-foreground, var(--vscode-foreground));
+  color: var(--neko-menu-foreground, var(--neko-foreground));
   background: transparent;
   font: inherit;
   text-align: left;
@@ -359,13 +359,13 @@
 
 .model-preview__creation-menu-item:hover:not(:disabled),
 .model-preview__creation-menu-item:focus-visible {
-  color: var(--vscode-menu-selectionForeground, var(--vscode-foreground));
-  background: var(--vscode-menu-selectionBackground, var(--vscode-list-hoverBackground));
+  color: var(--neko-menu-selectionForeground, var(--neko-foreground));
+  background: var(--neko-menu-selectionBackground, var(--neko-list-hoverBackground));
   outline: none;
 }
 
 .model-preview__creation-menu-item:disabled {
-  color: var(--vscode-disabledForeground, var(--vscode-descriptionForeground));
+  color: var(--neko-disabledForeground, var(--neko-descriptionForeground));
   cursor: default;
   opacity: 0.75;
 }
@@ -378,7 +378,7 @@
   place-items: center;
   padding: 24px;
   text-align: center;
-  color: var(--vscode-descriptionForeground);
+  color: var(--neko-descriptionForeground);
   background: rgba(245, 246, 248, 0.9);
 }
 
@@ -394,8 +394,8 @@
   border-bottom: 1px solid var(--neko-border);
   background: linear-gradient(
     180deg,
-    var(--vscode-sideBar-background, var(--vscode-editor-background)) 0%,
-    var(--vscode-editorWidget-background, var(--vscode-editor-background)) 100%
+    var(--neko-sideBar-background, var(--neko-editor-background)) 0%,
+    var(--neko-editorWidget-background, var(--neko-editor-background)) 100%
   );
 }
 
@@ -421,7 +421,7 @@
   place-items: center;
   border: 1px solid var(--neko-border);
   border-radius: 9px;
-  color: var(--vscode-foreground);
+  color: var(--neko-foreground);
   background: var(--neko-surface);
   font-size: 15px;
 }
@@ -429,7 +429,7 @@
 .model-preview__eyebrow {
   display: block;
   margin-bottom: 3px;
-  color: var(--vscode-descriptionForeground);
+  color: var(--neko-descriptionForeground);
   font-size: 9px;
   font-weight: 650;
   letter-spacing: 0.08em;
@@ -446,7 +446,7 @@
   padding: 0 7px;
   border: 1px solid var(--neko-border);
   border-radius: 999px;
-  color: var(--vscode-descriptionForeground);
+  color: var(--neko-descriptionForeground);
   background: var(--neko-surface);
   font-size: 9px;
   white-space: nowrap;
@@ -454,7 +454,7 @@
 
 .model-preview__inspector-header p {
   margin: 0;
-  color: var(--vscode-descriptionForeground);
+  color: var(--neko-descriptionForeground);
   font-size: 10px;
   line-height: 1.5;
 }
@@ -467,7 +467,7 @@
   gap: 0;
   padding: 0 14px 18px;
   overflow: auto;
-  scrollbar-color: var(--vscode-scrollbarSlider-background) transparent;
+  scrollbar-color: var(--neko-scrollbarSlider-background) transparent;
   scrollbar-width: thin;
 }
 
@@ -481,10 +481,10 @@
   gap: 6px;
   margin: 12px 1px 0;
   padding: 8px 10px;
-  border: 1px solid color-mix(in srgb, var(--vscode-charts-yellow, #b89500) 34%, transparent);
+  border: 1px solid color-mix(in srgb, var(--neko-charts-yellow, #b89500) 34%, transparent);
   border-radius: 8px;
-  color: var(--vscode-descriptionForeground);
-  background: color-mix(in srgb, var(--vscode-charts-yellow, #b89500) 9%, transparent);
+  color: var(--neko-descriptionForeground);
+  background: color-mix(in srgb, var(--neko-charts-yellow, #b89500) 9%, transparent);
   font-size: 11px;
 }
 
@@ -517,23 +517,23 @@
   padding: 6px 4px 7px;
   border: 1px solid transparent;
   border-radius: 8px;
-  color: var(--vscode-descriptionForeground);
-  background: color-mix(in srgb, var(--vscode-editorWidget-background) 72%, transparent);
+  color: var(--neko-descriptionForeground);
+  background: color-mix(in srgb, var(--neko-editorWidget-background) 72%, transparent);
   font: inherit;
   font-size: 10px;
   cursor: pointer;
 }
 
 .model-preview__pose-card:hover:not(:disabled) {
-  color: var(--vscode-foreground);
-  background: var(--vscode-list-hoverBackground);
+  color: var(--neko-foreground);
+  background: var(--neko-list-hoverBackground);
 }
 
 .model-preview__pose-card[aria-pressed='true'] {
-  border-color: var(--vscode-focusBorder);
-  color: var(--vscode-foreground);
-  background: color-mix(in srgb, var(--vscode-focusBorder) 10%, var(--vscode-editor-background));
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--vscode-focusBorder) 35%, transparent);
+  border-color: var(--neko-focusBorder);
+  color: var(--neko-foreground);
+  background: color-mix(in srgb, var(--neko-focusBorder) 10%, var(--neko-editor-background));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--neko-focusBorder) 35%, transparent);
 }
 
 .model-preview__pose-card > .codicon-check {
@@ -545,8 +545,8 @@
   height: 16px;
   place-items: center;
   border-radius: 3px;
-  color: var(--vscode-button-foreground);
-  background: var(--vscode-button-background);
+  color: var(--neko-button-foreground);
+  background: var(--neko-button-background);
   font-size: 11px;
 }
 
@@ -569,7 +569,7 @@
   border: 1px solid var(--neko-border);
   border-radius: 8px;
   object-fit: contain;
-  background: var(--vscode-editor-background);
+  background: var(--neko-editor-background);
 }
 
 .model-preview__inspector-section {
@@ -579,7 +579,7 @@
 }
 
 .model-preview__inspector-section h3 {
-  color: var(--vscode-foreground);
+  color: var(--neko-foreground);
   font-size: 11px;
   letter-spacing: 0.035em;
 }
@@ -621,7 +621,7 @@
   padding: 7px 9px;
   border: 1px dashed var(--neko-border);
   border-radius: 8px;
-  color: var(--vscode-descriptionForeground);
+  color: var(--neko-descriptionForeground);
   background: var(--neko-surface);
   font-size: 10px;
 }
@@ -644,18 +644,18 @@
 .model-preview__text-input {
   width: 100%;
   height: 28px;
-  border: 1px solid var(--vscode-input-border);
+  border: 1px solid var(--neko-input-border);
   border-radius: 7px;
   outline: 0;
-  color: var(--vscode-input-foreground);
-  background: var(--vscode-input-background);
+  color: var(--neko-input-foreground);
+  background: var(--neko-input-background);
   padding: 0 8px;
   font-size: 11px;
 }
 
 .model-preview__text-input:focus {
-  border-color: var(--vscode-focusBorder);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--vscode-focusBorder) 14%, transparent);
+  border-color: var(--neko-focusBorder);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--neko-focusBorder) 14%, transparent);
 }
 
 .model-preview__inspector-tabs {
@@ -671,7 +671,7 @@
   padding: 9px 10px;
   border: 1px dashed var(--neko-border);
   border-radius: 8px;
-  color: var(--vscode-descriptionForeground);
+  color: var(--neko-descriptionForeground);
   background: var(--neko-surface);
   font-size: 10px;
   line-height: 1.45;
@@ -680,23 +680,23 @@
 .model-preview__diagnostic {
   margin: 8px 12px 0;
   padding: 8px 10px;
-  border: 1px solid var(--vscode-inputValidation-infoBorder, var(--neko-border));
+  border: 1px solid var(--neko-inputValidation-infoBorder, var(--neko-border));
   border-radius: 6px;
-  color: var(--vscode-foreground);
-  background: var(--vscode-inputValidation-infoBackground, var(--vscode-editorWidget-background));
+  color: var(--neko-foreground);
+  background: var(--neko-inputValidation-infoBackground, var(--neko-editorWidget-background));
   font-size: 11px;
   line-height: 1.4;
 }
 
 .model-preview__diagnostic--error {
-  border-color: var(--vscode-inputValidation-errorBorder);
-  color: var(--vscode-inputValidation-errorForeground, var(--vscode-errorForeground));
-  background: var(--vscode-inputValidation-errorBackground);
+  border-color: var(--neko-inputValidation-errorBorder);
+  color: var(--neko-inputValidation-errorForeground, var(--neko-errorForeground));
+  background: var(--neko-inputValidation-errorBackground);
 }
 
 .model-preview__diagnostic--warning {
-  border-color: var(--vscode-inputValidation-warningBorder);
-  background: var(--vscode-inputValidation-warningBackground);
+  border-color: var(--neko-inputValidation-warningBorder);
+  background: var(--neko-inputValidation-warningBackground);
 }
 
 .model-preview__facts {
@@ -724,11 +724,11 @@
 }
 
 .model-preview__facts dt {
-  color: var(--vscode-descriptionForeground);
+  color: var(--neko-descriptionForeground);
 }
 
 .model-preview__facts dd {
-  color: var(--vscode-foreground);
+  color: var(--neko-foreground);
   font-weight: 650;
   font-variant-numeric: tabular-nums;
 }
@@ -737,7 +737,7 @@
   flex: 0 0 auto;
   padding: 10px 12px 12px;
   border-top: 1px solid var(--neko-border);
-  background: var(--vscode-button-foreground);
+  background: var(--neko-button-foreground);
 }
 
 .model-preview__send {
@@ -748,11 +748,11 @@
 }
 
 .model-preview__send[data-delivery-status='succeeded'] {
-  background: var(--vscode-testing-iconPassed, var(--vscode-button-background));
+  background: var(--neko-testing-iconPassed, var(--neko-button-background));
 }
 
 .model-preview__send[data-delivery-status='error'] {
-  background: var(--vscode-testing-iconFailed, var(--vscode-errorForeground));
+  background: var(--neko-testing-iconFailed, var(--neko-errorForeground));
 }
 
 .model-preview__send[data-delivery-status='sending'] .codicon-loading {

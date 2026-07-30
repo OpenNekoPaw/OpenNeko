@@ -1,12 +1,15 @@
 import { describe, expect, it, vi } from 'vitest';
 import { TOOL_NAMES_ENTITY } from '@neko/shared';
-import { createCreativeEntityHeadlessCapabilityProvider } from './agentHeadlessCapabilityProvider';
+import {
+  createCreativeEntityHeadlessCapabilityProvider,
+  type CreativeEntityHeadlessRuntime,
+} from './agentHeadlessCapabilityProvider';
 
 describe('CreativeEntityHeadlessCapabilityProvider', () => {
   it('exposes direct representation binding as an explicit confirmation-gated mutation', () => {
     const provider = createProvider();
     const tool = provider
-      .getTools({ extensionContext: undefined })
+      .getTools({ hostContext: undefined })
       .find((candidate) => candidate.name === TOOL_NAMES_ENTITY.BIND_ENTITY_REPRESENTATION);
 
     expect(tool).toMatchObject({
@@ -34,7 +37,7 @@ describe('CreativeEntityHeadlessCapabilityProvider', () => {
     }));
     const provider = createProvider(bindRepresentation);
     const tool = provider
-      .getTools({ extensionContext: undefined })
+      .getTools({ hostContext: undefined })
       .find((candidate) => candidate.name === TOOL_NAMES_ENTITY.BIND_ENTITY_REPRESENTATION);
     const representation = {
       kind: 'generated-output' as const,
@@ -69,7 +72,7 @@ describe('CreativeEntityHeadlessCapabilityProvider', () => {
     const bindRepresentation = vi.fn();
     const provider = createProvider(bindRepresentation);
     const tool = provider
-      .getTools({ extensionContext: undefined })
+      .getTools({ hostContext: undefined })
       .find((candidate) => candidate.name === TOOL_NAMES_ENTITY.BIND_ENTITY_REPRESENTATION);
 
     const result = await tool?.execute({
@@ -85,7 +88,7 @@ describe('CreativeEntityHeadlessCapabilityProvider', () => {
 });
 
 function createProvider(
-  bindRepresentation = vi.fn(async () => {
+  bindRepresentation: CreativeEntityHeadlessRuntime['bindRepresentation'] = vi.fn(async () => {
     throw new Error('not used');
   }),
 ) {

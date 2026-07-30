@@ -1084,7 +1084,7 @@ function App({ presentation = 'editor', timelineTarget }: CutAppProps) {
     return (
       <div
         ref={rootRef}
-        className="relative h-full bg-vscode-bg"
+        className="relative h-full bg-neko-bg"
         data-cut-presentation="timeline-only"
         data-neko-keyboard-focused={isKeyboardFocused ? 'true' : 'false'}
       >
@@ -1097,7 +1097,7 @@ function App({ presentation = 'editor', timelineTarget }: CutAppProps) {
   return (
     <div
       ref={rootRef}
-      className="relative h-full bg-vscode-bg"
+      className="relative h-full bg-neko-bg"
       data-neko-keyboard-focused={isKeyboardFocused ? 'true' : 'false'}
     >
       <CreativeWorkbenchShell

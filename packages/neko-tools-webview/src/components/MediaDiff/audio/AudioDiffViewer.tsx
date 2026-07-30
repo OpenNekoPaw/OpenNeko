@@ -84,8 +84,8 @@ export const AudioDiffViewer = memo(function AudioDiffViewer({
     return (
       <div className="flex-1 flex items-center justify-center">
         <div className="text-center">
-          <div className="w-8 h-8 border-2 border-[var(--vscode-button-background)] border-t-transparent rounded-full animate-spin mx-auto mb-2" />
-          <div className="text-sm text-[var(--vscode-descriptionForeground)]">
+          <div className="w-8 h-8 border-2 border-[var(--neko-button-background)] border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+          <div className="text-sm text-[var(--neko-descriptionForeground)]">
             {t('mediaDiff.audio.loading')}
           </div>
         </div>

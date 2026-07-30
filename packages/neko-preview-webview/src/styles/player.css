@@ -32,12 +32,12 @@
 }
 
 /* Light theme override */
-body.vscode-light .neko-preview-root,
-body.vscode-light .neko-preview-root__status,
-body[data-vscode-theme-kind="vscode-light"] .neko-preview-root,
-body[data-vscode-theme-kind="vscode-light"] .neko-preview-root__status,
-body[data-vscode-theme-kind="vscode-high-contrast-light"] .neko-preview-root,
-body[data-vscode-theme-kind="vscode-high-contrast-light"] .neko-preview-root__status {
+body.neko-light .neko-preview-root,
+body.neko-light .neko-preview-root__status,
+body[data-neko-theme-kind="neko-light"] .neko-preview-root,
+body[data-neko-theme-kind="neko-light"] .neko-preview-root__status,
+body[data-neko-theme-kind="neko-high-contrast-light"] .neko-preview-root,
+body[data-neko-theme-kind="neko-high-contrast-light"] .neko-preview-root__status {
   --neko-glass: rgba(0, 0, 0, 0.05);
   --neko-glass-hover: rgba(0, 0, 0, 0.08);
   --neko-glass-active: rgba(0, 0, 0, 0.12);
@@ -54,10 +54,10 @@ body[data-vscode-theme-kind="vscode-high-contrast-light"] .neko-preview-root__st
 }
 
 /* High contrast theme override */
-body.vscode-high-contrast .neko-preview-root,
-body.vscode-high-contrast .neko-preview-root__status,
-body[data-vscode-theme-kind="vscode-high-contrast"] .neko-preview-root,
-body[data-vscode-theme-kind="vscode-high-contrast"] .neko-preview-root__status {
+body.neko-high-contrast .neko-preview-root,
+body.neko-high-contrast .neko-preview-root__status,
+body[data-neko-theme-kind="neko-high-contrast"] .neko-preview-root,
+body[data-neko-theme-kind="neko-high-contrast"] .neko-preview-root__status {
   --neko-glass: rgba(255, 255, 255, 0.15);
   --neko-glass-hover: rgba(255, 255, 255, 0.25);
   --neko-glass-active: rgba(255, 255, 255, 0.35);
@@ -93,10 +93,10 @@ body[data-vscode-theme-kind="vscode-high-contrast"] .neko-preview-root__status {
 	margin: 0;
 	padding: 0;
 	overflow: hidden;
-	background: var(--vscode-editor-background, #1e1e1e);
-	color: var(--vscode-editor-foreground, #cccccc);
-	font-family: var(--vscode-font-family, -apple-system, BlinkMacSystemFont, sans-serif);
-	font-size: var(--vscode-font-size, 13px);
+	background: var(--neko-editor-background, #1e1e1e);
+	color: var(--neko-editor-foreground, #cccccc);
+	font-family: var(--neko-font-family, -apple-system, BlinkMacSystemFont, sans-serif);
+	font-size: var(--neko-font-size, 13px);
 }
 
 /* ==========================================================================
@@ -106,11 +106,11 @@ body[data-vscode-theme-kind="vscode-high-contrast"] .neko-preview-root__status {
 @layer components {
 	/* Gradient background with theme-derived colors */
 	.neko-audio-bg {
-		--neko-preview-bg: color-mix(in srgb, var(--vscode-editor-background, #1e1e1e) 85%, #000);
-		--neko-preview-surface: color-mix(in srgb, var(--vscode-editor-background, #1e1e1e) 70%, #fff 5%);
-		--neko-preview-accent: var(--vscode-button-background, #0e639c);
-		--neko-preview-accent-hover: var(--vscode-button-hoverBackground, #1177bb);
-		--neko-preview-gradient-start: color-mix(in srgb, var(--vscode-button-background, #0e639c) 25%, var(--vscode-editor-background, #1e1e1e));
+		--neko-preview-bg: color-mix(in srgb, var(--neko-editor-background, #1e1e1e) 85%, #000);
+		--neko-preview-surface: color-mix(in srgb, var(--neko-editor-background, #1e1e1e) 70%, #fff 5%);
+		--neko-preview-accent: var(--neko-button-background, #0e639c);
+		--neko-preview-accent-hover: var(--neko-button-hoverBackground, #1177bb);
+		--neko-preview-gradient-start: color-mix(in srgb, var(--neko-button-background, #0e639c) 25%, var(--neko-editor-background, #1e1e1e));
 		--neko-preview-gradient-end: var(--neko-preview-bg);
 		background: linear-gradient(180deg, var(--neko-preview-gradient-start) 0%, var(--neko-preview-gradient-end) 50%);
 	}

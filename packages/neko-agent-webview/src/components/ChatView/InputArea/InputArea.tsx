@@ -1151,7 +1151,7 @@ export function InputArea({
                     ? 'agent-composer-queue'
                     : inputAreaProjection.canSend
                       ? 'agent-composer-send'
-                      : 'bg-[var(--agent-control-muted-bg)] text-[var(--vscode-descriptionForeground)]'
+                      : 'bg-[var(--agent-control-muted-bg)] text-[var(--neko-descriptionForeground)]'
                 }`}
                 title={t(inputAreaProjection.sendTitleKey)}
                 aria-label={t(inputAreaProjection.sendTitleKey)}

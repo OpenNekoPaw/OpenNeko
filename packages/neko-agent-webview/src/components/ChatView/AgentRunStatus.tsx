@@ -7,10 +7,10 @@ interface AgentRunStatusProps {
 }
 
 const phaseTone: Record<AgentPhase, string> = {
-  idle: 'text-[var(--vscode-descriptionForeground)]',
-  thinking: 'text-[var(--vscode-charts-purple)]',
-  acting: 'text-[var(--vscode-charts-blue)]',
-  streaming: 'text-[var(--vscode-charts-green)]',
+  idle: 'text-[var(--neko-descriptionForeground)]',
+  thinking: 'text-[var(--neko-charts-purple)]',
+  acting: 'text-[var(--neko-charts-blue)]',
+  streaming: 'text-[var(--neko-charts-green)]',
 };
 
 export function AgentRunStatus({ agentState }: AgentRunStatusProps) {
@@ -37,7 +37,7 @@ export function AgentRunStatus({ agentState }: AgentRunStatusProps) {
 
   return (
     <div
-      className="agent-run-status flex items-center gap-2 border-t border-[var(--vscode-panel-border)] px-3 py-1.5 text-xs"
+      className="agent-run-status flex items-center gap-2 border-t border-[var(--neko-panel-border)] px-3 py-1.5 text-xs"
       role="status"
       aria-live="polite"
       data-started-at={activeStartedAt}
@@ -45,9 +45,9 @@ export function AgentRunStatus({ agentState }: AgentRunStatusProps) {
       <span className={`animate-pulse ${phaseTone[agentState.phase]}`} aria-hidden="true">
         ●
       </span>
-      <span className="text-[var(--vscode-foreground)] opacity-80">{statusLabel}</span>
+      <span className="text-[var(--neko-foreground)] opacity-80">{statusLabel}</span>
       <span
-        className="agent-run-elapsed text-[var(--vscode-descriptionForeground)] opacity-70"
+        className="agent-run-elapsed text-[var(--neko-descriptionForeground)] opacity-70"
         aria-label={t('chat.agentRun.elapsedLabel')}
       >
         {formatElapsedTime(activeStartedAt, now)}

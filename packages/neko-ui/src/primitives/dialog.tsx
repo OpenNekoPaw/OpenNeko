@@ -41,7 +41,7 @@ export function Dialog({
           className={cn(
             'fixed left-1/2 top-1/2 z-50 grid w-[min(92vw,520px)] -translate-x-1/2 -translate-y-1/2 gap-3',
             'rounded-[var(--neko-radius-md,8px)] border border-[var(--neko-border)]',
-            'bg-[var(--vscode-editorWidget-background)] p-4 text-[var(--vscode-foreground)]',
+            'bg-[var(--neko-editorWidget-background)] p-4 text-[var(--neko-foreground)]',
             'shadow-[var(--neko-shadow-lg,0_16px_48px_rgba(0,0,0,0.36))] outline-none',
             className,
           )}
@@ -53,11 +53,11 @@ export function Dialog({
           })}
         >
           <div className="grid gap-1 pr-8">
-            <DialogPrimitive.Title className="text-sm font-semibold text-[var(--vscode-foreground)]">
+            <DialogPrimitive.Title className="text-sm font-semibold text-[var(--neko-foreground)]">
               {title}
             </DialogPrimitive.Title>
             {description ? (
-              <DialogPrimitive.Description className="text-xs text-[var(--vscode-descriptionForeground)]">
+              <DialogPrimitive.Description className="text-xs text-[var(--neko-descriptionForeground)]">
                 {description}
               </DialogPrimitive.Description>
             ) : null}
@@ -68,8 +68,8 @@ export function Dialog({
             aria-label={closeLabel}
             className={cn(
               'absolute right-2 top-2 inline-flex h-7 w-7 items-center justify-center',
-              'rounded-[var(--neko-radius-sm,6px)] text-[var(--vscode-icon-foreground,var(--vscode-foreground))]',
-              'outline-none hover:bg-[var(--neko-hover)] focus-visible:ring-2 focus-visible:ring-[var(--vscode-focusBorder)]',
+              'rounded-[var(--neko-radius-sm,6px)] text-[var(--neko-icon-foreground,var(--neko-foreground))]',
+              'outline-none hover:bg-[var(--neko-hover)] focus-visible:ring-2 focus-visible:ring-[var(--neko-focusBorder)]',
             )}
             type="button"
           >

@@ -14,7 +14,7 @@ export function ErrorBoundary({ children }: ErrorBoundaryProps): ReactNode {
       logger={logger}
       title="Something went wrong"
       retryLabel="Try again"
-      className="flex h-full flex-col items-center justify-center p-4 text-center text-[var(--vscode-editor-foreground)] bg-[var(--vscode-editor-background)]"
+      className="flex h-full flex-col items-center justify-center p-4 text-center text-[var(--neko-editor-foreground)] bg-[var(--neko-editor-background)]"
     >
       {children}
     </WebviewErrorBoundary>

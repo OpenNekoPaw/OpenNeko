@@ -1,7 +1,7 @@
 /**
  * OpenNeko - Shared Tailwind CSS Preset
  *
- * Maps VSCode CSS variables to Tailwind utility classes.
+ * Maps Neko CSS variables to Tailwind utility classes.
  * Also injects --neko-* CSS design tokens and shared component base classes
  * via Tailwind plugin, so all webview packages get a unified token system.
  *
@@ -10,37 +10,37 @@
  *   export default { presets: [nekoTailwindPreset], content: [...] };
  *
  * Then use in JSX:
- *   <div className="bg-vscode-bg text-vscode-fg border-vscode-border" />
+ *   <div className="bg-neko-bg text-neko-fg border-neko-border" />
  *   <div className="neko-toolbar-btn active" />
  */
 
 import plugin from 'tailwindcss/plugin';
-import { vscodeCSSTokens, nekoDesignTokens } from './tokens';
+import { nekoCSSTokens, nekoDesignTokens } from './tokens';
 
 /**
- * Tailwind preset with all VSCode theme color mappings and Neko design tokens.
+ * Tailwind preset with all Neko theme color mappings and Neko design tokens.
  * Type is intentionally kept loose to avoid requiring tailwindcss as a dependency.
  */
 export const nekoTailwindPreset = {
   content: [] as string[],
   theme: {
     extend: {
-      colors: { ...vscodeCSSTokens.colors },
-      fontFamily: { ...vscodeCSSTokens.fontFamily },
-      fontSize: { ...vscodeCSSTokens.fontSize },
-      borderRadius: { ...vscodeCSSTokens.borderRadius },
-      boxShadow: { ...vscodeCSSTokens.boxShadow },
-      backdropBlur: { ...vscodeCSSTokens.backdropBlur },
+      colors: { ...nekoCSSTokens.colors },
+      fontFamily: { ...nekoCSSTokens.fontFamily },
+      fontSize: { ...nekoCSSTokens.fontSize },
+      borderRadius: { ...nekoCSSTokens.borderRadius },
+      boxShadow: { ...nekoCSSTokens.boxShadow },
+      backdropBlur: { ...nekoCSSTokens.backdropBlur },
     },
   },
   plugins: [
     plugin(({ addBase, addComponents }) => {
-      // Inject --neko-* CSS custom properties for all three VSCode theme modes
+      // Inject --neko-* CSS custom properties for all three Neko theme modes
       addBase({
         ':root': nekoDesignTokens.dark as Record<string, string>,
-        'body.vscode-light, body[data-vscode-theme-kind="vscode-light"], body[data-vscode-theme-kind="vscode-high-contrast-light"]':
+        'body.neko-light, body[data-neko-theme-kind="neko-light"], body[data-neko-theme-kind="neko-high-contrast-light"]':
           nekoDesignTokens.light as Record<string, string>,
-        'body.vscode-high-contrast, body[data-vscode-theme-kind="vscode-high-contrast"]':
+        'body.neko-high-contrast, body[data-neko-theme-kind="neko-high-contrast"]':
           nekoDesignTokens.highContrast as Record<string, string>,
       });
 

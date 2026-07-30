@@ -93,9 +93,9 @@ function DefaultWebviewErrorFallback({
   title = 'Something went wrong',
   description,
   retryLabel = 'Try again',
-  className = 'flex h-full flex-col items-center justify-center p-4 text-center text-[var(--vscode-editor-foreground)]',
+  className = 'flex h-full flex-col items-center justify-center p-4 text-center text-[var(--neko-editor-foreground)]',
   contentClassName = 'flex max-w-md flex-col items-center gap-3',
-  buttonClassName = 'rounded bg-[var(--vscode-button-background)] px-4 py-2 text-sm text-[var(--vscode-button-foreground)] hover:bg-[var(--vscode-button-hoverBackground)]',
+  buttonClassName = 'rounded bg-[var(--neko-button-background)] px-4 py-2 text-sm text-[var(--neko-button-foreground)] hover:bg-[var(--neko-button-hoverBackground)]',
 }: WebviewErrorBoundaryFallbackProps & WebviewErrorBoundaryProps): ReactNode {
   const descriptionNode = typeof description === 'function' ? description(error) : description;
   return (

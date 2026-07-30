@@ -71,10 +71,10 @@
   --fallback-scrollbar-active-bg: rgba(121, 121, 121, 0.8);
 
   /* Agent semantic tokens */
-  --agent-bg: var(--vscode-editor-background, var(--fallback-editor-bg));
+  --agent-bg: var(--neko-editor-background, var(--fallback-editor-bg));
   --agent-elevated: color-mix(
     in srgb,
-    var(--neko-elevated, var(--vscode-panel-background, var(--fallback-panel-bg))) 88%,
+    var(--neko-elevated, var(--neko-panel-background, var(--fallback-panel-bg))) 88%,
     var(--agent-bg) 12%
   );
   --agent-surface: color-mix(
@@ -84,19 +84,19 @@
   );
   --agent-border: var(--neko-border, rgba(255, 255, 255, 0.08));
   --agent-divider: var(--neko-divider, rgba(255, 255, 255, 0.06));
-  --agent-fg: var(--neko-fg, var(--vscode-editor-foreground, var(--fallback-editor-fg)));
+  --agent-fg: var(--neko-fg, var(--neko-editor-foreground, var(--fallback-editor-fg)));
   --agent-fg-secondary: var(
     --neko-fg-secondary,
-    var(--vscode-descriptionForeground, var(--fallback-description-fg))
+    var(--neko-descriptionForeground, var(--fallback-description-fg))
   );
   --agent-fg-muted: var(--neko-fg-muted, rgba(232, 232, 237, 0.38));
   --agent-hover: var(--neko-hover, rgba(255, 255, 255, 0.06));
-  --agent-accent: var(--neko-accent, var(--vscode-button-background, var(--fallback-button-bg)));
+  --agent-accent: var(--neko-accent, var(--neko-button-background, var(--fallback-button-bg)));
   --agent-accent-soft: var(
     --neko-accent-soft,
     color-mix(in srgb, var(--agent-accent) 16%, transparent)
   );
-  --agent-accent-fg: var(--vscode-button-foreground, var(--fallback-button-fg));
+  --agent-accent-fg: var(--neko-button-foreground, var(--fallback-button-fg));
   --agent-input-bg: color-mix(in srgb, var(--agent-elevated) 84%, var(--agent-bg) 16%);
   --agent-input-border: color-mix(in srgb, var(--agent-fg) 12%, transparent);
   --agent-chat-row-hover: color-mix(in srgb, var(--agent-fg) 3%, transparent);
@@ -139,18 +139,18 @@
   --agent-tab-active-bg: color-mix(in srgb, var(--agent-accent) 18%, transparent);
   --agent-menu-bg: color-mix(
     in srgb,
-    var(--vscode-menu-background, var(--fallback-menu-bg)) 86%,
+    var(--neko-menu-background, var(--fallback-menu-bg)) 86%,
     var(--agent-elevated) 14%
   );
   --agent-overlay-bg: color-mix(
     in srgb,
-    var(--vscode-quickInput-background, var(--vscode-dropdown-background, var(--agent-menu-bg))) 98%,
+    var(--neko-quickInput-background, var(--neko-dropdown-background, var(--agent-menu-bg))) 98%,
     var(--agent-bg) 2%
   );
   --agent-overlay-border: color-mix(in srgb, var(--agent-fg) 18%, transparent);
   --agent-overlay-radius: 7px;
   --agent-overlay-shadow:
-    0 10px 24px var(--vscode-widget-shadow, rgba(0, 0, 0, 0.24)),
+    0 10px 24px var(--neko-widget-shadow, rgba(0, 0, 0, 0.24)),
     inset 0 1px 0 color-mix(in srgb, var(--agent-fg) 5%, transparent);
   --agent-overlay-padding: 3px;
   --agent-overlay-inline-size: min(320px, calc(100vw - 24px));
@@ -167,7 +167,7 @@
   --agent-menu-row-radius: 5px;
   --agent-menu-row-hover-bg: color-mix(
     in srgb,
-    var(--vscode-list-hoverBackground, var(--agent-hover)) 92%,
+    var(--neko-list-hoverBackground, var(--agent-hover)) 92%,
     transparent
   );
   --agent-menu-row-hover-border: color-mix(in srgb, var(--agent-fg) 10%, transparent);
@@ -180,25 +180,25 @@
   --agent-menu-section-padding: 4px 7px 3px;
   --agent-menu-section-font-size: 10px;
   --agent-menu-section-line-height: 14px;
-  --agent-danger: var(--neko-danger, var(--vscode-errorForeground, var(--fallback-error-fg)));
-  --agent-success: var(--vscode-charts-green, #89d185);
-  --agent-info: var(--vscode-charts-blue, #3794ff);
+  --agent-danger: var(--neko-danger, var(--neko-errorForeground, var(--fallback-error-fg)));
+  --agent-success: var(--neko-charts-green, #89d185);
+  --agent-info: var(--neko-charts-blue, #3794ff);
   --agent-warning-bg: color-mix(
     in srgb,
-    var(--vscode-inputValidation-warningBackground, #5c4b1c) 72%,
+    var(--neko-inputValidation-warningBackground, #5c4b1c) 72%,
     transparent
   );
-  --agent-warning-fg: var(--vscode-inputValidation-warningForeground, #ffd60a);
+  --agent-warning-fg: var(--neko-inputValidation-warningForeground, #ffd60a);
 }
 
 [data-presentation='desktop-dock'] {
   --agent-bg: var(
     --neko-desktop-surface,
-    var(--vscode-sideBar-background, var(--fallback-sidebar-bg))
+    var(--neko-sideBar-background, var(--fallback-sidebar-bg))
   );
   --agent-elevated: var(
     --neko-desktop-surface-raised,
-    var(--vscode-editorWidget-background, var(--fallback-panel-bg))
+    var(--neko-editorWidget-background, var(--fallback-panel-bg))
   );
   --agent-input-bg: var(--neko-desktop-surface-raised, var(--agent-elevated));
   --agent-overlay-radius: var(--neko-desktop-radius-panel, 12px);
@@ -207,20 +207,20 @@
   --agent-menu-row-radius: var(--neko-desktop-radius-control, 8px);
 }
 
-body.vscode-high-contrast,
-body[data-vscode-theme-kind='vscode-high-contrast'] {
-  --agent-elevated: var(--vscode-panel-background, var(--fallback-panel-bg));
+body.neko-high-contrast,
+body[data-neko-theme-kind='neko-high-contrast'] {
+  --agent-elevated: var(--neko-panel-background, var(--fallback-panel-bg));
   --agent-surface: var(--agent-elevated);
-  --agent-border: var(--vscode-contrastBorder, #ffffff);
+  --agent-border: var(--neko-contrastBorder, #ffffff);
   --agent-divider: var(--agent-border);
-  --agent-hover: var(--vscode-list-hoverBackground, rgba(255, 255, 255, 0.12));
-  --agent-accent-soft: var(--vscode-list-activeSelectionBackground, rgba(255, 255, 255, 0.18));
+  --agent-hover: var(--neko-list-hoverBackground, rgba(255, 255, 255, 0.12));
+  --agent-accent-soft: var(--neko-list-activeSelectionBackground, rgba(255, 255, 255, 0.18));
   --agent-input-bg: var(--agent-elevated);
   --agent-input-border: var(--agent-border);
-  --agent-chat-row-hover: var(--vscode-list-hoverBackground, transparent);
+  --agent-chat-row-hover: var(--neko-list-hoverBackground, transparent);
   --agent-bubble-assistant-bg: var(--agent-elevated);
   --agent-bubble-assistant-border: var(--agent-border);
-  --agent-bubble-user-bg: var(--vscode-list-activeSelectionBackground, var(--agent-elevated));
+  --agent-bubble-user-bg: var(--neko-list-activeSelectionBackground, var(--agent-elevated));
   --agent-bubble-user-border: var(--agent-border);
   --agent-bubble-shadow: none;
   --agent-bubble-user-shadow: none;
@@ -228,12 +228,12 @@ body[data-vscode-theme-kind='vscode-high-contrast'] {
   --agent-composer-rail-border: var(--agent-border);
   --agent-composer-bg: var(--agent-elevated);
   --agent-composer-border: var(--agent-border);
-  --agent-composer-focus-border: var(--vscode-focusBorder, var(--agent-border));
+  --agent-composer-focus-border: var(--neko-focusBorder, var(--agent-border));
   --agent-composer-divider: var(--agent-border);
   --agent-composer-shadow: none;
   --agent-composer-focus-shadow: none;
   --agent-control-muted-bg: var(--agent-elevated);
-  --agent-composer-send-bg: var(--vscode-button-background, var(--agent-accent));
+  --agent-composer-send-bg: var(--neko-button-background, var(--agent-accent));
   --agent-composer-send-border: var(--agent-border);
   --agent-empty-panel-bg: var(--agent-elevated);
   --agent-empty-panel-border: var(--agent-border);
@@ -242,8 +242,8 @@ body[data-vscode-theme-kind='vscode-high-contrast'] {
   --agent-empty-muted: var(--agent-fg-secondary);
   --agent-empty-action-bg: var(--agent-elevated);
   --agent-empty-action-border: var(--agent-border);
-  --agent-empty-action-hover-bg: var(--vscode-list-hoverBackground, var(--agent-elevated));
-  --agent-empty-action-hover-border: var(--vscode-focusBorder, var(--agent-border));
+  --agent-empty-action-hover-bg: var(--neko-list-hoverBackground, var(--agent-elevated));
+  --agent-empty-action-hover-border: var(--neko-focusBorder, var(--agent-border));
   --agent-overlay-bg: var(--agent-elevated);
   --agent-overlay-border: var(--agent-border);
   --agent-overlay-shadow: none;
@@ -251,16 +251,16 @@ body[data-vscode-theme-kind='vscode-high-contrast'] {
   --agent-overlay-wide-inline-size: fit-content;
   --agent-overlay-wide-min-inline-size: 220px;
   --agent-overlay-wide-max-inline-size: min(560px, calc(100vw - 24px));
-  --agent-menu-row-hover-bg: var(--vscode-list-hoverBackground, var(--agent-elevated));
-  --agent-menu-row-selected-bg: var(--vscode-list-activeSelectionBackground, var(--agent-elevated));
-  --agent-menu-row-selected-fg: var(--vscode-list-activeSelectionForeground, var(--agent-fg));
+  --agent-menu-row-hover-bg: var(--neko-list-hoverBackground, var(--agent-elevated));
+  --agent-menu-row-selected-bg: var(--neko-list-activeSelectionBackground, var(--agent-elevated));
+  --agent-menu-row-selected-fg: var(--neko-list-activeSelectionForeground, var(--agent-fg));
   --agent-menu-row-hover-border: var(--agent-border);
   --agent-menu-row-selected-border: var(--agent-border);
   --agent-menu-row-indicator: var(--agent-border);
 }
 
-body.vscode-light,
-body[data-vscode-theme-kind='vscode-light'] {
+body.neko-light,
+body[data-neko-theme-kind='neko-light'] {
   --agent-empty-panel-bg: color-mix(in srgb, var(--agent-bg) 84%, #f3f3f3 16%);
   --agent-empty-panel-border: color-mix(in srgb, var(--agent-fg) 12%, transparent);
   --agent-empty-panel-shadow:
@@ -280,8 +280,8 @@ body[data-vscode-theme-kind='vscode-light'] {
 }
 
 body {
-  font-family: var(--vscode-font-family, var(--fallback-font-family));
-  font-size: var(--vscode-font-size, var(--fallback-font-size));
+  font-family: var(--neko-font-family, var(--fallback-font-family));
+  font-size: var(--neko-font-size, var(--fallback-font-size));
   background-color: var(--agent-bg);
   color: var(--agent-fg);
   overflow: hidden;
@@ -295,7 +295,7 @@ body {
 }
 
 /* VSCode-style buttons */
-.vscode-button {
+.neko-button {
   background-color: var(--agent-accent);
   color: var(--agent-accent-fg);
   border: 1px solid transparent;
@@ -311,34 +311,34 @@ body {
   box-shadow: 0 2px 10px color-mix(in srgb, var(--agent-accent) 22%, transparent);
 }
 
-.vscode-button:hover {
+.neko-button:hover {
   background-color: color-mix(in srgb, var(--agent-accent) 88%, #ffffff 12%);
 }
 
-.vscode-button:focus {
+.neko-button:focus {
   outline: 2px solid var(--agent-accent);
   outline-offset: 1px;
 }
 
-.vscode-button:disabled {
+.neko-button:disabled {
   opacity: 0.45;
   cursor: not-allowed;
   box-shadow: none;
 }
 
-.vscode-button-secondary {
+.neko-button-secondary {
   background-color: color-mix(in srgb, var(--agent-fg) 8%, transparent);
   color: var(--agent-fg);
   border-color: var(--agent-input-border);
   box-shadow: none;
 }
 
-.vscode-button-secondary:hover {
+.neko-button-secondary:hover {
   background-color: color-mix(in srgb, var(--agent-fg) 12%, transparent);
 }
 
 /* VSCode-style inputs */
-.vscode-input {
+.neko-input {
   background-color: var(--agent-input-bg);
   color: var(--agent-fg);
   border: 1px solid var(--agent-input-border);
@@ -352,17 +352,17 @@ body {
     box-shadow 0.15s ease;
 }
 
-.vscode-input:focus {
+.neko-input:focus {
   border-color: var(--agent-accent);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--agent-accent) 20%, transparent);
 }
 
-.vscode-input::placeholder {
+.neko-input::placeholder {
   color: var(--agent-fg-secondary);
 }
 
 /* VSCode-style dropdowns */
-.vscode-dropdown {
+.neko-dropdown {
   background-color: var(--agent-input-bg);
   color: var(--agent-fg);
   border: 1px solid var(--agent-input-border);
@@ -375,13 +375,13 @@ body {
     box-shadow 0.15s ease;
 }
 
-.vscode-dropdown:focus {
+.neko-dropdown:focus {
   border-color: var(--agent-accent);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--agent-accent) 20%, transparent);
 }
 
 /* VSCode-style list items */
-.vscode-list-item {
+.neko-list-item {
   padding: 4px 8px;
   cursor: pointer;
   transition: background-color 0.1s ease;
@@ -389,11 +389,11 @@ body {
   border-radius: 8px;
 }
 
-.vscode-list-item:hover {
+.neko-list-item:hover {
   background-color: var(--agent-hover);
 }
 
-.vscode-list-item.active {
+.neko-list-item.active {
   background-color: var(--agent-accent-soft);
   color: var(--agent-fg);
 }
@@ -409,16 +409,16 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--vscode-scrollbarSlider-background);
+  background: var(--neko-scrollbarSlider-background);
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--vscode-scrollbarSlider-hoverBackground);
+  background: var(--neko-scrollbarSlider-hoverBackground);
 }
 
 ::-webkit-scrollbar-thumb:active {
-  background: var(--vscode-scrollbarSlider-activeBackground);
+  background: var(--neko-scrollbarSlider-activeBackground);
 }
 
 ::-webkit-scrollbar-corner {
@@ -455,11 +455,11 @@ body {
 }
 
 .scrollbar-tab:hover::-webkit-scrollbar-thumb {
-  background: var(--vscode-scrollbarSlider-background);
+  background: var(--neko-scrollbarSlider-background);
 }
 
 .scrollbar-tab::-webkit-scrollbar-thumb:hover {
-  background: var(--vscode-scrollbarSlider-hoverBackground);
+  background: var(--neko-scrollbarSlider-hoverBackground);
 }
 
 /* Overlay scrollbar - scrollbar overlays content instead of taking space */
@@ -475,11 +475,11 @@ body {
 }
 
 .scrollbar-auto-hide:hover::-webkit-scrollbar-thumb {
-  background: var(--vscode-scrollbarSlider-background);
+  background: var(--neko-scrollbarSlider-background);
 }
 
 .scrollbar-auto-hide:hover::-webkit-scrollbar-thumb:hover {
-  background: var(--vscode-scrollbarSlider-hoverBackground);
+  background: var(--neko-scrollbarSlider-hoverBackground);
 }
 
 /* Hide scrollbar utility */
@@ -528,7 +528,7 @@ body {
 }
 
 /* Tooltip styling */
-.vscode-tooltip {
+.neko-tooltip {
   position: absolute;
   background-color: var(--agent-elevated);
   border: 1px solid var(--agent-border);
@@ -543,13 +543,13 @@ body {
 }
 
 /* Description/secondary text */
-.vscode-description {
+.neko-description {
   color: var(--agent-fg-secondary);
   font-size: 12px;
 }
 
 /* Badge styling */
-.vscode-badge {
+.neko-badge {
   display: inline-block;
   background-color: color-mix(in srgb, var(--agent-accent) 14%, transparent);
   color: color-mix(in srgb, var(--agent-accent) 80%, var(--agent-fg) 20%);
@@ -582,9 +582,9 @@ body {
 .neko-gradient-bar {
   background: linear-gradient(
     90deg,
-    var(--vscode-charts-purple, #9c3eda),
-    var(--vscode-charts-blue, #1a85ff),
-    var(--vscode-charts-purple, #9c3eda)
+    var(--neko-charts-purple, #9c3eda),
+    var(--neko-charts-blue, #1a85ff),
+    var(--neko-charts-purple, #9c3eda)
   );
   background-size: 200% 100%;
   height: 2px;
@@ -779,7 +779,7 @@ body {
   border-radius: var(--agent-overlay-radius);
   background: var(--agent-overlay-bg);
   box-shadow: var(--agent-overlay-shadow);
-  color: var(--vscode-descriptionForeground);
+  color: var(--neko-descriptionForeground);
 }
 
 .agent-composer-queue-header {
@@ -804,7 +804,7 @@ body {
   min-width: 0;
   flex: 1 1 auto;
   overflow: hidden;
-  color: var(--vscode-descriptionForeground);
+  color: var(--neko-descriptionForeground);
   font-size: 12.5px;
   font-weight: 600;
   line-height: 17px;
@@ -929,14 +929,14 @@ body {
   border: 0;
   outline: none;
   background: transparent;
-  color: var(--vscode-foreground);
+  color: var(--neko-foreground);
   font-size: 13px;
   line-height: 20px;
   resize: none;
 }
 
 .agent-composer-textarea::placeholder {
-  color: var(--vscode-descriptionForeground);
+  color: var(--neko-descriptionForeground);
 }
 
 .agent-composer-popover {
@@ -961,7 +961,7 @@ body {
   max-height: calc(var(--agent-overlay-block-size) - (var(--agent-overlay-padding) * 2));
   overflow-y: auto;
   padding: 0;
-  scrollbar-color: var(--vscode-scrollbarSlider-background, var(--fallback-scrollbar-bg))
+  scrollbar-color: var(--neko-scrollbarSlider-background, var(--fallback-scrollbar-bg))
     transparent;
   scrollbar-width: thin;
 }
@@ -1154,7 +1154,7 @@ body {
 }
 
 .agent-composer-command-row .agent-composer-popover-primary:not(.is-selected) {
-  color: var(--vscode-textLink-foreground);
+  color: var(--neko-textLink-foreground);
 }
 
 .agent-composer-popover-secondary {
@@ -1356,8 +1356,8 @@ body {
 
 .agent-reference-remove:hover,
 .agent-reference-remove:focus-visible {
-  background: color-mix(in srgb, var(--vscode-errorForeground, #f14c4c) 14%, transparent);
-  color: var(--vscode-errorForeground, #f14c4c);
+  background: color-mix(in srgb, var(--neko-errorForeground, #f14c4c) 14%, transparent);
+  color: var(--neko-errorForeground, #f14c4c);
   opacity: 1;
   outline: none;
 }
@@ -1417,7 +1417,7 @@ body {
   padding: 3px 6px;
   border: 1px solid transparent;
   border-radius: 6px;
-  color: var(--vscode-descriptionForeground);
+  color: var(--neko-descriptionForeground);
   font-size: 11px;
   line-height: 16px;
   white-space: nowrap;
@@ -1430,12 +1430,12 @@ body {
 }
 
 .agent-control-chip:hover {
-  background: var(--vscode-toolbar-hoverBackground);
-  color: var(--vscode-foreground);
+  background: var(--neko-toolbar-hoverBackground);
+  color: var(--neko-foreground);
 }
 
 .agent-control-chip:focus-visible {
-  outline: 1px solid var(--vscode-focusBorder, var(--agent-accent));
+  outline: 1px solid var(--neko-focusBorder, var(--agent-accent));
   outline-offset: 1px;
 }
 
@@ -1555,12 +1555,12 @@ body {
   padding: var(--agent-overlay-padding);
   overflow-y: auto;
   overflow-x: hidden;
-  color: var(--vscode-dropdown-foreground, var(--agent-fg));
+  color: var(--neko-dropdown-foreground, var(--agent-fg));
   background: var(--agent-overlay-bg);
   border: 1px solid var(--agent-overlay-border);
   border-radius: var(--agent-overlay-radius);
   box-shadow: var(--agent-overlay-shadow);
-  scrollbar-color: var(--vscode-scrollbarSlider-background, var(--fallback-scrollbar-bg))
+  scrollbar-color: var(--neko-scrollbarSlider-background, var(--fallback-scrollbar-bg))
     transparent;
   scrollbar-width: thin;
 }
@@ -1656,7 +1656,7 @@ body {
 
 .agent-model-config-header {
   padding: 3px 4px 8px;
-  color: var(--vscode-descriptionForeground);
+  color: var(--neko-descriptionForeground);
   font-size: 10px;
   font-weight: 600;
   line-height: 14px;
@@ -1681,7 +1681,7 @@ body {
   padding: 5px 7px;
   border: 1px solid transparent;
   border-radius: 6px;
-  color: var(--vscode-descriptionForeground);
+  color: var(--neko-descriptionForeground);
   cursor: pointer;
   font-size: 11px;
   line-height: 16px;
@@ -1689,14 +1689,14 @@ body {
 
 .agent-model-config-tab:hover,
 .agent-model-config-tab:focus-visible {
-  color: var(--vscode-foreground);
+  color: var(--neko-foreground);
   outline: none;
 }
 
 .agent-model-config-tab-selected {
   border-color: color-mix(in srgb, var(--agent-fg) 8%, transparent);
   background: var(--agent-overlay-bg);
-  color: var(--vscode-foreground);
+  color: var(--neko-foreground);
   box-shadow: 0 1px 2px color-mix(in srgb, #000 12%, transparent);
 }
 
@@ -1715,7 +1715,7 @@ body {
   border: 0;
   border-radius: 6px;
   background: transparent;
-  color: var(--vscode-descriptionForeground);
+  color: var(--neko-descriptionForeground);
   cursor: pointer;
   font-size: 11px;
   font-weight: 600;
@@ -1724,7 +1724,7 @@ body {
 .agent-model-config-secondary-tab:hover,
 .agent-model-config-secondary-tab:focus-visible {
   background: color-mix(in srgb, var(--agent-accent) 7%, transparent);
-  color: var(--vscode-foreground);
+  color: var(--neko-foreground);
   outline: none;
 }
 
@@ -1747,7 +1747,7 @@ body {
 .agent-model-config-section-title {
   margin: 0;
   padding: 2px 6px 4px;
-  color: var(--vscode-descriptionForeground);
+  color: var(--neko-descriptionForeground);
   font-size: 10px;
   font-weight: 600;
   line-height: 14px;
@@ -1763,7 +1763,7 @@ body {
   border: 1px solid transparent;
   border-radius: var(--agent-menu-row-radius);
   background: transparent;
-  color: var(--vscode-foreground);
+  color: var(--neko-foreground);
   cursor: pointer;
   font-size: 11px;
   line-height: 16px;
@@ -1783,7 +1783,7 @@ body {
 }
 
 .agent-model-config-radio-muted {
-  color: var(--vscode-descriptionForeground);
+  color: var(--neko-descriptionForeground);
 }
 
 .agent-model-config-radio-indicator {
@@ -1803,7 +1803,7 @@ body {
 
 .agent-model-config-empty {
   padding: 8px;
-  color: var(--vscode-descriptionForeground);
+  color: var(--neko-descriptionForeground);
   font-size: 11px;
   line-height: 16px;
 }
@@ -1818,7 +1818,7 @@ body {
   padding: var(--agent-menu-row-padding);
   border: 1px solid transparent;
   border-radius: var(--agent-menu-row-radius);
-  color: var(--vscode-foreground);
+  color: var(--neko-foreground);
   font-size: 11px;
   line-height: 16px;
   text-align: left;
@@ -1840,7 +1840,7 @@ body {
   margin: 1px 2px 3px;
   padding: 3px 6px 4px;
   border-bottom: 1px solid var(--agent-menu-separator, var(--agent-divider));
-  color: var(--vscode-descriptionForeground);
+  color: var(--neko-descriptionForeground);
   font-size: 10px;
   font-weight: 600;
   line-height: 14px;
@@ -1869,7 +1869,7 @@ body {
 }
 
 .agent-dropdown-item-muted {
-  color: var(--vscode-descriptionForeground);
+  color: var(--neko-descriptionForeground);
 }
 
 .agent-dropdown-item-stacked {
@@ -1909,7 +1909,7 @@ body {
   margin: var(--agent-menu-section-margin);
   padding: var(--agent-menu-section-padding);
   border-top: 0;
-  color: var(--vscode-descriptionForeground);
+  color: var(--neko-descriptionForeground);
   font-size: var(--agent-menu-section-font-size);
   font-weight: 600;
   line-height: var(--agent-menu-section-line-height);
@@ -1962,7 +1962,7 @@ body {
   min-width: 0;
   margin: 1px 2px 2px;
   padding: 2px 6px;
-  color: var(--vscode-descriptionForeground);
+  color: var(--neko-descriptionForeground);
   font-size: 10px;
   font-weight: 500;
   line-height: 14px;
@@ -2034,7 +2034,7 @@ body {
 }
 
 .agent-understanding-category-name {
-  color: var(--vscode-descriptionForeground);
+  color: var(--neko-descriptionForeground);
   font-weight: 600;
   white-space: nowrap;
 }
@@ -2042,7 +2042,7 @@ body {
 .agent-understanding-category-model {
   min-width: 0;
   overflow: hidden;
-  color: var(--vscode-foreground);
+  color: var(--neko-foreground);
   font-weight: 500;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2051,7 +2051,7 @@ body {
 .agent-understanding-category-chevron {
   width: 11px;
   height: 11px;
-  color: var(--vscode-descriptionForeground);
+  color: var(--neko-descriptionForeground);
   opacity: 0.78;
 }
 
@@ -2126,7 +2126,7 @@ body {
   border: 1px solid transparent;
   border-radius: 7px;
   background: transparent;
-  color: var(--vscode-descriptionForeground);
+  color: var(--neko-descriptionForeground);
   cursor: pointer;
   transition:
     background-color 0.15s ease,
@@ -2136,13 +2136,13 @@ body {
 }
 
 .agent-composer-tool-button:hover {
-  background: var(--vscode-toolbar-hoverBackground);
-  color: var(--vscode-foreground);
+  background: var(--neko-toolbar-hoverBackground);
+  color: var(--neko-foreground);
 }
 
 .agent-composer-tool-button:focus-visible {
   border-color: color-mix(in srgb, var(--agent-accent) 34%, transparent);
-  outline: 1px solid var(--vscode-focusBorder, var(--agent-accent));
+  outline: 1px solid var(--neko-focusBorder, var(--agent-accent));
   outline-offset: 1px;
 }
 
@@ -2165,7 +2165,7 @@ body {
   justify-content: center;
   gap: 3px;
   padding: 0 5px;
-  color: var(--vscode-descriptionForeground);
+  color: var(--neko-descriptionForeground);
   font-size: 10.5px;
   line-height: 1;
 }
@@ -2212,8 +2212,8 @@ body {
 }
 
 .agent-composer-stop {
-  border-color: color-mix(in srgb, var(--vscode-errorForeground) 70%, transparent);
-  background: var(--vscode-errorForeground);
+  border-color: color-mix(in srgb, var(--neko-errorForeground) 70%, transparent);
+  background: var(--neko-errorForeground);
   color: #ffffff;
 }
 
@@ -2228,11 +2228,11 @@ body {
   z-index: 50;
   margin-bottom: 8px;
   padding: 6px 8px;
-  border: 1px solid var(--vscode-editorWidget-border);
+  border: 1px solid var(--neko-editorWidget-border);
   border-radius: 7px;
-  background: var(--vscode-editorWidget-background);
-  box-shadow: 0 12px 26px var(--vscode-widget-shadow, rgba(0, 0, 0, 0.24));
-  color: var(--vscode-foreground);
+  background: var(--neko-editorWidget-background);
+  box-shadow: 0 12px 26px var(--neko-widget-shadow, rgba(0, 0, 0, 0.24));
+  color: var(--neko-foreground);
   font-size: 11px;
   line-height: 15px;
   white-space: nowrap;
@@ -2240,12 +2240,12 @@ body {
 }
 
 .agent-composer-tooltip-muted {
-  color: var(--vscode-descriptionForeground);
+  color: var(--neko-descriptionForeground);
 }
 
 .agent-composer-tooltip-link {
   margin-top: 3px;
-  color: var(--vscode-textLink-foreground);
+  color: var(--neko-textLink-foreground);
 }
 
 .agent-header {
@@ -2289,7 +2289,7 @@ body {
 }
 
 .agent-header-action:focus-visible {
-  outline: 1px solid var(--vscode-focusBorder, var(--agent-accent));
+  outline: 1px solid var(--neko-focusBorder, var(--agent-accent));
   outline-offset: 1px;
 }
 
@@ -2515,7 +2515,7 @@ body {
 }
 
 .agent-roleplay-menu-badge.is-candidate {
-  color: var(--vscode-notificationsWarningIcon-foreground, var(--agent-warning-fg));
+  color: var(--neko-notificationsWarningIcon-foreground, var(--agent-warning-fg));
 }
 
 .agent-roleplay-menu-empty {
@@ -2535,7 +2535,7 @@ body {
   min-height: 0;
   overflow-y: auto;
   padding: 0;
-  scrollbar-color: var(--vscode-scrollbarSlider-background, var(--fallback-scrollbar-bg))
+  scrollbar-color: var(--neko-scrollbarSlider-background, var(--fallback-scrollbar-bg))
     transparent;
   scrollbar-width: thin;
 }
@@ -2575,7 +2575,7 @@ body {
 }
 
 .agent-header-menu-item-main:focus-visible {
-  outline: 1px solid var(--vscode-focusBorder, var(--agent-accent));
+  outline: 1px solid var(--neko-focusBorder, var(--agent-accent));
   outline-offset: -1px;
 }
 
@@ -2641,15 +2641,15 @@ body {
 }
 
 .agent-history-lifecycle-warning {
-  color: var(--vscode-charts-yellow);
+  color: var(--neko-charts-yellow);
 }
 
 .agent-history-menu-status-running {
-  color: var(--vscode-charts-blue);
+  color: var(--neko-charts-blue);
 }
 
 .agent-history-menu-status-completed {
-  color: var(--vscode-charts-green);
+  color: var(--neko-charts-green);
 }
 
 .agent-history-menu-empty {
@@ -2758,7 +2758,7 @@ body {
 }
 
 .agent-tab-main:focus-visible {
-  outline: 1px solid var(--vscode-focusBorder, var(--agent-accent));
+  outline: 1px solid var(--neko-focusBorder, var(--agent-accent));
   outline-offset: 2px;
 }
 
@@ -2898,7 +2898,7 @@ body {
   border-radius: 5px;
   background: color-mix(in srgb, var(--agent-fg) 9%, transparent);
   color: var(--agent-fg);
-  font-family: var(--vscode-editor-font-family, monospace);
+  font-family: var(--neko-editor-font-family, monospace);
   font-size: 11px;
   line-height: 16px;
   text-overflow: ellipsis;
@@ -2978,7 +2978,7 @@ body {
   padding: 1px 5px;
   border-radius: 5px;
   background: color-mix(in srgb, var(--agent-fg) 9%, transparent);
-  font-family: var(--vscode-editor-font-family, monospace);
+  font-family: var(--neko-editor-font-family, monospace);
 }
 
 .agent-activation-progress-meta {

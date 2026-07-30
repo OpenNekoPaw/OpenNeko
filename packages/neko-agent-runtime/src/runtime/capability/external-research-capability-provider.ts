@@ -46,7 +46,7 @@ export function createExternalResearchCapabilityProvider(
     id: EXTERNAL_RESEARCH_CAPABILITY_PROVIDER_ID,
     version: '0.1.0',
     trustLevel: 'core',
-    hostRequirements: [{ host: 'tui' }, { host: 'cli' }, { host: 'vscode' }],
+    hostRequirements: [{ host: 'desktop' }],
     getTools: () => createExternalResearchTools(resolved),
     getPromptFragments: () => [
       {

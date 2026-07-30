@@ -30,9 +30,9 @@ export function ErrorBoundary({ children, fallback, onError }: ErrorBoundaryProp
       title={t('errorBoundary.title')}
       description={() => t('errorBoundary.description')}
       retryLabel={t('errorBoundary.retry')}
-      className="flex h-full flex-col items-center justify-center bg-[var(--vscode-editor-background)] p-4 text-center text-[var(--vscode-editor-foreground)]"
+      className="flex h-full flex-col items-center justify-center bg-[var(--neko-editor-background)] p-4 text-center text-[var(--neko-editor-foreground)]"
       contentClassName="flex max-w-md flex-col items-center gap-3"
-      buttonClassName="rounded bg-[var(--vscode-button-background)] px-4 py-2 text-sm text-[var(--vscode-button-foreground)] transition-colors hover:bg-[var(--vscode-button-hoverBackground)]"
+      buttonClassName="rounded bg-[var(--neko-button-background)] px-4 py-2 text-sm text-[var(--neko-button-foreground)] transition-colors hover:bg-[var(--neko-button-hoverBackground)]"
     >
       {children}
     </WebviewErrorBoundary>

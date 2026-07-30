@@ -64,7 +64,7 @@ function createEffects(): AgentHostControllerEffectPorts {
 function createContext(): AgentHostRouteEffectContext {
   return {
     identity: {
-      hostKind: 'vscode',
+      hostKind: 'electron',
       applicationId: 'app-1',
       windowId: 'window-1',
       viewId: 'view-1',

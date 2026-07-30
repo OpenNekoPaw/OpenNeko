@@ -100,9 +100,9 @@ const SEGMENTED_CONTROL_STYLE: React.CSSProperties = {
   maxWidth: 176,
   margin: '0 auto',
   padding: 2,
-  border: '1px solid var(--vscode-widget-border, var(--vscode-input-border, #d0d7de))',
+  border: '1px solid var(--neko-widget-border, var(--neko-input-border, #d0d7de))',
   borderRadius: 999,
-  background: 'var(--vscode-input-background, var(--vscode-editor-background, #ffffff))',
+  background: 'var(--neko-input-background, var(--neko-editor-background, #ffffff))',
   boxShadow:
     'inset 0 1px 2px rgba(0, 0, 0, 0.12), inset 0 -1px 0 rgba(255, 255, 255, 0.58), 0 1px 0 rgba(255, 255, 255, 0.45)',
   boxSizing: 'border-box',
@@ -116,9 +116,9 @@ const SEGMENTED_CONTROL_THUMB_STYLE: React.CSSProperties = {
   left: 2,
   border: '1px solid rgba(255, 255, 255, 0.58)',
   borderRadius: 999,
-  background: 'var(--vscode-button-background, #0e639c)',
+  background: 'var(--neko-button-background, #0e639c)',
   boxShadow:
-    '0 1px 1px rgba(255, 255, 255, 0.32) inset, 0 1px 3px rgba(0, 0, 0, 0.24), 0 0 0 1px var(--vscode-focusBorder, rgba(0, 122, 255, 0.26))',
+    '0 1px 1px rgba(255, 255, 255, 0.32) inset, 0 1px 3px rgba(0, 0, 0, 0.24), 0 0 0 1px var(--neko-focusBorder, rgba(0, 122, 255, 0.26))',
   pointerEvents: 'none',
   transition: 'transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1)',
   zIndex: 0,
@@ -132,7 +132,7 @@ const SEGMENTED_CONTROL_ITEM_STYLE: React.CSSProperties = {
   border: '1px solid transparent',
   borderRadius: 999,
   background: 'transparent',
-  color: 'var(--vscode-foreground, inherit)',
+  color: 'var(--neko-foreground, inherit)',
   cursor: 'pointer',
   fontSize: 12,
   fontWeight: 500,
@@ -145,11 +145,11 @@ const SEGMENTED_CONTROL_ITEM_STYLE: React.CSSProperties = {
 };
 
 const SEGMENTED_CONTROL_ITEM_HOVER_STYLE: React.CSSProperties = {
-  background: 'color-mix(in srgb, var(--vscode-foreground, #000000) 6%, transparent)',
+  background: 'color-mix(in srgb, var(--neko-foreground, #000000) 6%, transparent)',
 };
 
 const SEGMENTED_CONTROL_ITEM_FOCUS_STYLE: React.CSSProperties = {
-  boxShadow: '0 0 0 2px var(--vscode-focusBorder, rgba(0, 122, 255, 0.42)) inset',
+  boxShadow: '0 0 0 2px var(--neko-focusBorder, rgba(0, 122, 255, 0.42)) inset',
 };
 
 const SEGMENTED_CONTROL_ITEM_DISABLED_STYLE: React.CSSProperties = {
@@ -158,7 +158,7 @@ const SEGMENTED_CONTROL_ITEM_DISABLED_STYLE: React.CSSProperties = {
 };
 
 const SEGMENTED_CONTROL_ITEM_ACTIVE_STYLE: React.CSSProperties = {
-  color: 'var(--vscode-button-foreground, #ffffff)',
+  color: 'var(--neko-button-foreground, #ffffff)',
   fontWeight: 600,
 };
 

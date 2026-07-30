@@ -7,13 +7,13 @@ export interface BadgeProps extends HTMLAttributes<HTMLSpanElement> {
 }
 
 const toneClassNames = {
-  neutral: 'bg-[var(--neko-surface)] text-[var(--vscode-foreground)] border-[var(--neko-border)]',
-  accent: 'bg-[var(--neko-accent)] text-[var(--vscode-button-foreground)] border-transparent',
+  neutral: 'bg-[var(--neko-surface)] text-[var(--neko-foreground)] border-[var(--neko-border)]',
+  accent: 'bg-[var(--neko-accent)] text-[var(--neko-button-foreground)] border-transparent',
   success:
-    'bg-[var(--vscode-testing-iconPassed,var(--neko-accent))] text-[var(--vscode-button-foreground)] border-transparent',
+    'bg-[var(--neko-testing-iconPassed,var(--neko-accent))] text-[var(--neko-button-foreground)] border-transparent',
   warning:
-    'bg-[var(--vscode-inputValidation-warningBackground,var(--neko-surface))] text-[var(--vscode-inputValidation-warningForeground,var(--vscode-foreground))] border-[var(--vscode-inputValidation-warningBorder,var(--neko-border))]',
-  danger: 'bg-[var(--neko-danger)] text-[var(--vscode-button-foreground)] border-transparent',
+    'bg-[var(--neko-inputValidation-warningBackground,var(--neko-surface))] text-[var(--neko-inputValidation-warningForeground,var(--neko-foreground))] border-[var(--neko-inputValidation-warningBorder,var(--neko-border))]',
+  danger: 'bg-[var(--neko-danger)] text-[var(--neko-button-foreground)] border-transparent',
 } satisfies Record<NonNullable<BadgeProps['tone']>, string>;
 
 export function Badge({ className, tone = 'neutral', ...props }: BadgeProps): React.ReactElement {

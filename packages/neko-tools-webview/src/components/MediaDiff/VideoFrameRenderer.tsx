@@ -388,7 +388,7 @@ export const VideoFrameRenderer = memo(function VideoFrameRenderer({
 
   if (!webglSupported) {
     return (
-      <div className="flex-1 flex items-center justify-center text-[var(--vscode-descriptionForeground)]">
+      <div className="flex-1 flex items-center justify-center text-[var(--neko-descriptionForeground)]">
         {t('mediaDiff.webglNotAvailable')}
       </div>
     );
@@ -396,7 +396,7 @@ export const VideoFrameRenderer = memo(function VideoFrameRenderer({
 
   return (
     <div
-      className="relative flex-1 overflow-hidden bg-black rounded border border-[var(--vscode-panel-border)] m-2"
+      className="relative flex-1 overflow-hidden bg-black rounded border border-[var(--neko-panel-border)] m-2"
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
       style={{ cursor: mode === 'curtain' ? 'col-resize' : 'default' }}

@@ -27,7 +27,7 @@ export function MacIconButton({
   ...props
 }: MacIconButtonProps) {
   const label = typeof title === 'string' ? title : (props['aria-label'] ?? 'Icon button');
-  const activeClass = active ? 'bg-[var(--neko-hover)] text-[var(--vscode-foreground)]' : '';
+  const activeClass = active ? 'bg-[var(--neko-hover)] text-[var(--neko-foreground)]' : '';
 
   return (
     <IconButton

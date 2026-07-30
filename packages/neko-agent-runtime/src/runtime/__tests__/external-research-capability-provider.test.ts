@@ -55,7 +55,7 @@ describe('external research capability provider', () => {
       providers: resolver(createProvider()),
     });
 
-    expect(capability.getTools({ extensionContext: null })).toEqual([]);
+    expect(capability.getTools({ hostContext: null })).toEqual([]);
   });
 
   it('registers WebSearch only for indexed mode', () => {
@@ -64,7 +64,7 @@ describe('external research capability provider', () => {
       providers: resolver(createProvider()),
     });
 
-    expect(capability.getTools({ extensionContext: null }).map((tool) => tool.name)).toEqual([
+    expect(capability.getTools({ hostContext: null }).map((tool) => tool.name)).toEqual([
       'WebSearch',
     ]);
   });
@@ -74,7 +74,7 @@ describe('external research capability provider', () => {
       config: { mode: 'indexed', providerId: 'mcp:research' },
       providers: resolver(createProvider()),
     });
-    const fragment = capability.getPromptFragments?.({ extensionContext: null })[0];
+    const fragment = capability.getPromptFragments?.({ hostContext: null })[0];
 
     expect(fragment?.id).toBe('external-research:usage-boundary');
     expect(fragment?.content).toContain('cited reference intake');
@@ -90,7 +90,7 @@ describe('external research capability provider', () => {
       config: { mode: 'live', providerId: 'mcp:research', requireApprovalForLive: true },
       providers: resolver(createProvider()),
     });
-    const tools = capability.getTools({ extensionContext: null });
+    const tools = capability.getTools({ hostContext: null });
 
     expect(tools.map((tool) => tool.name)).toEqual(['WebSearch', 'WebFetch']);
     expect(tools.find((tool) => tool.name === 'WebFetch')?.requiresConfirmation).toBe(true);
@@ -128,7 +128,7 @@ describe('external research capability provider', () => {
       createExternalResearchCapabilityProvider({
         config: { mode: 'indexed', providerId: 'mcp:missing' },
         providers: resolver(undefined),
-      }).getTools({ extensionContext: null }),
+      }).getTools({ hostContext: null }),
     ).toEqual([]);
   });
 
@@ -157,7 +157,7 @@ describe('external research capability provider', () => {
       createExternalResearchCapabilityProvider({
         config: { mode: 'live', providerId: 'mcp:research' },
         providers: resolver(provider),
-      }).getTools({ extensionContext: null }),
+      }).getTools({ hostContext: null }),
     ).toEqual([]);
   });
 
@@ -185,7 +185,7 @@ describe('external research capability provider', () => {
       createExternalResearchCapabilityProvider({
         config: { mode: 'indexed', providerId: 'mcp:research', allowedDomains: ['example.com'] },
         providers: resolver(provider),
-      }).getTools({ extensionContext: null }),
+      }).getTools({ hostContext: null }),
     ).toEqual([]);
   });
 
@@ -194,7 +194,7 @@ describe('external research capability provider', () => {
     const [webSearch] = createExternalResearchCapabilityProvider({
       config: { mode: 'indexed', providerId: 'mcp:research', maxResults: 3 },
       providers: resolver(provider),
-    }).getTools({ extensionContext: null });
+    }).getTools({ hostContext: null });
 
     await expect(webSearch?.execute({ query: 'costume references' })).resolves.toEqual({
       success: true,
@@ -219,7 +219,7 @@ describe('external research capability provider', () => {
         allowProjectContextInQuery: false,
       },
       providers: resolver(provider),
-    }).getTools({ extensionContext: null });
+    }).getTools({ hostContext: null });
 
     await webSearch?.execute(
       { query: 'visible user query' },
@@ -243,7 +243,7 @@ describe('external research capability provider', () => {
     const [webSearch] = createExternalResearchCapabilityProvider({
       config: { mode: 'indexed', providerId: 'mcp:research' },
       providers: resolver(provider),
-    }).getTools({ extensionContext: null });
+    }).getTools({ hostContext: null });
 
     await expect(webSearch?.execute({ query: 'session-only references' })).resolves.toEqual({
       success: true,
@@ -265,7 +265,7 @@ describe('external research capability provider', () => {
       },
       providers: resolver(provider),
     })
-      .getTools({ extensionContext: null })
+      .getTools({ hostContext: null })
       .find((tool) => tool.name === 'WebFetch');
 
     await expect(
@@ -295,7 +295,7 @@ describe('external research capability provider', () => {
       config: { mode: 'live', providerId: 'mcp:research' },
       providers: resolver(provider),
     })
-      .getTools({ extensionContext: null })
+      .getTools({ hostContext: null })
       .find((tool) => tool.name === 'WebFetch');
 
     await expect(webFetch?.execute({ url: 'http://127.0.0.1:3000' })).resolves.toEqual({
@@ -311,7 +311,7 @@ describe('external research capability provider', () => {
       config: { mode: 'live', providerId: 'mcp:research', blockedDomains: ['blocked.example'] },
       providers: resolver(provider),
     })
-      .getTools({ extensionContext: null })
+      .getTools({ hostContext: null })
       .find((tool) => tool.name === 'WebFetch');
 
     await expect(webFetch?.execute({ url: 'https://blocked.example/source' })).resolves.toEqual({
@@ -340,7 +340,7 @@ describe('external research capability provider', () => {
       config: { mode: 'live', providerId: 'mcp:research', blockedDomains: ['blocked.example'] },
       providers: resolver(provider),
     })
-      .getTools({ extensionContext: null })
+      .getTools({ hostContext: null })
       .find((tool) => tool.name === 'WebFetch');
 
     await expect(webFetch?.execute({ url: 'https://example.com/source' })).resolves.toEqual({

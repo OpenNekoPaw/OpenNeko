@@ -108,9 +108,9 @@ export const DocumentContextMenu: FC<DocumentContextMenuProps> = ({
             left: Math.min(menu.x, window.innerWidth - 180),
             top: Math.min(menu.y, window.innerHeight - 120),
             minWidth: '160px',
-            background: 'var(--vscode-menu-background, var(--vscode-sideBar-background))',
-            border: '1px solid var(--vscode-menu-border, var(--vscode-panel-border))',
-            color: 'var(--vscode-menu-foreground, var(--vscode-foreground))',
+            background: 'var(--neko-menu-background, var(--neko-sideBar-background))',
+            border: '1px solid var(--neko-menu-border, var(--neko-panel-border))',
+            color: 'var(--neko-menu-foreground, var(--neko-foreground))',
           }}
           onClick={(e) => e.stopPropagation()}
         >

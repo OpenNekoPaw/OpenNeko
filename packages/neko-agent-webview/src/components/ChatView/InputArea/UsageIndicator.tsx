@@ -30,9 +30,9 @@ function formatTokenCount(count: number): string {
 }
 
 function getUsageColor(percentage: number): string {
-  if (percentage >= 90) return 'var(--vscode-errorForeground)';
-  if (percentage >= 70) return 'var(--vscode-editorWarning-foreground)';
-  return 'var(--vscode-descriptionForeground)';
+  if (percentage >= 90) return 'var(--neko-errorForeground)';
+  if (percentage >= 70) return 'var(--neko-editorWarning-foreground)';
+  return 'var(--neko-descriptionForeground)';
 }
 
 export function UsageIndicator({
@@ -84,7 +84,7 @@ export function UsageIndicator({
               cy="7"
               r={RADIUS}
               fill="none"
-              stroke="var(--vscode-descriptionForeground)"
+              stroke="var(--neko-descriptionForeground)"
               strokeWidth="2"
               strokeDasharray={`${CIRCUMFERENCE * 0.75} ${CIRCUMFERENCE * 0.25}`}
               strokeLinecap="round"
@@ -99,7 +99,7 @@ export function UsageIndicator({
               cy="7"
               r={RADIUS}
               fill="none"
-              stroke="var(--vscode-input-background)"
+              stroke="var(--neko-input-background)"
               strokeWidth="10"
             />
             {/* Filled arc */}

@@ -48,11 +48,7 @@ interface SanitizedProjectSearchItem {
 class ProjectSearchHeadlessCapabilityProvider implements AgentCapabilityProvider {
   readonly id = 'neko-search';
   readonly version = '1.0.0';
-  readonly hostRequirements = [
-    { host: 'tui' as const },
-    { host: 'cli' as const },
-    { host: 'vscode' as const },
-  ];
+  readonly hostRequirements = [{ host: 'desktop' as const }];
   readonly requirements = { contentAccess: false } as const;
 
   constructor(private readonly runtime: ProjectSearchHeadlessRuntime) {}

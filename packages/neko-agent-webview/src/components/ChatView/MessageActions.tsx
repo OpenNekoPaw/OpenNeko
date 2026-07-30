@@ -61,7 +61,7 @@ export const MessageActions = memo(function MessageActions({
       {/* Copy button */}
       <ActionButton onClick={handleCopy} title={copied ? 'Copied!' : 'Copy'} active={copied}>
         {copied ? (
-          <CheckIcon className="w-3.5 h-3.5 text-[var(--vscode-charts-green)]" />
+          <CheckIcon className="w-3.5 h-3.5 text-[var(--neko-charts-green)]" />
         ) : (
           <CopyIcon className="w-3.5 h-3.5" />
         )}
@@ -119,8 +119,8 @@ function ActionButton({ children, onClick, title, active }: ActionButtonProps) {
       title={title}
       className={`p-1 rounded transition-colors ${
         active
-          ? 'text-[var(--vscode-button-foreground)] bg-[var(--vscode-button-background)]'
-          : 'text-[var(--vscode-descriptionForeground)] hover:text-[var(--vscode-foreground)] hover:bg-[var(--vscode-toolbar-hoverBackground)]'
+          ? 'text-[var(--neko-button-foreground)] bg-[var(--neko-button-background)]'
+          : 'text-[var(--neko-descriptionForeground)] hover:text-[var(--neko-foreground)] hover:bg-[var(--neko-toolbar-hoverBackground)]'
       }`}
     >
       {children}

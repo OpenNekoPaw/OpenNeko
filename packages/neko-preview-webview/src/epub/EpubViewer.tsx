@@ -129,13 +129,13 @@ export async function fetchForEpub(url: string, type?: string): Promise<unknown>
 /** VSCode theme CSS applied to waterfall chapter content */
 const WATERFALL_THEME_CSS = `
   .epub-chapter-content {
-    background: var(--vscode-editor-background) !important;
-    color: var(--vscode-editor-foreground) !important;
-    font-family: var(--vscode-font-family) !important;
+    background: var(--neko-editor-background) !important;
+    color: var(--neko-editor-foreground) !important;
+    font-family: var(--neko-font-family) !important;
     line-height: 1.6;
   }
   .epub-chapter-content a,
-  .epub-chapter-content a:visited { color: var(--vscode-textLink-foreground) !important; }
+  .epub-chapter-content a:visited { color: var(--neko-textLink-foreground) !important; }
   .epub-chapter-content img,
   .epub-chapter-content image {
     max-width: 100% !important;
@@ -459,7 +459,7 @@ export const EpubViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =
           article.style.maxWidth = `${WATERFALL_CHAPTER_MAX_WIDTH_PX}px`;
           article.style.padding = `${WATERFALL_CHAPTER_PADDING_PX}px`;
           article.style.boxSizing = 'border-box';
-          article.style.borderBottom = '1px solid var(--vscode-panel-border)';
+          article.style.borderBottom = '1px solid var(--neko-panel-border)';
           article.style.margin = '0 auto';
 
           const html = await entry.section.render(book.load.bind(book));
@@ -602,13 +602,13 @@ export const EpubViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =
     (rendition: Rendition, tocItems: TocItem[]) => {
       rendition.themes.register('vscode', {
         body: {
-          background: 'var(--vscode-editor-background) !important',
-          color: 'var(--vscode-editor-foreground) !important',
-          'font-family': 'var(--vscode-font-family) !important',
+          background: 'var(--neko-editor-background) !important',
+          color: 'var(--neko-editor-foreground) !important',
+          'font-family': 'var(--neko-font-family) !important',
           'line-height': '1.6',
           padding: '20px !important',
         },
-        'a, a:visited': { color: 'var(--vscode-textLink-foreground) !important' },
+        'a, a:visited': { color: 'var(--neko-textLink-foreground) !important' },
         'img, image': {
           'max-width': '100% !important',
           height: 'auto !important',
@@ -1418,7 +1418,7 @@ export const EpubViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =
     return (
       <div
         className="flex h-full items-center justify-center"
-        style={{ color: 'var(--vscode-errorForeground)' }}
+        style={{ color: 'var(--neko-errorForeground)' }}
       >
         {t('preview.document.error', { error })}
       </div>
@@ -1436,15 +1436,15 @@ export const EpubViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =
         data-testid={!loading ? 'epub-preview-ready' : undefined}
         data-spine-count={spineEntriesRef.current.length}
         className="flex h-full flex-col"
-        style={{ background: 'var(--vscode-editor-background)' }}
+        style={{ background: 'var(--neko-editor-background)' }}
       >
         {/* Toolbar */}
         <div
           className="flex items-center gap-1 border-b px-3 py-1.5 text-xs"
           style={{
-            borderColor: 'var(--vscode-panel-border)',
-            color: 'var(--vscode-foreground)',
-            background: 'var(--vscode-sideBar-background)',
+            borderColor: 'var(--neko-panel-border)',
+            color: 'var(--neko-foreground)',
+            background: 'var(--neko-sideBar-background)',
           }}
         >
           <button onClick={goToPrev} className="px-2 py-0.5 hover:opacity-70">
@@ -1465,12 +1465,12 @@ export const EpubViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =
             style={{
               background:
                 viewMode !== 'paginated'
-                  ? 'var(--vscode-button-background)'
-                  : 'var(--vscode-button-secondaryBackground)',
+                  ? 'var(--neko-button-background)'
+                  : 'var(--neko-button-secondaryBackground)',
               color:
                 viewMode !== 'paginated'
-                  ? 'var(--vscode-button-foreground)'
-                  : 'var(--vscode-button-secondaryForeground)',
+                  ? 'var(--neko-button-foreground)'
+                  : 'var(--neko-button-secondaryForeground)',
             }}
           >
             {viewModeIcon}
@@ -1483,8 +1483,8 @@ export const EpubViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =
             <div
               className="absolute inset-0 z-10 flex items-center justify-center"
               style={{
-                background: 'var(--vscode-editor-background)',
-                color: 'var(--vscode-foreground)',
+                background: 'var(--neko-editor-background)',
+                color: 'var(--neko-foreground)',
               }}
             >
               {t('preview.epub.loading')}
@@ -1526,7 +1526,7 @@ export const EpubViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =
                   padding: `${WATERFALL_CHAPTER_PADDING_PX}px`,
                   minHeight: getChapterPlaceholderHeight(entry.index),
                   boxSizing: 'border-box',
-                  borderBottom: '1px solid var(--vscode-panel-border)',
+                  borderBottom: '1px solid var(--neko-panel-border)',
                 }}
               />
             ))}

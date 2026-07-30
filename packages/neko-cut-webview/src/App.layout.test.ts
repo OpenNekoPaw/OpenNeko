@@ -131,7 +131,7 @@ describe('Cut OTIO Webview boundary', () => {
       /\.cut-basic-inspector-shell\s*\{[^}]*min-width:\s*220px;[^}]*max-width:\s*min\(420px,\s*max\(220px,\s*42vw\)\);[^}]*padding-left:\s*5px;/,
     );
     expect(styles).toMatch(
-      /\.cut-basic-inspector-resize-handle\s*\{[^}]*inset:\s*0 auto 0 0;[^}]*width:\s*5px;[^}]*border-left:\s*1px solid var\(--vscode-panel-border\);[^}]*border-right:\s*1px solid var\(--vscode-panel-border\);/,
+      /\.cut-basic-inspector-resize-handle\s*\{[^}]*inset:\s*0 auto 0 0;[^}]*width:\s*5px;[^}]*border-left:\s*1px solid var\(--neko-panel-border\);[^}]*border-right:\s*1px solid var\(--neko-panel-border\);/,
     );
     expect(previewControls).toMatch(/onTogglePropertyPanel/);
     expect(previewControls).toMatch(/timeline\.controls\.propertyPanel/);

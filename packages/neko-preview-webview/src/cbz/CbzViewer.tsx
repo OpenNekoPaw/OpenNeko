@@ -510,7 +510,7 @@ export const CbzViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =>
     return (
       <div
         className="flex h-full items-center justify-center"
-        style={{ color: 'var(--vscode-errorForeground)' }}
+        style={{ color: 'var(--neko-errorForeground)' }}
       >
         {t('preview.document.error', { error })}
       </div>
@@ -521,7 +521,7 @@ export const CbzViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =>
     return (
       <div
         className="flex h-full items-center justify-center"
-        style={{ color: 'var(--vscode-foreground)' }}
+        style={{ color: 'var(--neko-foreground)' }}
       >
         {t('preview.cbz.loading')}
       </div>
@@ -544,15 +544,15 @@ export const CbzViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =>
         data-testid="cbz-preview-ready"
         data-page-count={totalPages}
         className="flex h-full flex-col"
-        style={{ background: 'var(--vscode-editor-background)' }}
+        style={{ background: 'var(--neko-editor-background)' }}
       >
         {/* Toolbar */}
         <div
           className="flex items-center gap-2 border-b px-3 py-1.5 text-xs"
           style={{
-            borderColor: 'var(--vscode-panel-border)',
-            color: 'var(--vscode-foreground)',
-            background: 'var(--vscode-sideBar-background)',
+            borderColor: 'var(--neko-panel-border)',
+            color: 'var(--neko-foreground)',
+            background: 'var(--neko-sideBar-background)',
           }}
         >
           {viewMode !== 'scroll' && (
@@ -592,12 +592,12 @@ export const CbzViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =>
             style={{
               background:
                 viewMode === 'scroll'
-                  ? 'var(--vscode-button-background)'
-                  : 'var(--vscode-button-secondaryBackground)',
+                  ? 'var(--neko-button-background)'
+                  : 'var(--neko-button-secondaryBackground)',
               color:
                 viewMode === 'scroll'
-                  ? 'var(--vscode-button-foreground)'
-                  : 'var(--vscode-button-secondaryForeground)',
+                  ? 'var(--neko-button-foreground)'
+                  : 'var(--neko-button-secondaryForeground)',
             }}
           >
             {viewMode === 'scroll' ? '⇕' : '⊡'}
@@ -609,7 +609,7 @@ export const CbzViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =>
           <div
             ref={scrollContainerRef}
             className="flex-1 overflow-auto"
-            style={{ background: 'var(--vscode-editor-background)' }}
+            style={{ background: 'var(--neko-editor-background)' }}
             onMouseMove={handleMouseMove}
             onMouseUp={handleMouseUp}
           >
@@ -644,7 +644,7 @@ export const CbzViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =>
                       className="flex items-center justify-center text-sm"
                       style={{
                         height: `${height}px`,
-                        color: 'var(--vscode-descriptionForeground)',
+                        color: 'var(--neko-descriptionForeground)',
                       }}
                     >
                       {t('preview.cbz.loading')}
@@ -656,7 +656,7 @@ export const CbzViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =>
                       className="pointer-events-none absolute border-2 border-dashed"
                       style={{
                         ...selRectStyle,
-                        borderColor: 'var(--vscode-focusBorder)',
+                        borderColor: 'var(--neko-focusBorder)',
                         backgroundColor: 'rgba(0, 120, 215, 0.15)',
                       }}
                     />
@@ -686,7 +686,7 @@ export const CbzViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =>
               ) : (
                 <div
                   className="flex h-48 w-48 items-center justify-center text-sm"
-                  style={{ color: 'var(--vscode-descriptionForeground)' }}
+                  style={{ color: 'var(--neko-descriptionForeground)' }}
                 >
                   {t('preview.cbz.loading')}
                 </div>
@@ -697,7 +697,7 @@ export const CbzViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =>
                   className="pointer-events-none absolute border-2 border-dashed"
                   style={{
                     ...selRectStyle,
-                    borderColor: 'var(--vscode-focusBorder)',
+                    borderColor: 'var(--neko-focusBorder)',
                     backgroundColor: 'rgba(0, 120, 215, 0.15)',
                   }}
                 />
@@ -714,8 +714,8 @@ export const CbzViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =>
               onClick={captureRegion}
               className="fixed bottom-4 right-4 z-50 rounded-lg px-4 py-2 text-sm font-medium shadow-lg"
               style={{
-                backgroundColor: 'var(--vscode-button-background)',
-                color: 'var(--vscode-button-foreground)',
+                backgroundColor: 'var(--neko-button-background)',
+                color: 'var(--neko-button-foreground)',
               }}
             >
               {t('preview.document.sendContentToAgent')}

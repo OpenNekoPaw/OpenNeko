@@ -189,13 +189,13 @@ function ToolCallDisplayComponent({
             <div className="flex items-center gap-2 border-t border-[var(--agent-divider)] pt-2">
               <button
                 onClick={() => handleConfirm(true)}
-                className="vscode-button px-3 py-1 text-[11px] leading-4"
+                className="neko-button px-3 py-1 text-[11px] leading-4"
               >
                 {t('toolCalls.approve')}
               </button>
               <button
                 onClick={() => handleConfirm(false)}
-                className="vscode-button vscode-button-secondary px-3 py-1 text-[11px] leading-4"
+                className="neko-button neko-button-secondary px-3 py-1 text-[11px] leading-4"
               >
                 {t('toolCalls.deny')}
               </button>

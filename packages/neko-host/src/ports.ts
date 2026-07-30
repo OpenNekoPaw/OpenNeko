@@ -3,8 +3,7 @@ import type { HostContentPolicySnapshot } from './workspace-content-settings';
 
 export type HostMaybePromise<T> = T | Promise<T>;
 
-export type NekoHostKind =
-  'vscode' | 'node' | 'electron' | 'tauri' | 'rust-native' | 'test' | 'unknown';
+export type NekoHostKind = 'node' | 'electron' | 'test' | 'unknown';
 
 export type NekoHostUiKind = 'graphical' | 'headless' | 'test';
 

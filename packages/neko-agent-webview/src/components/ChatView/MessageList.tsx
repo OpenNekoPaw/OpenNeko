@@ -363,16 +363,16 @@ function ThinkingIndicator({ identity }: { identity: MessageIdentityMap['assista
         {/* Content */}
         <div className="flex-1 min-w-0 max-w-[85%]">
           <div className="flex items-center gap-2 mb-0.5">
-            <span className="text-[11px] font-medium text-[var(--vscode-textLink-foreground)]">
+            <span className="text-[11px] font-medium text-[var(--neko-textLink-foreground)]">
               {identity.displayName}
             </span>
           </div>
           {/* Bubble with dots */}
           <div className="agent-bubble agent-bubble-assistant inline-block rounded-2xl rounded-tl-md px-3 py-2">
             <div className="flex gap-1">
-              <span className="w-1.5 h-1.5 bg-[var(--vscode-descriptionForeground)] rounded-full animate-bounce [animation-delay:-0.32s]" />
-              <span className="w-1.5 h-1.5 bg-[var(--vscode-descriptionForeground)] rounded-full animate-bounce [animation-delay:-0.16s]" />
-              <span className="w-1.5 h-1.5 bg-[var(--vscode-descriptionForeground)] rounded-full animate-bounce" />
+              <span className="w-1.5 h-1.5 bg-[var(--neko-descriptionForeground)] rounded-full animate-bounce [animation-delay:-0.32s]" />
+              <span className="w-1.5 h-1.5 bg-[var(--neko-descriptionForeground)] rounded-full animate-bounce [animation-delay:-0.16s]" />
+              <span className="w-1.5 h-1.5 bg-[var(--neko-descriptionForeground)] rounded-full animate-bounce" />
             </div>
           </div>
         </div>

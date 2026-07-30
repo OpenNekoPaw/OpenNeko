@@ -648,7 +648,7 @@ function resolveCapabilityProtocolInfo(
     hostRequirements:
       metadata.hostRequirements && metadata.hostRequirements.length > 0
         ? metadata.hostRequirements
-        : [{ host: 'vscode' }],
+        : [{ host: 'desktop' }],
     lifecycleHooks: metadata.lifecycleHooks ?? [],
     source,
   };

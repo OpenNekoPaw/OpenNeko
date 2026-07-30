@@ -40,7 +40,7 @@ export function createContentMediaReadCapabilityProvider(
 
 class ContentReadCapabilityProvider implements AgentCapabilityProvider {
   readonly version = '1.0.0';
-  readonly hostRequirements = [{ host: 'vscode' as const }, { host: 'tui' as const }];
+  readonly hostRequirements = [{ host: 'desktop' as const }];
   readonly requirements = { contentAccess: true };
 
   constructor(

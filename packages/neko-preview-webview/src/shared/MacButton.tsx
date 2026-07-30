@@ -40,7 +40,7 @@ export function MacButton({
           ? 'h-7 w-7 rounded-full p-0'
           : 'h-9 w-9 rounded-full p-0'
       : '';
-  const activeClass = active ? 'bg-[var(--neko-hover)] text-[var(--vscode-foreground)]' : '';
+  const activeClass = active ? 'bg-[var(--neko-hover)] text-[var(--neko-foreground)]' : '';
 
   return (
     <Button

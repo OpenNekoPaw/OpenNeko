@@ -7,4 +7,4 @@
  * Tailwind preset: import from '@neko/shared/theme/tailwind-preset'
  */
 export type { IThemeInfo, ThemeKind } from './types';
-export { nekoDesignTokens, vscodeCSSTokens } from './tokens';
+export { nekoDesignTokens, nekoCSSTokens } from './tokens';

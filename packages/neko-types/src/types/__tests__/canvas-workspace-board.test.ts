@@ -193,14 +193,14 @@ describe('Canvas Workspace Board delivery contract', () => {
     const delivery = createGeneratedAssetsWorkspaceDeliveryRequest([generatedImage()], {
       workspaceId: 'workspace-1',
       workspaceUri: 'file:///workspace/project/',
-      sourceHost: 'tui',
+      sourceHost: 'desktop',
       jobRef: { kind: 'generation', jobId: 'operation-1' },
     });
 
     expect(delivery).toMatchObject({
       version: 2,
       target: { workspaceId: 'workspace-1', workspaceUri: 'file:///workspace/project/' },
-      process: { sourceHost: 'tui', operationId: 'operation-1', runId: 'run-1' },
+      process: { sourceHost: 'desktop', operationId: 'operation-1', runId: 'run-1' },
       artifacts: [
         {
           kind: 'image',
@@ -309,7 +309,7 @@ function request(
     },
     process: {
       deliveryId: 'delivery:material-analysis:1',
-      sourceHost: 'tui',
+      sourceHost: 'desktop',
       taskId: 'task-1',
       runId: 'run-1',
       createdAt: '2026-07-15T00:00:00.000Z',

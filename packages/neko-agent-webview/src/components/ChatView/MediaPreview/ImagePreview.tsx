@@ -13,7 +13,7 @@ interface ImagePreviewProps {
   alt?: string;
   name?: string;
   className?: string;
-  /** Local file path for opening in VSCode */
+  /** Local file path for opening in the Desktop editor. */
   localPath?: string;
   /** Inline mode: show only the image for embedded Tool results. */
   inline?: boolean;
@@ -62,7 +62,7 @@ function ImagePreviewComponent({
     setIsExpanded((prev) => !prev);
   }, []);
 
-  // Open file in VSCode or system default
+  // Open the file in the Desktop editor or the system default application.
   const handleOpenFile = useCallback(() => {
     if (!openOnClick) return;
     const pathToOpen = localPath || src;
@@ -74,14 +74,14 @@ function ImagePreviewComponent({
     return (
       <div className={className}>
         {hasError ? (
-          <div className="flex items-center justify-center py-4 text-[var(--vscode-errorForeground)] text-[11px] bg-[var(--vscode-editor-background)] rounded">
+          <div className="flex items-center justify-center py-4 text-[var(--neko-errorForeground)] text-[11px] bg-[var(--neko-editor-background)] rounded">
             <ErrorIcon className="w-4 h-4 mr-2" />
             <span>Failed to load image</span>
           </div>
         ) : (
           <div className="relative">
             {isLoading && (
-              <div className="absolute inset-0 flex items-center justify-center bg-[var(--vscode-editor-background)] rounded">
+              <div className="absolute inset-0 flex items-center justify-center bg-[var(--neko-editor-background)] rounded">
                 <LoadingSpinner className="w-5 h-5" />
               </div>
             )}
@@ -106,23 +106,23 @@ function ImagePreviewComponent({
         className={`flex items-center gap-1.5 px-2 py-1 rounded-t text-[11px] cursor-pointer transition-colors
           ${
             hasError
-              ? 'bg-[color-mix(in_srgb,var(--vscode-textBlockQuote-background)_95%,#ef4444)]'
-              : 'bg-[color-mix(in_srgb,var(--vscode-textBlockQuote-background)_95%,#22c55e)]'
+              ? 'bg-[color-mix(in_srgb,var(--neko-textBlockQuote-background)_95%,#ef4444)]'
+              : 'bg-[color-mix(in_srgb,var(--neko-textBlockQuote-background)_95%,#22c55e)]'
           }
-          hover:bg-[var(--vscode-list-hoverBackground)]
+          hover:bg-[var(--neko-list-hoverBackground)]
           ${!isExpanded ? 'rounded-b' : ''}
         `}
         onClick={toggleExpand}
       >
         {/* Status indicator */}
         {hasError ? (
-          <ErrorIcon className="w-3 h-3 text-[var(--vscode-charts-red)] shrink-0" />
+          <ErrorIcon className="w-3 h-3 text-[var(--neko-charts-red)] shrink-0" />
         ) : (
-          <ImageIcon className="w-3 h-3 text-[var(--vscode-charts-green)] shrink-0" />
+          <ImageIcon className="w-3 h-3 text-[var(--neko-charts-green)] shrink-0" />
         )}
 
         {/* File name */}
-        <span className="font-medium text-[var(--vscode-foreground)] truncate flex-1">
+        <span className="font-medium text-[var(--neko-foreground)] truncate flex-1">
           {fileName}
         </span>
 
@@ -133,7 +133,7 @@ function ImagePreviewComponent({
               e.stopPropagation();
               handleOpenFile();
             }}
-            className="px-1.5 py-0.5 rounded bg-[var(--vscode-button-secondaryBackground)] hover:bg-[var(--vscode-button-secondaryHoverBackground)] text-[var(--vscode-button-secondaryForeground)] transition-colors flex items-center gap-1 shrink-0"
+            className="px-1.5 py-0.5 rounded bg-[var(--neko-button-secondaryBackground)] hover:bg-[var(--neko-button-secondaryHoverBackground)] text-[var(--neko-button-secondaryForeground)] transition-colors flex items-center gap-1 shrink-0"
             title="Open file"
           >
             <OpenIcon className="w-3 h-3" />
@@ -143,22 +143,22 @@ function ImagePreviewComponent({
 
         {/* Expand indicator */}
         <ChevronIcon
-          className={`w-3 h-3 text-[var(--vscode-descriptionForeground)] transition-transform shrink-0 ${isExpanded ? 'rotate-180' : ''}`}
+          className={`w-3 h-3 text-[var(--neko-descriptionForeground)] transition-transform shrink-0 ${isExpanded ? 'rotate-180' : ''}`}
         />
       </div>
 
       {/* Expanded content */}
       {isExpanded && (
-        <div className="border border-t-0 border-[var(--vscode-panel-border)] rounded-b bg-[var(--vscode-editor-background)] p-2">
+        <div className="border border-t-0 border-[var(--neko-panel-border)] rounded-b bg-[var(--neko-editor-background)] p-2">
           {hasError ? (
-            <div className="flex items-center justify-center py-4 text-[var(--vscode-errorForeground)] text-[11px]">
+            <div className="flex items-center justify-center py-4 text-[var(--neko-errorForeground)] text-[11px]">
               <ErrorIcon className="w-4 h-4 mr-2" />
               <span>Failed to load image</span>
             </div>
           ) : (
             <div className="relative">
               {isLoading && (
-                <div className="absolute inset-0 flex items-center justify-center bg-[var(--vscode-editor-background)]">
+                <div className="absolute inset-0 flex items-center justify-center bg-[var(--neko-editor-background)]">
                   <LoadingSpinner className="w-5 h-5" />
                 </div>
               )}
@@ -197,7 +197,7 @@ function ImageIcon({ className }: { className?: string }) {
 function LoadingSpinner({ className }: { className?: string }) {
   return (
     <svg
-      className={`${className} animate-spin text-[var(--vscode-foreground)]`}
+      className={`${className} animate-spin text-[var(--neko-foreground)]`}
       fill="none"
       viewBox="0 0 24 24"
     >

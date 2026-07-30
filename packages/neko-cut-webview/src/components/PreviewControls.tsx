@@ -44,13 +44,13 @@ export const PreviewControls = memo(function PreviewControls({
   const { t } = useTranslation();
 
   return (
-    <div className="cut-preview-controls flex items-center px-3 py-2 bg-vscode-editor-bg border-b border-vscode-panel-border">
+    <div className="cut-preview-controls flex items-center px-3 py-2 bg-neko-editor-bg border-b border-neko-panel-border">
       {/* Left: Playback Controls */}
       <div className="cut-preview-primary-controls flex items-center gap-1 flex-shrink-0">
         <button
           aria-label={t('timeline.controls.goToStart')}
           onClick={onStart}
-          className="p-1.5 hover:bg-vscode-toolbar-hover rounded"
+          className="p-1.5 hover:bg-neko-toolbar-hover rounded"
           title={t('timeline.controls.goToStart')}
         >
           <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
@@ -61,7 +61,7 @@ export const PreviewControls = memo(function PreviewControls({
         <button
           aria-label={t('timeline.basic.previousFrame')}
           onClick={onPrevious}
-          className="p-1.5 hover:bg-vscode-toolbar-hover rounded"
+          className="p-1.5 hover:bg-neko-toolbar-hover rounded"
           title={t('timeline.controls.rewind5s')}
         >
           <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
@@ -72,15 +72,15 @@ export const PreviewControls = memo(function PreviewControls({
         <button
           aria-label={playing ? t('timeline.controls.pause') : t('timeline.controls.play')}
           onClick={onToggle}
-          className="p-2 bg-vscode-button hover:bg-vscode-button-hover rounded"
+          className="p-2 bg-neko-button hover:bg-neko-button-hover rounded"
           title={playing ? t('timeline.controls.pause') : t('timeline.controls.play')}
         >
           {playing ? (
-            <svg className="w-4 h-4 fill-current text-vscode-button-fg" viewBox="0 0 24 24">
+            <svg className="w-4 h-4 fill-current text-neko-button-fg" viewBox="0 0 24 24">
               <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z" />
             </svg>
           ) : (
-            <svg className="w-4 h-4 fill-current text-vscode-button-fg" viewBox="0 0 24 24">
+            <svg className="w-4 h-4 fill-current text-neko-button-fg" viewBox="0 0 24 24">
               <path d="M8 5v14l11-7z" />
             </svg>
           )}
@@ -89,7 +89,7 @@ export const PreviewControls = memo(function PreviewControls({
         <button
           aria-label={t('timeline.basic.nextFrame')}
           onClick={onNext}
-          className="p-1.5 hover:bg-vscode-toolbar-hover rounded"
+          className="p-1.5 hover:bg-neko-toolbar-hover rounded"
           title={t('timeline.controls.forward5s')}
         >
           <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
@@ -100,7 +100,7 @@ export const PreviewControls = memo(function PreviewControls({
         <button
           aria-label={t('timeline.controls.goToEnd')}
           onClick={onEnd}
-          className="p-1.5 hover:bg-vscode-toolbar-hover rounded"
+          className="p-1.5 hover:bg-neko-toolbar-hover rounded"
           title={t('timeline.controls.goToEnd')}
         >
           <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
@@ -108,9 +108,9 @@ export const PreviewControls = memo(function PreviewControls({
           </svg>
         </button>
 
-        <div className="w-px h-4 bg-vscode-panel-border mx-2" />
+        <div className="w-px h-4 bg-neko-panel-border mx-2" />
 
-        <output className="text-xs text-vscode-description font-mono">
+        <output className="text-xs text-neko-description font-mono">
           {formatTimeFull(currentTime)} / {formatTimeFull(duration)}
         </output>
       </div>
@@ -122,7 +122,7 @@ export const PreviewControls = memo(function PreviewControls({
           <button
             aria-label={t('timeline.basic.globalVolume')}
             onClick={onToggleMute}
-            className="p-1.5 hover:bg-vscode-toolbar-hover rounded"
+            className="p-1.5 hover:bg-neko-toolbar-hover rounded"
             title={volume === 0 ? t('preview.unmute') : t('preview.mute')}
           >
             {volume === 0 ? (
@@ -142,15 +142,15 @@ export const PreviewControls = memo(function PreviewControls({
               const newVolume = Number.parseInt(e.target.value) / 100;
               onVolume(newVolume);
             }}
-            className="w-20 h-1 bg-vscode-input-bg rounded-lg appearance-none cursor-pointer accent-vscode-button"
+            className="w-20 h-1 bg-neko-input-bg rounded-lg appearance-none cursor-pointer accent-neko-button"
             style={{
-              background: `linear-gradient(to right, var(--vscode-button-background) 0%, var(--vscode-button-background) ${volume * 100}%, var(--vscode-input-background) ${volume * 100}%, var(--vscode-input-background) 100%)`,
+              background: `linear-gradient(to right, var(--neko-button-background) 0%, var(--neko-button-background) ${volume * 100}%, var(--neko-input-background) ${volume * 100}%, var(--neko-input-background) 100%)`,
             }}
             title={`${t('preview.volume')}: ${Math.round(volume * 100)}%`}
           />
 
           {/* Volume Percentage */}
-          <span className="text-xs text-vscode-description font-mono w-8 text-right">
+          <span className="text-xs text-neko-description font-mono w-8 text-right">
             {`${Math.round(volume * 100)}%`}
           </span>
         </div>
@@ -160,7 +160,7 @@ export const PreviewControls = memo(function PreviewControls({
           <button
             aria-label={t('timeline.basic.fullscreen')}
             onClick={onFullscreen}
-            className="p-1.5 hover:bg-vscode-toolbar-hover rounded"
+            className="p-1.5 hover:bg-neko-toolbar-hover rounded"
             title={t('preview.fullscreen')}
           >
             <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
@@ -172,7 +172,7 @@ export const PreviewControls = memo(function PreviewControls({
         <button
           aria-label={t('timeline.controls.propertyPanel')}
           aria-pressed={propertyPanelVisible}
-          className="p-1.5 hover:bg-vscode-toolbar-hover rounded"
+          className="p-1.5 hover:bg-neko-toolbar-hover rounded"
           onClick={onTogglePropertyPanel}
           title={t('timeline.controls.propertyPanel')}
           type="button"

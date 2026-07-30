@@ -11,11 +11,11 @@
   --tools-fg: var(--neko-fg);
   --tools-fg-secondary: var(--neko-fg-secondary);
   --tools-hover: var(--neko-hover, rgba(255, 255, 255, 0.06));
-  --tools-accent: var(--neko-accent, var(--vscode-button-background, #0e639c));
-  --tools-accent-fg: var(--vscode-button-foreground, #ffffff);
-  --tools-success: var(--vscode-testing-iconPassed, #22c55e);
-  --tools-warning: var(--vscode-editorWarning-foreground, #f59e0b);
-  --tools-danger: var(--vscode-testing-iconFailed, var(--neko-danger, #ef4444));
+  --tools-accent: var(--neko-accent, var(--neko-button-background, #0e639c));
+  --tools-accent-fg: var(--neko-button-foreground, #ffffff);
+  --tools-success: var(--neko-testing-iconPassed, #22c55e);
+  --tools-warning: var(--neko-editorWarning-foreground, #f59e0b);
+  --tools-danger: var(--neko-testing-iconFailed, var(--neko-danger, #ef4444));
 }
 
 html, body, #root {
@@ -26,8 +26,8 @@ html, body, #root {
   overflow: hidden;
   background-color: var(--neko-surface);
   color: var(--neko-fg);
-  font-family: var(--vscode-font-family);
-  font-size: var(--vscode-font-size);
+  font-family: var(--neko-font-family);
+  font-size: var(--neko-font-size);
 }
 
 .tools-card {

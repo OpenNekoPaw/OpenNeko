@@ -91,7 +91,7 @@ function ImageGridCardComponent({
             <div
               key={`img-${index}`}
               className={`relative group overflow-hidden rounded ${openOnClick ? 'cursor-pointer' : ''}
-                ${isSelected ? 'ring-2 ring-[var(--vscode-focusBorder)]' : ''}
+                ${isSelected ? 'ring-2 ring-[var(--neko-focusBorder)]' : ''}
               `}
               draggable={!!localPaths?.[index]}
               onDragStart={() => handleDragStart(index)}
@@ -120,7 +120,7 @@ function ImageGridCardComponent({
       </div>
 
       {/* Count label */}
-      <div className="text-[10px] text-[var(--vscode-descriptionForeground)] mt-1">
+      <div className="text-[10px] text-[var(--neko-descriptionForeground)] mt-1">
         {urls.length} images generated
       </div>
     </div>

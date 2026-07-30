@@ -13,7 +13,7 @@ export const CANVAS_WORKSPACE_BOARD_PATH = 'neko/boards/workspace.nkc' as const;
 
 export type CanvasWorkspaceProjectionKind = 'markdown' | 'file-reference' | GeneratedAssetMediaKind;
 export type CanvasWorkspaceArtifactRole = 'source' | 'analysis' | 'output';
-export type CanvasWorkspaceDeliveryHost = 'vscode' | 'tui' | 'headless';
+export type CanvasWorkspaceDeliveryHost = 'desktop' | 'headless';
 export type CanvasWorkspaceDeliveryState =
   'queued' | 'claimed' | 'projected' | 'noop' | 'blocked' | 'conflict' | 'discarded';
 
@@ -559,7 +559,7 @@ export function validateCanvasWorkspaceProjectionRequest(
       );
     }
   }
-  if (!['vscode', 'tui', 'headless'].includes(request.process.sourceHost)) {
+  if (!['desktop', 'headless'].includes(request.process.sourceHost)) {
     diagnostics.push(
       diagnostic('missing-projection-identity', 'Canvas delivery sourceHost is invalid.', [
         'process',

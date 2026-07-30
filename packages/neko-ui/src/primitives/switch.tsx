@@ -25,7 +25,7 @@ export const Switch = forwardRef<HTMLButtonElement, SwitchProps>(function Switch
       aria-checked={checked}
       className={cn(
         'inline-flex min-w-0 items-center gap-2 rounded-[var(--neko-radius-sm,6px)] text-xs',
-        'text-[var(--vscode-foreground)] outline-none focus-visible:ring-2 focus-visible:ring-[var(--vscode-focusBorder)]',
+        'text-[var(--neko-foreground)] outline-none focus-visible:ring-2 focus-visible:ring-[var(--neko-focusBorder)]',
         disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer',
         className,
       )}
@@ -53,7 +53,7 @@ export const Switch = forwardRef<HTMLButtonElement, SwitchProps>(function Switch
       >
         <span
           className={cn(
-            'absolute top-0.5 h-3 w-3 rounded-full bg-[var(--vscode-editor-background)] transition-transform',
+            'absolute top-0.5 h-3 w-3 rounded-full bg-[var(--neko-editor-background)] transition-transform',
             checked ? 'translate-x-3.5' : 'translate-x-0.5',
           )}
         />
@@ -62,7 +62,7 @@ export const Switch = forwardRef<HTMLButtonElement, SwitchProps>(function Switch
         <span className="grid min-w-0 gap-0.5 text-left">
           {label !== undefined ? <span className="min-w-0 truncate">{label}</span> : null}
           {description !== undefined ? (
-            <span className="min-w-0 text-[11px] text-[var(--vscode-descriptionForeground)]">
+            <span className="min-w-0 text-[11px] text-[var(--neko-descriptionForeground)]">
               {description}
             </span>
           ) : null}

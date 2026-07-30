@@ -57,7 +57,7 @@ export function ColorPicker({
   return (
     <label className={cn('flex min-w-0 items-center gap-2 text-xs', className)}>
       {label ? (
-        <span className="min-w-0 flex-1 truncate text-[var(--vscode-descriptionForeground)]">
+        <span className="min-w-0 flex-1 truncate text-[var(--neko-descriptionForeground)]">
           {label}
         </span>
       ) : null}
@@ -65,7 +65,7 @@ export function ColorPicker({
         <ColorSwatch alpha={alpha} label={label ? `${label} swatch` : undefined} value={value} />
         <input
           aria-label={label ?? id}
-          className="h-7 w-10 cursor-pointer rounded-[var(--neko-radius-sm,6px)] border border-[var(--neko-border)] bg-[var(--vscode-input-background)] p-0 disabled:cursor-not-allowed disabled:opacity-50"
+          className="h-7 w-10 cursor-pointer rounded-[var(--neko-radius-sm,6px)] border border-[var(--neko-border)] bg-[var(--neko-input-background)] p-0 disabled:cursor-not-allowed disabled:opacity-50"
           disabled={disabled}
           {...getKeyboardBoundaryMetadata({
             scope: 'text-input',

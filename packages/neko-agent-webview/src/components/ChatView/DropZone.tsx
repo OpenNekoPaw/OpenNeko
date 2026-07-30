@@ -108,13 +108,11 @@ export function DropZone({
 
       {/* Drop overlay */}
       {isDragOver && !disabled && (
-        <div className="absolute inset-0 z-50 flex items-center justify-center bg-[var(--vscode-editor-background)] bg-opacity-90 border-2 border-dashed border-[var(--vscode-focusBorder)] rounded-lg">
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-[var(--neko-editor-background)] bg-opacity-90 border-2 border-dashed border-[var(--neko-focusBorder)] rounded-lg">
           <div className="text-center">
-            <UploadIcon className="w-12 h-12 mx-auto mb-3 text-[var(--vscode-focusBorder)]" />
-            <p className="text-[14px] font-medium text-[var(--vscode-foreground)]">
-              Drop files here
-            </p>
-            <p className="text-[12px] text-[var(--vscode-descriptionForeground)] mt-1">
+            <UploadIcon className="w-12 h-12 mx-auto mb-3 text-[var(--neko-focusBorder)]" />
+            <p className="text-[14px] font-medium text-[var(--neko-foreground)]">Drop files here</p>
+            <p className="text-[12px] text-[var(--neko-descriptionForeground)] mt-1">
               Images, videos, and audio files
             </p>
           </div>

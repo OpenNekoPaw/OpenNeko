@@ -16,7 +16,7 @@ export const NEKO_COMMANDS = {
 
 export type NekoBuiltinCommandId = (typeof NEKO_COMMANDS)[keyof typeof NEKO_COMMANDS];
 
-export type NekoCommandActor = 'webview' | 'agent' | 'workbench' | 'plugin' | 'tui' | 'test';
+export type NekoCommandActor = 'webview' | 'agent' | 'workbench' | 'plugin' | 'test';
 
 export interface NekoCommandContext {
   readonly actor: NekoCommandActor;

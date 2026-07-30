@@ -34,7 +34,7 @@ export const AudioPlayerControls = memo(function AudioPlayerControls({
   const { t } = useTranslation();
 
   return (
-    <div className="flex items-center gap-4 p-3 bg-[var(--vscode-editor-background)] border-t border-[var(--vscode-panel-border)]">
+    <div className="flex items-center gap-4 p-3 bg-[var(--neko-editor-background)] border-t border-[var(--neko-panel-border)]">
       <Button
         variant="default"
         size="md"
@@ -75,7 +75,7 @@ export const AudioPlayerControls = memo(function AudioPlayerControls({
         </Button>
       </div>
 
-      <span className="text-xs text-[var(--vscode-foreground)] font-mono min-w-[100px]">
+      <span className="text-xs text-[var(--neko-foreground)] font-mono min-w-[100px]">
         {formatTime(currentTime)} / {formatTime(duration)}
       </span>
 

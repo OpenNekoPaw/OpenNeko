@@ -45,7 +45,7 @@ export function NumberInput({
   return (
     <label className={cn('flex min-w-0 items-center gap-2 text-xs', className)}>
       {label ? (
-        <span className="min-w-0 flex-1 truncate text-[var(--vscode-descriptionForeground)]">
+        <span className="min-w-0 flex-1 truncate text-[var(--neko-descriptionForeground)]">
           {label}
         </span>
       ) : null}
@@ -54,8 +54,8 @@ export function NumberInput({
           aria-label={label ?? id}
           className={cn(
             'h-7 w-20 rounded-[var(--neko-radius-sm,6px)] border border-[var(--neko-border)]',
-            'bg-[var(--vscode-input-background)] px-2 text-right text-xs text-[var(--vscode-input-foreground)]',
-            'outline-none focus-visible:border-[var(--vscode-focusBorder)] disabled:cursor-not-allowed disabled:opacity-50',
+            'bg-[var(--neko-input-background)] px-2 text-right text-xs text-[var(--neko-input-foreground)]',
+            'outline-none focus-visible:border-[var(--neko-focusBorder)] disabled:cursor-not-allowed disabled:opacity-50',
           )}
           disabled={disabled}
           {...getKeyboardBoundaryMetadata({
@@ -85,7 +85,7 @@ export function NumberInput({
           value={draft}
         />
         {unit ? (
-          <span className="shrink-0 text-[11px] text-[var(--vscode-descriptionForeground)]">
+          <span className="shrink-0 text-[11px] text-[var(--neko-descriptionForeground)]">
             {unit}
           </span>
         ) : null}

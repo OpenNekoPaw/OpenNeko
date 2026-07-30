@@ -11,16 +11,16 @@ import {
 
 describe('Desktop system theme', () => {
   it.each(['light', 'dark'] as const)(
-    'projects the shared, Desktop and compatibility contract for %s',
+    'projects the shared Desktop Webview theme contract for %s',
     (theme) => {
       applyResolvedDesktopTheme(document, theme);
 
-      const vscodeThemeKind = theme === 'dark' ? 'vscode-dark' : 'vscode-light';
+      const nekoThemeKind = theme === 'dark' ? 'neko-dark' : 'neko-light';
       expect(document.documentElement.dataset.nekoTheme).toBe(theme);
       expect(document.documentElement.dataset.nekoHost).toBe('desktop');
-      expect(document.documentElement.dataset.vscodeThemeKind).toBe(vscodeThemeKind);
-      expect(document.body.dataset.vscodeThemeKind).toBe(vscodeThemeKind);
-      expect(document.body.classList.contains(vscodeThemeKind)).toBe(true);
+      expect(document.documentElement.dataset.nekoThemeKind).toBe(nekoThemeKind);
+      expect(document.body.dataset.nekoThemeKind).toBe(nekoThemeKind);
+      expect(document.body.classList.contains(nekoThemeKind)).toBe(true);
       expect(document.documentElement.style.colorScheme).toBe(theme);
       expect(document.documentElement.style.getPropertyValue('--neko-surface')).toBe(
         nekoDesignTokens[theme]['--neko-surface'],
@@ -28,13 +28,13 @@ describe('Desktop system theme', () => {
       expect(document.documentElement.style.getPropertyValue('--neko-desktop-window')).toBe(
         desktopNativeThemeTokens[theme]['--neko-desktop-window'],
       );
-      expect(document.documentElement.style.getPropertyValue('--vscode-editor-background')).toBe(
+      expect(document.documentElement.style.getPropertyValue('--neko-editor-background')).toBe(
         'var(--neko-desktop-main)',
       );
-      expect(document.documentElement.style.getPropertyValue('--vscode-panel-background')).toBe(
+      expect(document.documentElement.style.getPropertyValue('--neko-panel-background')).toBe(
         'var(--neko-desktop-surface)',
       );
-      expect(document.documentElement.style.getPropertyValue('--vscode-menu-background')).toBe(
+      expect(document.documentElement.style.getPropertyValue('--neko-menu-background')).toBe(
         'var(--neko-desktop-overlay)',
       );
     },
@@ -52,10 +52,10 @@ describe('Desktop system theme', () => {
     expect(style.getPropertyValue('--neko-desktop-surface-muted')).toBe(
       '#f3f3f2',
     );
-    expect(style.getPropertyValue('--vscode-list-activeSelectionBackground')).toBe(
+    expect(style.getPropertyValue('--neko-list-activeSelectionBackground')).toBe(
       '#e8e8e7',
     );
-    expect(style.getPropertyValue('--vscode-focusBorder')).toBe('#6d716f');
+    expect(style.getPropertyValue('--neko-focusBorder')).toBe('#6d716f');
   });
 
   it('follows operating-system appearance changes and releases the listener', () => {

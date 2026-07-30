@@ -23,7 +23,7 @@ export function detectDesktopLocale(
 
 export function applyDesktopLocale(target: Document, locale: SupportedLocale): void {
   target.documentElement.lang = locale === 'zh-cn' ? 'zh-CN' : 'en';
-  target.documentElement.dataset.vscodeLocale = locale;
+  target.documentElement.dataset.nekoLocale = locale;
 }
 
 export function resolveDesktopLocalePreference(

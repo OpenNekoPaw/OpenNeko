@@ -119,8 +119,8 @@ function createAgentWebviewFoundation(input: {
   readonly locale: SupportedLocale;
 }): WebviewFoundationContextValue {
   return createWebviewFoundation({
-    hostKind: input.hostRuntimeAdapter?.hostKind ?? 'vscode',
-    runtimeId: input.hostRuntimeAdapter?.runtimeId ?? 'neko.agent.webview.vscode',
+    hostKind: input.hostRuntimeAdapter?.hostKind ?? 'electron',
+    runtimeId: input.hostRuntimeAdapter?.runtimeId ?? 'neko.agent.webview.unconfigured',
     locale: input.locale,
     theme: { kind: detectAgentWebviewThemeKind() },
   });
@@ -130,14 +130,11 @@ function detectAgentWebviewThemeKind(): WebviewFoundationThemeKind {
   if (typeof document === 'undefined') {
     return 'dark';
   }
-  const vscodeThemeKind = document.documentElement.getAttribute('data-vscode-theme-kind');
-  if (vscodeThemeKind === 'vscode-light') {
+  const nekoThemeKind = document.documentElement.getAttribute('data-neko-theme-kind');
+  if (nekoThemeKind === 'neko-light') {
     return 'light';
   }
-  if (
-    vscodeThemeKind === 'vscode-high-contrast' ||
-    vscodeThemeKind === 'vscode-high-contrast-light'
-  ) {
+  if (nekoThemeKind === 'neko-high-contrast' || nekoThemeKind === 'neko-high-contrast-light') {
     return 'high-contrast';
   }
   return 'dark';

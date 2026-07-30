@@ -13,7 +13,7 @@ import type { ContentLocator, DocumentLocator } from '@neko/shared';
 import type { AgentMessageRuntimeRequest } from '../turn/message-runtime';
 
 export interface AgentHostConnectionIdentity {
-  readonly hostKind: 'vscode' | 'electron';
+  readonly hostKind: 'electron';
   readonly applicationId: string;
   readonly windowId: string;
   readonly viewId: string;

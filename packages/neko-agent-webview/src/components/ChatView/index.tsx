@@ -191,7 +191,7 @@ export function ChatView({
         >
           {foregroundConversationAvailability.kind !== 'ready' ? (
             <div
-              className="agent-chat-empty-scroll flex flex-1 items-center justify-center overflow-y-auto px-6 text-center text-sm text-[var(--vscode-descriptionForeground,var(--agent-fg-muted))]"
+              className="agent-chat-empty-scroll flex flex-1 items-center justify-center overflow-y-auto px-6 text-center text-sm text-[var(--neko-descriptionForeground,var(--agent-fg-muted))]"
               role={foregroundConversationAvailability.kind === 'loading' ? 'status' : 'alert'}
             >
               {foregroundConversationAvailability.kind === 'loading'

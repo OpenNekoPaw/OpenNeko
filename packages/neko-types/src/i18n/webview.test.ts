@@ -5,7 +5,7 @@ import { createWebviewI18n, detectWebviewLocale } from './webview';
 
 describe('createWebviewI18n', () => {
   it('detects the VS Code Webview locale and registers locale bundles', () => {
-    document.documentElement.setAttribute('data-vscode-locale', 'zh-CN');
+    document.documentElement.setAttribute('data-neko-locale', 'zh-CN');
 
     const adapter = createWebviewI18n({
       bundles: {

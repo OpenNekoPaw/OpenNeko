@@ -227,7 +227,7 @@ function renderNormalizedMarkdownNode(
       return (
         <blockquote
           key={node.id}
-          className="border-l-2 border-[var(--vscode-textBlockQuote-border)] pl-3 my-2 text-[var(--vscode-textBlockQuote-foreground)]"
+          className="border-l-2 border-[var(--neko-textBlockQuote-border)] pl-3 my-2 text-[var(--neko-textBlockQuote-foreground)]"
         >
           {children}
         </blockquote>
@@ -246,7 +246,7 @@ function renderNormalizedMarkdownNode(
     }
     case 'listItem':
       return (
-        <li key={node.id} className="text-[var(--vscode-foreground)]">
+        <li key={node.id} className="text-[var(--neko-foreground)]">
           {node.checked !== undefined && (
             <input type="checkbox" checked={node.checked} readOnly className="mr-1 align-middle" />
           )}
@@ -264,12 +264,12 @@ function renderNormalizedMarkdownNode(
       );
     }
     case 'thematicBreak':
-      return <hr key={node.id} className="my-3 border-t border-[var(--vscode-panel-border)]" />;
+      return <hr key={node.id} className="my-3 border-t border-[var(--neko-panel-border)]" />;
     case 'html':
       return (
         <code
           key={node.id}
-          className="whitespace-pre-wrap text-[11px] text-[var(--vscode-descriptionForeground)]"
+          className="whitespace-pre-wrap text-[11px] text-[var(--neko-descriptionForeground)]"
           data-markdown-html="inert"
         >
           {node.value}
@@ -297,7 +297,7 @@ function renderNormalizedMarkdownNode(
       );
     case 'delete':
       return (
-        <del key={node.id} className="line-through text-[var(--vscode-descriptionForeground)]">
+        <del key={node.id} className="line-through text-[var(--neko-descriptionForeground)]">
           {children}
         </del>
       );
@@ -305,7 +305,7 @@ function renderNormalizedMarkdownNode(
       return (
         <code
           key={node.id}
-          className="px-1.5 py-0.5 rounded bg-[var(--vscode-textCodeBlock-background)] text-[var(--vscode-textPreformat-foreground)] text-[12px] font-mono break-words"
+          className="px-1.5 py-0.5 rounded bg-[var(--neko-textCodeBlock-background)] text-[var(--neko-textPreformat-foreground)] text-[12px] font-mono break-words"
         >
           {node.value}
         </code>
@@ -415,13 +415,13 @@ function renderNormalizedMarkdownTableCell(
   const children = cell.children.map((child) => renderNormalizedMarkdownNode(child, context));
   const projected = projectMarkdownResourceTokenCell(children, context.markdownResources);
   const displayValue = projectCreativeTableCellDisplayValue(cell, header, table, context.locale);
-  const className = 'border border-[var(--vscode-panel-border)] px-2 py-1 align-top';
+  const className = 'border border-[var(--neko-panel-border)] px-2 py-1 align-top';
   const style = { textAlign: normalizeTableTextAlign(table.alignments[cell.columnIndex]) } as const;
   const content = displayValue ?? projected ?? children;
   return header ? (
     <th
       key={cell.id}
-      className={`${className} font-semibold bg-[var(--vscode-editorWidget-background)]`}
+      className={`${className} font-semibold bg-[var(--neko-editorWidget-background)]`}
       style={style}
     >
       {content}
@@ -514,7 +514,7 @@ function renderNormalizedMarkdownLink(
       title={title}
       target="_blank"
       rel="noopener noreferrer"
-      className="text-[var(--vscode-textLink-foreground)] hover:underline"
+      className="text-[var(--neko-textLink-foreground)] hover:underline"
     >
       {children}
     </a>
@@ -529,7 +529,7 @@ function renderNormalizedMarkdownImage(
   return (
     projectMarkdownImageResource(destination, markdownResources) ?? (
       <span
-        className="my-2 inline-flex rounded border border-[var(--vscode-inputValidation-warningBorder)] bg-[var(--vscode-inputValidation-warningBackground)] px-2 py-1 text-[11px] text-[var(--vscode-inputValidation-warningForeground)]"
+        className="my-2 inline-flex rounded border border-[var(--neko-inputValidation-warningBorder)] bg-[var(--neko-inputValidation-warningBackground)] px-2 py-1 text-[11px] text-[var(--neko-inputValidation-warningForeground)]"
         data-markdown-image-status="unprojected"
       >
         {altText || destination || t('chat.markdown.image.missingSource')}
@@ -551,10 +551,9 @@ function collectMarkdownDefinitions(
 }
 
 function headingClassName(depth: number): string {
-  if (depth === 1) return 'text-lg font-bold mb-2 mt-4 first:mt-0 text-[var(--vscode-foreground)]';
-  if (depth === 2)
-    return 'text-base font-bold mb-2 mt-3 first:mt-0 text-[var(--vscode-foreground)]';
-  return 'text-sm font-semibold mb-1.5 mt-2 first:mt-0 text-[var(--vscode-foreground)]';
+  if (depth === 1) return 'text-lg font-bold mb-2 mt-4 first:mt-0 text-[var(--neko-foreground)]';
+  if (depth === 2) return 'text-base font-bold mb-2 mt-3 first:mt-0 text-[var(--neko-foreground)]';
+  return 'text-sm font-semibold mb-1.5 mt-2 first:mt-0 text-[var(--neko-foreground)]';
 }
 
 function normalizeTableTextAlign(
@@ -598,7 +597,7 @@ function projectMarkdownResourceTokenCell(
             src={uri}
             alt={projection.refs[index]?.label ?? token}
             title={projection.refs[index]?.label ?? token}
-            className="max-h-40 min-h-24 w-auto max-w-[14rem] rounded border border-[var(--vscode-panel-border)] object-contain"
+            className="max-h-40 min-h-24 w-auto max-w-[14rem] rounded border border-[var(--neko-panel-border)] object-contain"
             loading="lazy"
           />
         ))}
@@ -608,9 +607,9 @@ function projectMarkdownResourceTokenCell(
   return (
     <span className="inline-flex min-w-[8rem] max-w-full flex-col gap-1 align-top">
       <span className="inline-flex flex-wrap items-center gap-1.5">
-        <span className="font-mono text-[11px] text-[var(--vscode-foreground)]">{token}</span>
+        <span className="font-mono text-[11px] text-[var(--neko-foreground)]">{token}</span>
         <span
-          className="rounded border border-[var(--vscode-panel-border)] px-1 py-0.5 text-[10px] text-[var(--vscode-descriptionForeground)]"
+          className="rounded border border-[var(--neko-panel-border)] px-1 py-0.5 text-[10px] text-[var(--neko-descriptionForeground)]"
           data-markdown-resource-status={projection.status}
         >
           {markdownResourceStatusLabel(projection)}
@@ -623,14 +622,14 @@ function projectMarkdownResourceTokenCell(
               key={`${uri}-${index}`}
               src={uri}
               alt={projection.refs[index]?.label ?? token}
-              className="max-h-40 min-h-24 w-auto max-w-[14rem] rounded border border-[var(--vscode-panel-border)] object-contain"
+              className="max-h-40 min-h-24 w-auto max-w-[14rem] rounded border border-[var(--neko-panel-border)] object-contain"
               loading="lazy"
             />
           ))}
         </span>
       ) : null}
       {projection.diagnostics.length > 0 ? (
-        <span className="text-[10px] text-[var(--vscode-errorForeground)]">
+        <span className="text-[10px] text-[var(--neko-errorForeground)]">
           {formatMarkdownResourceDiagnostic(projection.diagnostics[0])}
         </span>
       ) : null}
@@ -656,7 +655,7 @@ function projectStoryboardResourceTokenCell(
             src={uri}
             alt={projection.refs[index]?.label ?? token}
             title={projection.refs[index]?.label ?? token}
-            className="max-h-28 min-h-16 w-auto max-w-[7rem] rounded border border-[var(--vscode-panel-border)] object-contain"
+            className="max-h-28 min-h-16 w-auto max-w-[7rem] rounded border border-[var(--neko-panel-border)] object-contain"
             loading="lazy"
           />
         ))}
@@ -666,11 +665,11 @@ function projectStoryboardResourceTokenCell(
 
   return (
     <span className="inline-flex max-w-full items-center gap-1 align-top">
-      <span className="min-w-0 truncate font-mono text-[11px] text-[var(--vscode-foreground)]">
+      <span className="min-w-0 truncate font-mono text-[11px] text-[var(--neko-foreground)]">
         {token}
       </span>
       <span
-        className="shrink-0 rounded border border-[var(--vscode-panel-border)] px-1 py-0.5 text-[10px] text-[var(--vscode-descriptionForeground)]"
+        className="shrink-0 rounded border border-[var(--neko-panel-border)] px-1 py-0.5 text-[10px] text-[var(--neko-descriptionForeground)]"
         data-markdown-resource-status={projection.status}
       >
         {markdownResourceStatusLabel(projection)}
@@ -700,7 +699,7 @@ function projectMarkdownImageResource(
         src={renderUri}
         alt={projection.refs[0]?.label ?? baseToken}
         title={projection.refs[0]?.label ?? baseToken}
-        className="max-w-full rounded border border-[var(--vscode-panel-border)]"
+        className="max-w-full rounded border border-[var(--neko-panel-border)]"
         loading="lazy"
       />
     </span>
@@ -801,12 +800,12 @@ function markdownResourceReferenceClassName(
   const base =
     'rounded-sm border px-1 py-[1px] font-mono text-[11px] underline decoration-2 underline-offset-[3px]';
   if (status === 'bound') {
-    return `${base} border-[var(--vscode-textLink-foreground)] text-[var(--vscode-textLink-foreground)] decoration-[color-mix(in_srgb,var(--vscode-textLink-foreground)_72%,transparent)]`;
+    return `${base} border-[var(--neko-textLink-foreground)] text-[var(--neko-textLink-foreground)] decoration-[color-mix(in_srgb,var(--neko-textLink-foreground)_72%,transparent)]`;
   }
   if (status === 'ambiguous') {
-    return `${base} border-[var(--vscode-inputValidation-warningBorder)] text-[var(--vscode-inputValidation-warningForeground)] decoration-[var(--vscode-inputValidation-warningBorder)]`;
+    return `${base} border-[var(--neko-inputValidation-warningBorder)] text-[var(--neko-inputValidation-warningForeground)] decoration-[var(--neko-inputValidation-warningBorder)]`;
   }
-  return `${base} border-[var(--vscode-inputValidation-errorBorder)] text-[var(--vscode-errorForeground)] decoration-[var(--vscode-inputValidation-errorBorder)]`;
+  return `${base} border-[var(--neko-inputValidation-errorBorder)] text-[var(--neko-errorForeground)] decoration-[var(--neko-inputValidation-errorBorder)]`;
 }
 
 function findMarkdownMentionProjection(
@@ -829,12 +828,12 @@ function markdownMentionClassName(
   const base =
     'rounded-sm border-b px-0.5 font-medium underline decoration-2 underline-offset-[3px]';
   if (status === 'bound') {
-    return `${base} border-[var(--vscode-textLink-foreground)] text-[var(--vscode-textLink-foreground)] decoration-[color-mix(in_srgb,var(--vscode-textLink-foreground)_72%,transparent)]`;
+    return `${base} border-[var(--neko-textLink-foreground)] text-[var(--neko-textLink-foreground)] decoration-[color-mix(in_srgb,var(--neko-textLink-foreground)_72%,transparent)]`;
   }
   if (status === 'ambiguous') {
-    return `${base} border-[var(--vscode-inputValidation-warningBorder)] text-[var(--vscode-inputValidation-warningForeground)] decoration-[var(--vscode-inputValidation-warningBorder)]`;
+    return `${base} border-[var(--neko-inputValidation-warningBorder)] text-[var(--neko-inputValidation-warningForeground)] decoration-[var(--neko-inputValidation-warningBorder)]`;
   }
-  return `${base} border-[var(--vscode-inputValidation-errorBorder)] text-[var(--vscode-errorForeground)] decoration-[var(--vscode-inputValidation-errorBorder)]`;
+  return `${base} border-[var(--neko-inputValidation-errorBorder)] text-[var(--neko-errorForeground)] decoration-[var(--neko-inputValidation-errorBorder)]`;
 }
 
 interface MarkdownTableProjection {
@@ -887,7 +886,7 @@ function projectStoryboardCreativeTableNode(
       data-markdown-storyboard-scene-table="true"
     >
       <table
-        className="table-fixed border-collapse text-left text-[11px] text-[var(--vscode-foreground)]"
+        className="table-fixed border-collapse text-left text-[11px] text-[var(--neko-foreground)]"
         style={{ minWidth: STORYBOARD_SCENE_TABLE_MIN_WIDTH }}
       >
         <colgroup>
@@ -895,12 +894,12 @@ function projectStoryboardCreativeTableNode(
             <col key={columnId} style={{ width: STORYBOARD_SCENE_COLUMN_WIDTHS[columnId] }} />
           ))}
         </colgroup>
-        <thead className="bg-[var(--vscode-editorWidget-background)] text-[10px] uppercase tracking-normal text-[var(--vscode-descriptionForeground)]">
+        <thead className="bg-[var(--neko-editorWidget-background)] text-[10px] uppercase tracking-normal text-[var(--neko-descriptionForeground)]">
           <tr>
             {STORYBOARD_SCENE_COLUMNS.map((columnId) => (
               <th
                 key={columnId}
-                className="border border-[var(--vscode-panel-border)] px-2 py-1.5 font-medium"
+                className="border border-[var(--neko-panel-border)] px-2 py-1.5 font-medium"
                 data-markdown-storyboard-scene-column={columnId}
               >
                 {storyboardSceneColumnLabel(columnId, locale)}
@@ -956,12 +955,12 @@ function MarkdownStoryboardSceneTableRow({
 
   return (
     <tr
-      className="align-top text-[11px] text-[var(--vscode-foreground)] odd:bg-[color-mix(in_srgb,var(--vscode-editorWidget-background)_44%,transparent)] hover:bg-[var(--vscode-list-hoverBackground)]"
+      className="align-top text-[11px] text-[var(--neko-foreground)] odd:bg-[color-mix(in_srgb,var(--neko-editorWidget-background)_44%,transparent)] hover:bg-[var(--neko-list-hoverBackground)]"
       data-markdown-storyboard-scene-row="true"
     >
       <StoryboardSceneTableCell columnId="shot">
-        <span className="flex min-w-0 items-center gap-1 text-left text-[12px] font-medium text-[var(--vscode-foreground)]">
-          <span className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-[var(--vscode-button-background)] text-[10px] leading-none text-[var(--vscode-button-foreground)]">
+        <span className="flex min-w-0 items-center gap-1 text-left text-[12px] font-medium text-[var(--neko-foreground)]">
+          <span className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-[var(--neko-button-background)] text-[10px] leading-none text-[var(--neko-button-foreground)]">
             {rowIndex + 1}
           </span>
           <span className="truncate">{shot}</span>
@@ -1021,7 +1020,7 @@ function StoryboardSceneTableCell({
 }) {
   return (
     <td
-      className="border border-[var(--vscode-panel-border)] px-2 py-2"
+      className="border border-[var(--neko-panel-border)] px-2 py-2"
       data-markdown-storyboard-scene-cell={columnId}
     >
       {children}
@@ -1044,7 +1043,7 @@ function StoryboardPromptCellText({
   const parts = projectNekoMarkdownGenerationPromptParts(value);
   return (
     <div
-      className="min-w-0 whitespace-pre-wrap break-words text-[11px] leading-[1.45] text-[var(--vscode-foreground)]"
+      className="min-w-0 whitespace-pre-wrap break-words text-[11px] leading-[1.45] text-[var(--neko-foreground)]"
       title={value}
       data-markdown-storyboard-prompt-cell={kind}
       data-markdown-storyboard-prompt-visual-style="subtle-inline"
@@ -1077,20 +1076,20 @@ function BoundedStoryboardSceneCellText({
 }) {
   return (
     <div
-      className="line-clamp-2 min-w-0 whitespace-pre-wrap break-words text-[11px] leading-[1.35] text-[var(--vscode-foreground)]"
+      className="line-clamp-2 min-w-0 whitespace-pre-wrap break-words text-[11px] leading-[1.35] text-[var(--neko-foreground)]"
       title={value || placeholder}
     >
-      {value || <span className="text-[var(--vscode-descriptionForeground)]">{placeholder}</span>}
+      {value || <span className="text-[var(--neko-descriptionForeground)]">{placeholder}</span>}
     </div>
   );
 }
 
 function getStoryboardPromptPartClassName(kind: NekoMarkdownGenerationPromptPartKind): string {
   const base =
-    'rounded-sm border px-0.5 py-[1px] text-[var(--vscode-foreground)] underline decoration-2 underline-offset-[3px] box-decoration-clone';
+    'rounded-sm border px-0.5 py-[1px] text-[var(--neko-foreground)] underline decoration-2 underline-offset-[3px] box-decoration-clone';
   switch (kind) {
     case 'intent':
-      return `${base} border-[color-mix(in_srgb,var(--vscode-button-background)_42%,transparent)] bg-[color-mix(in_srgb,var(--vscode-button-background)_8%,transparent)] font-medium decoration-[color-mix(in_srgb,var(--vscode-button-background)_70%,transparent)]`;
+      return `${base} border-[color-mix(in_srgb,var(--neko-button-background)_42%,transparent)] bg-[color-mix(in_srgb,var(--neko-button-background)_8%,transparent)] font-medium decoration-[color-mix(in_srgb,var(--neko-button-background)_70%,transparent)]`;
     case 'reference':
       return `${base} border-cyan-300/60 bg-cyan-50/40 decoration-cyan-400/75`;
     case 'operation':
@@ -1102,7 +1101,7 @@ function getStoryboardPromptPartClassName(kind: NekoMarkdownGenerationPromptPart
     case 'constraint':
       return `${base} border-emerald-300/60 bg-emerald-50/40 decoration-emerald-400/75`;
     case 'detail':
-      return `${base} border-[color-mix(in_srgb,var(--vscode-foreground)_16%,transparent)] bg-[color-mix(in_srgb,var(--vscode-foreground)_4%,transparent)] decoration-[color-mix(in_srgb,var(--vscode-foreground)_30%,transparent)]`;
+      return `${base} border-[color-mix(in_srgb,var(--neko-foreground)_16%,transparent)] bg-[color-mix(in_srgb,var(--neko-foreground)_4%,transparent)] decoration-[color-mix(in_srgb,var(--neko-foreground)_30%,transparent)]`;
   }
 }
 
@@ -1123,7 +1122,7 @@ function StoryboardSceneActionPill({
   }
   return (
     <span
-      className="inline-flex max-w-full rounded border border-[var(--vscode-button-background)] bg-[var(--vscode-button-secondaryBackground)] px-2 py-1 text-[11px] leading-none text-[var(--vscode-button-secondaryForeground)]"
+      className="inline-flex max-w-full rounded border border-[var(--neko-button-background)] bg-[var(--neko-button-secondaryBackground)] px-2 py-1 text-[11px] leading-none text-[var(--neko-button-secondaryForeground)]"
       title={value}
       data-markdown-storyboard-scene-action={value}
     >
@@ -1400,8 +1399,8 @@ function shouldTreatAsStreamingStructuredArtifact(code: string, language?: strin
 
 function StructuredArtifactPending() {
   return (
-    <div className="my-2 rounded-md border border-[var(--vscode-panel-border)] bg-[var(--vscode-editorWidget-background)] px-3 py-2 text-[12px] text-[var(--vscode-descriptionForeground)]">
-      <span className="inline-block h-2 w-2 rounded-full bg-[var(--vscode-charts-blue)] align-middle animate-pulse" />
+    <div className="my-2 rounded-md border border-[var(--neko-panel-border)] bg-[var(--neko-editorWidget-background)] px-3 py-2 text-[12px] text-[var(--neko-descriptionForeground)]">
+      <span className="inline-block h-2 w-2 rounded-full bg-[var(--neko-charts-blue)] align-middle animate-pulse" />
       <span className="ml-2 align-middle">{t('chat.structuredArtifact.generating')}</span>
     </div>
   );
@@ -1431,7 +1430,7 @@ function CreativeDraftDiagnostics({
   return (
     <div
       role="alert"
-      className="mt-2 rounded border border-[var(--vscode-inputValidation-errorBorder)] bg-[var(--vscode-inputValidation-errorBackground)] px-2 py-1.5 text-[11px] text-[var(--vscode-inputValidation-errorForeground)]"
+      className="mt-2 rounded border border-[var(--neko-inputValidation-errorBorder)] bg-[var(--neko-inputValidation-errorBackground)] px-2 py-1.5 text-[11px] text-[var(--neko-inputValidation-errorForeground)]"
     >
       {diagnostics.map((diagnostic, index) => (
         <div key={`${diagnostic.code}-${diagnostic.token ?? 'markdown'}-${index}`}>
@@ -1536,7 +1535,7 @@ function SemanticPromptSpanChip({
 
   return (
     <span
-      className="inline-flex min-h-6 max-w-full items-center gap-1 rounded border border-[var(--vscode-panel-border)] bg-[var(--vscode-editorWidget-background)] px-1.5 py-0.5 text-[11px] text-[var(--vscode-foreground)] border-b-2"
+      className="inline-flex min-h-6 max-w-full items-center gap-1 rounded border border-[var(--neko-panel-border)] bg-[var(--neko-editorWidget-background)] px-1.5 py-0.5 text-[11px] text-[var(--neko-foreground)] border-b-2"
       style={{ borderBottomColor: promptSpanColor(span) }}
       title={title}
       data-markdown-prompt-span="true"
@@ -1550,16 +1549,16 @@ function SemanticPromptSpanChip({
       data-canvas-handoff-ref-id={span.ref?.id}
       data-canvas-handoff-ref-namespace={span.ref?.namespace}
     >
-      <span className="max-w-[14rem] truncate underline decoration-[var(--vscode-descriptionForeground)] underline-offset-2">
+      <span className="max-w-[14rem] truncate underline decoration-[var(--neko-descriptionForeground)] underline-offset-2">
         {displayLabel}
       </span>
       {span.fieldId ? (
-        <span className="max-w-[10rem] truncate font-mono text-[10px] text-[var(--vscode-descriptionForeground)]">
+        <span className="max-w-[10rem] truncate font-mono text-[10px] text-[var(--neko-descriptionForeground)]">
           {span.fieldId}
         </span>
       ) : null}
       {span.ref ? (
-        <span className="max-w-[10rem] truncate font-mono text-[10px] text-[var(--vscode-descriptionForeground)]">
+        <span className="max-w-[10rem] truncate font-mono text-[10px] text-[var(--neko-descriptionForeground)]">
           @{span.ref.id}
         </span>
       ) : null}
@@ -1582,8 +1581,8 @@ function SemanticPromptSpanDiagnostics({
       role={hasError ? 'alert' : 'note'}
       className={`mt-2 rounded border px-2 py-1.5 text-[11px] ${
         hasError
-          ? 'border-[var(--vscode-inputValidation-errorBorder)] bg-[var(--vscode-inputValidation-errorBackground)] text-[var(--vscode-inputValidation-errorForeground)]'
-          : 'border-[var(--vscode-inputValidation-warningBorder)] bg-[var(--vscode-inputValidation-warningBackground)] text-[var(--vscode-inputValidation-warningForeground)]'
+          ? 'border-[var(--neko-inputValidation-errorBorder)] bg-[var(--neko-inputValidation-errorBackground)] text-[var(--neko-inputValidation-errorForeground)]'
+          : 'border-[var(--neko-inputValidation-warningBorder)] bg-[var(--neko-inputValidation-warningBackground)] text-[var(--neko-inputValidation-warningForeground)]'
       }`}
     >
       {diagnostics.map((diagnostic, index) => (
@@ -1628,16 +1627,16 @@ function promptSpanColor(
   span: NonNullable<MarkdownResourceRenderingProjection['promptSpans']>[number],
 ): string {
   const tone = (span.tone ?? span.kind).toLowerCase();
-  if (tone.includes('scene') || tone.includes('location')) return 'var(--vscode-charts-green)';
-  if (tone.includes('character') || tone.includes('entity')) return 'var(--vscode-charts-purple)';
+  if (tone.includes('scene') || tone.includes('location')) return 'var(--neko-charts-green)';
+  if (tone.includes('character') || tone.includes('entity')) return 'var(--neko-charts-purple)';
   if (tone.includes('voice') || tone.includes('audio') || tone.includes('dialogue')) {
-    return 'var(--vscode-charts-yellow)';
+    return 'var(--neko-charts-yellow)';
   }
   if (tone.includes('resource') || tone.includes('media') || tone.includes('asset')) {
-    return 'var(--vscode-charts-orange)';
+    return 'var(--neko-charts-orange)';
   }
-  if (tone.includes('style')) return 'var(--vscode-charts-red)';
-  return 'var(--vscode-charts-blue)';
+  if (tone.includes('style')) return 'var(--neko-charts-red)';
+  return 'var(--neko-charts-blue)';
 }
 
 function MarkdownRendererComponent({
@@ -1689,7 +1688,7 @@ function MarkdownRendererComponent({
       <MarkdownExtensionDiagnostics markdownResources={markdownResources} />
       <CreativeDraftDiagnostics content={content} markdownResources={markdownResources} />
       {isStreaming && (
-        <span className="inline-block w-1.5 h-4 ml-1 bg-[var(--vscode-foreground)] animate-pulse" />
+        <span className="inline-block w-1.5 h-4 ml-1 bg-[var(--neko-foreground)] animate-pulse" />
       )}
     </div>
   );
@@ -1756,7 +1755,7 @@ function MarkdownExtensionDiagnostics({
   return (
     <div
       role="note"
-      className="mt-2 rounded border border-[var(--vscode-inputValidation-warningBorder)] bg-[var(--vscode-inputValidation-warningBackground)] px-2 py-1.5 text-[11px] text-[var(--vscode-inputValidation-warningForeground)]"
+      className="mt-2 rounded border border-[var(--neko-inputValidation-warningBorder)] bg-[var(--neko-inputValidation-warningBackground)] px-2 py-1.5 text-[11px] text-[var(--neko-inputValidation-warningForeground)]"
     >
       {diagnostics.map((diagnostic, index) => (
         <div key={`${diagnostic.code}-${diagnostic.token ?? 'embed'}-${index}`}>

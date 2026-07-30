@@ -38,7 +38,7 @@ describe('PreviewPanel retained canvas presentation', () => {
 
     const stage = host.querySelector('.cut-basic-preview-stage');
     const workspace = host.querySelector('.cut-preview-stage');
-    expect(workspace?.className).toContain('bg-vscode-bg');
+    expect(workspace?.className).toContain('bg-neko-bg');
     expect(workspace?.className).not.toContain('bg-black');
     expect(stage?.className).toContain('bg-black');
     expect(stage?.className).not.toContain('border');

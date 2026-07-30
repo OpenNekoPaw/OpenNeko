@@ -72,20 +72,20 @@ describe('fetchForEpub', () => {
     document.body.append(container);
     const root = createRoot(container);
 
-    await act(async () => {
-      root.render(
-        <I18nProvider service={i18nService}>
-          <EpubViewer sourceUrl="neko-media://desktop/descriptor/book.epub" />
-        </I18nProvider>,
-      );
-    });
-    await vi.waitFor(
-      () => expect(container.textContent).not.toMatch(/Loading book|正在加载书籍/u),
-      { timeout: 5_000 },
-    );
-
-    expect(container.textContent).not.toContain('Error:');
-    expect(container.textContent).toContain('Page');
-    await act(async () => root.unmount());
+    try {
+      await act(async () => {
+        root.render(
+          <I18nProvider service={i18nService}>
+            <EpubViewer sourceUrl="neko-media://desktop/descriptor/book.epub" />
+          </I18nProvider>,
+        );
+      });
+      await vi.waitFor(() => expect(container.textContent).toContain('Page'), {
+        timeout: 5_000,
+      });
+      expect(container.textContent).not.toContain('Error:');
+    } finally {
+      await act(async () => root.unmount());
+    }
   });
 });

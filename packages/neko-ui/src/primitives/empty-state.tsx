@@ -20,12 +20,12 @@ export function EmptyState({
   return (
     <div
       className={cn(
-        'flex min-h-24 flex-col items-center justify-center gap-2 p-4 text-center text-[var(--vscode-descriptionForeground)]',
+        'flex min-h-24 flex-col items-center justify-center gap-2 p-4 text-center text-[var(--neko-descriptionForeground)]',
         className,
       )}
     >
-      {icon ? <div className="text-[var(--vscode-foreground)]">{icon}</div> : null}
-      <div className="text-sm font-medium text-[var(--vscode-foreground)]">{title}</div>
+      {icon ? <div className="text-[var(--neko-foreground)]">{icon}</div> : null}
+      <div className="text-sm font-medium text-[var(--neko-foreground)]">{title}</div>
       {description ? <div className="max-w-64 text-xs leading-5">{description}</div> : null}
       {action ? <div className="pt-1">{action}</div> : null}
     </div>

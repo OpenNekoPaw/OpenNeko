@@ -77,7 +77,7 @@ export function TimelineRuler({
     const visibleEnd = (scrollLeft + width) / pixelsPerSecond;
     const firstTickIdx = Math.floor(visibleStart / interval);
 
-    ctx.font = '10px var(--vscode-font-family, system-ui, sans-serif)';
+    ctx.font = '10px var(--neko-font-family, system-ui, sans-serif)';
     ctx.textBaseline = 'top';
     ctx.fillStyle = fg;
 

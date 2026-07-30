@@ -75,10 +75,10 @@ describe('@neko/ui positioned context menu', () => {
     const separator = document.body.querySelector<HTMLElement>('.neko-menu-sep');
 
     expect(menu?.style.background).toBe(
-      'var(--neko-menu-background, var(--vscode-menu-background, var(--vscode-editorWidget-background, var(--glass-bg, var(--neko-glass-bg, rgba(32, 32, 36, 0.88))))))',
+      'var(--neko-menu-background, var(--neko-menu-background, var(--neko-editorWidget-background, var(--glass-bg, var(--neko-glass-bg, rgba(32, 32, 36, 0.88))))))',
     );
     expect(menu?.style.color).toBe(
-      'var(--neko-menu-foreground, var(--vscode-menu-foreground, var(--vscode-foreground, var(--toolbar-fg, var(--neko-fg, inherit)))))',
+      'var(--neko-menu-foreground, var(--neko-menu-foreground, var(--neko-foreground, var(--toolbar-fg, var(--neko-fg, inherit)))))',
     );
 
     act(() => {
@@ -86,14 +86,14 @@ describe('@neko/ui positioned context menu', () => {
     });
 
     expect(item?.style.background).toBe(
-      'var(--neko-menu-selectionBackground, var(--vscode-menu-selectionBackground, var(--button-bg, var(--neko-accent, #0a84ff))))',
+      'var(--neko-menu-selectionBackground, var(--neko-menu-selectionBackground, var(--button-bg, var(--neko-accent, #0a84ff))))',
     );
     expect(item?.style.color).toBe(
-      'var(--neko-menu-selectionForeground, var(--vscode-menu-selectionForeground, var(--button-fg, #ffffff)))',
+      'var(--neko-menu-selectionForeground, var(--neko-menu-selectionForeground, var(--button-fg, #ffffff)))',
     );
     expect(shortcut?.style.color).toBe('currentcolor');
     expect(separator?.style.background).toBe(
-      'var(--neko-menu-separatorBackground, var(--vscode-menu-separatorBackground, var(--panel-divider, var(--neko-divider, var(--neko-border, rgba(255, 255, 255, 0.12))))))',
+      'var(--neko-menu-separatorBackground, var(--neko-menu-separatorBackground, var(--panel-divider, var(--neko-divider, var(--neko-border, rgba(255, 255, 255, 0.12))))))',
     );
   });
 

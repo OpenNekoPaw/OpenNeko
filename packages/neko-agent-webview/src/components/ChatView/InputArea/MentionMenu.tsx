@@ -486,20 +486,20 @@ function getToneStyle(key: string, isSelected: boolean, surface: 'badge' | 'glyp
 }
 
 function getToneColor(key: string): string {
-  if (key === 'code') return 'var(--vscode-charts-purple,#b180d7)';
-  if (key === 'data') return 'var(--vscode-charts-blue,#3794ff)';
-  if (key === 'image') return 'var(--vscode-charts-green,#89d185)';
-  if (key === 'video' || key === 'sequence') return 'var(--vscode-charts-orange,#d18616)';
-  if (key === 'audio') return 'var(--vscode-charts-yellow,#cca700)';
-  if (key === 'archive') return 'var(--vscode-terminal-ansiMagenta,#bc3fbc)';
-  if (key === 'document' || key === 'text') return 'var(--vscode-textLink-foreground,#3794ff)';
-  if (key === 'workspace') return 'var(--vscode-descriptionForeground,#8a8a8a)';
-  if (key === 'asset') return 'var(--vscode-charts-green,#89d185)';
-  if (key === 'media-library' || key === 'media') return 'var(--vscode-charts-orange,#d18616)';
-  if (key === 'entity-graph' || key === 'entity') return 'var(--vscode-charts-purple,#b180d7)';
+  if (key === 'code') return 'var(--neko-charts-purple,#b180d7)';
+  if (key === 'data') return 'var(--neko-charts-blue,#3794ff)';
+  if (key === 'image') return 'var(--neko-charts-green,#89d185)';
+  if (key === 'video' || key === 'sequence') return 'var(--neko-charts-orange,#d18616)';
+  if (key === 'audio') return 'var(--neko-charts-yellow,#cca700)';
+  if (key === 'archive') return 'var(--neko-terminal-ansiMagenta,#bc3fbc)';
+  if (key === 'document' || key === 'text') return 'var(--neko-textLink-foreground,#3794ff)';
+  if (key === 'workspace') return 'var(--neko-descriptionForeground,#8a8a8a)';
+  if (key === 'asset') return 'var(--neko-charts-green,#89d185)';
+  if (key === 'media-library' || key === 'media') return 'var(--neko-charts-orange,#d18616)';
+  if (key === 'entity-graph' || key === 'entity') return 'var(--neko-charts-purple,#b180d7)';
   if (key === 'story' || key === 'scene' || key === 'character')
-    return 'var(--vscode-charts-yellow,#cca700)';
-  if (key === 'canvas' || key === 'canvas-node') return 'var(--vscode-charts-blue,#3794ff)';
+    return 'var(--neko-charts-yellow,#cca700)';
+  if (key === 'canvas' || key === 'canvas-node') return 'var(--neko-charts-blue,#3794ff)';
   return 'var(--agent-fg-secondary)';
 }
 

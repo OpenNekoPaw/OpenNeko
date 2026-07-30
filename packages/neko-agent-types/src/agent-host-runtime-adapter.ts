@@ -4,7 +4,7 @@ import {
   type AgentWebviewToHostMessage,
 } from './webview-protocol';
 
-export type AgentHostKind = 'vscode' | 'electron';
+export type AgentHostKind = 'electron';
 
 export interface AgentHostRuntimeSubscription {
   dispose(): void;

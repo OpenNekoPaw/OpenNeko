@@ -66,7 +66,7 @@ export function SuggestionChips({ contextChips, onSuggest }: SuggestionChipsProp
     <div className="flex items-center gap-1 px-3 pt-2 flex-wrap">
       <span
         className="text-[10px] mr-0.5 opacity-50"
-        style={{ color: 'var(--vscode-descriptionForeground)' }}
+        style={{ color: 'var(--neko-descriptionForeground)' }}
       >
         💡
       </span>
@@ -77,8 +77,8 @@ export function SuggestionChips({ contextChips, onSuggest }: SuggestionChipsProp
           onClick={() => onSuggest(s.text)}
           className="inline-flex items-center px-2 py-0.5 rounded text-[11px] border cursor-pointer hover:opacity-80 transition-opacity"
           style={{
-            borderColor: 'var(--vscode-focusBorder)',
-            color: 'var(--vscode-foreground)',
+            borderColor: 'var(--neko-focusBorder)',
+            color: 'var(--neko-foreground)',
             background: 'transparent',
             opacity: 0.75,
           }}

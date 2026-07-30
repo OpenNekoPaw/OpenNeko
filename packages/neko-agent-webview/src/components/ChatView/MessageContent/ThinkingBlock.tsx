@@ -31,15 +31,15 @@ function ThinkingBlockComponent({
   }
 
   return (
-    <div className="my-2 rounded-lg border border-[var(--vscode-panel-border)] overflow-hidden">
+    <div className="my-2 rounded-lg border border-[var(--neko-panel-border)] overflow-hidden">
       {/* Header */}
       <button
         onClick={toggleExpand}
-        className="w-full flex items-center gap-2 px-3 py-2 bg-[var(--vscode-editor-background)] hover:bg-[var(--vscode-list-hoverBackground)] transition-colors text-left"
+        className="w-full flex items-center gap-2 px-3 py-2 bg-[var(--neko-editor-background)] hover:bg-[var(--neko-list-hoverBackground)] transition-colors text-left"
       >
         {/* Expand/Collapse icon */}
         <ChevronIcon
-          className={`w-4 h-4 text-[var(--vscode-foreground)] transition-transform ${isExpanded ? 'rotate-90' : ''}`}
+          className={`w-4 h-4 text-[var(--neko-foreground)] transition-transform ${isExpanded ? 'rotate-90' : ''}`}
         />
 
         {/* Thinking indicator */}
@@ -47,31 +47,29 @@ function ThinkingBlockComponent({
           {!isComplete && (
             <span className="flex gap-0.5">
               <span
-                className="w-1.5 h-1.5 rounded-full bg-[var(--vscode-foreground)] animate-bounce"
+                className="w-1.5 h-1.5 rounded-full bg-[var(--neko-foreground)] animate-bounce"
                 style={{ animationDelay: '0ms' }}
               />
               <span
-                className="w-1.5 h-1.5 rounded-full bg-[var(--vscode-foreground)] animate-bounce"
+                className="w-1.5 h-1.5 rounded-full bg-[var(--neko-foreground)] animate-bounce"
                 style={{ animationDelay: '150ms' }}
               />
               <span
-                className="w-1.5 h-1.5 rounded-full bg-[var(--vscode-foreground)] animate-bounce"
+                className="w-1.5 h-1.5 rounded-full bg-[var(--neko-foreground)] animate-bounce"
                 style={{ animationDelay: '300ms' }}
               />
             </span>
           )}
-          {isComplete && (
-            <BrainIcon className="w-4 h-4 text-[var(--vscode-descriptionForeground)]" />
-          )}
+          {isComplete && <BrainIcon className="w-4 h-4 text-[var(--neko-descriptionForeground)]" />}
 
-          <span className="text-[12px] font-medium text-[var(--vscode-foreground)]">
+          <span className="text-[12px] font-medium text-[var(--neko-foreground)]">
             {isComplete ? 'Thinking' : 'Thinking...'}
           </span>
         </div>
 
         {/* Content preview when collapsed */}
         {!isExpanded && (
-          <span className="flex-1 text-[11px] text-[var(--vscode-descriptionForeground)] truncate ml-2">
+          <span className="flex-1 text-[11px] text-[var(--neko-descriptionForeground)] truncate ml-2">
             {content.slice(0, 100)}...
           </span>
         )}
@@ -79,11 +77,11 @@ function ThinkingBlockComponent({
 
       {/* Content */}
       {isExpanded && (
-        <div className="px-3 py-2 bg-[var(--vscode-textBlockQuote-background)] border-t border-[var(--vscode-panel-border)]">
+        <div className="px-3 py-2 bg-[var(--neko-textBlockQuote-background)] border-t border-[var(--neko-panel-border)]">
           <MarkdownRenderer
             content={content}
             isStreaming={!isComplete}
-            className="text-[var(--vscode-descriptionForeground)]"
+            className="text-[var(--neko-descriptionForeground)]"
             sessionKey={sessionKey}
           />
         </div>

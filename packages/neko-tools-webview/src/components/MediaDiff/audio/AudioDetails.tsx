@@ -25,10 +25,10 @@ export const AudioDetails = memo(function AudioDetails({ details }: AudioDetails
   if (!details || !details.duration || !details.sampleRate || !details.channels) return null;
 
   return (
-    <div className="p-3 bg-[var(--vscode-editor-background)] border-t border-[var(--vscode-panel-border)]">
+    <div className="p-3 bg-[var(--neko-editor-background)] border-t border-[var(--neko-panel-border)]">
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
         <div>
-          <div className="text-[var(--vscode-descriptionForeground)] mb-1">
+          <div className="text-[var(--neko-descriptionForeground)] mb-1">
             {t('mediaDiff.audio.duration')}
           </div>
           <div className="flex items-center gap-2">
@@ -38,7 +38,7 @@ export const AudioDetails = memo(function AudioDetails({ details }: AudioDetails
           </div>
         </div>
         <div>
-          <div className="text-[var(--vscode-descriptionForeground)] mb-1">
+          <div className="text-[var(--neko-descriptionForeground)] mb-1">
             {t('mediaDiff.audio.sampleRate')}
           </div>
           <div className="flex items-center gap-2">
@@ -48,7 +48,7 @@ export const AudioDetails = memo(function AudioDetails({ details }: AudioDetails
           </div>
         </div>
         <div>
-          <div className="text-[var(--vscode-descriptionForeground)] mb-1">
+          <div className="text-[var(--neko-descriptionForeground)] mb-1">
             {t('mediaDiff.audio.channels')}
           </div>
           <div className="flex items-center gap-2">
@@ -71,7 +71,7 @@ export const AudioDetails = memo(function AudioDetails({ details }: AudioDetails
         </div>
         {details.bitrate && (
           <div>
-            <div className="text-[var(--vscode-descriptionForeground)] mb-1">
+            <div className="text-[var(--neko-descriptionForeground)] mb-1">
               {t('mediaDiff.audio.bitrate')}
             </div>
             <div className="flex items-center gap-2">
@@ -85,8 +85,8 @@ export const AudioDetails = memo(function AudioDetails({ details }: AudioDetails
       {details.silenceRegions &&
         (details.silenceRegions.previous.length > 0 ||
           details.silenceRegions.current.length > 0) && (
-          <div className="mt-3 pt-3 border-t border-[var(--vscode-panel-border)]">
-            <div className="text-[var(--vscode-descriptionForeground)] mb-1 text-xs">
+          <div className="mt-3 pt-3 border-t border-[var(--neko-panel-border)]">
+            <div className="text-[var(--neko-descriptionForeground)] mb-1 text-xs">
               {t('mediaDiff.audio.silentRegions')}
             </div>
             {details.silenceRegions.previous.length > 0 && (

@@ -14,28 +14,28 @@
      -------------------------------------------------------------------------- */
   .cut-webview-root {
     /* Surface hierarchy */
-    --nk-bg:               var(--vscode-editor-background, #1C1C1E);
-    --nk-bg-elevated:      var(--vscode-sideBar-background, #2C2C2E);
-    --nk-bg-panel:         var(--vscode-panel-background, #242426);
+    --nk-bg:               var(--neko-editor-background, #1C1C1E);
+    --nk-bg-elevated:      var(--neko-sideBar-background, #2C2C2E);
+    --nk-bg-panel:         var(--neko-panel-background, #242426);
     --nk-bg-overlay:       rgba(0, 0, 0, 0.60);
     --nk-bg-hover:         rgba(255, 255, 255, 0.06);
     --nk-bg-active:        rgba(255, 255, 255, 0.11);
 
     /* Text hierarchy */
-    --nk-fg:               var(--vscode-editor-foreground, rgba(255, 255, 255, 0.88));
-    --nk-fg-secondary:     var(--vscode-descriptionForeground, rgba(255, 255, 255, 0.50));
+    --nk-fg:               var(--neko-editor-foreground, rgba(255, 255, 255, 0.88));
+    --nk-fg-secondary:     var(--neko-descriptionForeground, rgba(255, 255, 255, 0.50));
     --nk-fg-tertiary:      rgba(255, 255, 255, 0.28);
     --nk-fg-placeholder:   rgba(255, 255, 255, 0.30);
 
     /* Borders */
     --nk-border:           rgba(255, 255, 255, 0.09);
     --nk-border-strong:    rgba(255, 255, 255, 0.15);
-    --nk-border-focus:     var(--vscode-focusBorder, #0A84FF);
+    --nk-border-focus:     var(--neko-focusBorder, #0A84FF);
 
     /* Accent */
-    --nk-accent:           var(--vscode-button-background, #0A84FF);
-    --nk-accent-hover:     var(--vscode-button-hoverBackground, #409CFF);
-    --nk-accent-fg:        var(--vscode-button-foreground, #ffffff);
+    --nk-accent:           var(--neko-button-background, #0A84FF);
+    --nk-accent-hover:     var(--neko-button-hoverBackground, #409CFF);
+    --nk-accent-fg:        var(--neko-button-foreground, #ffffff);
 
     /* Status */
     --nk-green:            #30D158;
@@ -51,7 +51,7 @@
     --nk-glass-shadow:     0 8px 32px rgba(0, 0, 0, 0.56), 0 2px 8px rgba(0, 0, 0, 0.32);
 
     /* Dialog / modal */
-    --nk-dialog-bg:        var(--vscode-sideBar-background, #252526);
+    --nk-dialog-bg:        var(--neko-sideBar-background, #252526);
     --nk-dialog-border:    rgba(255, 255, 255, 0.09);
     --nk-dialog-shadow:    0 24px 64px rgba(0, 0, 0, 0.68), 0 1px 0 rgba(255, 255, 255, 0.06) inset;
 
@@ -66,8 +66,8 @@
     --nk-btn-danger-hover:        rgba(255, 69, 58, 0.28);
 
     /* Input */
-    --nk-input-bg:         var(--vscode-input-background, rgba(255, 255, 255, 0.08));
-    --nk-input-fg:         var(--vscode-input-foreground, rgba(255, 255, 255, 0.88));
+    --nk-input-bg:         var(--neko-input-background, rgba(255, 255, 255, 0.08));
+    --nk-input-fg:         var(--neko-input-foreground, rgba(255, 255, 255, 0.88));
     --nk-input-border:     rgba(255, 255, 255, 0.12);
     --nk-input-shadow:     inset 0 1px 3px rgba(0, 0, 0, 0.25);
 
@@ -111,24 +111,24 @@
   /* --------------------------------------------------------------------------
      Light mode overrides
      -------------------------------------------------------------------------- */
-  :where(.vscode-light, [data-vscode-theme-kind="vscode-light"], [data-vscode-theme-kind="vscode-high-contrast-light"]) .cut-webview-root {
-    --nk-bg:               var(--vscode-editor-background, #F2F2F7);
-    --nk-bg-elevated:      var(--vscode-sideBar-background, #FFFFFF);
-    --nk-bg-panel:         var(--vscode-panel-background, #F8F8FA);
+  :where(.neko-light, [data-neko-theme-kind="neko-light"], [data-neko-theme-kind="neko-high-contrast-light"]) .cut-webview-root {
+    --nk-bg:               var(--neko-editor-background, #F2F2F7);
+    --nk-bg-elevated:      var(--neko-sideBar-background, #FFFFFF);
+    --nk-bg-panel:         var(--neko-panel-background, #F8F8FA);
     --nk-bg-overlay:       rgba(0, 0, 0, 0.35);
     --nk-bg-hover:         rgba(0, 0, 0, 0.05);
     --nk-bg-active:        rgba(0, 0, 0, 0.09);
 
-    --nk-fg:               var(--vscode-editor-foreground, rgba(0, 0, 0, 0.85));
-    --nk-fg-secondary:     var(--vscode-descriptionForeground, rgba(0, 0, 0, 0.50));
+    --nk-fg:               var(--neko-editor-foreground, rgba(0, 0, 0, 0.85));
+    --nk-fg-secondary:     var(--neko-descriptionForeground, rgba(0, 0, 0, 0.50));
     --nk-fg-tertiary:      rgba(0, 0, 0, 0.28);
     --nk-fg-placeholder:   rgba(0, 0, 0, 0.32);
 
     --nk-border:           rgba(0, 0, 0, 0.10);
     --nk-border-strong:    rgba(0, 0, 0, 0.18);
 
-    --nk-accent:           var(--vscode-button-background, #007AFF);
-    --nk-accent-hover:     var(--vscode-button-hoverBackground, #409CFF);
+    --nk-accent:           var(--neko-button-background, #007AFF);
+    --nk-accent-hover:     var(--neko-button-hoverBackground, #409CFF);
 
     --nk-green:            #28A745;
     --nk-red:              #DC3545;
@@ -139,7 +139,7 @@
     --nk-glass-border:     rgba(0, 0, 0, 0.09);
     --nk-glass-shadow:     0 8px 32px rgba(0, 0, 0, 0.16), 0 2px 8px rgba(0, 0, 0, 0.08);
 
-    --nk-dialog-bg:        var(--vscode-sideBar-background, #FFFFFF);
+    --nk-dialog-bg:        var(--neko-sideBar-background, #FFFFFF);
     --nk-dialog-border:    rgba(0, 0, 0, 0.09);
     --nk-dialog-shadow:    0 24px 64px rgba(0, 0, 0, 0.22), 0 1px 0 rgba(255, 255, 255, 0.90) inset;
 
@@ -152,8 +152,8 @@
     --nk-btn-danger-border:       rgba(215, 0, 21, 0.28);
     --nk-btn-danger-hover:        rgba(215, 0, 21, 0.18);
 
-    --nk-input-bg:         var(--vscode-input-background, rgba(0, 0, 0, 0.05));
-    --nk-input-fg:         var(--vscode-input-foreground, rgba(0, 0, 0, 0.85));
+    --nk-input-bg:         var(--neko-input-background, rgba(0, 0, 0, 0.05));
+    --nk-input-fg:         var(--neko-input-foreground, rgba(0, 0, 0, 0.85));
     --nk-input-border:     rgba(0, 0, 0, 0.14);
     --nk-input-shadow:     inset 0 1px 2px rgba(0, 0, 0, 0.08);
 
@@ -184,7 +184,7 @@
   /* --------------------------------------------------------------------------
      High contrast overrides
      -------------------------------------------------------------------------- */
-  :where(.vscode-high-contrast, [data-vscode-theme-kind="vscode-high-contrast"]) .cut-webview-root {
+  :where(.neko-high-contrast, [data-neko-theme-kind="neko-high-contrast"]) .cut-webview-root {
     --nk-bg:               #000000;
     --nk-bg-elevated:      #111111;
     --nk-bg-panel:         #0A0A0A;
@@ -226,8 +226,8 @@
     overflow: hidden;
     display: flex;
     flex-direction: column;
-    font-family: var(--vscode-font-family, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif);
-    font-size: var(--vscode-font-size, 13px);
+    font-family: var(--neko-font-family, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif);
+    font-size: var(--neko-font-size, 13px);
     background-color: var(--nk-bg);
     color: var(--nk-fg);
     line-height: 1.5;
@@ -266,7 +266,7 @@
 }
 
 .cut-webview-root ::-webkit-scrollbar-thumb:active {
-  background: var(--vscode-scrollbarSlider-activeBackground, rgba(255, 255, 255, 0.45));
+  background: var(--neko-scrollbarSlider-activeBackground, rgba(255, 255, 255, 0.45));
 }
 
 .cut-webview-root ::-webkit-scrollbar-corner {
@@ -539,7 +539,7 @@
   color: var(--nk-input-fg);
   border: 1px solid var(--nk-input-border);
   border-radius: var(--nk-r-sm);
-  font-family: var(--vscode-font-family, inherit);
+  font-family: var(--neko-font-family, inherit);
   font-size: 13px;
   line-height: 1.4;
   box-shadow: var(--nk-input-shadow);
@@ -585,7 +585,7 @@
 }
 
 /* Light mode select arrow */
-:where(.vscode-light, [data-vscode-theme-kind="vscode-light"]) .cut-webview-root .nk-select {
+:where(.neko-light, [data-neko-theme-kind="neko-light"]) .cut-webview-root .nk-select {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' fill='none'%3E%3Cpath d='M1 1l4 4 4-4' stroke='rgba(0,0,0,0.38)' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
 }
 
@@ -672,7 +672,7 @@
    Tooltip — glass style
    ============================================================================= */
 
-.vscode-tooltip,
+.neko-tooltip,
 .nk-tooltip {
   position: absolute;
   background: var(--nk-glass-bg);
@@ -693,7 +693,7 @@
    Badge / pill
    ============================================================================= */
 
-.vscode-badge,
+.neko-badge,
 .nk-badge {
   display: inline-flex;
   align-items: center;
@@ -711,7 +711,7 @@
    VSCode-compatible button classes (upgraded macOS style)
    ============================================================================= */
 
-.vscode-button {
+.neko-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -728,22 +728,22 @@
   transition: filter 0.15s ease;
 }
 
-.vscode-button:hover {
+.neko-button:hover {
   filter: brightness(1.12);
 }
 
-.vscode-button:focus {
+.neko-button:focus {
   outline: 2px solid var(--nk-border-focus);
   outline-offset: 2px;
 }
 
-.vscode-button-secondary {
+.neko-button-secondary {
   background: var(--nk-btn-secondary-bg);
   color: var(--nk-btn-secondary-fg);
   border: 1px solid var(--nk-btn-secondary-border);
 }
 
-.vscode-button-secondary:hover {
+.neko-button-secondary:hover {
   background: var(--nk-btn-secondary-hover);
 }
 
@@ -751,7 +751,7 @@
    VSCode-compatible input class (upgraded macOS style)
    ============================================================================= */
 
-.vscode-input {
+.neko-input {
   background: var(--nk-input-bg);
   color: var(--nk-input-fg);
   border: 1px solid var(--nk-input-border);
@@ -764,12 +764,12 @@
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
-.vscode-input:focus {
+.neko-input:focus {
   border-color: var(--nk-border-focus);
   box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.20), var(--nk-input-shadow);
 }
 
-.vscode-input::placeholder {
+.neko-input::placeholder {
   color: var(--nk-fg-placeholder);
 }
 
@@ -777,7 +777,7 @@
    VSCode-compatible dropdown class
    ============================================================================= */
 
-.vscode-dropdown {
+.neko-dropdown {
   background: var(--nk-input-bg);
   color: var(--nk-input-fg);
   border: 1px solid var(--nk-input-border);
@@ -789,7 +789,7 @@
   transition: border-color 0.15s ease;
 }
 
-.vscode-dropdown:focus {
+.neko-dropdown:focus {
   border-color: var(--nk-border-focus);
   box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.20);
 }
@@ -852,7 +852,7 @@
   flex-direction: column;
   min-width: 0;
   min-height: 0;
-  background: var(--vscode-editor-background);
+  background: var(--neko-editor-background);
 }
 
 .cut-basic-preview,
@@ -874,7 +874,7 @@
   width: 100%;
   height: 100%;
   flex: 1 1 0;
-  background: var(--vscode-editor-background);
+  background: var(--neko-editor-background);
   overflow: hidden;
 }
 
@@ -924,8 +924,8 @@
   flex-wrap: wrap;
   gap: 6px;
   padding: 8px 10px;
-  border-top: 1px solid var(--vscode-panel-border);
-  background: var(--vscode-editor-background);
+  border-top: 1px solid var(--neko-panel-border);
+  background: var(--neko-editor-background);
 }
 
 .cut-basic-inspector-resize-handle {
@@ -933,16 +933,16 @@
   inset: 0 auto 0 0;
   z-index: 5;
   width: 5px;
-  border-left: 1px solid var(--vscode-panel-border);
-  border-right: 1px solid var(--vscode-panel-border);
+  border-left: 1px solid var(--neko-panel-border);
+  border-right: 1px solid var(--neko-panel-border);
 }
 
 .cut-basic-preview-resize-handle {
   position: relative;
   z-index: 6;
   flex: 0 0 5px;
-  border-top: 1px solid var(--vscode-panel-border);
-  border-bottom: 1px solid var(--vscode-panel-border);
+  border-top: 1px solid var(--neko-panel-border);
+  border-bottom: 1px solid var(--neko-panel-border);
 }
 
 .cut-basic-timeline-region {
@@ -984,15 +984,15 @@
 .cut-basic-timeline-toolbar {
   min-height: 38px;
   justify-content: space-between;
-  border-bottom: 1px solid var(--vscode-panel-border);
-  background: var(--vscode-editor-background);
+  border-bottom: 1px solid var(--neko-panel-border);
+  background: var(--neko-editor-background);
 }
 
 .cut-basic-track-toolbar {
   flex: 0 0 auto;
   gap: 2px;
   padding: 0 5px;
-  border-right: 1px solid var(--vscode-panel-border);
+  border-right: 1px solid var(--neko-panel-border);
 }
 
 .cut-basic-timeline-actions {
@@ -1019,18 +1019,18 @@
   border: 0;
   border-radius: 5px;
   background: transparent;
-  color: var(--vscode-foreground);
+  color: var(--neko-foreground);
   font-size: 11px;
 }
 
 .cut-basic-toolbar-button:hover:not(:disabled),
 .cut-basic-export-actions button:hover:not(:disabled) {
-  background: var(--vscode-toolbar-hoverBackground, var(--nk-bg-hover));
+  background: var(--neko-toolbar-hoverBackground, var(--nk-bg-hover));
 }
 
 .cut-basic-toolbar-button[data-active='true'] {
-  background: var(--vscode-button-background);
-  color: var(--vscode-button-foreground);
+  background: var(--neko-button-background);
+  color: var(--neko-button-foreground);
 }
 
 .cut-basic-toolbar-button:disabled {
@@ -1041,7 +1041,7 @@
   width: 1px;
   height: 18px;
   margin: 0 3px;
-  background: var(--vscode-panel-border);
+  background: var(--neko-panel-border);
 }
 
 .cut-basic-timeline-scroll {
@@ -1066,15 +1066,15 @@
   left: 0;
   z-index: 35;
   flex: 0 0 auto;
-  border-right: 1px solid var(--vscode-panel-border);
-  background: var(--vscode-sideBar-background);
+  border-right: 1px solid var(--neko-panel-border);
+  background: var(--neko-sideBar-background);
 }
 
 .cut-basic-ruler {
   position: relative;
   height: 28px;
   flex: 0 0 auto;
-  border-bottom: 1px solid var(--vscode-panel-border);
+  border-bottom: 1px solid var(--neko-panel-border);
   background: var(--nk-ruler-bg);
   cursor: ew-resize;
 }
@@ -1084,7 +1084,7 @@
   bottom: 0;
   width: 1px;
   height: 7px;
-  background: var(--vscode-descriptionForeground);
+  background: var(--neko-descriptionForeground);
   opacity: 0.45;
 }
 
@@ -1097,7 +1097,7 @@
   position: absolute;
   top: -13px;
   left: 4px;
-  color: var(--vscode-descriptionForeground);
+  color: var(--neko-descriptionForeground);
   font-size: 10px;
   white-space: nowrap;
 }
@@ -1111,7 +1111,7 @@
   position: relative;
   display: flex;
   height: 58px;
-  border-bottom: 1px solid var(--vscode-panel-border);
+  border-bottom: 1px solid var(--neko-panel-border);
 }
 
 .cut-basic-track-header {
@@ -1123,8 +1123,8 @@
   align-items: center;
   gap: 2px;
   padding: 0 4px;
-  border-right: 1px solid var(--vscode-panel-border);
-  background: var(--vscode-sideBar-background);
+  border-right: 1px solid var(--neko-panel-border);
+  background: var(--neko-sideBar-background);
 }
 
 .cut-basic-track-type-icon {
@@ -1133,7 +1133,7 @@
   flex: 0 0 20px;
   align-items: center;
   justify-content: center;
-  color: var(--vscode-descriptionForeground);
+  color: var(--neko-descriptionForeground);
 }
 
 .cut-basic-track-content {
@@ -1149,11 +1149,11 @@
 .cut-basic-gap {
   position: absolute;
   inset-block: 0;
-  border-inline: 1px dashed color-mix(in srgb, var(--vscode-panel-border) 70%, transparent);
+  border-inline: 1px dashed color-mix(in srgb, var(--neko-panel-border) 70%, transparent);
   background: repeating-linear-gradient(
     135deg,
     transparent 0 8px,
-    color-mix(in srgb, var(--vscode-descriptionForeground) 14%, transparent) 8px 9px
+    color-mix(in srgb, var(--neko-descriptionForeground) 14%, transparent) 8px 9px
   );
 }
 
@@ -1181,7 +1181,7 @@
 }
 
 .cut-basic-clip[data-selected='true'] {
-  box-shadow: inset 0 0 0 1px var(--vscode-focusBorder), 0 0 0 1px var(--vscode-focusBorder);
+  box-shadow: inset 0 0 0 1px var(--neko-focusBorder), 0 0 0 1px var(--neko-focusBorder);
 }
 
 .cut-basic-clip[data-enabled='false'] {
@@ -1204,16 +1204,16 @@
 }
 
 .cut-basic-track-row[data-track-drag-over='true'] {
-  box-shadow: inset 0 2px 0 var(--vscode-focusBorder);
+  box-shadow: inset 0 2px 0 var(--neko-focusBorder);
 }
 
 .cut-basic-track-name-input {
   min-width: 0;
   width: 100%;
-  border: 1px solid var(--vscode-focusBorder);
+  border: 1px solid var(--neko-focusBorder);
   border-radius: 3px;
-  background: var(--vscode-input-background);
-  color: var(--vscode-input-foreground);
+  background: var(--neko-input-background);
+  color: var(--neko-input-foreground);
 }
 
 .cut-basic-track-button {
@@ -1227,11 +1227,11 @@
   border: 0;
   border-radius: 4px;
   background: transparent;
-  color: var(--vscode-foreground);
+  color: var(--neko-foreground);
 }
 
 .cut-basic-track-button:hover:not(:disabled) {
-  background: var(--vscode-toolbar-hoverBackground, var(--nk-bg-hover));
+  background: var(--neko-toolbar-hoverBackground, var(--nk-bg-hover));
 }
 
 .cut-basic-track-button:disabled {
@@ -1299,13 +1299,13 @@
   width: 9px;
   padding: 0;
   border-block: 0;
-  border-color: var(--vscode-focusBorder);
-  background: color-mix(in srgb, var(--vscode-focusBorder) 20%, transparent);
+  border-color: var(--neko-focusBorder);
+  background: color-mix(in srgb, var(--neko-focusBorder) 20%, transparent);
   cursor: ew-resize;
 }
 
 .cut-basic-trim-handle:hover {
-  background: color-mix(in srgb, var(--vscode-focusBorder) 42%, transparent);
+  background: color-mix(in srgb, var(--neko-focusBorder) 42%, transparent);
 }
 
 .cut-basic-trim-handle.is-start {
@@ -1339,7 +1339,7 @@
   bottom: 0;
   z-index: 20;
   width: 1px;
-  background: var(--vscode-focusBorder);
+  background: var(--neko-focusBorder);
   pointer-events: none;
 }
 
@@ -1361,21 +1361,21 @@
 .cut-basic-selection-box {
   position: absolute;
   z-index: 27;
-  border: 1px solid var(--vscode-focusBorder);
-  background: color-mix(in srgb, var(--vscode-focusBorder) 14%, transparent);
+  border: 1px solid var(--neko-focusBorder);
+  background: color-mix(in srgb, var(--neko-focusBorder) 14%, transparent);
   pointer-events: none;
 }
 
 .cut-basic-overview-row {
   height: 52px;
-  border-bottom: 1px solid var(--vscode-panel-border);
+  border-bottom: 1px solid var(--neko-panel-border);
 }
 
 .cut-basic-overview {
   position: relative;
   flex: 1 1 auto;
   min-width: 0;
-  background: var(--vscode-editor-background);
+  background: var(--neko-editor-background);
   overflow: hidden;
 }
 
@@ -1384,7 +1384,7 @@
   height: 6px;
   border-radius: 2px;
   min-width: 1px;
-  background: var(--vscode-focusBorder);
+  background: var(--neko-focusBorder);
 }
 
 .cut-basic-overview-clip[data-kind='Audio'] { background: var(--nk-green); }
@@ -1393,8 +1393,8 @@
 .cut-basic-overview-viewport {
   position: absolute;
   inset-block: 3px;
-  border: 1px solid var(--vscode-focusBorder);
-  background: color-mix(in srgb, var(--vscode-focusBorder) 12%, transparent);
+  border: 1px solid var(--neko-focusBorder);
+  background: color-mix(in srgb, var(--neko-focusBorder) 12%, transparent);
 }
 
 .cut-basic-export-dialog { width: min(92vw, 720px); max-height: min(88vh, 760px); overflow: auto; }
@@ -1402,19 +1402,19 @@
 .cut-basic-export-title-field,
 .cut-basic-export-row { display: grid; grid-template-columns: minmax(120px, 1fr) minmax(220px, 280px); align-items: center; gap: 18px; }
 .cut-basic-export-title-field { padding: 8px 0 16px; }
-.cut-basic-export-title-field input { min-width: 0; height: 30px; border: 1px solid var(--vscode-input-border, var(--neko-border)); border-radius: 4px; background: var(--vscode-input-background); color: var(--vscode-input-foreground); padding: 0 9px; }
-.cut-basic-export-section { display: grid; gap: 10px; padding: 14px 0; border-top: 1px solid var(--vscode-panel-border); }
+.cut-basic-export-title-field input { min-width: 0; height: 30px; border: 1px solid var(--neko-input-border, var(--neko-border)); border-radius: 4px; background: var(--neko-input-background); color: var(--neko-input-foreground); padding: 0 9px; }
+.cut-basic-export-section { display: grid; gap: 10px; padding: 14px 0; border-top: 1px solid var(--neko-panel-border); }
 .cut-basic-export-section h3 { margin: 0 0 2px; font-size: 13px; }
 .cut-basic-export-row > :last-child { width: 100%; }
-.cut-basic-export-more { width: max-content; border: 0; background: transparent; color: var(--vscode-descriptionForeground); padding: 2px 0; }
+.cut-basic-export-more { width: max-content; border: 0; background: transparent; color: var(--neko-descriptionForeground); padding: 2px 0; }
 .cut-basic-export-dimensions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .cut-basic-export-history { display: grid; gap: 3px; margin-top: 12px; font-size: 11px; }
-.cut-basic-export-footer { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-top: 14px; border-top: 1px solid var(--vscode-panel-border); color: var(--vscode-descriptionForeground); font-size: 11px; }
+.cut-basic-export-footer { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-top: 14px; border-top: 1px solid var(--neko-panel-border); color: var(--neko-descriptionForeground); font-size: 11px; }
 .cut-basic-export-actions { display: flex; flex: 0 0 auto; justify-content: flex-end; gap: 6px; }
-.cut-basic-export-actions button { padding: 4px 10px; background: var(--vscode-button-secondaryBackground); }
-.cut-basic-export-actions button:last-child { background: var(--vscode-button-background); color: var(--vscode-button-foreground); }
+.cut-basic-export-actions button { padding: 4px 10px; background: var(--neko-button-secondaryBackground); }
+.cut-basic-export-actions button:last-child { background: var(--neko-button-background); color: var(--neko-button-foreground); }
 .cut-basic-export-progress { display: grid; justify-items: center; gap: 10px; padding: 18px; }
-.cut-basic-export-spinner { width: 24px; height: 24px; border: 3px solid var(--vscode-panel-border); border-top-color: var(--vscode-progressBar-background); border-radius: 50%; animation: cut-preview-spin 0.9s linear infinite; }
+.cut-basic-export-spinner { width: 24px; height: 24px; border: 3px solid var(--neko-panel-border); border-top-color: var(--neko-progressBar-background); border-radius: 50%; animation: cut-preview-spin 0.9s linear infinite; }
 
 @media (max-width: 560px) {
   .cut-basic-export-title-field,
@@ -1429,39 +1429,39 @@
   align-self: stretch;
   min-width: 0;
   min-height: 0;
-  background: var(--vscode-sideBar-background);
+  background: var(--neko-sideBar-background);
   overflow: hidden;
 }
 
 #cut-property-panel {
-  background: var(--vscode-sideBar-background);
+  background: var(--neko-sideBar-background);
 }
 
 /* =============================================================================
    VSCode-compatible list item class
    ============================================================================= */
 
-.vscode-list-item {
+.neko-list-item {
   padding: 5px 9px;
   border-radius: var(--nk-r-xs);
   cursor: pointer;
   transition: background 0.10s ease;
 }
 
-.vscode-list-item:hover {
+.neko-list-item:hover {
   background: var(--nk-bg-hover);
 }
 
-.vscode-list-item.active {
-  background: var(--vscode-list-activeSelectionBackground, rgba(10, 132, 255, 0.25));
-  color: var(--vscode-list-activeSelectionForeground, var(--nk-fg));
+.neko-list-item.active {
+  background: var(--neko-list-activeSelectionBackground, rgba(10, 132, 255, 0.25));
+  color: var(--neko-list-activeSelectionForeground, var(--nk-fg));
 }
 
 /* =============================================================================
    Description text
    ============================================================================= */
 
-.vscode-description {
+.neko-description {
   color: var(--nk-fg-secondary);
   font-size: 12px;
 }
@@ -1492,7 +1492,7 @@
   min-width: 0;
   min-height: 37px;
   overflow: visible;
-  color: var(--vscode-foreground);
+  color: var(--neko-foreground);
 }
 
 .cut-preview-primary-controls {
@@ -1526,11 +1526,11 @@
   z-index: 50;
   min-width: 188px;
   padding: 6px;
-  color: var(--vscode-menu-foreground, var(--vscode-foreground));
-  background: var(--vscode-menu-background, var(--vscode-editorWidget-background));
-  border: 1px solid var(--vscode-menu-border, var(--vscode-panel-border));
+  color: var(--neko-menu-foreground, var(--neko-foreground));
+  background: var(--neko-menu-background, var(--neko-editorWidget-background));
+  border: 1px solid var(--neko-menu-border, var(--neko-panel-border));
   border-radius: 6px;
-  box-shadow: 0 6px 18px var(--vscode-widget-shadow, rgba(0, 0, 0, 0.36));
+  box-shadow: 0 6px 18px var(--neko-widget-shadow, rgba(0, 0, 0, 0.36));
 }
 
 .cut-preview-menu-row {
@@ -1539,7 +1539,7 @@
   justify-content: space-between;
   gap: 10px;
   min-height: 30px;
-  color: var(--vscode-descriptionForeground);
+  color: var(--neko-descriptionForeground);
   font-size: 12px;
   white-space: nowrap;
 }
@@ -1551,7 +1551,7 @@
   width: 100%;
   min-height: 28px;
   padding: 5px 7px;
-  color: var(--vscode-menu-foreground, var(--vscode-foreground));
+  color: var(--neko-menu-foreground, var(--neko-foreground));
   background: transparent;
   border: 0;
   border-radius: 4px;
@@ -1562,8 +1562,8 @@
 }
 
 .cut-preview-menu-button:hover:not(:disabled) {
-  background: var(--vscode-menu-selectionBackground, var(--vscode-list-hoverBackground));
-  color: var(--vscode-menu-selectionForeground, var(--vscode-foreground));
+  background: var(--neko-menu-selectionBackground, var(--neko-list-hoverBackground));
+  color: var(--neko-menu-selectionForeground, var(--neko-foreground));
 }
 
 .cut-preview-menu-button:disabled {
@@ -1572,7 +1572,7 @@
 }
 
 .cut-preview-menu-button[aria-pressed='true'] {
-  color: var(--vscode-button-background);
+  color: var(--neko-button-background);
 }
 
 .cut-preview-fps-icon {
@@ -1623,7 +1623,7 @@
 .cut-inspector-group {
   gap: 4px;
   padding: 9px 10px 10px;
-  border-top: 1px solid var(--vscode-panel-border);
+  border-top: 1px solid var(--neko-panel-border);
 }
 
 .cut-inspector-group:first-child {
@@ -1636,7 +1636,7 @@
 }
 
 .cut-inspector-group > header h3 {
-  color: var(--vscode-foreground);
+  color: var(--neko-foreground);
   font-size: 11px;
   font-weight: 600;
   line-height: 16px;
@@ -1734,7 +1734,7 @@
 .cut-shared-property-label {
   min-width: 0;
   overflow: hidden;
-  color: var(--vscode-descriptionForeground);
+  color: var(--neko-descriptionForeground);
   font-size: 10.5px;
   line-height: 1.2;
   text-overflow: ellipsis;
@@ -1787,8 +1787,8 @@
   height: 24px;
   border: 1px solid var(--neko-border);
   border-radius: var(--nk-r-sm);
-  background: var(--vscode-input-background);
-  color: var(--vscode-input-foreground);
+  background: var(--neko-input-background);
+  color: var(--neko-input-foreground);
   font-size: 11px;
   outline: none;
 }
@@ -1813,7 +1813,7 @@
   height: 24px;
   border: 1px solid var(--neko-border);
   border-radius: var(--nk-r-sm);
-  background: var(--vscode-input-background);
+  background: var(--neko-input-background);
   padding: 1px 2px;
 }
 
@@ -1825,7 +1825,7 @@
 
 .cut-shared-property-unit {
   flex: 0 0 auto;
-  color: var(--vscode-descriptionForeground);
+  color: var(--neko-descriptionForeground);
   font-size: 10px;
 }
 
@@ -1833,7 +1833,7 @@
 .cut-shared-text-input:focus,
 .cut-shared-select:focus,
 .cut-shared-color-input:focus {
-  border-color: var(--vscode-focusBorder);
+  border-color: var(--neko-focusBorder);
 }
 
 .cut-shared-number-input:disabled,

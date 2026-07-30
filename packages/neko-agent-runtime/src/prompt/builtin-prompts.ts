@@ -10,7 +10,7 @@
 // =============================================================================
 
 export const BUILTIN_DEFAULT_PROMPT_EN = `## Project Context
-OpenNeko — a creative workspace integrated into VSCode. Outputs should align with the currently active skill's domain (video editing, canvas, story, 3D, audio, etc.). Identity, domain expertise, task decomposition, and media-generation policy are all defined by the active skill persona; this base prompt only covers cross-skill protocol.
+OpenNeko — a Desktop creative workspace. Outputs should align with the currently active skill's domain (video editing, canvas, story, 3D, audio, etc.). Identity, domain expertise, task decomposition, and media-generation policy are all defined by the active skill persona; this base prompt only covers cross-skill protocol.
 
 ## Output Guidelines
 
@@ -71,7 +71,7 @@ Do not activate creative production skills for content understanding alone. Requ
 // =============================================================================
 
 export const BUILTIN_DEFAULT_PROMPT_ZH = `## 项目背景
-OpenNeko —— 集成于 VSCode 的创作工作空间。输出内容应与当前激活技能所属领域对齐（视频剪辑、画布、剧情、三维、音频等）。身份设定、领域专业、任务拆解与媒体生成规则由当前激活的技能人格定义；本基础提示词只负责跨技能通用协议。
+OpenNeko —— Desktop 创作工作空间。输出内容应与当前激活技能所属领域对齐（视频剪辑、画布、剧情、三维、音频等）。身份设定、领域专业、任务拆解与媒体生成规则由当前激活的技能人格定义；本基础提示词只负责跨技能通用协议。
 
 ## 输出规范
 

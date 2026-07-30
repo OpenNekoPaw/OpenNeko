@@ -130,12 +130,12 @@ export function PanelSection({
       {title !== undefined || description !== undefined ? (
         <header className="grid gap-0.5 px-1">
           {title !== undefined ? (
-            <h3 className="m-0 text-[11px] font-semibold uppercase text-[var(--vscode-descriptionForeground)]">
+            <h3 className="m-0 text-[11px] font-semibold uppercase text-[var(--neko-descriptionForeground)]">
               {title}
             </h3>
           ) : null}
           {description !== undefined ? (
-            <p className="m-0 text-[11px] text-[var(--vscode-descriptionForeground)]">
+            <p className="m-0 text-[11px] text-[var(--neko-descriptionForeground)]">
               {description}
             </p>
           ) : null}
@@ -172,7 +172,7 @@ export function PropertyRow({
       )}
       data-property-id={propertyId}
     >
-      <span className="grid min-w-0 gap-0.5 text-[var(--vscode-descriptionForeground)]">
+      <span className="grid min-w-0 gap-0.5 text-[var(--neko-descriptionForeground)]">
         <span className="min-w-0 truncate">{label}</span>
         {description !== undefined ? (
           <span className="min-w-0 text-[11px] leading-tight">{description}</span>
@@ -230,7 +230,7 @@ function AxisGroupAxis({
   const axisId = id ?? axis;
   return (
     <div className="flex min-w-0 items-center gap-1" data-property-id={axisId}>
-      <span className="w-3 shrink-0 text-[11px] font-medium text-[var(--vscode-descriptionForeground)]">
+      <span className="w-3 shrink-0 text-[11px] font-medium text-[var(--neko-descriptionForeground)]">
         {axis}
       </span>
       <NumberInput

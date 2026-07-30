@@ -102,78 +102,78 @@ export const desktopNativeThemeTokens = {
   Record<DesktopResolvedTheme, Readonly<Record<string, string>>>
 >;
 
-const electronWebviewCompatibilityTokens = {
+const desktopWebviewThemeTokens = {
   light: {
-    '--vscode-foreground': '#20201f',
-    '--vscode-descriptionForeground': '#777774',
-    '--vscode-editor-foreground': '#20201f',
-    '--vscode-sideBar-foreground': '#555552',
-    '--vscode-input-foreground': '#20201f',
-    '--vscode-input-placeholderForeground': '#969693',
-    '--vscode-button-background': '#343735',
-    '--vscode-button-foreground': '#ffffff',
-    '--vscode-button-hoverBackground': '#242725',
-    '--vscode-button-secondaryForeground': '#4f5250',
-    '--vscode-focusBorder': '#6d716f',
-    '--vscode-list-activeSelectionBackground': '#e8e8e7',
-    '--vscode-list-activeSelectionForeground': '#20201f',
-    '--vscode-menu-foreground': '#20201f',
-    '--vscode-dropdown-foreground': '#20201f',
-    '--vscode-icon-foreground': '#6c6f6d',
-    '--vscode-scrollbarSlider-background': 'rgba(0, 0, 0, 0.12)',
-    '--vscode-scrollbarSlider-hoverBackground': 'rgba(0, 0, 0, 0.21)',
-    '--vscode-scrollbarSlider-activeBackground': 'rgba(0, 0, 0, 0.30)',
-    '--vscode-inputValidation-errorBackground': '#fff0f1',
+    '--neko-foreground': '#20201f',
+    '--neko-descriptionForeground': '#777774',
+    '--neko-editor-foreground': '#20201f',
+    '--neko-sideBar-foreground': '#555552',
+    '--neko-input-foreground': '#20201f',
+    '--neko-input-placeholderForeground': '#969693',
+    '--neko-button-background': '#343735',
+    '--neko-button-foreground': '#ffffff',
+    '--neko-button-hoverBackground': '#242725',
+    '--neko-button-secondaryForeground': '#4f5250',
+    '--neko-focusBorder': '#6d716f',
+    '--neko-list-activeSelectionBackground': '#e8e8e7',
+    '--neko-list-activeSelectionForeground': '#20201f',
+    '--neko-menu-foreground': '#20201f',
+    '--neko-dropdown-foreground': '#20201f',
+    '--neko-icon-foreground': '#6c6f6d',
+    '--neko-scrollbarSlider-background': 'rgba(0, 0, 0, 0.12)',
+    '--neko-scrollbarSlider-hoverBackground': 'rgba(0, 0, 0, 0.21)',
+    '--neko-scrollbarSlider-activeBackground': 'rgba(0, 0, 0, 0.30)',
+    '--neko-inputValidation-errorBackground': '#fff0f1',
   },
   dark: {
-    '--vscode-foreground': '#e7eae8',
-    '--vscode-descriptionForeground': '#a4aba6',
-    '--vscode-editor-foreground': '#e7eae8',
-    '--vscode-sideBar-foreground': '#d1d6d2',
-    '--vscode-input-foreground': '#e7eae8',
-    '--vscode-input-placeholderForeground': '#7f8782',
-    '--vscode-button-background': '#397f68',
-    '--vscode-button-foreground': '#ffffff',
-    '--vscode-button-hoverBackground': '#478f76',
-    '--vscode-button-secondaryForeground': '#d5d9d6',
-    '--vscode-focusBorder': '#65b89b',
-    '--vscode-list-activeSelectionBackground': '#29473c',
-    '--vscode-list-activeSelectionForeground': '#effaf5',
-    '--vscode-menu-foreground': '#e7eae8',
-    '--vscode-dropdown-foreground': '#e7eae8',
-    '--vscode-icon-foreground': '#a4aba6',
-    '--vscode-scrollbarSlider-background': 'rgba(214, 224, 218, 0.14)',
-    '--vscode-scrollbarSlider-hoverBackground': 'rgba(214, 224, 218, 0.24)',
-    '--vscode-scrollbarSlider-activeBackground': 'rgba(214, 224, 218, 0.34)',
-    '--vscode-inputValidation-errorBackground': '#3a2327',
+    '--neko-foreground': '#e7eae8',
+    '--neko-descriptionForeground': '#a4aba6',
+    '--neko-editor-foreground': '#e7eae8',
+    '--neko-sideBar-foreground': '#d1d6d2',
+    '--neko-input-foreground': '#e7eae8',
+    '--neko-input-placeholderForeground': '#7f8782',
+    '--neko-button-background': '#397f68',
+    '--neko-button-foreground': '#ffffff',
+    '--neko-button-hoverBackground': '#478f76',
+    '--neko-button-secondaryForeground': '#d5d9d6',
+    '--neko-focusBorder': '#65b89b',
+    '--neko-list-activeSelectionBackground': '#29473c',
+    '--neko-list-activeSelectionForeground': '#effaf5',
+    '--neko-menu-foreground': '#e7eae8',
+    '--neko-dropdown-foreground': '#e7eae8',
+    '--neko-icon-foreground': '#a4aba6',
+    '--neko-scrollbarSlider-background': 'rgba(214, 224, 218, 0.14)',
+    '--neko-scrollbarSlider-hoverBackground': 'rgba(214, 224, 218, 0.24)',
+    '--neko-scrollbarSlider-activeBackground': 'rgba(214, 224, 218, 0.34)',
+    '--neko-inputValidation-errorBackground': '#3a2327',
   },
 } as const satisfies Readonly<
   Record<DesktopResolvedTheme, Readonly<Record<string, string>>>
 >;
 
-const electronWebviewSharedCompatibilityTokens = {
-  '--vscode-editor-background': 'var(--neko-desktop-main)',
-  '--vscode-sideBar-background': 'var(--neko-desktop-surface-muted)',
-  '--vscode-sideBar-border': 'var(--neko-desktop-border)',
-  '--vscode-editorWidget-background': 'var(--neko-desktop-surface-raised)',
-  '--vscode-editorWidget-border': 'var(--neko-desktop-border)',
-  '--vscode-panel-background': 'var(--neko-desktop-surface)',
-  '--vscode-panel-border': 'var(--neko-desktop-border)',
-  '--vscode-input-background': 'var(--neko-desktop-surface-raised)',
-  '--vscode-input-border': 'var(--neko-desktop-border-strong)',
-  '--vscode-button-secondaryBackground': 'var(--neko-desktop-control)',
-  '--vscode-button-secondaryHoverBackground': 'var(--neko-desktop-control-hover)',
-  '--vscode-list-hoverBackground': 'var(--neko-desktop-control-hover)',
-  '--vscode-list-inactiveSelectionBackground': 'var(--neko-desktop-control)',
-  '--vscode-menu-background': 'var(--neko-desktop-overlay)',
-  '--vscode-dropdown-background': 'var(--neko-desktop-surface-raised)',
-  '--vscode-dropdown-border': 'var(--neko-desktop-border)',
-  '--vscode-widget-border': 'var(--neko-desktop-border)',
-  '--vscode-toolbar-hoverBackground': 'var(--neko-desktop-control-hover)',
-  '--vscode-toolbar-activeBackground': 'var(--neko-desktop-control-pressed)',
-  '--vscode-font-family':
+const desktopWebviewSharedThemeTokens = {
+  '--neko-editor-background': 'var(--neko-desktop-main)',
+  '--neko-sideBar-background': 'var(--neko-desktop-surface-muted)',
+  '--neko-sideBar-border': 'var(--neko-desktop-border)',
+  '--neko-editorWidget-background': 'var(--neko-desktop-surface-raised)',
+  '--neko-editorWidget-border': 'var(--neko-desktop-border)',
+  '--neko-panel-background': 'var(--neko-desktop-surface)',
+  '--neko-panel-border': 'var(--neko-desktop-border)',
+  '--neko-input-background': 'var(--neko-desktop-surface-raised)',
+  '--neko-input-border': 'var(--neko-desktop-border-strong)',
+  '--neko-button-secondaryBackground': 'var(--neko-desktop-control)',
+  '--neko-button-secondaryHoverBackground': 'var(--neko-desktop-control-hover)',
+  '--neko-list-hoverBackground': 'var(--neko-desktop-control-hover)',
+  '--neko-list-inactiveSelectionBackground': 'var(--neko-desktop-control)',
+  '--neko-menu-background': 'var(--neko-desktop-overlay)',
+  '--neko-dropdown-background': 'var(--neko-desktop-surface-raised)',
+  '--neko-dropdown-border': 'var(--neko-desktop-border)',
+  '--neko-widget-border': 'var(--neko-desktop-border)',
+  '--neko-toolbar-hoverBackground': 'var(--neko-desktop-control-hover)',
+  '--neko-toolbar-activeBackground': 'var(--neko-desktop-control-pressed)',
+  '--neko-font-family':
     '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif',
-  '--vscode-font-size': '13px',
+  '--neko-font-size': '13px',
 } as const;
 
 export function applyResolvedDesktopTheme(
@@ -181,19 +181,19 @@ export function applyResolvedDesktopTheme(
   theme: DesktopResolvedTheme,
 ): void {
   const root = target.documentElement;
-  const vscodeThemeKind = theme === 'dark' ? 'vscode-dark' : 'vscode-light';
+  const nekoThemeKind = theme === 'dark' ? 'neko-dark' : 'neko-light';
   root.dataset.nekoTheme = theme;
   root.dataset.nekoHost = 'desktop';
-  root.dataset.vscodeThemeKind = vscodeThemeKind;
-  target.body.dataset.vscodeThemeKind = vscodeThemeKind;
-  target.body.classList.remove('vscode-light', 'vscode-dark');
-  target.body.classList.add(vscodeThemeKind);
+  root.dataset.nekoThemeKind = nekoThemeKind;
+  target.body.dataset.nekoThemeKind = nekoThemeKind;
+  target.body.classList.remove('neko-light', 'neko-dark');
+  target.body.classList.add(nekoThemeKind);
   root.style.colorScheme = theme;
 
   applyTokens(root, nekoDesignTokens[theme]);
   applyTokens(root, desktopNativeThemeTokens[theme]);
-  applyTokens(root, electronWebviewSharedCompatibilityTokens);
-  applyTokens(root, electronWebviewCompatibilityTokens[theme]);
+  applyTokens(root, desktopWebviewSharedThemeTokens);
+  applyTokens(root, desktopWebviewThemeTokens[theme]);
 }
 
 export function startDesktopSystemTheme(

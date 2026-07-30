@@ -165,7 +165,7 @@ export const ThreeTrackWaveform = memo(function ThreeTrackWaveform({
     >
       {/* Zoom indicator */}
       {zoom > 1 && (
-        <div className="flex items-center justify-between text-xs text-[var(--vscode-descriptionForeground)] px-1 mb-1">
+        <div className="flex items-center justify-between text-xs text-[var(--neko-descriptionForeground)] px-1 mb-1">
           <span>{t('mediaDiff.audio.zoom', { level: zoom.toFixed(1) })}</span>
           <span>
             {duration > 0
@@ -177,11 +177,11 @@ export const ThreeTrackWaveform = memo(function ThreeTrackWaveform({
       )}
       {tracks.map((track) => (
         <div key={track.key} className="relative">
-          <div className="text-xs text-[var(--vscode-descriptionForeground)] mb-0.5 flex items-center gap-2">
+          <div className="text-xs text-[var(--neko-descriptionForeground)] mb-0.5 flex items-center gap-2">
             <div className="w-2 h-2 rounded-full" style={{ backgroundColor: track.color }} />
             {track.label}
           </div>
-          <div className="relative bg-[var(--vscode-input-background)] rounded border border-[var(--vscode-panel-border)]">
+          <div className="relative bg-[var(--neko-input-background)] rounded border border-[var(--neko-panel-border)]">
             {/* Diff regions overlay (diff track only) */}
             {track.key === 'diff' && diffRegions.length > 0 && (
               <DiffRegionOverlay
@@ -234,9 +234,9 @@ export const ThreeTrackWaveform = memo(function ThreeTrackWaveform({
       ))}
       {/* Minimap scrollbar when zoomed */}
       {zoom > 1 && (
-        <div className="relative h-2 bg-[var(--vscode-input-background)] rounded mt-1 mx-1">
+        <div className="relative h-2 bg-[var(--neko-input-background)] rounded mt-1 mx-1">
           <div
-            className="absolute h-full bg-[var(--vscode-button-background)] rounded opacity-60"
+            className="absolute h-full bg-[var(--neko-button-background)] rounded opacity-60"
             style={{
               left: `${scrollOffset * 100}%`,
               width: `${(1 / zoom) * 100}%`,

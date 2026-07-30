@@ -33,8 +33,8 @@ export function Popover({
           align={align}
           className={cn(
             'z-50 min-w-40 rounded-[var(--neko-radius-md,8px)] border border-[var(--neko-popover-border,var(--neko-border))]',
-            'bg-[var(--neko-popover-background,var(--neko-glass-bg,var(--vscode-editorWidget-background)))] p-2 text-sm',
-            'text-[var(--neko-popover-foreground,var(--vscode-foreground))]',
+            'bg-[var(--neko-popover-background,var(--neko-glass-bg,var(--neko-editorWidget-background)))] p-2 text-sm',
+            'text-[var(--neko-popover-foreground,var(--neko-foreground))]',
             'shadow-[var(--neko-popover-shadow,var(--neko-shadow-md,0_8px_24px_rgba(0,0,0,0.28)))] outline-none',
             contentClassName,
           )}

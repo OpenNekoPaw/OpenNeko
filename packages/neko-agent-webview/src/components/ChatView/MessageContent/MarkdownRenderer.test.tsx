@@ -364,7 +364,7 @@ describe('MarkdownRenderer structured artifacts', () => {
     );
     expect(promptParts.length).toBeGreaterThan(0);
     for (const part of promptParts) {
-      expect(part.className).toContain('text-[var(--vscode-foreground)]');
+      expect(part.className).toContain('text-[var(--neko-foreground)]');
       expect(part.className).toContain('underline');
       expect(part.className).not.toContain(' block ');
       expect(part.className).not.toContain('text-emerald-950');

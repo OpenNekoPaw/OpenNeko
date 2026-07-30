@@ -21,8 +21,8 @@ export function Tooltip({ children, content, side = 'top' }: TooltipProps): Reac
         <TooltipPrimitive.Content
           className={cn(
             'z-50 rounded-[var(--neko-radius-sm,6px)] border border-[var(--neko-border)]',
-            'bg-[var(--neko-glass-bg,var(--vscode-editorWidget-background))] px-2 py-1',
-            'text-xs text-[var(--vscode-foreground)] shadow-[var(--neko-shadow-sm,0_2px_8px_rgba(0,0,0,0.25))]',
+            'bg-[var(--neko-glass-bg,var(--neko-editorWidget-background))] px-2 py-1',
+            'text-xs text-[var(--neko-foreground)] shadow-[var(--neko-shadow-sm,0_2px_8px_rgba(0,0,0,0.25))]',
           )}
           side={side}
           sideOffset={6}

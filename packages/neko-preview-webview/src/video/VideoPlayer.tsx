@@ -173,7 +173,7 @@ function SourceVideoPlayer({
             role="alert"
           >
             <EmptyState
-              className="w-full max-w-md rounded-xl border border-[var(--vscode-inputValidation-warningBorder,var(--vscode-panel-border))] bg-[var(--vscode-editor-background)] shadow-xl"
+              className="w-full max-w-md rounded-xl border border-[var(--neko-inputValidation-warningBorder,var(--neko-panel-border))] bg-[var(--neko-editor-background)] shadow-xl"
               icon={<WarningIcon size={28} />}
               title={t('preview.video.playbackFailedTitle')}
               description={t('preview.video.playbackFailedDescription')}
@@ -580,7 +580,7 @@ function EngineVideoPlayer() {
             aria-live="assertive"
           >
             <EmptyState
-              className="w-full max-w-md rounded-xl border border-[var(--vscode-inputValidation-warningBorder,var(--vscode-panel-border))] bg-[var(--vscode-editor-background)] shadow-xl"
+              className="w-full max-w-md rounded-xl border border-[var(--neko-inputValidation-warningBorder,var(--neko-panel-border))] bg-[var(--neko-editor-background)] shadow-xl"
               icon={<WarningIcon size={28} />}
               title={playbackNoticeTitle}
               description={playbackNoticeDescription}
@@ -589,13 +589,13 @@ function EngineVideoPlayer() {
         )}
         {posterDiagnostic && !posterUrl && !playbackDiagnostic && (
           <div
-            className="absolute top-3 left-1/2 flex w-[min(36rem,calc(100%-1.5rem))] -translate-x-1/2 items-start gap-2 rounded-lg border border-[var(--vscode-inputValidation-infoBorder,var(--vscode-panel-border))] bg-[var(--vscode-editor-background)] px-3 py-2 text-xs text-vscode-descriptionForeground shadow-lg"
+            className="absolute top-3 left-1/2 flex w-[min(36rem,calc(100%-1.5rem))] -translate-x-1/2 items-start gap-2 rounded-lg border border-[var(--neko-inputValidation-infoBorder,var(--neko-panel-border))] bg-[var(--neko-editor-background)] px-3 py-2 text-xs text-neko-descriptionForeground shadow-lg"
             role="status"
             aria-live="polite"
           >
             <InfoIcon className="mt-0.5 shrink-0" size={16} />
             <span>
-              <strong className="block font-medium text-vscode-foreground">
+              <strong className="block font-medium text-neko-foreground">
                 {t('preview.video.hdrPosterUnavailableTitle')}
               </strong>
               {t('preview.video.hdrPosterUnavailableDescription')}

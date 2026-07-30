@@ -16,7 +16,7 @@ export function ErrorBoundary({ children }: ErrorBoundaryProps): ReactNode {
       retryLabel="Try again"
       className="flex h-full items-center justify-center bg-[var(--agent-bg)] p-4 text-center text-[var(--agent-fg)]"
       contentClassName="agent-card flex max-w-md flex-col items-center gap-3 px-6 py-7"
-      buttonClassName="vscode-button"
+      buttonClassName="neko-button"
     >
       {children}
     </WebviewErrorBoundary>

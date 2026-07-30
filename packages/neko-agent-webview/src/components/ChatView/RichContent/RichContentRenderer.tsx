@@ -64,7 +64,7 @@ export const RichContentRenderer = memo(RichContentRendererComponent);
 
 function UnknownContentFallback({ kind, reason }: { kind: string; reason?: string }) {
   return (
-    <div className="px-2 py-1.5 rounded text-[10px] text-[var(--vscode-descriptionForeground)] bg-[var(--vscode-textBlockQuote-background)]">
+    <div className="px-2 py-1.5 rounded text-[10px] text-[var(--neko-descriptionForeground)] bg-[var(--neko-textBlockQuote-background)]">
       Unsupported content: <code>{kind}</code>
       {reason ? ` (${reason})` : ''}
     </div>

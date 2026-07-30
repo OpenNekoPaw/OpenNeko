@@ -36,7 +36,7 @@ export function PropertyPanel({
 }: PropertyPanelProps): React.ReactElement {
   if (properties.length === 0) {
     return (
-      <div className="rounded-[var(--neko-radius-sm,6px)] border border-dashed border-[var(--neko-border)] p-3 text-xs text-[var(--vscode-descriptionForeground)]">
+      <div className="rounded-[var(--neko-radius-sm,6px)] border border-dashed border-[var(--neko-border)] p-3 text-xs text-[var(--neko-descriptionForeground)]">
         {emptyState ?? 'No editable properties'}
       </div>
     );
@@ -236,8 +236,8 @@ function renderPropertyControl(
           aria-label={property.label}
           className={cn(
             'h-7 w-full rounded-[var(--neko-radius-sm,6px)] border border-[var(--neko-border)]',
-            'bg-[var(--vscode-input-background)] px-2 text-xs text-[var(--vscode-input-foreground)]',
-            'outline-none focus-visible:border-[var(--vscode-focusBorder)] disabled:cursor-not-allowed disabled:opacity-50',
+            'bg-[var(--neko-input-background)] px-2 text-xs text-[var(--neko-input-foreground)]',
+            'outline-none focus-visible:border-[var(--neko-focusBorder)] disabled:cursor-not-allowed disabled:opacity-50',
           )}
           disabled={property.disabled}
           {...getKeyboardBoundaryMetadata({

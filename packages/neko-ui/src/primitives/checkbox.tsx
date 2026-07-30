@@ -21,7 +21,7 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(function Che
   return (
     <label
       className={cn(
-        'inline-flex min-w-0 items-center gap-2 text-xs text-[var(--vscode-foreground)]',
+        'inline-flex min-w-0 items-center gap-2 text-xs text-[var(--neko-foreground)]',
         disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer',
         className,
       )}
@@ -33,7 +33,7 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(function Che
         checked={checked}
         className={cn(
           'h-4 w-4 shrink-0 rounded-[var(--neko-radius-sm,6px)] accent-[var(--neko-accent)]',
-          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--vscode-focusBorder)]',
+          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--neko-focusBorder)]',
           'disabled:cursor-not-allowed disabled:opacity-50',
         )}
         disabled={disabled}
@@ -49,7 +49,7 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(function Che
         <span className="grid min-w-0 gap-0.5">
           {label !== undefined ? <span className="min-w-0 truncate">{label}</span> : null}
           {description !== undefined ? (
-            <span className="min-w-0 text-[11px] text-[var(--vscode-descriptionForeground)]">
+            <span className="min-w-0 text-[11px] text-[var(--neko-descriptionForeground)]">
               {description}
             </span>
           ) : null}

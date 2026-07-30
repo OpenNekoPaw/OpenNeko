@@ -23,22 +23,22 @@ export function CharacterDialogueHeader({ session }: CharacterDialogueHeaderProp
   );
 
   return (
-    <div className="border-b border-[var(--vscode-panel-border)] bg-[var(--vscode-sideBar-background)]">
+    <div className="border-b border-[var(--neko-panel-border)] bg-[var(--neko-sideBar-background)]">
       <div className="flex items-center gap-2 px-3 py-2">
         <div className="flex min-w-0 flex-1 flex-col">
           <div className="flex min-w-0 items-center gap-2">
-            <span className="truncate text-[13px] font-medium text-[var(--vscode-foreground)]">
+            <span className="truncate text-[13px] font-medium text-[var(--neko-foreground)]">
               {session.displayName}
             </span>
-            <span className="rounded-sm border border-[var(--vscode-panel-border)] px-1.5 py-0.5 text-[10px] uppercase tracking-normal text-[var(--vscode-descriptionForeground)]">
+            <span className="rounded-sm border border-[var(--neko-panel-border)] px-1.5 py-0.5 text-[10px] uppercase tracking-normal text-[var(--neko-descriptionForeground)]">
               {t(`characterRole.dialogue.mode.${session.mode}`)}
             </span>
-            <span className="rounded-sm border border-[var(--vscode-panel-border)] px-1.5 py-0.5 text-[10px] uppercase tracking-normal text-[var(--vscode-descriptionForeground)]">
+            <span className="rounded-sm border border-[var(--neko-panel-border)] px-1.5 py-0.5 text-[10px] uppercase tracking-normal text-[var(--neko-descriptionForeground)]">
               {t(`characterRole.dialogue.sparsity.${session.profile.sparsity}`)}
             </span>
           </div>
           {session.summary ? (
-            <div className="mt-0.5 truncate text-[11px] text-[var(--vscode-descriptionForeground)]">
+            <div className="mt-0.5 truncate text-[11px] text-[var(--neko-descriptionForeground)]">
               {session.summary}
             </div>
           ) : null}
@@ -48,14 +48,14 @@ export function CharacterDialogueHeader({ session }: CharacterDialogueHeaderProp
           onClick={() => setExpanded((value) => !value)}
           aria-expanded={expanded}
           aria-controls={profileRegionId}
-          className="rounded px-2 py-1 text-[11px] text-[var(--vscode-foreground)] hover:bg-[var(--vscode-toolbar-hoverBackground)]"
+          className="rounded px-2 py-1 text-[11px] text-[var(--neko-foreground)] hover:bg-[var(--neko-toolbar-hoverBackground)]"
         >
           {t('characterRole.action.profile')}
         </button>
         <button
           type="button"
           onClick={() => AgentHostMessages.exitCharacterDialogueSession(session.sessionId)}
-          className="rounded px-2 py-1 text-[11px] text-[var(--vscode-foreground)] hover:bg-[var(--vscode-toolbar-hoverBackground)]"
+          className="rounded px-2 py-1 text-[11px] text-[var(--neko-foreground)] hover:bg-[var(--neko-toolbar-hoverBackground)]"
         >
           {t('characterRole.action.exit')}
         </button>
@@ -66,7 +66,7 @@ export function CharacterDialogueHeader({ session }: CharacterDialogueHeaderProp
           id={profileRegionId}
           role="region"
           aria-label={t('characterRole.action.profile')}
-          className="grid max-h-[45vh] gap-3 overflow-y-auto overscroll-contain border-t border-[var(--vscode-panel-border)] px-3 py-2 text-[11px] md:grid-cols-2"
+          className="grid max-h-[45vh] gap-3 overflow-y-auto overscroll-contain border-t border-[var(--neko-panel-border)] px-3 py-2 text-[11px] md:grid-cols-2"
         >
           <CharacterFactList
             title={t('characterRole.dialogue.confirmed')}
@@ -80,14 +80,14 @@ export function CharacterDialogueHeader({ session }: CharacterDialogueHeaderProp
           />
           {session.profile.dialogueSamples?.length ? (
             <div className="md:col-span-2">
-              <div className="mb-1 text-[var(--vscode-descriptionForeground)]">
+              <div className="mb-1 text-[var(--neko-descriptionForeground)]">
                 {t('characterRole.dialogue.samples')}
               </div>
               <div className="space-y-1">
                 {session.profile.dialogueSamples.slice(0, 3).map((sample, index) => (
                   <div
                     key={`${index}-${sample}`}
-                    className="rounded border border-[var(--vscode-panel-border)] px-2 py-1 text-[var(--vscode-foreground)]"
+                    className="rounded border border-[var(--neko-panel-border)] px-2 py-1 text-[var(--neko-foreground)]"
                   >
                     {sample}
                   </div>
@@ -112,25 +112,25 @@ function CharacterFactList({
 }) {
   return (
     <div>
-      <div className="mb-1 text-[var(--vscode-descriptionForeground)]">{title}</div>
+      <div className="mb-1 text-[var(--neko-descriptionForeground)]">{title}</div>
       {facts.length > 0 ? (
         <div className="space-y-1">
           {facts.map((fact) => (
             <div
               key={`${fact.key}-${String(fact.value)}-${fact.source}`}
-              className="rounded border border-[var(--vscode-panel-border)] px-2 py-1"
+              className="rounded border border-[var(--neko-panel-border)] px-2 py-1"
             >
-              <div className="text-[var(--vscode-descriptionForeground)]">
+              <div className="text-[var(--neko-descriptionForeground)]">
                 {projectCharacterFactLabel(fact.key, translate)}
               </div>
-              <div className="truncate text-[var(--vscode-foreground)]">
+              <div className="truncate text-[var(--neko-foreground)]">
                 {formatFactValue(fact.value)}
               </div>
             </div>
           ))}
         </div>
       ) : (
-        <div className="text-[var(--vscode-descriptionForeground)]">
+        <div className="text-[var(--neko-descriptionForeground)]">
           {translate('characterRole.none')}
         </div>
       )}

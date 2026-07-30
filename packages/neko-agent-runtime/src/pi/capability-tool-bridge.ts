@@ -27,7 +27,6 @@ export interface PiToolRunIdentity {
 export interface PiCapabilityToolRequirements {
   readonly workspaceTrust?: boolean;
   readonly writableProject?: boolean;
-  readonly host?: 'any' | 'vscode';
 }
 
 export interface PiCapabilityToolContext {

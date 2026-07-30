@@ -51,7 +51,7 @@ vi.mock('@/messages', () => ({
 
 vi.mock('@/host-runtime-context', () => ({
   useAgentHostRuntimeAdapter: () => ({
-    hostKind: 'vscode',
+    hostKind: 'electron',
     runtimeId: 'conversation-controller-test',
     send: vi.fn(),
     subscribe: vi.fn(() => ({ dispose: vi.fn() })),

@@ -118,12 +118,12 @@ export const settings = {
   'settings.prompts.sourceProject': 'Workspace Prompts',
   'settings.prompts.promptSource': 'Save Location',
   'settings.prompts.fileContentHint':
-    'Prompt content will be saved to a file that you can edit in VSCode.',
+    'Prompt content will be saved to a file that you can edit in Desktop editor.',
   'settings.prompts.personalFilePath': 'User location: ~/.neko/prompts/<name>.md',
   'settings.prompts.projectFilePath': 'Workspace location: .neko/prompts/<name>.md',
-  'settings.prompts.openInVSCode': 'Open in VSCode',
+  'settings.prompts.openInEditor': 'Open in Desktop editor',
   'settings.prompts.editHelp':
-    'User and workspace prompts can be edited in VSCode. Built-in prompts can only be enabled or disabled.',
+    'User and workspace prompts can be edited in Desktop editor. Built-in prompts can only be enabled or disabled.',
   'settings.prompts.agentsTitle': 'Global Agent Instructions (AGENTS.md)',
   'settings.prompts.agentsDescription':
     'Global instructions are injected as an environment overlay in all conversations. They do not replace the built-in system prompt.',
@@ -193,7 +193,7 @@ export const settings = {
   'settings.skills.sourceProject': 'Workspace Skills',
   'settings.skills.editContent': 'Edit Content',
   'settings.skills.editHelp': 'Configure skill content: references, scripts, and allowed tools.',
-  'settings.skills.filePathHint': 'Content is stored in files that you can edit in VSCode.',
+  'settings.skills.filePathHint': 'Content is stored in files that you can edit in Desktop editor.',
   'settings.skills.skillPersonalPath': 'User location: ~/.agents/skills/<name>/SKILL.md',
   'settings.skills.skillProjectPath': 'Workspace location: .agents/skills/<name>/SKILL.md',
   'settings.skills.commandPersonalPath': 'User location: ~/.neko/commands/<name>.md',
@@ -202,7 +202,7 @@ export const settings = {
   'settings.skills.scriptProjectPath': 'Workspace location: .neko/script/<name>.md',
   'settings.skills.hookPersonalPath': 'User location: ~/.neko/hook/<name>.md',
   'settings.skills.hookProjectPath': 'Workspace location: .neko/hook/<name>.md',
-  'settings.skills.openInVSCode': 'Open in VSCode',
+  'settings.skills.openInEditor': 'Open in Desktop editor',
   'settings.skills.viewDetail': 'View Details',
   'settings.skills.builtinNoEdit': 'Built-in skill content cannot be edited',
   'settings.skills.noSkillContent': 'No skill content available',

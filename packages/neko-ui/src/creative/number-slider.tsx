@@ -46,7 +46,7 @@ export function NumberSlider({
     <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 text-xs">
       <div className="flex min-w-0 items-center gap-2">
         {label ? (
-          <span className="min-w-0 flex-1 truncate text-[var(--vscode-descriptionForeground)]">
+          <span className="min-w-0 flex-1 truncate text-[var(--neko-descriptionForeground)]">
             {label}
           </span>
         ) : null}

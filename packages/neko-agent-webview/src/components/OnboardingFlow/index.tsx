@@ -44,7 +44,7 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
               </p>
               <button
                 onClick={handleOpenConfigFile}
-                className="vscode-button flex w-full justify-center py-2 text-[12px] font-medium"
+                className="neko-button flex w-full justify-center py-2 text-[12px] font-medium"
               >
                 {t('onboarding.openConfigButton')}
               </button>
@@ -60,7 +60,7 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
               </p>
               <button
                 onClick={onComplete}
-                className="vscode-button flex w-full justify-center py-2 text-[12px] font-medium"
+                className="neko-button flex w-full justify-center py-2 text-[12px] font-medium"
               >
                 {t('onboarding.gotIt')}
               </button>

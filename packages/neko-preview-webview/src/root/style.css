@@ -150,5 +150,5 @@
 }
 
 .neko-preview-quick[data-preview-kind='audio'] {
-  background: var(--vscode-editor-background, #fff);
+  background: var(--neko-editor-background, #fff);
 }

@@ -58,7 +58,7 @@ function CompositeArtifactRendererComponent({
           {data.title ?? data.artifactId}
         </span>
         {profile && (
-          <span className="shrink-0 rounded bg-[var(--vscode-editor-background)] px-1.5 py-0.5 font-mono text-[10px] text-[var(--agent-fg-secondary)]">
+          <span className="shrink-0 rounded bg-[var(--neko-editor-background)] px-1.5 py-0.5 font-mono text-[10px] text-[var(--agent-fg-secondary)]">
             {profile}
           </span>
         )}
@@ -80,7 +80,7 @@ function CompositeArtifactRendererComponent({
 
 function CompositeArtifactBlockView({ block }: { block: CompositeArtifactBlock }) {
   return (
-    <section className="min-w-0 rounded border border-[var(--agent-divider)] bg-[var(--vscode-editor-background)]">
+    <section className="min-w-0 rounded border border-[var(--agent-divider)] bg-[var(--neko-editor-background)]">
       <div className="flex flex-wrap items-center gap-2 border-b border-[var(--agent-divider)] px-2 py-1">
         <span className="min-w-0 flex-1 truncate text-[11px] font-medium text-[var(--agent-fg)]">
           {block.title ?? block.blockId}

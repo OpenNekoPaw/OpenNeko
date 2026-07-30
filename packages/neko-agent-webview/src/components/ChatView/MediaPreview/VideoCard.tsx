@@ -76,7 +76,7 @@ function VideoPlayerComponent({
     return (
       <div className={`rounded overflow-hidden bg-black ${className || ''}`}>
         {hasError ? (
-          <div className="flex items-center justify-center py-6 text-[var(--vscode-errorForeground)] text-[11px] bg-[var(--vscode-editor-background)]">
+          <div className="flex items-center justify-center py-6 text-[var(--neko-errorForeground)] text-[11px] bg-[var(--neko-editor-background)]">
             <ErrorIcon className="w-4 h-4 mr-2" />
             <span>Failed to load video</span>
           </div>
@@ -124,27 +124,27 @@ function VideoPlayerComponent({
         className={`flex items-center gap-1.5 px-2 py-1 rounded-t text-[11px] cursor-pointer transition-colors
           ${
             hasError
-              ? 'bg-[color-mix(in_srgb,var(--vscode-textBlockQuote-background)_95%,#ef4444)]'
-              : 'bg-[color-mix(in_srgb,var(--vscode-textBlockQuote-background)_95%,#3b82f6)]'
+              ? 'bg-[color-mix(in_srgb,var(--neko-textBlockQuote-background)_95%,#ef4444)]'
+              : 'bg-[color-mix(in_srgb,var(--neko-textBlockQuote-background)_95%,#3b82f6)]'
           }
-          hover:bg-[var(--vscode-list-hoverBackground)]
+          hover:bg-[var(--neko-list-hoverBackground)]
           ${!isExpanded ? 'rounded-b' : ''}
         `}
         onClick={toggleExpand}
       >
         {/* Status indicator */}
         {hasError ? (
-          <ErrorIcon className="w-3 h-3 text-[var(--vscode-charts-red)] shrink-0" />
+          <ErrorIcon className="w-3 h-3 text-[var(--neko-charts-red)] shrink-0" />
         ) : (
-          <VideoIcon className="w-3 h-3 text-[var(--vscode-charts-blue)] shrink-0" />
+          <VideoIcon className="w-3 h-3 text-[var(--neko-charts-blue)] shrink-0" />
         )}
 
         {/* File name */}
-        <span className="font-medium text-[var(--vscode-foreground)] truncate">{fileName}</span>
+        <span className="font-medium text-[var(--neko-foreground)] truncate">{fileName}</span>
 
         {/* Duration badge */}
         {duration > 0 && !hasError && (
-          <span className="text-[var(--vscode-descriptionForeground)] text-[10px]">
+          <span className="text-[var(--neko-descriptionForeground)] text-[10px]">
             {formatTime(duration)}
           </span>
         )}
@@ -159,7 +159,7 @@ function VideoPlayerComponent({
               e.stopPropagation();
               handleOpenPreview();
             }}
-            className="px-1.5 py-0.5 rounded bg-[var(--vscode-button-secondaryBackground)] hover:bg-[var(--vscode-button-secondaryHoverBackground)] text-[var(--vscode-button-secondaryForeground)] transition-colors flex items-center gap-1 shrink-0"
+            className="px-1.5 py-0.5 rounded bg-[var(--neko-button-secondaryBackground)] hover:bg-[var(--neko-button-secondaryHoverBackground)] text-[var(--neko-button-secondaryForeground)] transition-colors flex items-center gap-1 shrink-0"
             title="Open in Neko Preview"
           >
             <OpenIcon className="w-3 h-3" />
@@ -169,15 +169,15 @@ function VideoPlayerComponent({
 
         {/* Expand indicator */}
         <ChevronIcon
-          className={`w-3 h-3 text-[var(--vscode-descriptionForeground)] transition-transform shrink-0 ${isExpanded ? 'rotate-180' : ''}`}
+          className={`w-3 h-3 text-[var(--neko-descriptionForeground)] transition-transform shrink-0 ${isExpanded ? 'rotate-180' : ''}`}
         />
       </div>
 
       {/* Expanded content — thumbnail with click-to-open */}
       {isExpanded && (
-        <div className="border border-t-0 border-[var(--vscode-panel-border)] rounded-b bg-black overflow-hidden">
+        <div className="border border-t-0 border-[var(--neko-panel-border)] rounded-b bg-black overflow-hidden">
           {hasError ? (
-            <div className="flex items-center justify-center py-6 text-[var(--vscode-errorForeground)] text-[11px] bg-[var(--vscode-editor-background)]">
+            <div className="flex items-center justify-center py-6 text-[var(--neko-errorForeground)] text-[11px] bg-[var(--neko-editor-background)]">
               <ErrorIcon className="w-4 h-4 mr-2" />
               <span>Failed to load video</span>
             </div>
