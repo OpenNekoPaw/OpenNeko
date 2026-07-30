@@ -1,24 +1,7 @@
-/**
- * VSCode Message Builders
- *
- * Type-safe communication between the Assistant UI webview
- * and the VS Code extension host via postMessage.
- *
- * Core VSCode API is imported from @neko/shared.
- * Each method constructs and sends a properly typed message.
- */
-
-import {
-  getState as getVSCodeState,
-  getVSCodeAPI,
-  postMessage as postRawMessage,
-  setState as setVSCodeState,
-  type VSCodeAPI,
-} from '@neko/shared/vscode';
+/** Type-safe messages from the Agent surface to its injected Desktop host runtime. */
 import type {
   AgentHostRuntimeAdapter,
   AgentHostRuntimeSubscription,
-  AgentHostToWebviewMessage,
   InvokeAgentCapabilityLifecycleWebviewMessage,
   RequestCanvasAuthoringHandoffWebviewMessage,
   PluginTransferPayload,
@@ -28,45 +11,20 @@ import type {
 import type { ContentLocator, DocumentLocator } from '@neko/shared';
 import type { AgentContextType } from '@neko/shared';
 
-export type { AgentHostRuntimeAdapter, AgentHostRuntimeSubscription, VSCodeAPI };
+export type { AgentHostRuntimeAdapter, AgentHostRuntimeSubscription };
 
-/**
- * VSCode API instance, or null if running outside VS Code
- */
-export const vscode = getVSCodeAPI();
+const missingDesktopRuntime = (): never => {
+  throw new Error('Agent Webview requires an injected Desktop host runtime adapter.');
+};
 
-export function createVSCodeAgentHostRuntimeAdapter(
-  options: { readonly runtimeId?: string } = {},
-): AgentHostRuntimeAdapter {
-  return {
-    hostKind: 'vscode',
-    runtimeId: options.runtimeId ?? 'neko.agent.webview.vscode',
-    send(message: AgentWebviewToHostMessage): void {
-      postRawMessage(message);
-    },
-    subscribe(
-      listener: (message: AgentHostToWebviewMessage) => void,
-    ): AgentHostRuntimeSubscription {
-      const handleMessage = (event: MessageEvent<AgentHostToWebviewMessage>) => {
-        listener(event.data);
-      };
-      window.addEventListener('message', handleMessage);
-      return {
-        dispose(): void {
-          window.removeEventListener('message', handleMessage);
-        },
-      };
-    },
-    getState(): unknown {
-      return getVSCodeState<unknown>();
-    },
-    setState(state: unknown): void {
-      setVSCodeState(state);
-    },
-  };
-}
-
-let currentAgentHostRuntimeAdapter: AgentHostRuntimeAdapter = createVSCodeAgentHostRuntimeAdapter();
+let currentAgentHostRuntimeAdapter: AgentHostRuntimeAdapter = {
+  hostKind: 'electron',
+  runtimeId: 'neko.agent.webview.unconfigured',
+  send: missingDesktopRuntime,
+  subscribe: missingDesktopRuntime,
+  getState: missingDesktopRuntime,
+  setState: missingDesktopRuntime,
+};
 
 export function setAgentHostRuntimeAdapter(
   adapter: AgentHostRuntimeAdapter,

@@ -4,8 +4,10 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AuthorizedWorkspaceWriter, ContentLocator, ContentReadService } from '@neko/shared';
-import { createNodeHostContentReadService } from '@neko/shared/vscode/extension/node-content-read-service';
-import { NodeAuthorizedWorkspaceWriter } from '@neko/shared/vscode/extension/workspace-content-writer';
+import {
+  createNodeHostContentReadService,
+  NodeAuthorizedWorkspaceWriter,
+} from '@neko/shared/content-access';
 import { MediaLibraryCopyService } from './MediaLibraryCopyService';
 
 const tempDirs: string[] = [];

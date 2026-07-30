@@ -23,4 +23,3 @@ export type {
 export { createCanvasWebviewHost } from './canvas-webview-host';
 export type { CanvasWebviewDelegate, CanvasWebviewHostPort } from './canvas-webview-host';
 export { CanvasHostProvider, useCanvasHost, useOptionalCanvasHost } from './canvas-host-context';
-export { createVscodeCanvasHostRuntime } from './vscode-canvas-host-runtime';

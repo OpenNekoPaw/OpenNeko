@@ -15,14 +15,14 @@ import type {
   CanvasReferencedContentLocator,
   ContentLocator,
 } from '@neko/shared';
-import type { VSCodeAPI } from '../hooks/useVSCodeMessages';
+import type { CanvasHostMessagePort } from '../hooks/useCanvasHostMessages';
 import { createCanvasViewportSnapshotKey } from '../utils/viewportWebviewState';
 
-export interface CanvasWebviewDelegate extends NonNullable<VSCodeAPI> {
+export interface CanvasWebviewDelegate extends NonNullable<CanvasHostMessagePort> {
   supportsMessage?(messageType: string): boolean;
 }
 
-export interface CanvasWebviewHostPort extends NonNullable<VSCodeAPI> {
+export interface CanvasWebviewHostPort extends NonNullable<CanvasHostMessagePort> {
   supportsMessage(messageType: string): boolean;
   subscribe(listener: (message: unknown) => void): () => void;
   requestSource(

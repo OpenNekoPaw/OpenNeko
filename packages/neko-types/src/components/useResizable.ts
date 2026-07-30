@@ -1,7 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type React from 'react';
-import type { VSCodeAPI } from '../vscode/types';
-import { getVSCodeAPI } from '../vscode/api';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -76,8 +74,13 @@ export interface ResizeState {
 }
 
 export interface PersistedResizeOptions extends ResizeBounds {
-  api?: Pick<VSCodeAPI, 'getState' | 'setState'> | null;
+  api?: ResizeStateStorage | null;
   persistDebounceMs?: number;
+}
+
+export interface ResizeStateStorage {
+  getState(): unknown;
+  setState(state: unknown): void;
 }
 
 export interface PersistedResizeReturn {
@@ -92,7 +95,21 @@ export interface PersistedResizeReturn {
 type WebviewPersistedState = Record<string, unknown>;
 
 const RESIZE_STATE_KEY = 'neko.resizeState';
+const RESIZE_STORAGE_KEY = 'neko.desktop.resizeState';
 const RESIZE_PERSIST_DEBOUNCE_MS = 180;
+
+function getBrowserResizeStateStorage(): ResizeStateStorage | null {
+  if (typeof window === 'undefined') return null;
+  return {
+    getState(): unknown {
+      const serialized = window.localStorage.getItem(RESIZE_STORAGE_KEY);
+      return serialized === null ? undefined : JSON.parse(serialized);
+    },
+    setState(state: unknown): void {
+      window.localStorage.setItem(RESIZE_STORAGE_KEY, JSON.stringify(state));
+    },
+  };
+}
 
 // ── Pure Helpers ─────────────────────────────────────────────────────────────
 
@@ -382,7 +399,7 @@ export function usePersistedResize(
   bounds: ResizeBounds = {},
   options: PersistedResizeOptions = {},
 ): PersistedResizeReturn {
-  const api = options.api === undefined ? getVSCodeAPI() : options.api;
+  const api = options.api === undefined ? getBrowserResizeStateStorage() : options.api;
   const persistDebounceMs = options.persistDebounceMs ?? RESIZE_PERSIST_DEBOUNCE_MS;
   const effectiveBounds = {
     minSize: options.minSize ?? bounds.minSize,

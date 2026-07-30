@@ -30,19 +30,11 @@
     "./i18n": "./src/i18n/index.ts",
     "./i18n/webview": "./src/i18n/webview.ts",
     "./i18n/react": "./src/i18n/react.tsx",
-    "./vscode": "./src/vscode/index.ts",
     "./config/config-reader": "./src/config/config-reader.ts",
     "./types/creative-ai-invocation": "./src/types/creative-ai-invocation.ts",
     "./types/npc-test-bench": "./src/types/npc-test-bench.ts",
     "./types/agent-autoheal": "./src/types/agent-autoheal.ts",
     "./types/storage": "./src/types/storage.ts",
-    "./vscode/extension/command-args": "./src/vscode/extension/command-args.ts",
-    "./vscode/extension/local-resource-access": "./src/vscode/extension/local-resource-access.ts",
-    "./vscode/extension/node-content-read-service": "./src/vscode/extension/node-content-read-service.ts",
-    "./vscode/extension/project-file-io": "./src/vscode/extension/project-file-io.ts",
-    "./vscode/extension/workspace-content-writer": "./src/vscode/extension/workspace-content-writer.ts",
-    "./vscode/extension": "./src/vscode/extension/index.ts",
-    "./vscode/test-utils": "./src/vscode/test-utils.ts",
     "./*": "./src/*"
   },
   "peerDependencies": {
@@ -63,7 +55,6 @@
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
-    "@types/vscode": "^1.125.0",
     "jsdom": "^27.0.1"
   },
   "license": "AGPL-3.0-or-later",

@@ -11,9 +11,7 @@
     "./root": "./src/root.tsx"
   },
   "scripts": {
-    "dev": "vite",
-    "build": "tsc && vite build",
-    "preview": "vite preview",
+    "build": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest"
   },

@@ -25,7 +25,7 @@ import {
 import { useFileDrop } from '@neko/ui/hooks';
 import type { FileDropResult } from '@neko/ui/hooks';
 import { detectMediaType } from '../utils/mediaType';
-import type { VSCodeAPI } from './useVSCodeMessages';
+import type { CanvasHostMessagePort } from './useCanvasHostMessages';
 
 // =============================================================================
 // Types
@@ -34,7 +34,7 @@ import type { VSCodeAPI } from './useVSCodeMessages';
 export type CanvasProjectSourceAddClient = ProjectSourceAddClient;
 
 export interface UseDragDropOptions {
-  vscode: VSCodeAPI;
+  vscode: CanvasHostMessagePort;
   screenToCanvas: (screenX: number, screenY: number) => { x: number; y: number };
   addMediaAt: (
     pos: { x: number; y: number },
@@ -544,7 +544,9 @@ function isCanvasAddSourceAssetKind(value: unknown): value is 'media' | 'text' |
   return value === 'media' || value === 'text' || value === 'file' || value === 'canvas';
 }
 
-export function createCanvasProjectSourceAddClient(vscode: VSCodeAPI): ProjectSourceAddClient {
+export function createCanvasProjectSourceAddClient(
+  vscode: CanvasHostMessagePort,
+): ProjectSourceAddClient {
   if (!vscode) {
     return {
       async addSource(input) {

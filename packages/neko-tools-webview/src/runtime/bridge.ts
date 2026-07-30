@@ -1,5 +1,3 @@
-import { getState, postMessage, setState } from '@neko/shared/vscode';
-
 export interface IWebviewBridge {
   postMessage(message: unknown): void;
   getState<T>(): T | undefined;
@@ -7,17 +5,19 @@ export interface IWebviewBridge {
   subscribe(listener: (message: unknown) => void): () => void;
 }
 
-class VSCodeWebviewBridge implements IWebviewBridge {
+class WindowWebviewBridge implements IWebviewBridge {
+  private state: unknown;
+
   postMessage(message: unknown): void {
-    postMessage(message);
+    window.parent.postMessage(message, '*');
   }
 
   getState<T>(): T | undefined {
-    return getState<T>();
+    return this.state as T | undefined;
   }
 
   setState<T>(state: T): void {
-    setState(state);
+    this.state = state;
   }
 
   subscribe(listener: (message: unknown) => void): () => void {
@@ -30,7 +30,7 @@ class VSCodeWebviewBridge implements IWebviewBridge {
   }
 }
 
-const bridge = new VSCodeWebviewBridge();
+const bridge = new WindowWebviewBridge();
 
 export function getWebviewBridge(): IWebviewBridge {
   return bridge;

@@ -29,7 +29,7 @@ import { ContextMenu } from './components/common/ContextMenu';
 import { CanvasToolbar } from './components/toolbar/CanvasToolbar';
 import { PlaybackWorkspace } from './components/playback/PlaybackWorkspace';
 import { MIN_ZOOM, MAX_ZOOM } from './hooks';
-import { useVSCodeMessages } from './hooks/useVSCodeMessages';
+import { useCanvasHostMessages } from './hooks/useCanvasHostMessages';
 import { useNodeHelpers } from './hooks/useNodeHelpers';
 import { useClipboard } from './hooks/useClipboard';
 import {
@@ -187,7 +187,7 @@ export function CanvasApp({ host: vscode }: CanvasAppProps) {
   );
 
   // =========================================================================
-  // Container size tracking  (moved after useVSCodeMessages — see below)
+  // Container size tracking  (moved after useCanvasHostMessages — see below)
   // =========================================================================
 
   // =========================================================================
@@ -418,7 +418,7 @@ export function CanvasApp({ host: vscode }: CanvasAppProps) {
   // VSCode messages
   // =========================================================================
 
-  const { isReady, loadDiagnostic, keyboardActionRef } = useVSCodeMessages({
+  const { isReady, loadDiagnostic, keyboardActionRef } = useCanvasHostMessages({
     vscode,
     defaultCanvasData: DEFAULT_CANVAS_DATA,
     setCanvasData,
@@ -541,7 +541,7 @@ export function CanvasApp({ host: vscode }: CanvasAppProps) {
 
   // =========================================================================
   // Container size tracking
-  // Must be after useVSCodeMessages so isReady is available.
+  // Must be after useCanvasHostMessages so isReady is available.
   // The playback workspace can hide and remount the canvas pane, so observers
   // follow the actual DOM elements rather than only the initial ready state.
   // =========================================================================

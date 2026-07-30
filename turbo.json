@@ -24,36 +24,6 @@
       "outputs": ["dist/**", "out/**"],
       "cache": true
     },
-    "neko-preview#build": {
-      "dependsOn": ["@neko/preview-webview#build", "^build"],
-      "outputs": ["dist/**"],
-      "cache": true
-    },
-    "neko-tools#compile": {
-      "dependsOn": ["^build"],
-      "outputs": ["dist/**", "out/**"],
-      "cache": true
-    },
-    "neko-cut#compile": {
-      "dependsOn": ["neko-tools#compile", "@neko/webview#build"],
-      "outputs": ["dist/**", "out/**"],
-      "cache": true
-    },
-    "neko-canvas#compile": {
-      "dependsOn": ["neko-tools#compile"],
-      "outputs": ["dist/**", "out/**"],
-      "cache": true
-    },
-    "neko-agent#compile": {
-      "dependsOn": ["neko-tools#compile"],
-      "outputs": ["dist/**", "out/**"],
-      "cache": true
-    },
-    "neko-assets#compile": {
-      "dependsOn": ["neko-tools#compile"],
-      "outputs": ["dist/**", "out/**"],
-      "cache": true
-    },
     "dev": {
       "cache": false,
       "persistent": true
@@ -70,14 +40,9 @@
       "outputs": ["coverage/**"],
       "cache": false
     },
-    "neko-canvas#test": {
-      "dependsOn": ["@neko-canvas/webview#test"],
-      "outputs": ["coverage/**"],
-      "cache": false
-    },
     "package": {
-      "dependsOn": ["compile"],
-      "outputs": ["*.vsix"],
+      "dependsOn": ["build"],
+      "outputs": ["out/**"],
       "cache": false
     },
     "clean": {

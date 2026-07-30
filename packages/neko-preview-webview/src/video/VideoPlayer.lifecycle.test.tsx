@@ -71,12 +71,12 @@ vi.mock('../i18n/I18nContext', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 
-vi.mock('../shared/useVscodeMessage', () => ({
+vi.mock('../shared/useHostMessage', () => ({
   useExtensionMessage: (handler: (message: unknown) => void) => {
     messageHandlers.clear();
     messageHandlers.add(handler);
   },
-  useVscodeReady: (message: unknown) => {
+  useHostReady: (message: unknown) => {
     readyMessages(message);
     return { postMessage };
   },

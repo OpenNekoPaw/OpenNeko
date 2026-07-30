@@ -9,7 +9,7 @@
 import { useState, useEffect, useRef, useCallback, type FC } from 'react';
 import * as pdfjsLib from 'pdfjs-dist';
 import { TextLayer } from 'pdfjs-dist';
-import { useExtensionMessage, postMessage } from '../shared/useVscodeMessage';
+import { useExtensionMessage, postMessage } from '../shared/useHostMessage';
 import { useDocumentSelection } from '../shared/useDocumentSelection';
 import { DocumentContextMenu, useDocumentContextActions } from '../shared/DocumentContextMenu';
 import {

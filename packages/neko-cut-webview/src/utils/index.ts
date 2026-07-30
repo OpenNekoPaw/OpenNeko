@@ -161,30 +161,3 @@ export function isInputElement(target: EventTarget | null): boolean {
 export function hasParentWithClass(element: HTMLElement | null, className: string): boolean {
   return element?.closest(`.${className}`) !== null;
 }
-
-// =============================================================================
-// VSCode API
-// =============================================================================
-
-export {
-  getVSCodeAPI,
-  isVSCodeContext,
-  postMessage,
-  getState,
-  setState,
-  sendMessage,
-  sendAIAction,
-  sendRequest,
-  cancelRequest,
-  getPendingRequestCount,
-  vscodeApi,
-} from './vscodeApi';
-export type {
-  AIActionMessage,
-  RequestFileMessage,
-  SaveMessage,
-  ExportDialogMessage,
-  WebviewMessage,
-  RequestMessage,
-  VSCodeResponseMessage,
-} from './vscodeApi';

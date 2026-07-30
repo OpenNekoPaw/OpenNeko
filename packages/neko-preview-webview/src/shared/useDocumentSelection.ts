@@ -7,7 +7,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import type { DocumentLocator } from '@neko/shared';
-import { postMessage } from './useVscodeMessage';
+import { postMessage } from './useHostMessage';
 
 export interface DocumentSelection {
   /** Selected text content */

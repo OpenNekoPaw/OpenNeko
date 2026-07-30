@@ -7,7 +7,6 @@
   "exports": {
     ".": "./src/index.ts",
     "./core": "./src/core/index.ts",
-    "./host-vscode": "./src/host-vscode/index.ts",
     "./providers": "./src/providers/index.ts",
     "./testing": "./src/testing/index.ts",
     "./*": "./src/*"
@@ -22,7 +21,6 @@
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
-    "@types/vscode": "^1.125.0",
     "typescript": "^5.8.3",
     "vitest": "^4.1.2"
   },

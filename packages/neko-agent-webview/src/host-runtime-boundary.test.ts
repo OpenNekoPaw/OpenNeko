@@ -5,35 +5,21 @@ import { describe, expect, it } from 'vitest';
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const srcRoot = join(packageRoot, 'src');
-const approvedVSCodeTransportFiles = new Set(['messages/index.ts']);
-
 const forbiddenHostNeutralPatterns = [
   {
-    pattern: /window\.vscodeApi/u,
+    pattern: /window\[['"]hostApi['"]\]/u,
     replacement: 'use the injected AgentHostRuntimeAdapter facade',
   },
   {
-    pattern: /acquireVsCodeApi/u,
-    replacement: 'use @neko/shared/vscode only inside the VSCode transport adapter',
-  },
-  {
-    pattern: /@neko\/shared\/vscode/u,
-    replacement: 'delegate through messages/index.ts or an injected host adapter',
-  },
-  {
-    pattern: /\bVSCodeMessages\b/u,
+    pattern: /\bLegacyHostMessages\b/u,
     replacement: 'use AgentHostMessages or useAgentHostRuntime',
   },
 ] as const;
 
 describe('Agent Webview host runtime boundary', () => {
-  it('keeps concrete VSCode transport usage inside the approved adapter facade', () => {
+  it('keeps concrete host transport usage behind the injected adapter facade', () => {
     const violations = listProductionSources(srcRoot).flatMap((filePath) => {
       const relativePath = relative(srcRoot, filePath);
-      if (approvedVSCodeTransportFiles.has(relativePath)) {
-        return [];
-      }
-
       const source = readFileSync(filePath, 'utf8');
       return forbiddenHostNeutralPatterns
         .filter((forbidden) => forbidden.pattern.test(source))
@@ -45,12 +31,11 @@ describe('Agent Webview host runtime boundary', () => {
     expect(violations).toEqual([]);
   });
 
-  it('keeps the approved VSCode transport adapter behind the host-neutral facade', () => {
+  it('keeps the Desktop transport adapter behind the host-neutral facade', () => {
     const messagesSource = readFileSync(join(srcRoot, 'messages/index.ts'), 'utf8');
 
-    expect(messagesSource).toContain('createVSCodeAgentHostRuntimeAdapter');
     expect(messagesSource).toContain('setAgentHostRuntimeAdapter');
-    expect(messagesSource).not.toContain('VSCodeMessages');
+    expect(messagesSource).toContain('requires an injected Desktop host runtime adapter');
   });
 });
 

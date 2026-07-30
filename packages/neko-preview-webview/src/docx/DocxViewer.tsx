@@ -6,7 +6,7 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo, type FC } from 'react';
 import { renderAsync } from 'docx-preview';
-import { useExtensionMessage, postMessage } from '../shared/useVscodeMessage';
+import { useExtensionMessage, postMessage } from '../shared/useHostMessage';
 import { useDocumentSelection } from '../shared/useDocumentSelection';
 import { DocumentContextMenu, useDocumentContextActions } from '../shared/DocumentContextMenu';
 import { imgSrcToBase64 } from '../shared/imageToBase64';

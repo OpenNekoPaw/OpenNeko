@@ -7,7 +7,7 @@ import type {
   MediaInfo,
   ReadyMessage,
 } from '../shared/types';
-import { useExtensionMessage, useVscodeReady } from '../shared/useVscodeMessage';
+import { useExtensionMessage, useHostReady } from '../shared/useHostMessage';
 import { useTranslation } from '../i18n/I18nContext';
 import { VideoControls } from './VideoControls';
 import { EmptyState } from '@neko/ui/primitives';
@@ -212,7 +212,7 @@ function EngineVideoPlayer() {
   const { t } = useTranslation();
   const readyMessageRef = useRef<ReadyMessage>();
   readyMessageRef.current ??= createVideoReadyMessage();
-  const { postMessage } = useVscodeReady(readyMessageRef.current);
+  const { postMessage } = useHostReady(readyMessageRef.current);
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<PcmAudioClient>();
   const audioContextRef = useRef<AudioContext>();

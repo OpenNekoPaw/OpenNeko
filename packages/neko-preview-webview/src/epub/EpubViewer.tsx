@@ -13,7 +13,7 @@
 
 import { useState, useEffect, useRef, useCallback, type FC } from 'react';
 import ePub, { type Book, type Rendition } from 'epubjs';
-import { useExtensionMessage, postMessage } from '../shared/useVscodeMessage';
+import { useExtensionMessage, postMessage } from '../shared/useHostMessage';
 import { useDocumentSelection, type DocumentSelection } from '../shared/useDocumentSelection';
 import { DocumentContextMenu, useDocumentContextActions } from '../shared/DocumentContextMenu';
 import { imgSrcToBase64 } from '../shared/imageToBase64';

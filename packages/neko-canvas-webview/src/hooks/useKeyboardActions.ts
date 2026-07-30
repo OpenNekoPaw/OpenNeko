@@ -10,7 +10,7 @@ import { useCallback } from 'react';
 import { hasEditableActiveElement } from '@neko/ui/keyboard';
 import type { CanvasNode } from '@neko/shared';
 import { useCanvasStoreApi } from '../stores/canvasStoreScope';
-import type { VSCodeAPI } from './useVSCodeMessages';
+import type { CanvasHostMessagePort } from './useCanvasHostMessages';
 import { isEditorLevelKeyboardAction } from './keyboardActionPolicy';
 
 // =============================================================================
@@ -18,7 +18,7 @@ import { isEditorLevelKeyboardAction } from './keyboardActionPolicy';
 // =============================================================================
 
 export interface UseKeyboardActionsOptions {
-  vscode: VSCodeAPI;
+  vscode: CanvasHostMessagePort;
   selectedNodeIds: string[];
   selectedConnectionIds: string[];
   nodes: CanvasNode[];

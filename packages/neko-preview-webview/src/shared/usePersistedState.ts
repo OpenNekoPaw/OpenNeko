@@ -11,7 +11,7 @@
  */
 
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { getVscodeApi } from './vscodeApi';
+import { getBrowserHostState } from './browserHostState';
 
 const DEBOUNCE_MS = 500;
 
@@ -26,7 +26,7 @@ let pendingTimer: ReturnType<typeof setTimeout> | null = null;
 function flushToExtension(): void {
   if (pendingTimer) clearTimeout(pendingTimer);
   pendingTimer = setTimeout(() => {
-    getVscodeApi().postMessage({
+    getBrowserHostState().postMessage({
       type: 'document:saveState',
       payload: { ...stateStore },
     });

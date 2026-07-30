@@ -8,7 +8,6 @@
     ".": "./src/index.ts",
     "./core": "./src/core/index.ts",
     "./application": "./src/application/index.ts",
-    "./host-vscode": "./src/host-vscode/index.ts",
     "./testing": "./src/testing/index.ts"
   },
   "scripts": {
@@ -25,7 +24,6 @@
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
-    "@types/vscode": "^1.125.0",
     "typescript": "^5.9.3",
     "vitest": "4.1.2"
   },

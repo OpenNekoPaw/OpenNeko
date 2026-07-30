@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { PcmAudioClient } from '@neko/media/browser';
-import { useExtensionMessage, useVscodeReady } from '../shared/useVscodeMessage';
+import { useExtensionMessage, useHostReady } from '../shared/useHostMessage';
 import { useTranslation } from '../i18n/I18nContext';
 import { CoverView } from './CoverView';
 import { LyricsView } from './LyricsView';
@@ -167,7 +167,7 @@ function SourceAudioPlayer({
 
 function EngineAudioPlayer() {
   const { t } = useTranslation();
-  const { postMessage } = useVscodeReady();
+  const { postMessage } = useHostReady();
   const [mediaInfo, setMediaInfo] = useState<MediaInfo>();
   const [waveformData, setWaveformData] = useState<{
     peaks: number[];

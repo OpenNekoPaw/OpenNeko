@@ -7,7 +7,6 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const srcRoot = join(__dirname, '..');
 const sourceExtensions = new Set(['.ts', '.tsx']);
 const forbiddenImportPatterns = [
-  /from\s+['"]vscode['"]/,
   /from\s+['"]node:/,
   /from\s+['"]fs['"]/,
   /from\s+['"]path['"]/,
@@ -18,18 +17,14 @@ const markdownUiRoot = join(srcRoot, 'markdown');
 const markdownCoreRoot = join(srcRoot, '../../neko-markdown/src');
 
 describe('@neko/ui dependency boundary', () => {
-  it('does not import vscode, node-only modules, or feature packages from source files', () => {
+  it('does not import node-only modules or feature packages from source files', () => {
     const violations = collectSourceFiles(srcRoot).flatMap((filePath) => {
       const text = readFileSync(filePath, 'utf-8');
       const relativePath = relative(srcRoot, filePath);
       const patternViolations = forbiddenImportPatterns
         .filter((pattern) => pattern.test(text))
         .map((pattern) => `${relativePath}: ${pattern}`);
-      const acquireViolation = text.includes('acquireVsCodeApi')
-        ? [`${relativePath}: acquireVsCodeApi`]
-        : [];
-
-      return [...patternViolations, ...acquireViolation];
+      return patternViolations;
     });
 
     expect(violations).toEqual([]);

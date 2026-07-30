@@ -1,8 +1,6 @@
 packages:
   - apps/*
   - packages/*
-  - packages/*/packages/*
-  - packages/*/test-utils
 
 shamefullyHoist: true
 publicHoistPattern:
@@ -38,7 +36,6 @@ ignoredBuiltDependencies:
 
 allowBuilds:
   '@fission-ai/openspec': set this to true or false
-  '@vscode/vsce-sign': set this to true or false
   core-js: set this to true or false
   electron: true
   es5-ext: set this to true or false

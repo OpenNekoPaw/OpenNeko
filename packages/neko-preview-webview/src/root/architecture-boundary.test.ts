@@ -20,7 +20,7 @@ describe('Preview Root architecture boundary', () => {
     expect(source).not.toContain('vscodeModelViewerHost');
     expect(source).not.toContain('browserThreeRuntimeFactory');
     expect(source).not.toContain('<canvas');
-    expect(modelViewer).not.toContain('getVscodeApi');
+    expect(modelViewer).not.toContain('getBrowserHostState');
     expect(modelViewer).not.toContain("window.addEventListener('message'");
     for (const [fileName, productionSource] of [
       ['root/index.tsx', source],
@@ -48,8 +48,8 @@ function expectProductionRootSource(fileName: string, source: string): void {
   const forbidden = [
     /\bfrom\s+['"](?:node:|electron(?:\/|['"])|vscode(?:\/|['"]))/u,
     /\bimport\s*\(\s*['"](?:node:|electron(?:\/|['"])|vscode(?:\/|['"]))/u,
-    /\bacquireVsCodeApi\b/u,
-    /\bgetVscodeApi\b/u,
+    /\bacquireBrowserHostState\b/u,
+    /\bgetBrowserHostState\b/u,
     /\bPreviewHostAdapterSurface\b/u,
   ];
 

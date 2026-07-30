@@ -5,10 +5,10 @@ import { describe, expect, it } from 'vitest';
 const hostRuntimeRoot = import.meta.dirname;
 
 describe('Canvas Host runtime architecture boundary', () => {
-  it('keeps the browser runtime contract free of VS Code, Electron and Node imports', () => {
+  it('keeps the browser runtime contract free of Electron and Node imports', () => {
     const violations = walkTypeScript(hostRuntimeRoot).flatMap((file) => {
       const content = readFileSync(file, 'utf8');
-      return ['vscode', 'electron', 'node:', 'fs', 'path']
+      return ['electron', 'node:', 'fs', 'path']
         .filter((specifier) => containsModuleSpecifier(content, specifier))
         .map((specifier) => `${path.basename(file)} -> ${specifier}`);
     });
@@ -16,17 +16,15 @@ describe('Canvas Host runtime architecture boundary', () => {
     expect(violations).toEqual([]);
   });
 
-  it('does not let the public Canvas Root acquire a global VS Code API', () => {
+  it('requires the public Canvas Root to receive its host runtime explicitly', () => {
     const root = readFileSync(path.resolve(hostRuntimeRoot, '..', 'root.tsx'), 'utf8');
     const app = readFileSync(path.resolve(hostRuntimeRoot, '..', 'CanvasApp.tsx'), 'utf8');
 
     expect(root).toContain('runtime: CanvasHostRuntime');
     expect(root).toContain('<CanvasHostProvider host={host}>');
     expect(root).toContain('<CanvasApp host={host}');
-    expect(root).not.toContain('getGlobalVSCodeApi');
-    expect(root).not.toContain('acquireVsCodeApi');
-    expect(app).not.toContain('getGlobalVSCodeApi');
-    expect(app).not.toContain('const vscode: VSCodeAPI');
+    expect(root).not.toContain('getGlobalHostApi');
+    expect(app).not.toContain('getGlobalHostApi');
 
     const webviewRoot = path.resolve(hostRuntimeRoot, '..');
     const legacyGlobalViolations = walkTypeScript(webviewRoot)
@@ -34,12 +32,11 @@ describe('Canvas Host runtime architecture boundary', () => {
         (file) =>
           !file.endsWith('.test.ts') &&
           !file.endsWith('.test.tsx') &&
-          !file.endsWith(`${path.sep}main.tsx`) &&
-          !file.endsWith(`${path.sep}vscode-canvas-host-runtime.ts`),
+          !file.endsWith(`${path.sep}main.tsx`),
       )
       .flatMap((file) => {
         const content = readFileSync(file, 'utf8');
-        return ['getGlobalVSCodeApi', 'getVSCodeAPI', 'acquireVsCodeApi']
+        return ['getGlobalHostApi', 'getCanvasHostMessagePort']
           .filter((token) => content.includes(token))
           .map((token) => `${path.relative(webviewRoot, file)} -> ${token}`);
       });

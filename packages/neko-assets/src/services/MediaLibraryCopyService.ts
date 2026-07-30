@@ -8,7 +8,15 @@ import {
   type ContentFingerprint,
   type WorkspaceFileContentLocator,
 } from '@neko/shared';
-import type { WorkspaceLinkedMediaLibraryService } from './WorkspaceLinkedMediaLibraryService';
+export interface MediaLibraryCopyLibrarySource {
+  list(): Promise<
+    readonly {
+      readonly name: string;
+      readonly availability: 'available' | 'missing' | 'unavailable';
+      readonly workspacePath: string;
+    }[]
+  >;
+}
 
 export interface MediaLibraryCopyRequest {
   readonly source: ContentLocator;
@@ -38,7 +46,7 @@ export type MediaLibraryCopyResult =
 
 export class MediaLibraryCopyService {
   constructor(
-    private readonly libraries: Pick<WorkspaceLinkedMediaLibraryService, 'list'>,
+    private readonly libraries: MediaLibraryCopyLibrarySource,
     private readonly reader: ContentReadService,
     private readonly writer: AuthorizedWorkspaceWriter,
   ) {}

@@ -7,14 +7,11 @@
     "./host-adapter": "./src/host-adapter/index.tsx",
     "./root": "./src/root.tsx",
     "./runtime-bridge": "./src/controllers/cut-host-runtime-webview-bridge.ts",
-    "./vscode-bridge": "./src/controllers/vscode-cut-webview-host-bridge.ts",
     "./retained": "./src/retained.ts"
   },
   "scripts": {
-    "dev": "vite",
-    "build": "tsc && vite build",
-    "test": "vitest run",
-    "preview": "vite preview"
+    "build": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "@neko-cut/domain": "workspace:*",

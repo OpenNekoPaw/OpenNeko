@@ -22,7 +22,7 @@ registerDefaultRenderers();
 
 export interface AgentWebviewRootProps {
   readonly locale?: SupportedLocale;
-  readonly hostRuntimeAdapter?: AgentHostRuntimeAdapter;
+  readonly hostRuntimeAdapter: AgentHostRuntimeAdapter;
   readonly foundation?: WebviewFoundationContextValue;
   readonly initialConversation?: { readonly id: string; readonly title: string };
   readonly initialInput?: { readonly id: string; readonly value: string };
@@ -38,9 +38,6 @@ export function AgentWebviewRoot({
   presentation = 'default',
 }: AgentWebviewRootProps): ReactElement {
   useLayoutEffect(() => {
-    if (!hostRuntimeAdapter) {
-      return undefined;
-    }
     const subscription = setAgentHostRuntimeAdapter(hostRuntimeAdapter);
     return () => {
       subscription.dispose();
@@ -48,9 +45,6 @@ export function AgentWebviewRoot({
   }, [hostRuntimeAdapter]);
 
   useEffect(() => {
-    if (!hostRuntimeAdapter) {
-      return undefined;
-    }
     const subscription = hostRuntimeAdapter.subscribe((message) => {
       window.dispatchEvent(new CustomEvent(NEKO_AGENT_HOST_MESSAGE_EVENT, { detail: message }));
     });
