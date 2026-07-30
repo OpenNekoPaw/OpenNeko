@@ -1321,30 +1321,28 @@ describe('agent architecture boundary guards', () => {
   });
 
   it('keeps host-specific projection names quarantined away from runtime production callers', () => {
-    const sourceFiles = listFiles(packageRoot)
+    const sourceFiles = execFileSync(
+      'git',
+      ['ls-files', '--cached', '--others', '--exclude-standard', 'packages'],
+      { cwd: workspaceRoot, encoding: 'utf-8' },
+    )
+      .split('\n')
+      .filter(Boolean)
       .filter(
         (file) =>
           (file.endsWith('.ts') || file.endsWith('.tsx')) &&
           !isTestFile(file) &&
-          !relative(repoRoot, file).includes('__tests__/'),
+          !file.includes('__tests__/'),
       )
-      .map((file) => ({
-        file,
-        relativePath: relative(repoRoot, file).replace(/\\/g, '/'),
-        source: stripTypeScriptComments(readFileSync(file, 'utf-8')),
+      .map((relativePath) => ({
+        relativePath,
+        source: stripTypeScriptComments(readFileSync(join(repoRoot, relativePath), 'utf-8')),
       }));
 
     const allowedShimFiles = new Set([
       'packages/neko-agent-runtime/src/runtime/backfill-coordinator.ts',
       'packages/neko-agent-runtime/src/session/context-host-message.ts',
       'packages/neko-agent-runtime/src/runtime/index.ts',
-      'packages/neko-agent-runtime/src/runtime/backfill-coordinator.ts',
-      'packages/neko-agent-runtime/src/session/context-host-message.ts',
-      'packages/neko-agent-runtime/src/runtime/index.ts',
-    ]);
-    const allowedAdapterFiles = new Set([
-      'packages/neko-agent/packages/extension/src/chat/message/agentTurnBridge.ts',
-      'packages/neko-agent/packages/extension/src/services/mediaTurnBridge.ts',
     ]);
     const forbiddenPatterns = [
       /\brunAgentTurnForWebviewRuntime\b/,
@@ -1360,7 +1358,7 @@ describe('agent architecture boundary guards', () => {
     ];
 
     const violations = sourceFiles.flatMap(({ relativePath, source }) => {
-      if (allowedShimFiles.has(relativePath) || allowedAdapterFiles.has(relativePath)) {
+      if (allowedShimFiles.has(relativePath)) {
         return [];
       }
       return forbiddenPatterns

@@ -134,10 +134,14 @@ describe('@neko/generation architecture boundaries', () => {
     expect(violations).toEqual([]);
   });
 
-  it('keeps Agent and domain entry points on the canonical GenerationJob path', () => {
+  it('keeps Desktop and domain entry points on the canonical GenerationJob path', () => {
     const retiredCanvasGenerationPaths = [
       'packages/neko-canvas-domain/src/canvas-generation-runtime.ts',
       'packages/neko-canvas/packages/extension/src/canvasCreativeAiExecutor.ts',
+      'packages/neko-agent/packages/extension/src/services/mediaTurnBridge.ts',
+      'packages/neko-canvas/packages/extension/src/agentCapabilityProvider.ts',
+      'packages/neko-canvas/packages/extension/src/editor/canvasEditorProvider.ts',
+      'packages/neko-cut/packages/extension/src/extension.ts',
     ];
     expect(
       retiredCanvasGenerationPaths.filter((file) => existsSync(resolve(workspaceRoot, file))),
@@ -146,19 +150,17 @@ describe('@neko/generation architecture boundaries', () => {
     const sources = new Map(
       [
         'packages/neko-platform/src/media/media-agent-tools.ts',
-        'packages/neko-agent/packages/extension/src/services/mediaTurnBridge.ts',
-        'packages/neko-canvas/packages/extension/src/agentCapabilityProvider.ts',
-        'packages/neko-canvas/packages/extension/src/editor/canvasEditorProvider.ts',
-        'packages/neko-cut/packages/extension/src/extension.ts',
+        'apps/neko-desktop/src/main/desktop-canvas-generation-runtime.ts',
+        'apps/neko-desktop/src/main/desktop-cut-runtime.ts',
         'packages/neko-cut-node/src/CutExportTaskRegistry.ts',
       ].map((file) => [file, readFileSync(resolve(workspaceRoot, file), 'utf8')]),
     );
     const allEntrySource = [...sources.values()].join('\n');
     const agentToolSource = sources.get('packages/neko-platform/src/media/media-agent-tools.ts');
-    const cutSource = sources.get('packages/neko-cut/packages/extension/src/extension.ts');
-    const canvasEditorSource = sources.get(
-      'packages/neko-canvas/packages/extension/src/editor/canvasEditorProvider.ts',
+    const canvasGenerationSource = sources.get(
+      'apps/neko-desktop/src/main/desktop-canvas-generation-runtime.ts',
     );
+    const cutSource = sources.get('apps/neko-desktop/src/main/desktop-cut-runtime.ts');
     const cutExportRegistrySource = sources.get(
       'packages/neko-cut-node/src/CutExportTaskRegistry.ts',
     );
@@ -167,23 +169,18 @@ describe('@neko/generation architecture boundaries', () => {
     expect(agentToolSource).toContain('jobs.observeGeneration');
     expect(agentToolSource).not.toMatch(/\bmedia\.generate(?:Image|Video|Audio)\s*\(/u);
     expect(
-      sources.get('packages/neko-agent/packages/extension/src/services/mediaTurnBridge.ts'),
-    ).not.toMatch(/\bsubmitMediaTurn\b|\bplatform\.media\b/u);
-    expect(
       existsSync(
         resolve(workspaceRoot, 'packages/neko-platform/src/media/media-turn-dispatcher.ts'),
       ),
     ).toBe(false);
-    expect(
-      sources.get('packages/neko-canvas/packages/extension/src/agentCapabilityProvider.ts'),
-    ).not.toMatch(/\bensureProjectModel\b|neko\.project\.models\./u);
-    expect(canvasEditorSource).toContain("requestedAction: 'create-job'");
-    expect(canvasEditorSource).toContain("'neko.agent.sendContext'");
-    expect(canvasEditorSource).toContain("'neko.ai.sendMessage'");
-    expect(canvasEditorSource).not.toMatch(
-      /\b(?:jobs\.submitGeneration|executeCanvasCreativeAi|CanvasMediaService)\b/u,
+    expect(canvasGenerationSource).toContain('new GenerationJobCoordinator');
+    expect(canvasGenerationSource).toContain('createPersistentGenerationJobStore');
+    expect(canvasGenerationSource).toContain('owner.jobs.regenerateGeneration');
+    expect(canvasGenerationSource).not.toMatch(
+      /\b(?:executeCanvasCreativeAi|CanvasMediaService)\b/u,
     );
-    expect(canvasEditorSource).not.toMatch(/\.generateImage\s*\(/u);
+    expect(canvasGenerationSource).not.toMatch(/\.generateImage\s*\(/u);
+    expect(cutSource).toContain('new CutExportTaskRegistry');
     expect(cutSource).not.toMatch(/sendCutSkillIntentToAgent\(\s*['"]video['"]/u);
     expect(cutExportRegistrySource).toContain('this.coordinator.cancelExport(commandFor(current))');
     expect(cutExportRegistrySource).not.toMatch(/\b(?:active|latest)Job\b/iu);

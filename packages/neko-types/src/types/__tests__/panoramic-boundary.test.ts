@@ -4,12 +4,12 @@ import { join, relative } from 'node:path';
 
 const REPO_ROOT = join(__dirname, '../../../../../');
 const BOUNDARY_SOURCE_ROOTS = [
-  'packages/neko-preview/package.json',
-  'packages/neko-preview/packages/extension/src',
+  'apps/neko-desktop/src',
+  'packages/neko-preview-contracts/package.json',
+  'packages/neko-preview-contracts/src',
   'packages/neko-preview-webview/src',
-  'packages/neko-canvas/packages/extension/src',
+  'packages/neko-canvas-domain/src',
   'packages/neko-canvas-webview/src',
-  'packages/neko-agent/packages/extension/src',
   'packages/neko-platform/src',
   'packages/neko-agent-webview/src',
   'packages/neko-agent-runtime/src',
