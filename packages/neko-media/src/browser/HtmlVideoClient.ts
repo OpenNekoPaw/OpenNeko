@@ -1,6 +1,8 @@
+import { isMediaTransportUrl, type MediaTransport } from '../contracts';
+
 export interface HtmlVideoClientDescriptor {
   readonly version: 1;
-  readonly transport: 'http' | 'authorized';
+  readonly transport: MediaTransport;
   readonly url: string;
   readonly mimeType: string;
   readonly mediaTimeOriginSeconds: number;
@@ -230,27 +232,13 @@ function validateDescriptor(descriptor: HtmlVideoClientDescriptor): void {
     throw new Error('Cut HTML video descriptor requires a video MIME type.');
   }
   if (
-    !isDescriptorUrl(descriptor.url, descriptor.transport) ||
+    !isMediaTransportUrl(descriptor.url, descriptor.transport) ||
     !Number.isFinite(descriptor.mediaTimeOriginSeconds) ||
     descriptor.mediaTimeOriginSeconds < 0 ||
     !Number.isFinite(descriptor.durationSeconds) ||
     descriptor.durationSeconds <= 0
   ) {
     throw new Error('Invalid Cut HTML video descriptor.');
-  }
-}
-
-function isDescriptorUrl(
-  value: string,
-  transport: HtmlVideoClientDescriptor['transport'],
-): boolean {
-  try {
-    const url = new URL(value);
-    return transport === 'http'
-      ? url.protocol === 'http:' && url.hostname === '127.0.0.1'
-      : url.protocol === 'neko-media:' && url.hostname === 'desktop';
-  } catch {
-    return false;
   }
 }
 

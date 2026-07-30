@@ -62,6 +62,9 @@ describe('CanvasWebviewRoot lifetime', () => {
       async getSnapshot() {
         throw new Error('Snapshot is not used by the lifetime fixture.');
       },
+      async resolveMaterialActions() {
+        throw new Error('Material actions are not used by the lifetime fixture.');
+      },
       subscribe() {
         return () => {};
       },
@@ -110,6 +113,9 @@ describe('CanvasWebviewRoot lifetime', () => {
       },
       async getSnapshot() {
         throw new Error('Snapshot is not used by the lifetime fixture.');
+      },
+      async resolveMaterialActions() {
+        throw new Error('Material actions are not used by the lifetime fixture.');
       },
       subscribe,
       async executeIntent(request) {

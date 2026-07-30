@@ -131,7 +131,7 @@ export function PlaybackWorkspace({ canvasPane, className }: PlaybackWorkspacePr
       return;
     }
     const vscode = host;
-    if (!vscode) {
+    if (!vscode || !(vscode.supportsMessage?.('playback:getPreviewPlan') ?? true)) {
       setHostPlanState({ plan: null, stale: false, sourceCanvasData: null });
       return;
     }

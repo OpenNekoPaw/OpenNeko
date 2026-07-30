@@ -175,8 +175,10 @@ describe('Canvas creative workbench layout boundary', () => {
 
   it('creates nodes through canonical add action ids', () => {
     expect(appSource).toContain('getCanvasAddAction(actionId)');
-    expect(appSource).toContain("case 'markdown'");
-    expect(appSource).toContain("case 'group'");
+    expect(appSource).toContain("case 'text'");
+    expect(appSource).toContain("case 'table'");
+    expect(appSource).not.toContain("case 'markdown'");
+    expect(appSource).not.toContain("case 'group'");
     expect(appSource).not.toContain("case 'job'");
     expect(appSource).not.toContain("case 'shot'");
     expect(appSource).not.toContain("case 'scene'");
@@ -220,6 +222,12 @@ describe('Canvas creative workbench layout boundary', () => {
     expect(appSource).toMatch(/reportAction\('togglePlaybackWorkspace', 'overlay'\)/);
     expect(appSource).toMatch(/revealPlaybackWorkspace\(\{ focusOwner: 'route' \}\)/);
     expect(appSource).not.toMatch(/panes:/);
+    expect(appSource).toMatch(
+      /const canOpenHostPlayback = vscode\.supportsMessage\('media:probe'\)/,
+    );
+    expect(playbackWorkspaceSource).toMatch(
+      /if \(!vscode \|\| !\(vscode\.supportsMessage\?\.\('playback:getPreviewPlan'\) \?\? true\)\)/,
+    );
   });
 
   it('renders Storyline, controls and conditional Preview in one presentation component', () => {
@@ -359,11 +367,39 @@ describe('Canvas creative workbench layout boundary', () => {
   it('projects the shared add catalog from the left toolbar popover', () => {
     expect(toolbarSource).toMatch(/<CanvasAddActionPopover/);
     expect(toolbarSource).toMatch(/onSelectAddAction/);
-    expect(addActionPopoverSource).toMatch(/CANVAS_ADD_ACTION_GROUPS\.map/);
+    expect(addActionPopoverSource).toMatch(/CANVAS_ADD_ACTIONS\.filter/);
+    expect(addActionPopoverSource).toMatch(/visibleActions\.map/);
+    expect(addActionPopoverSource).toMatch(/availableGenerationKinds\.includes/);
+    expect(addActionPopoverSource).toMatch(/availableSourceModes\.length > 0/);
     expect(addActionPopoverSource).toMatch(/data-canvas-add-action-popover="true"/);
-    expect(addActionCatalogSource).toContain("id: 'create'");
-    expect(addActionCatalogSource).toContain("id: 'import'");
-    expect(addActionCatalogSource).toContain("id: 'reference'");
+    expect(addActionCatalogSource).toContain("id: 'text'");
+    expect(addActionCatalogSource).toContain("id: 'table'");
+    expect(addActionCatalogSource).toContain("id: 'director3d'");
+    expect(addActionCatalogSource).not.toContain("id: 'markdown'");
+    expect(addActionCatalogSource).not.toContain("id: 'subcanvas'");
+  });
+
+  it('keeps the add-node popover at Canvas toolbar density and on Canvas surface tokens', () => {
+    expect(addActionPopoverSource).toContain(
+      'contentClassName="canvas-add-action-popover-surface"',
+    );
+    expect(addActionPopoverSource).toContain('className="canvas-add-action-popover"');
+    expect(addActionPopoverSource).toContain('className="canvas-add-action-popover__title"');
+    expect(addActionPopoverSource).toContain('className="canvas-add-action-popover__action"');
+    expect(addActionPopoverSource).toContain('className="canvas-add-action-popover__icon"');
+    expect(addActionPopoverSource).not.toMatch(/\bw-72\b|\bh-11\b|\bw-11\b|\brounded-xl\b/);
+    expect(cssSource).toMatch(
+      /\.canvas-add-action-popover-surface\s*\{[^}]*--neko-menu-background:\s*var\(--neko-elevated\);[^}]*--neko-menu-border:\s*var\(--neko-border\);[^}]*--neko-menu-foreground:\s*var\(--neko-fg\);[^}]*--neko-menu-selectionBackground:\s*var\(--neko-hover\);[^}]*--neko-popover-background:\s*var\(--neko-menu-background\);[^}]*--neko-popover-border:\s*var\(--neko-menu-border\);[^}]*--neko-popover-shadow:\s*var\(--neko-shadow-md\);/s,
+    );
+    expect(cssSource).toMatch(
+      /\.canvas-add-action-popover\s*\{[^}]*width:\s*236px;[^}]*color:\s*var\(--neko-fg\);/s,
+    );
+    expect(cssSource).toMatch(
+      /\.canvas-add-action-popover__action\s*\{[^}]*min-height:\s*40px;[^}]*background:\s*transparent;/s,
+    );
+    expect(cssSource).toMatch(
+      /\.canvas-add-action-popover__action:is\(:hover,\s*:focus-visible\)\s*\{[^}]*background:\s*var\(--neko-menu-selectionBackground\);[^}]*color:\s*var\(--neko-menu-selectionForeground\);/s,
+    );
   });
 
   it('marks primary canvas tools and visibility toggles by responsibility', () => {

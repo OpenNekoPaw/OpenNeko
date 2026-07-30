@@ -18,7 +18,12 @@ import { usePlaybackStore } from '../stores/playbackStore';
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 
 const canvasHostMock = vi.hoisted(() => ({
-  current: undefined as { postMessage(message: unknown): void } | undefined,
+  current: undefined as
+    | {
+        postMessage(message: unknown): void;
+        subscribe(listener: (message: unknown) => void): () => void;
+      }
+    | undefined,
 }));
 
 vi.mock('../host-runtime', () => ({
@@ -125,6 +130,7 @@ describe('PreviewSurface media playback control', () => {
   let root: Root;
   let mockWindow: MockWebviewWindow;
   let postMessage: ReturnType<typeof vi.fn<(message: unknown) => void>>;
+  let subscribe: ReturnType<typeof vi.fn<(listener: (message: unknown) => void) => () => void>>;
 
   beforeEach(() => {
     host = document.createElement('div');
@@ -135,7 +141,15 @@ describe('PreviewSurface media playback control', () => {
       api.postedMessages.push(message);
     });
     api.postMessage = postMessage;
-    canvasHostMock.current = api;
+    subscribe = vi.fn((listener: (message: unknown) => void) => {
+      const handleMessage = (event: MessageEvent) => listener(event.data);
+      window.addEventListener('message', handleMessage);
+      return () => window.removeEventListener('message', handleMessage);
+    });
+    canvasHostMock.current = {
+      postMessage: (message) => api.postMessage(message),
+      subscribe,
+    };
     mockWindow = installMockWebviewWindow(api);
     audioContextMocks.length = 0;
     Object.assign(globalThis, {
@@ -162,6 +176,26 @@ describe('PreviewSurface media playback control', () => {
     canvasHostMock.current = undefined;
     resetVSCodeApi();
     vi.restoreAllMocks();
+  });
+
+  it('receives media responses through the Canvas Host subscription contract', async () => {
+    await act(async () => {
+      root.render(
+        <PreviewSurface
+          source={{
+            id: 'host-subscription-video',
+            role: 'video-proxy',
+            asset: {
+              kind: 'asset-identity',
+              path: 'media/subscribed.mp4',
+              mediaType: 'video',
+            },
+          }}
+        />,
+      );
+    });
+
+    expect(subscribe).toHaveBeenCalled();
   });
 
   it('contains inline creative images so the complete composition remains visible', async () => {
@@ -550,6 +584,230 @@ describe('PreviewSurface media playback control', () => {
       expect(messagesOfType('media:probe')).toHaveLength(1);
     },
   );
+
+  it.each([
+    {
+      role: 'video-proxy' as const,
+      mediaType: 'video' as const,
+      assetPath: 'clips/hover.mp4',
+      readyDescriptors: {
+        video: {
+          version: 1,
+          transport: 'authorized',
+          url: 'neko-media://desktop/canvas-hover-video/hover.mp4',
+          mimeType: 'video/mp4',
+          preparationProfile: 'h264-mp4-direct',
+          durationSeconds: 2,
+        },
+      },
+      endedTestId: 'inline-video-ended',
+    },
+    {
+      role: 'audio-waveform' as const,
+      mediaType: 'audio' as const,
+      assetPath: 'audio/hover.aac',
+      readyDescriptors: {
+        audio: {
+          version: 1,
+          transport: 'authorized',
+          protocol: 'neko-pcm-f32le-v1',
+          streamUrl: 'neko-media://desktop/canvas-hover-audio/hover.pcm',
+          sampleRate: 48_000,
+          channels: 2,
+        },
+      },
+      endedTestId: 'inline-audio-ended',
+    },
+  ])(
+    'stops and releases transient $mediaType playback when hover ownership ends',
+    async (caseData) => {
+      const source: PreviewSourceDescriptor = {
+        id: `hover:${caseData.mediaType}`,
+        role: caseData.role,
+        title: caseData.assetPath,
+        asset: {
+          kind: 'asset-identity',
+          path: caseData.assetPath,
+          mediaType: caseData.mediaType,
+        },
+      };
+
+      await act(async () => {
+        root.render(
+          <PreviewSurface
+            source={source}
+            playbackControl={{
+              requestId: `hover-${caseData.mediaType}-1`,
+              state: 'playing',
+              startTimeSeconds: 0,
+              persistence: 'transient',
+            }}
+          />,
+        );
+      });
+      const probe = latestMessageOfType('media:probe');
+      const nodeId = readString(probe['nodeId']);
+      if (!nodeId) throw new Error('hover media probe did not include a node id');
+      await act(async () => {
+        mockWindow.dispatchMessage({
+          type: 'media:probeResult',
+          nodeId,
+          mediaInfo: mediaInfoFor(caseData.mediaType),
+        });
+      });
+      await act(async () => {
+        mockWindow.dispatchMessage({
+          type: 'media:streamReady',
+          nodeId,
+          mediaInfo: mediaInfoFor(caseData.mediaType),
+          ...caseData.readyDescriptors,
+          startTime: 0,
+          playbackRate: 1,
+        });
+      });
+      expect(messagesOfType('media:play')).toHaveLength(1);
+      expect(host.querySelector(`[data-testid="${caseData.endedTestId}"]`)).not.toBeNull();
+
+      await act(async () => {
+        root.render(
+          <PreviewSurface
+            source={source}
+            playbackControl={{
+              requestId: `hover-${caseData.mediaType}-1`,
+              state: 'stopped',
+              startTimeSeconds: 0,
+              persistence: 'transient',
+            }}
+          />,
+        );
+      });
+
+      expect(messagesOfType('media:stop')).toHaveLength(1);
+      expect(usePlaybackStore.getState().playbacks.size).toBe(0);
+      expect(usePlaybackStore.getState().activePlayback).toBeNull();
+    },
+  );
+
+  it.each([
+    {
+      role: 'video-proxy' as const,
+      mediaType: 'video' as const,
+      assetPath: 'clips/leave-before-probe.mp4',
+    },
+    {
+      role: 'audio-waveform' as const,
+      mediaType: 'audio' as const,
+      assetPath: 'audio/leave-before-probe.aac',
+    },
+  ])(
+    'cancels pending transient $mediaType playback when hover ends before probe',
+    async (caseData) => {
+      const source: PreviewSourceDescriptor = {
+        id: `pending-hover:${caseData.mediaType}`,
+        role: caseData.role,
+        asset: {
+          kind: 'asset-identity',
+          path: caseData.assetPath,
+          mediaType: caseData.mediaType,
+        },
+      };
+
+      await act(async () => {
+        root.render(
+          <PreviewSurface
+            source={source}
+            playbackControl={{
+              requestId: `pending-hover-${caseData.mediaType}-1`,
+              state: 'playing',
+              startTimeSeconds: 0,
+              persistence: 'transient',
+            }}
+          />,
+        );
+      });
+      const nodeId = readString(latestMessageOfType('media:probe')['nodeId']);
+      if (!nodeId) throw new Error('pending hover probe did not include a node id');
+
+      await act(async () => {
+        root.render(
+          <PreviewSurface
+            source={source}
+            playbackControl={{
+              requestId: `pending-hover-${caseData.mediaType}-1`,
+              state: 'stopped',
+              startTimeSeconds: 0,
+              persistence: 'transient',
+            }}
+          />,
+        );
+      });
+      await act(async () => {
+        mockWindow.dispatchMessage({
+          type: 'media:probeResult',
+          nodeId,
+          mediaInfo: mediaInfoFor(caseData.mediaType),
+        });
+      });
+
+      expect(messagesOfType('media:play')).toHaveLength(0);
+      expect(usePlaybackStore.getState().playbacks.size).toBe(0);
+      expect(usePlaybackStore.getState().activePlayback).toBeNull();
+    },
+  );
+
+  it.each([
+    {
+      role: 'video-proxy' as const,
+      mediaType: 'video' as const,
+      assetPath: 'clips/unmount-hover.mp4',
+    },
+    {
+      role: 'audio-waveform' as const,
+      mediaType: 'audio' as const,
+      assetPath: 'audio/unmount-hover.aac',
+    },
+  ])('stops transient $mediaType playback when its preview surface unmounts', async (caseData) => {
+    const source: PreviewSourceDescriptor = {
+      id: `unmount-hover:${caseData.mediaType}`,
+      role: caseData.role,
+      asset: {
+        kind: 'asset-identity',
+        path: caseData.assetPath,
+        mediaType: caseData.mediaType,
+      },
+    };
+    await act(async () => {
+      root.render(
+        <PreviewSurface
+          source={source}
+          playbackControl={{
+            requestId: `unmount-hover-${caseData.mediaType}-1`,
+            state: 'playing',
+            startTimeSeconds: 0,
+            persistence: 'transient',
+          }}
+        />,
+      );
+    });
+    const nodeId = readString(latestMessageOfType('media:probe')['nodeId']);
+    if (!nodeId) throw new Error('unmount hover probe did not include a node id');
+    await act(async () => {
+      mockWindow.dispatchMessage({
+        type: 'media:probeResult',
+        nodeId,
+        mediaInfo: mediaInfoFor(caseData.mediaType),
+      });
+    });
+    expect(messagesOfType('media:play')).toHaveLength(1);
+
+    await act(async () => {
+      root.render(<div data-testid="hidden-canvas" />);
+    });
+
+    expect(messagesOfType('media:stop')).toHaveLength(1);
+    expect(usePlaybackStore.getState().playbacks.size).toBe(0);
+    expect(usePlaybackStore.getState().activePlayback).toBeNull();
+  });
 
   it('restarts inline video from zero when the saved position is at media end', async () => {
     const assetPath = 'clips/replay.mp4';

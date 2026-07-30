@@ -1,4 +1,4 @@
-import type { PcmStreamDescriptor } from '../contracts';
+import { isMediaTransportUrl, type PcmStreamDescriptor } from '../contracts';
 
 export interface PcmAudioClientOptions {
   readonly descriptor: PcmStreamDescriptor;
@@ -505,12 +505,7 @@ function validateDescriptor(descriptor: PcmStreamDescriptor): void {
   ) {
     throw new Error('Unsupported PCM descriptor version.');
   }
-  const url = new URL(descriptor.streamUrl);
-  const validUrl =
-    descriptor.transport === 'http'
-      ? url.protocol === 'http:' && url.hostname === '127.0.0.1'
-      : url.protocol === 'neko-media:' && url.hostname === 'desktop';
-  if (!validUrl) {
+  if (!isMediaTransportUrl(descriptor.streamUrl, descriptor.transport)) {
     throw new Error('PCM descriptor URL does not match its transport.');
   }
   if (descriptor.sampleRate <= 0 || descriptor.channels <= 0) {

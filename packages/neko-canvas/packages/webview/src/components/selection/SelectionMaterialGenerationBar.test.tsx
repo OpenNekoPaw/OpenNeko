@@ -1,132 +1,128 @@
 // @vitest-environment jsdom
 
-import { act } from 'react';
-import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { createResourceRef, type CanvasNode } from '@neko/shared';
-import { resetVSCodeApi } from '@neko/shared/vscode';
+import { beforeEach, describe, expect, it } from 'vitest';
+import type {
+  CanvasGenerationEvidence,
+  CanvasNode,
+  FileCanvasNode,
+  MediaCanvasNode,
+} from '@neko/shared';
 import { setLocale } from '../../i18n';
 import { SelectionMaterialGenerationBar } from './SelectionMaterialGenerationBar';
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 
-vi.mock('../../host-runtime', () => ({
-  useOptionalCanvasHost: () =>
-    (window as unknown as { vscodeApi?: { postMessage(message: unknown): void } }).vscodeApi,
-}));
-
-const resourceRef = createResourceRef({
-  id: 'generated-image-1',
-  scope: 'project',
-  provider: 'generated-output',
-  kind: 'generated',
-  source: { kind: 'generated-asset', generatedAssetId: 'generated-image-1' },
-  locator: { kind: 'generated-asset', assetId: 'generated-image-1' },
-  fingerprint: { strategy: 'hash', value: 'sha256:generated-image-1' },
-});
+const generation: CanvasGenerationEvidence = {
+  jobRef: { kind: 'generation', jobId: 'generation-job-1' },
+  summary: {
+    prompt: 'Cold industrial corridor',
+    model: 'image-model-v2',
+    aspectRatio: '16:9',
+  },
+};
 
 describe('SelectionMaterialGenerationBar', () => {
   beforeEach(() => {
     setLocale('en');
-    (window as unknown as { vscodeApi?: unknown }).vscodeApi = {
-      postMessage: vi.fn(),
-      supportsMessage: (messageType: string) => messageType === 'sendToAgent',
-    };
   });
 
-  it('shows prompt metadata and quick generation for generated canonical media', () => {
+  it('shows immutable prompt metadata for generated canonical media', () => {
     const node = mediaNode('generated-media', {
-      assetPath: '',
-      mediaType: 'image',
-      resourceRef,
-      generationContext: {
-        prompt: 'Cold industrial corridor',
-        model: 'image-model-v2',
-        aspectRatio: '16:9',
+      assetPath: 'neko/generated/generation-job-1/result.png',
+      contentLocator: {
+        kind: 'generated-output',
+        outputId: 'output-1',
+        revision: '1',
+        digest: 'sha256:generated-output-1',
+        path: 'neko/generated/generation-job-1/result.png',
       },
+      mediaType: 'image',
+      generation,
     });
 
-    const markup = render(node, [node]);
+    const markup = render(node);
 
     expect(markup).toContain('data-material-generation-context="true"');
-    expect(markup).toContain('data-material-generation-target="generated-media"');
     expect(markup).toContain('Cold industrial corridor');
     expect(markup).toContain('image-model-v2 · 16:9');
-    expect(markup).toContain('data-material-generation-action="generate-again"');
+    expect(markup).not.toContain('data-material-generation-action');
   });
 
-  it('shows missing prompt provenance while retaining the Agent Job quick action', () => {
+  it('omits legacy heuristic-only generation context', () => {
     const node = mediaNode('legacy-generated', {
-      assetPath: '',
+      assetPath: 'legacy/generated.png',
       mediaType: 'image',
-      resourceRef,
+      generationContext: { prompt: 'Legacy prompt' },
     });
 
-    const markup = render(node, [node]);
+    const markup = render(node);
 
-    expect(markup).toContain('data-material-generation-context="true"');
-    expect(markup).toContain('No generation prompt was recorded');
-    expect(markup).toContain('data-material-generation-action');
+    expect(markup).toBe('');
   });
 
-  it('routes generate again through the Agent with explicit provenance', () => {
-    const postMessage = vi.fn();
-    (window as unknown as { vscodeApi?: unknown }).vscodeApi = {
-      postMessage,
-      supportsMessage: (messageType: string) => messageType === 'sendToAgent',
-    };
-    resetVSCodeApi();
-    const host = document.createElement('div');
-    document.body.appendChild(host);
-    const root = createRoot(host);
+  it('does not infer regenerate authority from a source node reference', () => {
     const node = mediaNode('generated-media', {
-      assetPath: '',
+      assetPath: 'neko/generated/generation-job-1/result.png',
+      contentLocator: {
+        kind: 'generated-output',
+        outputId: 'output-1',
+        revision: '1',
+        digest: 'sha256:generated-output-1',
+        path: 'neko/generated/generation-job-1/result.png',
+      },
       mediaType: 'image',
-      resourceRef,
-      generationContext: {
-        prompt: 'Cold industrial corridor',
-        model: 'image-model-v2',
+      generation: {
+        ...generation,
+        summary: { ...generation.summary, sourceNodeId: 'source-node' },
       },
     });
 
-    try {
-      act(() => {
-        root.render(
-          <SelectionMaterialGenerationBar
-            nodes={[node]}
-            selectedNodeIds={[node.id]}
-            viewport={{ pan: { x: 0, y: 0 }, zoom: 1 }}
-            viewportSize={{ width: 800, height: 600 }}
-          />,
-        );
-      });
-      act(() => {
-        host
-          .querySelector<HTMLButtonElement>('[data-material-generation-action="generate-again"]')
-          ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-      });
+    const markup = render(node);
+    expect(markup).toContain('data-material-generation-context="true"');
+    expect(markup).not.toContain('generate-again');
+  });
 
-      expect(postMessage).toHaveBeenCalledWith({
-        type: 'sendToAgent',
-        nodeIds: ['generated-media'],
-        action: 'generate',
-        prompt: 'Cold industrial corridor',
-        mediaType: 'image',
-      });
-    } finally {
-      act(() => root.unmount());
-      host.remove();
-      delete (window as unknown as { vscodeApi?: unknown }).vscodeApi;
-      resetVSCodeApi();
-    }
+  it('shows the same immutable summary for generated document File nodes', () => {
+    const node: FileCanvasNode = {
+      id: 'generated-document',
+      type: 'file',
+      position: { x: 100, y: 100 },
+      size: { width: 360, height: 480 },
+      zIndex: 1,
+      data: {
+        path: 'neko/generated/document/storyboard.md',
+        title: 'storyboard.md',
+        mediaKind: 'document',
+        contentLocator: {
+          kind: 'generated-output',
+          outputId: 'generated-document-1',
+          revision: '1',
+          digest: 'sha256:generated-document-1',
+          path: 'neko/generated/document/storyboard.md',
+        },
+        generation: {
+          ...generation,
+          summary: {
+            prompt: 'Create a six-shot storyboard',
+            model: 'document-model-v1',
+          },
+        },
+      },
+    };
+
+    const markup = render(node);
+
+    expect(markup).toContain('data-material-generation-context="true"');
+    expect(markup).toContain('Create a six-shot storyboard');
+    expect(markup).toContain('document-model-v1');
   });
 });
 
-function render(node: CanvasNode, nodes: readonly CanvasNode[]): string {
+function render(node: CanvasNode): string {
   return renderToStaticMarkup(
     <SelectionMaterialGenerationBar
-      nodes={nodes}
+      nodes={[node]}
       selectedNodeIds={[node.id]}
       viewport={{ pan: { x: 0, y: 0 }, zoom: 1 }}
       viewportSize={{ width: 800, height: 600 }}
@@ -134,7 +130,7 @@ function render(node: CanvasNode, nodes: readonly CanvasNode[]): string {
   );
 }
 
-function mediaNode(id: string, data: Record<string, unknown>): CanvasNode {
+function mediaNode(id: string, data: MediaCanvasNode['data']): MediaCanvasNode {
   return {
     id,
     type: 'media',
@@ -142,5 +138,5 @@ function mediaNode(id: string, data: Record<string, unknown>): CanvasNode {
     size: { width: 280, height: 200 },
     zIndex: 1,
     data,
-  } as CanvasNode;
+  };
 }

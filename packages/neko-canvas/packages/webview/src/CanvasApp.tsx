@@ -45,7 +45,12 @@ import { useDragDrop } from './hooks/useDragDrop';
 import { useContextMenu } from './hooks/useContextMenu';
 import { useThrottledCanvasViewport } from './hooks/useThrottledCanvasViewport';
 import { buildCanvasNode } from './utils/nodeFactory';
-import { getCanvasAddAction, type CanvasAddActionId } from './utils/canvasAddActions';
+import {
+  getCanvasAddAction,
+  type CanvasAddActionId,
+  type CanvasAddSourceKind,
+  type CanvasAddSourceModeId,
+} from './utils/canvasAddActions';
 import type { CanvasWebviewHostPort } from './host-runtime';
 import { DEFAULT_RUNTIME_VIEWPORT } from './stores/runtimeViewportStore';
 import {
@@ -93,8 +98,7 @@ export interface CanvasAppProps {
 
 export function CanvasApp({ host: vscode }: CanvasAppProps) {
   const canOpenHostExport = vscode.supportsMessage('canvasAction');
-  const canOpenHostPlayback =
-    vscode.supportsMessage('playback:getPreviewPlan') && vscode.supportsMessage('media:probe');
+  const canOpenHostPlayback = vscode.supportsMessage('media:probe');
   const canSendToAgent = vscode.supportsMessage('sendToAgent');
   const canOpenBoardRef = vscode.supportsMessage('openCanvasBoardRef');
   const canvasStoreApi = useCanvasStoreApi();
@@ -261,9 +265,9 @@ export function CanvasApp({ host: vscode }: CanvasAppProps) {
 
   const {
     addMarkdownAt,
+    addTableAt,
     addImportedMarkdownAt,
     addMediaAt,
-    addGroupAt,
     addFileAt,
     addCanvasEmbedAt,
   } = useNodeHelpers({
@@ -321,18 +325,19 @@ export function CanvasApp({ host: vscode }: CanvasAppProps) {
   }, []);
 
   const requestCanvasFilePickerSource = useCallback(
-    (actionId: CanvasAddActionId, position: { x: number; y: number }) => {
+    (
+      actionId: CanvasAddActionId,
+      sourceMode: Exclude<CanvasAddSourceModeId, 'create'>,
+      position: { x: number; y: number },
+    ) => {
       const action = getCanvasAddAction(actionId);
       if (action.mode !== 'source') {
         throw new Error(`Canvas add action "${actionId}" does not bind a source`);
       }
-      const sourceKind =
-        action.nodeType === 'canvas-embed'
-          ? 'canvas'
-          : action.nodeType === 'file'
-            ? 'document'
-            : (action.mediaType ?? 'document');
-      void vscode.requestSource(sourceKind, position).catch((error: unknown) => {
+      if (!action.sourceKind) {
+        throw new Error(`Canvas source action "${actionId}" has no source kind`);
+      }
+      void vscode.requestSource(action.sourceKind, sourceMode, position).catch((error: unknown) => {
         logger.warn('Canvas file-picker add-source failed', error);
       });
     },
@@ -340,31 +345,53 @@ export function CanvasApp({ host: vscode }: CanvasAppProps) {
   );
 
   const addActionAt = useCallback(
-    (actionId: CanvasAddActionId, position: { x: number; y: number }) => {
+    (
+      actionId: CanvasAddActionId,
+      position: { x: number; y: number },
+      sourceMode?: CanvasAddSourceModeId,
+    ) => {
       const action = getCanvasAddAction(actionId);
       if (action.mode === 'source') {
-        requestCanvasFilePickerSource(actionId, position);
+        if (!sourceMode) {
+          throw new Error(`Canvas source action "${actionId}" requires an explicit source mode`);
+        }
+        if (!action.sourceKind) {
+          throw new Error(`Canvas source action "${actionId}" has no source kind`);
+        }
+        if (sourceMode === 'create') {
+          void vscode
+            .requestGenerationDraft(action.sourceKind, position, selectedNodeIds)
+            .catch((error: unknown) => {
+              logger.warn('Canvas Generation draft request failed', error);
+            });
+          return;
+        }
+        requestCanvasFilePickerSource(actionId, sourceMode, position);
         return;
       }
-      switch (action.nodeType) {
-        case 'markdown':
+      switch (action.id) {
+        case 'text':
           addMarkdownAt(position);
           return;
-        case 'group':
-          addGroupAt(position);
+        case 'table':
+          addTableAt(position);
           return;
         default:
-          throw new Error(`Direct creation is not supported for Canvas node "${action.nodeType}"`);
+          throw new Error(`Direct creation is not supported for Canvas action "${action.id}"`);
       }
     },
-    [addGroupAt, addMarkdownAt, requestCanvasFilePickerSource],
+    [addMarkdownAt, addTableAt, requestCanvasFilePickerSource, selectedNodeIds, vscode],
   );
 
   const handleSelectAddAction = useCallback(
-    (actionId: CanvasAddActionId) => {
-      addActionAt(actionId, getViewportCenter());
+    (actionId: CanvasAddActionId, sourceMode?: CanvasAddSourceModeId) => {
+      addActionAt(actionId, getViewportCenter(), sourceMode);
     },
     [addActionAt, getViewportCenter],
+  );
+  const authoringCapabilities = vscode.getAuthoringCapabilities();
+  const availableGenerationKinds = authoringCapabilities.generationMediaKinds.filter(
+    (kind): kind is CanvasAddSourceKind => kind !== 'document',
   );
 
   // =========================================================================
@@ -1032,6 +1059,8 @@ export function CanvasApp({ host: vscode }: CanvasAppProps) {
                     isSelectMode={interactionTool === 'select'}
                     onSelectTool={selectInteractionTool}
                     onSelectAddAction={handleSelectAddAction}
+                    availableSourceModes={authoringCapabilities.sourceModes}
+                    availableGenerationKinds={availableGenerationKinds}
                     playbackWorkspaceVisible={
                       canOpenHostPlayback ? playbackWorkspaceVisible : undefined
                     }

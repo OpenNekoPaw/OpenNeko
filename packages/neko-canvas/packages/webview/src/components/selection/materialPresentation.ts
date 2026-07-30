@@ -1,5 +1,9 @@
 import type { CanvasMaterialGenerationContext, CanvasNode } from '@neko/shared';
-import { isCanvasMaterialGenerationContext } from '@neko/shared';
+import {
+  deriveCanvasMaterialOrigin,
+  isCanvasGenerationEvidence,
+  validateContentLocator,
+} from '@neko/shared';
 
 export type CanvasMaterialSource = 'referenced' | 'generated';
 export type CanvasMaterialMediaType = 'image' | 'video' | 'audio';
@@ -12,7 +16,6 @@ export interface CanvasMaterialGenerationPresentation {
   readonly width?: number;
   readonly height?: number;
   readonly duration?: number;
-  readonly targetNodeId?: string;
 }
 
 export interface CanvasMaterialPresentation {
@@ -25,73 +28,55 @@ export interface CanvasMaterialPresentation {
 
 export function resolveCanvasMaterialPresentation(
   node: CanvasNode,
-  allNodes: readonly CanvasNode[],
 ): CanvasMaterialPresentation | undefined {
-  if (node.type === 'media') {
-    return resolveMediaMaterialPresentation(node, allNodes);
+  if (node.type === 'media' || node.type === 'file') {
+    return resolveMaterialPresentation(node);
   }
   return undefined;
 }
 
-function resolveMediaMaterialPresentation(
-  node: Extract<CanvasNode, { type: 'media' }>,
-  allNodes: readonly CanvasNode[],
+function resolveMaterialPresentation(
+  node: Extract<CanvasNode, { type: 'media' | 'file' }>,
 ): CanvasMaterialPresentation | undefined {
   const data = node.data;
-  const hasIdentity = Boolean(
-    data.assetPath || data.runtimeAssetPath || data.resourceRef || data.documentResourceRef,
-  );
-  if (!hasIdentity) return undefined;
+  const locator = validateContentLocator(data.contentLocator);
+  if (!locator.ok) return undefined;
+  const mediaType =
+    node.type === 'media'
+      ? node.data.mediaType
+      : isPresentationMediaType(node.data.mediaKind)
+        ? node.data.mediaKind
+        : undefined;
 
-  const context = isCanvasMaterialGenerationContext(data.generationContext)
-    ? data.generationContext
-    : undefined;
-  const generated = Boolean(
-    context ||
-    isStableGeneratedAssetPath(data.assetPath) ||
-    data.resourceRef?.kind === 'generated' ||
-    readString(data.provenance, 'projectionId')?.startsWith('generated-output:'),
-  );
-  const sourceNodeId = context?.sourceNodeId;
-  const targetNodeId = sourceNodeId
-    ? allNodes.find((candidate) => candidate.id === sourceNodeId)?.id
-    : node.id;
+  const source = deriveCanvasMaterialOrigin(locator.locator);
+  if (source === 'referenced') {
+    if (data.generation !== undefined) return undefined;
+    return {
+      source,
+      ...(mediaType ? { mediaType } : {}),
+      canPreview: true,
+      canCopyToMediaLibrary: true,
+    };
+  }
+
+  if (!isCanvasGenerationEvidence(data.generation)) return undefined;
+  const context = data.generation.summary;
 
   return {
-    source: generated ? 'generated' : 'referenced',
-    mediaType: data.mediaType,
+    source,
+    ...(mediaType ? { mediaType } : {}),
     canPreview: true,
     canCopyToMediaLibrary: true,
-    ...(generated
-      ? {
-          generation: {
-            ...projectGenerationContext(context),
-            ...(targetNodeId ? { targetNodeId } : {}),
-          },
-        }
-      : {}),
+    generation: projectGenerationContext(context),
   };
 }
 
 function projectGenerationContext(
-  context: CanvasMaterialGenerationContext | undefined,
+  context: CanvasMaterialGenerationContext,
 ): CanvasMaterialGenerationPresentation {
-  return context ? { ...context } : {};
+  return { ...context };
 }
 
-function isStableGeneratedAssetPath(value: unknown): boolean {
-  if (typeof value !== 'string') return false;
-  const normalized = value.trim().replace(/\\/g, '/').replace(/^\.\//, '');
-  return /^(?:\$\{[A-Z][A-Z0-9_]*\}\/)?neko\/generated\//.test(normalized);
-}
-
-function readRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === 'object' && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : {};
-}
-
-function readString(value: unknown, key: string): string | undefined {
-  const candidate = readRecord(value)[key];
-  return typeof candidate === 'string' && candidate.trim() ? candidate.trim() : undefined;
+function isPresentationMediaType(value: unknown): value is CanvasMaterialMediaType {
+  return value === 'image' || value === 'video' || value === 'audio';
 }

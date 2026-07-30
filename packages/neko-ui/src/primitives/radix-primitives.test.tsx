@@ -45,7 +45,12 @@ describe('@neko/ui Radix-backed primitives', () => {
 
     act(() => {
       root.render(
-        <Popover onOpenChange={onOpenChange} trigger={<Button>Open</Button>}>
+        <Popover
+          contentClassName="fixture-popover-surface"
+          onOpenChange={onOpenChange}
+          open
+          trigger={<Button>Open</Button>}
+        >
           Content
         </Popover>,
       );
@@ -53,6 +58,12 @@ describe('@neko/ui Radix-backed primitives', () => {
 
     const button = host.querySelector('button');
     expect(button?.textContent).toBe('Open');
+    const content = document.body.querySelector('.fixture-popover-surface');
+    expect(content?.textContent).toContain('Content');
+    expect(content?.className).toContain(
+      'bg-[var(--neko-popover-background,var(--neko-glass-bg,var(--vscode-editorWidget-background)))]',
+    );
+    expect(content?.className).toContain('border-[var(--neko-popover-border,var(--neko-border))]');
   });
 
   it('renders Select trigger with current value', () => {

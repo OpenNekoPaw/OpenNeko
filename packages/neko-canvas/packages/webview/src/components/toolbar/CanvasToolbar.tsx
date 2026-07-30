@@ -16,7 +16,8 @@ import { StorylineIcon } from '@neko/shared/icons';
 import { useScopedHistoryStore as useHistoryStore } from '../../stores/canvasStoreScope';
 import { t } from '../../i18n';
 import { DownloadIcon, UndoIcon, RedoIcon, PackageIcon, PointerIcon } from '@neko/ui/icons';
-import type { CanvasAddActionId } from '../../utils/canvasAddActions';
+import type { CanvasAddActionId, CanvasAddSourceModeId } from '../../utils/canvasAddActions';
+import type { CanvasAddSourceKind } from '../../utils/canvasAddActions';
 import { CanvasAddActionPopover } from './CanvasAddActionPopover';
 
 // =============================================================================
@@ -30,7 +31,9 @@ export interface CanvasToolbarProps {
   isSelectMode?: boolean;
   onSelectTool?: () => void;
   /** Creates or binds one user-authorable Canvas action. */
-  onSelectAddAction?: (actionId: CanvasAddActionId) => void;
+  onSelectAddAction?: (actionId: CanvasAddActionId, sourceMode?: CanvasAddSourceModeId) => void;
+  availableSourceModes?: readonly CanvasAddSourceModeId[];
+  availableGenerationKinds?: readonly CanvasAddSourceKind[];
   /** Unified Storyline Overlay visibility, controlled from the floating toolbar. */
   playbackWorkspaceVisible?: boolean;
   onTogglePlaybackWorkspace?: () => void;
@@ -53,6 +56,8 @@ export function CanvasToolbar({
   isSelectMode = true,
   onSelectTool,
   onSelectAddAction,
+  availableSourceModes = [],
+  availableGenerationKinds = [],
   playbackWorkspaceVisible,
   onTogglePlaybackWorkspace,
   onOpenExport,
@@ -107,7 +112,11 @@ export function CanvasToolbar({
       {onSelectAddAction && (
         <>
           <ToolbarSeparator orientation="vertical" />
-          <CanvasAddActionPopover onSelectAction={onSelectAddAction} />
+          <CanvasAddActionPopover
+            onSelectAction={onSelectAddAction}
+            availableSourceModes={availableSourceModes}
+            availableGenerationKinds={availableGenerationKinds}
+          />
         </>
       )}
 

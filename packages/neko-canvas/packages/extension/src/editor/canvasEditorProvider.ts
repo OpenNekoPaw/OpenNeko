@@ -100,8 +100,6 @@ import type {
   CanvasAgentActiveContextResult,
   CanvasAgentApplyContentResult,
   CanvasAgentContentPayload,
-  CanvasImportAssetRequest,
-  CanvasImportAssetResult,
   CanvasHostAppliedDocumentMessage,
   DocumentResourceStatusReason,
   DocumentArchiveResourceRef,
@@ -163,10 +161,6 @@ const CANVAS_EDITOR_LEVEL_KEYBOARD_ACTIONS = new Set([
   'duplicate',
   'resetZoom',
 ]);
-
-type CanvasHeadlessAssetImporter = (
-  asset: CanvasImportAssetRequest,
-) => Promise<CanvasImportAssetResult>;
 
 type CanvasPlaybackPreviewSourceKind = 'media-asset';
 
@@ -852,7 +846,6 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
     }),
     logger,
   });
-  private headlessAssetImporter: CanvasHeadlessAssetImporter | undefined;
 
   private constructor(
     private readonly context: vscode.ExtensionContext,
@@ -1103,10 +1096,6 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
   setProviders(opts: { outline?: CanvasOutlineProvider; statusBar?: CanvasStatusBar }): void {
     this.outlineProvider = opts.outline;
     this.statusBar = opts.statusBar;
-  }
-
-  setHeadlessAssetImporter(importer: CanvasHeadlessAssetImporter): void {
-    this.headlessAssetImporter = importer;
   }
 
   private getPanelForWorkspacePath(targetPath: string): vscode.WebviewPanel | undefined {
@@ -2671,30 +2660,9 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
       // =================================================================
 
       case 'dnd:drop': {
-        try {
-          const payload = await vscode.commands.executeCommand<{
-            path: string;
-            mediaType: 'image' | 'video' | 'audio';
-            name: string;
-          } | null>('neko.agent.getDndPayload');
-
-          if (payload) {
-            if (!this.headlessAssetImporter) {
-              throw new Error('Canvas headless asset importer is not registered.');
-            }
-            const result = await this.headlessAssetImporter({
-              path: payload.path,
-              type: payload.mediaType,
-              name: payload.name,
-              target: { documentUri: document.uri.toString() },
-            });
-            await vscode.commands.executeCommand('neko.agent.clearDndPayload');
-            logger.info(`DnD drop accepted: ${payload.name} -> ${result.nodeId}`);
-          }
-        } catch (error) {
-          logger.warn(`DnD drop failed (agent extension may not be installed): ${error}`);
-        }
-        break;
+        throw new Error(
+          'legacy-canvas-dnd-forbidden: Cross-Webview path transfer cannot author Canvas content. Use ContentLocator drag data or Host-owned material authoring.',
+        );
       }
 
       // =================================================================

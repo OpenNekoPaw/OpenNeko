@@ -38,9 +38,19 @@ describe('createVscodeCanvasHostRuntime', () => {
     expect(initial.revision).toBe(0);
 
     const projected = await execute(runtime, initial.revision, {
-      type: 'project-content',
-      locator: { kind: 'workspace-file', path: 'media/cat.png' },
-      position: { x: 120, y: 80 },
+      type: 'author-material',
+      request: {
+        kind: 'direct-reference',
+        identity: {
+          projectId: runtime.identity.projectId,
+          canvasId: runtime.identity.documentId,
+          canvasSessionId: runtime.identity.sessionId,
+        },
+        locator: { kind: 'workspace-file', path: 'media/cat.png' },
+        mediaKind: 'image',
+        title: 'cat.png',
+        position: { x: 120, y: 80 },
+      },
     });
     expect(projected.status).toBe('accepted');
     if (projected.status !== 'accepted') throw new Error('Expected accepted projection.');

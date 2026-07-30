@@ -7,7 +7,6 @@ import {
   createCanvasMediaAddSourceInput,
   getCanvasFilePickerDefaultName,
   hasCanvasExternalDropPayload,
-  readCanvasContentLocatorDrop,
 } from './useDragDrop';
 
 describe('useDragDrop external payload detection', () => {
@@ -39,25 +38,6 @@ describe('useDragDrop external payload detection', () => {
     expect(hasCanvasExternalDropPayload({ types: [] as unknown as DataTransfer['types'] })).toBe(
       false,
     );
-  });
-
-  it('parses the portable Resource Browser payload for the Canvas runtime path', () => {
-    const payload = JSON.stringify({
-      schemaVersion: 1,
-      type: 'content-locator',
-      locator: { kind: 'workspace-file', path: 'media/cat.png' },
-      name: 'cat.png',
-    });
-    expect(
-      readCanvasContentLocatorDrop({
-        getData: (type) => (type === CONTENT_LOCATOR_DRAG_MIME ? payload : ''),
-      }),
-    ).toEqual({
-      schemaVersion: 1,
-      type: 'content-locator',
-      locator: { kind: 'workspace-file', path: 'media/cat.png' },
-      name: 'cat.png',
-    });
   });
 });
 

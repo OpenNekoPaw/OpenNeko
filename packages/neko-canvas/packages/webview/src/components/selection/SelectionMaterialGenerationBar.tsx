@@ -1,8 +1,5 @@
 import { useMemo, type ReactNode } from 'react';
 import type { CanvasNode, CanvasViewport } from '@neko/shared';
-import { Button } from '@neko/ui/primitives';
-import { RefreshIcon } from '@neko/shared/icons';
-import { useOptionalCanvasHost } from '../../host-runtime';
 import { t } from '../../i18n';
 import {
   resolveCanvasMaterialPresentation,
@@ -24,27 +21,19 @@ export function SelectionMaterialGenerationBar({
   viewportSize,
   hidden = false,
 }: SelectionMaterialGenerationBarProps): ReactNode {
-  const host = useOptionalCanvasHost();
   const selectedNode =
     selectedNodeIds.length === 1
       ? nodes.find((candidate) => candidate.id === selectedNodeIds[0])
       : undefined;
   const material = useMemo(
-    () => (selectedNode ? resolveCanvasMaterialPresentation(selectedNode, nodes) : undefined),
-    [nodes, selectedNode],
+    () => (selectedNode ? resolveCanvasMaterialPresentation(selectedNode) : undefined),
+    [selectedNode],
   );
-  if (
-    hidden ||
-    !host?.supportsMessage('sendToAgent') ||
-    !selectedNode ||
-    material?.source !== 'generated' ||
-    !material.generation
-  ) {
+  if (hidden || !selectedNode || material?.source !== 'generated' || !material.generation) {
     return null;
   }
 
   const generation = material.generation;
-  const generationTargetNodeId = generation.targetNodeId;
   const position = resolveGenerationBarPosition(selectedNode, viewport, viewportSize);
   const summary = formatGenerationSummary(generation);
 
@@ -52,7 +41,6 @@ export function SelectionMaterialGenerationBar({
     <div
       className="selection-material-generation-bar"
       data-material-generation-context="true"
-      data-material-generation-target={generation.targetNodeId ?? ''}
       style={{ left: position.x, top: position.y, width: position.width }}
       onMouseDown={(event) => event.stopPropagation()}
     >
@@ -68,25 +56,6 @@ export function SelectionMaterialGenerationBar({
           {generation.prompt ?? t('material.promptUnavailable')}
         </div>
       </div>
-      {generationTargetNodeId && (
-        <Button
-          data-material-generation-action="generate-again"
-          size="xs"
-          variant="default"
-          leadingIcon={<RefreshIcon size={14} />}
-          onClick={() =>
-            host?.postMessage({
-              type: 'sendToAgent',
-              nodeIds: [generationTargetNodeId],
-              action: 'generate',
-              ...(generation.prompt ? { prompt: generation.prompt } : {}),
-              ...(material.mediaType ? { mediaType: material.mediaType } : {}),
-            })
-          }
-        >
-          {t('material.generateAgain')}
-        </Button>
-      )}
     </div>
   );
 }

@@ -14,10 +14,7 @@ import {
 } from '@neko-canvas/domain';
 import {
   type CanvasCreativeScope,
-  type CanvasImportAssetRequest,
-  type DocumentArchiveResourceRef,
   type CanvasMarkdownCapabilityInput,
-  type ResourceRef,
   CANVAS_WORKSPACE_BOARD_PATH,
   resolveGlobalStorageLayout,
   type LocalMetadataStore,
@@ -195,9 +192,6 @@ export async function activate(
       revealDocument: (uri) => canvasEditorProvider.revealCanvasDocument(uri),
     });
   }
-  canvasEditorProvider.setHeadlessAssetImporter((asset) =>
-    canvasProjectAuthoringService.importAsset({ asset }),
-  );
   canvasOutlineProvider = new CanvasOutlineProvider();
   canvasStatusBar = new CanvasStatusBar();
 
@@ -381,61 +375,16 @@ function registerCommands(context: vscode.ExtensionContext): void {
     }),
   );
 
-  // Import GeneratedAsset from another plugin (ADR-5 P0)
-  // Receives a GeneratedAsset JSON payload (or { path } shorthand) from agent/other extensions
+  // Direct-reference authoring accepts only Host-issued ContentLocator identity.
   context.subscriptions.push(
-    vscode.commands.registerCommand(
-      'neko.canvas.importAsset',
-      async (asset?: {
-        path?: string;
-        type?: string;
-        name?: string;
-        documentResourceRef?: DocumentArchiveResourceRef;
-        resourceRef?: ResourceRef;
-      }) => {
-        if (!asset?.path && !asset?.documentResourceRef && !asset?.resourceRef) {
-          void handleError(
-            new Error('neko.canvas.importAsset: missing asset path or resource ref'),
-            {
-              showToUser: true,
-              severity: 'warning',
-            },
-          );
-          return;
-        }
-        const { type: requestedType, ...assetWithoutType } = asset;
-        if (
-          requestedType !== undefined &&
-          requestedType !== 'image' &&
-          requestedType !== 'audio' &&
-          requestedType !== 'video'
-        ) {
-          void handleError(
-            new Error(`neko.canvas.importAsset: unsupported media type ${requestedType}`),
-            {
-              showToUser: true,
-              severity: 'warning',
-            },
-          );
-          return;
-        }
-        const request: CanvasImportAssetRequest = {
-          ...assetWithoutType,
-          ...(requestedType ? { type: requestedType } : {}),
-        };
-
-        const result = await canvasProjectAuthoringService.importAsset({ asset: request });
-
-        const source =
-          request.path ??
-          request.resourceRef?.id ??
-          request.documentResourceRef?.entryPath ??
-          'linked-resource';
-        getRootLogger().info(
-          `importAsset: created media node ${result.nodeId} in ${result.documentUri} from ${source} (${result.mediaType})`,
-        );
-      },
-    ),
+    vscode.commands.registerCommand('neko.canvas.importAsset', async (request?: unknown) => {
+      const result = await canvasProjectAuthoringService.importAsset({
+        asset: request,
+      });
+      getRootLogger().info(
+        `importAsset: created media node ${result.nodeId} in ${result.documentUri} from a validated ContentLocator (${result.mediaType})`,
+      );
+    }),
   );
 
   context.subscriptions.push(

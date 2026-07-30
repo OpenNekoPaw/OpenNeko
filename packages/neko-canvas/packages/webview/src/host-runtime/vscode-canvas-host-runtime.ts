@@ -6,7 +6,7 @@ import {
   type CanvasHostRuntime,
   type CanvasHostRuntimeIdentity,
   type CanvasHostSnapshot,
-  projectContentLocatorToCanvas,
+  projectResolvedCanvasMaterialToCanvas,
 } from '@neko-canvas/domain';
 import { createProjectSourceAddClient, isValidNkc, type CanvasData } from '@neko/shared';
 import { getVSCodeAPI } from '@neko/shared/vscode';
@@ -48,8 +48,9 @@ export function createVscodeCanvasHostRuntime(): CanvasHostRuntime {
     canvas: CanvasData,
     dirty = false,
     presentation = snapshot?.presentation,
+    originCommandId?: string,
   ): CanvasHostSnapshot => {
-    snapshot = {
+    const nextSnapshot: CanvasHostSnapshot = {
       schemaVersion: CANVAS_HOST_RUNTIME_CONTRACT_VERSION,
       identity: VSCODE_CANVAS_IDENTITY,
       revision: (snapshot?.revision ?? -1) + 1,
@@ -59,17 +60,23 @@ export function createVscodeCanvasHostRuntime(): CanvasHostRuntime {
         viewport: canvas.viewport ?? { pan: { x: 0, y: 0 }, zoom: 1 },
         selectedNodeIds: [],
       },
+      authoringCapabilities: {
+        sourceModes: ['import', 'reference'],
+        generationMediaKinds: ['image', 'video', 'audio', 'model', 'document'],
+      },
     };
-    for (const waiter of snapshotWaiters) waiter.resolve(snapshot);
+    snapshot = nextSnapshot;
+    for (const waiter of snapshotWaiters) waiter.resolve(nextSnapshot);
     snapshotWaiters.clear();
     sequence += 1;
     const event: CanvasHostProjectionEvent = {
       schemaVersion: CANVAS_HOST_RUNTIME_CONTRACT_VERSION,
       sequence,
-      snapshot,
+      ...(originCommandId === undefined ? {} : { originCommandId }),
+      snapshot: nextSnapshot,
     };
     for (const listener of listeners) listener(event);
-    return snapshot;
+    return nextSnapshot;
   };
 
   const handleMessage = (event: MessageEvent): void => {
@@ -104,6 +111,20 @@ export function createVscodeCanvasHostRuntime(): CanvasHostRuntime {
         snapshotWaiters.add({ resolve, reject });
       });
     },
+    async resolveMaterialActions(request) {
+      if (disposed) throw new Error('VS Code Canvas Host runtime is disposed.');
+      if (!snapshot || request.expectedRevision !== snapshot.revision) {
+        throw new Error('VS Code Canvas material action resolution requires a current snapshot.');
+      }
+      return {
+        schemaVersion: CANVAS_HOST_RUNTIME_CONTRACT_VERSION,
+        requestId: request.requestId,
+        identity: VSCODE_CANVAS_IDENTITY,
+        revision: snapshot.revision,
+        selectedNodeIds: [...request.selectedNodeIds],
+        descriptors: [],
+      };
+    },
     subscribe(listener) {
       if (disposed) throw new Error('VS Code Canvas Host runtime is disposed.');
       listeners.add(listener);
@@ -135,9 +156,11 @@ export function createVscodeCanvasHostRuntime(): CanvasHostRuntime {
             name:
               sourceKind === 'canvas'
                 ? 'canvas.nkc'
-                : sourceKind === 'document'
-                  ? 'document'
-                  : sourceKind,
+                : sourceKind === 'model'
+                  ? 'model'
+                  : sourceKind === 'document'
+                    ? 'document'
+                    : sourceKind,
           },
           target: {
             role:
@@ -145,11 +168,13 @@ export function createVscodeCanvasHostRuntime(): CanvasHostRuntime {
                 ? 'audio'
                 : sourceKind === 'image'
                   ? 'image'
-                  : sourceKind === 'canvas'
-                    ? 'project'
-                    : sourceKind === 'document'
-                      ? 'document'
-                      : 'media',
+                  : sourceKind === 'model'
+                    ? 'model'
+                    : sourceKind === 'canvas'
+                      ? 'project'
+                      : sourceKind === 'document'
+                        ? 'document'
+                        : 'media',
           },
           assetDirectory:
             sourceKind === 'image' || sourceKind === 'video' || sourceKind === 'audio'
@@ -163,10 +188,14 @@ export function createVscodeCanvasHostRuntime(): CanvasHostRuntime {
             'canvas-runtime-source-cancelled',
           );
         }
-        const canvas = projectContentLocatorToCanvas({
+        const canvas = projectResolvedCanvasMaterialToCanvas({
           canvas: snapshot.canvas,
-          locator: { kind: 'workspace-file', path: result.durablePath },
-          ...(request.intent.position ? { position: request.intent.position } : {}),
+          material: {
+            locator: { kind: 'workspace-file', path: result.durablePath },
+            title: result.durablePath.split('/').at(-1) ?? result.durablePath,
+            mediaKind: sourceKind === 'canvas' ? 'other' : sourceKind,
+            ...(request.intent.position ? { position: request.intent.position } : {}),
+          },
         });
         vscode.postMessage({ type: 'canvasStatus', data: canvas });
         return {
@@ -174,26 +203,58 @@ export function createVscodeCanvasHostRuntime(): CanvasHostRuntime {
           requestId: request.requestId,
           commandId: request.commandId,
           status: 'accepted',
-          snapshot: acceptDocument(canvas, true),
+          snapshot: acceptDocument(canvas, true, undefined, request.commandId),
         };
       }
-      if (request.intent.type === 'project-content') {
-        const canvas = projectContentLocatorToCanvas({
+      if (request.intent.type === 'author-material') {
+        const materialRequest = request.intent.request;
+        if (
+          materialRequest.kind !== 'direct-reference' &&
+          materialRequest.kind !== 'generated-output-commit'
+        ) {
+          return rejected(
+            request,
+            `VS Code Canvas adapter does not own '${materialRequest.kind}' authoring.`,
+          );
+        }
+        const canvas = projectResolvedCanvasMaterialToCanvas({
           canvas: snapshot.canvas,
-          locator: request.intent.locator,
-          ...(request.intent.position ? { position: request.intent.position } : {}),
+          material:
+            materialRequest.kind === 'direct-reference'
+              ? {
+                  locator: materialRequest.locator,
+                  title: materialRequest.title ?? portableLocatorTitle(materialRequest.locator),
+                  mediaKind: materialRequest.mediaKind,
+                  ...(materialRequest.position ? { position: materialRequest.position } : {}),
+                  ...(materialRequest.entity ? { entity: materialRequest.entity } : {}),
+                }
+              : {
+                  locator: materialRequest.locator,
+                  title: materialRequest.title,
+                  mediaKind: materialRequest.mediaKind,
+                  generation: materialRequest.generation,
+                  ...(materialRequest.position ? { position: materialRequest.position } : {}),
+                },
         });
         vscode.postMessage({ type: 'canvasStatus', data: canvas });
-        return accepted(request, acceptDocument(canvas, true));
+        return accepted(request, acceptDocument(canvas, true, undefined, request.commandId));
       }
       if (request.intent.type === 'save') {
         vscode.postMessage({ type: 'requestSave' });
-        return accepted(request, acceptDocument(snapshot.canvas, false));
+        return accepted(
+          request,
+          acceptDocument(snapshot.canvas, false, undefined, request.commandId),
+        );
       }
       if (request.intent.type === 'update-presentation') {
         return accepted(
           request,
-          acceptDocument(snapshot.canvas, snapshot.dirty, request.intent.presentation),
+          acceptDocument(
+            snapshot.canvas,
+            snapshot.dirty,
+            request.intent.presentation,
+            request.commandId,
+          ),
         );
       }
       if (request.intent.type === 'preview-resource' || request.intent.type === 'reveal-resource') {
@@ -231,7 +292,7 @@ export function createVscodeCanvasHostRuntime(): CanvasHostRuntime {
         requestId: request.requestId,
         commandId: request.commandId,
         status: 'accepted',
-        snapshot: acceptDocument(request.intent.canvas, true),
+        snapshot: acceptDocument(request.intent.canvas, true, undefined, request.commandId),
       };
     },
     dispose() {
@@ -244,6 +305,21 @@ export function createVscodeCanvasHostRuntime(): CanvasHostRuntime {
       listeners.clear();
     },
   };
+}
+
+function portableLocatorTitle(
+  locator: Extract<
+    Parameters<typeof projectResolvedCanvasMaterialToCanvas>[0]['material']['locator'],
+    { readonly kind: 'workspace-file' | 'document-entry' | 'package-resource' }
+  >,
+): string {
+  const portablePath =
+    locator.kind === 'workspace-file'
+      ? locator.path
+      : locator.kind === 'document-entry'
+        ? locator.entryPath
+        : locator.resourcePath;
+  return portablePath.split('/').at(-1) ?? portablePath;
 }
 
 function accepted(

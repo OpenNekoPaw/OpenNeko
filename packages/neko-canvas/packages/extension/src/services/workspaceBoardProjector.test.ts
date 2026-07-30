@@ -151,6 +151,13 @@ function request(
           digest: 'sha256:shot-1',
           path: 'neko/generated/image/shot-1.png',
         },
+        generation: {
+          jobRef: { kind: 'generation', jobId: 'generation-job:shot-1' },
+          summary: {
+            prompt: 'Generate fixture shot 1',
+            model: 'fixture-image-model',
+          },
+        },
         provenance: {
           version: CANVAS_WORKSPACE_BOARD_CONTRACT_VERSION,
           deliveryId,

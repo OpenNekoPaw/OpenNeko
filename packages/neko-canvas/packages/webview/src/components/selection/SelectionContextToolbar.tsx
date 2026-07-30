@@ -1,5 +1,10 @@
-import { useMemo, useState, type ReactNode } from 'react';
-import { isContentLocator, type CanvasNode, type CanvasViewport } from '@neko/shared';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import type {
+  CanvasMaterialActionDescriptor,
+  CanvasMaterialActionEffect,
+  CanvasNode,
+  CanvasViewport,
+} from '@neko/shared';
 import { Button, IconButton, Popover } from '@neko/ui/primitives';
 import {
   CopyIcon,
@@ -50,13 +55,45 @@ export function SelectionContextToolbar({
   const clipboardStore = useClipboardStoreApi();
   const historyStore = useHistoryStoreApi();
   const [overflowOpen, setOverflowOpen] = useState(false);
+  const [ownerDescriptors, setOwnerDescriptors] = useState<
+    readonly CanvasMaterialActionDescriptor[]
+  >([]);
   const selectedNodes = useMemo(
     () => selectedNodeIds.flatMap((id) => nodes.find((node) => node.id === id) ?? []),
     [nodes, selectedNodeIds],
   );
+  const selectionKey = selectedNodeIds.join('\u0000');
+  useEffect(() => {
+    let current = true;
+    setOwnerDescriptors([]);
+    if (!host || selectedNodeIds.length === 0) {
+      return () => {
+        current = false;
+      };
+    }
+    void host
+      .resolveMaterialActions(selectedNodeIds)
+      .then((descriptors) => {
+        if (current) setOwnerDescriptors(descriptors);
+      })
+      .catch(() => {
+        if (current) setOwnerDescriptors([]);
+      });
+    return () => {
+      current = false;
+    };
+  }, [host, selectionKey]);
   const actions = useMemo(
-    () => resolveActions(selectedNodes, host, canvasStore, clipboardStore, historyStore),
-    [canvasStore, clipboardStore, historyStore, host, selectedNodes],
+    () =>
+      resolveActions(
+        selectedNodes,
+        host,
+        ownerDescriptors,
+        canvasStore,
+        clipboardStore,
+        historyStore,
+      ),
+    [canvasStore, clipboardStore, historyStore, host, ownerDescriptors, selectedNodes],
   );
   if (hidden || selectedNodes.length === 0 || actions.length === 0) return null;
 
@@ -132,6 +169,7 @@ export function SelectionContextToolbar({
 function resolveActions(
   selectedNodes: readonly CanvasNode[],
   host: ReturnType<typeof useOptionalCanvasHost>,
+  ownerDescriptors: readonly CanvasMaterialActionDescriptor[],
   canvasStore: ReturnType<typeof useCanvasStoreApi>,
   clipboardStore: ReturnType<typeof useClipboardStoreApi>,
   historyStore: ReturnType<typeof useHistoryStoreApi>,
@@ -139,9 +177,7 @@ function resolveActions(
   const selectedIds = selectedNodes.map((node) => node.id);
   if (selectedNodes.length > 1) {
     return [
-      ...(host?.supportsMessage('sendToAgent')
-        ? [createQuickGenerateAction(selectedIds, host)]
-        : []),
+      ...resolveOwnerActions(ownerDescriptors, selectedIds, host),
       {
         key: 'group-selection',
         label: t('menu.group'),
@@ -154,51 +190,7 @@ function resolveActions(
 
   const node = selectedNodes[0];
   if (!node) return [];
-  const actions: ToolbarAction[] = host?.supportsMessage('sendToAgent')
-    ? [createQuickGenerateAction([node.id], host)]
-    : [];
-  if (
-    node.type === 'media' &&
-    (node.data.runtimeAssetPath ||
-      node.data.assetPath ||
-      node.data.resourceRef ||
-      node.data.documentResourceRef)
-  ) {
-    const contentLocator = isContentLocator(node.data.contentLocator)
-      ? node.data.contentLocator
-      : undefined;
-    actions.push({
-      key: 'node:open-media-preview',
-      label: t('action.openPreview'),
-      icon: <PlayIcon size={14} />,
-      run: () => {
-        if (contentLocator) {
-          void host?.previewResource(contentLocator);
-          return;
-        }
-        if (!host?.supportsMessage('openMediaPreview')) return;
-        host?.postMessage({
-          type: 'openMediaPreview',
-          nodeId: node.id,
-          assetPath: node.data.runtimeAssetPath || node.data.assetPath,
-          mediaType: node.data.mediaType,
-          ...(node.data.resourceRef ? { resourceRef: node.data.resourceRef } : {}),
-          ...(node.data.documentResourceRef
-            ? { documentResourceRef: node.data.documentResourceRef }
-            : {}),
-        });
-      },
-    });
-  }
-  if (node.type === 'file' && node.data.path) {
-    const path = node.data.path;
-    actions.push({
-      key: 'node:open-in-editor',
-      label: t('action.open'),
-      icon: <OpenIcon size={14} />,
-      run: () => void host?.previewResource({ kind: 'workspace-file', path }),
-    });
-  }
+  const actions: ToolbarAction[] = resolveOwnerActions(ownerDescriptors, selectedIds, host);
   if (node.type === 'canvas-embed' && node.data.canvasPath) {
     const path = node.data.canvasPath;
     actions.push({
@@ -236,21 +228,29 @@ function resolveActions(
   return actions;
 }
 
-function createQuickGenerateAction(
-  nodeIds: readonly string[],
+function resolveOwnerActions(
+  descriptors: readonly CanvasMaterialActionDescriptor[],
+  selectedNodeIds: readonly string[],
   host: ReturnType<typeof useOptionalCanvasHost>,
-): ToolbarAction {
-  return {
-    key: 'selection:quick-generate',
-    label: t('action.quickGenerate'),
-    icon: <RefreshIcon size={14} />,
-    run: () =>
-      host?.postMessage({
-        type: 'sendToAgent',
-        nodeIds: [...nodeIds],
-        action: 'generate',
-      }),
+): ToolbarAction[] {
+  if (!host) return [];
+  return descriptors.map((descriptor) => ({
+    key: descriptor.id,
+    label: descriptor.label,
+    icon: materialActionIcon(descriptor),
+    run: () => void host.executeMaterialAction(descriptor.id, selectedNodeIds),
+  }));
+}
+
+function materialActionIcon(descriptor: CanvasMaterialActionDescriptor): ReactNode {
+  const icons: Record<CanvasMaterialActionEffect, ReactNode> = {
+    read: <PlayIcon size={14} />,
+    derive: <RefreshIcon size={14} />,
+    copy: <CopyIcon size={14} />,
+    handoff: <OpenIcon size={14} />,
+    generate: <RefreshIcon size={14} />,
   };
+  return icons[descriptor.effect];
 }
 
 function createDuplicateAction(

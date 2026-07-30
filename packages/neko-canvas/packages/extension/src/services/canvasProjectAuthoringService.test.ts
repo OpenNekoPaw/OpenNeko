@@ -155,6 +155,13 @@ function workspaceProjectionRequest(): CanvasWorkspaceProjectionRequest {
         title: 'Shot 1',
         mimeType: 'image/png',
         contentLocator: generatedContentLocator,
+        generation: {
+          jobRef: { kind: 'generation', jobId: 'generation-job:shot-1' },
+          summary: {
+            prompt: 'Generate fixture shot 1',
+            model: 'fixture-image-model',
+          },
+        },
         provenance: {
           version: CANVAS_WORKSPACE_BOARD_CONTRACT_VERSION,
           deliveryId: 'delivery:shot-1',
@@ -449,7 +456,7 @@ describe('CanvasProjectAuthoringService', () => {
     });
   });
 
-  it('imports a workspace asset as a headless media node with stable project identity', async () => {
+  it('authors a referenced workspace locator as a headless media node with stable project identity', async () => {
     const provider = createProvider();
     const service = new CanvasProjectAuthoringService({
       context: { subscriptions: [] } as never,
@@ -458,7 +465,7 @@ describe('CanvasProjectAuthoringService', () => {
 
     const result = await service.importAsset({
       asset: {
-        path: '/workspace/project/assets/plate.png',
+        contentLocator: { kind: 'workspace-file', path: 'assets/plate.png' },
         type: 'image',
         name: 'plate.png',
       },
@@ -475,14 +482,14 @@ describe('CanvasProjectAuthoringService', () => {
     expect(reopened.data.nodes[0]).toMatchObject({
       type: 'media',
       data: {
-        assetPath: '${WORKSPACE}/assets/plate.png',
+        contentLocator: { kind: 'workspace-file', path: 'assets/plate.png' },
         mediaType: 'image',
       },
     });
     expect(JSON.stringify(reopened.data)).not.toContain('/workspace/project/assets/plate.png');
   });
 
-  it('imports a document resource as a headless media node without runtime paths', async () => {
+  it('authors a document-entry locator as a headless media node without runtime paths', async () => {
     const provider = createProvider();
     const service = new CanvasProjectAuthoringService({
       context: { subscriptions: [] } as never,
@@ -493,11 +500,11 @@ describe('CanvasProjectAuthoringService', () => {
       fallbackTitle: 'Document Page',
       asset: {
         type: 'image',
-        documentResourceRef: {
+        contentLocator: {
           kind: 'document-entry',
           source: {
-            filePath: '${WORKSPACE}/books/demo.epub',
-            format: 'epub',
+            kind: 'workspace-file',
+            path: 'books/demo.epub',
           },
           entryPath: 'OPS/page-001.jpg',
         },
@@ -512,14 +519,57 @@ describe('CanvasProjectAuthoringService', () => {
     expect(reopened.data.nodes[0]).toMatchObject({
       type: 'media',
       data: {
-        assetPath: '',
-        documentResourceRef: expect.objectContaining({
+        contentLocator: expect.objectContaining({
           kind: 'document-entry',
           entryPath: 'OPS/page-001.jpg',
         }),
       },
     });
     expect(JSON.stringify(reopened.data)).not.toContain('runtimeAssetPath');
+  });
+
+  it('poisons legacy raw-path and ResourceRef import payloads before Canvas mutation', async () => {
+    const provider = createProvider();
+    const service = new CanvasProjectAuthoringService({
+      context: { subscriptions: [] } as never,
+      canvasEditorProvider: provider,
+    });
+
+    await expect(
+      service.importAsset({
+        asset: {
+          path: './assets/legacy-shot.png',
+          resourceRef: {
+            provider: 'generated-asset',
+            id: 'legacy-shot',
+            source: { kind: 'generated-asset', filePath: '${WORKSPACE}/legacy-shot.png' },
+          },
+          type: 'image',
+        },
+      }),
+    ).rejects.toThrow('legacy-canvas-import-field-forbidden');
+    expect(vscodeMockState.files.size).toBe(0);
+    expect(provider.applyHostCanvasData).not.toHaveBeenCalled();
+  });
+
+  it('rejects generated-output import without owner-committed Generation evidence', async () => {
+    const provider = createProvider();
+    const service = new CanvasProjectAuthoringService({
+      context: { subscriptions: [] } as never,
+      canvasEditorProvider: provider,
+    });
+
+    await expect(
+      service.importAsset({
+        asset: {
+          contentLocator: generatedContentLocator,
+          type: 'image',
+          name: 'Generated Shot',
+        },
+      }),
+    ).rejects.toThrow('canvas-generation-evidence-required');
+    expect(vscodeMockState.files.size).toBe(0);
+    expect(provider.applyHostCanvasData).not.toHaveBeenCalled();
   });
 
   it('writes the active Canvas document when one is selected', async () => {
@@ -697,7 +747,7 @@ describe('CanvasProjectAuthoringService', () => {
     const result = await service.importAssetAuthoring({
       target: { kind: 'file', documentUri: targetUri.toString() },
       asset: {
-        path: './assets/approved-shot.png',
+        contentLocator: { kind: 'workspace-file', path: 'assets/approved-shot.png' },
         type: 'image',
         name: 'Approved Shot',
       },
@@ -731,7 +781,10 @@ describe('CanvasProjectAuthoringService', () => {
     await expect(
       service.importAssetAuthoring({
         target: { kind: 'active' },
-        asset: { path: './assets/approved-shot.png', type: 'image' },
+        asset: {
+          contentLocator: { kind: 'workspace-file', path: 'assets/approved-shot.png' },
+          type: 'image',
+        },
       }),
     ).rejects.toThrow('missing-authoring-target');
     expect(provider.getActiveCanvasDocumentUri).not.toHaveBeenCalled();

@@ -1,12 +1,20 @@
 import {
+  createCanvasMaterialActionResolutionRequest,
   createCanvasHostIntentRequest,
+  type CanvasHostAuthoringCapabilities,
   type CanvasHostIntent,
   type CanvasHostPresentationState,
   type CanvasHostRuntime,
   type CanvasHostSnapshot,
 } from '@neko-canvas/domain';
 import { isValidNkc, type CanvasData, type CanvasViewport } from '@neko/shared';
-import type { ContentLocator } from '@neko/shared';
+import type {
+  CanvasMaterialActionDescriptor,
+  CanvasMaterialActionIntent,
+  CanvasMaterialMediaKind,
+  CanvasReferencedContentLocator,
+  ContentLocator,
+} from '@neko/shared';
 import type { VSCodeAPI } from '../hooks/useVSCodeMessages';
 import { createCanvasViewportSnapshotKey } from '../utils/viewportWebviewState';
 
@@ -19,14 +27,34 @@ export interface CanvasWebviewHostPort extends NonNullable<VSCodeAPI> {
   subscribe(listener: (message: unknown) => void): () => void;
   requestSource(
     sourceKind: Extract<CanvasHostIntent, { readonly type: 'request-source' }>['sourceKind'],
+    sourceMode: Extract<CanvasHostIntent, { readonly type: 'request-source' }>['sourceMode'],
     position?: { readonly x: number; readonly y: number },
   ): Promise<CanvasHostSnapshot>;
+  requestGenerationDraft(
+    mediaKind: Extract<
+      CanvasHostIntent,
+      { readonly type: 'request-generation-draft' }
+    >['mediaKind'],
+    position?: { readonly x: number; readonly y: number },
+    inputNodeIds?: readonly string[],
+  ): Promise<CanvasHostSnapshot>;
   projectContent(
-    locator: ContentLocator,
+    locator: CanvasReferencedContentLocator,
+    mediaKind: CanvasMaterialMediaKind,
     position: { readonly x: number; readonly y: number },
+    title?: string,
   ): Promise<CanvasHostSnapshot>;
   previewResource(locator: ContentLocator): Promise<void>;
   revealResource(locator: ContentLocator): Promise<void>;
+  resolveMaterialActions(
+    selectedNodeIds: readonly string[],
+  ): Promise<readonly CanvasMaterialActionDescriptor[]>;
+  getAuthoringCapabilities(): CanvasHostAuthoringCapabilities;
+  executeMaterialAction(
+    actionId: string,
+    selectedNodeIds: readonly string[],
+    payload?: Readonly<Record<string, unknown>>,
+  ): Promise<CanvasHostSnapshot>;
   dispose(): void;
 }
 
@@ -40,7 +68,10 @@ export function createCanvasWebviewHost(
   let disposed = false;
   let started = false;
   let commandSequence = 0;
+  let materialActionRequestSequence = 0;
   let operationTail: Promise<void> = Promise.resolve();
+  const localCommandIds = new Set<string>();
+  const localCommandOrder: string[] = [];
   let unsubscribeDelegate: (() => void) | undefined;
   let unsubscribeRuntime: (() => void) | undefined;
 
@@ -57,6 +88,12 @@ export function createCanvasWebviewHost(
     emit({ type: 'canvas.hostPresentation', presentation: next.presentation });
   };
 
+  const adoptLocalSnapshot = (next: CanvasHostSnapshot): void => {
+    snapshot = next;
+    state = mergePresentationIntoWebviewState(state, next);
+    delegate?.setState(state);
+  };
+
   const start = (): void => {
     if (started) return;
     started = true;
@@ -65,6 +102,10 @@ export function createCanvasWebviewHost(
       unsubscribeRuntime = runtime.subscribe((event) => {
         if (event.snapshot.identity.sessionId !== runtime.identity.sessionId) {
           throw new Error('Canvas Host projection belongs to another document session.');
+        }
+        if (event.originCommandId && localCommandIds.has(event.originCommandId)) {
+          adoptLocalSnapshot(event.snapshot);
+          return;
         }
         publishSnapshot(event.snapshot);
       });
@@ -119,10 +160,12 @@ export function createCanvasWebviewHost(
     intent: CanvasHostIntent,
   ): Promise<CanvasHostSnapshot> => {
     commandSequence += 1;
+    const commandId = `canvas-webview-command:${commandSequence}`;
+    rememberLocalCommand(commandId);
     const result = await runtime.executeIntent(
       createCanvasHostIntentRequest({
         requestId: `canvas-webview-request:${commandSequence}`,
-        commandId: `canvas-webview-command:${commandSequence}`,
+        commandId,
         expectedRevision: current.revision,
         identity: runtime.identity,
         intent,
@@ -199,6 +242,14 @@ export function createCanvasWebviewHost(
   const supportsMessage = (messageType: string): boolean =>
     delegate !== undefined && (delegate.supportsMessage?.(messageType) ?? true);
 
+  const rememberLocalCommand = (commandId: string): void => {
+    localCommandIds.add(commandId);
+    localCommandOrder.push(commandId);
+    if (localCommandOrder.length <= 256) return;
+    const oldest = localCommandOrder.shift();
+    if (oldest) localCommandIds.delete(oldest);
+  };
+
   return {
     postMessage,
     supportsMessage,
@@ -219,22 +270,92 @@ export function createCanvasWebviewHost(
       }
       return () => listeners.delete(listener);
     },
-    async requestSource(sourceKind, position) {
+    async requestSource(sourceKind, sourceMode, position) {
       const current = snapshot ?? (await runtime.getSnapshot());
       const next = await executeIntent(current, {
         type: 'request-source',
         sourceKind,
+        sourceMode,
         ...(position ? { position } : {}),
       });
       publishSnapshot(next);
       return next;
     },
-    async projectContent(locator, position) {
+    async resolveMaterialActions(selectedNodeIds) {
+      await operationTail;
+      const current = snapshot ?? (await runtime.getSnapshot());
+      materialActionRequestSequence += 1;
+      const request = createCanvasMaterialActionResolutionRequest({
+        requestId: `canvas-webview-material-actions:${materialActionRequestSequence}`,
+        expectedRevision: current.revision,
+        identity: runtime.identity,
+        selectedNodeIds: [...selectedNodeIds],
+      });
+      let resolution: Awaited<ReturnType<CanvasHostRuntime['resolveMaterialActions']>>;
+      try {
+        resolution = await runtime.resolveMaterialActions(request);
+      } catch (error: unknown) {
+        emitLoadFailure(error);
+        throw error;
+      }
+      if (
+        snapshot?.revision !== undefined &&
+        (snapshot.revision !== resolution.revision ||
+          !areJsonValuesEqual(selectedNodeIds, resolution.selectedNodeIds))
+      ) {
+        throw new Error('Canvas material action resolution became stale before projection.');
+      }
+      return structuredClone(resolution.descriptors);
+    },
+    getAuthoringCapabilities: () =>
+      structuredClone(
+        snapshot?.authoringCapabilities ?? {
+          sourceModes: [],
+          generationMediaKinds: [],
+        },
+      ),
+    async executeMaterialAction(actionId, selectedNodeIds, payload = {}) {
+      const current = snapshot ?? (await runtime.getSnapshot());
+      const action: CanvasMaterialActionIntent = {
+        identity: {
+          projectId: current.identity.projectId,
+          canvasId: current.identity.documentId,
+          canvasSessionId: current.identity.sessionId,
+        },
+        actionId,
+        expectedCanvasRevision: current.revision,
+        selectedNodeIds: [...selectedNodeIds],
+        payload,
+      };
+      return executeIntent(current, { type: 'execute-material-action', action });
+    },
+    async requestGenerationDraft(mediaKind, position, inputNodeIds = []) {
       const current = snapshot ?? (await runtime.getSnapshot());
       const next = await executeIntent(current, {
-        type: 'project-content',
-        locator,
-        position,
+        type: 'request-generation-draft',
+        mediaKind,
+        inputNodeIds: [...inputNodeIds],
+        ...(position ? { position } : {}),
+      });
+      publishSnapshot(next);
+      return next;
+    },
+    async projectContent(locator, mediaKind, position, title) {
+      const current = snapshot ?? (await runtime.getSnapshot());
+      const next = await executeIntent(current, {
+        type: 'author-material',
+        request: {
+          kind: 'direct-reference',
+          identity: {
+            projectId: current.identity.projectId,
+            canvasId: current.identity.documentId,
+            canvasSessionId: current.identity.sessionId,
+          },
+          locator,
+          mediaKind,
+          position,
+          ...(title ? { title } : {}),
+        },
       });
       publishSnapshot(next);
       return next;

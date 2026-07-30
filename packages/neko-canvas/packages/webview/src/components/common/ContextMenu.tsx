@@ -16,15 +16,15 @@ import {
   TrashIcon,
   UndoIcon,
   RedoIcon,
-  UploadIcon,
   PlayIcon,
 } from '@neko/shared/icons';
 import { t } from '../../i18n';
 import { createCanvasAddActionIcon } from '../adapters/sharedCanvasUiAdapter';
 import {
-  CANVAS_ADD_ACTION_GROUPS,
-  type CanvasAddActionGroup,
+  CANVAS_ADD_ACTIONS,
+  CANVAS_ADD_SOURCE_MODES,
   type CanvasAddActionId,
+  type CanvasAddSourceModeId,
 } from '../../utils/canvasAddActions';
 
 export type MenuEntry = MenuItem;
@@ -54,7 +54,11 @@ export interface CanvasMenuContext {
   hasSelection: boolean;
   selectedCount: number;
   isNodeLocked?: boolean;
-  onAddAction: (actionId: CanvasAddActionId, pos: { x: number; y: number }) => void;
+  onAddAction: (
+    actionId: CanvasAddActionId,
+    pos: { x: number; y: number },
+    sourceMode?: CanvasAddSourceModeId,
+  ) => void;
   onDelete: () => void;
   onSelectAll: () => void;
   onFitContent: () => void;
@@ -83,7 +87,7 @@ export interface CanvasMenuContext {
  */
 export function buildCanvasMenuItems(ctx: CanvasMenuContext): MenuEntry[] {
   return [
-    ...CANVAS_ADD_ACTION_GROUPS.map((group) => buildCanvasAddActionGroup(group, ctx)),
+    buildCanvasAddActionMenu(ctx),
     { separator: true },
     {
       label: t('menu.paste'),
@@ -134,31 +138,32 @@ export function buildCanvasMenuItems(ctx: CanvasMenuContext): MenuEntry[] {
   ];
 }
 
-function buildCanvasAddActionGroup(
-  group: CanvasAddActionGroup,
-  ctx: CanvasMenuContext,
-): MenuAction {
+function buildCanvasAddActionMenu(ctx: CanvasMenuContext): MenuAction {
   return {
-    label: t(group.labelKey),
-    icon: menuIcon(resolveAddActionGroupIcon(group.id)),
+    label: t('toolbar.addNode'),
+    icon: menuIcon(<PlusIcon size={MENU_ICON_SIZE} />),
     onClick: () => {},
-    submenu: group.actions.map((action) => ({
-      label: t(action.labelKey),
-      icon: createCanvasAddActionIcon(action.nodeType),
-      onClick: () => ctx.onAddAction(action.id, ctx.canvasPosition),
-    })),
+    submenu: CANVAS_ADD_ACTIONS.map((action) => {
+      const item = {
+        label: t(action.labelKey),
+        icon: createCanvasAddActionIcon(action.id),
+      };
+      if (action.mode === 'direct') {
+        return {
+          ...item,
+          onClick: () => ctx.onAddAction(action.id, ctx.canvasPosition),
+        };
+      }
+      return {
+        ...item,
+        onClick: () => {},
+        submenu: CANVAS_ADD_SOURCE_MODES.map((sourceMode) => ({
+          label: t(sourceMode.labelKey),
+          onClick: () => ctx.onAddAction(action.id, ctx.canvasPosition, sourceMode.id),
+        })),
+      };
+    }),
   };
-}
-
-function resolveAddActionGroupIcon(groupId: CanvasAddActionGroup['id']): ReactElement {
-  switch (groupId) {
-    case 'create':
-      return <PlusIcon size={MENU_ICON_SIZE} />;
-    case 'import':
-      return <UploadIcon size={MENU_ICON_SIZE} />;
-    case 'reference':
-      return <LayersIcon size={MENU_ICON_SIZE} />;
-  }
 }
 
 /**

@@ -6,6 +6,7 @@ import {
   CanvasHostRuntimeContractError,
   assertCanvasHostRuntimeIdentity,
   createCanvasHostIntentRequest,
+  parseCanvasHostIntentRequest,
   parseCanvasHostIntentResult,
   parseCanvasHostProjectionEvent,
   parseCanvasHostSnapshot,
@@ -30,8 +31,17 @@ describe('Canvas Host runtime contract', () => {
       expectedRevision: 4,
       identity,
       intent: {
-        type: 'project-content',
-        locator: { kind: 'workspace-file', path: 'assets/cat.png' },
+        type: 'author-material',
+        request: {
+          kind: 'direct-reference',
+          identity: {
+            projectId: identity.projectId,
+            canvasId: identity.documentId,
+            canvasSessionId: identity.sessionId,
+          },
+          locator: { kind: 'workspace-file', path: 'assets/cat.png' },
+          mediaKind: 'image',
+        },
       },
     });
     const snapshot = parseCanvasHostSnapshot(validSnapshot());
@@ -41,8 +51,57 @@ describe('Canvas Host runtime contract', () => {
     expect(snapshot.canvas.name).toBe(DEFAULT_CANVAS_DATA.name);
   });
 
+  it('requires explicit source intent semantics and preserves Generation draft inputs', () => {
+    const source = createCanvasHostIntentRequest({
+      requestId: 'request-source',
+      commandId: 'command-source',
+      expectedRevision: 4,
+      identity,
+      intent: {
+        type: 'request-source',
+        sourceKind: 'image',
+        sourceMode: 'reference',
+      },
+    });
+    const draft = createCanvasHostIntentRequest({
+      requestId: 'request-generation-draft',
+      commandId: 'command-generation-draft',
+      expectedRevision: 4,
+      identity,
+      intent: {
+        type: 'request-generation-draft',
+        mediaKind: 'video',
+        position: { x: 24, y: 48 },
+        inputNodeIds: ['source-1'],
+      },
+    });
+
+    expect(source.intent).toEqual({
+      type: 'request-source',
+      sourceKind: 'image',
+      sourceMode: 'reference',
+    });
+    expect(draft.intent).toEqual({
+      type: 'request-generation-draft',
+      mediaKind: 'video',
+      position: { x: 24, y: 48 },
+      inputNodeIds: ['source-1'],
+    });
+    expect(() =>
+      parseCanvasHostIntentRequest({
+        ...source,
+        intent: { type: 'request-source', sourceKind: 'image' },
+      }),
+    ).toThrowError(CanvasHostRuntimeContractError);
+  });
+
   it('rejects unknown versions, absolute identities and stale sessions', () => {
-    expect(() => parseCanvasHostSnapshot({ ...validSnapshot(), schemaVersion: 2 })).toThrowError(
+    expect(() =>
+      parseCanvasHostSnapshot({
+        ...validSnapshot(),
+        schemaVersion: CANVAS_HOST_RUNTIME_CONTRACT_VERSION + 1,
+      }),
+    ).toThrowError(
       expect.objectContaining<Partial<CanvasHostRuntimeContractError>>({
         code: 'unsupported-canvas-host-runtime-version',
       }),
@@ -96,14 +155,18 @@ describe('Canvas Host runtime contract', () => {
       parseCanvasHostProjectionEvent({
         schemaVersion: CANVAS_HOST_RUNTIME_CONTRACT_VERSION,
         sequence: 1,
+        originCommandId: 'command-1',
         snapshot: validSnapshot(),
-      }).sequence,
-    ).toBe(1);
+      }),
+    ).toMatchObject({
+      sequence: 1,
+      originCommandId: 'command-1',
+    });
   });
 
   it('covers every fixed Canvas Host route', () => {
     expect(Object.values(CANVAS_HOST_RUNTIME_ROUTES).sort()).toEqual(
-      ['intent.execute', 'projection.event', 'snapshot.get'].sort(),
+      ['intent.execute', 'material-actions.resolve', 'projection.event', 'snapshot.get'].sort(),
     );
   });
 });
@@ -122,5 +185,10 @@ function validSnapshot() {
       },
       selectedNodeIds: [],
     },
+    authoringCapabilities: {
+      sourceModes: ['import', 'reference'],
+      generationMediaKinds: ['image', 'video', 'audio', 'model', 'document'],
+    },
+    materialActions: [],
   };
 }

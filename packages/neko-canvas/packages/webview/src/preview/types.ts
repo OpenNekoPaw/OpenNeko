@@ -26,7 +26,8 @@ export interface PreviewPlaybackEndedEvent extends PreviewPlaybackProgressEvent 
 
 export interface PreviewPlaybackControl {
   requestId?: string;
-  state?: 'playing' | 'paused';
+  state?: 'playing' | 'paused' | 'stopped';
+  persistence?: 'surface' | 'transient';
   startTimeSeconds?: number;
   onTimeUpdate?: (event: PreviewPlaybackProgressEvent) => void;
   onEnded?: (event: PreviewPlaybackEndedEvent) => void;

@@ -13,6 +13,7 @@ import {
   planCanvasConnectionCreation,
   planCanvasNodeCreation,
   ProjectFileStore,
+  validateContentLocator,
   type ProjectFileStoreOptions,
   type CanvasCreateCompositeRequest,
   type CanvasCreateCompositeResult,
@@ -65,9 +66,6 @@ interface LoadedCanvasTarget {
   readonly uri: vscode.Uri;
   readonly canvasData: CanvasData;
 }
-
-const STABLE_VARIABLE_PATH_PATTERN = /^\$\{[A-Z][A-Z0-9_]*\}\//;
-const PROJECT_RELATIVE_PATH_PATTERN = /^(?:\.\/)?(?!\/)(?![a-zA-Z]:[\\/])[^:?#]+$/;
 
 export class CanvasProjectAuthoringService implements CanvasWorkspaceBoardMutationPort {
   private readonly projectFileAdapter = createVSCodeProjectFileIoAdapter({ vscodeApi: vscode });
@@ -282,18 +280,19 @@ export class CanvasProjectAuthoringService implements CanvasWorkspaceBoardMutati
   }
 
   async importAsset(input: {
-    readonly asset: CanvasImportAssetRequest;
+    readonly asset: unknown;
     readonly target?: CanvasHeadlessAuthoringTarget;
     readonly fallbackTitle?: string;
   }): Promise<CanvasImportAssetResult & { readonly projectRef: QualityProjectRef }> {
-    const mediaType = normalizeImportedMediaType(input.asset.type, input.asset.path);
+    const asset = requireReferencedCanvasImportAsset(input.asset);
+    const mediaType = asset.type;
     const result = await this.createNode({
-      target: input.asset.target ?? input.target,
-      fallbackTitle: input.fallbackTitle ?? createImportedAssetCanvasTitle(input.asset),
+      target: asset.target ?? input.target,
+      fallbackTitle: input.fallbackTitle ?? createImportedAssetCanvasTitle(asset),
       node: {
         type: 'media',
-        position: input.asset.position,
-        data: this.createImportedAssetNodeData(input.asset, mediaType),
+        position: asset.position,
+        data: this.createImportedAssetNodeData(asset, mediaType),
       },
     });
     return {
@@ -531,55 +530,11 @@ export class CanvasProjectAuthoringService implements CanvasWorkspaceBoardMutati
     asset: CanvasImportAssetRequest,
     mediaType: CanvasImportAssetResult['mediaType'],
   ): Record<string, unknown> {
-    const hasStableResource = Boolean(asset.documentResourceRef || asset.resourceRef);
-    const assetPath = hasStableResource ? '' : this.normalizePersistentAssetPath(asset.path);
-    if (!hasStableResource && !assetPath) {
-      throw new Error(
-        'Canvas asset import requires a workspace-relative path, ${VAR}/path, ResourceRef, or DocumentArchiveResourceRef.',
-      );
-    }
-
     return {
-      assetPath: assetPath ?? '',
-      ...(asset.documentResourceRef ? { documentResourceRef: asset.documentResourceRef } : {}),
-      ...(asset.resourceRef ? { resourceRef: asset.resourceRef } : {}),
+      contentLocator: asset.contentLocator,
       mediaType,
       ...(asset.name ? { title: asset.name } : {}),
-      ...(asset.provenance ? { provenance: asset.provenance } : {}),
     };
-  }
-
-  private normalizePersistentAssetPath(assetPath: string | undefined): string | undefined {
-    const trimmed = assetPath?.trim();
-    if (!trimmed) {
-      return undefined;
-    }
-    if (isStablePersistentAssetPath(trimmed)) {
-      return trimmed;
-    }
-    const workspacePath = this.tryCreateWorkspaceVariablePath(trimmed);
-    if (workspacePath) {
-      return workspacePath;
-    }
-    throw new Error(
-      `Canvas asset import path must be workspace-relative, use a \${VAR}/path variable, or provide a stable resource ref: ${trimmed}`,
-    );
-  }
-
-  private tryCreateWorkspaceVariablePath(assetPath: string): string | undefined {
-    if (!path.isAbsolute(assetPath)) {
-      return undefined;
-    }
-    const normalizedAssetPath = path.resolve(assetPath);
-    for (const folder of vscode.workspace.workspaceFolders ?? []) {
-      const workspacePath = path.resolve(folder.uri.fsPath);
-      const relativePath = path.relative(workspacePath, normalizedAssetPath);
-      if (!relativePath || relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
-        continue;
-      }
-      return `\${WORKSPACE}/${relativePath.split(path.sep).join('/')}`;
-    }
-    return undefined;
   }
 
   private async saveCanvasData(uri: vscode.Uri, canvasData: CanvasData): Promise<void> {
@@ -672,13 +627,125 @@ function isFileNotFound(error: unknown): boolean {
 }
 
 function createImportedAssetCanvasTitle(asset: CanvasImportAssetRequest): string {
+  const sourcePath = canvasImportLocatorPath(asset.contentLocator);
   const sourceTitle =
     (asset.name ? path.parse(asset.name).name : '') ||
-    (asset.path ? path.parse(asset.path).name : '') ||
-    asset.documentResourceRef?.entryPath?.split(/[\\/]/).pop() ||
-    asset.resourceRef?.id ||
+    (sourcePath ? path.parse(sourcePath).name : '') ||
     'Agent Canvas';
   return sanitizeCanvasFileName(sourceTitle).slice(0, 80) || 'Agent Canvas';
+}
+
+function requireReferencedCanvasImportAsset(value: unknown): CanvasImportAssetRequest {
+  if (!isRecord(value)) {
+    throw new Error('canvas-material-content-locator-required: Canvas import request is invalid.');
+  }
+  const allowedKeys = new Set(['contentLocator', 'type', 'name', 'target', 'position']);
+  const unsupportedKey = Object.keys(value).find((key) => !allowedKeys.has(key));
+  if (unsupportedKey) {
+    throw new Error(
+      `legacy-canvas-import-field-forbidden: Canvas import field ${unsupportedKey} is not part of canonical ContentLocator authoring.`,
+    );
+  }
+  const locator = validateContentLocator(value['contentLocator']);
+  if (!locator.ok) {
+    throw new Error(
+      'canvas-material-content-locator-required: Canvas import requires a validated ContentLocator.',
+    );
+  }
+  if (locator.locator.kind === 'generated-output') {
+    throw new Error(
+      'canvas-generation-evidence-required: Generated output must use owner-committed projection with immutable Generation Job evidence.',
+    );
+  }
+  const mediaType = value['type'];
+  if (mediaType !== 'image' && mediaType !== 'video' && mediaType !== 'audio') {
+    throw new Error('canvas-material-media-type-required: Canvas import media type is invalid.');
+  }
+  const name = value['name'];
+  if (name !== undefined && (typeof name !== 'string' || name.trim().length === 0)) {
+    throw new Error(
+      'canvas-material-title-invalid: Canvas import title must be a non-empty string.',
+    );
+  }
+  const target = readCanvasImportTarget(value['target']);
+  const position = readCanvasImportPosition(value['position']);
+  return {
+    contentLocator: locator.locator,
+    type: mediaType,
+    ...(name !== undefined ? { name } : {}),
+    ...(target ? { target } : {}),
+    ...(position ? { position } : {}),
+  };
+}
+
+function canvasImportLocatorPath(
+  locator: CanvasImportAssetRequest['contentLocator'],
+): string | undefined {
+  switch (locator.kind) {
+    case 'workspace-file':
+      return locator.path;
+    case 'document-entry':
+      return locator.entryPath;
+    case 'package-resource':
+      return locator.resourcePath;
+  }
+}
+
+function readCanvasImportTarget(value: unknown): CanvasHeadlessAuthoringTarget | undefined {
+  if (value === undefined) return undefined;
+  if (!isRecord(value)) {
+    throw new Error('canvas-material-target-invalid: Canvas import target is invalid.');
+  }
+  const allowedKeys = new Set(['kind', 'documentUri', 'title', 'reveal', 'expectedRevision']);
+  if (Object.keys(value).some((key) => !allowedKeys.has(key))) {
+    throw new Error(
+      'canvas-material-target-invalid: Canvas import target contains unknown fields.',
+    );
+  }
+  const kind = value['kind'];
+  const documentUri = value['documentUri'];
+  const title = value['title'];
+  const reveal = value['reveal'];
+  const expectedRevision = value['expectedRevision'];
+  if (kind !== undefined && kind !== 'active' && kind !== 'file' && kind !== 'new') {
+    throw new Error('canvas-material-target-invalid: Canvas import target kind is invalid.');
+  }
+  if (documentUri !== undefined && typeof documentUri !== 'string') {
+    throw new Error('canvas-material-target-invalid: Canvas import document URI is invalid.');
+  }
+  if (title !== undefined && typeof title !== 'string') {
+    throw new Error('canvas-material-target-invalid: Canvas import target title is invalid.');
+  }
+  if (reveal !== undefined && typeof reveal !== 'boolean') {
+    throw new Error('canvas-material-target-invalid: Canvas import reveal flag is invalid.');
+  }
+  if (expectedRevision !== undefined && typeof expectedRevision !== 'string') {
+    throw new Error('canvas-material-target-invalid: Canvas import expected revision is invalid.');
+  }
+  return {
+    ...(kind !== undefined ? { kind } : {}),
+    ...(documentUri !== undefined ? { documentUri } : {}),
+    ...(title !== undefined ? { title } : {}),
+    ...(reveal !== undefined ? { reveal } : {}),
+    ...(expectedRevision !== undefined ? { expectedRevision } : {}),
+  };
+}
+
+function readCanvasImportPosition(
+  value: unknown,
+): CanvasImportAssetRequest['position'] | undefined {
+  if (value === undefined) return undefined;
+  if (
+    !isRecord(value) ||
+    Object.keys(value).some((key) => key !== 'x' && key !== 'y') ||
+    typeof value['x'] !== 'number' ||
+    !Number.isFinite(value['x']) ||
+    typeof value['y'] !== 'number' ||
+    !Number.isFinite(value['y'])
+  ) {
+    throw new Error('canvas-material-position-invalid: Canvas import position is invalid.');
+  }
+  return { x: value['x'], y: value['y'] };
 }
 
 function assertExplicitCanvasAuthoringTarget(
@@ -691,31 +758,8 @@ function assertExplicitCanvasAuthoringTarget(
   }
 }
 
-function normalizeImportedMediaType(
-  mediaType: CanvasImportAssetRequest['type'],
-  assetPath: string | undefined,
-): CanvasImportAssetResult['mediaType'] {
-  if (mediaType === 'video' || mediaType === 'audio') {
-    return mediaType;
-  }
-  if (mediaType === 'image') {
-    return 'image';
-  }
-  const cleanPath = assetPath?.split('?')[0]?.split('#')[0] ?? '';
-  const extension = cleanPath.split('.').pop()?.toLowerCase() ?? '';
-  if (['mp4', 'mov', 'avi', 'mkv', 'webm', 'm4v'].includes(extension)) {
-    return 'video';
-  }
-  if (['mp3', 'wav', 'ogg', 'm4a', 'aac', 'flac'].includes(extension)) {
-    return 'audio';
-  }
-  return 'image';
-}
-
-function isStablePersistentAssetPath(assetPath: string): boolean {
-  return (
-    STABLE_VARIABLE_PATH_PATTERN.test(assetPath) || PROJECT_RELATIVE_PATH_PATTERN.test(assetPath)
-  );
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function sanitizeCanvasFileName(value: string): string {

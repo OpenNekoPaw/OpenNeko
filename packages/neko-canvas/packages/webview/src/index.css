@@ -978,6 +978,117 @@ html.canvas-webview-document #root,
   pointer-events: auto;
 }
 
+.canvas-add-action-popover-surface {
+  --neko-menu-background: var(--neko-elevated);
+  --neko-menu-border: var(--neko-border);
+  --neko-menu-foreground: var(--neko-fg);
+  --neko-menu-selectionBackground: var(--neko-hover);
+  --neko-menu-selectionForeground: var(--neko-fg);
+  --neko-popover-background: var(--neko-menu-background);
+  --neko-popover-border: var(--neko-menu-border);
+  --neko-popover-foreground: var(--neko-menu-foreground);
+  --neko-popover-shadow: var(--neko-shadow-md);
+}
+
+.canvas-add-action-popover-surface > svg {
+  fill: var(--neko-popover-border);
+}
+
+.canvas-add-action-popover {
+  display: flex;
+  width: 236px;
+  max-width: calc(100vw - 32px);
+  flex-direction: column;
+  gap: 2px;
+  color: var(--neko-fg);
+}
+
+.canvas-add-action-popover__title {
+  padding: 3px 8px 5px;
+  color: var(--neko-fg-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 18px;
+}
+
+.canvas-add-action-popover__action {
+  display: grid;
+  width: 100%;
+  min-height: 40px;
+  appearance: none;
+  grid-template-columns: 26px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--neko-fg);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 100ms ease;
+}
+
+.canvas-add-action-popover__action:is(:hover, :focus-visible) {
+  background: var(--neko-menu-selectionBackground);
+  color: var(--neko-menu-selectionForeground);
+  outline: none;
+}
+
+.canvas-add-action-popover__icon {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  place-items: center;
+  color: var(--neko-fg-secondary);
+  font-size: 16px;
+}
+
+.canvas-add-action-popover__source-mode-mark {
+  width: 7px;
+  height: 7px;
+  place-self: center;
+  border: 1px solid var(--neko-fg-secondary);
+  border-radius: 50%;
+}
+
+.canvas-add-action-popover__content {
+  min-width: 0;
+}
+
+.canvas-add-action-popover__label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--neko-fg);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 18px;
+}
+
+.canvas-add-action-popover__description {
+  display: block;
+  margin-top: 1px;
+  overflow: hidden;
+  color: var(--neko-fg-secondary);
+  font-size: 11px;
+  line-height: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.canvas-add-action-popover__badge {
+  padding: 0 5px;
+  border: 1px solid color-mix(in srgb, var(--neko-fg) 10%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--neko-fg) 7%, transparent);
+  color: var(--neko-fg-secondary);
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 15px;
+}
+
 /* =============================================================================
    Scrollbar — macOS thin style
    ============================================================================= */

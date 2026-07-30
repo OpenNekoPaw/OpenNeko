@@ -7,6 +7,7 @@ import { cn } from '../utils';
 export interface PopoverProps {
   readonly trigger: ReactNode;
   readonly children: ReactNode;
+  readonly contentClassName?: string;
   readonly open?: boolean;
   readonly defaultOpen?: boolean;
   readonly onOpenChange?: (open: boolean) => void;
@@ -17,6 +18,7 @@ export interface PopoverProps {
 export function Popover({
   align = 'center',
   children,
+  contentClassName,
   defaultOpen,
   onOpenChange,
   open,
@@ -30,9 +32,11 @@ export function Popover({
         <PopoverPrimitive.Content
           align={align}
           className={cn(
-            'z-50 min-w-40 rounded-[var(--neko-radius-md,8px)] border border-[var(--neko-border)]',
-            'bg-[var(--neko-glass-bg,var(--vscode-editorWidget-background))] p-2 text-sm text-[var(--vscode-foreground)]',
-            'shadow-[var(--neko-shadow-md,0_8px_24px_rgba(0,0,0,0.28))] outline-none',
+            'z-50 min-w-40 rounded-[var(--neko-radius-md,8px)] border border-[var(--neko-popover-border,var(--neko-border))]',
+            'bg-[var(--neko-popover-background,var(--neko-glass-bg,var(--vscode-editorWidget-background)))] p-2 text-sm',
+            'text-[var(--neko-popover-foreground,var(--vscode-foreground))]',
+            'shadow-[var(--neko-popover-shadow,var(--neko-shadow-md,0_8px_24px_rgba(0,0,0,0.28)))] outline-none',
+            contentClassName,
           )}
           side={side}
           sideOffset={6}
@@ -44,7 +48,7 @@ export function Popover({
           })}
         >
           {children}
-          <PopoverPrimitive.Arrow className="fill-[var(--neko-border)]" />
+          <PopoverPrimitive.Arrow className="fill-[var(--neko-popover-border,var(--neko-border))]" />
         </PopoverPrimitive.Content>
       </PopoverPrimitive.Portal>
     </PopoverPrimitive.Root>

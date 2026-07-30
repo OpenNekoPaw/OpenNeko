@@ -30,13 +30,13 @@ describe('sharedCanvasUiAdapter', () => {
   });
 
   it('uses the shared icon system for canonical add action icons', () => {
-    const icon = createCanvasAddActionIcon('media', '#3b82f6');
+    const icon = createCanvasAddActionIcon('image', '#3b82f6');
 
     expect(isValidElement(icon)).toBe(true);
     expect(icon).toMatchObject({
       type: 'span',
       props: {
-        'data-canvas-add-action-icon': 'media',
+        'data-canvas-add-action-icon': 'image',
       },
     });
     expect(icon).toHaveProperty(

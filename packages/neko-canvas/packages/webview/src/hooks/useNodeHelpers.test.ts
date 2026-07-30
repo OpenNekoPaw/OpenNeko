@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createImportedMarkdownNodeData } from './useNodeHelpers';
+import { createImportedMarkdownNodeData, createTableMarkdownNodeData } from './useNodeHelpers';
 
 describe('createImportedMarkdownNodeData', () => {
   it('creates an editable Markdown snapshot with portable provenance', () => {
@@ -37,5 +37,14 @@ describe('createImportedMarkdownNodeData', () => {
     expect(data).not.toHaveProperty('format');
     expect(data).not.toHaveProperty('scriptPath');
     expect(data).not.toHaveProperty('docPath');
+  });
+});
+
+describe('createTableMarkdownNodeData', () => {
+  it('creates an editable GFM table without restoring the legacy table node type', () => {
+    expect(createTableMarkdownNodeData()).toEqual({
+      title: 'Table',
+      content: '| Column 1 | Column 2 |\n| --- | --- |\n|  |  |',
+    });
   });
 });

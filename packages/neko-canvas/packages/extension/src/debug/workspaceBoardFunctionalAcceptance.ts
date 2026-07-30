@@ -75,6 +75,7 @@ export function registerWorkspaceBoardFunctionalAcceptance(options: {
           workspaceId,
           workspaceUri: workspaceUri.toString(),
           sourceHost: input.sourceHost,
+          jobRef: { kind: 'generation', jobId: input.operationId },
         });
         const creativeRequest = input.sourceTitle
           ? withCreativeSourceRelation(generatedAssetRequest, input.sourceTitle)

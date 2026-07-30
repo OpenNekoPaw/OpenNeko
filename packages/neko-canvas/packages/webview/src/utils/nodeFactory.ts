@@ -8,11 +8,13 @@ import type {
 } from '@neko/shared';
 import {
   isCanvasMaterialGenerationContext,
+  isCanvasMaterialMediaKind,
   isCanvasNodeType,
   isDocumentArchiveResourceRef,
   isResourceRef,
   parseDocumentResourceStatus,
 } from '@neko/shared';
+import { isJobRef } from '@neko/shared/job-lifecycle';
 import { createBuiltInNodeTypeDescriptors } from '../components/nodes/nodeTypeDescriptors';
 
 type CanvasNodeDraft = CanvasNode extends infer TNode
@@ -118,11 +120,14 @@ export function buildCanvasNode(options: BuildCanvasNodeOptions): CanvasNodeDraf
         },
       };
     case 'job':
+      if (!isJobRef(data.jobRef)) {
+        throw new Error('Canvas jobRef must contain a non-empty owner kind and Job identity');
+      }
       return {
         ...base,
         type,
         data: {
-          jobId: requiredString(data.jobId, 'jobId'),
+          jobRef: data.jobRef,
           revision: readRequiredRevision(data.revision),
           title: requiredString(data.title, 'title'),
           objective: optionalString(data.objective),
@@ -147,6 +152,7 @@ export function buildCanvasNode(options: BuildCanvasNodeOptions): CanvasNodeDraf
         data: {
           path,
           title: optionalString(data.title) ?? path.split('/').pop() ?? 'File',
+          mediaKind: isCanvasMaterialMediaKind(data.mediaKind) ? data.mediaKind : undefined,
           mediaType: optionalString(data.mediaType),
           resourceRef,
           documentResourceRef,

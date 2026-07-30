@@ -1,25 +1,27 @@
 import { describe, expect, it } from 'vitest';
-import { createResourceRef, type CanvasNode } from '@neko/shared';
+import type { CanvasGenerationEvidence, FileCanvasNode, MediaCanvasNode } from '@neko/shared';
 import { resolveCanvasMaterialPresentation } from './materialPresentation';
 
-const generatedResourceRef = createResourceRef({
-  id: 'generated-image-1',
-  scope: 'project',
-  provider: 'generated-output',
-  kind: 'generated',
-  source: { kind: 'generated-asset', generatedAssetId: 'generated-image-1' },
-  locator: { kind: 'generated-asset', assetId: 'generated-image-1' },
-  fingerprint: { strategy: 'hash', value: 'sha256:generated-image-1' },
-});
+const generatedLocator = {
+  kind: 'generated-output',
+  outputId: 'generated-image-1',
+  revision: 'revision-1',
+  digest: 'sha256:generated-image-1',
+  path: 'neko/generated/image/generated-image-1.png',
+} as const;
 
 describe('resolveCanvasMaterialPresentation', () => {
   it('projects referenced image capabilities without generation context', () => {
     const node = mediaNode('reference', {
       assetPath: 'assets/reference.png',
       mediaType: 'image',
+      contentLocator: {
+        kind: 'workspace-file',
+        path: 'assets/reference.png',
+      },
     });
 
-    expect(resolveCanvasMaterialPresentation(node, [node])).toEqual({
+    expect(resolveCanvasMaterialPresentation(node)).toEqual({
       source: 'referenced',
       mediaType: 'image',
       canPreview: true,
@@ -27,44 +29,51 @@ describe('resolveCanvasMaterialPresentation', () => {
     });
   });
 
-  it('projects generated media provenance and resolves an existing canonical source target', () => {
-    const source = markdownNode('prompt-1');
+  it('projects generated media provenance without deriving execution authority from lineage', () => {
     const node = mediaNode('generated', {
-      assetPath: '',
+      assetPath: generatedLocator.path,
       mediaType: 'image',
-      resourceRef: generatedResourceRef,
-      generationContext: {
+      contentLocator: generatedLocator,
+      generation: generationEvidence({
         prompt: 'Monolithic city at night',
         model: 'image-model-v2',
-        sourceNodeId: source.id,
+        sourceNodeId: 'prompt-1',
+        aspectRatio: '16:9',
+      }),
+    });
+
+    expect(resolveCanvasMaterialPresentation(node)).toEqual({
+      source: 'generated',
+      mediaType: 'image',
+      canPreview: true,
+      canCopyToMediaLibrary: true,
+      generation: {
+        prompt: 'Monolithic city at night',
+        model: 'image-model-v2',
+        sourceNodeId: 'prompt-1',
         aspectRatio: '16:9',
       },
     });
-
-    expect(resolveCanvasMaterialPresentation(node, [node, source])).toMatchObject({
-      source: 'generated',
-      mediaType: 'image',
-      generation: {
-        prompt: 'Monolithic city at night',
-        model: 'image-model-v2',
-        targetNodeId: 'prompt-1',
-      },
-    });
   });
 
-  it('keeps generated audio eligible for the canonical Agent Job workflow', () => {
-    const source = markdownNode('prompt-1');
+  it('projects generated audio historical evidence without adding an action target', () => {
     const node = mediaNode('generated-audio', {
       assetPath: 'neko/generated/audio/shot-1.wav',
       mediaType: 'audio',
-      generationContext: {
-        prompt: 'Low industrial ambience',
-        sourceNodeId: source.id,
-        duration: 12,
+      contentLocator: {
+        ...generatedLocator,
+        outputId: 'generated-audio-1',
+        digest: 'sha256:generated-audio-1',
+        path: 'neko/generated/audio/shot-1.wav',
       },
+      generation: generationEvidence({
+        prompt: 'Low industrial ambience',
+        sourceNodeId: 'prompt-1',
+        duration: 12,
+      }),
     });
 
-    expect(resolveCanvasMaterialPresentation(node, [node, source])).toMatchObject({
+    expect(resolveCanvasMaterialPresentation(node)).toMatchObject({
       source: 'generated',
       mediaType: 'audio',
       generation: {
@@ -72,47 +81,76 @@ describe('resolveCanvasMaterialPresentation', () => {
         duration: 12,
       },
     });
-    expect(resolveCanvasMaterialPresentation(node, [node, source])?.generation?.targetNodeId).toBe(
-      'prompt-1',
-    );
+    expect(resolveCanvasMaterialPresentation(node)?.generation).not.toHaveProperty('targetNodeId');
   });
 
-  it('identifies legacy generated media without inventing prompt or target data', () => {
-    const node = mediaNode('legacy-generated', {
-      assetPath: '',
-      mediaType: 'image',
-      resourceRef: generatedResourceRef,
-    });
+  it('projects generated document evidence for canonical File nodes', () => {
+    const node: FileCanvasNode = {
+      id: 'generated-document',
+      type: 'file',
+      position: { x: 0, y: 0 },
+      size: { width: 360, height: 480 },
+      zIndex: 1,
+      data: {
+        path: 'neko/generated/document/storyboard.md',
+        title: 'storyboard.md',
+        mediaKind: 'document',
+        contentLocator: {
+          ...generatedLocator,
+          outputId: 'generated-document-1',
+          digest: 'sha256:generated-document-1',
+          path: 'neko/generated/document/storyboard.md',
+        },
+        generation: generationEvidence({
+          prompt: 'Create a six-shot storyboard',
+          model: 'document-model-v1',
+        }),
+      },
+    };
 
-    expect(resolveCanvasMaterialPresentation(node, [node])).toMatchObject({
+    expect(resolveCanvasMaterialPresentation(node)).toEqual({
       source: 'generated',
-      generation: {},
+      canPreview: true,
+      canCopyToMediaLibrary: true,
+      generation: {
+        prompt: 'Create a six-shot storyboard',
+        model: 'document-model-v1',
+      },
     });
   });
 
-  it('recognizes the durable generated-output directory used by legacy imports', () => {
+  it('poisons path, ResourceRef, provenance, and legacy summary classifiers in normal runtime', () => {
     const node = mediaNode('legacy-generated-path', {
       assetPath: 'neko/generated/image/task-1.png',
       mediaType: 'image',
+      resourceRef: {
+        id: 'generated-image-legacy',
+        scope: 'project',
+        provider: 'generated-output',
+        kind: 'generated',
+        source: { kind: 'generated-asset', generatedAssetId: 'generated-image-legacy' },
+        locator: { kind: 'generated-asset', assetId: 'generated-image-legacy' },
+        fingerprint: { strategy: 'hash', value: 'sha256:legacy' },
+      },
+      provenance: { projectionId: 'generated-output:legacy' },
+      generationContext: { prompt: 'Legacy prompt' },
     });
 
-    expect(resolveCanvasMaterialPresentation(node, [node])).toMatchObject({
-      source: 'generated',
-      generation: {},
+    expect(resolveCanvasMaterialPresentation(node)).toBeUndefined();
+  });
+
+  it('fails closed when a generated locator lacks canonical Generation evidence', () => {
+    const node = mediaNode('generated-without-job', {
+      assetPath: generatedLocator.path,
+      contentLocator: generatedLocator,
+      mediaType: 'image',
     });
 
-    const variablePathNode = mediaNode('legacy-generated-variable-path', {
-      assetPath: '${WORKSPACE}/neko/generated/video/task-2.mp4',
-      mediaType: 'video',
-    });
-    expect(resolveCanvasMaterialPresentation(variablePathNode, [variablePathNode])).toMatchObject({
-      source: 'generated',
-      mediaType: 'video',
-    });
+    expect(resolveCanvasMaterialPresentation(node)).toBeUndefined();
   });
 });
 
-function mediaNode(id: string, data: Record<string, unknown>): CanvasNode {
+function mediaNode(id: string, data: MediaCanvasNode['data']): MediaCanvasNode {
   return {
     id,
     type: 'media',
@@ -120,16 +158,14 @@ function mediaNode(id: string, data: Record<string, unknown>): CanvasNode {
     size: { width: 280, height: 200 },
     zIndex: 1,
     data,
-  } as CanvasNode;
+  };
 }
 
-function markdownNode(id: string): CanvasNode {
+function generationEvidence(
+  summary: CanvasGenerationEvidence['summary'],
+): CanvasGenerationEvidence {
   return {
-    id,
-    type: 'markdown',
-    position: { x: 0, y: 0 },
-    size: { width: 280, height: 200 },
-    zIndex: 1,
-    data: { content: '# Prompt' },
+    jobRef: { kind: 'generation', jobId: 'generation-job-1' },
+    summary,
   };
 }

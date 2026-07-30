@@ -8,7 +8,7 @@ describe('buildCanvasNode', () => {
     const media = createNode('media', { assetPath: 'media/hero.png', mediaType: 'image' });
     const group = createNode('group', { label: 'Chapter' });
     const job = createNode('job', {
-      jobId: 'job-owned-1',
+      jobRef: { kind: 'generation', jobId: 'job-owned-1' },
       revision: 4,
       title: 'Generate key art',
       status: 'running',
@@ -39,7 +39,7 @@ describe('buildCanvasNode', () => {
     expect(job).toMatchObject({
       type: 'job',
       data: {
-        jobId: 'job-owned-1',
+        jobRef: { kind: 'generation', jobId: 'job-owned-1' },
         revision: 4,
         title: 'Generate key art',
         status: 'running',
@@ -77,10 +77,10 @@ describe('buildCanvasNode', () => {
   });
 
   it('rejects unowned Job projections and source-backed nodes without sources', () => {
-    expect(() => createNode('job', {})).toThrow('Canvas jobId must be a non-empty string');
+    expect(() => createNode('job', {})).toThrow('Canvas jobRef must contain');
     expect(() =>
       createNode('job', {
-        jobId: 'job-owned-1',
+        jobRef: { kind: 'generation', jobId: 'job-owned-1' },
         revision: -1,
         title: 'Generate key art',
         status: 'running',

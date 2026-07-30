@@ -3,6 +3,22 @@ export interface MediaSource {
 }
 
 export type MediaFailureScope = 'source' | 'stream' | 'interval' | 'operation';
+export type MediaTransport = 'http' | 'authorized';
+
+export function isMediaTransport(value: unknown): value is MediaTransport {
+  return value === 'http' || value === 'authorized';
+}
+
+export function isMediaTransportUrl(value: string, transport: MediaTransport): boolean {
+  try {
+    const url = new URL(value);
+    return transport === 'http'
+      ? url.protocol === 'http:' && url.hostname === '127.0.0.1'
+      : url.protocol === 'neko-media:' && url.hostname === 'desktop';
+  } catch {
+    return false;
+  }
+}
 
 export interface MediaColorMetadata {
   readonly primaries?: string;
@@ -42,7 +58,7 @@ export interface MediaProbe {
 
 export interface PcmStreamDescriptor {
   readonly version: 1;
-  readonly transport: 'http' | 'authorized';
+  readonly transport: MediaTransport;
   readonly protocol: 'neko-pcm-f32le-v1';
   readonly streamUrl: string;
   readonly sampleRate: number;
@@ -69,7 +85,7 @@ export interface HtmlVideoPreparationOptions {
 
 export interface HtmlVideoDescriptor {
   readonly version: 1;
-  readonly transport: 'http';
+  readonly transport: MediaTransport;
   readonly url: string;
   readonly mimeType: string;
   readonly preparationProfile: HtmlVideoPreparationProfile;

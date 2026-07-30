@@ -138,9 +138,9 @@ describe('CanvasToolbar', () => {
     expect(addButton?.getAttribute('aria-expanded')).toBe('true');
 
     act(() => {
-      document.body.querySelector<HTMLButtonElement>('[data-canvas-add-action="group"]')?.click();
+      document.body.querySelector<HTMLButtonElement>('[data-canvas-add-action="table"]')?.click();
     });
-    expect(onSelectAddAction).toHaveBeenCalledWith('group');
+    expect(onSelectAddAction).toHaveBeenCalledWith('table');
     expect(document.body.querySelector('[data-canvas-add-action-popover="true"]')).toBeNull();
   });
 

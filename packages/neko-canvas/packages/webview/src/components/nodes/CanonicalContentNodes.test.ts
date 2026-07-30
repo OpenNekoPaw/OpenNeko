@@ -12,6 +12,9 @@ describe('canonical content node runtime boundaries', () => {
     expect(source).toContain('audioLayout={mediaType ===');
     expect(source).toContain("'node-card'");
     expect(source).toContain('canvas-audio-node-title');
+    expect(source).toContain('onPointerEnter');
+    expect(source).toContain('onPointerLeave');
+    expect(source).toContain("persistence: 'transient'");
     expect(source).not.toContain('<audio');
     expect(source).not.toContain('<video');
   });

@@ -16,6 +16,7 @@ export interface UseNodeHelpersOptions {
 
 export interface UseNodeHelpersReturn {
   addMarkdownAt: (pos: { x: number; y: number }) => void;
+  addTableAt: (pos: { x: number; y: number }) => void;
   addImportedMarkdownAt: (pos: { x: number; y: number }, asset: DroppedTextCanvasAsset) => void;
   addMediaAt: (
     pos: { x: number; y: number },
@@ -36,6 +37,13 @@ export interface UseNodeHelpersReturn {
     mediaType?: string,
   ) => void;
   addCanvasEmbedAt: (pos: { x: number; y: number }, canvasPath: string, title: string) => void;
+}
+
+export function createTableMarkdownNodeData(): MarkdownCanvasNode['data'] {
+  return {
+    title: 'Table',
+    content: '| Column 1 | Column 2 |\n| --- | --- |\n|  |  |',
+  };
 }
 
 export function createImportedMarkdownNodeData(
@@ -81,6 +89,21 @@ export function useNodeHelpers(options: UseNodeHelpersOptions): UseNodeHelpersRe
         }),
       );
       reportAction('node.create', 'markdown', asset.name);
+    },
+    [addNode, nodeCount, reportAction],
+  );
+
+  const addTableAt = useCallback(
+    (pos: { x: number; y: number }) => {
+      addNode(
+        buildCanvasNode({
+          type: 'markdown',
+          position: pos,
+          zIndex: nodeCount,
+          data: createTableMarkdownNodeData(),
+        }),
+      );
+      reportAction('node.create', 'table');
     },
     [addNode, nodeCount, reportAction],
   );
@@ -168,6 +191,7 @@ export function useNodeHelpers(options: UseNodeHelpersOptions): UseNodeHelpersRe
 
   return {
     addMarkdownAt,
+    addTableAt,
     addImportedMarkdownAt,
     addMediaAt,
     addGroupAt,

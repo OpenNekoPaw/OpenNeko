@@ -1,10 +1,17 @@
+// @vitest-environment jsdom
+
+import { act } from 'react';
+import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { createResourceRef, type CanvasNode, type GroupCanvasNode } from '@neko/shared';
+import type { CanvasMaterialActionDescriptor, CanvasNode, GroupCanvasNode } from '@neko/shared';
+import { CanvasHostProvider, type CanvasWebviewHostPort } from '../../host-runtime';
 import { SelectionContextToolbar } from './SelectionContextToolbar';
 
+Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+
 describe('SelectionContextToolbar', () => {
-  it('keeps canonical media preview primary and dangerous deletion in overflow', () => {
+  it('projects owner-contributed media preview and keeps dangerous deletion in overflow', async () => {
     const node: CanvasNode = {
       id: 'media',
       type: 'media',
@@ -13,35 +20,48 @@ describe('SelectionContextToolbar', () => {
       zIndex: 1,
       data: {
         mediaType: 'image',
-        resourceRef: createResourceRef({
-          id: 'resource-image',
-          scope: 'project',
-          provider: 'workspace',
-          kind: 'media',
-          source: { kind: 'file', projectRelativePath: 'assets/image.png' },
-          locator: { kind: 'file', path: 'assets/image.png' },
-          fingerprint: { strategy: 'identity', value: 'image-v1' },
-        }),
+        assetPath: 'assets/image.png',
+        contentLocator: { kind: 'workspace-file', path: 'assets/image.png' },
       },
-    } as CanvasNode;
+    };
+    const host = createMaterialHost([
+      {
+        id: 'preview:open',
+        ownerId: 'preview',
+        label: 'Preview',
+        mediaKinds: ['image'],
+        origins: ['referenced', 'generated'],
+        selection: { minimum: 1, maximum: 1 },
+        effect: 'read',
+      },
+    ]);
 
-    const markup = renderToStaticMarkup(
-      <SelectionContextToolbar
-        nodes={[node]}
-        selectedNodeIds={[node.id]}
-        viewport={{ pan: { x: 0, y: 0 }, zoom: 1 }}
-        viewportSize={{ width: 800, height: 600 }}
-      />,
-    );
+    const container = document.createElement('div');
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(
+        <CanvasHostProvider host={host}>
+          <SelectionContextToolbar
+            nodes={[node]}
+            selectedNodeIds={[node.id]}
+            viewport={{ pan: { x: 0, y: 0 }, zoom: 1 }}
+            viewportSize={{ width: 800, height: 600 }}
+          />
+        </CanvasHostProvider>,
+      );
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    const markup = container.innerHTML;
 
     expect(markup).toContain('data-selection-overflow="true"');
     expect(markup).not.toContain('data-selection-action="node:edit-media"');
     expect(markup).not.toContain('data-selection-action="selection:quick-generate"');
-    expect(markup).toContain('data-selection-action="node:open-media-preview"');
+    expect(markup).toContain('data-selection-action="preview:open"');
     expect(markup).toContain('data-selection-action="node:duplicate"');
     expect(markup).not.toContain('data-selection-action="node:copy-to-media-library"');
     expect(markup).not.toContain('data-selection-action="node:open-content-overlay"');
     expect(markup).toContain('data-selection-overflow-actions="delete-selection"');
+    await act(async () => root.unmount());
   });
 
   it('does not expose a content overlay for canonical file nodes', () => {
@@ -104,3 +124,35 @@ describe('SelectionContextToolbar', () => {
     expect(markup).toContain('top:10px');
   });
 });
+
+function createMaterialHost(
+  descriptors: readonly CanvasMaterialActionDescriptor[],
+): CanvasWebviewHostPort {
+  return {
+    postMessage: () => undefined,
+    getState: () => undefined,
+    setState: () => undefined,
+    supportsMessage: () => false,
+    subscribe: () => () => undefined,
+    requestSource: async () => {
+      throw new Error('Not used by this static component test.');
+    },
+    requestGenerationDraft: async () => {
+      throw new Error('Not used by this static component test.');
+    },
+    projectContent: async () => {
+      throw new Error('Not used by this static component test.');
+    },
+    previewResource: async () => undefined,
+    revealResource: async () => undefined,
+    getAuthoringCapabilities: () => ({
+      sourceModes: [],
+      generationMediaKinds: [],
+    }),
+    resolveMaterialActions: async () => descriptors,
+    executeMaterialAction: async () => {
+      throw new Error('Not used by this static component test.');
+    },
+    dispose: () => undefined,
+  };
+}

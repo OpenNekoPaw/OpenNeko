@@ -1,7 +1,8 @@
 import React from 'react';
 import type { PropertyDefinition, PropertyGroupDefinition, PropertyValue } from '@neko/ui/creative';
 import { toCodiconClassName, type CodiconName } from '@neko/ui/icons';
-import type { CanonicalCanvasNodeType, CanvasNode } from '@neko/shared';
+import type { CanvasNode } from '@neko/shared';
+import type { CanvasAddActionId } from '../../utils/canvasAddActions';
 
 export interface CanvasNodePropertyAdapterResult {
   readonly properties: readonly PropertyDefinition[];
@@ -11,13 +12,13 @@ export interface CanvasNodePropertyAdapterResult {
 export type CanvasNodePropertyId =
   'position.x' | 'position.y' | 'size.width' | 'size.height' | 'rotation';
 
-const ADD_ACTION_ICON_BY_TYPE: Readonly<Record<CanonicalCanvasNodeType, CodiconName>> = {
-  markdown: 'edit',
-  media: 'symbol-color',
-  group: 'symbol-namespace',
-  job: 'lightbulb',
-  file: 'package',
-  'canvas-embed': 'type-hierarchy',
+const ADD_ACTION_ICON_BY_ID: Readonly<Record<CanvasAddActionId, CodiconName>> = {
+  text: 'edit',
+  table: 'table',
+  image: 'symbol-color',
+  video: 'play',
+  audio: 'symbol-ruler',
+  director3d: 'device-camera',
 };
 
 export function mapCanvasNodeTransformToProperties(
@@ -88,13 +89,13 @@ export function mapCanvasNodePropertyCommit(
 }
 
 export function createCanvasAddActionIcon(
-  nodeType: CanonicalCanvasNodeType,
+  actionId: CanvasAddActionId,
   color = 'var(--neko-fg-secondary)',
 ): React.ReactNode {
   return React.createElement('span', {
     'aria-hidden': 'true',
-    className: `${toCodiconClassName(ADD_ACTION_ICON_BY_TYPE[nodeType])} canvas-add-action-icon`,
-    'data-canvas-add-action-icon': nodeType,
+    className: `${toCodiconClassName(ADD_ACTION_ICON_BY_ID[actionId])} canvas-add-action-icon`,
+    'data-canvas-add-action-icon': actionId,
     style: { color },
   });
 }

@@ -6,9 +6,11 @@ import type {
 } from '@neko/shared';
 import { FileIcon } from '@neko/shared/icons';
 import { MarkdownDocumentView } from '@neko/ui/markdown';
+import { useMemo, useRef, useState } from 'react';
 import { t } from '../../i18n';
 import { useOptionalCanvasHost } from '../../host-runtime';
 import { PreviewSurface } from '../../preview/PreviewRendererRegistry';
+import type { PreviewSourceDescriptor } from '../../preview/types';
 import { BaseNode } from './BaseNode';
 import type { NodeRendererCommonProps } from './nodeRendererTypes';
 
@@ -75,6 +77,47 @@ export function MediaNode({ node, isSelected, ...baseProps }: CanonicalNodeProps
           : 'unavailable';
   const title =
     node.data.title || node.data.assetPath.split('/').pop() || resolveMediaTypeLabel(mediaType);
+  const hoverSequence = useRef(0);
+  const [hoverRequestId, setHoverRequestId] = useState<string>();
+  const [isHovering, setIsHovering] = useState(false);
+  const playbackControl = useMemo(() => {
+    if (mediaType === 'image' || !hoverRequestId) return undefined;
+    return {
+      requestId: hoverRequestId,
+      state: isHovering ? ('playing' as const) : ('stopped' as const),
+      startTimeSeconds: 0,
+      persistence: 'transient' as const,
+    };
+  }, [hoverRequestId, isHovering, mediaType]);
+  const previewSource = useMemo<PreviewSourceDescriptor>(
+    () => ({
+      id: `canvas-node:${node.id}`,
+      role: previewRole,
+      title: node.data.title,
+      asset: {
+        kind: 'asset-identity' as const,
+        path: source,
+        mediaType,
+      },
+      metadata: {
+        ...(node.data.duration ? { duration: node.data.duration } : {}),
+        ...(node.data.resourceRef ? { resourceRef: node.data.resourceRef } : {}),
+        ...(node.data.documentResourceRef
+          ? { documentResourceRef: node.data.documentResourceRef }
+          : {}),
+      },
+    }),
+    [
+      mediaType,
+      node.data.documentResourceRef,
+      node.data.duration,
+      node.data.resourceRef,
+      node.data.title,
+      node.id,
+      previewRole,
+      source,
+    ],
+  );
   return (
     <BaseNode
       node={node}
@@ -89,6 +132,16 @@ export function MediaNode({ node, isSelected, ...baseProps }: CanonicalNodeProps
             ? 'canvas-audio-node flex h-full min-h-0 flex-col'
             : 'flex h-full min-h-0 flex-col'
         }
+        onPointerEnter={() => {
+          if (mediaType === 'image' || !source) return;
+          hoverSequence.current += 1;
+          setHoverRequestId(`canvas-hover:${node.id}:${hoverSequence.current}`);
+          setIsHovering(true);
+        }}
+        onPointerLeave={() => {
+          if (mediaType === 'image') return;
+          setIsHovering(false);
+        }}
       >
         {mediaType === 'audio' ? (
           <div className="canvas-audio-node-title">
@@ -111,26 +164,11 @@ export function MediaNode({ node, isSelected, ...baseProps }: CanonicalNodeProps
             </div>
           ) : (
             <PreviewSurface
-              source={{
-                id: `canvas-node:${node.id}`,
-                role: previewRole,
-                title: node.data.title,
-                asset: {
-                  kind: 'asset-identity',
-                  path: source,
-                  mediaType,
-                },
-                metadata: {
-                  ...(node.data.duration ? { duration: node.data.duration } : {}),
-                  ...(node.data.resourceRef ? { resourceRef: node.data.resourceRef } : {}),
-                  ...(node.data.documentResourceRef
-                    ? { documentResourceRef: node.data.documentResourceRef }
-                    : {}),
-                },
-              }}
+              source={previewSource}
               surfaceKind="inline"
               chrome="full-bleed"
               audioLayout={mediaType === 'audio' ? 'node-card' : undefined}
+              playbackControl={playbackControl}
             />
           )}
         </div>
@@ -177,7 +215,9 @@ export function JobNode({ node, isSelected, ...baseProps }: CanonicalNodeProps<J
           </p>
         ) : null}
         <div className="mt-auto flex justify-between" style={{ color: 'var(--node-fg-secondary)' }}>
-          <span>{node.data.jobId}</span>
+          <span>
+            {node.data.jobRef.kind}:{node.data.jobRef.jobId}
+          </span>
           <span>r{node.data.revision}</span>
         </div>
         {node.data.diagnostic ? (

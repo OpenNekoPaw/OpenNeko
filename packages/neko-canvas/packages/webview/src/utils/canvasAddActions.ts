@@ -1,91 +1,90 @@
 import type { CanonicalCanvasNodeType } from '@neko/shared';
 
-export type CanvasAddActionId =
-  'markdown' | 'image' | 'audio' | 'video' | 'group' | 'file' | 'subcanvas';
+export type CanvasAddActionId = 'text' | 'table' | 'image' | 'video' | 'audio' | 'director3d';
+
+export type CanvasAddSourceKind = 'image' | 'video' | 'audio' | 'model';
+export type CanvasAddSourceModeId = 'create' | 'import' | 'reference';
+
+export interface CanvasAddSourceMode {
+  readonly id: CanvasAddSourceModeId;
+  readonly labelKey: string;
+  readonly descriptionKey: string;
+}
+
+export const CANVAS_ADD_SOURCE_MODES: readonly CanvasAddSourceMode[] = [
+  {
+    id: 'create',
+    labelKey: 'sourceMode.create',
+    descriptionKey: 'sourceMode.createDescription',
+  },
+  {
+    id: 'import',
+    labelKey: 'sourceMode.import',
+    descriptionKey: 'sourceMode.importDescription',
+  },
+  {
+    id: 'reference',
+    labelKey: 'sourceMode.reference',
+    descriptionKey: 'sourceMode.referenceDescription',
+  },
+] as const;
 
 export interface CanvasAddAction {
   readonly id: CanvasAddActionId;
   readonly nodeType: CanonicalCanvasNodeType;
   readonly labelKey: string;
+  readonly descriptionKey?: string;
+  readonly badgeKey?: string;
   readonly mode: 'direct' | 'source';
-  readonly mediaType?: 'image' | 'audio' | 'video';
+  readonly sourceKind?: CanvasAddSourceKind;
 }
 
-export interface CanvasAddActionGroup {
-  readonly id: 'create' | 'import' | 'reference';
-  readonly labelKey: string;
-  readonly actions: readonly CanvasAddAction[];
-}
-
-export const CANVAS_ADD_ACTION_GROUPS: readonly CanvasAddActionGroup[] = [
+export const CANVAS_ADD_ACTIONS: readonly CanvasAddAction[] = [
   {
-    id: 'create',
-    labelKey: 'add.group.create',
-    actions: [
-      {
-        id: 'markdown',
-        nodeType: 'markdown',
-        labelKey: 'node.markdown',
-        mode: 'direct',
-      },
-      {
-        id: 'group',
-        nodeType: 'group',
-        labelKey: 'node.group',
-        mode: 'direct',
-      },
-    ],
+    id: 'text',
+    nodeType: 'markdown',
+    labelKey: 'node.text',
+    mode: 'direct',
   },
   {
-    id: 'import',
-    labelKey: 'add.group.import',
-    actions: [
-      {
-        id: 'image',
-        nodeType: 'media',
-        labelKey: 'node.image',
-        mode: 'source',
-        mediaType: 'image',
-      },
-      {
-        id: 'audio',
-        nodeType: 'media',
-        labelKey: 'node.audio',
-        mode: 'source',
-        mediaType: 'audio',
-      },
-      {
-        id: 'video',
-        nodeType: 'media',
-        labelKey: 'node.video',
-        mode: 'source',
-        mediaType: 'video',
-      },
-    ],
+    id: 'table',
+    nodeType: 'markdown',
+    labelKey: 'node.table',
+    descriptionKey: 'node.tableDescription',
+    mode: 'direct',
   },
   {
-    id: 'reference',
-    labelKey: 'add.group.reference',
-    actions: [
-      {
-        id: 'file',
-        nodeType: 'file',
-        labelKey: 'node.file',
-        mode: 'source',
-      },
-      {
-        id: 'subcanvas',
-        nodeType: 'canvas-embed',
-        labelKey: 'node.subcanvas',
-        mode: 'source',
-      },
-    ],
+    id: 'image',
+    nodeType: 'media',
+    labelKey: 'node.image',
+    mode: 'source',
+    sourceKind: 'image',
+  },
+  {
+    id: 'video',
+    nodeType: 'media',
+    labelKey: 'node.video',
+    mode: 'source',
+    sourceKind: 'video',
+  },
+  {
+    id: 'audio',
+    nodeType: 'media',
+    labelKey: 'node.audio',
+    mode: 'source',
+    sourceKind: 'audio',
+  },
+  {
+    id: 'director3d',
+    nodeType: 'file',
+    labelKey: 'node.director3d',
+    badgeKey: 'badge.new',
+    mode: 'source',
+    sourceKind: 'model',
   },
 ] as const;
 
-const ACTION_BY_ID = new Map(
-  CANVAS_ADD_ACTION_GROUPS.flatMap((group) => group.actions).map((action) => [action.id, action]),
-);
+const ACTION_BY_ID = new Map(CANVAS_ADD_ACTIONS.map((action) => [action.id, action]));
 
 export function getCanvasAddAction(id: CanvasAddActionId): CanvasAddAction {
   const action = ACTION_BY_ID.get(id);
