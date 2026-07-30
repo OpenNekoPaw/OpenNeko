@@ -298,11 +298,8 @@ const bridge: OpenNekoDesktopBridge &
       },
     },
     plugins: {
-      async list(projectId) {
-        const request = createDesktopHomePluginsRequest(
-          nextRequestId('desktop-home-plugins'),
-          projectId,
-        );
+      async list() {
+        const request = createDesktopHomePluginsRequest(nextRequestId('desktop-home-plugins'));
         const response: unknown = await ipcRenderer.invoke(
           DESKTOP_HOME_MANAGEMENT_CHANNELS.pluginsList,
           request,

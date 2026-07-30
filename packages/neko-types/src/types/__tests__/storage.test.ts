@@ -51,6 +51,7 @@ describe('canonical storage layout', () => {
     const layout = resolveStorageLayout('/workspace/demo', '/Users/feng');
 
     expect(layout.global.database).toBe('/Users/feng/.neko/neko.db');
+    expect(layout.global.assets).toBe('/Users/feng/.neko/assets');
     expect(layout.project.local.workspaceIdentity).toBe('/workspace/demo/.neko/workspace.json');
     expect('database' in layout.project.local.cache).toBe(false);
   });

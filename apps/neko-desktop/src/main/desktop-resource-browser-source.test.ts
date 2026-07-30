@@ -1,12 +1,4 @@
-import {
-  lstat,
-  mkdtemp,
-  mkdir,
-  realpath,
-  rm,
-  symlink,
-  writeFile,
-} from 'node:fs/promises';
+import { lstat, mkdtemp, mkdir, realpath, rm, symlink, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -17,6 +9,7 @@ import { createElectronNekoHostPorts } from './electron-host-ports';
 import {
   createDesktopResourceBrowserProjectionSource,
   createDesktopResourceBrowserReadSource,
+  searchDesktopGlobalAssetCatalog,
 } from './desktop-resource-browser-source';
 
 const temporaryRoots: string[] = [];
@@ -36,6 +29,61 @@ afterEach(async () => {
 });
 
 describe('Desktop Resource Browser source', () => {
+  it('searches and sorts only the user-global asset root', async () => {
+    const fixture = await createFixture();
+    const globalAssetRoot = path.join(fixture.root, 'home', '.neko', 'assets');
+    await mkdir(path.join(globalAssetRoot, 'Video'), { recursive: true });
+    await mkdir(path.join(globalAssetRoot, 'Audio'), { recursive: true });
+    await writeFile(path.join(globalAssetRoot, 'Video', 'new.mp4'), 'new');
+    await writeFile(path.join(globalAssetRoot, 'Video', 'old.mp4'), 'old');
+    await writeFile(path.join(fixture.workspace, 'project-only.mp4'), 'must-not-appear');
+    await utimes(
+      path.join(globalAssetRoot, 'Video', 'old.mp4'),
+      new Date('2026-01-01T00:00:00.000Z'),
+      new Date('2026-01-01T00:00:00.000Z'),
+    );
+    await utimes(
+      path.join(globalAssetRoot, 'Video', 'new.mp4'),
+      new Date('2026-07-01T00:00:00.000Z'),
+      new Date('2026-07-01T00:00:00.000Z'),
+    );
+    const host = createElectronNekoHostPorts({
+      homedir: path.join(fixture.root, 'home'),
+      nekoHome: path.join(fixture.root, 'home', '.neko'),
+      workspaceRoot: fixture.workspace,
+      version: '0.0.1',
+      logger: createLogger(),
+    });
+
+    await expect(
+      searchDesktopGlobalAssetCatalog({
+        globalAssetRoot,
+        files: host.files,
+        facet: 'libraries',
+        query: '',
+        sortBy: 'name',
+        sortDirection: 'descending',
+        limit: 20,
+      }),
+    ).resolves.toEqual([
+      expect.objectContaining({ id: 'library:Video', label: 'Video', kind: 'library' }),
+      expect.objectContaining({ id: 'library:Audio', label: 'Audio', kind: 'library' }),
+    ]);
+    const assets = await searchDesktopGlobalAssetCatalog({
+      globalAssetRoot,
+      files: host.files,
+      facet: 'assets',
+      query: '.mp4',
+      sortBy: 'modifiedAt',
+      sortDirection: 'descending',
+      limit: 20,
+    });
+
+    expect(assets.map((item) => item.label)).toEqual(['new.mp4', 'old.mp4']);
+    expect(JSON.stringify(assets)).not.toContain('project-only.mp4');
+    expect(JSON.stringify(assets)).not.toContain(fixture.root);
+  });
+
   it('exposes the same read authority to Home without composing interaction effects', async () => {
     const fixture = await createFixture();
     await writeFile(path.join(fixture.workspace, 'brief.md'), '# Brief');

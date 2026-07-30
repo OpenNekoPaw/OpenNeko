@@ -230,9 +230,10 @@ describe('DesktopAppHost', () => {
           frameUrl: `${DESKTOP_APP_ORIGIN}/index.html`,
         },
         createDesktopHomeAssetSearchRequest('assets-1', {
-          projectId: 'content:workspace-1',
-          facet: 'media',
+          facet: 'assets',
           query: '',
+          sortBy: 'name',
+          sortDirection: 'ascending',
           limit: 20,
         }),
       ),
@@ -417,57 +418,66 @@ describe('DesktopAppHost', () => {
     });
   });
 
-  it('projects only sanitized Skill metadata through the Home Plugins contract', async () => {
+  it('projects only sanitized global Skill and plugin metadata without attaching a Project', async () => {
     const fixture = await createShellAppHost();
-    const resolution = createWorkspaceResolution();
-    fixture.registry.resolve.mockResolvedValue(resolution);
-    const opened = await fixture.appHost.openContentProject(
-      fixture.sender,
-      createDesktopWindowMutationRequest(
-        'open-1',
-        fixture.projection.endpointEpoch,
-        fixture.projection.window.revision,
-      ),
-      async () => resolution.workspacePath,
-    );
-    const project = opened.projection.catalog.projects[0];
-    if (!project) throw new Error('Expected an opened Project.');
-    const runtime = {
-      ...createAgentWorkspaceRuntime(project.workspaceId),
-      listSkills: vi.fn(async () => [
+    fixture.agent.readGlobalSkillCatalog.mockResolvedValue({
+      records: [
         {
           name: 'story-planner',
           description: 'Plan a story.',
-          source: { kind: 'project' as const },
+          source: { kind: 'personal' as const },
           trusted: true,
           enabled: true,
           fingerprint: 'must-stay-in-main',
           locator: {
             kind: 'skill' as const,
-            value: '/workspace/demo/.agents/skills/story-planner/SKILL.md',
+            value: '/Users/fixture/.agents/skills/story-planner/SKILL.md',
             fingerprint: 'must-stay-in-main',
           },
         },
-      ]),
-    };
-    fixture.agent.attachWorkspace.mockResolvedValue(runtime);
+      ],
+      diagnostics: [
+        {
+          code: 'invalid_metadata' as const,
+          source: 'personal' as const,
+        },
+        {
+          code: 'invalid_metadata' as const,
+          source: 'personal' as const,
+        },
+      ],
+      warnings: [
+        {
+          code: 'duplicate-skill' as const,
+          skillName: 'story-planner',
+          selectedSource: 'personal' as const,
+          shadowedSource: 'builtin' as const,
+        },
+      ],
+    });
 
     const result = await fixture.appHost.listHomePlugins(
       fixture.sender,
-      createDesktopHomePluginsRequest('plugins-1', project.projectId),
+      createDesktopHomePluginsRequest('plugins-1'),
     );
 
     expect(result.skills).toEqual([
       {
         name: 'story-planner',
         description: 'Plan a story.',
-        source: 'project',
-        trusted: true,
-        enabled: true,
+        source: 'personal',
       },
     ]);
+    expect(result.skillDiscovery).toEqual({
+      diagnostics: [{ code: 'invalid_metadata', source: 'personal', count: 2 }],
+      duplicateCount: 1,
+    });
+    expect(result.plugins.length).toBeGreaterThan(0);
+    expect(result.plugins.every((plugin) => plugin.kind === 'builtin')).toBe(true);
+    expect(fixture.agent.attachWorkspace).not.toHaveBeenCalled();
     expect(JSON.stringify(result)).not.toContain('must-stay-in-main');
-    expect(JSON.stringify(result)).not.toContain('/workspace/demo');
+    expect(JSON.stringify(result)).not.toContain('/Users/fixture');
+    expect(JSON.stringify(result)).not.toContain('story-planner/SKILL.md');
     expect(result.externalPluginHost).toBe('unavailable');
   });
 
@@ -657,6 +667,7 @@ function createSettingsService(): DesktopApplicationSettingsService {
 function createAgentComposition(): DesktopAgentAppHostComposition & {
   readonly attachWorkspace: ReturnType<typeof vi.fn>;
   readonly getWorkspace: ReturnType<typeof vi.fn>;
+  readonly readGlobalSkillCatalog: ReturnType<typeof vi.fn>;
   readonly readHomeProjection: ReturnType<typeof vi.fn>;
   readonly dispose: ReturnType<typeof vi.fn>;
 } {
@@ -678,6 +689,11 @@ function createAgentComposition(): DesktopAgentAppHostComposition & {
       createAgentWorkspaceRuntime(workspace.workspaceId),
     ),
     getWorkspace: vi.fn(() => undefined),
+    readGlobalSkillCatalog: vi.fn(async () => ({
+      records: [],
+      diagnostics: [],
+      warnings: [],
+    })),
     readHomeProjection: vi.fn(() => ({
       revision: 0,
       conversations: [],
@@ -718,7 +734,7 @@ function createAgentWorkspaceRuntime(workspaceId: string): DesktopAgentWorkspace
     },
     clearContext: unavailable,
     compactContext: unavailable,
-    listSkills: unavailable,
+    readSkillCatalog: unavailable,
     listConversations: () => [],
     readConversationEvidence: () => {
       throw new Error('Agent evidence is not expected by this AppHost test.');

@@ -32,7 +32,10 @@ import {
   type DesktopShellResponse,
 } from '../shared/shell-contract';
 import { DesktopWindowRegistry, type DesktopSenderIdentity } from './window-registry';
-import type { DesktopAgentAppHostComposition } from './desktop-agent-app-host-composition';
+import type {
+  DesktopAgentAppHostComposition,
+  DesktopAgentSkillCatalog,
+} from './desktop-agent-app-host-composition';
 import {
   createDesktopAgentBridgeRuntime,
   type DesktopAgentBridgeRuntime,
@@ -421,18 +424,18 @@ export class DesktopAppHost {
     const window = this.windows.resolveSender(sender);
     const projection = await this.shell.getProjection(window.windowId);
     try {
-      const items = await this.requireResourceBrowser().searchHomeProject({
+      const items = await this.requireResourceBrowser().searchHomeAssets({
         windowId: window.windowId,
         endpointEpoch: projection.endpointEpoch,
-        projectId: request.projectId,
         facet: request.facet,
         query: request.query,
+        sortBy: request.sortBy,
+        sortDirection: request.sortDirection,
         limit: request.limit,
       });
       return {
         schemaVersion: DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION,
         requestId: request.requestId,
-        projectId: request.projectId,
         facet: request.facet,
         status: 'ready',
         items,
@@ -441,7 +444,6 @@ export class DesktopAppHost {
       return {
         schemaVersion: DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION,
         requestId: request.requestId,
-        projectId: request.projectId,
         facet: request.facet,
         status: 'error',
         diagnostic: { message: describeError(error) },
@@ -457,31 +459,28 @@ export class DesktopAppHost {
     const request = parseDesktopHomePluginsRequest(payload);
     const window = this.windows.resolveSender(sender);
     const projection = await this.shell.getProjection(window.windowId);
-    const workspaceResolution = await this.shell.resolveProjectWorkspace(request.projectId);
-    const project = projection.catalog.projects.find(
-      (candidate) =>
-        candidate.projectId === request.projectId &&
-        candidate.workspaceId === workspaceResolution.workspaceId,
-    );
-    if (!project) {
-      throw new Error(`Desktop Home Project '${request.projectId}' is not in this catalog.`);
+    const catalog = await this.agent.readGlobalSkillCatalog();
+    for (const skill of catalog.records) {
+      if (skill.source.kind === 'project') {
+        throw new Error('Desktop global Skill catalog returned a Project-scoped Skill.');
+      }
     }
-    const workspace =
-      this.agent.getWorkspace(project.workspaceId) ??
-      (await this.agent.attachWorkspace(workspaceResolution));
-    const skills = await workspace.listSkills(true);
     return {
       schemaVersion: DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION,
       requestId: request.requestId,
-      projectId: project.projectId,
-      skills: skills.map((skill) => ({
+      skills: catalog.records.map((skill) => ({
         name: skill.name,
         description: skill.description,
-        source: skill.source.kind,
-        trusted: skill.trusted,
-        enabled: skill.enabled,
+        source: requireGlobalSkillSource(skill.source.kind),
       })),
-      extensions: projection.domains,
+      skillDiscovery: projectSkillDiscovery(catalog),
+      plugins: projection.domains.map((capability) => ({
+        id: capability.surface,
+        name: capability.surface,
+        description: capability.ownerSlice,
+        kind: 'builtin',
+        status: capability.status,
+      })),
       externalPluginHost: 'unavailable',
     };
   }
@@ -875,6 +874,40 @@ export class DesktopAppHost {
       projection,
     };
   }
+}
+
+function projectSkillDiscovery(
+  catalog: DesktopAgentSkillCatalog,
+): DesktopHomePluginsResult['skillDiscovery'] {
+  const grouped = new Map<
+    string,
+    DesktopHomePluginsResult['skillDiscovery']['diagnostics'][number]
+  >();
+  for (const diagnostic of catalog.diagnostics) {
+    const source = requireGlobalSkillSource(diagnostic.source);
+    const key = `${source}:${diagnostic.code}`;
+    const existing = grouped.get(key);
+    grouped.set(key, {
+      code: diagnostic.code,
+      source,
+      count: (existing?.count ?? 0) + 1,
+    });
+  }
+  return {
+    diagnostics: Object.freeze(
+      [...grouped.values()].sort((left, right) =>
+        `${left.source}:${left.code}`.localeCompare(`${right.source}:${right.code}`),
+      ),
+    ),
+    duplicateCount: catalog.warnings.length,
+  };
+}
+
+function requireGlobalSkillSource(
+  source: DesktopAgentSkillCatalog['diagnostics'][number]['source'],
+): 'builtin' | 'personal' {
+  if (source === 'builtin' || source === 'personal') return source;
+  throw new Error('Desktop global Skill catalog cannot contain Project source metadata.');
 }
 
 function describeError(error: unknown): string {

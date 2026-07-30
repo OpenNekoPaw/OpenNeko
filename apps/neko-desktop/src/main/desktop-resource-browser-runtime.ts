@@ -1,5 +1,4 @@
 import type { NekoHostPorts } from '@neko/host/ports';
-import { contentLocatorKey } from '@neko/shared';
 import {
   createCanvasHostIntentRequest,
   type CanvasHostIntentResult,
@@ -28,6 +27,7 @@ import type { DesktopShellService } from './shell-service';
 import {
   createDesktopResourceBrowserReadSource,
   createDesktopResourceBrowserProjectionSource,
+  searchDesktopGlobalAssetCatalog,
   type DesktopResourceBrowserSourceOptions,
 } from './desktop-resource-browser-source';
 import { resourceBrowserViewId } from '../shared/resource-browser-bridge-contract';
@@ -36,9 +36,12 @@ import type { DesktopWorkbenchViewRef } from '../shared/workbench-contract';
 import type {
   DesktopHomeAssetFacet,
   DesktopHomeAssetItem,
+  DesktopHomeAssetSort,
+  DesktopHomeSortDirection,
 } from '../shared/home-management-contract';
 
 export interface DesktopResourceBrowserRuntimeOptions {
+  readonly globalAssetRoot: string;
   readonly shell: DesktopShellService;
   readonly host: Pick<NekoHostPorts, 'files' | 'external'>;
   readonly openPreview: DesktopResourceBrowserSourceOptions['openPreview'];
@@ -117,12 +120,13 @@ export class DesktopResourceBrowserRuntime {
     return (await this.resolveController(windowId, identity)).subscribe(listener);
   }
 
-  async searchHomeProject(input: {
+  async searchHomeAssets(input: {
     readonly windowId: string;
     readonly endpointEpoch: string;
-    readonly projectId: string;
     readonly facet: DesktopHomeAssetFacet;
     readonly query: string;
+    readonly sortBy: DesktopHomeAssetSort;
+    readonly sortDirection: DesktopHomeSortDirection;
     readonly limit: number;
   }): Promise<readonly DesktopHomeAssetItem[]> {
     this.requireActive();
@@ -130,71 +134,15 @@ export class DesktopResourceBrowserRuntime {
     if (projection.endpointEpoch !== input.endpointEpoch) {
       throw new Error('Desktop Home asset query endpoint identity is stale.');
     }
-    const project = projection.catalog.projects.find(
-      (candidate) => candidate.projectId === input.projectId,
-    );
-    if (!project) {
-      throw new Error(`Desktop Home Project '${input.projectId}' is not in the catalog.`);
-    }
-    const workspace = await this.options.shell.resolveProjectWorkspace(project.projectId);
-    if (workspace.workspaceId !== project.workspaceId) {
-      throw new Error('Desktop Home asset query Project identity is stale.');
-    }
-    const source = createDesktopResourceBrowserReadSource({
-      workspace,
-      host: this.options.host,
+    return searchDesktopGlobalAssetCatalog({
+      globalAssetRoot: this.options.globalAssetRoot,
+      files: this.options.host.files,
+      facet: input.facet,
+      query: input.query,
+      sortBy: input.sortBy,
+      sortDirection: input.sortDirection,
+      limit: input.limit,
     });
-    const identity: ResourceBrowserIdentity = {
-      projectId: project.projectId,
-      workspaceId: project.workspaceId,
-      windowId: input.windowId,
-      viewId: `home-assets:${project.projectId}`,
-      viewEpoch: 1,
-      endpointEpoch: input.endpointEpoch,
-    };
-    if (input.facet === 'entities') {
-      const result = await source.entities.list({
-        identity,
-        query: input.query,
-        limit: input.limit,
-      });
-      const normalizedQuery = input.query.trim().toLocaleLowerCase();
-      return result.entities
-        .filter((entity) => {
-          if (!normalizedQuery) return true;
-          return [entity.displayName, entity.canonicalName, ...entity.aliases].some((label) =>
-            label?.toLocaleLowerCase().includes(normalizedQuery),
-          );
-        })
-        .slice(0, input.limit)
-        .map((entity) => ({
-          id: entity.id,
-          label: entity.displayName ?? entity.canonicalName,
-          description: entity.kind,
-          kind: 'entity',
-          availability: 'available',
-        }));
-    }
-    const entries =
-      input.facet === 'files'
-        ? await source.files.list({
-            identity,
-            query: input.query,
-            limit: input.limit,
-          })
-        : await source.media.search({
-            identity,
-            query: input.query,
-            limit: input.limit,
-          });
-    return entries.map((entry) => ({
-      id: contentLocatorKey(entry.locator),
-      label: entry.label,
-      ...(entry.description ? { description: entry.description } : {}),
-      kind: entry.role === 'directory' || entry.role === 'library-root' ? 'directory' : 'content',
-      ...(entry.metadata?.mediaType ? { mediaType: entry.metadata.mediaType } : {}),
-      availability: entry.availability,
-    }));
   }
 
   detachWindow(windowId: string): void {

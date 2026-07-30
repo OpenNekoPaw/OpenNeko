@@ -446,7 +446,7 @@ function workspace(): DesktopAgentWorkspaceRuntime {
     readContextTokenCount: vi.fn(),
     clearContext: vi.fn(),
     compactContext: vi.fn(),
-    listSkills: vi.fn(),
+    readSkillCatalog: vi.fn(),
     listConversations: vi.fn(() => []),
     readConversationEvidence: vi.fn(),
     readConversationProjection: vi.fn(),

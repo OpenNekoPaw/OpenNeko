@@ -17,11 +17,13 @@ import {
   type PiProductEventSink,
   type PiConversationCatalogRecord,
   type PiConversationTranscriptEntry,
+  type PiSkillHostSnapshot,
   type SkillHostRecord,
   type PiToolPermissionPolicy,
   type PiToolResultAssetLoader,
   type PiToolRunIdentity,
   type SkillSourceRoot,
+  type SkillSourceKind,
 } from '@neko/agent/pi';
 import {
   createConversationProjectionStore,
@@ -51,8 +53,7 @@ export interface DesktopAgentTurnInput {
   readonly prompt: string;
   readonly modelPolicy: AgentModelPolicy;
   readonly permissionPolicy:
-    | PiToolPermissionPolicy
-    | ((events: PiProductEventSink) => PiToolPermissionPolicy);
+    PiToolPermissionPolicy | ((events: PiProductEventSink) => PiToolPermissionPolicy);
   readonly workspaceTrusted: boolean;
   readonly locale: 'en' | 'zh';
   readonly systemPrompt?: string;
@@ -98,9 +99,7 @@ export interface DesktopAgentWorkspaceRuntime {
   startTurn(input: DesktopAgentTurnInput): DesktopAgentTurnOperation;
   executeTurn(input: DesktopAgentTurnInput): Promise<DesktopAgentTurnResult>;
   cancelTurn(conversationId: string, identity: Pick<PiToolRunIdentity, 'turnId' | 'runId'>): void;
-  readActiveTurn(
-    conversationId: string,
-  ): Pick<PiToolRunIdentity, 'turnId' | 'runId'> | undefined;
+  readActiveTurn(conversationId: string): Pick<PiToolRunIdentity, 'turnId' | 'runId'> | undefined;
   readConversationEntries(
     conversationId: string,
   ): Promise<readonly PiConversationTranscriptEntry[]>;
@@ -110,7 +109,7 @@ export interface DesktopAgentWorkspaceRuntime {
     conversationId: string,
     contextWindow: number,
   ): Promise<Awaited<ReturnType<PiConversationRuntime['compactContext']>>>;
-  listSkills(workspaceTrusted: boolean): Promise<readonly SkillHostRecord[]>;
+  readSkillCatalog(workspaceTrusted: boolean): Promise<DesktopAgentSkillCatalog>;
   listConversations(): ReturnType<NodePiConversationAuthority['listConversations']>;
   readConversationEvidence(conversationId: string): DesktopAgentConversationEvidence;
   readConversationProjection(
@@ -123,10 +122,25 @@ export interface DesktopAgentWorkspaceRuntime {
   dispose(): Promise<void>;
 }
 
+export interface DesktopAgentSkillCatalog {
+  readonly records: readonly SkillHostRecord[];
+  readonly diagnostics: readonly {
+    readonly code: PiSkillHostSnapshot['diagnostics'][number]['code'];
+    readonly source: SkillSourceKind;
+  }[];
+  readonly warnings: readonly {
+    readonly code: 'duplicate-skill';
+    readonly skillName: string;
+    readonly selectedSource: SkillSourceKind;
+    readonly shadowedSource: SkillSourceKind;
+  }[];
+}
+
 export interface DesktopAgentAppHostComposition {
   readonly credentialRuntime: DesktopAgentCredentialRuntime;
   attachWorkspace(workspace: DesktopWorkspaceResolution): Promise<DesktopAgentWorkspaceRuntime>;
   getWorkspace(workspaceId: string): DesktopAgentWorkspaceRuntime | undefined;
+  readGlobalSkillCatalog(): Promise<DesktopAgentSkillCatalog>;
   readHomeProjection(): DesktopAgentHomeProjection;
   subscribeHomeProjection(listener: () => void): () => void;
   dispose(): Promise<void>;
@@ -190,6 +204,24 @@ class DefaultDesktopAgentAppHostComposition implements DesktopAgentAppHostCompos
   getWorkspace(workspaceId: string): DesktopAgentWorkspaceRuntime | undefined {
     this.requireActive();
     return this.workspaces.get(workspaceId);
+  }
+
+  async readGlobalSkillCatalog(): Promise<DesktopAgentSkillCatalog> {
+    this.requireActive();
+    const roots = await existingGlobalSkillRoots({
+      userHome: this.options.userHome,
+      ...(this.options.builtinSkillRoot === undefined
+        ? {}
+        : { builtinSkillRoot: this.options.builtinSkillRoot }),
+    });
+    const snapshot = await createNodePiSkillHost({
+      cwd: this.options.userHome,
+      policy: {
+        isTrusted: () => true,
+        isEnabled: () => true,
+      },
+    }).discover(roots);
+    return projectDesktopAgentSkillCatalog(snapshot);
   }
 
   readHomeProjection(): DesktopAgentHomeProjection {
@@ -484,9 +516,7 @@ class DefaultDesktopAgentWorkspaceRuntime implements DesktopAgentWorkspaceRuntim
     this.requireConversation(conversationId).cancel(identity);
   }
 
-  readActiveTurn(
-    conversationId: string,
-  ): Pick<PiToolRunIdentity, 'turnId' | 'runId'> | undefined {
+  readActiveTurn(conversationId: string): Pick<PiToolRunIdentity, 'turnId' | 'runId'> | undefined {
     this.requireActive();
     if (!this.options.authority.readConversation(conversationId)) {
       throw new Error(`Desktop Agent conversation '${conversationId}' does not exist.`);
@@ -533,8 +563,8 @@ class DefaultDesktopAgentWorkspaceRuntime implements DesktopAgentWorkspaceRuntim
     return this.requireConversation(conversationId).compactContext(contextWindow);
   }
 
-  async listSkills(workspaceTrusted: boolean): Promise<readonly SkillHostRecord[]> {
-    return (await this.discoverSkills(workspaceTrusted)).records;
+  async readSkillCatalog(workspaceTrusted: boolean): Promise<DesktopAgentSkillCatalog> {
+    return projectDesktopAgentSkillCatalog(await this.discoverSkills(workspaceTrusted));
   }
 
   listConversations(): ReturnType<NodePiConversationAuthority['listConversations']> {
@@ -942,9 +972,7 @@ export function projectDesktopAgentHomeConversationSummary(
   const latestTurn = projection?.turns.at(-1);
   const pendingConfirmation = latestTurn?.items
     .filter(
-      (item) =>
-        item.kind === 'tool_call' &&
-        item.payload.toolCall.pendingConfirmation === true,
+      (item) => item.kind === 'tool_call' && item.payload.toolCall.pendingConfirmation === true,
     )
     .sort((left, right) => right.updatedAt - left.updatedAt)[0];
   let attention: DesktopAgentHomeAttentionStatus = 'none';
@@ -1063,9 +1091,7 @@ function readNonNegativeInteger(
   key: string,
 ): number | undefined {
   const value = record?.[key];
-  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
-    ? value
-    : undefined;
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : undefined;
 }
 
 function latestTurnActivityAt(
@@ -1073,7 +1099,8 @@ function latestTurnActivityAt(
   defaultTimestamp: string,
 ): string {
   const latest = turn.items.reduce<number | undefined>(
-    (current, item) => (current === undefined || item.updatedAt > current ? item.updatedAt : current),
+    (current, item) =>
+      current === undefined || item.updatedAt > current ? item.updatedAt : current,
     undefined,
   );
   return latest === undefined ? defaultTimestamp : new Date(latest).toISOString();
@@ -1125,6 +1152,33 @@ async function existingSkillRoots(input: {
           },
         ]),
   ];
+  return existingSkillSourceRoots(candidates);
+}
+
+async function existingGlobalSkillRoots(input: {
+  readonly userHome: string;
+  readonly builtinSkillRoot?: string;
+}): Promise<readonly SkillSourceRoot[]> {
+  const candidates: readonly SkillSourceRoot[] = [
+    {
+      path: join(input.userHome, '.agents', 'skills'),
+      source: { kind: 'personal' },
+    },
+    ...(input.builtinSkillRoot === undefined
+      ? []
+      : [
+          {
+            path: input.builtinSkillRoot,
+            source: { kind: 'builtin' as const },
+          },
+        ]),
+  ];
+  return existingSkillSourceRoots(candidates);
+}
+
+async function existingSkillSourceRoots(
+  candidates: readonly SkillSourceRoot[],
+): Promise<readonly SkillSourceRoot[]> {
   const roots: SkillSourceRoot[] = [];
   for (const candidate of candidates) {
     try {
@@ -1132,9 +1186,36 @@ async function existingSkillRoots(input: {
       roots.push(candidate);
     } catch (error) {
       if (!isMissingPath(error)) throw error;
+      if (candidate.source.kind === 'builtin') {
+        throw new Error('Desktop builtin Skill root is unavailable.', { cause: error });
+      }
     }
   }
   return Object.freeze(roots);
+}
+
+function projectDesktopAgentSkillCatalog(snapshot: PiSkillHostSnapshot): DesktopAgentSkillCatalog {
+  return Object.freeze({
+    records: snapshot.records,
+    diagnostics: Object.freeze(
+      snapshot.diagnostics.map((diagnostic) =>
+        Object.freeze({
+          code: diagnostic.code,
+          source: diagnostic.source.kind,
+        }),
+      ),
+    ),
+    warnings: Object.freeze(
+      snapshot.warnings.map((warning) =>
+        Object.freeze({
+          code: warning.code,
+          skillName: warning.skillName,
+          selectedSource: warning.selectedSource,
+          shadowedSource: warning.shadowedSource,
+        }),
+      ),
+    ),
+  });
 }
 
 function isMissingPath(error: unknown): boolean {

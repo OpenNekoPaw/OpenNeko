@@ -138,6 +138,111 @@ describe('DesktopAgentAppHostComposition', () => {
     expect(piStorage.every((content) => !content.includes(protectedSecret))).toBe(true);
   });
 
+  it('discovers project, personal and builtin Skills through one sanitized catalog path', async () => {
+    const fixture = await createFixture();
+    const builtinSkillRoot = join(fixture.root, 'builtin-skills');
+    await writeSkill(builtinSkillRoot, 'desktop-fixture', 'Builtin shadowed fixture');
+    await writeSkill(builtinSkillRoot, 'builtin-only', 'Builtin-only fixture');
+    await writeSkill(
+      join(fixture.userHome, '.agents', 'skills'),
+      'personal-only',
+      'Personal fixture',
+    );
+    await mkdir(join(fixture.workspace.workspacePath, '.agents', 'skills', 'broken'), {
+      recursive: true,
+    });
+    await writeFile(
+      join(fixture.workspace.workspacePath, '.agents', 'skills', 'broken', 'SKILL.md'),
+      '---\nname: broken\n---\nMissing description\n',
+      'utf8',
+    );
+    const composition = createDesktopAgentAppHostComposition({
+      userDataRoot: join(fixture.root, 'catalog-data'),
+      userHome: fixture.userHome,
+      hostId: 'desktop-catalog-host',
+      credentialRuntime: createTestCredentialRuntime(),
+      builtinSkillRoot,
+    });
+    compositions.push(composition);
+    const workspace = await composition.attachWorkspace(fixture.workspace);
+
+    const catalog = await workspace.readSkillCatalog(true);
+
+    expect(catalog.records).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: 'desktop-fixture', source: { kind: 'project' } }),
+        expect.objectContaining({ name: 'personal-only', source: { kind: 'personal' } }),
+        expect.objectContaining({ name: 'builtin-only', source: { kind: 'builtin' } }),
+      ]),
+    );
+    expect(catalog.warnings).toContainEqual({
+      code: 'duplicate-skill',
+      skillName: 'desktop-fixture',
+      selectedSource: 'project',
+      shadowedSource: 'builtin',
+    });
+    expect(catalog.diagnostics).toContainEqual({
+      code: 'invalid_metadata',
+      source: 'project',
+    });
+    expect(JSON.stringify(catalog)).not.toContain(fixture.workspace.workspacePath);
+  });
+
+  it('discovers the global Skill catalog without attaching or reading a Project root', async () => {
+    const fixture = await createFixture();
+    const builtinSkillRoot = join(fixture.root, 'global-builtin-skills');
+    await writeSkill(builtinSkillRoot, 'shared-skill', 'Builtin shadowed fixture');
+    await writeSkill(builtinSkillRoot, 'builtin-only', 'Builtin-only fixture');
+    await writeSkill(
+      join(fixture.userHome, '.agents', 'skills'),
+      'shared-skill',
+      'Personal selected fixture',
+    );
+    const composition = createDesktopAgentAppHostComposition({
+      userDataRoot: join(fixture.root, 'global-catalog-data'),
+      userHome: fixture.userHome,
+      hostId: 'desktop-global-catalog-host',
+      credentialRuntime: createTestCredentialRuntime(),
+      builtinSkillRoot,
+    });
+    compositions.push(composition);
+
+    const catalog = await composition.readGlobalSkillCatalog();
+
+    expect(catalog.records).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: 'shared-skill', source: { kind: 'personal' } }),
+        expect.objectContaining({ name: 'builtin-only', source: { kind: 'builtin' } }),
+      ]),
+    );
+    expect(catalog.records.every((record) => record.source.kind !== 'project')).toBe(true);
+    expect(catalog.records.map((record) => record.name)).not.toContain('desktop-fixture');
+    expect(catalog.warnings).toContainEqual({
+      code: 'duplicate-skill',
+      skillName: 'shared-skill',
+      selectedSource: 'personal',
+      shadowedSource: 'builtin',
+    });
+    expect(composition.getWorkspace(fixture.workspace.workspaceId)).toBeUndefined();
+  });
+
+  it('fails visibly when a configured builtin Skill root is missing', async () => {
+    const fixture = await createFixture();
+    const composition = createDesktopAgentAppHostComposition({
+      userDataRoot: join(fixture.root, 'missing-data'),
+      userHome: fixture.userHome,
+      hostId: 'desktop-missing-builtin-host',
+      credentialRuntime: createTestCredentialRuntime(),
+      builtinSkillRoot: join(fixture.root, 'missing-builtin-skills'),
+    });
+    compositions.push(composition);
+    const workspace = await composition.attachWorkspace(fixture.workspace);
+
+    await expect(workspace.readSkillCatalog(true)).rejects.toThrow(
+      'Desktop builtin Skill root is unavailable',
+    );
+  });
+
   it('isolates conversation runtime and projection owners within one workspace', async () => {
     const fixture = await createFixture();
     const models = createFixtureModels((_model, context) =>
@@ -694,6 +799,15 @@ function createTestCredentialRuntime() {
       notify: () => undefined,
     },
   });
+}
+
+async function writeSkill(root: string, name: string, description: string): Promise<void> {
+  await mkdir(join(root, name), { recursive: true });
+  await writeFile(
+    join(root, name, 'SKILL.md'),
+    ['---', `name: ${name}`, `description: ${description}`, '---', `${name} body`, ''].join('\n'),
+    'utf8',
+  );
 }
 
 function fixturePolicy() {

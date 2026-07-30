@@ -56,6 +56,7 @@ import {
   type DesktopApplicationSettingsProjectionEvent,
 } from '../shared/application-settings-contract';
 import { buildConfigFilePath } from '@neko/platform/files';
+import { resolveDesktopBuiltinSkillRoot } from './desktop-builtin-skill-root';
 
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string | undefined;
 declare const MAIN_WINDOW_VITE_NAME: string;
@@ -156,6 +157,11 @@ async function startDesktop(): Promise<void> {
     userHome: homedir,
     hostId: `electron:${applicationInstanceId}`,
     credentialRuntime,
+    builtinSkillRoot: resolveDesktopBuiltinSkillRoot({
+      appPath: app.getAppPath(),
+      isPackaged: app.isPackaged,
+      resourcesPath: process.resourcesPath,
+    }),
   });
   const windowsById = new Map<string, BrowserWindow>();
   const nativeThemeController = createDesktopNativeThemeController({
@@ -289,6 +295,7 @@ async function startDesktop(): Promise<void> {
     },
   });
   const resourceBrowser = new DesktopResourceBrowserRuntime({
+    globalAssetRoot: globalStorage.assets,
     shell: shellService,
     host,
     canvas: canvasRuntime,

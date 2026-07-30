@@ -175,7 +175,11 @@ function createWorkspace(): DesktopAgentWorkspaceRuntime & {
     readContextTokenCount: vi.fn(async () => 0),
     clearContext: vi.fn(),
     compactContext: vi.fn(),
-    listSkills: vi.fn(async () => []),
+    readSkillCatalog: vi.fn(async () => ({
+      records: [],
+      diagnostics: [],
+      warnings: [],
+    })),
     listConversations: () => records,
     readConversationEvidence: vi.fn(),
     readConversationProjection: vi.fn(() => ({

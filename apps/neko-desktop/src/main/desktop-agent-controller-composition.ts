@@ -550,10 +550,10 @@ class DefaultDesktopAgentControllerComposition implements DesktopAgentController
     return {
       listSkills: async (context) => {
         bind(context);
-        const skills = await workspace.listSkills(true);
+        const catalog = await workspace.readSkillCatalog(true);
         await context.post({
           type: 'skillsList',
-          skills: skills.map((skill) => ({
+          skills: catalog.records.map((skill) => ({
             name: skill.name,
             description: skill.description,
             source: skill.source.kind,

@@ -418,6 +418,7 @@ function managedContentLabel(kind: NekoManagedContentKind): string {
 export interface IGlobalStorageLayout {
   readonly root: string;
   readonly database: string;
+  readonly assets: string;
   readonly journals: string;
   readonly logs: string;
   readonly skills: string;
@@ -489,6 +490,7 @@ export function resolveGlobalStorageLayout(homedir: string): IGlobalStorageLayou
   return {
     root,
     database: join(root, 'neko.db'),
+    assets: join(root, 'assets'),
     journals: join(root, 'journals'),
     logs: join(root, 'logs'),
     skills: join(homedir, '.agents', 'skills'),

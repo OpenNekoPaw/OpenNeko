@@ -27,6 +27,12 @@ import type {
 import type { DesktopWorkspaceResolution } from './desktop-workspace-registry';
 import { resolveDesktopWorkspaceContentLocator } from './desktop-content-locator';
 import { readDesktopConfirmedEntityResources } from './desktop-entity-resource-query';
+import type {
+  DesktopHomeAssetFacet,
+  DesktopHomeAssetItem,
+  DesktopHomeAssetSort,
+  DesktopHomeSortDirection,
+} from '../shared/home-management-contract';
 
 const FILE_SCAN_LIMIT = 5_000;
 const EXCLUDED_DIRECTORIES = new Set([
@@ -65,13 +71,32 @@ export type DesktopResourceBrowserReadSourceOptions = Pick<
   'workspace' | 'host'
 >;
 
+export async function searchDesktopGlobalAssetCatalog(input: {
+  readonly globalAssetRoot: string;
+  readonly files: NekoHostPorts['files'];
+  readonly facet: DesktopHomeAssetFacet;
+  readonly query: string;
+  readonly sortBy: DesktopHomeAssetSort;
+  readonly sortDirection: DesktopHomeSortDirection;
+  readonly limit: number;
+}): Promise<readonly DesktopHomeAssetItem[]> {
+  await input.files.createDirectory(input.globalAssetRoot);
+  const normalizedQuery = input.query.trim().toLocaleLowerCase();
+  const items =
+    input.facet === 'libraries'
+      ? await readGlobalLibraries(input, normalizedQuery)
+      : await readGlobalAssets(input);
+  return items
+    .sort((left, right) => compareGlobalAssetItems(left, right, input))
+    .slice(0, input.limit);
+}
+
 export function createDesktopResourceBrowserReadSource(
   options: DesktopResourceBrowserReadSourceOptions,
 ): ResourceBrowserProjectionSource {
   return {
     files: {
-      list: async ({ query, limit }) =>
-        listWorkspaceProjection(options, query, limit, false),
+      list: async ({ query, limit }) => listWorkspaceProjection(options, query, limit, false),
       children: async ({ parent, limit }) =>
         readResourceBrowserContentChildren({
           absoluteRoot: options.workspace.workspacePath,
@@ -323,6 +348,82 @@ function classifyContent(locatorPath: string, mediaOnly: boolean) {
       ? (['read', ...(previewKind ? (['preview'] as const) : []), 'bind'] as const)
       : (['read', 'bind', ...(previewKind ? (['preview'] as const) : [])] as const),
   };
+}
+
+async function readGlobalLibraries(
+  input: Parameters<typeof searchDesktopGlobalAssetCatalog>[0],
+  normalizedQuery: string,
+): Promise<DesktopHomeAssetItem[]> {
+  const entries = await input.files.readDirectory(input.globalAssetRoot);
+  const libraries = entries.filter(
+    (entry) =>
+      entry.type === 'directory' &&
+      (normalizedQuery.length === 0 || entry.name.toLocaleLowerCase().includes(normalizedQuery)),
+  );
+  return Promise.all(
+    libraries.map(async (entry) => {
+      const stat = await input.files.stat(path.join(input.globalAssetRoot, entry.name));
+      return {
+        id: `library:${entry.name}`,
+        label: entry.name,
+        description: '.',
+        kind: 'library' as const,
+        mediaType: 'directory',
+        ...(stat.modifiedAtMs === undefined
+          ? {}
+          : { modifiedAt: new Date(stat.modifiedAtMs).toISOString() }),
+        availability: 'available' as const,
+      };
+    }),
+  );
+}
+
+async function readGlobalAssets(
+  input: Parameters<typeof searchDesktopGlobalAssetCatalog>[0],
+): Promise<DesktopHomeAssetItem[]> {
+  const entries = await searchResourceBrowserContentTree({
+    absoluteRoot: input.globalAssetRoot,
+    locatorPrefix: '',
+    query: input.query,
+    limit: FILE_SCAN_LIMIT,
+    rootDepth: -1,
+    excludedDirectoryNames: EXCLUDED_DIRECTORIES,
+    files: input.files,
+    joinAbsolutePath: path.join,
+    relativePath: path.relative,
+    classify: (locatorPath) => classifyContent(locatorPath, true),
+  });
+  return entries.flatMap((entry) => {
+    if (entry.role !== 'content') return [];
+    if (entry.locator.kind !== 'workspace-file') {
+      throw new Error('Desktop global asset catalog produced a non-file locator.');
+    }
+    return [
+      {
+        id: `asset:${entry.locator.path}`,
+        label: entry.label,
+        ...(entry.description ? { description: entry.description } : {}),
+        kind: 'asset' as const,
+        ...(entry.metadata?.mediaType ? { mediaType: entry.metadata.mediaType } : {}),
+        ...(entry.metadata?.modifiedAt ? { modifiedAt: entry.metadata.modifiedAt } : {}),
+        availability: entry.availability,
+      },
+    ];
+  });
+}
+
+function compareGlobalAssetItems(
+  left: DesktopHomeAssetItem,
+  right: DesktopHomeAssetItem,
+  input: Pick<Parameters<typeof searchDesktopGlobalAssetCatalog>[0], 'sortBy' | 'sortDirection'>,
+): number {
+  const primary =
+    input.sortBy === 'name'
+      ? left.label.localeCompare(right.label)
+      : Date.parse(left.modifiedAt ?? '1970-01-01T00:00:00.000Z') -
+        Date.parse(right.modifiedAt ?? '1970-01-01T00:00:00.000Z');
+  const directed = input.sortDirection === 'ascending' ? primary : -primary;
+  return directed || left.label.localeCompare(right.label) || left.id.localeCompare(right.id);
 }
 
 function detectDesktopPreviewContentKind(
