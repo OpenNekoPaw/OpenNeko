@@ -19,15 +19,15 @@ const removedFeaturePackagePaths = [
 ];
 const removedProductContractRules = [
   {
-    file: 'packages/neko-agent/packages/agent-types/src/extension-command-contract.ts',
+    file: 'packages/neko-agent-types/src/extension-command-contract.ts',
     tokens: ['NEKO_PUPPET_EXTENSION_ID'],
   },
   {
-    file: 'packages/neko-agent/packages/agent-types/src/external-processor.ts',
+    file: 'packages/neko-agent-types/src/external-processor.ts',
     tokens: ["'market'", 'registerMarketExternalProcessorPackages'],
   },
   {
-    file: 'packages/neko-agent/packages/agent/src/provider/provider-card-runtime.ts',
+    file: 'packages/neko-agent-runtime/src/provider/provider-card-runtime.ts',
     tokens: ["layer: 'market'", 'marketRegistration', 'readonly market:'],
   },
   {
@@ -183,8 +183,8 @@ const removedProductContractFiles = [
   'packages/neko-tools/packages/extension/src/bootstrap/bootstrapMediaLsp.ts',
   'packages/neko-tools/packages/extension/src/media-lsp/index.ts',
   'packages/neko-tools/packages/extension/src/media-diff/services/analyzers/TimelineDiffAnalyzer.ts',
-  'packages/neko-tools/packages/webview/src/components/MediaDiff/TimelineDiffViewer.tsx',
-  'packages/neko-agent/packages/agent/src/runtime/turn/timeline-context-runtime.ts',
+  'packages/neko-tools-webview/src/components/MediaDiff/TimelineDiffViewer.tsx',
+  'packages/neko-agent-runtime/src/runtime/turn/timeline-context-runtime.ts',
   'packages/neko-types/src/generated/scene.engine.ts',
   'packages/neko-types/src/generated/__tests__/scene-contract.test.ts',
   'packages/neko-types/src/generated/__fixtures__/scene-character-v0.json',

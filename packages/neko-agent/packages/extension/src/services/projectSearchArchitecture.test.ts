@@ -27,7 +27,7 @@ describe('project cache/search architecture guards', () => {
 
   it('keeps Webview mention UI free of cache file paths and filesystem APIs', () => {
     const source = readRepoFile(
-      'packages/neko-agent/packages/webview/src/components/ChatView/InputArea/MentionMenu.tsx',
+      'packages/neko-agent-webview/src/components/ChatView/InputArea/MentionMenu.tsx',
     );
 
     expect(source).not.toMatch(/from ['"]vscode['"]/);

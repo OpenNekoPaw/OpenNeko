@@ -25,11 +25,11 @@ describe('ablation Evaluation ownership boundary', () => {
 
   it('poisons the removed Agent and CLI experiment surfaces', async () => {
     await expect(
-      fs.access(join(REPO_ROOT, 'packages/neko-agent/packages/agent/src/experiment')),
+      fs.access(join(REPO_ROOT, 'packages/neko-agent-runtime/src/experiment')),
     ).rejects.toThrow();
 
     const agentRoot = await fs.readFile(
-      join(REPO_ROOT, 'packages/neko-agent/packages/agent/src/index.ts'),
+      join(REPO_ROOT, 'packages/neko-agent-runtime/src/index.ts'),
       'utf8',
     );
     expect(agentRoot).not.toMatch(/from ['"]\.\/experiment/u);

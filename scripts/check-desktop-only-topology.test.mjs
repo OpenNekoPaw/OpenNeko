@@ -35,7 +35,7 @@ describe('desktop-only topology guard', () => {
         'apps/neko-tui/package.json',
         'apps/neko-vscode/package.json',
       ],
-      nestedPackagePaths: ['packages/neko-agent/packages/webview/package.json'],
+      nestedPackagePaths: ['packages/neko-agent-webview/package.json'],
       productionSourceEntries: [
         {
           path: 'packages/neko-chara/src/host-vscode/index.ts',

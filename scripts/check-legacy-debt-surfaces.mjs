@@ -915,7 +915,16 @@ function isTestPath(file) {
 }
 
 function isAgentGovernedPath(file) {
-  return file.startsWith('packages/neko-agent/') || file.startsWith('apps/neko-tui/');
+  return (
+    file.startsWith('packages/neko-agent/') ||
+    file.startsWith('packages/neko-agent-runtime/') ||
+    file.startsWith('packages/neko-agent-test-utils/') ||
+    file.startsWith('packages/neko-agent-types/') ||
+    file.startsWith('packages/neko-agent-webview/') ||
+    file.startsWith('packages/neko-ai-sdk/') ||
+    file.startsWith('packages/neko-platform/') ||
+    file.startsWith('apps/neko-tui/')
+  );
 }
 
 function getPackageName(file) {
@@ -1361,7 +1370,7 @@ function runSelfTest() {
     },
     {
       value: classifySurface(
-        'packages/neko-preview/packages/webview/src/Viewer.tsx',
+        'packages/neko-preview-webview/src/Viewer.tsx',
         'const fallbackLabel = "Open";',
         'fallback',
       ),
@@ -1393,7 +1402,7 @@ function runSelfTest() {
     },
     {
       value: classifySurface(
-        'packages/neko-agent/packages/agent/src/skill/legacy-skill-migration.ts',
+        'packages/neko-agent-runtime/src/skill/legacy-skill-migration.ts',
         "const LEGACY_MANIFEST_FILE = 'manifest.json';",
         'legacy',
       ),
@@ -1440,6 +1449,20 @@ function runSelfTest() {
     {
       value: buildQualityGate([
         {
+          file: 'packages/neko-agent-test-utils/src/poison-paths.ts',
+          packageName: '@neko-agent/test-utils',
+          lineNumber: 1,
+          term: 'legacy',
+          text: 'direct legacy Agent Webview Markdown parse',
+          isTest: false,
+          semanticClass: 'migrate-now',
+        },
+      ]).status,
+      expected: 'passed',
+    },
+    {
+      value: buildQualityGate([
+        {
           file: 'packages/neko-types/src/project-file-io/save-session.ts',
           packageName: '@neko/shared',
           lineNumber: 1,
@@ -1454,7 +1477,7 @@ function runSelfTest() {
     {
       value: buildQualityGate([
         {
-          file: 'packages/neko-agent/packages/agent/src/runtime.ts',
+          file: 'packages/neko-agent-runtime/src/runtime.ts',
           packageName: '@neko/agent',
           lineNumber: 1,
           term: 'legacy',
@@ -1475,7 +1498,7 @@ function runSelfTest() {
     },
     {
       value: classifySurface(
-        'packages/neko-canvas/packages/webview/src/components/content/creatorPresentation.ts',
+        'packages/neko-canvas-webview/src/components/content/creatorPresentation.ts',
         'referenceMedia: semanticRow.referenceMedia || summarizeLegacyReferenceMedia(data),',
         'legacy',
       ),

@@ -293,7 +293,7 @@ describe('optimization ownership gate', () => {
       kind: 'prompt-routing',
       promptId: 'base-prompt',
       contractHash: HASH,
-      targetFile: 'packages/neko-agent/packages/agent/src/prompt/system-prompt-composer.ts',
+      targetFile: 'packages/neko-agent-runtime/src/prompt/system-prompt-composer.ts',
     };
     expect(routeOptimizationOwnership(routingIntake, target)).toMatchObject({
       disposition: 'blocked',
@@ -317,7 +317,7 @@ describe('optimization ownership gate', () => {
         kind: 'prompt-guidance',
         promptId: 'base-prompt',
         contractHash: HASH,
-        targetFile: 'packages/neko-agent/packages/agent/src/prompt/system-prompt-composer.ts',
+        targetFile: 'packages/neko-agent-runtime/src/prompt/system-prompt-composer.ts',
       }),
     ).toMatchObject({
       disposition: 'candidate-eligible',
@@ -328,7 +328,7 @@ describe('optimization ownership gate', () => {
         kind: 'prompt-routing',
         promptId: 'base-prompt',
         contractHash: HASH,
-        targetFile: 'packages/neko-agent/packages/agent/src/prompt/system-prompt-composer.ts',
+        targetFile: 'packages/neko-agent-runtime/src/prompt/system-prompt-composer.ts',
       }),
     ).toMatchObject({ disposition: 'handoff' });
   });

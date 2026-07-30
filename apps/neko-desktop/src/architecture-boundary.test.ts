@@ -204,17 +204,17 @@ describe('Desktop architecture boundaries', () => {
     const canvasRoot = readFileSync(
       path.resolve(
         sourceRoot,
-        '../../../packages/neko-canvas/packages/webview/src/root.tsx',
+        '../../../packages/neko-canvas-webview/src/root.tsx',
       ),
       'utf8',
     );
 
     for (const sourcePattern of [
-      '../../packages/neko-agent/packages/webview/src/**/*.{ts,tsx}',
+      '../../packages/neko-agent-webview/src/**/*.{ts,tsx}',
       '../../packages/neko-assets/src/resource-browser/**/*.{ts,tsx}',
-      '../../packages/neko-canvas/packages/webview/src/**/*.{ts,tsx}',
-      '../../packages/neko-cut/packages/webview/src/**/*.{ts,tsx}',
-      '../../packages/neko-preview/packages/webview/src/**/*.{ts,tsx}',
+      '../../packages/neko-canvas-webview/src/**/*.{ts,tsx}',
+      '../../packages/neko-cut-webview/src/**/*.{ts,tsx}',
+      '../../packages/neko-preview-webview/src/**/*.{ts,tsx}',
     ]) {
       expect(tailwindConfig).toContain(sourcePattern);
     }
@@ -234,15 +234,15 @@ describe('Desktop architecture boundaries', () => {
     expect(rendererConfig).toMatch(/dedupe:\s*\[[^\]]*'react'[^\]]*'zustand'/s);
     expect(rendererConfig).toContain("find: /^@neko-canvas\\/webview\\/root$/");
     expect(rendererConfig).toContain(
-      "'../../packages/neko-canvas/packages/webview/src/root.tsx'",
+      "'../../packages/neko-canvas-webview/src/root.tsx'",
     );
     expect(rendererConfig).toContain("find: /^@neko\\/webview\\/root$/");
     expect(rendererConfig).toContain(
-      "'../../packages/neko-cut/packages/webview/src/root.tsx'",
+      "'../../packages/neko-cut-webview/src/root.tsx'",
     );
     expect(rendererConfig).toContain("find: /^@neko\\/preview-webview\\/root$/");
     expect(rendererConfig).toContain(
-      "'../../packages/neko-preview/packages/webview/src/root/index.tsx'",
+      "'../../packages/neko-preview-webview/src/root/index.tsx'",
     );
     expect(rendererConfig).toContain("find: /^neko-assets\\/resource-browser\\/root$/");
     expect(rendererConfig).toContain(

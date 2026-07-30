@@ -32,21 +32,21 @@
       "testScope": "src/**/*.test.{ts,tsx}"
     },
     {
-      "path": "packages/neko-agent/packages/agent",
-      "owner": "packages/neko-agent/packages/agent",
+      "path": "packages/neko-agent-runtime",
+      "owner": "packages/neko-agent-runtime",
       "mode": "self",
       "sourceScope": "src/**/*.{ts,tsx}",
       "testScope": "src/**/*.test.{ts,tsx}"
     },
     {
-      "path": "packages/neko-agent/packages/agent-types",
+      "path": "packages/neko-agent-types",
       "owner": "packages/neko-agent",
       "mode": "aggregated",
       "sourceScope": "src/**/*.{ts,tsx}",
       "testScope": "packages/agent-types/src/**/*.test.{ts,tsx}"
     },
     {
-      "path": "packages/neko-agent/packages/ai-sdk",
+      "path": "packages/neko-ai-sdk",
       "owner": "packages/neko-agent",
       "mode": "aggregated",
       "sourceScope": "src/**/*.{ts,tsx}",
@@ -60,22 +60,22 @@
       "testScope": "src/**/*.test.{ts,tsx}"
     },
     {
-      "path": "packages/neko-agent/packages/platform",
+      "path": "packages/neko-platform",
       "owner": "packages/neko-agent",
       "mode": "aggregated",
       "sourceScope": "src/**/*.{ts,tsx}",
       "testScope": "packages/platform/src/**/*.test.{ts,tsx}"
     },
     {
-      "path": "packages/neko-agent/packages/webview",
-      "owner": "packages/neko-agent/packages/webview",
+      "path": "packages/neko-agent-webview",
+      "owner": "packages/neko-agent-webview",
       "mode": "self",
       "sourceScope": "src/**/*.{ts,tsx}",
       "testScope": "src/**/*.test.{ts,tsx}"
     },
     {
-      "path": "packages/neko-agent/test-utils",
-      "owner": "packages/neko-agent/test-utils",
+      "path": "packages/neko-agent-test-utils",
+      "owner": "packages/neko-agent-test-utils",
       "mode": "self",
       "sourceScope": "src/**/*.{ts,tsx}",
       "testScope": "src/**/*.test.{ts,tsx}"
@@ -88,8 +88,8 @@
       "testScope": "src/**/*.test.{ts,tsx}"
     },
     {
-      "path": "packages/neko-canvas/packages/domain",
-      "owner": "packages/neko-canvas/packages/domain",
+      "path": "packages/neko-canvas-domain",
+      "owner": "packages/neko-canvas-domain",
       "mode": "self",
       "sourceScope": "src/**/*.{ts,tsx}",
       "testScope": "src/**/*.test.{ts,tsx}"
@@ -102,8 +102,8 @@
       "testScope": "packages/extension/src/**/*.test.{ts,tsx}"
     },
     {
-      "path": "packages/neko-canvas/packages/webview",
-      "owner": "packages/neko-canvas/packages/webview",
+      "path": "packages/neko-canvas-webview",
+      "owner": "packages/neko-canvas-webview",
       "mode": "self",
       "sourceScope": "src/**/*.{ts,tsx}",
       "testScope": "src/**/*.test.{ts,tsx}"
@@ -144,8 +144,8 @@
       "testScope": "src/**/*.test.{ts,tsx}"
     },
     {
-      "path": "packages/neko-cut/packages/domain",
-      "owner": "packages/neko-cut/packages/domain",
+      "path": "packages/neko-cut-domain",
+      "owner": "packages/neko-cut-domain",
       "mode": "self",
       "sourceScope": "src/**/*.{ts,tsx}",
       "testScope": "src/**/*.test.{ts,tsx}"
@@ -158,15 +158,15 @@
       "testScope": "packages/extension/src/**/*.test.{ts,tsx}"
     },
     {
-      "path": "packages/neko-cut/packages/node",
+      "path": "packages/neko-cut-node",
       "owner": "packages/neko-cut",
       "mode": "aggregated",
       "sourceScope": "src/**/*.{ts,tsx}",
       "testScope": "packages/node/src/**/*.test.{ts,tsx}"
     },
     {
-      "path": "packages/neko-cut/packages/webview",
-      "owner": "packages/neko-cut/packages/webview",
+      "path": "packages/neko-cut-webview",
+      "owner": "packages/neko-cut-webview",
       "mode": "self",
       "sourceScope": "src/**/*.{ts,tsx}",
       "testScope": "src/**/*.test.{ts,tsx}"
@@ -207,14 +207,14 @@
       "testScope": "packages/extension and webview tests"
     },
     {
-      "path": "packages/neko-preview/packages/contracts",
-      "owner": "packages/neko-preview/packages/contracts",
+      "path": "packages/neko-preview-contracts",
+      "owner": "packages/neko-preview-contracts",
       "mode": "self",
       "sourceScope": "src/**/*.ts",
       "testScope": "src/**/*.test.ts"
     },
     {
-      "path": "packages/neko-preview/packages/webview",
+      "path": "packages/neko-preview-webview",
       "owner": "packages/neko-preview",
       "mode": "aggregated",
       "sourceScope": "src/**/*.{ts,tsx}",
@@ -235,8 +235,8 @@
       "testScope": "src and package child tests"
     },
     {
-      "path": "packages/neko-tools/packages/contracts",
-      "owner": "packages/neko-tools/packages/contracts",
+      "path": "packages/neko-tools-contracts",
+      "owner": "packages/neko-tools-contracts",
       "mode": "self",
       "sourceScope": "src/**/*.ts",
       "testScope": "src/**/*.test.ts"
@@ -249,7 +249,7 @@
       "testScope": "packages/extension/src/**/*.test.{ts,tsx}"
     },
     {
-      "path": "packages/neko-tools/packages/webview",
+      "path": "packages/neko-tools-webview",
       "owner": "packages/neko-tools",
       "mode": "aggregated",
       "sourceScope": "src/**/*.{ts,tsx}",

@@ -15,8 +15,8 @@ describe('creative workbench StatusBar boundary', () => {
     );
     const extension = readRepoSource('packages/neko-cut/packages/extension/src/extension.ts');
     const statusBar = readRepoSource('packages/neko-cut/packages/extension/src/views/statusBar.ts');
-    const app = readRepoSource('packages/neko-cut/packages/webview/src/App.tsx');
-    const css = readRepoSource('packages/neko-cut/packages/webview/src/index.css');
+    const app = readRepoSource('packages/neko-cut-webview/src/App.tsx');
+    const css = readRepoSource('packages/neko-cut-webview/src/index.css');
 
     expect(provider).toMatch(/type: 'cut:export-task'/);
     expect(provider).toMatch(/type: 'cut:error'/);
@@ -42,7 +42,7 @@ describe('creative workbench StatusBar boundary', () => {
     const provider = readRepoSource(
       'packages/neko-canvas/packages/extension/src/editor/canvasEditorProvider.ts',
     );
-    const app = readRepoSource('packages/neko-canvas/packages/webview/src/CanvasApp.tsx');
+    const app = readRepoSource('packages/neko-canvas-webview/src/CanvasApp.tsx');
 
     expect(statusBar).toMatch(/class CanvasStatusBar/);
     expect(statusBar).toMatch(/projectionSummary/);

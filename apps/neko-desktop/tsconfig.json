@@ -6,9 +6,9 @@
     "moduleResolution": "bundler",
     "baseUrl": ".",
     "paths": {
-      "@/*": ["../../packages/neko-agent/packages/webview/src/*"],
-      "@neko-agent/types": ["../../packages/neko-agent/packages/agent-types/src/index.ts"],
-      "@neko-agent/types/*": ["../../packages/neko-agent/packages/agent-types/src/*"],
+      "@/*": ["../../packages/neko-agent-webview/src/*"],
+      "@neko-agent/types": ["../../packages/neko-agent-types/src/index.ts"],
+      "@neko-agent/types/*": ["../../packages/neko-agent-types/src/*"],
       "@neko/shared": ["../../packages/neko-types/src/index.ts"],
       "@neko/shared/*": ["../../packages/neko-types/src/*"]
     },

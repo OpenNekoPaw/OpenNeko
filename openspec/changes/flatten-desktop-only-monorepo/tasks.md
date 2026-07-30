@@ -9,11 +9,11 @@
 
 ## 2. First-Level Package Topology
 
-- [ ] 2.1 Move Agent runtime, types, AI SDK, platform, Webview and test-utils packages to their
+- [x] 2.1 Move Agent runtime, types, AI SDK, platform, Webview and test-utils packages to their
       first-level target directories without changing npm package identities.
-- [ ] 2.2 Move Canvas domain/Webview, Cut domain/Node/Webview, Preview contracts/Webview and Tools
+- [x] 2.2 Move Canvas domain/Webview, Cut domain/Node/Webview, Preview contracts/Webview and Tools
       contracts/Webview packages to first-level target directories.
-- [ ] 2.3 Update workspace globs, path-based root scripts, TypeScript/build/test configuration and
+- [x] 2.3 Update workspace globs, path-based root scripts, TypeScript/build/test configuration and
       Desktop dependencies for the moved packages.
 - [ ] 2.4 Run package-resolution, moved-package typecheck/build and focused producer/consumer tests;
       prove no nested workspace package remains.

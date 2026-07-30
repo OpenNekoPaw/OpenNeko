@@ -10,7 +10,7 @@ const files = {
   extension: 'packages/neko-canvas/packages/extension/src/extension.ts',
   provider: 'packages/neko-canvas/packages/extension/src/editor/canvasEditorProvider.ts',
   workspace:
-    'packages/neko-canvas/packages/webview/src/components/playback/PlaybackWorkspace.tsx',
+    'packages/neko-canvas-webview/src/components/playback/PlaybackWorkspace.tsx',
 };
 
 const sources = Object.fromEntries(

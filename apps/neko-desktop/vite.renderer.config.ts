@@ -16,21 +16,21 @@ export default defineConfig({
         find: /^@neko-canvas\/webview\/root$/,
         replacement: path.resolve(
           import.meta.dirname,
-          '../../packages/neko-canvas/packages/webview/src/root.tsx',
+          '../../packages/neko-canvas-webview/src/root.tsx',
         ),
       },
       {
         find: /^@neko\/webview\/root$/,
         replacement: path.resolve(
           import.meta.dirname,
-          '../../packages/neko-cut/packages/webview/src/root.tsx',
+          '../../packages/neko-cut-webview/src/root.tsx',
         ),
       },
       {
         find: /^@neko\/preview-webview\/root$/,
         replacement: path.resolve(
           import.meta.dirname,
-          '../../packages/neko-preview/packages/webview/src/root/index.tsx',
+          '../../packages/neko-preview-webview/src/root/index.tsx',
         ),
       },
       {
@@ -51,21 +51,21 @@ export default defineConfig({
         find: /^@neko-agent\/webview\/root$/,
         replacement: path.resolve(
           import.meta.dirname,
-          '../../packages/neko-agent/packages/webview/src/root.tsx',
+          '../../packages/neko-agent-webview/src/root.tsx',
         ),
       },
       {
         find: /^@neko-agent\/types$/,
         replacement: path.resolve(
           import.meta.dirname,
-          '../../packages/neko-agent/packages/agent-types/src/index.ts',
+          '../../packages/neko-agent-types/src/index.ts',
         ),
       },
       {
         find: /^@neko-agent\/types\//,
         replacement: `${path.resolve(
           import.meta.dirname,
-          '../../packages/neko-agent/packages/agent-types/src',
+          '../../packages/neko-agent-types/src',
         )}/`,
       },
       {
@@ -86,7 +86,7 @@ export default defineConfig({
         find: /^@\//,
         replacement: `${path.resolve(
           import.meta.dirname,
-          '../../packages/neko-agent/packages/webview/src',
+          '../../packages/neko-agent-webview/src',
         )}/`,
       },
     ],

@@ -58,7 +58,7 @@
     },
     {
       "id": "REQ-LCDR-005",
-      "pathPattern": "packages/neko-canvas/packages/webview/src/components/**/*.tsx",
+      "pathPattern": "packages/neko-canvas-webview/src/components/**/*.tsx",
       "ledgerEntryId": "LCDR-005",
       "allowRemovedEntry": true
     },
@@ -90,12 +90,12 @@
     },
     {
       "id": "REQ-LCDR-010",
-      "pathPattern": "packages/neko-preview/packages/webview/src/**/*.tsx",
+      "pathPattern": "packages/neko-preview-webview/src/**/*.tsx",
       "ledgerEntryId": "LCDR-010"
     },
     {
       "id": "REQ-LCDR-025",
-      "pathPattern": "packages/neko-preview/packages/webview/src/**/*Viewer.tsx",
+      "pathPattern": "packages/neko-preview-webview/src/**/*Viewer.tsx",
       "ledgerEntryId": "LCDR-025",
       "allowRemovedEntry": true
     },
@@ -265,7 +265,7 @@
       "validation": {
         "commands": [
           "pnpm --dir packages/neko-types exec vitest run src/types/__tests__/canvas.test.ts src/types/__tests__/canvas-playback.test.ts",
-          "pnpm --dir packages/neko-canvas/packages/webview exec vitest run src/components/playback/CanvasPlaybackController.test.tsx",
+          "pnpm --dir packages/neko-canvas-webview exec vitest run src/components/playback/CanvasPlaybackController.test.tsx",
           "pnpm --dir packages/neko-canvas exec vitest run packages/extension/src/editor/narrativePreviewBridge.test.ts",
           "rg -i \"childIds|legacy anchor|generatedImage|generatedVideoUrl|legacy-entry|deriveLegacyCanvasPlaybackRoute|routeCandidates\\\\?:|route candidates are absent\" packages/neko-types/src/types/canvas*.ts packages/neko-canvas/packages"
         ]
@@ -291,10 +291,10 @@
       "status": "removed",
       "owner": "neko-canvas",
       "paths": [
-        "packages/neko-canvas/packages/webview/src/components/connections/*.tsx",
-        "packages/neko-canvas/packages/webview/src/components/content/*.tsx",
-        "packages/neko-canvas/packages/webview/src/components/nodes/*.tsx",
-        "packages/neko-canvas/packages/webview/src/CanvasApp.tsx",
+        "packages/neko-canvas-webview/src/components/connections/*.tsx",
+        "packages/neko-canvas-webview/src/components/content/*.tsx",
+        "packages/neko-canvas-webview/src/components/nodes/*.tsx",
+        "packages/neko-canvas-webview/src/CanvasApp.tsx",
         "packages/neko-types/src/types/reference-resolution.ts"
       ],
       "replacement": "Port-based connection geometry, container.childPlacements, composable content metadata, and explicit default/placeholder renderers.",
@@ -303,28 +303,28 @@
         "commands": [
           "pnpm --dir packages/neko-types test -- --run src/nkc/__tests__/validator.test.ts src/nkc/__tests__/codec.test.ts src/nkc/__tests__/migrator.test.ts src/nkc/__tests__/layered-canvas.test.ts src/utils/__tests__/storyboardPlanner.test.ts src/types/__tests__/canvas-playback.test.ts",
           "pnpm --dir packages/neko-types exec vitest run src/types/__tests__/reference-resolution.test.ts",
-          "pnpm --dir packages/neko-canvas/packages/webview exec vitest run src/utils/connectionProjection.test.ts src/stores/__tests__/canvasStore.test.ts src/stores/__tests__/clipboardStore.test.ts src/utils/canvasAgentOperations.test.ts src/utils/containerActions.test.ts src/utils/nodeFactory.test.ts src/components/content/NodeContentDispatcher.test.ts src/components/playback/CanvasPlaybackController.test.tsx src/utils/renderRefreshTiering.test.ts",
-          "pnpm --dir packages/neko-canvas/packages/webview build",
-          "rg -n \"LegacyNodeRenderer|renderLegacy|Legacy path|legacy-node|FallbackNode|FallbackNodeProps|fallback card|fallback cards|renderFallbackBlock|fallbackExt|fallbackLabel\" packages/neko-canvas/packages/webview/src",
-          "rg -n \"sourceAnchor|targetAnchor|GalleryCell|data\\.cells|galleryMigration|migrateGalleryV1ToContainer|legacy anchor|Legacy cells path|getLegacyAnchorPoint|legacy-group-childIds|getLegacyContainerChildIds\" packages/neko-canvas/packages/webview/src packages/neko-types/src/types/canvas.ts packages/neko-types/src/utils/canvasLayered.ts packages/neko-types/src/nkc/migrator.ts"
+          "pnpm --dir packages/neko-canvas-webview exec vitest run src/utils/connectionProjection.test.ts src/stores/__tests__/canvasStore.test.ts src/stores/__tests__/clipboardStore.test.ts src/utils/canvasAgentOperations.test.ts src/utils/containerActions.test.ts src/utils/nodeFactory.test.ts src/components/content/NodeContentDispatcher.test.ts src/components/playback/CanvasPlaybackController.test.tsx src/utils/renderRefreshTiering.test.ts",
+          "pnpm --dir packages/neko-canvas-webview build",
+          "rg -n \"LegacyNodeRenderer|renderLegacy|Legacy path|legacy-node|FallbackNode|FallbackNodeProps|fallback card|fallback cards|renderFallbackBlock|fallbackExt|fallbackLabel\" packages/neko-canvas-webview/src",
+          "rg -n \"sourceAnchor|targetAnchor|GalleryCell|data\\.cells|galleryMigration|migrateGalleryV1ToContainer|legacy anchor|Legacy cells path|getLegacyAnchorPoint|legacy-group-childIds|getLegacyContainerChildIds\" packages/neko-canvas-webview/src packages/neko-types/src/types/canvas.ts packages/neko-types/src/utils/canvasLayered.ts packages/neko-types/src/nkc/migrator.ts"
         ]
       },
       "stalePatterns": [
         {
           "pattern": "LegacyNodeRenderer|renderLegacy|Legacy path|legacy-node|FallbackNode|FallbackNodeProps|fallback card|fallback cards|renderFallbackBlock|fallbackExt|fallbackLabel|sourceAnchor|targetAnchor|GalleryCell|data\\.cells|galleryMigration|migrateGalleryV1ToContainer|legacy anchor|Legacy cells path|getLegacyAnchorPoint|legacy-group-childIds|getLegacyContainerChildIds",
           "paths": [
-            "packages/neko-canvas/packages/webview/src/CanvasApp.tsx",
-            "packages/neko-canvas/packages/webview/src/components/connections/**/*.ts",
-            "packages/neko-canvas/packages/webview/src/components/connections/**/*.tsx",
-            "packages/neko-canvas/packages/webview/src/components/content/**/*.ts",
-            "packages/neko-canvas/packages/webview/src/components/content/**/*.tsx",
-            "packages/neko-canvas/packages/webview/src/components/nodes/**/*.ts",
-            "packages/neko-canvas/packages/webview/src/components/nodes/**/*.tsx",
-            "packages/neko-canvas/packages/webview/src/hooks/useVSCodeMessages.ts",
-            "packages/neko-canvas/packages/webview/src/stores/**/*.ts",
-            "packages/neko-canvas/packages/webview/src/utils/canvasAgentOperations.ts",
-            "packages/neko-canvas/packages/webview/src/utils/containerActions.ts",
-            "packages/neko-canvas/packages/webview/src/utils/nodeFactory.ts",
+            "packages/neko-canvas-webview/src/CanvasApp.tsx",
+            "packages/neko-canvas-webview/src/components/connections/**/*.ts",
+            "packages/neko-canvas-webview/src/components/connections/**/*.tsx",
+            "packages/neko-canvas-webview/src/components/content/**/*.ts",
+            "packages/neko-canvas-webview/src/components/content/**/*.tsx",
+            "packages/neko-canvas-webview/src/components/nodes/**/*.ts",
+            "packages/neko-canvas-webview/src/components/nodes/**/*.tsx",
+            "packages/neko-canvas-webview/src/hooks/useVSCodeMessages.ts",
+            "packages/neko-canvas-webview/src/stores/**/*.ts",
+            "packages/neko-canvas-webview/src/utils/canvasAgentOperations.ts",
+            "packages/neko-canvas-webview/src/utils/containerActions.ts",
+            "packages/neko-canvas-webview/src/utils/nodeFactory.ts",
             "packages/neko-types/src/types/canvas.ts",
             "packages/neko-types/src/types/reference-resolution.ts",
             "packages/neko-types/src/utils/canvasLayered.ts",
@@ -430,9 +430,9 @@
       "status": "removed",
       "owner": "neko-canvas",
       "paths": [
-        "packages/neko-canvas/packages/webview/src/components/common/InlineControls.tsx",
-        "packages/neko-canvas/packages/webview/src/components/content/index.ts",
-        "packages/neko-canvas/packages/webview/src/components/media/ImageViewer.tsx"
+        "packages/neko-canvas-webview/src/components/common/InlineControls.tsx",
+        "packages/neko-canvas-webview/src/components/content/index.ts",
+        "packages/neko-canvas-webview/src/components/media/ImageViewer.tsx"
       ],
       "replacement": "Current Canvas components import concrete modules directly and use existing media players/content dispatchers.",
       "removeCondition": "No current imports or package entrypoints reference the deleted files.",
@@ -440,16 +440,16 @@
       "validation": {
         "commands": [
           "pnpm check:unused",
-          "rg -w \"InlineControls|InlineSelect|InlineInput|InlineTextarea|ImageViewer\" packages/neko-canvas/packages/webview/src || true",
-          "rg \"components/content/index\" packages/neko-canvas/packages/webview/src || true"
+          "rg -w \"InlineControls|InlineSelect|InlineInput|InlineTextarea|ImageViewer\" packages/neko-canvas-webview/src || true",
+          "rg \"components/content/index\" packages/neko-canvas-webview/src || true"
         ]
       },
       "stalePatterns": [
         {
           "pattern": "\\bInlineControls\\b|\\bInlineSelect\\b|\\bInlineInput\\b|\\bInlineTextarea\\b|\\bImageViewer\\b|components/content/index",
           "paths": [
-            "packages/neko-canvas/packages/webview/src/**/*.ts",
-            "packages/neko-canvas/packages/webview/src/**/*.tsx"
+            "packages/neko-canvas-webview/src/**/*.ts",
+            "packages/neko-canvas-webview/src/**/*.tsx"
           ]
         }
       ]
@@ -564,14 +564,14 @@
       "status": "active",
       "owner": "neko-preview",
       "paths": [
-        "packages/neko-preview/packages/webview/src/**/*.tsx",
-        "packages/neko-preview/packages/webview/vite.config.ts"
+        "packages/neko-preview-webview/src/**/*.tsx",
+        "packages/neko-preview-webview/vite.config.ts"
       ],
       "replacement": "defaultLabel, placeholderText, emptyState, or unavailableLabel naming for display defaults.",
       "removeCondition": "Presentation-only fallback helpers are renamed; remaining fallback occurrences handle actual file/runtime failure.",
       "validation": {
         "commands": [
-          "rg -i \"fallback\" packages/neko-preview/packages/webview/src packages/neko-preview/packages/webview/vite.config.ts",
+          "rg -i \"fallback\" packages/neko-preview-webview/src packages/neko-preview-webview/vite.config.ts",
           "pnpm --filter @neko-preview/webview test"
         ]
       }
@@ -586,18 +586,18 @@
       "owner": "neko-preview",
       "paths": [
         "packages/neko-preview/packages/extension/src/types/document-messages.ts",
-        "packages/neko-preview/packages/webview/src/shared/document-types.ts",
-        "packages/neko-preview/packages/webview/src/docx/DocxViewer.tsx",
-        "packages/neko-preview/packages/webview/src/cbz/CbzViewer.tsx",
-        "packages/neko-preview/packages/webview/src/epub/EpubViewer.tsx",
-        "packages/neko-preview/packages/webview/src/pdf/PdfViewer.tsx"
+        "packages/neko-preview-webview/src/shared/document-types.ts",
+        "packages/neko-preview-webview/src/docx/DocxViewer.tsx",
+        "packages/neko-preview-webview/src/cbz/CbzViewer.tsx",
+        "packages/neko-preview-webview/src/epub/EpubViewer.tsx",
+        "packages/neko-preview-webview/src/pdf/PdfViewer.tsx"
       ],
       "replacement": "Canonical document:data payload uses a required webview URL produced by document preview providers.",
       "removeCondition": "Removed after all current document providers were confirmed to send payload.url.",
       "validation": {
         "commands": [
-          "pnpm --dir packages/neko-preview/packages/webview build",
-          "rg -n \"payload\\.data|Base64-encoded file content|loadDocx\\(|loadCbz\\(|loadEpub\\(|loadPdf\\(|Legacy: load DOCX|Load CBZ from base64|load EPUB from base64\" packages/neko-preview/packages/extension/src packages/neko-preview/packages/webview/src -g \"*.ts\" -g \"*.tsx\""
+          "pnpm --dir packages/neko-preview-webview build",
+          "rg -n \"payload\\.data|Base64-encoded file content|loadDocx\\(|loadCbz\\(|loadEpub\\(|loadPdf\\(|Legacy: load DOCX|Load CBZ from base64|load EPUB from base64\" packages/neko-preview/packages/extension/src packages/neko-preview-webview/src -g \"*.ts\" -g \"*.tsx\""
         ]
       },
       "stalePatterns": [
@@ -605,8 +605,8 @@
           "pattern": "payload\\.data|Base64-encoded file content|loadDocx\\(|loadCbz\\(|loadEpub\\(|loadPdf\\(|Legacy: load DOCX|Load CBZ from base64|load EPUB from base64",
           "paths": [
             "packages/neko-preview/packages/extension/src/**/*.ts",
-            "packages/neko-preview/packages/webview/src/**/*.ts",
-            "packages/neko-preview/packages/webview/src/**/*.tsx"
+            "packages/neko-preview-webview/src/**/*.ts",
+            "packages/neko-preview-webview/src/**/*.tsx"
           ]
         }
       ]
@@ -650,7 +650,7 @@
       "owner": "neko-preview",
       "paths": [
         "packages/neko-preview/packages/extension/src/types/document-messages.ts",
-        "packages/neko-preview/packages/webview/src/shared/document-types.ts",
+        "packages/neko-preview-webview/src/shared/document-types.ts",
         "packages/neko-preview/packages/extension/src/providers/document/documentProviderHelper.ts"
       ],
       "replacement": "Webview document:sendToAi messages carry a required semantic DocumentLocator; Extension enriches source/range without inferring locator from context.",
@@ -659,7 +659,7 @@
         "commands": [
           "pnpm --dir packages/neko-preview compile:extension",
           "pnpm --dir packages/neko-preview exec vitest run packages/extension/src/__tests__/documentProtocol.test.ts",
-          "rg -n \"buildLegacyLocator|locator\\?: DocumentLocator|payload\\.locator\\?\" packages/neko-preview/packages/extension/src/providers/document/documentProviderHelper.ts packages/neko-preview/packages/extension/src/types/document-messages.ts packages/neko-preview/packages/webview/src/shared/document-types.ts"
+          "rg -n \"buildLegacyLocator|locator\\?: DocumentLocator|payload\\.locator\\?\" packages/neko-preview/packages/extension/src/providers/document/documentProviderHelper.ts packages/neko-preview/packages/extension/src/types/document-messages.ts packages/neko-preview-webview/src/shared/document-types.ts"
         ]
       },
       "stalePatterns": [
@@ -668,7 +668,7 @@
           "paths": [
             "packages/neko-preview/packages/extension/src/providers/document/documentProviderHelper.ts",
             "packages/neko-preview/packages/extension/src/types/document-messages.ts",
-            "packages/neko-preview/packages/webview/src/shared/document-types.ts"
+            "packages/neko-preview-webview/src/shared/document-types.ts"
           ]
         }
       ]

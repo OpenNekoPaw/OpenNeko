@@ -8,9 +8,9 @@ const repoRoot = process.cwd();
 const checkedRoots = [
   'packages/neko-types/src',
   'packages/neko-agent/packages/extension/src',
-  'packages/neko-agent/packages/agent-types/src',
-  'packages/neko-agent/packages/agent/src',
-  'packages/neko-agent/packages/platform/src',
+  'packages/neko-agent-types/src',
+  'packages/neko-agent-runtime/src',
+  'packages/neko-platform/src',
   'packages/neko-chara/src',
   'packages/neko-generation/src',
   'packages/neko-quality/src',
@@ -24,9 +24,9 @@ const checkedRoots = [
 
 const featurePackageRoots = [
   'packages/neko-agent/packages/extension/src',
-  'packages/neko-agent/packages/agent-types/src',
-  'packages/neko-agent/packages/agent/src',
-  'packages/neko-agent/packages/platform/src',
+  'packages/neko-agent-types/src',
+  'packages/neko-agent-runtime/src',
+  'packages/neko-platform/src',
   'packages/neko-chara/src',
   'packages/neko-generation/src',
   'packages/neko-quality/src',
@@ -146,7 +146,7 @@ function runSelfTest() {
     },
     {
       name: 'processor cache root fails',
-      file: 'packages/neko-agent/packages/agent-types/src/new-processor.ts',
+      file: 'packages/neko-agent-types/src/new-processor.ts',
       content: "const allowedOutputRoots = ['resourceCache'];\n",
       expectedSymbols: ["'resourceCache'"],
     },

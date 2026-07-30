@@ -135,9 +135,9 @@
   - `packages/neko-client/src/`
   - package-owned L0 contracts
   - `packages/neko-ui/src/`
-  - `packages/neko-cut/packages/webview/src/components/`
-  - `packages/neko-cut/packages/webview/src/hooks/`
-  - `packages/neko-agent/packages/platform/src/`
+  - `packages/neko-cut-webview/src/components/`
+  - `packages/neko-cut-webview/src/hooks/`
+  - `packages/neko-platform/src/`
 - 新功能涉及组件样式、主题、国际化、日志、错误/诊断、配置、路径、文件保存/读写、资源授权、缓存、DTO 或跨包契约时，必须先做公共基础能力审计：判断应复用现有公共入口、更新公共契约/adapter，还是确实保留在 owning package。
 - 禁止在功能包内并行实现 package-local design system、theme token、i18n runtime、logger/error 类型、项目文件 IO、cache manager、path resolver、Engine HTTP/WS client 或无 owner 的共享 DTO；确需新增公共能力时优先进入 `@neko/shared`、`@neko/ui`、owning package L0 contract 或既有 domain service。
 - 若决定不更新公共层，必须在 OpenSpec、PR 或交付说明中说明原因、边界、后续提取条件和验证命令。

@@ -6,19 +6,19 @@ import { dirname, join, relative, resolve } from 'node:path';
 const repoRoot = process.cwd();
 
 const packageRoots = {
-  webview: 'packages/neko-agent/packages/webview/src',
+  webview: 'packages/neko-agent-webview/src',
   extension: 'packages/neko-agent/packages/extension/src',
-  agent: 'packages/neko-agent/packages/agent/src',
+  agent: 'packages/neko-agent-runtime/src',
   generation: 'packages/neko-generation/src',
-  platform: 'packages/neko-agent/packages/platform/src',
-  'ai-sdk': 'packages/neko-agent/packages/ai-sdk/src',
-  'agent-types': 'packages/neko-agent/packages/agent-types/src',
+  platform: 'packages/neko-platform/src',
+  'ai-sdk': 'packages/neko-ai-sdk/src',
+  'agent-types': 'packages/neko-agent-types/src',
   tui: 'apps/neko-tui/src',
   assets: 'packages/neko-assets/src',
 };
 
 const packageDirs = {
-  webview: 'packages/neko-agent/packages/webview',
+  webview: 'packages/neko-agent-webview',
   extension: 'packages/neko-agent/packages/extension',
 };
 
@@ -26,15 +26,15 @@ const hostAgnosticScopes = new Set(['agent', 'generation', 'platform', 'ai-sdk',
 const agentContentAccessResidualScopes = new Set(['extension', 'agent', 'agent-types', 'webview']);
 
 const retiredTranscriptAuthorityFiles = [
-  'packages/neko-agent/packages/agent/src/session/conversation-manager.ts',
-  'packages/neko-agent/packages/agent/src/session/conversation-resume-storage.ts',
-  'packages/neko-agent/packages/agent/src/session/history-hydration.ts',
-  'packages/neko-agent/packages/agent/src/session/journal-projection.ts',
-  'packages/neko-agent/packages/agent/src/session/journal-reader.ts',
-  'packages/neko-agent/packages/agent/src/session/journal-storage.ts',
-  'packages/neko-agent/packages/agent/src/session/journal-writer.ts',
-  'packages/neko-agent/packages/agent/src/session/node-sqlite-conversation-storage.ts',
-  'packages/neko-agent/packages/agent/src/session/sqlite-conversation-storage.ts',
+  'packages/neko-agent-runtime/src/session/conversation-manager.ts',
+  'packages/neko-agent-runtime/src/session/conversation-resume-storage.ts',
+  'packages/neko-agent-runtime/src/session/history-hydration.ts',
+  'packages/neko-agent-runtime/src/session/journal-projection.ts',
+  'packages/neko-agent-runtime/src/session/journal-reader.ts',
+  'packages/neko-agent-runtime/src/session/journal-storage.ts',
+  'packages/neko-agent-runtime/src/session/journal-writer.ts',
+  'packages/neko-agent-runtime/src/session/node-sqlite-conversation-storage.ts',
+  'packages/neko-agent-runtime/src/session/sqlite-conversation-storage.ts',
   'packages/neko-agent/packages/extension/src/chat/extensionConversationResume.ts',
   'apps/neko-tui/src/tui/host/tui-sqlite-conversation-storage.ts',
 ];
@@ -53,15 +53,15 @@ const retiredTranscriptAuthoritySymbols = [
 
 const retiredLegacyChatFiles = [
   'packages/neko-assets/src/services/LLMClassifier.ts',
-  'packages/neko-agent/packages/platform/src/service/internal-chat-runtime.ts',
-  'packages/neko-agent/packages/ai-sdk/src/bridge/index.ts',
-  'packages/neko-agent/packages/ai-sdk/src/bridge/legacy-image-model.ts',
-  'packages/neko-agent/packages/ai-sdk/src/bridge/legacy-video-model.ts',
-  'packages/neko-agent/packages/ai-sdk/src/bridge/legacy-video-model.test.ts',
-  'packages/neko-agent/packages/ai-sdk/src/bridge/legacy-speech-model.ts',
+  'packages/neko-platform/src/service/internal-chat-runtime.ts',
+  'packages/neko-ai-sdk/src/bridge/index.ts',
+  'packages/neko-ai-sdk/src/bridge/legacy-image-model.ts',
+  'packages/neko-ai-sdk/src/bridge/legacy-video-model.ts',
+  'packages/neko-ai-sdk/src/bridge/legacy-video-model.test.ts',
+  'packages/neko-ai-sdk/src/bridge/legacy-speech-model.ts',
   'apps/neko-tui/src/tui/host/node-perception-pipeline.ts',
-  'packages/neko-agent/packages/platform/src/perception/gemini-video-understanding-client.ts',
-  'packages/neko-agent/packages/platform/src/perception/__tests__/gemini-video-understanding-client.test.ts',
+  'packages/neko-platform/src/perception/gemini-video-understanding-client.ts',
+  'packages/neko-platform/src/perception/__tests__/gemini-video-understanding-client.test.ts',
 ];
 
 const retiredLegacyChatSymbols = [
@@ -78,15 +78,15 @@ const retiredLegacyChatSymbols = [
 
 const retiredTimelineProjectionAuthorityFiles = [
   'packages/neko-types/src/types/agent-message.ts',
-  'packages/neko-agent/packages/agent/src/runtime/stream/agent-event-stream-runtime.ts',
-  'packages/neko-agent/packages/agent/src/runtime/stream/agent-stream-state.ts',
-  'packages/neko-agent/packages/agent/src/runtime/stream/agent-turn-timeline-accumulator.ts',
+  'packages/neko-agent-runtime/src/runtime/stream/agent-event-stream-runtime.ts',
+  'packages/neko-agent-runtime/src/runtime/stream/agent-stream-state.ts',
+  'packages/neko-agent-runtime/src/runtime/stream/agent-turn-timeline-accumulator.ts',
   'packages/neko-agent/packages/extension/src/chat/message/agentStreamProcessor.ts',
   'packages/neko-agent/packages/extension/src/debug/streamLifecycleAcceptance.ts',
   'packages/neko-agent/packages/extension/src/debug/streamLifecycleAcceptance.test.ts',
-  'packages/neko-agent/packages/webview/src/handlers/legacy-active-content-handlers.ts',
-  'packages/neko-agent/packages/webview/src/presenters/message-presenter.ts',
-  'packages/neko-agent/packages/webview/src/presenters/tool-result-backfill-presenter.ts',
+  'packages/neko-agent-webview/src/handlers/legacy-active-content-handlers.ts',
+  'packages/neko-agent-webview/src/presenters/message-presenter.ts',
+  'packages/neko-agent-webview/src/presenters/tool-result-backfill-presenter.ts',
 ];
 
 const retiredTimelineProjectionAuthoritySymbols = [
@@ -112,21 +112,21 @@ const retiredTimelineProjectionAcceptanceCommands = [
 
 const retiredPromptFrameworkFiles = [
   'packages/neko-types/src/types/prompt.ts',
-  'packages/neko-agent/packages/agent/src/prompt/prompt-manager.ts',
-  'packages/neko-agent/packages/agent/src/prompt/system-prompt-composer.ts',
-  'packages/neko-agent/packages/agent/src/prompt/system-prompt-composer-types.ts',
-  'packages/neko-agent/packages/agent/src/prompt/context.ts',
-  'packages/neko-agent/packages/agent/src/prompt/composer/module-orchestrator.ts',
-  'packages/neko-agent/packages/agent/src/prompt/registry/module-manifest.ts',
-  'packages/neko-agent/packages/agent/src/prompt/registry/module-registry.ts',
-  'packages/neko-agent/packages/agent/src/prompt/registry/section-cache.ts',
-  'packages/neko-agent/packages/agent/src/prompt/modules/environment/agents-md-module.ts',
-  'packages/neko-agent/packages/agent/src/prompt/modules/environment/subpackage-fragments-module.ts',
-  'packages/neko-agent/packages/agent/src/prompt/modules/ephemeral/creative-version-log-module.ts',
-  'packages/neko-agent/packages/agent/src/prompt/modules/ephemeral/validation-guidance-module.ts',
-  'packages/neko-agent/packages/agent/src/prompt/modules/memory/memory-project-module.ts',
-  'packages/neko-agent/packages/agent/src/prompt/modules/memory/memory-recall-module.ts',
-  'packages/neko-agent/packages/platform/src/service/prompt-manager.ts',
+  'packages/neko-agent-runtime/src/prompt/prompt-manager.ts',
+  'packages/neko-agent-runtime/src/prompt/system-prompt-composer.ts',
+  'packages/neko-agent-runtime/src/prompt/system-prompt-composer-types.ts',
+  'packages/neko-agent-runtime/src/prompt/context.ts',
+  'packages/neko-agent-runtime/src/prompt/composer/module-orchestrator.ts',
+  'packages/neko-agent-runtime/src/prompt/registry/module-manifest.ts',
+  'packages/neko-agent-runtime/src/prompt/registry/module-registry.ts',
+  'packages/neko-agent-runtime/src/prompt/registry/section-cache.ts',
+  'packages/neko-agent-runtime/src/prompt/modules/environment/agents-md-module.ts',
+  'packages/neko-agent-runtime/src/prompt/modules/environment/subpackage-fragments-module.ts',
+  'packages/neko-agent-runtime/src/prompt/modules/ephemeral/creative-version-log-module.ts',
+  'packages/neko-agent-runtime/src/prompt/modules/ephemeral/validation-guidance-module.ts',
+  'packages/neko-agent-runtime/src/prompt/modules/memory/memory-project-module.ts',
+  'packages/neko-agent-runtime/src/prompt/modules/memory/memory-recall-module.ts',
+  'packages/neko-platform/src/service/prompt-manager.ts',
 ];
 
 const retiredPromptFrameworkSymbols = [
@@ -523,7 +523,7 @@ function runSelfTest() {
       scope: 'platform',
       file: resolve(
         repoRoot,
-        'packages/neko-agent/packages/platform/src/media/media-agent-tools.ts',
+        'packages/neko-platform/src/media/media-agent-tools.ts',
       ),
       content:
         'const mediaModels = options?.metadata?.mediaModels;\nreturn argProviderId ?? runtimeTarget?.providerId;\n',
@@ -534,7 +534,7 @@ function runSelfTest() {
       scope: 'platform',
       file: resolve(
         repoRoot,
-        'packages/neko-agent/packages/platform/src/media/media-task-executor.ts',
+        'packages/neko-platform/src/media/media-task-executor.ts',
       ),
       content: 'const providers = new ProviderRegistry(config);\n',
       expectedRuleIds: ['platform-media-no-legacy-chat-registry'],
@@ -592,7 +592,7 @@ function runSelfTest() {
     {
       name: 'designated Pi Skill boundary may recognize Skill locators',
       scope: 'agent',
-      file: resolve(repoRoot, 'packages/neko-agent/packages/agent/src/pi/conversation-runtime.ts'),
+      file: resolve(repoRoot, 'packages/neko-agent-runtime/src/pi/conversation-runtime.ts'),
       content: "const namespace = '/__neko_skills/';\n",
       expectedRuleIds: [],
     },
@@ -779,7 +779,7 @@ function runSelfTest() {
       register: createSelfTestLcdRegister([
         createSelfTestLcdEntry({
           id: 'LCD-009',
-          surface: 'packages/neko-agent/packages/ai-sdk/src/bridge/*',
+          surface: 'packages/neko-ai-sdk/src/bridge/*',
           kind: 'migration-adapter',
           status: 'active',
           sunsetProviders: [],
@@ -792,7 +792,7 @@ function runSelfTest() {
       register: createSelfTestLcdRegister([
         createSelfTestLcdEntry({
           id: 'LCD-009',
-          surface: 'packages/neko-agent/packages/ai-sdk/src/bridge/*',
+          surface: 'packages/neko-ai-sdk/src/bridge/*',
           kind: 'migration-adapter',
           status: 'active',
           sunsetProviders: [
@@ -1296,7 +1296,7 @@ function createSelfTestProviderSunsetRow(overrides) {
     nativeSupportStatus: 'self-test status',
     migrationConditions: ['self-test condition'],
     removalTrigger: 'self-test removal trigger',
-    protectingTests: ['packages/neko-agent/packages/ai-sdk/src/resolve.test.ts'],
+    protectingTests: ['packages/neko-ai-sdk/src/resolve.test.ts'],
     ...overrides,
   };
 }
@@ -1407,9 +1407,9 @@ function isWebviewCompatibilityShimCandidate(relativeFile) {
     return true;
   }
   return [
-    'packages/neko-agent/packages/webview/src/utils/message-helpers.ts',
-    'packages/neko-agent/packages/webview/src/components/ChatView/ToolCallDisplay/media-extractors.ts',
-    'packages/neko-agent/packages/webview/src/components/ChatView/ToolCallDisplay/tool-constants.ts',
+    'packages/neko-agent-webview/src/utils/message-helpers.ts',
+    'packages/neko-agent-webview/src/components/ChatView/ToolCallDisplay/media-extractors.ts',
+    'packages/neko-agent-webview/src/components/ChatView/ToolCallDisplay/tool-constants.ts',
   ].includes(relativeFile);
 }
 
@@ -1500,7 +1500,7 @@ function findPiAgentTurnBridgeLegacyViolations(scope, file, content) {
   const source = stripComments(content);
   if (
     scope === 'platform' &&
-    relativeFile.startsWith('packages/neko-agent/packages/platform/src/media/') &&
+    relativeFile.startsWith('packages/neko-platform/src/media/') &&
     !isTestOrFixtureFile(relativeFile)
   ) {
     const forbidden = [
@@ -1741,8 +1741,8 @@ function findSkillLocatorBoundaryViolations(scope, file, content) {
   const relativeFile = relative(repoRoot, file).replaceAll('\\', '/');
   if (isTestOrFixtureFile(relativeFile)) return [];
   const designatedFiles = new Set([
-    'packages/neko-agent/packages/agent/src/pi/skill-host.ts',
-    'packages/neko-agent/packages/agent/src/pi/conversation-runtime.ts',
+    'packages/neko-agent-runtime/src/pi/skill-host.ts',
+    'packages/neko-agent-runtime/src/pi/conversation-runtime.ts',
   ]);
   if (designatedFiles.has(relativeFile)) return [];
   return [
@@ -1900,6 +1900,6 @@ function pointsIntoPackage(file, specifier, packageKey) {
 }
 
 function fakeFile(scope, path) {
-  const root = packageRoots[scope] ?? 'packages/neko-agent/packages/agent/src';
+  const root = packageRoots[scope] ?? 'packages/neko-agent-runtime/src';
   return resolve(repoRoot, root, path.replace(/^src\//, ''));
 }

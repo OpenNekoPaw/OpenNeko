@@ -160,9 +160,9 @@ generic Job manager 或共享 active runtime singleton。
 ## 验证入口
 
 ```bash
-pnpm --dir packages/neko-agent/packages/agent test:run
+pnpm --dir packages/neko-agent-runtime test:run
 pnpm --dir packages/neko-agent/packages/extension test:run
-pnpm --dir packages/neko-agent/packages/webview test:run
+pnpm --dir packages/neko-agent-webview test:run
 pnpm check:agent-boundaries
 pnpm test:agent:eval
 pnpm build

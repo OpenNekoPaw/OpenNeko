@@ -6,15 +6,15 @@ const REPO_ROOT = join(__dirname, '../../../../../');
 const BOUNDARY_SOURCE_ROOTS = [
   'packages/neko-preview/package.json',
   'packages/neko-preview/packages/extension/src',
-  'packages/neko-preview/packages/webview/src',
+  'packages/neko-preview-webview/src',
   'packages/neko-canvas/packages/extension/src',
-  'packages/neko-canvas/packages/webview/src',
+  'packages/neko-canvas-webview/src',
   'packages/neko-agent/packages/extension/src',
-  'packages/neko-agent/packages/platform/src',
-  'packages/neko-agent/packages/webview/src',
-  'packages/neko-agent/packages/agent/src',
-  'packages/neko-agent/packages/agent-types/src',
-  'packages/neko-agent/packages/ai-sdk/src',
+  'packages/neko-platform/src',
+  'packages/neko-agent-webview/src',
+  'packages/neko-agent-runtime/src',
+  'packages/neko-agent-types/src',
+  'packages/neko-ai-sdk/src',
 ];
 const PROHIBITED_PATTERNS = [
   /neko\.preview\.panoramic(?:Image|Video)/,

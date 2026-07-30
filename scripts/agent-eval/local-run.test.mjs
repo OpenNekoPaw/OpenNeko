@@ -35,8 +35,8 @@ describe('Agent Evaluation local runner', () => {
         suites,
         {
           changedPaths: [
-            'packages/neko-agent/packages/agent/src/session/agent-session.ts',
-            'packages/neko-agent/packages/platform/src/config/config-manager.ts',
+            'packages/neko-agent-runtime/src/session/agent-session.ts',
+            'packages/neko-platform/src/config/config-manager.ts',
             'docs/README.md',
           ],
         },

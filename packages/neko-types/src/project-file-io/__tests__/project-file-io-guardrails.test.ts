@@ -128,7 +128,7 @@ describe('project file I/O guardrails', () => {
 
   it('keeps migrated editor source acquisition on the canonical project:addSource path', () => {
     const migratedProductionFiles = [
-      'packages/neko-canvas/packages/webview/src/hooks/useDragDrop.ts',
+      'packages/neko-canvas-webview/src/hooks/useDragDrop.ts',
       'packages/neko-canvas/packages/extension/src/editor/canvasEditorProvider.ts',
     ];
 
@@ -156,9 +156,7 @@ describe('project file I/O guardrails', () => {
       }
     }
 
-    const durableWebviewSourceAddFiles = [
-      'packages/neko-canvas/packages/webview/src/hooks/useDragDrop.ts',
-    ];
+    const durableWebviewSourceAddFiles = ['packages/neko-canvas-webview/src/hooks/useDragDrop.ts'];
     for (const file of durableWebviewSourceAddFiles) {
       expect(
         readSource(file),
@@ -167,7 +165,7 @@ describe('project file I/O guardrails', () => {
     }
 
     const canonicalSourceAddFiles = [
-      'packages/neko-canvas/packages/webview/src/hooks/useDragDrop.ts',
+      'packages/neko-canvas-webview/src/hooks/useDragDrop.ts',
       'packages/neko-canvas/packages/extension/src/editor/canvasEditorProvider.ts',
     ];
     for (const file of canonicalSourceAddFiles) {
@@ -182,12 +180,12 @@ describe('project file I/O guardrails', () => {
       'packages/neko-canvas/packages/extension/src/editor/canvasEditorProvider.ts',
     );
     const canvasAddActionCatalogSource = readSource(
-      'packages/neko-canvas/packages/webview/src/utils/canvasAddActions.ts',
+      'packages/neko-canvas-webview/src/utils/canvasAddActions.ts',
     );
     const canvasAddActionPopoverSource = readSource(
-      'packages/neko-canvas/packages/webview/src/components/toolbar/CanvasAddActionPopover.tsx',
+      'packages/neko-canvas-webview/src/components/toolbar/CanvasAddActionPopover.tsx',
     );
-    const canvasAppSource = readSource('packages/neko-canvas/packages/webview/src/CanvasApp.tsx');
+    const canvasAppSource = readSource('packages/neko-canvas-webview/src/CanvasApp.tsx');
     expect(canvasSource).toContain('private async resolveCanvasProjectSourceAddRequest(');
     expect(canvasSource).toContain('private createCanvasProjectSourcePickerFilters(');
     expect(canvasSource).toContain('this.createCanvasPickerSourceAddRequest(uri, documentUri');
@@ -221,7 +219,7 @@ describe('project file I/O guardrails', () => {
       /createCanvasDroppedAssetFromProjectAddSource|postMessage\(\{\s*type:\s*'dropAssets'|path:\s*uri\.(?:fsPath|path)/,
     );
     const canvasWebviewMessagesSource = readSource(
-      'packages/neko-canvas/packages/webview/src/hooks/useVSCodeMessages.ts',
+      'packages/neko-canvas-webview/src/hooks/useVSCodeMessages.ts',
     );
     expect(canvasWebviewMessagesSource).not.toMatch(
       /case ['"](?:addMedia|dropMedia|dropAssets)['"]/,

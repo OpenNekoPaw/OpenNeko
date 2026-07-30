@@ -32,7 +32,7 @@ describe('Sharp CommonJS bundle runtime', () => {
     const outputRoot = join(root, 'dist');
     const bundlePath = join(outputRoot, 'extension.cjs');
     const transportPath = resolve(
-      'packages/neko-agent/packages/ai-sdk/src/image-batch-transport.ts',
+      'packages/neko-ai-sdk/src/image-batch-transport.ts',
     );
     await build({
       stdin: {
