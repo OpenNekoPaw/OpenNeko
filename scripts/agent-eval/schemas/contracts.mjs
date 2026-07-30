@@ -13,7 +13,6 @@ export const SCHEMAS = Object.freeze({
   comparison: 'neko.agent-eval.comparison.v2',
   rubric: 'neko.agent-eval.rubric.v2',
   judge: 'neko.agent-eval.judge.v2',
-  repeatedRun: 'neko.agent-eval.repeated-run.v2',
   failureAttribution: 'neko.agent-eval.failure-attribution.v2',
   suiteIndex: 'neko.agent-eval.suite-index.v2',
 });
@@ -819,55 +818,6 @@ const JUDGE_RESULT_SCHEMA = s.object({
   usage: s.object({ inputTokens: s.integer({ min: 0 }), outputTokens: s.integer({ min: 0 }) }),
 });
 
-const REPEATED_RUN_SCHEMA = s.object({
-  schema: s.literal(SCHEMAS.repeatedRun),
-  suiteId: ID,
-  caseId: ID,
-  runId: ID,
-  outcome: s.enum(OUTCOMES),
-  samples: s.array(
-    s.object(
-      {
-        runId: ID,
-        reportId: ID,
-        outcome: s.enum(OUTCOMES),
-        result: PATH,
-        evidence: PATH,
-      },
-      { judge: PATH },
-    ),
-    { minLength: 2, maxLength: 100 },
-  ),
-  passRate: s.number({ min: 0, max: 1 }),
-  scoreDistribution: s.object(
-    { samples: s.integer({ min: 0 }), passRate: s.number({ min: 0, max: 1 }) },
-    { mean: s.number({ min: 0, max: 5 }), variance: s.number({ min: 0 }) },
-  ),
-  hardGates: s.object({
-    passed: s.integer({ min: 0 }),
-    failed: s.integer({ min: 0 }),
-    blocked: s.integer({ min: 0 }),
-  }),
-  latency: s.object({
-    totalMs: s.integer({ min: 0 }),
-    meanMs: s.number({ min: 0 }),
-    p50Ms: s.number({ min: 0 }),
-    p95Ms: s.number({ min: 0 }),
-  }),
-  tokens: s.object({ input: s.integer({ min: 0 }), output: s.integer({ min: 0 }) }),
-  cost: s.union([
-    s.object({ status: s.literal('unavailable') }),
-    s.object({ status: s.literal('available'), totalUsd: s.number({ min: 0 }) }),
-  ]),
-  iterations: s.object({ total: s.integer({ min: 0 }), mean: s.number({ min: 0 }) }),
-  tools: s.object({
-    calls: s.integer({ min: 0 }),
-    successes: s.integer({ min: 0 }),
-    failures: s.integer({ min: 0 }),
-  }),
-  retries: s.object({ count: s.integer({ min: 0 }) }),
-});
-
 const FAILURE_ATTRIBUTION_SCHEMA = s.object({
   schema: s.literal(SCHEMAS.failureAttribution),
   reportId: ID,
@@ -1060,10 +1010,6 @@ export function validateJudgeResult(input) {
     'Judge criterion ids',
   );
   return input;
-}
-
-export function validateRepeatedRun(input) {
-  return validateStrict(input, REPEATED_RUN_SCHEMA, 'repeatedRun');
 }
 
 export function validateFailureAttribution(input) {

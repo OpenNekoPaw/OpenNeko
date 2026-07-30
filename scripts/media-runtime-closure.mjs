@@ -1,15 +1,7 @@
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import {
-  chmodSync,
-  cpSync,
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  realpathSync,
-  writeFileSync,
-} from 'node:fs';
-import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
+import { cpSync, existsSync, readFileSync, realpathSync } from 'node:fs';
+import { basename, isAbsolute, join, relative } from 'node:path';
 
 export const MEDIA_RUNTIME_DESCRIPTOR_SCHEMA = 'openneko.media-runtime.v2';
 
@@ -25,40 +17,6 @@ const CAPABILITY_SECTIONS = Object.freeze([
   'filters',
 ]);
 
-export function stageDevelopmentMediaRuntime(stageRoot, target, environment = process.env) {
-  const ffmpeg = environment.NEKO_FFMPEG_PATH?.trim();
-  const ffprobe = environment.NEKO_FFPROBE_PATH?.trim();
-  if (!ffmpeg || !ffprobe) {
-    throw new Error(
-      'Development media runtime requires explicit NEKO_FFMPEG_PATH and NEKO_FFPROBE_PATH.',
-    );
-  }
-  const license =
-    environment.NEKO_FFMPEG_LICENSE_PATH?.trim() || discoverDevelopmentLicense(ffmpeg);
-  const spdx = environment.NEKO_FFMPEG_LICENSE_SPDX?.trim() || 'GPL-3.0-or-later';
-  const runtimeRoot = join(stageRoot, 'dist', 'media-runtime', target);
-  mkdirSync(join(runtimeRoot, 'bin'), { recursive: true });
-  cpSync(ffmpeg, join(runtimeRoot, 'bin', 'ffmpeg'));
-  cpSync(ffprobe, join(runtimeRoot, 'bin', 'ffprobe'));
-  cpSync(license, join(runtimeRoot, basename(license)));
-  chmodSync(join(runtimeRoot, 'bin', 'ffmpeg'), 0o755);
-  chmodSync(join(runtimeRoot, 'bin', 'ffprobe'), 0o755);
-  const descriptor = createMediaRuntimeDescriptor({
-    target,
-    ffmpeg: join(runtimeRoot, 'bin', 'ffmpeg'),
-    ffprobe: join(runtimeRoot, 'bin', 'ffprobe'),
-    license: join(runtimeRoot, basename(license)),
-    spdx,
-  });
-  writeFileSync(
-    join(runtimeRoot, 'descriptor.json'),
-    `${JSON.stringify(descriptor, null, 2)}\n`,
-    'utf8',
-  );
-  assertStagedMediaRuntime(stageRoot, target, { qualify: true });
-  return Object.freeze({ runtimeRoot, descriptor });
-}
-
 export function stagePackagedMediaRuntime(stageRoot, target, runtimeSourceRoot) {
   if (!runtimeSourceRoot) {
     throw new Error(
@@ -73,7 +31,7 @@ export function stagePackagedMediaRuntime(stageRoot, target, runtimeSourceRoot) 
   return Object.freeze({ runtimeRoot: destination });
 }
 
-export function assertStagedMediaRuntime(stageRoot, target, options = {}) {
+function assertStagedMediaRuntime(stageRoot, target, options = {}) {
   return assertRuntimeDirectory(join(stageRoot, 'dist', 'media-runtime', target), target, options);
 }
 
@@ -283,17 +241,6 @@ function run(executable, args) {
 
 function sha256File(path) {
   return createHash('sha256').update(readFileSync(path)).digest('hex');
-}
-
-function discoverDevelopmentLicense(ffmpegPath) {
-  const prefix = resolve(dirname(ffmpegPath), '..');
-  for (const fileName of ['COPYING.GPLv3', 'LICENSE.md', 'LICENSE']) {
-    const candidate = join(prefix, fileName);
-    if (existsSync(candidate)) return candidate;
-  }
-  throw new Error(
-    'Development FFmpeg license was not found. Set NEKO_FFMPEG_LICENSE_PATH explicitly.',
-  );
 }
 
 function escapeRegExp(value) {

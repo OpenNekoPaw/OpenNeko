@@ -42,9 +42,6 @@ importers:
       '@neko/media':
         specifier: workspace:*
         version: link:packages/neko-media
-      '@neko/shared':
-        specifier: workspace:*
-        version: link:packages/neko-types
       '@vitest/coverage-v8':
         specifier: 4.1.2
         version: 4.1.2(vitest@4.1.2(@opentelemetry/api@1.9.0)(@types/node@25.7.0)(jsdom@27.4.0)(vite@6.4.2(@types/node@25.7.0)(jiti@2.7.0)(terser@5.49.0)(tsx@4.21.0)(yaml@2.9.0)))
@@ -495,18 +492,6 @@ importers:
 
   packages/neko-chara:
     dependencies:
-      '@neko-agent/types':
-        specifier: workspace:*
-        version: link:../neko-agent-types
-      '@neko/content':
-        specifier: workspace:*
-        version: link:../neko-content
-      '@neko/entity':
-        specifier: workspace:*
-        version: link:../neko-entity
-      '@neko/search':
-        specifier: workspace:*
-        version: link:../neko-search
       '@neko/shared':
         specifier: workspace:*
         version: link:../neko-types
@@ -877,9 +862,6 @@ importers:
 
   packages/neko-search:
     dependencies:
-      '@neko/content':
-        specifier: workspace:*
-        version: link:../neko-content
       '@neko/shared':
         specifier: workspace:*
         version: link:../neko-types

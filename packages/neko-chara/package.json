@@ -16,10 +16,6 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@neko-agent/types": "workspace:*",
-    "@neko/content": "workspace:*",
-    "@neko/entity": "workspace:*",
-    "@neko/search": "workspace:*",
     "@neko/shared": "workspace:*"
   },
   "devDependencies": {

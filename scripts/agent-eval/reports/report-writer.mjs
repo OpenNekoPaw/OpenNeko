@@ -8,7 +8,6 @@ import {
   validateEvidence,
   validateFailureAttribution,
   validateJudgeResult,
-  validateRepeatedRun,
   validateResult,
 } from '../schemas/contracts.mjs';
 import { validateAblationDelta } from '../schemas/ablation-contracts.mjs';
@@ -174,17 +173,6 @@ export async function writeEvaluationReport(documents, options = {}) {
   return files;
 }
 
-export async function writeRepeatedRunReport(document, options = {}) {
-  validateRepeatedRun(document);
-  const root = resolve(options.outputRoot ?? DEFAULT_REPORT_ROOT);
-  const relativeFile = `${document.suiteId}/${document.caseId}/${document.runId}/aggregate.json`;
-  const file = resolve(root, relativeFile);
-  assertContained(root, file);
-  await fs.mkdir(dirname(file), { recursive: true });
-  await writeJson(file, document);
-  return { aggregate: file };
-}
-
 export async function writeAblationDeltaReport(document, options = {}) {
   validateAblationDelta(document);
   const root = resolve(options.outputRoot ?? DEFAULT_REPORT_ROOT);
@@ -194,16 +182,6 @@ export async function writeAblationDeltaReport(document, options = {}) {
   await fs.mkdir(dirname(file), { recursive: true });
   await writeJson(file, document);
   return { variantDelta: file };
-}
-
-export async function writeBaselineDiffReport(document, input, options = {}) {
-  validateComparison(document);
-  const root = resolve(options.outputRoot ?? DEFAULT_REPORT_ROOT);
-  const file = resolve(root, `${input.suiteId}/${input.caseId}/${input.runId}/baseline-diff.json`);
-  assertContained(root, file);
-  await fs.mkdir(dirname(file), { recursive: true });
-  await writeJson(file, document);
-  return { baselineDiff: file };
 }
 
 function createSanitizedSummary(input) {

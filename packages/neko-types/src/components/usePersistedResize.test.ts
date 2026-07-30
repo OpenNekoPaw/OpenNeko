@@ -4,12 +4,12 @@ import React, { useEffect } from 'react';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { VSCodeAPI } from '../vscode/types';
 import {
   normalizeResizeState,
   readPersistedResizeState,
   usePersistedResize,
   type PersistedResizeReturn,
+  type ResizeStateStorage,
   writePersistedResizeState,
 } from './useResizable';
 
@@ -154,10 +154,7 @@ describe('usePersistedResize hook persistence', () => {
     });
   });
 
-  function renderHarness(
-    api: Pick<VSCodeAPI, 'getState' | 'setState'>,
-    options: { persistDebounceMs: number },
-  ): void {
+  function renderHarness(api: ResizeStateStorage, options: { persistDebounceMs: number }): void {
     function Harness() {
       latest = usePersistedResize(
         'model.rightDock',
@@ -181,7 +178,7 @@ describe('usePersistedResize hook persistence', () => {
   }
 });
 
-function createStateApi(): Pick<VSCodeAPI, 'getState' | 'setState'> & {
+function createStateApi(): ResizeStateStorage & {
   setState: ReturnType<typeof vi.fn<[unknown], void>>;
 } {
   let state: unknown;

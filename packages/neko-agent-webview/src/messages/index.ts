@@ -42,10 +42,6 @@ export function getAgentHostRuntimeAdapter(): AgentHostRuntimeAdapter {
   return currentAgentHostRuntimeAdapter;
 }
 
-export function postMessage(message: unknown): void {
-  postWebviewMessage(message as AgentWebviewToHostMessage);
-}
-
 function postWebviewMessage(message: AgentWebviewToHostMessage): void {
   currentAgentHostRuntimeAdapter.send(message);
 }

@@ -26,7 +26,7 @@ export const DESKTOP_CANVAS_COPY_TO_PROJECT_MEDIA_LIBRARY_ACTION_ID =
 export const DESKTOP_CANVAS_COPY_TO_GLOBAL_MEDIA_LIBRARY_ACTION_ID =
   'media-library:copy-to-global';
 export const DESKTOP_CANVAS_REGENERATE_ACTION_ID = 'generation:regenerate';
-export const DESKTOP_CANVAS_EDIT_AND_GENERATE_ACTION_ID = 'generation:edit-and-generate';
+const DESKTOP_CANVAS_EDIT_AND_GENERATE_ACTION_ID = 'generation:edit-and-generate';
 
 export interface DesktopCanvasMaterialActionExecutionResult {
   readonly generationProjection?: CanvasGenerationProjectionSnapshot;
