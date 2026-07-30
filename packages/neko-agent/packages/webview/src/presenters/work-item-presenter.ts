@@ -1,7 +1,9 @@
 import type {
+  AgentWorkItem,
   AgentWorkItemStatus,
   AgentWorkItemStep,
   AgentWorkItemStepStatus,
+  Message,
   SubAgentWorkItem,
 } from '@neko-agent/types';
 
@@ -49,6 +51,23 @@ export interface SubAgentCardProjection {
   metaBadges: Array<{ label: string; value: string }>;
   childIds: string[];
   parentAgentId: string;
+}
+
+const ATTENTION_WORK_ITEM_STATUSES = new Set<AgentWorkItemStatus>([
+  'queued',
+  'processing',
+  'failed',
+]);
+
+export function selectConversationAttentionWorkItems(
+  messages: readonly Message[],
+  workItems: readonly AgentWorkItem[],
+): AgentWorkItem[] {
+  if (workItems.length === 0) return [];
+  const linkedIds = new Set(messages.flatMap((message) => message.workItemIds ?? []));
+  return workItems.filter(
+    (item) => !linkedIds.has(item.id) && ATTENTION_WORK_ITEM_STATUSES.has(item.status),
+  );
 }
 
 function projectAgentWorkItemStatus(status: AgentWorkItemStatus): AgentWorkItemStatusProjection {

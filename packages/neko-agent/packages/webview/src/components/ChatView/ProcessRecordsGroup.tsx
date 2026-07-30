@@ -48,8 +48,8 @@ function ProcessRecordsGroupComponent({
   ].filter((part): part is string => typeof part === 'string' && part.length > 0);
 
   return (
-    <div className="agent-message-row group">
-      <div className="flex gap-2 px-2 py-1">
+    <div className="agent-message-row agent-assistant-document-row group">
+      <div className="agent-assistant-document-layout flex gap-2 px-3 py-1">
         <div className="flex-shrink-0 w-5 pt-0.5">
           {isFirst ? (
             <MessageAvatar
@@ -62,10 +62,10 @@ function ProcessRecordsGroupComponent({
             <div className="w-5" />
           )}
         </div>
-        <div className="flex-1 min-w-0 max-w-[85%]">
+        <div className="min-w-0 flex-1">
           <button
             type="button"
-            className="flex w-fit max-w-full items-center gap-1.5 rounded-md border border-[var(--agent-divider)] bg-[var(--agent-bubble-assistant-bg)] px-2 py-1 text-left text-[11px] text-[var(--agent-fg-secondary)] transition-colors hover:bg-[var(--agent-hover)]"
+            className="agent-process-summary flex w-fit max-w-full items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-[11px] text-[var(--agent-fg-secondary)] transition-colors hover:bg-[var(--agent-hover)] focus-visible:outline focus-visible:outline-1 focus-visible:outline-[var(--vscode-focusBorder,var(--agent-accent))]"
             aria-expanded={isExpanded}
             onClick={toggleExpand}
           >

@@ -634,6 +634,29 @@ body {
   background: var(--agent-chat-row-hover);
 }
 
+.agent-assistant-document-row:hover {
+  background: transparent;
+}
+
+.agent-assistant-document-layout {
+  width: 100%;
+}
+
+.agent-assistant-document {
+  width: 100%;
+  padding: 2px 0 6px;
+  color: var(--agent-fg);
+}
+
+.agent-process-summary {
+  border: 0;
+  background: transparent;
+}
+
+.agent-process-summary:hover {
+  color: var(--agent-fg);
+}
+
 .agent-chat-empty-scroll {
   min-height: 0;
 }
@@ -661,6 +684,48 @@ body {
 
 .agent-empty-action-selected {
   background: color-mix(in srgb, var(--agent-accent) 9%, var(--agent-empty-action-bg));
+}
+
+.agent-empty-skill-label {
+  margin: 0 0 6px;
+  color: var(--agent-empty-muted);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 14px;
+}
+
+.agent-empty-skill-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.agent-empty-skill-button {
+  min-width: 0;
+  max-width: 100%;
+  padding: 5px 9px;
+  overflow: hidden;
+  border: 1px solid var(--agent-empty-action-border);
+  border-radius: 7px;
+  background: var(--agent-empty-action-bg);
+  color: var(--agent-fg);
+  cursor: pointer;
+  font-size: 11px;
+  line-height: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-empty-skill-button:hover,
+.agent-empty-skill-button:focus-visible {
+  border-color: var(--agent-empty-action-hover-border);
+  background: var(--agent-empty-action-hover-bg);
+  outline: none;
+}
+
+.agent-empty-skill-button:disabled {
+  cursor: default;
+  opacity: 0.6;
 }
 
 .agent-bubble {
@@ -1414,14 +1479,18 @@ body {
   max-width: 156px;
 }
 
+.agent-model-config-trigger {
+  max-width: 112px;
+}
+
 .agent-control-chip-understand {
   max-width: 132px;
 }
 
 .agent-control-chip-param {
-  justify-content: center;
-  min-width: 56px;
-  max-width: 92px;
+  justify-content: flex-start;
+  min-width: 72px;
+  max-width: 144px;
 }
 
 .agent-control-chip-preset {
@@ -1435,49 +1504,16 @@ body {
   opacity: 0.72;
 }
 
-.agent-generation-params {
+.agent-composer-mode-controls {
   display: inline-flex;
-  align-items: center;
-  justify-content: flex-end;
-  flex-wrap: wrap;
-  min-width: 0;
-  gap: 2px;
-}
-
-.agent-composer-control-row {
-  display: flex;
-  align-items: flex-start;
-  gap: 6px;
-  min-width: 0;
-  padding: 6px 8px 5px;
-}
-
-.agent-composer-control-group {
-  display: inline-flex;
-  min-width: 0;
-  min-height: 30px;
-  align-items: center;
-  gap: 2px;
-  padding: 2px;
-  border: 1px solid var(--agent-composer-rail-border);
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--agent-composer-bg) 58%, transparent);
-}
-
-.agent-composer-control-group-mode {
   flex: 0 1 auto;
-  max-width: min(38%, 220px);
+  align-items: center;
+  min-width: 0;
+  gap: 1px;
 }
 
-.agent-composer-control-group-config {
-  flex: 1 1 0;
-  justify-content: flex-end;
-  overflow: visible;
-}
-
-.agent-composer-control-group-config .agent-generation-params {
-  width: auto;
-  overflow: visible;
+.agent-composer-mode-controls .agent-control-chip-mode {
+  max-width: 76px;
 }
 
 .agent-mode-config-stack {
@@ -1550,12 +1586,6 @@ body {
   max-width: var(--agent-overlay-compact-max-inline-size);
 }
 
-.agent-dropdown-menu-param {
-  width: max-content;
-  min-width: var(--agent-overlay-compact-min-inline-size);
-  max-width: var(--agent-overlay-compact-max-inline-size);
-}
-
 .agent-dropdown-menu-model {
   width: var(--agent-overlay-wide-inline-size);
   min-width: min(320px, calc(100vw - 24px));
@@ -1568,7 +1598,214 @@ body {
 }
 
 .agent-dropdown-menu-mode {
-  width: min(220px, calc(100vw - 24px));
+  width: min(280px, calc(100vw - 24px));
+}
+
+.agent-model-config-dialog {
+  width: min(420px, calc(100vw - 24px));
+  max-width: calc(100vw - 24px);
+  max-height: min(560px, calc(100vh - 32px));
+  padding: 8px;
+}
+
+.agent-generation-params-section {
+  padding: 8px 4px 4px;
+}
+
+.agent-generation-params-section + .agent-generation-params-section {
+  border-top: 1px solid color-mix(in srgb, var(--agent-fg) 8%, transparent);
+}
+
+.agent-generation-params-section-title {
+  margin: 0 0 6px;
+  color: var(--agent-fg-secondary);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.agent-generation-params-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.agent-generation-params-option {
+  min-width: 48px;
+  min-height: 28px;
+  padding: 4px 9px;
+  border: 1px solid color-mix(in srgb, var(--agent-fg) 10%, transparent);
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--agent-bg) 72%, transparent);
+  color: var(--agent-fg-secondary);
+  cursor: pointer;
+  font-size: 11px;
+}
+
+.agent-generation-params-option:hover,
+.agent-generation-params-option:focus-visible {
+  border-color: color-mix(in srgb, var(--agent-accent) 30%, transparent);
+  background: color-mix(in srgb, var(--agent-accent) 9%, transparent);
+  color: var(--agent-fg);
+}
+
+.agent-generation-params-option-selected {
+  border-color: color-mix(in srgb, var(--agent-accent) 42%, transparent);
+  background: color-mix(in srgb, var(--agent-accent) 14%, transparent);
+  color: var(--agent-accent);
+}
+
+.agent-model-config-header {
+  padding: 3px 4px 8px;
+  color: var(--vscode-descriptionForeground);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 14px;
+}
+
+.agent-model-config-tabs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 2px;
+  padding: 3px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--agent-fg) 5%, transparent);
+}
+
+.agent-model-config-tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  min-height: 30px;
+  gap: 4px;
+  padding: 5px 7px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--vscode-descriptionForeground);
+  cursor: pointer;
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.agent-model-config-tab:hover,
+.agent-model-config-tab:focus-visible {
+  color: var(--vscode-foreground);
+  outline: none;
+}
+
+.agent-model-config-tab-selected {
+  border-color: color-mix(in srgb, var(--agent-fg) 8%, transparent);
+  background: var(--agent-overlay-bg);
+  color: var(--vscode-foreground);
+  box-shadow: 0 1px 2px color-mix(in srgb, #000 12%, transparent);
+}
+
+.agent-model-config-secondary-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 2px;
+  margin-top: 6px;
+  padding-bottom: 5px;
+  border-bottom: 1px solid color-mix(in srgb, var(--agent-fg) 8%, transparent);
+}
+
+.agent-model-config-secondary-tab {
+  min-height: 27px;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--vscode-descriptionForeground);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.agent-model-config-secondary-tab:hover,
+.agent-model-config-secondary-tab:focus-visible {
+  background: color-mix(in srgb, var(--agent-accent) 7%, transparent);
+  color: var(--vscode-foreground);
+  outline: none;
+}
+
+.agent-model-config-secondary-tab-selected {
+  background: color-mix(in srgb, var(--agent-accent) 12%, transparent);
+  color: var(--agent-accent);
+}
+
+.agent-model-config-content {
+  min-width: 0;
+  padding-top: 7px;
+}
+
+.agent-model-config-section + .agent-model-config-section {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--agent-menu-separator, var(--agent-divider));
+}
+
+.agent-model-config-section-title {
+  margin: 0;
+  padding: 2px 6px 4px;
+  color: var(--vscode-descriptionForeground);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 14px;
+}
+
+.agent-model-config-radio-list {
+  min-width: 0;
+}
+
+.agent-model-config-radio {
+  position: relative;
+  width: 100%;
+  border: 1px solid transparent;
+  border-radius: var(--agent-menu-row-radius);
+  background: transparent;
+  color: var(--vscode-foreground);
+  cursor: pointer;
+  font-size: 11px;
+  line-height: 16px;
+  text-align: left;
+}
+
+.agent-model-config-radio:hover,
+.agent-model-config-radio:focus-visible {
+  border-color: var(--agent-menu-row-hover-border);
+  background: var(--agent-menu-row-hover-bg);
+  outline: none;
+}
+
+.agent-model-config-radio-selected {
+  border-color: var(--agent-menu-row-selected-border);
+  background: var(--agent-menu-row-selected-bg);
+}
+
+.agent-model-config-radio-muted {
+  color: var(--vscode-descriptionForeground);
+}
+
+.agent-model-config-radio-indicator {
+  position: absolute;
+  left: 8px;
+  width: 8px;
+  height: 8px;
+  border: 1px solid color-mix(in srgb, currentColor 52%, transparent);
+  border-radius: 50%;
+}
+
+.agent-model-config-radio-selected .agent-model-config-radio-indicator {
+  border-color: var(--agent-accent);
+  background: var(--agent-accent);
+  box-shadow: inset 0 0 0 2px var(--agent-overlay-bg);
+}
+
+.agent-model-config-empty {
+  padding: 8px;
+  color: var(--vscode-descriptionForeground);
+  font-size: 11px;
+  line-height: 16px;
 }
 
 .agent-dropdown-item {
@@ -2422,6 +2659,28 @@ body {
 
 .agent-workitem-shelf {
   border-bottom: 1px solid var(--agent-divider);
+  background: color-mix(in srgb, var(--agent-elevated) 42%, transparent);
+}
+
+.agent-workitem-shelf-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+  color: var(--agent-fg-secondary);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 14px;
+}
+
+.agent-workitem-shelf-count {
+  min-width: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--agent-elevated);
+  color: var(--agent-fg);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
 }
 
 .agent-chat-empty-scroll .agent-workitem-shelf {
@@ -2789,6 +3048,35 @@ body {
 
 .agent-inline-header {
   background: color-mix(in srgb, var(--agent-elevated) 94%, transparent);
+}
+
+.agent-produced-outputs {
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px solid var(--agent-divider);
+}
+
+.agent-produced-outputs-title {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 5px;
+  color: var(--agent-fg-secondary);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 14px;
+}
+
+.agent-produced-outputs-content {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+.agent-produced-outputs-content > .space-y-2,
+.agent-produced-outputs-content > .space-y-1\.5 {
+  width: 100%;
 }
 
 .agent-code-block {

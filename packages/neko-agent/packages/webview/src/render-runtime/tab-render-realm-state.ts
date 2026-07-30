@@ -1,4 +1,3 @@
-import type { AgentLlmConfig } from '@neko-agent/types';
 import type { GenCategory, GenerationParams } from '@/components/ChatView/InputArea/types';
 import type {
   MediaModelSelection,
@@ -23,7 +22,6 @@ export interface TabRenderDraftSnapshot extends TabRenderBinding {
   readonly executionMode: TabRenderState['executionMode'];
   readonly generationCategory: GenCategory;
   readonly generationParams: Readonly<GenerationParams>;
-  readonly llmConfig: Readonly<AgentLlmConfig>;
 }
 
 export interface TabRenderRealmState {
@@ -187,10 +185,6 @@ function projectDraft(state: TabRenderState, binding: TabRenderBinding): TabRend
     executionMode: state.executionMode,
     generationCategory: state.generationCategory,
     generationParams: { ...state.generationParams },
-    llmConfig: {
-      ...state.llmConfig,
-      ...(state.llmConfig.advanced ? { advanced: { ...state.llmConfig.advanced } } : {}),
-    },
   };
 }
 
@@ -204,7 +198,6 @@ function toStateUpdate(draft: TabRenderDraftSnapshot): TabRenderStateUpdate {
     executionMode: draft.executionMode,
     generationCategory: draft.generationCategory,
     generationParams: draft.generationParams,
-    llmConfig: draft.llmConfig,
   };
 }
 
@@ -228,17 +221,7 @@ function hasSameDraft(left: TabRenderDraftSnapshot, right: TabRenderDraftSnapsho
     left.generationParams.videoDuration === right.generationParams.videoDuration &&
     left.generationParams.videoFps === right.generationParams.videoFps &&
     left.generationParams.audioDuration === right.generationParams.audioDuration &&
-    left.generationParams.audioType === right.generationParams.audioType &&
-    left.llmConfig.reasoningPreset === right.llmConfig.reasoningPreset &&
-    left.llmConfig.verbosityPreset === right.llmConfig.verbosityPreset &&
-    left.llmConfig.creativityPreset === right.llmConfig.creativityPreset &&
-    left.llmConfig.advanced?.temperature === right.llmConfig.advanced?.temperature &&
-    left.llmConfig.advanced?.topP === right.llmConfig.advanced?.topP &&
-    left.llmConfig.advanced?.maxOutputTokens === right.llmConfig.advanced?.maxOutputTokens &&
-    left.llmConfig.advanced?.reasoningEffort === right.llmConfig.advanced?.reasoningEffort &&
-    left.llmConfig.advanced?.thinkingBudget === right.llmConfig.advanced?.thinkingBudget &&
-    left.llmConfig.advanced?.verbosity === right.llmConfig.advanced?.verbosity &&
-    left.llmConfig.advanced?.serviceTier === right.llmConfig.advanced?.serviceTier
+    left.generationParams.audioType === right.generationParams.audioType
   );
 }
 
@@ -274,7 +257,6 @@ function parseDraft(value: unknown, index: number): TabRenderDraftSnapshot {
       `${path}.generationCategory`,
     ),
     generationParams: parseGenerationParams(value.generationParams, `${path}.generationParams`),
-    llmConfig: parseLlmConfig(value.llmConfig, `${path}.llmConfig`),
   };
 }
 
@@ -305,86 +287,6 @@ function parseGenerationParams(value: unknown, path: string): GenerationParams {
     audioDuration: durationValue(value.audioDuration, `${path}.audioDuration`),
     audioType: enumValue(value.audioType, ['sfx', 'ambient', 'voice'], `${path}.audioType`),
   };
-}
-
-function parseLlmConfig(value: unknown, path: string): AgentLlmConfig {
-  if (!isRecord(value)) throw new Error(`${path} must be an object.`);
-  return {
-    ...(value.reasoningPreset !== undefined
-      ? {
-          reasoningPreset: enumValue(
-            value.reasoningPreset,
-            ['fast', 'balanced', 'deep'],
-            `${path}.reasoningPreset`,
-          ),
-        }
-      : {}),
-    ...(value.verbosityPreset !== undefined
-      ? {
-          verbosityPreset: enumValue(
-            value.verbosityPreset,
-            ['brief', 'standard', 'detailed'],
-            `${path}.verbosityPreset`,
-          ),
-        }
-      : {}),
-    ...(value.creativityPreset !== undefined
-      ? {
-          creativityPreset: enumValue(
-            value.creativityPreset,
-            ['stable', 'creative', 'wild'],
-            `${path}.creativityPreset`,
-          ),
-        }
-      : {}),
-    ...(value.advanced !== undefined
-      ? { advanced: parseAdvanced(value.advanced, `${path}.advanced`) }
-      : {}),
-  };
-}
-
-function parseAdvanced(value: unknown, path: string): NonNullable<AgentLlmConfig['advanced']> {
-  if (!isRecord(value)) throw new Error(`${path} must be an object.`);
-  return {
-    ...optionalNumber(value, 'temperature', path),
-    ...optionalNumber(value, 'topP', path),
-    ...optionalNumber(value, 'maxOutputTokens', path),
-    ...optionalNumber(value, 'thinkingBudget', path),
-    ...(value.reasoningEffort !== undefined
-      ? {
-          reasoningEffort: enumValue(
-            value.reasoningEffort,
-            ['none', 'minimal', 'low', 'medium', 'high', 'xhigh'],
-            `${path}.reasoningEffort`,
-          ),
-        }
-      : {}),
-    ...(value.verbosity !== undefined
-      ? { verbosity: enumValue(value.verbosity, ['low', 'medium', 'high'], `${path}.verbosity`) }
-      : {}),
-    ...(value.serviceTier !== undefined
-      ? {
-          serviceTier: enumValue(
-            value.serviceTier,
-            ['auto', 'default', 'fast', 'flex', 'priority'],
-            `${path}.serviceTier`,
-          ),
-        }
-      : {}),
-  };
-}
-
-function optionalNumber(
-  value: Record<string, unknown>,
-  key: string,
-  path: string,
-): Record<string, number> {
-  const candidate = value[key];
-  if (candidate === undefined) return {};
-  if (typeof candidate !== 'number' || !Number.isFinite(candidate)) {
-    throw new Error(`${path}.${key} must be a finite number.`);
-  }
-  return { [key]: candidate };
 }
 
 function durationValue(value: unknown, path: string): 'auto' | number {

@@ -167,7 +167,7 @@ function ContentBlockRenderer({
           })
         : undefined;
       return (
-        <div className="agent-bubble agent-bubble-assistant block w-fit max-w-full min-w-0 rounded-2xl rounded-tl-md px-2.5 py-1.5 text-[13px] leading-relaxed">
+        <div className="agent-assistant-document min-w-0 text-[13px] leading-relaxed">
           <MarkdownRenderer
             content={projection.content}
             isStreaming={projection.renderStreaming}
@@ -390,7 +390,11 @@ export const MessageItem = memo(function MessageItem({
         </div>
 
         {/* Content */}
-        <div className={`flex-1 min-w-0 max-w-[85%] ${isUser ? 'flex flex-col items-end' : ''}`}>
+        <div
+          className={`flex-1 min-w-0 ${
+            isUser ? 'flex max-w-[85%] flex-col items-end' : 'max-w-none'
+          }`}
+        >
           {/* Header: Role name + timestamp */}
           {!isGrouped && (
             <div className={`flex items-center gap-2 mb-0.5 ${isUser ? 'flex-row-reverse' : ''}`}>
@@ -412,7 +416,7 @@ export const MessageItem = memo(function MessageItem({
 
           {/* User message content - compact bubble */}
           {isUser ? (
-            <div className="agent-bubble agent-bubble-user block w-fit max-w-full min-w-0 rounded-2xl rounded-tr-md px-2.5 py-1.5 text-[13px] leading-relaxed">
+            <div className="agent-bubble agent-bubble-user agent-user-prompt block w-fit max-w-full min-w-0 rounded-2xl rounded-tr-md px-2.5 py-1.5 text-[13px] leading-relaxed">
               {/* Context references for user messages */}
               {message.contextReferences && message.contextReferences.length > 0 && (
                 <div className="mb-1.5 flex flex-wrap gap-1">

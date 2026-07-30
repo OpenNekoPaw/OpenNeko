@@ -202,7 +202,7 @@ export function estimateMessageListItemHeight(item: MessageListProjectionItem | 
 }
 
 function estimateProcessGroupHeight(group: ContentBlockProcessGroupProjection): number {
-  return group.isStreaming ? 64 : 44;
+  return group.isStreaming ? 58 : 38;
 }
 
 function estimateContentBlockProjectionHeight(projection: ContentBlockUiProjection): number {
@@ -225,8 +225,8 @@ function estimateContentBlockHeight(block: ContentBlock): number {
     case 'canvas_lifecycle':
       return 140;
     case 'text': {
-      const contentLines = Math.ceil((block.content?.length ?? 0) / 60);
-      return Math.max(MESSAGE_LIST_ESTIMATED_CONTENT_BLOCK_HEIGHT, contentLines * 20 + 40);
+      const contentLines = Math.ceil((block.content?.length ?? 0) / 72);
+      return Math.max(MESSAGE_LIST_ESTIMATED_CONTENT_BLOCK_HEIGHT, contentLines * 20 + 30);
     }
   }
 }

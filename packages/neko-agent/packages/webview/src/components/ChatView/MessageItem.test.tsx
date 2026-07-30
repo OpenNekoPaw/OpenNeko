@@ -79,6 +79,45 @@ describe('MessageItem identity rendering', () => {
   });
 });
 
+describe('MessageItem document timeline presentation', () => {
+  it('renders assistant Markdown as a document block and keeps the user prompt as a bubble', () => {
+    const { unmount } = renderMessageItem({
+      message: createMessage({
+        role: 'assistant',
+        content: '',
+        contentBlocks: [
+          {
+            id: 'text-1',
+            type: 'text',
+            timestamp: 1,
+            content: 'A long-form assistant answer.',
+          },
+        ],
+      }),
+      identities: defaultIdentities(),
+    });
+
+    expect(
+      screen.getByText('A long-form assistant answer.').closest('.agent-assistant-document'),
+    ).toBeTruthy();
+    expect(
+      screen.getByText('A long-form assistant answer.').closest('.agent-bubble-assistant'),
+    ).toBeNull();
+    expect(screen.queryByText('chat.toolCall.outputs')).toBeNull();
+
+    unmount();
+
+    renderMessageItem({
+      message: createMessage({ role: 'user', content: 'Keep this visually compact.' }),
+      identities: defaultIdentities(),
+    });
+
+    expect(
+      screen.getByText('Keep this visually compact.').closest('.agent-user-prompt'),
+    ).toBeTruthy();
+  });
+});
+
 describe('MessageItem tool aggregation', () => {
   it('does not render Canvas handoff on plain assistant messages when Canvas is available', () => {
     renderMessageItem({
@@ -361,7 +400,7 @@ function renderMessageItem(input: {
   identities: MessageIdentityMap;
   pluginsAvailable?: PluginsAvailable;
 }) {
-  render(
+  return render(
     <MessageActionsProvider pluginsAvailable={input.pluginsAvailable}>
       <MessageItem message={input.message} conversationId="conv-1" identities={input.identities} />
     </MessageActionsProvider>,

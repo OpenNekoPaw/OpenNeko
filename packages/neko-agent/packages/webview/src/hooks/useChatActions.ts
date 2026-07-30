@@ -15,7 +15,6 @@ import {
 import {
   Message,
   type MessageContextReference,
-  type AgentLlmConfig,
   type AgentFlatPurposeModelRefs,
   type AgentModelSlots,
   type MediaUnderstandingModelSelections,
@@ -52,7 +51,6 @@ export interface PendingSendInput {
   fileReferences?: SelectedFileReference[];
   agentModels?: AgentModelSlots;
   understandingModels?: MediaUnderstandingModelSelections;
-  llmConfig?: AgentLlmConfig;
 }
 
 export interface UseChatActionsProps {
@@ -181,9 +179,6 @@ export function useChatActions({
           ...(pendingSessionMode === 'agent' && input?.understandingModels
             ? { understandingModels: input.understandingModels }
             : {}),
-          ...(pendingSessionMode === 'agent' && input?.llmConfig
-            ? { llmConfig: input.llmConfig }
-            : {}),
         });
         return;
       }
@@ -277,9 +272,6 @@ export function useChatActions({
           ? { agentModels: input.agentModels }
           : {}),
         ...(effectiveSessionMode === 'agent' && purposeModels ? { purposeModels } : {}),
-        ...(effectiveSessionMode === 'agent' && input?.llmConfig
-          ? { llmConfig: input.llmConfig }
-          : {}),
         ...(outboundAttachments.length > 0 ? { attachments: outboundAttachments } : {}),
         ...(outboundContextPayloads.length > 0 ? { contextPayloads: outboundContextPayloads } : {}),
         ...(input?.fileReferences && input.fileReferences.length > 0

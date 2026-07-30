@@ -14,16 +14,13 @@ describe('input area presenter', () => {
         disabled: false,
         sessionMode: 'agent',
         conversationKind: 'character-dialogue',
-        availableMediaModelCount: 0,
         currentSessionMediaModelCount: 0,
       }),
     ).toEqual(
       expect.objectContaining({
         canSend: true,
         showSessionModeSelector: false,
-        showChatModelSelector: false,
-        showSessionMediaModelSelector: false,
-        showGenerationParams: false,
+        showModelConfig: false,
         showExecutionModeSelector: false,
         showMediaCallCount: false,
       }),
@@ -42,14 +39,12 @@ describe('input area presenter', () => {
         disabled: false,
         sessionMode: 'agent',
         conversationKind: 'chat',
-        availableMediaModelCount: 1,
         currentSessionMediaModelCount: 0,
       }),
     ).toEqual(
       expect.objectContaining({
         showSessionModeSelector: true,
-        showChatModelSelector: true,
-        showGenerationParams: true,
+        showModelConfig: true,
         showExecutionModeSelector: true,
         showMediaCallCount: true,
       }),
@@ -68,15 +63,12 @@ describe('input area presenter', () => {
         disabled: false,
         sessionMode: 'agent',
         conversationKind: 'chat',
-        availableMediaModelCount: 0,
         currentSessionMediaModelCount: 0,
       }),
     ).toEqual(
       expect.objectContaining({
         showSessionModeSelector: true,
-        showChatModelSelector: true,
-        showSessionMediaModelSelector: false,
-        showGenerationParams: false,
+        showModelConfig: true,
         showExecutionModeSelector: true,
       }),
     );
@@ -95,7 +87,6 @@ describe('input area presenter', () => {
         disabled: false,
         sessionMode: 'agent',
         conversationKind: 'chat',
-        availableMediaModelCount: 0,
         currentSessionMediaModelCount: 0,
       }),
     ).toEqual(
@@ -123,7 +114,6 @@ describe('input area presenter', () => {
         disabled: false,
         sessionMode: 'agent',
         conversationKind: 'chat',
-        availableMediaModelCount: 0,
         currentSessionMediaModelCount: 0,
       }),
     ).toEqual(
@@ -148,14 +138,12 @@ describe('input area presenter', () => {
         disabled: false,
         sessionMode: 'agent',
         conversationKind: 'embody-character',
-        availableMediaModelCount: 1,
         currentSessionMediaModelCount: 0,
       }),
     ).toEqual(
       expect.objectContaining({
         showSessionModeSelector: false,
-        showChatModelSelector: false,
-        showGenerationParams: false,
+        showModelConfig: false,
         showExecutionModeSelector: false,
         showMediaCallCount: false,
       }),

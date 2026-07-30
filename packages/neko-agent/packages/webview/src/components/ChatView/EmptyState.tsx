@@ -1,4 +1,5 @@
 import { useTranslation } from '@/i18n/I18nContext';
+import type { SkillSummary } from './InputArea/types';
 
 export type EmptyStateEntryAction = 'start-chat' | 'generate-assets' | 'roleplay';
 
@@ -7,6 +8,8 @@ interface EmptyStateProps {
   disabled?: boolean;
   onEntryAction?: (action: EmptyStateEntryAction) => void;
   presentation?: 'default' | 'desktop-dock';
+  skills?: readonly SkillSummary[];
+  onSkillSelect?: (skill: SkillSummary) => void;
 }
 
 const EMPTY_STATE_ENTRIES: readonly {
@@ -36,9 +39,12 @@ export function EmptyState({
   disabled = false,
   onEntryAction,
   presentation = 'default',
+  skills = [],
+  onSkillSelect,
 }: EmptyStateProps) {
   const { t } = useTranslation();
   const selectedEntry = EMPTY_STATE_ENTRIES.find((entry) => entry.action === selectedAction);
+  const suggestedSkills = skills.filter((skill) => skill.enabled).slice(0, 4);
 
   if (presentation === 'desktop-dock') {
     return (
@@ -56,6 +62,25 @@ export function EmptyState({
           <p className="mt-1 text-[12px] leading-5 text-[var(--agent-empty-muted)]">
             {t('chat.emptyState.desktopDockDescription')}
           </p>
+          {suggestedSkills.length > 0 ? (
+            <div className="agent-empty-skill-suggestions mt-4">
+              <p className="agent-empty-skill-label">{t('chat.emptyState.desktopDockSkills')}</p>
+              <div className="agent-empty-skill-list">
+                {suggestedSkills.map((skill) => (
+                  <button
+                    key={skill.id}
+                    type="button"
+                    disabled={disabled}
+                    className="agent-empty-skill-button"
+                    title={skill.description}
+                    onClick={() => onSkillSelect?.(skill)}
+                  >
+                    {skill.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
         </section>
       </div>
     );

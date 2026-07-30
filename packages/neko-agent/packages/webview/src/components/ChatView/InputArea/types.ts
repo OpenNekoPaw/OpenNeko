@@ -2,7 +2,7 @@
  * InputArea Types and Constants
  */
 
-import type { AgentFileReference, AgentLlmConfig } from '@neko-agent/types';
+import type { AgentFileReference } from '@neko-agent/types';
 
 // Re-export MessageAttachment from shared
 export type { MessageAttachment, AttachmentType } from '@neko/shared';
@@ -85,27 +85,16 @@ export interface ComposerMenuSelectionState {
   readonly selectedIndex: number;
 }
 
-export type AgentConfigCategory = 'llm' | GenCategory;
+export type ComposerConfigCategory = 'llm' | GenCategory;
+export type ComposerConfigSection = 'model' | 'params';
 
 export type ComposerControlMenuId =
-  | 'session-mode'
-  | 'agent-config-category'
-  | 'agent-model'
-  | 'understanding-model'
-  | 'media-model'
-  | 'generation-ratio'
-  | 'generation-resolution'
-  | 'generation-duration'
-  | 'generation-audio-type'
-  | 'llm-reasoning'
-  | 'llm-verbosity'
-  | 'llm-creativity'
-  | 'execution-mode';
+  'session-mode' | 'composer-config' | 'agent-model' | 'understanding-model' | 'execution-mode';
 
 export interface ComposerControlMenuState {
   readonly openMenu: ComposerControlMenuId | null;
-  readonly agentConfigCategory: AgentConfigCategory;
-  readonly understandingCategory: GenCategory | null;
+  readonly configCategory: ComposerConfigCategory;
+  readonly configSection: ComposerConfigSection;
 }
 
 export interface ComposerMenuState {
@@ -116,20 +105,14 @@ export interface ComposerMenuState {
   readonly queueExpanded: boolean;
 }
 
-export const DEFAULT_AGENT_LLM_CONFIG: Readonly<AgentLlmConfig> = {
-  reasoningPreset: 'balanced',
-  verbosityPreset: 'standard',
-  creativityPreset: 'creative',
-};
-
 export const DEFAULT_COMPOSER_MENU_STATE: Readonly<ComposerMenuState> = {
   slash: { open: false, filter: '', selectedIndex: 0 },
   skill: { open: false, filter: '', selectedIndex: 0 },
   mention: { open: false, filter: '', selectedIndex: 0 },
   controls: {
     openMenu: null,
-    agentConfigCategory: 'llm',
-    understandingCategory: null,
+    configCategory: 'llm',
+    configSection: 'model',
   },
   queueExpanded: false,
 };

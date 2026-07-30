@@ -12,7 +12,6 @@ export interface InputAreaUiProjectionInput {
   disabled: boolean;
   sessionMode: SessionMode;
   conversationKind?: ConversationKind;
-  availableMediaModelCount: number;
   currentSessionMediaModelCount: number;
 }
 
@@ -31,10 +30,8 @@ export interface InputAreaUiProjection {
   showAmbientNodes: boolean;
   showMediaCallCount: boolean;
   showExecutionModeSelector: boolean;
-  showChatModelSelector: boolean;
-  showSessionMediaModelSelector: boolean;
+  showModelConfig: boolean;
   showSessionModeSelector: boolean;
-  showGenerationParams: boolean;
   inputPlaceholderKey:
     'chat.input.placeholder' | 'chat.input.thinkingPlaceholder' | 'chat.input.queuePlaceholder';
   sendTitleKey: 'chat.input.send' | 'chat.input.queue';
@@ -84,7 +81,6 @@ export function projectInputAreaUi(input: InputAreaUiProjectionInput): InputArea
     !isCharacterRoleSession &&
     isAgentMode &&
     hasQueueableTextOnlyContent;
-  const hasMediaModels = input.availableMediaModelCount > 0;
   const hasCurrentSessionMediaModels = input.currentSessionMediaModelCount > 0;
 
   return {
@@ -104,12 +100,8 @@ export function projectInputAreaUi(input: InputAreaUiProjectionInput): InputArea
     showAmbientNodes: hasAmbientNodes,
     showMediaCallCount: !isCharacterRoleSession && input.mediaModelCallCount > 0,
     showExecutionModeSelector: !isCharacterRoleSession && isAgentMode,
-    showChatModelSelector: !isCharacterRoleSession && isAgentMode,
-    showSessionMediaModelSelector:
-      !isCharacterRoleSession && !isAgentMode && hasCurrentSessionMediaModels,
+    showModelConfig: !isCharacterRoleSession && (isAgentMode || hasCurrentSessionMediaModels),
     showSessionModeSelector: !isCharacterRoleSession,
-    showGenerationParams:
-      !isCharacterRoleSession && (isAgentMode ? hasMediaModels : hasCurrentSessionMediaModels),
     inputPlaceholderKey:
       queuedMessageCount > 0
         ? 'chat.input.queuePlaceholder'

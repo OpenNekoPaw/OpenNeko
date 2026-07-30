@@ -24,7 +24,7 @@ vi.mock('@/messages', () => ({
 }));
 
 const translations: Record<string, string> = {
-  'chat.input.control.mode': '模式与模型',
+  'chat.input.control.mode': '模式、模型与参数',
   'chat.input.control.params': '工具参数',
   'chat.input.placeholder': '输入任何问题...',
   'chat.input.thinkingPlaceholder': '正在回答... 请等待或取消后再发送',
@@ -70,6 +70,19 @@ const translations: Record<string, string> = {
   'chat.autoMode': '自动',
   'chat.selectModel': '选择模型',
   'chat.noModelsAvailable': '无可用模型',
+  'chat.modelMenu.trigger': '配置模型',
+  'chat.modelMenu.title': '模型配置',
+  'chat.configMenu.title': '创作配置',
+  'chat.configMenu.category': '内容类型',
+  'chat.configMenu.section': '配置类型',
+  'chat.configMenu.section.model': '模型',
+  'chat.configMenu.section.params': '参数',
+  'chat.configMenu.params.empty': '当前模型没有可配置参数',
+  'chat.modelMenu.primary': '主模型',
+  'chat.modelMenu.understanding': '{category}感知模型',
+  'chat.modelMenu.generation': '{category}生成模型',
+  'chat.modelMenu.behavior': '模型参数',
+  'chat.modelMenu.autoUnderstanding': '自动（{model}）',
   'chat.categoryChat': '对话',
   'chat.modelSource.custom': '自定义',
   'chat.modelConnection.direct': '直连',
@@ -115,6 +128,9 @@ const translations: Record<string, string> = {
   'chat.generation.model.noneShort': '无',
   'chat.generation.model.select': '选择{category}模型',
   'chat.generation.model.unconfigured': '未配置{category}模型',
+  'chat.generation.params.title': '生成参数',
+  'chat.generation.params.trigger': '配置参数',
+  'chat.generation.params.summary': '生成参数：{summary}',
   'chat.mediaUnderstanding.chip': '感知 {model}',
   'chat.mediaUnderstanding.title': '{category}感知：{model}（{status}）',
   'chat.mediaUnderstanding.unavailable': '未配置',
@@ -587,20 +603,13 @@ describe('InputArea composer controls', () => {
       </Harness>,
     );
 
-    const modeGroup = screen.getByRole('group', { name: '模式与模型' });
+    const modeGroup = screen.getByRole('group', { name: '模式、模型与参数' });
     expect(within(modeGroup).getByRole('button', { name: 'Agent' })).toBeTruthy();
-    const paramsGroup = screen.getByRole('group', { name: '工具参数' });
-    expect(within(paramsGroup).getByRole('button', { name: '对话' })).toBeTruthy();
-    expect(within(paramsGroup).getByRole('group', { name: '模型配置' })).toBeTruthy();
-    expect(within(paramsGroup).queryByRole('group', { name: 'Agent 参数' })).toBeNull();
-    expect(within(paramsGroup).queryByRole('button', { name: '思考' })).toBeNull();
-    expect(within(paramsGroup).queryByRole('button', { name: '详略' })).toBeNull();
-    expect(within(paramsGroup).queryByRole('button', { name: '创意' })).toBeNull();
-    expect(within(paramsGroup).queryByText('模型')).toBeNull();
-    expect(within(paramsGroup).queryByText('参数')).toBeNull();
-    expect(within(paramsGroup).getByRole('button', { name: '选择模型' }).textContent).toContain(
-      '无可用模型',
-    );
+    const modelTrigger = within(modeGroup).getByRole('button', {
+      name: '配置模型',
+    });
+    expect(modelTrigger.textContent).toContain('无可用模型');
+    expect(within(modeGroup).queryByRole('button', { name: '配置参数' })).toBeNull();
 
     fireEvent.click(within(modeGroup).getByRole('button', { name: 'Agent' }));
     expect(screen.queryByRole('menuitem', { name: /图片生成/ })).toBeNull();
@@ -608,12 +617,14 @@ describe('InputArea composer controls', () => {
     expect(screen.queryByRole('menuitem', { name: /声音生成/ })).toBeNull();
     expect(screen.queryByRole('menuitem', { name: '生音乐' })).toBeNull();
 
-    fireEvent.click(within(paramsGroup).getByRole('button', { name: '选择模型' }));
-    expect(screen.queryByRole('menu')).toBeNull();
-    expect(screen.queryByRole('menuitem', { name: '自动' })).toBeNull();
+    fireEvent.click(modelTrigger);
+    const dialog = screen.getByRole('dialog', { name: '创作配置' });
+    expect(dialog).toBeTruthy();
+    expect(within(dialog).getByText('无可用模型')).toBeTruthy();
+    expect(screen.queryByText('全选')).toBeNull();
   });
 
-  it('hides legacy LLM/generation labels while preserving mode and params controls', () => {
+  it('hides legacy LLM/generation labels and omits Agent parameters', () => {
     render(
       <Harness>
         <InputArea inputValue="" isThinking={false} onInputChange={vi.fn()} onSend={vi.fn()} />
@@ -621,51 +632,26 @@ describe('InputArea composer controls', () => {
     );
 
     expect(screen.queryByText('生成')).toBeNull();
-    const modeGroup = screen.getByRole('group', { name: '模式与模型' });
-    const paramsGroup = screen.getByRole('group', { name: '工具参数' });
-    expect(modeGroup.className).toContain('agent-composer-control-group-mode');
-    expect(paramsGroup.className).toContain('agent-composer-control-group-config');
+    const modeGroup = screen.getByRole('group', { name: '模式、模型与参数' });
+    expect(modeGroup.className).toContain('agent-composer-mode-controls');
     expect(within(modeGroup).getByRole('button', { name: 'Agent' })).toBeTruthy();
-    const categoryTrigger = within(paramsGroup).getByRole('button', { name: '对话' });
-    const modelTrigger = within(paramsGroup).getByRole('button', { name: '选择模型' });
-    const thinkingTrigger = within(paramsGroup).getByRole('button', { name: '思考' });
-    const verbosityTrigger = within(paramsGroup).getByRole('button', { name: '详略' });
-    const effectTrigger = within(paramsGroup).getByRole('button', { name: '创意' });
-    expect(categoryTrigger).toBeTruthy();
-    expect(within(paramsGroup).getByRole('group', { name: '模型配置' })).toBeTruthy();
-    expect(within(paramsGroup).getByRole('group', { name: 'Agent 参数' })).toBeTruthy();
+    const modelTrigger = within(modeGroup).getByRole('button', { name: '配置模型' });
     expect(modelTrigger).toBeTruthy();
-    expect(thinkingTrigger.textContent).toBe('均衡');
-    expect(verbosityTrigger.textContent).toBe('标准');
-    expect(effectTrigger.textContent).toBe('创意');
-    expect([
-      categoryTrigger.style.color,
-      modelTrigger.style.color,
-      thinkingTrigger.style.color,
-      verbosityTrigger.style.color,
-      effectTrigger.style.color,
-    ]).toEqual([
-      'rgb(16, 163, 127)',
-      'rgb(16, 163, 127)',
-      'rgb(16, 163, 127)',
-      'rgb(16, 163, 127)',
-      'rgb(16, 163, 127)',
-    ]);
-    expect(within(paramsGroup).queryByText('模型')).toBeNull();
-    expect(within(paramsGroup).queryByText('参数')).toBeNull();
-    expect(within(paramsGroup).queryByText('思考 均衡')).toBeNull();
-    expect(within(paramsGroup).queryByText('详略 标准')).toBeNull();
-    expect(within(paramsGroup).queryByText('创意 创意')).toBeNull();
-    expect(within(paramsGroup).queryByRole('button', { name: '审批' })).toBeNull();
+    expect(modelTrigger.textContent).toBe('gpt-5.5');
+    expect(screen.queryByRole('button', { name: '对话' })).toBeNull();
+    expect(screen.queryByRole('button', { name: '思考' })).toBeNull();
+    expect(screen.queryByRole('button', { name: '详略' })).toBeNull();
+    expect(screen.queryByRole('button', { name: '创意' })).toBeNull();
+    expect(within(modeGroup).queryByRole('button', { name: '配置参数' })).toBeNull();
     expect(screen.getByRole('button', { name: '审批' })).toBeTruthy();
-    expect(within(paramsGroup).getByTitle(/gpt-5.5/)).toBeTruthy();
+    expect(within(modeGroup).getByTitle(/gpt-5.5/)).toBeTruthy();
     expect(screen.getByTitle('添加附件').className).toContain('agent-composer-tool-button');
     expect(screen.getByTitle('命令').className).toContain('agent-composer-tool-button');
     expect(document.querySelector('.agent-composer-toolbar')).toBeTruthy();
     expect(document.querySelector('.agent-composer-textarea')).toBeTruthy();
   });
 
-  it('sends Agent LLM presets and the primary model slot from the unified config', () => {
+  it('sends the primary Agent model without composer LLM parameters', () => {
     const onSend = vi.fn();
     render(
       <Harness>
@@ -678,12 +664,7 @@ describe('InputArea composer controls', () => {
       </Harness>,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: '思考' }));
-    fireEvent.click(screen.getByRole('menuitem', { name: '深入' }));
-    fireEvent.click(screen.getByRole('button', { name: '详略' }));
-    fireEvent.click(screen.getByRole('menuitem', { name: '详细' }));
-    fireEvent.click(screen.getByRole('button', { name: '创意' }));
-    fireEvent.click(screen.getByRole('menuitem', { name: '稳定' }));
+    expect(screen.queryByRole('button', { name: '配置参数' })).toBeNull();
     fireEvent.click(screen.getByTitle('发送'));
 
     expect(onSend).toHaveBeenCalledWith(
@@ -696,16 +677,12 @@ describe('InputArea composer controls', () => {
             category: 'llm',
           },
         },
-        llmConfig: {
-          reasoningPreset: 'deep',
-          verbosityPreset: 'detailed',
-          creativityPreset: 'stable',
-        },
       }),
     );
+    expect(onSend.mock.calls[0]?.[0]).not.toHaveProperty('llmConfig');
   }, 30_000);
 
-  it('hides unsupported LLM parameters and trims them from the send payload', () => {
+  it('does not expose Agent parameters even when the model catalog declares controls', () => {
     const onSend = vi.fn();
     const basicChatModels: ChatModelOption[] = [
       {
@@ -734,10 +711,10 @@ describe('InputArea composer controls', () => {
       </Harness>,
     );
 
-    const paramsGroup = screen.getByRole('group', { name: '工具参数' });
-    expect(within(paramsGroup).queryByRole('button', { name: '思考' })).toBeNull();
-    expect(within(paramsGroup).queryByRole('button', { name: '详略' })).toBeNull();
-    expect(within(paramsGroup).getByRole('button', { name: '创意' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: '配置参数' })).toBeNull();
+    expect(screen.queryByRole('radiogroup', { name: '思考' })).toBeNull();
+    expect(screen.queryByRole('radiogroup', { name: '详略' })).toBeNull();
+    expect(screen.queryByRole('radiogroup', { name: '创意' })).toBeNull();
 
     fireEvent.click(screen.getByTitle('发送'));
 
@@ -750,11 +727,9 @@ describe('InputArea composer controls', () => {
             category: 'llm',
           },
         },
-        llmConfig: {
-          creativityPreset: 'creative',
-        },
       }),
     );
+    expect(onSend.mock.calls[0]?.[0]).not.toHaveProperty('llmConfig');
   });
 
   it('omits Agent LLM config when the selected model has no parameter contract', () => {
@@ -826,32 +801,23 @@ describe('InputArea composer controls', () => {
     );
   });
 
-  it('shows Agent parameter field names as menu headers with compact options', () => {
+  it('places Agent mode and one unified model trigger in the composer toolbar', () => {
     render(
       <Harness>
         <InputArea inputValue="" isThinking={false} onInputChange={vi.fn()} onSend={vi.fn()} />
       </Harness>,
     );
 
-    const paramsGroup = screen.getByRole('group', { name: '工具参数' });
-    fireEvent.click(within(paramsGroup).getByRole('button', { name: '创意' }));
-
-    expect(within(paramsGroup).getByRole('button', { name: '创意' }).textContent).toBe('创意');
-    const menu = screen.getByRole('menu');
-    expect(within(menu).getByText('创意', { selector: '.agent-dropdown-header' })).toBeTruthy();
-    const stableOption = screen.getByRole('menuitem', { name: '稳定' });
-    const creativeOption = screen.getByRole('menuitem', { name: '创意' });
-    const wildOption = screen.getByRole('menuitem', { name: '发散' });
-    expect(stableOption.className).toContain('agent-dropdown-item-inline-detail');
-    expect(stableOption.className).not.toContain('agent-dropdown-item-stacked');
-    expect(creativeOption).toBeTruthy();
-    expect(wildOption).toBeTruthy();
-    expect(screen.queryByText('保持一致')).toBeNull();
-    expect(screen.queryByText('默认创作')).toBeNull();
-    expect(screen.queryByRole('menuitem', { name: /创意 ·/ })).toBeNull();
+    expect(document.querySelector('.agent-composer-control-row')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Agent' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: '配置模型' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: '配置参数' })).toBeNull();
+    expect(screen.queryByRole('button', { name: '对话' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /感知模型/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: '创意' })).toBeNull();
   });
 
-  it('does not show stale Agent config after switching to a media mode', () => {
+  it('keeps mode, model, and one parameter popup in the composer toolbar', () => {
     render(
       <Harness sessionMode="image" availableMediaModels={allMediaModels}>
         <InputArea inputValue="" isThinking={false} onInputChange={vi.fn()} onSend={vi.fn()} />
@@ -860,83 +826,118 @@ describe('InputArea composer controls', () => {
 
     expect(screen.queryByRole('group', { name: 'Agent 参数' })).toBeNull();
     expect(screen.queryByRole('button', { name: '思考' })).toBeNull();
-    expect(screen.getByTitle('Image Provider / Model Image')).toBeTruthy();
-    expect(screen.getByRole('button', { name: '画面比例' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: '分辨率' })).toBeTruthy();
+    const composerToolbar = document.querySelector('.agent-composer-toolbar');
+    expect(composerToolbar).toBeTruthy();
+    expect(document.querySelector('.agent-composer-control-row')).toBeNull();
+    expect(
+      within(composerToolbar as HTMLElement).getByRole('button', { name: '配置模型' }).textContent,
+    ).toContain('Model Image');
+    expect(
+      within(composerToolbar as HTMLElement).getByRole('button', { name: '图片' }),
+    ).toBeTruthy();
+    const paramsTrigger = within(composerToolbar as HTMLElement).getByRole('button', {
+      name: '配置参数',
+    });
+    expect(paramsTrigger.textContent).toBe('16:9 · 1080p');
+    expect(screen.queryByRole('button', { name: '画面比例' })).toBeNull();
+    expect(screen.queryByRole('button', { name: '分辨率' })).toBeNull();
+
+    fireEvent.click(paramsTrigger);
+    const dialog = screen.getByRole('dialog', { name: '创作配置' });
+    expect(within(dialog).getByRole('tab', { name: '图片' }).getAttribute('aria-selected')).toBe(
+      'true',
+    );
+    expect(within(dialog).getByRole('tab', { name: '参数' }).getAttribute('aria-selected')).toBe(
+      'true',
+    );
+    expect(within(dialog).getByRole('radiogroup', { name: '画面比例' })).toBeTruthy();
+    expect(within(dialog).getByRole('radiogroup', { name: '分辨率' })).toBeTruthy();
   });
 
-  it('switches Agent model configuration categories without changing the session mode', () => {
+  it('selects exact chat, understanding, generation, auto, and none bindings from one menu', () => {
     const onSessionModeChange = vi.fn();
-    const onGenCategoryChange = vi.fn();
+    const onModelSelect = vi.fn();
+    const onMediaUnderstandingModelSelect = vi.fn();
+    const onMediaModelSelect = vi.fn();
     render(
       <Harness
         availableMediaModels={allMediaModels}
         mediaUnderstandingModels={mediaUnderstandingModels}
         onSessionModeChange={onSessionModeChange}
-        onGenCategoryChange={onGenCategoryChange}
+        onModelSelect={onModelSelect}
+        onMediaUnderstandingModelSelect={onMediaUnderstandingModelSelect}
+        onMediaModelSelect={onMediaModelSelect}
       >
         <InputArea inputValue="" isThinking={false} onInputChange={vi.fn()} onSend={vi.fn()} />
       </Harness>,
     );
 
-    const modeGroup = screen.getByRole('group', { name: '模式与模型' });
-    const paramsGroupBefore = screen.getByRole('group', { name: '工具参数' });
-    expect(within(modeGroup).getByRole('button', { name: 'Agent' })).toBeTruthy();
-    fireEvent.click(within(paramsGroupBefore).getByRole('button', { name: '对话' }));
-    expect(screen.getByRole('menuitem', { name: '对话' })).toBeTruthy();
-    expect(screen.getByRole('menuitem', { name: /图片/ })).toBeTruthy();
-    expect(screen.getByRole('menuitem', { name: /视频/ })).toBeTruthy();
-    expect(screen.getByRole('menuitem', { name: /音频/ })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: '配置模型' }));
+    const configDialog = screen.getByRole('dialog', { name: '创作配置' });
+    expect(
+      within(screen.getByRole('tablist', { name: '内容类型' })).getAllByRole('tab'),
+    ).toHaveLength(4);
+    expect(
+      within(screen.getByRole('tablist', { name: '配置类型' })).getAllByRole('tab'),
+    ).toHaveLength(1);
+    expect(
+      within(configDialog).getByRole('tab', { name: '模型' }).getAttribute('aria-selected'),
+    ).toBe('true');
 
-    fireEvent.click(screen.getByRole('menuitem', { name: '视频' }));
-
+    fireEvent.click(screen.getByRole('radio', { name: /Gemini Flash/ }));
+    expect(onModelSelect).toHaveBeenCalledWith('google:gemini-flash');
     expect(onSessionModeChange).not.toHaveBeenCalled();
-    expect(onGenCategoryChange).toHaveBeenCalledWith('video');
-    const paramsGroup = screen.getByRole('group', { name: '工具参数' });
-    expect(within(paramsGroup).queryByRole('group', { name: 'Agent 参数' })).toBeNull();
-    expect(within(paramsGroup).queryByRole('button', { name: '思考' })).toBeNull();
-    fireEvent.click(within(paramsGroup).getByTitle('选择视频模型'));
-    expect(screen.getByText('Video Provider')).toBeTruthy();
-    const providerTagList = document.querySelector('.agent-model-provider-tags');
-    expect(providerTagList?.querySelectorAll('.agent-model-tag')).toHaveLength(2);
-    expect(providerTagList?.textContent).toBe('自定义中转');
-    expect(screen.getByRole('menuitem', { name: /Model Video/ })).toBeTruthy();
-    const modelTagList = document.querySelector('.agent-model-option-tags');
-    expect(modelTagList?.querySelectorAll('.agent-model-tag')).toHaveLength(2);
-    expect(modelTagList?.textContent).toBe('视频文生视频');
-    fireEvent.click(screen.getByRole('menuitem', { name: /Model Video/ }));
-    expect(within(paramsGroup).queryByRole('button', { name: /感知模型/ })).toBeNull();
-    expect(within(paramsGroup).getByRole('button', { name: '画面比例' })).toBeTruthy();
-    expect(within(paramsGroup).getByRole('button', { name: '分辨率' })).toBeTruthy();
-    const durationTrigger = within(paramsGroup).getByRole('button', { name: '视频时长' });
-    expect(durationTrigger.textContent).toBe('AUTO');
-    fireEvent.click(durationTrigger);
-    expect(screen.getByRole('menuitem', { name: /AUTO · 根据镜头/ })).toBeTruthy();
-    expect(screen.getByRole('menuitem', { name: '5s' })).toBeTruthy();
-    expect(screen.getByRole('menuitem', { name: '8s' })).toBeTruthy();
-    expect(screen.getByRole('menuitem', { name: '12s' })).toBeTruthy();
-    expect(screen.queryByText('动作片段')).toBeNull();
-    expect(screen.queryByText('常规镜头')).toBeNull();
-    expect(screen.queryByText('小场景')).toBeNull();
-    expect(screen.queryByRole('menuitem', { name: /6s/ })).toBeNull();
-    expect(screen.queryByRole('menuitem', { name: /20s/ })).toBeNull();
+
+    fireEvent.click(screen.getByRole('tab', { name: '图片' }));
+    expect(
+      within(screen.getByRole('tablist', { name: '配置类型' })).getAllByRole('tab'),
+    ).toHaveLength(2);
+    const understandingGroup = screen.getByRole('radiogroup', { name: '图片感知模型' });
+    fireEvent.click(within(understandingGroup).getByRole('radio', { name: /^Gemini Flash/ }));
+    expect(onMediaUnderstandingModelSelect).toHaveBeenCalledWith('image', 'google:gemini-flash');
+    fireEvent.click(within(understandingGroup).getByRole('radio', { name: /自动/ }));
+    expect(onMediaUnderstandingModelSelect).toHaveBeenCalledWith('image', 'auto');
+
+    const generationGroup = screen.getByRole('radiogroup', { name: '图片生成模型' });
+    fireEvent.click(within(generationGroup).getByRole('radio', { name: /Model Image/ }));
+    expect(onMediaModelSelect).toHaveBeenCalledWith('image', 'image-provider:model-image');
+    fireEvent.click(within(generationGroup).getByRole('radio', { name: '不使用' }));
+    expect(onMediaModelSelect).toHaveBeenCalledWith('image', 'none');
+    expect(screen.queryByText('全选')).toBeNull();
   });
 
-  it('hides Agent model configuration categories that have no configured models', () => {
+  it('keeps all purpose categories visible and exposes empty exact-selection groups', () => {
     render(
       <Harness availableMediaModels={mediaModels}>
         <InputArea inputValue="" isThinking={false} onInputChange={vi.fn()} onSend={vi.fn()} />
       </Harness>,
     );
 
-    const paramsGroup = screen.getByRole('group', { name: '工具参数' });
-    fireEvent.click(within(paramsGroup).getByRole('button', { name: '对话' }));
-    expect(screen.getByRole('menuitem', { name: '图片' })).toBeTruthy();
-    expect(screen.queryByRole('menuitem', { name: '视频' })).toBeNull();
-    expect(screen.queryByRole('menuitem', { name: '音频' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: '配置模型' }));
+    expect(screen.getByRole('tab', { name: '图片' })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: '视频' })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: '音频' })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('tab', { name: '视频' }));
+    const generationGroup = screen.getByRole('radiogroup', { name: '视频生成模型' });
+    expect(within(generationGroup).getAllByRole('radio')).toHaveLength(1);
+    expect(within(generationGroup).getByRole('radio', { name: '不使用' })).toBeTruthy();
   });
 
-  it('configures the media model from direct generation modes', () => {
+  it('locks the shared model menu while an Agent run is busy', () => {
+    render(
+      <Harness isBusy={true}>
+        <InputArea inputValue="" isThinking={false} onInputChange={vi.fn()} onSend={vi.fn()} />
+      </Harness>,
+    );
+
+    const trigger = screen.getByRole('button', { name: '配置模型' });
+    expect(trigger).toHaveProperty('disabled', true);
+    fireEvent.click(trigger);
+    expect(screen.queryByRole('dialog', { name: '创作配置' })).toBeNull();
+  });
+
+  it('opens the shared model configuration on the active direct-generation category', () => {
     const onMediaModelSelect = vi.fn();
     render(
       <Harness
@@ -948,25 +949,72 @@ describe('InputArea composer controls', () => {
       </Harness>,
     );
 
-    const modelTrigger = screen.getByTitle('Image Provider / Model Image');
+    const modelTrigger = screen.getByRole('button', { name: '配置模型' });
     expect(modelTrigger.querySelector('.rounded-full')).toBeNull();
 
     fireEvent.click(modelTrigger);
-    const menu = screen.getByRole('menu');
-    expect(menu.querySelector('.rounded-full')).toBeNull();
-    fireEvent.click(screen.getByRole('menuitem', { name: '不使用' }));
+    const dialog = screen.getByRole('dialog', { name: '创作配置' });
+    expect(dialog.querySelector('.rounded-full')).toBeNull();
+    expect(screen.getByRole('tab', { name: '图片' }).getAttribute('aria-selected')).toBe('true');
+    expect(screen.getByRole('tab', { name: '对话' })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: '视频' })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: '音频' })).toBeTruthy();
+    fireEvent.click(
+      within(screen.getByRole('radiogroup', { name: '图片生成模型' })).getByRole('radio', {
+        name: '不使用',
+      }),
+    );
 
     expect(onMediaModelSelect).toHaveBeenCalledWith('image', 'none');
 
-    fireEvent.click(screen.getByRole('button', { name: '分辨率' }));
-    expect(screen.getByText('分辨率').className).toContain('agent-dropdown-header');
-    expect(screen.getByRole('menuitem', { name: '1080p' })).toBeTruthy();
-    expect(screen.getByRole('menuitem', { name: '4K' })).toBeTruthy();
-    expect(screen.queryByText('常规高清')).toBeNull();
-    expect(screen.queryByText('最终输出')).toBeNull();
-    expect(screen.getByRole('menu').className).toContain('agent-dropdown-menu-param');
-    expect(screen.getByRole('button', { name: '分辨率' }).textContent).toBe('1080p');
+    fireEvent.click(screen.getByRole('button', { name: '配置参数' }));
+    const paramsDialog = screen.getByRole('dialog', { name: '创作配置' });
+    expect(
+      within(paramsDialog).getByRole('tab', { name: '参数' }).getAttribute('aria-selected'),
+    ).toBe('true');
+    const resolutionGroup = within(paramsDialog).getByRole('radiogroup', { name: '分辨率' });
+    expect(within(resolutionGroup).getByRole('radio', { name: '1080p' })).toBeTruthy();
+    expect(within(resolutionGroup).getByRole('radio', { name: '4K' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: '配置参数' }).textContent).toBe('16:9 · 1080p');
   });
+
+  it.each([
+    ['video', '视频', 'Model Video', ['画面比例', '分辨率', '视频时长']],
+    ['audio', '音频', 'Model Audio', ['音频类型', '音频时长']],
+  ] as const)(
+    'uses the shared model panel and request parameters in %s mode',
+    (sessionMode, categoryLabel, modelLabel, parameterLabels) => {
+      render(
+        <Harness
+          sessionMode={sessionMode}
+          availableMediaModels={allMediaModels}
+          mediaModelSelection={{
+            image: 'image-provider:model-image',
+            video: 'video-provider:model-video',
+            audio: 'audio-provider:model-audio',
+          }}
+        >
+          <InputArea inputValue="" isThinking={false} onInputChange={vi.fn()} onSend={vi.fn()} />
+        </Harness>,
+      );
+
+      const trigger = screen.getByRole('button', { name: '配置模型' });
+      expect(trigger.textContent).toContain(modelLabel);
+      fireEvent.click(trigger);
+      expect(screen.getByRole('tab', { name: categoryLabel }).getAttribute('aria-selected')).toBe(
+        'true',
+      );
+      fireEvent.click(screen.getByRole('button', { name: '配置参数' }));
+      const paramsDialog = screen.getByRole('dialog', { name: '创作配置' });
+      expect(
+        within(paramsDialog).getByRole('tab', { name: '参数' }).getAttribute('aria-selected'),
+      ).toBe('true');
+      for (const parameterLabel of parameterLabels) {
+        expect(within(paramsDialog).getByRole('radiogroup', { name: parameterLabel })).toBeTruthy();
+      }
+      expect(screen.queryByRole('menuitem', { name: '不使用' })).toBeNull();
+    },
+  );
 
   it('does not show media understanding model controls in direct generation modes', () => {
     const onMediaUnderstandingModelSelect = vi.fn();
@@ -985,6 +1033,48 @@ describe('InputArea composer controls', () => {
     expect(onMediaUnderstandingModelSelect).not.toHaveBeenCalled();
   });
 
+  it('shows an explicit unconfigured model summary without borrowing another category', () => {
+    render(
+      <Harness
+        sessionMode="audio"
+        availableMediaModels={allMediaModels}
+        mediaModelSelection={{
+          image: 'image-provider:model-image',
+          video: 'video-provider:model-video',
+          audio: 'none',
+        }}
+      >
+        <InputArea inputValue="" isThinking={false} onInputChange={vi.fn()} onSend={vi.fn()} />
+      </Harness>,
+    );
+
+    const trigger = screen.getByRole('button', { name: '配置模型' });
+    expect(trigger.textContent).toBe('未配置音频模型');
+    expect(trigger.textContent).not.toContain('Model Image');
+    expect(trigger.textContent).not.toContain('Model Video');
+  });
+
+  it('locks the shared model trigger and request parameters in direct media modes', () => {
+    render(
+      <Harness
+        sessionMode="video"
+        availableMediaModels={allMediaModels}
+        mediaModelSelection={{
+          image: 'image-provider:model-image',
+          video: 'video-provider:model-video',
+          audio: 'audio-provider:model-audio',
+        }}
+        isBusy
+      >
+        <InputArea inputValue="" isThinking={false} onInputChange={vi.fn()} onSend={vi.fn()} />
+      </Harness>,
+    );
+
+    expect(screen.getByRole('button', { name: '配置模型' })).toHaveProperty('disabled', true);
+    expect(screen.getByRole('button', { name: '配置参数' })).toHaveProperty('disabled', true);
+    expect(screen.queryByRole('dialog', { name: '创作配置' })).toBeNull();
+  });
+
   it('filters image understanding models by LLM vision capability', () => {
     render(
       <Harness
@@ -995,13 +1085,14 @@ describe('InputArea composer controls', () => {
       </Harness>,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /感知模型/ }));
-    fireEvent.click(screen.getByRole('menuitem', { name: /图片：/ }));
+    fireEvent.click(screen.getByRole('button', { name: '配置模型' }));
+    fireEvent.click(screen.getByRole('tab', { name: '图片' }));
+    const understandingGroup = screen.getByRole('radiogroup', { name: '图片感知模型' });
 
-    expect(screen.getAllByRole('menuitem', { name: /Gemini Flash/ }).length).toBeGreaterThan(0);
-    expect(screen.queryByRole('menuitem', { name: /Gemini Pro/ })).toBeNull();
-    expect(screen.queryByRole('menuitem', { name: /Gemini Audio/ })).toBeNull();
-    expect(screen.queryByRole('menuitem', { name: /Model Image/ })).toBeNull();
+    expect(within(understandingGroup).getByRole('radio', { name: /^Gemini Flash/ })).toBeTruthy();
+    expect(within(understandingGroup).queryByRole('radio', { name: /Gemini Pro/ })).toBeNull();
+    expect(within(understandingGroup).queryByRole('radio', { name: /Gemini Audio/ })).toBeNull();
+    expect(within(understandingGroup).queryByRole('radio', { name: /Model Image/ })).toBeNull();
   });
 
   it('filters audio understanding models by LLM audio capability', () => {
@@ -1027,12 +1118,13 @@ describe('InputArea composer controls', () => {
       </Harness>,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /感知模型/ }));
-    fireEvent.click(screen.getByRole('menuitem', { name: /音频：/ }));
+    fireEvent.click(screen.getByRole('button', { name: '配置模型' }));
+    fireEvent.click(screen.getByRole('tab', { name: '音频' }));
+    const understandingGroup = screen.getByRole('radiogroup', { name: '音频感知模型' });
 
-    expect(screen.getAllByRole('menuitem', { name: /Gemini Audio/ }).length).toBeGreaterThan(0);
-    expect(screen.queryByRole('menuitem', { name: /Gemini Flash/ })).toBeNull();
-    expect(screen.queryByRole('menuitem', { name: /Model Audio/ })).toBeNull();
+    expect(within(understandingGroup).getByRole('radio', { name: /^Gemini Audio/ })).toBeTruthy();
+    expect(within(understandingGroup).queryByRole('radio', { name: /Gemini Flash/ })).toBeNull();
+    expect(within(understandingGroup).queryByRole('radio', { name: /Model Audio/ })).toBeNull();
   });
 
   it('removes the empty top control row for roleplay conversations', () => {
@@ -1042,7 +1134,7 @@ describe('InputArea composer controls', () => {
       </Harness>,
     );
 
-    expect(screen.queryByRole('group', { name: '模式与模型' })).toBeNull();
+    expect(screen.queryByRole('group', { name: '模式、模型与参数' })).toBeNull();
     expect(screen.queryByRole('group', { name: '工具参数' })).toBeNull();
     expect(document.querySelector('.agent-composer-control-row')).toBeNull();
     expect(document.querySelector('.agent-composer-textarea')).toBeTruthy();
@@ -1055,7 +1147,7 @@ describe('InputArea composer controls', () => {
       </Harness>,
     );
 
-    expect(screen.queryByRole('group', { name: '模式与模型' })).toBeNull();
+    expect(screen.queryByRole('group', { name: '模式、模型与参数' })).toBeNull();
     expect(screen.queryByRole('group', { name: '工具参数' })).toBeNull();
     expect(document.querySelector('.agent-composer-control-row')).toBeNull();
     expect(document.querySelector('.agent-composer-textarea')).toBeTruthy();
@@ -1828,7 +1920,7 @@ describe('InputArea composer controls', () => {
     expect(mentionMenu.className).toContain('agent-composer-popover');
     expect(mentionMenu.className).toContain('agent-composer-mention-menu');
     expect(composerShell?.contains(mentionMenu)).toBe(true);
-    expect(controlRow?.contains(mentionMenu)).toBe(false);
+    expect(controlRow).toBeNull();
     expect(document.querySelector('.agent-composer-queue-panel')).toBeNull();
   });
 
@@ -1862,17 +1954,11 @@ describe('InputArea composer controls', () => {
     );
 
     const queuePanel = document.querySelector('.agent-composer-queue-panel');
-    const controlRow = document.querySelector('.agent-composer-control-row');
     const composerShell = document.querySelector('.agent-composer-shell');
     const textarea = screen.getByRole('textbox');
     expect(queuePanel).toBeTruthy();
-    expect(controlRow).toBeTruthy();
     expect(composerShell).toBeTruthy();
     expect(composerShell?.contains(queuePanel)).toBe(false);
-    expect(
-      (queuePanel as Node).compareDocumentPosition(controlRow as Node) &
-        Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
     expect(
       (queuePanel as Node).compareDocumentPosition(composerShell as Node) &
         Node.DOCUMENT_POSITION_FOLLOWING,
@@ -2039,13 +2125,16 @@ describe('InputArea composer controls', () => {
       </Harness>,
     );
 
-    const paramsGroup = screen.getByRole('group', { name: '工具参数' });
+    const modeGroup = screen.getByRole('group', { name: '模式、模型与参数' });
     expect(
-      (within(paramsGroup).getByRole('button', { name: '对话' }) as HTMLButtonElement).disabled,
+      (within(modeGroup).getByRole('button', { name: 'Agent' }) as HTMLButtonElement).disabled,
     ).toBe(true);
-    expect((within(paramsGroup).getByTitle(/gpt-5.5/) as HTMLButtonElement).disabled).toBe(true);
     expect(
-      (within(paramsGroup).getByRole('button', { name: '思考' }) as HTMLButtonElement).disabled,
+      (
+        within(modeGroup).getByRole('button', {
+          name: '配置模型',
+        }) as HTMLButtonElement
+      ).disabled,
     ).toBe(true);
 
     fireEvent.click(screen.getByTitle('发送'));
@@ -2116,6 +2205,7 @@ function Harness({
   onAddContextChip,
   mentionItems = [],
   onRequestFiles = vi.fn(),
+  onModelSelect = vi.fn(),
   onMediaModelSelect = vi.fn(),
   onMediaUnderstandingModelSelect = vi.fn(),
   onGenCategoryChange = vi.fn(),
@@ -2126,6 +2216,11 @@ function Harness({
   skills = [],
   availableModels = chatModels,
   availableMediaModels = mediaModels,
+  mediaModelSelection = {
+    image: 'image-provider:model-image',
+    video: 'none',
+    audio: 'none',
+  },
   mediaUnderstandingModels,
   selectedFileReferences = [],
   onSelectedFileReferencesChange = vi.fn(),
@@ -2139,6 +2234,7 @@ function Harness({
   readonly onAddContextChip?: React.ComponentProps<typeof InputAreaProvider>['onAddContextChip'];
   readonly mentionItems?: readonly LegacyMentionItem[];
   readonly onRequestFiles?: React.ComponentProps<typeof InputAreaProvider>['onRequestFiles'];
+  readonly onModelSelect?: React.ComponentProps<typeof InputAreaProvider>['onModelSelect'];
   readonly onMediaModelSelect?: React.ComponentProps<
     typeof InputAreaProvider
   >['onMediaModelSelect'];
@@ -2157,6 +2253,9 @@ function Harness({
   readonly skills?: React.ComponentProps<typeof InputAreaProvider>['skills'];
   readonly availableModels?: ChatModelOption[];
   readonly availableMediaModels?: ChatModelOption[];
+  readonly mediaModelSelection?: React.ComponentProps<
+    typeof InputAreaProvider
+  >['mediaModelSelection'];
   readonly mediaUnderstandingModels?: MediaUnderstandingModels;
   readonly selectedFileReferences?: readonly LegacySelectedFileReference[];
   readonly onSelectedFileReferencesChange?: React.ComponentProps<
@@ -2170,12 +2269,8 @@ function Harness({
       isBusy={isBusy}
       selectedModel={selectedModel}
       availableModels={availableModels}
-      onModelSelect={vi.fn()}
-      mediaModelSelection={{
-        image: 'image-provider:model-image',
-        video: 'none',
-        audio: 'none',
-      }}
+      onModelSelect={onModelSelect}
+      mediaModelSelection={mediaModelSelection}
       availableMediaModels={availableMediaModels}
       mediaUnderstandingModels={mediaUnderstandingModels}
       mediaUnderstandingSelection={{ image: 'auto', video: 'auto', audio: 'auto' }}

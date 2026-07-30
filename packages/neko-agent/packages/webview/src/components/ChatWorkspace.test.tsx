@@ -4,7 +4,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AgentContextPayload } from '@neko/shared';
 import {
   parseSendMessageWebviewMessage,
-  type AgentLlmConfig,
   type Message,
   type SettingsState,
 } from '@neko-agent/types';
@@ -118,8 +117,6 @@ vi.mock('@/components/ChatView', () => ({
       anchorMessageId?: string;
       anchorOffset?: number;
     }) => void;
-    llmConfig?: AgentLlmConfig;
-    onLlmConfigChange?: (config: AgentLlmConfig) => void;
     composerMenuState?: ComposerMenuState;
     onComposerMenuStateChange?: (state: ComposerMenuState) => void;
   }) => (
@@ -188,11 +185,6 @@ vi.mock('@/components/ChatView', () => ({
         {props.viewport?.followMode ?? 'none'}:{props.viewport?.anchorMessageId ?? 'none'}:
         {props.viewport?.anchorOffset ?? 0}
       </span>
-      <span data-testid="llm-config-state">
-        {props.llmConfig?.reasoningPreset ?? 'balanced'}:
-        {props.llmConfig?.verbosityPreset ?? 'standard'}:
-        {props.llmConfig?.creativityPreset ?? 'creative'}
-      </span>
       <span data-testid="composer-menu-state">
         {String(props.composerMenuState?.slash.open ?? false)}:
         {props.composerMenuState?.slash.filter ?? ''}:
@@ -200,20 +192,8 @@ vi.mock('@/components/ChatView', () => ({
       </span>
       <span data-testid="control-menu-state">
         {props.composerMenuState?.controls.openMenu ?? 'none'}:
-        {props.composerMenuState?.controls.agentConfigCategory ?? 'llm'}:
-        {props.composerMenuState?.controls.understandingCategory ?? 'none'}
+        {props.composerMenuState?.controls.configCategory ?? 'llm'}
       </span>
-      <button
-        type="button"
-        data-testid="set-deep-llm-config"
-        onClick={() =>
-          props.onLlmConfigChange?.({
-            reasoningPreset: 'deep',
-            verbosityPreset: 'detailed',
-            creativityPreset: 'stable',
-          })
-        }
-      />
       <button
         type="button"
         data-testid="open-slash-menu"
@@ -233,9 +213,9 @@ vi.mock('@/components/ChatView', () => ({
           props.onComposerMenuStateChange?.({
             ...props.composerMenuState,
             controls: {
-              openMenu: 'llm-creativity',
-              agentConfigCategory: 'image',
-              understandingCategory: 'video',
+              openMenu: 'composer-config',
+              configCategory: 'image',
+              configSection: 'model',
             },
           })
         }
@@ -619,7 +599,7 @@ describe('ChatWorkspace pending send', () => {
     expect(runtimeB.store.getSnapshot().state.selectedModel).toBe('test-model');
   });
 
-  it('keeps LLM configuration and composer menus in their owning Tab store while switching', () => {
+  it('keeps composer menus in their owning Tab store while switching', () => {
     const runtimeA = createTabRenderRuntime({ tabId: 'tab-a', conversationId: 'conv-a' });
     const runtimeB = createTabRenderRuntime({ tabId: 'tab-b', conversationId: 'conv-b' });
     const propsFor = (runtime: typeof runtimeA) =>
@@ -628,22 +608,18 @@ describe('ChatWorkspace pending send', () => {
       });
     const { getByTestId, rerender } = render(<ChatWorkspace {...propsFor(runtimeA)} />);
 
-    fireEvent.click(getByTestId('set-deep-llm-config'));
     fireEvent.click(getByTestId('open-slash-menu'));
     fireEvent.click(getByTestId('open-control-menu'));
-    expect(getByTestId('llm-config-state').textContent).toBe('deep:detailed:stable');
     expect(getByTestId('composer-menu-state').textContent).toBe('true:sto:2');
-    expect(getByTestId('control-menu-state').textContent).toBe('llm-creativity:image:video');
+    expect(getByTestId('control-menu-state').textContent).toBe('composer-config:image');
 
     rerender(<ChatWorkspace {...propsFor(runtimeB)} />);
-    expect(getByTestId('llm-config-state').textContent).toBe('balanced:standard:creative');
     expect(getByTestId('composer-menu-state').textContent).toBe('false::0');
-    expect(getByTestId('control-menu-state').textContent).toBe('none:llm:none');
+    expect(getByTestId('control-menu-state').textContent).toBe('none:llm');
 
     rerender(<ChatWorkspace {...propsFor(runtimeA)} />);
-    expect(getByTestId('llm-config-state').textContent).toBe('deep:detailed:stable');
     expect(getByTestId('composer-menu-state').textContent).toBe('true:sto:2');
-    expect(getByTestId('control-menu-state').textContent).toBe('llm-creativity:image:video');
+    expect(getByTestId('control-menu-state').textContent).toBe('composer-config:image');
   });
 
   it('keeps context references in their owning Tab store while switching', () => {

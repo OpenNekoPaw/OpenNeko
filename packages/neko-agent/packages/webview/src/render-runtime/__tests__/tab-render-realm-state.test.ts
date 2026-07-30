@@ -48,9 +48,6 @@ describe('Tab render realm state', () => {
 
     registry.require('tab-a').store.updateState({ inputValue: 'draft-a-1' });
     registry.require('tab-a').store.updateState({ inputValue: 'draft-a-2' });
-    registry.require('tab-a').store.updateState((state) => ({
-      llmConfig: { ...state.llmConfig, creativityPreset: 'wild' },
-    }));
     expect(host.setState).not.toHaveBeenCalled();
 
     vi.advanceTimersByTime(100);
@@ -63,7 +60,6 @@ describe('Tab render realm state', () => {
             tabId: 'tab-a',
             conversationId: 'conv-a',
             inputValue: 'draft-a-2',
-            llmConfig: expect.objectContaining({ creativityPreset: 'wild' }),
           }),
           expect.objectContaining({
             tabId: 'tab-b',
@@ -215,11 +211,6 @@ function draft(tabId: string, conversationId: string, inputValue: string): TabRe
       videoFps: 24,
       audioDuration: 'auto',
       audioType: 'sfx',
-    },
-    llmConfig: {
-      reasoningPreset: 'balanced',
-      verbosityPreset: 'standard',
-      creativityPreset: 'creative',
     },
   };
 }

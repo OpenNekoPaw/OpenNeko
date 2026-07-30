@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import type { ChildRunScope } from '@neko/shared';
-import type { SubAgentWorkItem } from '@neko-agent/types';
-import { projectAgentWorkItemSteps, projectSubAgentCard } from '../work-item-presenter';
+import type { Message, SubAgentWorkItem } from '@neko-agent/types';
+import {
+  projectAgentWorkItemSteps,
+  projectSubAgentCard,
+  selectConversationAttentionWorkItems,
+} from '../work-item-presenter';
 
 describe('subagent activity presenter', () => {
   it('projects child-run status, progress, steps, and response', () => {
@@ -24,18 +28,47 @@ describe('subagent activity presenter', () => {
       currentStepName: 'Review',
     });
   });
+
+  it('keeps only unanchored work items that still require attention', () => {
+    const messages: Message[] = [
+      {
+        id: 'message-1',
+        role: 'assistant',
+        content: '',
+        timestamp: 1,
+        workItemIds: ['sub-linked'],
+      },
+    ];
+    const items = [
+      subAgentItem({ id: 'sub-linked', status: 'processing' }),
+      subAgentItem({ id: 'sub-queued', status: 'queued' }),
+      subAgentItem({ id: 'sub-processing', status: 'processing' }),
+      subAgentItem({ id: 'sub-failed', status: 'failed' }),
+      subAgentItem({ id: 'sub-completed', status: 'completed' }),
+      subAgentItem({ id: 'sub-cancelled', status: 'cancelled' }),
+    ];
+
+    expect(selectConversationAttentionWorkItems(messages, items).map((item) => item.id)).toEqual([
+      'sub-queued',
+      'sub-processing',
+      'sub-failed',
+    ]);
+  });
 });
 
-function subAgentItem(): SubAgentWorkItem {
+function subAgentItem(
+  overrides: Partial<Pick<SubAgentWorkItem, 'id' | 'status'>> = {},
+): SubAgentWorkItem {
+  const id = overrides.id ?? 'sub-1';
   return {
-    scope: subAgentScope('conv-1', 'parent-1', 'sub-1'),
-    id: 'sub-1',
+    scope: subAgentScope('conv-1', 'parent-1', id),
+    id,
     conversationId: 'conv-1',
     kind: 'subagent',
     parentMessageId: 'message-1',
     parentToolCallId: 'tool-1',
     title: 'Review',
-    status: 'processing',
+    status: overrides.status ?? 'processing',
     progress: 40,
     steps: [{ id: 'review', name: 'Review', status: 'running' }],
     currentStepId: 'review',

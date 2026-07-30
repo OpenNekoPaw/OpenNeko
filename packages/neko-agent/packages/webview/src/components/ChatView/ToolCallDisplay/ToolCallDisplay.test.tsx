@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { ToolCall } from '@neko-agent/types';
 import { MessageActionsProvider } from '@/components/ChatView/MessageActionsContext';
@@ -82,6 +82,37 @@ describe('ToolCallDisplay Tool confirmation', () => {
       approved: true,
       conversationId: 'conv-1',
     });
+  });
+});
+
+describe('ToolCallDisplay produced outputs', () => {
+  it('labels an openable structured file result as produced output', () => {
+    render(
+      <MessageActionsProvider>
+        <ToolCallDisplay
+          conversationId="conv-1"
+          toolCall={{
+            id: 'write-1',
+            name: 'write_file',
+            arguments: { path: 'plans/storyboard.md' },
+            result: {
+              success: true,
+              data: {
+                path: 'plans/storyboard.md',
+                contentLocator: { kind: 'workspace-file', path: 'plans/storyboard.md' },
+              },
+            },
+          }}
+        />
+      </MessageActionsProvider>,
+    );
+
+    expect(screen.getByText('chat.toolCall.outputs')).toBeTruthy();
+    expect(
+      within(screen.getByTestId('tool-produced-outputs')).getByRole('button', {
+        name: /storyboard\.md/,
+      }),
+    ).toBeTruthy();
   });
 });
 

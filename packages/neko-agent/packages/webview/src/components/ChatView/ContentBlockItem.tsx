@@ -119,8 +119,8 @@ export const ContentBlockItem = memo(function ContentBlockItem({
   if (!projection) return null;
 
   return (
-    <div className="agent-message-row group">
-      <div className="flex gap-2 px-2 py-1">
+    <div className="agent-message-row agent-assistant-document-row group">
+      <div className="agent-assistant-document-layout flex gap-2 px-3 py-1">
         {/* Avatar - only show on first block */}
         <div className="flex-shrink-0 w-5 pt-0.5">
           {isFirst ? (
@@ -136,7 +136,7 @@ export const ContentBlockItem = memo(function ContentBlockItem({
         </div>
 
         {/* Content */}
-        <div className="flex-1 min-w-0 max-w-[85%]">
+        <div className="min-w-0 flex-1">
           {/* Header: Block type + timestamp */}
           <div className="flex items-center gap-2 mb-0.5">
             <span
@@ -241,7 +241,7 @@ function renderBlockContent(
             })
           : null;
       return (
-        <div className="agent-bubble agent-bubble-assistant block w-fit max-w-full min-w-0 rounded-2xl rounded-tl-md px-2.5 py-1.5 text-[13px] leading-relaxed">
+        <div className="agent-assistant-document min-w-0 text-[13px] leading-relaxed">
           <MarkdownRenderer
             content={projection.content}
             isStreaming={projection.renderStreaming}

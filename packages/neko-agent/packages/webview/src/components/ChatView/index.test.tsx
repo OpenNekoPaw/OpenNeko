@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import type { CharacterDialogueSessionProjection } from '@neko-agent/types';
+import type { CharacterDialogueSessionProjection, SubAgentWorkItem } from '@neko-agent/types';
 import { ChatView } from './index';
 
 const translations: Record<string, string> = {
@@ -15,6 +15,7 @@ const translations: Record<string, string> = {
   'chat.agentRun.actingWithTool': '{phase}: {tool}',
   'chat.agentRun.elapsedLabel': 'Elapsed time for this run',
   'chat.conversation.loading': 'Loading conversation history...',
+  'chat.workItems.attentionTitle': 'Tasks requiring attention',
 };
 
 vi.mock('@/i18n/I18nContext', () => ({
@@ -126,6 +127,19 @@ describe('ChatView empty state', () => {
 
     expect(screen.getByRole('status').textContent).toContain('Acting: ReadDocument');
   });
+
+  it('shows only unanchored work items that still require attention', () => {
+    renderChatView({
+      workItems: [
+        createSubAgentWorkItem('active-review', 'processing'),
+        createSubAgentWorkItem('completed-review', 'completed'),
+      ],
+    });
+
+    const shelf = screen.getByRole('region', { name: 'Tasks requiring attention' });
+    expect(shelf.textContent).toContain('active-review');
+    expect(shelf.textContent).not.toContain('completed-review');
+  });
 });
 
 function renderChatView(overrides: Partial<React.ComponentProps<typeof ChatView>> = {}) {
@@ -159,5 +173,35 @@ function createCharacterDialogueSession(): CharacterDialogueSessionProjection {
     summary: 'protagonist',
     startedAt: '2026-06-01T00:00:00.000Z',
     status: 'active',
+  };
+}
+
+function createSubAgentWorkItem(
+  title: string,
+  status: SubAgentWorkItem['status'],
+): SubAgentWorkItem {
+  const id = `subagent-${title}`;
+  return {
+    scope: {
+      conversationId: 'conv-1',
+      runId: 'run-parent',
+      parentRunId: 'run-parent',
+      childRunId: id,
+      childKind: 'subagent',
+    },
+    id,
+    conversationId: 'conv-1',
+    kind: 'subagent',
+    parentMessageId: null,
+    parentToolCallId: null,
+    title,
+    status,
+    progress: status === 'completed' ? 100 : 30,
+    createdAt: '2026-07-30T00:00:00.000Z',
+    updatedAt: '2026-07-30T00:00:01.000Z',
+    subAgent: {
+      parentAgentId: 'run-parent',
+      type: 'reviewer',
+    },
   };
 }

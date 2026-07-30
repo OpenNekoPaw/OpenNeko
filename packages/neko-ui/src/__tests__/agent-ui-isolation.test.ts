@@ -12,7 +12,7 @@ const agentCriticalFiles = [
   'packages/neko-agent/packages/webview/src/components/ChatView/InputArea/ModelSelector.tsx',
   'packages/neko-agent/packages/webview/src/components/ChatView/InputArea/ModeSelector.tsx',
   'packages/neko-agent/packages/webview/src/components/ChatView/InputArea/SessionModeSelector.tsx',
-  'packages/neko-agent/packages/webview/src/components/ChatView/InputArea/ModeConfigBar.tsx',
+  'packages/neko-agent/packages/webview/src/components/ChatView/InputArea/ComposerConfigMenu.tsx',
   'packages/neko-agent/packages/webview/src/components/ChatView/InputArea/ModelTagList.tsx',
   'packages/neko-agent/packages/webview/src/components/ChatView/InputArea/EntryPromptMenu.tsx',
   'packages/neko-agent/packages/webview/src/components/ChatView/InputArea/MentionMenu.tsx',

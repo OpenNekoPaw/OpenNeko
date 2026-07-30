@@ -76,7 +76,7 @@ describe('useTabRenderRuntimeRegistry', () => {
     expect(state.selectedModel).toBe('provider:model');
     expect(state.mediaModelSelection.image).toBe('image:model');
     expect(state.executionMode).toBe('ask');
-    expect(state.llmConfig.reasoningPreset).toBe('deep');
+    expect(state).not.toHaveProperty('llmConfig');
     expect(state).not.toHaveProperty('promptMode');
     expect(state).not.toHaveProperty('idcRun');
     expect(state).not.toHaveProperty('stagePersona');

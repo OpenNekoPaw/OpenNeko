@@ -1,9 +1,9 @@
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
 import type {
-  AgentConfigCategory,
+  ComposerConfigCategory,
+  ComposerConfigSection,
   ComposerControlMenuId,
   ComposerMenuState,
-  GenCategory,
 } from './types';
 
 type ComposerMenuStateAction =
@@ -63,47 +63,46 @@ export function useComposerControlMenu(
   return [runtime ? runtime.state.controls.openMenu === menuId : localOpen, setOpen] as const;
 }
 
-export function useComposerAgentConfigCategory(
-  initialCategory: AgentConfigCategory,
-): readonly [AgentConfigCategory, (category: AgentConfigCategory) => void] {
+export function useComposerConfigCategory(
+  initialCategory: ComposerConfigCategory,
+): readonly [ComposerConfigCategory, (category: ComposerConfigCategory) => void] {
   const runtime = useContext(ComposerMenuRuntimeContext);
   const update = runtime?.update;
   const [localCategory, setLocalCategory] = useState(initialCategory);
   const setCategory = useCallback(
-    (category: AgentConfigCategory) => {
+    (category: ComposerConfigCategory) => {
       if (!update) {
         setLocalCategory(category);
         return;
       }
       update((state) => ({
         ...state,
-        controls: { ...state.controls, agentConfigCategory: category },
+        controls: { ...state.controls, configCategory: category },
       }));
     },
     [update],
   );
-  return [runtime?.state.controls.agentConfigCategory ?? localCategory, setCategory] as const;
+  return [runtime?.state.controls.configCategory ?? localCategory, setCategory] as const;
 }
 
-export function useComposerUnderstandingCategory(): readonly [
-  GenCategory | null,
-  (category: GenCategory | null) => void,
-] {
+export function useComposerConfigSection(
+  initialSection: ComposerConfigSection,
+): readonly [ComposerConfigSection, (section: ComposerConfigSection) => void] {
   const runtime = useContext(ComposerMenuRuntimeContext);
   const update = runtime?.update;
-  const [localCategory, setLocalCategory] = useState<GenCategory | null>(null);
-  const setCategory = useCallback(
-    (category: GenCategory | null) => {
+  const [localSection, setLocalSection] = useState(initialSection);
+  const setSection = useCallback(
+    (section: ComposerConfigSection) => {
       if (!update) {
-        setLocalCategory(category);
+        setLocalSection(section);
         return;
       }
       update((state) => ({
         ...state,
-        controls: { ...state.controls, understandingCategory: category },
+        controls: { ...state.controls, configSection: section },
       }));
     },
     [update],
   );
-  return [runtime?.state.controls.understandingCategory ?? localCategory, setCategory] as const;
+  return [runtime?.state.controls.configSection ?? localSection, setSection] as const;
 }

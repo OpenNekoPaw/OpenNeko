@@ -116,6 +116,19 @@ function ToolCallDisplayComponent({
   const toneClass = isFailed ? 'is-danger' : isSuccess ? 'is-success' : isPending ? 'is-info' : '';
   const compactActionClass =
     'inline-flex items-center gap-1 rounded-md border border-[var(--agent-input-border)] bg-[var(--agent-elevated)] px-1.5 py-0.5 text-[10px] text-[var(--agent-fg)] transition-colors hover:bg-[var(--agent-hover)]';
+  const mediaOutputCount = imageUrls.length + videoUrls.length + audioUrls.length;
+  const attachmentOutputs =
+    toolCall.result?.attachments?.filter(
+      (attachment) => attachment.contentLocator ?? attachment.assetRef?.contentLocator,
+    ) ?? [];
+  const showAttachmentOutputs = mediaOutputCount === 0 && documentThumbnails.length === 0;
+  const hasProducedOutputs =
+    isSuccess &&
+    ((isFileTool && Boolean(filePath) && Boolean(fileContentLocator)) ||
+      documentThumbnails.length > 0 ||
+      (toolCall.result?.artifacts?.length ?? 0) > 0 ||
+      mediaOutputCount > 0 ||
+      (showAttachmentOutputs && attachmentOutputs.length > 0));
 
   // Confirmation UI
   if (needsConfirmation) {
@@ -233,20 +246,6 @@ function ToolCallDisplayComponent({
           )}
           <span className="flex-1" />
 
-          {isFileTool && filePath && fileContentLocator && isSuccess && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                handleOpenFile(fileContentLocator);
-              }}
-              className={compactActionClass}
-              title={`Open ${filePath}`}
-            >
-              <FileIcon className="h-3 w-3" />
-              <span>Open</span>
-            </button>
-          )}
-
           {copyText && (
             <button
               onClick={(e) => {
@@ -328,60 +327,110 @@ function ToolCallDisplayComponent({
         )}
       </div>
 
+      {hasProducedOutputs && (
+        <section
+          className="agent-produced-outputs"
+          aria-label={t('chat.toolCall.outputs')}
+          data-testid="tool-produced-outputs"
+        >
+          <div className="agent-produced-outputs-title">
+            <ChevronIcon className="h-3 w-3 rotate-180" />
+            <span>{t('chat.toolCall.outputs')}</span>
+          </div>
+          <div className="agent-produced-outputs-content">
+            {isFileTool && filePath && fileContentLocator && (
+              <button
+                type="button"
+                onClick={() => handleOpenFile(fileContentLocator)}
+                className={compactActionClass}
+                title={`${t('chat.toolCall.openOutput')}: ${filePath}`}
+              >
+                <FileIcon className="h-3 w-3" />
+                <span>{filePath.split('/').pop() ?? filePath}</span>
+              </button>
+            )}
+
+            {showAttachmentOutputs &&
+              attachmentOutputs.map((attachment, index) => {
+                const contentLocator =
+                  attachment.contentLocator ?? attachment.assetRef?.contentLocator;
+                if (!contentLocator) return null;
+                const label =
+                  attachment.assetRef?.label ??
+                  attachment.path?.split('/').pop() ??
+                  `${attachment.type} ${index + 1}`;
+                return (
+                  <button
+                    key={`${attachment.type}:${label}:${index}`}
+                    type="button"
+                    onClick={() => handleOpenFile(contentLocator)}
+                    className={compactActionClass}
+                    title={`${t('chat.toolCall.openOutput')}: ${label}`}
+                  >
+                    <FileIcon className="h-3 w-3" />
+                    <span>{label}</span>
+                  </button>
+                );
+              })}
+
+            {documentThumbnails.length > 0 && (
+              <DocumentImageThumbnails thumbnails={documentThumbnails} />
+            )}
+
+            {toolCall.result?.artifacts && toolCall.result.artifacts.length > 0 && (
+              <ArtifactTransferSummary artifacts={toolCall.result.artifacts} />
+            )}
+
+            {isImageTool && imageUrls.length > 0 && (
+              <div className="space-y-2">
+                {imageUrls.map((url, index) => (
+                  <RichContentRenderer
+                    key={url}
+                    kind="image"
+                    data={{
+                      src: url,
+                      alt: `Generated image ${index + 1}`,
+                      name: `generated_${index + 1}.png`,
+                    }}
+                  />
+                ))}
+              </div>
+            )}
+            {isVideoTool && videoUrls.length > 0 && (
+              <div className="space-y-2">
+                {videoUrls.map((url, index) => (
+                  <RichContentRenderer
+                    key={url}
+                    kind="video"
+                    data={{
+                      src: url,
+                      title: `generated_${index + 1}.mp4`,
+                    }}
+                  />
+                ))}
+              </div>
+            )}
+            {isAudioTool && audioUrls.length > 0 && (
+              <div className="space-y-2">
+                {audioUrls.map((url, index) => (
+                  <RichContentRenderer
+                    key={url}
+                    kind="audio"
+                    data={{
+                      src: url,
+                      title: `generated_${index + 1}.mp3`,
+                    }}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        </section>
+      )}
+
       {relatedSubAgents.map((item) => (
         <SubAgentCard key={item.id} item={item} />
       ))}
-
-      {documentThumbnails.length > 0 && <DocumentImageThumbnails thumbnails={documentThumbnails} />}
-
-      {toolCall.result?.artifacts && toolCall.result.artifacts.length > 0 && (
-        <ArtifactTransferSummary artifacts={toolCall.result.artifacts} />
-      )}
-
-      {/* Media previews — registry-driven rendering (ADR-6 §6.2) */}
-      {isImageTool && imageUrls.length > 0 && (
-        <div className="mt-2 space-y-2">
-          {imageUrls.map((url, index) => (
-            <RichContentRenderer
-              key={index}
-              kind="image"
-              data={{
-                src: url,
-                alt: `Generated image ${index + 1}`,
-                name: `generated_${index + 1}.png`,
-              }}
-            />
-          ))}
-        </div>
-      )}
-      {isVideoTool && videoUrls.length > 0 && (
-        <div className="mt-2 space-y-2">
-          {videoUrls.map((url, index) => (
-            <RichContentRenderer
-              key={index}
-              kind="video"
-              data={{
-                src: url,
-                title: `generated_${index + 1}.mp4`,
-              }}
-            />
-          ))}
-        </div>
-      )}
-      {isAudioTool && audioUrls.length > 0 && (
-        <div className="mt-2 space-y-2">
-          {audioUrls.map((url, index) => (
-            <RichContentRenderer
-              key={index}
-              kind="audio"
-              data={{
-                src: url,
-                title: `generated_${index + 1}.mp3`,
-              }}
-            />
-          ))}
-        </div>
-      )}
     </div>
   );
 }

@@ -82,7 +82,11 @@ export function ModeSelector({ mode, onChange }: ModeSelectorProps) {
         <div
           className={`agent-dropdown-menu agent-dropdown-menu-mode absolute ${dropdownPositionClass(placement)}`}
           role="menu"
+          aria-label={t('chat.executionMode.title')}
         >
+          <div className="agent-dropdown-header" role="presentation">
+            {t('chat.executionMode.title')}
+          </div>
           {MODE_OPTIONS.map((option) => (
             <button
               key={option.value}
@@ -94,7 +98,8 @@ export function ModeSelector({ mode, onChange }: ModeSelectorProps) {
               className={`agent-dropdown-item agent-dropdown-item-stacked ${
                 mode === option.value ? 'agent-dropdown-item-selected' : ''
               }`}
-              role="menuitem"
+              role="menuitemradio"
+              aria-checked={mode === option.value}
             >
               <div>{t(option.labelKey)}</div>
               <div className="agent-dropdown-item-description">{t(option.descriptionKey)}</div>

@@ -5,7 +5,6 @@ import {
   type ConversationKind,
   type CharacterDialogueSessionProjection,
   type EmbodyCharacterSessionProjection,
-  type AgentLlmConfig,
   type AgentModelSlots,
   type AgentQueuedMessageItem,
 } from '@neko-agent/types';
@@ -20,6 +19,7 @@ import type {
 import { DropZone } from '@/components/ChatView/DropZone';
 import type { PluginsAvailable } from '@/components/ChatView/SendToMenu';
 import type { AgentWorkItem, SubAgentWorkItem } from '@/components/AgentWorkItem';
+import { selectConversationAttentionWorkItems } from '@/presenters/work-item-presenter';
 import type { AgentContextPayload } from '@neko/shared';
 import type { AmbientCanvasNodeProjection } from '@/presenters/plugin-transfer-presenter';
 import type { ActivationProgressTimeline } from '@/presenters/activation-progress-presenter';
@@ -70,13 +70,10 @@ interface ChatViewProps {
     contextPayloads?: AgentContextPayload[];
     fileReferences?: SelectedFileReference[];
     agentModels?: AgentModelSlots;
-    llmConfig?: AgentLlmConfig;
   }) => void;
   onCancel?: () => void;
   entryPromptMenu?: EntryPromptMenu | null;
   onEntryPromptMenuChange?: (menu: EntryPromptMenu | null) => void;
-  llmConfig?: AgentLlmConfig;
-  onLlmConfigChange?: (config: AgentLlmConfig) => void;
   composerMenuState?: ComposerMenuState;
   onComposerMenuStateChange?: (state: ComposerMenuState) => void;
   /** Session-bound attached files (managed by parent) */
@@ -128,8 +125,6 @@ export function ChatView({
   onCancel,
   entryPromptMenu,
   onEntryPromptMenuChange,
-  llmConfig,
-  onLlmConfigChange,
   composerMenuState,
   onComposerMenuStateChange,
   attachedFiles,
@@ -158,8 +153,8 @@ export function ChatView({
       ),
     [characterDialogueSession, conversationKind, embodyCharacterSession, t],
   );
-  const unanchoredWorkItems = useMemo(
-    () => selectUnanchoredWorkItems(messages, workItems ?? []),
+  const attentionWorkItems = useMemo(
+    () => selectConversationAttentionWorkItems(messages, workItems ?? []),
     [messages, workItems],
   );
   // P2: Dropped files state for DropZone integration
@@ -205,11 +200,11 @@ export function ChatView({
             </div>
           ) : isEmpty ? (
             <div className="agent-chat-empty-scroll flex-1 overflow-y-auto">
-              <ConversationWorkItemShelf workItems={unanchoredWorkItems} />
+              <ConversationWorkItemShelf workItems={attentionWorkItems} />
             </div>
           ) : (
             <>
-              <ConversationWorkItemShelf workItems={unanchoredWorkItems} />
+              <ConversationWorkItemShelf workItems={attentionWorkItems} />
               <MessageList
                 messages={messages}
                 isThinking={isThinking}
@@ -243,8 +238,6 @@ export function ChatView({
           onCancel={onCancel}
           entryPromptMenu={entryPromptMenu}
           onEntryPromptMenuChange={onEntryPromptMenuChange}
-          llmConfig={llmConfig}
-          onLlmConfigChange={onLlmConfigChange}
           composerMenuState={composerMenuState}
           onComposerMenuStateChange={onComposerMenuStateChange}
           disabled={
@@ -273,25 +266,25 @@ function ConversationWorkItemShelf({
 }: {
   readonly workItems: readonly AgentWorkItem[];
 }) {
+  const { t } = useTranslation();
   if (workItems.length === 0) return null;
   const subAgentItems = workItems.filter(isSubAgentWorkItem);
 
   return (
-    <div className="agent-workitem-shelf px-3 py-2">
+    <section
+      className="agent-workitem-shelf px-3 py-2"
+      aria-label={t('chat.workItems.attentionTitle')}
+      aria-live="polite"
+    >
+      <div className="agent-workitem-shelf-title">
+        {t('chat.workItems.attentionTitle')}
+        <span className="agent-workitem-shelf-count">{subAgentItems.length}</span>
+      </div>
       {subAgentItems.map((item) => (
         <SubAgentCard key={item.id} item={item} />
       ))}
-    </div>
+    </section>
   );
-}
-
-function selectUnanchoredWorkItems(
-  messages: readonly Message[],
-  workItems: readonly AgentWorkItem[],
-): AgentWorkItem[] {
-  if (workItems.length === 0) return [];
-  const linkedIds = new Set(messages.flatMap((message) => message.workItemIds ?? []));
-  return workItems.filter((item) => !linkedIds.has(item.id));
 }
 
 function isSubAgentWorkItem(item: AgentWorkItem): item is SubAgentWorkItem {

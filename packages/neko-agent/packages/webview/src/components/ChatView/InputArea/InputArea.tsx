@@ -13,8 +13,9 @@ import {
   type ReactNode,
 } from 'react';
 import { SendIcon, StopIcon, PlusIcon, EditIcon, CloseIcon } from '@neko/shared/icons';
-import { ModeConfigBar } from './ModeConfigBar';
 import { ModeSelector } from './ModeSelector';
+import { SessionModeSelector } from './SessionModeSelector';
+import { ComposerConfigMenu } from './ComposerConfigMenu';
 import { EntryPromptMenu as ComposerEntryPromptMenu } from './EntryPromptMenu';
 import { AttachmentPreview } from './FileAttachment';
 import { FileReferencePreview } from './FileReferencePreview';
@@ -31,7 +32,6 @@ import {
   SlashCommand,
   MentionItem,
   EntryPromptMenu,
-  DEFAULT_AGENT_LLM_CONFIG,
   DEFAULT_COMPOSER_MENU_STATE,
   type ComposerMenuState,
   type GenCategory,
@@ -55,7 +55,6 @@ import { useInputAreaContext } from '@/components/ChatView/InputAreaContext';
 import { ComposerMenuRuntimeProvider } from './composer-menu-runtime';
 import { projectInputAreaUi } from '@/presenters/input-area-presenter';
 import { isOptimisticQueuedMessageItem } from '@/presenters/message-queue-presenter';
-import { projectComposerModeConfig } from '@/presenters/composer-mode-config-presenter';
 import { projectClipboardTextToContextPayload } from '@/presenters/clipboard-context-presenter';
 import {
   contentLocatorKey,
@@ -65,7 +64,6 @@ import {
 } from '@neko/shared';
 import { projectContentLocatorPath } from '@/presenters/content-locator-presenter';
 import type {
-  AgentLlmConfig,
   AgentModelSlots,
   AgentQueuedMessageItem,
   ConversationKind,
@@ -94,14 +92,11 @@ interface InputAreaProps {
     contextPayloads?: AgentContextPayload[];
     fileReferences?: SelectedFileReference[];
     agentModels?: AgentModelSlots;
-    llmConfig?: AgentLlmConfig;
   }) => void;
   onCancel?: () => void;
   entryPromptMenu?: EntryPromptMenu | null;
   onEntryPromptMenuChange?: (menu: EntryPromptMenu | null) => void;
   onEntryGenerationModeSelect?: (mode: Extract<SessionMode, GenCategory>) => void;
-  llmConfig?: AgentLlmConfig;
-  onLlmConfigChange?: (config: AgentLlmConfig) => void;
   composerMenuState?: ComposerMenuState;
   onComposerMenuStateChange?: (state: ComposerMenuState) => void;
   disabled?: boolean;
@@ -207,8 +202,6 @@ export function InputArea({
   entryPromptMenu,
   onEntryPromptMenuChange,
   onEntryGenerationModeSelect,
-  llmConfig: controlledLlmConfig,
-  onLlmConfigChange,
   composerMenuState: controlledComposerMenuState,
   onComposerMenuStateChange,
   disabled = false,
@@ -226,7 +219,6 @@ export function InputArea({
   // Global configuration from context (model, modes, compression, skills)
   const {
     sessionMode,
-    modelCatalogStatus = 'ready',
     onSessionModeChange,
     selectedModel,
     availableModels,
@@ -256,9 +248,7 @@ export function InputArea({
     onRemoveContextChip,
     ambientNodes = [],
     conversationKind,
-    genCategory,
     genParams,
-    onGenCategoryChange,
     onGenParamsChange,
     isBusy = false,
   } = useInputAreaContext();
@@ -283,11 +273,6 @@ export function InputArea({
   const { addToHistory, navigateUp, navigateDown, resetNavigation, isNavigating } =
     useInputHistory();
 
-  const [llmConfig, setLlmConfig] = useOptionalControlledState(
-    controlledLlmConfig,
-    onLlmConfigChange,
-    DEFAULT_AGENT_LLM_CONFIG,
-  );
   const [composerMenuState, setComposerMenuState] = useOptionalControlledState(
     controlledComposerMenuState,
     onComposerMenuStateChange,
@@ -770,9 +755,7 @@ export function InputArea({
       attachments: files,
       contextPayloads,
       fileReferences: hasSelectedFileReferences ? selectedFileReferences : undefined,
-      ...(sessionMode === 'agent'
-        ? buildAgentLlmSendConfig(selectedModel, availableModels, llmConfig)
-        : {}),
+      ...(sessionMode === 'agent' ? buildAgentModelSendConfig(selectedModel, availableModels) : {}),
     });
     contextChips.forEach((c) => onRemoveContextChip(c.id));
     onInputChange('');
@@ -932,27 +915,9 @@ export function InputArea({
     disabled,
     sessionMode,
     conversationKind,
-    availableMediaModelCount: availableMediaModels.length,
     currentSessionMediaModelCount,
   });
-  const showModeControlGroup =
-    inputAreaProjection.showSessionModeSelector ||
-    inputAreaProjection.showChatModelSelector ||
-    inputAreaProjection.showSessionMediaModelSelector;
-  const showControlRow = showModeControlGroup || inputAreaProjection.showGenerationParams;
   const queuePanelCount = inputAreaProjection.queuedMessageCount;
-  const composerModeConfig = projectComposerModeConfig({
-    sessionMode,
-    selectedModel,
-    availableModels,
-    modelCatalogStatus,
-    mediaModelSelection,
-    availableMediaModels,
-    genCategory,
-    genParams,
-    llmConfig,
-  });
-
   return (
     <div className="flex-shrink-0">
       {/* ── Suggestion chips — float above border-t, at bottom of message list ── */}
@@ -974,35 +939,6 @@ export function InputArea({
             onEdit={onEditQueuedMessage}
             t={t}
           />
-        )}
-
-        {/* ── Top bar: mode + model | generation params (with integrated media model) ── */}
-        {showControlRow && (
-          <ComposerMenuRuntimeProvider state={composerMenuState} update={setComposerMenuState}>
-            <ModeConfigBar
-              projection={composerModeConfig}
-              availableSessionModes={availableSessionModes}
-              availableModels={availableModels}
-              selectedModel={selectedModel}
-              onSessionModeChange={onSessionModeChange}
-              onModelSelect={onModelSelect}
-              mediaModelSelection={mediaModelSelection}
-              availableMediaModels={availableMediaModels}
-              mediaUnderstandingModels={mediaUnderstandingModels}
-              mediaUnderstandingSelection={mediaUnderstandingSelection}
-              onMediaModelSelect={onMediaModelSelect}
-              onMediaUnderstandingModelSelect={onMediaUnderstandingModelSelect}
-              genCategory={genCategory}
-              genParams={genParams}
-              onGenCategoryChange={onGenCategoryChange}
-              onGenParamsChange={onGenParamsChange}
-              llmConfig={llmConfig}
-              onLlmConfigChange={setLlmConfig}
-              showAgentConfig={inputAreaProjection.showChatModelSelector}
-              showMediaConfig={inputAreaProjection.showGenerationParams}
-              disabled={isBusy}
-            />
-          </ComposerMenuRuntimeProvider>
         )}
 
         {/* Ambient canvas reference — mirrors @ quick references above the composer. */}
@@ -1113,6 +1049,43 @@ export function InputArea({
               className="hidden"
               onChange={handleFileSelect}
             />
+
+            {(inputAreaProjection.showSessionModeSelector ||
+              inputAreaProjection.showModelConfig) && (
+              <ComposerMenuRuntimeProvider state={composerMenuState} update={setComposerMenuState}>
+                <div
+                  className="agent-composer-mode-controls"
+                  role="group"
+                  aria-label={t('chat.input.control.mode')}
+                >
+                  {inputAreaProjection.showSessionModeSelector ? (
+                    <SessionModeSelector
+                      mode={sessionMode}
+                      onChange={onSessionModeChange}
+                      availableModes={availableSessionModes}
+                      disabled={isBusy}
+                    />
+                  ) : null}
+                  {inputAreaProjection.showModelConfig ? (
+                    <ComposerConfigMenu
+                      activeMode={sessionMode}
+                      availableModels={availableModels}
+                      selectedModel={selectedModel}
+                      onModelSelect={onModelSelect}
+                      mediaModelSelection={mediaModelSelection}
+                      availableMediaModels={availableMediaModels}
+                      mediaUnderstandingModels={mediaUnderstandingModels}
+                      mediaUnderstandingSelection={mediaUnderstandingSelection}
+                      onMediaModelSelect={onMediaModelSelect}
+                      onMediaUnderstandingModelSelect={onMediaUnderstandingModelSelect}
+                      genParams={genParams}
+                      onGenParamsChange={onGenParamsChange}
+                      disabled={isBusy}
+                    />
+                  ) : null}
+                </div>
+              </ComposerMenuRuntimeProvider>
+            )}
 
             {allowCommandMenus && (
               <>
@@ -1314,11 +1287,10 @@ function isRoleplayConversationKind(conversationKind: ConversationKind | undefin
   return conversationKind === 'character-dialogue' || conversationKind === 'embody-character';
 }
 
-function buildAgentLlmSendConfig(
+function buildAgentModelSendConfig(
   selectedModel: string,
   availableModels: readonly ChatModelOption[],
-  llmConfig: AgentLlmConfig,
-): { agentModels?: AgentModelSlots; llmConfig?: AgentLlmConfig } {
+): { agentModels?: AgentModelSlots } {
   const selectedOption = availableModels.find((option) => option.id === selectedModel);
   const primaryModel =
     selectedOption?.providerId &&
@@ -1330,11 +1302,7 @@ function buildAgentLlmSendConfig(
           category: 'llm' as const,
         }
       : null;
-  const filteredConfig = filterLlmConfigForModel(selectedModel, availableModels, llmConfig);
-  return {
-    ...(primaryModel ? { agentModels: { primary: primaryModel } } : {}),
-    ...(Object.keys(filteredConfig).length > 0 ? { llmConfig: filteredConfig } : {}),
-  };
+  return primaryModel ? { agentModels: { primary: primaryModel } } : {};
 }
 
 function MessageQueueControls({
@@ -1494,74 +1462,6 @@ function QueueActionButton({
       {children}
     </button>
   );
-}
-
-function filterLlmConfigForModel(
-  selectedModel: string,
-  availableModels: readonly ChatModelOption[],
-  llmConfig: AgentLlmConfig,
-): AgentLlmConfig {
-  const controls = getLlmParameterControlsForModel(selectedModel, availableModels);
-  return removeUndefinedAgentLlmConfig({
-    reasoningPreset: controls.reasoning ? llmConfig.reasoningPreset : undefined,
-    verbosityPreset: controls.verbosity ? llmConfig.verbosityPreset : undefined,
-    creativityPreset: controls.creativity ? llmConfig.creativityPreset : undefined,
-    advanced: filterAdvancedLlmParamsForControls(llmConfig.advanced, controls),
-  });
-}
-
-function filterAdvancedLlmParamsForControls(
-  advanced: AgentLlmConfig['advanced'],
-  controls: NonNullable<ChatModelOption['llmParameterControls']>,
-): AgentLlmConfig['advanced'] {
-  if (!advanced) return undefined;
-  const filtered = removeUndefinedAgentLlmAdvancedParams({
-    temperature: controls.creativity ? advanced.temperature : undefined,
-    topP: controls.creativity ? advanced.topP : undefined,
-    maxOutputTokens: controls.maxOutputTokens ? advanced.maxOutputTokens : undefined,
-    reasoningEffort: controls.reasoning ? advanced.reasoningEffort : undefined,
-    thinkingBudget: controls.reasoning ? advanced.thinkingBudget : undefined,
-    verbosity: controls.verbosity ? advanced.verbosity : undefined,
-    serviceTier: controls.reasoning ? advanced.serviceTier : undefined,
-  });
-  return Object.keys(filtered).length > 0 ? filtered : undefined;
-}
-
-function getLlmParameterControlsForModel(
-  selectedModel: string,
-  availableModels: readonly ChatModelOption[],
-): NonNullable<ChatModelOption['llmParameterControls']> {
-  const model = availableModels.find((option) => option.id === selectedModel);
-  if (!model) {
-    return {
-      reasoning: false,
-      verbosity: false,
-      creativity: false,
-      maxOutputTokens: false,
-    };
-  }
-  return (
-    model.llmParameterControls ?? {
-      reasoning: false,
-      verbosity: false,
-      creativity: true,
-      maxOutputTokens: true,
-    }
-  );
-}
-
-function removeUndefinedAgentLlmConfig(config: AgentLlmConfig): AgentLlmConfig {
-  return Object.fromEntries(
-    Object.entries(config).filter(([, value]) => value !== undefined),
-  ) as AgentLlmConfig;
-}
-
-function removeUndefinedAgentLlmAdvancedParams(
-  advanced: NonNullable<AgentLlmConfig['advanced']>,
-): NonNullable<AgentLlmConfig['advanced']> {
-  return Object.fromEntries(
-    Object.entries(advanced).filter(([, value]) => value !== undefined),
-  ) as NonNullable<AgentLlmConfig['advanced']>;
 }
 
 function appendSelectedFileReferencesToMessage(

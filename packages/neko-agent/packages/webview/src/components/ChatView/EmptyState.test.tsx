@@ -15,6 +15,7 @@ const translations: Record<string, string> = {
   'chat.emptyState.entry.roleplayHelper': 'Roleplay helper',
   'chat.emptyState.desktopDockTitle': 'Hi, create with chat',
   'chat.emptyState.desktopDockDescription': 'Describe an idea or mention a resource.',
+  'chat.emptyState.desktopDockSkills': 'Try a Skill',
 };
 
 vi.mock('@/i18n/I18nContext', () => ({
@@ -74,12 +75,50 @@ describe('EmptyState', () => {
     );
   });
 
-  it('renders the Desktop dock greeting without package configuration or entry actions', () => {
-    render(<EmptyState presentation="desktop-dock" />);
+  it('renders at most four enabled catalog Skills in the Desktop dock', () => {
+    const onSkillSelect = vi.fn();
+    render(
+      <EmptyState
+        presentation="desktop-dock"
+        skills={[
+          skill('disabled', false),
+          skill('a'),
+          skill('b'),
+          skill('c'),
+          skill('d'),
+          skill('e'),
+        ]}
+        onSkillSelect={onSkillSelect}
+      />,
+    );
 
     expect(screen.getByRole('heading', { name: 'Hi, create with chat' })).toBeTruthy();
     expect(screen.getByText('Describe an idea or mention a resource.')).toBeTruthy();
-    expect(screen.queryByRole('button')).toBeNull();
+    expect(screen.getByText('Try a Skill')).toBeTruthy();
+    expect(screen.getAllByRole('button')).toHaveLength(4);
+    expect(screen.queryByRole('button', { name: 'disabled' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'e' })).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'b' }));
+    expect(onSkillSelect).toHaveBeenCalledWith(expect.objectContaining({ name: 'b' }));
     expect(screen.queryByText('AI responses may be inaccurate.')).toBeNull();
   });
+
+  it('does not fabricate Desktop Skill suggestions when none are enabled', () => {
+    render(<EmptyState presentation="desktop-dock" skills={[skill('disabled', false)]} />);
+
+    expect(screen.queryByText('Try a Skill')).toBeNull();
+    expect(screen.queryByRole('button')).toBeNull();
+  });
 });
+
+function skill(name: string, enabled = true) {
+  return {
+    id: name,
+    name,
+    description: `${name} description`,
+    tags: [],
+    source: 'project' as const,
+    enabled,
+  };
+}

@@ -112,14 +112,18 @@ export function GenerationJobCard({
           )}
 
           {isSuccess && imageUrls.length > 0 && (
-            <ImageGridCard
-              urls={[...imageUrls]}
-              name={t('toolCalls.generation.result')}
-              className="mt-2"
-            />
+            <div className="mt-2">
+              <div className="agent-produced-outputs-title">{t('chat.toolCall.outputs')}</div>
+              <ImageGridCard
+                urls={[...imageUrls]}
+                name={t('toolCalls.generation.result')}
+                className="mt-1"
+              />
+            </div>
           )}
           {isSuccess && videoUrls.length > 0 && (
             <div className="mt-2 space-y-2">
+              <div className="agent-produced-outputs-title">{t('chat.toolCall.outputs')}</div>
               {videoUrls.map((url) => (
                 <video key={url} className="max-h-[260px] w-full rounded" src={url} controls />
               ))}
@@ -127,6 +131,7 @@ export function GenerationJobCard({
           )}
           {isSuccess && audioUrls.length > 0 && (
             <div className="mt-2 space-y-2">
+              <div className="agent-produced-outputs-title">{t('chat.toolCall.outputs')}</div>
               {audioUrls.map((url) => (
                 <audio key={url} className="w-full" src={url} controls />
               ))}

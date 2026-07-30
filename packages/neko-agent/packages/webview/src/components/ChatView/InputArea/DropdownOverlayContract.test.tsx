@@ -22,11 +22,11 @@ const translations: Record<string, string> = {
   'chat.modelCapability.code': 'code',
   'chat.executionMode.title': 'Execution mode',
   'chat.executionMode.plan': 'Plan',
-  'chat.executionMode.planDesc': 'Draft commands before running',
+  'chat.executionMode.planDesc': 'Analyze and plan without side-effect tools',
   'chat.executionMode.ask': 'Ask',
-  'chat.executionMode.askDesc': 'Ask before tool actions',
+  'chat.executionMode.askDesc': 'Continue reads; confirm changes and external actions',
   'chat.executionMode.auto': 'Auto',
-  'chat.executionMode.autoDesc': 'Run approved actions automatically',
+  'chat.executionMode.autoDesc': 'Automatically run only allowed safe actions',
   'chat.sessionMode.sections.agent': 'Direct Agent Collaboration',
   'chat.sessionMode.sections.media': 'Media Generation',
   'chat.sessionMode.agent': 'Creative Collaboration',
@@ -201,6 +201,31 @@ describe('dropdown overlay presentation contract', () => {
     expect(screen.getByRole('menu').className).toContain('right-0');
   });
 
+  it('explains exactly three execution choices without a full-access mode', () => {
+    render(<ModeSelector mode="ask" onChange={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Ask' }));
+
+    const menu = screen.getByRole('menu', { name: 'Execution mode' });
+    expect(screen.getAllByRole('menuitemradio')).toHaveLength(3);
+    expect(
+      screen.getByRole('menuitemradio', { name: /Analyze and plan without side-effect tools/ }),
+    ).toBeTruthy();
+    expect(
+      screen
+        .getByRole('menuitemradio', {
+          name: /Continue reads; confirm changes and external actions/,
+        })
+        .getAttribute('aria-checked'),
+    ).toBe('true');
+    expect(
+      screen.getByRole('menuitemradio', {
+        name: /Automatically run only allowed safe actions/,
+      }),
+    ).toBeTruthy();
+    expect(menu.textContent).not.toMatch(/full access/i);
+  });
+
   it('keeps entry prompt menus stretched to the composer width', () => {
     const css = readFileSync(resolve(__dirname, '../../../index.css'), 'utf8');
     const rule = css.match(/\.agent-composer-entry-prompt-menu\s*\{(?<body>[^}]+)\}/)?.groups?.body;
@@ -211,26 +236,25 @@ describe('dropdown overlay presentation contract', () => {
     expect(rule).not.toContain('420px');
   });
 
-  it('keeps mode-specific model and params on the same composer config line', () => {
+  it('keeps mode, model, and parameter triggers on one composer toolbar line', () => {
     const css = readFileSync(resolve(__dirname, '../../../index.css'), 'utf8');
-    const mediaParamsRule = css.match(
-      /\.agent-composer-control-group-config \.agent-generation-params\s*\{(?<body>[^}]+)\}/,
-    )?.groups?.body;
-    const llmParamsRule = css.match(/\.agent-inline-config-stack\s*\{(?<body>[^}]+)\}/)?.groups
+    const controlsRule = css.match(/\.agent-composer-mode-controls\s*\{(?<body>[^}]+)\}/)?.groups
       ?.body;
+    const triggerRule = css.match(/\.agent-control-chip-param\s*\{(?<body>[^}]+)\}/)?.groups?.body;
 
-    expect(mediaParamsRule).toBeTruthy();
-    expect(mediaParamsRule).toContain('width: auto');
-    expect(mediaParamsRule).not.toContain('width: 100%');
-    expect(llmParamsRule).toBeTruthy();
-    expect(llmParamsRule).toContain('flex-direction: row');
-    expect(llmParamsRule).toContain('flex-wrap: wrap');
+    expect(controlsRule).toBeTruthy();
+    expect(controlsRule).toContain('display: inline-flex');
+    expect(controlsRule).toContain('align-items: center');
+    expect(triggerRule).toBeTruthy();
+    expect(triggerRule).toContain('max-width: 144px');
   });
 
-  it('keeps preset and parameter menus content-sized with field headers', () => {
+  it('keeps preset and generation parameter dialogs bounded with field headers', () => {
     const css = readFileSync(resolve(__dirname, '../../../index.css'), 'utf8');
     const presetRule = css.match(/\.agent-dropdown-menu-preset\s*\{(?<body>[^}]+)\}/)?.groups?.body;
-    const paramRule = css.match(/\.agent-dropdown-menu-param\s*\{(?<body>[^}]+)\}/)?.groups?.body;
+    const paramRule = css.match(/\.agent-model-config-dialog\s*\{(?<body>[^}]+)\}/)?.groups?.body;
+    const paramOptionsRule = css.match(/\.agent-generation-params-options\s*\{(?<body>[^}]+)\}/)
+      ?.groups?.body;
     const modelRule = css.match(/\.agent-dropdown-menu-model\s*\{(?<body>[^}]+)\}/)?.groups?.body;
     const inlineRule = css.match(/\.agent-dropdown-item-inline-detail\s*\{(?<body>[^}]+)\}/)?.groups
       ?.body;
@@ -248,9 +272,10 @@ describe('dropdown overlay presentation contract', () => {
     expect(presetRule).toContain('min-width: var(--agent-overlay-compact-min-inline-size)');
     expect(presetRule).toContain('max-width: var(--agent-overlay-compact-max-inline-size)');
     expect(paramRule).toBeTruthy();
-    expect(paramRule).toContain('width: max-content');
-    expect(paramRule).toContain('min-width: var(--agent-overlay-compact-min-inline-size)');
-    expect(paramRule).toContain('max-width: var(--agent-overlay-compact-max-inline-size)');
+    expect(paramRule).toContain('width: min(420px, calc(100vw - 24px))');
+    expect(paramRule).toContain('max-width: calc(100vw - 24px)');
+    expect(paramOptionsRule).toBeTruthy();
+    expect(paramOptionsRule).toContain('flex-wrap: wrap');
     expect(modelRule).toBeTruthy();
     expect(modelRule).toContain('width: var(--agent-overlay-wide-inline-size)');
     expect(modelRule).toContain('max-width: var(--agent-overlay-wide-max-inline-size)');

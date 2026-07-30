@@ -1361,6 +1361,8 @@ export function ConversationController({
               selectedAction={entryAction}
               disabled={isForegroundConversationActivationPending}
               onEntryAction={handleEntryAction}
+              skills={skills}
+              onSkillSelect={(skill) => updateEntryInputValue(`$${skill.name} `)}
             />
             <InputAreaProvider
               isBusy={!hasConfigSnapshot}

@@ -74,6 +74,9 @@ vi.mock('@/i18n/I18nContext', () => ({
         'chat.emptyState.entry.startChatHelper': 'Chat helper',
         'chat.emptyState.entry.generateAssetsHelper': 'Asset helper',
         'chat.emptyState.entry.roleplayHelper': 'Roleplay helper',
+        'chat.emptyState.desktopDockTitle': 'Hi, create with chat',
+        'chat.emptyState.desktopDockDescription': 'Describe an idea or mention a resource.',
+        'chat.emptyState.desktopDockSkills': 'Try a Skill',
         'chat.input.placeholder': 'Type anything...',
         'chat.input.thinkingPlaceholder': 'Type next message...',
         'chat.input.queuePlaceholder': '{count} queued...',
@@ -81,7 +84,7 @@ vi.mock('@/i18n/I18nContext', () => ({
         'chat.input.commands': 'Commands',
         'chat.input.send': 'Send',
         'chat.input.queue': 'Queue',
-        'chat.input.control.mode': 'Mode and model',
+        'chat.input.control.mode': 'Mode, model, and parameters',
         'chat.input.control.params': 'Tool parameters',
         'chat.autoMode': 'Auto',
         'chat.selectModel': 'Select model',
@@ -410,6 +413,35 @@ vi.mock('@/components/ChatView/InputArea', async () => {
 });
 
 describe('ConversationController entry state', () => {
+  it('prefills an explicit Desktop Skill invocation without sending it', () => {
+    render(<ConversationController {...createProps()} emptyStatePresentation="desktop-dock" />);
+
+    act(() => {
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: {
+            type: 'skillsList',
+            skills: [
+              {
+                id: 'storyboard',
+                name: 'storyboard',
+                description: 'Build a storyboard.',
+                tags: [],
+                source: 'project',
+                enabled: true,
+              },
+            ],
+          },
+        }),
+      );
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'storyboard' }));
+
+    expect(screen.getByRole('textbox')).toHaveProperty('value', '$storyboard ');
+    expect(vscodeMocks.newConversation).not.toHaveBeenCalled();
+  });
+
   it('prefills a host handoff exactly once without creating or sending a conversation', () => {
     vi.clearAllMocks();
     const view = render(

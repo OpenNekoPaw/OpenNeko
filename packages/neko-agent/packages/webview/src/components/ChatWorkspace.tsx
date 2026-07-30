@@ -29,7 +29,6 @@ import {
   type CharacterDialogueSessionProjection,
   type EmbodyCharacterSessionProjection,
   type AgentQueuedMessageItem,
-  type AgentLlmConfig,
   type AmbientCanvasNode,
   parseAmbientCanvasUpdateNodes,
 } from '@neko-agent/types';
@@ -198,7 +197,6 @@ export function ChatWorkspace({
   const mediaUnderstandingSelection = tabState.mediaUnderstandingSelection;
   const sessionMode = tabState.sessionMode;
   const entryPromptMenu = tabState.menus.entryPrompt;
-  const llmConfig = tabState.llmConfig;
   const composerMenuState = tabState.menus.composer;
   const composition = tabState.composition;
   const focus = tabState.focus;
@@ -323,12 +321,6 @@ export function ChatWorkspace({
           state.mediaUnderstandingSelection,
         ),
       }));
-    },
-    [updateTabRenderState],
-  );
-  const setLlmConfig = useCallback(
-    (config: AgentLlmConfig) => {
-      updateTabRenderState({ llmConfig: config });
     },
     [updateTabRenderState],
   );
@@ -819,8 +811,6 @@ export function ChatWorkspace({
         onEditQueuedMessage={handleEditQueuedMessage}
         entryPromptMenu={entryPromptMenu}
         onEntryPromptMenuChange={setEntryPromptMenu}
-        llmConfig={llmConfig}
-        onLlmConfigChange={setLlmConfig}
         composerMenuState={composerMenuState}
         onComposerMenuStateChange={setComposerMenuState}
         attachedFiles={attachedFiles}

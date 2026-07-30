@@ -19,7 +19,6 @@ describe('TabRenderRuntime', () => {
       attachedFiles: [{ id: 'asset-a', name: 'a.png', type: 'image', data: 'data-a' }],
       selectedModel: 'model-a',
       generationParams: { ...state.generationParams, resolution: '4K' },
-      llmConfig: { ...state.llmConfig, reasoningPreset: 'deep' },
       composition: { isComposing: true },
       focus: { target: 'input', requestRevision: state.focus.requestRevision + 1 },
       viewport: { followMode: 'detached', anchorMessageId: 'message-a', anchorOffset: 12 },
@@ -31,7 +30,6 @@ describe('TabRenderRuntime', () => {
       inputValue: 'draft-a',
       selectedModel: 'model-a',
       generationParams: { resolution: '4K' },
-      llmConfig: { reasoningPreset: 'deep' },
       composition: { isComposing: true },
       focus: { target: 'input', requestRevision: 1 },
       viewport: { followMode: 'detached', anchorMessageId: 'message-a', anchorOffset: 12 },
@@ -44,11 +42,6 @@ describe('TabRenderRuntime', () => {
       composition: { isComposing: false },
       focus: { target: 'none', requestRevision: 0 },
       viewport: { followMode: 'follow-tail' },
-      llmConfig: {
-        reasoningPreset: 'balanced',
-        verbosityPreset: 'standard',
-        creativityPreset: 'creative',
-      },
       menus: {
         entryPrompt: null,
         composer: {
@@ -57,8 +50,8 @@ describe('TabRenderRuntime', () => {
           mention: { open: false, filter: '', selectedIndex: 0 },
           controls: {
             openMenu: null,
-            agentConfigCategory: 'llm',
-            understandingCategory: null,
+            configCategory: 'llm',
+            configSection: 'model',
           },
           queueExpanded: false,
         },
@@ -202,7 +195,6 @@ describe('TabRenderRuntimeRegistry', () => {
       attachedFiles: [{ id: 'asset-a', name: 'a.png', type: 'image', data: 'data-a' }],
       selectedModel: 'model-a',
       generationParams: { ...state.generationParams, resolution: '4K' },
-      llmConfig: { ...state.llmConfig, reasoningPreset: 'deep' },
       composition: { isComposing: true },
       focus: { target: 'input', requestRevision: 3 },
       viewport: { followMode: 'detached', anchorMessageId: 'message-a', anchorOffset: 12 },
@@ -212,16 +204,14 @@ describe('TabRenderRuntimeRegistry', () => {
       attachedFiles: [{ id: 'asset-b', name: 'b.wav', type: 'audio', data: 'data-b' }],
       selectedModel: 'model-b',
       generationParams: { ...state.generationParams, resolution: '1080p' },
-      llmConfig: { ...state.llmConfig, verbosityPreset: 'detailed' },
       focus: { target: 'input', requestRevision: 7 },
       viewport: { followMode: 'detached', anchorMessageId: 'message-b', anchorOffset: 24 },
     }));
-    runtimeC.store.updateState((state) => ({
+    runtimeC.store.updateState({
       inputValue: 'draft-c',
       selectedModel: 'model-c',
-      llmConfig: { ...state.llmConfig, creativityPreset: 'wild' },
       viewport: { followMode: 'follow-tail' },
-    }));
+    });
 
     const stateA = runtimeA.store.getSnapshot().state;
     const stateB = runtimeB.store.getSnapshot().state;
