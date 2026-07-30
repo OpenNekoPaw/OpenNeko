@@ -120,6 +120,7 @@ export * from './canvas-layered';
 export * from './canvas-serializable';
 export * from './canvas-agent-operations';
 export * from './canvas-authoring-contracts';
+export * from './canvas-material-contracts';
 export * from './canvas-headless-authoring';
 export * from './canvas-semantic-storyboard';
 export * from './canvas-markdown-capabilities';

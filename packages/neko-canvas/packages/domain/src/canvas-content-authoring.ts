@@ -1,96 +1,247 @@
-import { planCanvasNodeCreation, type CanvasData, type ContentLocator } from '@neko/shared';
+import {
+  deriveCanvasMaterialOrigin,
+  planCanvasNodeCreation,
+  type CanvasData,
+  type CanvasConnection,
+  type CanvasEntityRepresentationEvidence,
+  type CanvasGenerationEvidence,
+  type CanvasMaterialMediaKind,
+  type ContentLocator,
+} from '@neko/shared';
 
-const IMAGE_EXTENSIONS = new Set([
-  '.avif',
-  '.bmp',
-  '.gif',
-  '.jpeg',
-  '.jpg',
-  '.png',
-  '.svg',
-  '.webp',
-]);
-const VIDEO_EXTENSIONS = new Set(['.avi', '.m4v', '.mkv', '.mov', '.mp4', '.webm']);
-const AUDIO_EXTENSIONS = new Set(['.aac', '.flac', '.m4a', '.mp3', '.ogg', '.opus', '.wav']);
-
-export function projectContentLocatorToCanvas(input: {
-  readonly canvas: CanvasData;
+/**
+ * Host-resolved, portable material ready for a Canvas commit.
+ * Authorization, linking and copying must already be complete.
+ */
+export interface ResolvedCanvasMaterialDescriptor {
   readonly locator: ContentLocator;
+  readonly title: string;
+  readonly mediaKind: CanvasMaterialMediaKind;
   readonly position?: { readonly x: number; readonly y: number };
+  readonly generation?: CanvasGenerationEvidence;
+  readonly entity?: CanvasEntityRepresentationEvidence;
+}
+
+export function projectResolvedCanvasMaterialToCanvas(input: {
+  readonly canvas: CanvasData;
+  readonly material: ResolvedCanvasMaterialDescriptor;
+  readonly generateId?: () => string;
 }): CanvasData {
-  if (input.locator.kind !== 'workspace-file') {
-    throw new Error('Canvas authoring does not support this ContentLocator kind.');
+  const { material } = input;
+  const origin = deriveCanvasMaterialOrigin(material.locator);
+  if (origin === 'referenced' && material.generation) {
+    throw new Error('Referenced Canvas material must not contain Generation evidence.');
   }
-  const title = basename(input.locator.path);
-  const extension = extensionOf(input.locator.path);
-  const position = input.position ?? {
+  if (origin === 'generated' && !material.generation) {
+    throw new Error('Generated Canvas material requires canonical Generation evidence.');
+  }
+
+  const position = material.position ?? {
     x: 100 + (input.canvas.nodes.length % 4) * 40,
     y: 100 + Math.floor(input.canvas.nodes.length / 4) * 40,
   };
-  if (extension === '.nkc') {
+  const portablePath = portableMaterialPath(material.locator);
+  if (extensionOf(portablePath) === '.nkc') {
     return planCanvasNodeCreation(
-      { canvasData: input.canvas },
+      { canvasData: input.canvas, ...(input.generateId ? { generateId: input.generateId } : {}) },
       {
         type: 'canvas-embed',
         position,
         data: {
-          canvasPath: input.locator.path,
-          canvasTitle: title,
+          canvasPath: portablePath,
+          canvasTitle: material.title,
+          contentLocator: material.locator,
         },
       },
     ).canvasData;
   }
-  const mediaType = resolveMediaType(extension);
-  if (mediaType) {
+
+  if (isRenderableMediaKind(material.mediaKind)) {
     return planCanvasNodeCreation(
-      { canvasData: input.canvas },
+      { canvasData: input.canvas, ...(input.generateId ? { generateId: input.generateId } : {}) },
       {
         type: 'media',
         position,
         data: {
-          assetPath: input.locator.path,
-          contentLocator: input.locator,
-          mediaType,
-          title,
-          provenance: {
-            source: 'content-locator',
-            locatorKind: input.locator.kind,
-          },
+          assetPath: material.locator.kind === 'document-entry' ? '' : portablePath,
+          contentLocator: material.locator,
+          mediaType: material.mediaKind,
+          title: material.title,
+          ...(material.generation ? { generation: material.generation } : {}),
+          ...(material.entity ? { entityRepresentation: material.entity } : {}),
         },
       },
     ).canvasData;
   }
+
   return planCanvasNodeCreation(
-    { canvasData: input.canvas },
+    { canvasData: input.canvas, ...(input.generateId ? { generateId: input.generateId } : {}) },
     {
       type: 'file',
       position,
       data: {
-        path: input.locator.path,
-        title,
-        contentLocator: input.locator,
-        provenance: {
-          source: 'content-locator',
-          locatorKind: input.locator.kind,
-        },
+        path: portablePath,
+        title: material.title,
+        mediaKind: material.mediaKind,
+        contentLocator: material.locator,
+        ...(material.generation ? { generation: material.generation } : {}),
+        ...(material.entity ? { entityRepresentation: material.entity } : {}),
       },
     },
   ).canvasData;
 }
 
-function resolveMediaType(extension: string): 'image' | 'video' | 'audio' | undefined {
-  if (IMAGE_EXTENSIONS.has(extension)) return 'image';
-  if (VIDEO_EXTENSIONS.has(extension)) return 'video';
-  if (AUDIO_EXTENSIONS.has(extension)) return 'audio';
-  return undefined;
+/**
+ * Commits an owner-produced derivative as a new Canvas node and records source lineage.
+ * Source nodes and their locators remain immutable.
+ */
+export function projectDerivedCanvasMaterialToCanvas(input: {
+  readonly canvas: CanvasData;
+  readonly material: ResolvedCanvasMaterialDescriptor;
+  readonly sourceNodeIds: readonly string[];
+  readonly generateId?: () => string;
+}): CanvasData {
+  if (
+    input.sourceNodeIds.length === 0 ||
+    new Set(input.sourceNodeIds).size !== input.sourceNodeIds.length
+  ) {
+    throw new Error('Canvas derived output requires unique source node identities.');
+  }
+  const existingNodeIds = new Set(input.canvas.nodes.map((node) => node.id));
+  for (const sourceNodeId of input.sourceNodeIds) {
+    if (!sourceNodeId.trim() || !existingNodeIds.has(sourceNodeId)) {
+      throw new Error(`Canvas derived output source node "${sourceNodeId}" does not exist.`);
+    }
+  }
+
+  const projected = projectResolvedCanvasMaterialToCanvas({
+    canvas: input.canvas,
+    material: input.material,
+    ...(input.generateId ? { generateId: input.generateId } : {}),
+  });
+  const outputs = projected.nodes.filter((node) => !existingNodeIds.has(node.id));
+  if (outputs.length !== 1) {
+    throw new Error('Canvas derived output must create exactly one new node.');
+  }
+  const output = outputs[0];
+  if (!output) {
+    throw new Error('Canvas derived output node was not created.');
+  }
+  const connections = [...projected.connections];
+  for (const sourceNodeId of input.sourceNodeIds) {
+    const connection = derivedFromConnection(sourceNodeId, output.id);
+    if (connections.some((candidate) => candidate.id === connection.id)) {
+      throw new Error(`Canvas derived output lineage identity "${connection.id}" is occupied.`);
+    }
+    connections.push(connection);
+  }
+  return { ...projected, connections };
 }
 
-function basename(locatorPath: string): string {
-  return locatorPath.slice(locatorPath.lastIndexOf('/') + 1);
+/**
+ * Replaces an Entity-backed node only after an explicit user operation.
+ * The expected binding poisons stale refreshes, while node identity, layout
+ * and existing graph connections remain stable.
+ */
+export function replaceCanvasEntityRepresentationOnCanvas(input: {
+  readonly canvas: CanvasData;
+  readonly nodeId: string;
+  readonly expectedEntity: CanvasEntityRepresentationEvidence;
+  readonly material: ResolvedCanvasMaterialDescriptor & {
+    readonly entity: CanvasEntityRepresentationEvidence;
+  };
+}): CanvasData {
+  const nodeIndex = input.canvas.nodes.findIndex((node) => node.id === input.nodeId);
+  const current = input.canvas.nodes[nodeIndex];
+  if (!current || (current.type !== 'media' && current.type !== 'file')) {
+    throw new Error(`Canvas Entity representation node "${input.nodeId}" is unavailable.`);
+  }
+  const currentEntity = current.data.entityRepresentation;
+  if (!currentEntity || !sameEntityEvidence(currentEntity, input.expectedEntity)) {
+    throw new Error('Canvas Entity representation refresh is stale.');
+  }
+  if (input.material.entity.entityId !== currentEntity.entityId) {
+    throw new Error('Canvas Entity representation refresh cannot change stable Entity identity.');
+  }
+  if (deriveCanvasMaterialOrigin(input.material.locator) !== 'referenced') {
+    throw new Error(
+      'Canvas Entity representation refresh requires a referenced representation locator.',
+    );
+  }
+  if (input.material.generation) {
+    throw new Error('Canvas Entity representation refresh must not attach Generation evidence.');
+  }
+
+  const projected = projectResolvedCanvasMaterialToCanvas({
+    canvas: { ...input.canvas, nodes: [], connections: [] },
+    material: { ...input.material, position: current.position },
+    generateId: () => current.id,
+  });
+  const created = projected.nodes[0];
+  if (
+    projected.nodes.length !== 1 ||
+    !created ||
+    (created.type !== 'media' && created.type !== 'file')
+  ) {
+    throw new Error('Canvas Entity representation refresh produced an unsupported node.');
+  }
+  const replacement = {
+    ...created,
+    position: current.position,
+    size: current.size,
+    zIndex: current.zIndex,
+    ...(current.rotation !== undefined ? { rotation: current.rotation } : {}),
+    ...(current.locked !== undefined ? { locked: current.locked } : {}),
+    ...(current.parentId !== undefined ? { parentId: current.parentId } : {}),
+  };
+  const nodes = [...input.canvas.nodes];
+  nodes[nodeIndex] = replacement;
+  return { ...input.canvas, nodes };
+}
+
+function derivedFromConnection(sourceId: string, targetId: string): CanvasConnection {
+  return {
+    id: `material-derived:${encodeURIComponent(sourceId)}:${encodeURIComponent(targetId)}`,
+    sourceId,
+    targetId,
+    type: 'derived-from',
+    sourceEndpoint: { nodeId: sourceId, scope: 'node' },
+    targetEndpoint: { nodeId: targetId, scope: 'node' },
+  };
+}
+
+function sameEntityEvidence(
+  left: CanvasEntityRepresentationEvidence,
+  right: CanvasEntityRepresentationEvidence,
+): boolean {
+  return (
+    left.entityId === right.entityId &&
+    left.bindingId === right.bindingId &&
+    left.role === right.role
+  );
+}
+
+export function portableMaterialPath(locator: ContentLocator): string {
+  switch (locator.kind) {
+    case 'workspace-file':
+      return locator.path;
+    case 'document-entry':
+      return locator.entryPath;
+    case 'generated-output':
+      return locator.path;
+    case 'package-resource':
+      return locator.resourcePath;
+  }
+}
+
+function isRenderableMediaKind(
+  value: CanvasMaterialMediaKind,
+): value is 'image' | 'video' | 'audio' {
+  return value === 'image' || value === 'video' || value === 'audio';
 }
 
 function extensionOf(locatorPath: string): string {
-  const name = basename(locatorPath);
+  const name = locatorPath.slice(locatorPath.lastIndexOf('/') + 1);
   const index = name.lastIndexOf('.');
   return index < 0 ? '' : name.slice(index).toLocaleLowerCase();
 }

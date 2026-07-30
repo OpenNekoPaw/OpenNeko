@@ -545,7 +545,7 @@ export function useAgentSession(options: UseAgentSessionOptions): AgentSessionHa
           resultCommitter: {
             commit: async ({ ref, generation }) => {
               const delivery = await mediaGenerationDeliveryHost.deliverMediaGeneration({
-                operationId: ref.jobId,
+                jobRef: ref,
                 result: generation,
               });
               return delivery.resultLocators;

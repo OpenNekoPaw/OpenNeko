@@ -125,7 +125,7 @@ describe('NKC validator v3.0', () => {
     );
   });
 
-  it('accepts stable generated-output, Asset, and existing generated-source file refs', () => {
+  it('accepts canonical referenced, generated, and Entity-representation material nodes', () => {
     const generatedRef = createResourceRef({
       scope: 'project',
       provider: 'generated-output',
@@ -146,6 +146,68 @@ describe('NKC validator v3.0', () => {
       locator: { kind: 'file', path: 'neko/assets/concept.png' },
       fingerprint: createResourceFingerprint({ strategy: 'hash', value: 'sha256:asset' }),
     });
+    const result = validateNkc(
+      createValidCanvas({
+        nodes: [
+          {
+            ...createCompleteNode('media'),
+            data: {
+              assetPath: 'neko/generated/image/concept.png',
+              contentLocator: {
+                kind: 'generated-output',
+                outputId: 'generated-output:1',
+                revision: 'revision-1',
+                digest: 'sha256:generated',
+                path: 'neko/generated/image/concept.png',
+              },
+              generation: {
+                jobRef: { kind: 'generation', jobId: 'generation-job-1' },
+                summary: {
+                  prompt: 'A generated concept image',
+                  model: 'fixture-image-model',
+                },
+              },
+              resourceRef: generatedRef,
+            },
+          },
+          {
+            ...createCompleteNode('media'),
+            id: 'media-asset',
+            data: {
+              assetPath: 'neko/assets/concept.png',
+              contentLocator: {
+                kind: 'workspace-file',
+                path: 'neko/assets/concept.png',
+              },
+              entityRepresentation: {
+                entityId: 'character-1',
+                bindingId: 'binding-1',
+                role: 'portrait',
+              },
+              resourceRef: assetRef,
+            },
+          },
+          {
+            ...createCompleteNode('job'),
+            id: 'generation-job-node',
+            data: {
+              jobRef: { kind: 'generation', jobId: 'generation-job-1' },
+              revision: 3,
+              title: 'Generate concept image',
+              status: 'completed',
+              inputRefs: [{ kind: 'canvas-node', nodeId: 'media-asset' }],
+              outputRefs: [{ kind: 'canvas-node', nodeId: 'media-1' }],
+            },
+          },
+        ],
+      }),
+    );
+
+    expect(result.valid).toBe(true);
+    expect(result.errors).toEqual([]);
+  });
+
+  it('rejects ResourceRef/path heuristics without canonical locator and Job evidence', () => {
     const legacyRef = createResourceRef({
       scope: 'project',
       provider: 'workspace',
@@ -160,15 +222,134 @@ describe('NKC validator v3.0', () => {
     const result = validateNkc(
       createValidCanvas({
         nodes: [
-          { ...createCompleteNode('media'), data: { resourceRef: generatedRef } },
-          { ...createCompleteNode('media'), id: 'media-asset', data: { resourceRef: assetRef } },
-          { ...createCompleteNode('media'), id: 'media-legacy', data: { resourceRef: legacyRef } },
+          {
+            ...createCompleteNode('media'),
+            data: {
+              assetPath: 'neko/generated/image/legacy-concept.png',
+              resourceRef: legacyRef,
+              generationContext: { prompt: 'Legacy prompt' },
+            },
+          },
+          {
+            ...createCompleteNode('file'),
+            id: 'generated-without-job',
+            data: {
+              path: 'neko/generated/document/result.md',
+              title: 'Generated document',
+              contentLocator: {
+                kind: 'generated-output',
+                outputId: 'output-document-1',
+                revision: 'revision-1',
+                digest: 'sha256:document',
+                path: 'neko/generated/document/result.md',
+              },
+            },
+          },
         ],
       }),
     );
 
-    expect(result.valid).toBe(true);
-    expect(result.errors).toEqual([]);
+    expect(result.valid).toBe(false);
+    expect(result.errors).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          field: 'nodes[0].data.contentLocator',
+          message: expect.stringContaining('canvas-material-content-locator-required'),
+        }),
+        expect.objectContaining({
+          field: 'nodes[0].data.generationContext',
+          message: expect.stringContaining('canvas-material-legacy-generation-evidence'),
+        }),
+        expect.objectContaining({
+          field: 'nodes[1].data.generation',
+          message: expect.stringContaining('canvas-material-generation-evidence-required'),
+        }),
+      ]),
+    );
+  });
+
+  it('rejects referenced material carrying Generation evidence and non-portable locators', () => {
+    const result = validateNkc(
+      createValidCanvas({
+        nodes: [
+          {
+            ...createCompleteNode('media'),
+            data: {
+              assetPath: 'media/reference.png',
+              contentLocator: { kind: 'workspace-file', path: 'media/reference.png' },
+              generation: {
+                jobRef: { kind: 'generation', jobId: 'generation-job-1' },
+                summary: { prompt: 'Must not classify a referenced file' },
+              },
+            },
+          },
+          {
+            ...createCompleteNode('file'),
+            id: 'absolute-file',
+            data: {
+              path: '/Users/example/private.md',
+              title: 'Invalid absolute file',
+              contentLocator: {
+                kind: 'workspace-file',
+                path: '/Users/example/private.md',
+              },
+            },
+          },
+        ],
+      }),
+    );
+
+    expect(result.valid).toBe(false);
+    expect(result.errors).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          field: 'nodes[0].data.generation',
+          message: expect.stringContaining('canvas-material-generation-evidence-forbidden'),
+        }),
+        expect.objectContaining({
+          field: 'nodes[1].data.contentLocator',
+          message: expect.stringContaining('canvas-material-content-locator-invalid'),
+        }),
+      ]),
+    );
+  });
+
+  it('rejects incomplete Job projections and absolute file artifact refs', () => {
+    const result = validateNkc(
+      createValidCanvas({
+        nodes: [
+          {
+            ...createCompleteNode('job'),
+            data: {
+              jobRef: { kind: 'generation', jobId: 'generation-job-1' },
+              revision: 1,
+              title: 'Generate concept image',
+              status: 'running',
+              inputRefs: [{ kind: 'file', path: '/Users/example/private.png' }],
+              outputRefs: [],
+            },
+          },
+          {
+            ...createCompleteNode('job'),
+            id: 'incomplete-job',
+            data: {},
+          },
+        ],
+      }),
+    );
+
+    expect(result.valid).toBe(false);
+    expect(result.errors).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          field: 'nodes[0].data.inputRefs[0].path',
+          message: expect.stringContaining('workspace-relative'),
+        }),
+        expect.objectContaining({ field: 'nodes[1].data.jobRef' }),
+        expect.objectContaining({ field: 'nodes[1].data.revision' }),
+        expect.objectContaining({ field: 'nodes[1].data.inputRefs' }),
+      ]),
+    );
   });
 
   it('rejects removed subsystem node and connection types', () => {

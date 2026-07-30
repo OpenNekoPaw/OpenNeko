@@ -45,7 +45,7 @@ describe('NodeMediaGenerationDeliveryHost Workspace Board delivery', () => {
 
     await expect(
       host.deliverMediaGeneration({
-        operationId: 'operation-generated-image',
+        jobRef: { kind: 'generation', jobId: 'operation-generated-image' },
         result: completedImageGeneration(sourcePath),
       }),
     ).resolves.toMatchObject({
@@ -238,11 +238,9 @@ function portraitImageArtifact(): CreatorVisibleArtifactCandidate {
     sourceId: 'source:portrait-image',
     intrinsicDimensions: { width: 1024, height: 1536 },
     contentLocator: {
-      kind: 'generated-output',
-      outputId: 'portrait-image',
-      revision: 'rev-portrait-image',
-      digest: 'sha256:portrait-image',
-      path: 'neko/generated/image/portrait-image.png',
+      kind: 'workspace-file',
+      path: 'materials/portrait-image.png',
+      fingerprint: { strategy: 'sha256', value: 'sha256:portrait-image' },
     },
   };
 }

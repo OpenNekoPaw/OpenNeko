@@ -66,6 +66,7 @@ function createJobs(overrides: Partial<GenerationJobPort>): GenerationJobPort {
     observeGeneration: vi.fn(),
     cancelGeneration: vi.fn(),
     retryGeneration: vi.fn(),
+    regenerateGeneration: vi.fn(),
     reconcileGeneration: vi.fn(),
     ...overrides,
   } as GenerationJobPort;

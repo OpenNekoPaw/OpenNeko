@@ -170,6 +170,46 @@ describe('GenerationJobCoordinator', () => {
     expect(await coordinator.describeGeneration(original.ref)).toEqual(failed);
   });
 
+  it('regenerates a succeeded result as a distinct Job without retry provenance', async () => {
+    const execution = createExecution();
+    execution.generateImage.mockResolvedValue(generationResult());
+    const coordinator = createCoordinator(execution, {
+      commit: vi.fn(async ({ ref }) => [createResultLocator(`output-${ref.jobId}`)]),
+    });
+    const original = await coordinator.submitGeneration({
+      ...createInput(),
+      lifecycleMode: 'detached',
+    });
+    const succeeded = await waitForPhase(coordinator, original.ref, 'succeeded');
+
+    const regenerated = await coordinator.regenerateGeneration({
+      ref: original.ref,
+      expectedRevision: succeeded.revision,
+    });
+
+    expect(regenerated.ref.jobId).not.toBe(original.ref.jobId);
+    expect(regenerated.regenerateOf).toEqual(original.ref);
+    expect(regenerated.retryOf).toBeUndefined();
+    expect(regenerated.request).toEqual(succeeded.request);
+  });
+
+  it('rejects regeneration when the source Job is not succeeded', async () => {
+    const execution = createExecution();
+    execution.generateImage.mockRejectedValue(new Error('provider rejected request'));
+    const coordinator = createCoordinator(execution, {
+      commit: vi.fn(async () => [createResultLocator('unused')]),
+    });
+    const original = await coordinator.submitGeneration(createInput());
+    const failed = await waitForPhase(coordinator, original.ref, 'failed');
+
+    await expect(
+      coordinator.regenerateGeneration({
+        ref: original.ref,
+        expectedRevision: failed.revision,
+      }),
+    ).rejects.toMatchObject({ code: 'generation-job-regenerate-unavailable' });
+  });
+
   it('cancels linked work on shutdown and preserves detached work for recovery', async () => {
     const linkedExecution = createExecution();
     linkedExecution.generateImage.mockImplementation((_request, options) =>

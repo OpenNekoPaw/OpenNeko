@@ -69,6 +69,7 @@ function isGenerationJobSnapshot(value: unknown): value is GenerationJobSnapshot
   if (!isRecord(value)) return false;
   const ref = value['ref'];
   const retryOf = value['retryOf'];
+  const regenerateOf = value['regenerateOf'];
   const phase = value['phase'];
   const failure = value['failure'];
   const progress = value['progress'];
@@ -83,6 +84,9 @@ function isGenerationJobSnapshot(value: unknown): value is GenerationJobSnapshot
     !isTimestamp(value['updatedAt']) ||
     value['updatedAt'] < value['createdAt'] ||
     (retryOf !== undefined && (!isGenerationRef(retryOf) || retryOf.jobId === ref.jobId)) ||
+    (regenerateOf !== undefined &&
+      (!isGenerationRef(regenerateOf) || regenerateOf.jobId === ref.jobId)) ||
+    (retryOf !== undefined && regenerateOf !== undefined) ||
     !isGenerationJobRequest(value['request']) ||
     !isGenerationProgress(progress) ||
     (providerTask !== undefined && !isProviderTask(providerTask)) ||

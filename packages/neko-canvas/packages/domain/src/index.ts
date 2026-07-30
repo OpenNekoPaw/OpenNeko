@@ -23,12 +23,16 @@ export {
   CanvasHostRuntimeContractError,
   assertCanvasHostRuntimeIdentity,
   createCanvasHostIntentRequest,
+  createCanvasMaterialActionResolutionRequest,
   parseCanvasHostIntentRequest,
   parseCanvasHostIntentResult,
+  parseCanvasMaterialActionResolution,
+  parseCanvasMaterialActionResolutionRequest,
   parseCanvasHostProjectionEvent,
   parseCanvasHostSnapshot,
 } from './canvas-host-runtime-contract';
 export type {
+  CanvasHostAuthoringCapabilities,
   CanvasHostIntent,
   CanvasHostIntentRequest,
   CanvasHostIntentResult,
@@ -38,9 +42,30 @@ export type {
   CanvasHostRuntimeIdentity,
   CanvasHostRuntimeRoute,
   CanvasHostSnapshot,
+  CanvasMaterialActionResolution,
+  CanvasMaterialActionResolutionRequest,
 } from './canvas-host-runtime-contract';
-export { CanvasHostRuntimeSession } from './canvas-host-runtime-session';
-export { projectContentLocatorToCanvas } from './canvas-content-authoring';
+export {
+  CanvasHostRuntimeSession,
+  CanvasHostVisibleEffectError,
+} from './canvas-host-runtime-session';
+export {
+  portableMaterialPath,
+  projectDerivedCanvasMaterialToCanvas,
+  projectResolvedCanvasMaterialToCanvas,
+  replaceCanvasEntityRepresentationOnCanvas,
+  type ResolvedCanvasMaterialDescriptor,
+} from './canvas-content-authoring';
+export {
+  projectGenerationSnapshotToCanvas,
+  type CanvasGenerationProjectionInput,
+  type CanvasGenerationProjectionSnapshot,
+} from './canvas-generation-projection';
+export {
+  projectCanvasMaterialActionCatalog,
+  resolveCanvasMaterialActionTargets,
+  type CanvasMaterialActionTarget,
+} from './canvas-material-action-catalog';
 export type {
   CanvasHostRuntimeSessionEffects,
   CanvasHostRuntimeSessionOptions,

@@ -8,6 +8,12 @@ import type { CanvasPlaybackMetadata } from './canvas-playback';
 import type { CanvasCreativeScope, CanvasRelatedBoardRef } from './canvas-creative-scope';
 import type { DocumentArchiveResourceRef } from './document-reading';
 import type { ResourceRef } from './resource-cache';
+import type { JobRef } from '../job-lifecycle/contracts';
+import type {
+  CanvasEntityRepresentationEvidence,
+  CanvasGenerationEvidence,
+  CanvasMaterialMediaKind,
+} from './canvas-material-contracts';
 
 // =============================================================================
 // Canvas Types - Infinite Canvas Editor Data Model
@@ -236,6 +242,10 @@ export interface MediaCanvasNode extends CanvasNodeBase {
     provenance?: CanvasSerializableRecord;
     /** Portable generation provenance shown by Canvas material action surfaces. */
     generationContext?: CanvasMaterialGenerationContext;
+    /** Canonical immutable Generation Job evidence for a generated-output locator. */
+    generation?: CanvasGenerationEvidence;
+    /** Optional stable Entity identity separate from the representation locator. */
+    entityRepresentation?: CanvasEntityRepresentationEvidence;
     /** Duration in seconds (for video/audio) */
     duration?: number;
   };
@@ -283,7 +293,8 @@ export type CanvasJobArtifactRef =
 export interface JobCanvasNode extends CanvasNodeBase {
   type: 'job';
   data: {
-    jobId: string;
+    /** Stable owner identity. `kind: legacy` is inspection-only migrated data. */
+    jobRef: JobRef;
     revision: number;
     title: string;
     objective?: string;
@@ -303,11 +314,19 @@ export interface FileCanvasNode extends CanvasNodeBase {
   data: {
     path: string;
     title: string;
+    /** Explicit material kind. Never inferred from the file name or extension. */
+    mediaKind?: CanvasMaterialMediaKind;
     mediaType?: string;
     resourceRef?: ResourceRef;
     documentResourceRef?: DocumentArchiveResourceRef;
     /** Canonical durable content location for Workspace Board and migrated creator-visible nodes. */
     contentLocator?: import('./content-locator').ContentLocator;
+    /** Canonical immutable Generation Job evidence for a generated-output locator. */
+    generation?: CanvasGenerationEvidence;
+    /** Legacy display-only summary accepted only by explicit NKC migration. */
+    generationContext?: CanvasMaterialGenerationContext;
+    /** Optional stable Entity identity separate from the representation locator. */
+    entityRepresentation?: CanvasEntityRepresentationEvidence;
     documentResourceStatus?: DocumentResourceStatus;
     runtimePath?: string;
     /** Base64 cover thumbnail for portable file projections. */
@@ -431,6 +450,8 @@ export interface CanvasEmbedCanvasNode extends CanvasNodeBase {
     canvasPath: string;
     canvasTitle: string;
     thumbnailData?: string;
+    /** Canonical durable location of the embedded Canvas document. */
+    contentLocator?: import('./content-locator').ContentLocator;
   };
 }
 

@@ -114,7 +114,10 @@ export class MediaTurnBridge {
     const resolved = await Promise.all(
       resultLocators.map((contentLocator) => resolveGenerationResult(contentLocator)),
     );
-    const boardDelivery = await this.deliverWorkspaceBatch(resolved.map(({ asset }) => asset));
+    const boardDelivery = await this.deliverWorkspaceBatch(
+      resolved.map(({ asset }) => asset),
+      terminal.ref,
+    );
     const timestamp = this.deps.now?.() ?? Date.now();
     const result = createSuccessfulMediaToolResult(
       input.mediaModel.category,
@@ -137,12 +140,13 @@ export class MediaTurnBridge {
 
   private async deliverWorkspaceBatch(
     assets: readonly GeneratedAsset[],
+    jobRef: GenerationJobSnapshot['ref'],
   ): Promise<GenerationBoardDeliveryProjection> {
     if (assets.length === 0) {
       throw new Error('Workspace Board delivery requires at least one generated asset.');
     }
     const results = await this.deps.workspaceBoardProjection.deliverBatch(
-      createGeneratedAssetsWorkspaceDeliveryBatch(assets, 'vscode'),
+      createGeneratedAssetsWorkspaceDeliveryBatch(assets, 'vscode', jobRef),
     );
     if (results.length !== 1) {
       throw new Error(

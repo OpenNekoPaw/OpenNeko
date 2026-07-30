@@ -16,8 +16,14 @@ import {
   type ConnectionType,
 } from '../types/canvas';
 import type { ContainerCapability } from '../types/canvas-layered';
+import { validateContentLocator } from '../types/content-locator';
+import {
+  isCanvasMaterialMediaKind,
+  type CanvasMaterialMediaKind,
+} from '../types/canvas-material-contracts';
 import { isDocumentArchiveResourceRef } from '../types/document-reading';
 import { isResourceRef } from '../types/resource-cache';
+import { isJobRef, type JobRef } from '../job-lifecycle/contracts';
 
 export type NkcVersion = '1.0' | '2.0' | '2.1' | '3.0';
 
@@ -166,6 +172,7 @@ function migrateLegacyNode(value: unknown, index: number, warnings: string[]): C
         createFileNode(base, {
           path: readString(data, 'docPath'),
           title: readString(data, 'title') || 'Document',
+          mediaKind: 'document',
           mediaType: readString(data, 'mimeType') || readString(data, 'docType'),
           migratedFromType: type,
           resourceRef: isRecord(data['resourceRef']) ? data['resourceRef'] : undefined,
@@ -179,6 +186,7 @@ function migrateLegacyNode(value: unknown, index: number, warnings: string[]): C
         createFileNode(base, {
           path: readString(data, 'modelPath'),
           title: readString(data, 'modelName') || 'Model',
+          mediaKind: 'model',
           mediaType: 'model',
           migratedFromType: type,
         }),
@@ -188,6 +196,7 @@ function migrateLegacyNode(value: unknown, index: number, warnings: string[]): C
         createFileNode(base, {
           path: readString(data, 'projectPath'),
           title: readString(data, 'projectTitle') || 'Project',
+          mediaKind: 'other',
           mediaType: 'application/x-openneko-project',
           migratedFromType: type,
         }),
@@ -220,6 +229,7 @@ function migrateLegacyNode(value: unknown, index: number, warnings: string[]): C
           data: {
             canvasPath: readString(data, 'canvasPath'),
             canvasTitle: readString(data, 'canvasTitle') || 'Canvas',
+            ...readOptionalContentLocator(data['contentLocator']),
           },
         },
       ];
@@ -277,7 +287,7 @@ function normalizeCanonicalNode(value: Record<string, unknown>, index: number): 
         ...base,
         type: 'job',
         data: {
-          jobId: readString(data, 'jobId'),
+          jobRef: readMigratedJobRef(data),
           revision: readFiniteNumber(data, 'revision', 0),
           title: readString(data, 'title') || 'Job',
           ...(typeof data['objective'] === 'string' ? { objective: data['objective'] } : {}),
@@ -291,6 +301,7 @@ function normalizeCanonicalNode(value: Record<string, unknown>, index: number): 
       return createFileNode(base, {
         path: readString(data, 'path'),
         title: readString(data, 'title') || 'File',
+        mediaKind: isCanvasMaterialMediaKind(data['mediaKind']) ? data['mediaKind'] : undefined,
         mediaType: readString(data, 'mediaType'),
         resourceRef: isRecord(data['resourceRef']) ? data['resourceRef'] : undefined,
         documentResourceRef: isRecord(data['documentResourceRef'])
@@ -307,11 +318,32 @@ function normalizeCanonicalNode(value: Record<string, unknown>, index: number): 
           ...(typeof data['thumbnailData'] === 'string'
             ? { thumbnailData: data['thumbnailData'] }
             : {}),
+          ...readOptionalContentLocator(data['contentLocator']),
         },
       };
     default:
       throw new Error(`Unsupported canonical Canvas node type "${String(value['type'])}".`);
   }
+}
+
+function readMigratedJobRef(data: Record<string, unknown>): JobRef {
+  if (isJobRef(data['jobRef'])) return data['jobRef'];
+  const legacyJobId = readString(data, 'jobId');
+  if (legacyJobId) {
+    return { kind: 'legacy', jobId: legacyJobId };
+  }
+  throw new Error('Canvas Job migration requires either jobRef or legacy jobId.');
+}
+
+function readOptionalContentLocator(
+  value: unknown,
+): { readonly contentLocator: import('../types/content-locator').ContentLocator } | undefined {
+  if (value === undefined) return undefined;
+  const result = validateContentLocator(value);
+  if (!result.ok) {
+    throw new Error('Canvas embed contentLocator is invalid.');
+  }
+  return { contentLocator: result.locator };
 }
 
 function migrateShotNode(
@@ -386,6 +418,7 @@ function createFileNode(
   input: {
     path: string;
     title: string;
+    mediaKind?: CanvasMaterialMediaKind;
     mediaType?: string;
     migratedFromType?: string;
     resourceRef?: Record<string, unknown>;
@@ -398,6 +431,7 @@ function createFileNode(
     data: {
       path: input.path,
       title: input.title,
+      ...(input.mediaKind ? { mediaKind: input.mediaKind } : {}),
       ...(input.mediaType ? { mediaType: input.mediaType } : {}),
       ...(input.resourceRef && isResourceRef(input.resourceRef)
         ? { resourceRef: input.resourceRef }

@@ -50,6 +50,7 @@ describe('NodeWorkspaceBoardMutationPort', () => {
       workspaceId: WORKSPACE_ID,
       workspaceUri: mutation.workspaceUri(),
       sourceHost: 'tui',
+      jobRef: { kind: 'generation', jobId: 'operation-generated-1' },
     });
 
     await expect(coordinator.enqueue(request)).resolves.toMatchObject([{ status: 'projected' }]);

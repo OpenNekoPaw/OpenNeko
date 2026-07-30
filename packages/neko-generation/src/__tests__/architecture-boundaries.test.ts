@@ -150,7 +150,7 @@ describe('@neko/generation architecture boundaries', () => {
         'packages/neko-canvas/packages/extension/src/agentCapabilityProvider.ts',
         'packages/neko-canvas/packages/extension/src/editor/canvasEditorProvider.ts',
         'packages/neko-cut/packages/extension/src/extension.ts',
-        'packages/neko-cut/packages/extension/src/editor/CutExportTaskRegistry.ts',
+        'packages/neko-cut/packages/node/src/CutExportTaskRegistry.ts',
       ].map((file) => [file, readFileSync(resolve(workspaceRoot, file), 'utf8')]),
     );
     const allEntrySource = [...sources.values()].join('\n');
@@ -162,7 +162,7 @@ describe('@neko/generation architecture boundaries', () => {
       'packages/neko-canvas/packages/extension/src/editor/canvasEditorProvider.ts',
     );
     const cutExportRegistrySource = sources.get(
-      'packages/neko-cut/packages/extension/src/editor/CutExportTaskRegistry.ts',
+      'packages/neko-cut/packages/node/src/CutExportTaskRegistry.ts',
     );
 
     expect(agentToolSource).toContain('jobs.submitGeneration');

@@ -13,8 +13,13 @@ export interface FileDropOptions {
   maxSize?: number;
   /** Parse `text/uri-list` from VSCode explorer drops (default true). */
   parseUriList?: boolean;
-  /** Parse supported structured drag payloads from `application/json` (default true). */
+  /** Parse supported structured JSON drag payloads (default true). */
   parseJson?: boolean;
+  /**
+   * Ordered JSON MIME types accepted for structured drag payloads.
+   * Defaults to `['application/json']`.
+   */
+  structuredMimeTypes?: readonly string[];
   /** Read native File objects from the DataTransfer (default true). */
   parseNativeFiles?: boolean;
 }
@@ -68,7 +73,7 @@ function parseUriList(raw: string): string[] {
  *
  * Handles three drop sources:
  *   1. VSCode explorer / external URI lists (`text/uri-list`)
- *   2. Structured extension payloads (`application/json`)
+ *   2. Structured extension payloads (ordered JSON MIME types)
  *   3. Native File objects (filesystem drag)
  *
  * ```tsx
@@ -98,10 +103,13 @@ export function useFileDrop(
     e.preventDefault();
     e.stopPropagation();
     const types = Array.from(e.dataTransfer.types);
+    const opts = optionsRef.current;
+    const structuredMimeTypes =
+      opts?.parseJson === false ? [] : (opts?.structuredMimeTypes ?? ['application/json']);
     const hasExternalPayload =
       types.includes('Files') ||
       types.includes('text/uri-list') ||
-      types.includes('application/json');
+      structuredMimeTypes.some((mimeType) => types.includes(mimeType));
     if (!hasExternalPayload) return;
     counterRef.current++;
     if (counterRef.current === 1) {
@@ -142,14 +150,16 @@ export function useFileDrop(
 
     // Priority 1: structured extension payloads
     if (doJson) {
-      const jsonStr = dt.getData('application/json');
-      if (jsonStr) {
+      const structuredMimeTypes = opts?.structuredMimeTypes ?? ['application/json'];
+      for (const mimeType of structuredMimeTypes) {
+        const jsonStr = dt.getData(mimeType);
+        if (!jsonStr) continue;
         try {
           const data: unknown = JSON.parse(jsonStr);
           onDropRef.current({ type: 'json', data }, e);
           return;
         } catch {
-          // fall through
+          // Try the next declared structured MIME representation.
         }
       }
     }

@@ -20,6 +20,11 @@ const generatedLocator: GeneratedOutputContentLocator = {
   digest: 'sha256:shot-1',
   path: 'neko/generated/image/shot-1.png',
 };
+const sourceLocator = {
+  kind: 'workspace-file' as const,
+  path: 'neko/assets/references/source-image.png',
+  fingerprint: { strategy: 'sha256' as const, value: 'sha256:source-image' },
+};
 
 describe('Canvas Workspace Board delivery contract', () => {
   it('derives one canonical Workspace Board URI', () => {
@@ -189,6 +194,7 @@ describe('Canvas Workspace Board delivery contract', () => {
       workspaceId: 'workspace-1',
       workspaceUri: 'file:///workspace/project/',
       sourceHost: 'tui',
+      jobRef: { kind: 'generation', jobId: 'operation-1' },
     });
 
     expect(delivery).toMatchObject({
@@ -202,13 +208,16 @@ describe('Canvas Workspace Board delivery contract', () => {
             kind: 'generated-output',
             outputId: 'shot-1',
           }),
-          generationContext: {
-            prompt: 'A silent megastructure under hard light',
-            model: 'image-model-v2',
-            sourceNodeId: 'shot-node-1',
-            aspectRatio: '16:9',
-            width: 2048,
-            height: 1152,
+          generation: {
+            jobRef: { kind: 'generation', jobId: 'operation-1' },
+            summary: {
+              prompt: 'A silent megastructure under hard light',
+              model: 'image-model-v2',
+              sourceNodeId: 'shot-node-1',
+              aspectRatio: '16:9',
+              width: 2048,
+              height: 1152,
+            },
           },
           provenance: { role: 'output', artifactId: 'shot-1' },
         },
@@ -216,6 +225,27 @@ describe('Canvas Workspace Board delivery contract', () => {
     });
     expect(validateCanvasWorkspaceProjectionRequest(delivery)).toEqual([]);
     expect(JSON.stringify(delivery)).not.toContain('/workspace/project/neko/generated');
+  });
+
+  it('requires Generation Job evidence only for generated outputs', () => {
+    const generatedWithoutEvidence = request({
+      artifacts: [{ ...outputArtifact(), generation: undefined }],
+    });
+    const referencedWithEvidence = request({
+      artifacts: [
+        {
+          ...sourceArtifact(),
+          generation: outputArtifact().generation,
+        },
+      ],
+    });
+
+    expect(
+      validateCanvasWorkspaceProjectionRequest(generatedWithoutEvidence).map(({ code }) => code),
+    ).toContain('missing-projection-identity');
+    expect(
+      validateCanvasWorkspaceProjectionRequest(referencedWithEvidence).map(({ code }) => code),
+    ).toContain('invalid-content-locator');
   });
 
   it('poisons legacy routing, runtime handles, cache values, and malformed refs', () => {
@@ -292,7 +322,7 @@ function sourceArtifact(): CanvasWorkspaceProjectionArtifact {
   return {
     kind: 'file-reference',
     title: 'Source image',
-    contentLocator: generatedLocator,
+    contentLocator: sourceLocator,
     provenance: provenance('source-1', 'source:sha256:shot-1', 'file-reference', 'source'),
   };
 }
@@ -312,6 +342,15 @@ function outputArtifact(): CanvasWorkspaceProjectionArtifact {
     title: 'Shot 1',
     mimeType: 'image/png',
     contentLocator: generatedLocator,
+    generation: {
+      jobRef: { kind: 'generation', jobId: 'operation-1' },
+      summary: {
+        prompt: 'A silent megastructure under hard light',
+        model: 'image-model-v2',
+        sourceNodeId: 'shot-node-1',
+        aspectRatio: '16:9',
+      },
+    },
     provenance: provenance('shot-1', 'generated:sha256:shot-1', 'image', 'output'),
   };
 }

@@ -52,6 +52,12 @@
       "visibility": "public"
     },
     {
+      "id": "generation-regenerate-result-projection",
+      "file": "cases/generation-regenerate-result-projection.json",
+      "group": "regression",
+      "visibility": "public"
+    },
+    {
       "id": "cancel-resume-recovery",
       "file": "cases/cancel-resume-recovery.json",
       "group": "failure",

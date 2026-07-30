@@ -523,7 +523,7 @@ function createArtifactNode(
         mediaType: artifact.kind,
         title: artifact.title,
         contentLocator: artifact.contentLocator,
-        ...(artifact.generationContext ? { generationContext: artifact.generationContext } : {}),
+        ...(artifact.generation ? { generation: artifact.generation } : {}),
         provenance,
       },
     };
@@ -560,7 +560,8 @@ function artifactNodeSize(artifact: CanvasWorkspaceProjectionArtifact): CanvasNo
 
 function artifactImageAspectRatio(artifact: CanvasWorkspaceProjectionArtifact): number | undefined {
   if (artifact.kind !== 'image') return undefined;
-  const dimensions = artifact.intrinsicDimensions ?? artifact.generationContext;
+  const summary = artifact.generation?.summary;
+  const dimensions = artifact.intrinsicDimensions ?? summary;
   if (
     typeof dimensions?.width === 'number' &&
     Number.isFinite(dimensions.width) &&
@@ -571,9 +572,7 @@ function artifactImageAspectRatio(artifact: CanvasWorkspaceProjectionArtifact): 
   ) {
     return dimensions.width / dimensions.height;
   }
-  const match = artifact.generationContext?.aspectRatio?.match(
-    /^\s*(\d+(?:\.\d+)?)\s*[:/]\s*(\d+(?:\.\d+)?)\s*$/,
-  );
+  const match = summary?.aspectRatio?.match(/^\s*(\d+(?:\.\d+)?)\s*[:/]\s*(\d+(?:\.\d+)?)\s*$/);
   if (!match) return undefined;
   const width = Number(match[1]);
   const height = Number(match[2]);

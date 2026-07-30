@@ -1,6 +1,11 @@
 import { validateContentLocator, type ContentLocator } from './content-locator';
 import type { GeneratedAsset, GeneratedAssetMediaKind } from './generated-asset';
 import { isCanvasMaterialGenerationContext, type CanvasMaterialGenerationContext } from './canvas';
+import {
+  isCanvasGenerationEvidence,
+  type CanvasGenerationEvidence,
+  type CanvasGenerationJobRef,
+} from './canvas-material-contracts';
 import { hashStableValue } from './stable-value';
 
 export const CANVAS_WORKSPACE_BOARD_CONTRACT_VERSION = 2 as const;
@@ -65,7 +70,7 @@ export type CanvasWorkspaceProjectionArtifact = CanvasWorkspaceProjectionArtifac
         readonly title: string;
         readonly mimeType?: string;
         readonly contentLocator: ContentLocator;
-        readonly generationContext?: CanvasMaterialGenerationContext;
+        readonly generation?: CanvasGenerationEvidence;
         /** Portable intrinsic pixel dimensions used to size newly projected image nodes. */
         readonly intrinsicDimensions?: CanvasWorkspaceArtifactDimensions;
       }
@@ -189,6 +194,7 @@ export interface CreateGeneratedAssetWorkspaceDeliveryTarget {
   readonly workspaceId: string;
   readonly workspaceUri: string;
   readonly sourceHost: CanvasWorkspaceDeliveryHost;
+  readonly jobRef: CanvasGenerationJobRef;
 }
 
 export function createGeneratedAssetWorkspaceDeliveryRequest(
@@ -202,7 +208,11 @@ export function createGeneratedAssetsWorkspaceDeliveryRequest(
   assets: readonly GeneratedAsset[],
   target: CreateGeneratedAssetWorkspaceDeliveryTarget,
 ): CanvasWorkspaceProjectionRequest {
-  const batch = createGeneratedAssetsWorkspaceDeliveryBatch(assets, target.sourceHost);
+  const batch = createGeneratedAssetsWorkspaceDeliveryBatch(
+    assets,
+    target.sourceHost,
+    target.jobRef,
+  );
   return {
     version: CANVAS_WORKSPACE_BOARD_CONTRACT_VERSION,
     target: { workspaceId: target.workspaceId, workspaceUri: target.workspaceUri },
@@ -213,12 +223,18 @@ export function createGeneratedAssetsWorkspaceDeliveryRequest(
 export function createGeneratedAssetsWorkspaceDeliveryBatch(
   assets: readonly GeneratedAsset[],
   sourceHost: CanvasWorkspaceDeliveryHost,
+  jobRef: CanvasGenerationJobRef,
 ): CanvasWorkspaceDeliveryBatch {
   if (assets.length === 0)
     throw new Error('Generated output delivery requires at least one asset.');
   for (const asset of assets) {
     if (!asset.lifecycle) {
       throw new Error(`Generated output ${asset.id} has no durable lifecycle reference.`);
+    }
+    if (asset.lifecycle.generation.operationId !== jobRef.jobId) {
+      throw new Error(
+        `Generated output ${asset.id} does not belong to Generation Job ${jobRef.jobId}.`,
+      );
     }
   }
   const identities = assets.map((asset) => ({
@@ -247,12 +263,15 @@ export function createGeneratedAssetsWorkspaceDeliveryBatch(
     artifacts: assets.map((asset) => {
       const lifecycle = requireGeneratedAssetLifecycle(asset);
       const generationContext = createCanvasMaterialGenerationContext(asset);
+      if (!generationContext) {
+        throw new Error(`Generated output ${asset.id} has no portable generation summary.`);
+      }
       return {
         kind: lifecycle.mediaKind,
         title: asset.prompt?.trim() || `Generated ${lifecycle.mediaKind}`,
         mimeType: asset.mimeType,
         contentLocator: lifecycle.contentLocator,
-        ...(generationContext ? { generationContext } : {}),
+        generation: { jobRef, summary: generationContext },
         provenance: {
           version: CANVAS_WORKSPACE_BOARD_CONTRACT_VERSION,
           deliveryId,
@@ -417,12 +436,19 @@ export function isCanvasWorkspaceProjectionRequest(
   return artifacts.every((artifact) => {
     if (!isRecord(artifact) || !isRecord(artifact['provenance'])) return false;
     const provenance = artifact['provenance'];
+    const contentLocator =
+      artifact['kind'] === 'markdown'
+        ? undefined
+        : validateContentLocator(artifact['contentLocator']);
     return (
       typeof artifact['kind'] === 'string' &&
       typeof artifact['title'] === 'string' &&
       (artifact['kind'] === 'markdown'
         ? typeof artifact['markdown'] === 'string'
-        : validateContentLocator(artifact['contentLocator']).ok &&
+        : contentLocator?.ok === true &&
+          (contentLocator.locator.kind === 'generated-output'
+            ? isCanvasGenerationEvidence(artifact['generation'])
+            : artifact['generation'] === undefined) &&
           artifact['resourceRef'] === undefined &&
           artifact['documentResourceRef'] === undefined &&
           artifact['localPath'] === undefined) &&
@@ -747,18 +773,39 @@ function validateArtifact(
     identities.add(identity);
   }
 
-  if (
-    artifact['kind'] !== 'markdown' &&
-    artifact['generationContext'] !== undefined &&
-    !isCanvasMaterialGenerationContext(artifact['generationContext'])
-  ) {
+  if (artifact['kind'] !== 'markdown' && artifact['generationContext'] !== undefined) {
     diagnostics.push(
       diagnostic(
         'runtime-value-forbidden',
-        'Canvas generated material context must contain only portable generation metadata.',
+        'Legacy generationContext is forbidden; use immutable Generation Job evidence.',
         [...path, 'generationContext'],
       ),
     );
+  }
+  if (artifact['kind'] !== 'markdown') {
+    const locator = validateContentLocator(artifact['contentLocator']);
+    const hasGeneration = isCanvasGenerationEvidence(artifact['generation']);
+    if (locator.ok && locator.locator.kind === 'generated-output' && !hasGeneration) {
+      diagnostics.push(
+        diagnostic(
+          'missing-projection-identity',
+          'Generated output projection requires immutable Generation Job evidence.',
+          [...path, 'generation'],
+        ),
+      );
+    } else if (
+      locator.ok &&
+      locator.locator.kind !== 'generated-output' &&
+      artifact['generation']
+    ) {
+      diagnostics.push(
+        diagnostic(
+          'invalid-content-locator',
+          'Referenced content projection must not carry Generation evidence.',
+          [...path, 'generation'],
+        ),
+      );
+    }
   }
   if (
     artifact['kind'] !== 'markdown' &&

@@ -57,6 +57,10 @@ export {
   type NodeDocumentEntryReader,
 } from '../vscode/extension/node-content-read-service';
 export {
+  NodeAuthorizedWorkspaceWriter,
+  type NodeAuthorizedWorkspaceWriterOptions,
+} from '../vscode/extension/workspace-content-writer';
+export {
   createHostDerivedContentRuntime,
   type CreateHostDerivedContentRuntimeOptions,
   type HostDerivedContentMaintenanceOptions,

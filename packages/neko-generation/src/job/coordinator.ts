@@ -60,6 +60,12 @@ export class GenerationJobCoordinator implements GenerationJobPort {
 
   async submitGeneration(input: SubmitGenerationJobInput): Promise<GenerationJobSnapshot> {
     this.assertNotDisposed();
+    if (input.retryOf !== undefined && input.regenerateOf !== undefined) {
+      throw new GenerationJobError(
+        'generation-job-binding-mismatch',
+        'Generation Job cannot be both a retry and a regeneration.',
+      );
+    }
     const timestamp = this.now();
     const ref: GenerationJobRef = {
       kind: GENERATION_JOB_KIND,
@@ -73,6 +79,7 @@ export class GenerationJobCoordinator implements GenerationJobPort {
       updatedAt: timestamp,
       lifecycleMode: input.lifecycleMode,
       ...(input.retryOf === undefined ? {} : { retryOf: input.retryOf }),
+      ...(input.regenerateOf === undefined ? {} : { regenerateOf: input.regenerateOf }),
       request: freezeRequest(input),
       progress: { stage: 'queued', percent: 0 },
     });
@@ -147,6 +154,23 @@ export class GenerationJobCoordinator implements GenerationJobPort {
         ...current.request,
         lifecycleMode: current.lifecycleMode,
         retryOf: current.ref,
+      });
+    });
+  }
+
+  regenerateGeneration(input: GenerationJobCommandInput): Promise<GenerationJobSnapshot> {
+    return this.enqueue(input.ref, async () => {
+      const current = await this.getAtExpectedRevision(input);
+      if (current.phase !== 'succeeded') {
+        throw new GenerationJobError(
+          'generation-job-regenerate-unavailable',
+          `Generation Job ${current.ref.jobId} in phase ${current.phase} cannot be regenerated.`,
+        );
+      }
+      return this.submitGeneration({
+        ...current.request,
+        lifecycleMode: current.lifecycleMode,
+        regenerateOf: current.ref,
       });
     });
   }

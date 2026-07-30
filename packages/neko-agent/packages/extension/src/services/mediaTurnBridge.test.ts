@@ -79,6 +79,17 @@ describe('MediaTurnBridge', () => {
       { kind: 'generation-job', jobId: 'generation-1', revision: 3, phase: 'succeeded' },
     ]);
     expect(deliverBatch).toHaveBeenCalledOnce();
+    expect(deliverBatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        artifacts: [
+          expect.objectContaining({
+            generation: expect.objectContaining({
+              jobRef: { kind: 'generation', jobId: 'generation-1' },
+            }),
+          }),
+        ],
+      }),
+    );
     expect(checkpointExternalTurn).toHaveBeenCalledWith({
       conversationId: 'conv-1',
       turnId: 'direct-media:generation-1',
@@ -386,7 +397,7 @@ function generatedImage(): GeneratedAsset {
       contentPath: 'generated-assets/generated-1.png',
       mediaKind: 'image',
       mimeType: 'image/png',
-      generation: { operationId: 'operation-generated-1' },
+      generation: { operationId: 'generation-1' },
     }),
     width: 1024,
     height: 1024,

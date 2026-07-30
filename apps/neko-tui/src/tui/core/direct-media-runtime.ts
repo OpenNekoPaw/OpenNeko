@@ -66,7 +66,7 @@ export async function createDirectMediaRuntime(input: {
         commit: async ({ ref, generation }) => {
           const delivery = await createdDeliveryHost.deliverMediaGeneration({
             result: generation,
-            operationId: ref.jobId,
+            jobRef: ref,
           });
           return delivery.resultLocators;
         },

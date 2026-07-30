@@ -7,7 +7,11 @@
 
 import type { ValidationResult, ValidationError } from '../config/config-adapter';
 import { CANVAS_CONNECTION_TYPES, CANVAS_NODE_TYPES } from '../types/canvas';
+import { validateCanvasMaterialNodePersistence } from '../types/canvas-material-contracts';
+import { normalizeWorkspaceContentPath } from '../types/content-locator';
+import { isResourceRef } from '../types/resource-cache';
 import { validateNkcNodeDurableResourceIdentity } from '../utils/canvasDurableResourceIdentity';
+import { isJobRef } from '../job-lifecycle/contracts';
 
 const LEGACY_RUNTIME_GENERATED_GROUP_ID_PREFIX = 'runtime:canvas-generated-group:';
 const LEGACY_RUNTIME_GENERATED_CANDIDATE_ID_PREFIX = 'runtime:canvas-generated-candidate:';
@@ -263,6 +267,18 @@ function validateNode(
       }),
     ),
   );
+  if (node['type'] === 'job') {
+    validateJobNodeData(node['data'], `${path}.data`, errors);
+  }
+  errors.push(
+    ...validateCanvasMaterialNodePersistence(node['type'], node['data'], `${path}.data`).map(
+      (diagnostic): ValidationError => ({
+        field: diagnostic.target,
+        message: `${diagnostic.code}: ${diagnostic.message}`,
+        severity: 'error',
+      }),
+    ),
+  );
 
   // ports — optional array
   if (node['ports'] !== undefined) {
@@ -275,6 +291,121 @@ function validateNode(
       }
     }
   }
+}
+
+function validateJobNodeData(value: unknown, path: string, errors: ValidationError[]): void {
+  if (!isRecord(value)) {
+    errors.push({ field: path, message: 'Job node data must be an object', severity: 'error' });
+    return;
+  }
+  if (!isJobRef(value['jobRef'])) {
+    errors.push({
+      field: `${path}.jobRef`,
+      message: 'Job reference must contain a non-empty owner kind and Job identity',
+      severity: 'error',
+    });
+  }
+  if (!isNonNegativeInteger(value['revision'])) {
+    errors.push({
+      field: `${path}.revision`,
+      message: 'Job revision must be a non-negative integer',
+      severity: 'error',
+    });
+  }
+  if (!isNonEmptyString(value['title'])) {
+    errors.push({
+      field: `${path}.title`,
+      message: 'Job title must be a non-empty string',
+      severity: 'error',
+    });
+  }
+  if (!isCanvasJobStatus(value['status'])) {
+    errors.push({
+      field: `${path}.status`,
+      message: 'Job status is invalid',
+      severity: 'error',
+    });
+  }
+  validateJobArtifactRefs(value['inputRefs'], `${path}.inputRefs`, errors);
+  validateJobArtifactRefs(value['outputRefs'], `${path}.outputRefs`, errors);
+}
+
+function validateJobArtifactRefs(value: unknown, path: string, errors: ValidationError[]): void {
+  if (!isArray(value)) {
+    errors.push({ field: path, message: 'Job artifact refs must be an array', severity: 'error' });
+    return;
+  }
+  value.forEach((entry, index) => {
+    const entryPath = `${path}[${index}]`;
+    if (!isRecord(entry)) {
+      errors.push({
+        field: entryPath,
+        message: 'Job artifact ref must be an object',
+        severity: 'error',
+      });
+      return;
+    }
+    switch (entry['kind']) {
+      case 'canvas-node':
+        if (!isNonEmptyString(entry['nodeId'])) {
+          errors.push({
+            field: `${entryPath}.nodeId`,
+            message: 'Canvas node artifact identity is invalid',
+            severity: 'error',
+          });
+        }
+        return;
+      case 'resource':
+        if (!isResourceRef(entry['resourceRef'])) {
+          errors.push({
+            field: `${entryPath}.resourceRef`,
+            message: 'Job resource artifact ref is invalid',
+            severity: 'error',
+          });
+        }
+        return;
+      case 'file': {
+        const normalized =
+          typeof entry['path'] === 'string'
+            ? normalizeWorkspaceContentPath(entry['path'])
+            : undefined;
+        if (!normalized || normalized !== entry['path']) {
+          errors.push({
+            field: `${entryPath}.path`,
+            message: 'Job file artifact path must be normalized and workspace-relative',
+            severity: 'error',
+          });
+        }
+        return;
+      }
+      default:
+        errors.push({
+          field: `${entryPath}.kind`,
+          message: 'Job artifact ref kind is invalid',
+          severity: 'error',
+        });
+    }
+  });
+}
+
+function isCanvasJobStatus(value: unknown): boolean {
+  return (
+    value === 'draft' ||
+    value === 'queued' ||
+    value === 'running' ||
+    value === 'waiting' ||
+    value === 'completed' ||
+    value === 'failed' ||
+    value === 'cancelled'
+  );
+}
+
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === 'string' && value.trim().length > 0;
+}
+
+function isNonNegativeInteger(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0;
 }
 
 function validatePort(

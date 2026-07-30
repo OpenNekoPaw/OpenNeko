@@ -54,6 +54,8 @@ export function createPurposeGenerationJobPort(input: {
       input.jobs.observeGeneration(ref, afterRevision),
     cancelGeneration: (command: GenerationJobCommandInput) => input.jobs.cancelGeneration(command),
     retryGeneration: (command: GenerationJobCommandInput) => input.jobs.retryGeneration(command),
+    regenerateGeneration: (command: GenerationJobCommandInput) =>
+      input.jobs.regenerateGeneration(command),
     reconcileGeneration: (command: GenerationJobCommandInput) =>
       input.jobs.reconcileGeneration(command),
   });

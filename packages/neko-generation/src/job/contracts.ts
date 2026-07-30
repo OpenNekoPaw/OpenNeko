@@ -49,6 +49,7 @@ export interface GenerationJobProgress {
 }
 
 export interface GenerationJobSnapshot extends JobSnapshotBase<typeof GENERATION_JOB_KIND> {
+  readonly regenerateOf?: GenerationJobRef;
   readonly lifecycleMode: GenerationJobLifecycleMode;
   readonly request: GenerationJobRequest;
   readonly progress: GenerationJobProgress;
@@ -63,6 +64,7 @@ export interface GenerationJobStore extends VersionedJobStore<GenerationJobSnaps
 export type SubmitGenerationJobInput = GenerationJobRequest & {
   readonly lifecycleMode: GenerationJobLifecycleMode;
   readonly retryOf?: GenerationJobRef;
+  readonly regenerateOf?: GenerationJobRef;
 };
 
 type PurposeGenerationRequest<T extends GenerationJobRequest = GenerationJobRequest> =
@@ -96,6 +98,7 @@ export interface GenerationJobPort {
   ): AsyncIterable<GenerationJobSnapshot>;
   cancelGeneration(input: GenerationJobCommandInput): Promise<GenerationJobSnapshot>;
   retryGeneration(input: GenerationJobCommandInput): Promise<GenerationJobSnapshot>;
+  regenerateGeneration(input: GenerationJobCommandInput): Promise<GenerationJobSnapshot>;
   reconcileGeneration(input: GenerationJobCommandInput): Promise<GenerationJobSnapshot>;
 }
 
@@ -119,6 +122,7 @@ export type GenerationJobErrorCode =
   | 'generation-job-cancel-unsupported'
   | 'generation-job-reconcile-unavailable'
   | 'generation-job-retry-unavailable'
+  | 'generation-job-regenerate-unavailable'
   | 'generation-job-migration-required'
   | 'generation-job-persistence-invalid';
 

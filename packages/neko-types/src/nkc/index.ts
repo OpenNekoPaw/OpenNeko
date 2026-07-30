@@ -16,3 +16,14 @@ export {
   migrateNkcV2ToV2_1,
 } from './migrator';
 export type { NkcMigrationResult, NkcMigrationStep, NkcVersion } from './migrator';
+export {
+  CANVAS_MATERIAL_LEGACY_EVIDENCE_KINDS,
+  inspectLegacyCanvasMaterialNodes,
+  migrateCanvasMaterialNodes,
+} from './canvas-material-migration';
+export type {
+  CanvasMaterialDocumentMigrationResult,
+  CanvasMaterialLegacyEvidenceKind,
+  CanvasMaterialLegacyInspection,
+  CanvasMaterialLegacyInspectionStatus,
+} from './canvas-material-migration';

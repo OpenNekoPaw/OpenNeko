@@ -1,14 +1,21 @@
 import {
+  isCanvasMaterialActionDescriptor,
+  isCanvasMaterialActionIntent,
+  isCanvasMaterialAuthoringRequest,
   isValidNkc,
   validateContentLocator,
   type CanvasData,
+  type CanvasMaterialActionDescriptor,
+  type CanvasMaterialActionIntent,
+  type CanvasMaterialAuthoringRequest,
   type ContentLocator,
 } from '@neko/shared';
 
-export const CANVAS_HOST_RUNTIME_CONTRACT_VERSION = 1 as const;
+export const CANVAS_HOST_RUNTIME_CONTRACT_VERSION = 5 as const;
 
 export const CANVAS_HOST_RUNTIME_ROUTES = {
   snapshotGet: 'snapshot.get',
+  materialActionsResolve: 'material-actions.resolve',
   intentExecute: 'intent.execute',
   projectionEvent: 'projection.event',
 } as const;
@@ -35,6 +42,11 @@ export interface CanvasHostPresentationState {
   readonly selectedNodeIds: readonly string[];
 }
 
+export interface CanvasHostAuthoringCapabilities {
+  readonly sourceModes: readonly ('import' | 'reference')[];
+  readonly generationMediaKinds: readonly ('image' | 'video' | 'audio' | 'model' | 'document')[];
+}
+
 export interface CanvasHostSnapshot {
   readonly schemaVersion: typeof CANVAS_HOST_RUNTIME_CONTRACT_VERSION;
   readonly identity: CanvasHostRuntimeIdentity;
@@ -42,6 +54,25 @@ export interface CanvasHostSnapshot {
   readonly dirty: boolean;
   readonly canvas: CanvasData;
   readonly presentation: CanvasHostPresentationState;
+  /** Runtime-only add-surface capabilities rebuilt from executable Host effects. */
+  readonly authoringCapabilities: CanvasHostAuthoringCapabilities;
+}
+
+export interface CanvasMaterialActionResolutionRequest {
+  readonly schemaVersion: typeof CANVAS_HOST_RUNTIME_CONTRACT_VERSION;
+  readonly requestId: string;
+  readonly expectedRevision: number;
+  readonly identity: CanvasHostRuntimeIdentity;
+  readonly selectedNodeIds: readonly string[];
+}
+
+export interface CanvasMaterialActionResolution {
+  readonly schemaVersion: typeof CANVAS_HOST_RUNTIME_CONTRACT_VERSION;
+  readonly requestId: string;
+  readonly identity: CanvasHostRuntimeIdentity;
+  readonly revision: number;
+  readonly selectedNodeIds: readonly string[];
+  readonly descriptors: readonly CanvasMaterialActionDescriptor[];
 }
 
 export type CanvasHostIntent =
@@ -53,18 +84,28 @@ export type CanvasHostIntent =
       readonly type: 'save' | 'undo' | 'redo';
     }
   | {
-      readonly type: 'project-content';
-      readonly locator: ContentLocator;
-      readonly position?: { readonly x: number; readonly y: number };
+      readonly type: 'author-material';
+      readonly request: CanvasMaterialAuthoringRequest;
     }
   | {
       readonly type: 'request-source';
-      readonly sourceKind: 'image' | 'video' | 'audio' | 'document' | 'canvas';
+      readonly sourceKind: 'image' | 'video' | 'audio' | 'model' | 'document' | 'canvas';
+      readonly sourceMode: 'import' | 'reference';
       readonly position?: { readonly x: number; readonly y: number };
+    }
+  | {
+      readonly type: 'request-generation-draft';
+      readonly mediaKind: 'image' | 'video' | 'audio' | 'model' | 'document';
+      readonly position?: { readonly x: number; readonly y: number };
+      readonly inputNodeIds: readonly string[];
     }
   | {
       readonly type: 'preview-resource' | 'reveal-resource';
       readonly locator: ContentLocator;
+    }
+  | {
+      readonly type: 'execute-material-action';
+      readonly action: CanvasMaterialActionIntent;
     }
   | {
       readonly type: 'update-presentation';
@@ -107,16 +148,79 @@ export type CanvasHostIntentResult =
 export interface CanvasHostProjectionEvent {
   readonly schemaVersion: typeof CANVAS_HOST_RUNTIME_CONTRACT_VERSION;
   readonly sequence: number;
+  /** Present when this projection was produced by an accepted Host intent. */
+  readonly originCommandId?: string;
   readonly snapshot: CanvasHostSnapshot;
 }
 
 export interface CanvasHostRuntime {
   readonly identity: CanvasHostRuntimeIdentity;
   getSnapshot(): Promise<CanvasHostSnapshot>;
+  resolveMaterialActions(
+    request: CanvasMaterialActionResolutionRequest,
+  ): Promise<CanvasMaterialActionResolution>;
   subscribe(listener: (event: CanvasHostProjectionEvent) => void): () => void;
   executeIntent(request: CanvasHostIntentRequest): Promise<CanvasHostIntentResult>;
   /** Releases runtime-local listeners. Owner-managed remote sessions may omit this hook. */
   dispose?(): void;
+}
+
+export function createCanvasMaterialActionResolutionRequest(input: {
+  readonly requestId: string;
+  readonly expectedRevision: number;
+  readonly identity: CanvasHostRuntimeIdentity;
+  readonly selectedNodeIds: readonly string[];
+}): CanvasMaterialActionResolutionRequest {
+  return parseCanvasMaterialActionResolutionRequest({
+    schemaVersion: CANVAS_HOST_RUNTIME_CONTRACT_VERSION,
+    ...input,
+  });
+}
+
+export function parseCanvasMaterialActionResolutionRequest(
+  value: unknown,
+): CanvasMaterialActionResolutionRequest {
+  const record = requireRecord(
+    value,
+    'Canvas material action resolution request must be an object.',
+  );
+  requireVersion(record['schemaVersion']);
+  return {
+    schemaVersion: CANVAS_HOST_RUNTIME_CONTRACT_VERSION,
+    requestId: requireOpaqueIdentity(
+      record['requestId'],
+      'Canvas material action resolution request identity is required.',
+    ),
+    expectedRevision: requireNonNegativeInteger(
+      record['expectedRevision'],
+      'Canvas material action resolution revision must be a non-negative integer.',
+    ),
+    identity: parseCanvasHostRuntimeIdentity(record['identity']),
+    selectedNodeIds: parseSelectedNodeIds(record['selectedNodeIds']),
+  };
+}
+
+export function parseCanvasMaterialActionResolution(
+  value: unknown,
+  expectedRequestId: string,
+): CanvasMaterialActionResolution {
+  const record = requireRecord(value, 'Canvas material action resolution must be an object.');
+  requireVersion(record['schemaVersion']);
+  return {
+    schemaVersion: CANVAS_HOST_RUNTIME_CONTRACT_VERSION,
+    requestId: requireMatchingIdentity(
+      record['requestId'],
+      expectedRequestId,
+      'Canvas material action resolution request identity does not match.',
+    ),
+    identity: parseCanvasHostRuntimeIdentity(record['identity']),
+    revision: requireNonNegativeInteger(
+      record['revision'],
+      'Canvas material action resolution revision must be a non-negative integer.',
+    ),
+    selectedNodeIds: parseSelectedNodeIds(record['selectedNodeIds']),
+    descriptors: parseCanvasMaterialActionDescriptors(record['descriptors']),
+  };
 }
 
 export class CanvasHostRuntimeContractError extends Error {
@@ -184,18 +288,28 @@ export function parseCanvasHostSnapshot(value: unknown): CanvasHostSnapshot {
     dirty: requireBoolean(record['dirty'], 'Canvas Host dirty state is invalid.'),
     canvas,
     presentation: parseCanvasHostPresentationState(record['presentation']),
+    authoringCapabilities: parseCanvasHostAuthoringCapabilities(record['authoringCapabilities']),
   };
 }
 
 export function parseCanvasHostProjectionEvent(value: unknown): CanvasHostProjectionEvent {
   const record = requireRecord(value, 'Canvas Host projection event must be an object.');
   requireVersion(record['schemaVersion']);
+  const originCommandId = record['originCommandId'];
   return {
     schemaVersion: CANVAS_HOST_RUNTIME_CONTRACT_VERSION,
     sequence: requirePositiveInteger(
       record['sequence'],
       'Canvas Host projection event sequence must be a positive integer.',
     ),
+    ...(originCommandId === undefined
+      ? {}
+      : {
+          originCommandId: requireOpaqueIdentity(
+            originCommandId,
+            'Canvas Host projection origin command identity is invalid.',
+          ),
+        }),
     snapshot: parseCanvasHostSnapshot(record['snapshot']),
   };
 }
@@ -314,22 +428,41 @@ function parseCanvasHostIntent(value: unknown): CanvasHostIntent {
   if (type === 'save' || type === 'undo' || type === 'redo') {
     return { type };
   }
-  if (type === 'project-content') {
+  if (type === 'author-material') {
     return {
       type,
-      locator: requireContentLocator(record['locator']),
-      ...readOptionalPosition(record['position']),
+      request: requireCanvasMaterialAuthoringRequest(record['request']),
     };
   }
   if (type === 'request-source') {
     return {
       type,
       sourceKind: requireSourceKind(record['sourceKind']),
+      sourceMode: requireSourceMode(record['sourceMode']),
+      ...readOptionalPosition(record['position']),
+    };
+  }
+  if (type === 'request-generation-draft') {
+    return {
+      type,
+      mediaKind: requireGenerationMediaKind(record['mediaKind']),
+      inputNodeIds: requireArray(
+        record['inputNodeIds'],
+        'Canvas Host Generation input node identities must be an array.',
+      ).map((nodeId) =>
+        requireOpaqueIdentity(nodeId, 'Canvas Host Generation input node identity is invalid.'),
+      ),
       ...readOptionalPosition(record['position']),
     };
   }
   if (type === 'preview-resource' || type === 'reveal-resource') {
     return { type, locator: requireContentLocator(record['locator']) };
+  }
+  if (type === 'execute-material-action') {
+    if (!isCanvasMaterialActionIntent(record['action'])) {
+      throw invalidPayload('Canvas Host material action intent is invalid.');
+    }
+    return { type, action: structuredClone(record['action']) };
   }
   if (type === 'update-presentation') {
     return {
@@ -360,15 +493,6 @@ function parseCanvasHostPresentationState(value: unknown): CanvasHostPresentatio
     'Canvas Host presentation viewport is required.',
   );
   const pan = requireRecord(viewport['pan'], 'Canvas Host presentation pan is required.');
-  const selectedNodeIds = requireArray(
-    record['selectedNodeIds'],
-    'Canvas Host selected node identities must be an array.',
-  ).map((selectedNodeId) =>
-    requireOpaqueIdentity(selectedNodeId, 'Canvas Host selected node identity is invalid.'),
-  );
-  if (new Set(selectedNodeIds).size !== selectedNodeIds.length) {
-    throw invalidPayload('Canvas Host selected node identities must be unique.');
-  }
   return {
     viewport: {
       pan: {
@@ -377,7 +501,36 @@ function parseCanvasHostPresentationState(value: unknown): CanvasHostPresentatio
       },
       zoom: requirePositiveNumber(viewport['zoom'], 'Canvas Host viewport zoom must be positive.'),
     },
-    selectedNodeIds,
+    selectedNodeIds: parseSelectedNodeIds(record['selectedNodeIds']),
+  };
+}
+
+function parseSelectedNodeIds(value: unknown): readonly string[] {
+  const selectedNodeIds = requireArray(
+    value,
+    'Canvas Host selected node identities must be an array.',
+  ).map((selectedNodeId) =>
+    requireOpaqueIdentity(selectedNodeId, 'Canvas Host selected node identity is invalid.'),
+  );
+  if (new Set(selectedNodeIds).size !== selectedNodeIds.length) {
+    throw invalidPayload('Canvas Host selected node identities must be unique.');
+  }
+  return selectedNodeIds;
+}
+
+function parseCanvasHostAuthoringCapabilities(value: unknown): CanvasHostAuthoringCapabilities {
+  const record = requireRecord(value, 'Canvas Host authoring capabilities are required.');
+  return {
+    sourceModes: requireUniqueEnumArray(
+      record['sourceModes'],
+      ['import', 'reference'] as const,
+      'Canvas Host source-mode capability',
+    ),
+    generationMediaKinds: requireUniqueEnumArray(
+      record['generationMediaKinds'],
+      ['image', 'video', 'audio', 'model', 'document'] as const,
+      'Canvas Host Generation media-kind capability',
+    ),
   };
 }
 
@@ -389,13 +542,77 @@ function requireContentLocator(value: unknown): ContentLocator {
   return result.locator;
 }
 
+function requireUniqueEnumArray<const T extends string>(
+  value: unknown,
+  allowed: readonly T[],
+  label: string,
+): readonly T[] {
+  const values = requireArray(value, `${label} list must be an array.`);
+  const parsed = values.map((entry) => {
+    const match = allowed.find((candidate) => candidate === entry);
+    if (!match) throw invalidPayload(`${label} value is invalid.`);
+    return match;
+  });
+  if (new Set(parsed).size !== parsed.length) {
+    throw invalidPayload(`${label} values must be unique.`);
+  }
+  return parsed;
+}
+
+function parseCanvasMaterialActionDescriptors(
+  value: unknown,
+): readonly CanvasMaterialActionDescriptor[] {
+  const descriptors = requireArray(
+    value,
+    'Canvas Host material action descriptors must be an array.',
+  );
+  const ids = new Set<string>();
+  return descriptors.map((descriptor) => {
+    if (!isCanvasMaterialActionDescriptor(descriptor)) {
+      throw invalidPayload('Canvas Host material action descriptor is invalid.');
+    }
+    if (ids.has(descriptor.id)) {
+      throw invalidPayload(`Canvas Host material action "${descriptor.id}" is duplicated.`);
+    }
+    ids.add(descriptor.id);
+    return structuredClone(descriptor);
+  });
+}
+
+function requireCanvasMaterialAuthoringRequest(value: unknown): CanvasMaterialAuthoringRequest {
+  if (!isCanvasMaterialAuthoringRequest(value)) {
+    throw invalidPayload('Canvas Host material authoring request is invalid.');
+  }
+  return value;
+}
+
 function requireSourceKind(
   value: unknown,
 ): Extract<CanvasHostIntent, { readonly type: 'request-source' }>['sourceKind'] {
-  const allowed = ['image', 'video', 'audio', 'document', 'canvas'] as const;
+  const allowed = ['image', 'video', 'audio', 'model', 'document', 'canvas'] as const;
   const match = allowed.find((candidate) => candidate === value);
   if (!match) {
     throw invalidPayload('Canvas Host source kind is invalid.');
+  }
+  return match;
+}
+
+function requireSourceMode(
+  value: unknown,
+): Extract<CanvasHostIntent, { readonly type: 'request-source' }>['sourceMode'] {
+  if (value !== 'import' && value !== 'reference') {
+    throw invalidPayload('Canvas Host source mode is invalid.');
+  }
+  return value;
+}
+
+function requireGenerationMediaKind(
+  value: unknown,
+): Extract<CanvasHostIntent, { readonly type: 'request-generation-draft' }>['mediaKind'] {
+  const allowed = ['image', 'video', 'audio', 'model', 'document'] as const;
+  const match = allowed.find((candidate) => candidate === value);
+  if (!match) {
+    throw invalidPayload('Canvas Host Generation media kind is invalid.');
   }
   return match;
 }

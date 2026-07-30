@@ -23,6 +23,10 @@ const VALID_CANVAS: CanvasData = {
       zIndex: 1,
       data: {
         assetPath: 'assets/video.mp4',
+        contentLocator: {
+          kind: 'workspace-file',
+          path: 'assets/video.mp4',
+        },
         mediaType: 'video',
       },
     },

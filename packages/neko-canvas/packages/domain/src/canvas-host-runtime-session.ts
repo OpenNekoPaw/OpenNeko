@@ -1,4 +1,10 @@
-import type { CanvasData, ContentLocator } from '@neko/shared';
+import type {
+  CanvasData,
+  CanvasMaterialActionDescriptor,
+  CanvasMaterialActionIntent,
+  CanvasMaterialAuthoringRequest,
+  ContentLocator,
+} from '@neko/shared';
 import {
   CANVAS_HOST_RUNTIME_CONTRACT_VERSION,
   assertCanvasHostRuntimeIdentity,
@@ -9,24 +15,47 @@ import {
   type CanvasHostRuntime,
   type CanvasHostRuntimeIdentity,
   type CanvasHostSnapshot,
+  type CanvasMaterialActionResolution,
+  type CanvasMaterialActionResolutionRequest,
 } from './canvas-host-runtime-contract';
+import {
+  projectCanvasMaterialActionCatalog,
+  resolveCanvasMaterialActionTargets,
+  type CanvasMaterialActionTarget,
+} from './canvas-material-action-catalog';
+import {
+  projectGenerationSnapshotToCanvas,
+  type CanvasGenerationProjectionSnapshot,
+} from './canvas-generation-projection';
 
 export interface CanvasHostRuntimeSessionEffects {
+  readonly resolveMaterialActions?: (input: {
+    readonly canvas: CanvasData;
+    readonly identity: CanvasHostRuntimeIdentity;
+    readonly revision: number;
+    readonly targets: readonly CanvasMaterialActionTarget[];
+  }) => Promise<readonly CanvasMaterialActionDescriptor[]>;
   readonly saveDocument?: (input: {
     readonly canvas: CanvasData;
     readonly identity: CanvasHostRuntimeIdentity;
     readonly expectedRevision: number;
   }) => Promise<void>;
-  readonly projectContent?: (input: {
+  readonly authorMaterial?: (input: {
     readonly canvas: CanvasData;
     readonly identity: CanvasHostRuntimeIdentity;
-    readonly locator: ContentLocator;
-    readonly position?: { readonly x: number; readonly y: number };
+    readonly request: CanvasMaterialAuthoringRequest;
   }) => Promise<CanvasData>;
   readonly requestSource?: (input: {
     readonly identity: CanvasHostRuntimeIdentity;
-    readonly sourceKind: 'image' | 'video' | 'audio' | 'document' | 'canvas';
-  }) => Promise<ContentLocator | undefined>;
+    readonly sourceKind: 'image' | 'video' | 'audio' | 'model' | 'document' | 'canvas';
+    readonly sourceMode: 'import' | 'reference';
+  }) => Promise<CanvasMaterialAuthoringRequest | undefined>;
+  readonly requestGenerationDraft?: (input: {
+    readonly identity: CanvasHostRuntimeIdentity;
+    readonly mediaKind: 'image' | 'video' | 'audio' | 'model' | 'document';
+    readonly position?: { readonly x: number; readonly y: number };
+    readonly inputNodeIds: readonly string[];
+  }) => Promise<CanvasGenerationProjectionSnapshot | undefined>;
   readonly previewResource?: (input: {
     readonly identity: CanvasHostRuntimeIdentity;
     readonly locator: ContentLocator;
@@ -35,6 +64,13 @@ export interface CanvasHostRuntimeSessionEffects {
     readonly identity: CanvasHostRuntimeIdentity;
     readonly locator: ContentLocator;
   }) => Promise<void>;
+  readonly executeMaterialAction?: (input: {
+    readonly canvas: CanvasData;
+    readonly identity: CanvasHostRuntimeIdentity;
+    readonly descriptor: CanvasMaterialActionDescriptor;
+    readonly action: CanvasMaterialActionIntent;
+    readonly targets: readonly CanvasMaterialActionTarget[];
+  }) => Promise<{ readonly canvas?: CanvasData }>;
 }
 
 export interface CanvasHostRuntimeSessionOptions {
@@ -46,6 +82,17 @@ export interface CanvasHostRuntimeSessionOptions {
   readonly effects: CanvasHostRuntimeSessionEffects;
   readonly commandHistoryLimit?: number;
   readonly documentHistoryLimit?: number;
+}
+
+/**
+ * Capability owners may surface a sanitized, user-actionable diagnostic.
+ * Internal errors remain generic so absolute paths and implementation details are not exposed.
+ */
+export class CanvasHostVisibleEffectError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'CanvasHostVisibleEffectError';
+  }
 }
 
 const DEFAULT_PRESENTATION: CanvasHostPresentationState = {
@@ -94,6 +141,23 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
     return this.createSnapshot();
   }
 
+  async resolveMaterialActions(
+    request: CanvasMaterialActionResolutionRequest,
+  ): Promise<CanvasMaterialActionResolution> {
+    this.assertActive();
+    assertCanvasHostRuntimeIdentity(this.identity, request.identity);
+    if (request.expectedRevision !== this.revision) {
+      throw new Error(`Canvas material action revision is stale; expected ${this.revision}.`);
+    }
+    const selectedNodeIds = [...request.selectedNodeIds];
+    if (selectedNodeIds.length === 0) {
+      return this.createMaterialActionResolution(request.requestId, selectedNodeIds, []);
+    }
+    const targets = resolveCanvasMaterialActionTargets(this.canvas.nodes, selectedNodeIds);
+    const descriptors = await this.resolveAvailableMaterialActions(targets);
+    return this.createMaterialActionResolution(request.requestId, selectedNodeIds, descriptors);
+  }
+
   subscribe(listener: (event: CanvasHostProjectionEvent) => void): () => void {
     this.assertActive();
     this.listeners.add(listener);
@@ -132,8 +196,14 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
 
     try {
       result = await this.applyIntent(request);
-    } catch {
-      result = rejected(request, 'canvas-runtime-effect-failed', 'Canvas Host effect failed.');
+    } catch (error: unknown) {
+      result = rejected(
+        request,
+        'canvas-runtime-effect-failed',
+        error instanceof CanvasHostVisibleEffectError
+          ? error.message
+          : 'Canvas Host effect failed.',
+      );
     }
     this.remember(request.commandId, result);
     return cloneResult(result);
@@ -152,7 +222,7 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
   private async applyIntent(request: CanvasHostIntentRequest): Promise<CanvasHostIntentResult> {
     const { intent } = request;
     if (intent.type === 'replace-document') {
-      this.commitCanvas(intent.canvas);
+      this.commitCanvas(intent.canvas, request.commandId);
       return this.accepted(request);
     }
     if (intent.type === 'undo') {
@@ -160,7 +230,7 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
       if (previous) {
         this.redoStack.push(cloneCanvas(this.canvas));
         this.canvas = previous;
-        this.commitStateChange(true);
+        this.commitStateChange(true, request.commandId);
       }
       return this.accepted(request);
     }
@@ -169,7 +239,7 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
       if (next) {
         this.pushHistory(this.undoStack, this.canvas);
         this.canvas = next;
-        this.commitStateChange(true);
+        this.commitStateChange(true, request.commandId);
       }
       return this.accepted(request);
     }
@@ -181,32 +251,69 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
         identity: { ...this.identity },
         expectedRevision: this.revision,
       });
-      this.commitStateChange(false);
+      this.commitStateChange(false, request.commandId);
       return this.accepted(request);
     }
-    if (intent.type === 'project-content') {
-      const next = await this.projectContent(intent.locator, request, intent.position);
+    if (intent.type === 'author-material') {
+      const next = await this.authorMaterial(intent.request, request);
       if (isIntentResult(next)) return next;
-      this.commitCanvas(next);
+      this.commitCanvas(next, request.commandId);
       return this.accepted(request);
     }
     if (intent.type === 'request-source') {
       const requestSource = this.options.effects.requestSource;
       if (!requestSource) return unsupported(request, intent.type);
-      const locator = await requestSource({
+      const materialRequest = await requestSource({
         identity: { ...this.identity },
         sourceKind: intent.sourceKind,
+        sourceMode: intent.sourceMode,
       });
-      if (!locator) {
+      if (!materialRequest) {
         return rejected(
           request,
           'canvas-runtime-source-cancelled',
           'Canvas source selection was cancelled.',
         );
       }
-      const next = await this.projectContent(locator, request, intent.position);
+      const requestWithPosition = applyRequestedPosition(materialRequest, intent.position);
+      const next = await this.authorMaterial(requestWithPosition, request);
       if (isIntentResult(next)) return next;
-      this.commitCanvas(next);
+      this.commitCanvas(next, request.commandId);
+      return this.accepted(request);
+    }
+    if (intent.type === 'request-generation-draft') {
+      const requestGenerationDraft = this.options.effects.requestGenerationDraft;
+      if (!requestGenerationDraft) return unsupported(request, intent.type);
+      const generation = await requestGenerationDraft({
+        identity: { ...this.identity },
+        mediaKind: intent.mediaKind,
+        ...(intent.position ? { position: intent.position } : {}),
+        inputNodeIds: [...intent.inputNodeIds],
+      });
+      if (!generation) {
+        return rejected(
+          request,
+          'canvas-runtime-source-cancelled',
+          'Canvas Generation draft was cancelled.',
+        );
+      }
+      const identity = {
+        projectId: this.identity.projectId,
+        canvasId: this.identity.documentId,
+        canvasSessionId: this.identity.sessionId,
+      };
+      this.commitCanvas(
+        projectGenerationSnapshotToCanvas({
+          identity,
+          expectedIdentity: identity,
+          canvas: cloneCanvas(this.canvas),
+          snapshot: {
+            ...generation,
+            ...(intent.position ? { position: intent.position } : {}),
+          },
+        }),
+        request.commandId,
+      );
       return this.accepted(request);
     }
     if (intent.type === 'preview-resource' || intent.type === 'reveal-resource') {
@@ -218,34 +325,75 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
       await effect({ identity: { ...this.identity }, locator: intent.locator });
       return this.accepted(request);
     }
+    if (intent.type === 'execute-material-action') {
+      if (!matchesMaterialActionIdentity(this.identity, intent.action)) {
+        return rejected(
+          request,
+          'canvas-runtime-stale-identity',
+          'Canvas material action belongs to another Canvas session.',
+        );
+      }
+      if (intent.action.expectedCanvasRevision !== this.revision) {
+        return rejected(
+          request,
+          'canvas-runtime-stale-revision',
+          `Canvas material action revision is stale; expected ${this.revision}.`,
+        );
+      }
+      const targets = resolveCanvasMaterialActionTargets(
+        this.canvas.nodes,
+        intent.action.selectedNodeIds,
+      );
+      const available = await this.resolveAvailableMaterialActions(targets);
+      const descriptor = available.find((candidate) => candidate.id === intent.action.actionId);
+      if (!descriptor) {
+        return rejected(
+          request,
+          'canvas-runtime-unsupported-intent',
+          `Canvas material action "${intent.action.actionId}" is unavailable for the current selection.`,
+        );
+      }
+      const executeMaterialAction = this.options.effects.executeMaterialAction;
+      if (!executeMaterialAction) return unsupported(request, intent.type);
+      const result = await executeMaterialAction({
+        canvas: cloneCanvas(this.canvas),
+        identity: { ...this.identity },
+        descriptor: structuredClone(descriptor),
+        action: structuredClone(intent.action),
+        targets: structuredClone(targets),
+      });
+      if (result.canvas) {
+        this.commitCanvas(result.canvas, request.commandId);
+      }
+      return this.accepted(request);
+    }
     if (intent.type === 'update-presentation') {
       this.presentation = clonePresentation(intent.presentation);
-      this.commitStateChange(this.dirty);
+      this.commitStateChange(this.dirty, request.commandId);
       return this.accepted(request);
     }
     return unsupported(request, 'unknown');
   }
 
-  private async projectContent(
-    locator: ContentLocator,
+  private async authorMaterial(
+    materialRequest: CanvasMaterialAuthoringRequest,
     request: CanvasHostIntentRequest,
-    position?: { readonly x: number; readonly y: number },
   ): Promise<CanvasData | CanvasHostIntentResult> {
-    const projectContent = this.options.effects.projectContent;
-    if (!projectContent) return unsupported(request, 'project-content');
-    return projectContent({
+    const authorMaterial = this.options.effects.authorMaterial;
+    if (!authorMaterial) return unsupported(request, 'author-material');
+    assertMaterialIdentity(this.identity, materialRequest);
+    return authorMaterial({
       canvas: cloneCanvas(this.canvas),
       identity: { ...this.identity },
-      locator,
-      ...(position ? { position } : {}),
+      request: structuredClone(materialRequest),
     });
   }
 
-  private commitCanvas(nextCanvas: CanvasData): void {
+  private commitCanvas(nextCanvas: CanvasData, originCommandId: string): void {
     this.pushHistory(this.undoStack, this.canvas);
     this.redoStack.length = 0;
     this.canvas = cloneCanvas(nextCanvas);
-    this.commitStateChange(true);
+    this.commitStateChange(true, originCommandId);
   }
 
   private pushHistory(history: CanvasData[], canvas: CanvasData): void {
@@ -253,13 +401,14 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
     if (history.length > this.documentHistoryLimit) history.shift();
   }
 
-  private commitStateChange(dirty: boolean): void {
+  private commitStateChange(dirty: boolean, originCommandId: string): void {
     this.dirty = dirty;
     this.revision += 1;
     this.sequence += 1;
     const event: CanvasHostProjectionEvent = {
       schemaVersion: CANVAS_HOST_RUNTIME_CONTRACT_VERSION,
       sequence: this.sequence,
+      originCommandId,
       snapshot: this.createSnapshot(),
     };
     for (const listener of this.listeners) listener(cloneEvent(event));
@@ -276,6 +425,8 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
   }
 
   private createSnapshot(): CanvasHostSnapshot {
+    const sourceAvailable = this.options.effects.requestSource !== undefined;
+    const generationAvailable = this.options.effects.requestGenerationDraft !== undefined;
     return {
       schemaVersion: CANVAS_HOST_RUNTIME_CONTRACT_VERSION,
       identity: { ...this.identity },
@@ -283,6 +434,43 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
       dirty: this.dirty,
       canvas: cloneCanvas(this.canvas),
       presentation: clonePresentation(this.presentation),
+      authoringCapabilities: {
+        sourceModes: sourceAvailable ? ['import', 'reference'] : [],
+        generationMediaKinds: generationAvailable
+          ? ['image', 'video', 'audio', 'model', 'document']
+          : [],
+      },
+    };
+  }
+
+  private async resolveAvailableMaterialActions(
+    targets: readonly CanvasMaterialActionTarget[],
+  ): Promise<readonly CanvasMaterialActionDescriptor[]> {
+    const resolveMaterialActions = this.options.effects.resolveMaterialActions;
+    if (!resolveMaterialActions || targets.length === 0) return [];
+    return projectCanvasMaterialActionCatalog({
+      descriptors: await resolveMaterialActions({
+        canvas: cloneCanvas(this.canvas),
+        identity: { ...this.identity },
+        revision: this.revision,
+        targets: structuredClone(targets),
+      }),
+      targets,
+    });
+  }
+
+  private createMaterialActionResolution(
+    requestId: string,
+    selectedNodeIds: readonly string[],
+    descriptors: readonly CanvasMaterialActionDescriptor[],
+  ): CanvasMaterialActionResolution {
+    return {
+      schemaVersion: CANVAS_HOST_RUNTIME_CONTRACT_VERSION,
+      requestId,
+      identity: { ...this.identity },
+      revision: this.revision,
+      selectedNodeIds: [...selectedNodeIds],
+      descriptors: structuredClone(descriptors),
     };
   }
 
@@ -367,4 +555,39 @@ function cloneSnapshot(snapshot: CanvasHostSnapshot): CanvasHostSnapshot {
     canvas: cloneCanvas(snapshot.canvas),
     presentation: clonePresentation(snapshot.presentation),
   };
+}
+
+function assertMaterialIdentity(
+  identity: CanvasHostRuntimeIdentity,
+  request: CanvasMaterialAuthoringRequest,
+): void {
+  if (
+    request.identity.projectId !== identity.projectId ||
+    request.identity.canvasId !== identity.documentId ||
+    request.identity.canvasSessionId !== identity.sessionId
+  ) {
+    throw new Error('Canvas material authoring identity does not match the active Canvas session.');
+  }
+}
+
+function matchesMaterialActionIdentity(
+  identity: CanvasHostRuntimeIdentity,
+  action: CanvasMaterialActionIntent,
+): boolean {
+  return (
+    action.identity.projectId === identity.projectId &&
+    action.identity.canvasId === identity.documentId &&
+    action.identity.canvasSessionId === identity.sessionId
+  );
+}
+
+function applyRequestedPosition(
+  request: CanvasMaterialAuthoringRequest,
+  position: Readonly<{ x: number; y: number }> | undefined,
+): CanvasMaterialAuthoringRequest {
+  if (position === undefined) return request;
+  if (request.kind === 'global-library-link') {
+    throw new Error('Canvas source selection cannot return a global Media Library link request.');
+  }
+  return { ...request, position: { ...position } };
 }

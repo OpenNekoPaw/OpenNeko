@@ -156,11 +156,14 @@ describe('planCanvasWorkspaceBoardProjection', () => {
     const image = outputArtifact('delivery:portrait-image');
     const portraitImage = {
       ...image,
-      generationContext: {
-        ...image.generationContext,
-        aspectRatio: '2:3',
-        width: 1024,
-        height: 1536,
+      generation: {
+        ...image.generation,
+        summary: {
+          ...image.generation?.summary,
+          aspectRatio: '2:3',
+          width: 1024,
+          height: 1536,
+        },
       },
     } satisfies CanvasWorkspaceProjectionArtifact;
 
@@ -177,7 +180,8 @@ describe('planCanvasWorkspaceBoardProjection', () => {
   it('sizes a newly projected referenced image node to its intrinsic aspect ratio', () => {
     const image = {
       ...outputArtifact('delivery:referenced-portrait'),
-      generationContext: undefined,
+      contentLocator: sourceLocator,
+      generation: undefined,
       intrinsicDimensions: { width: 900, height: 1600 },
     } satisfies CanvasWorkspaceProjectionArtifact;
 
@@ -564,11 +568,14 @@ function outputArtifact(
     title: 'Shot 1',
     mimeType: 'image/png',
     contentLocator: generatedLocator,
-    generationContext: {
-      prompt: 'A silent megastructure under hard light',
-      model: 'image-model-v2',
-      sourceNodeId: 'shot-node-1',
-      aspectRatio: '16:9',
+    generation: {
+      jobRef: { kind: 'generation', jobId: 'job-1' },
+      summary: {
+        prompt: 'A silent megastructure under hard light',
+        model: 'image-model-v2',
+        sourceNodeId: 'shot-node-1',
+        aspectRatio: '16:9',
+      },
     },
     provenance: provenance(
       deliveryId,

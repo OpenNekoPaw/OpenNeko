@@ -78,7 +78,13 @@ describe('WorkspaceBoardProjectionHost', () => {
     });
 
     await expect(
-      host.deliverBatch(createGeneratedAssetsWorkspaceDeliveryBatch([generatedImage()], 'vscode')),
+      host.deliverBatch(
+        createGeneratedAssetsWorkspaceDeliveryBatch(
+          [generatedImage()],
+          'vscode',
+          generationJobRef(),
+        ),
+      ),
     ).resolves.toMatchObject([{ status: 'projected' }]);
     expect(project).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -132,7 +138,7 @@ describe('WorkspaceBoardProjectionHost', () => {
           title: 'Portrait',
           sourceId: 'source:image-1',
           intrinsicDimensions: { width: 1024, height: 1536 },
-          contentLocator: generatedLocatorForCandidate(),
+          contentLocator: referencedLocatorForCandidate(),
         },
       ],
     });
@@ -154,7 +160,13 @@ describe('WorkspaceBoardProjectionHost', () => {
     });
 
     await expect(
-      host.deliverBatch(createGeneratedAssetsWorkspaceDeliveryBatch([generatedImage()], 'vscode')),
+      host.deliverBatch(
+        createGeneratedAssetsWorkspaceDeliveryBatch(
+          [generatedImage()],
+          'vscode',
+          generationJobRef(),
+        ),
+      ),
     ).resolves.toMatchObject([
       {
         status: 'blocked',
@@ -177,7 +189,7 @@ describe('WorkspaceBoardProjectionHost', () => {
     });
 
     const results = await host.deliverBatch(
-      createGeneratedAssetsWorkspaceDeliveryBatch([generatedImage()], 'vscode'),
+      createGeneratedAssetsWorkspaceDeliveryBatch([generatedImage()], 'vscode', generationJobRef()),
     );
 
     expect(results).toMatchObject([
@@ -195,7 +207,13 @@ describe('WorkspaceBoardProjectionHost', () => {
     });
 
     await expect(
-      host.deliverBatch(createGeneratedAssetsWorkspaceDeliveryBatch([generatedImage()], 'vscode')),
+      host.deliverBatch(
+        createGeneratedAssetsWorkspaceDeliveryBatch(
+          [generatedImage()],
+          'vscode',
+          generationJobRef(),
+        ),
+      ),
     ).resolves.toMatchObject([
       { status: 'blocked', diagnostics: [expect.objectContaining({ code: 'workspace-required' })] },
     ]);
@@ -226,13 +244,14 @@ function generatedImage(): GeneratedImage {
   };
 }
 
-function generatedLocatorForCandidate() {
-  return createGeneratedAssetRevisionRef({
-    assetId: 'image-1',
-    contentDigest: 'sha256:image-1',
-    contentPath: 'neko/generated/image/image-1.png',
-    mediaKind: 'image',
-    mimeType: 'image/png',
-    generation: { operationId: 'operation-image-1' },
-  }).contentLocator;
+function generationJobRef() {
+  return { kind: 'generation' as const, jobId: 'operation-generated-1' };
+}
+
+function referencedLocatorForCandidate() {
+  return {
+    kind: 'workspace-file' as const,
+    path: 'materials/image-1.png',
+    fingerprint: { strategy: 'sha256' as const, value: 'sha256:image-1' },
+  };
 }

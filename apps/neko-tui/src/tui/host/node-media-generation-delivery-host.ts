@@ -9,6 +9,7 @@ import type {
   CanvasWorkspaceProjectionResult,
   CanvasWorkspaceProjectionArtifact,
   CanvasWorkspaceProjectionRequest,
+  CanvasGenerationJobRef,
   GeneratedAsset,
   GeneratedAssetRevisionRef,
   LocalMetadataStore,
@@ -95,7 +96,7 @@ export class NodeMediaGenerationDeliveryHost {
   }
 
   async deliverMediaGeneration(input: {
-    readonly operationId: string;
+    readonly jobRef: CanvasGenerationJobRef;
     readonly result: MediaGenerationResult;
   }): Promise<{
     readonly resultUrls: readonly string[];
@@ -113,7 +114,7 @@ export class NodeMediaGenerationDeliveryHost {
     }
     const finalized = await finalizeMediaGenerationOutputs({
       workspaceRoot: this.deps.workspaceRoot,
-      operationId: input.operationId,
+      operationId: input.jobRef.jobId,
       generationType: input.result.type,
       mediaKind,
       outputs: input.result.outputs,
@@ -123,7 +124,7 @@ export class NodeMediaGenerationDeliveryHost {
       outputDir: settingsPlan.outputDir,
       assetIndex: this.assetIndex,
     });
-    await this.deliverGeneratedOutputBatch(finalized.generatedAssets);
+    await this.deliverGeneratedOutputBatch(finalized.generatedAssets, input.jobRef);
     return {
       resultUrls: finalized.resultUrls,
       resultLocators: finalized.generatedAssets.map((asset) => {
@@ -135,7 +136,10 @@ export class NodeMediaGenerationDeliveryHost {
     };
   }
 
-  private async deliverGeneratedOutputBatch(assets: readonly GeneratedAsset[]): Promise<void> {
+  private async deliverGeneratedOutputBatch(
+    assets: readonly GeneratedAsset[],
+    jobRef: CanvasGenerationJobRef,
+  ): Promise<void> {
     if (assets.length === 0) return;
     this.deps.onGeneratedOutputDelivery?.(
       assets.flatMap((asset) => (asset.lifecycle ? [asset.lifecycle] : [])),
@@ -145,6 +149,7 @@ export class NodeMediaGenerationDeliveryHost {
         workspaceId: this.deps.workspaceId,
         workspaceUri: this.workspaceBoardMutation.workspaceUri(),
         sourceHost: 'tui',
+        jobRef,
       }),
     );
   }

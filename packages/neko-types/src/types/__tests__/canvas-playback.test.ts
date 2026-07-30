@@ -255,7 +255,7 @@ describe('canonical Canvas playback', () => {
         size: { width: 300, height: 180 },
         zIndex: 1,
         data: {
-          jobId: 'job',
+          jobRef: { kind: 'generation', jobId: 'job' },
           revision: 1,
           title: 'Job',
           status: 'draft',

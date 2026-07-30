@@ -35,6 +35,12 @@ import type {
 } from '../types/canvas-headless-authoring';
 import { CANVAS_HEADLESS_AUTHORING_CONTRACT_VERSION } from '../types/canvas-headless-authoring';
 import type { JsonPointerPath } from '../types/canvas-layered';
+import {
+  isCanvasEntityRepresentationEvidence,
+  isCanvasGenerationEvidence,
+  isCanvasMaterialMediaKind,
+} from '../types/canvas-material-contracts';
+import { isJobRef } from '../job-lifecycle/contracts';
 import { validateContentLocator } from '../types/content-locator';
 import { isDocumentArchiveResourceRef } from '../types/document-reading';
 import { isResourceRef } from '../types/resource-cache';
@@ -529,10 +535,12 @@ function createNodeFromSpec(
       };
     case 'media': {
       const assetPath = readString(input, 'assetPath');
+      const contentLocator = validateContentLocator(input['contentLocator']);
       if (
         !assetPath &&
         !isResourceRef(input['resourceRef']) &&
-        !isDocumentArchiveResourceRef(input['documentResourceRef'])
+        !isDocumentArchiveResourceRef(input['documentResourceRef']) &&
+        !contentLocator.ok
       ) {
         throw new Error('Canvas Media creation requires a durable source');
       }
@@ -546,6 +554,8 @@ function createNodeFromSpec(
           ...readMediaType(input),
           ...readOptionalPositiveNumberField(input, 'duration'),
           ...readResourceFields(input),
+          ...readGenerationEvidence(input),
+          ...readEntityRepresentationEvidence(input),
           ...readGenerationContext(input),
           ...readProvenance(input),
         },
@@ -572,7 +582,7 @@ function createNodeFromSpec(
         ...base,
         type,
         data: {
-          jobId: readRequiredString(input, 'jobId', 'Canvas Job'),
+          jobRef: readRequiredJobRef(input['jobRef']),
           revision: readRequiredNonNegativeInteger(input, 'revision', 'Canvas Job'),
           title: readRequiredString(input, 'title', 'Canvas Job'),
           ...readOptionalStringField(input, 'objective'),
@@ -584,10 +594,12 @@ function createNodeFromSpec(
       };
     case 'file': {
       const path = readString(input, 'path');
+      const contentLocator = validateContentLocator(input['contentLocator']);
       if (
         !path &&
         !isResourceRef(input['resourceRef']) &&
-        !isDocumentArchiveResourceRef(input['documentResourceRef'])
+        !isDocumentArchiveResourceRef(input['documentResourceRef']) &&
+        !contentLocator.ok
       ) {
         throw new Error('Canvas File creation requires a durable source');
       }
@@ -597,8 +609,14 @@ function createNodeFromSpec(
         data: {
           path,
           title: readString(input, 'title') || path.split('/').pop() || 'File',
+          ...(isCanvasMaterialMediaKind(input['mediaKind'])
+            ? { mediaKind: input['mediaKind'] }
+            : {}),
           ...readOptionalStringField(input, 'mediaType'),
           ...readResourceFields(input),
+          ...readGenerationEvidence(input),
+          ...readEntityRepresentationEvidence(input),
+          ...readGenerationContext(input),
           ...readProvenance(input),
         },
       };
@@ -613,10 +631,18 @@ function createNodeFromSpec(
           canvasTitle:
             readString(input, 'canvasTitle') || canvasPath.split('/').pop() || canvasPath,
           ...readOptionalStringField(input, 'thumbnailData'),
+          ...readContentLocator(input),
         },
       };
     }
   }
+}
+
+function readRequiredJobRef(value: unknown): import('../job-lifecycle/contracts').JobRef {
+  if (!isJobRef(value)) {
+    throw new Error('Canvas Job jobRef must contain a non-empty owner kind and Job identity');
+  }
+  return value;
 }
 
 function replaceNodeData(node: CanvasNode, value: unknown): CanvasNode {
@@ -821,9 +847,26 @@ function readResourceFields(record: Record<string, unknown>) {
   };
 }
 
+function readContentLocator(record: Record<string, unknown>) {
+  const contentLocator = validateContentLocator(record['contentLocator']);
+  return contentLocator.ok ? { contentLocator: contentLocator.locator } : {};
+}
+
 function readGenerationContext(record: Record<string, unknown>) {
   return isCanvasMaterialGenerationContext(record['generationContext'])
     ? { generationContext: record['generationContext'] }
+    : {};
+}
+
+function readGenerationEvidence(record: Record<string, unknown>) {
+  return isCanvasGenerationEvidence(record['generation'])
+    ? { generation: record['generation'] }
+    : {};
+}
+
+function readEntityRepresentationEvidence(record: Record<string, unknown>) {
+  return isCanvasEntityRepresentationEvidence(record['entityRepresentation'])
+    ? { entityRepresentation: record['entityRepresentation'] }
     : {};
 }
 

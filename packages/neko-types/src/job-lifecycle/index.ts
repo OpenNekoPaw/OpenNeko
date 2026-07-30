@@ -6,6 +6,7 @@ export type {
   JobStoreCommit,
   VersionedJobStore,
 } from './contracts';
+export { isJobRef } from './contracts';
 export { createInMemoryVersionedJobStore } from './in-memory-job-store';
 export {
   createVersionedJobObservationHub,

@@ -16,7 +16,6 @@ import type {
   CanvasAgentActiveContextResult,
   CanvasAgentApplyContentResult,
   CanvasAgentContentPayload,
-  CanvasAgentProvenance,
   CanvasCreateCompositeRequest,
   CanvasCreateCompositeResult,
   CanvasCreateConnectionRequest,
@@ -39,10 +38,10 @@ import type {
 } from './canvas-markdown-capabilities';
 import type { CanvasCutDraftPayload } from './canvas-cut-draft';
 import type { CanvasPlaybackPlan, CanvasPlaybackRouteCandidate } from './canvas-playback';
-import type { DocumentArchiveResourceRef } from './document-reading';
 import type { GeneratedOutputContentLocator } from './content-locator';
+import type { CanvasReferencedContentLocator } from './canvas-material-contracts';
 import type { SkillCatalogMeta } from './skill';
-import type { ResourceRef, ResourceVariantRequest } from './resource-cache';
+import type { ResourceVariantRequest } from './resource-cache';
 
 export interface NekoDisposableLike {
   dispose(): void;
@@ -122,14 +121,11 @@ export interface ShapeConfig {
 export type CanvasNodeUpdateData = Record<string, unknown>;
 
 export interface CanvasImportAssetRequest {
-  readonly path?: string;
-  readonly type?: 'image' | 'video' | 'audio';
+  readonly contentLocator: CanvasReferencedContentLocator;
+  readonly type: 'image' | 'video' | 'audio';
   readonly name?: string;
-  readonly documentResourceRef?: DocumentArchiveResourceRef;
-  readonly resourceRef?: ResourceRef;
   readonly target?: CanvasHeadlessAuthoringTarget;
   readonly position?: { readonly x: number; readonly y: number };
-  readonly provenance?: CanvasAgentProvenance;
 }
 
 export interface CanvasImportAssetResult {

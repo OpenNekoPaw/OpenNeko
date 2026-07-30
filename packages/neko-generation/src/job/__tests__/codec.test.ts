@@ -114,6 +114,25 @@ describe('Generation Job codec', () => {
       expect.objectContaining({ code: 'generation-job-persistence-invalid' }),
     );
   });
+
+  it('round-trips regenerate provenance and rejects conflicting retry provenance', () => {
+    const regenerated: GenerationJobSnapshot = {
+      ...snapshot(),
+      regenerateOf: { kind: 'generation', jobId: 'generation-previous' },
+    };
+    expect(decodeGenerationJobSnapshot(encodeGenerationJobSnapshot(regenerated))).toEqual(
+      regenerated,
+    );
+
+    expect(() =>
+      decodeGenerationJobSnapshot(
+        JSON.stringify({
+          ...regenerated,
+          retryOf: { kind: 'generation', jobId: 'generation-retry-source' },
+        }),
+      ),
+    ).toThrow(expect.objectContaining({ code: 'generation-job-persistence-invalid' }));
+  });
 });
 
 function snapshot(): GenerationJobSnapshot {

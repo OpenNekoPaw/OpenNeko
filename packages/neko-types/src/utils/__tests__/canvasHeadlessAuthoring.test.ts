@@ -53,7 +53,7 @@ describe('canvasHeadlessAuthoring canonical planner', () => {
       {
         type: 'job' as const,
         data: {
-          jobId: 'job-owned-1',
+          jobRef: { kind: 'generation', jobId: 'job-owned-1' },
           revision: 2,
           title: 'Generate key art',
           status: 'running',
@@ -83,7 +83,7 @@ describe('canvasHeadlessAuthoring canonical planner', () => {
       deleteBehavior: 'release-children',
     });
     expect(canvas.nodes.find((node) => node.type === 'job')?.data).toMatchObject({
-      jobId: 'job-owned-1',
+      jobRef: { kind: 'generation', jobId: 'job-owned-1' },
       revision: 2,
       status: 'running',
       inputRefs: [],
@@ -106,7 +106,7 @@ describe('canvasHeadlessAuthoring canonical planner', () => {
         { canvasData: emptyCanvas(), generateId: ids() },
         { type: 'job', data: {} },
       ),
-    ).toThrow('Canvas Job jobId must be a non-empty string');
+    ).toThrow('Canvas Job jobRef must contain');
     expect(() =>
       planCanvasNodeCreation(
         { canvasData: emptyCanvas(), generateId: ids() },

@@ -90,7 +90,16 @@ describe('Workspace Board delivery coordinator', () => {
         },
       },
     });
-    expect(mutation.canvasData.nodes.filter((node) => node.parentId === group?.id)).toHaveLength(5);
+    const generatedNodes = mutation.canvasData.nodes.filter((node) => node.parentId === group?.id);
+    expect(generatedNodes).toHaveLength(5);
+    expect(
+      generatedNodes.every(
+        (node) =>
+          node.type === 'media' &&
+          node.data.generation?.jobRef.kind === 'generation' &&
+          node.data.generation.summary.model === 'fixture-image-model',
+      ),
+    ).toBe(true);
     expect(mutation.saveCount).toBe(1);
   });
 
@@ -368,6 +377,16 @@ function generatedBatchDelivery(
           revision: `revision:${outputId}`,
           digest,
           path: `neko/generated/image/${outputId}.png`,
+        },
+        generation: {
+          jobRef: {
+            kind: 'generation' as const,
+            jobId: `generation-job:${outputId}`,
+          },
+          summary: {
+            prompt: `Generate fixture image ${index + 1}`,
+            model: 'fixture-image-model',
+          },
         },
         provenance: {
           version: 2 as const,
