@@ -28,6 +28,10 @@ storage 或 content composition。若直接在 Desktop 复制 `ChatViewProvider`
 - 优化 Desktop UX 信息层级、最近工作导航、状态表达和最小窗口适配；所有视觉优化必须保留
   真实 Project/Tab/Agent/projection 基础能力，未接入区域不得显示仿输入框、仿画布工具或仿搜索
   等可能被误认为可操作的控件。
+- 收敛 Home Agent 入口为更聚焦的单一 composer 面板：强化输入区与底部 Project handoff
+  工具条的视觉层级，把重复的“打开项目”按钮与 Project 选择收敛为一个项目控件，并保持响应式
+  密度；输入区不提供手动高度调整角标，而是随输入内容在布局边界内自动增减高度；不得为了参考
+  视觉新增未接通的模型、Skill、版本或附件控件。
 - Content Project 的一级侧边栏、左右 Agent/资源停靠栏和底部 Timeline 使用共享 resize
   primitive 实时调整尺寸；拖拽结束后把归属于具体面板的尺寸一次性提交给 Host-owned
   Workbench projection，避免 renderer 私有持久状态和逐帧 IPC revision 冲突。

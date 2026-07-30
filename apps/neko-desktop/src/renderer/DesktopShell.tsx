@@ -547,6 +547,7 @@ function HomeStartCreating({
         <form
           className="home-task-composer"
           data-agent-entry="project-handoff"
+          data-home-agent-panel="composer"
           onSubmit={(event) => {
             event.preventDefault();
             actions.onStartConversation(projectId || undefined, input);
@@ -555,42 +556,56 @@ function HomeStartCreating({
           <textarea
             aria-label={t('home.start.inputLabel')}
             placeholder={t('home.start.inputPlaceholder')}
+            rows={1}
             value={input}
             onChange={(event) => setInput(event.currentTarget.value)}
           />
           <div className="home-task-composer-footer">
             <div className="home-task-composer-scope">
-              <button
-                type="button"
-                className="home-open-project-button"
-                onClick={actions.onOpenProject}
-                disabled={pending}
-              >
-                <PlusIcon size={15} />
-                {t('home.openProject')}
-              </button>
-              <span className="home-composer-divider" aria-hidden="true" />
-              <label>
-                <FolderIcon size={16} />
-                <select
-                  aria-label={t('home.start.projectLabel')}
-                  value={projectId}
-                  onChange={(event) => setProjectId(event.currentTarget.value)}
+              {projection.catalog.projects.length === 0 ? (
+                <button
+                  type="button"
+                  className="home-project-handoff home-project-handoff-button"
+                  onClick={actions.onOpenProject}
+                  disabled={pending}
                 >
-                  <option value="">{t('home.start.chooseWorkspace')}</option>
-                  {projection.catalog.projects.map((project) => (
-                    <option key={project.projectId} value={project.projectId}>
-                      {project.displayName}
-                    </option>
-                  ))}
-                </select>
-              </label>
+                  <FolderIcon size={16} />
+                  {t('home.openProject')}
+                </button>
+              ) : (
+                <label className="home-project-handoff">
+                  <FolderIcon size={16} />
+                  <select
+                    aria-label={t('home.start.projectLabel')}
+                    value={projectId}
+                    disabled={pending}
+                    onChange={(event) => {
+                      const nextProjectId = event.currentTarget.value;
+                      if (nextProjectId.length === 0) {
+                        actions.onOpenProject();
+                        return;
+                      }
+                      setProjectId(nextProjectId);
+                    }}
+                  >
+                    <option value="">{t('home.openProject')}</option>
+                    {projection.catalog.projects.map((project) => (
+                      <option key={project.projectId} value={project.projectId}>
+                        {project.displayName}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
             </div>
             <IconButton
+              className="home-agent-submit"
               disabled={pending || input.trim().length === 0}
               label={t('home.start.submit')}
               icon={<SendIcon size={16} />}
+              size="md"
               type="submit"
+              variant="default"
             />
           </div>
         </form>

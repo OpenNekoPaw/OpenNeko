@@ -280,10 +280,22 @@ describe('DesktopShellView', () => {
 
   it('renders Home from the authoritative catalog without inventing domain success', () => {
     const markup = renderShell(<DesktopShellView projection={homeProjection()} />);
+    const composerStart = markup.indexOf('data-agent-entry="project-handoff"');
+    const composerEnd = markup.indexOf('</form>', composerStart);
+    const composerMarkup = markup.slice(composerStart, composerEnd);
 
     expect(markup).toContain('Creation intent');
     expect(markup).toContain('data-home-composition="task-launchpad"');
     expect(markup).toContain('data-home-surface="application"');
+    expect(composerMarkup).toContain('data-home-agent-panel="composer"');
+    expect(composerMarkup.match(/<textarea/gu)).toHaveLength(1);
+    expect(composerMarkup).toContain('rows="1"');
+    expect(composerMarkup.match(/<select/gu)).toHaveLength(1);
+    expect(composerMarkup.match(/<button/gu)).toHaveLength(1);
+    expect(composerMarkup).toContain('<option value="">Open project</option>');
+    expect(composerMarkup).not.toContain('home-open-project-button');
+    expect(composerMarkup).not.toContain('home-composer-divider');
+    expect(composerMarkup).not.toMatch(/\b(?:Model|Skill|Version|Attachment)\b/u);
     expect(markup).toContain('Create with OpenNeko');
     expect(markup).toContain('Common creation tasks');
     expect(markup).toContain('Quick starts');

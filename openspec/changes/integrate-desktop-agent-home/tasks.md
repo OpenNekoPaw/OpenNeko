@@ -72,6 +72,10 @@
       entries in the embedded Root, remove the extra Desktop Agent wrapper chrome and global
       Header/unified workspace Tab row, and keep the full Conversation/Tool/Skill/composer path and
       Conversation tabs in the Chat dock
+- [x] 4.12 Refine the existing Home Agent composer as one responsive input/handoff panel using shared
+      theme/UI primitives; collapse the duplicate open/select affordances into one Project control,
+      make the creation-intent textarea content-sized without a manual resize affordance, preserve the
+      Project handoff path and prove model, Skill, version and attachment controls were not added
 
 ## 5. Lifecycle, Recovery And Isolation
 

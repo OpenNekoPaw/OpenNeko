@@ -779,7 +779,7 @@ code {
 }
 
 .home-start {
-  width: min(780px, 100%);
+  width: min(820px, 100%);
   margin: 0 auto;
 }
 
@@ -819,21 +819,37 @@ code {
 }
 
 .home-task-composer {
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
   border: 1px solid var(--neko-desktop-border);
-  border-radius: 18px;
+  border-radius: 22px;
   background: var(--neko-desktop-surface-raised);
   box-shadow:
-    0 18px 44px color-mix(in srgb, var(--neko-desktop-text-strong) 7%, transparent),
+    0 20px 48px color-mix(in srgb, var(--neko-desktop-text-strong) 8%, transparent),
     var(--neko-desktop-shadow-surface);
+  transition:
+    border-color 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.home-task-composer:focus-within {
+  border-color: var(--neko-desktop-border-strong);
+  box-shadow:
+    0 22px 54px color-mix(in srgb, var(--neko-desktop-text-strong) 10%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--neko-accent) 28%, transparent);
 }
 
 .home-task-composer textarea {
   display: block;
   width: 100%;
-  min-height: 112px;
-  resize: vertical;
-  padding: 18px 20px 8px;
+  min-height: 64px;
+  max-height: 280px;
+  flex: 0 0 auto;
+  overflow-y: auto;
+  resize: none;
+  field-sizing: content;
+  padding: 22px 22px 12px;
   border: 0;
   outline: 0;
   color: var(--neko-fg);
@@ -849,44 +865,31 @@ code {
 
 .home-task-composer-footer {
   display: flex;
+  min-height: 52px;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 8px 10px 10px;
+  padding: 8px 12px 12px;
 }
 
 .home-task-composer-scope {
   display: flex;
   min-width: 0;
   align-items: center;
-  gap: 9px;
 }
 
-.home-open-project-button {
+.home-project-handoff {
   display: inline-flex;
-  min-height: 30px;
+  min-width: 0;
+  min-height: 34px;
   align-items: center;
-  gap: 6px;
-  padding: 0 9px;
-  border: 0;
-  border-radius: 9px;
+  gap: 7px;
+  padding: 0 10px;
+  border-radius: 10px;
   color: var(--neko-fg-secondary);
   background: transparent;
-  cursor: pointer;
 }
 
-.home-open-project-button:hover {
-  color: var(--neko-fg);
-  background: var(--neko-hover);
-}
-
-.home-composer-divider {
-  width: 1px;
-  height: 16px;
-  background: var(--neko-desktop-border);
-}
-
-.home-task-composer-footer label,
 .home-project-selector {
   display: inline-flex;
   min-width: 0;
@@ -895,7 +898,23 @@ code {
   color: var(--neko-fg-secondary);
 }
 
-.home-task-composer-footer select,
+.home-project-handoff-button {
+  border: 0;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.home-project-handoff-button:hover:not(:disabled) {
+  color: var(--neko-fg);
+  background: var(--neko-hover);
+}
+
+.home-project-handoff-button:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+.home-project-handoff select,
 .home-project-selector select {
   max-width: 260px;
   border: 0;
@@ -903,7 +922,32 @@ code {
   color: inherit;
   background: transparent;
   font: inherit;
-  font-size: 11px;
+  font-size: 12px;
+}
+
+.home-agent-submit {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  color: var(--neko-desktop-surface-raised);
+  background: var(--neko-desktop-text-strong);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--neko-desktop-text-strong) 18%, transparent);
+}
+
+.home-agent-submit:hover:not(:disabled) {
+  color: var(--neko-desktop-surface-raised);
+  background: color-mix(
+    in srgb,
+    var(--neko-desktop-text-strong) 88%,
+    var(--neko-desktop-surface-raised)
+  );
+}
+
+.home-agent-submit:disabled {
+  color: var(--neko-desktop-text-muted);
+  background: var(--neko-desktop-surface-muted);
+  box-shadow: none;
+  opacity: 1;
 }
 
 .home-common-intents {
@@ -2161,6 +2205,39 @@ button.home-management-card:hover {
 }
 
 @media (max-width: 720px) {
+  .home-overview {
+    width: calc(100% - 28px);
+    padding-top: 52px;
+  }
+
+  .home-launchpad-heading {
+    justify-content: flex-start;
+  }
+
+  .home-launchpad-heading h1 {
+    font-size: 26px;
+  }
+
+  .home-task-composer {
+    border-radius: 18px;
+  }
+
+  .home-task-composer textarea {
+    padding: 18px 18px 10px;
+  }
+
+  .home-task-composer-footer {
+    padding-inline: 8px 10px;
+  }
+
+  .home-project-handoff {
+    padding-inline: 8px;
+  }
+
+  .home-project-handoff select {
+    max-width: 150px;
+  }
+
   .desktop-settings {
     grid-template-columns: 190px minmax(0, 1fr);
   }

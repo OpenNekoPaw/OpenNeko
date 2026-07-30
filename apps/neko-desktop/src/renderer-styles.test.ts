@@ -13,6 +13,34 @@ describe('Desktop renderer styles', () => {
     expect(frameRule?.groups?.body).not.toMatch(/transition\s*:[^;]*\bwidth\b/u);
   });
 
+  it('presents the Home Agent handoff as one focused responsive composer', () => {
+    const composerRule = styles.match(/\.home-task-composer\s*\{(?<body>[\s\S]*?)\n\}/u);
+    const inputRule = styles.match(/\.home-task-composer textarea\s*\{(?<body>[\s\S]*?)\n\}/u);
+    const submitRule = styles.match(/\.home-agent-submit\s*\{(?<body>[\s\S]*?)\n\}/u);
+
+    expect(composerRule?.groups?.body).toMatch(/display\s*:\s*flex/u);
+    expect(composerRule?.groups?.body).toMatch(/flex-direction\s*:\s*column/u);
+    expect(composerRule?.groups?.body).not.toMatch(/min-height\s*:\s*176px/u);
+    expect(inputRule?.groups?.body).toMatch(/flex\s*:\s*0 0 auto/u);
+    expect(inputRule?.groups?.body).toMatch(/resize\s*:\s*none/u);
+    expect(inputRule?.groups?.body).toMatch(/field-sizing\s*:\s*content/u);
+    expect(inputRule?.groups?.body).toMatch(/overflow-y\s*:\s*auto/u);
+    expect(inputRule?.groups?.body).toMatch(/max-height\s*:\s*280px/u);
+    expect(submitRule?.groups?.body).toMatch(/border-radius\s*:\s*50%/u);
+    expect(submitRule?.groups?.body).toMatch(
+      /background\s*:\s*var\(--neko-desktop-text-strong\)/u,
+    );
+    expect(styles).toMatch(
+      /\.home-agent-submit:disabled\s*\{[\s\S]*?background\s*:\s*var\(--neko-desktop-surface-muted\)/u,
+    );
+    expect(styles).toMatch(/\.home-task-composer:focus-within\s*\{/u);
+    expect(styles).not.toMatch(
+      /@media \(max-width: 720px\)[\s\S]*?\.home-task-composer\s*\{[\s\S]*?min-height\s*:\s*156px/u,
+    );
+    expect(styles).not.toContain('.home-open-project-button');
+    expect(styles).not.toContain('.home-composer-divider');
+  });
+
   it('keeps project layout controls in the primary-sidebar footer rather than over Main content', () => {
     expect(styles).toMatch(/\.home-navigation-footer__actions\s*\{[\s\S]*?display\s*:\s*flex/u);
     expect(styles).toMatch(

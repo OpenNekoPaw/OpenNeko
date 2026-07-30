@@ -157,6 +157,86 @@ describe('DesktopApplication', () => {
     container.remove();
   });
 
+  it('opens another Project from the unified Home Project selector', async () => {
+    const base = createProjection();
+    const projection: DesktopShellProjection = {
+      ...base,
+      catalog: {
+        revision: 1,
+        projects: [
+          {
+            projectId: 'content:workspace-1',
+            workspaceId: 'workspace-1',
+            profile: 'content',
+            displayName: 'Fixture',
+            createdAt: '2026-07-28T00:00:00.000Z',
+            updatedAt: '2026-07-28T00:00:00.000Z',
+          },
+        ],
+      },
+    };
+    const openContent = vi.fn(async () => ({
+      schemaVersion: 1 as const,
+      requestId: 'open-project-1',
+      status: 'cancelled' as const,
+      projection,
+    }));
+    Object.defineProperty(window, 'openNekoDesktop', {
+      configurable: true,
+      value: {
+        agent: {
+          getBootstrap: vi.fn(),
+          send: vi.fn(),
+          subscribe: vi.fn(() => () => undefined),
+        },
+        bootstrap: { get: vi.fn() },
+        lifecycle: { subscribe: vi.fn(() => () => undefined) },
+        settings: createSettingsBridgeMock(),
+        home: createHomeBridgeMock(),
+        shell: {
+          getSnapshot: vi.fn(async () => projection),
+          subscribe: vi.fn(() => () => undefined),
+        },
+        projects: {
+          open: vi.fn(),
+          openContent,
+          removeRecent: vi.fn(),
+          requestProfile: vi.fn(),
+        },
+        conversations: { delete: vi.fn() },
+        tabs: {
+          activateHome: vi.fn(),
+          activate: vi.fn(),
+          close: vi.fn(),
+        },
+        workbench: { update: vi.fn() },
+        resources: createResourceBridgeMock(),
+        preview: createPreviewBridgeMock(),
+        canvas: createCanvasBridgeMock(),
+        cut: createCutBridgeMock(),
+      } satisfies typeof window.openNekoDesktop,
+    });
+    const container = document.createElement('div');
+    document.body.append(container);
+    const root = createRoot(container);
+    await act(async () => root.render(<TestApplication />));
+
+    const projectSelector = container.querySelector<HTMLSelectElement>(
+      'select[aria-label="Project"]',
+    );
+    expect(projectSelector?.value).toBe('content:workspace-1');
+    await act(async () => {
+      if (!projectSelector) return;
+      projectSelector.value = '';
+      projectSelector.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+
+    expect(openContent).toHaveBeenCalledOnce();
+    expect(projectSelector?.value).toBe('content:workspace-1');
+    await act(async () => root.unmount());
+    container.remove();
+  });
+
   it('adds, reveals, and moves a global media library to the system trash from Asset Center', async () => {
     const projection = createProjection();
     const search = vi.fn(async () => ({

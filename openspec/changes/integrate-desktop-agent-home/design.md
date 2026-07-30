@@ -250,6 +250,23 @@ Desktop renderer 将最终尺寸映射回 Host-owned `DesktopWorkbenchLayoutProj
 Host 投影返回后再同步临时显示尺寸。隐藏面板不渲染 resize handle，overlay 与 docked presentation
 使用同一 owner 尺寸和提交路径。
 
+### 6.5 Home Agent composer 只优化现有 handoff，不扩张能力
+
+Home 的 `HomeStartCreating` 保持唯一 Agent 入口，并继续通过既有
+`onStartConversation(projectId, input)` 把创作意图交给 Project 内 package-owned Agent Root。
+视觉上将 textarea 与底部 Project handoff 工具条组合为更完整的单一面板，使用共享 theme
+token、`IconButton` 与既有图标，统一圆角、留白、边框、阴影、focus-within 和窄窗口密度。
+textarea 禁止浏览器手动 resize，不显示右下角调整角标；使用当前 Electron Chromium 支持的
+CSS `field-sizing: content` 原生跟随内容和换行重排高度，并由最小/最大高度约束保持 Home
+布局稳定。输入减少或清空时必须同步收缩，超过最大高度后只在输入区内部滚动，不建立额外
+React 状态或 observer 生命周期。
+
+Project handoff 只保留一个项目控件：已有 Project 作为选项直接切换，“打开项目”作为同一控件
+内的动作调用既有 folder-open path，不再并列渲染语义重复的按钮。参考设计中的模型、Skill、
+版本和附件入口不属于 Desktop Home 当前 contract。除这个统一项目控件和提交外，不新增任何
+控件或 renderer-owned selection state；测试必须断言重复入口和未接通能力不会出现在 Home
+composer，同时证明现有 submit 仍走唯一 Project handoff path。
+
 ### 7. 生命周期按 connection、View、conversation 和 AppHost 分层
 
 - renderer reload：旧 connection/View epoch detach；conversation/Pi runtime 不重建；

@@ -189,6 +189,19 @@ tabs remain package-owned inside the Agent Root.
 - **AND** unavailable Agent, Canvas and Assets regions do not render simulated prompt, authoring,
   search or success controls that could be mistaken for connected capabilities
 
+#### Scenario: Home Agent composer is visually refined without simulated controls
+
+- **WHEN** Desktop renders the Home start-creation surface
+- **THEN** one focused composer contains the existing creation-intent input, one unified Project
+  control for selecting an existing Project or opening another Project, and the submit action with
+  responsive shared-theme presentation
+- **AND** Project open and selection are not rendered as duplicate adjacent controls
+- **AND** the creation-intent input exposes no manual resize affordance, grows and shrinks with its
+  content within the composer layout bounds, and scrolls internally only after reaching its maximum
+  height
+- **AND** Home does not add model, Skill, version or attachment controls that are not connected to the
+  canonical Agent contract
+
 #### Scenario: Home opens the selected conversation in its owning workspace
 
 - **WHEN** the user selects a Home conversation owned by another attached or catalogued Project
