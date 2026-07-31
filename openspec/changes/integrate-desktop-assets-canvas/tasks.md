@@ -225,15 +225,18 @@
 
 ## 18. Restore Project Resource Right Sidebar
 
-- [ ] 18.1 Add red Workbench/renderer regressions proving Project Resource Browser is absent from
+- [x] 18.1 Add red Workbench/renderer regressions proving Project Resource Browser is absent from
       Main View kinds, Main tabs and primary navigation while its independent right Dock remains
       available with project-scoped identity.
-- [ ] 18.2 Upgrade the Workbench contract and migrate persisted v2 `resource-browser` Main Views
+- [x] 18.2 Upgrade the Workbench contract and migrate persisted v2 `resource-browser` Main Views
       into canonical visible right-Dock presentation; poison later Main View success and derive the
       Resource Browser runtime identity from the owning Project View.
-- [ ] 18.3 Restore the Assets-owned Resource Browser Root to the fixed right Dock with independent
+- [x] 18.3 Restore the Assets-owned Resource Browser Root to the fixed right Dock with independent
       width/resize/scroll ownership, project-local reveal/close controls, narrow-window overlay and
       deterministic left Agent placement when both owners are visible.
-- [ ] 18.4 Run focused Desktop/Assets/shared UI tests and typechecks, strict OpenSpec validation,
+- [x] 18.4 Run focused Desktop/Assets/shared UI tests and typechecks, strict OpenSpec validation,
       production packaging and an isolated real Electron scenario proving Canvas stays in Main,
-      Project resources stays right and the global Asset center remains independent.
+      Project resources stays right and the global Asset center remains independent. Exercise
+      Resource Dock reveal/navigation while Canvas is mounted and prove delayed Canvas startup
+      snapshots cannot regress the authoritative revision or surface a stale material-action
+      diagnostic.

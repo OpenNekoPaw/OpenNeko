@@ -75,12 +75,16 @@ export function createCanvasWebviewHost(
   let unsubscribeDelegate: (() => void) | undefined;
   let unsubscribeRuntime: (() => void) | undefined;
 
+  const isOlderSnapshot = (next: CanvasHostSnapshot): boolean =>
+    snapshot !== undefined && next.revision < snapshot.revision;
+
   const emit = (message: unknown): void => {
     if (disposed) return;
     for (const listener of listeners) listener(message);
   };
 
   const publishSnapshot = (next: CanvasHostSnapshot): void => {
+    if (isOlderSnapshot(next)) return;
     snapshot = next;
     state = mergePresentationIntoWebviewState(state, next);
     delegate?.setState(state);
@@ -89,6 +93,7 @@ export function createCanvasWebviewHost(
   };
 
   const adoptLocalSnapshot = (next: CanvasHostSnapshot): void => {
+    if (isOlderSnapshot(next)) return;
     snapshot = next;
     state = mergePresentationIntoWebviewState(state, next);
     delegate?.setState(state);
