@@ -1,6 +1,6 @@
 # Verification
 
-Date: 2026-07-29
+Date: 2026-07-31
 
 Risk classification: L4. This change crosses Electron Main/preload/renderer, package-owned browser
 Roots, workspace content authorization and persistent Canvas document sessions.
@@ -75,6 +75,31 @@ runtime differ from the production Rollup package:
     node count change from 1 to 2, undid to 1, redid to 2 and finally restored the saved 1-node
     fixture. Canvas controls use the package Codicon stylesheet rather than Desktop-owned copies.
 
+## Global Library Runtime And Layout Qualification
+
+- The Media Library search failure was reproduced after the shared Home management contract moved
+  from version 7 to version 8. Vite rebuilt preload and reloaded renderer, but Electron Forge's Vite
+  Main watcher did not restart the already-running Main process. The version 8 request therefore
+  reached the stale version 7 parser and correctly failed with
+  `Desktop Home management contract version is unsupported`.
+- The development Main Vite configuration now requests one Electron restart after each completed
+  `serve` build. Production builds do not request a restart, and the strict unsupported-version
+  rejection remains unchanged; no multi-version parser, retry, downgrade or fallback was added.
+- A red regression first failed because
+  `createDesktopDevelopmentMainRestartPlugin is not a function`. After the canonical restart hook
+  was implemented, its development-restart and production-no-restart cases both passed.
+- Desktop renderer style coverage proves that the Assets-owned Global Library stylesheet is the
+  source of its workbench layout rules. Desktop owns only the full-height mount boundary and does
+  not duplicate the package selectors.
+- In an isolated packaged Electron fixture at 1280 x 800, the Global Library Root measured
+  1040 x 800, the search control measured 708 x 30 with a 760 px maximum, and the centered empty
+  state measured 1008 x 696. No controls overlapped and renderer diagnostics were empty.
+- At 2048 x 800, the Root measured 1808 x 800, the search control remained bounded at 760 px, the
+  sort control followed it at x=1024, and the empty state measured 1776 x 696. The loaded
+  package-owned lazy stylesheet was `neko-app://desktop/assets/root-C1-6fpW5.css`.
+- Neither fixture emitted the unsupported contract diagnostic or an IPC handler error. Closing the
+  window logged `Desktop AppHost disposed`, proving the isolated runtime released its lifecycle.
+
 ## Workspace Authorization Boundary
 
 - The Desktop Host owns the selected Project workspace grant. The renderer is not granted arbitrary
@@ -109,6 +134,19 @@ runtime differ from the production Rollup package:
 - `pnpm check:quality` after the StrictMode/model fix — passed, including content access,
   application, Agent, Canvas, Webview, strict-TypeScript, test-ownership and all 78 OpenSpec items.
 - `pnpm --filter @neko/app-desktop package` — production Electron package passed.
+- `pnpm --filter @neko/app-desktop exec vitest run
+  src/main/desktop-development-main-restart.test.ts` — 1 file, 2 tests passed.
+- `pnpm --filter @neko/app-desktop exec vitest run src/renderer-styles.test.ts` — 1 file, 9 tests
+  passed.
+- `pnpm --filter neko-assets exec vitest run src/global-library/root.test.tsx` — 1 file, 8 tests
+  passed.
+- `pnpm --filter neko-assets typecheck:resource-browser` — passed.
+- `pnpm --filter @neko/app-desktop package` after the Global Library runtime/style fixes — passed.
+- `pnpm --filter @neko/app-desktop typecheck` after the Global Library fixes — blocked by unrelated
+  concurrent changes in `packages/neko-agent-runtime/src/input/input-processor.ts`,
+  `packages/neko-agent-runtime/src/input/node-file-reader.ts` and
+  `packages/neko-agent-runtime/src/prompt/prompt-file-projector.ts`; all reported
+  `string | undefined`/possibly-undefined errors are outside this change's ownership.
 - `pnpm --filter @neko/shared test -- project-file-io-guardrails.test.ts` — 1 file, 9 tests passed.
 - `pnpm test:agent:eval` — 40 harness files with 282 tests and 24 suites with 53 dry cases passed;
   no provider-backed behavior is claimed.
