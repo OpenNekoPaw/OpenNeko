@@ -118,6 +118,12 @@ SQLite listing preview、message count 等字段是可重建投影，不是第�
 不得存放 Pi transcript；旧 Journal、history hydration 或 workspace transcript importer 不能
 恢复正常会话。
 
+Desktop Home 冷启动只通过 Pi owning package 的只读 catalog reader 投影当前 Desktop Project
+catalog scope 内的 conversation metadata。该读取不 attach workspace runtime、不打开 Pi
+Session、不读取 transcript，也不获取 execution lease；只有已 attach workspace 可以按精确
+workspace/conversation identity 覆盖实时 attention。catalog 缺失表示尚无历史数据，catalog
+损坏或 schema 不匹配必须 fail-visible，不能伪装成成功空列表。
+
 turn terminal checkpoint 具有 `volatile`、`persisting`、`durable`、
 `persistence-delayed` 状态。持久化失败必须暴露 diagnostic；process-local backfill 不能伪装成
 durable，也不引入第二个 outbox/WAL authority。
@@ -214,6 +220,11 @@ JobRef/revision 的新 Tool Call。
 - Renderer 不访问 Node.js/Electron API，不读取文件、credential、SQLite 或 provider。
 - Preload 只暴露 sender-bound typed IPC；Main 负责 intent validation 与授权资源投影。
 - Renderer Tab 拥有独立 store、attachment 和 React subtree；切换只改变可见性。
+- Agent Root 必须在 descendant initialization request 发出前建立 Host event subscription；
+  browser/Electron renderer 使用 layout phase 建立并在 adapter replacement/unmount 时释放订阅。
+- 新 Conversation 的待发送 user message 使用稳定 conversation/message identity 立即进入可见
+  projection；authoritative Timeline 只负责按同一 identity reconciliation。Host send 拒绝必须
+  清除目标 conversation 的虚假 executing 状态并投影 conversation-scoped diagnostic。
 - Desktop Main 拥有 workspace IO、path containment、trust、credential interaction、
   LocalMetadata、runtime composition 和显式资源释放。
 - 模型/renderer 只接收稳定 identity、ResourceRef/ContentLocator 和脱敏 diagnostic；绝对路径、
