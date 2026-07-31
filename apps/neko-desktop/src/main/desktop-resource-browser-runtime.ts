@@ -65,6 +65,7 @@ import {
   removeDesktopGlobalAssetFile,
 } from './desktop-global-asset-files';
 import { createDesktopCanvasSessionId } from '../shared/canvas-bridge-contract';
+import { resourceBrowserViewId } from '../shared/resource-browser-bridge-contract';
 import type { DesktopWorkbenchViewRef } from '../shared/workbench-contract';
 import type {
   DesktopHomeCatalogSort,
@@ -632,25 +633,31 @@ export class DesktopResourceBrowserRuntime {
     if (identity.windowId !== windowId || identity.endpointEpoch !== projection.endpointEpoch) {
       throw new Error('Desktop Resource Browser owner identity is stale.');
     }
-    const project = projection.catalog.projects.find(
-      (candidate) => candidate.projectId === identity.projectId,
-    );
-    const view = projection.window.workbench.main.views.find(
-      (candidate) =>
-        candidate.kind === 'resource-browser' &&
-        candidate.projectId === identity.projectId &&
-        candidate.workspaceId === identity.workspaceId &&
-        candidate.viewId === identity.viewId,
-    );
-    if (!project || !view || project.workspaceId !== identity.workspaceId) {
+    const activeTarget = projection.window.activeTarget;
+    const tab =
+      activeTarget.kind === 'project'
+        ? projection.window.tabs.find((candidate) => candidate.tabId === activeTarget.tabId)
+        : undefined;
+    const project =
+      tab?.projectId === identity.projectId
+        ? projection.catalog.projects.find(
+            (candidate) => candidate.projectId === identity.projectId,
+          )
+        : undefined;
+    if (
+      !project ||
+      !tab ||
+      project.workspaceId !== identity.workspaceId ||
+      identity.viewId !== resourceBrowserViewId(tab.viewId)
+    ) {
       throw new Error('Desktop Resource Browser Project is not attached to this Window.');
     }
     const expected: ResourceBrowserIdentity = {
       projectId: project.projectId,
       workspaceId: project.workspaceId,
       windowId,
-      viewId: view.viewId,
-      viewEpoch: view.viewEpoch,
+      viewId: resourceBrowserViewId(tab.viewId),
+      viewEpoch: tab.viewEpoch,
       endpointEpoch: projection.endpointEpoch,
     };
     assertResourceBrowserIdentity(expected, identity);

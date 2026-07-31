@@ -177,23 +177,15 @@ describe('DesktopApplication', () => {
     await act(async () => root.render(<TestApplication />));
 
     const projectResources = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
-      (button) => button.textContent?.trim() === 'Project resources',
+      (button) => button.getAttribute('aria-label') === 'Project resources',
     );
     await act(async () => projectResources?.click());
     await waitForDom(() => updateWorkbench.mock.calls.length === 1);
 
     expect(updateWorkbench).toHaveBeenCalledWith(
       expect.objectContaining({
-        main: expect.objectContaining({
-          views: [
-            expect.objectContaining({
-              kind: 'resource-browser',
-              projectId: project.projectId,
-              workspaceId: project.workspaceId,
-              viewId: 'resource-browser:view-1',
-            }),
-          ],
-        }),
+        resourceDock: { presentation: 'docked', width: 320 },
+        main: projection.window.workbench.main,
       }),
       projection.window.revision,
       projection.window.workbench.revision,

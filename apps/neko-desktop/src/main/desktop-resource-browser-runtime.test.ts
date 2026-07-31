@@ -8,8 +8,10 @@ import {
   parseCanvasHostIntentRequest,
   type CanvasHostIntentResult,
 } from '@neko-canvas/domain';
+import { createResourceBrowserSnapshotRequest } from 'neko-assets/resource-browser/contract';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createDesktopCanvasSessionId } from '../shared/canvas-bridge-contract';
+import { createDesktopResourceBrowserIdentity } from '../shared/resource-browser-bridge-contract';
 import type { DesktopWorkbenchViewRef } from '../shared/workbench-contract';
 import {
   createDesktopResourceToCanvasInteraction,
@@ -209,6 +211,114 @@ describe('createDesktopResourceToCanvasInteraction', () => {
         },
       }),
     );
+  });
+});
+
+describe('DesktopResourceBrowserRuntime Project identity', () => {
+  it('authorizes the right-Dock browser through its Project View without a Resource Main View', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'openneko-project-resource-runtime-'));
+    temporaryRoots.push(root);
+    const workspacePath = path.join(root, 'workspace');
+    await mkdir(workspacePath, { recursive: true });
+    const registry: DesktopWorkspaceRegistry = {
+      resolve: async () => ({
+        workspaceId: 'workspace-1',
+        workspacePath,
+        displayName: 'Workspace',
+        locator: { kind: 'relative', value: 'workspace' },
+      }),
+      dispose: async () => undefined,
+    };
+    let shellContent: string | null = null;
+    const shell = new DesktopShellService({
+      applicationInstanceId: 'app-1',
+      stateRepository: new DesktopShellStateRepository({
+        readTextIfExists: async () => shellContent,
+        writeTextAtomic: async (content) => {
+          shellContent = content;
+        },
+      }),
+      workspaceRegistry: registry,
+      startupTarget: 'restore',
+      createIdentity: () => 'window-1',
+    });
+    const windowId = await shell.claimWindowId();
+    shell.setRendererEpoch(windowId, 1);
+    const initial = await shell.getProjection(windowId);
+    const opened = await shell.openContent(
+      windowId,
+      workspacePath,
+      initial.endpointEpoch,
+      initial.window.revision,
+    );
+    const projection = opened.projection;
+    const tab = projection.window.tabs[0];
+    const project = projection.catalog.projects[0];
+    if (!tab || !project) throw new Error('Project Resource runtime fixture failed to attach.');
+    const identity = createDesktopResourceBrowserIdentity({
+      projectId: project.projectId,
+      workspaceId: project.workspaceId,
+      windowId,
+      projectViewId: tab.viewId,
+      projectViewEpoch: tab.viewEpoch,
+      endpointEpoch: projection.endpointEpoch,
+    });
+    const host = createElectronNekoHostPorts({
+      homedir: root,
+      nekoHome: path.join(root, '.neko'),
+      version: '0.0.1',
+      logger: createLogger(),
+      revealPath: () => undefined,
+    });
+    const runtime = new DesktopResourceBrowserRuntime({
+      globalAssetRoot: path.join(root, '.neko', 'assets'),
+      globalMediaLibraryRoot: path.join(root, '.neko', 'media-libraries'),
+      shell,
+      host,
+      openPreview: async () => undefined,
+      openCut: async () => undefined,
+      selectSource: async () => undefined,
+      selectGlobalMediaLibrarySource: async () => undefined,
+      selectGlobalAssetSources: async () => undefined,
+      trashGlobalAsset: async () => undefined,
+      createThumbnail: async () => 'data:image/png;base64,AA==',
+      createGlobalLibraryThumbnail: async () => 'data:image/png;base64,AA==',
+      openQuickPreview: async () => {
+        throw new Error('Quick Preview is not expected by this identity test.');
+      },
+      releaseQuickPreview: () => undefined,
+      canvas: {
+        executeIntent: async () => {
+          throw new Error('Canvas execution is not expected by this identity test.');
+        },
+      },
+      cut: { addResource: async () => undefined },
+    });
+
+    try {
+      await expect(
+        runtime.getSnapshot(
+          windowId,
+          createResourceBrowserSnapshotRequest({ requestId: 'snapshot-1', identity }),
+        ),
+      ).resolves.toMatchObject({ identity });
+      expect(projection.window.workbench.main.views).toEqual([
+        expect.objectContaining({ kind: 'canvas' }),
+      ]);
+      await expect(
+        runtime.getSnapshot(
+          windowId,
+          createResourceBrowserSnapshotRequest({
+            requestId: 'snapshot-stale',
+            identity: { ...identity, viewId: 'resource-browser:legacy-main-view' },
+          }),
+        ),
+      ).rejects.toThrow('Project is not attached');
+    } finally {
+      runtime.dispose();
+      shell.releaseWindow(windowId);
+      await shell.dispose();
+    }
   });
 });
 

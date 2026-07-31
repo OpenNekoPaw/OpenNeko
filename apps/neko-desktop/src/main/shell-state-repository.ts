@@ -8,15 +8,18 @@ import type {
 import {
   createDefaultDesktopWorkbenchLayout,
   migrateDesktopWorkbenchV1,
+  migrateDesktopWorkbenchV2,
   parseDesktopWorkbenchLayout,
   type DesktopWorkbenchLayoutProjection,
 } from '../shared/workbench-contract';
 
-export const DESKTOP_SHELL_STATE_VERSION = 3 as const;
+export const DESKTOP_SHELL_STATE_VERSION = 4 as const;
 // Version 1 remains readable because it contains user-owned local Project and Window state.
 const DESKTOP_SHELL_STATE_V1 = 1 as const;
 // Version 2 carries the prelaunch Workbench v1 presentation.
 const DESKTOP_SHELL_STATE_V2 = 2 as const;
+// Version 3 carries the prelaunch Workbench v2 presentation.
+const DESKTOP_SHELL_STATE_V3 = 3 as const;
 
 export interface DesktopStoredProject {
   readonly projectId: string;
@@ -145,6 +148,7 @@ function parseDesktopShellStoredState(value: unknown): DesktopShellStoredState {
   const sourceVersion = record['schemaVersion'];
   if (
     sourceVersion !== DESKTOP_SHELL_STATE_VERSION &&
+    sourceVersion !== DESKTOP_SHELL_STATE_V3 &&
     sourceVersion !== DESKTOP_SHELL_STATE_V2 &&
     sourceVersion !== DESKTOP_SHELL_STATE_V1
   ) {
@@ -252,6 +256,7 @@ function parseStoredWindow(
   projectIds: ReadonlySet<string>,
   sourceVersion:
     | typeof DESKTOP_SHELL_STATE_VERSION
+    | typeof DESKTOP_SHELL_STATE_V3
     | typeof DESKTOP_SHELL_STATE_V2
     | typeof DESKTOP_SHELL_STATE_V1,
 ): DesktopStoredWindow {
@@ -285,7 +290,7 @@ function parseStoredWindow(
       : parseStoredWorkbench(
           record['workbench'],
           windowId,
-          sourceVersion === DESKTOP_SHELL_STATE_V2,
+          sourceVersion,
         );
   return {
     windowId,
@@ -302,11 +307,19 @@ function parseStoredWindow(
 function parseStoredWorkbench(
   value: unknown,
   windowId: string,
-  migrateV1: boolean,
+  sourceVersion:
+    | typeof DESKTOP_SHELL_STATE_VERSION
+    | typeof DESKTOP_SHELL_STATE_V3
+    | typeof DESKTOP_SHELL_STATE_V2,
 ): DesktopWorkbenchLayoutProjection {
   let workbench: DesktopWorkbenchLayoutProjection;
   try {
-    workbench = migrateV1 ? migrateDesktopWorkbenchV1(value) : parseDesktopWorkbenchLayout(value);
+    workbench =
+      sourceVersion === DESKTOP_SHELL_STATE_V2
+        ? migrateDesktopWorkbenchV1(value)
+        : sourceVersion === DESKTOP_SHELL_STATE_V3
+          ? migrateDesktopWorkbenchV2(value)
+          : parseDesktopWorkbenchLayout(value);
   } catch (error) {
     throw invalidState(
       `Desktop stored Workbench layout is invalid: ${

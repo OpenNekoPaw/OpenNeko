@@ -1,6 +1,7 @@
 import {
   CameraIcon,
   CheckIcon,
+  CloseIcon,
   ControlledWorkbenchShell,
   FolderIcon,
   GridIcon,
@@ -24,7 +25,7 @@ import {
   type ControlledWorkbenchResizeBinding,
 } from '@neko/ui';
 import { useTranslation } from '@neko/shared/i18n/react';
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type {
   DesktopAgentHomeConversationSummary,
   DesktopProjectCatalogItem,
@@ -35,11 +36,9 @@ import type {
   DesktopHomeExtensionsResult,
   DesktopHomeSkillItem,
 } from '../shared/home-management-contract';
-import { resourceBrowserViewId } from '../shared/resource-browser-bridge-contract';
 import {
   DESKTOP_WORKBENCH_LIMITS,
   closeMainView,
-  getActiveMainView,
   openOrFocusMainView,
   reorderMainView,
   resizeMainSplit,
@@ -1301,15 +1300,100 @@ function ContentProjectWorkspace({
       tab={tab}
     />
   );
-  const leftDock = createAgentDock(workbench, 'left', agentDock);
-  const rightDock = createAgentDock(workbench, 'right', agentDock);
+  const resourceDockPresentation = useResourceDockPresentation(
+    workbench.resourceDock.presentation,
+  );
+  const resourceDock =
+    resourceDockPresentation === 'hidden'
+      ? undefined
+      : createResourceDock(
+          workbench,
+          resourceDockPresentation,
+          <div className="project-resource-dock">
+            <header className="project-resource-dock__header">
+              <span>
+                <FolderIcon size={15} />
+                <strong>{t('workspace.projectResources')}</strong>
+              </span>
+              <IconButton
+                disabled={pending}
+                icon={<CloseIcon size={15} />}
+                label={t('workspace.closeProjectResources')}
+                title={t('workspace.closeProjectResources')}
+                onClick={() =>
+                  actions.onUpdateWorkbench(
+                    setResourceDockPresentationWorkbench(workbench, 'hidden'),
+                  )
+                }
+              />
+            </header>
+            <div className="project-resource-dock__content">
+              {assetsCapability?.status === 'ready' ? (
+                <DesktopResourceBrowserSurface
+                  onOpenCanvasDocument={(documentId, presentation) =>
+                    actions.onUpdateWorkbench(
+                      openCanvasDocumentWorkbench({
+                        documentId,
+                        presentation,
+                        projection,
+                        project,
+                        workbench,
+                      }),
+                    )
+                  }
+                  project={project}
+                  projection={projection}
+                  tab={tab}
+                />
+              ) : (
+                <ResourceBrowserUnavailable
+                  diagnostic={
+                    assetsCapability?.status === 'unavailable'
+                      ? assetsCapability.diagnosticCode
+                      : 'desktop-media-library-not-mounted'
+                  }
+                />
+              )}
+            </div>
+          </div>,
+        );
+  const effectiveAgentPosition =
+    resourceDock && workbench.display.mode === 'chat-main'
+      ? ('left' as const)
+      : workbench.display.chatPosition;
+  const leftDock = createAgentDock(workbench, 'left', effectiveAgentPosition, agentDock);
+  const rightAgentDock = createAgentDock(
+    workbench,
+    'right',
+    effectiveAgentPosition,
+    agentDock,
+  );
+  const rightDock = resourceDock ?? rightAgentDock;
+  const resourceControl = (
+    <WorkbenchIconButton
+      active={workbench.resourceDock.presentation !== 'hidden'}
+      disabled={pending}
+      icon={<RightPanelIcon size={15} />}
+      label={t('workspace.projectResources')}
+      onClick={() =>
+        actions.onUpdateWorkbench(
+          setResourceDockPresentationWorkbench(
+            workbench,
+            workbench.resourceDock.presentation === 'hidden' ? 'docked' : 'hidden',
+          ),
+        )
+      }
+    />
+  );
   const mainSurface = agentMain ? (
-    agentDock
+    <div className="project-main-chat-host">
+      {agentDock}
+      <div className="project-main-chat-host__controls">{resourceControl}</div>
+    </div>
   ) : (
     <MainViewGroupSurface
       actions={actions}
       allowCutRuntime
-      assetsCapability={assetsCapability}
       canvasCapability={canvasCapability}
       cutCapability={cutCapability}
       group={primaryGroup}
@@ -1322,6 +1406,7 @@ function ContentProjectWorkspace({
       }
       timelineTarget={cutTimelineTarget ?? undefined}
       workbench={workbench}
+      resourceControl={resourceControl}
     />
   );
   const timelineOwnerRenderedInMain =
@@ -1357,7 +1442,6 @@ function ContentProjectWorkspace({
           <MainViewGroupSurface
             actions={actions}
             allowCutRuntime={false}
-            assetsCapability={assetsCapability}
             canvasCapability={canvasCapability}
             cutCapability={cutCapability}
             group={secondaryGroup}
@@ -1460,7 +1544,6 @@ function ContentProjectWorkspace({
 function MainViewGroupSurface({
   actions,
   allowCutRuntime,
-  assetsCapability,
   canvasCapability,
   cutCapability,
   group,
@@ -1471,10 +1554,10 @@ function MainViewGroupSurface({
   timelineOwnerViewId,
   timelineTarget,
   workbench,
+  resourceControl,
 }: {
   readonly actions: ShellActions;
   readonly allowCutRuntime: boolean;
-  readonly assetsCapability: DesktopShellProjection['domains'][number] | undefined;
   readonly canvasCapability: DesktopShellProjection['domains'][number] | undefined;
   readonly cutCapability: DesktopShellProjection['domains'][number] | undefined;
   readonly group: DesktopWorkbenchMainGroup;
@@ -1485,6 +1568,7 @@ function MainViewGroupSurface({
   readonly timelineOwnerViewId?: string;
   readonly timelineTarget?: Element;
   readonly workbench: DesktopWorkbenchLayoutProjection;
+  readonly resourceControl?: JSX.Element;
 }): JSX.Element {
   const { t } = useTranslation();
   const views = group.viewIds.map((viewId) => {
@@ -1527,6 +1611,7 @@ function MainViewGroupSurface({
           }}
         />
         <div className="project-main-group__actions">
+          {resourceControl}
           <WorkbenchIconButton
             disabled={pending || !canSplit}
             icon={<RightPanelIcon size={15} />}
@@ -1550,9 +1635,7 @@ function MainViewGroupSurface({
       <div className="project-main-group__content">
         {views.length === 0
           ? renderWorkbenchMainView({
-              actions,
               allowCutRuntime,
-              assetsCapability,
               canvasCapability,
               previewCapability,
               cutCapability,
@@ -1571,9 +1654,7 @@ function MainViewGroupSurface({
                   key={`${view.viewId}:${view.viewEpoch}`}
                 >
                   {renderWorkbenchMainView({
-                    actions,
                     allowCutRuntime,
-                    assetsCapability,
                     canvasCapability,
                     previewCapability,
                     cutCapability,
@@ -1592,9 +1673,7 @@ function MainViewGroupSurface({
 }
 
 function renderWorkbenchMainView({
-  actions,
   allowCutRuntime,
-  assetsCapability,
   canvasCapability,
   previewCapability,
   cutCapability,
@@ -1603,9 +1682,7 @@ function renderWorkbenchMainView({
   timelineTarget,
   view,
 }: {
-  readonly actions: ShellActions;
   readonly allowCutRuntime: boolean;
-  readonly assetsCapability: DesktopShellProjection['domains'][number] | undefined;
   readonly canvasCapability: DesktopShellProjection['domains'][number] | undefined;
   readonly previewCapability: DesktopShellProjection['domains'][number] | undefined;
   readonly cutCapability: DesktopShellProjection['domains'][number] | undefined;
@@ -1619,34 +1696,6 @@ function renderWorkbenchMainView({
   }
   if (view?.kind === 'canvas' && canvasCapability?.status === 'ready') {
     return <DesktopCanvasSurface project={project} projection={projection} view={view} />;
-  }
-  if (view?.kind === 'resource-browser') {
-    return assetsCapability?.status === 'ready' ? (
-      <DesktopResourceBrowserSurface
-        onOpenCanvasDocument={(documentId, presentation) =>
-          actions.onUpdateWorkbench(
-            openCanvasDocumentWorkbench({
-              documentId,
-              presentation,
-              projection,
-              project,
-              workbench: projection.window.workbench,
-            }),
-          )
-        }
-        project={project}
-        projection={projection}
-        view={view}
-      />
-    ) : (
-      <ResourceBrowserUnavailable
-        diagnostic={
-          assetsCapability?.status === 'unavailable'
-            ? assetsCapability.diagnosticCode
-            : 'desktop-media-library-not-mounted'
-        }
-      />
-    );
   }
   if (view?.kind === 'cut' && cutCapability?.status === 'ready') {
     if (!allowCutRuntime) {
@@ -1822,7 +1871,6 @@ function ProjectPrimarySidebar({
   readonly projection: DesktopShellProjection;
   readonly compact: boolean;
 }): JSX.Element {
-  const { t } = useTranslation();
   const workbench = projection.window.workbench;
   const togglePrimarySidebar = (): void => {
     actions.onUpdateWorkbench(togglePrimarySidebarWorkbench(workbench));
@@ -1844,24 +1892,6 @@ function ProjectPrimarySidebar({
         onOpenSettings={actions.onOpenSettings}
         onToggle={togglePrimarySidebar}
         projection={projection}
-        contextNavigation={
-          <DesktopApplicationNavigationButton
-            active={getActiveMainView(workbench)?.kind === 'resource-browser'}
-            disabled={pending}
-            label={t('workspace.projectResources')}
-            icon={<GridIcon size={17} />}
-            onClick={() =>
-              actions.onUpdateWorkbench(
-                openResourceBrowserWorkbench({
-                  displayLabel: t('workspace.resources'),
-                  project,
-                  projection,
-                  workbench,
-                }),
-              )
-            }
-          />
-        }
         layoutControl={
           <WorkbenchDisplayMenu actions={actions} disabled={pending} projection={projection} />
         }
@@ -1873,6 +1903,7 @@ function ProjectPrimarySidebar({
 function createAgentDock(
   workbench: DesktopWorkbenchLayoutProjection,
   position: 'left' | 'right',
+  effectivePosition: 'left' | 'right',
   agent: JSX.Element,
 ):
   | {
@@ -1882,7 +1913,7 @@ function createAgentDock(
       readonly width: number;
     }
   | undefined {
-  if (workbench.display.mode !== 'chat-main' || workbench.display.chatPosition !== position) {
+  if (workbench.display.mode !== 'chat-main' || effectivePosition !== position) {
     return undefined;
   }
   return {
@@ -1897,6 +1928,42 @@ function createAgentDock(
   };
 }
 
+function createResourceDock(
+  workbench: DesktopWorkbenchLayoutProjection,
+  presentation: 'docked' | 'overlay',
+  resources: JSX.Element,
+): {
+  readonly content: JSX.Element;
+  readonly owner: 'resources';
+  readonly presentation: 'docked' | 'overlay';
+  readonly width: number;
+} {
+  return {
+    content: (
+      <div className="project-dock-panel" data-dock-owner="resources">
+        {resources}
+      </div>
+    ),
+    owner: 'resources',
+    presentation,
+    width: workbench.resourceDock.width,
+  };
+}
+
+function useResourceDockPresentation(
+  presentation: 'hidden' | 'docked' | 'overlay',
+): 'hidden' | 'docked' | 'overlay' {
+  const [compact, setCompact] = useState(
+    () => typeof window !== 'undefined' && window.innerWidth < 1100,
+  );
+  useEffect(() => {
+    const update = (): void => setCompact(window.innerWidth < 1100);
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
+  }, []);
+  return presentation === 'docked' && compact ? 'overlay' : presentation;
+}
+
 function createProjectDockResizeBinding({
   actions,
   dock,
@@ -1904,7 +1971,9 @@ function createProjectDockResizeBinding({
   workbench,
 }: {
   readonly actions: ShellActions;
-  readonly dock: NonNullable<ReturnType<typeof createAgentDock>>;
+  readonly dock:
+    | NonNullable<ReturnType<typeof createAgentDock>>
+    | ReturnType<typeof createResourceDock>;
   readonly label: string;
   readonly workbench: DesktopWorkbenchLayoutProjection;
 }) {
@@ -1913,7 +1982,9 @@ function createProjectDockResizeBinding({
     minSize: DESKTOP_WORKBENCH_LIMITS.dockWidth.min,
     maxSize: DESKTOP_WORKBENCH_LIMITS.dockWidth.max,
     onResizeEnd: (width: number) => {
-      if (workbench.display.chatWidth === width) return;
+      const currentWidth =
+        dock.owner === 'agent' ? workbench.display.chatWidth : workbench.resourceDock.width;
+      if (currentWidth === width) return;
       actions.onUpdateWorkbench(resizeProjectDockWorkbench(workbench, dock.owner, width));
     },
   };
@@ -1985,16 +2056,49 @@ export function resizeTimelineWorkbench(
 
 export function resizeProjectDockWorkbench(
   workbench: DesktopWorkbenchLayoutProjection,
-  _owner: 'agent',
+  owner: 'agent' | 'resources',
   width: number,
 ): DesktopWorkbenchLayoutProjection {
   return {
     ...workbench,
     revision: workbench.revision + 1,
-    display: {
-      ...workbench.display,
-      chatWidth: width,
+    display:
+      owner === 'agent'
+        ? {
+            ...workbench.display,
+            chatWidth: width,
+          }
+        : workbench.display,
+    resourceDock:
+      owner === 'resources'
+        ? {
+            ...workbench.resourceDock,
+            width,
+          }
+        : workbench.resourceDock,
+  };
+}
+
+export function setResourceDockPresentationWorkbench(
+  workbench: DesktopWorkbenchLayoutProjection,
+  presentation: 'hidden' | 'docked' | 'overlay',
+): DesktopWorkbenchLayoutProjection {
+  return {
+    ...workbench,
+    revision: workbench.revision + 1,
+    resourceDock: {
+      ...workbench.resourceDock,
+      presentation,
     },
+    display:
+      presentation !== 'hidden' &&
+      workbench.display.mode === 'chat-main' &&
+      workbench.display.chatPosition === 'right'
+        ? {
+            ...workbench.display,
+            chatPosition: 'left',
+          }
+        : workbench.display,
   };
 }
 
@@ -2019,7 +2123,9 @@ export function applyWorkbenchDisplayMode(
 ): DesktopWorkbenchLayoutProjection {
   if (mode === 'chat-only') return setWorkbenchDisplayMode(workbench, 'chat-only');
   if (mode === 'main-only') return setWorkbenchDisplayMode(workbench, 'main-only');
-  const chatPosition = mode === 'chat-main-left' ? 'left' : 'right';
+  const requestedPosition = mode === 'chat-main-left' ? 'left' : 'right';
+  const chatPosition =
+    workbench.resourceDock.presentation === 'hidden' ? requestedPosition : 'left';
   return setWorkbenchDisplayMode(workbench, 'chat-main', chatPosition);
 }
 
@@ -2057,37 +2163,6 @@ export function openCanvasDocumentWorkbench(input: {
   return openOrFocusMainView(workbench, canvasView, {
     ...(presentation === 'side' ? { splitAxis: 'columns' as const } : {}),
   });
-}
-
-export function openResourceBrowserWorkbench(input: {
-  readonly displayLabel: string;
-  readonly projection: DesktopShellProjection;
-  readonly project: DesktopProjectCatalogItem;
-  readonly workbench: DesktopWorkbenchLayoutProjection;
-}): DesktopWorkbenchLayoutProjection {
-  const { displayLabel, projection, project, workbench } = input;
-  const existing = workbench.main.views.find(
-    (view) =>
-      view.kind === 'resource-browser' &&
-      view.projectId === project.projectId &&
-      view.workspaceId === project.workspaceId,
-  );
-  const tab = requireProjectTab(projection, project.projectId);
-  const resourceBrowserView =
-    existing ??
-    ({
-      viewId: resourceBrowserViewId(tab.viewId),
-      viewEpoch: tab.viewEpoch,
-      projectId: project.projectId,
-      workspaceId: project.workspaceId,
-      kind: 'resource-browser' as const,
-      ownerId: `resource-browser:${project.projectId}`,
-      displayLabel,
-    } satisfies DesktopWorkbenchLayoutProjection['main']['views'][number]);
-  const opened = openOrFocusMainView(workbench, resourceBrowserView);
-  return opened.display.mode === 'chat-only'
-    ? setWorkbenchDisplayMode(opened, 'chat-main')
-    : opened;
 }
 
 function stableViewSuffix(value: string): string {
@@ -2231,7 +2306,6 @@ function ApplicationPrimarySidebar({
   onOpenSettings,
   onToggle,
   projection,
-  contextNavigation,
   layoutControl,
 }: {
   readonly activeProjectId?: string;
@@ -2246,7 +2320,6 @@ function ApplicationPrimarySidebar({
   readonly onOpenSettings: () => void;
   readonly onToggle: () => void;
   readonly projection: DesktopShellProjection;
-  readonly contextNavigation?: ReactNode;
   readonly layoutControl?: JSX.Element;
 }): JSX.Element {
   const { t } = useTranslation();
@@ -2287,7 +2360,6 @@ function ApplicationPrimarySidebar({
           icon={<FolderIcon size={17} />}
           onClick={() => onNavigate('projects')}
         />
-        {contextNavigation}
       </nav>
       <PrimaryRecentNavigation
         activeProjectId={activeProjectId}

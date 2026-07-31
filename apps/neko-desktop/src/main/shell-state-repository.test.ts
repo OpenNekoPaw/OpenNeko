@@ -92,12 +92,12 @@ describe('DesktopShellStateRepository', () => {
 
     const migrated = await repository.read();
 
-    expect(migrated.schemaVersion).toBe(3);
+    expect(migrated.schemaVersion).toBe(4);
     expect(migrated.windows[0]?.workbench).toEqual(createDefaultDesktopWorkbenchLayout('window-1'));
     await repository.commit(0, { ...migrated, storageRevision: 1 });
     expect(JSON.parse(content)).toMatchObject({
-      schemaVersion: 3,
-      windows: [{ workbench: { schemaVersion: 2, display: { mode: 'chat-only' } } }],
+      schemaVersion: 4,
+      windows: [{ workbench: { schemaVersion: 3, display: { mode: 'chat-only' } } }],
     });
   });
 
@@ -167,11 +167,11 @@ describe('DesktopShellStateRepository', () => {
     const migrated = await repository.read();
 
     expect(migrated).toMatchObject({
-      schemaVersion: 3,
+      schemaVersion: 4,
       windows: [
         {
           workbench: {
-            schemaVersion: 2,
+            schemaVersion: 3,
             display: { mode: 'chat-main', chatPosition: 'left' },
             main: {
               groups: [
@@ -185,6 +185,80 @@ describe('DesktopShellStateRepository', () => {
         },
       ],
     });
+  });
+
+  it('migrates version 3 Resource Browser Main Views into the right Dock', async () => {
+    const content = JSON.stringify({
+      schemaVersion: 3,
+      storageRevision: 0,
+      catalogRevision: 0,
+      primaryWindowId: 'window-1',
+      projects: [],
+      windows: [
+        {
+          windowId: 'window-1',
+          revision: 0,
+          activeTarget: { kind: 'home' },
+          tabs: [],
+          workbench: {
+            schemaVersion: 2,
+            windowId: 'window-1',
+            revision: 9,
+            primarySidebar: { visible: true, width: 240 },
+            resourceDock: { presentation: 'hidden', position: 'left', width: 416 },
+            display: { mode: 'main-only', chatPosition: 'right', chatWidth: 360 },
+            main: {
+              views: [
+                {
+                  viewId: 'resources-1',
+                  viewEpoch: 1,
+                  projectId: 'project-1',
+                  workspaceId: 'workspace-1',
+                  kind: 'resource-browser',
+                  ownerId: 'assets:project-1',
+                  displayLabel: 'Resources',
+                },
+              ],
+              groups: [
+                {
+                  groupId: 'main:primary',
+                  viewIds: ['resources-1'],
+                  activeViewId: 'resources-1',
+                },
+              ],
+              activeGroupId: 'main:primary',
+            },
+            timeline: { presentation: 'hidden', height: 240 },
+          },
+        },
+      ],
+    });
+    const repository = new DesktopShellStateRepository({
+      readTextIfExists: async () => content,
+      writeTextAtomic: async () => undefined,
+    });
+
+    const migrated = await repository.read();
+
+    expect(migrated).toMatchObject({
+      schemaVersion: 4,
+      windows: [
+        {
+          workbench: {
+            schemaVersion: 3,
+            revision: 9,
+            resourceDock: { presentation: 'docked', width: 416 },
+            display: { mode: 'chat-only', chatPosition: 'right' },
+            main: {
+              views: [],
+              groups: [{ groupId: 'main:primary', viewIds: [] }],
+              activeGroupId: 'main:primary',
+            },
+          },
+        },
+      ],
+    });
+    expect(migrated.windows[0]?.workbench.resourceDock).not.toHaveProperty('position');
   });
 });
 

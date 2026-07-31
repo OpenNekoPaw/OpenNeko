@@ -5,6 +5,7 @@ import {
   DesktopWorkbenchContractError,
   closeMainView,
   createDefaultDesktopWorkbenchLayout,
+  migrateDesktopWorkbenchV2,
   openOrFocusMainView,
   parseDesktopWorkbenchLayout,
   reorderMainView,
@@ -21,7 +22,7 @@ describe('Desktop Workbench contract', () => {
       windowId: 'window-1',
       revision: 0,
       primarySidebar: { visible: true, width: 240 },
-      resourceDock: { presentation: 'hidden', position: 'right', width: 320 },
+      resourceDock: { presentation: 'hidden', width: 320 },
       display: { mode: 'chat-only', chatPosition: 'left', chatWidth: 360 },
       main: {
         views: [],
@@ -61,18 +62,70 @@ describe('Desktop Workbench contract', () => {
     expect(focused.main.views).toHaveLength(2);
   });
 
-  it('opens and focuses one independent Resource Browser Main View', () => {
+  it('rejects Resource Browser as a v3 Main View', () => {
     const initial = createDefaultDesktopWorkbenchLayout('window-1');
-    const resourceBrowser = viewRef('resources-1', 'resource-browser');
-    const opened = openOrFocusMainView(initial, resourceBrowser);
-    const focused = openOrFocusMainView(opened, resourceBrowser);
+    const resourceBrowser = legacyResourceViewRef('resources-1');
 
-    expect(focused.main.views).toEqual([resourceBrowser]);
-    expect(focused.main.groups[0]).toEqual({
-      groupId: 'main:primary',
-      viewIds: ['resources-1'],
-      activeViewId: 'resources-1',
+    expect(() => Reflect.apply(openOrFocusMainView, undefined, [initial, resourceBrowser])).toThrow(
+      'Desktop Workbench Main View kind is invalid.',
+    );
+    expect(() =>
+      parseDesktopWorkbenchLayout({
+        ...initial,
+        main: {
+          ...initial.main,
+          views: [resourceBrowser],
+          groups: [
+            {
+              groupId: 'main:primary',
+              viewIds: ['resources-1'],
+              activeViewId: 'resources-1',
+            },
+          ],
+        },
+      }),
+    ).toThrow('Desktop Workbench Main View kind is invalid.');
+  });
+
+  it('migrates v2 Resource Browser Main Views into the visible right Dock', () => {
+    const canvas = viewRef('canvas-1', 'canvas');
+    const resources = legacyResourceViewRef('resources-1');
+
+    const migrated = migrateDesktopWorkbenchV2({
+      ...createDefaultDesktopWorkbenchLayout('window-1'),
+      schemaVersion: 2,
+      revision: 7,
+      resourceDock: { presentation: 'hidden', position: 'left', width: 404 },
+      main: {
+        views: [canvas, resources],
+        groups: [
+          {
+            groupId: 'main:primary',
+            viewIds: ['canvas-1', 'resources-1'],
+            activeViewId: 'resources-1',
+          },
+        ],
+        activeGroupId: 'main:primary',
+      },
     });
+
+    expect(migrated).toMatchObject({
+      schemaVersion: DESKTOP_WORKBENCH_CONTRACT_VERSION,
+      revision: 7,
+      resourceDock: { presentation: 'docked', width: 404 },
+      main: {
+        views: [canvas],
+        groups: [
+          {
+            groupId: 'main:primary',
+            viewIds: ['canvas-1'],
+            activeViewId: 'canvas-1',
+          },
+        ],
+        activeGroupId: 'main:primary',
+      },
+    });
+    expect(migrated.resourceDock).not.toHaveProperty('position');
   });
 
   it('rejects duplicate membership, missing active Group and dangling Timeline owner', () => {
@@ -220,7 +273,7 @@ describe('Desktop Workbench contract', () => {
   });
 });
 
-function viewRef(viewId: string, kind: 'canvas' | 'preview' | 'cut' | 'resource-browser') {
+function viewRef(viewId: string, kind: 'canvas' | 'preview' | 'cut') {
   return {
     viewId,
     viewEpoch: 1,
@@ -236,5 +289,18 @@ function viewRef(viewId: string, kind: 'canvas' | 'preview' | 'cut' | 'resource-
           previewContentKind: 'model' as const,
         }
       : {}),
+  } as const;
+}
+
+function legacyResourceViewRef(viewId: string) {
+  return {
+    viewId,
+    viewEpoch: 1,
+    projectId: 'project-1',
+    workspaceId: 'workspace-1',
+    kind: 'resource-browser',
+    ownerId: 'resource-browser-owner-1',
+    displayLabel: `${viewId}.document`,
+    documentId: `documents/${viewId}`,
   } as const;
 }

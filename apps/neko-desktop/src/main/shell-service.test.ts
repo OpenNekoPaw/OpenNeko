@@ -441,7 +441,6 @@ describe('DesktopShellService', () => {
       resourceDock: {
         ...current.resourceDock,
         presentation: 'overlay' as const,
-        position: 'left' as const,
       },
     };
 
@@ -456,7 +455,7 @@ describe('DesktopShellService', () => {
     expect(updated.window.workbench).toMatchObject({
       revision: current.revision + 1,
       primarySidebar: { visible: false },
-      resourceDock: { presentation: 'overlay', position: 'left' },
+      resourceDock: { presentation: 'overlay' },
     });
     await expect(
       first.service.updateWorkbench(
@@ -476,7 +475,44 @@ describe('DesktopShellService', () => {
 
     expect((await restored.service.getProjection(restoredWindow)).window.workbench).toMatchObject({
       primarySidebar: { visible: false },
-      resourceDock: { presentation: 'overlay', position: 'left' },
+      resourceDock: { presentation: 'overlay' },
+    });
+  });
+
+  it('preserves the visible Project Resource Dock when the same Project reattaches', async () => {
+    const fixture = createFixture();
+    const windowId = await fixture.service.claimWindowId();
+    fixture.service.setRendererEpoch(windowId, 1);
+    const initial = await fixture.service.getProjection(windowId);
+    const opened = await fixture.service.openContent(
+      windowId,
+      '/workspace/demo',
+      initial.endpointEpoch,
+      initial.window.revision,
+    );
+    const current = opened.projection.window.workbench;
+    const withResources = await fixture.service.updateWorkbench(
+      windowId,
+      opened.projection.endpointEpoch,
+      opened.projection.window.revision,
+      current.revision,
+      {
+        ...current,
+        revision: current.revision + 1,
+        resourceDock: { presentation: 'docked', width: 412 },
+      },
+    );
+
+    const reattached = await fixture.service.openContent(
+      windowId,
+      '/workspace/demo',
+      withResources.endpointEpoch,
+      withResources.window.revision,
+    );
+
+    expect(reattached.projection.window.workbench.resourceDock).toEqual({
+      presentation: 'docked',
+      width: 412,
     });
   });
 

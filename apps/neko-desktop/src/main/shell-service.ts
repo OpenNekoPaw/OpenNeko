@@ -1177,26 +1177,13 @@ function attachProjectWorkbench(
     current.main.views.every(
       (view) => view.projectId === project.projectId && view.workspaceId === project.workspaceId,
     );
-  if (ownsAllMainViews) {
-    if (current.resourceDock.presentation === 'hidden') return current;
-    return {
-      ...current,
-      revision: current.revision + 1,
-      resourceDock: {
-        ...current.resourceDock,
-        presentation: 'hidden',
-      },
-    };
-  }
+  if (ownsAllMainViews) return current;
   const reset = createDefaultDesktopWorkbenchLayout(current.windowId);
   const base: DesktopWorkbenchLayoutProjection = {
     ...reset,
     revision: current.revision,
     primarySidebar: current.primarySidebar,
-    resourceDock: {
-      ...current.resourceDock,
-      presentation: 'hidden',
-    },
+    resourceDock: current.resourceDock,
     display: {
       ...current.display,
       mode: 'chat-main',

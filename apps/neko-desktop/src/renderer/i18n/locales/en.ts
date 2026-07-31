@@ -268,6 +268,7 @@ export const en = {
   'workspace.canvasAndModel': 'Canvas + Model',
   'workspace.resources': 'Resources',
   'workspace.projectResources': 'Project resources',
+  'workspace.closeProjectResources': 'Close project resources',
   'workspace.agentToDock': 'Agent to side',
   'workspace.agentToMain': 'Agent to main',
   'workspace.timeline': 'Timeline',

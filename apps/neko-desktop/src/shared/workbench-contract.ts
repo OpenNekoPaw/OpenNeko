@@ -1,6 +1,6 @@
 import type { PreviewContentKind } from '@neko-preview/contracts';
 
-export const DESKTOP_WORKBENCH_CONTRACT_VERSION = 2 as const;
+export const DESKTOP_WORKBENCH_CONTRACT_VERSION = 3 as const;
 export const APPLICATION_PRIMARY_SIDEBAR_DEFAULT_WIDTH = 240;
 export const DESKTOP_PRIMARY_MAIN_GROUP_ID = 'main:primary';
 export const DESKTOP_SECONDARY_MAIN_GROUP_ID = 'main:secondary';
@@ -19,7 +19,7 @@ export type DesktopWorkbenchDockPresentation = 'hidden' | 'docked' | 'overlay';
 export type DesktopWorkbenchDisplayMode = 'chat-main' | 'chat-only' | 'main-only';
 export type DesktopWorkbenchMainSplitAxis = 'columns' | 'rows';
 export type DesktopPreviewViewPresentation = 'temporary' | 'pinned' | 'side';
-export type DesktopWorkbenchViewKind = 'canvas' | 'preview' | 'cut' | 'resource-browser';
+export type DesktopWorkbenchViewKind = 'canvas' | 'preview' | 'cut';
 
 export interface DesktopWorkbenchViewRef {
   readonly viewId: string;
@@ -55,7 +55,6 @@ export interface DesktopWorkbenchLayoutProjection {
   };
   readonly resourceDock: {
     readonly presentation: DesktopWorkbenchDockPresentation;
-    readonly position: DesktopWorkbenchDockPosition;
     readonly width: number;
   };
   readonly display: {
@@ -108,7 +107,6 @@ export function createDefaultDesktopWorkbenchLayout(
     },
     resourceDock: {
       presentation: 'hidden',
-      position: 'right',
       width: 320,
     },
     display: {
@@ -224,11 +222,6 @@ export function parseDesktopWorkbenchLayout(value: unknown): DesktopWorkbenchLay
         resourceDock['presentation'],
         ['hidden', 'docked', 'overlay'] as const,
         'Desktop Workbench Resource Dock presentation is invalid.',
-      ),
-      position: requireOneOf(
-        resourceDock['position'],
-        ['left', 'right'] as const,
-        'Desktop Workbench Resource Dock position is invalid.',
       ),
       width: requireBoundedNumber(
         resourceDock['width'],
@@ -401,11 +394,6 @@ export function migrateDesktopWorkbenchV1(value: unknown): DesktopWorkbenchLayou
         ['hidden', 'docked', 'overlay'] as const,
         'Desktop Workbench v1 Resource Dock presentation is invalid.',
       ),
-      position: requireOneOf(
-        resourceDock['position'],
-        ['left', 'right'] as const,
-        'Desktop Workbench v1 Resource Dock position is invalid.',
-      ),
       width: requireBoundedNumber(
         resourceDock['width'],
         DESKTOP_WORKBENCH_LIMITS.dockWidth,
@@ -467,6 +455,111 @@ export function migrateDesktopWorkbenchV1(value: unknown): DesktopWorkbenchLayou
           },
   };
   return parseDesktopWorkbenchLayout(next);
+}
+
+export function migrateDesktopWorkbenchV2(value: unknown): DesktopWorkbenchLayoutProjection {
+  const record = requireRecord(value, 'Desktop Workbench v2 layout must be an object.');
+  if (record['schemaVersion'] !== 2) {
+    throw new DesktopWorkbenchContractError(
+      'unsupported-desktop-workbench-version',
+      `Desktop Workbench v2 migration received version: ${String(record['schemaVersion'])}.`,
+    );
+  }
+  const main = requireRecord(record['main'], 'Desktop Workbench v2 Main projection is required.');
+  const views = requireArray(
+    main['views'],
+    'Desktop Workbench v2 Main Views must be an array.',
+  ).map(parseDesktopWorkbenchV2ViewRef);
+  const allViewIds = new Set(views.map((view) => view.viewId));
+  if (allViewIds.size !== views.length) {
+    throw invalidPayload('Desktop Workbench v2 Main View identities must be unique.');
+  }
+  const groups = requireArray(
+    main['groups'],
+    'Desktop Workbench v2 Main Groups must be an array.',
+  ).map((group) => parseDesktopWorkbenchMainGroup(group, allViewIds));
+  validateMainGroups(groups, allViewIds);
+  const activeGroupId = requireNonEmptyString(
+    main['activeGroupId'],
+    'Desktop Workbench v2 active Main Group identity is required.',
+  );
+  if (!groups.some((group) => group.groupId === activeGroupId)) {
+    throw staleIdentity('Desktop Workbench v2 active Main Group does not exist.');
+  }
+  const split =
+    main['split'] === undefined ? undefined : parseDesktopWorkbenchMainSplit(main['split']);
+  if (groups.length === 1 && split !== undefined) {
+    throw invalidPayload('Desktop Workbench v2 split requires two Main Groups.');
+  }
+  if (groups.length === 2 && split === undefined) {
+    throw invalidPayload('Desktop Workbench v2 two-Group layout requires a split.');
+  }
+
+  const resourceViewIds = new Set(
+    views.filter((view) => view.kind === 'resource-browser').map((view) => view.viewId),
+  );
+  const creativeViews = views.filter(
+    (view): view is DesktopWorkbenchViewRef => view.kind !== 'resource-browser',
+  );
+  const migratedGroups = migrateWorkbenchV2Groups(groups, resourceViewIds);
+  const resourceDock = requireRecord(
+    record['resourceDock'],
+    'Desktop Workbench v2 Resource Dock projection is required.',
+  );
+  requireOneOf(
+    resourceDock['position'],
+    ['left', 'right'] as const,
+    'Desktop Workbench v2 Resource Dock position is invalid.',
+  );
+  const display = requireRecord(
+    record['display'],
+    'Desktop Workbench v2 display projection is required.',
+  );
+  const displayMode = requireOneOf(
+    display['mode'],
+    ['chat-main', 'chat-only', 'main-only'] as const,
+    'Desktop Workbench v2 display mode is invalid.',
+  );
+  const chatPosition = requireOneOf(
+    display['chatPosition'],
+    ['left', 'right'] as const,
+    'Desktop Workbench v2 Chat position is invalid.',
+  );
+
+  return parseDesktopWorkbenchLayout({
+    ...record,
+    schemaVersion: DESKTOP_WORKBENCH_CONTRACT_VERSION,
+    resourceDock: {
+      presentation:
+        resourceViewIds.size > 0
+          ? 'docked'
+          : requireOneOf(
+              resourceDock['presentation'],
+              ['hidden', 'docked', 'overlay'] as const,
+              'Desktop Workbench v2 Resource Dock presentation is invalid.',
+            ),
+      width: requireBoundedNumber(
+        resourceDock['width'],
+        DESKTOP_WORKBENCH_LIMITS.dockWidth,
+        'Desktop Workbench v2 Resource Dock width is invalid.',
+      ),
+    },
+    display: {
+      ...display,
+      mode:
+        creativeViews.length === 0 && displayMode === 'main-only' ? 'chat-only' : displayMode,
+      chatPosition:
+        resourceViewIds.size > 0 && displayMode === 'chat-main' ? 'left' : chatPosition,
+    },
+    main: {
+      views: creativeViews,
+      groups: migratedGroups,
+      activeGroupId: migratedGroups.some((group) => group.groupId === activeGroupId)
+        ? activeGroupId
+        : DESKTOP_PRIMARY_MAIN_GROUP_ID,
+      ...(migratedGroups.length === 2 && split !== undefined ? { split } : {}),
+    },
+  });
 }
 
 export function setWorkbenchDisplayMode(
@@ -772,7 +865,7 @@ function parseDesktopWorkbenchViewRef(value: unknown): DesktopWorkbenchViewRef {
   const record = requireRecord(value, 'Desktop Workbench Main View must be an object.');
   const kind = requireOneOf(
     record['kind'],
-    ['canvas', 'preview', 'cut', 'resource-browser'] as const,
+    ['canvas', 'preview', 'cut'] as const,
     'Desktop Workbench Main View kind is invalid.',
   );
   const documentId = readOptionalNonEmptyString(
@@ -833,6 +926,84 @@ function parseDesktopWorkbenchViewRef(value: unknown): DesktopWorkbenchViewRef {
     ...(previewPresentation ? { previewPresentation } : {}),
     ...(previewContentKind ? { previewContentKind } : {}),
   };
+}
+
+type DesktopWorkbenchV2ViewRef =
+  | DesktopWorkbenchViewRef
+  | (Omit<DesktopWorkbenchViewRef, 'kind'> & { readonly kind: 'resource-browser' });
+
+function parseDesktopWorkbenchV2ViewRef(value: unknown): DesktopWorkbenchV2ViewRef {
+  const record = requireRecord(value, 'Desktop Workbench v2 Main View must be an object.');
+  if (record['kind'] !== 'resource-browser') {
+    return parseDesktopWorkbenchViewRef(record);
+  }
+  if (record['previewPresentation'] !== undefined || record['previewContentKind'] !== undefined) {
+    throw invalidPayload(
+      'Desktop Workbench v2 Preview presentation metadata belongs only to Preview Views.',
+    );
+  }
+  const documentId = readOptionalNonEmptyString(
+    record['documentId'],
+    'Desktop Workbench v2 document identity is invalid.',
+  );
+  return {
+    viewId: requireNonEmptyString(
+      record['viewId'],
+      'Desktop Workbench v2 Main View identity is required.',
+    ),
+    viewEpoch: requireNonNegativeInteger(
+      record['viewEpoch'],
+      'Desktop Workbench v2 Main View epoch must be a non-negative integer.',
+    ),
+    projectId: requireNonEmptyString(
+      record['projectId'],
+      'Desktop Workbench v2 Main View Project identity is required.',
+    ),
+    workspaceId: requireNonEmptyString(
+      record['workspaceId'],
+      'Desktop Workbench v2 Main View Workspace identity is required.',
+    ),
+    kind: 'resource-browser',
+    ownerId: requireNonEmptyString(
+      record['ownerId'],
+      'Desktop Workbench v2 Main View owner identity is required.',
+    ),
+    displayLabel: requireNonEmptyString(
+      record['displayLabel'],
+      'Desktop Workbench v2 Main View display label is required.',
+    ),
+    ...(documentId === undefined ? {} : { documentId }),
+  };
+}
+
+function migrateWorkbenchV2Groups(
+  groups: readonly DesktopWorkbenchMainGroup[],
+  resourceViewIds: ReadonlySet<string>,
+): readonly DesktopWorkbenchMainGroup[] {
+  const retained = groups
+    .map((group) => {
+      const viewIds = group.viewIds.filter((viewId) => !resourceViewIds.has(viewId));
+      const activeViewId =
+        group.activeViewId !== undefined && viewIds.includes(group.activeViewId)
+          ? group.activeViewId
+          : viewIds.at(-1);
+      return {
+        ...group,
+        viewIds,
+        ...(activeViewId === undefined ? { activeViewId: undefined } : { activeViewId }),
+      };
+    })
+    .filter((group, index) => index === 0 || group.viewIds.length > 0);
+  const primary = retained[0];
+  if (!primary) {
+    return [{ groupId: DESKTOP_PRIMARY_MAIN_GROUP_ID, viewIds: [] }];
+  }
+  if (primary.viewIds.length === 0 && retained.length === 2) {
+    const secondary = retained[1];
+    if (!secondary) throw invalidPayload('Desktop Workbench v2 secondary Main Group is missing.');
+    return [{ ...secondary, groupId: DESKTOP_PRIMARY_MAIN_GROUP_ID }];
+  }
+  return retained;
 }
 
 function parseWorkbenchV1ViewRef(value: unknown):
@@ -904,7 +1075,6 @@ function workbenchV1DisplayLabel(
   if (kind === 'agent') return 'Chat';
   if (kind === 'canvas') return 'Canvas';
   if (kind === 'cut') return 'Timeline';
-  if (kind === 'resource-browser') return 'Resources';
   return 'Preview';
 }
 

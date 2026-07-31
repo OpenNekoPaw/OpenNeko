@@ -11,7 +11,6 @@ import {
   filterAndSortHomeProjects,
   filterAndSortHomeSkills,
   openCanvasDocumentWorkbench,
-  openResourceBrowserWorkbench,
   parseHomeAssetSortOption,
   parseHomeNamedSortOption,
   parseHomeProjectSortOption,
@@ -20,6 +19,7 @@ import {
   resizePrimarySidebarWorkbench,
   resizeProjectDockWorkbench,
   resizeTimelineWorkbench,
+  setResourceDockPresentationWorkbench,
 } from './DesktopShell';
 import { createDesktopI18n } from './i18n';
 import {
@@ -191,6 +191,7 @@ describe('DesktopShellView', () => {
     const primary = resizePrimarySidebarWorkbench(workbench, 288);
     const timeline = resizeTimelineWorkbench(workbench, 320);
     const agent = resizeProjectDockWorkbench(workbench, 'agent', 400);
+    const resources = resizeProjectDockWorkbench(workbench, 'resources', 416);
 
     expect(primary).toMatchObject({
       revision: 9,
@@ -202,51 +203,27 @@ describe('DesktopShellView', () => {
     });
     expect(agent.display.chatWidth).toBe(400);
     expect(agent.resourceDock.width).toBe(workbench.resourceDock.width);
+    expect(resources.resourceDock.width).toBe(416);
+    expect(resources.display.chatWidth).toBe(workbench.display.chatWidth);
   });
 
-  it('opens and focuses Resources as one independent Main View', () => {
-    const home = homeProjection();
-    const project = home.catalog.projects[0];
-    if (!project) {
-      throw new Error('Desktop Shell fixture requires one project.');
-    }
-    const projection: DesktopShellProjection = {
-      ...home,
-      window: {
-        ...home.window,
-        tabs: [
-          {
-            tabId: 'tab-1',
-            projectId: project.projectId,
-            viewId: 'view-1',
-            viewEpoch: 1,
-          },
-        ],
+  it('reveals Project resources without creating a Main View and keeps Agent on the left', () => {
+    const initial = {
+      ...createDefaultDesktopWorkbenchLayout('window-1'),
+      display: {
+        mode: 'chat-main' as const,
+        chatPosition: 'right' as const,
+        chatWidth: 360,
       },
     };
-    const workbench = createDefaultDesktopWorkbenchLayout('window-1');
-    const opened = openResourceBrowserWorkbench({
-      displayLabel: 'Resources',
-      project,
-      projection,
-      workbench,
-    });
-    const focused = openResourceBrowserWorkbench({
-      displayLabel: 'Resources',
-      project,
-      projection,
-      workbench: opened,
-    });
+    const revealed = setResourceDockPresentationWorkbench(initial, 'docked');
 
-    expect(focused.display.mode).toBe('chat-main');
-    expect(focused.main.views).toEqual([
-      expect.objectContaining({
-        kind: 'resource-browser',
-        projectId: project.projectId,
-        workspaceId: project.workspaceId,
-      }),
-    ]);
-    expect(focused.resourceDock.presentation).toBe('hidden');
+    expect(revealed.resourceDock).toEqual({ presentation: 'docked', width: 320 });
+    expect(revealed.display).toMatchObject({ mode: 'chat-main', chatPosition: 'left' });
+    expect(revealed.main).toEqual(initial.main);
+    expect(applyWorkbenchDisplayMode(revealed, 'chat-main-right').display.chatPosition).toBe(
+      'left',
+    );
   });
 
   it('mounts an active Cut View into Main with its package timeline Host slot', () => {
@@ -415,7 +392,8 @@ describe('DesktopShellView', () => {
       expect(sidebar).not.toContain('project-layout-controls');
     }
     expect(homeSidebar).not.toContain('Project resources');
-    expect(projectSidebar).toContain('Project resources');
+    expect(projectSidebar).not.toContain('Project resources');
+    expect(projectMarkup).toContain('aria-label="Project resources"');
     expect(homeSidebar).not.toContain('data-workbench-display-control="primary-sidebar"');
     expect(projectSidebar).toContain('data-workbench-display-control="primary-sidebar"');
     expect(projectSidebar).toContain('aria-label="Display"');
@@ -464,7 +442,7 @@ describe('DesktopShellView', () => {
     expect(markup).toContain('home-navigation project-primary-sidebar');
     expect(markup).not.toContain('project-capabilities');
     expect(markup).not.toContain('Creative surfaces');
-    expect(markup).not.toContain('project-layout-icon-button');
+    expect(markup).toContain('aria-label="Project resources"');
     expect(markup).not.toContain('project-workbench-header');
     expect(markup).not.toContain('project-view-switcher');
     expect(markup).not.toContain('project-view-navigation');
@@ -526,7 +504,7 @@ describe('DesktopShellView', () => {
     expect(projectCatalogMarkup).not.toContain('Timeline payload must stay owner-only');
   });
 
-  it('renders only the Agent dock while legacy Resource Dock state remains persisted', () => {
+  it('renders Project resources on the right and moves Agent to an independent left Dock', () => {
     const projection = homeProjection();
     const markup = renderShell(
       <DesktopShellView
@@ -549,7 +527,6 @@ describe('DesktopShellView', () => {
               primarySidebar: { visible: false, width: 240 },
               resourceDock: {
                 presentation: 'overlay',
-                position: 'left',
                 width: 320,
               },
               display: {
@@ -594,15 +571,16 @@ describe('DesktopShellView', () => {
     expect(markup).toContain('data-workbench-display-control="primary-sidebar"');
     expect(markup).toContain('Recent projects');
     expect(markup).toContain('Recent Agent conversations');
-    expect(markup).toContain('data-left-presentation="hidden"');
-    expect(markup).toContain('data-right-presentation="docked"');
+    expect(markup).toContain('data-left-presentation="docked"');
+    expect(markup).toContain('data-right-presentation="overlay"');
     expect(markup).toContain('Creative main surface');
-    expect(markup).not.toContain('Resource facets');
-    expect(markup).not.toContain('data-dock-owner="resources"');
+    expect(markup).toContain('Resource facets');
+    expect(markup).toContain('data-dock-owner="resources"');
+    expect(markup).toMatch(/neko-controlled-workbench-dock--left[\s\S]*data-dock-owner="agent"/u);
     expect(markup.match(/data-primary-surface="agent"/gu)).toHaveLength(1);
   });
 
-  it('does not revive the removed Resource Dock path from restored presentation state', () => {
+  it('keeps the restored Resource Dock fixed right without stacking it with Agent', () => {
     const projection = homeProjection();
     const markup = renderShell(
       <DesktopShellView
@@ -623,7 +601,6 @@ describe('DesktopShellView', () => {
               ...createDefaultDesktopWorkbenchLayout('window-1'),
               resourceDock: {
                 presentation: 'docked',
-                position: 'right',
                 width: 320,
               },
               display: {
@@ -639,13 +616,18 @@ describe('DesktopShellView', () => {
 
     expect(markup).not.toContain('project-dock-stack');
     expect(markup).toContain('Creative main surface');
-    expect(markup).not.toContain('neko-controlled-workbench-dock--left" data-presentation="docked"');
+    expect(markup).toContain('neko-controlled-workbench-dock--left" data-presentation="docked"');
     expect(markup).toContain('neko-controlled-workbench-dock--right" data-presentation="docked"');
-    expect(markup).not.toContain('data-dock-owner="resources"');
-    expect(markup).toMatch(/neko-controlled-workbench-dock--right[\s\S]*data-dock-owner="agent"/u);
+    expect(markup).toContain('data-dock-owner="resources"');
+    expect(markup).toMatch(
+      /neko-controlled-workbench-dock--right[\s\S]*data-dock-owner="resources"/u,
+    );
+    expect(markup).not.toMatch(
+      /neko-controlled-workbench-dock--right[\s\S]*data-dock-owner="agent"/u,
+    );
   });
 
-  it('mounts the package-owned Resource Browser when the Main runtime is ready', () => {
+  it('mounts the package-owned Resource Browser in the right Dock when ready', () => {
     vi.stubGlobal('window', {
       openNekoDesktop: {
         resources: {
@@ -687,30 +669,14 @@ describe('DesktopShellView', () => {
             ],
             workbench: {
               ...projection.window.workbench,
+              resourceDock: {
+                presentation: 'docked',
+                width: 320,
+              },
               display: {
                 ...projection.window.workbench.display,
-                mode: 'main-only',
-              },
-              main: {
-                views: [
-                  {
-                    viewId: 'resource-browser:view-1',
-                    viewEpoch: 1,
-                    projectId: 'content:workspace-1',
-                    workspaceId: 'workspace-1',
-                    kind: 'resource-browser',
-                    ownerId: 'resource-browser:content:workspace-1',
-                    displayLabel: 'Resources',
-                  },
-                ],
-                groups: [
-                  {
-                    groupId: DESKTOP_PRIMARY_MAIN_GROUP_ID,
-                    viewIds: ['resource-browser:view-1'],
-                    activeViewId: 'resource-browser:view-1',
-                  },
-                ],
-                activeGroupId: DESKTOP_PRIMARY_MAIN_GROUP_ID,
+                mode: 'chat-main',
+                chatPosition: 'left',
               },
             },
           },
@@ -720,10 +686,11 @@ describe('DesktopShellView', () => {
 
     expect(markup).toContain('Loading project resources');
     expect(markup).not.toContain('Assets are not available yet');
+    expect(markup).toContain('data-dock-owner="resources"');
+    expect(markup).toContain('neko-controlled-workbench-dock--right');
+    expect(markup).not.toContain('data-main-view-id="resource-browser:');
     const sidebar = extractPrimarySidebar(markup);
-    expect(sidebar).toMatch(
-      /class="home-nav-button is-active"[^>]*aria-label="Project resources"/u,
-    );
+    expect(sidebar).not.toContain('Project resources');
     expect(sidebar).not.toMatch(
       /class="home-nav-button is-active"[^>]*aria-label="Asset Center"/u,
     );
