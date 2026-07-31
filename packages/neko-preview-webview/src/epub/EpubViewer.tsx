@@ -126,6 +126,62 @@ export async function fetchForEpub(url: string, type?: string): Promise<unknown>
   return text;
 }
 
+export interface EpubResourceReadiness {
+  readonly opened: Promise<unknown>;
+  on(event: 'openFailed', listener: (error: unknown) => void): unknown;
+  off(event: 'openFailed', listener: (error: unknown) => void): unknown;
+}
+
+export function waitForEpubResourceReadiness(book: EpubResourceReadiness): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    let settled = false;
+    const finish = (complete: () => void) => {
+      if (settled) return;
+      settled = true;
+      book.off('openFailed', handleOpenFailed);
+      complete();
+    };
+    const handleOpenFailed = (error: unknown) => {
+      finish(() => reject(error));
+    };
+
+    book.on('openFailed', handleOpenFailed);
+    void book.opened.then(
+      () => finish(resolve),
+      (error: unknown) => finish(() => reject(error)),
+    );
+  });
+}
+
+function epubImageLoadError(image: HTMLImageElement): Error {
+  const source = image.currentSrc || image.getAttribute('src') || 'unknown EPUB image';
+  return new Error(`EPUB image failed to load: ${source}`);
+}
+
+export function waitForEpubImage(image: HTMLImageElement): Promise<void> {
+  if (image.complete) {
+    return image.naturalWidth > 0 ? Promise.resolve() : Promise.reject(epubImageLoadError(image));
+  }
+
+  return new Promise<void>((resolve, reject) => {
+    const cleanup = () => {
+      image.removeEventListener('load', handleLoad);
+      image.removeEventListener('error', handleError);
+    };
+    const handleLoad = () => {
+      cleanup();
+      resolve();
+    };
+    const handleError = () => {
+      cleanup();
+      reject(epubImageLoadError(image));
+    };
+
+    image.addEventListener('load', handleLoad, { once: true });
+    image.addEventListener('error', handleError, { once: true });
+  });
+}
+
 /** Neko theme CSS applied to waterfall chapter content */
 const WATERFALL_THEME_CSS = `
   .epub-chapter-content {
@@ -345,13 +401,13 @@ export const EpubViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =
       });
     };
 
-    const images = Array.from(root.querySelectorAll('img'));
+    const images = Array.from(root.querySelectorAll<HTMLImageElement>('img'));
     const stylesheets = Array.from(
       root.querySelectorAll<HTMLLinkElement>('link[rel="stylesheet"]'),
     );
 
     await Promise.all([
-      ...images.map((img) => waitForLoad(img, () => img.complete)),
+      ...images.map((img) => waitForEpubImage(img)),
       ...stylesheets.map((link) => waitForLoad(link, () => Boolean(link.sheet))),
     ]);
 
@@ -384,9 +440,10 @@ export const EpubViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =
   }, []);
 
   const settleLoadedChapterHeight = useCallback(
-    async (entry: SpineEntry, el: HTMLElement) => {
+    async (entry: SpineEntry, el: HTMLElement, loadEpoch: number) => {
       await waitForChapterResources(el);
       if (
+        bookLoadEpochRef.current !== loadEpoch ||
         chapterRefsMap.current.get(entry.index) !== el ||
         !loadedChaptersRef.current.has(entry.index)
       ) {
@@ -699,12 +756,7 @@ export const EpubViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =
 
   /** Extract TOC and spine entries from book */
   const extractBookMetadata = useCallback(async (book: Book) => {
-    await Promise.race([
-      book.ready,
-      new Promise<never>((_, reject) => {
-        book.on('openFailed', (err: unknown) => reject(err));
-      }),
-    ]);
+    await waitForEpubResourceReadiness(book);
 
     const extractLabel = (raw: unknown): string => {
       if (typeof raw === 'string') return raw.trim();
@@ -897,6 +949,7 @@ export const EpubViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =
     async (entry: SpineEntry) => {
       const book = bookRef.current;
       if (!book) return;
+      const loadEpoch = bookLoadEpochRef.current;
       if (loadedChaptersRef.current.has(entry.index) || loadingChaptersRef.current.has(entry.index))
         return;
 
@@ -908,7 +961,13 @@ export const EpubViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =
         // section.render() returns HTML string with resource URLs resolved via book.load()
         const html = await entry.section.render(book.load.bind(book));
 
-        if (!chapterRefsMap.current.has(entry.index)) return;
+        if (
+          bookLoadEpochRef.current !== loadEpoch ||
+          bookRef.current !== book ||
+          chapterRefsMap.current.get(entry.index) !== el
+        ) {
+          return;
+        }
 
         el.innerHTML = html;
 
@@ -921,7 +980,19 @@ export const EpubViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =
         const height = commitChapterHeight(entry.index, measureRenderedChapterHeight(el));
         el.style.minHeight = `${height}px`;
         updateWaterfallPageMetrics();
-        void settleLoadedChapterHeight(entry, el);
+        void settleLoadedChapterHeight(entry, el, loadEpoch).catch((error: unknown) => {
+          if (
+            bookLoadEpochRef.current !== loadEpoch ||
+            bookRef.current !== book ||
+            chapterRefsMap.current.get(entry.index) !== el ||
+            !loadedChaptersRef.current.has(entry.index)
+          ) {
+            return;
+          }
+          const message = error instanceof Error ? error.message : String(error);
+          logger.error(`Failed to settle chapter ${entry.index}:`, error);
+          setError(message);
+        });
       } catch (err) {
         logger.error(`Failed to load chapter ${entry.index}:`, err);
       } finally {

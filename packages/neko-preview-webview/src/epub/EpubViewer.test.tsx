@@ -6,7 +6,12 @@ import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { I18nProvider } from '../i18n/I18nContext';
 import { i18nService } from '../i18n';
-import { EpubViewer, fetchForEpub } from './EpubViewer';
+import {
+  EpubViewer,
+  fetchForEpub,
+  waitForEpubImage,
+  waitForEpubResourceReadiness,
+} from './EpubViewer';
 
 Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', true);
 
@@ -87,5 +92,99 @@ describe('fetchForEpub', () => {
     } finally {
       await act(async () => root.unmount());
     }
+  });
+});
+
+describe('EPUB archive resource readiness', () => {
+  it('does not advance before epub.js finishes opening archive resources', async () => {
+    let resolveOpened: (() => void) | undefined;
+    const opened = new Promise<void>((resolveOpenedPromise) => {
+      resolveOpened = resolveOpenedPromise;
+    });
+    const listeners = new Set<(error: unknown) => void>();
+    const readiness = {
+      opened,
+      on: (_event: 'openFailed', listener: (error: unknown) => void) => {
+        listeners.add(listener);
+      },
+      off: (_event: 'openFailed', listener: (error: unknown) => void) => {
+        listeners.delete(listener);
+      },
+    };
+    let ready = false;
+    const pending = waitForEpubResourceReadiness(readiness).then(() => {
+      ready = true;
+    });
+
+    await Promise.resolve();
+    expect(ready).toBe(false);
+    expect(listeners.size).toBe(1);
+
+    resolveOpened?.();
+    await pending;
+
+    expect(ready).toBe(true);
+    expect(listeners.size).toBe(0);
+  });
+
+  it('rejects when epub.js reports an archive open failure', async () => {
+    const opened = new Promise<void>(() => undefined);
+    let openFailed: ((error: unknown) => void) | undefined;
+    const readiness = {
+      opened,
+      on: (_event: 'openFailed', listener: (error: unknown) => void) => {
+        openFailed = listener;
+      },
+      off: () => {
+        openFailed = undefined;
+      },
+    };
+    const pending = waitForEpubResourceReadiness(readiness);
+
+    openFailed?.(new Error('archive resources unavailable'));
+
+    await expect(pending).rejects.toThrow('archive resources unavailable');
+    expect(openFailed).toBeUndefined();
+  });
+});
+
+describe('EPUB chapter image settlement', () => {
+  it('accepts an already decoded image', async () => {
+    const image = document.createElement('img');
+    Object.defineProperties(image, {
+      complete: { configurable: true, value: true },
+      naturalWidth: { configurable: true, value: 640 },
+    });
+
+    await expect(waitForEpubImage(image)).resolves.toBeUndefined();
+  });
+
+  it('rejects an already completed image without decoded dimensions', async () => {
+    const image = document.createElement('img');
+    image.src = 'blob:broken-cover';
+    Object.defineProperties(image, {
+      complete: { configurable: true, value: true },
+      naturalWidth: { configurable: true, value: 0 },
+    });
+
+    await expect(waitForEpubImage(image)).rejects.toThrow(
+      'EPUB image failed to load: blob:broken-cover',
+    );
+  });
+
+  it('distinguishes pending image load and error events', async () => {
+    const loadedImage = document.createElement('img');
+    const failedImage = document.createElement('img');
+    failedImage.src = 'blob:broken-page';
+    Object.defineProperty(loadedImage, 'complete', { configurable: true, value: false });
+    Object.defineProperty(failedImage, 'complete', { configurable: true, value: false });
+    const loaded = waitForEpubImage(loadedImage);
+    const failed = waitForEpubImage(failedImage);
+
+    loadedImage.dispatchEvent(new Event('load'));
+    failedImage.dispatchEvent(new Event('error'));
+
+    await expect(loaded).resolves.toBeUndefined();
+    await expect(failed).rejects.toThrow('EPUB image failed to load: blob:broken-page');
   });
 });
