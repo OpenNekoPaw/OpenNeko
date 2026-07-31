@@ -8,6 +8,13 @@ describe('desktop-only topology guard', () => {
       inspectDesktopOnlyTopology({
         appPackagePaths: ['apps/neko-desktop/package.json'],
         nestedPackagePaths: [],
+        packageEntries: [
+          {
+            path: 'packages/neko-ui/package.json',
+            manifest: { dependencies: { '@vscode/codicons': '0.0.45' } },
+          },
+        ],
+        pnpmWorkspacePatterns: ['apps/*', 'packages/*'],
         productionSourceEntries: [
           {
             path: 'packages/neko-agent-webview/src/root.tsx',
@@ -19,6 +26,7 @@ describe('desktop-only topology guard', () => {
             build: 'turbo run build',
             'package:desktop': 'pnpm --filter @neko/app-desktop package',
           },
+          workspaces: ['apps/*', 'packages/*'],
           devDependencies: {
             electron: '43.2.0',
           },
@@ -36,6 +44,13 @@ describe('desktop-only topology guard', () => {
         'apps/neko-vscode/package.json',
       ],
       nestedPackagePaths: ['packages/neko-agent-webview/package.json'],
+      packageEntries: [
+        {
+          path: 'packages/neko-preview-webview/package.json',
+          manifest: { devDependencies: { '@types/vscode': '^1.99.0' } },
+        },
+      ],
+      pnpmWorkspacePatterns: ['apps/*', 'packages/*/packages/*'],
       productionSourceEntries: [
         {
           path: 'packages/neko-chara/src/host-vscode/index.ts',
@@ -43,7 +58,7 @@ describe('desktop-only topology guard', () => {
         },
         {
           path: 'packages/neko-agent-webview/src/bridge.ts',
-          content: 'const host = acquireVsCodeApi();',
+          content: "const host = acquireVsCodeApi(); const uri = 'vscode-webview://legacy';",
         },
       ],
       rootPackageJson: {
@@ -51,6 +66,7 @@ describe('desktop-only topology guard', () => {
           'package:vscode': 'vsce package',
           nekoagent: 'pnpm --filter @neko/app-tui dev',
         },
+        workspaces: ['apps/*', 'packages/*', 'packages/*/packages/*'],
         devDependencies: {
           '@vscode/vsce': '^3.9.2',
         },
@@ -62,7 +78,11 @@ describe('desktop-only topology guard', () => {
     assert.ok(violations.some((violation) => violation.includes('VS Code host adapter')));
     assert.ok(violations.some((violation) => violation.includes('vscode import')));
     assert.ok(violations.some((violation) => violation.includes('VS Code Webview API')));
+    assert.ok(violations.some((violation) => violation.includes('VS Code runtime URI')));
     assert.ok(violations.some((violation) => violation.includes('package:vscode')));
     assert.ok(violations.some((violation) => violation.includes('@vscode/vsce')));
+    assert.ok(violations.some((violation) => violation.includes('@types/vscode')));
+    assert.ok(violations.some((violation) => violation.includes('package.json#workspaces')));
+    assert.ok(violations.some((violation) => violation.includes('pnpm-workspace.yaml#packages')));
   });
 });

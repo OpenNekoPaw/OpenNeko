@@ -1,18 +1,27 @@
 import { readdir, readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { parse as parseYaml } from 'yaml';
 
 const FORBIDDEN_SOURCE_PATTERNS = [
   { label: 'vscode import', pattern: /\bfrom\s+['"]vscode['"]|\brequire\(\s*['"]vscode['"]\s*\)/u },
   { label: 'VS Code Webview API', pattern: /\bacquireVsCodeApi\b/u },
+  {
+    label: 'VS Code runtime URI',
+    pattern: /\bvscode-(?:webview(?:-resource)?|resource):/iu,
+  },
 ];
 
 const FORBIDDEN_ROOT_SCRIPT_PATTERN =
   /(?:^|:)(?:vscode|vsix)(?::|$)|\b(?:vscode|vsix|neko-tui|app-tui)\b/iu;
+const EXPECTED_WORKSPACE_PATTERNS = Object.freeze(['apps/*', 'packages/*']);
+const ALLOWED_VSCODE_ASSET_DEPENDENCIES = new Set(['@vscode/codicons']);
 
 export function inspectDesktopOnlyTopology({
   appPackagePaths,
   nestedPackagePaths,
+  packageEntries = [],
+  pnpmWorkspacePatterns = [],
   productionSourceEntries,
   rootPackageJson,
 }) {
@@ -27,6 +36,8 @@ export function inspectDesktopOnlyTopology({
   for (const packagePath of [...nestedPackagePaths].sort()) {
     violations.push(`Nested workspace package is forbidden: ${packagePath}.`);
   }
+  validateWorkspacePatterns('package.json#workspaces', rootPackageJson.workspaces, violations);
+  validateWorkspacePatterns('pnpm-workspace.yaml#packages', pnpmWorkspacePatterns, violations);
 
   for (const entry of productionSourceEntries) {
     if (entry.path.includes('/host-vscode/')) {
@@ -48,10 +59,17 @@ export function inspectDesktopOnlyTopology({
     }
   }
 
-  for (const section of ['dependencies', 'devDependencies']) {
-    for (const dependency of Object.keys(rootPackageJson[section] ?? {})) {
-      if (dependency === '@types/vscode' || dependency.startsWith('@vscode/')) {
-        violations.push(`Removed-host root dependency is forbidden: ${dependency}.`);
+  for (const entry of [{ path: 'package.json', manifest: rootPackageJson }, ...packageEntries]) {
+    for (const section of [
+      'dependencies',
+      'devDependencies',
+      'optionalDependencies',
+      'peerDependencies',
+    ]) {
+      for (const dependency of Object.keys(entry.manifest[section] ?? {})) {
+        if (isForbiddenRemovedHostDependency(dependency)) {
+          violations.push(`Removed-host dependency is forbidden in ${entry.path}: ${dependency}.`);
+        }
       }
     }
   }
@@ -60,19 +78,51 @@ export function inspectDesktopOnlyTopology({
 }
 
 export async function inspectDesktopOnlyRepository(repositoryRoot) {
-  const [appPackagePaths, nestedPackagePaths, productionSourceEntries, rootPackageJson] =
-    await Promise.all([
-      findAppPackages(repositoryRoot),
-      findNestedPackages(repositoryRoot),
-      readProductionSources(repositoryRoot),
-      readJson(path.join(repositoryRoot, 'package.json')),
-    ]);
+  const [
+    appPackagePaths,
+    nestedPackagePaths,
+    packageEntries,
+    pnpmWorkspacePatterns,
+    productionSourceEntries,
+    rootPackageJson,
+  ] = await Promise.all([
+    findAppPackages(repositoryRoot),
+    findNestedPackages(repositoryRoot),
+    readWorkspacePackageEntries(repositoryRoot),
+    readPnpmWorkspacePatterns(repositoryRoot),
+    readProductionSources(repositoryRoot),
+    readJson(path.join(repositoryRoot, 'package.json')),
+  ]);
   return inspectDesktopOnlyTopology({
     appPackagePaths,
     nestedPackagePaths,
+    packageEntries,
+    pnpmWorkspacePatterns,
     productionSourceEntries,
     rootPackageJson,
   });
+}
+
+function validateWorkspacePatterns(label, patterns, violations) {
+  const actual = Array.isArray(patterns) ? [...patterns].sort() : [];
+  const expected = [...EXPECTED_WORKSPACE_PATTERNS].sort();
+  if (
+    actual.length !== expected.length ||
+    actual.some((pattern, index) => pattern !== expected[index])
+  ) {
+    violations.push(
+      `${label} must contain only ${EXPECTED_WORKSPACE_PATTERNS.join(', ')}; found: ${
+        actual.join(', ') || '<none>'
+      }.`,
+    );
+  }
+}
+
+function isForbiddenRemovedHostDependency(dependency) {
+  if (ALLOWED_VSCODE_ASSET_DEPENDENCIES.has(dependency)) return false;
+  return (
+    dependency === 'vscode' || dependency === '@types/vscode' || dependency.startsWith('@vscode/')
+  );
 }
 
 async function findAppPackages(repositoryRoot) {
@@ -98,6 +148,36 @@ async function findNestedPackages(repositoryRoot) {
       const segments = filePath.split('/');
       return segments.length > 3;
     });
+}
+
+async function readWorkspacePackageEntries(repositoryRoot) {
+  const packageJsonPaths = (
+    await Promise.all(
+      ['apps', 'packages'].map((directory) =>
+        findFiles(path.join(repositoryRoot, directory), (filePath) =>
+          filePath.endsWith(`${path.sep}package.json`),
+        ),
+      ),
+    )
+  )
+    .flat()
+    .filter((filePath) => {
+      const relativePath = toRepositoryPath(repositoryRoot, filePath);
+      return relativePath.split('/').length === 3;
+    });
+  return Promise.all(
+    packageJsonPaths.map(async (filePath) => ({
+      path: toRepositoryPath(repositoryRoot, filePath),
+      manifest: await readJson(filePath),
+    })),
+  );
+}
+
+async function readPnpmWorkspacePatterns(repositoryRoot) {
+  const workspace = parseYaml(
+    await readFile(path.join(repositoryRoot, 'pnpm-workspace.yaml'), 'utf8'),
+  );
+  return Array.isArray(workspace?.packages) ? workspace.packages : [];
 }
 
 async function readProductionSources(repositoryRoot) {
@@ -131,6 +211,7 @@ async function findFiles(root, matches) {
     if (
       entry.name === 'node_modules' ||
       entry.name === 'dist' ||
+      entry.name === '.vite' ||
       entry.name === 'coverage' ||
       entry.name === 'reports'
     ) {

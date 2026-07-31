@@ -14,51 +14,52 @@ const requested = new Set(
 );
 const listOnly = process.argv.includes('--list');
 
-const webviews = discoverWebviews();
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  const webviews = discoverWebviews(repoRoot, requested);
 
-if (webviews.length === 0) {
-  throw new Error('No webview packages with build scripts were found.');
+  if (webviews.length === 0) {
+    throw new Error('No first-level Webview packages with build scripts were found.');
+  }
+
+  console.log(`[smoke] building ${webviews.length} webview package(s)`);
+
+  if (listOnly) {
+    for (const webview of webviews) {
+      console.log(`[smoke] webview package: ${webview.name} (${relative(repoRoot, webview.dir)})`);
+    }
+  } else {
+    for (const webview of webviews) {
+      const label = `${webview.name} (${relative(repoRoot, webview.dir)})`;
+      console.log(`[smoke] webview build start: ${label}`);
+
+      const result = spawnSync('pnpm', ['--dir', webview.dir, 'run', 'build'], {
+        cwd: repoRoot,
+        stdio: 'inherit',
+      });
+
+      if (result.error) {
+        throw result.error;
+      }
+
+      if (result.status !== 0) {
+        process.exit(result.status ?? 1);
+      }
+
+      const distDir = join(webview.dir, 'dist');
+      if (!existsSync(distDir)) {
+        throw new Error(`Expected build output directory missing: ${distDir}`);
+      }
+
+      console.log(`[smoke] webview build ok: ${label}`);
+    }
+  }
 }
 
-console.log(`[smoke] building ${webviews.length} webview package(s)`);
-
-if (listOnly) {
-  for (const webview of webviews) {
-    console.log(`[smoke] webview package: ${webview.name} (${relative(repoRoot, webview.dir)})`);
-  }
-  process.exit(0);
-}
-
-for (const webview of webviews) {
-  const label = `${webview.name} (${relative(repoRoot, webview.dir)})`;
-  console.log(`[smoke] webview build start: ${label}`);
-
-  const result = spawnSync('pnpm', ['--dir', webview.dir, 'run', 'build'], {
-    cwd: repoRoot,
-    stdio: 'inherit',
-  });
-
-  if (result.error) {
-    throw result.error;
-  }
-
-  if (result.status !== 0) {
-    process.exit(result.status ?? 1);
-  }
-
-  const distDir = join(webview.dir, 'dist');
-  if (!existsSync(distDir)) {
-    throw new Error(`Expected build output directory missing: ${distDir}`);
-  }
-
-  console.log(`[smoke] webview build ok: ${label}`);
-}
-
-function discoverWebviews() {
-  const packagesDir = join(repoRoot, 'packages');
+export function discoverWebviews(repositoryRoot, selectedPackages = new Set()) {
+  const packagesDir = join(repositoryRoot, 'packages');
   return readdirSync(packagesDir, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => join(packagesDir, entry.name, 'packages', 'webview', 'package.json'))
+    .filter((entry) => entry.isDirectory() && entry.name.endsWith('-webview'))
+    .map((entry) => join(packagesDir, entry.name, 'package.json'))
     .filter((packageJsonPath) => existsSync(packageJsonPath))
     .map((packageJsonPath) => {
       const raw = JSON.parse(readFileSync(packageJsonPath, 'utf8'));
@@ -70,11 +71,13 @@ function discoverWebviews() {
     })
     .filter((pkg) => typeof pkg.scripts.build === 'string')
     .filter((pkg) => {
-      if (requested.size === 0) return true;
-      const relativeDir = relative(repoRoot, pkg.dir).split(/[/\\]/).join('/');
+      if (selectedPackages.size === 0) return true;
+      const relativeDir = relative(repositoryRoot, pkg.dir).split(/[/\\]/).join('/');
       const parentPackage = relativeDir.split('/')[1];
       return (
-        requested.has(pkg.name) || requested.has(parentPackage ?? '') || requested.has(relativeDir)
+        selectedPackages.has(pkg.name) ||
+        selectedPackages.has(parentPackage ?? '') ||
+        selectedPackages.has(relativeDir)
       );
     })
     .sort((a, b) => a.name.localeCompare(b.name));

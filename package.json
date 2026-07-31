@@ -8,9 +8,7 @@
   "packageManager": "pnpm@10.29.2",
   "workspaces": [
     "apps/*",
-    "packages/*",
-    "packages/*/packages/*",
-    "packages/*/test-utils"
+    "packages/*"
   ],
   "scripts": {
     "build": "turbo run build",
@@ -39,7 +37,6 @@
     "check:agent-boundaries": "node scripts/check-neko-agent-boundaries.mjs",
     "check:canvas-playback-boundary": "node scripts/check-canvas-playback-boundary.mjs",
     "check:engine-retirement-boundary": "node scripts/check-engine-retirement-boundary.mjs",
-    "check:release-channels": "node scripts/check-release-channels.mjs",
     "check:openspec": "node scripts/check-openspec.mjs",
     "check:strict-tsconfig": "node scripts/check-strict-tsconfig.mjs",
     "check:strict-agent": "pnpm --dir packages/neko-agent-runtime run typecheck",
