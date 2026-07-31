@@ -243,15 +243,15 @@
 
 ## 19. Project Resource Facets And Media Library Setup
 
-- [ ] 19.1 Add red Assets contract/controller/Root tests proving Files is the default, All and Entity
+- [x] 19.1 Add red Assets contract/controller/Root tests proving Files is the default, All and Entity
       are rejected, Materials uses Entity authority, the two media-library intents are revisioned and
       the legacy generic source intent cannot succeed.
-- [ ] 19.2 Upgrade the Assets Resource Browser contract and Root to Files/Media/Materials, add the
+- [x] 19.2 Upgrade the Assets Resource Browser contract and Root to Files/Media/Materials, add the
       explicit media-library setup menu and preserve cancellation/stale-revision semantics without a
       duplicate catalog or inferred usage fallback.
-- [ ] 19.3 Compose Desktop global-registry selection plus directory creation with workspace linking,
+- [x] 19.3 Compose Desktop global-registry selection plus directory creation with workspace linking,
       rollback partial directory creation, keep absolute paths in Main and add producer/consumer path
       regressions.
-- [ ] 19.4 Run focused Assets/Desktop tests and typechecks, architecture/debt gates, strict OpenSpec
+- [x] 19.4 Run focused Assets/Desktop tests and typechecks, architecture/debt gates, strict OpenSpec
       validation, production packaging and an isolated real Electron scenario covering the three
       facets and both media-library setup paths.
