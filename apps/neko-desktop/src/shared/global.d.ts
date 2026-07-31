@@ -7,6 +7,7 @@ import type { OpenNekoDesktopCanvasBridge } from './canvas-bridge-contract';
 import type { OpenNekoDesktopCutBridge } from './cut-bridge-contract';
 import type { OpenNekoDesktopHomeManagementBridge } from './home-management-contract';
 import type { OpenNekoDesktopApplicationSettingsBridge } from './application-settings-contract';
+import type { OpenNekoDesktopProjectPortabilityBridge } from './project-portability-contract';
 
 declare global {
   interface Window {
@@ -18,7 +19,8 @@ declare global {
       OpenNekoDesktopCanvasBridge &
       OpenNekoDesktopCutBridge &
       OpenNekoDesktopHomeManagementBridge &
-      OpenNekoDesktopApplicationSettingsBridge;
+      OpenNekoDesktopApplicationSettingsBridge &
+      OpenNekoDesktopProjectPortabilityBridge;
   }
 }
 

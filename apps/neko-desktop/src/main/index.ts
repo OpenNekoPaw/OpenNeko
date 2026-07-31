@@ -63,6 +63,7 @@ import {
   resolveDesktopGlobalMediaLibraryTarget,
 } from './desktop-global-media-library-files';
 import { createDesktopExtensionCatalogReader } from './desktop-extension-catalog-reader';
+import { DesktopProjectPortabilityRuntime } from './desktop-project-portability-runtime';
 
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string | undefined;
 declare const MAIN_WINDOW_VITE_NAME: string;
@@ -437,6 +438,7 @@ async function startDesktop(): Promise<void> {
   const resourceBrowser = new DesktopResourceBrowserRuntime({
     globalAssetRoot: globalStorage.assets,
     globalMediaLibraryRoot: globalStorage.mediaLibraries,
+    localMetadataRepositories: workspaceRegistry.metadataRepositories,
     shell: shellService,
     host,
     canvas: canvasRuntime,
@@ -544,6 +546,32 @@ async function startDesktop(): Promise<void> {
     },
     trashGlobalAsset: (assetPath) => shell.trashItem(assetPath),
   });
+  const metadataRepositories = workspaceRegistry.metadataRepositories;
+  if (!metadataRepositories) {
+    throw new Error('Desktop project portability requires the local metadata repository.');
+  }
+  const projectPortability = new DesktopProjectPortabilityRuntime({
+    globalMediaLibraryRoot: globalStorage.mediaLibraries,
+    metadataRepositories,
+    shell: shellService,
+    selectDestination: async ({ windowId, projectDisplayName }) => {
+      const owner = requireOwnerWindow(windowId);
+      const chinese = app.getLocale().toLocaleLowerCase().startsWith('zh');
+      const result = await dialog.showSaveDialog(owner, {
+        title: chinese ? '创建便携项目快照' : 'Create Portable Project Snapshot',
+        buttonLabel: chinese ? '创建快照' : 'Create Snapshot',
+        defaultPath: path.join(
+          app.getPath('documents'),
+          `${portableSnapshotName(projectDisplayName)}-portable`,
+        ),
+      });
+      if (result.canceled) return undefined;
+      if (!result.filePath) {
+        throw new Error('Desktop portable snapshot picker returned no destination.');
+      }
+      return result.filePath;
+    },
+  });
   const agentControllerComposition = createDesktopAgentControllerComposition({
     host,
     userHome: homedir,
@@ -618,6 +646,7 @@ async function startDesktop(): Promise<void> {
     agent: agentComposition,
     agentControllerComposition,
     resourceBrowser,
+    projectPortability,
     preview: previewRuntime,
     canvas: canvasRuntime,
     cut: cutRuntime,
@@ -963,6 +992,14 @@ function readDevelopmentUrl(): string | undefined {
   return typeof MAIN_WINDOW_VITE_DEV_SERVER_URL === 'undefined'
     ? undefined
     : MAIN_WINDOW_VITE_DEV_SERVER_URL;
+}
+
+function portableSnapshotName(displayName: string): string {
+  const sanitized = displayName
+    .trim()
+    .replaceAll(/[<>:"/\\|?*\u0000-\u001f]/gu, '-')
+    .replaceAll(/[. ]+$/gu, '');
+  return sanitized || 'OpenNeko-project';
 }
 
 async function createDesktopThumbnailDataUrl(

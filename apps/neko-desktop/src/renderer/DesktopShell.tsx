@@ -54,6 +54,7 @@ import { DesktopCanvasSurface } from './DesktopCanvasSurface';
 import { DesktopCutSurface } from './DesktopCutSurface';
 import { DesktopSettingsSurface } from './DesktopSettingsSurface';
 import { DesktopGlobalLibrarySurface } from './DesktopGlobalLibrarySurface';
+import { DesktopProjectPortabilityControl } from './DesktopProjectPortabilityControl';
 import {
   DesktopApplicationBrand,
   DesktopApplicationNavigationButton,
@@ -1895,6 +1896,13 @@ function ProjectPrimarySidebar({
         layoutControl={
           <WorkbenchDisplayMenu actions={actions} disabled={pending} projection={projection} />
         }
+        lifecycleControl={
+          <DesktopProjectPortabilityControl
+            disabled={pending}
+            project={project}
+            projection={projection}
+          />
+        }
       />
     </DesktopApplicationSidebarFrame>
   );
@@ -2307,6 +2315,7 @@ function ApplicationPrimarySidebar({
   onToggle,
   projection,
   layoutControl,
+  lifecycleControl,
 }: {
   readonly activeProjectId?: string;
   readonly activeSection?: HomeSection;
@@ -2321,6 +2330,7 @@ function ApplicationPrimarySidebar({
   readonly onToggle: () => void;
   readonly projection: DesktopShellProjection;
   readonly layoutControl?: JSX.Element;
+  readonly lifecycleControl?: JSX.Element;
 }): JSX.Element {
   const { t } = useTranslation();
   return (
@@ -2371,6 +2381,7 @@ function ApplicationPrimarySidebar({
         projection={projection}
       />
       <PrimarySidebarFooter
+        lifecycleControl={lifecycleControl}
         layoutControl={layoutControl}
         onOpenSettings={onOpenSettings}
         projection={projection}
@@ -2405,10 +2416,12 @@ function PrimarySidebarBrand({
 }
 
 function PrimarySidebarFooter({
+  lifecycleControl,
   layoutControl,
   onOpenSettings,
   projection,
 }: {
+  readonly lifecycleControl?: JSX.Element;
   readonly layoutControl?: JSX.Element;
   readonly onOpenSettings: () => void;
   readonly projection: DesktopShellProjection;
@@ -2418,6 +2431,7 @@ function PrimarySidebarFooter({
     <div className="home-navigation-footer">
       <AttentionSummary projection={projection} />
       <div className="home-navigation-footer__actions">
+        {lifecycleControl}
         {layoutControl}
         <Tooltip content={t('shell.settingsLabel')}>
           <IconButton

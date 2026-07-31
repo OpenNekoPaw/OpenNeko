@@ -52,6 +52,11 @@ import type {
   ResourceBrowserQuickPreviewReleaseResult,
   ResourceBrowserQuickPreviewRequest,
   ResourceBrowserQuickPreviewResult,
+  ResourceBrowserRecoveryApplyRequest,
+  ResourceBrowserRecoveryCancelRequest,
+  ResourceBrowserRecoveryCancelResult,
+  ResourceBrowserRecoveryPlanRequest,
+  ResourceBrowserRecoveryPlanResult,
   ResourceBrowserSearchRequest,
   ResourceBrowserSnapshotRequest,
   ResourceBrowserThumbnailRequest,
@@ -113,6 +118,15 @@ import {
 } from '../shared/application-settings-contract';
 import type { DesktopApplicationSettingsService } from './application-settings-service';
 import type { DesktopExtensionCatalogReader } from './desktop-extension-catalog-reader';
+import type { DesktopProjectPortabilityRuntime } from './desktop-project-portability-runtime';
+import type {
+  DesktopProjectPortabilityCancelResult,
+  DesktopProjectPortabilityExecuteResult,
+  DesktopProjectPortabilityInspectResult,
+  DesktopProjectPortabilityPlanResult,
+  DesktopProjectPortabilityProgressEvent,
+} from '../shared/project-portability-contract';
+
 
 export interface DesktopAppHostOptions {
   readonly host: NekoHostPorts;
@@ -122,6 +136,7 @@ export interface DesktopAppHostOptions {
   readonly agent: DesktopAgentAppHostComposition;
   readonly agentControllerComposition?: DesktopAgentControllerComposition;
   readonly resourceBrowser?: DesktopResourceBrowserRuntime;
+  readonly projectPortability?: DesktopProjectPortabilityRuntime;
   readonly preview?: DesktopPreviewRuntime;
   readonly canvas?: DesktopCanvasRuntime;
   readonly cut?: DesktopCutRuntime;
@@ -138,6 +153,7 @@ export class DesktopAppHost {
   readonly agent: DesktopAgentAppHostComposition;
   readonly agentBridge: DesktopAgentBridgeRuntime;
   readonly resourceBrowser: DesktopResourceBrowserRuntime | undefined;
+  readonly projectPortability: DesktopProjectPortabilityRuntime | undefined;
   readonly preview: DesktopPreviewRuntime | undefined;
   readonly canvas: DesktopCanvasRuntime | undefined;
   readonly cut: DesktopCutRuntime | undefined;
@@ -162,6 +178,7 @@ export class DesktopAppHost {
         : {}),
     });
     this.resourceBrowser = options.resourceBrowser;
+    this.projectPortability = options.projectPortability;
     this.preview = options.preview;
     this.canvas = options.canvas;
     this.cut = options.cut;
@@ -847,6 +864,79 @@ export class DesktopAppHost {
     return this.requireResourceBrowser().releaseQuickPreview(window.windowId, payload);
   }
 
+  async planResourceBrowserRecovery(
+    sender: DesktopSenderIdentity,
+    payload: ResourceBrowserRecoveryPlanRequest | unknown,
+  ): Promise<ResourceBrowserRecoveryPlanResult> {
+    this.requireActive();
+    const window = this.windows.resolveSender(sender);
+    return this.requireResourceBrowser().planRecovery(window.windowId, payload);
+  }
+
+  async applyResourceBrowserRecovery(
+    sender: DesktopSenderIdentity,
+    payload: ResourceBrowserRecoveryApplyRequest | unknown,
+  ): Promise<ResourceBrowserProjection> {
+    this.requireActive();
+    const window = this.windows.resolveSender(sender);
+    return this.requireResourceBrowser().applyRecovery(window.windowId, payload);
+  }
+
+  async cancelResourceBrowserRecovery(
+    sender: DesktopSenderIdentity,
+    payload: ResourceBrowserRecoveryCancelRequest | unknown,
+  ): Promise<ResourceBrowserRecoveryCancelResult> {
+    this.requireActive();
+    const window = this.windows.resolveSender(sender);
+    return this.requireResourceBrowser().cancelRecovery(window.windowId, payload);
+  }
+
+  async inspectProjectPortability(
+    sender: DesktopSenderIdentity,
+    payload: unknown,
+  ): Promise<DesktopProjectPortabilityInspectResult> {
+    this.requireActive();
+    const window = this.windows.resolveSender(sender);
+    return this.requireProjectPortability().inspect(window.windowId, payload);
+  }
+
+  async planProjectPortability(
+    sender: DesktopSenderIdentity,
+    payload: unknown,
+  ): Promise<DesktopProjectPortabilityPlanResult> {
+    this.requireActive();
+    const window = this.windows.resolveSender(sender);
+    return this.requireProjectPortability().plan(window.windowId, payload);
+  }
+
+  async resumeProjectPortability(
+    sender: DesktopSenderIdentity,
+    payload: unknown,
+  ): Promise<DesktopProjectPortabilityPlanResult> {
+    this.requireActive();
+    const window = this.windows.resolveSender(sender);
+    return this.requireProjectPortability().resume(window.windowId, payload);
+  }
+
+  async executeProjectPortability(
+    sender: DesktopSenderIdentity,
+    payload: unknown,
+    publish: (event: DesktopProjectPortabilityProgressEvent) => void,
+  ): Promise<DesktopProjectPortabilityExecuteResult> {
+    this.requireActive();
+    const window = this.windows.resolveSender(sender);
+    return this.requireProjectPortability().execute(window.windowId, payload, publish);
+  }
+
+  async cancelProjectPortability(
+    sender: DesktopSenderIdentity,
+    payload: unknown,
+  ): Promise<DesktopProjectPortabilityCancelResult> {
+    this.requireActive();
+    const window = this.windows.resolveSender(sender);
+    return this.requireProjectPortability().cancel(window.windowId, payload);
+  }
+
   async executeResourceBrowser(
     sender: DesktopSenderIdentity,
     payload: ResourceBrowserIntentRequest | unknown,
@@ -964,6 +1054,7 @@ export class DesktopAppHost {
   detachWindowResources(windowId: string, webContentsId: number): void {
     this.detachRendererSubscriptions(webContentsId);
     this.resourceBrowser?.detachWindow(windowId);
+    this.projectPortability?.detachWindow(windowId);
     this.preview?.detachWindow(windowId);
     this.canvas?.detachWindow(windowId);
     this.cut?.detachWindow(windowId);
@@ -1098,6 +1189,13 @@ export class DesktopAppHost {
       throw new Error('Desktop Resource Browser runtime is unavailable.');
     }
     return this.resourceBrowser;
+  }
+
+  private requireProjectPortability(): DesktopProjectPortabilityRuntime {
+    if (!this.projectPortability) {
+      throw new Error('Desktop project portability runtime is unavailable.');
+    }
+    return this.projectPortability;
   }
 
   private requireCanvas(): DesktopCanvasRuntime {

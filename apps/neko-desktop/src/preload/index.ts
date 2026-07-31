@@ -52,6 +52,11 @@ import {
   parseResourceBrowserQuickPreviewReleaseResult,
   parseResourceBrowserQuickPreviewRequest,
   parseResourceBrowserQuickPreviewResult,
+  parseResourceBrowserRecoveryApplyRequest,
+  parseResourceBrowserRecoveryCancelRequest,
+  parseResourceBrowserRecoveryCancelResult,
+  parseResourceBrowserRecoveryPlanRequest,
+  parseResourceBrowserRecoveryPlanResult,
   parseResourceBrowserProjection,
   parseResourceBrowserProjectionEvent,
   parseResourceBrowserSearchRequest,
@@ -141,6 +146,20 @@ import {
   type DesktopApplicationSettingsProjection,
   type OpenNekoDesktopApplicationSettingsBridge,
 } from '../shared/application-settings-contract';
+import {
+  DESKTOP_PROJECT_PORTABILITY_CHANNELS,
+  isSameDesktopProjectPortabilityIdentity,
+  parseDesktopProjectPortabilityCancelResult,
+  parseDesktopProjectPortabilityExecuteRequest,
+  parseDesktopProjectPortabilityExecuteResult,
+  parseDesktopProjectPortabilityInspectResult,
+  parseDesktopProjectPortabilityPlanResult,
+  parseDesktopProjectPortabilityProgressEvent,
+  parseDesktopProjectPortabilityRequest,
+  parseDesktopProjectPortabilityResumeRequest,
+  type DesktopProjectPortabilityIdentity,
+  type OpenNekoDesktopProjectPortabilityBridge,
+} from '../shared/project-portability-contract';
 
 let requestSequence = 0;
 let currentDesktopEndpointEpoch: string | undefined;
@@ -151,6 +170,11 @@ let currentResourceIdentity: ResourceBrowserIdentity | undefined;
 let currentResourceEventSequence = 0;
 const resourceListeners = new Set<
   Parameters<OpenNekoDesktopResourceBrowserBridge['resources']['subscribe']>[0]
+>();
+let currentProjectPortabilityIdentity: DesktopProjectPortabilityIdentity | undefined;
+const projectPortabilityEventSequences = new Map<string, number>();
+const projectPortabilityListeners = new Set<
+  Parameters<OpenNekoDesktopProjectPortabilityBridge['projectPortability']['subscribe']>[0]
 >();
 const currentPreviewIdentities = new Map<string, PreviewRuntimeIdentity>();
 const currentCanvasIdentities = new Map<string, CanvasHostRuntimeIdentity>();
@@ -178,7 +202,8 @@ const bridge: OpenNekoDesktopBridge &
   OpenNekoDesktopCanvasBridge &
   OpenNekoDesktopCutBridge &
   OpenNekoDesktopHomeManagementBridge &
-  OpenNekoDesktopApplicationSettingsBridge = {
+  OpenNekoDesktopApplicationSettingsBridge &
+  OpenNekoDesktopProjectPortabilityBridge = {
   agent: {
     async getBootstrap(projectId, viewId, viewEpoch) {
       const request = createDesktopAgentBootstrapRequest(
@@ -549,6 +574,56 @@ const bridge: OpenNekoDesktopBridge &
       }
       return result;
     },
+    async planRecovery(value) {
+      const request = parseResourceBrowserRecoveryPlanRequest(value);
+      requireCurrentResourceIdentity(request.identity);
+      const response: unknown = await ipcRenderer.invoke(
+        DESKTOP_RESOURCE_BROWSER_CHANNELS.recoveryPlan,
+        request,
+      );
+      const result = parseResourceBrowserRecoveryPlanResult(response);
+      if (
+        !isSameResourceBrowserIdentity(result.identity, request.identity) ||
+        result.requestId !== request.requestId ||
+        result.resourceId !== request.resourceId ||
+        (result.status === 'planned' &&
+          (result.plan.workspaceId !== request.identity.workspaceId ||
+            result.plan.operationRevision !== request.expectedOperationRevision))
+      ) {
+        throw new Error('Desktop Resource Browser recovery plan identity does not match.');
+      }
+      return result;
+    },
+    async applyRecovery(value) {
+      const request = parseResourceBrowserRecoveryApplyRequest(value);
+      requireCurrentResourceIdentity(request.identity);
+      const response: unknown = await ipcRenderer.invoke(
+        DESKTOP_RESOURCE_BROWSER_CHANNELS.recoveryApply,
+        request,
+      );
+      const projection = parseResourceBrowserProjection(response);
+      if (!isSameResourceBrowserIdentity(projection.identity, request.identity)) {
+        throw new Error('Desktop Resource Browser recovery projection identity does not match.');
+      }
+      return projection;
+    },
+    async cancelRecovery(value) {
+      const request = parseResourceBrowserRecoveryCancelRequest(value);
+      requireCurrentResourceIdentity(request.identity);
+      const response: unknown = await ipcRenderer.invoke(
+        DESKTOP_RESOURCE_BROWSER_CHANNELS.recoveryCancel,
+        request,
+      );
+      const result = parseResourceBrowserRecoveryCancelResult(response);
+      if (
+        !isSameResourceBrowserIdentity(result.identity, request.identity) ||
+        result.requestId !== request.requestId ||
+        result.planId !== request.planId
+      ) {
+        throw new Error('Desktop Resource Browser recovery cancellation identity does not match.');
+      }
+      return result;
+    },
     async execute(value) {
       const request = parseResourceBrowserIntentRequest(value);
       requireCurrentResourceIdentity(request.identity);
@@ -562,6 +637,111 @@ const bridge: OpenNekoDesktopBridge &
       resourceListeners.add(listener);
       return () => {
         resourceListeners.delete(listener);
+      };
+    },
+  },
+  projectPortability: {
+    async inspect(value) {
+      const request = parseDesktopProjectPortabilityRequest(value);
+      const response: unknown = await ipcRenderer.invoke(
+        DESKTOP_PROJECT_PORTABILITY_CHANNELS.inspect,
+        request,
+      );
+      const result = parseDesktopProjectPortabilityInspectResult(response);
+      requireProjectPortabilityResultIdentity(
+        request.identity,
+        result.identity,
+        request.requestId,
+        result.requestId,
+      );
+      currentProjectPortabilityIdentity = request.identity;
+      return result;
+    },
+    async plan(value) {
+      const request = parseDesktopProjectPortabilityRequest(value);
+      const response: unknown = await ipcRenderer.invoke(
+        DESKTOP_PROJECT_PORTABILITY_CHANNELS.plan,
+        request,
+      );
+      const result = parseDesktopProjectPortabilityPlanResult(response);
+      requireProjectPortabilityResultIdentity(
+        request.identity,
+        result.identity,
+        request.requestId,
+        result.requestId,
+      );
+      if (
+        result.status === 'planned' &&
+        result.plan.workspaceId !== request.identity.workspaceId
+      ) {
+        throw new Error('Desktop project portability plan Workspace identity does not match.');
+      }
+      currentProjectPortabilityIdentity = request.identity;
+      return result;
+    },
+    async resume(value) {
+      const request = parseDesktopProjectPortabilityResumeRequest(value);
+      const response: unknown = await ipcRenderer.invoke(
+        DESKTOP_PROJECT_PORTABILITY_CHANNELS.resume,
+        request,
+      );
+      const result = parseDesktopProjectPortabilityPlanResult(response);
+      requireProjectPortabilityResultIdentity(
+        request.identity,
+        result.identity,
+        request.requestId,
+        result.requestId,
+      );
+      if (
+        result.status === 'planned' &&
+        (result.plan.workspaceId !== request.identity.workspaceId ||
+          result.plan.snapshotId !== request.snapshotId)
+      ) {
+        throw new Error('Desktop project portability resume identity does not match.');
+      }
+      currentProjectPortabilityIdentity = request.identity;
+      return result;
+    },
+    async execute(value) {
+      const request = parseDesktopProjectPortabilityExecuteRequest(value);
+      const response: unknown = await ipcRenderer.invoke(
+        DESKTOP_PROJECT_PORTABILITY_CHANNELS.execute,
+        request,
+      );
+      const result = parseDesktopProjectPortabilityExecuteResult(response);
+      requireProjectPortabilityResultIdentity(
+        request.identity,
+        result.identity,
+        request.requestId,
+        result.requestId,
+      );
+      if (result.snapshotId !== request.snapshotId) {
+        throw new Error('Desktop project portability execution identity does not match.');
+      }
+      return result;
+    },
+    async cancel(value) {
+      const request = parseDesktopProjectPortabilityResumeRequest(value);
+      const response: unknown = await ipcRenderer.invoke(
+        DESKTOP_PROJECT_PORTABILITY_CHANNELS.cancel,
+        request,
+      );
+      const result = parseDesktopProjectPortabilityCancelResult(response);
+      requireProjectPortabilityResultIdentity(
+        request.identity,
+        result.identity,
+        request.requestId,
+        result.requestId,
+      );
+      if (result.snapshotId !== request.snapshotId) {
+        throw new Error('Desktop project portability cancellation identity does not match.');
+      }
+      return result;
+    },
+    subscribe(listener) {
+      projectPortabilityListeners.add(listener);
+      return () => {
+        projectPortabilityListeners.delete(listener);
       };
     },
   },
@@ -972,6 +1152,22 @@ ipcRenderer.on(
 );
 
 ipcRenderer.on(
+  DESKTOP_PROJECT_PORTABILITY_CHANNELS.progressEvent,
+  (_event: Electron.IpcRendererEvent, value: unknown): void => {
+    const event = parseDesktopProjectPortabilityProgressEvent(value);
+    const identity = currentProjectPortabilityIdentity;
+    if (!identity || !isSameDesktopProjectPortabilityIdentity(event.identity, identity)) {
+      return;
+    }
+    const currentSequence =
+      projectPortabilityEventSequences.get(event.progress.snapshotId) ?? 0;
+    if (event.sequence !== currentSequence + 1) return;
+    projectPortabilityEventSequences.set(event.progress.snapshotId, event.sequence);
+    for (const listener of projectPortabilityListeners) listener(event);
+  },
+);
+
+ipcRenderer.on(
   DESKTOP_CANVAS_CHANNELS.projectionEvent,
   (_event: Electron.IpcRendererEvent, value: unknown): void => {
     const event: CanvasHostProjectionEvent = parseCanvasHostProjectionEvent(value);
@@ -1048,6 +1244,20 @@ function requireCurrentResourceIdentity(identity: ResourceBrowserIdentity): void
   const current = currentResourceIdentity;
   if (!current || !isSameResourceBrowserIdentity(identity, current)) {
     throw new Error('Desktop Resource Browser request requires a current owner-bound snapshot.');
+  }
+}
+
+function requireProjectPortabilityResultIdentity(
+  expectedIdentity: DesktopProjectPortabilityIdentity,
+  actualIdentity: DesktopProjectPortabilityIdentity,
+  expectedRequestId: string,
+  actualRequestId: string,
+): void {
+  if (
+    expectedRequestId !== actualRequestId ||
+    !isSameDesktopProjectPortabilityIdentity(expectedIdentity, actualIdentity)
+  ) {
+    throw new Error('Desktop project portability result identity does not match.');
   }
 }
 

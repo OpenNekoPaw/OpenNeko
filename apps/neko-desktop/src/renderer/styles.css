@@ -1767,6 +1767,101 @@ button.home-management-card:hover {
   background: var(--neko-desktop-border);
 }
 
+.project-portability-panel {
+  width: min(360px, calc(100vw - 32px));
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  color: var(--neko-text-primary);
+}
+
+.project-portability-panel > header,
+.project-portability-panel li,
+.project-portability-panel__operation,
+.project-portability-panel__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.project-portability-panel > header,
+.project-portability-panel li {
+  justify-content: space-between;
+}
+
+.project-portability-panel > header span,
+.project-portability-panel small,
+.project-portability-panel > p,
+.project-portability-panel__operation > span {
+  color: var(--neko-text-secondary);
+}
+
+.project-portability-panel > p {
+  margin: 0;
+  line-height: 1.45;
+}
+
+.project-portability-panel ul {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.project-portability-panel li {
+  min-width: 0;
+  padding-block: 5px;
+  border-bottom: 1px solid var(--neko-border-subtle);
+}
+
+.project-portability-panel li span,
+.project-portability-panel li small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.project-portability-panel__operation {
+  align-items: stretch;
+  flex-direction: column;
+}
+
+.project-portability-panel progress {
+  width: 100%;
+  height: 6px;
+}
+
+.project-portability-panel__operation > div,
+.project-portability-panel__actions {
+  justify-content: flex-end;
+}
+
+.project-portability-panel button {
+  min-height: 30px;
+  padding: 5px 10px;
+  border: 1px solid var(--neko-border-default);
+  border-radius: 6px;
+  background: var(--neko-surface-raised);
+  color: var(--neko-text-primary);
+  font: inherit;
+  cursor: pointer;
+}
+
+.project-portability-panel button:hover:not(:disabled) {
+  border-color: var(--neko-accent);
+  background: var(--neko-surface-hover);
+}
+
+.project-portability-panel button:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.project-portability-panel__error {
+  color: var(--neko-danger-text) !important;
+}
+
 .project-primary-sidebar {
   width: 100%;
   height: 100%;

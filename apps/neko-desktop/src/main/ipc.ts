@@ -8,6 +8,7 @@ import { DESKTOP_CANVAS_CHANNELS } from '../shared/canvas-bridge-contract';
 import { DESKTOP_CUT_CHANNELS } from '../shared/cut-bridge-contract';
 import { DESKTOP_HOME_MANAGEMENT_CHANNELS } from '../shared/home-management-contract';
 import { DESKTOP_APPLICATION_SETTINGS_CHANNELS } from '../shared/application-settings-contract';
+import { DESKTOP_PROJECT_PORTABILITY_CHANNELS } from '../shared/project-portability-contract';
 import type { DesktopAppHost } from './app-host';
 
 export function registerDesktopIpc(
@@ -87,9 +88,56 @@ export function registerDesktopIpc(
       appHost.releaseResourceBrowserQuickPreview(requireSender(event), payload),
   );
   ipcMain.handle(
+    DESKTOP_RESOURCE_BROWSER_CHANNELS.recoveryPlan,
+    (event: IpcMainInvokeEvent, payload: unknown) =>
+      appHost.planResourceBrowserRecovery(requireSender(event), payload),
+  );
+  ipcMain.handle(
+    DESKTOP_RESOURCE_BROWSER_CHANNELS.recoveryApply,
+    (event: IpcMainInvokeEvent, payload: unknown) =>
+      appHost.applyResourceBrowserRecovery(requireSender(event), payload),
+  );
+  ipcMain.handle(
+    DESKTOP_RESOURCE_BROWSER_CHANNELS.recoveryCancel,
+    (event: IpcMainInvokeEvent, payload: unknown) =>
+      appHost.cancelResourceBrowserRecovery(requireSender(event), payload),
+  );
+  ipcMain.handle(
     DESKTOP_RESOURCE_BROWSER_CHANNELS.execute,
     (event: IpcMainInvokeEvent, payload: unknown) =>
       appHost.executeResourceBrowser(requireSender(event), payload),
+  );
+  ipcMain.handle(
+    DESKTOP_PROJECT_PORTABILITY_CHANNELS.inspect,
+    (event: IpcMainInvokeEvent, payload: unknown) =>
+      appHost.inspectProjectPortability(requireSender(event), payload),
+  );
+  ipcMain.handle(
+    DESKTOP_PROJECT_PORTABILITY_CHANNELS.plan,
+    (event: IpcMainInvokeEvent, payload: unknown) =>
+      appHost.planProjectPortability(requireSender(event), payload),
+  );
+  ipcMain.handle(
+    DESKTOP_PROJECT_PORTABILITY_CHANNELS.resume,
+    (event: IpcMainInvokeEvent, payload: unknown) =>
+      appHost.resumeProjectPortability(requireSender(event), payload),
+  );
+  ipcMain.handle(
+    DESKTOP_PROJECT_PORTABILITY_CHANNELS.execute,
+    (event: IpcMainInvokeEvent, payload: unknown) =>
+      appHost.executeProjectPortability(requireSender(event), payload, (progressEvent) => {
+        if (!event.sender.isDestroyed()) {
+          event.sender.send(
+            DESKTOP_PROJECT_PORTABILITY_CHANNELS.progressEvent,
+            progressEvent,
+          );
+        }
+      }),
+  );
+  ipcMain.handle(
+    DESKTOP_PROJECT_PORTABILITY_CHANNELS.cancel,
+    (event: IpcMainInvokeEvent, payload: unknown) =>
+      appHost.cancelProjectPortability(requireSender(event), payload),
   );
   ipcMain.handle(
     DESKTOP_PREVIEW_CHANNELS.snapshotGet,
@@ -269,7 +317,15 @@ export function registerDesktopIpc(
       DESKTOP_RESOURCE_BROWSER_CHANNELS.thumbnailResolve,
       DESKTOP_RESOURCE_BROWSER_CHANNELS.quickPreviewResolve,
       DESKTOP_RESOURCE_BROWSER_CHANNELS.quickPreviewRelease,
+      DESKTOP_RESOURCE_BROWSER_CHANNELS.recoveryPlan,
+      DESKTOP_RESOURCE_BROWSER_CHANNELS.recoveryApply,
+      DESKTOP_RESOURCE_BROWSER_CHANNELS.recoveryCancel,
       DESKTOP_RESOURCE_BROWSER_CHANNELS.execute,
+      DESKTOP_PROJECT_PORTABILITY_CHANNELS.inspect,
+      DESKTOP_PROJECT_PORTABILITY_CHANNELS.plan,
+      DESKTOP_PROJECT_PORTABILITY_CHANNELS.resume,
+      DESKTOP_PROJECT_PORTABILITY_CHANNELS.execute,
+      DESKTOP_PROJECT_PORTABILITY_CHANNELS.cancel,
       DESKTOP_PREVIEW_CHANNELS.snapshotGet,
       DESKTOP_PREVIEW_CHANNELS.requestExecute,
       DESKTOP_CANVAS_CHANNELS.snapshotGet,

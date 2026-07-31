@@ -14,6 +14,7 @@ import { DesktopApplication } from './DesktopShell';
 import { DesktopApplicationSettingsProvider } from './application-settings-context';
 import { createDesktopI18n } from './i18n';
 import { DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION } from '../shared/home-management-contract';
+import type { DesktopProjectPortabilityRequest } from '../shared/project-portability-contract';
 
 vi.mock('./DesktopAgentSurface', () => ({
   DesktopAgentSurface: ({
@@ -74,6 +75,7 @@ describe('DesktopApplication', () => {
         },
         workbench: { update: vi.fn() },
         resources: createResourceBridgeMock(),
+        projectPortability: createProjectPortabilityBridgeMock(),
         preview: createPreviewBridgeMock(),
         canvas: createCanvasBridgeMock(),
         cut: createCutBridgeMock(),
@@ -136,6 +138,19 @@ describe('DesktopApplication', () => {
       },
     }));
     const updateWorkbench = vi.fn(async () => projection);
+    const projectPortability = createProjectPortabilityBridgeMock();
+    projectPortability.inspect.mockImplementation(
+      async (request: DesktopProjectPortabilityRequest) => ({
+      version: 1,
+      requestId: request.requestId,
+      identity: request.identity,
+      portability: {
+        state: 'linked-ready',
+        requirementRevision: 'requirements:abc',
+        libraries: [],
+      },
+      }),
+    );
     Object.defineProperty(window, 'openNekoDesktop', {
       configurable: true,
       value: {
@@ -166,6 +181,7 @@ describe('DesktopApplication', () => {
         },
         workbench: { update: updateWorkbench },
         resources: createResourceBridgeMock(),
+        projectPortability,
         preview: createPreviewBridgeMock(),
         canvas: createCanvasBridgeMock(),
         cut: createCutBridgeMock(),
@@ -191,6 +207,24 @@ describe('DesktopApplication', () => {
       projection.window.workbench.revision,
     );
     expect(activateHome).not.toHaveBeenCalled();
+
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe(): void {}
+        unobserve(): void {}
+        disconnect(): void {}
+      },
+    );
+    const portabilityControl = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
+      (button) => button.getAttribute('aria-label') === 'Project portability',
+    );
+    await act(async () => portabilityControl?.click());
+    await waitForDom(() => projectPortability.inspect.mock.calls.length === 1);
+    expect(document.body.textContent).toContain(
+      'Linked media is available on this machine. Other machines may require relinking.',
+    );
+    expect(projectPortability.plan).not.toHaveBeenCalled();
 
     const assetCenter = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
       (button) => button.textContent?.trim() === 'Asset Center',
@@ -259,6 +293,7 @@ describe('DesktopApplication', () => {
         },
         workbench: { update: vi.fn() },
         resources: createResourceBridgeMock(),
+        projectPortability: createProjectPortabilityBridgeMock(),
         preview: createPreviewBridgeMock(),
         canvas: createCanvasBridgeMock(),
         cut: createCutBridgeMock(),
@@ -320,6 +355,7 @@ describe('DesktopApplication', () => {
         },
         workbench: { update: vi.fn() },
         resources: createResourceBridgeMock(),
+        projectPortability: createProjectPortabilityBridgeMock(),
         preview: createPreviewBridgeMock(),
         canvas: createCanvasBridgeMock(),
         cut: createCutBridgeMock(),
@@ -400,6 +436,7 @@ describe('DesktopApplication', () => {
         },
         workbench: { update: vi.fn() },
         resources: createResourceBridgeMock(),
+        projectPortability: createProjectPortabilityBridgeMock(),
         preview: createPreviewBridgeMock(),
         canvas: createCanvasBridgeMock(),
         cut: createCutBridgeMock(),
@@ -554,6 +591,7 @@ describe('DesktopApplication', () => {
         },
         workbench: { update: vi.fn() },
         resources: createResourceBridgeMock(),
+        projectPortability: createProjectPortabilityBridgeMock(),
         preview: createPreviewBridgeMock(),
         canvas: createCanvasBridgeMock(),
         cut: createCutBridgeMock(),
@@ -742,6 +780,7 @@ describe('DesktopApplication', () => {
         },
         workbench: { update: vi.fn() },
         resources: createResourceBridgeMock(),
+        projectPortability: createProjectPortabilityBridgeMock(),
         preview: createPreviewBridgeMock(),
         canvas: createCanvasBridgeMock(),
         cut: createCutBridgeMock(),
@@ -903,6 +942,7 @@ describe('DesktopApplication', () => {
         },
         workbench: { update },
         resources: createResourceBridgeMock(),
+        projectPortability: createProjectPortabilityBridgeMock(),
         preview: createPreviewBridgeMock(),
         canvas: createCanvasBridgeMock(),
         cut: createCutBridgeMock(),
@@ -1043,6 +1083,7 @@ describe('DesktopApplication', () => {
         },
         workbench: { update: vi.fn() },
         resources: createResourceBridgeMock(),
+        projectPortability: createProjectPortabilityBridgeMock(),
         preview: createPreviewBridgeMock(),
         canvas: createCanvasBridgeMock(),
         cut: createCutBridgeMock(),
@@ -1171,6 +1212,7 @@ describe('DesktopApplication', () => {
         },
         workbench: { update: vi.fn() },
         resources: createResourceBridgeMock(),
+        projectPortability: createProjectPortabilityBridgeMock(),
         preview: createPreviewBridgeMock(),
         canvas: createCanvasBridgeMock(),
         cut: createCutBridgeMock(),
@@ -1229,8 +1271,22 @@ function createResourceBridgeMock() {
     resolveThumbnail: vi.fn(),
     resolveQuickPreview: vi.fn(),
     releaseQuickPreview: vi.fn(),
+    planRecovery: vi.fn(),
+    applyRecovery: vi.fn(),
+    cancelRecovery: vi.fn(),
     search: vi.fn(),
     execute: vi.fn(),
+    subscribe: vi.fn(() => () => undefined),
+  };
+}
+
+function createProjectPortabilityBridgeMock() {
+  return {
+    inspect: vi.fn(),
+    plan: vi.fn(),
+    resume: vi.fn(),
+    execute: vi.fn(),
+    cancel: vi.fn(),
     subscribe: vi.fn(() => () => undefined),
   };
 }

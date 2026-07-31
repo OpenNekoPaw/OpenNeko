@@ -268,6 +268,26 @@ export const en = {
   'workspace.canvasAndModel': 'Canvas + Model',
   'workspace.resources': 'Resources',
   'workspace.projectResources': 'Project resources',
+  'workspace.portability': 'Project portability',
+  'workspace.portabilityLoading': 'Checking project media',
+  'workspace.portabilityCreate': 'Create portable snapshot',
+  'workspace.portabilityResume': 'Resume snapshot',
+  'workspace.portabilityConfirm': 'Create snapshot',
+  'workspace.portabilityCreating': 'Creating snapshot',
+  'workspace.portabilityCancel': 'Cancel',
+  'workspace.portabilityPlanReady': 'Snapshot plan ready',
+  'workspace.portabilityProgress': 'Portable snapshot progress',
+  'workspace.portabilityReferences': 'references',
+  'workspace.portabilityMissing': 'missing',
+  'workspace.portabilityFiles': 'files',
+  'workspace.portabilityState.linked-ready':
+    'Linked media is available on this machine. Other machines may require relinking.',
+  'workspace.portabilityState.sync-requires-relink':
+    'One or more required media libraries must be relinked.',
+  'workspace.portabilityState.portable-snapshot-ready':
+    'A completed portable snapshot matches the current project revision.',
+  'workspace.portabilityState.coverage-incomplete':
+    'Project document coverage is incomplete. A portable snapshot cannot be verified.',
   'workspace.closeProjectResources': 'Close project resources',
   'workspace.agentToDock': 'Agent to side',
   'workspace.agentToMain': 'Agent to main',
