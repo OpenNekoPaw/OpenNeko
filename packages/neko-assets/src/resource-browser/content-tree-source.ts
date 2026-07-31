@@ -90,6 +90,7 @@ async function readDirectoryChildren(
   const directories: string[] = [];
   for (const child of children) {
     if (entries.length >= input.limit) return directories;
+    if (!isResourceBrowserContentNameVisible(child.name)) continue;
     if (child.type === 'symlink') continue;
     const absolutePath = input.joinAbsolutePath(absoluteDirectory, child.name);
     const relativePath = portableRelativePath(input.relativePath(input.absoluteRoot, absolutePath));
@@ -138,6 +139,10 @@ async function readDirectoryChildren(
     });
   }
   return directories;
+}
+
+export function isResourceBrowserContentNameVisible(name: string): boolean {
+  return !name.startsWith('.');
 }
 
 function matchesQuery(locatorPath: string, query: string): boolean {

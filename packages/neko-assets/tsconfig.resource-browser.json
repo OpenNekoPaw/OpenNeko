@@ -9,5 +9,10 @@
     "types": ["node", "vitest/globals"],
     "noEmit": true
   },
-  "include": ["src/resource-browser/**/*.ts", "src/resource-browser/**/*.tsx"]
+  "include": [
+    "src/global-library/**/*.ts",
+    "src/global-library/**/*.tsx",
+    "src/resource-browser/**/*.ts",
+    "src/resource-browser/**/*.tsx"
+  ]
 }

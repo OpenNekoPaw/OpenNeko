@@ -5,6 +5,10 @@
   "description": "Desktop resource browser and media library copy contracts",
   "license": "AGPL-3.0-or-later",
   "exports": {
+    "./global-library": "./src/global-library/index.ts",
+    "./global-library/contract": "./src/global-library/contract.ts",
+    "./global-library/controller": "./src/global-library/controller.ts",
+    "./global-library/root": "./src/global-library/root.tsx",
     "./media-library-copy": "./src/services/MediaLibraryCopyService.ts",
     "./resource-browser": "./src/resource-browser/index.ts",
     "./resource-browser/contract": "./src/resource-browser/contract.ts",

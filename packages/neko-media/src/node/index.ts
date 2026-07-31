@@ -15,6 +15,11 @@ export {
 } from './NodeMediaLoopbackServer';
 export { NodeMediaRuntime, type NodeMediaRuntimeOptions } from './NodeMediaRuntime';
 export {
+  NodeVideoThumbnail,
+  VideoThumbnailError,
+  type VideoThumbnailRequest,
+} from './NodeVideoThumbnail';
+export {
   getHardwareVideoPipeline,
   resolveHardwareVideoBackend,
   type HardwareVideoBackend,

@@ -5,6 +5,77 @@ import {
 } from './content-tree-source';
 
 describe('Resource Browser content tree source', () => {
+  it('excludes dot-prefixed files and directories before search or metadata projection', async () => {
+    const stat = vi.fn(async () => ({ sizeBytes: 4, modifiedAtMs: 20 }));
+    const readDirectory = vi.fn(async (directory: string) => {
+      if (directory === '/workspace') {
+        return [
+          { name: '.DS_Store', type: 'file' as const },
+          { name: '.cache', type: 'directory' as const },
+          { name: 'Media', type: 'directory' as const },
+          { name: 'poster.png', type: 'file' as const },
+        ];
+      }
+      if (directory === '/workspace/.cache') {
+        return [{ name: 'hidden.png', type: 'file' as const }];
+      }
+      if (directory === '/workspace/Media') {
+        return [{ name: 'shot.mp4', type: 'file' as const }];
+      }
+      return [];
+    });
+
+    const entries = await searchResourceBrowserContentTree({
+      absoluteRoot: '/workspace',
+      locatorPrefix: '',
+      query: '',
+      limit: 20,
+      rootDepth: -1,
+      excludedDirectoryNames: new Set(),
+      files: { readDirectory, stat },
+      joinAbsolutePath: (directory, childName) => `${directory}/${childName}`,
+      relativePath: (_root, target) => target.replace('/workspace/', ''),
+      classify: () => ({
+        include: true,
+        mediaType: 'image',
+        capabilities: ['read'],
+      }),
+    });
+
+    expect(entries.map((entry) => entry.label)).toEqual(['Media', 'poster.png', 'shot.mp4']);
+    expect(readDirectory).not.toHaveBeenCalledWith('/workspace/.cache');
+    expect(stat).toHaveBeenCalledTimes(2);
+    expect(stat).not.toHaveBeenCalledWith('/workspace/.DS_Store');
+  });
+
+  it('excludes dot-prefixed children from immediate directory browsing', async () => {
+    const entries = await readResourceBrowserContentChildren({
+      absoluteRoot: '/workspace',
+      absoluteDirectory: '/workspace',
+      locatorPrefix: '',
+      limit: 20,
+      rootDepth: -1,
+      excludedDirectoryNames: new Set(),
+      files: {
+        readDirectory: vi.fn(async () => [
+          { name: '.hidden.png', type: 'file' as const },
+          { name: '.private', type: 'directory' as const },
+          { name: 'visible.png', type: 'file' as const },
+        ]),
+        stat: vi.fn(async () => ({ sizeBytes: 4, modifiedAtMs: 20 })),
+      },
+      joinAbsolutePath: (directory, childName) => `${directory}/${childName}`,
+      relativePath: (_root, target) => target.replace('/workspace/', ''),
+      classify: () => ({
+        include: true,
+        mediaType: 'image',
+        capabilities: ['read'],
+      }),
+    });
+
+    expect(entries.map((entry) => entry.label)).toEqual(['visible.png']);
+  });
+
   it('projects portable hierarchy through the injected host-neutral file port', async () => {
     const readDirectory = vi.fn(async (directory: string) => {
       switch (directory) {

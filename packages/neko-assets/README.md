@@ -27,4 +27,17 @@ Desktop Main composes the package's host-neutral services through public entries
 projections, and `SemanticSourceDiscoveryService` emits reviewable semantic evidence without writing
 Entity facts. The package-owned renderer root projects those services through typed Desktop IPC.
 
+## Global Library Browser
+
+The browser-safe `global-library` entry owns the shared list/grid presentation for global Media
+Library connections and OpenNeko-owned Asset Library files. It accepts only opaque owner/item
+identities, catalog revisions, relative Media Library locators, and revisioned `icon`/`hover`
+thumbnail descriptors. Basenames beginning with `.` never enter either projection.
+
+Desktop Main remains the authority for native selection, absolute-path resolution, thumbnail
+generation, operation-owned Asset import staging, and system-trash removal. Removing a Media
+Library connection unlinks only the managed connection; removing an Asset validates the current
+owned regular file and moves it to the operating-system trash. Hover previews are static images and
+do not open or autoplay a media session.
+
 Legacy Asset catalog data is handled only by the explicit inspection and migration facilities in `@neko/shared`; normal Neko Assets runtime does not read it.
