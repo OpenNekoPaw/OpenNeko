@@ -1,6 +1,23 @@
-import { defineConfig } from 'vite';
+import { defineConfig, type Plugin } from 'vite';
 
-export default defineConfig({
+interface DesktopDevelopmentMainRestartPlugin extends Plugin {
+  closeBundle(): void;
+}
+
+export function createDesktopDevelopmentMainRestartPlugin(
+  command: 'build' | 'serve',
+  requestRestart: () => void = requestElectronMainRestart,
+): DesktopDevelopmentMainRestartPlugin {
+  return {
+    name: 'openneko:desktop:restart-main-after-development-build',
+    closeBundle() {
+      if (command === 'serve') requestRestart();
+    },
+  };
+}
+
+export default defineConfig(({ command }) => ({
+  plugins: [createDesktopDevelopmentMainRestartPlugin(command)],
   build: {
     sourcemap: true,
     rollupOptions: {
@@ -10,4 +27,8 @@ export default defineConfig({
       },
     },
   },
-});
+}));
+
+function requestElectronMainRestart(): void {
+  process.stdin.emit('data', 'rs\n');
+}
