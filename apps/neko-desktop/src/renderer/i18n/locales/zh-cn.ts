@@ -247,6 +247,7 @@ export const zhCN = {
   'workspace.canvasAndTimeline': '画布 + 时间线',
   'workspace.canvasAndModel': '画布 + 模型',
   'workspace.resources': '资源库',
+  'workspace.projectResources': '项目资源',
   'workspace.agentToDock': 'Agent 移至侧栏',
   'workspace.agentToMain': 'Agent 返回主面板',
   'workspace.timeline': '时间线',

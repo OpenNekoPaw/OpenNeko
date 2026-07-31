@@ -201,10 +201,10 @@
 
 ## 16. Global And Project Resource Navigation Separation
 
-- [ ] 16.1 Add red Desktop Shell regressions proving Asset center always dispatches the global Home
+- [x] 16.1 Add red Desktop Shell regressions proving Asset center always dispatches the global Home
       destination, Project resources independently opens the exact Project/Workspace Resource Browser
       Main View, and their active states never alias.
-- [ ] 16.2 Add an owner-neutral context navigation slot to the shared Application sidebar composition,
+- [x] 16.2 Add an owner-neutral context navigation slot to the shared Application sidebar composition,
       inject the Project resources destination from Project composition, and delete the Project
       override and Resource Browser-to-Asset-center active-state mapping.
 - [ ] 16.3 Run focused Desktop tests/typecheck, strict OpenSpec validation, production Electron

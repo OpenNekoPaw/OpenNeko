@@ -24,7 +24,7 @@ import {
   type ControlledWorkbenchResizeBinding,
 } from '@neko/ui';
 import { useTranslation } from '@neko/shared/i18n/react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type {
   DesktopAgentHomeConversationSummary,
   DesktopProjectCatalogItem,
@@ -1833,26 +1833,10 @@ function ProjectPrimarySidebar({
       expandedWidth={workbench.primarySidebar.width}
     >
       <ApplicationPrimarySidebar
-        activeSection={
-          getActiveMainView(workbench)?.kind === 'resource-browser' ? 'assets' : undefined
-        }
         activeProjectId={project.projectId}
         compact={compact}
         disabled={pending}
-        onNavigate={(section) => {
-          if (section !== 'assets') {
-            actions.onHome(section);
-            return;
-          }
-          actions.onUpdateWorkbench(
-            openResourceBrowserWorkbench({
-              displayLabel: t('workspace.resources'),
-              project,
-              projection,
-              workbench,
-            }),
-          );
-        }}
+        onNavigate={actions.onHome}
         onDeleteConversation={actions.onDeleteConversation}
         onOpenConversation={actions.onOpenConversation}
         onOpenRecent={actions.onOpenRecent}
@@ -1860,6 +1844,24 @@ function ProjectPrimarySidebar({
         onOpenSettings={actions.onOpenSettings}
         onToggle={togglePrimarySidebar}
         projection={projection}
+        contextNavigation={
+          <DesktopApplicationNavigationButton
+            active={getActiveMainView(workbench)?.kind === 'resource-browser'}
+            disabled={pending}
+            label={t('workspace.projectResources')}
+            icon={<GridIcon size={17} />}
+            onClick={() =>
+              actions.onUpdateWorkbench(
+                openResourceBrowserWorkbench({
+                  displayLabel: t('workspace.resources'),
+                  project,
+                  projection,
+                  workbench,
+                }),
+              )
+            }
+          />
+        }
         layoutControl={
           <WorkbenchDisplayMenu actions={actions} disabled={pending} projection={projection} />
         }
@@ -2229,6 +2231,7 @@ function ApplicationPrimarySidebar({
   onOpenSettings,
   onToggle,
   projection,
+  contextNavigation,
   layoutControl,
 }: {
   readonly activeProjectId?: string;
@@ -2243,6 +2246,7 @@ function ApplicationPrimarySidebar({
   readonly onOpenSettings: () => void;
   readonly onToggle: () => void;
   readonly projection: DesktopShellProjection;
+  readonly contextNavigation?: ReactNode;
   readonly layoutControl?: JSX.Element;
 }): JSX.Element {
   const { t } = useTranslation();
@@ -2283,6 +2287,7 @@ function ApplicationPrimarySidebar({
           icon={<FolderIcon size={17} />}
           onClick={() => onNavigate('projects')}
         />
+        {contextNavigation}
       </nav>
       <PrimaryRecentNavigation
         activeProjectId={activeProjectId}

@@ -414,6 +414,8 @@ describe('DesktopShellView', () => {
       expect(sidebar).not.toContain('project-primary-brand-copy');
       expect(sidebar).not.toContain('project-layout-controls');
     }
+    expect(homeSidebar).not.toContain('Project resources');
+    expect(projectSidebar).toContain('Project resources');
     expect(homeSidebar).not.toContain('data-workbench-display-control="primary-sidebar"');
     expect(projectSidebar).toContain('data-workbench-display-control="primary-sidebar"');
     expect(projectSidebar).toContain('aria-label="Display"');
@@ -718,6 +720,13 @@ describe('DesktopShellView', () => {
 
     expect(markup).toContain('Loading project resources');
     expect(markup).not.toContain('Assets are not available yet');
+    const sidebar = extractPrimarySidebar(markup);
+    expect(sidebar).toMatch(
+      /class="home-nav-button is-active"[^>]*aria-label="Project resources"/u,
+    );
+    expect(sidebar).not.toMatch(
+      /class="home-nav-button is-active"[^>]*aria-label="Asset Center"/u,
+    );
     vi.unstubAllGlobals();
   });
 
