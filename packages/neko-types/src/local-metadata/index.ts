@@ -7,3 +7,4 @@ export * from './maintenance-report';
 export * from './migration-planner';
 export * from './user-diagnostic';
 export * from './secret-boundary';
+export * from './workspace-media-library-sync-binding';

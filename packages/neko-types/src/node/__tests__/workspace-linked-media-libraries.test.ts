@@ -13,6 +13,7 @@ import {
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
+import { createNodeHostContentReadService } from '../../host-node/content-read-service';
 import {
   WorkspaceLinkedMediaLibraryError,
   createWorkspaceLinkedMediaLibrary,
@@ -33,6 +34,39 @@ afterEach(async () => {
 });
 
 describe('Node workspace-linked media libraries', () => {
+  it('dereferences only the locator requested by package and export consumers', async () => {
+    const fixture = await createFixture();
+    await writeFile(path.join(fixture.targetA, 'referenced.mov'), 'referenced');
+    await writeFile(path.join(fixture.targetA, 'unreferenced.mov'), 'unreferenced');
+    await createWorkspaceLinkedMediaLibrary({
+      workspaceRoot: fixture.workspace,
+      name: 'Footage',
+      targetDirectory: fixture.targetA,
+    });
+    const content = createNodeHostContentReadService({
+      workspaceRoot: fixture.workspace,
+      defaultMaxBytes: 1024,
+    });
+
+    const result = await content.read(
+      {
+        kind: 'workspace-file',
+        path: 'neko/assets/Footage/referenced.mov',
+      },
+      { maxBytes: 1024 },
+    );
+
+    expect(result.status).toBe('ready');
+    if (result.status !== 'ready') throw new Error('Expected linked content to be readable.');
+    expect(Buffer.from(result.bytes).toString('utf8')).toBe('referenced');
+    expect(
+      (await lstat(path.join(fixture.workspace, 'neko/assets/Footage'))).isSymbolicLink(),
+    ).toBe(true);
+    await expect(readFile(path.join(fixture.targetA, 'unreferenced.mov'), 'utf8')).resolves.toBe(
+      'unreferenced',
+    );
+  });
+
   it('creates, enumerates, relinks, and removes only the workspace link', async () => {
     const fixture = await createFixture();
     await writeFile(path.join(fixture.targetA, 'a.mov'), 'a');

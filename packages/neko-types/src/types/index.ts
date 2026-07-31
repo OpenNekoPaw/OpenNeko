@@ -69,6 +69,7 @@ export * from './hook';
 export * from './media-file';
 export * from './asset/manifest';
 export * from './asset/workspace-linked-media-library';
+export * from './asset/workspace-media-library-sync';
 
 // Bundle locators and character asset contracts
 export * from './bundle-locator';
