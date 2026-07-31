@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import type { ResourceRef } from '../resource-cache';
 import type {
   CanvasPlaybackPlan,
   CanvasPlaybackRouteCandidate,
@@ -14,13 +13,10 @@ import {
   type CanvasCutDraftPayload,
 } from '../canvas-cut-draft';
 
-const resourceRef: ResourceRef = {
-  id: 'resource-video-a',
-  scope: 'project',
-  provider: 'neko-assets',
-  kind: 'media',
-  source: { kind: 'file', projectRelativePath: 'assets/video-a.mp4' },
-  fingerprint: { strategy: 'hash', value: 'hash-a' },
+const contentLocator = {
+  kind: 'workspace-file' as const,
+  path: 'assets/video-a.mp4',
+  fingerprint: { strategy: 'sha256' as const, value: 'hash-a' },
 };
 
 describe('canvas cut draft contract', () => {
@@ -45,7 +41,7 @@ describe('canvas cut draft contract', () => {
           },
         }),
         playbackUnit('shot-b', {
-          resourceRef,
+          contentLocator,
           metadata: { sceneId: 'scene-1', shotId: 'shot-2', soundCue: 'Door closes.' },
         }),
       ],
@@ -99,7 +95,7 @@ describe('canvas cut draft contract', () => {
         }),
       ]),
     });
-    expect(result.payload.units[1]?.media?.[0]?.resourceRef).toEqual(resourceRef);
+    expect(result.payload.units[1]?.media?.[0]?.contentLocator).toEqual(contentLocator);
   });
 
   it('fails visibly when the selected route is missing', () => {

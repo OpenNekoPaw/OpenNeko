@@ -16,13 +16,11 @@ import {
   type ConnectionType,
 } from '../types/canvas';
 import type { ContainerCapability } from '../types/canvas-layered';
-import { validateContentLocator } from '../types/content-locator';
+import { isContentLocator, validateContentLocator } from '../types/content-locator';
 import {
   isCanvasMaterialMediaKind,
   type CanvasMaterialMediaKind,
 } from '../types/canvas-material-contracts';
-import { isDocumentArchiveResourceRef } from '../types/document-reading';
-import { isResourceRef } from '../types/resource-cache';
 import { isJobRef, type JobRef } from '../job-lifecycle/contracts';
 
 export type NkcVersion = '1.0' | '2.0' | '2.1' | '3.0';
@@ -175,10 +173,7 @@ function migrateLegacyNode(value: unknown, index: number, warnings: string[]): C
           mediaKind: 'document',
           mediaType: readString(data, 'mimeType') || readString(data, 'docType'),
           migratedFromType: type,
-          resourceRef: isRecord(data['resourceRef']) ? data['resourceRef'] : undefined,
-          documentResourceRef: isRecord(data['documentResourceRef'])
-            ? data['documentResourceRef']
-            : undefined,
+          contentLocator: isRecord(data['contentLocator']) ? data['contentLocator'] : undefined,
         }),
       ];
     case 'model':
@@ -303,10 +298,7 @@ function normalizeCanonicalNode(value: Record<string, unknown>, index: number): 
         title: readString(data, 'title') || 'File',
         mediaKind: isCanvasMaterialMediaKind(data['mediaKind']) ? data['mediaKind'] : undefined,
         mediaType: readString(data, 'mediaType'),
-        resourceRef: isRecord(data['resourceRef']) ? data['resourceRef'] : undefined,
-        documentResourceRef: isRecord(data['documentResourceRef'])
-          ? data['documentResourceRef']
-          : undefined,
+        contentLocator: isRecord(data['contentLocator']) ? data['contentLocator'] : undefined,
       });
     case 'canvas-embed':
       return {
@@ -389,7 +381,9 @@ function normalizeMediaNode(
   migratedFromType: string,
   warnings: string[],
 ): CanvasNode {
-  const generatedResource = isResourceRef(data['resourceRef']) ? data['resourceRef'] : undefined;
+  const contentLocator = isContentLocator(data['contentLocator'])
+    ? data['contentLocator']
+    : undefined;
   const mediaType = readMediaType(data);
   if (!mediaType) {
     warnings.push(`Media node "${base.id}" had no media type; migration classified it as image.`);
@@ -403,7 +397,7 @@ function normalizeMediaNode(
         readString(data, 'path') ||
         readString(data, 'generatedPath'),
       mediaType: mediaType ?? 'image',
-      ...(generatedResource ? { resourceRef: generatedResource } : {}),
+      ...(contentLocator ? { contentLocator } : {}),
       ...(typeof data['title'] === 'string' ? { title: data['title'] } : {}),
       provenance: {
         ...(isRecord(data['provenance']) ? toCanvasSerializableRecord(data['provenance']) : {}),
@@ -421,8 +415,7 @@ function createFileNode(
     mediaKind?: CanvasMaterialMediaKind;
     mediaType?: string;
     migratedFromType?: string;
-    resourceRef?: Record<string, unknown>;
-    documentResourceRef?: Record<string, unknown>;
+    contentLocator?: Record<string, unknown>;
   },
 ): CanvasNode {
   return {
@@ -433,11 +426,8 @@ function createFileNode(
       title: input.title,
       ...(input.mediaKind ? { mediaKind: input.mediaKind } : {}),
       ...(input.mediaType ? { mediaType: input.mediaType } : {}),
-      ...(input.resourceRef && isResourceRef(input.resourceRef)
-        ? { resourceRef: input.resourceRef }
-        : {}),
-      ...(input.documentResourceRef && isDocumentArchiveResourceRef(input.documentResourceRef)
-        ? { documentResourceRef: input.documentResourceRef }
+      ...(input.contentLocator && isContentLocator(input.contentLocator)
+        ? { contentLocator: input.contentLocator }
         : {}),
       ...(input.migratedFromType
         ? { provenance: { migratedFromType: input.migratedFromType } }
@@ -569,8 +559,8 @@ function readJobArtifactRefs(value: unknown): CanvasJobArtifactRef[] {
     if (candidate['kind'] === 'canvas-node') {
       return typeof candidate['nodeId'] === 'string' && candidate['nodeId'].length > 0;
     }
-    if (candidate['kind'] === 'resource') {
-      return isResourceRef(candidate['resourceRef']);
+    if (candidate['kind'] === 'content') {
+      return isContentLocator(candidate['contentLocator']);
     }
     return (
       candidate['kind'] === 'file' &&

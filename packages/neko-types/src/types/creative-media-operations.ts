@@ -1,8 +1,4 @@
-import type { ResourceRef } from './resource-cache';
-import {
-  validateDurableResourceRef,
-  type DurableResourceRefDiagnostic,
-} from './durable-resource-ref';
+import { isContentLocator, type ContentLocator } from './content-locator';
 
 export const CREATIVE_MEDIA_OPERATION_CONTRACT_VERSION = 1 as const;
 
@@ -149,7 +145,7 @@ export interface CreativeMediaOperationDiagnostic {
     | 'adapter-already-registered'
     | 'adapter-unavailable'
     | 'adapter-extension-unsupported'
-    | DurableResourceRefDiagnostic['code'];
+    | 'content-locator-invalid';
   readonly severity: 'info' | 'warning' | 'error';
   readonly message: string;
   readonly path?: readonly (string | number)[];
@@ -181,12 +177,12 @@ export interface CreativeMediaOperationRequest {
   readonly requestId: string;
   readonly mediaKind: CreativeMediaKind;
   readonly operationId: CreativeMediaOperationId;
-  readonly inputRefs: readonly ResourceRef[];
+  readonly inputLocators: readonly ContentLocator[];
   readonly prompt?: string;
-  readonly maskRef?: ResourceRef;
-  readonly startFrameRef?: ResourceRef;
-  readonly endFrameRef?: ResourceRef;
-  readonly referenceVideoRef?: ResourceRef;
+  readonly maskLocator?: ContentLocator;
+  readonly startFrameLocator?: ContentLocator;
+  readonly endFrameLocator?: ContentLocator;
+  readonly referenceVideoLocator?: ContentLocator;
   readonly editInstruction?: string;
   readonly motion?: CreativeMediaMotionControl;
   readonly camera?: CreativeMediaCameraControl;
@@ -209,7 +205,7 @@ export interface CreativeMediaOperationResult {
   readonly mediaKind: CreativeMediaKind;
   readonly operationId: CreativeMediaOperationId;
   readonly status: 'succeeded' | 'failed';
-  readonly outputRefs: readonly ResourceRef[];
+  readonly outputLocators: readonly ContentLocator[];
   readonly diagnostics: readonly CreativeMediaOperationDiagnostic[];
   readonly provider?: { readonly providerId: string; readonly modelId?: string };
   readonly provenance?: Readonly<Record<string, unknown>>;
@@ -311,14 +307,14 @@ export function validateCreativeMediaOperationRequest(
     });
   }
   validateOperationIdentity(request.mediaKind, request.operationId, diagnostics);
-  validateRefs(request.inputRefs, ['inputRefs'], diagnostics);
+  validateLocators(request.inputLocators, ['inputLocators'], diagnostics);
   for (const [name, ref] of [
-    ['maskRef', request.maskRef],
-    ['startFrameRef', request.startFrameRef],
-    ['endFrameRef', request.endFrameRef],
-    ['referenceVideoRef', request.referenceVideoRef],
+    ['maskLocator', request.maskLocator],
+    ['startFrameLocator', request.startFrameLocator],
+    ['endFrameLocator', request.endFrameLocator],
+    ['referenceVideoLocator', request.referenceVideoLocator],
   ] as const) {
-    if (ref) validateRefs([ref], [name], diagnostics);
+    if (ref) validateLocators([ref], [name], diagnostics);
   }
   validateRequestFieldOwnership(request, diagnostics);
   validateOperationRequiredInputs(request, diagnostics);
@@ -384,14 +380,14 @@ export function validateCreativeMediaOperationResult(
     });
   }
   validateOperationIdentity(result.mediaKind, result.operationId, diagnostics);
-  validateRefs(result.outputRefs, ['outputRefs'], diagnostics);
-  if (result.status === 'succeeded' && result.outputRefs.length === 0) {
+  validateLocators(result.outputLocators, ['outputLocators'], diagnostics);
+  if (result.status === 'succeeded' && result.outputLocators.length === 0) {
     diagnostics.push({
       code: 'invalid-operation-result',
       severity: 'error',
       message:
-        'A successful operation result must include at least one durable output ResourceRef.',
-      path: ['outputRefs'],
+        'A successful operation result must include at least one durable output ContentLocator.',
+      path: ['outputLocators'],
     });
   }
   if (
@@ -413,10 +409,10 @@ export function getRequestedCreativeMediaControls(
 ): readonly CreativeMediaControlId[] {
   const controls: CreativeMediaControlId[] = [];
   if (request.prompt !== undefined) controls.push('prompt');
-  if (request.maskRef !== undefined) controls.push('mask');
-  if (request.startFrameRef !== undefined) controls.push('start-frame');
-  if (request.endFrameRef !== undefined) controls.push('end-frame');
-  if (request.referenceVideoRef !== undefined) controls.push('reference-video');
+  if (request.maskLocator !== undefined) controls.push('mask');
+  if (request.startFrameLocator !== undefined) controls.push('start-frame');
+  if (request.endFrameLocator !== undefined) controls.push('end-frame');
+  if (request.referenceVideoLocator !== undefined) controls.push('reference-video');
   if (request.editInstruction !== undefined) controls.push('edit-instruction');
   if (request.motion?.strength !== undefined || request.motion?.description !== undefined) {
     controls.push('motion-strength');
@@ -454,14 +450,20 @@ function validateOperationIdentity(
   }
 }
 
-function validateRefs(
-  refs: readonly ResourceRef[],
+function validateLocators(
+  locators: readonly ContentLocator[],
   path: readonly (string | number)[],
   diagnostics: CreativeMediaOperationDiagnostic[],
 ): void {
-  refs.forEach((ref, index) => {
-    const validation = validateDurableResourceRef(ref, [...path, index]);
-    diagnostics.push(...validation.diagnostics);
+  locators.forEach((locator, index) => {
+    if (!isContentLocator(locator)) {
+      diagnostics.push({
+        code: 'content-locator-invalid',
+        severity: 'error',
+        message: 'Creative media operation requires a valid ContentLocator.',
+        path: [...path, index],
+      });
+    }
   });
 }
 
@@ -486,7 +488,7 @@ function validateRequestFieldOwnership(
     });
   }
   const hasVideoControl =
-    request.referenceVideoRef !== undefined ||
+    request.referenceVideoLocator !== undefined ||
     request.motion !== undefined ||
     request.camera !== undefined ||
     request.shotScale !== undefined;
@@ -513,18 +515,18 @@ function validateOperationRequiredInputs(
     });
   };
   if (request.operationId === 'outpaint') {
-    if (request.inputRefs.length === 0) missing('source');
+    if (request.inputLocators.length === 0) missing('source');
     if (!request.outpaintExpansion) missing('outpaint-expansion', ['outpaintExpansion']);
   }
   if (request.operationId === 'split' && !request.splitProfile) {
     missing('split-profile', ['splitProfile']);
   }
-  if (request.operationId === 'generate-from-image' && !request.startFrameRef) {
-    missing('start-frame', ['startFrameRef']);
+  if (request.operationId === 'generate-from-image' && !request.startFrameLocator) {
+    missing('start-frame', ['startFrameLocator']);
   }
   if (request.operationId === 'generate-from-keyframes') {
-    if (!request.startFrameRef) missing('start-frame', ['startFrameRef']);
-    if (!request.endFrameRef) missing('end-frame', ['endFrameRef']);
+    if (!request.startFrameLocator) missing('start-frame', ['startFrameLocator']);
+    if (!request.endFrameLocator) missing('end-frame', ['endFrameLocator']);
   }
   if (
     [
@@ -536,10 +538,10 @@ function validateOperationRequiredInputs(
       'retime',
       'prepare-for-timeline',
     ].includes(request.operationId) &&
-    !request.referenceVideoRef &&
-    request.inputRefs.length === 0
+    !request.referenceVideoLocator &&
+    request.inputLocators.length === 0
   ) {
-    missing('reference-video', ['referenceVideoRef']);
+    missing('reference-video', ['referenceVideoLocator']);
   }
 }
 
@@ -701,7 +703,7 @@ function validateLimits(
 ): void {
   const limits = support.limits;
   if (
-    (limits?.maxInputCount !== undefined && request.inputRefs.length > limits.maxInputCount) ||
+    (limits?.maxInputCount !== undefined && request.inputLocators.length > limits.maxInputCount) ||
     (limits?.maxOutputCount !== undefined &&
       request.requestedOutputCount !== undefined &&
       request.requestedOutputCount > limits.maxOutputCount) ||
@@ -726,15 +728,15 @@ function validateLimits(
 function hasRequiredInputRole(request: CreativeMediaOperationRequest, role: string): boolean {
   switch (role) {
     case 'source':
-      return request.inputRefs.length > 0;
+      return request.inputLocators.length > 0;
     case 'mask':
-      return request.maskRef !== undefined;
+      return request.maskLocator !== undefined;
     case 'start-frame':
-      return request.startFrameRef !== undefined;
+      return request.startFrameLocator !== undefined;
     case 'end-frame':
-      return request.endFrameRef !== undefined;
+      return request.endFrameLocator !== undefined;
     case 'reference-video':
-      return request.referenceVideoRef !== undefined || request.inputRefs.length > 0;
+      return request.referenceVideoLocator !== undefined || request.inputLocators.length > 0;
     case 'split-profile':
       return request.splitProfile !== undefined;
     case 'outpaint-expansion':

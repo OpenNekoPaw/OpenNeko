@@ -52,20 +52,17 @@ export class WebviewPreviewResolver implements PreviewResolver {
     const variantSourcePath = selectRuntimeVariantSourcePath(request, role);
     const sourcePath = variantSourcePath ?? request.source.asset?.path ?? request.source.asset?.uri;
     const mediaType = variantSourcePath ? 'image' : request.source.asset?.mediaType;
-    const documentResourceRef = request.source.metadata?.['documentResourceRef'];
-    const resourceRef = request.source.metadata?.['resourceRef'];
-    const hasStructuredResourceRef = Boolean(documentResourceRef || resourceRef);
-    if (!sourcePath && !documentResourceRef && !resourceRef) {
+    const contentLocator = request.source.contentLocator;
+    if (!sourcePath && !contentLocator) {
       return createUnavailableVariant(request, 'No preview source');
     }
 
     const runtimeUrl = await this.requestRuntimeVariant({
       sourceId: request.source.id,
-      assetPath: hasStructuredResourceRef ? undefined : sourcePath,
+      assetPath: contentLocator ? undefined : sourcePath,
       role,
       mediaType,
-      documentResourceRef,
-      resourceRef,
+      contentLocator,
     });
 
     return {
@@ -157,8 +154,7 @@ interface RuntimeVariantInput {
   assetPath?: string;
   role: CanvasPreviewRole;
   mediaType?: string;
-  documentResourceRef?: unknown;
-  resourceRef?: unknown;
+  contentLocator?: import('@neko/shared').ContentLocator;
 }
 
 interface RuntimeVariantRequest {
@@ -168,7 +164,7 @@ interface RuntimeVariantRequest {
 
 function createRuntimeVariantRequest(
   hostPort: PreviewMessagePort | undefined,
-  { sourceId, assetPath, role, mediaType, documentResourceRef, resourceRef }: RuntimeVariantInput,
+  { sourceId, assetPath, role, mediaType, contentLocator }: RuntimeVariantInput,
   onSettled: () => void,
 ): RuntimeVariantRequest {
   const engineRole = ROLE_TO_ENGINE_ROLE[role] ?? 'thumbnail';
@@ -226,8 +222,7 @@ function createRuntimeVariantRequest(
         role: engineRole,
         mediaType,
         ...(assetPath ? { assetPath } : {}),
-        ...(documentResourceRef ? { documentResourceRef } : {}),
-        ...(resourceRef ? { resourceRef } : {}),
+        ...(contentLocator ? { contentLocator } : {}),
       });
     } catch {
       settle(undefined);

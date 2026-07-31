@@ -143,7 +143,7 @@ OpenNeko MVP 继续以 Pi adapter 为唯一内部 canonical path。ACP 或 Termi
 不采用其产品内部事实和运行时组合：
 
 - 不引入 Claude Agent SDK 与 Pi 双运行时；OpenNeko 继续以 Pi 为唯一 Agent canonical path；
-- 不复制其 JSON/JSONL、credential、source 或 session 存储模型；OpenNeko 继续使用自身的 SQLite、Pi Session、`ResourceRef` 与 `HostSecretPort` 边界；
+- 不复制其 JSON/JSONL、credential、source 或 session 存储模型；OpenNeko 继续使用自身的 SQLite、Pi Session、`ContentLocator` 与 `HostSecretPort` 边界；
 - 不引入 Bun 或第二套 UI/design system；
 - 不把会话展示状态升级为 Canvas、Cut、任务或项目事实；
 - MVP 不引入远程 server/control plane 或 thin-client 架构。

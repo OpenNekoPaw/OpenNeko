@@ -1,5 +1,5 @@
 import type {
-  DocumentArchiveResourceRef,
+  ContentLocator,
   DocumentFormat,
   DocumentLocator,
   DocumentSourceRef,
@@ -51,7 +51,7 @@ export interface ExtractSemanticDocumentInput {
 
 export interface SemanticDocumentExtractionResult {
   readonly segments: readonly SemanticTextSegment[];
-  readonly resourceRefs: readonly DocumentArchiveResourceRef[];
+  readonly contentLocators: readonly ContentLocator[];
   readonly unitCount: number;
   readonly totalTextChars: number;
 }
@@ -106,7 +106,7 @@ export async function extractSemanticDocument(
     maxChars: maxUnitChars,
   });
   const segments: SemanticTextSegment[] = [];
-  const resourceRefs = new Map<string, DocumentArchiveResourceRef>();
+  const contentLocators = new Map<string, ContentLocator>();
   let unitCount = 0;
   let totalTextChars = 0;
 
@@ -136,7 +136,7 @@ export async function extractSemanticDocument(
     if (totalTextChars > maxTotalChars) {
       throw budgetExceeded(input.source, `text exceeds ${maxTotalChars} characters`);
     }
-    collectResourceRefs(result.imageInfo, resourceRefs);
+    collectContentLocators(result.imageInfo, contentLocators);
     if (unitText.trim()) {
       const unitId = documentUnitId(input.source.sourceId, locator);
       const unitSegments = extractSemanticText({
@@ -166,7 +166,7 @@ export async function extractSemanticDocument(
 
   return {
     segments,
-    resourceRefs: [...resourceRefs.values()],
+    contentLocators: [...contentLocators.values()],
     unitCount,
     totalTextChars,
   };
@@ -184,14 +184,14 @@ function resolveSupportedDocumentFormat(
   return source.format;
 }
 
-function collectResourceRefs(
+function collectContentLocators(
   imageInfo: Awaited<ReturnType<IDocumentAccessService['readNext']>>['imageInfo'],
-  refs: Map<string, DocumentArchiveResourceRef>,
+  locators: Map<string, ContentLocator>,
 ): void {
   for (const image of imageInfo ?? []) {
-    const resourceRef = image.resourceRef;
-    if (!resourceRef) continue;
-    refs.set(JSON.stringify(resourceRef), resourceRef);
+    const contentLocator = image.contentLocator;
+    if (!contentLocator) continue;
+    locators.set(JSON.stringify(contentLocator), contentLocator);
   }
 }
 

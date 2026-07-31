@@ -23,6 +23,7 @@ export async function runLocalMetadataAdapterContract(
   const backupLayout = resolveGlobalStorageLayout(options.backupHome);
   const backupSourcePath = `${backupLayout.database}.source.bak`;
   const destructiveBackupPath = `${backupLayout.database}.pre-destructive.bak`;
+  const resourceCacheBackupPath = `${backupLayout.database}.pre-resource-cache-v2.bak`;
   const source = options.createStore(options.sourceHome);
   await source.open({ databasePath: sourceLayout.database, busyTimeoutMs: 1_000 });
 
@@ -30,7 +31,9 @@ export async function runLocalMetadataAdapterContract(
   assert(firstMigration.previousVersion === 0, 'M1 previous version must be zero');
   assert(firstMigration.currentVersion === 3, 'M1 current version must be three');
   assert(firstMigration.appliedVersions.length === 3, 'M1 must apply all three core migrations');
-  await source.migrateNamespace(RESOURCE_CACHE_MIGRATIONS);
+  await source.migrateNamespace(RESOURCE_CACHE_MIGRATIONS, {
+    destructiveBackup: { destinationPath: resourceCacheBackupPath, reason: 'migration' },
+  });
   await source.migrateNamespace(MEDIA_METADATA_MIGRATIONS);
 
   await source.repositories.workspaces.bind({
@@ -229,7 +232,7 @@ export async function runLocalMetadataAdapterContract(
         workspaceId: CONTRACT_WORKSPACE_ID,
         domain: 'resource-cache',
       })
-    )[0]?.resource.id === 'contract-resource',
+    )[0]?.descriptor.id === 'contract-resource',
     'manual backup must preserve ResourceCache metadata',
   );
   assert(
@@ -251,7 +254,7 @@ export async function runLocalMetadataAdapterContract(
 
 function createContractResourceCacheEntry() {
   return {
-    resource: {
+    descriptor: {
       id: 'contract-resource',
       scope: 'project' as const,
       provider: 'contract-provider',

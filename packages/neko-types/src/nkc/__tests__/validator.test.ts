@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { createResourceFingerprint, createResourceRef } from '../../types/resource-cache';
 import { validateNkc } from '../index';
 
 function createValidCanvas(overrides: Record<string, unknown> = {}): Record<string, unknown> {
@@ -93,14 +92,6 @@ describe('NKC validator v3.0', () => {
   });
 
   it('rejects runtime projections and cache paths in node data', () => {
-    const generatedRef = createResourceRef({
-      scope: 'project',
-      provider: 'generated-output',
-      kind: 'generated',
-      source: { kind: 'generated-asset', generatedAssetId: 'generated-output:1' },
-      locator: { kind: 'generated-asset', assetId: 'generated-output:1' },
-      fingerprint: createResourceFingerprint({ strategy: 'hash', value: 'sha256:draft' }),
-    });
     const result = validateNkc(
       createValidCanvas({
         nodes: [
@@ -109,7 +100,7 @@ describe('NKC validator v3.0', () => {
             data: {
               projectionId: 'runtime:canvas-generated-group:task:1',
               cachePath: '.neko/.cache/resources/generated-output.png',
-              resourceRef: generatedRef,
+              resourceRef: { id: 'legacy-generated-output' },
             },
           },
         ],
@@ -126,26 +117,6 @@ describe('NKC validator v3.0', () => {
   });
 
   it('accepts canonical referenced, generated, and Entity-representation material nodes', () => {
-    const generatedRef = createResourceRef({
-      scope: 'project',
-      provider: 'generated-output',
-      kind: 'generated',
-      source: { kind: 'generated-asset', generatedAssetId: 'generated-output:1' },
-      locator: { kind: 'generated-asset', assetId: 'generated-output:1' },
-      fingerprint: createResourceFingerprint({ strategy: 'hash', value: 'sha256:generated' }),
-    });
-    const assetRef = createResourceRef({
-      scope: 'project',
-      provider: 'media-library',
-      kind: 'media',
-      source: {
-        kind: 'media-library',
-        mediaLibraryId: 'asset:entity:1',
-        projectRelativePath: 'neko/assets/concept.png',
-      },
-      locator: { kind: 'file', path: 'neko/assets/concept.png' },
-      fingerprint: createResourceFingerprint({ strategy: 'hash', value: 'sha256:asset' }),
-    });
     const result = validateNkc(
       createValidCanvas({
         nodes: [
@@ -167,7 +138,6 @@ describe('NKC validator v3.0', () => {
                   model: 'fixture-image-model',
                 },
               },
-              resourceRef: generatedRef,
             },
           },
           {
@@ -184,7 +154,6 @@ describe('NKC validator v3.0', () => {
                 bindingId: 'binding-1',
                 role: 'portrait',
               },
-              resourceRef: assetRef,
             },
           },
           {
@@ -207,18 +176,7 @@ describe('NKC validator v3.0', () => {
     expect(result.errors).toEqual([]);
   });
 
-  it('rejects ResourceRef/path heuristics without canonical locator and Job evidence', () => {
-    const legacyRef = createResourceRef({
-      scope: 'project',
-      provider: 'workspace',
-      kind: 'media',
-      source: {
-        kind: 'file',
-        projectRelativePath: 'neko/generated/image/legacy-concept.png',
-      },
-      locator: { kind: 'file', path: 'neko/generated/image/legacy-concept.png' },
-      fingerprint: createResourceFingerprint({ strategy: 'hash', value: 'sha256:legacy' }),
-    });
+  it('rejects ResourceCacheSource/path heuristics without canonical locator and Job evidence', () => {
     const result = validateNkc(
       createValidCanvas({
         nodes: [
@@ -226,7 +184,7 @@ describe('NKC validator v3.0', () => {
             ...createCompleteNode('media'),
             data: {
               assetPath: 'neko/generated/image/legacy-concept.png',
-              resourceRef: legacyRef,
+              resourceRef: { id: 'legacy-resource' },
               generationContext: { prompt: 'Legacy prompt' },
             },
           },

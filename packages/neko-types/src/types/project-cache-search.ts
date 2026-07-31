@@ -7,13 +7,11 @@ import {
   isHostProjectedRuntimeValue,
   type ContentSourceRef,
 } from './content-access';
+import { isResourceCacheStatus, type ResourceCacheStatus } from './resource-cache';
 import {
-  isResourceRef,
-  isResourceCacheStatus,
-  isResourceVariantRef,
-  type ResourceCacheStatus,
-  type ResourceVariantRef,
-} from './resource-cache';
+  isContentRepresentationLocator,
+  type ContentRepresentationLocator,
+} from './content-representation';
 import {
   validateMediaTextRangeForSourceRef,
   type ContributionDiagnostic,
@@ -152,7 +150,7 @@ export interface ProjectSearchScoreHints {
 }
 
 export interface ProjectSearchVisualResource {
-  readonly resource?: ResourceVariantRef;
+  readonly representationLocator?: ContentRepresentationLocator;
   readonly projectedUri?: string;
   readonly status?: ResourceCacheStatus;
   readonly alt?: string;
@@ -971,7 +969,8 @@ function optionalProjectSearchVisualResource(value: unknown): boolean {
   if (value === undefined) return true;
   if (!isRecord(value)) return false;
   return (
-    (value['resource'] === undefined || isResourceVariantRef(value['resource'])) &&
+    (value['representationLocator'] === undefined ||
+      isContentRepresentationLocator(value['representationLocator'])) &&
     optionalString(value['projectedUri']) &&
     (value['status'] === undefined || isResourceCacheStatus(value['status'])) &&
     optionalString(value['alt'])
@@ -1091,7 +1090,6 @@ function isStableSemanticSourceRef(value: unknown): value is MediaSemanticSource
 
 function isCacheOrRuntimeSemanticSourceRef(ref: ContentSourceRef): boolean {
   if (ref.kind === 'runtime') return true;
-  if (isResourceRef(ref) && ref.scope === 'extension-private') return true;
   return !isSafeSemanticCoverageValue(ref);
 }
 

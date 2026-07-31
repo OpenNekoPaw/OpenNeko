@@ -1,10 +1,9 @@
 import { useCallback } from 'react';
 import type {
   CanvasNode,
-  DocumentArchiveResourceRef,
+  ContentLocator,
   DroppedTextCanvasAsset,
   MarkdownCanvasNode,
-  ResourceRef,
 } from '@neko/shared';
 import { buildCanvasNode } from '../utils/nodeFactory';
 
@@ -24,8 +23,7 @@ export interface UseNodeHelpersReturn {
     uri?: string,
     name?: string,
     options?: {
-      documentResourceRef?: DocumentArchiveResourceRef;
-      resourceRef?: ResourceRef;
+      contentLocator?: ContentLocator;
       runtimeAssetPath?: string;
     },
   ) => void;
@@ -115,24 +113,20 @@ export function useNodeHelpers(options: UseNodeHelpersOptions): UseNodeHelpersRe
       uri?: string,
       name?: string,
       options?: {
-        documentResourceRef?: DocumentArchiveResourceRef;
-        resourceRef?: ResourceRef;
+        contentLocator?: ContentLocator;
         runtimeAssetPath?: string;
       },
     ) => {
-      const linkedDocumentResource = options?.documentResourceRef;
-      const linkedResource = options?.resourceRef;
-      const hasLinkedResource = Boolean(linkedDocumentResource || linkedResource);
-      const runtimePath = options?.runtimeAssetPath ?? (hasLinkedResource ? uri : undefined);
+      const contentLocator = options?.contentLocator;
+      const runtimePath = options?.runtimeAssetPath ?? (contentLocator ? uri : undefined);
       addNode(
         buildCanvasNode({
           type: 'media',
           position: pos,
           zIndex: nodeCount,
           data: {
-            assetPath: hasLinkedResource ? '' : (uri ?? ''),
-            ...(linkedDocumentResource ? { documentResourceRef: linkedDocumentResource } : {}),
-            ...(linkedResource ? { resourceRef: linkedResource } : {}),
+            assetPath: contentLocator ? '' : (uri ?? ''),
+            ...(contentLocator ? { contentLocator } : {}),
             ...(runtimePath ? { runtimeAssetPath: runtimePath } : {}),
             ...(name ? { title: name } : {}),
             mediaType,

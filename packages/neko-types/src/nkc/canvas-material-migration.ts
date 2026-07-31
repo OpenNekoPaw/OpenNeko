@@ -332,7 +332,6 @@ function collectLegacyEvidence(
   const evidence = new Set<CanvasMaterialLegacyEvidenceKind>();
   const path = node.type === 'media' ? node.data.assetPath : node.data.path;
   if (isLegacyGeneratedPath(path)) evidence.add('generated-path');
-  if (isLegacyGeneratedResourceRef(data.resourceRef)) evidence.add('generated-resource-ref');
   if (hasLegacyGeneratedProvenance(data.provenance)) evidence.add('generated-provenance');
   if (hasLegacyGenerationContext(data)) evidence.add('legacy-generation-context');
   if ((context.generationJobIdsByOutputNodeId.get(node.id)?.length ?? 0) > 0) {
@@ -359,18 +358,6 @@ function isLegacyGeneratedPath(value: unknown): boolean {
   if (typeof value !== 'string') return false;
   const normalized = value.trim().replace(/\\/gu, '/').replace(/^\.\//u, '');
   return /^(?:\$\{[A-Z][A-Z0-9_]*\}\/)?neko\/generated\//u.test(normalized);
-}
-
-function isLegacyGeneratedResourceRef(value: unknown): boolean {
-  if (!isRecord(value)) return false;
-  const source = isRecord(value['source']) ? value['source'] : undefined;
-  const locator = isRecord(value['locator']) ? value['locator'] : undefined;
-  return (
-    value['kind'] === 'generated' ||
-    value['provider'] === 'generated-output' ||
-    source?.['kind'] === 'generated-asset' ||
-    locator?.['kind'] === 'generated-asset'
-  );
 }
 
 function hasLegacyGeneratedProvenance(value: unknown): boolean {

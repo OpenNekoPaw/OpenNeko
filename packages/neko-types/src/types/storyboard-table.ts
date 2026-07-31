@@ -4,12 +4,7 @@ import {
   type CreativeEntityRef,
   type RepresentationKind,
 } from './creative-entity-asset-composition';
-import {
-  parseDocumentArchiveResourceRef,
-  type DocumentArchiveResourceRef,
-} from './document-reading';
-import { isResourceRef, type ResourceRef } from './resource-cache';
-import { validateDurableResourceRef } from './durable-resource-ref';
+import { isContentLocator, type ContentLocator } from './content-locator';
 import { isHostProjectedRuntimeValue } from './content-access';
 
 export const STORYBOARD_TABLE_SCHEMA_VERSION = 1 as const;
@@ -148,8 +143,7 @@ export interface StoryboardSourceRegion {
 export interface StoryboardSourceTrace {
   readonly traceId: string;
   readonly sourceProfile: StoryboardSourceProfileId;
-  readonly sourceRef?: ResourceRef;
-  readonly sourceDocumentRef?: DocumentArchiveResourceRef;
+  readonly sourceLocator: ContentLocator;
   readonly sourceRevisionId?: string;
   readonly sourceSceneId?: string;
   readonly sourceShotId?: string;
@@ -161,7 +155,7 @@ export interface StoryboardProjectionHandoff {
   readonly target: StoryboardProjectionTarget;
   readonly storyboardRevisionId: string;
   readonly mode: 'read-only-projection' | 'one-way-handoff';
-  readonly artifactRef?: ResourceRef;
+  readonly artifactLocator?: ContentLocator;
   readonly createdAt: string;
 }
 
@@ -318,11 +312,9 @@ export interface StoryboardMediaRef {
   readonly refId: string;
   readonly role: StoryboardMediaRole;
   readonly locator: StoryboardMediaLocator;
-  readonly contentLocator?: import('./content-locator').ContentLocator;
+  readonly contentLocator?: ContentLocator;
   readonly label?: string;
   readonly mimeType?: string;
-  readonly documentResourceRef?: DocumentArchiveResourceRef;
-  readonly resourceRef?: ResourceRef;
   readonly metadata?: StoryboardSerializableRecord;
 }
 
@@ -496,12 +488,12 @@ export function validateCanonicalStoryboardTable(
         ),
       );
     }
-    if (projection.artifactRef && !validateDurableResourceRef(projection.artifactRef).ok) {
+    if (projection.artifactLocator && !isContentLocator(projection.artifactLocator)) {
       diagnostics.push(
         createCanonicalStoryboardDiagnostic(
           'invalid-projection-handoff',
-          'Storyboard projection artifactRef must be a valid ResourceRef.',
-          ['projections', index, 'artifactRef'],
+          'Storyboard projection artifactLocator must be a valid ContentLocator.',
+          ['projections', index, 'artifactLocator'],
         ),
       );
     }
@@ -730,10 +722,10 @@ export function classifyStoryboardMediaIdentity(
   mediaRef: StoryboardMediaRef,
   options: StoryboardMediaIdentityClassificationOptions = {},
 ): StoryboardMediaIdentityClassification {
-  if (mediaRef.resourceRef) {
+  if (mediaRef.contentLocator) {
     return {
       kind: 'stable',
-      reason: 'Storyboard media references a stable resource ref.',
+      reason: 'Storyboard media references a stable ContentLocator.',
     };
   }
 
@@ -898,7 +890,7 @@ export function projectCanonicalStoryboardTableToCutHandoff(
   table: StoryboardTable,
   options: ProjectStoryboardTableToCutOptions = {},
   handoffOptions: {
-    readonly artifactRef?: ResourceRef;
+    readonly artifactLocator?: ContentLocator;
     readonly now?: () => string;
   } = {},
 ): CanonicalStoryboardCutHandoffResult {
@@ -906,19 +898,16 @@ export function projectCanonicalStoryboardTableToCutHandoff(
   if (!validation.ok || !table.revision) {
     return { diagnostics: validation.diagnostics };
   }
-  if (handoffOptions.artifactRef) {
-    const artifactValidation = validateDurableResourceRef(handoffOptions.artifactRef);
-    if (!artifactValidation.ok) {
-      return {
-        diagnostics: artifactValidation.diagnostics.map((diagnostic) =>
-          createCanonicalStoryboardDiagnostic(
-            'invalid-projection-handoff',
-            diagnostic.message,
-            diagnostic.path,
-          ),
+  if (handoffOptions.artifactLocator && !isContentLocator(handoffOptions.artifactLocator)) {
+    return {
+      diagnostics: [
+        createCanonicalStoryboardDiagnostic(
+          'invalid-projection-handoff',
+          'Storyboard handoff artifactLocator must be a valid ContentLocator.',
+          ['artifactLocator'],
         ),
-      };
-    }
+      ],
+    };
   }
 
   const payload = projectStoryboardTableToCutPayload(table, options);
@@ -931,7 +920,9 @@ export function projectCanonicalStoryboardTableToCutHandoff(
       target: 'cut',
       storyboardRevisionId: table.revision.revisionId,
       mode: 'one-way-handoff',
-      ...(handoffOptions.artifactRef ? { artifactRef: handoffOptions.artifactRef } : {}),
+      ...(handoffOptions.artifactLocator
+        ? { artifactLocator: handoffOptions.artifactLocator }
+        : {}),
       createdAt: handoffOptions.now?.() ?? new Date().toISOString(),
     },
     diagnostics: validation.diagnostics,
@@ -1697,9 +1688,10 @@ function normalizeCanonicalSourceTraces(value: unknown): readonly StoryboardSour
     if (!record) return [];
     const traceId = readTrimmedString(record['traceId']);
     const sourceProfile = normalizeStoryboardSourceProfile(record['sourceProfile']);
-    const sourceRef = isResourceRef(record['sourceRef']) ? record['sourceRef'] : undefined;
-    const sourceDocumentRef = parseDocumentArchiveResourceRef(record['sourceDocumentRef']);
-    if (!traceId || !sourceProfile || (sourceRef ? 1 : 0) + (sourceDocumentRef ? 1 : 0) !== 1) {
+    const sourceLocator = isContentLocator(record['sourceLocator'])
+      ? record['sourceLocator']
+      : undefined;
+    if (!traceId || !sourceProfile || !sourceLocator) {
       return [];
     }
     const sourceRevisionId = readTrimmedString(record['sourceRevisionId']);
@@ -1711,8 +1703,7 @@ function normalizeCanonicalSourceTraces(value: unknown): readonly StoryboardSour
       {
         traceId,
         sourceProfile,
-        ...(sourceRef ? { sourceRef } : {}),
-        ...(sourceDocumentRef ? { sourceDocumentRef } : {}),
+        sourceLocator,
         ...(sourceRevisionId ? { sourceRevisionId } : {}),
         ...(sourceSceneId ? { sourceSceneId } : {}),
         ...(sourceShotId ? { sourceShotId } : {}),
@@ -1746,7 +1737,9 @@ function normalizeStoryboardProjectionHandoffs(
     const storyboardRevisionId = readTrimmedString(record['storyboardRevisionId']);
     const mode = record['mode'];
     const createdAt = readTrimmedString(record['createdAt']);
-    const artifactRef = isResourceRef(record['artifactRef']) ? record['artifactRef'] : undefined;
+    const artifactLocator = isContentLocator(record['artifactLocator'])
+      ? record['artifactLocator']
+      : undefined;
     if (
       !STORYBOARD_PROJECTION_TARGETS.some((candidate) => candidate === target) ||
       !storyboardRevisionId ||
@@ -1760,7 +1753,7 @@ function normalizeStoryboardProjectionHandoffs(
         target: target as StoryboardProjectionTarget,
         storyboardRevisionId,
         mode,
-        ...(artifactRef ? { artifactRef } : {}),
+        ...(artifactLocator ? { artifactLocator } : {}),
         createdAt,
       },
     ];
@@ -1783,19 +1776,15 @@ function validateCanonicalSourceTrace(
   diagnostics: StoryboardValidationDiagnostic[],
 ): void {
   traces.forEach((trace, index) => {
-    const identityCount = (trace.sourceRef ? 1 : 0) + (trace.sourceDocumentRef ? 1 : 0);
     if (
       !trace.traceId.trim() ||
       !STORYBOARD_SOURCE_PROFILE_IDS.some((profile) => profile === trace.sourceProfile) ||
-      identityCount !== 1 ||
-      (trace.sourceRef !== undefined && !validateDurableResourceRef(trace.sourceRef).ok) ||
-      (trace.sourceDocumentRef !== undefined &&
-        parseDocumentArchiveResourceRef(trace.sourceDocumentRef) === undefined)
+      !isContentLocator(trace.sourceLocator)
     ) {
       diagnostics.push(
         createCanonicalStoryboardDiagnostic(
           'invalid-source-trace',
-          'Source trace requires an id, supported profile, and exactly one valid stable source reference.',
+          'Source trace requires an id, supported profile, and one valid ContentLocator.',
           [...path, index],
         ),
       );
@@ -2200,8 +2189,7 @@ function selectStoryboardShotImageRef(shot: StoryboardShotRow): StoryboardMediaR
   ];
   return preferred.find(
     (ref) =>
-      Boolean(ref.documentResourceRef) ||
-      Boolean(ref.resourceRef) ||
+      Boolean(ref.contentLocator) ||
       ref.mimeType?.startsWith('image/') ||
       ref.locator.type === 'workspace-path',
   );
@@ -2365,8 +2353,7 @@ function normalizeMediaRef(
   const locator = normalizeMediaLocator(record['locator'], [...path, 'locator'], diagnostics);
   const label = readTrimmedString(record['label']) ?? readTrimmedString(record['caption']);
   const mimeType = readTrimmedString(record['mimeType']);
-  const documentResourceRef = normalizeDocumentArchiveResourceRef(record['documentResourceRef']);
-  const resourceRef = normalizeResourceRef(record['resourceRef']);
+  const contentLocator = normalizeContentLocator(record['contentLocator']);
   const metadata = normalizeSerializableRecord(record['metadata']);
 
   if (!refId) {
@@ -2412,22 +2399,13 @@ function normalizeMediaRef(
     locator,
     ...(label ? { label } : {}),
     ...(mimeType ? { mimeType } : {}),
-    ...(documentResourceRef ? { documentResourceRef } : {}),
-    ...(resourceRef ? { resourceRef } : {}),
+    ...(contentLocator ? { contentLocator } : {}),
     ...(metadata ? { metadata } : {}),
   };
 }
 
-function normalizeResourceRef(value: unknown): ResourceRef | undefined {
-  return isResourceRef(value) ? value : undefined;
-}
-
-function normalizeDocumentArchiveResourceRef(
-  value: unknown,
-): DocumentArchiveResourceRef | undefined {
-  const ref = parseDocumentArchiveResourceRef(value);
-  if (!ref) return undefined;
-  return ref;
+function normalizeContentLocator(value: unknown): ContentLocator | undefined {
+  return isContentLocator(value) ? value : undefined;
 }
 
 function normalizeMediaLocator(

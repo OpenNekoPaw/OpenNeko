@@ -1,6 +1,6 @@
 import type { CanvasConnection, CanvasData, CanvasNode } from './canvas';
 import type { CanvasSerializableRecord } from './canvas-serializable';
-import type { ResourceRef } from './resource-cache';
+import type { ContentLocator } from './content-locator';
 import { getContainerChildIds, getNodeParentId } from '../utils/canvasLayered';
 
 export const CANVAS_PLAYBACK_ADAPTER_IDS = ['auto', 'generic'] as const;
@@ -48,7 +48,7 @@ export interface CanvasPlaybackUnit {
   readonly durationMs?: number;
   readonly terminal?: boolean;
   readonly assetPath?: string;
-  readonly resourceRef?: ResourceRef;
+  readonly contentLocator?: ContentLocator;
   readonly metadata?: CanvasSerializableRecord;
 }
 
@@ -592,7 +592,7 @@ function projectNodeToUnit(
 ): CanvasPlaybackUnit {
   const override = metadata.nodeOverrides[node.id] ?? {};
   if (node.type === 'media') {
-    if (!node.data.assetPath && !node.data.resourceRef && !node.data.documentResourceRef) {
+    if (!node.data.assetPath && !node.data.contentLocator) {
       diagnostics.push({
         code: 'playback-missing-media-source',
         severity: 'warning',
@@ -613,7 +613,7 @@ function projectNodeToUnit(
           ? { durationMs: Math.round(node.data.duration * 1000) }
           : {}),
       ...(node.data.assetPath ? { assetPath: node.data.assetPath } : {}),
-      ...(node.data.resourceRef ? { resourceRef: node.data.resourceRef } : {}),
+      ...(node.data.contentLocator ? { contentLocator: node.data.contentLocator } : {}),
       metadata: {
         nodeType: 'media',
         ...(node.data.mediaType ? { mediaType: node.data.mediaType } : {}),

@@ -13,7 +13,6 @@ import {
   parsePreviewRuntimeRequest,
   type PreviewRuntimeIdentity,
 } from './index';
-import { createResourceFingerprint, createResourceRef } from '@neko/shared';
 
 const identity: PreviewRuntimeIdentity = {
   projectId: 'project-1',
@@ -34,17 +33,7 @@ describe('Preview Host runtime contract', () => {
   });
 
   it('creates the shared source-model staging used by VS Code and Desktop hosts', () => {
-    const source = createResourceRef({
-      scope: 'project',
-      provider: 'test',
-      kind: 'preview',
-      source: { kind: 'preview-asset', previewAssetId: 'asset-1' },
-      fingerprint: createResourceFingerprint({
-        strategy: 'provider',
-        value: 'revision-1',
-        providerId: 'test',
-      }),
-    });
+    const source = { kind: 'workspace-file' as const, path: 'models/asset-1.glb' };
 
     expect(
       createSourceModelStaging('session-1', {
@@ -70,6 +59,7 @@ describe('Preview Host runtime contract', () => {
         descriptor: {
           descriptorId: 'descriptor-1',
           revision: 'content-2',
+          contentLocator: { kind: 'workspace-file', path: 'models/cat.glb' },
           contentKind: 'model',
           mediaType: 'model/gltf-binary',
           displayName: 'cat.glb',
@@ -108,6 +98,7 @@ describe('Preview Host runtime contract', () => {
       parsePreviewMediaDescriptor({
         descriptorId: 'descriptor-1',
         revision: 'content-2',
+        contentLocator: { kind: 'workspace-file', path: 'scenes/scene.nkc' },
         contentKind: 'canvas',
         mediaType: 'application/json',
         displayName: 'scene.nkc',

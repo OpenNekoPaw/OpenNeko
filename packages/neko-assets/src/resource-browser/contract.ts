@@ -152,6 +152,7 @@ export type ResourceBrowserQuickPreviewKind = 'image' | 'video' | 'audio';
 export interface ResourceBrowserQuickPreviewDescriptor {
   readonly descriptorId: string;
   readonly revision: string;
+  readonly contentLocator: ContentLocator;
   readonly contentKind: ResourceBrowserQuickPreviewKind;
   readonly mediaType: string;
   readonly displayName: string;
@@ -524,6 +525,7 @@ export function parseResourceBrowserQuickPreviewResult(
         descriptor['revision'],
         'Resource Browser quick preview revision is required.',
       ),
+      contentLocator: requireContentLocator(descriptor['contentLocator'], 'contentLocator'),
       contentKind,
       mediaType: requireNonEmptyString(
         descriptor['mediaType'],

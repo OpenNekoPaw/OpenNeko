@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import type {
-  DocumentArchiveResourceRef,
   DocumentBatchCursor,
   DocumentContextData,
   DocumentImageInfo,
@@ -9,13 +8,8 @@ import type {
   DocumentReadResult,
   DocumentSourceRef,
 } from '../document-reading';
-import {
-  createDocumentEntryResourceRef,
-  isDocumentArchiveResourceRef,
-  isDocumentArchiveResourceVersionPolicy,
-  isDocumentFormat,
-  parseDocumentArchiveResourceRef,
-} from '../document-reading';
+import { createDocumentEntryContentLocator, isDocumentFormat } from '../document-reading';
+import { isContentLocator } from '../content-locator';
 
 describe('document reading contracts', () => {
   it('represents stable page, chapter, text, and region locators', () => {
@@ -104,80 +98,48 @@ describe('document reading contracts', () => {
     expect(result.returnedTextChars).toBe(12);
   });
 
-  it('keeps archive entry references separate from cache paths', () => {
+  it('keeps archive entry content identity separate from semantic location and cache paths', () => {
     const source: DocumentSourceRef = {
       filePath: '${BOOKS}/comic.epub',
       format: 'epub',
       fileId: 'comic-v1',
+      contentLocator: { kind: 'workspace-file', path: 'books/comic.epub' },
     };
-    const resourceRef: DocumentArchiveResourceRef = {
-      kind: 'document-entry',
+    const contentLocator = createDocumentEntryContentLocator({
       source,
       entryPath: 'image/page-1.jpg',
-      locator: { kind: 'chapter', chapterHref: 'Page_1', spineIndex: 0 },
-      versionPolicy: 'versioned-export',
-    };
+    });
     const imageInfo: DocumentImageInfo = {
       mimeType: 'image/jpeg',
-      resourceRef,
+      contentLocator,
+      locator: { kind: 'chapter', chapterHref: 'Page_1', spineIndex: 0 },
     };
 
     expect(imageInfo.path).toBeUndefined();
-    expect(imageInfo.resourceRef?.source.filePath).toBe('${BOOKS}/comic.epub');
-    expect(imageInfo.resourceRef?.entryPath).toBe('image/page-1.jpg');
-    expect(imageInfo.resourceRef?.versionPolicy).toBe('versioned-export');
-    expect(JSON.stringify(imageInfo.resourceRef)).not.toContain('cachePath');
+    expect(imageInfo.contentLocator?.source.path).toBe('books/comic.epub');
+    expect(imageInfo.contentLocator?.entryPath).toBe('image/page-1.jpg');
+    expect(imageInfo.locator?.kind).toBe('chapter');
+    expect(JSON.stringify(imageInfo)).not.toMatch(/cachePath|resourceRef/u);
   });
 
-  it('parses and validates archive entry references at shared boundaries without leaking cache paths', () => {
-    const parsed = parseDocumentArchiveResourceRef({
-      kind: 'document-entry',
-      source: {
-        filePath: '${BOOKS}/comic.epub',
-        format: 'epub',
-        identity: { fileId: 'comic-v1', sizeBytes: 1024, mtimeMs: 1000 },
-      },
-      entryPath: 'image/page-1.jpg',
-      cachePath: '/tmp/page-1.jpg',
-      locator: { kind: 'chapter', chapterHref: 'Page_1', spineIndex: 0 },
-      versionPolicy: 'versioned-export',
-    });
-
-    expect(parsed?.source.identity?.fileId).toBe('comic-v1');
-    expect(parsed?.locator?.kind).toBe('chapter');
-    expect(JSON.stringify(parsed)).not.toContain('cachePath');
-    expect(isDocumentArchiveResourceRef(parsed)).toBe(true);
-    expect(
-      parseDocumentArchiveResourceRef({
-        kind: 'document-entry',
-        source: { filePath: '${BOOKS}/comic.epub', format: 'epub' },
-        entryPath: 12,
-      }),
-    ).toBeUndefined();
-    expect(
-      parseDocumentArchiveResourceRef({
-        kind: 'document-entry',
-        source: { filePath: '${BOOKS}/comic.epub', format: 'bad-format' },
-      }),
-    ).toBeUndefined();
-  });
-
-  it('builds archive entry references with a default version policy', () => {
-    const ref = createDocumentEntryResourceRef({
+  it('builds only validated document-entry locators from workspace-owned sources', () => {
+    const locator = createDocumentEntryContentLocator({
       source: {
         filePath: '${BOOKS}/comic.cbz',
         format: 'cbz',
+        contentLocator: { kind: 'workspace-file', path: 'books/comic.cbz' },
       },
       entryPath: 'page-1.png',
-      locator: { kind: 'page', pageNumber: 1, pageIndex: 0 },
     });
 
-    expect(ref?.kind).toBe('document-entry');
-    expect(ref?.versionPolicy).toBe('versioned-export');
-    expect(ref?.locator?.kind).toBe('page');
-    expect(JSON.stringify(ref)).not.toContain('cachePath');
+    expect(locator).toEqual({
+      kind: 'document-entry',
+      source: { kind: 'workspace-file', path: 'books/comic.cbz' },
+      entryPath: 'page-1.png',
+    });
+    expect(isContentLocator(locator)).toBe(true);
     expect(
-      createDocumentEntryResourceRef({
+      createDocumentEntryContentLocator({
         source: {
           filePath: '${BOOKS}/comic.cbz',
           format: 'cbz',
@@ -186,7 +148,6 @@ describe('document reading contracts', () => {
     ).toBeUndefined();
     expect(isDocumentFormat('xlsx')).toBe(true);
     expect(isDocumentFormat('zip')).toBe(false);
-    expect(isDocumentArchiveResourceVersionPolicy('replace-reference')).toBe(true);
   });
 
   it('allows preview context to carry source locator and legacy excerpt data together', () => {

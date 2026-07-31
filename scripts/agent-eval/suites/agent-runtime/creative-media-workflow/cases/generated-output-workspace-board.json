@@ -19,7 +19,7 @@
       "multi-Board resolver or active Board selection",
       "runtime generated-draft projection",
       "direct Agent turn runner",
-      "ResourceRef, localPath, provider URL, data URL, or base64 handoff"
+      "retired resource-reference field, localPath, provider URL, data URL, or base64 handoff"
     ],
     "observables": [
       {
@@ -45,7 +45,7 @@
     {
       "id": "submit",
       "kind": "submit",
-      "prompt": "$image Generate one image of a small red paper kite resting on a clean white studio table. Wait for the real result and report the delivered generated-output ContentLocator. Do not use ResourceRef, localPath, provider URL, data URL, base64, import it into the Asset library, select another Canvas, or create a runtime draft."
+      "prompt": "$image Generate one image of a small red paper kite resting on a clean white studio table. Wait for the real result and report the delivered generated-output ContentLocator. Do not use retired resource-reference fields, localPath, provider URL, data URL, base64, import it into the Asset library, select another Canvas, or create a runtime draft."
     },
     { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 300000 }
   ],

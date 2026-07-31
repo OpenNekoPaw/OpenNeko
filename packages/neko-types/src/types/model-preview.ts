@@ -1,4 +1,4 @@
-import type { ResourceRef } from './resource-cache.js';
+import type { ContentLocator } from './content-locator.js';
 
 export const MODEL_PREVIEW_STAGING_SCHEMA_VERSION = 3 as const;
 
@@ -88,7 +88,7 @@ export interface NormalizedModelFacts {
 }
 
 export interface ModelPreviewSourceDescriptor {
-  readonly source: ResourceRef;
+  readonly source: ContentLocator;
   readonly sourceFingerprint: string;
   readonly format: ModelPreviewFormat;
   readonly entryUri: string;

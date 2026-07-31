@@ -71,7 +71,7 @@ OpenNeko 的顶层 Agent 入口围绕以下交互职责组织：
 1. 它读取或修改哪一种领域事实；
 2. 输入 identity、schema、revision 和权限由谁验证；
 3. 与相邻能力相比，它拥有哪一个不可替代的职责；
-4. 成功返回什么文件、ResourceRef、revision 或证据；
+4. 成功返回什么文件、ContentLocator、revision 或证据；
 5. 失败如何返回可恢复或不可恢复的 diagnostic。
 
 同一领域优先形成少量概念角色，例如 context、read、revisioned apply 和 preview/validate。具体领域可以

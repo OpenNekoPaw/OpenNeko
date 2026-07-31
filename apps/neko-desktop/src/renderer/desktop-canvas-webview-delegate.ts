@@ -1,4 +1,5 @@
 import type { CanvasHostRuntimeIdentity } from '@neko-canvas/domain';
+import { isContentLocator, type WorkspaceFileContentLocator } from '@neko/shared';
 import type { DesktopCanvasMediaRequest } from '../shared/canvas-bridge-contract';
 
 const DESKTOP_CANVAS_MEDIA_MESSAGE_TYPES = new Set([
@@ -49,7 +50,7 @@ export function createDesktopCanvasWebviewDelegate(
         .resolvePreviewVariant({
           identity,
           requestId: request.requestId,
-          locator: { kind: 'workspace-file', path: request.assetPath },
+          locator: request.contentLocator,
           role: request.role,
           ...(request.mediaType === undefined ? {} : { mediaType: request.mediaType }),
         })
@@ -101,11 +102,11 @@ function parseMediaMessage(
       time: requireNonNegativeNumber(message['time'], 'seek time'),
     };
   }
-  const assetPath = message['assetPath'];
-  if (typeof assetPath !== 'string' || !isPortableRelativePath(assetPath)) {
+  const contentLocator = readCanvasContentLocator(message);
+  if (!contentLocator) {
     throw new Error('Desktop Canvas media source is invalid.');
   }
-  const locator = { kind: 'workspace-file' as const, path: assetPath };
+  const locator = contentLocator;
   if (type === 'media:captureFrame') {
     return {
       identity,
@@ -179,7 +180,7 @@ function createMediaErrorResponse(
 
 function parsePreviewVariantMessage(message: unknown): {
   readonly requestId: string;
-  readonly assetPath: string;
+  readonly contentLocator: WorkspaceFileContentLocator;
   readonly role: 'source' | 'thumbnail' | 'proxy' | 'fov-crop';
   readonly mediaType?: string;
 } {
@@ -187,14 +188,13 @@ function parsePreviewVariantMessage(message: unknown): {
     throw new Error('Desktop Canvas delegate received an unsupported message.');
   }
   const requestId = message['requestId'];
-  const assetPath = message['assetPath'];
+  const contentLocator = readCanvasContentLocator(message);
   const role = message['role'];
   const mediaType = message['mediaType'];
   if (
     typeof requestId !== 'string' ||
     requestId.length === 0 ||
-    typeof assetPath !== 'string' ||
-    !isPortableRelativePath(assetPath)
+    !contentLocator
   ) {
     throw new Error('Desktop Canvas preview message is invalid.');
   }
@@ -206,22 +206,20 @@ function parsePreviewVariantMessage(message: unknown): {
   }
   return {
     requestId,
-    assetPath,
+    contentLocator,
     role,
     ...(mediaType === undefined ? {} : { mediaType }),
   };
 }
 
-function isPortableRelativePath(value: string): boolean {
+function readCanvasContentLocator(
+  message: Record<string, unknown>,
+): WorkspaceFileContentLocator | undefined {
   return (
-    value.length > 0 &&
-    !value.startsWith('/') &&
-    !value.startsWith('\\') &&
-    !value.includes('\\') &&
-    !value.includes('://') &&
-    value !== '..' &&
-    !value.startsWith('../') &&
-    !value.includes('/../')
+    isContentLocator(message['contentLocator']) &&
+    message['contentLocator'].kind === 'workspace-file'
+      ? message['contentLocator']
+      : undefined
   );
 }
 

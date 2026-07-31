@@ -68,7 +68,7 @@ fallback 返回成功。
 ```text
 VS Code / Webview
   -> OpenNeko product runtime
-       -> conversation identity / permission / Capability / MCP / ResourceRef
+       -> conversation identity / permission / Capability / MCP / ContentLocator
        -> creative run / task / projection
        -> Pi Skill catalog + Pi Session transcript
        -> Pi Agent
@@ -85,7 +85,7 @@ OpenNeko 继续拥有：
 | conversation catalog 与 branch metadata authority   | title、workspace、branch/session mapping 是产品事实   |
 | Skill Host source、trust、enablement 和 fingerprint | Pi Skill 文件不能自行声明宿主信任与授权               |
 | Capability、MCP 和工具目录                          | 它们表达真实可执行领域能力和宿主依赖                  |
-| 权限、审批、workspace trust 和 ResourceRef          | 它们属于本地文件、VS Code 和用户数据边界              |
+| 权限、审批、workspace trust 和 ContentLocator          | 它们属于本地文件、VS Code 和用户数据边界              |
 | Creative run/work item 和后台任务观察               | 长时间媒体生成必须可恢复、可取消、可追踪              |
 | Canvas、Timeline、Assets、Markdown 和 Preview 接入  | 这些是 OpenNeko 的产品能力与 package-owned apply 边界 |
 | VS Code Extension/Webview adapter                   | Pi 不拥有 Webview 沙箱、CSP、URI 授权和宿主生命周期   |
@@ -118,7 +118,7 @@ Skill 只负责：
 - 缺少输入、证据或能力时的 fail-visible 指导。
 
 Skill 不负责 Tool schema/注册、MCP 连接、权限、workspace trust、provider/model 路由、
-conversation/session 状态、Run/Task、ResourceRef、项目 revision、可执行 workflow state 或自动
+conversation/session 状态、Run/Task、ContentLocator、项目 revision、可执行 workflow state 或自动
 validator。Skill 可以描述工作方法和质量标准，但不能成为运行时控制器。
 
 OpenNeko 只在 Pi Skill 外维护最小 Host record：
@@ -182,7 +182,7 @@ resolver、Skill model override、ToolGuard/ToolSet mutation 或 lifecycle UI in
 
 Skill `scripts/` 允许执行，但 Skill 文件、metadata、source priority 或 trust record 都不能授予执行
 权限。执行必须通过用户/工作区 permission policy 配置的 allow/ask/deny、workspace trust、现有
-External Processor/PathAccessPolicy/sandbox 和 ResourceRef 输出边界；普通 Agent 不获得任意 shell。
+External Processor/PathAccessPolicy/sandbox 和 ContentLocator 输出边界；普通 Agent 不获得任意 shell。
 授权至少绑定 workspace、Skill fingerprint 和具体 script/processor identity，fingerprint 改变后旧
 授权失效。
 
@@ -209,7 +209,7 @@ Conversation
        -> one active Pi Agent
   -> zero or more historical/alternative ConversationBranch
 
-Attachment / Tool / ResourceRef grant
+Attachment / Tool / ContentLocator grant
   -> may introduce additional authorized inputs
   -> does not replace the default WorkspaceBinding
 
@@ -217,7 +217,7 @@ Pi Session JSONL
   -> messages / model changes / active-tool changes / compaction / context
 
 OpenNeko local metadata store
-  -> conversation catalog / workspace binding / Run / Task / ResourceRef / permission facts
+  -> conversation catalog / workspace binding / Run / Task / ContentLocator / permission facts
 
 Diagnostic logs
   -> audit and troubleshooting only; never a second transcript authority
@@ -260,7 +260,7 @@ Rebuildable listing projection
 
 Pi Session header/JSONL 只拥有 `sessionId`、虚拟 `cwd`、Pi format/version、消息、model changes、
 tool entries、compaction 和 context。它不复制 title、active branch、workspace binding、完整 model
-policy、Run/Task/ResourceRef 或 permission facts。SQLite 丢失时允许 Pi JSONL 成为 orphan 并由 GC
+policy、Run/Task/ContentLocator 或 permission facts。SQLite 丢失时允许 Pi JSONL 成为 orphan 并由 GC
 清理，不要求扫描 Pi Session 重建 Conversation/Branch。
 
 每个活动 conversation 拥有一个独立 Pi Agent、当前 branch 的 Pi Session、abort state 和 immutable
@@ -402,7 +402,7 @@ user request
   -> Pi main model selects a semantic tool
   -> tool runtime resolves purpose from the immutable policy snapshot
   -> registered model/provider executes generation or perception
-  -> tool returns evidence, ResourceRef, or TaskRef
+  -> tool returns evidence, ContentLocator, or TaskRef
   -> Pi main model continues reasoning
 ```
 
@@ -423,15 +423,15 @@ turn-scoped `ToolPurposeModelRuntime`。该 runtime 只暴露一次受限的多�
 混合工具可以保留非模型能力，但不得执行该 perception evaluator，更不得回退到 `agent.main`。
 
 首个 canonical bounded-perception 入口是 `perception.image.understand`：参数只接受稳定
-`ResourceRef` 和可选的观察重点，由 stable locator + `ContentReadService` 在工具内部有界读取字节，并且只能使用当前 turn 的
+`ContentLocator` 和可选的观察重点，由 stable locator + `ContentReadService` 在工具内部有界读取字节，并且只能使用当前 turn 的
 `image.understand` binding。工具返回 `neko.image-understanding.v1` 结构化证据、原始
-`ResourceRef`、准确 purpose/model facts 和 usage；不得接受或回传绝对路径、cache path、
+`ContentLocator`、准确 purpose/model facts 和 usage；不得接受或回传绝对路径、cache path、
 `providerId` 或 `modelId` 参数。旧 `perception.perceive` 的 `understandingModels` 覆盖属于待删除
 AgentSession 路径，命中时必须 fail-visible，不能成为 Pi fallback。
 
 Pi AI 当前通用消息内容只覆盖文本和图像，因此不得把音频/视频伪装成通用 Pi payload。CLIP、
 Whisper、shot detection 以及 NewAPI 特有媒体协议继续由 OpenNeko 领域 runtime 拥有；只有在相应
-Capability 能以稳定 `ResourceRef` 输入、程序配置拥有模型选择并返回结构化证据后才投影为 Pi Tool。
+Capability 能以稳定 `ContentLocator` 输入、程序配置拥有模型选择并返回结构化证据后才投影为 Pi Tool。
 缺少该领域工具时直接报告不支持，不调用 `agent.main` 猜测，也不恢复旧 Platform chat。
 
 如果同一条 assistant message 产生多个允许并行的 tool call，每个工具可以独立调用不同模型。
@@ -456,7 +456,7 @@ executor，不调用 `completeSimple`。
 `GenerateImage`、`TransformImage`、`GenerateVideo`、`GenerateMusic`、`GenerateTTS` 的模型可见
 schema 不再包含 `providerId`/`modelId`。缺少精确 purpose 时工具不注册；若旧调用仍传路由参数则
 fail-visible。成功提交立即返回 `{ source: "media-task", sourceTaskId }` 形式的产品 `TaskRef`，同时
-保留现有 task scope 供取消、进度、恢复和终态关联。最终 generated-output `ResourceRef` 仍由
+保留现有 task scope 供取消、进度、恢复和终态关联。最终 generated-output `ContentLocator` 仍由
 OpenNeko task observation/continuation 投递，Pi transcript 不成为 provider task state authority。
 
 - 工具不得调用 `setModel()` 改写主 Agent 模型。
@@ -469,7 +469,7 @@ OpenNeko task observation/continuation 投递，Pi transcript 不成为 provider
 
 视频、音频和其他长时间生成不得让 Pi tool call 阻塞到远端任务完成。工具应在成功提交后
 快速返回 `TaskRef`/run identity，由 OpenNeko task runtime 持久化 provider task id、观察进度、
-处理取消/恢复，并在完成后通过 canonical observation path 把 `ResourceRef` 和结果状态交回
+处理取消/恢复，并在完成后通过 canonical observation path 把 `ContentLocator` 和结果状态交回
 会话。
 
 ### 10. 缺失配置和未知模型 fail-visible
@@ -521,7 +521,7 @@ auto-compaction 和 retry 的部分工作标为 planned/in progress。OpenNeko �
 - 生成与感知 provider，特别是 Pi 没有等价覆盖的视频、语音和异步媒体任务；
 - NewAPI 用户配置、Neko account gateway catalog/entitlement，以及迁入 owning media runtime 的
   图片、视频、语音、音乐和异步任务协议；NewAPI 聊天则通过 Pi，不保留旧 adapter；
-- Skill Host source/trust/enablement/fingerprint、Capability、permission、MCP 和 ResourceRef；
+- Skill Host source/trust/enablement/fingerprint、Capability、permission、MCP 和 ContentLocator；
 - conversation/turn/run/task identity、conversation catalog、product projection 和后台任务 authority；
 - package-owned creative apply 和 background task observation。
 
@@ -559,14 +559,14 @@ compaction、task observation 和 diagnostics。把 Pi 塞进 executor 位置不
 
 ### 首版采用 AgentHarness 作为全部 session/runtime
 
-延期。上游仍存在 migration-ready TODO，且 OpenNeko 已经有更强的本地身份、ResourceRef、
+延期。上游仍存在 migration-ready TODO，且 OpenNeko 已经有更强的本地身份、ContentLocator、
 durable media task 和投影约束。
 
 ### 完全自研 transcript/session persistence
 
 否决。Pi 已公开 `Session`、JSONL repo/storage、context 和 compaction primitives；继续迁移 Neko
 自研 Journal/ConversationManager 只会重复通用能力。OpenNeko 只保留 Pi Session 不表达的产品
-conversation catalog、Run/Task、ResourceRef、permission 和 UI projection。
+conversation catalog、Run/Task、ContentLocator、permission 和 UI projection。
 
 ## 后果与风险
 
@@ -597,7 +597,7 @@ conversation catalog、Run/Task、ResourceRef、permission 和 UI projection。
   直到出现真实调用方再实现并验证 `OAuthAuth`、callback、取消和 credential 写入语义。
 - 跨 Host lease 失效或接管若缺少 fencing，可能让两个进程同时推进同一 conversation；所有 turn 和
   checkpoint 写入必须携带当前 lease epoch。
-- Pi 的默认行为不自动满足 OpenNeko 的 ResourceRef、workspace trust、后台任务和 fail-visible
+- Pi 的默认行为不自动满足 OpenNeko 的 ContentLocator、workspace trust、后台任务和 fail-visible
   约束。
 
 缓解措施：使用正常依赖版本范围与 lockfile，不建立人工固定版本政策；在构建/升级流程中执行
@@ -622,7 +622,7 @@ characterization tests；执行依赖许可、安全、包体积和冷启动审�
 5. 跨 TUI/VS Code 测试证明只有当前 lease epoch holder 可推进 turn/checkpoint，其他 Host 只读且
    stale holder 写入失败；checkpoint 补写只在进程内，崩溃丢失不触发 outbox/journal fallback。
 6. 测试证明完整 transcript 只有 Pi Session 一个 authority；SQLite 只权威保存产品 metadata，并且
-   仅列表 projection 可重建；Run/Task/ResourceRef 不以 Pi custom entry 作为唯一事实。
+   仅列表 projection 可重建；Run/Task/ContentLocator 不以 Pi custom entry 作为唯一事实。
 7. 扁平 `agent.main` 与工具 purpose 同时携带模型和最终参数，测试证明执行期没有二级 purpose、
    类型默认、首个兼容模型或 main fallback。
 8. TUI/VS Code 共享用户 CredentialStore，Host 只拥有 interaction；覆盖 API key、Pi 内置 OAuth

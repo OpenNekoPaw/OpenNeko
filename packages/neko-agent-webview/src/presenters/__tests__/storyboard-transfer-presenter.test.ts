@@ -184,14 +184,9 @@ describe('storyboard transfer presenter', () => {
           {
             traceId: 'trace-script-1',
             sourceProfile: 'from-script',
-            sourceRef: {
-              id: 'resource-script-source',
-              scope: 'project',
-              provider: 'workspace',
-              kind: 'document',
-              source: { kind: 'file', projectRelativePath: 'scripts/story.md' },
-              locator: { kind: 'file', path: '${WORKSPACE}/scripts/story.md' },
-              fingerprint: { strategy: 'hash', value: 'sha256:story-source' },
+            sourceLocator: {
+              kind: 'workspace-file',
+              path: 'scripts/story.md',
             },
           },
         ],
@@ -221,17 +216,9 @@ describe('storyboard transfer presenter', () => {
                     refId: 'source-image-1',
                     role: 'source',
                     locator: { type: 'workspace-path', path: '${WORKSPACE}/assets/cat.png' },
-                    resourceRef: {
-                      id: 'resource-cat-source',
-                      scope: 'project',
-                      provider: 'workspace',
-                      kind: 'media',
-                      source: {
-                        kind: 'file',
-                        projectRelativePath: 'assets/cat.png',
-                      },
-                      locator: { kind: 'file', path: '${WORKSPACE}/assets/cat.png' },
-                      fingerprint: { strategy: 'hash', value: 'sha256:cat-source' },
+                    contentLocator: {
+                      kind: 'workspace-file',
+                      path: 'assets/cat.png',
                     },
                   },
                 ],
@@ -249,14 +236,12 @@ describe('storyboard transfer presenter', () => {
                     refId: 'generated-image-2',
                     role: 'generated',
                     locator: { type: 'asset', assetId: 'generated-image-2' },
-                    resourceRef: {
-                      id: 'resource-cat-generated',
-                      scope: 'project',
-                      provider: 'generated-assets',
-                      kind: 'generated',
-                      source: { kind: 'generated-asset', generatedAssetId: 'generated-image-2' },
-                      locator: { kind: 'generated-asset', assetId: 'generated-image-2' },
-                      fingerprint: { strategy: 'provider', value: 'generated-image-2' },
+                    contentLocator: {
+                      kind: 'generated-output',
+                      outputId: 'generated-image-2',
+                      revision: '1',
+                      digest: 'sha256:generated-image-2',
+                      path: 'generated/generated-image-2.png',
                     },
                   },
                 ],
@@ -301,7 +286,10 @@ describe('storyboard transfer presenter', () => {
                 sourceMediaRefs: [
                   expect.objectContaining({
                     refId: 'source-image-1',
-                    resourceRef: expect.objectContaining({ id: 'resource-cat-source' }),
+                    contentLocator: {
+                      kind: 'workspace-file',
+                      path: 'assets/cat.png',
+                    },
                   }),
                 ],
               },
@@ -310,7 +298,13 @@ describe('storyboard transfer presenter', () => {
                 generatedMediaRefs: [
                   expect.objectContaining({
                     refId: 'generated-image-2',
-                    resourceRef: expect.objectContaining({ id: 'resource-cat-generated' }),
+                    contentLocator: {
+                      kind: 'generated-output',
+                      outputId: 'generated-image-2',
+                      revision: '1',
+                      digest: 'sha256:generated-image-2',
+                      path: 'generated/generated-image-2.png',
+                    },
                   }),
                 ],
               },

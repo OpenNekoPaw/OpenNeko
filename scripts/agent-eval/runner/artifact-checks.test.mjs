@@ -158,7 +158,7 @@ describe('v2 contained artifact checks', () => {
       evidenceRef: 'artifact-facts',
       ref: 'asset:scene-1',
       digest: `sha256:${'a'.repeat(64)}`,
-      validatorId: 'durable-resource-ref',
+      validatorId: 'content-locator',
     };
     const facts = {
       artifacts: [

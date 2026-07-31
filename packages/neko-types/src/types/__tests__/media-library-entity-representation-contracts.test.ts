@@ -136,7 +136,7 @@ describe('Creative Entity representation binding contract', () => {
     }
   });
 
-  it('rejects legacy identity, dual refs, ResourceRef, routing, and internal storage fields', () => {
+  it('rejects legacy identity, dual refs, ResourceCacheSource, routing, and internal storage fields', () => {
     const poisonedBindings: readonly unknown[] = [
       { ...binding, assetRef: 'project://assets/alice' },
       { ...binding, assetEntityId: 'asset-alice' },

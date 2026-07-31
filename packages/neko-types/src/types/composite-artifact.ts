@@ -1,6 +1,6 @@
-import type { DocumentArchiveResourceRef, DocumentSourceRef } from './document-reading';
+import type { DocumentSourceRef } from './document-reading';
 import { isHostProjectedRuntimeValue } from './content-access';
-import type { ResourceRef } from './resource-cache';
+import { isContentLocator, type ContentLocator } from './content-locator';
 import {
   AGENT_PROFILE_SOURCES,
   createAgentProfileDiagnostic,
@@ -39,7 +39,7 @@ export const GENERIC_TABLE_CELL_TYPES = [
   'tags',
   'status',
   'diagnostic',
-  'resource-ref',
+  'reference',
   'media-preview',
   'duration',
   'timecode',
@@ -107,7 +107,8 @@ export type ArtifactDiagnosticCode =
   | 'invalid-extension-namespace'
   | 'non-serializable-value'
   | 'unsafe-runtime-handle'
-  | 'invalid-resource-ref'
+  | 'invalid-artifact-reference'
+  | 'invalid-content-locator'
   | 'invalid-profile'
   | 'unsupported-profile-version'
   | 'missing-profile-descriptor'
@@ -151,27 +152,23 @@ export interface ArtifactProvenance {
   readonly sourceArtifactIds?: readonly string[];
 }
 
-export type ArtifactResourceRef =
+export type ArtifactReference =
   | {
-      readonly kind: 'resource';
-      readonly resource: ResourceRef;
-    }
-  | {
-      readonly kind: 'document-entry';
-      readonly resource: DocumentArchiveResourceRef;
+      readonly kind: 'content';
+      readonly contentLocator: ContentLocator;
     }
   | {
       readonly kind: 'generated-asset';
       readonly assetId: string;
       readonly assetVersion?: string;
-      readonly resourceRef?: ResourceRef;
+      readonly contentLocator?: ContentLocator;
     }
   | {
       readonly kind: 'tool-result';
       readonly toolCallId: string;
       readonly assetIndex?: number;
       readonly taskId?: string;
-      readonly resourceRef?: ResourceRef;
+      readonly contentLocator?: ContentLocator;
     }
   | {
       readonly kind: 'canvas-node';
@@ -188,7 +185,7 @@ export type ArtifactResourceRef =
       readonly kind: 'perception-card';
       readonly assetId: string;
       readonly cardId?: string;
-      readonly resourceRef?: ResourceRef;
+      readonly contentLocator?: ContentLocator;
     };
 
 export interface ArtifactAction {
@@ -282,7 +279,7 @@ export interface ArtifactTimelineCue {
   readonly durationMs?: number;
   readonly label?: string;
   readonly type?: 'shot' | 'dialogue' | 'voice-over' | 'sound' | 'music' | 'effect';
-  readonly resourceRef?: ArtifactResourceRef;
+  readonly reference?: ArtifactReference;
   readonly metadata?: ArtifactJsonRecord;
 }
 
@@ -306,7 +303,7 @@ export interface CompositeArtifactDiagnosticBlock extends CompositeArtifactBlock
 export interface ArtifactMediaItem {
   readonly itemId: string;
   readonly mediaType: ArtifactMediaType;
-  readonly resourceRef: ArtifactResourceRef;
+  readonly reference: ArtifactReference;
   readonly label?: string;
   readonly mimeType?: string;
   readonly width?: number;
@@ -366,7 +363,7 @@ export type GenericTableCell =
   | { readonly type: 'tags'; readonly value: readonly string[] }
   | { readonly type: 'status'; readonly value: string }
   | { readonly type: 'diagnostic'; readonly value: ArtifactDiagnostic }
-  | { readonly type: 'resource-ref'; readonly value: ArtifactResourceRef }
+  | { readonly type: 'reference'; readonly value: ArtifactReference }
   | { readonly type: 'media-preview'; readonly value: ArtifactMediaItem }
   | { readonly type: 'duration'; readonly valueMs: number }
   | { readonly type: 'timecode'; readonly valueMs: number; readonly format?: string }
@@ -484,8 +481,8 @@ export interface ArtifactExecutionSummary {
   readonly actionId: string;
   readonly providerId?: string;
   readonly status: 'succeeded' | 'failed' | 'partial' | 'unavailable' | 'cancelled';
-  readonly createdRefs?: readonly ArtifactResourceRef[];
-  readonly updatedRefs?: readonly ArtifactResourceRef[];
+  readonly createdRefs?: readonly ArtifactReference[];
+  readonly updatedRefs?: readonly ArtifactReference[];
   readonly diagnostics?: readonly ArtifactDiagnostic[];
   readonly metadata?: ArtifactJsonRecord;
 }
@@ -986,8 +983,8 @@ function validateGenericTableCell(
     case 'diagnostic':
       validateDiagnostic(value['value'], [...path, 'value'], diagnostics);
       break;
-    case 'resource-ref':
-      validateArtifactResourceRef(value['value'], [...path, 'value'], diagnostics);
+    case 'reference':
+      validateArtifactReference(value['value'], [...path, 'value'], diagnostics);
       break;
     case 'media-preview':
       validateMediaItem(value['value'], [...path, 'value'], diagnostics, options);
@@ -1677,7 +1674,7 @@ function validateMediaItem(
       ),
     );
   }
-  validateArtifactResourceRef(value['resourceRef'], [...path, 'resourceRef'], diagnostics);
+  validateArtifactReference(value['reference'], [...path, 'reference'], diagnostics);
   validateSerializableValue(value['metadata'], [...path, 'metadata'], diagnostics);
   void options;
 }
@@ -1712,13 +1709,13 @@ function validateTimelineCue(
   requireFiniteNumber(value['startMs'], [...path, 'startMs'], diagnostics);
   if (value['durationMs'] !== undefined)
     requireFiniteNumber(value['durationMs'], [...path, 'durationMs'], diagnostics);
-  if (value['resourceRef'] !== undefined)
-    validateArtifactResourceRef(value['resourceRef'], [...path, 'resourceRef'], diagnostics);
+  if (value['reference'] !== undefined)
+    validateArtifactReference(value['reference'], [...path, 'reference'], diagnostics);
   validateSerializableValue(value['metadata'], [...path, 'metadata'], diagnostics);
   void options;
 }
 
-function validateArtifactResourceRef(
+function validateArtifactReference(
   value: unknown,
   path: readonly ArtifactPathSegment[],
   diagnostics: ArtifactDiagnostic[],
@@ -1727,14 +1724,34 @@ function validateArtifactResourceRef(
     diagnostics.push(
       artifactDiagnostic(
         'error',
-        'invalid-resource-ref',
+        'invalid-artifact-reference',
         path,
-        'Artifact resource ref must be an object.',
+        'Artifact reference must be an object.',
       ),
     );
     return;
   }
   requireString(value['kind'], [...path, 'kind'], diagnostics);
+  if (value['kind'] === 'content' && !isContentLocator(value['contentLocator'])) {
+    diagnostics.push(
+      artifactDiagnostic(
+        'error',
+        'invalid-content-locator',
+        [...path, 'contentLocator'],
+        'Artifact content references require a valid ContentLocator.',
+      ),
+    );
+  }
+  if (value['contentLocator'] !== undefined && !isContentLocator(value['contentLocator'])) {
+    diagnostics.push(
+      artifactDiagnostic(
+        'error',
+        'invalid-content-locator',
+        [...path, 'contentLocator'],
+        'Artifact reference contentLocator is invalid.',
+      ),
+    );
+  }
   validateSerializableValue(value, path, diagnostics);
 }
 

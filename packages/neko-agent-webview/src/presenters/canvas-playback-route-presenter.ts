@@ -2,7 +2,7 @@ import type {
   ArtifactDiagnostic,
   ArtifactJsonRecord,
   ArtifactMediaItem,
-  ArtifactResourceRef,
+  ArtifactReference,
   CanvasPlaybackDiagnostic,
   CanvasPlaybackPlan,
   CanvasPlaybackRouteCandidate,
@@ -11,9 +11,7 @@ import type {
   CompositeArtifactBlock,
   GenericTable,
   GenericTableCell,
-  ResourceRef,
 } from '@neko/shared';
-import { isResourceRef } from '@neko/shared';
 
 export interface CanvasPlaybackRouteCardOptions {
   readonly routeId?: string;
@@ -254,8 +252,8 @@ function createMediaGalleryBlocks(
 }
 
 function unitToMediaItem(unit: CanvasPlaybackUnit): readonly ArtifactMediaItem[] {
-  const ref = unit.resourceRef;
-  if (!ref || !isResourceRef(ref)) return [];
+  const contentLocator = unit.contentLocator;
+  if (!contentLocator) return [];
   const mediaType = unit.metadata ? readStringMetadata(unit.metadata, 'mediaType') : undefined;
   return [
     {
@@ -264,7 +262,7 @@ function unitToMediaItem(unit: CanvasPlaybackUnit): readonly ArtifactMediaItem[]
         mediaType === 'video' || mediaType === 'audio' || mediaType === 'image'
           ? mediaType
           : 'unknown',
-      resourceRef: resourceRefToArtifactResourceRef(ref),
+      reference: contentLocatorToArtifactReference(contentLocator),
       label: unit.label ?? unit.id,
       durationMs: unit.durationMs,
       metadata: cleanRecord({
@@ -276,10 +274,12 @@ function unitToMediaItem(unit: CanvasPlaybackUnit): readonly ArtifactMediaItem[]
   ];
 }
 
-function resourceRefToArtifactResourceRef(resource: ResourceRef): ArtifactResourceRef {
+function contentLocatorToArtifactReference(
+  contentLocator: NonNullable<CanvasPlaybackUnit['contentLocator']>,
+): ArtifactReference {
   return {
-    kind: 'resource',
-    resource,
+    kind: 'content',
+    contentLocator,
   };
 }
 

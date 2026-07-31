@@ -1,6 +1,6 @@
 import { isHostProjectedRuntimeValue } from './content-access';
-import type { ArtifactResourceRef } from './composite-artifact';
-import type { ResourceRef } from './resource-cache';
+import type { ArtifactReference } from './composite-artifact';
+import { isContentLocator, type ContentLocator } from './content-locator';
 import type {
   StoryboardMediaRef,
   StoryboardSerializableRecord,
@@ -17,7 +17,7 @@ export const STORYBOARD_PLAN_OVERLAY_TYPES = ['AnimationPlan'] as const;
 export const STORYBOARD_PLAN_SOURCE_REF_KINDS = [
   'artifact',
   'storyboard-table',
-  'resource',
+  'content',
   'workspace-path',
 ] as const;
 export const STORYBOARD_PLAN_DIAGNOSTIC_SEVERITIES = [
@@ -68,7 +68,7 @@ export interface StoryboardPlanSourceRef {
   readonly artifactId?: string;
   readonly storyboardId?: string;
   readonly title?: string;
-  readonly resourceRef?: ResourceRef;
+  readonly contentLocator?: ContentLocator;
   readonly path?: string;
   readonly version?: string;
   readonly metadata?: StoryboardSerializableRecord;
@@ -86,7 +86,7 @@ export interface StoryboardPlanPromptIntent {
 export interface StoryboardPlanImagePrepIntent {
   readonly operations?: readonly string[];
   readonly notes?: string;
-  readonly maskRefs?: readonly ArtifactResourceRef[];
+  readonly maskRefs?: readonly ArtifactReference[];
   readonly targetKeyframeCount?: number;
   readonly metadata?: StoryboardSerializableRecord;
 }
@@ -112,9 +112,9 @@ export interface StoryboardShotPlanOverlay {
   readonly approvalNotes?: string;
   readonly providerHints?: readonly StoryboardPlanProviderHint[];
   readonly sourceMediaRefs?: readonly StoryboardMediaRef[];
-  readonly preparedKeyframeRefs?: readonly ArtifactResourceRef[];
-  readonly generatedVideoRefs?: readonly ArtifactResourceRef[];
-  readonly outputMediaRefs?: readonly ArtifactResourceRef[];
+  readonly preparedKeyframeRefs?: readonly ArtifactReference[];
+  readonly generatedVideoRefs?: readonly ArtifactReference[];
+  readonly outputMediaRefs?: readonly ArtifactReference[];
   readonly textCueRefs?: readonly string[];
   readonly voiceCueRefs?: readonly string[];
   readonly diagnostics?: readonly StoryboardPlanDiagnostic[];
@@ -372,9 +372,9 @@ function normalizeShotOverlay(
       ? { approvalNotes: readString(record['approvalNotes']) }
       : {}),
     ...(sourceMediaRefs ? { sourceMediaRefs } : {}),
-    ...normalizeArtifactResourceRefArray(record, 'preparedKeyframeRefs'),
-    ...normalizeArtifactResourceRefArray(record, 'generatedVideoRefs'),
-    ...normalizeArtifactResourceRefArray(record, 'outputMediaRefs'),
+    ...normalizeArtifactReferenceArray(record, 'preparedKeyframeRefs'),
+    ...normalizeArtifactReferenceArray(record, 'generatedVideoRefs'),
+    ...normalizeArtifactReferenceArray(record, 'outputMediaRefs'),
     ...normalizeStringArrayField(record, 'textCueRefs'),
     ...normalizeStringArrayField(record, 'voiceCueRefs'),
     ...(isSerializableRecord(record['extensions']) ? { extensions: record['extensions'] } : {}),
@@ -396,8 +396,8 @@ function normalizeSourceStoryboardRef(value: unknown): StoryboardPlanSourceRef |
       ? { storyboardId: readString(record['storyboardId']) }
       : {}),
     ...(readString(record['title']) ? { title: readString(record['title']) } : {}),
-    ...(readRecord(record['resourceRef'])
-      ? { resourceRef: record['resourceRef'] as ResourceRef }
+    ...(isContentLocator(record['contentLocator'])
+      ? { contentLocator: record['contentLocator'] }
       : {}),
     ...(readString(record['path']) ? { path: readString(record['path']) } : {}),
     ...(readString(record['version']) ? { version: readString(record['version']) } : {}),
@@ -415,14 +415,14 @@ function validateSourceStoryboardRef(
     !ref.artifactId &&
     !ref.storyboardId &&
     !ref.title &&
-    !ref.resourceRef
+    !ref.contentLocator
   ) {
     diagnostics.push(
       storyboardPlanDiagnostic(
         'error',
         'invalid-source-storyboard-ref',
         path,
-        'Artifact storyboard source refs need artifactId, storyboardId, title, or resourceRef.',
+        'Artifact storyboard source refs need artifactId, storyboardId, title, or contentLocator.',
       ),
     );
   }
@@ -484,7 +484,7 @@ function normalizeImagePrep(record: Record<string, unknown>): {
       imagePrep: {
         ...normalizeStringArrayField(imagePrep, 'operations'),
         ...(readString(imagePrep['notes']) ? { notes: readString(imagePrep['notes']) } : {}),
-        ...normalizeArtifactResourceRefArray(imagePrep, 'maskRefs'),
+        ...normalizeArtifactReferenceArray(imagePrep, 'maskRefs'),
         ...(typeof imagePrep['targetKeyframeCount'] === 'number' &&
         Number.isInteger(imagePrep['targetKeyframeCount']) &&
         imagePrep['targetKeyframeCount'] > 0
@@ -528,13 +528,13 @@ function normalizePromptIntent(
   return {};
 }
 
-function normalizeArtifactResourceRefArray(
+function normalizeArtifactReferenceArray(
   record: Record<string, unknown>,
   field: string,
-): Record<string, readonly ArtifactResourceRef[]> {
+): Record<string, readonly ArtifactReference[]> {
   const value = record[field];
   if (!Array.isArray(value)) return {};
-  const refs = value.filter(isRecordLike) as unknown as ArtifactResourceRef[];
+  const refs = value.filter(isRecordLike) as unknown as ArtifactReference[];
   return refs.length > 0 ? { [field]: refs } : {};
 }
 

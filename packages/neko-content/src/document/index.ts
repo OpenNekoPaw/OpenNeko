@@ -40,19 +40,6 @@ export {
 } from './content-access-document-runtime';
 
 export {
-  createDocumentEntryVariantFromMetadata,
-  createManagedDocumentResourceRef,
-  formatDocumentAliasScope,
-  formatDocumentImageAlias,
-  formatDocumentSourceId,
-  projectDocumentResourceRefsInValue,
-  readDocumentArchiveResourceProjection,
-  readDocumentResourceDisplayId,
-  type DocumentResourceProjection,
-  type DocumentResourceProjectionProjector,
-} from './document-resource-projection';
-
-export {
   createContentDocumentReadCapabilityProvider,
   createContentMediaReadCapabilityProvider,
   createContentReadCapabilityProvider,
@@ -81,10 +68,7 @@ export {
   type ReadImageAnalysisKind,
   type ReadImageContentAccessRuntime,
   type ReadImageInputImage,
-  type ReadImageMetadataInput,
-  type ReadImageMetadataResult,
   type ReadImageMode,
-  type ReadImageProviderAssetInput,
   type ReadImageProviderAssetResult,
   type ReadImageResultData,
   type ReadImageResultImage,

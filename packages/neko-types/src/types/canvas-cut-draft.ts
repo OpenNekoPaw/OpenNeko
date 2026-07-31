@@ -9,7 +9,7 @@ import type {
 } from './canvas-playback';
 import { resolveEffectiveCanvasPlaybackRoutes } from './canvas-playback';
 import type { CanvasSerializableRecord, CanvasSerializableValue } from './canvas-serializable';
-import type { ResourceRef } from './resource-cache';
+import { isContentLocator, type ContentLocator } from './content-locator';
 import type { StoryboardTextCue, StoryboardVoiceCue } from './storyboard-table';
 
 export const CANVAS_CUT_DRAFT_SCHEMA_VERSION = 1 as const;
@@ -32,7 +32,7 @@ export type CanvasCutDraftDiagnosticCode =
   | 'draft-unmanaged-path'
   | 'draft-invalid-extension-namespace'
   | 'draft-forbidden-extension-field'
-  | 'draft-invalid-resource-ref'
+  | 'draft-invalid-content-locator'
   | 'draft-invalid-unit'
   | 'draft-cue-conflict'
   | 'draft-invalid-cue';
@@ -73,7 +73,7 @@ export type CanvasCutDraftMediaRole =
 export interface CanvasCutDraftMediaRef {
   readonly role: CanvasCutDraftMediaRole;
   readonly assetPath?: string;
-  readonly resourceRef?: ResourceRef;
+  readonly contentLocator?: ContentLocator;
   readonly sourceRefId?: string;
   readonly label?: string;
   readonly mimeType?: string;
@@ -360,11 +360,11 @@ function projectPlaybackUnitToDraftUnit(
 
 function collectDraftMedia(unit: CanvasPlaybackUnit): readonly CanvasCutDraftMediaRef[] {
   const media: CanvasCutDraftMediaRef[] = [];
-  if (unit.assetPath || unit.resourceRef) {
+  if (unit.assetPath || unit.contentLocator) {
     media.push({
       role: 'source',
       ...(unit.assetPath ? { assetPath: unit.assetPath } : {}),
-      ...(unit.resourceRef ? { resourceRef: unit.resourceRef } : {}),
+      ...(unit.contentLocator ? { contentLocator: unit.contentLocator } : {}),
     });
   }
   const metadata = unit.metadata;
@@ -751,17 +751,22 @@ function validateMediaRefs(
     }
     const assetPath = readString(media['assetPath']);
     if (assetPath) validateAssetPath(assetPath, options, diagnostics, mediaPath, unitId);
-    if (media['resourceRef'] !== undefined && !isResourceRef(media['resourceRef'])) {
+    if (media['contentLocator'] !== undefined && !isContentLocator(media['contentLocator'])) {
       diagnostics.push(
-        diagnostic('draft-invalid-resource-ref', 'error', 'Draft media resourceRef is invalid.', {
-          unitId,
-          path: [...mediaPath, 'resourceRef'],
-        }),
+        diagnostic(
+          'draft-invalid-content-locator',
+          'error',
+          'Draft media contentLocator is invalid.',
+          {
+            unitId,
+            path: [...mediaPath, 'contentLocator'],
+          },
+        ),
       );
     }
     if (
       !assetPath &&
-      media['resourceRef'] === undefined &&
+      media['contentLocator'] === undefined &&
       readString(media['sourceRefId']) === undefined
     ) {
       diagnostics.push(
@@ -957,7 +962,7 @@ function validateAssetPath(
       diagnostic(
         'draft-unmanaged-path',
         'error',
-        'Draft assetPath must be project-relative, variable-based, or a ResourceRef.',
+        'Draft assetPath must be project-relative or accompanied by a ContentLocator.',
         { unitId, path: [...path, 'assetPath'] },
       ),
     );
@@ -1086,18 +1091,6 @@ function isRuntimeMediaValue(value: string): boolean {
 
 function isAbsoluteHostPath(value: string): boolean {
   return value.startsWith('/') || value.startsWith('\\\\') || /^[A-Za-z]:[\\/]/.test(value);
-}
-
-function isResourceRef(value: unknown): value is ResourceRef {
-  return (
-    isRecord(value) &&
-    readString(value['id']) !== undefined &&
-    readString(value['provider']) !== undefined &&
-    readString(value['scope']) !== undefined &&
-    readString(value['kind']) !== undefined &&
-    isRecord(value['source']) &&
-    isRecord(value['fingerprint'])
-  );
 }
 
 function readString(value: unknown): string | undefined {

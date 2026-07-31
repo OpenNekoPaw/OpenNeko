@@ -136,7 +136,7 @@ describe('OpenNeko tool projection to Pi', () => {
   it('projects the complete ReadDocument chapter locator contract to Pi', () => {
     const projected = projectOpenNekoTool(createReadDocumentTool({}));
     const base = {
-      source: { kind: 'file', path: '${A}/books/book.epub' },
+      source: { kind: 'workspace-file', path: 'books/book.epub' },
       mode: 'range',
       range: {
         locator: { kind: 'chapter', spineIndex: 304 },
@@ -163,24 +163,6 @@ describe('OpenNeko tool projection to Pi', () => {
 
   it('projects the discriminated ReadImage resource contract to Pi', () => {
     const projected = projectOpenNekoTool(createReadImageTool({}));
-    const documentImage = {
-      entryPath: 'images/page-1.jpg',
-      resourceRef: {
-        kind: 'document-entry',
-        source: { filePath: 'books/book.epub', format: 'epub' },
-        entryPath: 'images/page-1.jpg',
-      },
-    };
-    const managedImage = {
-      resourceRef: {
-        id: 'resource-1',
-        scope: 'project',
-        provider: 'source-file',
-        kind: 'image',
-        source: { kind: 'file', filePath: 'images/reference.png' },
-        fingerprint: { strategy: 'none', value: 'resource-1' },
-      },
-    };
     const contentLocatorImage = {
       contentLocator: {
         kind: 'document-entry',
@@ -189,21 +171,19 @@ describe('OpenNeko tool projection to Pi', () => {
       },
     };
 
-    expect(Value.Check(projected.parameters, { images: [documentImage] })).toBe(true);
     expect(
       Value.Check(projected.parameters, {
         images: [
           {
-            ...documentImage,
             resourceRef: {
               kind: 'document-entry',
-              source: documentImage.resourceRef.source,
+              source: { filePath: 'books/book.epub', format: 'epub' },
+              entryPath: 'images/page-1.jpg',
             },
           },
         ],
       }),
     ).toBe(false);
-    expect(Value.Check(projected.parameters, { images: [managedImage] })).toBe(true);
     expect(Value.Check(projected.parameters, { images: [contentLocatorImage] })).toBe(true);
     expect(
       Value.Check(projected.parameters, {
@@ -229,14 +209,6 @@ describe('OpenNeko tool projection to Pi', () => {
                   expect.objectContaining({ required: ['kind', 'source', 'entryPath'] }),
                   expect.any(Object),
                   expect.any(Object),
-                ],
-              },
-              resourceRef: {
-                anyOf: [
-                  expect.objectContaining({ required: ['kind', 'source', 'entryPath'] }),
-                  expect.objectContaining({
-                    required: ['id', 'scope', 'provider', 'kind', 'source', 'fingerprint'],
-                  }),
                 ],
               },
             },
@@ -306,16 +278,16 @@ describe('OpenNeko tool projection to Pi', () => {
   });
 
   it('projects stable image attachments through the injected Host loader', async () => {
+    const contentLocator = {
+      kind: 'document-entry' as const,
+      source: { kind: 'workspace-file' as const, path: 'book.epub' },
+      entryPath: 'images/page-1.png',
+    };
     const assetRef = {
       assetId: 'document-page-1',
       uri: 'book.epub#images/page-1.png',
       mimeType: 'image/png',
-      documentResourceRef: {
-        kind: 'document-entry' as const,
-        source: { filePath: 'book.epub', format: 'epub' as const },
-        entryPath: 'images/page-1.png',
-        versionPolicy: 'versioned-export' as const,
-      },
+      contentLocator,
     };
     const load = vi.fn(async () => ({
       kind: 'image' as const,
@@ -327,7 +299,15 @@ describe('OpenNeko tool projection to Pi', () => {
         execute: async () => ({
           success: true,
           data: { imageCount: 1 },
-          attachments: [{ type: 'image', path: assetRef.uri, mimeType: 'image/png', assetRef }],
+          attachments: [
+            {
+              type: 'image',
+              path: assetRef.uri,
+              mimeType: 'image/png',
+              contentLocator,
+              assetRef,
+            },
+          ],
         }),
       }),
       { assetLoader: { load } },
@@ -539,6 +519,13 @@ describe('OpenNeko tool projection to Pi', () => {
   });
 
   it('fails visibly when an image attachment has no Host loader', async () => {
+    const contentLocator = {
+      kind: 'generated-output' as const,
+      outputId: 'generated-page-1',
+      revision: 'revision-1',
+      digest: 'sha256:generated-page-1',
+      path: 'generated/generated-page-1.png',
+    };
     const projected = projectOpenNekoTool(
       tool({
         execute: async () => ({
@@ -547,17 +534,7 @@ describe('OpenNeko tool projection to Pi', () => {
           attachments: [
             {
               type: 'image',
-              path: 'book.epub#images/page-1.png',
-              assetRef: {
-                assetId: 'document-page-1',
-                uri: 'book.epub#images/page-1.png',
-                mimeType: 'image/png',
-                documentResourceRef: {
-                  kind: 'document-entry',
-                  source: { filePath: 'book.epub', format: 'epub' },
-                  entryPath: 'images/page-1.png',
-                },
-              },
+              contentLocator,
             },
           ],
         }),
@@ -570,6 +547,13 @@ describe('OpenNeko tool projection to Pi', () => {
   });
 
   it('rejects non-image or non-base64 Host payloads', async () => {
+    const contentLocator = {
+      kind: 'generated-output' as const,
+      outputId: 'generated-page-1',
+      revision: 'revision-1',
+      digest: 'sha256:generated-page-1',
+      path: 'generated/generated-page-1.png',
+    };
     const projected = projectOpenNekoTool(
       tool({
         execute: async () => ({
@@ -578,17 +562,7 @@ describe('OpenNeko tool projection to Pi', () => {
           attachments: [
             {
               type: 'image',
-              path: 'book.epub#images/page-1.png',
-              assetRef: {
-                assetId: 'document-page-1',
-                uri: 'book.epub#images/page-1.png',
-                mimeType: 'image/png',
-                documentResourceRef: {
-                  kind: 'document-entry',
-                  source: { filePath: 'book.epub', format: 'epub' },
-                  entryPath: 'images/page-1.png',
-                },
-              },
+              contentLocator,
             },
           ],
         }),

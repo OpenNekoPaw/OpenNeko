@@ -10,16 +10,17 @@ import type {
   StoryboardPlanOverlay,
   StoryboardMediaRef,
   StoryboardValidationDiagnostic,
-  DocumentArchiveResourceRef,
+  ContentLocator,
   EntityMemoryContribution,
   ToolResultAttachment,
 } from '@neko/shared';
 import {
+  contentLocatorKey,
+  isContentLocator,
   isPublicGeneratedAssetResultUri,
   isEntityMemoryContribution,
   normalizeStoryboardPlanOverlay,
   normalizeCanonicalStoryboardTable,
-  parseDocumentArchiveResourceRef,
 } from '@neko/shared';
 import type { PluginsAvailable } from '@/components/ChatView/SendToMenu';
 
@@ -50,7 +51,7 @@ export interface ResolvedCompositeMedia {
   readonly assetId?: string;
   readonly stableUri?: string;
   readonly localPath?: string;
-  readonly resourceRef?: DocumentArchiveResourceRef;
+  readonly contentLocator?: ContentLocator;
   readonly mimeType?: string;
   readonly caption?: string;
   readonly role?: string;
@@ -120,7 +121,7 @@ interface MediaCandidate {
   readonly assetId?: string;
   readonly stableUri?: string;
   readonly localPath?: string;
-  readonly resourceRef?: DocumentArchiveResourceRef;
+  readonly contentLocator?: ContentLocator;
   readonly mimeType?: string;
   readonly label?: string;
   readonly alias?: string;
@@ -141,7 +142,7 @@ interface InferredStoryboardImageRef {
   readonly batchKey: string;
   readonly mimeType?: string;
   readonly pageNumber?: number;
-  readonly resourceRef?: DocumentArchiveResourceRef;
+  readonly contentLocator?: ContentLocator;
 }
 
 interface StoryboardImageAliasIndex {
@@ -444,7 +445,7 @@ function projectInferredImageRefToStoryboardMediaRef(
     },
     ...((imageRef.label ?? imageRef.alias) ? { label: imageRef.label ?? imageRef.alias } : {}),
     ...(imageRef.mimeType ? { mimeType: imageRef.mimeType } : {}),
-    ...(imageRef.resourceRef ? { documentResourceRef: imageRef.resourceRef } : {}),
+    ...(imageRef.contentLocator ? { contentLocator: imageRef.contentLocator } : {}),
   };
 }
 
@@ -466,7 +467,7 @@ function collectSequentialStoryboardImageRefs(
           ? `page_${pageNumber}`
           : normalizeStoryboardAlias(candidate.label));
       const sourceDocumentId =
-        candidate.sourceDocumentId ?? readDocumentResourceSourceId(candidate.resourceRef);
+        candidate.sourceDocumentId ?? readDocumentResourceSourceId(candidate.contentLocator);
       const aliasScope =
         candidate.aliasScope ??
         (sourceDocumentId ? `document:${sourceDocumentId}` : `tool:${toolCall.id}`);
@@ -481,7 +482,7 @@ function collectSequentialStoryboardImageRefs(
         ...(candidate.entryPath ? { entryPath: candidate.entryPath } : {}),
         ...(candidate.mimeType ? { mimeType: candidate.mimeType } : {}),
         ...(pageNumber !== undefined ? { pageNumber } : {}),
-        ...(candidate.resourceRef ? { resourceRef: candidate.resourceRef } : {}),
+        ...(candidate.contentLocator ? { contentLocator: candidate.contentLocator } : {}),
       });
     }
   }
@@ -601,7 +602,7 @@ function isStoryboardImageSourceTool(toolName: string): boolean {
 }
 
 function isImageCandidateResolvable(candidate: MediaCandidate): boolean {
-  return Boolean(candidate.src || candidate.renderUri || candidate.resourceRef);
+  return Boolean(candidate.src || candidate.renderUri || candidate.contentLocator);
 }
 
 function maybeAlignStoryboardSectionMediaRefs(
@@ -644,7 +645,7 @@ function maybeBackfillStoryboardSectionMedia(
     const sectionDiagnostics: CompositeMediaDiagnostic[] = [];
     for (const mediaRef of collectExplicitStoryboardDocumentMediaRefs(shot)) {
       const resolved = projectStoryboardDocumentResourceMediaRef(mediaRef, media.length);
-      if (resolved && !hasResolvedCompositeMediaResource(media, resolved.resourceRef)) {
+      if (resolved && !hasResolvedCompositeMediaResource(media, resolved.contentLocator)) {
         media.push(resolved);
       }
     }
@@ -689,7 +690,7 @@ function projectStoryboardMediaRefToCompositeMediaRefForSection(
   toolCalls: ReadonlyMap<string, ToolCall>,
 ): readonly MediaRef[] {
   if (
-    mediaRef.documentResourceRef &&
+    mediaRef.contentLocator &&
     mediaRef.locator.type === 'tool-result' &&
     !hasSuccessfulToolResult(mediaRef.locator.toolCallId, toolCalls)
   ) {
@@ -708,11 +709,11 @@ function hasSuccessfulToolResult(
 
 function hasResolvedCompositeMediaResource(
   media: readonly ResolvedCompositeMedia[],
-  resourceRef: DocumentArchiveResourceRef | undefined,
+  contentLocator: ContentLocator | undefined,
 ): boolean {
-  const key = createDocumentResourceCandidateKey(resourceRef);
+  const key = createDocumentResourceCandidateKey(contentLocator);
   if (!key) return false;
-  return media.some((item) => createDocumentResourceCandidateKey(item.resourceRef) === key);
+  return media.some((item) => createDocumentResourceCandidateKey(item.contentLocator) === key);
 }
 
 function collectExplicitStoryboardMediaRefs(
@@ -744,34 +745,34 @@ function collectExplicitStoryboardDocumentMediaRefs(
   shot: StoryboardTable['scenes'][number]['shots'][number],
 ): readonly StoryboardMediaRef[] {
   const layeredRefs = [...(shot.sourceMediaRefs ?? []), ...(shot.generatedMediaRefs ?? [])].filter(
-    hasStableDocumentResourceRef,
+    hasStableDocumentContentLocator,
   );
   return layeredRefs.length > 0
     ? layeredRefs
-    : (shot.mediaRefs ?? []).filter(hasStableDocumentResourceRef);
+    : (shot.mediaRefs ?? []).filter(hasStableDocumentContentLocator);
 }
 
-function hasStableDocumentResourceRef(mediaRef: StoryboardMediaRef): boolean {
-  return parseStableDocumentArchiveResourceRef(mediaRef.documentResourceRef) !== undefined;
+function hasStableDocumentContentLocator(mediaRef: StoryboardMediaRef): boolean {
+  return parseStableContentLocator(mediaRef.contentLocator)?.kind === 'document-entry';
 }
 
 function projectStoryboardDocumentResourceMediaRef(
   mediaRef: StoryboardMediaRef,
   assetIndex: number,
 ): ResolvedCompositeMedia | undefined {
-  const resourceRef = parseStableDocumentArchiveResourceRef(mediaRef.documentResourceRef);
-  if (!resourceRef) return undefined;
+  const contentLocator = parseStableContentLocator(mediaRef.contentLocator);
+  if (contentLocator?.kind !== 'document-entry') return undefined;
   return {
     id: [
       'storyboard-document-resource',
       mediaRef.refId,
-      createDocumentResourceCandidateKey(resourceRef) ?? resourceRef.entryPath,
+      createDocumentResourceCandidateKey(contentLocator) ?? contentLocator.entryPath,
     ].join(':'),
     toolCallId: mediaRef.refId,
     assetIndex,
-    type: inferMediaType(mediaRef.mimeType, resourceRef.entryPath, 'image'),
+    type: inferMediaType(mediaRef.mimeType, contentLocator.entryPath, 'image'),
     src: '',
-    resourceRef,
+    contentLocator,
     ...(mediaRef.mimeType ? { mimeType: mediaRef.mimeType } : {}),
     ...(mediaRef.label ? { caption: mediaRef.label, label: mediaRef.label } : {}),
     role: mediaRef.role,
@@ -876,7 +877,7 @@ function resolveCompositeMediaRef(
         mediaRef.toolCallId,
         assetIndex,
         candidate.assetId ??
-          createDocumentResourceCandidateKey(candidate.resourceRef) ??
+          createDocumentResourceCandidateKey(candidate.contentLocator) ??
           candidate.stableUri ??
           candidate.renderUri ??
           candidate.src,
@@ -889,7 +890,7 @@ function resolveCompositeMediaRef(
       ...(candidate.assetId ? { assetId: candidate.assetId } : {}),
       ...(candidate.stableUri ? { stableUri: candidate.stableUri } : {}),
       ...(candidate.localPath ? { localPath: candidate.localPath } : {}),
-      ...(candidate.resourceRef ? { resourceRef: candidate.resourceRef } : {}),
+      ...(candidate.contentLocator ? { contentLocator: candidate.contentLocator } : {}),
       ...(candidate.mimeType ? { mimeType: candidate.mimeType } : {}),
       ...(mediaRef.caption || candidate.label
         ? { caption: mediaRef.caption ?? candidate.label }
@@ -965,7 +966,7 @@ function collectMediaCandidates(toolCall: ToolCall): readonly MediaCandidate[] {
   const addCandidate = (candidate: MediaCandidate): void => {
     const key =
       candidate.assetId ??
-      createDocumentResourceCandidateKey(candidate.resourceRef) ??
+      createDocumentResourceCandidateKey(candidate.contentLocator) ??
       candidate.stableUri ??
       candidate.renderUri ??
       candidate.src ??
@@ -1050,8 +1051,8 @@ function collectReadImageCandidates(
     const info = {
       ...(documentImage ?? {}),
       ...image,
-      ...(documentImage?.['resourceRef'] !== undefined
-        ? { resourceRef: documentImage['resourceRef'] }
+      ...(documentImage?.['contentLocator'] !== undefined
+        ? { contentLocator: documentImage['contentLocator'] }
         : {}),
     };
     const candidate = projectDocumentImageCandidate({
@@ -1077,18 +1078,20 @@ function projectDocumentImageCandidate(input: {
   const mimeType = readString(input.info, 'mimeType') ?? inferImageMimeType(input.path);
   const renderUri =
     input.renderUri && isRenderableUri(input.renderUri) ? input.renderUri : undefined;
-  const resourceRef = parseStableDocumentArchiveResourceRef(input.info?.['resourceRef']);
-  if (!resourceRef && !renderUri) return null;
+  const contentLocator = parseStableContentLocator(input.info?.['contentLocator']);
+  if (!contentLocator && !renderUri) return null;
   const pageNumber = readDocumentImagePageNumber(input.info) ?? readPageNumberFromText(input.label);
   const alias = normalizeStoryboardAlias(readString(input.info, 'alias'));
   const sourceDocumentId =
-    readString(input.info, 'sourceDocumentId') ?? readDocumentResourceSourceId(resourceRef);
-  const entryPath = readString(input.info, 'entryPath') ?? resourceRef?.entryPath;
+    readString(input.info, 'sourceDocumentId') ?? readDocumentResourceSourceId(contentLocator);
+  const entryPath =
+    readString(input.info, 'entryPath') ??
+    (contentLocator?.kind === 'document-entry' ? contentLocator.entryPath : undefined);
   return {
     assetIndex: input.index,
     type: 'image',
-    ...(renderUri && !resourceRef ? { src: renderUri, renderUri } : {}),
-    ...(resourceRef ? { resourceRef } : {}),
+    ...(renderUri && !contentLocator ? { src: renderUri, renderUri } : {}),
+    ...(contentLocator ? { contentLocator } : {}),
     ...(mimeType ? { mimeType } : {}),
     ...(input.label ? { label: input.label } : {}),
     ...(alias ? { alias } : {}),
@@ -1102,32 +1105,17 @@ function projectDocumentImageCandidate(input: {
 }
 
 function createDocumentResourceCandidateKey(
-  resourceRef: DocumentArchiveResourceRef | undefined,
+  contentLocator: ContentLocator | undefined,
 ): string | undefined {
-  if (!resourceRef) return undefined;
-  const sourceKey =
-    resourceRef.source.identity?.hash ??
-    resourceRef.source.identity?.fileId ??
-    resourceRef.source.fileId ??
-    resourceRef.source.filePath;
-  const entryKey =
-    resourceRef.entryPath ??
-    (resourceRef.locator?.kind === 'page' || resourceRef.locator?.kind === 'region'
-      ? resourceRef.locator.entryName
-      : undefined);
-  return sourceKey && entryKey ? `document-entry:${sourceKey}:${entryKey}` : undefined;
+  return contentLocator ? contentLocatorKey(contentLocator) : undefined;
 }
 
 function readDocumentResourceSourceId(
-  resourceRef: DocumentArchiveResourceRef | undefined,
+  contentLocator: ContentLocator | undefined,
 ): string | undefined {
-  if (!resourceRef) return undefined;
-  return (
-    resourceRef.source.identity?.hash ??
-    resourceRef.source.identity?.fileId ??
-    resourceRef.source.fileId ??
-    resourceRef.source.filePath
-  );
+  return contentLocator?.kind === 'document-entry'
+    ? contentLocatorKey(contentLocator.source)
+    : undefined;
 }
 
 function normalizeStoryboardAlias(value: string | undefined): string | undefined {
@@ -1406,12 +1394,8 @@ function readString(record: Record<string, unknown> | undefined, key: string): s
   return typeof value === 'string' && value.length > 0 ? value : undefined;
 }
 
-function parseStableDocumentArchiveResourceRef(
-  value: unknown,
-): DocumentArchiveResourceRef | undefined {
-  const ref = parseDocumentArchiveResourceRef(value);
-  if (!ref) return undefined;
-  return ref;
+function parseStableContentLocator(value: unknown): ContentLocator | undefined {
+  return isContentLocator(value) ? value : undefined;
 }
 
 function readFiniteNumber(

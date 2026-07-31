@@ -1,10 +1,8 @@
 import {
   TOOL_NAMES_SYSTEM,
-  type DocumentArchiveResourceRef,
   type ContentLocator,
   createTool,
-  isContentSourceRef,
-  type ContentSourceRef,
+  validateContentLocator,
   parseDocumentLocator,
   parseDocumentSourceRef,
   type DocumentBatchCursor,
@@ -12,7 +10,6 @@ import {
   type DocumentManifest,
   type DocumentRange,
   type DocumentReadResult,
-  type ResourceRef,
   type Tool,
   type ToolExecuteOptions,
   type ToolParameterProperty,
@@ -26,16 +23,11 @@ export const MAX_DOCUMENT_IMAGE_INFO_LIMIT = 500;
 
 const CONTENT_SOURCE_REF_PARAMETER: ToolParameterProperty = {
   type: 'object',
-  description:
-    'Canonical ContentSourceRef. For a portable document path use {"kind":"file","path":"${VAR}/file.epub"} or {"kind":"file","path":"relative/path.epub"}.',
+  description: 'Canonical ContentLocator returned by an owning content capability.',
   properties: {
     kind: {
       type: 'string',
-      enum: ['file', 'document', 'asset', 'generated-asset'],
-    },
-    path: {
-      type: 'string',
-      description: 'Source path for kind="file"; may be project-relative or ${VAR}/path.',
+      enum: ['workspace-file', 'generated-output', 'package-resource'],
     },
   },
   required: ['kind'],
@@ -147,7 +139,6 @@ type ReadDocumentMode = 'content' | 'manifest' | 'range' | 'next';
 
 export interface ReadDocumentToolDeps {
   readonly contentAccessRuntime?: ReadDocumentContentAccessRuntime;
-  readonly resolveResourceScope?: () => ResourceRef['scope'];
 }
 
 export interface ReadDocumentContentAccessRuntime {
@@ -157,7 +148,7 @@ export interface ReadDocumentContentAccessRuntime {
 }
 
 export interface ReadDocumentContentAccessInput {
-  readonly source: ContentSourceRef;
+  readonly source: ContentLocator;
   readonly mode?: ReadDocumentMode;
   readonly range?: DocumentRange;
   readonly cursor?: DocumentBatchCursor;
@@ -170,11 +161,9 @@ export interface ReadDocumentContentAccessInput {
 
 export interface ReadDocumentContentAccessResult {
   readonly status: 'ready' | 'missing-source' | 'unsupported-source' | 'unauthorized' | 'failed';
-  readonly source?: Exclude<ContentSourceRef, { readonly kind: 'runtime' }>;
+  readonly source?: ContentLocator;
   readonly diagnostics: readonly ReadDocumentDiagnostic[];
   readonly contentLocator?: ContentLocator;
-  readonly resourceRef?: ResourceRef;
-  readonly documentResourceRef?: DocumentArchiveResourceRef;
   readonly text?: string;
   readonly totalTextChars?: number;
   readonly returnedTextChars?: number;
@@ -198,11 +187,9 @@ export interface ReadDocumentDiagnostic {
 }
 
 interface ReadDocumentToolData {
-  readonly source: Exclude<ContentSourceRef, { readonly kind: 'runtime' }>;
+  readonly source: ContentLocator;
   readonly mode: ReadDocumentMode;
   readonly contentLocator?: ContentLocator;
-  readonly resourceRef?: ResourceRef;
-  readonly documentResourceRef?: DocumentArchiveResourceRef;
   readonly text?: string;
   readonly totalTextChars?: number;
   readonly returnedTextChars?: number;
@@ -269,7 +256,7 @@ export function createReadDocumentTool(deps: ReadDocumentToolDeps): Tool {
         include_images: {
           type: 'boolean',
           description:
-            'Whether to include document image metadata and stable document resource refs when available. Default true.',
+            'Whether to include document image metadata and stable content locators when available. Default true.',
         },
         max_images: {
           type: 'integer',
@@ -289,12 +276,11 @@ async function executeReadDocument(
   args: Record<string, unknown>,
   options?: ToolExecuteOptions,
 ): Promise<ToolResult> {
-  const source = readContentSourceRef(args['source']);
+  const source = readContentLocator(args['source']);
   if (!source) {
     return {
       success: false,
-      error:
-        'ReadDocument requires source to be a canonical ContentSourceRef, for example {"kind":"file","path":"${VAR}/book.epub"}.',
+      error: 'ReadDocument requires source to be a canonical ContentLocator.',
     };
   }
   const contentAccessRuntime = deps.contentAccessRuntime;
@@ -355,8 +341,6 @@ async function executeReadDocument(
       source: result.source,
       mode,
       ...(result.contentLocator ? { contentLocator: result.contentLocator } : {}),
-      ...(result.resourceRef ? { resourceRef: result.resourceRef } : {}),
-      ...(result.documentResourceRef ? { documentResourceRef: result.documentResourceRef } : {}),
       ...(truncatedText
         ? {
             text: truncatedText.text,
@@ -381,8 +365,9 @@ async function executeReadDocument(
   };
 }
 
-function readContentSourceRef(value: unknown): ContentSourceRef | undefined {
-  return isContentSourceRef(value) ? value : undefined;
+function readContentLocator(value: unknown): ContentLocator | undefined {
+  const validation = validateContentLocator(value);
+  return validation.ok ? validation.locator : undefined;
 }
 
 function readMode(value: unknown): ReadDocumentMode {

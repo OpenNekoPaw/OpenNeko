@@ -92,7 +92,7 @@ export class LocalMetadataGeneratedOutputProjectionStore implements GeneratedOut
       const projectionEntries = Object.fromEntries(
         updatedAssets.map((asset) => {
           const entry = this.encodeEntry(asset);
-          return [entry.resource.id, entry];
+          return [entry.descriptor.id, entry];
         }),
       );
       return {
@@ -121,7 +121,7 @@ export class LocalMetadataGeneratedOutputProjectionStore implements GeneratedOut
     };
     const projectRelativePath = this.toProjectRelativePath(pathKey);
     return {
-      resource: {
+      descriptor: {
         id: `generated-output:${asset.id}`,
         scope: 'project',
         provider: GENERATED_OUTPUT_INDEX_PROVIDER,
@@ -132,7 +132,7 @@ export class LocalMetadataGeneratedOutputProjectionStore implements GeneratedOut
           ...(projectRelativePath ? { projectRelativePath } : { filePath: pathKey }),
           metadata: { type: asset.type, mimeType: asset.mimeType },
         },
-        locator: { kind: 'generated-asset', assetId: asset.id },
+        ...(asset.lifecycle ? { contentLocator: asset.lifecycle.contentLocator } : {}),
         fingerprint: asset.lifecycle
           ? { strategy: 'hash', value: asset.lifecycle.contentDigest }
           : { strategy: 'provider', value: `${asset.id}:${asset.generatedAt}` },
@@ -169,8 +169,8 @@ export class LocalMetadataGeneratedOutputProjectionStore implements GeneratedOut
     if (isRetiredGeneratedDraftProjection(entry)) {
       throw createProjectionRejection(
         'retired-generated-draft-projection',
-        entry.resource.id,
-        `Resource ${entry.resource.id} must be rebuilt through the generated output index.`,
+        entry.descriptor.id,
+        `Resource ${entry.descriptor.id} must be rebuilt through the generated output index.`,
       );
     }
     if (!this.isProjectionEntry(entry)) return null;
@@ -178,12 +178,12 @@ export class LocalMetadataGeneratedOutputProjectionStore implements GeneratedOut
     if (!projection) {
       throw createProjectionRejection(
         'generated-output-projection-migration-required',
-        entry.resource.id,
-        `Resource ${entry.resource.id} contains an invalid or legacy projection.`,
+        entry.descriptor.id,
+        `Resource ${entry.descriptor.id} contains an invalid or legacy projection.`,
       );
     }
-    assertLifecycleMatchesProjectionPath(projection.asset, projection.pathKey, entry.resource.id);
-    const assetPath = this.resolvePathKey(projection.pathKey, entry.resource.id);
+    assertLifecycleMatchesProjectionPath(projection.asset, projection.pathKey, entry.descriptor.id);
+    const assetPath = this.resolvePathKey(projection.pathKey, entry.descriptor.id);
     switch (projection.asset.type) {
       case 'generated-image':
       case 'generated-audio':
@@ -194,7 +194,7 @@ export class LocalMetadataGeneratedOutputProjectionStore implements GeneratedOut
         if (!shotPathKeys || shotPathKeys.length !== projection.asset.scenes.length) {
           throw createProjectionRejection(
             'generated-output-projection-migration-required',
-            entry.resource.id,
+            entry.descriptor.id,
             `Generated storyboard ${projection.asset.id} has invalid shot paths.`,
           );
         }
@@ -206,7 +206,7 @@ export class LocalMetadataGeneratedOutputProjectionStore implements GeneratedOut
             if (!scenePathKeys || scenePathKeys.length !== scene.shots.length) {
               throw createProjectionRejection(
                 'generated-output-projection-migration-required',
-                entry.resource.id,
+                entry.descriptor.id,
                 `Generated storyboard ${projection.asset.id} has invalid shot paths.`,
               );
             }
@@ -217,13 +217,13 @@ export class LocalMetadataGeneratedOutputProjectionStore implements GeneratedOut
                 if (!shotPathKey) {
                   throw createProjectionRejection(
                     'generated-output-projection-migration-required',
-                    entry.resource.id,
+                    entry.descriptor.id,
                     `Generated storyboard ${projection.asset.id} is missing shot path ${shotIndex}.`,
                   );
                 }
                 return {
                   ...shot,
-                  path: this.resolvePathKey(shotPathKey, entry.resource.id),
+                  path: this.resolvePathKey(shotPathKey, entry.descriptor.id),
                 };
               }),
             };
@@ -235,8 +235,8 @@ export class LocalMetadataGeneratedOutputProjectionStore implements GeneratedOut
 
   private isProjectionEntry(entry: ResourceCacheEntry): boolean {
     return (
-      entry.resource.kind === 'generated' &&
-      entry.resource.provider === GENERATED_OUTPUT_INDEX_PROVIDER
+      entry.descriptor.kind === 'generated' &&
+      entry.descriptor.provider === GENERATED_OUTPUT_INDEX_PROVIDER
     );
   }
 
@@ -306,8 +306,8 @@ export async function createNodeGeneratedOutputProjectionBinding(options: {
 
 function isRetiredGeneratedDraftProjection(entry: ResourceCacheEntry): boolean {
   return (
-    entry.resource.kind === 'generated' &&
-    (entry.resource.provider === ['generated', 'draft', 'index'].join('-') ||
+    entry.descriptor.kind === 'generated' &&
+    (entry.descriptor.provider === ['generated', 'draft', 'index'].join('-') ||
       entry.providerMetadata?.[['generated', 'Draft', 'Projection'].join('')] !== undefined)
   );
 }
@@ -316,7 +316,7 @@ function readGeneratedOutputProjection(
   entry: ResourceCacheEntry,
 ): GeneratedOutputProjectionPayload | undefined {
   const value =
-    entry.resource.provider === GENERATED_OUTPUT_INDEX_PROVIDER
+    entry.descriptor.provider === GENERATED_OUTPUT_INDEX_PROVIDER
       ? entry.providerMetadata?.[GENERATED_OUTPUT_PROJECTION_FIELD]
       : undefined;
   return isGeneratedOutputProjectionPayload(value) ? value : undefined;

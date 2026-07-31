@@ -1,4 +1,4 @@
-import { isDocumentArchiveResourceRef, isResourceRef } from '@neko/shared';
+import { isContentLocator } from '@neko/shared';
 import type { Message, ToolCall } from '@neko-agent/types';
 
 const MEDIA_FILE_EXTENSIONS = [
@@ -147,7 +147,7 @@ function projectResourceValueInternal(
   }
 
   if (typeof value !== 'object') return value;
-  if (isResourceRef(value) || isDocumentArchiveResourceRef(value)) return value;
+  if (isContentLocator(value)) return value;
 
   if (visited.has(value)) return value;
   visited.add(value);
@@ -186,8 +186,8 @@ function projectLocalMediaStringField(input: {
   if (!isProjectableLocalMediaStringField(input.key, input.item)) return false;
   const resolved = resolveLocalMediaPath(input.item, input.options);
   if (resolved) {
-    input.projected[input.key] = hasStableResourceRef(input.owner) ? input.item : resolved;
-    if (hasStableResourceRef(input.owner) && input.projected['renderUri'] === undefined) {
+    input.projected[input.key] = hasStableContentLocator(input.owner) ? input.item : resolved;
+    if (hasStableContentLocator(input.owner) && input.projected['renderUri'] === undefined) {
       input.projected['renderUri'] = resolved;
     }
   } else {
@@ -204,12 +204,9 @@ function isProjectableLocalMediaStringField(key: string, item: unknown): item is
   );
 }
 
-function hasStableResourceRef(value: object): boolean {
+function hasStableContentLocator(value: object): boolean {
   if (!isRecord(value)) return false;
-  return (
-    isResourceRef(value['resourceRef']) ||
-    isDocumentArchiveResourceRef(value['documentResourceRef'])
-  );
+  return isContentLocator(value['contentLocator']);
 }
 
 function appendProjectionDiagnostic(
@@ -226,7 +223,7 @@ function appendProjectionDiagnostic(
     field,
     sourceKind: 'local-media-path',
     message:
-      'Local media path could not be projected for Webview display. Use ResourceRef, source refs, workspace-relative paths, or adapter-projected render descriptors.',
+      'Local media path could not be projected for Webview display. Use ContentLocator, workspace-relative paths, or adapter-projected render descriptors.',
   });
   projected['resourceProjectionDiagnostics'] = diagnostics;
 }

@@ -46,7 +46,7 @@ Canvas Webview action
   -> Canvas Extension preflight
   -> explicit ExternalCreativeAiInvocation
   -> Agent creative run/workItem
-  -> ResourceRef / structured candidate
+  -> ContentLocator / structured candidate
   -> Canvas candidate apply
   -> user accept or judge pass
   -> Canvas mutating apply
@@ -101,7 +101,7 @@ Agent 负责：
 - 非创作运行参数推断，例如 retry/backoff、timeout、scheduler lane、provider transport、token/response budgets 和内部执行策略。
 - cost/approval gate。
 - run/workItem 生命周期、取消、重试、进度、诊断、observation 和 conversation projection。
-- ResourceRef/artifact 生成和 package-owned apply orchestration。
+- ContentLocator/artifact 生成和 package-owned apply orchestration。
 
 Canvas 不直接调用 provider SDK，不传 provider runtime handle，不复制 Agent 模型能力逻辑，也不把自然语言提示词当作参数校验替代品。
 
@@ -144,7 +144,7 @@ Canvas 需要展示聚合进度，例如总任务数、完成数、失败数、�
 - `@neko/shared` 定义 invocation、refs、revision、candidate/promotion、run/workItem、diagnostics 和 apply DTO。
 - `neko-canvas` Webview 发起 typed action request，只展示 Canvas state、candidate 和聚合进度。
 - `neko-canvas` Extension 解析 shot/scene 创作参数、校验目标、构造 invocation、执行 package-owned candidate/mutating apply。
-- `@neko/agent` runtime 管理 run/workItem、lane concurrency、judge、ResourceRef 输出、observation 和 conversation projection。
+- `@neko/agent` runtime 管理 run/workItem、lane concurrency、judge、ContentLocator 输出、observation 和 conversation projection。
 - `neko-agent` Extension 连接 VS Code 命令、Agent config、provider/model resolution 和 Canvas apply command。
 
 ### 依赖
@@ -152,7 +152,7 @@ Canvas 需要展示聚合进度，例如总任务数、完成数、失败数、�
 - Canvas Webview 不导入 VS Code、Agent runtime、provider SDK 或 Node API。
 - Canvas Extension 不导入 Agent 内部实现，通过 shared contract 和 command/API facade 调用 Agent。
 - Agent runtime 不导入 Canvas Webview 或 Canvas 内部 store；写回通过 Canvas apply adapter。
-- 媒体和二进制结果使用 ResourceRef/artifact 生命周期，不使用 Webview URI、blob URL、cache path、temp path 或 `dataUrl` 作为 durable identity。
+- 媒体和二进制结果使用 ContentLocator/artifact 生命周期，不使用 Webview URI、blob URL、cache path、temp path 或 `dataUrl` 作为 durable identity。
 
 ### 接口
 

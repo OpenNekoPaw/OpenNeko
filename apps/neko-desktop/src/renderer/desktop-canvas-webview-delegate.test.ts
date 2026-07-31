@@ -36,7 +36,7 @@ describe('Desktop Canvas Webview delegate', () => {
     delegate.postMessage({
       type: 'preview:resolveVariant',
       requestId: 'preview-1',
-      assetPath: 'media/cat.png',
+      contentLocator: { kind: 'workspace-file', path: 'media/cat.png' },
       role: 'thumbnail',
       mediaType: 'image',
     });
@@ -88,7 +88,7 @@ describe('Desktop Canvas Webview delegate', () => {
     delegate.postMessage({
       type: 'media:probe',
       nodeId: 'audio-1',
-      assetPath: 'media/test.aac',
+      contentLocator: { kind: 'workspace-file', path: 'media/test.aac' },
       mediaType: 'audio',
     });
 
@@ -107,7 +107,7 @@ describe('Desktop Canvas Webview delegate', () => {
     });
   });
 
-  it('rejects unsupported messages and escaping paths instead of silently ignoring them', () => {
+  it('rejects unsupported messages and path-only sources instead of inferring locators', () => {
     vi.stubGlobal('openNekoDesktop', {
       canvas: { resolvePreviewVariant: vi.fn() },
     });
@@ -120,7 +120,7 @@ describe('Desktop Canvas Webview delegate', () => {
       delegate.postMessage({
         type: 'media:probe',
         nodeId: 'video-1',
-        assetPath: '../cat.mp4',
+        assetPath: 'media/cat.mp4',
         mediaType: 'video',
       }),
     ).toThrow('media source is invalid');
@@ -128,7 +128,7 @@ describe('Desktop Canvas Webview delegate', () => {
       delegate.postMessage({
         type: 'preview:resolveVariant',
         requestId: 'preview-2',
-        assetPath: '../cat.png',
+        assetPath: 'media/cat.png',
         role: 'thumbnail',
       }),
     ).toThrow('preview message is invalid');

@@ -8,9 +8,7 @@ import {
   type CanvasPlaybackRouteCandidate,
   type CanvasPlaybackUnit,
   type CanvasPreviewRole,
-  type ResourceRef,
 } from '@neko/shared';
-import { isResourceRef } from '@neko/shared';
 import { CloseIcon, EyeIcon, EyeOffIcon, FullscreenIcon, RestoreIcon } from '@neko/shared/icons';
 import { PlayIcon } from '@neko/ui/icons';
 import { getKeyboardBoundaryMetadata } from '@neko/ui/keyboard';
@@ -870,7 +868,7 @@ type StorylineMediaState = 'playable' | 'missing' | 'metadata';
 
 function resolveStorylineMediaState(unit: CanvasPlaybackUnit): StorylineMediaState {
   if (unit.kind !== 'media') return 'metadata';
-  return unit.assetPath || unit.resourceRef ? 'playable' : 'missing';
+  return unit.assetPath || unit.contentLocator ? 'playable' : 'missing';
 }
 
 function formatStorylineMediaState(state: StorylineMediaState): string {
@@ -994,16 +992,13 @@ function createPreviewSourceForUnit(unit: CanvasPlaybackUnit): PreviewSourceDesc
     readString(unit.metadata?.['previewSourceAssetPath']) ??
     unit.assetPath ??
     readGeneratedMediaPath(unit.metadata);
-  const resourceRef =
-    readResourceRef(unit.metadata?.['previewSourceResourceRef']) ??
-    unit.resourceRef ??
-    readResourceRef(unit.metadata?.['resourceRef']);
-  const documentResourceRef = unit.metadata?.['previewSourceDocumentResourceRef'];
-  if (!path && !resourceRef && !previewUrl) return undefined;
+  const contentLocator = unit.contentLocator;
+  if (!path && !contentLocator && !previewUrl) return undefined;
   return {
     id: `playback:${unit.id}`,
     role,
     title: formatPlaybackDisplayLabel(unit.label ?? unit.id),
+    ...(contentLocator ? { contentLocator } : {}),
     ...(previewUrl
       ? {
           variants: [
@@ -1032,8 +1027,6 @@ function createPreviewSourceForUnit(unit: CanvasPlaybackUnit): PreviewSourceDesc
       unit.durationMs > 0
         ? { duration: unit.durationMs / 1000 }
         : {}),
-      ...(resourceRef ? { resourceRef } : {}),
-      ...(documentResourceRef ? { documentResourceRef } : {}),
     },
   };
 }
@@ -1063,10 +1056,6 @@ function readGeneratedMediaPath(metadata: CanvasPlaybackUnit['metadata']): strin
     return readString(generatedImage['path']) ?? readString(generatedImage['url']);
   }
   return readString(metadata?.['generatedImage']);
-}
-
-function readResourceRef(value: unknown): ResourceRef | undefined {
-  return isResourceRef(value) ? value : undefined;
 }
 
 function inferMediaType(path: string | undefined): string | undefined {

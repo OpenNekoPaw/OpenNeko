@@ -124,7 +124,7 @@ Add domain checks as needed:
 - Engine/media: `cargo test`, CLI smoke, `serve` integration, performance before/after when relevant.
 - Proto/shared: generated types are synchronized and callers are migrated.
 - Agent/AI: tool contracts, permissions, Journal/traceability, failure recovery, and whether the change triggers `neko-agent-evaluation`. When triggered, check focused canonical-path evidence, forbidden-fallback evidence, assertion support in the current runner, and either a real Desktop complete-session result or an explicit blocking condition with residual risk. Protocol-only, mock-only, or final-text-only results do not count as Agent behavior acceptance.
-- Content access/cache/path: intent-aware access, transparent resource cache, path variable resolution, Engine-backed binary/media reads, Host text/project-file reads, authorized Webview projection, and stable `ResourceRef`/source-ref transfer.
+- Content access/cache/path: intent-aware access, transparent resource cache, path variable resolution, Engine-backed binary/media reads, Host text/project-file reads, authorized Webview projection, and stable `ContentLocator` transfer.
 - Assets/market: manifest/schema compatibility, path safety, cache invalidation, trust boundaries.
 
 ## Output Format

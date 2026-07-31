@@ -852,6 +852,7 @@ function createRuntime(snapshot = projection): ResourceBrowserHostRuntime & {
       descriptor: {
         descriptorId: `descriptor:${request.resourceId}`,
         revision: 'revision-1',
+        contentLocator: { kind: 'workspace-file' as const, path: 'preview/preview.png' },
         contentKind: 'image' as const,
         mediaType: 'image/png',
         displayName: 'preview.png',

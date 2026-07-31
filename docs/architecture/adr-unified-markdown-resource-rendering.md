@@ -84,13 +84,13 @@ Canvas capability 以工具 schema 的方式暴露给 Agent、Agent Webview 和�
 
 | Capability                                 | 输入                                                        | 输出                                                    | 用途                                                                                                           |
 | ------------------------------------------ | ----------------------------------------------------------- | ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| `canvas.ingestMarkdown`                    | Markdown、title、resourceRefs、target、intent/profile hints | note/table node id、resolved kind、diagnostics、actions | Agent 选中 Markdown review/apply 后的通用入口：由 Canvas 解析为 Markdown note、generic table 或 creative table |
-| `canvas.createMarkdownNote`                | Markdown、title、resourceRefs、target                       | text/document node ids、diagnostics                     | 显式把分析、计划、提示词说明放到 Canvas                                                                        |
-| `canvas.createTableFromMarkdown`           | Markdown table、resourceRefs、target                        | table node id、diagnostics                              | lower-level generic table wrapper                                                                              |
-| `canvas.createStoryboardDraftFromMarkdown` | Markdown 分镜表、profile hint、resourceRefs、target         | draft/review node id、diagnostics、actions              | lower-level storyboard review wrapper；storyboard 只是 creative table profile                                  |
-| `canvas.createStoryboardFromMarkdown`      | Markdown 分镜表、resourceRefs、mode、target                 | scene/shot/media node ids、diagnostics                  | 用户明确要求创建 Canvas 分镜节点                                                                               |
-| `canvas.attachResource`                    | node target、resourceRef、role                              | changed node id、diagnostics                            | 给已有节点挂接媒体资源                                                                                         |
-| `canvas.validateMarkdownStoryboard`        | Markdown、resourceRefs                                      | diagnostics、normalized preview summary                 | 只校验和预览，不写 Canvas                                                                                      |
+| `canvas.ingestMarkdown`                    | Markdown、title、contentLocators、target、intent/profile hints | note/table node id、resolved kind、diagnostics、actions | Agent 选中 Markdown review/apply 后的通用入口：由 Canvas 解析为 Markdown note、generic table 或 creative table |
+| `canvas.createMarkdownNote`                | Markdown、title、contentLocators、target                       | text/document node ids、diagnostics                     | 显式把分析、计划、提示词说明放到 Canvas                                                                        |
+| `canvas.createTableFromMarkdown`           | Markdown table、contentLocators、target                        | table node id、diagnostics                              | lower-level generic table wrapper                                                                              |
+| `canvas.createStoryboardDraftFromMarkdown` | Markdown 分镜表、profile hint、contentLocators、target         | draft/review node id、diagnostics、actions              | lower-level storyboard review wrapper；storyboard 只是 creative table profile                                  |
+| `canvas.createStoryboardFromMarkdown`      | Markdown 分镜表、contentLocators、mode、target                 | scene/shot/media node ids、diagnostics                  | 用户明确要求创建 Canvas 分镜节点                                                                               |
+| `canvas.attachResource`                    | node target、contentLocator、role                              | changed node id、diagnostics                            | 给已有节点挂接媒体资源                                                                                         |
+| `canvas.validateMarkdownStoryboard`        | Markdown、contentLocators                                      | diagnostics、normalized preview summary                 | 只校验和预览，不写 Canvas                                                                                      |
 
 示例输入：
 
@@ -100,8 +100,8 @@ canvas.ingestMarkdown({
   intentHint: 'creative-table',
   profileHint: 'storyboard',
   resources: [
-    { token: 'cover', resourceRef },
-    { token: 'P1', documentResourceRef },
+    { token: 'cover', contentLocator },
+    { token: 'P1', contentLocator },
   ],
   target: { containerId, insertionPoint },
 });
@@ -147,12 +147,12 @@ type CanvasMarkdownIngestIntent = 'auto' | 'note' | 'table' | 'creative-table';
 
 type CanvasMarkdownResolvedKind = 'markdown-note' | 'generic-table' | 'creative-table';
 
-interface CanvasMarkdownResourceRef {
+interface CanvasMarkdownContentLocator {
   readonly token?: string;
   readonly label?: string;
   readonly role?: string;
-  readonly resourceRef?: ResourceRef;
-  readonly documentResourceRef?: DocumentArchiveResourceRef;
+  readonly contentLocator?: ContentLocator;
+  readonly contentLocator?: DocumentEntryContentLocator;
 }
 
 interface CanvasMarkdownCapabilityTarget extends CanvasAgentTargetRef {
@@ -180,7 +180,7 @@ interface CanvasMarkdownCapabilityBaseInput {
   readonly markdown: string;
   readonly title?: string;
   readonly sourceFormat?: CanvasMarkdownSourceFormat;
-  readonly resources?: readonly CanvasMarkdownResourceRef[];
+  readonly resources?: readonly CanvasMarkdownContentLocator[];
   readonly target?: CanvasMarkdownCapabilityTarget;
   readonly provenance?: CanvasAgentProvenance;
   readonly intentHint?: CanvasMarkdownIngestIntent;
@@ -212,7 +212,7 @@ interface CanvasCreateStoryboardFromMarkdownInput extends CanvasMarkdownCapabili
 interface CanvasAttachResourceInput {
   readonly capabilityId: 'canvas.attachResource';
   readonly target: CanvasMarkdownCapabilityTarget;
-  readonly resource: CanvasMarkdownResourceRef;
+  readonly resource: CanvasMarkdownContentLocator;
   readonly role?: string;
   readonly provenance?: CanvasAgentProvenance;
 }
@@ -295,7 +295,7 @@ Agent Webview Markdown renderer 应支持资源增强渲染，但只作为当前
 
 | 语法                                                  | 含义                                                                           | 解析结果                                                                        |
 | ----------------------------------------------------- | ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------- |
-| `![[cover.png]]`                                      | Neko resource-reference embed；表示项目/turn 资源 token 或 host 可解析文件引用 | resource lookup hint；绑定到 `ResourceRef` 后显示图片                           |
+| `![[cover.png]]`                                      | Neko resource-reference embed；表示项目/turn 资源 token 或 host 可解析文件引用 | resource lookup hint；绑定到 `ContentLocator` 后显示图片                           |
 | `![[Chapter 1#Section]]`                              | 文档或 Markdown section embed                                                  | document locator / context link；可渲染为 excerpt card 或跳转链接，不默认当图片 |
 | `![cover](assets/cover.png)`                          | CommonMark image                                                               | workspace-relative/source ref lookup hint；可解析时显示图片，不可解析时诊断     |
 | `[[Chapter 1#Section]]`                               | 内部文档链接                                                                   | 文档 locator/context link，不嵌入媒体                                           |
@@ -324,7 +324,7 @@ output:
     - gfm-table
     - resource-reference
     - commonmark-image
-  resourceReferences:
+  contentLocatorerences:
     preferred:
       - '![[resource-token]]'
       - '![alt](workspace-relative-or-variable-path)'
@@ -356,7 +356,7 @@ Skill 可以要求 Agent 输出：
 - next-step Canvas handoff hints such as `declaredIntentHint: "creative-table"` and `declaredProfileHint: "storyboard"`；Agent 只有在选中 Canvas Markdown capability 时才把它们转为 tool input；
 - no direct Canvas node JSON.
 
-Canvas capability invocation carries the actual `ResourceRef` / `DocumentArchiveResourceRef` array separately. Markdown remains human-readable; resource refs remain structured tool input.
+Canvas capability invocation carries the actual `ContentLocator` array separately. Markdown remains human-readable; content locators remain structured tool input.
 
 ## Resource Binding
 
@@ -365,11 +365,11 @@ Canvas capability invocation carries the actual `ResourceRef` / `DocumentArchive
 ```text
 Markdown token / embed / image path
   -> turn resource index + project/document resolver
-  -> ResourceRef | DocumentArchiveResourceRef | source ref
+  -> ContentLocator
   -> runtime renderUri projection
 ```
 
-Markdown token、`![[...]]`、CommonMark image URL 和表格单元格文本都只是 lookup hint。Canvas capability input 必须携带已解析的 `ResourceRef`、`DocumentArchiveResourceRef`、workspace-relative path、`${VAR}/path` 或 document/source locator；无法解析时返回 diagnostic，不得把裸 token 或路径字符串当成功资源写入 Canvas 节点。
+Markdown token、`![[...]]`、CommonMark image URL 和表格单元格文本都只是 lookup hint。Canvas capability input 必须携带已解析的 `ContentLocator`；无法解析时返回 diagnostic，不得把裸 token、路径字符串或 runtime URL 当成功资源写入 Canvas 节点。
 
 ## `neko-composite` 和 `draft-runtime` 清理
 
@@ -404,7 +404,7 @@ Markdown token、`![[...]]`、CommonMark image URL 和表格单元格文本都�
 | `neko-agent`     | 生成 Markdown/文本/结构化内容、展示增强 Markdown、创建 Agent-visible Canvas handoff、由 Agent runtime 自主选择 Skill/tool                                                                  |
 | `neko-canvas`    | 暴露 authoring catalog、Canvas-owned Skills/tools/capabilities；校验、绑定资源、创建节点、渲染 Canvas 内容                                                                                 |
 | `@neko/markdown` | authoritative source、normalized CommonMark/GFM/extension nodes、ranges、annotations、diagnostics、streaming session 与 resolution/renderer adapter contracts；不做 Canvas 校验或 mutation |
-| `@neko/shared`   | 跨包 DTO：ResourceRef、DocumentArchiveResourceRef、Canvas authoring catalog/result、capability input/output 的最小共享契约                                                                 |
+| `@neko/shared`   | 跨包 DTO：ContentLocator、Canvas authoring catalog/result、capability input/output 的最小共享契约                                                                 |
 | Extension Host   | stable ref -> bytes/cache/renderUri；路径授权、CSP、diagnostics                                                                                                                            |
 | `@neko/ui`       | 可复用的无业务 Markdown/table/resource cell UI 原语，成熟后再提取                                                                                                                          |
 

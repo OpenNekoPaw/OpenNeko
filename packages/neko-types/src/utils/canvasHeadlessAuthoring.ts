@@ -42,8 +42,6 @@ import {
 } from '../types/canvas-material-contracts';
 import { isJobRef } from '../job-lifecycle/contracts';
 import { validateContentLocator } from '../types/content-locator';
-import { isDocumentArchiveResourceRef } from '../types/document-reading';
-import { isResourceRef } from '../types/resource-cache';
 import { isJsonPointerPath, writeJsonPointer } from './fieldBinding';
 import { assertNoRuntimeResourceIdentity } from './canvasDurableResourceIdentity';
 
@@ -536,12 +534,7 @@ function createNodeFromSpec(
     case 'media': {
       const assetPath = readString(input, 'assetPath');
       const contentLocator = validateContentLocator(input['contentLocator']);
-      if (
-        !assetPath &&
-        !isResourceRef(input['resourceRef']) &&
-        !isDocumentArchiveResourceRef(input['documentResourceRef']) &&
-        !contentLocator.ok
-      ) {
+      if (!assetPath && !contentLocator.ok) {
         throw new Error('Canvas Media creation requires a durable source');
       }
       return {
@@ -595,12 +588,7 @@ function createNodeFromSpec(
     case 'file': {
       const path = readString(input, 'path');
       const contentLocator = validateContentLocator(input['contentLocator']);
-      if (
-        !path &&
-        !isResourceRef(input['resourceRef']) &&
-        !isDocumentArchiveResourceRef(input['documentResourceRef']) &&
-        !contentLocator.ok
-      ) {
+      if (!path && !contentLocator.ok) {
         throw new Error('Canvas File creation requires a durable source');
       }
       return {
@@ -838,13 +826,7 @@ function readMediaType(record: Record<string, unknown>): {
 
 function readResourceFields(record: Record<string, unknown>) {
   const contentLocator = validateContentLocator(record['contentLocator']);
-  return {
-    ...(isResourceRef(record['resourceRef']) ? { resourceRef: record['resourceRef'] } : {}),
-    ...(isDocumentArchiveResourceRef(record['documentResourceRef'])
-      ? { documentResourceRef: record['documentResourceRef'] }
-      : {}),
-    ...(contentLocator.ok ? { contentLocator: contentLocator.locator } : {}),
-  };
+  return contentLocator.ok ? { contentLocator: contentLocator.locator } : {};
 }
 
 function readContentLocator(record: Record<string, unknown>) {
@@ -911,8 +893,9 @@ function readJobArtifactRefs(value: unknown): CanvasJobArtifactRef[] {
       refs.push({ kind: 'file', path: item['path'] });
       continue;
     }
-    if (item['kind'] === 'resource' && isResourceRef(item['resourceRef'])) {
-      refs.push({ kind: 'resource', resourceRef: item['resourceRef'] });
+    const contentLocator = validateContentLocator(item['contentLocator']);
+    if (item['kind'] === 'content' && contentLocator.ok) {
+      refs.push({ kind: 'content', contentLocator: contentLocator.locator });
     }
   }
   return refs;

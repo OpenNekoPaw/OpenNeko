@@ -10,14 +10,12 @@ describe('clipboard-context-presenter', () => {
         document: {
           filePath: '/books/a.epub',
           source: { filePath: '/books/a.epub', format: 'epub' },
-          contentLocator: { kind: 'workspace-file', path: 'books/a.epub' },
-          locator: { kind: 'chapter', chapterHref: 'Page_1', spineIndex: 1 },
-          resourceRef: {
+          contentLocator: {
             kind: 'document-entry',
-            source: { filePath: '/books/a.epub', format: 'epub' },
+            source: { kind: 'workspace-file', path: 'books/a.epub' },
             entryPath: 'image/Page_1.jpg',
-            versionPolicy: 'versioned-export',
           },
+          locator: { kind: 'chapter', chapterHref: 'Page_1', spineIndex: 1 },
         },
         image: {
           index: 0,
@@ -36,20 +34,18 @@ describe('clipboard-context-presenter', () => {
 
     expect(payload).toEqual({
       type: 'image',
-      id: 'document-image:books/a.epub:image/Page_1.jpg:chapter:Page_1@1',
+      id: 'document-image:books/a.epub#image/Page_1.jpg:image/Page_1.jpg:chapter:Page_1@1',
       label: 'chapter:Page_1@1',
-      summary: 'Document image: a.epub#chapter:Page_1@1',
+      summary: 'Document image: Page_1.jpg#chapter:Page_1@1',
       data: {
         kind: 'document-image-reference',
         document: {
-          contentLocator: { kind: 'workspace-file', path: 'books/a.epub' },
-          locator: { kind: 'chapter', chapterHref: 'Page_1', spineIndex: 1 },
-          resourceRef: {
+          contentLocator: {
             kind: 'document-entry',
-            source: { filePath: '/books/a.epub', format: 'epub' },
+            source: { kind: 'workspace-file', path: 'books/a.epub' },
             entryPath: 'image/Page_1.jpg',
-            versionPolicy: 'versioned-export',
           },
+          locator: { kind: 'chapter', chapterHref: 'Page_1', spineIndex: 1 },
         },
         image: {
           index: 0,
@@ -57,12 +53,10 @@ describe('clipboard-context-presenter', () => {
           height: 2133,
           byteSize: 1024,
           mimeType: 'image/jpeg',
-          contentLocator: { kind: 'workspace-file', path: 'books/a.epub' },
-          resourceRef: {
+          contentLocator: {
             kind: 'document-entry',
-            source: { filePath: '/books/a.epub', format: 'epub' },
+            source: { kind: 'workspace-file', path: 'books/a.epub' },
             entryPath: 'image/Page_1.jpg',
-            versionPolicy: 'versioned-export',
           },
         },
         navigationData: {

@@ -7,7 +7,6 @@ import type {
   JobCanvasNode,
   MediaCanvasNode,
 } from '../../types';
-import { createResourceFingerprint, createResourceRef } from '../../types/resource-cache';
 import {
   inspectLegacyCanvasMaterialNodes,
   migrateCanvasMaterialNodes,
@@ -138,22 +137,11 @@ describe('Canvas material legacy inspection and migration', () => {
     expect(generated.data.generationContext).toEqual(GENERATION.summary);
   });
 
-  it('blocks path, ResourceRef, and provenance heuristics when no ContentLocator exists', () => {
-    const generatedRef = createResourceRef({
-      scope: 'project',
-      provider: 'generated-output',
-      kind: 'generated',
-      source: { kind: 'generated-asset', generatedAssetId: 'generated-output:legacy' },
-      locator: { kind: 'generated-asset', assetId: 'generated-output:legacy' },
-      fingerprint: createResourceFingerprint({
-        strategy: 'hash',
-        value: 'sha256:legacy',
-      }),
-    });
+  it('blocks legacy path and provenance heuristics when no ContentLocator exists', () => {
     const legacy = createMediaNode('legacy-1', {
       assetPath: 'neko/generated/images/legacy.png',
       mediaType: 'image',
-      resourceRef: generatedRef,
+      resourceRef: { id: 'legacy-resource' },
       provenance: { projectionId: 'generated-output:legacy' },
       generationContext: { prompt: 'Legacy prompt' },
     });
@@ -169,7 +157,6 @@ describe('Canvas material legacy inspection and migration', () => {
         status: 'migration-required',
         evidence: expect.arrayContaining([
           'generated-path',
-          'generated-resource-ref',
           'generated-provenance',
           'legacy-generation-context',
           'job-output-ref',

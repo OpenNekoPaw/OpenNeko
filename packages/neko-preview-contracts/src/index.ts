@@ -1,6 +1,8 @@
 import {
   THREE_REFERENCE_STAGING_SCHEMA_VERSION,
   isThreeReferenceStagingSnapshot,
+  validateContentLocator,
+  type ContentLocator,
   type ThreeReferenceStagingSnapshot,
   type ThreeReferenceSubject,
 } from '@neko/shared';
@@ -150,6 +152,7 @@ export interface PreviewRuntimeIdentity {
 export interface PreviewMediaDescriptor {
   readonly descriptorId: string;
   readonly revision: string;
+  readonly contentLocator: ContentLocator;
   readonly contentKind: PreviewContentKind;
   readonly mediaType: string;
   readonly displayName: string;
@@ -249,12 +252,21 @@ export function parsePreviewRuntimeIdentity(value: unknown): PreviewRuntimeIdent
 
 export function parsePreviewMediaDescriptor(value: unknown): PreviewMediaDescriptor {
   const record = requireRecord(value, 'Preview media descriptor must be an object.');
+  const contentLocator = validateContentLocator(record['contentLocator']);
+  if (!contentLocator.ok) {
+    throw invalidPayload(
+      `Preview media descriptor contentLocator is invalid: ${contentLocator.diagnostics
+        .map((diagnostic) => diagnostic.message)
+        .join('; ')}`,
+    );
+  }
   const descriptor = {
     descriptorId: requireOpaqueIdentity(
       record['descriptorId'],
       'Preview descriptor identity is required.',
     ),
     revision: requireOpaqueIdentity(record['revision'], 'Preview descriptor revision is required.'),
+    contentLocator: contentLocator.locator,
     contentKind: requirePreviewContentKind(record['contentKind']),
     mediaType: requireMediaType(record['mediaType']),
     displayName: requireNonEmptyString(record['displayName'], 'Preview display name is required.'),

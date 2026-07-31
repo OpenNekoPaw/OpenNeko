@@ -1,5 +1,9 @@
 import type { ContentRepresentationLocator } from './content-representation';
-import type { DocumentEntryContentLocator } from './content-locator';
+import {
+  isContentLocator,
+  type DocumentEntryContentLocator,
+  type WorkspaceFileContentLocator,
+} from './content-locator';
 
 // =============================================================================
 // Document Reading Contracts
@@ -58,6 +62,8 @@ export interface DocumentFileIdentity {
 export interface DocumentSourceRef {
   readonly filePath: string;
   readonly format: DocumentFormat;
+  /** Canonical workspace identity. Required before document entries can cross package boundaries. */
+  readonly contentLocator?: WorkspaceFileContentLocator;
   readonly fileId?: string;
   readonly identity?: DocumentFileIdentity;
   readonly uri?: string;
@@ -132,28 +138,9 @@ export interface DocumentRange {
 
 export type DocumentContentKind = 'text' | 'image' | 'mixed';
 
-export type DocumentArchiveResourceVersionPolicy =
-  'read-only-source' | 'versioned-export' | 'replace-reference';
-
-export const DOCUMENT_ARCHIVE_RESOURCE_VERSION_POLICIES = [
-  'read-only-source',
-  'versioned-export',
-  'replace-reference',
-] as const satisfies readonly DocumentArchiveResourceVersionPolicy[];
-
-export interface DocumentArchiveResourceRef {
-  readonly kind: 'document-entry';
-  readonly source: DocumentSourceRef;
-  readonly entryPath?: string;
-  readonly locator?: DocumentLocator;
-  readonly versionPolicy?: DocumentArchiveResourceVersionPolicy;
-}
-
-export interface CreateDocumentEntryResourceRefInput {
+export interface CreateDocumentEntryContentLocatorInput {
   readonly source?: DocumentSourceRef;
-  readonly locator?: DocumentLocator;
   readonly entryPath?: string;
-  readonly versionPolicy?: DocumentArchiveResourceVersionPolicy;
 }
 
 export interface DocumentImageInfo {
@@ -169,7 +156,6 @@ export interface DocumentImageInfo {
   readonly mimeType?: string;
   readonly byteSize?: number;
   readonly locator?: DocumentLocator;
-  readonly resourceRef?: DocumentArchiveResourceRef;
   readonly contentLocator?: DocumentEntryContentLocator;
   readonly representationLocator?: ContentRepresentationLocator;
 }
@@ -273,68 +259,21 @@ export function isDocumentFormat(value: unknown): value is DocumentFormat {
   return typeof value === 'string' && includesString(DOCUMENT_FORMATS, value);
 }
 
-export function isDocumentArchiveResourceVersionPolicy(
-  value: unknown,
-): value is DocumentArchiveResourceVersionPolicy {
-  return (
-    typeof value === 'string' && includesString(DOCUMENT_ARCHIVE_RESOURCE_VERSION_POLICIES, value)
-  );
-}
-
-export function isDocumentArchiveResourceRef(value: unknown): value is DocumentArchiveResourceRef {
-  return parseDocumentArchiveResourceRef(value) !== undefined;
-}
-
-export function parseDocumentArchiveResourceRef(
-  value: unknown,
-): DocumentArchiveResourceRef | undefined {
-  const resource = asRecord(value);
-  if (!resource || resource['kind'] !== 'document-entry') {
+export function createDocumentEntryContentLocator(
+  input: CreateDocumentEntryContentLocatorInput,
+): DocumentEntryContentLocator | undefined {
+  if (!input.source?.contentLocator || !input.entryPath) {
     return undefined;
   }
-
-  const source = parseDocumentSourceRef(resource['source']);
-  if (!source) {
-    return undefined;
-  }
-
-  const entryPath = readOptionalStringField(resource, 'entryPath');
-  const versionPolicy = readOptionalVersionPolicyField(resource, 'versionPolicy');
-  const locator = readOptionalLocatorField(resource, 'locator');
-  if (entryPath === null || versionPolicy === null || locator === null) {
-    return undefined;
-  }
-
-  return {
+  const locator: DocumentEntryContentLocator = {
     kind: 'document-entry',
-    source,
-    ...(entryPath ? { entryPath } : {}),
-    ...(locator ? { locator } : {}),
-    ...(versionPolicy ? { versionPolicy } : {}),
+    source: input.source.contentLocator,
+    entryPath: input.entryPath,
   };
-}
-
-export function createDocumentEntryResourceRef(
-  input: CreateDocumentEntryResourceRefInput,
-): DocumentArchiveResourceRef | undefined {
-  if (!input.source || (!input.entryPath && !input.locator)) {
+  if (!isContentLocator(locator)) {
     return undefined;
   }
-
-  const source = parseDocumentSourceRef(input.source);
-  const locator = input.locator ? parseDocumentLocator(input.locator) : undefined;
-  const versionPolicy = input.versionPolicy ?? 'versioned-export';
-  if (!source || !isDocumentArchiveResourceVersionPolicy(versionPolicy)) {
-    return undefined;
-  }
-
-  return {
-    kind: 'document-entry',
-    source,
-    ...(input.entryPath ? { entryPath: input.entryPath } : {}),
-    ...(locator ? { locator } : {}),
-    versionPolicy,
-  };
+  return locator;
 }
 
 export function parseDocumentSourceRef(value: unknown): DocumentSourceRef | undefined {
@@ -350,6 +289,7 @@ export function parseDocumentSourceRef(value: unknown): DocumentSourceRef | unde
   }
 
   const fileId = readOptionalStringField(source, 'fileId');
+  const contentLocator = readOptionalWorkspaceFileContentLocator(source, 'contentLocator');
   const uri = readOptionalStringField(source, 'uri');
   const token = readOptionalStringField(source, 'token');
   const rangeUrl = readOptionalStringField(source, 'rangeUrl');
@@ -357,6 +297,7 @@ export function parseDocumentSourceRef(value: unknown): DocumentSourceRef | unde
   const identity = readOptionalFileIdentityField(source, 'identity');
   if (
     fileId === null ||
+    contentLocator === null ||
     uri === null ||
     token === null ||
     rangeUrl === null ||
@@ -369,6 +310,7 @@ export function parseDocumentSourceRef(value: unknown): DocumentSourceRef | unde
   return {
     filePath,
     format,
+    ...(contentLocator ? { contentLocator } : {}),
     ...(fileId ? { fileId } : {}),
     ...(identity ? { identity } : {}),
     ...(uri ? { uri } : {}),
@@ -560,25 +502,15 @@ function readOptionalFileIdentityField(
   return parseDocumentFileIdentity(record[key]) ?? null;
 }
 
-function readOptionalLocatorField(
+function readOptionalWorkspaceFileContentLocator(
   record: Record<string, unknown>,
   key: string,
-): DocumentLocator | undefined | null {
-  if (!(key in record)) {
-    return undefined;
-  }
-  return parseDocumentLocator(record[key]) ?? null;
-}
-
-function readOptionalVersionPolicyField(
-  record: Record<string, unknown>,
-  key: string,
-): DocumentArchiveResourceVersionPolicy | undefined | null {
+): WorkspaceFileContentLocator | undefined | null {
   if (!(key in record)) {
     return undefined;
   }
   const value = record[key];
-  return isDocumentArchiveResourceVersionPolicy(value) ? value : null;
+  return isContentLocator(value) && value.kind === 'workspace-file' ? value : null;
 }
 
 function readOptionalStringField(

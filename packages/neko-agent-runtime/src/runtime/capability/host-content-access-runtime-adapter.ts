@@ -1,16 +1,9 @@
+import { DocumentContentAccessRuntime, type IDocumentAccessService } from '@neko/content/document';
 import {
-  DocumentContentAccessRuntime,
-  probeImageMetadata,
-  type IDocumentAccessService,
-} from '@neko/content/document';
-import {
-  isResourceRef,
-  readResourceSourceLocalPath,
   type ContentReadService,
   type ContentLocator,
   type ContentRepresentationLocator,
   type ContentRepresentationService,
-  type ContentSourceRef,
   type WorkspaceFileContentLocator,
 } from '@neko/shared';
 import {
@@ -19,18 +12,12 @@ import {
   type AgentContentAccessRuntime,
   type AgentDocumentContentInput,
   type AgentDocumentContentResult,
-  type AgentImageMetadataInput,
-  type AgentImageMetadataResult,
-  type AgentProviderAssetInput,
   type AgentProviderAssetResult,
 } from './agent-content-access-runtime';
-
-const DEFAULT_AGENT_CONTENT_READ_MAX_BYTES = 20 * 1024 * 1024;
 
 export interface CreateHostAgentContentAccessRuntimeOptions {
   readonly contentRead: ContentReadService;
   readonly documentAccess: IDocumentAccessService;
-  readonly resolveWorkspaceFileLocator: (path: string) => WorkspaceFileContentLocator | undefined;
   readonly resolveDocumentHostFilePath: (
     source: WorkspaceFileContentLocator,
   ) => Promise<string | undefined> | string | undefined;
@@ -54,45 +41,13 @@ class HostAgentContentAccessRuntime implements AgentContentAccessRuntime {
     });
   }
 
-  async resolveImageMetadata(input: AgentImageMetadataInput): Promise<AgentImageMetadataResult> {
-    const providerAsset = await this.loadProviderAsset(input);
-    const diagnostics = [...providerAsset.diagnostics];
-    const metadata =
-      providerAsset.bytes !== undefined ? probeImageMetadata(providerAsset.bytes) : undefined;
-    if (providerAsset.status === 'ready' && !metadata) {
-      diagnostics.push(
-        createAgentContentAccessDiagnostic({
-          code: 'unsupported-source',
-          message: 'Unsupported or unreadable image bytes.',
-        }),
-      );
-    }
-    return {
-      status:
-        metadata !== undefined
-          ? 'ready'
-          : providerAsset.status === 'ready'
-            ? 'unsupported-source'
-            : providerAsset.status,
-      source: providerAsset.source,
-      diagnostics,
-      ...(metadata?.mimeType ? { mimeType: metadata.mimeType } : {}),
-      ...(metadata?.width !== undefined ? { width: metadata.width } : {}),
-      ...(metadata?.height !== undefined ? { height: metadata.height } : {}),
-      sizeBytes: metadata?.byteSize ?? providerAsset.sizeBytes,
-      ...(isResourceRef(input.source) ? { resourceRef: input.source } : {}),
-      ...(input.metadata ? { metadata: input.metadata } : {}),
-    };
-  }
-
   async resolveDocumentContent(
     input: AgentDocumentContentInput,
   ): Promise<AgentDocumentContentResult> {
-    const sourcePath = readStableSourcePath(input.source);
-    const source = sourcePath ? this.services.resolveWorkspaceFileLocator(sourcePath) : undefined;
-    if (!source) {
+    if (input.source.kind !== 'workspace-file') {
       return documentFailure(input, 'Document source must be a workspace-file locator.');
     }
+    const source = input.source;
     try {
       const result = await this.documentRuntime.resolveDocumentContent({
         source,
@@ -115,7 +70,7 @@ class HostAgentContentAccessRuntime implements AgentContentAccessRuntime {
       const imagesTruncated = computedImages.imagesTruncated ?? result.imagesTruncated;
       return {
         status: 'ready',
-        source: { kind: 'file', path: result.source.path },
+        source: result.source,
         contentLocator: result.source,
         diagnostics: computedImages.diagnostics,
         ...(result.text !== undefined ? { text: result.text } : {}),
@@ -275,106 +230,6 @@ class HostAgentContentAccessRuntime implements AgentContentAccessRuntime {
         ],
       };
     }
-  }
-
-  async loadProviderAsset(input: AgentProviderAssetInput): Promise<AgentProviderAssetResult> {
-    const source = input.source;
-    if (source.kind === 'runtime') {
-      return {
-        status: 'unsupported-source',
-        diagnostics: [
-          createAgentContentAccessDiagnostic({
-            code: 'runtime-handle-rejected',
-            message: 'Runtime handles cannot be used as durable Agent content identity.',
-          }),
-        ],
-      };
-    }
-
-    const locator = await this.resolveContentLocator(source);
-    if (!locator) {
-      return {
-        status: 'unsupported-source',
-        diagnostics: [
-          createAgentContentAccessDiagnostic({
-            code: 'unsupported-source',
-            message: 'Agent content source does not resolve to a stable content locator.',
-          }),
-        ],
-      };
-    }
-    const loaded = await this.loadContentAsset({
-      locator,
-      maxBytes: DEFAULT_AGENT_CONTENT_READ_MAX_BYTES,
-      ...(input.signal ? { signal: input.signal } : {}),
-    });
-    return {
-      ...loaded,
-      source,
-      diagnostics: loaded.diagnostics,
-      mimeType: loaded.mimeType ?? input.mimeTypeHint,
-      ...(input.metadata ? { metadata: input.metadata } : {}),
-    };
-  }
-
-  async resolveContentLocator(source: ContentSourceRef): Promise<ContentLocator | undefined> {
-    if (isResourceRef(source)) {
-      if (source.source.kind === 'generated-asset') {
-        return undefined;
-      }
-      if (source.locator?.kind === 'document' && source.locator.entryPath) {
-        const sourcePath =
-          readResourceSourceLocalPath(source.source) ??
-          (source.source.kind === 'document'
-            ? (source.source.document?.filePath ?? source.source.filePath)
-            : undefined);
-        const workspaceSource = sourcePath
-          ? this.services.resolveWorkspaceFileLocator(sourcePath)
-          : undefined;
-        return workspaceSource
-          ? {
-              kind: 'document-entry',
-              source: workspaceSource,
-              entryPath: source.locator.entryPath,
-            }
-          : undefined;
-      }
-      const sourcePath = readStableSourcePath(source);
-      return sourcePath ? this.services.resolveWorkspaceFileLocator(sourcePath) : undefined;
-    }
-    if (source.kind === 'document' && source.entryPath) {
-      const sourcePath = source.source.document?.filePath ?? source.source.filePath;
-      const workspaceSource = sourcePath
-        ? this.services.resolveWorkspaceFileLocator(sourcePath)
-        : undefined;
-      return workspaceSource
-        ? {
-            kind: 'document-entry',
-            source: workspaceSource,
-            entryPath: source.entryPath,
-          }
-        : undefined;
-    }
-    const sourcePath = readStableSourcePath(source);
-    return sourcePath ? this.services.resolveWorkspaceFileLocator(sourcePath) : undefined;
-  }
-}
-
-function readStableSourcePath(source: ContentSourceRef): string | undefined {
-  if (isResourceRef(source)) {
-    return source.locator?.kind === 'file'
-      ? source.locator.path
-      : readResourceSourceLocalPath(source.source);
-  }
-  switch (source.kind) {
-    case 'file':
-      return source.path;
-    case 'document':
-      return source.source.document?.filePath;
-    case 'runtime':
-      return source.source ? readStableSourcePath(source.source) : undefined;
-    default:
-      return undefined;
   }
 }
 

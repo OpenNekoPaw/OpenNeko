@@ -136,7 +136,7 @@ Agent 使用同一份 identity-bearing Performance 协议驱动不同模型格�
 | `playAction`           | 按 descriptor 中的稳定 action identity 播放已有 Live2D motion、VRM animation 或 glTF clip |
 | `setExpression`        | 按 descriptor 中的稳定 expression identity 设置或混合表情                                 |
 | `lookAt`               | 设置预览局部坐标或归一化屏幕坐标中的视线目标                                              |
-| `playSpeech`           | 播放已授权的 audio `ResourceRef`，并按 descriptor 声明的 lip-sync 等级驱动本地 runtime    |
+| `playSpeech`           | 播放已授权的 audio `ContentLocator`，并按 descriptor 声明的 lip-sync 等级驱动本地 runtime    |
 | `stop` / `reset`       | 停止当前动作或恢复模型默认临时状态                                                        |
 
 低层参数控制不作为默认 Agent 能力。只有模型 capability descriptor 明确暴露 allowlist、范围、默认值和互斥约束时，Agent 才能发送受约束的参数操作；未知 parameter、bone、motion、expression 或 hit area 必须拒绝。
@@ -217,7 +217,7 @@ OpenNeko 复用现有异步 `GenerateTTS` 媒体能力，不在 Live2D、VRM 或
 Agent text
   -> owning GenerateTTS capability
   -> async media Task
-  -> audio ResourceRef + lineage + optional timing metadata
+  -> audio ContentLocator + lineage + optional timing metadata
   -> Preview playSpeech
   -> Webview-local audio playback and LipSyncDriver
 ```
@@ -265,7 +265,7 @@ opening -> loading -> ready -> performing -> ready
 - 模型入口和每个依赖文件必须经过 Extension 精确授权；Webview 不可任意读取工作区目录。
 - CSP 只放行实际需要的 script、worker、WASM、image/blob 与 WebGL 路径，不使用宽泛网络白名单。
 - capability/result 不包含绝对用户路径、Webview token、renderer object、provider credential 或未限定的原始二进制。
-- 截图或 Agent 视觉证据继续使用有界资源与 `ResourceRef`；不得因动作能力引入直接 provider upload fallback。
+- 截图或 Agent 视觉证据继续使用有界资源与 `ContentLocator`；不得因动作能力引入直接 provider upload fallback。
 - 模型源、动作和表情资源的许可证由用户与发行方分别承担；OpenNeko 的分发必须单独满足 Live2D Cubism SDK/Core 的发布与可扩展应用条款。Project N.E.K.O 或第三方库的许可证不会自动覆盖 OpenNeko。
 
 ## 测试与验收
@@ -279,7 +279,7 @@ opening -> loading -> ready -> performing -> ready
 5. Extension Development Host 功能场景分别证明真实 Live2D、动画 GLB/glTF 和后续 VRM 的能力发现、Agent 操作、动作结果和关闭清理；静态或不具备目标能力的模型必须返回 unsupported；普通浏览器/Vite 不能替代该验收；
 6. 因该能力改变 Agent capability/tool routing 和真实行为，必须按 `neko-agent-evaluation` 规划并执行聚焦真实 Agent evaluation，至少覆盖一个 canonical action case 和一个 unsupported/stale failure case；
 7. 路径级断言证明 canonical flow 是 Agent -> owning capability -> exact Preview instance -> Webview adapter，且没有 active-panel fallback、Engine、direct provider 或 renderer-global 旁路。
-8. TTS/`playSpeech` 测试证明 Preview 只消费授权的 audio `ResourceRef`，Provider timing 缺失时报告实际 lip-sync 等级，模型无 mouth capability 时不返回同步成功；
+8. TTS/`playSpeech` 测试证明 Preview 只消费授权的 audio `ContentLocator`，Provider timing 缺失时报告实际 lip-sync 等级，模型无 mouth capability 时不返回同步成功；
 9. STT 边界测试证明未配置 provider 时不注册或明确失败，并 poison 已删除的 Engine transcription fallback。
 
 ## 实施顺序

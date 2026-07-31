@@ -20,7 +20,7 @@
 同时，单纯让 Markdown 表格成为跨工具协议也会引入风险：
 
 - Markdown 单元格没有类型约束，`duration`、`shotId`、`sceneId`、`imageStrategy` 和 `sourceMediaRefs` 都可能缺失或歧义。
-- 表格中的 `read-image-cover.jpg`、`page_1`、`cover` 等只是用户可读 token，不是稳定 `ResourceRef`。
+- 表格中的 `read-image-cover.jpg`、`page_1`、`cover` 等只是用户可读 token，不是稳定 `ContentLocator`。
 - Canvas/Cut/Preview/生成工具如果直接消费 Markdown，会重复实现解析、补全和图片绑定逻辑。
 - Markdown 不能作为项目事实或跨领域命令 payload 的唯一标准，否则会破坏协议验证、诊断和迁移。
 
@@ -153,12 +153,12 @@ Markdown 草稿必须支持图片与 shot 的多对多关系：
 
 | 关系 | 示例 | 规范化结果 |
 | --- | --- | --- |
-| 一张图片拆成多个 shot | `page_2#panel_1`、`page_2#panel_2` | 多个 shot 引用同一个 `sourceMediaRefs[].documentResourceRef`，并在 label/metadata 记录 panel/crop |
+| 一张图片拆成多个 shot | `page_2#panel_1`、`page_2#panel_2` | 多个 shot 引用同一个 `sourceMediaRefs[].contentLocator`，并在 label/metadata 记录 panel/crop |
 | 多张图片组成一个 shot | `page_3+page_4`、`P3,P4` | 一个 shot 的 `sourceMediaRefs[]` 包含多个来源 |
 | 多个 shot 共享同一整页图 | 同一页有 3 个漫画分格 | 每个 shot 都引用同一页图，但用 `extensions["neko.comicImageAudit"]` 或 ref metadata 标明 panel index |
 | 一个 shot 没有直接图源 | 过渡字幕、旁白、黑场 | 允许无 `sourceMediaRefs`，但 `imageStrategy` 不得是 `reuse-original` / `use-as-reference` / `transform-original` |
 
-因此，Normalizer 不得按行号把第 N 行强行绑定到第 N 张图片，也不得假设每张图片只能生成一个分镜。`source` 字段表达的是来源证据 token 或来源组合，不是数组下标。若一个 token 对应整页图且行内声明了 `panel_2`、`left-top`、`crop(...)` 或其他 panel 线索，编译器应把整页 `resourceRef` 写入 `sourceMediaRefs`，并把 panel 线索写入 metadata；只有真实裁切工具返回后，才能把裁切图写入 generated/prepared media ref。
+因此，Normalizer 不得按行号把第 N 行强行绑定到第 N 张图片，也不得假设每张图片只能生成一个分镜。`source` 字段表达的是来源证据 token 或来源组合，不是数组下标。若一个 token 对应整页图且行内声明了 `panel_2`、`left-top`、`crop(...)` 或其他 panel 线索，编译器应把整页 `contentLocator` 写入 `sourceMediaRefs`，并把 panel 线索写入 metadata；只有真实裁切工具返回后，才能把裁切图写入 generated/prepared media ref。
 
 ## 资源绑定
 
@@ -177,8 +177,8 @@ Markdown 草稿中的图片字段是资源 token，不是路径。允许的 toke
 解析规则：
 
 1. Webview/Agent presenter 从当前消息、相邻工具结果和统一内容访问投影建立 `StoryboardImageTokenIndex`。
-2. 索引项只能来自结构化数据：`ReadDocument.imageInfo[].resourceRef`、`ReadImage.images[].resourceRef`、统一内容访问 `ResourceRef`、已验证的 generated asset ref。
-3. token 解析成功后输出稳定 `documentResourceRef` 或 `resourceRef`，并保留 label、mimeType、尺寸和来源页摘要。
+2. 索引项只能来自结构化数据：`ReadDocument.imageInfo[].contentLocator`、`ReadImage.images[].contentLocator`、统一内容访问 `ContentLocator`、已验证的 generated output locator。
+3. token 解析成功后输出稳定 `contentLocator`，并保留 label、mimeType、尺寸和来源页摘要。
 4. 组合 token 先拆成多个 source token，再分别解析；panel/crop 后缀只作为 metadata，不改变原始图片身份。
 5. token 多义、缺失或指向不支持媒体时，生成 diagnostic；不得按行号、文件名路径、cache path、Webview URI 或 EPUB entry path 强行读取。
 6. Agent 和 Canvas 不感知 cache 目录、manifest、materialized path、Webview URI 或 provider-private payload。
@@ -363,7 +363,7 @@ Webview Markdown renderer 可以把 `read-image-cover.jpg`、`page_1` 等 token 
 ```text
 Markdown cell token
   -> StoryboardImageTokenIndex
-  -> stable resourceRef/documentResourceRef
+  -> stable contentLocator
   -> Webview resource projection
   -> thumbnail/preview UI
 ```
@@ -371,7 +371,7 @@ Markdown cell token
 渲染规则：
 
 - 只识别当前消息上下文、相邻工具结果或明确传入的 resource binding index 中的 token。
-- 只渲染已解析到 stable `resourceRef` / `documentResourceRef` 的图片。
+- 只渲染已解析到 stable `contentLocator` 的图片。
 - Webview renderer 不读取文件系统、不访问 cache root、不解析 EPUB entry path、不调用 Engine、不拼接 Webview URI。
 - `renderUri`、缩略图 URL 或 VS Code `asWebviewUri()` 只来自 Host/Webview resource projection，不能写回 Markdown、Canvas payload 或项目事实。
 - token 无法解析时保留原文本，并显示轻量 diagnostic；不能静默显示空白或把单元格改成 `-`。
@@ -452,7 +452,7 @@ CreativeDraftDocument
 - `duration`
 - `visualDescription`
 - `imageStrategy`
-- `sourceMediaRefs[].documentResourceRef` 或 `sourceMediaRefs[].resourceRef`
+- `sourceMediaRefs[].contentLocator`
 - 必要的 diagnostic / provenance metadata
 
 显式的 `Add to Canvas as Creative Draft` 可以直接发送草稿节点，例如：
@@ -504,7 +504,7 @@ Markdown 草稿节点只能用于展示、编辑、评论、下一轮 Agent 参�
 | 草稿类型、diagnostic 类型、字段规范 | `@neko/draft-runtime` runtime-local DTO；只有持久化或跨包 durable contract 出现时再收窄迁移到 `@neko/shared` | 当前 Agent/Webview 本地传输不需要膨胀 shared；生产协议仍在 shared |
 | Markdown/TSV 解析与字段归一化 | `@neko/draft-runtime` | 纯函数，可单测；按 `CreativeDraftProfile` 映射字段，不再维护 storyboard-only parser |
 | 图片/资源 token index contract | `@neko/draft-runtime` + host/content adapter | 任意 `resource-token` 或 `role: resource` 字段都可绑定 stable ref；只保存 safe ref 摘要，不保存 cache path |
-| Host 侧资源解析 adapter | `neko-content` + Extension adapter | 通过统一内容访问解析 `ResourceRef` |
+| Host 侧资源解析 adapter | `neko-content` + Extension adapter | 通过统一内容访问解析 `ContentLocator` |
 | Agent skill prompt | `neko-agent` | 只要求输出草稿或标准 payload，不拥有解析逻辑 |
 | Chat/Webview 草稿渲染 | `neko-agent` Webview | UI projection |
 | Canvas Markdown/Creative Draft 节点渲染 | `neko-canvas` Webview | 领域 UI，可展示 editable `CreativeDraftDocument`，生产动作仍走 typed projection |
@@ -526,7 +526,7 @@ Agent 可以优先生成 Markdown 分镜草稿以降低 token 和延迟，但必
 
 - 若用户只要求快速草稿/预览，输出 Markdown 草稿即可，并标注其为草稿。
 - 若用户要求 Canvas/Cut/生成/导出，Agent 应先触发转换或输出可转换的草稿，不能直接把 Markdown 当生产协议。
-- Agent 不得把图片 token 当路径读取，不得发明 `toolCallId`、`resourceRef`、cache path、Webview URI 或 EPUB entry path。
+- Agent 不得把图片 token 当路径读取，不得发明 `toolCallId`、`contentLocator`、cache path、Webview URI 或 EPUB entry path。
 - Agent 局部修复时只接收 Markdown、diagnostics、可用图片 token 摘要和安全 metadata，不接收底层缓存路径。
 - 如果转换失败，Agent 应修复失败行或请求用户选择，而不是报告已完成生产交接。
 
@@ -566,7 +566,7 @@ Agent 可以优先生成 Markdown 分镜草稿以降低 token 和延迟，但必
 - 一张图片拆成多个 shot、多个 shot 共享同一页图、多张图片组合成一个 shot 的转换都有测试。
 - panel/crop 后缀只进入 metadata，不被当成独立文件路径或 cache path 读取。
 - duration、sceneId、shotId、shotNumber、imageStrategy 的机械补全有单元测试。
-- 图片 token 唯一匹配时生成 `sourceMediaRefs[].documentResourceRef` 或 `resourceRef`。
+- 图片 token 唯一匹配时生成 `sourceMediaRefs[].contentLocator`。
 - 图片 token 多义、缺失、无 stable ref、指向非图片时产生 fail-visible diagnostics。
 - token 多义选择结果可回写 normalized draft，并在 retry 时不再次歧义。
 - Normalizer 各阶段 parser、column mapper、row normalizer、resource binder、compiler 有独立测试，禁止只测最终成功快照。

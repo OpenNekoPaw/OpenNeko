@@ -17,7 +17,7 @@
       "closed-loop feedback",
       "second terminal GenerateImage Tool call",
       "neko/generated workspace output",
-      "stable unpromoted generated-output ResourceRef",
+      "stable unpromoted generated-output ContentLocator",
       "Workspace Board projection"
     ],
     "forbiddenFallback": [
@@ -39,7 +39,7 @@
       {
         "ref": "workflow-facts",
         "kind": "runtime-fact",
-        "description": "Exact image.generate model snapshot, two terminal GenerateImage Tool results, feedback source digest, final ResourceRefs, ordered steps, and terminal idle facts.",
+        "description": "Exact image.generate model snapshot, two terminal GenerateImage Tool results, feedback source digest, final ContentLocators, ordered steps, and terminal idle facts.",
         "required": true
       }
     ],

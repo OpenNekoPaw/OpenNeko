@@ -190,14 +190,13 @@ describe('validateSchema', () => {
     expect(errors).toHaveLength(0);
   });
 
-  it('accepts an outer document entry path when the nested ref omits the same field', () => {
+  it('accepts complete document entry content locators nested in an array', () => {
     const schema = createDocumentImageSchema();
     const images = Array.from({ length: 10 }, (_, index) => ({
-      entryPath: `image/page-${index + 1}.jpg`,
-      resourceRef: {
+      contentLocator: {
         kind: 'document-entry',
-        source: { filePath: 'book.epub', format: 'epub' },
-        ...(index >= 4 ? {} : { entryPath: `image/page-${index + 1}.jpg` }),
+        source: { kind: 'workspace-file', path: 'book.epub' },
+        entryPath: `image/page-${index + 1}.jpg`,
       },
     }));
 
@@ -206,14 +205,14 @@ describe('validateSchema', () => {
     expect(errors).toHaveLength(0);
   });
 
-  it('rejects a partial document entry when both nested and outer paths are absent', () => {
+  it('rejects a partial document entry content locator', () => {
     const errors = validateSchema(
       {
         images: [
           {
-            resourceRef: {
+            contentLocator: {
               kind: 'document-entry',
-              source: { filePath: 'book.epub', format: 'epub' },
+              source: { kind: 'workspace-file', path: 'book.epub' },
             },
           },
         ],
@@ -221,28 +220,26 @@ describe('validateSchema', () => {
       createDocumentImageSchema(),
     );
 
-    expect(errors).toEqual([expect.objectContaining({ field: 'images[0].resourceRef.entryPath' })]);
+    expect(errors).toEqual([
+      expect.objectContaining({ field: 'images[0].contentLocator.entryPath' }),
+    ]);
   });
 
-  it('accepts either a complete document entry or managed ResourceRef nested in an array', () => {
+  it('accepts workspace-file and document-entry content locators nested in an array', () => {
     const errors = validateSchema(
       {
         images: [
           {
-            resourceRef: {
+            contentLocator: {
               kind: 'document-entry',
-              source: { filePath: 'book.epub', format: 'epub' },
+              source: { kind: 'workspace-file', path: 'book.epub' },
               entryPath: 'image/page-1.jpg',
             },
           },
           {
-            resourceRef: {
-              id: 'resource-1',
-              scope: 'project',
-              provider: 'source-file',
-              kind: 'image',
-              source: { kind: 'file', filePath: 'images/reference.png' },
-              fingerprint: { strategy: 'none', value: 'resource-1' },
+            contentLocator: {
+              kind: 'workspace-file',
+              path: 'images/reference.png',
             },
           },
         ],
@@ -284,32 +281,24 @@ describe('validateSchema', () => {
 });
 
 function createDocumentImageSchema(): ToolParameters {
+  const workspaceFile: ToolParameterProperty = {
+    type: 'object',
+    required: ['kind', 'path'],
+    properties: {
+      kind: { type: 'string', enum: ['workspace-file'] },
+      path: { type: 'string', minLength: 1 },
+    },
+    additionalProperties: false,
+  };
   const documentEntryProperties: Record<string, ToolParameterProperty> = {
     kind: { type: 'string', enum: ['document-entry'] },
-    source: { type: 'object' },
+    source: workspaceFile,
     entryPath: { type: 'string', minLength: 1 },
   };
   const completeDocumentEntry: ToolParameterProperty = {
     type: 'object',
     required: ['kind', 'source', 'entryPath'],
     properties: documentEntryProperties,
-  };
-  const documentEntryWithOuterPath: ToolParameterProperty = {
-    type: 'object',
-    required: ['kind', 'source'],
-    properties: documentEntryProperties,
-  };
-  const managedResourceRef: ToolParameterProperty = {
-    type: 'object',
-    required: ['id', 'scope', 'provider', 'kind', 'source', 'fingerprint'],
-    properties: {
-      id: { type: 'string', minLength: 1 },
-      scope: { type: 'string' },
-      provider: { type: 'string', minLength: 1 },
-      kind: { type: 'string' },
-      source: { type: 'object' },
-      fingerprint: { type: 'object' },
-    },
   };
 
   return {
@@ -320,31 +309,11 @@ function createDocumentImageSchema(): ToolParameters {
         type: 'array',
         items: {
           type: 'object',
-          anyOf: [
-            {
-              type: 'object',
-              required: ['resourceRef'],
-              properties: {
-                resourceRef: {
-                  type: 'object',
-                  anyOf: [completeDocumentEntry, managedResourceRef],
-                },
-              },
-            },
-            {
-              type: 'object',
-              required: ['entryPath', 'resourceRef'],
-              properties: {
-                entryPath: { type: 'string', minLength: 1 },
-                resourceRef: documentEntryWithOuterPath,
-              },
-            },
-          ],
+          required: ['contentLocator'],
           properties: {
-            entryPath: { type: 'string' },
-            resourceRef: {
+            contentLocator: {
               type: 'object',
-              anyOf: [completeDocumentEntry, documentEntryWithOuterPath, managedResourceRef],
+              anyOf: [completeDocumentEntry, workspaceFile],
             },
           },
         },

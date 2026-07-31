@@ -50,7 +50,7 @@ Lifecycle capabilities/tools
 
 - Agent 的基础身份和 OpenNeko 本地创作产品背景。
 - 通用工具纪律：只使用运行时可见工具，必要时先 `GetContext`。
-- 通用资源原则：不可伪造 `ResourceRef`，不可把 Webview URI、blob URL、缓存路径、系统临时路径或绝对路径写成稳定资源身份。
+- 通用资源原则：不可伪造 `ContentLocator`，不可把 Webview URI、blob URL、缓存路径、系统临时路径或绝对路径写成稳定资源身份。
 - 通用输出原则：Markdown 可读、结构清晰、复杂图表可校验。
 - 通用 Skill 触发原则：内容理解请求不自动激活创作生产 Skill，生产产物请求才激活相应 Skill。
 

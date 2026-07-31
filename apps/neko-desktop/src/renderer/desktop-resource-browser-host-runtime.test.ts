@@ -50,6 +50,7 @@ describe('Electron Resource Browser Host runtime', () => {
           descriptor: {
             descriptorId: 'descriptor-1',
             revision: 'revision-1',
+            contentLocator: { kind: 'workspace-file' as const, path: 'media/clip.mp4' },
             contentKind: 'video' as const,
             mediaType: 'video/mp4',
             displayName: 'clip.mp4',

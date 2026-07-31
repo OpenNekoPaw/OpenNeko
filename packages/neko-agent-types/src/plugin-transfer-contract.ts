@@ -1,8 +1,7 @@
 import type {
   CanvasAgentTargetRef,
-  DocumentArchiveResourceRef,
+  ContentLocator,
   NekoProjectAuthoringTarget,
-  ResourceRef,
   StoryboardTextCue,
   StoryboardVoiceCue,
 } from '@neko/shared';
@@ -36,15 +35,9 @@ export interface PluginTransferProvenance {
 
 export interface PluginTransferAssetRef {
   readonly path?: string;
+  readonly contentLocator?: ContentLocator;
   readonly mediaType?: PluginTransferMediaType;
   readonly name?: string;
-  /**
-   * Canonical structured source reference for document/archive-derived assets.
-   * Provenance metadata may mirror this field for backward-compatible routing,
-   * but consumers should prefer this top-level asset field when present.
-   */
-  readonly documentResourceRef?: DocumentArchiveResourceRef;
-  readonly resourceRef?: ResourceRef;
   readonly target?: PluginTransferTargetRef;
   readonly provenance?: PluginTransferProvenance;
 }
@@ -98,10 +91,9 @@ export type PluginTransferPayload =
 
 export interface PluginTransferCanvasImportAssetPayload {
   readonly path?: string;
+  readonly contentLocator?: ContentLocator;
   readonly type?: PluginTransferMediaType;
   readonly name?: string;
-  readonly documentResourceRef?: DocumentArchiveResourceRef;
-  readonly resourceRef?: ResourceRef;
   readonly target?: PluginTransferTargetRef;
   readonly provenance?: PluginTransferProvenance;
 }

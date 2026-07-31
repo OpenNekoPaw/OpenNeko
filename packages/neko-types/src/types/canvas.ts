@@ -6,8 +6,7 @@ import type {
 import type { CanvasSerializableRecord, CanvasSerializableValue } from './canvas-serializable';
 import type { CanvasPlaybackMetadata } from './canvas-playback';
 import type { CanvasCreativeScope, CanvasRelatedBoardRef } from './canvas-creative-scope';
-import type { DocumentArchiveResourceRef } from './document-reading';
-import type { ResourceRef } from './resource-cache';
+import type { ContentLocator } from './content-locator';
 import type { JobRef } from '../job-lifecycle/contracts';
 import type {
   CanvasEntityRepresentationEvidence,
@@ -218,17 +217,13 @@ export function isCanvasMaterialGenerationContext(
 export interface MediaCanvasNode extends CanvasNodeBase {
   type: 'media';
   data: {
-    /** Relative path to the media file. Empty when documentResourceRef is the persistent source. */
+    /** Runtime or legacy relative path. Canonical persisted nodes use contentLocator. */
     assetPath: string;
-    /** Stable reference to a document/archive entry when the media is linked from a container. */
-    documentResourceRef?: DocumentArchiveResourceRef;
-    /** Stable unified cache resource identity. Preferred over documentResourceRef for new payloads. */
-    resourceRef?: ResourceRef;
-    /** Canonical durable content location for Workspace Board and migrated creator-visible nodes. */
-    contentLocator?: import('./content-locator').ContentLocator;
+    /** Canonical durable content location. */
+    contentLocator?: ContentLocator;
     /** Runtime-only document cache status. Not persisted. */
     documentResourceStatus?: DocumentResourceStatus;
-    /** Runtime-only preview URI/path materialized from documentResourceRef. Not persisted. */
+    /** Runtime-only preview URI/path materialized from contentLocator. Not persisted. */
     runtimeAssetPath?: string;
     /** Relative path to thumbnail image */
     thumbnailPath?: string;
@@ -284,7 +279,7 @@ export type CanvasJobStatus =
 
 export type CanvasJobArtifactRef =
   | { kind: 'canvas-node'; nodeId: string }
-  | { kind: 'resource'; resourceRef: ResourceRef }
+  | { kind: 'content'; contentLocator: ContentLocator }
   | { kind: 'file'; path: string };
 
 /**
@@ -317,10 +312,8 @@ export interface FileCanvasNode extends CanvasNodeBase {
     /** Explicit material kind. Never inferred from the file name or extension. */
     mediaKind?: CanvasMaterialMediaKind;
     mediaType?: string;
-    resourceRef?: ResourceRef;
-    documentResourceRef?: DocumentArchiveResourceRef;
-    /** Canonical durable content location for Workspace Board and migrated creator-visible nodes. */
-    contentLocator?: import('./content-locator').ContentLocator;
+    /** Canonical durable content location for Workspace Board and creator-visible nodes. */
+    contentLocator?: ContentLocator;
     /** Canonical immutable Generation Job evidence for a generated-output locator. */
     generation?: CanvasGenerationEvidence;
     /** Legacy display-only summary accepted only by explicit NKC migration. */
@@ -451,7 +444,7 @@ export interface CanvasEmbedCanvasNode extends CanvasNodeBase {
     canvasTitle: string;
     thumbnailData?: string;
     /** Canonical durable location of the embedded Canvas document. */
-    contentLocator?: import('./content-locator').ContentLocator;
+    contentLocator?: ContentLocator;
   };
 }
 

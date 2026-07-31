@@ -27,7 +27,7 @@ Agent 不拥有：
 - workspace 文件 IO、Electron/renderer 生命周期或 React 状态；
 - 第二套 transcript、Skill cache、provider chat registry 或通用 TaskManager。
 
-领域能力通过 typed Capability、Tool、domain port 和稳定 `ResourceRef`/ContentLocator 注入。
+领域能力通过 typed Capability、Tool、domain port 和稳定 `ContentLocator` 注入。
 
 ## 五层分析
 
@@ -35,7 +35,7 @@ Agent 不拥有：
 | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 职责 | Pi 拥有 generic Agent execution、Tool scheduling、Skill read 和 transcript/context；OpenNeko Agent 拥有产品 identity、policy 与 projection；领域包拥有执行和事实；Host 拥有 IO、trust、credential interaction 与 UI transport。 |
 | 依赖 | Renderer 只依赖共享 contract；Desktop Main composition 依赖 host-neutral runtime 和具体领域 port；Agent core 不依赖 Electron、React 或具体领域实现；领域包不反向依赖 Agent。                                                    |
-| 接口 | conversation/branch/turn/run/tool-call identity、Tool schema、model-purpose snapshot、Capability contribution、domain Job port、Timeline patch 和 ResourceRef 分层定义；禁止自由 JSON 和 active-state fallback。                |
+| 接口 | conversation/branch/turn/run/tool-call identity、Tool schema、model-purpose snapshot、Capability contribution、domain Job port、Timeline patch 和 ContentLocator 分层定义；禁止自由 JSON 和 active-state fallback。                |
 | 扩展 | 新 provider 通过 Pi registration 或 owning media runtime 接入；新 Skill 使用 Pi `SKILL.md`；新领域能力先由 owning package 定义 contract，再通过 contribution 注入。                                                             |
 | 测试 | deterministic path/schema/identity/permission/legacy-poison 测试证明 canonical path；key-free evaluation 验证 harness；真实 Desktop complete-session 场景证明模型与 UI 行为。                                                   |
 
@@ -112,7 +112,7 @@ OpenNeko 用户级 SQLite 继续拥有：
 
 - conversation catalog、active/historical branch mapping；
 - workspace binding、writer lease、turn/run/domain Job identity；
-- permission、provider task、ResourceRef 和必要的产品 metadata。
+- permission、provider task、ContentLocator 和必要的产品 metadata。
 
 SQLite listing preview、message count 等字段是可重建投影，不是第二份 transcript。workspace
 不得存放 Pi transcript；旧 Journal、history hydration 或 workspace transcript importer 不能
@@ -200,7 +200,7 @@ read 可以免确认，但仍受 containment 和 trust 检查。
 Pi Tool Call
   -> exact GenerationJob port
   -> committed versioned observations
-  -> terminal ResourceRef or diagnostic
+  -> terminal ContentLocator or diagnostic
 
 Cut UI
   -> exact ExportJob port
@@ -227,7 +227,7 @@ JobRef/revision 的新 Tool Call。
   清除目标 conversation 的虚假 executing 状态并投影 conversation-scoped diagnostic。
 - Desktop Main 拥有 workspace IO、path containment、trust、credential interaction、
   LocalMetadata、runtime composition 和显式资源释放。
-- 模型/renderer 只接收稳定 identity、ResourceRef/ContentLocator 和脱敏 diagnostic；绝对路径、
+- 模型/renderer 只接收稳定 identity、`ContentLocator` 和脱敏 diagnostic；绝对路径、
   cache path、token、SQLite row 与 runtime handle 不穿透边界。
 - Renderer/CSP/焦点/IPC/视觉验收必须使用打包 Electron 与隔离 fixture；普通浏览器/Vite 不能
   替代 Desktop 运行态验收。
@@ -236,7 +236,7 @@ JobRef/revision 的新 Tool Call。
 
 进入持久上下文或领域项目的结果必须接地到稳定事实：
 
-- `ResourceRef`、ContentLocator、asset/entity ID；
+- `ContentLocator`、asset/entity ID；
 - Search source、Engine output；
 - Canvas/Cut/Character 等 owning project revision 和格式；
 - concrete domain Job terminal result。

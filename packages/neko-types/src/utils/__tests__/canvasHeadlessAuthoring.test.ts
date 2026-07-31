@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import type { CanvasData } from '../../types/canvas';
-import { createResourceFingerprint, createResourceRef } from '../../types/resource-cache';
 import {
   createEmptyCanvasData,
   planCanvasAgentContentApplication,
@@ -227,26 +226,22 @@ describe('canvasHeadlessAuthoring canonical planner', () => {
     expect(replayed.canvasData.nodes).toHaveLength(1);
   });
 
-  it('preserves stable resource refs in Media and File nodes', () => {
-    const resourceRef = createResourceRef({
-      scope: 'project',
-      provider: 'workspace',
-      kind: 'document',
-      source: { kind: 'file', projectRelativePath: 'docs/reference.pdf' },
-      locator: { kind: 'file', path: 'docs/reference.pdf' },
-      fingerprint: createResourceFingerprint({ strategy: 'none', value: 'docs/reference.pdf' }),
-    });
+  it('preserves stable ContentLocator identity in File nodes', () => {
+    const contentLocator = {
+      kind: 'workspace-file' as const,
+      path: 'docs/reference.pdf',
+    };
     const file = planCanvasNodeCreation(
       { canvasData: emptyCanvas(), generateId: ids() },
       {
         type: 'file',
-        data: { path: '', title: 'Reference', resourceRef },
+        data: { path: '', title: 'Reference', contentLocator },
       },
     );
 
     expect(file.result.node).toMatchObject({
       type: 'file',
-      data: { resourceRef },
+      data: { contentLocator },
     });
   });
 

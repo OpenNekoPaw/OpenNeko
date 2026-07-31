@@ -2,13 +2,11 @@
 // Runtime handles are accepted only so boundaries can reject them explicitly; they are not
 // durable identity and must never be persisted or projected as a successful source.
 
-import {
-  getResourcePathCategory,
-  isManagedCachePathCategory,
-  isResourceRef,
-  type ResourceRef,
-  type ResourceScope,
-} from './resource-cache';
+import { getResourcePathCategory, isManagedCachePathCategory } from './resource-cache';
+import { isContentLocator, type ContentLocator } from './content-locator';
+import type { DocumentSourceRef } from './document-reading';
+
+export type ContentAccessScope = 'project' | 'global' | 'extension-private';
 
 export type ContentRuntimeRefKind =
   | 'cache-path'
@@ -22,24 +20,24 @@ export type ContentRuntimeRefKind =
 
 export interface ContentDocumentSourceRef {
   readonly kind: 'document';
-  readonly source: ResourceRef['source'];
-  readonly resource?: ResourceRef;
+  readonly source: DocumentSourceRef;
+  readonly contentLocator?: ContentLocator;
   readonly entryPath?: string;
-  readonly locator?: ResourceRef['locator'];
 }
 
 export interface ContentAssetSourceRef {
   readonly kind: 'asset';
   readonly assetId: string;
   readonly sourcePath?: string;
-  readonly resource?: ResourceRef;
+  readonly contentLocator?: ContentLocator;
   readonly metadata?: Record<string, unknown>;
 }
 
 export interface ContentFileSourceRef {
   readonly kind: 'file';
   readonly path: string;
-  readonly scope?: ResourceScope;
+  readonly scope?: ContentAccessScope;
+  readonly contentLocator?: ContentLocator;
   readonly metadata?: Record<string, unknown>;
 }
 
@@ -47,7 +45,7 @@ export interface ContentGeneratedAssetSourceRef {
   readonly kind: 'generated-asset';
   readonly assetId: string;
   readonly path?: string;
-  readonly resource?: ResourceRef;
+  readonly contentLocator?: ContentLocator;
   readonly promoted?: boolean;
   readonly metadata?: Record<string, unknown>;
 }
@@ -61,7 +59,7 @@ export interface ContentRuntimeRef {
 }
 
 export type ContentStableSourceRef =
-  | ResourceRef
+  | ContentLocator
   | ContentDocumentSourceRef
   | ContentAssetSourceRef
   | ContentFileSourceRef
@@ -86,7 +84,6 @@ export function isRuntimeOnlyContentRef(ref: ContentSourceRef): ref is ContentRu
 
 export function isCacheOrRuntimeOnlyContentRef(ref: ContentSourceRef): boolean {
   if (isRuntimeOnlyContentRef(ref)) return ref.source === undefined;
-  if (isResourceRef(ref) && ref.scope === 'extension-private') return true;
   if ('kind' in ref && ref.kind === 'generated-asset') {
     return ref.promoted !== true || isGeneratedCacheBackedSourceRef(ref);
   }
@@ -126,21 +123,32 @@ export function isPrivateCachePath(
 }
 
 export function isContentSourceRef(value: unknown): value is ContentSourceRef {
-  if (isResourceRef(value)) return true;
+  if (isContentLocator(value)) return true;
   if (!isRecord(value) || typeof value['kind'] !== 'string') return false;
 
   switch (value['kind']) {
     case 'document':
-      return isRecord(value['source']);
+      return (
+        isRecord(value['source']) &&
+        (value['contentLocator'] === undefined || isContentLocator(value['contentLocator']))
+      );
     case 'asset':
-      return typeof value['assetId'] === 'string' && optionalString(value['sourcePath']);
+      return (
+        typeof value['assetId'] === 'string' &&
+        optionalString(value['sourcePath']) &&
+        (value['contentLocator'] === undefined || isContentLocator(value['contentLocator']))
+      );
     case 'file':
-      return typeof value['path'] === 'string';
+      return (
+        typeof value['path'] === 'string' &&
+        (value['contentLocator'] === undefined || isContentLocator(value['contentLocator']))
+      );
     case 'generated-asset':
       return (
         typeof value['assetId'] === 'string' &&
         optionalString(value['path']) &&
-        optionalBoolean(value['promoted'])
+        optionalBoolean(value['promoted']) &&
+        (value['contentLocator'] === undefined || isContentLocator(value['contentLocator']))
       );
     case 'runtime':
       return isContentRuntimeRefKind(value['runtimeKind']) && typeof value['value'] === 'string';

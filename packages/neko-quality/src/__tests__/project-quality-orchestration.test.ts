@@ -3,7 +3,6 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   MEDIA_QUALITY_CONTRACT_VERSION,
   PROJECT_QUALITY_CONTRACT_VERSION,
-  createResourceRef,
   type ProjectQualityFacade,
   type QualityProjectRef,
   type QualityTarget,
@@ -24,18 +23,11 @@ const target: QualityTarget = {
   revision: project.projectRevision,
   contentDigest: project.contentDigest,
 };
-const snapshotRef = createResourceRef({
-  scope: 'project',
-  provider: 'neko-cut',
-  kind: 'document',
-  source: {
-    kind: 'document',
-    uri: project.documentUri,
-    identity: { hash: project.contentDigest },
-  },
-  locator: { kind: 'file', uri: project.documentUri },
-  fingerprint: { strategy: 'hash', value: project.contentDigest! },
-});
+const snapshotLocator = {
+  kind: 'workspace-file' as const,
+  path: 'edit.otio',
+  fingerprint: { strategy: 'sha256' as const, value: project.contentDigest ?? 'digest' },
+};
 
 describe('collectProjectQualityEvidence', () => {
   it('routes structural, runtime, and export checks through the owning facade', async () => {
@@ -58,7 +50,9 @@ describe('collectProjectQualityEvidence', () => {
       'technical',
       'policy',
     ]);
-    expect(evidence.every((item) => item.sourceEvidenceRefs[0]?.id === snapshotRef.id)).toBe(true);
+    expect(
+      evidence.every((item) => item.sourceEvidenceLocators[0]?.kind === snapshotLocator.kind),
+    ).toBe(true);
   });
 
   it('returns blocking structural evidence and does not continue after validation failure', async () => {
@@ -155,7 +149,7 @@ function createFacade(
       requestId: request.requestId,
       operation: 'get-project-snapshot' as const,
       ok: true,
-      data: { project, snapshotRef, createdAt: '2026-07-12T00:00:00.000Z' },
+      data: { project, snapshotLocator, createdAt: '2026-07-12T00:00:00.000Z' },
       diagnostics: [],
     })),
     renderPreview: vi.fn(async (request) => ({

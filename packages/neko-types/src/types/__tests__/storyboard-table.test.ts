@@ -1303,13 +1303,11 @@ describe('storyboard table contract', () => {
     ]);
   });
 
-  it('accepts stable document and resource refs as storyboard image identity', () => {
-    const documentResourceRef = {
+  it('accepts a document-entry ContentLocator as storyboard image identity', () => {
+    const contentLocator = {
       kind: 'document-entry' as const,
-      source: { filePath: '${BOOKS}/comic.epub', format: 'epub' as const },
+      source: { kind: 'workspace-file' as const, path: 'books/comic.epub' },
       entryPath: 'OPS/page-1.jpg',
-      cachePath: '/tmp/neko-cache/page-1.jpg',
-      versionPolicy: 'read-only-source' as const,
     };
     const table = storyboardTable({
       imageStrategy: 'reuse-original',
@@ -1319,15 +1317,13 @@ describe('storyboard table contract', () => {
           role: 'source',
           locator: { type: 'tool-result', toolCallId: 'read-document-1', assetIndex: 0 },
           mimeType: 'image/jpeg',
-          documentResourceRef,
+          contentLocator,
         },
       ],
     });
 
     expect(validateStoryboardTable(table, { knownToolCallIds: ['read-document-1'] }).ok).toBe(true);
-    expect(table.scenes[0]?.shots[0]?.sourceMediaRefs?.[0]?.documentResourceRef).toEqual(
-      documentResourceRef,
-    );
+    expect(table.scenes[0]?.shots[0]?.sourceMediaRefs?.[0]?.contentLocator).toEqual(contentLocator);
   });
 
   it('interprets image strategies without scheduling generation for reuse-original', () => {
@@ -1494,13 +1490,10 @@ function sourceMediaRef(refId: string) {
 
 describe('canonical storyboard contract', () => {
   it('requires source profile, stable trace, revision, and revision-bound projections', () => {
-    const resource = {
-      id: 'story-source-1',
-      scope: 'project',
-      provider: 'workspace',
-      kind: 'document',
-      source: { kind: 'file', projectRelativePath: 'story/script.md' },
-      fingerprint: { strategy: 'hash', value: 'sha256:script-v1' },
+    const sourceLocator = {
+      kind: 'workspace-file',
+      path: 'story/script.md',
+      fingerprint: { strategy: 'sha256', value: 'sha256:script-v1' },
     } as const;
     const table = {
       schemaVersion: 1,
@@ -1513,7 +1506,7 @@ describe('canonical storyboard contract', () => {
         contentDigest: 'sha256:storyboard-v1',
         createdAt: '2026-07-11T00:00:00.000Z',
       },
-      sourceTrace: [{ traceId: 'trace-1', sourceProfile: 'from-script', sourceRef: resource }],
+      sourceTrace: [{ traceId: 'trace-1', sourceProfile: 'from-script', sourceLocator }],
       projections: [
         {
           target: 'cut',

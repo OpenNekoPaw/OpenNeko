@@ -1,9 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import {
-  createResourceFingerprint,
-  createResourceRef,
-  type PerceptionEvidenceEntry,
-} from '@neko/shared';
+import { type PerceptionEvidenceEntry } from '@neko/shared';
 import type {
   MediaProbePort,
   PerceptionClientPort,
@@ -576,7 +572,7 @@ describe('PerceiveTool', () => {
     expect(pipeline.perceive).not.toHaveBeenCalled();
   });
 
-  it('preserves unified ResourceRef identity in explicit perception refs', async () => {
+  it('preserves ContentLocator identity in explicit perception refs', async () => {
     const pipeline = {
       perceive: vi.fn(async () => ({
         card: {
@@ -593,23 +589,13 @@ describe('PerceiveTool', () => {
         },
       })),
     };
-    const resourceRef = createResourceRef({
-      id: 'res-generated-1',
-      scope: 'project',
-      provider: 'generated-asset',
-      kind: 'generated',
-      source: {
-        kind: 'generated-asset',
-        generatedAssetId: 'generated-1',
-        filePath: '${WORKSPACE}/neko/generated/image/task_1_0.png',
-      },
-      locator: { kind: 'generated-asset', assetId: 'generated-1' },
-      fingerprint: createResourceFingerprint({
-        strategy: 'provider',
-        value: 'generated-1',
-        providerId: 'generated-asset',
-      }),
-    });
+    const contentLocator = {
+      kind: 'generated-output' as const,
+      outputId: 'generated-1',
+      revision: 'revision-1',
+      digest: 'sha256:generated-1',
+      path: 'neko/generated/image/task_1_0.png',
+    };
     const tool = new PerceiveTool({ pipeline, now: () => 20 });
 
     await tool.execute({
@@ -619,7 +605,7 @@ describe('PerceiveTool', () => {
         assetId: 'asset-1',
         uri: 'generated-assets/non-existent-display-label.png',
         mimeType: 'image/png',
-        resourceRef,
+        contentLocator,
       },
     });
 
@@ -627,13 +613,13 @@ describe('PerceiveTool', () => {
       expect.objectContaining({
         asset: {
           assetId: 'asset-1',
-          ref: expect.objectContaining({ resourceRef }),
+          ref: expect.objectContaining({ contentLocator }),
         },
       }),
     );
   });
 
-  it('accepts explicit refs when a model includes an incomplete resourceRef hint', async () => {
+  it('rejects explicit refs containing a retired resourceRef field', async () => {
     const pipeline = {
       perceive: vi.fn(async () => ({
         card: {
@@ -667,19 +653,8 @@ describe('PerceiveTool', () => {
       },
     });
 
-    expect(result.success).toBe(true);
-    expect(pipeline.perceive).toHaveBeenCalledWith(
-      expect.objectContaining({
-        asset: {
-          assetId: 'generated-1',
-          ref: {
-            assetId: 'generated-1',
-            uri: 'neko/generated/image/task_1_0.png',
-            mimeType: 'image/png',
-          },
-        },
-      }),
-    );
+    expect(result.success).toBe(false);
+    expect(pipeline.perceive).not.toHaveBeenCalled();
   });
 });
 

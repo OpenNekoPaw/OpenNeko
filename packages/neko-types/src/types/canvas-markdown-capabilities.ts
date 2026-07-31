@@ -1,7 +1,6 @@
 import type { CanvasAgentProvenance, CanvasAgentTargetRef } from './canvas-agent-operations';
 import { isHostProjectedRuntimeValue } from './content-access';
-import { isDocumentArchiveResourceRef, type DocumentArchiveResourceRef } from './document-reading';
-import { isResourceRef, type ResourceRef } from './resource-cache';
+import { isContentLocator, type ContentLocator } from './content-locator';
 
 export const CANVAS_MARKDOWN_CAPABILITY_IDS = [
   'canvas.ingestMarkdown',
@@ -41,14 +40,13 @@ export interface CanvasMarkdownCapabilityDiagnostic {
  * Stable resource context that may accompany an Agent handoff. Canvas Markdown
  * capabilities do not turn these references into implicit specialized nodes.
  */
-export interface CanvasMarkdownResourceRef {
+export interface CanvasMarkdownContentBinding {
   readonly token?: string;
   readonly alias?: string;
   readonly label?: string;
   readonly role?: string;
   readonly sourcePath?: string;
-  readonly resourceRef?: ResourceRef;
-  readonly documentResourceRef?: DocumentArchiveResourceRef;
+  readonly contentLocator?: ContentLocator;
 }
 
 export interface CanvasMarkdownCapabilityTarget extends CanvasAgentTargetRef {
@@ -133,7 +131,9 @@ export function isCanvasMarkdownCapabilityTarget(
   );
 }
 
-export function isCanvasMarkdownResourceRef(value: unknown): value is CanvasMarkdownResourceRef {
+export function isCanvasMarkdownContentBinding(
+  value: unknown,
+): value is CanvasMarkdownContentBinding {
   if (!isRecord(value)) return false;
   return (
     optionalString(value['token']) &&
@@ -141,12 +141,8 @@ export function isCanvasMarkdownResourceRef(value: unknown): value is CanvasMark
     optionalString(value['label']) &&
     optionalString(value['role']) &&
     optionalString(value['sourcePath']) &&
-    (value['resourceRef'] === undefined || isResourceRef(value['resourceRef'])) &&
-    (value['documentResourceRef'] === undefined ||
-      isDocumentArchiveResourceRef(value['documentResourceRef'])) &&
-    (value['sourcePath'] !== undefined ||
-      value['resourceRef'] !== undefined ||
-      value['documentResourceRef'] !== undefined)
+    (value['contentLocator'] === undefined || isContentLocator(value['contentLocator'])) &&
+    (value['sourcePath'] !== undefined || value['contentLocator'] !== undefined)
   );
 }
 

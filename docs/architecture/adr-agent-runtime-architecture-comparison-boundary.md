@@ -53,9 +53,9 @@ protocol Submission / Op / Event
 
 不可照搬点：
 
-- Codex 的 shell、apply_patch、workspace diff、sandbox escalation 是 coding agent 的核心能力；Neko 默认能力应是 typed creative tools、ResourceRef、domain operation 和受管 External Processor。
+- Codex 的 shell、apply_patch、workspace diff、sandbox escalation 是 coding agent 的核心能力；Neko 默认能力应是 typed creative tools、ContentLocator、domain operation 和受管 External Processor。
 - Codex 的 app-server/SDK/protocol 层服务于多客户端、多运行面和外部集成；Neko 已经需要支持 VS Code 与 TUI，并应为未来客户端保留统一 runtime command/event contract，但不需要在第一阶段复制 Codex 的独立 daemon、公共 SDK 和完整 app-server 分层。
-- Codex 的权限模型围绕代码仓库读写和命令执行；Neko 的真实边界还包括 Webview CSP、媒体 Range/codec、ResourceRef、Engine、Asset library、provider trust 和创作 artifact provenance。
+- Codex 的权限模型围绕代码仓库读写和命令执行；Neko 的真实边界还包括 Webview CSP、媒体 Range/codec、ContentLocator、Engine、Asset library、provider trust 和创作 artifact provenance。
 
 ### OpenCode
 
@@ -73,15 +73,15 @@ protocol Submission / Op / Event
 | ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
 | Codex                           | 任务闭环成熟：上下文读取、计划、执行、验证、汇总、sandbox、approval、Skill、subagent 和多 surface 投影形成稳定产品心智。官方文档可参考 [sandboxing](https://developers.openai.com/codex/concepts/sandboxing)、[subagents](https://developers.openai.com/codex/subagents) 与 Codex manual。                                                                             | coding-agent 取向强，shell、patch、workspace diff 和仓库验证是核心；直接照搬会把 Neko 推向通用代码执行器。 | 高。借鉴 plan/update/verify/summary、approval、Skill 渐进披露、subagent review；不借鉴 shell-first 和完整 app-server。 |
 | OpenCode                        | Plan/Build agent、primary/subagent、permission allow/ask/deny 和项目/全局规则边界清楚；参考 [agents](https://opencode.ai/docs/agents/) 与 [permissions](https://opencode.ai/docs/permissions/)。                                                                                                                                                                       | 仍以代码任务为中心，Plan/Build 二分不完全适合创作中的探索、生成、比较、修订循环。                          | 中高。借鉴只读分析模式、执行模式和权限矩阵；不建立大型角色市场或多 agent 分身体系。                                    |
-| Pi / companion agent            | 对话体验好，善于追问、共情、降低用户表达成本；适合作为创作 brief、风格澄清和反馈体验参考。参考 [Inflection](https://inflection.ai/) 与 [Pi](https://hey.pi.ai/)。                                                                                                                                                                                                      | action、artifact、验证、写回和可追溯性弱；容易停留在舒适对话，不能保证创作结果落地。                       | 高但仅限 UX。借鉴 brief、澄清问题、反馈语气；不能用对话历史替代 run、ResourceRef 或 package-owned apply。              |
+| Pi / companion agent            | 对话体验好，善于追问、共情、降低用户表达成本；适合作为创作 brief、风格澄清和反馈体验参考。参考 [Inflection](https://inflection.ai/) 与 [Pi](https://hey.pi.ai/)。                                                                                                                                                                                                      | action、artifact、验证、写回和可追溯性弱；容易停留在舒适对话，不能保证创作结果落地。                       | 高但仅限 UX。借鉴 brief、澄清问题、反馈语气；不能用对话历史替代 run、ContentLocator 或 package-owned apply。              |
 | OpenClaw / gateway-session 模式 | 多渠道、多 agent、多 workspace/session routing 可以隔离长期会话；参考 [multi-agent routing](https://docs.openclaw.ai/concepts/multi-agent)。                                                                                                                                                                                                                           | 对当前本地创作套件过重，会增加 gateway、session store、routing、成本、延迟和语义污染。                     | 低。用户已明确不需要 gateway session routing；仅保留显式 identity、isolation diagnostic 这类概念。                     |
 | Hermes / agent loop 模式        | prompt assembly、stable/context/volatile 分层、context compression、memory flush 和 agent loop 职责边界有参考价值；参考 [prompt assembly](https://github.com/NousResearch/hermes-agent/blob/main/website/docs/developer-guide/prompt-assembly.md) 与 [agent loop](https://github.com/NousResearch/hermes-agent/blob/main/website/docs/developer-guide/agent-loop.md)。 | 单一大 agent loop 容易吸收过多职责；自动 memory/self-improvement/fallback 会造成状态漂移和成本不可见。     | 中高。借鉴 prompt/context/memory 分层与压缩；不借鉴自动记忆写入、隐式 provider fallback 或万能 loop。                  |
-| OpenAI Agents SDK               | Agent/Runner/tools/handoff/guardrails/sessions/tracing 抽象清楚，适合固定工具和审批流的事务型 agent；参考 [Agents guide](https://developers.openai.com/api/docs/guides/agents)。                                                                                                                                                                                       | SDK runtime 若成为核心，会压过 Neko 已有 host-neutral runtime、ResourceRef 和 owning package apply 边界。  | 中。借鉴 tracing、guardrails、handoff 语义；不把 SDK 作为 Neko runtime 主循环。                                        |
+| OpenAI Agents SDK               | Agent/Runner/tools/handoff/guardrails/sessions/tracing 抽象清楚，适合固定工具和审批流的事务型 agent；参考 [Agents guide](https://developers.openai.com/api/docs/guides/agents)。                                                                                                                                                                                       | SDK runtime 若成为核心，会压过 Neko 已有 host-neutral runtime、ContentLocator 和 owning package apply 边界。  | 中。借鉴 tracing、guardrails、handoff 语义；不把 SDK 作为 Neko runtime 主循环。                                        |
 | LangGraph                       | durable execution、persistence、human-in-the-loop、streaming 和 checkpoint/resume 适合复杂长任务；参考 [LangGraph overview](https://docs.langchain.com/oss/python/langgraph/overview)。                                                                                                                                                                                | 图编排对多数创作按钮和单文档 run 过重，容易形成第二套 workflow engine。                                    | 低到中。只在影视批量生成、跨媒体长任务中借鉴 checkpoint/interrupt/resume；不做通用 graph clone。                       |
 
 由此得到的收敛判断：
 
-- 必要优化是 `Brief -> Plan -> Run/workItem -> Capability -> ResourceRef/artifact -> Verify -> package-owned apply -> Summary` 的轻量闭环。
+- 必要优化是 `Brief -> Plan -> Run/workItem -> Capability -> ContentLocator/artifact -> Verify -> package-owned apply -> Summary` 的轻量闭环。
 - 不必要优化是 gateway session routing、通用 workflow graph、通用 daemon/public SDK、自动记忆写入和 TypeScript extension。
 - 当前 `CreativeAiRunRuntime`、`TaskManager`、消息队列/任务队列/任务卡 ADR 已经覆盖大部分基础设施，应优先补齐边界和 UX，而不是新增平台层。
 
@@ -187,7 +187,7 @@ CapabilityRegistry / ExternalProcessorRegistry
 - CallRuntime：并发、取消、event projection、tool result normalization、timeout、background task observation。
 - PolicyOrchestrator：resource root policy、approval、trust gate、provider/processor risk、host requirement、fail-visible diagnostic。
 
-普通创作 Agent 默认不暴露任意 shell。需要执行外部工具时，必须通过 [`adr-agent-sandbox-and-external-processing-boundary.md`](adr-agent-sandbox-and-external-processing-boundary.md) 定义的 External Processor manifest、PathAccessPolicy、ResourceRef 和 approval gate。
+普通创作 Agent 默认不暴露任意 shell。需要执行外部工具时，必须通过 [`adr-agent-sandbox-and-external-processing-boundary.md`](adr-agent-sandbox-and-external-processing-boundary.md) 定义的 External Processor manifest、PathAccessPolicy、ContentLocator 和 approval gate。
 
 ### 5. Protocol 面保持窄，但为多客户端预留 runtime command/event contract
 
@@ -242,12 +242,12 @@ Codex/OpenCode 都把 session/thread/history/event store 作为 agent 产品主�
 
 | 类型                  | 示例                                                                            | 规则                                                  |
 | --------------------- | ------------------------------------------------------------------------------- | ----------------------------------------------------- |
-| Durable creative fact | Asset、Entity、Draft、Plan、Task、ResourceRef、workspace-relative path          | 可进入项目事实和长期 artifact。                       |
+| Durable creative fact | Asset、Entity、Draft、Plan、Task、ContentLocator、workspace-relative path          | 可进入项目事实和长期 artifact。                       |
 | Session history       | user/assistant/tool messages、journal event、conversation index                 | 可持久化，但不得承载 Webview-only display URI。       |
 | Runtime projection    | stream delta、phase、pending message queue、confirmation prompt、TaskCard state | 按 session/turn/version 投影，不能替代 durable fact。 |
 | Host display state    | `asWebviewUri`、blob URL、runtime image src、temporary local path               | 不进入长期 payload；只能由 host presenter 临时生成。  |
 
-消息队列、任务队列和任务卡继续遵守 [`adr-agent-message-task-queue-boundary.md`](adr-agent-message-task-queue-boundary.md)。External Processor 输出继续遵守 ResourceRef 与 path policy。
+消息队列、任务队列和任务卡继续遵守 [`adr-agent-message-task-queue-boundary.md`](adr-agent-message-task-queue-boundary.md)。External Processor 输出继续遵守 ContentLocator 与 path policy。
 
 ## 五层分析
 
@@ -255,7 +255,7 @@ Codex/OpenCode 都把 session/thread/history/event store 作为 agent 产品主�
 
 - `@neko/agent`：host-neutral Agent runtime、session facade、turn assembly、runner port、capability consumption。
 - `@neko-agent/types`：Webview/Extension/Agent projection contract。
-- `@neko/shared`：跨包 capability、permission、provider、ResourceRef、task/artifact 基础 contract。
+- `@neko/shared`：跨包 capability、permission、provider、ContentLocator、task/artifact 基础 contract。
 - Extension：VS Code API、workspace trust、resource URI projection、Engine client provider、Host content read/projection ports、host effect。
 - Domain packages：贡献领域 capability provider、typed operation、artifact/schema adapter，不反向依赖 Agent internals。
 
@@ -287,7 +287,7 @@ Codex/OpenCode 都把 session/thread/history/event store 作为 agent 产品主�
 - 为 `runtime/turn` 补充 provider selection、token budget、queued message compatibility、context patch contract 测试。
 - 为 `runtime/runner` 补充 cancellation、confirmation timeout、pending queue、config locked 测试。
 - 为 `runtime/capability` 补充 manifest/source/trust/diagnostic、registry revision、injection blocking 测试。
-- 为 External Processor 和 resource handoff 补充 path policy、ResourceRef、legacy cachePath poison、Webview URI 非持久化测试。
+- 为 External Processor 和 resource handoff 补充 path policy、ContentLocator、legacy cachePath poison、Webview URI 非持久化测试。
 - VS Code Webview 视觉、CSP、message route、resource projection 改动必须用 Extension Development Host 或 `vscode-extension-debugger` 验证。
 
 ## 后果

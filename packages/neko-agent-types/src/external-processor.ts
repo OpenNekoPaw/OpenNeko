@@ -3,7 +3,6 @@ import type {
   ContentLocator,
   ProcessorOutputLocator,
   ProcessorOutputOwnership,
-  ResourceRef,
 } from '@neko/shared';
 import type { AgentCapabilitySource } from './capability';
 
@@ -200,7 +199,7 @@ export interface ExternalProcessorRunIdentity {
   readonly stageId: string;
   readonly attempt: number;
   readonly parentProcessorRunId?: string;
-  readonly parentResourceRef?: ResourceRef;
+  readonly parentContentLocator?: ContentLocator;
 }
 
 export interface ExternalProcessorInvocation {

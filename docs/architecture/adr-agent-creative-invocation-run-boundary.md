@@ -1,6 +1,6 @@
 # ADR: Agent 创作调用、Run 与写回边界
 
-> 后续决策：[`adr-agent-tool-call-domain-job-lifecycle-boundary.md`](adr-agent-tool-call-domain-job-lifecycle-boundary.md) 已取代本文中由 Agent 通用 run/workItem/TaskManager 统一拥有外部创作执行的部分。Document/candidate/ResourceRef/package-owned apply 继续有效；直接创作动作由 surface/领域 operation 或具体领域 Job 拥有，委派推理只创建 SubagentRun，不创建独立 BackgroundAgentRun。
+> 后续决策：[`adr-agent-tool-call-domain-job-lifecycle-boundary.md`](adr-agent-tool-call-domain-job-lifecycle-boundary.md) 已取代本文中由 Agent 通用 run/workItem/TaskManager 统一拥有外部创作执行的部分。Document/candidate/ContentLocator/package-owned apply 继续有效；直接创作动作由 surface/领域 operation 或具体领域 Job 拥有，委派推理只创建 SubagentRun，不创建独立 BackgroundAgentRun。
 
 状态：Accepted
 日期：2026-07-09
@@ -32,7 +32,7 @@ Package AI button / Agent action
   -> explicit invocation envelope
   -> lightweight run / workItem
   -> typed capability call
-  -> ResourceRef / artifact result
+  -> ContentLocator / artifact result
   -> package-owned apply
   -> optional Agent conversation projection
 ```
@@ -70,7 +70,7 @@ interface ExternalCreativeAiInvocation {
 - `idempotencyKey` 防止重复点击、重放消息或刷新 UI 造成重复 provider 调用和重复扣费。
 - `conversationId` 只表达可选投影或用户显式选择的创作对话。
 
-Envelope 不得携带 Webview URI、blob/object URL、provider runtime handle、component-local state、未授权绝对路径或 cache path 作为 durable identity。图片、视频、音频和文档页引用必须使用 `ResourceRef`、workspace-relative path、`${VAR}/path`、asset/entity id 或 package-owned source ref。
+Envelope 不得携带 Webview URI、blob/object URL、provider runtime handle、component-local state、未授权绝对路径或 cache path 作为 durable identity。图片、视频、音频和文档页引用必须使用 `ContentLocator`、workspace-relative path、`${VAR}/path`、asset/entity id 或 package-owned source ref。
 
 ### 3. Run/workItem 是并发和成本控制单位
 
@@ -87,7 +87,7 @@ status
 model/provider identity
 cost estimate / usage when available
 cancel state
-result ResourceRef / artifact refs
+result ContentLocator / artifact refs
 diagnostics
 ```
 
@@ -98,12 +98,12 @@ diagnostics
 - 重复 invocation envelope 命中同一 idempotency key 时，应返回已有 run/workItem 或明确诊断，不能重复创建 provider 调用。
 - Run 完成后可以向 Agent conversation 投影摘要、诊断、重试按钮或 apply 状态，但不得自动把完整结果写入聊天历史或 Project Memory。
 
-### 4. 生成资产必须进入 ResourceRef 生命周期
+### 4. 生成资产必须进入 ContentLocator 生命周期
 
 图片、视频、音频、文档页图、外部处理器输出和 provider 生成结果必须返回稳定资源身份：
 
 ```text
-ResourceRef
+ContentLocator
   + provenance
   + model/profile
   + prompt/params/seed when available
@@ -141,7 +141,7 @@ Owning package 负责：
 ```text
 selected nodes / clips / layers
 nearby scene or shot metadata
-referenced assets and ResourceRefs
+referenced assets and ContentLocators
 style/profile hints
 target revision
 user-visible intent
@@ -164,7 +164,7 @@ Agent/runtime 不应默认读取完整 conversation history、自动召回 archi
 
 ### 8. TypeScript Extension 暂不进入当前设计
 
-用户脚本、TypeScript extension、hot reload extension hooks 或任意项目级脚本扩展不进入当前必要路径。未来如需设计，应单独提出 ADR 或 OpenSpec，围绕 manifest、trust、PathAccessPolicy、approval、sandbox 和 ResourceRef 输出定义边界。
+用户脚本、TypeScript extension、hot reload extension hooks 或任意项目级脚本扩展不进入当前必要路径。未来如需设计，应单独提出 ADR 或 OpenSpec，围绕 manifest、trust、PathAccessPolicy、approval、sandbox 和 ContentLocator 输出定义边界。
 
 当前阶段只接受以下扩展形态：
 
@@ -179,11 +179,11 @@ Agent/runtime 不应默认读取完整 conversation history、自动召回 archi
 Agent Chat 可以展示外部 run 的摘要、进度、结果卡、诊断、重试、打开资源、发送到领域包等操作。但这些 UI 投影不得成为唯一事实源：
 
 - Run/workItem 状态来自 runtime 或 package adapter。
-- 生成资源身份来自 ResourceRef/artifact store。
+- 生成资源身份来自 ContentLocator/artifact store。
 - 项目事实来自 owning package。
 - Project Memory 晋升必须显式确认，不从 run 或 conversation 自动写入。
 
-用户明确选择“在某个 Agent 对话中继续”时，后续 Agent turn 可以引用 run result、ResourceRef、diagnostics 和 package state。这个动作是上下文引用，不是把历史 conversation 变成 run owner。
+用户明确选择“在某个 Agent 对话中继续”时，后续 Agent turn 可以引用 run result、ContentLocator、diagnostics 和 package state。这个动作是上下文引用，不是把历史 conversation 变成 run owner。
 
 ## 五层分析
 
@@ -213,7 +213,7 @@ Agent Chat 可以展示外部 run 的摘要、进度、结果卡、诊断、重�
 ### 扩展
 
 - 新创作包接入 AI 按钮时，只需要实现最小 context packet 和 apply adapter，不需要改 Agent Webview 内部。
-- Capability Directory、Agent Profile、Project Memory 晋升、variant compare 和 trajectory/eval 可在 ResourceRef/run/apply 稳定后逐步增强。
+- Capability Directory、Agent Profile、Project Memory 晋升、variant compare 和 trajectory/eval 可在 ContentLocator/run/apply 稳定后逐步增强。
 - 如果未来出现真实跨进程共享 session、公共 SDK 或远程控制需求，应优先提升 runtime command/event contract；本 ADR 不作为引入 gateway/session router 的理由。
 - TypeScript extension 和用户脚本能力必须另行设计，不从本 ADR 推导。
 
@@ -231,7 +231,7 @@ Agent Chat 可以展示外部 run 的摘要、进度、结果卡、诊断、重�
 
 - 外部创作按钮路径更短，避免为每次生成加载和路由 conversation history。
 - 成本控制更早发生，重复点击和批量生成可以通过 idempotency 与 approval gate 管住。
-- 生成结果从一开始就是 ResourceRef/artifact，而不是先进入 Webview/runtime-only payload 再补救。
+- 生成结果从一开始就是 ContentLocator/artifact，而不是先进入 Webview/runtime-only payload 再补救。
 - Agent 和创作包边界更清楚：Agent 负责调用与观察，owning package 负责事实写回。
 - 未来仍可把结果投影到 Agent conversation，但 conversation 不再是外部创作调用的默认权威。
 
@@ -251,4 +251,4 @@ Agent Chat 可以展示外部 run 的摘要、进度、结果卡、诊断、重�
 - 外部 package AI 按钮默认创建/复用 document-scoped run/workItem，而不是 background conversation。
 - Agent conversation 只作为可选投影和显式继续创作入口。
 - 最近 source/document association 可以用于 UI 提示、资源引用和 optional projection，但不能作为执行路由的默认成功路径。
-- 第一条迁移路径仍应优先选择 Canvas 生成/编辑按钮，目标是从 `dataUrl` 写回转向 `ResourceRef` + package-owned apply。
+- 第一条迁移路径仍应优先选择 Canvas 生成/编辑按钮，目标是从 `dataUrl` 写回转向 `ContentLocator` + package-owned apply。

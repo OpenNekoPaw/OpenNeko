@@ -1,7 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  createResourceFingerprint,
-  createResourceRef,
   isAgentCapabilityInvocationInput,
   isAgentCapabilityInvocationResult,
   isAgentCapabilityLifecycleDescriptor,
@@ -12,11 +10,10 @@ import {
   type AgentCapabilityInvocationInput,
   type AgentCapabilityInvocationResult,
   type AgentCapabilityLifecycleDescriptor,
-  type ResourceRef,
 } from '../index';
 
 describe('agent capability lifecycle contracts', () => {
-  const resourceRef = createTestResourceRef();
+  const contentLocator = createTestContentLocator();
 
   it('accepts valid lifecycle descriptors exposed through artifact facets', () => {
     const descriptor: AgentCapabilityLifecycleDescriptor = {
@@ -128,8 +125,8 @@ describe('agent capability lifecycle contracts', () => {
       },
       changedRefs: [
         {
-          kind: 'resource',
-          resourceRef,
+          kind: 'content',
+          contentLocator,
         },
       ],
       actions: [
@@ -192,16 +189,10 @@ describe('agent capability lifecycle contracts', () => {
   });
 });
 
-function createTestResourceRef(): ResourceRef {
-  return createResourceRef({
-    scope: 'project',
-    provider: 'test',
-    kind: 'media',
-    source: {
-      kind: 'file',
-      filePath: '${MEDIA}/cover.png',
-      projectRelativePath: 'assets/cover.png',
-    },
-    fingerprint: createResourceFingerprint({ strategy: 'provider', value: 'cover-v1' }),
-  });
+function createTestContentLocator() {
+  return {
+    kind: 'workspace-file' as const,
+    path: 'assets/cover.png',
+    fingerprint: { strategy: 'provider' as const, value: 'cover-v1' },
+  };
 }

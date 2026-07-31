@@ -23,7 +23,7 @@ Neko Agent 需要覆盖三类影视创作使用场景：
 - 文本：剧本、brief、plan、checklist、提示词、分镜草稿等，Agent 可以直接读取、分析和改写。
 - 媒体：图片、音频、视频、模型、文档内图片和生成资产，需要稳定资源引用、授权、预览、转码、索引和跨插件传输。
 
-如果把所有内容都资产化，会增加不必要的资源管理复杂度。如果只用文件路径或 `ResourceRef` 追踪过程，又会混淆“创作行为”和“媒体资源身份”。
+如果把所有内容都资产化，会增加不必要的资源管理复杂度。如果只用文件路径或 `ContentLocator` 追踪过程，又会混淆“创作行为”和“媒体资源身份”。
 
 ## 决策
 
@@ -35,7 +35,7 @@ Agent Autonomy
   + Skill 生命周期
   + SKILL.md prompt-chain 动态指导
   + 文本创作文档
-  + 媒体 ResourceRef / assetRef
+  + 媒体 ContentLocator / assetRef
   + iteration / attempt 过程追踪
 ```
 
@@ -63,7 +63,7 @@ Creation
 | --------------------------- | ---------------------------------------------------------------- | ------------------------ |
 | `creationId`                | 标识一个长期创作对象，例如一支短片、一个动画片段或一个宣传视频   | 标识单次生成行为         |
 | `iterationId` / `attemptId` | 标识一次生成、修订、审查或恢复行为                               | 定位媒体文件             |
-| `ResourceRef` / `assetRef`  | 标识可管理媒体资源                                               | 记录完整创作过程         |
+| `ContentLocator` / `assetRef`  | 标识可管理媒体资源                                               | 记录完整创作过程         |
 | 文本 artifact               | 承载剧本、创作理解稿、执行方案、任务进度、提示词等可直接分析内容 | 承载二进制媒体授权和预览 |
 
 ### 2. IDC 是创作过程骨架
@@ -139,10 +139,10 @@ Skill 的 portable metadata 和可选 `agents/neko.yaml` 只允许表达发现�
 文本 / markdown / brief / plan / checklist / prompt
   -> Agent 直接读写、分析、总结和引用
   -> 使用项目路径、文档名、frontmatter 或 artifact id
-  -> 不需要 ResourceRef
+  -> 不需要 ContentLocator
 
 图片 / 音频 / 视频 / 模型 / 文档内图片
-  -> 使用 DocumentArchiveResourceRef、GeneratedAsset.assetRef 或 ResourceRef
+  -> 使用对应 kind 的 ContentLocator
   -> 跨 Canvas/Cut/Storyboard/Preview/Quality Review 时使用稳定媒体引用
   -> 不使用 cache path、Webview URI 或临时绝对路径作为持久身份
 ```
@@ -154,28 +154,28 @@ media generation
   -> GeneratedAsset
   -> assetRef for Agent message and perception
   -> promotion / ingest when entering project graph
-  -> ResourceRef for Canvas, Cut, Storyboard and later reuse
+  -> ContentLocator for Canvas, Cut, Storyboard and later reuse
 ```
 
 文档内图片的推荐链路是：
 
 ```text
 ReadDocument
-  -> imageInfo[].resourceRef
-  -> ReadImage.images[].resourceRef
+  -> imageInfo[].contentLocator
+  -> ReadImage.images[].contentLocator
   -> Storyboard / Canvas / Cut / quality review
 ```
 
-### 6. 过程追踪不得用 ResourceRef 替代
+### 6. 过程追踪不得用 ContentLocator 替代
 
-`ResourceRef` 标识媒体资源，`iterationId` 或 `attemptId` 标识一次创作行为。二者可以互相引用，但不能互相替代。
+`ContentLocator` 标识媒体资源，`iterationId` 或 `attemptId` 标识一次创作行为。二者可以互相引用，但不能互相替代。
 
 原因：
 
 - 一次生成可能产生多个媒体资源。
 - 一次尝试可能失败、取消或只产生文本分析，没有媒体资源。
 - 同一媒体资源可能被多次使用、审查、重剪或作为参考图复用。
-- 过程追踪需要记录 prompt、Skill、模型、参数、IDC 阶段、审批、质量结果和失败原因，这些不应塞入 `ResourceRef`。
+- 过程追踪需要记录 prompt、Skill、模型、参数、IDC 阶段、审批、质量结果和失败原因，这些不应塞入 `ContentLocator`。
 
 推荐的过程记录形态是：
 
@@ -265,7 +265,7 @@ Creation / Iteration      = canonical 创作模型
 IDC stage runtime         = 创作阶段控制
 SkillLifecycleRuntime     = 能力激活/失效
 PromptChain events        = checkpoint / skip / reorder / completion
-ResourceRef / assetRef    = 媒体资源身份
+ContentLocator / assetRef    = 媒体资源身份
 Workflow projection       = 可选 UI/兼容投影，不参与决策
 ```
 
@@ -274,7 +274,7 @@ Workflow projection       = 可选 UI/兼容投影，不参与决策
 当前代码和文档已经具备正确方向，但仍有以下收敛点：
 
 1. `AgentWorkflowRun` 与 `IdcRun` 并存。需要明确它们是 runtime projection、trace 或 audit，不是影视创作 canonical object；具体 `agent-workflow-runtime.ts` 应退役为兼容投影并最终删除。
-2. `creationId`、`iterationId`、文本 artifact、媒体 `ResourceRef` 之间尚未形成统一创作模型。
+2. `creationId`、`iterationId`、文本 artifact、媒体 `ContentLocator` 之间尚未形成统一创作模型。
 3. Skill lifecycle 正在向 `SkillLifecycleRecord[]`、slot 和 lifetime 收敛，影视创作需要确保 `stagePersona`、`domainSkill`、`referenceSkill`、`workflowSkill` 不互相覆盖。
 4. prompt-chain 的读取、执行检查点、跳步、重排和结果记录还需要形成可测试 contract，避免变成隐藏 workflow engine。
 5. 文档图片和部分生成媒体已有稳定资源链路，但需要端到端确认生成、Storyboard、Canvas、Cut、Preview、质量审查都不回退到 cache path、Webview URI 或临时绝对路径。
@@ -283,20 +283,20 @@ Workflow projection       = 可选 UI/兼容投影，不参与决策
 
 ## 后续收敛方向
 
-当前 IDC 阶段、创作文档路径、Skill 生命周期和事件频道已有骨架。后续收敛应优先补齐 Creation 域模型、prompt-chain 追踪和媒体 `ResourceRef` 路径级验证。
+当前 IDC 阶段、创作文档路径、Skill 生命周期和事件频道已有骨架。后续收敛应优先补齐 Creation 域模型、prompt-chain 追踪和媒体 `ContentLocator` 路径级验证。
 
 | 优先级 | 收敛项                                                                            | 目标                                                                                                                                         |
 | ------ | --------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
 | P0     | 在 `agent-types` 定义 `Creation` / `CreationIteration` / `CreationEvent` contract | 作为媒体追踪、质量审查、iteration journal 和后续 UI projection 的锚点                                                                        |
 | P1     | 为 prompt-chain 建立最小可测试 contract                                           | 记录 checkpoint、skip、reorder 和 completion 事件，证明 Agent 动态执行而不是固定 workflow                                                    |
-| P2     | 建立端到端媒体路径测试                                                            | 覆盖生成媒体 -> Storyboard -> Canvas -> Cut -> Preview，全程使用 `ResourceRef` / `assetRef`，不回退到 cache path、Webview URI 或临时绝对路径 |
+| P2     | 建立端到端媒体路径测试                                                            | 覆盖生成媒体 -> Storyboard -> Canvas -> Cut -> Preview，全程使用 `ContentLocator` / `assetRef`，不回退到 cache path、Webview URI 或临时绝对路径 |
 
 补充收敛方向：
 
 - 将 `AgentWorkflowRun` 限定为 UI projection、trace 或兼容层；若保留 `IdcRun`，也应限定为 IDC runtime trace。具体 `agent-workflow-runtime.ts` 先降级为 legacy compat，不再新增创作语义，待 `Creation` contract 接管身份锚点后删除。
 - 为创作类 Skill 增加更清晰的 IDC entry metadata、默认 slot 和 prompt-chain observation contract。
 - 为媒体生产工具增加 preflight，检查 active IDC context、审批状态、source refs、provider availability 和输出 promotion 策略。
-- 为生成媒体建立统一 promotion 规则，确保进入项目图或跨插件交付前拥有 canonical `ResourceRef`。
+- 为生成媒体建立统一 promotion 规则，确保进入项目图或跨插件交付前拥有 canonical `ContentLocator`。
 - 为文本 artifact 明确“直接分析”边界，保留普通项目文件路径、frontmatter 和 artifact id，不引入媒体资源 ref。
 - 为质量审查增加领域 validator，覆盖 StoryboardTable、ShotImagePrepPlan、Canvas payload、Cut handoff 和生成媒体诊断。
 
@@ -304,4 +304,4 @@ Workflow projection       = 可选 UI/兼容投影，不参与决策
 
 该决策让 Agent 能管理完整影视创作流程，同时避免把系统退化成固定工作流编排器。它把创作行为、文本内容和媒体资源拆成不同身份层，降低了资源管理、Skill 扩展和 IDC 过程控制之间的耦合。
 
-代价是 runtime 需要维护更清晰的 projection 和 trace 边界，尤其要防止 `WorkflowRun`、`IdcRun`、`ResourceRef` 和 `SkillLifecycleRecord` 互相抢占职责。相关实现应优先 fail-visible，并通过路径级测试证明 canonical IDC、Skill lifecycle 和媒体 ResourceRef 链路被命中。
+代价是 runtime 需要维护更清晰的 projection 和 trace 边界，尤其要防止 `WorkflowRun`、`IdcRun`、`ContentLocator` 和 `SkillLifecycleRecord` 互相抢占职责。相关实现应优先 fail-visible，并通过路径级测试证明 canonical IDC、Skill lifecycle 和媒体 ContentLocator 链路被命中。

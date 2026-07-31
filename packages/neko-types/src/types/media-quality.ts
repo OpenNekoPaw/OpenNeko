@@ -1,9 +1,5 @@
-import type { ResourceRef } from './resource-cache';
-import {
-  isRuntimeOnlyResourceIdentityValue,
-  validateDurableResourceRef,
-  type DurableResourceRefDiagnostic,
-} from './durable-resource-ref';
+import { contentLocatorsEqual, isContentLocator, type ContentLocator } from './content-locator';
+import { isHostProjectedRuntimeValue } from './content-access';
 
 export const MEDIA_QUALITY_CONTRACT_VERSION = 1 as const;
 
@@ -46,7 +42,7 @@ export interface QualityProjectRef {
 export interface QualityLineageRef {
   readonly relation:
     'source' | 'generated-from' | 'derived-from' | 'projected-from' | 'exported-from' | 'reference';
-  readonly resourceRef?: ResourceRef;
+  readonly contentLocator?: ContentLocator;
   readonly projectRef?: QualityProjectRef;
   readonly revision?: string;
 }
@@ -55,7 +51,7 @@ export interface QualityTarget {
   readonly version: typeof MEDIA_QUALITY_CONTRACT_VERSION;
   readonly targetId: string;
   readonly kind: QualityTargetKind;
-  readonly resourceRef?: ResourceRef;
+  readonly contentLocator?: ContentLocator;
   readonly projectRef?: QualityProjectRef;
   readonly revision?: string;
   readonly contentDigest?: string;
@@ -133,7 +129,7 @@ export interface QualityEvidence {
   readonly coverage: QualityCoverage;
   readonly confidence?: number;
   readonly createdAt: string;
-  readonly sourceEvidenceRefs: readonly ResourceRef[];
+  readonly sourceEvidenceLocators: readonly ContentLocator[];
   readonly evidenceLineage?: QualityEvidenceLineage;
 }
 
@@ -192,7 +188,8 @@ export interface QualityDiagnostic {
     | 'quality-repair-not-approved'
     | 'quality-repair-limit-exceeded'
     | 'quality-repair-lineage-invalid'
-    | DurableResourceRefDiagnostic['code'];
+    | 'content-locator-invalid'
+    | 'runtime-resource-identity';
   readonly severity: 'info' | 'warning' | 'error';
   readonly message: string;
   readonly path?: readonly (string | number)[];
@@ -216,12 +213,12 @@ export function validateQualityTarget(target: QualityTarget): QualityValidationR
       message: 'QualityTarget has an unsupported version, kind, or empty target id.',
     });
   }
-  if ((target.resourceRef ? 1 : 0) + (target.projectRef ? 1 : 0) !== 1) {
+  if ((target.contentLocator ? 1 : 0) + (target.projectRef ? 1 : 0) !== 1) {
     diagnostics.push({
       code: 'invalid-quality-target',
       severity: 'error',
-      message: 'QualityTarget requires exactly one stable resourceRef or projectRef.',
-      path: ['resourceRef'],
+      message: 'QualityTarget requires exactly one ContentLocator or projectRef.',
+      path: ['contentLocator'],
     });
   }
   if (!target.revision && !target.contentDigest && !target.projectRef?.projectRevision) {
@@ -232,27 +229,32 @@ export function validateQualityTarget(target: QualityTarget): QualityValidationR
       path: ['revision'],
     });
   }
-  if (target.resourceRef) {
-    diagnostics.push(
-      ...validateDurableResourceRef(target.resourceRef, ['resourceRef']).diagnostics,
-    );
+  if (target.contentLocator && !isContentLocator(target.contentLocator)) {
+    diagnostics.push({
+      code: 'content-locator-invalid',
+      severity: 'error',
+      message: 'QualityTarget contentLocator is invalid.',
+      path: ['contentLocator'],
+    });
   }
   if (target.projectRef) validateProjectRef(target.projectRef, diagnostics, ['projectRef']);
   validateMediaRange(target.mediaRange, diagnostics, ['mediaRange']);
   target.lineage?.forEach((lineage, index) => {
-    if ((lineage.resourceRef ? 1 : 0) + (lineage.projectRef ? 1 : 0) !== 1) {
+    if ((lineage.contentLocator ? 1 : 0) + (lineage.projectRef ? 1 : 0) !== 1) {
       diagnostics.push({
         code: 'invalid-quality-target',
         severity: 'error',
-        message: 'Each lineage entry requires exactly one resourceRef or projectRef.',
+        message: 'Each lineage entry requires exactly one contentLocator or projectRef.',
         path: ['lineage', index],
       });
     }
-    if (lineage.resourceRef) {
-      diagnostics.push(
-        ...validateDurableResourceRef(lineage.resourceRef, ['lineage', index, 'resourceRef'])
-          .diagnostics,
-      );
+    if (lineage.contentLocator && !isContentLocator(lineage.contentLocator)) {
+      diagnostics.push({
+        code: 'content-locator-invalid',
+        severity: 'error',
+        message: 'Quality lineage contentLocator is invalid.',
+        path: ['lineage', index, 'contentLocator'],
+      });
     }
     if (lineage.projectRef)
       validateProjectRef(lineage.projectRef, diagnostics, ['lineage', index, 'projectRef']);
@@ -323,8 +325,15 @@ export function validateQualityEvidence(
       path: ['evidenceLineage'],
     });
   }
-  evidence.sourceEvidenceRefs.forEach((ref, index) => {
-    diagnostics.push(...validateDurableResourceRef(ref, ['sourceEvidenceRefs', index]).diagnostics);
+  evidence.sourceEvidenceLocators.forEach((locator, index) => {
+    if (!isContentLocator(locator)) {
+      diagnostics.push({
+        code: 'content-locator-invalid',
+        severity: 'error',
+        message: 'Quality evidence source locator is invalid.',
+        path: ['sourceEvidenceLocators', index],
+      });
+    }
   });
   const stale = currentTarget
     ? !qualityTargetsMatch(evidence.target, currentTarget)
@@ -382,7 +391,10 @@ export function qualityTargetsMatch(left: QualityTarget, right: QualityTarget): 
     (left.revision ?? left.projectRef?.projectRevision) ===
       (right.revision ?? right.projectRef?.projectRevision) &&
     left.contentDigest === right.contentDigest &&
-    left.resourceRef?.id === right.resourceRef?.id &&
+    ((!left.contentLocator && !right.contentLocator) ||
+      (left.contentLocator !== undefined &&
+        right.contentLocator !== undefined &&
+        contentLocatorsEqual(left.contentLocator, right.contentLocator))) &&
     left.projectRef?.documentUri === right.projectRef?.documentUri
   );
 }
@@ -400,7 +412,7 @@ function validateProjectRef(
       path,
     });
   }
-  if (isRuntimeOnlyResourceIdentityValue(ref.documentUri)) {
+  if (isHostProjectedRuntimeValue(ref.documentUri)) {
     diagnostics.push({
       code: 'runtime-resource-identity',
       severity: 'error',

@@ -31,7 +31,7 @@
 | Engine/Webview/Node token 或 stream URL           | 否           | 当前 runtime projection                                                   |
 | derived/cache/temp/materialized path              | 否           | Host 内部可重建表现或 scratch                                             |
 
-普通 workspace source 不需要为了读取先包装为 ResourceRef。`Downloads`、Desktop、temp 和任意外部绝对目录也不是隐式授权来源；用户必须显式导入、放入 workspace，或创建 `neko/assets/<libraryName>` link。
+普通 workspace source 直接使用 `WorkspaceFileContentLocator`，不需要注册 Asset 或进入 cache。`Downloads`、Desktop、temp 和任意外部绝对目录也不是隐式授权来源；用户必须显式导入、放入 workspace，或创建 `neko/assets/<libraryName>` link。
 
 ## 服务职责
 
@@ -102,7 +102,7 @@ Electron Main 并非真正 OS sandbox，因此仍需上述 guard；但 guard 不
 
 ## 文档与 Agent
 
-ReadDocument 输出 stable document locator，ReadImage 原样交回 ContentReadService。Agent 不感知 EPUB/DOCX/CBZ 解包，也不需要为原生 entry 构造 ResourceRef 或 cache variant。
+ReadDocument 分别输出语义 `DocumentLocator` 与内容 `DocumentEntryContentLocator`，ReadImage 将内容 locator 原样交回 ContentReadService。Agent 不感知 EPUB/DOCX/CBZ 解包，也不构造 cache variant。
 
 - 已存在的 archive image entry 是 source content，直接有界读取。
 - PDF/Office raster page、document thumbnail 是实际生成的 representation。

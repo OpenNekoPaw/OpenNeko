@@ -5,7 +5,7 @@ import {
   createExternalProcessorRegistry,
   type ExternalProcessorManifest,
 } from '@neko-agent/types';
-import { createResourceFingerprint, createResourceRef, type ResourceRef } from '@neko/shared';
+import type { ContentLocator } from '@neko/shared';
 import { createAgentExternalProcessorRuntime } from '../capability/external-processor-runtime';
 
 const removeBackgroundManifest = manifest('remove-background', {
@@ -90,13 +90,13 @@ describe('Agent external processor chain runtime', () => {
 
   it('creates a new processorRunId when the creative target changes', () => {
     const runtime = createRuntime();
-    const parentResourceRef = resource('shot-1-output');
+    const parentContentLocator = contentLocator('shot-1-output');
     const first = runtime.startChain({ targetKey: 'shot-1' });
 
     const replanned = runtime.replanChainForTargetChange({
       previousProcessorRunId: first.processorRunId,
       targetKey: 'shot-2',
-      parentResourceRef,
+      parentContentLocator,
     });
 
     expect(replanned.processorRunId).not.toBe(first.processorRunId);
@@ -104,7 +104,7 @@ describe('Agent external processor chain runtime', () => {
       expect.objectContaining({
         targetKey: 'shot-2',
         parentProcessorRunId: first.processorRunId,
-        parentResourceRef,
+        parentContentLocator,
       }),
     );
   });
@@ -192,16 +192,6 @@ function manifest(
   };
 }
 
-function resource(id: string): ResourceRef {
-  return createResourceRef({
-    id,
-    scope: 'project',
-    provider: 'external-processor',
-    kind: 'generated',
-    source: {
-      kind: 'generated-asset',
-      generatedAssetId: id,
-    },
-    fingerprint: createResourceFingerprint({ strategy: 'provider', value: id }),
-  });
+function contentLocator(path: string): ContentLocator {
+  return { kind: 'workspace-file', path };
 }

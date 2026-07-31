@@ -1,6 +1,6 @@
 import * as path from 'node:path';
 import {
-  createDocumentEntryResourceRef,
+  createDocumentEntryContentLocator,
   type DocumentBatchCursor,
   type DocumentFormat,
   type DocumentImageInfo,
@@ -696,19 +696,19 @@ export class DocumentAccessService implements IDocumentAccessService {
         pageIndex,
         ...(entryName ? { entryName } : {}),
       };
+      const contentLocator =
+        image.info?.contentLocator ??
+        createDocumentEntryContentLocator({
+          source,
+          entryPath: entryName,
+        });
       return image.info
         ? [
             {
               ...image.info,
               locator,
               ...(entryName && !image.info.entryPath ? { entryPath: entryName } : {}),
-              resourceRef:
-                image.info.resourceRef ??
-                createDocumentEntryResourceRef({
-                  source,
-                  locator,
-                  entryPath: entryName,
-                }),
+              ...(contentLocator ? { contentLocator } : {}),
             },
           ]
         : [];
@@ -1252,9 +1252,8 @@ function createImageInfo(
   },
 ): DocumentImageInfo {
   const metadata = probeImageMetadata(bytes);
-  const resourceRef = createDocumentEntryResourceRef({
+  const contentLocator = createDocumentEntryContentLocator({
     source: resource?.source,
-    locator: resource?.locator,
     entryPath: resource?.entryPath,
   });
   return {
@@ -1264,7 +1263,7 @@ function createImageInfo(
     ...(metadata?.height !== undefined ? { height: metadata.height } : {}),
     ...(resource?.entryPath ? { entryPath: resource.entryPath } : {}),
     ...(resource?.locator ? { locator: resource.locator } : {}),
-    ...(resourceRef ? { resourceRef } : {}),
+    ...(contentLocator ? { contentLocator } : {}),
   };
 }
 

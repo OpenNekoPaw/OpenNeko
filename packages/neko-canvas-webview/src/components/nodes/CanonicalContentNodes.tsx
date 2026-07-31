@@ -99,19 +99,15 @@ export function MediaNode({ node, isSelected, ...baseProps }: CanonicalNodeProps
         path: source,
         mediaType,
       },
+      ...(node.data.contentLocator ? { contentLocator: node.data.contentLocator } : {}),
       metadata: {
         ...(node.data.duration ? { duration: node.data.duration } : {}),
-        ...(node.data.resourceRef ? { resourceRef: node.data.resourceRef } : {}),
-        ...(node.data.documentResourceRef
-          ? { documentResourceRef: node.data.documentResourceRef }
-          : {}),
       },
     }),
     [
       mediaType,
-      node.data.documentResourceRef,
+      node.data.contentLocator,
       node.data.duration,
-      node.data.resourceRef,
       node.data.title,
       node.id,
       previewRole,

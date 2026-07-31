@@ -4,7 +4,7 @@ import type {
   ArtifactAction,
   ArtifactDiagnostic,
   ArtifactMediaItem,
-  ArtifactResourceRef,
+  ArtifactReference,
   CompositeArtifact,
   CompositeArtifactBlock,
   GenericTable,
@@ -273,7 +273,7 @@ function GenericTableCellView({ cell }: { cell: GenericTableCell }) {
       );
     case 'diagnostic':
       return <DiagnosticPill diagnostic={cell.value} />;
-    case 'resource-ref':
+    case 'reference':
       return <StableRefText value={cell.value} />;
     case 'media-preview':
       return <MediaItemView item={cell.value} compact />;
@@ -312,7 +312,7 @@ function MediaItemView({ item, compact = false }: { item: ArtifactMediaItem; com
       </div>
       {!compact && (
         <div className="mt-1">
-          <StableRefText value={item.resourceRef} />
+          <StableRefText value={item.reference} />
         </div>
       )}
     </div>
@@ -383,10 +383,10 @@ function DiagnosticPill({ diagnostic }: { diagnostic: ArtifactDiagnostic }) {
   );
 }
 
-function StableRefText({ value }: { value: ArtifactResourceRef }) {
+function StableRefText({ value }: { value: ArtifactReference }) {
   return (
     <span className="break-all font-mono text-[9px] text-[var(--agent-fg-secondary)]">
-      {formatResourceRef(value)}
+      {formatReference(value)}
     </span>
   );
 }
@@ -401,17 +401,10 @@ function JsonPreview({ value, compact = false }: { value: unknown; compact?: boo
   );
 }
 
-function formatResourceRef(ref: ArtifactResourceRef): string {
+function formatReference(ref: ArtifactReference): string {
   switch (ref.kind) {
-    case 'resource':
-      return formatJson({
-        id: ref.resource.id,
-        provider: ref.resource.provider,
-        kind: ref.resource.kind,
-        source: ref.resource.source,
-      });
-    case 'document-entry':
-      return `${ref.resource.source.fileId ?? ref.resource.source.filePath}:${ref.resource.entryPath ?? 'entry'}`;
+    case 'content':
+      return formatJson(ref.contentLocator);
     case 'generated-asset':
       return ref.assetVersion ? `${ref.assetId}@${ref.assetVersion}` : ref.assetId;
     case 'tool-result':

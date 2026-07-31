@@ -14,7 +14,7 @@ import type {
   ExternalProcessorResult,
   ExternalProcessorRunIdentity,
 } from '@neko-agent/types';
-import { isContentLocator, type ResourceRef } from '@neko/shared';
+import { isContentLocator, type ContentLocator } from '@neko/shared';
 
 export interface AgentExternalProcessorRuntimeOptions {
   readonly registry: ExternalProcessorRegistry;
@@ -107,7 +107,7 @@ export interface AgentExternalProcessorResultProjection {
 export interface AgentExternalProcessorChainStartInput {
   readonly targetKey: string;
   readonly parentProcessorRunId?: string;
-  readonly parentResourceRef?: ResourceRef;
+  readonly parentContentLocator?: ContentLocator;
 }
 
 export interface AgentExternalProcessorChainRun {
@@ -116,7 +116,7 @@ export interface AgentExternalProcessorChainRun {
   readonly status: 'running' | 'waiting-approval' | 'completed' | 'failed' | 'cancelled';
   readonly stages: readonly AgentExternalProcessorChainStageRecord[];
   readonly parentProcessorRunId?: string;
-  readonly parentResourceRef?: ResourceRef;
+  readonly parentContentLocator?: ContentLocator;
 }
 
 export interface AgentExternalProcessorChainStageRecord {
@@ -136,7 +136,7 @@ export interface AgentExternalProcessorChainStageInput extends Omit<
   readonly processorRunId: string;
   readonly stageId?: string;
   readonly attempt?: number;
-  readonly parentResourceRef?: ResourceRef;
+  readonly parentContentLocator?: ContentLocator;
   readonly requireApprovalContinuation?: boolean;
   readonly approvalToken?: string;
 }
@@ -169,7 +169,7 @@ export interface AgentExternalProcessorChainApprovalContinuationInput {
 export interface AgentExternalProcessorChainTargetChangeInput {
   readonly previousProcessorRunId: string;
   readonly targetKey: string;
-  readonly parentResourceRef?: ResourceRef;
+  readonly parentContentLocator?: ContentLocator;
 }
 
 export function createAgentExternalProcessorRuntime(
@@ -323,7 +323,7 @@ class DefaultAgentExternalProcessorRuntime implements AgentExternalProcessorRunt
       status: 'running',
       stages: [],
       ...(input.parentProcessorRunId ? { parentProcessorRunId: input.parentProcessorRunId } : {}),
-      ...(input.parentResourceRef ? { parentResourceRef: input.parentResourceRef } : {}),
+      ...(input.parentContentLocator ? { parentContentLocator: input.parentContentLocator } : {}),
     };
     this.chainRuns.set(run.processorRunId, run);
     return run;
@@ -374,8 +374,8 @@ class DefaultAgentExternalProcessorRuntime implements AgentExternalProcessorRunt
         stageId,
         attempt,
         ...(run.parentProcessorRunId ? { parentProcessorRunId: run.parentProcessorRunId } : {}),
-        ...((input.parentResourceRef ?? run.parentResourceRef)
-          ? { parentResourceRef: input.parentResourceRef ?? run.parentResourceRef }
+        ...((input.parentContentLocator ?? run.parentContentLocator)
+          ? { parentContentLocator: input.parentContentLocator ?? run.parentContentLocator }
           : {}),
       },
     });
@@ -459,8 +459,8 @@ class DefaultAgentExternalProcessorRuntime implements AgentExternalProcessorRunt
     const run = this.startChain({
       targetKey: input.targetKey,
       parentProcessorRunId: input.previousProcessorRunId,
-      ...((input.parentResourceRef ?? previous?.parentResourceRef)
-        ? { parentResourceRef: input.parentResourceRef ?? previous?.parentResourceRef }
+      ...((input.parentContentLocator ?? previous?.parentContentLocator)
+        ? { parentContentLocator: input.parentContentLocator ?? previous?.parentContentLocator }
         : {}),
     });
     return run;
@@ -508,7 +508,7 @@ function createRunIdentity(
     stageId: input?.stageId ?? generateStageId(),
     attempt: input?.attempt ?? 1,
     ...(input?.parentProcessorRunId ? { parentProcessorRunId: input.parentProcessorRunId } : {}),
-    ...(input?.parentResourceRef ? { parentResourceRef: input.parentResourceRef } : {}),
+    ...(input?.parentContentLocator ? { parentContentLocator: input.parentContentLocator } : {}),
   };
 }
 

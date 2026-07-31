@@ -1,37 +1,23 @@
 import { describe, expect, it } from 'vitest';
 import {
-  createResourceFingerprint,
-  createResourceRef,
   validateCompositeArtifact,
   type CanvasPlaybackPlan,
-  type ResourceRef,
+  type ContentLocator,
 } from '@neko/shared';
 import { projectCanvasPlaybackRouteCard } from '../canvas-playback-route-presenter';
 
-function createPosterResourceRef(): ResourceRef {
-  return createResourceRef({
-    scope: 'project',
-    provider: 'generated-assets',
-    kind: 'generated',
-    source: {
-      kind: 'generated-asset',
-      generatedAssetId: 'asset-shot-1',
-    },
-    locator: {
-      kind: 'generated-asset',
-      assetId: 'asset-shot-1',
-      variantId: 'poster',
-    },
-    fingerprint: createResourceFingerprint({
-      strategy: 'provider',
-      value: 'asset-shot-1:poster',
-      providerId: 'generated-assets',
-    }),
-  });
+function createPosterContentLocator(): ContentLocator {
+  return {
+    kind: 'generated-output',
+    outputId: 'asset-shot-1',
+    revision: '1',
+    digest: 'sha256:asset-shot-1',
+    path: 'generated/asset-shot-1.png',
+  };
 }
 
 function createPlan(): CanvasPlaybackPlan {
-  const posterRef = createPosterResourceRef();
+  const posterLocator = createPosterContentLocator();
   return {
     adapterId: 'generic',
     requestedAdapterId: 'generic',
@@ -46,7 +32,7 @@ function createPlan(): CanvasPlaybackPlan {
         renderMode: 'media-playback',
         label: 'Opening image',
         durationMs: 3000,
-        resourceRef: posterRef,
+        contentLocator: posterLocator,
         metadata: { mediaType: 'image', thumbnailUrl: 'webview://runtime-thumbnail' },
       },
       {
@@ -172,11 +158,9 @@ describe('canvas playback route presenter', () => {
         {
           itemId: 'unit-media-1:poster',
           mediaType: 'image',
-          resourceRef: {
-            kind: 'resource',
-            resource: {
-              provider: 'generated-assets',
-            },
+          reference: {
+            kind: 'content',
+            contentLocator: createPosterContentLocator(),
           },
           metadata: {
             routeCardRole: 'poster-or-source-reference',

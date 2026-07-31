@@ -10,8 +10,7 @@ import {
   isCanvasMaterialGenerationContext,
   isCanvasMaterialMediaKind,
   isCanvasNodeType,
-  isDocumentArchiveResourceRef,
-  isResourceRef,
+  isContentLocator,
   parseDocumentResourceStatus,
 } from '@neko/shared';
 import { isJobRef } from '@neko/shared/job-lifecycle';
@@ -71,11 +70,13 @@ export function buildCanvasNode(options: BuildCanvasNodeOptions): CanvasNodeDraf
     case 'media': {
       const mediaType = readMediaType(data.mediaType);
       const assetPath = asString(data.assetPath);
-      const documentResourceRef = isDocumentArchiveResourceRef(data.documentResourceRef)
-        ? data.documentResourceRef
+      if (data.resourceRef !== undefined || data.documentResourceRef !== undefined) {
+        throw new Error('Canvas Media creation rejects retired resource-reference fields');
+      }
+      const contentLocator = isContentLocator(data.contentLocator)
+        ? data.contentLocator
         : undefined;
-      const resourceRef = isResourceRef(data.resourceRef) ? data.resourceRef : undefined;
-      if (!assetPath && !documentResourceRef && !resourceRef) {
+      if (!assetPath && !contentLocator) {
         throw new Error('Canvas Media creation requires a durable source');
       }
       return {
@@ -87,8 +88,7 @@ export function buildCanvasNode(options: BuildCanvasNodeOptions): CanvasNodeDraf
         },
         data: {
           assetPath,
-          documentResourceRef,
-          resourceRef,
+          contentLocator,
           documentResourceStatus: parseDocumentResourceStatus(data.documentResourceStatus),
           runtimeAssetPath: optionalString(data.runtimeAssetPath),
           thumbnailPath: optionalString(data.thumbnailPath),
@@ -139,11 +139,13 @@ export function buildCanvasNode(options: BuildCanvasNodeOptions): CanvasNodeDraf
       };
     case 'file': {
       const path = asString(data.path);
-      const resourceRef = isResourceRef(data.resourceRef) ? data.resourceRef : undefined;
-      const documentResourceRef = isDocumentArchiveResourceRef(data.documentResourceRef)
-        ? data.documentResourceRef
+      if (data.resourceRef !== undefined || data.documentResourceRef !== undefined) {
+        throw new Error('Canvas File creation rejects retired resource-reference fields');
+      }
+      const contentLocator = isContentLocator(data.contentLocator)
+        ? data.contentLocator
         : undefined;
-      if (!path && !resourceRef && !documentResourceRef) {
+      if (!path && !contentLocator) {
         throw new Error('Canvas File creation requires a durable source');
       }
       return {
@@ -154,8 +156,7 @@ export function buildCanvasNode(options: BuildCanvasNodeOptions): CanvasNodeDraf
           title: optionalString(data.title) ?? path.split('/').pop() ?? 'File',
           mediaKind: isCanvasMaterialMediaKind(data.mediaKind) ? data.mediaKind : undefined,
           mediaType: optionalString(data.mediaType),
-          resourceRef,
-          documentResourceRef,
+          contentLocator,
           documentResourceStatus: parseDocumentResourceStatus(data.documentResourceStatus),
           runtimePath: optionalString(data.runtimePath),
           provenance: asSerializableRecord(data.provenance),
@@ -242,8 +243,8 @@ function readJobArtifactRefs(value: unknown): CanvasJobArtifactRef[] {
     if (candidate.kind === 'canvas-node') {
       return typeof candidate.nodeId === 'string' && candidate.nodeId.length > 0;
     }
-    if (candidate.kind === 'resource') {
-      return isResourceRef(candidate.resourceRef);
+    if (candidate.kind === 'content') {
+      return isContentLocator(candidate.contentLocator);
     }
     return (
       candidate.kind === 'file' && typeof candidate.path === 'string' && candidate.path.length > 0

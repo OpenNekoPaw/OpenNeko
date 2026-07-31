@@ -321,11 +321,11 @@ function decodeResourceCacheEntry(
       message: `Stored ResourceCache entry is invalid: ${readString(row, 'resource_id')}`,
     });
   }
-  if (entry.resource.id !== readString(row, 'resource_id')) {
+  if (entry.descriptor.id !== readString(row, 'resource_id')) {
     throw new LocalMetadataError({
       code: 'metadata-integrity-failed',
       operation: 'decode-resource-cache-entry',
-      message: `Stored ResourceCache entry identity does not match its row: ${entry.resource.id}`,
+      message: `Stored ResourceCache entry identity does not match its row: ${entry.descriptor.id}`,
     });
   }
   return entry;
@@ -961,7 +961,7 @@ class RawResourceCacheMetadataRepository implements ResourceCacheMetadataReposit
     resourceId: string,
   ): Promise<ResourceCacheEntry | null> {
     const entries = await this.list(partition);
-    return entries.find((entry) => entry.resource.id === resourceId) ?? null;
+    return entries.find((entry) => entry.descriptor.id === resourceId) ?? null;
   }
 
   async list(partition: LocalMetadataPartition): Promise<readonly ResourceCacheEntry[]> {
@@ -1012,7 +1012,7 @@ class RawResourceCacheMetadataRepository implements ResourceCacheMetadataReposit
           key,
           request.partition.scope,
           request.partition.workspaceId,
-          entry.resource.id,
+          entry.descriptor.id,
           serializeLocalMetadataJson(metadata, 'replace-resource-cache-entry'),
           entry.status,
           entry.createdAt,
@@ -1022,7 +1022,7 @@ class RawResourceCacheMetadataRepository implements ResourceCacheMetadataReposit
       );
       const variantKeys = new Set<string>();
       for (const variant of variants) {
-        assertResourceCacheVariant(variant, entry.resource.id, variantKeys);
+        assertResourceCacheVariant(variant, entry.descriptor.id, variantKeys);
         await this.connection().run(
           `INSERT INTO resource_cache_variants (
             partition_key, partition_scope, workspace_id, resource_id, variant_key,
@@ -1033,7 +1033,7 @@ class RawResourceCacheMetadataRepository implements ResourceCacheMetadataReposit
             key,
             request.partition.scope,
             request.partition.workspaceId,
-            entry.resource.id,
+            entry.descriptor.id,
             variant.key,
             serializeLocalMetadataJson(variant, 'replace-resource-cache-variant'),
             variant.status,
@@ -2624,31 +2624,31 @@ function assertResourceCacheEntryForPartition(
   partition: LocalMetadataPartition,
   resourceIds: Set<string>,
 ): void {
-  if (!isResourceCacheEntry(entry) || !entry.resource.id.trim()) {
+  if (!isResourceCacheEntry(entry) || !entry.descriptor.id.trim()) {
     throw new LocalMetadataError({
       code: 'metadata-transaction-failed',
       operation: 'replace-resource-cache-entry',
       message: 'ResourceCache replacement contains an invalid entry',
     });
   }
-  if (resourceIds.has(entry.resource.id)) {
+  if (resourceIds.has(entry.descriptor.id)) {
     throw new LocalMetadataError({
       code: 'metadata-transaction-failed',
       operation: 'replace-resource-cache-entry',
-      message: `ResourceCache replacement contains duplicate resource ${entry.resource.id}`,
+      message: `ResourceCache replacement contains duplicate resource ${entry.descriptor.id}`,
     });
   }
   if (
-    (partition.scope === 'workspace' && entry.resource.scope !== 'project') ||
-    (partition.scope === 'global' && entry.resource.scope === 'project')
+    (partition.scope === 'workspace' && entry.descriptor.scope !== 'project') ||
+    (partition.scope === 'global' && entry.descriptor.scope === 'project')
   ) {
     throw new LocalMetadataError({
       code: 'metadata-transaction-failed',
       operation: 'replace-resource-cache-entry',
-      message: `Resource ${entry.resource.id} scope does not match its metadata partition`,
+      message: `Resource ${entry.descriptor.id} scope does not match its metadata partition`,
     });
   }
-  resourceIds.add(entry.resource.id);
+  resourceIds.add(entry.descriptor.id);
 }
 
 function assertResourceCacheVariant(

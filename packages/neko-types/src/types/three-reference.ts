@@ -3,7 +3,7 @@ import {
   type ModelPreviewFormat,
   type NormalizedModelFacts,
 } from './model-preview.js';
-import { isResourceRef, type ResourceRef } from './resource-cache.js';
+import { contentLocatorsEqual, isContentLocator, type ContentLocator } from './content-locator.js';
 
 export const THREE_REFERENCE_CONTEXT_VERSION = 1 as const;
 export const THREE_REFERENCE_PROTOCOL_VERSION = 2 as const;
@@ -51,7 +51,7 @@ export interface ThreeReferencePresetOption {
 export type ThreeReferenceSubject =
   | {
       readonly kind: 'source-model';
-      readonly source: ResourceRef;
+      readonly source: ContentLocator;
       readonly fingerprint: string;
       readonly format: ModelPreviewFormat;
     }
@@ -85,13 +85,13 @@ export interface ThreeReferencePanoramaOrientation {
 }
 
 export interface ThreeReferenceEnvironment {
-  readonly source: ResourceRef;
+  readonly source: ContentLocator;
   readonly fingerprint: string;
   readonly orientation: ThreeReferencePanoramaOrientation;
 }
 
 export interface ThreeReferencePanoramaRuntimeDescriptor {
-  readonly source: ResourceRef;
+  readonly source: ContentLocator;
   readonly fingerprint: string;
   readonly uri: string;
   readonly mediaType:
@@ -100,7 +100,7 @@ export interface ThreeReferencePanoramaRuntimeDescriptor {
 }
 
 export interface ThreeReferenceSourceRuntimeDescriptor {
-  readonly source: ResourceRef;
+  readonly source: ContentLocator;
   readonly fingerprint: string;
   readonly format: ModelPreviewFormat;
   readonly entryUri: string;
@@ -178,25 +178,25 @@ interface ThreeReferenceOutputIdentity extends ThreeReferenceIdentity {}
 export type ThreeReferenceOutput =
   | (ThreeReferenceOutputIdentity & {
       readonly kind: 'appearance';
-      readonly image: ResourceRef;
-      readonly source: ResourceRef;
+      readonly image: ContentLocator;
+      readonly source: ContentLocator;
     })
   | (ThreeReferenceOutputIdentity & {
       readonly kind: 'pose';
-      readonly controlImage: ResourceRef;
+      readonly controlImage: ContentLocator;
       readonly controlMode: ThreeReferencePoseControlMode;
       readonly joints: readonly ThreeReferenceJointPose[];
     })
   | (ThreeReferenceOutputIdentity & {
       readonly kind: 'camera';
       readonly camera: ThreeReferenceCamera;
-      readonly compositionImage?: ResourceRef;
+      readonly compositionImage?: ContentLocator;
     })
   | (ThreeReferenceOutputIdentity & {
       readonly kind: 'panorama-scene';
-      readonly panorama: ResourceRef;
+      readonly panorama: ContentLocator;
       readonly orientation: ThreeReferencePanoramaOrientation;
-      readonly viewportImage?: ResourceRef;
+      readonly viewportImage?: ContentLocator;
     });
 
 export interface ThreeReferenceContextData {
@@ -211,13 +211,13 @@ export interface ThreeReferenceMediaOutputIdentity {
 }
 
 export interface ThreeReferenceAppearanceMediaReference {
-  readonly imageRef: ResourceRef;
-  readonly sourceRef: ResourceRef;
+  readonly imageRef: ContentLocator;
+  readonly sourceRef: ContentLocator;
   readonly identity: ThreeReferenceMediaOutputIdentity;
 }
 
 export interface ThreeReferenceControlImageMediaReference {
-  readonly imageRef: ResourceRef;
+  readonly imageRef: ContentLocator;
   readonly mode: ThreeReferencePoseControlMode;
   readonly identity: ThreeReferenceMediaOutputIdentity;
 }
@@ -228,7 +228,7 @@ export interface ThreeReferenceCameraMediaReference {
 }
 
 export interface ThreeReferencePanoramaMediaReference {
-  readonly imageRef: ResourceRef;
+  readonly imageRef: ContentLocator;
   readonly orientation: ThreeReferencePanoramaOrientation;
   readonly identity: ThreeReferenceMediaOutputIdentity;
 }
@@ -449,7 +449,7 @@ export function isThreeReferenceSourceRuntimeDescriptor(
 ): value is ThreeReferenceSourceRuntimeDescriptor {
   return (
     isRecord(value) &&
-    isResourceRef(value['source']) &&
+    isContentLocator(value['source']) &&
     isNonEmptyString(value['fingerprint']) &&
     isModelPreviewFormat(value['format']) &&
     isNonEmptyString(value['entryUri']) &&
@@ -463,7 +463,7 @@ export function isThreeReferencePanoramaRuntimeDescriptor(
 ): value is ThreeReferencePanoramaRuntimeDescriptor {
   return (
     isRecord(value) &&
-    isResourceRef(value['source']) &&
+    isContentLocator(value['source']) &&
     isNonEmptyString(value['fingerprint']) &&
     isNonEmptyString(value['uri']) &&
     (value['mediaType'] === 'image/jpeg' ||
@@ -483,7 +483,7 @@ export function isThreeReferencePanelSubject(value: unknown): value is ThreeRefe
       return (
         value['subject'].kind === 'source-model' &&
         isThreeReferenceSourceRuntimeDescriptor(value['runtime']) &&
-        value['runtime'].source.id === value['subject'].source.id &&
+        contentLocatorsEqual(value['runtime'].source, value['subject'].source) &&
         value['runtime'].fingerprint === value['subject'].fingerprint &&
         value['runtime'].format === value['subject'].format
       );
@@ -637,7 +637,7 @@ export function isThreeReferenceSubject(value: unknown): value is ThreeReference
   switch (value['kind']) {
     case 'source-model':
       return (
-        isResourceRef(value['source']) &&
+        isContentLocator(value['source']) &&
         isNonEmptyString(value['fingerprint']) &&
         isModelPreviewFormat(value['format'])
       );
@@ -654,23 +654,23 @@ export function isThreeReferenceOutput(value: unknown): value is ThreeReferenceO
   if (!isRecord(value) || !isIdentityFields(value)) return false;
   switch (value['kind']) {
     case 'appearance':
-      return isResourceRef(value['image']) && isResourceRef(value['source']);
+      return isContentLocator(value['image']) && isContentLocator(value['source']);
     case 'pose':
       return (
-        isResourceRef(value['controlImage']) &&
+        isContentLocator(value['controlImage']) &&
         (value['controlMode'] === 'pose' || value['controlMode'] === 'depth') &&
         isArrayOf(value['joints'], isThreeReferenceJointPose)
       );
     case 'camera':
       return (
         isThreeReferenceCamera(value['camera']) &&
-        (value['compositionImage'] === undefined || isResourceRef(value['compositionImage']))
+        (value['compositionImage'] === undefined || isContentLocator(value['compositionImage']))
       );
     case 'panorama-scene':
       return (
-        isResourceRef(value['panorama']) &&
+        isContentLocator(value['panorama']) &&
         isThreeReferencePanoramaOrientation(value['orientation']) &&
-        (value['viewportImage'] === undefined || isResourceRef(value['viewportImage']))
+        (value['viewportImage'] === undefined || isContentLocator(value['viewportImage']))
       );
     default:
       return false;
@@ -745,7 +745,7 @@ function isThreeReferenceCamera(value: unknown): value is ThreeReferenceCamera {
 function isThreeReferenceEnvironment(value: unknown): value is ThreeReferenceEnvironment {
   return (
     isRecord(value) &&
-    isResourceRef(value['source']) &&
+    isContentLocator(value['source']) &&
     isNonEmptyString(value['fingerprint']) &&
     isThreeReferencePanoramaOrientation(value['orientation'])
   );
@@ -797,7 +797,7 @@ function outputMatchesStaging(
     case 'panorama-scene':
       return (
         staging.environment !== undefined &&
-        output.panorama.id === staging.environment.source.id &&
+        contentLocatorsEqual(output.panorama, staging.environment.source) &&
         samePanoramaOrientation(output.orientation, staging.environment.orientation)
       );
     case 'appearance':

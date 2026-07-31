@@ -196,7 +196,7 @@ function prepareProxyEntries(
       artifactSourcePath,
       artifactTargetPath,
       entry: {
-        resource: {
+        descriptor: {
           id: resourceId,
           scope: 'project',
           provider: PROXY_PROVIDER,
@@ -209,7 +209,14 @@ function prepareProxyEntries(
               mtimeMs: proxy.sourceModified,
             },
           },
-          locator: { kind: 'file', path: source.path },
+          ...('projectRelativePath' in source.reference
+            ? {
+                contentLocator: {
+                  kind: 'workspace-file' as const,
+                  path: source.reference.projectRelativePath,
+                },
+              }
+            : {}),
           fingerprint: {
             strategy: 'mtime-size',
             value: `${proxy.sourceModified}:${proxy.sourceSize}`,
@@ -235,14 +242,14 @@ function mergeImportedEntries(
 ): ResourceCacheManifest {
   const entries = { ...manifest.entries };
   for (const imported of importedEntries) {
-    const existing = entries[imported.resource.id];
+    const existing = entries[imported.descriptor.id];
     if (!existing) {
-      entries[imported.resource.id] = imported;
+      entries[imported.descriptor.id] = imported;
       continue;
     }
     const variants = new Map(existing.variants.map((variant) => [variant.key, variant]));
     for (const variant of imported.variants) variants.set(variant.key, variant);
-    entries[imported.resource.id] = {
+    entries[imported.descriptor.id] = {
       ...existing,
       variants: [...variants.values()],
       updatedAt: new Date(migratedAt).toISOString(),
@@ -260,14 +267,16 @@ function assertVerifiedProjection(
   actual: ResourceCacheManifest,
 ): void {
   for (const imported of importedEntries) {
-    const actualEntry = actual.entries[imported.resource.id];
+    const actualEntry = actual.entries[imported.descriptor.id];
     if (!actualEntry) {
-      throw new Error(`Proxy migration identity verification failed for ${imported.resource.id}.`);
+      throw new Error(
+        `Proxy migration identity verification failed for ${imported.descriptor.id}.`,
+      );
     }
     for (const variant of imported.variants) {
       if (!actualEntry.variants.some((candidate) => candidate.key === variant.key)) {
         throw new Error(
-          `Proxy migration variant verification failed for ${imported.resource.id}:${variant.key}.`,
+          `Proxy migration variant verification failed for ${imported.descriptor.id}:${variant.key}.`,
         );
       }
     }

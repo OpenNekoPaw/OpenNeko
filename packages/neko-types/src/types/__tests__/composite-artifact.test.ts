@@ -387,7 +387,7 @@ function makeMediaCell(
       itemId: 'panel-1',
       mediaType: 'image',
       label: 'Panel 1',
-      resourceRef: {
+      reference: {
         kind: 'tool-result',
         toolCallId: 'read-comic',
         assetIndex: 0,

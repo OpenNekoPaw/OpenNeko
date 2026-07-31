@@ -181,7 +181,7 @@ Pi 与 OpenNeko 的职责边界固定为：
 | Owner                    | 保留职责                                                                                                                                  |
 | ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------- |
 | Pi                       | Agent turn loop、主模型流式调用、Tool Call 校验/执行/并行/结果回填、事件、取消、steering/follow-up、Session/context/compaction primitives |
-| OpenNeko product runtime | conversation/turn/run identity、Capability/MCP 目录、workspace trust、approval、ResourceRef、模型用途投影、领域 Tool 和 Host 生命周期     |
+| OpenNeko product runtime | conversation/turn/run identity、Capability/MCP 目录、workspace trust、approval、ContentLocator、模型用途投影、领域 Tool 和 Host 生命周期     |
 | Host config              | 用户/工作区配置读取、credential handle、监听与 mutation、Extension/TUI 设置投影                                                           |
 | Domain/media runtime     | 媒体生成、感知、Quality、项目事实、领域 Job 和产物晋升                                                                                    |
 
@@ -212,15 +212,15 @@ Pi Agent
   -> OpenNeko Capability
   -> Host security / approval adapter
   -> managed external process
-  -> ResourceRef + diagnostic + provenance
+  -> ContentLocator + diagnostic + provenance
 ```
 
-Pi 只负责 Tool Call 生命周期、`AbortSignal`、流式 update 和结果回填；它不发现 manifest、不解析 executable、不分配 cwd/output、不继承 env，也不拥有 processor chain、缓存或恢复状态。Capability/领域包声明业务输入输出，Host 拥有进程、路径、network、timeout、trust、approval、ResourceRef 和清理。
+Pi 只负责 Tool Call 生命周期、`AbortSignal`、流式 update 和结果回填；它不发现 manifest、不解析 executable、不分配 cwd/output、不继承 env，也不拥有 processor chain、缓存或恢复状态。Capability/领域包声明业务输入输出，Host 拥有进程、路径、network、timeout、trust、approval、ContentLocator 和清理。
 
 以下约束继续无条件保留：
 
 - typed processor 优先于任意 shell；
-- PathAccessPolicy、ResourceRef、受管输出目录；
+- PathAccessPolicy、ContentLocator、受管输出目录；
 - executable、cwd、env、network、timeout、trust 和 approval 校验；
 - 用户数据、project/personal manifest 和已安装 package 不得静默删除；
 - 未知 schema、非法 root、缺失 executable 和权限不匹配必须 fail-visible。

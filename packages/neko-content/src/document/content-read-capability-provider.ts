@@ -1,9 +1,4 @@
-import {
-  type AgentCapabilityContext,
-  type AgentCapabilityProvider,
-  type ResourceRef,
-  type Tool,
-} from '@neko/shared';
+import { type AgentCapabilityContext, type AgentCapabilityProvider, type Tool } from '@neko/shared';
 import {
   createReadDocumentTool,
   type ReadDocumentContentAccessRuntime,
@@ -14,7 +9,6 @@ export interface ContentReadCapabilityProviderDeps {
   readonly contentAccessRuntime?: ReadDocumentContentAccessRuntime & ReadImageContentAccessRuntime;
   readonly getContentAccessRuntime?: () =>
     (ReadDocumentContentAccessRuntime & ReadImageContentAccessRuntime) | undefined;
-  readonly resolveResourceScope?: () => ResourceRef['scope'];
   readonly now?: () => number;
 }
 
@@ -56,7 +50,6 @@ class ContentReadCapabilityProvider implements AgentCapabilityProvider {
       tools.push(
         createReadDocumentTool({
           contentAccessRuntime: this.readContentAccessRuntime(),
-          resolveResourceScope: this.resolveResourceScope,
         }),
       );
     }
@@ -64,16 +57,12 @@ class ContentReadCapabilityProvider implements AgentCapabilityProvider {
       tools.push(
         createReadImageTool({
           contentAccessRuntime: this.readContentAccessRuntime(),
-          resolveResourceScope: this.resolveResourceScope,
           now: this.deps.now,
         }),
       );
     }
     return tools;
   }
-
-  private readonly resolveResourceScope = (): ResourceRef['scope'] =>
-    this.deps.resolveResourceScope?.() ?? 'project';
 
   private readContentAccessRuntime():
     (ReadDocumentContentAccessRuntime & ReadImageContentAccessRuntime) | undefined {

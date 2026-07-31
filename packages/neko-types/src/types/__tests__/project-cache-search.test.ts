@@ -28,7 +28,6 @@ import {
   type ProjectSemanticCoverageQuery,
   type ProjectSemanticCoverageResult,
 } from '../project-cache-search';
-import { createResourceFingerprint, createResourceRef } from '../resource-cache';
 
 describe('project cache/search contracts', () => {
   it('validates enum-like project search fields', () => {
@@ -79,14 +78,17 @@ describe('project cache/search contracts', () => {
   });
 
   it('represents normalized search items with source and freshness metadata', () => {
-    const resource = createResourceRef({
-      scope: 'project',
-      provider: 'media-thumbnail',
-      kind: 'media',
-      source: { kind: 'file', filePath: '/workspace/assets/hero.png' },
-      locator: { kind: 'file', path: '/workspace/assets/hero.png' },
-      fingerprint: createResourceFingerprint({ strategy: 'provider', value: 'hero.png' }),
-    });
+    const representationLocator = {
+      kind: 'content-representation' as const,
+      id: 'thumbnail:hero',
+      representationKind: 'thumbnail' as const,
+      source: { kind: 'workspace-file' as const, path: 'assets/hero.png' },
+      spec: { kind: 'thumbnail' as const, maxWidth: 256, maxHeight: 256 },
+      generatorId: 'media-thumbnail',
+      sourceFingerprint: 'hero.png',
+      specFingerprint: 'thumbnail-256',
+      revision: '1',
+    };
     const item: ProjectSearchItem = {
       id: 'script-role:/workspace/cases/test.fountain:小橘',
       kind: 'script-role',
@@ -103,13 +105,7 @@ describe('project cache/search contracts', () => {
       aliases: [],
       searchText: '小橘 Script role /workspace/cases/test.fountain',
       visualResource: {
-        resource: {
-          resource,
-          role: 'thumbnail',
-          mimeType: 'image/png',
-          width: 256,
-          height: 256,
-        },
+        representationLocator,
         status: 'ready',
         alt: '小橘',
       },
@@ -121,7 +117,7 @@ describe('project cache/search contracts', () => {
     expect(
       isProjectSearchItem({
         ...item,
-        visualResource: { resource: { provider: 'bad' }, status: 'ready' },
+        visualResource: { representationLocator: { provider: 'bad' }, status: 'ready' },
       }),
     ).toBe(false);
     expect(isProjectSearchItem({ ...item, visualResource: { status: 'pending' } })).toBe(false);

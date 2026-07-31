@@ -71,7 +71,7 @@ runtime 入口。
 - 通过 runtime deps 注入文本、二进制和 container 读取能力。
 - 不管理 cache root、Webview URI、runtime token、workspace 生命周期或 UI 状态。
 - Agent 和领域包复用公共入口，不重新实现 document reader/cache/path/media catalog。
-- 文本实体分析复用 `DocumentAccessService` manifest/cursor/range：PDF page、EPUB chapter、DOCX section/paragraph 的正文只在 transient analysis batch 中存在；Content 返回 locator、hash 与 `ResourceRef`，不拥有 SQLite projection。
+- 文本实体分析复用 `DocumentAccessService` manifest/cursor/range：PDF page、EPUB chapter、DOCX section/paragraph 的正文只在 transient analysis batch 中存在；Content 分别返回语义 `DocumentLocator` 与内容 `ContentLocator`，不拥有 SQLite projection。
 
 ### `@neko/entity` 与 `@neko/search`
 
@@ -232,8 +232,8 @@ Character 不直接写 World store；跨域 mutation 必须通过显式 world ru
 
 ## 路径、缓存与用户数据
 
-- Generation Job、Agent creator-visible artifact、Workspace Board 与其 Canvas 投影只使用 stable `ContentLocator` 传递内容位置；entity/artifact/job/output ID 与 provenance 保持独立。不得并列保存 raw path、`ResourceRef`、provider URL、base64 或 Webview URI。
-- 其他尚未迁移的领域可继续使用其已接受的 workspace-relative path、保留用途的 `${VAR}/path` 或 `ResourceRef`；Host 派生缓存也可保留内部 `ResourceRef`，但不得反向进入上述 creator-visible canonical path。
+- 跨包与持久内容身份只使用 stable `ContentLocator`；entity/artifact/job/output ID 与 provenance 保持独立。不得并列保存 raw path、旧资源引用、provider URL、base64 或 Webview URI作为第二内容身份。
+- owning package 可在文件操作参数中使用 workspace-relative path 或保留用途的 `${VAR}/path`；Host 派生缓存使用 cache-owned descriptor。二者都不得替代或反向污染跨包 `ContentLocator`。
 - 本机绝对路径只允许存在于本机设置、临时运行时状态或明确 host adapter 内。
 - Cache 是可重建派生数据，不能替代项目、Entity、Media Library locator、generated/package owner 或 Agent 事实。
 - 用户 secret 不写入项目文件、日志、Webview state、prompt 或 Skill。

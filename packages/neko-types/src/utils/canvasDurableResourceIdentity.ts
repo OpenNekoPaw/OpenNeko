@@ -1,6 +1,6 @@
 import type { CanvasAuthoringDiagnostic } from '../types/canvas-authoring-contracts';
 import { isRuntimeOnlyCanvasAuthoringResourceIdentityValue } from '../types/canvas-authoring-contracts';
-import { isResourceRef } from '../types/resource-cache';
+import { isContentLocator } from '../types/content-locator';
 
 export interface CanvasDurableResourceIdentityValidationOptions {
   readonly rootLabel?: string;
@@ -36,8 +36,7 @@ const NKC_DURABLE_IDENTITY_FIELDS = new Set([
   'canvasPath',
   'projectPath',
   'referenceImagePath',
-  'resourceRef',
-  'documentResourceRef',
+  'contentLocator',
   'legacyGeneratedSourceRef',
   'sourceMediaRefs',
   'generatedMediaRefs',
@@ -157,7 +156,7 @@ function collectNkcNodeIdentityDiagnostics(
   if (!value || typeof value !== 'object' || seen.has(value)) return;
   seen.add(value);
 
-  if (isResourceRef(value)) {
+  if (isContentLocator(value)) {
     diagnostics.push(...validateCanvasDurableResourceIdentity(value, { rootLabel: path }));
     return;
   }

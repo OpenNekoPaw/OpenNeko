@@ -1,5 +1,4 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createResourceFingerprint, createResourceRef } from '@neko/shared';
 import { createSourceModelViewerHost } from './sourceModelViewerHost';
 
 describe('source Model Viewer host', () => {
@@ -7,17 +6,7 @@ describe('source Model Viewer host', () => {
     const host = createSourceModelViewerHost({
       sessionId: 'session-1',
       source: {
-        source: createResourceRef({
-          scope: 'project',
-          provider: 'desktop-preview',
-          kind: 'preview',
-          source: { kind: 'preview-asset', previewAssetId: 'descriptor-1' },
-          fingerprint: createResourceFingerprint({
-            strategy: 'provider',
-            value: 'revision-1',
-            providerId: 'desktop-preview',
-          }),
-        }),
+        source: { kind: 'workspace-file', path: 'models/descriptor-1.glb' },
         sourceFingerprint: 'revision-1',
         format: 'glb',
         entryUri: 'neko-media://desktop/descriptor-1',
@@ -54,17 +43,7 @@ describe('source Model Viewer host', () => {
     const host = createSourceModelViewerHost({
       sessionId: 'session-strict',
       source: {
-        source: createResourceRef({
-          scope: 'project',
-          provider: 'desktop-preview',
-          kind: 'preview',
-          source: { kind: 'preview-asset', previewAssetId: 'descriptor-strict' },
-          fingerprint: createResourceFingerprint({
-            strategy: 'provider',
-            value: 'revision-strict',
-            providerId: 'desktop-preview',
-          }),
-        }),
+        source: { kind: 'workspace-file', path: 'models/descriptor-strict.glb' },
         sourceFingerprint: 'revision-strict',
         format: 'glb',
         entryUri: 'neko-media://desktop/descriptor-strict',

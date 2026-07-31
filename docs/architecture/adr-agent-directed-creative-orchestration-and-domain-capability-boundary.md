@@ -25,8 +25,8 @@ Neko Agent 已经具备：
 - `Read`、`ReadDocument`、`ReadImage` 与工作区文件读写；
 - 普通 Tool 发现、schema 注入、调用、校验和结果回传；
 - 图片、视频和音频生成；
-- `ResourceRef`、异步 Task、审批、diagnostic 和基础质量能力；
-- 生成文件写入 `neko/generated/<kind>/`，并返回 digest、ResourceRef 和 lineage；
+- `ContentLocator`、异步 Task、审批、diagnostic 和基础质量能力；
+- 生成文件写入 `neko/generated/<kind>/`，并返回 digest、ContentLocator 和 lineage；
 - Canvas、Cut 等部分 headless authoring 能力。
 
 因此，缺口不是基础 Agent、文件读取、通用规划或新的操作入口，而是 Agent 尚不能稳定地自主完成影视化、动画化的专业判断和连续执行。例如，面对漫画到动画的请求，Agent 需要根据实际输入和已有素材决定是否分格、OCR、补全、上色、建立角色参考、制作分镜、选择镜头技术、生成或编辑镜头、制作 Animatic、配音混音、质量检查和导出，并在异步任务、能力不可用或质量失败后继续原对话中的下一步。
@@ -57,7 +57,7 @@ Agent core 也不拥有创作结果的目的地：不保存默认/活动 Canvas�
   -> Agent 结合 Skill 判断下一步
   -> Agent 从当前可用 Tool 中选择原子能力
   -> 既有 runtime 校验、审批并执行
-  -> Tool/Task 返回文件、ResourceRef、项目 revision 或 diagnostic
+  -> Tool/Task 返回文件、ContentLocator、项目 revision 或 diagnostic
   -> Agent 在同一对话中观察结果并继续判断
   -> 产出用户可直接使用的文件或领域项目
 ```
@@ -73,7 +73,7 @@ Agent 可以采用、跳过、重排、重复、并行或回退创作步骤。�
 Agent 已经能够获得注入的 Tool definition、description、input schema 和调用结果，也可以通过现有上下文查询能力了解 Skill 与 Tool 分类。影视动画编排首先应修正和补齐这些 canonical Tool/capability contribution，使 Agent 能理解：
 
 - 该能力解决什么领域问题；
-- 接受什么文件、ResourceRef 或项目输入；
+- 接受什么文件、ContentLocator 或项目输入；
 - 产生文件、素材还是 `.nk*` 项目 mutation；
 - 属于确定性、感知、生成式还是混合操作；
 - 当前是否真实可执行，以及失败 diagnostic 和关键限制。
@@ -100,7 +100,7 @@ Skill 方法仍可被 Agent 跳过、重排和重复，但不形成 checkpoint �
 
 ### 4. Agent 先分析来源，再生成创作者可审批的文档
 
-普通创作请求直接由 Agent 在对话中分析并调用 Tool。涉及内容改编、角色、视觉/声音方向、镜头策略、核心制作技术、成本或交付范围时，Agent 应先基于实际文档、图片、音视频、ResourceRef 或项目文件区分：
+普通创作请求直接由 Agent 在对话中分析并调用 Tool。涉及内容改编、角色、视觉/声音方向、镜头策略、核心制作技术、成本或交付范围时，Agent 应先基于实际文档、图片、音视频、ContentLocator 或项目文件区分：
 
 1. 从来源中观察到的事实；
 2. Agent 基于证据作出的解释与置信度；
@@ -117,7 +117,7 @@ Skill 方法仍可被 Agent 跳过、重排和重复，但不形成 checkpoint �
 
 - 页、格、场景、角色、镜头、音轨或项目等工作对象；
 - 触发条件与可跳过条件；
-- 当前文件、ResourceRef、角色参考或项目输入；
+- 当前文件、ContentLocator、角色参考或项目输入；
 - 人类可读的能力意图与制作技术；
 - 保留内容、尺寸、时长、连续性、风格和成本约束；
 - 期望文件、素材或 `.nk*` 项目输出；
@@ -137,8 +137,8 @@ TODO 复用现有 conversation/task progress surface，只投影少量近期 `pe
 
 | 对象                                      | 身份与并发规则                                                                                 | 是否需要全局 current revision     |
 | ----------------------------------------- | ---------------------------------------------------------------------------------------------- | --------------------------------- |
-| 来源文件、漫画、剧本、小说、PDF、插画     | `ResourceRef`、路径授权、fingerprint 或 content digest                                         | 否                                |
-| `neko/generated/<kind>/` 生成文件         | 实际文件 + `ResourceRef` + content digest + lineage                                            | 否；新结果通常是新文件            |
+| 来源文件、漫画、剧本、小说、PDF、插画     | `ContentLocator`、路径授权、fingerprint 或 content digest                                         | 否                                |
+| `neko/generated/<kind>/` 生成文件         | 实际文件 + `ContentLocator` + content digest + lineage                                            | 否；新结果通常是新文件            |
 | `.nk*` 可变领域项目                       | owning package 的 project revision/content digest；mutation 使用 `baseRevision` 或等价前置条件 | 仅该项目 mutation 需要            |
 | QualityEvidence / preflight               | 绑定被检查文件 digest 或项目 revision                                                          | 按 owning Quality/Export 契约需要 |
 | 已审阅的 `plan.md`                        | 普通文件 identity/digest 可进入通用 Approval context；不授权未来 Tool                          | 不形成项目 revision               |
@@ -146,7 +146,7 @@ TODO 复用现有 conversation/task progress surface，只投影少量近期 `pe
 
 生成结果是 generated-output owner 管理的可直接使用文件，不需要晋升成另一种 catalog identity。用户需要整理时可以显式复制到 Media Library；需要语义关联时直接绑定 Creative Entity representation。
 
-Agent 不维护全局 current revision，也不递归扫描历史消息寻找“最新 revision”。普通文本优先使用 VS Code `TextDocument.version`、外部修改检测、文件 digest 或精确 patch 冲突；generated 输出使用 ResourceRef/digest/lineage。只有依赖先前 read、异步结果、审批或 resume 的 stale-risk project mutation 才由 owning runtime 在写入前校验其 owner-specific base revision/digest；新建项目和同步 live-document 原子操作不强制 Agent 提供 revision。
+Agent 不维护全局 current revision，也不递归扫描历史消息寻找“最新 revision”。普通文本优先使用 VS Code `TextDocument.version`、外部修改检测、文件 digest 或精确 patch 冲突；generated 输出使用 ContentLocator/digest/lineage。只有依赖先前 read、异步结果、审批或 resume 的 stale-risk project mutation 才由 owning runtime 在写入前校验其 owner-specific base revision/digest；新建项目和同步 live-document 原子操作不强制 Agent 提供 revision。
 
 ### 7. 领域能力拥有真实操作和项目权威
 
@@ -165,7 +165,7 @@ Agent 负责选择和组合，领域包负责执行：
 | Engine                      | 媒体分析、解码、编码、渲染、导出和本地计算；不提供 Scene/Puppet/Live 产品 runtime |
 | Quality / Export            | 对当前文件或项目的质量证据、preflight、导出和交付验证                             |
 
-领域包通过共享 contract、Tool contribution、ResourceRef 和项目 authoring result 协作，不直接导入另一个功能包的内部实现。需要多个低级 mutation 才能保证一致性的操作，由 owning package 提供小型事务性 headless Tool，并返回 exact project revision；Agent 不直接拼装 `.nk*` 私有格式，也不依赖 active Webview 猜测目标。当前 Agent change 只消费已经存在的 owning Tool/result/diagnostic，缺失能力必须进入对应 owning-package OpenSpec，不能以 Agent facade、orchestrator 或共享 workflow DTO 补齐。
+领域包通过共享 contract、Tool contribution、ContentLocator 和项目 authoring result 协作，不直接导入另一个功能包的内部实现。需要多个低级 mutation 才能保证一致性的操作，由 owning package 提供小型事务性 headless Tool，并返回 exact project revision；Agent 不直接拼装 `.nk*` 私有格式，也不依赖 active Webview 猜测目标。当前 Agent change 只消费已经存在的 owning Tool/result/diagnostic，缺失能力必须进入对应 owning-package OpenSpec，不能以 Agent facade、orchestrator 或共享 workflow DTO 补齐。
 
 ### 8. 漫画、剧本、小说和插画到动画是动态纵向路径
 
@@ -192,7 +192,7 @@ Agent 必须根据已有产物跳过不需要的步骤。例如已有可用分�
 - inpaint、outpaint、遮挡补全、上色和重绘属于生成式操作；
 - 文字移除后背景补全、人物分层后局部生成等是多个显式 Tool call 的混合策略。
 
-图片编辑领域契约不得直接依赖生成图片模型。几何、像素和图层操作不得为了统一入口而调用生成模型；需要创造缺失像素或改变内容语义时才选择生成式 adapter，并保留 source、mask、未修改区域、ResourceRef 和 lineage。
+图片编辑领域契约不得直接依赖生成图片模型。几何、像素和图层操作不得为了统一入口而调用生成模型；需要创造缺失像素或改变内容语义时才选择生成式 adapter，并保留 source、mask、未修改区域、ContentLocator 和 lineage。
 
 角色身份与正式参考由 Entity/Asset/Character owner 管理。镜头引用适用的角色和外观版本；角色参考改变后，相关项目或质量检查是否需要重做由 owning dependency/validator 契约判断，Agent 不保存第二份角色状态。
 
@@ -214,7 +214,7 @@ Agent 不得把“动画化”默认等同于生成视频。它应比较当前�
 
 媒体 Task 完成后应：
 
-1. 返回实际生成文件、ResourceRef、digest、lineage 和结构化 diagnostic；
+1. 返回实际生成文件、ContentLocator、digest、lineage 和结构化 diagnostic；
 2. 唤醒发起任务的原 conversation/session；
 3. 由该 Agent 进入普通 ReAct 下一轮，读取当前需要的文件或项目事实；
 4. 继续创作、修复、询问用户或交付结果。
@@ -225,7 +225,7 @@ Agent 不得把“动画化”默认等同于生成视频。它应比较当前�
 
 系统不建立中央 target-completion evaluator。Agent 根据用户目标检查实际输出，并复用 owning domain 已有的 validator、Quality 和 Export 契约：
 
-- 生成图片、视频、音频或中间素材：交付实际文件及其 ResourceRef/digest；
+- 生成图片、视频、音频或中间素材：交付实际文件及其 ContentLocator/digest；
 - Storyboard 或 Animatic：交付对应 Markdown/领域项目及 owning validation 结果；
 - 可继续编辑的项目：交付 `.nk*` 文件和当前 project revision；
 - 最终动画/TV/电影交付：交付最终媒体文件，并在已有能力支持时附带当前 timeline/audio、preflight、export lineage 和验证结果。
@@ -277,7 +277,7 @@ Agent 编排必须区分三类事实：
 | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
 | 模型无关创作语义   | 主体、角色身份不变量、镜头/布局、参考用途、内容语言、精确文字、禁止项和验收条件                                                                 | 用户目标、领域文档、Skill 方法                                       |
 | 模型绑定执行支持   | 输入模态/数量/格式、参考控制、多视图/跨图/嵌入文字可靠性、Prompt 方言、尺寸/时长、成本、并发、安全和 support/limits                             | owning Provider/model/version/profile capability 与当前 session 配置 |
-| 实际执行与完成证据 | requested/effective model identity、实际请求或 digest、输入参考、Task terminal result、输出 ResourceRef/lineage、diagnostic 和 Quality evidence | Task/result、生成文件与 owning validator                             |
+| 实际执行与完成证据 | requested/effective model identity、实际请求或 digest、输入参考、Task terminal result、输出 ContentLocator/lineage、diagnostic 和 Quality evidence | Task/result、生成文件与 owning validator                             |
 
 例如，“角色卡需要正面、侧面、背面并保持服装一致”不绑定模型；“当前模型能否一次生成这些视图”绑定当前 Provider/model/version/profile；“本次角色卡是否完成”只由实际文件和视图/一致性检查证明。参考图的 identity、appearance、costume、prop、style、composition、structure-only、first-frame、last-frame 和 product-preservation 等语义角色不绑定模型，但 adapter 是否接受、怎样传递和能否遵守这些角色属于模型绑定事实。
 
@@ -330,7 +330,7 @@ Capability registration/contribution 和 session effective configuration 是执�
 
 ### 正面影响
 
-- 复用现有 Agent、Tool、Task、ResourceRef 和文件系统能力，避免重新实现一套创作平台。
+- 复用现有 Agent、Tool、Task、ContentLocator 和文件系统能力，避免重新实现一套创作平台。
 - 创作路径可以根据真实内容和结果动态变化，同时保持领域写入、revision 和质量边界确定。
 - 用户通过同一对话完成分析、审批、修正和继续，不需要理解 Workflow 概念。
 - 新增创作技术只需提供正确的 Skill 判断或 owning Tool，即可参与 Agent 组合。
@@ -355,7 +355,7 @@ Capability registration/contribution 和 session effective configuration 是执�
 3. 漫画分格、OCR、裁切等确定性/感知步骤不调用通用图片生成，生成式编辑保留 source/mask/lineage；
 4. 插画或漫画镜头只在当前注册的图片、视频、Canvas、Cut 与 Preview 能力间选择，并对未提供的骨骼动画、分层绘画或 3D 场景编辑返回 unavailable/degraded diagnostic；
 5. 异步 Task 完成后唤醒原对话，Agent 根据结构化结果继续，而不依赖 active Webview 或只输出总结；
-6. 生成结果实际存在于 `neko/generated/<kind>/` 并返回 ResourceRef/digest，用户无需先晋升资产即可使用；
+6. 生成结果实际存在于 `neko/generated/<kind>/` 并返回 ContentLocator/digest，用户无需先晋升资产即可使用；
 7. `.nk*` mutation 使用 owning revision/baseRevision，普通来源和生成文件不被强制套用全局 current revision；
 8. Plan Mode 可以读取真实内容并生成可操作工作单元，但不创建媒体 Task、项目 mutation、导出、IDC 或 persona；
 9. Markdown 计划和 TODO 更新不触发副作用、不证明完成，用户要求执行时仍走当前 Tool resolve、validation、approval 和 runtime；

@@ -1,7 +1,5 @@
 import {
   BuiltinTool,
-  isResourceRef,
-  parseDocumentArchiveResourceRef,
   TOOL_NAMES_PERCEPTION,
   validateContentLocator,
   type PerceiveToolInput,
@@ -46,16 +44,6 @@ export class PerceiveTool extends BuiltinTool {
           assetId: { type: 'string' },
           uri: { type: 'string' },
           mimeType: { type: 'string' },
-          resourceRef: {
-            type: 'object',
-            description:
-              'Optional stable unified ResourceRef copied exactly from the producing tool. Omit it when only a file path or generated asset id is known.',
-          },
-          documentResourceRef: {
-            type: 'object',
-            description:
-              'Stable document-entry resource ref copied exactly from the producing tool.',
-          },
           contentLocator: {
             type: 'object',
             description: 'Stable canonical content locator copied exactly from the producing tool.',
@@ -171,17 +159,13 @@ function readPerceptualAssetRef(value: unknown): PerceiveToolInput['ref'] | unde
   if (!assetId || !uri || !mimeType) {
     return undefined;
   }
-  const resourceRefValue = value['resourceRef'];
-  const resourceRef = isResourceRef(resourceRefValue) ? resourceRefValue : undefined;
+  if (value['resourceRef'] !== undefined || value['documentResourceRef'] !== undefined) {
+    return undefined;
+  }
   const contentLocatorValue = value['contentLocator'];
   const contentLocatorResult = validateContentLocator(contentLocatorValue);
   const contentLocator = contentLocatorResult.ok ? contentLocatorResult.locator : undefined;
   if (contentLocatorValue !== undefined && !contentLocator) {
-    return undefined;
-  }
-  const documentResourceRefValue = value['documentResourceRef'];
-  const documentResourceRef = parseDocumentArchiveResourceRef(documentResourceRefValue);
-  if (documentResourceRefValue !== undefined && !documentResourceRef) {
     return undefined;
   }
   const label = readNonEmptyString(value['label']);
@@ -191,8 +175,6 @@ function readPerceptualAssetRef(value: unknown): PerceiveToolInput['ref'] | unde
     uri,
     mimeType,
     ...(contentLocator ? { contentLocator } : {}),
-    ...(resourceRef ? { resourceRef } : {}),
-    ...(documentResourceRef ? { documentResourceRef } : {}),
     ...(label ? { label } : {}),
     ...(timestampMs !== undefined ? { timestampMs } : {}),
   };

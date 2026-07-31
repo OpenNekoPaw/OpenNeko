@@ -1,15 +1,11 @@
 import type {
-  ContentSourceRef,
   ContentRepresentationLocator,
   ContentLocator,
-  ContentStableSourceRef,
-  DocumentArchiveResourceRef,
   DocumentBatchCursor,
   DocumentImageInfo,
   DocumentManifest,
   DocumentRange,
   DocumentReadResult,
-  ResourceRef,
 } from '@neko/shared';
 
 export type AgentContentAccessStatus =
@@ -35,12 +31,10 @@ export interface AgentContentAccessDiagnostic {
 }
 
 export interface AgentContentAccessBaseInput {
-  readonly source: ContentSourceRef;
+  readonly source: ContentLocator;
   readonly signal?: AbortSignal;
   readonly metadata?: Record<string, unknown>;
 }
-
-export type AgentImageMetadataInput = AgentContentAccessBaseInput;
 
 export interface AgentDocumentContentInput extends AgentContentAccessBaseInput {
   readonly mode?: 'content' | 'manifest' | 'range' | 'next';
@@ -54,31 +48,16 @@ export interface AgentDocumentContentInput extends AgentContentAccessBaseInput {
   readonly textOnly?: boolean;
 }
 
-export interface AgentProviderAssetInput extends AgentContentAccessBaseInput {
-  readonly mimeTypeHint?: string;
-}
-
 export interface AgentContentAccessOperationResult {
   readonly status: AgentContentAccessStatus;
-  readonly source?: ContentStableSourceRef;
+  readonly source?: ContentLocator;
   readonly diagnostics: readonly AgentContentAccessDiagnostic[];
   readonly metadata?: Record<string, unknown>;
-}
-
-export interface AgentImageMetadataResult extends AgentContentAccessOperationResult {
-  readonly mimeType?: string;
-  readonly width?: number;
-  readonly height?: number;
-  readonly sizeBytes?: number;
-  readonly resourceRef?: ResourceRef;
-  readonly documentResourceRef?: DocumentArchiveResourceRef;
 }
 
 export interface AgentDocumentContentResult extends AgentContentAccessOperationResult {
   readonly contentLocator?: ContentLocator;
   readonly text?: string;
-  readonly documentResourceRef?: DocumentArchiveResourceRef;
-  readonly resourceRef?: ResourceRef;
   readonly manifest?: DocumentManifest;
   readonly range?: DocumentRange;
   readonly locator?: DocumentReadResult['locator'];
@@ -100,8 +79,6 @@ export interface AgentProviderAssetResult extends AgentContentAccessOperationRes
 }
 
 export interface AgentContentAccessRuntime {
-  resolveContentLocator(source: ContentSourceRef): Promise<ContentLocator | undefined>;
-  resolveImageMetadata(input: AgentImageMetadataInput): Promise<AgentImageMetadataResult>;
   resolveDocumentContent(input: AgentDocumentContentInput): Promise<AgentDocumentContentResult>;
   loadRepresentationAsset?(input: {
     readonly locator: ContentRepresentationLocator;
@@ -112,7 +89,6 @@ export interface AgentContentAccessRuntime {
     readonly maxBytes: number;
     readonly signal?: AbortSignal;
   }): Promise<AgentProviderAssetResult>;
-  loadProviderAsset(input: AgentProviderAssetInput): Promise<AgentProviderAssetResult>;
 }
 
 export function createAgentContentAccessDiagnostic(input: {

@@ -1356,21 +1356,21 @@ function isPerceptionCardRef(value: unknown): value is PerceptionCardRef {
 
 function mediaRefToMediaItem(ref: StoryboardMediaRef | undefined): ArtifactMediaItem | undefined {
   if (!ref) return undefined;
-  const resourceRef = mediaRefToArtifactResourceRef(ref);
-  if (!resourceRef) return undefined;
+  const reference = mediaRefToArtifactReference(ref);
+  if (!reference) return undefined;
   return {
     itemId: ref.refId,
     mediaType: ref.mimeType?.startsWith('video/') ? 'video' : 'image',
-    resourceRef,
+    reference,
     ...(ref.label ? { label: ref.label } : {}),
     ...(ref.mimeType ? { mimeType: ref.mimeType } : {}),
     ...(ref.metadata ? { metadata: storyboardRecordToArtifactRecord(ref.metadata) } : {}),
   };
 }
 
-function mediaRefToArtifactResourceRef(
+function mediaRefToArtifactReference(
   ref: StoryboardMediaRef,
-): ArtifactMediaItem['resourceRef'] | undefined {
+): ArtifactMediaItem['reference'] | undefined {
   switch (ref.locator.type) {
     case 'tool-result':
       return {
@@ -1494,7 +1494,7 @@ function mapDiagnosticCode(code: ShotImagePrepDiagnosticCode): ArtifactDiagnosti
     case 'unsafe-runtime-handle':
       return 'unsafe-runtime-handle';
     case 'invalid-source-ref':
-      return 'invalid-resource-ref';
+      return 'invalid-artifact-reference';
     case 'invalid-entity-ref':
     case 'invalid-image-strategy':
     case 'invalid-operation':

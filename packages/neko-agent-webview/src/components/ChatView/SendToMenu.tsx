@@ -22,7 +22,7 @@ import type {
   PluginsAvailable as SharedPluginsAvailable,
   RequestCanvasAuthoringHandoffWebviewMessage,
 } from '@neko-agent/types';
-import type { CanvasMarkdownCapabilityTarget, CanvasMarkdownResourceRef } from '@neko/shared';
+import type { CanvasMarkdownCapabilityTarget, CanvasMarkdownContentBinding } from '@neko/shared';
 import { isRuntimeOnlyCanvasMarkdownResourceValue } from '@neko/shared';
 import { projectPluginTransferMenu } from '../../presenters/plugin-transfer-presenter';
 import type { CanvasMarkdownHandoffRequest } from '@/presenters/canvas-markdown-handoff-presenter';
@@ -274,7 +274,7 @@ function projectCanvasAuthoringHandoffFromTransfer(
 
 function projectCanvasAuthoringResources(
   payload: PluginTransferPayload,
-): readonly CanvasMarkdownResourceRef[] {
+): readonly CanvasMarkdownContentBinding[] {
   if (payload.kind === 'singleAsset') return projectCanvasAuthoringAssetResource(payload.asset);
   if (payload.kind === 'assetBatch') {
     return payload.assets.flatMap((asset) => projectCanvasAuthoringAssetResource(asset));
@@ -284,19 +284,16 @@ function projectCanvasAuthoringResources(
 
 function projectCanvasAuthoringAssetResource(
   asset: PluginTransferAssetRef,
-): readonly CanvasMarkdownResourceRef[] {
+): readonly CanvasMarkdownContentBinding[] {
   const sourcePath = asset.path && isStableCanvasSourcePath(asset.path) ? asset.path : undefined;
-  const resource: CanvasMarkdownResourceRef = {
+  const resource: CanvasMarkdownContentBinding = {
     ...(asset.name ? { label: asset.name } : {}),
     ...((asset.name ?? sourcePath) ? { token: asset.name ?? sourcePath } : {}),
     role: 'source',
     ...(sourcePath ? { sourcePath } : {}),
-    ...(asset.resourceRef ? { resourceRef: asset.resourceRef } : {}),
-    ...(asset.documentResourceRef ? { documentResourceRef: asset.documentResourceRef } : {}),
+    ...(asset.contentLocator ? { contentLocator: asset.contentLocator } : {}),
   };
-  return resource.sourcePath || resource.resourceRef || resource.documentResourceRef
-    ? [resource]
-    : [];
+  return resource.sourcePath || resource.contentLocator ? [resource] : [];
 }
 
 function isStableCanvasSourcePath(path: string): boolean {
@@ -375,7 +372,7 @@ function buildPluginTransferPayload(input: {
 }
 
 function hasPluginTransferAssetIdentity(asset: PluginTransferAssetRef): boolean {
-  return Boolean(asset.path || asset.documentResourceRef || asset.resourceRef);
+  return Boolean(asset.path || asset.contentLocator);
 }
 
 function getTargetIcon(target: SendToTarget): React.ReactNode {

@@ -1,5 +1,5 @@
 import type {
-  DocumentArchiveResourceRef,
+  DocumentEntryContentLocator,
   DocumentBatchCursor,
   DocumentFormat,
   DocumentLocator,
@@ -87,11 +87,10 @@ describe('semantic document extraction', () => {
   });
 
   it('returns embedded media only as resource references', async () => {
-    const resourceRef: DocumentArchiveResourceRef = {
+    const contentLocator: DocumentEntryContentLocator = {
       kind: 'document-entry',
-      source: { filePath: '/workspace/book.epub', format: 'epub' },
+      source: { kind: 'workspace-file', path: 'book.epub' },
       entryPath: 'images/portrait.png',
-      locator: { kind: 'chapter', chapterHref: 'chapter-1', spineIndex: 0 },
     };
     const result = await extractSemanticDocument({
       source: source('epub'),
@@ -100,11 +99,11 @@ describe('semantic document extraction', () => {
         {
           locator: { kind: 'chapter', chapterHref: 'chapter-1', spineIndex: 0 },
           text: 'Rin enters.',
-          resourceRef,
+          contentLocator,
         },
       ]),
     });
-    expect(result.resourceRefs).toEqual([resourceRef]);
+    expect(result.contentLocators).toEqual([contentLocator]);
     expect(JSON.stringify(result.segments)).not.toContain('portrait.png');
   });
 });
@@ -138,7 +137,7 @@ interface FakeUnit {
   readonly locator: DocumentLocator;
   readonly text: string;
   readonly truncated?: boolean;
-  readonly resourceRef?: DocumentArchiveResourceRef;
+  readonly contentLocator?: DocumentEntryContentLocator;
 }
 
 function fakeDocumentAccess(
@@ -214,12 +213,12 @@ function readResult(
     returnedTextChars: unit.text.length,
     totalTextChars: unit.text.length,
     truncated: unit.truncated ?? false,
-    ...(unit.resourceRef
+    ...(unit.contentLocator
       ? {
           imageInfo: [
             {
-              path: unit.resourceRef.entryPath,
-              resourceRef: unit.resourceRef,
+              path: unit.contentLocator.entryPath,
+              contentLocator: unit.contentLocator,
             },
           ],
         }

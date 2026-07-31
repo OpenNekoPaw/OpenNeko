@@ -160,7 +160,7 @@ describe('composite content presenter', () => {
   });
 
   it('projects composite artifact storyboard, entity contribution, and source images together', () => {
-    const documentResourceRef = makeDocumentResourceRef('OPS/page-1.jpg');
+    const contentLocator = makeDocumentEntryContentLocator('OPS/page-1.jpg');
     const contribution = {
       contributionId: 'contribution-page-1',
       sourcePackage: 'neko-agent',
@@ -226,7 +226,7 @@ describe('composite content presenter', () => {
                           },
                           label: 'Original panel',
                           mimeType: 'image/jpeg',
-                          documentResourceRef,
+                          contentLocator,
                         },
                       ],
                     },
@@ -255,7 +255,7 @@ describe('composite content presenter', () => {
                 {
                   label: 'Page 1',
                   mimeType: 'image/jpeg',
-                  resourceRef: documentResourceRef,
+                  contentLocator: contentLocator,
                 },
               ],
             },
@@ -279,7 +279,7 @@ describe('composite content presenter', () => {
     });
     expect(projection.data.sections[0]?.media).toEqual([
       expect.objectContaining({
-        resourceRef: documentResourceRef,
+        contentLocator: contentLocator,
         role: 'source',
       }),
     ]);
@@ -287,9 +287,9 @@ describe('composite content presenter', () => {
   });
 
   it('renders storyboard rows from stable document resource refs without requiring tool-result lookup', () => {
-    const documentResourceRef = makeDocumentResourceRef(
+    const contentLocator = makeDocumentEntryContentLocator(
       'OPS/images/page-1.jpg',
-      '${A}/epub/animation/Blame/book.epub',
+      'epub/animation/Blame/book.epub',
     );
     const projection = projectCompositeBlockRichContent({
       composite: {
@@ -321,7 +321,7 @@ describe('composite content presenter', () => {
                       },
                       label: 'Page 1',
                       mimeType: 'image/jpeg',
-                      documentResourceRef,
+                      contentLocator,
                     },
                   ],
                 },
@@ -350,7 +350,7 @@ describe('composite content presenter', () => {
         assetIndex: 0,
         type: 'image',
         src: '',
-        resourceRef: documentResourceRef,
+        contentLocator: contentLocator,
         mimeType: 'image/jpeg',
         caption: 'Page 1',
         label: 'Page 1',
@@ -537,12 +537,12 @@ describe('composite content presenter', () => {
                 {
                   mimeType: 'image/jpeg',
                   locator: { kind: 'page', pageNumber: 1 },
-                  resourceRef: makeDocumentResourceRef('OPS/page-1.jpg'),
+                  contentLocator: makeDocumentEntryContentLocator('OPS/page-1.jpg'),
                 },
                 {
                   mimeType: 'image/jpeg',
                   locator: { kind: 'page', pageNumber: 2 },
-                  resourceRef: makeDocumentResourceRef('OPS/page-2.jpg'),
+                  contentLocator: makeDocumentEntryContentLocator('OPS/page-2.jpg'),
                 },
               ],
             },
@@ -578,7 +578,7 @@ describe('composite content presenter', () => {
     expect(projection.data.sections[0]?.media[0]).toMatchObject({
       toolCallId: 'read-doc',
       assetIndex: 1,
-      resourceRef: makeDocumentResourceRef('OPS/page-2.jpg'),
+      contentLocator: makeDocumentEntryContentLocator('OPS/page-2.jpg'),
     });
     expect(projection.data.sections[0]?.media[0]).not.toHaveProperty('localPath');
   });
@@ -633,7 +633,10 @@ describe('composite content presenter', () => {
                   aliasScope: 'document:comic-a',
                   sourceDocumentId: 'comic-a',
                   mimeType: 'image/jpeg',
-                  resourceRef: makeDocumentResourceRef('OPS/a/page-1.jpg', '${BOOKS}/comic-a.epub'),
+                  contentLocator: makeDocumentEntryContentLocator(
+                    'OPS/a/page-1.jpg',
+                    'books/comic-a.epub',
+                  ),
                 },
               ],
             },
@@ -652,7 +655,10 @@ describe('composite content presenter', () => {
                   aliasScope: 'document:comic-b',
                   sourceDocumentId: 'comic-b',
                   mimeType: 'image/jpeg',
-                  resourceRef: makeDocumentResourceRef('OPS/b/page-1.jpg', '${BOOKS}/comic-b.epub'),
+                  contentLocator: makeDocumentEntryContentLocator(
+                    'OPS/b/page-1.jpg',
+                    'books/comic-b.epub',
+                  ),
                 },
               ],
             },
@@ -677,7 +683,7 @@ describe('composite content presenter', () => {
     expect(projection.data.sections[0]?.media[0]).toMatchObject({
       toolCallId: 'read-doc-b',
       assetIndex: 0,
-      resourceRef: makeDocumentResourceRef('OPS/b/page-1.jpg', '${BOOKS}/comic-b.epub'),
+      contentLocator: makeDocumentEntryContentLocator('OPS/b/page-1.jpg', 'books/comic-b.epub'),
     });
     expect(projection.data.sections[0]?.media[0]).not.toHaveProperty('localPath');
     expect(projection.data.diagnostics).toEqual([]);
@@ -973,7 +979,7 @@ describe('composite content presenter', () => {
   });
 
   it('projects storyboard media refs from document image pages and generated variants', () => {
-    const documentResourceRef = makeDocumentResourceRef('OPS/Page_1.jpg', '/books/story.epub');
+    const contentLocator = makeDocumentEntryContentLocator('OPS/Page_1.jpg', '/books/story.epub');
     const projection = projectCompositeBlockRichContent({
       composite: {
         template: 'storyboard-table',
@@ -1019,7 +1025,7 @@ describe('composite content presenter', () => {
                   height: 2133,
                   mimeType: 'image/jpeg',
                   locator: { kind: 'chapter', chapterHref: 'Page_1', spineIndex: 1 },
-                  resourceRef: documentResourceRef,
+                  contentLocator: contentLocator,
                 },
               ],
             },
@@ -1035,7 +1041,7 @@ describe('composite content presenter', () => {
       {
         toolCallId: 'read-doc',
         type: 'image',
-        resourceRef: documentResourceRef,
+        contentLocator: contentLocator,
         mimeType: 'image/jpeg',
         caption: '原始页图',
         role: 'original',
@@ -1375,17 +1381,17 @@ function toolBlock(toolCall: ToolCall): ContentBlock {
   };
 }
 
-function makeDocumentResourceRef(
+function makeDocumentEntryContentLocator(
   entryPath: string,
-  filePath = '${BOOKS}/comic.epub',
+  filePath = 'books/comic.epub',
 ): {
   readonly kind: 'document-entry';
-  readonly source: { readonly filePath: string; readonly format: 'epub' };
+  readonly source: { readonly kind: 'workspace-file'; readonly path: string };
   readonly entryPath: string;
 } {
   return {
     kind: 'document-entry',
-    source: { filePath, format: 'epub' },
+    source: { kind: 'workspace-file', path: filePath.replace(/^\/+/u, '') },
     entryPath,
   };
 }

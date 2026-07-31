@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   THREE_REFERENCE_PROTOCOL_VERSION,
+  contentLocatorsEqual,
   isThreeReferenceDiagnostic,
   isThreeReferenceIdentity,
   isThreeReferencePanoramaRuntimeDescriptor,
@@ -763,7 +764,8 @@ function parseHostMessage(value: unknown): ThreeReferenceHostMessage | undefined
         isThreeReferencePanoramaRuntimeDescriptor(value['runtime']) &&
         value['identity'].sessionId === value['staging'].sessionId &&
         value['identity'].revision === value['staging'].revision &&
-        value['staging'].environment?.source.id === value['runtime'].source.id &&
+        value['staging'].environment !== undefined &&
+        contentLocatorsEqual(value['staging'].environment.source, value['runtime'].source) &&
         value['staging'].environment?.fingerprint === value['runtime'].fingerprint
         ? {
             type: '3d-reference/environment-runtime',

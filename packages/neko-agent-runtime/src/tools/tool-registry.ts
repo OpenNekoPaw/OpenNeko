@@ -485,7 +485,8 @@ interface ToolDefinitionLocalization {
 
 const ZH_TOOL_DEFINITION_LOCALIZATIONS: Readonly<Record<string, ToolDefinitionLocalization>> = {
   ReadDocument: {
-    description: '读取文档文件，返回文本、结构信息和可供 ReadImage 使用的 imageInfo/resourceRef。',
+    description:
+      '读取文档文件，返回文本、结构信息和可供 ReadImage 使用的 ContentLocator-backed imageInfo。',
     parameters: {
       source: '文档来源。读取本地文件时使用 { kind: "file", path }，path 可为 ${VAR}/path。',
       'source.path': '读取本地文件时使用的 source.path，可为项目相对路径或 ${VAR}/path。',
@@ -497,20 +498,21 @@ const ZH_TOOL_DEFINITION_LOCALIZATIONS: Readonly<Record<string, ToolDefinitionLo
       max_chars: '最多返回的文本字符数，默认 20000，最大 100000。',
       include_metadata: '是否返回提取到的文档元数据，默认 true。',
       include_manifest: 'range/next 结果是否包含完整文档 manifest，默认 false。',
-      include_images: '是否返回文档图片元数据和稳定 resourceRef，默认 true。',
+      include_images: '是否返回文档图片元数据和稳定 contentLocator，默认 true。',
       max_images: '最多返回的文档图片引用数量，默认 50，最大 500。',
       limit: '最多读取的条目数量。',
     },
   },
   ReadImage: {
     description:
-      '读取图片内容。EPUB/PDF/CBZ 图片必须使用 ReadDocument.imageInfo 返回的 resourceRef，不能自行拼接路径。',
+      '读取图片内容。EPUB/PDF/CBZ 图片必须使用 ReadDocument.imageInfo 返回的 contentLocator 或 representationLocator，不能自行拼接路径。',
     parameters: {
       images: '要读取的图片列表。',
       'images.[].metadata': '从 ReadDocument.imageInfo 复制的可选图片元数据。',
-      'images.[].resourceRef':
-        '稳定资源引用，必须原样来自 ReadDocument.imageInfo[].resourceRef 或统一内容访问结果。',
-      resourceRef: '稳定资源引用，必须来自 ReadDocument.imageInfo 或统一内容访问结果。',
+      'images.[].contentLocator':
+        '稳定内容定位器，必须原样来自 ReadDocument.imageInfo[].contentLocator 或统一内容访问结果。',
+      'images.[].representationLocator':
+        '稳定派生表示定位器，必须原样来自 ReadDocument.imageInfo[].representationLocator。',
       mode: '读取模式。当前只支持 metadata：读取元数据并把图片暴露给原生多模态 Agent 推理；不要使用 vision。',
       analysis: '希望图片分析回答的问题或分析类型。',
       prompt: '给下一次原生多模态 Agent 推理使用的可选提示；此工具本身不执行模型分析。',

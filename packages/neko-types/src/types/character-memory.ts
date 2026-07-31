@@ -16,7 +16,7 @@ import type {
 } from './creative-entity-asset-composition';
 import { isCreativeEntityCandidate } from './creative-entity-asset-composition';
 import type { DocumentSourceRef } from './document-reading';
-import type { ArtifactResourceRef } from './composite-artifact';
+import type { ArtifactReference } from './composite-artifact';
 import { isHostProjectedRuntimeValue } from './content-access';
 
 export const CHARACTER_MEMORY_FILE_VERSION = 1 as const;
@@ -73,7 +73,7 @@ export const CHARACTER_MEMORY_SOURCE_REF_KINDS = [
   'story',
   'canvas-node',
   'cut-range',
-  'artifact-resource',
+  'artifact-reference',
   'generated-asset',
   'document',
   'tool-result',
@@ -197,8 +197,8 @@ export type CharacterMemorySourceRef =
       readonly endMs?: number;
     }
   | {
-      readonly kind: 'artifact-resource';
-      readonly resourceRef: ArtifactResourceRef;
+      readonly kind: 'artifact-reference';
+      readonly reference: ArtifactReference;
       readonly range?: CharacterMemorySourceRange;
     }
   | {
@@ -1095,8 +1095,8 @@ function validateSourceRef(
         requireFiniteNumber(value['endMs'], [...path, 'endMs'], diagnostics);
       }
       break;
-    case 'artifact-resource':
-      validateSerializableValue(value['resourceRef'], [...path, 'resourceRef'], diagnostics);
+    case 'artifact-reference':
+      validateSerializableValue(value['reference'], [...path, 'reference'], diagnostics);
       break;
     case 'generated-asset':
       requireString(value['assetId'], [...path, 'assetId'], diagnostics);

@@ -119,22 +119,23 @@ describe('resolveCanvasMaterialPresentation', () => {
     });
   });
 
-  it('poisons path, ResourceRef, provenance, and legacy summary classifiers in normal runtime', () => {
-    const node = mediaNode('legacy-generated-path', {
+  it('poisons path, ResourceCacheSource, provenance, and legacy summary classifiers in normal runtime', () => {
+    const data: MediaCanvasNode['data'] = {
       assetPath: 'neko/generated/image/task-1.png',
       mediaType: 'image',
-      resourceRef: {
-        id: 'generated-image-legacy',
-        scope: 'project',
-        provider: 'generated-output',
-        kind: 'generated',
-        source: { kind: 'generated-asset', generatedAssetId: 'generated-image-legacy' },
-        locator: { kind: 'generated-asset', assetId: 'generated-image-legacy' },
-        fingerprint: { strategy: 'hash', value: 'sha256:legacy' },
-      },
       provenance: { projectionId: 'generated-output:legacy' },
       generationContext: { prompt: 'Legacy prompt' },
+    };
+    Reflect.set(data, 'resourceRef', {
+      id: 'generated-image-legacy',
+      scope: 'project',
+      provider: 'generated-output',
+      kind: 'generated',
+      source: { kind: 'generated-asset', generatedAssetId: 'generated-image-legacy' },
+      locator: { kind: 'generated-asset', assetId: 'generated-image-legacy' },
+      fingerprint: { strategy: 'hash', value: 'sha256:legacy' },
     });
+    const node = mediaNode('legacy-generated-path', data);
 
     expect(resolveCanvasMaterialPresentation(node)).toBeUndefined();
   });

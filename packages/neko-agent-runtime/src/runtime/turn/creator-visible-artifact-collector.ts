@@ -65,11 +65,7 @@ export function collectCreatorVisibleArtifacts(
     for (const attachment of result.attachments ?? []) {
       const contentLocator = attachment.contentLocator ?? attachment.assetRef?.contentLocator;
       if (!contentLocator) {
-        if (
-          attachment.path !== undefined ||
-          attachment.assetRef?.resourceRef !== undefined ||
-          attachment.assetRef?.documentResourceRef !== undefined
-        ) {
+        if (attachment.path !== undefined) {
           throw new Error(
             'creator-visible-artifact-migration-required: Tool attachment requires contentLocator.',
           );

@@ -95,7 +95,7 @@ function DocumentImageThumbnailsComponent({ thumbnails }: DocumentImageThumbnail
                   <span className="text-[9px] font-medium leading-none">i</span>
                 </ThumbnailActionButton>
               </div>
-              {pluginsAvailable?.canvas && thumbnail.resourceRef && (
+              {pluginsAvailable?.canvas && thumbnail.contentLocator && (
                 <div className="border-t border-[var(--agent-input-border)] px-1 py-1">
                   <SendToMenu
                     payload={{
@@ -103,7 +103,7 @@ function DocumentImageThumbnailsComponent({ thumbnails }: DocumentImageThumbnail
                       asset: {
                         mediaType: 'image',
                         name: getFileName(thumbnail.path),
-                        documentResourceRef: thumbnail.resourceRef,
+                        contentLocator: thumbnail.contentLocator,
                       },
                       target: projectCanvasContentTransferTarget({
                         ambientNodes,
@@ -113,7 +113,7 @@ function DocumentImageThumbnailsComponent({ thumbnails }: DocumentImageThumbnail
                         source: 'webview',
                         label: `document-image:${thumbnail.label}`,
                         metadata: {
-                          documentResourceRef: thumbnail.resourceRef,
+                          contentLocator: thumbnail.contentLocator,
                         },
                       },
                     }}
@@ -168,7 +168,9 @@ function formatThumbnailSummary(thumbnail: DocumentImageThumbnailProjection): st
     `Reference: ${formatLocatorReference(thumbnail)}`,
     `Location: ${formatThumbnailLocation(thumbnail)}`,
   ];
-  if (thumbnail.resourceRef?.entryPath) parts.push(`Entry: ${thumbnail.resourceRef.entryPath}`);
+  if (thumbnail.contentLocator?.kind === 'document-entry') {
+    parts.push(`Entry: ${thumbnail.contentLocator.entryPath}`);
+  }
   const dimensions = formatDimensions(thumbnail.width, thumbnail.height);
   if (dimensions) parts.push(`Dimensions: ${dimensions}`);
   const byteSize = formatByteSize(thumbnail.byteSize);
@@ -179,7 +181,9 @@ function formatThumbnailSummary(thumbnail: DocumentImageThumbnailProjection): st
 
 function formatThumbnailLocation(thumbnail: DocumentImageThumbnailProjection): string {
   if (thumbnail.locator) return formatLocator(thumbnail.locator);
-  if (thumbnail.resourceRef?.entryPath) return `entry:${thumbnail.resourceRef.entryPath}`;
+  if (thumbnail.contentLocator?.kind === 'document-entry') {
+    return `entry:${thumbnail.contentLocator.entryPath}`;
+  }
   return thumbnail.label;
 }
 

@@ -298,10 +298,10 @@ describe('ToolRegistry nested schema validation', () => {
               type: 'array',
               items: {
                 type: 'object',
-                required: ['resourceRef'],
+                required: ['contentLocator'],
                 properties: {
                   entryPath: { type: 'string' },
-                  resourceRef: { type: 'object' },
+                  contentLocator: { type: 'object' },
                 },
               },
             },
@@ -316,7 +316,7 @@ describe('ToolRegistry nested schema validation', () => {
     });
 
     expect(result.success).toBe(false);
-    expect(result.error).toContain('Missing required field: "images[0].resourceRef"');
+    expect(result.error).toContain('Missing required field: "images[0].contentLocator"');
     expect(execute).not.toHaveBeenCalled();
   });
 });
@@ -423,7 +423,7 @@ describe('ToolRegistry provider schema projection', () => {
     >;
 
     expect(definition?.function.description).toBe(
-      '读取文档文件，返回文本、结构信息和可供 ReadImage 使用的 imageInfo/resourceRef。',
+      '读取文档文件，返回文本、结构信息和可供 ReadImage 使用的 ContentLocator-backed imageInfo。',
     );
     expect(properties['source']?.description).toBe(
       '文档来源。读取本地文件时使用 { kind: "file", path }，path 可为 ${VAR}/path。',
@@ -437,7 +437,7 @@ describe('ToolRegistry provider schema projection', () => {
     );
     expect(properties['cursor']?.description).toBe('先前 ReadDocument 结果返回的批量读取游标。');
     expect(properties['include_images']?.description).toBe(
-      '是否返回文档图片元数据和稳定 resourceRef，默认 true。',
+      '是否返回文档图片元数据和稳定 contentLocator，默认 true。',
     );
   });
 
@@ -460,15 +460,15 @@ describe('ToolRegistry provider schema projection', () => {
               description: 'Structured image inputs.',
               items: {
                 type: 'object',
-                required: ['resourceRef'],
+                required: ['contentLocator'],
                 properties: {
                   metadata: {
                     type: 'object',
                     description: 'Optional metadata copied from ReadDocument.imageInfo.',
                   },
-                  resourceRef: {
+                  contentLocator: {
                     type: 'object',
-                    description: 'Stable resource ref returned by ReadDocument.',
+                    description: 'Stable content locator returned by ReadDocument.',
                   },
                 },
               },

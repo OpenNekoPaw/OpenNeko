@@ -3,8 +3,9 @@ import { DEFAULT_MENTION_EXCLUDE_GLOB } from '../../input/mention-excludes';
 import {
   AGENT_RESOLVED_ENTITY_CONTEXT_KIND,
   AGENT_RESOLVED_ENTITY_CONTEXT_SCHEMA_VERSION,
+  contentLocatorKey,
   type AgentContextPayload,
-  type ResourceRef,
+  type ContentLocator,
 } from '@neko/shared';
 import {
   AGENT_TURN_PRECONDITION_MESSAGE,
@@ -171,12 +172,14 @@ describe('message runtime helpers', () => {
 
     expect(projected).toContain('[3D Reference: Neutral mannequin]');
     expect(projected).toContain('Guide restriction: not an appearance reference');
-    expect(projected).toContain('Pose control (depth): pose-control');
+    expect(projected).toContain(
+      `Pose control (depth): ${contentLocatorKey(contentLocator('pose-control'))}`,
+    );
     expect(projected).toContain('Camera: front, FOV 45°, aspect 1');
     expect(projected).not.toContain('ordinary image');
     expect(projectThreeReferenceContextImageResources([payload])).toEqual([
-      { role: 'pose', resource: resourceRef('pose-control') },
-      { role: 'camera', resource: resourceRef('camera-composition') },
+      { role: 'pose', contentLocator: contentLocator('pose-control') },
+      { role: 'camera', contentLocator: contentLocator('camera-composition') },
     ]);
   });
 
@@ -492,7 +495,7 @@ describe('message runtime helpers', () => {
         resources.map((input) => ({
           type: 'base64' as const,
           media_type: 'image/png',
-          data: input.resource.id,
+          data: contentLocatorKey(input.contentLocator),
         })),
     );
 
@@ -509,12 +512,20 @@ describe('message runtime helpers', () => {
     });
 
     expect(processContextImageResources).toHaveBeenCalledWith([
-      { role: 'pose', resource: resourceRef('pose-control') },
-      { role: 'camera', resource: resourceRef('camera-composition') },
+      { role: 'pose', contentLocator: contentLocator('pose-control') },
+      { role: 'camera', contentLocator: contentLocator('camera-composition') },
     ]);
     expect(prepared.mediaImages).toEqual([
-      { type: 'base64', media_type: 'image/png', data: 'pose-control' },
-      { type: 'base64', media_type: 'image/png', data: 'camera-composition' },
+      {
+        type: 'base64',
+        media_type: 'image/png',
+        data: contentLocatorKey(contentLocator('pose-control')),
+      },
+      {
+        type: 'base64',
+        media_type: 'image/png',
+        data: contentLocatorKey(contentLocator('camera-composition')),
+      },
     ]);
   });
 
@@ -917,7 +928,7 @@ describe('message runtime helpers', () => {
           resources.map((resource) => ({
             type: 'base64' as const,
             media_type: 'image/png',
-            data: resource.resource.id,
+            data: contentLocatorKey(resource.contentLocator),
           })),
         persistUserMessage: vi.fn(),
         postMessage: vi.fn(),
@@ -933,7 +944,7 @@ describe('message runtime helpers', () => {
         threeReferenceControls: {
           appearanceReferences: [],
           controlImage: {
-            imageRef: resourceRef('pose-control'),
+            imageRef: contentLocator('pose-control'),
             mode: 'depth',
             identity: { sessionId: 'session-1', revision: 2 },
           },
@@ -1948,24 +1959,8 @@ describe('message runtime helpers', () => {
   });
 });
 
-function resourceRef(id: string): ResourceRef {
-  return {
-    id,
-    scope: 'project',
-    provider: 'preview-variant',
-    kind: 'preview',
-    source: {
-      kind: 'preview-asset',
-      previewAssetId: id,
-      filePath: `/workspace/.neko/.cache/resources/three-reference-captures/${id}.png`,
-    },
-    locator: { kind: 'preview-asset', assetId: id },
-    fingerprint: {
-      strategy: 'provider',
-      value: `preview:${id}`,
-      providerId: 'preview-variant',
-    },
-  };
+function contentLocator(path: string): ContentLocator {
+  return { kind: 'workspace-file', path };
 }
 
 function threeReferencePayload(): AgentContextPayload {
@@ -2004,7 +1999,7 @@ function threeReferencePayload(): AgentContextPayload {
           kind: 'pose',
           sessionId: 'session-1',
           revision: 2,
-          controlImage: resourceRef('pose-control'),
+          controlImage: contentLocator('pose-control'),
           controlMode: 'depth',
           joints: [],
         },
@@ -2019,7 +2014,7 @@ function threeReferencePayload(): AgentContextPayload {
             fieldOfViewDeg: 45,
             aspectRatio: 1,
           },
-          compositionImage: resourceRef('camera-composition'),
+          compositionImage: contentLocator('camera-composition'),
         },
       ],
     },

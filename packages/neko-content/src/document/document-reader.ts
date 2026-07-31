@@ -1,6 +1,6 @@
 import * as path from 'node:path';
 import {
-  createDocumentEntryResourceRef,
+  createDocumentEntryContentLocator,
   type DocumentFormat,
   type DocumentImageInfo,
   type DocumentLocator,
@@ -923,16 +923,15 @@ function createArchiveImageInfo(
   bytes: Uint8Array,
   resource: DocumentImageResourceInput,
 ): DocumentImageInfo {
-  const resourceRef = createDocumentEntryResourceRef({
+  const contentLocator = createDocumentEntryContentLocator({
     source: resource.source,
-    locator: resource.locator,
     entryPath: resource.entryPath,
   });
   return {
     ...createImageInfoFromBytes(bytes),
     ...(resource.entryPath ? { entryPath: resource.entryPath } : {}),
     ...(resource.locator ? { locator: resource.locator } : {}),
-    ...(resourceRef ? { resourceRef } : {}),
+    ...(contentLocator ? { contentLocator } : {}),
   };
 }
 

@@ -54,7 +54,7 @@ Agent 应优先调用 typed domain tools：
 - 文档/图片读取：`ReadDocument`、`ReadImage`。
 - Canvas/Timeline 修改：typed intent 或领域工具。
 - 媒体生成和转码：`@neko/media` 的 Node/FFmpeg adapter、media provider adapter 或受管 external processor。
-- 产物交付：`ResourceRef`、artifact transfer、workspace-relative path 或 `${VAR}/path`。
+- 产物交付：`ContentLocator`、artifact transfer、workspace-relative path 或 `${VAR}/path`。
 
 ### 2. 所有文件类工具必须进入统一 PathAccessPolicy
 
@@ -105,9 +105,9 @@ Agent、Webview、Canvas 和 Storyboard 的图片交接必须分清 stable ident
 
 | 字段/形态                                                                | 允许进入长期 payload | 用途                                                                                                                             |
 | ------------------------------------------------------------------------ | -------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| `ResourceRef` / `cacheResourceRef` / `documentResourceRef`               | 是                   | 受管资源身份；Canvas、Storyboard、Composite artifact 和工具引用优先传递这些结构化引用。                                          |
+| `ContentLocator` / `contentLocator`                                       | 是                   | 唯一公共内容身份；Canvas、Storyboard、Composite artifact 和工具引用传递这些结构化定位器。                                        |
 | `ProcessorOutputLocator`                                                 | 否（promotion 前）   | processor chain 的短生命周期 opaque identity；可作为下一 processor 输入，但不得作为项目事实或 durable source。                   |
-| workspace-relative path / `${VAR}/path`                                  | 是                   | 已纳管 source；由 Host 解析和授权。                                                                                              |
+| workspace-relative path / `${VAR}/path`                                  | 仅 owning package 或 operation scope | 可作为 Host 授权和文件操作输入；跨包内容交付必须保留 `ContentLocator`。                                                |
 | 当前消息投影中的 `renderUri` / `src` 或 `display.runtimeOnly` diagnostic | 否                   | 当前 Webview 展示或诊断；不能复制到 Canvas、剪贴板稳定引用或项目事实。Host 内部 materialized path 不进入 Webview/Agent payload。 |
 | legacy `cachePath`                                                       | 否                   | 只允许作为迁移/诊断 metadata；新 payload 写出前必须剥离。                                                                        |
 | `/tmp`、`/var/folders/...`、Downloads、Desktop、`file:`、blob/object URL | 否                   | 未纳管或会话态路径；作为 Agent/Webview/Canvas/storyboard 成功路径时必须返回 diagnostic。                                         |
@@ -403,7 +403,7 @@ Developer Mode 可以允许本地命令和更宽的 processor 调试能力，但
 | Secret denylist 漏网      | `denySecrets: true` 如果只靠少量命名模式，可能漏掉非标准 credential；如果可被 manifest 关闭，会破坏沙箱边界。                                                                    | Host baseline denylist 必须作为不可被非 core manifest 放宽的 policy；未知 env 默认不继承，命中 secret pattern 的 allowlist entry 也返回 diagnostic。                                                                                                                               |
 | Developer Mode 边界       | 若允许绕过 manifest 直接执行，本 ADR 会退化成“普通模式禁 Bash，开发模式全开”。                                                                                                   | Developer Mode 只能创建临时 processor request；所有路径、env、network、cwd 和 output ownership 仍走同一 policy。                                                                                                                                                                   |
 | TempFileService 迁移      | 当前仍存在 package-local temp service；即使不再使用 `os.tmpdir()`，消费者也可能把临时产物当作可展示资源或项目事实。                                                              | 所有面向 Agent/Webview/Canvas/storyboard 的中间产物必须进入 `.neko/.cache/resources` 或 extension `globalStorageUri/resources`。TempFileService 只允许用于 owner package 内部短生命周期 scratch，不能作为 resource handoff。                                                       |
-| Workspace ignore 简化     | Agent 文件工具会参考 `.gitignore` 与受管目录隐藏规则，但当前不是完整 gitignore interpreter；`!` negation 不会重新授权已隐藏路径。                                                | 这是保守的沙箱边界：`.gitignore` 只能收窄 Agent 可见范围，不能扩大授权。需要让 Agent 读取的文件应放入 workspace 可见路径、Media Library 授权根或由 Host 投影的受管 ResourceRef，而不是依赖 gitignore negation。                                                                    |
+| Workspace ignore 简化     | Agent 文件工具会参考 `.gitignore` 与受管目录隐藏规则，但当前不是完整 gitignore interpreter；`!` negation 不会重新授权已隐藏路径。                                                | 这是保守的沙箱边界：`.gitignore` 只能收窄 Agent 可见范围，不能扩大授权。需要让 Agent 读取的文件应放入 workspace 可见路径、Media Library 授权根或由 Host 投影的受管 ContentLocator，而不是依赖 gitignore negation。                                                                    |
 | PathAccessPolicy 实现收敛 | Agent core file tools 和 Extension Host external processor 需要不同 diagnostic 与 root alias 语义，但 forbidden path 与 root-contained 判定不能漂移。                            | 共享最低层纯路径判定 helper（forbidden unmanaged path、inside authorized roots），上层仍由 `CoreFileAccessPolicy` 和 `ExternalProcessorPathAccessPolicy` 分别负责各自的 root projection、diagnostic 和 tool contract。                                                             |
 | Discovery bootstrap 覆盖  | Processor 五来源 discovery 如果只验证 registry DTO，而不验证 Extension activation/Market install target/command/event 链路，后续可能出现 catalog 已实现但未接入 runtime 的断层。 | Extension activation 必须创建 `ExternalProcessorRegistryService`、绑定 `externalProcessorRuntime`、注册 Market processor install target 并启动 refresh；测试需覆盖 project/personal/market 扫描、Market uninstall、extension contribution register/dispose 和 registry lifecycle。 |
 
@@ -413,7 +413,7 @@ Developer Mode 可以允许本地命令和更宽的 processor 调试能力，但
 
 - 普通创作 Agent 默认无法调用 `Bash` 或任意 shell command。
 - `Read`、`Grep`、`ListDirectory`、`ReadImage`、`ReadDocument`、`Write` 对未授权绝对路径返回 fail-visible diagnostic。
-- 普通 `Read`、`Grep`、`ListDirectory`、`Write` 默认隐藏 `.neko/.cache`、`.neko/logs`、`.neko/tmp` 等 managed runtime 目录；`ReadImage`、`ReadDocument` 不按路径豁免 cache，只能通过结构化 `ResourceRef`/`DocumentArchiveResourceRef` 让 Host 内部统一内容访问服务物化受管资源。
+- 普通 `Read`、`Grep`、`ListDirectory`、`Write` 默认隐藏 `.neko/.cache`、`.neko/logs`、`.neko/tmp` 等 managed runtime 目录；`ReadImage`、`ReadDocument` 不按路径豁免 cache，只能通过结构化 `ContentLocator` 让 Host 内部统一内容访问服务物化受管资源。
 - `.gitignore` 规则只能收窄 Agent 文件可见范围；测试必须覆盖常见 ignore、managed directory 和 `!` negation 不重新授权的行为。
 - processor 输出只能写入 Host 分配的内部路径；Agent/Webview 只接收 stable locator，不接收 root、cache path 或系统 temp 路径。
 - Webview 只接收授权 projection 或 stable durable reference；未 promoted 的 `ProcessorOutputLocator` 不能写入项目事实。

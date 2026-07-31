@@ -2,15 +2,14 @@
 // Resource Cache Contracts
 // =============================================================================
 //
-// Stable cache identity for derived resources. Paths are runtime resolution
-// results; durable cross-package payloads should prefer ResourceRef.
+// Cache-owned identity for derived resources. This contract is implementation
+// state for local metadata and must not be used as cross-package content identity.
 // =============================================================================
 
+import { isContentLocator, type ContentLocator } from './content-locator';
 import {
-  parseDocumentLocator,
   parseDocumentSourceRef,
   type DocumentFormat,
-  type DocumentLocator,
   type DocumentSourceRef,
 } from './document-reading';
 import { hashStableValue } from './stable-value';
@@ -34,15 +33,8 @@ export type ResourceCacheStatus =
 
 export type ResourceRetentionHint = 'intermediate' | 'debug' | 'pinned' | 'promoted';
 
-export type ResourceSourceKind =
+export type ResourceCacheSourceKind =
   'document' | 'file' | 'media-library' | 'generated-asset' | 'preview-asset' | 'remote-url';
-
-export type ResourceLocator =
-  | { readonly kind: 'document'; readonly locator?: DocumentLocator; readonly entryPath?: string }
-  | { readonly kind: 'file'; readonly path?: string; readonly uri?: string }
-  | { readonly kind: 'generated-asset'; readonly assetId: string; readonly variantId?: string }
-  | { readonly kind: 'preview-asset'; readonly assetId: string; readonly route?: string }
-  | { readonly kind: 'storyboard-shot'; readonly sceneId?: string; readonly shotId: string };
 
 export interface ResourceFileIdentity {
   readonly fileId?: string;
@@ -51,8 +43,8 @@ export interface ResourceFileIdentity {
   readonly hash?: string;
 }
 
-export interface ResourceSourceRef {
-  readonly kind: ResourceSourceKind;
+export interface ResourceCacheSourceDescriptor {
+  readonly kind: ResourceCacheSourceKind;
   readonly filePath?: string;
   readonly uri?: string;
   readonly projectRelativePath?: string;
@@ -71,18 +63,18 @@ export interface ResourceFingerprint {
   readonly providerId?: string;
 }
 
-export interface ResourceRef {
+export interface ResourceCacheEntryDescriptor {
   readonly id: string;
   readonly scope: ResourceScope;
   readonly provider: string;
   readonly kind: ResourceKind;
-  readonly source: ResourceSourceRef;
-  readonly locator?: ResourceLocator;
+  readonly source: ResourceCacheSourceDescriptor;
+  readonly contentLocator?: ContentLocator;
   readonly fingerprint: ResourceFingerprint;
 }
 
-export interface ResourceVariantRef {
-  readonly resource: ResourceRef;
+export interface ResourceCacheVariantDescriptor {
+  readonly descriptor: ResourceCacheEntryDescriptor;
   readonly role: ResourceVariantRole;
   readonly format?: string;
   readonly mimeType?: string;
@@ -91,7 +83,7 @@ export interface ResourceVariantRef {
 }
 
 export interface ResourceCacheEntry {
-  readonly resource: ResourceRef;
+  readonly descriptor: ResourceCacheEntryDescriptor;
   readonly variants: readonly ResourceCacheVariantEntry[];
   readonly createdAt: string;
   readonly updatedAt: string;
@@ -137,7 +129,7 @@ export interface ResourceCacheLifecycleMetadata {
 }
 
 export interface ResourceCacheManifest {
-  readonly version: 1;
+  readonly version: 2;
   readonly projectRoot?: string;
   readonly createdAt: string;
   readonly updatedAt: string;
@@ -258,7 +250,7 @@ export const RESOURCE_CACHE_STATUSES: readonly ResourceCacheStatus[] = [
   'non-portable',
 ] as const;
 
-export const RESOURCE_SOURCE_KINDS: readonly ResourceSourceKind[] = [
+export const RESOURCE_CACHE_SOURCE_KINDS: readonly ResourceCacheSourceKind[] = [
   'document',
   'file',
   'media-library',
@@ -267,60 +259,73 @@ export const RESOURCE_SOURCE_KINDS: readonly ResourceSourceKind[] = [
   'remote-url',
 ] as const;
 
-export function createResourceRef(
-  input: Omit<ResourceRef, 'id'> & { readonly id?: string },
-): ResourceRef {
-  const ref: ResourceRef = {
+export function createResourceCacheEntryDescriptor(
+  input: Omit<ResourceCacheEntryDescriptor, 'id'> & { readonly id?: string },
+): ResourceCacheEntryDescriptor {
+  const descriptor: ResourceCacheEntryDescriptor = {
     ...input,
-    id: input.id ?? createResourceRefId(input),
+    id: input.id ?? createResourceCacheEntryDescriptorId(input),
   };
-  return ref;
+  return descriptor;
 }
 
-export function createResourceRefId(
+export function createResourceCacheEntryDescriptorId(
   input:
-    | Omit<ResourceRef, 'id'>
-    | Pick<ResourceRef, 'scope' | 'provider' | 'kind' | 'source' | 'locator' | 'fingerprint'>,
+    | Omit<ResourceCacheEntryDescriptor, 'id'>
+    | Pick<
+        ResourceCacheEntryDescriptor,
+        'scope' | 'provider' | 'kind' | 'source' | 'contentLocator' | 'fingerprint'
+      >,
 ): string {
-  return `res_${hashStableValue({
+  return `cache_${hashStableValue({
     scope: input.scope,
     provider: input.provider,
     kind: input.kind,
     source: input.source,
-    locator: input.locator,
+    contentLocator: input.contentLocator,
     fingerprint: input.fingerprint,
   })}`;
 }
 
-export function createResourceLogicalContentIdentity(resourceRef: ResourceRef): string {
+export function createResourceCacheLogicalContentIdentity(
+  descriptor: ResourceCacheEntryDescriptor,
+): string {
   return hashStableValue({
-    kind: 'resource-content',
-    scope: resourceRef.scope,
-    resourceKind: resourceRef.kind,
-    identity: resourceRef.locator
-      ? { locator: resourceRef.locator }
-      : createResourceSourceContentLocator(resourceRef),
+    kind: 'cache-entry-content',
+    scope: descriptor.scope,
+    resourceKind: descriptor.kind,
+    identity: descriptor.contentLocator
+      ? { contentLocator: descriptor.contentLocator }
+      : createCacheSourceIdentity(descriptor),
   });
 }
 
-export function createResourceContentIdentity(resourceRef: ResourceRef): string {
-  const logicalIdentity = createResourceLogicalContentIdentity(resourceRef);
-  if (resourceRef.fingerprint.strategy === 'none') return logicalIdentity;
+export function createResourceCacheContentIdentity(
+  descriptor: ResourceCacheEntryDescriptor,
+): string {
+  const logicalIdentity = createResourceCacheLogicalContentIdentity(descriptor);
+  if (descriptor.fingerprint.strategy === 'none') return logicalIdentity;
   return hashStableValue({
-    kind: 'resource-revision',
+    kind: 'cache-entry-revision',
     logicalIdentity,
     fingerprint: {
-      strategy: resourceRef.fingerprint.strategy,
-      value: resourceRef.fingerprint.value,
-      ...(resourceRef.fingerprint.providerId
-        ? { providerId: resourceRef.fingerprint.providerId }
+      strategy: descriptor.fingerprint.strategy,
+      value: descriptor.fingerprint.value,
+      ...(descriptor.fingerprint.providerId
+        ? { providerId: descriptor.fingerprint.providerId }
         : {}),
     },
   });
 }
 
-export function areResourceRefsContentCompatible(left: ResourceRef, right: ResourceRef): boolean {
-  if (createResourceLogicalContentIdentity(left) !== createResourceLogicalContentIdentity(right)) {
+export function areResourceCacheEntryDescriptorsContentCompatible(
+  left: ResourceCacheEntryDescriptor,
+  right: ResourceCacheEntryDescriptor,
+): boolean {
+  if (
+    createResourceCacheLogicalContentIdentity(left) !==
+    createResourceCacheLogicalContentIdentity(right)
+  ) {
     return false;
   }
   if (left.fingerprint.strategy === 'none' || right.fingerprint.strategy === 'none') return true;
@@ -331,18 +336,20 @@ export function areResourceRefsContentCompatible(left: ResourceRef, right: Resou
   );
 }
 
-export function compareResourceRefObservationStrength(
-  left: ResourceRef,
-  right: ResourceRef,
+export function compareResourceCacheDescriptorObservationStrength(
+  left: ResourceCacheEntryDescriptor,
+  right: ResourceCacheEntryDescriptor,
 ): number {
   return (
     fingerprintStrength(left.fingerprint.strategy) - fingerprintStrength(right.fingerprint.strategy)
   );
 }
 
-function createResourceSourceContentLocator(resourceRef: ResourceRef): Record<string, unknown> {
-  const source = resourceRef.source;
-  const locator = {
+function createCacheSourceIdentity(
+  descriptor: ResourceCacheEntryDescriptor,
+): Record<string, unknown> {
+  const source = descriptor.source;
+  const identity = {
     kind: source.kind,
     ...(source.projectRelativePath ? { projectRelativePath: source.projectRelativePath } : {}),
     ...(source.filePath ? { filePath: source.filePath } : {}),
@@ -352,7 +359,7 @@ function createResourceSourceContentLocator(resourceRef: ResourceRef): Record<st
     ...(source.previewAssetId ? { previewAssetId: source.previewAssetId } : {}),
     ...(source.document ? { document: source.document } : {}),
   };
-  return Object.keys(locator).length > 1 ? locator : { resourceId: resourceRef.id };
+  return Object.keys(identity).length > 1 ? identity : { cacheEntryId: descriptor.id };
 }
 
 function fingerprintStrength(strategy: ResourceFingerprint['strategy']): number {
@@ -370,12 +377,12 @@ function fingerprintStrength(strategy: ResourceFingerprint['strategy']): number 
 }
 
 export function createResourceVariantKey(
-  variant: ResourceVariantRef | ResourceVariantRequest,
+  variant: ResourceCacheVariantDescriptor | ResourceVariantRequest,
 ): string {
   const request = normalizeResourceVariantKeyInput(
-    'resource' in variant
+    'descriptor' in variant
       ? {
-          resourceId: variant.resource.id,
+          cacheEntryId: variant.descriptor.id,
           role: variant.role,
           format: variant.format,
           mimeType: variant.mimeType,
@@ -388,16 +395,18 @@ export function createResourceVariantKey(
 }
 
 function normalizeResourceVariantKeyInput(
-  variant: (ResourceVariantRequest | ResourceVariantRef) & { readonly resourceId?: string },
+  variant: (ResourceVariantRequest | ResourceCacheVariantDescriptor) & {
+    readonly cacheEntryId?: string;
+  },
 ): Record<string, unknown> {
   if (variant.role === 'document-entry') {
     return {
-      resourceId: variant.resourceId,
+      cacheEntryId: variant.cacheEntryId,
       role: variant.role,
     };
   }
   return {
-    resourceId: variant.resourceId,
+    cacheEntryId: variant.cacheEntryId,
     role: variant.role,
     format: variant.format,
     mimeType: variant.mimeType,
@@ -422,7 +431,9 @@ export function createResourceFingerprint(input: {
   };
 }
 
-export function readResourceSourceLocalPath(source: ResourceSourceRef): string | undefined {
+export function readResourceSourceLocalPath(
+  source: ResourceCacheSourceDescriptor,
+): string | undefined {
   return source.filePath ?? source.projectRelativePath ?? source.document?.filePath ?? source.uri;
 }
 
@@ -442,8 +453,8 @@ export function isResourceCacheStatus(value: unknown): value is ResourceCacheSta
   return includesString(RESOURCE_CACHE_STATUSES, value);
 }
 
-export function isResourceSourceKind(value: unknown): value is ResourceSourceKind {
-  return includesString(RESOURCE_SOURCE_KINDS, value);
+export function isResourceCacheSourceKind(value: unknown): value is ResourceCacheSourceKind {
+  return includesString(RESOURCE_CACHE_SOURCE_KINDS, value);
 }
 
 export function isResourceFingerprint(value: unknown): value is ResourceFingerprint {
@@ -460,8 +471,10 @@ export function isResourceFingerprint(value: unknown): value is ResourceFingerpr
   );
 }
 
-export function isResourceSourceRef(value: unknown): value is ResourceSourceRef {
-  if (!isRecord(value) || !isResourceSourceKind(value['kind'])) return false;
+export function isResourceCacheSourceDescriptor(
+  value: unknown,
+): value is ResourceCacheSourceDescriptor {
+  if (!isRecord(value) || !isResourceCacheSourceKind(value['kind'])) return false;
   return (
     optionalString(value['filePath']) &&
     optionalString(value['uri']) &&
@@ -475,45 +488,27 @@ export function isResourceSourceRef(value: unknown): value is ResourceSourceRef 
   );
 }
 
-export function isResourceLocator(value: unknown): value is ResourceLocator {
-  if (!isRecord(value) || typeof value['kind'] !== 'string') return false;
-  switch (value['kind']) {
-    case 'document':
-      return (
-        (value['locator'] === undefined || parseDocumentLocator(value['locator']) !== undefined) &&
-        optionalString(value['entryPath']) &&
-        (value['locator'] !== undefined || typeof value['entryPath'] === 'string')
-      );
-    case 'file':
-      return optionalString(value['path']) && optionalString(value['uri']);
-    case 'generated-asset':
-      return typeof value['assetId'] === 'string' && optionalString(value['variantId']);
-    case 'preview-asset':
-      return typeof value['assetId'] === 'string' && optionalString(value['route']);
-    case 'storyboard-shot':
-      return typeof value['shotId'] === 'string' && optionalString(value['sceneId']);
-    default:
-      return false;
-  }
-}
-
-export function isResourceRef(value: unknown): value is ResourceRef {
+export function isResourceCacheEntryDescriptor(
+  value: unknown,
+): value is ResourceCacheEntryDescriptor {
   if (!isRecord(value)) return false;
   return (
     typeof value['id'] === 'string' &&
     isResourceScope(value['scope']) &&
     typeof value['provider'] === 'string' &&
     isResourceKind(value['kind']) &&
-    isResourceSourceRef(value['source']) &&
-    (value['locator'] === undefined || isResourceLocator(value['locator'])) &&
+    isResourceCacheSourceDescriptor(value['source']) &&
+    (value['contentLocator'] === undefined || isContentLocator(value['contentLocator'])) &&
     isResourceFingerprint(value['fingerprint'])
   );
 }
 
-export function isResourceVariantRef(value: unknown): value is ResourceVariantRef {
+export function isResourceCacheVariantDescriptor(
+  value: unknown,
+): value is ResourceCacheVariantDescriptor {
   if (!isRecord(value)) return false;
   return (
-    isResourceRef(value['resource']) &&
+    isResourceCacheEntryDescriptor(value['descriptor']) &&
     isResourceVariantRole(value['role']) &&
     optionalString(value['format']) &&
     optionalString(value['mimeType']) &&
@@ -523,7 +518,7 @@ export function isResourceVariantRef(value: unknown): value is ResourceVariantRe
 }
 
 export function isResourceCacheManifest(value: unknown): value is ResourceCacheManifest {
-  if (!isRecord(value) || value['version'] !== 1 || !isRecord(value['entries'])) return false;
+  if (!isRecord(value) || value['version'] !== 2 || !isRecord(value['entries'])) return false;
   return (
     optionalString(value['projectRoot']) &&
     typeof value['createdAt'] === 'string' &&
@@ -604,7 +599,7 @@ export function isManagedCachePathCategory(category: ResourcePathCategory): bool
 export function isResourceCacheEntry(value: unknown): value is ResourceCacheEntry {
   if (!isRecord(value)) return false;
   return (
-    isResourceRef(value['resource']) &&
+    isResourceCacheEntryDescriptor(value['descriptor']) &&
     Array.isArray(value['variants']) &&
     value['variants'].every((variant) => isResourceCacheVariantEntry(variant)) &&
     typeof value['createdAt'] === 'string' &&
@@ -705,4 +700,4 @@ function isPathInside(filePath: string, root: string): boolean {
 }
 
 // Type-only references keep these imports visible to API consumers.
-export type { DocumentFormat, DocumentLocator, DocumentSourceRef };
+export type { DocumentFormat, DocumentSourceRef };

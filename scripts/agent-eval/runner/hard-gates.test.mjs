@@ -192,7 +192,7 @@ function m2Facts() {
       digest: HASH_B,
       provenance: { source: 'generated-asset', toolCallId: 'tool-1' },
       deliveryStatus: 'delivered',
-      validator: { id: 'durable-resource-ref', status: 'valid' },
+      validator: { id: 'content-locator', status: 'valid' },
       diagnostics: [],
     },
   ];

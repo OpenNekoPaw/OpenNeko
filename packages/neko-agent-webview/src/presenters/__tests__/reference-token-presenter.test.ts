@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { AgentContextPayload, MessageAttachment, ResourceRef } from '@neko/shared';
+import type { AgentContextPayload, ContentLocator, MessageAttachment } from '@neko/shared';
 import {
   formatReferenceBasename,
   formatReferenceParentPath,
@@ -175,7 +175,7 @@ function threeReferenceData() {
         kind: 'pose',
         sessionId: 'session-1',
         revision: 2,
-        controlImage: resourceRef('pose-control'),
+        controlImage: contentLocator('pose-control'),
         controlMode: 'pose',
         joints: [],
       },
@@ -195,22 +195,6 @@ function threeReferenceData() {
   };
 }
 
-function resourceRef(id: string): ResourceRef {
-  return {
-    id,
-    scope: 'project',
-    provider: 'preview-variant',
-    kind: 'preview',
-    source: {
-      kind: 'preview-asset',
-      previewAssetId: id,
-      filePath: `/workspace/.neko/.cache/resources/three-reference-captures/${id}.png`,
-    },
-    locator: { kind: 'preview-asset', assetId: id },
-    fingerprint: {
-      strategy: 'provider',
-      value: `preview:${id}`,
-      providerId: 'preview-variant',
-    },
-  };
+function contentLocator(id: string): ContentLocator {
+  return { kind: 'workspace-file', path: `references/${id}.png` };
 }

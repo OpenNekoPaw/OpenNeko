@@ -30,7 +30,7 @@ package-owned L0 contract
 | Project format        | Canvas `.nkc`、Cut OTIO                         | owning domain schema/codec | 是                           |
 | 媒体 port             | probe、frame、waveform、preview、PCM descriptor | `@neko/media`              | 否                           |
 | Host/renderer message | intent、status、diagnostic、session identity    | owning package L0 contract | 仅可恢复 UI state 可短期保存 |
-| Resource identity     | `ResourceRef`、Asset/Entity ID                  | shared/domain service      | 是                           |
+| Resource identity     | `ContentLocator`、Asset/Entity ID                  | shared/domain service      | 是                           |
 
 ## 不变量
 

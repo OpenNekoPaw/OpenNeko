@@ -32,6 +32,11 @@ const identity: PreviewRuntimeIdentity = {
   revision: 1,
 };
 
+const previewContentLocator = {
+  kind: 'workspace-file' as const,
+  path: 'preview/fixture.bin',
+};
+
 afterEach(() => {
   document.body.replaceChildren();
   vi.unstubAllGlobals();
@@ -78,6 +83,7 @@ describe('PreviewRoot', () => {
             descriptor: {
               descriptorId: 'descriptor-1',
               revision: 'revision-1',
+              contentLocator: previewContentLocator,
               contentKind: 'text',
               mediaType: 'application/json',
               displayName: 'candidates.json',
@@ -115,6 +121,7 @@ describe('PreviewRoot', () => {
       descriptor: {
         descriptorId: 'descriptor-image',
         revision: 'revision-1',
+        contentLocator: previewContentLocator,
         contentKind: 'image',
         mediaType: 'image/png',
         displayName: 'reference.png',
@@ -168,6 +175,7 @@ describe('PreviewRoot', () => {
             descriptor: {
               descriptorId: 'descriptor-video',
               revision: 'revision-1',
+              contentLocator: previewContentLocator,
               contentKind: 'video',
               mediaType: 'video/mp4',
               displayName: 'clip.mp4',
@@ -196,6 +204,7 @@ describe('PreviewRoot', () => {
           descriptor={{
             descriptorId: 'descriptor-image-hover',
             revision: 'revision-1',
+            contentLocator: previewContentLocator,
             contentKind: 'image',
             mediaType: 'image/png',
             displayName: 'hover.png',
@@ -226,6 +235,7 @@ describe('PreviewRoot', () => {
           descriptor={{
             descriptorId: 'descriptor-video-hover',
             revision: 'revision-1',
+            contentLocator: previewContentLocator,
             contentKind: 'video',
             mediaType: 'video/mp4',
             displayName: 'hover.mp4',
@@ -245,6 +255,7 @@ describe('PreviewRoot', () => {
           descriptor={{
             descriptorId: 'descriptor-audio-hover',
             revision: 'revision-1',
+            contentLocator: previewContentLocator,
             contentKind: 'audio',
             mediaType: 'audio/aac',
             displayName: 'hover.aac',

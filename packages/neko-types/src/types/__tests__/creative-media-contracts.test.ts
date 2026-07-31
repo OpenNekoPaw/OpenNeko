@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { ResourceRef } from '../resource-cache';
 import {
-  validateDurableResourceRef,
+  validateContentLocator,
   validateCreativeMediaOperationDispatch,
   validateCreativeMediaOperationRequest,
   validateCreativeMediaOperationResult,
@@ -22,18 +21,11 @@ import {
   type ProjectQualityResult,
 } from '../../project-authoring/project-quality';
 
-function resourceRef(overrides: Partial<ResourceRef> = {}): ResourceRef {
+function contentLocator(path = 'assets/hero.png') {
   return {
-    id: 'asset:image:hero',
-    scope: 'project',
-    provider: 'workspace',
-    kind: 'media',
-    source: {
-      kind: 'file',
-      projectRelativePath: 'assets/hero.png',
-    },
-    fingerprint: { strategy: 'hash', value: 'sha256:hero-v1' },
-    ...overrides,
+    kind: 'workspace-file' as const,
+    path,
+    fingerprint: { strategy: 'sha256' as const, value: 'sha256:hero-v1' },
   };
 }
 
@@ -42,7 +34,7 @@ function target(overrides: Partial<QualityTarget> = {}): QualityTarget {
     version: 1,
     targetId: 'quality-target:hero',
     kind: 'image',
-    resourceRef: resourceRef(),
+    contentLocator: contentLocator(),
     revision: 'revision-1',
     contentDigest: 'sha256:hero-v1',
     ...overrides,
@@ -50,29 +42,10 @@ function target(overrides: Partial<QualityTarget> = {}): QualityTarget {
 }
 
 describe('creative media shared contracts', () => {
-  it('rejects cache, render, Webview, and preview resources as durable identity', () => {
-    expect(
-      validateDurableResourceRef(
-        resourceRef({
-          source: { kind: 'file', filePath: '/workspace/.neko/cache/render/hero.png' },
-        }),
-      ).diagnostics.map((item) => item.code),
-    ).toContain('runtime-resource-identity');
-
-    expect(
-      validateDurableResourceRef(
-        resourceRef({ source: { kind: 'file', uri: 'neko-media://panel/hero.png' } }),
-      ).ok,
-    ).toBe(false);
-
-    expect(
-      validateDurableResourceRef(
-        resourceRef({
-          kind: 'preview',
-          source: { kind: 'preview-asset', previewAssetId: 'preview-1' },
-        }),
-      ).diagnostics.map((item) => item.code),
-    ).toContain('preview-resource-identity');
+  it('rejects cache paths, absolute paths, and runtime URLs as ContentLocator identity', () => {
+    expect(validateContentLocator(contentLocator('.neko/.cache/render/hero.png')).ok).toBe(false);
+    expect(validateContentLocator(contentLocator('/workspace/assets/hero.png')).ok).toBe(false);
+    expect(validateContentLocator(contentLocator('neko-media://panel/hero.png')).ok).toBe(false);
   });
 
   it('fails visibly for unknown cross-family operations and unsupported declarations', () => {
@@ -81,7 +54,7 @@ describe('creative media shared contracts', () => {
       requestId: 'request-1',
       mediaKind: 'image',
       operationId: 'transform',
-      inputRefs: [resourceRef()],
+      inputLocators: [contentLocator()],
     };
     expect(validateCreativeMediaOperationRequest(request).diagnostics).toEqual([
       expect.objectContaining({ code: 'unknown-operation' }),
@@ -107,8 +80,8 @@ describe('creative media shared contracts', () => {
       requestId: 'request-keyframes',
       mediaKind: 'video',
       operationId: 'generate-from-keyframes',
-      inputRefs: [],
-      startFrameRef: resourceRef(),
+      inputLocators: [],
+      startFrameLocator: contentLocator(),
       requestedDurationSeconds: 12,
     };
     const support: CreativeMediaOperationSupport = {
@@ -134,22 +107,22 @@ describe('creative media shared contracts', () => {
       mediaKind: 'image',
       operationId: 'generate',
       status: 'succeeded',
-      outputRefs: [],
+      outputLocators: [],
       diagnostics: [],
     };
     expect(validateCreativeMediaOperationResult(result).diagnostics).toEqual([
-      expect.objectContaining({ code: 'invalid-operation-result', path: ['outputRefs'] }),
+      expect.objectContaining({ code: 'invalid-operation-result', path: ['outputLocators'] }),
     ]);
   });
 
   it('requires stable target identity and revision instead of a bare path', () => {
     const invalid = target({
-      resourceRef: resourceRef({ source: { kind: 'file', filePath: '/tmp/cache/render.png' } }),
+      contentLocator: undefined,
       revision: undefined,
       contentDigest: undefined,
     });
     expect(validateQualityTarget(invalid).diagnostics.map((item) => item.code)).toEqual(
-      expect.arrayContaining(['invalid-quality-target', 'runtime-resource-identity']),
+      expect.arrayContaining(['invalid-quality-target']),
     );
   });
 
@@ -165,7 +138,7 @@ describe('creative media shared contracts', () => {
       coverage: { mode: 'sampled', sampledFrames: [0, 12], sampleCount: 2 },
       confidence: 0.8,
       createdAt: '2026-07-11T00:00:00.000Z',
-      sourceEvidenceRefs: [],
+      sourceEvidenceLocators: [],
     };
     expect(
       validateQualityEvidence(
@@ -202,24 +175,32 @@ describe('creative media shared contracts', () => {
   });
 
   it('rejects runtime-only ProjectQuality preview identity and durable session URLs', () => {
-    const invalidPreviewRef = resourceRef({
-      id: 'preview:runtime',
-      kind: 'preview',
-      source: { kind: 'remote-url', uri: 'blob:runtime-preview' },
+    const invalidPreview = {
+      project: {
+        domain: 'cut' as const,
+        documentUri: 'file:///workspace/edit.otio',
+        projectRevision: 'otio:edit-v1',
+      },
+      previewLocator: {
+        kind: 'content-representation' as const,
+        id: 'preview-1',
+        representationKind: 'preview' as const,
+        source: contentLocator(),
+        spec: { kind: 'preview' as const },
+        generatorId: 'cut-preview',
+        sourceFingerprint: 'source-v1',
+        specFingerprint: 'preview-v1',
+        revision: '1',
+      },
+      sessionRenderUri: 'file:///workspace/render.png',
+      createdAt: '2026-07-12T00:00:00.000Z',
+    };
+    Reflect.set(invalidPreview, 'previewLocator', {
+      kind: 'content-representation',
+      source: { kind: 'runtime', value: 'blob:runtime-preview' },
     });
-    expect(
-      validateProjectQualityPreview({
-        project: {
-          domain: 'cut',
-          documentUri: 'file:///workspace/edit.otio',
-          projectRevision: 'otio:edit-v1',
-        },
-        previewRef: invalidPreviewRef,
-        sessionRenderUri: 'file:///workspace/render.png',
-        createdAt: '2026-07-12T00:00:00.000Z',
-      }).diagnostics,
-    ).toEqual([
-      expect.objectContaining({ path: ['previewRef'] }),
+    expect(validateProjectQualityPreview(invalidPreview).diagnostics).toEqual([
+      expect.objectContaining({ path: ['previewLocator'] }),
       expect.objectContaining({ path: ['sessionRenderUri'] }),
     ]);
   });

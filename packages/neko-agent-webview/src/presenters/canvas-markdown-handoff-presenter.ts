@@ -1,6 +1,6 @@
 import {
   type CanvasMarkdownCapabilityTarget,
-  type CanvasMarkdownResourceRef,
+  type CanvasMarkdownContentBinding,
   isRuntimeOnlyCanvasMarkdownResourceValue,
 } from '@neko/shared';
 import type {
@@ -19,7 +19,7 @@ export interface CanvasMarkdownHandoffRequest {
   readonly title?: string;
   readonly sourceFormat?:
     'markdown' | 'markdown-table' | 'gfm-table' | 'resource-reference-markdown';
-  readonly resources?: readonly CanvasMarkdownResourceRef[];
+  readonly resources?: readonly CanvasMarkdownContentBinding[];
   readonly stableRefs?: readonly CanvasAuthoringHandoffStableRef[];
   readonly diagnostics?: readonly CanvasAuthoringHandoffDiagnostic[];
   readonly promptSpans?: readonly CanvasAuthoringHandoffPromptSpan[];
@@ -122,9 +122,9 @@ function projectCanvasMarkdownSourceRange(
 
 function projectCanvasMarkdownResources(
   projection: MarkdownResourceRenderingProjection | undefined,
-): readonly CanvasMarkdownResourceRef[] {
+): readonly CanvasMarkdownContentBinding[] {
   if (!projection) return [];
-  const byKey = new Map<string, CanvasMarkdownResourceRef>();
+  const byKey = new Map<string, CanvasMarkdownContentBinding>();
   for (const token of projection.tokens) {
     for (const resource of token.resources) {
       if (!isSafeCanvasMarkdownHandoffResource(resource)) continue;
@@ -135,7 +135,7 @@ function projectCanvasMarkdownResources(
   return Array.from(byKey.values());
 }
 
-function isSafeCanvasMarkdownHandoffResource(resource: CanvasMarkdownResourceRef): boolean {
+function isSafeCanvasMarkdownHandoffResource(resource: CanvasMarkdownContentBinding): boolean {
   if (resource.token && isRuntimeOnlyCanvasMarkdownResourceValue(resource.token)) return false;
   if (resource.sourcePath && isRuntimeOnlyCanvasMarkdownResourceValue(resource.sourcePath)) {
     return false;
@@ -265,14 +265,9 @@ function projectCanvasMarkdownProvenance(
   return Object.keys(rest).length > 0 ? rest : undefined;
 }
 
-function canvasMarkdownResourceKey(resource: CanvasMarkdownResourceRef): string {
+function canvasMarkdownResourceKey(resource: CanvasMarkdownContentBinding): string {
   return (
-    (resource.resourceRef
-      ? `resource:${resource.resourceRef.provider}:${resource.resourceRef.id}`
-      : undefined) ??
-    (resource.documentResourceRef
-      ? `document:${resource.documentResourceRef.source.filePath}:${resource.documentResourceRef.entryPath ?? JSON.stringify(resource.documentResourceRef.locator)}`
-      : undefined) ??
+    (resource.contentLocator ? `content:${JSON.stringify(resource.contentLocator)}` : undefined) ??
     (resource.sourcePath ? `path:${resource.sourcePath}` : undefined) ??
     `token:${resource.token ?? ''}`
   );

@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
-  areResourceRefsContentCompatible,
+  areResourceCacheEntryDescriptorsContentCompatible,
   asProjectCachePath,
   asProjectFactPath,
-  compareResourceRefObservationStrength,
-  createResourceContentIdentity,
+  compareResourceCacheDescriptorObservationStrength,
+  createResourceCacheContentIdentity,
   createResourceFingerprint,
-  createResourceLogicalContentIdentity,
-  createResourceRef,
-  createResourceRefId,
+  createResourceCacheLogicalContentIdentity,
+  createResourceCacheEntryDescriptor,
+  createResourceCacheEntryDescriptorId,
   createResourceVariantKey,
   getResourcePathCategory,
   isManagedCachePathCategory,
@@ -17,13 +17,13 @@ import {
   isResourceCacheManifest,
   isResourceCacheStatus,
   isResourceKind,
-  isResourceRef,
+  isResourceCacheEntryDescriptor,
   isResourceScope,
-  isResourceVariantRef,
+  isResourceCacheVariantDescriptor,
   isResourceVariantRole,
   type ResourceCacheManifest,
-  type ResourceRef,
-  type ResourceVariantRef,
+  type ResourceCacheEntryDescriptor,
+  type ResourceCacheVariantDescriptor,
 } from '../resource-cache';
 import { resolveStorageLayout } from '../storage';
 
@@ -38,9 +38,9 @@ describe('resource cache contracts', () => {
     identity: { fileId: 'comic-v1', sizeBytes: 1024, mtimeMs: 42 },
   };
 
-  const locator = {
-    kind: 'document' as const,
-    locator: { kind: 'chapter' as const, chapterHref: 'OPS/page-1.xhtml', spineIndex: 0 },
+  const contentLocator = {
+    kind: 'document-entry' as const,
+    source: { kind: 'workspace-file' as const, path: 'books/comic.epub' },
     entryPath: 'OPS/page-1.jpg',
   };
 
@@ -65,71 +65,76 @@ describe('resource cache contracts', () => {
       provider: 'document-archive',
       kind: 'document' as const,
       source,
-      locator,
+      contentLocator,
       fingerprint,
     };
 
-    expect(createResourceRefId(input)).toBe(createResourceRefId({ ...input }));
+    expect(createResourceCacheEntryDescriptorId(input)).toBe(
+      createResourceCacheEntryDescriptorId({ ...input }),
+    );
 
-    const ref = createResourceRef(input);
-    const sameRef = createResourceRef({ ...input });
+    const ref = createResourceCacheEntryDescriptor(input);
+    const sameRef = createResourceCacheEntryDescriptor({ ...input });
     expect(ref.id).toBe(sameRef.id);
-    expect(isResourceRef(ref)).toBe(true);
+    expect(isResourceCacheEntryDescriptor(ref)).toBe(true);
     expect(
-      isResourceRef({
+      isResourceCacheEntryDescriptor({
         ...ref,
-        locator: { kind: 'document', locator: { kind: 'bad' } },
+        contentLocator: { kind: 'document-entry', source: { kind: 'bad' } },
       }),
     ).toBe(false);
   });
 
   it('distinguishes logical file identity from durable resource revisions', () => {
     const portablePath = '${A}/epub/animation/Blame/volume-01.epub';
-    const fallback: ResourceRef = {
+    const fallback: ResourceCacheEntryDescriptor = {
       id: 'res_fallback',
       scope: 'project',
       provider: 'source-file-content-access',
       kind: 'document',
       source: { kind: 'file', projectRelativePath: portablePath },
-      locator: { kind: 'file', path: portablePath },
       fingerprint: { strategy: 'none', value: portablePath },
     };
-    const firstRevision: ResourceRef = {
+    const firstRevision: ResourceCacheEntryDescriptor = {
       ...fallback,
       id: 'res_hash_1',
       fingerprint: { strategy: 'hash', value: 'sha256:volume-01-v1' },
     };
-    const secondRevision: ResourceRef = {
+    const secondRevision: ResourceCacheEntryDescriptor = {
       ...fallback,
       id: 'res_hash_2',
       fingerprint: { strategy: 'hash', value: 'sha256:volume-01-v2' },
     };
 
-    expect(createResourceLogicalContentIdentity(fallback)).toBe(
-      createResourceLogicalContentIdentity(firstRevision),
+    expect(createResourceCacheLogicalContentIdentity(fallback)).toBe(
+      createResourceCacheLogicalContentIdentity(firstRevision),
     );
-    expect(areResourceRefsContentCompatible(fallback, firstRevision)).toBe(true);
-    expect(compareResourceRefObservationStrength(firstRevision, fallback)).toBeGreaterThan(0);
-    expect(createResourceContentIdentity(fallback)).not.toBe(
-      createResourceContentIdentity(firstRevision),
+    expect(areResourceCacheEntryDescriptorsContentCompatible(fallback, firstRevision)).toBe(true);
+    expect(
+      compareResourceCacheDescriptorObservationStrength(firstRevision, fallback),
+    ).toBeGreaterThan(0);
+    expect(createResourceCacheContentIdentity(fallback)).not.toBe(
+      createResourceCacheContentIdentity(firstRevision),
     );
-    expect(areResourceRefsContentCompatible(firstRevision, secondRevision)).toBe(false);
-    expect(createResourceContentIdentity(firstRevision)).not.toBe(
-      createResourceContentIdentity(secondRevision),
+    expect(areResourceCacheEntryDescriptorsContentCompatible(firstRevision, secondRevision)).toBe(
+      false,
+    );
+    expect(createResourceCacheContentIdentity(firstRevision)).not.toBe(
+      createResourceCacheContentIdentity(secondRevision),
     );
   });
 
   it('creates deterministic variant keys and validates variants', () => {
-    const resource: ResourceRef = createResourceRef({
+    const descriptor: ResourceCacheEntryDescriptor = createResourceCacheEntryDescriptor({
       scope: 'project',
       provider: 'document-archive',
       kind: 'document',
       source,
-      locator,
+      contentLocator,
       fingerprint: createResourceFingerprint({ strategy: 'provider', value: 'doc-entry-v1' }),
     });
-    const variant: ResourceVariantRef = {
-      resource,
+    const variant: ResourceCacheVariantDescriptor = {
+      descriptor,
       role: 'thumbnail',
       format: 'jpg',
       mimeType: 'image/jpeg',
@@ -141,9 +146,9 @@ describe('resource cache contracts', () => {
     expect(createResourceVariantKey({ role: 'thumbnail', width: 256, height: 256 })).toBe(
       createResourceVariantKey({ height: 256, role: 'thumbnail', width: 256 }),
     );
-    expect(createResourceVariantKey({ resource, role: 'document-entry' })).toBe(
+    expect(createResourceVariantKey({ descriptor, role: 'document-entry' })).toBe(
       createResourceVariantKey({
-        resource,
+        descriptor,
         role: 'document-entry',
         format: 'epub',
         mimeType: 'image/jpeg',
@@ -151,37 +156,37 @@ describe('resource cache contracts', () => {
         height: 2160,
       }),
     );
-    expect(createResourceVariantKey({ resource, role: 'thumbnail', width: 256 })).not.toBe(
-      createResourceVariantKey({ resource, role: 'thumbnail', width: 512 }),
+    expect(createResourceVariantKey({ descriptor, role: 'thumbnail', width: 256 })).not.toBe(
+      createResourceVariantKey({ descriptor, role: 'thumbnail', width: 512 }),
     );
-    expect(isResourceVariantRef(variant)).toBe(true);
-    expect(isResourceVariantRef({ ...variant, role: 'poster' })).toBe(false);
+    expect(isResourceCacheVariantDescriptor(variant)).toBe(true);
+    expect(isResourceCacheVariantDescriptor({ ...variant, role: 'poster' })).toBe(false);
   });
 
   it('validates cache manifests with mapping and freshness metadata', () => {
-    const resource = createResourceRef({
+    const descriptor = createResourceCacheEntryDescriptor({
       scope: 'project',
       provider: 'document-archive',
       kind: 'document',
       source,
-      locator,
+      contentLocator,
       fingerprint: createResourceFingerprint({ strategy: 'provider', value: 'doc-entry-v1' }),
     });
     const now = '2026-06-05T00:00:00.000Z';
     const manifest: ResourceCacheManifest = {
-      version: 1,
+      version: 2,
       projectRoot: '/workspace',
       createdAt: now,
       updatedAt: now,
       entries: {
-        [resource.id]: {
-          resource,
+        [descriptor.id]: {
+          descriptor,
           status: 'ready',
           createdAt: now,
           updatedAt: now,
           variants: [
             {
-              key: createResourceVariantKey({ resource, role: 'thumbnail', width: 256 }),
+              key: createResourceVariantKey({ descriptor, role: 'thumbnail', width: 256 }),
               role: 'thumbnail',
               status: 'ready',
               relativePath: 'documents/res/page-1.jpg',
@@ -189,7 +194,7 @@ describe('resource cache contracts', () => {
               sizeBytes: 2048,
               createdAt: now,
               updatedAt: now,
-              sourceFingerprint: resource.fingerprint,
+              sourceFingerprint: descriptor.fingerprint,
               rebuildable: true,
             },
           ],
@@ -206,7 +211,20 @@ describe('resource cache contracts', () => {
 
     expect(isResourceCacheManifest(manifest)).toBe(true);
     expect(
-      isResourceCacheManifest({ ...manifest, entries: { [resource.id]: { status: 'ready' } } }),
+      isResourceCacheManifest({ ...manifest, entries: { [descriptor.id]: { status: 'ready' } } }),
+    ).toBe(false);
+    expect(
+      isResourceCacheManifest({
+        ...manifest,
+        version: 1,
+        entries: {
+          [descriptor.id]: {
+            ...manifest.entries[descriptor.id],
+            resource: descriptor,
+            descriptor: undefined,
+          },
+        },
+      }),
     ).toBe(false);
   });
 

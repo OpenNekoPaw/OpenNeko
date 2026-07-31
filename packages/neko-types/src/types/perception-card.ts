@@ -1,7 +1,5 @@
 import type { AgentObservationModality } from './agent-observation';
 import type { ContentLocator } from './content-locator';
-import type { DocumentArchiveResourceRef } from './document-reading';
-import type { ResourceRef } from './resource-cache';
 import type { ToolResultArtifactTransfer, ToolResultAttachment } from './tool';
 
 export type PerceptionLayerStatus = 'pending' | 'complete' | 'skipped' | 'failed';
@@ -18,7 +16,7 @@ export interface PerceptualAssetRef {
   /**
    * Portable display/load locator used only when no stable locator or reference is present.
    * Persist relative paths or ${VAR}/path values only.
-   * When a stable content locator or resource reference is present, adapters must resolve it
+   * When a stable content locator is present, adapters must resolve it
    * instead of interpreting this value as a local file path.
    */
   readonly uri: string;
@@ -28,8 +26,6 @@ export interface PerceptualAssetRef {
   /** Host-projected, runtime-only display failure. Model loading may still succeed independently. */
   readonly previewDiagnostic?: string;
   readonly contentLocator?: ContentLocator;
-  readonly resourceRef?: ResourceRef;
-  readonly documentResourceRef?: DocumentArchiveResourceRef;
   readonly label?: string;
   readonly timestampMs?: number;
 }

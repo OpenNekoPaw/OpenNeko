@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createGeneratedAssetRevisionRef, validateGeneratedAssetRevisionRef } from '..';
 
 describe('generated asset lifecycle', () => {
-  it('creates locator-only revision identity without ResourceRef or host/cache paths', () => {
+  it('creates locator-only revision identity without cache descriptors or host/cache paths', () => {
     const lifecycle = createLifecycle('draft-1', 'sha256:same', 'operation-1');
 
     expect(lifecycle.contentLocator).toEqual({
@@ -17,7 +17,7 @@ describe('generated asset lifecycle', () => {
     expect(JSON.stringify(lifecycle)).not.toContain('/.neko/.cache/');
   });
 
-  it('rejects legacy ResourceRef lifecycle fields and mismatched locator identity', () => {
+  it('rejects retired lifecycle fields and mismatched locator identity', () => {
     const lifecycle = createLifecycle('draft-1', 'sha256:same', 'operation-1');
 
     expect(

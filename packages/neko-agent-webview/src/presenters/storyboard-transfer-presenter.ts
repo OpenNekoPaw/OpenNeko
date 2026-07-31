@@ -1,7 +1,6 @@
 import {
   projectStoryboardTableToCutPayload as projectSemanticStoryboardTableToCutPayload,
   validateCanonicalStoryboardTable,
-  type DocumentArchiveResourceRef,
   type StoryboardMediaRef,
   type StoryboardTable,
 } from '@neko/shared';
@@ -166,18 +165,16 @@ function projectCompositeMediaAssetRef(
     media.stableUri && isCanvasReferenceImagePathUsable(media.stableUri)
       ? media.stableUri
       : undefined;
-  if (!portablePath && !media.resourceRef) return null;
+  if (!portablePath && !media.contentLocator) return null;
   return {
-    ...(media.resourceRef ? {} : { path: portablePath }),
+    ...(media.contentLocator ? {} : { path: portablePath }),
     mediaType: media.type,
     name:
       media.caption ??
       media.label ??
       section.heading ??
       `section-${section.index + 1}-asset-${mediaIndex + 1}`,
-    ...(media.resourceRef
-      ? { documentResourceRef: toStableDocumentArchiveResourceRef(media.resourceRef) }
-      : {}),
+    ...(media.contentLocator ? { contentLocator: media.contentLocator } : {}),
   };
 }
 
@@ -197,11 +194,4 @@ function isCanvasReferenceImagePathUsable(value: string): boolean {
   }
   if (value.startsWith('${')) return true;
   return !isAbsolutePath(value);
-}
-
-function toStableDocumentArchiveResourceRef(
-  ref: DocumentArchiveResourceRef | undefined,
-): DocumentArchiveResourceRef | undefined {
-  if (!ref) return undefined;
-  return ref;
 }

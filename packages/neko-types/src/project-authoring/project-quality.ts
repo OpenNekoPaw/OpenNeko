@@ -1,6 +1,10 @@
-import { isResourceRef, type ResourceRef } from '../types/resource-cache';
+import type { ContentLocator } from '../types/content-locator';
+import {
+  isContentRepresentationLocator,
+  type ContentRepresentationLocator,
+} from '../types/content-representation';
+import { isHostProjectedRuntimeValue } from '../types/content-access';
 import type { QualityDiagnostic, QualityProjectRef, QualityTarget } from '../types/media-quality';
-import { isRuntimeOnlyResourceIdentityValue } from '../types/durable-resource-ref';
 
 export const PROJECT_QUALITY_CONTRACT_VERSION = 1 as const;
 
@@ -20,13 +24,13 @@ export interface ProjectQualityRequest {
 
 export interface ProjectQualitySnapshot {
   readonly project: QualityProjectRef;
-  readonly snapshotRef: ResourceRef;
+  readonly snapshotLocator: ContentLocator;
   readonly createdAt: string;
 }
 
 export interface ProjectQualityPreview {
   readonly project: QualityProjectRef;
-  readonly previewRef: ResourceRef;
+  readonly previewLocator: ContentRepresentationLocator;
   readonly sessionRenderUri?: string;
   readonly createdAt: string;
 }
@@ -119,25 +123,15 @@ export function validateProjectQualityPreview(
   preview: ProjectQualityPreview,
 ): ProjectQualityContractValidationResult {
   const diagnostics: QualityDiagnostic[] = [];
-  if (!isResourceRef(preview.previewRef)) {
+  if (!isContentRepresentationLocator(preview.previewLocator)) {
     diagnostics.push({
       code: 'invalid-quality-gate-result',
       severity: 'error',
-      message: 'ProjectQuality preview requires a structurally valid preview ResourceRef.',
-      path: ['previewRef'],
-    });
-  } else if (
-    projectQualityPreviewIdentityValues(preview.previewRef).some(isRuntimeOnlyResourceIdentityValue)
-  ) {
-    diagnostics.push({
-      code: 'invalid-quality-gate-result',
-      severity: 'error',
-      message:
-        'ProjectQuality previewRef cannot use cache, render, Webview, or session-only identity.',
-      path: ['previewRef'],
+      message: 'ProjectQuality preview requires a valid ContentRepresentationLocator.',
+      path: ['previewLocator'],
     });
   }
-  if (preview.sessionRenderUri && !isRuntimeOnlyResourceIdentityValue(preview.sessionRenderUri)) {
+  if (preview.sessionRenderUri && !isHostProjectedRuntimeValue(preview.sessionRenderUri)) {
     diagnostics.push({
       code: 'invalid-quality-gate-result',
       severity: 'error',
@@ -146,18 +140,6 @@ export function validateProjectQualityPreview(
     });
   }
   return { ok: diagnostics.length === 0, diagnostics };
-}
-
-function projectQualityPreviewIdentityValues(ref: ResourceRef): readonly unknown[] {
-  const values: unknown[] = [
-    ref.id,
-    ref.source.filePath,
-    ref.source.uri,
-    ref.source.projectRelativePath,
-  ];
-  if (ref.locator?.kind === 'file') values.push(ref.locator.path, ref.locator.uri);
-  if (ref.locator?.kind === 'preview-asset') values.push(ref.locator.route);
-  return values;
 }
 
 function isProjectQualityOperation(value: unknown): value is ProjectQualityOperation {

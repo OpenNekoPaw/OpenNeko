@@ -250,6 +250,11 @@ describe('tool-call-presenter', () => {
   });
 
   it('projects ReadImage result images into thumbnail view models', () => {
+    const contentLocator = {
+      kind: 'document-entry' as const,
+      source: { kind: 'workspace-file' as const, path: 'books/a.epub' },
+      entryPath: 'image/Page_1.jpg',
+    };
     const projection = projectToolCallDisplayState({
       id: 'tool-2',
       name: 'ReadImage',
@@ -276,19 +281,7 @@ describe('tool-call-presenter', () => {
                   spineIndex: 1,
                 },
               },
-              documentImage: {
-                locator: {
-                  kind: 'chapter',
-                  chapterHref: 'Page_1',
-                  spineIndex: 1,
-                },
-                resourceRef: {
-                  kind: 'document-entry',
-                  source: { filePath: '/books/a.epub', format: 'epub' },
-                  entryPath: 'image/Page_1.jpg',
-                  versionPolicy: 'versioned-export',
-                },
-              },
+              contentLocator,
             },
           ],
           imageCount: 1,
@@ -311,12 +304,7 @@ describe('tool-call-presenter', () => {
           chapterHref: 'Page_1',
           spineIndex: 1,
         },
-        resourceRef: {
-          kind: 'document-entry',
-          source: { filePath: '/books/a.epub', format: 'epub' },
-          entryPath: 'image/Page_1.jpg',
-          versionPolicy: 'versioned-export',
-        },
+        contentLocator,
       }),
     ]);
     expect(projection.copyText).toBeNull();
@@ -333,12 +321,7 @@ describe('tool-call-presenter', () => {
           chapterHref: 'Page_1',
           spineIndex: 1,
         },
-        resourceRef: {
-          kind: 'document-entry',
-          source: { filePath: '/books/a.epub', format: 'epub' },
-          entryPath: 'image/Page_1.jpg',
-          versionPolicy: 'versioned-export',
-        },
+        contentLocator,
       },
       image: {
         index: 0,
@@ -346,12 +329,11 @@ describe('tool-call-presenter', () => {
         height: 2133,
         byteSize: 2048,
         mimeType: 'image/jpeg',
-        resourceRef: {
-          kind: 'document-entry',
-          source: { filePath: '/books/a.epub', format: 'epub' },
-          entryPath: 'image/Page_1.jpg',
-          versionPolicy: 'versioned-export',
-        },
+        contentLocator,
+      },
+      display: {
+        runtimeOnly: true,
+        path: 'image/Page_1.jpg',
       },
     });
     expect(projection.documentThumbnails[0]!.referenceJson).not.toContain('"renderUri"');
@@ -387,6 +369,11 @@ describe('tool-call-presenter', () => {
   });
 
   it('keeps ReadImage stable refs even when no webview URI is available', () => {
+    const contentLocator = {
+      kind: 'document-entry' as const,
+      source: { kind: 'workspace-file' as const, path: 'books/a.epub' },
+      entryPath: 'image/Page_1.jpg',
+    };
     const projection = projectToolCallDisplayState({
       id: 'tool-3b',
       name: 'ReadImage',
@@ -401,12 +388,7 @@ describe('tool-call-presenter', () => {
               width: 1494,
               height: 2133,
               mimeType: 'image/jpeg',
-              resourceRef: {
-                kind: 'document-entry',
-                source: { filePath: '/books/a.epub', format: 'epub' },
-                entryPath: 'image/Page_1.jpg',
-                versionPolicy: 'versioned-export',
-              },
+              contentLocator,
             },
           ],
         },
@@ -415,19 +397,14 @@ describe('tool-call-presenter', () => {
 
     expect(projection.documentThumbnails).toEqual([
       expect.objectContaining({
-        filePath: '/books/a.epub',
+        filePath: 'books/a.epub',
         path: 'image/Page_1.jpg',
         width: 1494,
         height: 2133,
         mimeType: 'image/jpeg',
         src: 'neko-media://page-1.jpg',
         label: 'Page 1',
-        resourceRef: {
-          kind: 'document-entry',
-          source: { filePath: '/books/a.epub', format: 'epub' },
-          entryPath: 'image/Page_1.jpg',
-          versionPolicy: 'versioned-export',
-        },
+        contentLocator,
       }),
     ]);
     expect(JSON.parse(projection.documentThumbnails[0]!.referenceJson).image).not.toHaveProperty(

@@ -40,9 +40,9 @@ import type {
   ThreeReferenceOutput,
   ThreeReferencePurpose,
   ThreeReferenceMediaControls,
-  ResourceRef,
 } from '@neko/shared';
 import {
+  contentLocatorKey,
   isAgentResolvedEntityContextData,
   isContentLocator,
   isDocumentFile,
@@ -750,7 +750,7 @@ export function projectContextReferences(
 
 export interface AgentThreeReferenceImageResource {
   readonly role: ThreeReferencePurpose;
-  readonly resource: ResourceRef;
+  readonly contentLocator: ContentLocator;
 }
 
 export function projectThreeReferenceContextImageResources(
@@ -765,20 +765,20 @@ export function projectThreeReferenceContextImageResources(
     for (const output of payload.data.outputs) {
       switch (output.kind) {
         case 'appearance':
-          resources.push({ role: output.kind, resource: output.image });
+          resources.push({ role: output.kind, contentLocator: output.image });
           break;
         case 'pose':
-          resources.push({ role: output.kind, resource: output.controlImage });
+          resources.push({ role: output.kind, contentLocator: output.controlImage });
           break;
         case 'camera':
           if (output.compositionImage) {
-            resources.push({ role: output.kind, resource: output.compositionImage });
+            resources.push({ role: output.kind, contentLocator: output.compositionImage });
           }
           break;
         case 'panorama-scene':
-          resources.push({ role: output.kind, resource: output.panorama });
+          resources.push({ role: output.kind, contentLocator: output.panorama });
           if (output.viewportImage) {
-            resources.push({ role: output.kind, resource: output.viewportImage });
+            resources.push({ role: output.kind, contentLocator: output.viewportImage });
           }
           break;
       }
@@ -1279,13 +1279,13 @@ function formatThreeReferenceContext(
 function formatThreeReferenceOutput(output: ThreeReferenceOutput, isZh: boolean): string {
   switch (output.kind) {
     case 'appearance':
-      return `${isZh ? '形象参考' : 'Appearance reference'}: image=${output.image.id}, source=${output.source.id}`;
+      return `${isZh ? '形象参考' : 'Appearance reference'}: image=${contentLocatorKey(output.image)}, source=${contentLocatorKey(output.source)}`;
     case 'pose':
-      return `${isZh ? '动作控制' : 'Pose control'} (${output.controlMode}): ${output.controlImage.id}`;
+      return `${isZh ? '动作控制' : 'Pose control'} (${output.controlMode}): ${contentLocatorKey(output.controlImage)}`;
     case 'camera':
-      return `${isZh ? '机位' : 'Camera'}: ${output.camera.cameraId}, FOV ${output.camera.fieldOfViewDeg}°, aspect ${output.camera.aspectRatio}${output.compositionImage ? `, evidence=${output.compositionImage.id}` : ''}`;
+      return `${isZh ? '机位' : 'Camera'}: ${output.camera.cameraId}, FOV ${output.camera.fieldOfViewDeg}°, aspect ${output.camera.aspectRatio}${output.compositionImage ? `, evidence=${contentLocatorKey(output.compositionImage)}` : ''}`;
     case 'panorama-scene':
-      return `${isZh ? '720° 场景' : '720° scene'}: panorama=${output.panorama.id}, yaw=${output.orientation.yawDeg}°, pitch=${output.orientation.pitchDeg}°, FOV=${output.orientation.fieldOfViewDeg}°${output.viewportImage ? `, evidence=${output.viewportImage.id}` : ''}`;
+      return `${isZh ? '720° 场景' : '720° scene'}: panorama=${contentLocatorKey(output.panorama)}, yaw=${output.orientation.yawDeg}°, pitch=${output.orientation.pitchDeg}°, FOV=${output.orientation.fieldOfViewDeg}°${output.viewportImage ? `, evidence=${contentLocatorKey(output.viewportImage)}` : ''}`;
   }
 }
 
@@ -1644,7 +1644,7 @@ function appendPerceptionToolRoutingPrompt(
   }
 
   const imageRoute = modalities.includes('image')
-    ? 'For image evidence, call `perception.image.understand` with the stable ResourceRef and the relevant focus.'
+    ? 'For image evidence, call `perception.image.understand` with the stable ContentLocator and the relevant focus.'
     : '';
   const retainedDomainRoutes = modalities.filter((modality) => modality !== 'image');
   const domainRoute =

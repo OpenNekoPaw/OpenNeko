@@ -1,7 +1,6 @@
 import {
   MEDIA_QUALITY_CONTRACT_VERSION,
   qualityTargetsMatch,
-  validateDurableResourceRef,
   validateQualityEvidence,
   validateQualityTarget,
   type QualityCoverage,
@@ -15,7 +14,7 @@ import {
   type QualityRepairAction,
   type QualityTarget,
   type QualityTargetKind,
-  type ResourceRef,
+  type ContentLocator,
 } from '@neko/shared';
 
 export interface MediaQualityLLMService {
@@ -52,7 +51,7 @@ export interface QualityProfile {
 }
 
 export interface MaterializedQualityResource {
-  readonly resourceRef: ResourceRef;
+  readonly contentLocator: ContentLocator;
   readonly source?: string;
   readonly base64?: string;
   readonly mimeType?: string;
@@ -156,33 +155,26 @@ export function selectQualityProfile(
 export function rejectLegacyMediaPathRequest(value: unknown): never {
   if (isRecord(value) && ('mediaPath' in value || hasSceneMediaPath(value['scenes']))) {
     throw new Error(
-      'legacy-path-target-rejected: Quality review requires QualityTarget.resourceRef or projectRef.',
+      'legacy-path-target-rejected: Quality review requires QualityTarget.contentLocator or projectRef.',
     );
   }
   throw new Error('invalid-quality-target: Quality review requires a canonical QualityTarget.');
 }
 
-export function assertExternalPerceptionTarget(target: QualityTarget): ResourceRef {
+export function assertExternalPerceptionTarget(target: QualityTarget): ContentLocator {
   const validation = validateQualityTarget(target);
   if (!validation.ok) throw new Error(validation.diagnostics.map((item) => item.code).join(', '));
   if (
     target.kind === 'project-artifact' ||
     target.projectRef ||
-    !target.resourceRef ||
-    target.resourceRef.kind === 'document'
+    !target.contentLocator ||
+    target.contentLocator.kind === 'document-entry'
   ) {
     throw new Error(
-      'invalid-quality-target: External perception cannot receive project archives or project paths; use an owning-package preview ResourceRef.',
+      'invalid-quality-target: External perception cannot receive project archives or project paths; use an owning-package ContentLocator.',
     );
   }
-  if (containsUnscopedLocalPath(target.resourceRef)) {
-    throw new Error(
-      'invalid-quality-target: External perception rejects arbitrary absolute local paths; materialize an authorized stable ResourceRef instead.',
-    );
-  }
-  const durable = validateDurableResourceRef(target.resourceRef);
-  if (!durable.ok) throw new Error(durable.diagnostics.map((item) => item.code).join(', '));
-  return target.resourceRef;
+  return target.contentLocator;
 }
 
 export interface QualityGateRuntimeDeps {
@@ -485,7 +477,7 @@ function evidence(
     coverage,
     ...(confidence !== undefined ? { confidence } : {}),
     createdAt: context.now(),
-    sourceEvidenceRefs: context.target.resourceRef ? [context.target.resourceRef] : [],
+    sourceEvidenceLocators: context.target.contentLocator ? [context.target.contentLocator] : [],
   };
 }
 function metric(
@@ -534,7 +526,7 @@ function createEvaluatorFailureEvidence(
       description: 'Evaluator failed before completing coverage.',
     },
     createdAt,
-    sourceEvidenceRefs: target.resourceRef ? [target.resourceRef] : [],
+    sourceEvidenceLocators: target.contentLocator ? [target.contentLocator] : [],
   };
 }
 function parsePerceptionResponse(content: string | unknown[]): {
@@ -588,19 +580,6 @@ function parsePerceptionResponse(content: string | unknown[]): {
     };
   }
 }
-function containsUnscopedLocalPath(resourceRef: ResourceRef): boolean {
-  const values = [
-    resourceRef.source.filePath,
-    resourceRef.locator?.kind === 'file' ? resourceRef.locator.path : undefined,
-  ];
-  return values.some(
-    (value) =>
-      typeof value === 'string' &&
-      (value.startsWith('/') || /^[A-Za-z]:[\\/]/.test(value)) &&
-      !value.startsWith('${'),
-  );
-}
-
 function hasSceneMediaPath(value: unknown): boolean {
   return Array.isArray(value) && value.some((item) => isRecord(item) && 'mediaPath' in item);
 }

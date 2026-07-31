@@ -334,12 +334,6 @@ describe('document-reader runtime', () => {
         height: 2133,
         mimeType: 'image/jpeg',
         byteSize: makeJpeg(1494, 2133).length,
-        resourceRef: {
-          kind: 'document-entry',
-          source: { filePath: '/doc/comic.epub', format: 'epub' },
-          entryPath: 'image/page-1.jpg',
-          versionPolicy: 'versioned-export',
-        },
       },
     ]);
     expect(result.metadata?.['imageCount']).toBe(1);
@@ -386,12 +380,6 @@ describe('document-reader runtime', () => {
       height: 2001,
       mimeType: 'image/jpeg',
       byteSize: makeJpeg(1001, 2001).length,
-      resourceRef: {
-        kind: 'document-entry',
-        source: { filePath: '/doc/comic.cbz', format: 'cbz' },
-        entryPath: '001.jpg',
-        versionPolicy: 'versioned-export',
-      },
     });
   });
 
@@ -488,12 +476,6 @@ describe('document-reader runtime', () => {
         height: 240,
         mimeType: 'image/jpeg',
         byteSize: makeJpeg(320, 240).length,
-        resourceRef: {
-          kind: 'document-entry',
-          source: { filePath: '/doc/report.docx', format: 'docx' },
-          entryPath: 'word/media/image1.jpg',
-          versionPolicy: 'versioned-export',
-        },
       },
       {
         entryPath: 'word/media/image2.png',
@@ -501,12 +483,6 @@ describe('document-reader runtime', () => {
         height: 600,
         mimeType: 'image/png',
         byteSize: makePng(800, 600).length,
-        resourceRef: {
-          kind: 'document-entry',
-          source: { filePath: '/doc/report.docx', format: 'docx' },
-          entryPath: 'word/media/image2.png',
-          versionPolicy: 'versioned-export',
-        },
       },
     ]);
     expect(result.metadata?.['imageCount']).toBe(2);
@@ -561,12 +537,6 @@ describe('document-reader runtime', () => {
       height: 768,
       mimeType: 'image/png',
       byteSize: makePng(1024, 768).length,
-      resourceRef: {
-        kind: 'document-entry',
-        source: { filePath: '/doc/deck.pptx', format: 'pptx' },
-        entryPath: 'ppt/media/image1.png',
-        versionPolicy: 'versioned-export',
-      },
     });
     expect(xlsx.imageInfo?.[0]).toEqual({
       entryPath: 'xl/media/image1.png',
@@ -574,12 +544,6 @@ describe('document-reader runtime', () => {
       height: 768,
       mimeType: 'image/png',
       byteSize: makePng(1024, 768).length,
-      resourceRef: {
-        kind: 'document-entry',
-        source: { filePath: '/doc/sheet.xlsx', format: 'xlsx' },
-        entryPath: 'xl/media/image1.png',
-        versionPolicy: 'versioned-export',
-      },
     });
   });
 });
@@ -862,22 +826,6 @@ describe('document access service', () => {
           spineIndex: 0,
           title: 'html/page-1.xhtml',
         },
-        resourceRef: {
-          kind: 'document-entry',
-          source: {
-            filePath: '/doc/comic.epub',
-            format: 'epub',
-            fileId: '/doc/comic.epub',
-          },
-          entryPath: 'image/Page_1.jpg',
-          locator: {
-            kind: 'chapter',
-            chapterHref: 'Page_1',
-            spineIndex: 0,
-            title: 'html/page-1.xhtml',
-          },
-          versionPolicy: 'versioned-export',
-        },
       },
     ]);
     expect(result.excerpt).toEqual(
@@ -975,16 +923,6 @@ describe('document access service', () => {
           spineIndex: 1,
           title: 'html/page-b.xhtml',
         },
-        resourceRef: expect.objectContaining({
-          kind: 'document-entry',
-          entryPath: 'image/page-b.jpg',
-          locator: {
-            kind: 'chapter',
-            chapterHref: 'html/page-b.xhtml',
-            spineIndex: 1,
-            title: 'html/page-b.xhtml',
-          },
-        }),
       }),
     ]);
   });
@@ -1084,17 +1022,6 @@ describe('document access service', () => {
         mimeType: 'image/jpeg',
         byteSize: makeJpeg(1001, 2001).length,
         locator: { kind: 'page', pageNumber: 1, pageIndex: 0, entryName: '001.jpg' },
-        resourceRef: {
-          kind: 'document-entry',
-          source: {
-            filePath: '/doc/comic.cbz',
-            format: 'cbz',
-            fileId: '/doc/comic.cbz',
-          },
-          entryPath: '001.jpg',
-          locator: { kind: 'page', pageNumber: 1, pageIndex: 0, entryName: '001.jpg' },
-          versionPolicy: 'versioned-export',
-        },
       },
       {
         entryPath: '002.jpg',
@@ -1103,17 +1030,6 @@ describe('document access service', () => {
         mimeType: 'image/jpeg',
         byteSize: makeJpeg(1002, 2002).length,
         locator: { kind: 'page', pageNumber: 2, pageIndex: 1, entryName: '002.jpg' },
-        resourceRef: {
-          kind: 'document-entry',
-          source: {
-            filePath: '/doc/comic.cbz',
-            format: 'cbz',
-            fileId: '/doc/comic.cbz',
-          },
-          entryPath: '002.jpg',
-          locator: { kind: 'page', pageNumber: 2, pageIndex: 1, entryName: '002.jpg' },
-          versionPolicy: 'versioned-export',
-        },
       },
     ]);
   });
@@ -1181,7 +1097,8 @@ describe('document access service', () => {
 
     expect(first.imagePaths).toBeUndefined();
     expect(second.imagePaths).toBeUndefined();
-    expect(first.imageInfo?.[0]?.resourceRef).toEqual(second.imageInfo?.[0]?.resourceRef);
+    expect(first.imageInfo?.[0]?.entryPath).toBe(second.imageInfo?.[0]?.entryPath);
+    expect(JSON.stringify(first.imageInfo)).not.toContain('resourceRef');
   });
 
   it('builds CBR manifests without exposing non-rebuildable temporary image paths', async () => {

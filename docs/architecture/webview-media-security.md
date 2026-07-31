@@ -102,7 +102,7 @@ Web Audio source 结束，不能提前 dispose 截断尾音。
 ## 推荐链路
 
 ```text
-ResourceRef / workspace-relative path
+ContentLocator
   -> Extension Host authorization
   -> NodeMediaRuntime probe
   -> direct H.264/VP8 | changing-frame-qualified native MP4

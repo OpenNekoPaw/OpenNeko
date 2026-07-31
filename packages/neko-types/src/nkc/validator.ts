@@ -8,8 +8,7 @@
 import type { ValidationResult, ValidationError } from '../config/config-adapter';
 import { CANVAS_CONNECTION_TYPES, CANVAS_NODE_TYPES } from '../types/canvas';
 import { validateCanvasMaterialNodePersistence } from '../types/canvas-material-contracts';
-import { normalizeWorkspaceContentPath } from '../types/content-locator';
-import { isResourceRef } from '../types/resource-cache';
+import { isContentLocator, normalizeWorkspaceContentPath } from '../types/content-locator';
 import { validateNkcNodeDurableResourceIdentity } from '../utils/canvasDurableResourceIdentity';
 import { isJobRef } from '../job-lifecycle/contracts';
 
@@ -355,11 +354,11 @@ function validateJobArtifactRefs(value: unknown, path: string, errors: Validatio
           });
         }
         return;
-      case 'resource':
-        if (!isResourceRef(entry['resourceRef'])) {
+      case 'content':
+        if (!isContentLocator(entry['contentLocator'])) {
           errors.push({
-            field: `${entryPath}.resourceRef`,
-            message: 'Job resource artifact ref is invalid',
+            field: `${entryPath}.contentLocator`,
+            message: 'Job content artifact locator is invalid',
             severity: 'error',
           });
         }

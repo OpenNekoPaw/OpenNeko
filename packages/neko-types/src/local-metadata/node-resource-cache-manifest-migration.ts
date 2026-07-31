@@ -1,12 +1,4 @@
 import { access, copyFile, readFile, rename } from 'node:fs/promises';
-import * as path from 'node:path';
-import {
-  isResourceCacheManifest,
-  type ResourceCacheEntry,
-  type ResourceCacheManifest,
-  type ResourceCacheManifestStore,
-  type ResourceCacheVariantEntry,
-} from '../types/resource-cache';
 
 export interface ResourceCacheManifestMigrationUnrecoverable {
   readonly resourceId: string;
@@ -16,7 +8,7 @@ export interface ResourceCacheManifestMigrationUnrecoverable {
 }
 
 export interface ResourceCacheManifestMigrationReport {
-  readonly sourceStatus: 'absent' | 'migrated' | 'quarantined';
+  readonly sourceStatus: 'absent' | 'invalidated' | 'quarantined';
   readonly sourcePath: string;
   readonly backupPath: string | null;
   readonly archivedPath: string | null;
@@ -32,14 +24,15 @@ export interface ResourceCacheManifestMigrationReport {
 export async function migrateLegacyResourceCacheManifest(options: {
   readonly manifestPath: string;
   readonly cacheRoot: string;
-  readonly manifestStore: ResourceCacheManifestStore;
+  readonly manifestStore: unknown;
   readonly now?: () => number;
 }): Promise<ResourceCacheManifestMigrationReport> {
   if (!(await pathExists(options.manifestPath))) {
     return emptyMigrationReport(options.manifestPath);
   }
-  const migratedAt = (options.now ?? (() => Date.now()))();
-  const backupPath = `${options.manifestPath}.backup-${migratedAt}`;
+
+  const invalidatedAt = (options.now ?? (() => Date.now()))();
+  const backupPath = `${options.manifestPath}.backup-${invalidatedAt}`;
   try {
     await copyFile(options.manifestPath, backupPath);
   } catch (error) {
@@ -49,147 +42,63 @@ export async function migrateLegacyResourceCacheManifest(options: {
     throw error;
   }
 
-  let legacyManifest: ResourceCacheManifest;
   try {
     const parsed: unknown = JSON.parse(await readFile(backupPath, 'utf8'));
-    if (!isResourceCacheManifest(parsed)) {
-      throw new Error('Legacy ResourceCache manifest must use the valid version 1 schema.');
+    if (!isLegacyResourceCacheManifest(parsed)) {
+      throw new Error(
+        'Legacy ResourceCache manifest is not the retired version 1 schema and cannot be rebuilt safely.',
+      );
     }
-    legacyManifest = parsed;
   } catch (error) {
-    let quarantinePath: string | null = `${options.manifestPath}.quarantine-${migratedAt}`;
-    try {
-      await rename(options.manifestPath, quarantinePath);
-    } catch (renameError) {
-      if (!hasNodeErrorCode(renameError, 'ENOENT')) throw renameError;
-      quarantinePath = null;
-    }
+    const quarantinePath = `${options.manifestPath}.quarantine-${invalidatedAt}`;
+    const moved = await moveIfPresent(options.manifestPath, quarantinePath);
     return {
       ...emptyMigrationReport(options.manifestPath),
       sourceStatus: 'quarantined',
       backupPath,
-      quarantinePath,
+      quarantinePath: moved ? quarantinePath : null,
       sourceDiagnostic: error instanceof Error ? error.message : String(error),
     };
   }
 
-  const normalized = normalizeLegacyManifest(legacyManifest, options.cacheRoot);
-  await options.manifestStore.save(normalized.manifest);
-  const verified = await options.manifestStore.load({ refresh: true });
-  assertVerifiedProjection(normalized.manifest, verified);
-  const archivedPath = `${options.manifestPath}.migrated-${migratedAt}`;
-  let retiredPath: string | null = archivedPath;
-  try {
-    await rename(options.manifestPath, archivedPath);
-  } catch (error) {
-    if (!hasNodeErrorCode(error, 'ENOENT')) throw error;
-    retiredPath = null;
-  }
+  const archivedPath = `${options.manifestPath}.invalidated-${invalidatedAt}`;
+  const moved = await moveIfPresent(options.manifestPath, archivedPath);
   return {
-    sourceStatus: 'migrated',
-    sourcePath: options.manifestPath,
+    ...emptyMigrationReport(options.manifestPath),
+    sourceStatus: 'invalidated',
     backupPath,
-    archivedPath: retiredPath,
-    quarantinePath: null,
-    sourceDiagnostic: null,
-    importedEntryCount: Object.keys(normalized.manifest.entries).length,
-    importedVariantCount: countVariants(normalized.manifest),
-    verifiedEntryCount: Object.keys(verified.entries).length,
-    verifiedVariantCount: countVariants(verified),
-    unrecoverable: normalized.unrecoverable,
+    archivedPath: moved ? archivedPath : null,
+    sourceDiagnostic:
+      'Retired ResourceRef-based ResourceCache manifest was invalidated; derived entries must be rebuilt.',
   };
+}
+
+function isLegacyResourceCacheManifest(value: unknown): boolean {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    !Array.isArray(value) &&
+    Reflect.get(value, 'version') === 1 &&
+    isRecord(Reflect.get(value, 'entries'))
+  );
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+async function moveIfPresent(sourcePath: string, targetPath: string): Promise<boolean> {
+  try {
+    await rename(sourcePath, targetPath);
+    return true;
+  } catch (error) {
+    if (hasNodeErrorCode(error, 'ENOENT')) return false;
+    throw error;
+  }
 }
 
 function hasNodeErrorCode(error: unknown, code: string): boolean {
   return typeof error === 'object' && error !== null && Reflect.get(error, 'code') === code;
-}
-
-function normalizeLegacyManifest(
-  manifest: ResourceCacheManifest,
-  cacheRoot: string,
-): {
-  readonly manifest: ResourceCacheManifest;
-  readonly unrecoverable: readonly ResourceCacheManifestMigrationUnrecoverable[];
-} {
-  const entries: Record<string, ResourceCacheEntry> = {};
-  const unrecoverable: ResourceCacheManifestMigrationUnrecoverable[] = [];
-  for (const [resourceId, entry] of Object.entries(manifest.entries)) {
-    if (resourceId !== entry.resource.id) {
-      unrecoverable.push({
-        resourceId,
-        variantKey: null,
-        fields: ['resource.id'],
-        reason: `Manifest key does not match resource identity ${entry.resource.id}.`,
-      });
-      continue;
-    }
-    const variants = entry.variants.flatMap((variant) => {
-      const normalized = normalizeVariantPath(variant, cacheRoot);
-      if (normalized) return [normalized];
-      unrecoverable.push({
-        resourceId,
-        variantKey: variant.key,
-        fields: ['relativePath', 'absolutePath'],
-        reason: 'Variant artifact path is outside the managed cache root.',
-      });
-      return [];
-    });
-    entries[resourceId] = { ...entry, variants };
-  }
-  return {
-    manifest: {
-      ...manifest,
-      entries,
-    },
-    unrecoverable,
-  };
-}
-
-function normalizeVariantPath(
-  variant: ResourceCacheVariantEntry,
-  cacheRoot: string,
-): ResourceCacheVariantEntry | null {
-  const relativePath = variant.absolutePath
-    ? path.relative(path.resolve(cacheRoot), path.resolve(variant.absolutePath))
-    : variant.relativePath;
-  if (!relativePath || !isManagedRelativePath(relativePath)) return null;
-  const { absolutePath: _absolutePath, ...portableVariant } = variant;
-  return { ...portableVariant, relativePath: relativePath.split(path.sep).join('/') };
-}
-
-function isManagedRelativePath(value: string): boolean {
-  if (path.isAbsolute(value)) return false;
-  const normalized = path.normalize(value);
-  return normalized !== '..' && !normalized.startsWith(`..${path.sep}`);
-}
-
-function assertVerifiedProjection(
-  expected: ResourceCacheManifest,
-  actual: ResourceCacheManifest,
-): void {
-  const expectedIdentities = projectionIdentities(expected);
-  const actualIdentities = projectionIdentities(actual);
-  if (
-    expectedIdentities.length !== actualIdentities.length ||
-    expectedIdentities.some((identity, index) => identity !== actualIdentities[index])
-  ) {
-    throw new Error(
-      `ResourceCache migration identity verification failed: expected ${expectedIdentities.length}, received ${actualIdentities.length}.`,
-    );
-  }
-}
-
-function projectionIdentities(manifest: ResourceCacheManifest): string[] {
-  return Object.values(manifest.entries)
-    .flatMap((entry) => [
-      `resource:${entry.resource.id}`,
-      ...entry.variants.map((variant) => `variant:${entry.resource.id}:${variant.key}`),
-    ])
-    .sort();
-}
-
-function countVariants(manifest: ResourceCacheManifest): number {
-  return Object.values(manifest.entries).reduce((count, entry) => count + entry.variants.length, 0);
 }
 
 async function pathExists(filePath: string): Promise<boolean> {

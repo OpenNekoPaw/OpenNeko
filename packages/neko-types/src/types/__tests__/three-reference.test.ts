@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import type { AgentContextPayload } from '../agent-context';
-import { createResourceFingerprint, createResourceRef } from '../resource-cache';
 import {
   isThreeReferenceDiagnostic,
   isThreeReferenceContextData,
@@ -12,14 +11,7 @@ import {
   type ThreeReferenceContextData,
 } from '../three-reference';
 
-const poseImage = createResourceRef({
-  scope: 'project',
-  provider: 'preview-asset',
-  kind: 'preview',
-  source: { kind: 'preview-asset', previewAssetId: 'pose-1' },
-  locator: { kind: 'preview-asset', assetId: 'pose-1' },
-  fingerprint: createResourceFingerprint({ strategy: 'provider', value: 'pose-1' }),
-});
+const poseImage = packageResource('pose-1');
 
 const contextData: ThreeReferenceContextData = {
   contractVersion: THREE_REFERENCE_CONTEXT_VERSION,
@@ -164,30 +156,9 @@ describe('3D reference contracts', () => {
   });
 
   it('projects purpose outputs into role-isolated stable media controls', () => {
-    const panorama = createResourceRef({
-      scope: 'project',
-      provider: 'preview-asset',
-      kind: 'preview',
-      source: { kind: 'preview-asset', previewAssetId: 'panorama-1' },
-      locator: { kind: 'preview-asset', assetId: 'panorama-1' },
-      fingerprint: createResourceFingerprint({ strategy: 'provider', value: 'panorama-1' }),
-    });
-    const appearance = createResourceRef({
-      scope: 'project',
-      provider: 'preview-asset',
-      kind: 'preview',
-      source: { kind: 'preview-asset', previewAssetId: 'appearance-1' },
-      locator: { kind: 'preview-asset', assetId: 'appearance-1' },
-      fingerprint: createResourceFingerprint({ strategy: 'provider', value: 'appearance-1' }),
-    });
-    const source = createResourceRef({
-      scope: 'project',
-      provider: 'preview-asset',
-      kind: 'preview',
-      source: { kind: 'preview-asset', previewAssetId: 'source-1' },
-      locator: { kind: 'preview-asset', assetId: 'source-1' },
-      fingerprint: createResourceFingerprint({ strategy: 'provider', value: 'source-1' }),
-    });
+    const panorama = packageResource('panorama-1');
+    const appearance = packageResource('appearance-1');
+    const source = packageResource('source-1');
 
     const controls = projectThreeReferenceMediaControls([
       contextData,
@@ -246,6 +217,16 @@ describe('3D reference contracts', () => {
   });
 });
 
+function packageResource(id: string) {
+  return {
+    kind: 'package-resource' as const,
+    packageId: 'neko-three-reference',
+    revision: '1',
+    resourcePath: `references/${id}.png`,
+    digest: `sha256:${id}`,
+  };
+}
+
 function withOutputs(
   source: ThreeReferenceContextData,
   outputs: ThreeReferenceContextData['outputs'],
@@ -264,7 +245,7 @@ function withOutputs(
             subject: {
               kind: 'source-model' as const,
               source: first.source,
-              fingerprint: first.source.fingerprint.value,
+              fingerprint: JSON.stringify(first.source),
               format: 'glb' as const,
             },
           }
@@ -276,7 +257,7 @@ function withOutputs(
         ? {
             environment: {
               source: first.panorama,
-              fingerprint: first.panorama.fingerprint.value,
+              fingerprint: JSON.stringify(first.panorama),
               orientation: first.orientation,
             },
           }

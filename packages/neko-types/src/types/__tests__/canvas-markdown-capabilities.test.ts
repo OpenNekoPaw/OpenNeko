@@ -1,15 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
-  createResourceFingerprint,
-  createResourceRef,
   isCanvasMarkdownCapabilityInput,
   isCanvasMarkdownCapabilityResult,
-  isCanvasMarkdownResourceRef,
+  isCanvasMarkdownContentBinding,
   isRuntimeOnlyCanvasMarkdownResourceValue,
   validateCanvasMarkdownCapabilityInput,
   type CanvasMarkdownCapabilityInput,
   type CanvasMarkdownCapabilityResult,
-  type ResourceRef,
 } from '../index';
 
 describe('canonical Canvas Markdown capability contracts', () => {
@@ -73,15 +70,15 @@ describe('canonical Canvas Markdown capability contracts', () => {
   });
 
   it('keeps stable resource context separate from Markdown capability input', () => {
-    const resourceRef = createTestResourceRef();
+    const contentLocator = createTestContentLocator();
     expect(
-      isCanvasMarkdownResourceRef({
+      isCanvasMarkdownContentBinding({
         token: 'cover',
         sourcePath: 'assets/cover.png',
-        resourceRef,
+        contentLocator,
       }),
     ).toBe(true);
-    expect(isCanvasMarkdownResourceRef({ token: 'cover' })).toBe(false);
+    expect(isCanvasMarkdownContentBinding({ token: 'cover' })).toBe(false);
   });
 
   it('classifies runtime-only resource values', () => {
@@ -116,16 +113,10 @@ describe('canonical Canvas Markdown capability contracts', () => {
   });
 });
 
-function createTestResourceRef(): ResourceRef {
-  return createResourceRef({
-    scope: 'project',
-    provider: 'test',
-    kind: 'media',
-    source: {
-      kind: 'file',
-      filePath: '${MEDIA}/cover.png',
-      projectRelativePath: 'assets/cover.png',
-    },
-    fingerprint: createResourceFingerprint({ strategy: 'provider', value: 'cover-v1' }),
-  });
+function createTestContentLocator() {
+  return {
+    kind: 'workspace-file' as const,
+    path: 'assets/cover.png',
+    fingerprint: { strategy: 'provider' as const, value: 'cover-v1' },
+  };
 }

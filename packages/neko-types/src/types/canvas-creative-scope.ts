@@ -1,5 +1,5 @@
 import { isHostProjectedRuntimeValue } from './content-access';
-import type { ResourceRef } from './resource-cache';
+import type { ContentLocator } from './content-locator';
 
 export const CANVAS_CREATIVE_SCOPE_KINDS = [
   'episode',
@@ -31,8 +31,8 @@ export type CanvasBoardRef =
       readonly path: string;
     }
   | {
-      readonly kind: 'resource';
-      readonly resourceRef: ResourceRef;
+      readonly kind: 'content';
+      readonly contentLocator: ContentLocator;
     }
   | {
       readonly kind: 'project';
@@ -132,7 +132,7 @@ export function validateCanvasBoardRef(
             },
           ]
         : [];
-    case 'resource':
+    case 'content':
     case 'project':
       return [];
   }

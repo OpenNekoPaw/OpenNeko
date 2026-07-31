@@ -1,35 +1,20 @@
 import * as path from 'path';
 import {
   AGENT_IMAGE_TRANSPORT_MAX_SOURCE_IMAGES,
-  createResourceFingerprint,
-  createResourceRef,
   contentLocatorKey,
   createTool,
   getMimeType,
-  isDocumentArchiveResourceRef,
   isContentRepresentationLocator,
-  isResourceRef,
-  parseDocumentArchiveResourceRef,
   TOOL_NAMES_SYSTEM,
   validateContentLocator,
   type ContentLocator,
-  type ContentSourceRef,
   type ContentRepresentationLocator,
-  type WorkspaceFileContentLocator,
-  type DocumentArchiveResourceRef,
   type PerceptionCard,
   type PerceptualAssetRef,
-  type ResourceRef,
-  type ResourceVariantRequest,
   type Tool,
   type ToolParameterProperty,
   type ToolResult,
 } from '@neko/shared';
-import {
-  createDocumentEntryVariantFromMetadata,
-  createManagedDocumentResourceRef,
-  readDocumentResourceDisplayId,
-} from './document-resource-projection';
 import { probeImageMetadata, type ImageMetadata } from './image-metadata';
 
 export const DEFAULT_READ_IMAGE_LIMIT = 4;
@@ -40,7 +25,6 @@ export const READ_IMAGE_MODEL_ANALYSIS_UNSUPPORTED =
 
 export interface ReadImageToolDeps {
   readonly contentAccessRuntime?: ReadImageContentAccessRuntime;
-  readonly resolveResourceScope?: () => ResourceRef['scope'];
   readonly now?: () => number;
 }
 
@@ -49,19 +33,10 @@ export interface ReadImageContentAccessRuntime {
     readonly locator: ContentLocator;
     readonly maxBytes: number;
   }): Promise<ReadImageProviderAssetResult>;
-  loadProviderAsset(input: ReadImageProviderAssetInput): Promise<ReadImageProviderAssetResult>;
-  resolveImageMetadata(input: ReadImageMetadataInput): Promise<ReadImageMetadataResult>;
   loadRepresentationAsset?(input: {
     readonly locator: ContentRepresentationLocator;
     readonly maxBytes: number;
   }): Promise<ReadImageProviderAssetResult>;
-}
-
-export interface ReadImageProviderAssetInput {
-  readonly source: ContentSourceRef;
-  readonly variant?: ResourceVariantRequest;
-  readonly mimeTypeHint?: string;
-  readonly metadata?: Record<string, unknown>;
 }
 
 export interface ReadImageProviderAssetResult {
@@ -69,21 +44,6 @@ export interface ReadImageProviderAssetResult {
   readonly diagnostics: readonly ReadImageDiagnostic[];
   readonly bytes?: Uint8Array;
   readonly mimeType?: string;
-  readonly sizeBytes?: number;
-}
-
-export interface ReadImageMetadataInput {
-  readonly source: ContentSourceRef;
-  readonly variant?: ResourceVariantRequest;
-  readonly metadata?: Record<string, unknown>;
-}
-
-export interface ReadImageMetadataResult {
-  readonly status: ReadImageContentStatus;
-  readonly diagnostics: readonly ReadImageDiagnostic[];
-  readonly mimeType?: string;
-  readonly width?: number;
-  readonly height?: number;
   readonly sizeBytes?: number;
 }
 
@@ -108,14 +68,8 @@ export interface ReadImageInputImage {
   readonly height?: number;
   readonly mimeType?: string;
   readonly metadata?: Record<string, unknown>;
-  readonly locator?: WorkspaceFileContentLocator;
   readonly contentLocator?: ContentLocator;
-  readonly resourceRef?: DocumentArchiveResourceRef | ResourceRef;
   readonly representationLocator?: ContentRepresentationLocator;
-}
-
-interface InternalReadImageInputImage extends ReadImageInputImage {
-  readonly managedResourceRef?: ResourceRef;
 }
 
 export interface ReadImageResultImage {
@@ -131,9 +85,7 @@ export interface ReadImageResultImage {
   readonly mimeType?: string;
   readonly byteSize: number;
   readonly metadata?: Record<string, unknown>;
-  readonly locator?: WorkspaceFileContentLocator;
   readonly contentLocator?: ContentLocator;
-  readonly resourceRef?: DocumentArchiveResourceRef | ResourceRef;
   readonly representationLocator?: ContentRepresentationLocator;
 }
 
@@ -149,57 +101,10 @@ export type ReadImageMode = 'metadata' | 'vision';
 export type ReadImageAnalysisKind = 'describe' | 'ocr' | 'panels' | 'storyboard' | 'custom';
 
 interface LoadedImage {
-  readonly input: InternalReadImageInputImage;
+  readonly input: ReadImageInputImage;
   readonly resolvedPath: string;
   readonly metadata: ImageMetadata;
 }
-
-const DOCUMENT_ENTRY_SOURCE_SCHEMA: ToolParameterProperty = {
-  type: 'object',
-  required: ['filePath', 'format'],
-  properties: {
-    filePath: { type: 'string', minLength: 1 },
-    format: { type: 'string', minLength: 1 },
-  },
-};
-
-const DOCUMENT_ENTRY_REF_BASE_PROPERTIES: Record<string, ToolParameterProperty> = {
-  kind: { type: 'string', enum: ['document-entry'] },
-  source: DOCUMENT_ENTRY_SOURCE_SCHEMA,
-  entryPath: { type: 'string', minLength: 1 },
-  locator: { type: 'object' },
-  versionPolicy: { type: 'string' },
-};
-
-const COMPLETE_DOCUMENT_ENTRY_REF_SCHEMA: ToolParameterProperty = {
-  type: 'object',
-  required: ['kind', 'source', 'entryPath'],
-  properties: DOCUMENT_ENTRY_REF_BASE_PROPERTIES,
-};
-
-const MANAGED_RESOURCE_REF_SCHEMA: ToolParameterProperty = {
-  type: 'object',
-  required: ['id', 'scope', 'provider', 'kind', 'source', 'fingerprint'],
-  properties: {
-    id: { type: 'string', minLength: 1 },
-    scope: {
-      type: 'string',
-      enum: ['project', 'workspace', 'user', 'extension-private'],
-    },
-    provider: { type: 'string', minLength: 1 },
-    kind: { type: 'string', minLength: 1 },
-    source: { type: 'object' },
-    locator: { type: 'object' },
-    fingerprint: {
-      type: 'object',
-      required: ['strategy', 'value'],
-      properties: {
-        strategy: { type: 'string' },
-        value: { type: 'string' },
-      },
-    },
-  },
-};
 
 const CONTENT_FINGERPRINT_SCHEMA: ToolParameterProperty = {
   type: 'object',
@@ -280,8 +185,8 @@ export function createReadImageTool(deps: ReadImageToolDeps = {}): Tool {
     name: TOOL_NAMES_SYSTEM.READ_IMAGE,
     description:
       'Read local image metadata and expose selected images as native multimodal Agent resources. ' +
-      'Use this with structured imageInfo entries returned by ReadDocument, including Host-owned representationLocator values, ResourceRef values returned by unified content access, or canonical workspace-file locators returned by Media Library search. ' +
-      'Do not pass document locators, EPUB entry paths, cache paths, Webview URIs, or whole document sources, and do not fabricate resourceRef objects. ' +
+      'Use this with ContentLocator or Host-owned representationLocator values returned by ReadDocument, Media Library, Project Search, or another content capability. ' +
+      'Do not pass document positions, entry paths, cache paths, Webview URIs, system paths, or whole document sources. ' +
       'The selected chat model performs visual analysis in the next Agent reasoning step; this tool does not call a separate vision model.',
     category: 'analysis',
     isReadOnly: true,
@@ -292,29 +197,14 @@ export function createReadImageTool(deps: ReadImageToolDeps = {}): Tool {
         images: {
           type: 'array',
           description:
-            'Structured image inputs with stable representationLocator/resourceRef values or canonical workspace-file locators.',
+            'Structured image inputs with a stable contentLocator or representationLocator.',
           items: {
             type: 'object',
             anyOf: [
               {
                 type: 'object',
-                required: ['resourceRef'],
-                properties: {
-                  resourceRef: {
-                    type: 'object',
-                    anyOf: [COMPLETE_DOCUMENT_ENTRY_REF_SCHEMA, MANAGED_RESOURCE_REF_SCHEMA],
-                  },
-                },
-              },
-              {
-                type: 'object',
                 required: ['contentLocator'],
                 properties: { contentLocator: CONTENT_LOCATOR_SCHEMA },
-              },
-              {
-                type: 'object',
-                required: ['locator'],
-                properties: { locator: WORKSPACE_FILE_LOCATOR_SCHEMA },
               },
               {
                 type: 'object',
@@ -337,14 +227,7 @@ export function createReadImageTool(deps: ReadImageToolDeps = {}): Tool {
                 type: 'object',
                 description: 'Optional metadata copied from ReadDocument.imageInfo.',
               },
-              locator: WORKSPACE_FILE_LOCATOR_SCHEMA,
               contentLocator: CONTENT_LOCATOR_SCHEMA,
-              resourceRef: {
-                type: 'object',
-                description:
-                  'Stable DocumentArchiveResourceRef copied unchanged from ReadDocument.imageInfo[].resourceRef, or a ResourceRef returned by unified content access.',
-                anyOf: [COMPLETE_DOCUMENT_ENTRY_REF_SCHEMA, MANAGED_RESOURCE_REF_SCHEMA],
-              },
               representationLocator: {
                 type: 'object',
                 description:
@@ -407,7 +290,7 @@ export async function executeReadImage(
     return {
       success: false,
       error:
-        'Missing required stable image identity: pass images[].contentLocator or images[].representationLocator from ReadDocument, images[].resourceRef from unified content access, or images[].locator as a canonical workspace-file locator. Do not inspect cache directories, pass image paths, EPUB entry paths, or whole document sources.',
+        'Missing required stable image identity: pass images[].contentLocator or images[].representationLocator from an owning content capability.',
     };
   }
 
@@ -431,9 +314,7 @@ export async function executeReadImage(
       ...(image.metadata.mimeType ? { mimeType: image.metadata.mimeType } : {}),
       byteSize: image.metadata.byteSize,
       ...(image.input.metadata ? { metadata: image.input.metadata } : {}),
-      ...(image.input.locator ? { locator: image.input.locator } : {}),
       ...(image.input.contentLocator ? { contentLocator: image.input.contentLocator } : {}),
-      ...(image.input.resourceRef ? { resourceRef: image.input.resourceRef } : {}),
       ...(image.input.representationLocator
         ? { representationLocator: image.input.representationLocator }
         : {}),
@@ -533,151 +414,7 @@ async function loadImage(
       metadata,
     };
   }
-  const withRefs = restoreManagedResourceRef(deps, input);
-  const source = await createReadImageSource(withRefs);
-  const providerAsset = await contentAccessRuntime.loadProviderAsset({
-    source,
-    variant:
-      withRefs.resourceRef && isDocumentArchiveResourceRef(withRefs.resourceRef)
-        ? createDocumentEntryVariant(withRefs)
-        : undefined,
-    mimeTypeHint: withRefs.mimeType,
-    metadata: withRefs.metadata,
-  });
-  if (providerAsset.status !== 'ready' || !providerAsset.bytes) {
-    throw new Error(
-      providerAsset.diagnostics.find((diagnostic) => diagnostic.severity === 'error')?.message ??
-        `ReadImage could not load image bytes: ${providerAsset.status}`,
-    );
-  }
-  if (providerAsset.bytes.byteLength > MAX_READ_IMAGE_BYTES) {
-    throw new Error(`Image is too large for ReadImage: ${getImageDisplayPath(withRefs)}`);
-  }
-  const metadataResult = await contentAccessRuntime.resolveImageMetadata({
-    source,
-    variant:
-      withRefs.resourceRef && isDocumentArchiveResourceRef(withRefs.resourceRef)
-        ? createDocumentEntryVariant(withRefs)
-        : undefined,
-    metadata: withRefs.metadata,
-  });
-  if (metadataResult.status !== 'ready') {
-    throw new Error(
-      metadataResult.diagnostics.find((diagnostic) => diagnostic.severity === 'error')?.message ??
-        `Unsupported or unreadable image file: ${metadataResult.status}`,
-    );
-  }
-  const metadata: ImageMetadata = {
-    mimeType:
-      metadataResult.mimeType ??
-      providerAsset.mimeType ??
-      withRefs.mimeType ??
-      getMimeType(getImageDisplayPath(withRefs)),
-    byteSize: metadataResult.sizeBytes ?? providerAsset.sizeBytes ?? providerAsset.bytes.byteLength,
-    ...(metadataResult.width !== undefined ? { width: metadataResult.width } : {}),
-    ...(metadataResult.height !== undefined ? { height: metadataResult.height } : {}),
-  };
-  return {
-    input: withRefs,
-    resolvedPath: getImageDisplayPath(withRefs),
-    metadata,
-  };
-}
-
-function restoreManagedResourceRef(
-  deps: ReadImageToolDeps,
-  input: ReadImageInputImage,
-): InternalReadImageInputImage {
-  if (input.resourceRef && isDocumentArchiveResourceRef(input.resourceRef)) {
-    if (!input.resourceRef.entryPath) {
-      throw new Error(
-        'ReadImage document resource refs require a stable document entry path; whole document archive bytes are not valid image assets.',
-      );
-    }
-    const managedResourceRef = createManagedDocumentResourceRef(
-      input.resourceRef,
-      deps.resolveResourceScope?.() ?? 'project',
-    );
-    return withResourceTransferMetadata(input, managedResourceRef, { managedResourceRef });
-  }
-  if (input.resourceRef && isResourceRef(input.resourceRef)) {
-    return withResourceTransferMetadata(input, input.resourceRef);
-  }
-  if (input.locator) {
-    const managedResourceRef = createWorkspaceFileResourceRef(
-      input.locator,
-      deps.resolveResourceScope?.() ?? 'project',
-    );
-    return withResourceTransferMetadata(input, managedResourceRef, { managedResourceRef });
-  }
-  return input;
-}
-
-function createWorkspaceFileResourceRef(
-  locator: WorkspaceFileContentLocator,
-  scope: ResourceRef['scope'],
-): ResourceRef {
-  return createResourceRef({
-    scope,
-    provider: 'source-file-content-access',
-    kind: 'media',
-    source: { kind: 'file', projectRelativePath: locator.path },
-    locator: { kind: 'file', path: locator.path },
-    fingerprint: createResourceFingerprint({
-      strategy: locator.fingerprint ? 'provider' : 'none',
-      value: locator.fingerprint?.value ?? locator.path,
-      ...(locator.fingerprint ? { providerId: locator.fingerprint.strategy } : {}),
-    }),
-  });
-}
-
-function withResourceTransferMetadata(
-  input: ReadImageInputImage,
-  resourceRef: ResourceRef,
-  extra: Pick<InternalReadImageInputImage, 'managedResourceRef'> = {},
-): InternalReadImageInputImage {
-  return {
-    ...input,
-    ...extra,
-    portableForTransfer: input.portableForTransfer ?? resourceRef.scope === 'project',
-    ...(input.nonPortableReason
-      ? { nonPortableReason: input.nonPortableReason }
-      : resourceRef.scope !== 'project'
-        ? { nonPortableReason: 'workspace-required-for-transfer' }
-        : {}),
-  };
-}
-
-async function createReadImageSource(input: InternalReadImageInputImage): Promise<ResourceRef> {
-  if (input.managedResourceRef) {
-    return input.managedResourceRef;
-  }
-
-  if (input.resourceRef && isResourceRef(input.resourceRef)) {
-    return input.resourceRef;
-  }
-
-  if (input.resourceRef) {
-    throw new Error('ReadImage could not convert documentResourceRef to a managed ResourceRef.');
-  }
-
-  throw new Error('ReadImage image inputs require images[].resourceRef or images[].locator.');
-}
-
-function createDocumentEntryVariant(input: ReadImageInputImage): ResourceVariantRequest {
-  return createDocumentEntryVariantFromMetadata(input);
-}
-
-function getImageDisplayPath(input: InternalReadImageInputImage): string {
-  return (
-    readDocumentResourceDisplayId(input.resourceRef) ??
-    input.representationLocator?.id ??
-    input.locator?.path ??
-    (input.contentLocator ? contentLocatorKey(input.contentLocator) : undefined) ??
-    input.alias ??
-    input.label ??
-    'image'
-  );
+  throw new Error('ReadImage requires images[].contentLocator or images[].representationLocator.');
 }
 
 function readInputImages(args: Record<string, unknown>): ReadImageInputImage[] {
@@ -696,13 +433,16 @@ function readInputImages(args: Record<string, unknown>): ReadImageInputImage[] {
       const height = readPositiveInteger(item['height']);
       const mimeType = readString(item['mimeType']);
       const metadata = isRecord(item['metadata']) ? item['metadata'] : undefined;
-      const locator = parseWorkspaceFileLocator(item['locator']);
+      if ('resourceRef' in item || 'documentResourceRef' in item) {
+        throw new Error(
+          `ReadImage images[${index}] uses a retired content identity; pass contentLocator or representationLocator.`,
+        );
+      }
       const contentLocator = parseContentLocator(item['contentLocator'], index);
-      const resourceRef = parseReadImageResourceRef(item['resourceRef'], entryPath);
       const representationLocator = isContentRepresentationLocator(item['representationLocator'])
         ? item['representationLocator']
         : undefined;
-      return resourceRef || locator || contentLocator || representationLocator
+      return contentLocator || representationLocator
         ? [
             {
               ...(alias ? { alias } : {}),
@@ -716,9 +456,7 @@ function readInputImages(args: Record<string, unknown>): ReadImageInputImage[] {
               ...(height !== undefined ? { height } : {}),
               ...(mimeType ? { mimeType } : {}),
               ...(metadata ? { metadata } : {}),
-              ...(locator ? { locator } : {}),
               ...(contentLocator ? { contentLocator } : {}),
-              ...(resourceRef ? { resourceRef } : {}),
               ...(representationLocator ? { representationLocator } : {}),
             },
           ]
@@ -738,27 +476,6 @@ function parseContentLocator(value: unknown, imageIndex: number): ContentLocator
       .map((diagnostic) => diagnostic.message)
       .join(' ')}`,
   );
-}
-
-function parseWorkspaceFileLocator(value: unknown): WorkspaceFileContentLocator | undefined {
-  const result = validateContentLocator(value);
-  return result.ok && result.locator.kind === 'workspace-file' ? result.locator : undefined;
-}
-
-function parseReadImageResourceRef(
-  value: unknown,
-  outerEntryPath?: string,
-): DocumentArchiveResourceRef | ResourceRef | undefined {
-  const documentRef = parseDocumentArchiveResourceRef(value);
-  if (documentRef) {
-    if (documentRef.entryPath && outerEntryPath && documentRef.entryPath !== outerEntryPath) {
-      throw new Error(
-        `ReadImage document entry identity mismatch: resourceRef.entryPath "${documentRef.entryPath}" does not match images[].entryPath "${outerEntryPath}".`,
-      );
-    }
-    return documentRef;
-  }
-  return isResourceRef(value) ? value : undefined;
 }
 
 function readMode(value: unknown): ReadImageMode {
@@ -813,15 +530,11 @@ function createReadImagePerceptionCard(input: {
     assetId,
     uri: selectPerceptualAssetUri(input.image, input.loaded.resolvedPath),
     mimeType,
-    ...(input.image.contentLocator ? { contentLocator: input.image.contentLocator } : {}),
-    ...(input.image.resourceRef && isResourceRef(input.image.resourceRef)
-      ? { resourceRef: input.image.resourceRef }
-      : input.loaded.input.managedResourceRef
-        ? { resourceRef: input.loaded.input.managedResourceRef }
+    ...(input.image.contentLocator
+      ? { contentLocator: input.image.contentLocator }
+      : input.image.representationLocator
+        ? { contentLocator: input.image.representationLocator.source }
         : {}),
-    ...(input.image.resourceRef && isDocumentArchiveResourceRef(input.image.resourceRef)
-      ? { documentResourceRef: input.image.resourceRef }
-      : {}),
     ...(input.image.label ? { label: input.image.label } : {}),
   };
 
@@ -846,7 +559,9 @@ function createReadImagePerceptionCard(input: {
       keyframeRefs: [assetRef],
       thumbnailRef: assetRef,
     },
-    cacheKey: readDocumentResourceDisplayId(input.image.resourceRef) ?? assetId,
+    cacheKey:
+      input.image.representationLocator?.id ??
+      (input.image.contentLocator ? contentLocatorKey(input.image.contentLocator) : assetId),
   };
 }
 
@@ -871,18 +586,6 @@ function sanitizeAssetIdPart(value: string): string {
 
 function selectPerceptualAssetUri(image: ReadImageResultImage, resolvedPath: string): string {
   if (image.representationLocator) return resolvedPath;
-  if (image.resourceRef && isDocumentArchiveResourceRef(image.resourceRef)) {
-    return (
-      image.resourceRef.entryPath ??
-      image.alias ??
-      image.sourceDocumentId ??
-      `document-${image.resourceRef.source.format}`
-    );
-  }
-  if (image.resourceRef && isResourceRef(image.resourceRef)) {
-    return image.alias ?? image.label ?? image.resourceRef.id;
-  }
-  if (image.locator) return image.locator.path;
   if (image.contentLocator) return `content:${contentLocatorKey(image.contentLocator)}`;
   return resolvedPath;
 }

@@ -1,10 +1,5 @@
-import type {
-  AgentContextPayload,
-  ContentLocator,
-  DocumentArchiveResourceRef,
-  DocumentLocator,
-} from '@neko/shared';
-import { isContentLocator, parseDocumentArchiveResourceRef } from '@neko/shared';
+import type { AgentContextPayload, ContentLocator, DocumentLocator } from '@neko/shared';
+import { isContentLocator } from '@neko/shared';
 import { projectContentLocatorPath } from './content-locator-presenter';
 
 export function projectClipboardTextToContextPayload(text: string): AgentContextPayload | null {
@@ -27,18 +22,16 @@ function projectDocumentImageReference(value: Record<string, unknown>): AgentCon
 
   const source = asRecord(document.source);
   const locator = parseDocumentLocator(document.locator);
-  const resourceRef =
-    parseStableDocumentArchiveResourceRef(image.resourceRef) ??
-    parseStableDocumentArchiveResourceRef(document.resourceRef);
   const contentLocator =
     parseStableContentLocator(image.contentLocator) ??
     parseStableContentLocator(document.contentLocator);
-  if (!contentLocator || !resourceRef) return null;
+  if (!contentLocator) return null;
+  if (image.resourceRef !== undefined || document.resourceRef !== undefined) return null;
 
   const label = locator
     ? formatDocumentLocator(locator)
-    : resourceRef?.entryPath
-      ? basename(resourceRef.entryPath)
+    : contentLocator.kind === 'document-entry'
+      ? basename(contentLocator.entryPath)
       : basename(projectContentLocatorPath(contentLocator));
   const sourceFormat = readString(source?.format);
   const contentPath = projectContentLocatorPath(contentLocator);
@@ -47,7 +40,6 @@ function projectDocumentImageReference(value: Record<string, unknown>): AgentCon
     document: {
       contentLocator,
       ...(locator ? { locator } : {}),
-      ...(resourceRef ? { resourceRef } : {}),
     },
     image: {
       ...optionalNumberField('index', image.index),
@@ -55,18 +47,22 @@ function projectDocumentImageReference(value: Record<string, unknown>): AgentCon
       ...optionalNumberField('height', image.height),
       ...optionalNumberField('byteSize', image.byteSize),
       ...optionalStringField('mimeType', image.mimeType),
-      ...(resourceRef ? { resourceRef } : {}),
       contentLocator,
     },
     navigationData: {
       source: sourceFormat ?? 'document',
-      ...(resourceRef?.entryPath ? { entryPath: resourceRef.entryPath } : {}),
+      ...(contentLocator.kind === 'document-entry' ? { entryPath: contentLocator.entryPath } : {}),
     },
   };
 
   return {
     type: 'image',
-    id: stableContextId('document-image', contentPath, resourceRef.entryPath ?? label, label),
+    id: stableContextId(
+      'document-image',
+      contentPath,
+      contentLocator.kind === 'document-entry' ? contentLocator.entryPath : label,
+      label,
+    ),
     label,
     summary: `Document image: ${basename(contentPath)}#${label}`,
     data,
@@ -116,14 +112,6 @@ function parseJsonObject(text: string): Record<string, unknown> | null {
   } catch {
     return null;
   }
-}
-
-function parseStableDocumentArchiveResourceRef(
-  value: unknown,
-): DocumentArchiveResourceRef | undefined {
-  const ref = parseDocumentArchiveResourceRef(value);
-  if (!ref) return undefined;
-  return ref;
 }
 
 function parseDocumentLocator(value: unknown): DocumentLocator | undefined {

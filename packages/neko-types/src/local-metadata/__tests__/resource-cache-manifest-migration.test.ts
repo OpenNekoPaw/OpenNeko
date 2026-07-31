@@ -20,7 +20,7 @@ afterEach(async () => {
 });
 
 describe('legacy ResourceCache manifest migration', () => {
-  it('backs up, normalizes, verifies, and archives a workspace manifest', async () => {
+  it('backs up and invalidates the retired manifest without deleting cached artifacts', async () => {
     const homedir = await mkdtemp(join(tmpdir(), 'neko-resource-cache-migration-'));
     temporaryDirectories.push(homedir);
     const workDir = join(homedir, 'workspace');
@@ -28,6 +28,7 @@ describe('legacy ResourceCache manifest migration', () => {
     const manifestPath = join(cacheRoot, 'manifest.json');
     await mkdir(join(cacheRoot, 'documents'), { recursive: true });
     const artifactPath = join(cacheRoot, 'documents', 'page-1.jpg');
+    await writeFile(artifactPath, 'derived page', 'utf8');
     const legacyManifest = createLegacyManifest(artifactPath);
     await writeFile(manifestPath, `${JSON.stringify(legacyManifest)}\n`, 'utf8');
 
@@ -37,7 +38,12 @@ describe('legacy ResourceCache manifest migration', () => {
       busyTimeoutMs: 1_000,
     });
     await metadataStore.migrateNamespace(M1_LOCAL_METADATA_MIGRATIONS);
-    await metadataStore.migrateNamespace(RESOURCE_CACHE_MIGRATIONS);
+    await metadataStore.migrateNamespace(RESOURCE_CACHE_MIGRATIONS, {
+      destructiveBackup: {
+        destinationPath: join(homedir, 'resource-cache-v2.bak'),
+        reason: 'migration',
+      },
+    });
     await metadataStore.repositories.workspaces.bind({
       identity: { version: 1, workspaceId: WORKSPACE_ID },
       locator: { kind: 'variable', value: '${HOME}/workspace' },
@@ -62,29 +68,19 @@ describe('legacy ResourceCache manifest migration', () => {
     });
 
     expect(report).toMatchObject({
-      sourceStatus: 'migrated',
-      importedEntryCount: 1,
-      importedVariantCount: 1,
-      verifiedEntryCount: 1,
-      verifiedVariantCount: 1,
+      sourceStatus: 'invalidated',
+      importedEntryCount: 0,
+      importedVariantCount: 0,
+      verifiedEntryCount: 0,
+      verifiedVariantCount: 0,
       unrecoverable: [],
     });
+    expect(report.sourceDiagnostic).toMatch(/ResourceRef.*invalidated/u);
     await expect(access(report.backupPath ?? '')).resolves.toBeUndefined();
     await expect(access(report.archivedPath ?? '')).resolves.toBeUndefined();
     expect(JSON.parse(await readFile(report.backupPath ?? '', 'utf8'))).toEqual(legacyManifest);
-    const migratedManifest = await manifestStore.load();
-    expect(migratedManifest).toMatchObject({
-      entries: {
-        'resource-1': {
-          variants: [
-            expect.objectContaining({
-              relativePath: 'documents/page-1.jpg',
-            }),
-          ],
-        },
-      },
-    });
-    expect(migratedManifest.entries['resource-1']?.variants[0]).not.toHaveProperty('absolutePath');
+    await expect(manifestStore.load()).resolves.toMatchObject({ version: 2, entries: {} });
+    await expect(readFile(artifactPath, 'utf8')).resolves.toBe('derived page');
 
     await metadataStore.dispose();
   });
@@ -116,7 +112,7 @@ describe('legacy ResourceCache manifest migration', () => {
     await expect(manifestStore.load()).resolves.toMatchObject({ entries: {} });
   });
 
-  it('reports an outside-root artifact path without fabricating a fallback variant', async () => {
+  it('invalidates legacy entries without inspecting or materializing their artifact paths', async () => {
     const root = await mkdtemp(join(tmpdir(), 'neko-resource-cache-unrecoverable-'));
     temporaryDirectories.push(root);
     const cacheRoot = join(root, 'resources');
@@ -135,23 +131,14 @@ describe('legacy ResourceCache manifest migration', () => {
     });
 
     expect(report).toMatchObject({
-      sourceStatus: 'migrated',
-      importedEntryCount: 1,
+      sourceStatus: 'invalidated',
+      importedEntryCount: 0,
       importedVariantCount: 0,
       verifiedVariantCount: 0,
-      unrecoverable: [
-        {
-          resourceId: 'resource-1',
-          variantKey: 'thumbnail:256x256',
-          fields: ['relativePath', 'absolutePath'],
-          reason: expect.stringContaining('outside the managed cache root'),
-        },
-      ],
+      unrecoverable: [],
     });
     expect(JSON.parse(await readFile(report.backupPath ?? '', 'utf8'))).toEqual(legacyManifest);
-    await expect(manifestStore.load()).resolves.toMatchObject({
-      entries: { 'resource-1': { variants: [] } },
-    });
+    await expect(manifestStore.load()).resolves.toMatchObject({ version: 2, entries: {} });
   });
 });
 
@@ -191,7 +178,12 @@ describe('legacy proxy manifest migration', () => {
       busyTimeoutMs: 1_000,
     });
     await metadataStore.migrateNamespace(M1_LOCAL_METADATA_MIGRATIONS);
-    await metadataStore.migrateNamespace(RESOURCE_CACHE_MIGRATIONS);
+    await metadataStore.migrateNamespace(RESOURCE_CACHE_MIGRATIONS, {
+      destructiveBackup: {
+        destinationPath: join(homedir, 'resource-cache-v2.bak'),
+        reason: 'migration',
+      },
+    });
     await metadataStore.repositories.workspaces.bind({
       identity: { version: 1, workspaceId: WORKSPACE_ID },
       locator: { kind: 'variable', value: '${HOME}/workspace' },
@@ -233,7 +225,7 @@ describe('legacy proxy manifest migration', () => {
 
     const migratedManifest = await manifestStore.load({ refresh: true });
     expect(migratedManifest.entries['resource-1']).toMatchObject({
-      resource: {
+      descriptor: {
         id: 'resource-1',
         provider: 'neko-cut-proxy',
         kind: 'media',
@@ -329,7 +321,7 @@ describe('legacy proxy manifest migration', () => {
     });
 
     const manifest = await manifestStore.load();
-    expect(manifest.entries['variable']?.resource.source).toEqual({
+    expect(manifest.entries['variable']?.descriptor.source).toEqual({
       kind: 'file',
       filePath: '${BOOKS}/source.mov',
       identity: { sizeBytes: 1024, mtimeMs: 1_752_361_200_000 },
@@ -406,7 +398,7 @@ describe('legacy proxy manifest migration', () => {
 
 function createMemoryManifestStore(): ResourceCacheManifestStore {
   let manifest: ResourceCacheManifest = {
-    version: 1,
+    version: 2,
     createdAt: '2026-07-13T00:00:00.000Z',
     updatedAt: '2026-07-13T00:00:00.000Z',
     entries: {},

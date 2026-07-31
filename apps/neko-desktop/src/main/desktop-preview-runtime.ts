@@ -172,6 +172,7 @@ export class DesktopPreviewRuntime {
         descriptor: {
           descriptorId,
           revision,
+          contentLocator: resolvePreviewContentLocator(input.item),
           contentKind,
           mediaType,
           displayName: input.item.label,
@@ -288,6 +289,7 @@ export class DesktopPreviewRuntime {
       descriptor: {
         descriptorId,
         revision,
+        contentLocator: resolvePreviewContentLocator(input.item),
         contentKind,
         mediaType,
         displayName: input.item.label,
@@ -549,3 +551,21 @@ export class DesktopPreviewRuntime {
     return closedProjection;
   }
 }
+
+function resolvePreviewContentLocator(
+  item: ResourceBrowserItem,
+): ResourceBrowserContentLocator {
+  if (item.facet === 'files' || item.facet === 'media') {
+    return item.locator;
+  }
+  if ('representationLocator' in item && item.representationLocator) {
+    return item.representationLocator;
+  }
+  throw new Error(`Desktop Preview item '${item.resourceId}' has no content locator.`);
+}
+
+type ResourceBrowserContentLocator =
+  | Extract<ResourceBrowserItem, { readonly facet: 'files' | 'media' }>['locator']
+  | NonNullable<
+      Extract<ResourceBrowserItem, { readonly facet: 'materials' }>['representationLocator']
+    >;

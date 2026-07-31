@@ -11,7 +11,7 @@ import {
   type QualityGateIssue,
   type QualityProjectRef,
   type QualityTarget,
-  type ResourceRef,
+  type ContentLocator,
 } from '@neko/shared';
 
 export interface ProjectQualityFacadeResolver {
@@ -68,22 +68,22 @@ export async function collectProjectQualityEvidence(
   const runtimeData = projectQualityResultData(runtime, 'probe-runtime');
   const readinessData = projectQualityResultData(readiness, 'check-export-readiness');
 
-  const snapshotRefs = snapshotData ? [snapshotData.snapshotRef] : [];
+  const snapshotLocators = snapshotData ? [snapshotData.snapshotLocator] : [];
   const structuralDiagnostics = [...validation.diagnostics, ...snapshot.diagnostics];
   const runtimeDiagnostics = [...runtime.diagnostics, ...(runtimeData?.diagnostics ?? [])];
   const readinessDiagnostics = [...readiness.diagnostics, ...(readinessData?.diagnostics ?? [])];
   return [
-    createEvidence(target, 'structural', structuralDiagnostics, snapshotRefs, now(), createId, {
+    createEvidence(target, 'structural', structuralDiagnostics, snapshotLocators, now(), createId, {
       id: 'project.valid',
       value: snapshot.ok,
       passed: snapshot.ok && !hasError(structuralDiagnostics),
     }),
-    createEvidence(target, 'technical', runtimeDiagnostics, snapshotRefs, now(), createId, {
+    createEvidence(target, 'technical', runtimeDiagnostics, snapshotLocators, now(), createId, {
       id: 'project.runtime.available',
       value: runtimeData?.available ?? false,
       passed: runtimeData?.available === true && !hasError(runtimeDiagnostics),
     }),
-    createEvidence(target, 'policy', readinessDiagnostics, snapshotRefs, now(), createId, {
+    createEvidence(target, 'policy', readinessDiagnostics, snapshotLocators, now(), createId, {
       id: 'project.export.ready',
       value: readinessData?.ready ?? false,
       passed: readinessData?.ready === true && !hasError(readinessDiagnostics),
@@ -110,7 +110,7 @@ function createEvidence(
   target: QualityTarget,
   evaluatorClass: QualityEvaluatorClass,
   diagnostics: readonly QualityDiagnostic[],
-  sourceEvidenceRefs: readonly ResourceRef[],
+  sourceEvidenceLocators: readonly ContentLocator[],
   createdAt: string,
   createId: (prefix: string) => string,
   metric: QualityEvidence['metrics'][number],
@@ -132,7 +132,7 @@ function createEvidence(
       description: `Owning ${target.projectRef?.domain ?? 'project'} facade ${evaluatorClass} evidence.`,
     },
     createdAt,
-    sourceEvidenceRefs,
+    sourceEvidenceLocators,
   };
 }
 

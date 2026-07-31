@@ -2,16 +2,12 @@ import { access, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import {
-  createGeneratedAssetRevisionRef,
-  PathResolver,
-  type GeneratedAsset,
-  type ResourceCacheManifest,
-  type ResourceCacheManifestStore,
-} from '@neko/shared';
+import { createGeneratedAssetRevisionRef, PathResolver, type GeneratedAsset } from '@neko/shared';
 import {
   LocalMetadataGeneratedOutputProjectionStore,
   type GeneratedOutputProjectionRejection,
+  type ResourceCacheManifest,
+  type ResourceCacheManifestStore,
 } from '@neko/shared/local-metadata/node';
 import {
   GeneratedAssetIndex,
@@ -67,7 +63,7 @@ describe('GeneratedAssetIndex', () => {
     expect(JSON.stringify(manifest.current())).not.toContain(workspaceRoot);
     expect(Object.values(manifest.current().entries)).toEqual([
       expect.objectContaining({
-        resource: expect.objectContaining({
+        descriptor: expect.objectContaining({
           id: 'generated-output:asset-1',
           provider: 'generated-output-index',
         }),
@@ -288,12 +284,12 @@ describe('GeneratedAssetIndex', () => {
       path: path.join(workspaceRoot, 'neko', 'generated', 'image', 'legacy.png'),
     });
     const manifest = createManifestStore({
-      version: 1,
+      version: 2,
       createdAt: '2026-07-13T00:00:00.000Z',
       updatedAt: '2026-07-13T00:00:00.000Z',
       entries: {
         'generated-draft:asset-1': {
-          resource: {
+          descriptor: {
             id: 'generated-draft:asset-1',
             scope: 'project',
             provider: 'generated-draft-index',
@@ -303,7 +299,6 @@ describe('GeneratedAssetIndex', () => {
               generatedAssetId: 'asset-1',
               projectRelativePath: 'neko/generated/image/legacy.png',
             },
-            locator: { kind: 'generated-asset', assetId: 'asset-1' },
             fingerprint: { strategy: 'provider', value: 'asset-1:legacy' },
           },
           variants: [],
@@ -458,7 +453,7 @@ function createManifestStore(initial?: ResourceCacheManifest): {
   readonly current: () => ResourceCacheManifest;
 } {
   let manifest: ResourceCacheManifest = initial ?? {
-    version: 1,
+    version: 2,
     createdAt: '2026-07-13T00:00:00.000Z',
     updatedAt: '2026-07-13T00:00:00.000Z',
     entries: {},

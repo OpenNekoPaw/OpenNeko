@@ -72,7 +72,7 @@ describe('Generation Job codec', () => {
       },
     ],
     [
-      'nested ResourceRef',
+      'nested retired resource-reference fields',
       {
         request: {
           ...snapshot().request,

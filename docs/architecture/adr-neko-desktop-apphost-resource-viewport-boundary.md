@@ -109,7 +109,7 @@ VSCode 继续作为插件生态和轻量创作入口，但 VSCode 原生 Extensi
 - Renderer 不导入 `vscode`、Node API、Electron main internals 或 Engine internals。
 - Main/preload 可导入 Electron/Node，但不导入 React。
 - Engine 通信走 `@neko/neko-client`、Proto 或后续 Engine viewport contract。
-- 资源访问走 ResourceRef/source ref + AppHost 授权，不直接暴露缓存和 runtime handles。
+- 资源访问走 ContentLocator/source ref + AppHost 授权，不直接暴露缓存和 runtime handles。
 
 接口：
 

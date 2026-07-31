@@ -21,6 +21,9 @@
       "fabricated source or entry path",
       "provider fallback after canonical content loading",
       "conflicting outer and nested entry paths",
+      "resourceRef or documentResourceRef",
+      "legacy resource-reference adapter",
+      "path inference from entryPath or display metadata",
       "cache or scratch path",
       "one provider image part per source page",
       "textual Tool imitation"
@@ -124,6 +127,19 @@
       "events": [
         { "kind": "tool", "name": "ReadDocument", "status": "success" },
         { "kind": "tool", "name": "ReadImage", "status": "success" }
+      ],
+      "evidenceRef": "document-image-facts"
+    },
+    {
+      "id": "no-retired-resource-reference-fallback",
+      "kind": "no-fallback",
+      "forbiddenRefs": [
+        "ResourceRef",
+        "DocumentArchiveResourceRef",
+        "resourceRef",
+        "documentResourceRef",
+        "legacy-resource-reference-adapter",
+        "document-entry-path-inference"
       ],
       "evidenceRef": "document-image-facts"
     },

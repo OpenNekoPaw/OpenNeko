@@ -14,7 +14,7 @@ import type {
   AgentContextType,
   CanvasMarkdownCapabilityTarget,
   CanvasMarkdownCapabilityResult,
-  CanvasMarkdownResourceRef,
+  CanvasMarkdownContentBinding,
   CanvasNodeType,
   ChatModelOption,
   ContentLocator,
@@ -31,13 +31,11 @@ import {
   STORYBOARD_TEXT_CUE_KINDS,
   isAgentCapabilityInvocationInput,
   isCanvasMarkdownCapabilityTarget,
-  isCanvasMarkdownResourceRef,
+  isCanvasMarkdownContentBinding,
   isCanvasNodeType,
   isContentLocator,
   isThreeReferenceContextData,
-  isResourceRef,
   normalizeWorkspaceContentPath,
-  parseDocumentArchiveResourceRef,
   parseDocumentLocator,
   normalizeCanonicalStoryboardTable,
   validateCanonicalStoryboardTable,
@@ -341,7 +339,7 @@ export interface RequestCanvasAuthoringHandoffWebviewMessage {
   sourceFormat?: CanvasAuthoringHandoffSourceFormat;
   canonicalStoryboard?: StoryboardTable;
   title?: string;
-  resources?: readonly CanvasMarkdownResourceRef[];
+  resources?: readonly CanvasMarkdownContentBinding[];
   stableRefs?: readonly CanvasAuthoringHandoffStableRef[];
   diagnostics?: readonly CanvasAuthoringHandoffDiagnostic[];
   promptSpans?: readonly CanvasAuthoringHandoffPromptSpan[];
@@ -1911,7 +1909,7 @@ function parseRequestCanvasAuthoringHandoffMessage(
   const resources =
     raw.resources === undefined
       ? undefined
-      : Array.isArray(raw.resources) && raw.resources.every(isCanvasMarkdownResourceRef)
+      : Array.isArray(raw.resources) && raw.resources.every(isCanvasMarkdownContentBinding)
         ? raw.resources
         : null;
   if (resources === null) return null;
@@ -2196,33 +2194,34 @@ function parsePluginTransferPayload(value: unknown): PluginTransferPayload | nul
 function parsePluginTransferAssetRef(value: unknown): PluginTransferAssetRef | null {
   if (!isRecord(value)) return null;
   const path = optionalStringStrict(value.path);
+  const contentLocator =
+    value.contentLocator === undefined
+      ? undefined
+      : isContentLocator(value.contentLocator)
+        ? value.contentLocator
+        : null;
   const mediaType = optionalStringStrict(value.mediaType);
   const name = optionalStringStrict(value.name);
-  const documentResourceRef =
-    value.documentResourceRef === undefined
-      ? undefined
-      : parseDocumentArchiveResourceRef(value.documentResourceRef);
-  const resourceRef = value.resourceRef === undefined ? undefined : value.resourceRef;
   const target = parseOptionalPluginTransferTargetRef(value.target);
   const provenance = parseOptionalPluginTransferProvenance(value.provenance);
   if (
     path === null ||
+    contentLocator === null ||
     mediaType === null ||
     name === null ||
-    (value.documentResourceRef !== undefined && documentResourceRef === undefined) ||
-    (value.resourceRef !== undefined && !isResourceRef(resourceRef)) ||
+    value.documentResourceRef !== undefined ||
+    value.resourceRef !== undefined ||
     target === null ||
     provenance === null
   ) {
     return null;
   }
-  if (!path && documentResourceRef === undefined && !isResourceRef(resourceRef)) {
+  if (!path && contentLocator === undefined) {
     return null;
   }
   const suffix = {
     ...(path !== undefined ? { path } : {}),
-    ...(documentResourceRef !== undefined ? { documentResourceRef } : {}),
-    ...(isResourceRef(resourceRef) ? { resourceRef } : {}),
+    ...(contentLocator !== undefined ? { contentLocator } : {}),
     ...(target !== undefined ? { target } : {}),
     ...(provenance !== undefined ? { provenance } : {}),
   };
@@ -2361,10 +2360,12 @@ function parseJsonMetadataRecord(value: unknown): Record<string, unknown> | null
   if (!isRecord(value)) return null;
   const metadata: Record<string, unknown> = {};
   for (const [key, item] of Object.entries(value)) {
-    if (key === 'documentResourceRef') {
-      const resourceRef = parseDocumentArchiveResourceRef(item);
-      if (!resourceRef) return null;
-      metadata[key] = resourceRef;
+    if (key === 'resourceRef' || key === 'documentResourceRef') {
+      return null;
+    }
+    if (key === 'contentLocator') {
+      if (!isContentLocator(item)) return null;
+      metadata[key] = item;
       continue;
     }
     if (isRecord(item)) {

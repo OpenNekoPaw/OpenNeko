@@ -220,7 +220,7 @@ export class DocumentContentAccessRuntime {
     const visible = imageInfo.slice(0, input.maxImages ?? imageInfo.length);
     const projected = await Promise.all(
       visible.map(async (image) => {
-        const entryPath = image.entryPath ?? image.resourceRef?.entryPath;
+        const entryPath = image.entryPath ?? image.contentLocator?.entryPath;
         if (!entryPath) return stripDocumentImageRuntimeFields(image);
         const contentLocator: DocumentEntryContentLocator = {
           kind: 'document-entry',
@@ -254,6 +254,7 @@ function createStableDocumentSource(
   return {
     filePath: input.source.path,
     format: input.format ?? detectDocumentFormat(input.source.path),
+    contentLocator: input.source,
     fileId: fingerprint,
     identity: { fileId: fingerprint },
   };

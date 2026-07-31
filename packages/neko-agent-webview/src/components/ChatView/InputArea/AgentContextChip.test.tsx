@@ -2,7 +2,7 @@
 
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import type { AgentContextPayload, ResourceRef } from '@neko/shared';
+import type { AgentContextPayload, ContentLocator } from '@neko/shared';
 import { AgentContextChip } from './AgentContextChip';
 
 describe('AgentContextChip', () => {
@@ -42,7 +42,7 @@ describe('AgentContextChip', () => {
             kind: 'pose',
             sessionId: 'fixture',
             revision: 1,
-            controlImage: resourceRef('pose-control'),
+            controlImage: contentLocator('pose-control'),
             controlMode: 'pose',
             joints: [],
           },
@@ -69,22 +69,6 @@ describe('AgentContextChip', () => {
   });
 });
 
-function resourceRef(id: string): ResourceRef {
-  return {
-    id,
-    scope: 'project',
-    provider: 'preview-variant',
-    kind: 'preview',
-    source: {
-      kind: 'preview-asset',
-      previewAssetId: id,
-      filePath: `/workspace/.neko/.cache/resources/three-reference-captures/${id}.png`,
-    },
-    locator: { kind: 'preview-asset', assetId: id },
-    fingerprint: {
-      strategy: 'provider',
-      value: `preview:${id}`,
-      providerId: 'preview-variant',
-    },
-  };
+function contentLocator(id: string): ContentLocator {
+  return { kind: 'workspace-file', path: `references/${id}.png` };
 }

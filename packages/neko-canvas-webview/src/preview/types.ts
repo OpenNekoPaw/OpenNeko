@@ -2,11 +2,13 @@ import type {
   AssetIdentityCapability,
   CanvasPreviewRole,
   CanvasPreviewVariant,
+  ContentLocator,
   DelegateAction,
 } from '@neko/shared';
 
 export interface PreviewSourceDescriptor {
   id: string;
+  contentLocator?: ContentLocator;
   asset?: AssetIdentityCapability;
   role: CanvasPreviewRole;
   variants?: CanvasPreviewVariant[];

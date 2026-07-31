@@ -12,16 +12,14 @@ import {
   type NekoMarkdownStableRef,
 } from '@neko/markdown';
 import {
+  contentLocatorKey,
   type AgentContextPayload,
   isRuntimeOnlyCanvasMarkdownResourceValue,
-  isResourceRef,
-  parseDocumentArchiveResourceRef,
-  type CanvasMarkdownResourceRef,
-  type DocumentArchiveResourceRef,
+  isContentLocator,
+  type CanvasMarkdownContentBinding,
+  type ContentLocator,
   type PerceptionCard,
   type PerceptualAssetRef,
-  type ResourceRef,
-  type ResourceSourceRef,
   type ToolResultAttachment,
 } from '@neko/shared';
 import type { AmbientCanvasNodeProjection } from './plugin-transfer-presenter';
@@ -52,7 +50,7 @@ export interface MarkdownRenderedResourceToken {
   readonly token: string;
   readonly status: MarkdownResourceStatus;
   readonly refs: readonly MarkdownResourceCandidateSummary[];
-  readonly resources: readonly CanvasMarkdownResourceRef[];
+  readonly resources: readonly CanvasMarkdownContentBinding[];
   readonly renderUris: readonly string[];
   readonly diagnostics: readonly MarkdownResourceDiagnostic[];
 }
@@ -119,8 +117,7 @@ interface MarkdownToolResultImageRef {
   readonly mimeType?: string;
   readonly pageNumber?: number;
   readonly sequenceNumber?: number;
-  readonly documentResourceRef?: DocumentArchiveResourceRef;
-  readonly resourceRef?: ResourceRef;
+  readonly contentLocator?: ContentLocator;
   readonly renderUri?: string;
   readonly extraTokens?: readonly string[];
   readonly width?: number;
@@ -250,7 +247,7 @@ function projectMarkdownResourceToken(
       token,
       status: 'ambiguous',
       refs: summaries,
-      resources: refs.flatMap((ref) => projectCanvasMarkdownResourceRef(token, ref) ?? []),
+      resources: refs.flatMap((ref) => projectCanvasMarkdownResource(token, ref) ?? []),
       renderUris: uniqueStrings(refs.flatMap((ref) => (ref.renderUri ? [ref.renderUri] : []))),
       diagnostics: [
         {
@@ -267,7 +264,7 @@ function projectMarkdownResourceToken(
   if (!ref) {
     throw new Error(`Resource index returned an empty candidate for token "${token}".`);
   }
-  const resource = projectCanvasMarkdownResourceRef(token, ref);
+  const resource = projectCanvasMarkdownResource(token, ref);
   return {
     token,
     status: 'bound',
@@ -330,21 +327,11 @@ function createMarkdownResourceReferenceResolver(
 function projectMarkdownStableRefForResource(
   ref: MarkdownToolResultImageRef,
 ): NekoMarkdownStableRef | undefined {
-  if (ref.resourceRef) {
+  if (ref.contentLocator) {
     return {
-      kind: ref.resourceRef.kind,
-      id: ref.resourceRef.id,
-      namespace: ref.resourceRef.scope,
-    };
-  }
-  if (ref.documentResourceRef) {
-    const sourceId = readDocumentResourceSourceId(ref.documentResourceRef) ?? 'document';
-    const entryId =
-      ref.documentResourceRef.entryPath ?? JSON.stringify(ref.documentResourceRef.locator);
-    return {
-      kind: 'document-entry',
-      id: `${sourceId}:${entryId}`,
-      namespace: 'document',
+      kind: ref.contentLocator.kind,
+      id: contentLocatorKey(ref.contentLocator),
+      namespace: 'content',
     };
   }
   if (ref.entryPath && !isRuntimeOnlyCanvasMarkdownResourceValue(ref.entryPath)) {
@@ -548,22 +535,19 @@ function formatNekoMarkdownDiagnostic(
   }
 }
 
-function projectCanvasMarkdownResourceRef(
+function projectCanvasMarkdownResource(
   token: string,
   ref: MarkdownToolResultImageRef,
-): CanvasMarkdownResourceRef | undefined {
-  const sourcePath = ref.documentResourceRef ? undefined : ref.entryPath;
-  const resource: CanvasMarkdownResourceRef = {
+): CanvasMarkdownContentBinding | undefined {
+  const sourcePath = ref.contentLocator ? undefined : ref.entryPath;
+  const resource: CanvasMarkdownContentBinding = {
     token,
     ...(ref.label ? { label: ref.label } : {}),
     role: 'source',
     ...(sourcePath && !isRuntimeOnlyCanvasMarkdownResourceValue(sourcePath) ? { sourcePath } : {}),
-    ...(ref.resourceRef ? { resourceRef: ref.resourceRef } : {}),
-    ...(ref.documentResourceRef ? { documentResourceRef: ref.documentResourceRef } : {}),
+    ...(ref.contentLocator ? { contentLocator: ref.contentLocator } : {}),
   };
-  return resource.sourcePath || resource.resourceRef || resource.documentResourceRef
-    ? resource
-    : undefined;
+  return resource.sourcePath || resource.contentLocator ? resource : undefined;
 }
 
 function createSafeCandidateSummary(
@@ -676,10 +660,7 @@ function createResourceIndex(
 }
 
 function resourceIdentityKey(ref: MarkdownToolResultImageRef): string {
-  if (ref.resourceRef) return `resource:${ref.resourceRef.id}`;
-  if (ref.documentResourceRef) {
-    return `document:${readDocumentResourceSourceId(ref.documentResourceRef) ?? 'unknown'}:${ref.documentResourceRef.entryPath ?? JSON.stringify(ref.documentResourceRef.locator)}`;
-  }
+  if (ref.contentLocator) return `content:${contentLocatorKey(ref.contentLocator)}`;
   return `tool:${ref.toolCallId}:${ref.assetIndex}`;
 }
 
@@ -688,9 +669,9 @@ function createMarkdownToolResultTokens(ref: MarkdownToolResultImageRef): readon
     [
       ref.alias,
       ref.label,
-      ref.resourceRef?.id,
-      ...(ref.resourceRef ? resourceRefLookupTokens(ref.resourceRef) : []),
-      ref.documentResourceRef?.entryPath,
+      ref.contentLocator ? contentLocatorKey(ref.contentLocator) : undefined,
+      ...(ref.contentLocator ? contentLocatorLookupTokens(ref.contentLocator) : []),
+      ref.contentLocator?.kind === 'document-entry' ? ref.contentLocator.entryPath : undefined,
       ref.pageNumber !== undefined ? `page_${ref.pageNumber}` : undefined,
       ref.pageNumber !== undefined ? `P${ref.pageNumber}` : undefined,
       ref.sequenceNumber !== undefined ? `image_${ref.sequenceNumber}` : undefined,
@@ -698,8 +679,8 @@ function createMarkdownToolResultTokens(ref: MarkdownToolResultImageRef): readon
       ref.sequenceNumber !== undefined ? `P${ref.sequenceNumber}` : undefined,
       ...sequenceNumberLookupTokens(ref.sequenceNumber),
       ...(ref.entryPath ? pathLookupTokens(ref.entryPath) : []),
-      ...(ref.documentResourceRef?.entryPath
-        ? pathLookupTokens(ref.documentResourceRef.entryPath)
+      ...(ref.contentLocator?.kind === 'document-entry'
+        ? pathLookupTokens(ref.contentLocator.entryPath)
         : []),
       ...(ref.toolName === 'ReadImage' ? readImageDerivedAssetTokens(ref) : []),
       ...(ref.extraTokens ?? []),
@@ -756,7 +737,7 @@ function collectMarkdownImageRefsFromToolCall(
 
   for (const [index, image] of collectToolResultImageRecords(data).entries()) {
     const documentImage = asRecord(image['documentImage']);
-    const resourceRef = documentImage?.['resourceRef'] ?? image['resourceRef'];
+    const contentLocator = documentImage?.['contentLocator'] ?? image['contentLocator'];
     refs.push(
       projectMarkdownImageRef(
         toolCall.id,
@@ -765,7 +746,7 @@ function collectMarkdownImageRefsFromToolCall(
         {
           ...(documentImage ?? {}),
           ...image,
-          ...(resourceRef !== undefined ? { resourceRef } : {}),
+          ...(contentLocator !== undefined ? { contentLocator } : {}),
         },
         renderUrisByIndex.get(index),
         index + 1,
@@ -812,10 +793,11 @@ function collectMarkdownImageRefsFromPerceptionCards(
       mimeType: imageRef.mimeType ?? card.structural.mimeType,
       width: card.structural.width,
       height: card.structural.height,
-      ...(imageRef.documentResourceRef
-        ? { documentResourceRef: imageRef.documentResourceRef }
-        : {}),
-      entryPath: imageRef.documentResourceRef?.entryPath ?? imageRef.uri,
+      ...(imageRef.contentLocator ? { contentLocator: imageRef.contentLocator } : {}),
+      entryPath:
+        (imageRef.contentLocator?.kind === 'document-entry'
+          ? imageRef.contentLocator.entryPath
+          : undefined) ?? imageRef.uri,
     };
     return [
       projectMarkdownImageRef(
@@ -841,20 +823,19 @@ function projectMarkdownImageRef(
   extraTokens?: readonly string[],
 ): MarkdownToolResultImageRef {
   const locator = asRecord(image['locator']);
-  const documentResourceRef =
-    parseStableDocumentArchiveResourceRef(image['documentResourceRef']) ??
-    parseStableDocumentArchiveResourceRef(image['resourceRef']);
-  const resourceRef = parseStableResourceRef(image['resourceRef']);
+  const contentLocator = parseStableContentLocator(image['contentLocator']);
   const label = readString(image, 'label');
   const alias = readString(image, 'alias');
   const sourceDocumentId =
-    readString(image, 'sourceDocumentId') ?? readDocumentResourceSourceId(documentResourceRef);
-  const entryPath = readString(image, 'entryPath') ?? documentResourceRef?.entryPath;
+    readString(image, 'sourceDocumentId') ?? readDocumentResourceSourceId(contentLocator);
+  const entryPath =
+    readString(image, 'entryPath') ??
+    (contentLocator?.kind === 'document-entry' ? contentLocator.entryPath : undefined);
   const pageNumber =
     readFinitePositiveInteger(locator?.['pageNumber']) ??
     resolveStoryboardSourceImageNumber(alias) ??
     resolveStoryboardSourceImageNumber(label) ??
-    readDocumentResourcePageNumber(documentResourceRef);
+    readDocumentResourcePageNumber(contentLocator);
   return {
     toolCallId,
     toolName,
@@ -871,8 +852,7 @@ function projectMarkdownImageRef(
     ...(extraTokens && extraTokens.length > 0 ? { extraTokens } : {}),
     ...(pageNumber !== undefined ? { pageNumber } : {}),
     ...(sequenceNumber !== undefined ? { sequenceNumber } : {}),
-    ...(documentResourceRef ? { documentResourceRef } : {}),
-    ...(resourceRef ? { resourceRef } : {}),
+    ...(contentLocator ? { contentLocator } : {}),
     ...(readFinitePositiveInteger(image['width'])
       ? { width: readFinitePositiveInteger(image['width']) }
       : {}),
@@ -935,7 +915,14 @@ function readPerceptionCardLookupTokens(card: PerceptionCard): readonly (string 
 function readPerceptualAssetRefLookupTokens(
   ref: PerceptualAssetRef | undefined,
 ): readonly (string | undefined)[] {
-  return ref ? [ref.assetId, ref.label, ref.uri, ref.documentResourceRef?.entryPath] : [];
+  return ref
+    ? [
+        ref.assetId,
+        ref.label,
+        ref.uri,
+        ref.contentLocator?.kind === 'document-entry' ? ref.contentLocator.entryPath : undefined,
+      ]
+    : [];
 }
 
 function readRenderableAttachmentUri(attachment: ToolResultAttachment): string | undefined {
@@ -1018,10 +1005,7 @@ function dedupeMarkdownImageRefs(
 
 function markdownImageRefDedupeKey(ref: MarkdownToolResultImageRef): string {
   return (
-    (ref.documentResourceRef
-      ? `${readDocumentResourceSourceId(ref.documentResourceRef) ?? 'unknown'}:${ref.documentResourceRef.entryPath ?? JSON.stringify(ref.documentResourceRef.locator)}`
-      : undefined) ??
-    (ref.resourceRef ? `${ref.resourceRef.provider}:${ref.resourceRef.id}` : undefined) ??
+    (ref.contentLocator ? `content:${contentLocatorKey(ref.contentLocator)}` : undefined) ??
     `${ref.toolCallId}:${ref.assetIndex}`
   );
 }
@@ -1056,11 +1040,8 @@ function mergeMarkdownImageRefs(
     ...((existing.sequenceNumber ?? incoming.sequenceNumber)
       ? { sequenceNumber: existing.sequenceNumber ?? incoming.sequenceNumber }
       : {}),
-    ...((existing.documentResourceRef ?? incoming.documentResourceRef)
-      ? { documentResourceRef: existing.documentResourceRef ?? incoming.documentResourceRef }
-      : {}),
-    ...((existing.resourceRef ?? incoming.resourceRef)
-      ? { resourceRef: existing.resourceRef ?? incoming.resourceRef }
+    ...((existing.contentLocator ?? incoming.contentLocator)
+      ? { contentLocator: existing.contentLocator ?? incoming.contentLocator }
       : {}),
     ...((existing.renderUri ?? incoming.renderUri)
       ? { renderUri: existing.renderUri ?? incoming.renderUri }
@@ -1072,34 +1053,23 @@ function mergeMarkdownImageRefs(
 }
 
 function readDocumentResourcePageNumber(
-  resourceRef: DocumentArchiveResourceRef | undefined,
+  contentLocator: ContentLocator | undefined,
 ): number | undefined {
-  if (resourceRef?.locator?.kind === 'page' || resourceRef?.locator?.kind === 'region') {
-    return resourceRef.locator.pageNumber;
-  }
-  return resolveStoryboardSourceImageNumber(resourceRef?.entryPath);
-}
-
-function readDocumentResourceSourceId(
-  resourceRef: DocumentArchiveResourceRef | undefined,
-): string | undefined {
-  if (!resourceRef) return undefined;
-  return (
-    resourceRef.source.identity?.hash ??
-    resourceRef.source.identity?.fileId ??
-    resourceRef.source.fileId ??
-    resourceRef.source.filePath
+  return resolveStoryboardSourceImageNumber(
+    contentLocator?.kind === 'document-entry' ? contentLocator.entryPath : undefined,
   );
 }
 
-function parseStableResourceRef(value: unknown): ResourceRef | undefined {
-  return isResourceRef(value) ? value : undefined;
+function readDocumentResourceSourceId(
+  contentLocator: ContentLocator | undefined,
+): string | undefined {
+  return contentLocator?.kind === 'document-entry'
+    ? contentLocatorKey(contentLocator.source)
+    : undefined;
 }
 
-function parseStableDocumentArchiveResourceRef(
-  value: unknown,
-): DocumentArchiveResourceRef | undefined {
-  return parseDocumentArchiveResourceRef(value);
+function parseStableContentLocator(value: unknown): ContentLocator | undefined {
+  return isContentLocator(value) ? value : undefined;
 }
 
 function resolveStoryboardSourceImageNumber(value: string | undefined): number | undefined {
@@ -1142,18 +1112,16 @@ function stripMarkdownToken(value: string): string {
   return value.trim().replace(/^`+|`+$/g, '');
 }
 
-function resourceRefLookupTokens(resourceRef: ResourceRef): readonly string[] {
-  return uniqueStrings(
-    [
-      readResourceSourceLocalPath(resourceRef.source),
-      resourceRef.source.projectRelativePath,
-      resourceRef.source.document?.filePath,
-      resourceRef.locator?.kind === 'file' ? resourceRef.locator.path : undefined,
-      resourceRef.locator?.kind === 'document' ? resourceRef.locator.entryPath : undefined,
-    ]
-      .filter(isNonEmptyString)
-      .flatMap(pathLookupTokens),
-  );
+function contentLocatorLookupTokens(contentLocator: ContentLocator): readonly string[] {
+  const paths =
+    contentLocator.kind === 'workspace-file'
+      ? [contentLocator.path]
+      : contentLocator.kind === 'document-entry'
+        ? [contentLocator.source.path, contentLocator.entryPath]
+        : contentLocator.kind === 'generated-output'
+          ? [contentLocator.path, contentLocator.outputId]
+          : [contentLocator.resourcePath, contentLocator.manifestPath];
+  return uniqueStrings(paths.filter(isNonEmptyString).flatMap(pathLookupTokens));
 }
 
 function readImageDerivedAssetTokens(ref: MarkdownToolResultImageRef): readonly string[] {
@@ -1163,16 +1131,7 @@ function readImageDerivedAssetTokens(ref: MarkdownToolResultImageRef): readonly 
       ref.label,
       ref.entryPath ? fileName(ref.entryPath) : undefined,
       ref.entryPath ? fileStem(ref.entryPath) : undefined,
-      ref.resourceRef ? resourceSourceFileName(ref.resourceRef.source) : undefined,
-      ref.resourceRef?.source.document?.filePath
-        ? fileName(ref.resourceRef.source.document.filePath)
-        : undefined,
-      ref.resourceRef?.locator?.kind === 'document' && ref.resourceRef.locator.entryPath
-        ? fileName(ref.resourceRef.locator.entryPath)
-        : undefined,
-      ref.resourceRef?.locator?.kind === 'file' && ref.resourceRef.locator.path
-        ? fileName(ref.resourceRef.locator.path)
-        : undefined,
+      ...(ref.contentLocator ? contentLocatorLookupTokens(ref.contentLocator).map(fileName) : []),
     ]
       .filter(isNonEmptyString)
       .map(toReadImageDerivedAssetToken)
@@ -1235,15 +1194,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function isAbsolutePath(value: string): boolean {
   return value.startsWith('/') || /^[A-Za-z]:[\\/]/.test(value);
-}
-
-function readResourceSourceLocalPath(source: ResourceSourceRef): string | undefined {
-  return source.filePath ?? source.projectRelativePath ?? source.document?.filePath ?? source.uri;
-}
-
-function resourceSourceFileName(source: ResourceSourceRef): string | undefined {
-  const localPath = readResourceSourceLocalPath(source);
-  return localPath ? fileName(localPath) : undefined;
 }
 
 function isNonEmptyString(value: unknown): value is string {

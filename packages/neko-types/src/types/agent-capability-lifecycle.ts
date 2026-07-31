@@ -1,8 +1,6 @@
-import type { DocumentArchiveResourceRef } from './document-reading';
-import { isDocumentArchiveResourceRef } from './document-reading';
 import { isHostProjectedRuntimeValue } from './content-access';
-import type { ResourceRef } from './resource-cache';
-import { isResourceRef } from './resource-cache';
+import type { ContentLocator } from './content-locator';
+import { isContentLocator } from './content-locator';
 import type {
   ToolQueryBeforeMutateGuidance,
   ToolSafetyKind,
@@ -43,8 +41,7 @@ export type AgentCapabilityLifecycleRisk = (typeof AGENT_CAPABILITY_LIFECYCLE_RI
 export const AGENT_CAPABILITY_ARTIFACT_REF_KINDS = [
   'artifact',
   'node',
-  'resource',
-  'document-resource',
+  'content',
   'generated-asset',
   'project-path',
 ] as const;
@@ -134,8 +131,7 @@ export interface AgentCapabilityArtifactRef {
   readonly artifactKind?: string;
   readonly profile?: string;
   readonly title?: string;
-  readonly resourceRef?: ResourceRef;
-  readonly documentResourceRef?: DocumentArchiveResourceRef;
+  readonly contentLocator?: ContentLocator;
   readonly assetRef?: {
     readonly id: string;
     readonly provider?: string;
@@ -576,9 +572,7 @@ function isAgentCapabilityArtifactRef(value: unknown): value is AgentCapabilityA
     optionalString(value['artifactKind']) &&
     optionalString(value['profile']) &&
     optionalString(value['title']) &&
-    (value['resourceRef'] === undefined || isResourceRef(value['resourceRef'])) &&
-    (value['documentResourceRef'] === undefined ||
-      isDocumentArchiveResourceRef(value['documentResourceRef'])) &&
+    (value['contentLocator'] === undefined || isContentLocator(value['contentLocator'])) &&
     (value['assetRef'] === undefined || isAgentCapabilityAssetRef(value['assetRef'])) &&
     optionalStablePath(value['projectPath']) &&
     artifactRefHasRequiredIdentity(value)
@@ -626,10 +620,8 @@ function isAgentCapabilityLifecycleDiagnostic(
 
 function artifactRefHasRequiredIdentity(value: Readonly<Record<string, unknown>>): boolean {
   switch (value['kind']) {
-    case 'resource':
-      return isResourceRef(value['resourceRef']);
-    case 'document-resource':
-      return isDocumentArchiveResourceRef(value['documentResourceRef']);
+    case 'content':
+      return isContentLocator(value['contentLocator']);
     case 'generated-asset':
       return isAgentCapabilityAssetRef(value['assetRef']);
     case 'project-path':

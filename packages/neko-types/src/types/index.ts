@@ -125,8 +125,6 @@ export * from './document-reading';
 // Project cache/search contracts (Project facts/cache ↔ Agent/Webview search)
 export * from './project-cache-search';
 
-// Resource cache contracts (stable refs, variants, manifests, quota)
-export * from './resource-cache';
 export * from './stable-value';
 
 // Intent-aware content access and ingest contracts
@@ -186,7 +184,6 @@ export * from './creative-entity-graph';
 // Creative entity asset composition contracts
 export * from './creative-entity-asset-composition';
 
-export * from './durable-resource-ref';
 export * from './creative-media-operations';
 export * from './media-production';
 export * from './media-quality';

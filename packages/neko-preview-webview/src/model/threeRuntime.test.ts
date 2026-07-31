@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
 import * as THREE from 'three';
-import { createResourceFingerprint, createResourceRef } from '@neko/shared';
 import {
   assertPurposeCaptureAllowed,
   configureModelRendererColorPipeline,
@@ -28,13 +27,7 @@ import {
 describe('Three model runtime helpers', () => {
   it('resolves only exact authorized URLs and rejects network or undeclared probes', () => {
     const resolve = createExactUrlModifier({
-      source: createResourceRef({
-        scope: 'project',
-        provider: 'test',
-        kind: 'media',
-        source: { kind: 'file', projectRelativePath: 'model/scene.gltf' },
-        fingerprint: createResourceFingerprint({ strategy: 'hash', value: 'source' }),
-      }),
+      source: { kind: 'workspace-file', path: 'model/scene.gltf' },
       sourceFingerprint: 'source',
       format: 'gltf',
       entryUri: 'neko-media://authority/model/scene.gltf',

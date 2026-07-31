@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { createResourceFingerprint, createResourceRef } from '@neko/shared';
 import {
   AGENT_WEBVIEW_PROTOCOL_VERSION,
   buildInjectContextMessage,
@@ -9,22 +8,15 @@ import {
   parseAgentWebviewToHostMessage,
 } from '../webview-protocol';
 
-const cacheResourceRef = createResourceRef({
-  scope: 'project',
-  provider: 'document-archive',
-  kind: 'document',
+const contentLocator = {
+  kind: 'document-entry' as const,
   source: {
-    kind: 'document',
-    document: { filePath: '/books/a.epub', format: 'epub' },
-    filePath: '/books/a.epub',
+    kind: 'workspace-file' as const,
+    path: 'books/a.epub',
+    fingerprint: { strategy: 'provider' as const, value: 'book-a' },
   },
-  locator: { kind: 'document', entryPath: 'models/character.glb' },
-  fingerprint: createResourceFingerprint({
-    strategy: 'provider',
-    value: 'book-a:character',
-    providerId: 'document-archive',
-  }),
-});
+  entryPath: 'models/character.glb',
+};
 
 describe('webview protocol parser', () => {
   it('accepts canonical ambient Canvas nodes and rejects removed node types', () => {
@@ -831,7 +823,7 @@ describe('webview protocol parser', () => {
           kind: 'pose',
           sessionId: 'session-1',
           revision: 2,
-          controlImage: cacheResourceRef,
+          controlImage: contentLocator,
           controlMode: 'pose',
           joints: [{ jointId: 'hips', rotation: { x: 0, y: 0, z: 0, order: 'XYZ' } }],
         },
@@ -1204,7 +1196,7 @@ function legacyModelPreviewContextData(): Record<string, unknown> {
   };
   return {
     contractVersion: 1,
-    source: cacheResourceRef,
+    source: contentLocator,
     sourceFingerprint: 'legacy-fingerprint',
     format: 'glb',
     facts: {
@@ -1221,7 +1213,7 @@ function legacyModelPreviewContextData(): Record<string, unknown> {
       animationCount: 0,
     },
     staging,
-    previewImage: cacheResourceRef,
+    previewImage: contentLocator,
     capture: {
       sessionId: staging.sessionId,
       sourceFingerprint: staging.sourceFingerprint,

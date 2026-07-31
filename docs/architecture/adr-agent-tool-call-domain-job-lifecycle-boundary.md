@@ -11,7 +11,7 @@
 - [`adr-agent-message-task-queue-boundary.md`](adr-agent-message-task-queue-boundary.md) 中 `TaskManager`、`AgentWorkItem` 和通用 `TaskCard` 作为后台工具/媒体/subagent 权威的部分；消息队列与计划进度分离的原则继续有效。
 - [`adr-agent-internal-continuation-boundary.md`](adr-agent-internal-continuation-boundary.md) 中 `task-result-continuation`、Task Group 和通用 Task 完成后续跑的部分；用户消息与 runtime-authored continuation 不得混为用户 transcript 的原则继续有效。
 - [`adr-pi-agent-runtime.md`](adr-pi-agent-runtime.md) 和 `adopt-pi-agent-runtime` OpenSpec 中“长媒体 Tool 快速返回 `TaskRef`，由 OpenNeko Task runtime 观察”的部分。
-- [`adr-agent-creative-invocation-run-boundary.md`](adr-agent-creative-invocation-run-boundary.md) 与 [`adr-canvas-creative-ai-candidate-actions.md`](adr-canvas-creative-ai-candidate-actions.md) 中由 Agent 通用 run/workItem/TaskManager 统一拥有 Canvas 直接创作动作的部分。Document/candidate/ResourceRef/package-owned apply 边界继续有效。
+- [`adr-agent-creative-invocation-run-boundary.md`](adr-agent-creative-invocation-run-boundary.md) 与 [`adr-canvas-creative-ai-candidate-actions.md`](adr-canvas-creative-ai-candidate-actions.md) 中由 Agent 通用 run/workItem/TaskManager 统一拥有 Canvas 直接创作动作的部分。Document/candidate/ContentLocator/package-owned apply 边界继续有效。
 
 Agent 通用 TaskManager/TaskRef 已从当前 canonical Agent 路径删除。Generation 已实现最小
 versioned lifecycle kernel、具体 coordinator、持久 store、重启恢复、Agent 领域 Job Tools、
@@ -60,7 +60,7 @@ AgentRun
 
 `ToolCallExecution` 必须携带 `agentRunId`、`conversationId`、`turnId`、`toolCallId` 和 tool identity。它继承 Agent Run 的取消信号，并在成功、失败或取消后释放临时资源。
 
-“耗时长”不构成创建 Job 的充分条件。只要调用方需要终态结果、工作不应脱离 Agent 存活、也不需要跨进程恢复，Tool executor 就在调用内轮询 provider、投影进度并最终返回 `ResourceRef`、结构化结果或明确 diagnostic。
+“耗时长”不构成创建 Job 的充分条件。只要调用方需要终态结果、工作不应脱离 Agent 存活、也不需要跨进程恢复，Tool executor 就在调用内轮询 provider、投影进度并最终返回 `ContentLocator`、结构化结果或明确 diagnostic。
 
 禁止以下路径：
 
@@ -122,7 +122,7 @@ Host-neutral `ExecutionOwnershipRegistry` 另只负责：
 - 释放 cancel/dispose handle；
 - 拒绝缺失、陈旧或不匹配 identity。
 
-它不得保存 provider task id、prompt、领域进度、结果、ResourceRef、重试策略或恢复 checkpoint。也就是说，底层统一的是资源 ownership/cancellation 机制，不是统一业务 Task 状态机。
+它不得保存 provider task id、prompt、领域进度、结果、ContentLocator、重试策略或恢复 checkpoint。也就是说，底层统一的是资源 ownership/cancellation 机制，不是统一业务 Task 状态机。
 
 ```text
 SurfaceOwner
@@ -199,10 +199,10 @@ assistant turn
        queued
        running 42%
        materializing artifact
-       completed ResourceRef
+       completed ContentLocator
 ```
 
-不得追加第二条 assistant message、通用 TaskCard 或 Webview-only stream 作为另一事实源。高频 progress 可以节流，但必须有单调 version/sequence；取消后的迟到更新必须被拒绝。二进制产物不进入消息流，只返回稳定 `ResourceRef`。
+不得追加第二条 assistant message、通用 TaskCard 或 Webview-only stream 作为另一事实源。高频 progress 可以节流，但必须有单调 version/sequence；取消后的迟到更新必须被拒绝。二进制产物不进入消息流，只返回稳定 `ContentLocator`。
 
 ## 面向内容创作的具体结论
 

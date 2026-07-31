@@ -17,7 +17,7 @@ Agent 的主要长期创作结果是企划、分镜草稿、分析报告、制�
 当前实现尚未形成该路径：
 
 - 具名 Markdown 主要通过对话内 `CompositeArtifact` 表达，再投影为 Board 内嵌 Markdown；
-- 通用 `Write` 直接写文件，未返回稳定文档 artifact、`ResourceRef` 和内容 revision；
+- 通用 `Write` 直接写文件，未返回稳定文档 artifact、`ContentLocator` 和内容 revision；
 - terminal artifact delivery 依赖整个 Agent turn 成功，文件已经写入后若最终模型响应失败，Board 投递可能缺失；
 - Skill 内容标准、自检要求和持久化意图没有统一约束；
 - Generation Tool 暴露通用 schema，但 Agent 尚不能稳定获得当前 provider/model 的精确支持范围；
@@ -76,7 +76,7 @@ mediaWorkflow:
 Skill 正文不得包含：
 
 - 具体 Tool 名称教程、命令名或参数表；
-- 固定保存路径、Board 命令或 `ResourceRef` 协议；
+- 固定保存路径、Board 命令或 `ContentLocator` 协议；
 - 轮询、Job、Task、审批、Webview 或缓存协议；
 - Markdown 到 Generation request 的字段映射；
 - 固定 stage、DAG、workflow node 或自动执行状态。
@@ -131,7 +131,7 @@ optional explicit Canvas target supplied by the current authorized request
 - 复用共享 `AuthorizedWorkspaceWriter`，执行工作区路径授权、原子写入、取消、大小限制和冲突检测；
 - 只接受规范化 workspace-relative path，不持久化绝对路径；
 - 新建时默认 fail-if-exists；更新时使用 expected fingerprint/revision，冲突必须 fail-visible；
-- 返回稳定的文档 artifact transfer，其中只包含 artifact identity、title、workspace-relative locator、`ResourceRef` 和内容 revision；
+- 返回稳定的文档 artifact transfer，其中只包含 artifact identity、title、workspace-relative locator、`ContentLocator` 和内容 revision；
 - 将文档保存结果与 Board/Canvas 投递结果分别返回和展示；
 - 不把 Markdown 内容解析成领域对象、Tool 参数或执行计划。
 
@@ -189,7 +189,7 @@ Board/Canvas 使用现有 `file-reference` / Document 节点表达 Markdown 文�
 
 内容 revision 不应使同一 living document 在 Board 中持续产生重复卡片。Canvas 投影必须以稳定文件 locator 复用原 Document 节点，更新引用 observation 时保留用户位置、尺寸、连接、批注和其他布局事实。
 
-不同路径、无法证明相同 locator 的文件或显式历史快照仍是不同内容。不得修改通用媒体 `ResourceRef` 语义来错误合并不同媒体 revision。
+不同路径、无法证明相同 locator 的文件或显式历史快照仍是不同内容。不得修改通用媒体 `ContentLocator` 语义来错误合并不同媒体 revision。
 
 ### 9. Generation 参数来自当前 capability，不来自 Skill 或 Markdown parser
 
@@ -265,7 +265,7 @@ Skill/System Prompt -> Agent decision
 Agent -> public Capability/Tool contract
 Capability/Tool -> AuthorizedWorkspaceWriter
 Host -> public Canvas delivery port
-Canvas -> file-reference ResourceRef
+Canvas -> file-reference ContentLocator
 ```
 
 Agent core 不导入 Canvas implementation；Webview 不读写工作区；Canvas 不解析 Skill 或 Markdown 创作语义。
@@ -283,7 +283,7 @@ Agent core 不导入 Canvas implementation；Webview 不读写工作区；Canvas
 实施必须创建独立 OpenSpec，建议命名为 `persist-agent-markdown-deliverables`，并至少覆盖：
 
 1. Skill/Prompt 防回流测试：Skill 不包含 Tool 名、参数表、保存路径、Board/Job 协议。
-2. authoring contract、授权路径、原子写入、冲突、取消和稳定 `ResourceRef` 测试。
+2. authoring contract、授权路径、原子写入、冲突、取消和稳定 `ContentLocator` 测试。
 3. Tool result 持久化后投递、最终模型失败后文档仍存在、Board 失败不回滚测试。
 4. 默认 Workspace Board、显式 Canvas no-mirror、无 active/recent fallback 路径测试。
 5. living document 更新不重复创建 Board 节点并保留用户布局的测试。

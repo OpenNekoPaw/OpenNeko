@@ -1276,7 +1276,7 @@ function isRangeFieldCompatible(kind: CharacterMemorySourceRefKind, field: strin
       return field === 'nodeId' || field === 'assetId' || field === 'boundingBox';
     case 'cut-range':
       return field === 'sceneId' || field === 'shotId' || field === 'startMs' || field === 'endMs';
-    case 'artifact-resource':
+    case 'artifact-reference':
     case 'generated-asset':
     case 'tool-result':
       return true;

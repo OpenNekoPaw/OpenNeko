@@ -77,11 +77,11 @@ export class LocalMetadataResourceCacheManifestStore implements ResourceCacheMan
     const entries = await repository.list(this.options.partition);
     const now = this.now();
     return {
-      version: 1,
+      version: 2,
       ...(this.options.projectRoot ? { projectRoot: this.options.projectRoot } : {}),
       createdAt: earliestTimestamp(entries, 'createdAt') ?? now,
       updatedAt: latestTimestamp(entries, 'updatedAt') ?? now,
-      entries: Object.fromEntries(entries.map((entry) => [entry.resource.id, entry])),
+      entries: Object.fromEntries(entries.map((entry) => [entry.descriptor.id, entry])),
     };
   }
 

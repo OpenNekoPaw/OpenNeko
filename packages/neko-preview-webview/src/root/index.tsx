@@ -385,21 +385,7 @@ function createModelSourceDescriptor(
 ): ModelPreviewSourceDescriptor {
   const format = modelFormat(descriptor.displayName);
   return {
-    source: {
-      id: descriptor.descriptorId,
-      scope: 'project',
-      provider: 'desktop-preview',
-      kind: 'preview',
-      source: {
-        kind: 'preview-asset',
-        previewAssetId: descriptor.descriptorId,
-      },
-      fingerprint: {
-        strategy: 'provider',
-        value: descriptor.revision,
-        providerId: 'desktop-preview',
-      },
-    },
+    source: descriptor.contentLocator,
     sourceFingerprint: descriptor.revision,
     format,
     entryUri: sourceUrl,

@@ -160,16 +160,16 @@ guide-only preset 在 catalog 中不允许 `appearance`。这一限制必须在 
 
 ```text
 appearance
-  -> RGB ResourceRef + authorized source identity
+  -> RGB ContentLocator + authorized source identity
 
 pose
-  -> joint snapshot + control ResourceRef + pose/depth mode
+  -> joint snapshot + control ContentLocator + pose/depth mode
 
 camera
   -> camera identity + position/target/FOV/aspect + optional composition evidence
 
 panorama-scene
-  -> panorama ResourceRef + yaw/pitch/FOV + optional viewport evidence
+  -> panorama ContentLocator + yaw/pitch/FOV + optional viewport evidence
 ```
 
 交互用 shaded viewport screenshot 不是自动 appearance output。只有显式构造并通过 role eligibility 校验的 `appearance` variant 可以进入普通 image reference 或 provider 明确支持的 IP-Adapter 字段。

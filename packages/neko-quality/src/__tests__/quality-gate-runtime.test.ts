@@ -4,7 +4,6 @@ import {
   type QualityEvidence,
   type QualityGatePolicy,
   type QualityTarget,
-  type ResourceRef,
 } from '@neko/shared';
 import {
   aggregateQualityGate,
@@ -17,13 +16,10 @@ import {
 } from '../core/index';
 import { createMultimodalPerceptionEvaluator } from '../model/index';
 
-const resourceRef: ResourceRef = {
-  id: 'asset:image:hero',
-  scope: 'project',
-  provider: 'project',
-  kind: 'media',
-  source: { kind: 'file', projectRelativePath: 'assets/hero.png' },
-  fingerprint: { strategy: 'hash', value: 'sha256:hero-v1' },
+const contentLocator = {
+  kind: 'workspace-file' as const,
+  path: 'assets/hero.png',
+  fingerprint: { strategy: 'sha256' as const, value: 'sha256:hero-v1' },
 };
 
 function target(overrides: Partial<QualityTarget> = {}): QualityTarget {
@@ -31,7 +27,7 @@ function target(overrides: Partial<QualityTarget> = {}): QualityTarget {
     version: MEDIA_QUALITY_CONTRACT_VERSION,
     targetId: 'hero-shot',
     kind: 'image',
-    resourceRef,
+    contentLocator,
     revision: 'rev-1',
     contentDigest: 'sha256:v1',
     expectedIntent: { prompt: 'cinematic hero' },
@@ -76,13 +72,13 @@ function evidence(input: {
     coverage: input.coverage ?? { mode: 'complete' },
     ...(input.confidence !== undefined ? { confidence: input.confidence } : {}),
     createdAt: '2026-07-11T00:00:00.000Z',
-    sourceEvidenceRefs: [resourceRef],
+    sourceEvidenceLocators: [contentLocator],
   };
 }
 
 const materializer: QualityTargetMaterializer = {
   materialize: vi.fn().mockResolvedValue({
-    resourceRef,
+    contentLocator,
     source: '/authorized/session/hero.png',
     base64: 'aGVybw==',
     mimeType: 'image/png',
@@ -207,17 +203,13 @@ describe('canonical quality gate runtime', () => {
     );
   });
 
-  it('rejects arbitrary absolute local paths from external perception', () => {
-    expect(() =>
-      assertExternalPerceptionTarget(
-        target({
-          resourceRef: {
-            ...resourceRef,
-            source: { kind: 'file', filePath: '/tmp/untrusted.png' },
-          },
-        }),
-      ),
-    ).toThrow('arbitrary absolute local paths');
+  it('rejects invalid absolute-path locators from external perception', () => {
+    const invalid = target();
+    Reflect.set(invalid, 'contentLocator', {
+      kind: 'workspace-file',
+      path: '/tmp/untrusted.png',
+    });
+    expect(() => assertExternalPerceptionTarget(invalid)).toThrow('content-locator-invalid');
   });
 
   it('records complete multimodal perception evidence through the model entry', async () => {

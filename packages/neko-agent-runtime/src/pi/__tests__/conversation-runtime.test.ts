@@ -343,9 +343,9 @@ describe('PiConversationRuntime', () => {
               assetId: 'document-page-1',
               uri: 'book.epub#images/page.png',
               mimeType: 'image/png',
-              documentResourceRef: {
+              contentLocator: {
                 kind: 'document-entry',
-                source: { filePath: 'book.epub', format: 'epub' },
+                source: { kind: 'workspace-file', path: 'book.epub' },
                 entryPath: 'images/page.png',
               },
             },

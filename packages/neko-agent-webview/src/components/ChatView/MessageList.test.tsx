@@ -536,18 +536,9 @@ function createReadImageContextMessage(): Message {
                 {
                   alias: 'P1',
                   label: 'Page 1',
-                  resourceRef: {
-                    id: 'page-1',
-                    scope: 'project',
-                    provider: 'read-image',
-                    kind: 'media',
-                    source: { kind: 'file', projectRelativePath: 'images/page-1.jpg' },
-                    locator: { kind: 'file', path: 'images/page-1.jpg' },
-                    fingerprint: {
-                      strategy: 'provider',
-                      providerId: 'read-image',
-                      value: 'page-1',
-                    },
+                  contentLocator: {
+                    kind: 'workspace-file',
+                    path: 'images/page-1.jpg',
                   },
                 },
               ],

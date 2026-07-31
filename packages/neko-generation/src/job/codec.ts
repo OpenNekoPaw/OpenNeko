@@ -243,7 +243,7 @@ function assertNoLegacyGenerationPayload(value: unknown): void {
   if ('resultRefs' in value || (request !== undefined && containsLegacyGenerationField(request))) {
     throw new GenerationJobError(
       'generation-job-migration-required',
-      'Persisted Generation Job uses retired ResourceRef or materialized media fields and must be resubmitted.',
+      'Persisted Generation Job uses retired resource-reference fields or materialized media fields and must be resubmitted.',
     );
   }
 }

@@ -56,7 +56,11 @@ describe('message resource projector', () => {
     });
   });
 
-  it('adds renderUri for stable resource-backed media without replacing durable path fields', () => {
+  it('adds renderUri for ContentLocator-backed media without replacing durable path fields', () => {
+    const contentLocator = {
+      kind: 'workspace-file' as const,
+      path: 'images/page-1.jpg',
+    };
     expect(
       projectResourceValue(
         {
@@ -64,19 +68,7 @@ describe('message resource projector', () => {
             {
               label: 'Page 1',
               path: '/tmp/page-1.jpg',
-              resourceRef: {
-                id: 'page-1',
-                scope: 'project',
-                provider: 'read-image',
-                kind: 'media',
-                source: { kind: 'file', projectRelativePath: 'images/page-1.jpg' },
-                locator: { kind: 'file', path: 'images/page-1.jpg' },
-                fingerprint: {
-                  strategy: 'provider',
-                  providerId: 'read-image',
-                  value: 'page-1',
-                },
-              },
+              contentLocator,
             },
           ],
         },
@@ -88,59 +80,33 @@ describe('message resource projector', () => {
           label: 'Page 1',
           path: '/tmp/page-1.jpg',
           renderUri: 'webview:///tmp/page-1.jpg',
-          resourceRef: {
-            id: 'page-1',
-            scope: 'project',
-            provider: 'read-image',
-            kind: 'media',
-            source: { kind: 'file', projectRelativePath: 'images/page-1.jpg' },
-            locator: { kind: 'file', path: 'images/page-1.jpg' },
-            fingerprint: {
-              strategy: 'provider',
-              providerId: 'read-image',
-              value: 'page-1',
-            },
-          },
+          contentLocator,
         },
       ],
     });
   });
 
-  it('treats nested ResourceRef values as atomic stable identity during Webview projection', () => {
-    const resourceRef = {
-      id: 'generated-1',
-      scope: 'project',
-      provider: 'generated-asset',
-      kind: 'generated',
-      source: {
-        kind: 'generated-asset',
-        generatedAssetId: 'generated-1',
-        filePath: '/workspace/neko/generated/image/task_1_0.png',
-        metadata: {
-          path: '/workspace/neko/generated/image/task_1_0.png',
-          mimeType: 'image/png',
-        },
-      },
-      locator: { kind: 'generated-asset', assetId: 'generated-1' },
-      fingerprint: {
-        strategy: 'provider',
-        value: 'generated-1',
-        providerId: 'generated-asset',
-      },
+  it('preserves durable fields for ContentLocator-backed media during Webview projection', () => {
+    const contentLocator = {
+      kind: 'generated-output' as const,
+      outputId: 'generated-1',
+      revision: 'revision-1',
+      digest: 'sha256:generated-1',
+      path: 'neko/generated/image/task_1_0.png',
     };
 
     expect(
       projectResourceValue(
         {
           uri: '/workspace/neko/generated/image/task_1_0.png',
-          resourceRef,
+          contentLocator,
         },
         { resolveLocalMediaPath: (path) => `webview://${path}` },
       ),
     ).toEqual({
       uri: '/workspace/neko/generated/image/task_1_0.png',
       renderUri: 'webview:///workspace/neko/generated/image/task_1_0.png',
-      resourceRef,
+      contentLocator,
     });
   });
 
@@ -381,7 +347,7 @@ describe('message resource projector', () => {
           field: 'url',
           sourceKind: 'local-media-path',
           message:
-            'Local media path could not be projected for Webview display. Use ResourceRef, source refs, workspace-relative paths, or adapter-projected render descriptors.',
+            'Local media path could not be projected for Webview display. Use ContentLocator, workspace-relative paths, or adapter-projected render descriptors.',
         },
       ],
     });

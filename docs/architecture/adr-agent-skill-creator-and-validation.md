@@ -323,7 +323,7 @@ PortableSkillValidator
 | `domain`、`tags`      | 小型字符串进入 `SKILL.md.metadata` 的 namespaced keys                                             |
 | `requiredSubpackages` | 删除；由 capability/tool/profile registry 解析 owner/package                                      |
 | `autoInvoke`          | 删除；当前没有独立 Host 自动激活消费者，激活权威保持 Agent/显式入口/runtime guard                 |
-| `referencedAssets`    | 删除；bundled 文件进入 `assets/`，项目素材通过请求上下文或 Artifact/ResourceRef 绑定              |
+| `referencedAssets`    | 删除；bundled 文件进入 `assets/`，项目素材通过请求上下文或 Artifact/ContentLocator 绑定              |
 | `referencedSkills`    | 真正需要时进入 `agents/neko.yaml.relationships.skills`                                            |
 | `profileReferences`   | 进入 `agents/neko.yaml.dependencies.profiles`；Profile 定义仍由 Profile Registry 拥有             |
 | `mediaWorkflow`       | 按语义拆到 description/body、metadata、overlay dependencies、Artifact Profile 和 operation policy |
