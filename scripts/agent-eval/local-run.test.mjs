@@ -100,6 +100,36 @@ describe('Agent Evaluation local runner', () => {
       fs.readFile(join(reportRoot, 'local-run-summary.json'), 'utf8'),
     ).resolves.toContain('infrastructure-blocked');
   });
+
+  it('preserves the missing Desktop driver as infrastructure-blocked after preflight', async () => {
+    const reportRoot = await fs.mkdtemp(join(os.tmpdir(), 'neko-agent-eval-desktop-driver-'));
+    temporaryDirectories.push(reportRoot);
+    const stdout = capture();
+    const code = await main(
+      [
+        '--mode',
+        'focused',
+        '--suite',
+        'agent-runtime.workflow-controller',
+        '--report-root',
+        reportRoot,
+      ],
+      {
+        env: { NEKO_API_KEY: 'test-only-present' },
+        stdout,
+        cwd: () => '/repo',
+        homedir: () => '/synthetic-home',
+        stat: async () => ({ isFile: () => true }),
+      },
+    );
+
+    expect(code).toBe(2);
+    expect(JSON.parse(stdout.text())).toMatchObject({
+      outcome: 'infrastructure-blocked',
+      runs: [],
+      diagnostic: expect.stringContaining('Desktop application'),
+    });
+  });
 });
 
 function capture() {

@@ -9,15 +9,15 @@
 !.vscode/settings.json
 .idea/
 .codex/
-# 仓库级 Agent evaluation Skill 需要进入版本控制；其余本地 Codex 状态继续忽略
+# 仓库级 Evaluation/质量 Skill 需要进入版本控制；其余本地 Codex 状态继续忽略
 !.codex/
 .codex/*
 !.codex/skills/
 .codex/skills/*
 !.codex/skills/neko-agent-evaluation/
 !.codex/skills/neko-agent-evaluation/**
-!.codex/skills/vscode-extension-debugger/
-!.codex/skills/vscode-extension-debugger/**
+!.codex/skills/neko-quality-review/
+!.codex/skills/neko-quality-review/**
 
 # 依赖库
 node_modules/

@@ -1,6 +1,6 @@
 ---
 name: neko-agent-evaluation
-description: Plan, create, validate, run, and analyze script-driven evaluations and evidence-based Skill/Prompt optimization for Neko Agent behavior changes. Use when work affects prompts, Skills, capability or tool routing, provider/model selection, AgentSession workflows, asynchronous tasks, validation/recovery, or TUI Agent event projection; also use when asked to add an Agent evaluation, verify a real Agent path, analyze a Skill/Prompt quality defect, or provide Agent evaluation evidence for OpenSpec, review, or release readiness.
+description: Plan, create, validate, run, and analyze script-driven evaluations and evidence-based Skill/Prompt optimization for Neko Agent behavior changes. Use when work affects prompts, Skills, capability or tool routing, provider/model selection, AgentSession workflows, asynchronous tasks, validation/recovery, or Desktop Agent event projection; also use when asked to add an Agent evaluation, verify a real Agent path, analyze a Skill/Prompt quality defect, or provide Agent evaluation evidence for OpenSpec, review, or release readiness.
 ---
 
 # Neko Agent Evaluation
@@ -14,8 +14,10 @@ Treat Neko Agent as the system under test:
 
 - Keep authoring decisions, suites, fixtures, orchestration, assertions, Judges,
   comparisons, and reports in the repository Evaluation platform.
-- Drive the complete TUI session owner and input path. Do not import a turn runner,
-  create another session assembly, or count mock behavior as acceptance.
+- Drive the complete Desktop application session owner and its public Agent input
+  path. If no Desktop complete-session driver exists, report the real case
+  `infrastructure-blocked`; do not import a turn runner, create another session
+  assembly, or count mock behavior as acceptance.
 - Keep runtime observability neutral. Add a generally useful runtime fact or
   control only when the owning contract lacks evidence required beyond
   Evaluation.
@@ -40,7 +42,7 @@ Require focused real behavior evidence when a change can affect:
 - provider, model, profile, or effective runtime configuration;
 - multi-turn sessions, queues, continuation, asynchronous tasks, cancellation,
   resume, recovery, or artifact delivery;
-- runtime evidence projected to TUI or another Agent host.
+- runtime evidence projected to Desktop or another explicitly supported Agent host.
 
 Use deterministic tests instead when a change is limited to pure parsing,
 strict schema validation, or unrelated non-Agent logic. An exclusion must name
@@ -120,8 +122,9 @@ Evaluation platform:
 1. validate key-free schemas, runner semantics, assertions, reports, and every
    indexed suite;
 2. validate the selected case without provider-backed behavior;
-3. run the same focused case through the real TUI when credentials, network,
-   model access, configuration, and fixtures are available;
+3. run the same focused case through the Desktop-owned complete-session driver
+   when the driver, credentials, network, model access, configuration, and
+   fixtures are available; otherwise preserve the exact infrastructure blocker;
 4. use repeated samples when making stability or quality claims.
 
 Concrete commands, suite/scenario fields, controller operations, assertion

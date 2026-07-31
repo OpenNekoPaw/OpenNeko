@@ -203,18 +203,18 @@
 
 - 单元测试只是实现级反馈，不代表功能验收完成。新增功能、bug 修复和非平凡重构必须按影响范围完成从局部到系统的验证；若同时命中多种变更类型，验证要求取并集。
 
-| 变更类型                                                                                                                | 最低必要验证                                                                                                                              |
-| ----------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| 纯文档、注释或无运行时影响的元数据                                                                                      | `git diff --check`，并检查相关链接、路径、schema 或文档一致性                                                                             |
-| 局部 TypeScript 逻辑或 bug 修复                                                                                         | 修复前可失败的聚焦回归/单元测试、受影响包 typecheck/build；涉及调用链时补集成或路径断言                                                   |
-| 共享 TypeScript 契约、跨包重构或高风险路径                                                                              | 生产者和消费者测试、`pnpm build`、`pnpm test`、`pnpm check`；必要时运行 `pnpm ci:local` 或与远端 CI 对应的聚焦门禁                        |
-| 残留、兼容层、冗余或依赖清理                                                                                            | `pnpm check:legacy-debt`、`pnpm check:unused`，或说明已由 `pnpm ci:local` / `pnpm check:quality` 覆盖                                     |
-| Proto、Extension/Engine bridge 或跨层 message                                                                           | 生成物一致性、生产者/消费者测试、契约路径断言，以及受影响运行态或集成验证                                                                 |
-| Rust Engine                                                                                                             | 聚焦 `cargo test`；涉及客户端、媒体协议或跨层行为时增加对应集成/运行态验证                                                                |
-| Agent evaluation harness、scenario manifest、debug automation 或 facts 契约                                             | `pnpm test:agent:eval`；该命令仅是 key-free harness 自测，不得描述为真实 Agent 行为验收                                                   |
-| prompt、Skill、capability/tool routing、provider/model、AgentSession、validation/recovery 或 TUI Agent event projection | 按 `.codex/skills/neko-agent-evaluation/SKILL.md` 规划并运行聚焦脚本 evaluation；无法运行真实 case 时记录阻塞条件和残余风险               |
-| Renderer/Webview 视觉、交互、CSP、消息、焦点或媒体                                                                      | 受影响构建/测试，加真实 Electron Desktop 聚焦场景；普通浏览器/Vite/Chrome 不能替代 preload/IPC/窗口生命周期验收；UI 运行态测试不得进入 CI |
-| 发布链路或影响面不易限定的高风险改动                                                                                    | `pnpm ci:local` 加所有受影响领域的 evaluation、Electron Desktop UI 或 Node/FFmpeg 运行态验证                                              |
+| 变更类型                                                                                                                    | 最低必要验证                                                                                                                              |
+| --------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| 纯文档、注释或无运行时影响的元数据                                                                                          | `git diff --check`，并检查相关链接、路径、schema 或文档一致性                                                                             |
+| 局部 TypeScript 逻辑或 bug 修复                                                                                             | 修复前可失败的聚焦回归/单元测试、受影响包 typecheck/build；涉及调用链时补集成或路径断言                                                   |
+| 共享 TypeScript 契约、跨包重构或高风险路径                                                                                  | 生产者和消费者测试、`pnpm build`、`pnpm test`、`pnpm check`；必要时运行 `pnpm ci:local` 或与远端 CI 对应的聚焦门禁                        |
+| 残留、兼容层、冗余或依赖清理                                                                                                | `pnpm check:legacy-debt`、`pnpm check:unused`，或说明已由 `pnpm ci:local` / `pnpm check:quality` 覆盖                                     |
+| Proto、Extension/Engine bridge 或跨层 message                                                                               | 生成物一致性、生产者/消费者测试、契约路径断言，以及受影响运行态或集成验证                                                                 |
+| Rust Engine                                                                                                                 | 聚焦 `cargo test`；涉及客户端、媒体协议或跨层行为时增加对应集成/运行态验证                                                                |
+| Agent evaluation harness、scenario manifest、debug automation 或 facts 契约                                                 | `pnpm test:agent:eval`；该命令仅是 key-free harness 自测，不得描述为真实 Agent 行为验收                                                   |
+| prompt、Skill、capability/tool routing、provider/model、AgentSession、validation/recovery 或 Desktop Agent event projection | 按 `.codex/skills/neko-agent-evaluation/SKILL.md` 规划并运行聚焦脚本 evaluation；无法运行真实 case 时记录阻塞条件和残余风险               |
+| Renderer/Webview 视觉、交互、CSP、消息、焦点或媒体                                                                          | 受影响构建/测试，加真实 Electron Desktop 聚焦场景；普通浏览器/Vite/Chrome 不能替代 preload/IPC/窗口生命周期验收；UI 运行态测试不得进入 CI |
+| 发布链路或影响面不易限定的高风险改动                                                                                        | `pnpm ci:local` 加所有受影响领域的 evaluation、Electron Desktop UI 或 Node/FFmpeg 运行态验证                                              |
 
 - 新路径、迁移和 bug 修复必须同时验证结果与执行路径：断言 canonical contract、handler、renderer、adapter 或 Engine path 被命中，并证明 legacy/fallback 路径未参与。
 - 验证应重点发现循环依赖、Layer 0 反向依赖、Renderer/Webview 依赖 Electron/Node、Desktop Main 依赖 React、包到应用反向依赖等架构违规。

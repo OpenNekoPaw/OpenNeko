@@ -46,7 +46,10 @@ export async function main(argv = process.argv.slice(2), io = defaultIo()) {
   try {
     const suites = await discoverSuites();
     const suiteIds = await selectSuiteIds(args, suites);
-    const blocker = await readInfrastructureBlocker(io.env);
+    const blocker = await readInfrastructureBlocker(io.env, {
+      homedir: io.homedir ?? os.homedir,
+      stat: io.stat ?? fs.stat,
+    });
     if (blocker) {
       summary = {
         schema: 'neko.agent-eval.local-run-summary.v2',
@@ -100,16 +103,20 @@ export async function main(argv = process.argv.slice(2), io = defaultIo()) {
     io.stdout.write(`${JSON.stringify(summary, null, 2)}\n`);
     return exitCode(outcome);
   } catch (error) {
+    const outcome =
+      readErrorCode(error) === 'infrastructure-blocked'
+        ? 'infrastructure-blocked'
+        : 'configuration-invalid';
     summary = {
       schema: 'neko.agent-eval.local-run-summary.v2',
       mode: args.mode ?? 'unknown',
-      outcome: 'configuration-invalid',
+      outcome,
       diagnostic: error instanceof Error ? error.message : String(error),
       runs: [],
     };
     await writeSummary(reportRoot, summary);
     io.stdout.write(`${JSON.stringify(summary, null, 2)}\n`);
-    return 3;
+    return exitCode(outcome);
   }
 }
 
@@ -173,13 +180,13 @@ async function readChangedPaths(baseSha, headSha, injectedExecFile = execFile) {
     .filter(Boolean);
 }
 
-async function readInfrastructureBlocker(env) {
+async function readInfrastructureBlocker(env, io) {
   if (!CREDENTIAL_ENV_NAMES.some((name) => typeof env[name] === 'string' && env[name].length > 0)) {
     return 'No local Agent provider credential environment variable is available.';
   }
-  const configPath = resolve(os.homedir(), '.neko', 'config.toml');
+  const configPath = resolve(io.homedir(), '.neko', 'config.toml');
   try {
-    const stat = await fs.stat(configPath);
+    const stat = await io.stat(configPath);
     if (!stat.isFile()) return `Local Agent configuration is not a file: ${configPath}`;
   } catch (error) {
     if (error?.code === 'ENOENT') return `Local Agent configuration is missing: ${configPath}`;
@@ -191,9 +198,17 @@ async function readInfrastructureBlocker(env) {
 function classifyRuns(runs) {
   if (runs.some((run) => run.outcome === 'configuration-invalid')) return 'configuration-invalid';
   if (runs.some((run) => run.outcome === 'infrastructure-fail')) return 'infrastructure-fail';
+  if (runs.some((run) => run.outcome === 'infrastructure-blocked')) {
+    return 'infrastructure-blocked';
+  }
   if (runs.some((run) => run.outcome === 'case-fail')) return 'case-fail';
   if (runs.some((run) => run.outcome === 'non-comparable')) return 'non-comparable';
   return 'pass';
+}
+
+function readErrorCode(error) {
+  if (typeof error !== 'object' || error === null || !('code' in error)) return undefined;
+  return typeof error.code === 'string' ? error.code : undefined;
 }
 
 function exitCode(outcome) {
@@ -217,7 +232,13 @@ function requireValue(name, value) {
 }
 
 function defaultIo() {
-  return { env: process.env, stdout: process.stdout, cwd: () => process.cwd() };
+  return {
+    env: process.env,
+    stdout: process.stdout,
+    cwd: () => process.cwd(),
+    homedir: os.homedir,
+    stat: fs.stat,
+  };
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === scriptPath) {

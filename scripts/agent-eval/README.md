@@ -90,7 +90,9 @@ node scripts/agent-eval/local-run.mjs --mode focused --suite skill.storyboard
 
 Until a Desktop complete-session driver exists, real runs return `infrastructure-blocked` with exit
 code 2. Missing credentials, provider access or Judge configuration remain independent
-infrastructure blockers and never trigger mock or fallback execution.
+infrastructure blockers and never trigger mock or fallback execution. Passing credential/config
+preflight does not change the missing-driver classification: the runner preserves
+`infrastructure-blocked` and exit code 2.
 
 Validate an ablation plan without starting runtime behavior:
 
