@@ -186,33 +186,49 @@ Capability 是 OpenNeko 产品扩展 seam，领域包提供定义，Host 负责 
 
 ## 保留领域包
 
-| 包                  | 主要职责                                              | 关键边界                                                                                                                     |
-| ------------------- | ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `neko-agent`        | Agent session、provider、Skill、capability 与 Chat UI | runtime host-neutral；宿主与 UI adapter 分离；行为变更需真实 evaluation                                                      |
-| `neko-generation`   | 生成请求/结果契约、execution port 与 recoverable Job  | 只依赖共享契约；不读取配置或 credential；provider runtime 由现有 Host 注入；不创建独立 Host 或 UI                            |
-| `neko-chara`        | Character Dialogue、Embody、角色证据与角色运行编排    | core/application host-neutral；具体 adapter 由 Desktop 注入；只消费 Agent contract，不拥有第二套 Agent loop                  |
-| `neko-quality`      | canonical Quality Gate、evaluator port 与模型证据适配 | 只依赖共享 contract；领域 rubric/repair/apply 留在 owning package；provider/config/credential 和 Host IO 由组合层注入        |
+| 包                  | 主要职责                                                                   | 关键边界                                                                                                                                                                                                                                                                       |
+| ------------------- | -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `neko-agent`        | Agent session、provider、Skill、capability 与 Chat UI                      | runtime host-neutral；宿主与 UI adapter 分离；行为变更需真实 evaluation                                                                                                                                                                                                        |
+| `neko-generation`   | 生成请求/结果契约、execution port 与 recoverable Job                       | 只依赖共享契约；不读取配置或 credential；provider runtime 由现有 Host 注入；不创建独立 Host 或 UI                                                                                                                                                                              |
+| `neko-chara`        | Character 创作语义、Dialogue/Embody、证据、剧情/日常运行编排与日常关系记忆 | 当前仅保留未接入的 core/application kernel；具体 adapter 由 Desktop 注入；运行只消费唯一 AgentSession contract，不拥有第二套 Agent loop                                                                                                                                        |
+| `neko-quality`      | canonical Quality Gate、evaluator port 与模型证据适配                      | 只依赖共享 contract；领域 rubric/repair/apply 留在 owning package；provider/config/credential 和 Host IO 由组合层注入                                                                                                                                                          |
 | `neko-assets`       | Media Library 文件入口、全局 Media/Asset 浏览投影和 Entity Desktop surface | 文件走 canonical locator/Host Content I/O；全局浏览只接收 opaque identity、revision 和安全 thumbnail descriptor；owned Asset IO 与外部 Media Library link lifecycle 由 Desktop Host 执行；Entity 走 canonical facade；不拥有持久 catalog、package/generated lifecycle 或 cache |
-| `neko-canvas`       | 六类通用节点、空间布局、连接、投影与 `.nkc` authoring | Webview 管交互；只持久化 Markdown/Media/Group/Job/File/CanvasEmbed 与三类连接；Job/Character/World runtime 外置；复用公共 UI |
-| `neko-cut`          | Timeline、视频编辑、媒体控制与导出                    | Webview 管时间线交互；Desktop Main 管 editor/export adapter；媒体走 `@neko/media` 窄端口                                     |
-| `neko-preview`      | 授权只读预览与临时 3D Reference staging               | Preview 拥有媒体 session 和面板级 Three.js 会话；Agent/Canvas/media 只消费共享 contract；不拥有持久 3D 项目                  |
-| `neko-tools`        | 图片/音频/视频比较与媒体诊断                          | Desktop Main 拥有文件/Git/媒体 runtime；Webview 只消费 `@neko-tools/contracts`；不得恢复 NKV/JVI/Timeline Diff               |
-| `apps/neko-desktop` | Electron 产品组合根                                   | 拥有 Main/preload/renderer 生命周期、typed IPC、安全策略、平台打包与产品验收；领域实现仍由各 `neko-*` 包拥有                 |
+| `neko-canvas`       | 六类通用节点、空间布局、连接、投影与 `.nkc` authoring                      | Webview 管交互；只持久化 Markdown/Media/Group/Job/File/CanvasEmbed 与三类连接；Job/Character/World runtime 外置；复用公共 UI                                                                                                                                                   |
+| `neko-cut`          | Timeline、视频编辑、媒体控制与导出                                         | Webview 管时间线交互；Desktop Main 管 editor/export adapter；媒体走 `@neko/media` 窄端口                                                                                                                                                                                       |
+| `neko-preview`      | 授权只读预览与临时 3D Reference staging                                    | Preview 拥有媒体 session 和面板级 Three.js 会话；Agent/Canvas/media 只消费共享 contract；不拥有持久 3D 项目                                                                                                                                                                    |
+| `neko-tools`        | 图片/音频/视频比较与媒体诊断                                               | Desktop Main 拥有文件/Git/媒体 runtime；Webview 只消费 `@neko-tools/contracts`；不得恢复 NKV/JVI/Timeline Diff                                                                                                                                                                 |
+| `apps/neko-desktop` | Electron 产品组合根                                                        | 拥有 Main/preload/renderer 生命周期、typed IPC、安全策略、平台打包与产品验收；领域实现仍由各 `neko-*` 包拥有                                                                                                                                                                   |
 
 ## Character / World 顶级领域聚合包
 
 Character IP 与 Interactive World 已确定为独立 bounded context，必须作为平级顶级领域包存在，不得嵌入 `neko-agent`、应用根或现有 Assets/Preview 内部。`neko-chara` 已完成第一阶段 owner 迁移；`neko-world` 仍未实现：
 
-| 包           | 状态           | 聚合主线                                                       | 主要职责                                                                                                          | 关键边界                                                                                                                   |
-| ------------ | -------------- | -------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `neko-chara` | 第一阶段已建立 | `CharacterProject -> CharacterVersion -> CharacterRun`         | 当前已拥有 Character Dialogue、Embody、角色证据和 Profile Assembly；项目/版本/发布及 Desktop 产品组合仍待后续实现 | 完全复用 `neko-agent`/Pi；Entity、Assets、Voice、2D/3D、Device/Perception 和表现 runtime 只通过公共 ref/port/provider 组合 |
-| `neko-world` | 拟议           | `WorldProject -> WorldVersion -> WorldRun -> WorldSave/Replay` | 世界事实、规则/事件、Gameplay、运行、存档、分支和回放                                                             | 只通过 CharacterVersion/WorldCharacterBinding 使用角色；世界局部状态不回写全局角色；不以 Agent/UI 状态代替世界事实         |
+| 包           | 状态                                   | 聚合主线                                                          | 主要职责                                                                                                                                              | 关键边界                                                                                                                          |
+| ------------ | -------------------------------------- | ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `neko-chara` | 第一阶段 kernel 已建立、Desktop 未接入 | `CharacterProject -> CharacterVersion -> narrative/companion run` | 当前只拥有 Character Dialogue、Embody、角色证据和 Profile Assembly 内核；项目/版本/发布、剧情 save、日常 relationship 及 Desktop 产品组合仍待后续实现 | 完全复用 `neko-agent`/Pi；World/Narrative、Entity、Assets、Voice、Renderer、Media/Game Activity 只通过公共 ref/port/provider 组合 |
+| `neko-world` | 拟议                                   | `WorldProject -> WorldVersion -> WorldRun -> WorldSave/Replay`    | 世界事实、规则/事件、Gameplay、运行、存档、分支和回放                                                                                                 | 只通过 CharacterVersion/WorldCharacterBinding 使用角色；世界局部状态不回写全局角色；不以 Agent/UI 状态代替世界事实                |
 
 “顶级”指领域所有权，不指 concrete Composition Root。`apps/neko-desktop` 负责注入具体
 Agent、Renderer、Device、表现 runtime 和 host adapter。`neko-agent` 不导入 Character/World；
 Character core 不导入 World 私有实现；运行期环境交互通过窄 port 或 host-owned adapter 组合。
 
 角色只拥有说话、动作、表情、移动意图、感知、交互 affordance 和个体行为策略；地图、目标、任务、战斗、经济、成长、事件调度和整体胜负状态归 World。当前缺失的 Character Project/Version、World、Device/Live、Scene/Puppet 和持久 2D/3D 路径必须保持 fail-visible，不能因为第一阶段 package 已建立就恢复旧实现或宣称支持。
+
+角色创作与运行使用以下 canonical split：
+
+```text
+CharacterProject
+  -> immutable CharacterVersion
+       -> NarrativeCharacterBinding -> NarrativeCharacterRun
+            memory owner: NarrativeSave / WorldSave
+       -> CompanionBinding -> UserCharacterRelationship -> CompanionRun
+            memory owner: UserCharacterRelationship
+```
+
+产品“剧情模式 / 日常模式”分别对应 `narrative / companion` runtime kind。Kind 在 run 创建时
+固定，不能通过 active tab、共享 responder 或参数切换修改。剧情运行绑定显式 save、branch、
+checkpoint/timepoint 和 actor identity；日常运行只接受发布 CharacterVersion，并通过独立
+relationship identity 保存跨会话互动记忆。
 
 两个聚合包内部必须保持以下依赖层级：
 
@@ -224,11 +240,35 @@ adapters/chara|world -> public cross-domain contracts + owning ports
 host-* -> public package entry + concrete host adapters
 ```
 
-`core` 不得导入 Agent、Electron、React、Renderer、Device、表现 runtime 或另一领域私有 runtime。应用 Host 只构造、注入和释放 adapter；Character/World application service 分别拥有 run、turn/action、memory candidate、event/save/replay 编排。上述依赖必须通过 public/subpath exports 和 architecture test 强制执行，不能只依赖目录命名。
+`core` 不得导入 Agent、Electron、React、Renderer、Device、表现 runtime、Media/Game
+Activity 或另一领域私有 runtime。应用 Host 只构造、注入和释放 adapter；Chara application
+service 拥有 mode-specific run、context、relationship binding 和 memory candidate 编排；
+World/Narrative application service 拥有剧情 event/save/branch/replay；Activity owner 拥有
+媒体、游戏和设备执行。上述依赖必须通过 public/subpath exports 和 architecture test 强制
+执行，不能只依赖目录命名。
 
-同一 published character actor 的运行路径固定为 `WorldActorInstance -> CharacterRun -> primary AgentSession`，World 不得再创建第二个 actor-level session；Ambient NPC 和 World Director 使用独立显式 scope。有效能力固定为 Host permission、workspace trust、Character policy、World binding policy 与 run scope 的交集，副作用提交时由 owner 重验 permission、identity、revision 和 Approval。
+同一 published narrative actor 的运行路径固定为
+`WorldActorInstance -> NarrativeCharacterRun -> primary AgentSession`，World 不得再创建
+第二个 actor-level session；Ambient NPC 和 World Director 使用独立显式 scope。日常路径固定
+为 `UserCharacterRelationship -> CompanionRun -> primary AgentSession`；relationship 可顺序
+创建多个 run，但同一 active run 至多一个 primary session。
 
-Character 不直接写 World store；跨域 mutation 必须通过显式 world run/actor/action identity 与 expected revision 的 WorldAction contract，由 World runtime 原子提交 WorldEvent/revision 或返回 typed rejection。CharacterVersion、CharacterRun、WorldSave 与 Memory infrastructure 的事实/派生边界必须保持独立，Device/Renderer/runtime live handle 和本机路径不得进入持久项目、版本或存档。
+剧情有效能力是 Host permission、workspace trust、CharacterVersion policy、World binding
+policy 与 NarrativeRun scope 的交集；日常有效能力是 Host permission、workspace trust、
+CharacterVersion policy、relationship policy 与 Activity scope 的交集。副作用提交时由 owner
+重验 permission、identity、revision 和 Approval。
+
+Character 不直接写 World store；跨域 mutation 必须通过显式 world run/actor/action identity
+与 expected revision 的 WorldAction contract，由 World runtime 原子提交 WorldEvent/revision
+或返回 typed rejection。CharacterVersion canon、NarrativeSave/WorldSave 剧情记忆、
+UserCharacterRelationship 日常长期记忆、CharacterRun 短期状态与 Memory infrastructure
+派生索引必须保持独立。
+
+剧情检索必须先由 save owner 按 branch ancestry、checkpoint/timepoint、actor knowledge 和
+revision 过滤；日常 RealityContext、Tool result 和 Activity state 只能产生受 policy 管理的
+关系记忆候选。跨模式记忆默认隔离，版本更新通过新 save/relationship revision 显式迁移，
+不得改写 CharacterVersion。Device/Renderer/Media/Game live handle 和本机路径不得进入持久
+项目、版本、存档或关系记忆。
 
 ## 路径、缓存与用户数据
 
