@@ -6,9 +6,10 @@ Date: 2026-07-29
 
 - Change/feature: Desktop Agent connection bootstrap, durable closed-Conversation context reads,
   canonical Tab/projection message ordering and Entity-authority-backed composer mention search.
-- Decision and owning suite: `excluded` from provider-backed TUI Evaluation for these focused
-  corrections. The indexed `agent-runtime.session-workflows` suites own TUI session behavior, but
-  cannot exercise Electron connection epochs, Desktop AppHost ownership or Webview Tab bindings.
+- Decision and owning suite: `excluded` from provider-backed Evaluation for these focused
+  corrections. The indexed `agent-runtime.session-workflows` suites own host-neutral Agent session
+  behavior, but cannot exercise Electron connection epochs, Desktop AppHost ownership or Webview
+  Tab bindings.
 - Why real Evaluation is not required for the correction: Pi turn prompts, Skill injection,
   capability/Tool routing, provider/model selection, Pi Agent state and provider output are
   unchanged. Entity mention search is a deterministic pre-turn Host effect over canonical Entity
@@ -24,7 +25,7 @@ Date: 2026-07-29
 ## Cases
 
 - Reused, updated, created or excluded: `excluded`; no indexed provider-backed case was modified or
-  invented for a Host boundary the TUI cannot own.
+  invented for a deterministic Electron Host boundary.
 - Evidence and coverage:
   - deterministic bridge regression proves exact-epoch idempotency and advanced-epoch fencing;
   - deterministic AppHost regression proves cold durable context reads use persisted authority;
@@ -41,8 +42,8 @@ Date: 2026-07-29
 - Key-free validation: `pnpm test:agent:eval` is run as a harness/inventory gate only; it is not
   described as Desktop or real Agent behavior acceptance.
 - Real cases and reports: no provider-backed case was run and no report was created.
-- Blocked or unexecuted cases: provider/model/cost authorization has not been granted. VS Code
-  runtime validation is explicitly outside the current Desktop scope.
+- Blocked or unexecuted cases: provider/model/cost authorization has not been granted. Retired-host
+  runtime validation is explicitly outside the current Desktop-only scope.
 
 ## Residual Risk
 

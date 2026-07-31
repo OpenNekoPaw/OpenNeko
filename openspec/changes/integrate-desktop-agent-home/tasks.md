@@ -6,7 +6,7 @@
 - [x] 1.2 Replace partial route coverage with an exhaustive per-Host record and add all 52 Electron
       classifications, future-slice ownership and typed unsupported/inapplicable diagnostics
 - [x] 1.3 Migrate path-bearing Agent routes and projections to existing DocumentLocator,
-      ContentLocator, ResourceRef or opaque Host content identity; poison absolute/resolved path
+      ContentLocator, owning domain identity or opaque Host materialization; poison absolute/resolved path
       authority in Desktop messages
 - [x] 1.4 Add producer/consumer tests for valid/invalid wire payloads, new-route compile coverage,
       unsupported routes, host-inapplicable emission policy and unknown schema/type rejection
@@ -102,8 +102,9 @@
 
 ## 6. Evaluation And Quality Gates
 
-- [ ] 6.1 Add a focused key-free Agent evaluation scenario and facts for shared-controller, Pi
-      conversation, Tool confirmation, projection, unsupported route and legacy-fallback evidence
+- [ ] 6.1 Add focused deterministic Agent harness scenarios/facts for shared-controller, Pi
+      conversation, Tool confirmation, projection, unsupported route and forbidden-fallback
+      infrastructure; do not represent key-free validation as AI behavior Evaluation
 - [x] 6.2 Run focused real Agent evaluation with explicit provider/model/cost authorization when
       available; otherwise record the exact external blocker and residual behavior risk
 - [x] 6.3 Run Agent types/runtime/Webview and Desktop tests/typechecks/builds plus
