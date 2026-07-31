@@ -3,6 +3,7 @@ import type React from 'react';
 import type { ReactNode } from 'react';
 import { getKeyboardBoundaryMetadata } from '../keyboard';
 import { cn } from '../utils';
+import './popover.css';
 
 export interface PopoverProps {
   readonly trigger: ReactNode;
@@ -31,13 +32,7 @@ export function Popover({
       <PopoverPrimitive.Portal>
         <PopoverPrimitive.Content
           align={align}
-          className={cn(
-            'z-50 min-w-40 rounded-[var(--neko-radius-md,8px)] border border-[var(--neko-popover-border,var(--neko-border))]',
-            'bg-[var(--neko-popover-background,var(--neko-glass-bg,var(--neko-editorWidget-background)))] p-2 text-sm',
-            'text-[var(--neko-popover-foreground,var(--neko-foreground))]',
-            'shadow-[var(--neko-popover-shadow,var(--neko-shadow-md,0_8px_24px_rgba(0,0,0,0.28)))] outline-none',
-            contentClassName,
-          )}
+          className={cn('neko-popover-surface', contentClassName)}
           side={side}
           sideOffset={6}
           {...getKeyboardBoundaryMetadata({
@@ -48,7 +43,7 @@ export function Popover({
           })}
         >
           {children}
-          <PopoverPrimitive.Arrow className="fill-[var(--neko-popover-border,var(--neko-border))]" />
+          <PopoverPrimitive.Arrow className="neko-popover-arrow" data-neko-popover-arrow="true" />
         </PopoverPrimitive.Content>
       </PopoverPrimitive.Portal>
     </PopoverPrimitive.Root>

@@ -118,6 +118,7 @@ vi.mock('@/components/ChatView', () => ({
     }) => void;
     composerMenuState?: ComposerMenuState;
     onComposerMenuStateChange?: (state: ComposerMenuState) => void;
+    messages?: readonly Message[];
   }) => (
     <div>
       <button
@@ -192,6 +193,9 @@ vi.mock('@/components/ChatView', () => ({
       <span data-testid="control-menu-state">
         {props.composerMenuState?.controls.openMenu ?? 'none'}:
         {props.composerMenuState?.controls.configCategory ?? 'llm'}
+      </span>
+      <span data-testid="visible-messages">
+        {props.messages?.map((message) => `${message.role}:${message.content}`).join('|') ?? ''}
       </span>
       <button
         type="button"
@@ -284,6 +288,9 @@ describe('ChatWorkspace pending send', () => {
 
     expect(hostMocks.sendMessage).not.toHaveBeenCalled();
     expect(onPendingSendRequestConsumed).not.toHaveBeenCalled();
+    expect(screen.getByTestId('visible-messages').textContent).toBe(
+      'user:hello from tabless state',
+    );
 
     act(() => {
       runtime.store.updateState({
@@ -301,6 +308,9 @@ describe('ChatWorkspace pending send', () => {
       }),
     );
     expect(onPendingSendRequestConsumed).toHaveBeenCalledWith(1);
+    expect(screen.getByTestId('visible-messages').textContent).toBe(
+      'user:hello from tabless state',
+    );
 
     rerender(
       <ChatWorkspace

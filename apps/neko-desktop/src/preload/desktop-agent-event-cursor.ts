@@ -1,8 +1,26 @@
 import type { DesktopAgentConnectionIdentity } from '../shared/agent-contract';
+import type { AgentHostToWebviewMessage, AgentWebviewToHostMessage } from '@neko-agent/types';
 
 export interface DesktopAgentEventCursor {
   readonly connection: DesktopAgentConnectionIdentity;
   readonly sequence: number;
+}
+
+export function projectDesktopAgentSendFailure(
+  message: AgentWebviewToHostMessage,
+  failure: string,
+): AgentHostToWebviewMessage {
+  if ('conversationId' in message && typeof message.conversationId === 'string') {
+    return {
+      type: 'error',
+      conversationId: message.conversationId,
+      message: failure,
+    };
+  }
+  return {
+    type: 'globalError',
+    message: failure,
+  };
 }
 
 export function advanceDesktopAgentBootstrapCursor(

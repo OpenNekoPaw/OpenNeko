@@ -5,7 +5,7 @@ import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { I18nProvider } from '@neko/shared/i18n/react';
 import type { AgentHostRuntimeAdapter } from '@neko-agent/types';
-import { DesktopAgentSurface } from './DesktopAgentSurface';
+import { DesktopAgentSurface, prepareDesktopAgentSurfaceResources } from './DesktopAgentSurface';
 import { createDesktopI18n } from './i18n';
 
 vi.mock('@neko-agent/webview/root', () => ({
@@ -73,6 +73,34 @@ describe('DesktopAgentSurface', () => {
       'view-1',
     );
     await act(async () => root.unmount());
+  });
+
+  it('starts the Agent module and owner bootstrap concurrently', async () => {
+    const started: string[] = [];
+    let resolveModule: (() => void) | undefined;
+    let resolveBootstrap: ((value: ReturnType<typeof readyBootstrap>) => void) | undefined;
+    const moduleReady = new Promise<void>((resolve) => {
+      resolveModule = resolve;
+    });
+    const bootstrapReady = new Promise<ReturnType<typeof readyBootstrap>>((resolve) => {
+      resolveBootstrap = resolve;
+    });
+
+    const operation = prepareDesktopAgentSurfaceResources({
+      loadModule: () => {
+        started.push('module');
+        return moduleReady;
+      },
+      getBootstrap: () => {
+        started.push('bootstrap');
+        return bootstrapReady;
+      },
+    });
+
+    expect(started).toEqual(['module', 'bootstrap']);
+    resolveModule?.();
+    resolveBootstrap?.(readyBootstrap());
+    await expect(operation).resolves.toEqual(readyBootstrap());
   });
 
   it('renders the startup diagnostic without mounting an adapter', async () => {
@@ -144,15 +172,19 @@ function installBridge(getBootstrap: typeof window.openNekoDesktop.agent.getBoot
       home: {
         assets: {
           search: vi.fn(),
+          importFiles: vi.fn(),
+          remove: vi.fn(),
         },
+        libraryThumbnails: { resolve: vi.fn() },
         mediaLibraries: {
           search: vi.fn(),
           children: vi.fn(),
           addLibrary: vi.fn(),
+          relinkLibrary: vi.fn(),
           removeLibrary: vi.fn(),
           revealLibrary: vi.fn(),
         },
-        plugins: { list: vi.fn() },
+        extensions: { list: vi.fn() },
       },
       shell: {
         getSnapshot: vi.fn(),

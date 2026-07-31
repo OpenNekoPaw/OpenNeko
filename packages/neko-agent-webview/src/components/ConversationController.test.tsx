@@ -151,6 +151,7 @@ vi.mock('@/components/ChatWorkspace', () => ({
     workItems?: readonly AgentWorkItem[];
     handleMessage?: (event: MessageEvent) => void;
     onUserMessageSent?: (event: { conversationId: string; message: Message }) => void;
+    onPendingSendRequestConsumed?: (id: number) => void;
     pendingSendRequest?: {
       id: number;
       input: { messageText?: string; contextPayloads?: AgentContextPayload[] };
@@ -329,6 +330,24 @@ vi.mock('@/components/ChatWorkspace', () => ({
             ?.map((payload) => payload.label)
             .join('|') ?? 'none'}
         </span>
+        <button
+          type="button"
+          data-testid={testId('commit-pending-send')}
+          onClick={() => {
+            const pending = props.pendingSendRequest;
+            if (!pending) return;
+            props.onUserMessageSent?.({
+              conversationId: tabRenderSnapshot.snapshot.conversationId,
+              message: {
+                id: `pending-send:${pending.id}`,
+                role: 'user',
+                content: pending.input.messageText ?? '',
+                timestamp: 1,
+              },
+            });
+            props.onPendingSendRequestConsumed?.(pending.id);
+          }}
+        />
         <span data-testid={testId('initial-input')}>
           {props.initialInputRequest?.messageText ?? 'none'}
         </span>
@@ -819,6 +838,64 @@ describe('ConversationController entry state', () => {
 
     expect(screen.getByTestId('pending-send').textContent).toBe('develop the city mood');
     expect(screen.getByTestId('initial-input').textContent).toBe('none');
+  });
+
+  it('keeps the owning optimistic text visible across Host-created Tab and empty projections', () => {
+    vi.clearAllMocks();
+    render(<ConversationController {...createProps()} />);
+
+    fireEvent.change(screen.getByPlaceholderText('Type anything...'), {
+      target: { value: 'keep this visible' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    act(() => {
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: {
+            type: 'tabState',
+            revision: 1,
+            tabState: {
+              openTabs: [
+                {
+                  id: 'tab-conv-new',
+                  title: 'New conversation',
+                  conversationId: 'conv-new',
+                },
+              ],
+              activeTabId: 'tab-conv-new',
+            },
+          },
+        }),
+      );
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: {
+            type: 'activeConversation',
+            conversation: { id: 'conv-new', title: 'New conversation', messages: [] },
+          },
+        }),
+      );
+    });
+
+    expect(screen.getByTestId('pending-send').textContent).toBe('keep this visible');
+    fireEvent.click(screen.getByTestId('commit-pending-send'));
+    expect(screen.getByTestId('workspace-messages').textContent).toBe('keep this visible');
+
+    act(() => {
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: {
+            type: 'conversationSnapshot',
+            conversation: { id: 'conv-new', title: 'New conversation', messages: [] },
+          },
+        }),
+      );
+    });
+
+    expect(screen.getByTestId('workspace-conversation').textContent).toBe('conv-new');
+    expect(screen.getByTestId('workspace-messages').textContent).toBe('keep this visible');
+    expect(screen.getByTestId('pending-send').textContent).toBe('none');
   });
 
   it('runs entry-page mention search without opening a chat tab', () => {

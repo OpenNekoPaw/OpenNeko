@@ -17,6 +17,7 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
 } from 'react';
@@ -57,7 +58,12 @@ import type { PluginsAvailable } from '@/components/ChatView/SendToMenu';
 import type { AgentWorkItem } from '@/components/AgentWorkItem';
 import type { ActivationProgressTimeline } from '@/presenters/activation-progress-presenter';
 import { projectTrailingMention } from '@/components/ChatView/InputArea/mention-input';
-import { useChatActions, type PendingSendInput, useSlashCommands } from '@/hooks';
+import {
+  useChatActions,
+  type PendingSendIdentity,
+  type PendingSendInput,
+  useSlashCommands,
+} from '@/hooks';
 import { useKeyboardShortcuts, COMMON_SHORTCUTS } from '@/hooks/useKeyboardShortcuts';
 import {
   projectChatWorkspaceModelState,
@@ -436,6 +442,34 @@ export function ChatWorkspace({
     ensureConversationForSend: handleSendWithoutConversation,
     onUserMessageSent,
   });
+  const pendingSendRequestId = pendingSendRequest?.id;
+  const pendingSendIdentity = useMemo<PendingSendIdentity | undefined>(
+    () =>
+      pendingSendRequestId === undefined
+        ? undefined
+        : {
+            id: `pending-send:${pendingSendRequestId}`,
+            timestamp: Date.now(),
+          },
+    [pendingSendRequestId],
+  );
+  const visibleMessages = useMemo(() => {
+    if (!pendingSendRequest || !pendingSendIdentity) return messages;
+    if (messages.some((message) => message.id === pendingSendIdentity.id)) return messages;
+    return [
+      ...messages,
+      {
+        id: pendingSendIdentity.id,
+        role: 'user' as const,
+        content: (
+          pendingSendRequest.input.displayMessageText ??
+          pendingSendRequest.input.messageText ??
+          ''
+        ).trim(),
+        timestamp: pendingSendIdentity.timestamp,
+      },
+    ];
+  }, [messages, pendingSendIdentity, pendingSendRequest]);
 
   useEffect(() => {
     if (!pendingSendRequest || !sessionMutationConversationId || !isModelConfigurationReady) return;
@@ -449,13 +483,14 @@ export function ChatWorkspace({
     }
 
     consumedPendingSendRequestIdRef.current = pendingSendRequest.id;
-    handleSend(pendingSendRequest.input);
+    handleSend(pendingSendRequest.input, pendingSendIdentity);
     onPendingSendRequestConsumed?.(pendingSendRequest.id);
   }, [
     handleSend,
     isModelConfigurationReady,
     onPendingSendRequestConsumed,
     pendingSendRequest,
+    pendingSendIdentity,
     sessionMode,
     sessionMutationConversationId,
     setVisibleSessionMode,
@@ -784,7 +819,7 @@ export function ChatWorkspace({
       ) : null}
       <ChatView
         composerDisabled={!isModelConfigurationReady}
-        messages={messages}
+        messages={visibleMessages}
         inputValue={inputValue}
         isThinking={isThinking}
         isRunActive={isThinking || streamingMessageId !== null}

@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { DesktopAgentConnectionIdentity } from '../shared/agent-contract';
-import { advanceDesktopAgentBootstrapCursor } from './desktop-agent-event-cursor';
+import {
+  advanceDesktopAgentBootstrapCursor,
+  projectDesktopAgentSendFailure,
+} from './desktop-agent-event-cursor';
 
 describe('Desktop Agent preload event cursor', () => {
   it('preserves the sequence baseline when bootstrap reuses the exact connection', () => {
@@ -23,6 +26,30 @@ describe('Desktop Agent preload event cursor', () => {
     expect(advanceDesktopAgentBootstrapCursor(current, replacement)).toEqual({
       connection: replacement,
       sequence: 0,
+    });
+  });
+
+  it('projects a rejected conversation send into a conversation-visible terminal error', () => {
+    expect(
+      projectDesktopAgentSendFailure(
+        {
+          type: 'sendMessage',
+          conversationId: 'conversation-1',
+          message: 'hello',
+          sessionMode: 'agent',
+        },
+        'Desktop send rejected.',
+      ),
+    ).toEqual({
+      type: 'error',
+      conversationId: 'conversation-1',
+      message: 'Desktop send rejected.',
+    });
+    expect(
+      projectDesktopAgentSendFailure({ type: 'getConversations' }, 'Catalog request rejected.'),
+    ).toEqual({
+      type: 'globalError',
+      message: 'Catalog request rejected.',
     });
   });
 });

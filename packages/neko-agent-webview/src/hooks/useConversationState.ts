@@ -118,6 +118,7 @@ export function useConversationState(): UseConversationStateReturn {
         coordinator: conversationRenderCoordinator,
         conversationId,
         messages: updated.messages,
+        source: 'local',
         streaming: updated.streaming,
       });
       if (conversationId !== activeConversationIdRef.current) return;

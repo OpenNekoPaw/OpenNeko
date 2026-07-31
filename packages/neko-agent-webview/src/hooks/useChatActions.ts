@@ -53,6 +53,11 @@ export interface PendingSendInput {
   understandingModels?: MediaUnderstandingModelSelections;
 }
 
+export interface PendingSendIdentity {
+  readonly id: string;
+  readonly timestamp: number;
+}
+
 export interface UseChatActionsProps {
   inputValue: string;
   isThinking: boolean;
@@ -84,7 +89,7 @@ export interface UseChatActionsProps {
 }
 
 export interface UseChatActionsReturn {
-  handleSend: (input?: PendingSendInput) => void;
+  handleSend: (input?: PendingSendInput, identity?: PendingSendIdentity) => void;
   triggerSend: (messageText: string) => void;
   handleCancelMessage: () => void;
   copyLastResponse: () => void;
@@ -130,7 +135,7 @@ export function useChatActions({
   // Send a user message directly to the Desktop host.
   // AgentRunner handles queueing if the agent is already running.
   const handleSend = useCallback(
-    (input?: PendingSendInput) => {
+    (input?: PendingSendInput, identity?: PendingSendIdentity) => {
       if (isConversationSwitching) return;
       const isQueueingSend = isThinking;
 
@@ -226,10 +231,10 @@ export function useChatActions({
         fileReferenceContextReferences,
       );
       const userMessage: Message = {
-        id: Date.now().toString(),
+        id: identity?.id ?? Date.now().toString(),
         role: 'user',
         content: displayMessageText.trim(),
-        timestamp: Date.now(),
+        timestamp: identity?.timestamp ?? Date.now(),
         ...(isQueueingSend ? { isQueued: true } : {}),
         ...(outboundAttachments.length > 0 ? { attachments: outboundAttachments } : {}),
         ...(contextReferences ? { contextReferences } : {}),

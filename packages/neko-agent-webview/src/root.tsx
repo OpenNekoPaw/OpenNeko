@@ -44,7 +44,7 @@ export function AgentWebviewRoot({
     };
   }, [hostRuntimeAdapter]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const subscription = hostRuntimeAdapter.subscribe((message) => {
       window.dispatchEvent(new CustomEvent(NEKO_AGENT_HOST_MESSAGE_EVENT, { detail: message }));
     });

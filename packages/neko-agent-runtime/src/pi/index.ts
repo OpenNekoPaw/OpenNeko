@@ -63,6 +63,11 @@ export {
   type PiTurnDurabilityState,
 } from './node-conversation-authority';
 export {
+  NodePiConversationCatalogReader,
+  type CreateNodePiConversationCatalogReaderOptions,
+  type PiConversationCatalogReader,
+} from './node-conversation-catalog-reader';
+export {
   bridgePiCapabilityTools,
   PiCapabilityToolBridgeError,
   resolvePiToolPermissionAction,

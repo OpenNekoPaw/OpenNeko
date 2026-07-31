@@ -39,6 +39,7 @@ export {
 
 export {
   useChatActions,
+  type PendingSendIdentity,
   type PendingSendInput,
   type UseChatActionsProps,
   type UseChatActionsReturn,

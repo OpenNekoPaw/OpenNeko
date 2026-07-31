@@ -268,6 +268,7 @@ function createContextHarness(options: ContextHarnessOptions): ContextHarness {
         coordinator: conversationRenderCoordinator,
         conversationId,
         messages: result.messages,
+        source: 'local',
         streaming: result.streaming,
       });
     },

@@ -201,6 +201,7 @@ function cacheConversationProjection(
     coordinator,
     conversationId,
     messages,
+    source: 'host',
     streaming,
   });
 }

@@ -1,13 +1,14 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
 import { useTranslation } from '@neko/shared/i18n/react';
 import type { AgentHostRuntimeAdapter } from '@neko-agent/types';
+import type { DesktopAgentBootstrapProjection } from '../shared/agent-contract';
 import type { DesktopProjectTabProjection } from '../shared/shell-contract';
 import { createElectronAgentHostRuntimeAdapter } from './desktop-agent-host-runtime-adapter';
 
-const AgentWebviewRoot = lazy(async () => {
-  const module = await import('@neko-agent/webview/root');
-  return { default: module.AgentWebviewRoot };
-});
+const loadAgentWebviewRootModule = () => import('@neko-agent/webview/root');
+const AgentWebviewRoot = lazy(() =>
+  loadAgentWebviewRootModule().then((module) => ({ default: module.AgentWebviewRoot })),
+);
 
 type DesktopAgentSurfaceState =
   | { readonly kind: 'loading' }
@@ -30,8 +31,11 @@ export function DesktopAgentSurface({
   useEffect(() => {
     let active = true;
     setState({ kind: 'loading' });
-    void window.openNekoDesktop.agent
-      .getBootstrap(tab.projectId, tab.viewId, tab.viewEpoch)
+    void prepareDesktopAgentSurfaceResources({
+      loadModule: loadAgentWebviewRootModule,
+      getBootstrap: () =>
+        window.openNekoDesktop.agent.getBootstrap(tab.projectId, tab.viewId, tab.viewEpoch),
+    })
       .then((bootstrap) => {
         if (!active) return;
         if (bootstrap.status === 'unavailable') {
@@ -73,6 +77,14 @@ export function DesktopAgentSurface({
       </Suspense>
     </div>
   );
+}
+
+export async function prepareDesktopAgentSurfaceResources(input: {
+  readonly loadModule: () => Promise<unknown>;
+  readonly getBootstrap: () => Promise<DesktopAgentBootstrapProjection>;
+}): Promise<DesktopAgentBootstrapProjection> {
+  const [, bootstrap] = await Promise.all([input.loadModule(), input.getBootstrap()]);
+  return bootstrap;
 }
 
 function AgentSurfaceStatus({

@@ -1,0 +1,71 @@
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { NodePiConversationAuthority } from '../node-conversation-authority';
+import { NodePiConversationCatalogReader } from '../node-conversation-catalog-reader';
+
+describe('NodePiConversationCatalogReader', () => {
+  let root: string;
+  const authorities: NodePiConversationAuthority[] = [];
+  const readers: NodePiConversationCatalogReader[] = [];
+
+  beforeEach(async () => {
+    root = await mkdtemp(join(tmpdir(), 'neko-pi-catalog-reader-'));
+  });
+
+  afterEach(async () => {
+    for (const reader of readers.splice(0)) reader.dispose();
+    await Promise.all(authorities.splice(0).map((authority) => authority.dispose()));
+    await rm(root, { recursive: true, force: true });
+  });
+
+  it('lists only the requested workspaces without acquiring an execution lease', async () => {
+    const workspaceA = await createConversation('workspace-a', 'conversation-a');
+    await createConversation('workspace-b', 'conversation-b');
+    const reader = await NodePiConversationCatalogReader.create({ userDataRoot: root });
+    readers.push(reader);
+
+    expect(reader.listConversations(['workspace-a'])).toEqual([
+      expect.objectContaining({
+        workspaceId: 'workspace-a',
+        conversationId: 'conversation-a',
+      }),
+    ]);
+
+    const lease = workspaceA.acquireLease('conversation-a');
+    expect(lease.holderId).toBe('host:workspace-a');
+    workspaceA.releaseLease(lease);
+  });
+
+  it('returns an empty cold-start catalog before Pi storage exists and fails after disposal', async () => {
+    const reader = await NodePiConversationCatalogReader.create({ userDataRoot: root });
+
+    expect(reader.listConversations(['workspace-a'])).toEqual([]);
+    reader.dispose();
+    expect(() => reader.listConversations(['workspace-a'])).toThrow(
+      'Pi conversation catalog reader is disposed',
+    );
+  });
+
+  async function createConversation(
+    workspaceId: string,
+    conversationId: string,
+  ): Promise<NodePiConversationAuthority> {
+    const authority = await NodePiConversationAuthority.create({
+      userDataRoot: root,
+      workspaceId,
+      hostId: `host:${workspaceId}`,
+    });
+    authorities.push(authority);
+    const lease = authority.acquireLease(conversationId);
+    await authority.createConversation({
+      lease,
+      conversationId,
+      branchId: 'main',
+      title: conversationId,
+    });
+    authority.releaseLease(lease);
+    return authority;
+  }
+});

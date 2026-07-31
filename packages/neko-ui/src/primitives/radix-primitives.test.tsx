@@ -60,10 +60,8 @@ describe('@neko/ui Radix-backed primitives', () => {
     expect(button?.textContent).toBe('Open');
     const content = document.body.querySelector('.fixture-popover-surface');
     expect(content?.textContent).toContain('Content');
-    expect(content?.className).toContain(
-      'bg-[var(--neko-popover-background,var(--neko-glass-bg,var(--neko-editorWidget-background)))]',
-    );
-    expect(content?.className).toContain('border-[var(--neko-popover-border,var(--neko-border))]');
+    expect(content?.className).toContain('neko-popover-surface');
+    expect(content?.querySelector('[data-neko-popover-arrow]')).not.toBeNull();
   });
 
   it('renders Select trigger with current value', () => {

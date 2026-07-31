@@ -1,8 +1,9 @@
 import { render, screen } from '@testing-library/react';
-import type { ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { WebviewFoundationProvider, createWebviewFoundation } from '@neko/ui/foundation';
 import type { AgentHostRuntimeAdapter } from '@neko-agent/types';
+import { NEKO_AGENT_HOST_MESSAGE_EVENT } from '@neko-agent/types/host-message-event';
 import { AgentWebviewRoot } from './root';
 
 vi.mock('@/components/ChatView/RichContent', () => ({
@@ -22,6 +23,15 @@ vi.mock('@/components/AppShell', async () => {
     AppShell: ({ presentation }: { readonly presentation?: string }) => {
       const foundation = useWebviewFoundation();
       const adapter = useAgentHostRuntimeAdapter();
+      useEffect(() => {
+        const listener = (event: Event): void => {
+          const message = (event as CustomEvent<{ readonly type: string }>).detail;
+          document.body.setAttribute('data-synchronous-host-message', message.type);
+        };
+        window.addEventListener(NEKO_AGENT_HOST_MESSAGE_EVENT, listener);
+        adapter.send({ type: 'getConversations' });
+        return () => window.removeEventListener(NEKO_AGENT_HOST_MESSAGE_EVENT, listener);
+      }, [adapter]);
       return (
         <>
           <span data-testid="foundation-runtime">{foundation.runtimeId}</span>
@@ -84,6 +94,23 @@ describe('AgentWebviewRoot foundation wiring', () => {
     );
 
     expect(screen.getByTestId('presentation').textContent).toBe('desktop-dock');
+  });
+
+  it('subscribes before a descendant initialization request receives a synchronous response', () => {
+    let listener:
+      ((message: { readonly type: 'conversationList'; conversations: [] }) => void) | undefined;
+    const adapter = createAdapter('synchronous-adapter');
+    vi.mocked(adapter.subscribe).mockImplementation((nextListener) => {
+      listener = nextListener as typeof listener;
+      return { dispose: vi.fn() };
+    });
+    vi.mocked(adapter.send).mockImplementation(() => {
+      listener?.({ type: 'conversationList', conversations: [] });
+    });
+
+    render(<AgentWebviewRoot hostRuntimeAdapter={adapter} locale="en" />);
+
+    expect(document.body.getAttribute('data-synchronous-host-message')).toBe('conversationList');
   });
 });
 
