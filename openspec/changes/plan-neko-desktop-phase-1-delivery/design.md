@@ -3,19 +3,18 @@
 Phase 1 的产品范围已在 [`ROADMAP_CN.md`](../../../ROADMAP_CN.md) 中确定：先交付 Desktop
 前端与现有子包真实接入，跨平台资格和 MCP/插件/专业工具分别留给 Phase 2、Phase 3。
 
-当前代码复用成熟度不是均匀的：
+P1.0 重新审计后的代码与 change 状态如下：
 
-| 能力 | 当前可复用事实 | Phase 1 缺口 |
-| --- | --- | --- |
-| Application/Host | `NekoHostPorts` 已覆盖 environment/workspace/files/paths/policy/secrets/external/diagnostics；host kind 已包含 Electron | application id 仍有 `neko-home`，没有正式 Electron Host ports、AppHost 和 IPC |
-| Agent | Pi conversation runtime/Pi Session、Product Turn Bridge、Tool/Skill/Conversation authority host-neutral；`AgentWebviewRoot` 接受 `AgentHostRuntimeAdapter`；已有 attachment/sequence/revision | Extension router 仍混入 VS Code effects；没有正式 Electron route coverage、storage/secret/content composition |
-| Assets/Content | `@neko/content`、Entity、Search、workspace-linked Media Library 和 local metadata 可复用 | 产品 UI 主要是 VS Code TreeView/Provider，没有 Desktop browser-safe Root |
-| Canvas | `.nkc`、domain、`./root`、`./host-adapter` 存在 | 完整 Root 仍依赖 VS Code message transport；简化 HostAdapterSurface 不是 authoring runtime |
-| Cut | OTIO、domain、`./root`、`./host-adapter`、`@neko/media` 路径存在 | 完整 Root 仍依赖 VS Code transport；简化 surface 不是编辑/导出 runtime |
-| Preview | 各格式 renderer、Three.js、浏览器媒体 consumer 可复用 | 只有简化 host-adapter public entry，没有统一完整 Root/descriptor lifecycle |
-| Generation/Quality | GenerationJob、Quality Gate 与 host-neutral port 已建立 | 没有 Desktop projection/command 组合；不能创建第二套执行状态 |
-| Chara/Entity | Chara application/core、Dialogue/Embody/evidence/profile 和 Entity binding 已建立 | 只有 VS Code host adapter；没有 CharacterProject/Version 或独立 Desktop editor |
-| Tools/Diagnostics | 比较、metadata、日志和诊断能力存在 | UI/command 主要依赖 VS Code；需拆分可复用 browser Root 与 Host effect |
+| 能力               | 当前事实                                                                                                   | 剩余 focused owner                                                                                     |
+| ------------------ | ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Application/Host   | `apps/neko-desktop`、`neko-desktop` identity、Electron Host ports、AppHost、typed preload 和安全基线已建立 | P0 build change 关闭 typecheck/package/Windows runner 证据；Host Proposed ADR 不自动成为 P1 gate       |
+| Shell/State        | Home、Project/Window/View identity、owner projection 和受控 Workbench 已建立                               | `fix-desktop-agent-shell-regressions` 完成本地图形化回归                                               |
+| Agent              | Pi/AgentSession/Conversation/Tool/Approval/Skill 与 Desktop composition 已接入                             | `integrate-desktop-agent-home`、Shell regression 和 capability catalog 完成真实 API/本地 Electron 验收 |
+| Assets/Canvas      | Assets Root、Resource Browser、完整 Canvas Root 与 workbench composition 已接入                            | `integrate-desktop-assets-canvas` 完成最终节点/UI 验收；HTTP gateway 接管媒体节点 transport            |
+| Cut                | Desktop Cut Root/OTIO/Export/Node media adapter 已接入                                                     | `redefine-openneko-lightweight-editing` 拥有剩余编辑/保存/生产力任务；HTTP gateway 拥有 transport      |
+| Preview/Media      | Preview viewers、Node/FFmpeg 和当前 custom-scheme transport 可运行                                         | HTTP gateway 替换 transport；`fix-epub-preview-resource-readiness` 完成 EPUB 本地 Electron 验收        |
+| Generation/Quality | GenerationJob、Quality Gate 与相关投影基础存在                                                             | 尚未创建的 `integrate-desktop-creative-support-domains` 重新审计并组合                                 |
+| Chara/Entity/Tools | Chara、Entity、Search、Tools 能力分散存在，部分 package 是零 manifest consumer                             | zero-consumer disposition 提供证据；P1.6 只接入被明确保留的能力                                        |
 
 本提案是项目级 delivery contract，不直接实现以上缺口。每个实施切片必须拥有独立 OpenSpec、
 canonical path、回归测试和运行态证据。
@@ -28,12 +27,14 @@ canonical path、回归测试和运行态证据。
 - 交付一个真实、可恢复、可编辑和可导出的 Content Project 工作流。
 - 让所有功能包继续拥有自己的领域事实与 public Root，Desktop 只做宿主与组合。
 - 让 renderer 竞态、安全、用户数据和资源生命周期在写 UI 前成为硬约束。
-- 保持 VS Code/TUI 当前 canonical path 可运行，并证明 Desktop 没有命中其私有实现。
+- 保持 Electron Desktop 为唯一产品组合根，并通过依赖/残留/path tests 证明已退休宿主、
+  demo、legacy 和 fallback 路径不能参与成功。
+- 让确定性 CI、真实 API Evaluation 和图形化 UI 验收分别拥有清晰且不可互相替代的证据。
 
 **Non-Goals:**
 
 - 在本提案中创建 Electron runtime 或修改生产代码。
-- 完成 Phase 2 的 Linux/Windows 资格、签名、更新或多平台发布。
+- 完成 Phase 2 的 Windows 安装/升级、签名、更新、GPU/媒体和完整发布资格。
 - 完成 Phase 3 的 MCP UI、插件 Host、ComfyUI 或专业工具 adapter。
 - 实现完整 CharacterProject/Version、WorldProject/Run/Save 或空壳 World 页面。
 - 恢复旧 Desktop、Workbench Core、Market Core、Rust Engine、EngineClient 或 `neko-home`
@@ -42,57 +43,57 @@ canonical path、回归测试和运行态证据。
 
 ## Five-Layer Analysis
 
-| 层 | Phase 1 决策 |
-| --- | --- |
-| 职责 | Desktop composition root 拥有 Electron 生命周期、Shell、typed bridge 和依赖注入；功能包拥有领域事实、application service 和 UI Root；Host 拥有权限/IO/进程/持久化。 |
+| 层   | Phase 1 决策                                                                                                                                                             |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 职责 | Desktop composition root 拥有 Electron 生命周期、Shell、typed bridge 和依赖注入；功能包拥有领域事实、application service 和 UI Root；Host 拥有权限/IO/进程/持久化。      |
 | 依赖 | renderer 只依赖 browser-safe public entry；preload 只依赖固定 IPC contract；main/AppHost 依赖 Host/domain public ports，不依赖 React；功能包不导入另一个功能包私有实现。 |
-| 接口 | 先冻结 application/workspace/project/window/view identity、projection attachment、domain adapter、command/revision、resource descriptor 和 diagnostic，再实现页面。 |
-| 扩展 | Phase 1 只显式组合内置功能包，不建立插件 registry；每个 domain adapter 是未来受控贡献的基础，但不提前开放。 |
-| 测试 | contract/producer/consumer、架构依赖、竞态、资源释放和 Electron 真实纵向 E2E 分层验证；VS Code Webview 验收独立保留。 |
+| 接口 | 先冻结 application/workspace/project/window/view identity、projection attachment、domain adapter、command/revision、resource descriptor 和 diagnostic，再实现页面。      |
+| 扩展 | Phase 1 只显式组合内置功能包，不建立插件 registry；每个 domain adapter 是未来受控贡献的基础，但不提前开放。                                                              |
+| 测试 | CI 执行 contract/producer/consumer、架构依赖和 headless functional；真实 API Agent Evaluation 与图形化 Electron UI/E2E 显式本地执行。                                    |
 
 ## Decisions
 
-### 1. Phase 1 是 delivery program，不是一个巨型代码变更
+### 1. P1.0 重整 program，Phase 1 仍由 focused changes 交付
 
-本提案只协调七个有依赖关系的实施 OpenSpec：
+P1.0 不实现产品代码。它把旧 program 的工作转移到当前事实对应的唯一 owner，并冻结以下
+依赖关系：
 
 ```text
-P1.1 Desktop foundation and application identity
-  -> P1.2 Shell, project catalog and projection protocol
-     -> P1.3 Agent and Home vertical slice
-        -> P1.4 Media Library and Canvas
-        -> P1.5 Cut, Preview and media transport
-           -> P1.6 Generation, Quality, Chara/Entity and Tools
-              -> P1.7 Phase 1 end-to-end qualification
+P0 build/typecheck gate + ResourceRef retirement
+  -> P1.3 Agent/Shell acceptance
+  -> P1.4 Assets/Canvas media acceptance
+  -> P1.5 Cut/Preview/HTTP gateway closure
+  -> P1.6 retained supporting domains
+  -> P1.7 reference-platform end-to-end qualification
 ```
 
-P1.4 与 P1.5 在 P1.2/P1.3 稳定后可以并行，但各自仍是唯一 canonical adapter 迁移，不能
-在 Desktop 旁路复制 UI/store。P1.6 只能使用前面建立的 Host/projection/command contract。
-P1.7 只做收口、验收和缺口清零，不在验收阶段重新设计基础接口。
+`retire-resource-ref-contract` 先关闭 public durable identity；HTTP gateway、Agent display、
+Canvas、Preview 和后续 support-domain contract 不得继续新增或恢复 `ResourceRef`。
+P1.4/P1.5 的媒体路径由 HTTP gateway successor 统一替换，不能分别保留 custom scheme、
+upstream proxy 或普通 Canvas PCM 成功路径。
 
-用户请求的 Home 管理 Surface 通过补充 change
-`refine-desktop-home-management-surfaces` 实施：开始创作复用 Project + Agent canonical
-path，资产中心聚合各项目 Assets source，插件页只管理 Pi Skill 与当前内置 domain capability。
-该补充不建立 Phase 3 外部 Plugin Host、Marketplace 或扩展执行成功路径。
+当前 successor ownership 为：
 
-建议实施 change 名称：
+| Program slice          | Current/focused changes                                                                                      | P1.0 disposition                                                                                |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------- |
+| P1.1 Foundation        | `bootstrap-neko-desktop-foundation`                                                                          | 已实施；最终 package 证据由 P0 build change 持续跟踪                                            |
+| P1.2 Shell/state       | `implement-desktop-shell-project-state`、Home/Workbench refinements                                          | 已实施；可见回归由 `fix-desktop-agent-shell-regressions` 验收                                   |
+| P1.3 Agent/Home        | `integrate-desktop-agent-home`、`clarify-desktop-capability-catalog`                                         | 保留剩余真实 API Evaluation 与本地 Electron scenario，不重复实现 Agent runtime                  |
+| P1.4 Assets/Canvas     | `integrate-desktop-assets-canvas`、HTTP gateway Canvas slice                                                 | Assets/Canvas child 只关闭剩余 UI/节点验收；媒体 transport 交给 gateway                         |
+| P1.5 Cut/Preview/Media | `redefine-openneko-lightweight-editing`、HTTP gateway、EPUB readiness、`integrate-desktop-cut-preview-media` | Cut 编辑、transport、格式 readiness 和最终文档分别由各 owner 关闭                               |
+| P1.6 Support domains   | 尚未创建 `integrate-desktop-creative-support-domains`                                                        | 先读取 zero-consumer disposition，再只接入明确保留的 Generation/Quality/Chara/Entity/Tools 能力 |
+| P1.7 Qualification     | 尚未创建 `qualify-neko-desktop-phase-1`                                                                      | 只做 frozen fixture、canonical-path assertion、图形化 E2E 和最终文档/归档                       |
+| Sync recovery          | `optimize-workspace-media-library-sync`                                                                      | 是独立 portability enhancement；除非 P1.7 后续 spec 显式需要，不自动成为 Phase 1 gate           |
+| Package topology       | Platform/Shared/Host/zero-consumer/identity Proposed changes                                                 | 保持独立架构线；Proposed ADR 未接受前不自动成为产品 Phase 1 gate                                |
 
-| 切片 | 建议 OpenSpec change |
-| --- | --- |
-| P1.1 | `bootstrap-neko-desktop-foundation` |
-| P1.2 | `implement-desktop-shell-project-state` |
-| P1.3 | `integrate-desktop-agent-home` |
-| P1.4 | `integrate-desktop-assets-canvas` |
-| P1.5 | `integrate-desktop-cut-preview-media` |
-| P1.6 | `integrate-desktop-creative-support-domains` |
-| P1.7 | `qualify-neko-desktop-phase-1` |
+P1.3-P1.5 可以在各自 owner 内推进，但不得并行修改同一个 public contract。尤其
+ResourceRef retirement 与 HTTP gateway 的 shared/Agent/Canvas consumer migration 必须串行；
+package identity normalization 必须等其 proposal 声明的 Platform/Shared/Host/zero-consumer
+前置完成后再原子执行。
 
-每个 child change 必须重新审计当时的代码事实；本提案中的文件位置和成熟度不能替代实施前
-审计。
+### 2. Phase 1 只保留一个 composition root
 
-### 2. Phase 1 只创建一个新的 composition root
-
-目标目录职责：
+当前 canonical 目录职责：
 
 ```text
 apps/neko-desktop/
@@ -113,8 +114,8 @@ Desktop main     -> AppHost -> host-neutral domain service / @neko/media
 ```
 
 不得新增 `@neko/desktop-core`、万能 `HostAdapter`、全局 command router 或第二套 design
-system。只有当 Desktop 与现有 TUI/VS Code 出现第二个真实、同语义 Node 实现时，才把共同
-算法提升到 `@neko/host/node` 或其他中立 owner。
+system。只有当两个保留 package/runtime owner 出现真实、同语义实现时，才把共同算法提升到
+准确的中立 owner；已退休宿主不能作为新增抽象的消费者证据。
 
 ### 3. Electron 基线是安全产品边界
 
@@ -130,7 +131,7 @@ P1.1 必须固定：
 - Main 根据真实 `webContents`/frame/window registry 反查 `WindowId` 和 sender identity，
   不信任 renderer 自报权限或 application identity。
 - CSP 由 Desktop 安全模块统一生成；不得使用 `unsafe-inline`、任意远程 script、
-  `file://`、任意 localhost 或 custom protocol `bypassCSP`。
+  `file://`、未经 Main 启动并发布的 localhost origin 或 custom protocol `bypassCSP`。
 - renderer 崩溃、reload、window close 和 app quit 有不同生命周期，所有 disposable、
   stream、timer、protocol session 和 runtime handle 明确释放。
 
@@ -149,16 +150,16 @@ P1.1 在同一最小边界内：
 
 用户数据处置必须覆盖 `NekoApplicationStorageCategory`：
 
-| 分类 | Phase 1 默认处置 |
-| --- | --- |
-| settings | 已知 schema 通过显式 migration 进入 canonical settings owner；未知 schema 拒绝并诊断 |
-| conversations | 复用 workspace/Conversation authority 的稳定 identity，不按 application 复制 transcript |
-| project-registry | 基于现有 workspace registry 建立 Desktop project catalog projection；不重新生成 workspace id |
-| credentials | 继续由 HostSecretPort/OS credential owner 持有，不复制明文 |
-| trust-state | 只复用与相同 workspace/config digest 绑定的明确授权；不扩大权限 |
-| installed-packages | 保留安装记录和 owner；Phase 1 只投影可用性，不启用 Phase 3 插件 UI |
-| generated-artifacts | 通过稳定 ContentLocator/ResourceRef 复用；不移动或重写源产物 |
-| rebuildable-cache | 可以显式重建；清理必须限定 cache owner 和目标，不能删除源素材 |
+| 分类                | Phase 1 默认处置                                                                             |
+| ------------------- | -------------------------------------------------------------------------------------------- |
+| settings            | 已知 schema 通过显式 migration 进入 canonical settings owner；未知 schema 拒绝并诊断         |
+| conversations       | 复用 workspace/Conversation authority 的稳定 identity，不按 application 复制 transcript      |
+| project-registry    | 基于现有 workspace registry 建立 Desktop project catalog projection；不重新生成 workspace id |
+| credentials         | 继续由 HostSecretPort/OS credential owner 持有，不复制明文                                   |
+| trust-state         | 只复用与相同 workspace/config digest 绑定的明确授权；不扩大权限                              |
+| installed-packages  | 保留安装记录和 owner；Phase 1 只投影可用性，不启用 Phase 3 插件 UI                           |
+| generated-artifacts | 通过稳定 `ContentLocator` 或 owning domain identity 复用；不移动或重写源产物                 |
+| rebuildable-cache   | 可以显式重建；清理必须限定 cache owner 和目标，不能删除源素材                                |
 
 若审计没有任何 `neko-home` 用户数据，迁移实现可以只提供明确拒绝/诊断测试并删除 legacy
 路径；不得为了假想兼容保留双读或双写。
@@ -275,21 +276,21 @@ Host/domain authority 与 renderer replica；不得创建全局 `desktopStore` �
 
 ### 7. Package integration 保持 owner 和 Root 唯一
 
-| Owner | P1 child change 的 canonical 工作 |
-| --- | --- |
-| Agent | 把 Extension router 的 host-neutral orchestration 收敛到 Agent owner；VS Code 和 Electron 注入不同 effects；实现 Electron route coverage；复用 `AgentWebviewRoot`、Conversation projection 和 Tab render runtime |
-| Assets/Content | 复用 ContentLocator、workspace-linked library、Entity/Search/local metadata；在 Assets owning package 建 browser-safe management Root，并作为独立 Resource Dock projection 接入；Desktop 不包装 TreeView |
-| Canvas | 让完整 `CanvasRoot` 注入 versioned `CanvasHostAdapter`；迁移 Root 内直接 VS Code transport；删除/poison 被替代的简化演示成功路径；`.nkc`/domain 保持真值；支持不同 Board 的领域内 View switcher 与显式双栏 |
-| Cut | 让完整 `CutRoot` 注入 versioned `CutHostAdapter`；复用 OTIO、Cut command、ExportJob 和 `@neko/media`；删除固定演示 timeline 成功路径；Cut Stage 与底部 Timeline 仍由同一 Cut session 拥有 |
-| Preview | 建立 package-owned `PreviewRoot`/descriptor lifecycle，组合现有格式 renderer；只消费 Host 授权 ContentLocator/media descriptor；提供临时、固定和显式侧边 Preview View，不默认覆盖 Canvas |
-| Media | 在 Electron main 注册安全 custom protocol，实现 token/owner/session/GET/HEAD/Range/206/cancel/backpressure；direct/remux/hardware-prepared file/PCM 由现有 playback plan 决定，renderer 视频只使用原生 `<video src>` |
-| Generation/Quality | 只通过 GenerationJob/Quality owner 的 command 和 projection 接入 Agent、Canvas、Activity；P1.3 只消费已有 Job link/status，P1.6 才组合具体领域 port；不建立 Desktop task |
-| Chara/Entity | 复用现有 Chara application/core 和 Entity binding，通过 Agent/Context Dock 投影当前已实现能力；不创建 CharacterProject/Version 或独立空编辑器 |
-| Tools/Diagnostics | 将媒体比较/metadata/diagnostic 的 browser-safe presenter 与 Host effect 分离；日志和错误使用公共 Logger/Errors，不暴露绝对路径或 runtime console |
+| Owner              | P1 child change 的 canonical 工作                                                                                                                                                        |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Agent              | 复用唯一 Agent controller、`AgentWebviewRoot`、Pi/AgentSession、Conversation projection 和 Tab render runtime；剩余工作只补真实 API Evaluation、Desktop route 和生命周期证据             |
+| Assets/Content     | 复用 `ContentLocator`、workspace-linked library、Entity/Search/local metadata 与 Assets-owned browser Root；Desktop 不建立第二套 catalog                                                 |
+| Canvas             | 完整 `CanvasRoot` 注入 versioned `CanvasHostAdapter`；`.nkc`/domain 保持真值；HTTP gateway successor 接管普通 audio/video transport 与真实媒体验收                                       |
+| Cut                | 完整 `CutRoot`/OTIO/Cut command/ExportJob 保持 authority；`redefine-openneko-lightweight-editing` 关闭编辑/保存缺口，HTTP gateway 保留 Cut mixed PCM                                     |
+| Preview            | 建立 package-owned `PreviewRoot`/descriptor lifecycle，组合现有格式 renderer；只消费 Host 授权 ContentLocator/media descriptor；提供临时、固定和显式侧边 Preview View，不默认覆盖 Canvas |
+| Media              | Desktop Main 组合唯一 scoped loopback HTTP gateway，实现 token/owner/generation/Range/CORS/PNA/cancel/backpressure；删除 `neko-media:` 与 upstream proxy；PCM 只服务 Cut 等显式处理语义  |
+| Generation/Quality | 只通过 GenerationJob/Quality owner 的 command 和 projection 接入 Agent、Canvas、Activity；P1.3 只消费已有 Job link/status，P1.6 才组合具体领域 port；不建立 Desktop task                 |
+| Chara/Entity       | 根据 zero-consumer evidence 复用明确保留的 Chara application/core 和 Entity binding，通过 Agent/Context Dock 投影当前能力；不创建 CharacterProject/Version 或独立空编辑器                |
+| Tools/Diagnostics  | 将媒体比较/metadata/diagnostic 的 browser-safe presenter 与 Host effect 分离；日志和错误使用公共 Logger/Errors，不暴露绝对路径或 runtime console                                         |
 
-每个 child change 必须同时迁移 VS Code 使用方到同一 Root/contract，或证明为什么 UI 语义和
-生命周期不同而保留 package-local 实现。Desktop 不能长期维护一套与 VS Code 完整 Root
-平行的简化实现。
+每个 child change 必须迁移 Desktop producer/consumer 到同一 owning Root/contract，并通过
+import/path/residue guards 证明已退休的 VS Code/TUI/Engine/demo 路径不可达。不得为了保留
+历史宿主测试而恢复 compatibility package、平行 adapter 或双 transport。
 
 Character Dialogue/Embody 使用 Chara-owned session 和独立 Agent Tab kind，但投影在同一个
 Agent Shell；不得建模为普通 conversation mode。Resource Dock 可以提供由 Entity authority
@@ -322,8 +323,9 @@ launch Desktop
 - Agent 命中 Pi conversation runtime、Pi Session 与 Product Turn Bridge canonical path；
 - Assets/Canvas/Cut/Preview 命中各自 public adapter；
 - Generation/Export 命中 owning Job；
-- Desktop media 命中 secure custom protocol/`@neko/media`；
-- VS Code transport、`neko-home`、Engine/client、mock store 和 demo surface 被 poison 后仍通过。
+- Desktop media 命中 Main-owned HTTP resource gateway/`@neko/media`；
+- `neko-media:`、upstream proxy、已退休宿主、`neko-home`、Engine/client、mock store 和 demo
+  surface 被删除、poison 或 residue guard 拒绝后仍通过。
 
 ### 9. 生命周期与错误语义
 
@@ -336,35 +338,56 @@ launch Desktop
 - autosave single-flight/coalesced latest intent；旧 completion 不能清除新 dirty revision。
 - renderer reload 从 Host snapshot 恢复；持久化 UI state 不成为 runtime 真值。
 - 缺失 adapter、unsupported route、unknown schema/version、无权限路径和非法状态全部
-  fail-visible，不回退 VS Code、legacy、active object 或 no-op。
+  fail-visible，不回退 retired host、legacy、active object 或 no-op。
 
-### 10. Phase 1 参考平台
+### 10. 构建目标与 Phase 1 参考平台分离
 
-Phase 1 产品级运行态证据固定在 `darwin-arm64`，因为它是当前开发和发布闭集内的真实目标。
-代码和 contract 必须保持平台中立，但本提案不宣称 Linux/Windows Desktop 已通过资格。
+当前原生构建闭集是 `darwin-arm64` 与 `win32-x64`，Linux 只运行 host-neutral CI。P0 build
+change 拥有两个真实 host package artifact、Desktop typecheck 和 Windows build/startup
+证据；这些证据不能被普通 Linux build 或 cross-package 替代。
+
+Phase 1 产品级图形化纵向验收仍固定在 `darwin-arm64`，因为这是当前可执行完整本地 UI、
+媒体和创作 fixture 的参考平台。代码和 contract 必须保持平台中立，但 macOS 的 Phase 1
+E2E 与 Windows package 均不等于 Windows 安装/升级、凭据、GPU/媒体和发布资格完成。
 
 P1.7 至少验证：
 
 - Electron package、安装/启动、窗口、菜单、文件选择和应用退出；
 - Node 24/native dependency/FFmpeg closure；
-- custom protocol Range、图片/音频/视频/文档/3D preview；
+- scoped loopback HTTP gateway Range、图片/音频/视频/文档/3D preview；
 - SDR baseline；HDR/10-bit 只报告 capability/diagnostic，不成为 Phase 1 完成条件；
 - IME、快捷键、DPI、可访问性、crash/reload；
 - 隔离 synthetic workspace，禁止使用真实用户配置、credential 或私人素材。
 
-Linux/Windows 的真实资格、installer、签名、更新、GPU/媒体矩阵进入 Phase 2。
+Windows 的完整 installer、签名、更新、凭据、GPU/媒体矩阵和产品 E2E 进入 Phase 2；Linux
+不得重新获得 Desktop artifact、native runtime 或产品 fallback。
+
+### 11. CI、Agent Evaluation 与图形化 UI 证据分离
+
+- CI 必须运行 host-neutral static build、`darwin-arm64`/`win32-x64` package、
+  deterministic unit/contract tests 和无 GUI headless Desktop functional subset。
+- `pnpm test:agent:eval` 只验证 key-free harness/schema/dry-run，不是 AI 行为验收。
+- Prompt、Skill、capability/tool routing、provider/model、AgentSession 或 Desktop Agent
+  event projection 变化时，必须通过显式本地命令运行真实 provider API Evaluation，并记录
+  provider/model/cost、canonical path 和 no-fallback evidence；不得加入 CI。
+- Renderer layout、焦点、Portal 样式、IPC/CSP、窗口生命周期和媒体可见行为必须通过隔离
+  fixture 的本地图形化 Electron 验收；不得加入 CI，也不能用普通浏览器替代。
+- P1.7 必须组合确定性结果、真实 API Agent case（适用时）和图形化 Electron evidence；
+  任一类证据不能冒充另一类。
 
 ## Risks / Trade-offs
 
 - **范围仍然较大**：通过七个 child change、依赖 gate 和最终纵向验收限制并行漂移。
 - **Canvas/Cut/Preview 解耦可能暴露旧设计问题**：必须修改唯一 Root/contract，不能旁建
   Desktop-only adapter 链来规避。
-- **Assets 新 React 管理面可能与 TreeView 交互不同**：共享 domain/service，不强制共享
-  不同宿主的 UI；若将来 VS Code 也消费该 Root，再按真实语义提取公共 primitive。
+- **历史宿主文字可能重新进入任务事实**：只保留为历史/拒绝/residue evidence；当前 owner、
+  package 和 Desktop 路径由 Accepted 文档、代码与 focused OpenSpec 决定。
 - **Project catalog 可能被误写成 ContentProject**：catalog 只拥有导航 metadata；领域
   aggregate 另行设计。
 - **Electron 依赖增加供应链和打包成本**：P1.1 锁定版本、fuses、安全测试和依赖闭包。
-- **Phase 1 只在一个参考平台验收**：UI/contract 可进入后续集成，但对用户的跨平台支持
-  声明必须等 Phase 2。
+- **Phase 1 只在一个参考平台做完整图形化验收**：Windows package 是必要构建证据，但对
+  Windows 的完整产品支持声明必须等 Phase 2。
+- **Proposed package ADR 扩大关键路径**：Platform/Shared/Host/zero-consumer/identity changes
+  维持独立 owner；未接受前不自动阻塞产品 P1，接受后按其显式依赖顺序实施。
 - **Program change 可能长期悬空**：每个 child change 独立完成/归档，program 只跟踪 gate；
   P1.7 完成后立即归档本 change，不在其中继续 Phase 2/3。

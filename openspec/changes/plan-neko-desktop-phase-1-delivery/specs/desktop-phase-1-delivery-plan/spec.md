@@ -8,7 +8,8 @@ Desktop Phase 1 MUST be implemented through bounded OpenSpec changes for foundat
 Agent/Home, Assets/Canvas, Cut/Preview/Media, support domains, and final qualification. Each child
 change MUST define its own canonical path, replaced legacy path, tests, data impact, and completion
 gate. The program MUST NOT maintain one parallel Desktop implementation until every package is
-integrated.
+integrated. The program checklist MUST track focused change gates and MUST NOT duplicate stale
+implementation tasks, superseded transports, or historical host requirements.
 
 #### Scenario: A package integration starts
 
@@ -24,6 +25,12 @@ integrated.
 - **THEN** it remains an isolated spike without a production success path
 - **AND** it cannot invent a temporary bridge, fallback, or mock contract that bypasses the pending
   foundation
+
+#### Scenario: Program and child status disagree
+
+- **WHEN** a child change implements, supersedes, transfers, or blocks program work
+- **THEN** the program records the exact focused owner and prerequisite without copying its task list
+- **AND** checkbox counts alone cannot promote the child or program to complete
 
 ### Requirement: Desktop has one secure composition root
 
@@ -200,8 +207,8 @@ independent Resource facets.
 
 Phase 1 MUST integrate Agent, Assets/Content/Media Library, Canvas, Cut, Preview/Media,
 Generation/Quality, applicable Chara/Entity, and Tools/Diagnostics through their owning public
-contracts. VS Code-specific Extension, TreeView, Custom Editor, command, URI, and message effects
-MUST remain behind the VS Code adapter and MUST NOT enter Desktop.
+contracts. Retired VS Code/TUI/Engine packages, private implementations, message effects and
+compatibility adapters MUST remain absent from production dependencies and MUST NOT enter Desktop.
 
 #### Scenario: Canvas or Cut opens in Desktop
 
@@ -214,10 +221,10 @@ MUST remain behind the VS Code adapter and MUST NOT enter Desktop.
 #### Scenario: Preview displays local content
 
 - **WHEN** Preview displays a document, image, audio, video, or supported 3D resource
-- **THEN** Host projects an authorized ContentLocator/media descriptor through the secure Desktop
-  protocol
-- **AND** Renderer does not receive a raw path, `file://` URL, arbitrary localhost URL, cache path, or
-  Engine/client token
+- **THEN** Host resolves an authorized `ContentLocator` and projects only a short-lived scoped HTTP
+  gateway descriptor or another owning bounded representation
+- **AND** Renderer does not receive a raw path, `file://` URL, unregistered localhost origin, cache
+  path, stable transport URL, or Engine/client token
 
 #### Scenario: Agent searches a project Entity
 
@@ -245,9 +252,9 @@ synthetic workspace data and MUST assert both user-visible results and the canon
 
 - **WHEN** the final Phase 1 functional scenario executes on `darwin-arm64`
 - **THEN** it exercises real Host ports, public package adapters, Pi conversation runtime, Pi Session,
-  Product Turn Bridge, owning Jobs, `@neko/media`, and secure Desktop content transport
-- **AND** poisoned VS Code transport, `neko-home`, Engine/client, mock stores, and demo surfaces are
-  not involved
+  Product Turn Bridge, owning Jobs, `@neko/media`, and the Main-owned HTTP resource gateway
+- **AND** poisoned `neko-media:`/upstream proxy, retired host paths, `neko-home`, Engine/client, mock
+  stores, and demo surfaces are not involved
 
 #### Scenario: Application restarts after work
 
@@ -256,23 +263,47 @@ synthetic workspace data and MUST assert both user-visible results and the canon
   Job facts restore from their authorities while View state restores only allowed presentation data
 - **AND** no duplicate run, import, generation, or export is submitted
 
-### Requirement: Phase 1 preserves current clients and support claims
+### Requirement: CI, Agent Evaluation and graphical UI evidence remain distinct
 
-VS Code and TUI MUST remain current product roots throughout Phase 1. Shared contract changes MUST
-retain their producer/consumer tests and current runtime acceptance paths. Phase 1 MAY use
-`darwin-arm64` as its Desktop reference platform but MUST NOT modify the closed release matrix or
-claim Linux/Windows Desktop qualification.
+CI MUST validate native package construction, deterministic unit/contract tests and a bounded
+headless Desktop functional subset. Provider-backed Agent Evaluation and graphical Electron UI
+acceptance MUST require explicit local execution and MUST NOT be reachable from GitHub workflows or
+generic CI script composition. Key-free harness validation MUST NOT be represented as AI behavior
+acceptance, and browser-only rendering MUST NOT be represented as Electron UI acceptance.
 
-#### Scenario: Shared adapter changes
+#### Scenario: Agent behavior changes
 
-- **WHEN** an existing package Root or Host controller is made host-neutral for Desktop
-- **THEN** its VS Code or TUI consumer is migrated to the same canonical contract and passes its
-  existing acceptance path
-- **AND** Desktop does not import the old host-specific implementation
+- **WHEN** Prompt, Skill, capability/tool routing, provider/model, AgentSession or Desktop Agent event
+  projection changes
+- **THEN** the owning change runs a focused real-provider API Evaluation locally with provider/model,
+  cost, canonical-path and forbidden-fallback evidence
+- **AND** CI runs only deterministic producer/consumer and harness infrastructure checks
 
-#### Scenario: Phase 1 package is demonstrated
+#### Scenario: Desktop visual behavior changes
+
+- **WHEN** layout, focus, Portal styling, IPC/CSP, window lifecycle or media visibility changes
+- **THEN** the owning change runs the isolated graphical Electron fixture locally and records visible
+  runtime evidence
+- **AND** CI retains only the non-graphical headless functional path
+
+### Requirement: Phase 1 preserves Desktop-only topology and accurate support claims
+
+Electron Desktop MUST remain the only product composition root. Shared contract changes MUST retain
+their current Desktop producer/consumer and canonical-path tests without restoring a retired host,
+compatibility package or fallback. Native build targets SHALL remain exactly `darwin-arm64` and
+`win32-x64`; Linux SHALL remain host-neutral CI only. Phase 1 MAY use `darwin-arm64` as its complete
+graphical reference platform, but a Windows package MUST NOT be represented as complete Windows
+installation, media/GPU or release qualification.
+
+#### Scenario: A shared adapter changes
+
+- **WHEN** an existing package Root or Host controller is generalized or migrated
+- **THEN** its current Desktop producer and consumer migrate atomically to the one canonical contract
+- **AND** residue/path guards prove retired hosts and old aliases cannot resolve or return success
+
+#### Scenario: A Phase 1 package is demonstrated
 
 - **WHEN** a Phase 1 Desktop package or build is produced
-- **THEN** documentation identifies it as reference-platform Alpha evidence
-- **AND** it does not imply Phase 2 cross-platform, Windows, plugin, MCP UI, or professional-tool
-  support
+- **THEN** documentation identifies exact `darwin-arm64`/`win32-x64` build evidence and the
+  `darwin-arm64` graphical qualification actually performed
+- **AND** it does not imply full Windows qualification or Phase 3 MCP/plugin/professional-tool support

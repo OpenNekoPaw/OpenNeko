@@ -1,10 +1,20 @@
-## 0. Program Proposal
+## 0. P1.0 Program Governance And Rebaseline
 
 - [x] 0.1 Audit current application identity, Host ports, Agent, Assets, Canvas, Cut, Preview,
       Generation/Quality, Chara/Entity, Tools and media reuse maturity
 - [x] 0.2 Define Phase 1 ownership, dependency order, data disposition, reference platform and
       end-to-end completion gate
 - [x] 0.3 Define the child OpenSpec boundaries; this program change does not implement runtime code
+- [x] 0.4 Re-audit the Desktop-only implementation, active child progress and accepted architecture;
+      reject the old VS Code/TUI product-root and Linux release assumptions
+- [x] 0.5 Freeze `ContentLocator` as durable public content identity, transfer Renderer media
+      transport to the HTTP resource-gateway successor and reject parallel custom-scheme ownership
+- [x] 0.6 Map every remaining Phase 1 gate to one focused owner, identify missing P1.6/P1.7 changes
+      and keep Proposed package-topology changes outside the product gate until accepted
+- [x] 0.7 Separate CI build/unit/headless-functional evidence from explicit local real-API Agent
+      Evaluation and local graphical Electron UI acceptance
+- [x] 0.8 Validate the rebased program and synchronized child artifacts with strict OpenSpec,
+      current-fact searches, formatting/link checks and `git diff --check`
 
 ## 1. P1.1 Desktop Foundation
 
@@ -40,8 +50,11 @@
 - [x] 3.3 Integrate `AgentWebviewRoot`, Conversation/Tab projections, Tool Call, Approval, Skill,
       existing GenerationJob link/status consumption and Home Conversation/Activity summaries;
       keep concrete GenerationJob Desktop composition in P1.6
-- [ ] 3.4 Run producer/consumer tests, poisoned VS Code-route Desktop tests, Agent package checks,
-      focused real Agent evaluation where behavior changes, and Electron Agent functional scenarios
+- [ ] 3.4 Close `integrate-desktop-agent-home`, `fix-desktop-agent-shell-regressions` and
+      `clarify-desktop-capability-catalog`: run deterministic producer/consumer checks, explicit
+      local real-provider Evaluation where Agent behavior/routing changes, and isolated local
+      graphical Electron conversation/plugin scenarios; treat key-free harness runs as
+      infrastructure validation only
 
 ## 4. P1.4 Assets, Content And Canvas
 
@@ -62,29 +75,31 @@
       controlled Canvas/Timeline/Model Main compositions without separate move-left/right buttons,
       independent Files/Media/Entity resource facets and package-owned bottom horizontal
       Canvas/Model toolbars; preserve all owner identities and command paths
-- [ ] 4.6 Reopen the embedded Canvas Preview acceptance path: consume the P1.5 host-neutral media
-      runtime from the Desktop Canvas adapter so audio/video nodes retain the package-owned probe,
-      poster, playback and cleanup behavior of the canonical Canvas Root
+- [ ] 4.6 Close `integrate-desktop-assets-canvas` final UI/node scenario, then let the HTTP
+      resource-gateway Canvas slice replace ordinary audio/video transport and prove package-owned
+      probe, poster, playback, isolation and cleanup in a local graphical Electron fixture
 
 ## 5. P1.5 Cut, Preview And Media
 
-- [x] 5.1 Create `integrate-desktop-cut-preview-media` with canonical Cut/Preview adapters and the
-      Desktop secure custom media protocol contract
-- [ ] 5.2 Inject the full Cut Root, preserve OTIO/Cut command/ExportJob authority, remove direct
-      VS Code transport, and remove/poison fixed demo timeline success; support multiple open Cut
-      documents with one rendered Cut Stage/Timeline session in Phase 1
-- [ ] 5.3 Build the package-owned Preview Root/descriptor lifecycle over existing document/media/3D
-      renderers and Host-authorized ContentLocator projections; implement temporary, pinned and
-      explicit side-by-side Preview Views while keeping Canvas/Cut-owned previews embedded
-- [ ] 5.4 Implement and test GET/HEAD/closed Range/206/token/owner/session/cancel/backpressure,
-      direct/remux/hardware-prepared file/PCM, native `<video src>`, SDR baseline, seek, export and
-      resource cleanup; poison `MediaSource`, `SourceBuffer`, whole-video fetch and CPU fallback
-- [ ] 5.5 Run Cut/Preview producer-consumer tests, Node/FFmpeg integration and isolated Electron
-      fixture media scenarios, proving removed hosts do not participate
+- [x] 5.1 Record `integrate-desktop-cut-preview-media` as the implemented Cut/Preview composition
+      baseline and transfer its superseded `neko-media:` transport to the HTTP gateway successor
+- [ ] 5.2 Close retained Cut edit/save/preview/export and P1 productivity work through
+      `redefine-openneko-lightweight-editing`; keep OTIO/Cut command/ExportJob authority and poison
+      demo, active-editor and retired-host success paths
+- [ ] 5.3 Close package-owned Preview lifecycle and format readiness through the HTTP gateway
+      Preview slice plus `fix-epub-preview-resource-readiness`, including temporary/pinned/side View
+      identity, documents and model resource sets
+- [ ] 5.4 After `retire-resource-ref-contract`, implement the single Main-owned HTTP gateway with
+      scoped token/origin/generation, Range/CORS/PNA/cancel/backpressure, Cut PCM and native
+      Canvas/Preview/Agent media; delete custom scheme and upstream proxy success
+- [ ] 5.5 Run focused producer/consumer and Node/FFmpeg checks, then isolated local graphical
+      Electron Cut/Canvas/Preview/EPUB scenarios proving the gateway and owning Roots were reached
+      while retired transports/hosts remained unavailable
 
 ## 6. P1.6 Supporting Creative Domains
 
-- [ ] 6.1 Create `integrate-desktop-creative-support-domains` for Generation/Quality,
+- [ ] 6.1 Read the approved zero-consumer dispositions and current package consumers, then create
+      `integrate-desktop-creative-support-domains` only for retained Generation/Quality,
       Chara/Entity and Tools/Diagnostics projections and commands
 - [ ] 6.2 Integrate GenerationJob and Quality Gate without a Desktop Task authority; project progress
       to Agent/Canvas/Activity and preserve candidate/evidence ownership
@@ -94,8 +109,9 @@
       unavailable
 - [ ] 6.4 Separate Tools browser presenters from host effects and integrate Desktop media comparison,
       metadata, logs and fail-visible diagnostics without leaking paths or runtime consoles
-- [ ] 6.5 Run domain tests, Agent evaluation where routing changes, UI adapter tests and unsupported
-      capability diagnostics
+- [ ] 6.5 Run domain tests and UI adapter checks, explicit local real-provider Evaluation only where
+      routing/Agent behavior changes, and local graphical Desktop acceptance for visible domain
+      surfaces; keep unavailable capability diagnostics fail-visible
 
 ## 7. P1.7 Qualification And Handoff
 
@@ -104,11 +120,12 @@
 - [ ] 7.2 Verify launch → Content Project → Agent → Media Library → Canvas candidate/accept →
       Preview → Cut → Export → Activity/result → close/reopen/restart
 - [ ] 7.3 Assert canonical-path counters/poisoning for Pi conversation runtime, Pi Session, Product
-      Turn Bridge, package adapters, owning Jobs, `@neko/media` and Desktop protocol; prove
-      legacy/demo/VS Code routes did not participate
+      Turn Bridge, package adapters, owning Jobs, `@neko/media` and the HTTP gateway; prove
+      custom-scheme/upstream proxy, legacy/demo/retired-host routes did not participate
 - [ ] 7.4 Verify `darwin-arm64` package/install/startup, dependency closure, IME/keyboard/DPI/
       accessibility, renderer crash, app quit and resource release
 - [ ] 7.5 Run all applicable package tests, `pnpm build`, `pnpm test`, `pnpm check`,
-      `pnpm check:quality`, OpenSpec validation and the Desktop Electron functional suite
+      `pnpm check:quality`, OpenSpec validation and CI headless functional tests; separately run
+      applicable real-provider Evaluation and the local graphical Desktop Electron suite
 - [ ] 7.6 Update current-capability documentation without claiming Phase 2 cross-platform or Phase 3
       MCP/plugin/professional-tool support, then archive the Phase 1 program
