@@ -43,6 +43,35 @@ implementation.
 - **THEN** it projects Creative Entity identity and representation bindings from Entity authority
 - **AND** it does not create a Chara asset category, CharacterProject, CharacterRun or inferred playable state
 
+### Requirement: Desktop development keeps Home contract consumers coherent
+
+Desktop development SHALL restart the Electron Main lifecycle after a successful Main watch build so
+Main, preload and renderer consume one Desktop Home management contract version. A reloaded preload
+MUST NOT send a newer Home management request to a stale Main parser. Desktop MUST NOT accept
+multiple internal schema versions, downgrade requests, retry unsupported versions or hide the
+diagnostic as compatibility behavior.
+
+#### Scenario: Shared Home contract changes during development
+
+- **WHEN** the Desktop Main watch build completes after a shared Home contract change
+- **THEN** the development lifecycle requests one Electron Main restart
+- **AND** the next Media Library search is parsed by the matching Main contract
+- **AND** production builds do not emit a development restart request
+
+### Requirement: Global Library package styles reach the renderer
+
+The Assets-owned Global Library Root SHALL import its package-owned stylesheet into the lazy renderer
+chunk. Desktop SHALL provide the complete Main viewport but MUST NOT duplicate Global Library
+selectors. Runtime acceptance MUST verify computed styles and stable layout dimensions in real
+Electron rather than only inspecting stylesheet source text.
+
+#### Scenario: User opens Asset center
+
+- **WHEN** the Global Library lazy Root is mounted in the Desktop Main viewport
+- **THEN** its header, toolbar, view switcher and collection use the Assets-owned layout rules
+- **AND** the controls do not collapse into an unstyled browser-default row
+- **AND** the renderer exposes no unsupported Home contract diagnostic
+
 ### Requirement: Resource operations use sender-bound Host effects
 
 Desktop MUST route resource search, import/link, source selection, thumbnail/metadata projection,

@@ -210,3 +210,15 @@
 - [x] 16.3 Run focused Desktop tests/typecheck, strict OpenSpec validation, production Electron
       packaging and an isolated real Desktop navigation scenario proving the two destinations,
       identities and lifecycles remain independent.
+
+## 17. Global Library Development Contract And Style Regression
+
+- [ ] 17.1 Add red Desktop development-lifecycle coverage proving a completed Main watch build
+      requests an Electron restart while a production build does not; preserve strict unsupported
+      version rejection instead of adding a compatibility fallback.
+- [ ] 17.2 Implement the canonical Main restart hook and add renderer build/runtime assertions that
+      the Assets-owned Global Library stylesheet reaches the lazy chunk without Desktop selector
+      duplication.
+- [ ] 17.3 Run focused Desktop/Assets tests and typechecks, strict OpenSpec validation, production
+      packaging and an isolated real Electron Asset center scenario proving Media Library search,
+      computed package styles, layout dimensions and clean stderr.

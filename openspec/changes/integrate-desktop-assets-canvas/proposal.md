@@ -28,6 +28,9 @@ Canvas 和受控创作布局不一致。继续添加视觉占位会形成第二�
 - 将全局资产中心与项目资源管理器拆成两个稳定导航 destination：全局资产中心在 Home/Project
   上下文中始终进入全局 Media Library / Asset Library，项目资源入口只投影当前
   Project/Workspace 的 Resource Browser Main View；两者不共享命令、激活态或 View identity。
+- 保证开发期共享 Desktop Home contract 重新构建时 Main/preload/renderer 作为同一版本
+  生命周期切换，禁止新 preload 请求命中旧 Main parser；真实 renderer 必须加载
+  Assets-owned Global Library stylesheet，不能把源文件静态存在误判为运行态样式生效。
 - Canvas 音视频节点和 Resource Browser 图片/音频/视频资源增加 package-owned 悬停预览；
   悬停只创建临时媒体会话，离开、切换条目或卸载时立即停止并释放，不打开 Workbench
   Preview、不持久化播放状态，也不向 renderer 暴露路径。

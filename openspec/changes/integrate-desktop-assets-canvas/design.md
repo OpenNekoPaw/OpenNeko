@@ -328,6 +328,25 @@ Portal content 中读取只定义于 `.canvas-webview-root` 的 toolbar/control/
 `@neko/preview-webview` 拥有，不在 Canvas 或 Desktop 中复制 viewer，也不添加无 handler 的
 假按钮。
 
+### 14. 开发期 Desktop contract 变更必须原子切换运行生命周期
+
+Desktop Home management contract 同时被 Main parser、preload producer 和 renderer bridge
+消费。生产 package 由一次完整构建生成同版本产物；开发期 Vite watch 则可能分别重建 Main、
+preload 和 renderer。Electron Forge 7.11.2 的内置 Main hot-restart plugin 当前不执行重启，
+而 preload 重建会触发 renderer full reload。若共享 contract version 在此期间变化，新
+preload 会向仍驻留的旧 Main 发送新版本 payload，最终显示
+`Desktop Home management contract version is unsupported.`。
+
+开发配置必须在 Main watch build 完成后请求 Forge 重启 Electron 主进程，使 Main、preload
+和 renderer 从同一构建代际重新创建。该机制只属于开发工具生命周期，不进入生产 bridge，
+也不得通过 Main 接受多个 schema version、preload 降级 version、renderer retry 或错误吞掉
+来伪造兼容。聚焦测试必须调用真实 Vite plugin hook 并证明 production build 不触发重启。
+
+Global Library 的结构与样式继续由 `neko-assets/global-library/root` 拥有。Root 的 CSS import
+必须随 lazy chunk 进入 production renderer，并在真实 Electron 中通过 computed style 和
+布局尺寸验收；只读取 `style.css` 源文本的测试不能证明 runtime stylesheet 已加载。Desktop
+只提供完整 Main viewport，不复制 package selector 或另建本地样式路径。
+
 ## Risks / Trade-offs
 
 - [Assets package 当前整体依赖 VS Code] → 先按 presenter/service/effect 责任切开，保留一个
