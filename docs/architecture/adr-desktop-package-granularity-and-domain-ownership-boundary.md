@@ -7,6 +7,10 @@
 范围：`apps/neko-desktop`、一级 `packages/*` workspace、Desktop Main/preload/renderer、
 Host ports、领域 runtime、Node adapter、Webview、测试支撑与仓库治理。
 
+本文是待评审的目标架构，不是当前 package 拓扑的事实清单，也不授权直接移动、删除或重命名
+workspace。当前行为以代码、manifest 和 Accepted 架构文档为准；本文目标必须通过“实施
+OpenSpec”列出的 change 完成路径级验收后，才能提升为 Accepted/current 约束。
+
 ## 背景
 
 `flatten-desktop-only-monorepo` 已将 OpenNeko 收敛为唯一 Electron Desktop 应用和一级
@@ -30,8 +34,10 @@ workspace、构建、依赖、测试和命名成本，却不能改善所有权�
   `packages/`。
 - 一级 package 只为 bounded context、跨 runtime contract、Node/browser 隔离、重型 adapter
   或多个真实消费者建立。
-- `@neko/host` 继续作为唯一共享 Host primitive port 包；领域接入在 Desktop 内按模块隔离，
-  不为单一 Electron 宿主创建一组 `neko-*-host` workspace package。
+- `@neko/host` 继续作为唯一共享 Host primitive port 包，但必须先执行准入审计；产品
+  application contract、领域命令目录、mutable registry 和 concrete adapter 不得留在其中。
+  领域接入在 Desktop 内按模块隔离，不为单一 Electron 宿主创建一组 `neko-*-host`
+  workspace package。
 - Desktop 可以拥有产品 Shell、Home、Project/Window/View、typed IPC、授权、文件选择和
   跨领域 capability composition；不得拥有 Agent 会话语义、Cut 时间线/导出编排等
   host-neutral 领域运行逻辑。
@@ -106,37 +112,76 @@ Renderer/Webview 不得导入 Node/Electron；Desktop Main 不得导入 React；
 
 ## 当前 package 职责与处置
 
-| Package                       | 当前职责                                              | 决策                                            |
-| ----------------------------- | ----------------------------------------------------- | ----------------------------------------------- |
-| `apps/neko-desktop`           | Electron Main/preload/renderer、Shell、打包和产品组合 | 保留在 `apps/`                                  |
-| `neko-agent-runtime`          | Pi 会话、Turn、Tool、Capability、权限和 Agent runtime | 保留；接收从 Desktop 下沉的 Agent 逻辑          |
-| `neko-agent-types`            | Agent Main/preload/Webview contract 和状态投影        | 保留                                            |
-| `neko-agent-webview`          | Chat/Agent React UI 和浏览器交互                      | 保留                                            |
-| `neko-ai-sdk`                 | AI SDK/provider adapter                               | 暂保留；在 Platform 拆解后复核消费者            |
-| `neko-platform`               | Config、provider 和媒体生成集成                       | 拆解到真实 owner 后移除                         |
-| `neko-agent-test-utils`       | fixture、stream replay 和 poison helper               | 当前无跨包消费者；合并或建立真实复用            |
-| `neko-types` / `@neko/shared` | 公共契约、Logger、路径、metadata 和 Node helper       | 保留最小 L0；提取 L1/领域职责                   |
-| `neko-host`                   | 文件、路径、凭据、权限和应用身份等 Host ports         | 保留单一共享包                                  |
-| `neko-ui`                     | 无业务 React primitive、布局、焦点和基础交互          | 保留                                            |
-| `neko-media`                  | 媒体契约、Node/FFmpeg、browser video/PCM              | 保留；现有 subpath 隔离有效                     |
-| `neko-content`                | 文档解析、locator、range 和读取                       | 保留                                            |
-| `neko-markdown`               | Markdown 解析与投影                                   | 保留；内部包应显式 `private`                    |
-| `neko-entity`                 | 创作实体、分析和 projection                           | 保留                                            |
-| `neko-search`                 | 搜索 coordinator/provider                             | 当前未接入；接入或明确为未接入内核              |
-| `neko-generation`             | 生成 contract 和 recoverable Job                      | 保留                                            |
-| `neko-quality`                | Quality Gate、evaluator 和证据模型                    | 当前未接入；接入或明确为未接入内核              |
-| `neko-chara`                  | Character Dialogue、证据和运行编排                    | bounded context 保留；不得宣称 Desktop 已接入   |
-| `neko-skills`                 | 内置 Skill 内容资源                                   | 保留为内容 owner                                |
-| `neko-assets`                 | Resource Browser 和 Media Library copy                | 保留                                            |
-| `neko-canvas-domain`          | Canvas contract、authoring 和 session                 | 保留                                            |
-| `neko-canvas-webview`         | Canvas 浏览器 UI                                      | 保留                                            |
-| `neko-cut-domain`             | OTIO、Timeline、Command 和 session                    | 保留                                            |
-| `neko-cut-node`               | FFmpeg、媒体导入、导出和预览 adapter                  | 保留                                            |
-| `neko-cut-webview`            | Timeline 编辑 UI                                      | 保留                                            |
-| `neko-preview-contracts`      | Main/Webview Preview contract                         | 保留                                            |
-| `neko-preview-webview`        | PDF、EPUB、媒体和 3D Preview UI                       | 保留                                            |
-| `neko-tools-contracts`        | Media Diff contract                                   | 仅有 Webview 消费时合并；真实 Host 消费后可独立 |
-| `neko-tools-webview`          | 图片、音频和视频 Diff UI                              | 当前未接入；不得视为已交付产品能力              |
+| Package                       | 当前职责                                               | 决策                                            |
+| ----------------------------- | ------------------------------------------------------ | ----------------------------------------------- |
+| `apps/neko-desktop`           | Electron Main/preload/renderer、Shell、打包和产品组合  | 保留在 `apps/`                                  |
+| `neko-agent-runtime`          | Pi 会话、Turn、Tool、Capability、权限和 Agent runtime  | 保留；接收从 Desktop 下沉的 Agent 逻辑          |
+| `neko-agent-types`            | Agent Main/preload/Webview contract 和状态投影         | 保留                                            |
+| `neko-agent-webview`          | Chat/Agent React UI 和浏览器交互                       | 保留                                            |
+| `neko-ai-sdk`                 | AI SDK/provider adapter                                | 暂保留；在 Platform 拆解后复核消费者            |
+| `neko-platform`               | Config、provider 和媒体生成集成                        | 拆解到真实 owner 后移除                         |
+| `neko-agent-test-utils`       | fixture、stream replay 和 poison helper                | 当前无跨包消费者；合并或建立真实复用            |
+| `neko-types` / `@neko/shared` | 公共契约、Logger、路径、metadata 和 Node helper        | 保留最小 L0；提取 L1/领域职责                   |
+| `neko-host`                   | Host primitive ports，以及当前误置的应用/命令/registry | 保留并收窄；非 primitive 迁回真实 owner         |
+| `neko-ui`                     | 无业务 React primitive、布局、焦点和基础交互           | 保留                                            |
+| `neko-media`                  | 媒体契约、Node/FFmpeg、browser video/PCM               | 保留；现有 subpath 隔离有效                     |
+| `neko-content`                | 文档解析、locator、range 和读取                        | 保留                                            |
+| `neko-markdown`               | Markdown 解析与投影                                    | 保留；内部包应显式 `private`                    |
+| `neko-entity`                 | 创作实体、分析和 projection                            | 保留                                            |
+| `neko-search`                 | 搜索 coordinator/provider                              | 当前未接入；接入或明确为未接入内核              |
+| `neko-generation`             | 生成 contract 和 recoverable Job                       | 保留                                            |
+| `neko-quality`                | Quality Gate、evaluator 和证据模型                     | 当前未接入；接入或明确为未接入内核              |
+| `neko-chara`                  | Character Dialogue、证据和运行编排                     | bounded context 保留；不得宣称 Desktop 已接入   |
+| `neko-skills`                 | 内置 Skill 内容资源                                    | 保留为内容 owner                                |
+| `neko-assets`                 | Resource Browser 和 Media Library copy                 | 保留                                            |
+| `neko-canvas-domain`          | Canvas contract、authoring 和 session                  | 保留                                            |
+| `neko-canvas-webview`         | Canvas 浏览器 UI                                       | 保留                                            |
+| `neko-cut-domain`             | OTIO、Timeline、Command 和 session                     | 保留                                            |
+| `neko-cut-node`               | FFmpeg、媒体导入、导出和预览 adapter                   | 保留                                            |
+| `neko-cut-webview`            | Timeline 编辑 UI                                       | 保留                                            |
+| `neko-preview-contracts`      | Main/Webview Preview contract                          | 保留                                            |
+| `neko-preview-webview`        | PDF、EPUB、媒体和 3D Preview UI                        | 保留                                            |
+| `neko-tools-contracts`        | Media Diff contract                                    | 仅有 Webview 消费时合并；真实 Host 消费后可独立 |
+| `neko-tools-webview`          | 图片、音频和视频 Diff UI                               | 当前未接入；不得视为已交付产品能力              |
+
+## Package identity、owner 与处置映射
+
+下表冻结本 ADR 提出时的完整映射。`Consumers` 是 2026-07-31 manifest 直接依赖基线，不包含
+动态资源加载、root script 和历史测试引用；实施前必须重新生成并与本表对账。标记为“治理后
+决定”的 package 不得先行重命名：若治理决定删除/合并，则最终目录和 identity 均为无；若
+决定保留，使用表中给出的规范化目标。
+
+| 当前目录                          | 当前 npm identity         | 最终目录                          | 最终 identity             | Owner                                       | Consumers（当前 manifest）                                                                      | Disposition                                                              |
+| --------------------------------- | ------------------------- | --------------------------------- | ------------------------- | ------------------------------------------- | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| `apps/neko-desktop`               | `@neko/app-desktop`       | `apps/neko-desktop`               | `@neko/app-desktop`       | Electron application/composition            | 无（应用根）                                                                                    | 保留                                                                     |
+| `packages/neko-agent-runtime`     | `@neko/agent`             | `packages/neko-agent`             | `@neko/agent`             | Agent runtime、Pi session、Tool、permission | Desktop、Agent test-utils、Platform                                                             | 仅目录改名；不得恢复历史聚合根语义或创建第二个 `@neko/agent`             |
+| `packages/neko-agent-test-utils`  | `@neko-agent/test-utils`  | `packages/neko-agent-test-utils`  | `@neko/agent-test-utils`  | Agent test support                          | 无                                                                                              | 零消费者治理后决定；保留时统一 identity，否则合并到真实测试 owner 或删除 |
+| `packages/neko-agent-types`       | `@neko-agent/types`       | `packages/neko-agent-types`       | `@neko/agent-types`       | Agent L0/cross-runtime contract             | Desktop、Agent runtime、Agent Webview、AI SDK、Platform                                         | 保留并统一 identity                                                      |
+| `packages/neko-agent-webview`     | `@neko-agent/webview`     | `packages/neko-agent-webview`     | `@neko/agent-webview`     | Agent browser/React UI                      | Desktop                                                                                         | 保留并统一 identity                                                      |
+| `packages/neko-ai-sdk`            | `@neko/ai-sdk`            | `packages/neko-ai-sdk`            | `@neko/ai-sdk`            | AI SDK/provider adapter                     | Platform                                                                                        | Platform 拆解后复核真实消费者；保留时名称不变                            |
+| `packages/neko-assets`            | `neko-assets`             | `packages/neko-assets`            | `@neko/assets`            | Resource Browser/Media Library              | Desktop                                                                                         | 保留并统一 identity                                                      |
+| `packages/neko-canvas-domain`     | `@neko-canvas/domain`     | `packages/neko-canvas-domain`     | `@neko/canvas-domain`     | Canvas contract/authoring/session           | Desktop、Canvas Webview                                                                         | 保留并统一 identity                                                      |
+| `packages/neko-canvas-webview`    | `@neko-canvas/webview`    | `packages/neko-canvas-webview`    | `@neko/canvas-webview`    | Canvas browser/React UI                     | Desktop                                                                                         | 保留并统一 identity                                                      |
+| `packages/neko-chara`             | `@neko/chara`             | `packages/neko-chara`             | `@neko/chara`             | Character Dialogue bounded context          | 无                                                                                              | 零消费者治理后决定；保留时标记未接入内核                                 |
+| `packages/neko-content`           | `@neko/content`           | `packages/neko-content`           | `@neko/content`           | Content locator/range/read                  | Agent runtime                                                                                   | 保留                                                                     |
+| `packages/neko-cut-domain`        | `@neko-cut/domain`        | `packages/neko-cut-domain`        | `@neko/cut-domain`        | Cut OTIO/timeline/session                   | Desktop、Cut Node、Cut Webview                                                                  | 保留并统一 identity                                                      |
+| `packages/neko-cut-node`          | `@neko-cut/node`          | `packages/neko-cut-node`          | `@neko/cut-node`          | Cut Node/FFmpeg adapter                     | Desktop                                                                                         | 保留并统一 identity                                                      |
+| `packages/neko-cut-webview`       | `@neko/webview`           | `packages/neko-cut-webview`       | `@neko/cut-webview`       | Cut browser/React UI                        | Desktop                                                                                         | 保留；优先消除 owner 不明确的 `@neko/webview`                            |
+| `packages/neko-entity`            | `@neko/entity`            | `packages/neko-entity`            | `@neko/entity`            | Entity domain/projection                    | Desktop                                                                                         | 保留                                                                     |
+| `packages/neko-generation`        | `@neko/generation`        | `packages/neko-generation`        | `@neko/generation`        | Generation job/output lifecycle             | Desktop、Platform                                                                               | 保留并接收 Platform 中的 Generation owner 职责                           |
+| `packages/neko-host`              | `@neko/host`              | `packages/neko-host`              | `@neko/host`              | Host-neutral primitive ports                | Desktop、Agent types                                                                            | 保留并按 Host 准入规则收窄                                               |
+| `packages/neko-markdown`          | `@neko/markdown`          | `packages/neko-markdown`          | `@neko/markdown`          | Markdown parse/projection                   | Agent Webview、Content、UI                                                                      | 保留；内部包显式 `private`                                               |
+| `packages/neko-media`             | `@neko/media`             | `packages/neko-media`             | `@neko/media`             | Media contract/Node/browser runtime         | Desktop、Agent/Canvas/Cut/Preview/Tools Webview、Cut Node                                       | 保留                                                                     |
+| `packages/neko-platform`          | `@neko/platform`          | 无                                | 无                        | 当前无稳定 owner                            | Desktop                                                                                         | 按领域 owner 拆解后删除；不得保留 facade、alias 或 fallback              |
+| `packages/neko-preview-contracts` | `@neko-preview/contracts` | `packages/neko-preview-contracts` | `@neko/preview-contracts` | Preview cross-runtime contract              | Desktop、Preview Webview                                                                        | 保留并统一 identity                                                      |
+| `packages/neko-preview-webview`   | `@neko/preview-webview`   | `packages/neko-preview-webview`   | `@neko/preview-webview`   | Preview browser/React UI                    | Desktop                                                                                         | 保留                                                                     |
+| `packages/neko-quality`           | `@neko/quality`           | `packages/neko-quality`           | `@neko/quality`           | Quality Gate/evidence bounded context       | 无                                                                                              | 零消费者治理后决定；保留时标记未接入内核                                 |
+| `packages/neko-search`            | `@neko/search`            | `packages/neko-search`            | `@neko/search`            | Search coordinator/provider                 | 无                                                                                              | 零消费者治理后决定；接入、标记未接入或删除                               |
+| `packages/neko-skills`            | `@neko/skills`            | `packages/neko-skills`            | `@neko/skills`            | Builtin Skill resource owner                | 无 manifest 消费者                                                                              | 先审计资源 loader/打包消费；证实内容 owner 后保留，否则合并或删除        |
+| `packages/neko-tools-contracts`   | `@neko-tools/contracts`   | `packages/neko-tools-contracts`   | `@neko/tools-contracts`   | Tools/Media Diff contract                   | Tools Webview                                                                                   | 与 Tools Webview 作为依赖岛共同治理；保留时统一 identity                 |
+| `packages/neko-tools-webview`     | `@neko-tools/webview`     | `packages/neko-tools-webview`     | `@neko/tools-webview`     | Tools/Media Diff browser UI                 | 无                                                                                              | 零消费者治理后决定；接入、合并或删除                                     |
+| `packages/neko-types`             | `@neko/shared`            | `packages/neko-shared`            | `@neko/shared`            | Cross-domain L0 foundation                  | 24 个 workspace；除 Cut domain、Markdown、Skills、Tools contracts 外的当前 app/package consumer | 先按 layer/owner 拆解，再仅改目录；不得在职责收敛前改名                  |
+| `packages/neko-ui`                | `@neko/ui`                | `packages/neko-ui`                | `@neko/ui`                | Cross-Webview React primitives              | Desktop、Agent/Canvas/Cut/Preview/Tools Webview                                                 | 保留并接收 Shared 中的 L2 UI primitive                                   |
 
 ## 决策
 
@@ -165,8 +210,10 @@ Tests -> neko-agent-test-utils
 contract 会进入同一依赖闭包。`ai-sdk` 隔离第三方 provider adapter，暂时保留。
 `test-utils` 只有出现两个以上真实测试消费者时才值得独立；当前零消费者不满足条件。
 
-已删除的 `packages/neko-agent` 聚合根不是父 package，也不得恢复为兼容包、目录容器或
-第二个 Agent owner。
+已删除的历史 `packages/neko-agent` 聚合根不是父 package，也不得恢复为兼容包、目录容器或
+第二个 Agent owner。最终允许将 `packages/neko-agent-runtime` 目录改名为
+`packages/neko-agent`，但该路径只拥有当前 `@neko/agent` runtime；这是一对一目录收敛，不是
+聚合根复活。
 
 ### 3. Desktop 保留应用业务，不保留领域业务
 
@@ -211,7 +258,37 @@ apps/neko-desktop/src/
 只负责显式构造与释放。除非未来出现第二个 concrete host、独立发布或独立依赖闭包，不创建
 `neko-agent-host`、`neko-cut-host` 等 workspace package。
 
-### 5. `neko-platform` 必须按 owner 拆解
+### 5. `@neko/host` 只接纳 Host primitive
+
+`@neko/host` 的准入必须同时满足：
+
+- product/domain neutral，不含 `neko-desktop` 等 application identity 或产品命令语义；
+- 只定义最小 port、value、typed diagnostic 或不可变 projection，不拥有 concrete I/O、
+  mutable registry/manager 或资源生命周期；
+- 至少两个真实消费者，或存在必须集中约束的 Main/preload/renderer 或 host 安全边界；
+- 消费者可以通过精简 subpath 和窄 port 使用，不要求依赖整个 `NekoHostPorts`。
+
+以下内容不得进入或继续留在 `@neko/host`：
+
+- Desktop application identity、handoff 和 storage migration contract；
+- workspace/resource/drag 等产品命令目录与领域 payload；
+- mutable Command Registry、manager、concrete filesystem/Electron adapter；
+- React component、领域 DTO、无 owner 的通用 helper。
+
+当前文件按下表处理，具体 export 必须在实施 change 中逐项对账：
+
+| 当前文件                        | 目标处置                                                                                  |
+| ------------------------------- | ----------------------------------------------------------------------------------------- |
+| `ports.ts`                      | 保留符合准入的 environment/workspace/files/path/secret/external port 与 diagnostic        |
+| `application.ts`                | 移入 Desktop-owned L0 shared contract；不再由 Host primitive package 硬编码应用身份       |
+| `commands.ts`                   | 产品 command/payload 移入 owning domain/Desktop contract；mutable registry 移 composition |
+| `workspace-content-settings.ts` | 仅保留 host-neutral immutable projection/validation；具体 content/application policy 迁出 |
+| `projection-attachment.ts`      | 仅在满足跨 runtime 消费与准入证据时保留，否则迁入 owning projection contract              |
+
+Desktop Main 继续构造和释放 concrete Host adapter。不得用新的 `manager`、`registry`、`common`
+或 `platform` package 接走被排除职责，也不得为单一 Electron 宿主创建多个 `*-host` package。
+
+### 6. `neko-platform` 必须按 owner 拆解
 
 `neko-platform` 同时承担 Agent 配置、provider、媒体生成、下载、generated output 和文件
 能力，不是稳定 bounded context。目标迁移方向：
@@ -224,7 +301,7 @@ apps/neko-desktop/src/
 
 迁移完成后删除 `neko-platform`，不得保留 facade、fallback 或 manager bag。
 
-### 6. `@neko/shared` 只保留真实共享基础能力
+### 7. `@neko/shared` 只保留真实共享基础能力
 
 `packages/neko-types` 当前同时拥有广泛领域 DTO、local metadata、project file I/O、Node
 helper、组件和图标。审计顺序：
@@ -237,7 +314,7 @@ helper、组件和图标。审计顺序：
 在职责收敛后，目录可从 `neko-types` 改为与 package identity 一致的 `neko-shared`。
 不得仅按文件数量机械拆包。
 
-### 7. package identity 统一为单一 scope
+### 8. package identity 统一为单一 scope
 
 当前同时存在 `@neko/*`、`@neko-agent/*`、`@neko-canvas/*`、`@neko-cut/*`、
 `@neko-preview/*`、`@neko-tools/*` 和无 scope 的 `neko-assets`。所有 package 都是预发布
@@ -255,11 +332,13 @@ helper、组件和图标。审计顺序：
 `@neko/webview` 必须优先消除，因为名称无法表达 Cut owner。命名迁移必须一次性更新
 manifest、imports、lockfile、scripts、tests 和文档，不保留 alias 或兼容 package。
 
-### 8. 未接入 package 必须显式治理
+### 9. 未接入 package 必须显式治理
 
-反向依赖审计显示 `neko-chara`、`neko-quality`、`neko-search` 和
-`neko-tools-webview` 当前没有 workspace 消费者。它们可以作为真实 bounded context 或
-独立内核继续存在，但必须满足以下之一：
+manifest 反向依赖审计显示 `neko-agent-test-utils`、`neko-chara`、`neko-quality`、
+`neko-search`、`neko-skills` 和 `neko-tools-webview` 当前没有 workspace 消费者；
+`neko-tools-contracts` 仅被未接入的 Tools Webview 消费。manifest 零消费者不等于没有资源
+loader、root tooling 或动态消费，尤其 `neko-skills` 必须先检查内容加载与打包路径。这些
+package 可以作为真实 bounded context、内容 owner 或独立内核继续存在，但必须满足以下之一：
 
 - 通过活跃 OpenSpec 接入 Desktop canonical path；
 - 在 package README 和产品能力文档中明确标记为未接入；
@@ -267,7 +346,7 @@ manifest、imports、lockfile、scripts、tests 和文档，不保留 alias 或�
 
 不得由 package 存在、单元测试通过或 root build 成功推断产品能力已经可用。
 
-### 9. 残留按性质分类处理
+### 10. 残留按性质分类处理
 
 - **本地忽略目录：** 已删除的 `neko-agent`、`neko-canvas`、`neko-client`、`neko-cut`、
   `neko-engine`、`neko-preview`、`neko-tools` 聚合根不属于 workspace。确认只含
@@ -286,14 +365,28 @@ manifest、imports、lockfile、scripts、tests 和文档，不保留 alias 或�
 1. 建立 package identity、反向消费者、Desktop 领域逻辑和残留目录的机器可读清单。
 2. 修正文档事实与归档已完成 OpenSpec，避免旧约束参与后续设计。
 3. 将 Desktop 中的 Agent/Cut host-neutral 逻辑迁回现有 owning package，并增加路径断言。
-4. 拆解 `neko-platform`，同时消除其 facade 和 fallback。
-5. 审计 `@neko/shared`，按领域 owner、L0/L1 和 UI/Node 边界迁移。
-6. 处理零消费者 package，明确接入、未接入或删除。
-7. 最后统一 package identity 和必要目录名，避免在所有权迁移前产生两轮路径 churn。
-8. 清理本地忽略目录和空目录，运行完整 repository、Desktop package 和真实 Electron 验收。
+4. 按准入规则收窄 `@neko/host`，迁出 application contract、产品命令和 mutable registry。
+5. 拆解 `neko-platform`，同时消除其 facade 和 fallback。
+6. 审计 `@neko/shared`，按领域 owner、L0/L1 和 UI/Node 边界迁移。
+7. 处理零消费者 package，明确接入、未接入或删除。
+8. 最后统一 package identity 和必要目录名，避免在所有权迁移前产生两轮路径 churn。
+9. 清理本地忽略目录和空目录，运行完整 repository、Desktop package 和真实 Electron 验收。
 
-上述步骤涉及跨包契约、目录移动和架构变更，实施前必须创建独立 OpenSpec。不得将本 ADR
-直接视为删除用户数据、批量移动文件或保留兼容 alias 的授权。
+上述步骤涉及跨包契约、目录移动和架构变更，只能通过以下独立 OpenSpec 实施：
+
+1. [`decompose-neko-platform-by-domain-owner`](../../openspec/changes/decompose-neko-platform-by-domain-owner/)：
+   按 Agent/AI SDK/Generation/Desktop owner 拆解并删除 Platform。
+2. [`decompose-neko-shared-by-layer-owner`](../../openspec/changes/decompose-neko-shared-by-layer-owner/)：
+   按 L0/L1/L2 和领域 owner 收敛 Shared。
+3. [`govern-zero-consumer-workspace-packages`](../../openspec/changes/govern-zero-consumer-workspace-packages/)：
+   审计 manifest、动态资源和测试消费，决定接入、未接入、合并或删除。
+4. [`refine-neko-host-primitive-boundary`](../../openspec/changes/refine-neko-host-primitive-boundary/)：
+   落实 Host 准入、应用契约/命令/registry 迁移和边界门禁。
+5. [`normalize-package-directory-and-npm-identities`](../../openspec/changes/normalize-package-directory-and-npm-identities/)：
+   在前四项完成后统一目录与 npm identity。
+
+不得将本 ADR 直接视为删除用户数据、批量移动文件或保留兼容 alias 的授权。第五项依赖前
+四项的最终 disposition；若 inventory 漂移，必须先更新映射和 OpenSpec，不能部分重命名。
 
 ## 后果
 
@@ -345,7 +438,9 @@ path 要求。
 - workspace 包含一个应用和 28 个一级 package；
 - `apps/neko-desktop/src` 约 4.2 万行非空代码，其中 Main 生产代码约 1.45 万行；
 - `neko-agent-test-utils` 没有反向 workspace 消费者；
-- `neko-chara`、`neko-quality`、`neko-search`、`neko-tools-webview` 没有产品依赖；
+- `neko-chara`、`neko-quality`、`neko-search`、`neko-skills`、`neko-tools-webview` 没有
+  manifest 反向消费者，`neko-tools-contracts` 只被 Tools Webview 消费；该结论不排除资源
+  loader 或 root tooling，且 `neko-entity` 已由 Desktop 直接消费；
 - Desktop Agent composition/controller 和 Desktop Cut runtime 包含可下沉的 host-neutral
   业务状态与编排；
 - dependency、legacy debt、unused 和 test ownership 门禁通过，但这些门禁不能证明职责
