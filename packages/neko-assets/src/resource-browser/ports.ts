@@ -3,6 +3,7 @@ import type {
   ContentLocator,
   EntityRepresentationBinding,
   MediaLibraryProjectionEntry,
+  WorkspaceMediaLibraryStatus,
 } from '@neko/shared';
 import type {
   ResourceBrowserContentItem,
@@ -19,6 +20,7 @@ export interface ResourceBrowserContentEntry extends MediaLibraryProjectionEntry
   readonly parentLocator?: ContentLocator;
   readonly depth: number;
   readonly libraryName?: string;
+  readonly libraryStatus?: WorkspaceMediaLibraryStatus;
 }
 
 export interface ResourceBrowserFilesReader {

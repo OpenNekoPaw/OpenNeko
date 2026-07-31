@@ -12,6 +12,10 @@ import {
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import {
+  ENTITY_REPRESENTATION_BINDING_FILE_VERSION,
+  encodeEntityRepresentationBindingFile,
+} from '@neko/shared';
 import type { ILogger } from '@neko/shared/logger';
 import type { ResourceBrowserIdentity } from 'neko-assets/resource-browser/contract';
 import { presentResourceBrowserContentItem } from 'neko-assets/resource-browser/presenter';
@@ -28,6 +32,7 @@ import {
   listDesktopGlobalMediaLibraryConnections,
   removeDesktopGlobalMediaLibraryConnection,
 } from './desktop-global-media-library-files';
+import { DesktopWorkspaceMediaLibrarySyncService } from './desktop-workspace-media-library-sync';
 
 const temporaryRoots: string[] = [];
 const identity: ResourceBrowserIdentity = {
@@ -46,15 +51,72 @@ afterEach(async () => {
 });
 
 describe('Desktop Resource Browser source', () => {
+  it('projects a required-but-unlinked Media Library from authoritative project references', async () => {
+    const fixture = await createFixture();
+    const nekoDirectory = path.join(fixture.workspace, 'neko');
+    await mkdir(nekoDirectory, { recursive: true });
+    await writeFile(
+      path.join(nekoDirectory, 'entity-representation-bindings.json'),
+      encodeEntityRepresentationBindingFile({
+        version: ENTITY_REPRESENTATION_BINDING_FILE_VERSION,
+        bindings: [
+          {
+            id: 'binding-footage',
+            entityId: 'character-a',
+            entityKind: 'character',
+            representation: {
+              kind: 'workspace-file',
+              path: 'neko/assets/Footage/shot.mov',
+            },
+            role: 'portrait',
+            status: 'confirmed',
+            availability: 'active',
+            source: 'user',
+            updatedAt: '2026-08-01T00:00:00.000Z',
+          },
+        ],
+      }),
+    );
+    const host = createElectronNekoHostPorts({
+      homedir: fixture.root,
+      nekoHome: path.join(fixture.root, '.openneko'),
+      workspaceRoot: fixture.workspace,
+      version: '0.0.1',
+      logger: createLogger(),
+    });
+    const workspace = {
+      workspaceId: identity.workspaceId,
+      workspacePath: fixture.workspace,
+      displayName: 'Fixture',
+      locator: { kind: 'relative' as const, value: 'workspace' },
+    };
+    const source = createDesktopResourceBrowserReadSource({
+      workspace,
+      host,
+      workspaceMediaLibrarySync: new DesktopWorkspaceMediaLibrarySyncService(
+        path.join(fixture.root, '.openneko', 'media-libraries'),
+      ),
+    });
+
+    await expect(source.media.search({ identity, query: '', limit: 20 })).resolves.toEqual([
+      expect.objectContaining({
+        label: 'Footage',
+        libraryName: 'Footage',
+        availability: 'unavailable',
+        capabilities: [],
+        libraryStatus: expect.objectContaining({
+          state: 'required-unlinked',
+          referenceCount: 1,
+          missingCount: 1,
+        }),
+      }),
+    ]);
+  });
+
   it('keeps Asset Library content independent from connected Media Library files', async () => {
     const fixture = await createFixture();
     const globalAssetRoot = path.join(fixture.root, 'home', '.neko', 'assets');
-    const globalMediaLibraryRoot = path.join(
-      fixture.root,
-      'home',
-      '.neko',
-      'media-libraries',
-    );
+    const globalMediaLibraryRoot = path.join(fixture.root, 'home', '.neko', 'media-libraries');
     const externalLibrary = path.join(fixture.root, 'Footage');
     await mkdir(path.join(globalAssetRoot, 'Editorial'), { recursive: true });
     await mkdir(path.join(externalLibrary, 'shots'), { recursive: true });
@@ -176,9 +238,7 @@ describe('Desktop Resource Browser source', () => {
     ]);
 
     await removeDesktopGlobalMediaLibraryConnection({ mediaLibraryRoot, libraryId });
-    await expect(
-      readFile(path.join(target, 'images', 'hero.png'), 'utf8'),
-    ).resolves.toBe('hero');
+    await expect(readFile(path.join(target, 'images', 'hero.png'), 'utf8')).resolves.toBe('hero');
   });
 
   it('exposes the same read authority to Home without composing interaction effects', async () => {
@@ -511,10 +571,11 @@ describe('Desktop Resource Browser source', () => {
     expect(result.bindings.map((binding) => binding.id)).toEqual(['binding-confirmed']);
   });
 
-  it('adds a selected directory to the global registry and links it into the workspace', async () => {
+  it('adds a selected directory through links without copying the library', async () => {
     const fixture = await createFixture();
     const selected = path.join(fixture.root, 'Media Source');
     await mkdir(selected);
+    await writeFile(path.join(selected, 'unreferenced.mov'), 'external-only');
     const didMutateGlobalMediaLibraries = vi.fn();
     const composition = createComposition(fixture.workspace, {
       selectSource: async () => selected,
@@ -525,6 +586,13 @@ describe('Desktop Resource Browser source', () => {
 
     const link = await lstat(path.join(fixture.workspace, 'neko', 'assets', 'Media Source'));
     expect(link.isSymbolicLink()).toBe(true);
+    expect(
+      (
+        await lstat(
+          path.join(fixture.root, '.openneko', 'media-libraries', 'local', 'Media Source'),
+        )
+      ).isSymbolicLink(),
+    ).toBe(true);
     expect(
       await listDesktopGlobalMediaLibraryConnections(
         path.join(fixture.root, '.openneko', 'media-libraries'),
@@ -538,6 +606,9 @@ describe('Desktop Resource Browser source', () => {
     ]);
     expect(await realpath(path.join(fixture.workspace, 'neko', 'assets', 'Media Source'))).toBe(
       await realpath(selected),
+    );
+    await expect(readFile(path.join(selected, 'unreferenced.mov'), 'utf8')).resolves.toBe(
+      'external-only',
     );
     expect(didMutateGlobalMediaLibraries).toHaveBeenCalledOnce();
   });
@@ -587,10 +658,12 @@ describe('Desktop Resource Browser source', () => {
 
   it('relinks and removes only the selected managed media library root', async () => {
     const fixture = await createFixture();
-    const first = path.join(fixture.root, 'First');
-    const second = path.join(fixture.root, 'Second');
-    await mkdir(first);
-    await mkdir(second);
+    const first = path.join(fixture.root, 'original', 'First');
+    const second = path.join(fixture.root, 'replacement', 'First');
+    await mkdir(first, { recursive: true });
+    await mkdir(second, { recursive: true });
+    await writeFile(path.join(first, 'first-only.mov'), 'first');
+    await writeFile(path.join(second, 'second-only.mov'), 'second');
     await createComposition(fixture.workspace, {
       selectSource: async () => first,
     }).interactions.addDirectoryLibrary({ identity });
@@ -615,11 +688,24 @@ describe('Desktop Resource Browser source', () => {
     expect(await realpath(path.join(fixture.workspace, 'neko', 'assets', 'First'))).toBe(
       await realpath(second),
     );
+    expect(
+      await realpath(path.join(fixture.root, '.openneko', 'media-libraries', 'local', 'First')),
+    ).toBe(await realpath(second));
+    expect(
+      (await lstat(path.join(fixture.workspace, 'neko', 'assets', 'First'))).isSymbolicLink(),
+    ).toBe(true);
+    expect(
+      (
+        await lstat(path.join(fixture.root, '.openneko', 'media-libraries', 'local', 'First'))
+      ).isSymbolicLink(),
+    ).toBe(true);
 
     await composition.interactions.removeSource({ identity, item: libraryItem });
     await expect(
       lstat(path.join(fixture.workspace, 'neko', 'assets', 'First')),
     ).rejects.toMatchObject({ code: 'ENOENT' });
+    await expect(readFile(path.join(first, 'first-only.mov'), 'utf8')).resolves.toBe('first');
+    await expect(readFile(path.join(second, 'second-only.mov'), 'utf8')).resolves.toBe('second');
   });
 
   it('projects the Desktop preview and Canvas file kinds shown by the Resource Browser', async () => {

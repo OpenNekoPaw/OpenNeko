@@ -1,4 +1,5 @@
 .neko-resource-browser {
+  position: relative;
   display: flex;
   flex-direction: column;
   width: 100%;
@@ -357,6 +358,28 @@
   overflow: hidden;
 }
 
+.neko-resource-browser__library-status {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  display: grid;
+  width: 13px;
+  height: 13px;
+  border: 1px solid var(--neko-sideBar-background, #ffffff);
+  border-radius: 50%;
+  place-items: center;
+  color: var(--neko-warningForeground, #8a6418);
+  background: var(--neko-sideBar-background, #ffffff);
+}
+
+.neko-resource-browser__library-status[data-state='available'] {
+  color: var(--neko-successForeground, #2f765d);
+}
+
+.neko-resource-browser__library-status[data-state='unreferenced-linked'] {
+  color: var(--neko-descriptionForeground, #747d78);
+}
+
 .neko-resource-browser__kind img {
   width: 100%;
   height: 100%;
@@ -422,4 +445,53 @@
 
 .neko-resource-browser-status.is-error {
   color: var(--neko-errorForeground, #a3404e);
+}
+
+.neko-resource-browser__dialog-backdrop {
+  position: absolute;
+  z-index: 40;
+  inset: 0;
+  display: grid;
+  padding: 14px;
+  background: rgb(17 24 21 / 28%);
+  place-items: center;
+}
+
+.neko-resource-browser__dialog {
+  display: grid;
+  width: min(280px, 100%);
+  gap: 7px;
+  padding: 12px;
+  border: 1px solid var(--neko-border, #d7ddda);
+  border-radius: 7px;
+  background: var(--neko-elevated, #ffffff);
+  box-shadow: var(--neko-shadow, 0 12px 30px rgb(21 31 27 / 20%));
+}
+
+.neko-resource-browser__dialog > strong {
+  font-size: 12px;
+}
+
+.neko-resource-browser__dialog > p,
+.neko-resource-browser__dialog > small {
+  margin: 0;
+}
+
+.neko-resource-browser__dialog > small {
+  color: var(--neko-descriptionForeground, #747d78);
+  font-size: 9px;
+}
+
+.neko-resource-browser__dialog > div {
+  display: flex;
+  justify-content: flex-end;
+  gap: 5px;
+  margin-top: 3px;
+}
+
+.neko-resource-browser__dialog button {
+  min-height: 28px;
+  padding: 4px 8px;
+  border-color: var(--neko-border, #d7ddda);
+  font-size: 9px;
 }

@@ -13,6 +13,21 @@ export interface ResourceBrowserLabels {
   readonly addDirectoryLibrary: string;
   readonly relinkSource: string;
   readonly removeSource: string;
+  readonly removeSourceConfirm: string;
+  readonly recoverSource: string;
+  readonly recoveryTitle: string;
+  readonly recoveryUseGlobal: string;
+  readonly recoverySelectDirectory: string;
+  readonly recoveryConfirm: string;
+  readonly recoveryCancel: string;
+  readonly recoveryReferences: string;
+  readonly statusAvailable: string;
+  readonly statusRequiredUnlinked: string;
+  readonly statusGlobalConnectionMissing: string;
+  readonly statusTargetUnavailable: string;
+  readonly statusContentIncomplete: string;
+  readonly statusEntryConflict: string;
+  readonly statusUnreferencedLinked: string;
   readonly preview: string;
   readonly openCut: string;
   readonly addToCut: string;
@@ -48,6 +63,22 @@ const labels: Record<SupportedLocale, ResourceBrowserLabels> = {
     addDirectoryLibrary: 'Add directory as media library',
     relinkSource: 'Relink media library',
     removeSource: 'Remove media library',
+    removeSourceConfirm:
+      'Remove this workspace link? Referenced items will remain visible as missing.',
+    recoverSource: 'Recover media library',
+    recoveryTitle: 'Recover media library',
+    recoveryUseGlobal: 'Use global connection',
+    recoverySelectDirectory: 'Choose directory',
+    recoveryConfirm: 'Confirm recovery',
+    recoveryCancel: 'Cancel',
+    recoveryReferences: 'referenced entries',
+    statusAvailable: 'Available',
+    statusRequiredUnlinked: 'Required library is not linked',
+    statusGlobalConnectionMissing: 'Global connection is missing',
+    statusTargetUnavailable: 'Library target is unavailable',
+    statusContentIncomplete: 'Referenced content is incomplete',
+    statusEntryConflict: 'A real workspace entry conflicts with this library',
+    statusUnreferencedLinked: 'Linked but not referenced by project content',
     preview: 'Preview',
     openCut: 'Open in Cut',
     addToCut: 'Add to Cut',
@@ -81,6 +112,21 @@ const labels: Record<SupportedLocale, ResourceBrowserLabels> = {
     addDirectoryLibrary: '将目录添加为媒体库',
     relinkSource: '重新链接媒体库',
     removeSource: '移除媒体库',
+    removeSourceConfirm: '确认移除此工作区链接？项目引用仍会保留，并显示为缺失。',
+    recoverSource: '恢复媒体库',
+    recoveryTitle: '恢复媒体库',
+    recoveryUseGlobal: '使用全局连接',
+    recoverySelectDirectory: '选择目录',
+    recoveryConfirm: '确认恢复',
+    recoveryCancel: '取消',
+    recoveryReferences: '个引用条目',
+    statusAvailable: '可用',
+    statusRequiredUnlinked: '项目需要此媒体库，但尚未链接',
+    statusGlobalConnectionMissing: '全局媒体库连接缺失',
+    statusTargetUnavailable: '媒体库目标不可用',
+    statusContentIncomplete: '部分引用素材缺失',
+    statusEntryConflict: '工作区存在同名真实目录或文件',
+    statusUnreferencedLinked: '已链接，但项目内容暂未引用',
     preview: '预览',
     openCut: '使用剪辑器打开',
     addToCut: '添加到剪辑',

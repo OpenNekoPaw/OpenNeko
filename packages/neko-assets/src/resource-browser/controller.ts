@@ -21,6 +21,11 @@ import {
   type ResourceBrowserQuickPreviewReleaseResult,
   type ResourceBrowserQuickPreviewRequest,
   type ResourceBrowserQuickPreviewResult,
+  type ResourceBrowserRecoveryApplyRequest,
+  type ResourceBrowserRecoveryCancelRequest,
+  type ResourceBrowserRecoveryCancelResult,
+  type ResourceBrowserRecoveryPlanRequest,
+  type ResourceBrowserRecoveryPlanResult,
   type ResourceBrowserSearchRequest,
   type ResourceBrowserThumbnailRequest,
   type ResourceBrowserThumbnailResult,
@@ -183,6 +188,24 @@ export class ResourceBrowserController implements ResourceBrowserHostRuntime {
     _request: ResourceBrowserQuickPreviewReleaseRequest,
   ): Promise<ResourceBrowserQuickPreviewReleaseResult> {
     throw new Error('Resource Browser quick Preview requires a Host-owned descriptor runtime.');
+  }
+
+  async planRecovery(
+    _request: ResourceBrowserRecoveryPlanRequest,
+  ): Promise<ResourceBrowserRecoveryPlanResult> {
+    throw new Error('Resource Browser recovery planning requires a Host-owned runtime.');
+  }
+
+  async applyRecovery(
+    _request: ResourceBrowserRecoveryApplyRequest,
+  ): Promise<ResourceBrowserProjection> {
+    throw new Error('Resource Browser recovery apply requires a Host-owned runtime.');
+  }
+
+  async cancelRecovery(
+    _request: ResourceBrowserRecoveryCancelRequest,
+  ): Promise<ResourceBrowserRecoveryCancelResult> {
+    throw new Error('Resource Browser recovery cancellation requires a Host-owned runtime.');
   }
 
   async execute(request: ResourceBrowserIntentRequest): Promise<ResourceBrowserProjection> {

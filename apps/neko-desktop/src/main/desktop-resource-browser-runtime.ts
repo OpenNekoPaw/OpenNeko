@@ -1,6 +1,7 @@
 import * as path from 'node:path';
 import { lstat, realpath } from 'node:fs/promises';
 import type { NekoHostPorts } from '@neko/host/ports';
+import type { LocalMetadataRepositories } from '@neko/shared/local-metadata';
 import {
   createCanvasHostIntentRequest,
   type CanvasHostIntentResult,
@@ -8,11 +9,15 @@ import {
 } from '@neko-canvas/domain';
 import type { CanvasMaterialMediaKind } from '@neko/shared';
 import {
+  RESOURCE_BROWSER_ROUTES,
   assertResourceBrowserIdentity,
   parseResourceBrowserChildrenRequest,
   parseResourceBrowserIntentRequest,
   parseResourceBrowserQuickPreviewReleaseRequest,
   parseResourceBrowserQuickPreviewRequest,
+  parseResourceBrowserRecoveryApplyRequest,
+  parseResourceBrowserRecoveryCancelRequest,
+  parseResourceBrowserRecoveryPlanRequest,
   parseResourceBrowserSearchRequest,
   parseResourceBrowserSnapshotRequest,
   parseResourceBrowserThumbnailRequest,
@@ -26,6 +31,11 @@ import {
   type ResourceBrowserQuickPreviewReleaseResult,
   type ResourceBrowserQuickPreviewRequest,
   type ResourceBrowserQuickPreviewResult,
+  type ResourceBrowserRecoveryApplyRequest,
+  type ResourceBrowserRecoveryCancelRequest,
+  type ResourceBrowserRecoveryCancelResult,
+  type ResourceBrowserRecoveryPlanRequest,
+  type ResourceBrowserRecoveryPlanResult,
   type ResourceBrowserSearchRequest,
   type ResourceBrowserSnapshotRequest,
   type ResourceBrowserThumbnailRequest,
@@ -51,6 +61,7 @@ import {
   replaceDesktopGlobalMediaLibraryConnection,
   resolveDesktopGlobalMediaLibraryTarget,
 } from './desktop-global-media-library-files';
+import { DesktopWorkspaceMediaLibrarySyncService } from './desktop-workspace-media-library-sync';
 import {
   createDesktopResourceBrowserProjectionSource,
   readDesktopGlobalMediaLibraryChildren,
@@ -76,6 +87,7 @@ import type {
 export interface DesktopResourceBrowserRuntimeOptions {
   readonly globalAssetRoot: string;
   readonly globalMediaLibraryRoot: string;
+  readonly localMetadataRepositories?: LocalMetadataRepositories;
   readonly shell: DesktopShellService;
   readonly host: Pick<NekoHostPorts, 'files' | 'external'>;
   readonly openPreview: DesktopResourceBrowserSourceOptions['openPreview'];
@@ -127,8 +139,14 @@ export class DesktopResourceBrowserRuntime {
   private globalAssetMutationActive = false;
   private globalMediaLibraryMutationActive = false;
   private disposed = false;
+  private readonly workspaceMediaLibrarySync: DesktopWorkspaceMediaLibrarySyncService;
 
-  constructor(private readonly options: DesktopResourceBrowserRuntimeOptions) {}
+  constructor(private readonly options: DesktopResourceBrowserRuntimeOptions) {
+    this.workspaceMediaLibrarySync = new DesktopWorkspaceMediaLibrarySyncService(
+      options.globalMediaLibraryRoot,
+      options.localMetadataRepositories,
+    );
+  }
 
   async getSnapshot(
     windowId: string,
@@ -206,6 +224,105 @@ export class DesktopResourceBrowserRuntime {
       identity: request.identity,
       previewSessionId: request.previewSessionId,
       status: 'released',
+    };
+  }
+
+  async planRecovery(
+    windowId: string,
+    value: ResourceBrowserRecoveryPlanRequest | unknown,
+  ): Promise<ResourceBrowserRecoveryPlanResult> {
+    const request = parseResourceBrowserRecoveryPlanRequest(value);
+    const context = await this.resolveRecoveryContext(windowId, request);
+    if (request.candidate === 'select-directory') {
+      const sourceDirectory = await this.options.selectSource(windowId);
+      if (!sourceDirectory) {
+        return {
+          schemaVersion: request.schemaVersion,
+          requestId: request.requestId,
+          identity: request.identity,
+          resourceId: request.resourceId,
+          status: 'cancelled',
+        };
+      }
+      const plan = await this.workspaceMediaLibrarySync.planSelectedDirectory({
+        workspace: context.workspace,
+        libraryName: context.libraryName,
+        locationKind: 'local',
+        sourceDirectory,
+      });
+      return {
+        schemaVersion: request.schemaVersion,
+        requestId: request.requestId,
+        identity: request.identity,
+        resourceId: request.resourceId,
+        status: 'planned',
+        plan,
+      };
+    }
+    const plan = await this.workspaceMediaLibrarySync.planRecovery({
+      workspace: context.workspace,
+      libraryName: context.libraryName,
+    });
+    return {
+      schemaVersion: request.schemaVersion,
+      requestId: request.requestId,
+      identity: request.identity,
+      resourceId: request.resourceId,
+      status: 'planned',
+      plan,
+    };
+  }
+
+  async applyRecovery(
+    windowId: string,
+    value: ResourceBrowserRecoveryApplyRequest | unknown,
+  ): Promise<ResourceBrowserProjection> {
+    const request = parseResourceBrowserRecoveryApplyRequest(value);
+    const controller = await this.resolveController(windowId, request.identity);
+    const current = await controller.getSnapshot();
+    if (current.revision !== request.expectedRevision) {
+      throw new Error('Desktop Resource Browser recovery projection is stale.');
+    }
+    const workspace = await this.options.shell.resolveProjectWorkspace(request.identity.projectId);
+    if (workspace.workspaceId !== request.identity.workspaceId) {
+      throw new Error('Desktop Resource Browser recovery Workspace is stale.');
+    }
+    await this.withGlobalMediaLibraryMutation(() =>
+      this.workspaceMediaLibrarySync.applyRecovery({
+        workspace,
+        planId: request.planId,
+        expectedOperationRevision: request.expectedOperationRevision,
+      }),
+    );
+    this.advanceHomeRevision();
+    return controller.execute({
+      schemaVersion: request.schemaVersion,
+      requestId: `${request.requestId}:refresh`,
+      identity: request.identity,
+      route: RESOURCE_BROWSER_ROUTES.refresh,
+    });
+  }
+
+  async cancelRecovery(
+    windowId: string,
+    value: ResourceBrowserRecoveryCancelRequest | unknown,
+  ): Promise<ResourceBrowserRecoveryCancelResult> {
+    const request = parseResourceBrowserRecoveryCancelRequest(value);
+    await this.resolveController(windowId, request.identity);
+    const workspace = await this.options.shell.resolveProjectWorkspace(request.identity.projectId);
+    if (workspace.workspaceId !== request.identity.workspaceId) {
+      throw new Error('Desktop Resource Browser recovery Workspace is stale.');
+    }
+    this.workspaceMediaLibrarySync.cancelRecovery({
+      workspace,
+      planId: request.planId,
+    });
+    return {
+      schemaVersion: request.schemaVersion,
+      requestId: request.requestId,
+      identity: request.identity,
+      planId: request.planId,
+      status: 'cancelled',
     };
   }
 
@@ -690,6 +807,7 @@ export class DesktopResourceBrowserRuntime {
     };
     const composition = createDesktopResourceBrowserProjectionSource({
       globalMediaLibraryRoot: this.options.globalMediaLibraryRoot,
+      workspaceMediaLibrarySync: this.workspaceMediaLibrarySync,
       workspace,
       host: this.options.host,
       openPreview: this.options.openPreview,
@@ -714,6 +832,37 @@ export class DesktopResourceBrowserRuntime {
     });
     this.controllers.set(key, controller);
     return controller;
+  }
+
+  private async resolveRecoveryContext(
+    windowId: string,
+    request: ResourceBrowserRecoveryPlanRequest,
+  ): Promise<{
+    readonly workspace: Awaited<ReturnType<DesktopShellService['resolveProjectWorkspace']>>;
+    readonly libraryName: string;
+  }> {
+    const controller = await this.resolveController(windowId, request.identity);
+    const projection = await controller.getSnapshot();
+    if (projection.revision !== request.expectedRevision) {
+      throw new Error('Desktop Resource Browser recovery projection is stale.');
+    }
+    const item = projection.items.find(
+      (candidate) => candidate.resourceId === request.resourceId,
+    );
+    if (
+      !item ||
+      item.role !== 'library-root' ||
+      !item.libraryName ||
+      !item.libraryStatus ||
+      item.libraryStatus.operationRevision !== request.expectedOperationRevision
+    ) {
+      throw new Error('Desktop Resource Browser recovery item is stale or not recoverable.');
+    }
+    const workspace = await this.options.shell.resolveProjectWorkspace(request.identity.projectId);
+    if (workspace.workspaceId !== request.identity.workspaceId) {
+      throw new Error('Desktop Resource Browser recovery Workspace is stale.');
+    }
+    return { workspace, libraryName: item.libraryName };
   }
 
   private requireActive(): void {

@@ -30,6 +30,15 @@ export function createElectronResourceBrowserHostRuntime(input: {
     releaseQuickPreview(request) {
       return input.bridge.resources.releaseQuickPreview(request);
     },
+    planRecovery(request) {
+      return input.bridge.resources.planRecovery(request);
+    },
+    applyRecovery(request) {
+      return input.bridge.resources.applyRecovery(request);
+    },
+    cancelRecovery(request) {
+      return input.bridge.resources.cancelRecovery(request);
+    },
     subscribe(listener) {
       return input.bridge.resources.subscribe((event) => {
         if (isSameIdentity(event.projection.identity, input.identity)) listener(event);

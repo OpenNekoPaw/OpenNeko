@@ -1,12 +1,8 @@
 import * as path from 'node:path';
 import type { NekoHostPorts } from '@neko/host/ports';
 import { detectPreviewContentKind, type PreviewContentKind } from '@neko-preview/contracts';
-import {
-  createWorkspaceLinkedMediaLibrary,
-  listWorkspaceLinkedMediaLibraries,
-  removeWorkspaceLinkedMediaLibrary,
-  replaceWorkspaceLinkedMediaLibrary,
-} from '@neko/shared/node/workspace-linked-media-libraries';
+import { workspaceLinkedMediaLibraryPath } from '@neko/shared';
+import { listWorkspaceLinkedMediaLibraries } from '@neko/shared/node/workspace-linked-media-libraries';
 import type {
   ResourceBrowserContentEntry,
   ResourceBrowserInteractionPort,
@@ -29,11 +25,10 @@ import type { DesktopWorkspaceResolution } from './desktop-workspace-registry';
 import { resolveDesktopWorkspaceContentLocator } from './desktop-content-locator';
 import { readDesktopConfirmedEntityResources } from './desktop-entity-resource-query';
 import {
-  createDesktopGlobalMediaLibraryConnection,
   listDesktopGlobalMediaLibraryConnections,
-  removeDesktopGlobalMediaLibraryConnection,
   type DesktopGlobalMediaLibraryConnection,
 } from './desktop-global-media-library-files';
+import { DesktopWorkspaceMediaLibrarySyncService } from './desktop-workspace-media-library-sync';
 import type {
   DesktopHomeAssetItem,
   DesktopHomeCatalogSort,
@@ -55,6 +50,7 @@ const EXCLUDED_DIRECTORIES = new Set([
 
 export interface DesktopResourceBrowserSourceOptions {
   readonly globalMediaLibraryRoot: string;
+  readonly workspaceMediaLibrarySync?: DesktopWorkspaceMediaLibrarySyncService;
   readonly workspace: DesktopWorkspaceResolution;
   readonly host: Pick<NekoHostPorts, 'files' | 'external'>;
   readonly openPreview: (input: {
@@ -88,7 +84,7 @@ export interface DesktopResourceBrowserSourceOptions {
 
 export type DesktopResourceBrowserReadSourceOptions = Pick<
   DesktopResourceBrowserSourceOptions,
-  'workspace' | 'host'
+  'workspace' | 'host' | 'workspaceMediaLibrarySync'
 >;
 
 export async function searchDesktopGlobalAssetCatalog(input: {
@@ -259,6 +255,9 @@ export function createDesktopResourceBrowserProjectionSource(
   readonly interactions: ResourceBrowserInteractionPort;
 } {
   const source = createDesktopResourceBrowserReadSource(options);
+  const workspaceMediaLibrarySync =
+    options.workspaceMediaLibrarySync ??
+    new DesktopWorkspaceMediaLibrarySyncService(options.globalMediaLibraryRoot);
 
   const interactions: ResourceBrowserInteractionPort = {
     async linkGlobalLibrary({ identity }): Promise<'linked' | 'cancelled'> {
@@ -290,10 +289,9 @@ export function createDesktopResourceBrowserProjectionSource(
       if (!library) {
         throw new Error('Selected global Media Library identity is stale.');
       }
-      await createWorkspaceLinkedMediaLibrary({
-        workspaceRoot: options.workspace.workspacePath,
-        name: library.name,
-        targetDirectory: library.linkPath,
+      await workspaceMediaLibrarySync.linkGlobalLibrary({
+        workspace: options.workspace,
+        libraryId: library.libraryId,
       });
       return 'linked';
     },
@@ -301,37 +299,11 @@ export function createDesktopResourceBrowserProjectionSource(
       const selectedDirectory = await options.selectSource(identity.windowId);
       if (!selectedDirectory) return 'cancelled';
       await options.mutateGlobalMediaLibraries(async () => {
-        const created = await createDesktopGlobalMediaLibraryConnection({
-          mediaLibraryRoot: options.globalMediaLibraryRoot,
+        await workspaceMediaLibrarySync.addDirectoryLibrary({
+          workspace: options.workspace,
           sourceDirectory: selectedDirectory,
           locationKind: 'local',
         });
-        try {
-          const library = (
-            await listDesktopGlobalMediaLibraryConnections(options.globalMediaLibraryRoot)
-          ).find((candidate) => candidate.libraryId === created.libraryId);
-          if (!library || library.availability !== 'available') {
-            throw new Error('New global Media Library could not be resolved after creation.');
-          }
-          await createWorkspaceLinkedMediaLibrary({
-            workspaceRoot: options.workspace.workspacePath,
-            name: library.name,
-            targetDirectory: library.linkPath,
-          });
-        } catch (error: unknown) {
-          try {
-            await removeDesktopGlobalMediaLibraryConnection({
-              mediaLibraryRoot: options.globalMediaLibraryRoot,
-              libraryId: created.libraryId,
-            });
-          } catch (rollbackError: unknown) {
-            throw new AggregateError(
-              [error, rollbackError],
-              'Project Media Library setup failed and global registry rollback also failed.',
-            );
-          }
-          throw error;
-        }
       });
       options.didMutateGlobalMediaLibraries();
       return 'added';
@@ -340,17 +312,21 @@ export function createDesktopResourceBrowserProjectionSource(
       const libraryName = requireLibraryName(item);
       const selectedDirectory = await options.selectSource(identity.windowId);
       if (!selectedDirectory) return 'cancelled';
-      await replaceWorkspaceLinkedMediaLibrary({
-        workspaceRoot: options.workspace.workspacePath,
-        name: libraryName,
-        targetDirectory: selectedDirectory,
-      });
+      await options.mutateGlobalMediaLibraries(() =>
+        workspaceMediaLibrarySync.relinkDirectoryLibrary({
+          workspace: options.workspace,
+          libraryName,
+          sourceDirectory: selectedDirectory,
+          locationKind: 'local',
+        }),
+      );
+      options.didMutateGlobalMediaLibraries();
       return 'relinked';
     },
     async removeSource({ item }): Promise<void> {
-      await removeWorkspaceLinkedMediaLibrary({
-        workspaceRoot: options.workspace.workspacePath,
-        name: requireLibraryName(item),
+      await workspaceMediaLibrarySync.removeLink({
+        workspace: options.workspace,
+        libraryName: requireLibraryName(item),
       });
     },
     async preview({ identity, item, target }): Promise<void> {
@@ -417,41 +393,61 @@ async function listWorkspaceProjection(
   }
   if (mediaOnly) {
     const libraries = await listWorkspaceLinkedMediaLibraries(options.workspace.workspacePath);
-    for (const library of libraries) {
+    const librariesByName = new Map(libraries.map((library) => [library.name, library]));
+    const syncProjection = options.workspaceMediaLibrarySync
+      ? await options.workspaceMediaLibrarySync.inspect(options.workspace)
+      : undefined;
+    const statusesByName = new Map(
+      syncProjection?.statuses.map((status) => [status.libraryName, status]) ?? [],
+    );
+    const libraryNames = new Set([...librariesByName.keys(), ...statusesByName.keys()]);
+    for (const libraryName of [...libraryNames].sort((left, right) =>
+      left.localeCompare(right, 'en-US'),
+    )) {
       if (entries.length >= limit) break;
+      const library = librariesByName.get(libraryName);
+      const libraryStatus = statusesByName.get(libraryName);
+      const workspacePath = library?.workspacePath ?? workspaceLinkedMediaLibraryPath(libraryName);
+      const browseAvailable =
+        library?.availability === 'available' &&
+        libraryStatus?.state !== 'required-unlinked' &&
+        libraryStatus?.state !== 'global-connection-missing' &&
+        libraryStatus?.state !== 'target-unavailable' &&
+        libraryStatus?.state !== 'entry-conflict';
       const rootIndex = entries.length;
       entries.push({
-        locator: { kind: 'workspace-file', path: library.workspacePath },
-        label: library.name,
+        locator: { kind: 'workspace-file', path: workspacePath },
+        label: libraryName,
         description:
-          library.availability === 'available'
-            ? library.workspacePath
-            : (library.diagnostic?.message ?? 'Media library is unavailable.'),
-        availability: library.availability === 'available' ? 'available' : 'unavailable',
-        ...(library.availability === 'unavailable'
+          libraryStatus?.diagnostic?.message ??
+          library?.diagnostic?.message ??
+          (browseAvailable ? workspacePath : 'Media library is unavailable.'),
+        availability: browseAvailable ? 'available' : 'unavailable',
+        ...(!browseAvailable
           ? { diagnostic: { code: 'resource-inaccessible' as const } }
           : {}),
-        capabilities: library.availability === 'available' ? ['read'] : [],
+        capabilities: browseAvailable ? ['read'] : [],
         metadata: { mediaType: 'directory' },
         role: 'library-root',
         depth: 0,
-        libraryName: library.name,
+        libraryName,
+        ...(libraryStatus ? { libraryStatus } : {}),
       });
       const libraryMatchesQuery =
         !normalizedQuery ||
-        `${library.name} ${library.workspacePath}`.toLocaleLowerCase().includes(normalizedQuery);
-      if (library.availability !== 'available' || entries.length >= limit || !normalizedQuery) {
+        `${libraryName} ${workspacePath}`.toLocaleLowerCase().includes(normalizedQuery);
+      if (!browseAvailable || entries.length >= limit || !normalizedQuery) {
         if (!libraryMatchesQuery) entries.splice(rootIndex, 1);
         continue;
       }
       const absoluteRoot = path.join(
         options.workspace.workspacePath,
-        ...library.workspacePath.split('/'),
+        ...workspacePath.split('/'),
       );
       entries.push(
         ...(await searchResourceBrowserContentTree({
           absoluteRoot,
-          locatorPrefix: library.workspacePath,
+          locatorPrefix: workspacePath,
           query,
           limit: Math.min(limit - entries.length, FILE_SCAN_LIMIT),
           rootDepth: 0,
@@ -460,7 +456,7 @@ async function listWorkspaceProjection(
           joinAbsolutePath: path.join,
           relativePath: path.relative,
           classify: (locatorPath) => classifyContent(locatorPath, true),
-          libraryName: library.name,
+          libraryName,
         })),
       );
       if (!libraryMatchesQuery && entries.length === rootIndex + 1) {

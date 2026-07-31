@@ -8,6 +8,11 @@ import type {
   ResourceBrowserQuickPreviewReleaseResult,
   ResourceBrowserQuickPreviewRequest,
   ResourceBrowserQuickPreviewResult,
+  ResourceBrowserRecoveryApplyRequest,
+  ResourceBrowserRecoveryCancelRequest,
+  ResourceBrowserRecoveryCancelResult,
+  ResourceBrowserRecoveryPlanRequest,
+  ResourceBrowserRecoveryPlanResult,
   ResourceBrowserSearchRequest,
   ResourceBrowserSnapshotRequest,
   ResourceBrowserThumbnailRequest,
@@ -20,6 +25,9 @@ export const DESKTOP_RESOURCE_BROWSER_CHANNELS = {
   thumbnailResolve: 'openneko:resources:thumbnail:resolve',
   quickPreviewResolve: 'openneko:resources:quick-preview:resolve',
   quickPreviewRelease: 'openneko:resources:quick-preview:release',
+  recoveryPlan: 'openneko:resources:recovery:plan',
+  recoveryApply: 'openneko:resources:recovery:apply',
+  recoveryCancel: 'openneko:resources:recovery:cancel',
   search: 'openneko:resources:search',
   execute: 'openneko:resources:execute',
   projectionEvent: 'openneko:resources:projection:event',
@@ -37,6 +45,13 @@ export interface OpenNekoDesktopResourceBrowserBridge {
     releaseQuickPreview(
       request: ResourceBrowserQuickPreviewReleaseRequest,
     ): Promise<ResourceBrowserQuickPreviewReleaseResult>;
+    planRecovery(
+      request: ResourceBrowserRecoveryPlanRequest,
+    ): Promise<ResourceBrowserRecoveryPlanResult>;
+    applyRecovery(request: ResourceBrowserRecoveryApplyRequest): Promise<ResourceBrowserProjection>;
+    cancelRecovery(
+      request: ResourceBrowserRecoveryCancelRequest,
+    ): Promise<ResourceBrowserRecoveryCancelResult>;
     children(request: ResourceBrowserChildrenRequest): Promise<ResourceBrowserProjection>;
     search(request: ResourceBrowserSearchRequest): Promise<ResourceBrowserProjection>;
     execute(request: ResourceBrowserIntentRequest): Promise<ResourceBrowserProjection>;

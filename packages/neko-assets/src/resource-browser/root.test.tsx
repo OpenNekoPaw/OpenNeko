@@ -430,7 +430,7 @@ describe('ResourceBrowserRoot', () => {
 
     expect(await screen.findByText('characters')).toBeTruthy();
     expect(screen.queryByText('hero.png')).toBeNull();
-    fireEvent.click(screen.getByText('characters'));
+    fireEvent.doubleClick(screen.getByText('characters'));
     expect(screen.getByText('characters')).toBeTruthy();
     expect(await screen.findByText('hero.png')).toBeTruthy();
     expect(screen.getByRole('tree')).toBeTruthy();
@@ -454,12 +454,12 @@ describe('ResourceBrowserRoot', () => {
         parentResourceId: 'content:characters',
       }),
     );
-    fireEvent.click(screen.getByText('characters'));
+    fireEvent.doubleClick(screen.getByText('characters'));
     expect(screen.queryByText('hero.png')).toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: 'Grid view' }));
     expect(await screen.findByText('characters')).toBeTruthy();
-    fireEvent.click(screen.getByText('characters'));
+    fireEvent.doubleClick(screen.getByText('characters'));
     expect(await screen.findByText('hero.png')).toBeTruthy();
     expect(screen.getByRole('navigation', { name: 'Resource location' })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Workspace' }));
@@ -592,7 +592,7 @@ describe('ResourceBrowserRoot', () => {
       />,
     );
 
-    fireEvent.click(await screen.findByText('characters'));
+    fireEvent.doubleClick(await screen.findByText('characters'));
     const portraits = await screen.findByRole('treeitem', {
       name: /portraits/i,
     });
@@ -649,7 +649,91 @@ describe('ResourceBrowserRoot', () => {
         }),
       ),
     );
+    runtime.execute.mockClear();
+    const confirm = vi.spyOn(globalThis, 'confirm').mockReturnValueOnce(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Remove media library' }));
+    expect(confirm).toHaveBeenCalledOnce();
+    expect(runtime.execute).not.toHaveBeenCalled();
+
+    confirm.mockReturnValueOnce(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Remove media library' }));
+    await waitFor(() =>
+      expect(runtime.execute).toHaveBeenCalledWith(
+        expect.objectContaining({
+          route: 'source.remove',
+          resourceId: 'content:library',
+          expectedRevision: 0,
+        }),
+      ),
+    );
     expect(document.querySelector('.neko-resource-browser__actions')).toBeNull();
+  });
+
+  it('keeps missing library identity across list/grid and confirms revisioned recovery', async () => {
+    const libraryProjection: ResourceBrowserProjection = {
+      ...projection,
+      facet: 'media',
+      items: [
+        {
+          resourceId: 'content:missing-library',
+          facet: 'media',
+          role: 'library-root',
+          libraryName: 'Footage',
+          libraryStatus: {
+            libraryName: 'Footage',
+            state: 'required-unlinked',
+            referenceCount: 2,
+            missingCount: 2,
+            operationRevision: 'sha256:operation',
+          },
+          depth: 0,
+          kind: 'directory',
+          label: 'Footage',
+          locator: { kind: 'workspace-file', path: 'neko/assets/Footage' },
+          capabilities: [],
+        },
+      ],
+    };
+    const runtime = createRuntime(libraryProjection);
+    runtime.planRecovery.mockResolvedValueOnce({
+      schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
+      requestId: 'resource-recovery-plan-1',
+      identity: libraryProjection.identity,
+      resourceId: 'content:missing-library',
+      status: 'planned',
+      plan: {
+        contractVersion: 1,
+        planId: 'media-library-recovery:plan-1',
+        workspaceId: libraryProjection.identity.workspaceId,
+        libraryName: 'Footage',
+        requirementRevision: 'requirements-1',
+        operationRevision: 'sha256:operation',
+        candidate: { kind: 'global-alias', name: 'Footage', locationKind: 'local' },
+        referencedCount: 2,
+        validatedCount: 2,
+      },
+    });
+    render(<ResourceBrowserRoot runtime={runtime} locale="en" />);
+
+    fireEvent.click(await screen.findByText('Footage'));
+    fireEvent.click(screen.getByRole('button', { name: 'Grid view' }));
+    expect(
+      document.querySelector('.neko-resource-browser__item-row[data-selected="true"] strong')
+        ?.textContent,
+    ).toBe('Footage');
+    fireEvent.click(screen.getByRole('button', { name: 'Recover media library' }));
+    expect(await screen.findByRole('dialog', { name: 'Recover media library' })).toBeTruthy();
+    expect(runtime.applyRecovery).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm recovery' }));
+    await waitFor(() =>
+      expect(runtime.applyRecovery).toHaveBeenCalledWith(
+        expect.objectContaining({
+          route: 'source.recovery.apply',
+          planId: 'media-library-recovery:plan-1',
+          expectedOperationRevision: 'sha256:operation',
+        }),
+      ),
+    );
   });
 
   it('resolves media thumbnails only when their row enters the visible range', async () => {
@@ -830,6 +914,9 @@ function createRuntime(snapshot = projection): ResourceBrowserHostRuntime & {
   readonly resolveThumbnail: ReturnType<typeof vi.fn>;
   readonly resolveQuickPreview: ReturnType<typeof vi.fn>;
   readonly releaseQuickPreview: ReturnType<typeof vi.fn>;
+  readonly planRecovery: ReturnType<typeof vi.fn>;
+  readonly applyRecovery: ReturnType<typeof vi.fn>;
+  readonly cancelRecovery: ReturnType<typeof vi.fn>;
 } {
   return {
     identity: snapshot.identity,
@@ -853,6 +940,7 @@ function createRuntime(snapshot = projection): ResourceBrowserHostRuntime & {
         descriptorId: `descriptor:${request.resourceId}`,
         revision: 'revision-1',
         contentLocator: { kind: 'workspace-file' as const, path: 'preview/preview.png' },
+        url: 'http://127.0.0.1:43125/v1/resources/preview-token',
         contentKind: 'image' as const,
         mediaType: 'image/png',
         displayName: 'preview.png',
@@ -865,6 +953,21 @@ function createRuntime(snapshot = projection): ResourceBrowserHostRuntime & {
       identity: request.identity,
       previewSessionId: request.previewSessionId,
       status: 'released' as const,
+    })),
+    planRecovery: vi.fn(async (request) => ({
+      schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
+      requestId: request.requestId,
+      identity: request.identity,
+      resourceId: request.resourceId,
+      status: 'cancelled' as const,
+    })),
+    applyRecovery: vi.fn(async () => snapshot),
+    cancelRecovery: vi.fn(async (request) => ({
+      schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
+      requestId: request.requestId,
+      identity: request.identity,
+      planId: request.planId,
+      status: 'cancelled' as const,
     })),
     subscribe: vi.fn(() => () => undefined),
     children: vi.fn(async () => snapshot),

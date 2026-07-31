@@ -64,6 +64,21 @@ describe('Electron Resource Browser Host runtime', () => {
           previewSessionId: request.previewSessionId,
           status: 'released' as const,
         })),
+        planRecovery: vi.fn(async (request) => ({
+          schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
+          requestId: request.requestId,
+          identity: request.identity,
+          resourceId: request.resourceId,
+          status: 'cancelled' as const,
+        })),
+        applyRecovery: vi.fn(async () => projection),
+        cancelRecovery: vi.fn(async (request) => ({
+          schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
+          requestId: request.requestId,
+          identity: request.identity,
+          planId: request.planId,
+          status: 'cancelled' as const,
+        })),
         search: vi.fn(async () => projection),
         execute: vi.fn(async () => projection),
         subscribe: vi.fn((listener) => {

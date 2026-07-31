@@ -30,6 +30,7 @@ export function presentResourceBrowserContentItem(
     depth: entry.depth,
     ...(parentResourceId ? { parentResourceId } : {}),
     ...(entry.libraryName ? { libraryName: entry.libraryName } : {}),
+    ...(entry.libraryStatus ? { libraryStatus: entry.libraryStatus } : {}),
     ...(entry.description ? { description: entry.description } : {}),
     locator: entry.locator,
     ...presentThumbnail(

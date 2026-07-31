@@ -10,6 +10,8 @@ import {
   parseResourceBrowserProjection,
   parseResourceBrowserProjectionEvent,
   parseResourceBrowserIntentRequest,
+  parseResourceBrowserRecoveryPlanRequest,
+  parseResourceBrowserRecoveryPlanResult,
 } from './contract';
 
 const identity = {
@@ -220,6 +222,72 @@ describe('Resource Browser contract', () => {
     );
   });
 
+  it('rejects target-bearing recovery requests, plans, and library statuses', () => {
+    expect(() =>
+      parseResourceBrowserRecoveryPlanRequest({
+        schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
+        requestId: 'recover-1',
+        identity,
+        route: RESOURCE_BROWSER_ROUTES.recoveryPlan,
+        resourceId: 'library-1',
+        expectedRevision: 4,
+        expectedOperationRevision: 'sha256:operation',
+        candidate: 'select-directory',
+        sourceDirectory: '/Users/private/Footage',
+      }),
+    ).toThrowError('unsupported fields');
+    expect(() =>
+      parseResourceBrowserRecoveryPlanResult({
+        schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
+        requestId: 'recover-1',
+        identity,
+        resourceId: 'library-1',
+        status: 'planned',
+        plan: {
+          contractVersion: 1,
+          planId: 'recovery-plan-1',
+          workspaceId: identity.workspaceId,
+          libraryName: 'Footage',
+          requirementRevision: 'requirements-1',
+          operationRevision: 'sha256:operation',
+          candidate: {
+            kind: 'global-alias',
+            name: 'Footage',
+            locationKind: 'local',
+            targetPath: '/Users/private/Footage',
+          },
+          referencedCount: 1,
+          validatedCount: 1,
+        },
+      }),
+    ).toThrowError('unsupported fields');
+    expect(() =>
+      parseResourceBrowserProjection(
+        projection('media', [
+          {
+            resourceId: 'library-1',
+            facet: 'media',
+            role: 'library-root',
+            depth: 0,
+            kind: 'directory',
+            label: 'Footage',
+            libraryName: 'Footage',
+            locator: { kind: 'workspace-file', path: 'neko/assets/Footage' },
+            capabilities: [],
+            libraryStatus: {
+              libraryName: 'Footage',
+              state: 'required-unlinked',
+              referenceCount: 1,
+              missingCount: 1,
+              operationRevision: 'sha256:operation',
+              targetPath: '/Users/private/Footage',
+            },
+          },
+        ]),
+      ),
+    ).toThrowError('unsupported fields');
+  });
+
   it('covers every fixed Host route and parses monotonic events', () => {
     expect(Object.values(RESOURCE_BROWSER_ROUTES).sort()).toEqual(
       [
@@ -236,6 +304,9 @@ describe('Resource Browser contract', () => {
         'snapshot.get',
         'source.add-directory-library',
         'source.link-global-library',
+        'source.recovery.apply',
+        'source.recovery.cancel',
+        'source.recovery.plan',
         'source.relink',
         'source.remove',
         'thumbnail.resolve',
@@ -272,15 +343,23 @@ describe('Resource Browser contract', () => {
         }),
       ).toThrowError(ResourceBrowserContractError);
     }
-    expect(() =>
-      parseResourceBrowserIntentRequest({
-        schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
-        requestId: 'legacy-source',
-        identity,
-        route: 'source.add',
-        expectedRevision: 0,
-      }),
-    ).toThrowError(ResourceBrowserContractError);
+    for (const route of [
+      'source.add',
+      'source.recover',
+      'source.repair',
+      'source.recovery',
+      'source.recovery.apply-direct',
+    ]) {
+      expect(() =>
+        parseResourceBrowserIntentRequest({
+          schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
+          requestId: 'legacy-source',
+          identity,
+          route,
+          expectedRevision: 0,
+        }),
+      ).toThrowError(ResourceBrowserContractError);
+    }
   });
 
   it('requires explicit Preview and Cut handoff targets', () => {

@@ -17,8 +17,11 @@ import {
   PlusIcon,
   RefreshIcon,
   SearchIcon,
+  SuccessIcon,
   TrashIcon,
   VolumeIcon,
+  WarningIcon,
+  InfoIcon,
 } from '@neko/shared/icons';
 import React, {
   useCallback,
@@ -37,6 +40,9 @@ import {
   createResourceBrowserChildrenRequest,
   createResourceBrowserQuickPreviewReleaseRequest,
   createResourceBrowserQuickPreviewRequest,
+  createResourceBrowserRecoveryApplyRequest,
+  createResourceBrowserRecoveryCancelRequest,
+  createResourceBrowserRecoveryPlanRequest,
   createResourceBrowserSearchRequest,
   createResourceBrowserThumbnailRequest,
   type ResourceBrowserFacet,
@@ -44,6 +50,7 @@ import {
   type ResourceBrowserItem,
   type ResourceBrowserProjection,
   type ResourceBrowserQuickPreviewResult,
+  type ResourceBrowserRecoveryPlanResult,
 } from './contract';
 import { getResourceBrowserLabels } from './labels';
 import './style.css';
@@ -94,6 +101,9 @@ export function ResourceBrowserRoot({
   const [selectedId, setSelectedId] = useState<string | undefined>(initialDisplayState?.selectedId);
   const [pending, setPending] = useState(false);
   const [libraryMenuOpen, setLibraryMenuOpen] = useState(false);
+  const [recovery, setRecovery] = useState<
+    Extract<ResourceBrowserRecoveryPlanResult, { readonly status: 'planned' }> | undefined
+  >();
   const [viewMode, setViewMode] = useState<'list' | 'grid'>(
     initialDisplayState?.viewMode ?? defaultViewMode,
   );
@@ -352,6 +362,86 @@ export function ResourceBrowserRoot({
   }
 
   const projection = state.projection;
+  const requestRecovery = async (
+    item: ResourceBrowserItem,
+    candidate: 'existing-global' | 'select-directory',
+  ): Promise<void> => {
+    const libraryStatus = item.libraryStatus;
+    if (!libraryStatus) {
+      setState({ kind: 'error', message: 'Media Library recovery status is unavailable.' });
+      return;
+    }
+    requestSequence.current += 1;
+    setPending(true);
+    try {
+      if (candidate === 'select-directory' && recovery) {
+        await runtime.cancelRecovery(
+          createResourceBrowserRecoveryCancelRequest({
+            requestId: `resource-recovery-replace-${requestSequence.current}`,
+            identity: runtime.identity,
+            planId: recovery.plan.planId,
+          }),
+        );
+        setRecovery(undefined);
+      }
+      const result = await runtime.planRecovery(
+        createResourceBrowserRecoveryPlanRequest({
+          requestId: `resource-recovery-plan-${requestSequence.current}`,
+          identity: runtime.identity,
+          resourceId: item.resourceId,
+          expectedRevision: projection.revision,
+          expectedOperationRevision: libraryStatus.operationRevision,
+          candidate,
+        }),
+      );
+      if (result.status === 'planned') setRecovery(result);
+    } catch (error: unknown) {
+      setState({ kind: 'error', message: describeError(error) });
+    } finally {
+      setPending(false);
+    }
+  };
+  const cancelRecovery = async (): Promise<void> => {
+    if (!recovery) return;
+    requestSequence.current += 1;
+    setPending(true);
+    try {
+      await runtime.cancelRecovery(
+        createResourceBrowserRecoveryCancelRequest({
+          requestId: `resource-recovery-cancel-${requestSequence.current}`,
+          identity: runtime.identity,
+          planId: recovery.plan.planId,
+        }),
+      );
+      setRecovery(undefined);
+    } catch (error: unknown) {
+      setState({ kind: 'error', message: describeError(error) });
+    } finally {
+      setPending(false);
+    }
+  };
+  const applyRecovery = async (): Promise<void> => {
+    if (!recovery) return;
+    requestSequence.current += 1;
+    setPending(true);
+    try {
+      const nextProjection = await runtime.applyRecovery(
+        createResourceBrowserRecoveryApplyRequest({
+          requestId: `resource-recovery-apply-${requestSequence.current}`,
+          identity: runtime.identity,
+          planId: recovery.plan.planId,
+          expectedRevision: projection.revision,
+          expectedOperationRevision: recovery.plan.operationRevision,
+        }),
+      );
+      setRecovery(undefined);
+      setState({ kind: 'ready', projection: nextProjection });
+    } catch (error: unknown) {
+      setState({ kind: 'error', message: describeError(error) });
+    } finally {
+      setPending(false);
+    }
+  };
   const navigableFacet =
     projection.facet === 'files' || projection.facet === 'media' ? projection.facet : undefined;
   const activeContainerId = navigableFacet ? activeContainerByFacet[navigableFacet] : undefined;
@@ -595,13 +685,6 @@ export function ResourceBrowserRoot({
                     setSelectedId(item.resourceId);
                     if (event.detail > 1) return;
                     if (item.role === 'directory' || item.role === 'library-root') {
-                      if (navigableFacet && projection.query.length === 0) {
-                        if (viewMode === 'list') {
-                          void toggleTreeContainer(navigableFacet, item);
-                        } else {
-                          void openGridContainer(navigableFacet, item);
-                        }
-                      }
                       return;
                     }
                     if (
@@ -618,6 +701,21 @@ export function ResourceBrowserRoot({
                     }
                     if (previewTarget && item.capabilities.includes('preview') && !pending) {
                       void execute(RESOURCE_BROWSER_ROUTES.preview, item);
+                    }
+                  }}
+                  onDoubleClick={() => {
+                    if (
+                      !navigableFacet ||
+                      projection.query.length > 0 ||
+                      (item.role !== 'directory' && item.role !== 'library-root') ||
+                      !canBrowseResourceContainer(item)
+                    ) {
+                      return;
+                    }
+                    if (viewMode === 'list') {
+                      void toggleTreeContainer(navigableFacet, item);
+                    } else {
+                      void openGridContainer(navigableFacet, item);
                     }
                   }}
                   onKeyDown={(event: KeyboardEvent<HTMLButtonElement>) => {
@@ -664,29 +762,53 @@ export function ResourceBrowserRoot({
                     item={item}
                     runtime={runtime}
                     unavailableLabel={labels.thumbnailUnavailable}
+                    libraryStatusLabel={presentLibraryStatus(item, labels)}
                   />
-                  <ResourceBrowserItemCopy item={item} showDescription={!treePresentation} />
+                  <ResourceBrowserItemCopy
+                    item={item}
+                    showDescription={!treePresentation}
+                    libraryStatusLabel={presentLibraryStatus(item, labels)}
+                  />
                 </button>
                 {item.role === 'library-root' ? (
                   <span className="neko-resource-browser__inline-actions">
-                    <button
-                      type="button"
-                      disabled={pending}
-                      aria-label={labels.relinkSource}
-                      title={labels.relinkSource}
-                      onClick={() => void execute(RESOURCE_BROWSER_ROUTES.relinkSource, item)}
-                    >
-                      <EditIcon size={13} />
-                    </button>
-                    <button
-                      type="button"
-                      disabled={pending}
-                      aria-label={labels.removeSource}
-                      title={labels.removeSource}
-                      onClick={() => void execute(RESOURCE_BROWSER_ROUTES.removeSource, item)}
-                    >
-                      <TrashIcon size={13} />
-                    </button>
+                    {canRecoverLibrary(item) ? (
+                      <button
+                        type="button"
+                        disabled={pending}
+                        aria-label={labels.recoverSource}
+                        title={labels.recoverSource}
+                        onClick={() => void requestRecovery(item, 'existing-global')}
+                      >
+                        <RefreshIcon size={13} />
+                      </button>
+                    ) : null}
+                    {hasManagedLibraryLink(item) ? (
+                      <>
+                        <button
+                          type="button"
+                          disabled={pending}
+                          aria-label={labels.relinkSource}
+                          title={labels.relinkSource}
+                          onClick={() => void execute(RESOURCE_BROWSER_ROUTES.relinkSource, item)}
+                        >
+                          <EditIcon size={13} />
+                        </button>
+                        <button
+                          type="button"
+                          disabled={pending}
+                          aria-label={labels.removeSource}
+                          title={labels.removeSource}
+                          onClick={() => {
+                            if (globalThis.confirm(labels.removeSourceConfirm)) {
+                              void execute(RESOURCE_BROWSER_ROUTES.removeSource, item);
+                            }
+                          }}
+                        >
+                          <TrashIcon size={13} />
+                        </button>
+                      </>
+                    ) : null}
                   </span>
                 ) : null}
                 {quickPreview?.resourceId === item.resourceId && renderQuickPreview ? (
@@ -702,8 +824,79 @@ export function ResourceBrowserRoot({
           ))
         )}
       </div>
+      {recovery ? (
+        <div className="neko-resource-browser__dialog-backdrop">
+          <div
+            className="neko-resource-browser__dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="resource-browser-recovery-title"
+          >
+            <strong id="resource-browser-recovery-title">{labels.recoveryTitle}</strong>
+            <p>{recovery.plan.libraryName}</p>
+            <small>
+              {recovery.plan.referencedCount} {labels.recoveryReferences}
+            </small>
+            <div>
+              {recovery.plan.candidate.kind === 'directory-selection-required' ? (
+                <button
+                  type="button"
+                  disabled={pending}
+                  onClick={() => {
+                    const item = projection.items.find(
+                      (candidate) => candidate.resourceId === recovery.resourceId,
+                    );
+                    if (!item) {
+                      setState({
+                        kind: 'error',
+                        message: 'Media Library recovery item is stale.',
+                      });
+                      return;
+                    }
+                    void requestRecovery(item, 'select-directory');
+                  }}
+                >
+                  {labels.recoverySelectDirectory}
+                </button>
+              ) : (
+                <button type="button" disabled={pending} onClick={() => void applyRecovery()}>
+                  {labels.recoveryConfirm}
+                </button>
+              )}
+              <button type="button" disabled={pending} onClick={() => void cancelRecovery()}>
+                {labels.recoveryCancel}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
+}
+
+function canBrowseResourceContainer(item: ResourceBrowserItem): boolean {
+  const state = item.libraryStatus?.state;
+  return (
+    !state ||
+    state === 'available' ||
+    state === 'unreferenced-linked' ||
+    state === 'content-incomplete'
+  );
+}
+
+function canRecoverLibrary(item: ResourceBrowserItem): boolean {
+  const state = item.libraryStatus?.state;
+  return (
+    state === 'required-unlinked' ||
+    state === 'global-connection-missing' ||
+    state === 'target-unavailable' ||
+    state === 'content-incomplete'
+  );
+}
+
+function hasManagedLibraryLink(item: ResourceBrowserItem): boolean {
+  const state = item.libraryStatus?.state;
+  return state !== 'required-unlinked' && state !== 'entry-conflict';
 }
 
 function canDragResourceToCanvas(item: ResourceBrowserItem): boolean {
@@ -715,18 +908,46 @@ function canDragResourceToCanvas(item: ResourceBrowserItem): boolean {
 
 function ResourceBrowserItemCopy({
   item,
+  libraryStatusLabel,
   showDescription,
 }: {
   readonly item: ResourceBrowserItem;
+  readonly libraryStatusLabel?: string;
   readonly showDescription: boolean;
 }): ReactElement {
-  const description = showDescription ? presentResourceBrowserDescription(item) : undefined;
+  const description = showDescription
+    ? (libraryStatusLabel ?? presentResourceBrowserDescription(item))
+    : undefined;
   return (
     <span className="neko-resource-browser__item-copy">
       <strong title={item.label}>{item.label}</strong>
       {description ? <small title={description}>{description}</small> : null}
     </span>
   );
+}
+
+function presentLibraryStatus(
+  item: ResourceBrowserItem,
+  labels: ReturnType<typeof getResourceBrowserLabels>,
+): string | undefined {
+  switch (item.libraryStatus?.state) {
+    case 'available':
+      return labels.statusAvailable;
+    case 'required-unlinked':
+      return labels.statusRequiredUnlinked;
+    case 'global-connection-missing':
+      return labels.statusGlobalConnectionMissing;
+    case 'target-unavailable':
+      return labels.statusTargetUnavailable;
+    case 'content-incomplete':
+      return labels.statusContentIncomplete;
+    case 'entry-conflict':
+      return labels.statusEntryConflict;
+    case 'unreferenced-linked':
+      return labels.statusUnreferencedLinked;
+    case undefined:
+      return undefined;
+  }
 }
 
 function presentResourceBrowserDescription(item: ResourceBrowserItem): string | undefined {
@@ -866,10 +1087,12 @@ function startResourceCanvasDrag(
 
 function ResourceBrowserThumbnail({
   item,
+  libraryStatusLabel,
   runtime,
   unavailableLabel,
 }: {
   readonly item: ResourceBrowserItem;
+  readonly libraryStatusLabel?: string;
   readonly runtime: ResourceBrowserHostRuntime;
   readonly unavailableLabel: string;
 }): ReactElement {
@@ -955,6 +1178,21 @@ function ResourceBrowserThumbnail({
       ) : (
         <ResourceBrowserPlaceholderIcon kind={item.kind} />
       )}
+      {item.libraryStatus ? (
+        <span
+          className="neko-resource-browser__library-status"
+          data-state={item.libraryStatus.state}
+          title={libraryStatusLabel}
+        >
+          {item.libraryStatus.state === 'available' ? (
+            <SuccessIcon size={10} />
+          ) : item.libraryStatus.state === 'unreferenced-linked' ? (
+            <InfoIcon size={10} />
+          ) : (
+            <WarningIcon size={10} />
+          )}
+        </span>
+      ) : null}
     </span>
   );
 }
