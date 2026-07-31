@@ -192,7 +192,7 @@ Capability 是 OpenNeko 产品扩展 seam，领域包提供定义，Host 负责 
 | `neko-generation`   | 生成请求/结果契约、execution port 与 recoverable Job  | 只依赖共享契约；不读取配置或 credential；provider runtime 由现有 Host 注入；不创建独立 Host 或 UI                            |
 | `neko-chara`        | Character Dialogue、Embody、角色证据与角色运行编排    | core/application host-neutral；具体 adapter 由 Desktop 注入；只消费 Agent contract，不拥有第二套 Agent loop                  |
 | `neko-quality`      | canonical Quality Gate、evaluator port 与模型证据适配 | 只依赖共享 contract；领域 rubric/repair/apply 留在 owning package；provider/config/credential 和 Host IO 由组合层注入        |
-| `neko-assets`       | Media Library 文件入口、投影和 Entity Desktop surface | 文件走 canonical locator/Host Content I/O；Entity 走 canonical facade；不拥有 catalog、package/generated lifecycle 或 cache  |
+| `neko-assets`       | Media Library 文件入口、全局 Media/Asset 浏览投影和 Entity Desktop surface | 文件走 canonical locator/Host Content I/O；全局浏览只接收 opaque identity、revision 和安全 thumbnail descriptor；owned Asset IO 与外部 Media Library link lifecycle 由 Desktop Host 执行；Entity 走 canonical facade；不拥有持久 catalog、package/generated lifecycle 或 cache |
 | `neko-canvas`       | 六类通用节点、空间布局、连接、投影与 `.nkc` authoring | Webview 管交互；只持久化 Markdown/Media/Group/Job/File/CanvasEmbed 与三类连接；Job/Character/World runtime 外置；复用公共 UI |
 | `neko-cut`          | Timeline、视频编辑、媒体控制与导出                    | Webview 管时间线交互；Desktop Main 管 editor/export adapter；媒体走 `@neko/media` 窄端口                                     |
 | `neko-preview`      | 授权只读预览与临时 3D Reference staging               | Preview 拥有媒体 session 和面板级 Three.js 会话；Agent/Canvas/media 只消费共享 contract；不拥有持久 3D 项目                  |

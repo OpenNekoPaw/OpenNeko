@@ -16,6 +16,10 @@ Agent + Home，以及 P1.4 Assets + Canvas 的确定性实现：
   confirmation、Home Activity/Attention 和跨 reload/restart 生命周期测试；
 - package-owned Resource Browser Root，Files/Media/Entity facet、ContentLocator 搜索、
   metadata/thumbnail、授权预览和显式添加到目标 Canvas；
+- package-owned Global Library Browser Root，为全局 Media Library 与 owned Asset Library
+  提供列表/网格、双击或 Enter 目录导航、点号隐藏项过滤、revisioned 图像/视频缩略图和静态
+  hover 预览；Asset 导入由 Main 复制到 owned root，删除只进入系统废纸篓，Media Library
+  移除只断开 managed link；
 - package-owned `CanvasWebviewRoot`、`.nkc` document session、revision/save/undo/redo、
   source picker、资源放置、多个 Canvas View 与最多双栏显示；
 - Canvas 素材入口按 owner 收敛为工作区/已链接媒体库直接引用、全局媒体库显式关联或复制、
@@ -38,6 +42,17 @@ conversation、config、Skill、content 与 projection effects；缺少任一 re
 Workspace 和新 View。Content Project 在 catalog 与 Tab state 完成 hydration 后才激活目标，
 不回退到当前 active conversation。重启后也由同一 locator 惰性重连，identity 漂移会被拒绝。
 加密端口只在实际 credential 操作时触发 macOS safeStorage/Keychain 检查。
+
+冷启动最近会话由 Pi owning package 的只读 SQLite catalog reader 提供，并在首次 Shell
+snapshot 前按持久 Desktop Project catalog 限定 workspace scope；该路径不 attach Agent
+workspace runtime、不打开 transcript 或获取 execution lease。Agent Root 在 layout phase
+先建立 Host 订阅，再允许子组件请求 conversation/config/Skill snapshot。新会话 pending send
+使用稳定 message identity 保持用户消息可见；发送失败按目标 conversation 投影 diagnostic，
+不会留下空白的“执行中”面板。
+
+共享 portal surface 由 `@neko/ui` semantic stylesheet 拥有，Desktop 只投影主题 token，业务
+菜单不得复制背景或依赖消费者 Tailwind 扫描共享包源码。Workbench 在没有 creative Main View
+时允许 `Chat + Main` 并展示明确空 Main surface；`Main only` 仍要求已有 Main View。
 
 完整 provider-backed 宿主验收仍未完成：真实 provider/model 调用尚未获得成本授权，且当前
 没有 Desktop complete-session evaluation driver。确定性测试、key-free Evaluation harness、production
@@ -66,6 +81,11 @@ pnpm --filter @neko/app-desktop lint
 pnpm --filter @neko/app-desktop package
 pnpm --filter @neko/app-desktop dev
 ```
+
+真实 Electron 功能验收可用 `--openneko-functional-fixture` 与
+`OPENNEKO_DESKTOP_FUNCTIONAL_HOME` 注入隔离 home；目录必须是绝对路径且 basename 以
+`openneko-desktop-functional-` 开头。该入口只隔离功能 fixture，不替代独立
+`--user-data-dir`，普通启动不会读取该路径。
 
 `darwin-arm64` 开发包使用 ad-hoc 签名，并保持 sandbox、CSP、ASAR integrity、安全 fuses，
 同时关闭 `file://` extra privileges。Electron V1 fuse 使用严格完整配置：
