@@ -2,9 +2,9 @@ import { lazy, Suspense, useMemo } from 'react';
 import { useTranslation } from '@neko/shared/i18n/react';
 import type {
   DesktopProjectCatalogItem,
-  DesktopProjectTabProjection,
   DesktopShellProjection,
 } from '../shared/shell-contract';
+import type { DesktopWorkbenchViewRef } from '../shared/workbench-contract';
 import { createDesktopResourceBrowserIdentity } from '../shared/resource-browser-bridge-contract';
 import { createElectronResourceBrowserHostRuntime } from './desktop-resource-browser-host-runtime';
 import { useDesktopApplicationSettings } from './application-settings-context';
@@ -23,12 +23,12 @@ export function DesktopResourceBrowserSurface({
   onOpenCanvasDocument,
   project,
   projection,
-  tab,
+  view,
 }: {
   readonly onOpenCanvasDocument: (documentId: string, presentation: 'main' | 'side') => void;
   readonly project: DesktopProjectCatalogItem;
   readonly projection: DesktopShellProjection;
-  readonly tab: DesktopProjectTabProjection;
+  readonly view: DesktopWorkbenchViewRef;
 }): JSX.Element {
   const { locale, t } = useTranslation();
   const applicationSettings = useDesktopApplicationSettings();
@@ -40,8 +40,8 @@ export function DesktopResourceBrowserSurface({
           projectId: project.projectId,
           workspaceId: project.workspaceId,
           windowId: projection.window.windowId,
-          projectViewId: tab.viewId,
-          projectViewEpoch: tab.viewEpoch,
+          viewId: view.viewId,
+          viewEpoch: view.viewEpoch,
           endpointEpoch: projection.endpointEpoch,
         }),
       }),
@@ -50,8 +50,8 @@ export function DesktopResourceBrowserSurface({
       project.workspaceId,
       projection.endpointEpoch,
       projection.window.windowId,
-      tab.viewEpoch,
-      tab.viewId,
+      view.viewEpoch,
+      view.viewId,
     ],
   );
   return (
@@ -68,7 +68,7 @@ export function DesktopResourceBrowserSurface({
           locale={locale}
           defaultViewMode={applicationSettings.projection.preferences.resourceBrowserView}
           previewTarget={{
-            viewId: `preview:${tab.viewId}:temporary`,
+            viewId: `preview:${view.viewId}:temporary`,
             presentation: 'temporary',
             expectedWorkbenchRevision: projection.window.workbench.revision,
           }}

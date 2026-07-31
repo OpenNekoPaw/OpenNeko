@@ -5,19 +5,21 @@ import type { DesktopShellProjection } from '../shared/shell-contract';
 import {
   activateWorkbenchMainView,
   applyWorkbenchDisplayMode,
+  DESKTOP_BUILTIN_SKILL_IDS,
   DesktopShellView,
-  filterAndSortHomePlugins,
+  filterAndSortHomeExtensions,
   filterAndSortHomeProjects,
   filterAndSortHomeSkills,
-  nextResourceDockPresentation,
   openCanvasDocumentWorkbench,
+  openResourceBrowserWorkbench,
   parseHomeAssetSortOption,
   parseHomeNamedSortOption,
   parseHomeProjectSortOption,
+  parseHomeSkillSourceFilter,
+  presentHomeSkill,
   resizePrimarySidebarWorkbench,
   resizeProjectDockWorkbench,
   resizeTimelineWorkbench,
-  setResourceDockPresentationWorkbench,
 } from './DesktopShell';
 import { createDesktopI18n } from './i18n';
 import {
@@ -39,45 +41,89 @@ describe('DesktopShellView', () => {
   it('rejects unknown Home catalog sort options', () => {
     expect(parseHomeAssetSortOption('modified-descending')).toBe('modified-descending');
     expect(parseHomeNamedSortOption('name-descending')).toBe('name-descending');
+    expect(parseHomeSkillSourceFilter('personal')).toBe('personal');
     expect(parseHomeProjectSortOption('updated-ascending')).toBe('updated-ascending');
     expect(() => parseHomeAssetSortOption('recent')).toThrow('Unknown Home asset sort option');
     expect(() => parseHomeNamedSortOption('recent')).toThrow('Unknown Home catalog sort option');
+    expect(() => parseHomeSkillSourceFilter('project')).toThrow('Unknown Home Skill source filter');
     expect(() => parseHomeProjectSortOption('recent')).toThrow('Unknown Home project sort option');
   });
 
-  it('filters and deterministically sorts global capability and Project catalogs', () => {
+  it('filters and deterministically sorts global extension and Project catalogs', () => {
     expect(
       filterAndSortHomeSkills(
         [
           { name: 'Video', description: 'Edit clips', source: 'builtin' },
           { name: 'Audio', description: 'Mix sound', source: 'personal' },
         ],
-        'personal',
+        '',
         'name-ascending',
+        { source: 'all' },
       ).map((skill) => skill.name),
-    ).toEqual(['Audio']);
+    ).toEqual(['Audio', 'Video']);
     expect(
-      filterAndSortHomePlugins(
+      filterAndSortHomeSkills(
+        [
+          { name: 'Video', description: 'Edit clips', source: 'builtin' },
+          { name: 'Audio', description: 'Mix sound', source: 'personal' },
+        ],
+        '',
+        'name-ascending',
+        { source: 'builtin' },
+      ).map((skill) => skill.name),
+    ).toEqual(['Video']);
+    expect(
+      filterAndSortHomeExtensions(
         [
           {
-            id: 'preview',
-            name: 'Preview',
-            description: 'P1.5',
-            kind: 'builtin',
-            status: 'ready',
+            id: 'github@openai-api-curated',
+            name: 'github',
+            displayName: 'GitHub',
+            description: 'Triage pull requests.',
+            version: '0.1.6',
+            developer: 'OpenAI',
+            marketplace: 'openai-api-curated',
+            mcpServerIds: ['github'],
+            hasSkills: true,
+            appIds: ['github'],
           },
           {
-            id: 'agent',
-            name: 'Agent',
-            description: 'P1.3',
-            kind: 'builtin',
-            status: 'unavailable',
+            id: 'computer-use@openai-bundled',
+            name: 'computer-use',
+            displayName: 'Computer Use',
+            description: 'Control Mac apps.',
+            version: '1.0.2',
+            developer: 'OpenAI',
+            marketplace: 'openai-bundled',
+            mcpServerIds: ['computer-use'],
+            hasSkills: true,
+            appIds: [],
           },
         ],
         '',
         'name-descending',
-      ).map((plugin) => plugin.name),
-    ).toEqual(['Preview', 'Agent']);
+      ).map((extension) => extension.id),
+    ).toEqual(['github@openai-api-curated', 'computer-use@openai-bundled']);
+    expect(
+      filterAndSortHomeExtensions(
+        [
+          {
+            id: 'computer-use@openai-bundled',
+            name: 'computer-use',
+            displayName: 'Computer Use',
+            description: 'Control Mac apps.',
+            version: '1.0.2',
+            developer: 'OpenAI',
+            marketplace: 'openai-bundled',
+            mcpServerIds: ['computer-use'],
+            hasSkills: true,
+            appIds: [],
+          },
+        ],
+        'computer-use',
+        'name-ascending',
+      ).map((extension) => extension.id),
+    ).toEqual(['computer-use@openai-bundled']);
     expect(
       filterAndSortHomeProjects(
         [
@@ -104,25 +150,7 @@ describe('DesktopShellView', () => {
     ).toEqual(['Newer', 'Older']);
   });
 
-  it('reopens Resources as an overlay while a full Preview owns Main', () => {
-    const workbench = openOrFocusMainView(createDefaultDesktopWorkbenchLayout('window-1'), {
-      viewId: 'preview-1',
-      viewEpoch: 1,
-      projectId: 'project-1',
-      workspaceId: 'workspace-1',
-      kind: 'preview',
-      ownerId: 'preview-session-1',
-      displayLabel: 'resource-1',
-      documentId: 'resource-1',
-    });
-
-    expect(nextResourceDockPresentation(workbench)).toBe('overlay');
-    expect(nextResourceDockPresentation(createDefaultDesktopWorkbenchLayout('window-1'))).toBe(
-      'docked',
-    );
-  });
-
-  it('activates an attached creative Main tab and normalizes an overlay Resource dock', () => {
+  it('activates an attached creative Main tab without mutating legacy Resource Dock state', () => {
     const workbench = {
       ...createDefaultDesktopWorkbenchLayout('window-1'),
       resourceDock: {
@@ -142,7 +170,7 @@ describe('DesktopShellView', () => {
     };
 
     expect(activateWorkbenchMainView(workbench, canvasView)).toMatchObject({
-      resourceDock: { presentation: 'docked' },
+      resourceDock: { presentation: 'overlay' },
       main: {
         groups: [
           {
@@ -163,7 +191,6 @@ describe('DesktopShellView', () => {
     const primary = resizePrimarySidebarWorkbench(workbench, 288);
     const timeline = resizeTimelineWorkbench(workbench, 320);
     const agent = resizeProjectDockWorkbench(workbench, 'agent', 400);
-    const resources = resizeProjectDockWorkbench(workbench, 'resources', 440);
 
     expect(primary).toMatchObject({
       revision: 9,
@@ -175,41 +202,51 @@ describe('DesktopShellView', () => {
     });
     expect(agent.display.chatWidth).toBe(400);
     expect(agent.resourceDock.width).toBe(workbench.resourceDock.width);
-    expect(resources.display.chatWidth).toBe(workbench.display.chatWidth);
-    expect(resources.resourceDock.width).toBe(440);
   });
 
-  it('keeps visible Resources opposite the declared Chat side', () => {
-    const projection = homeProjection();
-    const project = projection.catalog.projects[0];
+  it('opens and focuses Resources as one independent Main View', () => {
+    const home = homeProjection();
+    const project = home.catalog.projects[0];
     if (!project) {
       throw new Error('Desktop Shell fixture requires one project.');
     }
-    const workbench = {
-      ...openOrFocusMainView(createDefaultDesktopWorkbenchLayout('window-1'), {
-        viewId: 'canvas:view-1:main',
-        viewEpoch: 1,
-        projectId: project.projectId,
-        workspaceId: project.workspaceId,
-        kind: 'canvas',
-        ownerId: 'canvas:view-1',
-        displayLabel: 'main.nkc',
-        documentId: 'boards/main.nkc',
-      }),
-      resourceDock: {
-        presentation: 'docked' as const,
-        position: 'right' as const,
-        width: 340,
+    const projection: DesktopShellProjection = {
+      ...home,
+      window: {
+        ...home.window,
+        tabs: [
+          {
+            tabId: 'tab-1',
+            projectId: project.projectId,
+            viewId: 'view-1',
+            viewEpoch: 1,
+          },
+        ],
       },
     };
+    const workbench = createDefaultDesktopWorkbenchLayout('window-1');
+    const opened = openResourceBrowserWorkbench({
+      displayLabel: 'Resources',
+      project,
+      projection,
+      workbench,
+    });
+    const focused = openResourceBrowserWorkbench({
+      displayLabel: 'Resources',
+      project,
+      projection,
+      workbench: opened,
+    });
 
-    const revealed = setResourceDockPresentationWorkbench(workbench, 'docked');
-    const chatRight = applyWorkbenchDisplayMode(revealed, 'chat-main-right');
-
-    expect(revealed.display.chatPosition).toBe('left');
-    expect(revealed.resourceDock.position).toBe('right');
-    expect(chatRight.display.chatPosition).toBe('right');
-    expect(chatRight.resourceDock.position).toBe('left');
+    expect(focused.display.mode).toBe('chat-main');
+    expect(focused.main.views).toEqual([
+      expect.objectContaining({
+        kind: 'resource-browser',
+        projectId: project.projectId,
+        workspaceId: project.workspaceId,
+      }),
+    ]);
+    expect(focused.resourceDock.presentation).toBe('hidden');
   });
 
   it('mounts an active Cut View into Main with its package timeline Host slot', () => {
@@ -304,7 +341,7 @@ describe('DesktopShellView', () => {
     expect(markup).not.toContain('home-hero');
     expect(markup).toContain('Demo Project');
     expect(markup).toContain('Asset Center');
-    expect(markup).toContain('Plugins');
+    expect(markup).toContain('Extensions');
     expect(markup).toContain('All projects');
     expect(markup).not.toContain('/Users/private');
   });
@@ -368,7 +405,7 @@ describe('DesktopShellView', () => {
       expect(sidebar).toContain('home-navigation project-primary-sidebar');
       expect(sidebar).toContain('Start creating');
       expect(sidebar).toContain('Asset Center');
-      expect(sidebar).toContain('Plugins');
+      expect(sidebar).toContain('Extensions');
       expect(sidebar).toContain('All projects');
       expect(sidebar).toContain('Recent projects');
       expect(sidebar).toContain('Recent Agent conversations');
@@ -418,7 +455,7 @@ describe('DesktopShellView', () => {
     expect(markup).toContain('Desktop settings');
     expect(markup).toContain('Start creating');
     expect(markup).toContain('Asset Center');
-    expect(markup).toContain('Plugins');
+    expect(markup).toContain('Extensions');
     expect(markup).toContain('All projects');
     expect(markup).toContain('Recent projects');
     expect(markup).toContain('Recent Agent conversations');
@@ -487,7 +524,7 @@ describe('DesktopShellView', () => {
     expect(projectCatalogMarkup).not.toContain('Timeline payload must stay owner-only');
   });
 
-  it('projects movable Agent/Resource docks without duplicating domain state', () => {
+  it('renders only the Agent dock while legacy Resource Dock state remains persisted', () => {
     const projection = homeProjection();
     const markup = renderShell(
       <DesktopShellView
@@ -555,14 +592,15 @@ describe('DesktopShellView', () => {
     expect(markup).toContain('data-workbench-display-control="primary-sidebar"');
     expect(markup).toContain('Recent projects');
     expect(markup).toContain('Recent Agent conversations');
-    expect(markup).toContain('data-left-presentation="docked"');
+    expect(markup).toContain('data-left-presentation="hidden"');
     expect(markup).toContain('data-right-presentation="docked"');
     expect(markup).toContain('Creative main surface');
-    expect(markup).toContain('Resource facets');
+    expect(markup).not.toContain('Resource facets');
+    expect(markup).not.toContain('data-dock-owner="resources"');
     expect(markup.match(/data-primary-surface="agent"/gu)).toHaveLength(1);
   });
 
-  it('renders Agent and Resources as independent sidebars when restored positions collide', () => {
+  it('does not revive the removed Resource Dock path from restored presentation state', () => {
     const projection = homeProjection();
     const markup = renderShell(
       <DesktopShellView
@@ -598,11 +636,10 @@ describe('DesktopShellView', () => {
     );
 
     expect(markup).not.toContain('project-dock-stack');
-    expect(markup).toContain('neko-controlled-workbench-dock--left" data-presentation="docked"');
+    expect(markup).toContain('Creative main surface');
+    expect(markup).not.toContain('neko-controlled-workbench-dock--left" data-presentation="docked"');
     expect(markup).toContain('neko-controlled-workbench-dock--right" data-presentation="docked"');
-    expect(markup).toMatch(
-      /neko-controlled-workbench-dock--left[\s\S]*data-dock-owner="resources"/u,
-    );
+    expect(markup).not.toContain('data-dock-owner="resources"');
     expect(markup).toMatch(/neko-controlled-workbench-dock--right[\s\S]*data-dock-owner="agent"/u);
   });
 
@@ -648,10 +685,30 @@ describe('DesktopShellView', () => {
             ],
             workbench: {
               ...projection.window.workbench,
-              resourceDock: {
-                presentation: 'docked',
-                position: 'right',
-                width: 320,
+              display: {
+                ...projection.window.workbench.display,
+                mode: 'main-only',
+              },
+              main: {
+                views: [
+                  {
+                    viewId: 'resource-browser:view-1',
+                    viewEpoch: 1,
+                    projectId: 'content:workspace-1',
+                    workspaceId: 'workspace-1',
+                    kind: 'resource-browser',
+                    ownerId: 'resource-browser:content:workspace-1',
+                    displayLabel: 'Resources',
+                  },
+                ],
+                groups: [
+                  {
+                    groupId: DESKTOP_PRIMARY_MAIN_GROUP_ID,
+                    viewIds: ['resource-browser:view-1'],
+                    activeViewId: 'resource-browser:view-1',
+                  },
+                ],
+                activeGroupId: DESKTOP_PRIMARY_MAIN_GROUP_ID,
               },
             },
           },
@@ -674,40 +731,100 @@ describe('DesktopShellView', () => {
 
     expect(markup).toContain('开始创作');
     expect(markup).toContain('资产中心');
-    expect(markup).toContain('插件');
+    expect(markup).toContain('扩展');
+    expect(markup).not.toContain('插件');
     expect(markup).toContain('所有项目');
     expect(markup).not.toContain('Start creating');
   });
 
-  it('renders global Skills and Plugins controls without a Project selector', () => {
+  it('renders global Skills and extension catalog controls without runtime capability claims', () => {
     const i18n = createDesktopI18n('zh-cn');
     const markup = renderToStaticMarkup(
       <I18nProvider service={i18n.i18nService}>
-        <DesktopShellView projection={homeProjection()} homeSection="plugins" />
+        <DesktopShellView projection={homeProjection()} homeSection="extensions" />
       </I18nProvider>,
     );
 
-    expect(markup).toContain('搜索 Skill 或插件');
-    expect(markup).toContain('Skill 与插件排序');
-    expect(markup).toContain('能力分类');
+    expect(markup).toContain('搜索 Skill 或扩展');
+    expect(markup).toContain('扩展目录排序');
+    expect(markup).toContain('扩展目录');
+    expect(markup).toContain('来源');
+    expect(markup).toContain('全部');
+    expect(markup).toContain('扩展');
+    expect(markup).not.toContain('内置能力');
     expect(markup).not.toContain('选择项目');
-    expect(markup).toContain('刷新 Skill');
+    expect(markup).not.toContain('插件');
+    expect(markup).toContain('刷新目录');
+  });
+
+  it('localizes builtin catalog metadata without rewriting personal Skill metadata', () => {
+    const english = createDesktopI18n('en');
+    const chinese = createDesktopI18n('zh-cn');
+    const builtin = {
+      name: 'audio-mixing',
+      description: 'Canonical model-facing description.',
+      source: 'builtin' as const,
+    };
+    const personal = {
+      name: 'my-skill',
+      description: '作者原文',
+      source: 'personal' as const,
+    };
+
+    expect(presentHomeSkill(builtin, english.t)).toEqual({
+      name: 'Audio mixing',
+      description: 'Balance levels, music, fades, normalization, and ducking.',
+    });
+    expect(presentHomeSkill(builtin, chinese.t)).toEqual({
+      name: '混音',
+      description: '平衡音量与配乐，并处理淡入淡出、标准化和闪避。',
+    });
+    expect(presentHomeSkill(personal, english.t)).toEqual({
+      name: 'my-skill',
+      description: '作者原文',
+    });
+    expect(presentHomeSkill(personal, chinese.t)).toEqual({
+      name: 'my-skill',
+      description: '作者原文',
+    });
+    expect(builtin).toEqual({
+      name: 'audio-mixing',
+      description: 'Canonical model-facing description.',
+      source: 'builtin',
+    });
+  });
+
+  it('keeps every packaged builtin Skill in the bilingual Desktop display catalog', () => {
+    const packagedSkillFiles = import.meta.glob(
+      '../../../../packages/neko-skills/skills/*/SKILL.md',
+      { eager: true, import: 'default', query: '?raw' },
+    );
+    const packagedSkillIds = Object.keys(packagedSkillFiles)
+      .map((path) => path.split('/').at(-2))
+      .filter((name): name is string => name !== undefined)
+      .sort();
+    const english = createDesktopI18n('en');
+    const chinese = createDesktopI18n('zh-cn');
+
+    expect([...DESKTOP_BUILTIN_SKILL_IDS].sort()).toEqual(packagedSkillIds);
+    for (const skillId of packagedSkillIds) {
+      for (const field of ['name', 'description'] as const) {
+        const key = `home.capabilities.builtinSkill.${skillId}.${field}`;
+        expect(english.t(key)).not.toBe(key);
+        expect(chinese.t(key)).not.toBe(key);
+      }
+    }
   });
 
   it('renders independent Media Library and Asset Library controls without Project resources', () => {
-    const i18n = createDesktopI18n('zh-cn');
-    const markup = renderToStaticMarkup(
-      <I18nProvider service={i18n.i18nService}>
-        <DesktopShellView projection={homeProjection()} homeSection="assets" />
-      </I18nProvider>,
+    const markup = renderShell(
+      <DesktopShellView projection={homeProjection()} homeSection="assets" />,
     );
 
-    expect(markup).toContain('全局内容库');
-    expect(markup).toContain('搜索已连接目录与文件');
-    expect(markup).toContain('媒体库');
-    expect(markup).toContain('资产库');
-    expect(markup).toContain('位置类型');
-    expect(markup).toContain('资产排序');
+    expect(markup).toContain('desktop-global-library-root');
+    expect(markup).not.toContain('home-management-card');
+    expect(markup).not.toContain('Browse');
+    expect(markup).not.toContain('Open folder');
     expect(markup).not.toContain('选择项目');
     expect(markup).not.toContain('检索已授权项目');
   });

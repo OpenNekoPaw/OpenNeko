@@ -37,6 +37,42 @@ describe('DesktopShellService', () => {
     expect(restored.catalog.projects).toHaveLength(1);
   });
 
+  it('scopes the Agent Home catalog from persisted Projects before the first snapshot', async () => {
+    const file = createMemoryFile();
+    const first = createFixture(file);
+    const firstWindowId = await first.service.claimWindowId();
+    first.service.setRendererEpoch(firstWindowId, 1);
+    const initial = await first.service.getProjection(firstWindowId);
+    await first.service.openContent(
+      firstWindowId,
+      '/workspace/demo',
+      initial.endpointEpoch,
+      initial.window.revision,
+    );
+    first.service.releaseWindow(firstWindowId);
+    await first.service.dispose();
+
+    const second = createFixture(file);
+    const setHomeWorkspaceScope = vi.fn<(workspaceIds: readonly string[]) => void>();
+    second.service.setAgentHomeProjectionSource({
+      setHomeWorkspaceScope,
+      readHomeProjection: () => ({
+        revision: 1,
+        conversations: [],
+        attention: { needsInput: 0, needsReview: 0, running: 0 },
+      }),
+      subscribeHomeProjection: () => () => undefined,
+    });
+
+    const restoredWindowId = await second.service.claimWindowId();
+    second.service.setRendererEpoch(restoredWindowId, 1);
+    await second.service.getProjection(restoredWindowId);
+
+    expect(setHomeWorkspaceScope).toHaveBeenCalledWith([
+      '11111111-1111-4111-8111-111111111111',
+    ]);
+  });
+
   it('projects only fully composed Agent and Resource Browser capabilities as ready', async () => {
     const fixture = createFixture();
     fixture.service.setAgentCapabilityReady(true);
@@ -94,6 +130,38 @@ describe('DesktopShellService', () => {
     expect(second.projection.window.revision).toBe(first.projection.window.revision);
     expect(first.workspace).toEqual(second.workspace);
     expect(fixture.registry.resolve).toHaveBeenCalledTimes(2);
+  });
+
+  it('opens the canonical Workspace Canvas when a Project has no stored Main View', async () => {
+    const fixture = createFixture();
+    const windowId = await fixture.service.claimWindowId();
+    fixture.service.setRendererEpoch(windowId, 1);
+    const initial = await fixture.service.getProjection(windowId);
+
+    const opened = await fixture.service.openContent(
+      windowId,
+      '/workspace/demo',
+      initial.endpointEpoch,
+      initial.window.revision,
+    );
+
+    expect(opened.projection.window.workbench).toMatchObject({
+      display: { mode: 'chat-main' },
+      main: {
+        views: [
+          {
+            projectId: 'content:11111111-1111-4111-8111-111111111111',
+            workspaceId: '11111111-1111-4111-8111-111111111111',
+            kind: 'canvas',
+            documentId: 'neko/boards/workspace.nkc',
+          },
+        ],
+      },
+    });
+    expect(opened.projection.window.workbench.main.groups[0]).toMatchObject({
+      viewIds: [opened.projection.window.workbench.main.views[0]?.viewId],
+      activeViewId: opened.projection.window.workbench.main.views[0]?.viewId,
+    });
   });
 
   it('shares a Project owner while isolating cross-window Tab and View identity', async () => {
@@ -451,7 +519,12 @@ describe('DesktopShellService', () => {
     expect(updated.window.activeTarget).toEqual({ kind: 'home' });
     expect(updated.window.workbench.primarySidebar.visible).toBe(false);
     expect(updated.window.tabs[0]?.viewEpoch).toBe(2);
-    expect(updated.window.workbench.main.views).toEqual([]);
+    expect(updated.window.workbench.main.views).toEqual([
+      expect.objectContaining({
+        kind: 'canvas',
+        documentId: 'neko/boards/workspace.nkc',
+      }),
+    ]);
     await expect(
       fixture.service.updateWorkbench(
         windowId,
@@ -473,7 +546,7 @@ describe('DesktopShellService', () => {
     });
   });
 
-  it('drops a persisted temporary Preview View without inventing a Main owner', async () => {
+  it('drops a persisted temporary Preview View and restores the default Workspace Canvas', async () => {
     const file = createMemoryFile();
     const first = createFixture(file);
     const windowId = await first.service.claimWindowId();
@@ -525,16 +598,27 @@ describe('DesktopShellService', () => {
     const restored = createFixture(file);
     const restoredWindow = await restored.service.claimWindowId();
     restored.service.setRendererEpoch(restoredWindow, 1);
-    const projection = await restored.service.getProjection(restoredWindow);
+    const homeProjection = await restored.service.getProjection(restoredWindow);
+    const projection = await restored.service.activateTab(
+      restoredWindow,
+      homeProjection.window.tabs[0]!.tabId,
+      homeProjection.endpointEpoch,
+      homeProjection.window.revision,
+    );
 
     expect(projection.window.workbench).toMatchObject({
-      display: { mode: 'chat-only' },
+      display: { mode: 'chat-main' },
       main: {
-        views: [],
+        views: [
+          {
+            kind: 'canvas',
+            documentId: 'neko/boards/workspace.nkc',
+          },
+        ],
         groups: [
           {
             groupId: DESKTOP_PRIMARY_MAIN_GROUP_ID,
-            viewIds: [],
+            viewIds: [expect.stringContaining('canvas:')],
           },
         ],
       },

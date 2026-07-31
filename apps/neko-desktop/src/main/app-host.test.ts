@@ -13,7 +13,7 @@ import {
   createDesktopHomeAssetSearchRequest,
   createDesktopHomeMediaLibraryAddRequest,
   createDesktopHomeMediaLibraryRequest,
-  createDesktopHomePluginsRequest,
+  createDesktopHomeExtensionsRequest,
 } from '../shared/home-management-contract';
 import {
   createDesktopConversationDeleteRequest,
@@ -42,6 +42,10 @@ import {
   type DesktopApplicationSettingsFilePort,
 } from './application-settings-repository';
 import { DesktopApplicationSettingsService } from './application-settings-service';
+import type {
+  DesktopExtensionCatalogReader,
+  DesktopExtensionCatalogSnapshot,
+} from './desktop-extension-catalog-reader';
 
 describe('DesktopAppHost', () => {
   it('keeps Desktop settings sender-bound and opens Agent configuration through its owner action', async () => {
@@ -61,6 +65,7 @@ describe('DesktopAppHost', () => {
       logger,
       shell: createShellService('app-1'),
       agent: createAgentComposition(),
+      extensionCatalog: createExtensionCatalog(),
       settings,
       openAgentAdvancedSettings,
     });
@@ -131,6 +136,7 @@ describe('DesktopAppHost', () => {
       logger,
       shell: createShellService('app-1'),
       agent: createAgentComposition(),
+      extensionCatalog: createExtensionCatalog(),
       settings: createSettingsService(),
       openAgentAdvancedSettings: vi.fn(async () => undefined),
     });
@@ -183,6 +189,7 @@ describe('DesktopAppHost', () => {
       logger,
       shell: createShellService('app-1'),
       agent,
+      extensionCatalog: createExtensionCatalog(),
       settings: createSettingsService(),
       openAgentAdvancedSettings: vi.fn(async () => undefined),
     });
@@ -231,7 +238,7 @@ describe('DesktopAppHost', () => {
           webContentsId: 11,
           frameUrl: `${DESKTOP_APP_ORIGIN}/index.html`,
         },
-        createDesktopHomeAssetSearchRequest('assets-1', {
+        createDesktopHomeAssetSearchRequest('assets-1', fixture.projection.endpointEpoch, {
           query: '',
           sortBy: 'name',
           sortDirection: 'ascending',
@@ -239,6 +246,22 @@ describe('DesktopAppHost', () => {
         }),
       ),
     ).rejects.toThrow("Unknown Desktop IPC sender '11'");
+  });
+
+  it('rejects a stale Home endpoint before resolving the Resource Browser runtime', async () => {
+    const fixture = await createShellAppHost();
+
+    await expect(
+      fixture.appHost.searchHomeAssets(
+        fixture.sender,
+        createDesktopHomeAssetSearchRequest('assets-stale', 'app-1:window-1:0', {
+          query: '',
+          sortBy: 'name',
+          sortDirection: 'ascending',
+          limit: 20,
+        }),
+      ),
+    ).rejects.toThrow('endpoint identity is stale');
   });
 
   it('rejects unknown senders before any global media-library mutation', async () => {
@@ -251,7 +274,12 @@ describe('DesktopAppHost', () => {
     await expect(
       fixture.appHost.addHomeMediaLibrary(
         sender,
-        createDesktopHomeMediaLibraryAddRequest('media-library-add-1', 'local'),
+        createDesktopHomeMediaLibraryAddRequest(
+          'media-library-add-1',
+          fixture.projection.endpointEpoch,
+          'local',
+          0,
+        ),
       ),
     ).rejects.toThrow("Unknown Desktop IPC sender '11'");
     await expect(
@@ -259,7 +287,9 @@ describe('DesktopAppHost', () => {
         sender,
         createDesktopHomeMediaLibraryRequest(
           'media-library-remove-1',
+          fixture.projection.endpointEpoch,
           'media-library:local:Footage',
+          0,
         ),
       ),
     ).rejects.toThrow("Unknown Desktop IPC sender '11'");
@@ -268,7 +298,9 @@ describe('DesktopAppHost', () => {
         sender,
         createDesktopHomeMediaLibraryRequest(
           'media-library-reveal-1',
+          fixture.projection.endpointEpoch,
           'media-library:local:Footage',
+          0,
         ),
       ),
     ).rejects.toThrow("Unknown Desktop IPC sender '11'");
@@ -452,7 +484,7 @@ describe('DesktopAppHost', () => {
     });
   });
 
-  it('projects only sanitized global Skill and plugin metadata without attaching a Project', async () => {
+  it('projects sanitized global Skills and verified extensions without a Project', async () => {
     const fixture = await createShellAppHost();
     fixture.agent.readGlobalSkillCatalog.mockResolvedValue({
       records: [
@@ -489,10 +521,26 @@ describe('DesktopAppHost', () => {
         },
       ],
     });
-
-    const result = await fixture.appHost.listHomePlugins(
+    fixture.extensionCatalog.readCatalog.mockResolvedValue({
+      records: [
+        {
+          id: 'computer-use@openai-bundled',
+          name: 'computer-use',
+          displayName: 'Computer Use',
+          description: 'Control Mac apps.',
+          version: '1.0.2',
+          developer: 'OpenAI',
+          marketplace: 'openai-bundled',
+          mcpServerIds: ['computer-use'],
+          hasSkills: true,
+          appIds: [],
+        },
+      ],
+      diagnostics: [{ code: 'package_missing', count: 1 }],
+    });
+    const result = await fixture.appHost.listHomeExtensions(
       fixture.sender,
-      createDesktopHomePluginsRequest('plugins-1'),
+      createDesktopHomeExtensionsRequest('extensions-1', fixture.projection.endpointEpoch),
     );
 
     expect(result.skills).toEqual([
@@ -506,13 +554,36 @@ describe('DesktopAppHost', () => {
       diagnostics: [{ code: 'invalid_metadata', source: 'personal', count: 2 }],
       duplicateCount: 1,
     });
-    expect(result.plugins.length).toBeGreaterThan(0);
-    expect(result.plugins.every((plugin) => plugin.kind === 'builtin')).toBe(true);
+    expect(result.extensions).toEqual([
+      expect.objectContaining({
+        id: 'computer-use@openai-bundled',
+        mcpServerIds: ['computer-use'],
+        hasSkills: true,
+      }),
+    ]);
+    expect(result.extensionDiscovery).toEqual({
+      diagnostics: [{ code: 'package_missing', count: 1 }],
+    });
     expect(fixture.agent.attachWorkspace).not.toHaveBeenCalled();
     expect(JSON.stringify(result)).not.toContain('must-stay-in-main');
     expect(JSON.stringify(result)).not.toContain('/Users/fixture');
     expect(JSON.stringify(result)).not.toContain('story-planner/SKILL.md');
-    expect(result.externalPluginHost).toBe('unavailable');
+    expect(JSON.stringify(result)).not.toContain('ownerSlice');
+    expect(JSON.stringify(result)).not.toContain('canvas');
+    expect(JSON.stringify(result)).not.toContain('command');
+  });
+
+  it('rejects a stale Home endpoint before reading global Skills or extensions', async () => {
+    const fixture = await createShellAppHost();
+
+    await expect(
+      fixture.appHost.listHomeExtensions(
+        fixture.sender,
+        createDesktopHomeExtensionsRequest('extensions-stale', 'stale-endpoint'),
+      ),
+    ).rejects.toThrow('endpoint identity is stale');
+    expect(fixture.agent.readGlobalSkillCatalog).not.toHaveBeenCalled();
+    expect(fixture.extensionCatalog.readCatalog).not.toHaveBeenCalled();
   });
 
   it('derives the Agent View grant from Shell and keeps incomplete startup unavailable', async () => {
@@ -640,10 +711,13 @@ function createShellFixture(applicationInstanceId: string): {
   };
 }
 
-async function createShellAppHost() {
+async function createShellAppHost(options?: {
+  readonly configureShell?: (shell: DesktopShellService) => void;
+}) {
   const logger = createLogger();
   const fixture = createShellFixture('app-1');
   const agent = createAgentComposition();
+  const extensionCatalog = createExtensionCatalog();
   const appHost = new DesktopAppHost({
     host: createElectronNekoHostPorts({
       homedir: '/Users/fixture',
@@ -656,9 +730,11 @@ async function createShellAppHost() {
     logger,
     shell: fixture.service,
     agent,
+    extensionCatalog,
     settings: createSettingsService(),
     openAgentAdvancedSettings: vi.fn(async () => undefined),
   });
+  options?.configureShell?.(appHost.shell);
   const windowId = await appHost.shell.claimWindowId();
   appHost.windows.register({
     windowId,
@@ -670,6 +746,7 @@ async function createShellAppHost() {
   return {
     appHost,
     agent,
+    extensionCatalog,
     registry: fixture.registry,
     windowId,
     sender: {
@@ -677,6 +754,17 @@ async function createShellAppHost() {
       frameUrl: `${DESKTOP_APP_ORIGIN}/index.html`,
     },
     projection: await appHost.shell.getProjection(windowId),
+  };
+}
+
+function createExtensionCatalog(): DesktopExtensionCatalogReader & {
+  readonly readCatalog: ReturnType<typeof vi.fn<() => Promise<DesktopExtensionCatalogSnapshot>>>;
+} {
+  return {
+    readCatalog: vi.fn<() => Promise<DesktopExtensionCatalogSnapshot>>(async () => ({
+      records: [],
+      diagnostics: [],
+    })),
   };
 }
 
@@ -693,6 +781,7 @@ function createSettingsService(): DesktopApplicationSettingsService {
 
 function createAgentComposition(): DesktopAgentAppHostComposition & {
   readonly attachWorkspace: ReturnType<typeof vi.fn>;
+  readonly setHomeWorkspaceScope: ReturnType<typeof vi.fn>;
   readonly getWorkspace: ReturnType<typeof vi.fn>;
   readonly readGlobalSkillCatalog: ReturnType<typeof vi.fn>;
   readonly readHomeProjection: ReturnType<typeof vi.fn>;
@@ -712,6 +801,7 @@ function createAgentComposition(): DesktopAgentAppHostComposition & {
   });
   return {
     credentialRuntime,
+    setHomeWorkspaceScope: vi.fn<(workspaceIds: readonly string[]) => void>(),
     attachWorkspace: vi.fn(async (workspace: DesktopWorkspaceResolution) =>
       createAgentWorkspaceRuntime(workspace.workspaceId),
     ),

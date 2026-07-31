@@ -1,16 +1,40 @@
+import { mkdtemp, mkdir, realpath, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import * as path from 'node:path';
 import { DEFAULT_CANVAS_DATA } from '@neko/shared';
+import type { ILogger } from '@neko/shared/logger';
 import {
   CANVAS_HOST_RUNTIME_CONTRACT_VERSION,
   parseCanvasHostIntentRequest,
   type CanvasHostIntentResult,
 } from '@neko-canvas/domain';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createDesktopCanvasSessionId } from '../shared/canvas-bridge-contract';
 import type { DesktopWorkbenchViewRef } from '../shared/workbench-contract';
 import {
   createDesktopResourceToCanvasInteraction,
+  DesktopResourceBrowserRuntime,
   type DesktopResourceBrowserRuntimeOptions,
 } from './desktop-resource-browser-runtime';
+import { createElectronNekoHostPorts } from './electron-host-ports';
+import { createDesktopGlobalMediaLibraryConnection } from './desktop-global-media-library-files';
+import { DesktopShellService } from './shell-service';
+import {
+  DesktopShellStateRepository,
+  type DesktopShellStateFilePort,
+} from './shell-state-repository';
+import type {
+  DesktopWorkspaceRegistry,
+  DesktopWorkspaceResolution,
+} from './desktop-workspace-registry';
+
+const temporaryRoots: string[] = [];
+
+afterEach(async () => {
+  for (const root of temporaryRoots.splice(0)) {
+    await rm(root, { recursive: true, force: true });
+  }
+});
 
 const resourceIdentity = {
   projectId: 'project-1',
@@ -188,6 +212,194 @@ describe('createDesktopResourceToCanvasInteraction', () => {
   });
 });
 
+describe('DesktopResourceBrowserRuntime global libraries', () => {
+  it('resolves only the exact current thumbnail and rejects stale or cross-owner effects', async () => {
+    const fixture = await createGlobalLibraryRuntimeFixture();
+    const assetPath = path.join(fixture.assetRoot, 'hero.png');
+    const externalRoot = path.join(fixture.root, 'Footage');
+    await mkdir(fixture.assetRoot, { recursive: true });
+    await mkdir(externalRoot, { recursive: true });
+    await writeFile(assetPath, 'image');
+    await writeFile(path.join(externalRoot, 'shot.mp4'), 'video');
+    await createDesktopGlobalMediaLibraryConnection({
+      mediaLibraryRoot: fixture.mediaLibraryRoot,
+      sourceDirectory: externalRoot,
+      locationKind: 'local',
+    });
+
+    const assets = await fixture.runtime.searchHomeAssets({
+      windowId: fixture.windowId,
+      endpointEpoch: fixture.endpointEpoch,
+      query: '',
+      sortBy: 'name',
+      sortDirection: 'ascending',
+      limit: 20,
+    });
+    const asset = assets.items[0];
+    if (!asset?.thumbnail) throw new Error('Fixture asset thumbnail is required.');
+    const result = await fixture.runtime.resolveHomeLibraryThumbnail({
+      windowId: fixture.windowId,
+      endpointEpoch: fixture.endpointEpoch,
+      request: {
+        owner: asset.owner,
+        itemId: asset.id,
+        expectedCatalogRevision: assets.revision,
+        descriptorId: asset.thumbnail.descriptorId,
+        thumbnailRevision: asset.thumbnail.revision,
+        variant: 'icon',
+      },
+    });
+
+    expect(fixture.createGlobalLibraryThumbnail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        absolutePath: await realpath(assetPath),
+        mediaType: 'image',
+        variant: 'icon',
+      }),
+    );
+    expect(result).toMatchObject({ itemId: asset.id, variant: 'icon' });
+    expect(JSON.stringify(result)).not.toContain(fixture.root);
+
+    await expect(
+      fixture.runtime.resolveHomeLibraryThumbnail({
+        windowId: fixture.windowId,
+        endpointEpoch: fixture.endpointEpoch,
+        request: {
+          owner: asset.owner,
+          itemId: asset.id,
+          expectedCatalogRevision: assets.revision + 1,
+          descriptorId: asset.thumbnail.descriptorId,
+          thumbnailRevision: asset.thumbnail.revision,
+          variant: 'hover',
+        },
+      }),
+    ).rejects.toThrow('expected revision');
+
+    const media = await fixture.runtime.searchHomeMediaLibraries({
+      windowId: fixture.windowId,
+      endpointEpoch: fixture.endpointEpoch,
+      query: 'shot',
+      sortBy: 'name',
+      sortDirection: 'ascending',
+      limit: 20,
+    });
+    const mediaItem = media.items[0];
+    if (!mediaItem) throw new Error('Fixture Media Library item is required.');
+    await expect(
+      fixture.runtime.removeHomeAsset({
+        windowId: fixture.windowId,
+        endpointEpoch: fixture.endpointEpoch,
+        assetId: mediaItem.id,
+        expectedRevision: media.revision,
+      }),
+    ).rejects.toThrow('wrong owner');
+    expect(fixture.trashGlobalAsset).not.toHaveBeenCalled();
+  });
+
+  it('serializes Asset mutations without blocking Media Library reads', async () => {
+    const selectedSources = deferred<readonly string[] | undefined>();
+    const selectGlobalAssetSources = vi.fn(() => selectedSources.promise);
+    const fixture = await createGlobalLibraryRuntimeFixture({
+      selectGlobalAssetSources,
+    });
+    const externalRoot = path.join(fixture.root, 'Footage');
+    await mkdir(externalRoot, { recursive: true });
+    await writeFile(path.join(externalRoot, 'shot.mp4'), 'video');
+    await createDesktopGlobalMediaLibraryConnection({
+      mediaLibraryRoot: fixture.mediaLibraryRoot,
+      sourceDirectory: externalRoot,
+      locationKind: 'local',
+    });
+
+    const pendingImport = fixture.runtime.importHomeAssets({
+      windowId: fixture.windowId,
+      endpointEpoch: fixture.endpointEpoch,
+      expectedRevision: 0,
+    });
+    await waitFor(() => selectGlobalAssetSources.mock.calls.length === 1);
+
+    await expect(
+      fixture.runtime.importHomeAssets({
+        windowId: fixture.windowId,
+        endpointEpoch: fixture.endpointEpoch,
+        expectedRevision: 0,
+      }),
+    ).rejects.toThrow('already in progress');
+    await expect(
+      fixture.runtime.searchHomeMediaLibraries({
+        windowId: fixture.windowId,
+        endpointEpoch: fixture.endpointEpoch,
+        query: '',
+        sortBy: 'name',
+        sortDirection: 'ascending',
+        limit: 20,
+      }),
+    ).resolves.toMatchObject({ revision: 0 });
+
+    selectedSources.resolve(undefined);
+    await expect(pendingImport).resolves.toEqual({ status: 'cancelled', revision: 0 });
+  });
+
+  it('rejects stale endpoints, permits bounded parallel thumbnail variants, and aborts on detach', async () => {
+    const thumbnailsStarted = deferred<void>();
+    let startedCount = 0;
+    const fixture = await createGlobalLibraryRuntimeFixture({
+      createGlobalLibraryThumbnail: vi.fn(
+        ({ signal }: Parameters<DesktopResourceBrowserRuntimeOptions['createGlobalLibraryThumbnail']>[0]) =>
+          new Promise<string>((_resolve, reject) => {
+            startedCount += 1;
+            if (startedCount === 2) thumbnailsStarted.resolve();
+            signal?.addEventListener('abort', () => reject(signal.reason), { once: true });
+          }),
+      ),
+    });
+    await mkdir(fixture.assetRoot, { recursive: true });
+    await writeFile(path.join(fixture.assetRoot, 'hero.png'), 'image');
+
+    await expect(
+      fixture.runtime.importHomeAssets({
+        windowId: fixture.windowId,
+        endpointEpoch: 'stale-endpoint',
+        expectedRevision: 0,
+      }),
+    ).rejects.toThrow('endpoint identity is stale');
+    expect(fixture.selectGlobalAssetSources).not.toHaveBeenCalled();
+
+    const assets = await fixture.runtime.searchHomeAssets({
+      windowId: fixture.windowId,
+      endpointEpoch: fixture.endpointEpoch,
+      query: '',
+      sortBy: 'name',
+      sortDirection: 'ascending',
+      limit: 20,
+    });
+    const asset = assets.items[0];
+    if (!asset?.thumbnail) throw new Error('Fixture asset thumbnail is required.');
+    const thumbnailRequest = {
+      windowId: fixture.windowId,
+      endpointEpoch: fixture.endpointEpoch,
+      request: {
+        owner: asset.owner,
+        itemId: asset.id,
+        expectedCatalogRevision: assets.revision,
+        descriptorId: asset.thumbnail.descriptorId,
+        thumbnailRevision: asset.thumbnail.revision,
+        variant: 'hover',
+      },
+    } as const;
+    const pendingHoverThumbnail =
+      fixture.runtime.resolveHomeLibraryThumbnail(thumbnailRequest);
+    const pendingIconThumbnail = fixture.runtime.resolveHomeLibraryThumbnail({
+      ...thumbnailRequest,
+      request: { ...thumbnailRequest.request, variant: 'icon' },
+    });
+    await thumbnailsStarted.promise;
+    fixture.runtime.detachWindow(fixture.windowId);
+    await expect(pendingHoverThumbnail).rejects.toThrow('detached');
+    await expect(pendingIconThumbnail).rejects.toThrow('detached');
+  });
+});
+
 function shellWithViews(views: readonly DesktopWorkbenchViewRef[]) {
   return {
     getProjection: async () => ({
@@ -219,4 +431,129 @@ function accepted(value: unknown): CanvasHostIntentResult {
       },
     },
   };
+}
+
+async function createGlobalLibraryRuntimeFixture(overrides: {
+  readonly selectGlobalAssetSources?: DesktopResourceBrowserRuntimeOptions['selectGlobalAssetSources'];
+  readonly createGlobalLibraryThumbnail?: DesktopResourceBrowserRuntimeOptions['createGlobalLibraryThumbnail'];
+} = {}) {
+  const root = await mkdtemp(path.join(tmpdir(), 'openneko-global-library-runtime-'));
+  temporaryRoots.push(root);
+  const home = path.join(root, 'home');
+  const assetRoot = path.join(home, '.neko', 'assets');
+  const mediaLibraryRoot = path.join(home, '.neko', 'media-libraries');
+  const shell = createGlobalLibraryShell();
+  const windowId = await shell.claimWindowId();
+  shell.setRendererEpoch(windowId, 1);
+  const endpointEpoch = (await shell.getProjection(windowId)).endpointEpoch;
+  const host = createElectronNekoHostPorts({
+    homedir: home,
+    nekoHome: path.join(home, '.neko'),
+    version: '0.0.1',
+    logger: createLogger(),
+    revealPath: () => undefined,
+  });
+  const selectGlobalAssetSources =
+    overrides.selectGlobalAssetSources ?? vi.fn(async () => undefined);
+  const createGlobalLibraryThumbnail =
+    overrides.createGlobalLibraryThumbnail ??
+    vi.fn(async () => 'data:image/png;base64,AA==');
+  const trashGlobalAsset = vi.fn(async () => undefined);
+  const runtime = new DesktopResourceBrowserRuntime({
+    globalAssetRoot: assetRoot,
+    globalMediaLibraryRoot: mediaLibraryRoot,
+    shell,
+    host,
+    openPreview: async () => undefined,
+    openCut: async () => undefined,
+    selectSource: async () => undefined,
+    selectGlobalMediaLibrarySource: async () => undefined,
+    selectGlobalAssetSources,
+    trashGlobalAsset,
+    createThumbnail: async () => 'data:image/png;base64,AA==',
+    createGlobalLibraryThumbnail,
+    openQuickPreview: async () => {
+      throw new Error('Quick preview is not expected by this global-library test.');
+    },
+    releaseQuickPreview: () => undefined,
+    canvas: {
+      executeIntent: async () => {
+        throw new Error('Canvas execution is not expected by this global-library test.');
+      },
+    },
+    cut: {
+      addResource: async () => undefined,
+    },
+  });
+  return {
+    root,
+    assetRoot,
+    mediaLibraryRoot,
+    runtime,
+    windowId,
+    endpointEpoch,
+    selectGlobalAssetSources,
+    trashGlobalAsset,
+    createGlobalLibraryThumbnail,
+  };
+}
+
+function createGlobalLibraryShell(): DesktopShellService {
+  let content: string | null = null;
+  const file: DesktopShellStateFilePort = {
+    readTextIfExists: async () => content,
+    writeTextAtomic: async (next) => {
+      content = next;
+    },
+  };
+  const registry: DesktopWorkspaceRegistry = {
+    resolve: async (): Promise<DesktopWorkspaceResolution> => {
+      throw new Error('Workspace resolution is not expected by this global-library test.');
+    },
+    dispose: async () => undefined,
+  };
+  return new DesktopShellService({
+    applicationInstanceId: 'app-1',
+    stateRepository: new DesktopShellStateRepository(file),
+    workspaceRegistry: registry,
+    startupTarget: 'restore',
+    createIdentity: () => 'window-1',
+  });
+}
+
+function createLogger(): ILogger {
+  return {
+    source: 'test',
+    debug: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    child: () => createLogger(),
+    setLevel: vi.fn(),
+  };
+}
+
+function deferred<T>(): {
+  readonly promise: Promise<T>;
+  readonly resolve: (value: T) => void;
+} {
+  let resolvePromise: ((value: T) => void) | undefined;
+  const promise = new Promise<T>((resolve) => {
+    resolvePromise = resolve;
+  });
+  return {
+    promise,
+    resolve: (value) => {
+      if (!resolvePromise) throw new Error('Deferred promise is unavailable.');
+      resolvePromise(value);
+    },
+  };
+}
+
+async function waitFor(predicate: () => boolean): Promise<void> {
+  for (let attempt = 0; attempt < 50; attempt += 1) {
+    if (predicate()) return;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  throw new Error('Runtime test condition was not reached.');
 }

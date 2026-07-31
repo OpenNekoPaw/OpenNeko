@@ -82,19 +82,27 @@ import { parseDesktopCutHostIdentity } from '../shared/cut-bridge-contract';
 import type { DesktopCutRuntime } from './desktop-cut-runtime';
 import {
   DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION,
+  parseDesktopHomeAssetImportRequest,
+  parseDesktopHomeAssetRemoveRequest,
   parseDesktopHomeAssetSearchRequest,
+  parseDesktopHomeLibraryThumbnailRequest,
   parseDesktopHomeMediaLibraryAddRequest,
   parseDesktopHomeMediaLibraryChildrenRequest,
   parseDesktopHomeMediaLibraryRequest,
   parseDesktopHomeMediaLibrarySearchRequest,
-  parseDesktopHomePluginsRequest,
+  parseDesktopHomeExtensionsRequest,
+  type DesktopHomeAssetImportResult,
+  type DesktopHomeAssetRemoveResult,
   type DesktopHomeAssetSearchResult,
+  type DesktopHomeLibraryThumbnailResult,
   type DesktopHomeMediaLibraryAddResult,
   type DesktopHomeMediaLibraryChildrenResult,
+  type DesktopHomeMediaLibraryRelinkResult,
   type DesktopHomeMediaLibraryRemoveResult,
   type DesktopHomeMediaLibraryRevealResult,
   type DesktopHomeMediaLibrarySearchResult,
-  type DesktopHomePluginsResult,
+  type DesktopHomeExtensionsResult,
+  type DesktopHomeManagementRequest,
 } from '../shared/home-management-contract';
 import {
   DESKTOP_APPLICATION_SETTINGS_CONTRACT_VERSION,
@@ -104,6 +112,7 @@ import {
   type DesktopApplicationSettingsResponse,
 } from '../shared/application-settings-contract';
 import type { DesktopApplicationSettingsService } from './application-settings-service';
+import type { DesktopExtensionCatalogReader } from './desktop-extension-catalog-reader';
 
 export interface DesktopAppHostOptions {
   readonly host: NekoHostPorts;
@@ -117,6 +126,7 @@ export interface DesktopAppHostOptions {
   readonly canvas?: DesktopCanvasRuntime;
   readonly cut?: DesktopCutRuntime;
   readonly settings: DesktopApplicationSettingsService;
+  readonly extensionCatalog: DesktopExtensionCatalogReader;
   readonly openAgentAdvancedSettings: () => Promise<void>;
   readonly instanceId?: string;
 }
@@ -428,12 +438,11 @@ export class DesktopAppHost {
   ): Promise<DesktopHomeAssetSearchResult> {
     this.requireActive();
     const request = parseDesktopHomeAssetSearchRequest(payload);
-    const window = this.windows.resolveSender(sender);
-    const projection = await this.shell.getProjection(window.windowId);
+    const endpoint = await this.resolveHomeRequest(sender, request);
     try {
-      const items = await this.requireResourceBrowser().searchHomeAssets({
-        windowId: window.windowId,
-        endpointEpoch: projection.endpointEpoch,
+      const catalog = await this.requireResourceBrowser().searchHomeAssets({
+        windowId: endpoint.windowId,
+        endpointEpoch: endpoint.endpointEpoch,
         query: request.query,
         sortBy: request.sortBy,
         sortDirection: request.sortDirection,
@@ -443,7 +452,8 @@ export class DesktopAppHost {
         schemaVersion: DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION,
         requestId: request.requestId,
         status: 'ready',
-        items,
+        revision: catalog.revision,
+        items: catalog.items,
       };
     } catch (error: unknown) {
       return {
@@ -461,21 +471,22 @@ export class DesktopAppHost {
   ): Promise<DesktopHomeMediaLibrarySearchResult> {
     this.requireActive();
     const request = parseDesktopHomeMediaLibrarySearchRequest(payload);
-    const window = this.windows.resolveSender(sender);
-    const projection = await this.shell.getProjection(window.windowId);
+    const endpoint = await this.resolveHomeRequest(sender, request);
     try {
+      const catalog = await this.requireResourceBrowser().searchHomeMediaLibraries({
+        windowId: endpoint.windowId,
+        endpointEpoch: endpoint.endpointEpoch,
+        query: request.query,
+        sortBy: request.sortBy,
+        sortDirection: request.sortDirection,
+        limit: request.limit,
+      });
       return {
         schemaVersion: DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION,
         requestId: request.requestId,
         status: 'ready',
-        items: await this.requireResourceBrowser().searchHomeMediaLibraries({
-          windowId: window.windowId,
-          endpointEpoch: projection.endpointEpoch,
-          query: request.query,
-          sortBy: request.sortBy,
-          sortDirection: request.sortDirection,
-          limit: request.limit,
-        }),
+        revision: catalog.revision,
+        items: catalog.items,
       };
     } catch (error: unknown) {
       return {
@@ -493,22 +504,23 @@ export class DesktopAppHost {
   ): Promise<DesktopHomeMediaLibraryChildrenResult> {
     this.requireActive();
     const request = parseDesktopHomeMediaLibraryChildrenRequest(payload);
-    const window = this.windows.resolveSender(sender);
-    const projection = await this.shell.getProjection(window.windowId);
+    const endpoint = await this.resolveHomeRequest(sender, request);
     try {
+      const catalog = await this.requireResourceBrowser().readHomeMediaLibraryChildren({
+        windowId: endpoint.windowId,
+        endpointEpoch: endpoint.endpointEpoch,
+        libraryId: request.libraryId,
+        relativePath: request.relativePath,
+        sortBy: request.sortBy,
+        sortDirection: request.sortDirection,
+        limit: request.limit,
+      });
       return {
         schemaVersion: DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION,
         requestId: request.requestId,
         status: 'ready',
-        items: await this.requireResourceBrowser().readHomeMediaLibraryChildren({
-          windowId: window.windowId,
-          endpointEpoch: projection.endpointEpoch,
-          libraryId: request.libraryId,
-          relativePath: request.relativePath,
-          sortBy: request.sortBy,
-          sortDirection: request.sortDirection,
-          limit: request.limit,
-        }),
+        revision: catalog.revision,
+        items: catalog.items,
       };
     } catch (error: unknown) {
       return {
@@ -526,12 +538,32 @@ export class DesktopAppHost {
   ): Promise<DesktopHomeMediaLibraryAddResult> {
     this.requireActive();
     const request = parseDesktopHomeMediaLibraryAddRequest(payload);
-    const window = this.windows.resolveSender(sender);
-    const projection = await this.shell.getProjection(window.windowId);
+    const endpoint = await this.resolveHomeRequest(sender, request);
     const result = await this.requireResourceBrowser().addHomeMediaLibrary({
-      windowId: window.windowId,
-      endpointEpoch: projection.endpointEpoch,
+      windowId: endpoint.windowId,
+      endpointEpoch: endpoint.endpointEpoch,
       locationKind: request.locationKind,
+      expectedRevision: request.expectedRevision,
+    });
+    return {
+      schemaVersion: DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION,
+      requestId: request.requestId,
+      ...result,
+    };
+  }
+
+  async relinkHomeMediaLibrary(
+    sender: DesktopSenderIdentity,
+    payload: unknown,
+  ): Promise<DesktopHomeMediaLibraryRelinkResult> {
+    this.requireActive();
+    const request = parseDesktopHomeMediaLibraryRequest(payload);
+    const endpoint = await this.resolveHomeRequest(sender, request);
+    const result = await this.requireResourceBrowser().relinkHomeMediaLibrary({
+      windowId: endpoint.windowId,
+      endpointEpoch: endpoint.endpointEpoch,
+      libraryId: request.libraryId,
+      expectedRevision: request.expectedRevision,
     });
     return {
       schemaVersion: DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION,
@@ -546,18 +578,19 @@ export class DesktopAppHost {
   ): Promise<DesktopHomeMediaLibraryRemoveResult> {
     this.requireActive();
     const request = parseDesktopHomeMediaLibraryRequest(payload);
-    const window = this.windows.resolveSender(sender);
-    const projection = await this.shell.getProjection(window.windowId);
-    await this.requireResourceBrowser().removeHomeMediaLibrary({
-      windowId: window.windowId,
-      endpointEpoch: projection.endpointEpoch,
+    const endpoint = await this.resolveHomeRequest(sender, request);
+    const revision = await this.requireResourceBrowser().removeHomeMediaLibrary({
+      windowId: endpoint.windowId,
+      endpointEpoch: endpoint.endpointEpoch,
       libraryId: request.libraryId,
+      expectedRevision: request.expectedRevision,
     });
     return {
       schemaVersion: DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION,
       requestId: request.requestId,
       status: 'removed',
       libraryId: request.libraryId,
+      revision,
     };
   }
 
@@ -567,31 +600,99 @@ export class DesktopAppHost {
   ): Promise<DesktopHomeMediaLibraryRevealResult> {
     this.requireActive();
     const request = parseDesktopHomeMediaLibraryRequest(payload);
-    const window = this.windows.resolveSender(sender);
-    const projection = await this.shell.getProjection(window.windowId);
-    await this.requireResourceBrowser().revealHomeMediaLibrary({
-      windowId: window.windowId,
-      endpointEpoch: projection.endpointEpoch,
+    const endpoint = await this.resolveHomeRequest(sender, request);
+    const revision = await this.requireResourceBrowser().revealHomeMediaLibrary({
+      windowId: endpoint.windowId,
+      endpointEpoch: endpoint.endpointEpoch,
       libraryId: request.libraryId,
+      expectedRevision: request.expectedRevision,
     });
     return {
       schemaVersion: DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION,
       requestId: request.requestId,
       status: 'revealed',
       libraryId: request.libraryId,
+      revision,
     };
   }
 
-  async listHomePlugins(
+  async importHomeAssets(
     sender: DesktopSenderIdentity,
     payload: unknown,
-  ): Promise<DesktopHomePluginsResult> {
+  ): Promise<DesktopHomeAssetImportResult> {
     this.requireActive();
-    const request = parseDesktopHomePluginsRequest(payload);
-    const window = this.windows.resolveSender(sender);
-    const projection = await this.shell.getProjection(window.windowId);
-    const catalog = await this.agent.readGlobalSkillCatalog();
-    for (const skill of catalog.records) {
+    const request = parseDesktopHomeAssetImportRequest(payload);
+    const endpoint = await this.resolveHomeRequest(sender, request);
+    const result = await this.requireResourceBrowser().importHomeAssets({
+      windowId: endpoint.windowId,
+      endpointEpoch: endpoint.endpointEpoch,
+      expectedRevision: request.expectedRevision,
+    });
+    return {
+      schemaVersion: DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION,
+      requestId: request.requestId,
+      ...result,
+    };
+  }
+
+  async removeHomeAsset(
+    sender: DesktopSenderIdentity,
+    payload: unknown,
+  ): Promise<DesktopHomeAssetRemoveResult> {
+    this.requireActive();
+    const request = parseDesktopHomeAssetRemoveRequest(payload);
+    const endpoint = await this.resolveHomeRequest(sender, request);
+    const result = await this.requireResourceBrowser().removeHomeAsset({
+      windowId: endpoint.windowId,
+      endpointEpoch: endpoint.endpointEpoch,
+      assetId: request.assetId,
+      expectedRevision: request.expectedRevision,
+    });
+    return {
+      schemaVersion: DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION,
+      requestId: request.requestId,
+      ...result,
+    };
+  }
+
+  async resolveHomeLibraryThumbnail(
+    sender: DesktopSenderIdentity,
+    payload: unknown,
+  ): Promise<DesktopHomeLibraryThumbnailResult> {
+    this.requireActive();
+    const request = parseDesktopHomeLibraryThumbnailRequest(payload);
+    const endpoint = await this.resolveHomeRequest(sender, request);
+    const result = await this.requireResourceBrowser().resolveHomeLibraryThumbnail({
+      windowId: endpoint.windowId,
+      endpointEpoch: endpoint.endpointEpoch,
+      request: {
+        owner: request.owner,
+        itemId: request.itemId,
+        expectedCatalogRevision: request.expectedCatalogRevision,
+        descriptorId: request.descriptorId,
+        thumbnailRevision: request.thumbnailRevision,
+        variant: request.variant,
+      },
+    });
+    return {
+      schemaVersion: DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION,
+      requestId: request.requestId,
+      ...result,
+    };
+  }
+
+  async listHomeExtensions(
+    sender: DesktopSenderIdentity,
+    payload: unknown,
+  ): Promise<DesktopHomeExtensionsResult> {
+    this.requireActive();
+    const request = parseDesktopHomeExtensionsRequest(payload);
+    await this.resolveHomeRequest(sender, request);
+    const [skillCatalog, extensionCatalog] = await Promise.all([
+      this.agent.readGlobalSkillCatalog(),
+      this.options.extensionCatalog.readCatalog(),
+    ]);
+    for (const skill of skillCatalog.records) {
       if (skill.source.kind === 'project') {
         throw new Error('Desktop global Skill catalog returned a Project-scoped Skill.');
       }
@@ -599,20 +700,16 @@ export class DesktopAppHost {
     return {
       schemaVersion: DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION,
       requestId: request.requestId,
-      skills: catalog.records.map((skill) => ({
+      skills: skillCatalog.records.map((skill) => ({
         name: skill.name,
         description: skill.description,
         source: requireGlobalSkillSource(skill.source.kind),
       })),
-      skillDiscovery: projectSkillDiscovery(catalog),
-      plugins: projection.domains.map((capability) => ({
-        id: capability.surface,
-        name: capability.surface,
-        description: capability.ownerSlice,
-        kind: 'builtin',
-        status: capability.status,
-      })),
-      externalPluginHost: 'unavailable',
+      skillDiscovery: projectSkillDiscovery(skillCatalog),
+      extensions: extensionCatalog.records,
+      extensionDiscovery: {
+        diagnostics: extensionCatalog.diagnostics,
+      },
     };
   }
 
@@ -981,6 +1078,21 @@ export class DesktopAppHost {
     }
   }
 
+  private async resolveHomeRequest(
+    sender: DesktopSenderIdentity,
+    request: DesktopHomeManagementRequest,
+  ): Promise<{ readonly windowId: string; readonly endpointEpoch: string }> {
+    const window = this.windows.resolveSender(sender);
+    const projection = await this.shell.getProjection(window.windowId);
+    if (request.endpointEpoch !== projection.endpointEpoch) {
+      throw new Error('Desktop Home endpoint identity is stale.');
+    }
+    return {
+      windowId: window.windowId,
+      endpointEpoch: projection.endpointEpoch,
+    };
+  }
+
   private requireResourceBrowser(): DesktopResourceBrowserRuntime {
     if (!this.resourceBrowser) {
       throw new Error('Desktop Resource Browser runtime is unavailable.');
@@ -1041,14 +1153,15 @@ export class DesktopAppHost {
       projection,
     };
   }
+
 }
 
 function projectSkillDiscovery(
   catalog: DesktopAgentSkillCatalog,
-): DesktopHomePluginsResult['skillDiscovery'] {
+): DesktopHomeExtensionsResult['skillDiscovery'] {
   const grouped = new Map<
     string,
-    DesktopHomePluginsResult['skillDiscovery']['diagnostics'][number]
+    DesktopHomeExtensionsResult['skillDiscovery']['diagnostics'][number]
   >();
   for (const diagnostic of catalog.diagnostics) {
     const source = requireGlobalSkillSource(diagnostic.source);

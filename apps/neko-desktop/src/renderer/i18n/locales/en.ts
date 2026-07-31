@@ -69,7 +69,7 @@ export const en = {
   'home.overview': 'Start creating',
   'home.activity': 'Activity',
   'home.mediaLibrary': 'Asset Center',
-  'home.plugins': 'Plugins',
+  'home.capabilities': 'Extensions',
   'home.allProjects': 'All projects',
   'home.workspace': 'Workspace',
   'home.projects': 'Projects',
@@ -167,24 +167,66 @@ export const en = {
     'Manage OpenNeko-owned creative materials independently for future sharing and distribution.',
   'home.assetLibrary.search': 'Search creative assets',
   'home.assetLibrary.noResults': 'No matching creative assets',
-  'home.plugins.eyebrow': 'Capabilities',
-  'home.plugins.description':
-    'Browse user-global and built-in Skills alongside Desktop global plugins.',
-  'home.plugins.search': 'Search Skills or plugins',
-  'home.plugins.sort': 'Skill and plugin sorting',
-  'home.plugins.tabs': 'Capability catalog',
-  'home.plugins.skills': 'Skills',
-  'home.plugins.plugins': 'Plugins',
-  'home.plugins.builtin': 'Built-in plugin',
-  'home.plugins.refresh': 'Refresh Skills',
-  'home.plugins.discoveryIssues':
-    '{count} Skill discovery issues were found. Invalid or shadowed records are not shown.',
-  'home.plugins.noSkills': 'No global Skills were discovered',
-  'home.plugins.noPlugins': 'No matching plugins',
-  'home.plugins.externalUnavailable':
-    'External plugin installation and execution require the future Plugin Host and are not available in Phase 1.',
-  'home.plugins.source.builtin': 'Built-in',
-  'home.plugins.source.personal': 'Personal',
+  'home.capabilities.eyebrow': 'Global catalog',
+  'home.capabilities.description':
+    'Browse global Skills and enabled extension package manifests.',
+  'home.capabilities.search': 'Search Skills or extensions',
+  'home.capabilities.sort': 'Extension catalog sorting',
+  'home.capabilities.tabs': 'Extension catalog',
+  'home.capabilities.skills': 'Skills',
+  'home.capabilities.extensions': 'Extensions',
+  'home.capabilities.refresh': 'Refresh catalog',
+  'home.capabilities.discoveryIssues':
+    '{count} catalog issue(s) were found. Invalid or shadowed records are not shown.',
+  'home.capabilities.noSkills': 'No matching global Skills',
+  'home.capabilities.noExtensions': 'No matching enabled extensions',
+  'home.capabilities.extensionMcp': 'MCP: {ids}',
+  'home.capabilities.extensionSkills': 'Skill contribution',
+  'home.capabilities.extensionApps': 'App: {ids}',
+  'home.capabilities.extensionNoContributions': 'No declared contributions',
+  'home.capabilities.source.label': 'Source',
+  'home.capabilities.source.all': 'All',
+  'home.capabilities.source.builtin': 'Built-in',
+  'home.capabilities.source.personal': 'Personal',
+  'home.capabilities.builtinSkill.audio-mixing.name': 'Audio mixing',
+  'home.capabilities.builtinSkill.audio-mixing.description':
+    'Balance levels, music, fades, normalization, and ducking.',
+  'home.capabilities.builtinSkill.color-grading.name': 'Color grading',
+  'home.capabilities.builtinSkill.color-grading.description':
+    'Adjust exposure, contrast, white balance, saturation, and cinematic looks.',
+  'home.capabilities.builtinSkill.image.name': 'Image',
+  'home.capabilities.builtinSkill.image.description':
+    'Generate, edit, extend, enhance, compose, or prepare images.',
+  'home.capabilities.builtinSkill.media-production.name': 'Media production',
+  'home.capabilities.builtinSkill.media-production.description':
+    'Guide source-to-deliverable work through available creative capabilities.',
+  'home.capabilities.builtinSkill.media-quality-review.name': 'Media quality review',
+  'home.capabilities.builtinSkill.media-quality-review.description':
+    'Review assets, storyboards, projects, cuts, and deliverables with evidence.',
+  'home.capabilities.builtinSkill.scene-to-music.name': 'Scene to music',
+  'home.capabilities.builtinSkill.scene-to-music.description':
+    'Analyze scenes and plan background music for a timeline.',
+  'home.capabilities.builtinSkill.script-generation.name': 'Script generation',
+  'home.capabilities.builtinSkill.script-generation.description':
+    'Create and refine screenplays, story structures, and character arcs.',
+  'home.capabilities.builtinSkill.script-to-timeline.name': 'Script to timeline',
+  'home.capabilities.builtinSkill.script-to-timeline.description':
+    'Convert Fountain scripts and screenplays into timeline plans.',
+  'home.capabilities.builtinSkill.skill-creator.name': 'Skill creator',
+  'home.capabilities.builtinSkill.skill-creator.description':
+    'Design, create, refine, and validate reusable Agent Skills.',
+  'home.capabilities.builtinSkill.storyboard.name': 'Storyboard',
+  'home.capabilities.builtinSkill.storyboard.description':
+    'Explore source material and create structured storyboards when requested.',
+  'home.capabilities.builtinSkill.subtitle-assistant.name': 'Subtitle assistant',
+  'home.capabilities.builtinSkill.subtitle-assistant.description':
+    'Create, edit, time, translate, import, or export subtitles and captions.',
+  'home.capabilities.builtinSkill.video.name': 'Video',
+  'home.capabilities.builtinSkill.video.description':
+    'Generate or transform a video clip from prompts, images, or references.',
+  'home.capabilities.builtinSkill.video-editing.name': 'Video editing',
+  'home.capabilities.builtinSkill.video-editing.description':
+    'Trim, split, merge, transition, and retime clips on a timeline.',
   'home.projects.eyebrow': 'Creative projects',
   'home.projects.description':
     'Browse and continue every creative project. Agent conversations are not part of this catalog.',
@@ -229,7 +271,7 @@ export const en = {
   'workspace.agentToMain': 'Agent to main',
   'workspace.timeline': 'Timeline',
   'workspace.timelineDetail': 'The Cut-owned Timeline will mount here in P1.5.',
-  'workspace.resizePrimarySidebar': 'Resize project navigation',
+  'workspace.resizePrimarySidebar': 'Resize application navigation',
   'workspace.resizeLeftDock': 'Resize left sidebar',
   'workspace.resizeRightDock': 'Resize right sidebar',
   'workspace.resizeTimeline': 'Resize Timeline',

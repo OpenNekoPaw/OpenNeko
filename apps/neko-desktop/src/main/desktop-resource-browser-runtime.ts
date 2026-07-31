@@ -1,4 +1,5 @@
 import * as path from 'node:path';
+import { lstat, realpath } from 'node:fs/promises';
 import type { NekoHostPorts } from '@neko/host/ports';
 import {
   createCanvasHostIntentRequest,
@@ -31,27 +32,42 @@ import {
   type ResourceBrowserThumbnailResult,
 } from 'neko-assets/resource-browser/contract';
 import { ResourceBrowserController } from 'neko-assets/resource-browser/controller';
+import type {
+  GlobalAssetImportResult,
+  GlobalAssetItem,
+  GlobalAssetProjection,
+  GlobalAssetRemoveResult,
+  GlobalLibraryItem,
+  GlobalLibraryThumbnailRequest,
+  GlobalLibraryThumbnailResult,
+  GlobalMediaLibraryItem,
+  GlobalMediaLibraryProjection,
+} from 'neko-assets/global-library/contract';
 import type { DesktopShellService } from './shell-service';
 import {
   createDesktopGlobalMediaLibraryConnection,
+  listDesktopGlobalMediaLibraryConnections,
   removeDesktopGlobalMediaLibraryConnection,
+  replaceDesktopGlobalMediaLibraryConnection,
   resolveDesktopGlobalMediaLibraryTarget,
 } from './desktop-global-media-library-files';
 import {
   createDesktopResourceBrowserProjectionSource,
   readDesktopGlobalMediaLibraryChildren,
+  resolveDesktopGlobalAssetItemPath,
   resolveDesktopResourceBrowserItemPath,
   searchDesktopGlobalAssetCatalog,
   searchDesktopGlobalMediaLibraries,
   type DesktopResourceBrowserSourceOptions,
 } from './desktop-resource-browser-source';
-import { resourceBrowserViewId } from '../shared/resource-browser-bridge-contract';
+import {
+  importDesktopGlobalAssetFiles,
+  removeDesktopGlobalAssetFile,
+} from './desktop-global-asset-files';
 import { createDesktopCanvasSessionId } from '../shared/canvas-bridge-contract';
 import type { DesktopWorkbenchViewRef } from '../shared/workbench-contract';
 import type {
-  DesktopHomeAssetItem,
   DesktopHomeCatalogSort,
-  DesktopHomeMediaLibraryItem,
   DesktopHomeMediaLibraryLocationKind,
   DesktopHomeSortDirection,
 } from '../shared/home-management-contract';
@@ -65,7 +81,15 @@ export interface DesktopResourceBrowserRuntimeOptions {
   readonly openCut: DesktopResourceBrowserSourceOptions['openCut'];
   readonly selectSource: (windowId: string) => Promise<string | undefined>;
   readonly selectGlobalMediaLibrarySource: (windowId: string) => Promise<string | undefined>;
+  readonly selectGlobalAssetSources: (windowId: string) => Promise<readonly string[] | undefined>;
+  readonly trashGlobalAsset: (absolutePath: string) => Promise<void>;
   readonly createThumbnail: (absolutePath: string) => Promise<string>;
+  readonly createGlobalLibraryThumbnail: (input: {
+    readonly absolutePath: string;
+    readonly mediaType: 'image' | 'video';
+    readonly variant: GlobalLibraryThumbnailRequest['variant'];
+    readonly signal?: AbortSignal;
+  }) => Promise<string>;
   readonly openQuickPreview: (input: {
     readonly identity: ResourceBrowserIdentity;
     readonly item: ResourceBrowserItem;
@@ -95,6 +119,10 @@ export interface DesktopResourceBrowserRuntimeOptions {
 
 export class DesktopResourceBrowserRuntime {
   private readonly controllers = new Map<string, ResourceBrowserController>();
+  private readonly homeItemsByWindow = new Map<string, Map<string, GlobalLibraryItem>>();
+  private readonly homeThumbnailControllers = new Map<string, Set<AbortController>>();
+  private homeCatalogRevision = 0;
+  private globalAssetMutationActive = false;
   private globalMediaLibraryMutationActive = false;
   private disposed = false;
 
@@ -202,9 +230,9 @@ export class DesktopResourceBrowserRuntime {
     readonly sortBy: DesktopHomeCatalogSort;
     readonly sortDirection: DesktopHomeSortDirection;
     readonly limit: number;
-  }): Promise<readonly DesktopHomeAssetItem[]> {
+  }): Promise<GlobalAssetProjection> {
     await this.requireHomeEndpoint(input.windowId, input.endpointEpoch);
-    return searchDesktopGlobalAssetCatalog({
+    const items = await searchDesktopGlobalAssetCatalog({
       globalAssetRoot: this.options.globalAssetRoot,
       files: this.options.host.files,
       query: input.query,
@@ -212,6 +240,8 @@ export class DesktopResourceBrowserRuntime {
       sortDirection: input.sortDirection,
       limit: input.limit,
     });
+    this.recordHomeItems(input.windowId, 'asset-library', items);
+    return { revision: this.homeCatalogRevision, items };
   }
 
   async searchHomeMediaLibraries(input: {
@@ -221,9 +251,9 @@ export class DesktopResourceBrowserRuntime {
     readonly sortBy: DesktopHomeCatalogSort;
     readonly sortDirection: DesktopHomeSortDirection;
     readonly limit: number;
-  }): Promise<readonly DesktopHomeMediaLibraryItem[]> {
+  }): Promise<GlobalMediaLibraryProjection> {
     await this.requireHomeEndpoint(input.windowId, input.endpointEpoch);
-    return searchDesktopGlobalMediaLibraries({
+    const items = await searchDesktopGlobalMediaLibraries({
       mediaLibraryRoot: this.options.globalMediaLibraryRoot,
       files: this.options.host.files,
       query: input.query,
@@ -231,6 +261,8 @@ export class DesktopResourceBrowserRuntime {
       sortDirection: input.sortDirection,
       limit: input.limit,
     });
+    this.recordHomeItems(input.windowId, 'media-library', items);
+    return { revision: this.homeCatalogRevision, items };
   }
 
   async readHomeMediaLibraryChildren(input: {
@@ -241,9 +273,9 @@ export class DesktopResourceBrowserRuntime {
     readonly sortBy: DesktopHomeCatalogSort;
     readonly sortDirection: DesktopHomeSortDirection;
     readonly limit: number;
-  }): Promise<readonly DesktopHomeMediaLibraryItem[]> {
+  }): Promise<GlobalMediaLibraryProjection> {
     await this.requireHomeEndpoint(input.windowId, input.endpointEpoch);
-    return readDesktopGlobalMediaLibraryChildren({
+    const items = await readDesktopGlobalMediaLibraryChildren({
       mediaLibraryRoot: this.options.globalMediaLibraryRoot,
       files: this.options.host.files,
       libraryId: input.libraryId,
@@ -252,25 +284,65 @@ export class DesktopResourceBrowserRuntime {
       sortDirection: input.sortDirection,
       limit: input.limit,
     });
+    this.recordHomeItems(input.windowId, 'media-library', items);
+    return { revision: this.homeCatalogRevision, items };
   }
 
   async addHomeMediaLibrary(input: {
     readonly windowId: string;
     readonly endpointEpoch: string;
     readonly locationKind: DesktopHomeMediaLibraryLocationKind;
+    readonly expectedRevision: number;
   }): Promise<
-    { readonly status: 'added'; readonly libraryId: string } | { readonly status: 'cancelled' }
+    | { readonly status: 'added'; readonly libraryId: string; readonly revision: number }
+    | { readonly status: 'cancelled'; readonly revision: number }
   > {
     await this.requireHomeEndpoint(input.windowId, input.endpointEpoch);
+    this.requireHomeRevision(input.expectedRevision);
     return this.withGlobalMediaLibraryMutation(async () => {
       const sourceDirectory = await this.options.selectGlobalMediaLibrarySource(input.windowId);
-      if (!sourceDirectory) return { status: 'cancelled' };
+      if (!sourceDirectory) {
+        return { status: 'cancelled', revision: this.homeCatalogRevision };
+      }
       const connection = await createDesktopGlobalMediaLibraryConnection({
         mediaLibraryRoot: this.options.globalMediaLibraryRoot,
         sourceDirectory,
         locationKind: input.locationKind,
       });
-      return { status: 'added', libraryId: connection.libraryId };
+      return {
+        status: 'added',
+        libraryId: connection.libraryId,
+        revision: this.advanceHomeRevision(),
+      };
+    });
+  }
+
+  async relinkHomeMediaLibrary(input: {
+    readonly windowId: string;
+    readonly endpointEpoch: string;
+    readonly libraryId: string;
+    readonly expectedRevision: number;
+  }): Promise<
+    | { readonly status: 'relinked'; readonly libraryId: string; readonly revision: number }
+    | { readonly status: 'cancelled'; readonly revision: number }
+  > {
+    await this.requireHomeEndpoint(input.windowId, input.endpointEpoch);
+    this.requireHomeRevision(input.expectedRevision);
+    return this.withGlobalMediaLibraryMutation(async () => {
+      const sourceDirectory = await this.options.selectGlobalMediaLibrarySource(input.windowId);
+      if (!sourceDirectory) {
+        return { status: 'cancelled', revision: this.homeCatalogRevision };
+      }
+      await replaceDesktopGlobalMediaLibraryConnection({
+        mediaLibraryRoot: this.options.globalMediaLibraryRoot,
+        libraryId: input.libraryId,
+        sourceDirectory,
+      });
+      return {
+        status: 'relinked',
+        libraryId: input.libraryId,
+        revision: this.advanceHomeRevision(),
+      };
     });
   }
 
@@ -278,13 +350,16 @@ export class DesktopResourceBrowserRuntime {
     readonly windowId: string;
     readonly endpointEpoch: string;
     readonly libraryId: string;
-  }): Promise<void> {
+    readonly expectedRevision: number;
+  }): Promise<number> {
     await this.requireHomeEndpoint(input.windowId, input.endpointEpoch);
-    await this.withGlobalMediaLibraryMutation(async () => {
+    this.requireHomeRevision(input.expectedRevision);
+    return this.withGlobalMediaLibraryMutation(async () => {
       await removeDesktopGlobalMediaLibraryConnection({
         mediaLibraryRoot: this.options.globalMediaLibraryRoot,
         libraryId: input.libraryId,
       });
+      return this.advanceHomeRevision();
     });
   }
 
@@ -292,8 +367,10 @@ export class DesktopResourceBrowserRuntime {
     readonly windowId: string;
     readonly endpointEpoch: string;
     readonly libraryId: string;
-  }): Promise<void> {
+    readonly expectedRevision: number;
+  }): Promise<number> {
     await this.requireHomeEndpoint(input.windowId, input.endpointEpoch);
+    this.requireHomeRevision(input.expectedRevision);
     const revealPath = this.options.host.external?.revealPath;
     if (!revealPath) {
       throw new Error('Desktop global media-library reveal capability is unavailable.');
@@ -304,6 +381,100 @@ export class DesktopResourceBrowserRuntime {
         libraryId: input.libraryId,
       }),
     );
+    return this.homeCatalogRevision;
+  }
+
+  async importHomeAssets(input: {
+    readonly windowId: string;
+    readonly endpointEpoch: string;
+    readonly expectedRevision: number;
+  }): Promise<GlobalAssetImportResult> {
+    await this.requireHomeEndpoint(input.windowId, input.endpointEpoch);
+    this.requireHomeRevision(input.expectedRevision);
+    return this.withGlobalAssetMutation(async () => {
+      const sources = await this.options.selectGlobalAssetSources(input.windowId);
+      if (!sources) return { status: 'cancelled', revision: this.homeCatalogRevision };
+      const outcomes = await importDesktopGlobalAssetFiles({
+        globalAssetRoot: this.options.globalAssetRoot,
+        sourcePaths: sources,
+      });
+      const changed = outcomes.some((outcome) => outcome.status === 'added');
+      return {
+        status: 'completed',
+        revision: changed ? this.advanceHomeRevision() : this.homeCatalogRevision,
+        outcomes,
+      };
+    });
+  }
+
+  async removeHomeAsset(input: {
+    readonly windowId: string;
+    readonly endpointEpoch: string;
+    readonly assetId: string;
+    readonly expectedRevision: number;
+  }): Promise<GlobalAssetRemoveResult> {
+    await this.requireHomeEndpoint(input.windowId, input.endpointEpoch);
+    this.requireHomeRevision(input.expectedRevision);
+    return this.withGlobalAssetMutation(async () => {
+      const item = this.requireHomeItem(input.windowId, input.assetId, 'asset-library');
+      if (item.owner !== 'asset-library') {
+        throw new Error('Desktop global Asset identity has the wrong owner.');
+      }
+      const assetPath = await resolveDesktopGlobalAssetItemPath({
+        globalAssetRoot: this.options.globalAssetRoot,
+        files: this.options.host.files,
+        itemId: item.id,
+      });
+      await removeDesktopGlobalAssetFile({
+        globalAssetRoot: this.options.globalAssetRoot,
+        assetPath,
+        trash: this.options.trashGlobalAsset,
+      });
+      return {
+        status: 'removed',
+        assetId: item.id,
+        revision: this.advanceHomeRevision(),
+      };
+    });
+  }
+
+  async resolveHomeLibraryThumbnail(input: {
+    readonly windowId: string;
+    readonly endpointEpoch: string;
+    readonly request: GlobalLibraryThumbnailRequest;
+  }): Promise<GlobalLibraryThumbnailResult> {
+    await this.requireHomeEndpoint(input.windowId, input.endpointEpoch);
+    this.requireHomeRevision(input.request.expectedCatalogRevision);
+    const item = this.requireHomeItem(
+      input.windowId,
+      input.request.itemId,
+      input.request.owner,
+    );
+    const descriptor = item.thumbnail;
+    if (
+      !descriptor ||
+      descriptor.descriptorId !== input.request.descriptorId ||
+      descriptor.revision !== input.request.thumbnailRevision
+    ) {
+      throw new Error('Desktop global Library thumbnail identity is stale.');
+    }
+    const absolutePath = await this.resolveHomeItemPath(item);
+    const controller = new AbortController();
+    const controllers = this.homeThumbnailControllers.get(input.windowId) ?? new Set();
+    controllers.add(controller);
+    this.homeThumbnailControllers.set(input.windowId, controllers);
+    try {
+      const dataUrl = await this.options.createGlobalLibraryThumbnail({
+        absolutePath,
+        mediaType: descriptor.mediaType,
+        variant: input.request.variant,
+        signal: controller.signal,
+      });
+      return { ...input.request, dataUrl };
+    } finally {
+      controllers.delete(controller);
+      if (controllers.size === 0) this.homeThumbnailControllers.delete(input.windowId);
+    }
   }
 
   detachWindow(windowId: string): void {
@@ -311,6 +482,14 @@ export class DesktopResourceBrowserRuntime {
       if (controller.identity.windowId !== windowId) continue;
       controller.dispose();
       this.controllers.delete(key);
+    }
+    this.homeItemsByWindow.delete(windowId);
+    const controllers = this.homeThumbnailControllers.get(windowId);
+    if (controllers) {
+      for (const controller of controllers) {
+        controller.abort(new Error('Desktop Window was detached.'));
+      }
+      this.homeThumbnailControllers.delete(windowId);
     }
   }
 
@@ -334,11 +513,114 @@ export class DesktopResourceBrowserRuntime {
     }
   }
 
+  private async withGlobalAssetMutation<T>(operation: () => Promise<T>): Promise<T> {
+    if (this.globalAssetMutationActive) {
+      throw new Error('Desktop global Asset mutation is already in progress.');
+    }
+    this.globalAssetMutationActive = true;
+    try {
+      return await operation();
+    } finally {
+      this.globalAssetMutationActive = false;
+    }
+  }
+
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
     for (const controller of this.controllers.values()) controller.dispose();
     this.controllers.clear();
+    for (const controllers of this.homeThumbnailControllers.values()) {
+      for (const controller of controllers) {
+        controller.abort(new Error('Desktop Resource Browser runtime was disposed.'));
+      }
+    }
+    this.homeThumbnailControllers.clear();
+    this.homeItemsByWindow.clear();
+  }
+
+  private recordHomeItems(
+    windowId: string,
+    owner: GlobalLibraryItem['owner'],
+    items: readonly GlobalLibraryItem[],
+  ): void {
+    const current = this.homeItemsByWindow.get(windowId) ?? new Map<string, GlobalLibraryItem>();
+    for (const [itemId, item] of current) {
+      if (item.owner === owner) current.delete(itemId);
+    }
+    for (const item of items) current.set(item.id, item);
+    this.homeItemsByWindow.set(windowId, current);
+  }
+
+  private requireHomeItem(
+    windowId: string,
+    itemId: string,
+    owner: GlobalLibraryItem['owner'],
+  ): GlobalLibraryItem {
+    const item = this.homeItemsByWindow.get(windowId)?.get(itemId);
+    if (!item || item.owner !== owner) {
+      throw new Error('Desktop global Library item identity is stale or has the wrong owner.');
+    }
+    return item;
+  }
+
+  private requireHomeRevision(expectedRevision: number): void {
+    if (expectedRevision !== this.homeCatalogRevision) {
+      throw new Error(
+        `Desktop global Library expected revision ${expectedRevision} but current revision is ${this.homeCatalogRevision}.`,
+      );
+    }
+  }
+
+  private advanceHomeRevision(): number {
+    this.homeCatalogRevision += 1;
+    return this.homeCatalogRevision;
+  }
+
+  private async resolveHomeItemPath(item: GlobalAssetItem | GlobalMediaLibraryItem): Promise<string> {
+    if (item.owner === 'asset-library') {
+      return this.requireContainedRealFile(
+        await resolveDesktopGlobalAssetItemPath({
+          globalAssetRoot: this.options.globalAssetRoot,
+          files: this.options.host.files,
+          itemId: item.id,
+        }),
+        this.options.globalAssetRoot,
+      );
+    }
+    if (item.kind !== 'file') {
+      throw new Error('Desktop global Library thumbnail requires a file item.');
+    }
+    const connection = (
+      await listDesktopGlobalMediaLibraryConnections(this.options.globalMediaLibraryRoot)
+    ).find((candidate) => candidate.libraryId === item.libraryId);
+    if (!connection || connection.availability !== 'available') {
+      throw new Error('Desktop global Media Library connection is unavailable.');
+    }
+    return this.requireContainedRealFile(
+      path.resolve(connection.linkPath, ...item.relativePath.split('/')),
+      connection.linkPath,
+    );
+  }
+
+  private async requireContainedRealFile(candidate: string, root: string): Promise<string> {
+    const [resolvedRoot, resolvedCandidate, candidateStat] = await Promise.all([
+      realpath(root),
+      realpath(candidate),
+      lstat(candidate),
+    ]);
+    const relative = path.relative(resolvedRoot, resolvedCandidate);
+    if (
+      !candidateStat.isFile() ||
+      candidateStat.isSymbolicLink() ||
+      relative === '' ||
+      relative === '..' ||
+      relative.startsWith(`..${path.sep}`) ||
+      path.isAbsolute(relative)
+    ) {
+      throw new Error('Desktop global Library file escapes its authorized owner root.');
+    }
+    return resolvedCandidate;
   }
 
   private async resolveController(
@@ -353,18 +635,22 @@ export class DesktopResourceBrowserRuntime {
     const project = projection.catalog.projects.find(
       (candidate) => candidate.projectId === identity.projectId,
     );
-    const tab = projection.window.tabs.find(
-      (candidate) => candidate.projectId === identity.projectId,
+    const view = projection.window.workbench.main.views.find(
+      (candidate) =>
+        candidate.kind === 'resource-browser' &&
+        candidate.projectId === identity.projectId &&
+        candidate.workspaceId === identity.workspaceId &&
+        candidate.viewId === identity.viewId,
     );
-    if (!project || !tab || project.workspaceId !== identity.workspaceId) {
+    if (!project || !view || project.workspaceId !== identity.workspaceId) {
       throw new Error('Desktop Resource Browser Project is not attached to this Window.');
     }
     const expected: ResourceBrowserIdentity = {
       projectId: project.projectId,
       workspaceId: project.workspaceId,
       windowId,
-      viewId: resourceBrowserViewId(tab.viewId),
-      viewEpoch: tab.viewEpoch,
+      viewId: view.viewId,
+      viewEpoch: view.viewEpoch,
       endpointEpoch: projection.endpointEpoch,
     };
     assertResourceBrowserIdentity(expected, identity);

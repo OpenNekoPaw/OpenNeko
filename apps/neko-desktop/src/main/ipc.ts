@@ -162,6 +162,21 @@ export function registerDesktopIpc(
       appHost.searchHomeAssets(requireSender(event), payload),
   );
   ipcMain.handle(
+    DESKTOP_HOME_MANAGEMENT_CHANNELS.assetsImport,
+    (event: IpcMainInvokeEvent, payload: unknown) =>
+      appHost.importHomeAssets(requireSender(event), payload),
+  );
+  ipcMain.handle(
+    DESKTOP_HOME_MANAGEMENT_CHANNELS.assetsRemove,
+    (event: IpcMainInvokeEvent, payload: unknown) =>
+      appHost.removeHomeAsset(requireSender(event), payload),
+  );
+  ipcMain.handle(
+    DESKTOP_HOME_MANAGEMENT_CHANNELS.libraryThumbnailResolve,
+    (event: IpcMainInvokeEvent, payload: unknown) =>
+      appHost.resolveHomeLibraryThumbnail(requireSender(event), payload),
+  );
+  ipcMain.handle(
     DESKTOP_HOME_MANAGEMENT_CHANNELS.mediaLibrariesSearch,
     (event: IpcMainInvokeEvent, payload: unknown) =>
       appHost.searchHomeMediaLibraries(requireSender(event), payload),
@@ -177,6 +192,11 @@ export function registerDesktopIpc(
       appHost.addHomeMediaLibrary(requireSender(event), payload),
   );
   ipcMain.handle(
+    DESKTOP_HOME_MANAGEMENT_CHANNELS.mediaLibrariesRelink,
+    (event: IpcMainInvokeEvent, payload: unknown) =>
+      appHost.relinkHomeMediaLibrary(requireSender(event), payload),
+  );
+  ipcMain.handle(
     DESKTOP_HOME_MANAGEMENT_CHANNELS.mediaLibrariesRemove,
     (event: IpcMainInvokeEvent, payload: unknown) =>
       appHost.removeHomeMediaLibrary(requireSender(event), payload),
@@ -187,9 +207,9 @@ export function registerDesktopIpc(
       appHost.revealHomeMediaLibrary(requireSender(event), payload),
   );
   ipcMain.handle(
-    DESKTOP_HOME_MANAGEMENT_CHANNELS.pluginsList,
+    DESKTOP_HOME_MANAGEMENT_CHANNELS.extensionsList,
     (event: IpcMainInvokeEvent, payload: unknown) =>
-      appHost.listHomePlugins(requireSender(event), payload),
+      appHost.listHomeExtensions(requireSender(event), payload),
   );
   ipcMain.handle(
     DESKTOP_SHELL_CHANNELS.projectOpenContent,
@@ -262,12 +282,16 @@ export function registerDesktopIpc(
       DESKTOP_BRIDGE_CHANNELS.bootstrapGet,
       DESKTOP_SHELL_CHANNELS.snapshotGet,
       DESKTOP_HOME_MANAGEMENT_CHANNELS.assetsSearch,
+      DESKTOP_HOME_MANAGEMENT_CHANNELS.assetsImport,
+      DESKTOP_HOME_MANAGEMENT_CHANNELS.assetsRemove,
+      DESKTOP_HOME_MANAGEMENT_CHANNELS.libraryThumbnailResolve,
       DESKTOP_HOME_MANAGEMENT_CHANNELS.mediaLibrariesSearch,
       DESKTOP_HOME_MANAGEMENT_CHANNELS.mediaLibrariesChildren,
       DESKTOP_HOME_MANAGEMENT_CHANNELS.mediaLibrariesAdd,
+      DESKTOP_HOME_MANAGEMENT_CHANNELS.mediaLibrariesRelink,
       DESKTOP_HOME_MANAGEMENT_CHANNELS.mediaLibrariesRemove,
       DESKTOP_HOME_MANAGEMENT_CHANNELS.mediaLibrariesReveal,
-      DESKTOP_HOME_MANAGEMENT_CHANNELS.pluginsList,
+      DESKTOP_HOME_MANAGEMENT_CHANNELS.extensionsList,
       DESKTOP_SHELL_CHANNELS.projectOpenContent,
       DESKTOP_SHELL_CHANNELS.projectOpenCatalog,
       DESKTOP_SHELL_CHANNELS.projectRemoveRecent,

@@ -16,6 +16,7 @@ import {
   type OpenPiConversationRuntimeOptions,
   type PiProductEventSink,
   type PiConversationCatalogRecord,
+  type PiConversationCatalogReader,
   type PiConversationTranscriptEntry,
   type PiSkillHostSnapshot,
   type SkillHostRecord,
@@ -138,6 +139,7 @@ export interface DesktopAgentSkillCatalog {
 
 export interface DesktopAgentAppHostComposition {
   readonly credentialRuntime: DesktopAgentCredentialRuntime;
+  setHomeWorkspaceScope(workspaceIds: readonly string[]): void;
   attachWorkspace(workspace: DesktopWorkspaceResolution): Promise<DesktopAgentWorkspaceRuntime>;
   getWorkspace(workspaceId: string): DesktopAgentWorkspaceRuntime | undefined;
   readGlobalSkillCatalog(): Promise<DesktopAgentSkillCatalog>;
@@ -151,6 +153,7 @@ export interface CreateDesktopAgentAppHostCompositionOptions {
   readonly userHome: string;
   readonly hostId: string;
   readonly credentialRuntime: DesktopAgentCredentialRuntime;
+  readonly catalogReader: PiConversationCatalogReader;
   readonly builtinSkillRoot?: string;
   readonly assetLoader?: PiToolResultAssetLoader;
   readonly createIdentity?: () => string;
@@ -166,6 +169,7 @@ class DefaultDesktopAgentAppHostComposition implements DesktopAgentAppHostCompos
   private readonly workspaces = new Map<string, DefaultDesktopAgentWorkspaceRuntime>();
   private readonly opening = new Map<string, Promise<DefaultDesktopAgentWorkspaceRuntime>>();
   private readonly homeProjectionListeners = new Set<() => void>();
+  private homeWorkspaceScope: readonly string[] = [];
   private homeProjectionRevision = 0;
   private disposed = false;
 
@@ -175,6 +179,26 @@ class DefaultDesktopAgentAppHostComposition implements DesktopAgentAppHostCompos
 
   get credentialRuntime(): DesktopAgentCredentialRuntime {
     return this.options.credentialRuntime;
+  }
+
+  setHomeWorkspaceScope(workspaceIds: readonly string[]): void {
+    this.requireActive();
+    const next = [
+      ...new Set(
+        workspaceIds.map((workspaceId) => {
+          requireIdentity(workspaceId, 'Workspace');
+          return workspaceId;
+        }),
+      ),
+    ].sort();
+    if (
+      next.length === this.homeWorkspaceScope.length &&
+      next.every((workspaceId, index) => workspaceId === this.homeWorkspaceScope[index])
+    ) {
+      return;
+    }
+    this.homeWorkspaceScope = Object.freeze(next);
+    this.emitHomeProjectionChanged();
   }
 
   async attachWorkspace(
@@ -226,8 +250,14 @@ class DefaultDesktopAgentAppHostComposition implements DesktopAgentAppHostCompos
 
   readHomeProjection(): DesktopAgentHomeProjection {
     this.requireActive();
-    const conversations = [...this.workspaces.values()]
-      .flatMap((workspace) => workspace.projectHomeConversations())
+    const conversations = this.options.catalogReader
+      .listConversations(this.homeWorkspaceScope)
+      .map((record) => {
+        const workspace = this.workspaces.get(record.workspaceId);
+        return workspace
+          ? workspace.projectHomeConversation(record)
+          : projectDesktopAgentHomeConversationSummary(record, undefined, undefined);
+      })
       .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
     const attention = {
       needsInput: countAttention(conversations, 'needs-input'),
@@ -266,6 +296,12 @@ class DefaultDesktopAgentAppHostComposition implements DesktopAgentAppHostCompos
     this.workspaces.clear();
     this.opening.clear();
     this.homeProjectionListeners.clear();
+    let catalogError: unknown;
+    try {
+      this.options.catalogReader.dispose();
+    } catch (error) {
+      catalogError = error;
+    }
     let credentialError: unknown;
     try {
       this.options.credentialRuntime.dispose();
@@ -275,6 +311,7 @@ class DefaultDesktopAgentAppHostComposition implements DesktopAgentAppHostCompos
     const errors = [
       ...pending.flatMap((result) => (result.status === 'rejected' ? [result.reason] : [])),
       ...results.flatMap((result) => (result.status === 'rejected' ? [result.reason] : [])),
+      ...(catalogError === undefined ? [] : [catalogError]),
       ...(credentialError === undefined ? [] : [credentialError]),
     ];
     if (errors.length > 0) {
@@ -602,16 +639,21 @@ class DefaultDesktopAgentWorkspaceRuntime implements DesktopAgentWorkspaceRuntim
     return this.requireProjection(conversationId).subscribe(listener);
   }
 
-  projectHomeConversations(): readonly DesktopAgentHomeConversationSummary[] {
+  projectHomeConversation(
+    record: PiConversationCatalogRecord,
+  ): DesktopAgentHomeConversationSummary {
     this.requireActive();
-    return this.options.authority.listConversations().map((record) => {
-      const owner = this.conversations.get(record.conversationId);
-      return projectDesktopAgentHomeConversationSummary(
-        record,
-        owner?.projection.snapshot(),
-        owner?.readActiveIdentity(),
+    if (record.workspaceId !== this.workspaceId) {
+      throw new Error(
+        `Desktop Agent catalog conversation '${record.conversationId}' belongs to Workspace '${record.workspaceId}', not '${this.workspaceId}'.`,
       );
-    });
+    }
+    const owner = this.conversations.get(record.conversationId);
+    return projectDesktopAgentHomeConversationSummary(
+      record,
+      owner?.projection.snapshot(),
+      owner?.readActiveIdentity(),
+    );
   }
 
   async dispose(): Promise<void> {

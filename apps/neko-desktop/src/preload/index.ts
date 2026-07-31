@@ -41,6 +41,7 @@ import {
 import {
   advanceDesktopAgentBootstrapCursor,
   isSameDesktopAgentEventConnection,
+  projectDesktopAgentSendFailure,
   type DesktopAgentEventCursor,
 } from './desktop-agent-event-cursor';
 import { preserveDesktopBootstrapEventSequence } from './desktop-runtime-event-cursor';
@@ -106,20 +107,27 @@ import {
   type OpenNekoDesktopCutBridge,
 } from '../shared/cut-bridge-contract';
 import {
+  createDesktopHomeAssetImportRequest,
+  createDesktopHomeAssetRemoveRequest,
   createDesktopHomeAssetSearchRequest,
+  createDesktopHomeLibraryThumbnailRequest,
   createDesktopHomeMediaLibraryAddRequest,
   createDesktopHomeMediaLibraryChildrenRequest,
   createDesktopHomeMediaLibraryRequest,
   createDesktopHomeMediaLibrarySearchRequest,
-  createDesktopHomePluginsRequest,
+  createDesktopHomeExtensionsRequest,
   DESKTOP_HOME_MANAGEMENT_CHANNELS,
+  parseDesktopHomeAssetImportResult,
+  parseDesktopHomeAssetRemoveResult,
   parseDesktopHomeAssetSearchResult,
+  parseDesktopHomeLibraryThumbnailResult,
   parseDesktopHomeMediaLibraryAddResult,
   parseDesktopHomeMediaLibraryChildrenResult,
+  parseDesktopHomeMediaLibraryRelinkResult,
   parseDesktopHomeMediaLibraryRemoveResult,
   parseDesktopHomeMediaLibraryRevealResult,
   parseDesktopHomeMediaLibrarySearchResult,
-  parseDesktopHomePluginsResult,
+  parseDesktopHomeExtensionsResult,
   type OpenNekoDesktopHomeManagementBridge,
 } from '../shared/home-management-contract';
 import {
@@ -135,6 +143,7 @@ import {
 } from '../shared/application-settings-contract';
 
 let requestSequence = 0;
+let currentDesktopEndpointEpoch: string | undefined;
 let latestShellProjection: DesktopShellProjectionCursor | undefined;
 let currentAgentEventCursor: DesktopAgentEventCursor | undefined;
 const agentListeners = new Set<Parameters<OpenNekoDesktopAgentBridge['agent']['subscribe']>[0]>();
@@ -207,17 +216,11 @@ const bridge: OpenNekoDesktopBridge &
         .then((response: unknown) => {
           const result = parseDesktopAgentMessageResult(response, request.requestId);
           if (result.status === 'unavailable') {
-            emitAgentMessage({
-              type: 'globalError',
-              message: result.diagnostic.message,
-            });
+            emitAgentMessage(projectDesktopAgentSendFailure(message, result.diagnostic.message));
           }
         })
         .catch((error: unknown) => {
-          emitAgentMessage({
-            type: 'globalError',
-            message: describeError(error),
-          });
+          emitAgentMessage(projectDesktopAgentSendFailure(message, describeError(error)));
         });
     },
     subscribe(listener) {
@@ -236,13 +239,25 @@ const bridge: OpenNekoDesktopBridge &
         DESKTOP_BRIDGE_CHANNELS.bootstrapGet,
         request,
       );
-      return parseDesktopBootstrapProjection(response, requestId);
+      const projection = parseDesktopBootstrapProjection(response, requestId);
+      currentDesktopEndpointEpoch = createDesktopEndpointEpoch(
+        projection.application.instanceId,
+        projection.window.windowId,
+        projection.window.rendererEpoch,
+      );
+      return projection;
     },
   },
   lifecycle: {
     subscribe(listener: (event: DesktopLifecycleEvent) => void): () => void {
       const handler = (_event: Electron.IpcRendererEvent, value: unknown): void => {
-        listener(parseDesktopLifecycleEvent(value));
+        const event = parseDesktopLifecycleEvent(value);
+        currentDesktopEndpointEpoch = createDesktopEndpointEpoch(
+          event.applicationInstanceId,
+          event.windowId,
+          event.rendererEpoch,
+        );
+        listener(event);
       };
       ipcRenderer.on(DESKTOP_BRIDGE_CHANNELS.lifecycleEvent, handler);
       return () => {
@@ -305,6 +320,7 @@ const bridge: OpenNekoDesktopBridge &
       async search(input) {
         const request = createDesktopHomeAssetSearchRequest(
           nextRequestId('desktop-home-assets'),
+          requireDesktopEndpointEpoch(),
           input,
         );
         const response: unknown = await ipcRenderer.invoke(
@@ -313,11 +329,51 @@ const bridge: OpenNekoDesktopBridge &
         );
         return parseDesktopHomeAssetSearchResult(response, request.requestId);
       },
+      async importFiles(expectedRevision) {
+        const request = createDesktopHomeAssetImportRequest(
+          nextRequestId('desktop-home-assets-import'),
+          requireDesktopEndpointEpoch(),
+          expectedRevision,
+        );
+        const response: unknown = await ipcRenderer.invoke(
+          DESKTOP_HOME_MANAGEMENT_CHANNELS.assetsImport,
+          request,
+        );
+        return parseDesktopHomeAssetImportResult(response, request.requestId);
+      },
+      async remove(assetId, expectedRevision) {
+        const request = createDesktopHomeAssetRemoveRequest(
+          nextRequestId('desktop-home-assets-remove'),
+          requireDesktopEndpointEpoch(),
+          assetId,
+          expectedRevision,
+        );
+        const response: unknown = await ipcRenderer.invoke(
+          DESKTOP_HOME_MANAGEMENT_CHANNELS.assetsRemove,
+          request,
+        );
+        return parseDesktopHomeAssetRemoveResult(response, request.requestId);
+      },
+    },
+    libraryThumbnails: {
+      async resolve(input) {
+        const request = createDesktopHomeLibraryThumbnailRequest(
+          nextRequestId('desktop-home-library-thumbnail'),
+          requireDesktopEndpointEpoch(),
+          input,
+        );
+        const response: unknown = await ipcRenderer.invoke(
+          DESKTOP_HOME_MANAGEMENT_CHANNELS.libraryThumbnailResolve,
+          request,
+        );
+        return parseDesktopHomeLibraryThumbnailResult(response, request.requestId);
+      },
     },
     mediaLibraries: {
       async search(input) {
         const request = createDesktopHomeMediaLibrarySearchRequest(
           nextRequestId('desktop-home-media-libraries'),
+          requireDesktopEndpointEpoch(),
           input,
         );
         const response: unknown = await ipcRenderer.invoke(
@@ -329,6 +385,7 @@ const bridge: OpenNekoDesktopBridge &
       async children(input) {
         const request = createDesktopHomeMediaLibraryChildrenRequest(
           nextRequestId('desktop-home-media-library-children'),
+          requireDesktopEndpointEpoch(),
           input,
         );
         const response: unknown = await ipcRenderer.invoke(
@@ -337,10 +394,12 @@ const bridge: OpenNekoDesktopBridge &
         );
         return parseDesktopHomeMediaLibraryChildrenResult(response, request.requestId);
       },
-      async addLibrary(locationKind) {
+      async addLibrary(locationKind, expectedRevision) {
         const request = createDesktopHomeMediaLibraryAddRequest(
           nextRequestId('desktop-home-media-library-add'),
+          requireDesktopEndpointEpoch(),
           locationKind,
+          expectedRevision,
         );
         const response: unknown = await ipcRenderer.invoke(
           DESKTOP_HOME_MANAGEMENT_CHANNELS.mediaLibrariesAdd,
@@ -348,10 +407,25 @@ const bridge: OpenNekoDesktopBridge &
         );
         return parseDesktopHomeMediaLibraryAddResult(response, request.requestId);
       },
-      async removeLibrary(libraryId) {
+      async relinkLibrary(libraryId, expectedRevision) {
+        const request = createDesktopHomeMediaLibraryRequest(
+          nextRequestId('desktop-home-media-library-relink'),
+          requireDesktopEndpointEpoch(),
+          libraryId,
+          expectedRevision,
+        );
+        const response: unknown = await ipcRenderer.invoke(
+          DESKTOP_HOME_MANAGEMENT_CHANNELS.mediaLibrariesRelink,
+          request,
+        );
+        return parseDesktopHomeMediaLibraryRelinkResult(response, request.requestId);
+      },
+      async removeLibrary(libraryId, expectedRevision) {
         const request = createDesktopHomeMediaLibraryRequest(
           nextRequestId('desktop-home-media-library-remove'),
+          requireDesktopEndpointEpoch(),
           libraryId,
+          expectedRevision,
         );
         const response: unknown = await ipcRenderer.invoke(
           DESKTOP_HOME_MANAGEMENT_CHANNELS.mediaLibrariesRemove,
@@ -359,10 +433,12 @@ const bridge: OpenNekoDesktopBridge &
         );
         return parseDesktopHomeMediaLibraryRemoveResult(response, request.requestId);
       },
-      async revealLibrary(libraryId) {
+      async revealLibrary(libraryId, expectedRevision) {
         const request = createDesktopHomeMediaLibraryRequest(
           nextRequestId('desktop-home-media-library-reveal'),
+          requireDesktopEndpointEpoch(),
           libraryId,
+          expectedRevision,
         );
         const response: unknown = await ipcRenderer.invoke(
           DESKTOP_HOME_MANAGEMENT_CHANNELS.mediaLibrariesReveal,
@@ -371,14 +447,17 @@ const bridge: OpenNekoDesktopBridge &
         return parseDesktopHomeMediaLibraryRevealResult(response, request.requestId);
       },
     },
-    plugins: {
+    extensions: {
       async list() {
-        const request = createDesktopHomePluginsRequest(nextRequestId('desktop-home-plugins'));
+        const request = createDesktopHomeExtensionsRequest(
+          nextRequestId('desktop-home-extensions'),
+          requireDesktopEndpointEpoch(),
+        );
         const response: unknown = await ipcRenderer.invoke(
-          DESKTOP_HOME_MANAGEMENT_CHANNELS.pluginsList,
+          DESKTOP_HOME_MANAGEMENT_CHANNELS.extensionsList,
           request,
         );
-        return parseDesktopHomePluginsResult(response, request.requestId);
+        return parseDesktopHomeExtensionsResult(response, request.requestId);
       },
     },
   },
@@ -917,6 +996,21 @@ contextBridge.exposeInMainWorld('openNekoDesktop', bridge);
 function nextRequestId(prefix: string): string {
   requestSequence += 1;
   return `${prefix}-${Date.now()}-${requestSequence}`;
+}
+
+function createDesktopEndpointEpoch(
+  applicationInstanceId: string,
+  windowId: string,
+  rendererEpoch: number,
+): string {
+  return `${applicationInstanceId}:${windowId}:${rendererEpoch}`;
+}
+
+function requireDesktopEndpointEpoch(): string {
+  if (!currentDesktopEndpointEpoch) {
+    throw new Error('Desktop Home request requires a sender-bound bootstrap identity.');
+  }
+  return currentDesktopEndpointEpoch;
 }
 
 function rememberShellProjection<

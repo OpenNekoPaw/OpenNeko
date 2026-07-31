@@ -48,16 +48,16 @@ export function createDesktopResourceBrowserIdentity(input: {
   readonly projectId: string;
   readonly workspaceId: string;
   readonly windowId: string;
-  readonly projectViewId: string;
-  readonly projectViewEpoch: number;
+  readonly viewId: string;
+  readonly viewEpoch: number;
   readonly endpointEpoch: string;
 }): ResourceBrowserIdentity {
   return {
     projectId: input.projectId,
     workspaceId: input.workspaceId,
     windowId: input.windowId,
-    viewId: resourceBrowserViewId(input.projectViewId),
-    viewEpoch: input.projectViewEpoch,
+    viewId: input.viewId,
+    viewEpoch: input.viewEpoch,
     endpointEpoch: input.endpointEpoch,
   };
 }

@@ -23,13 +23,19 @@ import {
   DesktopShellStateRepository,
 } from './shell-state-repository';
 import { createDesktopAgentAppHostComposition } from './desktop-agent-app-host-composition';
+import { NodePiConversationCatalogReader } from '@neko/agent/pi';
+import { NodeVideoThumbnail } from '@neko/media/node';
+import { resolveDesktopRuntimeHome } from './desktop-functional-fixture';
 import { createDesktopAgentCredentialRuntime } from './desktop-agent-credential-runtime';
 import { createDesktopAgentControllerComposition } from './desktop-agent-controller-composition';
 import { createEncryptedDesktopSecretPort } from './encrypted-desktop-secret-port';
 import { createMacOSProtectedAuthPrompt } from './macos-protected-auth-prompt';
 import { closeDesktopWindows } from './window-lifecycle';
 import { resolveGlobalStorageLayout } from '@neko/shared/types/storage';
-import { DesktopResourceBrowserRuntime } from './desktop-resource-browser-runtime';
+import {
+  DesktopResourceBrowserRuntime,
+  type DesktopResourceBrowserRuntimeOptions,
+} from './desktop-resource-browser-runtime';
 import {
   DesktopMediaDescriptorRegistry,
   registerDesktopMediaProtocol,
@@ -56,6 +62,7 @@ import {
   listDesktopGlobalMediaLibraryConnections,
   resolveDesktopGlobalMediaLibraryTarget,
 } from './desktop-global-media-library-files';
+import { createDesktopExtensionCatalogReader } from './desktop-extension-catalog-reader';
 
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string | undefined;
 declare const MAIN_WINDOW_VITE_NAME: string;
@@ -81,7 +88,11 @@ async function startDesktop(): Promise<void> {
   await app.whenReady();
   logger.info('Desktop Electron runtime is ready.');
 
-  const homedir = app.getPath('home');
+  const homedir = resolveDesktopRuntimeHome({
+    systemHome: app.getPath('home'),
+    argv: process.argv,
+    environment: process.env,
+  });
   const userData = app.getPath('userData');
   const globalStorage = resolveGlobalStorageLayout(homedir);
   const applicationSettings = new DesktopApplicationSettingsService(
@@ -151,16 +162,27 @@ async function startDesktop(): Promise<void> {
     workspaceRegistry,
     startupTarget: initialApplicationSettings.preferences.startupTarget,
   });
+  const agentCatalogReader = await NodePiConversationCatalogReader.create({
+    userDataRoot: globalStorage.root,
+  });
   const agentComposition = createDesktopAgentAppHostComposition({
     userDataRoot: globalStorage.root,
     userHome: homedir,
     hostId: `electron:${applicationInstanceId}`,
     credentialRuntime,
+    catalogReader: agentCatalogReader,
     builtinSkillRoot: resolveDesktopBuiltinSkillRoot({
       appPath: app.getAppPath(),
       isPackaged: app.isPackaged,
       resourcesPath: process.resourcesPath,
     }),
+  });
+  const configuredCodexHome = process.env['CODEX_HOME']?.trim();
+  if (configuredCodexHome && !path.isAbsolute(configuredCodexHome)) {
+    throw new Error('CODEX_HOME must be an absolute path.');
+  }
+  const extensionCatalog = createDesktopExtensionCatalogReader({
+    codexHome: configuredCodexHome || path.join(homedir, '.codex'),
   });
   const windowsById = new Map<string, BrowserWindow>();
   const nativeThemeController = createDesktopNativeThemeController({
@@ -304,11 +326,7 @@ async function startDesktop(): Promise<void> {
         },
       };
     },
-    requestProjectMediaLibraryCopy: async ({
-      identity,
-      workspace,
-      suggestedFileName,
-    }) => {
+    requestProjectMediaLibraryCopy: async ({ identity, workspace, suggestedFileName }) => {
       const libraries = (await listWorkspaceLinkedMediaLibraries(workspace.workspacePath)).filter(
         (library) => library.availability === 'available',
       );
@@ -325,9 +343,7 @@ async function startDesktop(): Promise<void> {
       );
       const destination = await selectCanvasMediaLibraryDestination({
         owner: requireOwnerWindow(identity.windowId),
-        title: canvasUsesChineseLabels
-          ? '复制到项目媒体库'
-          : 'Copy to project Media Library',
+        title: canvasUsesChineseLabels ? '复制到项目媒体库' : 'Copy to project Media Library',
         targetRoot,
         suggestedFileName,
       });
@@ -350,9 +366,7 @@ async function startDesktop(): Promise<void> {
       });
       const destination = await selectCanvasMediaLibraryDestination({
         owner: requireOwnerWindow(identity.windowId),
-        title: canvasUsesChineseLabels
-          ? '复制到全局媒体库'
-          : 'Copy to global Media Library',
+        title: canvasUsesChineseLabels ? '复制到全局媒体库' : 'Copy to global Media Library',
         targetRoot,
         suggestedFileName,
       });
@@ -436,6 +450,7 @@ async function startDesktop(): Promise<void> {
     openCut: (input) => cutRuntime.open(input),
     createThumbnail: (targetPath) =>
       createDesktopThumbnailDataUrl(targetPath, { width: 160, height: 100 }),
+    createGlobalLibraryThumbnail: createDesktopGlobalLibraryThumbnailFactory(),
     selectSource: async (windowId) => {
       const owner = requireOwnerWindow(windowId);
       const chinese = app.getLocale().toLocaleLowerCase().startsWith('zh');
@@ -466,6 +481,56 @@ async function startDesktop(): Promise<void> {
       }
       return selectedPath;
     },
+    selectGlobalAssetSources: async (windowId) => {
+      const owner = requireOwnerWindow(windowId);
+      const chinese = app.getLocale().toLocaleLowerCase().startsWith('zh');
+      const result = await dialog.showOpenDialog(owner, {
+        title: chinese ? '导入资产' : 'Import Assets',
+        buttonLabel: chinese ? '导入' : 'Import',
+        properties: ['openFile', 'multiSelections'],
+        filters: [
+          {
+            name: chinese ? '支持的素材' : 'Supported Materials',
+            extensions: [
+              'aac',
+              'avi',
+              'avif',
+              'bmp',
+              'flac',
+              'gif',
+              'glb',
+              'gltf',
+              'jpeg',
+              'jpg',
+              'm4a',
+              'm4v',
+              'mkv',
+              'mov',
+              'mp3',
+              'mp4',
+              'nkc',
+              'nkv',
+              'obj',
+              'ogg',
+              'opus',
+              'ply',
+              'png',
+              'stl',
+              'svg',
+              'wav',
+              'webm',
+              'webp',
+            ],
+          },
+        ],
+      });
+      if (result.canceled) return undefined;
+      if (result.filePaths.length === 0) {
+        throw new Error('Desktop global Asset picker returned no files.');
+      }
+      return result.filePaths;
+    },
+    trashGlobalAsset: (assetPath) => shell.trashItem(assetPath),
   });
   const agentControllerComposition = createDesktopAgentControllerComposition({
     host,
@@ -545,6 +610,7 @@ async function startDesktop(): Promise<void> {
     canvas: canvasRuntime,
     cut: cutRuntime,
     settings: applicationSettings,
+    extensionCatalog,
     openAgentAdvancedSettings: () => openHostPath(buildConfigFilePath(homedir)),
     instanceId: applicationInstanceId,
   });
@@ -898,6 +964,57 @@ async function createDesktopThumbnailDataUrl(
     // Native thumbnail errors may contain the private absolute source path.
   }
   throw new Error('Desktop could not project a thumbnail for this resource.');
+}
+
+function createDesktopGlobalLibraryThumbnailFactory(): DesktopResourceBrowserRuntimeOptions['createGlobalLibraryThumbnail'] {
+  const videoThumbnail = new NodeVideoThumbnail();
+  const runBounded = createBoundedOperationRunner(4);
+  return (input) =>
+    runBounded(async () => {
+      if (input.signal?.aborted) {
+        throw input.signal.reason instanceof Error
+          ? input.signal.reason
+          : new Error('Desktop global Library thumbnail request was cancelled.');
+      }
+      const size =
+        input.variant === 'icon'
+          ? { width: 160, height: 100 }
+          : { width: 640, height: 400 };
+      if (input.mediaType === 'image') {
+        return createDesktopThumbnailDataUrl(input.absolutePath, size);
+      }
+      const png = await videoThumbnail.createPng({
+        sourcePath: input.absolutePath,
+        ...size,
+        ...(input.signal ? { signal: input.signal } : {}),
+      });
+      return `data:image/png;base64,${Buffer.from(png).toString('base64')}`;
+    });
+}
+
+function createBoundedOperationRunner(limit: number) {
+  if (!Number.isInteger(limit) || limit < 1) {
+    throw new Error('Desktop bounded operation limit must be a positive integer.');
+  }
+  let active = 0;
+  const queued: Array<() => void> = [];
+  const release = (): void => {
+    active -= 1;
+    queued.shift()?.();
+  };
+  return async <T>(operation: () => Promise<T>): Promise<T> => {
+    if (active >= limit) {
+      await new Promise<void>((resolve) => {
+        queued.push(resolve);
+      });
+    }
+    active += 1;
+    try {
+      return await operation();
+    } finally {
+      release();
+    }
+  };
 }
 
 function canvasSourceFilters(

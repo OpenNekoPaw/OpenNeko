@@ -3,19 +3,14 @@ import { createRoot } from 'react-dom/client';
 import { I18nProvider } from '@neko/shared/i18n/react';
 import { DesktopApplication } from './DesktopShell';
 import { startDesktopTheme, type DesktopThemeController } from './desktop-theme';
-import {
-  applyDesktopLocale,
-  createDesktopI18n,
-  resolveDesktopLocalePreference,
-} from './i18n';
-import {
-  DesktopApplicationSettingsProvider,
-} from './application-settings-context';
+import { applyDesktopLocale, createDesktopI18n, resolveDesktopLocalePreference } from './i18n';
+import { DesktopApplicationSettingsProvider } from './application-settings-context';
 import type {
   DesktopApplicationPreferences,
   DesktopApplicationSettingsProjection,
 } from '../shared/application-settings-contract';
 import type { WebviewI18nAdapter } from '@neko/shared/i18n/webview';
+import { initializeDesktopRendererBridge } from './desktop-renderer-startup';
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {
@@ -29,14 +24,9 @@ void startRenderer(rootElement).catch((error: unknown) => {
 });
 
 async function startRenderer(container: HTMLElement): Promise<void> {
-  const initialSettings = await window.openNekoDesktop.settings.get();
-  const initialLocale = resolveDesktopLocalePreference(
-    initialSettings.preferences.locale,
-  );
-  const themeController = startDesktopTheme(
-    document,
-    initialSettings.preferences.theme,
-  );
+  const initialSettings = await initializeDesktopRendererBridge(window.openNekoDesktop);
+  const initialLocale = resolveDesktopLocalePreference(initialSettings.preferences.locale);
+  const themeController = startDesktopTheme(document, initialSettings.preferences.theme);
   const desktopI18n = createDesktopI18n(initialLocale);
   applyDesktopLocale(document, initialLocale);
 
@@ -86,10 +76,7 @@ function DesktopRendererRoot({
       projection: settings,
       async update(preferences: DesktopApplicationPreferences) {
         applyProjection(
-          await window.openNekoDesktop.settings.update(
-            preferences,
-            settings.revision,
-          ),
+          await window.openNekoDesktop.settings.update(preferences, settings.revision),
         );
       },
       openAgentAdvanced: () => window.openNekoDesktop.settings.openAgentAdvanced(),

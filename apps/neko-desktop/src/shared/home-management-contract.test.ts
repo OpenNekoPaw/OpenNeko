@@ -1,14 +1,23 @@
 import { describe, expect, it } from 'vitest';
 import {
   DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION,
+  createDesktopHomeAssetImportRequest,
+  createDesktopHomeAssetRemoveRequest,
   createDesktopHomeAssetSearchRequest,
+  createDesktopHomeLibraryThumbnailRequest,
   createDesktopHomeMediaLibraryAddRequest,
   createDesktopHomeMediaLibraryChildrenRequest,
   createDesktopHomeMediaLibraryRequest,
   createDesktopHomeMediaLibrarySearchRequest,
-  createDesktopHomePluginsRequest,
+  createDesktopHomeExtensionsRequest,
   parseDesktopHomeAssetSearchRequest,
   parseDesktopHomeAssetSearchResult,
+  parseDesktopHomeAssetImportRequest,
+  parseDesktopHomeAssetImportResult,
+  parseDesktopHomeAssetRemoveRequest,
+  parseDesktopHomeAssetRemoveResult,
+  parseDesktopHomeLibraryThumbnailRequest,
+  parseDesktopHomeLibraryThumbnailResult,
   parseDesktopHomeMediaLibraryAddRequest,
   parseDesktopHomeMediaLibraryAddResult,
   parseDesktopHomeMediaLibraryChildrenRequest,
@@ -17,13 +26,15 @@ import {
   parseDesktopHomeMediaLibraryRevealResult,
   parseDesktopHomeMediaLibrarySearchRequest,
   parseDesktopHomeMediaLibrarySearchResult,
-  parseDesktopHomePluginsRequest,
-  parseDesktopHomePluginsResult,
+  parseDesktopHomeExtensionsRequest,
+  parseDesktopHomeExtensionsResult,
 } from './home-management-contract';
+
+const endpointEpoch = 'app-1:window-1:1';
 
 describe('Desktop Home management contract', () => {
   it('keeps Asset Library queries independent from Media Library facets', () => {
-    const request = createDesktopHomeAssetSearchRequest('asset-request', {
+    const request = createDesktopHomeAssetSearchRequest('asset-request', endpointEpoch, {
       query: 'video',
       sortBy: 'modifiedAt',
       sortDirection: 'descending',
@@ -34,20 +45,29 @@ describe('Desktop Home management contract', () => {
     expect(() => parseDesktopHomeAssetSearchRequest({ ...request, facet: 'libraries' })).toThrow(
       'invalid',
     );
+    const { endpointEpoch: _endpointEpoch, ...requestWithoutEndpoint } = request;
+    expect(() => parseDesktopHomeAssetSearchRequest(requestWithoutEndpoint)).toThrow(
+      'endpoint epoch is required',
+    );
     expect(() => parseDesktopHomeAssetSearchRequest({ ...request, schemaVersion: 4 })).toThrow(
       'unsupported',
     );
   });
 
-  it('accepts exact v5 Media Library connection requests and rejects v4 copy payloads', () => {
-    const search = createDesktopHomeMediaLibrarySearchRequest('search-1', {
+  it('accepts exact v7 Media Library connection requests and rejects v6 copy payloads', () => {
+    const search = createDesktopHomeMediaLibrarySearchRequest('search-1', endpointEpoch, {
       query: '',
       sortBy: 'name',
       sortDirection: 'ascending',
     });
-    const add = createDesktopHomeMediaLibraryAddRequest('add-1', 'nas');
-    const library = createDesktopHomeMediaLibraryRequest('remove-1', 'media-library:nas:Footage');
-    const children = createDesktopHomeMediaLibraryChildrenRequest('children-1', {
+    const add = createDesktopHomeMediaLibraryAddRequest('add-1', endpointEpoch, 'nas', 2);
+    const library = createDesktopHomeMediaLibraryRequest(
+      'remove-1',
+      endpointEpoch,
+      'media-library:nas:Footage',
+      2,
+    );
+    const children = createDesktopHomeMediaLibraryChildrenRequest('children-1', endpointEpoch, {
       libraryId: library.libraryId,
       relativePath: 'shots/day-1',
       sortBy: 'name',
@@ -60,7 +80,7 @@ describe('Desktop Home management contract', () => {
     expect(parseDesktopHomeMediaLibraryChildrenRequest(children)).toEqual(children);
     expect(() =>
       parseDesktopHomeMediaLibraryAddRequest({
-        schemaVersion: 4,
+        schemaVersion: 6,
         requestId: 'add-1',
       }),
     ).toThrow('unsupported');
@@ -70,11 +90,11 @@ describe('Desktop Home management contract', () => {
         absolutePath: '/Volumes/private/Footage',
       }),
     ).toThrow('invalid');
-    expect(() => createDesktopHomeMediaLibraryRequest('remove-1', 'library:Footage')).toThrow(
-      'invalid',
-    );
     expect(() =>
-      createDesktopHomeMediaLibraryChildrenRequest('children-2', {
+      createDesktopHomeMediaLibraryRequest('remove-1', endpointEpoch, 'library:Footage', 2),
+    ).toThrow('invalid');
+    expect(() =>
+      createDesktopHomeMediaLibraryChildrenRequest('children-2', endpointEpoch, {
         ...children,
         relativePath: '../private',
       }),
@@ -87,10 +107,13 @@ describe('Desktop Home management contract', () => {
         schemaVersion: DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION,
         requestId: 'search-1',
         status: 'ready',
+        revision: 3,
         items: [
           {
-            id: 'media-library:cloud:References:root',
+            id: 'media-library:abc123',
+            owner: 'media-library',
             libraryId: 'media-library:cloud:References',
+            libraryLabel: 'References',
             label: 'References',
             kind: 'library',
             locationKind: 'cloud',
@@ -112,6 +135,7 @@ describe('Desktop Home management contract', () => {
           schemaVersion: DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION,
           requestId: 'search-1',
           status: 'ready',
+          revision: 3,
           items: [
             {
               ...result.items[0],
@@ -131,6 +155,7 @@ describe('Desktop Home management contract', () => {
           schemaVersion: DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION,
           requestId: 'add-1',
           status: 'cancelled',
+          revision: 2,
         },
         'add-1',
       ),
@@ -142,6 +167,7 @@ describe('Desktop Home management contract', () => {
           requestId: 'add-2',
           status: 'added',
           libraryId: 'media-library:local:Footage',
+          revision: 3,
         },
         'add-2',
       ),
@@ -153,6 +179,7 @@ describe('Desktop Home management contract', () => {
           requestId: 'remove-1',
           status: 'removed',
           libraryId: 'media-library:local:Footage',
+          revision: 4,
         },
         'remove-1',
       ),
@@ -164,6 +191,7 @@ describe('Desktop Home management contract', () => {
           requestId: 'reveal-1',
           status: 'revealed',
           libraryId: 'media-library:nas:Footage',
+          revision: 4,
         },
         'reveal-1',
       ),
@@ -187,11 +215,118 @@ describe('Desktop Home management contract', () => {
     });
   });
 
-  it('accepts only sanitized global Skill and plugin records', () => {
-    const request = createDesktopHomePluginsRequest('request-2');
-    expect(parseDesktopHomePluginsRequest(request)).toEqual(request);
+  it('accepts exact Asset import/remove and thumbnail contracts without physical paths', () => {
+    const importRequest = createDesktopHomeAssetImportRequest(
+      'asset-import-1',
+      endpointEpoch,
+      4,
+    );
+    const removeRequest = createDesktopHomeAssetRemoveRequest(
+      'asset-remove-1',
+      endpointEpoch,
+      'asset-library:abc123',
+      4,
+    );
+    const thumbnailRequest = createDesktopHomeLibraryThumbnailRequest(
+      'thumbnail-1',
+      endpointEpoch,
+      {
+        owner: 'asset-library',
+        itemId: 'asset-library:abc123',
+        expectedCatalogRevision: 4,
+        descriptorId: 'asset-library:def456',
+        thumbnailRevision: '2026-07-31T00:00:00.000Z:42',
+        variant: 'hover',
+      },
+    );
 
-    const result = parseDesktopHomePluginsResult(
+    expect(parseDesktopHomeAssetImportRequest(importRequest)).toEqual(importRequest);
+    expect(parseDesktopHomeAssetRemoveRequest(removeRequest)).toEqual(removeRequest);
+    expect(parseDesktopHomeLibraryThumbnailRequest(thumbnailRequest)).toEqual(thumbnailRequest);
+    expect(
+      parseDesktopHomeAssetImportResult(
+        {
+          schemaVersion: DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION,
+          requestId: 'asset-import-1',
+          status: 'completed',
+          revision: 5,
+          outcomes: [
+            { status: 'added', label: 'Hero.png', assetId: 'asset-library:abc123' },
+            { status: 'conflict', label: 'Existing.png', diagnostic: 'Asset already exists.' },
+          ],
+        },
+        'asset-import-1',
+      ),
+    ).toMatchObject({ status: 'completed', revision: 5 });
+    expect(
+      parseDesktopHomeAssetRemoveResult(
+        {
+          schemaVersion: DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION,
+          requestId: 'asset-remove-1',
+          status: 'removed',
+          assetId: 'asset-library:abc123',
+          revision: 6,
+        },
+        'asset-remove-1',
+      ),
+    ).toMatchObject({ status: 'removed', revision: 6 });
+    expect(
+      parseDesktopHomeLibraryThumbnailResult(
+        {
+          schemaVersion: DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION,
+          requestId: thumbnailRequest.requestId,
+          owner: thumbnailRequest.owner,
+          itemId: thumbnailRequest.itemId,
+          expectedCatalogRevision: thumbnailRequest.expectedCatalogRevision,
+          descriptorId: thumbnailRequest.descriptorId,
+          thumbnailRevision: thumbnailRequest.thumbnailRevision,
+          variant: thumbnailRequest.variant,
+          dataUrl: 'data:image/png;base64,AA==',
+        },
+        'thumbnail-1',
+      ),
+    ).toMatchObject({ variant: 'hover' });
+    expect(() =>
+      parseDesktopHomeAssetRemoveRequest({ ...removeRequest, absolutePath: '/private/Hero.png' }),
+    ).toThrow('invalid');
+  });
+
+  it('parses revisioned Asset Library items owned only by the Asset Library', () => {
+    expect(
+      parseDesktopHomeAssetSearchResult(
+        {
+          schemaVersion: DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION,
+          requestId: 'asset-search-1',
+          status: 'ready',
+          revision: 2,
+          items: [
+            {
+              id: 'asset-library:abc123',
+              owner: 'asset-library',
+              label: 'Hero.png',
+              kind: 'asset',
+              mediaType: 'image',
+              byteLength: 42,
+              modifiedAt: '2026-07-31T00:00:00.000Z',
+              availability: 'available',
+              thumbnail: {
+                descriptorId: 'asset-library:def456',
+                revision: '2026-07-31T00:00:00.000Z:42',
+                mediaType: 'image',
+              },
+            },
+          ],
+        },
+        'asset-search-1',
+      ),
+    ).toMatchObject({ status: 'ready', revision: 2 });
+  });
+
+  it('accepts only sanitized global Skill and extension manifest projections', () => {
+    const request = createDesktopHomeExtensionsRequest('request-2', 'endpoint-1');
+    expect(parseDesktopHomeExtensionsRequest(request)).toEqual(request);
+
+    const result = parseDesktopHomeExtensionsResult(
       {
         schemaVersion: DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION,
         requestId: request.requestId,
@@ -206,16 +341,23 @@ describe('Desktop Home management contract', () => {
           diagnostics: [{ code: 'invalid_metadata', source: 'personal', count: 2 }],
           duplicateCount: 1,
         },
-        plugins: [
+        extensions: [
           {
-            id: 'canvas',
-            name: 'Canvas',
-            description: 'Built-in creative surface',
-            kind: 'builtin',
-            status: 'ready',
+            id: 'computer-use@openai-bundled',
+            name: 'computer-use',
+            displayName: 'Computer Use',
+            description: 'Control Mac apps.',
+            version: '1.0.2',
+            developer: 'OpenAI',
+            marketplace: 'openai-bundled',
+            mcpServerIds: ['computer-use'],
+            hasSkills: true,
+            appIds: [],
           },
         ],
-        externalPluginHost: 'unavailable',
+        extensionDiscovery: {
+          diagnostics: [{ code: 'package_missing', count: 1 }],
+        },
       },
       request.requestId,
     );
@@ -225,13 +367,18 @@ describe('Desktop Home management contract', () => {
       description: 'Plan a story.',
       source: 'personal',
     });
-    expect(result.plugins[0]).toMatchObject({ id: 'canvas', kind: 'builtin', status: 'ready' });
+    expect(result.extensions[0]).toMatchObject({
+      id: 'computer-use@openai-bundled',
+      mcpServerIds: ['computer-use'],
+      hasSkills: true,
+    });
     expect(result.skills[0]).not.toHaveProperty('locator');
-    expect(result.externalPluginHost).toBe('unavailable');
+    expect(JSON.stringify(result)).not.toContain('ownerSlice');
+    expect(JSON.stringify(result)).not.toContain('command');
   });
 
   it('rejects unsafe Skill discovery diagnostics', () => {
-    const request = createDesktopHomePluginsRequest('request-3');
+    const request = createDesktopHomeExtensionsRequest('request-3', 'endpoint-1');
     const payload = {
       schemaVersion: DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION,
       requestId: request.requestId,
@@ -247,9 +394,55 @@ describe('Desktop Home management contract', () => {
         ],
         duplicateCount: 0,
       },
-      plugins: [],
-      externalPluginHost: 'unavailable',
+      extensions: [],
+      extensionDiscovery: { diagnostics: [] },
     };
-    expect(() => parseDesktopHomePluginsResult(payload, request.requestId)).toThrow('diagnostic');
+    expect(() => parseDesktopHomeExtensionsResult(payload, request.requestId)).toThrow(
+      'diagnostic',
+    );
+  });
+
+  it('rejects removed capability payloads and unsafe extension fields', () => {
+    const request = createDesktopHomeExtensionsRequest('request-4', 'endpoint-1');
+    const base = {
+      schemaVersion: DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION,
+      requestId: request.requestId,
+      skills: [],
+      skillDiscovery: { diagnostics: [], duplicateCount: 0 },
+      extensionDiscovery: { diagnostics: [] },
+    };
+
+    expect(() =>
+      parseDesktopHomeExtensionsResult(
+        {
+          ...base,
+          capabilities: [{ id: 'canvas', status: 'ready' }],
+        },
+        request.requestId,
+      ),
+    ).toThrow('invalid');
+    expect(() =>
+      parseDesktopHomeExtensionsResult(
+        {
+          ...base,
+          extensions: [
+            {
+              id: 'computer-use@openai-bundled',
+              name: 'computer-use',
+              displayName: 'Computer Use',
+              description: 'Control Mac apps.',
+              version: '1.0.2',
+              developer: 'OpenAI',
+              marketplace: 'openai-bundled',
+              mcpServerIds: ['computer-use'],
+              hasSkills: true,
+              appIds: [],
+              command: './private-launcher',
+            },
+          ],
+        },
+        request.requestId,
+      ),
+    ).toThrow('invalid');
   });
 });

@@ -17,6 +17,7 @@ import {
 import {
   closeMainView,
   createDefaultDesktopWorkbenchLayout,
+  openOrFocusMainView,
   parseDesktopWorkbenchLayout,
   type DesktopWorkbenchLayoutProjection,
 } from '../shared/workbench-contract';
@@ -59,6 +60,7 @@ export interface DesktopShellServiceOptions {
 }
 
 export interface DesktopAgentHomeProjectionSource {
+  setHomeWorkspaceScope(workspaceIds: readonly string[]): void;
   readHomeProjection(): DesktopAgentHomeProjection;
   subscribeHomeProjection(listener: () => void): () => void;
 }
@@ -177,6 +179,7 @@ export class DesktopShellService {
     return this.enqueue(async () => {
       this.requireActive();
       const state = await this.options.stateRepository.read();
+      this.synchronizeAgentHomeWorkspaceScope(state);
       const reusablePrimary =
         state.primaryWindowId !== null && !this.activeWindows.has(state.primaryWindowId)
           ? state.primaryWindowId
@@ -259,12 +262,13 @@ export class DesktopShellService {
     this.requireActive();
     this.requireAgentHomeProjectionHealthy();
     const runtime = this.requireWindowRuntime(windowId);
+    const state = await this.options.stateRepository.read();
     return projectShellState(
-      await this.options.stateRepository.read(),
+      state,
       this.options.applicationInstanceId,
       windowId,
       runtime.rendererEpoch,
-      this.readAgentHomeProjection(),
+      this.readAgentHomeProjection(state),
       this.domainCapabilities(),
     );
   }
@@ -428,7 +432,7 @@ export class DesktopShellService {
       if (window.revision !== expectedWindowRevision) {
         throw staleWindowRevision(windowId, expectedWindowRevision, window.revision);
       }
-      const agentHome = this.readAgentHomeProjection();
+      const agentHome = this.readAgentHomeProjection(state);
       if (agentHome.revision !== expectedAgentHomeRevision) {
         throw new DesktopShellContractError(
           'desktop-shell-stale-revision',
@@ -829,13 +833,14 @@ export class DesktopShellService {
   }
 
   private async emitAll(state: DesktopShellStoredState): Promise<void> {
+    this.synchronizeAgentHomeWorkspaceScope(state);
     for (const [windowId, runtime] of this.activeWindows) {
       const projection = projectShellState(
         state,
         this.options.applicationInstanceId,
         windowId,
         runtime.rendererEpoch,
-        this.readAgentHomeProjection(),
+        this.readAgentHomeProjection(state),
         this.domainCapabilities(),
       );
       runtime.sequence += 1;
@@ -858,7 +863,7 @@ export class DesktopShellService {
       this.options.applicationInstanceId,
       windowId,
       runtime.rendererEpoch,
-      this.readAgentHomeProjection(),
+      this.readAgentHomeProjection(state),
       this.domainCapabilities(),
     );
   }
@@ -936,7 +941,8 @@ export class DesktopShellService {
     if (this.disposed) throw new Error('Desktop Shell service is disposed.');
   }
 
-  private readAgentHomeProjection(): DesktopAgentHomeProjection {
+  private readAgentHomeProjection(state: DesktopShellStoredState): DesktopAgentHomeProjection {
+    this.synchronizeAgentHomeWorkspaceScope(state);
     this.requireAgentHomeProjectionHealthy();
     return (
       this.agentHomeProjectionSource?.readHomeProjection() ?? {
@@ -944,6 +950,12 @@ export class DesktopShellService {
         conversations: [],
         attention: { needsInput: 0, needsReview: 0, running: 0 },
       }
+    );
+  }
+
+  private synchronizeAgentHomeWorkspaceScope(state: DesktopShellStoredState): void {
+    this.agentHomeProjectionSource?.setHomeWorkspaceScope(
+      state.projects.map((project) => project.workspaceId),
     );
   }
 
@@ -1160,17 +1172,26 @@ function attachProjectWorkbench(
   current: DesktopWorkbenchLayoutProjection,
   project: DesktopStoredProject,
 ): DesktopWorkbenchLayoutProjection {
-  if (
+  const ownsAllMainViews =
+    current.main.views.length > 0 &&
     current.main.views.every(
       (view) => view.projectId === project.projectId && view.workspaceId === project.workspaceId,
-    )
-  ) {
-    return current;
+    );
+  if (ownsAllMainViews) {
+    if (current.resourceDock.presentation === 'hidden') return current;
+    return {
+      ...current,
+      revision: current.revision + 1,
+      resourceDock: {
+        ...current.resourceDock,
+        presentation: 'hidden',
+      },
+    };
   }
   const reset = createDefaultDesktopWorkbenchLayout(current.windowId);
-  return {
+  const base: DesktopWorkbenchLayoutProjection = {
     ...reset,
-    revision: current.revision + 1,
+    revision: current.revision,
     primarySidebar: current.primarySidebar,
     resourceDock: {
       ...current.resourceDock,
@@ -1178,9 +1199,19 @@ function attachProjectWorkbench(
     },
     display: {
       ...current.display,
-      mode: 'chat-only',
+      mode: 'chat-main',
     },
   };
+  return openOrFocusMainView(base, {
+    viewId: `canvas:${project.projectId}:workspace`,
+    viewEpoch: 1,
+    projectId: project.projectId,
+    workspaceId: project.workspaceId,
+    kind: 'canvas',
+    ownerId: `canvas:${project.projectId}`,
+    displayLabel: 'workspace.nkc',
+    documentId: 'neko/boards/workspace.nkc',
+  });
 }
 
 function restoreTransientWorkbench(

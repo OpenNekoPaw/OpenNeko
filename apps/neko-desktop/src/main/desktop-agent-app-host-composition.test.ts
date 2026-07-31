@@ -12,7 +12,11 @@ import {
   type Model,
   type SimpleStreamOptions,
 } from '@earendil-works/pi-ai';
-import { resolveAgentModelPolicy, type PiProductAgentEvent } from '@neko/agent/pi';
+import {
+  NodePiConversationCatalogReader,
+  resolveAgentModelPolicy,
+  type PiProductAgentEvent,
+} from '@neko/agent/pi';
 import type { Tool } from '@neko/shared';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
@@ -156,11 +160,13 @@ describe('DesktopAgentAppHostComposition', () => {
       '---\nname: broken\n---\nMissing description\n',
       'utf8',
     );
+    const userDataRoot = join(fixture.root, 'catalog-data');
     const composition = createDesktopAgentAppHostComposition({
-      userDataRoot: join(fixture.root, 'catalog-data'),
+      userDataRoot,
       userHome: fixture.userHome,
       hostId: 'desktop-catalog-host',
       credentialRuntime: createTestCredentialRuntime(),
+      catalogReader: await NodePiConversationCatalogReader.create({ userDataRoot }),
       builtinSkillRoot,
     });
     compositions.push(composition);
@@ -198,11 +204,13 @@ describe('DesktopAgentAppHostComposition', () => {
       'shared-skill',
       'Personal selected fixture',
     );
+    const userDataRoot = join(fixture.root, 'global-catalog-data');
     const composition = createDesktopAgentAppHostComposition({
-      userDataRoot: join(fixture.root, 'global-catalog-data'),
+      userDataRoot,
       userHome: fixture.userHome,
       hostId: 'desktop-global-catalog-host',
       credentialRuntime: createTestCredentialRuntime(),
+      catalogReader: await NodePiConversationCatalogReader.create({ userDataRoot }),
       builtinSkillRoot,
     });
     compositions.push(composition);
@@ -228,11 +236,13 @@ describe('DesktopAgentAppHostComposition', () => {
 
   it('fails visibly when a configured builtin Skill root is missing', async () => {
     const fixture = await createFixture();
+    const userDataRoot = join(fixture.root, 'missing-data');
     const composition = createDesktopAgentAppHostComposition({
-      userDataRoot: join(fixture.root, 'missing-data'),
+      userDataRoot,
       userHome: fixture.userHome,
       hostId: 'desktop-missing-builtin-host',
       credentialRuntime: createTestCredentialRuntime(),
+      catalogReader: await NodePiConversationCatalogReader.create({ userDataRoot }),
       builtinSkillRoot: join(fixture.root, 'missing-builtin-skills'),
     });
     compositions.push(composition);
@@ -313,6 +323,52 @@ describe('DesktopAgentAppHostComposition', () => {
     expect(home.attention).toEqual({ needsInput: 0, needsReview: 0, running: 0 });
     expect(JSON.stringify(home)).not.toContain('reply:alpha');
     expect(JSON.stringify(home)).not.toContain(fixture.workspace.workspacePath);
+  });
+
+  it('projects scoped persisted conversations before a workspace runtime is attached', async () => {
+    const fixture = await createFixture();
+    const workspace = await fixture.composition.attachWorkspace(fixture.workspace);
+    await workspace.createConversation('conversation-cold-start');
+    await fixture.composition.dispose();
+    compositions.splice(compositions.indexOf(fixture.composition), 1);
+
+    const restored = await createComposition(fixture, 'desktop-host-cold-start');
+    compositions.push(restored);
+
+    expect(restored.getWorkspace(fixture.workspace.workspaceId)).toBeUndefined();
+    expect(restored.readHomeProjection()).toMatchObject({
+      conversations: [
+        {
+          navigation: {
+            workspaceId: fixture.workspace.workspaceId,
+            conversationId: 'conversation-cold-start',
+          },
+          attention: 'none',
+        },
+      ],
+    });
+    restored.setHomeWorkspaceScope([]);
+    expect(restored.readHomeProjection().conversations).toEqual([]);
+  });
+
+  it('fails visibly when the persisted Home catalog cannot be read', async () => {
+    const fixture = await createFixture();
+    const composition = createDesktopAgentAppHostComposition({
+      userDataRoot: fixture.userDataRoot,
+      userHome: fixture.userHome,
+      hostId: 'desktop-host-failed-catalog',
+      credentialRuntime: createTestCredentialRuntime(),
+      catalogReader: {
+        listConversations: () => {
+          throw new Error('catalog fixture failed');
+        },
+        dispose: () => undefined,
+      },
+    });
+    composition.setHomeWorkspaceScope([fixture.workspace.workspaceId]);
+    compositions.push(composition);
+
+    expect(() => composition.readHomeProjection()).toThrow('catalog fixture failed');
   });
 
   it('reports no active turn for a durable conversation that has not opened a Pi runtime', async () => {
@@ -590,7 +646,7 @@ describe('DesktopAgentAppHostComposition', () => {
     await fixture.composition.dispose();
 
     const observedContexts: Context[] = [];
-    const second = createComposition(fixture, 'desktop-host-restarted');
+    const second = await createComposition(fixture, 'desktop-host-restarted');
     compositions.push(second);
     const secondModels = createFixtureModels((_model, context) => {
       observedContexts.push(context);
@@ -667,7 +723,7 @@ describe('DesktopAgentAppHostComposition', () => {
 
     expect(terminal.durability).toBe('durable');
     expect(terminal.projection.turns[0]?.completion?.status).toBe('cancelled');
-    const replacement = createComposition(fixture, 'desktop-host-after-quit');
+    const replacement = await createComposition(fixture, 'desktop-host-after-quit');
     compositions.push(replacement);
     const replacementWorkspace = await replacement.attachWorkspace(fixture.workspace);
     await expect(
@@ -682,7 +738,7 @@ describe('DesktopAgentAppHostComposition', () => {
 
   it('rejects a second Host while the first owns the fenced conversation lease', async () => {
     const fixture = await createFixture();
-    const second = createComposition(fixture, 'desktop-host-2');
+    const second = await createComposition(fixture, 'desktop-host-2');
     compositions.push(second);
     const models = createFixtureModels(() => completedStream(assistant('unused')));
     const policy = fixturePolicy();
@@ -759,26 +815,33 @@ describe('DesktopAgentAppHostComposition', () => {
       userHome,
       hostId: 'desktop-host-1',
       credentialRuntime: createTestCredentialRuntime(),
+      catalogReader: await NodePiConversationCatalogReader.create({ userDataRoot }),
       createIdentity: () => `identity-${(identity += 1)}`,
     });
+    composition.setHomeWorkspaceScope([workspace.workspaceId]);
     compositions.push(composition);
     return { root, userHome, userDataRoot, workspace, composition };
   }
 });
 
-function createComposition(
+async function createComposition(
   fixture: {
     readonly userDataRoot: string;
     readonly userHome: string;
   },
   hostId: string,
-): DesktopAgentAppHostComposition {
-  return createDesktopAgentAppHostComposition({
+): Promise<DesktopAgentAppHostComposition> {
+  const composition = createDesktopAgentAppHostComposition({
     userDataRoot: fixture.userDataRoot,
     userHome: fixture.userHome,
     hostId,
     credentialRuntime: createTestCredentialRuntime(),
+    catalogReader: await NodePiConversationCatalogReader.create({
+      userDataRoot: fixture.userDataRoot,
+    }),
   });
+  composition.setHomeWorkspaceScope(['11111111-1111-4111-8111-111111111111']);
+  return composition;
 }
 
 function createTestCredentialRuntime() {

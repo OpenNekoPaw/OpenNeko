@@ -21,6 +21,10 @@ import type {
   ResourceBrowserIdentity,
   ResourceBrowserItem,
 } from 'neko-assets/resource-browser/contract';
+import {
+  createGlobalLibraryOpaqueId,
+  createGlobalLibraryThumbnailDescriptor,
+} from 'neko-assets/global-library/contract';
 import type { DesktopWorkspaceResolution } from './desktop-workspace-registry';
 import { resolveDesktopWorkspaceContentLocator } from './desktop-content-locator';
 import { readDesktopConfirmedEntityResources } from './desktop-entity-resource-query';
@@ -84,6 +88,36 @@ export async function searchDesktopGlobalAssetCatalog(input: {
   return (await readGlobalAssets(input))
     .sort((left, right) => compareGlobalCatalogItems(left, right, input))
     .slice(0, input.limit);
+}
+
+export async function resolveDesktopGlobalAssetItemPath(input: {
+  readonly globalAssetRoot: string;
+  readonly files: NekoHostPorts['files'];
+  readonly itemId: string;
+}): Promise<string> {
+  const entries = await readGlobalAssetEntries({
+    globalAssetRoot: input.globalAssetRoot,
+    files: input.files,
+    query: '',
+  });
+  const entry = entries.find(
+    (candidate) =>
+      candidate.locator.kind === 'workspace-file' &&
+      createGlobalLibraryOpaqueId('asset-library', candidate.locator.path) === input.itemId,
+  );
+  if (!entry || entry.locator.kind !== 'workspace-file') {
+    throw new Error('Desktop global Asset identity is stale or unavailable.');
+  }
+  const resolved = path.resolve(input.globalAssetRoot, ...entry.locator.path.split('/'));
+  const relative = path.relative(input.globalAssetRoot, resolved);
+  if (relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
+    throw new Error('Desktop global Asset path escapes its owned root.');
+  }
+  return resolved;
+}
+
+export function isSupportedDesktopGlobalAssetPath(filePath: string): boolean {
+  return classifyContent(filePath, true).include;
 }
 
 export async function searchDesktopGlobalMediaLibraries(input: {
@@ -414,7 +448,45 @@ function classifyContent(locatorPath: string, mediaOnly: boolean) {
 async function readGlobalAssets(
   input: Parameters<typeof searchDesktopGlobalAssetCatalog>[0],
 ): Promise<DesktopHomeAssetItem[]> {
-  const entries = await searchResourceBrowserContentTree({
+  const entries = await readGlobalAssetEntries(input);
+  return entries.flatMap((entry) => {
+    if (entry.role !== 'content') return [];
+    if (entry.locator.kind !== 'workspace-file') {
+      throw new Error('Desktop global asset catalog produced a non-file locator.');
+    }
+    const id = createGlobalLibraryOpaqueId('asset-library', entry.locator.path);
+    const modifiedAt = entry.metadata?.modifiedAt;
+    const byteLength = entry.metadata?.byteLength;
+    const thumbnail = createGlobalLibraryThumbnailDescriptor({
+      owner: 'asset-library',
+      itemId: id,
+      mediaType: entry.metadata?.mediaType,
+      modifiedAt,
+      byteLength,
+    });
+    return [
+      {
+        id,
+        owner: 'asset-library' as const,
+        label: entry.label,
+        ...(entry.description ? { description: entry.description } : {}),
+        kind: 'asset' as const,
+        ...(entry.metadata?.mediaType ? { mediaType: entry.metadata.mediaType } : {}),
+        ...(byteLength === undefined ? {} : { byteLength }),
+        ...(modifiedAt ? { modifiedAt } : {}),
+        availability: entry.availability,
+        ...(thumbnail ? { thumbnail } : {}),
+      },
+    ];
+  });
+}
+
+async function readGlobalAssetEntries(input: {
+  readonly globalAssetRoot: string;
+  readonly files: NekoHostPorts['files'];
+  readonly query: string;
+}): Promise<readonly ResourceBrowserContentEntry[]> {
+  return searchResourceBrowserContentTree({
     absoluteRoot: input.globalAssetRoot,
     locatorPrefix: '',
     query: input.query,
@@ -426,31 +498,17 @@ async function readGlobalAssets(
     relativePath: path.relative,
     classify: (locatorPath) => classifyContent(locatorPath, true),
   });
-  return entries.flatMap((entry) => {
-    if (entry.role !== 'content') return [];
-    if (entry.locator.kind !== 'workspace-file') {
-      throw new Error('Desktop global asset catalog produced a non-file locator.');
-    }
-    return [
-      {
-        id: `asset:${entry.locator.path}`,
-        label: entry.label,
-        ...(entry.description ? { description: entry.description } : {}),
-        kind: 'asset' as const,
-        ...(entry.metadata?.mediaType ? { mediaType: entry.metadata.mediaType } : {}),
-        ...(entry.metadata?.modifiedAt ? { modifiedAt: entry.metadata.modifiedAt } : {}),
-        availability: entry.availability,
-      },
-    ];
-  });
 }
 
 function projectMediaLibraryRoot(
   connection: DesktopGlobalMediaLibraryConnection,
 ): DesktopHomeMediaLibraryItem {
+  const id = createGlobalLibraryOpaqueId('media-library', `${connection.libraryId}:root`);
   return {
-    id: `${connection.libraryId}:root`,
+    id,
+    owner: 'media-library',
     libraryId: connection.libraryId,
+    libraryLabel: connection.name,
     label: connection.name,
     description: connection.locationKind,
     kind: 'library',
@@ -470,17 +528,34 @@ function projectMediaLibraryEntry(
     throw new Error('Desktop global Media Library produced a non-file locator.');
   }
   const relativePath = entry.locator.path;
+  const id = createGlobalLibraryOpaqueId(
+    'media-library',
+    `${connection.libraryId}:${relativePath}`,
+  );
+  const modifiedAt = entry.metadata?.modifiedAt;
+  const byteLength = entry.metadata?.byteLength;
+  const thumbnail = createGlobalLibraryThumbnailDescriptor({
+    owner: 'media-library',
+    itemId: id,
+    mediaType: entry.metadata?.mediaType,
+    modifiedAt,
+    byteLength,
+  });
   return {
-    id: `${connection.libraryId}:${relativePath}`,
+    id,
+    owner: 'media-library',
     libraryId: connection.libraryId,
+    libraryLabel: connection.name,
     label: entry.label,
     ...(entry.description ? { description: entry.description } : {}),
     kind: entry.role === 'directory' ? 'directory' : 'file',
     locationKind: connection.locationKind,
     relativePath,
     ...(entry.metadata?.mediaType ? { mediaType: entry.metadata.mediaType } : {}),
-    ...(entry.metadata?.modifiedAt ? { modifiedAt: entry.metadata.modifiedAt } : {}),
+    ...(byteLength === undefined ? {} : { byteLength }),
+    ...(modifiedAt ? { modifiedAt } : {}),
     availability: entry.availability,
+    ...(thumbnail ? { thumbnail } : {}),
   };
 }
 

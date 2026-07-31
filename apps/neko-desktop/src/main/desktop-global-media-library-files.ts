@@ -122,6 +122,34 @@ export async function removeDesktopGlobalMediaLibraryConnection(input: {
   await fs.unlink(linkPath);
 }
 
+export async function replaceDesktopGlobalMediaLibraryConnection(input: {
+  readonly mediaLibraryRoot: string;
+  readonly libraryId: string;
+  readonly sourceDirectory: string;
+}): Promise<void> {
+  requireMediaLibraryName(path.basename(input.sourceDirectory));
+  const sourceStat = await fs.stat(input.sourceDirectory);
+  if (!sourceStat.isDirectory()) {
+    throw new Error('Desktop global Media Library source must be a directory.');
+  }
+  const linkPath = resolveDesktopGlobalMediaLibraryLinkPath(input);
+  const linkStat = await fs.lstat(linkPath);
+  if (!linkStat.isSymbolicLink()) {
+    throw new Error('Desktop global Media Library connection is not a managed link.');
+  }
+  const temporaryPath = `${linkPath}.${randomUUID()}.relink`;
+  try {
+    await fs.symlink(
+      await fs.realpath(input.sourceDirectory),
+      temporaryPath,
+      process.platform === 'win32' ? 'junction' : 'dir',
+    );
+    await fs.rename(temporaryPath, linkPath);
+  } finally {
+    await fs.rm(temporaryPath, { force: true }).catch(() => undefined);
+  }
+}
+
 export async function resolveDesktopGlobalMediaLibraryTarget(input: {
   readonly mediaLibraryRoot: string;
   readonly libraryId: string;
@@ -261,6 +289,7 @@ function requireLocationKind(value: string): DesktopHomeMediaLibraryLocationKind
 function requireMediaLibraryName(value: string): string {
   if (
     value.length === 0 ||
+    value.startsWith('.') ||
     value !== value.normalize('NFC') ||
     value === '.' ||
     value === '..' ||

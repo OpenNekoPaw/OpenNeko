@@ -107,6 +107,7 @@ describe('Desktop Resource Browser source', () => {
     expect(libraries).toEqual([
       expect.objectContaining({
         libraryId,
+        libraryLabel: 'Footage',
         label: 'Footage',
         kind: 'library',
         locationKind: 'nas',
@@ -115,6 +116,7 @@ describe('Desktop Resource Browser source', () => {
     expect(searchMatches).toEqual([
       expect.objectContaining({
         libraryId,
+        libraryLabel: 'Footage',
         label: 'external.mp4',
         relativePath: 'shots/external.mp4',
         kind: 'file',
@@ -162,7 +164,11 @@ describe('Desktop Resource Browser source', () => {
       limit: 20,
     });
     expect(rootEntries).toEqual([
-      expect.objectContaining({ kind: 'directory', relativePath: 'images' }),
+      expect.objectContaining({
+        libraryLabel: 'References',
+        kind: 'directory',
+        relativePath: 'images',
+      }),
     ]);
     expect(imageEntries).toEqual([
       expect.objectContaining({ kind: 'file', relativePath: 'images/hero.png' }),

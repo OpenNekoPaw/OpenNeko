@@ -61,6 +61,20 @@ describe('Desktop Workbench contract', () => {
     expect(focused.main.views).toHaveLength(2);
   });
 
+  it('opens and focuses one independent Resource Browser Main View', () => {
+    const initial = createDefaultDesktopWorkbenchLayout('window-1');
+    const resourceBrowser = viewRef('resources-1', 'resource-browser');
+    const opened = openOrFocusMainView(initial, resourceBrowser);
+    const focused = openOrFocusMainView(opened, resourceBrowser);
+
+    expect(focused.main.views).toEqual([resourceBrowser]);
+    expect(focused.main.groups[0]).toEqual({
+      groupId: 'main:primary',
+      viewIds: ['resources-1'],
+      activeViewId: 'resources-1',
+    });
+  });
+
   it('rejects duplicate membership, missing active Group and dangling Timeline owner', () => {
     const canvas = openOrFocusMainView(
       createDefaultDesktopWorkbenchLayout('window-1'),
@@ -159,10 +173,17 @@ describe('Desktop Workbench contract', () => {
     expect(moved.main.split?.axis).toBe('rows');
   });
 
-  it('changes only display state and rejects Main modes without a Main View', () => {
+  it('allows Chat + Main to expose an empty Main group but rejects Main only without a View', () => {
     const initial = createDefaultDesktopWorkbenchLayout('window-1');
-    expect(() => setWorkbenchDisplayMode(initial, 'chat-main')).toThrow(
-      "display mode 'chat-main' requires an attached Main View",
+    const emptyChatMain = setWorkbenchDisplayMode(initial, 'chat-main', 'right');
+    expect(emptyChatMain.display).toEqual({
+      mode: 'chat-main',
+      chatPosition: 'right',
+      chatWidth: 360,
+    });
+    expect(emptyChatMain.main).toEqual(initial.main);
+    expect(() => setWorkbenchDisplayMode(initial, 'main-only')).toThrow(
+      "display mode 'main-only' requires an attached Main View",
     );
     const withCanvas = openOrFocusMainView(initial, viewRef('canvas-1', 'canvas'));
     const changed = setWorkbenchDisplayMode(withCanvas, 'chat-main', 'right');
@@ -199,7 +220,7 @@ describe('Desktop Workbench contract', () => {
   });
 });
 
-function viewRef(viewId: string, kind: 'canvas' | 'preview' | 'cut') {
+function viewRef(viewId: string, kind: 'canvas' | 'preview' | 'cut' | 'resource-browser') {
   return {
     viewId,
     viewEpoch: 1,

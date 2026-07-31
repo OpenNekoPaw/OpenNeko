@@ -22,17 +22,20 @@ export const DESKTOP_SHELL_CHANNELS = {
 
 export type DesktopProjectProfile = 'content' | 'character' | 'world';
 export type DesktopUnavailableProjectProfile = Exclude<DesktopProjectProfile, 'content'>;
-export type DesktopDomainSurface =
-  | 'agent'
-  | 'media-library'
-  | 'canvas'
-  | 'cut'
-  | 'preview'
-  | 'generation'
-  | 'quality'
-  | 'character'
-  | 'world'
-  | 'tools';
+const DESKTOP_DOMAIN_SURFACES = [
+  'agent',
+  'media-library',
+  'canvas',
+  'cut',
+  'preview',
+  'generation',
+  'quality',
+  'character',
+  'world',
+  'tools',
+] as const;
+
+export type DesktopDomainSurface = (typeof DESKTOP_DOMAIN_SURFACES)[number];
 
 export interface DesktopShellRequest {
   readonly schemaVersion: typeof DESKTOP_SHELL_CONTRACT_VERSION;
@@ -989,19 +992,7 @@ function parseDesktopDomainCapabilityProjection(
 }
 
 function requireDomainSurface(value: unknown): DesktopDomainSurface {
-  const surfaces: readonly DesktopDomainSurface[] = [
-    'agent',
-    'media-library',
-    'canvas',
-    'cut',
-    'preview',
-    'generation',
-    'quality',
-    'character',
-    'world',
-    'tools',
-  ];
-  const matched = surfaces.find((surface) => surface === value);
+  const matched = DESKTOP_DOMAIN_SURFACES.find((surface) => surface === value);
   if (!matched) throw invalidPayload(`Unknown Desktop domain surface '${String(value)}'.`);
   return matched;
 }

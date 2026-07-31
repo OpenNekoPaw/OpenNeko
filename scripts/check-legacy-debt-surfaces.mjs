@@ -27,6 +27,14 @@ const retiredAssetCatalogBoundaryPathPatterns = [
   'packages/neko-types/src/types/asset/workspace-linked-media-library.ts',
   'packages/neko-types/src/types/content-locator.ts',
 ];
+const canonicalGlobalAssetLibraryPathPatterns = [
+  'apps/neko-desktop/src/main/desktop-global-asset-files.ts',
+  'apps/neko-desktop/src/main/desktop-resource-browser-runtime.ts',
+  'apps/neko-desktop/src/main/desktop-resource-browser-source.ts',
+  'packages/neko-assets/src/global-library/contract.ts',
+  'packages/neko-assets/src/global-library/controller.ts',
+  'packages/neko-assets/src/global-library/root.tsx',
+];
 // Match both the owning boundary and its rejection marker so unrelated debt in the same file fails.
 const explicitBoundaryRejectionRules = [
   {
@@ -367,7 +375,7 @@ function scanRetiredAssetCatalog(sourceFiles) {
         rule.pattern.lastIndex = 0;
         let match = rule.pattern.exec(line);
         while (match !== null) {
-          const allowlist = retiredAssetCatalogAllowlist(relPath);
+          const allowlist = retiredAssetCatalogAllowlist(relPath, rule.id);
           results.push({
             file: relPath,
             line: index + 1,
@@ -390,6 +398,7 @@ function summarizeRetiredAssetCatalog(matches) {
     allowlists: {
       migrationOnly: [],
       boundaryRejection: retiredAssetCatalogBoundaryPathPatterns,
+      canonicalGlobalAssetLibrary: canonicalGlobalAssetLibraryPathPatterns,
       tests: ['**/__tests__/**', '**/*.test.ts', '**/*.test.tsx', '**/*.spec.ts', '**/*.spec.tsx'],
     },
     matches: matches.length,
@@ -398,10 +407,16 @@ function summarizeRetiredAssetCatalog(matches) {
   };
 }
 
-function retiredAssetCatalogAllowlist(file) {
+function retiredAssetCatalogAllowlist(file, rule) {
   if (isTestPath(file)) return 'test-or-poison-fixture';
   if (retiredAssetCatalogBoundaryPathPatterns.some((pattern) => matchesGlob(file, pattern))) {
     return 'boundary-rejection';
+  }
+  if (
+    rule === 'search-partition' &&
+    canonicalGlobalAssetLibraryPathPatterns.some((pattern) => matchesGlob(file, pattern))
+  ) {
+    return 'canonical-global-asset-library';
   }
   return undefined;
 }
@@ -1530,8 +1545,32 @@ function runSelfTest() {
       expected: 'boundary-canonicalizer',
     },
     {
-      value: retiredAssetCatalogAllowlist('packages/neko-types/src/types/content-locator.ts'),
+      value: retiredAssetCatalogAllowlist(
+        'packages/neko-types/src/types/content-locator.ts',
+        'asset-uri',
+      ),
       expected: 'boundary-rejection',
+    },
+    {
+      value: retiredAssetCatalogAllowlist(
+        'packages/neko-assets/src/global-library/contract.ts',
+        'search-partition',
+      ),
+      expected: 'canonical-global-asset-library',
+    },
+    {
+      value: retiredAssetCatalogAllowlist(
+        'packages/neko-assets/src/global-library/contract.ts',
+        'catalog-type',
+      ),
+      expected: undefined,
+    },
+    {
+      value: retiredAssetCatalogAllowlist(
+        'apps/neko-desktop/src/main/unrelated.ts',
+        'search-partition',
+      ),
+      expected: undefined,
     },
     {
       value: matchesGlob(

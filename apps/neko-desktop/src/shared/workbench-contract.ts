@@ -19,7 +19,7 @@ export type DesktopWorkbenchDockPresentation = 'hidden' | 'docked' | 'overlay';
 export type DesktopWorkbenchDisplayMode = 'chat-main' | 'chat-only' | 'main-only';
 export type DesktopWorkbenchMainSplitAxis = 'columns' | 'rows';
 export type DesktopPreviewViewPresentation = 'temporary' | 'pinned' | 'side';
-export type DesktopWorkbenchViewKind = 'canvas' | 'preview' | 'cut';
+export type DesktopWorkbenchViewKind = 'canvas' | 'preview' | 'cut' | 'resource-browser';
 
 export interface DesktopWorkbenchViewRef {
   readonly viewId: string;
@@ -474,7 +474,7 @@ export function setWorkbenchDisplayMode(
   mode: DesktopWorkbenchDisplayMode,
   chatPosition = workbench.display.chatPosition,
 ): DesktopWorkbenchLayoutProjection {
-  if (mode !== 'chat-only' && workbench.main.views.length === 0) {
+  if (mode === 'main-only' && workbench.main.views.length === 0) {
     throw invalidPayload(`Desktop display mode '${mode}' requires an attached Main View.`);
   }
   return {
@@ -772,7 +772,7 @@ function parseDesktopWorkbenchViewRef(value: unknown): DesktopWorkbenchViewRef {
   const record = requireRecord(value, 'Desktop Workbench Main View must be an object.');
   const kind = requireOneOf(
     record['kind'],
-    ['canvas', 'preview', 'cut'] as const,
+    ['canvas', 'preview', 'cut', 'resource-browser'] as const,
     'Desktop Workbench Main View kind is invalid.',
   );
   const documentId = readOptionalNonEmptyString(
@@ -904,6 +904,7 @@ function workbenchV1DisplayLabel(
   if (kind === 'agent') return 'Chat';
   if (kind === 'canvas') return 'Canvas';
   if (kind === 'cut') return 'Timeline';
+  if (kind === 'resource-browser') return 'Resources';
   return 'Preview';
 }
 

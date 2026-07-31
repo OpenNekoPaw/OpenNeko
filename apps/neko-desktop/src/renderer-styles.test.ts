@@ -64,9 +64,7 @@ describe('Desktop renderer styles', () => {
     expect(inputRule?.groups?.body).toMatch(/overflow-y\s*:\s*auto/u);
     expect(inputRule?.groups?.body).toMatch(/max-height\s*:\s*280px/u);
     expect(submitRule?.groups?.body).toMatch(/border-radius\s*:\s*50%/u);
-    expect(submitRule?.groups?.body).toMatch(
-      /background\s*:\s*var\(--neko-desktop-text-strong\)/u,
-    );
+    expect(submitRule?.groups?.body).toMatch(/background\s*:\s*var\(--neko-desktop-text-strong\)/u);
     expect(styles).toMatch(
       /\.home-agent-submit:disabled\s*\{[\s\S]*?background\s*:\s*var\(--neko-desktop-surface-muted\)/u,
     );
@@ -84,5 +82,50 @@ describe('Desktop renderer styles', () => {
       /\.home-navigation--compact\s+\.home-navigation-footer__actions\s*\{[\s\S]*?flex-direction\s*:\s*column/u,
     );
     expect(styles).not.toMatch(/\.project-workbench-controls\s*\{/u);
+  });
+
+  it('projects opaque shared Popover tokens for Desktop portals', () => {
+    expect(styles).toMatch(/--neko-popover-background\s*:\s*var\(--neko-desktop-surface-raised\)/u);
+    expect(styles).toMatch(/--neko-popover-border\s*:\s*var\(--neko-desktop-border-strong\)/u);
+    expect(styles).toMatch(/--neko-popover-foreground\s*:\s*var\(--neko-fg\)/u);
+  });
+
+  it('gives the package-owned Global Library its complete Home viewport', () => {
+    const globalLibraryRootRule = styles.match(
+      /\.desktop-global-library-root\s*\{(?<body>[\s\S]*?)\n\}/u,
+    );
+
+    expect(globalLibraryRootRule?.groups?.body).toMatch(/height\s*:\s*100%/u);
+    expect(globalLibraryRootRule?.groups?.body).toMatch(/min-height\s*:\s*0/u);
+  });
+
+  it('keeps the Global Library as a compact unframed workbench surface', () => {
+    const packageStyles = readFileSync(
+      new URL('../../../packages/neko-assets/src/global-library/style.css', import.meta.url),
+      'utf8',
+    );
+    const browserRule = packageStyles.match(
+      /\.global-library-browser\s*\{(?<body>[\s\S]*?)\n\}/u,
+    );
+    const headerRule = packageStyles.match(
+      /\.global-library-browser__header\s*\{(?<body>[\s\S]*?)\n\}/u,
+    );
+    const headingRule = packageStyles.match(
+      /\.global-library-browser__header h1\s*\{(?<body>[\s\S]*?)\n\}/u,
+    );
+
+    expect(browserRule?.groups?.body).toMatch(/height\s*:\s*100%/u);
+    expect(browserRule?.groups?.body).not.toMatch(/border-radius/u);
+    expect(headerRule?.groups?.body).toMatch(/padding\s*:\s*16px 16px 10px/u);
+    expect(headingRule?.groups?.body).toMatch(/font-size\s*:\s*16px/u);
+    expect(packageStyles).toMatch(
+      /\.global-library-browser__toolbar\s*\{[\s\S]*?padding\s*:\s*0 16px 10px/u,
+    );
+    expect(packageStyles).toMatch(
+      /\.global-library-browser__commands button,[\s\S]*?min-height\s*:\s*28px/u,
+    );
+    expect(packageStyles).toMatch(
+      /\.global-library-browser__collection\s*\{[\s\S]*?padding\s*:\s*10px 16px 16px/u,
+    );
   });
 });

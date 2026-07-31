@@ -8,6 +8,7 @@ import {
   createDesktopGlobalMediaLibraryConnection,
   listDesktopGlobalMediaLibraryConnections,
   removeDesktopGlobalMediaLibraryConnection,
+  replaceDesktopGlobalMediaLibraryConnection,
   resolveDesktopGlobalMediaLibraryTarget,
 } from './desktop-global-media-library-files';
 
@@ -20,6 +21,26 @@ afterEach(async () => {
 });
 
 describe('Desktop global Media Library connections', () => {
+  it('rejects a dot-prefixed source name before creating a managed link', async () => {
+    const root = await createFixture();
+    const source = path.join(root, '.hidden-library');
+    const registry = path.join(root, 'registry');
+    await mkdir(source);
+    await writeFile(path.join(source, 'shot.mp4'), 'original');
+
+    await expect(
+      createDesktopGlobalMediaLibraryConnection({
+        mediaLibraryRoot: registry,
+        sourceDirectory: source,
+        locationKind: 'local',
+      }),
+    ).rejects.toThrow('name is invalid');
+    await expect(lstat(path.join(registry, 'local', '.hidden-library'))).rejects.toMatchObject({
+      code: 'ENOENT',
+    });
+    await expect(readFile(path.join(source, 'shot.mp4'), 'utf8')).resolves.toBe('original');
+  });
+
   it('connects a directory without copying it into the registry', async () => {
     const root = await createFixture();
     const source = path.join(root, 'Footage');
@@ -98,6 +119,36 @@ describe('Desktop global Media Library connections', () => {
     await expect(
       resolveDesktopGlobalMediaLibraryTarget({ mediaLibraryRoot: registry, libraryId }),
     ).resolves.toBe(await pathResolve(source));
+  });
+
+  it('relinks a managed connection without changing either target directory', async () => {
+    const root = await createFixture();
+    const original = path.join(root, 'Original');
+    const replacement = path.join(root, 'Replacement');
+    const registry = path.join(root, 'registry');
+    await mkdir(original);
+    await mkdir(replacement);
+    await writeFile(path.join(original, 'original.png'), 'original');
+    await writeFile(path.join(replacement, 'replacement.png'), 'replacement');
+    const { libraryId } = await createDesktopGlobalMediaLibraryConnection({
+      mediaLibraryRoot: registry,
+      sourceDirectory: original,
+      locationKind: 'local',
+    });
+
+    await replaceDesktopGlobalMediaLibraryConnection({
+      mediaLibraryRoot: registry,
+      libraryId,
+      sourceDirectory: replacement,
+    });
+
+    await expect(
+      readFile(path.join(registry, 'local', 'Original', 'replacement.png'), 'utf8'),
+    ).resolves.toBe('replacement');
+    await expect(readFile(path.join(original, 'original.png'), 'utf8')).resolves.toBe('original');
+    await expect(readFile(path.join(replacement, 'replacement.png'), 'utf8')).resolves.toBe(
+      'replacement',
+    );
   });
 
   it('copies source bytes into an explicit global library destination without changing source identity', async () => {

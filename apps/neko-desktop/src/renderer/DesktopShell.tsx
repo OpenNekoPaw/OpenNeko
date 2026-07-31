@@ -31,14 +31,11 @@ import type {
   DesktopShellProjection,
 } from '../shared/shell-contract';
 import type {
-  DesktopHomeAssetSearchResult,
-  DesktopHomeMediaLibraryItem,
-  DesktopHomeMediaLibraryLocationKind,
-  DesktopHomeMediaLibrarySearchResult,
-  DesktopHomePluginItem,
-  DesktopHomePluginsResult,
+  DesktopHomeExtensionItem,
+  DesktopHomeExtensionsResult,
   DesktopHomeSkillItem,
 } from '../shared/home-management-contract';
+import { resourceBrowserViewId } from '../shared/resource-browser-bridge-contract';
 import {
   DESKTOP_WORKBENCH_LIMITS,
   closeMainView,
@@ -57,6 +54,7 @@ import { DesktopPreviewSurface } from './DesktopPreviewSurface';
 import { DesktopCanvasSurface } from './DesktopCanvasSurface';
 import { DesktopCutSurface } from './DesktopCutSurface';
 import { DesktopSettingsSurface } from './DesktopSettingsSurface';
+import { DesktopGlobalLibrarySurface } from './DesktopGlobalLibrarySurface';
 import {
   DesktopApplicationBrand,
   DesktopApplicationNavigationButton,
@@ -68,7 +66,7 @@ type ShellState =
   | { readonly kind: 'ready'; readonly projection: DesktopShellProjection }
   | { readonly kind: 'error'; readonly message: string };
 
-type HomeSection = 'create' | 'assets' | 'plugins' | 'projects';
+type HomeSection = 'create' | 'assets' | 'extensions' | 'projects';
 type TranslationFunction = ReturnType<typeof useTranslation>['t'];
 
 interface ShellActions {
@@ -516,8 +514,8 @@ function HomeWorkspace({
           <HomeStartCreating actions={actions} pending={pending} projection={projection} />
         ) : section === 'assets' ? (
           <HomeAssetCenter interactive={interactive} />
-        ) : section === 'plugins' ? (
-          <HomePlugins interactive={interactive} />
+        ) : section === 'extensions' ? (
+          <HomeExtensions interactive={interactive} />
         ) : (
           <HomeAllProjects onOpenRecent={onOpenRecent} projection={projection} />
         )}
@@ -731,375 +729,46 @@ function HomeTemplateButton({
 
 type HomeAssetSortOption = 'name-ascending' | 'name-descending' | 'modified-descending';
 type HomeNamedSortOption = 'name-ascending' | 'name-descending';
+type HomeSkillSourceFilter = 'all' | DesktopHomeSkillItem['source'];
 type HomeProjectSortOption =
   'updated-descending' | 'updated-ascending' | 'name-ascending' | 'name-descending';
 
+export const DESKTOP_BUILTIN_SKILL_IDS = [
+  'audio-mixing',
+  'color-grading',
+  'image',
+  'media-production',
+  'media-quality-review',
+  'scene-to-music',
+  'script-generation',
+  'script-to-timeline',
+  'skill-creator',
+  'storyboard',
+  'subtitle-assistant',
+  'video',
+  'video-editing',
+] as const;
+
+const DESKTOP_BUILTIN_SKILL_ID_SET: ReadonlySet<string> = new Set(DESKTOP_BUILTIN_SKILL_IDS);
+
 function HomeAssetCenter({ interactive }: { readonly interactive: boolean }): JSX.Element {
-  const { locale, t } = useTranslation();
-  const [catalog, setCatalog] = useState<'mediaLibraries' | 'assets'>('mediaLibraries');
-  const [query, setQuery] = useState('');
-  const [sort, setSort] = useState<HomeAssetSortOption>('name-ascending');
-  const [locationKind, setLocationKind] =
-    useState<DesktopHomeMediaLibraryLocationKind>('local');
-  const [selectedLibrary, setSelectedLibrary] = useState<DesktopHomeMediaLibraryItem>();
-  const [relativePath, setRelativePath] = useState('');
-  const [catalogRevision, setCatalogRevision] = useState(0);
-  const [assetResult, setAssetResult] = useState<DesktopHomeAssetSearchResult>();
-  const [mediaLibraryResult, setMediaLibraryResult] =
-    useState<DesktopHomeMediaLibrarySearchResult>();
-  const [error, setError] = useState<string>();
-  const [mutationDiagnostic, setMutationDiagnostic] = useState<string>();
-  const [mutationNotice, setMutationNotice] = useState<string>();
-  const [pendingAction, setPendingAction] = useState<string>();
-  useEffect(() => {
-    if (!interactive) return;
-    let active = true;
-    setError(undefined);
-    setAssetResult(undefined);
-    setMediaLibraryResult(undefined);
-    const timeout = window.setTimeout(() => {
-      const sortInput = {
-        sortBy: sort === 'modified-descending' ? ('modifiedAt' as const) : ('name' as const),
-        sortDirection:
-          sort === 'name-descending' || sort === 'modified-descending'
-            ? ('descending' as const)
-            : ('ascending' as const),
-        limit: 120,
-      };
-      const request =
-        catalog === 'assets'
-          ? window.openNekoDesktop.home.assets
-              .search({ query, ...sortInput })
-              .then((value) => {
-                if (active) setAssetResult(value);
-              })
-          : selectedLibrary && query.length === 0
-            ? window.openNekoDesktop.home.mediaLibraries
-                .children({
-                  libraryId: selectedLibrary.libraryId,
-                  relativePath,
-                  ...sortInput,
-                })
-                .then((value) => {
-                  if (active) setMediaLibraryResult(value);
-                })
-            : window.openNekoDesktop.home.mediaLibraries
-                .search({ query, ...sortInput })
-                .then((value) => {
-                  if (active) setMediaLibraryResult(value);
-                });
-      void request
-        .catch((reason: unknown) => {
-          if (active) setError(describeError(reason));
-        });
-    }, 150);
-    return () => {
-      active = false;
-      window.clearTimeout(timeout);
-    };
-  }, [catalog, catalogRevision, interactive, query, relativePath, selectedLibrary, sort]);
-
-  const addLibrary = useCallback(async (): Promise<void> => {
-    setMutationDiagnostic(undefined);
-    setMutationNotice(undefined);
-    setPendingAction('add');
-    try {
-      const mutation =
-        await window.openNekoDesktop.home.mediaLibraries.addLibrary(locationKind);
-      if (mutation.status === 'cancelled') {
-        setMutationNotice(t('home.assets.addCancelled'));
-        return;
-      }
-      setMutationNotice(t('home.assets.added'));
-      setCatalogRevision((revision) => revision + 1);
-    } catch (reason: unknown) {
-      setMutationDiagnostic(describeError(reason));
-    } finally {
-      setPendingAction(undefined);
-    }
-  }, [locationKind, t]);
-
-  const removeLibrary = useCallback(
-    async (item: DesktopHomeMediaLibraryItem) => {
-      if (!window.confirm(t('home.assets.removeConfirm', { name: item.label }))) return;
-      setMutationDiagnostic(undefined);
-      setMutationNotice(undefined);
-      setPendingAction(`remove:${item.id}`);
-      try {
-        await window.openNekoDesktop.home.mediaLibraries.removeLibrary(item.libraryId);
-        setMutationNotice(t('home.assets.removed'));
-        setSelectedLibrary(undefined);
-        setRelativePath('');
-        setCatalogRevision((revision) => revision + 1);
-      } catch (reason: unknown) {
-        setMutationDiagnostic(describeError(reason));
-      } finally {
-        setPendingAction(undefined);
-      }
-    },
-    [t],
-  );
-
-  const revealLibrary = useCallback(
-    async (item: DesktopHomeMediaLibraryItem) => {
-      setMutationDiagnostic(undefined);
-      setMutationNotice(undefined);
-      setPendingAction(`reveal:${item.id}`);
-      try {
-        await window.openNekoDesktop.home.mediaLibraries.revealLibrary(item.libraryId);
-        setMutationNotice(t('home.assets.revealed'));
-      } catch (reason: unknown) {
-        setMutationDiagnostic(describeError(reason));
-      } finally {
-        setPendingAction(undefined);
-      }
-    },
-    [t],
-  );
-  const activeResult = catalog === 'assets' ? assetResult : mediaLibraryResult;
-  const leaveDirectory = (): void => {
-    if (relativePath) {
-      const segments = relativePath.split('/');
-      segments.pop();
-      setRelativePath(segments.join('/'));
-      return;
-    }
-    setSelectedLibrary(undefined);
-  };
-  return (
-    <div className="home-management-page">
-      <header className="home-management-header">
-        <div>
-          <p className="section-label">{t('home.assets.eyebrow')}</p>
-          <h1>
-            {catalog === 'mediaLibraries'
-              ? t('home.mediaLibraries.title')
-              : t('home.assetLibrary.title')}
-          </h1>
-          <p>
-            {catalog === 'mediaLibraries'
-              ? t('home.mediaLibraries.description')
-              : t('home.assetLibrary.description')}
-          </p>
-        </div>
-        <div className="home-management-header-actions">
-          <button
-            type="button"
-            className="home-management-refresh"
-            disabled={!interactive || pendingAction !== undefined}
-            onClick={() => setCatalogRevision((revision) => revision + 1)}
-          >
-            {t('home.assets.refresh')}
-          </button>
-          {catalog === 'mediaLibraries' ? (
-            <>
-              <label className="home-sort-control">
-                <span>{t('home.mediaLibraries.locationType')}</span>
-                <select
-                  aria-label={t('home.mediaLibraries.locationType')}
-                  value={locationKind}
-                  onChange={(event) =>
-                    setLocationKind(
-                      parseMediaLibraryLocationKind(event.currentTarget.value),
-                    )
-                  }
-                >
-                  <option value="local">{t('home.mediaLibraries.local')}</option>
-                  <option value="nas">{t('home.mediaLibraries.nas')}</option>
-                  <option value="cloud">{t('home.mediaLibraries.cloud')}</option>
-                </select>
-              </label>
-              <button
-                type="button"
-                className="home-management-primary-action"
-                disabled={!interactive || pendingAction !== undefined}
-                onClick={() => void addLibrary()}
-              >
-                <PlusIcon size={14} />
-                {pendingAction === 'add' ? t('home.assets.adding') : t('home.assets.add')}
-              </button>
-            </>
-          ) : null}
-        </div>
-      </header>
-      <div className="home-management-toolbar">
-        <label className="home-search-field">
-          <SearchIcon size={16} />
-          <input
-            key={catalog}
-            aria-label={
-              catalog === 'mediaLibraries'
-                ? t('home.mediaLibraries.search')
-                : t('home.assetLibrary.search')
-            }
-            placeholder={
-              catalog === 'mediaLibraries'
-                ? t('home.mediaLibraries.search')
-                : t('home.assetLibrary.search')
-            }
-            value={query}
-            onChange={(event) => setQuery(event.currentTarget.value)}
-          />
-        </label>
-        <div className="home-management-toolbar-actions">
-          <label className="home-sort-control">
-            <span>{t('home.sort.label')}</span>
-            <select
-              aria-label={t('home.assets.sort')}
-              value={sort}
-              onChange={(event) => setSort(parseHomeAssetSortOption(event.currentTarget.value))}
-            >
-              <option value="name-ascending">{t('home.sort.nameAscending')}</option>
-              <option value="name-descending">{t('home.sort.nameDescending')}</option>
-              <option value="modified-descending">{t('home.sort.newest')}</option>
-            </select>
-          </label>
-          <div className="home-segmented-control" aria-label={t('home.assets.facets')}>
-            {(['mediaLibraries', 'assets'] as const).map((value) => (
-              <button
-                type="button"
-                className={catalog === value ? 'is-active' : ''}
-                key={value}
-                onClick={() => {
-                  setCatalog(value);
-                  setQuery('');
-                  setSelectedLibrary(undefined);
-                  setRelativePath('');
-                }}
-              >
-                {value === 'mediaLibraries'
-                  ? t('home.mediaLibraries.title')
-                  : t('home.assetLibrary.title')}
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-      {catalog === 'mediaLibraries' && selectedLibrary ? (
-        <div className="home-management-path">
-          <button type="button" onClick={leaveDirectory}>
-            {t('home.mediaLibraries.back')}
-          </button>
-          <span>
-            {selectedLibrary.label}
-            {relativePath ? ` / ${relativePath}` : ''}
-          </span>
-        </div>
-      ) : null}
-      {mutationDiagnostic ? (
-        <div className="home-management-diagnostic" role="alert">
-          <WarningIcon size={17} />
-          <span>{mutationDiagnostic}</span>
-        </div>
-      ) : mutationNotice ? (
-        <div className="home-management-notice" role="status">
-          <CheckIcon size={17} />
-          <span>{mutationNotice}</span>
-        </div>
-      ) : null}
-      {error || activeResult?.status === 'error' ? (
-        <div className="home-management-diagnostic" role="alert">
-          <WarningIcon size={17} />
-          <span>
-            {error ??
-              (activeResult?.status === 'error' ? activeResult.diagnostic.message : '')}
-          </span>
-        </div>
-      ) : (
-        <div className="home-management-grid">
-          {(activeResult?.status === 'ready' ? activeResult.items : []).map((item) => (
-            <article className="home-management-card" key={item.id}>
-              <span className="home-management-card-icon">
-                {item.kind === 'library' || item.kind === 'directory' ? (
-                  <FolderIcon size={18} />
-                ) : (
-                  <GridIcon size={18} />
-                )}
-              </span>
-              <span>
-                <strong>{item.label}</strong>
-                <small>
-                  {item.description ?? item.mediaType ?? item.kind}
-                  {item.modifiedAt ? ` · ${formatProjectDate(item.modifiedAt, locale)}` : ''}
-                </small>
-              </span>
-              {catalog === 'mediaLibraries' && item.kind === 'library' ? (
-                <span className="home-management-card-actions">
-                  <button
-                    type="button"
-                    disabled={item.availability !== 'available'}
-                    onClick={() => {
-                      setSelectedLibrary(item);
-                      setRelativePath('');
-                    }}
-                  >
-                    {t('home.mediaLibraries.browse')}
-                  </button>
-                  <button
-                    type="button"
-                    disabled={pendingAction !== undefined}
-                    onClick={() => void revealLibrary(item)}
-                  >
-                    {pendingAction === `reveal:${item.id}`
-                      ? t('home.assets.revealing')
-                      : t('home.assets.reveal')}
-                  </button>
-                  <button
-                    type="button"
-                    className="is-danger"
-                    disabled={pendingAction !== undefined}
-                    onClick={() => void removeLibrary(item)}
-                  >
-                    <TrashIcon size={13} />
-                    {pendingAction === `remove:${item.id}`
-                      ? t('home.assets.removing')
-                      : t('home.assets.remove')}
-                  </button>
-                </span>
-              ) : catalog === 'mediaLibraries' && item.kind === 'directory' ? (
-                <span className="home-management-card-actions">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelectedLibrary(item);
-                      setRelativePath(item.relativePath);
-                    }}
-                  >
-                    {t('home.mediaLibraries.openFolder')}
-                  </button>
-                </span>
-              ) : null}
-            </article>
-          ))}
-          {activeResult?.status === 'ready' && activeResult.items.length === 0 ? (
-            <HomeManagementEmpty
-              icon={<SearchIcon size={22} />}
-              label={
-                catalog === 'mediaLibraries'
-                  ? t('home.mediaLibraries.noResults')
-                  : t('home.assetLibrary.noResults')
-              }
-            />
-          ) : null}
-        </div>
-      )}
-    </div>
-  );
+  return <DesktopGlobalLibrarySurface interactive={interactive} />;
 }
 
-function HomePlugins({ interactive }: { readonly interactive: boolean }): JSX.Element {
+function HomeExtensions({ interactive }: { readonly interactive: boolean }): JSX.Element {
   const { t } = useTranslation();
-  const [tab, setTab] = useState<'skills' | 'plugins'>('skills');
+  const [tab, setTab] = useState<'skills' | 'extensions'>('skills');
+  const [source, setSource] = useState<HomeSkillSourceFilter>('all');
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState<HomeNamedSortOption>('name-ascending');
   const [catalogRevision, setCatalogRevision] = useState(0);
-  const [result, setResult] = useState<DesktopHomePluginsResult>();
+  const [result, setResult] = useState<DesktopHomeExtensionsResult>();
   const [error, setError] = useState<string>();
   useEffect(() => {
     if (!interactive) return;
     let active = true;
     setError(undefined);
-    void window.openNekoDesktop.home.plugins
+    void window.openNekoDesktop.home.extensions
       .list()
       .then((value) => {
         if (active) setResult(value);
@@ -1113,25 +782,38 @@ function HomePlugins({ interactive }: { readonly interactive: boolean }): JSX.El
   }, [catalogRevision, interactive]);
   const normalizedQuery = query.trim().toLocaleLowerCase();
   const skills = useMemo(
-    () => filterAndSortHomeSkills(result?.skills ?? [], normalizedQuery, sort),
-    [normalizedQuery, result?.skills, sort],
+    () =>
+      filterAndSortHomeSkills(result?.skills ?? [], normalizedQuery, sort, {
+        source,
+        searchText: (skill) => {
+          const presentation = presentHomeSkill(skill, t);
+          return `${presentation.name} ${presentation.description}`;
+        },
+        sortName: (skill) => presentHomeSkill(skill, t).name,
+      }),
+    [normalizedQuery, result?.skills, sort, source, t],
   );
-  const plugins = useMemo(
-    () => filterAndSortHomePlugins(result?.plugins ?? [], normalizedQuery, sort),
-    [normalizedQuery, result?.plugins, sort],
+  const extensions = useMemo(
+    () => filterAndSortHomeExtensions(result?.extensions ?? [], normalizedQuery, sort),
+    [normalizedQuery, result?.extensions, sort],
   );
   const discoveryIssueCount =
     (result?.skillDiscovery.diagnostics.reduce(
       (total, diagnostic) => total + diagnostic.count,
       0,
-    ) ?? 0) + (result?.skillDiscovery.duplicateCount ?? 0);
+    ) ?? 0) +
+    (result?.skillDiscovery.duplicateCount ?? 0) +
+    (result?.extensionDiscovery.diagnostics.reduce(
+      (total, diagnostic) => total + diagnostic.count,
+      0,
+    ) ?? 0);
   return (
     <div className="home-management-page">
       <header className="home-management-header">
         <div>
-          <p className="section-label">{t('home.plugins.eyebrow')}</p>
-          <h1>{t('home.plugins')}</h1>
-          <p>{t('home.plugins.description')}</p>
+          <p className="section-label">{t('home.capabilities.eyebrow')}</p>
+          <h1>{t('home.capabilities')}</h1>
+          <p>{t('home.capabilities.description')}</p>
         </div>
         <div className="home-management-header-actions">
           <button
@@ -1140,7 +822,7 @@ function HomePlugins({ interactive }: { readonly interactive: boolean }): JSX.El
             disabled={!interactive}
             onClick={() => setCatalogRevision((revision) => revision + 1)}
           >
-            {t('home.plugins.refresh')}
+            {t('home.capabilities.refresh')}
           </button>
         </div>
       </header>
@@ -1148,17 +830,33 @@ function HomePlugins({ interactive }: { readonly interactive: boolean }): JSX.El
         <label className="home-search-field">
           <SearchIcon size={16} />
           <input
-            aria-label={t('home.plugins.search')}
-            placeholder={t('home.plugins.search')}
+            aria-label={t('home.capabilities.search')}
+            placeholder={t('home.capabilities.search')}
             value={query}
             onChange={(event) => setQuery(event.currentTarget.value)}
           />
         </label>
         <div className="home-management-toolbar-actions">
+          {tab === 'skills' ? (
+            <label className="home-sort-control">
+              <span>{t('home.capabilities.source.label')}</span>
+              <select
+                aria-label={t('home.capabilities.source.label')}
+                value={source}
+                onChange={(event) =>
+                  setSource(parseHomeSkillSourceFilter(event.currentTarget.value))
+                }
+              >
+                <option value="all">{t('home.capabilities.source.all')}</option>
+                <option value="personal">{t('home.capabilities.source.personal')}</option>
+                <option value="builtin">{t('home.capabilities.source.builtin')}</option>
+              </select>
+            </label>
+          ) : null}
           <label className="home-sort-control">
             <span>{t('home.sort.label')}</span>
             <select
-              aria-label={t('home.plugins.sort')}
+              aria-label={t('home.capabilities.sort')}
               value={sort}
               onChange={(event) => setSort(parseHomeNamedSortOption(event.currentTarget.value))}
             >
@@ -1166,20 +864,20 @@ function HomePlugins({ interactive }: { readonly interactive: boolean }): JSX.El
               <option value="name-descending">{t('home.sort.nameDescending')}</option>
             </select>
           </label>
-          <div className="home-segmented-control" aria-label={t('home.plugins.tabs')}>
+          <div className="home-segmented-control" aria-label={t('home.capabilities.tabs')}>
             <button
               type="button"
               className={tab === 'skills' ? 'is-active' : ''}
               onClick={() => setTab('skills')}
             >
-              {t('home.plugins.skills')}
+              {t('home.capabilities.skills')}
             </button>
             <button
               type="button"
-              className={tab === 'plugins' ? 'is-active' : ''}
-              onClick={() => setTab('plugins')}
+              className={tab === 'extensions' ? 'is-active' : ''}
+              onClick={() => setTab('extensions')}
             >
-              {t('home.plugins.plugins')}
+              {t('home.capabilities.extensions')}
             </button>
           </div>
         </div>
@@ -1194,61 +892,61 @@ function HomePlugins({ interactive }: { readonly interactive: boolean }): JSX.El
           {discoveryIssueCount > 0 ? (
             <div className="home-management-diagnostic" role="alert">
               <WarningIcon size={17} />
-              <span>{t('home.plugins.discoveryIssues', { count: discoveryIssueCount })}</span>
+              <span>{t('home.capabilities.discoveryIssues', { count: discoveryIssueCount })}</span>
             </div>
           ) : null}
           {tab === 'skills' ? (
             <div className="home-management-grid">
-              {skills.map((skill) => (
-                <article className="home-management-card" key={`${skill.source}:${skill.name}`}>
-                  <span className="home-management-card-icon">
-                    <PackageIcon size={18} />
-                  </span>
-                  <span>
-                    <strong>{skill.name}</strong>
-                    <small>{skill.description || skill.source}</small>
-                  </span>
-                  <span className="home-status-badge">
-                    {t(`home.plugins.source.${skill.source}`)}
-                  </span>
-                </article>
-              ))}
+              {skills.map((skill) => {
+                const presentation = presentHomeSkill(skill, t);
+                return (
+                  <article className="home-management-card" key={`${skill.source}:${skill.name}`}>
+                    <span className="home-management-card-icon">
+                      <PackageIcon size={18} />
+                    </span>
+                    <span>
+                      <strong>{presentation.name}</strong>
+                      <small>{presentation.description || skill.source}</small>
+                    </span>
+                    <span className="home-status-badge">
+                      {t(`home.capabilities.source.${skill.source}`)}
+                    </span>
+                  </article>
+                );
+              })}
               {result && skills.length === 0 ? (
                 <HomeManagementEmpty
                   icon={<PackageIcon size={22} />}
-                  label={t('home.plugins.noSkills')}
+                  label={t('home.capabilities.noSkills')}
                 />
               ) : null}
             </div>
           ) : (
-            <>
-              <div className="home-management-grid">
-                {plugins.map((plugin) => (
-                  <article className="home-management-card" key={plugin.id}>
-                    <span className="home-management-card-icon">
-                      <GridIcon size={18} />
-                    </span>
-                    <span>
-                      <strong>{plugin.name}</strong>
-                      <small>{t('home.plugins.builtin')}</small>
-                    </span>
-                    <span className={`home-status-badge is-${plugin.status}`}>
-                      {plugin.status === 'ready' ? t('home.available') : t('home.unavailable')}
-                    </span>
-                  </article>
-                ))}
-                {result && plugins.length === 0 ? (
-                  <HomeManagementEmpty
-                    icon={<PackageIcon size={22} />}
-                    label={t('home.plugins.noPlugins')}
-                  />
-                ) : null}
-              </div>
-              <div className="home-plugin-host-notice">
-                <InfoIcon size={17} />
-                <span>{t('home.plugins.externalUnavailable')}</span>
-              </div>
-            </>
+            <div className="home-management-grid">
+              {extensions.map((extension) => (
+                <article className="home-management-card" key={extension.id}>
+                  <span className="home-management-card-icon">
+                    <PackageIcon size={18} />
+                  </span>
+                  <span>
+                    <strong>{extension.displayName}</strong>
+                    <small>{extension.description || extension.id}</small>
+                    <small title={formatHomeExtensionContributions(extension, t)}>
+                      {formatHomeExtensionContributions(extension, t)}
+                    </small>
+                  </span>
+                  <span className="home-status-badge">
+                    {extension.developer || extension.marketplace} · {extension.version}
+                  </span>
+                </article>
+              ))}
+              {result && extensions.length === 0 ? (
+                <HomeManagementEmpty
+                  icon={<PackageIcon size={22} />}
+                  label={t('home.capabilities.noExtensions')}
+                />
+              ) : null}
+            </div>
           )}
         </>
       )}
@@ -1375,26 +1073,61 @@ export function filterAndSortHomeSkills(
   skills: readonly DesktopHomeSkillItem[],
   query: string,
   sort: HomeNamedSortOption,
+  options: {
+    readonly source?: HomeSkillSourceFilter;
+    readonly searchText?: (skill: DesktopHomeSkillItem) => string;
+    readonly sortName?: (skill: DesktopHomeSkillItem) => string;
+  } = {},
 ): readonly DesktopHomeSkillItem[] {
-  return filterAndSortHomeNamedItems(
-    skills,
-    query,
-    sort,
-    (skill) => `${skill.name} ${skill.description} ${skill.source}`,
-  );
+  const normalizedQuery = query.trim().toLocaleLowerCase();
+  const source = options.source ?? 'all';
+  return [...skills]
+    .filter((skill) => source === 'all' || skill.source === source)
+    .filter((skill) => {
+      const localizedText = options.searchText?.(skill) ?? '';
+      return `${skill.name} ${skill.description} ${skill.source} ${localizedText}`
+        .toLocaleLowerCase()
+        .includes(normalizedQuery);
+    })
+    .sort((left, right) => {
+      const sourceCompared = homeSkillSourceRank(left.source) - homeSkillSourceRank(right.source);
+      if (sourceCompared !== 0) return sourceCompared;
+      const nameCompared = (options.sortName?.(left) ?? left.name).localeCompare(
+        options.sortName?.(right) ?? right.name,
+      );
+      if (nameCompared !== 0) return sort === 'name-ascending' ? nameCompared : -nameCompared;
+      return left.name.localeCompare(right.name);
+    });
 }
 
-export function filterAndSortHomePlugins(
-  plugins: readonly DesktopHomePluginItem[],
+export function filterAndSortHomeExtensions(
+  extensions: readonly DesktopHomeExtensionItem[],
   query: string,
   sort: HomeNamedSortOption,
-): readonly DesktopHomePluginItem[] {
-  return filterAndSortHomeNamedItems(
-    plugins,
-    query,
-    sort,
-    (plugin) => `${plugin.name} ${plugin.description} ${plugin.status}`,
-  );
+): readonly DesktopHomeExtensionItem[] {
+  const normalizedQuery = query.trim().toLocaleLowerCase();
+  return [...extensions]
+    .filter((extension) =>
+      [
+        extension.id,
+        extension.name,
+        extension.displayName,
+        extension.description,
+        extension.developer,
+        extension.marketplace,
+        ...extension.mcpServerIds,
+        ...extension.appIds,
+      ]
+        .join(' ')
+        .toLocaleLowerCase()
+        .includes(normalizedQuery),
+    )
+    .sort((left, right) => {
+      const compared =
+        left.displayName.localeCompare(right.displayName) ||
+        left.id.localeCompare(right.id);
+      return sort === 'name-ascending' ? compared : -compared;
+    });
 }
 
 export function filterAndSortHomeProjects(
@@ -1419,19 +1152,39 @@ export function filterAndSortHomeProjects(
     });
 }
 
-function filterAndSortHomeNamedItems<T extends { readonly name: string }>(
-  items: readonly T[],
-  query: string,
-  sort: HomeNamedSortOption,
-  searchableText: (item: T) => string,
-): readonly T[] {
-  const normalizedQuery = query.trim().toLocaleLowerCase();
-  return [...items]
-    .filter((item) => searchableText(item).toLocaleLowerCase().includes(normalizedQuery))
-    .sort((left, right) => {
-      const compared = left.name.localeCompare(right.name);
-      return sort === 'name-ascending' ? compared : -compared;
-    });
+export function presentHomeSkill(
+  skill: DesktopHomeSkillItem,
+  t: TranslationFunction,
+): { readonly name: string; readonly description: string } {
+  if (skill.source !== 'builtin' || !DESKTOP_BUILTIN_SKILL_ID_SET.has(skill.name)) {
+    return { name: skill.name, description: skill.description };
+  }
+  return {
+    name: t(`home.capabilities.builtinSkill.${skill.name}.name`),
+    description: t(`home.capabilities.builtinSkill.${skill.name}.description`),
+  };
+}
+
+function formatHomeExtensionContributions(
+  extension: DesktopHomeExtensionItem,
+  t: TranslationFunction,
+): string {
+  const contributions = [
+    extension.mcpServerIds.length > 0
+      ? t('home.capabilities.extensionMcp', { ids: extension.mcpServerIds.join(', ') })
+      : undefined,
+    extension.hasSkills ? t('home.capabilities.extensionSkills') : undefined,
+    extension.appIds.length > 0
+      ? t('home.capabilities.extensionApps', { ids: extension.appIds.join(', ') })
+      : undefined,
+  ].filter((value): value is string => value !== undefined);
+  return contributions.length > 0
+    ? contributions.join(' · ')
+    : t('home.capabilities.extensionNoContributions');
+}
+
+function homeSkillSourceRank(source: DesktopHomeSkillItem['source']): number {
+  return source === 'personal' ? 0 : 1;
 }
 
 export function parseHomeAssetSortOption(value: string): HomeAssetSortOption {
@@ -1445,19 +1198,6 @@ export function parseHomeAssetSortOption(value: string): HomeAssetSortOption {
   }
 }
 
-function parseMediaLibraryLocationKind(
-  value: string,
-): DesktopHomeMediaLibraryLocationKind {
-  switch (value) {
-    case 'local':
-    case 'nas':
-    case 'cloud':
-      return value;
-    default:
-      throw new Error(`Unknown Media Library location kind: ${value}`);
-  }
-}
-
 export function parseHomeNamedSortOption(value: string): HomeNamedSortOption {
   switch (value) {
     case 'name-ascending':
@@ -1465,6 +1205,17 @@ export function parseHomeNamedSortOption(value: string): HomeNamedSortOption {
       return value;
     default:
       throw new Error(`Unknown Home catalog sort option: ${value}`);
+  }
+}
+
+export function parseHomeSkillSourceFilter(value: string): HomeSkillSourceFilter {
+  switch (value) {
+    case 'all':
+    case 'personal':
+    case 'builtin':
+      return value;
+    default:
+      throw new Error(`Unknown Home Skill source filter: ${value}`);
   }
 }
 
@@ -1550,41 +1301,15 @@ function ContentProjectWorkspace({
       tab={tab}
     />
   );
-  const resourceDock =
-    assetsCapability?.status === 'ready' ? (
-      <DesktopResourceBrowserSurface
-        onOpenCanvasDocument={(documentId, presentation) =>
-          actions.onUpdateWorkbench(
-            openCanvasDocumentWorkbench({
-              documentId,
-              presentation,
-              projection,
-              project,
-              workbench,
-            }),
-          )
-        }
-        project={project}
-        projection={projection}
-        tab={tab}
-      />
-    ) : (
-      <ResourceDockUnavailable
-        diagnostic={
-          assetsCapability?.status === 'unavailable'
-            ? assetsCapability.diagnosticCode
-            : 'desktop-media-library-not-mounted'
-        }
-      />
-    );
-  const leftDock = createProjectDock(workbench, 'left', agentDock, resourceDock);
-  const rightDock = createProjectDock(workbench, 'right', agentDock, resourceDock);
+  const leftDock = createAgentDock(workbench, 'left', agentDock);
+  const rightDock = createAgentDock(workbench, 'right', agentDock);
   const mainSurface = agentMain ? (
     agentDock
   ) : (
     <MainViewGroupSurface
       actions={actions}
       allowCutRuntime
+      assetsCapability={assetsCapability}
       canvasCapability={canvasCapability}
       cutCapability={cutCapability}
       group={primaryGroup}
@@ -1632,6 +1357,7 @@ function ContentProjectWorkspace({
           <MainViewGroupSurface
             actions={actions}
             allowCutRuntime={false}
+            assetsCapability={assetsCapability}
             canvasCapability={canvasCapability}
             cutCapability={cutCapability}
             group={secondaryGroup}
@@ -1734,6 +1460,7 @@ function ContentProjectWorkspace({
 function MainViewGroupSurface({
   actions,
   allowCutRuntime,
+  assetsCapability,
   canvasCapability,
   cutCapability,
   group,
@@ -1747,6 +1474,7 @@ function MainViewGroupSurface({
 }: {
   readonly actions: ShellActions;
   readonly allowCutRuntime: boolean;
+  readonly assetsCapability: DesktopShellProjection['domains'][number] | undefined;
   readonly canvasCapability: DesktopShellProjection['domains'][number] | undefined;
   readonly cutCapability: DesktopShellProjection['domains'][number] | undefined;
   readonly group: DesktopWorkbenchMainGroup;
@@ -1822,7 +1550,9 @@ function MainViewGroupSurface({
       <div className="project-main-group__content">
         {views.length === 0
           ? renderWorkbenchMainView({
+              actions,
               allowCutRuntime,
+              assetsCapability,
               canvasCapability,
               previewCapability,
               cutCapability,
@@ -1841,7 +1571,9 @@ function MainViewGroupSurface({
                   key={`${view.viewId}:${view.viewEpoch}`}
                 >
                   {renderWorkbenchMainView({
+                    actions,
                     allowCutRuntime,
+                    assetsCapability,
                     canvasCapability,
                     previewCapability,
                     cutCapability,
@@ -1860,7 +1592,9 @@ function MainViewGroupSurface({
 }
 
 function renderWorkbenchMainView({
+  actions,
   allowCutRuntime,
+  assetsCapability,
   canvasCapability,
   previewCapability,
   cutCapability,
@@ -1869,7 +1603,9 @@ function renderWorkbenchMainView({
   timelineTarget,
   view,
 }: {
+  readonly actions: ShellActions;
   readonly allowCutRuntime: boolean;
+  readonly assetsCapability: DesktopShellProjection['domains'][number] | undefined;
   readonly canvasCapability: DesktopShellProjection['domains'][number] | undefined;
   readonly previewCapability: DesktopShellProjection['domains'][number] | undefined;
   readonly cutCapability: DesktopShellProjection['domains'][number] | undefined;
@@ -1883,6 +1619,34 @@ function renderWorkbenchMainView({
   }
   if (view?.kind === 'canvas' && canvasCapability?.status === 'ready') {
     return <DesktopCanvasSurface project={project} projection={projection} view={view} />;
+  }
+  if (view?.kind === 'resource-browser') {
+    return assetsCapability?.status === 'ready' ? (
+      <DesktopResourceBrowserSurface
+        onOpenCanvasDocument={(documentId, presentation) =>
+          actions.onUpdateWorkbench(
+            openCanvasDocumentWorkbench({
+              documentId,
+              presentation,
+              projection,
+              project,
+              workbench: projection.window.workbench,
+            }),
+          )
+        }
+        project={project}
+        projection={projection}
+        view={view}
+      />
+    ) : (
+      <ResourceBrowserUnavailable
+        diagnostic={
+          assetsCapability?.status === 'unavailable'
+            ? assetsCapability.diagnosticCode
+            : 'desktop-media-library-not-mounted'
+        }
+      />
+    );
   }
   if (view?.kind === 'cut' && cutCapability?.status === 'ready') {
     if (!allowCutRuntime) {
@@ -1985,7 +1749,6 @@ function WorkbenchDisplayMenu({
         <strong>{t('workspace.displayMode')}</strong>
         <DisplayMenuButton
           checked={mode === 'chat-main-left' || mode === 'chat-main-right'}
-          disabled={!hasCreativeMain}
           label={t('workspace.chatAndMain')}
           onClick={() =>
             selectMode(mode === 'chat-main-right' ? 'chat-main-right' : 'chat-main-left')
@@ -2059,6 +1822,7 @@ function ProjectPrimarySidebar({
   readonly projection: DesktopShellProjection;
   readonly compact: boolean;
 }): JSX.Element {
+  const { t } = useTranslation();
   const workbench = projection.window.workbench;
   const togglePrimarySidebar = (): void => {
     actions.onUpdateWorkbench(togglePrimarySidebarWorkbench(workbench));
@@ -2069,10 +1833,26 @@ function ProjectPrimarySidebar({
       expandedWidth={workbench.primarySidebar.width}
     >
       <ApplicationPrimarySidebar
+        activeSection={
+          getActiveMainView(workbench)?.kind === 'resource-browser' ? 'assets' : undefined
+        }
         activeProjectId={project.projectId}
         compact={compact}
         disabled={pending}
-        onNavigate={actions.onHome}
+        onNavigate={(section) => {
+          if (section !== 'assets') {
+            actions.onHome(section);
+            return;
+          }
+          actions.onUpdateWorkbench(
+            openResourceBrowserWorkbench({
+              displayLabel: t('workspace.resources'),
+              project,
+              projection,
+              workbench,
+            }),
+          );
+        }}
         onDeleteConversation={actions.onDeleteConversation}
         onOpenConversation={actions.onOpenConversation}
         onOpenRecent={actions.onOpenRecent}
@@ -2088,56 +1868,30 @@ function ProjectPrimarySidebar({
   );
 }
 
-function createProjectDock(
+function createAgentDock(
   workbench: DesktopWorkbenchLayoutProjection,
   position: 'left' | 'right',
   agent: JSX.Element,
-  resources: JSX.Element,
 ):
   | {
       readonly content: JSX.Element;
-      readonly owner: 'agent' | 'resources';
+      readonly owner: 'agent';
       readonly presentation: 'docked' | 'overlay';
       readonly width: number;
     }
   | undefined {
-  const agentPresentation =
-    workbench.display.mode === 'chat-main' ? ('docked' as const) : ('hidden' as const);
-  const agentPosition =
-    workbench.display.mode === 'chat-main' ? workbench.display.chatPosition : undefined;
-  const resourcePresentation = workbench.resourceDock.presentation;
-  const resourcePosition =
-    resourcePresentation === 'hidden'
-      ? undefined
-      : agentPosition === workbench.resourceDock.position
-        ? oppositeDockPosition(agentPosition)
-        : workbench.resourceDock.position;
-
-  if (agentPosition === position) {
-    return {
-      content: (
-        <div className="project-dock-panel" data-dock-owner="agent">
-          {agent}
-        </div>
-      ),
-      owner: 'agent',
-      presentation: requireVisibleDockPresentation(agentPresentation, 'Agent'),
-      width: workbench.display.chatWidth,
-    };
+  if (workbench.display.mode !== 'chat-main' || workbench.display.chatPosition !== position) {
+    return undefined;
   }
-  if (resourcePosition !== position) return undefined;
   return {
     content: (
-      <div className="project-dock-panel" data-dock-owner="resources">
-        {resources}
+      <div className="project-dock-panel" data-dock-owner="agent">
+        {agent}
       </div>
     ),
-    owner: 'resources',
-    presentation:
-      resourcePresentation === 'overlay' && !isPreviewMainActive(workbench)
-        ? 'docked'
-        : requireVisibleDockPresentation(resourcePresentation, 'Resources'),
-    width: workbench.resourceDock.width,
+    owner: 'agent',
+    presentation: 'docked',
+    width: workbench.display.chatWidth,
   };
 }
 
@@ -2148,7 +1902,7 @@ function createProjectDockResizeBinding({
   workbench,
 }: {
   readonly actions: ShellActions;
-  readonly dock: NonNullable<ReturnType<typeof createProjectDock>>;
+  readonly dock: NonNullable<ReturnType<typeof createAgentDock>>;
   readonly label: string;
   readonly workbench: DesktopWorkbenchLayoutProjection;
 }) {
@@ -2157,9 +1911,7 @@ function createProjectDockResizeBinding({
     minSize: DESKTOP_WORKBENCH_LIMITS.dockWidth.min,
     maxSize: DESKTOP_WORKBENCH_LIMITS.dockWidth.max,
     onResizeEnd: (width: number) => {
-      const agentChanged = dock.owner === 'agent' && workbench.display.chatWidth !== width;
-      const resourcesChanged = dock.owner === 'resources' && workbench.resourceDock.width !== width;
-      if (!agentChanged && !resourcesChanged) return;
+      if (workbench.display.chatWidth === width) return;
       actions.onUpdateWorkbench(resizeProjectDockWorkbench(workbench, dock.owner, width));
     },
   };
@@ -2231,89 +1983,24 @@ export function resizeTimelineWorkbench(
 
 export function resizeProjectDockWorkbench(
   workbench: DesktopWorkbenchLayoutProjection,
-  owner: 'agent' | 'resources',
+  _owner: 'agent',
   width: number,
 ): DesktopWorkbenchLayoutProjection {
   return {
     ...workbench,
     revision: workbench.revision + 1,
-    display:
-      owner === 'agent'
-        ? {
-            ...workbench.display,
-            chatWidth: width,
-          }
-        : workbench.display,
-    resourceDock:
-      owner === 'resources'
-        ? {
-            ...workbench.resourceDock,
-            width,
-          }
-        : workbench.resourceDock,
-  };
-}
-
-export function nextResourceDockPresentation(
-  workbench: DesktopWorkbenchLayoutProjection,
-): 'hidden' | 'docked' | 'overlay' {
-  if (workbench.resourceDock.presentation !== 'hidden') return 'hidden';
-  return isPreviewMainActive(workbench) ? 'overlay' : 'docked';
-}
-
-export function setResourceDockPresentationWorkbench(
-  workbench: DesktopWorkbenchLayoutProjection,
-  presentation: 'hidden' | 'docked' | 'overlay',
-): DesktopWorkbenchLayoutProjection {
-  const agentPosition =
-    workbench.display.mode === 'chat-main' ? workbench.display.chatPosition : undefined;
-  return {
-    ...workbench,
-    revision: workbench.revision + 1,
-    resourceDock: {
-      ...workbench.resourceDock,
-      presentation,
-      position:
-        presentation !== 'hidden' && agentPosition
-          ? oppositeDockPosition(agentPosition)
-          : workbench.resourceDock.position,
+    display: {
+      ...workbench.display,
+      chatWidth: width,
     },
   };
-}
-
-function oppositeDockPosition(position: 'left' | 'right'): 'left' | 'right' {
-  return position === 'left' ? 'right' : 'left';
-}
-
-function requireVisibleDockPresentation(
-  presentation: 'hidden' | 'docked' | 'overlay',
-  owner: 'Agent' | 'Resources',
-): 'docked' | 'overlay' {
-  if (presentation === 'hidden') {
-    throw new Error(`${owner} cannot own a visible Desktop dock while hidden.`);
-  }
-  return presentation;
-}
-
-function isPreviewMainActive(workbench: DesktopWorkbenchLayoutProjection): boolean {
-  return getActiveMainView(workbench)?.kind === 'preview';
 }
 
 export function activateWorkbenchMainView(
   workbench: DesktopWorkbenchLayoutProjection,
   view: DesktopWorkbenchLayoutProjection['main']['views'][number],
 ): DesktopWorkbenchLayoutProjection {
-  const activated = openOrFocusMainView(workbench, view);
-  return {
-    ...activated,
-    resourceDock: {
-      ...activated.resourceDock,
-      presentation:
-        view.kind !== 'preview' && activated.resourceDock.presentation === 'overlay'
-          ? 'docked'
-          : activated.resourceDock.presentation,
-    },
-  };
+  return openOrFocusMainView(workbench, view);
 }
 
 function getWorkbenchDisplayMode(
@@ -2331,16 +2018,7 @@ export function applyWorkbenchDisplayMode(
   if (mode === 'chat-only') return setWorkbenchDisplayMode(workbench, 'chat-only');
   if (mode === 'main-only') return setWorkbenchDisplayMode(workbench, 'main-only');
   const chatPosition = mode === 'chat-main-left' ? 'left' : 'right';
-  const displayed = setWorkbenchDisplayMode(workbench, 'chat-main', chatPosition);
-  return displayed.resourceDock.presentation === 'hidden'
-    ? displayed
-    : {
-        ...displayed,
-        resourceDock: {
-          ...displayed.resourceDock,
-          position: oppositeDockPosition(chatPosition),
-        },
-      };
+  return setWorkbenchDisplayMode(workbench, 'chat-main', chatPosition);
 }
 
 export function openCanvasDocumentWorkbench(input: {
@@ -2377,6 +2055,37 @@ export function openCanvasDocumentWorkbench(input: {
   return openOrFocusMainView(workbench, canvasView, {
     ...(presentation === 'side' ? { splitAxis: 'columns' as const } : {}),
   });
+}
+
+export function openResourceBrowserWorkbench(input: {
+  readonly displayLabel: string;
+  readonly projection: DesktopShellProjection;
+  readonly project: DesktopProjectCatalogItem;
+  readonly workbench: DesktopWorkbenchLayoutProjection;
+}): DesktopWorkbenchLayoutProjection {
+  const { displayLabel, projection, project, workbench } = input;
+  const existing = workbench.main.views.find(
+    (view) =>
+      view.kind === 'resource-browser' &&
+      view.projectId === project.projectId &&
+      view.workspaceId === project.workspaceId,
+  );
+  const tab = requireProjectTab(projection, project.projectId);
+  const resourceBrowserView =
+    existing ??
+    ({
+      viewId: resourceBrowserViewId(tab.viewId),
+      viewEpoch: tab.viewEpoch,
+      projectId: project.projectId,
+      workspaceId: project.workspaceId,
+      kind: 'resource-browser' as const,
+      ownerId: `resource-browser:${project.projectId}`,
+      displayLabel,
+    } satisfies DesktopWorkbenchLayoutProjection['main']['views'][number]);
+  const opened = openOrFocusMainView(workbench, resourceBrowserView);
+  return opened.display.mode === 'chat-only'
+    ? setWorkbenchDisplayMode(opened, 'chat-main')
+    : opened;
 }
 
 function stableViewSuffix(value: string): string {
@@ -2416,10 +2125,14 @@ function CreativeMainPlaceholder({
   );
 }
 
-function ResourceDockUnavailable({ diagnostic }: { readonly diagnostic: string }): JSX.Element {
+function ResourceBrowserUnavailable({
+  diagnostic,
+}: {
+  readonly diagnostic: string;
+}): JSX.Element {
   const { t } = useTranslation();
   return (
-    <section className="resource-dock" aria-label={t('workspace.resources')}>
+    <section className="resource-browser-unavailable" aria-label={t('workspace.resources')}>
       <header>
         <div>
           <FolderIcon size={15} />
@@ -2557,11 +2270,11 @@ function ApplicationPrimarySidebar({
           onClick={() => onNavigate('assets')}
         />
         <DesktopApplicationNavigationButton
-          active={activeSection === 'plugins'}
+          active={activeSection === 'extensions'}
           disabled={disabled}
-          label={t('home.plugins')}
+          label={t('home.capabilities')}
           icon={<PackageIcon size={17} />}
-          onClick={() => onNavigate('plugins')}
+          onClick={() => onNavigate('extensions')}
         />
         <DesktopApplicationNavigationButton
           active={activeSection === 'projects'}
