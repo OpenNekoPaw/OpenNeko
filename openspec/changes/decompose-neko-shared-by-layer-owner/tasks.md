@@ -14,8 +14,12 @@
       closures remain browser-safe.
 - [ ] 2.3 Move Node, host, path, metadata, and project-I/O behavior to established L1 owners or
       justified Node entries with isolated persisted-data migration/rebuild/rejection tests.
-- [ ] 2.4 Narrow `@neko/shared` exports to admitted L0 foundations and remove all old barrels, aliases,
-      fallbacks, and dual implementations.
+- [x] 2.4a Retire the first 18 zero-production-consumer modules and their package-local tests, record
+      their no-data-impact dispositions, and poison source/direct-entry reintroduction.
+- [x] 2.4b Retire the second zero-production-consumer batch, remove the unused Agent reference
+      contributor manifest field, and poison all removed source/direct/root exports.
+- [ ] 2.4c Narrow all remaining `@neko/shared` exports to admitted L0 foundations and remove old
+      barrels, aliases, fallbacks, and dual implementations.
 
 ## 3. Validate Converged Shared Boundary
 

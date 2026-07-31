@@ -2,12 +2,6 @@
 // Types Index - Re-export all types from submodules
 // =============================================================================
 
-// Audio contracts retained outside the retired Timeline project model
-export * from './audioAutomation';
-export * from './audioEffectParams';
-export * from './audioMix';
-export * from './audioTempo';
-export * from './media-stream';
 export * from './message-attachment';
 
 // Configuration
@@ -16,17 +10,10 @@ export * from './agent-ai-source';
 export * from './external-research';
 export * from './fountain-script';
 
-// AI Actions
-export * from './aiAction';
-
 export * from './agent-runtime-scope';
 
-export * from './creative-entity-facade';
 export * from './npc-test-bench';
 export * from './media-library-drag';
-
-// SubAgent UI Types
-export * from './subagent';
 
 // =============================================================================
 // Platform/Agent Shared Types (for package split)
@@ -48,7 +35,6 @@ export * from './agent-autoheal';
 export * from './agent-capability-activation';
 export * from './agent-capability-diagnostics';
 export * from './agent-capability-lifecycle';
-export * from './agent-feedback';
 export * from './agent-profile';
 export * from './agent-output-validation';
 export * from './reference-contributor';
@@ -56,15 +42,9 @@ export * from './reference-contributor';
 // Agent execution trace contracts
 export * from './agent-trace';
 export * from './agent-token-budget';
-// Memory types (for agent context management)
-export * from './memory';
-
 // Skill types (Claude-compatible skills and slash commands)
 export * from './skill';
 export * from './portable-skill';
-
-// Skill lifecycle types (activation records and request-time projection)
-export * from './skill-lifecycle';
 
 // ToolGroup types (dynamic tool injection)
 export * from './tool-group';
@@ -90,21 +70,8 @@ export * from './media-file';
 export * from './asset/manifest';
 export * from './asset/workspace-linked-media-library';
 
-// Bundle locators and character asset import contracts
+// Bundle locators and character asset contracts
 export * from './bundle-locator';
-export * from './media-import';
-
-// Context manager types (token budget and lifecycle management)
-export * from './context-manager';
-
-// Conversation compressor types (sliding window and summarization)
-export * from './conversation-compressor';
-
-// Skill conflict resolution types
-export * from './skill-conflict';
-
-// Context persistence types (cross-session state)
-export * from './context-persistence';
 
 // Project memory types (cross-session agent memory)
 export * from './project-memory';
@@ -127,21 +94,16 @@ export * from './canvas-markdown-capabilities';
 export * from './canvas-drop';
 export * from './canvas-projection';
 export * from './canvas-cut-draft';
-export * from './canvas-timeline-sync';
-export * from './storyboard-planner';
 export * from './storyboard-cinematography';
-export * from './storyboard-readiness';
 export * from './storyboard-table';
 export * from './creative-table-profile';
 export * from './storyboard-plan-overlay';
 export * from './shot-image-prep';
 export * from './composite-artifact';
-export * from './artifact-projection';
 export * from './character-memory';
 export * from './media-semantic-index';
 export * from './semantic-source';
 export * from './comic-animation-indexing';
-export * from './reference-resolution';
 
 // Proxy protocol types (video proxy generation and management)
 export * from './proxyProtocol';
@@ -192,7 +154,6 @@ export * from './loading-tier';
 // Generated asset types (cross-plugin asset reference schema, ADR-4)
 export * from './generated-asset';
 export * from './generated-asset-lifecycle';
-export * from './generated-asset-quality-adapter';
 
 // Character registry types (git-tracked project identity source)
 export * from './character-registry';
@@ -212,7 +173,6 @@ export * from './multimodal-context';
 
 export * from './decision-rationale';
 export * from './recovery-guidance';
-export * from './subagent-reviewer';
 
 // Prompt fragment (PR3e: sub-package prompt contribution)
 export * from './prompt-fragment';
@@ -228,6 +188,5 @@ export * from './creative-entity-asset-composition';
 
 export * from './durable-resource-ref';
 export * from './creative-media-operations';
-export * from './creative-media-capability-registry';
 export * from './media-production';
 export * from './media-quality';

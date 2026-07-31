@@ -4,11 +4,9 @@ import {
   validateContentLocator,
   type GeneratedOutputContentLocator,
 } from './content-locator';
-import type { QualityEvidence, QualityEvidenceLineage } from './media-quality';
 import { hashStableValue } from './stable-value';
 
 export const GENERATED_ASSET_LIFECYCLE_VERSION = 1 as const;
-export const GENERATED_ASSET_RESOURCE_PROVIDER_ID = 'generated-asset';
 
 export interface GeneratedAssetWorkflowStageRef {
   readonly stageId: string;
@@ -47,29 +45,6 @@ export interface CreateGeneratedAssetRevisionRefInput {
   readonly mimeType: string;
   readonly generation: GeneratedAssetGenerationLineage;
 }
-
-export interface GeneratedAssetPromotionRecord {
-  readonly promotionId: string;
-  readonly draft: GeneratedAssetRevisionRef;
-  readonly promoted: GeneratedAssetRevisionRef;
-  readonly promotedAt: string;
-  readonly contentPreserved: boolean;
-  readonly sourceEvidenceIds: readonly string[];
-}
-
-export type GeneratedAssetEvidenceTransferResult =
-  | {
-      readonly status: 'transferred';
-      readonly promotion: GeneratedAssetPromotionRecord;
-      readonly evidence: QualityEvidence & {
-        readonly evidenceLineage: QualityEvidenceLineage;
-      };
-    }
-  | {
-      readonly status: 'content-changed';
-      readonly promotion: GeneratedAssetPromotionRecord;
-      readonly staleEvidence: QualityEvidence;
-    };
 
 export type GeneratedAssetRevisionRefValidationResult =
   | {

@@ -285,15 +285,13 @@
         "packages/neko-canvas-webview/src/components/connections/*.tsx",
         "packages/neko-canvas-webview/src/components/content/*.tsx",
         "packages/neko-canvas-webview/src/components/nodes/*.tsx",
-        "packages/neko-canvas-webview/src/CanvasApp.tsx",
-        "packages/neko-types/src/types/reference-resolution.ts"
+        "packages/neko-canvas-webview/src/CanvasApp.tsx"
       ],
       "replacement": "Port-based connection geometry, container.childPlacements, composable content metadata, and explicit default/placeholder renderers.",
       "removeCondition": "Removed in cleanup-remaining-legacy-debt-surfaces: CanvasConnection now uses canonical sourceEndpoint/targetEndpoint, GroupCanvasNode no longer mirrors container children through data.childIds, GalleryCell/data.cells and galleryMigration were deleted, and Webview generation updates write media child nodes plus container.childPlacements metadata.",
       "validation": {
         "commands": [
           "pnpm --dir packages/neko-types test -- --run src/nkc/__tests__/validator.test.ts src/nkc/__tests__/codec.test.ts src/nkc/__tests__/migrator.test.ts src/nkc/__tests__/layered-canvas.test.ts src/utils/__tests__/storyboardPlanner.test.ts src/types/__tests__/canvas-playback.test.ts",
-          "pnpm --dir packages/neko-types exec vitest run src/types/__tests__/reference-resolution.test.ts",
           "pnpm --dir packages/neko-canvas-webview exec vitest run src/utils/connectionProjection.test.ts src/stores/__tests__/canvasStore.test.ts src/stores/__tests__/clipboardStore.test.ts src/utils/canvasAgentOperations.test.ts src/utils/containerActions.test.ts src/utils/nodeFactory.test.ts src/components/content/NodeContentDispatcher.test.ts src/components/playback/CanvasPlaybackController.test.tsx src/utils/renderRefreshTiering.test.ts",
           "pnpm --dir packages/neko-canvas-webview build",
           "rg -n \"LegacyNodeRenderer|renderLegacy|Legacy path|legacy-node|FallbackNode|FallbackNodeProps|fallback card|fallback cards|renderFallbackBlock|fallbackExt|fallbackLabel\" packages/neko-canvas-webview/src",
@@ -317,7 +315,6 @@
             "packages/neko-canvas-webview/src/utils/containerActions.ts",
             "packages/neko-canvas-webview/src/utils/nodeFactory.ts",
             "packages/neko-types/src/types/canvas.ts",
-            "packages/neko-types/src/types/reference-resolution.ts",
             "packages/neko-types/src/utils/canvasLayered.ts",
             "packages/neko-types/src/nkc/migrator.ts"
           ]

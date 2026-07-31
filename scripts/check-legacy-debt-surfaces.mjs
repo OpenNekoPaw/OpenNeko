@@ -734,7 +734,6 @@ function isBoundaryCanonicalizerSurface(lowerFile, lowerLine) {
       'canvaseditorprovider.ts',
       'engine/types.ts',
       'project-cache-search.ts',
-      'reference-resolution.ts',
       'asset/market.ts',
       'canvas-layered.ts',
       'canvas-playback.ts',

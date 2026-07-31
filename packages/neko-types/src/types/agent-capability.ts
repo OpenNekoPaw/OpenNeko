@@ -16,7 +16,6 @@ import type { PromptFragment } from './prompt-fragment';
 import type { ProviderCard, ProviderExpressionProfileDescriptor } from './provider-card';
 import type { ArtifactProfileDescriptor } from './composite-artifact';
 import type { PerceptionCapabilityFacet } from './comic-animation-indexing';
-import type { ReferenceContributorManifest } from './reference-resolution';
 import type { AgentCapabilityLifecycleDescriptor } from './agent-capability-lifecycle';
 import type { AgentReferenceContributor } from './reference-contributor';
 
@@ -172,7 +171,6 @@ export interface AgentArtifactFacetsContribution {
   readonly capabilities?: readonly AgentArtifactExecutionCapabilityContribution[];
   readonly lifecycleCapabilities?: readonly AgentCapabilityLifecycleDescriptor[];
   readonly perceptionCapabilities?: readonly PerceptionCapabilityFacet[];
-  readonly referenceContributors?: readonly ReferenceContributorManifest[];
 }
 
 /** Pure bounded text completion. Domain code owns prompts and receives no LLM identity. */
