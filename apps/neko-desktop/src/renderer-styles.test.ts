@@ -127,5 +127,14 @@ describe('Desktop renderer styles', () => {
     expect(packageStyles).toMatch(
       /\.global-library-browser__collection\s*\{[\s\S]*?padding\s*:\s*10px 16px 16px/u,
     );
+    expect(packageStyles).toMatch(
+      /\.global-library-browser__search\s*\{[\s\S]*?max-width\s*:\s*760px/u,
+    );
+    expect(packageStyles).toMatch(
+      /\.global-library-browser__loading,[\s\S]*?\.global-library-browser__empty\s*\{[\s\S]*?flex\s*:\s*1/u,
+    );
+    expect(packageStyles).toMatch(
+      /\.global-library-browser__loading,[\s\S]*?\.global-library-browser__empty\s*\{[\s\S]*?place-items\s*:\s*center/u,
+    );
   });
 });

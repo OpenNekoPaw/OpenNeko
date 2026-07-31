@@ -65,6 +65,7 @@
 .global-library-browser__search {
   display: flex;
   min-width: 180px;
+  max-width: 760px;
   flex: 1;
   align-items: center;
   gap: 7px;
@@ -318,6 +319,10 @@
 
 .global-library-browser__loading,
 .global-library-browser__empty {
+  display: grid;
+  min-height: 0;
+  flex: 1;
+  place-items: center;
   color: var(--neko-text-secondary, #6c7178);
 }
 
@@ -350,5 +355,6 @@
 
   .global-library-browser__search {
     min-width: 100%;
+    max-width: none;
   }
 }
