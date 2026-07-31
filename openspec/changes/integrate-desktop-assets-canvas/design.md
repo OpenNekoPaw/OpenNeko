@@ -21,7 +21,7 @@ thumbnail/metadata 和 ContentLocator 服务混在同一源码树。Canvas 已�
 
 **Goals:**
 
-- 以一级侧边栏、主创作区、Agent/Resource Dock 和保留 Timeline slot 替换当前视觉布局，
+- 以一级侧边栏、主创作区、Agent Dock、Resource Browser Main View 和保留 Timeline slot 替换当前视觉布局，
   同时保留 Window 内部 ProjectTab/View identity 与 snapshot/CAS 恢复语义。
 - 建立 Assets-owned browser-safe Resource Browser Root 和 host-neutral presenter。
 - 建立 versioned Canvas host runtime contract，让 `CanvasWebviewRoot` 通过显式 prop/context
@@ -38,7 +38,7 @@ thumbnail/metadata 和 ContentLocator 服务混在同一源码树。Canvas 已�
 - 不实现任意 Dock tree、无限 editor group、同一文档多 View 或实时协作。
 - 不改变 `.nkc` codec、Canvas node canonical model、Media Library link model 或 Entity authority。
 - 不创建 Desktop-only asset catalog、Canvas document store、文件 IO、thumbnail cache 或搜索索引。
-- 不把 Character 建模为 Canvas node；Resource Dock 只投影 Entity，并允许显式 Agent/Chara
+- 不把 Character 建模为 Canvas node；Resource Browser 只投影 Entity，并允许显式 Agent/Chara
   handoff 在对应 slice ready 后启用。
 
 ## Decisions
@@ -53,9 +53,9 @@ Window-owned workbench projection 记录最小展示语义：
 
 ```text
 primarySidebar.visible
-resourceDock.visible / position / width / presentation
+legacyResourceDock.hidden
 agentView.presentation(main|dock) / dockPosition / width
-mainViews[] / activeMainViewId / optional split
+mainViews[canvas|preview|cut|resource-browser] / activeMainViewId / optional split
 timeline.visible / height
 layoutPreset
 ```
@@ -77,15 +77,10 @@ Phase 1 提供固定 preset：
 - Canvas + Preview（P1.5 激活）；
 - Canvas + Cut（P1.5 激活）。
 
-Resource/Agent Dock 只允许 left/right，主区只允许一个主 View 加一个显式 side View，Timeline
-只在底部。宽度不足时次要 Dock 转为明确 overlay 或隐藏；不通过无限压缩主区维持所有面板。
-
-Agent Dock 与 Resource Dock 是两个独立侧边栏 owner，不得因为请求了同一 position 而被包装
-进一个纵向 stack、共用宽度或共用 resize owner。当两者同时可见且恢复出的 position 冲突时，
-Desktop 使用一个确定性展示归一化：Agent 保留 Chat preset 声明的位置，Resource Dock 移到
-另一侧；后续 Chat placement 和 Resource reveal transition 同样写入该互斥位置。该归一化只
-修改 Window-owned presentation state，不移动 Resource selection、query、Entity、Conversation
-或其他领域事实。
+Agent Dock 只允许 left/right，主区只允许一个主 View 加一个显式 side View，Timeline 只在
+底部。Resource Browser 与 Canvas/Preview/Cut 一样使用通用 Main View/Group/Tab contract；
+一级导航只发出 open-or-focus intent，不创建第二个 sidebar owner。旧 `resourceDock`
+presentation 仅作为 schema 迁移输入保留并归一化为 hidden，renderer 不再消费。
 
 `@neko/ui` 的 `EditorWorkbenchShell` 将增强为 slot/presentation primitive；Desktop 保留
 产品级组合和 i18n，功能包不依赖 Desktop CSS。
@@ -232,7 +227,7 @@ Electron fixture 场景覆盖：
 
 ```text
 open project
-  -> reveal Resource Dock
+  -> open Resource Browser Main View
   -> search/import linked media
   -> create/open Canvas
   -> place resource
@@ -260,8 +255,9 @@ Home 与 Content Project 的一级侧边栏使用同一个信息架构和视觉 
 增加当前项目激活/关闭语义，不再展示一组名为“创作区域”的 Agent/Canvas/Assets capability
 卡片；创作 View 的组合继续由主面板 display menu 和各 owning package 的局部 Tab/工具栏拥有。
 
-资产中心是一级导航入口，但 Resource Browser 仍是独立、可调整宽度的 owner sidebar，不得
-嵌入 Agent Dock。折叠控制只存在于品牌区，底部只保留 attention、display、timeline 和统一
+资产中心是一级导航入口；在 Content Project 中它打开或聚焦独立 Resource Browser Main View，
+在 Home 中进入全局素材中心。Resource Browser 不得嵌入 Agent Dock 或创建项目 Resource Dock。
+折叠控制只存在于品牌区，底部只保留 attention、display、timeline 和统一
 Desktop 设置等实际可用的全局控制，不重复放置折叠或资源入口。Plugin/Skill 等未来入口只有
 在 Desktop 存在真实 owner route 与 capability 后才可显示为可操作项，不得用 no-op 按钮模拟。
 
@@ -350,7 +346,7 @@ Portal content 中读取只定义于 `.canvas-webview-root` 的 toolbar/control/
 2. 扩展 Shell L0 projection/CAS 和 `@neko/ui` slot primitive，迁移视觉 Project Tabs/Activity Rail。
 3. 提取 Assets host-neutral services/presenter 和 browser Root；让 VS Code adapter消费它。
 4. 定义 Canvas runtime contract，迁移完整 Root 与 VS Code adapter，poison demo/global path。
-5. 接入 Desktop Main/preload/renderer、Resource Dock、Canvas View switcher和authoring intent。
+5. 接入 Desktop Main/preload/renderer、Resource Browser Main View、Canvas View switcher和authoring intent。
 6. 完成 deterministic、VS Code EDH、Electron fixture、package/build 和 quality gates后，将
    P1.4 capability 标记 ready，并勾选 program 4.x。
 

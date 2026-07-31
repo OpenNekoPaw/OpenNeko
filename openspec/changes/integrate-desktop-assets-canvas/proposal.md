@@ -2,7 +2,7 @@
 
 Desktop P1.3 已接通真实 Agent/Home，但 Content Project 仍以 Agent 为唯一主 Surface，
 Assets/Media Library 和 Canvas 只显示 unavailable。当前 Shell 还保留顶部 Project Tabs、
-窄 Activity Rail 和固定 Context Dock，与已经确定的一级侧边栏、Resource Dock、多文档
+窄 Activity Rail 和固定 Context Dock，与已经确定的一级侧边栏、Resource Browser Main View、多文档
 Canvas 和受控创作布局不一致。继续添加视觉占位会形成第二套资源、文件 IO 和 Canvas 状态，
 无法完成 Phase 1 的真实创作路径。
 
@@ -18,12 +18,12 @@ Canvas 和受控创作布局不一致。继续添加视觉占位会形成第二�
 - 接通资源搜索、预览意图、拖放/添加、Canvas 持久化、重新打开、candidate/accept 和
   Workspace Board delivery 的唯一 canonical path。
 - **BREAKING** 将 Desktop Content Project 的视觉布局从顶部 Project Tabs + Activity Rail +
-  固定 Context Dock 收敛为可显隐一级侧边栏、主创作区、可控 Agent/Resource Dock 和保留的
+  固定 Context Dock 收敛为可显隐一级侧边栏、主创作区、可控 Agent Dock、Resource Browser Main View 和保留的
   Timeline slot；Window 内部仍保留 ProjectTab/View identity 作为恢复契约，但不渲染第二套
   顶层项目 Tab。
 - 为不同 Canvas 文档增加紧凑 View switcher、重复打开聚焦和显式双栏；Phase 1 最多同时
   渲染两个不同 Board，同一 Board 不创建重复 View。
-- Resource Dock 增加 Files/Media/Entity 分区；Character 仅作为 Entity projection，
+- Resource Browser Main View 增加 Files/Media/Entity 分区；Character 仅作为 Entity projection，
   不创建 Chara 素材 catalog 或未实现的 CharacterProject/Version。
 - Canvas 音视频节点和 Resource Browser 图片/音频/视频资源增加 package-owned 悬停预览；
   悬停只创建临时媒体会话，离开、切换条目或卸载时立即停止并释放，不打开 Workbench
@@ -35,7 +35,7 @@ Canvas 和受控创作布局不一致。继续添加视觉占位会形成第二�
 
 ### New Capabilities
 
-- `desktop-creative-workbench-layout`: 定义一级侧边栏、主创作区、Agent/Resource Dock、
+- `desktop-creative-workbench-layout`: 定义一级侧边栏、主创作区、Agent Dock、Resource Browser Main View、
   Canvas View switcher、受控双栏和小窗口 overlay 的 Desktop 布局与状态所有权。
 - `desktop-assets-canvas-integration`: 定义 Assets browser Root、Desktop content bridge、
   Canvas Host adapter、资源到 Canvas authoring、持久化和 canonical-path 验收。

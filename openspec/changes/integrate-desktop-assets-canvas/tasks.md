@@ -13,7 +13,7 @@
 ## 2. Controlled Desktop Workbench
 
 - [x] 2.1 Enhance the existing `@neko/ui` workbench primitive with primary sidebar, controlled
-      Agent/Resource Dock, bounded Main split, Timeline slot and compact/overlay presentation without
+      Agent Dock, bounded Main split, Timeline slot and compact/overlay presentation without
       adding domain semantics
 - [x] 2.2 Extend Window layout projection and revision/CAS persistence for sidebar visibility, dock
       positions/sizes, Agent main/dock presentation, Main Views/split and Timeline visibility/height
@@ -39,7 +39,7 @@
       duplicate identity/search rules
 - [x] 3.4 Implement Desktop Main/preload fixed Assets namespace, sender-derived authorization,
       source picker, search, reveal and projected thumbnail/metadata effects
-- [x] 3.5 Mount Resource Browser Root in Resource Dock and implement selection, search, refresh,
+- [x] 3.5 Mount Resource Browser Root in its Workbench Main View and implement selection, search, refresh,
       preview intent and explicit add-to-Canvas target actions
 - [x] 3.6 Test linked libraries, Entity bindings, locator containment, symlink escape, projection
       authorization, cancellation, unavailable Chara actions and no path leakage
@@ -85,7 +85,7 @@
 - [x] 6.4 Record the explicit Desktop-only acceptance waiver: the user excluded VS Code plugin
       runtime testing, so no Extension Development Host evidence is claimed and that runtime remains
       a documented residual risk
-- [x] 6.5 Validate the packaged Electron Project → Resource Dock → Canvas add/undo → package-owned
+- [x] 6.5 Validate the packaged Electron Project → Resource Browser Main View → Canvas add/undo → package-owned
       Preview scenario, and cover save/reopen plus dual-Canvas isolation through canonical-path tests
 - [x] 6.6 Run `pnpm build`, `pnpm test`, `pnpm check`, `pnpm check:quality` and `git diff --check`;
       update current-capability docs and mark Phase 1 program 4.x only when every gate passes
@@ -101,16 +101,15 @@
       `project:addSource` route with a portable ContentLocator drag contract and the owning Canvas
       Host `project-content` intent at the actual drop position; cover payload privacy and path use
 
-## 7. Independent Agent And Resource Sidebars
+## 7. Superseded Resource Dock Migration
 
-- [x] 7.1 Add a red-capable Desktop Shell regression proving visible Agent and Resource owners never
-      render in one vertical dock stack or share one resize owner.
-- [x] 7.2 Replace the multi-owner `project-dock-stack` path with deterministic independent left/right
-      sidebar placement while preserving each owner Root, width and visibility.
-- [x] 7.3 Normalize Chat placement and Resource reveal transitions so a same-side restored layout
-      keeps Agent on the declared Chat side and places Resource on the opposite side.
+- [x] 7.1 Preserve the historical regression proving Agent and Resource owners never share a stacked
+      Dock while migrating the Resource owner to a Main View.
+- [x] 7.2 Remove the project Resource Dock renderer path and retain Agent as the only side Dock owner.
+- [x] 7.3 Normalize restored legacy Resource Dock presentation to hidden and route Resource reveal to
+      Main View open/focus.
 - [x] 7.4 Run Desktop and shared UI tests/typecheck, strict OpenSpec validation, production Electron
-      packaging and a real Desktop scenario with Agent and Resource visible together.
+      packaging and a real Desktop scenario with Agent Dock plus Resource Browser Main View.
 
 ## 8. Unified Primary Navigation
 
@@ -118,7 +117,7 @@
       Creative surfaces section and a non-duplicated footer.
 - [x] 8.2 Reuse one primary sidebar structure and style contract for Home and Content Project,
       including brand/collapse, Start creating, Activity, Asset center and authoritative recents.
-- [x] 8.3 Route Project Asset center to the independent Resource Browser, preserve Project
+- [x] 8.3 Route Project Asset center to the independent Resource Browser Main View, preserve Project
       activation/close semantics, and reduce the footer to real attention/display/timeline/settings
       controls without simulated Plugin/Skill actions.
 - [x] 8.4 Run Desktop tests/typecheck, strict OpenSpec validation, production package build and a

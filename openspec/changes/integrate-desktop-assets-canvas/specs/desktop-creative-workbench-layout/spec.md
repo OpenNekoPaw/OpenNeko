@@ -26,21 +26,20 @@ SHALL live in the primary sidebar or the relevant panel header.
 
 ### Requirement: Creative workbench uses controlled owner-neutral slots
 
-Desktop SHALL provide Main Creative Surface, Agent Dock, Resource Dock and Cut Timeline Panel slots.
+Desktop SHALL provide Main Creative Surface, Agent Dock and Cut Timeline Panel slots.
 Agent placement SHALL be selected only through declared Chat + Main left/right presets; Desktop SHALL
-not expose separate move-left/right toolbar buttons for Agent or Resource. Resource Dock SHALL remain
-an independent hideable facet region. Main SHALL support at most one explicit side split; Timeline
+not expose separate move-left/right toolbar buttons for Agent. Resource Browser SHALL be an independent
+Main View using the same View/Group/Tab lifecycle as Canvas, Preview and Cut. Main SHALL support at most one explicit side split; Timeline
 SHALL support bottom visibility and height. Slot state MUST contain only presentation and View identity.
 
-Agent Dock and Resource Dock MUST render as two independent sidebar regions. They MUST NOT share one
-vertical stack, one width, one resize owner or one panel scroll container. When both are visible and a
-restored or requested layout places them on the same side, Desktop SHALL keep Agent on the declared
-Chat side and deterministically place Resource Dock on the opposite side.
+Desktop MUST NOT mount the project Resource Browser from legacy Resource Dock presentation state.
+Selecting project resources SHALL open or focus exactly one `resource-browser` Main View while keeping
+other creative Main Views available as tabs.
 
 The display menu SHALL compose Chat + Main, only Chat or only Main. Main SHALL reuse owner Views for
-Canvas, Cut Stage + Timeline, Model Preview, Canvas + Timeline or Canvas + Model. Agent SHALL not be
-embedded in Main Creative Surface. Files, Media and Entity SHALL remain independently selectable
-Resource facets outside display presets.
+Canvas, Cut Stage + Timeline, Model Preview, Resource Browser, Canvas + Timeline or Canvas + Model.
+Agent SHALL not be embedded in Main Creative Surface. Files, Media and Entity SHALL remain independently
+selectable facets inside the Assets-owned Resource Browser Root.
 
 #### Scenario: User switches to Canvas and Agent layout
 
@@ -56,12 +55,12 @@ Resource facets outside display presets.
 - **AND** no separate move-left/right button is rendered
 - **AND** Resource projection, selection and workspace facts are not copied into layout state
 
-#### Scenario: Agent and Resource docks are both visible
+#### Scenario: Project resources open from primary navigation
 
-- **WHEN** a restored layout or user action requests visible Agent and Resource docks on the same side
-- **THEN** Desktop renders Agent and Resource as separate sidebars on opposite sides of Main
-- **AND** each sidebar keeps its own width, resize handle, owner projection and scroll container
-- **AND** Desktop does not create a stacked Agent-and-Resource panel or resize both owners together
+- **WHEN** the user selects Asset center while a Content Project is active
+- **THEN** Desktop opens or focuses one Resource Browser Main View
+- **AND** Canvas and other Main Views remain available as tabs
+- **AND** no project Resource Dock or second Assets Root is mounted
 
 #### Scenario: Canvas and Model tools are repositioned
 
@@ -78,7 +77,7 @@ Projects and recent Agent conversations from the authoritative Shell projection.
 
 Content Project SHALL NOT render a separate Creative surfaces/capability section. Agent, Canvas,
 Preview, Cut/Timeline and Model view composition SHALL remain in the display menu or the owning
-surface. Asset center SHALL reveal the independent Resource sidebar. The primary navigation footer
+surface. Asset center SHALL open or focus the project Resource Browser Main View. The primary navigation footer
 SHALL NOT duplicate collapse or Asset center controls, and SHALL only expose real Desktop-owned
 status, display, timeline and settings actions.
 
