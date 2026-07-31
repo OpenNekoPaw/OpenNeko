@@ -31,11 +31,12 @@ workspace-linked Media Library, Search, Entity and metadata services. Desktop SH
 through public contracts and MUST NOT import VS Code TreeView providers, commands or Extension
 implementation.
 
-#### Scenario: Resource Browser Main View opens
+#### Scenario: Project Resource Dock opens
 
-- **WHEN** a Content Project with complete Assets effects opens its Resource Browser Main View
+- **WHEN** a Content Project with complete Assets effects reveals its right Resource Dock
 - **THEN** the Assets Root obtains a snapshot containing stable resource and Entity identities
 - **AND** no absolute path, VS Code object, Host handle or duplicate asset catalog enters renderer state
+- **AND** no Resource Browser Main View or primary-navigation destination is created
 
 #### Scenario: Character resources are listed
 

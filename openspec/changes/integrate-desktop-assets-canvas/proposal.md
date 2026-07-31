@@ -2,9 +2,10 @@
 
 Desktop P1.3 已接通真实 Agent/Home，但 Content Project 仍以 Agent 为唯一主 Surface，
 Assets/Media Library 和 Canvas 只显示 unavailable。当前 Shell 还保留顶部 Project Tabs、
-窄 Activity Rail 和固定 Context Dock，与已经确定的一级侧边栏、Resource Browser Main View、多文档
-Canvas 和受控创作布局不一致。继续添加视觉占位会形成第二套资源、文件 IO 和 Canvas 状态，
-无法完成 Phase 1 的真实创作路径。
+窄 Activity Rail 和固定 Context Dock，与已经确定的一级侧边栏、多文档 Canvas 和受控创作
+布局不一致。后续实现又把 Project Resource Browser 迁入 Main View/Tab 并加入一级侧边栏，
+导致项目上下文工具替换主创作内容，也与全局 Asset center 争用一级导航语义。继续保留该
+路径会让 Project Resource Browser 错误继承文档 Tab 生命周期。
 
 ## What Changes
 
@@ -18,16 +19,16 @@ Canvas 和受控创作布局不一致。继续添加视觉占位会形成第二�
 - 接通资源搜索、预览意图、拖放/添加、Canvas 持久化、重新打开、candidate/accept 和
   Workspace Board delivery 的唯一 canonical path。
 - **BREAKING** 将 Desktop Content Project 的视觉布局从顶部 Project Tabs + Activity Rail +
-  固定 Context Dock 收敛为可显隐一级侧边栏、主创作区、可控 Agent Dock、Resource Browser Main View 和保留的
-  Timeline slot；Window 内部仍保留 ProjectTab/View identity 作为恢复契约，但不渲染第二套
-  顶层项目 Tab。
+  固定占位 Context Dock 收敛为可显隐一级侧边栏、主创作区、可控 Agent Dock、固定右侧
+  Project Resource Dock 和保留的 Timeline slot；Window 内部仍保留 ProjectTab/View
+  identity 作为恢复契约，但不渲染第二套顶层项目 Tab。
 - 为不同 Canvas 文档增加紧凑 View switcher、重复打开聚焦和显式双栏；Phase 1 最多同时
   渲染两个不同 Board，同一 Board 不创建重复 View。
-- Resource Browser Main View 增加 Files/Media/Entity 分区；Character 仅作为 Entity projection，
+- Project Resource Dock 增加 Files/Media/Entity 分区；Character 仅作为 Entity projection，
   不创建 Chara 素材 catalog 或未实现的 CharacterProject/Version。
-- 将全局资产中心与项目资源管理器拆成两个稳定导航 destination：全局资产中心在 Home/Project
-  上下文中始终进入全局 Media Library / Asset Library，项目资源入口只投影当前
-  Project/Workspace 的 Resource Browser Main View；两者不共享命令、激活态或 View identity。
+- 将全局资产中心与项目资源管理器拆成两个稳定 presentation owner：全局资产中心在
+  Home/Project 上下文中始终作为一级导航进入全局 Media Library / Asset Library；项目资源
+  只作为当前 Project/Workspace 的右侧 Context Dock，不进入一级导航或 Main View/Tab。
 - 保证开发期共享 Desktop Home contract 重新构建时 Main/preload/renderer 作为同一版本
   生命周期切换，禁止新 preload 请求命中旧 Main parser；真实 renderer 必须加载
   Assets-owned Global Library stylesheet，不能把源文件静态存在误判为运行态样式生效。
@@ -41,8 +42,9 @@ Canvas 和受控创作布局不一致。继续添加视觉占位会形成第二�
 
 ### New Capabilities
 
-- `desktop-creative-workbench-layout`: 定义一级侧边栏、主创作区、Agent Dock、Resource Browser Main View、
-  Canvas View switcher、受控双栏和小窗口 overlay 的 Desktop 布局与状态所有权。
+- `desktop-creative-workbench-layout`: 定义一级侧边栏、主创作区、Agent Dock、右侧 Project
+  Resource Dock、Canvas View switcher、受控双栏和小窗口 overlay 的 Desktop 布局与状态
+  所有权。
 - `desktop-assets-canvas-integration`: 定义 Assets browser Root、Desktop content bridge、
   Canvas Host adapter、资源到 Canvas authoring、持久化和 canonical-path 验收。
 

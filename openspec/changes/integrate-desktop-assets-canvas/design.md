@@ -21,8 +21,9 @@ thumbnail/metadata 和 ContentLocator 服务混在同一源码树。Canvas 已�
 
 **Goals:**
 
-- 以一级侧边栏、主创作区、Agent Dock、Resource Browser Main View 和保留 Timeline slot 替换当前视觉布局，
-  同时保留 Window 内部 ProjectTab/View identity 与 snapshot/CAS 恢复语义。
+- 以一级侧边栏、主创作区、Agent Dock、固定右侧 Project Resource Dock 和保留 Timeline
+  slot 替换当前视觉布局，同时保留 Window 内部 ProjectTab/View identity 与 snapshot/CAS
+  恢复语义。
 - 建立 Assets-owned browser-safe Resource Browser Root 和 host-neutral presenter。
 - 建立 versioned Canvas host runtime contract，让 `CanvasWebviewRoot` 通过显式 prop/context
   消费，不再在模块加载时获取 VS Code API。
@@ -53,9 +54,9 @@ Window-owned workbench projection 记录最小展示语义：
 
 ```text
 primarySidebar.visible
-legacyResourceDock.hidden
+resourceDock.presentation / width
 agentView.presentation(main|dock) / dockPosition / width
-mainViews[canvas|preview|cut|resource-browser] / activeMainViewId / optional split
+mainViews[canvas|preview|cut] / activeMainViewId / optional split
 timeline.visible / height
 layoutPreset
 ```
@@ -78,9 +79,11 @@ Phase 1 提供固定 preset：
 - Canvas + Cut（P1.5 激活）。
 
 Agent Dock 只允许 left/right，主区只允许一个主 View 加一个显式 side View，Timeline 只在
-底部。Resource Browser 与 Canvas/Preview/Cut 一样使用通用 Main View/Group/Tab contract；
-一级导航只发出 open-or-focus intent，不创建第二个 sidebar owner。旧 `resourceDock`
-presentation 仅作为 schema 迁移输入保留并归一化为 hidden，renderer 不再消费。
+底部。Project Resource Browser 使用固定右侧 Context Dock，不进入通用 Main
+View/Group/Tab contract，也不进入一级导航。`resourceDock` 是 Window-owned canonical
+presentation state；它只保存 `hidden|docked|overlay` 与宽度，不保存资源查询、目录或选择。
+资源可见时 Agent 的 Chat + Main 位置必须归一化到左侧，不能移动 Resource Dock、纵向堆叠
+两个 owner 或共享 resize/scroll owner。
 
 `@neko/ui` 的 `EditorWorkbenchShell` 将增强为 slot/presentation primitive；Desktop 保留
 产品级组合和 i18n，功能包不依赖 Desktop CSS。
@@ -227,7 +230,7 @@ Electron fixture 场景覆盖：
 
 ```text
 open project
-  -> open Resource Browser Main View
+  -> reveal Project Resource Dock
   -> search/import linked media
   -> create/open Canvas
   -> place resource
@@ -256,18 +259,18 @@ Home 与 Content Project 的一级侧边栏使用同一个信息架构和视觉 
 卡片；创作 View 的组合继续由主面板 display menu 和各 owning package 的局部 Tab/工具栏拥有。
 
 资产中心是稳定的全局一级导航入口；无论当前处于 Home 还是 Content Project，它都进入全局
-Media Library / Asset Library，不根据当前 Project 重载命令语义。Content Project 在共享
-sidebar 的中性 context slot 中增加独立“项目资源”入口，该入口携带明确 Project/Workspace
-identity，并打开或聚焦项目 Resource Browser Main View。两个入口不得共享 active key、
-View identity、owner lifecycle 或数据投影；项目 Resource Browser 激活时不得高亮全局资产中心。
-Resource Browser 不得嵌入 Agent Dock 或创建项目 Resource Dock。
+Media Library / Asset Library，不根据当前 Project 重载命令语义。Project Resource Browser
+不加入共享一级 sidebar；它由项目工作区右上角 panel control 显隐，并在右侧 panel header
+提供关闭操作。两个 surface 不共享 active key、View identity、owner lifecycle 或数据投影；
+项目资源可见时不得高亮全局资产中心。Resource Browser 不得嵌入 Agent Dock 或 Main
+View/Tab。
 折叠控制只存在于品牌区，底部只保留 attention、display、timeline 和统一
 Desktop 设置等实际可用的全局控制，不重复放置折叠或资源入口。Plugin/Skill 等未来入口只有
 在 Desktop 存在真实 owner route 与 capability 后才可显示为可操作项，不得用 no-op 按钮模拟。
 
-共享 sidebar 只拥有品牌、布局、可访问性和无业务 navigation item primitive。Project
-destination 由 Project composition 注入，避免通用 Application sidebar 依赖 Project
-workbench contract；全局 destination 继续由 Shell/Home action owner 处理。
+共享 sidebar 只拥有品牌、布局、可访问性和全局 navigation item primitive，不接收 Project
+Resource destination slot。项目工作区局部 panel control 由 Project composition 注入，
+全局 destination 继续由 Shell/Home action owner 处理。
 
 ### 11. 悬停预览使用临时、owner-released 媒体会话
 
@@ -296,6 +299,24 @@ Canvas Webview 的 Host boundary decoder 必须接受并保留 `@neko/media` 声
 `authorized`。decoder 必须同时校验 transport 与 URL scheme/authority 一致，且回归测试
 必须使用 Desktop 实际返回的 `authorized` + `neko-media://desktop/...` 描述符并断言
 package-owned player 已挂载；只断言 `media:play` 发出不能作为播放成功证据。
+
+### 15. Project Resource Browser 恢复为固定右侧 Context Dock
+
+Project Resource Browser 是当前 Project/Workspace 的辅助上下文，不是文档或创作 Main
+View。Desktop 继续挂载同一个 Assets-owned `ResourceBrowserRoot`，但其 sender-bound
+identity 由 Window-owned Project View 派生为 `resource-browser:<projectViewId>`；显隐不会
+创建、关闭或聚焦 Main View，也不会重建 Project attachment。
+
+Workbench contract 升级到 v3：`DesktopWorkbenchViewKind` 只允许 Canvas、Preview 和 Cut，
+`resourceDock` 只保存 presentation 与 width，且几何位置固定为右侧。v2 migration 若发现
+`resource-browser` Main View，必须从 Main groups 中移除它，并把 `resourceDock` 投影为
+`docked`；v3 parser 必须拒绝该 kind，renderer 和 Host 都不得保留可返回成功的 Main View
+fallback。
+
+资源显隐入口位于项目工作区右上角的 right-panel icon control，侧栏 header 提供关闭按钮。
+普通宽度使用独立可调整的右侧 dock；窄窗口使用右侧 overlay。若 Chat + Main 请求 Agent
+位于右侧，Shell 将 Agent 归一化到左侧，资源侧栏不移动到左侧、不与 Agent 纵向堆叠，也不
+共享 width、resize handle 或滚动容器。
 
 ### 12. 结构化拖放生命周期只有一个 owner
 
@@ -364,6 +385,8 @@ Global Library 的结构与样式继续由 `neko-assets/global-library/root` 拥
   同一 Board duplicate focus。
 - [Character facet 被误解为 Character Studio] → 只投影 Entity facts/bindings和 unavailable
   Chara actions，不创建 CharacterProject/Version 或角色运行状态。
+- [已持久化 Resource Browser Main View] → v2→v3 显式迁移为右侧 dock presentation，并在
+  v3 parser、renderer 和 Host 路径测试中 poison `resource-browser` Main View success。
 - [现有工作树已有大量 P1.3 修改] → 修改限定在新增 P1.4 artifacts/entry 和必要共享 contract，
   不回滚或重写 P1.3 用户改动。
 
@@ -373,9 +396,12 @@ Global Library 的结构与样式继续由 `neko-assets/global-library/root` 拥
 2. 扩展 Shell L0 projection/CAS 和 `@neko/ui` slot primitive，迁移视觉 Project Tabs/Activity Rail。
 3. 提取 Assets host-neutral services/presenter 和 browser Root；让 VS Code adapter消费它。
 4. 定义 Canvas runtime contract，迁移完整 Root 与 VS Code adapter，poison demo/global path。
-5. 接入 Desktop Main/preload/renderer、Resource Browser Main View、Canvas View switcher和authoring intent。
+5. 接入 Desktop Main/preload/renderer、Project Resource Dock、Canvas View switcher 和
+   authoring intent。
 6. 完成 deterministic、VS Code EDH、Electron fixture、package/build 和 quality gates后，将
    P1.4 capability 标记 ready，并勾选 program 4.x。
+7. 将错误引入的 `resource-browser` Main View 与一级 Project resources 入口迁移回固定右侧
+   Context Dock，并删除本次边界内的旧成功路径。
 
 回退只能把 Assets/Canvas capability 恢复为明确 unavailable；不得恢复旧 visual mock、
 Desktop-only store 或 VS Code fallback。现有 `.nkc`、Media Library link、Entity binding 和

@@ -26,18 +26,20 @@ SHALL live in the primary sidebar or the relevant panel header.
 
 ### Requirement: Creative workbench uses controlled owner-neutral slots
 
-Desktop SHALL provide Main Creative Surface, Agent Dock and Cut Timeline Panel slots.
+Desktop SHALL provide Main Creative Surface, Agent Dock, fixed-right Project Resource Dock and Cut
+Timeline Panel slots.
 Agent placement SHALL be selected only through declared Chat + Main left/right presets; Desktop SHALL
-not expose separate move-left/right toolbar buttons for Agent. Resource Browser SHALL be an independent
-Main View using the same View/Group/Tab lifecycle as Canvas, Preview and Cut. Main SHALL support at most one explicit side split; Timeline
-SHALL support bottom visibility and height. Slot state MUST contain only presentation and View identity.
+not expose separate move-left/right toolbar buttons for Agent. Main SHALL support at most one explicit
+side split; Timeline SHALL support bottom visibility and height. Resource Dock state MUST contain
+only presentation and width; resource query, directory, selection and projection remain Assets-owned.
 
-Desktop MUST NOT mount the project Resource Browser from legacy Resource Dock presentation state.
-Selecting project resources SHALL open or focus exactly one `resource-browser` Main View while keeping
-other creative Main Views available as tabs.
+Desktop MUST mount the package-owned Project Resource Browser only in the fixed-right Resource Dock.
+It MUST NOT register `resource-browser` as a Main View kind, render it as a Main Tab, add Project
+resources to primary navigation or move the Resource Dock to the left. When Agent and Resource would
+occupy the right side, Agent SHALL move to the left while Resource remains right.
 
 The display menu SHALL compose Chat + Main, only Chat or only Main. Main SHALL reuse owner Views for
-Canvas, Cut Stage + Timeline, Model Preview, Resource Browser, Canvas + Timeline or Canvas + Model.
+Canvas, Cut Stage + Timeline, Model Preview, Canvas + Timeline or Canvas + Model.
 Agent SHALL not be embedded in Main Creative Surface. Files, Media and Entity SHALL remain independently
 selectable facets inside the Assets-owned Resource Browser Root.
 
@@ -55,12 +57,18 @@ selectable facets inside the Assets-owned Resource Browser Root.
 - **AND** no separate move-left/right button is rendered
 - **AND** Resource projection, selection and workspace facts are not copied into layout state
 
-#### Scenario: Project resources open from primary navigation
+#### Scenario: User reveals Project resources
 
-- **WHEN** the user selects Project resources while a Content Project is active
-- **THEN** Desktop opens or focuses one Resource Browser Main View
-- **AND** Canvas and other Main Views remain available as tabs
-- **AND** no project Resource Dock or second Assets Root is mounted
+- **WHEN** the user activates the project-local right-panel control
+- **THEN** Desktop reveals one package-owned Resource Browser in the right Dock
+- **AND** Canvas and other Main Views remain unchanged and visible
+- **AND** no Main Tab, primary-navigation item or second Assets Root is mounted
+
+#### Scenario: Agent and Project resources are both visible
+
+- **WHEN** a layout requests Chat on the right while the Project Resource Dock is visible
+- **THEN** Desktop keeps Project resources in the right Dock and places Agent on the left
+- **AND** the owners do not share width, resize handling, scrolling or a stacked sidebar
 
 #### Scenario: Canvas and Model tools are repositioned
 
@@ -78,10 +86,10 @@ Projects and recent Agent conversations from the authoritative Shell projection.
 Content Project SHALL NOT render a separate Creative surfaces/capability section. Agent, Canvas,
 Preview, Cut/Timeline and Model view composition SHALL remain in the display menu or the owning
 surface. Asset center SHALL remain a global destination and SHALL open the global Media Library /
-Asset Library in both Home and Content Project contexts. Content Project SHALL inject a separate
-Project resources destination that opens or focuses the exact Project/Workspace Resource Browser
-Main View. These destinations MUST NOT share commands, active state, View identity, lifecycle or data
-projection. The primary navigation footer
+Asset Library in both Home and Content Project contexts. Content Project SHALL NOT inject Project
+resources into primary navigation; its Resource Browser belongs to the project-local right Dock.
+The global destination and Project Dock MUST NOT share commands, active state, identity, lifecycle or
+data projection. The primary navigation footer
 SHALL NOT duplicate collapse or Asset center controls, and SHALL only expose real Desktop-owned
 status, display, timeline and settings actions.
 
@@ -98,13 +106,26 @@ status, display, timeline and settings actions.
 - **THEN** Desktop navigates to the global Media Library / Asset Library
 - **AND** it does not open, focus or activate the Project Resource Browser
 
-#### Scenario: User opens Project resources from Project navigation
+#### Scenario: Project resources remain outside primary navigation
 
-- **WHEN** the Project Resource capability is ready and the user selects Project resources
-- **THEN** Desktop opens or focuses the package-owned Resource Browser Main View with the exact
-  Project and Workspace identity
-- **AND** Project resources is active while Asset center remains inactive
-- **AND** Agent remains in its own sidebar and the footer does not render a second Resource button
+- **WHEN** a Content Project is active
+- **THEN** primary navigation does not render a Project resources destination
+- **AND** the project-local right-panel control reveals the exact Project/Workspace Resource Browser
+- **AND** Asset center remains the only resource-related primary destination
+
+### Requirement: Workbench v2 Resource Main Views migrate to the right Dock
+
+Desktop SHALL migrate persisted v2 Workbench state to v3 before rendering. A v2
+`resource-browser` Main View SHALL be removed from Main groups and converted to visible right
+Resource Dock presentation. The v3 parser and renderer MUST reject or poison any later attempt to
+attach a Resource Browser as a Main View.
+
+#### Scenario: Existing Resource Browser Main View is restored
+
+- **WHEN** Desktop reads v2 Workbench state containing a `resource-browser` Main View
+- **THEN** migration removes that View identity and repairs affected Main groups
+- **AND** the right Resource Dock becomes visible with its existing bounded width
+- **AND** no legacy Main View handler participates after migration
 
 ### Requirement: Narrow layouts preserve a usable main surface
 
