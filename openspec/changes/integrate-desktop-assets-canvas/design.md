@@ -122,8 +122,31 @@ Resource projection 使用稳定 `ContentLocator`、`CreativeEntityRef`、finger
 representation identity。缩略图使用 Host 授权 descriptor，不包含绝对路径、`file://`、
 cache path 或 token。
 
-Character 作为 Entity facet 投影，头像/声音/模型仍是 representation bindings。Chara
-runtime action 在 P1.6 之前显示明确 unavailable，不创建第二个角色 catalog。
+Project Resource Browser 只提供 `files | media | materials` 三个 facet，默认进入
+`files`；没有独立查询语义的 `all` 必须从 contract、controller 和 Root 中删除。
+`materials` 是工作区使用视图，不是全局 Asset Library 的副本：Phase 1 只组合 Entity
+authority 中已确认的 Creative Entity 及其有效 representation binding，头像、声音和模型
+仍是 representation。未来只有 Canvas/文档 owner 提供稳定、可查询的 usage index 时，才可
+把项目媒体引用加入该 facet；不得通过扫描目录或文件扩展名推断“已使用”。
+
+媒体库设置拆成两个显式 intent：
+
+```text
+source.link-global-library
+  -> Desktop Main lists global Media Library registry
+  -> sender-bound selection returns one library identity
+  -> workspace registry creates one project link
+
+source.add-directory-library
+  -> Desktop Main authorizes one selected directory
+  -> global Media Library registry creates the canonical library
+  -> workspace registry links the new library into this project
+```
+
+旧 `source.add` 不再是可成功的兼容入口。全局注册表拥有库的配置与目录 target，工作区注册表
+只拥有当前 Project 的链接；Resource Browser 不读取或修改全局资产中心的 UI projection、
+active state、筛选或生命周期。取消选择不推进 revision，陈旧 revision、无可用全局库、
+重复库名和 registry mutation failure 必须 fail-visible。
 
 ### 4. Canvas Root 接受显式 runtime，而不是全局 VS Code API
 
@@ -317,6 +340,18 @@ fallback。
 普通宽度使用独立可调整的右侧 dock；窄窗口使用右侧 overlay。若 Chat + Main 请求 Agent
 位于右侧，Shell 将 Agent 归一化到左侧，资源侧栏不移动到左侧、不与 Agent 纵向堆叠，也不
 共享 width、resize handle 或滚动容器。
+
+### 16. Project Resource facets 与媒体库设置保持 owner 分离
+
+Assets-owned Root 负责 Files/Media/Materials facet、添加菜单、国际化标签和显式 intent；
+Desktop Main 负责 sender-bound 全局库选择、目录授权以及两个 registry 的顺序化 mutation。
+Renderer 不接收全局库绝对路径，项目 projection 也不复制全局 catalog。关联已有全局库只
+建立工作区 link；从目录添加则先创建全局注册记录，再建立工作区 link，若第二步失败必须
+撤销本次新建的全局记录，避免出现界面报告失败但留下半完成配置。
+
+该交互复用现有 Assets toolbar/menu、Desktop global Media Library files service 和
+workspace-linked Media Library service。不得新增 Desktop-local Resource Browser Root、
+第二套媒体库 registry、renderer 文件选择能力或 active Asset center fallback。
 
 ### 12. 结构化拖放生命周期只有一个 owner
 

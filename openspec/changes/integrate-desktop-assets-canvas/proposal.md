@@ -24,8 +24,13 @@ Assets/Media Library 和 Canvas 只显示 unavailable。当前 Shell 还保留�
   identity 作为恢复契约，但不渲染第二套顶层项目 Tab。
 - 为不同 Canvas 文档增加紧凑 View switcher、重复打开聚焦和显式双栏；Phase 1 最多同时
   渲染两个不同 Board，同一 Board 不创建重复 View。
-- Project Resource Dock 增加 Files/Media/Entity 分区；Character 仅作为 Entity projection，
-  不创建 Chara 素材 catalog 或未实现的 CharacterProject/Version。
+- **BREAKING** Project Resource Dock 收敛为 Files/Media/Materials 三个互斥分区，删除没有
+  独立职责的 All 分区；Materials 复用 Creative Entity 与有效 representation binding，
+  不创建第二个素材 catalog，也不根据文件扩展名推断项目使用状态。
+- Project Resource Dock 提供两个显式媒体库设置动作：关联全局已配置媒体库，以及选择目录
+  创建并关联媒体库。全局媒体库注册表与工作区关联注册表保持独立 owner，项目侧只消费
+  library identity 并建立工作区关联，不共享全局资产中心的 projection、active state 或
+  生命周期。
 - 将全局资产中心与项目资源管理器拆成两个稳定 presentation owner：全局资产中心在
   Home/Project 上下文中始终作为一级导航进入全局 Media Library / Asset Library；项目资源
   只作为当前 Project/Workspace 的右侧 Context Dock，不进入一级导航或 Main View/Tab。

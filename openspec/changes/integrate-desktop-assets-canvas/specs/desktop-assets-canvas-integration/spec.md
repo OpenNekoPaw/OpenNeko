@@ -38,11 +38,43 @@ implementation.
 - **AND** no absolute path, VS Code object, Host handle or duplicate asset catalog enters renderer state
 - **AND** no Resource Browser Main View or primary-navigation destination is created
 
-#### Scenario: Character resources are listed
+#### Scenario: Workspace materials are listed
 
-- **WHEN** the Resource Browser selects its Character Entity facet
+- **WHEN** the Resource Browser selects its Materials facet
 - **THEN** it projects Creative Entity identity and representation bindings from Entity authority
-- **AND** it does not create a Chara asset category, CharacterProject, CharacterRun or inferred playable state
+- **AND** it does not create a duplicate Asset catalog, infer project usage from file extensions or
+  create a CharacterProject, CharacterRun or inferred playable state
+
+#### Scenario: Resource facets remain purposeful
+
+- **WHEN** the Project Resource Dock opens or changes facet
+- **THEN** it exposes exactly Files, Media and Materials and defaults to Files
+- **AND** no All or Entity facet remains accepted by the contract or rendered by the Root
+
+#### Scenario: User links a configured global Media Library
+
+- **WHEN** the user chooses to link a configured global Media Library at the current Resource Browser revision
+- **THEN** Desktop Main lists the global registry, selects one stable library identity and creates one
+  workspace-linked Media Library entry for the explicit Project
+- **AND** renderer receives no absolute target path or global Asset center projection
+- **AND** cancellation leaves both registries and the Resource Browser revision unchanged
+
+#### Scenario: User adds a directory as a Media Library
+
+- **WHEN** the user chooses a directory through the sender-bound Project Resource Browser action
+- **THEN** Desktop creates the canonical global Media Library connection and links that library into
+  the explicit workspace
+- **AND** the new library appears in the Project Media facet and remains independently configurable
+  in the global Asset center
+- **AND** a failed workspace link rolls back the newly created global connection instead of leaving a
+  partial successful configuration
+
+#### Scenario: Legacy generic source intent is submitted
+
+- **WHEN** a renderer submits `source.add`, an `all` facet or an `entities` facet
+- **THEN** the versioned Resource Browser contract rejects it visibly
+- **AND** it does not dispatch a directory picker, mutate either registry or fall back to an active
+  global Asset center
 
 ### Requirement: Desktop development keeps Home contract consumers coherent
 
