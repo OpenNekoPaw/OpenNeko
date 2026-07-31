@@ -2,32 +2,65 @@
 
 - 日期：2026-07-31
 - 范围：`openspec/changes/` 一级活动 change 与 `archive/`
-- 性质：当前治理快照，不作为长期架构事实或批量归档授权
-- 采集方式：按 change 目录、`tasks.md` 是否存在以及 checkbox 完成状态统计
+- 性质：带来源的治理快照，不作为长期架构事实或批量归档授权
+- 清理前 source revision：`7679faa1afd20307580c905a779424ed35e4503a`
+- 清理前采集时间：`2026-07-31T16:18:23+08:00`
+- 清理后采集时间：`2026-07-31T16:26:02+08:00`
+- 清理后 source revision：本文件所在提交；逐项目录与 successor 证据见
+  [`clean-openspec-active-area/disposition.md`](../../openspec/changes/archive/2026-07-31-clean-openspec-active-area/disposition.md)
+
+计数按一级 change 目录执行：`tasks.md` 无未勾选项记为 complete，仍有未勾选项记为
+incomplete，递归不存在任何文件的目录记为 artifact-free residue。工作区在采集期间包含
+另行开发中的 Desktop、Agent、Assets 和 media 改动；本批次明确排除这些 change，不以本快照
+处置其任务。
 
 ## 结果
 
-| 分类                 | 数量 | 判定                                                   |
-| -------------------- | ---: | ------------------------------------------------------ |
-| 活动 change 目录     |   95 | 不含 `archive/`，包含本次文档同步 change               |
-| 全部 checkbox 已完成 |   65 | 需要逐项确认实现、验证、稳定文档和归档条件             |
-| 仍有未完成 checkbox  |   23 | 保持活动，但必须检查是否仍符合 Desktop-only 当前架构   |
-| 缺少 `tasks.md`      |    7 | 需要判断是旧格式、未完成提案、重复变更还是应删除的残留 |
-| 已归档 change        |    6 | 位于 `openspec/changes/archive/`                       |
+| 分类                         | 清理前 | 清理后 | 处置                                              |
+| ---------------------------- | -----: | -----: | ------------------------------------------------- |
+| 活动 change 目录             |     95 |     85 | 删除 7 个无 artifact 残留，归档 4 个已核验 change |
+| 全部 checkbox 已完成         |     66 |     65 | 1 个完成 change 归档；治理 change 完成后归档      |
+| 仍有未完成 checkbox          |     22 |     20 | 2 个旧 change 由 successor 明确关闭并归档         |
+| 缺少 `tasks.md` 且无任何文件 |      7 |      0 | 精确验证无文件和 tracked entry 后删除             |
+| 已归档 change                |      6 |     10 | 本批次新增 4 个日期前缀 archive                   |
 
-活动区仍包含 VS Code、TUI、Engine 和已退休包路径的历史设计与验证文字。历史证据本身可以
-保留，但活动 change 不得继续作为当前实现入口，也不得让 removed-host path 重新返回成功。
+本批次同步并归档：
 
-## 处置边界
+- `synchronize-desktop-only-documentation`：
+  `repository-documentation-consistency` 已进入 canonical specs。
+- `replace-cut-engine-with-node-ffmpeg-runtime`：
+  `desktop-cut-node-media-runtime` 已进入 canonical specs；Engine 删除 gate 由 successor
+  完成。
+- `clean-openspec-active-area`：
+  `openspec-active-area-governance` 在本批次验证完成后进入 canonical specs。
 
-本快照不授权机械移动 65 个已勾选 change。后续治理应按 change 逐项执行：
+`align-pruned-workspace-build` 仅作为历史 artifacts 归档，没有把已退休 Rust Engine、VS Code
+和 Cargo gate 同步为当前 requirements。
 
-1. 核对 proposal、design、spec、tasks 与真实代码和验证证据是否一致；
-2. 确认稳定结论已经提升到 `docs/architecture/`、`docs/domains/` 或当前 spec；
-3. 将已完成且无后续实施约束的 change 归档；
-4. 对仍引用退休宿主或 Engine 的未完成 change，选择更新、合并、supersede 或删除；
-5. 为缺少 `tasks.md` 的目录补齐合法 artifact，或明确其不再是活动 change；
-6. 归档后运行严格 OpenSpec、文档链接、legacy debt 和 unused 检查。
+## 仍需治理
 
-需要推进本治理时应创建独立 OpenSpec change，并记录每个目录的 disposition；不得以本状态
-快照代替任务清单。
+以下情况继续保持 active，不能用 checkbox 数量机械归档：
+
+1. `retire-neko-engine-before-node-media-rebuild` 仍有 Engine vocabulary 和旧 snapshot
+   拒绝路径需要实现；
+2. `plan-neko-desktop-phase-1-delivery` 是仍含真实任务的 program change，应先把工作转移到
+   focused changes；
+3. `redefine-openneko-lightweight-editing` 仍混有未完成 Cut 任务，需要 Desktop Cut successor
+   明确接管；
+4. provider 成本、打包 Electron、GitHub branch protection 等外部证据 gate 必须保持未完成，
+   不能静默勾选；
+5. 其余 complete changes 仍需逐项比较 delta spec、canonical spec、实现、文档链接和 successor
+   ownership。
+
+## 后续处置规则
+
+每个 change 归档前必须选择唯一 disposition：
+
+1. **Active**：真实实现、验收、迁移或外部证据仍未完成；
+2. **Archive with spec sync**：实现完成且 delta requirements 仍是当前事实；
+3. **Archive without spec sync**：历史或 superseded artifacts，不得提升为当前 requirements；
+4. **Delete empty residue**：递归无文件、无 tracked entry、无可恢复 artifact。
+
+归档后必须运行严格 OpenSpec、Markdown 本地链接、legacy debt、unused 和
+`git diff --check`。门禁若被本批次外的 dirty worktree 阻塞，必须记录精确来源，不得修改或
+吞并无关开发改动。

@@ -6,9 +6,9 @@
 Extension/Electron Host、`@neko/media`、OTIO、媒体预览、PCM、派生表示与导出。
 
 本文定义单 Video Track、多 Audio Track、单 Subtitle Track 的轻量 Cut 媒体运行时。
-它补充
+它接续并提升
 [`adr-cut-otio-vscode-media-runtime-boundary.md`](adr-cut-otio-vscode-media-runtime-boundary.md)
-中的 OTIO 工程与 host-neutral media ports，并取代此前由应用管理 MSE、
+中仍有效的 OTIO 工程与 host-neutral media ports 约束，并取代此前由应用管理 MSE、
 `SourceBuffer` 和视频缓冲窗口的设计。
 
 ## 背景
@@ -36,8 +36,10 @@ HTTP Range 调度、媒体缓存、demux、decoder backpressure 和 GOP 回收�
 
 ### 1. OTIO 与 Cut Core 是唯一 Timeline 权威
 
-`.otio`、`CutDocumentSession`、typed command 和 `TimelineView` 的权威不变。
-媒体 runtime 只消费 Cut Core 产生的 source-time mapping：
+`.otio` 是唯一持久 Cut 工程事实；`CutDocumentSession` 拥有文档 bytes、revision、
+undo/redo 和文件生命周期，Webview 只拥有可恢复展示状态。typed command 和
+`TimelineView` 由该 session 投影，媒体 runtime 只消费 Cut Core 产生的
+source-time mapping：
 
 ```text
 OTIO document + revision
@@ -47,7 +49,9 @@ OTIO document + revision
 ```
 
 FFmpeg、`<video>` 和 AudioContext 不得独立解释完整 OTIO。所有 operation、
-generation、session 和 cache entry 必须携带显式 document/session identity。
+generation、session 和 cache entry 必须携带显式 document/session identity；
+缺失或陈旧 identity、未知 schema/version 和未实现 operation 必须 fail-visible，
+不得回退 Engine、第二套项目事实或隐式 active document。
 
 ### 2. 原生 `<video src>` 是唯一 Cut 视频路径
 

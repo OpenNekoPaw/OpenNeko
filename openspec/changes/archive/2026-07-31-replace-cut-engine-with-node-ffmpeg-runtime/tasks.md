@@ -62,8 +62,8 @@
 
 ## 8. Apply the Engine deletion gate
 
-- [ ] 8.1 Delete `packages/neko-engine` only if the audited dependency closure is
-      empty.
+- [x] 8.1 Delete `packages/neko-engine` only if the audited dependency closure is
+      empty. - Resolved by `retire-neko-engine-before-node-media-rebuild` task 6.4; the package and obsolete client package are absent from the current workspace.
 - [x] 8.2 Otherwise retain it and record the exact blockers without claiming
       whole-Engine removal.
 

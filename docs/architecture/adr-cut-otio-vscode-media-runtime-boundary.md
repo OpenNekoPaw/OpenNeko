@@ -1,10 +1,15 @@
 # ADR: Cut OTIO 工程与可替换媒体运行时边界
 
-状态：Accepted（OTIO 边界已实施；媒体 adapter 由 Node/FFmpeg ADR 接续）
+状态：Superseded / Historical（2026-07-31）
 日期：2026-07-22
 范围：`neko-cut`、`neko-canvas`、`apps/neko-vscode`、OTIO 工程、媒体引用、逻辑音频分离与媒体执行。
 
-本文是 Cut 最新目标架构。它补充 [`package-boundaries.md`](package-boundaries.md) 和 [`webview-media-security.md`](webview-media-security.md)，并取代更早文档中的 Cut `.nkv`、专业多轨、隐式活动目标、持续同步、项目内媒体目录和从 Desktop 提案推断出的 Cut 格式结论。
+本文是 Cut 从 NKV/Engine 迁移到 OTIO/host-neutral media ports 的历史实施决策。当前
+OTIO authority、document/session identity、Node/FFmpeg adapter、Range/PCM 和
+fail-visible 边界已由
+[`adr-cut-html-video-node-ffmpeg-media-runtime-boundary.md`](adr-cut-html-video-node-ffmpeg-media-runtime-boundary.md)、
+[`media-runtime.md`](media-runtime.md) 与 [`package-boundaries.md`](package-boundaries.md)
+接续；本文不再是新的实现或验收入口。
 
 实施状态（2026-07-23）：VS Code Cut 已切换到本 ADR 定义的 `.otio` authority、基础 Webview 与选定媒体 adapter；NKV/NKC 可写路径、Webview writable project store、专业功能和旧 NKV Minimap 已从该边界删除。Webview 保留 document-scoped Zustand Presentation Store，用于不可变 `TimelineView` 投影和可恢复 UI/gesture 状态；只读 OTIO Timeline Overview 承担基础长时间线导航。Desktop/TUI/Agent Cut authoring 仍不在本 ADR 的实施范围。
 

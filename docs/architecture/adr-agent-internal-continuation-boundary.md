@@ -1,6 +1,6 @@
 # ADR: Agent 内部续跑、消息队列与异步结果回传边界
 
-状态：Proposed
+状态：Superseded / Historical（2026-07-31）
 
 > 取代说明：[`adr-agent-tool-call-domain-job-lifecycle-boundary.md`](adr-agent-tool-call-domain-job-lifecycle-boundary.md) 已取代本文的通用 `task-result-continuation`、Task Group 和 TaskManager 续跑目标。用户消息与 runtime-authored input 不得混成用户 transcript，以及 Subagent 结构化回传的原则继续有效；普通 Tool Call 现在直接返回终态结果，不再通过 Task continuation 恢复主 Agent。
 
@@ -41,10 +41,7 @@ Message Queue 只表示用户意图等待执行。Continuation Queue 表示 runt
 
 ```ts
 type AgentTurnSource =
-  | 'user'
-  | 'task-result-continuation'
-  | 'subagent-result-continuation'
-  | 'system-continuation';
+  'user' | 'task-result-continuation' | 'subagent-result-continuation' | 'system-continuation';
 ```
 
 TUI 展示、eval facts、journal 和 queue 操作不得只依赖文本内容推断来源。
@@ -62,11 +59,11 @@ TUI 展示、eval facts、journal 和 queue 操作不得只依赖文本内容推
 
 这些控制操作 MUST 使用不同语义，不得混成一个隐式“发送”行为：
 
-| 操作 | 语义 | 对当前 turn 的影响 | 对 pending continuation 的影响 |
-| --- | --- | --- | --- |
-| interrupt-current-turn | 停止当前正在运行的 Agent turn | 请求取消当前 turn | 不隐式丢弃，除非该 continuation 依赖被取消的 turn 且已失效 |
-| send-now | 将用户消息抢占到 pending continuation 前执行 | 不隐式取消当前 turn；若当前 turn 正在运行，应等待可抢占点或要求用户先 interrupt | 不隐式丢弃，只改变排序 |
-| discard-continuation | 明确丢弃某个内部续跑 | 不影响当前 turn，除非丢弃的是当前待执行 continuation | 标记为 discarded，并写入 timeline/journal/eval facts |
+| 操作                   | 语义                                         | 对当前 turn 的影响                                                              | 对 pending continuation 的影响                             |
+| ---------------------- | -------------------------------------------- | ------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| interrupt-current-turn | 停止当前正在运行的 Agent turn                | 请求取消当前 turn                                                               | 不隐式丢弃，除非该 continuation 依赖被取消的 turn 且已失效 |
+| send-now               | 将用户消息抢占到 pending continuation 前执行 | 不隐式取消当前 turn；若当前 turn 正在运行，应等待可抢占点或要求用户先 interrupt | 不隐式丢弃，只改变排序                                     |
+| discard-continuation   | 明确丢弃某个内部续跑                         | 不影响当前 turn，除非丢弃的是当前待执行 continuation                            | 标记为 discarded，并写入 timeline/journal/eval facts       |
 
 `send-now` 的目标是处理紧急用户意图，不是清理异步任务结果。若用户想放弃某个任务结果，应使用 `discard-continuation` 或等价 UI 操作。discard 必须可观测，因为它改变了后台结果是否被主 Agent 消费。
 
@@ -123,7 +120,8 @@ TUI session SHOULD expose separate entry points for user-authored prompts and ru
 ```ts
 interface SubmitInternalContinuationInput {
   readonly prompt: string;
-  readonly source: 'task-result-continuation' | 'subagent-result-continuation' | 'system-continuation';
+  readonly source:
+    'task-result-continuation' | 'subagent-result-continuation' | 'system-continuation';
   readonly metadata: {
     readonly observationId?: string;
     readonly taskId?: string;
@@ -153,10 +151,10 @@ User: Continue from the completed async task result.
 
 Queue UI 也必须区分：
 
-| 类型 | 推荐展示 |
-| --- | --- |
-| 用户 pending prompt | `Queued message: queue-1` |
-| task continuation | `Task continuation queued: task_123` |
+| 类型                  | 推荐展示                             |
+| --------------------- | ------------------------------------ |
+| 用户 pending prompt   | `Queued message: queue-1`            |
+| task continuation     | `Task continuation queued: task_123` |
 | subagent continuation | `Subagent result queued: subagent-1` |
 
 ## Eval 与 Debug Automation 规则

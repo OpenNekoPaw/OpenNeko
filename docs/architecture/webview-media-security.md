@@ -1,12 +1,16 @@
 # Webview Media Security 与运行时约束
 
-状态：Accepted
+状态：Superseded / Historical（2026-07-31）
 
 更新日期：2026-07-27
 对应变更：`harden-node-media-playback-runtime`
 
-本文记录 VS Code Webview 中媒体展示、资源授权和按需读取的稳定约束。
-它适用于 Cut、Preview、Canvas、Agent、Assets、Tools 及新增 Webview。
+本文记录已退休 VS Code Webview 中媒体展示、资源授权和按需读取的历史约束。
+当前 Desktop renderer、Node/FFmpeg、opaque Range/PCM、CSP 和生命周期权威见
+[`media-runtime.md`](media-runtime.md)、
+[`package-boundaries.md`](package-boundaries.md) 与
+[`adr-neko-desktop-media-capability-and-security-boundary.md`](adr-neko-desktop-media-capability-and-security-boundary.md)。
+本文只保留迁移证据，不再作为新增 renderer 或媒体实现入口。
 
 ## 运行边界
 
