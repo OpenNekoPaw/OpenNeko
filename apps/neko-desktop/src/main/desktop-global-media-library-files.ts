@@ -20,6 +20,12 @@ export interface DesktopGlobalMediaLibraryConnection {
   readonly modifiedAt?: string;
 }
 
+export interface DesktopGlobalMediaLibraryConnectionRollback {
+  readonly libraryId: string;
+  readonly previousLinkTarget: string;
+  readonly replacementTarget: string;
+}
+
 export type DesktopGlobalMediaLibraryCopyResult =
   | {
       readonly status: 'copied';
@@ -126,7 +132,7 @@ export async function replaceDesktopGlobalMediaLibraryConnection(input: {
   readonly mediaLibraryRoot: string;
   readonly libraryId: string;
   readonly sourceDirectory: string;
-}): Promise<void> {
+}): Promise<DesktopGlobalMediaLibraryConnectionRollback> {
   requireMediaLibraryName(path.basename(input.sourceDirectory));
   const sourceStat = await fs.stat(input.sourceDirectory);
   if (!sourceStat.isDirectory()) {
@@ -137,10 +143,47 @@ export async function replaceDesktopGlobalMediaLibraryConnection(input: {
   if (!linkStat.isSymbolicLink()) {
     throw new Error('Desktop global Media Library connection is not a managed link.');
   }
+  const previousLinkTarget = await fs.readlink(linkPath);
+  const replacementTarget = await fs.realpath(input.sourceDirectory);
   const temporaryPath = `${linkPath}.${randomUUID()}.relink`;
   try {
     await fs.symlink(
-      await fs.realpath(input.sourceDirectory),
+      replacementTarget,
+      temporaryPath,
+      process.platform === 'win32' ? 'junction' : 'dir',
+    );
+    await fs.rename(temporaryPath, linkPath);
+  } finally {
+    await fs.rm(temporaryPath, { force: true }).catch(() => undefined);
+  }
+  return {
+    libraryId: input.libraryId,
+    previousLinkTarget,
+    replacementTarget,
+  };
+}
+
+export async function rollbackDesktopGlobalMediaLibraryConnection(input: {
+  readonly mediaLibraryRoot: string;
+  readonly rollback: DesktopGlobalMediaLibraryConnectionRollback;
+}): Promise<void> {
+  const linkPath = resolveDesktopGlobalMediaLibraryLinkPath({
+    mediaLibraryRoot: input.mediaLibraryRoot,
+    libraryId: input.rollback.libraryId,
+  });
+  const linkStat = await fs.lstat(linkPath);
+  if (!linkStat.isSymbolicLink()) {
+    throw new Error('Desktop global Media Library rollback target is not a managed link.');
+  }
+  const currentTarget = await fs.readlink(linkPath);
+  const resolvedCurrentTarget = path.resolve(path.dirname(linkPath), currentTarget);
+  if (resolvedCurrentTarget !== input.rollback.replacementTarget) {
+    throw new Error('Desktop global Media Library changed after the replacement.');
+  }
+  const temporaryPath = `${linkPath}.${randomUUID()}.rollback`;
+  try {
+    await fs.symlink(
+      input.rollback.previousLinkTarget,
       temporaryPath,
       process.platform === 'win32' ? 'junction' : 'dir',
     );

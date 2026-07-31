@@ -1,9 +1,16 @@
 import { stat } from 'node:fs/promises';
 import * as path from 'node:path';
-import type { LocalMetadataStore } from '@neko/shared/local-metadata';
+import type {
+  LocalMetadataRepositories,
+  LocalMetadataStore,
+} from '@neko/shared/local-metadata';
 import { createNodeSqliteLocalMetadataStore } from '@neko/shared/local-metadata/node-sqlite-local-metadata-store';
 import { resolveNodeWorkspaceIdentity } from '@neko/shared/local-metadata/node-workspace-identity';
-import { M1_LOCAL_METADATA_MIGRATIONS } from '@neko/shared/local-metadata/sqlite';
+import {
+  AGENT_STATE_MIGRATIONS,
+  M1_LOCAL_METADATA_MIGRATIONS,
+  MEDIA_METADATA_MIGRATIONS,
+} from '@neko/shared/local-metadata/sqlite';
 import { resolveGlobalStorageLayout } from '@neko/shared/types/storage';
 
 export interface DesktopWorkspaceResolution {
@@ -17,6 +24,7 @@ export interface DesktopWorkspaceResolution {
 }
 
 export interface DesktopWorkspaceRegistry {
+  readonly metadataRepositories?: LocalMetadataRepositories;
   resolve(workspacePath: string): Promise<DesktopWorkspaceResolution>;
   dispose(): Promise<void>;
 }
@@ -33,6 +41,8 @@ export async function createDesktopWorkspaceRegistry(options: {
     busyTimeoutMs: 2_000,
   });
   await metadataStore.migrateNamespace(M1_LOCAL_METADATA_MIGRATIONS);
+  await metadataStore.migrateNamespace(AGENT_STATE_MIGRATIONS);
+  await metadataStore.migrateNamespace(MEDIA_METADATA_MIGRATIONS);
   return new NodeDesktopWorkspaceRegistry(homedir, metadataStore);
 }
 
@@ -43,6 +53,10 @@ class NodeDesktopWorkspaceRegistry implements DesktopWorkspaceRegistry {
     private readonly homedir: string,
     private readonly metadataStore: LocalMetadataStore,
   ) {}
+
+  get metadataRepositories(): LocalMetadataRepositories {
+    return this.metadataStore.repositories;
+  }
 
   async resolve(workspacePath: string): Promise<DesktopWorkspaceResolution> {
     this.requireActive();
