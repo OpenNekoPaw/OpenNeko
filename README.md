@@ -16,21 +16,26 @@ OpenNeko is for creators who want control over their project files, model connec
 - **Agent-driven creation**: the Agent can understand the current project, plan tasks, invoke tools, and help generate, analyze, and iterate content.
 - **A continuous workflow**: generated content can move into the canvas, Media Library, and video timeline for editing, preview, and export.
 
-## Current Capabilities
+## Current Desktop Capabilities
 
-| Capability            | What it provides                                                                             |
-| --------------------- | -------------------------------------------------------------------------------------------- |
-| Creative Agent        | Project conversations, task planning, tool use, and media generation                         |
-| Canvas                | Organize ideas, references, storyboards, media, and generated results                        |
-| Video Timeline        | Arrange audio, video, effects, and transitions, then preview and export                      |
-| Assets and Characters | Manage media, characters, variants, references, and reusable packs                           |
-| Preview and Tools     | Preview common media, documents, and standard 3D models, compare assets, and return feedback |
+| Integrated surface | Current boundary                                                                    |
+| ------------------ | ----------------------------------------------------------------------------------- |
+| Creative Agent     | Desktop project conversations, context, tool use, and controlled content generation |
+| Canvas             | Organize Markdown, media, files, groups, generation Jobs, and Canvas references     |
+| Video Timeline     | Lightweight audio/video arrangement, preview, and Node/FFmpeg export                |
+| Media and Entity   | Browse workspace and linked Media Libraries and project Entity representations      |
+| Read-only Preview  | Preview common documents, images, audio/video, and supported standard 3D models     |
 
 Available generation and understanding features depend on your configured APIs, model access, and local services.
 
+The repository also retains Chara, Search, Quality, and media-comparison Tools packages, but they do
+not all have Desktop product paths yet. Character projects, Interactive World, professional-tool
+integrations, and a standalone asset-comparison surface remain unavailable or planned; package
+existence alone does not make them product capabilities.
+
 ## Project Status
 
-OpenNeko is currently in **Alpha** and is primarily intended for source-based previews and product validation. The core creative workflow is running, while installation, upgrades, compatibility, interfaces, and project formats may still change. Electron Desktop is the only product host; Agent, model, Skill, and workflow validation follows the Desktop composition boundary.
+OpenNeko is currently in **Alpha** and is primarily intended for source-based previews and product validation. Real Desktop composition paths exist for the foundation, Agent, Media Library, Canvas, Cut, and Preview, but the complete Phase 1 creative workflow is not finished and this is not yet a supported release product. Installation, upgrades, compatibility, interfaces, and project formats may still change. Electron Desktop is the only product host; Agent, model, Skill, and workflow validation follows the Desktop composition boundary.
 
 ## Start From Source
 
@@ -72,6 +77,7 @@ The repository now retains only the Electron Desktop build and Forge packaging e
 
 - [Documentation index](./docs/README.md)
 - [Desktop development roadmap](./ROADMAP.md)
+- [Contributing](./CONTRIBUTING.md)
 - [Active product and feature changes](./openspec/changes/)
 - [Repository development rules](./AGENTS.md)
 

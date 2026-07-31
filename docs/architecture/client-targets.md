@@ -5,8 +5,9 @@
 更新日期：2026-07-31
 对应变更：`flatten-desktop-only-monorepo`
 
-OpenNeko 当前只有一个客户端目标：Electron Desktop。它由 `apps/neko-desktop` 组合所有
-保留的 Agent、Assets、Canvas、Cut、Preview、Tools、共享和媒体能力。
+OpenNeko 当前只有一个客户端目标：Electron Desktop。`apps/neko-desktop` 当前组合
+Agent、Assets/Entity、Canvas、Cut、Preview、Generation、共享与媒体能力。保留在 workspace
+但没有 Desktop consumer 的 Chara、Search、Quality 和媒体比较 Tools 不属于当前产品能力。
 
 ## OpenNeko Desktop
 
@@ -25,11 +26,14 @@ Desktop 不拥有：
 
 ## Package 复用
 
-- `@neko/shared`、`@neko/host`、`@neko/media`、`@neko/content`、`@neko/entity`、
-  `@neko/search` 提供 host-neutral 能力。
+- `@neko/shared`、`@neko/host`、`@neko/media`、`@neko/content` 和 `@neko/entity`
+  提供当前 Desktop 路径使用的 host-neutral 能力。
 - `@neko/ui` 和一级 Webview package 只提供 browser-safe React UI。
-- Agent、Canvas、Cut、Preview、Tools 等领域由各自一级 package 拥有 contract、
-  runtime/node adapter 和 UI；Desktop 通过 public entry 显式注入。
+- Agent、Assets、Canvas、Cut、Preview 和 Generation 由各自一级 package 拥有 contract、
+  runtime/node adapter 或 UI；Desktop 通过 public entry 显式注入。
+- `@neko/chara`、`@neko/search`、`@neko/quality` 和 `@neko-tools/*` 仍是保留 package；
+  接入前必须建立真实 Desktop composition、产品入口和路径级验收，不能因 package 存在而
+  宣称能力可用。
 - 未来新增另一应用宿主必须先建立独立 OpenSpec 和真实 adapter 需求；当前不保留
   speculative multi-host registry。
 

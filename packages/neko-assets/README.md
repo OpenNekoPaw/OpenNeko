@@ -18,7 +18,7 @@ Neko Assets owns the Desktop Media Library surface and composes the Creative Ent
 - Files use `neko/assets/<libraryName>/...` locators directly. Discovery does not create entities or bindings.
 - Creative Entity owns character, scene, object, location, and style identity plus representation bindings.
 - Generated outputs, document entries, and package resources retain their owner-specific identities and lifecycle.
-- Cache paths, absolute link targets, Webview URIs, and Engine tokens are runtime-only implementation details.
+- Cache paths, absolute link targets, Webview URIs, and runtime tokens are implementation details that never become durable content identity.
 
 ## Runtime
 

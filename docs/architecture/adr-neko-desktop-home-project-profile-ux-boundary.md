@@ -1,11 +1,17 @@
 # ADR: Neko Desktop Home、Project Tabs 与创作 Profile UX 边界
 
-状态：Proposed
+状态：Superseded / Historical（2026-07-31）
 
 日期：2026-07-22
 更新日期：2026-07-27
 
 范围：拟议中的 `apps/neko-desktop`、Home 管理中心、Agent 会话与 Activity/Attention 投影、Project Tabs，以及内容创作、角色 IP、互动世界三类创作项目。
+
+> 本文保留 Desktop 尚未建立时的目标 UX 背景，不再描述当前产品状态。当前组合与能力事实
+> 由 [`application-composition.md`](application-composition.md)、
+> [`client-targets.md`](client-targets.md)、[`package-boundaries.md`](package-boundaries.md)
+> 和 [`../../ROADMAP_CN.md`](../../ROADMAP_CN.md) 接续；具体界面行为由对应 Desktop
+> OpenSpec 约束。
 
 ## 背景
 
@@ -32,14 +38,14 @@ OpenNeko 的目标创作范围分为三类：
 
 本文冻结目标信息架构，不表示对应能力已经实现。当前状态如下：
 
-| 范围 | 当前状态 | 可复用基础 | 尚未建立 |
-| ---- | -------- | ---------- | -------- |
-| Desktop Shell / Home / Project Tabs | Proposed；无 `apps/neko-desktop` | `@neko/ui` primitives、Host ports、各领域公共入口 | Electron composition、Project catalog、ProjectTab 持久 contract |
-| Content Profile | 子能力已实现 | Agent、Canvas、Cut、Preview、Generation、Quality、Document/Markdown、Media Library | 统一 ContentProject aggregate、codec、跨 Surface artifact/review/output contract |
-| Character IP Profile | Chara 第一阶段已实现 | Dialogue、Embody、evidence、profile、Entity 与 representation binding | CharacterProject/Version、发布、持久 Run、独立角色编辑器和完整表现 authoring |
-| Interactive World Profile | 仅架构边界 | CharacterVersion/World binding 目标契约 | `neko-world`、project/version/run/save/replay、规则/事件和 UI |
-| Media Library | Accepted 且已有 VS Code 实现 | linked library、ContentLocator、Search、Entity binding | Desktop React 管理面和 Electron Host adapter |
-| Professional Tools | 仅目标边界 | MCP Manager、External Processor、ContentLocator、Cut OTIO/export | Desktop integration catalog/Host port，以及 DaVinci、剪映、Photoshop、Live2D、Blender、Unity、ComfyUI 的真实 adapter |
+| 范围                                | 当前状态                         | 可复用基础                                                                         | 尚未建立                                                                                                             |
+| ----------------------------------- | -------------------------------- | ---------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| Desktop Shell / Home / Project Tabs | Proposed；无 `apps/neko-desktop` | `@neko/ui` primitives、Host ports、各领域公共入口                                  | Electron composition、Project catalog、ProjectTab 持久 contract                                                      |
+| Content Profile                     | 子能力已实现                     | Agent、Canvas、Cut、Preview、Generation、Quality、Document/Markdown、Media Library | 统一 ContentProject aggregate、codec、跨 Surface artifact/review/output contract                                     |
+| Character IP Profile                | Chara 第一阶段已实现             | Dialogue、Embody、evidence、profile、Entity 与 representation binding              | CharacterProject/Version、发布、持久 Run、独立角色编辑器和完整表现 authoring                                         |
+| Interactive World Profile           | 仅架构边界                       | CharacterVersion/World binding 目标契约                                            | `neko-world`、project/version/run/save/replay、规则/事件和 UI                                                        |
+| Media Library                       | Accepted 且已有 VS Code 实现     | linked library、ContentLocator、Search、Entity binding                             | Desktop React 管理面和 Electron Host adapter                                                                         |
+| Professional Tools                  | 仅目标边界                       | MCP Manager、External Processor、ContentLocator、Cut OTIO/export                   | Desktop integration catalog/Host port，以及 DaVinci、剪映、Photoshop、Live2D、Blender、Unity、ComfyUI 的真实 adapter |
 
 Profile、导航项或 UI 占位不构成成功实现。缺少 canonical owner、project codec 或运行契约时必须显示 unavailable diagnostic，不得创建空项目、空 Run 或成功 no-op。
 
@@ -90,14 +96,14 @@ Home 首页只保留 Director Agent composer、最近项目、运行中/待确�
 
 Home 管理面只组合 owning domain 的公共 contract 和 projection：
 
-| Home 页面         | 用户职责                                        | Canonical owner / 当前边界                                 |
-| ----------------- | ----------------------------------------------- | ---------------------------------------------------------- |
-| 活动与会话        | 查看会话以及跨项目运行中、待确认与失败摘要      | 只读 Attention projection；命令委派给 Agent/领域 owner     |
-| 媒体库            | 浏览、导入、搜索、整理、查看来源和使用关系      | Assets / ContentLocator / Search                           |
-| 角色库            | 浏览 confirmed 角色、版本、表现、关系和使用位置 | Entity 与 Asset binding；不是图片或模型文件目录            |
+| Home 页面              | 用户职责                                                                                    | Canonical owner / 当前边界                                                         |
+| ---------------------- | ------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| 活动与会话             | 查看会话以及跨项目运行中、待确认与失败摘要                                                  | 只读 Attention projection；命令委派给 Agent/领域 owner                             |
+| 媒体库                 | 浏览、导入、搜索、整理、查看来源和使用关系                                                  | Assets / ContentLocator / Search                                                   |
+| 角色库                 | 浏览 confirmed 角色、版本、表现、关系和使用位置                                             | Entity 与 Asset binding；不是图片或模型文件目录                                    |
 | Skills、插件与专业工具 | 管理 Skill、MCP、专业应用集成、Computer Use、版本、能力/验证等级、OS 权限、信任、依赖和诊断 | Agent Skill/MCP catalog、Professional Tool integration、plugin/capability contract |
-| Market / Discover | 发现、安装、更新和卸载                          | 当前不存在；未来需新的 Market owner、trust 和安装 contract |
-| 所有项目          | 创建、打开、归档、过滤和恢复项目                | Desktop project catalog projection；Tab 不是项目事实       |
+| Market / Discover      | 发现、安装、更新和卸载                                                                      | 当前不存在；未来需新的 Market owner、trust 和安装 contract                         |
+| 所有项目               | 创建、打开、归档、过滤和恢复项目                                                            | Desktop project catalog projection；Tab 不是项目事实                               |
 
 Market 当前是被删除产品。本文只保留其目标信息位置，不建立可调用 route、repository、安装结果或兼容成功路径。
 
@@ -111,13 +117,13 @@ Home 的会话 Inbox 可以统一展示：
 
 会话、执行与运行必须保持不同用户对象：
 
-| 对象               | 含义                                                                    | 默认位置                                         |
-| ------------------ | ----------------------------------------------------------------------- | ------------------------------------------------ |
-| Agent Conversation | 用户与 Agent 的持续讨论；拥有持久 identity，但不等于当前 run 或 UI view | Home Inbox 或项目 Agent                          |
-| Agent Run          | Conversation 中一次 turn、续跑或 delegation 的执行                      | 所属 Conversation timeline / activity projection |
-| Tool Call / Domain Job | 工具调用、生成、导出、导入或其他领域执行                             | 所属 Timeline、领域 Surface、Home/项目摘要       |
-| 角色对话运行       | 角色实验的一次对话或测试执行                                            | 角色项目内部                                     |
-| 世界运行 / Save    | 世界的一次模拟、游玩状态或存档                                          | 世界项目内部                                     |
+| 对象                   | 含义                                                                    | 默认位置                                         |
+| ---------------------- | ----------------------------------------------------------------------- | ------------------------------------------------ |
+| Agent Conversation     | 用户与 Agent 的持续讨论；拥有持久 identity，但不等于当前 run 或 UI view | Home Inbox 或项目 Agent                          |
+| Agent Run              | Conversation 中一次 turn、续跑或 delegation 的执行                      | 所属 Conversation timeline / activity projection |
+| Tool Call / Domain Job | 工具调用、生成、导出、导入或其他领域执行                                | 所属 Timeline、领域 Surface、Home/项目摘要       |
+| 角色对话运行           | 角色实验的一次对话或测试执行                                            | 角色项目内部                                     |
+| 世界运行 / Save        | 世界的一次模拟、游玩状态或存档                                          | 世界项目内部                                     |
 
 新建 Home 会话不创建项目。一个全局目标可以创建项目及一个项目主会话；后续生成、分析和导出默认进入 Tool Call 或 owning-domain Job，不为每次操作创建新会话。只有用户显式开始独立讨论、实验或调试分支时才新增项目会话。
 
@@ -196,13 +202,13 @@ WindowId
 
 #### 5.2 关闭、停止、归档和删除是不同 operation
 
-| 用户动作                             | UI view                      | Conversation | 当前 Agent Run                         | owning-domain Job/Run                     |
-| ------------------------------------ | ---------------------------- | ------------ | -------------------------------------- | ---------------------------------------- |
-| 关闭 Conversation view / Project Tab | detach 或保存 view state     | 保留         | 默认继续                               | 按 owner policy 继续，不因可见性而取消   |
-| Stop / Abort                         | 保留                         | 保留         | 取消明确 `agentRunId`                  | 不隐式取消                               |
-| Archive Conversation                 | 从默认 Inbox 移出，可恢复    | 保留         | 仅在无 active run 时允许，或先显式取消 | 不隐式取消                               |
-| Delete Conversation                  | 关闭相关 view 并删除持久会话 | 删除         | 必须先终止或拒绝删除                   | 按 owner 的引用/保留策略处理             |
-| Cancel domain Job/Run                | 保留                         | 保留         | 不隐式取消                             | 调用准确 owner port 和 Job/Run identity  |
+| 用户动作                             | UI view                      | Conversation | 当前 Agent Run                         | owning-domain Job/Run                   |
+| ------------------------------------ | ---------------------------- | ------------ | -------------------------------------- | --------------------------------------- |
+| 关闭 Conversation view / Project Tab | detach 或保存 view state     | 保留         | 默认继续                               | 按 owner policy 继续，不因可见性而取消  |
+| Stop / Abort                         | 保留                         | 保留         | 取消明确 `agentRunId`                  | 不隐式取消                              |
+| Archive Conversation                 | 从默认 Inbox 移出，可恢复    | 保留         | 仅在无 active run 时允许，或先显式取消 | 不隐式取消                              |
+| Delete Conversation                  | 关闭相关 view 并删除持久会话 | 删除         | 必须先终止或拒绝删除                   | 按 owner 的引用/保留策略处理            |
+| Cancel domain Job/Run                | 保留                         | 保留         | 不隐式取消                             | 调用准确 owner port 和 Job/Run identity |
 
 任何操作不得通过“当前 active Tab/Conversation”推断目标。关闭 renderer、Panel 或 Window 时，Host 只释放 view subscription 和 renderer-scoped resource；Host-owned runtime、媒体 session 或领域 Job/Run 是否释放，必须由 owning lifecycle 和显式引用/退出策略决定。
 
@@ -357,8 +363,8 @@ packages/neko-assets
 
 这里的“顶级”表示顶级领域包，不表示应用 Composition Root。`apps/neko-desktop`、`apps/neko-vscode` 或其他宿主继续负责实例化 Pi runtime、`@neko/media`/Node-FFmpeg adapter、Device/Perception、Renderer 和各领域 host adapter；`neko-chara`、`neko-world` 只通过公共 contract、稳定 ref、窄 port 和 capability contribution 组合这些能力。
 
-| 聚合包       | 聚合主线                                                       | 拥有                                                                           | 组合但不拥有实现                                                        |
-| ------------ | -------------------------------------------------------------- | ------------------------------------------------------------------------------ | ----------------------------------------------------------------------- |
+| 聚合包       | 聚合主线                                                       | 拥有                                                                           | 组合但不拥有实现                                                       |
+| ------------ | -------------------------------------------------------------- | ------------------------------------------------------------------------------ | ---------------------------------------------------------------------- |
 | `neko-chara` | `CharacterProject -> CharacterVersion -> CharacterRun`         | 角色 IP 创作、发布版本、角色运行、记忆/能力策略、表现绑定、Roleplay 和测试语义 | Agent、Entity、Assets、Voice、2D/3D Renderer、Device/Perception、Media |
 | `neko-world` | `WorldProject -> WorldVersion -> WorldRun -> WorldSave/Replay` | 世界事实、规则、事件、时钟、Gameplay、运行、存档、分支和回放                   | Agent、Entity、Assets、已发布 CharacterVersion、Scene/Renderer、Media  |
 
@@ -486,10 +492,10 @@ Project candidate
 
 Desktop 使用两个 Agent 展示 scope，但不建立两套 Agent runtime：
 
-| 展示 scope     | 职责                                                                      |
-| -------------- | ------------------------------------------------------------------------- |
+| 展示 scope     | 职责                                                                             |
+| -------------- | -------------------------------------------------------------------------------- |
 | Director Agent | Home 中理解全局意图、发现资源、创建项目、派发明确项目 operation 和查看跨项目摘要 |
-| Project Agent  | 在项目内消费明确 project/document/run context，协助创作、调试、审阅和运行 |
+| Project Agent  | 在项目内消费明确 project/document/run context，协助创作、调试、审阅和运行        |
 
 Director 会话创建项目时，保留来源记录并创建或选择一个 project-scoped 主会话。Project Agent 不继承隐式 active project；所有 operation、event、Job/Run command 和 projection 必须携带明确 identity。
 
@@ -579,12 +585,12 @@ Home 默认停留在当前界面处理普通问答、调研、一次性生成和
 
 项目页共享稳定布局语法：
 
-| 区域 | 统一职责                 | Profile 自定义内容                                                       |
-| ---- | ------------------------ | ------------------------------------------------------------------------ |
-| 左侧 | 项目资源与结构导航       | 内容文档/媒体；角色身份/表现；世界地点/实体/剧情/存档                    |
-| 中央 | 当前主要创作或体验表面   | Canvas/Cut；角色设计/Dialogue Lab；世界编辑/模拟/游玩                    |
+| 区域 | 统一职责                 | Profile 自定义内容                                                          |
+| ---- | ------------------------ | --------------------------------------------------------------------------- |
+| 左侧 | 项目资源与结构导航       | 内容文档/媒体；角色身份/表现；世界地点/实体/剧情/存档                       |
+| 中央 | 当前主要创作或体验表面   | Canvas/Cut；角色设计/Dialogue Lab；世界编辑/模拟/游玩                       |
 | 右侧 | 上下文协作与审阅         | Project Agent、Inspector、Review、Activity、State、Events、Debug 的受控组合 |
-| 顶部 | 项目身份、模式和全局命令 | profile 名称、运行/待确认/失败/未保存状态和 profile mode                 |
+| 顶部 | 项目身份、模式和全局命令 | profile 名称、运行/待确认/失败/未保存状态和 profile mode                    |
 
 共享的是 Shell、Host ports、Agent/Activity projection、ContentLocator/稳定领域 ref 和 `@neko/ui` primitive。Content、Character、World 各自拥有项目事实、运行生命周期和验收，不通过万能 Canvas、Agent transcript 或 active Tab 共享状态。
 

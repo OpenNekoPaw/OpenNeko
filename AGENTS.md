@@ -20,7 +20,7 @@
   1. 是否符合现有架构？
   2. 如何进一步降低耦合？
   3. 是否易于扩展与测试？
-- 非平凡功能、跨模块修改、公共契约或架构变更，实施前必须按 `openspec/project.md` 创建或更新 OpenSpec artifacts；proposal、design、spec 和 tasks 是实施约束，不是事后补写的文档。
+- 非平凡功能、跨模块修改、公共契约或架构变更，实施前必须按 `openspec/config.yaml` 的 workflow 在 `openspec/changes/<change>/` 创建或更新 OpenSpec artifacts；proposal、design、spec 和 tasks 是实施约束，不是事后补写的文档。
 - 遇到多模块改动或新功能，先做五层分析：职责、依赖、接口、扩展、测试。
 - 分析必须覆盖完整调用链和真实运行边界，不能只优化当前文件、当前函数或单个测试暴露出的局部现象；先确认输入、状态、契约、依赖、资源生命周期、错误传播和最终用户路径，再决定修改位置。
 - 抽象只服务于稳定职责、真实边界或明确变化点：接口应精简、可组合、可替换、可测试，不要为单一实现制造无意义层级，也不要为了少写代码把不同职责压进同一接口。
@@ -48,9 +48,9 @@
   - Desktop：Electron Main/preload/renderer、TypeScript、Vite
   - 媒体运行时：Node.js + FFmpeg/ffprobe、loopback Range/PCM
   - AI：Vercel AI SDK + MCP Protocol
-  - 类型契约：Protobuf
+  - 类型契约：TypeScript package-owned contracts 与领域 codec
   - 构建：pnpm 10 + Turborepo 2
-  - 测试：Vitest、cargo test
+  - 测试：Vitest、Node.js test runner、真实 Electron 场景
 - 共享基础核心包：
   - `packages/neko-types`：共享基础设施（Logger、i18n、Theme、Errors）
   - `packages/neko-media`：Node/FFmpeg 与浏览器媒体运行时
@@ -129,14 +129,13 @@
 - 功能设计、架构设计、模块设计和问题修复必须收敛到唯一 canonical path；内部设计问题应修改设计和契约，不得通过兼容层、fallback、双实现、多路条件分发或锁叠加维持错误结构。
 - 实现新功能前，优先复用现有资源：
   - `packages/neko-types/src/`
-  - `packages/neko-client/src/`
   - package-owned L0 contracts
   - `packages/neko-ui/src/`
   - `packages/neko-cut-webview/src/components/`
   - `packages/neko-cut-webview/src/hooks/`
-  - `packages/neko-platform/src/`
+- `packages/neko-platform/src/` 是仍被 Desktop 使用的迁移中边界，不是新增公共能力的默认落点；复用或扩展前必须先确认能力 owner，并检查活跃 OpenSpec 与 Platform 拆解目标。
 - 新功能涉及组件样式、主题、国际化、日志、错误/诊断、配置、路径、文件保存/读写、资源授权、缓存、DTO 或跨包契约时，必须先做公共基础能力审计：判断应复用现有公共入口、更新公共契约/adapter，还是确实保留在 owning package。
-- 禁止在功能包内并行实现 package-local design system、theme token、i18n runtime、logger/error 类型、项目文件 IO、cache manager、path resolver、Engine HTTP/WS client 或无 owner 的共享 DTO；确需新增公共能力时优先进入 `@neko/shared`、`@neko/ui`、owning package L0 contract 或既有 domain service。
+- 禁止在功能包内并行实现 package-local design system、theme token、i18n runtime、logger/error 类型、项目文件 IO、cache manager、path resolver、宽泛媒体 client 或无 owner 的共享 DTO；确需新增公共能力时优先进入 `@neko/shared`、`@neko/ui`、owning package L0 contract 或既有 domain service。
 - 若决定不更新公共层，必须在 OpenSpec、PR 或交付说明中说明原因、边界、后续提取条件和验证命令。
 - 新功能涉及 provider、registry、bridge、protocol、message router、status bar、tree view、file decoration、history、selection、recent items、projector、facade、command router、capability provider、store slice 或 workflow adapter 时，必须先做跨子包能力复用审计：搜索其他子包是否已有同类能力、相同交互模式或相同 host adapter。
 - 两个以上子包出现领域语义、生命周期、运行环境、错误模型和变化方向一致的同类能力时，优先提取到中立共享层、domain service、shared contract、adapter factory、registry、strategy、hook 或 `@neko/ui` primitive；仅名称或代码结构相似不足以证明属于同一抽象，不得为了消除少量重复强行共享，也不要让功能包直接 import 另一个功能包的内部实现。
@@ -209,14 +208,14 @@
 | 局部 TypeScript 逻辑或 bug 修复                                                                                             | 修复前可失败的聚焦回归/单元测试、受影响包 typecheck/build；涉及调用链时补集成或路径断言                                                   |
 | 共享 TypeScript 契约、跨包重构或高风险路径                                                                                  | 生产者和消费者测试、`pnpm build`、`pnpm test`、`pnpm check`；必要时运行 `pnpm ci:local` 或与远端 CI 对应的聚焦门禁                        |
 | 残留、兼容层、冗余或依赖清理                                                                                                | `pnpm check:legacy-debt`、`pnpm check:unused`，或说明已由 `pnpm ci:local` / `pnpm check:quality` 覆盖                                     |
-| Proto、Extension/Engine bridge 或跨层 message                                                                               | 生成物一致性、生产者/消费者测试、契约路径断言，以及受影响运行态或集成验证                                                                 |
-| Rust Engine                                                                                                                 | 聚焦 `cargo test`；涉及客户端、媒体协议或跨层行为时增加对应集成/运行态验证                                                                |
+| package-owned wire contract、Desktop IPC 或跨层 message                                                                     | 生产者/消费者测试、契约路径断言，以及受影响 Electron 运行态或集成验证                                                                     |
+| Node/FFmpeg 媒体 runtime                                                                                                    | 聚焦 Node/FFmpeg、Range/PCM、取消与资源释放测试；涉及 Renderer 时增加真实 Electron 媒体路径验收                                           |
 | Agent evaluation harness、scenario manifest、debug automation 或 facts 契约                                                 | `pnpm test:agent:eval`；该命令仅是 key-free harness 自测，不得描述为真实 Agent 行为验收                                                   |
 | prompt、Skill、capability/tool routing、provider/model、AgentSession、validation/recovery 或 Desktop Agent event projection | 按 `.codex/skills/neko-agent-evaluation/SKILL.md` 规划并运行聚焦脚本 evaluation；无法运行真实 case 时记录阻塞条件和残余风险               |
 | Renderer/Webview 视觉、交互、CSP、消息、焦点或媒体                                                                          | 受影响构建/测试，加真实 Electron Desktop 聚焦场景；普通浏览器/Vite/Chrome 不能替代 preload/IPC/窗口生命周期验收；UI 运行态测试不得进入 CI |
 | 发布链路或影响面不易限定的高风险改动                                                                                        | `pnpm ci:local` 加所有受影响领域的 evaluation、Electron Desktop UI 或 Node/FFmpeg 运行态验证                                              |
 
-- 新路径、迁移和 bug 修复必须同时验证结果与执行路径：断言 canonical contract、handler、renderer、adapter 或 Engine path 被命中，并证明 legacy/fallback 路径未参与。
+- 新路径、迁移和 bug 修复必须同时验证结果与执行路径：断言 canonical contract、handler、renderer、adapter 或 Node/FFmpeg path 被命中，并证明 legacy/fallback 路径未参与。
 - 验证应重点发现循环依赖、Layer 0 反向依赖、Renderer/Webview 依赖 Electron/Node、Desktop Main 依赖 React、包到应用反向依赖等架构违规。
 - 验收结论必须列出实际执行的命令、结果和覆盖层级；未执行项需记录不适用原因、阻塞条件和残余风险，不能仅以单元测试通过声明功能完成。
 - Webview 功能场景由 owning package 维护 fixture、用户操作、业务断言和 authoritative side effect；共享 runner 只拥有宿主/CDP/错误策略/报告机制，不得在共享层加入包级业务 shortcut。
@@ -262,6 +261,4 @@ pnpm check:unused
 pnpm test:agent:eval
 pnpm package:desktop
 
-# Rust Engine
-cd packages/neko-engine && cargo test
 ```

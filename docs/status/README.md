@@ -13,6 +13,7 @@
 
 ## 快照
 
+- [`2026-07-31-openspec-active-change-governance-gap.md`](2026-07-31-openspec-active-change-governance-gap.md)：活动 change 的完成状态、缺失 tasks、历史宿主残留和逐项归档边界。
 - [`2026-07-26-engine-consumer-audit.md`](2026-07-26-engine-consumer-audit.md)：Cut 切换到 Node/FFmpeg 后的 Engine 消费闭包、保留职责与整包删除判定。
 - [`2026-07-18-text-entity-extraction-gap.md`](2026-07-18-text-entity-extraction-gap.md)：统一实体文本抽取、动态工作区/素材库发现、SQLite 候选边界与第一阶段 Gap。
 - [`2026-07-22-desktop-host-adapter-reuse-gap.md`](2026-07-22-desktop-host-adapter-reuse-gap.md)：Desktop 对 VS Code 子包、Agent、Canvas、Cut、Preview、Assets、Host ports 和 Engine 的复用成熟度与 adapter 缺口。

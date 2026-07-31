@@ -10,4 +10,4 @@ Public entries：
 
 该包不得读取 provider/config/credential，不得依赖 Agent runtime、Platform、VS Code、React、Content 或具体领域包，也不拥有领域 rubric、项目 parser、repair/apply、revision mutation 或 UI。
 
-Agent Extension 只保留 `QualityCheck` Tool/Capability 与 Host materializer；Cut、Canvas、Chara、Assets 等 owning package 继续拥有各自的确定性检查、Gate policy 和修复写回。
+Desktop Agent composition 只保留 `QualityCheck` Tool/Capability 与 Host materializer；当前尚未建立 `@neko/quality` 的 Desktop 产品 consumer。Cut、Canvas、Chara、Assets 等 owning package 继续拥有各自的确定性检查、Gate policy 和修复写回。

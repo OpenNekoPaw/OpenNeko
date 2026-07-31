@@ -3,7 +3,7 @@
 - 状态：Accepted
 - 日期：2026-07-14
 - 范围：`neko-agent`、Skill、Canvas、Cut、Assets/Entity、Preview、Content、Quality、Export、Engine 与媒体 Provider。
-- 实施变更：[`../../openspec/changes/retire-idc-and-align-agent-creative-planning/`](../../openspec/changes/retire-idc-and-align-agent-creative-planning/)、[`../../openspec/changes/enable-agent-capability-aware-creative-orchestration/`](../../openspec/changes/enable-agent-capability-aware-creative-orchestration/)
+- 当前实施入口：[`clarify-desktop-capability-catalog`](../../openspec/changes/clarify-desktop-capability-catalog/) 与各 owning domain 的 capability OpenSpec；早期 IDC/创作编排 change 已清理，不再是活动实现入口。
 
 ## 实现状态（2026-07-15）
 
@@ -371,4 +371,8 @@ Capability registration/contribution 和 session effective configuration 是执�
 
 ## 后续实施
 
-IDC 清理、Plan Mode、创作者审批文档、creative execution plan 和 TODO 投影由 [`retire-idc-and-align-agent-creative-planning`](../../openspec/changes/retire-idc-and-align-agent-creative-planning/) 实施。Agent 自主编排、Skill 收敛、Tool 结果与异步续作由 [`enable-agent-capability-aware-creative-orchestration`](../../openspec/changes/enable-agent-capability-aware-creative-orchestration/) 实施；后者依赖前者提供的无 IDC canonical path。审计确认缺失的漫画理解、角色/Style/Color 参考、分镜、Animatic、多镜头依赖、音频后期和最终导出能力，应由对应 owning package 的 OpenSpec 承接；不得把这些领域实现堆入 Agent runtime。
+早期 IDC 清理与 capability-aware creative orchestration change 已完成并从活动目录清理。
+当前 Agent capability catalog 的 Desktop 接续由
+[`clarify-desktop-capability-catalog`](../../openspec/changes/clarify-desktop-capability-catalog/)
+约束；缺失的漫画理解、角色/Style/Color 参考、分镜、Animatic、多镜头依赖、音频后期和
+最终导出能力仍应由对应 owning package 的 OpenSpec 承接，不得堆入 Agent runtime。

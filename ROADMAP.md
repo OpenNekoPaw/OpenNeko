@@ -2,15 +2,14 @@
 
 Status: directional roadmap; no release dates are promised.
 
-Updated: 2026-07-28
+Updated: 2026-07-31
 
 This roadmap defines delivery order and qualification gates. Current product facts remain defined by
 [`README.md`](README.md), [`docs/architecture/client-targets.md`](docs/architecture/client-targets.md),
-and the codebase: `apps/neko-desktop` now contains the P1.1 foundation and P1.2 Shell/Project state.
-P1.3 Agent + Home deterministic implementation is in place, but the production controller
-composition and real-Host acceptance remain incomplete. Phase 1 domain integration is still in
-progress and Desktop is not a supported release product. Windows is not in the current release
-matrix, and Desktop professional-tool/plugin integrations are not implemented.
+and the codebase. Phase 1 domain integration is still in progress and Desktop is not a supported
+release product. Only `darwin-arm64` currently has Forge package qualification. Linux, Windows, and
+Intel Mac remain outside the supported set, and Desktop professional-tool/plugin integrations are
+not implemented.
 
 Each phase must be split into bounded OpenSpec changes. Shell, cross-platform work, the plugin
 runtime, and every professional-tool adapter must not be developed as one permanent umbrella change.
@@ -20,15 +19,14 @@ runtime, and every professional-tool adapter must not be developed as one perman
 Development proposal and implementation slices:
 [`plan-neko-desktop-phase-1-delivery`](openspec/changes/plan-neko-desktop-phase-1-delivery/).
 
-Create `apps/neko-desktop` with Electron main/preload/renderer, AppHost, typed IPC, Home, Project
+Complete `apps/neko-desktop` with Electron main/preload/renderer, AppHost, typed IPC, Home, Project
 Tabs, Content Project, Context Dock, and Activity/Attention. Integrate real public paths from Agent,
 Assets/Content/Media Library, Canvas, Cut, Preview/Media, Generation/Quality, Chara/Entity, and
 Tools/Diagnostics.
 
-Current progress: P1.1 and P1.2 have implementation and packaged `darwin-arm64` runtime evidence.
-P1.3 Agent and Home tasks 1-5 have deterministic implementation; acceptance remains blocked on
-Evaluation observability, the production controller composition, provider cost authorization, and
-graphical Host runtime evidence. Phase 1 remains incomplete until P1.3-P1.7 pass.
+Implementation progress, blockers, and verification evidence belong to the corresponding OpenSpec
+changes and dated status snapshots. This roadmap does not duplicate task-level state. Phase 1
+remains incomplete until every phase gate passes.
 
 The phase is complete only when:
 
@@ -50,9 +48,9 @@ Qualify the same Desktop application on:
 2. `linux-x64`, with an explicit glibc/distribution boundary;
 3. `win32-x64`, through a separate platform-contract change and real Windows evidence.
 
-The current release matrix remains `darwin-arm64` and `linux-x64`; Windows stays deferred until its
-contract, runner/host evidence, packaging, signing, installation, updates, paths, credentials,
-native modules, GPU/media, and end-to-end creative workflows pass.
+The current supported set contains only `darwin-arm64`. Linux, Windows, and Intel Mac remain
+deferred until their contracts, runner/host evidence, packaging, signing, installation, updates,
+paths, credentials, native modules, GPU/media, and end-to-end creative workflows pass.
 
 Platform differences must stay behind narrow Host adapters and capability policies. Cross-compiling
 or launching Electron alone is not platform qualification.

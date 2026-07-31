@@ -2,14 +2,13 @@
 
 状态：方向性路线，不承诺发布日期
 
-更新日期：2026-07-28
+更新日期：2026-07-31
 
 本文只定义开发顺序、阶段边界和完成门禁。当前已发布/可运行事实仍以
 [`README_CN.md`](README_CN.md)、[`docs/architecture/client-targets.md`](docs/architecture/client-targets.md)
-和代码为准：仓库已建立 `apps/neko-desktop`，P1.1 foundation 与 P1.2 Shell/Project state
-已实现；P1.3 Agent + Home 已完成确定性实现，但生产 controller composition 与真实宿主
-验收尚未收口。Phase 1 领域接入仍在进行，因此 Desktop 尚不是受支持发布产品。Windows
-仍不在当前发布闭集中，专业工具、插件和 Desktop MCP 集成也尚未实现。
+和代码为准。Phase 1 领域接入仍在进行，因此 Desktop 尚不是受支持发布产品。当前仅
+`darwin-arm64` 具有 Forge package 资格；Linux、Windows 和 Intel Mac 仍未进入支持闭集，
+专业工具、插件和 Desktop MCP 集成也尚未实现。
 
 每个阶段必须拆成边界明确的 OpenSpec change，不允许用一个长期巨型 change 同时开发 Shell、
 跨平台、插件和全部专业工具。
@@ -36,30 +35,28 @@
 
 ### 目标
 
-建立新的 `apps/neko-desktop`，完成 Home、Project Tabs、Content Project 和 Context Dock，
+完善 `apps/neko-desktop`，完成 Home、Project Tabs、Content Project 和 Context Dock，
 并把现有保留子包通过公共入口和 host-neutral adapter 接入。第一阶段交付的是可完成真实创作
 流程的 Desktop，不是静态原型或由 mock/no-op 支撑的页面集合。
 
-当前进度：P1.1 与 P1.2 已完成实现和 `darwin-arm64` packaged runtime 验证；P1.3 Agent
-与 Home 已完成 tasks 1-5 的确定性实现，仍受 Evaluation 可观测性、生产 controller
-composition、provider 成本授权和图形宿主运行证据阻塞。P1.3-P1.7 完成前，不声明
-Phase 1 完成。
+具体实施进度、阻塞和验证证据由对应 OpenSpec change 与日期化状态文档记录；本路线图
+不复制 task 级状态。所有 Phase 1 门禁通过前，不声明 Phase 1 完成。
 
 ### 范围
 
-| 能力 | 第一阶段接入要求 |
-| --- | --- |
-| Desktop Shell | Electron main/preload/renderer、AppHost、typed IPC、安全自定义协议、窗口/菜单/文件选择、Home、Project Tabs、Context Dock、Activity/Attention |
-| 前端状态 | Host authoritative snapshot、按 owner 的 Renderer replica、Window/View store、snapshot-first attachment、sequence/revision/CAS、迟到响应拒绝 |
-| Agent | 复用 Pi、AgentSession、Conversation projection、Tool Call、Approval、Skill 与现有 `AgentHostRuntimeAdapter`；不建立第二套 Agent runtime |
-| Assets / Content / Media Library | 复用 `ContentLocator`、workspace-linked library、缩略图/metadata 和受控文件授权；不复制 catalog |
-| Canvas | 接入完整 Canvas Root、`.nkc` 事实、节点/素材/候选操作和 Agent capability；不使用简化占位 surface |
-| Cut | 接入完整 Cut Root、OTIO、预览、音频、代理和 ExportJob；不恢复 Engine/client |
-| Preview / Media | 接入文档、图片、音视频和标准 3D 只读预览，使用 `@neko/media`、Node/FFmpeg 和安全 Range/PCM transport |
-| Generation / Quality | 接入 GenerationJob、candidate/review、质量检查和明确失败诊断 |
-| Chara / Entity | 只接入已经实现的角色对话、表现、证据和 representation binding；未实现的 CharacterProject/Version 明确标为 unavailable |
-| Tools / Diagnostics | 接入日志、诊断、能力状态和可恢复错误，不增加运行时控制台式产品表面 |
-| Interactive World | 在 `neko-world` canonical owner、project/run/save contract 实现前保持 unavailable；不得用 Canvas/Preview 空壳冒充 |
+| 能力                             | 第一阶段接入要求                                                                                                                             |
+| -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| Desktop Shell                    | Electron main/preload/renderer、AppHost、typed IPC、安全自定义协议、窗口/菜单/文件选择、Home、Project Tabs、Context Dock、Activity/Attention |
+| 前端状态                         | Host authoritative snapshot、按 owner 的 Renderer replica、Window/View store、snapshot-first attachment、sequence/revision/CAS、迟到响应拒绝 |
+| Agent                            | 复用 Pi、AgentSession、Conversation projection、Tool Call、Approval、Skill 与现有 `AgentHostRuntimeAdapter`；不建立第二套 Agent runtime      |
+| Assets / Content / Media Library | 复用 `ContentLocator`、workspace-linked library、缩略图/metadata 和受控文件授权；不复制 catalog                                              |
+| Canvas                           | 接入完整 Canvas Root、`.nkc` 事实、节点/素材/候选操作和 Agent capability；不使用简化占位 surface                                             |
+| Cut                              | 接入完整 Cut Root、OTIO、预览、音频、代理和 ExportJob；不恢复 Engine/client                                                                  |
+| Preview / Media                  | 接入文档、图片、音视频和标准 3D 只读预览，使用 `@neko/media`、Node/FFmpeg 和安全 Range/PCM transport                                         |
+| Generation / Quality             | 接入 GenerationJob、candidate/review、质量检查和明确失败诊断                                                                                 |
+| Chara / Entity                   | 只接入已经实现的角色对话、表现、证据和 representation binding；未实现的 CharacterProject/Version 明确标为 unavailable                        |
+| Tools / Diagnostics              | 接入日志、诊断、能力状态和可恢复错误，不增加运行时控制台式产品表面                                                                           |
+| Interactive World                | 在 `neko-world` canonical owner、project/run/save contract 实现前保持 unavailable；不得用 Canvas/Preview 空壳冒充                            |
 
 ### 建议实施切片
 
@@ -94,15 +91,15 @@ Phase 1 完成。
 
 ### 平台顺序
 
-| 目标 | 计划 | 资格边界 |
-| --- | --- | --- |
-| `darwin-arm64` | 第一参考平台 | 签名、公证、更新、Keychain、GPU/媒体、文件关联和真实创作流程 |
-| `linux-x64` | 第二资格平台 | 明确 glibc/发行版范围、包格式、桌面集成、FFmpeg/字体/音频/GPU 和真实创作流程 |
-| `win32-x64` | 第三资格平台 | 通过独立 platform-contract OpenSpec 恢复；验证安装/卸载、签名、更新、路径、长路径、进程、凭据、GPU/媒体和真实创作流程 |
+| 目标           | 计划         | 资格边界                                                                                                              |
+| -------------- | ------------ | --------------------------------------------------------------------------------------------------------------------- |
+| `darwin-arm64` | 第一参考平台 | 签名、公证、更新、Keychain、GPU/媒体、文件关联和真实创作流程                                                          |
+| `linux-x64`    | 第二资格平台 | 明确 glibc/发行版范围、包格式、桌面集成、FFmpeg/字体/音频/GPU 和真实创作流程                                          |
+| `win32-x64`    | 第三资格平台 | 通过独立 platform-contract OpenSpec 恢复；验证安装/卸载、签名、更新、路径、长路径、进程、凭据、GPU/媒体和真实创作流程 |
 
-当前仓库支持闭集仍是 `darwin-arm64` 与 `linux-x64`，Windows 仍为 deferred。只有 Windows
-OpenSpec、真实 Windows runner/host 证据和发布契约全部通过后，才能修改该闭集；不得直接
-恢复旧 Windows loader、artifact 或 fallback。
+当前仓库支持闭集仅为 `darwin-arm64`。Linux、Windows 和 Intel Mac 只有在各自 OpenSpec、
+真实 runner/host 证据和发布契约全部通过后，才能加入该闭集；不得直接恢复旧 loader、
+artifact 或 fallback。
 
 ### 横切能力
 
@@ -161,13 +158,13 @@ L5 Round-trip import / relink / review with evidence
 
 计划按以下切片交付：
 
-| 切片 | 工具 | 最小目标 |
-| --- | --- | --- |
-| 3A | ComfyUI | 发现本地服务、受控 workflow/input、API/MCP 执行、进度、输出归档和显式导入 |
-| 3B | DaVinci Resolve 与一个剪映/CapCut 目标 | 从 Cut frozen revision 导出稳定交换包、启动/打开、可验证自动化和 round-trip review |
-| 3C | Blender | 受控工程/素材交换、稳定 API/MCP/脚本入口、明确 scene/document identity 和产物回收 |
-| 3D | Unity | 受控 project/package handoff、Editor/CLI/MCP 操作、明确 project/scene identity 和构建/导出证据 |
-| 3E | Photoshop、Live2D Cubism 等 | 按各自公开稳定接口和交换格式增加 adapter，不通过私有格式猜测或像素坐标宏伪造支持 |
+| 切片 | 工具                                   | 最小目标                                                                                       |
+| ---- | -------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| 3A   | ComfyUI                                | 发现本地服务、受控 workflow/input、API/MCP 执行、进度、输出归档和显式导入                      |
+| 3B   | DaVinci Resolve 与一个剪映/CapCut 目标 | 从 Cut frozen revision 导出稳定交换包、启动/打开、可验证自动化和 round-trip review             |
+| 3C   | Blender                                | 受控工程/素材交换、稳定 API/MCP/脚本入口、明确 scene/document identity 和产物回收              |
+| 3D   | Unity                                  | 受控 project/package handoff、Editor/CLI/MCP 操作、明确 project/scene identity 和构建/导出证据 |
+| 3E   | Photoshop、Live2D Cubism 等            | 按各自公开稳定接口和交换格式增加 adapter，不通过私有格式猜测或像素坐标宏伪造支持               |
 
 精确交换格式、支持版本、平台矩阵和自动化接口由每个工具的实施 OpenSpec 决定。一个工具
 在某个平台只有 L1/L2 时必须如实展示，不能因为另一个平台达到 L3/L5 就宣称全平台完整支持。

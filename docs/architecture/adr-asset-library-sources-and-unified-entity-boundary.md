@@ -3,7 +3,7 @@
 - 状态：Accepted
 - 日期：2026-07-22
 - 范围：Media Library、Creative Entity、Content I/O、Search、Agent、Canvas、Cut、Tools、TUI 与 VS Code
-- 实施：[`retain-media-library-and-unified-entity`](../../openspec/changes/retain-media-library-and-unified-entity/)
+- 实施：[`retain-media-library-and-unified-entity`](../../openspec/changes/archive/2026-07-22-retain-media-library-and-unified-entity/)
 
 ## 决策
 
@@ -22,14 +22,14 @@ Asset catalog 还保存角色/场景分类、名称、别名和 metadata，与 C
 
 ## 责任边界
 
-| Owner | 拥有 | 不拥有 |
-| --- | --- | --- |
-| Media Library | linked roots、文件 projection、add/relink/remove、显式 copy/delete | semantic identity、target registry、cache、generated/package lifecycle |
-| Creative Entity | identity、alias、status、semantic metadata、binding、orphan/rebind | 文件字节、link、package、generated output |
-| ContentReadService | locator 的授权 stat/read | 业务 membership、cache path、UI projection |
-| ContentRepresentationService | thumbnail/proxy/preview 等语义表现 | source identity、Entity fact |
-| Document/generated/package owner | entry、revision/digest、manifest/trust 与生命周期 | Media Library membership |
-| Search | rebuildable locator/fingerprint projection | Entity 或 binding 写入 |
+| Owner                            | 拥有                                                               | 不拥有                                                                 |
+| -------------------------------- | ------------------------------------------------------------------ | ---------------------------------------------------------------------- |
+| Media Library                    | linked roots、文件 projection、add/relink/remove、显式 copy/delete | semantic identity、target registry、cache、generated/package lifecycle |
+| Creative Entity                  | identity、alias、status、semantic metadata、binding、orphan/rebind | 文件字节、link、package、generated output                              |
+| ContentReadService               | locator 的授权 stat/read                                           | 业务 membership、cache path、UI projection                             |
+| ContentRepresentationService     | thumbnail/proxy/preview 等语义表现                                 | source identity、Entity fact                                           |
+| Document/generated/package owner | entry、revision/digest、manifest/trust 与生命周期                  | Media Library membership                                               |
+| Search                           | rebuildable locator/fingerprint projection                         | Entity 或 binding 写入                                                 |
 
 ## 文件与 link
 

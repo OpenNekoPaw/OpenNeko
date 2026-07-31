@@ -1,12 +1,16 @@
 # ADR: 单扩展、单层 Workspace 与共享能力所有权边界
 
-状态：Proposed（目标架构，待分阶段实施）
+状态：Superseded / Historical（2026-07-31）
 日期：2026-07-29
 范围：`apps/neko-vscode`、`apps/neko-desktop`、`apps/neko-tui`、`packages/*`、pnpm/Turborepo workspace、VS Code Extension Host/Webview、Host ports、`@neko/shared`、平台打包与发布。
 
 本文记录 OpenNeko 将 VS Code 产品收敛为单一扩展、将 workspace 收敛为 `apps/*` 与 `packages/*` 两个单层分组，并重新明确 App、共享 Package、Host adapter 和 `@neko/shared` 所有权的目标边界。
 
-具体实施由 [`consolidate-vscode-single-extension-package`](../../openspec/changes/consolidate-vscode-single-extension-package/) 及其后继变更跟踪。在这些变更完成前，本文描述目标架构，不表示当前嵌入式功能扩展、二级 workspace 或 shared 聚合已经移除。
+单扩展阶段的实施记录已归档至
+[`consolidate-vscode-single-extension-package`](../../openspec/changes/archive/2026-07-30-consolidate-vscode-single-extension-package/)。
+当前唯一 Desktop 与一级 workspace 边界由 [`application-composition.md`](application-composition.md)、
+[`package-boundaries.md`](package-boundaries.md) 和 `flatten-desktop-only-monorepo` 接续；
+本文不再是实现入口。
 
 ## 背景
 
@@ -198,16 +202,16 @@ Agent、Canvas、Cut、Preview、Assets 等领域分别定义自己需要的窄 
 
 现有内容按 owner 迁移：
 
-| 当前内容 | 目标 owner |
-| --- | --- |
-| React components、icons、React theme | `@neko/ui` |
-| VS Code adapters | `apps/neko-vscode/src/adapters` 或 owning feature |
-| Agent、Tool、Skill、Prompt contract | Agent owning package |
-| Canvas、Storyboard contract 与 utility | Canvas domain |
-| Media、Generated Asset contract | Media 或对应 owning domain |
-| Entity、Content contract 与 utility | `@neko/entity` / `@neko/content` |
-| SQLite/local metadata | 顶层 `@neko/local-metadata` |
-| NKC、project file IO、authoring | 顶层 `@neko/project` 或其他明确 owner |
+| 当前内容                               | 目标 owner                                        |
+| -------------------------------------- | ------------------------------------------------- |
+| React components、icons、React theme   | `@neko/ui`                                        |
+| VS Code adapters                       | `apps/neko-vscode/src/adapters` 或 owning feature |
+| Agent、Tool、Skill、Prompt contract    | Agent owning package                              |
+| Canvas、Storyboard contract 与 utility | Canvas domain                                     |
+| Media、Generated Asset contract        | Media 或对应 owning domain                        |
+| Entity、Content contract 与 utility    | `@neko/entity` / `@neko/content`                  |
+| SQLite/local metadata                  | 顶层 `@neko/local-metadata`                       |
+| NKC、project file IO、authoring        | 顶层 `@neko/project` 或其他明确 owner             |
 
 最终删除 `@neko/shared` 的通配 subpath export。根入口只导出稳定基础契约，不再作为所有领域 DTO 的聚合 barrel。
 

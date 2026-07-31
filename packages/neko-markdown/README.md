@@ -68,9 +68,9 @@ MarkdownStreamingSession
 Resize reprojects/reflows the unchanged normalized revision; it does not reparse source. Layout,
 table presentation, code wrapping and theme behavior remain renderer-owned presentation policy.
 
-The Agent renderer still has a bounded legacy direct parser and is tracked by the linked OpenSpec
-change `migrate-agent-webview-to-normalized-markdown`. Until its direct parser removal/runtime gate
-passes, documentation must not claim all Markdown presentation paths have converged.
+The Agent renderer uses `MarkdownStreamingSession` and the normalized package contract. Renderer
+components still own layout and React projection, but they do not maintain a second Markdown parser
+or cross-package semantic model.
 
 ## Diagnostics, resources and security
 

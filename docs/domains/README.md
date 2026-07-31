@@ -2,9 +2,10 @@
 
 本目录用于单个保留领域的能力模型、领域数据流和领域内部架构。当前稳定的跨领域约束仍集中在 [`../architecture/README.md`](../architecture/README.md)；领域文档应在形成独立、稳定的领域事实后再建立子目录。
 
-当前保留产品领域包括 Agent、Generation、Chara、Assets/Entity、Canvas、Cut、Preview、Tools 和
-Media Runtime；Assets 的产品入口是单一 Media Library，Creative Entity 通过稳定引用与其连接。
-Generation 的实现中边界由
+当前 Desktop 已组合 Agent、Generation、Assets/Entity、Canvas、Cut、Preview 和 Media
+Runtime。Chara、Search、Quality 与媒体比较 Tools 仍保留领域 package，但尚未全部形成
+Desktop 产品路径；本索引中的“保留”不等于“已经接入”。Assets 的产品入口是单一 Media
+Library，Creative Entity 通过稳定引用与其连接。Generation 的实现中边界由
 [`extract-generation-domain-package`](../../openspec/changes/extract-generation-domain-package/)
 约束，稳定后再建立领域目录；Chara 的稳定边界见
 [`chara/README.md`](chara/README.md)。新增领域目录时使用 `docs/domains/<domain>/`，并优先提供：

@@ -2,7 +2,7 @@
 
 状态：Accepted
 日期：2026-06-29
-更新：2026-07-10
+更新：2026-07-31
 范围：`neko-agent`、`neko-canvas`、`@neko/markdown`、`@neko/shared`、`@neko/ui`、Agent Webview Markdown、Canvas authoring capabilities、Canvas 文本/表格/分镜节点、CompositeArtifact / GenericTable、Markdown 文档和资源投影。
 
 本文记录 OpenNeko 对 “Agent 生成 Markdown、Agent Webview 增强渲染、Canvas 通过 MCP 式能力创建/校验/渲染内容” 的系统级边界。它补充 [`cache-file-access-and-paths.md`](cache-file-access-and-paths.md)、[`adr-agent-autonomous-filmmaking-creation-boundary.md`](adr-agent-autonomous-filmmaking-creation-boundary.md)、[`adr-markdown-storyboard-draft-protocol.md`](adr-markdown-storyboard-draft-protocol.md)、[`adr-canvas-cut-playback-route-and-timeline-boundary.md`](adr-canvas-cut-playback-route-and-timeline-boundary.md) 和 [`proto-and-wire-contracts.md`](proto-and-wire-contracts.md)。
@@ -11,7 +11,9 @@
 
 > 2026-07-06 更新：Markdown 分镜表的生产导入已经收敛到 Canvas semantic storyboard authoring。`canvas.createStoryboardFromMarkdown` 创建 `storyboardPrompt` semantic prompt documents；Markdown 中名为 `Generation Prompt` 或 `generationPrompt` 的列只作为 prompt 输入，不重新写入 `/generationPrompt` 作为分镜提示词权威。
 
-> 2026-07-10 更新：`@neko/markdown` normalized document/session contract 与 Agent TUI canonical terminal adapter 已落地；Agent Webview 仍直接使用 `react-markdown + remark-gfm`。因此本文的 Canvas/resource boundary 继续为 Accepted，但“所有 Markdown host 已语义统一”仍是**未接受/未完成**结论。移除 gate 由 [`migrate-agent-webview-to-normalized-markdown`](../../openspec/changes/migrate-agent-webview-to-normalized-markdown/) 跟踪。
+> 2026-07-31 更新：TUI 已退出产品拓扑；Agent Webview 已使用 `MarkdownStreamingSession`
+> 和 `@neko/markdown` normalized contract。Renderer 继续拥有 React/layout projection，
+> 但不再维护第二套 Markdown parser 或跨包语义模型。
 
 ## 背景
 
@@ -80,15 +82,15 @@ Canvas capability 以工具 schema 的方式暴露给 Agent、Agent Webview 和�
 
 推荐能力：
 
-| Capability | 输入 | 输出 | 用途 |
-| --- | --- | --- | --- |
-| `canvas.ingestMarkdown` | Markdown、title、resourceRefs、target、intent/profile hints | note/table node id、resolved kind、diagnostics、actions | Agent 选中 Markdown review/apply 后的通用入口：由 Canvas 解析为 Markdown note、generic table 或 creative table |
-| `canvas.createMarkdownNote` | Markdown、title、resourceRefs、target | text/document node ids、diagnostics | 显式把分析、计划、提示词说明放到 Canvas |
-| `canvas.createTableFromMarkdown` | Markdown table、resourceRefs、target | table node id、diagnostics | lower-level generic table wrapper |
-| `canvas.createStoryboardDraftFromMarkdown` | Markdown 分镜表、profile hint、resourceRefs、target | draft/review node id、diagnostics、actions | lower-level storyboard review wrapper；storyboard 只是 creative table profile |
-| `canvas.createStoryboardFromMarkdown` | Markdown 分镜表、resourceRefs、mode、target | scene/shot/media node ids、diagnostics | 用户明确要求创建 Canvas 分镜节点 |
-| `canvas.attachResource` | node target、resourceRef、role | changed node id、diagnostics | 给已有节点挂接媒体资源 |
-| `canvas.validateMarkdownStoryboard` | Markdown、resourceRefs | diagnostics、normalized preview summary | 只校验和预览，不写 Canvas |
+| Capability                                 | 输入                                                        | 输出                                                    | 用途                                                                                                           |
+| ------------------------------------------ | ----------------------------------------------------------- | ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `canvas.ingestMarkdown`                    | Markdown、title、resourceRefs、target、intent/profile hints | note/table node id、resolved kind、diagnostics、actions | Agent 选中 Markdown review/apply 后的通用入口：由 Canvas 解析为 Markdown note、generic table 或 creative table |
+| `canvas.createMarkdownNote`                | Markdown、title、resourceRefs、target                       | text/document node ids、diagnostics                     | 显式把分析、计划、提示词说明放到 Canvas                                                                        |
+| `canvas.createTableFromMarkdown`           | Markdown table、resourceRefs、target                        | table node id、diagnostics                              | lower-level generic table wrapper                                                                              |
+| `canvas.createStoryboardDraftFromMarkdown` | Markdown 分镜表、profile hint、resourceRefs、target         | draft/review node id、diagnostics、actions              | lower-level storyboard review wrapper；storyboard 只是 creative table profile                                  |
+| `canvas.createStoryboardFromMarkdown`      | Markdown 分镜表、resourceRefs、mode、target                 | scene/shot/media node ids、diagnostics                  | 用户明确要求创建 Canvas 分镜节点                                                                               |
+| `canvas.attachResource`                    | node target、resourceRef、role                              | changed node id、diagnostics                            | 给已有节点挂接媒体资源                                                                                         |
+| `canvas.validateMarkdownStoryboard`        | Markdown、resourceRefs                                      | diagnostics、normalized preview summary                 | 只校验和预览，不写 Canvas                                                                                      |
 
 示例输入：
 
@@ -136,28 +138,14 @@ type CanvasMarkdownCapabilityId =
   | 'canvas.validateMarkdownStoryboard';
 
 type CanvasMarkdownSourceFormat =
-  | 'markdown'
-  | 'markdown-table'
-  | 'gfm-table'
-  | 'resource-reference-markdown';
+  'markdown' | 'markdown-table' | 'gfm-table' | 'resource-reference-markdown';
 
 type CanvasMarkdownCapabilityStatus =
-  | 'created'
-  | 'changed'
-  | 'validated'
-  | 'needs-review'
-  | 'blocked';
+  'created' | 'changed' | 'validated' | 'needs-review' | 'blocked';
 
-type CanvasMarkdownIngestIntent =
-  | 'auto'
-  | 'note'
-  | 'table'
-  | 'creative-table';
+type CanvasMarkdownIngestIntent = 'auto' | 'note' | 'table' | 'creative-table';
 
-type CanvasMarkdownResolvedKind =
-  | 'markdown-note'
-  | 'generic-table'
-  | 'creative-table';
+type CanvasMarkdownResolvedKind = 'markdown-note' | 'generic-table' | 'creative-table';
 
 interface CanvasMarkdownResourceRef {
   readonly token?: string;
@@ -212,13 +200,11 @@ interface CanvasCreateTableFromMarkdownInput extends CanvasMarkdownCapabilityBas
   readonly tableTitle?: string;
 }
 
-interface CanvasCreateStoryboardDraftFromMarkdownInput
-  extends CanvasMarkdownCapabilityBaseInput {
+interface CanvasCreateStoryboardDraftFromMarkdownInput extends CanvasMarkdownCapabilityBaseInput {
   readonly capabilityId: 'canvas.createStoryboardDraftFromMarkdown';
 }
 
-interface CanvasCreateStoryboardFromMarkdownInput
-  extends CanvasMarkdownCapabilityBaseInput {
+interface CanvasCreateStoryboardFromMarkdownInput extends CanvasMarkdownCapabilityBaseInput {
   readonly capabilityId: 'canvas.createStoryboardFromMarkdown';
   readonly mode?: 'review-first' | 'create-nodes';
 }
@@ -231,8 +217,7 @@ interface CanvasAttachResourceInput {
   readonly provenance?: CanvasAgentProvenance;
 }
 
-interface CanvasValidateMarkdownStoryboardInput
-  extends CanvasMarkdownCapabilityBaseInput {
+interface CanvasValidateMarkdownStoryboardInput extends CanvasMarkdownCapabilityBaseInput {
   readonly capabilityId: 'canvas.validateMarkdownStoryboard';
 }
 
@@ -265,12 +250,12 @@ interface CanvasMarkdownCapabilityResult {
 
 Agent Webview 的 `Send to Canvas` 是快捷 handoff，而不是 Canvas 命令按钮。它构造 typed context payload：source content、source kind、stable resource refs、semantic stable refs、diagnostics、prompt spans、title、provenance、user intent 和 target hints。Extension Host 只把它转成普通 Agent user message + context payload，不预激活 Canvas Skill，不选择 Canvas tool，不调用 `neko.canvas.importAsset`。
 
-| 用户动作 | 语义 | 允许的后续路径 |
-| --- | --- | --- |
-| Send to Canvas | Agent-visible authoring handoff | Agent 查询 catalog/context 后选择 Canvas tool、Markdown capability、直接 import、询问用户或拒绝 |
-| Import / Add Source to Canvas | 显式素材导入 | Extension 可调用 `neko.canvas.importAsset` 或 Canvas add-source path |
-| Agent-selected Markdown review/apply | Canvas-owned Markdown capability | `canvas.ingestMarkdown`、`canvas.createTableFromMarkdown`、`canvas.createStoryboardFromMarkdown` 等 lifecycle/tool invocation |
-| Agent-selected node/composite authoring | Canvas-owned node tools | `canvas_create_node`、`canvas_create_composite`、`canvas_update_block`、`canvas_apply_agent_content` 等 |
+| 用户动作                                | 语义                             | 允许的后续路径                                                                                                                |
+| --------------------------------------- | -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| Send to Canvas                          | Agent-visible authoring handoff  | Agent 查询 catalog/context 后选择 Canvas tool、Markdown capability、直接 import、询问用户或拒绝                               |
+| Import / Add Source to Canvas           | 显式素材导入                     | Extension 可调用 `neko.canvas.importAsset` 或 Canvas add-source path                                                          |
+| Agent-selected Markdown review/apply    | Canvas-owned Markdown capability | `canvas.ingestMarkdown`、`canvas.createTableFromMarkdown`、`canvas.createStoryboardFromMarkdown` 等 lifecycle/tool invocation |
+| Agent-selected node/composite authoring | Canvas-owned node tools          | `canvas_create_node`、`canvas_create_composite`、`canvas_update_block`、`canvas_apply_agent_content` 等                       |
 
 默认动作应偏 review-first：
 
@@ -284,14 +269,12 @@ Agent Webview 的 `Send to Canvas` 是快捷 handoff，而不是 Canvas 命令�
 
 Agent Webview Markdown renderer 应支持资源增强渲染，但只作为当前消息的展示投影。该能力必须分阶段实施，避免把 Neko resource-reference parser、文档 resolver 和 Canvas capability 同时塞进同一轮变更。
 
-当前宿主状态（2026-07-10）：
+当前宿主状态（2026-07-31）：
 
 - `@neko/markdown` 已拥有 authoritative source、exhaustive CommonMark/GFM normalized nodes、半开 UTF-16 ranges、annotations、resolution association、diagnostics 和 append/finalize `MarkdownStreamingSession`。
-- Agent TUI assistant Markdown 已从首 delta 到 finalize 统一进入 normalized session → terminal projector → layout/highlighter → safe encoder → thin Ink adapter；resize 对同一 revision reflow，不重新 parse。
-- TUI 的 regex parser、逐行 regex highlighter、final-only renderer 和 assistant `StreamingText` Markdown path 已移除且不得 fallback。
-- Agent Webview **尚未迁移**：普通 Markdown/GFM 仍由 `react-markdown + remark-gfm` 直接解释；creative table、code language 和部分 React components 仍依赖该 parser AST，同时另行消费部分 `@neko/markdown` extension/resource projection。
-- 因此 cross-host semantic unification 仍未 Accepted。Webview 必须完成 normalized adapter、shared fixtures、direct dependency cleanup、legacy parser poison 和 Extension Development Host runtime acceptance 后，才能移除此 gate。
-- Webview 审计见 [`webview-audit.md`](../../openspec/changes/normalize-agent-tui-markdown-rendering/webview-audit.md)，实施变更见 [`migrate-agent-webview-to-normalized-markdown`](../../openspec/changes/migrate-agent-webview-to-normalized-markdown/)。
+- Agent Webview 从流式 delta 到 finalize 统一进入 normalized session；resize 只重排同一 revision，不重新解析 authoritative source。
+- 旧 TUI、`react-markdown` direct parser 和 Extension Development Host 不再是产品、实现或验收入口。
+- Markdown package 拥有语义 contract；Agent renderer 只拥有 projector、React component、layout、theme 和 interaction policy。
 - `![[...]]` / `[[...]]` 在 resolver-backed 完整实现前必须保留文本并返回 unsupported diagnostic，不能被当作稳定资源成功解析；Send to Canvas 仍通过 `requestCanvasAuthoringHandoff` 进入 Agent，不直接调用 Canvas capability。
 
 后续资源增强阶段：
@@ -310,13 +293,13 @@ Agent Webview Markdown renderer 应支持资源增强渲染，但只作为当前
 
 语义：
 
-| 语法 | 含义 | 解析结果 |
-| --- | --- | --- |
-| `![[cover.png]]` | Neko resource-reference embed；表示项目/turn 资源 token 或 host 可解析文件引用 | resource lookup hint；绑定到 `ResourceRef` 后显示图片 |
-| `![[Chapter 1#Section]]` | 文档或 Markdown section embed | document locator / context link；可渲染为 excerpt card 或跳转链接，不默认当图片 |
-| `![cover](assets/cover.png)` | CommonMark image | workspace-relative/source ref lookup hint；可解析时显示图片，不可解析时诊断 |
-| `[[Chapter 1#Section]]` | 内部文档链接 | 文档 locator/context link，不嵌入媒体 |
-| `P1` / `cover` / `read-image-cover.jpg` in table cell | 表格资源 token | 只作为 lookup hint；不能作为成功路径 |
+| 语法                                                  | 含义                                                                           | 解析结果                                                                        |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------- |
+| `![[cover.png]]`                                      | Neko resource-reference embed；表示项目/turn 资源 token 或 host 可解析文件引用 | resource lookup hint；绑定到 `ResourceRef` 后显示图片                           |
+| `![[Chapter 1#Section]]`                              | 文档或 Markdown section embed                                                  | document locator / context link；可渲染为 excerpt card 或跳转链接，不默认当图片 |
+| `![cover](assets/cover.png)`                          | CommonMark image                                                               | workspace-relative/source ref lookup hint；可解析时显示图片，不可解析时诊断     |
+| `[[Chapter 1#Section]]`                               | 内部文档链接                                                                   | 文档 locator/context link，不嵌入媒体                                           |
+| `P1` / `cover` / `read-image-cover.jpg` in table cell | 表格资源 token                                                                 | 只作为 lookup hint；不能作为成功路径                                            |
 
 增强渲染规则：
 
@@ -343,19 +326,19 @@ output:
     - commonmark-image
   resourceReferences:
     preferred:
-      - "![[resource-token]]"
-      - "![alt](workspace-relative-or-variable-path)"
-      - "table cell token"
+      - '![[resource-token]]'
+      - '![alt](workspace-relative-or-variable-path)'
+      - 'table cell token'
     forbidden:
-      - "webviewUri"
-      - "blob:"
-      - "cachePath"
-      - "/tmp"
-      - "/var/folders"
+      - 'webviewUri'
+      - 'blob:'
+      - 'cachePath'
+      - '/tmp'
+      - '/var/folders'
   canvasActions:
     preferred:
-      - "canvas.ingestMarkdown"
-      - "canvas.createStoryboardFromMarkdown"
+      - 'canvas.ingestMarkdown'
+      - 'canvas.createStoryboardFromMarkdown'
 ```
 
 Prompt wording example:
@@ -416,14 +399,14 @@ Markdown token、`![[...]]`、CommonMark image URL 和表格单元格文本都�
 
 ## 包边界
 
-| 包 | 职责 |
-| --- | --- |
-| `neko-agent` | 生成 Markdown/文本/结构化内容、展示增强 Markdown、创建 Agent-visible Canvas handoff、由 Agent runtime 自主选择 Skill/tool |
-| `neko-canvas` | 暴露 authoring catalog、Canvas-owned Skills/tools/capabilities；校验、绑定资源、创建节点、渲染 Canvas 内容 |
+| 包               | 职责                                                                                                                                                                                       |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `neko-agent`     | 生成 Markdown/文本/结构化内容、展示增强 Markdown、创建 Agent-visible Canvas handoff、由 Agent runtime 自主选择 Skill/tool                                                                  |
+| `neko-canvas`    | 暴露 authoring catalog、Canvas-owned Skills/tools/capabilities；校验、绑定资源、创建节点、渲染 Canvas 内容                                                                                 |
 | `@neko/markdown` | authoritative source、normalized CommonMark/GFM/extension nodes、ranges、annotations、diagnostics、streaming session 与 resolution/renderer adapter contracts；不做 Canvas 校验或 mutation |
-| `@neko/shared` | 跨包 DTO：ResourceRef、DocumentArchiveResourceRef、Canvas authoring catalog/result、capability input/output 的最小共享契约 |
-| Extension Host | stable ref -> bytes/cache/renderUri；路径授权、CSP、diagnostics |
-| `@neko/ui` | 可复用的无业务 Markdown/table/resource cell UI 原语，成熟后再提取 |
+| `@neko/shared`   | 跨包 DTO：ResourceRef、DocumentArchiveResourceRef、Canvas authoring catalog/result、capability input/output 的最小共享契约                                                                 |
+| Extension Host   | stable ref -> bytes/cache/renderUri；路径授权、CSP、diagnostics                                                                                                                            |
+| `@neko/ui`       | 可复用的无业务 Markdown/table/resource cell UI 原语，成熟后再提取                                                                                                                          |
 
 依赖方向：
 

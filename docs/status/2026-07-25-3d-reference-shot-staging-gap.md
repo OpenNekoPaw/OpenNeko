@@ -11,7 +11,9 @@
 - 单主体 staging 状态：[`model-preview.ts`](../../packages/neko-types/src/types/model-preview.ts)
 - 3D Reference subject/output contract：[`three-reference.ts`](../../packages/neko-types/src/types/three-reference.ts)
 - 单 primary-subject 和非时间线设计：[`design.md`](../../openspec/changes/add-3d-reference-staging/design.md)
-- 视频生成显式拒绝 3D Reference：[`mediaTurnBridge.ts`](../../packages/neko-agent/packages/extension/src/services/mediaTurnBridge.ts)
+- 视频生成显式拒绝 3D Reference：当时位于
+  `packages/neko-agent/packages/extension/src/services/mediaTurnBridge.ts`；该 VS Code
+  source path 已随 Desktop-only 拓扑迁移删除，本条只保留为 2026-07-25 历史证据。
 - 当前视频请求字段：[`contracts.ts`](../../packages/neko-generation/src/contracts.ts)
 - 未完成任务与运行态阻塞：[`tasks.md`](../../openspec/changes/add-3d-reference-staging/tasks.md)、[`verification.md`](../../openspec/changes/add-3d-reference-staging/verification.md)
 
