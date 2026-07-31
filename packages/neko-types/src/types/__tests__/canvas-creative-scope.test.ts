@@ -10,7 +10,7 @@ describe('canvas creative scope contracts', () => {
       [],
     );
     expect(
-      validateCanvasBoardRef({ kind: 'workspace-path', path: 'vscode-webview://runtime/board' }),
+      validateCanvasBoardRef({ kind: 'workspace-path', path: 'neko-media://runtime/board' }),
     ).toEqual([
       expect.objectContaining({
         code: 'unsafe-board-ref',

@@ -27,10 +27,6 @@ vi.mock('@/messages', () => ({
     openConfigFile: messageMocks.openConfigFile,
     openUserConfigFile: messageMocks.openUserConfigFile,
   },
-  VSCodeMessages: {
-    openConfigFile: messageMocks.openConfigFile,
-    openUserConfigFile: messageMocks.openUserConfigFile,
-  },
 }));
 
 describe('AccountBar', () => {

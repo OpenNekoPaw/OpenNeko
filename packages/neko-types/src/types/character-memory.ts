@@ -17,6 +17,7 @@ import type {
 import { isCreativeEntityCandidate } from './creative-entity-asset-composition';
 import type { DocumentSourceRef } from './document-reading';
 import type { ArtifactResourceRef } from './composite-artifact';
+import { isHostProjectedRuntimeValue } from './content-access';
 
 export const CHARACTER_MEMORY_FILE_VERSION = 1 as const;
 
@@ -1591,8 +1592,7 @@ function isUnsafeRuntimeHandle(value: string): boolean {
   return (
     trimmed.startsWith('blob:') ||
     trimmed.startsWith('data:') ||
-    trimmed.startsWith('vscode-resource:') ||
-    trimmed.startsWith('vscode-webview-resource:') ||
+    isHostProjectedRuntimeValue(trimmed) ||
     trimmed.startsWith('file:') ||
     trimmed.startsWith('http://localhost') ||
     trimmed.startsWith('https://localhost') ||

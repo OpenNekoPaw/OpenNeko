@@ -44,7 +44,7 @@ describe('useCanvasHostMessages keyboard action guards', () => {
 
   it('keeps editor-level keyboard actions inside the active text input', () => {
     act(() => {
-      root.render(<VSCodeMessageHarness action={action} isComposingRef={isComposingRef} />);
+      root.render(<HostMessageHarness action={action} isComposingRef={isComposingRef} />);
     });
 
     const input = document.createElement('input');
@@ -62,7 +62,7 @@ describe('useCanvasHostMessages keyboard action guards', () => {
 
   it('keeps editor-level keyboard actions out while IME composition is active', () => {
     act(() => {
-      root.render(<VSCodeMessageHarness action={action} isComposingRef={isComposingRef} />);
+      root.render(<HostMessageHarness action={action} isComposingRef={isComposingRef} />);
     });
 
     act(() => {
@@ -81,7 +81,7 @@ describe('useCanvasHostMessages keyboard action guards', () => {
 
     act(() => {
       root.render(
-        <VSCodeMessageHarness
+        <HostMessageHarness
           action={action}
           isComposingRef={isComposingRef}
           isKeyboardFocusedRef={isKeyboardFocusedRef}
@@ -104,7 +104,7 @@ describe('useCanvasHostMessages keyboard action guards', () => {
 
     act(() => {
       root.render(
-        <VSCodeMessageHarness
+        <HostMessageHarness
           action={action}
           isComposingRef={isComposingRef}
           options={{
@@ -155,7 +155,7 @@ describe('useCanvasHostMessages keyboard action guards', () => {
     useHistoryStore.getState().clear();
 
     act(() => {
-      root.render(<VSCodeMessageHarness action={action} isComposingRef={isComposingRef} />);
+      root.render(<HostMessageHarness action={action} isComposingRef={isComposingRef} />);
     });
     act(() => {
       postHostMessage({ type: 'update', data: hostCanvas });
@@ -174,7 +174,7 @@ describe('useCanvasHostMessages keyboard action guards', () => {
 
     act(() => {
       root.render(
-        <VSCodeMessageHarness
+        <HostMessageHarness
           action={action}
           isComposingRef={isComposingRef}
           options={{
@@ -201,7 +201,7 @@ describe('useCanvasHostMessages keyboard action guards', () => {
 
     act(() => {
       root.render(
-        <VSCodeMessageHarness
+        <HostMessageHarness
           action={action}
           isComposingRef={isComposingRef}
           options={{ hostPort }}
@@ -235,7 +235,7 @@ describe('useCanvasHostMessages keyboard action guards', () => {
 
     act(() => {
       root.render(
-        <VSCodeMessageHarness
+        <HostMessageHarness
           action={action}
           isComposingRef={isComposingRef}
           options={{
@@ -259,12 +259,12 @@ describe('useCanvasHostMessages keyboard action guards', () => {
     expect(hostPort.postMessage).toHaveBeenCalledWith({ type: 'canvasDataReady' });
   });
 
-  it('notifies the app when the extension confirms a custom document save', () => {
+  it('notifies the app when the host confirms a document save', () => {
     const onSaved = vi.fn();
 
     act(() => {
       root.render(
-        <VSCodeMessageHarness
+        <HostMessageHarness
           action={action}
           isComposingRef={isComposingRef}
           options={{ onSaved }}
@@ -284,7 +284,7 @@ describe('useCanvasHostMessages keyboard action guards', () => {
 
     act(() => {
       root.render(
-        <VSCodeMessageHarness
+        <HostMessageHarness
           action={action}
           isComposingRef={isComposingRef}
           options={{ onRevealPlaybackWorkspace }}
@@ -314,7 +314,7 @@ describe('useCanvasHostMessages keyboard action guards', () => {
 
     act(() => {
       root.render(
-        <VSCodeMessageHarness
+        <HostMessageHarness
           action={action}
           isComposingRef={isComposingRef}
           options={{
@@ -350,7 +350,7 @@ describe('useCanvasHostMessages keyboard action guards', () => {
   });
 });
 
-function VSCodeMessageHarness({
+function HostMessageHarness({
   action,
   isComposingRef,
   isKeyboardFocusedRef,

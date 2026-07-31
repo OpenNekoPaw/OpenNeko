@@ -1,4 +1,5 @@
 import { validateContentLocator, type ContentLocator } from './content-locator';
+import { isHostProjectedRuntimeValue } from './content-access';
 import type { GeneratedAsset, GeneratedAssetMediaKind } from './generated-asset';
 import { isCanvasMaterialGenerationContext, type CanvasMaterialGenerationContext } from './canvas';
 import {
@@ -990,7 +991,8 @@ function isRuntimeValue(value: string): boolean {
   return (
     normalized.includes('/.neko/.cache/') ||
     normalized.startsWith('.neko/.cache/') ||
-    /^(?:blob|data|vscode-webview|render|preview):/i.test(normalized)
+    isHostProjectedRuntimeValue(normalized) ||
+    /^(?:render|preview):/i.test(normalized)
   );
 }
 

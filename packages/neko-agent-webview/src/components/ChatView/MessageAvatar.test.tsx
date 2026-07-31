@@ -8,14 +8,14 @@ describe('MessageAvatar', () => {
       <MessageAvatar
         role="assistant"
         label="小橘"
-        imageUri="vscode-webview://avatars/xiaoju.png"
+        imageUri="neko-media://avatars/xiaoju.png"
         title="小橘"
       />,
     );
 
     const avatar = screen.getByLabelText('小橘');
     const image = avatar.querySelector('img');
-    expect(image?.getAttribute('src')).toBe('vscode-webview://avatars/xiaoju.png');
+    expect(image?.getAttribute('src')).toBe('neko-media://avatars/xiaoju.png');
   });
 
   it('falls back to the text label when the image fails to load', () => {
@@ -23,7 +23,7 @@ describe('MessageAvatar', () => {
       <MessageAvatar
         role="assistant"
         label="Character feedback"
-        imageUri="vscode-webview://avatars/missing.png"
+        imageUri="neko-media://avatars/missing.png"
         title="Character feedback"
       />,
     );

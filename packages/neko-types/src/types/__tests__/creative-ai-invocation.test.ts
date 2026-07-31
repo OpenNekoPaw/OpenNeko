@@ -171,7 +171,7 @@ describe('creative AI invocation contracts', () => {
   });
 
   it('rejects runtime handles and cache paths as durable invocation identity', () => {
-    expect(isRuntimeOnlyCreativeAiIdentityValue('blob:vscode/preview')).toBe(true);
+    expect(isRuntimeOnlyCreativeAiIdentityValue('blob:neko-media/preview')).toBe(true);
     expect(isRuntimeOnlyCreativeAiIdentityValue('.neko/.cache/generated/image.png')).toBe(true);
     expect(isRuntimeOnlyCreativeAiIdentityValue('boards/intro.nkc')).toBe(false);
 
@@ -179,7 +179,7 @@ describe('creative AI invocation contracts', () => {
       ...validExternalInvocation(),
       sourceRef: {
         ...sourceRef,
-        contentLocator: { kind: 'workspace-file', path: 'vscode-webview://panel/generated.png' },
+        contentLocator: { kind: 'workspace-file', path: 'neko-media://panel/generated.png' },
       },
     });
 

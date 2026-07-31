@@ -1,4 +1,5 @@
 import { isResourceRef, type ResourceRef } from './resource-cache';
+import { isHostProjectedRuntimeValue } from './content-access';
 
 export type DurableResourceRefDiagnosticCode =
   'invalid-resource-ref' | 'runtime-resource-identity' | 'preview-resource-identity';
@@ -16,8 +17,6 @@ export interface DurableResourceRefValidationResult {
 }
 
 const RUNTIME_RESOURCE_PATTERNS = [
-  /^vscode-(?:webview-resource|resource):/i,
-  /^vscode-webview:\/\//i,
   /(?:^|[\\/])\.neko[\\/]\.?cache(?:[\\/]|$)/i,
   /(?:^|[\\/])cache(?:[\\/]|$)/i,
   /^(?:render|preview|engine-session|provider-task):\/\//i,
@@ -27,7 +26,8 @@ const RUNTIME_RESOURCE_PATTERNS = [
 export function isRuntimeOnlyResourceIdentityValue(value: unknown): boolean {
   return (
     typeof value === 'string' &&
-    RUNTIME_RESOURCE_PATTERNS.some((pattern) => pattern.test(value.trim()))
+    (isHostProjectedRuntimeValue(value.trim()) ||
+      RUNTIME_RESOURCE_PATTERNS.some((pattern) => pattern.test(value.trim())))
   );
 }
 

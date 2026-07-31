@@ -13,6 +13,7 @@ import {
   type ProcessorContentProjection,
   type WebviewContentProjection,
 } from '../content-io';
+import { isHostProjectedRuntimeValue } from '../content-access';
 
 const locator = {
   kind: 'workspace-file' as const,
@@ -21,6 +22,14 @@ const locator = {
 };
 
 describe('content I/O contracts', () => {
+  it('rejects current and retired host-projected runtime URIs', () => {
+    expect(isHostProjectedRuntimeValue('neko-media://panel/content')).toBe(true);
+    expect(isHostProjectedRuntimeValue('neko-app://desktop/index.html')).toBe(true);
+    expect(isHostProjectedRuntimeValue('vscode-webview://panel/content')).toBe(true);
+    expect(isHostProjectedRuntimeValue('vscode-resource://panel/content')).toBe(true);
+    expect(isHostProjectedRuntimeValue('${WORKSPACE}/assets/content.png')).toBe(false);
+  });
+
   it('accepts only bounded read and fingerprint precondition options', () => {
     expect(
       isContentReadOptions({
@@ -59,7 +68,7 @@ describe('content I/O contracts', () => {
       status: 'ready',
       kind: 'webview',
       locator,
-      uri: 'vscode-webview-resource://panel/content',
+      uri: 'neko-media://panel/content',
     };
     const engine: EngineContentProjection = {
       status: 'ready',

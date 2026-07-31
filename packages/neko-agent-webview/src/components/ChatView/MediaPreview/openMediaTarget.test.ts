@@ -1,14 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 import { openMediaTarget } from './openMediaTarget';
 
-const mockVSCodeMessages = vi.hoisted(() => ({
+const mockHostMessages = vi.hoisted(() => ({
   openFile: vi.fn(),
   openUrl: vi.fn(),
 }));
 
 vi.mock('@/messages', () => ({
-  AgentHostMessages: mockVSCodeMessages,
-  VSCodeMessages: mockVSCodeMessages,
+  AgentHostMessages: mockHostMessages,
 }));
 
 describe('openMediaTarget', () => {
@@ -17,7 +16,7 @@ describe('openMediaTarget', () => {
       'Host file open requires a ContentLocator.',
     );
 
-    expect(mockVSCodeMessages.openFile).not.toHaveBeenCalled();
-    expect(mockVSCodeMessages.openUrl).not.toHaveBeenCalled();
+    expect(mockHostMessages.openFile).not.toHaveBeenCalled();
+    expect(mockHostMessages.openUrl).not.toHaveBeenCalled();
   });
 });

@@ -73,7 +73,7 @@ describe('content locator contracts', () => {
       '${MEDIA}/image.png',
       'neko/assets/../private.png',
       '.neko/.cache/resources/image.png',
-      'vscode-webview://panel/image.png',
+      'neko-media://panel/image.png',
     ];
 
     for (const path of paths) {
@@ -130,7 +130,7 @@ describe('content locator contracts', () => {
       {
         kind: 'workspace-file',
         path: 'neko/assets/Characters/alice.png',
-        webviewUri: 'vscode-webview://panel/alice.png',
+        webviewUri: 'neko-media://panel/alice.png',
       },
       {
         kind: 'workspace-file',

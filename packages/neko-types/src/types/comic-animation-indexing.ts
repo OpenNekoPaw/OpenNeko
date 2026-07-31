@@ -17,6 +17,7 @@ import type {
   GenericTableColumn,
   GenericTableRow,
 } from './composite-artifact';
+import { isHostProjectedRuntimeValue } from './content-access';
 import type {
   CharacterMemoryJsonRecord,
   CharacterMemoryJsonValue,
@@ -2174,9 +2175,7 @@ function isUnsafeRuntimeHandle(value: string): boolean {
     normalized.startsWith('blob:') ||
     normalized.startsWith('data:') ||
     normalized.startsWith('object:') ||
-    normalized.startsWith('vscode-resource:') ||
-    normalized.startsWith('vscode-webview-resource:') ||
-    normalized.startsWith('vscode-webview://') ||
+    isHostProjectedRuntimeValue(normalized) ||
     normalized.startsWith('file:') ||
     normalized.startsWith('http://localhost') ||
     normalized.startsWith('https://localhost') ||

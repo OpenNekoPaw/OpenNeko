@@ -1,4 +1,5 @@
 import { isContentLocator, type ContentLocator } from './content-locator';
+import { isHostProjectedRuntimeValue } from './content-access';
 
 export const CREATIVE_AI_INVOCATION_SCHEMA_VERSION = 1 as const;
 
@@ -397,9 +398,6 @@ export interface CreativeAiCandidatePromotionResult {
 }
 
 const RUNTIME_ONLY_IDENTITY_PATTERNS: readonly RegExp[] = [
-  /^vscode-webview:\/\//i,
-  /^vscode-resource:\/\//i,
-  /^vscode-webview-resource:\/\//i,
   /^blob:/i,
   /^object:/i,
   /^data:/i,
@@ -1036,7 +1034,10 @@ export function createCreativeAiDiagnostic(
 
 export function isRuntimeOnlyCreativeAiIdentityValue(value: string): boolean {
   const normalized = value.trim();
-  return RUNTIME_ONLY_IDENTITY_PATTERNS.some((pattern) => pattern.test(normalized));
+  return (
+    isHostProjectedRuntimeValue(normalized) ||
+    RUNTIME_ONLY_IDENTITY_PATTERNS.some((pattern) => pattern.test(normalized))
+  );
 }
 
 function validateCreativeAiRefBase(

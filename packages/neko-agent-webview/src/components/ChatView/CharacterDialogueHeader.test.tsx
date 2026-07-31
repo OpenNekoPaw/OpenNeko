@@ -12,9 +12,6 @@ vi.mock('@/messages', () => ({
   AgentHostMessages: {
     exitCharacterDialogueSession: (...args: unknown[]) => exitCharacterDialogueSession(...args),
   },
-  VSCodeMessages: {
-    exitCharacterDialogueSession: (...args: unknown[]) => exitCharacterDialogueSession(...args),
-  },
 }));
 
 describe('CharacterDialogueHeader', () => {

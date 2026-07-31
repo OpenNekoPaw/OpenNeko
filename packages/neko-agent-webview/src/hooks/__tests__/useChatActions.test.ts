@@ -4,7 +4,7 @@ import { useRef } from 'react';
 import { parseSendMessageWebviewMessage } from '@neko-agent/types';
 import { useChatActions } from '../useChatActions';
 
-const vscodeMocks = vi.hoisted(() => ({
+const hostMocks = vi.hoisted(() => ({
   sendMessage: vi.fn(),
   invokeSlashCommand: vi.fn(),
   invokeSkill: vi.fn(),
@@ -13,16 +13,10 @@ const vscodeMocks = vi.hoisted(() => ({
 
 vi.mock('@/messages', () => ({
   AgentHostMessages: {
-    sendMessage: vscodeMocks.sendMessage,
-    invokeSlashCommand: vscodeMocks.invokeSlashCommand,
-    invokeSkill: vscodeMocks.invokeSkill,
-    cancelMessage: vscodeMocks.cancelMessage,
-  },
-  VSCodeMessages: {
-    sendMessage: vscodeMocks.sendMessage,
-    invokeSlashCommand: vscodeMocks.invokeSlashCommand,
-    invokeSkill: vscodeMocks.invokeSkill,
-    cancelMessage: vscodeMocks.cancelMessage,
+    sendMessage: hostMocks.sendMessage,
+    invokeSlashCommand: hostMocks.invokeSlashCommand,
+    invokeSkill: hostMocks.invokeSkill,
+    cancelMessage: hostMocks.cancelMessage,
   },
 }));
 
@@ -63,12 +57,12 @@ describe('useChatActions', () => {
       result.current.handleSend();
     });
 
-    expect(vscodeMocks.invokeSlashCommand).toHaveBeenCalledWith(
+    expect(hostMocks.invokeSlashCommand).toHaveBeenCalledWith(
       'as',
       '@小明 --consult hello',
       'conv-1',
     );
-    expect(vscodeMocks.sendMessage).not.toHaveBeenCalled();
+    expect(hostMocks.sendMessage).not.toHaveBeenCalled();
     expect(setMessages).not.toHaveBeenCalled();
     expect(setIsThinking).not.toHaveBeenCalled();
     expect(setStreamingMessageId).not.toHaveBeenCalled();
@@ -107,8 +101,8 @@ describe('useChatActions', () => {
       result.current.handleSend();
     });
 
-    expect(vscodeMocks.invokeSlashCommand).not.toHaveBeenCalled();
-    expect(vscodeMocks.sendMessage).toHaveBeenCalledWith(
+    expect(hostMocks.invokeSlashCommand).not.toHaveBeenCalled();
+    expect(hostMocks.sendMessage).toHaveBeenCalledWith(
       expect.objectContaining({
         conversationId: 'conv-1',
         message: '/not-a-builtin hello',
@@ -158,13 +152,9 @@ describe('useChatActions', () => {
       result.current.handleSend();
     });
 
-    expect(vscodeMocks.invokeSkill).toHaveBeenCalledWith(
-      'quality-review',
-      'changed files',
-      'conv-1',
-    );
-    expect(vscodeMocks.invokeSlashCommand).not.toHaveBeenCalled();
-    expect(vscodeMocks.sendMessage).not.toHaveBeenCalled();
+    expect(hostMocks.invokeSkill).toHaveBeenCalledWith('quality-review', 'changed files', 'conv-1');
+    expect(hostMocks.invokeSlashCommand).not.toHaveBeenCalled();
+    expect(hostMocks.sendMessage).not.toHaveBeenCalled();
     expect(setMessages).not.toHaveBeenCalled();
     expect(setIsThinking).not.toHaveBeenCalled();
     expect(setStreamingMessageId).not.toHaveBeenCalled();
@@ -203,7 +193,7 @@ describe('useChatActions', () => {
       result.current.handleSend();
     });
 
-    expect(vscodeMocks.sendMessage).not.toHaveBeenCalled();
+    expect(hostMocks.sendMessage).not.toHaveBeenCalled();
     expect(setMessages).not.toHaveBeenCalled();
     expect(setIsThinking).not.toHaveBeenCalled();
     expect(setStreamingMessageId).not.toHaveBeenCalled();
@@ -244,7 +234,7 @@ describe('useChatActions', () => {
       messageText: '从这里开始一个默认 Agent 对话',
       displayMessageText: '从这里开始一个默认 Agent 对话',
     });
-    expect(vscodeMocks.sendMessage).not.toHaveBeenCalled();
+    expect(hostMocks.sendMessage).not.toHaveBeenCalled();
     expect(setMessages).not.toHaveBeenCalled();
     expect(setIsThinking).not.toHaveBeenCalled();
     expect(setStreamingMessageId).not.toHaveBeenCalled();
@@ -281,7 +271,7 @@ describe('useChatActions', () => {
       messageText: 'Use this selected clip',
       displayMessageText: 'Use this selected clip',
     });
-    expect(vscodeMocks.sendMessage).not.toHaveBeenCalled();
+    expect(hostMocks.sendMessage).not.toHaveBeenCalled();
   });
 
   it('sends builtin slash-looking text as role session content during character role sessions', () => {
@@ -313,8 +303,8 @@ describe('useChatActions', () => {
       result.current.handleSend();
     });
 
-    expect(vscodeMocks.invokeSlashCommand).not.toHaveBeenCalled();
-    expect(vscodeMocks.sendMessage).toHaveBeenCalledWith(
+    expect(hostMocks.invokeSlashCommand).not.toHaveBeenCalled();
+    expect(hostMocks.sendMessage).toHaveBeenCalledWith(
       expect.objectContaining({
         conversationId: 'role-session-1',
         message: '/as @小明 --consult hello',
@@ -363,7 +353,7 @@ describe('useChatActions', () => {
       result.current.handleSend();
     });
 
-    expect(vscodeMocks.sendMessage).toHaveBeenCalledWith(
+    expect(hostMocks.sendMessage).toHaveBeenCalledWith(
       expect.objectContaining({
         conversationId: 'conv-deepseek',
         message: '你好',
@@ -431,14 +421,14 @@ describe('useChatActions', () => {
       result.current.handleSend();
     });
 
-    expect(vscodeMocks.sendMessage).toHaveBeenCalledWith(
+    expect(hostMocks.sendMessage).toHaveBeenCalledWith(
       expect.objectContaining({
         conversationId: 'conv-image',
         message: '生成一张图片',
         sessionMode: 'image',
       }),
     );
-    const payload = { type: 'sendMessage', ...vscodeMocks.sendMessage.mock.calls[0]?.[0] };
+    const payload = { type: 'sendMessage', ...hostMocks.sendMessage.mock.calls[0]?.[0] };
     expect(payload).not.toHaveProperty('purposeModels');
     expect(payload).not.toHaveProperty('chatModel');
     expect(parseSendMessageWebviewMessage(payload)).toEqual(
@@ -502,7 +492,7 @@ describe('useChatActions', () => {
       result.current.handleSend();
     });
 
-    expect(vscodeMocks.sendMessage).toHaveBeenCalledWith(
+    expect(hostMocks.sendMessage).toHaveBeenCalledWith(
       expect.objectContaining({
         conversationId: 'conv-music',
         purposeModels: {
@@ -514,7 +504,7 @@ describe('useChatActions', () => {
         },
       }),
     );
-    expect(vscodeMocks.sendMessage.mock.calls[0]?.[0]?.purposeModels).not.toHaveProperty([
+    expect(hostMocks.sendMessage.mock.calls[0]?.[0]?.purposeModels).not.toHaveProperty([
       'audio.generate',
     ]);
   });
@@ -557,7 +547,7 @@ describe('useChatActions', () => {
       displayMessageText: '生成视频',
       sessionMode: 'video',
     });
-    expect(vscodeMocks.sendMessage).not.toHaveBeenCalled();
+    expect(hostMocks.sendMessage).not.toHaveBeenCalled();
   });
 
   it('uses Agent primary model as the only LLM routing field when legacy selectedModel is stale', () => {
@@ -615,7 +605,7 @@ describe('useChatActions', () => {
       });
     });
 
-    expect(vscodeMocks.sendMessage).toHaveBeenCalledWith(
+    expect(hostMocks.sendMessage).toHaveBeenCalledWith(
       expect.objectContaining({
         conversationId: 'conv-agent-model',
         message: '继续生成',
@@ -629,7 +619,7 @@ describe('useChatActions', () => {
         },
       }),
     );
-    expect(vscodeMocks.sendMessage).toHaveBeenCalledWith(
+    expect(hostMocks.sendMessage).toHaveBeenCalledWith(
       expect.not.objectContaining({
         chatModel: expect.anything(),
       }),
@@ -664,13 +654,13 @@ describe('useChatActions', () => {
       result.current.handleSend();
     });
 
-    expect(vscodeMocks.sendMessage).toHaveBeenCalledWith(
+    expect(hostMocks.sendMessage).toHaveBeenCalledWith(
       expect.objectContaining({
         conversationId: 'conv-embody',
         message: '我现在应该知道天台的秘密吗？',
       }),
     );
-    expect(vscodeMocks.sendMessage.mock.calls[0]?.[0]).not.toHaveProperty('contextPayloads');
+    expect(hostMocks.sendMessage.mock.calls[0]?.[0]).not.toHaveProperty('contextPayloads');
   });
 
   it('keeps selected file references as local attachment previews while sending @path text', () => {
@@ -738,7 +728,7 @@ describe('useChatActions', () => {
         ],
       }),
     ]);
-    expect(vscodeMocks.sendMessage).toHaveBeenCalledWith(
+    expect(hostMocks.sendMessage).toHaveBeenCalledWith(
       expect.objectContaining({
         conversationId: 'conv-files',
         message: '参考 @"assets/ref file.zip"',
@@ -821,12 +811,12 @@ describe('useChatActions', () => {
         ],
       }),
     ]);
-    expect(vscodeMocks.sendMessage).toHaveBeenCalledWith(
+    expect(hostMocks.sendMessage).toHaveBeenCalledWith(
       expect.not.objectContaining({
         attachments: expect.any(Array),
       }),
     );
-    expect(vscodeMocks.sendMessage).toHaveBeenCalledWith(
+    expect(hostMocks.sendMessage).toHaveBeenCalledWith(
       expect.objectContaining({
         conversationId: 'conv-doc',
         message: '分析 @books/story.epub',
@@ -899,7 +889,7 @@ describe('useChatActions', () => {
         ],
       }),
     ]);
-    expect(vscodeMocks.sendMessage).toHaveBeenCalledWith(
+    expect(hostMocks.sendMessage).toHaveBeenCalledWith(
       expect.objectContaining({
         conversationId: 'conv-doc-only',
         message: '@books/story.epub',
@@ -960,7 +950,7 @@ describe('useChatActions', () => {
       });
     });
 
-    expect(vscodeMocks.sendMessage).toHaveBeenCalledWith(
+    expect(hostMocks.sendMessage).toHaveBeenCalledWith(
       expect.objectContaining({
         conversationId: 'conv-media',
         message: '参考 @assets/1.png @cases/1080P.mp4',
@@ -1073,7 +1063,7 @@ describe('useChatActions', () => {
       }),
     });
     expect(setActiveTab).toHaveBeenCalledWith('chat');
-    expect(vscodeMocks.sendMessage).toHaveBeenCalledWith(
+    expect(hostMocks.sendMessage).toHaveBeenCalledWith(
       expect.objectContaining({
         conversationId: 'conv-trigger',
         message: 'Use this selected clip',
@@ -1123,7 +1113,7 @@ describe('useChatActions', () => {
         isQueued: true,
       }),
     });
-    expect(vscodeMocks.sendMessage).toHaveBeenCalledWith(
+    expect(hostMocks.sendMessage).toHaveBeenCalledWith(
       expect.objectContaining({
         conversationId: 'conv-queue',
         message: '继续这个方向',
@@ -1166,7 +1156,7 @@ describe('useChatActions', () => {
       });
     });
 
-    expect(vscodeMocks.sendMessage).not.toHaveBeenCalled();
+    expect(hostMocks.sendMessage).not.toHaveBeenCalled();
     expect(setMessages).not.toHaveBeenCalled();
   });
 
@@ -1202,7 +1192,7 @@ describe('useChatActions', () => {
       result.current.triggerSend('Continue from selection');
     });
 
-    expect(vscodeMocks.sendMessage).toHaveBeenCalledWith(
+    expect(hostMocks.sendMessage).toHaveBeenCalledWith(
       expect.objectContaining({
         conversationId: 'conv-trigger-queue',
         message: 'Continue from selection',
@@ -1260,7 +1250,7 @@ describe('useChatActions', () => {
       result.current.triggerSend('Use this selected clip');
     });
 
-    expect(vscodeMocks.sendMessage).toHaveBeenCalledWith(
+    expect(hostMocks.sendMessage).toHaveBeenCalledWith(
       expect.objectContaining({
         conversationId: 'conv-trigger-model',
         message: 'Use this selected clip',

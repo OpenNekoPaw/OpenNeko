@@ -2,12 +2,9 @@
 @tailwind components;
 @tailwind utilities;
 
-/* VSCode Theme Integration - CSS Custom Properties
-   VSCode automatically injects theme variables into webviews.
-   These fallbacks are only used when running outside VSCode (e.g., development mode).
-*/
+/* Neko theme integration through Desktop-injected CSS custom properties. */
 :root {
-  /* Fallback values for when VSCode variables are not available */
+  /* Fallback values for standalone development rendering */
   --fallback-font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --fallback-font-size: 13px;
 
@@ -294,7 +291,7 @@ body {
   flex-direction: column;
 }
 
-/* VSCode-style buttons */
+/* Compact workbench buttons */
 .neko-button {
   background-color: var(--agent-accent);
   color: var(--agent-accent-fg);
@@ -337,7 +334,7 @@ body {
   background-color: color-mix(in srgb, var(--agent-fg) 12%, transparent);
 }
 
-/* VSCode-style inputs */
+/* Compact workbench inputs */
 .neko-input {
   background-color: var(--agent-input-bg);
   color: var(--agent-fg);
@@ -361,7 +358,7 @@ body {
   color: var(--agent-fg-secondary);
 }
 
-/* VSCode-style dropdowns */
+/* Compact workbench dropdowns */
 .neko-dropdown {
   background-color: var(--agent-input-bg);
   color: var(--agent-fg);
@@ -380,7 +377,7 @@ body {
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--agent-accent) 20%, transparent);
 }
 
-/* VSCode-style list items */
+/* Compact workbench list items */
 .neko-list-item {
   padding: 4px 8px;
   cursor: pointer;
@@ -435,7 +432,7 @@ body {
   border-radius: 2px;
 }
 
-/* VSCode tab-style horizontal scrollbar - very thin and subtle */
+/* Compact tab-strip horizontal scrollbar */
 .scrollbar-tab {
   scrollbar-width: thin;
 }
@@ -961,8 +958,7 @@ body {
   max-height: calc(var(--agent-overlay-block-size) - (var(--agent-overlay-padding) * 2));
   overflow-y: auto;
   padding: 0;
-  scrollbar-color: var(--neko-scrollbarSlider-background, var(--fallback-scrollbar-bg))
-    transparent;
+  scrollbar-color: var(--neko-scrollbarSlider-background, var(--fallback-scrollbar-bg)) transparent;
   scrollbar-width: thin;
 }
 
@@ -1560,8 +1556,7 @@ body {
   border: 1px solid var(--agent-overlay-border);
   border-radius: var(--agent-overlay-radius);
   box-shadow: var(--agent-overlay-shadow);
-  scrollbar-color: var(--neko-scrollbarSlider-background, var(--fallback-scrollbar-bg))
-    transparent;
+  scrollbar-color: var(--neko-scrollbarSlider-background, var(--fallback-scrollbar-bg)) transparent;
   scrollbar-width: thin;
 }
 
@@ -2535,8 +2530,7 @@ body {
   min-height: 0;
   overflow-y: auto;
   padding: 0;
-  scrollbar-color: var(--neko-scrollbarSlider-background, var(--fallback-scrollbar-bg))
-    transparent;
+  scrollbar-color: var(--neko-scrollbarSlider-background, var(--fallback-scrollbar-bg)) transparent;
   scrollbar-width: thin;
 }
 

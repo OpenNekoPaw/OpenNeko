@@ -1081,15 +1081,7 @@ function isRuntimeFieldName(value: string): boolean {
 
 function isRuntimeMediaValue(value: string): boolean {
   const normalized = value.trim().toLowerCase();
-  return (
-    normalized.startsWith('blob:') ||
-    normalized.startsWith('data:') ||
-    normalized.startsWith('vscode-webview-resource:') ||
-    normalized.startsWith('vscode-resource:') ||
-    normalized.startsWith('webview:') ||
-    normalized.startsWith('vscode://') ||
-    normalized.includes('vscode-resource.vscode-cdn.net')
-  );
+  return /^[a-z][a-z0-9+.-]*:/i.test(normalized);
 }
 
 function isAbsoluteHostPath(value: string): boolean {

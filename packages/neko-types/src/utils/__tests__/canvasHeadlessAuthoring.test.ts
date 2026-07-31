@@ -254,7 +254,7 @@ describe('canvasHeadlessAuthoring canonical planner', () => {
     expect(
       validateCanvasDurableResourceIdentity({
         cachePath: '/tmp/cache.png',
-        previewUrl: 'blob:vscode-webview://preview',
+        previewUrl: 'blob:neko-media://preview',
       }).map((diagnostic) => diagnostic.code),
     ).toEqual(['runtime-only-resource-identity', 'runtime-only-resource-identity']);
   });

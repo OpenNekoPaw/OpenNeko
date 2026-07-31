@@ -907,7 +907,7 @@ function isValidAudioUrl(url: string): boolean {
 function isValidMediaUrl(url: string, extensions: readonly string[]): boolean {
   if (!url) return false;
   if (url.startsWith('http://') || url.startsWith('https://')) return true;
-  if (url.includes('vscode-webview-resource://') || url.includes('vscode-resource')) return true;
+  if (url.startsWith('neko-media://')) return true;
   if (url.startsWith('webview://')) return true;
   if (url.startsWith('data:')) return true;
   if (isStableGeneratedAssetMediaUri(url, extensions)) return true;

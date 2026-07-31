@@ -102,10 +102,12 @@ export function isContentRuntimeRefKind(value: unknown): value is ContentRuntime
   return typeof value === 'string' && RUNTIME_REF_KINDS.includes(value as ContentRuntimeRefKind);
 }
 
-export function isWebviewLikeRuntimeValue(value: string): boolean {
+const HOST_PROJECTED_RUNTIME_URI_PATTERN =
+  /^(?:neko-(?:app|media)|[a-z][a-z0-9+.-]*-(?:webview(?:-resource)?|resource)):/i;
+
+export function isHostProjectedRuntimeValue(value: string): boolean {
   return (
-    value.startsWith('vscode-resource:') ||
-    value.startsWith('vscode-webview-resource:') ||
+    HOST_PROJECTED_RUNTIME_URI_PATTERN.test(value) ||
     value.startsWith('blob:') ||
     value.startsWith('data:') ||
     value.startsWith('object:')

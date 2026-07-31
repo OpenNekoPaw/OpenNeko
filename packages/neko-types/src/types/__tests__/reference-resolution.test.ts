@@ -95,7 +95,7 @@ describe('reference resolution contracts', () => {
           entryPath: 'page-01.png',
         },
         assetPath: 'assets/panel.png',
-        runtimeAssetPath: 'vscode-resource://runtime/panel.png',
+        runtimeAssetPath: 'neko-media://runtime/panel.png',
         mediaType: 'image',
       },
     });

@@ -256,7 +256,7 @@ describe('Canvas Workspace Board delivery contract', () => {
       conversationId: 'conversation-1',
       binding: { scopeKind: 'storyboard' },
       token: 'secret',
-      renderUri: 'vscode-webview://preview/shot-1',
+      renderUri: 'neko-media://preview/shot-1',
       cachePath: '.neko/.cache/generated/shot-1.png',
     } as unknown as CanvasWorkspaceProjectionRequest;
     const legacyRef = request({

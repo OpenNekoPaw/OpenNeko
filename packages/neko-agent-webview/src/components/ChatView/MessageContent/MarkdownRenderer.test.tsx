@@ -234,7 +234,7 @@ describe('MarkdownRenderer structured artifacts', () => {
           resources: [
             { token: 'page_1', label: 'Page 1', role: 'source', sourcePath: 'assets/page-1.png' },
           ],
-          renderUris: ['vscode-webview://page-1'],
+          renderUris: ['neko-media://page-1'],
           diagnostics: [],
         },
       ],
@@ -251,8 +251,8 @@ describe('MarkdownRenderer structured artifacts', () => {
     );
 
     expect(screen.queryByText('page_1')).toBeNull();
-    expect(screen.getByAltText('Page 1').getAttribute('src')).toBe('vscode-webview://page-1');
-    expect(JSON.stringify(projection.tokens[0]?.refs)).not.toContain('vscode-webview://page-1');
+    expect(screen.getByAltText('Page 1').getAttribute('src')).toBe('neko-media://page-1');
+    expect(JSON.stringify(projection.tokens[0]?.refs)).not.toContain('neko-media://page-1');
   });
 
   it('renders table resource images as uncropped media previews', () => {
@@ -272,7 +272,7 @@ describe('MarkdownRenderer structured artifacts', () => {
             status: 'bound',
             refs: [{ label: 'Page 1', role: 'source' }],
             resources: [{ token: 'P1', label: 'Page 1', role: 'source', sourcePath: 'P1' }],
-            renderUris: ['vscode-webview://page-1'],
+            renderUris: ['neko-media://page-1'],
             diagnostics: [],
           },
         ],
@@ -280,7 +280,7 @@ describe('MarkdownRenderer structured artifacts', () => {
     );
 
     const image = screen.getByAltText('Page 1');
-    expect(image.getAttribute('src')).toBe('vscode-webview://page-1');
+    expect(image.getAttribute('src')).toBe('neko-media://page-1');
     expect(image.className).toContain('object-contain');
     expect(image.className).toContain('max-h-40');
     expect(image.className).not.toContain('h-12');
@@ -424,7 +424,7 @@ describe('MarkdownRenderer structured artifacts', () => {
             status: 'bound',
             refs: [{ label: 'Page 1', role: 'source' }],
             resources: [{ token: 'P1', label: 'Page 1', role: 'source', sourcePath: 'P1' }],
-            renderUris: ['vscode-webview://page-1'],
+            renderUris: ['neko-media://page-1'],
             diagnostics: [],
           },
         ],
@@ -487,7 +487,7 @@ describe('MarkdownRenderer structured artifacts', () => {
             status: 'ambiguous',
             refs: [{ label: 'Page 1' }, { label: 'Page 1 duplicate' }],
             resources: [],
-            renderUris: ['vscode-webview://page-1', 'vscode-webview://page-1-duplicate'],
+            renderUris: ['neko-media://page-1', 'neko-media://page-1-duplicate'],
             diagnostics: [
               {
                 code: 'ambiguous-resource-token',
@@ -579,7 +579,7 @@ describe('MarkdownRenderer structured artifacts', () => {
               sourcePath: 'read-image-cover.jpg',
             },
           ],
-          renderUris: ['vscode-webview://cover'],
+          renderUris: ['neko-media://cover'],
           diagnostics: [],
         },
       ],
@@ -598,9 +598,9 @@ describe('MarkdownRenderer structured artifacts', () => {
     expect(screen.queryByText('`read-image-cover.jpg`')).toBeNull();
     expect(screen.queryByText('image')).toBeNull();
     expect(screen.getByAltText('read-image-cover.jpg').getAttribute('src')).toBe(
-      'vscode-webview://cover',
+      'neko-media://cover',
     );
-    expect(JSON.stringify(projection.tokens[0]?.refs)).not.toContain('vscode-webview://cover');
+    expect(JSON.stringify(projection.tokens[0]?.refs)).not.toContain('neko-media://cover');
   });
 
   it('renders missing resource tokens as text with diagnostics', () => {
@@ -687,13 +687,13 @@ describe('MarkdownRenderer structured artifacts', () => {
               sourcePath: 'assets/cover.png',
             },
           ],
-          renderUris: ['vscode-webview://cover'],
+          renderUris: ['neko-media://cover'],
           diagnostics: [],
         },
       ],
     });
 
-    expect(screen.getByAltText('cover.png').getAttribute('src')).toBe('vscode-webview://cover');
+    expect(screen.getByAltText('cover.png').getAttribute('src')).toBe('neko-media://cover');
     expect(screen.queryByText('assets/cover.png')).toBeNull();
   });
 
@@ -707,13 +707,13 @@ describe('MarkdownRenderer structured artifacts', () => {
           status: 'bound',
           refs: [{ label: 'Page 1', role: 'source' }],
           resources: [{ token: 'P1', label: 'Page 1', role: 'source', sourcePath: 'P1' }],
-          renderUris: ['vscode-webview://page-1'],
+          renderUris: ['neko-media://page-1'],
           diagnostics: [],
         },
       ],
     });
 
-    expect(screen.getByAltText('Page 1').getAttribute('src')).toBe('vscode-webview://page-1');
+    expect(screen.getByAltText('Page 1').getAttribute('src')).toBe('neko-media://page-1');
     expect(screen.queryByText('P1#panel_1')).toBeNull();
   });
 
@@ -918,7 +918,7 @@ describe('MarkdownRenderer structured artifacts', () => {
               sourcePath: 'cover.png',
             },
           ],
-          renderUris: ['vscode-webview://cover'],
+          renderUris: ['neko-media://cover'],
           diagnostics: [],
         },
       ],
@@ -938,7 +938,7 @@ describe('MarkdownRenderer structured artifacts', () => {
       diagnostics: [],
     });
 
-    expect(screen.getByAltText('cover.png').getAttribute('src')).toBe('vscode-webview://cover');
+    expect(screen.getByAltText('cover.png').getAttribute('src')).toBe('neko-media://cover');
     expect(screen.queryByText('![[cover.png#panel_1]]')).toBeNull();
   });
 

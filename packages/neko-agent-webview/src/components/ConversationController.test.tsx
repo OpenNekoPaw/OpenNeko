@@ -20,7 +20,7 @@ import type { TabRenderStore } from '@/render-runtime/tab-render-runtime';
 import { useTabRenderStore } from '@/render-runtime/useTabRenderStore';
 import { ConversationController } from './ConversationController';
 
-const vscodeMocks = vi.hoisted(() => ({
+const hostMocks = vi.hoisted(() => ({
   getConversations: vi.fn(),
   getActiveConversation: vi.fn(),
   refreshConfigSnapshot: vi.fn(),
@@ -41,8 +41,7 @@ const vscodeMocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/messages', () => ({
-  AgentHostMessages: vscodeMocks,
-  VSCodeMessages: vscodeMocks,
+  AgentHostMessages: hostMocks,
   getAgentHostRuntimeAdapter: () => ({
     getState: () => undefined,
     setState: vi.fn(),
@@ -447,7 +446,7 @@ describe('ConversationController entry state', () => {
     fireEvent.click(screen.getByRole('button', { name: 'storyboard' }));
 
     expect(screen.getByRole('textbox')).toHaveProperty('value', '$storyboard ');
-    expect(vscodeMocks.newConversation).not.toHaveBeenCalled();
+    expect(hostMocks.newConversation).not.toHaveBeenCalled();
   });
 
   it('prefills a host handoff exactly once without creating or sending a conversation', () => {
@@ -460,7 +459,7 @@ describe('ConversationController entry state', () => {
     );
 
     expect(screen.getByRole('textbox')).toHaveProperty('value', 'Plan a short film');
-    expect(vscodeMocks.newConversation).not.toHaveBeenCalled();
+    expect(hostMocks.newConversation).not.toHaveBeenCalled();
 
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Edited plan' } });
     view.rerender(
@@ -471,7 +470,7 @@ describe('ConversationController entry state', () => {
     );
 
     expect(screen.getByRole('textbox')).toHaveProperty('value', 'Edited plan');
-    expect(vscodeMocks.newConversation).not.toHaveBeenCalled();
+    expect(hostMocks.newConversation).not.toHaveBeenCalled();
   });
 
   it('activates an explicit host navigation target only after catalog and tab state hydrate', () => {
@@ -502,7 +501,7 @@ describe('ConversationController entry state', () => {
       );
     });
 
-    expect(vscodeMocks.activateConversation).not.toHaveBeenCalled();
+    expect(hostMocks.activateConversation).not.toHaveBeenCalled();
 
     act(() => {
       window.dispatchEvent(
@@ -516,8 +515,8 @@ describe('ConversationController entry state', () => {
       );
     });
 
-    expect(vscodeMocks.activateConversation).toHaveBeenCalledTimes(1);
-    expect(vscodeMocks.activateConversation).toHaveBeenCalledWith(
+    expect(hostMocks.activateConversation).toHaveBeenCalledTimes(1);
+    expect(hostMocks.activateConversation).toHaveBeenCalledWith(
       expect.objectContaining({
         conversationId: 'conversation-1',
         expectedTabStateRevision: 0,
@@ -554,7 +553,7 @@ describe('ConversationController entry state', () => {
       );
     });
 
-    expect(vscodeMocks.activateConversation).not.toHaveBeenCalled();
+    expect(hostMocks.activateConversation).not.toHaveBeenCalled();
     expect(screen.getByText('chat.conversation.navigationTargetUnavailable')).toBeTruthy();
   });
 
@@ -608,10 +607,10 @@ describe('ConversationController entry state', () => {
 
     expect(screen.getByRole('heading', { name: 'OpenNeko Creative Assistant' })).toBeTruthy();
     expect(screen.queryByTestId('chat-workspace')).toBeNull();
-    expect(vscodeMocks.getTabState).toHaveBeenCalledTimes(1);
+    expect(hostMocks.getTabState).toHaveBeenCalledTimes(1);
 
     fireEvent.click(screen.getByRole('button', { name: /Generate Assets/ }));
-    expect(vscodeMocks.newConversation).not.toHaveBeenCalled();
+    expect(hostMocks.newConversation).not.toHaveBeenCalled();
     expect(screen.getByRole('heading', { name: 'OpenNeko Creative Assistant' })).toBeTruthy();
     expect(screen.getByTestId('entry-page-menu').textContent).toBe('generate-assets');
   });
@@ -622,7 +621,7 @@ describe('ConversationController entry state', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Start Chat/ }));
 
-    expect(vscodeMocks.newConversation).toHaveBeenCalledTimes(1);
+    expect(hostMocks.newConversation).toHaveBeenCalledTimes(1);
 
     act(() => {
       window.dispatchEvent(
@@ -639,7 +638,7 @@ describe('ConversationController entry state', () => {
     expect(screen.getByTestId('entry-menu').textContent).toBe('none');
     expect(screen.getByTestId('pending-send').textContent).toBe('none');
     expect(screen.getByTestId('initial-input').textContent).toBe('none');
-    expect(vscodeMocks.getSettings).toHaveBeenCalledWith('conv-new');
+    expect(hostMocks.getSettings).toHaveBeenCalledWith('conv-new');
   });
 
   it('opens roleplay prompts from the entry button', () => {
@@ -648,8 +647,8 @@ describe('ConversationController entry state', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Roleplay/ }));
 
-    expect(vscodeMocks.newConversation).not.toHaveBeenCalled();
-    expect(vscodeMocks.searchProjectFiles).toHaveBeenCalledWith('', undefined, {
+    expect(hostMocks.newConversation).not.toHaveBeenCalled();
+    expect(hostMocks.searchProjectFiles).toHaveBeenCalledWith('', undefined, {
       purpose: 'roleplay',
     });
     expect(screen.getByRole('heading', { name: 'OpenNeko Creative Assistant' })).toBeTruthy();
@@ -678,18 +677,18 @@ describe('ConversationController entry state', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Open Role Sessions' }));
 
     expect(setMentionItems).toHaveBeenCalledWith([]);
-    expect(vscodeMocks.searchProjectFiles).toHaveBeenCalledWith('', undefined, {
+    expect(hostMocks.searchProjectFiles).toHaveBeenCalledWith('', undefined, {
       purpose: 'roleplay',
     });
-    expect(vscodeMocks.newConversation).not.toHaveBeenCalled();
+    expect(hostMocks.newConversation).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole('button', { name: 'Start Role Xiaoju' }));
 
-    expect(vscodeMocks.startCharacterDialogueFromSlash).toHaveBeenCalledWith(
+    expect(hostMocks.startCharacterDialogueFromSlash).toHaveBeenCalledWith(
       'entity:char-xiaoju --roleplay --skip-enrich',
     );
-    expect(vscodeMocks.confirmRoleplayCandidate).not.toHaveBeenCalled();
-    expect(vscodeMocks.newConversation).not.toHaveBeenCalled();
+    expect(hostMocks.confirmRoleplayCandidate).not.toHaveBeenCalled();
+    expect(hostMocks.newConversation).not.toHaveBeenCalled();
   });
 
   it('confirms an exact roleplay Candidate from the Header without optimistic session creation', () => {
@@ -715,11 +714,11 @@ describe('ConversationController entry state', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Start Role Ling' }));
 
-    expect(vscodeMocks.confirmRoleplayCandidate).toHaveBeenCalledWith({
+    expect(hostMocks.confirmRoleplayCandidate).toHaveBeenCalledWith({
       projectSearchItemId: 'entity-projection:semantic-ling',
     });
-    expect(vscodeMocks.startCharacterDialogueFromSlash).not.toHaveBeenCalled();
-    expect(vscodeMocks.newConversation).not.toHaveBeenCalled();
+    expect(hostMocks.startCharacterDialogueFromSlash).not.toHaveBeenCalled();
+    expect(hostMocks.newConversation).not.toHaveBeenCalled();
     expect(screen.getByTestId('tab-count').textContent).toBe('0');
   });
 
@@ -729,12 +728,12 @@ describe('ConversationController entry state', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Generate Assets/ }));
 
-    expect(vscodeMocks.newConversation).not.toHaveBeenCalled();
+    expect(hostMocks.newConversation).not.toHaveBeenCalled();
     expect(screen.getByTestId('entry-page-menu').textContent).toBe('generate-assets');
 
     fireEvent.click(screen.getByRole('button', { name: 'Close Entry Menu' }));
 
-    expect(vscodeMocks.newConversation).not.toHaveBeenCalled();
+    expect(hostMocks.newConversation).not.toHaveBeenCalled();
     expect(screen.getByRole('heading', { name: 'OpenNeko Creative Assistant' })).toBeTruthy();
     expect(screen.getByTestId('entry-page-menu').textContent).toBe('none');
   });
@@ -748,12 +747,12 @@ describe('ConversationController entry state', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: /Generate Assets/ }));
 
-    expect(vscodeMocks.newConversation).not.toHaveBeenCalled();
+    expect(hostMocks.newConversation).not.toHaveBeenCalled();
     expect(screen.getByTestId('entry-page-menu').textContent).toBe('generate-assets');
 
     fireEvent.click(screen.getByRole('button', { name: 'Select Video Generation' }));
 
-    expect(vscodeMocks.newConversation).toHaveBeenCalledTimes(1);
+    expect(hostMocks.newConversation).toHaveBeenCalledTimes(1);
 
     act(() => {
       window.dispatchEvent(
@@ -777,14 +776,14 @@ describe('ConversationController entry state', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Generate Assets/ }));
 
-    expect(vscodeMocks.newConversation).not.toHaveBeenCalled();
+    expect(hostMocks.newConversation).not.toHaveBeenCalled();
     expect(screen.getByRole('button', { name: /Generate Assets/ }).hasAttribute('disabled')).toBe(
       false,
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Select Video Generation' }));
 
-    expect(vscodeMocks.newConversation).toHaveBeenCalledTimes(1);
+    expect(hostMocks.newConversation).toHaveBeenCalledTimes(1);
     expect(screen.getByRole('button', { name: /Generate Assets/ }).hasAttribute('disabled')).toBe(
       true,
     );
@@ -793,7 +792,7 @@ describe('ConversationController entry state', () => {
     fireEvent.click(screen.getByRole('button', { name: /Roleplay/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
 
-    expect(vscodeMocks.newConversation).toHaveBeenCalledTimes(1);
+    expect(hostMocks.newConversation).toHaveBeenCalledTimes(1);
   });
 
   it('starts a new tab and sends entry text in chat mode', () => {
@@ -805,7 +804,7 @@ describe('ConversationController entry state', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
 
-    expect(vscodeMocks.newConversation).toHaveBeenCalledTimes(1);
+    expect(hostMocks.newConversation).toHaveBeenCalledTimes(1);
 
     act(() => {
       window.dispatchEvent(
@@ -830,15 +829,15 @@ describe('ConversationController entry state', () => {
       target: { value: '@hero' },
     });
 
-    expect(vscodeMocks.newConversation).not.toHaveBeenCalled();
-    expect(vscodeMocks.searchProjectFiles).toHaveBeenCalledWith('hero', undefined, {
+    expect(hostMocks.newConversation).not.toHaveBeenCalled();
+    expect(hostMocks.searchProjectFiles).toHaveBeenCalledWith('hero', undefined, {
       purpose: 'entry',
     });
     expect(screen.getByRole('heading', { name: 'OpenNeko Creative Assistant' })).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
 
-    expect(vscodeMocks.newConversation).toHaveBeenCalledTimes(1);
+    expect(hostMocks.newConversation).toHaveBeenCalledTimes(1);
 
     act(() => {
       window.dispatchEvent(
@@ -887,7 +886,7 @@ describe('ConversationController entry state', () => {
     render(<ConversationController {...createProps()} />);
 
     fireEvent.click(screen.getByRole('button', { name: /Start Chat/ }));
-    expect(vscodeMocks.newConversation).toHaveBeenCalledTimes(1);
+    expect(hostMocks.newConversation).toHaveBeenCalledTimes(1);
 
     act(() => {
       window.dispatchEvent(
@@ -906,14 +905,14 @@ describe('ConversationController entry state', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Close Draft Chat' }));
 
     expect(screen.getByRole('heading', { name: 'OpenNeko Creative Assistant' })).toBeTruthy();
-    expect(vscodeMocks.newConversation).toHaveBeenCalledTimes(1);
+    expect(hostMocks.newConversation).toHaveBeenCalledTimes(1);
 
     fireEvent.change(screen.getByPlaceholderText('Type anything...'), {
       target: { value: '@hero' },
     });
 
-    expect(vscodeMocks.newConversation).toHaveBeenCalledTimes(1);
-    expect(vscodeMocks.searchProjectFiles).toHaveBeenCalledWith('hero', undefined, {
+    expect(hostMocks.newConversation).toHaveBeenCalledTimes(1);
+    expect(hostMocks.searchProjectFiles).toHaveBeenCalledWith('hero', undefined, {
       purpose: 'entry',
     });
   });
@@ -928,7 +927,7 @@ describe('ConversationController entry state', () => {
     fireEvent.click(screen.getByRole('button', { name: /Generate Assets/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
 
-    expect(vscodeMocks.newConversation).not.toHaveBeenCalled();
+    expect(hostMocks.newConversation).not.toHaveBeenCalled();
     expect(screen.getByTestId('entry-page-menu').textContent).toBe('generate-assets');
     expect(screen.getByPlaceholderText('Type anything...')).toHaveProperty(
       'value',
@@ -1580,7 +1579,7 @@ describe('ConversationController entry state', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Delete Chat A' }));
 
-    expect(vscodeMocks.deleteConversation).toHaveBeenCalledWith('conv-a');
+    expect(hostMocks.deleteConversation).toHaveBeenCalledWith('conv-a');
     expect(registry.getSnapshot(keyA)).toBeUndefined();
     expect(registry.getSnapshot(keyB)?.source).toBe('markdown B');
   });
@@ -1920,10 +1919,10 @@ describe('ConversationController entry state', () => {
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Open 分析前10页，生成分镜表' }));
-    expect(vscodeMocks.activateConversation).toHaveBeenCalledWith(
+    expect(hostMocks.activateConversation).toHaveBeenCalledWith(
       expect.objectContaining({ conversationId: 'conv-a' }),
     );
-    const activationA = vscodeMocks.activateConversation.mock.calls.at(-1)?.[0] as {
+    const activationA = hostMocks.activateConversation.mock.calls.at(-1)?.[0] as {
       activationId: number;
       expectedTabStateRevision: number;
     };
@@ -1954,10 +1953,10 @@ describe('ConversationController entry state', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Open 生成猫猫玩耍的图片' }));
 
-    expect(vscodeMocks.activateConversation).toHaveBeenCalledWith(
+    expect(hostMocks.activateConversation).toHaveBeenCalledWith(
       expect.objectContaining({ conversationId: 'conv-b' }),
     );
-    const activationB = vscodeMocks.activateConversation.mock.calls.at(-1)?.[0] as {
+    const activationB = hostMocks.activateConversation.mock.calls.at(-1)?.[0] as {
       activationId: number;
       expectedTabStateRevision: number;
     };

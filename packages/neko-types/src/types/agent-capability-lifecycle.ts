@@ -1,5 +1,6 @@
 import type { DocumentArchiveResourceRef } from './document-reading';
 import { isDocumentArchiveResourceRef } from './document-reading';
+import { isHostProjectedRuntimeValue } from './content-access';
 import type { ResourceRef } from './resource-cache';
 import { isResourceRef } from './resource-cache';
 import type {
@@ -176,8 +177,6 @@ export interface AgentCapabilityInvocationResult {
 }
 
 const RUNTIME_ONLY_RESOURCE_PATTERNS: readonly RegExp[] = [
-  /^vscode-webview:\/\//i,
-  /^vscode-webview-resource:\/\//i,
   /^blob:/i,
   /^file:/i,
   /^data:/i,
@@ -507,7 +506,10 @@ export function createAgentCapabilityLifecycleDiagnostic(
 
 export function isRuntimeOnlyAgentCapabilityResourceValue(value: string): boolean {
   const normalized = value.trim();
-  return RUNTIME_ONLY_RESOURCE_PATTERNS.some((pattern) => pattern.test(normalized));
+  return (
+    isHostProjectedRuntimeValue(normalized) ||
+    RUNTIME_ONLY_RESOURCE_PATTERNS.some((pattern) => pattern.test(normalized))
+  );
 }
 
 function isAgentCapabilitySchemaRef(value: unknown): value is AgentCapabilitySchemaRef {

@@ -12,15 +12,14 @@ import {
 } from './types';
 import { InputArea } from './InputArea';
 
-const vscodeMocks = vi.hoisted(() => ({
+const hostMocks = vi.hoisted(() => ({
   invokeSkill: vi.fn(),
   confirmRoleplayCandidate: vi.fn(),
   startCharacterDialogueFromSlash: vi.fn(),
 }));
 
 vi.mock('@/messages', () => ({
-  AgentHostMessages: vscodeMocks,
-  VSCodeMessages: vscodeMocks,
+  AgentHostMessages: hostMocks,
 }));
 
 const translations: Record<string, string> = {
@@ -1211,7 +1210,7 @@ describe('InputArea composer controls', () => {
     fireEvent.click(screen.getByRole('menuitem', { name: /\$quality-review/ }));
 
     expect(textarea.value).toBe('$quality-review ');
-    expect(vscodeMocks.invokeSkill).not.toHaveBeenCalled();
+    expect(hostMocks.invokeSkill).not.toHaveBeenCalled();
   });
 
   it('suppresses slash and skill command affordances in media generation mode', () => {
@@ -1417,7 +1416,7 @@ describe('InputArea composer controls', () => {
     fireEvent.click(getEntryPromptRowByPrimaryText('小橘'));
 
     expect(onSend).not.toHaveBeenCalled();
-    expect(vscodeMocks.startCharacterDialogueFromSlash).toHaveBeenCalledWith(
+    expect(hostMocks.startCharacterDialogueFromSlash).toHaveBeenCalledWith(
       'entity:char-xiaoju --roleplay --skip-enrich',
     );
     expect(onEntryPromptMenuChange).toHaveBeenCalledWith(null);
@@ -1450,7 +1449,7 @@ describe('InputArea composer controls', () => {
     fireEvent.click(screen.getByRole('menuitem', { name: /小橘/ }));
 
     expect(onSend).not.toHaveBeenCalled();
-    expect(vscodeMocks.startCharacterDialogueFromSlash).toHaveBeenCalledWith(
+    expect(hostMocks.startCharacterDialogueFromSlash).toHaveBeenCalledWith(
       'entity:char-xiaoju --roleplay --skip-enrich "你还记得昨晚的雨吗？"',
     );
   });
@@ -1487,11 +1486,11 @@ describe('InputArea composer controls', () => {
     expect(screen.getByText('确认并扮演')).toBeTruthy();
     fireEvent.click(getEntryPromptRowByPrimaryText('小橘'));
 
-    expect(vscodeMocks.confirmRoleplayCandidate).toHaveBeenCalledWith({
+    expect(hostMocks.confirmRoleplayCandidate).toHaveBeenCalledWith({
       projectSearchItemId: 'entity-projection:semantic-xiaoju',
       initialUserMessage: '你好，小橘',
     });
-    expect(vscodeMocks.startCharacterDialogueFromSlash).not.toHaveBeenCalled();
+    expect(hostMocks.startCharacterDialogueFromSlash).not.toHaveBeenCalled();
     expect(onSend).not.toHaveBeenCalled();
   });
 

@@ -10,6 +10,7 @@ import {
 } from './document-reading';
 import { isResourceRef, type ResourceRef } from './resource-cache';
 import { validateDurableResourceRef } from './durable-resource-ref';
+import { isHostProjectedRuntimeValue } from './content-access';
 
 export const STORYBOARD_TABLE_SCHEMA_VERSION = 1 as const;
 export const STORYBOARD_TABLE_KIND = 'storyboard-table' as const;
@@ -2973,12 +2974,7 @@ function normalizeStoryboardAlias(value: string | undefined): string | undefined
 }
 
 function isRuntimeOnlyStoryboardMediaValue(value: string): boolean {
-  return (
-    /^vscode-(?:webview-resource|resource):/i.test(value) ||
-    /^vscode-webview:\/\//i.test(value) ||
-    /^blob:/i.test(value) ||
-    /^object:/i.test(value)
-  );
+  return isHostProjectedRuntimeValue(value);
 }
 
 function isManagedOrAbsoluteCachePath(value: string): boolean {
@@ -2996,8 +2992,7 @@ function isUnsafeMediaUri(value: string): boolean {
     value.startsWith('data:') ||
     value.startsWith('blob:') ||
     value.startsWith('object:') ||
-    /^vscode-(?:webview-resource|resource):/i.test(value) ||
-    /^vscode-webview:\/\//i.test(value) ||
+    isHostProjectedRuntimeValue(value) ||
     /^https?:\/\/(?:localhost|127\.0\.0\.1|\[::1\])(?::\d+)?(?:\/|$)/i.test(value) ||
     value.startsWith('file://') ||
     isManagedOrAbsoluteCachePath(value)
@@ -3009,8 +3004,7 @@ function isUnsafeWorkspacePath(value: string): boolean {
     value.startsWith('data:') ||
     value.startsWith('blob:') ||
     value.startsWith('object:') ||
-    /^vscode-(?:webview-resource|resource):/i.test(value) ||
-    /^vscode-webview:\/\//i.test(value) ||
+    isHostProjectedRuntimeValue(value) ||
     /^https?:\/\//i.test(value) ||
     value.startsWith('file://') ||
     isManagedOrAbsoluteCachePath(value)

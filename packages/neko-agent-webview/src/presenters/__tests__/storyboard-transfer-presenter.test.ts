@@ -321,7 +321,7 @@ describe('storyboard transfer presenter', () => {
       },
     });
     expect(handoff).not.toHaveProperty('kind', 'assetBatch');
-    expect(JSON.stringify(handoff)).not.toMatch(/vscode-webview:|blob:|\.neko\/.cache/);
+    expect(JSON.stringify(handoff)).not.toMatch(/neko-media:|blob:|\.neko\/.cache/);
   });
 
   it('poisons old Markdown storyboard compiler transfer paths for new Canvas requests', async () => {

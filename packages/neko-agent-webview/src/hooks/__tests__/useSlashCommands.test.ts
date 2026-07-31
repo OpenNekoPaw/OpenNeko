@@ -2,19 +2,15 @@ import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useSlashCommands } from '../useSlashCommands';
 
-const vscodeMocks = vi.hoisted(() => ({
+const hostMocks = vi.hoisted(() => ({
   invokeSlashCommand: vi.fn(),
   invokePluginSlashCommand: vi.fn(),
 }));
 
 vi.mock('@/messages', () => ({
   AgentHostMessages: {
-    invokeSlashCommand: vscodeMocks.invokeSlashCommand,
-    invokePluginSlashCommand: vscodeMocks.invokePluginSlashCommand,
-  },
-  VSCodeMessages: {
-    invokeSlashCommand: vscodeMocks.invokeSlashCommand,
-    invokePluginSlashCommand: vscodeMocks.invokePluginSlashCommand,
+    invokeSlashCommand: hostMocks.invokeSlashCommand,
+    invokePluginSlashCommand: hostMocks.invokePluginSlashCommand,
   },
 }));
 

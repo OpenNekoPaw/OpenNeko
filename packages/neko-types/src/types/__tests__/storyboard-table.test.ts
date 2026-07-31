@@ -622,7 +622,19 @@ describe('storyboard table contract', () => {
         locator: {
           type: 'asset',
           assetId: 'asset-1',
-          uri: 'vscode-webview-resource://neko/page.jpg',
+          uri: 'neko-media://neko/page.jpg',
+        },
+      }),
+    ).toMatchObject({ kind: 'runtime-only' });
+
+    expect(
+      classifyStoryboardMediaIdentity({
+        refId: 'retired-host-runtime-uri',
+        role: 'source',
+        locator: {
+          type: 'asset',
+          assetId: 'asset-retired-host',
+          uri: 'vscode-webview://neko/page.jpg',
         },
       }),
     ).toMatchObject({ kind: 'runtime-only' });
@@ -661,7 +673,7 @@ describe('storyboard table contract', () => {
                     locator: {
                       type: 'asset',
                       assetId: 'asset-webview',
-                      uri: 'vscode-webview://neko/page.jpg',
+                      uri: 'neko-media://neko/page.jpg',
                     },
                   },
                   {
@@ -1570,7 +1582,7 @@ describe('canonical storyboard contract', () => {
             scope: 'project',
             provider: 'workspace',
             kind: 'media',
-            source: { kind: 'file', uri: 'vscode-webview://panel/source.png' },
+            source: { kind: 'file', uri: 'neko-media://panel/source.png' },
             fingerprint: { strategy: 'none', value: 'runtime' },
           },
         },

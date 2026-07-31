@@ -35,16 +35,16 @@ describe('canvas authoring contracts', () => {
   });
 
   it('rejects runtime-only resource identities in authoring results', () => {
-    expect(
-      isRuntimeOnlyCanvasAuthoringResourceIdentityValue('vscode-webview://panel/image.png'),
-    ).toBe(true);
-    expect(isRuntimeOnlyCanvasAuthoringResourceIdentityValue('blob:vscode/preview')).toBe(true);
+    expect(isRuntimeOnlyCanvasAuthoringResourceIdentityValue('neko-media://panel/image.png')).toBe(
+      true,
+    );
+    expect(isRuntimeOnlyCanvasAuthoringResourceIdentityValue('blob:neko-media/preview')).toBe(true);
     expect(isRuntimeOnlyCanvasAuthoringResourceIdentityValue('assets/cover.png')).toBe(false);
 
     const validation = validateCanvasAuthoringResultEnvelope({
       version: 1,
       status: 'success',
-      refs: [{ kind: 'resource', id: 'vscode-webview://panel/image.png' }],
+      refs: [{ kind: 'resource', id: 'neko-media://panel/image.png' }],
       diagnostics: [],
     });
 
@@ -320,7 +320,7 @@ describe('canvas authoring contracts', () => {
           kind: 'resource-ref',
           range: { start: 13, end: 24 },
           referenceStatus: 'resolved',
-          ref: { kind: 'resource', id: 'blob:vscode/preview' },
+          ref: { kind: 'resource', id: 'blob:neko-media/preview' },
         },
       ],
       fieldProjections: [

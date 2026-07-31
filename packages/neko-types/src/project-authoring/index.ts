@@ -1,4 +1,5 @@
 import type { QualityProjectRef } from '../types/media-quality';
+import { isHostProjectedRuntimeValue } from '../types/content-access';
 import type {
   ProjectFileDiagnostic,
   ProjectFileDiagnosticValue,
@@ -207,9 +208,6 @@ const CORE_UI_DEPENDENCY_RULES: readonly NekoProjectAuthoringStaticGuardRule[] =
 ];
 
 const RUNTIME_HANDLE_VALUE_PATTERNS: readonly RegExp[] = [
-  /^vscode-resource:\/\//i,
-  /^vscode-webview-resource:\/\//i,
-  /^vscode-webview:\/\//i,
   /^blob:/i,
   /^data:/i,
   /^https?:\/\/(?:127\.0\.0\.1|0\.0\.0\.0|localhost|\[::1\])(?::|\/)/i,
@@ -278,7 +276,8 @@ export function isNekoProjectAuthoringClientKind(
 export function isNekoProjectAuthoringRuntimeHandleValue(value: unknown): boolean {
   return (
     typeof value === 'string' &&
-    RUNTIME_HANDLE_VALUE_PATTERNS.some((pattern) => pattern.test(value))
+    (isHostProjectedRuntimeValue(value) ||
+      RUNTIME_HANDLE_VALUE_PATTERNS.some((pattern) => pattern.test(value)))
   );
 }
 

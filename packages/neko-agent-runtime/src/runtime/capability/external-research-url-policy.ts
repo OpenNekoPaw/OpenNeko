@@ -16,8 +16,8 @@ const UNSAFE_SCHEMES = new Set([
   'data:',
   'blob:',
   'javascript:',
-  'vscode-webview:',
-  'vscode:',
+  'neko-app:',
+  'neko-media:',
 ]);
 
 export function validateExternalResearchUrl(

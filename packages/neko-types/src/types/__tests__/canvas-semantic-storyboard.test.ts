@@ -105,7 +105,7 @@ describe('canvas semantic storyboard contracts', () => {
         {
           refId: 'preview',
           role: 'reference',
-          locator: { type: 'asset', assetId: 'preview', uri: 'blob:vscode/preview' },
+          locator: { type: 'asset', assetId: 'preview', uri: 'blob:neko-media/preview' },
         },
       ],
     });
@@ -287,7 +287,7 @@ describe('canvas semantic storyboard contracts', () => {
           {
             refId: 'runtime-preview',
             role: 'reference',
-            locator: { type: 'asset', assetId: 'runtime-preview', uri: 'blob:vscode/preview' },
+            locator: { type: 'asset', assetId: 'runtime-preview', uri: 'blob:neko-media/preview' },
           },
         ],
       },

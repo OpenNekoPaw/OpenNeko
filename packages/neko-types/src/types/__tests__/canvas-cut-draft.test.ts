@@ -157,6 +157,7 @@ describe('canvas cut draft contract', () => {
       units: [
         createDraftUnit({
           media: [
+            { role: 'source', assetPath: 'neko-media://asset/video.mp4' },
             { role: 'source', assetPath: 'vscode-webview-resource://asset/video.mp4' },
             { role: 'source', assetPath: '/Users/feng/video.mp4' },
           ],

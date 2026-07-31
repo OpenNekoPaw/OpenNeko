@@ -6,7 +6,7 @@
 // facts, media payloads, Webview URIs, or provider runtime handles.
 // =============================================================================
 
-import type { ContentStableSourceRef } from './content-access';
+import { isHostProjectedRuntimeValue, type ContentStableSourceRef } from './content-access';
 import {
   CHARACTER_MEMORY_OBSERVATION_SOURCES,
   CHARACTER_MEMORY_SOURCE_REF_KINDS,
@@ -1215,8 +1215,7 @@ function isUnsafeRuntimeHandle(value: string): boolean {
   return (
     trimmed.startsWith('blob:') ||
     trimmed.startsWith('data:') ||
-    trimmed.startsWith('vscode-resource:') ||
-    trimmed.startsWith('vscode-webview-resource:') ||
+    isHostProjectedRuntimeValue(trimmed) ||
     trimmed.startsWith('file:') ||
     trimmed.startsWith('http://localhost') ||
     trimmed.startsWith('https://localhost') ||

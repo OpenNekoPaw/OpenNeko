@@ -85,8 +85,8 @@ describe('canonical Canvas Markdown capability contracts', () => {
   });
 
   it('classifies runtime-only resource values', () => {
-    expect(isRuntimeOnlyCanvasMarkdownResourceValue('vscode-webview://panel/image.png')).toBe(true);
-    expect(isRuntimeOnlyCanvasMarkdownResourceValue('blob:vscode/preview')).toBe(true);
+    expect(isRuntimeOnlyCanvasMarkdownResourceValue('neko-media://panel/image.png')).toBe(true);
+    expect(isRuntimeOnlyCanvasMarkdownResourceValue('blob:neko-media/preview')).toBe(true);
     expect(isRuntimeOnlyCanvasMarkdownResourceValue('/tmp/neko/page.png')).toBe(true);
     expect(isRuntimeOnlyCanvasMarkdownResourceValue('/var/folders/neko/page.png')).toBe(true);
     expect(isRuntimeOnlyCanvasMarkdownResourceValue('/workspace/.neko/.cache/page.png')).toBe(true);

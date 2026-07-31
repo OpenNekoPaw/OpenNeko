@@ -14,13 +14,10 @@ const RUNTIME_IDENTITY_KEY_PATTERN =
 
 const RUNTIME_IDENTITY_VALUE_PATTERNS: readonly RegExp[] = [
   /^runtime:canvas-generated-(?:group|candidate):/i,
-  /^vscode-resource:\/\//i,
-  /^vscode-webview-resource:\/\//i,
-  /^vscode-webview:\/\//i,
+  /^neko-media:\/\//i,
   /^blob:/i,
   /^data:/i,
   /^https?:\/\/(?:127\.0\.0\.1|0\.0\.0\.0|localhost|\[::1\])(?::|\/)/i,
-  /^https?:\/\/[^/]*\.vscode-cdn\.net\//i,
   /(?:^|[\\/])\.neko[\\/](?:\.cache|cache)(?:[\\/]|$)/i,
   /(?:^|[\\/])cachePath(?:[\\/]|$)/i,
   /^\/tmp(?:\/|$)/i,

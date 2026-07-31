@@ -79,7 +79,7 @@ describe('3D reference contracts', () => {
       isThreeReferencePanoramaRuntimeDescriptor({
         source: poseImage,
         fingerprint: 'panorama-1',
-        uri: 'vscode-webview://authorized/scene.hdr',
+        uri: 'neko-media://authorized/scene.hdr',
         mediaType: 'image/vnd.radiance',
         sizeBytes: 1024,
       }),

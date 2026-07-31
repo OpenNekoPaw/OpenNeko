@@ -163,7 +163,7 @@ describe('agent capability lifecycle contracts', () => {
       diagnostics: [],
       reviewArtifact: {
         kind: 'project-path',
-        projectPath: 'vscode-webview://panel/preview.png',
+        projectPath: 'neko-media://panel/preview.png',
       },
       changedRefs: [
         {
@@ -180,10 +180,8 @@ describe('agent capability lifecycle contracts', () => {
   });
 
   it('classifies runtime-only resource identity values', () => {
-    expect(isRuntimeOnlyAgentCapabilityResourceValue('vscode-webview://panel/image.png')).toBe(
-      true,
-    );
-    expect(isRuntimeOnlyAgentCapabilityResourceValue('blob:vscode/preview')).toBe(true);
+    expect(isRuntimeOnlyAgentCapabilityResourceValue('neko-media://panel/image.png')).toBe(true);
+    expect(isRuntimeOnlyAgentCapabilityResourceValue('blob:neko-media/preview')).toBe(true);
     expect(isRuntimeOnlyAgentCapabilityResourceValue('/tmp/neko/page.png')).toBe(true);
     expect(isRuntimeOnlyAgentCapabilityResourceValue('/var/folders/neko/page.png')).toBe(true);
     expect(isRuntimeOnlyAgentCapabilityResourceValue('/workspace/.neko/.cache/page.png')).toBe(

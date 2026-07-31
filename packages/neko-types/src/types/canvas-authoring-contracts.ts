@@ -1,6 +1,7 @@
 import type { CanvasNodeType, ConnectionType } from './canvas';
 import type { CanvasAgentProvenance, CanvasAgentTargetRef } from './canvas-agent-operations';
 import type { JsonPointerPath } from './canvas-layered';
+import { isHostProjectedRuntimeValue } from './content-access';
 
 export const CANVAS_AUTHORING_CATALOG_VERSION = 1 as const;
 
@@ -458,8 +459,6 @@ export interface CanvasAuthoringResultEnvelope {
 }
 
 const RUNTIME_RESOURCE_IDENTITY_PATTERNS: readonly RegExp[] = [
-  /^vscode-webview:\/\//i,
-  /^vscode-webview-resource:\/\//i,
   /^blob:/i,
   /^file:/i,
   /^data:/i,
@@ -1486,7 +1485,10 @@ export function isCanvasAuthoringOperationDescriptor(
 
 export function isRuntimeOnlyCanvasAuthoringResourceIdentityValue(value: string): boolean {
   const trimmed = value.trim();
-  return RUNTIME_RESOURCE_IDENTITY_PATTERNS.some((pattern) => pattern.test(trimmed));
+  return (
+    isHostProjectedRuntimeValue(trimmed) ||
+    RUNTIME_RESOURCE_IDENTITY_PATTERNS.some((pattern) => pattern.test(trimmed))
+  );
 }
 
 function validationResult(

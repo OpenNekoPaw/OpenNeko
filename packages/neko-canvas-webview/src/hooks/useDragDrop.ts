@@ -197,16 +197,14 @@ export function useDragDrop(options: UseDragDropOptions): UseDragDropReturn {
     structuredMimeTypes: [CONTENT_LOCATOR_DRAG_MIME, 'application/json'],
   });
 
-  // Wrap the drop handler to also check for cross-extension DnD payload (ADR-5 P1).
-  // When a drag originates from another Host webview iframe, the dataTransfer is
-  // empty — so we always notify the extension host to check for a pending DnD payload.
-  const handleDropWithCrossExtension = useCallback(
+  // Cross-surface drags can arrive without a browser DataTransfer payload.
+  const handleDropWithCrossSurface = useCallback(
     (e: React.DragEvent) => {
       // Let useFileDrop handle file/URI/asset drops first
       const hasExternalDropPayload = hasCanvasExternalDropPayload(e.dataTransfer);
       dropProps.onDrop(e);
 
-      // Also ask the extension host if there is a cross-extension DnD payload
+      // Ask the Desktop host whether another Webview surface owns a pending payload.
       if (hostPort && !hasExternalDropPayload && (hostPort.supportsMessage?.('dnd:drop') ?? true)) {
         hostPort.postMessage({ type: 'dnd:drop' });
       }
@@ -220,7 +218,7 @@ export function useDragDrop(options: UseDragDropOptions): UseDragDropReturn {
     handleDragEnter: dropProps.onDragEnter,
     handleDragOver: dropProps.onDragOver,
     handleDragLeave: dropProps.onDragLeave,
-    handleDrop: handleDropWithCrossExtension,
+    handleDrop: handleDropWithCrossSurface,
   };
 }
 

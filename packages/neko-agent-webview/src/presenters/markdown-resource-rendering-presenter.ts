@@ -979,7 +979,7 @@ function isRenderableUri(value: string): boolean {
   if (value.startsWith('${') || isAbsolutePath(value)) return false;
   if (value.startsWith('http://') || value.startsWith('https://')) return true;
   if (value.startsWith('webview://')) return true;
-  return value.includes('vscode-resource') || value.includes('vscode-webview');
+  return value.startsWith('neko-media://');
 }
 
 function isStableResourceLookupTokenCandidate(value: unknown): value is string {

@@ -61,7 +61,7 @@ describe('creative media shared contracts', () => {
 
     expect(
       validateDurableResourceRef(
-        resourceRef({ source: { kind: 'file', uri: 'vscode-webview://panel/hero.png' } }),
+        resourceRef({ source: { kind: 'file', uri: 'neko-media://panel/hero.png' } }),
       ).ok,
     ).toBe(false);
 

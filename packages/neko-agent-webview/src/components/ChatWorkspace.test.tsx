@@ -12,7 +12,7 @@ import { ChatWorkspace } from './ChatWorkspace';
 import type { ComposerMenuState } from '@/components/ChatView/InputArea/types';
 import { createTabRenderRuntime } from '@/render-runtime/tab-render-runtime';
 
-const vscodeMocks = vi.hoisted(() => ({
+const hostMocks = vi.hoisted(() => ({
   sendMessage: vi.fn(),
   refreshConfigSnapshot: vi.fn(),
   searchProjectFiles: vi.fn(),
@@ -28,8 +28,7 @@ const vscodeMocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/messages', () => ({
-  AgentHostMessages: vscodeMocks,
-  VSCodeMessages: vscodeMocks,
+  AgentHostMessages: hostMocks,
 }));
 
 vi.mock('@/components/ChatView/InputAreaContext', () => ({
@@ -283,7 +282,7 @@ describe('ChatWorkspace pending send', () => {
       />,
     );
 
-    expect(vscodeMocks.sendMessage).not.toHaveBeenCalled();
+    expect(hostMocks.sendMessage).not.toHaveBeenCalled();
     expect(onPendingSendRequestConsumed).not.toHaveBeenCalled();
 
     act(() => {
@@ -293,8 +292,8 @@ describe('ChatWorkspace pending send', () => {
       });
     });
 
-    expect(vscodeMocks.sendMessage).toHaveBeenCalledTimes(1);
-    expect(vscodeMocks.sendMessage).toHaveBeenCalledWith(
+    expect(hostMocks.sendMessage).toHaveBeenCalledTimes(1);
+    expect(hostMocks.sendMessage).toHaveBeenCalledWith(
       expect.objectContaining({
         conversationId: 'conv-new',
         message: 'hello from tabless state',
@@ -319,7 +318,7 @@ describe('ChatWorkspace pending send', () => {
       />,
     );
 
-    expect(vscodeMocks.sendMessage).toHaveBeenCalledTimes(1);
+    expect(hostMocks.sendMessage).toHaveBeenCalledTimes(1);
   });
 
   it('replays a pending image entry send with the selected direct media model', () => {
@@ -355,7 +354,7 @@ describe('ChatWorkspace pending send', () => {
       });
     });
 
-    const payload = { type: 'sendMessage', ...vscodeMocks.sendMessage.mock.calls[0]?.[0] };
+    const payload = { type: 'sendMessage', ...hostMocks.sendMessage.mock.calls[0]?.[0] };
     expect(payload).toEqual(
       expect.objectContaining({
         conversationId: 'conv-image',
@@ -390,7 +389,7 @@ describe('ChatWorkspace pending send', () => {
       />,
     );
 
-    expect(vscodeMocks.sendMessage).not.toHaveBeenCalled();
+    expect(hostMocks.sendMessage).not.toHaveBeenCalled();
 
     act(() => {
       runtime.store.updateState({
@@ -404,7 +403,7 @@ describe('ChatWorkspace pending send', () => {
       });
     });
 
-    expect(vscodeMocks.sendMessage).toHaveBeenCalledWith(
+    expect(hostMocks.sendMessage).toHaveBeenCalledWith(
       expect.objectContaining({
         conversationId: 'conv-new',
         sessionMode: 'agent',
@@ -445,7 +444,7 @@ describe('ChatWorkspace pending send', () => {
 
     fireEvent.click(getByTestId('send'));
 
-    expect(vscodeMocks.sendMessage).toHaveBeenCalledWith(
+    expect(hostMocks.sendMessage).toHaveBeenCalledWith(
       expect.objectContaining({
         conversationId: 'conv-1',
         message: 'hello from tabless state',
@@ -477,7 +476,7 @@ describe('ChatWorkspace pending send', () => {
 
     expect(screen.getByTestId('input-value').textContent).toBe('@hero');
     expect(onMentionSearchFilterChange).toHaveBeenCalledWith('hero');
-    expect(vscodeMocks.searchProjectFiles).toHaveBeenCalledWith('hero', 'conv-1');
+    expect(hostMocks.searchProjectFiles).toHaveBeenCalledWith('hero', 'conv-1');
     expect(onInitialInputRequestConsumed).toHaveBeenCalledWith(3);
   });
 
@@ -559,11 +558,11 @@ describe('ChatWorkspace pending send', () => {
     const { getByTestId } = render(<ChatWorkspace {...createProps()} />);
 
     fireEvent.click(getByTestId('promote-queued'));
-    expect(vscodeMocks.promoteQueuedMessage).toHaveBeenCalledWith('conv-1', 'queued-1');
+    expect(hostMocks.promoteQueuedMessage).toHaveBeenCalledWith('conv-1', 'queued-1');
     fireEvent.click(getByTestId('cancel-queued'));
-    expect(vscodeMocks.cancelQueuedMessage).toHaveBeenCalledWith('conv-1', 'queued-1');
+    expect(hostMocks.cancelQueuedMessage).toHaveBeenCalledWith('conv-1', 'queued-1');
     fireEvent.click(getByTestId('edit-queued'));
-    expect(vscodeMocks.editQueuedMessage).toHaveBeenCalledWith('tab-1', 'conv-1', 'queued-1');
+    expect(hostMocks.editQueuedMessage).toHaveBeenCalledWith('tab-1', 'conv-1', 'queued-1');
   });
 
   it('keeps model selection in its owning Tab store while switching', () => {
@@ -760,7 +759,7 @@ describe('ChatWorkspace pending send', () => {
     });
     fireEvent.click(getByTestId('send'));
 
-    expect(vscodeMocks.sendMessage).not.toHaveBeenCalled();
+    expect(hostMocks.sendMessage).not.toHaveBeenCalled();
   });
 
   it('routes visible mutations through the immutable Tab runtime binding', () => {
@@ -799,14 +798,14 @@ describe('ChatWorkspace pending send', () => {
 
     runRegisteredShortcut('clearConversation');
 
-    expect(vscodeMocks.sendMessage).toHaveBeenCalledWith(
+    expect(hostMocks.sendMessage).toHaveBeenCalledWith(
       expect.objectContaining({ conversationId: 'conv-b' }),
     );
-    expect(vscodeMocks.clearHistory).toHaveBeenCalledWith('conv-b');
-    expect(vscodeMocks.compressContext).toHaveBeenCalledWith('conv-b');
-    expect(vscodeMocks.promoteQueuedMessage).toHaveBeenCalledWith('conv-b', 'queued-1');
-    expect(vscodeMocks.cancelQueuedMessage).toHaveBeenCalledWith('conv-b', 'queued-1');
-    expect(vscodeMocks.editQueuedMessage).toHaveBeenCalledWith('tab-b', 'conv-b', 'queued-1');
+    expect(hostMocks.clearHistory).toHaveBeenCalledWith('conv-b');
+    expect(hostMocks.compressContext).toHaveBeenCalledWith('conv-b');
+    expect(hostMocks.promoteQueuedMessage).toHaveBeenCalledWith('conv-b', 'queued-1');
+    expect(hostMocks.cancelQueuedMessage).toHaveBeenCalledWith('conv-b', 'queued-1');
+    expect(hostMocks.editQueuedMessage).toHaveBeenCalledWith('tab-b', 'conv-b', 'queued-1');
     expect(clearMessages).toHaveBeenCalledTimes(1);
     expect(setAmbientNodes).toHaveBeenCalledWith([
       { nodeId: 'node-b', type: 'group', summary: 'Tab B group' },
@@ -879,7 +878,7 @@ describe('ChatWorkspace pending send', () => {
     );
 
     fireEvent.click(getByTestId('send'));
-    expect(vscodeMocks.sendMessage).toHaveBeenCalledWith(
+    expect(hostMocks.sendMessage).toHaveBeenCalledWith(
       expect.objectContaining({
         conversationId: 'conv-b',
         message: 'hello from tabless state',

@@ -1,8 +1,8 @@
 /**
- * useCanvasHostMessages - Handle Host extension ↔ webview communication
+ * useCanvasHostMessages - Handle Desktop host ↔ Webview communication
  *
  * Manages message listeners for canvas updates, keyboard actions,
- * locale changes, and media additions from the extension host.
+ * locale changes, and media additions from the Desktop host.
  */
 
 import { useEffect, useRef, useState } from 'react';

@@ -37,20 +37,20 @@ describe('Three model runtime helpers', () => {
       }),
       sourceFingerprint: 'source',
       format: 'gltf',
-      entryUri: 'vscode-webview://authority/model/scene.gltf',
+      entryUri: 'neko-media://authority/model/scene.gltf',
       uriMap: {
-        'scene.gltf': 'vscode-webview://authority/model/scene.gltf',
-        'scene.bin': 'vscode-webview://authority/model/scene.bin',
-        'textures/base.png': 'vscode-webview://authority/model/textures/base.png',
+        'scene.gltf': 'neko-media://authority/model/scene.gltf',
+        'scene.bin': 'neko-media://authority/model/scene.bin',
+        'textures/base.png': 'neko-media://authority/model/textures/base.png',
       },
       sizeBytes: 100,
     });
-    expect(resolve('scene.bin')).toBe('vscode-webview://authority/model/scene.bin');
-    expect(resolve('vscode-webview://authority/model/textures/base.png')).toBe(
-      'vscode-webview://authority/model/textures/base.png',
+    expect(resolve('scene.bin')).toBe('neko-media://authority/model/scene.bin');
+    expect(resolve('neko-media://authority/model/textures/base.png')).toBe(
+      'neko-media://authority/model/textures/base.png',
     );
     expect(resolve('data:image/png;base64,AA==')).toBe('data:image/png;base64,AA==');
-    const embeddedTexture = 'blob:vscode-webview://authority/2f3dbd0d-11ad-4d4c-96ac-71d0f9db8f4e';
+    const embeddedTexture = 'blob:neko-media://authority/2f3dbd0d-11ad-4d4c-96ac-71d0f9db8f4e';
     expect(resolve(embeddedTexture)).toBe(embeddedTexture);
     expect(() => resolve('https://example.com/secret.png')).toThrow(/rejected unresolved URL/);
     expect(() => resolve('undeclared.png')).toThrow(/rejected unresolved URL/);

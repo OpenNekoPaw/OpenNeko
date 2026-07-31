@@ -492,7 +492,7 @@ describe('project cache/search contracts', () => {
                 severity: 'warning',
                 code: 'provider-private',
                 message: 'bad',
-                details: { uri: 'vscode-webview-resource://panel' },
+                details: { uri: 'neko-media://panel' },
               },
             ],
           },

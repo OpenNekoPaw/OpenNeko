@@ -1,4 +1,5 @@
 import type { CanvasData } from '../types/canvas';
+import { isHostProjectedRuntimeValue } from '../types/content-access';
 import type {
   PortableSourcePathPolicy,
   ProjectSourceDescriptor,
@@ -193,8 +194,7 @@ function isSourceLikeValue(value: string): boolean {
   if (!trimmed || trimmed.length > 4096) return false;
   if (trimmed.startsWith('data:')) return false;
   return (
-    /^blob:/i.test(trimmed) ||
-    /^vscode-(?:webview-)?resource:/i.test(trimmed) ||
+    isHostProjectedRuntimeValue(trimmed) ||
     /^webview:/i.test(trimmed) ||
     trimmed.startsWith('./') ||
     trimmed.startsWith('../') ||

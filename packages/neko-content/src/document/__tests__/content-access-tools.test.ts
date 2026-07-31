@@ -698,7 +698,7 @@ describe('content access tools', () => {
       images: [{ path: '/workspace/.neko/.cache/resources/page-1.jpg' }],
     });
     const webviewResult = await createReadImageTool({ contentAccessRuntime: runtime }).execute({
-      images: [{ webviewUri: 'vscode-webview://extension/.neko/.cache/resources/page-1.jpg' }],
+      images: [{ webviewUri: 'neko-media://extension/.neko/.cache/resources/page-1.jpg' }],
     });
 
     expect(pathResult.success).toBe(false);

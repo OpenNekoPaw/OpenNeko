@@ -1,4 +1,4 @@
-import { isWebviewLikeRuntimeValue } from './content-access';
+import { isHostProjectedRuntimeValue } from './content-access';
 import type { ArtifactResourceRef } from './composite-artifact';
 import type { ResourceRef } from './resource-cache';
 import type {
@@ -630,8 +630,7 @@ function isSourceRefKind(value: string): value is StoryboardPlanSourceRefKind {
 function isUnsafePersistentString(value: string): boolean {
   const trimmed = value.trim();
   return (
-    isWebviewLikeRuntimeValue(trimmed) ||
-    /^vscode-webview:\/\//i.test(trimmed) ||
+    isHostProjectedRuntimeValue(trimmed) ||
     /^https?:\/\/(?:localhost|127\.0\.0\.1|\[::1\])(?::\d+)?(?:\/|$)/i.test(trimmed) ||
     /^file:\/\//i.test(trimmed) ||
     /^[A-Za-z]:[\\/]/.test(trimmed) ||

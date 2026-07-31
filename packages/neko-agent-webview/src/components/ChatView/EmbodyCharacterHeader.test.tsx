@@ -12,9 +12,6 @@ vi.mock('@/messages', () => ({
   AgentHostMessages: {
     exitEmbodyCharacterSession: (...args: unknown[]) => exitEmbodyCharacterSession(...args),
   },
-  VSCodeMessages: {
-    exitEmbodyCharacterSession: (...args: unknown[]) => exitEmbodyCharacterSession(...args),
-  },
 }));
 
 describe('EmbodyCharacterHeader', () => {

@@ -263,7 +263,7 @@ describe('tool-call-presenter', () => {
           images: [
             {
               label: 'Page 1',
-              renderUri: 'vscode-webview://page-1.jpg',
+              renderUri: 'neko-media://page-1.jpg',
               width: 1494,
               height: 2133,
               byteSize: 2048,
@@ -304,7 +304,7 @@ describe('tool-call-presenter', () => {
         height: 2133,
         byteSize: 2048,
         mimeType: 'image/jpeg',
-        src: 'vscode-webview://page-1.jpg',
+        src: 'neko-media://page-1.jpg',
         label: 'Page 1',
         locator: {
           kind: 'chapter',
@@ -355,7 +355,7 @@ describe('tool-call-presenter', () => {
       },
     });
     expect(projection.documentThumbnails[0]!.referenceJson).not.toContain('"renderUri"');
-    expect(projection.documentThumbnails[0]!.referenceJson).not.toContain('vscode-webview://');
+    expect(projection.documentThumbnails[0]!.referenceJson).not.toContain('neko-media://');
     expect(projection.documentThumbnails[0]!.referenceJson).not.toContain('/tmp/page-1.jpg');
   });
 
@@ -368,7 +368,7 @@ describe('tool-call-presenter', () => {
           {
             label: '第10页',
             path: '/tmp/page-10.jpg',
-            renderUri: 'vscode-webview://page-10.jpg',
+            renderUri: 'neko-media://page-10.jpg',
           },
         ],
         mode: 'metadata',
@@ -380,7 +380,7 @@ describe('tool-call-presenter', () => {
       expect.objectContaining({
         filePath: '/tmp/page-10.jpg',
         path: '/tmp/page-10.jpg',
-        src: 'vscode-webview://page-10.jpg',
+        src: 'neko-media://page-10.jpg',
         label: '第10页',
       }),
     ]);
@@ -397,7 +397,7 @@ describe('tool-call-presenter', () => {
           images: [
             {
               label: 'Page 1',
-              renderUri: 'vscode-webview://page-1.jpg',
+              renderUri: 'neko-media://page-1.jpg',
               width: 1494,
               height: 2133,
               mimeType: 'image/jpeg',
@@ -420,7 +420,7 @@ describe('tool-call-presenter', () => {
         width: 1494,
         height: 2133,
         mimeType: 'image/jpeg',
-        src: 'vscode-webview://page-1.jpg',
+        src: 'neko-media://page-1.jpg',
         label: 'Page 1',
         resourceRef: {
           kind: 'document-entry',
@@ -434,7 +434,7 @@ describe('tool-call-presenter', () => {
       'renderUri',
     );
     expect(projection.documentThumbnails[0]!.referenceJson).not.toContain('renderUri');
-    expect(projection.documentThumbnails[0]!.referenceJson).not.toContain('vscode-webview://');
+    expect(projection.documentThumbnails[0]!.referenceJson).not.toContain('neko-media://');
     expect(projection.documentThumbnails[0]!.referenceJson).not.toContain('.neko/.cache');
   });
 
@@ -589,7 +589,7 @@ describe('tool-call-presenter', () => {
           {
             label: 'Page 2',
             path: '/tmp/page-2.jpg',
-            renderUri: 'vscode-webview://page-2.jpg',
+            renderUri: 'neko-media://page-2.jpg',
             metadata: {
               locator: {
                 kind: 'chapter',
@@ -611,7 +611,7 @@ describe('tool-call-presenter', () => {
       expect.objectContaining({
         filePath: '/books/a.epub',
         path: '/tmp/page-2.jpg',
-        src: 'vscode-webview://page-2.jpg',
+        src: 'neko-media://page-2.jpg',
         label: 'Page 2',
         locator: {
           kind: 'chapter',

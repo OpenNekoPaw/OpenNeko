@@ -1369,7 +1369,7 @@ function isRenderableUri(value: string): boolean {
   if (isAbsolutePath(value)) return false;
   if (value.startsWith('http://') || value.startsWith('https://')) return true;
   if (value.startsWith('webview://')) return true;
-  return value.includes('vscode-resource') || value.includes('vscode-webview');
+  return value.startsWith('neko-media://');
 }
 
 function isGeneratedAssetResultMediaUri(value: string): boolean {

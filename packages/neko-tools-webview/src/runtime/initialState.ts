@@ -11,7 +11,7 @@ export function getMediaDiffInitialState(bridge: IWebviewBridge): ImmutableIniti
   const persistedState = bridge.getState<Partial<InitialState>>();
   const injectedState = window.initialState;
   if (!injectedState) {
-    throw new Error('Media diff initial state was not injected by the extension host.');
+    throw new Error('Media diff initial state was not injected by the Desktop host.');
   }
 
   const state: InitialState = {

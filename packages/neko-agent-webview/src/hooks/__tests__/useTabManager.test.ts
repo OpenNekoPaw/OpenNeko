@@ -4,7 +4,7 @@ import { useState } from 'react';
 import type { OpenTab } from '@neko-agent/types';
 import { useTabManager } from '../useTabManager';
 
-const vscodeMocks = vi.hoisted(() => ({
+const hostMocks = vi.hoisted(() => ({
   activateConversation: vi.fn(),
   updateTabState: vi.fn(),
   exitCharacterDialogueSession: vi.fn(),
@@ -13,8 +13,7 @@ const vscodeMocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/messages', () => ({
-  AgentHostMessages: vscodeMocks,
-  VSCodeMessages: vscodeMocks,
+  AgentHostMessages: hostMocks,
 }));
 
 describe('useTabManager', () => {
@@ -61,7 +60,7 @@ describe('useTabManager', () => {
 
     expect(result.current.activeTabId).toBe('tab-role');
     expect(onActivateCharacterRoleTab).toHaveBeenCalledWith(roleTab);
-    expect(vscodeMocks.activateConversation).not.toHaveBeenCalled();
+    expect(hostMocks.activateConversation).not.toHaveBeenCalled();
     expect(setActiveTab).toHaveBeenCalledWith('chat');
   });
 
@@ -108,7 +107,7 @@ describe('useTabManager', () => {
       expectedTabStateRevision: 0,
     });
     expect(onActivateCharacterRoleTab).not.toHaveBeenCalled();
-    expect(vscodeMocks.activateConversation).toHaveBeenCalledWith({
+    expect(hostMocks.activateConversation).toHaveBeenCalledWith({
       activationId: 1,
       conversationId: 'conv-b',
       tabId: 'tab-b',
@@ -121,7 +120,7 @@ describe('useTabManager', () => {
         activeTabId: 'tab-b',
       },
     });
-    expect(vscodeMocks.updateTabState).not.toHaveBeenCalled();
+    expect(hostMocks.updateTabState).not.toHaveBeenCalled();
   });
 
   it('requests a config snapshot only when opening a new tab', () => {
@@ -199,7 +198,7 @@ describe('useTabManager', () => {
       result.current.handleCloseTab('tab-a');
     });
 
-    expect(vscodeMocks.deleteConversation).not.toHaveBeenCalled();
+    expect(hostMocks.deleteConversation).not.toHaveBeenCalled();
   });
 
   it('preserves locally active conversations when closing their tab', () => {
@@ -227,7 +226,7 @@ describe('useTabManager', () => {
       result.current.handleCloseTab('tab-a');
     });
 
-    expect(vscodeMocks.deleteConversation).not.toHaveBeenCalled();
+    expect(hostMocks.deleteConversation).not.toHaveBeenCalled();
   });
 
   it('checks active-tab local activity without a foreground save callback', () => {
@@ -258,7 +257,7 @@ describe('useTabManager', () => {
     });
 
     expect(hasLocalConversationActivity).toHaveBeenCalledWith('conv-a');
-    expect(vscodeMocks.deleteConversation).not.toHaveBeenCalled();
+    expect(hostMocks.deleteConversation).not.toHaveBeenCalled();
   });
 
   it('keeps the empty-tab cleanup behavior for confirmed empty conversations', () => {
@@ -285,7 +284,7 @@ describe('useTabManager', () => {
       result.current.handleCloseTab('tab-a');
     });
 
-    expect(vscodeMocks.deleteConversation).toHaveBeenCalledWith('conv-a', {
+    expect(hostMocks.deleteConversation).toHaveBeenCalledWith('conv-a', {
       activateNext: false,
     });
   });
@@ -323,11 +322,11 @@ describe('useTabManager', () => {
     expect(result.current.openTabs).toEqual([]);
     expect(result.current.activeTabId).toBeNull();
     expect(onAllTabsClosed).toHaveBeenCalledTimes(1);
-    expect(vscodeMocks.deleteConversation).toHaveBeenCalledWith('conv-a', {
+    expect(hostMocks.deleteConversation).toHaveBeenCalledWith('conv-a', {
       activateNext: false,
     });
-    expect(vscodeMocks.activateConversation).not.toHaveBeenCalled();
-    expect(vscodeMocks.updateTabState).toHaveBeenCalledWith([], null, 0);
+    expect(hostMocks.activateConversation).not.toHaveBeenCalled();
+    expect(hostMocks.updateTabState).toHaveBeenCalledWith([], null, 0);
   });
 
   it('closes the final roleplay tab into an explicit empty tab state without restoring history', () => {
@@ -368,10 +367,10 @@ describe('useTabManager', () => {
     expect(result.current.openTabs).toEqual([]);
     expect(result.current.activeTabId).toBeNull();
     expect(onAllTabsClosed).toHaveBeenCalledTimes(1);
-    expect(vscodeMocks.exitCharacterDialogueSession).toHaveBeenCalledWith('npc-session-1');
-    expect(vscodeMocks.activateConversation).not.toHaveBeenCalled();
-    expect(vscodeMocks.deleteConversation).not.toHaveBeenCalled();
-    expect(vscodeMocks.updateTabState).toHaveBeenCalledWith([], null, 0);
+    expect(hostMocks.exitCharacterDialogueSession).toHaveBeenCalledWith('npc-session-1');
+    expect(hostMocks.activateConversation).not.toHaveBeenCalled();
+    expect(hostMocks.deleteConversation).not.toHaveBeenCalled();
+    expect(hostMocks.updateTabState).toHaveBeenCalledWith([], null, 0);
   });
 
   it('records the next ordinary conversation before closing the active tab switches to it', () => {
@@ -410,7 +409,7 @@ describe('useTabManager', () => {
       tabId: 'tab-b',
       expectedTabStateRevision: 0,
     });
-    expect(vscodeMocks.activateConversation).toHaveBeenCalledWith({
+    expect(hostMocks.activateConversation).toHaveBeenCalledWith({
       activationId: 1,
       conversationId: 'conv-b',
       tabId: 'tab-b',
@@ -420,6 +419,6 @@ describe('useTabManager', () => {
         activeTabId: 'tab-b',
       },
     });
-    expect(vscodeMocks.updateTabState).not.toHaveBeenCalled();
+    expect(hostMocks.updateTabState).not.toHaveBeenCalled();
   });
 });

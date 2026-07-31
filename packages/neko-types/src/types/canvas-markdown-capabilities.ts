@@ -1,4 +1,5 @@
 import type { CanvasAgentProvenance, CanvasAgentTargetRef } from './canvas-agent-operations';
+import { isHostProjectedRuntimeValue } from './content-access';
 import { isDocumentArchiveResourceRef, type DocumentArchiveResourceRef } from './document-reading';
 import { isResourceRef, type ResourceRef } from './resource-cache';
 
@@ -99,8 +100,6 @@ const CANVAS_MARKDOWN_TARGET_MODES = [
 ] as const;
 
 const RUNTIME_RESOURCE_PATTERNS: readonly RegExp[] = [
-  /^vscode-webview:\/\//i,
-  /^vscode-webview-resource:\/\//i,
   /^blob:/i,
   /^file:/i,
   /^data:/i,
@@ -247,7 +246,10 @@ export function validateCanvasMarkdownCapabilityInput(
 }
 
 export function isRuntimeOnlyCanvasMarkdownResourceValue(value: string): boolean {
-  return RUNTIME_RESOURCE_PATTERNS.some((pattern) => pattern.test(value));
+  return (
+    isHostProjectedRuntimeValue(value) ||
+    RUNTIME_RESOURCE_PATTERNS.some((pattern) => pattern.test(value))
+  );
 }
 
 function isCanvasMarkdownCapabilityStatus(value: unknown): value is CanvasMarkdownCapabilityStatus {

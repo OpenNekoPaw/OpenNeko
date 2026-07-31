@@ -4,6 +4,7 @@ import {
   type WorkspaceMediaPathContext,
   type WorkspaceMediaPathDiagnostic,
 } from '../path/workspace-media-path';
+import { isHostProjectedRuntimeValue } from '../types/content-access';
 import { createProjectFileDiagnostic, type ProjectFileDiagnostic } from './diagnostics';
 
 export type ProjectSourceRole =
@@ -180,9 +181,7 @@ export function detectRuntimeOrCacheSourceHandle(
   const lower = value.toLowerCase();
 
   if (
-    lower.startsWith('blob:') ||
-    lower.startsWith('vscode-resource:') ||
-    lower.startsWith('vscode-webview-resource:') ||
+    isHostProjectedRuntimeValue(lower) ||
     lower.startsWith('http://127.0.0.1') ||
     lower.startsWith('http://localhost') ||
     lower.includes('engineToken=') ||

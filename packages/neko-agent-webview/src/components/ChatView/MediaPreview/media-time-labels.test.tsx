@@ -8,10 +8,6 @@ vi.mock('@/messages', () => ({
     openFile: vi.fn(),
     openUrl: vi.fn(),
   },
-  VSCodeMessages: {
-    openFile: vi.fn(),
-    openUrl: vi.fn(),
-  },
 }));
 
 describe('Agent media preview time labels', () => {

@@ -1,4 +1,5 @@
 import type { DocumentArchiveResourceRef, DocumentSourceRef } from './document-reading';
+import { isHostProjectedRuntimeValue } from './content-access';
 import type { ResourceRef } from './resource-cache';
 import {
   AGENT_PROFILE_SOURCES,
@@ -2103,8 +2104,7 @@ function isUnsafeRuntimeHandle(value: string): boolean {
   if (
     normalized.startsWith('blob:') ||
     normalized.startsWith('data:') ||
-    normalized.startsWith('vscode-resource:') ||
-    normalized.startsWith('vscode-webview-resource:') ||
+    isHostProjectedRuntimeValue(normalized) ||
     normalized.startsWith('file:') ||
     normalized.startsWith('http://localhost') ||
     normalized.startsWith('http://127.0.0.1') ||

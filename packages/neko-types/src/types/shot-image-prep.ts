@@ -11,6 +11,7 @@ import type {
   GenericTableColumn,
   GenericTableRow,
 } from './composite-artifact';
+import { isHostProjectedRuntimeValue } from './content-access';
 import type { CreativeEntityRef } from './creative-entity-asset-composition';
 import { MEDIA_PRODUCTION_SHOT_IMAGE_PREP_PROFILE_ID } from './media-production';
 import type { PerceptionCardRef } from './media-semantic-index';
@@ -1657,9 +1658,7 @@ function isUnsafeRuntimeHandle(value: string): boolean {
     normalized.startsWith('blob:') ||
     normalized.startsWith('data:') ||
     normalized.startsWith('object:') ||
-    normalized.startsWith('vscode-resource:') ||
-    normalized.startsWith('vscode-webview-resource:') ||
-    normalized.startsWith('vscode-webview://') ||
+    isHostProjectedRuntimeValue(normalized) ||
     normalized.startsWith('file:') ||
     normalized.startsWith('http://localhost') ||
     normalized.startsWith('http://127.0.0.1') ||

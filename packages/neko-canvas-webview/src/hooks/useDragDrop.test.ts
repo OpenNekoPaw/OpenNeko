@@ -34,7 +34,7 @@ describe('useDragDrop external payload detection', () => {
     ).toBe(true);
   });
 
-  it('leaves empty cross-extension drops for the extension-host DnD fallback', () => {
+  it('leaves empty cross-surface drops for the Desktop host DnD path', () => {
     expect(hasCanvasExternalDropPayload({ types: [] as unknown as DataTransfer['types'] })).toBe(
       false,
     );

@@ -361,7 +361,7 @@ describe('MessageList auto-scroll lifecycle', () => {
       </MessageActionsProvider>,
     );
 
-    expect(screen.getByAltText('Page 1').getAttribute('src')).toBe('vscode-webview://page-1.jpg');
+    expect(screen.getByAltText('Page 1').getAttribute('src')).toBe('neko-media://page-1.jpg');
     expect(screen.queryByText(/no image resource context/)).toBeNull();
     expect(screen.queryByText('P1')).toBeNull();
   });
@@ -555,7 +555,7 @@ function createReadImageContextMessage(): Message {
             attachments: [
               {
                 type: 'image',
-                path: 'vscode-webview://page-1.jpg',
+                path: 'neko-media://page-1.jpg',
                 mimeType: 'image/jpeg',
               },
             ],

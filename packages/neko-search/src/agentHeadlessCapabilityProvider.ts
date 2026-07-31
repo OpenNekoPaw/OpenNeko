@@ -239,7 +239,7 @@ function isSensitiveKey(key: string): boolean {
 
 function isSafeVisibleValue(value: unknown): boolean {
   if (typeof value === 'string') {
-    return !containsManagedStorage(value) && !isWebviewUri(value);
+    return !containsManagedStorage(value) && !isRuntimeMediaUri(value);
   }
   if (Array.isArray(value)) {
     return value.every(isSafeVisibleValue);
@@ -261,7 +261,7 @@ function isSafeVisibleUri(value: string | undefined): value is string {
     typeof value === 'string' &&
     value.length > 0 &&
     !containsManagedStorage(value) &&
-    !isWebviewUri(value)
+    !isRuntimeMediaUri(value)
   );
 }
 
@@ -269,8 +269,11 @@ function containsManagedStorage(value: string): boolean {
   return /(^|[\\/])\.neko([\\/]|$)/i.test(value);
 }
 
-function isWebviewUri(value: string): boolean {
-  return /^vscode-webview:/i.test(value) || /^blob:/i.test(value);
+function isRuntimeMediaUri(value: string): boolean {
+  return (
+    /^(?:neko-(?:app|media)|[a-z][a-z0-9+.-]*-(?:webview(?:-resource)?|resource)):/i.test(value) ||
+    /^blob:/i.test(value)
+  );
 }
 
 function readSearchMode(value: unknown): ProjectSearchMode | undefined {

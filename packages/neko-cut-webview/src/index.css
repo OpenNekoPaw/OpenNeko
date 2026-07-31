@@ -4,7 +4,7 @@
 
 /* =============================================================================
    neko-cut Design System — macOS-inspired video editor theme
-   Layered on top of VSCode CSS variables.
+   Layered on top of Desktop-owned Neko theme variables.
    Supports dark / light / high-contrast modes.
    ============================================================================= */
 
@@ -708,7 +708,7 @@
 }
 
 /* =============================================================================
-   VSCode-compatible button classes (upgraded macOS style)
+   Shared button classes (macOS style)
    ============================================================================= */
 
 .neko-button {
@@ -748,7 +748,7 @@
 }
 
 /* =============================================================================
-   VSCode-compatible input class (upgraded macOS style)
+   Shared input class (macOS style)
    ============================================================================= */
 
 .neko-input {
@@ -774,7 +774,7 @@
 }
 
 /* =============================================================================
-   VSCode-compatible dropdown class
+   Shared dropdown class
    ============================================================================= */
 
 .neko-dropdown {
@@ -1438,7 +1438,7 @@
 }
 
 /* =============================================================================
-   VSCode-compatible list item class
+   Shared list item class
    ============================================================================= */
 
 .neko-list-item {

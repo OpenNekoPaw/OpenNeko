@@ -29,7 +29,7 @@ describe('clipboard-context-presenter', () => {
         display: {
           runtimeOnly: true,
           path: '/tmp/page-1.jpg',
-          renderUri: 'vscode-webview://page-1.jpg',
+          renderUri: 'neko-media://page-1.jpg',
         },
       }),
     );

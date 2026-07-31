@@ -1,4 +1,4 @@
-import { isWebviewLikeRuntimeValue } from './content-access';
+import { isHostProjectedRuntimeValue } from './content-access';
 import type { ResourceRef } from './resource-cache';
 
 export const CANVAS_CREATIVE_SCOPE_KINDS = [
@@ -180,8 +180,7 @@ function isUnsafeBoardString(value: string): boolean {
   const trimmed = value.trim();
   return (
     trimmed.length === 0 ||
-    isWebviewLikeRuntimeValue(trimmed) ||
-    /^vscode-webview:\/\//i.test(trimmed) ||
+    isHostProjectedRuntimeValue(trimmed) ||
     /^https?:\/\/(?:localhost|127\.0\.0\.1|\[::1\])(?::\d+)?(?:\/|$)/i.test(trimmed) ||
     /^file:\/\//i.test(trimmed) ||
     /^[A-Za-z]:[\\/]/.test(trimmed) ||

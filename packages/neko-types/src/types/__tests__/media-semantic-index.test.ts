@@ -42,7 +42,7 @@ describe('media semantic index contracts', () => {
         sourceKind: 'screenshot',
       },
       metadata: {
-        uri: 'vscode-resource://panel.png',
+        uri: 'neko-media://panel.png',
       },
     });
 

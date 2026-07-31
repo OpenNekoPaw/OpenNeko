@@ -1,7 +1,7 @@
 /**
  * Player styles - shared CSS for video and audio preview
  *
- * Uses VSCode CSS variables for theme integration.
+ * Uses Desktop-owned Neko theme variables.
  */
 
 @tailwind base;

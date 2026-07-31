@@ -4,7 +4,7 @@
 
 import {
   isContentSourceRef,
-  isWebviewLikeRuntimeValue,
+  isHostProjectedRuntimeValue,
   type ContentSourceRef,
 } from './content-access';
 import {
@@ -1123,8 +1123,7 @@ function findUnsafeSemanticCoverageValue(value: JsonValue): string | undefined {
 function isUnsafeSemanticCoverageString(value: string): boolean {
   const trimmed = value.trim();
   return (
-    isWebviewLikeRuntimeValue(trimmed) ||
-    trimmed.startsWith('vscode-webview://') ||
+    isHostProjectedRuntimeValue(trimmed) ||
     trimmed.startsWith('file://') ||
     trimmed.startsWith('sqlite://') ||
     trimmed.startsWith('fts://') ||

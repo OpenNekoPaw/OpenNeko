@@ -31,7 +31,7 @@ describe('storyboard readiness contracts', () => {
           characterId: 'char-alice',
           matchSource: 'dialogue-character',
           status: 'bound',
-          thumbnailUri: 'vscode-webview://thumb/alice.png',
+          thumbnailUri: 'neko-media://thumb/alice.png',
           assetEntityIds: ['asset-alice'],
         },
         {
@@ -89,7 +89,7 @@ describe('storyboard readiness contracts', () => {
       sourceScriptUri: 'file:///project/demo.fountain',
       characterId: 'char-alice',
       assetEntityIds: ['asset-alice'],
-      thumbnailRef: 'vscode-webview://thumb/alice.png',
+      thumbnailRef: 'neko-media://thumb/alice.png',
       readinessStatus: 'bound',
     };
 

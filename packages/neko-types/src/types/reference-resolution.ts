@@ -1,4 +1,5 @@
 import { isCanvasNodeType, type CanvasNode, type CanvasNodeType } from './canvas';
+import { isHostProjectedRuntimeValue } from './content-access';
 import type {
   ArtifactMediaItem,
   ArtifactResourceRef,
@@ -1131,7 +1132,7 @@ export function collectReferencesFromStoryboardTable(
 export function isUnsafeReferenceRuntimeHandle(value: string): boolean {
   const trimmed = value.trim();
   if (!trimmed) return false;
-  if (/^(?:blob|data|file|vscode-resource):/i.test(trimmed)) return true;
+  if (isHostProjectedRuntimeValue(trimmed) || /^file:/i.test(trimmed)) return true;
   if (/^https?:\/\/(?:localhost|127\.0\.0\.1|\[::1\])(?::|\/|$)/i.test(trimmed)) return true;
   if (/^\/(?!\$\{)/.test(trimmed)) return true;
   if (/^[A-Za-z]:[\\/]/.test(trimmed)) return true;
