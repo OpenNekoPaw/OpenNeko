@@ -10,6 +10,8 @@ Desktop 目前有三种不同所有权的配置：
 
 组件复用审计结论：设置页复用 `@neko/ui` 的图标、按钮、Tooltip 和表单交互语义，继续消费 shared/Desktop theme token；设置页是新的应用级信息架构，不复用 Canvas、Agent 或 Assets 的领域 Root，也不建立第二套 design system。
 
+增量复用审计结论：设置页的分类信息架构仍由 Desktop Settings surface 拥有，但应用侧栏 frame、品牌头、导航项、宽度调整 binding、搜索输入、页面标题 typography 和主内容 surface 必须复用 Home 与项目工作区的 Desktop Shell primitives。共享 primitive 留在 Desktop renderer 组合边界，因为它依赖应用品牌和 workbench sidebar contract，不提升到无业务 `@neko/ui`；pointer resize 机制继续复用 `@neko/ui` 的 `useResizable` 与 `ResizeHandle`，不复制拖拽算法。
+
 ## Goals / Non-Goals
 
 **Goals:**
@@ -81,6 +83,12 @@ Renderer 使用显式 `workspace | settings` 应用表面状态。设置页替�
 - `light/dark`：使用显式值，系统变化不改变结果
 
 i18n 继续使用 shared webview adapter 的 `setLocale()`，`system` 通过 navigator locale 解析。设置提交成功后才更新 UI，写入失败不得显示为已保存。
+
+### 7. 设置页复用 Desktop Shell 的应用级视觉骨架
+
+Home、项目工作区和设置页使用同一个应用侧栏 frame、品牌头和导航按钮组件。Home 与设置页通过共享 frame 注入同一个 primary-sidebar resize binding；项目工作区把同一 binding 交给 `ControlledWorkbenchShell`，三条路径最终都更新同一 `workbench.primarySidebar.width`。设置页主内容复用 Home 的 main surface、内容宽度和 `home-launchpad-heading` 字体层级；设置领域只拥有分类、设置行与 authority 说明。不得为设置页保留独立侧栏宽度、独立标题字体、独立背景层级或一套平行的导航视觉规则。
+
+设置页在侧栏宽度变化时，品牌、返回、搜索和分类导航应组成同宽、水平居中的响应式控件列。控件列宽度必须根据当前可用侧栏宽度连续变化，并通过动态安全边距保持合理密度；不得固定为单一像素宽度。控件内部图标和文字继续左对齐。该约束属于设置页信息密度适配，不改变共享侧栏 frame、宽度持久化或 Home/项目业务导航的布局。
 
 ## Risks / Trade-offs
 

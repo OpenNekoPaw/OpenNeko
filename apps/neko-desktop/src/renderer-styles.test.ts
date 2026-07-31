@@ -21,6 +21,26 @@ describe('Desktop renderer styles', () => {
     expect(dragStripRule?.groups?.body).toMatch(/-webkit-app-region\s*:\s*drag/u);
   });
 
+  it('centers a bounded Settings control column without centering its text', () => {
+    const settingsControlColumnRule = styles.match(
+      /\.desktop-settings__navigation-control\s*\{(?<body>[\s\S]*?)\n\}/u,
+    );
+    const settingsNavigationButtonRule = styles.match(
+      /\.desktop-settings__navigation\s+\.home-nav-button\s*\{(?<body>[\s\S]*?)\n\}/u,
+    );
+    const settingsSearchRule = styles.match(
+      /\.desktop-settings__navigation-control\s+\.desktop-settings__search\s*\{(?<body>[\s\S]*?)\n\}/u,
+    );
+
+    expect(settingsControlColumnRule?.groups?.body).toMatch(
+      /width\s*:\s*calc\(100%\s*-\s*clamp\(24px,\s*12%,\s*40px\)\)/u,
+    );
+    expect(settingsControlColumnRule?.groups?.body).not.toMatch(/224px/u);
+    expect(settingsControlColumnRule?.groups?.body).toMatch(/margin-inline\s*:\s*auto/u);
+    expect(settingsNavigationButtonRule?.groups?.body).toMatch(/text-align\s*:\s*left/u);
+    expect(settingsSearchRule?.groups?.body).toMatch(/width\s*:\s*100%/u);
+  });
+
   it('hides the visibility control on the idle compact rail and reveals it with the sidebar', () => {
     expect(styles).toMatch(
       /\.home-navigation--compact\s+\.home-brand-toggle\s*\{[\s\S]*?display\s*:\s*none/u,

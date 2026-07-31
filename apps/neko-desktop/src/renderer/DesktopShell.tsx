@@ -21,6 +21,7 @@ import {
   TooltipProvider,
   WarningIcon,
   WorkbenchEditorTabs,
+  type ControlledWorkbenchResizeBinding,
 } from '@neko/ui';
 import { useTranslation } from '@neko/shared/i18n/react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -39,7 +40,6 @@ import type {
   DesktopHomeSkillItem,
 } from '../shared/home-management-contract';
 import {
-  APPLICATION_PRIMARY_SIDEBAR_DEFAULT_WIDTH,
   DESKTOP_WORKBENCH_LIMITS,
   closeMainView,
   getActiveMainView,
@@ -57,6 +57,11 @@ import { DesktopPreviewSurface } from './DesktopPreviewSurface';
 import { DesktopCanvasSurface } from './DesktopCanvasSurface';
 import { DesktopCutSurface } from './DesktopCutSurface';
 import { DesktopSettingsSurface } from './DesktopSettingsSurface';
+import {
+  DesktopApplicationBrand,
+  DesktopApplicationNavigationButton,
+  DesktopApplicationSidebarFrame,
+} from './DesktopApplicationSidebar';
 
 type ShellState =
   | { readonly kind: 'loading' }
@@ -369,7 +374,16 @@ export function DesktopApplication(): JSX.Element {
           </div>
         ) : null}
         {applicationSurface === 'settings' ? (
-          <DesktopSettingsSurface onBack={() => setApplicationSurface('workspace')} />
+          <DesktopSettingsSurface
+            onBack={() => setApplicationSurface('workspace')}
+            sidebarResize={createApplicationPrimarySidebarResizeBinding({
+              actions,
+              disabled: pending,
+              t,
+              workbench: projection.window.workbench,
+            })}
+            sidebarWidth={projection.window.workbench.primarySidebar.width}
+          />
         ) : activeProject ? (
           <ContentProjectWorkspace
             actions={actions}
@@ -469,13 +483,20 @@ function HomeWorkspace({
   readonly onOpenRecent: (projectId: string) => void;
   readonly onOpenConversation: (conversation: DesktopAgentHomeConversationSummary) => void;
 }): JSX.Element {
+  const { t } = useTranslation();
   const workbench = projection.window.workbench;
   const navigationCollapsed = !workbench.primarySidebar.visible;
   return (
     <div className="home-layout" data-navigation-collapsed={navigationCollapsed ? 'true' : 'false'}>
-      <ApplicationPrimarySidebarFrame
+      <DesktopApplicationSidebarFrame
         compact={navigationCollapsed}
         expandedWidth={workbench.primarySidebar.width}
+        resize={createApplicationPrimarySidebarResizeBinding({
+          actions,
+          disabled: pending || navigationCollapsed,
+          t,
+          workbench,
+        })}
       >
         <ApplicationPrimarySidebar
           activeSection={section}
@@ -489,7 +510,7 @@ function HomeWorkspace({
           onToggle={() => actions.onUpdateWorkbench(togglePrimarySidebarWorkbench(workbench))}
           projection={projection}
         />
-      </ApplicationPrimarySidebarFrame>
+      </DesktopApplicationSidebarFrame>
       <main className="home-main" data-home-surface="application">
         {section === 'create' ? (
           <HomeStartCreating actions={actions} pending={pending} projection={projection} />
@@ -1595,19 +1616,12 @@ function ContentProjectWorkspace({
       }
       primarySidebarVisible
       primarySidebarWidth={workbench.primarySidebar.visible ? workbench.primarySidebar.width : 64}
-      primarySidebarResize={
-        pending || !workbench.primarySidebar.visible
-          ? undefined
-          : {
-              label: t('workspace.resizePrimarySidebar'),
-              minSize: DESKTOP_WORKBENCH_LIMITS.primarySidebarWidth.min,
-              maxSize: DESKTOP_WORKBENCH_LIMITS.primarySidebarWidth.max,
-              onResizeEnd: (width) => {
-                if (width === workbench.primarySidebar.width) return;
-                actions.onUpdateWorkbench(resizePrimarySidebarWorkbench(workbench, width));
-              },
-            }
-      }
+      primarySidebarResize={createApplicationPrimarySidebarResizeBinding({
+        actions,
+        disabled: pending || !workbench.primarySidebar.visible,
+        t,
+        workbench,
+      })}
       main={
         <div className="project-main-host">
           <div className="project-main-host__content">{mainSurface}</div>
@@ -2050,7 +2064,7 @@ function ProjectPrimarySidebar({
     actions.onUpdateWorkbench(togglePrimarySidebarWorkbench(workbench));
   };
   return (
-    <ApplicationPrimarySidebarFrame
+    <DesktopApplicationSidebarFrame
       compact={compact}
       expandedWidth={workbench.primarySidebar.width}
     >
@@ -2070,7 +2084,7 @@ function ProjectPrimarySidebar({
           <WorkbenchDisplayMenu actions={actions} disabled={pending} projection={projection} />
         }
       />
-    </ApplicationPrimarySidebarFrame>
+    </DesktopApplicationSidebarFrame>
   );
 }
 
@@ -2161,6 +2175,29 @@ export function resizePrimarySidebarWorkbench(
     primarySidebar: {
       ...workbench.primarySidebar,
       width,
+    },
+  };
+}
+
+function createApplicationPrimarySidebarResizeBinding({
+  actions,
+  disabled,
+  t,
+  workbench,
+}: {
+  readonly actions: ShellActions;
+  readonly disabled: boolean;
+  readonly t: TranslationFunction;
+  readonly workbench: DesktopWorkbenchLayoutProjection;
+}): ControlledWorkbenchResizeBinding | undefined {
+  if (disabled) return undefined;
+  return {
+    label: t('workspace.resizePrimarySidebar'),
+    minSize: DESKTOP_WORKBENCH_LIMITS.primarySidebarWidth.min,
+    maxSize: DESKTOP_WORKBENCH_LIMITS.primarySidebarWidth.max,
+    onResizeEnd: (width) => {
+      if (width === workbench.primarySidebar.width) return;
+      actions.onUpdateWorkbench(resizePrimarySidebarWorkbench(workbench, width));
     },
   };
 }
@@ -2505,28 +2542,28 @@ function ApplicationPrimarySidebar({
     >
       <PrimarySidebarBrand compact={compact} disabled={disabled} onToggle={onToggle} />
       <nav className="home-primary-navigation" aria-label={t('workspace.primaryNavigation')}>
-        <HomeNavigationButton
+        <DesktopApplicationNavigationButton
           active={activeSection === 'create'}
           disabled={disabled}
           label={t('home.overview')}
           icon={<PlusIcon size={17} />}
           onClick={() => onNavigate('create')}
         />
-        <HomeNavigationButton
+        <DesktopApplicationNavigationButton
           active={activeSection === 'assets'}
           disabled={disabled}
           label={t('home.mediaLibrary')}
           icon={<SearchIcon size={17} />}
           onClick={() => onNavigate('assets')}
         />
-        <HomeNavigationButton
+        <DesktopApplicationNavigationButton
           active={activeSection === 'plugins'}
           disabled={disabled}
           label={t('home.plugins')}
           icon={<PackageIcon size={17} />}
           onClick={() => onNavigate('plugins')}
         />
-        <HomeNavigationButton
+        <DesktopApplicationNavigationButton
           active={activeSection === 'projects'}
           disabled={disabled}
           label={t('home.allProjects')}
@@ -2552,38 +2589,6 @@ function ApplicationPrimarySidebar({
   );
 }
 
-function ApplicationPrimarySidebarFrame({
-  children,
-  compact,
-  expandedWidth,
-}: {
-  readonly children: JSX.Element;
-  readonly compact: boolean;
-  readonly expandedWidth: number;
-}): JSX.Element {
-  const width = compact ? 64 : expandedWidth;
-  const frameStyle: React.CSSProperties & {
-    '--application-primary-sidebar-expanded-width': string;
-  } = {
-    '--application-primary-sidebar-expanded-width': `${expandedWidth}px`,
-    width,
-  };
-  return (
-    <div
-      className="application-primary-sidebar-frame"
-      data-primary-sidebar-frame="application"
-      data-primary-sidebar-placement="flush"
-      data-primary-sidebar-default-width={APPLICATION_PRIMARY_SIDEBAR_DEFAULT_WIDTH}
-      data-primary-sidebar-expanded-width={expandedWidth}
-      data-primary-sidebar-hover-reveal={compact ? 'true' : 'false'}
-      data-primary-sidebar-width={width}
-      style={frameStyle}
-    >
-      {children}
-    </div>
-  );
-}
-
 function PrimarySidebarBrand({
   compact,
   disabled = false,
@@ -2595,19 +2600,17 @@ function PrimarySidebarBrand({
 }): JSX.Element {
   const { t } = useTranslation();
   return (
-    <div className="home-brand">
-      <span className="brand-mark" aria-hidden="true">
-        N
-      </span>
-      <strong>{t('app.name')}</strong>
-      <IconButton
-        className="home-brand-toggle"
-        disabled={disabled}
-        label={compact ? t('workspace.expandSidebar') : t('workspace.collapseSidebar')}
-        icon={<RightPanelIcon size={16} />}
-        onClick={onToggle}
-      />
-    </div>
+    <DesktopApplicationBrand
+      control={
+        <IconButton
+          className="home-brand-toggle"
+          disabled={disabled}
+          label={compact ? t('workspace.expandSidebar') : t('workspace.collapseSidebar')}
+          icon={<RightPanelIcon size={16} />}
+          onClick={onToggle}
+        />
+      }
+    />
   );
 }
 
@@ -2635,33 +2638,6 @@ function PrimarySidebarFooter({
         </Tooltip>
       </div>
     </div>
-  );
-}
-
-function HomeNavigationButton({
-  active,
-  disabled = false,
-  label,
-  icon,
-  onClick,
-}: {
-  readonly active: boolean;
-  readonly disabled?: boolean;
-  readonly label: string;
-  readonly icon: JSX.Element;
-  readonly onClick: () => void;
-}): JSX.Element {
-  return (
-    <button
-      type="button"
-      className={`home-nav-button ${active ? 'is-active' : ''}`}
-      disabled={disabled}
-      aria-label={label}
-      onClick={onClick}
-    >
-      {icon}
-      <span>{label}</span>
-    </button>
   );
 }
 

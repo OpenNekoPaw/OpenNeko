@@ -5,6 +5,7 @@ Desktop 当前把“设置”操作直接映射到 Agent 拥有的 `config.toml`
 ## What Changes
 
 - 新增独立的 Desktop 设置页面，Home 与项目工作区使用同一入口和页面，不再以打开 `config.toml` 代替应用设置。
+- 设置页面复用 Home 与项目工作区的 canonical Desktop Shell 侧栏 frame、品牌头、导航按钮、宽度调整行为、主内容表面、字体层级、间距和控件视觉语言，不维护独立页面主题。
 - 新增版本化 Desktop 用户偏好契约和 Host 持久化，首批覆盖外观主题、应用语言、启动目标与资源浏览默认视图。
 - 设置变更通过 preload/IPC 的受控 Desktop bridge 读取和更新，并即时投影到现有 renderer；renderer 不直接访问文件系统。
 - Agent 分类继续复用 Agent 自己的配置 authority，并提供进入高级 Agent 配置的入口；Desktop 用户偏好不得写入 `config.toml`，Agent 设置也不得写入 Desktop 配置。

@@ -2,7 +2,7 @@
 
 ### Requirement: Desktop provides an application settings surface
 
-Desktop MUST provide one standalone settings surface that can be opened from Home or a project workspace without an active Agent connection. The surface MUST NOT be represented as a project or workbench tab and MUST return to the application surface from which it was opened.
+Desktop MUST provide one standalone settings surface that can be opened from Home or a project workspace without an active Agent connection. The surface MUST NOT be represented as a project or workbench tab and MUST return to the application surface from which it was opened. The settings surface MUST reuse the canonical Desktop Shell application sidebar, brand header, navigation, main surface, spacing, and control visual language used by Home and project workspaces instead of defining a separate page theme.
 
 #### Scenario: Open settings from Home
 - **WHEN** a user activates Settings while the Desktop window shows Home
@@ -13,6 +13,20 @@ Desktop MUST provide one standalone settings surface that can be opened from Hom
 - **WHEN** a user activates Settings while a project workspace is visible
 - **THEN** Desktop presents the same application settings surface without adding a project or workbench tab
 - **AND** returning from Settings restores that project workspace
+
+#### Scenario: Settings uses the Desktop Shell visual system
+- **WHEN** Desktop renders the Settings surface
+- **THEN** its application sidebar uses the same canonical frame width, brand header, navigation component, resize behavior, and surface tokens as Home and project workspaces
+- **AND** resizing the Settings sidebar updates the same persisted `workbench.primarySidebar.width` projection used by Home and project workspaces
+- **AND** its main content uses the same Desktop Shell background, content width, heading typography, spacing, and control hierarchy
+- **AND** Settings does not maintain a parallel sidebar or page-theme implementation
+
+#### Scenario: Settings navigation remains balanced in a wide sidebar
+- **WHEN** the user changes the application sidebar width while Settings is visible
+- **THEN** the Settings brand, back action, search field, and category navigation form one consistently sized responsive control column
+- **AND** the control column width changes continuously with the available sidebar width instead of using one fixed pixel width
+- **AND** that control column is horizontally centered within the sidebar
+- **AND** icons and text remain left-aligned within their controls
 
 ### Requirement: Desktop application preferences have an independent authority
 
