@@ -57,7 +57,7 @@ selectable facets inside the Assets-owned Resource Browser Root.
 
 #### Scenario: Project resources open from primary navigation
 
-- **WHEN** the user selects Asset center while a Content Project is active
+- **WHEN** the user selects Project resources while a Content Project is active
 - **THEN** Desktop opens or focuses one Resource Browser Main View
 - **AND** Canvas and other Main Views remain available as tabs
 - **AND** no project Resource Dock or second Assets Root is mounted
@@ -77,7 +77,11 @@ Projects and recent Agent conversations from the authoritative Shell projection.
 
 Content Project SHALL NOT render a separate Creative surfaces/capability section. Agent, Canvas,
 Preview, Cut/Timeline and Model view composition SHALL remain in the display menu or the owning
-surface. Asset center SHALL open or focus the project Resource Browser Main View. The primary navigation footer
+surface. Asset center SHALL remain a global destination and SHALL open the global Media Library /
+Asset Library in both Home and Content Project contexts. Content Project SHALL inject a separate
+Project resources destination that opens or focuses the exact Project/Workspace Resource Browser
+Main View. These destinations MUST NOT share commands, active state, View identity, lifecycle or data
+projection. The primary navigation footer
 SHALL NOT duplicate collapse or Asset center controls, and SHALL only expose real Desktop-owned
 status, display, timeline and settings actions.
 
@@ -88,10 +92,18 @@ status, display, timeline and settings actions.
 - **AND** Project navigation keeps current/open Project identity without introducing a global Tab row
 - **AND** no Creative surfaces section or simulated Plugin/Skill route is rendered
 
-#### Scenario: User opens Asset center from Project navigation
+#### Scenario: User opens global Asset center from Project navigation
 
-- **WHEN** the Project Resource capability is ready and the user selects Asset center
-- **THEN** Desktop reveals the package-owned Resource Browser in its independent sidebar
+- **WHEN** a Content Project is active and the user selects Asset center
+- **THEN** Desktop navigates to the global Media Library / Asset Library
+- **AND** it does not open, focus or activate the Project Resource Browser
+
+#### Scenario: User opens Project resources from Project navigation
+
+- **WHEN** the Project Resource capability is ready and the user selects Project resources
+- **THEN** Desktop opens or focuses the package-owned Resource Browser Main View with the exact
+  Project and Workspace identity
+- **AND** Project resources is active while Asset center remains inactive
 - **AND** Agent remains in its own sidebar and the footer does not render a second Resource button
 
 ### Requirement: Narrow layouts preserve a usable main surface

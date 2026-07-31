@@ -255,11 +255,19 @@ Home 与 Content Project 的一级侧边栏使用同一个信息架构和视觉 
 增加当前项目激活/关闭语义，不再展示一组名为“创作区域”的 Agent/Canvas/Assets capability
 卡片；创作 View 的组合继续由主面板 display menu 和各 owning package 的局部 Tab/工具栏拥有。
 
-资产中心是一级导航入口；在 Content Project 中它打开或聚焦独立 Resource Browser Main View，
-在 Home 中进入全局素材中心。Resource Browser 不得嵌入 Agent Dock 或创建项目 Resource Dock。
+资产中心是稳定的全局一级导航入口；无论当前处于 Home 还是 Content Project，它都进入全局
+Media Library / Asset Library，不根据当前 Project 重载命令语义。Content Project 在共享
+sidebar 的中性 context slot 中增加独立“项目资源”入口，该入口携带明确 Project/Workspace
+identity，并打开或聚焦项目 Resource Browser Main View。两个入口不得共享 active key、
+View identity、owner lifecycle 或数据投影；项目 Resource Browser 激活时不得高亮全局资产中心。
+Resource Browser 不得嵌入 Agent Dock 或创建项目 Resource Dock。
 折叠控制只存在于品牌区，底部只保留 attention、display、timeline 和统一
 Desktop 设置等实际可用的全局控制，不重复放置折叠或资源入口。Plugin/Skill 等未来入口只有
 在 Desktop 存在真实 owner route 与 capability 后才可显示为可操作项，不得用 no-op 按钮模拟。
+
+共享 sidebar 只拥有品牌、布局、可访问性和无业务 navigation item primitive。Project
+destination 由 Project composition 注入，避免通用 Application sidebar 依赖 Project
+workbench contract；全局 destination 继续由 Shell/Home action owner 处理。
 
 ### 11. 悬停预览使用临时、owner-released 媒体会话
 

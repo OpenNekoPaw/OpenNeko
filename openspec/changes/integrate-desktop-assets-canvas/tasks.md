@@ -198,3 +198,15 @@
 - [ ] 15.3 Run focused shared UI/Canvas tests and typechecks, strict OpenSpec validation, production
       Desktop packaging and a real add-menu/node-creation scenario in the isolated `neko-test`
       fixture workspace.
+
+## 16. Global And Project Resource Navigation Separation
+
+- [ ] 16.1 Add red Desktop Shell regressions proving Asset center always dispatches the global Home
+      destination, Project resources independently opens the exact Project/Workspace Resource Browser
+      Main View, and their active states never alias.
+- [ ] 16.2 Add an owner-neutral context navigation slot to the shared Application sidebar composition,
+      inject the Project resources destination from Project composition, and delete the Project
+      override and Resource Browser-to-Asset-center active-state mapping.
+- [ ] 16.3 Run focused Desktop tests/typecheck, strict OpenSpec validation, production Electron
+      packaging and an isolated real Desktop navigation scenario proving the two destinations,
+      identities and lifecycles remain independent.

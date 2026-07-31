@@ -25,6 +25,9 @@ Canvas 和受控创作布局不一致。继续添加视觉占位会形成第二�
   渲染两个不同 Board，同一 Board 不创建重复 View。
 - Resource Browser Main View 增加 Files/Media/Entity 分区；Character 仅作为 Entity projection，
   不创建 Chara 素材 catalog 或未实现的 CharacterProject/Version。
+- 将全局资产中心与项目资源管理器拆成两个稳定导航 destination：全局资产中心在 Home/Project
+  上下文中始终进入全局 Media Library / Asset Library，项目资源入口只投影当前
+  Project/Workspace 的 Resource Browser Main View；两者不共享命令、激活态或 View identity。
 - Canvas 音视频节点和 Resource Browser 图片/音频/视频资源增加 package-owned 悬停预览；
   悬停只创建临时媒体会话，离开、切换条目或卸载时立即停止并释放，不打开 Workbench
   Preview、不持久化播放状态，也不向 renderer 暴露路径。
