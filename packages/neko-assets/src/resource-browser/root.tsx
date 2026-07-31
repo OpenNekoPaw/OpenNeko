@@ -93,6 +93,7 @@ export function ResourceBrowserRoot({
   const [query, setQuery] = useState(initialDisplayState?.query ?? '');
   const [selectedId, setSelectedId] = useState<string | undefined>(initialDisplayState?.selectedId);
   const [pending, setPending] = useState(false);
+  const [libraryMenuOpen, setLibraryMenuOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'list' | 'grid'>(
     initialDisplayState?.viewMode ?? defaultViewMode,
   );
@@ -109,10 +110,22 @@ export function ResourceBrowserRoot({
   const quickPreviewGeneration = useRef(0);
   const quickPreviewTimer = useRef<ReturnType<typeof setTimeout>>();
   const quickPreviewSession = useRef<string>();
+  const libraryMenuRef = useRef<HTMLDivElement>(null);
   const [quickPreview, setQuickPreview] = useState<{
     readonly resourceId: string;
     readonly result: ResourceBrowserQuickPreviewResult;
   }>();
+
+  useEffect(() => {
+    if (!libraryMenuOpen) return undefined;
+    const closeOnOutsidePointer = (event: PointerEvent): void => {
+      if (event.target instanceof Node && !libraryMenuRef.current?.contains(event.target)) {
+        setLibraryMenuOpen(false);
+      }
+    };
+    document.addEventListener('pointerdown', closeOnOutsidePointer);
+    return () => document.removeEventListener('pointerdown', closeOnOutsidePointer);
+  }, [libraryMenuOpen]);
 
   const releaseQuickPreview = useCallback(
     (surfaceActive = true): void => {
@@ -274,7 +287,7 @@ export function ResourceBrowserRoot({
       );
       if (requestNumber === requestSequence.current) {
         setSelectedId(undefined);
-        if (facet === 'all' || facet === 'entities') {
+        if (facet === 'materials') {
           setActiveContainerByFacet({});
         }
         setState({ kind: 'ready', projection });
@@ -289,7 +302,14 @@ export function ResourceBrowserRoot({
   };
 
   const execute = async (
-    route: 'refresh' | 'source.add' | 'source.relink' | 'source.remove' | 'preview' | 'cut.open',
+    route:
+      | 'refresh'
+      | 'source.link-global-library'
+      | 'source.add-directory-library'
+      | 'source.relink'
+      | 'source.remove'
+      | 'preview'
+      | 'cut.open',
     item?: ResourceBrowserItem,
   ): Promise<void> => {
     requestSequence.current += 1;
@@ -300,7 +320,8 @@ export function ResourceBrowserRoot({
         requestId: `resource-intent-${requestSequence.current}`,
         identity: runtime.identity,
         route,
-        ...(route === RESOURCE_BROWSER_ROUTES.addSource ||
+        ...(route === RESOURCE_BROWSER_ROUTES.linkGlobalLibrary ||
+        route === RESOURCE_BROWSER_ROUTES.addDirectoryLibrary ||
         route === RESOURCE_BROWSER_ROUTES.relinkSource ||
         route === RESOURCE_BROWSER_ROUTES.removeSource
           ? { expectedRevision: projection.revision }
@@ -399,16 +420,52 @@ export function ResourceBrowserRoot({
       <header className="neko-resource-browser__header">
         <strong>{labels.title}</strong>
         <div>
-          <button
-            type="button"
-            className="neko-resource-browser__icon-button"
-            disabled={pending}
-            aria-label={labels.addSource}
-            title={labels.addSource}
-            onClick={() => void execute(RESOURCE_BROWSER_ROUTES.addSource)}
+          <div
+            className="neko-resource-browser__library-menu"
+            ref={libraryMenuRef}
+            onKeyDown={(event) => {
+              if (event.key === 'Escape') setLibraryMenuOpen(false);
+            }}
           >
-            <PlusIcon size={15} />
-          </button>
+            <button
+              type="button"
+              className="neko-resource-browser__icon-button"
+              disabled={pending}
+              aria-label={labels.configureMediaLibraries}
+              aria-haspopup="menu"
+              aria-expanded={libraryMenuOpen}
+              title={labels.configureMediaLibraries}
+              onClick={() => setLibraryMenuOpen((open) => !open)}
+            >
+              <PlusIcon size={15} />
+            </button>
+            {libraryMenuOpen ? (
+              <div className="neko-resource-browser__library-menu-content" role="menu">
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setLibraryMenuOpen(false);
+                    void execute(RESOURCE_BROWSER_ROUTES.linkGlobalLibrary);
+                  }}
+                >
+                  <PackageIcon size={14} aria-hidden="true" />
+                  <span>{labels.linkGlobalLibrary}</span>
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setLibraryMenuOpen(false);
+                    void execute(RESOURCE_BROWSER_ROUTES.addDirectoryLibrary);
+                  }}
+                >
+                  <FolderIcon size={14} aria-hidden="true" />
+                  <span>{labels.addDirectoryLibrary}</span>
+                </button>
+              </div>
+            ) : null}
+          </div>
           <button
             type="button"
             className="neko-resource-browser__icon-button"
@@ -453,7 +510,7 @@ export function ResourceBrowserRoot({
         </div>
       </form>
       <div className="neko-resource-browser__facets" role="tablist">
-        {(['all', 'files', 'media', 'entities'] as const).map((facet) => (
+        {(['files', 'media', 'materials'] as const).map((facet) => (
           <button
             type="button"
             role="tab"
@@ -507,12 +564,8 @@ export function ResourceBrowserRoot({
         {projection.items.length === 0 ? (
           <div className="neko-resource-browser__empty">{labels.empty}</div>
         ) : (
-          visibleItems.map((item, index) => (
+          visibleItems.map((item) => (
             <React.Fragment key={item.resourceId}>
-              {projection.facet === 'all' &&
-              (index === 0 || visibleItems[index - 1]?.facet !== item.facet) ? (
-                <div className="neko-resource-browser__section-title">{labels[item.facet]}</div>
-              ) : null}
               <div
                 className="neko-resource-browser__item-row"
                 data-selected={item.resourceId === selectedId ? 'true' : 'false'}
@@ -656,7 +709,7 @@ export function ResourceBrowserRoot({
 function canDragResourceToCanvas(item: ResourceBrowserItem): boolean {
   return (
     item.capabilities.includes('add-to-canvas') &&
-    (item.facet === 'entities' ? item.representationLocator !== undefined : true)
+    (item.facet === 'materials' ? item.representationLocator !== undefined : true)
   );
 }
 
@@ -787,7 +840,7 @@ function buildBreadcrumbs(
 
 function isWorkspaceDocument(item: ResourceBrowserItem, extension: '.nkc' | '.otio'): boolean {
   return (
-    item.facet !== 'entities' &&
+    item.facet !== 'materials' &&
     item.locator.kind === 'workspace-file' &&
     item.locator.path.toLocaleLowerCase().endsWith(extension)
   );
@@ -797,7 +850,7 @@ function startResourceCanvasDrag(
   event: DragEvent<HTMLButtonElement>,
   item: ResourceBrowserItem,
 ): void {
-  const locator = item.facet === 'entities' ? item.representationLocator : item.locator;
+  const locator = item.facet === 'materials' ? item.representationLocator : item.locator;
   if (!locator || !item.capabilities.includes('add-to-canvas')) {
     event.preventDefault();
     return;

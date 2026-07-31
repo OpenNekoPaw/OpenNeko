@@ -51,7 +51,7 @@ export class ResourceBrowserController implements ResourceBrowserHostRuntime {
   async getSnapshot(): Promise<ResourceBrowserProjection> {
     this.requireActive();
     if (!this.projection) {
-      this.projection = await this.readProjection(this.options.initialFacet ?? 'all', '', 100, 0);
+      this.projection = await this.readProjection(this.options.initialFacet ?? 'files', '', 100, 0);
     }
     return this.projection;
   }
@@ -191,7 +191,8 @@ export class ResourceBrowserController implements ResourceBrowserHostRuntime {
     assertResourceBrowserIdentity(this.identity, parsed.identity);
     const current = await this.getSnapshot();
     if (
-      (parsed.route === RESOURCE_BROWSER_ROUTES.addSource ||
+      (parsed.route === RESOURCE_BROWSER_ROUTES.linkGlobalLibrary ||
+        parsed.route === RESOURCE_BROWSER_ROUTES.addDirectoryLibrary ||
         parsed.route === RESOURCE_BROWSER_ROUTES.relinkSource ||
         parsed.route === RESOURCE_BROWSER_ROUTES.removeSource) &&
       parsed.expectedRevision !== current.revision
@@ -212,10 +213,14 @@ export class ResourceBrowserController implements ResourceBrowserHostRuntime {
       this.publish(this.projection);
       return this.projection;
     }
-    if (parsed.route === RESOURCE_BROWSER_ROUTES.addSource) {
-      const result = await this.options.interactions.addSource({
-        identity: this.identity,
-      });
+    if (
+      parsed.route === RESOURCE_BROWSER_ROUTES.linkGlobalLibrary ||
+      parsed.route === RESOURCE_BROWSER_ROUTES.addDirectoryLibrary
+    ) {
+      const result =
+        parsed.route === RESOURCE_BROWSER_ROUTES.linkGlobalLibrary
+          ? await this.options.interactions.linkGlobalLibrary({ identity: this.identity })
+          : await this.options.interactions.addDirectoryLibrary({ identity: this.identity });
       if (result === 'cancelled') return current;
       await this.options.source.refresh(this.identity);
       this.projection = await this.readProjection(
@@ -329,28 +334,26 @@ export class ResourceBrowserController implements ResourceBrowserHostRuntime {
     revision: number,
   ): Promise<ResourceBrowserProjection> {
     const items =
-      facet === 'all'
-        ? await this.readAll(query, limit)
-        : facet === 'files'
-          ? (await this.options.source.files.list({ identity: this.identity, query, limit })).map(
-              (entry) =>
-                presentResourceBrowserContentItem(entry, 'files', {
-                  canvasAvailable: this.options.canvasAvailable,
-                }),
+      facet === 'files'
+        ? (await this.options.source.files.list({ identity: this.identity, query, limit })).map(
+            (entry) =>
+              presentResourceBrowserContentItem(entry, 'files', {
+                canvasAvailable: this.options.canvasAvailable,
+              }),
+          )
+        : facet === 'media'
+          ? (
+              await this.options.source.media.search({
+                identity: this.identity,
+                query,
+                limit,
+              })
+            ).map((entry) =>
+              presentResourceBrowserContentItem(entry, 'media', {
+                canvasAvailable: this.options.canvasAvailable,
+              }),
             )
-          : facet === 'media'
-            ? (
-                await this.options.source.media.search({
-                  identity: this.identity,
-                  query,
-                  limit,
-                })
-              ).map((entry) =>
-                presentResourceBrowserContentItem(entry, 'media', {
-                  canvasAvailable: this.options.canvasAvailable,
-                }),
-              )
-            : await this.readEntities(query, limit);
+          : await this.readMaterials(query, limit);
     return parseResourceBrowserProjection({
       schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
       identity: this.identity,
@@ -361,41 +364,7 @@ export class ResourceBrowserController implements ResourceBrowserHostRuntime {
     });
   }
 
-  private async readAll(query: string, limit: number) {
-    const sectionLimit = Math.max(1, Math.ceil(limit / 3));
-    const [files, media, entities] = await Promise.all([
-      this.options.source.files.list({
-        identity: this.identity,
-        query,
-        limit: sectionLimit,
-      }),
-      this.options.source.media.search({
-        identity: this.identity,
-        query,
-        limit: sectionLimit,
-      }),
-      this.readEntities(query, sectionLimit),
-    ]);
-    const overviewFiles =
-      query.length === 0 ? files.filter((entry) => entry.parentLocator === undefined) : files;
-    const overviewMedia =
-      query.length === 0 ? media.filter((entry) => entry.role === 'library-root') : media;
-    return [
-      ...overviewFiles.map((entry) =>
-        presentResourceBrowserContentItem(entry, 'files', {
-          canvasAvailable: this.options.canvasAvailable,
-        }),
-      ),
-      ...overviewMedia.map((entry) =>
-        presentResourceBrowserContentItem(entry, 'media', {
-          canvasAvailable: this.options.canvasAvailable,
-        }),
-      ),
-      ...entities,
-    ].slice(0, limit);
-  }
-
-  private async readEntities(query: string, limit: number) {
+  private async readMaterials(query: string, limit: number) {
     const result = await this.options.source.entities.list({
       identity: this.identity,
       query,

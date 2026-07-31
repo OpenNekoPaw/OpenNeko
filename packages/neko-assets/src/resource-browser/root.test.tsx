@@ -268,29 +268,39 @@ describe('ResourceBrowserRoot', () => {
     render(<ResourceBrowserRoot runtime={runtime} locale="zh-cn" />);
 
     await screen.findByText('cat.png');
-    fireEvent.click(screen.getByRole('tab', { name: '实体' }));
+    expect(screen.queryByRole('tab', { name: '全部' })).toBeNull();
+    expect(screen.queryByRole('tab', { name: '实体' })).toBeNull();
+    fireEvent.click(screen.getByRole('tab', { name: '素材' }));
     await waitFor(() =>
       expect(runtime.search).toHaveBeenCalledWith(
-        expect.objectContaining({ facet: 'entities', route: 'search' }),
+        expect.objectContaining({ facet: 'materials', route: 'search' }),
       ),
     );
-    fireEvent.click(screen.getByRole('button', { name: '添加来源' }));
+    fireEvent.click(screen.getByRole('button', { name: '配置媒体库' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: '关联全局媒体库' }));
     await waitFor(() =>
       expect(runtime.execute).toHaveBeenCalledWith(
-        expect.objectContaining({ route: 'source.add' }),
+        expect.objectContaining({ route: 'source.link-global-library' }),
+      ),
+    );
+    fireEvent.click(screen.getByRole('button', { name: '配置媒体库' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: '将目录添加为媒体库' }));
+    await waitFor(() =>
+      expect(runtime.execute).toHaveBeenCalledWith(
+        expect.objectContaining({ route: 'source.add-directory-library' }),
       ),
     );
   });
 
-  it('groups All results and switches between list and grid without changing source state', async () => {
-    const allProjection: ResourceBrowserProjection = {
+  it('switches a concrete facet between list and grid without changing source state', async () => {
+    const filesProjection: ResourceBrowserProjection = {
       ...projection,
       identity: {
         ...projection.identity,
         projectId: 'project-all-view-mode',
         workspaceId: 'workspace-all-view-mode',
       },
-      facet: 'all',
+      facet: 'files',
       items: [
         {
           resourceId: 'content:directory',
@@ -302,14 +312,12 @@ describe('ResourceBrowserRoot', () => {
           locator: { kind: 'workspace-file', path: 'characters' },
           capabilities: ['reveal'],
         },
-        ...projection.items,
       ],
     };
-    const runtime = createRuntime(allProjection);
+    const runtime = createRuntime(filesProjection);
     render(<ResourceBrowserRoot runtime={runtime} locale="en" />);
 
-    expect((await screen.findAllByText('Files')).length).toBeGreaterThan(1);
-    expect(screen.getAllByText('Media').length).toBeGreaterThan(1);
+    expect(await screen.findByText('characters')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Grid view' }));
     expect(
       document.querySelector('.neko-resource-browser__items')?.getAttribute('data-view-mode'),

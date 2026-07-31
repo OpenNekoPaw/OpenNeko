@@ -61,7 +61,7 @@ export function presentResourceBrowserEntityItem(
   const representationLocator = binding?.representation;
   return {
     resourceId: stableResourceId('entity', `${entity.kind}:${entity.id}`),
-    facet: 'entities',
+    facet: 'materials',
     kind: entity.kind,
     label: entity.displayName ?? entity.canonicalName,
     ...(entity.aliases.length > 0 ? { description: entity.aliases.join(', ') } : {}),

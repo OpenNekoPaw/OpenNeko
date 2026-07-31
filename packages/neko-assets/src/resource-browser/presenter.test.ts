@@ -49,7 +49,7 @@ describe('Resource Browser presenter', () => {
     });
 
     expect(item).toMatchObject({
-      facet: 'entities',
+      facet: 'materials',
       kind: 'character',
       entityStatus: 'confirmed',
       representationAvailability: 'active',

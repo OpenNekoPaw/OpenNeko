@@ -61,11 +61,11 @@ describe('Resource Browser controller', () => {
       descriptorId: thumbnail?.descriptorId,
       dataUrl: 'data:image/png;base64,aW1hZ2U=',
     });
-    const entities = await controller.search(
+    const materials = await controller.search(
       createResourceBrowserSearchRequest({
         requestId: 'search-1',
         identity,
-        facet: 'entities',
+        facet: 'materials',
         query: 'neko',
       }),
     );
@@ -75,25 +75,35 @@ describe('Resource Browser controller', () => {
       identity,
       route: RESOURCE_BROWSER_ROUTES.refresh,
     });
-    const withSource = await controller.execute({
+    const withGlobalLibrary = await controller.execute({
       schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
-      requestId: 'source-1',
+      requestId: 'global-library-1',
       identity,
-      route: RESOURCE_BROWSER_ROUTES.addSource,
+      route: RESOURCE_BROWSER_ROUTES.linkGlobalLibrary,
       expectedRevision: 2,
     });
+    const withDirectoryLibrary = await controller.execute({
+      schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
+      requestId: 'directory-library-1',
+      identity,
+      route: RESOURCE_BROWSER_ROUTES.addDirectoryLibrary,
+      expectedRevision: 3,
+    });
 
-    expect(snapshot.facet).toBe('all');
-    expect(entities.items[0]).toMatchObject({
+    expect(snapshot.facet).toBe('files');
+    expect(materials.items[0]).toMatchObject({
+      facet: 'materials',
       kind: 'character',
       label: 'Neko',
       representationLocator: { kind: 'workspace-file', path: 'characters/neko.png' },
     });
     expect(source.refresh).toHaveBeenCalledWith(identity);
     expect(refreshed.revision).toBe(2);
-    expect(interactions.addSource).toHaveBeenCalledWith({ identity });
-    expect(withSource.revision).toBe(3);
-    expect(listener.mock.calls.map(([event]) => event.sequence)).toEqual([1, 2, 3]);
+    expect(interactions.linkGlobalLibrary).toHaveBeenCalledWith({ identity });
+    expect(interactions.addDirectoryLibrary).toHaveBeenCalledWith({ identity });
+    expect(withGlobalLibrary.revision).toBe(3);
+    expect(withDirectoryLibrary.revision).toBe(4);
+    expect(listener.mock.calls.map(([event]) => event.sequence)).toEqual([1, 2, 3, 4]);
   });
 
   it('fences stale owners and stale resource identity before an effect runs', async () => {
@@ -202,7 +212,7 @@ describe('Resource Browser controller', () => {
       identity,
       source,
       interactions: createInteractions(),
-      initialFacet: 'entities',
+      initialFacet: 'materials',
     });
     await controller.getSnapshot();
     const listener = vi.fn();
@@ -329,7 +339,8 @@ function createSource(): ResourceBrowserProjectionSource & {
 }
 
 function createInteractions(): ResourceBrowserInteractionPort & {
-  readonly addSource: ReturnType<typeof vi.fn>;
+  readonly linkGlobalLibrary: ReturnType<typeof vi.fn>;
+  readonly addDirectoryLibrary: ReturnType<typeof vi.fn>;
   readonly preview: ReturnType<typeof vi.fn>;
   readonly openCut: ReturnType<typeof vi.fn>;
   readonly reveal: ReturnType<typeof vi.fn>;
@@ -338,7 +349,8 @@ function createInteractions(): ResourceBrowserInteractionPort & {
   readonly addToCut: ReturnType<typeof vi.fn>;
 } {
   return {
-    addSource: vi.fn(async () => 'added' as const),
+    linkGlobalLibrary: vi.fn(async () => 'linked' as const),
+    addDirectoryLibrary: vi.fn(async () => 'added' as const),
     relinkSource: vi.fn(async () => 'relinked' as const),
     removeSource: vi.fn(async () => undefined),
     preview: vi.fn(async () => undefined),

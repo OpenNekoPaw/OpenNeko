@@ -26,6 +26,38 @@
   gap: 3px;
 }
 
+.neko-resource-browser__library-menu {
+  position: relative;
+}
+
+.neko-resource-browser__library-menu-content {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 4px);
+  right: 0;
+  display: grid;
+  width: max-content;
+  min-width: 168px;
+  padding: 4px;
+  border: 1px solid var(--neko-border, #d7ddda);
+  border-radius: 7px;
+  color: var(--neko-foreground, #26312c);
+  background: var(--neko-elevated, #ffffff);
+  box-shadow: var(--neko-shadow, 0 8px 24px rgb(21 31 27 / 16%));
+}
+
+.neko-resource-browser__library-menu-content > button {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 6px;
+  align-items: center;
+  width: 100%;
+  min-height: 28px;
+  padding: 4px 7px;
+  text-align: left;
+  white-space: nowrap;
+}
+
 .neko-resource-browser button {
   border: 1px solid transparent;
   border-radius: 7px;
@@ -123,7 +155,7 @@
 
 .neko-resource-browser__facets {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 3px;
   padding: 3px 7px;
   border-bottom: 1px solid var(--neko-border, #e2e5e3);

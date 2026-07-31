@@ -68,7 +68,7 @@ describe('Resource Browser contract', () => {
     });
   });
 
-  it('parses portable ContentLocator and Character Entity projections', () => {
+  it('parses portable ContentLocator and workspace Material projections', () => {
     const media = parseResourceBrowserProjection(
       projection('media', [
         {
@@ -88,11 +88,11 @@ describe('Resource Browser contract', () => {
         },
       ]),
     );
-    const entities = parseResourceBrowserProjection(
-      projection('entities', [
+    const materials = parseResourceBrowserProjection(
+      projection('materials', [
         {
           resourceId: 'entity-1',
-          facet: 'entities',
+          facet: 'materials',
           role: 'entity',
           depth: 0,
           kind: 'character',
@@ -110,12 +110,12 @@ describe('Resource Browser contract', () => {
 
     expect(media.items[0]?.capabilities).toContain('add-to-cut');
     expect(media.items[0]?.facet).toBe('media');
-    expect(entities.items[0]?.facet).toBe('entities');
+    expect(materials.items[0]?.facet).toBe('materials');
   });
 
-  it('parses hierarchical mixed All projections and revisioned library management', () => {
-    const mixed = parseResourceBrowserProjection(
-      projection('all', [
+  it('parses hierarchical File projections and revisioned library management', () => {
+    const files = parseResourceBrowserProjection(
+      projection('files', [
         {
           resourceId: 'directory-1',
           facet: 'files',
@@ -139,7 +139,7 @@ describe('Resource Browser contract', () => {
         },
       ]),
     );
-    expect(mixed.items[1]).toMatchObject({
+    expect(files.items[1]).toMatchObject({
       parentResourceId: 'directory-1',
       depth: 1,
     });
@@ -195,10 +195,10 @@ describe('Resource Browser contract', () => {
     ).toThrowError(ResourceBrowserContractError);
     expect(() =>
       parseResourceBrowserProjection(
-        projection('entities', [
+        projection('materials', [
           {
             resourceId: 'entity-1',
-            facet: 'entities',
+            facet: 'materials',
             kind: 'character',
             label: 'Neko',
             entityRef: {
@@ -234,7 +234,8 @@ describe('Resource Browser contract', () => {
         'reveal',
         'search',
         'snapshot.get',
-        'source.add',
+        'source.add-directory-library',
+        'source.link-global-library',
         'source.relink',
         'source.remove',
         'thumbnail.resolve',
@@ -252,14 +253,34 @@ describe('Resource Browser contract', () => {
         schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
         requestId: 'source-1',
         identity,
-        route: RESOURCE_BROWSER_ROUTES.addSource,
+        route: RESOURCE_BROWSER_ROUTES.linkGlobalLibrary,
         expectedRevision: 0,
       }),
     ).toMatchObject({
       requestId: 'source-1',
-      route: RESOURCE_BROWSER_ROUTES.addSource,
+      route: RESOURCE_BROWSER_ROUTES.linkGlobalLibrary,
       expectedRevision: 0,
     });
+  });
+
+  it('rejects legacy generic source and facet routes', () => {
+    for (const facet of ['all', 'entities']) {
+      expect(() =>
+        parseResourceBrowserProjection({
+          ...projection('files', []),
+          facet,
+        }),
+      ).toThrowError(ResourceBrowserContractError);
+    }
+    expect(() =>
+      parseResourceBrowserIntentRequest({
+        schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
+        requestId: 'legacy-source',
+        identity,
+        route: 'source.add',
+        expectedRevision: 0,
+      }),
+    ).toThrowError(ResourceBrowserContractError);
   });
 
   it('requires explicit Preview and Cut handoff targets', () => {
@@ -316,7 +337,7 @@ describe('Resource Browser contract', () => {
   });
 });
 
-function projection(facet: 'all' | 'files' | 'media' | 'entities', items: readonly unknown[]) {
+function projection(facet: 'files' | 'media' | 'materials', items: readonly unknown[]) {
   return {
     schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
     identity,

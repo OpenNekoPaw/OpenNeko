@@ -81,6 +81,7 @@ export interface DesktopResourceBrowserRuntimeOptions {
   readonly openPreview: DesktopResourceBrowserSourceOptions['openPreview'];
   readonly openCut: DesktopResourceBrowserSourceOptions['openCut'];
   readonly selectSource: (windowId: string) => Promise<string | undefined>;
+  readonly selectConfiguredGlobalMediaLibrary: DesktopResourceBrowserSourceOptions['selectGlobalLibrary'];
   readonly selectGlobalMediaLibrarySource: (windowId: string) => Promise<string | undefined>;
   readonly selectGlobalAssetSources: (windowId: string) => Promise<readonly string[] | undefined>;
   readonly trashGlobalAsset: (absolutePath: string) => Promise<void>;
@@ -688,11 +689,18 @@ export class DesktopResourceBrowserRuntime {
       await this.options.cut.addResource({ resourceIdentity, item, target });
     };
     const composition = createDesktopResourceBrowserProjectionSource({
+      globalMediaLibraryRoot: this.options.globalMediaLibraryRoot,
       workspace,
       host: this.options.host,
       openPreview: this.options.openPreview,
       openCut: this.options.openCut,
       selectSource: this.options.selectSource,
+      selectGlobalLibrary: this.options.selectConfiguredGlobalMediaLibrary,
+      mutateGlobalMediaLibraries: (operation) =>
+        this.withGlobalMediaLibraryMutation(operation),
+      didMutateGlobalMediaLibraries: () => {
+        this.advanceHomeRevision();
+      },
       createThumbnail: this.options.createThumbnail,
       addToCanvas,
       addToCut,
@@ -751,7 +759,7 @@ export function createDesktopResourceToCanvasInteraction(options: {
       sessionId: target.sessionId,
       endpointEpoch: resourceIdentity.endpointEpoch,
     };
-    const locator = item.facet === 'entities' ? item.representationLocator : item.locator;
+    const locator = item.facet === 'materials' ? item.representationLocator : item.locator;
     if (!locator) {
       throw new Error('Resource Browser item has no Canvas representation.');
     }
@@ -786,7 +794,7 @@ export function createDesktopResourceToCanvasInteraction(options: {
             locator,
             mediaKind: resourceItemMediaKind(item),
             title: item.label,
-            ...(item.facet === 'entities'
+            ...(item.facet === 'materials'
               ? {
                   entity: {
                     entityId: item.entityRef.entityId,
@@ -806,7 +814,7 @@ export function createDesktopResourceToCanvasInteraction(options: {
 }
 
 function requireEntityRepresentationBindingId(
-  item: Extract<ResourceBrowserItem, { readonly facet: 'entities' }>,
+  item: Extract<ResourceBrowserItem, { readonly facet: 'materials' }>,
 ): string {
   if (!item.representationBindingId) {
     throw new Error('Resource Browser Entity has no active representation binding identity.');
@@ -815,7 +823,7 @@ function requireEntityRepresentationBindingId(
 }
 
 function requireEntityRepresentationRole(
-  item: Extract<ResourceBrowserItem, { readonly facet: 'entities' }>,
+  item: Extract<ResourceBrowserItem, { readonly facet: 'materials' }>,
 ) {
   if (!item.representationRole) {
     throw new Error('Resource Browser Entity has no active representation role.');

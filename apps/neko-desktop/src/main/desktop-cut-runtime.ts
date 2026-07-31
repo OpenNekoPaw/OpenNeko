@@ -110,7 +110,7 @@ export class DesktopCutRuntime {
 
   supportsOpen(item: ResourceBrowserItem): item is DesktopCutOpenResourceItem {
     this.requireActive();
-    if (item.facet === 'entities') return false;
+    if (item.facet === 'materials') return false;
     return (
       item.locator.kind === 'workspace-file' &&
       item.locator.path.toLocaleLowerCase().endsWith('.otio')
@@ -199,7 +199,7 @@ export class DesktopCutRuntime {
     };
   }): Promise<CutHostRuntimeSnapshot> {
     this.requireActive();
-    if (input.item.facet === 'entities' || !input.item.capabilities.includes('add-to-cut')) {
+    if (input.item.facet === 'materials' || !input.item.capabilities.includes('add-to-cut')) {
       throw new Error('Desktop Cut does not support this Resource Browser item.');
     }
     const identity: CutHostRuntimeIdentity = {

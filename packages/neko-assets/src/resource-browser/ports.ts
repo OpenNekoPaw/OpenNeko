@@ -66,7 +66,12 @@ export interface ResourceBrowserProjectionSource {
 }
 
 export interface ResourceBrowserInteractionPort {
-  addSource(input: { readonly identity: ResourceBrowserIdentity }): Promise<'added' | 'cancelled'>;
+  linkGlobalLibrary(input: {
+    readonly identity: ResourceBrowserIdentity;
+  }): Promise<'linked' | 'cancelled'>;
+  addDirectoryLibrary(input: {
+    readonly identity: ResourceBrowserIdentity;
+  }): Promise<'added' | 'cancelled'>;
   relinkSource(input: {
     readonly identity: ResourceBrowserIdentity;
     readonly item: ResourceBrowserItem;

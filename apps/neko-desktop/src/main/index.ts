@@ -466,6 +466,18 @@ async function startDesktop(): Promise<void> {
       }
       return selectedPath;
     },
+    selectConfiguredGlobalMediaLibrary: async ({ windowId, libraries }) => {
+      const owner = requireOwnerWindow(windowId);
+      const chinese = app.getLocale().toLocaleLowerCase().startsWith('zh');
+      return selectCanvasMediaLibrary({
+        owner,
+        title: chinese ? '关联全局媒体库' : 'Link Global Media Library',
+        names: libraries.map(
+          (library) => `${library.name} (${library.locationKind.toLocaleUpperCase()})`,
+        ),
+        identities: libraries.map((library) => library.libraryId),
+      });
+    },
     selectGlobalMediaLibrarySource: async (windowId) => {
       const owner = requireOwnerWindow(windowId);
       const chinese = app.getLocale().toLocaleLowerCase().startsWith('zh');

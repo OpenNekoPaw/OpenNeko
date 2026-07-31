@@ -2,14 +2,15 @@ import type { SupportedLocale } from '@neko/shared';
 
 export interface ResourceBrowserLabels {
   readonly title: string;
-  readonly all: string;
   readonly files: string;
   readonly media: string;
-  readonly entities: string;
+  readonly materials: string;
   readonly search: string;
   readonly searchPlaceholder: string;
   readonly refresh: string;
-  readonly addSource: string;
+  readonly configureMediaLibraries: string;
+  readonly linkGlobalLibrary: string;
+  readonly addDirectoryLibrary: string;
   readonly relinkSource: string;
   readonly removeSource: string;
   readonly preview: string;
@@ -36,14 +37,15 @@ export interface ResourceBrowserLabels {
 const labels: Record<SupportedLocale, ResourceBrowserLabels> = {
   en: {
     title: 'Resources',
-    all: 'All',
     files: 'Files',
     media: 'Media',
-    entities: 'Entities',
+    materials: 'Materials',
     search: 'Search',
     searchPlaceholder: 'Search project resources…',
     refresh: 'Refresh',
-    addSource: 'Add source',
+    configureMediaLibraries: 'Configure media libraries',
+    linkGlobalLibrary: 'Link global media library',
+    addDirectoryLibrary: 'Add directory as media library',
     relinkSource: 'Relink media library',
     removeSource: 'Remove media library',
     preview: 'Preview',
@@ -68,14 +70,15 @@ const labels: Record<SupportedLocale, ResourceBrowserLabels> = {
   },
   'zh-cn': {
     title: '资源',
-    all: '全部',
     files: '目录',
     media: '媒体',
-    entities: '实体',
+    materials: '素材',
     search: '搜索',
     searchPlaceholder: '搜索项目资源…',
     refresh: '刷新',
-    addSource: '添加来源',
+    configureMediaLibraries: '配置媒体库',
+    linkGlobalLibrary: '关联全局媒体库',
+    addDirectoryLibrary: '将目录添加为媒体库',
     relinkSource: '重新链接媒体库',
     removeSource: '移除媒体库',
     preview: '预览',

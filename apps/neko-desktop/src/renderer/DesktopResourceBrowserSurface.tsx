@@ -73,7 +73,7 @@ export function DesktopResourceBrowserSurface({
             expectedWorkbenchRevision: projection.window.workbench.revision,
           }}
           onOpenCanvas={(item, presentation) => {
-            if (item.facet === 'entities' || item.locator.kind !== 'workspace-file') {
+            if (item.facet === 'materials' || item.locator.kind !== 'workspace-file') {
               throw new Error('Canvas documents require a workspace-file ContentLocator.');
             }
             onOpenCanvasDocument(item.locator.path, presentation);

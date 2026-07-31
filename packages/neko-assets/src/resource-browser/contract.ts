@@ -7,7 +7,7 @@ import {
   type EntityRepresentationRole,
 } from '@neko/shared';
 
-export const RESOURCE_BROWSER_CONTRACT_VERSION = 6 as const;
+export const RESOURCE_BROWSER_CONTRACT_VERSION = 7 as const;
 
 export const RESOURCE_BROWSER_ROUTES = {
   snapshotGet: 'snapshot.get',
@@ -17,7 +17,8 @@ export const RESOURCE_BROWSER_ROUTES = {
   quickPreviewRelease: 'quick-preview.release',
   search: 'search',
   refresh: 'refresh',
-  addSource: 'source.add',
+  linkGlobalLibrary: 'source.link-global-library',
+  addDirectoryLibrary: 'source.add-directory-library',
   relinkSource: 'source.relink',
   removeSource: 'source.remove',
   preview: 'preview',
@@ -29,7 +30,7 @@ export const RESOURCE_BROWSER_ROUTES = {
 
 export type ResourceBrowserRoute =
   (typeof RESOURCE_BROWSER_ROUTES)[keyof typeof RESOURCE_BROWSER_ROUTES];
-export type ResourceBrowserFacet = 'all' | 'files' | 'media' | 'entities';
+export type ResourceBrowserFacet = 'files' | 'media' | 'materials';
 export type ResourceBrowserItemKind =
   | 'directory'
   | 'file'
@@ -85,7 +86,7 @@ export interface ResourceBrowserContentItem extends ResourceBrowserItemBase {
 }
 
 export interface ResourceBrowserEntityItem extends ResourceBrowserItemBase {
-  readonly facet: 'entities';
+  readonly facet: 'materials';
   readonly entityRef: ResourceBrowserEntityRef;
   readonly entityStatus: 'confirmed';
   readonly representationAvailability: 'active' | 'unbound';
@@ -187,7 +188,8 @@ export interface ResourceBrowserQuickPreviewReleaseResult {
 export interface ResourceBrowserIntentRequest extends ResourceBrowserRequest {
   readonly route:
     | typeof RESOURCE_BROWSER_ROUTES.refresh
-    | typeof RESOURCE_BROWSER_ROUTES.addSource
+    | typeof RESOURCE_BROWSER_ROUTES.linkGlobalLibrary
+    | typeof RESOURCE_BROWSER_ROUTES.addDirectoryLibrary
     | typeof RESOURCE_BROWSER_ROUTES.relinkSource
     | typeof RESOURCE_BROWSER_ROUTES.removeSource
     | typeof RESOURCE_BROWSER_ROUTES.preview
@@ -630,7 +632,8 @@ export function parseResourceBrowserIntentRequest(value: unknown): ResourceBrows
   const route = record['route'];
   if (
     route !== RESOURCE_BROWSER_ROUTES.refresh &&
-    route !== RESOURCE_BROWSER_ROUTES.addSource &&
+    route !== RESOURCE_BROWSER_ROUTES.linkGlobalLibrary &&
+    route !== RESOURCE_BROWSER_ROUTES.addDirectoryLibrary &&
     route !== RESOURCE_BROWSER_ROUTES.relinkSource &&
     route !== RESOURCE_BROWSER_ROUTES.removeSource &&
     route !== RESOURCE_BROWSER_ROUTES.preview &&
@@ -654,7 +657,8 @@ export function parseResourceBrowserIntentRequest(value: unknown): ResourceBrows
     return request;
   }
   const expectedRevision =
-    route === RESOURCE_BROWSER_ROUTES.addSource ||
+    route === RESOURCE_BROWSER_ROUTES.linkGlobalLibrary ||
+    route === RESOURCE_BROWSER_ROUTES.addDirectoryLibrary ||
     route === RESOURCE_BROWSER_ROUTES.relinkSource ||
     route === RESOURCE_BROWSER_ROUTES.removeSource
       ? requireNonNegativeInteger(
@@ -662,7 +666,10 @@ export function parseResourceBrowserIntentRequest(value: unknown): ResourceBrows
           'Resource Browser source mutation revision must be a non-negative integer.',
         )
       : undefined;
-  if (route === RESOURCE_BROWSER_ROUTES.addSource) {
+  if (
+    route === RESOURCE_BROWSER_ROUTES.linkGlobalLibrary ||
+    route === RESOURCE_BROWSER_ROUTES.addDirectoryLibrary
+  ) {
     return { ...request, expectedRevision };
   }
   const resourceId = requireOpaqueIdentity(
@@ -767,7 +774,7 @@ export function parseResourceBrowserProjection(value: unknown): ResourceBrowserP
     record['items'],
     'Resource Browser projection items must be an array.',
   ).map(parseResourceBrowserItem);
-  if (facet !== 'all' && items.some((item) => item.facet !== facet)) {
+  if (items.some((item) => item.facet !== facet)) {
     throw invalidPayload('Resource Browser item facet does not match the active facet.');
   }
   const resourceIds = new Set(items.map((item) => item.resourceId));
@@ -872,7 +879,7 @@ function parseResourceBrowserItem(value: unknown): ResourceBrowserItem {
     ...readOptionalOpaqueIdentity(record['parentResourceId'], 'parentResourceId'),
     ...readOptionalLibraryName(record['libraryName']),
   };
-  if (facet === 'entities') {
+  if (facet === 'materials') {
     const entityRef = parseResourceBrowserEntityRef(record['entityRef']);
     if (base.kind !== entityRef.entityKind) {
       throw invalidPayload('Resource Browser Entity kind does not match its Entity identity.');
@@ -897,9 +904,6 @@ function parseResourceBrowserItem(value: unknown): ResourceBrowserItem {
       representationAvailability,
       ...representation,
     };
-  }
-  if (facet === 'all') {
-    throw invalidPayload('Resource Browser items must belong to a concrete facet.');
   }
   if (base.role === 'entity') {
     throw invalidPayload('Resource Browser content item role is invalid.');
@@ -1014,7 +1018,7 @@ function requireContentLocator(value: unknown, field: string): ContentLocator {
 }
 
 function requireFacet(value: unknown): ResourceBrowserFacet {
-  if (value !== 'all' && value !== 'files' && value !== 'media' && value !== 'entities') {
+  if (value !== 'files' && value !== 'media' && value !== 'materials') {
     throw invalidPayload('Resource Browser facet is invalid.');
   }
   return value;

@@ -25,6 +25,7 @@ import {
 } from './desktop-resource-browser-source';
 import {
   createDesktopGlobalMediaLibraryConnection,
+  listDesktopGlobalMediaLibraryConnections,
   removeDesktopGlobalMediaLibraryConnection,
 } from './desktop-global-media-library-files';
 
@@ -510,18 +511,78 @@ describe('Desktop Resource Browser source', () => {
     expect(result.bindings.map((binding) => binding.id)).toEqual(['binding-confirmed']);
   });
 
-  it('keeps the native source picker path in Main and persists only a managed link', async () => {
+  it('adds a selected directory to the global registry and links it into the workspace', async () => {
     const fixture = await createFixture();
     const selected = path.join(fixture.root, 'Media Source');
     await mkdir(selected);
+    const didMutateGlobalMediaLibraries = vi.fn();
     const composition = createComposition(fixture.workspace, {
       selectSource: async () => selected,
+      didMutateGlobalMediaLibraries,
     });
 
-    await expect(composition.interactions.addSource({ identity })).resolves.toBe('added');
+    await expect(composition.interactions.addDirectoryLibrary({ identity })).resolves.toBe('added');
 
     const link = await lstat(path.join(fixture.workspace, 'neko', 'assets', 'Media Source'));
     expect(link.isSymbolicLink()).toBe(true);
+    expect(
+      await listDesktopGlobalMediaLibraryConnections(
+        path.join(fixture.root, '.openneko', 'media-libraries'),
+      ),
+    ).toEqual([
+      expect.objectContaining({
+        name: 'Media Source',
+        locationKind: 'local',
+        availability: 'available',
+      }),
+    ]);
+    expect(await realpath(path.join(fixture.workspace, 'neko', 'assets', 'Media Source'))).toBe(
+      await realpath(selected),
+    );
+    expect(didMutateGlobalMediaLibraries).toHaveBeenCalledOnce();
+  });
+
+  it('links a configured global library by identity without projecting its path', async () => {
+    const fixture = await createFixture();
+    const selected = path.join(fixture.root, 'Global Footage');
+    const globalMediaLibraryRoot = path.join(fixture.root, '.openneko', 'media-libraries');
+    await mkdir(selected);
+    const { libraryId } = await createDesktopGlobalMediaLibraryConnection({
+      mediaLibraryRoot: globalMediaLibraryRoot,
+      sourceDirectory: selected,
+      locationKind: 'nas',
+    });
+    const selectGlobalLibrary = vi.fn(async () => libraryId);
+    const composition = createComposition(fixture.workspace, { selectGlobalLibrary });
+
+    await expect(composition.interactions.linkGlobalLibrary({ identity })).resolves.toBe('linked');
+
+    expect(selectGlobalLibrary).toHaveBeenCalledWith({
+      windowId: identity.windowId,
+      libraries: [{ libraryId, name: 'Global Footage', locationKind: 'nas' }],
+    });
+    expect(await realpath(path.join(fixture.workspace, 'neko', 'assets', 'Global Footage'))).toBe(
+      await realpath(selected),
+    );
+  });
+
+  it('rolls back a newly created global library when the workspace link fails', async () => {
+    const fixture = await createFixture();
+    const selected = path.join(fixture.root, 'Conflict');
+    await mkdir(selected);
+    await mkdir(path.join(fixture.workspace, 'neko', 'assets', 'Conflict'), { recursive: true });
+    const globalMediaLibraryRoot = path.join(fixture.root, '.openneko', 'media-libraries');
+    const didMutateGlobalMediaLibraries = vi.fn();
+    const composition = createComposition(fixture.workspace, {
+      selectSource: async () => selected,
+      didMutateGlobalMediaLibraries,
+    });
+
+    await expect(composition.interactions.addDirectoryLibrary({ identity })).rejects.toThrow();
+    await expect(listDesktopGlobalMediaLibraryConnections(globalMediaLibraryRoot)).resolves.toEqual(
+      [],
+    );
+    expect(didMutateGlobalMediaLibraries).not.toHaveBeenCalled();
   });
 
   it('relinks and removes only the selected managed media library root', async () => {
@@ -532,7 +593,7 @@ describe('Desktop Resource Browser source', () => {
     await mkdir(second);
     await createComposition(fixture.workspace, {
       selectSource: async () => first,
-    }).interactions.addSource({ identity });
+    }).interactions.addDirectoryLibrary({ identity });
     const libraryItem = {
       resourceId: 'content:library',
       facet: 'media' as const,
@@ -663,6 +724,10 @@ function createComposition(
     }) => Promise<void>;
     readonly revealPath?: (absolutePath: string) => Promise<void>;
     readonly selectSource?: (windowId: string) => Promise<string | undefined>;
+    readonly selectGlobalLibrary?: Parameters<
+      typeof createDesktopResourceBrowserProjectionSource
+    >[0]['selectGlobalLibrary'];
+    readonly didMutateGlobalMediaLibraries?: () => void;
     readonly createThumbnail?: (absolutePath: string) => Promise<string>;
   } = {},
 ) {
@@ -675,6 +740,7 @@ function createComposition(
     revealPath: effects.revealPath,
   });
   return createDesktopResourceBrowserProjectionSource({
+    globalMediaLibraryRoot: path.join(path.dirname(workspacePath), '.openneko', 'media-libraries'),
     workspace: {
       workspaceId: 'workspace-1',
       workspacePath,
@@ -685,6 +751,9 @@ function createComposition(
     openPreview: effects.openPreview ?? (async () => undefined),
     openCut: effects.openCut ?? (async () => undefined),
     selectSource: effects.selectSource ?? (async () => undefined),
+    selectGlobalLibrary: effects.selectGlobalLibrary ?? (async () => undefined),
+    mutateGlobalMediaLibraries: (operation) => operation(),
+    didMutateGlobalMediaLibraries: effects.didMutateGlobalMediaLibraries ?? (() => undefined),
     createThumbnail: effects.createThumbnail ?? (async () => 'data:image/png;base64,aW1hZ2U='),
     addToCanvas: async () => undefined,
     addToCut: async () => undefined,

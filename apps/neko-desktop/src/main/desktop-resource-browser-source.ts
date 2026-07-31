@@ -29,7 +29,9 @@ import type { DesktopWorkspaceResolution } from './desktop-workspace-registry';
 import { resolveDesktopWorkspaceContentLocator } from './desktop-content-locator';
 import { readDesktopConfirmedEntityResources } from './desktop-entity-resource-query';
 import {
+  createDesktopGlobalMediaLibraryConnection,
   listDesktopGlobalMediaLibraryConnections,
+  removeDesktopGlobalMediaLibraryConnection,
   type DesktopGlobalMediaLibraryConnection,
 } from './desktop-global-media-library-files';
 import type {
@@ -52,6 +54,7 @@ const EXCLUDED_DIRECTORIES = new Set([
 ]);
 
 export interface DesktopResourceBrowserSourceOptions {
+  readonly globalMediaLibraryRoot: string;
   readonly workspace: DesktopWorkspaceResolution;
   readonly host: Pick<NekoHostPorts, 'files' | 'external'>;
   readonly openPreview: (input: {
@@ -66,6 +69,18 @@ export interface DesktopResourceBrowserSourceOptions {
     readonly absolutePath: string;
   }) => Promise<void>;
   readonly selectSource: (windowId: string) => Promise<string | undefined>;
+  readonly selectGlobalLibrary: (input: {
+    readonly windowId: string;
+    readonly libraries: readonly {
+      readonly libraryId: string;
+      readonly name: string;
+      readonly locationKind: DesktopGlobalMediaLibraryConnection['locationKind'];
+    }[];
+  }) => Promise<string | undefined>;
+  readonly mutateGlobalMediaLibraries: <Result>(
+    operation: () => Promise<Result>,
+  ) => Promise<Result>;
+  readonly didMutateGlobalMediaLibraries: () => void;
   readonly createThumbnail: (absolutePath: string) => Promise<string>;
   readonly addToCanvas: ResourceBrowserInteractionPort['addToCanvas'];
   readonly addToCut: ResourceBrowserInteractionPort['addToCut'];
@@ -246,14 +261,79 @@ export function createDesktopResourceBrowserProjectionSource(
   const source = createDesktopResourceBrowserReadSource(options);
 
   const interactions: ResourceBrowserInteractionPort = {
-    async addSource({ identity }): Promise<'added' | 'cancelled'> {
-      const selectedDirectory = await options.selectSource(identity.windowId);
-      if (!selectedDirectory) return 'cancelled';
+    async linkGlobalLibrary({ identity }): Promise<'linked' | 'cancelled'> {
+      const linkedNames = new Set(
+        (await listWorkspaceLinkedMediaLibraries(options.workspace.workspacePath)).map(
+          (library) => library.name.toLocaleLowerCase(),
+        ),
+      );
+      const availableLibraries = (
+        await listDesktopGlobalMediaLibraryConnections(options.globalMediaLibraryRoot)
+      ).filter(
+        (library) =>
+          library.availability === 'available' &&
+          !linkedNames.has(library.name.toLocaleLowerCase()),
+      );
+      if (availableLibraries.length === 0) {
+        throw new Error('No unlinked global Media Library is available for this workspace.');
+      }
+      const libraryId = await options.selectGlobalLibrary({
+        windowId: identity.windowId,
+        libraries: availableLibraries.map(({ libraryId, name, locationKind }) => ({
+          libraryId,
+          name,
+          locationKind,
+        })),
+      });
+      if (!libraryId) return 'cancelled';
+      const library = availableLibraries.find((candidate) => candidate.libraryId === libraryId);
+      if (!library) {
+        throw new Error('Selected global Media Library identity is stale.');
+      }
       await createWorkspaceLinkedMediaLibrary({
         workspaceRoot: options.workspace.workspacePath,
-        name: path.basename(selectedDirectory),
-        targetDirectory: selectedDirectory,
+        name: library.name,
+        targetDirectory: library.linkPath,
       });
+      return 'linked';
+    },
+    async addDirectoryLibrary({ identity }): Promise<'added' | 'cancelled'> {
+      const selectedDirectory = await options.selectSource(identity.windowId);
+      if (!selectedDirectory) return 'cancelled';
+      await options.mutateGlobalMediaLibraries(async () => {
+        const created = await createDesktopGlobalMediaLibraryConnection({
+          mediaLibraryRoot: options.globalMediaLibraryRoot,
+          sourceDirectory: selectedDirectory,
+          locationKind: 'local',
+        });
+        try {
+          const library = (
+            await listDesktopGlobalMediaLibraryConnections(options.globalMediaLibraryRoot)
+          ).find((candidate) => candidate.libraryId === created.libraryId);
+          if (!library || library.availability !== 'available') {
+            throw new Error('New global Media Library could not be resolved after creation.');
+          }
+          await createWorkspaceLinkedMediaLibrary({
+            workspaceRoot: options.workspace.workspacePath,
+            name: library.name,
+            targetDirectory: library.linkPath,
+          });
+        } catch (error: unknown) {
+          try {
+            await removeDesktopGlobalMediaLibraryConnection({
+              mediaLibraryRoot: options.globalMediaLibraryRoot,
+              libraryId: created.libraryId,
+            });
+          } catch (rollbackError: unknown) {
+            throw new AggregateError(
+              [error, rollbackError],
+              'Project Media Library setup failed and global registry rollback also failed.',
+            );
+          }
+          throw error;
+        }
+      });
+      options.didMutateGlobalMediaLibraries();
       return 'added';
     },
     async relinkSource({ identity, item }): Promise<'relinked' | 'cancelled'> {
@@ -611,7 +691,7 @@ export async function resolveDesktopResourceBrowserItemPath(
   workspace: DesktopWorkspaceResolution,
   item: Parameters<ResourceBrowserInteractionPort['preview']>[0]['item'],
 ): Promise<string> {
-  const locator = item.facet === 'entities' ? item.representationLocator : item.locator;
+  const locator = item.facet === 'materials' ? item.representationLocator : item.locator;
   if (!locator) {
     throw new Error('Desktop Resource Browser item has no local presentation.');
   }
