@@ -374,18 +374,29 @@ The retained presentation SHALL be migrated from the pre-change component, hook,
 
 ### Requirement: Retained editing UI uses shared infrastructure
 
-Cut SHALL retain the existing `PreviewPanel`, `PreviewControls`, `Timeline`/`TimelineTrack`, `PropertyPanel`, Export subviews and their interaction hooks as the canonical component boundaries. The Webview SHALL use the shared Workbench Shell, resize hooks, icons/tags, context menu, property primitives, keyboard dispatcher, i18n provider, theme tokens, ErrorBoundary, Toast and logger. The Extension SHALL use shared Logger, ErrorHandler, l10n and `StatusBarGroup`. Cut MUST NOT create a parallel package-local foundation for any of these concerns.
+Cut SHALL retain the existing `PreviewPanel`, `PreviewControls`, `Timeline`/`TimelineTrack`,
+`PropertyPanel`, Export subviews and their interaction hooks as the canonical component boundaries.
+The Webview SHALL use the shared Workbench Shell, resize hooks, icons/tags, context menu, property
+primitives, keyboard dispatcher, i18n provider, theme tokens, ErrorBoundary, Toast and logger.
+Desktop Main SHALL use the shared Logger, ErrorHandler, i18n and shell status projection. Cut MUST
+NOT create a parallel package-local foundation for any of these concerns.
 
 #### Scenario: Render and operate the retained workbench
 
-- **WHEN** the Cut Webview opens, changes VS Code theme or locale, resizes a panel, drags media/Clips, opens a menu or reports a failure
+- **WHEN** the Cut Webview opens, changes Desktop theme or locale, resizes a panel, drags
+  media/Clips, opens a menu or reports a failure
 - **THEN** the interaction is handled through the retained component/hook and shared infrastructure path
 - **AND** all user-visible labels, ARIA text, tags, status text and recoverable errors are localized without hard-coded mixed-language fragments
 - **AND** no operation writes a Webview-owned project snapshot or accesses workspace media directly
 
 ### Requirement: AI quick invocation is a structured context handoff
 
-Cut SHALL expose a localized “Send to Agent” action for a current Clip or Track selection. The Extension Host SHALL resolve that selection against the explicit current document/session/revision and project a shared `AgentContextPayload` with stable OTIO locators and a read-only summary before invoking the unified Agent context command. This action MUST NOT call a model from the Webview, restore the legacy `executeAIAction` handler, infer an active/recent Cut target or report unimplemented automatic editing actions as success.
+Cut SHALL expose a localized “Send to Agent” action for a current Clip or Track selection. Desktop
+Main SHALL resolve that selection against the explicit current document/session/revision and project
+a shared `AgentContextPayload` with stable OTIO locators and a read-only summary before invoking the
+unified Agent context operation. This action MUST NOT call a model from the Webview, restore the
+legacy `executeAIAction` handler, infer an active/recent Cut target or report unimplemented automatic
+editing actions as success.
 
 #### Scenario: Send a Cut selection to Agent
 
@@ -400,13 +411,36 @@ Cut SHALL expose a localized “Send to Agent” action for a current Clip or Tr
 
 ### Requirement: Export remains a Host-owned background workflow
 
-Cut SHALL retain an export configuration panel, progress display, cancellation and background-running interaction. The Extension Host `ExportJobCoordinator` SHALL own each export Job's versioned snapshot, persistence, media validation, Engine execution, progress polling, staging output, cancellation, reconciliation and terminal state under explicit document/session/job identity. The Webview MUST NOT own the Job lifecycle, send a writable project snapshot for export or cancel a Job merely because the panel, editor or Webview closes. The implementation MUST NOT retain a generic TaskManager, compatibility adapter or parallel export registry.
+Cut SHALL retain an export configuration panel, progress display, cancellation and
+background-running interaction. The Desktop Main `ExportJobCoordinator` SHALL own each export Job's
+versioned snapshot, persistence, media validation, Node/FFmpeg execution, progress polling, staging
+output, cancellation, reconciliation and terminal state under explicit document/session/job
+identity. The Webview MUST NOT own the Job lifecycle, send a writable project snapshot for export or
+cancel a Job merely because the panel, view or Webview closes. The implementation MUST NOT retain a
+generic TaskManager, compatibility adapter or parallel export registry.
 
-The Extension Host SHALL project background export state into a native VS Code status item. The projection MUST be derived from explicit versioned ExportJob snapshots and its navigation action MUST open the owning `.otio` document rather than infer an active or recent editor. Playback time and media metadata SHALL remain Webview control-bar state and MUST NOT be duplicated as another writable status source.
+Desktop Main SHALL project background export state into the Desktop shell status surface. The
+projection MUST be derived from explicit versioned ExportJob snapshots and its navigation action
+MUST open the owning `.otio` document rather than infer an active or recent view. Playback time and
+media metadata SHALL remain Webview control-bar state and MUST NOT be duplicated as another writable
+status source.
 
-The Extension Host MAY additionally project the currently visible Cut document's playback state, timeline time/FPS, Track/Clip counts and dirty/diagnostic summary into a separate native status item. That projection SHALL be keyed by explicit document/session identity. VS Code active-editor state MAY select which projection is visible but MUST NOT own, mutate or recover Cut session state. All status text, tooltips and command titles SHALL use Extension l10n.
+Desktop Main MAY additionally project the currently visible Cut document's playback state, timeline
+time/FPS, Track/Clip counts and dirty/diagnostic summary into a separate Desktop status item. That
+projection SHALL be keyed by explicit document/session identity. Desktop view selection MAY select
+which projection is visible but MUST NOT own, mutate or recover Cut session state. All status text,
+tooltips and command titles SHALL use shared i18n.
 
-The Host SHALL freeze the accepted in-memory `TimelineView` immediately when it accepts a matching `cut:export-start` identity, before opening the destination picker. Export SHALL NOT implicitly save the VS Code document and SHALL NOT re-read disk, request a writable Webview snapshot or infer an active/recent editor. Each job SHALL bind that frozen `documentUri/sessionId/revision` to immutable output name, container, width, height, frame rate, video bitrate, audio inclusion, audio bitrate and audio sample-rate settings. Job settings MAY explicitly override encoding settings, SHALL initialize dimensions/rate from the frozen OTIO profile at the Webview boundary, and MUST NOT be persisted as another project profile or hidden user preference. The export surface SHALL create only a local MP4 or MOV file through the native Save Dialog and SHALL NOT expose export-to-Canvas or DaVinci Resolve actions.
+The Host SHALL freeze the accepted in-memory `TimelineView` immediately when it accepts a matching
+`cut:export-start` identity, before opening the destination picker. Export SHALL NOT implicitly save
+the Desktop document and SHALL NOT re-read disk, request a writable Webview snapshot or infer an
+active/recent view. Each job SHALL bind that frozen `documentUri/sessionId/revision` to immutable
+output name, container, width, height, frame rate, video bitrate, audio inclusion, audio bitrate and
+audio sample-rate settings. Job settings MAY explicitly override encoding settings, SHALL initialize
+dimensions/rate from the frozen OTIO profile at the Webview boundary, and MUST NOT be persisted as
+another project profile or hidden user preference. The export surface SHALL create only a local MP4
+or MOV file through the native Save Dialog and SHALL NOT expose export-to-Canvas or DaVinci Resolve
+actions.
 
 #### Scenario: Export a dirty accepted revision
 
@@ -440,18 +474,19 @@ The Host SHALL freeze the accepted in-memory `TimelineView` immediately when it 
 
 #### Scenario: Export fails visibly
 
-- **WHEN** media validation, Engine execution, output validation or atomic replacement fails
+- **WHEN** media validation, Node/FFmpeg execution, output validation or atomic replacement fails
 - **THEN** the ExportJob enters an explicit failed state with a diagnostic and Cut does not publish a partial or empty output as success
 
 #### Scenario: Follow a background export from the VS Code status bar
 
 - **WHEN** an export continues after its panel or editor becomes hidden and then reaches a running, completed or failed state
-- **THEN** a native VS Code status item reflects that Host-owned state
+- **THEN** the Desktop shell status item reflects that Host-owned state
 - **AND** activating the item opens the exact `.otio` identified by the selected ExportJob snapshot, without consulting the active or most-recent Cut editor
 
 #### Scenario: Reconcile after Host restart
 
-- **WHEN** the Host restores a persisted running ExportJob but cannot prove that its previous Engine execution can be reattached
+- **WHEN** the Host restores a persisted running ExportJob but cannot prove that its previous
+  Node/FFmpeg execution can be reattached
 - **THEN** the coordinator commits `outcome-unknown` for that exact Job
 - **AND** it does not automatically submit another export or report terminal failure/success
 

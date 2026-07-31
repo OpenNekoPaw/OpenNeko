@@ -1,5 +1,11 @@
 ## Context
 
+> Desktop-only migration: `flatten-desktop-only-monorepo` supersedes every VS Code
+> Extension composition, Custom Editor, status-bar and Extension Development Host
+> instruction below. Those references are retained only as historical design context.
+> Current and pending work is owned by Desktop Main/preload/renderer and is accepted in
+> isolated Electron Desktop scenarios.
+
 当前 Cut 仍以 NKV、Webview timeline store、Extension-owned timeline conversion 和 Rust timeline 为代码事实。现有“分离音频”会创建一个引用相同视频 `src` 的 Audio element；它不是生成 WAV 的媒体派生流程。本设计保留同源引用，但不保留基于 link 的自动混音抑制。
 
 本设计以 `.otio` 文件取代重复工程模型，同时尽量不重做已经工作的媒体行为。对应稳定决策见 [`ADR: Cut OTIO 工程与可替换媒体运行时边界`](../../../docs/architecture/adr-cut-otio-vscode-media-runtime-boundary.md)。本 change 和该 ADR 是 Cut 最新目标；更早 NKV、项目内媒体目录或 Desktop 推断只作为历史/当前实现说明。
@@ -25,7 +31,7 @@
 - 当前媒体 adapter 的字幕预览叠加与导出烧录；基础 Subtitle Track 先提供 OTIO 持久化、排列和移动，运行时支持由后续 change 接入。
 - 将导出结果直接发送到 Canvas，或生成/发送 DaVinci Resolve 工程；本 change 只导出用户在原生 Save Dialog 中选择的本地 MP4/MOV 文件。
 - NKC/NKV 在线迁移、双读或双写。
-- Desktop Cut、TUI/Agent Cut authoring 或非 VS Code Host 集成。
+- Agent Cut authoring 或 Desktop 之外的宿主集成。
 
 ## Five-layer analysis
 

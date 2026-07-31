@@ -1,3 +1,9 @@
+> Desktop-only migration: checked Extension/Custom Editor/Extension Development Host
+> wording below records historical completion evidence only. It does not reopen or
+> require a removed host. Every unchecked task is owned by Desktop
+> Main/preload/renderer, the first-level Cut packages and isolated Electron Desktop
+> acceptance.
+
 ## 1. Freeze the replacement boundary without implementing it
 
 - [x] 1.1 Inventory every NKV/NKC codec, Custom Editor registration, Webview component/store/snapshot, Extension reconstruction path, operation/message/command, media import/copy path, current linked separation path, Canvas target, test, fixture, manifest entry and dependency inside the replacement boundary.
@@ -212,7 +218,7 @@
 - [x] 24.5 Diagnose and repair stuck Playhead gestures, timeline-end overrun and delayed/interrupted cross-Clip switching across the Webview controller, Host preview boundary and selected media adapter.
 - [x] 24.6 Make Preview workspace background follow existing VS Code theme tokens while preserving the project Canvas/letterbox color semantics.
 - [ ] 24.7 Run focused Domain/Node/Renderer tests and builds, strict OpenSpec and isolated Electron Desktop scenarios for dirty export revision, mixed audio, multiple Clip boundaries, high-frequency Playhead drag, exact timeline stop and light/dark Preview themes; record evidence in `validation.md`.
-- [ ] 24.8 Add save lifecycle/path tests, migrate OTIO persistence from package-local temporary-file replacement to the shared project-file save/authorized writer boundary, and prove normal save preserves the exact Custom Editor document/panel identity while version conflicts remain fail-visible.
+- [ ] 24.8 Add save lifecycle/path tests, migrate OTIO persistence from package-local temporary-file replacement to the shared project-file save/authorized writer boundary, and prove normal save preserves the exact Desktop document/view identity while version conflicts remain fail-visible.
 
 ## 25. Correct Timeline placement and presentation extent
 

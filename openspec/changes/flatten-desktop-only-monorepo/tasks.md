@@ -50,3 +50,18 @@
       driver if one exists, or record the missing complete-session owner as a blocking residual risk.
 - [x] 5.4 Run the L4 Neko quality review, confirm no project/Desktop settings were deleted, document
       removed VS Code/TUI state behavior and list every unexecuted platform validation.
+
+## 6. Residual Desktop-Only Closure
+
+- [x] 6.1 Remove nested root workspace globs, update the topology guard to validate every workspace
+      declaration and explicitly allow only the retained static Codicons dependency.
+- [x] 6.2 Make Webview smoke discover first-level packages, remove the dangling release-channel
+      command and add orchestration regressions for both executable root-tool boundaries.
+- [x] 6.3 Preserve the missing Desktop complete-session driver as `infrastructure-blocked`/exit 2
+      after preflight; update runner tests, Evaluation documentation and the repository Skill.
+- [x] 6.4 Replace active VS Code/TUI validation guidance, stale Webview/test naming and conflicting
+      Cut host specs with Desktop-owned terminology while retaining explicit historical/negative
+      references.
+- [x] 6.5 Run focused orchestration/topology/Evaluation tests, Webview smoke, strict OpenSpec,
+      legacy/unused/dependency gates and the complete local gate; update verification and residual
+      risk.

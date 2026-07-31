@@ -5,7 +5,10 @@ TBD - created by archiving change add-standard-3d-model-preview. Update Purpose 
 ## Requirements
 ### Requirement: Preview supports a fixed standard 3D source allowlist
 
-The Preview Extension SHALL register one read-only model preview surface for GLB, glTF, OBJ, STL, and PLY source files. MTL SHALL be accepted only as a declared OBJ companion resource. The system MUST NOT define a new model, scene, sidecar, or project format and MUST NOT expose a runtime format-registration API.
+The Preview package SHALL register one read-only Desktop model preview surface for GLB, glTF, OBJ,
+STL, and PLY source files. MTL SHALL be accepted only as a declared OBJ companion resource. The
+system MUST NOT define a new model, scene, sidecar, or project format and MUST NOT expose a runtime
+format-registration API.
 
 #### Scenario: Open an allowed model source
 
@@ -19,26 +22,39 @@ The Preview Extension SHALL register one read-only model preview surface for GLB
 
 ### Requirement: Model resources are projected through exact panel-scoped authorization
 
-The Extension Host SHALL validate the primary source and enumerate only the local companion resources declared by the standard source format. Every projected file MUST remain inside an authorized root, MUST be exposed through a panel-scoped Webview URI mapping, and MUST be revoked when the panel session closes. Remote HTTP(S) dependencies, traversal, absolute dependency references, undeclared companion reads, oversized dependency graphs, and unsupported MIME or extension combinations MUST fail visibly before Three.js loads them.
+Desktop Main SHALL validate the primary source and enumerate only the local companion resources
+declared by the standard source format. Every projected file MUST remain inside an authorized root,
+MUST be exposed through a view-scoped `neko-media://` mapping, and MUST be revoked when the Preview
+session closes. Remote HTTP(S) dependencies, traversal, absolute dependency references, undeclared
+companion reads, oversized dependency graphs, and unsupported MIME or extension combinations MUST
+fail visibly before Three.js loads them.
 
 #### Scenario: Load a GLB source
 
 - **WHEN** a valid GLB file is opened from an authorized source root
-- **THEN** the Extension projects exactly the GLB source through a panel-scoped URI and sends the Webview a typed source descriptor containing its stable `ResourceRef`, fingerprint, format, and authorized entry URI
+- **THEN** Desktop Main projects exactly the GLB source through a view-scoped URI and sends the
+  Preview surface a typed source descriptor containing its stable `ResourceRef`, fingerprint,
+  format, and authorized entry URI
 
 #### Scenario: Load a glTF bundle
 
 - **WHEN** a valid glTF file declares relative buffers or image resources inside the authorized source root
-- **THEN** the Extension enumerates those declared resources, projects each through `webview.asWebviewUri()`, and supplies a URL mapping that resolves only those dependencies
+- **THEN** Desktop Main enumerates those declared resources, projects each through the authorized
+  `neko-media://` service, and supplies a URL mapping that resolves only those dependencies
 
 #### Scenario: Reject an unsafe model dependency
 
 - **WHEN** a glTF, OBJ, or MTL source declares a remote URL, an absolute dependency, traversal outside the authorized root, or a missing companion file
-- **THEN** the Extension returns a source-projection diagnostic and the Webview does not attempt a network request or substitute an unrelated resource
+- **THEN** Desktop Main returns a source-projection diagnostic and the Preview surface does not
+  attempt a network request or substitute an unrelated resource
 
 ### Requirement: Three.js rendering is browser-only and isolated from the Media Engine
 
-The model preview renderer SHALL run only inside the dedicated Preview Webview entry. Three.js, its loaders, renderer state, scene graph, cameras, lights, controls, and GPU resources MUST NOT be imported by the Extension Host, shared Layer 0/1 packages, Agent runtime, or Rust Engine. Opening a model preview MUST NOT activate or dispatch the removed Engine `models`, `model-preview`, `scenes`, `viewport`, or `cameras` groups.
+The model preview renderer SHALL run only inside the dedicated Preview Webview entry. Three.js, its
+loaders, renderer state, scene graph, cameras, lights, controls, and GPU resources MUST NOT be
+imported by Desktop Main/preload, shared Layer 0 packages, Agent runtime, or the retired Rust Engine.
+Opening a model preview MUST NOT activate or dispatch the removed Engine `models`,
+`model-preview`, `scenes`, `viewport`, or `cameras` groups.
 
 #### Scenario: Render a standard model
 

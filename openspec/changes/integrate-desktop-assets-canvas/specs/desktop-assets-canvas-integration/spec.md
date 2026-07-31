@@ -1,19 +1,19 @@
 ## ADDED Requirements
 
-### Requirement: Canvas add-node catalog is identical across Desktop and VS Code
+### Requirement: Canvas add-node catalog is owned by the Desktop Canvas surface
 
-The package-owned Canvas Root SHALL render and route one add-node catalog for both Desktop and
-VS Code. The catalog SHALL expose Text, Table, Image, Video, Audio and 3D Director in that order.
+The package-owned Canvas Root SHALL render and route one add-node catalog in Desktop. The catalog
+SHALL expose Text, Table, Image, Video, Audio and 3D Director in that order.
 Text and Table SHALL create canonical Markdown nodes, media actions SHALL use their typed source
 intent, and 3D Director SHALL use a model source intent that resolves to a canonical file reference.
 The popover SHALL use compact Canvas control density and explicit Portal-safe global Neko surface,
-border, foreground, hover and shadow tokens; neither Host may substitute host-local sizing, item
-surfaces, colors or focus treatment.
+border, foreground, hover and shadow tokens; the Desktop shell MUST NOT substitute app-local sizing,
+item surfaces, colors or focus treatment.
 
-#### Scenario: Both hosts consume the same real add-node intents
+#### Scenario: Desktop consumes the real add-node intents
 
-- **WHEN** a user opens the Canvas add-node menu in Desktop or VS Code
-- **THEN** both hosts render the same package-owned ordered catalog and localized labels
+- **WHEN** a user opens the Canvas add-node menu in Desktop
+- **THEN** Desktop renders the package-owned ordered catalog and localized labels
 - **AND** the popover uses neutral Portal-safe Neko foreground, hover, badge and elevated surface
   treatment at compact Canvas density without oversized card icons or a duplicate focus outline
 - **AND** Table creates editable GFM table content without a legacy table node type
@@ -21,7 +21,8 @@ surfaces, colors or focus treatment.
   placeholder: Text/Table become Markdown, Image/Video/Audio become typed Media and 3D Director
   becomes a model-backed File reference
 - **AND** 3D Director requests a model source and uses the package-owned model Preview path
-- **AND** neither host renders a local duplicate menu, viewer, no-op item or compatibility fallback
+- **AND** the Desktop shell does not render a local duplicate menu, viewer, no-op item or
+  compatibility fallback
 
 ### Requirement: Assets owns the Desktop Resource Browser
 
@@ -93,21 +94,16 @@ playback state, mutate `.nkc` facts, expose an absolute path or introduce a Desk
 
 ### Requirement: Canvas Root consumes one injected host runtime
 
-The complete package-owned Canvas Root SHALL consume a versioned browser-safe Canvas runtime supplied
-by its Host. VS Code and Electron SHALL adapt their effects to that runtime. Production Canvas code
-MUST NOT require a module-global VS Code API, direct Extension command or Desktop demo surface.
+The complete package-owned Canvas Root SHALL consume a versioned browser-safe Canvas runtime
+supplied by Desktop preload/Main composition. Production Canvas code MUST NOT require a
+module-global host API, direct Electron IPC, app implementation import or Desktop demo surface.
 
 #### Scenario: Desktop mounts a Canvas
 
 - **WHEN** the startup audit confirms the complete Canvas runtime and an explicit document View
 - **THEN** Desktop mounts the full Canvas Root and obtains its authoritative document snapshot
-- **AND** `CanvasHostAdapterSurface`, fixed nodes, global VS Code API and active editor do not participate
-
-#### Scenario: VS Code opens the same Canvas contract
-
-- **WHEN** the VS Code Custom Editor opens an `.nkc`
-- **THEN** its adapter supplies the same Canvas runtime semantics
-- **AND** existing VS Code save, edit, preview and authoring behavior remains covered
+- **AND** `CanvasHostAdapterSurface`, fixed nodes, removed host APIs and active-view fallback do not
+  participate
 
 ### Requirement: Canvas authoring is explicit and revisioned
 
@@ -165,9 +161,10 @@ import, delivery, candidate acceptance or Canvas mutation.
 
 ### Requirement: P1.4 qualification proves the canonical path
 
-The change SHALL provide producer/consumer, authorization, identity, revision, persistence, lifecycle,
-architecture and UI tests plus an isolated Electron fixture scenario. Existing VS Code Canvas behavior
-SHALL be revalidated through Extension Development Host when Webview behavior changes.
+The change SHALL provide producer/consumer, authorization, identity, revision, persistence,
+lifecycle, architecture and UI tests plus an isolated Electron fixture scenario. Desktop Canvas
+behavior SHALL be revalidated through the production package or controlled Electron runtime when
+Webview behavior changes.
 
 #### Scenario: Desktop Assets and Canvas qualification runs
 

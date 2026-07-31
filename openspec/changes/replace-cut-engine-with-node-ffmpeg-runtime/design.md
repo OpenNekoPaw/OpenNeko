@@ -6,7 +6,7 @@
 
 - Domain ports describe Cut media operations without naming Node, FFmpeg,
   Electron, WebSocket, or Engine DTOs.
-- The Extension Host owns trusted workspace path resolution, ffprobe/FFmpeg
+- Desktop Main owns trusted workspace path resolution, ffprobe/FFmpeg
   processes, cache/session lifecycle, cancellation, and loopback HTTP delivery.
 - Chromium owns Range scheduling, demux, buffering, and decode. The Webview
   owns `<video>` lifecycle, Web Audio playback, and recoverable presentation
@@ -21,15 +21,15 @@
 ```mermaid
 flowchart LR
   CutDomain["Cut domain media ports"]
-  Extension["Cut Extension composition root"]
+  Desktop["Desktop Cut composition root"]
   Adapter["Node/FFmpeg adapter"]
   Server["Loopback media server"]
   Webview["Cut Webview"]
   Browser["native HTML video + Web Audio"]
   Ffmpeg["ffprobe / FFmpeg"]
 
-  Extension --> CutDomain
-  Extension --> Adapter
+  Desktop --> CutDomain
+  Desktop --> Adapter
   Adapter --> CutDomain
   Adapter --> Server
   Adapter --> Ffmpeg
@@ -38,8 +38,8 @@ flowchart LR
   Browser --> Server
 ```
 
-The Webview never receives local file paths and never calls Node or VS Code
-APIs. Media bytes do not cross `postMessage`.
+The renderer Webview never receives local file paths and never calls Node or
+Electron Main APIs. Media bytes do not cross typed IPC.
 
 ### 3. Interfaces
 
@@ -87,7 +87,7 @@ mismatched sessions fail visibly.
   timeline mapping, drift handling, and disposal.
 - Path assertions prove the Node adapter is selected and the poisoned Engine Cut
   path is never invoked.
-- Extension Development Host validation covers a synthetic H.264 fixture, PCM
+- Isolated Electron Desktop validation covers a synthetic H.264 fixture, PCM
   audio, seek/resume, frame/waveform operations, and an unsupported input that
   follows the explicit preparation path.
 - Repository audit checks all remaining Engine imports, commands, routes, DTOs,
@@ -95,7 +95,7 @@ mismatched sessions fail visibly.
 
 ## Canonical runtime flow
 
-1. Cut resolves an OTIO media reference through the Extension Host.
+1. Cut resolves an OTIO media reference through Desktop Main.
 2. The adapter probes the source and selects one declared preparation profile.
 3. The Host registers the compatible source or completes a prepared file.
 4. The loopback server exposes one opaque Range URL per video session.
@@ -110,15 +110,15 @@ There is no legacy Engine retry or automatic adapter fallback at any step.
 
 ## Preview preparation profiles
 
-| Source                               | Initial preview action                                   |
-| ------------------------------------ | -------------------------------------------------------- |
-| H.264 compatible MP4                 | authorize the original file as a native Range resource  |
-| H.264 incompatible container         | remux into fragmented MP4                                |
-| VP8 WebM after real Webview qualification | authorize the original file as a native Range resource |
-| VP8 before qualification             | explicitly transcode to H.264 SDR preview                |
-| HEVC, AV1, other video               | explicitly transcode to H.264 SDR preview                |
-| 10-bit/HDR requiring H.264 proxy     | tone-map and convert to the declared SDR preview profile |
-| Any audible audio                    | decode to interleaved float32 PCM                        |
+| Source                                    | Initial preview action                                   |
+| ----------------------------------------- | -------------------------------------------------------- |
+| H.264 compatible MP4                      | authorize the original file as a native Range resource   |
+| H.264 incompatible container              | remux into fragmented MP4                                |
+| VP8 WebM after real Webview qualification | authorize the original file as a native Range resource   |
+| VP8 before qualification                  | explicitly transcode to H.264 SDR preview                |
+| HEVC, AV1, other video                    | explicitly transcode to H.264 SDR preview                |
+| 10-bit/HDR requiring H.264 proxy          | tone-map and convert to the declared SDR preview profile |
+| Any audible audio                         | decode to interleaved float32 PCM                        |
 
 Preparation choice and failure are diagnostic events. Transcoding is not
 reported as direct playback.
@@ -151,7 +151,7 @@ letting tracks diverge.
   paths.
 - Cache writes use staging plus atomic publication; incomplete artifacts are not
   reusable.
-- Extension disposal terminates children, closes the server, and removes
+- Desktop runtime disposal terminates children, closes the server, and removes
   session-owned temporary data.
 
 ## Composition switch and legacy removal
@@ -171,13 +171,13 @@ must pass focused tests. After switching:
 `packages/neko-engine` is deleted only when a repository-wide dependency closure
 finds zero remaining owned responsibilities. The audit must include:
 
-- runtime imports and extension activation
+- runtime imports and Desktop activation
 - commands and configuration
 - protobuf services/messages and generated DTO consumers
 - HTTP/WebSocket routes and clients
 - packaging/native artifacts and CI scripts
 - tests, fixtures, docs, and release workflows
-- consumers in Preview, Canvas, Assets, Tools, Agent, TUI, and VS Code host
+- consumers in Preview, Canvas, Assets, Tools, Agent, Desktop composition and packaging
 
 If any consumer remains, this change records its owner and keeps the Engine.
 Partial Cut decoupling must not be presented as whole-Engine removal.
@@ -188,6 +188,6 @@ Partial Cut decoupling must not be presented as whole-Engine removal.
   concern and must be verified separately from development PATH discovery.
 - Full-source proxy creation can delay first frame; preparation should remain
   interval-oriented and cacheable.
-- Current VS Code/Electron WebM behavior must be measured, not inferred from a
+- Current Electron WebM behavior must be measured, not inferred from a
   generic Chromium capability table.
 - SDR proxy preview does not validate native HDR output correctness.

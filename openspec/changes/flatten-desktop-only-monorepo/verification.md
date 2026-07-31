@@ -23,10 +23,16 @@ real Desktop conversations created after the previously applied v2 migration mar
 - The workspace contains one application package at `apps/neko-desktop/package.json`, 28 retained
   first-level packages under `packages/*/package.json`, no `packages/*/packages/*`, and no
   package-local `test-utils/package.json`.
+- Root `package.json` and `pnpm-workspace.yaml` both declare only `apps/*` and `packages/*`.
+  `pnpm smoke:webview` discovered and built the five retained first-level Webview packages.
+- The only retained `@vscode/*` dependency is `@vscode/codicons`, which is a static icon asset.
+  Production source contains no VS Code import, runtime URI, Extension adapter or compatibility
+  bridge. The remaining `vscode`/`tui` local-metadata values exist only in the non-destructive v1
+  migration that isolates old user rows.
 - `pnpm gate:local` passed: formatting, lint (0 errors; 219 existing warnings), 29 workspace builds,
   all 28 test owners and repository quality gates completed successfully.
 - `pnpm check:legacy-debt`, `pnpm check:unused` and `pnpm check:deps` passed. Dependency Cruiser
-  inspected 1,030 modules and 3,208 dependencies without violations.
+  inspected 1,030 modules and 3,223 dependencies without violations.
 - Strict OpenSpec validation passed for all 89 active changes.
 
 ## Desktop Runtime Evidence
@@ -48,18 +54,35 @@ picker.
 
 Desktop owner tests passed 55 files / 293 tests. The wider gate also passed Agent runtime
 97 files / 920 tests, Agent Webview 88 files / 669 tests, and shared metadata
-132 files / 994 tests.
+132 files / 994 tests. The final post-edit shared-contract rerun passed 132 files / 995 tests,
+including explicit rejection of retired host-projected runtime URIs.
 
 ## Agent Evaluation Disposition
 
-- `pnpm test:agent:eval` passed 35 files / 233 tests and key-free dry-ran 22 suites / 50 cases.
+- `pnpm test:agent:eval` passed 35 files / 234 tests and key-free dry-ran 22 suites / 50 cases.
   This validates the Evaluation harness only, not real Agent behavior.
 - The focused `agent-runtime.workflow-controller` run through `local-run.mjs` returned exit code 2
   and `infrastructure-blocked` before starting a run because no allowlisted provider credential was
-  available.
-- The Evaluation coverage index separately marks the Desktop complete-session driver as excluded
-  because no such owner exists yet. No removed TUI driver, headless runner, direct turn runner or
-  mock business tool was used as fallback.
+  available. Focused runner tests separately prove that a preflight-complete invocation still
+  preserves `infrastructure-blocked`/exit 2 when the Desktop complete-session driver is absent.
+- The Evaluation coverage index marks the Desktop complete-session driver as excluded because no
+  such owner exists yet. No removed TUI driver, headless runner, direct turn runner or mock business
+  tool was used as fallback.
+
+## Documentation And Governance Evidence
+
+- Root README, architecture navigation, package boundaries, contribution rules, Agent Evaluation
+  developer documentation and repository Skills identify Electron Desktop as the sole current host.
+- The repository-local `vscode-extension-debugger` Skill is absent and its `.gitignore` tracking
+  exception has been removed. The developer's global personal Skill installation is outside this
+  repository and was not modified.
+- Active Desktop foundation, release, Canvas, Cut and standard 3D Preview requirements now assign
+  application/session, resource projection, background export and UI acceptance to Desktop
+  Main/preload/renderer plus Node/FFmpeg. Archived changes, dated status snapshots and explicitly
+  superseded ADRs retain historical VS Code/TUI evidence without defining an executable path.
+- `.github/workflows/ci.yml` contains only deterministic source/build/test/quality jobs and no VSIX,
+  TUI, Extension Development Host, GUI or real Agent Evaluation job. Root build, package and smoke
+  scripts target Desktop and first-level packages only.
 
 Real provider-backed Agent behavior therefore remains unverified until both an authorized provider
 environment and a Desktop-owned complete-session driver are available.

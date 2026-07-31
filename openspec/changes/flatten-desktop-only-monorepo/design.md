@@ -143,6 +143,26 @@ fail build or tests. There is no dual-read or fallback into removed hosts. The m
 delete project content or Desktop settings. Removed VS Code/TUI state is ignored because those
 unpublished hosts are no longer executable; the release note states this breaking boundary.
 
+### 7. Executable tooling and governance follow the same Desktop topology
+
+All workspace declarations, package discovery scripts and root commands are part of the executable
+repository contract. `package.json`, `pnpm-workspace.yaml`, Webview smoke discovery and topology
+validation must enumerate only `apps/*` and first-level `packages/*`. A root script whose target was
+deleted must itself be removed unless a Desktop-owned replacement exists. Smoke discovery must fail
+when an expected first-level Webview build is missing, not because it still searches retired nested
+locations.
+
+Repository Skills and active OpenSpec artifacts are operational inputs, not passive prose. They must
+name Electron Desktop as the real UI/session owner and use isolated packaged or development Electron
+scenarios for runtime evidence. Historical ADRs may retain VS Code facts only when their status or
+supersession is explicit and no active Skill, task or spec treats the old host as executable.
+
+The Agent Evaluation platform remains external test infrastructure. Until Desktop exposes a
+complete-session driver, `runV2Case` fails with `infrastructure-blocked`; `local-run` must preserve
+that outcome and exit code 2 after credential/config preflight. It must never rewrite the missing
+driver as `configuration-invalid` or fall back to TUI, headless assembly, direct turn injection or a
+mock provider.
+
 ## Risks / Trade-offs
 
 - **[Large rename obscures behavior changes]** -> Commit topology moves separately from host
@@ -176,11 +196,11 @@ Rollback is commit-based because no project data migration occurs. Reverting the
 removal commits restores the previous prelaunch tree; the superseding merge commit remains a
 historical record and does not contain old branch files.
 
-## Open Questions
+## Resolved Follow-up Audit
 
-- Whether styling-only `--vscode-*` token aliases should be renamed in this change depends on their
-  count and whether third-party Webview components consume them. They cannot retain any runtime
-  bridge semantics.
-- Real Agent evaluation currently uses the TUI as complete session owner. Before removing TUI, the
-  implementation must either identify an existing Desktop-owned driver or record real evaluation as
-  blocked with key-free harness coverage only.
+- Retained Webview theme inputs use `--neko-*`; stale VS Code-only comments and test helper names are
+  removed. `@vscode/codicons` is an explicitly allowlisted static icon asset dependency, not a host
+  API or compatibility bridge.
+- No Desktop complete-session evaluation driver exists in this change. Real execution remains
+  `infrastructure-blocked` with key-free harness coverage only, and repository Skills describe that
+  Desktop boundary directly.

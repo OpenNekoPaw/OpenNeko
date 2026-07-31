@@ -26,6 +26,7 @@ VS Code/TUI owner.
 - **THEN** every retained package resolves from one first-level directory
 - **AND** no nested workspace package or aggregate Extension package is discovered
 - **AND** Desktop imports resolve through package public entries rather than filesystem aliases
+- **AND** every workspace declaration contains only `apps/*` and `packages/*`
 
 ### Requirement: VS Code runtime and compatibility paths are absent
 
@@ -84,3 +85,40 @@ supported product host.
 - **THEN** it builds and tests retained first-level packages and the Desktop application
 - **AND** it rejects nested packages, removed-host dependencies and VSIX/TUI release artifacts
 - **AND** it does not require an Extension Development Host or TUI runtime to report success
+
+#### Scenario: Retained root tooling is executable
+
+- **WHEN** repository orchestration validates root scripts and local smoke commands
+- **THEN** every retained script target exists
+- **AND** Webview smoke discovers the retained first-level Webview packages
+- **AND** no removed release validator, nested package discovery path or removed-host command can
+  report success
+
+### Requirement: Agent Evaluation preserves the Desktop runtime boundary
+
+Repository Evaluation guidance SHALL identify Desktop as the sole product session owner. A real case
+MUST use a Desktop-owned complete-session driver. Until that driver exists, provider-backed execution
+MUST return `infrastructure-blocked` with exit code 2 and MUST NOT use a removed TUI driver, direct
+turn runner, headless assembly or mock provider.
+
+#### Scenario: Credentials exist but the Desktop driver does not
+
+- **WHEN** focused Evaluation passes credential and local configuration preflight
+- **AND** the Desktop complete-session driver is unavailable
+- **THEN** the report outcome is `infrastructure-blocked`
+- **AND** the process exits with code 2
+- **AND** the blocker is not rewritten as `configuration-invalid`
+
+### Requirement: Active governance is Desktop-first
+
+Repository Skills, current architecture guidance and active OpenSpec requirements SHALL use Desktop
+as the only executable host and runtime acceptance owner. Removed-host facts MAY remain in explicit
+negative guards, data migrations or documents marked historical/superseded.
+
+#### Scenario: Active guidance is audited
+
+- **WHEN** maintainers inspect repository Skills and current validation guidance
+- **THEN** no instruction requires a VS Code debugger, Extension Development Host or TUI runtime
+- **AND** active Cut media requirements identify Desktop Main/preload/renderer and Node/FFmpeg as the
+  canonical host path
+- **AND** historical removed-host references cannot be mistaken for current implementation tasks

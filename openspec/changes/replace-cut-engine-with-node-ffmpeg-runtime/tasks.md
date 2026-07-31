@@ -21,13 +21,13 @@
       output validation.
 - [x] 2.7 Add focused adapter, lifecycle, error, and contract tests.
 
-## 3. Validate the real VS Code Webview
+## 3. Validate the real Desktop renderer
 
 - [x] 3.1 Replace the Engine WebSocket preview client with native `<video src>` and HTTP
       PCM clients.
 - [x] 3.2 Implement and test OpenNeko timeline clock ownership and drift policy.
 - [x] 3.3 Validate H.264 preview, PCM audio, seek/resume, frame capture, waveform,
-      and explicit transcode in an Extension Development Host.
+      and explicit transcode in an isolated Electron Desktop runtime.
 - [x] 3.4 Run a VP8 WebM native video fixture and record direct-support qualification or
       retain explicit H.264 transcode.
 
@@ -75,3 +75,7 @@
 - [x] 9.3 Run `pnpm ci:local` for the final high-risk cross-layer change.
 - [x] 9.4 Record actual validation commands, results, and remaining release/HDR
       risks.
+
+The checked Extension-era tasks above were migrated to Desktop-owned acceptance by
+`flatten-desktop-only-monorepo`. `validation.md` is retained as historical evidence
+only; it does not require an Extension Development Host for current completion.

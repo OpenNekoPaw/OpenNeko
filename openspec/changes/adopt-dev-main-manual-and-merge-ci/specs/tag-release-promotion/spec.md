@@ -14,23 +14,25 @@ The Release workflow SHALL accept only version tags whose commit is reachable fr
 - **WHEN** a `v*` tag points to a commit not reachable from `origin/main`
 - **THEN** the Release workflow SHALL fail before building or publishing artifacts
 
-### Requirement: Release tag and VSIX versions agree
+### Requirement: Release tag and Desktop artifact versions agree
 
-The Release workflow SHALL validate that the version tag is valid SemVer and that its numeric base version equals every publishable extension and extension-pack manifest version selected by the canonical package groups.
+The Release workflow SHALL validate that the version tag is valid SemVer and that its numeric base
+version equals the `apps/neko-desktop` manifest version projected into every supported Desktop
+artifact.
 
 #### Scenario: Stable version matches
 
-- **WHEN** tag `v0.1.0` is released and every publishable VSIX manifest declares `0.1.0`
+- **WHEN** tag `v0.1.0` is released and the projected Desktop manifest declares `0.1.0`
 - **THEN** version validation SHALL succeed
 
 #### Scenario: Prerelease version matches the numeric manifest
 
-- **WHEN** tag `v0.1.0-alpha.1` is released and every publishable VSIX manifest declares `0.1.0`
+- **WHEN** tag `v0.1.0-alpha.1` is released and the projected Desktop manifest declares `0.1.0`
 - **THEN** version validation SHALL succeed and the GitHub Release SHALL be marked prerelease
 
 #### Scenario: Manifest version differs
 
-- **WHEN** any selected publishable manifest version differs from the tag numeric base version
+- **WHEN** the projected Desktop manifest version differs from the tag numeric base version
 - **THEN** the Release workflow SHALL fail with the exact package path and observed version
 
 ### Requirement: Release publication is isolated and auditable
@@ -39,8 +41,9 @@ The Release workflow SHALL build supported-platform artifacts from the validated
 
 #### Scenario: Release artifacts are complete
 
-- **WHEN** all TypeScript extension and supported Engine packaging jobs succeed
-- **THEN** the publication job SHALL attach every VSIX and one `SHA256SUMS` file to the GitHub Release
+- **WHEN** all checks and supported Desktop packaging jobs succeed
+- **THEN** the publication job SHALL attach only the allowlisted Desktop artifacts and one
+  `SHA256SUMS` file to the GitHub Release
 
 #### Scenario: Upstream release job fails
 

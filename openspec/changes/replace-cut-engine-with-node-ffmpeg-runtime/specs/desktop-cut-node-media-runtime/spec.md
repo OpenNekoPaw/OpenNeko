@@ -1,14 +1,14 @@
-# vscode-cut-node-media-runtime Specification
+# desktop-cut-node-media-runtime Specification
 
 ## ADDED Requirements
 
 ### Requirement: Cut media ports remain runtime-neutral
 
 The system SHALL expose Cut media operations through domain-owned ports that do
-not import Engine, Node, FFmpeg, VS Code, browser transport, or generated Engine
+not import Engine, Node, FFmpeg, Electron, browser transport, or generated Engine
 DTO types.
 
-#### Scenario: Extension composes the runtime
+#### Scenario: Desktop composes the runtime
 
 - **WHEN** a Cut document is opened
 - **THEN** the composition root provides exactly one implementation of the
@@ -24,7 +24,7 @@ DTO types.
 
 ### Requirement: Node/FFmpeg owns trusted media preparation
 
-The Extension Host SHALL resolve authorized workspace media paths and use
+Desktop Main SHALL resolve authorized workspace media paths and use
 ffprobe/FFmpeg to implement probe, frame capture, waveform, preview preparation,
 PCM decoding, and export.
 
@@ -100,7 +100,7 @@ opaque loopback Range URL. The Webview SHALL assign it directly to a muted
 
 #### Scenario: VP8 qualification
 
-- **WHEN** the target VS Code/Electron Webview passes the real VP8 WebM native
+- **WHEN** the target Electron renderer passes the real VP8 WebM native
   `<video src>` fixture
 - **THEN** VP8 may use the direct WebM preparation profile
 - **ELSE** VP8 uses the explicit H.264 transcode profile
@@ -119,7 +119,7 @@ versioned framed float32 PCM delivered over loopback HTTP.
 #### Scenario: Start synchronized audio
 
 - **WHEN** a preview interval contains audible inputs
-- **THEN** the Extension creates one PCM session per audible input
+- **THEN** Desktop Main creates one PCM session per audible input
 - **AND** each descriptor reports protocol version, sample rate, channels, and
   an opaque stream URL
 - **AND** the video element remains muted
@@ -164,10 +164,10 @@ explicit timeline origin, media origin, playback rate, and active interval.
   sessions
 - **AND** it does not conceal the discontinuity with an unrelated clock
 
-### Requirement: Media bytes stay outside postMessage
+### Requirement: Media bytes stay outside typed IPC
 
 The system SHALL transfer media segments and PCM bytes through session-scoped
-loopback HTTP URLs rather than VS Code `postMessage`.
+loopback HTTP URLs rather than Desktop typed IPC.
 
 #### Scenario: Webview consumes media
 
@@ -234,7 +234,7 @@ dependency closure proves that it has no remaining owned responsibility.
 
 #### Scenario: A non-Cut consumer remains
 
-- **WHEN** Preview, Canvas, Assets, Tools, Agent, TUI, VS Code host, packaging,
+- **WHEN** Preview, Canvas, Assets, Tools, Agent, Desktop composition, packaging,
   protocol, tests, or documentation still owns an Engine dependency
 - **THEN** `packages/neko-engine` remains
 - **AND** the audit records the exact consumer and responsibility

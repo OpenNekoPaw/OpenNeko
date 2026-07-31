@@ -65,16 +65,17 @@ MUST stay in main and MUST NOT expose absolute paths or secret values to rendere
 - **AND** it does not receive environment variables, absolute workspace paths, credentials or raw
   Host port objects
 
-### Requirement: Desktop application identity MUST replace legacy Home identity
+### Requirement: Desktop application identity MUST replace retired host identities
 
-The canonical application set MUST include `neko-desktop`, `neko-tui` and `neko-vscode`.
-`neko-home` MUST NOT parse successfully or remain available as an alias or fallback. Before
+The canonical application set MUST contain only `neko-desktop`. `neko-home`, `neko-tui` and
+`neko-vscode` MUST NOT parse successfully or remain available as aliases or fallbacks. Before
 removal, all defined application storage categories MUST receive an audited migration, reuse,
 rebuild or rejection disposition.
 
-#### Scenario: Legacy Home identity reaches a new contract
+#### Scenario: Retired host identity reaches a new contract
 
-- **WHEN** an identity with application id `neko-home` is parsed after migration
+- **WHEN** an identity with application id `neko-home`, `neko-tui` or `neko-vscode` is parsed after
+  migration
 - **THEN** parsing fails with `unknown-application-identity`
 - **AND** no alias silently converts it to `neko-desktop`
 
