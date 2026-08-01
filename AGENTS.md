@@ -55,7 +55,9 @@
   - `packages/neko-types`：共享基础设施（Logger、i18n、Theme、Errors）
   - `packages/neko-media`：Node/FFmpeg 与浏览器媒体运行时
   - package-owned L0 contracts：Desktop Main/preload/renderer 跨 runtime 类型契约
-- 保留能力均位于一级 `packages/*` workspace；`apps/neko-desktop` 是唯一应用组合根。完整边界见 `docs/architecture/package-boundaries.md`。
+- 保留能力和业务逻辑均由一级 `packages/*` workspace 拥有；`apps/neko-desktop` 是唯一、薄的
+  Electron 应用组合根，只负责产品入口、信任边界、concrete adapter 与 wiring。完整边界见
+  `docs/architecture/application-composition.md` 和 `docs/architecture/package-boundaries.md`。
 
 ## 开发前先读
 
@@ -92,7 +94,9 @@
   - 宿主能力只能通过 preload 暴露的最小 typed Desktop port 使用。
   - 本地资源必须由 Desktop Main 授权，并以 opaque URL、descriptor 或短生命周期 handle 投影。
 - Renderer/Webview 包负责 UI 渲染、用户交互、可恢复展示状态、浏览器图形/GPU 能力和授权媒体流消费；不得拥有工作区文件读写、持久项目事实、权限与信任、后台任务生命周期、运行时实例状态或宿主业务编排。
-- Desktop Main 或 host-neutral domain service 负责工作区 IO、持久化、权限、生命周期和业务编排；可复用的领域逻辑应进入独立 domain core，不要把它们堆入应用组合根。
+- Desktop Main 负责 Electron trust boundary，以及工作区 IO、持久化、凭据、进程和窗口的 concrete
+  Host adapter 与资源生命周期；业务编排、领域状态和规则由 owning package 的 host-neutral/Node
+  application service 负责，不得堆入应用组合根。
 - Node/FFmpeg 媒体运行时负责宿主侧媒体探测、转码与流式读取；TypeScript owning packages 负责领域模型与编排，Renderer 不得重复实现宿主媒体逻辑。
 - 当前没有 Proto package；跨层 contract 由 owning package 的 L0 contract 或真实项目 codec 拥有。未来只有存在真实序列化 producer/consumer 时才可通过 OpenSpec 重新引入 Proto。
 - 路径系统只保存相对路径或 `${VAR}/path` 形式，避免写入绝对路径；优先复用 `PathResolver` 与现有设置机制。
@@ -112,6 +116,37 @@
 - 新增/修改 Skill 时必须补充或维护防回流测试，确保 builtin/custom skill content 不重新包含被系统提示词或子包 capability 拥有的工具协议。
 
 ## 设计与实现规范
+
+### Application root 与业务 ownership
+
+- `apps/neko-desktop` 必须保持薄应用组合根，只允许拥有 Electron app/window/view/webContents
+  生命周期、安全/CSP/protocol/fuse、Main/preload/renderer 入口、sender-bound typed IPC、原生资源
+  授权 adapter、产品 shell/presentation composition、package public port wiring、打包和真实 Electron
+  fixture。
+- 领域实体、业务状态机、业务 revision/CAS、业务错误 taxonomy、配置解析、业务校验、数据变换、
+  同步/恢复/authoring/portability workflow、Prompt/Skill/Tool/Agent workflow 策略必须进入对应一级
+  `packages/*` owning package。当前只有一个 Desktop consumer 不构成留在 `apps/*` 的理由，也不要求
+  为此建立 TUI、VS Code 或通用 multi-host framework。
+- 判断 Desktop 代码归属时必须完成五层审计：
+  1. 职责：决定 Electron/产品 shell 行为，还是决定领域结果；
+  2. 依赖：真正依赖 Electron object/sender/window identity，还是只需要可注入 port；
+  3. 接口：是否应由 package public contract/application port 表达；
+  4. 扩展：变化来自 OS/Electron，还是领域规则、provider、format 或 workflow；
+  5. 测试：authoritative test 是否必须启动 Electron。
+- 只依赖注入的 file/time/credential/process 等 port、可脱离 Electron 执行并决定业务结果的 service，
+  即使只有一个调用方，也必须下沉 owning package；Desktop 只保留边界 decode、sender/路径授权、
+  concrete port implementation、调用和结果投影。
+- 现有 `apps/neko-desktop` 中的业务实现属于待迁移架构漂移，不构成先例。新增或实质修改命中混合职责
+  文件时执行“触碰即收敛”：优先在同一 OpenSpec 下沉；无法同时迁移时，必须记录 owner、目标
+  package/public entry、阻塞、旧路径删除条件和验证任务，且不得扩大 app-owned 业务 API。
+- 跨领域业务没有明确 owner 时，先通过 OpenSpec 定义中立职责和依赖方向；禁止创建
+  `@neko/desktop-core`、Desktop manager bag、万能 facade 或平行业务 contract 收纳无归属逻辑。
+- 从 Application 层迁移业务逻辑时，必须先建立 package-owned contract/test/application service，
+  再一次性切换本次边界内调用方，并删除、poison 或 fail-closed 隔离旧 app path；禁止 compatibility
+  shim、双实现、双写或 fallback 维持两份成功路径。
+- 新增 `apps/neko-desktop` 生产模块或保留 app-local 实现时，OpenSpec、PR 或交付说明必须说明允许职责、
+  组合的 package public contract、为何必须依赖 Application 层，以及 package producer、Desktop
+  consumer、canonical path 和真实 Electron（如适用）验证证据。
 
 - 遵循“契约优先、自顶向下”顺序：
   1. 先定义类型和接口

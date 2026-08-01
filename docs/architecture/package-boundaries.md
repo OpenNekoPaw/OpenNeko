@@ -3,19 +3,20 @@
 状态：Accepted
 
 更新日期：2026-08-01
-对应变更：`replace-desktop-media-scheme-with-http-resource-gateway`
+对应变更：`replace-desktop-media-scheme-with-http-resource-gateway`、
+`enforce-thin-desktop-application-root`
 
 本文定义当前一级 workspace 的依赖方向、公共能力 owner，以及 Electron Desktop 和
 Node/FFmpeg 媒体运行时的边界。包名、入口和示例只描述当前 Electron Desktop 实现。
 
 ## 分层与依赖方向
 
-| 层级            | 主要包                                                                                                                | 可依赖                          | 不得依赖                                         |
-| --------------- | --------------------------------------------------------------------------------------------------------------------- | ------------------------------- | ------------------------------------------------ |
-| L0 host-neutral | `@neko/shared`、`@neko/content`、`@neko/entity`、`@neko/search`、`@neko/markdown`、`@neko/skills`、包自有 L0 contract | 更低层纯 contract/utility       | Electron、React、应用根、功能包内部实现          |
-| L1 host/runtime | `@neko/host`、`@neko/media`、各功能包 host-neutral core/platform                                                      | L0、明确 runtime dependency     | React/Webview 实现、`apps/*`、其他功能包内部实现 |
-| L2 browser UI   | `@neko/ui`、一级 `*-webview` package、`neko-assets`                                                                   | L0、L2 公共 UI、包自有 contract | Electron、Node-only API、本地文件路径            |
-| Application     | `apps/neko-desktop`                                                                                                   | package public entries          | `packages/*/src`、应用级领域副本                 |
+| 层级            | 主要包                                                                                                                | 可依赖                          | 不得依赖                                                         |
+| --------------- | --------------------------------------------------------------------------------------------------------------------- | ------------------------------- | ---------------------------------------------------------------- |
+| L0 host-neutral | `@neko/shared`、`@neko/content`、`@neko/entity`、`@neko/search`、`@neko/markdown`、`@neko/skills`、包自有 L0 contract | 更低层纯 contract/utility       | Electron、React、应用根、功能包内部实现                          |
+| L1 host/runtime | `@neko/host`、`@neko/media`、各功能包 host-neutral core/platform                                                      | L0、明确 runtime dependency     | React/Webview 实现、`apps/*`、其他功能包内部实现                 |
+| L2 browser UI   | `@neko/ui`、一级 `*-webview` package、`neko-assets`                                                                   | L0、L2 公共 UI、包自有 contract | Electron、Node-only API、本地文件路径                            |
+| Application     | `apps/neko-desktop`                                                                                                   | package public entries          | `packages/*/src`、应用级领域/contract 副本、业务状态机/策略/事务 |
 
 依赖必须自上而下组合：
 
@@ -31,6 +32,11 @@ Node media adapter -> FFmpeg/ffprobe process
 ```
 
 任何跨层消息都先定义类型化 contract；任何跨包复用都走 public entry、port、facade command 或明确 adapter，不直接导入另一个包的内部实现。
+
+一级 package 首先表达 owning responsibility，不以发布范围、消费者数量或 Host 数量为前提。领域规则、
+业务状态机、配置解析、业务校验、数据变换、同步/恢复/authoring/portability workflow 即使只有 Desktop
+一个调用方，也必须由对应 `packages/*` owner 持有。只有跨两个以上相同语义和生命周期的 package
+复用，才需要进一步提升到共享层；“不应过早共享”不等于“可以把业务逻辑放进 apps”。
 
 ## 公共包职责
 
@@ -105,9 +111,11 @@ runtime 入口。
 
 ## Desktop Main 与 preload
 
-Desktop Main 拥有文件、凭据、外部进程、窗口和后台资源生命周期：
+Desktop Main 拥有 Electron trust boundary、文件/凭据/外部进程的具体授权 adapter、窗口和后台宿主
+资源生命周期，但不拥有使用这些资源作出领域决策的业务流程：
 
 - 组合 package public entry，并为每个窗口/编辑器实例创建显式 runtime；
+- 解析 typed IPC、绑定 sender/instance identity，并调用 owning package public application port；
 - 在 owning service 解析 `ContentLocator` 后，把 exact seekable byte source、one-shot PCM 或
   frozen resource set 注册到 app-lifetime Desktop exact-resource registry；
 - 为 Window/View/session/renderer-epoch/generation 注册和撤销 opaque resource，并绑定允许的
@@ -115,9 +123,18 @@ Desktop Main 拥有文件、凭据、外部进程、窗口和后台资源生命�
 - 通过领域窄 port 编排 `@neko/media/node` 操作；
 - 在窗口关闭、取消和应用退出路径显式释放资源。
 
+若逻辑只需要注入的 file/time/credential/process port，而不需要 Electron object 或 sender/window
+identity，并负责业务结果、状态、错误或恢复策略，它属于 owning package 的 host-neutral 或 Node
+application service。Desktop 只保留 port implementation、产品 wiring 和结果投影。不得以 Desktop-only
+为理由在 Main 中保留领域实现，也不得建立宽泛 `desktop-core`、manager bag 或第二套 contract。
+
 preload 只向已授权 sender 投影最小 typed IPC port，不暴露通用 `ipcRenderer`、文件系统、
 shell、process handle 或任意 channel。Desktop Main 不导入 React、不复制媒体计算，也不
 中继高频视频帧或 PCM。
+
+当前 `apps/neko-desktop` 仍存在部分业务职责与 Host adapter 混合的已知漂移；稳定边界以本文为准，
+候选清单和迁移进度见活跃 OpenSpec `enforce-thin-desktop-application-root`。现有文件不能作为新增
+app-owned 业务逻辑的架构先例。
 
 文件发现边界：
 
