@@ -90,7 +90,12 @@ const config: KnipConfig = {
     },
     'packages/neko-media': {},
     'packages/neko-chara': {
-      entry: ['src/index.ts', 'src/application/index.ts', 'src/core/index.ts', 'src/testing/index.ts'],
+      entry: [
+        'src/index.ts',
+        'src/application/index.ts',
+        'src/core/index.ts',
+        'src/testing/index.ts',
+      ],
     },
     'packages/neko-generation': {},
     'packages/neko-quality': {},
@@ -134,7 +139,11 @@ const config: KnipConfig = {
 
     'packages/neko-assets': {},
     'packages/neko-cut-webview': {
-      entry: ['src/host-adapter/index.tsx', 'src/retained.ts'],
+      entry: [
+        'functional/desktop-openneko-consumer.mjs',
+        'src/host-adapter/index.tsx',
+        'src/retained.ts',
+      ],
     },
     'apps/neko-desktop': {
       entry: [
@@ -172,6 +181,7 @@ const config: KnipConfig = {
     'packages/neko-agent-test-utils': {},
     'packages/neko-canvas-webview': {
       entry: [
+        'functional/desktop-openneko-consumer.mjs',
         'src/host-adapter/index.tsx',
         'src/main.tsx',
         'src/root.tsx',
@@ -198,6 +208,7 @@ const config: KnipConfig = {
     },
     'packages/neko-preview-webview': {
       entry: [
+        'functional/desktop-openneko-consumer.mjs',
         'scripts/three-reference-preset-feasibility.mts',
         'src/audio/main.tsx',
         'src/video/main.tsx',

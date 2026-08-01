@@ -29,7 +29,7 @@ export async function connectDesktopCdp(options) {
   throw new Error(`Desktop CDP target was not ready before timeout.${detail}`);
 }
 
-export class CdpClient {
+class CdpClient {
   static async connect(url, WebSocketImpl = WebSocket) {
     const socket = new WebSocketImpl(url);
     await new Promise((resolve, reject) => {

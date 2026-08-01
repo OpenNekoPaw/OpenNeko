@@ -46,11 +46,11 @@
 - [x] 6.1 Add an isolated synthetic OpenNeko qualification scenario for H.264/WAV metadata, play, seek, Range, SHA-256, changing Canvas pixels, repeated WebGL texture upload and cleanup.
 - [x] 6.2 Qualify one-shot PCM and client/owner cancellation through the OpenNeko handler.
 - [x] 6.3 Qualify image, PDF, GLB and external-resource glTF plus sender isolation between two WebContents.
-- [ ] 6.4.1 Extend the shared isolated Desktop functional runner with CDP control, console/network capture, timeout, redacted reports, deterministic cleanup, legacy/loopback poison and development/packaged launch targets.
-- [ ] 6.4.2 Run package-owned real Electron Cut and Canvas scenarios proving their actual Roots, changing/advancing native or PCM consumers, seek/generation/release, no ordinary Canvas PCM and two-View isolation.
-- [ ] 6.4.3 Run package-owned real Electron Preview scenarios proving the actual image/audio/video/PDF/GLB/glTF viewers, frozen dependency sets and exact session release.
-- [ ] 6.4.4 Drive the real Desktop Agent complete-session input path through Pi Tool result, Timeline/conversation projection and the package-owned media card; prove the render URL never enters provider/Tool facts, or preserve the exact provider/model/cost infrastructure blocker without mock/direct injection.
-- [ ] 6.4.5 Aggregate the development and applicable packaged consumer reports, prove the OpenNeko handler and package-owned consumers were hit, and prove every poisoned HTTP/legacy/fallback path remained untouched.
+- [x] 6.4.1 Extend the shared isolated Desktop functional runner with CDP control, console/network capture, timeout, redacted reports, deterministic cleanup, legacy/loopback poison and development/packaged launch targets.
+- [x] 6.4.2 Run package-owned real Electron Cut and Canvas scenarios proving their actual Roots, changing/advancing native or PCM consumers, seek/generation/release, no ordinary Canvas PCM and two-View isolation.
+- [x] 6.4.3 Run package-owned real Electron Preview scenarios proving the actual image/audio/video/PDF/GLB/glTF viewers, frozen dependency sets and exact session release.
+- [x] 6.4.4 Drive the real Desktop Agent complete-session input path through Pi Tool result, Timeline/conversation projection and the package-owned media card; prove the render URL never enters provider/Tool facts, or preserve the exact provider/model/cost infrastructure blocker without mock/direct injection.
+- [x] 6.4.5 Aggregate the development and applicable packaged consumer reports, prove the OpenNeko handler and package-owned consumers were hit, and prove every poisoned HTTP/legacy/fallback path remained untouched.
 - [x] 6.5 Run packaged `darwin-arm64`; keep native `win32-x64` typecheck/package green and record graphical Windows qualification as Phase 2.
 
 ## 7. Documentation And Quality Gates
@@ -59,5 +59,5 @@
 - [x] 7.2 Update evaluation evidence, preserving the prior HTTP spike only as non-canonical feasibility history.
 - [x] 7.3 Run focused `@neko/media`, Desktop, Cut, Canvas, Preview and Agent tests/typechecks.
 - [x] 7.3.1 Include Desktop functional `.mjs` sources in Prettier and ESLint gates, retire obsolete ignore entries, and synchronize local qualification commands in Desktop documentation.
-- [ ] 7.4 Run `pnpm build`, `pnpm test`, `pnpm check`, `pnpm check:quality`, `pnpm check:legacy-debt`, `pnpm check:unused` and `pnpm test:agent:eval`.
-- [ ] 7.5 Run `pnpm package:desktop`, applicable Electron functional matrices and `neko-quality-review`; record remaining HDR, Windows media and Agent-driver risks.
+- [x] 7.4 Run `pnpm build`, `pnpm test`, `pnpm check`, `pnpm check:quality`, `pnpm check:legacy-debt`, `pnpm check:unused` and `pnpm test:agent:eval`.
+- [x] 7.5 Run `pnpm package:desktop`, applicable Electron functional matrices and `neko-quality-review`; record remaining HDR, Windows media and Agent-driver risks.

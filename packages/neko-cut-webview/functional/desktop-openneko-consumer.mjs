@@ -21,7 +21,14 @@ export const cutOpenNekoConsumerScenario = Object.freeze({
     );
     return { workspacePath, media, documentId: 'edits/qualification.otio' };
   },
-  async run({ click, evaluate, prepared, waitForSelector }) {
+  async run({
+    checkpoint,
+    click,
+    evaluate,
+    prepared,
+    readOpenNekoResourceRequests,
+    waitForSelector,
+  }) {
     await openFixtureWorkspace(evaluate);
     await replaceWorkbench(
       evaluate,
@@ -48,20 +55,43 @@ export const cutOpenNekoConsumerScenario = Object.freeze({
     );
     await waitForSelector('[data-owner-root="cut"] [data-testid="cut-preview-toggle-playback"]');
     await waitForCutReady(evaluate);
+    checkpoint('cut-ready');
     await evaluate(`(() => {
       window.__openNekoCutClickEvidence = [];
       document.querySelector('[data-testid="cut-preview-toggle-playback"]')?.addEventListener(
-        'click',
-        (event) => window.__openNekoCutClickEvidence.push({ trusted: event.isTrusted }),
+        'click', (event) => window.__openNekoCutClickEvidence.push({
+          kind: 'playback-toggle',
+          trusted: event.isTrusted,
+        }),
       );
+      document.querySelector('.cut-basic-ruler')?.addEventListener('pointerdown', (event) => {
+        const rect = event.currentTarget.getBoundingClientRect();
+        window.__openNekoCutClickEvidence.push({
+          kind: 'ruler-seek',
+          trusted: event.isTrusted,
+          ratio: (event.clientX - rect.left) / rect.width,
+        });
+      });
       return true;
     })()`);
     await click('[data-testid="cut-preview-toggle-playback"]');
     const playing = await waitForCutPlayback(evaluate);
-    await click('[data-testid="cut-preview-toggle-playback"]');
-    await click('[data-cut-track-id="audio-1"]', 0, { xRatio: 0.32 });
-    const seeked = await waitForCutSeek(evaluate, playing.url);
+    checkpoint('cut-playing', { startTime: playing.startTime, endTime: playing.endTime });
+    const requestsBeforeSeek = new Set(readOpenNekoResourceRequests());
+    await click('.cut-basic-ruler', 0, { xRatio: 0.25 });
+    const seekOutput = await evaluate(
+      `document.querySelector('.cut-preview-controls output')?.textContent`,
+    );
+    checkpoint('cut-seek-clicked', { output: seekOutput });
+    const seeked = await waitForCutPausedSeek(
+      evaluate,
+      playing.url,
+      requestsBeforeSeek,
+      readOpenNekoResourceRequests,
+    );
+    checkpoint('cut-seek-ready', { currentTime: seeked.currentTime });
     const releasedStatus = await waitForReleasedUrl(evaluate, playing.url);
+    checkpoint('cut-generation-released');
     return {
       ownerRoot: 'cut',
       nativeVideo: true,
@@ -71,6 +101,7 @@ export const cutOpenNekoConsumerScenario = Object.freeze({
       seekedTo: seeked.currentTime,
       generationChanged: seeked.url !== playing.url,
       releasedStatus,
+      trustedInteractions: seeked.clickEvidence,
     };
   },
   assertObservation(observation, evidence) {
@@ -85,6 +116,16 @@ export const cutOpenNekoConsumerScenario = Object.freeze({
     }
     if (!evidence.generationChanged || evidence.releasedStatus !== 0) {
       throw new Error('Cut seek did not replace and release its prior generation.');
+    }
+    if (
+      !evidence.trustedInteractions?.some(
+        (interaction) => interaction.kind === 'playback-toggle' && interaction.trusted,
+      ) ||
+      !evidence.trustedInteractions?.some(
+        (interaction) => interaction.kind === 'ruler-seek' && interaction.trusted,
+      )
+    ) {
+      throw new Error('Cut scenario did not reach package controls through trusted UI events.');
     }
   },
 });
@@ -116,6 +157,38 @@ async function waitForCutPlayback(evaluate) {
   );
 }
 
+async function waitForCutPausedSeek(evaluate, previousUrl, requestsBeforeSeek, readRequests) {
+  const deadline = Date.now() + 30_000;
+  let last;
+  while (Date.now() < deadline) {
+    const hasNewRequest = readRequests().some(
+      (url) => url !== previousUrl && !requestsBeforeSeek.has(url),
+    );
+    if (hasNewRequest) {
+      const sample = await evaluate(cutVideoSeekSampleExpression());
+      last = sample;
+      const seekedVideo = sample?.videos?.find(
+        (video) =>
+          video.url?.startsWith('openneko://resource/') &&
+          !requestsBeforeSeek.has(video.url) &&
+          video.currentTime > 1 &&
+          video.paused,
+      );
+      if (seekedVideo && sample.output?.startsWith('00:02.')) {
+        return {
+          ...seekedVideo,
+          output: sample.output,
+          clickEvidence: sample.clickEvidence,
+        };
+      }
+    }
+    await delay(100);
+  }
+  throw new Error(
+    `Cut package-owned paused seek did not publish a replacement generation: ${JSON.stringify(last)}`,
+  );
+}
+
 async function waitForCutReady(evaluate) {
   const deadline = Date.now() + 30_000;
   while (Date.now() < deadline) {
@@ -130,24 +203,30 @@ async function waitForCutReady(evaluate) {
   throw new Error('Cut package-owned OTIO View did not become ready before timeout.');
 }
 
-async function waitForCutSeek(evaluate, previousUrl) {
-  const deadline = Date.now() + 30_000;
-  let last;
-  while (Date.now() < deadline) {
-    const sample = await evaluate(cutVideoSampleExpression());
-    last = sample;
-    if (
-      sample?.url?.startsWith('openneko://resource/') &&
-      sample.url !== previousUrl &&
-      sample.currentTime > 1
-    ) {
-      return sample;
-    }
-    await delay(100);
-  }
-  throw new Error(
-    `Cut package-owned seek did not publish a replacement generation: ${JSON.stringify(last)}`,
-  );
+function cutVideoSeekSampleExpression() {
+  return `(() => {
+    const root = document.querySelector('[data-owner-root="cut"]');
+    const videos = [...document.querySelectorAll('[data-owner-root="cut"] video')];
+    const video = videos.find(
+      (candidate) => candidate.getAttribute('aria-hidden') !== 'true' && candidate.src,
+    );
+    return {
+      url: video?.src,
+      currentSrc: video?.currentSrc,
+      currentTime: video?.currentTime,
+      readyState: video?.readyState,
+      paused: video?.paused,
+      output: root?.querySelector('.cut-preview-controls output')?.textContent,
+      clickEvidence: window.__openNekoCutClickEvidence,
+      videos: videos.map((candidate) => ({
+        url: candidate.src,
+        currentTime: candidate.currentTime,
+        readyState: candidate.readyState,
+        paused: candidate.paused,
+        ariaHidden: candidate.getAttribute('aria-hidden'),
+      })),
+    };
+  })()`;
 }
 
 async function waitForReleasedUrl(evaluate, url) {
@@ -164,14 +243,25 @@ function cutVideoSampleExpression() {
   return `(() => {
     const root = document.querySelector('[data-owner-root="cut"]');
     const videos = [...document.querySelectorAll('[data-owner-root="cut"] video')];
-    const video = videos.find((candidate) => candidate.getAttribute('aria-hidden') !== 'true' && candidate.src);
+    const video = videos.find((candidate) => !candidate.paused && candidate.src) ??
+      videos.find((candidate) => candidate.getAttribute('aria-hidden') !== 'true' && candidate.src) ??
+      videos.find((candidate) => candidate.src);
     const button = root?.querySelector('[data-testid="cut-preview-toggle-playback"]');
     if (!(video instanceof HTMLVideoElement)) return {
       videoCount: videos.length,
       buttonLabel: button?.getAttribute('aria-label'),
       alerts: [...(root?.querySelectorAll('[role="alert"]') ?? [])].map((item) => item.textContent),
       output: root?.querySelector('.cut-preview-controls output')?.textContent,
+      toasts: [...(root?.querySelectorAll('[role="status"]') ?? [])].map((item) => item.textContent),
       clickEvidence: window.__openNekoCutClickEvidence,
+      videos: videos.map((candidate) => ({
+        url: candidate.src,
+        currentTime: candidate.currentTime,
+        readyState: candidate.readyState,
+        paused: candidate.paused,
+        errorCode: candidate.error?.code,
+        ariaHidden: candidate.getAttribute('aria-hidden'),
+      })),
     };
     if (video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) return {
       url: video.src,
@@ -181,6 +271,8 @@ function cutVideoSampleExpression() {
       paused: video.paused,
       errorCode: video.error?.code,
       buttonLabel: button?.getAttribute('aria-label'),
+      output: root?.querySelector('.cut-preview-controls output')?.textContent,
+      toasts: [...(root?.querySelectorAll('[role="status"]') ?? [])].map((item) => item.textContent),
       clickEvidence: window.__openNekoCutClickEvidence,
       frame: video.getVideoPlaybackQuality().totalVideoFrames,
     };
@@ -193,6 +285,8 @@ function cutVideoSampleExpression() {
       paused: video.paused,
       errorCode: video.error?.code,
       buttonLabel: button?.getAttribute('aria-label'),
+      output: root?.querySelector('.cut-preview-controls output')?.textContent,
+      toasts: [...(root?.querySelectorAll('[role="status"]') ?? [])].map((item) => item.textContent),
       clickEvidence: window.__openNekoCutClickEvidence,
       frame,
     };

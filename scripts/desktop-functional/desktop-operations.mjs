@@ -94,15 +94,6 @@ export async function openPreviewResource(evaluate, portablePath) {
   })()`);
 }
 
-export async function closeCurrentPreview(evaluate) {
-  return evaluate(`(async () => {
-    const button = document.querySelector('.neko-preview-root__actions button:last-child');
-    if (!(button instanceof HTMLButtonElement)) throw new Error('Preview close action is missing.');
-    button.click();
-    return true;
-  })()`);
-}
-
 export async function readFetchStatus(evaluate, url) {
   return evaluate(`(async () => {
     const controller = new AbortController();

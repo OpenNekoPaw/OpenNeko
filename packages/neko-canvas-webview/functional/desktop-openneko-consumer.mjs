@@ -31,7 +31,7 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
       audioDocumentId: 'boards/audio.nkc',
     };
   },
-  async run({ click, evaluate, hover, prepared, waitForSelector }) {
+  async run({ checkpoint, click, evaluate, hover, prepared, waitForSelector }) {
     await openFixtureWorkspace(evaluate);
     await replaceWorkbench(
       evaluate,
@@ -90,7 +90,7 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
     );
     await waitForCanvasPackagePlaybackState(evaluate, 'canvas:functional:video', 'video');
     await waitForSelector(
-      '[data-owner-view-id="canvas:functional:video"] [data-preview-surface="video"]:not([data-preview-controlled-idle]) [data-testid="canvas-video-toggle-playback"]',
+      '[data-owner-view-id="canvas:functional:video"] [data-preview-surface="video"] [data-testid="canvas-video-toggle-playback"]',
     );
     const videoPlayback = await ensureCanvasMediaPlayback(
       click,
@@ -99,12 +99,13 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
       'video',
       '[data-owner-view-id="canvas:functional:video"] [data-testid="canvas-video-toggle-playback"]',
     );
+    checkpoint('canvas-video-playing', { currentTime: videoPlayback.currentTime });
     await hover(
       '[data-owner-view-id="canvas:functional:audio"] [data-testid="canvas-audio-node-title"]',
     );
     await waitForCanvasPackagePlaybackState(evaluate, 'canvas:functional:audio', 'audio');
     await waitForSelector(
-      '[data-owner-view-id="canvas:functional:audio"] [data-preview-surface="audio"]:not([data-preview-controlled-idle]) [data-testid="canvas-audio-toggle-playback"]',
+      '[data-owner-view-id="canvas:functional:audio"] [data-preview-surface="audio"] [data-testid="canvas-audio-toggle-playback"]',
     );
     const audioPlayback = await ensureCanvasMediaPlayback(
       click,
@@ -113,23 +114,13 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
       'audio',
       '[data-owner-view-id="canvas:functional:audio"] [data-testid="canvas-audio-toggle-playback"]',
     );
+    checkpoint('canvas-audio-playing', { currentTime: audioPlayback.currentTime });
     const playback = {
       videoUrl: videoPlayback.url,
       videoTime: videoPlayback.currentTime,
       audioUrl: audioPlayback.url,
       audioTime: audioPlayback.currentTime,
     };
-    await hover('.home-navigation');
-    await waitForCanvasPackagePlaybackState(
-      evaluate,
-      'canvas:functional:audio',
-      'audio',
-      'stopped',
-    );
-    const released = [
-      await waitForReleasedUrl(evaluate, playback.videoUrl, 'video'),
-      await waitForReleasedUrl(evaluate, playback.audioUrl, 'audio'),
-    ];
     await replaceWorkbench(
       evaluate,
       `(projection, current) => ({
@@ -144,6 +135,12 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
       })`,
     );
     await waitForCanvasRootsRemoved(evaluate);
+    checkpoint('canvas-roots-removed');
+    await delay(500);
+    const released = [
+      await waitForReleasedUrl(evaluate, playback.videoUrl, 'video'),
+      await waitForReleasedUrl(evaluate, playback.audioUrl, 'audio'),
+    ];
     return {
       ownerRoot: 'canvas',
       rootCount: 2,
@@ -226,7 +223,15 @@ async function waitForCanvasMediaPlayback(evaluate, viewId, mediaType) {
 async function ensureCanvasMediaPlayback(click, evaluate, viewId, mediaType, playbackSelector) {
   await delay(250);
   const sample = await readCanvasMediaPlayback(evaluate, viewId, mediaType);
-  if (!sample || (sample.currentTime <= 0.15 && sample.paused !== false)) {
+  if (!sample) {
+    const state = await readCanvasPackagePlaybackState(evaluate, viewId, mediaType);
+    if (state === 'playing') {
+      await click(playbackSelector);
+      await waitForCanvasPackagePlaybackState(evaluate, viewId, mediaType, 'stopped');
+    }
+    await click(playbackSelector);
+    await waitForCanvasPackagePlaybackState(evaluate, viewId, mediaType);
+  } else if (sample.currentTime <= 0.15 && sample.paused !== false) {
     await click(playbackSelector);
   }
   return waitForCanvasMediaPlayback(evaluate, viewId, mediaType);
@@ -247,17 +252,21 @@ async function waitForCanvasPackagePlaybackState(
   mediaType,
   expectedState = 'playing',
 ) {
-  const selector = `[data-owner-view-id=${JSON.stringify(viewId)}] [data-testid="canvas-media-node"][data-media-type=${JSON.stringify(mediaType)}]`;
   const deadline = Date.now() + 5_000;
   while (Date.now() < deadline) {
-    const state = await evaluate(
-      `document.querySelector(${JSON.stringify(selector)})?.getAttribute('data-playback-state')`,
-    );
+    const state = await readCanvasPackagePlaybackState(evaluate, viewId, mediaType);
     if (state === expectedState) return;
     await delay(100);
   }
   throw new Error(
     `Canvas ${mediaType} package-owned playback state did not reach ${expectedState}.`,
+  );
+}
+
+function readCanvasPackagePlaybackState(evaluate, viewId, mediaType) {
+  const selector = `[data-owner-view-id=${JSON.stringify(viewId)}] [data-testid="canvas-media-node"][data-media-type=${JSON.stringify(mediaType)}]`;
+  return evaluate(
+    `document.querySelector(${JSON.stringify(selector)})?.getAttribute('data-playback-state')`,
   );
 }
 

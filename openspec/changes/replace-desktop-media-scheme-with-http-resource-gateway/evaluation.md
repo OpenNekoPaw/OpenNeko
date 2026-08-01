@@ -42,12 +42,14 @@
 
 - Key-free validation: run `pnpm test:agent:eval` and the focused indexed case dry-run after updating
   the suite/coverage index.
-- Real case: run the same focused case through the Desktop-owned complete-session driver when it
-  exists, with report under gitignored `reports/agent-eval/`.
-- Current infrastructure blocker: repository documentation states that Desktop does not yet expose
-  a complete-session Evaluation driver. Until that exists, the provider-backed case MUST be recorded
-  as `infrastructure-blocked`; key-free validation, direct turn injection or mock output is not
-  acceptance.
+- Real case: run the same focused case through the Desktop-owned complete-session driver with report
+  under gitignored `reports/agent-eval/` after an operator explicitly approves the exact provider,
+  model, credential environment and cost.
+- Current infrastructure blocker: the fixture-only sender-bound complete-session driver and the
+  `locator-backed-display-projection` Electron sample path now exist, but this run has no explicit
+  provider/model/credential-environment/cost authorization. The focused command therefore returns
+  `infrastructure-blocked` before Desktop launch; key-free validation, direct turn injection or mock
+  output is not acceptance.
 - Real Electron media-card rendering, Range request and legacy-path poison evidence belongs to the
   isolated Desktop functional scenario, not to a Judge.
 
@@ -137,27 +139,100 @@ consumer 已通过，也不能作为恢复 HTTP fallback 的依据。
   `OpenNeko-darwin-arm64/OpenNeko.app` package. The Desktop platform contract keeps native
   `darwin-arm64` and `win32-x64` typecheck/package jobs and rejects unsupported targets; the
   Windows package itself was not executable on this macOS host.
-- Passed: `pnpm check`, `pnpm check:quality`, `pnpm check:legacy-debt`,
-  `pnpm check:unused` and `pnpm test:agent:eval`. The Agent gate passed 35 files / 237 tests and
-  all 22 suites / 51 key-free dry-run cases.
-- Blocked outside this transport primitive: package-owned Cut/Canvas/Preview/Agent real Electron
-  functional matrices have no current automated Desktop complete-session fixture. Generic native
-  element qualification is not counted as those package-owned scenarios.
-- Repository-wide `pnpm test` ran and failed only
-  `apps/neko-desktop/src/renderer-styles.test.ts:119`, where the concurrent Global Library UI
-  change removed the old header padding expected by the test. The media-focused Desktop matrix
-  passed 12 files / 106 tests, and the full Desktop run passed the other 427 tests.
-- The known repository-wide Desktop renderer-style failure concerns the concurrent Global Library
-  header CSS working-tree change and is not counted as media evidence.
+- Final stable-worktree reruns passed `pnpm build`, `pnpm test`, `pnpm check`,
+  `pnpm check:quality`, `pnpm check:legacy-debt`, `pnpm check:unused` and
+  `pnpm test:agent:eval`. Agent Evaluation reported 37 files / 245 tests and all 22 suites / 51
+  key-free dry-run cases. The repository-wide Desktop result was 77 files / 454 tests.
+- The previously failing Global Library style assertion was a stale compact-layout expectation from
+  before the package-owned aligned management layout. Its test now protects the current width,
+  spacing, control size and loading-state contract; the focused regression and final full test pass.
+- Passed: package-owned Cut, Canvas and Preview real Electron matrices in both development and the
+  freshly rebuilt `darwin-arm64` package. The Agent fixture-only complete-session path is implemented;
+  the provider-backed execution remains blocked only on explicit provider/model/credential/cost
+  authorization. Generic native-element qualification and direct turn injection are not counted as
+  Agent acceptance.
+- The final `darwin-arm64` package exposed a sandbox-preload regression before acceptance: the new
+  Agent facts result parser imported host-only `node:crypto`, so Electron could not project
+  `window.openNekoDesktop` and the renderer failed while reading `bootstrap`. The facts contract now
+  performs a pure structural parse in preload while Main retains authoritative SHA-256 validation;
+  the preload build fails if any `require("node:*")` appears. The rebuilt package and all three
+  package-owned matrices pass.
 
 ## Residual Risk
 
-- Until a Desktop complete-session driver is available, real provider-backed Agent projection
-  evidence remains blocked even if all deterministic and Electron media scenarios pass.
+- Until the exact provider, model, credential environment and cost are explicitly authorized, real
+  provider-backed Agent projection evidence remains blocked even though the complete-session driver
+  and package-owned scenario path are available.
+- The separate Desktop Agent evaluation-matrix change still owns reload/reconnect, application
+  restart, multi-worker isolation and full repeated-matrix orchestration. Those broader driver
+  controls are not claimed by this single authorized Tool-result display scenario.
 - Native Windows typecheck/package and graphical media/GPU qualification were not run on this
   `darwin-arm64` host. The workflow contract was validated, but Windows runtime behavior remains
   Phase 2.
 - HDR display output and zero-copy remain respectively `not-qualified` and `not-measured`.
+- Preview matrices can still record two non-fatal Agent handler warnings for broadcast
+  `document:statusUpdate` / `document:saveState` messages. They produced no console error, Renderer
+  exception, fallback request or media failure, but the Agent message-routing owner should remove
+  this warning noise independently of the media change.
 - Agent Bash remains outside ordinary product capability. Any future change that grants or reroutes
   shell execution requires its own Tool/permission Evaluation decision rather than reusing this
   display case.
+
+## Package-Owned Desktop Functional Verification (2026-08-01)
+
+- The shared isolated Desktop runner now owns CDP control, trusted pointer actions, console/network
+  capture, abortable bounded operations, revoked-exception reconciliation, checkpoints, legacy and
+  loopback request poison, redacted reports, process-group cleanup with TERM/KILL escalation, and
+  development/packaged launch. Package scenarios continue to own fixtures, user operations and
+  domain assertions.
+- The final development matrix passed:
+  - `cut-openneko-consumer`: 4 OpenNeko requests, 1 PCM response, advancing decoded video and mixed
+    PCM, trusted playback/ruler operations, seek across clips, generation replacement and stale URL
+    rejection.
+  - `canvas-openneko-consumer`: 5 OpenNeko requests, 0 PCM responses, two real Canvas Roots with
+    isolated locator-backed native video/audio playback and Host-authoritative View teardown.
+  - `preview-openneko-consumer`: 16 OpenNeko requests across image/audio/video/PDF/GLB/glTF; the
+    external glTF dependency was requested separately and every Preview session was released.
+- The final rebuilt `darwin-arm64` package passed the same Cut/Canvas/Preview matrix with 4, 4 and
+  15 OpenNeko requests respectively. All six final reports recorded zero poisoned requests, console
+  errors and renderer exceptions. The final packaged reports were written at
+  `2026-08-01T15-47-50.476Z`, `2026-08-01T15-47-55.405Z` and
+  `2026-08-01T15-47-58.175Z`; raw reports remain gitignored under
+  `reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/`.
+- The final aggregation re-read the latest passed report for each scenario/target pair and rejected
+  missing OpenNeko handler requests, any poisoned request, console error or renderer exception. The
+  development counts were Cut `4` / Canvas `5` / Preview `16`; packaged counts were Cut `4` /
+  Canvas `4` / Preview `15`. Cut alone recorded the expected one-shot PCM response in each target.
+  The Agent entry is the separately retained exact authorization blocker above, not a fabricated
+  consumer success.
+- The packaged Preview matrix exposed and fixed two production-only defects: the Desktop Preview
+  surface had no Workbench height contract, and the OpenNeko desktop asset handler returned the
+  pdf.js `.mjs` worker with an invalid binary MIME type. CSP now permits only same-origin workers.
+- The Canvas matrix exposed and fixed missing Host reconciliation for removed Canvas Views. AppHost
+  now reconciles Canvas alongside Preview and Cut, and Canvas media cleanup remains keyed by exact
+  Window/View identity.
+- The final development Cut teardown exposed a Main-process crash when a normal resource release
+  aborted an active FFmpeg PCM stream. The registry cancellation was correct; the Cut PCM framing
+  path had not consumed the source stdout error produced by the aborted process. The Cut adapter now
+  follows the existing media-runtime contract: cancellation ends the framed stream, non-cancellation
+  errors propagate explicitly and the aborted completion settles without an uncaught exception. A
+  focused regression, the rebuilt package matrix and the development matrix all passed afterward.
+- Cut's native-video regression also protects element ownership: a superseded client cannot clear a
+  newer client's source on the same `<video>` element. The functional scenario samples both
+  double-buffer slots by actual playback/generation identity rather than presentation timing.
+- Agent remains provider-unqualified. The fixture-only driver now launches the real Desktop, creates
+  the conversation through the public renderer/preload bridge, submits through the sender-bound
+  controller, waits for terminal idle, reads bounded product facts, asserts the package-owned Agent
+  card/OpenNeko request and closes with disposal facts. This run has no explicit provider/model/
+  credential-environment/cost authorization, so no Desktop or provider was launched. No credential
+  discovery, direct turn injection, fabricated Tool result or mock final answer was used.
+- Focused blocker command:
+  `node scripts/agent-eval/local-run.mjs --mode focused --suite agent-runtime.stream-delivery --case locator-backed-display-projection --report-root reports/agent-eval/media-agent-6.4.4`.
+  It returned `infrastructure-blocked`: `Real Desktop Agent evaluation requires explicit provider,
+model, credential environment and cost authorization.` Raw summary remains gitignored at
+  `reports/agent-eval/media-agent-6.4.4/local-run-summary.json`.
+- Final high-risk quality review classified the change as Desktop IPC/preload, media-runtime and
+  release-path risk. It found no remaining actionable defect after the PCM cancellation,
+  sandbox-preload and stale Global Library assertion fixes. Deterministic tests, architecture gates,
+  the final native package and applicable Electron matrices pass; only the explicitly documented
+  provider authorization and platform/measurement residual risks remain.

@@ -23,7 +23,3 @@ export function resolveDesktopFunctionalScenarios(value) {
   }
   return [scenario];
 }
-
-export function listDesktopFunctionalScenarioIds() {
-  return [...scenarios.keys()];
-}

@@ -47,7 +47,9 @@ export const previewOpenNekoConsumerScenario = Object.freeze({
         releasedStatuses.push(await waitForReleasedUrl(evaluate, url));
       }
       const reportDetail = Object.fromEntries(
-        Object.entries(detail).filter(([key]) => key !== 'sourceUrl'),
+        Object.entries(detail).filter(
+          ([key]) => !['sourceUrl', 'alertText', 'statusText', 'rootText'].includes(key),
+        ),
       );
       viewers.push({
         key: definition.key,
