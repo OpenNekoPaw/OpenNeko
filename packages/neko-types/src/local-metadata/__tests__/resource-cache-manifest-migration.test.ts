@@ -75,7 +75,7 @@ describe('legacy ResourceCache manifest migration', () => {
       verifiedVariantCount: 0,
       unrecoverable: [],
     });
-    expect(report.sourceDiagnostic).toMatch(/ResourceRef.*invalidated/u);
+    expect(report.sourceDiagnostic).toMatch(/version 1.*invalidated/u);
     await expect(access(report.backupPath ?? '')).resolves.toBeUndefined();
     await expect(access(report.archivedPath ?? '')).resolves.toBeUndefined();
     expect(JSON.parse(await readFile(report.backupPath ?? '', 'utf8'))).toEqual(legacyManifest);

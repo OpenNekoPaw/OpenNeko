@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
   MEDIA_DIFF_SCHEMA_VERSION,
@@ -7,6 +8,13 @@ import {
 } from './index';
 
 describe('media diff contracts', () => {
+  it('keeps media descriptors transport-neutral', () => {
+    const source = readFileSync(new URL('./index.ts', import.meta.url), 'utf8');
+
+    expect(source).not.toMatch(/\btransport\s*:\s*['"]http['"]/u);
+    expect(source).not.toMatch(/\bMediaTransport\b/u);
+  });
+
   it('recognizes only retained media kinds', () => {
     expect(getMediaType('shot.PNG')).toBe('image');
     expect(getMediaType('clip.mp4')).toBe('video');

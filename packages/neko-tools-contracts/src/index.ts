@@ -153,7 +153,6 @@ export type DiffResult =
 
 export interface MediaDiffPcmDescriptor {
   readonly version: 1;
-  readonly transport: 'http';
   readonly protocol: 'neko-pcm-f32le-v1';
   readonly streamUrl: string;
   readonly sampleRate: number;
@@ -162,7 +161,6 @@ export interface MediaDiffPcmDescriptor {
 
 export interface MediaDiffVideoDescriptor {
   readonly version: 1;
-  readonly transport: 'http';
   readonly url: string;
   readonly mimeType: string;
   readonly preparationProfile:

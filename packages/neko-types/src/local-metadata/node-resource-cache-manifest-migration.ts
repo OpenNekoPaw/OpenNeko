@@ -69,7 +69,7 @@ export async function migrateLegacyResourceCacheManifest(options: {
     backupPath,
     archivedPath: moved ? archivedPath : null,
     sourceDiagnostic:
-      'Retired ResourceRef-based ResourceCache manifest was invalidated; derived entries must be rebuilt.',
+      'Retired version 1 ResourceCache manifest was invalidated; derived entries must be rebuilt.',
   };
 }
 
