@@ -19,10 +19,10 @@ describe('Sharp runtime staging', () => {
     const root = await createTemporaryRoot();
     const outputRoot = join(root, 'dist');
     const sourceRoot = join(root, 'sources');
-    await mkdir(join(outputRoot, 'node_modules', '@img', 'sharp-linux-x64'), {
+    await mkdir(join(outputRoot, 'node_modules', '@img', 'sharp-win32-x64'), {
       recursive: true,
     });
-    await writeFile(join(outputRoot, 'node_modules', '@img', 'sharp-linux-x64', 'stale.node'), '');
+    await writeFile(join(outputRoot, 'node_modules', '@img', 'sharp-win32-x64', 'stale.node'), '');
 
     for (const { packageName } of getSharpRuntimePackages('darwin-arm64')) {
       const packageRoot = join(sourceRoot, packageName.replaceAll('/', '__'));
@@ -67,7 +67,7 @@ describe('Sharp runtime staging', () => {
       ],
     });
     await assert.rejects(
-      readFile(join(outputRoot, 'node_modules', '@img', 'sharp-linux-x64', 'stale.node')),
+      readFile(join(outputRoot, 'node_modules', '@img', 'sharp-win32-x64', 'stale.node')),
       { code: 'ENOENT' },
     );
     for (const { packageName } of manifest.modules) {
@@ -85,8 +85,8 @@ describe('Sharp runtime staging', () => {
   it('fails visibly with the missing target package name', async () => {
     const root = await createTemporaryRoot();
     const sourceRoot = join(root, 'sources');
-    for (const { packageName } of getSharpRuntimePackages('linux-x64')) {
-      if (packageName === '@img/sharp-linux-x64') continue;
+    for (const { packageName } of getSharpRuntimePackages('win32-x64')) {
+      if (packageName === '@img/sharp-win32-x64') continue;
       const packageRoot = join(sourceRoot, packageName.replaceAll('/', '__'));
       await mkdir(packageRoot, { recursive: true });
       await writeFile(join(packageRoot, 'package.json'), JSON.stringify({ name: packageName }));
@@ -94,16 +94,23 @@ describe('Sharp runtime staging', () => {
     assert.throws(
       () =>
         stageSharpRuntime({
-          target: 'linux-x64',
+          target: 'win32-x64',
           outputRoot: join(root, 'dist'),
           resolvePackageRoot: (packageName) => {
-            if (packageName === '@img/sharp-linux-x64') {
+            if (packageName === '@img/sharp-win32-x64') {
               throw new Error(`Sharp runtime package is not installed: ${packageName}`);
             }
             return join(sourceRoot, packageName.replaceAll('/', '__'));
           },
         }),
-      /Sharp runtime package is not installed: @img\/sharp-linux-x64/u,
+      /Sharp runtime package is not installed: @img\/sharp-win32-x64/u,
+    );
+  });
+
+  it('rejects the retired Linux target', () => {
+    assert.throws(
+      () => getSharpRuntimePackages('linux-x64'),
+      /Unsupported Sharp runtime target: linux-x64/u,
     );
   });
 });

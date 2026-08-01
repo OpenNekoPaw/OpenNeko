@@ -4,9 +4,11 @@ import { describe, it } from 'node:test';
 import { parse } from 'yaml';
 
 const SHARED_GATE_JOBS = Object.freeze([
-  'build',
+  'static-build',
+  'desktop-package',
   'local-metadata-runtime',
   'test-ts',
+  'functional-test',
   'code-quality',
   'openspec-check',
 ]);
@@ -16,6 +18,16 @@ describe('development/main quality gate orchestration', () => {
     const packageJson = JSON.parse(await readFile('package.json', 'utf8'));
     const scripts = packageJson.scripts ?? {};
 
+    assert.equal(scripts['typecheck'], 'turbo run typecheck');
+    assert.equal(scripts['typecheck:desktop'], 'pnpm --dir apps/neko-desktop run typecheck');
+    assert.equal(
+      scripts['check:static-build'],
+      'pnpm format:check && pnpm lint && pnpm typecheck && pnpm build:ui',
+    );
+    assert.equal(
+      scripts['check:build'],
+      'pnpm format:check && pnpm lint && pnpm typecheck && pnpm build',
+    );
     assert.equal(
       scripts['gate:local'],
       'pnpm check:build && pnpm test && pnpm check:repository-quality',
@@ -23,6 +35,10 @@ describe('development/main quality gate orchestration', () => {
     assert.equal(scripts['gate:remote'], 'pnpm check:ci');
     assert.equal(scripts['ci:local'], 'pnpm gate:local');
     assert.equal(scripts['ci:remote'], 'pnpm gate:remote');
+    assert.match(
+      scripts['test:functional:headless'] ?? '',
+      /^pnpm --dir apps\/neko-desktop exec vitest run /u,
+    );
     for (const removedScript of ['gate:branch', 'gate:main', 'ci:branch', 'ci:main']) {
       assert.equal(scripts[removedScript], undefined, `${removedScript} must be removed`);
     }
@@ -63,6 +79,23 @@ describe('development/main quality gate orchestration', () => {
       assert.match(mergeCommand, new RegExp(`(?:^| )${jobName}(?: |$)`, 'u'));
     }
     assert.match(mergeCommand, /promotion-source dependency-review/u);
+  });
+
+  it('runs unit-contract and credential-free headless functional tests as separate CI evidence', async () => {
+    const workflow = parse(await readFile('.github/workflows/ci.yml', 'utf8'));
+    const unitTests = workflow.jobs?.['test-ts'];
+    const functionalTests = workflow.jobs?.['functional-test'];
+
+    assert.equal(unitTests?.name, 'Unit & Contract Tests');
+    assert.equal(unitTests?.['runs-on'], 'ubuntu-latest');
+    assert.match(findRunStep(unitTests, 'Run unit and contract tests'), /pnpm check:test/u);
+
+    assert.equal(functionalTests?.name, 'Desktop Headless Functional Tests');
+    assert.equal(functionalTests?.['runs-on'], 'ubuntu-latest');
+    assert.equal(
+      findRunStep(functionalTests, 'Run headless Desktop functional tests'),
+      'pnpm test:functional:headless',
+    );
   });
 
   it('does not path-skip deterministic validation', async () => {

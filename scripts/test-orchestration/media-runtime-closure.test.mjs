@@ -24,7 +24,7 @@ describe('OpenNeko media runtime closure', () => {
   it('requires an explicit verified bundle for packaged payloads', () => {
     const stageRoot = mkdtempSync(join(tmpdir(), 'openneko-media-stage-'));
     assert.throws(
-      () => stagePackagedMediaRuntime(stageRoot, 'linux-x64', undefined),
+      () => stagePackagedMediaRuntime(stageRoot, 'win32-x64', undefined),
       /requires NEKO_MEDIA_RUNTIME_ROOT/u,
     );
   });
@@ -54,58 +54,38 @@ describe('OpenNeko media runtime closure', () => {
     );
   });
 
-  it('requires the VAAPI encoder and scale filter for linux-x64', () => {
-    const root = createFixtureRuntime('linux-x64');
+  it('requires the portable H.264 encoder for win32-x64', () => {
+    const root = createFixtureRuntime('win32-x64');
     const descriptorPath = join(root, 'descriptor.json');
     const descriptor = JSON.parse(readFileSync(descriptorPath, 'utf8'));
     descriptor.requiredCapabilities.encoders = descriptor.requiredCapabilities.encoders.filter(
-      (encoder) => encoder !== 'h264Vaapi',
+      (encoder) => encoder !== 'h264',
     );
     writeFileSync(descriptorPath, JSON.stringify(descriptor), 'utf8');
 
     assert.throws(
-      () => assertRuntimeDirectory(root, 'linux-x64'),
-      /weakens required encoders capability h264Vaapi/u,
+      () => assertRuntimeDirectory(root, 'win32-x64'),
+      /weakens required encoders capability h264/u,
     );
   });
 
-  it('requires the VAAPI decode accelerator for linux-x64', () => {
-    const root = createFixtureRuntime('linux-x64');
+  it('rejects the retired Linux descriptor target', () => {
+    const root = createFixtureRuntime('win32-x64');
     const descriptorPath = join(root, 'descriptor.json');
     const descriptor = JSON.parse(readFileSync(descriptorPath, 'utf8'));
-    descriptor.requiredCapabilities.hardwareAccelerators =
-      descriptor.requiredCapabilities.hardwareAccelerators.filter(
-        (accelerator) => accelerator !== 'vaapi',
-      );
+    descriptor.target = 'linux-x64';
     writeFileSync(descriptorPath, JSON.stringify(descriptor), 'utf8');
 
-    assert.throws(
-      () => assertRuntimeDirectory(root, 'linux-x64'),
-      /weakens required hardwareAccelerators capability vaapi/u,
-    );
+    assert.throws(() => assertRuntimeDirectory(root, 'win32-x64'), /descriptor is invalid/u);
   });
 
-  it('requires the VAAPI HDR tone-map filter for linux-x64', () => {
-    const root = createFixtureRuntime('linux-x64');
-    const descriptorPath = join(root, 'descriptor.json');
-    const descriptor = JSON.parse(readFileSync(descriptorPath, 'utf8'));
-    descriptor.requiredCapabilities.filters = descriptor.requiredCapabilities.filters.filter(
-      (filter) => filter !== 'tonemapVaapi',
-    );
-    writeFileSync(descriptorPath, JSON.stringify(descriptor), 'utf8');
-
-    assert.throws(
-      () => assertRuntimeDirectory(root, 'linux-x64'),
-      /weakens required filters capability tonemapVaapi/u,
-    );
-  });
-
-  it('enables the Linux VAAPI and libdrm build closure explicitly', () => {
+  it('uses the Windows-native media build closure without Linux VAAPI', () => {
     const source = readFileSync('scripts/build-media-runtime.sh', 'utf8');
 
-    assert.match(source, /--enable-vaapi/u);
-    assert.match(source, /--enable-libdrm/u);
-    assert.match(source, /--pkg-config-flags=--static/u);
+    assert.match(source, /win32-x64/u);
+    assert.match(source, /--target-os=mingw32/u);
+    assert.doesNotMatch(source, /--enable-vaapi/u);
+    assert.doesNotMatch(source, /--enable-libdrm/u);
     assert.match(source, /--retry-all-errors/u);
   });
 });
@@ -132,13 +112,13 @@ function createFixtureRuntime(target = 'darwin-arm64') {
         ffprobe: { file: 'bin/ffprobe', sha256: sha256(ffprobe) },
       },
       requiredCapabilities: {
-        hardwareAccelerators: target === 'darwin-arm64' ? ['videoToolbox'] : ['vaapi'],
+        hardwareAccelerators: target === 'darwin-arm64' ? ['videoToolbox'] : [],
         decoders: ['h264', 'hevc', 'av1', 'vp8', 'vp9', 'aac', 'mp3', 'flac', 'dts'],
-        encoders: target === 'darwin-arm64' ? ['h264VideoToolbox', 'aac'] : ['h264Vaapi', 'aac'],
+        encoders: target === 'darwin-arm64' ? ['h264VideoToolbox', 'aac'] : ['h264', 'aac'],
         filters:
           target === 'darwin-arm64'
             ? ['alimiter', 'loudnorm', 'ebur128', 'scaleVt']
-            : ['alimiter', 'loudnorm', 'ebur128', 'scaleVaapi', 'tonemapVaapi'],
+            : ['alimiter', 'loudnorm', 'ebur128'],
       },
     })}\n`,
   );

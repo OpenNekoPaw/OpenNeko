@@ -3,17 +3,46 @@ import { readdir, readFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, it } from 'node:test';
+import { createDesktopUiFunctionalLaunch } from '../run-desktop-ui-functional.mjs';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const REMOTE_GATE_ROOTS = Object.freeze(['check:ci', 'gate:remote', 'ci:remote']);
 const LOCAL_RUNTIME_SCRIPTS = Object.freeze([
   'dev:desktop',
-  'package:desktop',
   'test:local:api',
+  'test:local:ui',
   'test:local:media-openneko',
 ]);
 
 describe('Desktop functional workflow boundary', () => {
+  it('launches graphical UI acceptance with isolated functional and Electron data roots', () => {
+    const launch = createDesktopUiFunctionalLaunch({
+      platform: 'darwin',
+      fixtureHome: '/tmp/openneko-desktop-functional-shell',
+      userDataRoot: '/tmp/openneko-desktop-functional-shell/electron-user-data',
+    });
+
+    assert.equal(launch.command, 'pnpm');
+    assert.deepEqual(launch.args, [
+      '--filter',
+      '@neko/app-desktop',
+      'dev',
+      '--',
+      '--openneko-functional-fixture',
+      '--user-data-dir=/tmp/openneko-desktop-functional-shell/electron-user-data',
+    ]);
+    assert.deepEqual(launch.environment, {
+      OPENNEKO_DESKTOP_FUNCTIONAL_HOME: '/tmp/openneko-desktop-functional-shell',
+    });
+
+    const windowsLaunch = createDesktopUiFunctionalLaunch({
+      platform: 'win32',
+      fixtureHome: 'D:\\openneko-desktop-functional-shell',
+      userDataRoot: 'D:\\openneko-desktop-functional-shell\\electron-user-data',
+    });
+    assert.equal(windowsLaunch.command, 'pnpm.cmd');
+  });
+
   it('keeps removed VS Code runtime commands out of workflows', async () => {
     const workflowRoot = join(repoRoot, '.github/workflows');
     const workflowNames = (await readdir(workflowRoot)).filter(
@@ -40,7 +69,7 @@ describe('Desktop functional workflow boundary', () => {
     assert.doesNotMatch(scripts['check:test-orchestration'] ?? '', /webview-functional/u);
   });
 
-  it('keeps VS Code, GUI, and real API commands unreachable from remote gates', async () => {
+  it('keeps VS Code, GUI startup, and real API commands unreachable from remote gates', async () => {
     const packageJson = JSON.parse(await readFile(join(repoRoot, 'package.json'), 'utf8'));
     const scripts = packageJson.scripts ?? {};
     const workflowRoot = join(repoRoot, '.github/workflows');
@@ -66,12 +95,25 @@ describe('Desktop functional workflow boundary', () => {
         `${localScript} must not be reachable from remote CI`,
       );
     }
+    assert.equal(
+      scripts['test:local:ui'],
+      'node scripts/run-desktop-ui-functional.mjs',
+      'graphical UI acceptance must retain one explicit local launcher',
+    );
+    assert.equal(
+      scripts['test:local:media-openneko'],
+      'node scripts/run-desktop-openneko-qualification.mjs',
+      'OpenNeko media qualification must retain one explicit local launcher',
+    );
     assert.doesNotMatch(
       scripts['check:test-orchestration'] ?? '',
       /vscode-debug-config\.local\.mjs/u,
     );
     for (const source of workflowSources) {
-      assert.doesNotMatch(source, /vscode-debug-config\.local\.mjs|test:local:/u);
+      assert.doesNotMatch(
+        source,
+        /vscode-debug-config\.local\.mjs|test:local:|run-desktop-(?:ui-functional|openneko-qualification)\.mjs|OPENNEKO_(?:DESKTOP_FUNCTIONAL_HOME|MEDIA_QUALIFICATION_ROOT)|openneko-functional-fixture/u,
+      );
     }
   });
 });

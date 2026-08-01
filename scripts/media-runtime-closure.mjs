@@ -115,7 +115,6 @@ function inspectCapabilities(ffmpeg, ffprobe) {
     ffprobeVersion: ffprobeVersion.split(/\r?\n/u)[0] ?? '',
     hardwareAccelerators: capabilitySet(hardwareAcceleratorText, {
       videoToolbox: 'videotoolbox',
-      vaapi: 'vaapi',
     }),
     decoders: capabilitySet(decoderText, {
       h264: 'h264',
@@ -131,7 +130,6 @@ function inspectCapabilities(ffmpeg, ffprobe) {
     encoders: capabilitySet(encoderText, {
       h264: 'h264',
       h264VideoToolbox: 'h264_videotoolbox',
-      h264Vaapi: 'h264_vaapi',
       aac: 'aac',
     }),
     filters: capabilitySet(filterText, {
@@ -139,27 +137,23 @@ function inspectCapabilities(ffmpeg, ffprobe) {
       loudnorm: 'loudnorm',
       ebur128: 'ebur128',
       scaleVt: 'scale_vt',
-      scaleVaapi: 'scale_vaapi',
-      tonemapVaapi: 'tonemap_vaapi',
     }),
   });
 }
 
 function requiredCapabilitiesForTarget(target) {
-  if (target !== 'darwin-arm64' && target !== 'linux-x64') {
+  if (target !== 'darwin-arm64' && target !== 'win32-x64') {
     throw new Error(`Unsupported media runtime target: ${target}.`);
   }
+  const isDarwin = target === 'darwin-arm64';
   return Object.freeze({
-    hardwareAccelerators: Object.freeze([target === 'darwin-arm64' ? 'videoToolbox' : 'vaapi']),
+    hardwareAccelerators: Object.freeze(isDarwin ? ['videoToolbox'] : []),
     decoders: COMMON_REQUIRED.decoders,
     encoders: Object.freeze([
       ...COMMON_REQUIRED.encoders,
-      ...(target === 'darwin-arm64' ? ['h264VideoToolbox'] : ['h264Vaapi']),
+      ...(isDarwin ? ['h264VideoToolbox'] : ['h264']),
     ]),
-    filters: Object.freeze([
-      ...COMMON_REQUIRED.filters,
-      ...(target === 'darwin-arm64' ? ['scaleVt'] : ['scaleVaapi', 'tonemapVaapi']),
-    ]),
+    filters: Object.freeze([...COMMON_REQUIRED.filters, ...(isDarwin ? ['scaleVt'] : [])]),
   });
 }
 

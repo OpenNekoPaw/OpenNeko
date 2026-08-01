@@ -14,7 +14,7 @@ test('CI and the prepared act image share the media runtime dependency list', as
   const mediaRuntimePackages = packageList.split(/\s+/u).filter(Boolean);
 
   assert.deepEqual(mediaRuntimePackages, ['ffmpeg']);
-  for (const jobName of ['build', 'test-ts']) {
+  for (const jobName of ['static-build', 'test-ts']) {
     const mediaRuntimeDependencyStep = ciWorkflow.jobs[jobName].steps.find(
       (step) => step.name === 'Install media runtime dependency',
     );
@@ -40,7 +40,12 @@ test('Turbo actions cache remains remote-only when act uses direct cache mounts'
     )
     .map(([jobName]) => jobName);
 
-  assert.deepEqual(turboCacheJobs, ['build', 'test-ts', 'code-quality']);
+  assert.deepEqual(turboCacheJobs, [
+    'static-build',
+    'desktop-package',
+    'test-ts',
+    'code-quality',
+  ]);
   for (const jobName of turboCacheJobs) {
     const cacheStep = workflow.jobs[jobName].steps.find(
       (step) => step.uses === 'actions/cache@v5' && step.with?.path === '.turbo',

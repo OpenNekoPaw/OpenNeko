@@ -72,7 +72,7 @@ export async function validateLocalMetadataRuntimeMatrix() {
   const expectedHosts = ['electron-main'];
   const expectedPlatforms = [
     ['darwin', 'arm64'],
-    ['linux', 'x64'],
+    ['win32', 'x64'],
   ];
   for (const host of expectedHosts) {
     for (const [os, arch] of expectedPlatforms) {

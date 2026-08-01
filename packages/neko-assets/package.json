@@ -21,7 +21,7 @@
   "scripts": {
     "lint": "eslint src --ext ts,tsx",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit -p tsconfig.resource-browser.json",
     "typecheck:resource-browser": "tsc --noEmit -p tsconfig.resource-browser.json"
   },
   "dependencies": {

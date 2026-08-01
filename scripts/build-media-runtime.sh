@@ -36,12 +36,11 @@ configure_args=(
 )
 if [[ "${target}" == "darwin-arm64" ]]; then
   configure_args+=("--enable-videotoolbox" "--enable-audiotoolbox")
-elif [[ "${target}" == "linux-x64" ]]; then
+elif [[ "${target}" == "win32-x64" ]]; then
   configure_args+=(
-    "--disable-x86asm"
-    "--enable-vaapi"
-    "--enable-libdrm"
-    "--pkg-config-flags=--static"
+    "--target-os=mingw32"
+    "--arch=x86_64"
+    "--enable-mediafoundation"
   )
 else
   echo "Unsupported media runtime target: ${target}." >&2

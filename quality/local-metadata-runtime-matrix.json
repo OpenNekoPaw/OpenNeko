@@ -5,6 +5,6 @@
   },
   "targets": [
     { "host": "electron-main", "os": "darwin", "arch": "arm64" },
-    { "host": "electron-main", "os": "linux", "arch": "x64" }
+    { "host": "electron-main", "os": "win32", "arch": "x64" }
   ]
 }

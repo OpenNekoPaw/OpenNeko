@@ -72,6 +72,11 @@ describe('Agent Evaluation local-only boundary', () => {
       /vitest.+vitest\.agent-eval\.config\.mts.+all-suite-dry-run\.mjs/u,
       'explicit local harness command must remain available',
     );
+    assert.equal(
+      scripts['test:local:api'],
+      'node scripts/agent-eval/local-run.mjs',
+      'real provider-backed Evaluation must retain one explicit local command',
+    );
     assert.equal((await stat('scripts/agent-eval/local-run.mjs')).isFile(), true);
   });
 });

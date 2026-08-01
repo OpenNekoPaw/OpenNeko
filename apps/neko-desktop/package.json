@@ -6,11 +6,11 @@
   "type": "module",
   "main": ".vite/build/main.cjs",
   "scripts": {
-    "build": "electron-forge package",
-    "dev": "electron-forge start",
+    "build": "node ../../scripts/assert-supported-desktop-host.mjs && electron-forge package",
+    "dev": "node ../../scripts/assert-supported-desktop-host.mjs && electron-forge start",
     "lint": "eslint \"src/**/*.{ts,tsx}\"",
-    "make": "electron-forge make",
-    "package": "electron-forge package",
+    "make": "node ../../scripts/assert-supported-desktop-host.mjs && electron-forge make",
+    "package": "node ../../scripts/assert-supported-desktop-host.mjs && electron-forge package",
     "test": "vitest run",
     "test:run": "vitest run",
     "typecheck": "tsc --noEmit"

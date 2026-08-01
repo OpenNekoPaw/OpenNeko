@@ -2,10 +2,7 @@
 
 import { chmodSync, cpSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import {
-  assertRuntimeDirectory,
-  createMediaRuntimeDescriptor,
-} from './media-runtime-closure.mjs';
+import { assertRuntimeDirectory, createMediaRuntimeDescriptor } from './media-runtime-closure.mjs';
 
 const options = parseArguments(process.argv.slice(2));
 const output = resolve(options.output);
@@ -23,11 +20,7 @@ const descriptor = createMediaRuntimeDescriptor({
   license: join(output, 'COPYING'),
   spdx: options.spdx,
 });
-writeFileSync(
-  join(output, 'descriptor.json'),
-  `${JSON.stringify(descriptor, null, 2)}\n`,
-  'utf8',
-);
+writeFileSync(join(output, 'descriptor.json'), `${JSON.stringify(descriptor, null, 2)}\n`, 'utf8');
 assertRuntimeDirectory(output, options.target, { qualify: true });
 process.stdout.write(`Prepared verified media runtime at ${output}.\n`);
 
@@ -39,7 +32,7 @@ function parseArguments(argv) {
     return candidate;
   };
   const target = value('--target');
-  if (target !== 'darwin-arm64' && target !== 'linux-x64') {
+  if (target !== 'darwin-arm64' && target !== 'win32-x64') {
     throw new Error(`Unsupported media runtime target: ${target}.`);
   }
   return Object.freeze({

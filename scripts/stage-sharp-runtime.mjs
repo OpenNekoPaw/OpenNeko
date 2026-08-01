@@ -33,14 +33,10 @@ const SHARP_TARGET_RUNTIME_PACKAGES = Object.freeze({
       specifier: '@img/sharp-libvips-darwin-arm64/lib',
     }),
   ]),
-  'linux-x64': Object.freeze([
+  'win32-x64': Object.freeze([
     Object.freeze({
-      packageName: '@img/sharp-linux-x64',
-      specifier: '@img/sharp-linux-x64/sharp.node',
-    }),
-    Object.freeze({
-      packageName: '@img/sharp-libvips-linux-x64',
-      specifier: '@img/sharp-libvips-linux-x64/lib',
+      packageName: '@img/sharp-win32-x64',
+      specifier: '@img/sharp-win32-x64/sharp.node',
     }),
   ]),
 });
