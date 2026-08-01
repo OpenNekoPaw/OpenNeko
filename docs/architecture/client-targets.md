@@ -24,6 +24,20 @@ Desktop 不拥有：
 - 通用文件系统、shell 或 `ipcRenderer` 暴露；
 - package internal imports、跨实例共享 mutable runtime 或 removed-host compatibility。
 
+### 构建平台闭集
+
+Desktop 原生构建目标精确为：
+
+| Target         | 原生构建 Host       | 当前证据                                             |
+| -------------- | ------------------- | ---------------------------------------------------- |
+| `darwin-arm64` | Apple Silicon macOS | 本地 Forge package 已验证                            |
+| `win32-x64`    | x64 Windows         | GitHub Actions 原生 package 门禁；完整运行态资格待补 |
+
+Linux 只运行 lint、测试、OpenSpec、依赖分析和 browser-safe build 等 host-neutral
+检查，不调用 Forge，不生成 Linux Desktop artifact。Intel macOS、Windows ARM/IA32
+和其他目标在 Forge 前 fail-visible。原生 package 成功只证明构建闭包，不能替代安装、
+启动、凭据、媒体/GPU、文件和完整创作路径资格。
+
 ## Package 复用
 
 - `@neko/shared`、`@neko/host`、`@neko/media`、`@neko/content` 和 `@neko/entity`
@@ -46,13 +60,13 @@ fail-visible。
 
 ## 验证重点
 
-| 层级             | 最低验证                                                                      |
-| ---------------- | ----------------------------------------------------------------------------- |
-| Contract/domain  | owning package tests、typecheck/build、生产者/消费者路径断言                  |
-| Main/preload/IPC | Desktop contract/security tests、unknown message 与 stale identity rejection  |
-| Renderer/UI      | package build/test，加真实 Electron visual/interaction/CSP/message 场景       |
-| Media            | Node/FFmpeg focused tests、Range/PCM/取消/释放和 production bundle inspection |
-| Product          | `pnpm package:desktop`、隔离 fixture project-open 与受影响 creative surface   |
+| 层级             | 最低验证                                                                                       |
+| ---------------- | ---------------------------------------------------------------------------------------------- |
+| Contract/domain  | owning package tests、typecheck/build、生产者/消费者路径断言                                   |
+| Main/preload/IPC | Desktop contract/security tests、unknown message 与 stale identity rejection                   |
+| Renderer/UI      | package build/test，加真实 Electron visual/interaction/CSP/message 场景                        |
+| Media            | Node/FFmpeg focused tests、Range/PCM/取消/释放和 production bundle inspection                  |
+| Product          | macOS/Windows 原生 `pnpm package:desktop`、隔离 fixture project-open 与受影响 creative surface |
 
 相关边界见 [`application-composition.md`](application-composition.md)、
 [`package-boundaries.md`](package-boundaries.md) 和 [`media-runtime.md`](media-runtime.md)。

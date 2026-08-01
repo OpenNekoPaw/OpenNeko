@@ -66,15 +66,15 @@ renderer 不得直接访问 Node.js、Electron main API 或 VS Code API。preloa
 
 Desktop 优先复用以下公共能力：
 
-| 能力                               | Canonical owner                                                        | Desktop 复用方式                                                                                         |
-| ---------------------------------- | ---------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| Agent、会话、模型、Skill、工具编排 | `packages/neko-agent`                                                  | 复用 Pi runtime、`AgentHostRuntimeAdapter` 和公共 Web UI root；实现 Electron adapter                     |
-| Canvas 项目事实与交互              | `packages/neko-canvas`                                                 | 保留 `.nkc` 与 Canvas domain 为真值；把完整 UI root 的 VS Code message 依赖改为注入式 host adapter       |
-| Cut 时间线与编辑                   | `packages/neko-cut`                                                    | 以 `.otio`、Cut Core command 和派生执行计划为真值；通过 host-neutral authoring/runtime contract 接入     |
-| 素材、实体与搜索                   | `packages/neko-assets`、`packages/neko-entity`、`packages/neko-search` | 复用 domain service 与 DTO；为 Desktop 组合 React 素材管理面，不复用 VS Code TreeView 宿主实现           |
-| Preview                            | `packages/neko-preview`                                                | 保留只读投影职责；把完整 root 的宿主通信抽到 adapter                                                     |
-| Host、UI 与基础能力                | `packages/neko-host`、`packages/neko-ui`、`packages/neko-types`        | 扩展现有公共 ports/primitives，不在 Desktop 建第二套 host framework、design system、i18n、日志或错误类型 |
-| 媒体执行与跨层契约                 | `packages/neko-media`、领域窄 ports、package-owned L0 contracts        | 复用 Node/FFmpeg 与浏览器媒体客户端；宿主只实现授权、生命周期和组合，不恢复旧 Engine/client              |
+| 能力                                  | Canonical owner                                                                                  | Desktop 复用方式                                                                                                                                      |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Agent、会话、模型、Skill、工具编排    | `packages/neko-agent`                                                                            | 复用 Pi runtime、`AgentHostRuntimeAdapter` 和公共 Web UI root；实现 Electron adapter                                                                  |
+| Canvas 项目事实与交互                 | `packages/neko-canvas`                                                                           | 保留 `.nkc` 与 Canvas domain 为真值；把完整 UI root 的 VS Code message 依赖改为注入式 host adapter                                                    |
+| Cut 时间线与编辑                      | `packages/neko-cut`                                                                              | 以 `.otio`、Cut Core command 和派生执行计划为真值；通过 host-neutral authoring/runtime contract 接入                                                  |
+| 素材、实体与搜索                      | `packages/neko-assets`、`packages/neko-entity`、`packages/neko-search`                           | 复用 domain service 与 DTO；为 Desktop 组合 React 素材管理面，不复用 VS Code TreeView 宿主实现                                                        |
+| Preview                               | `packages/neko-preview`                                                                          | 保留只读投影职责；把完整 root 的宿主通信抽到 adapter                                                                                                  |
+| Host、UI 与基础能力                   | `packages/neko-host`、`packages/neko-ui`、`packages/neko-types`                                  | 扩展现有公共 ports/primitives，不在 Desktop 建第二套 host framework、design system、i18n、日志或错误类型                                              |
+| 媒体执行与跨层契约                    | `packages/neko-media`、领域窄 ports、package-owned L0 contracts                                  | 复用 Node/FFmpeg 与浏览器媒体客户端；宿主只实现授权、生命周期和组合，不恢复旧 Engine/client                                                           |
 | 专业工具 handoff、MCP 与 Computer Use | owning domain export、Desktop Host、`packages/neko-agent` Tool Call/MCP、现有 External Processor | 领域 owner 冻结 revision/导出，Desktop 发现并启动应用；Agent 复用唯一 Tool Call/MCP，Computer Use 由 Host 受控执行；GUI app 不冒充 External Processor |
 
 当前复用成熟度不同：Agent Web UI 已存在 `AgentHostRuntimeAdapter` 与 `electron` host kind，可作为第一阶段入口；Canvas、Cut、Preview 的完整 UI root 仍有较强 VS Code `postMessage` 耦合；Assets 的主要宿主 UI 仍偏向 VS Code TreeView。后两类必须先完成宿主适配器和公共入口收敛，不能在 Desktop 中复制一套平行实现。
@@ -173,21 +173,21 @@ Desktop MVP 仍遵守本地产品边界：workspace、本地文件、Host 权限
 
 ### 6. 开源组件按“直接采用、协议参考、交互参考”分级
 
-| 项目                       | 决策               | 边界                                                                                            |
-| -------------------------- | ------------------ | ----------------------------------------------------------------------------------------------- |
-| Electron Forge             | 优先直接采用       | 用于 Electron 打包、发布和 native module rebuild；最终选择仍需通过实施 OpenSpec 和平台 spike    |
-| Electron Security Guidance | 必须落实           | `contextIsolation`、sandbox、CSP、最小 preload API、sender 校验和安全自定义协议是宿主基线       |
-| Playwright Electron        | 评估后采用         | 用于 Desktop 运行态 E2E；其 Electron 支持状态要求同时保留 IPC/contract 测试，不能只靠 UI 自动化 |
-| OpenTimelineIO             | Cut 工程协议       | Cut 以受限 OTIO profile 作为唯一项目真值；MVP 不要求嵌入其 Python/C++ runtime                   |
-| Agent Skills               | 格式参考并保持兼容 | 用于开放 Skill 可移植格式；Neko overlay、trust 和 capability 仍由现有 Agent 边界拥有            |
-| ComfyUI                    | 外部专业工作流集成 | 可通过 Launch、经验证 HTTP/MCP adapter 和 Generation/External Processor output ownership 接入；其 workflow/queue 不成为 Canvas 或项目事实 |
-| React Flow                 | 技术 spike 候选    | 只评估图交互、可访问性与自动布局；未经 Canvas 架构和性能 spike 不替换现有 Canvas                |
-| pi-mono                    | 上游模式参考       | 参考 session、subagent 与工具模式；OpenNeko 已有 Pi canonical path，不建立第二个 Agent runtime  |
+| 项目                       | 决策               | 边界                                                                                                                                                                                        |
+| -------------------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Electron Forge             | 优先直接采用       | 用于 Electron 打包、发布和 native module rebuild；最终选择仍需通过实施 OpenSpec 和平台 spike                                                                                                |
+| Electron Security Guidance | 必须落实           | `contextIsolation`、sandbox、CSP、最小 preload API、sender 校验和安全自定义协议是宿主基线                                                                                                   |
+| Playwright Electron        | 评估后采用         | 用于 Desktop 运行态 E2E；其 Electron 支持状态要求同时保留 IPC/contract 测试，不能只靠 UI 自动化                                                                                             |
+| OpenTimelineIO             | Cut 工程协议       | Cut 以受限 OTIO profile 作为唯一项目真值；MVP 不要求嵌入其 Python/C++ runtime                                                                                                               |
+| Agent Skills               | 格式参考并保持兼容 | 用于开放 Skill 可移植格式；Neko overlay、trust 和 capability 仍由现有 Agent 边界拥有                                                                                                        |
+| ComfyUI                    | 外部专业工作流集成 | 可通过 Launch、经验证 HTTP/MCP adapter 和 Generation/External Processor output ownership 接入；其 workflow/queue 不成为 Canvas 或项目事实                                                   |
+| React Flow                 | 技术 spike 候选    | 只评估图交互、可访问性与自动布局；未经 Canvas 架构和性能 spike 不替换现有 Canvas                                                                                                            |
+| pi-mono                    | 上游模式参考       | 参考 session、subagent 与工具模式；OpenNeko 已有 Pi canonical path，不建立第二个 Agent runtime                                                                                              |
 | Kun                        | 架构/UX 参考       | 参考单本地 runtime、HTTP/SSE 投影、需求到验收连续性、project MCP digest trust 和 Extension Host/Broker；不采用 Code/Design/Write Profile、`.kunx`、Direct DOM、Kun runtime 或非商业许可代码 |
-| Cindy                      | 架构/UX 参考       | 参考 harness-independent task continuity、插件进程/partition 隔离、capability slot、device allowlist 和结构化 Agent↔Plugin UI；不采用多主 Agent、未开源 backend 或未验证通用桌面控制 |
-| Agent Client Protocol      | 技术 spike 候选    | 仅用于未来可选外部 Agent backend adapter；不替换内部 Agent、Desktop IPC 或媒体 ports            |
-| MCP Apps                   | 技术 spike 候选    | 用于受控 inline result、Context Dock 或 editor surface；不得向 Shell 任意贡献 UI                |
-| VS Code / Code OSS         | UX 参考            | 参考命令面板、快捷键和工作区体验；不 fork Code OSS 作为 Desktop 基座                            |
+| Cindy                      | 架构/UX 参考       | 参考 harness-independent task continuity、插件进程/partition 隔离、capability slot、device allowlist 和结构化 Agent↔Plugin UI；不采用多主 Agent、未开源 backend 或未验证通用桌面控制        |
+| Agent Client Protocol      | 技术 spike 候选    | 仅用于未来可选外部 Agent backend adapter；不替换内部 Agent、Desktop IPC 或媒体 ports                                                                                                        |
+| MCP Apps                   | 技术 spike 候选    | 用于受控 inline result、Context Dock 或 editor surface；不得向 Shell 任意贡献 UI                                                                                                            |
+| VS Code / Code OSS         | UX 参考            | 参考命令面板、快捷键和工作区体验；不 fork Code OSS 作为 Desktop 基座                                                                                                                        |
 
 ### 7. 每个 runtime instance 独立拥有状态
 
@@ -204,14 +204,14 @@ Subagent/delegation 使用父 Conversation 下的 child `AgentRunId`；生成、
 React、Zustand 或其他状态库只解决订阅和更新，不自动解决所有权、消息乱序或异步竞态。
 Desktop 前端必须先按 authority 和生命周期拆分状态，再选择具体 store：
 
-| 状态层 | live owner | Renderer 中的形态 | 持久化与写入 |
-| --- | --- | --- | --- |
-| Project、Conversation、Agent Run、Tool Call、领域 Job/Run、文档事实 | AppHost / owning domain | 按 owner identity 建立的只读 replica | 只经 owning public port 写入；Renderer 不直接修改 |
-| Project catalog、Activity/Attention、badge、权限与可用能力 | AppHost projection service | normalized projection cache | Host 生成带 revision 的摘要；Renderer 不从已打开页面反推 |
-| Window layout、Project Tabs、dock 与打开的 view binding | Window application service | `WindowId` scoped replica + pending intent | Host 按 revision/CAS 持久化；每个 Window 独立 |
-| 输入草稿、滚动、选择、viewport、临时展开状态 | `ConversationViewId` / `SurfaceViewId` | view-scoped store | Renderer live-owned；只持久化明确允许恢复的字段和 schema version |
-| hover、popover、drag preview、composition 等瞬时交互 | React component | component-local state/ref | 不持久化，不进入跨窗口协议 |
-| 插件私有 UI | 插件 sandbox process/Webview | 插件命名空间内的私有 store | 只能通过 capability/contribution bridge 提交 intent |
+| 状态层                                                              | live owner                             | Renderer 中的形态                          | 持久化与写入                                                     |
+| ------------------------------------------------------------------- | -------------------------------------- | ------------------------------------------ | ---------------------------------------------------------------- |
+| Project、Conversation、Agent Run、Tool Call、领域 Job/Run、文档事实 | AppHost / owning domain                | 按 owner identity 建立的只读 replica       | 只经 owning public port 写入；Renderer 不直接修改                |
+| Project catalog、Activity/Attention、badge、权限与可用能力          | AppHost projection service             | normalized projection cache                | Host 生成带 revision 的摘要；Renderer 不从已打开页面反推         |
+| Window layout、Project Tabs、dock 与打开的 view binding             | Window application service             | `WindowId` scoped replica + pending intent | Host 按 revision/CAS 持久化；每个 Window 独立                    |
+| 输入草稿、滚动、选择、viewport、临时展开状态                        | `ConversationViewId` / `SurfaceViewId` | view-scoped store                          | Renderer live-owned；只持久化明确允许恢复的字段和 schema version |
+| hover、popover、drag preview、composition 等瞬时交互                | React component                        | component-local state/ref                  | 不持久化，不进入跨窗口协议                                       |
+| 插件私有 UI                                                         | 插件 sandbox process/Webview           | 插件命名空间内的私有 store                 | 只能通过 capability/contribution bridge 提交 intent              |
 
 因此不得创建同时保存项目事实、运行状态、打开 Tab、当前文档、插件数据和媒体 session 的
 `desktopStore`。`activeProjectTabId`、`activeConversationViewId` 只选择要读取的 replica；
@@ -282,14 +282,14 @@ round-trip 和 Computer Use mutation 不得用前端 last-write-wins 伪造成�
 
 具体竞态处理如下：
 
-| 竞态 | 必须行为 |
-| --- | --- |
-| 点击 A 后立即切到 B，A 的异步响应最后返回 | response 只匹配捕获的 owner/view epoch；不得写入当前 active B |
-| 两个 Window 同时改可持久布局或项目事实 | Host 使用 expected revision/CAS；冲突返回 typed diagnostic，由 owner 决定 merge/reload |
-| 自动保存期间继续输入 | 每个 view 保留 `baseRevision`，coalesce 为 single-flight latest intent；旧保存完成不能清除新 dirty state |
-| 重复提交、IPC retry 或 outcome unknown | 以 command id/idempotency key 去重；没有稳定外部 identity 时不自动重提付费或有副作用操作 |
-| component unmount 或 renderer abort fetch | 只取消本地等待；已经由 Host 接受的运行必须用精确 owner identity 显式取消 |
-| view 关闭后迟到 callback/timer/worker message | view epoch 与 disposal token 失配后拒绝更新，并释放 listener、timer、object URL 与 media handle |
+| 竞态                                          | 必须行为                                                                                                 |
+| --------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| 点击 A 后立即切到 B，A 的异步响应最后返回     | response 只匹配捕获的 owner/view epoch；不得写入当前 active B                                            |
+| 两个 Window 同时改可持久布局或项目事实        | Host 使用 expected revision/CAS；冲突返回 typed diagnostic，由 owner 决定 merge/reload                   |
+| 自动保存期间继续输入                          | 每个 view 保留 `baseRevision`，coalesce 为 single-flight latest intent；旧保存完成不能清除新 dirty state |
+| 重复提交、IPC retry 或 outcome unknown        | 以 command id/idempotency key 去重；没有稳定外部 identity 时不自动重提付费或有副作用操作                 |
+| component unmount 或 renderer abort fetch     | 只取消本地等待；已经由 Host 接受的运行必须用精确 owner identity 显式取消                                 |
+| view 关闭后迟到 callback/timer/worker message | view epoch 与 disposal token 失配后拒绝更新，并释放 listener、timer、object URL 与 media handle          |
 
 ### 11. Attention、Computer Use 与插件遵守同一竞态边界
 
@@ -333,9 +333,9 @@ attachment/capability epoch，拒绝所有迟到消息并释放订阅。
    Chara/Entity 与 Tools/Diagnostics 的真实公共路径。缺失 Character/World 能力保持
    unavailable，不允许 mock/no-op 页面冒充完成。
 2. **跨平台资格验证**：在第一阶段唯一 canonical implementation 上分别验证
-   `darwin-arm64`、`linux-x64` 和拟议 `win32-x64` 的打包、安装、签名/更新、Host adapter、
-   native/FFmpeg、GPU/媒体与真实创作路径。Windows 当前仍 deferred，必须通过独立
-   platform-contract OpenSpec 和真实 Windows 证据后才可加入发布闭集。
+   `darwin-arm64` 与 `win32-x64` 的打包、安装、签名/更新、Host adapter、
+   native/FFmpeg、GPU/媒体与真实创作路径。Linux 只运行 host-neutral CI；Windows
+   native package 已进入门禁，但仍需真实 Windows 运行态证据才能完成产品资格。
 3. **MCP、插件与专业工具**：复用唯一 MCP Manager、Agent Tool Call/Approval 和 capability
    catalog，建立受控插件进程/Webview/contribution contract；按 ComfyUI、NLE、
    Blender、Unity、Photoshop、Live2D 等独立适配器交付 Discover/Launch、
@@ -364,8 +364,8 @@ attachment/capability epoch，拒绝所有迟到消息并释放订阅。
 - Agent prompt、Skill、provider、tool routing 或 AgentSession 行为变化的聚焦真实 evaluation；
 - 生产者与消费者测试，以及仓库级 `pnpm build`、`pnpm test`、`pnpm check`；
 - 第一阶段参考平台和第二阶段各资格平台的签名/打包、安装、更新与 native module 验证；
-  当前发布闭集仍为 `darwin-arm64`、`linux-x64`，Windows 只有独立平台契约与真实 Windows
-  证据通过后才能加入；
+  当前原生构建闭集为 `darwin-arm64`、`win32-x64`，Windows 完整资格仍需真实运行态证据；
+  Linux 不得产生 Desktop artifact；
 - 第三阶段分别验证插件 lifecycle、MCP trust/digest 和每个专业工具 adapter 声明的平台、
   软件版本、capability level、失败诊断与 round-trip，不以一个工具的成功替代整个 catalog。
 

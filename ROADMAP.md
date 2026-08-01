@@ -7,9 +7,10 @@ Updated: 2026-07-31
 This roadmap defines delivery order and qualification gates. Current product facts remain defined by
 [`README.md`](README.md), [`docs/architecture/client-targets.md`](docs/architecture/client-targets.md),
 and the codebase. Phase 1 domain integration is still in progress and Desktop is not a supported
-release product. Only `darwin-arm64` currently has Forge package qualification. Linux, Windows, and
-Intel Mac remain outside the supported set, and Desktop professional-tool/plugin integrations are
-not implemented.
+release product. Native build targets are `darwin-arm64` and `win32-x64`; macOS has local Forge
+package evidence, while Windows is required by the real x64 CI package gate but still lacks complete
+runtime/release qualification. Linux is host-neutral CI only, Intel Mac and other architectures are
+unsupported, and Desktop professional-tool/plugin integrations are not implemented.
 
 Each phase must be split into bounded OpenSpec changes. Shell, cross-platform work, the plugin
 runtime, and every professional-tool adapter must not be developed as one permanent umbrella change.
@@ -45,12 +46,12 @@ Phase 1 uses an OpenSpec-selected reference platform and does not claim full cro
 Qualify the same Desktop application on:
 
 1. `darwin-arm64`;
-2. `linux-x64`, with an explicit glibc/distribution boundary;
-3. `win32-x64`, through a separate platform-contract change and real Windows evidence.
+2. `win32-x64`, through real Windows installation, startup, credential, native, media, and creative
+   workflow evidence.
 
-The current supported set contains only `darwin-arm64`. Linux, Windows, and Intel Mac remain
-deferred until their contracts, runner/host evidence, packaging, signing, installation, updates,
-paths, credentials, native modules, GPU/media, and end-to-end creative workflows pass.
+The native build set contains exactly `darwin-arm64` and `win32-x64`. Windows package construction
+does not complete product qualification. Linux remains a host-neutral CI runner and must not
+produce a Desktop artifact; Intel Mac and other architectures are unsupported.
 
 Platform differences must stay behind narrow Host adapters and capability policies. Cross-compiling
 or launching Electron alone is not platform qualification.

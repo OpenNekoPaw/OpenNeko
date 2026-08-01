@@ -83,6 +83,7 @@ coverage 和静态质量；不得启动 Electron GUI、依赖真实用户 fixtur
 | 范围                           | 推荐命令                                                            |
 | ------------------------------ | ------------------------------------------------------------------- |
 | TS / Desktop 提交前            | `pnpm gate:local`                                                   |
+| Linux host-neutral build       | `pnpm check:static-build`                                           |
 | Manual/Merge 源码门禁本地复现  | `pnpm gate:remote`                                                  |
 | Wire/跨层契约                  | owning package contract tests + `pnpm check:application-boundaries` |
 | 架构边界                       | `pnpm check`                                                        |
@@ -90,6 +91,8 @@ coverage 和静态质量；不得启动 Electron GUI、依赖真实用户 fixtur
 | Agent 边界                     | `pnpm check:agent-boundaries`                                       |
 | Agent eval harness（key-free） | `pnpm test:agent:eval`                                              |
 | 真实 API/provider Agent case   | `pnpm test:local:api -- --mode ...`                                 |
+| Desktop headless 功能路径      | `pnpm test:functional:headless`                                     |
+| Desktop 图形化 UI 验收         | `pnpm test:local:ui`                                                |
 | 残留/债务关键词扫描            | `pnpm check:legacy-debt`                                            |
 | 代码债务台账                   | `pnpm check:legacy-debt:ledger`                                     |
 | 质量门禁组合                   | `pnpm check:quality`                                                |
@@ -99,8 +102,15 @@ coverage 和静态质量；不得启动 Electron GUI、依赖真实用户 fixtur
 | GitHub Actions 形状预检        | `pnpm ci:act`                                                       |
 
 `ci:local` 是 `gate:local` 的别名，`ci:remote` 是 `gate:remote` 的别名，`check:ci` 是远程
-源码门禁的基础组合。`act` 只是本地 Linux job 形状预检，不替代 GitHub Actions。Desktop
-production package 和真实 GUI 场景单独记录，不由普通 CI 隐式启动。
+源码门禁的基础组合。`act` 只能预检 Linux host-neutral job 形状，不替代 GitHub Actions
+中的真实 `darwin-arm64` / `win32-x64` package matrix。原生 package 是 Manual/Merge
+Gate 的必要证据，但仍不替代真实 GUI、安装、凭据与媒体场景。
+
+CI 的测试证据分为全仓库 unit/contract coverage 与固定的 Desktop headless functional
+流程。后者可跨 Main/preload/composition 验证产品路径，但不得启动 Electron GUI、读取真实
+用户目录、使用 provider credential 或调用真实 AI API。真实 API Agent Evaluation 与图形化
+Electron UI 验收都必须由开发者通过显式本地命令启动，不得进入 GitHub Actions 或通用 CI
+script composition。
 
 代码债务、边界例外、发布通道等机器可读门禁输入放在 `quality/`，由脚本和 CI 消费；本文只记录质量政策、验证矩阵和人工 review 边界。
 

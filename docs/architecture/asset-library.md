@@ -1,6 +1,6 @@
 # 媒体库架构
 
-更新日期：2026-07-22
+更新日期：2026-08-01
 
 > 文件名 `asset-library.md` 仅为保持既有文档链接稳定。产品与架构名称统一为 **Media Library / 媒体库**；不存在独立的 Asset Library、Asset Source 或文件 membership catalog。
 
@@ -10,7 +10,7 @@
 
 媒体库只负责：
 
-- 从 `neko/assets/<libraryName>` 的直接子 link 派生可用库根；
+- 从 `neko/assets/<libraryName>` 的直接子 link 派生可用库根，并从权威项目引用派生缺失的必需库；
 - 按 canonical `ContentLocator` 浏览、搜索、打开和诊断文件；
 - 维护可重建的文件树、recent-use、technical metadata 和 availability projection；
 - 显式 add、relink、remove link；
@@ -26,17 +26,25 @@
 ## Canonical 模型
 
 ```text
-neko/assets/<libraryName>          OS symlink/junction
-          |
-          v
-workspace-file ContentLocator     neko/assets/<libraryName>/...
-          |
-          +----> ContentReadService / ContentRepresentationService
-          +----> Media Library tree/search/recent projection
-          +----> EntityRepresentationBinding (explicit user decision)
+Project: neko/assets/<libraryName>                    OS symlink/junction
+                  |
+                  v
+Machine-global: ~/.neko/media-libraries/<kind>/<name> OS symlink/junction
+                  |
+                  v
+Physical local/NAS/synchronized directory
+
+workspace-file ContentLocator: neko/assets/<libraryName>/...
+                  |
+                  +----> ContentReadService / ContentRepresentationService
+                  +----> Project Media facet / search / recent projection
+                  +----> EntityRepresentationBinding (explicit user decision)
 ```
 
-link 文件名就是媒体库名称，OS link 是名称到物理 target 的唯一映射事实。项目设置、环境变量、SQLite、JSON 和 runtime service 都不得复制 target。
+link 文件名就是媒体库名称，两个 OS link 分别拥有项目连接与机器全局连接；它们是名称到
+物理 target 的唯一映射事实。项目设置、环境变量、SQLite、JSON 和 runtime service 都不得
+复制 target。新的 Desktop add/relink 指向机器全局 alias，因此一次全局 relink 可以修复所有
+参与项目；已有 direct-to-physical link 继续可读，只能经显式确认转换。
 
 普通 workspace 文件与 linked 文件使用相同的 `workspace-file` locator。PathResolver 只处理 portable path normalization；它不知道 library ID、target setting、cache 或同步 provider。
 
@@ -49,6 +57,32 @@ link 文件名就是媒体库名称，OS link 是名称到物理 target 的唯�
 - 移动工作区不会破坏相对 link target；绝对 link target 的有效性由 OS 决定。应用不维护第二份修复映射。
 
 link 不可用时，媒体库显示 safe diagnostic 与 relink 操作。不得尝试同名目录、旧设置变量或历史 target 作为回退。
+
+## 同步、恢复与便携快照
+
+普通 Git 或文件夹同步只传输项目事实中的 portable `ContentLocator`，不传输本机 link 或
+external Media Library 字节。项目打开时，Desktop 从 Canvas、Cut、Entity representation
+等 owning codec 的权威引用重建必需库，不读取 `library.json`、target registry 或缓存
+membership。
+
+项目媒体 facet 区分：
+
+- `available`、`required-unlinked`、`global-connection-missing`；
+- `target-unavailable`、`content-incomplete`、`entry-conflict`；
+- `unreferenced-linked`。
+
+恢复使用不可变的 revisioned plan：只接受 exact-name 全局连接或用户明确选择的目录，验证
+全部被引用 descendant，经确认后才创建或替换项目 link。打开项目、刷新 projection 或重建
+SQLite metadata 都不得修改 link、项目事实或 target。
+
+需要把项目交给另一台机器且不依赖 relink 时，用户显式创建独立便携快照。Desktop 在 sibling
+staging 中只收集权威引用的 linked bytes，校验 fingerprint，重写 staged owning documents，
+完整验证后一次 atomic rename 发布。source workspace 与 external library 全程只读；它不是
+普通同步、add/relink 或项目 Media facet 的隐式步骤。
+
+全局资源中心与项目资源管理器是独立 surface：前者管理机器级连接和 owned Asset，后者只浏览
+当前项目、投影缺失需求并提交恢复 intent。两者不得共享 selection、filter、layout 或 active
+state；便携快照进度属于项目生命周期 surface。
 
 ## Projection
 
@@ -82,9 +116,11 @@ Search 返回 canonical locator。legacy Asset partition、绝对路径、变量
 
 | 用户意图 | Operation | 所有权结果 |
 | --- | --- | --- |
-| 添加共享目录 | add link | 只创建 workspace link |
-| 修复断链 | relink | 只替换 link，不改 target 内容 |
+| 添加共享目录 | add directory library | 创建全局 alias 与 workspace link，不复制库内容 |
+| 修复同步后缺失连接 | plan / confirm / apply recovery | exact-name 验证后只创建或替换 workspace link |
+| 重新定位已有库 | relink | 更新全局 alias 并替换 workspace link，不改 target 内容 |
 | 移除库 | remove link | 只删除 link |
+| 创建可独立移动的项目 | portable snapshot | 复制被引用字节到新项目并重写 staged 项目事实 |
 | 整理已有文件 | copy to selected writable library | 复制真实字节，保留 source identity |
 | 删除库内文件 | authorized delete | 明确修改 external target，需用户确认与 fingerprint precondition |
 | 保留生成结果 | retain generated | generated-output owner 负责 revision/digest/lineage |
@@ -111,6 +147,29 @@ Creative Entity 是 character、scene、object、location 和 style 的唯一语
 
 遗留数据只进入显式 inspection/migration/recovery。迁移先创建 content-addressed archive、校验 revision/digest，再把可确定记录转换为 locator 或 binding；歧义和无 owner metadata 保留在 unresolved report。archive 绝不是正常读取的回退源。
 
+## 存储归属
+
+| 数据 | Canonical owner / persistence | 不迁入 SQLite 的原因 |
+| --- | --- | --- |
+| 项目与全局 Media Library target mapping | OS symlink/junction | SQLite target row 会成为第二 resolver 并产生机器相关陈旧路径 |
+| `.neko/workspace.json` | Workspace identity owner | 是轻量 checkout recovery descriptor，不是通用本地 metadata |
+| 项目 JSON/NKC/OTIO | Owning project codec | 是可审阅、可同步的权威项目事实 |
+| JSONL journal 与日志 | Journal/logger owner | append-only recovery 与 DB 故障诊断必须保持文件语义 |
+| Media 与 retained artifact bytes | File/artifact owner | 大型字节和生命周期不属于关系 metadata |
+| Credential、mount secret | SecretStorage/system keychain | 普通 SQLite 不具备对应安全与信任边界 |
+| Requirement freshness、probe cache、snapshot task/checkpoint | 用户级 `~/.neko/neko.db` | 可重建 projection 与最小跨重启状态；不得包含 target、绝对路径或 media bytes |
+
+## 已知限制与发布风险
+
+- 权威 reference reader 未覆盖的项目 document kind 必须返回 `coverage-incomplete`，不能声明
+  linked-ready 或 portable-snapshot-ready。
+- Git、文件同步工具和不同 OS 对 symlink/junction 的处理仍不一致；产品文案只能承诺同步
+  portable references，不能承诺同步 linked bytes。
+- macOS/Unix symlink 可在本机验收；Windows directory junction 与真实 UNC/NAS target 必须在
+  Windows host 单独验证。缺少该证据时，Windows 网络媒体库属于 release blocker。
+- 大型便携快照需要在写入前验证 destination conflict 与可用空间；中途取消、fingerprint
+  变化或 publish conflict 只能清理 staging，不能产生部分成功 destination。
+
 ## 验证不变量
 
 - 任何媒体文件无需 catalog membership 即可读取、预览和引用。
@@ -118,3 +177,6 @@ Creative Entity 是 character、scene、object、location 和 style 的唯一语
 - projection 可删除重建，且不会创建 Entity facts。
 - copy/delete 命中 shared Host Content I/O 和授权 writer；package resource 无 owner adapter 时 fail-visible。
 - legacy catalog handler 被 poison，不能参与成功路径。
+- open/metadata rebuild 不改 link、target 或项目事实；add/relink 不复制整库。
+- recovery 只能经 plan/confirm/apply；package/export 只按权威 locator 经 ContentReadService
+  解引用被请求字节。

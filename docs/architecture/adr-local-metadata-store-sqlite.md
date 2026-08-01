@@ -2,7 +2,7 @@
 
 状态：Accepted
 原始日期：2026-06-27
-修订日期：2026-07-14
+修订日期：2026-08-01
 范围：`~/.neko/`、workspace `neko/`、workspace `.neko/`、workspace `.neko/.cache/`、VS Code `globalStorageUri`、Host content read/representation、ResourceCache、Search、Assets、Entity、Agent、Market 和各创作领域的本地元数据。
 
 本文定义 OpenNeko 哪些结构化本地数据进入用户级 SQLite，哪些内容继续使用 JSON/Markdown/TOML/JSONL/`nk*` 或文件 artifact。它补充 [`cache-file-access-and-paths.md`](cache-file-access-and-paths.md)、[`asset-library.md`](asset-library.md)、[`unified-entity.md`](unified-entity.md) 和 `normalize-neko-storage-scopes` OpenSpec。
@@ -129,6 +129,30 @@ canonical checkout identity descriptor：
 - 历史行为若已把多个 non-orphan UUID 注册到同一 current locator，必须使用独立的 canonical identity selection：事务内校验精确冲突集合，将未选 UUID 标记为 orphan 并保留其全部 partition；不得误用 clone/rebind、创建第三个 UUID、自动合并或删除数据。current-locator 查询不返回 orphan，orphan 仍可按 UUID 审计和恢复。
 - 不得通过 active workspace fallback 合并未知或缺失 workspace identity。
 - 后续可以新增 Git-trackable `projectId` 关联同一项目的多个 checkout，但它不能替代本次的 local checkout identity。
+
+## Media Library 同步恢复投影
+
+Media Library 的物理 target 映射继续只由 workspace 与机器全局的 OS symlink/junction
+拥有；SQLite 不保存 target、全局 registry root、绝对路径、当前 link availability 或必需库
+membership。项目打开和每次 recovery plan 都从 owning project codecs 重读当前
+`ContentLocator`，并重新检查 OS link。
+
+用户级 `neko.db` 只承载：
+
+- `projection_versions` 中 workspace-partitioned requirement/provider revision、freshness 和
+  safe diagnostic；
+- `media_metadata` 中可重建的被引用媒体 probe cache；
+- `tasks` / `task_checkpoints` 中便携快照 lifecycle 和最小 resumable cursor。
+
+snapshot payload/checkpoint 不得包含 source/destination absolute path、symlink target、完整
+项目文档、media bytes、credential 或 runtime URL。cache transaction 失败不能回滚已经完成的
+authority mutation；durable task/checkpoint 提交失败必须显式报告且不能写 JSON fallback。
+
+`.neko/workspace.json`、项目 JSON/NKC/OTIO、JSONL journal/log、media/artifact bytes 与
+SecretStorage/keychain 数据继续由原 owner 持久化。`desktop-shell-state.json` 与
+`desktop-application-settings.v1.json` 的迁移另由
+`migrate-desktop-local-state-to-sqlite` OpenSpec 定义事务导入、验证、archive 与 downgrade
+export；本 Media Library 变更不得双读或双写这两类 Desktop state。
 
 ## Schema 与数据分类
 

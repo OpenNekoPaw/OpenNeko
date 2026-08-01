@@ -693,9 +693,9 @@ Home 默认停留在当前界面处理普通问答、调研、一次性生成和
    Project Tabs、Conversation/Runtime/Run 与 owning-domain Job/Run ref；以现有 Agent、
    Assets/Content/Media Library、Canvas、Cut、Preview/Media、Generation/Quality、
    Chara/Entity 和 Tools/Diagnostics 交付真实 Content Profile 闭环。
-2. **跨平台能力**：不改变信息架构和领域 owner，在 macOS、Linux 和 Windows 的真实平台
+2. **跨平台能力**：不改变信息架构和领域 owner，在 macOS 与 Windows 的真实平台
    资格流程中验证 Window/Tab 恢复、输入/快捷键、文件/媒体、GPU、打包、安装和更新。
-   Windows 当前仍 deferred，只有单独 OpenSpec 和真实 Windows 证据通过后才成为支持目标。
+   Linux 只运行 host-neutral CI；Windows package 不能替代真实 Windows 产品路径证据。
 3. **MCP、插件和专业工具**：通过受控 contribution slot、唯一 MCP Manager 和同一
    Professional Tool application service 接入 ComfyUI、剪辑软件、Blender、Unity、
    Photoshop、Live2D 等；MCP/API 优先，Computer Use 只作为显式补充 transport。

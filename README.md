@@ -23,10 +23,16 @@ OpenNeko is for creators who want control over their project files, model connec
 | Creative Agent     | Desktop project conversations, context, tool use, and controlled content generation |
 | Canvas             | Organize Markdown, media, files, groups, generation Jobs, and Canvas references     |
 | Video Timeline     | Lightweight audio/video arrangement, preview, and Node/FFmpeg export                |
-| Media and Entity   | Browse workspace and linked Media Libraries and project Entity representations      |
+| Media and Entity   | Browse workspace/global libraries, recover project links, and project Entity media   |
 | Read-only Preview  | Preview common documents, images, audio/video, and supported standard 3D models     |
 
 Available generation and understanding features depend on your configured APIs, model access, and local services.
+
+Project files keep portable media references rather than machine-local Media Library targets. After
+syncing or cloning to another machine, Desktop shows the missing project libraries and requires
+explicit link recovery; ordinary sync does not copy external media bytes. For a complete handoff,
+users can create an independent portable snapshot containing only media actually referenced by the
+project. The global Library Browser and project Resource Browser keep independent UI state.
 
 The repository also retains Chara, Search, Quality, and media-comparison Tools packages, but they do
 not all have Desktop product paths yet. Character projects, Interactive World, professional-tool
@@ -41,19 +47,25 @@ OpenNeko is currently in **Alpha** and is primarily intended for source-based pr
 
 Requires Node.js 24+ and pnpm 10; the repository development toolchain is pinned to Node.js 24.18.0 LTS.
 
-Supported release platforms are limited to:
+Desktop build targets are limited to:
 
-| System | Architecture | Current Desktop qualification |
-| ------ | ------------ | ----------------------------- |
-| macOS  | ARM64        | Forge package                 |
+| System  | Architecture | Current Desktop qualification                                     |
+| ------- | ------------ | ----------------------------------------------------------------- |
+| macOS   | ARM64        | Forge package; complete Phase 1 qualification is in progress      |
+| Windows | x64          | Native CI package is gated; runtime/release qualification pending |
 
-Windows, Linux, and Intel Mac Desktop releases remain deferred. Enabling one requires Electron packaging, application startup, native dependency, and Node/FFmpeg media read/export validation on the corresponding real system.
+Linux is a host-neutral CI runner only and does not build a Desktop product. Intel Mac and other
+architectures are unsupported. Windows requires real-system startup, native dependency, credential,
+and Node/FFmpeg media read/export evidence before it is described as fully release-qualified.
 
 ```bash
 pnpm install
 pnpm build
 pnpm dev:desktop
 ```
+
+`pnpm build` and `pnpm dev:desktop` run only on the two native targets above. Linux uses
+`pnpm check:static-build` for static validation.
 
 Common validation commands:
 

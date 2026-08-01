@@ -6,9 +6,10 @@
 
 本文只定义开发顺序、阶段边界和完成门禁。当前已发布/可运行事实仍以
 [`README_CN.md`](README_CN.md)、[`docs/architecture/client-targets.md`](docs/architecture/client-targets.md)
-和代码为准。Phase 1 领域接入仍在进行，因此 Desktop 尚不是受支持发布产品。当前仅
-`darwin-arm64` 具有 Forge package 资格；Linux、Windows 和 Intel Mac 仍未进入支持闭集，
-专业工具、插件和 Desktop MCP 集成也尚未实现。
+和代码为准。Phase 1 领域接入仍在进行，因此 Desktop 尚不是受支持发布产品。原生构建目标
+已收敛为 `darwin-arm64` 与 `win32-x64`；macOS 已有本地 Forge package 证据，Windows 已
+进入真实 x64 CI package 门禁但完整运行态/发布资格仍待验证。Linux 只用于 host-neutral CI，
+Intel Mac 和其他架构不支持；专业工具、插件和 Desktop MCP 集成也尚未实现。
 
 每个阶段必须拆成边界明确的 OpenSpec change，不允许用一个长期巨型 change 同时开发 Shell、
 跨平台、插件和全部专业工具。
@@ -20,7 +21,7 @@
   -> 稳定 Shell、状态协议和真实内容创作纵向路径
 
 阶段 2：跨平台资格验证
-  -> macOS / Linux / Windows 的真实安装、媒体、GPU、文件与发布证据
+  -> macOS / Windows 的真实安装、媒体、GPU、文件与发布证据
 
 阶段 3：MCP、插件与专业工具生态
   -> ComfyUI / NLE / Blender / Unity / Photoshop / Live2D 等受控集成
@@ -86,20 +87,19 @@
 
 ### 目标
 
-在不分叉领域逻辑和 Renderer 的前提下，让同一个 Desktop 应用通过 macOS、Linux 和 Windows
+在不分叉领域逻辑和 Renderer 的前提下，让同一个 Desktop 应用通过 macOS 和 Windows
 的真实平台资格验证。Electron 能启动、交叉编译成功或单元测试通过都不等于平台支持。
 
 ### 平台顺序
 
-| 目标           | 计划         | 资格边界                                                                                                              |
-| -------------- | ------------ | --------------------------------------------------------------------------------------------------------------------- |
-| `darwin-arm64` | 第一参考平台 | 签名、公证、更新、Keychain、GPU/媒体、文件关联和真实创作流程                                                          |
-| `linux-x64`    | 第二资格平台 | 明确 glibc/发行版范围、包格式、桌面集成、FFmpeg/字体/音频/GPU 和真实创作流程                                          |
-| `win32-x64`    | 第三资格平台 | 通过独立 platform-contract OpenSpec 恢复；验证安装/卸载、签名、更新、路径、长路径、进程、凭据、GPU/媒体和真实创作流程 |
+| 目标           | 计划         | 资格边界                                                                    |
+| -------------- | ------------ | --------------------------------------------------------------------------- |
+| `darwin-arm64` | 第一参考平台 | 签名、公证、更新、Keychain、GPU/媒体、文件关联和真实创作流程                |
+| `win32-x64`    | 第二资格平台 | 验证安装/卸载、签名、更新、路径、长路径、进程、凭据、GPU/媒体和真实创作流程 |
 
-当前仓库支持闭集仅为 `darwin-arm64`。Linux、Windows 和 Intel Mac 只有在各自 OpenSpec、
-真实 runner/host 证据和发布契约全部通过后，才能加入该闭集；不得直接恢复旧 loader、
-artifact 或 fallback。
+当前原生构建闭集为 `darwin-arm64` 与 `win32-x64`。Windows package 证据不自动提升为
+完整产品资格；仍需完成本节运行态门禁。Linux 只允许运行 host-neutral CI，不得恢复
+Desktop artifact、native runtime 或 fallback；Intel Mac 和其他架构不支持。
 
 ### 横切能力
 

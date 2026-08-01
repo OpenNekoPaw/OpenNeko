@@ -38,23 +38,23 @@ OpenNeko Desktop 是 **AI 原生轻量创作工具与专业制作软件之间的
 
 ## 五层分析
 
-| 层 | 决策 |
-| --- | --- |
-| 职责 | 领域 owner 冻结 revision 和导出；Professional Tool service 发现/启动/绑定外部 session；Agent Tool Call 编排操作；MCP Manager 连接 MCP；Desktop Host 执行授权窗口观察和输入；外部应用拥有 native document。 |
-| 依赖 | renderer 只调用 typed Desktop bridge；Agent 只消费 capability/tool catalog；adapter 通过 Host 授权解析 app、path、credential、window；领域包不依赖第三方 SDK 或 OS 输入 API。 |
+| 层   | 决策                                                                                                                                                                                                                     |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 职责 | 领域 owner 冻结 revision 和导出；Professional Tool service 发现/启动/绑定外部 session；Agent Tool Call 编排操作；MCP Manager 连接 MCP；Desktop Host 执行授权窗口观察和输入；外部应用拥有 native document。               |
+| 依赖 | renderer 只调用 typed Desktop bridge；Agent 只消费 capability/tool catalog；adapter 通过 Host 授权解析 app、path、credential、window；领域包不依赖第三方 SDK 或 OS 输入 API。                                            |
 | 接口 | integration contribution 分 launch、exchange、automation facet；automation 声明 transport、target binding、action traits 和 verification；handoff 携带 app、revision、resource、profile、session、result 和 provenance。 |
-| 扩展 | 新工具通过 builtin/plugin integration contribution 接入；不新增 Shell、MCP runtime、Computer Use loop、processor registry、Agent loop 或通用 TaskManager。 |
-| 测试 | 隔离 fixture 加真实安装应用，验证发现、启动、导出、明确 target、MCP/Computer Use 操作、用户接管、修改证据、取消、round-trip 与不可用诊断。 |
+| 扩展 | 新工具通过 builtin/plugin integration contribution 接入；不新增 Shell、MCP runtime、Computer Use loop、processor registry、Agent loop 或通用 TaskManager。                                                               |
+| 测试 | 隔离 fixture 加真实安装应用，验证发现、启动、导出、明确 target、MCP/Computer Use 操作、用户接管、修改证据、取消、round-trip 与不可用诊断。                                                                               |
 
 ## 决策
 
 ### 1. 创作能力分为内置轻量层与外部专业层
 
-| 能力层 | Canonical owner | 用户价值 | 明确不负责 |
-| --- | --- | --- | --- |
-| AI-native lightweight authoring | Agent、Canvas、Cut、Preview、Assets、Chara/World 轻量 surface | 快速生成、组织、预览、轻编辑、审阅、验证和导出准备 | 完整 NLE/DCC/图像编辑/引擎/workflow 功能 |
-| Professional production | 用户安装的专业软件 | 专业编辑、精修、资产制作、工程 authoring、最终制作 | Neko 项目、Agent transcript 或媒体库事实 |
-| Integration orchestration | Desktop Host + owning domain + Agent Tool Call/MCP/Computer Use | 发现、导出、打开、自动化、结果回收和 provenance | 第三方 native document 的内部语义 |
+| 能力层                          | Canonical owner                                                 | 用户价值                                           | 明确不负责                               |
+| ------------------------------- | --------------------------------------------------------------- | -------------------------------------------------- | ---------------------------------------- |
+| AI-native lightweight authoring | Agent、Canvas、Cut、Preview、Assets、Chara/World 轻量 surface   | 快速生成、组织、预览、轻编辑、审阅、验证和导出准备 | 完整 NLE/DCC/图像编辑/引擎/workflow 功能 |
+| Professional production         | 用户安装的专业软件                                              | 专业编辑、精修、资产制作、工程 authoring、最终制作 | Neko 项目、Agent transcript 或媒体库事实 |
+| Integration orchestration       | Desktop Host + owning domain + Agent Tool Call/MCP/Computer Use | 发现、导出、打开、自动化、结果回收和 provenance    | 第三方 native document 的内部语义        |
 
 新需求优先判断应增强轻量闭环，还是应进入专业 handoff。只有高频、跨工具、能保持
 轻量边界的能力才进入内置子包；专业软件已经拥有且会持续演进的复杂 authoring 不在
@@ -65,10 +65,10 @@ Neko 内复制。
 `ProfessionalToolIntegration` 是 Desktop Host 中版本化、机器可读的 contribution，
 由 builtin 或 plugin 提供，并归一化到同一 catalog。它拥有稳定 `integrationId` 和：
 
-| Facet | 职责 |
-| --- | --- |
-| Launch | 支持平台、应用 identity、版本范围、安装/配置状态、安全启动参数和 lifecycle |
-| Exchange | 接受/产生的 media type、交换 profile、导出 adapter、semantic loss、relink/round-trip |
+| Facet      | 职责                                                                                                                                            |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| Launch     | 支持平台、应用 identity、版本范围、安装/配置状态、安全启动参数和 lifecycle                                                                      |
+| Exchange   | 接受/产生的 media type、交换 profile、导出 adapter、semantic loss、relink/round-trip                                                            |
 | Automation | vendor MCP、可信第三方 MCP、Neko API adapter 或受控 Computer Use，及 operation risk/permission/host requirement、target binding 和 verification |
 
 Manifest 不自证安装、版本兼容或 trust。Host 必须通过 tool-specific adapter 发现用户
@@ -76,13 +76,13 @@ Manifest 不自证安装、版本兼容或 trust。Host 必须通过 tool-specif
 
 每个 integration 按已验证能力声明等级：
 
-| 等级 | 能力 |
-| --- | --- |
-| `launch-only` | 打开应用，不带项目或资源 |
-| `export-and-open` | 产生 durable exchange bundle 并在目标应用打开 |
-| `read-automation` | 通过 MCP/API 或 qualified Computer Use 查询明确应用、项目、文档、selection、queue 或状态 |
+| 等级               | 能力                                                                                                  |
+| ------------------ | ----------------------------------------------------------------------------------------------------- |
+| `launch-only`      | 打开应用，不带项目或资源                                                                              |
+| `export-and-open`  | 产生 durable exchange bundle 并在目标应用打开                                                         |
+| `read-automation`  | 通过 MCP/API 或 qualified Computer Use 查询明确应用、项目、文档、selection、queue 或状态              |
 | `write-automation` | 通过 MCP/API 或 qualified Computer Use 对明确目标执行编辑、生成、导入、渲染或构建，并提供独立结果证据 |
-| `round-trip` | 验证外部结果并显式导回 Neko 新 revision/candidate |
+| `round-trip`       | 验证外部结果并显式导回 Neko 新 revision/candidate                                                     |
 
 Capability level 之外还必须声明：
 
@@ -168,14 +168,14 @@ writer 接收为 `ContentLocator`。
 
 下表定义目标落点，不承诺尚未验证的具体私有格式：
 
-| 工具类别 | 目标工具 | Neko owner | 最低 handoff | Automation 方向 |
-| --- | --- | --- | --- | --- |
-| NLE/后期 | DaVinci Resolve、剪映/CapCut | Cut + Assets | frozen OTIO revision、媒体 bundle、经验证的 timeline/video exchange profile | timeline/project query、import、render/export；只使用已验证 API/MCP |
-| 分层图像 | Photoshop | Assets/Canvas/Generation | durable image/layer-capable export profile 与 reference bundle | document/layer query、controlled edit/export |
-| 2D 角色 | Live2D Cubism | Chara + Assets | confirmed Character representation input、texture/source bundle | model/project query、import/build/export；不可用时只 open |
-| 3D/DCC | Blender | Assets/Preview/Chara/World | model/scene/reference bundle 与 coordinate/unit diagnostic | object/scene query、import、render、bake/export |
-| 互动工程 | Unity | World + Assets/Chara | versioned asset/world handoff bundle，不直接写用户工程未知目录 | project/scene query、asset import、build/test |
-| 节点生成 | ComfyUI | Generation + Assets | workflow/input binding、model dependency diagnostic、candidate output ownership | queue/status/cancel、workflow run、output ingest |
+| 工具类别 | 目标工具                     | Neko owner                 | 最低 handoff                                                                    | Automation 方向                                                     |
+| -------- | ---------------------------- | -------------------------- | ------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| NLE/后期 | DaVinci Resolve、剪映/CapCut | Cut + Assets               | frozen OTIO revision、媒体 bundle、经验证的 timeline/video exchange profile     | timeline/project query、import、render/export；只使用已验证 API/MCP |
+| 分层图像 | Photoshop                    | Assets/Canvas/Generation   | durable image/layer-capable export profile 与 reference bundle                  | document/layer query、controlled edit/export                        |
+| 2D 角色  | Live2D Cubism                | Chara + Assets             | confirmed Character representation input、texture/source bundle                 | model/project query、import/build/export；不可用时只 open           |
+| 3D/DCC   | Blender                      | Assets/Preview/Chara/World | model/scene/reference bundle 与 coordinate/unit diagnostic                      | object/scene query、import、render、bake/export                     |
+| 互动工程 | Unity                        | World + Assets/Chara       | versioned asset/world handoff bundle，不直接写用户工程未知目录                  | project/scene query、asset import、build/test                       |
+| 节点生成 | ComfyUI                      | Generation + Assets        | workflow/input binding、model dependency diagnostic、candidate output ownership | queue/status/cancel、workflow run、output ingest                    |
 
 具体交换格式必须由 owning adapter 维护 profile 和损失说明。例如 Cut 已以 OTIO 为
 内部事实，但 DaVinci/剪映 adapter 只能导出目标版本真实支持的交换格式；不得因为
@@ -192,13 +192,13 @@ Agent Task 事实。
 
 ### 6. 专业 GUI 应用与 External Processor 是不同运行边界
 
-| 边界 | Professional Tool | External Processor |
-| --- | --- | --- |
-| 生命周期 | 长期交互应用、外部 document/session | 单次或有界 headless invocation |
-| 输入 | durable handoff bundle | Host 授权 input locator |
-| 输出 | 外部 document/result，经 round-trip 接收 | Host-owned intermediate/debug/candidate output |
-| 控制 | launch、exchange、MCP/API/Computer Use | 固定 executable + argv |
-| 用户交互 | 允许并预期 | 不作为执行成功条件 |
+| 边界     | Professional Tool                        | External Processor                             |
+| -------- | ---------------------------------------- | ---------------------------------------------- |
+| 生命周期 | 长期交互应用、外部 document/session      | 单次或有界 headless invocation                 |
+| 输入     | durable handoff bundle                   | Host 授权 input locator                        |
+| 输出     | 外部 document/result，经 round-trip 接收 | Host-owned intermediate/debug/candidate output |
+| 控制     | launch、exchange、MCP/API/Computer Use   | 固定 executable + argv                         |
+| 用户交互 | 允许并预期                               | 不作为执行成功条件                             |
 
 同一产品可同时贡献两种能力，但必须是两个明确 operation。例如 Blender GUI 编辑使用
 Professional Tool handoff；固定 headless render 可以使用 External Processor。不得把
@@ -234,12 +234,12 @@ MCP 返回 success 文本、进程退出码、窗口获得焦点、输入已注�
 
 Computer Use 的职责分离为：
 
-| Owner | 职责 | 不拥有 |
-| --- | --- | --- |
-| Agent Tool Call | 目标、计划、transport 选择、approval、取消、结果投影 | OS 输入注入、窗口句柄 |
-| Desktop Host | Screen Recording/Accessibility/Input 权限、窗口枚举、受限截图、聚焦和输入原语 | 专业应用业务语义、完成判断 |
-| Professional Tool adapter | app/process/window/document binding、允许动作、前置条件、验证规则 | Agent loop、Host 全局权限 |
-| Plugin/Skill | machine-readable integration/profile；Skill 描述专业方法 | 任意坐标宏、工具协议、自动越权 |
+| Owner                     | 职责                                                                          | 不拥有                         |
+| ------------------------- | ----------------------------------------------------------------------------- | ------------------------------ |
+| Agent Tool Call           | 目标、计划、transport 选择、approval、取消、结果投影                          | OS 输入注入、窗口句柄          |
+| Desktop Host              | Screen Recording/Accessibility/Input 权限、窗口枚举、受限截图、聚焦和输入原语 | 专业应用业务语义、完成判断     |
+| Professional Tool adapter | app/process/window/document binding、允许动作、前置条件、验证规则             | Agent loop、Host 全局权限      |
+| Plugin/Skill              | machine-readable integration/profile；Skill 描述专业方法                      | 任意坐标宏、工具协议、自动越权 |
 
 每个 `ComputerUseSession` 必须显式绑定：
 
@@ -341,15 +341,15 @@ CharacterVersion、WorldVersion、媒体库 source 或 Agent transcript。接受
 
 ## 当前成熟度
 
-| 能力 | 当前状态 |
-| --- | --- |
-| Pi/Agent 与 MCP Manager | 已存在，可复用 |
-| External Processor registry、path/env/output ownership | 已存在，可复用，但不负责 GUI app |
-| ContentLocator、Media Library、Cut OTIO/Export Job | 已存在，可作为 handoff 输入基础 |
-| Desktop Professional Tool catalog/Host port | 不存在，需要实施 |
-| Desktop Computer Use Host port/session/profile | 不存在，需要实施；不得显示可用 |
-| DaVinci、剪映、Photoshop、Live2D、Blender、Unity、ComfyUI integrations | 未实现，不能显示成功 capability |
-| Professional round-trip | 未实现，需要按 owning domain 和真实应用逐项验证 |
+| 能力                                                                   | 当前状态                                        |
+| ---------------------------------------------------------------------- | ----------------------------------------------- |
+| Pi/Agent 与 MCP Manager                                                | 已存在，可复用                                  |
+| External Processor registry、path/env/output ownership                 | 已存在，可复用，但不负责 GUI app                |
+| ContentLocator、Media Library、Cut OTIO/Export Job                     | 已存在，可作为 handoff 输入基础                 |
+| Desktop Professional Tool catalog/Host port                            | 不存在，需要实施                                |
+| Desktop Computer Use Host port/session/profile                         | 不存在，需要实施；不得显示可用                  |
+| DaVinci、剪映、Photoshop、Live2D、Blender、Unity、ComfyUI integrations | 未实现，不能显示成功 capability                 |
+| Professional round-trip                                                | 未实现，需要按 owning domain 和真实应用逐项验证 |
 
 当前仓库没有 `apps/neko-desktop`。本文冻结目标边界，不授权创建空 integration、假 MCP
 tool、未验证 exchange format 或成功 no-op。
@@ -369,8 +369,9 @@ tool、未验证 exchange format 或成功 no-op。
    adapter，不建立跨领域万能 exporter。
 6. 逐工具、逐版本、逐平台扩大 capability level；无真实应用证据时保持 unavailable。
 
-当前发布平台闭集仍是 `darwin-arm64` 与 `linux-x64`。Integration 只声明目标软件真实
-支持且已经验证的平台；Windows 仍需独立平台准入。某工具不支持当前 OS 时返回
+当前原生构建平台闭集是 `darwin-arm64` 与 `win32-x64`，Linux 只用于 host-neutral CI。
+Integration 只声明目标软件真实支持且已经验证的平台；Windows package 不能替代逐工具
+运行态准入。某工具不支持当前 OS 时返回
 `unsupported-platform`，不能通过 Wine、远程 UI 或未验证兼容层返回成功。
 Computer Use 还必须逐平台资格化 Screen Recording、Accessibility/Input、窗口枚举和
 受限截图能力；平台可启动应用不等于具备 Computer Use。远程桌面、锁屏或 headless

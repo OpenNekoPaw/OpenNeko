@@ -16,10 +16,17 @@ Agent + Home，以及 P1.4 Assets + Canvas 的确定性实现：
   confirmation、Home Activity/Attention 和跨 reload/restart 生命周期测试；
 - package-owned Resource Browser Root，Files/Media/Entity facet、ContentLocator 搜索、
   metadata/thumbnail、授权预览和显式添加到目标 Canvas；
+- 项目 Resource Browser 在 Media facet 投影由 Canvas、Cut 与 Entity representation 权威
+  引用派生的缺失/不可用/不完整媒体库；恢复仅经 exact-name plan、确认与 apply，add/relink
+  只维护全局 alias 与项目 link，不复制整库；
+- 项目侧栏 footer 独立拥有便携快照 readiness、计划、确认、进度、取消与跨重启恢复；快照在
+  sibling staging 中只收集被引用字节并 atomic publish，不修改源项目或外部媒体库；
 - package-owned Global Library Browser Root，为全局 Media Library 与 owned Asset Library
   提供列表/网格、双击或 Enter 目录导航、点号隐藏项过滤、revisioned 图像/视频缩略图和静态
   hover 预览；Asset 导入由 Main 复制到 owned root，删除只进入系统废纸篓，Media Library
   移除只断开 managed link；
+- 全局 Library Browser 与项目 Resource Browser 不共享 selection、filter、layout 或 active
+  state；全局资源中心不承载项目恢复或便携快照 lifecycle；
 - package-owned `CanvasWebviewRoot`、`.nkc` document session、revision/save/undo/redo、
   source picker、资源放置、多个 Canvas View 与最多双栏显示；
 - Canvas 素材入口按 owner 收敛为工作区/已链接媒体库直接引用、全局媒体库显式关联或复制、
@@ -80,6 +87,10 @@ pnpm --filter @neko/app-desktop test
 pnpm --filter @neko/app-desktop lint
 pnpm --filter @neko/app-desktop package
 pnpm --filter @neko/app-desktop dev
+pnpm test:functional:headless
+pnpm test:local:ui
+pnpm test:local:media-http
+pnpm test:local:media-http:packaged
 ```
 
 真实 Electron 功能验收可用 `--openneko-functional-fixture` 与
@@ -87,10 +98,28 @@ pnpm --filter @neko/app-desktop dev
 `openneko-desktop-functional-` 开头。该入口只隔离功能 fixture，不替代独立
 `--user-data-dir`，普通启动不会读取该路径。
 
+`pnpm test:functional:headless` 是 CI 可运行的无 GUI Desktop Main/preload/composition
+功能路径，不读取真实用户数据、凭据或 provider。`pnpm test:local:ui` 才会启动图形化
+Electron，并自动创建隔离 functional home 与独立 Electron user-data 目录；关闭应用后清理
+临时目录。该图形化入口不得加入 CI。
+
+`pnpm test:local:media-http` 使用合成 H.264/WAV/Main10-PQ 和 32 MiB fixture 运行专用
+Electron HTTP qualification，验证 metadata、seek、Range、SHA-256、变化帧、anonymous
+CORS、Canvas/WebGL2 重复纹理上传、吞吐和 capability 撤销。原始 JSON 写入 gitignored
+`reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/`。
+`pnpm test:local:media-http:packaged` 对已由 `pnpm package:desktop` 生成的当前平台应用运行
+同一场景。Main10 decode/texture 成功不等于 10-bit surface、zero-copy 或 HDR display
+output 资格。
+
+Desktop 原生构建只接受 `darwin-arm64` 与 `win32-x64`；Linux 可运行 host-neutral
+仓库检查，但在 Forge 前被拒绝。两个目标都固定 Electron `43.2.0` 归档 checksum，
+并在真实匹配 Host 的 CI job 中 typecheck、package 和上传 artifact。Windows package
+仍不等价于安装、启动、凭据、媒体/GPU 和发布资格完成。
+
 `darwin-arm64` 开发包使用 ad-hoc 签名，并保持 sandbox、CSP、ASAR integrity、安全 fuses，
 同时关闭 `file://` extra privileges。Electron V1 fuse 使用严格完整配置：
 `LoadBrowserProcessSpecificV8Snapshot` 保持关闭，因为 Electron `43.2.0` macOS 分发包不包含
 browser-specific snapshot；其余安全取值均显式固定，包括启用 `WasmTrapHandlers`。
-Electron `43.2.0` 的参考平台归档 checksum 已固定，package 可直接校验本地缓存而不重复下载
-`SHASUMS256.txt`。Developer ID、hardened runtime、notarization、installer 和 release
-channel 属于 Phase 2。
+Electron `43.2.0` 的两个目标归档 checksum 已固定，package 可直接校验本地缓存而不重复
+下载 `SHASUMS256.txt`。Developer ID、hardened runtime、notarization、Windows signing/
+installer 和 release channel 属于 Phase 2。

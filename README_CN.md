@@ -23,10 +23,14 @@ OpenNeko 面向希望自主掌控项目文件、模型接入和创作流程的�
 | 创作 Agent | Desktop 项目对话、上下文、工具调用和受控内容生成         |
 | 画布       | 组织 Markdown、媒体、文件、分组、生成 Job 和 Canvas 引用 |
 | 视频时间线 | 轻量音视频编排、预览和 Node/FFmpeg 导出                  |
-| 媒体与实体 | 浏览工作区与已链接媒体库，并投影统一实体与表现绑定       |
+| 媒体与实体 | 浏览工作区/全局媒体库，恢复项目连接并投影实体表现绑定    |
 | 只读预览   | 预览常用文档、图片、音视频和受支持的标准 3D 模型         |
 
 可用的生成与理解能力取决于你配置的 API、模型权限和本地服务。
+
+项目文件只保存可移植的媒体引用，不保存本机媒体库目标。同步或克隆到另一台机器后，Desktop
+会显示缺失的项目媒体库并要求显式恢复连接；普通同步不会复制外部媒体字节。需要完整移交时，可
+创建只收集项目实际引用媒体的独立便携快照。全局资源中心与项目资源管理器保持独立状态。
 
 仓库还保留 Chara、Search、Quality 和媒体比较 Tools 等领域包，但它们尚未全部形成 Desktop
 产品路径。角色项目、Interactive World、专业工具接入和独立素材比较界面当前必须视为 unavailable
@@ -40,19 +44,25 @@ OpenNeko 目前处于 **Alpha** 阶段，以源码体验和产品验证为主。
 
 要求 Node.js 24+ 和 pnpm 10；仓库开发工具链固定为 Node.js 24.18.0 LTS。
 
-支持的平台仅限：
+Desktop 构建目标仅限：
 
-| 系统  | 架构  | 当前 Desktop 资格 |
-| ----- | ----- | ----------------- |
-| macOS | ARM64 | Forge package     |
+| 系统    | 架构  | 当前 Desktop 资格                                 |
+| ------- | ----- | ------------------------------------------------- |
+| macOS   | ARM64 | Forge package；完整 Phase 1 资格仍在进行          |
+| Windows | x64   | 原生 CI package 已纳入门禁；运行态/发布资格待验证 |
 
-Windows、Linux 和 Intel Mac 的 Desktop 发布资格仍暂缓。后续启用前必须在对应真实系统验证 Electron 打包、应用启动、原生依赖以及 Node/FFmpeg 媒体读取和导出路径。
+Linux 只用于 host-neutral CI，不构建 Desktop 产品；Intel Mac 与其他架构不支持。Windows
+只有在真实系统继续通过应用启动、原生依赖、凭据、Node/FFmpeg 媒体读取和导出路径后，
+才能描述为完整发布资格。
 
 ```bash
 pnpm install
 pnpm build
 pnpm dev:desktop
 ```
+
+`pnpm build` 和 `pnpm dev:desktop` 只允许在上述两个原生目标运行；Linux 使用
+`pnpm check:static-build` 做静态验证。
 
 常用验证命令：
 

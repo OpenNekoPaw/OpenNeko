@@ -78,12 +78,17 @@ Host 为不同 consumer 注入 capability-scoped port。调用方不能通过 `c
 
 `neko/assets/<libraryName>` link 的创建、替换和移除是一次性文件系统 helper，不是运行时 registry 或 lifecycle service：
 
+- 新 Desktop link 指向机器全局 `~/.neko/media-libraries/<locationKind>/<libraryName>`
+  alias；alias 再指向物理目录。两个 OS link 分别是项目连接和机器连接的唯一 mapping，
+  SQLite/JSON/runtime service 都不复制 target。
 - `libraryName` 必须是 portable single segment，并与退休 catalog 保留名 `library.json`、平台保留名和现有名称无冲突。
 - 创建 link 时写精确 Git ignore；不得把 target string 提交或打包，也不得宽泛忽略 unrelated real asset。
 - 枚举与 availability 即时来自 `readdir/lstat/stat`，不保存 target、accessible/remapped state 或 background repair metadata。
 - 只允许 `neko/assets` 直接 link 穿越 workspace physical root；其他 unmanaged symlink 继续按普通 containment 拒绝。
 - 最终 realpath 必须位于动态解析的顶层 link target 内，阻止 nested symlink escape。
 - workspace 移动不会改变 absolute-target link；target 移动时 broken link fail-visible，用户 relink 只替换 link。
+- 同步后缺失 link 从 owning project codecs 的权威 `ContentLocator` 派生；恢复只经
+  exact-name plan/confirm/apply，open 与 metadata rebuild 不执行 mutation。
 
 Electron Main 并非真正 OS sandbox，因此仍需上述 guard；但 guard 不负责路径映射，OS 才是映射 owner。
 
@@ -115,6 +120,8 @@ ReadDocument 分别输出语义 `DocumentLocator` 与内容 `DocumentEntryConten
 - NKC/OTIO 写入拒绝媒体库 `${VAR}`、absolute path、file URI、cache/materialized path、Webview/Engine URL。
 - 项目、Asset、generated output、package 和 export 的 ownership 由原有领域 owner 决定；共享 writer 不根据 mode 猜测 destination。
 - package/export 通过 ContentReadService 读取 link descendant 字节，不复制 symlink object 或序列化 target。
+- 普通 Git/folder sync 不包含 linked bytes；独立便携快照只复制权威引用的 bytes，并在
+  sibling staging 中重写项目文档后 atomic publish，不修改 source workspace 或 external target。
 - legacy variable/original path/local override 仅由 migration reader 使用；正常读取和 authoring 不保留 fallback。
 
 ## 派生物不变量
