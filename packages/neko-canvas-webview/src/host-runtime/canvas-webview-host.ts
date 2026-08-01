@@ -288,29 +288,44 @@ export function createCanvasWebviewHost(
     },
     async resolveMaterialActions(selectedNodeIds) {
       await operationTail;
-      const current = snapshot ?? (await runtime.getSnapshot());
-      materialActionRequestSequence += 1;
-      const request = createCanvasMaterialActionResolutionRequest({
-        requestId: `canvas-webview-material-actions:${materialActionRequestSequence}`,
-        expectedRevision: current.revision,
-        identity: runtime.identity,
-        selectedNodeIds: [...selectedNodeIds],
-      });
-      let resolution: Awaited<ReturnType<CanvasHostRuntime['resolveMaterialActions']>>;
-      try {
-        resolution = await runtime.resolveMaterialActions(request);
-      } catch (error: unknown) {
-        emitLoadFailure(error);
-        throw error;
+      let current = snapshot ?? (await runtime.getSnapshot());
+      const resolveForSnapshot = (target: CanvasHostSnapshot) => {
+        materialActionRequestSequence += 1;
+        return runtime.resolveMaterialActions(
+          createCanvasMaterialActionResolutionRequest({
+            requestId: `canvas-webview-material-actions:${materialActionRequestSequence}`,
+            expectedRevision: target.revision,
+            identity: runtime.identity,
+            selectedNodeIds: [...selectedNodeIds],
+          }),
+        );
+      };
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        let resolution: Awaited<ReturnType<CanvasHostRuntime['resolveMaterialActions']>>;
+        try {
+          resolution = await resolveForSnapshot(current);
+        } catch (error: unknown) {
+          const latest =
+            snapshot && snapshot.revision > current.revision
+              ? snapshot
+              : await runtime.getSnapshot();
+          if (attempt > 0 || latest.revision <= current.revision) throw error;
+          adoptLocalSnapshot(latest);
+          current = latest;
+          continue;
+        }
+        if (!areJsonValuesEqual(selectedNodeIds, resolution.selectedNodeIds)) {
+          throw new Error('Canvas material action resolution returned another selection.');
+        }
+        if (snapshot === undefined || snapshot.revision === resolution.revision) {
+          return structuredClone(resolution.descriptors);
+        }
+        if (attempt > 0 || snapshot.revision <= current.revision) {
+          throw new Error('Canvas material action resolution became stale before projection.');
+        }
+        current = snapshot;
       }
-      if (
-        snapshot?.revision !== undefined &&
-        (snapshot.revision !== resolution.revision ||
-          !areJsonValuesEqual(selectedNodeIds, resolution.selectedNodeIds))
-      ) {
-        throw new Error('Canvas material action resolution became stale before projection.');
-      }
-      return structuredClone(resolution.descriptors);
+      throw new Error('Canvas material action resolution exceeded its retry boundary.');
     },
     getAuthoringCapabilities: () =>
       structuredClone(

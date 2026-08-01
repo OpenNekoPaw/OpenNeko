@@ -301,6 +301,100 @@ describe('createCanvasWebviewHost', () => {
     session.dispose();
   });
 
+  it.each(['stale rejection', 'stale response'] as const)(
+    'keeps a content-unavailable node open after a concurrent move returns a %s',
+    async (concurrencyResult) => {
+      const identity = {
+        projectId: 'project-1',
+        workspaceId: 'workspace-1',
+        windowId: 'window-1',
+        viewId: 'view-1',
+        viewEpoch: 1,
+        documentId: 'neko/boards/workspace.nkc',
+        sessionId: 'session-1',
+        endpointEpoch: 'endpoint-1',
+      };
+      const node: MediaCanvasNode = {
+        id: 'media-image',
+        type: 'media',
+        position: { x: 20, y: 30 },
+        size: { width: 320, height: 180 },
+        zIndex: 1,
+        data: {
+          assetPath: 'media/cat.png',
+          mediaType: 'image',
+        },
+      };
+      const session = new CanvasHostRuntimeSession({
+        identity,
+        initialCanvas: { ...DEFAULT_CANVAS_DATA, nodes: [node] },
+        initialPresentation: {
+          viewport: { pan: { x: 0, y: 0 }, zoom: 1 },
+          selectedNodeIds: [node.id],
+        },
+        effects: {},
+      });
+      let releaseFirstResolution = (): void => {};
+      const firstResolutionGate = new Promise<void>((resolve) => {
+        releaseFirstResolution = resolve;
+      });
+      const requestedRevisions: number[] = [];
+      const runtime: CanvasHostRuntime = {
+        identity,
+        getSnapshot: () => session.getSnapshot(),
+        async resolveMaterialActions(request) {
+          requestedRevisions.push(request.expectedRevision);
+          if (requestedRevisions.length === 1 && concurrencyResult === 'stale response') {
+            const resolution = await session.resolveMaterialActions(request);
+            await firstResolutionGate;
+            return resolution;
+          }
+          if (requestedRevisions.length === 1) await firstResolutionGate;
+          return session.resolveMaterialActions(request);
+        },
+        subscribe: (listener) => session.subscribe(listener),
+        executeIntent: (request) => session.executeIntent(request),
+      };
+      const host = createCanvasWebviewHost(runtime);
+      const messages: unknown[] = [];
+      host.subscribe((message) => messages.push(message));
+      host.postMessage({ type: 'ready' });
+      await vi.waitFor(() => {
+        expect(messages).toContainEqual({
+          type: 'update',
+          data: { ...DEFAULT_CANVAS_DATA, nodes: [node] },
+        });
+      });
+
+      const resolution = host.resolveMaterialActions([node.id]);
+      await vi.waitFor(() => {
+        expect(requestedRevisions).toEqual([0]);
+      });
+      host.postMessage({
+        type: 'canvasStatus',
+        data: {
+          ...DEFAULT_CANVAS_DATA,
+          nodes: [{ ...node, position: { x: 160, y: 90 } }],
+          _selection: { nodeIds: [node.id] },
+        },
+      });
+      await vi.waitFor(async () => {
+        expect((await session.getSnapshot()).revision).toBe(1);
+      });
+      releaseFirstResolution();
+
+      await expect(resolution).resolves.toEqual([]);
+      expect(requestedRevisions).toEqual([0, 1]);
+      expect(messages).not.toContainEqual(
+        expect.objectContaining({
+          type: 'canvas.loadFailed',
+        }),
+      );
+      host.dispose();
+      session.dispose();
+    },
+  );
+
   it('does not let a delayed startup snapshot regress the material action revision', async () => {
     const identity = {
       projectId: 'project-1',
