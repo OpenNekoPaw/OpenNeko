@@ -18,12 +18,27 @@ CharacterProject
 拥有不同 durable owner、版本升级和 capability policy，不能在同一活动 session 上切换，也
 不能默认互相召回记忆。
 
+对话记忆使用三个互斥 scope，但 `workspace` 不是第三种角色运行模式：
+
+```text
+workspace conversation -> Workspace Memory，不进入角色记忆
+narrative conversation -> NarrativeSave/WorldSave revisioned event
+companion conversation -> transcript evidence -> accepted relationship memory
+```
+
+时间、空间和叙事密度只用于聚合、摘要粒度、冗余控制和召回多样性；新颖性、重复度、
+连接性、情感强度、用户明确重视和事件后果形成可解释的显著性证据。Scope、分支、时间点、
+角色认知、权限、敏感性和删除状态的硬过滤始终先于密度、显著性、关键词或 embedding 排序。
+Chara 必须保留显著性依据，但不持久化单一 `importance` 分数；密度只是可选的可重建优化，
+首版不要求核密度估计、叙事图指标或其他连续分布模型。
+
 阅读路径：
 
 - [`architecture.md`](architecture.md)：owner、依赖、生命周期与错误边界；
 - [`../../architecture/package-boundaries.md`](../../architecture/package-boundaries.md)：跨包约束；
 - [`../../architecture/adr-agent-runtime-single-authority-and-simplification-boundary.md`](../../architecture/adr-agent-runtime-single-authority-and-simplification-boundary.md)：Agent 收敛顺序；
 - [`../../../openspec/changes/define-character-authoring-and-runtime-mode-boundaries/`](../../../openspec/changes/define-character-authoring-and-runtime-mode-boundaries/)：角色创作、剧情运行、日常陪伴和记忆 owner 的目标设计；
+- [`../../../openspec/changes/define-character-memory-lifecycle-and-salience/`](../../../openspec/changes/define-character-memory-lifecycle-and-salience/)：对话记忆作用域、长期记忆生命周期、密度、显著性与召回设计；
 - [`../../../openspec/changes/extract-neko-chara-domain-package/`](../../../openspec/changes/extract-neko-chara-domain-package/)：第一阶段 package owner 迁移的历史实施设计。
 
 当前不支持 CharacterProject/CharacterVersion 持久格式、发布、NarrativeSave/World runtime、

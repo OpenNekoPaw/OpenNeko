@@ -69,6 +69,36 @@ CharacterProject draft 更新不得静默改变已启动运行。
 每个 active CharacterRun 至多映射一个 primary AgentSession。Companion relationship 可以
 顺序创建多个 run/session，但不能通过共享 responder、active tab 或会话参数切换模拟并发实例。
 
+## 对话记忆作用域
+
+对话在创建时绑定且仅绑定一个 memory scope：
+
+```text
+workspace
+  -> AgentSession transcript
+  -> optional WorkspaceMemory candidate
+  -> Workspace Memory owner
+
+narrative
+  -> AgentSession execution evidence
+  -> NarrativeDialogueEvent / WorldEvent
+  -> NarrativeSave / WorldSave revision
+
+companion
+  -> AgentSession transcript evidence
+  -> RelationshipMemoryCandidate
+  -> UserCharacterRelationship revision
+```
+
+`workspace` 是普通 Agent conversation scope，不是第三种 CharacterRuntimeKind。工作区中的
+角色分析、Dialogue 测试或模拟扮演不能自动进入 NarrativeSave 或 UserCharacterRelationship；
+它只能形成 Workspace Memory 或带来源的 CharacterProject authoring candidate。
+
+Scope 和 owner identity 在 conversation 创建时固定。所有 operation/event 必须携带匹配的
+workspace、save/branch/checkpoint/actor 或 relationship/run identity，不得从 active workspace、
+tab、角色选择或最近会话推断。跨 scope 导入必须使用独立、显式、带 source/target identity 的
+review transaction。
+
 ## 剧情运行
 
 剧情运行固定路径为：
@@ -87,10 +117,19 @@ WorldVersion / accepted NarrativeDefinition
 Narrative/Environment port 消费授权状态，不创建第二套 Storyline/save engine；Canvas
 Storyline 仍只是内容路线与播放投影。
 
+剧情对话不是仅存在于 Agent transcript 的消息。模型生成的 response/action 先是 provisional
+结果，必须由 World/Narrative owner 校验 save、branch、actor、规则和 expected revision，并
+原子提交为带 narrative time/checkpoint、observation scope、source turn 和 committed revision
+的 NarrativeDialogueEvent/WorldEvent。提交失败时不得宣称角色已经说过、听过或记住该内容。
+
 剧情记忆必须先由 save owner 按 save、branch ancestry、checkpoint/timepoint、actor
 knowledge scope 和 event revision 过滤，再交给 Memory infrastructure 排序、压缩或语义召回。
 其他分支、未来事件、未感知事件和另一个 save 的用户互动不得进入当前角色上下文。剧情用户
 互动属于 save event history，不自动进入日常关系或 CharacterVersion。
+
+从旧 checkpoint 继续互动必须创建新 branch identity，而不是改写旧历史。Agent transcript、
+embedding similarity、显著性或叙事连接性都不能把另一个分支或角色未知事件重新引入当前
+MemoryView。
 
 World/Narrative runtime 未实现时，剧情运行必须返回 unavailable diagnostic。
 
@@ -116,10 +155,28 @@ UserCharacterRelationship
 4. 当前 Media/Game 等 Activity context；
 5. 当前 effective capability snapshot。
 
+日常 transcript 可以按 retention policy 跨会话保留为 exact evidence，但可搜索 transcript
+不等于 accepted relationship memory。只有 relationship owner 接受的结构化用户事实、偏好、
+边界、约定、共同经历和关系里程碑进入 RelationshipMemoryView。关闭或压缩 AgentSession
+不删除已接受记忆；transcript 中的寒暄、模型错误和未接受候选也不能因为可搜索而变成事实。
+
 现实背景、模型常识、Tool output 和 Activity state 不是长期记忆。用户消息、工具结果和活动
 事件只能产生带 source、sensitivity、retention class 和 revision 的 memory candidate；最终
 由 relationship owner 接受、拒绝、更正或删除。凭据、私密文件、临时 URL、完整外部 payload
 和 live handle 不得进入关系记忆。
+
+Relationship memory lifecycle 固定为：
+
+```text
+proposed
+  -> accepted -> superseded / deleted
+  -> quarantined -> accepted / rejected / deleted
+  -> rejected
+```
+
+用户明确要求记住的非敏感信息可以进入 policy 允许的快速接受路径。健康、身份、创伤、情绪和
+第三方隐私等模型推断默认不得自动接受。纠错创建新的 relationship revision 并保留 supersession
+来源；删除必须移除内容并失效全部派生索引，tombstone 不能保留可恢复的敏感 payload。
 
 ## 版本升级
 
@@ -169,6 +226,75 @@ CharacterVersion policy、relationship policy 与 Activity scope 的交集。任
 显式、带 source/target identity 的 review transaction，不能由共享版本、语义相似或 active
 selection 自动触发。
 
+## 记忆密度
+
+密度不是首版必需的领域语义。实现可以完全不计算密度；需要处理高频重复、摘要粒度或召回
+多样性时，才在 owner 授权 snapshot 上生成可重建统计投影。首版应优先使用固定时间窗口计数、
+显式 topic/thread 重复计数等简单统计，不要求核密度估计、连续分布拟合或叙事图中心性。
+
+启用密度投影时，它不是事实、confidence 或 importance：
+
+- temporal density：同一 scope 中时间接近事件的密度；
+- spatial density：共享显式 scene/place/region identity 的事件密度；
+- narrative density：共享 arc/topic/goal/relationship thread 的事件密度。
+
+剧情密度只能在 save owner 已按 branch/timepoint/actor knowledge 过滤的集合内计算；空间
+identity 由 World/Narrative owner 提供，不能由相似文本猜测。日常空间密度只使用用户授权的
+粗粒度 place identity，默认不得保存 GPS 轨迹。
+
+密度用于发现重复/连续事件、决定摘要粒度、抑制同主题重复召回和保持多样性。它不得扩大 owner
+scope、证明事件真实、覆盖用户明确重视或直接删除记忆。
+
+## 显著性与召回
+
+显著性是必要的记忆选择语义：Chara 必须能够解释记忆为何被保留、聚合或优先召回，但不要求
+每条记忆具有所有证据，也不要求计算统一数值。显著性保存为可解释证据和派生 feature，不
+持久化单一 `importance` 分数：
+
+| Class      | Evidence / feature                                          | Persistence                                |
+| ---------- | ----------------------------------------------------------- | ------------------------------------------ |
+| intrinsic  | 用户明确重视、事件后果、经授权的情感强度与 valence evidence | 保存带来源的证据                           |
+| structural | 新颖性、独立重复证据数、显式连接性                          | 从 owner snapshot 派生，可缓存重建         |
+| contextual | 当前 query、task、scene、goal relevance                     | 只存在于当前 recall，不写回 durable memory |
+
+- 新颖性相对同 owner 的 accepted memory 计算，模型声称“惊讶”不能证明重要。
+- 重复度按独立 source/turn/event 计数并使用有上限的饱和策略；模型复述不重复计数。
+- 连接性来自显式 entity/event/arc/topic ref，不使用 recall count，避免越召回越重要。
+- 情感 valence 与 arousal/intensity 分离；负面方向不能天然压过用户边界或积极锚点。
+- 用户 `remember-requested` / pinned 是最可靠的长期保留证据，但仍受敏感性和删除策略约束。
+- task relevance 随当前目标动态计算，不能反向修改 durable salience。
+
+Recall 固定先硬过滤后软排序：
+
+```text
+explicit scope + owner identity + expected revision
+  -> authoritative snapshot
+  -> user / relationship / save / branch / timepoint / actor knowledge
+  -> accepted status / version / permission / sensitivity / retention
+  -> lexical/vector relevance + density + salience + contextual relevance
+  -> redundancy suppression + diversity + item/token budget
+  -> MemoryView(owner revision + source refs)
+```
+
+高分不能抵消 hard filter。Owner 成功但没有 eligible memory 是合法空 view；owner、revision、
+permission 或 contractually required index 失败必须返回 diagnostic，不能伪装为空记忆或静默
+改用另一 scope/retriever。
+
+## 聚合、纠错与删除
+
+|              | Low salience                    | High salience                                |
+| ------------ | ------------------------------- | -------------------------------------------- |
+| Low density  | 降低召回权重，按 retention 过期 | 保留独立 anchor                              |
+| High density | 生成派生摘要并抑制重复          | 保留摘要、关键 anchor 和 source episode refs |
+
+自动摘要默认是 derived projection；只有经过 owner policy 显式接受并保留来源，才成为新的领域
+事实。时间衰减只影响召回权重，不自动删除 pinned memory、用户边界、仍有效 agreement 或纠错。
+
+Relationship revision 变化后，全文、embedding、summary、density、salience 和 graph projection
+全部失效。Index result 必须携带 source owner revision；陈旧结果 fail-closed，不能把已删除或
+superseded 内容重新注入 Agent context。Narrative rewind/branch 不删除历史事件，而是改变合法
+因果集合。
+
 ## 项目证据链路
 
 第一阶段角色证据语义继续沿以下 canonical path 装配，未来实现必须改用 Desktop-safe
@@ -197,5 +323,8 @@ fallback。Search 成功但没有角色场景是合法空证据；Entity/Search 
 - 跨包 `Npc*` DTO 与 Agent Webview 角色投影暂时保留在共享 contract/Chat shell；Chara 是语义 owner，后续迁移必须单独设计 wire/persistence 兼容。
 - 现有 `character-memory.json`、路径型 ref 和 `Npc*` DTO 不自动成为新关系/存档格式；后续
   contract OpenSpec 必须明确迁移、重建、拒绝或有意忽略策略。
+- `.neko/memory.md`、关键词 MemoryRecall、Pi transcript/compaction 和 SharedMemoryStore 不得
+  作为 Character 长期记忆 authority；它们分别属于 Workspace Memory、AgentSession 或临时
+  scratchpad。
 - CharacterProject/Version、NarrativeSave/World、UserCharacterRelationship、持久恢复、
   Companion Activity 和独立 Webview 未实现时必须 fail-visible。

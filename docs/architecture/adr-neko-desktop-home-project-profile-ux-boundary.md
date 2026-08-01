@@ -427,14 +427,21 @@ Character、Agent、Tool adapter 和 Host 均不得直接修改 World store。�
 
 #### 6.9 记忆和运行时句柄不跨越所有权边界
 
-| 事实/能力                        | Owner                             |
-| -------------------------------- | --------------------------------- |
-| 角色核心知识、长期记忆和记忆策略 | CharacterProject/CharacterVersion |
-| 一次角色互动产生的记忆候选       | CharacterRun                      |
-| 世界关系、事件和经历             | WorldSave                         |
-| embedding、压缩、索引和召回      | 可重建 Memory infrastructure      |
+| 事实/能力                            | Owner                                |
+| ------------------------------------ | ------------------------------------ |
+| 角色 canon、知识边界和记忆策略       | CharacterProject / CharacterVersion  |
+| 工作区聊天事实和项目决策             | Workspace Memory                     |
+| 剧情分支、时间点、角色可见事件和对话 | NarrativeSave / WorldSave            |
+| 日常跨会话长期互动记忆               | UserCharacterRelationship            |
+| 一次角色互动产生的未提交记忆候选     | NarrativeCharacterRun / CompanionRun |
+| transcript、Tool Call 和 compaction  | AgentSession                         |
+| embedding、摘要、密度、显著性和召回  | 可重建 Memory infrastructure         |
 
-CharacterRun memory candidate 或 WorldSave experience 只有经过显式 review/promotion，并发布新的 CharacterVersion，才能改变可复用角色事实。Memory infrastructure 不拥有晋升决策，也不能直接写 CharacterVersion、WorldSave 或 Agent transcript。
+Workspace Memory 不进入角色运行记忆。剧情对话只有由 save owner 提交后才成为剧情事实；日常
+transcript 只是关系记忆证据，只有 relationship owner 接受的结构化记录进入跨会话召回。运行
+evidence 只有形成独立 CharacterProject authoring insight，并经过显式 review/publish，才能改变
+CharacterVersion canon。Memory infrastructure 不拥有接受或晋升决策，也不能直接写
+CharacterVersion、NarrativeSave、WorldSave、UserCharacterRelationship 或 Agent transcript。
 
 持久项目/版本/存档只保存 `EntityRef`、`ContentLocator`、`RepresentationRef`、`VoiceProfileRef`、`MotionSetRef`、CharacterVersionRef 和 provider-neutral policy 等稳定引用。Device handle/临时枚举 ID、Renderer/Voice/Media live session、Webview/blob/localhost URL、token、进程 ID、绝对 cache path 和 provider object 只能存在于 run-scoped host adapter；恢复时必须重新解析和授权，失败返回 unavailable diagnostic。
 
@@ -478,15 +485,20 @@ Project candidate
 - world-local NPC 变成长期 IP 时，通过显式操作提升为角色候选或角色项目；
 - 提升不得静默改写原世界存档或历史运行。
 
-#### 8.4 三类记忆
+#### 8.4 记忆按运行场景和事实 owner 隔离
 
-| 记忆                             | Owner               | 生命周期                |
-| -------------------------------- | ------------------- | ----------------------- |
-| 角色核心设定、长期知识和记忆策略 | 角色版本 / 角色项目 | 跨项目、版本化          |
-| 一次角色对话产生的记忆           | 角色对话运行        | run-scoped，可审阅提升  |
-| 世界关系、事件和经历             | World Save          | save-scoped，可审阅提升 |
+| 记忆或证据                        | Owner                                | 生命周期                        |
+| --------------------------------- | ------------------------------------ | ------------------------------- |
+| 角色 canon、长期知识和记忆策略    | CharacterProject / CharacterVersion  | 跨项目、版本化                  |
+| 工作区聊天和项目工作记忆          | Workspace Memory                     | workspace-scoped                |
+| 剧情对话、关系、事件和经历        | NarrativeSave / WorldSave            | save/branch/checkpoint-scoped   |
+| 日常已接受的跨会话互动记忆        | UserCharacterRelationship            | relationship-scoped、revisioned |
+| 当前对话 transcript 和 compaction | AgentSession                         | conversation-scoped、可作为来源 |
+| 一次角色互动产生的未提交候选      | NarrativeCharacterRun / CompanionRun | run-scoped、待 owner 接受或拒绝 |
 
-角色运行或世界经历只有经过显式审阅和提升，才能进入后续角色版本；不得自动污染全局角色事实。
+工作区、剧情和日常记忆默认不能互相召回。CharacterVersion 只作为剧情/日常运行的初始 canon；
+运行记忆不得回写发布版本。只有独立的角色创作 insight 经过显式审阅和发布，才能改变后续
+CharacterVersion。
 
 ### 9. Agent scope 与 Activity 路由保持显式
 
