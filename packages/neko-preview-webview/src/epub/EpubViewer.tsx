@@ -192,14 +192,39 @@ const WATERFALL_THEME_CSS = `
   }
   .epub-chapter-content a,
   .epub-chapter-content a:visited { color: var(--neko-textLink-foreground) !important; }
-  .epub-chapter-content img,
-  .epub-chapter-content image {
-    max-width: 100% !important;
-    height: auto !important;
-    display: block !important;
-    margin: 0 auto !important;
-  }
 `;
+
+export const EPUB_PAGINATED_THEME = {
+  body: {
+    background: 'var(--neko-editor-background) !important',
+    color: 'var(--neko-editor-foreground) !important',
+    'font-family': 'var(--neko-font-family) !important',
+    'line-height': '1.6',
+    padding: '20px !important',
+  },
+  'a, a:visited': { color: 'var(--neko-textLink-foreground) !important' },
+  'img, image': {
+    'max-width': '100% !important',
+    height: 'auto !important',
+    display: 'block !important',
+    margin: '0 auto !important',
+  },
+  'svg:has(image)': {
+    'max-width': '100% !important',
+    height: 'auto !important',
+    display: 'block !important',
+    margin: '0 auto !important',
+  },
+} satisfies Record<string, Record<string, string>>;
+
+export function applyEpubImageLayout(root: ParentNode): void {
+  root.querySelectorAll<HTMLElement | SVGSVGElement>('img, svg:has(image)').forEach((page) => {
+    page.style.setProperty('max-width', '100%', 'important');
+    page.style.setProperty('height', 'auto', 'important');
+    page.style.setProperty('display', 'block', 'important');
+    page.style.setProperty('margin', '0 auto', 'important');
+  });
+}
 
 function average(values: Iterable<number>): number | null {
   let total = 0;
@@ -517,13 +542,14 @@ export const EpubViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =
           article.style.padding = `${WATERFALL_CHAPTER_PADDING_PX}px`;
           article.style.boxSizing = 'border-box';
           article.style.borderBottom = '1px solid var(--neko-panel-border)';
-          article.style.margin = '0 auto';
+          article.style.marginInline = 'auto';
 
           const html = await entry.section.render(book.load.bind(book));
           if (sessionId !== measurementSessionRef.current) return getEstimatedChapterHeight();
 
           article.innerHTML = html;
           rewriteSectionResources(article, entry.section.url ?? '');
+          applyEpubImageLayout(article);
           measureContainer.appendChild(article);
 
           await waitForChapterResources(article);
@@ -657,22 +683,7 @@ export const EpubViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =
 
   const setupRendition = useCallback(
     (rendition: Rendition, tocItems: TocItem[]) => {
-      rendition.themes.register('neko', {
-        body: {
-          background: 'var(--neko-editor-background) !important',
-          color: 'var(--neko-editor-foreground) !important',
-          'font-family': 'var(--neko-font-family) !important',
-          'line-height': '1.6',
-          padding: '20px !important',
-        },
-        'a, a:visited': { color: 'var(--neko-textLink-foreground) !important' },
-        'img, image': {
-          'max-width': '100% !important',
-          height: 'auto !important',
-          display: 'block !important',
-          margin: '0 auto !important',
-        },
-      });
+      rendition.themes.register('neko', EPUB_PAGINATED_THEME);
       rendition.themes.select('neko');
 
       rendition.on('relocated', (location: { start: { href: string } }) => {
@@ -976,6 +987,7 @@ export const EpubViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =
         // Use section.url as base (e.g. http://…/epub/{token}/OEBPS/text/ch1.xhtml)
         // so that relative paths like "../image/cover.jpg" resolve correctly.
         rewriteSectionResources(el, entry.section.url ?? '');
+        applyEpubImageLayout(el);
 
         loadedChaptersRef.current.add(entry.index);
         const height = commitChapterHeight(entry.index, measureRenderedChapterHeight(el));
@@ -1598,6 +1610,7 @@ export const EpubViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =
                   minHeight: getChapterPlaceholderHeight(entry.index),
                   boxSizing: 'border-box',
                   borderBottom: '1px solid var(--neko-panel-border)',
+                  marginInline: 'auto',
                 }}
               />
             ))}

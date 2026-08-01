@@ -7,7 +7,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { I18nProvider } from '../i18n/I18nContext';
 import { i18nService } from '../i18n';
 import {
+  EPUB_PAGINATED_THEME,
   EpubViewer,
+  applyEpubImageLayout,
   fetchForEpub,
   waitForEpubImage,
   waitForEpubResourceReadiness,
@@ -89,6 +91,12 @@ describe('fetchForEpub', () => {
         timeout: 5_000,
       });
       expect(container.textContent).not.toContain('Error:');
+
+      const liveChapter = container.querySelector<HTMLElement>(
+        '[data-spine-index].epub-chapter-content',
+      );
+      expect(liveChapter).not.toBeNull();
+      expect(liveChapter?.style.marginInline).toBe('auto');
     } finally {
       await act(async () => root.unmount());
     }
@@ -145,6 +153,36 @@ describe('EPUB archive resource readiness', () => {
 
     await expect(pending).rejects.toThrow('archive resources unavailable');
     expect(openFailed).toBeUndefined();
+  });
+});
+
+describe('EPUB paginated image layout', () => {
+  it('centers image-bearing SVG page canvases without overflowing the content area', () => {
+    expect(EPUB_PAGINATED_THEME['svg:has(image)']).toEqual({
+      'max-width': '100% !important',
+      height: 'auto !important',
+      display: 'block !important',
+      margin: '0 auto !important',
+    });
+  });
+});
+
+describe('EPUB waterfall image layout', () => {
+  it('normalizes raster and SVG image pages through the live chapter DOM path', () => {
+    const chapter = document.createElement('article');
+    chapter.innerHTML = '<img src="page.png"><svg><image href="page.png"></image></svg>';
+
+    applyEpubImageLayout(chapter);
+
+    for (const page of chapter.querySelectorAll<HTMLElement | SVGSVGElement>(
+      'img, svg:has(image)',
+    )) {
+      expect(page.style.maxWidth).toBe('100%');
+      expect(page.style.height).toBe('auto');
+      expect(page.style.display).toBe('block');
+      expect(page.style.margin).toBe('0px auto');
+      expect(page.style.getPropertyPriority('margin')).toBe('important');
+    }
   });
 });
 
