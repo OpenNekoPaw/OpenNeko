@@ -82,6 +82,7 @@ const EXPECTED_RUNTIME_CAPABILITIES = Object.freeze([
   'timeline-projection-authority',
   'tool-result-delivery',
   'desktop-event-projection',
+  'resource-display-projection',
 ]);
 const EXPECTED_LEGACY_CASES = Object.freeze([
   'cat-play-image-analysis',

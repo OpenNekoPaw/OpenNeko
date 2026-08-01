@@ -1,0 +1,149 @@
+{
+  "schema": "neko.agent-eval.scenario.v2",
+  "id": "locator-backed-display-projection",
+  "suiteId": "agent-runtime.stream-delivery",
+  "caseGroup": "regression",
+  "visibility": "public",
+  "evidenceContract": {
+    "userBehavior": "Read one committed workspace image by ContentLocator and project its successful Tool result to the Agent Webview through an authorized transient display source.",
+    "canonicalPath": [
+      "Desktop Agent input queue",
+      "Pi Agent Tool schema",
+      "ReadImage ContentLocator validation",
+      "shared Pi Timeline projector",
+      "conversation projection store",
+      "Desktop message resource display projector",
+      "Desktop OpenNeko resource registry",
+      "package-owned Agent media card",
+      "terminal answer"
+    ],
+    "forbiddenFallback": [
+      "ResourceRef",
+      "absolute path inference",
+      "file URL",
+      "neko-media custom scheme",
+      "data URL",
+      "persisted OpenNeko resource URL",
+      "persisted loopback URL",
+      "provider display-URL fetch",
+      "legacy AgentEvent projector",
+      "direct Pi conversation mutation",
+      "terminal Tool-result accumulator"
+    ],
+    "observables": [
+      {
+        "ref": "display-projection-facts",
+        "kind": "runtime-fact",
+        "description": "Pi and Timeline identity, successful locator-backed ReadImage Tool result, redacted authorized OpenNeko resource projection, terminal idle state, and no-fallback facts.",
+        "required": true
+      }
+    ],
+    "expectedResult": "ReadImage preserves the workspace-file ContentLocator, the terminal Timeline contains the successful Tool result, and Desktop records one redacted authorized OpenNeko resource projection before the final marker.",
+    "expectedFailure": "Missing locator continuity, denied display authorization, URL or path identity substitution, runtime diagnostics, legacy projection participation, or a missing terminal marker fails visibly."
+  },
+  "fixtureRefs": ["creative-planning-workspace"],
+  "runtimeProfileId": "markdown",
+  "modelProfileIds": ["configured-default"],
+  "steps": [
+    {
+      "id": "submit",
+      "kind": "submit",
+      "prompt": "调用 ReadImage 一次，images 只包含一个 workspace-file ContentLocator：path=station-illustration.svg；analysis=general、mode=metadata、max_images=1。必须原样保留 ContentLocator，不要传 ResourceRef、绝对路径、file URL、neko-media URL、data URL 或 display URL。读取成功后简短说明图片类型，最后单独输出 LOCATOR_DISPLAY_PROJECTION_OK。"
+    },
+    {
+      "id": "idle",
+      "kind": "wait-for-idle",
+      "timeoutMs": 180000
+    }
+  ],
+  "assertions": [
+    {
+      "id": "runtime",
+      "kind": "runtime-errors-empty",
+      "evidenceRef": "display-projection-facts"
+    },
+    {
+      "id": "idle",
+      "kind": "fully-idle",
+      "evidenceRef": "display-projection-facts"
+    },
+    {
+      "id": "pi-runtime",
+      "kind": "pi-runtime",
+      "implementation": "pi-agent-core",
+      "transcriptAuthority": "pi-session",
+      "productMetadataAuthority": "sqlite",
+      "purpose": "agent.main",
+      "workspaceLocatorKind": "virtual",
+      "turnDurability": "durable",
+      "evidenceRef": "display-projection-facts"
+    },
+    {
+      "id": "read-image",
+      "kind": "tool-call",
+      "name": "ReadImage",
+      "status": "success",
+      "resultIncludes": {
+        "imageCount": 1,
+        "images": [
+          {
+            "contentLocator": {
+              "kind": "workspace-file",
+              "path": "station-illustration.svg"
+            }
+          }
+        ]
+      },
+      "evidenceRef": "display-projection-facts"
+    },
+    {
+      "id": "timeline",
+      "kind": "timeline-projection",
+      "terminalStatus": "completed",
+      "toolName": "ReadImage",
+      "evidenceRef": "display-projection-facts"
+    },
+    {
+      "id": "display-projection",
+      "kind": "resource-display-projection",
+      "projectionKind": "tool-result",
+      "status": "authorized",
+      "locatorKind": "workspace-file",
+      "transport": "openneko-resource",
+      "renderTarget": "agent-webview",
+      "diagnosticsEmpty": true,
+      "evidenceRef": "display-projection-facts"
+    },
+    {
+      "id": "no-display-fallback",
+      "kind": "no-fallback",
+      "forbiddenRefs": [
+        "ResourceRef",
+        "resourceRef",
+        "absolute-path-inference",
+        "file:",
+        "neko-media:",
+        "data:",
+        "persisted-openneko-resource-url",
+        "persisted-loopback-url",
+        "provider-display-url-fetch",
+        "legacy-agent-event-projector",
+        "direct-pi-conversation-mutation",
+        "terminal-tool-result-accumulator"
+      ],
+      "evidenceRef": "display-projection-facts"
+    },
+    {
+      "id": "answer",
+      "kind": "final-answer",
+      "mode": "contains",
+      "text": ["LOCATOR_DISPLAY_PROJECTION_OK"],
+      "evidenceRef": "display-projection-facts"
+    }
+  ],
+  "artifactChecks": [],
+  "budget": {
+    "timeoutMs": 180000,
+    "repetitions": 1
+  }
+}

@@ -85,6 +85,8 @@ function runGate(assertion, facts, context) {
       return assertTerminalIdle(assertion, facts);
     case 'timeline-projection':
       return assertTimelineProjection(assertion, facts);
+    case 'resource-display-projection':
+      return assertResourceDisplayProjection(assertion, facts);
     case 'structured-output':
       return evaluateStructuredOutput(assertion, facts, context);
     case 'markdown-path':
@@ -747,6 +749,69 @@ function assertTimelineProjection(assertion, facts) {
   };
 }
 
+function assertResourceDisplayProjection(assertion, facts) {
+  const projections = arrayOrEmpty(facts?.resourceDisplayProjections);
+  const projection = projections.find(
+    (candidate) =>
+      candidate?.projectionKind === assertion.projectionKind &&
+      candidate?.status === assertion.status &&
+      candidate?.locatorKind === assertion.locatorKind &&
+      candidate?.transport === assertion.transport &&
+      candidate?.renderTarget === assertion.renderTarget,
+  );
+  if (!projection) {
+    throw new Error(
+      `Resource display projection ${assertion.projectionKind}/${assertion.status}/${assertion.locatorKind}/${assertion.transport} was not observed`,
+    );
+  }
+  const allowedKeys = new Set([
+    'conversationId',
+    'toolCallId',
+    'projectionKind',
+    'status',
+    'locatorKind',
+    'transport',
+    'renderTarget',
+    'diagnosticCodes',
+  ]);
+  const unknownKeys = Object.keys(projection).filter((key) => !allowedKeys.has(key));
+  if (unknownKeys.length > 0) {
+    throw new Error(
+      `Resource display projection exposed non-redacted field(s): ${unknownKeys.join(', ')}`,
+    );
+  }
+  if (
+    !nonEmpty(projection.conversationId) ||
+    projection.conversationId !== facts?.conversationId
+  ) {
+    throw new Error('Resource display projection conversation identity is unavailable or stale');
+  }
+  if (projection.toolCallId !== undefined) {
+    const matchingToolCall = arrayOrEmpty(facts?.turns).some((turn) =>
+      arrayOrEmpty(turn?.toolCalls).some((call) => call?.id === projection.toolCallId),
+    );
+    if (!matchingToolCall) {
+      throw new Error('Resource display projection Tool Call identity is unavailable or stale');
+    }
+  }
+  const diagnosticCodes = arrayOrEmpty(projection.diagnosticCodes);
+  if (assertion.diagnosticsEmpty && diagnosticCodes.length > 0) {
+    throw new Error(
+      `Resource display projection diagnostics observed: ${diagnosticCodes.join(', ')}`,
+    );
+  }
+  return {
+    conversationId: projection.conversationId,
+    toolCallId: projection.toolCallId,
+    projectionKind: projection.projectionKind,
+    status: projection.status,
+    locatorKind: projection.locatorKind,
+    transport: projection.transport,
+    renderTarget: projection.renderTarget,
+    diagnosticCodes,
+  };
+}
+
 function assertMarkdownPath(assertion, facts) {
   assertCompleteEvidence(facts, ['markdownPathEvents']);
   const events = arrayOrEmpty(facts?.markdown?.pathEvents);
@@ -1190,6 +1255,7 @@ function collectRuntimeRefs(facts) {
   const refs = new Set();
   addValues(refs, facts?.piRuntime);
   addValues(refs, facts?.timelineProjection);
+  addValues(refs, facts?.resourceDisplayProjections);
   addValues(refs, facts?.model);
   addValues(refs, facts?.configuration?.chat);
   addValue(refs, facts?.configuration?.digest);

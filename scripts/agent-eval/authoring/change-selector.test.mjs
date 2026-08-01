@@ -67,6 +67,9 @@ describe('Agent Evaluation change-to-suite selector', () => {
         'packages/neko-agent-types/src/conversation-projection.ts',
         'packages/neko-agent-webview/src/render-runtime/conversation-projection-replica.ts',
         'apps/neko-desktop/src/main/desktop-agent-bridge-runtime.ts',
+        'apps/neko-desktop/src/main/desktop-agent-resource-display-projector.ts',
+        'packages/neko-agent-runtime/src/input/message-resource-projector.ts',
+        'packages/neko-agent-webview/src/presenters/resource-display-uri.ts',
         'apps/neko-desktop/src/main/desktop-agent-controller-composition.ts',
         'apps/neko-desktop/src/preload/desktop-agent-event-cursor.ts',
         'scripts/agent-eval/schemas/contracts.mjs',
@@ -120,6 +123,11 @@ describe('Agent Evaluation change-to-suite selector', () => {
         }),
         expect.objectContaining({
           behaviorId: 'desktop-event-projection',
+          suiteId: 'agent-runtime.stream-delivery',
+          suiteIds: ['agent-runtime.stream-delivery'],
+        }),
+        expect.objectContaining({
+          behaviorId: 'resource-display-projection',
           suiteId: 'agent-runtime.stream-delivery',
           suiteIds: ['agent-runtime.stream-delivery'],
         }),

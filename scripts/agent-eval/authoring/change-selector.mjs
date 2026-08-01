@@ -44,6 +44,12 @@ const RULES = Object.freeze([
     'packages/neko-agent-runtime/src/pi/event-projector.ts',
     'apps/neko-desktop/src/main/desktop-agent-bridge-runtime.ts',
   ]),
+  rule('resource-display-projection', 'agent-runtime.stream-delivery', [
+    'packages/neko-agent-runtime/src/input/message-resource-projector.ts',
+    'packages/neko-agent-webview/src/presenters/resource-display-uri.ts',
+    'packages/neko-agent-webview/src/components/ChatView/MediaPreview/',
+    'apps/neko-desktop/src/main/desktop-agent-resource-display-projector.ts',
+  ]),
   regexRule(
     'portable-skill-content',
     (match) => `skill.${match[1]}`,

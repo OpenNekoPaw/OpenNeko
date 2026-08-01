@@ -663,6 +663,18 @@ function m3Facts() {
       { itemId: 'text-1-0', kind: 'assistant_text', itemRevision: 3 },
     ],
   };
+  facts.resourceDisplayProjections = [
+    {
+      conversationId: 'conversation-1',
+      toolCallId: 'tool-1',
+      projectionKind: 'tool-result',
+      status: 'authorized',
+      locatorKind: 'workspace-file',
+      transport: 'openneko-resource',
+      renderTarget: 'agent-webview',
+      diagnosticCodes: [],
+    },
+  ];
   facts.conversationPersistence = {
     authority: 'pi-session',
     catalog: 'sqlite',
@@ -892,6 +904,39 @@ describe('M3 process hard gates', () => {
     expect(evaluateHardGates([assertion], facts, context)[0]).toMatchObject({
       status: 'fail',
       message: expect.stringContaining('image.understand mismatch'),
+    });
+  });
+
+  it('proves a locator-backed Tool result received a redacted OpenNeko display projection', () => {
+    const assertion = {
+      id: 'resource-display',
+      kind: 'resource-display-projection',
+      projectionKind: 'tool-result',
+      status: 'authorized',
+      locatorKind: 'workspace-file',
+      transport: 'openneko-resource',
+      renderTarget: 'agent-webview',
+      diagnosticsEmpty: true,
+      evidenceRef: 'display-facts',
+    };
+    const facts = m3Facts();
+
+    expect(evaluateHardGates([assertion], facts)[0]).toMatchObject({
+      status: 'pass',
+      details: {
+        projectionKind: 'tool-result',
+        status: 'authorized',
+        locatorKind: 'workspace-file',
+        transport: 'openneko-resource',
+        renderTarget: 'agent-webview',
+      },
+    });
+
+    facts.resourceDisplayProjections[0].url =
+      'http://127.0.0.1:43125/v1/resources/must-not-enter-evidence';
+    expect(evaluateHardGates([assertion], facts)[0]).toMatchObject({
+      status: 'fail',
+      message: expect.stringContaining('non-redacted field'),
     });
   });
 

@@ -3,6 +3,10 @@
 This directory owns development-time evaluation contracts for Neko Agent behavior. It is external
 test infrastructure, not an Agent product capability or a second `AgentSession` assembly.
 
+In repository acceptance language, Agent Evaluation means behavior executed through a configured
+real provider API. `pnpm test:agent:eval` is only the key-free harness self-test; it validates
+Evaluation infrastructure but is not itself AI behavior Evaluation.
+
 ## Current Runtime Status
 
 The Desktop application is the only product host. The previous TUI debug-automation driver has been

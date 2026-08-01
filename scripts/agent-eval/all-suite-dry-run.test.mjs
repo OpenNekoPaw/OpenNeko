@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { runAllSuiteDryRun } from './all-suite-dry-run.mjs';
+import { parseDryRunArgs, runAllSuiteDryRun } from './all-suite-dry-run.mjs';
 
 describe('all-suite key-free dry-run', () => {
   it('validates every indexed v2 suite and case', async () => {
@@ -7,7 +7,30 @@ describe('all-suite key-free dry-run', () => {
       schema: 'neko.agent-eval.all-suite-dry-run.v2',
       ok: true,
       suiteCount: 22,
-      caseCount: 50,
+      caseCount: 51,
     });
+  });
+
+  it('validates one exact indexed case without starting provider behavior', async () => {
+    const options = parseDryRunArgs([
+      '--suite',
+      'agent-runtime.stream-delivery',
+      '--case',
+      'locator-backed-display-projection',
+    ]);
+
+    await expect(runAllSuiteDryRun(options)).resolves.toEqual({
+      schema: 'neko.agent-eval.all-suite-dry-run.v2',
+      ok: true,
+      suiteCount: 1,
+      caseCount: 1,
+      suites: [{ id: 'agent-runtime.stream-delivery', caseCount: 1 }],
+    });
+  });
+
+  it('rejects case selection without an owning suite', () => {
+    expect(() => parseDryRunArgs(['--case', 'unknown'])).toThrow(
+      '--case requires --suite',
+    );
   });
 });

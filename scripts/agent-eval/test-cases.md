@@ -153,7 +153,10 @@ closed-loop `feedback` 和 terminal `resize`。活跃 turn 中的新用户输入
 当前 hard gates 覆盖 runtime error、fully idle、canonical turn、final answer、
 Skill identity/status、prompt composition、Markdown path、model/no-fallback、Tool call、
 process order、queue state、cancellation、recovery、retry、terminal
-concerns、structured output、artifact 和 forbidden refs。新增 assertion kind 前必须先
+concerns、Timeline、脱敏 resource display projection、structured output、artifact 和
+forbidden refs。`resource-display-projection` 只接受 locator kind、授权状态和
+`openneko-resource`/`none` transport 分类；fact 出现 URL、token、路径或未知字段时必须失败。
+新增 assertion kind 前必须先
 实现 evaluator 与 key-free 失败测试；metadata-only 字段会被 strict validation 拒绝。
 
 Artifact check 只能访问隔离 fixture 内的相对路径或稳定 runtime ref。路径 traversal、
@@ -215,10 +218,9 @@ pnpm test:agent:eval
 再 dry-run 一个选中的 indexed case：
 
 ```bash
-node scripts/agent-eval/protocol-smoke.mjs \
+node scripts/agent-eval/all-suite-dry-run.mjs \
   --suite agent-runtime.workflow-controller \
-  --case cancel-resume-recovery \
-  --dry-run
+  --case cancel-resume-recovery
 ```
 
 具备真实 provider/model/config/fixture 时，移除 `--dry-run` 执行同一 case。修改多个

@@ -463,6 +463,27 @@ const ASSERTION_SCHEMA = s.union([
     },
     { toolName: EXTERNAL_ID },
   ),
+  s.object({
+    ...ASSERTION_COMMON,
+    kind: s.literal('resource-display-projection'),
+    projectionKind: s.enum([
+      'attachment',
+      'tool-result',
+      'perception',
+      'timeline',
+      'artifact',
+    ]),
+    status: s.enum(['authorized', 'denied']),
+    locatorKind: s.enum([
+      'workspace-file',
+      'document-entry',
+      'generated-output',
+      'package-resource',
+    ]),
+    transport: s.enum(['openneko-resource', 'none']),
+    renderTarget: s.literal('agent-webview'),
+    diagnosticsEmpty: s.boolean(),
+  }),
   s.object(
     {
       ...ASSERTION_COMMON,
@@ -876,6 +897,7 @@ const DEFAULT_EXECUTION_SUPPORT = Object.freeze({
     'conversation-persistence',
     'terminal-idle',
     'timeline-projection',
+    'resource-display-projection',
     'structured-output',
     'markdown-path',
     'artifact',
