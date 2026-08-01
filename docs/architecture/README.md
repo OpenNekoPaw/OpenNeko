@@ -2,10 +2,9 @@
 
 `docs/architecture/` 用于记录系统级架构约束、ADR 和跨领域不变量。根目录 [`../../README_CN.md`](../../README_CN.md) 介绍项目和当前能力；本目录是当前系统架构、决策记录和专题说明的稳定入口。
 
-Electron Desktop 已是唯一应用宿主。保留 ADR 中关于
-VS Code、TUI、VSIX 或 Extension Development Host 的文字只作为历史决策/验证背景，不再
-定义当前 composition、依赖、发布或验收路径；当前规则以 `application-composition.md`、
-`client-targets.md` 和 `package-boundaries.md` 为准。
+Electron Desktop 是唯一应用宿主。当前 composition、依赖、发布和验收路径以
+`application-composition.md`、`client-targets.md` 和 `package-boundaries.md` 为准；本目录
+不保留已退出产品拓扑的宿主设计或已取代 ADR。
 
 Desktop 本地内容投影以统一 `openneko:` scheme 和 exact-resource registry 为唯一 canonical
 transport；`ContentLocator`、领域身份和短生命周期 opaque URL 保持分离。完整安全与
@@ -71,29 +70,8 @@ composition。
 
 | 文档                                                                                                                                   | 目标与实施入口                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | -------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`adr-desktop-package-granularity-and-domain-ownership-boundary.md`](adr-desktop-package-granularity-and-domain-ownership-boundary.md) | Desktop 子包粒度、领域 owner、Host 准入和统一命名的历史评审目标；原分阶段重构提案已撤销，未来实施必须重新建立聚焦 OpenSpec |
 | [`adr-neko-desktop-media-capability-and-security-boundary.md`](adr-neko-desktop-media-capability-and-security-boundary.md)             | Desktop 统一 OpenNeko resource capability、per-consumer PCM、安全和硬件目标；不得从 transport 成功推断 direct codec、10-bit/HDR 或全部 runtime path 已交付                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | [`adr-neko-desktop-professional-tool-handoff-and-mcp-boundary.md`](adr-neko-desktop-professional-tool-handoff-and-mcp-boundary.md)     | 专业工具 handoff、MCP/Computer Use 和 round-trip 目标；具体能力以已完成实施 change 和 Desktop 运行态证据为准                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-
-## 历史/已取代 ADR
-
-| 文档                                                                                                                                                           | 取代说明                                                                                                                                                                                                |
-| -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`adr-agent-idc-skill-planmode-trigger-boundary.md`](adr-agent-idc-skill-planmode-trigger-boundary.md)                                                         | 已被 Agent 动态创作编排 ADR 取代的 IDC/Plan 历史边界                                                                                                                                                    |
-| [`adr-agent-autonomous-filmmaking-creation-boundary.md`](adr-agent-autonomous-filmmaking-creation-boundary.md)                                                 | 已被 Agent 动态创作编排 ADR 取代的影视创作历史边界                                                                                                                                                      |
-| [`adr-agent-message-task-queue-boundary.md`](adr-agent-message-task-queue-boundary.md)                                                                         | 消息队列与计划进度分离仍有效；通用 Task/TaskCard 已被 Tool Call 与领域 Job 取代                                                                                                                         |
-| [`adr-agent-internal-continuation-boundary.md`](adr-agent-internal-continuation-boundary.md)                                                                   | Subagent 结构化回传原则仍有效；通用 Task continuation 已被取代                                                                                                                                          |
-| [`adr-agent-native-creation-capability-boundary.md`](adr-agent-native-creation-capability-boundary.md)                                                         | Agent 原生创作边界的历史过渡设计                                                                                                                                                                        |
-| [`adr-canvas-creative-ai-candidate-actions.md`](adr-canvas-creative-ai-candidate-actions.md)                                                                   | 已被 Canvas 六节点/JobCard 模型取代的 Shot/Scene AI 按钮历史边界                                                                                                                                        |
-| [`adr-neko-desktop-home-project-profile-ux-boundary.md`](adr-neko-desktop-home-project-profile-ux-boundary.md)                                                 | Desktop 尚未建立时期的目标 UX；当前事实由 application composition、client targets、Roadmap 与具体 Desktop OpenSpec 接续                                                                                 |
-| [`adr-neko-desktop-apphost-resource-viewport-boundary.md`](adr-neko-desktop-apphost-resource-viewport-boundary.md)                                             | Desktop 产品壳已删除；当前边界由 application composition、package boundaries 与 Media Runtime 文档接续                                                                                                  |
-| [`adr-neko-workbench-core-plugin-host.md`](adr-neko-workbench-core-plugin-host.md)                                                                             | Workbench Core 与 Desktop Plugin Host 已随产品裁剪删除；仅保留为历史设计背景                                                                                                                            |
-| [`adr-single-extension-single-level-workspace-and-shared-ownership-boundary.md`](adr-single-extension-single-level-workspace-and-shared-ownership-boundary.md) | 单一 VS Code 扩展方案已被 Desktop-only composition 取代；一级 workspace 约束由当前 package boundaries 接续                                                                                              |
-| [`adr-cut-otio-vscode-desktop-media-runtime-boundary.md`](adr-cut-otio-vscode-desktop-media-runtime-boundary.md)                                               | Cut 跨宿主过渡设计已被唯一 Desktop 与 Node/FFmpeg runtime 取代                                                                                                                                          |
-| [`adr-cut-otio-vscode-media-runtime-boundary.md`](adr-cut-otio-vscode-media-runtime-boundary.md)                                                               | VS Code Cut 运行时历史设计；不再是实现或验收入口                                                                                                                                                        |
-| [`webview-media-security.md`](webview-media-security.md)                                                                                                       | VS Code Webview 安全历史设计；当前 renderer 安全边界由 package boundaries 与 Desktop media ADR 接续                                                                                                     |
-| [`marketplace.md`](marketplace.md)                                                                                                                             | Market/Registry 客户端、Market Core 和安装面已删除；仅保留为历史产品设计背景                                                                                                                            |
-| [`adr-markdown-storyboard-draft-protocol.md`](adr-markdown-storyboard-draft-protocol.md)                                                                       | 已被 [`adr-unified-markdown-resource-rendering.md`](adr-unified-markdown-resource-rendering.md) 和 Canvas `canvas.ingestMarkdown` / Creative Table profile 方案取代；仅保留为历史背景，不作为新实现入口 |
 
 机器可读的质量门禁输入放在 [`../../quality/`](../../quality/)，例如代码债务台账和 Agent 边界 LCD register；本目录只保留人类可读的架构决策和规则说明。
 
@@ -102,8 +80,6 @@ composition。
 | 内容                           | 应放位置                                |
 | ------------------------------ | --------------------------------------- |
 | 单个领域内部架构               | `docs/domains/<domain>/architecture.md` |
-| 竞品、市场、技术调研           | `docs/research/`                        |
-| 当前 gap、迁移进度、健康度快照 | `docs/status/`                          |
 | 尚未稳定的开发变更             | `openspec/changes/`                     |
 | 供脚本和 CI 消费的 JSON 台账   | `quality/`                              |
 | 单包实现细节                   | `packages/<pkg>/docs/`                  |

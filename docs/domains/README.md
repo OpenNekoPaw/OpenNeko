@@ -14,4 +14,4 @@ Library，Creative Entity 通过稳定引用与其连接。Generation 的实现�
 - `architecture.md`：领域 owner、contract、依赖、生命周期和错误边界；
 - 按需增加 `capability-map.md`、`data-flow.md` 或 `integration.md`。
 
-尚在设计或实施中的内容放入 [`../../openspec/changes/`](../../openspec/changes/)，不要把任务进度写成稳定领域事实。已移除产品的旧设计只可作为明确标注的历史材料保留。
+尚在设计或实施中的内容放入 [`../../openspec/changes/`](../../openspec/changes/)，不要把任务进度或已退出产品拓扑的设计写成稳定领域事实。

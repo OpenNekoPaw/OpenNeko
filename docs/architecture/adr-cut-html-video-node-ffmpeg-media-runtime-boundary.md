@@ -6,10 +6,8 @@
 媒体预览、PCM、派生表示与导出。
 
 本文定义单 Video Track、多 Audio Track、单 Subtitle Track 的轻量 Cut 媒体运行时。
-它接续并提升
-[`adr-cut-otio-vscode-media-runtime-boundary.md`](adr-cut-otio-vscode-media-runtime-boundary.md)
-中仍有效的 OTIO 工程与 host-neutral media ports 约束，并取代此前由应用管理 MSE、
-`SourceBuffer` 和视频缓冲窗口的设计。
+OTIO 工程、host-neutral media ports、原生 HTML media 与 Node/FFmpeg 是唯一当前路径；
+应用不管理 MSE、`SourceBuffer` 或视频缓冲窗口。
 
 ## 背景
 
@@ -51,7 +49,7 @@ OTIO document + revision
 FFmpeg、`<video>` 和 AudioContext 不得独立解释完整 OTIO。所有 operation、
 generation、session 和 cache entry 必须携带显式 document/session identity；
 缺失或陈旧 identity、未知 schema/version 和未实现 operation 必须 fail-visible，
-不得回退 Engine、第二套项目事实或隐式 active document。
+不得切换到平行媒体实现、第二套项目事实或隐式 active document。
 
 ### 2. 原生 `<video src>` 是唯一 Cut 视频路径
 
@@ -79,7 +77,7 @@ buffer window，也不把完整文件读入应用内存。Node 只按浏览器�
 | Profile                                    | Host 行为  | Webview 行为         |
 | ------------------------------------------ | ---------- | -------------------- |
 | H.264/AVC、8-bit、YUV 4:2:0、SDR、MP4/M4V  | 注册原文件 | 原生 Range seek/play |
-| 已通过目标 VS Code runtime 验证的 VP8 WebM | 注册原文件 | 原生 Range seek/play |
+| 已通过目标 Electron runtime 验证的 VP8 WebM | 注册原文件 | 原生 Range seek/play |
 
 非零 Clip source start 直接进入 descriptor 的 `mediaTimeOriginSeconds`。Chromium
 根据容器 sample table 和 Range 请求完成关键帧 pre-roll。Host 不为 compatible
@@ -184,7 +182,7 @@ FFmpeg/FFprobe 继续负责 probe、硬件 preparation、截帧、缩略图、�
 ### 9. 唯一 composition path
 
 每个 composition root 只有一个 Cut media adapter。不得保留 MSE fallback、
-旧 Engine adapter、双 probe、双视频 descriptor 或播放失败后的隐藏转码。未知
+平行媒体 adapter、双 probe、双视频 descriptor 或播放失败后的隐藏转码。未知
 profile、非法 URL、缺失硬件能力和 session mismatch 必须 fail-visible。
 
 ## 验证要求
@@ -196,8 +194,8 @@ profile、非法 URL、缺失硬件能力和 session mismatch 必须 fail-visibl
   `SourceBuffer`；
 - active/standby、same-Clip retain、paused seek、Clip boundary、EOF 和 dispose；
 - PCM PTS、预缓冲、峰值、generation handoff 和 A/V drift；
-- 真实 Extension Development Host 验证 CSP、Range 请求、变化帧、边界和 console；
-- 普通浏览器不能替代 VS Code Webview 运行态验收。
+- 真实 Electron Desktop 验证 CSP、Range 请求、变化帧、边界和 console；
+- 普通浏览器不能替代 Electron Renderer 运行态验收。
 
 ## 后果与权衡
 
@@ -206,14 +204,14 @@ profile、非法 URL、缺失硬件能力和 session mismatch 必须 fail-visibl
 - 浏览器拥有其擅长的视频流控，应用状态机显著缩小；
 - compatible source 零视频预处理、零 Clip 临时文件、零应用级视频字节复制；
 - 双槽只表达真实的单轨边界需求；
-- VS Code 与 Desktop 可以共享同一 descriptor 和 Host adapter。
+- Cut、Preview 和 Canvas 可以复用 package-owned descriptor 与媒体 primitive。
 
 代价：
 
 - Chromium 的 Range 粒度和媒体缓存不由 Cut 精确控制；
 - 长 GOP seek 仍可能读取较大区间；
 - remux/硬件转换必须先完成 seekable file，首次准备延迟更高；
-- 产品仍需在每个目标 Electron/VS Code runtime 验证 codec/profile。
+- 产品仍需在每个目标 Electron runtime 验证 codec/profile。
 
 被拒绝：
 
@@ -222,7 +220,7 @@ profile、非法 URL、缺失硬件能力和 session mismatch 必须 fail-visibl
 - 为所有 Clip 建立 video consumer：资源随 Timeline 长度增长；
 - 所有输入预转码：破坏 compatible source 的低延迟直接路径；
 - WebCodecs 作为普通播放：要求应用拥有 demux、帧调度、色彩和 surface；
-- 旧 Engine 或 CPU fallback：形成双事实并隐藏资格失败。
+- 平行媒体实现或 CPU fallback：形成双事实并隐藏资格失败。
 
-后续跨 Extension、Webview、Node/FFmpeg、`@neko/media` 和 owning contract 的
+后续跨 Desktop Main、Renderer、Node/FFmpeg、`@neko/media` 和 owning contract 的
 非平凡替换仍必须先更新 OpenSpec，再按唯一 canonical path 实施和验收。

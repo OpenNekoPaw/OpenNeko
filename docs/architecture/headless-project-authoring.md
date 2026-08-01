@@ -49,7 +49,7 @@ Authoring core 不导入 Electron、React 或 DOM。Desktop 不通过打开隐�
 
 ## Source identity
 
-持久事实可以保存 stable `ContentLocator`、`ContentFileSourceRef`、asset/entity ID、workspace-relative path、`${VAR}/path` 或 project-owned JSON。不得保存 renderer URI、blob URL、cache/temp path、Engine token、stream id、Range URL、preview URL 或未晋升的生成缓存产物。
+持久事实可以保存 stable `ContentLocator`、`ContentFileSourceRef`、asset/entity ID、workspace-relative path、`${VAR}/path` 或 project-owned JSON。不得保存 renderer URI、blob URL、cache/temp path、runtime token、stream id、Range URL、preview URL 或未晋升的生成缓存产物。
 
 Canvas Board 的二进制生成媒体必须先提交到项目拥有的稳定生成目录并取得 durable identity；未指定目标时只能使用定义好的 workspace board，不能从 active/recent UI 状态、conversation binding 或 runtime group 猜测写入目标。
 

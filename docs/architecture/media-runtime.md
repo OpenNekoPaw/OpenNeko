@@ -4,9 +4,7 @@
 
 更新日期：2026-08-01
 
-OpenNeko 的本地媒体 canonical path 是 `@neko/media` 与各领域的窄媒体
-port。`packages/neko-engine` 和 `packages/neko-client` 已删除，不是可选
-fallback。
+OpenNeko 的本地媒体 canonical path 是 `@neko/media` 与各领域的窄媒体 port。
 
 ## 职责
 
@@ -58,7 +56,7 @@ byte source、one-shot stream 或 frozen resource set，不解析 `ContentLocato
   不得进入实时预览或预览代理路径。
 - 硬件 decoder/filter/encoder 缺失或拒绝源 profile 时返回
   `MediaRuntimeUnavailableError`。HDR 截帧需要 CPU filter/readback 时独立
-  失败，不得阻塞另一个已合格播放路径，也不得回退旧 Engine。
+  失败，不得阻塞另一个已合格播放路径，也不得切换到平行媒体实现。
 - Desktop 也不因 Electron 而自动扩大 direct profile。只有精确 release target
   的真实变化帧 fixture 和输出链资格验证通过后，才能增加 direct codec 或
   `hdr-qualified-preview`；否则使用同一平台硬件 preparation path 或明确失败。
@@ -168,7 +166,6 @@ DTS，以及 macOS 硬件视频闭包或 Windows portable software floor；缺�
 
 ## 验证
 
-- `pnpm check:engine-retirement-boundary`
 - `pnpm --filter @neko/media test -- --run`
 - `pnpm validate:media-matrix ~/Git/neko-test/cases`
 - Desktop 必须在打包 Electron runtime 与隔离 fixture workspace 中验证 OpenNeko

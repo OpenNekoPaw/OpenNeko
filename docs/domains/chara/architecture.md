@@ -114,7 +114,7 @@ WorldVersion / accepted NarrativeDefinition
 ```
 
 当前架构由 World 拥有规则、事件、branch、save 和 replay。Chara 通过窄
-Narrative/Environment port 消费授权状态，不创建第二套 Storyline/save engine；Canvas
+Narrative/Environment port 消费授权状态，不创建第二套 Storyline/save runtime；Canvas
 Storyline 仍只是内容路线与播放投影。
 
 剧情对话不是仅存在于 Agent transcript 的消息。模型生成的 response/action 先是 provisional
@@ -298,7 +298,7 @@ superseded 内容重新注入 Agent context。Narrative rewind/branch 不删除�
 ## 项目证据链路
 
 第一阶段角色证据语义继续沿以下 canonical path 装配，未来实现必须改用 Desktop-safe
-ContentLocator/Content port，不能恢复旧 VS Code file adapter：
+ContentLocator/Content port，不能建立 package-local file adapter：
 
 1. Entity 通过稳定 `CreativeEntityRef` 提供 canonical name、display name 和 aliases，不负责角色问题检索或 prompt 组装。
 2. Chara 分别以非空角色名称和别名调用 Project Search，并按稳定 Search item ID 去重。当前回合问题和内部 Entity ID 不得进入 `story-symbols` 查询。
@@ -319,8 +319,8 @@ fallback。Search 成功但没有角色场景是合法空证据；Entity/Search 
 - 缺失 CharacterVersion、workspace、Entity identity、required evidence、save/branch/checkpoint、
   relationship revision、Activity owner、permission 或非法 run/session 必须返回明确 diagnostic。
 - 不得回退 active run、另一运行模式、旧版本、普通 Agent conversation 或 empty-memory success。
-- 旧 Entity Character runtime 和 Agent-owned controller 已删除，不提供 compatibility re-export。
-- 跨包 `Npc*` DTO 与 Agent Webview 角色投影暂时保留在共享 contract/Chat shell；Chara 是语义 owner，后续迁移必须单独设计 wire/persistence 兼容。
+- Chara 是 Character 语义与 application runtime 的唯一 owner，不提供平行 controller 或 re-export。
+- 跨包 `Npc*` DTO 与 Agent Renderer 角色投影属于共享 contract/Chat shell；Chara 仍是语义 owner，wire/persistence 变更必须通过独立 OpenSpec。
 - 现有 `character-memory.json`、路径型 ref 和 `Npc*` DTO 不自动成为新关系/存档格式；后续
   contract OpenSpec 必须明确迁移、重建、拒绝或有意忽略策略。
 - `.neko/memory.md`、关键词 MemoryRecall、Pi transcript/compaction 和 SharedMemoryStore 不得

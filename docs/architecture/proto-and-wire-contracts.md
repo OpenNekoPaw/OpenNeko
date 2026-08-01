@@ -35,7 +35,7 @@ package-owned L0 contract
 ## 不变量
 
 - 普通共享 TypeScript shape 不得以 `*.proto -> interface` 生成链伪装为 wire contract。
-- 功能包通过窄领域 port 消费 `@neko/media`，不得重建万能 client 或旧 Engine DTO。
+- 功能包通过窄领域 port 消费 `@neko/media`，不得重建万能 media client 或平行 DTO。
 - runtime handle、token、端口、URL、blob、renderer URI 和 stream id 不写入项目格式。
 - 未知 message、schema/version、缺失字段和陈旧 session identity 必须明确失败。
 - UI projection 可以裁剪字段，但不能改变 identity、error、cancel 或 lifecycle 语义。
@@ -56,9 +56,8 @@ Host 内部类型不满足准入条件。
 
 ## 验证
 
-- `pnpm check:application-boundaries` 阻止已删除 Proto 包、生成器和 Engine Timeline/Diff
-  生成物回流；
+- `pnpm check:application-boundaries` 阻止已删除 Proto 包、生成器和 Timeline/Diff 生成物回流；
 - media port、Node adapter、browser client 与 owning package message 测试；
 - token、Range、PCM、session identity、dispose/cancel 路径测试；
 - project-format 测试证明 runtime 字段未被持久化；
-- `pnpm check:engine-retirement-boundary` 证明旧 client/DTO/route 不会返回。
+- application boundary 与路径测试证明未注册 client/DTO/route 不会返回成功。

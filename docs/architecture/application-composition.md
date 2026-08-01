@@ -43,19 +43,14 @@ renderer/webview packages -X-> electron or node:*
 - 缺失 Desktop adapter、未知 IPC message、过期 instance identity 或被移除宿主入口必须
   fail-visible。
 
-## 已移除宿主
+## 唯一宿主
 
-VS Code Extension、TUI、VSIX、Extension Development Host、`host-vscode` adapter 和
-`acquireVsCodeApi` bridge 不再是产品、开发、测试或发布入口。不得通过 alias、动态 optional
-import、兼容 package、fallback transport、空命令或成功 no-op 恢复这些路径。
-
-历史归档文档可以保留旧宿主事实；active architecture、当前 OpenSpec 和 executable
-configuration 必须以 Desktop 为唯一 canonical path。
+产品、开发、测试和发布入口均以 Electron Desktop 为唯一 canonical path。不得通过 alias、
+动态 optional import、平行 package、fallback transport、空命令或成功 no-op 建立第二条宿主路径。
 
 ## 数据与资源
 
 - 项目文件和 Desktop settings 是受保护用户数据；宿主清理不得删除、覆盖或静默迁移它们。
-- 已移除的未发布 VS Code/TUI state 不导入 Desktop，也不作为 fallback。
 - FFmpeg/ffprobe、Range/PCM producer、watcher 与内容解析由 owning Node/domain adapter
   管理；Desktop Main 拥有唯一 exact-resource registry、opaque ID、`webContentsId`
   sender authorization 及 Window/View/session/renderer-epoch/generation 撤销生命周期。

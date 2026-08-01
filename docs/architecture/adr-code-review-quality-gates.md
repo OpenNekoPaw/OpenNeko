@@ -48,9 +48,9 @@ OpenNeko 采用“架构优先、契约优先、风险分级、证据驱动”�
 - Desktop Main 不导入 React/ReactDOM 或 Webview 实现；preload 不暴露通用 IPC/Node 能力。
 - TypeScript domain 层不重复 Node/FFmpeg adapter 已拥有的媒体执行职责。
 - Protobuf 和共享契约仍是跨层类型单一事实来源。
-- 持久项目数据使用相对路径、`${VAR}/path`、stable refs、asset/entity ID 或 document locator，不保存 Webview URI、blob URL、stream ID、preview token 或 engine token。
+- 持久项目数据使用相对路径、`${VAR}/path`、stable refs、asset/entity ID 或 document locator，不保存 Renderer URL、blob URL、stream ID、preview token 或 runtime token。
 - 文件、文档、媒体、模型、缩略图、preview/proxy、导入、导出或跨包传递必须经过 `ContentReadService`、`ContentRepresentationService`、capability-scoped runtime projection、authorized writer、领域媒体 port 或项目文件服务中对应的 owning boundary；功能包只实现 storage-neutral generator/adapter 和领域语义，不重新实现 cache manager、path resolver、Webview URI 投影或 loopback token/Range policy。
-- 缓存是透明、可重建的派生状态；业务逻辑、Agent 工具、Webview、Canvas 节点、Storyboard、Composite artifact 和跨插件 payload 不得把 `.neko/.cache` 目录结构、cache manifest、materialized path、`cachePath`、`runtimePath`、`cacheResourceRef`、Webview URI、blob/object URL、Engine token、preview token 或 scratch path 当作 durable identity。
+- 缓存是透明、可重建的派生状态；业务逻辑、Agent 工具、Renderer、Canvas 节点、Storyboard、Composite artifact 和跨插件 payload 不得把 `.neko/.cache` 目录结构、cache manifest、materialized path、`cachePath`、`runtimePath`、`cacheResourceRef`、Renderer URL、blob/object URL、runtime token、preview token 或 scratch path 当作 durable identity。
 - Webview 可访问 URI 只能由 Host 注入的 `WebviewContentProjectionPort` 在授权后生成；`LocalResourceAccessService` 只存在于该 Host adapter 内。投影失败必须返回明确 diagnostic 或 fail closed，不能回退为 raw local/cache/source path。
 - 异步流程处理错误、取消、超时、资源释放和竞态边界。
 - 公共契约、关键分支和失败路径有测试或明确残余风险。
@@ -129,7 +129,7 @@ Desktop App/session owner，并通过 Desktop Agent input queue 提交消息；�
 
 当前 Desktop 尚未暴露 complete-session evaluation driver。需要真实 provider-backed case 时，
 runner 必须返回 `infrastructure-blocked`，并在交付说明中记录缺失 owner；不得回退到已移除
-TUI driver、旧 headless runner 或只凭最终文本宣称通过。
+仅 headless driver、单元 runner 或只凭最终文本宣称通过。
 
 原始 Evaluation 报告写入 gitignored `reports/agent-eval/`。长期文档只提交脱敏摘要，保留
 suite/case/run、identity、assertion/artifact refs、failure classification 和 residual risk，
@@ -195,7 +195,7 @@ Webview/React 变更新增组件前，review 必须确认已经做过组件复�
 新功能涉及组件样式、主题、国际化、日志、错误/诊断、配置、路径、文件保存/读写、资源授权、缓存、DTO 或跨包契约时，review 必须确认已经做过公共基础能力审计：
 
 - 是否优先复用或更新 `@neko/shared`、`@neko/ui`、`@neko/media`、`@neko/entity`、`@neko/search`、project-file-io、resource cache 或既有 domain service。
-- 是否避免了 package-local design system、theme token、i18n runtime、logger/error 类型、项目文件 IO、cache manager、path resolver、Engine HTTP/WS client 或共享 DTO 的并行实现。
+- 是否避免了 package-local design system、theme token、i18n runtime、logger/error 类型、项目文件 IO、cache manager、path resolver、媒体 HTTP/WS client 或共享 DTO 的并行实现。
 - 如果公共入口缺少能力，是否优先扩展公共契约、公共 adapter、公共 hook/primitive 或 domain service，而不是复制一份功能包私有实现。
 - 如果能力留在 owning package，是否说明了业务边界、依赖方向、后续提取条件和验证命令。
 
@@ -206,14 +206,14 @@ Webview/React 变更新增组件前，review 必须确认已经做过组件复�
 当变更涉及文件、文档、媒体、模型、PSD、字幕、附件、缩略图、preview variant、proxy、OCR/ASR/metadata sidecar、导入、导出、Send to Canvas/Storyboard、Agent 工具或跨包资源传递时，review 必须额外确认：
 
 - 调用方是否使用 stable `ContentLocator` 和窄 `stat/read`、representation 或 capability-scoped projection port；不得通过 intent、target、materialization、qualityMode 或 caller 字符串自行选择 Host 路径与权限。
-- 二进制/媒体/container entry 是否经 Engine-backed content access 或注册 provider；纯文本、配置和 `nk*` 项目事实是否经项目文件/text 服务，且没有误进资源缓存。
-- 缓存路径、manifest、document-reader scratch、system temp、Webview URI、blob/object URL、Engine token 和 preview URL 是否只存在于 runtime/projection/diagnostic，不进入 durable payload、Agent memory、Canvas node、Storyboard row、artifact 或剪贴板稳定引用。
+- 二进制/媒体/container entry 是否经 `@neko/media`、content access 或注册 provider；纯文本、配置和 `nk*` 项目事实是否经项目文件/text 服务，且没有误进资源缓存。
+- 缓存路径、manifest、document-reader scratch、system temp、Renderer URL、blob/object URL、runtime token 和 preview URL 是否只存在于 runtime/projection/diagnostic，不进入 durable payload、Agent memory、Canvas node、Storyboard row、artifact 或剪贴板稳定引用。
 - generated 输出是否按 scratch / draft / promoted source / derivative 分类：draft 只能作为当前会话 projection；promoted source 必须在 `.neko/.cache` 外；ResourceCache 只能保存 thumbnail/preview/proxy/metadata 等可重建 derivative，不能保存 generated source variant。
 - Webview 展示是否通过 Host 注入的 `WebviewContentProjectionPort` 生成授权 URI；失败时是否 fail-visible，而不是返回 raw local path、cache path 或未验证 source URL。
 - 新增 generator/adapter 是否接入共享 Host content composition，并保持 storage-neutral；产品包不得注册或持有 ResourceCache provider、manifest、root、GC 或生命周期。
 - 测试是否是路径级验收：断言 canonical service/provider/message/adapter 被命中，并证明 direct fs read、cache-path lookup、legacy field fallback、package-local path conversion 或 Webview URI fallback 没有参与。
 
-缺少这组审计的内容路径变更，应至少视为 L2；涉及 Engine file access、media stream、document container、Agent tool 或跨包 payload 时，默认按 L3 review。
+缺少这组审计的内容路径变更，应至少视为 L2；涉及媒体文件访问、media stream、document container、Agent tool 或跨包 payload 时，默认按 L3 review。
 
 ## 跨子包能力复用审计
 
@@ -246,7 +246,7 @@ proposal / spec scenario
 - 是否违反 proposal non-goals。
 - 每个新增公共契约或关键 scenario 对应哪个测试或 smoke。
 - 哪些验证未运行以及原因。
-- 剩余风险进入 OpenSpec follow-up、`TODO_CN.md` / `TODO.md`、`ROADMAP_CN.md` / `ROADMAP.md` 或带日期的 `docs/status/` 快照。
+- 剩余风险进入 OpenSpec follow-up、`TODO_CN.md` / `TODO.md` 或 `ROADMAP_CN.md` / `ROADMAP.md`。
 
 ## 自动化与人工边界
 

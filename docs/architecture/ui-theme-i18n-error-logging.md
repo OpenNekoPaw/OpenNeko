@@ -38,12 +38,12 @@
 | 可进入 `@neko/ui`                                                                      | 留在功能包内                                                                |
 | -------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
 | Button、IconButton、Badge、Dialog、Select、Slider、Tabs、Toolbar、Tooltip 等无业务原语 | Agent Header/Input/ModelSelector、Timeline 具体业务面板、Canvas 专属节点 UI |
-| CreativeWorkbenchShell、CreativeLeftRail、MainPanelControlLayer 等创作工具壳           | 某领域的具体工具状态、命令协议、Engine command 组装                         |
+| CreativeWorkbenchShell、CreativeLeftRail、MainPanelControlLayer 等创作工具壳           | 某领域的具体工具状态、命令协议、runtime command 组装                        |
 | ViewportShell、OverlayRenderer、frame metadata bridge                                  | 具体 Canvas/Cut/Preview 媒体状态机                                          |
 | KeyboardBoundary、keyboard dispatcher、focus CSS                                       | 功能包快捷键业务命令和编辑器状态                                            |
 | 通用 property panel、number slider、timeline ruler、tree view                          | 领域 schema、文件格式、素材实体业务                                         |
 
-`@neko/shared/components` 是 legacy UI 兼容面。新 renderer UI 优先进入 `@neko/ui`；只有历史迁移兼容或明确 allowlist 才继续使用 `@neko/shared/components`。
+新 Renderer UI 进入 `@neko/ui`；`@neko/shared/components` 不作为新增 UI 的公共入口。现有调用方应按组件 owner 和依赖层级迁移，不得形成双 design system。
 
 ### UI 边界规则
 
@@ -89,7 +89,7 @@ Desktop theme preference + nativeTheme
 | Desktop host       | application settings + OS locale                                       | Main 只投影稳定 locale 与 typed diagnostic，不维护第二套 renderer bundle      |
 | Renderer           | `I18nService`、`detectWebviewLocale`、`I18nProvider`、`useTranslation` | 每个 package-owned surface 注册命名空间 bundle，React 通过 provider/hook 消费 |
 | Agent Skill/Prompt | Skill localized content、provider cards、prompt fragments              | 用 Agent/Skill 自己的 locale 规则，不把 prompt 文案混入 UI bundle             |
-| Engine/Rust        | error code/details                                                     | 返回 code 和诊断上下文，不承担最终 UI 翻译                                    |
+| Node/FFmpeg/领域 runtime | error code/details                                                | 返回 code 和诊断上下文，不承担最终 UI 翻译                                    |
 
 ### Renderer i18n 模型
 

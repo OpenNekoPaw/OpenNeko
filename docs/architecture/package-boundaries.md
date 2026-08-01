@@ -6,7 +6,7 @@
 对应变更：`replace-desktop-media-scheme-with-http-resource-gateway`
 
 本文定义当前一级 workspace 的依赖方向、公共能力 owner，以及 Electron Desktop 和
-Node/FFmpeg 媒体运行时的边界。包名、入口和示例只描述当前保留实现；已移除宿主不构成兼容要求。
+Node/FFmpeg 媒体运行时的边界。包名、入口和示例只描述当前 Electron Desktop 实现。
 
 ## 分层与依赖方向
 
@@ -101,7 +101,7 @@ runtime 入口。
 
 `@neko/workbench-core` 和 `@neko/market-core` 不在 workspace 中。保留 Canvas、Cut、Agent 和 Preview Webview 直接暴露 package-owned host adapter；应用根显式组合这些公共入口。
 
-不得通过 TypeScript alias、空 package、legacy export、动态 optional import 或成功 no-op 恢复已移除组合层。未来出现两个以上真实、同生命周期、同错误模型的复用点时，应先通过 OpenSpec 定义新的中立 contract，而不是复活旧包。
+不得通过 TypeScript alias、空 package、旁路 export、动态 optional import 或成功 no-op 建立第二个组合层。未来出现两个以上真实、同生命周期、同错误模型的复用点时，应先通过 OpenSpec 定义新的中立 contract。
 
 ## Desktop Main 与 preload
 
@@ -146,9 +146,7 @@ Desktop 应用和本地资源统一使用 `openneko:` scheme：`desktop` host �
 
 ## Node/FFmpeg 媒体运行时
 
-`packages/neko-engine` 与 `packages/neko-client` 已从 workspace 和源码拓扑删除；本地
-gitignored 构建产物不构成保留 package。当前媒体边界由 `@neko/media`、领域 port 和
-FFmpeg adapter 组成；不存在 Engine fallback。
+当前媒体边界由 `@neko/media`、领域 port 和 Node/FFmpeg adapter 组成，不保留平行媒体 client。
 
 - H.264/Range、原生 HTML video、PCM、抽帧、波形、转码和导出遵循
   [`media-runtime.md`](media-runtime.md)。
@@ -158,8 +156,8 @@ FFmpeg adapter 组成；不存在 Engine fallback。
   live runtime。
 - OTIO、Canvas 文档、Agent 会话和其他项目事实由 owning domain 持有，FFmpeg
   只是有界执行 adapter。
-- 新媒体能力先更新中立 contract，再接 owning package adapter 和真实 Webview
-  路径测试；不得恢复 Engine route/client/DTO。
+- 新媒体能力先更新中立 contract，再接 owning package adapter 和真实 Renderer
+  路径测试；不得建立第二套 route/client/DTO。
 
 ## Agent 子包
 
@@ -227,7 +225,7 @@ Character IP 与 Interactive World 已确定为独立 bounded context，必须�
 Agent、Renderer、Device、表现 runtime 和 host adapter。`neko-agent` 不导入 Character/World；
 Character core 不导入 World 私有实现；运行期环境交互通过窄 port 或 host-owned adapter 组合。
 
-角色只拥有说话、动作、表情、移动意图、感知、交互 affordance 和个体行为策略；地图、目标、任务、战斗、经济、成长、事件调度和整体胜负状态归 World。当前缺失的 Character Project/Version、World、Device/Live、Scene/Puppet 和持久 2D/3D 路径必须保持 fail-visible，不能因为第一阶段 package 已建立就恢复旧实现或宣称支持。
+角色只拥有说话、动作、表情、移动意图、感知、交互 affordance 和个体行为策略；地图、目标、任务、战斗、经济、成长、事件调度和整体胜负状态归 World。当前缺失的 Character Project/Version、World、Device/Live、Scene/Puppet 和持久 2D/3D 路径必须保持 fail-visible，不能因为基础 package 已建立就宣称支持。
 
 角色创作与运行使用以下 canonical split：
 

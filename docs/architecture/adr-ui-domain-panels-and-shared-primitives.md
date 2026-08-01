@@ -62,11 +62,11 @@ OpenNeko 的创作 UI 复用边界采用以下原则：
 | 视觉原语       | Button、IconButton、Badge、Dialog、Tabs、Toolbar、Tooltip、Panel shell、Section、EmptyState       |
 | 表单控件       | NumberInput、Slider、ColorPicker、Select、Switch、Checkbox、Stepper、SegmentedControl             |
 | 创作控件约束   | 统一 spacing、density、disabled、focus ring、keyboard suppression、tooltip、a11y、drag affordance |
-| 主题与布局约束 | VS Code token、`--neko-*` token、radius、border、scroll container、panel resize rule              |
+| 主题与布局约束 | `--neko-*` token、radius、border、scroll container、panel resize rule                            |
 | 稳定低语义组合 | 属性行、分组、轴向输入、数值/颜色/选择属性行、TreeView visual shell、keyframe visual shell        |
 | 测试工具       | Webview UI test utils、keyboard/focus helpers、render wrappers                                    |
 
-这些共享能力只接收 props、callbacks 和 typed data，不拥有领域状态、文件格式、Engine command、Agent runtime 或 Extension message 协议。
+这些共享能力只接收 props、callbacks 和 typed data，不拥有领域状态、文件格式、领域 runtime command、Agent runtime 或 Desktop message 协议。
 
 ### 当前共享原语覆盖
 
@@ -139,7 +139,7 @@ OpenNeko 的创作 UI 复用边界采用以下原则：
 
 通用 `PropertyPanel` / property schema 只适合以下场景：
 
-- Engine、插件、provider 或外部 manifest 在运行时返回未知字段列表。
+- 领域 runtime、插件、provider 或外部 manifest 在运行时返回未知字段列表。
 - provider、shader、effect、filter 等参数数量和名称本身是动态数据。
 - 同一通用 inspector 需要渲染多个无固定 UI 的扩展对象。
 - 需要把 schema 作为跨进程、跨语言或插件 contract 传递。
@@ -174,11 +174,11 @@ Domain state/store
 动态属性面板：
 
 ```text
-Engine/plugin/provider schema
+domain/plugin/provider schema
   -> canonical property schema
   -> generic PropertyPanel
   -> typed schema commit command
-  -> domain/engine boundary
+  -> owning-domain boundary
 ```
 
 若多个领域都需要相同的视觉排版，应提取低语义 UI primitive 或 layout helper，而不是提取领域数据 adapter。例如优先提取 `PanelSection`、`AxisGroup`、`LayerTreeShell`、`ParameterSliderList`，而不是提取 `mapDomainTransformToProperties()` 这类领域映射。
@@ -223,7 +223,7 @@ Engine/plugin/provider schema
 </PanelSection>
 ```
 
-组合原语必须透传预览与提交两个阶段，而不是只暴露最终提交。`NumberInput`、`NumberSlider`、`ColorPicker` 等基础控件已经区分 `onPreviewChange` 和 `onCommit`；`AxisGroup.Axis`、`SliderPropertyRow`、`NumberPropertyRow`、`ColorPropertyRow` 等组合件也必须保持这个契约，以支持拖拽实时预览、放手提交、撤销合并和 Engine/Webview 节流。
+组合原语必须透传预览与提交两个阶段，而不是只暴露最终提交。`NumberInput`、`NumberSlider`、`ColorPicker` 等基础控件已经区分 `onPreviewChange` 和 `onCommit`；`AxisGroup.Axis`、`SliderPropertyRow`、`NumberPropertyRow`、`ColorPropertyRow` 等组合件也必须保持这个契约，以支持拖拽实时预览、放手提交、撤销合并和 Host/Renderer 节流。
 
 这样固定面板和动态面板共享视觉与交互原语，但不共享数据模型。
 
@@ -284,7 +284,7 @@ Cut 的 keyframe timeline 是当前迁移锚点：领域包从 store 投影出 U
 - 领域 UI 更直接表达创作工作流，减少无意义的转换层。
 - `@neko/ui` 保持无业务、低耦合、可跨包复用。
 - 固定面板重构不再因为适配通用 schema 而增加代码量。
-- 动态参数面板仍有明确共享路径，适合 Engine、插件、shader、effect 和 provider 参数。
+- 动态参数面板仍有明确共享路径，适合领域 runtime、插件、shader、effect 和 provider 参数。
 
 代价：
 

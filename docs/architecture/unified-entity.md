@@ -45,7 +45,7 @@ Alice 不是一张图片或一个模型文件。Alice 是稳定实体；立绘�
 | `VisualIdentityDraft` | AI 视觉草案与可审阅建议 | owning project fact |
 | occurrence / relationship / availability | 可重建 read model | user SQLite projection |
 
-Entity metadata 只保存语义或领域中立属性。文件路径、thumbnail/cache path、Webview URI、Engine token、provider raw response、license 或任意旧 catalog metadata 不得写入 Entity metadata。
+Entity metadata 只保存语义或领域中立属性。文件路径、thumbnail/cache path、Renderer URL、runtime token、provider raw response、license 或任意非 canonical catalog metadata 不得写入 Entity metadata。
 
 ## Identity 生命周期
 

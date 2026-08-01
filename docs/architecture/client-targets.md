@@ -51,13 +51,6 @@ Linux 只运行 lint、测试、OpenSpec、依赖分析和 browser-safe build �
 - 未来新增另一应用宿主必须先建立独立 OpenSpec 和真实 adapter 需求；当前不保留
   speculative multi-host registry。
 
-## 已移除目标
-
-VS Code Extension 和 TUI 已从 workspace、依赖、脚本、CI 和发布配置移除。它们的未发布
-本地 state 不迁移到 Desktop，也不构成兼容要求；项目文件与 Desktop settings 保持不变。
-旧宿主 message、command、manifest、VSIX 或 adapter 被重新引入时必须由拓扑/边界检查
-fail-visible。
-
 ## 验证重点
 
 | 层级             | 最低验证                                                                                       |

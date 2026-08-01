@@ -20,7 +20,7 @@
 
 - 角色、场景、物品、地点或风格身份；
 - 生成结果、文档 entry、package 或外部同步 provider 的生命周期；
-- cache、thumbnail/proxy materialization、Webview URI 或 Engine token；
+- cache、thumbnail/proxy materialization、Renderer URL 或 runtime token；
 - 任意本机路径 registry、通用资源 ID registry 或自动文件 relocation。
 
 ## Canonical 模型
@@ -56,7 +56,7 @@ link 文件名就是媒体库名称，两个 OS link 分别拥有项目连接与
 - 项目只 Git-ignore link 路径，不提交 target string，也不宽泛忽略媒体内容。
 - 移动工作区不会破坏相对 link target；绝对 link target 的有效性由 OS 决定。应用不维护第二份修复映射。
 
-link 不可用时，媒体库显示 safe diagnostic 与 relink 操作。不得尝试同名目录、旧设置变量或历史 target 作为回退。
+link 不可用时，媒体库显示 safe diagnostic 与 relink 操作。不得尝试同名目录、其他设置变量或最近 target 作为回退。
 
 ## 同步、恢复与便携快照
 
@@ -96,7 +96,7 @@ state；便携快照进度属于项目生命周期 surface。
 - 不写 `library.json`；
 - 不把同步 provider 或 link target 写入项目事实。
 
-Search 返回 canonical locator。legacy Asset partition、绝对路径、变量路径、cache path 或陈旧 fingerprint 只能被丢弃并重建，不能被修补成新的 authority。
+Search 只返回 canonical locator。绝对路径、变量路径、cache path 或陈旧 fingerprint 不构成可接受结果。
 
 ## 内容读取与表现
 
@@ -110,7 +110,7 @@ Search 返回 canonical locator。legacy Asset partition、绝对路径、变量
 | package resource | package owner manifest/trust adapter |
 | thumbnail/proxy/preview | `ContentRepresentationService`；cache 仅是 Host 内部实现 |
 
-公共或持久契约不得包含绝对 source path、link target、cache path、materialization 状态、Webview URL、Engine token 或 provider-private error。
+公共或持久契约不得包含绝对 source path、link target、cache path、materialization 状态、Renderer URL、runtime token 或 provider-private error。
 
 ## 显式操作
 
@@ -133,19 +133,7 @@ link 存在不等于目标可写。复制与删除必须明确选择 library、�
 
 Creative Entity 是 character、scene、object、location 和 style 的唯一语义身份 authority。`EntityRepresentationBinding` 直接保存 workspace、document-entry、generated-output 或 package-resource locator。
 
-文件移动或 fingerprint 不匹配时，binding 变为 orphaned。Search 可以给出候选，但只有显式 rebind 可以修改 confirmed binding；不得通过旧 catalog、fingerprint registry 或文件名猜测自动迁移。
-
-## Legacy Asset catalog
-
-以下路径已退休，正常 runtime 不得读取或返回成功：
-
-- `AssetEntity -> AssetVariant -> AssetFile`；
-- `neko/assets/library.json`；
-- `project://assets/<id>`；
-- Asset Source registry、import/promote membership；
-- Asset-specific Extension API、commands、search partition 与 Agent capability。
-
-遗留数据只进入显式 inspection/migration/recovery。迁移先创建 content-addressed archive、校验 revision/digest，再把可确定记录转换为 locator 或 binding；歧义和无 owner metadata 保留在 unresolved report。archive 绝不是正常读取的回退源。
+文件移动或 fingerprint 不匹配时，binding 变为 orphaned。Search 可以给出候选，但只有显式 rebind 可以修改 confirmed binding；不得通过旁路 catalog、fingerprint registry 或文件名猜测自动迁移。
 
 ## 存储归属
 
@@ -176,7 +164,7 @@ Creative Entity 是 character、scene、object、location 和 style 的唯一语
 - link target 不出现在项目事实、Agent payload、Webview state 或 safe diagnostic。
 - projection 可删除重建，且不会创建 Entity facts。
 - copy/delete 命中 shared Host Content I/O 和授权 writer；package resource 无 owner adapter 时 fail-visible。
-- legacy catalog handler 被 poison，不能参与成功路径。
+- 路径测试证明只有 canonical locator handler 参与成功路径。
 - open/metadata rebuild 不改 link、target 或项目事实；add/relink 不复制整库。
 - recovery 只能经 plan/confirm/apply；package/export 只按权威 locator 经 ContentReadService
   解引用被请求字节。

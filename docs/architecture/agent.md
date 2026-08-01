@@ -8,7 +8,7 @@
 
 Pi 是唯一 canonical Agent、主模型、Tool 调度、Skill 读取和 transcript/context 执行路径。
 `AgentSession`、`AgentExecutor`、Think/Act/ReAct、Platform chat adapter、Vercel AI SDK chat
-glue、legacy Skill lifecycle 和自建 Journal 已被替换，不得作为正常路径、fallback 或恢复来源。
+Agent 不保留第二套 Skill lifecycle、transcript repository 或 session Journal。
 
 ## 系统定位
 
@@ -22,7 +22,7 @@ Agent 是领域无关智能运行内核，不是创作领域。它负责：
 
 Agent 不拥有：
 
-- Canvas、Cut、Assets、Preview、Character、Generation、Quality、Entity、Search 或 Engine 事实；
+- Canvas、Cut、Assets、Preview、Character、Generation、Quality、Entity、Search 或媒体 runtime 事实；
 - 领域 Job 的 snapshot、retry/reconciliation、结果提交或历史页面；
 - workspace 文件 IO、Electron/renderer 生命周期或 React 状态；
 - 第二套 transcript、Skill cache、provider chat registry 或通用 TaskManager。
@@ -37,7 +37,7 @@ Agent 不拥有：
 | 依赖 | Renderer 只依赖共享 contract；Desktop Main composition 依赖 host-neutral runtime 和具体领域 port；Agent core 不依赖 Electron、React 或具体领域实现；领域包不反向依赖 Agent。                                                    |
 | 接口 | conversation/branch/turn/run/tool-call identity、Tool schema、model-purpose snapshot、Capability contribution、domain Job port、Timeline patch 和 ContentLocator 分层定义；禁止自由 JSON 和 active-state fallback。                |
 | 扩展 | 新 provider 通过 Pi registration 或 owning media runtime 接入；新 Skill 使用 Pi `SKILL.md`；新领域能力先由 owning package 定义 contract，再通过 contribution 注入。                                                             |
-| 测试 | deterministic path/schema/identity/permission/legacy-poison 测试证明 canonical path；key-free evaluation 验证 harness；真实 Desktop complete-session 场景证明模型与 UI 行为。                                                   |
+| 测试 | deterministic path/schema/identity/permission 测试证明 canonical path；key-free evaluation 验证 harness；真实 Desktop complete-session 场景证明模型与 UI 行为。                                                                 |
 
 ## 分层与依赖方向
 
@@ -208,7 +208,7 @@ Cut UI
 ```
 
 共享 job-lifecycle 只拥有 typed identity、phase、revision、CAS、terminal immutability 和
-observation 机械规则。每个领域拥有 submit、provider/Engine identity、reconciliation、retry
+observation 机械规则。每个领域拥有 submit、provider/executor identity、reconciliation、retry
 policy、结果验证与原子提交。
 
 Agent 不直接读写 JobStore，不建立通用 Job/Task dispatcher、global Activity 页面或
@@ -237,7 +237,7 @@ JobRef/revision 的新 Tool Call。
 进入持久上下文或领域项目的结果必须接地到稳定事实：
 
 - `ContentLocator`、asset/entity ID；
-- Search source、Engine output；
+- Search source、媒体或领域执行 output；
 - Canvas/Cut/Character 等 owning project revision 和格式；
 - concrete domain Job terminal result。
 
@@ -254,7 +254,7 @@ DAG、plan authorization 或领域 project state。Canvas、Cut、Preview 等 su
 - Tool schema、permission、confirmation、cancellation；
 - Pi Session authority、lease fencing、checkpoint durability；
 - Skill trust/locator/receipt/no-cache；
-- canonical provider/domain port 被命中，legacy path 被 poison；
+- canonical provider/domain port 被命中，未注册旁路无法返回成功；
 - Desktop Main/preload/renderer projection 的 producer/consumer contract。
 
 `pnpm test:agent:eval` 只验证 key-free harness、schema、fixture 和 hard gate，不能描述为真实
@@ -266,10 +266,10 @@ effective model、usage/cost、artifact/path fact 与 no-fallback evidence。Des
 
 - `AgentSession` / `AgentExecutor` / Think-Act-ReAct；
 - Platform/Vercel AI SDK 主模型 chat fallback；
-- legacy Journal/history hydration/custom compaction；
+- 第二套 Journal/history hydration/custom compaction；
 - Skill lifecycle/activation/ToolGuard/model override；
 - generic TaskManager、JobManager、payload/result dispatcher；
 - Webview-owned runtime、active conversation singleton、latest Job fallback；
-- 默认空数据、默认成功、兼容 reader 或双写 transcript。
+- 默认空数据、默认成功、旁路 reader 或双写 transcript。
 
 命中上述路径必须使架构检查、测试或运行时 diagnostic 失败，而不是继续返回成功。

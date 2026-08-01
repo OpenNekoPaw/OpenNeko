@@ -2,7 +2,7 @@
 
 - 状态：Accepted
 - 日期：2026-07-25
-- 范围：OpenNeko 产品入口、Agent runtime、Skill、Tool/capability contribution、Canvas、Cut、Assets/Entity、Preview、Quality、Export，以及 TUI / VS Code composition root
+- 范围：OpenNeko Desktop 产品入口、Agent runtime、Skill、Tool/capability contribution、Canvas、Cut、Assets/Entity、Preview、Quality 与 Export
 
 本文补充
 [`adr-agent-directed-creative-orchestration-and-domain-capability-boundary.md`](adr-agent-directed-creative-orchestration-and-domain-capability-boundary.md)、
@@ -56,7 +56,7 @@ OpenNeko 的顶层 Agent 入口围绕以下交互职责组织：
 默认不得各自扩张为并列顶层 Agent 功能。只有满足以下任一条件时，才可以保留独立命令或直接 UI：
 
 - 操作具有高频、确定、低歧义的直接操纵价值；
-- VS Code 或操作系统要求独立的文件、编辑器、导航或生命周期入口；
+- Electron Desktop 或操作系统要求独立的文件、编辑器、导航或生命周期入口；
 - 操作具有需要用户显式识别的权限、成本、安全或不可逆边界；
 - 真实用户研究或 Evaluation 证明统一意图入口显著降低成功率或可发现性。
 
@@ -106,9 +106,8 @@ Tool、Skill、Prompt fragment、AGENTS/environment overlay、reference contribu
 - 可通过运行时证据证明目标 contribution 被消费；
 - 缺失、冲突、陈旧或版本不匹配时 fail-visible。
 
-仅有类型、Provider、getter、注册表条目或单元测试，不代表能力已经接入产品。TUI 和 VS Code 可以拥有
-不同宿主 adapter，但必须复用同一 runtime assembly 契约，且都能证明最终 Prompt、Tool 集合和上下文
-投影包含预期贡献。
+仅有类型、Provider、getter、注册表条目或单元测试，不代表能力已经接入产品。Desktop composition
+必须证明最终 Prompt、Tool 集合和上下文投影包含预期贡献。
 
 同名 Tool、Skill、Prompt fragment 或 capability identity 默认是契约冲突。Registry 必须拒绝冲突并
 返回 owner-aware diagnostic；不得通过注册顺序、最后写入覆盖或静默 first-writer-wins 决定运行行为。
@@ -186,8 +185,8 @@ capability，增加少量 typed contract、revision validation 或路径测试�
 - 合并 Tool 前必须确认事务、权限和错误语义一致，不能仅因名称相似强行抽象。
 - 过大的通用 `apply` 容易变成无边界万能接口，必须由领域 schema、operation union、revision 和 policy
   约束。
-- Prompt 和 Tool 的实际投影需要跨 TUI、VS Code 与测试 harness 保持一致，composition root 的验证
-  成本会上升。
+- Prompt 和 Tool 的实际投影需要在 Desktop runtime 与测试 harness 之间保持一致，composition root
+  的验证成本会上升。
 - 当前实现与本 ADR 仍有差距；后续删除命令、收敛 Tool、修改 Provider 契约或接通 Prompt composition
   属于非平凡变更，必须通过独立 OpenSpec 定义范围、迁移和路径级验收。
 
@@ -203,5 +202,4 @@ capability，增加少量 typed contract、revision validation 或路径测试�
 5. Tool 路径测试断言正确 owner、revision、handler/adapter 和最终副作用被命中。
 6. 按 `.codex/skills/neko-agent-evaluation/SKILL.md` 运行聚焦真实 Agent Evaluation，观察能力选择、
    跳过/重排、失败恢复和交付证据；key-free harness 只能证明评测基础设施，不替代真实行为验收。
-7. 涉及 Webview 交互时，按 `vscode-extension-debugger` 要求在隔离 fixture workspace 中完成 Extension
-   Development Host 验证。
+7. 涉及 Renderer/Webview 交互时，在隔离 fixture workspace 中完成真实 Electron Desktop 验证。
