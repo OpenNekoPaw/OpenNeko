@@ -9,8 +9,12 @@ export {
 export {
   NodeMediaLoopbackServer,
   createPcmPacketTransform,
+  type NodeMediaLoopbackServerOptions,
+  type NodeMediaPublisher,
+  type NodeMediaResourceSetEntry,
   type PcmPacketTransformOptions,
   type RegisteredMediaFile,
+  type RegisteredMediaResourceSet,
   type RegisteredPcmStream,
 } from './NodeMediaLoopbackServer';
 export { NodeMediaRuntime, type NodeMediaRuntimeOptions } from './NodeMediaRuntime';

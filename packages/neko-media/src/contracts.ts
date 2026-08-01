@@ -3,18 +3,23 @@ export interface MediaSource {
 }
 
 export type MediaFailureScope = 'source' | 'stream' | 'interval' | 'operation';
-export type MediaTransport = 'http' | 'authorized';
+export type MediaTransport = 'http';
 
 export function isMediaTransport(value: unknown): value is MediaTransport {
-  return value === 'http' || value === 'authorized';
+  return value === 'http';
 }
 
 export function isMediaTransportUrl(value: string, transport: MediaTransport): boolean {
+  if (transport !== 'http') return false;
   try {
     const url = new URL(value);
-    return transport === 'http'
-      ? url.protocol === 'http:' && url.hostname === '127.0.0.1'
-      : url.protocol === 'neko-media:' && url.hostname === 'desktop';
+    return (
+      url.protocol === 'http:' &&
+      url.hostname === '127.0.0.1' &&
+      url.port.length > 0 &&
+      url.username.length === 0 &&
+      url.password.length === 0
+    );
   } catch {
     return false;
   }
@@ -65,6 +70,14 @@ export interface PcmStreamDescriptor {
   readonly channels: number;
 }
 
+export interface HtmlAudioDescriptor {
+  readonly version: 1;
+  readonly transport: MediaTransport;
+  readonly url: string;
+  readonly mimeType: string;
+  readonly durationSeconds: number;
+}
+
 export type HtmlVideoPreparationProfile =
   | 'h264-mp4-direct'
   | 'av1-mp4-direct'
@@ -108,7 +121,6 @@ export interface MediaRuntimeQualification {
   readonly ffprobeVersion: string;
   readonly hardwareAccelerators: {
     readonly videoToolbox: boolean;
-    readonly vaapi: boolean;
   };
   readonly decoders: {
     readonly h264: boolean;
@@ -124,7 +136,6 @@ export interface MediaRuntimeQualification {
   readonly encoders: {
     readonly h264: boolean;
     readonly h264VideoToolbox: boolean;
-    readonly h264Vaapi: boolean;
     readonly aac: boolean;
   };
   readonly filters: {
@@ -135,8 +146,6 @@ export interface MediaRuntimeQualification {
     readonly loudnorm: boolean;
     readonly ebur128: boolean;
     readonly scaleVt: boolean;
-    readonly scaleVaapi: boolean;
-    readonly tonemapVaapi: boolean;
   };
 }
 

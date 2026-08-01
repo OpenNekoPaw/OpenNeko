@@ -11,7 +11,7 @@ import { NodeMediaRuntime } from './NodeMediaRuntime';
 
 export const MEDIA_RUNTIME_DESCRIPTOR_SCHEMA = 'openneko.media-runtime.v2';
 
-export type MediaRuntimeTarget = 'darwin-arm64' | 'linux-x64';
+export type MediaRuntimeTarget = 'darwin-arm64' | 'win32-x64';
 
 export interface MediaRuntimeDescriptor {
   readonly schemaVersion: typeof MEDIA_RUNTIME_DESCRIPTOR_SCHEMA;
@@ -52,8 +52,8 @@ const DECODER_CAPABILITIES = [
   'flac',
   'dts',
 ] as const;
-const HARDWARE_ACCELERATOR_CAPABILITIES = ['videoToolbox', 'vaapi'] as const;
-const ENCODER_CAPABILITIES = ['h264', 'h264VideoToolbox', 'h264Vaapi', 'aac'] as const;
+const HARDWARE_ACCELERATOR_CAPABILITIES = ['videoToolbox'] as const;
+const ENCODER_CAPABILITIES = ['h264', 'h264VideoToolbox', 'aac'] as const;
 const FILTER_CAPABILITIES = [
   'zscale',
   'tonemap',
@@ -62,8 +62,6 @@ const FILTER_CAPABILITIES = [
   'loudnorm',
   'ebur128',
   'scaleVt',
-  'scaleVaapi',
-  'tonemapVaapi',
 ] as const;
 
 export async function verifyMediaRuntimeDirectory(
@@ -121,7 +119,7 @@ function parseMediaRuntimeDescriptor(value: unknown): MediaRuntimeDescriptor {
     throw new Error('Media runtime descriptor schema is invalid.');
   }
   const target = value['target'];
-  if (target !== 'darwin-arm64' && target !== 'linux-x64') {
+  if (target !== 'darwin-arm64' && target !== 'win32-x64') {
     throw new Error('Media runtime descriptor fields are invalid.');
   }
   const ffmpegVersion = readRequiredString(value, 'ffmpegVersion');
@@ -135,6 +133,7 @@ function parseMediaRuntimeDescriptor(value: unknown): MediaRuntimeDescriptor {
       required,
       'hardwareAccelerators',
       HARDWARE_ACCELERATOR_CAPABILITIES,
+      { allowEmpty: true },
     ),
     decoders: readCapabilities(required, 'decoders', DECODER_CAPABILITIES),
     encoders: readCapabilities(required, 'encoders', ENCODER_CAPABILITIES),
@@ -199,17 +198,16 @@ function assertCapabilityFloor(
   capabilities: MediaRuntimeDescriptor['requiredCapabilities'],
 ): void {
   const required = {
-    hardwareAccelerators:
-      target === 'darwin-arm64' ? (['videoToolbox'] as const) : (['vaapi'] as const),
+    hardwareAccelerators: target === 'darwin-arm64' ? (['videoToolbox'] as const) : ([] as const),
     decoders: DECODER_CAPABILITIES,
     encoders:
       target === 'darwin-arm64'
         ? (['h264VideoToolbox', 'aac'] as const)
-        : (['h264Vaapi', 'aac'] as const),
+        : (['h264', 'aac'] as const),
     filters:
       target === 'darwin-arm64'
         ? (['alimiter', 'loudnorm', 'ebur128', 'scaleVt'] as const)
-        : (['alimiter', 'loudnorm', 'ebur128', 'scaleVaapi', 'tonemapVaapi'] as const),
+        : (['alimiter', 'loudnorm', 'ebur128'] as const),
   };
   for (const section of ['hardwareAccelerators', 'decoders', 'encoders', 'filters'] as const) {
     for (const capability of required[section]) {
@@ -246,9 +244,10 @@ function readCapabilities<const TCapability extends string>(
   value: Readonly<Record<string, unknown>>,
   key: string,
   allowed: readonly TCapability[],
+  options: { readonly allowEmpty?: boolean } = {},
 ): readonly TCapability[] {
   const capabilities = value[key];
-  if (!Array.isArray(capabilities) || capabilities.length === 0) {
+  if (!Array.isArray(capabilities) || (!options.allowEmpty && capabilities.length === 0)) {
     throw new Error(`Media runtime ${key} capability signature is empty.`);
   }
   const parsed: TCapability[] = [];

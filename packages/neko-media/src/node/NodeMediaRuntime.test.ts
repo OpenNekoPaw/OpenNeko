@@ -77,7 +77,6 @@ describe('NodeMediaRuntime', () => {
       ffprobeVersion: 'ffprobe version qualified',
       hardwareAccelerators: {
         videoToolbox: true,
-        vaapi: true,
       },
       decoders: {
         h264: true,
@@ -93,7 +92,6 @@ describe('NodeMediaRuntime', () => {
       encoders: {
         h264: true,
         h264VideoToolbox: true,
-        h264Vaapi: true,
         aac: true,
       },
       filters: {
@@ -104,8 +102,6 @@ describe('NodeMediaRuntime', () => {
         loudnorm: true,
         ebur128: true,
         scaleVt: true,
-        scaleVaapi: true,
-        tonemapVaapi: true,
       },
     });
   });
@@ -196,45 +192,6 @@ describe('NodeMediaRuntime', () => {
     expect(args).not.toContain('libx264');
     expect(args).not.toContain('-pix_fmt');
     expect(args.join(' ')).not.toMatch(/(?:^|[,\s])(?:zscale|tonemap|scale=)/u);
-  });
-
-  it('uses one VAAPI-only closure for an unqualified AV1 source', async () => {
-    const fixture = await createVideoFixture('av1', '.mp4', temporaryDirectories);
-    const process = new ProfilePreparationProcess(AV1_HDR_PROBE);
-    const runtime = new NodeMediaRuntime({
-      process,
-      hardwareVideoBackend: 'vaapi',
-    });
-    runtimes.push(runtime);
-
-    const prepared = await runtime.prepareVideo(fixture, {
-      nativeCapabilities: { version: 1, av1Mp4: false, vp9Mp4: false },
-    });
-
-    expect(prepared.video.preparationProfile).toBe('h264-sdr-transcode');
-    expect(process.ffmpegRuns).toHaveLength(1);
-    const args = process.ffmpegRuns[0] ?? [];
-    expect(args).toEqual(
-      expect.arrayContaining([
-        '-init_hw_device',
-        'vaapi=neko',
-        '-filter_hw_device',
-        'neko',
-        '-hwaccel',
-        'vaapi',
-        '-hwaccel_device',
-        'neko',
-        '-hwaccel_output_format',
-        'vaapi',
-        '-c:v',
-        'h264_vaapi',
-      ]),
-    );
-    expect(args.join(' ')).toContain(
-      'tonemap_vaapi=format=nv12:matrix=bt709:primaries=bt709:transfer=bt709,scale_vaapi=w=1280:h=720:format=nv12:out_color_matrix=bt709:out_color_primaries=bt709:out_color_transfer=bt709:out_range=limited',
-    );
-    expect(args).not.toContain('libx264');
-    expect(args.join(' ')).not.toMatch(/(?:^|[,\s])(?:zscale|tonemap|scale)=|hwdownload/u);
   });
 
   it('reports VideoToolbox AV1 decoder rejection without a CPU fallback', async () => {
@@ -393,21 +350,19 @@ class QualificationProcess implements FfmpegProcessPort {
     }
     if (command === '-hwaccels') {
       return {
-        stdout: Buffer.from('Hardware acceleration methods:\nvideotoolbox\nvaapi\n'),
+        stdout: Buffer.from('Hardware acceleration methods:\nvideotoolbox\n'),
         stderr: '',
       };
     }
     if (command === '-encoders') {
       return {
-        stdout: Buffer.from(' V libx264\n V h264_videotoolbox\n V h264_vaapi\n A aac\n'),
+        stdout: Buffer.from(' V libx264\n V h264_videotoolbox\n A aac\n'),
         stderr: '',
       };
     }
     if (command === '-filters') {
       return {
-        stdout: Buffer.from(
-          ' T tonemap\n A loudnorm\n A ebur128\n V scale_vt\n V scale_vaapi\n V tonemap_vaapi\n',
-        ),
+        stdout: Buffer.from(' T tonemap\n A loudnorm\n A ebur128\n V scale_vt\n'),
         stderr: '',
       };
     }

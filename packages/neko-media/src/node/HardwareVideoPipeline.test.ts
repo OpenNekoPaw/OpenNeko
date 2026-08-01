@@ -5,7 +5,7 @@ import { getHardwareVideoPipeline, resolveHardwareVideoBackend } from './Hardwar
 describe('HardwareVideoPipeline', () => {
   it('selects the backend from supported release targets', () => {
     expect(resolveHardwareVideoBackend('darwin', 'arm64')).toBe('videotoolbox');
-    expect(resolveHardwareVideoBackend('linux', 'x64')).toBe('vaapi');
+    expect(resolveHardwareVideoBackend('linux', 'x64')).toBe('unavailable');
     expect(resolveHardwareVideoBackend('win32', 'x64')).toBe('unavailable');
     expect(resolveHardwareVideoBackend('darwin', 'x64')).toBe('unavailable');
   });
@@ -43,53 +43,9 @@ describe('HardwareVideoPipeline', () => {
     ).not.toMatch(/(?:libx264|zscale|tonemap|scale=)/u);
   });
 
-  it('keeps the VAAPI transcode closure on one named hardware device', () => {
-    const pipeline = getHardwareVideoPipeline('vaapi');
-    if (!pipeline) throw new Error('Expected the VAAPI pipeline.');
-
-    expect(pipeline.decodeInputArgs).toEqual([
-      '-init_hw_device',
-      'vaapi=neko',
-      '-filter_hw_device',
-      'neko',
-      '-hwaccel',
-      'vaapi',
-      '-hwaccel_device',
-      'neko',
-      '-hwaccel_output_format',
-      'vaapi',
-    ]);
-    expect(pipeline.acceleratorCapability).toBe('vaapi');
-    expect(pipeline.buildSdrFilter(1280, 720, false)).toBe(
-      'scale_vaapi=w=1280:h=720:format=nv12:out_color_matrix=bt709:out_color_primaries=bt709:out_color_transfer=bt709:out_range=limited',
-    );
-    expect(pipeline.buildSdrFilter(1280, 720, true)).toBe(
-      'tonemap_vaapi=format=nv12:matrix=bt709:primaries=bt709:transfer=bt709,scale_vaapi=w=1280:h=720:format=nv12:out_color_matrix=bt709:out_color_primaries=bt709:out_color_transfer=bt709:out_range=limited',
-    );
-    expect(pipeline.h264EncoderArgs).toEqual(['-c:v', 'h264_vaapi']);
-    expect(pipeline.buildFrameCaptureFilter(320, 180)).toBe(
-      'scale_vaapi=w=320:h=180:format=nv12:out_color_matrix=bt709:out_color_primaries=bt709:out_color_transfer=bt709:out_range=limited,hwdownload,format=nv12,format=yuvj420p',
-    );
-    expect(
-      [
-        ...pipeline.decodeInputArgs,
-        pipeline.buildSdrFilter(1280, 720, false),
-        ...pipeline.h264EncoderArgs,
-      ].join(' '),
-    ).not.toMatch(/(?:libx264|zscale|tonemap|scale=|hwdownload)/u);
-  });
-
-  it('classifies backend device and decoder failures without a software retry', () => {
-    const vaapi = getHardwareVideoPipeline('vaapi');
+  it('classifies VideoToolbox decoder failures without a software retry', () => {
     const videoToolbox = getHardwareVideoPipeline('videotoolbox');
-    if (!vaapi || !videoToolbox) throw new Error('Expected qualified hardware pipelines.');
-
-    expect(
-      vaapi.classifyFailure(
-        commandError('Device creation failed: -542398533. No VA display found.'),
-        'av1',
-      ),
-    ).toEqual({ capability: 'VAAPI device' });
+    if (!videoToolbox) throw new Error('Expected the VideoToolbox pipeline.');
     expect(
       videoToolbox.classifyFailure(
         commandError('[dec:av1] Task finished with error code: -78 (Function not implemented)'),

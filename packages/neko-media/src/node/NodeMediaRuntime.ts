@@ -21,7 +21,11 @@ import {
   type FfmpegProcessPort,
   type RunningProcess,
 } from './NodeFfmpegProcess';
-import { NodeMediaLoopbackServer, createPcmPacketTransform } from './NodeMediaLoopbackServer';
+import {
+  NodeMediaLoopbackServer,
+  createPcmPacketTransform,
+  type NodeMediaPublisher,
+} from './NodeMediaLoopbackServer';
 import {
   getHardwareVideoPipeline,
   resolveHardwareVideoBackend,
@@ -32,7 +36,7 @@ import {
 export interface NodeMediaRuntimeOptions {
   readonly cacheRoot?: string;
   readonly process?: FfmpegProcessPort;
-  readonly server?: NodeMediaLoopbackServer;
+  readonly publisher?: NodeMediaPublisher;
   readonly vp8WebmDirectQualified?: boolean;
   readonly hardwareVideoBackend?: HardwareVideoBackend;
 }
@@ -86,7 +90,8 @@ const PCM_CHANNELS = 2;
 
 export class NodeMediaRuntime {
   private readonly process: FfmpegProcessPort;
-  private readonly server: NodeMediaLoopbackServer;
+  private readonly publisher: NodeMediaPublisher;
+  private readonly ownedServer: NodeMediaLoopbackServer | undefined;
   private readonly cacheRoot: string;
   private readonly vp8WebmDirectQualified: boolean;
   private readonly hardwareVideoPipeline: HardwareVideoPipeline | undefined;
@@ -97,7 +102,8 @@ export class NodeMediaRuntime {
 
   constructor(options: NodeMediaRuntimeOptions = {}) {
     this.process = options.process ?? new NodeFfmpegProcess();
-    this.server = options.server ?? new NodeMediaLoopbackServer();
+    this.ownedServer = options.publisher === undefined ? new NodeMediaLoopbackServer() : undefined;
+    this.publisher = options.publisher ?? this.ownedServer!;
     this.cacheRoot = options.cacheRoot ?? path.join(os.tmpdir(), 'openneko-media');
     this.vp8WebmDirectQualified = options.vp8WebmDirectQualified ?? true;
     this.hardwareVideoPipeline = getHardwareVideoPipeline(
@@ -128,7 +134,6 @@ export class NodeMediaRuntime {
           ffprobeVersion: firstLine(ffprobeVersion.stdout),
           hardwareAccelerators: {
             videoToolbox: hasListedCapability(hardwareAcceleratorText, 'videotoolbox'),
-            vaapi: hasListedCapability(hardwareAcceleratorText, 'vaapi'),
           },
           decoders: {
             h264: hasListedCapability(decoderText, 'h264'),
@@ -146,7 +151,6 @@ export class NodeMediaRuntime {
               hasListedCapability(encoderText, 'libx264') ||
               hasListedCapability(encoderText, 'h264'),
             h264VideoToolbox: hasListedCapability(encoderText, 'h264_videotoolbox'),
-            h264Vaapi: hasListedCapability(encoderText, 'h264_vaapi'),
             aac: hasListedCapability(encoderText, 'aac'),
           },
           filters: {
@@ -157,8 +161,6 @@ export class NodeMediaRuntime {
             loudnorm: hasListedCapability(filterText, 'loudnorm'),
             ebur128: hasListedCapability(filterText, 'ebur128'),
             scaleVt: hasListedCapability(filterText, 'scale_vt'),
-            scaleVaapi: hasListedCapability(filterText, 'scale_vaapi'),
-            tonemapVaapi: hasListedCapability(filterText, 'tonemap_vaapi'),
           },
         };
       } catch (error) {
@@ -402,13 +404,14 @@ export class NodeMediaRuntime {
             sourcePath,
             '-map',
             '0:v:0',
-            '-an',
+            '-map',
+            '0:a:0?',
             ...(profile === 'h264-mp4-remux' || profile === 'vp9-mp4-remux'
-              ? ['-c:v', 'copy']
+              ? ['-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k']
               : hardwareVideoTranscodeArgs(
                   video,
                   requirePreparedHardwareVideoPipeline(hardwareVideoPipeline),
-                )),
+                ).concat(['-c:a', 'aac', '-b:a', '192k'])),
             '-movflags',
             '+faststart',
             preparedPath,
@@ -428,7 +431,7 @@ export class NodeMediaRuntime {
         throw classifyCommandError(error, 'stream', 'prepare video');
       }
     }
-    const registration = await this.server.registerFile(
+    const registration = await this.publisher.registerFile(
       preparedPath,
       profile === 'vp8-webm-direct' ? 'video/webm' : 'video/mp4',
     );
@@ -467,7 +470,7 @@ export class NodeMediaRuntime {
     contentType: string,
   ): Promise<{ readonly sessionId: string; readonly url: string }> {
     this.assertUsable();
-    const registration = await this.server.registerFile(sourcePath, contentType);
+    const registration = await this.publisher.registerFile(sourcePath, contentType);
     const sessionId = randomUUID();
     this.sessions.set(sessionId, { kind: 'file', token: registration.token });
     return { sessionId, url: registration.url };
@@ -493,7 +496,7 @@ export class NodeMediaRuntime {
         ? probe.audioStreams[0]
         : probe.audioStreams.find((item) => item.streamIndex === options.audioStreamIndex);
     if (!audio) throw new Error('PCM source contains no selected audio stream.');
-    const registration = await this.server.registerPcm((streamSignal) =>
+    const registration = await this.publisher.registerPcm((streamSignal) =>
       this.createPcmProcess(sourcePath, audio.streamIndex, options, streamSignal),
     );
     registration.prime();
@@ -574,7 +577,7 @@ export class NodeMediaRuntime {
     const session = this.sessions.get(sessionId);
     if (!session) throw new Error(`Unknown media session: ${sessionId}`);
     this.sessions.delete(sessionId);
-    this.server.unregister(session.token);
+    this.publisher.unregister(session.token);
     if (session.kind === 'file' && session.directory) {
       await fs.rm(session.directory, { recursive: true, force: true });
     }
@@ -584,7 +587,7 @@ export class NodeMediaRuntime {
     if (this.disposed) return;
     this.disposed = true;
     for (const id of [...this.sessions.keys()]) await this.stop(id);
-    await this.server.dispose();
+    await this.ownedServer?.dispose();
     const root = await this.rootPromise?.catch(() => undefined);
     if (root) await fs.rm(root, { recursive: true, force: true });
   }

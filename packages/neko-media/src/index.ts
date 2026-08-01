@@ -8,6 +8,7 @@ export type {
   MediaSource,
   MediaVideoStream,
   FrameCaptureResult,
+  HtmlAudioDescriptor,
   HtmlVideoDescriptor,
   HtmlVideoNativeCapabilities,
   HtmlVideoPreparationOptions,

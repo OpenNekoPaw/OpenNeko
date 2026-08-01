@@ -29,7 +29,6 @@ describe('MediaRuntimeDescriptor', () => {
       ebur128: true,
       alimiter: true,
       scaleVt: true,
-      tonemapVaapi: true,
     });
   });
 
@@ -65,10 +64,10 @@ describe('MediaRuntimeDescriptor', () => {
     const root = await createRuntimeRoot(roots);
 
     await expect(
-      verifyMediaRuntimeDirectory(root, 'linux-x64', {
+      verifyMediaRuntimeDirectory(root, 'win32-x64', {
         process: new QualifiedProcess(),
       }),
-    ).rejects.toThrow('Media runtime target mismatch: expected linux-x64, received darwin-arm64.');
+    ).rejects.toThrow('Media runtime target mismatch: expected win32-x64, received darwin-arm64.');
   });
 
   it('fails closed when a declared capability is absent', async () => {
@@ -113,8 +112,8 @@ describe('MediaRuntimeDescriptor', () => {
     ).rejects.toThrow('Media runtime descriptor weakens required filters capability loudnorm.');
   });
 
-  it('requires the VAAPI encoder and scale filter for linux-x64', async () => {
-    const root = await createRuntimeRoot(roots, 'linux-x64');
+  it('requires the portable H.264 encoder for win32-x64', async () => {
+    const root = await createRuntimeRoot(roots, 'win32-x64');
     const descriptorPath = join(root, 'descriptor.json');
     const descriptor: unknown = JSON.parse(await readFile(descriptorPath, 'utf8'));
     if (
@@ -128,85 +127,55 @@ describe('MediaRuntimeDescriptor', () => {
     if (
       typeof requiredCapabilities !== 'object' ||
       requiredCapabilities === null ||
-      !('filters' in requiredCapabilities) ||
-      !Array.isArray(requiredCapabilities.filters)
+      !('encoders' in requiredCapabilities) ||
+      !Array.isArray(requiredCapabilities.encoders)
     ) {
       throw new Error('Fixture capability signature is invalid.');
     }
-    requiredCapabilities.filters = requiredCapabilities.filters.filter(
-      (filter) => filter !== 'scaleVaapi',
+    requiredCapabilities.encoders = requiredCapabilities.encoders.filter(
+      (encoder) => encoder !== 'h264',
     );
     await writeFile(descriptorPath, JSON.stringify(descriptor), 'utf8');
 
     await expect(
-      verifyMediaRuntimeDirectory(root, 'linux-x64', {
+      verifyMediaRuntimeDirectory(root, 'win32-x64', {
         process: new QualifiedProcess(),
       }),
-    ).rejects.toThrow('Media runtime descriptor weakens required filters capability scaleVaapi.');
+    ).rejects.toThrow('Media runtime descriptor weakens required encoders capability h264.');
   });
 
-  it('requires the VAAPI decode accelerator for linux-x64', async () => {
-    const root = await createRuntimeRoot(roots, 'linux-x64');
-    const descriptorPath = join(root, 'descriptor.json');
-    const descriptor: unknown = JSON.parse(await readFile(descriptorPath, 'utf8'));
-    if (
-      typeof descriptor !== 'object' ||
-      descriptor === null ||
-      !('requiredCapabilities' in descriptor)
-    ) {
-      throw new Error('Fixture descriptor is invalid.');
-    }
-    const requiredCapabilities = descriptor.requiredCapabilities;
-    if (
-      typeof requiredCapabilities !== 'object' ||
-      requiredCapabilities === null ||
-      !('hardwareAccelerators' in requiredCapabilities) ||
-      !Array.isArray(requiredCapabilities.hardwareAccelerators)
-    ) {
-      throw new Error('Fixture capability signature is invalid.');
-    }
-    requiredCapabilities.hardwareAccelerators = ['videoToolbox'];
-    await writeFile(descriptorPath, JSON.stringify(descriptor), 'utf8');
-
+  it('accepts the Windows software baseline without claiming hardware acceleration', async () => {
+    const root = await createRuntimeRoot(roots, 'win32-x64');
     await expect(
-      verifyMediaRuntimeDirectory(root, 'linux-x64', {
+      verifyMediaRuntimeDirectory(root, 'win32-x64', {
         process: new QualifiedProcess(),
       }),
-    ).rejects.toThrow(
-      'Media runtime descriptor weakens required hardwareAccelerators capability vaapi.',
-    );
+    ).resolves.toMatchObject({
+      descriptor: {
+        requiredCapabilities: {
+          hardwareAccelerators: [],
+          encoders: ['h264', 'aac'],
+          filters: ['alimiter', 'loudnorm', 'ebur128'],
+        },
+      },
+    });
   });
 
-  it('requires the VAAPI HDR tone-map filter for linux-x64', async () => {
-    const root = await createRuntimeRoot(roots, 'linux-x64');
+  it('rejects the retired Linux descriptor target', async () => {
+    const root = await createRuntimeRoot(roots, 'win32-x64');
     const descriptorPath = join(root, 'descriptor.json');
     const descriptor: unknown = JSON.parse(await readFile(descriptorPath, 'utf8'));
-    if (
-      typeof descriptor !== 'object' ||
-      descriptor === null ||
-      !('requiredCapabilities' in descriptor)
-    ) {
+    if (typeof descriptor !== 'object' || descriptor === null || !('target' in descriptor)) {
       throw new Error('Fixture descriptor is invalid.');
     }
-    const requiredCapabilities = descriptor.requiredCapabilities;
-    if (
-      typeof requiredCapabilities !== 'object' ||
-      requiredCapabilities === null ||
-      !('filters' in requiredCapabilities) ||
-      !Array.isArray(requiredCapabilities.filters)
-    ) {
-      throw new Error('Fixture capability signature is invalid.');
-    }
-    requiredCapabilities.filters = requiredCapabilities.filters.filter(
-      (filter) => filter !== 'tonemapVaapi',
-    );
+    descriptor.target = 'linux-x64';
     await writeFile(descriptorPath, JSON.stringify(descriptor), 'utf8');
 
     await expect(
-      verifyMediaRuntimeDirectory(root, 'linux-x64', {
+      verifyMediaRuntimeDirectory(root, 'win32-x64', {
         process: new QualifiedProcess(),
       }),
-    ).rejects.toThrow('Media runtime descriptor weakens required filters capability tonemapVaapi.');
+    ).rejects.toThrow('Media runtime descriptor fields are invalid.');
   });
 });
 
@@ -228,20 +197,20 @@ class QualifiedProcess implements FfmpegProcessPort {
     }
     if (command === '-hwaccels') {
       return {
-        stdout: Buffer.from('Hardware acceleration methods:\nvideotoolbox\nvaapi\n'),
+        stdout: Buffer.from('Hardware acceleration methods:\nvideotoolbox\n'),
         stderr: '',
       };
     }
     if (command === '-encoders') {
       return {
-        stdout: Buffer.from(' V libx264\n V h264_videotoolbox\n V h264_vaapi\n A aac\n'),
+        stdout: Buffer.from(' V libx264\n V h264_videotoolbox\n A aac\n'),
         stderr: '',
       };
     }
     if (command === '-filters') {
       return {
         stdout: Buffer.from(
-          ` A alimiter\n A ebur128\n V scale_vt\n V scale_vaapi\n V tonemap_vaapi\n${this.missing.loudnorm === false ? '' : ' A loudnorm\n'}`,
+          ` A alimiter\n A ebur128\n V scale_vt\n${this.missing.loudnorm === false ? '' : ' A loudnorm\n'}`,
         ),
         stderr: '',
       };
@@ -256,7 +225,7 @@ class QualifiedProcess implements FfmpegProcessPort {
 
 async function createRuntimeRoot(
   roots: string[],
-  target: 'darwin-arm64' | 'linux-x64' = 'darwin-arm64',
+  target: 'darwin-arm64' | 'win32-x64' = 'darwin-arm64',
 ): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), 'openneko-media-runtime-'));
   roots.push(root);
@@ -287,13 +256,13 @@ async function createRuntimeRoot(
           ffprobe: { file: 'bin/ffprobe', sha256: sha256(ffprobe) },
         },
         requiredCapabilities: {
-          hardwareAccelerators: target === 'darwin-arm64' ? ['videoToolbox'] : ['vaapi'],
+          hardwareAccelerators: target === 'darwin-arm64' ? ['videoToolbox'] : [],
           decoders: ['h264', 'hevc', 'av1', 'vp8', 'vp9', 'aac', 'mp3', 'flac', 'dts'],
-          encoders: target === 'darwin-arm64' ? ['h264VideoToolbox', 'aac'] : ['h264Vaapi', 'aac'],
+          encoders: target === 'darwin-arm64' ? ['h264VideoToolbox', 'aac'] : ['h264', 'aac'],
           filters:
             target === 'darwin-arm64'
               ? ['alimiter', 'loudnorm', 'ebur128', 'scaleVt']
-              : ['alimiter', 'loudnorm', 'ebur128', 'scaleVaapi', 'tonemapVaapi'],
+              : ['alimiter', 'loudnorm', 'ebur128'],
         },
       },
       null,
