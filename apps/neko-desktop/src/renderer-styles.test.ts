@@ -99,14 +99,21 @@ describe('Desktop renderer styles', () => {
     expect(globalLibraryRootRule?.groups?.body).toMatch(/min-height\s*:\s*0/u);
   });
 
-  it('keeps the Global Library as a compact unframed workbench surface', () => {
+  it('gives the package-owned Preview Root its complete Workbench viewport', () => {
+    const previewSurfaceRule = styles.match(/\.desktop-preview-surface\s*\{(?<body>[\s\S]*?)\n\}/u);
+
+    expect(previewSurfaceRule?.groups?.body).toMatch(/width\s*:\s*100%/u);
+    expect(previewSurfaceRule?.groups?.body).toMatch(/height\s*:\s*100%/u);
+    expect(previewSurfaceRule?.groups?.body).toMatch(/min-height\s*:\s*0/u);
+    expect(previewSurfaceRule?.groups?.body).toMatch(/overflow\s*:\s*hidden/u);
+  });
+
+  it('keeps the Global Library as an aligned unframed workbench surface', () => {
     const packageStyles = readFileSync(
       new URL('../../../packages/neko-assets/src/global-library/style.css', import.meta.url),
       'utf8',
     );
-    const browserRule = packageStyles.match(
-      /\.global-library-browser\s*\{(?<body>[\s\S]*?)\n\}/u,
-    );
+    const browserRule = packageStyles.match(/\.global-library-browser\s*\{(?<body>[\s\S]*?)\n\}/u);
     const headerRule = packageStyles.match(
       /\.global-library-browser__header\s*\{(?<body>[\s\S]*?)\n\}/u,
     );
@@ -115,23 +122,26 @@ describe('Desktop renderer styles', () => {
     );
 
     expect(browserRule?.groups?.body).toMatch(/height\s*:\s*100%/u);
+    expect(browserRule?.groups?.body).toMatch(/width\s*:\s*min\(1020px, calc\(100% - 64px\)\)/u);
+    expect(browserRule?.groups?.body).toMatch(/margin\s*:\s*0 auto/u);
     expect(browserRule?.groups?.body).not.toMatch(/border-radius/u);
-    expect(headerRule?.groups?.body).toMatch(/padding\s*:\s*16px 16px 10px/u);
-    expect(headingRule?.groups?.body).toMatch(/font-size\s*:\s*16px/u);
+    expect(headerRule?.groups?.body).toMatch(/align-items\s*:\s*flex-end/u);
+    expect(headerRule?.groups?.body).toMatch(/margin-bottom\s*:\s*22px/u);
+    expect(headingRule?.groups?.body).toMatch(/font-size\s*:\s*27px/u);
     expect(packageStyles).toMatch(
-      /\.global-library-browser__toolbar\s*\{[\s\S]*?padding\s*:\s*0 16px 10px/u,
+      /\.global-library-browser__toolbar\s*\{[\s\S]*?margin-bottom\s*:\s*16px/u,
     );
     expect(packageStyles).toMatch(
-      /\.global-library-browser__commands button,[\s\S]*?min-height\s*:\s*28px/u,
+      /\.global-library-browser__commands button,[\s\S]*?min-height\s*:\s*36px/u,
     );
     expect(packageStyles).toMatch(
-      /\.global-library-browser__collection\s*\{[\s\S]*?padding\s*:\s*10px 16px 16px/u,
+      /\.global-library-browser__collection\s*\{[\s\S]*?padding\s*:\s*10px 0 0/u,
     );
     expect(packageStyles).toMatch(
-      /\.global-library-browser__search\s*\{[\s\S]*?max-width\s*:\s*760px/u,
+      /\.global-library-browser__search\s*\{[\s\S]*?width\s*:\s*min\(420px, 55%\)/u,
     );
     expect(packageStyles).toMatch(
-      /\.global-library-browser__loading,[\s\S]*?\.global-library-browser__empty\s*\{[\s\S]*?flex\s*:\s*1/u,
+      /\.global-library-browser__loading,[\s\S]*?\.global-library-browser__empty\s*\{[\s\S]*?min-height\s*:\s*160px/u,
     );
     expect(packageStyles).toMatch(
       /\.global-library-browser__loading,[\s\S]*?\.global-library-browser__empty\s*\{[\s\S]*?place-items\s*:\s*center/u,

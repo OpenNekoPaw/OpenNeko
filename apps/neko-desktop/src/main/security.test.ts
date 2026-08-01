@@ -23,19 +23,14 @@ describe('Desktop security policy', () => {
   });
 
   it('allows only the registered renderer origin', () => {
-    expect(desktopRendererOrigin(`${DESKTOP_APP_ORIGIN}/index.html`)).toBe(
-      DESKTOP_APP_ORIGIN,
-    );
+    expect(desktopRendererOrigin(`${DESKTOP_APP_ORIGIN}/index.html`)).toBe(DESKTOP_APP_ORIGIN);
     expect(
       isAllowedDesktopRendererUrl(`${DESKTOP_APP_ORIGIN}/assets/main.js`, DESKTOP_APP_ORIGIN),
     ).toBe(true);
     expect(isAllowedDesktopRendererUrl('file:///tmp/index.html', DESKTOP_APP_ORIGIN)).toBe(false);
     expect(isAllowedDesktopRendererUrl('https://example.com/', DESKTOP_APP_ORIGIN)).toBe(false);
     expect(
-      isAllowedDesktopRendererUrl(
-        'openneko://attacker@desktop/index.html',
-        DESKTOP_APP_ORIGIN,
-      ),
+      isAllowedDesktopRendererUrl('openneko://attacker@desktop/index.html', DESKTOP_APP_ORIGIN),
     ).toBe(false);
   });
 
@@ -49,6 +44,8 @@ describe('Desktop security policy', () => {
     expect(policy).toContain("img-src 'self' data: blob: openneko://resource");
     expect(policy).toContain("connect-src 'self' openneko://resource blob:");
     expect(policy).toContain('media-src openneko://resource');
+    expect(policy).toContain("worker-src 'self'");
+    expect(policy).not.toContain('worker-src blob:');
     expect(policy).not.toContain('127.0.0.1');
     expect(policy).not.toContain('neko-media:');
   });
@@ -58,12 +55,8 @@ describe('Desktop security policy', () => {
       viteDevelopmentNonce: 'openneko-vite-development',
     });
 
-    expect(policy).toContain(
-      "script-src 'self' 'nonce-openneko-vite-development'",
-    );
-    expect(policy).toContain(
-      "style-src 'self' 'nonce-openneko-vite-development'",
-    );
+    expect(policy).toContain("script-src 'self' 'nonce-openneko-vite-development'");
+    expect(policy).toContain("style-src 'self' 'nonce-openneko-vite-development'");
     expect(policy).not.toContain("'unsafe-inline'");
   });
 

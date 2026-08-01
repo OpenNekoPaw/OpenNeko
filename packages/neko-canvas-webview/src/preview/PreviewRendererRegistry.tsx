@@ -504,7 +504,7 @@ function useMediaStream(
       playbackRequestSentRef.current = false;
       stoppedPlaybackRef.current = true;
       const hostPort = host;
-      if (playbackRequestSent && hostPort && createMediaPlaybackSourceKey(contentLocator)) {
+      if (hostPort && createMediaPlaybackSourceKey(contentLocator)) {
         hostPort.postMessage({ type: 'media:stop', nodeId: surfaceId });
       }
       const sourceKey = createMediaPlaybackSourceKey(contentLocator);

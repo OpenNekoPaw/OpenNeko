@@ -15,6 +15,7 @@ const MIME_TYPES: Readonly<Record<string, string>> = {
   '.css': 'text/css; charset=utf-8',
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
+  '.mjs': 'text/javascript; charset=utf-8',
   '.json': 'application/json; charset=utf-8',
   '.map': 'application/json; charset=utf-8',
   '.svg': 'image/svg+xml',
@@ -40,10 +41,7 @@ export function registerDesktopOpenNekoProtocol(
   rendererRoot: string,
   resources: Pick<DesktopResourceRegistry, 'handle'>,
 ): () => void {
-  protocol.handle(
-    OPENNEKO_SCHEME,
-    createDesktopOpenNekoProtocolHandler(rendererRoot, resources),
-  );
+  protocol.handle(OPENNEKO_SCHEME, createDesktopOpenNekoProtocolHandler(rendererRoot, resources));
   return () => {
     protocol.unhandle(OPENNEKO_SCHEME);
   };

@@ -1,5 +1,7 @@
 import { isMediaResourceUrl } from '../contracts';
 
+const videoElementOwners = new WeakMap<HTMLVideoElement, HtmlVideoClient>();
+
 export interface HtmlVideoClientDescriptor {
   readonly version: 1;
   readonly url: string;
@@ -30,6 +32,9 @@ export class HtmlVideoClient {
     video.defaultMuted = true;
     video.playsInline = true;
     video.playbackRate = this.options.playbackRate;
+    const previousOwner = videoElementOwners.get(video);
+    if (previousOwner && previousOwner !== this) previousOwner.relinquishElement();
+    videoElementOwners.set(video, this);
     video.addEventListener('ended', this.handleEnded);
     video.addEventListener('error', this.handleVideoError);
     video.src = descriptor.url;
@@ -103,9 +108,20 @@ export class HtmlVideoClient {
     const { video } = this.options;
     video.removeEventListener('ended', this.handleEnded);
     video.removeEventListener('error', this.handleVideoError);
+    if (videoElementOwners.get(video) !== this) return;
+    videoElementOwners.delete(video);
     video.pause();
     video.removeAttribute('src');
     video.load();
+  }
+
+  private relinquishElement(): void {
+    if (this.disposed) return;
+    this.disposed = true;
+    this.abortController.abort(new Error('HTML video client was replaced.'));
+    const { video } = this.options;
+    video.removeEventListener('ended', this.handleEnded);
+    video.removeEventListener('error', this.handleVideoError);
   }
 
   private get signal(): AbortSignal {

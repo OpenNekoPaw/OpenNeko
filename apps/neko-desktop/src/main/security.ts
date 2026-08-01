@@ -87,7 +87,7 @@ export function createDesktopContentSecurityPolicy(
     "font-src 'self'",
     `connect-src ${connectSources} blob:`,
     `media-src ${DESKTOP_RESOURCE_ORIGIN}`,
-    "worker-src 'none'",
+    "worker-src 'self'",
   ].join('; ');
 }
 

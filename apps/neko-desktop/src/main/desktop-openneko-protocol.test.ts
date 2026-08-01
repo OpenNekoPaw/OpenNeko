@@ -15,6 +15,7 @@ describe('Desktop OpenNeko protocol handler', () => {
   it('dispatches desktop assets and authorized resources through one handler', async () => {
     rendererRoot = await mkdtemp(path.join(tmpdir(), 'desktop-openneko-protocol-'));
     await writeFile(path.join(rendererRoot, 'index.html'), '<main>OpenNeko</main>');
+    await writeFile(path.join(rendererRoot, 'pdf.worker.mjs'), 'export default true;');
     const handleResource = vi.fn(async () => new Response('resource-bytes'));
     const handle = createDesktopOpenNekoProtocolHandler(rendererRoot, {
       handle: handleResource,
@@ -26,6 +27,8 @@ describe('Desktop OpenNeko protocol handler', () => {
     expect(appResponse.headers.get('Content-Security-Policy')).toContain(
       'media-src openneko://resource',
     );
+    const workerResponse = await handle(new Request('openneko://desktop/pdf.worker.mjs'));
+    expect(workerResponse.headers.get('Content-Type')).toBe('text/javascript; charset=utf-8');
 
     const resourceRequest = new Request('openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa');
     expect(await (await handle(resourceRequest)).text()).toBe('resource-bytes');

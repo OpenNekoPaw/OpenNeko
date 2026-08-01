@@ -712,9 +712,20 @@ export class NodeFfmpegCutMediaAdapter implements CutMediaRuntimeAdapter {
       playbackRate: 1,
     });
     process.stdout.pipe(framed);
+    process.stdout.on('error', (error: Error) => {
+      if (signal.aborted) {
+        framed.end();
+        return;
+      }
+      framed.destroy(error);
+    });
+    const completion = process.completion.catch((error: unknown) => {
+      if (signal.aborted) return;
+      throw error;
+    });
     return {
       stdout: framed,
-      completion: process.completion,
+      completion,
       terminate: process.terminate,
     };
   }

@@ -121,6 +121,32 @@ describe('HtmlVideoClient', () => {
     expect(video.removeAttribute).toHaveBeenCalledWith('src');
     expect(video.load).toHaveBeenCalledTimes(2);
   });
+
+  it('does not let a replaced client clear the new owner source', async () => {
+    const video = createVideoStub();
+    const first = new HtmlVideoClient({
+      video,
+      descriptor: createDescriptor(0),
+      playbackRate: 1,
+    });
+    const secondDescriptor = {
+      ...createDescriptor(2.5),
+      url: 'openneko://resource/zyxwvutsrqponmlkjihgfedcba987654',
+    };
+    const second = new HtmlVideoClient({ video, descriptor: secondDescriptor, playbackRate: 1 });
+    await first.connect();
+    await second.connect();
+
+    first.dispose();
+
+    expect(video.src).toBe(secondDescriptor.url);
+    expect(video.pause).not.toHaveBeenCalled();
+    expect(video.removeAttribute).not.toHaveBeenCalled();
+    expect(video.load).toHaveBeenCalledTimes(2);
+    second.dispose();
+    expect(video.pause).toHaveBeenCalledOnce();
+    expect(video.removeAttribute).toHaveBeenCalledWith('src');
+  });
 });
 
 function createVideoStub(): HTMLVideoElement {
