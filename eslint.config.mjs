@@ -1,7 +1,8 @@
 import eslint from '@eslint/js';
-import tseslint from 'typescript-eslint';
+import globals from 'globals';
 import reactHooks from 'eslint-plugin-react-hooks';
 import security from 'eslint-plugin-security';
+import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
   // Global ignores
@@ -11,7 +12,6 @@ export default tseslint.config(
       '**/out/**',
       '**/node_modules/**',
       '**/*.js',
-      '**/*.mjs',
       '**/*.cjs',
       '**/coverage/**',
       '**/__mocks__/**',
@@ -20,6 +20,27 @@ export default tseslint.config(
 
   // Base JS recommended rules
   eslint.configs.recommended,
+
+  // Repository-owned Desktop functional scripts execute in Node.js and remain part of lint CI.
+  {
+    files: [
+      'scripts/desktop-functional/**/*.mjs',
+      'scripts/run-desktop-ui-functional.mjs',
+      'scripts/test-orchestration/desktop-functional-runner.test.mjs',
+      'packages/*-webview/functional/**/*.mjs',
+    ],
+    languageOptions: {
+      globals: {
+        ...globals.node,
+        WebSocket: 'readonly',
+      },
+    },
+    rules: {
+      'no-console': 'error',
+      'no-debugger': 'error',
+      'prefer-const': 'error',
+    },
+  },
 
   // TypeScript files
   {
@@ -62,9 +83,7 @@ export default tseslint.config(
 
   // Explicit console output boundaries: the shared transport and a local manual executable.
   {
-    files: [
-      'packages/neko-types/src/logger/console-logger.ts',
-    ],
+    files: ['packages/neko-types/src/logger/console-logger.ts'],
     rules: {
       'no-console': 'off',
     },
@@ -80,6 +99,10 @@ export default tseslint.config(
       'apps/**/src/**/*.tsx',
       'packages/**/src/**/*.ts',
       'packages/**/src/**/*.tsx',
+      'scripts/desktop-functional/**/*.mjs',
+      'scripts/run-desktop-ui-functional.mjs',
+      'scripts/test-orchestration/desktop-functional-runner.test.mjs',
+      'packages/*-webview/functional/**/*.mjs',
     ],
     rules: {
       ...security.configs.recommended.rules,

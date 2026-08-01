@@ -49,14 +49,21 @@ export function DesktopPreviewSurface({
   ]);
 
   return (
-    <Suspense
-      fallback={
-        <div className="preview-main-loading" role="status">
-          {t('workspace.preview.loading')}
-        </div>
-      }
+    <section
+      className="desktop-preview-surface"
+      data-owner-root="preview"
+      data-owner-view-id={view.viewId}
+      aria-label="Preview"
     >
-      <PreviewRoot runtime={runtime} locale={locale} />
-    </Suspense>
+      <Suspense
+        fallback={
+          <div className="preview-main-loading" role="status">
+            {t('workspace.preview.loading')}
+          </div>
+        }
+      >
+        <PreviewRoot runtime={runtime} locale={locale} />
+      </Suspense>
+    </section>
   );
 }

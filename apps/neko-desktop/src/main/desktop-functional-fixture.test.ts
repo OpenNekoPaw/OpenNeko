@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { resolveDesktopRuntimeHome } from './desktop-functional-fixture';
+import {
+  resolveDesktopFunctionalWorkspace,
+  resolveDesktopRuntimeHome,
+} from './desktop-functional-fixture';
 
 describe('Desktop functional fixture home', () => {
   it('keeps the system home for ordinary Desktop startup', () => {
@@ -46,6 +49,42 @@ describe('Desktop functional fixture home', () => {
         environment: {
           OPENNEKO_DESKTOP_FUNCTIONAL_HOME:
             '/private/tmp/openneko-desktop-functional-library-browser',
+        },
+      }),
+    ).toThrow('explicit fixture argument');
+  });
+
+  it('accepts a functional workspace only inside the isolated fixture home', () => {
+    const fixtureHome = '/private/tmp/openneko-desktop-functional-media';
+    expect(
+      resolveDesktopFunctionalWorkspace({
+        argv: ['--openneko-functional-fixture'],
+        fixtureHome,
+        environment: {
+          OPENNEKO_DESKTOP_FUNCTIONAL_WORKSPACE: `${fixtureHome}/workspace`,
+        },
+      }),
+    ).toBe(`${fixtureHome}/workspace`);
+
+    for (const workspace of ['relative-workspace', '/private/tmp/unrelated-workspace', fixtureHome]) {
+      expect(() =>
+        resolveDesktopFunctionalWorkspace({
+          argv: ['--openneko-functional-fixture'],
+          fixtureHome,
+          environment: { OPENNEKO_DESKTOP_FUNCTIONAL_WORKSPACE: workspace },
+        }),
+      ).toThrow('functional workspace');
+    }
+  });
+
+  it('rejects a functional workspace override without the explicit fixture argument', () => {
+    expect(() =>
+      resolveDesktopFunctionalWorkspace({
+        argv: [],
+        fixtureHome: '/private/tmp/openneko-desktop-functional-media',
+        environment: {
+          OPENNEKO_DESKTOP_FUNCTIONAL_WORKSPACE:
+            '/private/tmp/openneko-desktop-functional-media/workspace',
         },
       }),
     ).toThrow('explicit fixture argument');

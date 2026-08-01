@@ -58,5 +58,6 @@
 - [x] 7.1 Update active media/Cut/Canvas/Preview OpenSpec artifacts and architecture docs to the unified OpenNeko scheme.
 - [x] 7.2 Update evaluation evidence, preserving the prior HTTP spike only as non-canonical feasibility history.
 - [x] 7.3 Run focused `@neko/media`, Desktop, Cut, Canvas, Preview and Agent tests/typechecks.
+- [x] 7.3.1 Include Desktop functional `.mjs` sources in Prettier and ESLint gates, retire obsolete ignore entries, and synchronize local qualification commands in Desktop documentation.
 - [ ] 7.4 Run `pnpm build`, `pnpm test`, `pnpm check`, `pnpm check:quality`, `pnpm check:legacy-debt`, `pnpm check:unused` and `pnpm test:agent:eval`.
 - [ ] 7.5 Run `pnpm package:desktop`, applicable Electron functional matrices and `neko-quality-review`; record remaining HDR, Windows media and Agent-driver risks.

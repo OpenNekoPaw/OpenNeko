@@ -125,6 +125,7 @@ export function VideoControls({
           {/* Play/Pause */}
           <MacIconButton
             size="lg"
+            data-testid="preview-video-toggle-playback"
             onClick={onTogglePlay}
             className="text-white/85 hover:text-white hover:bg-white/15"
             title={isPlaying ? t('preview.video.pauseButton') : t('preview.video.playButton')}

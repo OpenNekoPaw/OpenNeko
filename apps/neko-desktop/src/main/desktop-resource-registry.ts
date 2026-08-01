@@ -537,7 +537,7 @@ export function registerDesktopResourceRequestAuthorization(
 async function registerFileSource(
   source: DesktopAuthorizedFileSource,
 ): Promise<RegisteredFileSource> {
-  const revision = requireIdentity(source.revision, 'revision');
+  requireIdentity(source.revision, 'revision');
   if (!isAbsolute(source.absolutePath)) {
     throw new Error('Desktop resource registration requires an absolute file path.');
   }

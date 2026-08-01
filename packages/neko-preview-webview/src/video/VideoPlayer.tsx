@@ -158,6 +158,7 @@ function SourceVideoPlayer({
         {!compact && !isPlaying && !failed ? (
           <button
             type="button"
+            data-testid="preview-video-toggle-playback"
             className="absolute inset-0 flex items-center justify-center"
             onClick={togglePlay}
             aria-label={t('preview.video.playButton')}

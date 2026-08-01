@@ -40,7 +40,12 @@ export function DesktopCanvasSurface({
   const runtime = useMemo(() => createElectronCanvasHostRuntime(identity), [identity]);
   const delegate = useMemo(() => createDesktopCanvasWebviewDelegate(identity), [identity]);
   return (
-    <section className="desktop-canvas-surface" data-owner-root="canvas" aria-label="Canvas">
+    <section
+      className="desktop-canvas-surface"
+      data-owner-root="canvas"
+      data-owner-view-id={view.viewId}
+      aria-label="Canvas"
+    >
       <CanvasWebviewRoot delegate={delegate} locale="zh-cn" runtime={runtime} />
     </section>
   );

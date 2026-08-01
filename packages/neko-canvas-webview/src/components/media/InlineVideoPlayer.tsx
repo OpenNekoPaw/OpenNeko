@@ -209,6 +209,7 @@ export function InlineVideoPlayer({
         <div className="flex items-center gap-1.5">
           <button
             type="button"
+            data-testid="canvas-video-toggle-playback"
             className="flex h-6 w-6 items-center justify-center rounded text-white/85 hover:text-white"
             onClick={isPlaying ? pause : resume}
             aria-label={playbackLabel}

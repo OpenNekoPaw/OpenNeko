@@ -166,6 +166,7 @@ export function AudioControls({
         <MacIconButton
           size="xl"
           variant="primary"
+          data-testid="preview-audio-toggle-playback"
           onClick={onTogglePlay}
           title={isPlaying ? t('preview.audio.pauseButton') : t('preview.audio.playButton')}
         >

@@ -89,8 +89,9 @@ pnpm --filter @neko/app-desktop package
 pnpm --filter @neko/app-desktop dev
 pnpm test:functional:headless
 pnpm test:local:ui
-pnpm test:local:media-http
-pnpm test:local:media-http:packaged
+pnpm test:local:ui -- --scenario=all-openneko-consumers
+pnpm test:local:ui -- --scenario=all-openneko-consumers --target=packaged
+pnpm test:local:media-openneko
 ```
 
 真实 Electron 功能验收可用 `--openneko-functional-fixture` 与
@@ -99,17 +100,17 @@ pnpm test:local:media-http:packaged
 `--user-data-dir`，普通启动不会读取该路径。
 
 `pnpm test:functional:headless` 是 CI 可运行的无 GUI Desktop Main/preload/composition
-功能路径，不读取真实用户数据、凭据或 provider。`pnpm test:local:ui` 才会启动图形化
-Electron，并自动创建隔离 functional home 与独立 Electron user-data 目录；关闭应用后清理
-临时目录。该图形化入口不得加入 CI。
+功能路径，不读取真实用户数据、凭据或 provider。`pnpm test:local:ui` 不带场景参数时启动手动
+图形化 Electron fixture；增加 `--scenario=all-openneko-consumers` 后通过 CDP 运行 Cut、Canvas、
+Preview 的 package-owned 场景。两种模式都会创建隔离 functional home 与独立 Electron
+user-data 目录，并在退出后清理临时目录。`--target=packaged` 使用当前平台已生成的 Desktop
+package；运行前必须先执行 `pnpm package:desktop`。图形化入口不得加入 CI。
 
-`pnpm test:local:media-http` 使用合成 H.264/WAV/Main10-PQ 和 32 MiB fixture 运行专用
-Electron HTTP qualification，验证 metadata、seek、Range、SHA-256、变化帧、anonymous
-CORS、Canvas/WebGL2 重复纹理上传、吞吐和 capability 撤销。原始 JSON 写入 gitignored
+`pnpm test:local:media-openneko` 使用合成 H.264/WAV/Main10-PQ 和 32 MiB fixture 运行专用
+Electron OpenNeko resource qualification，验证 metadata、seek、Range、SHA-256、变化帧、
+Canvas/WebGL2 重复纹理上传、sender isolation 和 capability 撤销。原始 JSON 写入 gitignored
 `reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/`。
-`pnpm test:local:media-http:packaged` 对已由 `pnpm package:desktop` 生成的当前平台应用运行
-同一场景。Main10 decode/texture 成功不等于 10-bit surface、zero-copy 或 HDR display
-output 资格。
+Main10 decode/texture 成功不等于 10-bit surface、zero-copy 或 HDR display output 资格。
 
 Desktop 原生构建只接受 `darwin-arm64` 与 `win32-x64`；Linux 可运行 host-neutral
 仓库检查，但在 Forge 前被拒绝。两个目标都固定 Electron `43.2.0` 归档 checksum，

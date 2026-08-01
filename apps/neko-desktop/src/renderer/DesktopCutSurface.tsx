@@ -51,18 +51,25 @@ export function DesktopCutSurface({
   );
   const bridge = useMemo(() => createCutHostRuntimeWebviewBridge(runtime), [runtime]);
   return (
-    <Suspense
-      fallback={
-        <div className="creative-main-placeholder" role="status">
-          {t('workspace.cut.loading')}
-        </div>
-      }
+    <section
+      className="desktop-cut-surface"
+      data-owner-root="cut"
+      data-owner-view-id={view.viewId}
+      aria-label="Cut"
     >
-      <CutWebviewRoot
-        bridge={bridge}
-        locale={locale}
-        timelineTarget={timelineTarget}
-      />
-    </Suspense>
+      <Suspense
+        fallback={
+          <div className="creative-main-placeholder" role="status">
+            {t('workspace.cut.loading')}
+          </div>
+        }
+      >
+        <CutWebviewRoot
+          bridge={bridge}
+          locale={locale}
+          timelineTarget={timelineTarget}
+        />
+      </Suspense>
+    </section>
   );
 }

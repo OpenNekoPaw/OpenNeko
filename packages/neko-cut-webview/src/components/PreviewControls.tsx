@@ -70,6 +70,7 @@ export const PreviewControls = memo(function PreviewControls({
         </button>
 
         <button
+          data-testid="cut-preview-toggle-playback"
           aria-label={playing ? t('timeline.controls.pause') : t('timeline.controls.play')}
           onClick={onToggle}
           className="p-2 bg-neko-button hover:bg-neko-button-hover rounded"

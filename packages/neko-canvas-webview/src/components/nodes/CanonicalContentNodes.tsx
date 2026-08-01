@@ -117,6 +117,9 @@ export function MediaNode({ node, isSelected, ...baseProps }: CanonicalNodeProps
       opaqueSurface
     >
       <div
+        data-testid="canvas-media-node"
+        data-media-type={mediaType}
+        data-playback-state={mediaType === 'image' ? undefined : isHovering ? 'playing' : 'stopped'}
         className={
           mediaType === 'audio'
             ? 'canvas-audio-node flex h-full min-h-0 flex-col'
@@ -134,7 +137,7 @@ export function MediaNode({ node, isSelected, ...baseProps }: CanonicalNodeProps
         }}
       >
         {mediaType === 'audio' ? (
-          <div className="canvas-audio-node-title">
+          <div className="canvas-audio-node-title" data-testid="canvas-audio-node-title">
             <span className="canvas-audio-node-title-icon" aria-hidden="true">
               ♪
             </span>

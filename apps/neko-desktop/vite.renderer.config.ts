@@ -4,8 +4,13 @@ import { defineConfig } from 'vite';
 import path from 'node:path';
 import { DESKTOP_VITE_CSP_NONCE } from './src/shared/vite-development-security';
 
+const functionalFixtureHome = process.env['OPENNEKO_DESKTOP_FUNCTIONAL_HOME'];
+
 export default defineConfig({
   plugins: [react(), createEpubJsPatchPlugin()],
+  ...(functionalFixtureHome
+    ? { cacheDir: path.join(functionalFixtureHome, 'vite-renderer-cache') }
+    : {}),
   html: {
     cspNonce: DESKTOP_VITE_CSP_NONCE,
   },
@@ -70,24 +75,15 @@ export default defineConfig({
       },
       {
         find: /^@neko-agent\/types\//,
-        replacement: `${path.resolve(
-          import.meta.dirname,
-          '../../packages/neko-agent-types/src',
-        )}/`,
+        replacement: `${path.resolve(import.meta.dirname, '../../packages/neko-agent-types/src')}/`,
       },
       {
         find: /^@neko\/shared$/,
-        replacement: path.resolve(
-          import.meta.dirname,
-          '../../packages/neko-types/src/index.ts',
-        ),
+        replacement: path.resolve(import.meta.dirname, '../../packages/neko-types/src/index.ts'),
       },
       {
         find: /^@neko\/shared\//,
-        replacement: `${path.resolve(
-          import.meta.dirname,
-          '../../packages/neko-types/src',
-        )}/`,
+        replacement: `${path.resolve(import.meta.dirname, '../../packages/neko-types/src')}/`,
       },
       {
         find: /^@\//,
@@ -102,10 +98,16 @@ export default defineConfig({
     exclude: [
       '@neko-canvas/domain',
       '@neko-canvas/webview/root',
+      '@neko/media',
+      '@neko/media/browser',
       '@neko/preview-webview/root',
       '@neko/webview/root',
     ],
     include: [
+      '@zip.js/zip.js',
+      'docx-preview',
+      'epubjs',
+      'pdfjs-dist',
       'three',
       'three/addons/controls/DragControls.js',
       'three/addons/controls/OrbitControls.js',

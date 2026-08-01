@@ -37,7 +37,10 @@ import {
 import { createDesktopAgentAppHostComposition } from './desktop-agent-app-host-composition';
 import { NodePiConversationCatalogReader } from '@neko/agent/pi';
 import { NodeVideoThumbnail } from '@neko/media/node';
-import { resolveDesktopRuntimeHome } from './desktop-functional-fixture';
+import {
+  resolveDesktopFunctionalWorkspace,
+  resolveDesktopRuntimeHome,
+} from './desktop-functional-fixture';
 import { createDesktopAgentCredentialRuntime } from './desktop-agent-credential-runtime';
 import { createDesktopAgentControllerComposition } from './desktop-agent-controller-composition';
 import { createEncryptedDesktopSecretPort } from './encrypted-desktop-secret-port';
@@ -110,6 +113,11 @@ async function startDesktop(): Promise<void> {
     systemHome: app.getPath('home'),
     argv: process.argv,
     environment: process.env,
+  });
+  const functionalWorkspace = resolveDesktopFunctionalWorkspace({
+    argv: process.argv,
+    environment: process.env,
+    fixtureHome: homedir,
   });
   const userData = app.getPath('userData');
   const globalStorage = resolveGlobalStorageLayout(homedir);
@@ -707,6 +715,7 @@ async function startDesktop(): Promise<void> {
     selectContentWorkspace: async (event) => {
       const owner = BrowserWindow.fromWebContents(event.sender);
       if (!owner) throw new Error('Desktop workspace picker requires a registered BrowserWindow.');
+      if (functionalWorkspace) return functionalWorkspace;
       const result = await dialog.showOpenDialog(owner, {
         title: 'Open Content Project',
         buttonLabel: 'Open Project',

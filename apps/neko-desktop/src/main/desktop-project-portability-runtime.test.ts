@@ -31,8 +31,8 @@ afterEach(async () => {
 describe('Desktop project portability runtime', () => {
   it('runs the target-free inspect, plan, execute, and progress path', async () => {
     const fixture = await createFixture();
-    let destinationPath: string | undefined;
-    const selectDestination = vi.fn(async () => destinationPath);
+    const destination: { path: string | undefined } = { path: undefined };
+    const selectDestination = vi.fn(async () => destination.path);
     const runtime = new DesktopProjectPortabilityRuntime({
       globalMediaLibraryRoot: fixture.globalRoot,
       metadataRepositories: fixture.repositories,
@@ -60,7 +60,8 @@ describe('Desktop project portability runtime', () => {
       runtime.plan('window-a', request('plan-cancelled', identity)),
     ).resolves.toMatchObject({ status: 'cancelled' });
 
-    destinationPath = path.join(fixture.root, 'portable-project');
+    const destinationPath = path.join(fixture.root, 'portable-project');
+    destination.path = destinationPath;
     const planned = await runtime.plan('window-a', request('plan-a', identity));
     expect(planned.status).toBe('planned');
     if (planned.status !== 'planned') throw new Error('Expected a portable snapshot plan.');

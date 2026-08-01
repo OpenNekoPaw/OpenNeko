@@ -21,7 +21,6 @@
 
 # 依赖库
 node_modules/
-*.dynlib
 *.dll
 *.so
 *.dylib
@@ -31,13 +30,6 @@ dist/
 out/
 build/
 .vite/
-*.vsix
-vsix-artifacts/
-/neko
-# Local build output of the neko-agent CLI. Previously committed by
-# accident (65MB arm64 binary); ignore new builds here. The
-# tracked copy needs a dedicated `git rm --cached` in a separate commit.
-packages/neko-agent/neko
 
 # 锁文件（pnpm-lock.yaml 必须提交，CI 依赖它）
 bun.lock
@@ -45,7 +37,6 @@ package-lock.json
 
 # 测试
 test/
-.vscode-test/
 test-results/
 playwright-report/
 
@@ -77,14 +68,11 @@ yarn-error.log*
 # 本地 smoke / 调试证据（PR 或文档需要的截图应显式放入目标文档目录）
 smoke-artifacts/
 debug-artifacts/
-vscode-screenshot*.png
-vscode-webview-*.png
 
 # TypeScript 增量编译产物
 *.tsbuildinfo
 
-# Rust 构建产物
-target/
+# Native Node addon build outputs
 *.node
 
 # 测试覆盖率

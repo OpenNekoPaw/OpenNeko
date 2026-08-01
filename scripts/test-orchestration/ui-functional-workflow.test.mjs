@@ -69,6 +69,39 @@ describe('Desktop functional workflow boundary', () => {
     assert.doesNotMatch(scripts['check:test-orchestration'] ?? '', /webview-functional/u);
   });
 
+  it('keeps functional formatting, documentation, and ignored artifacts current', async () => {
+    const packageJson = JSON.parse(await readFile(join(repoRoot, 'package.json'), 'utf8'));
+    const desktopReadme = await readFile(join(repoRoot, 'apps/neko-desktop/README_CN.md'), 'utf8');
+    const gitignoreEntries = (await readFile(join(repoRoot, '.gitignore'), 'utf8'))
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0 && !line.startsWith('#'));
+
+    for (const scriptName of ['format', 'format:check']) {
+      const command = packageJson.scripts?.[scriptName] ?? '';
+      assert.match(command, /scripts\/desktop-functional\/\*\*\/\*\.mjs/u);
+      assert.match(command, /packages\/\*-webview\/functional\/\*\*\/\*\.mjs/u);
+    }
+
+    assert.match(desktopReadme, /pnpm test:local:media-openneko/u);
+    assert.match(desktopReadme, /--scenario=all-openneko-consumers/u);
+    assert.doesNotMatch(desktopReadme, /test:local:media-http/u);
+
+    assert.ok(gitignoreEntries.includes('/reports/'));
+    for (const retiredEntry of [
+      '/neko',
+      'packages/neko-agent/neko',
+      '.vscode-test/',
+      '*.vsix',
+      'vsix-artifacts/',
+      'vscode-screenshot*.png',
+      'vscode-webview-*.png',
+      'target/',
+    ]) {
+      assert.equal(gitignoreEntries.includes(retiredEntry), false, retiredEntry);
+    }
+  });
+
   it('keeps VS Code, GUI startup, and real API commands unreachable from remote gates', async () => {
     const packageJson = JSON.parse(await readFile(join(repoRoot, 'package.json'), 'utf8'));
     const scripts = packageJson.scripts ?? {};

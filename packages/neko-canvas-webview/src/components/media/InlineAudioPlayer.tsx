@@ -426,6 +426,7 @@ function AudioPlaybackButton({
   return (
     <button
       type="button"
+      data-testid="canvas-audio-toggle-playback"
       className="canvas-audio-transport-button"
       data-variant="primary"
       onClick={onClick}

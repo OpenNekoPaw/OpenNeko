@@ -5,6 +5,8 @@ import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { runAutomatedDesktopFunctional } from './desktop-functional/runner.mjs';
+import { resolveDesktopFunctionalScenarios } from './desktop-functional/scenarios.mjs';
 
 const repositoryRoot = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const fixturePrefix = 'openneko-desktop-functional-';
@@ -72,11 +74,59 @@ function waitForProcess(child) {
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try {
-    process.exitCode = await runDesktopUiFunctional();
+    const cli = parseCli(process.argv.slice(2));
+    if (!cli.scenario) {
+      process.exitCode = await runDesktopUiFunctional();
+    } else {
+      for (const scenario of resolveDesktopFunctionalScenarios(cli.scenario)) {
+        const result = await runAutomatedDesktopFunctional({
+          scenario,
+          target: cli.target,
+        });
+        process.stdout.write(
+          `Desktop functional scenario '${scenario.id}' passed: ${result.reportPath}\n`,
+        );
+      }
+      process.exitCode = 0;
+    }
   } catch (error) {
     process.stderr.write(
       `Desktop UI functional launcher failed: ${error instanceof Error ? error.message : String(error)}\n`,
     );
     process.exitCode = 1;
   }
+}
+
+function parseCli(args) {
+  let scenario;
+  let target = 'development';
+  for (let index = 0; index < args.length; index += 1) {
+    const argument = args[index];
+    if (argument === '--scenario') {
+      scenario = args[index + 1];
+      index += 1;
+      continue;
+    }
+    if (argument?.startsWith('--scenario=')) {
+      scenario = argument.slice('--scenario='.length);
+      continue;
+    }
+    if (argument === '--target') {
+      target = args[index + 1];
+      index += 1;
+      continue;
+    }
+    if (argument?.startsWith('--target=')) {
+      target = argument.slice('--target='.length);
+      continue;
+    }
+    throw new Error(`Unknown Desktop functional argument '${String(argument)}'.`);
+  }
+  if (target !== 'development' && target !== 'packaged') {
+    throw new Error(`Desktop functional target '${String(target)}' is invalid.`);
+  }
+  if (args.includes('--scenario') && !scenario) {
+    throw new Error('Desktop functional --scenario requires a value.');
+  }
+  return { scenario, target };
 }
