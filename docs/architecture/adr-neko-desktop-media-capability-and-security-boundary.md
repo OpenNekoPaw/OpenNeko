@@ -262,7 +262,6 @@ Electron renderer 同时保留两条自动 fallback 路径。
 - [`webview-media-security.md`](webview-media-security.md)
 - [`adr-cut-html-video-node-ffmpeg-media-runtime-boundary.md`](adr-cut-html-video-node-ffmpeg-media-runtime-boundary.md)
 - [`adr-neko-desktop-composition-and-open-source-reference-boundary.md`](adr-neko-desktop-composition-and-open-source-reference-boundary.md)
-- [`../../openspec/changes/define-desktop-media-capability-boundary/`](../../openspec/changes/define-desktop-media-capability-boundary/)
 
 外部一手资料（核验日期：2026-07-27）：
 

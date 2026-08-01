@@ -69,7 +69,7 @@ Explicit or progressively disclosed Skill content MUST create no persistent acti
 - **THEN** Pi formats its content for that turn and subsequent turns do not retain legacy activation slots, ToolGuard state, ToolSet mutations, or Skill model overrides
 
 ### Requirement: Model-selected Skill use exposes a receipt, not activation state
-Every successful Pi `read_skill` result MUST carry the Host-owned Skill name, source, content fingerprint, and opaque locator identity in Pi transcript history. TUI debug automation SHALL project a bounded, redacted receipt containing the ToolCall identity, name, source kind, normalized fingerprint, and locator class. It MUST NOT project a physical path, raw locator value, raw Skill content, activation status, injected-fragment lifecycle, ToolGuard state, or cache identity.
+Every successful Pi `read_skill` result MUST carry the Host-owned Skill name, source, content fingerprint, and opaque locator identity in Pi transcript history. Desktop diagnostics SHALL project a bounded, redacted receipt containing the ToolCall identity, name, source kind, normalized fingerprint, and locator class. It MUST NOT project a physical path, raw locator value, raw Skill content, activation status, injected-fragment lifecycle, ToolGuard state, or cache identity.
 
 #### Scenario: Evaluate a model-selected Skill read
 - **WHEN** Pi successfully reads a trusted enabled Skill through `read_skill`

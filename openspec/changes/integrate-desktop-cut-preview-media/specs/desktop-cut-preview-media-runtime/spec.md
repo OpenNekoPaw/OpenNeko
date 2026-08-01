@@ -131,15 +131,3 @@ without creating a generic renderer task or duplicate execution.
 - **THEN** Cut/Preview runtimes release subscriptions, streams, decoders and cancellable work
   according to owning lifecycle policy
 - **AND** a late event cannot mutate a reopened View with a new epoch
-
-### Requirement: Cut and Preview retain current VS Code behavior
-
-The VS Code Cut and Preview adapters MUST consume the same package-owned contracts used by Desktop
-and MUST retain current save, undo/redo, preview, media, export, focus and cleanup behavior.
-
-#### Scenario: Shared Root migration is qualified
-
-- **WHEN** the Cut/Preview runtime migration is validated
-- **THEN** producer-consumer tests and isolated Extension Development Host scenarios prove the shared
-  Roots use the new runtime
-- **AND** Electron fixture evidence proves VS Code adapters are not involved in Desktop

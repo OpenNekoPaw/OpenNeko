@@ -433,4 +433,3 @@ Electron 与隔离 workspace 验收。
 - [`adr-agent-runtime-architecture-comparison-boundary.md`](adr-agent-runtime-architecture-comparison-boundary.md)
 - [`adr-cut-html-video-node-ffmpeg-media-runtime-boundary.md`](adr-cut-html-video-node-ffmpeg-media-runtime-boundary.md)
 - [`asset-library.md`](asset-library.md)
-- [`../../openspec/changes/define-desktop-professional-tool-handoff-mcp-boundary/`](../../openspec/changes/define-desktop-professional-tool-handoff-mcp-boundary/)

@@ -7,7 +7,7 @@
 - 清理前采集时间：`2026-07-31T16:18:23+08:00`
 - 清理后采集时间：`2026-07-31T16:26:02+08:00`
 - 清理后 source revision：本文件所在提交；逐项目录与 successor 证据见
-  [`clean-openspec-active-area/disposition.md`](../../openspec/changes/archive/2026-07-31-clean-openspec-active-area/disposition.md)
+  [`openspec-active-area-governance`](../../openspec/specs/openspec-active-area-governance/spec.md)
 
 计数按一级 change 目录执行：`tasks.md` 无未勾选项记为 complete，仍有未勾选项记为
 incomplete，递归不存在任何文件的目录记为 artifact-free residue。工作区在采集期间包含
@@ -41,8 +41,7 @@ incomplete，递归不存在任何文件的目录记为 artifact-free residue。
 
 以下情况继续保持 active，不能用 checkbox 数量机械归档：
 
-1. `retire-neko-engine-before-node-media-rebuild` 仍有 Engine vocabulary 和旧 snapshot
-   拒绝路径需要实现；
+1. Engine 退役提案已在 2026-08-01 Electron-only 清理中删除；后续只以稳定架构和禁回流门禁为准；
 2. `plan-neko-desktop-phase-1-delivery` 是仍含真实任务的 program change，应先把工作转移到
    focused changes；
 3. `redefine-openneko-lightweight-editing` 仍混有未完成 Cut 任务，需要 Desktop Cut successor

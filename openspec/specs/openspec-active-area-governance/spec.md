@@ -2,25 +2,40 @@
 
 ## Purpose
 
-TBD - created by archiving change clean-openspec-active-area. Update Purpose after archive.
+Keep the OpenSpec active area limited to current Electron Desktop design and implementation work,
+while promoting stable requirements to canonical specs and removing completed or obsolete proposal
+residue.
 
 ## Requirements
 
 ### Requirement: Active changes have an explicit lifecycle disposition
 
-The repository SHALL classify an examined OpenSpec change as active, archive with spec sync,
-archive without spec sync, or empty residue before moving or deleting it. Checkbox completion alone
-MUST NOT authorize archive.
+The repository SHALL classify an examined OpenSpec change as current Desktop work, completed work
+whose stable requirements must be promoted, obsolete work, or empty residue before deleting it.
+Checkbox completion alone MUST NOT authorize deletion until current requirements and references have
+been checked.
 
 #### Scenario: Completed tasks retain current requirements
 
 - **WHEN** all change artifacts and tasks are complete and its delta requirements remain current
-- **THEN** the change is archived with those requirements synchronized to the canonical specs
+- **THEN** those requirements are synchronized to canonical specs or current architecture documents,
+  and the completed proposal directory is deleted
 
 #### Scenario: Superseded requirements are historical only
 
 - **WHEN** a successor owns the implemented behavior and the old delta requirements are obsolete
-- **THEN** the old change is archived without synchronizing its delta specs
+- **THEN** the old proposal is deleted without preserving a historical change copy
+
+### Requirement: Active changes describe the current Electron Desktop product
+
+The active change directory SHALL contain only unfinished design, implementation, migration, or
+acceptance work for the current Electron Desktop product and its directly consumed packages.
+
+#### Scenario: Retired host proposal remains
+
+- **WHEN** a proposal only describes VS Code, TUI, Engine compatibility, superseded host topology,
+  or already completed work
+- **THEN** it is removed from the active change directory after current references are detached
 
 ### Requirement: Genuine unfinished work remains visible
 
@@ -44,34 +59,12 @@ entries, and no artifacts to recover.
 - **WHEN** a first-level change directory is empty and Git tracks no path beneath it
 - **THEN** the directory is removed without creating replacement historical artifacts
 
-### Requirement: Archive moves preserve navigability and evidence
+### Requirement: Current references do not depend on deleted proposal history
 
-Archive operations SHALL retain the complete change directory and SHALL update current local
-Markdown references to the date-prefixed archive location.
+Current architecture documents, active changes, scripts, and checks SHALL reference canonical specs,
+current architecture facts, or implementation paths rather than deleted proposal directories.
 
-#### Scenario: Current documentation references an archived change
+#### Scenario: Completed proposal is removed
 
-- **WHEN** a change moves from the active directory into `openspec/changes/archive/`
-- **THEN** all current Markdown links resolve to the archived path after the move
-
-### Requirement: Historical decision status matches successor ownership
-
-The repository SHALL mark an ADR as superseded at its source when a stable successor document
-replaces its implementation authority, while preserving still-valid principles and historical
-evidence.
-
-#### Scenario: Architecture index already marks an ADR historical
-
-- **WHEN** the ADR contains a replacement notice and the architecture index no longer treats it as
-  current authority
-- **THEN** the ADR status is marked Superseded and names the successor boundary
-
-### Requirement: Governance audits are reproducible snapshots
-
-A dated OpenSpec governance audit SHALL record its source revision, collection timestamp, counting
-method, and lifecycle caveat. It MUST NOT present mutable counts as timeless architecture facts.
-
-#### Scenario: Active change counts change after cleanup
-
-- **WHEN** empty directories are removed or completed changes are archived
-- **THEN** the audit records refreshed counts together with the exact revision and collection time
+- **WHEN** a completed proposal directory is deleted
+- **THEN** repository link and name searches find no current dependency on that directory

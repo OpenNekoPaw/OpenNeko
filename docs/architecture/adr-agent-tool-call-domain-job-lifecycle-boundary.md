@@ -2,9 +2,9 @@
 
 状态：Accepted（部分实施）
 日期：2026-07-23
-范围：`neko-agent`、Pi Tool bridge、媒体生成、Canvas/Cut/Assets 创作入口、TUI、VS Code、拟议 Desktop、Subagent、页面关闭和执行恢复。
+范围：`neko-agent`、Pi Tool bridge、媒体生成、Canvas/Cut/Assets 创作入口、Electron Desktop、Subagent、页面关闭和执行恢复。
 
-本文决定以 Tool Call 取代通用 Agent `Task`/`TaskManager`，同时保留真正具有独立产品生命周期的领域 Job/Session。它补充 [`adr-pi-agent-runtime.md`](adr-pi-agent-runtime.md)、[`adr-agent-runtime-architecture-comparison-boundary.md`](adr-agent-runtime-architecture-comparison-boundary.md)、[`adr-cut-otio-vscode-desktop-media-runtime-boundary.md`](adr-cut-otio-vscode-desktop-media-runtime-boundary.md) 和 [`package-boundaries.md`](package-boundaries.md)。
+本文决定以 Tool Call 取代通用 Agent `Task`/`TaskManager`，同时保留真正具有独立产品生命周期的领域 Job/Session。它补充 [`adr-pi-agent-runtime.md`](adr-pi-agent-runtime.md)、[`adr-agent-runtime-architecture-comparison-boundary.md`](adr-agent-runtime-architecture-comparison-boundary.md)、[`adr-cut-html-video-node-ffmpeg-media-runtime-boundary.md`](adr-cut-html-video-node-ffmpeg-media-runtime-boundary.md) 和 [`package-boundaries.md`](package-boundaries.md)。
 
 本文取代以下既有目标：
 
@@ -14,10 +14,9 @@
 - [`adr-agent-creative-invocation-run-boundary.md`](adr-agent-creative-invocation-run-boundary.md) 与 [`adr-canvas-creative-ai-candidate-actions.md`](adr-canvas-creative-ai-candidate-actions.md) 中由 Agent 通用 run/workItem/TaskManager 统一拥有 Canvas 直接创作动作的部分。Document/candidate/ContentLocator/package-owned apply 边界继续有效。
 
 Agent 通用 TaskManager/TaskRef 已从当前 canonical Agent 路径删除。Generation 已实现最小
-versioned lifecycle kernel、具体 coordinator、持久 store、重启恢复、Agent 领域 Job Tools、
-TUI direct consumer 和 VS Code Host composition；Cut ExportJob 与 caller-owned projections 仍在
-[`introduce-domain-job-lifecycle-kernel`](../../openspec/changes/introduce-domain-job-lifecycle-kernel/)
-中实施。实现和 UI 不得把尚未接入的 VS Code 重启恢复或 Webview 管理误报为已经完成。
+versioned lifecycle kernel、具体 coordinator、持久 store、重启恢复和 Agent 领域 Job Tools；
+Desktop composition、Cut ExportJob 与 caller-owned projections 由当前活动提案继续验收。
+实现和 UI 不得把尚未接入的 Electron 重启恢复或 Renderer 管理误报为已经完成。
 
 ## 背景
 
@@ -249,13 +248,13 @@ Cut 已有明确 `ExportJobPort`，导出进度、取消、输入 revision、输
 - Agent path：Pi `AbortSignal` 到 provider、Tool progress/result 同 item、TaskManager poison 未命中。
 - 领域 Job：linked/detached cancel、以新 Tool Call 重新附着、provider reconciliation、原子产物提交。
 - Host：Tab/Window close 取消前台 Agent/Tool，Subagent 按 owner policy 处理并可显式中断。
-- Agent Evaluation：真实 TUI/Agent 路径证明没有 TaskRef、task continuation 或旧 TaskManager fallback。
-- Webview：Extension Development Host 验证 Tool streaming/terminal phase、全局 Activity
-  页面与协议不存在、关闭竞态和资源释放；普通浏览器不能替代。
+- Agent Evaluation：真实 Desktop Agent 路径证明没有 TaskRef、task continuation 或旧 TaskManager fallback。
+- Electron：真实 Desktop 验证 Tool streaming/terminal phase、全局 Activity 页面与协议不存在、
+  关闭竞态和资源释放；普通浏览器不能替代。
 
-已实现路径的确定性验证与剩余运行态验收记录在
-[`introduce-domain-job-lifecycle-kernel`](../../openspec/changes/introduce-domain-job-lifecycle-kernel/)；
-真实 Agent provider case 和 Extension Development Host Tool Timeline 尚未通过，因此不能
+已实现路径的确定性验证与剩余运行态验收由 `extract-generation-domain-package` 和
+`replace-agent-task-with-tool-call-lifecycle` 继续跟踪；真实 Agent provider case 和 Electron
+Tool Timeline 尚未通过，因此不能
 把单元测试或 key-free harness 描述为完整产品验收。
 
 ## 后果

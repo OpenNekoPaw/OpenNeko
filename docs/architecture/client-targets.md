@@ -3,7 +3,7 @@
 状态：Accepted
 
 更新日期：2026-07-31
-对应变更：`flatten-desktop-only-monorepo`
+当前宿主：Electron Desktop
 
 OpenNeko 当前只有一个客户端目标：Electron Desktop。`apps/neko-desktop` 当前组合
 Agent、Assets/Entity、Canvas、Cut、Preview、Generation、共享与媒体能力。保留在 workspace

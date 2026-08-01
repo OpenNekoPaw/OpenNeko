@@ -29,9 +29,8 @@ to macOS and Windows.
 
 - `desktop-build-gates`: Defines the workspace typecheck gate, the boundary between host-neutral
   build validation and native packaging, and required native CI evidence.
-- `supported-release-platforms`: Supersedes the completed but unarchived
-  `limit-supported-platforms` delta by redefining the closed Desktop release target set as macOS
-  Apple Silicon and Windows x64.
+- `supported-release-platforms`: Defines the closed Desktop release target set as macOS Apple
+  Silicon and Windows x64; the retired Linux/VSIX matrix is not a compatibility baseline.
 
 ### Modified Capabilities
 

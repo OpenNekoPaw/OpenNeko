@@ -42,7 +42,7 @@ The confirmation wait MUST remain correlated to the originating conversation and
 - **WHEN** Pi proposes a Tool classified as read-only for trusted internal content or content already authorized inside the current workspace
 - **THEN** `ask` and `auto` modes execute the read without user confirmation, while path containment, workspace trust, and content-access checks remain enforced
 
-Permission interaction MUST follow operation risk rather than the existence of a Tool call. An explicitly confirmation-gated Tool MUST still request approval, `plan` mode MUST NOT execute Tools, and a non-read Tool in `ask` mode MUST NOT inherit the read-only exemption. TUI and VS Code MUST consume the same read-only/confirmation decision contract.
+Permission interaction MUST follow operation risk rather than the existence of a Tool call. An explicitly confirmation-gated Tool MUST still request approval, `plan` mode MUST NOT execute Tools, and a non-read Tool in `ask` mode MUST NOT inherit the read-only exemption. Electron Desktop MUST consume the canonical read-only/confirmation decision contract.
 
 #### Scenario: Long generation returns product identity
 
@@ -80,13 +80,13 @@ Unknown tools, invalid arguments, missing host requirements, cancelled work, pro
 #### Scenario: Project a Pi tool failure to product Hosts
 
 - **WHEN** Pi reports a failed Tool result whose diagnostic is present in result content while structured details are empty
-- **THEN** the Pi event boundary preserves that diagnostic as a failed product Tool result for TUI and VS Code, and neither Host receives empty data with a generic replacement error
+- **THEN** the Pi event boundary preserves that diagnostic as a failed Desktop Tool result, and the renderer does not receive empty data with a generic replacement error
 
 ### Requirement: Pi Provider and Auth contracts are canonical for supported main models
 
 For Pi-supported main/chat providers, the system MUST use Pi provider/model registration, credential interpretation, OAuth login/refresh/logout, and `CredentialStore` contracts. The legacy Platform provider/auth path MUST NOT provide fallback success.
 
-OpenNeko SHALL own one program-level user CredentialStore shared by TUI and VS Code, durable credential persistence, deletion, provenance, redaction, Host-specific login interaction, and workspace/user configuration projection. Host-local login stores and Pi's default in-memory credential store MUST NOT act as production persistence. Secret values MUST NOT enter workspace facts, conversation SQLite, Pi Session, logs, or Evaluation facts.
+OpenNeko SHALL own one program-level user CredentialStore for Electron Desktop, durable credential persistence, deletion, provenance, redaction, Desktop login interaction, and workspace/user configuration projection. Renderer-local login stores and Pi's default in-memory credential store MUST NOT act as production persistence. Secret values MUST NOT enter workspace facts, conversation SQLite, Pi Session, logs, or Evaluation facts.
 
 #### Scenario: Refresh and persist an OAuth credential
 

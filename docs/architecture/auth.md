@@ -3,7 +3,7 @@
 状态：Accepted
 
 更新日期：2026-07-31
-对应变更：`flatten-desktop-only-monorepo`
+当前宿主：Electron Desktop
 
 当前 workspace 不包含独立 Auth 产品或 `neko-auth` 包。认证仍是外部 AI/provider、MCP 和未来联网能力的真实安全边界，但由具体宿主的 credential/config adapter 负责，不通过一个不存在的共享产品兜底。
 

@@ -16,7 +16,7 @@ The system MUST store messages, model changes, active-tool changes, compaction, 
 - **THEN** OpenNeko policy selects the trigger/budget/retained product references and Pi compaction entries plus `buildContext` produce the next model context while preserving the authoritative JSONL tree
 
 ### Requirement: Session storage is user-global and program-owned
-The program MUST own one user-global Pi Session root and SQLite metadata root shared by TUI and VS Code and partitioned by workspace, conversation, and branch identity. Workspace files MUST NOT store Pi transcripts. Loss of user-global state SHALL NOT trigger recovery from workspace files.
+The Electron Desktop program MUST own one user-global Pi Session root and SQLite metadata root partitioned by workspace, conversation, and branch identity. Workspace files MUST NOT store Pi transcripts. Loss of user-global state SHALL NOT trigger recovery from workspace files.
 
 Pi `cwd` MUST be a Host-generated virtual workspace locator used only for Pi partition/header semantics. It MUST NOT be treated as a physical path, `${VAR}` path, Skill locator, ContentAccess input, or generic file-tool argument.
 
@@ -46,15 +46,15 @@ The conversation runtime MUST create one idempotent checkpoint at each turn term
 - **WHEN** best-effort shutdown flush does not persist a delayed checkpoint or the process crashes
 - **THEN** the unsaved turn may be lost and the system does not recover it from a durable outbox, secondary WAL authority, or legacy journal
 
-### Requirement: Cross-Host conversation execution has one fenced writer
-TUI and VS Code MAY observe the same conversation, but only the Host holding the current `ConversationExecutionLease` epoch MAY advance its Pi Agent or commit a turn checkpoint. Other Hosts MUST remain read-only unless an explicit takeover obtains a higher epoch. Expired or replaced holders MUST fail writes through fencing checks.
+### Requirement: Desktop conversation execution has one fenced writer
+Multiple Desktop windows MAY observe the same conversation, but only the owner holding the current `ConversationExecutionLease` epoch MAY advance its Pi Agent or commit a turn checkpoint. Other owners MUST remain read-only unless an explicit takeover obtains a higher epoch. Expired or replaced holders MUST fail writes through fencing checks.
 
-#### Scenario: Open one conversation in two Hosts
-- **WHEN** TUI holds the current execution lease and VS Code opens the same conversation
-- **THEN** VS Code receives the read-only projection and cannot submit a turn until it explicitly takes over or the lease expires
+#### Scenario: Open one conversation in two Desktop windows
+- **WHEN** one Desktop window holds the current execution lease and another opens the same conversation
+- **THEN** the second window receives the read-only projection and cannot submit a turn until it explicitly takes over or the lease expires
 
 #### Scenario: Stale holder writes after takeover
-- **WHEN** another Host obtains a higher lease epoch and the former holder later submits a checkpoint
+- **WHEN** another Desktop owner obtains a higher lease epoch and the former holder later submits a checkpoint
 - **THEN** SQLite rejects the stale epoch and no Pi Session or product metadata is advanced by that write
 
 ### Requirement: Pi executes compaction under OpenNeko policy

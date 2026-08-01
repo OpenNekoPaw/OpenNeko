@@ -19,24 +19,18 @@ or host-inapplicable.
 - **THEN** Host returns a typed diagnostic containing the route and owning future slice
 - **AND** it does not execute a VS Code command, return a successful no-op, or fall back to another route
 
-### Requirement: Desktop and VS Code share one Agent message controller
+### Requirement: Desktop uses one canonical Agent message controller
 
 Host-neutral Agent orchestration MUST be owned by `@neko/agent` and composed from responsibility-specific
-route handlers. VS Code and Electron MUST inject Host effects into the same controller and MUST NOT
-maintain parallel router, conversation, Tool, Skill, configuration, or projection implementations.
+route handlers. Electron MUST inject Desktop Host effects into that controller and MUST NOT maintain
+a parallel router, conversation, Tool, Skill, configuration, or projection implementation.
 
 #### Scenario: Desktop dispatches a user message
 
 - **WHEN** an authenticated Desktop View sends `sendMessage` for an explicit conversation
 - **THEN** the shared controller invokes the canonical conversation Product Turn Bridge and Pi runtime
-- **AND** no `ChatViewProvider`, `vscode.Webview`, active editor, active workspace, or Desktop-only Agent
-  loop participates
-
-#### Scenario: VS Code dispatches the same message
-
-- **WHEN** the VS Code Webview sends the same valid message
-- **THEN** the same controller and wire parser execute with VS Code-specific effects
-- **AND** existing VS Code behavior remains covered by producer/consumer and Extension Host tests
+- **AND** no retired Host provider, active-editor fallback, active-workspace fallback, or Desktop-only
+  parallel Agent loop participates
 
 ### Requirement: Desktop composes the canonical Pi conversation authority
 
@@ -267,7 +261,7 @@ matrix and inject real domain ports.
 The change MUST provide deterministic producer/consumer, route coverage, identity, revision, reload,
 multi-window, cancellation and disposal tests. Agent routing or behavior changes MUST run the focused
 Agent evaluation workflow, and the final path MUST be exercised in Electron with an isolated synthetic
-workspace while existing VS Code behavior is revalidated in Extension Development Host.
+workspace.
 
 #### Scenario: Desktop Agent functional qualification runs
 

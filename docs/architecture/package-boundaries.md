@@ -3,7 +3,7 @@
 状态：Accepted
 
 更新日期：2026-08-01
-对应变更：`flatten-desktop-only-monorepo`、`replace-desktop-media-scheme-with-http-resource-gateway`
+对应变更：`replace-desktop-media-scheme-with-http-resource-gateway`
 
 本文定义当前一级 workspace 的依赖方向、公共能力 owner，以及 Electron Desktop 和
 Node/FFmpeg 媒体运行时的边界。包名、入口和示例只描述当前保留实现；已移除宿主不构成兼容要求。

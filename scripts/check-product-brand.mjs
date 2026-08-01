@@ -29,7 +29,6 @@ const scannedExtensions = new Set([
 ]);
 const excludedDirectoryNames = new Set([
   '.git',
-  '.turbo',
   'coverage',
   'dist',
   'node_modules',
@@ -38,10 +37,7 @@ const excludedDirectoryNames = new Set([
   'reports',
   'target',
 ]);
-const excludedPathPrefixes = [
-  'openspec/changes/archive/',
-  'openspec/changes/rename-product-to-openneko/',
-];
+const excludedPathPrefixes = [];
 
 const retiredBrandRules = [
   rule(['Neko', ' Suite'], canonicalProductName),

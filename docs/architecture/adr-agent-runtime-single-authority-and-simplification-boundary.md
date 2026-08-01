@@ -15,7 +15,7 @@
 - [`adr-agent-sandbox-and-external-processing-boundary.md`](adr-agent-sandbox-and-external-processing-boundary.md)：路径、资源、trust、approval 和进程隔离约束继续有效；其中五类来源、通用 package registry 和完整 processor extension framework 改为需要真实产品消费者证明的条件性架构。
 - [`adr-neko-desktop-home-project-profile-ux-boundary.md`](adr-neko-desktop-home-project-profile-ux-boundary.md) 及 Character/World 聚合 OpenSpec：Chara/World 领域拥有角色和世界工作流，Agent 保持领域中立。
 
-`extract-neko-chara-domain-package` 已完成本文“领域工作流返回 owner”的第一阶段：当前 Character Dialogue、Embody、角色证据和 Profile Assembly 由 `@neko/chara` 拥有，Agent Extension 只保留 Chat shell 组合与消息路由。流式 Timeline、Prompt、Rendering、Platform 和 External Processor 收敛仍需各自 OpenSpec；不得把单项迁移误报为整份 ADR 已实施。
+当前 Character Dialogue、Embody、角色证据和 Profile Assembly 由 `@neko/chara` 拥有；Desktop Agent composition 只保留 Chat shell 组合与消息路由。流式 Timeline、Prompt、Rendering、Platform 和 External Processor 收敛仍需各自 OpenSpec；不得把单项迁移误报为整份 ADR 已实施。
 
 ## 背景
 
@@ -170,7 +170,7 @@ Pi Agent Run
 
 已有 `CutProjectQualityFacade` 证明领域侧确实需要独立 Quality owner；生成媒体和后续 Canvas/Chara Quality 又共享 target/evidence/freshness/Gate 语义，因此建立窄的 `@neko/quality` runtime 已有真实复用依据。初始提取只迁移中立 contract validation、Gate aggregation 和 evaluator ports；如果把 contract 从 `@neko/shared` 移出会产生依赖循环，应先保留 contract 原位，再由独立 OpenSpec 收敛依赖方向。
 
-第一阶段实现见 `openspec/changes/extract-neko-quality-domain-package`：`@neko/quality/core` 已接管 canonical Gate 与 evaluator/materializer ports，`@neko/quality/model` 已接管 provider-neutral multimodal evidence adapter，`@neko/quality/project` 已接管通用 ProjectQuality facade orchestration。Agent Extension 仅保留 `QualityCheck` Tool/Capability、purpose-model 与授权资源 materializer 适配；旧 `MediaQualityRuntime`、Consistency runtime、Tool-name remediation planner、未接通的 review adapter，以及 `@neko/shared` 中无消费者的旧 `types/quality/qa-types` DTO 已删除。仍有跨包消费者的 canonical Quality contract 暂留 `@neko/shared`，领域 rubric、技术检查、repair/apply 与 revision mutation 仍归 owning package。
+第一阶段已完成：`@neko/quality/core` 接管 canonical Gate 与 evaluator/materializer ports，`@neko/quality/model` 接管 provider-neutral multimodal evidence adapter，`@neko/quality/project` 接管通用 ProjectQuality facade orchestration。Agent 仅保留 `QualityCheck` Tool/Capability、purpose-model 与授权资源 materializer 适配；旧 `MediaQualityRuntime`、Consistency runtime、Tool-name remediation planner、未接通的 review adapter，以及 `@neko/shared` 中无消费者的旧 `types/quality/qa-types` DTO 已删除。仍有跨包消费者的 canonical Quality contract 暂留 `@neko/shared`，领域 rubric、技术检查、repair/apply 与 revision mutation 仍归 owning package。
 
 ### 5. Platform 只能是组合结果，不得成为可变 manager 容器
 

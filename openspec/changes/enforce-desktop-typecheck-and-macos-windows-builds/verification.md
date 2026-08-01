@@ -25,8 +25,8 @@ Host: `darwin-arm64`
 
 ### Earlier P0 Evidence Before The Parallel Migration
 
-Before `retire-resource-ref-contract` entered its current breaking intermediate state, the same P0
-platform implementation passed:
+Before the ContentLocator migration entered its breaking intermediate state, the same P0 platform
+implementation passed:
 
 - `pnpm check:static-build`, including format, lint, all 15 explicit workspace typecheck tasks, and
   all five browser-safe UI builds;
@@ -61,8 +61,8 @@ Electron evidence.
 ### Current Worktree Blocker
 
 `pnpm check:static-build`, `pnpm typecheck:desktop`, `pnpm check:build`, `pnpm build`, and
-`pnpm package:desktop` cannot currently complete because the parallel
-`retire-resource-ref-contract` change is in an intentionally breaking intermediate state:
+`pnpm package:desktop` cannot currently complete because the parallel ContentLocator migration is
+in an intentionally breaking intermediate state:
 `DocumentArchiveResourceRef`, `ArtifactResourceRef`, and their guards were removed before all
 Agent, Canvas, Content, Preview, and shared-type consumers were migrated. The direct Desktop
 typecheck now fails on the resulting `ContentLocator`/`ResourceCacheSource` mismatch and removed

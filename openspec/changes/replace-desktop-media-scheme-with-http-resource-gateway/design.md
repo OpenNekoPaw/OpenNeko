@@ -243,6 +243,31 @@ registration。active selection 只选择 UI，不作为资源 owner fallback。
 
 这是 prelaunch canonical path 替换，不提供 runtime flag、dual descriptor 或 fallback。
 
+### 11. Desktop functional qualification 保持 runner 与领域场景分离
+
+共享 Desktop functional runner 只拥有隔离 fixture/user-data 根、development 与 packaged
+application 启动、CDP transport、console/network 采集、超时、脱敏报告和进程清理。它不得解释
+OTIO、NKC、Preview descriptor、Agent Timeline 或各领域成功条件。
+
+Cut、Canvas、Preview 和 Agent owning package 分别拥有：
+
+- 只含合成内容的 workspace fixture；
+- 通过生产 Desktop UI 或公开 typed Host path 执行的用户操作；
+- package-owned Root/player/viewer/card 的领域断言；
+- 运行结果必须产生的 authoritative side effect 与释放断言。
+
+runner 在所有场景启用统一 no-fallback poison：拦截 loopback HTTP 与旧 scheme，任一
+poisoned request 立即使场景失败；同时采集 `openneko://resource` 请求与脱敏的
+consumer/root 证据。报告不得保存用户工作区、凭据、完整临时 URL 或 provider payload。
+
+Agent 场景复用同一 Desktop session driver，但由 Evaluation platform 拥有 case、assertion 和
+report。driver 必须从真实 Desktop composition 的公开 composer/input path 启动 turn，不得导入
+Pi/AgentSession、直接注入 turn/Tool result 或使用 mock provider。未提供 credential、model access
+或 cost authorization 时，真实 case 保持 `infrastructure-blocked`，不改写为通过。
+
+development matrix 覆盖完整的领域边界断言；packaged matrix 至少在当前平台对每个
+applicable consumer 运行一条 canonical smoke，并证明打包应用未恢复第二 transport 或测试后门。
+
 ## Risks / Trade-offs
 
 - [custom scheme loader 行为需要资格]：真实 Electron 覆盖 native media、Range、Canvas/WebGL、

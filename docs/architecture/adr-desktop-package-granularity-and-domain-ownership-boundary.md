@@ -13,7 +13,7 @@ OpenSpec”列出的 change 完成路径级验收后，才能提升为 Accepted/
 
 ## 背景
 
-`flatten-desktop-only-monorepo` 已将 OpenNeko 收敛为唯一 Electron Desktop 应用和一级
+OpenNeko 已收敛为唯一 Electron Desktop 应用和一级
 `packages/*` workspace。当前拓扑解决了嵌套 package、VS Code Extension 和 TUI 多宿主问题，
 但仍存在四类结构性疑问：
 
@@ -372,21 +372,9 @@ package 可以作为真实 bounded context、内容 owner 或独立内核继续�
 8. 最后统一 package identity 和必要目录名，避免在所有权迁移前产生两轮路径 churn。
 9. 清理本地忽略目录和空目录，运行完整 repository、Desktop package 和真实 Electron 验收。
 
-上述步骤涉及跨包契约、目录移动和架构变更，只能通过以下独立 OpenSpec 实施：
-
-1. [`decompose-neko-platform-by-domain-owner`](../../openspec/changes/decompose-neko-platform-by-domain-owner/)：
-   按 Agent/AI SDK/Generation/Desktop owner 拆解并删除 Platform。
-2. [`decompose-neko-shared-by-layer-owner`](../../openspec/changes/decompose-neko-shared-by-layer-owner/)：
-   按 L0/L1/L2 和领域 owner 收敛 Shared。
-3. [`govern-zero-consumer-workspace-packages`](../../openspec/changes/govern-zero-consumer-workspace-packages/)：
-   审计 manifest、动态资源和测试消费，决定接入、未接入、合并或删除。
-4. [`refine-neko-host-primitive-boundary`](../../openspec/changes/refine-neko-host-primitive-boundary/)：
-   落实 Host 准入、应用契约/命令/registry 迁移和边界门禁。
-5. [`normalize-package-directory-and-npm-identities`](../../openspec/changes/normalize-package-directory-and-npm-identities/)：
-   在前四项完成后统一目录与 npm identity。
-
-不得将本 ADR 直接视为删除用户数据、批量移动文件或保留兼容 alias 的授权。第五项依赖前
-四项的最终 disposition；若 inventory 漂移，必须先更新映射和 OpenSpec，不能部分重命名。
+上述步骤涉及跨包契约、目录移动和架构变更；原分阶段重构提案已撤销。本文不再构成实施
+入口，也不得视为删除用户数据、批量移动文件或保留兼容 alias 的授权。未来若重新推进，
+必须按当时的实际消费者、数据边界和 Electron 运行路径建立新的聚焦 OpenSpec。
 
 ## 后果
 
@@ -455,4 +443,3 @@ path 要求。
 - [`application-composition.md`](application-composition.md)
 - [`adr-agent-runtime-single-authority-and-simplification-boundary.md`](adr-agent-runtime-single-authority-and-simplification-boundary.md)
 - [`adr-code-review-quality-gates.md`](adr-code-review-quality-gates.md)
-- [`../../openspec/changes/flatten-desktop-only-monorepo/`](../../openspec/changes/flatten-desktop-only-monorepo/)

@@ -5,7 +5,7 @@
 - 范围：`neko-preview`、`neko-agent`、共享类型契约、VS Code Webview、Live2D、VRM、GLB/glTF、MMD、TTS/STT 与 Three.js/PixiJS 运行时。
 - 实施状态：仅确立架构决策；具体功能必须通过独立 OpenSpec 变更实施和验收。
 
-本文记录 OpenNeko 对 Live2D、VRM、GLB/glTF 和 MMD 模型预览、Agent 动作/语音驱动及渲染运行时的稳定边界。它补充 [`package-boundaries.md`](package-boundaries.md)、[`webview-media-security.md`](webview-media-security.md)、[`agent.md`](agent.md) 和 [`adr-agent-directed-creative-orchestration-and-domain-capability-boundary.md`](adr-agent-directed-creative-orchestration-and-domain-capability-boundary.md)。现有标准 3D 模型预览基线已归档于 [`../../openspec/changes/archive/2026-07-18-add-standard-3d-model-preview/`](../../openspec/changes/archive/2026-07-18-add-standard-3d-model-preview/)；本文不静默扩大该基线的格式范围或把尚未实现的动画播放描述成现有能力。
+本文记录 OpenNeko 对 Live2D、VRM、GLB/glTF 和 MMD 模型预览、Agent 动作/语音驱动及渲染运行时的稳定边界。它补充 [`package-boundaries.md`](package-boundaries.md)、[`media-runtime.md`](media-runtime.md)、[`agent.md`](agent.md) 和 [`adr-agent-directed-creative-orchestration-and-domain-capability-boundary.md`](adr-agent-directed-creative-orchestration-and-domain-capability-boundary.md)。现有标准 3D 模型预览基线由 [`standard-3d-model-preview`](../../openspec/specs/standard-3d-model-preview/spec.md) 约束；本文不静默扩大该基线的格式范围或把尚未实现的动画播放描述成现有能力。
 
 ## 背景
 

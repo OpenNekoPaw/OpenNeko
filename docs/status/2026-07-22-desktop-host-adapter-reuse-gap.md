@@ -16,7 +16,7 @@
 > [Tool Call/Domain Job ADR](../architecture/adr-agent-tool-call-domain-job-lifecycle-boundary.md)
 > 为准。下文只保留 2026-07-22 当日耦合规模和迁移背景，不得作为恢复旧包或旧 runtime 的依据。
 >
-> Foundation 状态更新（2026-07-27）：`bootstrap-neko-desktop-foundation` 已新增
+> Foundation 状态更新（2026-07-27）：Electron Desktop foundation 已新增
 > `apps/neko-desktop`、canonical `neko-desktop` identity、`ElectronNekoHostPorts`、
 > typed preload bridge、window registry 和安全 Electron package。下表的 application
 > identity 与通用 Electron Host 缺口已关闭；领域 adapter 缺口仍然有效。

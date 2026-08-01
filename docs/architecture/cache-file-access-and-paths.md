@@ -4,7 +4,7 @@
 
 更新日期：2026-07-22
 
-目标实现拆分为 [`adopt-workspace-linked-media-libraries`](../../openspec/changes/adopt-workspace-linked-media-libraries/proposal.md)、[`internalize-derived-content-storage`](../../openspec/changes/internalize-derived-content-storage/proposal.md) 和 [`simplify-workspace-content-io`](../../openspec/changes/simplify-workspace-content-io/proposal.md)。前两个可独立推进，Content I/O 简化在两者完成后实施。本文记录最终目标架构；旧媒体库 `${VAR}` 和旧 ContentAccess cache contract 只可作为 migration/cleanup 输入。
+工作区关联媒体库、派生内容私有存储与 Content I/O 的当前收敛结果由本文记录。旧媒体库 `${VAR}` 和旧 ContentAccess cache contract 只可作为 migration/cleanup 输入。
 
 本文定义 Desktop 产品中的工作区路径、内容读写、文档访问、runtime 投影和可重建派生物边界。Creative Entity 与 Media Library 的业务语义分别见 [`unified-entity.md`](unified-entity.md) 和 [`asset-library.md`](asset-library.md)。
 

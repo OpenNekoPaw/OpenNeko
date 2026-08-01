@@ -6,10 +6,8 @@
 
 本文记录 OpenNeko 将 VS Code 产品收敛为单一扩展、将 workspace 收敛为 `apps/*` 与 `packages/*` 两个单层分组，并重新明确 App、共享 Package、Host adapter 和 `@neko/shared` 所有权的目标边界。
 
-单扩展阶段的实施记录已归档至
-[`consolidate-vscode-single-extension-package`](../../openspec/changes/archive/2026-07-30-consolidate-vscode-single-extension-package/)。
-当前唯一 Desktop 与一级 workspace 边界由 [`application-composition.md`](application-composition.md)、
-[`package-boundaries.md`](package-boundaries.md) 和 `flatten-desktop-only-monorepo` 接续；
+当前唯一 Desktop 与一级 workspace 边界由 [`application-composition.md`](application-composition.md) 和
+[`package-boundaries.md`](package-boundaries.md) 接续；
 本文不再是实现入口。
 
 ## 背景
@@ -294,7 +292,7 @@ packager 不再创建或解包内部 feature VSIX。缺失资源、重复 contri
 ### 正面后果
 
 - VS Code 的安装、源码、运行时和打包边界一致，不再“对外单扩展、内部多扩展”。
-- workspace graph 只剩两个固定层级，pnpm/Turbo/测试/架构检查不再理解 feature container。
+- workspace graph 只剩两个固定层级，pnpm/测试/架构检查不再理解 feature container。
 - Desktop、TUI 和 VS Code 对共享 domain/runtime/UI 的依赖地位一致。
 - Host 和跨 feature 依赖在 composition root 可见，减少隐式 service locator 耦合。
 - `@neko/shared` 不再成为所有领域与 runtime 的公共耦合中心。

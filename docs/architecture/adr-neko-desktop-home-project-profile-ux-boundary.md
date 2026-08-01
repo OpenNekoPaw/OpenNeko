@@ -381,11 +381,11 @@ CharacterProject
 
 世界可以在 binding 中增加 world actor identity、世界角色、初始位置、阵营和世界局部策略，但当前地点、库存、关系进度、任务、事件经历和 Gameplay 状态属于 WorldRun/WorldSave。世界不得静默修改 CharacterVersion；角色 core 也不得导入 World 私有 runtime。角色在世界中的观察与行动由宿主组合的窄 Environment/World adapter 提供，避免 `neko-chara <-> neko-world` 循环依赖。
 
-`packages/neko-chara` 已通过 `extract-neko-chara-domain-package` OpenSpec 建立第一阶段 owner，拥有当前 Character Dialogue、Embody、角色证据、Profile Assembly 和 VS Code 角色编排。它尚未实现 CharacterProject/CharacterVersion、发布、持久 CharacterRun 恢复或独立 Webview；`neko-world` 仍未建立。新增 project codec、Device/Live、持久 2D/3D authoring、Scene/Puppet 或 Gameplay runtime 前仍需独立 OpenSpec；缺失能力必须返回 unavailable diagnostic，不能恢复旧命令、fallback、空 provider 或成功 no-op。
+`packages/neko-chara` 已建立第一阶段 owner，拥有当前 Character Dialogue、Embody、角色证据和 Profile Assembly；具体运行组合由 Electron Desktop 注入。它尚未实现 CharacterProject/CharacterVersion、发布、持久 CharacterRun 恢复或独立 Webview；`neko-world` 仍未建立。新增 project codec、Device/Live、持久 2D/3D authoring、Scene/Puppet 或 Gameplay runtime 前仍需独立 OpenSpec；缺失能力必须返回 unavailable diagnostic，不能恢复旧命令、fallback、空 provider 或成功 no-op。
 
 #### 6.5 Host 只组合实例，领域 application service 负责编排
 
-`apps/neko-desktop`、`apps/neko-vscode`、TUI 和未来宿主只构造 Character/World application service，注入 AgentSession、Storage、Renderer、Device、Media 等 adapter，并拥有宿主资源生命周期。Host 不判断角色回应、NPC 行为、世界 action、记忆晋升或领域 mutation，也不通过 active tab 选择 run。
+`apps/neko-desktop` 只构造 Character/World application service，注入 AgentSession、Storage、Renderer、Device、Media 等 adapter，并拥有宿主资源生命周期。Host 不判断角色回应、NPC 行为、世界 action、记忆晋升或领域 mutation，也不通过 active tab 选择 run。
 
 `CharacterApplicationService` 拥有 CharacterRun 的创建、恢复、销毁、角色上下文/能力快照、Roleplay turn 和记忆候选；`WorldApplicationService` 拥有 WorldRun、action/revision 校验、WorldEvent 提交、save、branch 和 replay。两者依赖 package-local、consumer-owned port，Host 只替换具体 adapter，不能为 VS Code、Desktop 和 TUI 复制领域流程。
 
@@ -742,7 +742,6 @@ Home 默认停留在当前界面处理普通问答、调研、一次性生成和
 - [`unified-entity.md`](unified-entity.md)
 - [`adr-preview-3d-reference-staging-boundary.md`](adr-preview-3d-reference-staging-boundary.md)
 - [`../research/desktop-agent-client-architecture-reference-2026-07-22.md`](../research/desktop-agent-client-architecture-reference-2026-07-22.md)
-- [`../../openspec/changes/consolidate-desktop-shell-activity-profile-docs/`](../../openspec/changes/consolidate-desktop-shell-activity-profile-docs/)
 
 外部参考快照（2026-07-22，产品界面和能力可能变化，实施时需重新核验）：
 

@@ -90,12 +90,12 @@ The retained Media Info command SHALL resolve an explicit resource and use the m
 - **THEN** Media Info SHALL show the owning diagnostic
 - **AND** it SHALL NOT silently show only the file path and inferred kind as if probing succeeded
 
-### Requirement: The Extension Development Host validates the retained user path
+### Requirement: Electron Desktop validates the retained user path
 
-Media comparison changes SHALL be validated in an Extension Development Host using isolated image, audio and video fixtures. The validation SHALL cover compare, Git comparison where supported, cancellation/timeout, concurrent viewers, Media Info and disposal.
+Media comparison changes SHALL be validated in Electron Desktop using isolated image, audio and video fixtures. The validation SHALL cover compare, Git comparison where supported, cancellation/timeout, concurrent viewers, Media Info and disposal.
 
 #### Scenario: A retained comparison release candidate is evaluated
 
 - **WHEN** the package build and automated tests pass
-- **THEN** the current VS Code extension build SHALL complete the focused fixture scenarios
+- **THEN** the current Electron Desktop build SHALL complete the focused fixture scenarios
 - **AND** sanitized evidence SHALL prove the package-owned handler, media adapter and matching renderer were used

@@ -3,7 +3,7 @@
 状态：Accepted
 
 更新日期：2026-08-01
-对应变更：`flatten-desktop-only-monorepo`、`replace-desktop-media-scheme-with-http-resource-gateway`
+对应变更：`replace-desktop-media-scheme-with-http-resource-gateway`
 
 OpenNeko 只有一个可执行产品组合根：`apps/neko-desktop`。一级 `packages/*` workspace
 提供 host-neutral contract、领域 runtime、Node adapter 和 browser-safe UI；应用根负责把它们

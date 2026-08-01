@@ -58,7 +58,7 @@ Cut SHALL persist project profile/edit-rate/canvas metadata, one stable `clipId`
 
 #### Scenario: Save linked audio
 
-- **WHEN** a user separates audio through the current supported VS Code path and saves the project
+- **WHEN** a user separates audio through the Electron Desktop Cut path and saves the project
 - **THEN** the Video and Audio Clips retain stable identities, reciprocal link metadata and the same ExternalReference after reopen
 
 #### Scenario: Encounter unknown OpenNeko metadata
@@ -134,7 +134,7 @@ Cut SHALL expose one mode with a Video Track, up to three Audio Tracks, one opti
 
 #### Scenario: Import a dropped local file
 
-- **WHEN** the Webview receives a VS Code Explorer or system file drop over a compatible Track
+- **WHEN** the Cut renderer receives an authorized system file drop over a compatible Track
 - **THEN** the Host validates the dropped URI through the same prepare, workspace containment, media probe and document-relative `link-media` path as the file picker
 - **AND** a drop uses the pointer Track/time while the picker uses the playhead and selected compatible Track, or the fixed Video/first compatible Track when no selection exists
 - **AND** multiple files preserve input order and each following item starts at the prior inserted item's actual end
@@ -160,7 +160,7 @@ Cut SHALL expose one mode with a Video Track, up to three Audio Tracks, one opti
 
 #### Scenario: Unsupported subtitle burn-in is visible
 
-- **WHEN** the current VS Code media adapter exports a Timeline with a non-empty Subtitle Track
+- **WHEN** the current Desktop media adapter exports a Timeline with a non-empty Subtitle Track
 - **THEN** it SHALL return an explicit unsupported diagnostic before enqueueing export
 - **AND** it MUST NOT silently omit subtitles while reporting success
 
@@ -175,7 +175,7 @@ The initial OTIO implementation SHALL allow a Video Clip to contribute embedded 
 
 #### Scenario: Separate embedded audio
 
-- **WHEN** the selected VS Code media adapter confirms usable embedded audio and the user invokes separation at the current document revision
+- **WHEN** the selected Desktop media adapter confirms usable embedded audio and the user invokes separation at the current document revision
 - **THEN** one Cut Core command creates an unmuted Audio Clip with the same ExternalReference/ranges and reciprocal link identities while preserving the Video Clip mute state
 
 #### Scenario: Mute embedded video audio
@@ -335,7 +335,7 @@ The retained presentation SHALL be migrated from the pre-change component, hook,
 #### Scenario: Resize the basic editing workspace
 
 - **WHEN** the user resizes the Preview/Timeline split or the right Inspector and then reconstructs the Webview
-- **THEN** Cut restores the bounded layout from VS Code Webview state without writing layout values to OTIO
+- **THEN** Cut restores the bounded layout from renderer presentation state without writing layout values to OTIO
 - **AND** the Inspector remains independently collapsible and resizable to the right of Preview while Timeline spans the full lower width
 - **AND** Preview controls keeps the single localized Inspector visibility button at its right edge without overwriting the last expanded width
 - **AND** a collapsed Inspector does not add a separate right-side rail or duplicate Timeline toolbar action
@@ -477,7 +477,7 @@ actions.
 - **WHEN** media validation, Node/FFmpeg execution, output validation or atomic replacement fails
 - **THEN** the ExportJob enters an explicit failed state with a diagnostic and Cut does not publish a partial or empty output as success
 
-#### Scenario: Follow a background export from the VS Code status bar
+#### Scenario: Follow a background export from the Desktop shell
 
 - **WHEN** an export continues after its panel or editor becomes hidden and then reaches a running, completed or failed state
 - **THEN** the Desktop shell status item reflects that Host-owned state

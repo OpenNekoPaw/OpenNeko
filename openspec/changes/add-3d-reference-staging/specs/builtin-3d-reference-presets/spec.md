@@ -23,14 +23,14 @@ Every guide-only mannequin, blockout prop, studio, marker, and neutral panoramic
 - **WHEN** the creator or a stale message requests appearance output for a guide-only mannequin
 - **THEN** the system returns a role-violation diagnostic and produces no appearance resource
 
-### Requirement: Bundled assets are immutable authorized extension resources
+### Requirement: Bundled assets are immutable authorized Desktop resources
 
-Built-in presets SHALL be packaged with Preview, projected through the existing Extension/Webview resource authorization boundary, and addressed in staging by preset identity rather than absolute path, raw extension path, Webview URI, blob URL, or cache path. The Webview MUST NOT infer asset locations or fetch network resources.
+Built-in presets SHALL be packaged with Preview, projected through the Desktop resource authorization boundary, and addressed in staging by preset identity rather than absolute path, package path, renderer URL, blob URL, or cache path. The renderer MUST NOT infer asset locations or fetch network resources.
 
 #### Scenario: Load a bundled mannequin
 
 - **WHEN** a live guide session selects a catalog mannequin
-- **THEN** the Extension validates its catalog entry and fingerprint, projects the exact packaged files with `webview.asWebviewUri()`, and sends only the identity-bearing descriptor to that panel
+- **THEN** Desktop Main validates its catalog entry and fingerprint, registers the exact packaged files with the resource gateway, and sends only an identity-bearing descriptor to that View
 
 ### Requirement: The initial catalog is intentionally small, neutral, and proportionally useful
 

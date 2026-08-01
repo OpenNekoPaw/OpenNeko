@@ -5,7 +5,7 @@
 范围：`neko-canvas` Shot/Scene AI 按钮、`neko-agent` 后台创作会话投影、run/workItem、candidate 写回、媒体并发和质量晋升边界。
 
 取代说明：Canvas 已收敛为 Markdown、Media、Group、Job、File 和 CanvasEmbed，不再注册 Shot/Scene 节点或 Canvas-owned 生成按钮。当前约束见
-[`../../openspec/changes/simplify-canvas-ai-workspace-node-model/`](../../openspec/changes/simplify-canvas-ai-workspace-node-model/)；
+[`package-boundaries.md`](package-boundaries.md) 与 Canvas 领域文档；
 本文仅保留为历史设计背景，不得作为新实现入口。AI 执行由 Agent/Job owner
 持有，Canvas 只展示 JobCard 和稳定结果引用。
 

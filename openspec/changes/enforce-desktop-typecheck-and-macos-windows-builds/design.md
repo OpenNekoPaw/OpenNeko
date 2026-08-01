@@ -6,9 +6,8 @@ transpilation therefore creates a native package even when Desktop contracts fai
 Because the remote build job runs on Ubuntu, the same command also creates an implicit Linux
 Desktop package.
 
-The completed `limit-supported-platforms` change still describes `darwin-arm64` and `linux-x64`,
-but it was not archived into `openspec/specs/`. The current product decision replaces Linux with
-Windows. Linux remains useful as a fast host-neutral CI environment, but it must not be a product
+The retired packaging matrix described `darwin-arm64` and `linux-x64`. The current product decision
+replaces Linux with Windows. Linux remains useful as a fast host-neutral CI environment, but it must not be a product
 package or release-runtime target.
 
 This is a local Electron product. Native package evidence must come from the target host, and an

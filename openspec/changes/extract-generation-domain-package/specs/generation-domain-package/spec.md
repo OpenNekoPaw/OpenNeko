@@ -3,12 +3,12 @@
 ### Requirement: Generation is owned by a first-level domain package
 
 The system SHALL expose generation request/result/capability and recoverable GenerationJob contracts
-from `@neko/generation`, a first-level package independent of Agent, Platform, VS Code and Webview.
+from `@neko/generation`, a first-level package independent of Agent, Platform, Electron and React.
 `@neko/platform` MUST NOT define or re-export GenerationJob contracts, coordinators, stores or migrations.
 
-#### Scenario: Agent and direct mode consume Generation
+#### Scenario: Desktop Agent and Canvas consume Generation
 
-- **WHEN** Agent Tool and TUI direct mode invoke generation
+- **WHEN** a Desktop Agent Tool or Canvas action invokes generation
 - **THEN** both depend on the same `@neko/generation` public contract
 - **AND** neither imports a Platform-local Job implementation
 
@@ -36,22 +36,22 @@ Generation SHALL NOT read user/workspace configuration files, resolve credential
 watchers or mutate model bindings. Host composition SHALL provide effective runtime dependencies while
 credentials remain outside Job snapshots and Webview projections.
 
-#### Scenario: VS Code and TUI use the same configuration
+#### Scenario: Desktop consumers use one configuration projection
 
-- **WHEN** VS Code and TUI construct Generation runtimes for the same user/workspace configuration
-- **THEN** both use the canonical shared Host config parsing and merge rules
+- **WHEN** Desktop Main constructs Generation runtimes for Agent and Canvas in the same user/workspace
+- **THEN** both use the canonical Host config parsing and immutable projection rules
 - **AND** Generation creates no domain-local config file or second ConfigManager
 
 ### Requirement: Package extraction does not create another Host
 
-The Generation package SHALL remain host-neutral and MUST NOT introduce a new process, VS Code extension
+The Generation package SHALL remain host-neutral and MUST NOT introduce a new process, application
 identity or global singleton. Existing product Hosts SHALL own coordinator construction, instance identity
 and disposal.
 
-#### Scenario: Multiple domain runtimes run in VS Code
+#### Scenario: Multiple domain runtimes run in Electron Desktop
 
 - **WHEN** Agent, Generation and Quality are active
-- **THEN** they are composed inside the existing VS Code Extension Host
+- **THEN** they are composed inside the existing Electron Main application boundary
 - **AND** each retains independent instance-scoped mutable state without another Host process
 
 ### Requirement: Persisted Generation Jobs survive package relocation

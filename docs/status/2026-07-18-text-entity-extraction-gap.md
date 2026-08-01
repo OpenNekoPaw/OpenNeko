@@ -6,7 +6,7 @@
 
 本快照检查统一实体如何从工作区和素材库文件中获得 text mention、candidate、occurrence 与 match，并验证 Finder 复制、Git 操作、同步工具、外部编辑器和直接配置本地素材目录时是否会进入同一处理路径。
 
-长期架构事实以 [`../architecture/unified-entity.md`](../architecture/unified-entity.md)、[`../architecture/asset-library.md`](../architecture/asset-library.md) 和 [`../architecture/adr-local-metadata-store-sqlite.md`](../architecture/adr-local-metadata-store-sqlite.md) 为准；实施设计与任务位于 [`../../openspec/changes/add-text-entity-extraction/`](../../openspec/changes/add-text-entity-extraction/)。
+长期架构事实以 [`../architecture/unified-entity.md`](../architecture/unified-entity.md)、[`../architecture/asset-library.md`](../architecture/asset-library.md) 和 [`../architecture/adr-local-metadata-store-sqlite.md`](../architecture/adr-local-metadata-store-sqlite.md) 为准；文本实体抽取能力已完成，本文只保留当时的 gap 快照。
 
 ## 证据来源
 

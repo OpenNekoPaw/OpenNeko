@@ -37,9 +37,7 @@ Chara 必须保留显著性依据，但不持久化单一 `importance` 分数；
 - [`architecture.md`](architecture.md)：owner、依赖、生命周期与错误边界；
 - [`../../architecture/package-boundaries.md`](../../architecture/package-boundaries.md)：跨包约束；
 - [`../../architecture/adr-agent-runtime-single-authority-and-simplification-boundary.md`](../../architecture/adr-agent-runtime-single-authority-and-simplification-boundary.md)：Agent 收敛顺序；
-- [`../../../openspec/changes/define-character-authoring-and-runtime-mode-boundaries/`](../../../openspec/changes/define-character-authoring-and-runtime-mode-boundaries/)：角色创作、剧情运行、日常陪伴和记忆 owner 的目标设计；
-- [`../../../openspec/changes/define-character-memory-lifecycle-and-salience/`](../../../openspec/changes/define-character-memory-lifecycle-and-salience/)：对话记忆作用域、长期记忆生命周期、密度、显著性与召回设计；
-- [`../../../openspec/changes/extract-neko-chara-domain-package/`](../../../openspec/changes/extract-neko-chara-domain-package/)：第一阶段 package owner 迁移的历史实施设计。
+- [`architecture.md`](architecture.md)：角色创作、剧情运行、日常陪伴、记忆 owner、生命周期与显著性边界；
 
 当前不支持 CharacterProject/CharacterVersion 持久格式、发布、NarrativeSave/World runtime、
 UserCharacterRelationship、持久 CharacterRun 恢复、Companion Activity 或独立 Chara

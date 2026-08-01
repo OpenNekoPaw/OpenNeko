@@ -18,7 +18,7 @@ OpenNeko SHALL remove Neko Tools `.nkv` language/custom editor contributions, JV
 
 ### Requirement: Owning project domains replace shared legacy Timeline projections
 
-Cut consumers SHALL use the revisioned OTIO projection and stable IDs owned by Cut; Canvas/TUI consumers SHALL use explicit NKC-owned contracts; Agent context SHALL use an explicit read-only owning projection. They MUST NOT depend on shared writable `ProjectData`, `TimelineElement`, NKV codecs or old Timeline operation models.
+Cut consumers SHALL use the revisioned OTIO projection and stable IDs owned by Cut; Canvas consumers SHALL use explicit NKC-owned contracts; Agent context SHALL use an explicit read-only owning projection. They MUST NOT depend on shared writable `ProjectData`, `TimelineElement`, NKV codecs or old Timeline operation models.
 
 #### Scenario: Cut projects a timeline for UI or Agent context
 
@@ -26,7 +26,7 @@ Cut consumers SHALL use the revisioned OTIO projection and stable IDs owned by C
 - **THEN** the owning OTIO session SHALL provide the revision, stable identities and read-only data required by the caller
 - **AND** no shared NKV/Timeline model or implicit active document SHALL be consulted
 
-#### Scenario: Canvas or TUI opens a project
+#### Scenario: Desktop Canvas opens a project
 
 - **WHEN** a caller expects an NKC project
 - **THEN** it SHALL select an NKC-owned codec explicitly
@@ -69,7 +69,7 @@ Repository quality checks SHALL reject reintroduction of Neko Tools JVI/Timeline
 
 ### Requirement: Removal is proven at producer and consumer boundaries
 
-The cleanup SHALL validate both the replacement result and the executed path across Tools, Cut, Agent, Canvas and TUI. Passing tests that rely on legacy fixtures, aliases, fallback readers or generated DTOs SHALL NOT count as acceptance.
+The cleanup SHALL validate both the replacement result and the executed path across Desktop Tools, Cut, Agent and Canvas. Passing tests that rely on legacy fixtures, aliases, fallback readers or generated DTOs SHALL NOT count as acceptance.
 
 #### Scenario: The cleanup reaches release validation
 

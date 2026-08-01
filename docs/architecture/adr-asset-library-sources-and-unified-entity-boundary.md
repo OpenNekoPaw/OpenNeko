@@ -3,7 +3,7 @@
 - 状态：Accepted
 - 日期：2026-07-22
 - 范围：Media Library、Creative Entity、Content I/O、Search、Agent、Canvas、Cut、Tools、TUI 与 VS Code
-- 实施：[`retain-media-library-and-unified-entity`](../../openspec/changes/archive/2026-07-22-retain-media-library-and-unified-entity/)
+- 当前契约：[`media-library-resource-entry`](../../openspec/specs/media-library-resource-entry/spec.md)、[`unified-entity-representation-bindings`](../../openspec/specs/unified-entity-representation-bindings/spec.md)
 
 ## 决策
 

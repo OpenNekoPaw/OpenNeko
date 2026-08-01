@@ -55,13 +55,12 @@ test('reports the most specific retired label once when rules overlap', () => {
   ]);
 });
 
-test('scans current first-party files and excludes archived or generated surfaces', () => {
+test('scans current first-party files and excludes generated surfaces', () => {
   const root = mkdtempSync(join(tmpdir(), 'openneko-brand-'));
   const retiredProduct = ['Neko', ' Suite'].join('');
   try {
     write(root, 'README.md', '# OpenNeko\n');
     write(root, 'packages/example/src/index.ts', `export const label = '${retiredProduct}';\n`);
-    write(root, 'openspec/changes/archive/old/proposal.md', retiredProduct);
     write(root, 'outputs/user-artifact.md', retiredProduct);
     write(root, 'packages/example/dist/generated.js', retiredProduct);
 

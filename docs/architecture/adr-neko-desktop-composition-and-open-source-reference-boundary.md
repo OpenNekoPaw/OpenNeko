@@ -5,13 +5,12 @@
 更新日期：2026-07-27
 范围：实施中的 `apps/neko-desktop`、现有领域子包、Desktop Host bridge、本地媒体运行时、专业工具 handoff/MCP/Computer Use，以及 OpenCode、Zed、Craft Agents、Goose、Kun、Cindy、MiniMax Hub 等外部参考的采用边界。
 
-媒体边界更新（2026-07-27）：Rust Engine 与旧 TypeScript client 已退役。VS Code 当前使用共享 `@neko/media`、Node/FFmpeg、tokenized loopback Range/PCM 与浏览器媒体客户端；Desktop 必须复用相同 host-neutral ports，并由 [`media-runtime.md`](media-runtime.md)、[`adr-cut-html-video-node-ffmpeg-media-runtime-boundary.md`](adr-cut-html-video-node-ffmpeg-media-runtime-boundary.md) 与 [`adr-neko-desktop-media-capability-and-security-boundary.md`](adr-neko-desktop-media-capability-and-security-boundary.md) 约束。Desktop 可以替换 VS Code 特有的资源 transport 和 CSP envelope，但不能从 Electron 推断 10-bit/HDR 或广格式 direct playback；不得从历史 ADR 恢复 Rust Engine、NKV、双 adapter 或自动 fallback。
+媒体边界更新（2026-08-01）：Rust Engine、旧 TypeScript client、VS Code 与 TUI 产品宿主均已退役。Electron Desktop 通过共享 `@neko/media`、Node/FFmpeg、统一 `openneko:` resource transport 与浏览器媒体客户端组成唯一产品路径，并由 [`media-runtime.md`](media-runtime.md)、[`adr-cut-html-video-node-ffmpeg-media-runtime-boundary.md`](adr-cut-html-video-node-ffmpeg-media-runtime-boundary.md) 与 [`adr-neko-desktop-media-capability-and-security-boundary.md`](adr-neko-desktop-media-capability-and-security-boundary.md) 约束。不得从 Electron 推断 10-bit/HDR 或广格式 direct playback，也不得从历史 ADR 恢复 Rust Engine、NKV、双 adapter 或自动 fallback。
 
 ## 背景
 
-OpenNeko 当前发布产品仍只有 `apps/neko-vscode` 和 `apps/neko-tui`；
-`apps/neko-desktop` 已按 `bootstrap-neko-desktop-foundation` 开始 Phase 1 实施，但尚未
-完成领域接入或发布资格。此前的 Desktop、Workbench Core 与 Market Core 已被删除；
+OpenNeko 当前唯一产品组合根是 `apps/neko-desktop`；Phase 1 领域接入与发布资格仍在推进。
+此前的 Desktop、Workbench Core 与 Market Core 已被删除；
 [`adr-neko-desktop-apphost-resource-viewport-boundary.md`](adr-neko-desktop-apphost-resource-viewport-boundary.md)
 因此保持 `Superseded`，不得作为恢复旧实现的依据。
 

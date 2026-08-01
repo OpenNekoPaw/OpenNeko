@@ -39,14 +39,14 @@ The system SHALL derive delivered source materials from stable content-access, T
 - **WHEN** a user attaches or mentions a material but the completed processing path has no evidence that the material was read or selected
 - **THEN** the delivery SHALL omit that material rather than inferring usage from attachment or mention state
 
-### Requirement: All supported local Agent Hosts share one delivery contract
+### Requirement: Electron Desktop uses one Board delivery contract
 
-VS Code Agent, Terminal TUI, pure Node/Bun Agent Hosts, and recoverable background task owners SHALL submit Workspace Board artifacts through one Host-neutral delivery contract. Agent core and session state SHALL expose typed result/provenance facts but SHALL NOT resolve a Canvas destination, import Canvas implementation code, or write `.nkc` files directly.
+Electron Desktop Agent and recoverable background task owners SHALL submit Workspace Board artifacts through one Host-neutral delivery contract composed by Main. Agent core and session state SHALL expose typed result/provenance facts but SHALL NOT resolve a Canvas destination, import Canvas implementation code, or write `.nkc` files directly.
 
-#### Scenario: TUI completes a creator-visible artifact batch
+#### Scenario: Desktop Agent completes a creator-visible artifact batch
 
-- **WHEN** the canonical TUI session owner completes a typed artifact batch for a workspace
-- **THEN** its Host adapter SHALL persist and deliver the batch without requiring an active VS Code Extension or Webview
+- **WHEN** the canonical Desktop Agent session owner completes a typed artifact batch for a workspace
+- **THEN** its Desktop Host adapter SHALL persist and deliver the batch without requiring an active Canvas renderer
 
 #### Scenario: Agent core runs without a writable workspace Host
 
@@ -81,10 +81,10 @@ Each accepted delivery SHALL be recorded in the existing user-level `LocalMetada
 - **WHEN** a Host accepts a valid typed artifact batch
 - **THEN** it SHALL transactionally persist a Canvas-owned delivery task and resumable checkpoint before reporting the batch as durable for Board delivery
 
-#### Scenario: Extension or TUI restarts with pending deliveries
+#### Scenario: Electron Desktop restarts with pending deliveries
 
-- **WHEN** a supported Host opens the workspace or the Workspace Board and the ledger contains pending or recoverable delivery tasks
-- **THEN** the Host SHALL resume those deliveries through the Canvas-owned projector and preserve their original identity and provenance
+- **WHEN** Desktop Main opens the workspace or the Workspace Board and the ledger contains pending or recoverable delivery tasks
+- **THEN** Main SHALL resume those deliveries through the Canvas-owned projector and preserve their original identity and provenance
 
 #### Scenario: Local metadata is unavailable or corrupt
 
@@ -248,23 +248,23 @@ Board delivery status SHALL distinguish queued, claimed, projected, no-op, block
 - **WHEN** a blocked or expired-claim delivery remains valid and the owning Host explicitly resumes it
 - **THEN** the retry SHALL reuse the original delivery identity and SHALL either project once or return a current typed diagnostic without creating a parallel identity
 
-### Requirement: Canvas custom editor saves preserve authoritative Board content
+### Requirement: Canvas renderer saves preserve authoritative Board content
 
-The VS Code Canvas custom editor SHALL validate Webview save snapshots against the most recently loaded or Host-authored authoritative document. A candidate snapshot SHALL NOT remove an authoritative node unless the Webview reported explicit removal evidence for that node in the current document save epoch.
+Desktop Main SHALL validate Canvas renderer save snapshots against the most recently loaded or Host-authored authoritative document. A candidate snapshot SHALL NOT remove an authoritative node unless the renderer reported explicit removal evidence for that node in the current document save epoch.
 
 #### Scenario: Webview state resets after a non-empty Board was loaded
 
-- **WHEN** the authoritative Workspace Board contains nodes and the Webview returns an empty or partial snapshot without matching node-removal evidence
-- **THEN** the Extension SHALL reject the save visibly and SHALL leave the `.nkc` bytes unchanged
+- **WHEN** the authoritative Workspace Board contains nodes and the renderer returns an empty or partial snapshot without matching node-removal evidence
+- **THEN** Main SHALL reject the save visibly and SHALL leave the `.nkc` bytes unchanged
 
 #### Scenario: User explicitly clears the Board
 
-- **WHEN** the user deletes all nodes and the Webview reports the exact removed node identities before saving
-- **THEN** the Extension SHALL accept the empty candidate snapshot and persist the intentional deletion
+- **WHEN** the user deletes all nodes and the renderer reports the exact removed node identities before saving
+- **THEN** Main SHALL accept the empty candidate snapshot and persist the intentional deletion
 
 #### Scenario: Host sends an invalid Canvas update
 
-- **WHEN** a Webview receives an `update` message without a valid Canvas document payload
+- **WHEN** a Canvas renderer receives an `update` message without a valid Canvas document payload
 - **THEN** it SHALL surface a contract error and SHALL NOT replace the current document with a default empty Canvas
 
 #### Scenario: A projected receipt exists after Board content was intentionally deleted
