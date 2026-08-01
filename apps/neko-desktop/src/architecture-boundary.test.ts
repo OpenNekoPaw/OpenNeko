@@ -254,6 +254,10 @@ describe('Desktop architecture boundaries', () => {
     expect(rendererConfig).toContain(
       "'../../packages/neko-assets/src/resource-browser/contract.ts'",
     );
+    expect(rendererConfig).toContain(
+      "find: /^neko-assets\\/global-library\\/root$/",
+    );
+    expect(rendererConfig).toContain("'../../packages/neko-assets/src/global-library/root.tsx'");
     expect(rendererConfig).toMatch(
       /exclude:\s*\[[^\]]*'@neko-canvas\/domain'[^\]]*'@neko-canvas\/webview\/root'/s,
     );

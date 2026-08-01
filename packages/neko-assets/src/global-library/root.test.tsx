@@ -50,6 +50,16 @@ describe('GlobalLibraryBrowserRoot', () => {
 
     expect(runtime.searchMediaLibraries).toHaveBeenCalledTimes(1);
     expect(container.textContent).toContain('Footage');
+    expect(
+      container.querySelector('.global-library-browser__header-copy .section-label')?.textContent,
+    ).toBe('Global catalog');
+    expect(container.querySelector('.global-library-browser__header-copy h1')?.textContent).toBe(
+      'Media Library',
+    );
+    expect(
+      container.querySelector('.global-library-browser__header-copy p:not(.section-label)')
+        ?.textContent,
+    ).toBe('Manage reusable media connections without copying source files into every project.');
     expect(container.textContent).not.toContain('Global Library controller is disposed.');
     expect(dispose).not.toHaveBeenCalled();
 

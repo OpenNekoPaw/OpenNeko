@@ -48,6 +48,13 @@ export default defineConfig({
         ),
       },
       {
+        find: /^neko-assets\/global-library\/root$/,
+        replacement: path.resolve(
+          import.meta.dirname,
+          '../../packages/neko-assets/src/global-library/root.tsx',
+        ),
+      },
+      {
         find: /^@neko-agent\/webview\/root$/,
         replacement: path.resolve(
           import.meta.dirname,

@@ -1,8 +1,11 @@
 import type { SupportedLocale } from '@neko/shared';
 
 export interface GlobalLibraryLabels {
+  readonly eyebrow: string;
   readonly titleMedia: string;
   readonly titleAssets: string;
+  readonly descriptionMedia: string;
+  readonly descriptionAssets: string;
   readonly searchMedia: string;
   readonly searchAssets: string;
   readonly list: string;
@@ -38,8 +41,12 @@ export interface GlobalLibraryLabels {
 
 const labels: Record<'en' | 'zh-cn', GlobalLibraryLabels> = {
   en: {
+    eyebrow: 'Global catalog',
     titleMedia: 'Media Library',
     titleAssets: 'Asset Library',
+    descriptionMedia:
+      'Manage reusable media connections without copying source files into every project.',
+    descriptionAssets: 'Manage reusable creative assets available across projects.',
     searchMedia: 'Search media libraries',
     searchAssets: 'Search assets',
     list: 'List view',
@@ -73,8 +80,11 @@ const labels: Record<'en' | 'zh-cn', GlobalLibraryLabels> = {
     revealed: 'Shown in file manager.',
   },
   'zh-cn': {
+    eyebrow: '全局目录',
     titleMedia: '媒体库',
     titleAssets: '资产库',
+    descriptionMedia: '管理可复用的媒体连接，无需将源文件复制到每个项目。',
+    descriptionAssets: '管理可供多个项目复用的创作素材。',
     searchMedia: '搜索媒体库',
     searchAssets: '搜索资产',
     list: '列表视图',

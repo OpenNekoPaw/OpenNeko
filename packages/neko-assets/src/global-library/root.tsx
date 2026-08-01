@@ -238,10 +238,17 @@ export function GlobalLibraryBrowserRoot({
   };
 
   const items = state.kind === 'ready' ? state.items : [];
+  const title = catalog === 'media-library' ? labels.titleMedia : labels.titleAssets;
+  const description =
+    catalog === 'media-library' ? labels.descriptionMedia : labels.descriptionAssets;
   return (
     <section className="global-library-browser" data-owner-root="global-library-browser">
       <header className="global-library-browser__header">
-        <h1>{catalog === 'media-library' ? labels.titleMedia : labels.titleAssets}</h1>
+        <div className="global-library-browser__header-copy">
+          <p className="section-label">{labels.eyebrow}</p>
+          <h1>{title}</h1>
+          <p>{description}</p>
+        </div>
         <div className="global-library-browser__commands">
           {catalog === 'media-library' ? (
             <>
