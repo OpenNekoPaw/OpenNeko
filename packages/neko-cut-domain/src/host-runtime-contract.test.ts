@@ -137,7 +137,7 @@ describe('Cut Host runtime contract', () => {
     );
   });
 
-  it('parses Desktop-authorized preview output without accepting arbitrary URLs', () => {
+  it('parses Desktop HTTP preview output without accepting arbitrary URLs', () => {
     const snapshot = {
       schemaVersion: CUT_HOST_RUNTIME_VERSION,
       identity,
@@ -164,8 +164,7 @@ describe('Cut Host runtime contract', () => {
           framesPerSecond: 30,
           video: {
             version: 1,
-            transport: 'authorized',
-            url: 'neko-media://desktop/media%3Apreview/preview.mp4',
+            url: 'openneko://resource/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
             mimeType: 'video/mp4',
             preparationProfile: 'h264-mp4-direct',
             mediaTimeOriginSeconds: 0,
@@ -182,7 +181,9 @@ describe('Cut Host runtime contract', () => {
       output: {
         type: 'preview',
         message: {
-          video: { transport: 'authorized' },
+          video: {
+            url: 'openneko://resource/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+          },
         },
       },
     });
@@ -200,7 +201,7 @@ describe('Cut Host runtime contract', () => {
           },
         },
       }),
-    ).toThrow('does not match its transport');
+    ).toThrow('resource URL is invalid');
   });
 
   it('accepts only bounded serializable presentation state', () => {

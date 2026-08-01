@@ -1,4 +1,4 @@
-import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import * as path from 'node:path';
 import { FuseV1Options, FuseVersion } from '@electron/fuses';
 import { describe, expect, it } from 'vitest';
@@ -24,13 +24,19 @@ describe('Desktop architecture boundaries', () => {
     expect(main).toContain("path.join(__dirname, 'preload.cjs')");
   });
 
-  it('pins the Electron archive checksum for the Phase 1 reference target', () => {
+  it('pins Electron archives for the supported Desktop targets only', () => {
     const forgeConfig = readFileSync(path.resolve(sourceRoot, '..', 'forge.config.ts'), 'utf8');
 
     expect(forgeConfig).toContain('electron-v43.2.0-darwin-arm64.zip');
     expect(forgeConfig).toContain(
       'ad4a0ae3c37ee05aa06c7e2ed0627608389790f0505a2b0d20319efbe33ffe28',
     );
+    expect(forgeConfig).toContain('electron-v43.2.0-win32-x64.zip');
+    expect(forgeConfig).toContain(
+      'eba5f5088af40ecb364fe258809c79a5234c6ece5a75c64722772eba01b02786',
+    );
+    expect(forgeConfig).not.toContain('electron-v43.2.0-linux-');
+    expect(forgeConfig).toContain("new MakerZIP({}, ['darwin', 'win32'])");
   });
 
   it('strictly configures every Electron V1 fuse', () => {
@@ -115,14 +121,12 @@ describe('Desktop architecture boundaries', () => {
       path.join(mainRoot, 'desktop-resource-browser-runtime.ts'),
       'utf8',
     );
-    const source = readFileSync(
-      path.join(mainRoot, 'desktop-resource-browser-source.ts'),
+    const source = readFileSync(path.join(mainRoot, 'desktop-resource-browser-source.ts'), 'utf8');
+    const sync = readFileSync(
+      path.join(mainRoot, 'desktop-workspace-media-library-sync.ts'),
       'utf8',
     );
-    const locator = readFileSync(
-      path.join(mainRoot, 'desktop-content-locator.ts'),
-      'utf8',
-    );
+    const locator = readFileSync(path.join(mainRoot, 'desktop-content-locator.ts'), 'utf8');
     const bridgeContract = readFileSync(
       path.join(sourceRoot, 'shared', 'resource-browser-bridge-contract.ts'),
       'utf8',
@@ -133,7 +137,11 @@ describe('Desktop architecture boundaries', () => {
     expect(source).toContain('listWorkspaceLinkedMediaLibraries');
     expect(locator).toContain('realpath');
     expect(source).toContain('resolveDesktopWorkspaceContentLocator');
-    expect(source).toContain('createWorkspaceLinkedMediaLibrary');
+    expect(source).toContain('DesktopWorkspaceMediaLibrarySyncService');
+    expect(source).not.toContain('createWorkspaceLinkedMediaLibrary');
+    expect(sync).toContain('createWorkspaceLinkedMediaLibrary');
+    expect(sync).toContain('planRecovery');
+    expect(sync).toContain('applyRecovery');
     expect(bridgeContract).not.toContain('absolutePath');
     expect(bridgeContract).not.toContain('selectedDirectory');
   });
@@ -152,10 +160,7 @@ describe('Desktop architecture boundaries', () => {
       path.join(sourceRoot, 'renderer', 'DesktopCanvasSurface.tsx'),
       'utf8',
     );
-    const shell = readFileSync(
-      path.join(sourceRoot, 'renderer', 'DesktopShell.tsx'),
-      'utf8',
-    );
+    const shell = readFileSync(path.join(sourceRoot, 'renderer', 'DesktopShell.tsx'), 'utf8');
 
     expect(surface).toContain("from '@neko-canvas/webview/root'");
     expect(surface).toContain('<CanvasWebviewRoot');
@@ -174,10 +179,7 @@ describe('Desktop architecture boundaries', () => {
       path.join(sourceRoot, 'renderer', 'DesktopPreviewSurface.tsx'),
       'utf8',
     );
-    const shell = readFileSync(
-      path.join(sourceRoot, 'renderer', 'DesktopShell.tsx'),
-      'utf8',
-    );
+    const shell = readFileSync(path.join(sourceRoot, 'renderer', 'DesktopShell.tsx'), 'utf8');
 
     expect(cutSurface).toContain("import('@neko/webview/root')");
     expect(cutSurface).toMatch(/<CutWebviewRoot[\s\S]*bridge=\{bridge\}/u);
@@ -196,16 +198,86 @@ describe('Desktop architecture boundaries', () => {
     }
   });
 
+  it('poisons retired Desktop media transports and path-derived resource identity', () => {
+    const mainRoot = path.join(sourceRoot, 'main');
+    const repositoryRoot = path.resolve(sourceRoot, '../../..');
+    const appProtocol = readFileSync(path.join(mainRoot, 'app-protocol.ts'), 'utf8');
+    const resourceRegistry = readFileSync(
+      path.join(mainRoot, 'desktop-resource-registry.ts'),
+      'utf8',
+    );
+    const canvasMediaRuntime = readFileSync(
+      path.join(mainRoot, 'desktop-canvas-media-runtime.ts'),
+      'utf8',
+    );
+    const canvasPreviewResolver = readFileSync(
+      path.join(
+        repositoryRoot,
+        'packages/neko-canvas-webview/src/preview/previewResolver.ts',
+      ),
+      'utf8',
+    );
+
+    for (const retiredFile of [
+      'desktop-media-protocol.ts',
+      'desktop-media-protocol.test.ts',
+      'desktop-media-descriptor-registry.ts',
+      'desktop-media-descriptor-registry.test.ts',
+      'desktop-http-resource-gateway.ts',
+      'desktop-http-resource-gateway.test.ts',
+    ]) {
+      expect(existsSync(path.join(mainRoot, retiredFile))).toBe(false);
+    }
+    expect(
+      existsSync(
+        path.join(
+          repositoryRoot,
+          'packages/neko-media/src/node/NodeMediaLoopbackServer.ts',
+        ),
+      ),
+    ).toBe(false);
+
+    expect(appProtocol).toContain("protocol.handle(DESKTOP_APP_SCHEME");
+    expect(appProtocol.match(/protocol\.handle\(/gu)).toHaveLength(1);
+    expect(appProtocol).toContain('DESKTOP_RESOURCE_HOST');
+    expect(appProtocol).not.toContain('neko-app');
+    expect(appProtocol).not.toContain('neko-media');
+    expect(resourceRegistry).not.toMatch(/\bcreateServer\s*\(/u);
+    expect(resourceRegistry).not.toMatch(/\bupstream\b/iu);
+    expect(resourceRegistry).not.toContain('ContentLocator');
+    expect(resourceRegistry).not.toContain('ResourceRef');
+    expect(resourceRegistry).not.toMatch(
+      /\b(?:MediaStream|RTCPeerConnection|getUserMedia)\b/u,
+    );
+
+    const resourceRefDeclarations = [
+      ...walkProductionTypeScript(path.join(repositoryRoot, 'apps')),
+      ...walkProductionTypeScript(path.join(repositoryRoot, 'packages')),
+    ].flatMap((file) => {
+      const content = readFileSync(file, 'utf8');
+      return /\b(?:interface|type|class)\s+\w*ResourceRef\b|\bimport\s+type\b[^;]*\bResourceRef\b/gu
+        .test(content)
+        ? [path.relative(repositoryRoot, file)]
+        : [];
+    });
+    expect(resourceRefDeclarations).toEqual([]);
+
+    expect(canvasMediaRuntime).toContain(
+      'Desktop Canvas PCM is not available for ordinary node playback.',
+    );
+    expect(canvasMediaRuntime).not.toMatch(/\.(?:startPcm|prepareAudio)\s*\(/u);
+    expect(canvasPreviewResolver).not.toContain('assetPath:');
+    expect(canvasPreviewResolver).not.toContain('activeCanvas');
+    expect(canvasPreviewResolver).not.toContain('recentCanvas');
+  });
+
   it('compiles every embedded package Root utility class in the Desktop renderer', () => {
     const tailwindConfig = readFileSync(
       path.resolve(sourceRoot, '..', 'tailwind.config.js'),
       'utf8',
     );
     const canvasRoot = readFileSync(
-      path.resolve(
-        sourceRoot,
-        '../../../packages/neko-canvas-webview/src/root.tsx',
-      ),
+      path.resolve(sourceRoot, '../../../packages/neko-canvas-webview/src/root.tsx'),
       'utf8',
     );
 
@@ -232,31 +304,19 @@ describe('Desktop architecture boundaries', () => {
     expect(rendererConfig).toContain("'three/addons/loaders/GLTFLoader.js'");
     expect(rendererConfig).toContain("'use-sync-external-store/shim/with-selector.js'");
     expect(rendererConfig).toMatch(/dedupe:\s*\[[^\]]*'react'[^\]]*'zustand'/s);
-    expect(rendererConfig).toContain("find: /^@neko-canvas\\/webview\\/root$/");
-    expect(rendererConfig).toContain(
-      "'../../packages/neko-canvas-webview/src/root.tsx'",
-    );
-    expect(rendererConfig).toContain("find: /^@neko\\/webview\\/root$/");
-    expect(rendererConfig).toContain(
-      "'../../packages/neko-cut-webview/src/root.tsx'",
-    );
-    expect(rendererConfig).toContain("find: /^@neko\\/preview-webview\\/root$/");
-    expect(rendererConfig).toContain(
-      "'../../packages/neko-preview-webview/src/root/index.tsx'",
-    );
-    expect(rendererConfig).toContain("find: /^neko-assets\\/resource-browser\\/root$/");
-    expect(rendererConfig).toContain(
-      "'../../packages/neko-assets/src/resource-browser/root.tsx'",
-    );
-    expect(rendererConfig).toContain(
-      "find: /^neko-assets\\/resource-browser\\/contract$/",
-    );
+    expect(rendererConfig).toContain('find: /^@neko-canvas\\/webview\\/root$/');
+    expect(rendererConfig).toContain("'../../packages/neko-canvas-webview/src/root.tsx'");
+    expect(rendererConfig).toContain('find: /^@neko\\/webview\\/root$/');
+    expect(rendererConfig).toContain("'../../packages/neko-cut-webview/src/root.tsx'");
+    expect(rendererConfig).toContain('find: /^@neko\\/preview-webview\\/root$/');
+    expect(rendererConfig).toContain("'../../packages/neko-preview-webview/src/root/index.tsx'");
+    expect(rendererConfig).toContain('find: /^neko-assets\\/resource-browser\\/root$/');
+    expect(rendererConfig).toContain("'../../packages/neko-assets/src/resource-browser/root.tsx'");
+    expect(rendererConfig).toContain('find: /^neko-assets\\/resource-browser\\/contract$/');
     expect(rendererConfig).toContain(
       "'../../packages/neko-assets/src/resource-browser/contract.ts'",
     );
-    expect(rendererConfig).toContain(
-      "find: /^neko-assets\\/global-library\\/root$/",
-    );
+    expect(rendererConfig).toContain('find: /^neko-assets\\/global-library\\/root$/');
     expect(rendererConfig).toContain("'../../packages/neko-assets/src/global-library/root.tsx'");
     expect(rendererConfig).toMatch(
       /exclude:\s*\[[^\]]*'@neko-canvas\/domain'[^\]]*'@neko-canvas\/webview\/root'/s,
@@ -265,13 +325,12 @@ describe('Desktop architecture boundaries', () => {
 
   it('releases window resources through the registered sender identity after Electron closes', () => {
     const application = readFileSync(path.join(sourceRoot, 'main', 'index.ts'), 'utf8');
+    const appHost = readFileSync(path.join(sourceRoot, 'main', 'app-host.ts'), 'utf8');
 
     expect(application).toContain(
       'appHost.detachWindowResources(registration.windowId, registration.webContentsId);',
     );
-    expect(application).toContain(
-      'appHost.detachRendererSubscriptions(registration.webContentsId);',
-    );
+    expect(appHost).toContain('this.detachRendererSubscriptions(webContentsId);');
     expect(application).not.toContain(
       'appHost.detachWindowResources(registration.windowId, createdWindow.webContents.id);',
     );
@@ -298,10 +357,7 @@ describe('Desktop architecture boundaries', () => {
 
   it('does not expose raw IPC or an arbitrary command bridge', () => {
     const preload = readFileSync(path.join(sourceRoot, 'preload', 'index.ts'), 'utf8');
-    const contract = readFileSync(
-      path.join(sourceRoot, 'shared', 'agent-contract.ts'),
-      'utf8',
-    );
+    const contract = readFileSync(path.join(sourceRoot, 'shared', 'agent-contract.ts'), 'utf8');
     expect(preload).toContain('agent: {');
     expect(preload).toContain('getBootstrap(projectId, viewId, viewEpoch)');
     expect(preload).toContain('createDesktopAgentMessageRequest');
@@ -333,11 +389,26 @@ function findForbiddenImports(directory: string, forbidden: readonly string[]): 
 
 function walkTypeScript(directory: string): string[] {
   return readdirSync(directory)
+    .filter(
+      (entry) =>
+        entry !== 'node_modules' &&
+        entry !== 'dist' &&
+        entry !== 'coverage' &&
+        entry !== '.turbo',
+    )
     .flatMap((entry) => {
       const file = path.join(directory, entry);
       return statSync(file).isDirectory() ? walkTypeScript(file) : [file];
     })
     .filter((file) => file.endsWith('.ts') || file.endsWith('.tsx'));
+}
+
+function walkProductionTypeScript(directory: string): string[] {
+  return walkTypeScript(directory).filter(
+    (file) =>
+      !file.includes(`${path.sep}__tests__${path.sep}`) &&
+      !/\.(?:test|spec)\.[cm]?[jt]sx?$/u.test(file),
+  );
 }
 
 function containsModuleSpecifier(content: string, specifier: string): boolean {

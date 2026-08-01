@@ -5,7 +5,7 @@ export interface ProtocolSkillSummaryForUi {
   description: string;
   icon?: string;
   command?: string;
-  source: 'builtin' | 'personal' | 'project';
+  source: 'builtin' | 'personal' | 'plugin' | 'project';
   enabled: boolean;
 }
 
@@ -38,6 +38,8 @@ function projectInputSkillSource(
   switch (source) {
     case 'personal':
       return 'user';
+    case 'plugin':
+      return 'community';
     case 'builtin':
     case 'project':
       return source;

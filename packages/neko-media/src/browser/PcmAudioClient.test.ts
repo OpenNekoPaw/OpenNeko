@@ -9,7 +9,7 @@ afterEach(() => {
 });
 
 describe('parsePcmPackets', () => {
-  it('buffers incomplete HTTP chunks and parses multiple framed packets', () => {
+  it('buffers incomplete stream chunks and parses multiple framed packets', () => {
     const first = packet(1_250_000n, 20_000n, 48_000, 2);
     const second = packet(1_270_000n, 10_000n, 48_000, 2);
     const joined = concatenate(first, second);
@@ -51,9 +51,8 @@ describe('parsePcmPackets', () => {
     const client = new PcmAudioClient({
       descriptor: {
         version: 1,
-        transport: 'http',
         protocol: 'neko-pcm-f32le-v1',
-        streamUrl: 'http://127.0.0.1:1234/pcm/session',
+        streamUrl: 'openneko://resource/0123456789abcdefghijklmnopqrstuv',
         sampleRate: 48_000,
         channels: 2,
       },
@@ -187,9 +186,8 @@ describe('parsePcmPackets', () => {
     const client = new PcmAudioClient({
       descriptor: {
         version: 1,
-        transport: 'http',
         protocol: 'neko-pcm-f32le-v1',
-        streamUrl: 'http://127.0.0.1:1234/pcm/session',
+        streamUrl: 'openneko://resource/0123456789abcdefghijklmnopqrstuv',
         sampleRate: 48_000,
         channels: 2,
       },
@@ -237,9 +235,8 @@ describe('parsePcmPackets', () => {
     const client = new PcmAudioClient({
       descriptor: {
         version: 1,
-        transport: 'http',
         protocol: 'neko-pcm-f32le-v1',
-        streamUrl: 'http://127.0.0.1:1234/pcm/session',
+        streamUrl: 'openneko://resource/0123456789abcdefghijklmnopqrstuv',
         sampleRate: 48_000,
         channels: 2,
       },
@@ -268,9 +265,8 @@ function createClient(volume = 1): PcmAudioClient {
   return new PcmAudioClient({
     descriptor: {
       version: 1,
-      transport: 'http',
       protocol: 'neko-pcm-f32le-v1',
-      streamUrl: 'http://127.0.0.1:1234/pcm/session',
+      streamUrl: 'openneko://resource/0123456789abcdefghijklmnopqrstuv',
       sampleRate: 48_000,
       channels: 2,
     },

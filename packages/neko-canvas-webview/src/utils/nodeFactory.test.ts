@@ -5,7 +5,11 @@ import { buildCanvasNode } from './nodeFactory';
 describe('buildCanvasNode', () => {
   it('creates the six canonical node types from valid canonical data', () => {
     const markdown = createNode('markdown', { content: '# Draft' });
-    const media = createNode('media', { assetPath: 'media/hero.png', mediaType: 'image' });
+    const media = createNode('media', {
+      assetPath: 'media/hero.png',
+      contentLocator: { kind: 'workspace-file', path: 'media/hero.png' },
+      mediaType: 'image',
+    });
     const group = createNode('group', { label: 'Chapter' });
     const job = createNode('job', {
       jobRef: { kind: 'generation', jobId: 'job-owned-1' },
@@ -13,7 +17,10 @@ describe('buildCanvasNode', () => {
       title: 'Generate key art',
       status: 'running',
     });
-    const file = createNode('file', { path: 'docs/script.fountain' });
+    const file = createNode('file', {
+      path: 'docs/script.fountain',
+      contentLocator: { kind: 'workspace-file', path: 'docs/script.fountain' },
+    });
     const subcanvas = createNode('canvas-embed', {
       canvasPath: 'boards/chapter.nkc',
       canvasTitle: 'Chapter',
@@ -60,6 +67,7 @@ describe('buildCanvasNode', () => {
   it('normalizes canonical node inputs without retaining unknown fields', () => {
     const node = createNode('media', {
       assetPath: 'media/voice.wav',
+      contentLocator: { kind: 'workspace-file', path: 'media/voice.wav' },
       mediaType: 'audio',
       duration: Number.POSITIVE_INFINITY,
       legacyPrompt: 'must not survive',
@@ -86,10 +94,12 @@ describe('buildCanvasNode', () => {
         status: 'running',
       }),
     ).toThrow('Canvas Job revision must be a non-negative integer');
-    expect(() => createNode('media', { mediaType: 'image' })).toThrow(
-      'Canvas Media creation requires a durable source',
+    expect(() =>
+      createNode('media', { assetPath: 'media/path-only.png', mediaType: 'image' }),
+    ).toThrow('Canvas Media creation requires a canonical ContentLocator');
+    expect(() => createNode('file', { path: 'docs/path-only.md' })).toThrow(
+      'Canvas File creation requires a canonical ContentLocator',
     );
-    expect(() => createNode('file', {})).toThrow('Canvas File creation requires a durable source');
     expect(() => createNode('canvas-embed', {})).toThrow(
       'Canvas canvasPath must be a non-empty string',
     );

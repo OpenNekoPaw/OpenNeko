@@ -53,13 +53,12 @@ export class WebviewPreviewResolver implements PreviewResolver {
     const sourcePath = variantSourcePath ?? request.source.asset?.path ?? request.source.asset?.uri;
     const mediaType = variantSourcePath ? 'image' : request.source.asset?.mediaType;
     const contentLocator = request.source.contentLocator;
-    if (!sourcePath && !contentLocator) {
-      return createUnavailableVariant(request, 'No preview source');
+    if (!contentLocator) {
+      return createUnavailableVariant(request, 'Preview source has no canonical ContentLocator');
     }
 
     const runtimeUrl = await this.requestRuntimeVariant({
       sourceId: request.source.id,
-      assetPath: contentLocator ? undefined : sourcePath,
       role,
       mediaType,
       contentLocator,
@@ -97,7 +96,14 @@ function selectStableVariant(request: PreviewResolveRequest): RuntimePreviewVari
   if (!variant) {
     return undefined;
   }
-  if (role === 'video-poster' && variant.sourcePath && !isImagePreviewUrl(variant.sourcePath)) {
+  if (
+    !variant.sourcePath ||
+    !isSafeWebviewUrl(variant.sourcePath) ||
+    /^https?:/iu.test(variant.sourcePath)
+  ) {
+    return undefined;
+  }
+  if (role === 'video-poster' && !isImagePreviewUrl(variant.sourcePath)) {
     return undefined;
   }
 
@@ -151,10 +157,9 @@ function createUnavailableVariant(
 
 interface RuntimeVariantInput {
   sourceId: string;
-  assetPath?: string;
   role: CanvasPreviewRole;
   mediaType?: string;
-  contentLocator?: import('@neko/shared').ContentLocator;
+  contentLocator: import('@neko/shared').ContentLocator;
 }
 
 interface RuntimeVariantRequest {
@@ -164,7 +169,7 @@ interface RuntimeVariantRequest {
 
 function createRuntimeVariantRequest(
   hostPort: PreviewMessagePort | undefined,
-  { sourceId, assetPath, role, mediaType, contentLocator }: RuntimeVariantInput,
+  { sourceId, role, mediaType, contentLocator }: RuntimeVariantInput,
   onSettled: () => void,
 ): RuntimeVariantRequest {
   const engineRole = ROLE_TO_ENGINE_ROLE[role] ?? 'thumbnail';
@@ -221,8 +226,7 @@ function createRuntimeVariantRequest(
         sourceId,
         role: engineRole,
         mediaType,
-        ...(assetPath ? { assetPath } : {}),
-        ...(contentLocator ? { contentLocator } : {}),
+        contentLocator,
       });
     } catch {
       settle(undefined);

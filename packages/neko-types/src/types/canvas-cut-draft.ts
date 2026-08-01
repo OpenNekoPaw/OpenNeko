@@ -360,11 +360,11 @@ function projectPlaybackUnitToDraftUnit(
 
 function collectDraftMedia(unit: CanvasPlaybackUnit): readonly CanvasCutDraftMediaRef[] {
   const media: CanvasCutDraftMediaRef[] = [];
-  if (unit.assetPath || unit.contentLocator) {
+  if (unit.contentLocator) {
     media.push({
       role: 'source',
       ...(unit.assetPath ? { assetPath: unit.assetPath } : {}),
-      ...(unit.contentLocator ? { contentLocator: unit.contentLocator } : {}),
+      contentLocator: unit.contentLocator,
     });
   }
   const metadata = unit.metadata;

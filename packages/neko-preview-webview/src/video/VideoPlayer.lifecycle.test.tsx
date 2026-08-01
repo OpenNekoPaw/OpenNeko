@@ -152,8 +152,7 @@ describe('Preview VideoPlayer native playback lifecycle', () => {
       payload: {
         video: {
           version: 1,
-          transport: 'http',
-          url: 'http://127.0.0.1:4567/media/token',
+          url: 'openneko://resource/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
           mimeType: 'video/mp4',
           preparationProfile: 'h264-mp4-direct',
           durationSeconds: 10,
@@ -164,7 +163,9 @@ describe('Preview VideoPlayer native playback lifecycle', () => {
     });
 
     await vi.waitFor(() => {
-      expect(host.querySelector('video')?.src).toBe('http://127.0.0.1:4567/media/token');
+      expect(host.querySelector('video')?.src).toBe(
+        'openneko://resource/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+      );
     });
     const video = host.querySelector('video');
     expect(video?.muted).toBe(true);
@@ -300,8 +301,7 @@ describe('Preview VideoPlayer native playback lifecycle', () => {
       payload: {
         video: {
           version: 1,
-          transport: 'http',
-          url: 'http://127.0.0.1:4567/media/token',
+          url: 'openneko://resource/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
           mimeType: 'video/mp4',
           preparationProfile: 'h264-mp4-direct',
           durationSeconds: 10,
@@ -315,7 +315,7 @@ describe('Preview VideoPlayer native playback lifecycle', () => {
     expect(video).not.toBeNull();
     await act(async () => videoControls.onSeek?.(6));
     expect(host.querySelector('video')).toBe(video);
-    expect(video?.src).toBe('http://127.0.0.1:4567/media/token');
+    expect(video?.src).toBe('openneko://resource/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb');
     video?.removeAttribute('src');
     await act(async () => video?.dispatchEvent(new Event('error')));
 
@@ -350,17 +350,15 @@ describe('Preview VideoPlayer native playback lifecycle', () => {
       payload: {
         video: {
           version: 1,
-          transport: 'http',
-          url: 'http://127.0.0.1:4567/media/stable-video-token',
+          url: 'openneko://resource/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
           mimeType: 'video/mp4',
           preparationProfile: 'av1-mp4-direct',
           durationSeconds: 100,
         },
         audio: {
           version: 1,
-          transport: 'http',
           protocol: 'neko-pcm-f32le-v1',
-          streamUrl: 'http://127.0.0.1:4567/media/pcm-generation-1',
+          streamUrl: 'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
           sampleRate: 48_000,
           channels: 2,
         },
@@ -385,7 +383,7 @@ describe('Preview VideoPlayer native playback lifecycle', () => {
     });
     expect(postMessage).not.toHaveBeenCalledWith({ type: 'preview:resume' });
     expect(host.querySelector('video')).toBe(video);
-    expect(video?.src).toBe('http://127.0.0.1:4567/media/stable-video-token');
+    expect(video?.src).toBe('openneko://resource/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb');
     expect(load).toHaveBeenCalledTimes(loadCount);
   });
 
@@ -415,8 +413,7 @@ describe('Preview VideoPlayer native playback lifecycle', () => {
     const video = host.querySelector('video');
     const descriptor = {
       version: 1 as const,
-      transport: 'http' as const,
-      url: 'http://127.0.0.1:4567/media/stable-video-token',
+      url: 'openneko://resource/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
       mimeType: 'video/mp4',
       preparationProfile: 'av1-mp4-direct' as const,
       durationSeconds: 100,
@@ -462,9 +459,11 @@ async function emit(message: unknown): Promise<void> {
 function pcmDescriptor(generation: string) {
   return {
     version: 1 as const,
-    transport: 'http' as const,
     protocol: 'neko-pcm-f32le-v1' as const,
-    streamUrl: `http://127.0.0.1:4567/media/pcm-${generation}`,
+    streamUrl:
+      generation === 'generation-1'
+        ? 'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+        : 'openneko://resource/cccccccccccccccccccccccccccccccc',
     sampleRate: 48_000,
     channels: 2,
   };

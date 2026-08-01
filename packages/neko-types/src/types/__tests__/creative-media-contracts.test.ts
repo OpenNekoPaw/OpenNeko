@@ -46,6 +46,10 @@ describe('creative media shared contracts', () => {
     expect(validateContentLocator(contentLocator('.neko/.cache/render/hero.png')).ok).toBe(false);
     expect(validateContentLocator(contentLocator('/workspace/assets/hero.png')).ok).toBe(false);
     expect(validateContentLocator(contentLocator('neko-media://panel/hero.png')).ok).toBe(false);
+    expect(
+      validateContentLocator(contentLocator('openneko://resource/0123456789abcdefghijklmnopqrstuv'))
+        .ok,
+    ).toBe(false);
   });
 
   it('fails visibly for unknown cross-family operations and unsupported declarations', () => {

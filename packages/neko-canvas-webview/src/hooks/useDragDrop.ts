@@ -18,6 +18,7 @@ import {
   type ProjectSourceAddClientInput,
   type ProjectSourceAddResult,
   type CanvasDroppedAsset,
+  type ContentLocator,
   type CanvasMaterialMediaKind,
   type CanvasNodeType,
   type CanvasReferencedContentLocator,
@@ -41,7 +42,7 @@ export interface UseDragDropOptions {
     mediaType: 'image' | 'video' | 'audio',
     uri?: string,
     name?: string,
-    options?: { runtimeAssetPath?: string },
+    options?: { contentLocator: ContentLocator; runtimeAssetPath?: string },
   ) => void;
   onDropAssets?: (assets: CanvasDroppedAsset[], position?: { x: number; y: number }) => void;
   addSourceClient?: ProjectSourceAddClient;
@@ -393,8 +394,13 @@ export function applyCanvasAddSourceResult(input: {
   const metadata = readCanvasAddSourceMetadata(input.result);
   const mediaType = metadata.mediaType ?? input.mediaTypeHint;
   if (input.result.ok && input.result.durablePath) {
+    if (!input.result.contentLocator) {
+      input.onError?.('Canvas source Host result omitted its canonical ContentLocator.');
+      return;
+    }
     const asset = createCanvasDroppedAssetFromAddSourceResult({
       durablePath: input.result.durablePath,
+      contentLocator: input.result.contentLocator,
       metadata,
       sourceNameHint: input.sourceNameHint,
       mediaTypeHint: mediaType,
@@ -406,6 +412,7 @@ export function applyCanvasAddSourceResult(input: {
       }
       if (asset.kind === 'media') {
         input.addMediaAt(input.dropPosition, asset.mediaType, asset.path, asset.name, {
+          contentLocator: asset.contentLocator,
           ...(asset.runtimeAssetPath ? { runtimeAssetPath: asset.runtimeAssetPath } : {}),
         });
         return;
@@ -423,6 +430,7 @@ export function applyCanvasAddSourceResult(input: {
 
 function createCanvasDroppedAssetFromAddSourceResult(input: {
   readonly durablePath: string;
+  readonly contentLocator: Extract<ContentLocator, { readonly kind: 'workspace-file' }>;
   readonly metadata: ReturnType<typeof readCanvasAddSourceMetadata>;
   readonly sourceNameHint: string;
   readonly mediaTypeHint?: 'image' | 'video' | 'audio';
@@ -440,6 +448,7 @@ function createCanvasDroppedAssetFromAddSourceResult(input: {
       path: input.durablePath,
       name,
       mediaType,
+      contentLocator: input.contentLocator,
       ...(input.metadata.runtimeAssetPath
         ? { runtimeAssetPath: input.metadata.runtimeAssetPath }
         : {}),
@@ -454,7 +463,13 @@ function createCanvasDroppedAssetFromAddSourceResult(input: {
     return { kind: 'text', path: input.durablePath, name, title, format, content };
   }
   if (kind === 'file') {
-    return { kind: 'file', path: input.durablePath, name, title };
+    return {
+      kind: 'file',
+      path: input.durablePath,
+      name,
+      title,
+      contentLocator: input.contentLocator,
+    };
   }
   if (kind === 'canvas') {
     return { kind: 'canvas', path: input.durablePath, name, title };

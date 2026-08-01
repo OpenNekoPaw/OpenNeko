@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -11,10 +11,11 @@ import {
   getActiveMainView,
   openOrFocusMainView,
 } from '../shared/workbench-contract';
-import { DesktopMediaDescriptorRegistry } from './desktop-media-protocol';
+import { DesktopResourceRegistry } from './desktop-resource-registry';
 import { DesktopPreviewRuntime, type DesktopPreviewShellPort } from './desktop-preview-runtime';
 
 const roots: string[] = [];
+const registries: DesktopResourceRegistry[] = [];
 const resourceIdentity: ResourceBrowserIdentity = {
   projectId: 'project-1',
   workspaceId: 'workspace-1',
@@ -25,10 +26,77 @@ const resourceIdentity: ResourceBrowserIdentity = {
 };
 
 afterEach(async () => {
+  for (const registry of registries.splice(0)) registry.dispose();
   for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true });
 });
 
 describe('DesktopPreviewRuntime', () => {
+  it.each([
+    ['reference.png', 'image', 'image/png'],
+    ['voice.wav', 'audio', 'audio/wav'],
+    ['clip.mp4', 'video', 'video/mp4'],
+    ['document.pdf', 'document', 'application/pdf'],
+    ['comic.cbz', 'document', 'application/x-cbz'],
+    [
+      'document.docx',
+      'document',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    ],
+    ['book.epub', 'document', 'application/epub+zip'],
+  ] as const)(
+    'projects locator-backed %s through its package viewer MIME and Range source',
+    async (label, contentKind, mediaType) => {
+      const root = await mkdtemp(path.join(tmpdir(), 'openneko-preview-kind-'));
+      roots.push(root);
+      const absolutePath = path.join(root, label);
+      await writeFile(absolutePath, 'preview-bytes');
+      const workbench = createDefaultDesktopWorkbenchLayout('window-1');
+      const shell: DesktopPreviewShellPort = {
+        getProjection: async () => ({
+          endpointEpoch: 'endpoint-1',
+          catalog: {
+            projects: [{ projectId: 'project-1', workspaceId: 'workspace-1' }],
+          },
+          window: {
+            windowId: 'window-1',
+            revision: 1,
+            tabs: [{ projectId: 'project-1', viewId: 'project-view-1', viewEpoch: 1 }],
+            workbench,
+          },
+        }),
+        updateWorkbench: vi.fn(async () => undefined),
+      };
+      const runtime = new DesktopPreviewRuntime({
+        shell,
+        resources: createResources(),
+        createIdentity: () => `kind-${contentKind}-${label}`,
+      });
+
+      const projection = await runtime.open({
+        identity: resourceIdentity,
+        item: createItem(label, `content:${label}`),
+        absolutePath,
+      });
+      if (projection.status !== 'ready') throw new Error('Expected a ready Preview.');
+
+      expect(projection.descriptor).toMatchObject({
+        contentLocator: { kind: 'workspace-file', path: label },
+        contentKind,
+        mediaType,
+        byteLength: 13,
+      });
+      const range = await fetchResource(projection.descriptor.url, {
+        headers: { Range: 'bytes=0-6' },
+      });
+      expect(range.status).toBe(206);
+      expect(range.headers.get('content-type')).toBe(mediaType);
+      expect(range.headers.get('content-range')).toBe('bytes 0-6/13');
+      expect(await range.text()).toBe('preview');
+      runtime.dispose();
+      expect((await fetchResource(projection.descriptor.url)).status).toBe(404);
+    },
+  );
+
   it('authorizes and releases a transient media descriptor without mutating the workbench', async () => {
     const root = await mkdtemp(path.join(tmpdir(), 'openneko-preview-hover-'));
     roots.push(root);
@@ -51,11 +119,10 @@ describe('DesktopPreviewRuntime', () => {
       }),
       updateWorkbench,
     };
-    const mediaRegistry = new DesktopMediaDescriptorRegistry();
+    const resources = createResources();
     const runtime = new DesktopPreviewRuntime({
       shell,
-      mediaRegistry,
-      resolveWebContentsId: () => 10,
+      resources,
       createIdentity: () => 'hover-one',
     });
 
@@ -73,14 +140,74 @@ describe('DesktopPreviewRuntime', () => {
         displayName: 'hover.mp4',
       },
     });
-    expect(mediaRegistry.authorize(10, opened.descriptor.descriptorId)).toBe(true);
+    expect((await fetchResource(opened.descriptor.url)).status).toBe(200);
     expect(updateWorkbench).not.toHaveBeenCalled();
 
     runtime.releaseQuickPreview('window-1', opened.previewSessionId);
-    expect(mediaRegistry.authorize(10, opened.descriptor.descriptorId)).toBe(false);
+    expect((await fetchResource(opened.descriptor.url)).status).toBe(404);
     expect(() => runtime.releaseQuickPreview('window-1', opened.previewSessionId)).toThrow(
       'is unavailable',
     );
+  });
+
+  it('fences stale Preview identity and revokes only the detached Window sessions', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'openneko-preview-fencing-'));
+    roots.push(root);
+    const mediaPath = path.join(root, 'preview.mp4');
+    await writeFile(mediaPath, 'video');
+    const workbench = createDefaultDesktopWorkbenchLayout('window-1');
+    const shell: DesktopPreviewShellPort = {
+      getProjection: async () => ({
+        endpointEpoch: 'endpoint-1',
+        catalog: {
+          projects: [{ projectId: 'project-1', workspaceId: 'workspace-1' }],
+        },
+        window: {
+          windowId: 'window-1',
+          revision: 1,
+          tabs: [{ projectId: 'project-1', viewId: 'project-view-1', viewEpoch: 1 }],
+          workbench,
+        },
+      }),
+      updateWorkbench: vi.fn(async () => undefined),
+    };
+    const runtime = new DesktopPreviewRuntime({
+      shell,
+      resources: createResources(),
+      createIdentity: (() => {
+        const identities = ['full', 'quick'];
+        return () => identities.shift() ?? 'unexpected';
+      })(),
+    });
+    const projection = await runtime.open({
+      identity: resourceIdentity,
+      item: createItem('preview.mp4', 'content:full'),
+      absolutePath: mediaPath,
+    });
+    if (projection.status !== 'ready') throw new Error('Expected a ready Preview.');
+    const quick = await runtime.openQuickPreview({
+      identity: resourceIdentity,
+      item: { ...createItem('preview.mp4', 'content:quick'), kind: 'video' },
+      absolutePath: mediaPath,
+    });
+
+    await expect(
+      runtime.execute('window-1', {
+        schemaVersion: PREVIEW_HOST_RUNTIME_VERSION,
+        requestId: 'stale-revision',
+        route: PREVIEW_HOST_RUNTIME_ROUTES.snapshotGet,
+        identity: { ...projection.identity, revision: projection.identity.revision + 1 },
+      }),
+    ).rejects.toThrow('revision does not match');
+    expect((await fetchResource(projection.descriptor.url)).status).toBe(200);
+    expect(() => runtime.releaseQuickPreview('window-2', quick.previewSessionId)).toThrow(
+      'is unavailable',
+    );
+    expect((await fetchResource(quick.descriptor.url)).status).toBe(200);
+
+    runtime.detachWindow('window-1');
+    expect((await fetchResource(projection.descriptor.url)).status).toBe(404);
+    expect((await fetchResource(quick.descriptor.url)).status).toBe(404);
   });
 
   it('opens one temporary owner-bound Preview View and releases the replaced descriptor', async () => {
@@ -131,12 +258,11 @@ describe('DesktopPreviewRuntime', () => {
         windowRevision += 1;
       }),
     };
-    const mediaRegistry = new DesktopMediaDescriptorRegistry();
+    const resources = createResources();
     const identities = ['one', 'two', 'three'];
     const runtime = new DesktopPreviewRuntime({
       shell,
-      mediaRegistry,
-      resolveWebContentsId: () => 10,
+      resources,
       createIdentity: () => identities.shift() ?? 'unexpected',
     });
 
@@ -163,7 +289,7 @@ describe('DesktopPreviewRuntime', () => {
       },
     });
     if (first.status !== 'ready') throw new Error('Expected a ready Preview.');
-    expect(mediaRegistry.authorize(10, first.descriptor.descriptorId)).toBe(true);
+    expect((await fetchResource(first.descriptor.url)).status).toBe(200);
     expect(workbench).toMatchObject({
       resourceDock: { presentation: 'docked' },
       display: { mode: 'chat-main' },
@@ -188,8 +314,8 @@ describe('DesktopPreviewRuntime', () => {
     });
     if (second.status !== 'ready') throw new Error('Expected a ready Preview.');
     expect(second.descriptor.contentKind).toBe('model');
-    expect(mediaRegistry.authorize(10, first.descriptor.descriptorId)).toBe(false);
-    expect(mediaRegistry.authorize(10, second.descriptor.descriptorId)).toBe(true);
+    expect((await fetchResource(first.descriptor.url)).status).toBe(404);
+    expect((await fetchResource(second.descriptor.url)).status).toBe(200);
     expect(workbench.main.views).toEqual([
       expect.objectContaining({ kind: 'canvas', ownerId: 'canvas:project-view-1' }),
       expect.objectContaining({ kind: 'preview', ownerId: 'preview-session:two' }),
@@ -236,7 +362,7 @@ describe('DesktopPreviewRuntime', () => {
       absolutePath: thirdPath,
     });
     if (third.status !== 'ready') throw new Error('Expected a ready Preview.');
-    expect(mediaRegistry.authorize(10, second.descriptor.descriptorId)).toBe(true);
+    expect((await fetchResource(second.descriptor.url)).status).toBe(200);
     expect(workbench.main.views.filter((view) => view.kind === 'preview')).toHaveLength(2);
 
     const side = await runtime.execute('window-1', {
@@ -269,8 +395,8 @@ describe('DesktopPreviewRuntime', () => {
       route: PREVIEW_HOST_RUNTIME_ROUTES.viewClose,
       identity: side.identity,
     });
-    expect(mediaRegistry.authorize(10, third.descriptor.descriptorId)).toBe(false);
-    expect(mediaRegistry.authorize(10, second.descriptor.descriptorId)).toBe(true);
+    expect((await fetchResource(third.descriptor.url)).status).toBe(404);
+    expect((await fetchResource(second.descriptor.url)).status).toBe(200);
     expect(workbench.main.views).toContainEqual(
       expect.objectContaining({
         ownerId: 'preview-session:two',
@@ -290,34 +416,197 @@ describe('DesktopPreviewRuntime', () => {
     expect(JSON.stringify(unsupported)).not.toMatch(/absolutePath|must-not-be-opened|neko-media:/u);
 
     endpointEpoch = 'endpoint-2';
-    const recovered = await runtime.getSnapshot('window-1', {
-      schemaVersion: PREVIEW_HOST_RUNTIME_VERSION,
-      requestId: 'renderer-reload',
-      projectId: unsupported.identity.projectId,
-      workspaceId: unsupported.identity.workspaceId,
-      viewId: unsupported.identity.viewId,
-      viewEpoch: unsupported.identity.viewEpoch,
-      sessionId: unsupported.identity.sessionId,
-      endpointEpoch,
-    });
-    expect(recovered.identity).toMatchObject({
-      endpointEpoch: 'endpoint-2',
-      revision: unsupported.identity.revision + 1,
-    });
     await expect(
       runtime.getSnapshot('window-1', {
         schemaVersion: PREVIEW_HOST_RUNTIME_VERSION,
-        requestId: 'late-renderer',
+        requestId: 'renderer-reload',
         projectId: unsupported.identity.projectId,
         workspaceId: unsupported.identity.workspaceId,
         viewId: unsupported.identity.viewId,
         viewEpoch: unsupported.identity.viewEpoch,
         sessionId: unsupported.identity.sessionId,
-        endpointEpoch: 'endpoint-1',
+        endpointEpoch,
       }),
     ).rejects.toThrow('endpoint is stale');
   });
+
+  it('publishes only declared glTF dependencies through a frozen resource set', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'openneko-preview-gltf-'));
+    roots.push(root);
+    await mkdir(path.join(root, 'textures'));
+    const modelPath = path.join(root, 'scene.gltf');
+    await writeFile(
+      modelPath,
+      JSON.stringify({
+        asset: { version: '2.0' },
+        buffers: [{ uri: 'scene.bin', byteLength: 6 }],
+        images: [{ uri: 'textures/base.png' }],
+      }),
+    );
+    await writeFile(path.join(root, 'scene.bin'), 'buffer');
+    await writeFile(path.join(root, 'textures', 'base.png'), 'image');
+    await writeFile(path.join(root, 'undeclared.bin'), 'private');
+    const workbench = createDefaultDesktopWorkbenchLayout('window-1');
+    const shell: DesktopPreviewShellPort = {
+      getProjection: async () => ({
+        endpointEpoch: 'endpoint-1',
+        catalog: {
+          projects: [{ projectId: 'project-1', workspaceId: 'workspace-1' }],
+        },
+        window: {
+          windowId: 'window-1',
+          revision: 1,
+          tabs: [{ projectId: 'project-1', viewId: 'project-view-1', viewEpoch: 1 }],
+          workbench,
+        },
+      }),
+      updateWorkbench: vi.fn(async () => undefined),
+    };
+    const runtime = new DesktopPreviewRuntime({
+      shell,
+      resources: createResources(),
+      createIdentity: () => 'gltf-one',
+    });
+
+    const projection = await runtime.open({
+      identity: resourceIdentity,
+      item: createItem('scene.gltf', 'content:gltf'),
+      absolutePath: modelPath,
+    });
+    if (projection.status !== 'ready') throw new Error('Expected a ready glTF Preview.');
+
+    expect(projection.descriptor.resourceUris).toEqual({
+      'scene.gltf': projection.descriptor.url,
+      'scene.bin': new URL('scene.bin', projection.descriptor.url).toString(),
+      'textures/base.png': new URL(
+        'textures/base.png',
+        projection.descriptor.url,
+      ).toString(),
+    });
+    expect(await (await fetchResource(projection.descriptor.url)).json()).toMatchObject({
+      buffers: [{ uri: 'scene.bin' }],
+    });
+    expect(
+      await (
+        await fetchResource(new URL('scene.bin', projection.descriptor.url))
+      ).text(),
+    ).toBe('buffer');
+    expect(
+      await (
+        await fetchResource(new URL('textures/base.png', projection.descriptor.url))
+      ).text(),
+    ).toBe('image');
+    expect(
+      (await fetchResource(new URL('undeclared.bin', projection.descriptor.url))).status,
+    ).toBe(404);
+
+    runtime.dispose();
+    expect((await fetchResource(projection.descriptor.url)).status).toBe(404);
+  });
+
+  it('rejects encoded glTF traversal before registering a resource set', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'openneko-preview-gltf-'));
+    roots.push(root);
+    const modelPath = path.join(root, 'unsafe.gltf');
+    await writeFile(
+      modelPath,
+      JSON.stringify({
+        asset: { version: '2.0' },
+        buffers: [{ uri: '%2e%2e/secret.bin', byteLength: 6 }],
+      }),
+    );
+    const workbench = createDefaultDesktopWorkbenchLayout('window-1');
+    const shell: DesktopPreviewShellPort = {
+      getProjection: async () => ({
+        endpointEpoch: 'endpoint-1',
+        catalog: {
+          projects: [{ projectId: 'project-1', workspaceId: 'workspace-1' }],
+        },
+        window: {
+          windowId: 'window-1',
+          revision: 1,
+          tabs: [{ projectId: 'project-1', viewId: 'project-view-1', viewEpoch: 1 }],
+          workbench,
+        },
+      }),
+      updateWorkbench: vi.fn(async () => undefined),
+    };
+    const runtime = new DesktopPreviewRuntime({
+      shell,
+      resources: createResources(),
+      createIdentity: () => 'gltf-unsafe',
+    });
+
+    await expect(
+      runtime.open({
+        identity: resourceIdentity,
+        item: createItem('unsafe.gltf', 'content:gltf-unsafe'),
+        absolutePath: modelPath,
+      }),
+    ).rejects.toThrow('unsafe path segment');
+  });
+
+  it('rejects a glTF dependency symlink that escapes the model directory', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'openneko-preview-gltf-'));
+    const outside = await mkdtemp(path.join(tmpdir(), 'openneko-preview-gltf-outside-'));
+    roots.push(root, outside);
+    const modelPath = path.join(root, 'unsafe-link.gltf');
+    await writeFile(
+      modelPath,
+      JSON.stringify({
+        asset: { version: '2.0' },
+        buffers: [{ uri: 'linked.bin', byteLength: 6 }],
+      }),
+    );
+    await writeFile(path.join(outside, 'secret.bin'), 'secret');
+    await symlink(path.join(outside, 'secret.bin'), path.join(root, 'linked.bin'));
+    const workbench = createDefaultDesktopWorkbenchLayout('window-1');
+    const shell: DesktopPreviewShellPort = {
+      getProjection: async () => ({
+        endpointEpoch: 'endpoint-1',
+        catalog: {
+          projects: [{ projectId: 'project-1', workspaceId: 'workspace-1' }],
+        },
+        window: {
+          windowId: 'window-1',
+          revision: 1,
+          tabs: [{ projectId: 'project-1', viewId: 'project-view-1', viewEpoch: 1 }],
+          workbench,
+        },
+      }),
+      updateWorkbench: vi.fn(async () => undefined),
+    };
+    const runtime = new DesktopPreviewRuntime({
+      shell,
+      resources: createResources(),
+      createIdentity: () => 'gltf-unsafe-link',
+    });
+
+    await expect(
+      runtime.open({
+        identity: resourceIdentity,
+        item: createItem('unsafe-link.gltf', 'content:gltf-unsafe-link'),
+        absolutePath: modelPath,
+      }),
+    ).rejects.toThrow('escapes the model directory');
+  });
 });
+
+function createResources(): DesktopResourceRegistry {
+  const registry = new DesktopResourceRegistry();
+  registry.bindWindow(resourceIdentity.windowId, 101);
+  registries.push(registry);
+  return registry;
+}
+
+function fetchResource(input: string | URL, init?: RequestInit): Promise<Response> {
+  const url = input.toString();
+  const registry = registries.find((candidate) => candidate.authorizeRequest(url, 101));
+  if (!registry) {
+    return Promise.resolve(new Response('Resource not found', { status: 404 }));
+  }
+  return registry.handle(new Request(url, init));
+}
 
 function createItem(label: string, resourceId: string) {
   return {

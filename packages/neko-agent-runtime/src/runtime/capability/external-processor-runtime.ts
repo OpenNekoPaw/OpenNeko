@@ -207,6 +207,31 @@ export function createDeveloperModeTemporaryProcessorRequest(
       ],
     };
   }
+  if (containsDisplayTransportUrl(command)) {
+    return {
+      manifest: createDeveloperModeManifest({
+        command,
+        allowNetwork: input.allowNetwork,
+        allowedInputRoots: input.allowedInputRoots,
+        cwdRoot: input.cwdRoot,
+        timeoutMs: input.timeoutMs,
+      }),
+      invocation: createDeveloperModeInvocation(
+        command,
+        input.run,
+        `developer-mode-run-${stableCommandHash(command)}`,
+        'developer-mode-stage-1',
+      ),
+      diagnostics: [
+        diagnostic(
+          'unauthorized-path',
+          'error',
+          'Developer Mode commands must use Host-authorized filesystem paths, not display transport URLs.',
+          'command',
+        ),
+      ],
+    };
+  }
 
   const manifest = createDeveloperModeManifest({
     command,
@@ -828,6 +853,15 @@ function stableCommandHash(command: string): string {
     hash = (hash * 31 + command.charCodeAt(index)) >>> 0;
   }
   return hash.toString(16);
+}
+
+function containsDisplayTransportUrl(command: string): boolean {
+  return (
+    /\b(?:neko-media|media|video|audio|file):\/\//iu.test(command) ||
+    /\bhttps?:\/\/(?:127\.0\.0\.1|localhost|\[::1\]):\d+\/v1\/(?:resources|streams|resource-sets)\//iu.test(
+      command,
+    )
+  );
 }
 
 function nextAttemptForStage(run: AgentExternalProcessorChainRun, stageId: string): number {

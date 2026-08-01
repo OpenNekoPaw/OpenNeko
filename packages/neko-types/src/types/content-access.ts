@@ -100,7 +100,7 @@ export function isContentRuntimeRefKind(value: unknown): value is ContentRuntime
 }
 
 const HOST_PROJECTED_RUNTIME_URI_PATTERN =
-  /^(?:neko-(?:app|media)|[a-z][a-z0-9+.-]*-(?:webview(?:-resource)?|resource)):/i;
+  /^(?:openneko(?:media)?|neko-(?:app|media)|[a-z][a-z0-9+.-]*-(?:webview(?:-resource)?|resource)):/i;
 
 export function isHostProjectedRuntimeValue(value: string): boolean {
   return (

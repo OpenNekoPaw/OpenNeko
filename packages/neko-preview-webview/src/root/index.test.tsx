@@ -10,12 +10,7 @@ import {
   type PreviewProjection,
   type PreviewRuntimeIdentity,
 } from '@neko-preview/contracts';
-import {
-  PreviewRoot,
-  QuickPreviewSurface,
-  createPreviewMediaUrl,
-  getPreviewViewerRegistry,
-} from './index';
+import { PreviewRoot, QuickPreviewSurface, getPreviewViewerRegistry } from './index';
 const playerStyles = readFileSync(resolve(__dirname, '../styles/player.css'), 'utf8');
 const modelStyles = readFileSync(resolve(__dirname, '../model/model.css'), 'utf8');
 const rootStyles = readFileSync(resolve(__dirname, './style.css'), 'utf8');
@@ -84,6 +79,7 @@ describe('PreviewRoot', () => {
               descriptorId: 'descriptor-1',
               revision: 'revision-1',
               contentLocator: previewContentLocator,
+              url: 'http://127.0.0.1:43125/v1/resources/text-token',
               contentKind: 'text',
               mediaType: 'application/json',
               displayName: 'candidates.json',
@@ -100,18 +96,6 @@ describe('PreviewRoot', () => {
     expect(JSON.stringify(container.innerHTML)).not.toContain('/Users/');
   });
 
-  it('constructs only the fixed opaque media scheme', () => {
-    expect(createPreviewMediaUrl('descriptor:abc-123', 'book.epub')).toBe(
-      'neko-media://desktop/descriptor%3Aabc-123/book.epub',
-    );
-    expect(() => createPreviewMediaUrl('/Users/private/file')).toThrow(
-      'descriptor identity is invalid',
-    );
-    expect(() => createPreviewMediaUrl('descriptor-1', '../private.epub')).toThrow(
-      'display name is invalid',
-    );
-  });
-
   it('routes pin and side actions through the injected Preview runtime', async () => {
     const projection: PreviewProjection = {
       schemaVersion: PREVIEW_HOST_RUNTIME_VERSION,
@@ -122,6 +106,7 @@ describe('PreviewRoot', () => {
         descriptorId: 'descriptor-image',
         revision: 'revision-1',
         contentLocator: previewContentLocator,
+        url: 'http://127.0.0.1:43125/v1/resources/image-token',
         contentKind: 'image',
         mediaType: 'image/png',
         displayName: 'reference.png',
@@ -176,6 +161,7 @@ describe('PreviewRoot', () => {
               descriptorId: 'descriptor-video',
               revision: 'revision-1',
               contentLocator: previewContentLocator,
+              url: 'http://127.0.0.1:43125/v1/resources/video-token',
               contentKind: 'video',
               mediaType: 'video/mp4',
               displayName: 'clip.mp4',
@@ -187,7 +173,7 @@ describe('PreviewRoot', () => {
     });
 
     expect(container.querySelector('video')?.getAttribute('src')).toBe(
-      'neko-media://desktop/descriptor-video/clip.mp4',
+      'http://127.0.0.1:43125/v1/resources/video-token',
     );
     expect(container.querySelector('.absolute.inset-0.bg-black')).toBeTruthy();
     expect(container.querySelector('[aria-label="Play (Space)"]')).toBeTruthy();
@@ -205,6 +191,7 @@ describe('PreviewRoot', () => {
             descriptorId: 'descriptor-image-hover',
             revision: 'revision-1',
             contentLocator: previewContentLocator,
+            url: 'http://127.0.0.1:43125/v1/resources/image-hover-token',
             contentKind: 'image',
             mediaType: 'image/png',
             displayName: 'hover.png',
@@ -215,7 +202,7 @@ describe('PreviewRoot', () => {
     });
 
     expect(container.querySelector('img')?.getAttribute('src')).toBe(
-      'neko-media://desktop/descriptor-image-hover/hover.png',
+      'http://127.0.0.1:43125/v1/resources/image-hover-token',
     );
     expect(container.querySelector('.neko-preview-quick')).toBeTruthy();
   });
@@ -236,6 +223,7 @@ describe('PreviewRoot', () => {
             descriptorId: 'descriptor-video-hover',
             revision: 'revision-1',
             contentLocator: previewContentLocator,
+            url: 'http://127.0.0.1:43125/v1/resources/video-hover-token',
             contentKind: 'video',
             mediaType: 'video/mp4',
             displayName: 'hover.mp4',
@@ -256,6 +244,7 @@ describe('PreviewRoot', () => {
             descriptorId: 'descriptor-audio-hover',
             revision: 'revision-1',
             contentLocator: previewContentLocator,
+            url: 'http://127.0.0.1:43125/v1/resources/audio-hover-token',
             contentKind: 'audio',
             mediaType: 'audio/aac',
             displayName: 'hover.aac',

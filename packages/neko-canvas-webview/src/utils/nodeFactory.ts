@@ -76,8 +76,8 @@ export function buildCanvasNode(options: BuildCanvasNodeOptions): CanvasNodeDraf
       const contentLocator = isContentLocator(data.contentLocator)
         ? data.contentLocator
         : undefined;
-      if (!assetPath && !contentLocator) {
-        throw new Error('Canvas Media creation requires a durable source');
+      if (!contentLocator) {
+        throw new Error('Canvas Media creation requires a canonical ContentLocator');
       }
       return {
         ...base,
@@ -145,8 +145,8 @@ export function buildCanvasNode(options: BuildCanvasNodeOptions): CanvasNodeDraf
       const contentLocator = isContentLocator(data.contentLocator)
         ? data.contentLocator
         : undefined;
-      if (!path && !contentLocator) {
-        throw new Error('Canvas File creation requires a durable source');
+      if (!contentLocator) {
+        throw new Error('Canvas File creation requires a canonical ContentLocator');
       }
       return {
         ...base,

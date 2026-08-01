@@ -16,7 +16,6 @@ import { ConsoleLogger } from '@neko/shared/logger';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createElectronNekoHostPorts } from './electron-host-ports';
 import { DesktopCutRuntime } from './desktop-cut-runtime';
-import { DesktopMediaDescriptorRegistry } from './desktop-media-protocol';
 import {
   DESKTOP_SHELL_CONTRACT_VERSION,
   type DesktopShellProjection,
@@ -143,8 +142,6 @@ describe('DesktopCutRuntime', () => {
         version: 'test',
         logger: new ConsoleLogger('DesktopCutRuntimeFocusTest'),
       }),
-      mediaRegistry: new DesktopMediaDescriptorRegistry(),
-      resolveWebContentsId: () => 10,
     });
     const item = {
       resourceId: 'resource-story',
@@ -543,8 +540,7 @@ describe('DesktopCutRuntime', () => {
         sessionId: 'video-session-1',
         video: {
           version: 1 as const,
-          transport: 'http' as const,
-          url: 'http://127.0.0.1:4123/v1/cut-media/file/video-session-1',
+          url: 'openneko://resource/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
           mimeType: 'video/mp4',
           preparationProfile: 'h264-mp4-direct' as const,
           mediaTimeOriginSeconds: 0,
@@ -588,13 +584,11 @@ describe('DesktopCutRuntime', () => {
         type: 'cut:preview-ready',
         generation: 1,
         video: {
-          transport: 'authorized',
-          url: expect.stringMatching(
-            /^neko-media:\/\/desktop\/media%3A[A-Za-z0-9-]+\/preview\.mp4$/u,
-          ),
+          url: 'openneko://resource/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
         },
       },
     });
+    expect(JSON.stringify(result.output)).not.toContain('neko-media:');
     expect(mediaAdapter.startPreview).toHaveBeenCalledOnce();
     await runtime.dispose();
     expect(stopPreview).toHaveBeenCalledWith('video-session-1');
@@ -651,9 +645,8 @@ describe('DesktopCutRuntime', () => {
         sessionId: 'pcm-session-1',
         stream: {
           version: 1 as const,
-          transport: 'http' as const,
           protocol: 'neko-pcm-f32le-v1' as const,
-          streamUrl: 'http://127.0.0.1/pcm-session-1',
+          streamUrl: 'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
           sampleRate: 48_000,
           channels: 2,
         },
@@ -981,8 +974,6 @@ function createRuntime(
       version: 'test',
       logger: new ConsoleLogger('DesktopCutRuntimeTest'),
     }),
-    mediaRegistry: new DesktopMediaDescriptorRegistry(),
-    resolveWebContentsId: () => 10,
     ...(createMediaAdapter ? { createMediaAdapter } : {}),
     ...(createPreviewMediaAdapter ? { createPreviewMediaAdapter } : {}),
     ...(createExportMediaAdapter ? { createExportMediaAdapter } : {}),

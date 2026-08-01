@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { FfmpegProcessPort, FfmpegRunResult, RunningProcess } from './NodeFfmpegProcess';
 import { FfmpegCommandError } from './NodeFfmpegProcess';
+import type { NodeMediaPublisher } from './NodeMediaPublisher';
 import { NodeMediaRuntime } from './NodeMediaRuntime';
 
 const AUDIO_PROBE = Buffer.from(
@@ -51,7 +52,10 @@ describe('NodeMediaRuntime', () => {
 
   it('stops an active PCM stream without leaking the FFmpeg abort error', async () => {
     const process = new AbortablePcmProcess();
-    const runtime = new NodeMediaRuntime({ process });
+    const runtime = new NodeMediaRuntime({
+      process,
+      publisher: new TestMediaPublisher({ consumePcmOnPrime: true }),
+    });
     runtimes.push(runtime);
     const session = await runtime.startPcm('/fixture/audio.aac', {
       startTimeSeconds: 0,
@@ -59,12 +63,9 @@ describe('NodeMediaRuntime', () => {
       playbackRate: 1,
     });
 
-    const response = await fetch(session.stream.streamUrl);
     await vi.waitFor(() => expect(process.streamStarted).toBe(true));
     await runtime.stop(session.sessionId);
 
-    expect(response.status).toBe(200);
-    expect((await response.arrayBuffer()).byteLength).toBe(0);
     await expect(process.completion).rejects.toThrow('Media PCM session was stopped.');
   });
 
@@ -109,7 +110,7 @@ describe('NodeMediaRuntime', () => {
   it('publishes qualified AV1 MP4 without invoking an HDR proxy', async () => {
     const fixture = await createVideoFixture('av1', '.mp4', temporaryDirectories);
     const process = new ProfilePreparationProcess(AV1_HDR_PROBE);
-    const runtime = new NodeMediaRuntime({ process });
+    const runtime = new NodeMediaRuntime({ process, publisher: new TestMediaPublisher() });
     runtimes.push(runtime);
 
     const prepared = await runtime.prepareVideo(fixture, {
@@ -142,7 +143,7 @@ describe('NodeMediaRuntime', () => {
   it('remuxes qualified VP9 WebM into MP4 without re-encoding', async () => {
     const fixture = await createVideoFixture('vp9', '.webm', temporaryDirectories);
     const process = new ProfilePreparationProcess(VP9_HDR_PROBE);
-    const runtime = new NodeMediaRuntime({ process });
+    const runtime = new NodeMediaRuntime({ process, publisher: new TestMediaPublisher() });
     runtimes.push(runtime);
 
     const prepared = await runtime.prepareVideo(fixture, {
@@ -162,6 +163,7 @@ describe('NodeMediaRuntime', () => {
     const process = new ProfilePreparationProcess(AV1_HDR_PROBE);
     const runtime = new NodeMediaRuntime({
       process,
+      publisher: new TestMediaPublisher(),
       hardwareVideoBackend: 'videotoolbox',
     });
     runtimes.push(runtime);
@@ -330,6 +332,52 @@ class AbortablePcmProcess implements FfmpegProcessPort {
       stdout,
       completion: this.completion,
       terminate: () => undefined,
+    };
+  }
+}
+
+class TestMediaPublisher implements NodeMediaPublisher {
+  private readonly registrations = new Map<string, AbortController>();
+  private nextId = 0;
+
+  constructor(
+    private readonly options: {
+      readonly consumePcmOnPrime?: boolean;
+    } = {},
+  ) {}
+
+  async registerFile() {
+    return this.createRegistration();
+  }
+
+  async registerPcm(createStream: (signal: AbortSignal) => RunningProcess) {
+    const registration = this.createRegistration();
+    const controller = this.registrations.get(registration.token);
+    if (!controller) throw new Error('Test media registration is missing.');
+    return {
+      ...registration,
+      prime: () => {
+        if (this.options.consumePcmOnPrime) createStream(controller.signal);
+      },
+    };
+  }
+
+  unregister(token: string): void {
+    const controller = this.registrations.get(token);
+    if (!controller) return;
+    this.registrations.delete(token);
+    controller.abort(new Error('Media PCM session was stopped.'));
+  }
+
+  private createRegistration() {
+    this.nextId += 1;
+    const token = String(this.nextId).padStart(32, 'a');
+    const controller = new AbortController();
+    this.registrations.set(token, controller);
+    return {
+      token,
+      url: `openneko://resource/${token}`,
+      release: () => this.unregister(token),
     };
   }
 }

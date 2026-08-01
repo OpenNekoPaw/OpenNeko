@@ -51,20 +51,20 @@ export function buildConversationListMessage(
 export function buildActiveConversationMessage(
   conversation: ConversationViewSource | null | undefined,
   options: MessageResourceProjectionOptions = {},
-): ActiveConversationMessage {
+): Promise<ActiveConversationMessage> {
   if (!conversation) {
-    return {
+    return Promise.resolve({
       type: 'activeConversation',
       conversation: null,
-    };
+    });
   }
 
-  return {
+  return projectMessagesForResourceDisplay(conversation.messages, options).then((messages) => ({
     type: 'activeConversation',
     conversation: {
       id: conversation.id,
       title: conversation.title,
-      messages: projectMessagesForResourceDisplay(conversation.messages, options),
+      messages,
     },
-  };
+  }));
 }

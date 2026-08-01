@@ -14,6 +14,7 @@ import type {
   CanvasData,
   CanvasDroppedAsset,
   CanvasViewport,
+  ContentLocator,
   ProjectedCanvasStatus,
 } from '@neko/shared';
 import { createCanvasAgentActiveContext } from './utils/canvasAgentOperations';
@@ -296,6 +297,7 @@ export function CanvasApp({ host: hostPort }: CanvasAppProps) {
         switch (asset.kind) {
           case 'media':
             addMediaAt(dropPos, asset.mediaType, asset.path, asset.name, {
+              contentLocator: asset.contentLocator,
               ...(asset.runtimeAssetPath ? { runtimeAssetPath: asset.runtimeAssetPath } : {}),
             });
             break;
@@ -303,7 +305,7 @@ export function CanvasApp({ host: hostPort }: CanvasAppProps) {
             addImportedMarkdownAt(dropPos, asset);
             break;
           case 'file':
-            addFileAt(dropPos, asset.path, asset.title);
+            addFileAt(dropPos, asset.path, asset.title, asset.contentLocator);
             break;
           case 'canvas':
             addCanvasEmbedAt(dropPos, asset.path, asset.title);
@@ -602,8 +604,8 @@ export function CanvasApp({ host: hostPort }: CanvasAppProps) {
   }, [selectedNodeIds, hostPort]);
 
   const handleDocumentOpen = useCallback(
-    (docPath: string) => {
-      void hostPort.previewResource({ kind: 'workspace-file', path: docPath });
+    (locator: ContentLocator) => {
+      void hostPort.previewResource(locator);
     },
     [hostPort],
   );

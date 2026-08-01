@@ -1,230 +1,125 @@
-/**
- * VideoCard - Compact video result card (renamed from VideoPlayer, ADR-6)
- *
- * Displays video metadata with a thumbnail preview.
- * Clicking "Open" or the thumbnail opens the file in neko-preview
- * (hardware-accelerated H.264 preview via customEditor).
- */
-
-import { useState, useRef, useCallback, memo } from 'react';
-import { formatMediaTime as formatTime } from '@neko/media';
-import { ChevronDownIcon as ChevronIcon, ErrorIcon, OpenIcon, PlayIcon } from '@neko/shared/icons';
-import { openMediaTarget } from './openMediaTarget';
+import { memo, useCallback, useState } from 'react';
+import { formatMediaTime } from '@neko/media';
+import { ChevronDownIcon as ChevronIcon, ErrorIcon } from '@neko/shared/icons';
+import { isAuthorizedResourceDisplayUri } from '@/presenters/resource-display-uri';
 
 interface VideoPlayerProps {
   src: string;
   poster?: string;
   title?: string;
   className?: string;
-  /** Local file path for opening in neko-preview */
+  /** @deprecated Display cards never open Host paths or transient display URLs. */
   localPath?: string;
-  /** Inline mode: compact card without header for Tool results. */
+  /** Inline mode uses compact native video controls. */
   inline?: boolean;
 }
 
-/**
- * Extract filename from path or URL
- */
-function getFileName(src: string, title?: string): string {
-  if (title) return title.split('/').pop() || title;
-  try {
-    const url = new URL(src);
-    return url.pathname.split('/').pop() || 'video';
-  } catch {
-    return src.split('/').pop() || 'video';
-  }
-}
-
-function VideoPlayerComponent({
-  src,
-  poster,
-  title,
-  className,
-  localPath,
-  inline = false,
-}: VideoPlayerProps) {
-  const videoRef = useRef<HTMLVideoElement>(null);
+function VideoPlayerComponent({ src, poster, title, className, inline = false }: VideoPlayerProps) {
   const [isExpanded, setIsExpanded] = useState(true);
   const [duration, setDuration] = useState(0);
   const [hasError, setHasError] = useState(false);
-
   const fileName = getFileName(src, title);
 
-  const toggleExpand = useCallback(() => {
-    setIsExpanded((prev) => !prev);
+  const handleLoadedMetadata = useCallback((event: React.SyntheticEvent<HTMLVideoElement>) => {
+    const nextDuration = event.currentTarget.duration;
+    if (Number.isFinite(nextDuration)) setDuration(nextDuration);
   }, []);
 
-  const handleLoadedMetadata = useCallback(() => {
-    const video = videoRef.current;
-    if (video) {
-      setDuration(video.duration);
-    }
-  }, []);
+  if (!isAuthorizedResourceDisplayUri(src)) {
+    return (
+      <div
+        role="alert"
+        className={`my-1 rounded px-2 py-2 text-[11px] text-[var(--neko-errorForeground)] ${className || ''}`}
+      >
+        Video display source was not authorized.
+      </div>
+    );
+  }
 
-  const handleError = useCallback(() => {
-    setHasError(true);
-  }, []);
+  const authorizedPoster = poster && isAuthorizedResourceDisplayUri(poster) ? poster : undefined;
+  const video = (
+    <div className="relative bg-black">
+      <video
+        controls
+        crossOrigin="anonymous"
+        preload="metadata"
+        className="max-h-[260px] w-full object-contain"
+        poster={authorizedPoster}
+        onLoadedMetadata={handleLoadedMetadata}
+        onError={() => setHasError(true)}
+        src={src}
+      />
+      {duration > 0 && (
+        <span className="pointer-events-none absolute right-1.5 top-1.5 rounded bg-black/70 px-1.5 py-0.5 text-[9px] tabular-nums text-white/90">
+          {formatMediaTime(duration)}
+        </span>
+      )}
+    </div>
+  );
 
-  // Open file in neko-preview (hardware-accelerated preview)
-  const handleOpenPreview = useCallback(() => {
-    const pathToOpen = localPath || src;
-    openMediaTarget(pathToOpen);
-  }, [localPath, src]);
-
-  // Inline mode: compact thumbnail card with click-to-open
   if (inline) {
     return (
-      <div className={`rounded overflow-hidden bg-black ${className || ''}`}>
-        {hasError ? (
-          <div className="flex items-center justify-center py-6 text-[var(--neko-errorForeground)] text-[11px] bg-[var(--neko-editor-background)]">
-            <ErrorIcon className="w-4 h-4 mr-2" />
-            <span>Failed to load video</span>
-          </div>
-        ) : (
-          <div className="relative cursor-pointer group" onClick={handleOpenPreview}>
-            {/* Hidden video element for metadata extraction */}
-            <video
-              ref={videoRef}
-              src={src}
-              poster={poster}
-              onLoadedMetadata={handleLoadedMetadata}
-              onError={handleError}
-              className="w-full max-h-[200px] object-contain"
-              preload="metadata"
-            />
-
-            {/* Play overlay — click to open in neko-preview */}
-            <div className="absolute inset-0 flex items-center justify-center bg-black/30 group-hover:bg-black/50 transition-colors">
-              <div className="w-10 h-10 flex items-center justify-center rounded-full bg-white/20 backdrop-blur-sm group-hover:bg-white/30 transition-colors">
-                <PlayIcon className="w-5 h-5 text-white ml-0.5" />
-              </div>
-            </div>
-
-            {/* Duration badge */}
-            {duration > 0 && (
-              <div className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 bg-black/70 rounded text-[9px] text-white/90 tabular-nums">
-                {formatTime(duration)}
-              </div>
-            )}
-
-            {/* "Open in Preview" hint */}
-            <div className="absolute bottom-1.5 left-1.5 px-1.5 py-0.5 bg-black/70 rounded text-[9px] text-white/70 opacity-0 group-hover:opacity-100 transition-opacity">
-              Open in Preview
-            </div>
-          </div>
-        )}
+      <div className={`overflow-hidden rounded ${className || ''}`}>
+        {hasError ? <VideoError /> : video}
       </div>
     );
   }
 
   return (
     <div className={`my-1 ${className || ''}`}>
-      {/* Compact header - matches ToolCallDisplay style */}
-      <div
-        className={`flex items-center gap-1.5 px-2 py-1 rounded-t text-[11px] cursor-pointer transition-colors
-          ${
-            hasError
-              ? 'bg-[color-mix(in_srgb,var(--neko-textBlockQuote-background)_95%,#ef4444)]'
-              : 'bg-[color-mix(in_srgb,var(--neko-textBlockQuote-background)_95%,#3b82f6)]'
-          }
-          hover:bg-[var(--neko-list-hoverBackground)]
-          ${!isExpanded ? 'rounded-b' : ''}
-        `}
-        onClick={toggleExpand}
+      <button
+        type="button"
+        className={`flex w-full items-center gap-1.5 rounded-t px-2 py-1 text-left text-[11px] transition-colors ${
+          hasError
+            ? 'bg-[color-mix(in_srgb,var(--neko-textBlockQuote-background)_95%,#ef4444)]'
+            : 'bg-[color-mix(in_srgb,var(--neko-textBlockQuote-background)_95%,#3b82f6)]'
+        } hover:bg-[var(--neko-list-hoverBackground)] ${!isExpanded ? 'rounded-b' : ''}`}
+        onClick={() => setIsExpanded((expanded) => !expanded)}
       >
-        {/* Status indicator */}
         {hasError ? (
-          <ErrorIcon className="w-3 h-3 text-[var(--neko-charts-red)] shrink-0" />
+          <ErrorIcon className="h-3 w-3 shrink-0 text-[var(--neko-charts-red)]" />
         ) : (
-          <VideoIcon className="w-3 h-3 text-[var(--neko-charts-blue)] shrink-0" />
+          <VideoIcon className="h-3 w-3 shrink-0 text-[var(--neko-charts-blue)]" />
         )}
-
-        {/* File name */}
-        <span className="font-medium text-[var(--neko-foreground)] truncate">{fileName}</span>
-
-        {/* Duration badge */}
+        <span className="truncate font-medium text-[var(--neko-foreground)]">{fileName}</span>
         {duration > 0 && !hasError && (
-          <span className="text-[var(--neko-descriptionForeground)] text-[10px]">
-            {formatTime(duration)}
+          <span className="text-[10px] text-[var(--neko-descriptionForeground)]">
+            {formatMediaTime(duration)}
           </span>
         )}
-
-        {/* Spacer */}
         <span className="flex-1" />
-
-        {/* Open in Preview button */}
-        {!hasError && (
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              handleOpenPreview();
-            }}
-            className="px-1.5 py-0.5 rounded bg-[var(--neko-button-secondaryBackground)] hover:bg-[var(--neko-button-secondaryHoverBackground)] text-[var(--neko-button-secondaryForeground)] transition-colors flex items-center gap-1 shrink-0"
-            title="Open in Neko Preview"
-          >
-            <OpenIcon className="w-3 h-3" />
-            <span>Preview</span>
-          </button>
-        )}
-
-        {/* Expand indicator */}
         <ChevronIcon
-          className={`w-3 h-3 text-[var(--neko-descriptionForeground)] transition-transform shrink-0 ${isExpanded ? 'rotate-180' : ''}`}
+          className={`h-3 w-3 shrink-0 text-[var(--neko-descriptionForeground)] transition-transform ${isExpanded ? 'rotate-180' : ''}`}
         />
-      </div>
+      </button>
 
-      {/* Expanded content — thumbnail with click-to-open */}
       {isExpanded && (
-        <div className="border border-t-0 border-[var(--neko-panel-border)] rounded-b bg-black overflow-hidden">
-          {hasError ? (
-            <div className="flex items-center justify-center py-6 text-[var(--neko-errorForeground)] text-[11px] bg-[var(--neko-editor-background)]">
-              <ErrorIcon className="w-4 h-4 mr-2" />
-              <span>Failed to load video</span>
-            </div>
-          ) : (
-            <div className="relative cursor-pointer group" onClick={handleOpenPreview}>
-              {/* Video element for poster/thumbnail — no playback controls */}
-              <video
-                ref={videoRef}
-                src={src}
-                poster={poster}
-                onLoadedMetadata={handleLoadedMetadata}
-                onError={handleError}
-                className="w-full max-h-[200px] object-contain"
-                preload="metadata"
-              />
-
-              {/* Play overlay — click to open in neko-preview */}
-              <div className="absolute inset-0 flex items-center justify-center bg-black/30 group-hover:bg-black/50 transition-colors">
-                <div className="w-10 h-10 flex items-center justify-center rounded-full bg-white/20 backdrop-blur-sm group-hover:bg-white/30 transition-colors">
-                  <PlayIcon className="w-5 h-5 text-white ml-0.5" />
-                </div>
-              </div>
-
-              {/* "Click to open in Preview" hint */}
-              <div className="absolute bottom-0 left-0 right-0 p-1.5 bg-gradient-to-t from-black/80 to-transparent">
-                <div className="flex items-center justify-between">
-                  <span className="text-[9px] text-white/70 opacity-0 group-hover:opacity-100 transition-opacity">
-                    Click to open in Neko Preview
-                  </span>
-                  {duration > 0 && (
-                    <span className="text-[9px] text-white/80 tabular-nums">
-                      {formatTime(duration)}
-                    </span>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
+        <div className="overflow-hidden rounded-b border border-t-0 border-[var(--neko-panel-border)] bg-black">
+          {hasError ? <VideoError /> : video}
         </div>
       )}
     </div>
   );
 }
 
-export const VideoCard = memo(VideoPlayerComponent);
+function VideoError() {
+  return (
+    <div className="flex items-center justify-center bg-[var(--neko-editor-background)] py-6 text-[11px] text-[var(--neko-errorForeground)]">
+      <ErrorIcon className="mr-2 h-4 w-4" />
+      <span>Failed to load video</span>
+    </div>
+  );
+}
 
-// Icons
+function getFileName(src: string, title?: string): string {
+  if (title) return title.split('/').pop() || title;
+  try {
+    return new URL(src).pathname.split('/').pop() || 'video';
+  } catch {
+    return 'video';
+  }
+}
+
 function VideoIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -237,3 +132,5 @@ function VideoIcon({ className }: { className?: string }) {
     </svg>
   );
 }
+
+export const VideoCard = memo(VideoPlayerComponent);

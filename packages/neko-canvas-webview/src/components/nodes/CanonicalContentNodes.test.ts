@@ -18,4 +18,11 @@ describe('canonical content node runtime boundaries', () => {
     expect(source).not.toContain('<audio');
     expect(source).not.toContain('<video');
   });
+
+  it('renders missing ContentLocators as explicit unavailable content without path fallback', () => {
+    expect(source).toContain("t('node.contentUnavailable')");
+    expect(source).toContain("t('node.contentLocatorMissing')");
+    expect(source).toContain('!contentLocator ?');
+    expect(source).toContain('onActivate={contentLocator && onOpen');
+  });
 });

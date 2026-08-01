@@ -700,9 +700,8 @@ describe('CutOtioController', () => {
       audioStreams: [
         {
           version: 1,
-          transport: 'http',
           protocol: 'neko-pcm-f32le-v1',
-          streamUrl: 'http://127.0.0.1:4123/v1/cut-media/pcm/pcm-1',
+          streamUrl: 'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
           sampleRate: 48_000,
           channels: 2,
         },
@@ -724,7 +723,7 @@ describe('CutOtioController', () => {
     expect(onPreviewReady).toHaveBeenCalledWith(message);
   });
 
-  it('accepts only loopback native video descriptors', () => {
+  it('accepts only OpenNeko native video descriptors', () => {
     const store = createCutPresentationStore();
     const onPreviewReady = vi.fn();
     const controller = new CutOtioController(store, { postMessage: vi.fn() }, { onPreviewReady });
@@ -740,8 +739,7 @@ describe('CutOtioController', () => {
       framesPerSecond: 30,
       video: {
         version: 1,
-        transport: 'http',
-        url: 'http://127.0.0.1:4123/v1/cut-media/file/video-1',
+        url: 'openneko://resource/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
         mimeType: 'video/mp4; codecs="avc1.640029"',
         preparationProfile: 'h264-mp4-direct',
         mediaTimeOriginSeconds: 5,

@@ -1,4 +1,5 @@
 import type {
+  ContentLocator,
   FileCanvasNode,
   JobCanvasNode,
   MarkdownCanvasNode,
@@ -16,7 +17,7 @@ import type { NodeRendererCommonProps } from './nodeRendererTypes';
 
 type CanonicalNodeProps<TNode> = NodeRendererCommonProps & {
   readonly node: TNode;
-  readonly onOpen?: (path: string) => void;
+  readonly onOpen?: (locator: ContentLocator) => void;
 };
 
 type CanvasMediaType = NonNullable<MediaCanvasNode['data']['mediaType']>;
@@ -64,6 +65,7 @@ export function MarkdownNode({
 export function MediaNode({ node, isSelected, ...baseProps }: CanonicalNodeProps<MediaCanvasNode>) {
   const host = useOptionalCanvasHost();
   const source = node.data.runtimeAssetPath || node.data.assetPath;
+  const contentLocator = node.data.contentLocator;
   const mediaType = node.data.mediaType ?? 'image';
   const previewRole =
     mediaType === 'image'
@@ -96,23 +98,15 @@ export function MediaNode({ node, isSelected, ...baseProps }: CanonicalNodeProps
       title: node.data.title,
       asset: {
         kind: 'asset-identity' as const,
-        path: source,
+        ...(source ? { path: source } : {}),
         mediaType,
       },
-      ...(node.data.contentLocator ? { contentLocator: node.data.contentLocator } : {}),
+      ...(contentLocator ? { contentLocator } : {}),
       metadata: {
         ...(node.data.duration ? { duration: node.data.duration } : {}),
       },
     }),
-    [
-      mediaType,
-      node.data.contentLocator,
-      node.data.duration,
-      node.data.title,
-      node.id,
-      previewRole,
-      source,
-    ],
+    [mediaType, contentLocator, node.data.duration, node.data.title, node.id, previewRole, source],
   );
   return (
     <BaseNode
@@ -129,7 +123,7 @@ export function MediaNode({ node, isSelected, ...baseProps }: CanonicalNodeProps
             : 'flex h-full min-h-0 flex-col'
         }
         onPointerEnter={() => {
-          if (mediaType === 'image' || !source) return;
+          if (mediaType === 'image' || !contentLocator) return;
           hoverSequence.current += 1;
           setHoverRequestId(`canvas-hover:${node.id}:${hoverSequence.current}`);
           setIsHovering(true);
@@ -151,12 +145,16 @@ export function MediaNode({ node, isSelected, ...baseProps }: CanonicalNodeProps
           className="min-h-0 flex-1 overflow-hidden"
           style={{ background: 'var(--node-surface)' }}
         >
-          {!source ? (
+          {!contentLocator ? (
             <div
-              className="flex h-full items-center justify-center text-xs"
+              className="flex h-full flex-col items-center justify-center gap-1 px-3 text-center text-xs"
               style={{ color: 'var(--node-fg-secondary)' }}
+              role="status"
             >
-              {resolveMediaTypeLabel(mediaType)}
+              <strong style={{ color: 'var(--hostPort-errorForeground)' }}>
+                {t('node.contentUnavailable')}
+              </strong>
+              <span>{t('node.contentLocatorMissing')}</span>
             </div>
           ) : (
             <PreviewSurface
@@ -261,6 +259,7 @@ export function FileNode({
   ...baseProps
 }: CanonicalNodeProps<FileCanvasNode>) {
   const fileName = node.data.path.split('/').pop() || node.data.title;
+  const contentLocator = node.data.contentLocator;
   return (
     <BaseNode
       node={node}
@@ -268,7 +267,7 @@ export function FileNode({
       {...baseProps}
       presentation="foundational"
       opaqueSurface
-      onActivate={node.data.path && onOpen ? () => onOpen(node.data.path) : undefined}
+      onActivate={contentLocator && onOpen ? () => onOpen(contentLocator) : undefined}
     >
       <div className="flex h-full flex-col items-center justify-center gap-3 p-3 text-center">
         <span style={{ color: 'var(--node-fg-secondary)' }}>
@@ -280,6 +279,15 @@ export function FileNode({
         <div className="w-full truncate text-xs" style={{ color: 'var(--node-fg-secondary)' }}>
           {node.data.mediaType || fileName}
         </div>
+        {!contentLocator ? (
+          <div
+            className="text-xs"
+            style={{ color: 'var(--hostPort-errorForeground)' }}
+            role="status"
+          >
+            {t('node.contentUnavailable')}
+          </div>
+        ) : null}
       </div>
     </BaseNode>
   );

@@ -121,6 +121,8 @@ export const en = {
   'node.unsupportedBadge': 'UNSUPPORTED',
   'node.unsupportedType': 'Unsupported node type',
   'node.unserializableData': '[unserializable data]',
+  'node.contentUnavailable': 'Content unavailable',
+  'node.contentLocatorMissing': 'This node has no valid content reference.',
   'media.type.image': 'Image',
   'media.type.audio': 'Audio',
   'media.type.video': 'Video',

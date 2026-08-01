@@ -1,5 +1,12 @@
-import { isContentLocator } from '@neko/shared';
-import type { Message, ToolCall } from '@neko-agent/types';
+import { contentLocatorKey, isContentLocator, type ContentLocator } from '@neko/shared';
+import type {
+  AgentTurnTimelineItem,
+  AgentTurnTimelineOperation,
+  ConversationProjectionPatch,
+  ConversationProjectionSnapshot,
+  Message,
+  ToolCall,
+} from '@neko-agent/types';
 
 const MEDIA_FILE_EXTENSIONS = [
   '.png',
@@ -20,56 +27,106 @@ const MEDIA_FILE_EXTENSIONS = [
   '.aac',
   '.flac',
   '.m4a',
+  '.pdf',
 ] as const;
 
-const SINGLE_URL_KEYS = new Set(['url', 'uri', 'thumbnailUrl', 'imageUrl', 'videoUrl', 'audioUrl']);
-const LOCAL_MEDIA_PATH_KEYS = new Set(['path']);
+const SINGLE_RESOURCE_KEYS = new Set([
+  'path',
+  'url',
+  'uri',
+  'previewUri',
+  'renderUri',
+  'poster',
+  'thumbnailUrl',
+  'imageUrl',
+  'videoUrl',
+  'audioUrl',
+]);
+
+export interface MessageResourceProjectionContext {
+  readonly mediaType?: string;
+}
 
 export interface MessageResourceProjectionOptions {
-  resolveLocalMediaPath?: (path: string) => string | undefined;
+  resolveContentLocator?: (
+    locator: ContentLocator,
+    context: MessageResourceProjectionContext,
+  ) => Promise<string | undefined>;
 }
 
 export function isLocalMediaFilePath(value: string): boolean {
   if (!isAbsolutePath(value)) return false;
-
   const normalized = value.toLowerCase();
   return MEDIA_FILE_EXTENSIONS.some((extension) => normalized.endsWith(extension));
 }
 
-export function projectMessagesForResourceDisplay(
+export async function projectMessagesForResourceDisplay(
   messages: readonly Message[],
   options: MessageResourceProjectionOptions = {},
-): Message[] {
-  return messages.map((message) => projectMessageForResourceDisplay(message, options));
+): Promise<Message[]> {
+  return Promise.all(messages.map((message) => projectMessageForResourceDisplay(message, options)));
 }
 
-export function projectMessageForResourceDisplay(
+export async function projectMessageForResourceDisplay(
   message: Message,
   options: MessageResourceProjectionOptions = {},
-): Message {
+): Promise<Message> {
   const projectedMessage = { ...message } as Message & { toolCalls?: ToolCall[] };
-
   if (hasToolCallArray(message)) {
-    projectedMessage.toolCalls = message.toolCalls.map((toolCall) =>
-      projectToolCallForResourceDisplay(toolCall, options),
+    projectedMessage.toolCalls = await Promise.all(
+      message.toolCalls.map((toolCall) => projectToolCallForResourceDisplay(toolCall, options)),
     );
   }
-
   if (message.contentBlocks && message.contentBlocks.length > 0) {
-    projectedMessage.contentBlocks = message.contentBlocks.map((block) => {
-      const toolCall = block.type === 'tool_call' ? block.toolCall : undefined;
-      if (!toolCall) {
-        return block;
-      }
-
-      return {
-        ...block,
-        toolCall: projectToolCallForResourceDisplay(toolCall, options),
-      };
-    });
+    projectedMessage.contentBlocks = await Promise.all(
+      message.contentBlocks.map(async (block) => {
+        if (block.type !== 'tool_call' || !block.toolCall) return block;
+        return {
+          ...block,
+          toolCall: await projectToolCallForResourceDisplay(block.toolCall, options),
+        };
+      }),
+    );
   }
-
   return projectedMessage;
+}
+
+export async function projectConversationProjectionSnapshotForResourceDisplay(
+  snapshot: ConversationProjectionSnapshot,
+  options: MessageResourceProjectionOptions = {},
+): Promise<ConversationProjectionSnapshot> {
+  return {
+    ...snapshot,
+    turns: await Promise.all(
+      snapshot.turns.map(async (turn) => ({
+        ...turn,
+        items: await Promise.all(
+          turn.items.map((item) => projectTimelineItemForResourceDisplay(item, options)),
+        ),
+      })),
+    ),
+  };
+}
+
+export async function projectConversationProjectionPatchForResourceDisplay(
+  patch: ConversationProjectionPatch,
+  options: MessageResourceProjectionOptions = {},
+): Promise<ConversationProjectionPatch> {
+  return {
+    ...patch,
+    operations: await Promise.all(
+      patch.operations.map((operation) =>
+        projectTimelineOperationForResourceDisplay(operation, options),
+      ),
+    ),
+  };
+}
+
+export async function projectResourceValue(
+  value: unknown,
+  options: MessageResourceProjectionOptions = {},
+): Promise<unknown> {
+  return projectResourceValueInternal(value, options, new WeakSet<object>());
 }
 
 function hasToolCallArray(message: Message): message is Message & { toolCalls: ToolCall[] } {
@@ -77,142 +134,191 @@ function hasToolCallArray(message: Message): message is Message & { toolCalls: T
   return Array.isArray(value);
 }
 
-function projectToolCallForResourceDisplay(
+async function projectTimelineItemForResourceDisplay(
+  item: AgentTurnTimelineItem,
+  options: MessageResourceProjectionOptions,
+): Promise<AgentTurnTimelineItem> {
+  if (item.kind !== 'tool_call') return item;
+  return {
+    ...item,
+    payload: {
+      ...item.payload,
+      toolCall: await projectToolCallForResourceDisplay(item.payload.toolCall, options),
+    },
+  };
+}
+
+async function projectTimelineOperationForResourceDisplay(
+  operation: AgentTurnTimelineOperation,
+  options: MessageResourceProjectionOptions,
+): Promise<AgentTurnTimelineOperation> {
+  switch (operation.operation) {
+    case 'complete':
+    case 'append':
+    case 'replace':
+      return operation;
+    case 'snapshot':
+      return {
+        ...operation,
+        item: await projectTimelineItemForResourceDisplay(operation.item, options),
+      };
+    case 'upsert':
+      if (operation.item.kind !== 'tool_call') return operation;
+      return {
+        ...operation,
+        item: {
+          ...operation.item,
+          payload: {
+            ...operation.item.payload,
+            toolCall: await projectToolCallForResourceDisplay(
+              operation.item.payload.toolCall,
+              options,
+            ),
+          },
+        },
+      };
+  }
+}
+
+async function projectToolCallForResourceDisplay(
   toolCall: ToolCall,
   options: MessageResourceProjectionOptions,
-): ToolCall {
-  const projectedArguments = projectResourceValue(toolCall.arguments, options);
-  const projectedResultData = toolCall.result?.data
-    ? projectResourceValue(toolCall.result.data, options)
-    : undefined;
-  const projectedResultAttachments = toolCall.result?.attachments
-    ? projectResourceValue(toolCall.result.attachments, options)
-    : undefined;
-  const projectedResultPerceptionCards = toolCall.result?.perceptionCards
-    ? projectResourceValue(toolCall.result.perceptionCards, options)
-    : undefined;
-  const hasProjectedResult =
-    projectedResultData !== undefined ||
-    projectedResultAttachments !== undefined ||
-    projectedResultPerceptionCards !== undefined;
-
+): Promise<ToolCall> {
+  const projectedResultData =
+    toolCall.result?.data === undefined
+      ? undefined
+      : await projectResourceValue(toolCall.result.data, options);
+  const projectedResultAttachments =
+    toolCall.result?.attachments === undefined
+      ? undefined
+      : await projectResourceValue(toolCall.result.attachments, options);
+  const projectedResultPerceptionCards =
+    toolCall.result?.perceptionCards === undefined
+      ? undefined
+      : await projectResourceValue(toolCall.result.perceptionCards, options);
   return {
     ...toolCall,
-    arguments: isRecord(projectedArguments) ? projectedArguments : toolCall.arguments,
-    ...(hasProjectedResult && toolCall.result
+    ...(toolCall.result
       ? {
           result: {
             ...toolCall.result,
-            ...(projectedResultData !== undefined ? { data: projectedResultData } : {}),
-            ...(projectedResultAttachments !== undefined
-              ? {
+            ...(projectedResultData === undefined ? {} : { data: projectedResultData }),
+            ...(projectedResultAttachments === undefined
+              ? {}
+              : {
                   attachments: projectedResultAttachments as typeof toolCall.result.attachments,
-                }
-              : {}),
-            ...(projectedResultPerceptionCards !== undefined
-              ? {
+                }),
+            ...(projectedResultPerceptionCards === undefined
+              ? {}
+              : {
                   perceptionCards:
                     projectedResultPerceptionCards as typeof toolCall.result.perceptionCards,
-                }
-              : {}),
+                }),
           },
         }
       : {}),
   };
 }
 
-export function projectResourceValue(
-  value: unknown,
-  options: MessageResourceProjectionOptions = {},
-): unknown {
-  return projectResourceValueInternal(value, options, new WeakSet<object>());
-}
-
-function projectResourceValueInternal(
+async function projectResourceValueInternal(
   value: unknown,
   options: MessageResourceProjectionOptions,
   visited: WeakSet<object>,
-): unknown {
-  if (value === null || value === undefined) return value;
-
-  if (typeof value === 'string') {
-    return isLocalMediaFilePath(value) ? resolveLocalMediaPath(value, options) : value;
-  }
-
-  if (Array.isArray(value)) {
-    return value.flatMap((item) => {
-      const projected = projectResourceValueInternal(item, options, visited);
-      return projected === undefined ? [] : [projected];
-    });
-  }
-
-  if (typeof value !== 'object') return value;
+): Promise<unknown> {
+  if (value === null || value === undefined || typeof value !== 'object') return value;
   if (isContentLocator(value)) return value;
-
   if (visited.has(value)) return value;
   visited.add(value);
 
-  const projected: Record<string, unknown> = {};
-  for (const [key, item] of Object.entries(value)) {
-    if (projectLocalMediaStringField({ key, item, owner: value, projected, options })) {
-      continue;
-    }
-
-    if (key === 'urls' && Array.isArray(item)) {
-      projected[key] = item.flatMap((url) => {
-        if (typeof url === 'string' && isLocalMediaFilePath(url)) {
-          const resolved = resolveLocalMediaPath(url, options);
-          if (!resolved) appendProjectionDiagnostic(projected, url, key);
-          return resolved ? [resolved] : [];
-        }
-        return [url];
-      });
-      continue;
-    }
-
-    projected[key] = projectResourceValueInternal(item, options, visited);
+  if (Array.isArray(value)) {
+    return Promise.all(value.map((item) => projectResourceValueInternal(item, options, visited)));
   }
 
+  if (!isRecord(value)) return value;
+  const owner = value;
+  const locator = isContentLocator(owner['contentLocator']) ? owner['contentLocator'] : undefined;
+  const mediaType = typeof owner['mimeType'] === 'string' ? owner['mimeType'] : undefined;
+  const projected: Record<string, unknown> = {};
+  for (const [key, item] of Object.entries(owner)) {
+    if (key === 'renderUri' || key === 'previewUri') {
+      if (!locator) appendProjectionDiagnostic(projected, key, 'missing-content-locator');
+      continue;
+    }
+    if (typeof item === 'string' && isUnsafeMediaDisplayField(key, item)) {
+      if (locator) {
+        projected[key] = portableContentPath(locator);
+      } else {
+        appendProjectionDiagnostic(projected, key, 'missing-content-locator');
+      }
+      continue;
+    }
+    if (key === 'urls' && Array.isArray(item)) {
+      const retained: unknown[] = [];
+      for (const url of item) {
+        if (typeof url === 'string' && isUnsafeMediaDisplaySource(url)) {
+          appendProjectionDiagnostic(projected, key, 'missing-content-locator');
+        } else {
+          retained.push(await projectResourceValueInternal(url, options, visited));
+        }
+      }
+      projected[key] = retained;
+      continue;
+    }
+    projected[key] = await projectResourceValueInternal(item, options, visited);
+  }
+
+  if (locator) {
+    const renderUri = await resolveContentLocator(locator, mediaType, options);
+    if (renderUri) {
+      projected['renderUri'] = renderUri;
+    } else {
+      appendProjectionDiagnostic(projected, 'contentLocator', 'authorization-denied');
+    }
+  }
   return projected;
 }
 
-function projectLocalMediaStringField(input: {
-  readonly key: string;
-  readonly item: unknown;
-  readonly owner: object;
-  readonly projected: Record<string, unknown>;
-  readonly options: MessageResourceProjectionOptions;
-}): boolean {
-  if (!isProjectableLocalMediaStringField(input.key, input.item)) return false;
-  const resolved = resolveLocalMediaPath(input.item, input.options);
-  if (resolved) {
-    input.projected[input.key] = hasStableContentLocator(input.owner) ? input.item : resolved;
-    if (hasStableContentLocator(input.owner) && input.projected['renderUri'] === undefined) {
-      input.projected['renderUri'] = resolved;
-    }
-  } else {
-    appendProjectionDiagnostic(input.projected, input.item, input.key);
+function isUnsafeMediaDisplayField(key: string, value: string): boolean {
+  return SINGLE_RESOURCE_KEYS.has(key) && isUnsafeMediaDisplaySource(value);
+}
+
+function isUnsafeMediaDisplaySource(value: string): boolean {
+  if (isLocalMediaFilePath(value)) return true;
+  const scheme = /^([A-Za-z][A-Za-z0-9+.-]*):/u.exec(value)?.[1]?.toLocaleLowerCase();
+  return scheme !== undefined && scheme !== 'http' && scheme !== 'https';
+}
+
+async function resolveContentLocator(
+  locator: ContentLocator,
+  mediaType: string | undefined,
+  options: MessageResourceProjectionOptions,
+): Promise<string | undefined> {
+  try {
+    return await options.resolveContentLocator?.(locator, {
+      ...(mediaType ? { mediaType } : {}),
+    });
+  } catch {
+    return undefined;
   }
-  return true;
 }
 
-function isProjectableLocalMediaStringField(key: string, item: unknown): item is string {
-  return (
-    (LOCAL_MEDIA_PATH_KEYS.has(key) || SINGLE_URL_KEYS.has(key)) &&
-    typeof item === 'string' &&
-    isLocalMediaFilePath(item)
-  );
-}
-
-function hasStableContentLocator(value: object): boolean {
-  if (!isRecord(value)) return false;
-  return isContentLocator(value['contentLocator']);
+function portableContentPath(locator: ContentLocator): string {
+  switch (locator.kind) {
+    case 'workspace-file':
+      return locator.path;
+    case 'document-entry':
+      return locator.entryPath;
+    case 'generated-output':
+      return locator.path;
+    case 'package-resource':
+      return `${locator.packageId}/${locator.resourcePath}`;
+  }
 }
 
 function appendProjectionDiagnostic(
   projected: Record<string, unknown>,
-  source: string,
   field: string,
+  reason: 'missing-content-locator' | 'authorization-denied',
 ): void {
   const diagnostics = Array.isArray(projected['resourceProjectionDiagnostics'])
     ? [...projected['resourceProjectionDiagnostics']]
@@ -221,28 +327,23 @@ function appendProjectionDiagnostic(
     code: 'resource-projection-denied',
     severity: 'error',
     field,
-    sourceKind: 'local-media-path',
+    sourceKind: reason,
     message:
-      'Local media path could not be projected for Webview display. Use ContentLocator, workspace-relative paths, or adapter-projected render descriptors.',
+      reason === 'missing-content-locator'
+        ? 'Local media display requires a validated ContentLocator.'
+        : 'Content could not be authorized for Webview display.',
   });
   projected['resourceProjectionDiagnostics'] = diagnostics;
 }
 
-function resolveLocalMediaPath(
-  path: string,
-  options: MessageResourceProjectionOptions,
-): string | undefined {
-  try {
-    return options.resolveLocalMediaPath?.(path);
-  } catch {
-    return undefined;
-  }
-}
-
 function isAbsolutePath(value: string): boolean {
-  return value.startsWith('/') || /^[A-Za-z]:[\\/]/.test(value);
+  return value.startsWith('/') || /^[A-Za-z]:[\\/]/u.test(value);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+export function messageResourceProjectionKey(locator: ContentLocator): string {
+  return contentLocatorKey(locator);
 }

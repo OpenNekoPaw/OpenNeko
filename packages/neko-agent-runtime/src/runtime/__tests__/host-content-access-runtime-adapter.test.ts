@@ -25,7 +25,7 @@ describe('HostAgentContentAccessRuntime document representations', () => {
     const runtime = createRuntime(createRepresentations(getRepresentation));
 
     const result = await runtime.resolveDocumentContent({
-      source: { kind: 'file', path: 'docs/story.pdf' },
+      source: { kind: 'workspace-file', path: 'docs/story.pdf' },
       includeImages: true,
       maxImages: 2,
     });
@@ -76,7 +76,7 @@ describe('HostAgentContentAccessRuntime document representations', () => {
     );
 
     const result = await runtime.resolveDocumentContent({
-      source: { kind: 'file', path: 'docs/story.pdf' },
+      source: { kind: 'workspace-file', path: 'docs/story.pdf' },
       includeImages: true,
       maxImages: 1,
     });
@@ -128,7 +128,6 @@ function createRuntime(contentRepresentation: ContentRepresentationService) {
       },
     },
     documentAccess,
-    resolveWorkspaceFileLocator: (filePath) => ({ kind: 'workspace-file', path: filePath }),
     contentRepresentation,
     resolveDocumentHostFilePath: () => '/workspace/docs/story.pdf',
   });

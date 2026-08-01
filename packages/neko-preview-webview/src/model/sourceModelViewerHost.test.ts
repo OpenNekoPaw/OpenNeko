@@ -9,8 +9,10 @@ describe('source Model Viewer host', () => {
         source: { kind: 'workspace-file', path: 'models/descriptor-1.glb' },
         sourceFingerprint: 'revision-1',
         format: 'glb',
-        entryUri: 'neko-media://desktop/descriptor-1',
-        uriMap: { 'model.glb': 'neko-media://desktop/descriptor-1' },
+        entryUri: 'http://127.0.0.1:43125/v1/resources/descriptor-1',
+        uriMap: {
+          'model.glb': 'http://127.0.0.1:43125/v1/resources/descriptor-1',
+        },
         sizeBytes: 100,
       },
     });
@@ -46,8 +48,10 @@ describe('source Model Viewer host', () => {
         source: { kind: 'workspace-file', path: 'models/descriptor-strict.glb' },
         sourceFingerprint: 'revision-strict',
         format: 'glb',
-        entryUri: 'neko-media://desktop/descriptor-strict',
-        uriMap: { 'model.glb': 'neko-media://desktop/descriptor-strict' },
+        entryUri: 'http://127.0.0.1:43125/v1/resources/descriptor-strict',
+        uriMap: {
+          'model.glb': 'http://127.0.0.1:43125/v1/resources/descriptor-strict',
+        },
         sizeBytes: 100,
       },
     });

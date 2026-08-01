@@ -21,7 +21,6 @@ import {
 } from '@neko-cut/domain';
 import {
   FfmpegCommandError,
-  NodeMediaLoopbackServer,
   NodeFfmpegProcess,
   createPcmPacketTransform,
   getHardwareVideoPipeline,
@@ -29,6 +28,7 @@ import {
   type FfmpegProcessPort,
   type HardwareVideoBackend,
   type HardwareVideoPipeline,
+  type NodeMediaPublisher,
   type QualifiedHardwareVideoBackend,
   type RunningProcess,
 } from '@neko/media/node';
@@ -36,7 +36,7 @@ import {
 export interface NodeFfmpegCutMediaAdapterOptions {
   readonly cacheRoot?: string;
   readonly process?: FfmpegProcessPort;
-  readonly server?: NodeMediaLoopbackServer;
+  readonly publisher?: NodeMediaPublisher;
   readonly vp8WebmDirectQualified?: boolean;
   readonly hardwareVideoBackend?: HardwareVideoBackend;
 }
@@ -109,7 +109,7 @@ const PCM_CHANNELS = 2;
 
 export class NodeFfmpegCutMediaAdapter implements CutMediaRuntimeAdapter {
   private readonly process: FfmpegProcessPort;
-  private readonly server: NodeMediaLoopbackServer;
+  private readonly publisher: NodeMediaPublisher | undefined;
   private readonly cacheRoot: string;
   private readonly sessions = new Map<string, SessionRecord>();
   private readonly keyframeIndexes = new Map<string, Promise<KeyframeIndex>>();
@@ -124,7 +124,7 @@ export class NodeFfmpegCutMediaAdapter implements CutMediaRuntimeAdapter {
     options: NodeFfmpegCutMediaAdapterOptions = {},
   ) {
     this.process = options.process ?? new NodeFfmpegProcess();
-    this.server = options.server ?? new NodeMediaLoopbackServer();
+    this.publisher = options.publisher;
     this.cacheRoot = options.cacheRoot ?? nodePath.join(nodeOs.tmpdir(), 'openneko-cut-media');
     this.vp8WebmDirectQualified = options.vp8WebmDirectQualified ?? true;
     this.hardwareVideoPipeline = getHardwareVideoPipeline(
@@ -424,7 +424,7 @@ export class NodeFfmpegCutMediaAdapter implements CutMediaRuntimeAdapter {
     const webm = profile === 'vp8-webm-direct';
     const direct = profile === 'h264-mp4-direct' || webm;
     let preparedDirectory: string | undefined;
-    let registration: Awaited<ReturnType<NodeMediaLoopbackServer['registerFile']>> | undefined;
+    let registration: Awaited<ReturnType<NodeMediaPublisher['registerFile']>> | undefined;
     try {
       let preparedPath = sourcePath;
       let mediaTimeOriginSeconds = options.startTimeSeconds;
@@ -472,7 +472,7 @@ export class NodeFfmpegCutMediaAdapter implements CutMediaRuntimeAdapter {
         }
         mediaTimeOriginSeconds = fragment.mediaTimeOriginSeconds;
       }
-      registration = await this.server.registerFile(
+      registration = await this.requirePublisher().registerFile(
         preparedPath,
         webm ? 'video/webm' : 'video/mp4',
       );
@@ -486,7 +486,6 @@ export class NodeFfmpegCutMediaAdapter implements CutMediaRuntimeAdapter {
         sessionId,
         video: {
           version: 1 as const,
-          transport: 'http' as const,
           url: registration.url,
           mimeType: webm
             ? 'video/webm; codecs="vp8"'
@@ -499,7 +498,7 @@ export class NodeFfmpegCutMediaAdapter implements CutMediaRuntimeAdapter {
         },
       };
     } catch (error) {
-      if (registration) this.server.unregister(registration.token);
+      if (registration) this.requirePublisher().unregister(registration.token);
       if (preparedDirectory) {
         await nodeFs.rm(preparedDirectory, { recursive: true, force: true });
       }
@@ -518,7 +517,7 @@ export class NodeFfmpegCutMediaAdapter implements CutMediaRuntimeAdapter {
   async stopPreview(sessionId: string): Promise<void> {
     const session = this.requireSession(sessionId, 'preview');
     this.sessions.delete(sessionId);
-    this.server.unregister(session.token);
+    this.requirePublisher().unregister(session.token);
     if (session.preparedDirectory) {
       await nodeFs.rm(session.preparedDirectory, { recursive: true, force: true });
     }
@@ -556,7 +555,7 @@ export class NodeFfmpegCutMediaAdapter implements CutMediaRuntimeAdapter {
         };
       }),
     );
-    const registration = await this.server.registerPcm((streamSignal) =>
+    const registration = await this.requirePublisher().registerPcm((streamSignal) =>
       this.createPcmMixProcess(resolvedSources, options, streamSignal),
     );
     const sessionId = this.newSessionId('pcm');
@@ -570,7 +569,6 @@ export class NodeFfmpegCutMediaAdapter implements CutMediaRuntimeAdapter {
       sessionId,
       stream: {
         version: 1 as const,
-        transport: 'http' as const,
         protocol: 'neko-pcm-f32le-v1' as const,
         streamUrl: registration.url,
         sampleRate: PCM_SAMPLE_RATE,
@@ -588,7 +586,7 @@ export class NodeFfmpegCutMediaAdapter implements CutMediaRuntimeAdapter {
   async stopPcm(sessionId: string): Promise<void> {
     const session = this.requireSession(sessionId, 'pcm');
     this.sessions.delete(sessionId);
-    this.server.unregister(session.token);
+    this.requirePublisher().unregister(session.token);
   }
 
   async export(
@@ -627,7 +625,8 @@ export class NodeFfmpegCutMediaAdapter implements CutMediaRuntimeAdapter {
     this.disposed = true;
     const records = [...this.sessions.entries()];
     this.sessions.clear();
-    for (const [, session] of records) this.server.unregister(session.token);
+    const publisher = records.length > 0 ? this.requirePublisher() : undefined;
+    for (const [, session] of records) publisher?.unregister(session.token);
     await Promise.all(
       records.flatMap(([, session]) =>
         session.kind === 'preview' && session.preparedDirectory
@@ -635,7 +634,6 @@ export class NodeFfmpegCutMediaAdapter implements CutMediaRuntimeAdapter {
           : [],
       ),
     );
-    await this.server.dispose();
   }
 
   private createPcmMixProcess(
@@ -1106,6 +1104,13 @@ export class NodeFfmpegCutMediaAdapter implements CutMediaRuntimeAdapter {
 
   private assertUsable(): void {
     if (this.disposed) throw new Error('Node/FFmpeg Cut media adapter is disposed.');
+  }
+
+  private requirePublisher(): NodeMediaPublisher {
+    if (!this.publisher) {
+      throw new Error('Cut media publication requires an injected Host publisher.');
+    }
+    return this.publisher;
   }
 
   private assertPreviewRuntimeCapabilities(

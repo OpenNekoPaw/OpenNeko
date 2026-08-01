@@ -248,13 +248,17 @@ export class InputProcessor implements IInputProcessor {
     // Check for line range (e.g., file.ts:10-20)
     const lineRangeMatch = ref.match(/^(.+):(\d+)-(\d+)$/);
     if (lineRangeMatch) {
+      const [, matchedPath, startText, endText] = lineRangeMatch;
+      if (!matchedPath || !startText || !endText) {
+        throw new Error(`Invalid line range reference: ${ref}`);
+      }
       return {
         original: `@${ref}`,
-        path: lineRangeMatch[1],
+        path: matchedPath,
         type: 'file',
         lineRange: {
-          start: parseInt(lineRangeMatch[2], 10),
-          end: parseInt(lineRangeMatch[3], 10),
+          start: parseInt(startText, 10),
+          end: parseInt(endText, 10),
         },
       };
     }
@@ -262,10 +266,14 @@ export class InputProcessor implements IInputProcessor {
     // Check for single line (e.g., file.ts:10)
     const singleLineMatch = ref.match(/^(.+):(\d+)$/);
     if (singleLineMatch) {
-      const line = parseInt(singleLineMatch[2], 10);
+      const [, matchedPath, lineText] = singleLineMatch;
+      if (!matchedPath || !lineText) {
+        throw new Error(`Invalid single-line reference: ${ref}`);
+      }
+      const line = parseInt(lineText, 10);
       return {
         original: `@${ref}`,
-        path: singleLineMatch[1],
+        path: matchedPath,
         type: 'file',
         lineRange: {
           start: Math.max(1, line - 5),
@@ -389,7 +397,8 @@ function isDurableNonWorkspaceReference(ref: string): boolean {
     return true;
   }
   const schemeMatch = ref.match(/^([A-Za-z][A-Za-z0-9+.-]*):/);
-  return schemeMatch ? DURABLE_REFERENCE_SCHEMES.has(schemeMatch[1].toLowerCase()) : false;
+  const scheme = schemeMatch?.[1];
+  return scheme ? DURABLE_REFERENCE_SCHEMES.has(scheme.toLowerCase()) : false;
 }
 
 function scanReferenceTokens(input: string): ReferenceToken[] {

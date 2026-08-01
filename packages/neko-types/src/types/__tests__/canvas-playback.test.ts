@@ -28,7 +28,12 @@ function media(id: string, parentId?: string): CanvasNode {
     position: { x: 0, y: 0 },
     size: { width: 280, height: 200 },
     zIndex: 1,
-    data: { assetPath: `media/${id}.mp4`, mediaType: 'video', duration: 3 },
+    data: {
+      assetPath: `media/${id}.mp4`,
+      contentLocator: { kind: 'workspace-file', path: `media/${id}.mp4` },
+      mediaType: 'video',
+      duration: 3,
+    },
   };
 }
 
@@ -197,6 +202,28 @@ describe('canonical Canvas playback', () => {
     ]);
     expect(selected.routeCandidates.flatMap((route) => route.unitIds).sort()).toEqual(
       unselected.routeCandidates.flatMap((route) => route.unitIds).sort(),
+    );
+  });
+
+  it('reports a path-only media node as missing canonical content identity', () => {
+    const pathOnly = media('path-only');
+    pathOnly.data.contentLocator = undefined;
+
+    const plan = createCanvasPlaybackPlan({ canvas: canvas([pathOnly]) });
+
+    expect(plan.units[0]).toMatchObject({
+      id: 'path-only',
+      assetPath: 'media/path-only.mp4',
+    });
+    expect(plan.units[0]).not.toHaveProperty('contentLocator');
+    expect(plan.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'playback-missing-media-source',
+          nodeId: 'path-only',
+          message: 'Media node "path-only" has no canonical ContentLocator.',
+        }),
+      ]),
     );
   });
 

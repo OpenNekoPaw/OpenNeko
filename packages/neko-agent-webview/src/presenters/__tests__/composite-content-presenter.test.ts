@@ -29,7 +29,7 @@ describe('composite content presenter', () => {
           {
             toolCallId: 'call-1',
             type: 'image',
-            src: 'webview://asset-1.png',
+            src: 'http://127.0.0.1:43125/v1/resources/asset-1.png',
             assetId: 'asset-1',
             stableUri: '${WORKSPACE}/.neko/generated/image/out.png',
             caption: 'Wide',
@@ -116,12 +116,12 @@ describe('composite content presenter', () => {
             data: {
               images: [
                 {
-                  renderUri: 'webview://image-1.jpg',
+                  renderUri: 'http://127.0.0.1:43125/v1/resources/image-1.jpg',
                   label: 'Image #1',
                   mimeType: 'image/jpeg',
                 },
                 {
-                  renderUri: 'webview://image-2.jpg',
+                  renderUri: 'http://127.0.0.1:43125/v1/resources/image-2.jpg',
                   label: 'Image #2',
                   mimeType: 'image/jpeg',
                 },
@@ -153,7 +153,7 @@ describe('composite content presenter', () => {
       expect.objectContaining({
         toolCallId: 'read-image-current-result',
         assetIndex: 1,
-        src: 'webview://image-2.jpg',
+        src: 'http://127.0.0.1:43125/v1/resources/image-2.jpg',
       }),
     ]);
     expect(projection.data.diagnostics).toEqual([]);
@@ -419,7 +419,7 @@ describe('composite content presenter', () => {
               images: [
                 {
                   path: '/cache/page-1.jpg',
-                  renderUri: 'webview://page-1.jpg',
+                  renderUri: 'http://127.0.0.1:43125/v1/resources/page-1.jpg',
                   label: 'Page 1',
                   mimeType: 'image/jpeg',
                 },
@@ -452,7 +452,7 @@ describe('composite content presenter', () => {
     expect(projection.data.sections[0]?.media).toEqual([
       expect.objectContaining({
         toolCallId: 'read-image',
-        src: 'webview://page-1.jpg',
+        src: 'http://127.0.0.1:43125/v1/resources/page-1.jpg',
       }),
     ]);
     expect(projection.data.sections[0]?.media[0]).not.toHaveProperty('localPath');
@@ -740,13 +740,13 @@ describe('composite content presenter', () => {
               images: [
                 {
                   path: '/cache/page-1.jpg',
-                  renderUri: 'webview://page-1.jpg',
+                  renderUri: 'http://127.0.0.1:43125/v1/resources/page-1.jpg',
                   label: 'Page 1',
                   mimeType: 'image/jpeg',
                 },
                 {
                   path: '/cache/page-2.jpg',
-                  renderUri: 'webview://page-2.jpg',
+                  renderUri: 'http://127.0.0.1:43125/v1/resources/page-2.jpg',
                   label: 'Page 2',
                   mimeType: 'image/jpeg',
                 },
@@ -778,7 +778,7 @@ describe('composite content presenter', () => {
       expect.objectContaining({
         toolCallId: 'read-image-real',
         assetIndex: 1,
-        src: 'webview://page-2.jpg',
+        src: 'http://127.0.0.1:43125/v1/resources/page-2.jpg',
       }),
     ]);
     expect(projection.data.sections[0]?.media[0]).not.toHaveProperty('localPath');
@@ -841,12 +841,12 @@ describe('composite content presenter', () => {
             data: {
               images: [
                 {
-                  renderUri: 'webview://page-1.jpg',
+                  renderUri: 'http://127.0.0.1:43125/v1/resources/page-1.jpg',
                   label: 'Image #1',
                   mimeType: 'image/jpeg',
                 },
                 {
-                  renderUri: 'webview://page-2.jpg',
+                  renderUri: 'http://127.0.0.1:43125/v1/resources/page-2.jpg',
                   label: 'Image #2',
                   mimeType: 'image/jpeg',
                 },
@@ -865,7 +865,7 @@ describe('composite content presenter', () => {
       expect.objectContaining({
         toolCallId: 'real-read-image-call',
         assetIndex: 1,
-        src: 'webview://page-2.jpg',
+        src: 'http://127.0.0.1:43125/v1/resources/page-2.jpg',
       }),
     ]);
     expect(projection.data.diagnostics).toEqual([]);
@@ -929,7 +929,7 @@ describe('composite content presenter', () => {
               images: [
                 {
                   path: '/cache/page-1.jpg',
-                  renderUri: 'webview://page-1.jpg',
+                  renderUri: 'http://127.0.0.1:43125/v1/resources/page-1.jpg',
                   label: 'Page 1',
                   mimeType: 'image/jpeg',
                 },
@@ -945,7 +945,7 @@ describe('composite content presenter', () => {
       expect.objectContaining({
         toolCallId: 'read-image',
         type: 'image',
-        src: 'webview://page-1.jpg',
+        src: 'http://127.0.0.1:43125/v1/resources/page-1.jpg',
         caption: 'Page 1',
         role: 'source',
       }),
@@ -973,8 +973,8 @@ describe('composite content presenter', () => {
 
     expect(projection.kind).toBe('comparison-grid');
     expect(projection.data.sections.map((section) => section.media[0]?.src)).toEqual([
-      'webview://asset-1.png',
-      'webview://asset-2.png',
+      'http://127.0.0.1:43125/v1/resources/asset-1.png',
+      'http://127.0.0.1:43125/v1/resources/asset-2.png',
     ]);
   });
 
@@ -1031,8 +1031,16 @@ describe('composite content presenter', () => {
             },
           },
         }),
-        toolBlock(makeImageToolCall('colorize', 'color-1', 'webview://color.png')),
-        toolBlock(makeImageToolCall('generate', 'generated-1', 'webview://generated.png')),
+        toolBlock(
+          makeImageToolCall('colorize', 'color-1', 'http://127.0.0.1:43125/v1/resources/color.png'),
+        ),
+        toolBlock(
+          makeImageToolCall(
+            'generate',
+            'generated-1',
+            'http://127.0.0.1:43125/v1/resources/generated.png',
+          ),
+        ),
       ],
     });
 
@@ -1048,13 +1056,13 @@ describe('composite content presenter', () => {
       },
       {
         toolCallId: 'colorize',
-        src: 'webview://color.png',
+        src: 'http://127.0.0.1:43125/v1/resources/color.png',
         caption: '上色图',
         role: 'colorized',
       },
       {
         toolCallId: 'generate',
-        src: 'webview://generated.png',
+        src: 'http://127.0.0.1:43125/v1/resources/generated.png',
         caption: '生成图',
         role: 'generated',
       },
@@ -1084,7 +1092,7 @@ describe('composite content presenter', () => {
               images: [
                 {
                   path: '/images/reference.png',
-                  renderUri: 'webview://reference.png',
+                  renderUri: 'http://127.0.0.1:43125/v1/resources/reference.png',
                   label: 'reference',
                   mimeType: 'image/png',
                   byteSize: 100,
@@ -1100,7 +1108,7 @@ describe('composite content presenter', () => {
       expect.objectContaining({
         toolCallId: 'read-image',
         type: 'image',
-        src: 'webview://reference.png',
+        src: 'http://127.0.0.1:43125/v1/resources/reference.png',
         caption: 'reference',
       }),
     ]);
@@ -1241,7 +1249,11 @@ describe('composite content presenter', () => {
             success: true,
             data: {
               provider: 'openai',
-              urls: ['file:///repo/out.png', 'data:image/png;base64,abc', 'webview://safe.png'],
+              urls: [
+                'file:///repo/out.png',
+                'data:image/png;base64,abc',
+                'http://127.0.0.1:43125/v1/resources/safe.png',
+              ],
               localPaths: ['/repo/out.png'],
             },
           },
@@ -1253,7 +1265,7 @@ describe('composite content presenter', () => {
     expect(JSON.stringify(projection)).not.toContain('file://');
     expect(JSON.stringify(projection)).not.toContain('base64');
     expect(projection.data.sections[0]?.media).toEqual([
-      expect.objectContaining({ src: 'webview://safe.png' }),
+      expect.objectContaining({ src: 'http://127.0.0.1:43125/v1/resources/safe.png' }),
     ]);
   });
 
@@ -1329,7 +1341,7 @@ describe('composite content presenter', () => {
 function makeImageToolCall(
   id = 'call-1',
   assetId = 'asset-1',
-  renderUri = 'webview://asset-1.png',
+  renderUri = 'http://127.0.0.1:43125/v1/resources/asset-1.png',
 ): ToolCall {
   return {
     id,
@@ -1359,7 +1371,7 @@ function makeImageToolCall(
             id: 'asset-2',
             type: 'generated-image',
             path: '/repo/.neko/generated/image/out-2.png',
-            renderUri: 'webview://asset-2.png',
+            renderUri: 'http://127.0.0.1:43125/v1/resources/asset-2.png',
             mimeType: 'image/png',
             generatedAt: '2026-01-01T00:00:00.000Z',
             width: 1024,

@@ -28,6 +28,118 @@ afterEach(async () => {
 });
 
 describe('DesktopCanvasRuntime', () => {
+  it('opens path-only material nodes as unavailable without migrating or authorizing content', async () => {
+    const workspacePath = await mkdtemp(path.join(tmpdir(), 'openneko-canvas-degraded-content-'));
+    roots.push(workspacePath);
+    const identity = createIdentity();
+    const documentPath = path.join(workspacePath, identity.documentId);
+    await mkdir(path.dirname(documentPath), { recursive: true });
+    await writeFile(
+      documentPath,
+      JSON.stringify({
+        version: '3.0',
+        name: 'Degraded materials',
+        viewport: { pan: { x: 0, y: 0 }, zoom: 1 },
+        nodes: [
+          {
+            id: 'legacy-media',
+            type: 'media',
+            position: { x: 40, y: 60 },
+            size: { width: 300, height: 180 },
+            zIndex: 1,
+            data: { assetPath: 'media/legacy.mp4', mediaType: 'video' },
+          },
+          {
+            id: 'legacy-file',
+            type: 'file',
+            position: { x: 420, y: 60 },
+            size: { width: 260, height: 180 },
+            zIndex: 2,
+            data: {
+              path: 'documents/legacy.md',
+              title: 'Legacy notes',
+              mediaKind: 'document',
+              mediaType: 'text/markdown',
+            },
+          },
+        ],
+        connections: [
+          {
+            id: 'legacy-reference',
+            sourceId: 'legacy-file',
+            targetId: 'legacy-media',
+            sourceEndpoint: { nodeId: 'legacy-file', scope: 'node' },
+            targetEndpoint: { nodeId: 'legacy-media', scope: 'node' },
+            type: 'reference',
+          },
+        ],
+      }),
+    );
+    const previewResource = vi.fn(async () => undefined);
+    const runtime = new DesktopCanvasRuntime({
+      shell: {
+        resolveCanvasViewGrant: vi.fn(async (): Promise<DesktopCanvasViewGrant> => ({
+          identity,
+          workspace: {
+            workspaceId: 'workspace-1',
+            workspacePath,
+            displayName: 'Fixture',
+            locator: { kind: 'relative', value: '.' },
+          },
+        })),
+      },
+      host: createElectronNekoHostPorts({
+        homedir: workspacePath,
+        nekoHome: path.join(workspacePath, '.neko-home'),
+        workspaceRoot: workspacePath,
+        version: 'test',
+        logger: new ConsoleLogger('DesktopCanvasDegradedContentTest'),
+      }),
+      globalMediaLibraryRoot: path.join(workspacePath, '.global-media-libraries'),
+      previewResource,
+    });
+
+    const snapshot = await runtime.getSnapshot('window-1', identity);
+
+    expect(snapshot.canvas.nodes.map((node) => node.id)).toEqual([
+      'legacy-media',
+      'legacy-file',
+    ]);
+    expect(snapshot.canvas.connections.map((connection) => connection.id)).toEqual([
+      'legacy-reference',
+    ]);
+    for (const node of snapshot.canvas.nodes) {
+      expect(node.data).not.toHaveProperty('contentLocator');
+      const actions = await runtime.resolveMaterialActions('window-1', {
+        schemaVersion: 5,
+        requestId: `resolve-${node.id}`,
+        expectedRevision: snapshot.revision,
+        identity,
+        selectedNodeIds: [node.id],
+      });
+      expect(actions.descriptors).toEqual([]);
+    }
+    expect(previewResource).not.toHaveBeenCalled();
+
+    const saved = await runtime.executeIntent(
+      'window-1',
+      createCanvasHostIntentRequest({
+        requestId: 'save-degraded-content',
+        commandId: 'save-degraded-content',
+        expectedRevision: snapshot.revision,
+        identity,
+        intent: { type: 'save' },
+      }),
+    );
+    expect(saved.status).toBe('accepted');
+    const persisted = JSON.parse(await readFile(documentPath, 'utf8')) as {
+      readonly nodes: readonly { readonly data: Readonly<Record<string, unknown>> }[];
+    };
+    expect(persisted.nodes).toHaveLength(2);
+    expect(persisted.nodes.every((node) => node.data['contentLocator'] === undefined)).toBe(true);
+    await runtime.dispose();
+  });
+
   it('projects an authorized ContentLocator through owning Canvas authoring', async () => {
     const workspacePath = await mkdtemp(path.join(tmpdir(), 'openneko-canvas-content-'));
     roots.push(workspacePath);

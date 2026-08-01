@@ -120,6 +120,8 @@ export const zhCN = {
   'node.unsupportedBadge': '不支持',
   'node.unsupportedType': '不支持的节点类型',
   'node.unserializableData': '[数据无法序列化]',
+  'node.contentUnavailable': '内容失效',
+  'node.contentLocatorMissing': '该节点没有有效的内容引用。',
   'media.type.image': '图片',
   'media.type.audio': '音频',
   'media.type.video': '视频',

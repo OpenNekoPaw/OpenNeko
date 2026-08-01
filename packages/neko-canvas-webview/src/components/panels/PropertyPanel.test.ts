@@ -19,7 +19,11 @@ describe('PropertyPanel canonical node registry', () => {
         type: 'media',
         position: { x: 0, y: 0 },
         zIndex: 1,
-        data: { assetPath: 'assets/ref.png', mediaType: 'image' },
+        data: {
+          assetPath: 'assets/ref.png',
+          mediaType: 'image',
+          contentLocator: { kind: 'workspace-file', path: 'assets/ref.png' },
+        },
       }),
       id: 'media-1',
     } as CanvasNode;

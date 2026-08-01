@@ -133,7 +133,7 @@ describe('createCutHostRuntimeWebviewBridge', () => {
     expect(messages).not.toContainEqual(expect.objectContaining({ type: 'cut:error' }));
   });
 
-  it('projects owner-authorized preview output to the package Cut controller', async () => {
+  it('projects owner-authorized HTTP preview output to the package Cut controller', async () => {
     const initial = snapshot(0);
     const previewMessage = {
       type: 'cut:preview-ready' as const,
@@ -149,8 +149,7 @@ describe('createCutHostRuntimeWebviewBridge', () => {
       framesPerSecond: 30,
       video: {
         version: 1 as const,
-        transport: 'authorized' as const,
-        url: 'neko-media://desktop/media%3Apreview/preview.mp4',
+        url: 'openneko://resource/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
         mimeType: 'video/mp4',
         preparationProfile: 'h264-mp4-direct' as const,
         mediaTimeOriginSeconds: 0,

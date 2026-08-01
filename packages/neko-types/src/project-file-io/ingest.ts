@@ -5,6 +5,7 @@ import {
   type ProjectSourceDescriptor,
   type ProjectSourceRole,
 } from './source-policy';
+import type { WorkspaceFileContentLocator } from '../types/content-locator';
 
 export type ProjectSourceAddKind =
   'drag-drop' | 'paste' | 'file-picker' | 'generated-output' | 'programmatic';
@@ -41,6 +42,7 @@ export interface ProjectSourceAddResult {
   readonly requestId: string;
   readonly ok: boolean;
   readonly durablePath?: string;
+  readonly contentLocator?: WorkspaceFileContentLocator;
   readonly metadata?: Record<string, unknown>;
   readonly diagnostics: readonly ProjectFileDiagnostic[];
 }
@@ -87,6 +89,7 @@ export async function handleProjectSourceAddRequest(
     requestId: request.requestId,
     ok: true,
     durablePath: stored.durablePath,
+    contentLocator: { kind: 'workspace-file', path: stored.durablePath },
     ...(stored.metadata ? { metadata: stored.metadata } : {}),
     diagnostics: [],
   };

@@ -1,5 +1,5 @@
 import type React from 'react';
-import type { CanvasNode, CanvasNodeType, CanvasViewport } from '@neko/shared';
+import type { CanvasNode, CanvasNodeType, CanvasViewport, ContentLocator } from '@neko/shared';
 import type { NodeTypeDescriptorRegistry } from './nodeTypeDescriptor';
 import type { ConnectionDragTargetState } from '../../hooks/useConnectionDrag';
 
@@ -35,7 +35,7 @@ export interface NodeRendererContext extends NodeRendererCommonProps {
   allNodes: CanvasNode[];
   selectedNodeIds: string[];
   nodeTypeDescriptors?: NodeTypeDescriptorRegistry;
-  onDocumentOpen?: (docPath: string) => void;
+  onDocumentOpen?: (locator: ContentLocator) => void;
   onCanvasEmbedOpen?: (canvasPath: string) => void;
 }
 

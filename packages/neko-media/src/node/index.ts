@@ -7,16 +7,12 @@ export {
   type RunningProcess,
 } from './NodeFfmpegProcess';
 export {
-  NodeMediaLoopbackServer,
   createPcmPacketTransform,
-  type NodeMediaLoopbackServerOptions,
   type NodeMediaPublisher,
-  type NodeMediaResourceSetEntry,
   type PcmPacketTransformOptions,
   type RegisteredMediaFile,
-  type RegisteredMediaResourceSet,
   type RegisteredPcmStream,
-} from './NodeMediaLoopbackServer';
+} from './NodeMediaPublisher';
 export { NodeMediaRuntime, type NodeMediaRuntimeOptions } from './NodeMediaRuntime';
 export {
   NodeVideoThumbnail,

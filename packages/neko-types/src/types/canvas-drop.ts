@@ -6,6 +6,7 @@ export interface DroppedMediaCanvasAsset {
   name: string;
   path: string;
   mediaType: 'image' | 'video' | 'audio';
+  contentLocator: WorkspaceFileContentLocator;
   /** Runtime-only safe URL for immediate webview display/playback. */
   runtimeAssetPath?: string;
   /** Original local file path, never persisted by the Webview. */
@@ -26,6 +27,7 @@ export interface DroppedFileCanvasAsset {
   name: string;
   path: string;
   title: string;
+  contentLocator: WorkspaceFileContentLocator;
 }
 
 export interface DroppedCanvasEmbedAsset {
@@ -92,3 +94,4 @@ export function inferCanvasDroppedAssetKind(fileName: string): CanvasDroppedAsse
   if (extension === 'nkc') return 'canvas';
   return extension.length > 0 ? 'file' : null;
 }
+import type { WorkspaceFileContentLocator } from './content-locator';

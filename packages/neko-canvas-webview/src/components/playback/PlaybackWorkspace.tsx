@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  contentLocatorKey,
   createCanvasPlaybackPlan,
   resolveEffectiveCanvasPlaybackRoutes,
   type CanvasData,
@@ -284,8 +285,8 @@ export function PlaybackWorkspace({ canvasPane, className }: PlaybackWorkspacePr
       setCurrentUnit(unitId, playheadMs);
     }
     if (!unit) return undefined;
-    if (unit.assetPath) {
-      savePlayback(unit.assetPath, {
+    if (unit.contentLocator) {
+      savePlayback(`content:${contentLocatorKey(unit.contentLocator)}`, {
         currentTime: playheadMs / 1000,
         duration: resolveRouteUnitDurationMs(unit) / 1000,
         wasPlaying: false,
@@ -868,7 +869,7 @@ type StorylineMediaState = 'playable' | 'missing' | 'metadata';
 
 function resolveStorylineMediaState(unit: CanvasPlaybackUnit): StorylineMediaState {
   if (unit.kind !== 'media') return 'metadata';
-  return unit.assetPath || unit.contentLocator ? 'playable' : 'missing';
+  return unit.contentLocator ? 'playable' : 'missing';
 }
 
 function formatStorylineMediaState(state: StorylineMediaState): string {
@@ -986,31 +987,18 @@ function createPreviewSourceForUnit(unit: CanvasPlaybackUnit): PreviewSourceDesc
   const mediaType =
     previewMediaType ?? readString(unit.metadata?.['mediaType']) ?? inferMediaType(unit.assetPath);
   const role = previewRoleForUnit(unit, mediaType);
-  const previewUrl = readString(unit.metadata?.['previewUrl']);
   const path =
     readString(unit.metadata?.['previewPlayableAssetPath']) ??
     readString(unit.metadata?.['previewSourceAssetPath']) ??
     unit.assetPath ??
     readGeneratedMediaPath(unit.metadata);
   const contentLocator = unit.contentLocator;
-  if (!path && !contentLocator && !previewUrl) return undefined;
+  if (!contentLocator) return undefined;
   return {
     id: `playback:${unit.id}`,
     role,
     title: formatPlaybackDisplayLabel(unit.label ?? unit.id),
     ...(contentLocator ? { contentLocator } : {}),
-    ...(previewUrl
-      ? {
-          variants: [
-            {
-              id: `playback:${unit.id}:preview`,
-              role,
-              sourcePath: previewUrl,
-              mimeType: mediaType,
-            },
-          ],
-        }
-      : {}),
     ...(path || mediaType
       ? {
           asset: {

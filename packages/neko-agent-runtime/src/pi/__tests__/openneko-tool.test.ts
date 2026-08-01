@@ -277,6 +277,50 @@ describe('OpenNeko tool projection to Pi', () => {
     });
   });
 
+  it.each([
+    ['renderUri', 'http://127.0.0.1:43125/v1/resources/display-token'],
+    ['previewUri', 'https://example.test/preview'],
+    ['source', 'neko-media://desktop/legacy-video'],
+    ['source', 'file:///private/tmp/video.mp4'],
+  ])('rejects transient display projection in Tool arguments: %s', async (field, value) => {
+    const execute = vi.fn();
+    const projected = projectOpenNekoTool(tool({ execute }));
+
+    await expect(
+      projected.execute({
+        args: { assetId: 'asset-1', nested: { [field]: value } },
+        context,
+      }),
+    ).rejects.toThrow(/must not contain/u);
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { renderUri: 'http://127.0.0.1:43125/v1/resources/display-token' },
+    { previewUri: 'https://example.test/preview' },
+    { source: 'http://localhost:43125/v1/streams/display-token' },
+    { source: 'media://desktop/legacy-video' },
+  ])('rejects transient display projection in Tool results before Pi sees it', async (data) => {
+    const projected = projectOpenNekoTool(
+      tool({
+        execute: async () => ({
+          success: true,
+          data: {
+            contentLocator: {
+              kind: 'workspace-file',
+              path: 'media/video.mp4',
+            },
+            nested: data,
+          },
+        }),
+      }),
+    );
+
+    await expect(projected.execute({ args: { assetId: 'asset-1' }, context })).rejects.toThrow(
+      /must not contain/u,
+    );
+  });
+
   it('projects stable image attachments through the injected Host loader', async () => {
     const contentLocator = {
       kind: 'document-entry' as const,

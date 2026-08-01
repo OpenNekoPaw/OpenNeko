@@ -25,6 +25,7 @@ describe('canvas cut draft contract', () => {
       units: [
         playbackUnit('shot-a', {
           assetPath: 'assets/shot-a.mp4',
+          contentLocator: { kind: 'workspace-file', path: 'assets/shot-a.mp4' },
           metadata: {
             sceneId: 'scene-1',
             shotId: 'shot-1',
@@ -84,7 +85,13 @@ describe('canvas cut draft contract', () => {
         sceneId: 'scene-1',
         shotId: 'shot-1',
       },
-      media: [{ role: 'source', assetPath: 'assets/shot-a.mp4' }],
+      media: [
+        {
+          role: 'source',
+          assetPath: 'assets/shot-a.mp4',
+          contentLocator: { kind: 'workspace-file', path: 'assets/shot-a.mp4' },
+        },
+      ],
       cues: expect.arrayContaining([
         expect.objectContaining({ kind: 'dialogue', text: 'Hello there.', source: 'canvas-node' }),
         expect.objectContaining({

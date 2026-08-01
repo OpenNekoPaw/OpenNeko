@@ -1332,7 +1332,8 @@ describe('agent architecture boundary guards', () => {
         (file) =>
           (file.endsWith('.ts') || file.endsWith('.tsx')) &&
           !isTestFile(file) &&
-          !file.includes('__tests__/'),
+          !file.includes('__tests__/') &&
+          existsSync(join(repoRoot, file)),
       )
       .map((relativePath) => ({
         relativePath,

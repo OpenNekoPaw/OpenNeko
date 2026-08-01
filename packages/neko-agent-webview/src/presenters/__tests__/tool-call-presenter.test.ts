@@ -26,7 +26,7 @@ describe('tool-call-presenter', () => {
             {
               type: 'image',
               contentLocator: generatedOutputLocator('generated-1'),
-              renderUri: 'webview://generated/image.png',
+              renderUri: 'http://127.0.0.1:43125/v1/resources/generated/image.png',
             },
           ],
           boardDelivery: {
@@ -40,7 +40,7 @@ describe('tool-call-presenter', () => {
 
     expect(projection).toMatchObject({
       isImageTool: true,
-      imageUrls: ['webview://generated/image.png'],
+      imageUrls: ['http://127.0.0.1:43125/v1/resources/generated/image.png'],
       videoUrls: [],
       audioUrls: [],
       isSuccess: true,
@@ -75,7 +75,7 @@ describe('tool-call-presenter', () => {
             {
               type: 'image',
               contentLocator: generatedOutputLocator('generated-1'),
-              renderUri: 'webview://generated/generated-1.png',
+              renderUri: 'http://127.0.0.1:43125/v1/resources/generated/generated-1.png',
             },
           ],
         },
@@ -83,7 +83,7 @@ describe('tool-call-presenter', () => {
     });
 
     expect(projection).toMatchObject({
-      imageUrls: ['webview://generated/generated-1.png'],
+      imageUrls: ['http://127.0.0.1:43125/v1/resources/generated/generated-1.png'],
       videoUrls: [],
       audioUrls: [],
       generationJob: {
@@ -268,7 +268,7 @@ describe('tool-call-presenter', () => {
           images: [
             {
               label: 'Page 1',
-              renderUri: 'neko-media://page-1.jpg',
+              renderUri: 'http://127.0.0.1:43125/v1/resources/page-1.jpg',
               width: 1494,
               height: 2133,
               byteSize: 2048,
@@ -297,7 +297,7 @@ describe('tool-call-presenter', () => {
         height: 2133,
         byteSize: 2048,
         mimeType: 'image/jpeg',
-        src: 'neko-media://page-1.jpg',
+        src: 'http://127.0.0.1:43125/v1/resources/page-1.jpg',
         label: 'Page 1',
         locator: {
           kind: 'chapter',
@@ -350,7 +350,7 @@ describe('tool-call-presenter', () => {
           {
             label: '第10页',
             path: '/tmp/page-10.jpg',
-            renderUri: 'neko-media://page-10.jpg',
+            renderUri: 'http://127.0.0.1:43125/v1/resources/page-10.jpg',
           },
         ],
         mode: 'metadata',
@@ -362,7 +362,7 @@ describe('tool-call-presenter', () => {
       expect.objectContaining({
         filePath: '/tmp/page-10.jpg',
         path: '/tmp/page-10.jpg',
-        src: 'neko-media://page-10.jpg',
+        src: 'http://127.0.0.1:43125/v1/resources/page-10.jpg',
         label: '第10页',
       }),
     ]);
@@ -384,7 +384,7 @@ describe('tool-call-presenter', () => {
           images: [
             {
               label: 'Page 1',
-              renderUri: 'neko-media://page-1.jpg',
+              renderUri: 'http://127.0.0.1:43125/v1/resources/page-1.jpg',
               width: 1494,
               height: 2133,
               mimeType: 'image/jpeg',
@@ -402,7 +402,7 @@ describe('tool-call-presenter', () => {
         width: 1494,
         height: 2133,
         mimeType: 'image/jpeg',
-        src: 'neko-media://page-1.jpg',
+        src: 'http://127.0.0.1:43125/v1/resources/page-1.jpg',
         label: 'Page 1',
         contentLocator,
       }),
@@ -566,7 +566,7 @@ describe('tool-call-presenter', () => {
           {
             label: 'Page 2',
             path: '/tmp/page-2.jpg',
-            renderUri: 'neko-media://page-2.jpg',
+            renderUri: 'http://127.0.0.1:43125/v1/resources/page-2.jpg',
             metadata: {
               locator: {
                 kind: 'chapter',
@@ -588,7 +588,7 @@ describe('tool-call-presenter', () => {
       expect.objectContaining({
         filePath: '/books/a.epub',
         path: '/tmp/page-2.jpg',
-        src: 'neko-media://page-2.jpg',
+        src: 'http://127.0.0.1:43125/v1/resources/page-2.jpg',
         label: 'Page 2',
         locator: {
           kind: 'chapter',

@@ -106,18 +106,22 @@ export class NodeFileReader implements IFileReader {
       if (remainingParts.length === 0) return;
 
       const [current, ...rest] = remainingParts;
+      if (current === undefined) {
+        throw new Error('Glob traversal reached an invalid empty pattern segment.');
+      }
 
       if (current === '**') {
         // Match any depth
         const entries = await fs.readdir(currentDir, { withFileTypes: true });
+        const leafPattern = rest.at(-1);
         for (const entry of entries) {
           const entryPath = path.join(currentDir, entry.name);
           if (entry.isDirectory()) {
             await walk(entryPath, remainingParts); // Continue with **
             await walk(entryPath, rest); // Try next part
           } else if (
-            rest.length === 0 ||
-            this._patternToRegex(rest[rest.length - 1]).test(entry.name)
+            leafPattern === undefined ||
+            this._patternToRegex(leafPattern).test(entry.name)
           ) {
             const relativePath = path.relative(this._basePath, entryPath);
             results.push(relativePath);

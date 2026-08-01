@@ -14,6 +14,7 @@ import {
   validateContentLocator,
   validateCanvasAuthoringResultEnvelope,
 } from '@neko/shared';
+import { isAuthorizedResourceDisplayUri } from './resource-display-uri';
 import {
   AUDIO_GENERATION_TOOLS,
   FILE_TOOLS,
@@ -917,16 +918,8 @@ function isValidAudioUrl(url: string): boolean {
 }
 
 function isValidMediaUrl(url: string, extensions: readonly string[]): boolean {
-  if (!url) return false;
-  if (url.startsWith('http://') || url.startsWith('https://')) return true;
-  if (url.startsWith('neko-media://')) return true;
-  if (url.startsWith('webview://')) return true;
-  if (url.startsWith('data:')) return true;
+  if (isAuthorizedResourceDisplayUri(url)) return true;
   if (isStableGeneratedAssetMediaUri(url, extensions)) return true;
-  if (isAbsolutePath(url)) {
-    const lowerUrl = url.toLowerCase();
-    return extensions.some((ext) => lowerUrl.endsWith(ext));
-  }
   return false;
 }
 

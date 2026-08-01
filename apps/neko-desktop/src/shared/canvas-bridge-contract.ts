@@ -8,10 +8,11 @@ import type {
   CanvasMaterialActionResolutionRequest,
 } from '@neko-canvas/domain';
 import type {
+  HtmlAudioDescriptor,
   HtmlVideoDescriptor,
   HtmlVideoPreparationProfile,
-  PcmStreamDescriptor,
 } from '@neko/media';
+import { isMediaResourceUrl } from '@neko/media';
 
 export const DESKTOP_CANVAS_CHANNELS = {
   snapshotGet: 'open-neko:canvas:snapshot-get',
@@ -141,8 +142,12 @@ export type DesktopCanvasMediaResponse =
       readonly type: 'media:streamReady';
       readonly nodeId: string;
       readonly mediaInfo?: DesktopCanvasMediaInfo;
+      readonly contentLocator?: {
+        readonly kind: 'workspace-file';
+        readonly path: string;
+      };
       readonly video?: HtmlVideoDescriptor;
-      readonly audio?: PcmStreamDescriptor;
+      readonly audio?: HtmlAudioDescriptor;
       readonly startTime?: number;
       readonly playbackRate?: number;
       readonly error?: string;
@@ -278,13 +283,18 @@ export function parseDesktopCanvasMediaResponse(
         : parseDesktopCanvasMediaInfo(value['mediaInfo']);
     const video = parseOptionalVideoDescriptor(value['video']);
     const audio = parseOptionalAudioDescriptor(value['audio']);
-    if (!error && (!mediaInfo || (!video && !audio))) {
+    const contentLocator =
+      value['contentLocator'] === undefined
+        ? undefined
+        : parseWorkspaceFileLocator(value['contentLocator']);
+    if (!error && (!mediaInfo || !contentLocator || (!video && !audio))) {
       throw new Error('Desktop Canvas media stream response is incomplete.');
     }
     return {
       type: 'media:streamReady',
       nodeId,
       ...(mediaInfo ? { mediaInfo } : {}),
+      ...(contentLocator ? { contentLocator } : {}),
       ...(video ? { video } : {}),
       ...(audio ? { audio } : {}),
       ...(typeof value['startTime'] === 'number' ? { startTime: value['startTime'] } : {}),
@@ -403,8 +413,8 @@ function parseOptionalVideoDescriptor(value: unknown): HtmlVideoDescriptor | und
   if (
     !isRecord(value) ||
     value['version'] !== 1 ||
-    value['transport'] !== 'http' ||
     typeof value['url'] !== 'string' ||
+    !isMediaResourceUrl(value['url']) ||
     typeof value['mimeType'] !== 'string' ||
     typeof value['durationSeconds'] !== 'number' ||
     !isHtmlVideoPreparationProfile(value['preparationProfile'])
@@ -413,7 +423,6 @@ function parseOptionalVideoDescriptor(value: unknown): HtmlVideoDescriptor | und
   }
   return {
     version: 1,
-    transport: 'http',
     url: value['url'],
     mimeType: value['mimeType'],
     preparationProfile: value['preparationProfile'],
@@ -424,26 +433,26 @@ function parseOptionalVideoDescriptor(value: unknown): HtmlVideoDescriptor | und
   };
 }
 
-function parseOptionalAudioDescriptor(value: unknown): PcmStreamDescriptor | undefined {
+function parseOptionalAudioDescriptor(value: unknown): HtmlAudioDescriptor | undefined {
   if (value === undefined) return undefined;
   if (
     !isRecord(value) ||
     value['version'] !== 1 ||
-    value['transport'] !== 'http' ||
-    value['protocol'] !== 'neko-pcm-f32le-v1' ||
-    typeof value['streamUrl'] !== 'string' ||
-    typeof value['sampleRate'] !== 'number' ||
-    typeof value['channels'] !== 'number'
+    typeof value['url'] !== 'string' ||
+    !isMediaResourceUrl(value['url']) ||
+    typeof value['mimeType'] !== 'string' ||
+    typeof value['durationSeconds'] !== 'number'
   ) {
     throw new Error('Desktop Canvas audio descriptor is invalid.');
   }
   return {
     version: 1,
-    transport: 'http',
-    protocol: 'neko-pcm-f32le-v1',
-    streamUrl: value['streamUrl'],
-    sampleRate: requirePositiveNumber(value['sampleRate'], 'audio descriptor sample rate'),
-    channels: requirePositiveNumber(value['channels'], 'audio descriptor channel count'),
+    url: value['url'],
+    mimeType: value['mimeType'],
+    durationSeconds: requireNonNegativeNumber(
+      value['durationSeconds'],
+      'audio descriptor duration',
+    ),
   };
 }
 

@@ -191,7 +191,10 @@ export class StdioMCPClient extends BaseMCPClient {
 
       this.process = spawn(this.config.command, this.config.args || [], {
         cwd: this.config.cwd,
-        env: { ...process.env, ...this.config.env },
+        env: {
+          ...(this.config.inheritProcessEnv === false ? {} : process.env),
+          ...this.config.env,
+        },
         stdio: ['pipe', 'pipe', 'pipe'],
       }) as unknown as typeof this.process;
 
@@ -481,6 +484,8 @@ export function createMCPClient(config: MCPServerConfig): IMCPClient {
       command: config.command || '',
       args: config.args,
       env: config.env,
+      cwd: config.cwd,
+      inheritProcessEnv: config.inheritProcessEnv,
       requestTimeout: config.requestTimeout,
     };
     return new StdioMCPClient(config.id, stdioConfig);
@@ -488,6 +493,7 @@ export function createMCPClient(config: MCPServerConfig): IMCPClient {
     // Extract http config from flat MCPServerConfig
     const httpConfig: MCPHttpConfig = {
       url: config.url || '',
+      headers: config.headers,
       timeout: config.requestTimeout,
     };
     return new HttpMCPClient(config.id, httpConfig);

@@ -848,8 +848,7 @@ function isHtmlVideoDescriptor(value: unknown): value is CutHtmlVideoDescriptor 
   return (
     isRecord(value) &&
     value['version'] === 1 &&
-    isCutMediaTransport(value['transport']) &&
-    isCutMediaUrl(value['url'], value['transport']) &&
+    isCutMediaUrl(value['url']) &&
     typeof value['mimeType'] === 'string' &&
     typeof value['preparationProfile'] === 'string' &&
     isNonNegativeFinite(value['mediaTimeOriginSeconds']) &&
@@ -861,28 +860,26 @@ function isPcmStreamDescriptor(value: unknown): value is CutPcmStreamDescriptor 
   return (
     isRecord(value) &&
     value['version'] === 1 &&
-    isCutMediaTransport(value['transport']) &&
-    isCutMediaUrl(value['streamUrl'], value['transport']) &&
+    isCutMediaUrl(value['streamUrl']) &&
     value['protocol'] === 'neko-pcm-f32le-v1' &&
     typeof value['sampleRate'] === 'number' &&
     typeof value['channels'] === 'number'
   );
 }
 
-function isCutMediaTransport(value: unknown): value is CutHtmlVideoDescriptor['transport'] {
-  return value === 'http' || value === 'authorized';
-}
-
-function isCutMediaUrl(
-  value: unknown,
-  transport: CutHtmlVideoDescriptor['transport'],
-): value is string {
+function isCutMediaUrl(value: unknown): value is string {
   if (typeof value !== 'string') return false;
   try {
     const url = new URL(value);
-    return transport === 'http'
-      ? url.protocol === 'http:' && url.hostname === '127.0.0.1'
-      : url.protocol === 'neko-media:' && url.hostname === 'desktop';
+    return (
+      url.protocol === 'openneko:' &&
+      url.hostname === 'resource' &&
+      /^\/[A-Za-z0-9_-]{32}$/u.test(url.pathname) &&
+      !url.username &&
+      !url.password &&
+      !url.search &&
+      !url.hash
+    );
   } catch {
     return false;
   }

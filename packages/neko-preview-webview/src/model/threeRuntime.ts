@@ -1394,12 +1394,15 @@ async function loadModelSource(
   switch (source.format) {
     case 'glb':
     case 'gltf': {
-      const gltf = await new GLTFLoader(manager).loadAsync(source.entryUri);
+      const loader = new GLTFLoader(manager);
+      loader.setCrossOrigin('anonymous');
+      const gltf = await loader.loadAsync(source.entryUri);
       await promoteOpaqueBlendMaterials(gltf.scene);
       return { root: gltf.scene, animationCount: gltf.animations.length };
     }
     case 'obj': {
       const objLoader = new OBJLoader(manager);
+      objLoader.setCrossOrigin('anonymous');
       const materialUris = Object.entries(source.uriMap)
         .filter(([reference]) => reference.toLowerCase().endsWith('.mtl'))
         .map(([, uri]) => uri);
@@ -1440,8 +1443,11 @@ async function loadPanoramaTexture(
       return new EXRLoader().loadAsync(runtime.uri);
     case 'image/jpeg':
     case 'image/png':
-    case 'image/webp':
-      return new THREE.TextureLoader().loadAsync(runtime.uri);
+    case 'image/webp': {
+      const loader = new THREE.TextureLoader();
+      loader.setCrossOrigin('anonymous');
+      return loader.loadAsync(runtime.uri);
+    }
   }
 }
 
@@ -1526,6 +1532,7 @@ async function loadObjMaterials(
   manager: THREE.LoadingManager,
 ): Promise<MTLLoader.MaterialCreator> {
   const loader = new MTLLoader(manager);
+  loader.setCrossOrigin('anonymous');
   const creators = await Promise.all(uris.map((uri) => loader.loadAsync(uri)));
   const primary = creators[0];
   if (!primary) throw new Error('OBJ source declared no loadable material library.');

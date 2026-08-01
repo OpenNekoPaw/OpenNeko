@@ -21,11 +21,7 @@ import {
   type FfmpegProcessPort,
   type RunningProcess,
 } from './NodeFfmpegProcess';
-import {
-  NodeMediaLoopbackServer,
-  createPcmPacketTransform,
-  type NodeMediaPublisher,
-} from './NodeMediaLoopbackServer';
+import { createPcmPacketTransform, type NodeMediaPublisher } from './NodeMediaPublisher';
 import {
   getHardwareVideoPipeline,
   resolveHardwareVideoBackend,
@@ -90,8 +86,7 @@ const PCM_CHANNELS = 2;
 
 export class NodeMediaRuntime {
   private readonly process: FfmpegProcessPort;
-  private readonly publisher: NodeMediaPublisher;
-  private readonly ownedServer: NodeMediaLoopbackServer | undefined;
+  private readonly publisher: NodeMediaPublisher | undefined;
   private readonly cacheRoot: string;
   private readonly vp8WebmDirectQualified: boolean;
   private readonly hardwareVideoPipeline: HardwareVideoPipeline | undefined;
@@ -102,8 +97,7 @@ export class NodeMediaRuntime {
 
   constructor(options: NodeMediaRuntimeOptions = {}) {
     this.process = options.process ?? new NodeFfmpegProcess();
-    this.ownedServer = options.publisher === undefined ? new NodeMediaLoopbackServer() : undefined;
-    this.publisher = options.publisher ?? this.ownedServer!;
+    this.publisher = options.publisher;
     this.cacheRoot = options.cacheRoot ?? path.join(os.tmpdir(), 'openneko-media');
     this.vp8WebmDirectQualified = options.vp8WebmDirectQualified ?? true;
     this.hardwareVideoPipeline = getHardwareVideoPipeline(
@@ -431,7 +425,7 @@ export class NodeMediaRuntime {
         throw classifyCommandError(error, 'stream', 'prepare video');
       }
     }
-    const registration = await this.publisher.registerFile(
+    const registration = await this.requirePublisher().registerFile(
       preparedPath,
       profile === 'vp8-webm-direct' ? 'video/webm' : 'video/mp4',
     );
@@ -445,7 +439,6 @@ export class NodeMediaRuntime {
       sessionId,
       video: {
         version: 1,
-        transport: 'http',
         url: registration.url,
         mimeType: profile === 'vp8-webm-direct' ? 'video/webm' : 'video/mp4',
         preparationProfile: profile,
@@ -470,7 +463,7 @@ export class NodeMediaRuntime {
     contentType: string,
   ): Promise<{ readonly sessionId: string; readonly url: string }> {
     this.assertUsable();
-    const registration = await this.publisher.registerFile(sourcePath, contentType);
+    const registration = await this.requirePublisher().registerFile(sourcePath, contentType);
     const sessionId = randomUUID();
     this.sessions.set(sessionId, { kind: 'file', token: registration.token });
     return { sessionId, url: registration.url };
@@ -496,7 +489,7 @@ export class NodeMediaRuntime {
         ? probe.audioStreams[0]
         : probe.audioStreams.find((item) => item.streamIndex === options.audioStreamIndex);
     if (!audio) throw new Error('PCM source contains no selected audio stream.');
-    const registration = await this.publisher.registerPcm((streamSignal) =>
+    const registration = await this.requirePublisher().registerPcm((streamSignal) =>
       this.createPcmProcess(sourcePath, audio.streamIndex, options, streamSignal),
     );
     registration.prime();
@@ -506,7 +499,6 @@ export class NodeMediaRuntime {
       sessionId,
       stream: {
         version: 1,
-        transport: 'http',
         protocol: 'neko-pcm-f32le-v1',
         streamUrl: registration.url,
         sampleRate: PCM_SAMPLE_RATE,
@@ -577,7 +569,7 @@ export class NodeMediaRuntime {
     const session = this.sessions.get(sessionId);
     if (!session) throw new Error(`Unknown media session: ${sessionId}`);
     this.sessions.delete(sessionId);
-    this.publisher.unregister(session.token);
+    this.requirePublisher().unregister(session.token);
     if (session.kind === 'file' && session.directory) {
       await fs.rm(session.directory, { recursive: true, force: true });
     }
@@ -587,7 +579,6 @@ export class NodeMediaRuntime {
     if (this.disposed) return;
     this.disposed = true;
     for (const id of [...this.sessions.keys()]) await this.stop(id);
-    await this.ownedServer?.dispose();
     const root = await this.rootPromise?.catch(() => undefined);
     if (root) await fs.rm(root, { recursive: true, force: true });
   }
@@ -702,6 +693,13 @@ export class NodeMediaRuntime {
 
   private assertUsable(): void {
     if (this.disposed) throw new Error('Node media runtime is disposed.');
+  }
+
+  private requirePublisher(): NodeMediaPublisher {
+    if (!this.publisher) {
+      throw new Error('Node media publication requires an injected Host publisher.');
+    }
+    return this.publisher;
   }
 }
 

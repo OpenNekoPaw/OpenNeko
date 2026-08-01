@@ -1,8 +1,7 @@
-import { isMediaTransportUrl, type MediaTransport } from '../contracts';
+import { isMediaResourceUrl } from '../contracts';
 
 export interface HtmlVideoClientDescriptor {
   readonly version: 1;
-  readonly transport: MediaTransport;
   readonly url: string;
   readonly mimeType: string;
   readonly mediaTimeOriginSeconds: number;
@@ -222,17 +221,16 @@ function waitForEvent(target: EventTarget, eventName: string, signal: AbortSigna
 }
 
 function validateDescriptor(descriptor: HtmlVideoClientDescriptor): void {
-  if (
-    descriptor.version !== 1 ||
-    (descriptor.transport !== 'http' && descriptor.transport !== 'authorized')
-  ) {
+  if (descriptor.version !== 1) {
     throw new Error('Unsupported Cut HTML video descriptor version.');
+  }
+  if (!isMediaResourceUrl(descriptor.url)) {
+    throw new Error('Invalid Cut HTML video descriptor resource URL.');
   }
   if (!descriptor.mimeType.startsWith('video/')) {
     throw new Error('Cut HTML video descriptor requires a video MIME type.');
   }
   if (
-    !isMediaTransportUrl(descriptor.url, descriptor.transport) ||
     !Number.isFinite(descriptor.mediaTimeOriginSeconds) ||
     descriptor.mediaTimeOriginSeconds < 0 ||
     !Number.isFinite(descriptor.durationSeconds) ||

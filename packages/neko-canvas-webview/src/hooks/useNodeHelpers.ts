@@ -4,9 +4,7 @@ import type {
   ContentLocator,
   DroppedTextCanvasAsset,
   MarkdownCanvasNode,
-  WorkspaceFileContentLocator,
 } from '@neko/shared';
-import { normalizeWorkspaceContentPath } from '@neko/shared';
 import { buildCanvasNode } from '../utils/nodeFactory';
 
 export interface UseNodeHelpersOptions {
@@ -25,7 +23,7 @@ export interface UseNodeHelpersReturn {
     uri?: string,
     name?: string,
     options?: {
-      contentLocator?: ContentLocator;
+      contentLocator: ContentLocator;
       runtimeAssetPath?: string;
     },
   ) => void;
@@ -34,6 +32,7 @@ export interface UseNodeHelpersReturn {
     pos: { x: number; y: number },
     path: string,
     title: string,
+    contentLocator: ContentLocator,
     mediaType?: string,
   ) => void;
   addCanvasEmbedAt: (pos: { x: number; y: number }, canvasPath: string, title: string) => void;
@@ -58,14 +57,6 @@ export function createImportedMarkdownNodeData(
       sourceName: asset.name,
     },
   };
-}
-
-export function requireCanvasWorkspaceContentLocator(value: string): WorkspaceFileContentLocator {
-  const path = normalizeWorkspaceContentPath(value);
-  if (!path || path !== value) {
-    throw new Error('Canvas persisted material path must be normalized and workspace-relative.');
-  }
-  return { kind: 'workspace-file', path };
 }
 
 export function useNodeHelpers(options: UseNodeHelpersOptions): UseNodeHelpersReturn {
@@ -127,8 +118,7 @@ export function useNodeHelpers(options: UseNodeHelpersOptions): UseNodeHelpersRe
         runtimeAssetPath?: string;
       },
     ) => {
-      const contentLocator =
-        options?.contentLocator ?? (uri ? requireCanvasWorkspaceContentLocator(uri) : undefined);
+      const contentLocator = options?.contentLocator;
       if (!contentLocator) {
         throw new Error('Canvas Media creation requires a canonical ContentLocator.');
       }
@@ -168,8 +158,13 @@ export function useNodeHelpers(options: UseNodeHelpersOptions): UseNodeHelpersRe
   );
 
   const addFileAt = useCallback(
-    (pos: { x: number; y: number }, path: string, title: string, mediaType?: string) => {
-      const contentLocator = requireCanvasWorkspaceContentLocator(path);
+    (
+      pos: { x: number; y: number },
+      path: string,
+      title: string,
+      contentLocator: ContentLocator,
+      mediaType?: string,
+    ) => {
       addNode(
         buildCanvasNode({
           type: 'file',

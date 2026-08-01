@@ -1,7 +1,14 @@
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { createOpenNekoPiModels } from '@neko/agent/pi';
 import { createToolRegistry } from '@neko/agent/tool-registry';
-import type { AgentHostToWebviewMessage } from '@neko-agent/types';
-import { describe, expect, it, vi } from 'vitest';
+import type {
+  AgentHostToWebviewMessage,
+  AgentTurnTimelineToolCallItem,
+  ConversationProjectionSnapshot,
+} from '@neko-agent/types';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { DesktopAgentWorkspaceRuntime } from './desktop-agent-app-host-composition';
 import {
   auditDesktopAgentStartup,
@@ -12,6 +19,14 @@ import {
 } from './desktop-agent-controller-composition';
 import { createDesktopAgentCredentialRuntime } from './desktop-agent-credential-runtime';
 
+const temporaryRoots: string[] = [];
+
+afterEach(async () => {
+  await Promise.all(
+    temporaryRoots.splice(0).map((root) => rm(root, { recursive: true, force: true })),
+  );
+});
+
 describe('Desktop Agent controller composition', () => {
   it('advertises the complete base effect composition and routes through workspace owners', async () => {
     const workspace = createWorkspace();
@@ -20,6 +35,12 @@ describe('Desktop Agent controller composition', () => {
       host: createHost(),
       userHome: '/Users/fixture',
       credentialRuntime: createCredentialRuntime(),
+      resources: {
+        registerFile: vi.fn(async () => ({
+          url: 'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+          release: vi.fn(),
+        })),
+      },
       contentInteraction: {
         openContent: vi.fn(),
         revealDocument: vi.fn(),
@@ -126,9 +147,99 @@ describe('Desktop Agent controller composition', () => {
     expect(JSON.stringify(projected)).not.toContain('must-not-cross-renderer');
     expect(projected.configuredProviders[0]).not.toHaveProperty('apiKey');
   });
+
+  it('releases attachment display leases when snapshot delivery fails fatally', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'desktop-agent-controller-display-'));
+    temporaryRoots.push(root);
+    await mkdir(join(root, 'media'));
+    await writeFile(join(root, 'media', 'clip.mp4'), 'fixture');
+    const projection = createLocatorBackedProjection();
+    const workspace = createWorkspace(root, projection);
+    const release = vi.fn();
+    const reportError = vi.fn();
+    const composition = createDesktopAgentControllerComposition({
+      host: createHost(),
+      userHome: '/Users/fixture',
+      credentialRuntime: createCredentialRuntime(),
+      resources: {
+        registerFile: vi.fn(async () => ({
+          url: 'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+          release,
+        })),
+      },
+      contentInteraction: {
+        openContent: vi.fn(),
+        revealDocument: vi.fn(),
+        selectWorkspaceWriteTarget: vi.fn(),
+      },
+      configInteraction: {
+        openUserConfig: vi.fn(),
+        openWorkspaceConfig: vi.fn(),
+      },
+      reportError,
+    });
+    const identity = {
+      applicationInstanceId: 'app-1',
+      windowId: 'window-1',
+      projectId: 'project-1',
+      workspaceId: workspace.workspaceId,
+      viewId: 'view-1',
+      viewEpoch: 1,
+      rendererEpoch: 1,
+      connectionId: 'connection-1',
+    };
+    const effects = composition.createEffects({ workspace, identity });
+    const posted: AgentHostToWebviewMessage[] = [];
+    const context = {
+      identity: {
+        hostKind: 'electron' as const,
+        applicationId: 'neko-desktop',
+        windowId: 'window-1',
+        viewId: 'view-1',
+        workspaceId: workspace.workspaceId,
+        rendererEpoch: '1',
+        connectionId: 'connection-1',
+      },
+      post: async (message: AgentHostToWebviewMessage) => {
+        if (message.type === 'projectionSnapshot') {
+          throw new Error('Webview projection delivery failed.');
+        }
+        posted.push(message);
+      },
+    };
+    const key = {
+      endpointEpoch: 'connection-1',
+      attachmentId: 'attachment-1',
+      tabId: 'tab-1',
+      conversationId: projection.conversationId,
+    };
+
+    await expect(
+      effects.projection.attach({ type: 'projectionAttach', key }, context),
+    ).rejects.toThrow('Webview projection delivery failed.');
+    await vi.waitFor(() => expect(release).toHaveBeenCalledOnce());
+    expect(reportError).toHaveBeenCalledOnce();
+    expect(posted).toContainEqual(
+      expect.objectContaining({
+        type: 'sessionDiagnostic',
+        code: 'projection-attachment-protocol-fatal',
+        conversationId: projection.conversationId,
+      }),
+    );
+
+    effects.dispose();
+    await composition.dispose?.();
+  });
 });
 
-function createWorkspace(): DesktopAgentWorkspaceRuntime & {
+function createWorkspace(
+  workspacePath = '/workspace/demo',
+  projection: ConversationProjectionSnapshot = {
+    conversationId: 'conversation-1',
+    projectionVersion: 0,
+    turns: [],
+  },
+): DesktopAgentWorkspaceRuntime & {
   readonly createConversation: ReturnType<typeof vi.fn>;
 } {
   const records: Array<{
@@ -153,7 +264,7 @@ function createWorkspace(): DesktopAgentWorkspaceRuntime & {
     workspaceId: 'workspace-1',
     workspace: {
       workspaceId: 'workspace-1',
-      workspacePath: '/workspace/demo',
+      workspacePath,
       displayName: 'Demo',
       locator: { kind: 'variable', value: '${HOME}/workspace/demo' },
     },
@@ -182,13 +293,54 @@ function createWorkspace(): DesktopAgentWorkspaceRuntime & {
     })),
     listConversations: () => records,
     readConversationEvidence: vi.fn(),
-    readConversationProjection: vi.fn(() => ({
-      conversationId: records[0]?.conversationId ?? 'conversation-1',
-      projectionVersion: 0,
-      turns: [],
-    })),
+    readConversationProjection: vi.fn(() => projection),
     subscribeConversationProjection: vi.fn(() => () => undefined),
     dispose: vi.fn(),
+  };
+}
+
+function createLocatorBackedProjection(): ConversationProjectionSnapshot {
+  const item: AgentTurnTimelineToolCallItem = {
+    conversationId: 'conversation-1',
+    turnId: 'turn-1',
+    runId: 'run-1',
+    messageId: 'message-1',
+    itemId: 'tool-item-1',
+    sequence: 1,
+    itemRevision: 1,
+    status: 'complete',
+    createdAt: 1,
+    updatedAt: 1,
+    kind: 'tool_call',
+    parentAnchor: 'turn',
+    payload: {
+      toolCall: {
+        id: 'tool-call-1',
+        name: 'ReadDocument',
+        arguments: {
+          contentLocator: { kind: 'workspace-file', path: 'documents/source.pdf' },
+        },
+        result: {
+          success: true,
+          data: {
+            contentLocator: { kind: 'workspace-file', path: 'media/clip.mp4' },
+            mimeType: 'video/mp4',
+          },
+        },
+      },
+    },
+  };
+  return {
+    conversationId: 'conversation-1',
+    projectionVersion: 1,
+    turns: [
+      {
+        turnId: 'turn-1',
+        runId: 'run-1',
+        messageId: 'message-1',
+        items: [item],
+      },
+    ],
   };
 }
 

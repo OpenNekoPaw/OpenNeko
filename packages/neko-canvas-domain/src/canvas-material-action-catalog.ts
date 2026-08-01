@@ -49,6 +49,9 @@ export function resolveCanvasMaterialActionTargets(
       return [];
     }
 
+    if (node.data.contentLocator === undefined) {
+      return [];
+    }
     const locatorResult = validateContentLocator(node.data.contentLocator);
     if (!locatorResult.ok) {
       throw new Error(

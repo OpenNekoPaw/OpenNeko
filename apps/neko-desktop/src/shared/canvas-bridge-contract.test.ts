@@ -116,4 +116,39 @@ describe('Desktop Canvas bridge contract', () => {
       'owner does not match',
     );
   });
+
+  it('retains locator-backed native media descriptors and rejects path-only success', () => {
+    const response = {
+      type: 'media:streamReady',
+      nodeId: 'audio-1',
+      mediaInfo: {
+        duration: 12,
+        width: 0,
+        height: 0,
+        fps: 0,
+        codec: 'aac',
+        format: 'aac',
+        hasAudio: true,
+      },
+      contentLocator: { kind: 'workspace-file', path: 'media/voice.aac' },
+      audio: {
+        version: 1,
+        url: 'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        mimeType: 'audio/aac',
+        durationSeconds: 12,
+      },
+    };
+
+    expect(parseDesktopCanvasMediaResponse(response, 'audio-1')).toEqual(response);
+    expect(() =>
+      parseDesktopCanvasMediaResponse(
+        {
+          ...response,
+          contentLocator: undefined,
+          assetPath: 'media/voice.aac',
+        },
+        'audio-1',
+      ),
+    ).toThrow('stream response is incomplete');
+  });
 });

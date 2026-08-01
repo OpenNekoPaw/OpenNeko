@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { createEmptyCanvasData, type CanvasMaterialActionDescriptor } from '@neko/shared';
+import {
+  createEmptyCanvasData,
+  type CanvasMaterialActionDescriptor,
+  type CanvasNode,
+} from '@neko/shared';
 import {
   projectCanvasMaterialActionCatalog,
   resolveCanvasMaterialActionTargets,
@@ -276,5 +280,21 @@ describe('Canvas material action catalog', () => {
         targets: resolveCanvasMaterialActionTargets(canvas.nodes, ['reference']),
       }),
     ).toThrow('Duplicate Canvas material action descriptor');
+  });
+
+  it('projects no actions for a degraded path-only material node', () => {
+    const degraded: CanvasNode = {
+      id: 'degraded-media',
+      type: 'media',
+      position: { x: 40, y: 60 },
+      size: { width: 300, height: 180 },
+      zIndex: 1,
+      data: {
+        assetPath: 'media/legacy.mp4',
+        mediaType: 'video',
+      },
+    };
+
+    expect(resolveCanvasMaterialActionTargets([degraded], [degraded.id])).toEqual([]);
   });
 });

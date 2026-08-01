@@ -12,6 +12,7 @@ import {
   parseResourceBrowserIntentRequest,
   parseResourceBrowserRecoveryPlanRequest,
   parseResourceBrowserRecoveryPlanResult,
+  parseResourceBrowserQuickPreviewResult,
 } from './contract';
 
 const identity = {
@@ -220,6 +221,43 @@ describe('Resource Browser contract', () => {
         code: 'resource-browser-stale-identity',
       }),
     );
+  });
+
+  it('accepts only transient OpenNeko URLs for quick preview display', () => {
+    const result = {
+      schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
+      requestId: 'preview-1',
+      identity,
+      resourceId: 'media-1',
+      previewSessionId: 'preview-session-1',
+      descriptor: {
+        descriptorId: 'descriptor-1',
+        revision: 'revision-1',
+        contentLocator: { kind: 'workspace-file', path: 'media/clip.mp4' },
+        url: 'openneko://resource/0123456789abcdefghijklmnopqrstuv',
+        contentKind: 'video',
+        mediaType: 'video/mp4',
+        displayName: 'clip.mp4',
+        byteLength: 42,
+      },
+    };
+
+    expect(parseResourceBrowserQuickPreviewResult(result)).toMatchObject({
+      descriptor: { url: 'openneko://resource/0123456789abcdefghijklmnopqrstuv' },
+    });
+    for (const url of [
+      'http://127.0.0.1:43125/v1/resources/token',
+      'neko-media://desktop/token',
+      'opennekomedia://resource/token',
+      'openneko://desktop/index.html',
+    ]) {
+      expect(() =>
+        parseResourceBrowserQuickPreviewResult({
+          ...result,
+          descriptor: { ...result.descriptor, url },
+        }),
+      ).toThrow('authorized OpenNeko resource');
+    }
   });
 
   it('rejects target-bearing recovery requests, plans, and library statuses', () => {

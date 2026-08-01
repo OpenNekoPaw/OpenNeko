@@ -1,9 +1,11 @@
-import type { HtmlVideoDescriptor, MediaProbe, PcmStreamDescriptor } from '@neko/media';
-import { NodeMediaRuntime } from '@neko/media/node';
+import { stat } from 'node:fs/promises';
+import * as path from 'node:path';
+import type { HtmlAudioDescriptor, HtmlVideoDescriptor, MediaProbe } from '@neko/media';
+import { NodeMediaRuntime, type NodeMediaPublisher } from '@neko/media/node';
 import type { CanvasHostRuntimeIdentity } from '@neko-canvas/domain';
-import type { DesktopMediaDescriptorRegistry } from './desktop-media-protocol';
 import type { DesktopWorkspaceResolution } from './desktop-workspace-registry';
 import { resolveDesktopWorkspaceContentLocator } from './desktop-content-locator';
+import type { DesktopResourceRegistry } from './desktop-resource-registry';
 import type {
   DesktopCanvasMediaInfo,
   DesktopCanvasMediaRequest,
@@ -12,7 +14,10 @@ import type {
 
 interface DesktopCanvasMediaHandle {
   readonly identity: CanvasHostRuntimeIdentity;
-  readonly descriptorSessionId: string;
+  readonly contentLocator: {
+    readonly kind: 'workspace-file';
+    readonly path: string;
+  };
   readonly sourcePath: string;
   readonly mediaInfo: DesktopCanvasMediaInfo;
   readonly mediaType: 'video' | 'audio';
@@ -20,7 +25,9 @@ interface DesktopCanvasMediaHandle {
   readonly videoSessionId?: string;
   readonly audioSessionId?: string;
   readonly video?: HtmlVideoDescriptor;
-  readonly audio?: PcmStreamDescriptor;
+  readonly audio?: HtmlAudioDescriptor;
+  readonly media: DesktopCanvasNodeMediaPort;
+  readonly ownsMedia: boolean;
 }
 
 export interface DesktopCanvasNodeMediaPort {
@@ -34,14 +41,10 @@ export interface DesktopCanvasNodeMediaPort {
     readonly sessionId: string;
     readonly video: HtmlVideoDescriptor;
   }>;
-  startPcm(
+  publishFile(
     sourcePath: string,
-    options: {
-      readonly startTimeSeconds: number;
-      readonly durationSeconds: number;
-      readonly playbackRate: number;
-    },
-  ): Promise<{ readonly sessionId: string; readonly stream: PcmStreamDescriptor }>;
+    contentType: string,
+  ): Promise<{ readonly sessionId: string; readonly url: string }>;
   stop(sessionId: string): Promise<void>;
   dispose(): Promise<void>;
 }
@@ -54,12 +57,12 @@ export class DesktopCanvasMediaRuntime {
 
   constructor(
     private readonly options: {
-      readonly mediaRegistry: DesktopMediaDescriptorRegistry;
-      readonly resolveWebContentsId: (windowId: string) => number;
+      readonly resources?: Pick<DesktopResourceRegistry, 'createMediaPublisher'>;
       readonly media?: DesktopCanvasNodeMediaPort;
     },
   ) {
-    this.media = options.media ?? new NodeMediaRuntime();
+    this.media =
+      options.media ?? new NodeMediaRuntime({ publisher: UNAVAILABLE_DESKTOP_MEDIA_PUBLISHER });
   }
 
   async execute(
@@ -130,7 +133,8 @@ export class DesktopCanvasMediaRuntime {
       await this.stopKey(key);
       const handle = await this.startPlayback(
         request.identity,
-        key,
+        request.locator,
+        request.nodeId,
         sourcePath,
         request.mediaInfo,
         request.mediaType,
@@ -158,7 +162,8 @@ export class DesktopCanvasMediaRuntime {
       await this.stopKey(key);
       const replacement = await this.startPlayback(
         current.identity,
-        key,
+        current.contentLocator,
+        request.nodeId,
         current.sourcePath,
         current.mediaInfo,
         current.mediaType,
@@ -202,7 +207,8 @@ export class DesktopCanvasMediaRuntime {
 
   private async startPlayback(
     identity: CanvasHostRuntimeIdentity,
-    key: string,
+    contentLocator: { readonly kind: 'workspace-file'; readonly path: string },
+    nodeId: string,
     sourcePath: string,
     mediaInfo: DesktopCanvasMediaInfo,
     mediaType: 'video' | 'audio',
@@ -213,50 +219,59 @@ export class DesktopCanvasMediaRuntime {
     if (duration <= 0) {
       throw new Error('Desktop Canvas playback start is outside the media duration.');
     }
-    const descriptorSessionId = `canvas-media:${key}`;
-    const video = mediaType === 'video' ? await this.media.prepareVideo(sourcePath) : undefined;
+    const playbackMedia = await this.createPlaybackMedia(
+      identity,
+      nodeId,
+      sourcePath,
+      contentLocator.path,
+    );
+    const video =
+      mediaType === 'video' ? await playbackMedia.media.prepareVideo(sourcePath) : undefined;
     let audio:
       | {
           readonly sessionId: string;
-          readonly stream: PcmStreamDescriptor;
+          readonly url: string;
         }
       | undefined;
     try {
       audio =
-        mediaType === 'audio' || mediaInfo.hasAudio
-          ? await this.media.startPcm(sourcePath, {
-              startTimeSeconds: startTime,
-              durationSeconds: duration,
-              playbackRate: speed,
-            })
+        mediaType === 'audio'
+          ? await playbackMedia.media.publishFile(sourcePath, audioMimeType(sourcePath))
           : undefined;
       return {
         identity,
-        descriptorSessionId,
+        contentLocator,
         sourcePath,
         mediaInfo,
         mediaType,
         speed,
+        media: playbackMedia.media,
+        ownsMedia: playbackMedia.ownsMedia,
         ...(video
           ? {
               videoSessionId: video.sessionId,
-              video: this.authorizeVideo(identity, descriptorSessionId, video.video),
+              video: video.video,
             }
           : {}),
         ...(audio
           ? {
               audioSessionId: audio.sessionId,
-              audio: this.authorizeAudio(identity, descriptorSessionId, audio.stream),
+              audio: {
+                version: 1,
+                url: audio.url,
+                mimeType: audioMimeType(sourcePath),
+                durationSeconds: mediaInfo.duration,
+              },
             }
           : {}),
       };
     } catch (error: unknown) {
-      this.options.mediaRegistry.releaseSession(descriptorSessionId);
       await Promise.all(
         [video?.sessionId, audio?.sessionId]
           .filter((sessionId): sessionId is string => sessionId !== undefined)
-          .map((sessionId) => this.media.stop(sessionId)),
+          .map((sessionId) => playbackMedia.media.stop(sessionId)),
       );
+      if (playbackMedia.ownsMedia) await playbackMedia.media.dispose();
       throw error;
     }
   }
@@ -265,68 +280,39 @@ export class DesktopCanvasMediaRuntime {
     const handle = this.streams.get(key);
     if (!handle) return;
     this.streams.delete(key);
-    this.options.mediaRegistry.releaseSession(handle.descriptorSessionId);
     const sessionIds = [handle.videoSessionId, handle.audioSessionId].filter(
       (sessionId): sessionId is string => sessionId !== undefined,
     );
-    await Promise.all(sessionIds.map((sessionId) => this.media.stop(sessionId)));
+    await Promise.all(sessionIds.map((sessionId) => handle.media.stop(sessionId)));
+    if (handle.ownsMedia) await handle.media.dispose();
   }
 
-  private authorizeVideo(
+  private async createPlaybackMedia(
     identity: CanvasHostRuntimeIdentity,
-    descriptorSessionId: string,
-    descriptor: HtmlVideoDescriptor,
-  ): HtmlVideoDescriptor {
+    nodeId: string,
+    sourcePath: string,
+    locatorPath: string,
+  ): Promise<{ readonly media: DesktopCanvasNodeMediaPort; readonly ownsMedia: boolean }> {
+    if (this.options.media) return { media: this.options.media, ownsMedia: false };
+    const resources = this.options.resources;
+    if (!resources) {
+      throw new Error('Desktop Canvas playback requires the app resource registry.');
+    }
+    const metadata = await stat(sourcePath);
+    if (!metadata.isFile()) throw new Error('Desktop Canvas media source is not a file.');
+    const revision = `${metadata.mtimeMs}:${metadata.size}:${locatorPath}`;
     return {
-      ...descriptor,
-      transport: 'authorized',
-      url: this.authorizeUpstreamMedia(
-        identity,
-        descriptorSessionId,
-        descriptor.url,
-        descriptor.mimeType,
-        'video.mp4',
-      ),
+      media: new NodeMediaRuntime({
+        publisher: resources.createMediaPublisher({
+          windowId: identity.windowId,
+          viewId: identity.viewId,
+          sessionId: `canvas-media:${identity.sessionId}:${nodeId}`,
+          endpointEpoch: identity.endpointEpoch,
+          revision,
+        }),
+      }),
+      ownsMedia: true,
     };
-  }
-
-  private authorizeAudio(
-    identity: CanvasHostRuntimeIdentity,
-    descriptorSessionId: string,
-    descriptor: PcmStreamDescriptor,
-  ): PcmStreamDescriptor {
-    return {
-      ...descriptor,
-      transport: 'authorized',
-      streamUrl: this.authorizeUpstreamMedia(
-        identity,
-        descriptorSessionId,
-        descriptor.streamUrl,
-        'application/octet-stream',
-        'audio.pcm',
-      ),
-    };
-  }
-
-  private authorizeUpstreamMedia(
-    identity: CanvasHostRuntimeIdentity,
-    descriptorSessionId: string,
-    upstreamUrl: string,
-    mediaType: string,
-    displayName: string,
-  ): string {
-    const descriptorId = this.options.mediaRegistry.registerUpstream({
-      webContentsId: this.options.resolveWebContentsId(identity.windowId),
-      windowId: identity.windowId,
-      viewId: identity.viewId,
-      sessionId: descriptorSessionId,
-      revision: descriptorSessionId,
-      upstreamUrl,
-      mediaType,
-    });
-    return `neko-media://desktop/${encodeURIComponent(descriptorId)}/${encodeURIComponent(
-      displayName,
-    )}`;
   }
 
   private trackCleanup(cleanup: Promise<void>): void {
@@ -342,6 +328,18 @@ export class DesktopCanvasMediaRuntime {
   }
 }
 
+const UNAVAILABLE_DESKTOP_MEDIA_PUBLISHER = {
+  registerFile: async () => {
+    throw new Error('Desktop Canvas media publication requires the app resource registry.');
+  },
+  registerPcm: async () => {
+    throw new Error('Desktop Canvas PCM is not available for ordinary node playback.');
+  },
+  unregister: () => {
+    throw new Error('Desktop Canvas cannot release an unregistered media capability.');
+  },
+} satisfies NodeMediaPublisher;
+
 function streamReadyResponse(
   nodeId: string,
   handle: DesktopCanvasMediaHandle,
@@ -351,11 +349,33 @@ function streamReadyResponse(
     type: 'media:streamReady',
     nodeId,
     mediaInfo: handle.mediaInfo,
+    contentLocator: handle.contentLocator,
     ...(handle.video ? { video: handle.video } : {}),
     ...(handle.audio ? { audio: handle.audio } : {}),
     startTime,
     playbackRate: handle.speed,
   };
+}
+
+function audioMimeType(sourcePath: string): string {
+  switch (path.extname(sourcePath).toLocaleLowerCase()) {
+    case '.wav':
+      return 'audio/wav';
+    case '.mp3':
+      return 'audio/mpeg';
+    case '.m4a':
+    case '.mp4':
+      return 'audio/mp4';
+    case '.aac':
+      return 'audio/aac';
+    case '.flac':
+      return 'audio/flac';
+    case '.ogg':
+    case '.oga':
+      return 'audio/ogg';
+    default:
+      throw new Error('Desktop Canvas audio source requires an accepted native profile.');
+  }
 }
 
 function projectMediaInfo(probe: MediaProbe): DesktopCanvasMediaInfo {

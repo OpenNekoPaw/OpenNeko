@@ -1,7 +1,16 @@
 import { randomUUID } from 'node:crypto';
 import { lstat, realpath } from 'node:fs/promises';
 import * as path from 'node:path';
-import { app, BrowserWindow, dialog, nativeImage, nativeTheme, safeStorage, shell } from 'electron';
+import {
+  app,
+  BrowserWindow,
+  dialog,
+  nativeImage,
+  nativeTheme,
+  safeStorage,
+  session,
+  shell,
+} from 'electron';
 import { ConsoleLogger } from '@neko/shared/logger';
 import { DESKTOP_BRIDGE_CHANNELS, type DesktopLifecycleEvent } from '../shared/bridge-contract';
 import { DESKTOP_SHELL_CHANNELS, type DesktopShellProjectionEvent } from '../shared/shell-contract';
@@ -37,9 +46,9 @@ import {
   type DesktopResourceBrowserRuntimeOptions,
 } from './desktop-resource-browser-runtime';
 import {
-  DesktopMediaDescriptorRegistry,
-  registerDesktopMediaProtocol,
-} from './desktop-media-protocol';
+  DesktopResourceRegistry,
+  registerDesktopResourceRequestAuthorization,
+} from './desktop-resource-registry';
 import { DesktopPreviewRuntime } from './desktop-preview-runtime';
 import { DesktopCanvasGenerationRuntime } from './desktop-canvas-generation-runtime';
 import { DesktopCanvasRuntime } from './desktop-canvas-runtime';
@@ -138,6 +147,16 @@ async function startDesktop(): Promise<void> {
     },
   });
   logger.info('Desktop Host ports initialized.');
+  const developmentUrl = readDevelopmentUrl();
+  const rendererOrigin = developmentUrl ? new URL(developmentUrl).origin : DESKTOP_APP_ORIGIN;
+  const resourceRegistry = new DesktopResourceRegistry({
+    allowedOrigins: [rendererOrigin],
+  });
+  const disposeResourceAuthorization = registerDesktopResourceRequestAuthorization(
+    session.defaultSession,
+    resourceRegistry,
+  );
+  logger.info('Desktop OpenNeko resource registry initialized.');
   const workspaceRegistry = await createDesktopWorkspaceRegistry({ homedir });
   logger.info('Desktop workspace registry initialized.');
   const credentialRuntime = createDesktopAgentCredentialRuntime({
@@ -204,17 +223,14 @@ async function startDesktop(): Promise<void> {
     const error = await shell.openPath(targetPath);
     if (error) throw new Error(error);
   };
-  const mediaRegistry = new DesktopMediaDescriptorRegistry();
   const previewRuntime = new DesktopPreviewRuntime({
     shell: shellService,
-    mediaRegistry,
-    resolveWebContentsId: (windowId) => requireOwnerWindow(windowId).webContents.id,
+    resources: resourceRegistry,
   });
   const cutRuntime = new DesktopCutRuntime({
     shell: shellService,
     host,
-    mediaRegistry,
-    resolveWebContentsId: (windowId) => requireOwnerWindow(windowId).webContents.id,
+    resources: resourceRegistry,
     selectMediaFiles: async ({ identity, trackKind }) => {
       const owner = requireOwnerWindow(identity.windowId);
       const result = await dialog.showOpenDialog(owner, {
@@ -280,8 +296,7 @@ async function startDesktop(): Promise<void> {
     },
     generation: canvasGenerationRuntime,
     media: new DesktopCanvasMediaRuntime({
-      mediaRegistry,
-      resolveWebContentsId: (windowId) => requireOwnerWindow(windowId).webContents.id,
+      resources: resourceRegistry,
     }),
     requestSource: async ({ identity, sourceKind, sourceMode, workspace }) => {
       const owner = requireOwnerWindow(identity.windowId);
@@ -576,6 +591,7 @@ async function startDesktop(): Promise<void> {
     host,
     userHome: homedir,
     credentialRuntime,
+    resources: resourceRegistry,
     contentInteraction: {
       openContent: async ({ identity, absolutePath }) => {
         requireOwnerWindow(identity.windowId);
@@ -678,10 +694,8 @@ async function startDesktop(): Promise<void> {
     },
   });
   logger.info('Desktop AppHost and IPC initialized.');
-  const developmentUrl = readDevelopmentUrl();
   const rendererRoot = path.join(__dirname, '..', 'renderer', MAIN_WINDOW_VITE_NAME);
-  const disposeProtocol = developmentUrl ? undefined : registerDesktopAppProtocol(rendererRoot);
-  const disposeMediaProtocol = registerDesktopMediaProtocol(mediaRegistry);
+  const disposeProtocol = registerDesktopAppProtocol(rendererRoot, resourceRegistry);
   let shutdownStarted = false;
   let shutdownComplete = false;
 
@@ -716,6 +730,7 @@ async function startDesktop(): Promise<void> {
         webContentsId: createdWindow.webContents.id,
         allowedOrigin,
       });
+      resourceRegistry.bindWindow(registration.windowId, registration.webContentsId);
       registered = true;
       const disposeSecurity = configureDesktopWindowSecurity(
         createdWindow,
@@ -750,6 +765,7 @@ async function startDesktop(): Promise<void> {
       appHost.windows.addDisposable(registration.windowId, {
         dispose: () => {
           appHost.detachWindowResources(registration.windowId, registration.webContentsId);
+          resourceRegistry.unbindWindow(registration.windowId);
         },
       });
       appHost.windows.addDisposable(registration.windowId, {
@@ -760,7 +776,8 @@ async function startDesktop(): Promise<void> {
 
       createdWindow.webContents.on('did-start-loading', () => {
         appHost.agentBridge.detachWindow(registration.windowId);
-        appHost.detachRendererSubscriptions(registration.webContentsId);
+        appHost.detachWindowResources(registration.windowId, registration.webContentsId);
+        resourceRegistry.releaseWindow(registration.windowId);
         const event = appHost.windows.rendererLoading(
           registration.windowId,
           appHost.applicationIdentity.instanceId,
@@ -893,9 +910,9 @@ async function startDesktop(): Promise<void> {
     nativeThemeController.dispose();
     disposeIpc();
     await appHost.dispose();
-    disposeMediaProtocol();
-    mediaRegistry.dispose();
-    disposeProtocol?.();
+    resourceRegistry.dispose();
+    disposeResourceAuthorization();
+    disposeProtocol();
   }
 }
 

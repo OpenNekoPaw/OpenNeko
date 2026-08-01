@@ -16,11 +16,7 @@ import {
   type ConnectionType,
 } from '../types/canvas';
 import type { ContainerCapability } from '../types/canvas-layered';
-import {
-  isContentLocator,
-  normalizeWorkspaceContentPath,
-  validateContentLocator,
-} from '../types/content-locator';
+import { isContentLocator, validateContentLocator } from '../types/content-locator';
 import {
   isCanvasMaterialMediaKind,
   type CanvasMaterialMediaKind,
@@ -64,22 +60,12 @@ export function migrateNkc(data: unknown): NkcMigrationResult {
   assertMigratableCanvasRoot(data);
   const fromVersion = detectNkcVersion(data) ?? '1.0';
   if (fromVersion === CURRENT_NKC_VERSION) {
-    const currentVersionMigration = migrateCurrentVersionMaterialLocators(data);
     return {
-      data: currentVersionMigration.data,
+      data: data as unknown as CanvasData,
       fromVersion,
       toVersion: CURRENT_NKC_VERSION,
-      migrated: currentVersionMigration.migrated,
-      steps: currentVersionMigration.migrated
-        ? [
-            {
-              from: CURRENT_NKC_VERSION,
-              to: CURRENT_NKC_VERSION,
-              description:
-                'Promoted legacy workspace-relative Media and File paths to canonical ContentLocators.',
-            },
-          ]
-        : [],
+      migrated: false,
+      steps: [],
       warnings: [],
     };
   }
@@ -100,41 +86,6 @@ export function migrateNkc(data: unknown): NkcMigrationResult {
       },
     ],
     warnings,
-  };
-}
-
-function migrateCurrentVersionMaterialLocators(data: Record<string, unknown>): {
-  readonly data: CanvasData;
-  readonly migrated: boolean;
-} {
-  const sourceNodes = data['nodes'];
-  if (!Array.isArray(sourceNodes)) {
-    return { data: data as unknown as CanvasData, migrated: false };
-  }
-  let migrated = false;
-  const nodes = sourceNodes.map((node) => {
-    if (!isRecord(node) || (node['type'] !== 'media' && node['type'] !== 'file')) return node;
-    const nodeData = node['data'];
-    if (!isRecord(nodeData) || nodeData['contentLocator'] !== undefined) return node;
-    const legacyPath =
-      node['type'] === 'media' ? readString(nodeData, 'assetPath') : readString(nodeData, 'path');
-    const normalizedPath = normalizeWorkspaceContentPath(legacyPath);
-    if (!normalizedPath || normalizedPath !== legacyPath) return node;
-    migrated = true;
-    return {
-      ...node,
-      data: {
-        ...nodeData,
-        contentLocator: {
-          kind: 'workspace-file',
-          path: normalizedPath,
-        },
-      },
-    };
-  });
-  return {
-    data: (migrated ? { ...data, nodes } : data) as unknown as CanvasData,
-    migrated,
   };
 }
 

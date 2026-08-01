@@ -153,6 +153,8 @@ export interface PreviewMediaDescriptor {
   readonly descriptorId: string;
   readonly revision: string;
   readonly contentLocator: ContentLocator;
+  readonly url: string;
+  readonly resourceUris?: Readonly<Record<string, string>>;
   readonly contentKind: PreviewContentKind;
   readonly mediaType: string;
   readonly displayName: string;
@@ -267,6 +269,10 @@ export function parsePreviewMediaDescriptor(value: unknown): PreviewMediaDescrip
     ),
     revision: requireOpaqueIdentity(record['revision'], 'Preview descriptor revision is required.'),
     contentLocator: contentLocator.locator,
+    url: requireOpenNekoResourceUrl(record['url']),
+    ...(record['resourceUris'] === undefined
+      ? {}
+      : { resourceUris: requireResourceUris(record['resourceUris']) }),
     contentKind: requirePreviewContentKind(record['contentKind']),
     mediaType: requireMediaType(record['mediaType']),
     displayName: requireNonEmptyString(record['displayName'], 'Preview display name is required.'),
@@ -275,7 +281,6 @@ export function parsePreviewMediaDescriptor(value: unknown): PreviewMediaDescrip
       'Preview byte length must be a non-negative integer.',
     ),
   };
-  assertNoForbiddenTransportValue(descriptor);
   return descriptor;
 }
 
@@ -456,6 +461,43 @@ function requireMediaType(value: unknown): string {
     throw invalidPayload('Preview media type is invalid.');
   }
   return mediaType;
+}
+
+function requireOpenNekoResourceUrl(value: unknown): string {
+  if (typeof value !== 'string') throw invalidPayload('Preview media URL is required.');
+  try {
+    const url = new URL(value);
+    if (
+      url.protocol !== 'openneko:' ||
+      url.hostname !== 'resource' ||
+      !/^\/[A-Za-z0-9_-]{32}(?:\/.*)?$/u.test(url.pathname) ||
+      url.username.length > 0 ||
+      url.password.length > 0 ||
+      url.port.length > 0 ||
+      url.search.length > 0 ||
+      url.hash.length > 0
+    ) {
+      throw new Error('not an OpenNeko resource URL');
+    }
+    return value;
+  } catch {
+    throw invalidPayload('Preview media URL must use an authorized OpenNeko resource.');
+  }
+}
+
+function requireResourceUris(value: unknown): Readonly<Record<string, string>> {
+  const record = requireRecord(value, 'Preview resource URI map must be an object.');
+  const result: Record<string, string> = {};
+  for (const [reference, uri] of Object.entries(record)) {
+    if (reference.trim().length === 0 || reference.includes('\0')) {
+      throw invalidPayload('Preview resource URI reference is invalid.');
+    }
+    result[reference] = requireOpenNekoResourceUrl(uri);
+  }
+  if (Object.keys(result).length === 0) {
+    throw invalidPayload('Preview resource URI map must not be empty.');
+  }
+  return result;
 }
 
 function requireOpaqueIdentity(value: unknown, message: string): string {

@@ -211,10 +211,6 @@ describe('NKC validator v3.0', () => {
     expect(result.errors).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          field: 'nodes[0].data.contentLocator',
-          message: expect.stringContaining('canvas-material-content-locator-required'),
-        }),
-        expect.objectContaining({
           field: 'nodes[0].data.generationContext',
           message: expect.stringContaining('canvas-material-legacy-generation-evidence'),
         }),
@@ -223,6 +219,12 @@ describe('NKC validator v3.0', () => {
           message: expect.stringContaining('canvas-material-generation-evidence-required'),
         }),
       ]),
+    );
+    expect(result.warnings).toContainEqual(
+      expect.objectContaining({
+        field: 'nodes[0].data.contentLocator',
+        message: expect.stringContaining('canvas-material-content-locator-required'),
+      }),
     );
   });
 

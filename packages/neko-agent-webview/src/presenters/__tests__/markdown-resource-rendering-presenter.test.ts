@@ -23,11 +23,13 @@ describe('markdown resource rendering presenter', () => {
       expect.objectContaining({
         token: 'read-image-cover.jpg',
         status: 'bound',
-        renderUris: ['neko-media://cover'],
+        renderUris: ['http://127.0.0.1:43125/v1/resources/cover'],
         refs: [expect.objectContaining({ label: 'read-image-cover.jpg' })],
       }),
     );
-    expect(JSON.stringify(projection.tokens[0]?.refs)).not.toContain('neko-media://cover');
+    expect(JSON.stringify(projection.tokens[0]?.refs)).not.toContain(
+      'http://127.0.0.1:43125/v1/resources/cover',
+    );
   });
 
   it('does not bind missing tokens by image order', () => {
@@ -67,7 +69,7 @@ describe('markdown resource rendering presenter', () => {
       expect.objectContaining({
         token: 'P1',
         status: 'bound',
-        renderUris: ['neko-media://page-1'],
+        renderUris: ['http://127.0.0.1:43125/v1/resources/page-1'],
         resources: [
           expect.objectContaining({
             token: 'P1',
@@ -158,7 +160,7 @@ describe('markdown resource rendering presenter', () => {
       expect.objectContaining({
         token: 'read-image-moe-010564.jpg',
         status: 'bound',
-        renderUris: ['neko-media://cover'],
+        renderUris: ['http://127.0.0.1:43125/v1/resources/cover'],
         resources: [
           expect.objectContaining({
             token: 'read-image-moe-010564.jpg',
@@ -190,7 +192,7 @@ describe('markdown resource rendering presenter', () => {
       expect.objectContaining({
         token: 'read-image-p01-cover',
         status: 'bound',
-        renderUris: ['neko-media://cover'],
+        renderUris: ['http://127.0.0.1:43125/v1/resources/cover'],
         resources: [
           expect.objectContaining({
             token: 'read-image-p01-cover',
@@ -208,7 +210,7 @@ describe('markdown resource rendering presenter', () => {
         createReadImageDocumentResourceToolCall({
           label: 'Page 1',
           entryPath: 'image/moe-010564.jpg',
-          renderUri: 'neko-media://moe-page-1',
+          renderUri: 'http://127.0.0.1:43125/v1/resources/moe-page-1',
         }),
       ],
     });
@@ -218,7 +220,7 @@ describe('markdown resource rendering presenter', () => {
       expect.objectContaining({
         token: 'P1',
         status: 'bound',
-        renderUris: ['neko-media://moe-page-1'],
+        renderUris: ['http://127.0.0.1:43125/v1/resources/moe-page-1'],
         resources: [
           expect.objectContaining({
             token: 'P1',
@@ -246,7 +248,7 @@ describe('markdown resource rendering presenter', () => {
       expect.objectContaining({
         token: 'P00',
         status: 'bound',
-        renderUris: ['neko-media://cover'],
+        renderUris: ['http://127.0.0.1:43125/v1/resources/cover'],
         resources: [
           expect.objectContaining({
             token: 'P00',
@@ -257,7 +259,7 @@ describe('markdown resource rendering presenter', () => {
       expect.objectContaining({
         token: 'P01',
         status: 'bound',
-        renderUris: ['neko-media://moe-010564'],
+        renderUris: ['http://127.0.0.1:43125/v1/resources/moe-010564'],
         resources: [
           expect.objectContaining({
             token: 'P01',
@@ -268,7 +270,7 @@ describe('markdown resource rendering presenter', () => {
       expect.objectContaining({
         token: 'P02',
         status: 'bound',
-        renderUris: ['neko-media://moe-003015'],
+        renderUris: ['http://127.0.0.1:43125/v1/resources/moe-003015'],
         resources: [
           expect.objectContaining({
             token: 'P02',
@@ -290,7 +292,7 @@ describe('markdown resource rendering presenter', () => {
       toolCalls: [
         createReadImageManagedDocumentResourceToolCall({
           entryPath: 'image/moe-010564.jpg',
-          renderUri: 'neko-media://managed-moe-page',
+          renderUri: 'http://127.0.0.1:43125/v1/resources/managed-moe-page',
         }),
       ],
     });
@@ -300,12 +302,12 @@ describe('markdown resource rendering presenter', () => {
       expect.objectContaining({
         token: 'image/moe-010564.jpg',
         status: 'bound',
-        renderUris: ['neko-media://managed-moe-page'],
+        renderUris: ['http://127.0.0.1:43125/v1/resources/managed-moe-page'],
       }),
       expect.objectContaining({
         token: 'moe-010564.jpg',
         status: 'bound',
-        renderUris: ['neko-media://managed-moe-page'],
+        renderUris: ['http://127.0.0.1:43125/v1/resources/managed-moe-page'],
       }),
     ]);
   });
@@ -358,7 +360,7 @@ describe('markdown resource rendering presenter', () => {
       expect.objectContaining({
         token: 'cover.png',
         status: 'bound',
-        renderUris: ['neko-media://cover'],
+        renderUris: ['http://127.0.0.1:43125/v1/resources/cover'],
       }),
     ]);
   });
@@ -413,7 +415,7 @@ describe('markdown resource rendering presenter', () => {
       expect.objectContaining({
         token: 'P1',
         status: 'bound',
-        renderUris: ['neko-media://page-1'],
+        renderUris: ['http://127.0.0.1:43125/v1/resources/page-1'],
         resources: [
           expect.objectContaining({
             token: 'P1',
@@ -439,7 +441,7 @@ describe('markdown resource rendering presenter', () => {
       expect.objectContaining({
         token: 'P1',
         status: 'bound',
-        renderUris: ['neko-media://page-1'],
+        renderUris: ['http://127.0.0.1:43125/v1/resources/page-1'],
       }),
     ]);
   });
@@ -751,11 +753,11 @@ function createReadImageToolCall(
             attachments: [
               {
                 type: 'image',
-                path: 'neko-media://cover',
+                path: 'http://127.0.0.1:43125/v1/resources/cover',
                 mimeType: 'image/jpeg',
                 assetRef: {
                   assetId: overrides.assetId ?? 'read-image-cover',
-                  uri: 'neko-media://cover',
+                  uri: 'http://127.0.0.1:43125/v1/resources/cover',
                   mimeType: 'image/jpeg',
                   ...(overrides.label ? { label: overrides.label } : {}),
                 },
@@ -801,7 +803,7 @@ function createReadImageDocumentResourceToolCall(
       attachments: [
         {
           type: 'image',
-          path: overrides.renderUri ?? 'neko-media://document-page',
+          path: overrides.renderUri ?? 'http://127.0.0.1:43125/v1/resources/document-page',
           mimeType: 'image/jpeg',
           assetRef: {
             assetId: 'read-image-page-1',
@@ -844,17 +846,17 @@ function createReadImageDocumentResourceBatchToolCall(): ToolCall {
     {
       label: 'read-image-cover.jpg',
       entryPath: 'image/cover.jpg',
-      renderUri: 'neko-media://cover',
+      renderUri: 'http://127.0.0.1:43125/v1/resources/cover',
     },
     {
       label: 'read-image-moe-010564.jpg',
       entryPath: 'image/moe-010564.jpg',
-      renderUri: 'neko-media://moe-010564',
+      renderUri: 'http://127.0.0.1:43125/v1/resources/moe-010564',
     },
     {
       label: 'read-image-moe-003015.jpg',
       entryPath: 'image/moe-003015.jpg',
-      renderUri: 'neko-media://moe-003015',
+      renderUri: 'http://127.0.0.1:43125/v1/resources/moe-003015',
     },
   ];
   const source = {
@@ -929,7 +931,7 @@ function createReadImageManagedDocumentResourceToolCall(
       attachments: [
         {
           type: 'image',
-          path: overrides.renderUri ?? 'neko-media://managed-document-page',
+          path: overrides.renderUri ?? 'http://127.0.0.1:43125/v1/resources/managed-document-page',
           mimeType: 'image/jpeg',
           assetRef: {
             assetId: 'read-image-managed-moe-page',
@@ -984,7 +986,7 @@ function createReadDocumentToolCall(
       attachments: [
         {
           type: 'image',
-          path: 'neko-media://page-1',
+          path: 'http://127.0.0.1:43125/v1/resources/page-1',
           mimeType: 'image/jpeg',
         },
       ],
@@ -1013,7 +1015,7 @@ function createPerceptionOnlyToolCall(): ToolCall {
       attachments: [
         {
           type: 'image',
-          path: 'neko-media://page-1',
+          path: 'http://127.0.0.1:43125/v1/resources/page-1',
           mimeType: 'image/jpeg',
           assetRef: {
             assetId: 'read-image-page-1',
@@ -1081,7 +1083,7 @@ function createReadImageDocumentResourceFieldToolCall(): ToolCall {
       attachments: [
         {
           type: 'image',
-          path: 'neko-media://page-1',
+          path: 'http://127.0.0.1:43125/v1/resources/page-1',
           mimeType: 'image/jpeg',
           assetRef: {
             assetId: 'read-image-page-1',

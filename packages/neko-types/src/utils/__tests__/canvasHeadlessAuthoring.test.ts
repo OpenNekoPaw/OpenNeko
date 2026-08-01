@@ -47,7 +47,14 @@ describe('canvasHeadlessAuthoring canonical planner', () => {
     const generateId = ids();
     for (const request of [
       { type: 'markdown' as const, data: { content: '# Brief' } },
-      { type: 'media' as const, data: { assetPath: 'media/key.png', mediaType: 'image' } },
+      {
+        type: 'media' as const,
+        data: {
+          assetPath: 'media/key.png',
+          mediaType: 'image',
+          contentLocator: { kind: 'workspace-file', path: 'media/key.png' },
+        },
+      },
       { type: 'group' as const, data: { label: 'References' } },
       {
         type: 'job' as const,
@@ -58,7 +65,14 @@ describe('canvasHeadlessAuthoring canonical planner', () => {
           status: 'running',
         },
       },
-      { type: 'file' as const, data: { path: 'docs/brief.pdf', title: 'Brief' } },
+      {
+        type: 'file' as const,
+        data: {
+          path: 'docs/brief.pdf',
+          title: 'Brief',
+          contentLocator: { kind: 'workspace-file', path: 'docs/brief.pdf' },
+        },
+      },
       {
         type: 'canvas-embed' as const,
         data: { canvasPath: 'boards/detail.nkc', canvasTitle: 'Detail' },
@@ -111,13 +125,22 @@ describe('canvasHeadlessAuthoring canonical planner', () => {
         { canvasData: emptyCanvas(), generateId: ids() },
         { type: 'media', data: { mediaType: 'image' } },
       ),
-    ).toThrow('Canvas Media creation requires a durable source');
+    ).toThrow('Canvas Media creation requires a canonical ContentLocator');
     expect(() =>
       planCanvasNodeCreation(
         { canvasData: emptyCanvas(), generateId: ids() },
         { type: 'file', data: {} },
       ),
-    ).toThrow('Canvas File creation requires a durable source');
+    ).toThrow('Canvas File creation requires a canonical ContentLocator');
+    expect(() =>
+      planCanvasNodeCreation(
+        { canvasData: emptyCanvas(), generateId: ids() },
+        {
+          type: 'media',
+          data: { assetPath: 'media/path-only.png', mediaType: 'image' },
+        },
+      ),
+    ).toThrow('Canvas Media creation requires a canonical ContentLocator');
     expect(() =>
       planCanvasNodeCreation(
         { canvasData: emptyCanvas(), generateId: ids() },
@@ -134,7 +157,14 @@ describe('canvasHeadlessAuthoring canonical planner', () => {
         data: { label: 'Draft' },
         children: [
           { type: 'markdown', data: { content: 'Prompt' } },
-          { type: 'media', data: { assetPath: 'media/result.png', mediaType: 'image' } },
+          {
+            type: 'media',
+            data: {
+              assetPath: 'media/result.png',
+              mediaType: 'image',
+              contentLocator: { kind: 'workspace-file', path: 'media/result.png' },
+            },
+          },
         ],
       },
     );
@@ -157,7 +187,14 @@ describe('canvasHeadlessAuthoring canonical planner', () => {
     );
     const withTarget = planCanvasNodeCreation(
       { canvasData: withSource.canvasData, generateId },
-      { type: 'file', data: { path: 'docs/target.pdf', title: 'Target' } },
+      {
+        type: 'file',
+        data: {
+          path: 'docs/target.pdf',
+          title: 'Target',
+          contentLocator: { kind: 'workspace-file', path: 'docs/target.pdf' },
+        },
+      },
     );
     const plan = planCanvasConnectionCreation(
       { canvasData: withTarget.canvasData, generateId },
@@ -250,8 +287,16 @@ describe('canvasHeadlessAuthoring canonical planner', () => {
       validateCanvasDurableResourceIdentity({
         cachePath: '/tmp/cache.png',
         previewUrl: 'blob:neko-media://preview',
+        contentLocator: {
+          kind: 'workspace-file',
+          path: 'openneko://resource/0123456789abcdefghijklmnopqrstuv',
+        },
       }).map((diagnostic) => diagnostic.code),
-    ).toEqual(['runtime-only-resource-identity', 'runtime-only-resource-identity']);
+    ).toEqual([
+      'runtime-only-resource-identity',
+      'runtime-only-resource-identity',
+      'runtime-only-resource-identity',
+    ]);
   });
 
   it('fails visibly for editor-only slots and unbound blocks', () => {

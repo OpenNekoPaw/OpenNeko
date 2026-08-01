@@ -25,6 +25,11 @@ describe('content I/O contracts', () => {
   it('rejects current and retired host-projected runtime URIs', () => {
     expect(isHostProjectedRuntimeValue('neko-media://panel/content')).toBe(true);
     expect(isHostProjectedRuntimeValue('neko-app://desktop/index.html')).toBe(true);
+    expect(
+      isHostProjectedRuntimeValue('openneko://resource/0123456789abcdefghijklmnopqrstuv'),
+    ).toBe(true);
+    expect(isHostProjectedRuntimeValue('openneko://desktop/index.html')).toBe(true);
+    expect(isHostProjectedRuntimeValue('opennekomedia://resource/legacy')).toBe(true);
     expect(isHostProjectedRuntimeValue('vscode-webview://panel/content')).toBe(true);
     expect(isHostProjectedRuntimeValue('vscode-resource://panel/content')).toBe(true);
     expect(isHostProjectedRuntimeValue('${WORKSPACE}/assets/content.png')).toBe(false);

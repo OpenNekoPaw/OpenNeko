@@ -22,6 +22,7 @@ import {
   type PerceptualAssetRef,
   type ToolResultAttachment,
 } from '@neko/shared';
+import { isAuthorizedResourceDisplayUri } from './resource-display-uri';
 import type { AmbientCanvasNodeProjection } from './plugin-transfer-presenter';
 
 export type MarkdownResourceStatus = 'bound' | 'ambiguous' | 'missing' | 'unsupported';
@@ -959,14 +960,7 @@ function readRenderableUri(record: Record<string, unknown> | undefined): string 
 }
 
 function isRenderableUri(value: string): boolean {
-  if (!value) return false;
-  if (value.startsWith('file:') || value.startsWith('data:') || value.startsWith('blob:')) {
-    return false;
-  }
-  if (value.startsWith('${') || isAbsolutePath(value)) return false;
-  if (value.startsWith('http://') || value.startsWith('https://')) return true;
-  if (value.startsWith('webview://')) return true;
-  return value.startsWith('neko-media://');
+  return isAuthorizedResourceDisplayUri(value);
 }
 
 function isStableResourceLookupTokenCandidate(value: unknown): value is string {

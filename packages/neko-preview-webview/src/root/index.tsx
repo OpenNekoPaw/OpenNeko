@@ -43,7 +43,7 @@ export function QuickPreviewSurface({
   useEffect(() => {
     setLocale(locale);
   }, [locale]);
-  const sourceUrl = createPreviewMediaUrl(descriptor.descriptorId, descriptor.displayName);
+  const sourceUrl = descriptor.url;
   return (
     <section
       className="neko-preview-quick"
@@ -182,10 +182,7 @@ export function PreviewRoot({ locale, runtime }: PreviewRootProps): ReactElement
       </div>
     );
   }
-  const sourceUrl = createPreviewMediaUrl(
-    projection.descriptor.descriptorId,
-    projection.descriptor.displayName,
-  );
+  const sourceUrl = projection.descriptor.url;
   const executeViewRoute = async (route: PreviewHostRuntimeRoute): Promise<void> => {
     setPendingRoute(route);
     try {
@@ -266,24 +263,6 @@ function PreviewActionButton({
       <span className={`codicon codicon-${icon}`} aria-hidden="true" />
     </button>
   );
-}
-
-export function createPreviewMediaUrl(descriptorId: string, displayName?: string): string {
-  if (!/^[A-Za-z0-9:_-]+$/u.test(descriptorId)) {
-    throw new Error('Preview descriptor identity is invalid.');
-  }
-  if (
-    displayName !== undefined &&
-    (displayName.trim().length === 0 ||
-      displayName !== displayName.trim() ||
-      displayName.includes('/') ||
-      displayName.includes('\\'))
-  ) {
-    throw new Error('Preview display name is invalid.');
-  }
-  return `neko-media://desktop/${encodeURIComponent(descriptorId)}${
-    displayName === undefined ? '' : `/${encodeURIComponent(displayName)}`
-  }`;
 }
 
 function ImagePreview({ descriptor, sourceUrl }: PreviewViewerProps): ReactElement {
@@ -389,7 +368,7 @@ function createModelSourceDescriptor(
     sourceFingerprint: descriptor.revision,
     format,
     entryUri: sourceUrl,
-    uriMap: { [descriptor.displayName]: sourceUrl },
+    uriMap: descriptor.resourceUris ?? { [descriptor.displayName]: sourceUrl },
     sizeBytes: descriptor.byteLength,
   };
 }

@@ -16,6 +16,8 @@ const UNSAFE_SCHEMES = new Set([
   'data:',
   'blob:',
   'javascript:',
+  'openneko:',
+  'opennekomedia:',
   'neko-app:',
   'neko-media:',
 ]);

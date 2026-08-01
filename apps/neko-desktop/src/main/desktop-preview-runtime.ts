@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
-import { stat } from 'node:fs/promises';
+import { readFile, realpath, stat } from 'node:fs/promises';
+import * as path from 'node:path';
 import {
   PREVIEW_HOST_RUNTIME_VERSION,
   PREVIEW_HOST_RUNTIME_ROUTES,
@@ -8,6 +9,7 @@ import {
   getPreviewMediaType,
   parsePreviewProjection,
   parsePreviewRuntimeRequest,
+  type PreviewContentKind,
   type PreviewProjection,
   type PreviewRuntimeRequest,
   type PreviewRuntimeIdentity,
@@ -28,7 +30,7 @@ import {
   parseDesktopPreviewBootstrapRequest,
   type DesktopPreviewBootstrapRequest,
 } from '../shared/preview-bridge-contract';
-import type { DesktopMediaDescriptorRegistry } from './desktop-media-protocol';
+import type { DesktopResourceRegistry } from './desktop-resource-registry';
 
 interface DesktopPreviewShellProjection {
   readonly endpointEpoch: string;
@@ -63,8 +65,10 @@ export interface DesktopPreviewShellPort {
 
 export interface DesktopPreviewRuntimeOptions {
   readonly shell: DesktopPreviewShellPort;
-  readonly mediaRegistry: DesktopMediaDescriptorRegistry;
-  readonly resolveWebContentsId: (windowId: string) => number;
+  readonly resources: Pick<
+    DesktopResourceRegistry,
+    'registerFile' | 'registerResourceSet' | 'releaseSession'
+  >;
   readonly createIdentity?: () => string;
 }
 
@@ -155,14 +159,22 @@ export class DesktopPreviewRuntime {
       const file = await stat(input.absolutePath);
       if (!file.isFile()) throw new Error('Desktop Preview source is not a file.');
       const revision = `${file.mtimeMs}:${file.size}`;
-      const descriptorId = this.options.mediaRegistry.register({
-        webContentsId: this.options.resolveWebContentsId(input.identity.windowId),
-        windowId: input.identity.windowId,
-        viewId,
-        sessionId,
-        revision,
+      const descriptorId = `preview:${sessionId}`;
+      const resource = await publishPreviewResource({
+        resources: this.options.resources,
+        owner: {
+          windowId: input.identity.windowId,
+          viewId,
+          sessionId,
+          endpointEpoch: input.identity.endpointEpoch,
+          revision,
+          generation: String(runtimeIdentity.revision),
+        },
         absolutePath: input.absolutePath,
+        displayName: input.item.label,
+        contentKind,
         mediaType,
+        revision,
       });
       projection = parsePreviewProjection({
         schemaVersion: PREVIEW_HOST_RUNTIME_VERSION,
@@ -173,6 +185,8 @@ export class DesktopPreviewRuntime {
           descriptorId,
           revision,
           contentLocator: resolvePreviewContentLocator(input.item),
+          url: resource.url,
+          ...(resource.resourceUris ? { resourceUris: resource.resourceUris } : {}),
           contentKind,
           mediaType,
           displayName: input.item.label,
@@ -209,7 +223,7 @@ export class DesktopPreviewRuntime {
       };
     } catch (error) {
       this.sessions.delete(sessionId);
-      this.options.mediaRegistry.releaseSession(sessionId);
+      this.options.resources.releaseSession(sessionId);
       throw error;
     }
     try {
@@ -229,7 +243,7 @@ export class DesktopPreviewRuntime {
       return projection;
     } catch (error) {
       this.sessions.delete(sessionId);
-      this.options.mediaRegistry.releaseSession(sessionId);
+      this.options.resources.releaseSession(sessionId);
       throw error;
     }
   }
@@ -272,15 +286,22 @@ export class DesktopPreviewRuntime {
     if (!file.isFile()) throw new Error('Desktop quick Preview source is not a file.');
     const previewSessionId = `preview-hover:${this.createIdentity()}`;
     const revision = `${file.mtimeMs}:${file.size}`;
-    const descriptorId = this.options.mediaRegistry.register({
-      webContentsId: this.options.resolveWebContentsId(input.identity.windowId),
-      windowId: input.identity.windowId,
-      viewId: input.identity.viewId,
-      sessionId: previewSessionId,
-      revision,
-      absolutePath: input.absolutePath,
-      mediaType,
-    });
+    const descriptorId = `preview:${previewSessionId}`;
+    const lease = await this.options.resources.registerFile(
+      {
+        windowId: input.identity.windowId,
+        viewId: input.identity.viewId,
+        sessionId: previewSessionId,
+        endpointEpoch: input.identity.endpointEpoch,
+        revision,
+        generation: '0',
+      },
+      {
+        absolutePath: input.absolutePath,
+        mediaType,
+        revision,
+      },
+    );
     this.transientSessions.set(previewSessionId, {
       windowId: input.identity.windowId,
     });
@@ -290,6 +311,7 @@ export class DesktopPreviewRuntime {
         descriptorId,
         revision,
         contentLocator: resolvePreviewContentLocator(input.item),
+        url: lease.url,
         contentKind,
         mediaType,
         displayName: input.item.label,
@@ -304,7 +326,7 @@ export class DesktopPreviewRuntime {
     if (!session || session.windowId !== windowId) {
       throw new Error(`Desktop quick Preview session '${previewSessionId}' is unavailable.`);
     }
-    this.options.mediaRegistry.releaseSession(previewSessionId);
+    this.options.resources.releaseSession(previewSessionId);
     this.transientSessions.delete(previewSessionId);
   }
 
@@ -339,16 +361,7 @@ export class DesktopPreviewRuntime {
     };
     assertPreviewRuntimeIdentity(session.identity, requestedIdentity);
     if (session.identity.endpointEpoch !== request.endpointEpoch) {
-      const identity: PreviewRuntimeIdentity = {
-        ...session.identity,
-        endpointEpoch: request.endpointEpoch,
-        revision: session.identity.revision + 1,
-      };
-      session.identity = identity;
-      session.projection = parsePreviewProjection({
-        ...session.projection,
-        identity,
-      });
+      throw new Error('Desktop Preview session endpoint is stale.');
     }
     return session.projection;
   }
@@ -395,12 +408,12 @@ export class DesktopPreviewRuntime {
   detachWindow(windowId: string): void {
     for (const [sessionId, session] of this.sessions) {
       if (session.identity.windowId !== windowId) continue;
-      this.options.mediaRegistry.releaseSession(sessionId);
+      this.options.resources.releaseSession(sessionId);
       this.sessions.delete(sessionId);
     }
     for (const [sessionId, session] of this.transientSessions) {
       if (session.windowId !== windowId) continue;
-      this.options.mediaRegistry.releaseSession(sessionId);
+      this.options.resources.releaseSession(sessionId);
       this.transientSessions.delete(sessionId);
     }
   }
@@ -413,7 +426,7 @@ export class DesktopPreviewRuntime {
       if (session.identity.windowId !== windowId || attachedSessionIds.has(sessionId)) {
         continue;
       }
-      this.options.mediaRegistry.releaseSession(sessionId);
+      this.options.resources.releaseSession(sessionId);
       this.sessions.delete(sessionId);
     }
   }
@@ -422,11 +435,11 @@ export class DesktopPreviewRuntime {
     if (this.disposed) return;
     this.disposed = true;
     for (const sessionId of this.sessions.keys()) {
-      this.options.mediaRegistry.releaseSession(sessionId);
+      this.options.resources.releaseSession(sessionId);
     }
     this.sessions.clear();
     for (const sessionId of this.transientSessions.keys()) {
-      this.options.mediaRegistry.releaseSession(sessionId);
+      this.options.resources.releaseSession(sessionId);
     }
     this.transientSessions.clear();
   }
@@ -446,7 +459,7 @@ export class DesktopPreviewRuntime {
       ) {
         continue;
       }
-      this.options.mediaRegistry.releaseSession(sessionId);
+      this.options.resources.releaseSession(sessionId);
       this.sessions.delete(sessionId);
     }
   }
@@ -547,7 +560,7 @@ export class DesktopPreviewRuntime {
       workbench,
     );
     this.sessions.delete(session.identity.sessionId);
-    this.options.mediaRegistry.releaseSession(session.identity.sessionId);
+    this.options.resources.releaseSession(session.identity.sessionId);
     return closedProjection;
   }
 }
@@ -569,3 +582,194 @@ type ResourceBrowserContentLocator =
   | NonNullable<
       Extract<ResourceBrowserItem, { readonly facet: 'materials' }>['representationLocator']
     >;
+
+interface PublishedPreviewResource {
+  readonly url: string;
+  readonly resourceUris?: Readonly<Record<string, string>>;
+}
+
+async function publishPreviewResource(input: {
+  readonly resources: Pick<DesktopResourceRegistry, 'registerFile' | 'registerResourceSet'>;
+  readonly owner: Parameters<DesktopResourceRegistry['registerFile']>[0];
+  readonly absolutePath: string;
+  readonly displayName: string;
+  readonly contentKind: PreviewContentKind;
+  readonly mediaType: string;
+  readonly revision: string;
+}): Promise<PublishedPreviewResource> {
+  if (
+    input.contentKind !== 'model' ||
+    path.extname(input.displayName).toLocaleLowerCase() !== '.gltf'
+  ) {
+    return input.resources.registerFile(input.owner, {
+      absolutePath: input.absolutePath,
+      mediaType: input.mediaType,
+      revision: input.revision,
+    });
+  }
+  const dependencies = await resolveGltfDependencies(input.absolutePath);
+  const entryPath = path.basename(input.absolutePath);
+  const lease = await input.resources.registerResourceSet(
+    input.owner,
+    [
+      {
+        virtualPath: entryPath,
+        path: input.absolutePath,
+        contentType: input.mediaType,
+        revision: input.revision,
+      },
+      ...dependencies.map((dependency) => ({
+        virtualPath: dependency.virtualPath,
+        path: dependency.absolutePath,
+        contentType: dependency.mediaType,
+        revision: dependency.revision,
+      })),
+    ],
+    entryPath,
+  );
+  return {
+    url: lease.url,
+    resourceUris: {
+      [input.displayName]: lease.url,
+      ...Object.fromEntries(
+        dependencies.map((dependency) => [
+          dependency.reference,
+          new URL(dependency.reference, lease.url).toString(),
+        ]),
+      ),
+    },
+  };
+}
+
+interface GltfDependency {
+  readonly reference: string;
+  readonly virtualPath: string;
+  readonly absolutePath: string;
+  readonly mediaType: string;
+  readonly revision: string;
+}
+
+async function resolveGltfDependencies(absolutePath: string): Promise<readonly GltfDependency[]> {
+  const manifest = parseGltfManifest(await readFile(absolutePath, 'utf8'));
+  const references = collectGltfReferences(manifest);
+  const sourcePath = await realpath(absolutePath);
+  const sourceRoot = path.dirname(sourcePath);
+  return Promise.all(
+    references.map(async (reference) => {
+      const virtualPath = normalizeGltfReference(reference);
+      const dependencyPath = await realpath(path.resolve(sourceRoot, ...virtualPath.split('/')));
+      const relativePath = path.relative(sourceRoot, dependencyPath);
+      if (
+        relativePath.length === 0 ||
+        path.isAbsolute(relativePath) ||
+        relativePath === '..' ||
+        relativePath.startsWith(`..${path.sep}`)
+      ) {
+        throw new Error(`Preview glTF dependency '${reference}' escapes the model directory.`);
+      }
+      const metadata = await stat(dependencyPath);
+      if (!metadata.isFile()) {
+        throw new Error(`Preview glTF dependency '${reference}' is not a file.`);
+      }
+      return {
+        reference,
+        virtualPath,
+        absolutePath: dependencyPath,
+        mediaType: getGltfDependencyMediaType(virtualPath),
+        revision: `${metadata.mtimeMs}:${metadata.size}`,
+      };
+    }),
+  );
+}
+
+function parseGltfManifest(source: string): Record<string, unknown> {
+  let value: unknown;
+  try {
+    value = JSON.parse(source);
+  } catch {
+    throw new Error('Preview glTF manifest is not valid JSON.');
+  }
+  if (!isRecord(value)) throw new Error('Preview glTF manifest must be an object.');
+  return value;
+}
+
+function collectGltfReferences(manifest: Record<string, unknown>): readonly string[] {
+  const references = new Set<string>();
+  for (const collectionName of ['buffers', 'images'] as const) {
+    const collection = manifest[collectionName];
+    if (collection === undefined) continue;
+    if (!Array.isArray(collection)) {
+      throw new Error(`Preview glTF '${collectionName}' must be an array.`);
+    }
+    for (const entry of collection) {
+      if (!isRecord(entry) || entry['uri'] === undefined) continue;
+      const uri = entry['uri'];
+      if (typeof uri !== 'string' || uri.length === 0) {
+        throw new Error(`Preview glTF '${collectionName}' contains an invalid URI.`);
+      }
+      if (uri.startsWith('data:')) continue;
+      references.add(uri);
+    }
+  }
+  if (references.size > 512) {
+    throw new Error('Preview glTF declares more than 512 external dependencies.');
+  }
+  return [...references];
+}
+
+function normalizeGltfReference(reference: string): string {
+  if (
+    reference.startsWith('/') ||
+    reference.startsWith('\\') ||
+    reference.startsWith('//') ||
+    reference.includes('\\') ||
+    reference.includes('\0') ||
+    reference.includes('?') ||
+    reference.includes('#') ||
+    /^[A-Za-z][A-Za-z0-9+.-]*:/u.test(reference)
+  ) {
+    throw new Error(`Preview glTF dependency '${reference}' must be a relative file URI.`);
+  }
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(reference);
+  } catch {
+    throw new Error(`Preview glTF dependency '${reference}' has invalid URL encoding.`);
+  }
+  const segments = decoded.split('/');
+  if (
+    segments.some(
+      (segment) =>
+        segment.length === 0 ||
+        segment === '.' ||
+        segment === '..' ||
+        segment.includes('\\') ||
+        segment.includes('\0'),
+    )
+  ) {
+    throw new Error(`Preview glTF dependency '${reference}' contains an unsafe path segment.`);
+  }
+  return segments.join('/');
+}
+
+function getGltfDependencyMediaType(virtualPath: string): string {
+  switch (path.extname(virtualPath).slice(1).toLocaleLowerCase()) {
+    case 'png':
+      return 'image/png';
+    case 'jpg':
+    case 'jpeg':
+      return 'image/jpeg';
+    case 'webp':
+      return 'image/webp';
+    case 'ktx2':
+      return 'image/ktx2';
+    case 'basis':
+      return 'image/x-basis';
+    default:
+      return 'application/octet-stream';
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}

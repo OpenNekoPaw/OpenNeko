@@ -33,7 +33,7 @@ describe('Desktop security policy', () => {
     expect(isAllowedDesktopRendererUrl('https://example.com/', DESKTOP_APP_ORIGIN)).toBe(false);
     expect(
       isAllowedDesktopRendererUrl(
-        'neko-app://attacker@desktop/index.html',
+        'openneko://attacker@desktop/index.html',
         DESKTOP_APP_ORIGIN,
       ),
     ).toBe(false);
@@ -44,11 +44,13 @@ describe('Desktop security policy', () => {
     expect(policy).toContain("default-src 'none'");
     expect(policy).toContain("script-src 'self'");
     expect(policy).not.toContain("'unsafe-inline'");
-    expect(policy).not.toContain('http:');
     expect(policy).not.toContain('https:');
     expect(policy).not.toContain('file:');
-    expect(policy).toContain("img-src 'self' data: blob: neko-media:");
-    expect(policy).toContain("connect-src 'self' blob: neko-media:");
+    expect(policy).toContain("img-src 'self' data: blob: openneko://resource");
+    expect(policy).toContain("connect-src 'self' openneko://resource blob:");
+    expect(policy).toContain('media-src openneko://resource');
+    expect(policy).not.toContain('127.0.0.1');
+    expect(policy).not.toContain('neko-media:');
   });
 
   it('authorizes only the configured Vite development resource nonce', () => {

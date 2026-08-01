@@ -940,7 +940,7 @@ function createRuntime(snapshot = projection): ResourceBrowserHostRuntime & {
         descriptorId: `descriptor:${request.resourceId}`,
         revision: 'revision-1',
         contentLocator: { kind: 'workspace-file' as const, path: 'preview/preview.png' },
-        url: 'http://127.0.0.1:43125/v1/resources/preview-token',
+        url: 'openneko://resource/0123456789abcdefghijklmnopqrstuv',
         contentKind: 'image' as const,
         mediaType: 'image/png',
         displayName: 'preview.png',

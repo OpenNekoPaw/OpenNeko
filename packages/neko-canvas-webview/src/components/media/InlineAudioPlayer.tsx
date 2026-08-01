@@ -1,6 +1,5 @@
 import { useRef, useState, useCallback, useEffect } from 'react';
-import { formatMediaTime as formatTime, type PcmStreamDescriptor } from '@neko/media';
-import { PcmAudioClient } from '@neko/media/browser';
+import { formatMediaTime as formatTime, type HtmlAudioDescriptor } from '@neko/media';
 import { ProgressBar } from '@neko/ui/creative';
 import { PlayIcon, PauseIcon, VolumeIcon, VolumeOffIcon } from '@neko/ui/icons';
 import { t } from '../../i18n';
@@ -18,8 +17,7 @@ const WAVEFORM_BAR_HEIGHTS = [
 export type AudioPlayerLayout = 'transport' | 'node-card';
 
 export interface InlineAudioPlayerProps {
-  audio: PcmStreamDescriptor;
-  audioContext?: AudioContext;
+  audio: HtmlAudioDescriptor;
   duration: number;
   audioLayout?: AudioPlayerLayout;
   startTime?: number;
@@ -37,7 +35,6 @@ export interface InlineAudioPlayerProps {
 
 export function InlineAudioPlayer({
   audio,
-  audioContext,
   duration,
   audioLayout = 'transport',
   startTime = 0,
@@ -52,123 +49,62 @@ export function InlineAudioPlayer({
   playbackStartTime,
   onEnded,
 }: InlineAudioPlayerProps) {
-  const clientRef = useRef<PcmAudioClient>();
-  const ownedContextRef = useRef<AudioContext>();
+  const elementRef = useRef<HTMLAudioElement>(null);
   const currentTimeRef = useRef(startTime);
-  const startingRef = useRef(false);
   const handledPlaybackRequestRef = useRef<string | undefined>();
   const handledPlaybackStateRef = useRef<'playing' | 'paused' | undefined>();
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(startTime);
   const [isMuted, setIsMuted] = useState(false);
 
-  const activateContext = useCallback((): AudioContext => {
-    if (audioContext && audioContext.state !== 'closed') {
-      if (audioContext.state === 'suspended') void audioContext.resume();
-      return audioContext;
-    }
-    let context = ownedContextRef.current;
-    if (!context || context.state === 'closed') {
-      context = new AudioContext({ sampleRate: audio.sampleRate });
-      ownedContextRef.current = context;
-    }
-    if (context.state === 'suspended') void context.resume();
-    return context;
-  }, [audio.sampleRate, audioContext]);
-
   useEffect(() => {
     currentTimeRef.current = startTime;
     setCurrentTime(startTime);
-    startingRef.current = false;
-    clientRef.current?.dispose();
-    clientRef.current = undefined;
+    const element = elementRef.current;
+    if (element) {
+      element.pause();
+      element.crossOrigin = 'anonymous';
+      element.src = audio.url;
+      element.preload = 'metadata';
+      element.playbackRate = playbackRate;
+      element.volume = DEFAULT_VOLUME;
+      element.load();
+    }
     return () => {
-      startingRef.current = false;
-      clientRef.current?.dispose();
-      clientRef.current = undefined;
+      const current = elementRef.current;
+      if (!current) return;
+      current.pause();
+      current.removeAttribute('src');
+      current.load();
     };
   }, [audio, playbackRate, startTime]);
 
-  useEffect(() => {
-    if (!isPlaying) return;
-    let frame = 0;
-    const tick = (): void => {
-      const nextTime = clientRef.current?.isClockReady
-        ? clientRef.current.getCurrentTime()
-        : currentTimeRef.current;
-      currentTimeRef.current = nextTime;
-      setCurrentTime(nextTime);
-      onTimeUpdate?.(nextTime);
-      frame = requestAnimationFrame(tick);
-    };
-    frame = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(frame);
-  }, [isPlaying, onTimeUpdate]);
-
-  useEffect(() => {
-    return () => {
-      const context = ownedContextRef.current;
-      if (context && context.state !== 'closed') void context.close();
-    };
-  }, []);
-
   const pause = useCallback(() => {
-    void clientRef.current?.pause();
+    const element = elementRef.current;
+    element?.pause();
+    if (element) currentTimeRef.current = element.currentTime;
     setIsPlaying(false);
     onPause(currentTimeRef.current);
   }, [onPause]);
 
   const resume = useCallback(() => {
-    const context = activateContext();
-    const existingClient = clientRef.current;
-    if (existingClient?.isClockReady) {
-      void existingClient.resume().then(() => {
-        setIsPlaying(true);
-        onResume();
-      });
-      return;
+    const element = elementRef.current;
+    if (!element) return;
+    element.playbackRate = playbackRate;
+    element.muted = isMuted;
+    if (Math.abs(element.currentTime - currentTimeRef.current) > PLAYBACK_SEEK_EPSILON_SECONDS) {
+      element.currentTime = currentTimeRef.current;
     }
-    if (startingRef.current) return;
-    startingRef.current = true;
-    currentTimeRef.current = startTime;
-    setCurrentTime(startTime);
-    const client = new PcmAudioClient({
-      descriptor: audio,
-      playbackRate,
-      volume: DEFAULT_VOLUME,
-      onError: (error) => logger.warn(`Canvas PCM error: ${error.message}`),
-      onPlaybackEnd: () => {
-        startingRef.current = false;
-        if (clientRef.current === client) {
-          client.dispose();
-          clientRef.current = undefined;
-        }
-        currentTimeRef.current = duration;
-        setCurrentTime(duration);
-        setIsPlaying(false);
-        onStop(duration);
-        onEnded?.(duration);
-      },
-    });
-    clientRef.current = client;
-    void client
-      .prepare(context)
-      .then(() => client.startAt(context.currentTime + 0.1))
+    void element
+      .play()
       .then(() => {
-        startingRef.current = false;
-        if (clientRef.current !== client) return;
         setIsPlaying(true);
         onResume();
       })
       .catch((error: unknown) => {
-        startingRef.current = false;
-        if (clientRef.current === client) {
-          client.dispose();
-          clientRef.current = undefined;
-        }
         logger.warn(`Inline audio playback failed: ${String(error)}`);
       });
-  }, [activateContext, audio, duration, onEnded, onResume, onStop, playbackRate, startTime]);
+  }, [isMuted, onResume, playbackRate]);
 
   const handleTogglePlay = useCallback(
     (event?: React.MouseEvent) => {
@@ -183,6 +119,8 @@ export function InlineAudioPlayer({
     (time: number) => {
       setCurrentTime(time);
       currentTimeRef.current = time;
+      const element = elementRef.current;
+      if (element) element.currentTime = time;
       onTimeUpdate?.(time);
       onSeek(time);
     },
@@ -230,32 +168,49 @@ export function InlineAudioPlayer({
       e.stopPropagation();
       const newMuted = !isMuted;
       setIsMuted(newMuted);
-      clientRef.current?.setVolume(newMuted ? 0 : DEFAULT_VOLUME);
+      const element = elementRef.current;
+      if (element) element.muted = newMuted;
     },
     [isMuted],
   );
-
-  // =========================================================================
-  // Render
-  // =========================================================================
 
   const playbackLabel = isPlaying ? t('toolbar.playbackPause') : t('toolbar.playbackPlay');
   const muteLabel = isMuted ? t('media.unmute') : t('media.mute');
 
   return (
-    <AudioPlayerSurface
-      layout={audioLayout}
-      currentTime={currentTime}
-      duration={duration}
-      isPlaying={isPlaying}
-      isMuted={isMuted}
-      onTogglePlay={handleTogglePlay}
-      onSeekCommit={handleSeekCommit}
-      onSeeking={handleSeeking}
-      onToggleMute={handleToggleMute}
-      playbackLabel={playbackLabel}
-      muteLabel={muteLabel}
-    />
+    <>
+      <audio
+        ref={elementRef}
+        crossOrigin="anonymous"
+        preload="metadata"
+        onTimeUpdate={(event) => {
+          const nextTime = event.currentTarget.currentTime;
+          currentTimeRef.current = nextTime;
+          setCurrentTime(nextTime);
+          onTimeUpdate?.(nextTime);
+        }}
+        onEnded={() => {
+          currentTimeRef.current = duration;
+          setCurrentTime(duration);
+          setIsPlaying(false);
+          onStop(duration);
+          onEnded?.(duration);
+        }}
+      />
+      <AudioPlayerSurface
+        layout={audioLayout}
+        currentTime={currentTime}
+        duration={duration}
+        isPlaying={isPlaying}
+        isMuted={isMuted}
+        onTogglePlay={handleTogglePlay}
+        onSeekCommit={handleSeekCommit}
+        onSeeking={handleSeeking}
+        onToggleMute={handleToggleMute}
+        playbackLabel={playbackLabel}
+        muteLabel={muteLabel}
+      />
+    </>
   );
 }
 

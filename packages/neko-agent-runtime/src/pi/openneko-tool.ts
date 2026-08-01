@@ -173,6 +173,7 @@ export function projectOpenNekoTool(
     }): Promise<AgentToolResult<ToolResult>> => {
       const { args, context, signal, onUpdate } = input;
       const record = requireArgumentsRecord(tool.name, args);
+      assertNoTransientDisplayProjection(record, `Tool ${tool.name} arguments`);
       const result = await tool.execute(record, {
         ...(signal === undefined ? {} : { signal }),
         ...(context.purposeModel === undefined ? {} : { purposeModel: context.purposeModel }),
@@ -203,6 +204,7 @@ export function projectOpenNekoTool(
           : new Error(`OpenNeko tool ${tool.name} was cancelled.`);
       }
       if (!result.success) throw new OpenNekoPiToolExecutionError(tool.name, result);
+      assertNoTransientDisplayProjection(result, `Tool ${tool.name} result`);
       return {
         content: await projectToolResultContent(result, options.assetLoader),
         details: structuredClone(result),
@@ -287,6 +289,41 @@ function requireArgumentsRecord(toolName: string, args: unknown): Record<string,
     throw new Error(`OpenNeko tool ${toolName} requires object arguments.`);
   }
   return Object.fromEntries(Object.entries(args));
+}
+
+function assertNoTransientDisplayProjection(value: unknown, owner: string): void {
+  const pending: unknown[] = [value];
+  const visited = new Set<object>();
+  while (pending.length > 0) {
+    const current = pending.pop();
+    if (typeof current === 'string') {
+      if (isForbiddenDisplayTransport(current)) {
+        throw new Error(`${owner} must not contain a transient Renderer display URL.`);
+      }
+      continue;
+    }
+    if (typeof current !== 'object' || current === null || visited.has(current)) continue;
+    visited.add(current);
+    if (Array.isArray(current)) {
+      pending.push(...current);
+      continue;
+    }
+    for (const [key, entry] of Object.entries(current)) {
+      if (key === 'renderUri' || key === 'previewUri') {
+        throw new Error(`${owner} must not contain transient Renderer field '${key}'.`);
+      }
+      pending.push(entry);
+    }
+  }
+}
+
+function isForbiddenDisplayTransport(value: string): boolean {
+  return (
+    /^(?:neko-media|media|video|audio|file):\/\//iu.test(value) ||
+    /^https?:\/\/(?:127\.0\.0\.1|localhost|\[::1\]):\d+\/v1\/(?:resources|streams|resource-sets)\//iu.test(
+      value,
+    )
+  );
 }
 
 function createExecutionMetadata(

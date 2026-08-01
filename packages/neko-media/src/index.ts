@@ -2,7 +2,6 @@ export type {
   MediaAudioStream,
   MediaColorMetadata,
   MediaFailureScope,
-  MediaTransport,
   MediaRuntimeQualification,
   MediaProbe,
   MediaSource,
@@ -16,6 +15,6 @@ export type {
   PcmStreamDescriptor,
   WaveformResult,
 } from './contracts';
-export { isMediaTransport, isMediaTransportUrl } from './contracts';
+export { isMediaResourceUrl } from './contracts';
 export { MediaCorruptionError, MediaRuntimeUnavailableError } from './errors';
 export { formatMediaTime, formatMediaTimeCentiseconds, formatMediaTimeWithFraction } from './time';

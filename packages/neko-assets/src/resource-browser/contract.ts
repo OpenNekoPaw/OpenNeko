@@ -639,7 +639,7 @@ export function parseResourceBrowserQuickPreviewResult(
         'Resource Browser quick preview revision is required.',
       ),
       contentLocator: requireContentLocator(descriptor['contentLocator'], 'contentLocator'),
-      url: requireLoopbackHttpUrl(descriptor['url']),
+      url: requireOpenNekoResourceUrl(descriptor['url']),
       contentKind,
       mediaType: requireNonEmptyString(
         descriptor['mediaType'],
@@ -657,24 +657,29 @@ export function parseResourceBrowserQuickPreviewResult(
   };
 }
 
-function requireLoopbackHttpUrl(value: unknown): string {
+function requireOpenNekoResourceUrl(value: unknown): string {
   if (typeof value !== 'string') {
     throw invalidPayload('Resource Browser quick preview URL is required.');
   }
   try {
     const url = new URL(value);
     if (
-      url.protocol !== 'http:' ||
-      url.hostname !== '127.0.0.1' ||
-      url.port.length === 0 ||
+      url.protocol !== 'openneko:' ||
+      url.hostname !== 'resource' ||
+      !/^\/[A-Za-z0-9_-]{32}$/u.test(url.pathname) ||
       url.username.length > 0 ||
-      url.password.length > 0
+      url.password.length > 0 ||
+      url.port.length > 0 ||
+      url.search.length > 0 ||
+      url.hash.length > 0
     ) {
-      throw new Error('not loopback HTTP');
+      throw new Error('not an OpenNeko resource URL');
     }
     return value;
   } catch {
-    throw invalidPayload('Resource Browser quick preview URL must use authorized loopback HTTP.');
+    throw invalidPayload(
+      'Resource Browser quick preview URL must use an authorized OpenNeko resource.',
+    );
   }
 }
 

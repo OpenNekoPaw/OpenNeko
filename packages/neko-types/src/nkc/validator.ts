@@ -269,15 +269,25 @@ function validateNode(
   if (node['type'] === 'job') {
     validateJobNodeData(node['data'], `${path}.data`, errors);
   }
-  errors.push(
-    ...validateCanvasMaterialNodePersistence(node['type'], node['data'], `${path}.data`).map(
-      (diagnostic): ValidationError => ({
-        field: diagnostic.target,
-        message: `${diagnostic.code}: ${diagnostic.message}`,
-        severity: 'error',
-      }),
-    ),
-  );
+  for (const diagnostic of validateCanvasMaterialNodePersistence(
+    node['type'],
+    node['data'],
+    `${path}.data`,
+  )) {
+    const validation: ValidationError = {
+      field: diagnostic.target,
+      message: `${diagnostic.code}: ${diagnostic.message}`,
+      severity: 'error',
+    };
+    if (
+      diagnostic.code === 'canvas-material-content-locator-required' &&
+      isSafePathOnlyMaterialNode(node['type'], node['data'])
+    ) {
+      warnings.push({ ...validation, severity: 'warning' });
+    } else {
+      errors.push(validation);
+    }
+  }
 
   // ports — optional array
   if (node['ports'] !== undefined) {
@@ -290,6 +300,14 @@ function validateNode(
       }
     }
   }
+}
+
+function isSafePathOnlyMaterialNode(nodeType: unknown, data: unknown): boolean {
+  if (!isRecord(data) || data['contentLocator'] !== undefined) return false;
+  const pathValue =
+    nodeType === 'media' ? data['assetPath'] : nodeType === 'file' ? data['path'] : undefined;
+  if (typeof pathValue !== 'string') return false;
+  return normalizeWorkspaceContentPath(pathValue) === pathValue;
 }
 
 function validateJobNodeData(value: unknown, path: string, errors: ValidationError[]): void {

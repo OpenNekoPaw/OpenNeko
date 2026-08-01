@@ -336,6 +336,57 @@ describe('Agent external processor runtime', () => {
       expect.objectContaining({ code: 'missing-required-field', path: 'command' }),
     ]);
   });
+
+  it.each([
+    'ffmpeg -i http://127.0.0.1:43125/v1/resources/display-token output.mp4',
+    'ffprobe http://localhost:43125/v1/streams/pcm-token',
+    'cp neko-media://desktop/legacy-video output.mp4',
+    'cat file:///private/tmp/input.wav',
+  ])('rejects display transport URLs at the Developer Mode command boundary: %s', (command) => {
+    const request = createDeveloperModeTemporaryProcessorRequest({ command });
+
+    expect(request.diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'unauthorized-path',
+        severity: 'error',
+        path: 'command',
+      }),
+    ]);
+  });
+
+  it.each([
+    'http://127.0.0.1:43125/v1/resources/display-token',
+    'neko-media://desktop/legacy-video',
+    'file:///private/tmp/input.png',
+  ])('rejects display URLs masquerading as processor input locators: %s', (path) => {
+    const registry = createExternalProcessorRegistry();
+    registry.upsert(
+      { sourceScope: 'builtin', agentCapabilitySource: 'builtin', sourceId: 'builtin' },
+      manifest,
+    );
+    const runtime = createAgentExternalProcessorRuntime({ registry });
+
+    const plan = runtime.planInvocation({
+      processorId: 'upscale-image',
+      inputs: [
+        {
+          slot: 'image',
+          locator: { kind: 'workspace-file', path } as never,
+        },
+      ],
+      params: { scale: 2 },
+    });
+
+    expect(plan.status).toBe('blocked');
+    expect(plan.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'unauthorized-path',
+          path: 'inputs.image.locator',
+        }),
+      ]),
+    );
+  });
 });
 
 function createProcessorOutputLocator(id: string): ProcessorOutputLocator {

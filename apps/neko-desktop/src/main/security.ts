@@ -21,10 +21,11 @@ export interface DesktopContentSecurityPolicyOptions {
   readonly viteDevelopmentNonce?: string;
 }
 
-export const DESKTOP_APP_SCHEME = 'neko-app';
+export const DESKTOP_APP_SCHEME = 'openneko';
 export const DESKTOP_APP_HOST = 'desktop';
 export const DESKTOP_APP_ORIGIN = `${DESKTOP_APP_SCHEME}://${DESKTOP_APP_HOST}`;
-export const DESKTOP_MEDIA_SCHEME = 'neko-media';
+export const DESKTOP_RESOURCE_HOST = 'resource';
+export const DESKTOP_RESOURCE_ORIGIN = `${DESKTOP_APP_SCHEME}://${DESKTOP_RESOURCE_HOST}`;
 
 export function createDesktopWebPreferences(preloadPath: string): WebPreferences {
   if (preloadPath.trim().length === 0) {
@@ -66,8 +67,8 @@ export function createDesktopContentSecurityPolicy(
 ): string {
   const connectSources =
     allowedOrigin.startsWith('http://') || allowedOrigin.startsWith('https://')
-      ? `'self' ${allowedOrigin} ${toWebSocketOrigin(allowedOrigin)}`
-      : "'self'";
+      ? `'self' ${allowedOrigin} ${toWebSocketOrigin(allowedOrigin)} ${DESKTOP_RESOURCE_ORIGIN}`
+      : `'self' ${DESKTOP_RESOURCE_ORIGIN}`;
   const nonceSource = options.viteDevelopmentNonce
     ? `'nonce-${validateContentSecurityPolicyNonce(options.viteDevelopmentNonce)}'`
     : undefined;
@@ -77,15 +78,15 @@ export function createDesktopContentSecurityPolicy(
     "default-src 'none'",
     "base-uri 'none'",
     "object-src 'none'",
-    `frame-src ${DESKTOP_MEDIA_SCHEME}:`,
+    "frame-src 'none'",
     "frame-ancestors 'none'",
     "form-action 'none'",
     `script-src ${scriptSources}`,
     `style-src ${styleSources}`,
-    `img-src 'self' data: blob: ${DESKTOP_MEDIA_SCHEME}:`,
+    `img-src 'self' data: blob: ${DESKTOP_RESOURCE_ORIGIN}`,
     "font-src 'self'",
-    `connect-src ${connectSources} blob: ${DESKTOP_MEDIA_SCHEME}:`,
-    `media-src ${DESKTOP_MEDIA_SCHEME}:`,
+    `connect-src ${connectSources} blob:`,
+    `media-src ${DESKTOP_RESOURCE_ORIGIN}`,
     "worker-src 'none'",
   ].join('; ');
 }
@@ -93,7 +94,7 @@ export function createDesktopContentSecurityPolicy(
 export function configureDesktopWindowSecurity(
   window: DesktopWindowSecurityTarget,
   allowedOrigin: string,
-  policyOptions?: DesktopContentSecurityPolicyOptions,
+  policyOptions: DesktopContentSecurityPolicyOptions = {},
 ): () => void {
   const webContents = window.webContents;
   webContents.setWindowOpenHandler(() => ({ action: 'deny' }));

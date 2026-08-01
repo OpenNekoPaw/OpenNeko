@@ -20,7 +20,7 @@ describe('HtmlVideoClient', () => {
 
     await client.connect();
 
-    expect(video.src).toBe('http://127.0.0.1:1234/video');
+    expect(video.src).toBe('openneko://resource/0123456789abcdefghijklmnopqrstuv');
     expect(video.playbackRate).toBe(1.25);
     expect(video.currentTime).toBe(2.5);
     expect(fetch).not.toHaveBeenCalled();
@@ -91,7 +91,7 @@ describe('HtmlVideoClient', () => {
     expect(video.load).toHaveBeenCalledTimes(1);
   });
 
-  it('rejects non-loopback descriptors before mutating the element', async () => {
+  it('rejects non-resource descriptors before mutating the element', async () => {
     const video = createVideoStub();
     const client = new HtmlVideoClient({
       video,
@@ -181,8 +181,7 @@ function createVideoStub(): HTMLVideoElement {
 function createDescriptor(mediaTimeOriginSeconds: number) {
   return {
     version: 1 as const,
-    transport: 'http' as const,
-    url: 'http://127.0.0.1:1234/video',
+    url: 'openneko://resource/0123456789abcdefghijklmnopqrstuv',
     mimeType: 'video/mp4; codecs="avc1.4d0020"',
     mediaTimeOriginSeconds,
     durationSeconds: 10,

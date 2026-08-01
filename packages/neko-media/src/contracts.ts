@@ -3,22 +3,18 @@ export interface MediaSource {
 }
 
 export type MediaFailureScope = 'source' | 'stream' | 'interval' | 'operation';
-export type MediaTransport = 'http';
 
-export function isMediaTransport(value: unknown): value is MediaTransport {
-  return value === 'http';
-}
-
-export function isMediaTransportUrl(value: string, transport: MediaTransport): boolean {
-  if (transport !== 'http') return false;
+export function isMediaResourceUrl(value: string): boolean {
   try {
     const url = new URL(value);
     return (
-      url.protocol === 'http:' &&
-      url.hostname === '127.0.0.1' &&
-      url.port.length > 0 &&
+      url.protocol === 'openneko:' &&
+      url.hostname === 'resource' &&
+      /^\/[A-Za-z0-9_-]{32}(?:\/.*)?$/u.test(url.pathname) &&
       url.username.length === 0 &&
-      url.password.length === 0
+      url.password.length === 0 &&
+      url.search.length === 0 &&
+      url.hash.length === 0
     );
   } catch {
     return false;
@@ -63,7 +59,6 @@ export interface MediaProbe {
 
 export interface PcmStreamDescriptor {
   readonly version: 1;
-  readonly transport: MediaTransport;
   readonly protocol: 'neko-pcm-f32le-v1';
   readonly streamUrl: string;
   readonly sampleRate: number;
@@ -72,7 +67,6 @@ export interface PcmStreamDescriptor {
 
 export interface HtmlAudioDescriptor {
   readonly version: 1;
-  readonly transport: MediaTransport;
   readonly url: string;
   readonly mimeType: string;
   readonly durationSeconds: number;
@@ -98,7 +92,6 @@ export interface HtmlVideoPreparationOptions {
 
 export interface HtmlVideoDescriptor {
   readonly version: 1;
-  readonly transport: MediaTransport;
   readonly url: string;
   readonly mimeType: string;
   readonly preparationProfile: HtmlVideoPreparationProfile;

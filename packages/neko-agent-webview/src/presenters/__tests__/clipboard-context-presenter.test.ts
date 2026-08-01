@@ -27,7 +27,7 @@ describe('clipboard-context-presenter', () => {
         display: {
           runtimeOnly: true,
           path: '/tmp/page-1.jpg',
-          renderUri: 'neko-media://page-1.jpg',
+          renderUri: 'http://127.0.0.1:43125/v1/resources/page-1.jpg',
         },
       }),
     );

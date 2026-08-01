@@ -5,7 +5,12 @@
 
 import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
 import { getKeyboardBoundaryMetadata } from '@neko/ui/keyboard';
-import type { CanvasNode, CanvasConnection, CanvasViewport as ViewportType } from '@neko/shared';
+import type {
+  CanvasNode,
+  CanvasConnection,
+  CanvasViewport as ViewportType,
+  ContentLocator,
+} from '@neko/shared';
 import { CanvasGrid } from './CanvasGrid';
 import { CanvasViewport } from './CanvasViewport';
 import { renderCanvasNode } from './nodes';
@@ -77,7 +82,7 @@ export interface InfiniteCanvasProps {
   isGridVisible?: boolean;
 
   /** Called when user opens a referenced file. */
-  onDocumentOpen?: (docPath: string) => void;
+  onDocumentOpen?: (locator: ContentLocator) => void;
   /** Called when user opens an embedded canvas. */
   onCanvasEmbedOpen?: (canvasPath: string) => void;
 }

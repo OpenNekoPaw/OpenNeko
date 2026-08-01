@@ -12,7 +12,6 @@ import {
   type CutCommand,
   type CutDocumentStorage,
   type CutHostRuntimeIdentity,
-  type CutHostPreviewMessage,
   type CutHostPresentationState,
   type CutHostRuntimeProjectionEvent,
   type CutHostRuntimeRequest,
@@ -34,6 +33,7 @@ import {
   type CutPreviewRuntimeEvent,
 } from '@neko-cut/node';
 import type { NekoHostPorts } from '@neko/host/ports';
+import type { NodeMediaPublisher } from '@neko/media/node';
 import type { WorkspaceFileContentLocator } from '@neko/shared';
 import type {
   ResourceBrowserContentItem,
@@ -49,7 +49,7 @@ import {
 } from '../shared/workbench-contract';
 import { createDesktopCutSessionId } from '../shared/cut-bridge-contract';
 import { resolveDesktopWorkspaceContentLocator } from './desktop-content-locator';
-import type { DesktopMediaDescriptorRegistry } from './desktop-media-protocol';
+import type { DesktopResourceRegistry } from './desktop-resource-registry';
 
 interface DesktopCutRuntimeEntry {
   identity: CutHostRuntimeIdentity;
@@ -58,7 +58,7 @@ interface DesktopCutRuntimeEntry {
   readonly completedCommands: Map<string, CutHostRuntimeResult>;
   readonly documentPath: string;
   readonly workspacePath: string;
-  readonly preview: CutPreviewRuntimeController;
+  preview: CutPreviewRuntimeController;
   presentation: CutHostPresentationState;
   sequence: number;
 }
@@ -80,8 +80,7 @@ export class DesktopCutRuntime {
         'getProjection' | 'updateWorkbench' | 'resolveAgentWorkspace' | 'resolveCutViewGrant'
       >;
       readonly host: NekoHostPorts;
-      readonly mediaRegistry: DesktopMediaDescriptorRegistry;
-      readonly resolveWebContentsId: (windowId: string) => number;
+      readonly resources?: Pick<DesktopResourceRegistry, 'createMediaPublisher'>;
       readonly createMediaAdapter?: (
         workspacePath: string,
       ) => Pick<CutMediaRuntimeAdapter, 'captureFrame' | 'generateWaveform' | 'dispose'>;
@@ -237,7 +236,7 @@ export class DesktopCutRuntime {
     const prepared = await importer.prepare(entry.documentPath, sourcePath);
     const mediaAdapter =
       this.options.createAuthoringMediaAdapter?.(entry.workspacePath) ??
-      new NodeFfmpegCutMediaAdapter(entry.workspacePath);
+      this.createNodeMediaAdapter(entry.workspacePath, entry.identity, String(current.revision));
     let committed = false;
     try {
       const probe = await mediaAdapter.probe({
@@ -435,7 +434,11 @@ export class DesktopCutRuntime {
           run: async (signal) => {
             const adapter =
               this.options.createExportMediaAdapter?.(entry.workspacePath) ??
-              new NodeFfmpegCutMediaAdapter(entry.workspacePath);
+              this.createNodeMediaAdapter(
+                entry.workspacePath,
+                entry.identity,
+                String(frozen.sourceRevision),
+              );
             try {
               await adapter.export(
                 {
@@ -467,7 +470,11 @@ export class DesktopCutRuntime {
         const paths = await CutWorkspaceMediaPaths.create(entry.workspacePath);
         const mediaAdapter =
           this.options.createMediaAdapter?.(entry.workspacePath) ??
-          new NodeFfmpegCutMediaAdapter(entry.workspacePath);
+          this.createNodeMediaAdapter(
+            entry.workspacePath,
+            entry.identity,
+            String(entry.session.revision),
+          );
         try {
           const requestedView = entry.session.view();
           const results = await generateClipRepresentations({
@@ -614,7 +621,14 @@ export class DesktopCutRuntime {
     if (rebound) {
       const [previousKey, entry] = rebound;
       this.sessions.delete(previousKey);
+      await entry.preview.dispose();
       entry.identity = { ...identity };
+      entry.preview = this.createPreviewController(
+        entry.documentPath,
+        entry.workspacePath,
+        entry.identity,
+        entry.session.revision,
+      );
       this.sessions.set(key, entry);
       return entry;
     }
@@ -629,9 +643,6 @@ export class DesktopCutRuntime {
       createTrackId: () => `track-${randomUUID()}`,
       createSessionId: () => identity.sessionId,
     });
-    const previewMediaAdapter =
-      this.options.createPreviewMediaAdapter?.(grant.workspace.workspacePath) ??
-      new NodeFfmpegCutMediaAdapter(grant.workspace.workspacePath);
     const entry: DesktopCutRuntimeEntry = {
       identity: { ...identity },
       session,
@@ -639,11 +650,12 @@ export class DesktopCutRuntime {
       completedCommands: new Map(),
       documentPath,
       workspacePath: grant.workspace.workspacePath,
-      preview: new CutPreviewRuntimeController({
+      preview: this.createPreviewController(
         documentPath,
-        workspacePath: grant.workspace.workspacePath,
-        mediaAdapter: previewMediaAdapter,
-      }),
+        grant.workspace.workspacePath,
+        identity,
+        session.revision,
+      ),
       presentation: { ...DEFAULT_CUT_HOST_PRESENTATION },
       sequence: 0,
     };
@@ -687,7 +699,7 @@ export class DesktopCutRuntime {
     const prepared: Awaited<ReturnType<CutWorkspaceMediaImporter['prepare']>>[] = [];
     const adapter =
       this.options.createAuthoringMediaAdapter?.(entry.workspacePath) ??
-      new NodeFfmpegCutMediaAdapter(entry.workspacePath);
+      this.createNodeMediaAdapter(entry.workspacePath, entry.identity, String(expectedRevision));
     let committed = false;
     try {
       for (const sourcePath of input.sourcePaths) {
@@ -773,88 +785,69 @@ export class DesktopCutRuntime {
     commandId: string,
     event: CutPreviewRuntimeEvent,
   ): CutHostRuntimeResult {
-    const message = this.authorizePreviewEvent(entry, event);
     const result: CutHostRuntimeResult = {
       schemaVersion: CUT_HOST_RUNTIME_VERSION,
       snapshot: this.projectSnapshot(entry),
-      output: { type: 'preview', message },
+      output: { type: 'preview', message: event },
     };
     entry.completedCommands.set(commandId, result);
     return result;
   }
 
-  private authorizePreviewEvent(
-    entry: DesktopCutRuntimeEntry,
-    event: CutPreviewRuntimeEvent,
-  ): CutHostPreviewMessage {
-    if (event.type === 'cut:preview-activated') return event;
-    const webContentsId = this.options.resolveWebContentsId(entry.identity.windowId);
-    const video = event.video
-      ? {
-          ...event.video,
-          transport: 'authorized' as const,
-          url: this.authorizeUpstreamMedia(entry, {
-            webContentsId,
-            generation: event.generation,
-            upstreamUrl: event.video.url,
-            mediaType: event.video.mimeType,
-            displayName: 'preview.mp4',
-          }),
-        }
-      : undefined;
-    const audioStreams = event.audioStreams.map((stream, index) => ({
-      ...stream,
-      transport: 'authorized' as const,
-      streamUrl: this.authorizeUpstreamMedia(entry, {
-        webContentsId,
-        generation: event.generation,
-        upstreamUrl: stream.streamUrl,
-        mediaType: 'application/octet-stream',
-        displayName: `audio-${index}.pcm`,
-      }),
-    }));
-    return {
-      ...event,
-      ...(video ? { video } : {}),
-      audioStreams,
-    };
-  }
-
-  private authorizeUpstreamMedia(
-    entry: DesktopCutRuntimeEntry,
-    input: {
-      readonly webContentsId: number;
-      readonly generation: number;
-      readonly upstreamUrl: string;
-      readonly mediaType: string;
-      readonly displayName: string;
-    },
-  ): string {
-    const descriptorId = this.options.mediaRegistry.registerUpstream({
-      webContentsId: input.webContentsId,
-      windowId: entry.identity.windowId,
-      viewId: entry.identity.viewId,
-      sessionId: entry.identity.sessionId,
-      revision: `preview:${input.generation}`,
-      upstreamUrl: input.upstreamUrl,
-      mediaType: input.mediaType,
-    });
-    return `neko-media://desktop/${encodeURIComponent(descriptorId)}/${encodeURIComponent(
-      input.displayName,
-    )}`;
-  }
-
   private scheduleDisposal(entry: DesktopCutRuntimeEntry): void {
-    this.options.mediaRegistry.releaseSession(entry.identity.sessionId);
     const disposal = entry.preview.dispose();
     this.pendingDisposals.add(disposal);
     void disposal.catch(() => undefined);
+  }
+
+  private createPreviewController(
+    documentPath: string,
+    workspacePath: string,
+    identity: CutHostRuntimeIdentity,
+    revision: number,
+  ): CutPreviewRuntimeController {
+    const mediaAdapter =
+      this.options.createPreviewMediaAdapter?.(workspacePath) ??
+      this.createNodeMediaAdapter(workspacePath, identity, String(revision));
+    return new CutPreviewRuntimeController({
+      documentPath,
+      workspacePath,
+      mediaAdapter,
+    });
+  }
+
+  private createNodeMediaAdapter(
+    workspacePath: string,
+    identity: CutHostRuntimeIdentity,
+    revision: string,
+  ): NodeFfmpegCutMediaAdapter {
+    const publisher =
+      this.options.resources?.createMediaPublisher({
+        windowId: identity.windowId,
+        viewId: identity.viewId,
+        sessionId: identity.sessionId,
+        endpointEpoch: identity.endpointEpoch,
+        revision,
+      }) ?? UNAVAILABLE_DESKTOP_MEDIA_PUBLISHER;
+    return new NodeFfmpegCutMediaAdapter(workspacePath, { publisher });
   }
 
   private requireActive(): void {
     if (this.disposed) throw new Error('Desktop Cut runtime is disposed.');
   }
 }
+
+const UNAVAILABLE_DESKTOP_MEDIA_PUBLISHER = {
+  registerFile: async () => {
+    throw new Error('Desktop Cut media publication requires the app resource registry.');
+  },
+  registerPcm: async () => {
+    throw new Error('Desktop Cut PCM publication requires the app resource registry.');
+  },
+  unregister: () => {
+    throw new Error('Desktop Cut cannot release an unregistered media capability.');
+  },
+} satisfies NodeMediaPublisher;
 
 function createCutDocumentStorage(host: NekoHostPorts, documentPath: string): CutDocumentStorage {
   return {

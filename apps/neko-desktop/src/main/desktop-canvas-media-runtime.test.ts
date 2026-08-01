@@ -1,17 +1,19 @@
 import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
-import type { HtmlVideoDescriptor, MediaProbe, PcmStreamDescriptor } from '@neko/media';
+import type { HtmlVideoDescriptor, MediaProbe } from '@neko/media';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   DesktopCanvasMediaRuntime,
   type DesktopCanvasNodeMediaPort,
 } from './desktop-canvas-media-runtime';
-import { DesktopMediaDescriptorRegistry } from './desktop-media-protocol';
+import { DesktopResourceRegistry } from './desktop-resource-registry';
 
 const roots: string[] = [];
+const registries: DesktopResourceRegistry[] = [];
 
 afterEach(async () => {
+  for (const registry of registries.splice(0)) registry.dispose();
   for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true });
 });
 
@@ -19,8 +21,7 @@ describe('DesktopCanvasMediaRuntime', () => {
   it('projects probe and playback descriptors through the package media runtime', async () => {
     const workspacePath = await createWorkspace('cases/test.aac');
     const media = createMediaPort();
-    const mediaRegistry = new DesktopMediaDescriptorRegistry();
-    const runtime = createRuntime(media, mediaRegistry);
+    const runtime = createRuntime(media);
     const workspace = createWorkspaceResolution(workspacePath);
 
     const probe = await runtime.execute(
@@ -69,25 +70,18 @@ describe('DesktopCanvasMediaRuntime', () => {
     expect(play).toMatchObject({
       type: 'media:streamReady',
       nodeId: 'audio-1',
+      contentLocator: { kind: 'workspace-file', path: 'cases/test.aac' },
       audio: {
-        protocol: 'neko-pcm-f32le-v1',
-        transport: 'authorized',
-        streamUrl: expect.stringMatching(/^neko-media:\/\/desktop\//u),
+        url: 'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       },
     });
-    const descriptorId = readDescriptorId(
-      play?.type === 'media:streamReady' ? play.audio?.streamUrl : undefined,
-    );
-    expect(descriptorId).toBeDefined();
-    expect(mediaRegistry.authorize(42, descriptorId ?? '')).toBe(true);
-    expect(media.startPcm).toHaveBeenCalledWith(
+    expect(media.publishFile).toHaveBeenCalledWith(
       await realpath(path.join(workspacePath, 'cases/test.aac')),
-      expect.objectContaining({ durationSeconds: 12 }),
+      'audio/aac',
     );
 
     runtime.detachWindow(identity.windowId);
     await runtime.dispose();
-    expect(mediaRegistry.authorize(42, descriptorId ?? '')).toBe(false);
     expect(media.stop).toHaveBeenCalledWith('audio-session-1');
     expect(media.dispose).toHaveBeenCalledOnce();
   });
@@ -96,7 +90,7 @@ describe('DesktopCanvasMediaRuntime', () => {
     const workspacePath = await createWorkspace('cases/test.aac');
     const outsidePath = await createWorkspace('secret.aac');
     const media = createMediaPort();
-    const runtime = createRuntime(media, new DesktopMediaDescriptorRegistry());
+    const runtime = createRuntime(media);
 
     const response = await runtime.execute(
       {
@@ -121,11 +115,10 @@ describe('DesktopCanvasMediaRuntime', () => {
     await runtime.dispose();
   });
 
-  it('rewrites Canvas video and PCM descriptors to sender-bound Desktop media URLs', async () => {
+  it('returns one native Canvas video descriptor without a duplicate PCM stream', async () => {
     const workspacePath = await createWorkspace('media/test.mp4');
     const media = createMediaPort();
-    const mediaRegistry = new DesktopMediaDescriptorRegistry();
-    const runtime = createRuntime(media, mediaRegistry);
+    const runtime = createRuntime(media);
 
     const response = await runtime.execute(
       {
@@ -152,30 +145,157 @@ describe('DesktopCanvasMediaRuntime', () => {
     expect(response).toMatchObject({
       type: 'media:streamReady',
       nodeId: 'video-1',
+      contentLocator: { kind: 'workspace-file', path: 'media/test.mp4' },
       video: {
-        transport: 'authorized',
-        url: expect.stringMatching(/^neko-media:\/\/desktop\//u),
-      },
-      audio: {
-        transport: 'authorized',
-        streamUrl: expect.stringMatching(/^neko-media:\/\/desktop\//u),
+        url: 'openneko://resource/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
       },
     });
-    const videoDescriptorId = readDescriptorId(
-      response?.type === 'media:streamReady' ? response.video?.url : undefined,
-    );
-    const audioDescriptorId = readDescriptorId(
-      response?.type === 'media:streamReady' ? response.audio?.streamUrl : undefined,
-    );
-    expect(mediaRegistry.authorize(42, videoDescriptorId ?? '')).toBe(true);
-    expect(mediaRegistry.authorize(42, audioDescriptorId ?? '')).toBe(true);
+    if (response?.type !== 'media:streamReady') throw new Error('Expected stream response.');
+    expect(response.audio).toBeUndefined();
+    expect(media.publishFile).not.toHaveBeenCalled();
 
     await runtime.execute(
       { identity, type: 'media:stop', nodeId: 'video-1' },
       createWorkspaceResolution(workspacePath),
     );
-    expect(mediaRegistry.authorize(42, videoDescriptorId ?? '')).toBe(false);
-    expect(mediaRegistry.authorize(42, audioDescriptorId ?? '')).toBe(false);
+    await runtime.dispose();
+  });
+
+  it('publishes native audio through the owner-scoped resource registry', async () => {
+    const workspacePath = await createWorkspace('media/test.wav');
+    const registry = createRegistry();
+    const runtime = new DesktopCanvasMediaRuntime({ resources: registry });
+
+    const response = await runtime.execute(
+      {
+        identity,
+        type: 'media:play',
+        nodeId: 'audio-resource',
+        locator: { kind: 'workspace-file', path: 'media/test.wav' },
+        mediaType: 'audio',
+        mediaInfo: {
+          duration: 12,
+          width: 0,
+          height: 0,
+          fps: 0,
+          codec: 'pcm_s16le',
+          format: 'wav',
+          hasAudio: true,
+        },
+        startTime: 0,
+        speed: 1,
+      },
+      createWorkspaceResolution(workspacePath),
+    );
+
+    if (response?.type !== 'media:streamReady' || !response.audio) {
+      throw new Error('Expected native Canvas audio descriptor.');
+    }
+    expect(response.audio.url).toMatch(
+      /^openneko:\/\/resource\/[A-Za-z0-9_-]{32}$/u,
+    );
+    expect(await (await fetchResource(response.audio.url)).text()).toBe('fixture');
+
+    registry.releaseWindow(identity.windowId);
+    expect((await fetchResource(response.audio.url)).status).toBe(404);
+    await runtime.execute(
+      { identity, type: 'media:stop', nodeId: 'audio-resource' },
+      createWorkspaceResolution(workspacePath),
+    );
+    await runtime.dispose();
+  });
+
+  it('isolates two Canvas Views that use the same node identity', async () => {
+    const workspacePath = await createWorkspace('media/test.wav');
+    const registry = createRegistry();
+    const runtime = new DesktopCanvasMediaRuntime({ resources: registry });
+    const secondIdentity = {
+      ...identity,
+      viewId: 'canvas:view-2',
+      documentId: 'Second.nkc',
+      sessionId: 'canvas-session:canvas:view-2:1',
+    };
+    const request = {
+      type: 'media:play' as const,
+      nodeId: 'audio-shared-id',
+      locator: { kind: 'workspace-file' as const, path: 'media/test.wav' },
+      mediaType: 'audio' as const,
+      mediaInfo: {
+        duration: 12,
+        width: 0,
+        height: 0,
+        fps: 0,
+        codec: 'pcm_s16le',
+        format: 'wav',
+        hasAudio: true,
+      },
+      startTime: 0,
+      speed: 1,
+    };
+    const first = await runtime.execute(
+      { ...request, identity },
+      createWorkspaceResolution(workspacePath),
+    );
+    const second = await runtime.execute(
+      { ...request, identity: secondIdentity },
+      createWorkspaceResolution(workspacePath),
+    );
+    if (
+      first?.type !== 'media:streamReady' ||
+      !first.audio ||
+      second?.type !== 'media:streamReady' ||
+      !second.audio
+    ) {
+      throw new Error('Expected two native Canvas audio descriptors.');
+    }
+
+    await runtime.execute(
+      { identity, type: 'media:stop', nodeId: request.nodeId },
+      createWorkspaceResolution(workspacePath),
+    );
+
+    expect((await fetchResource(first.audio.url)).status).toBe(404);
+    expect((await fetchResource(second.audio.url)).status).toBe(200);
+    await runtime.dispose();
+    expect((await fetchResource(second.audio.url)).status).toBe(404);
+  });
+
+  it('returns prepared video failure without falling back to PCM or native audio', async () => {
+    const workspacePath = await createWorkspace('media/unsupported.mkv');
+    const media = createMediaPort();
+    media.prepareVideo.mockRejectedValueOnce(
+      new Error('No qualified complete seekable representation is available.'),
+    );
+    const runtime = createRuntime(media);
+
+    const response = await runtime.execute(
+      {
+        identity,
+        type: 'media:play',
+        nodeId: 'video-unavailable',
+        locator: { kind: 'workspace-file', path: 'media/unsupported.mkv' },
+        mediaType: 'video',
+        mediaInfo: {
+          duration: 12,
+          width: 1920,
+          height: 1080,
+          fps: 30,
+          codec: 'unsupported',
+          format: 'mkv',
+          hasAudio: true,
+        },
+        startTime: 0,
+        speed: 1,
+      },
+      createWorkspaceResolution(workspacePath),
+    );
+
+    expect(response).toEqual({
+      type: 'media:streamReady',
+      nodeId: 'video-unavailable',
+      error: 'No qualified complete seekable representation is available.',
+    });
+    expect(media.publishFile).not.toHaveBeenCalled();
     await runtime.dispose();
   });
 });
@@ -222,18 +342,9 @@ function createMediaPort() {
       },
     ],
   };
-  const audio: PcmStreamDescriptor = {
-    version: 1,
-    transport: 'http',
-    protocol: 'neko-pcm-f32le-v1',
-    streamUrl: 'http://127.0.0.1/audio',
-    sampleRate: 48_000,
-    channels: 2,
-  };
   const video: HtmlVideoDescriptor = {
     version: 1,
-    transport: 'http',
-    url: 'http://127.0.0.1/video',
+    url: 'openneko://resource/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
     mimeType: 'video/mp4',
     preparationProfile: 'h264-mp4-direct',
     durationSeconds: 12,
@@ -242,29 +353,35 @@ function createMediaPort() {
     probe: vi.fn(async () => probeValue),
     captureFrame: vi.fn(async () => 'data:image/jpeg;base64,ZnJhbWU='),
     prepareVideo: vi.fn(async () => ({ sessionId: 'video-session-1', video })),
-    startPcm: vi.fn(async () => ({ sessionId: 'audio-session-1', stream: audio })),
+    publishFile: vi.fn(async () => ({
+      sessionId: 'audio-session-1',
+      url: 'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+    })),
     stop: vi.fn(async () => undefined),
     dispose: vi.fn(async () => undefined),
   } satisfies DesktopCanvasNodeMediaPort;
 }
 
-function createRuntime(
-  media: DesktopCanvasNodeMediaPort,
-  mediaRegistry: DesktopMediaDescriptorRegistry,
-): DesktopCanvasMediaRuntime {
-  return new DesktopCanvasMediaRuntime({
-    media,
-    mediaRegistry,
-    resolveWebContentsId: () => 42,
-  });
-}
-
-function readDescriptorId(url: string | undefined): string | undefined {
-  if (!url) return undefined;
-  const segment = new URL(url).pathname.split('/').filter(Boolean)[0];
-  return segment ? decodeURIComponent(segment) : undefined;
+function createRuntime(media: DesktopCanvasNodeMediaPort): DesktopCanvasMediaRuntime {
+  return new DesktopCanvasMediaRuntime({ media });
 }
 
 function failMediaInfo(): never {
   throw new Error('Expected media probe metadata.');
+}
+
+function createRegistry(): DesktopResourceRegistry {
+  const registry = new DesktopResourceRegistry();
+  registry.bindWindow(identity.windowId, 101);
+  registries.push(registry);
+  return registry;
+}
+
+function fetchResource(input: string | URL, init?: RequestInit): Promise<Response> {
+  const url = input.toString();
+  const registry = registries.find((candidate) => candidate.authorizeRequest(url, 101));
+  if (!registry) {
+    return Promise.resolve(new Response('Resource not found', { status: 404 }));
+  }
+  return registry.handle(new Request(url, init));
 }

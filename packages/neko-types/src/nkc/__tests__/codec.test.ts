@@ -56,7 +56,7 @@ describe('loadNkc', () => {
     expect(result.data.name).toBe('Test Canvas');
   });
 
-  it('migrates current-version path-only material nodes to canonical workspace locators', () => {
+  it('loads current-version path-only material nodes as degraded content without inferring a locator', () => {
     const result = loadNkc(
       JSON.stringify({
         ...VALID_CANVAS,
@@ -73,21 +73,64 @@ describe('loadNkc', () => {
     );
 
     expect(result.validation.valid).toBe(true);
-    expect(result.migration).toMatchObject({
-      fromVersion: '3.0',
-      toVersion: '3.0',
-      migrated: true,
-    });
+    expect(result.migration).toBeUndefined();
     expect(result.data.nodes[0]).toMatchObject({
       type: 'media',
       data: {
         assetPath: 'media/legacy.mp4',
-        contentLocator: {
-          kind: 'workspace-file',
-          path: 'media/legacy.mp4',
-        },
+        mediaType: 'video',
       },
     });
+    expect(result.data.nodes[0]?.data).not.toHaveProperty('contentLocator');
+    expect(result.validation.warnings).toContainEqual(
+      expect.objectContaining({
+        field: 'nodes[0].data.contentLocator',
+        message: expect.stringContaining('canvas-material-content-locator-required'),
+      }),
+    );
+  });
+
+  it('preserves path-only File nodes and their connections without migration', () => {
+    const result = loadNkc(
+      JSON.stringify({
+        ...VALID_CANVAS,
+        nodes: [
+          {
+            id: 'file-1',
+            type: 'file',
+            position: { x: 40, y: 80 },
+            size: { width: 260, height: 180 },
+            zIndex: 2,
+            data: {
+              path: 'documents/legacy.md',
+              title: 'Legacy notes',
+              mediaKind: 'document',
+              mediaType: 'text/markdown',
+            },
+          },
+          VALID_CANVAS.nodes[0],
+        ],
+        connections: [
+          {
+            id: 'legacy-connection',
+            sourceId: 'file-1',
+            targetId: 'node-1',
+            sourceEndpoint: { nodeId: 'file-1', scope: 'node' },
+            targetEndpoint: { nodeId: 'node-1', scope: 'node' },
+            type: 'reference',
+          },
+        ],
+      }),
+    );
+
+    expect(result.validation.valid).toBe(true);
+    expect(result.migration).toBeUndefined();
+    expect(result.data.nodes[0]).toMatchObject({
+      id: 'file-1',
+      data: { path: 'documents/legacy.md' },
+    });
+    expect(result.data.nodes[0]?.data).not.toHaveProperty('contentLocator');
+    expect(result.data.connections).toHaveLength(1);
   });
 
   it('keeps non-portable current-version material paths invalid', () => {
@@ -111,6 +154,30 @@ describe('loadNkc', () => {
     expect(result.validation.errors).toContainEqual(
       expect.objectContaining({
         field: 'nodes[0].data.contentLocator',
+      }),
+    );
+  });
+
+  it('rejects persisted loopback projection URLs even when a locator is present', () => {
+    const result = loadNkc(
+      JSON.stringify({
+        ...VALID_CANVAS,
+        nodes: [
+          {
+            ...VALID_CANVAS.nodes[0],
+            data: {
+              ...VALID_CANVAS.nodes[0]!.data,
+              assetPath: 'http://127.0.0.1:43125/v1/resources/runtime-token',
+            },
+          },
+        ],
+      }),
+    );
+
+    expect(result.validation.valid).toBe(false);
+    expect(result.validation.errors).toContainEqual(
+      expect.objectContaining({
+        field: 'nodes[0].data.assetPath',
       }),
     );
   });

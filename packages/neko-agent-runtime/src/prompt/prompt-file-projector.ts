@@ -199,7 +199,8 @@ export function generatePromptFileName(name: string): string {
 
 export function extractPromptNameFromContent(content: string): string | null {
   const match = content.match(/^#\s+(.+)$/m);
-  return match ? match[1].trim() : null;
+  const heading = match?.[1];
+  return heading ? heading.trim() : null;
 }
 
 export function generatePromptFileId(source: PromptSource, fileName: string): string {

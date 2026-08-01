@@ -131,6 +131,7 @@ describe('useDragDrop add-source contract', () => {
             requestId: 'first-add',
             ok: true,
             durablePath: 'media/first.mp4',
+            contentLocator: { kind: 'workspace-file', path: 'media/first.mp4' },
             diagnostics: [],
             metadata: { canvasAssetKind: 'media', mediaType: 'video', name: 'first.mp4' },
           },
@@ -150,7 +151,15 @@ describe('useDragDrop add-source contract', () => {
       expect(addMediaAt).not.toHaveBeenCalled();
       expect(onDropAssets).toHaveBeenCalledTimes(1);
       expect(onDropAssets).toHaveBeenCalledWith(
-        [{ kind: 'media', path: 'media/first.mp4', name: 'first.mp4', mediaType: 'video' }],
+        [
+          {
+            kind: 'media',
+            path: 'media/first.mp4',
+            name: 'first.mp4',
+            mediaType: 'video',
+            contentLocator: { kind: 'workspace-file', path: 'media/first.mp4' },
+          },
+        ],
         { x: 10, y: 20 },
       );
     } finally {
@@ -171,6 +180,7 @@ describe('useDragDrop add-source contract', () => {
           requestId: `add-${name}`,
           ok: true,
           durablePath: `assets/${name}`,
+          contentLocator: { kind: 'workspace-file', path: `assets/${name}` },
           diagnostics: [],
           metadata: {
             canvasAssetKind: 'text',
@@ -261,6 +271,7 @@ describe('useDragDrop add-source contract', () => {
         requestId: 'first',
         ok: true,
         durablePath: 'media/first.mp4',
+        contentLocator: { kind: 'workspace-file', path: 'media/first.mp4' },
         diagnostics: [],
         metadata: { canvasAssetKind: 'media', mediaType: 'video', name: 'first.mp4' },
       },
@@ -275,6 +286,7 @@ describe('useDragDrop add-source contract', () => {
         requestId: 'second',
         ok: true,
         durablePath: 'media/second.mp4',
+        contentLocator: { kind: 'workspace-file', path: 'media/second.mp4' },
         diagnostics: [],
         metadata: { canvasAssetKind: 'media', mediaType: 'video', name: 'second.mp4' },
       },
@@ -288,13 +300,61 @@ describe('useDragDrop add-source contract', () => {
     expect(addMediaAt).not.toHaveBeenCalled();
     expect(onDropAssets).toHaveBeenNthCalledWith(
       1,
-      [{ kind: 'media', path: 'media/first.mp4', name: 'first.mp4', mediaType: 'video' }],
+      [
+        {
+          kind: 'media',
+          path: 'media/first.mp4',
+          name: 'first.mp4',
+          mediaType: 'video',
+          contentLocator: { kind: 'workspace-file', path: 'media/first.mp4' },
+        },
+      ],
       { x: 10, y: 20 },
     );
     expect(onDropAssets).toHaveBeenNthCalledWith(
       2,
-      [{ kind: 'media', path: 'media/second.mp4', name: 'second.mp4', mediaType: 'video' }],
+      [
+        {
+          kind: 'media',
+          path: 'media/second.mp4',
+          name: 'second.mp4',
+          mediaType: 'video',
+          contentLocator: { kind: 'workspace-file', path: 'media/second.mp4' },
+        },
+      ],
       { x: 40, y: 50 },
+    );
+  });
+
+  it('rejects a path-only successful source response without creating a Canvas node', () => {
+    const addMediaAt = vi.fn();
+    const onDropAssets = vi.fn();
+    const onError = vi.fn();
+
+    applyCanvasAddSourceResult({
+      result: {
+        requestId: 'missing-locator',
+        ok: true,
+        durablePath: 'media/path-only.mp4',
+        diagnostics: [],
+        metadata: {
+          canvasAssetKind: 'media',
+          mediaType: 'video',
+          name: 'path-only.mp4',
+        },
+      },
+      sourceNameHint: 'path-only.mp4',
+      mediaTypeHint: 'video',
+      dropPosition: { x: 10, y: 20 },
+      addMediaAt,
+      onDropAssets,
+      onError,
+    });
+
+    expect(addMediaAt).not.toHaveBeenCalled();
+    expect(onDropAssets).not.toHaveBeenCalled();
+    expect(onError).toHaveBeenCalledWith(
+      'Canvas source Host result omitted its canonical ContentLocator.',
     );
   });
 

@@ -22,6 +22,7 @@ import {
   normalizeStoryboardPlanOverlay,
   normalizeCanonicalStoryboardTable,
 } from '@neko/shared';
+import { isAuthorizedResourceDisplayUri } from './resource-display-uri';
 import type { PluginsAvailable } from '@/components/ChatView/SendToMenu';
 
 export type CompositeRichContentKind = 'storyboard-table' | 'comparison-grid' | 'asset-gallery';
@@ -1350,14 +1351,7 @@ function isModelMimeType(mimeType: string | undefined): boolean {
 }
 
 function isRenderableUri(value: string): boolean {
-  if (!value) return false;
-  if (value.startsWith('file://')) return false;
-  if (value.startsWith('data:')) return false;
-  if (value.startsWith('${')) return false;
-  if (isAbsolutePath(value)) return false;
-  if (value.startsWith('http://') || value.startsWith('https://')) return true;
-  if (value.startsWith('webview://')) return true;
-  return value.startsWith('neko-media://');
+  return isAuthorizedResourceDisplayUri(value);
 }
 
 function isGeneratedAssetResultMediaUri(value: string): boolean {

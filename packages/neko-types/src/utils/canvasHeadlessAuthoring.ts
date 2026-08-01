@@ -534,8 +534,8 @@ function createNodeFromSpec(
     case 'media': {
       const assetPath = readString(input, 'assetPath');
       const contentLocator = validateContentLocator(input['contentLocator']);
-      if (!assetPath && !contentLocator.ok) {
-        throw new Error('Canvas Media creation requires a durable source');
+      if (!contentLocator.ok) {
+        throw new Error('Canvas Media creation requires a canonical ContentLocator');
       }
       return {
         ...base,
@@ -588,8 +588,8 @@ function createNodeFromSpec(
     case 'file': {
       const path = readString(input, 'path');
       const contentLocator = validateContentLocator(input['contentLocator']);
-      if (!path && !contentLocator.ok) {
-        throw new Error('Canvas File creation requires a durable source');
+      if (!contentLocator.ok) {
+        throw new Error('Canvas File creation requires a canonical ContentLocator');
       }
       return {
         ...base,

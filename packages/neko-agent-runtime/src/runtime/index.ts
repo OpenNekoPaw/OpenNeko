@@ -28,9 +28,6 @@ export {
   type AgentContentAccessStatus,
   type AgentDocumentContentInput,
   type AgentDocumentContentResult,
-  type AgentImageMetadataInput,
-  type AgentImageMetadataResult,
-  type AgentProviderAssetInput,
   type AgentProviderAssetResult,
 } from './capability/agent-content-access-runtime';
 
@@ -349,6 +346,9 @@ export {
 
 export {
   isLocalMediaFilePath,
+  messageResourceProjectionKey,
+  projectConversationProjectionPatchForResourceDisplay,
+  projectConversationProjectionSnapshotForResourceDisplay,
   projectMessageForResourceDisplay,
   projectMessagesForResourceDisplay,
   projectResourceValue,

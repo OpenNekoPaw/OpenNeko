@@ -51,7 +51,10 @@ import {
 import { projectLlmParameters } from '@neko/platform/config/llm-parameter-projection';
 import type { ModelConfig as Model, ProviderConfig as Provider } from '@neko/shared';
 import type { NekoHostPorts } from '@neko/host/ports';
-import { createDesktopAgentContentEffects, type DesktopAgentContentInteractionPort } from './desktop-agent-content-effects';
+import {
+  createDesktopAgentContentEffects,
+  type DesktopAgentContentInteractionPort,
+} from './desktop-agent-content-effects';
 import type {
   DesktopAgentTurnInput,
   DesktopAgentWorkspaceRuntime,
@@ -62,6 +65,11 @@ import type {
   DesktopAgentControllerEffects,
 } from './desktop-agent-bridge-runtime';
 import type { DesktopAgentConnectionIdentity } from '../shared/agent-contract';
+import {
+  createDesktopAgentResourceDisplayProjector,
+  type DesktopAgentResourceDisplayRegistrationPort,
+  type DesktopAgentResourceDisplayProjector,
+} from './desktop-agent-resource-display-projector';
 
 export interface DesktopAgentConfigInteractionPort {
   openUserConfig(input: {
@@ -80,6 +88,7 @@ export interface CreateDesktopAgentControllerCompositionOptions {
   readonly credentialRuntime: DesktopAgentCredentialRuntime;
   readonly contentInteraction: DesktopAgentContentInteractionPort;
   readonly configInteraction: DesktopAgentConfigInteractionPort;
+  readonly resources: DesktopAgentResourceDisplayRegistrationPort;
   readonly reportError: (error: Error) => void;
 }
 
@@ -116,6 +125,11 @@ class DefaultDesktopAgentControllerComposition implements DesktopAgentController
       tabStateRevision: 0,
     };
     let post: AgentHostRouteEffectContext['post'] | undefined;
+    const resourceDisplay = createDesktopAgentResourceDisplayProjector({
+      identity: input.identity,
+      workspace: input.workspace.workspace,
+      resources: this.options.resources,
+    });
     const projection = createConversationProjectionAttachmentServer({
       endpointEpoch: input.identity.connectionId,
       resolveProjection: (conversationId) => ({
@@ -134,11 +148,13 @@ class DefaultDesktopAgentControllerComposition implements DesktopAgentController
         },
       }),
       postMessage: async (message) => {
-        if (!post) throw new Error('Desktop projection endpoint has no bound connection post port.');
-        await post(message);
+        if (!post)
+          throw new Error('Desktop projection endpoint has no bound connection post port.');
+        await post(await resourceDisplay.project(message));
         return true;
       },
       reportError: (error, key) => {
+        resourceDisplay.releaseAttachment(key.attachmentId);
         this.options.reportError(error);
         if (post) {
           this.track(
@@ -173,9 +189,10 @@ class DefaultDesktopAgentControllerComposition implements DesktopAgentController
         host: this.options.host,
         interaction: this.options.contentInteraction,
       }),
-      projection: this.createProjectionEffects(projection, bind),
+      projection: this.createProjectionEffects(projection, resourceDisplay, bind),
       dispose: () => {
         this.track(projection.abandon());
+        resourceDisplay.dispose();
       },
     };
     return effects;
@@ -232,7 +249,8 @@ class DefaultDesktopAgentControllerComposition implements DesktopAgentController
       const record = workspace
         .listConversations()
         .find((candidate) => candidate.conversationId === conversationId);
-      if (!record) throw new Error(`Desktop Agent conversation '${conversationId}' does not exist.`);
+      if (!record)
+        throw new Error(`Desktop Agent conversation '${conversationId}' does not exist.`);
       await context.post({
         type: 'activeConversation',
         ...(activation ? { activation } : {}),
@@ -273,15 +291,13 @@ class DefaultDesktopAgentControllerComposition implements DesktopAgentController
       submitTurn: (request, context) => submit(request, context),
       confirmTool: ({ conversationId, toolCallId, approved }, context) => {
         bind(context);
-        this.getConfirmation(workspace.workspaceId, conversationId).resolve(
-          toolCallId,
-          approved,
-        );
+        this.getConfirmation(workspace.workspaceId, conversationId).resolve(toolCallId, approved);
       },
       cancelTurn: (conversationId, context) => {
         bind(context);
         const active = workspace.readActiveTurn(conversationId);
-        if (!active) throw new Error(`Desktop Agent conversation '${conversationId}' is not running.`);
+        if (!active)
+          throw new Error(`Desktop Agent conversation '${conversationId}' is not running.`);
         workspace.cancelTurn(conversationId, active);
       },
       createConversation: async (context) => {
@@ -337,9 +353,7 @@ class DefaultDesktopAgentControllerComposition implements DesktopAgentController
         this.confirmations.get(ownerKey(workspace.workspaceId, conversationId))?.cancelAll();
         this.confirmations.delete(ownerKey(workspace.workspaceId, conversationId));
         state.tabState = {
-          openTabs: state.tabState.openTabs.filter(
-            (tab) => tab.conversationId !== conversationId,
-          ),
+          openTabs: state.tabState.openTabs.filter((tab) => tab.conversationId !== conversationId),
           activeTabId:
             state.tabState.openTabs.find((tab) => tab.id === state.tabState.activeTabId)
               ?.conversationId === conversationId
@@ -365,8 +379,7 @@ class DefaultDesktopAgentControllerComposition implements DesktopAgentController
         }
       },
       listConversations: postConversationList,
-      readActiveConversation: (context) =>
-        postConversation(state.activeConversationId, context),
+      readActiveConversation: (context) => postConversation(state.activeConversationId, context),
       readAgentStates: async (context) => {
         bind(context);
         await context.post(
@@ -386,7 +399,8 @@ class DefaultDesktopAgentControllerComposition implements DesktopAgentController
         const record = workspace
           .listConversations()
           .find((candidate) => candidate.conversationId === conversationId);
-        if (!record) throw new Error(`Desktop Agent conversation '${conversationId}' does not exist.`);
+        if (!record)
+          throw new Error(`Desktop Agent conversation '${conversationId}' does not exist.`);
         await context.post({
           type: 'conversationSnapshot',
           conversation: {
@@ -401,7 +415,9 @@ class DefaultDesktopAgentControllerComposition implements DesktopAgentController
       readMessageQueue: async (conversationId, context) => {
         bind(context);
         await context.post(
-          buildMessageQueueSnapshotMessage(this.getQueue(workspace.workspaceId, conversationId).snapshot()),
+          buildMessageQueueSnapshotMessage(
+            this.getQueue(workspace.workspaceId, conversationId).snapshot(),
+          ),
         );
       },
       promoteQueuedMessage: async ({ conversationId, queueItemId }, context) => {
@@ -524,10 +540,7 @@ class DefaultDesktopAgentControllerComposition implements DesktopAgentController
         const active = message.activeTabId
           ? message.openTabs.find((tab) => tab.id === message.activeTabId)
           : undefined;
-        if (
-          active &&
-          active.conversationId !== state.activeConversationId
-        ) {
+        if (active && active.conversationId !== state.activeConversationId) {
           throw new Error(
             'Desktop ordinary conversation activation must use activateConversation.',
           );
@@ -623,6 +636,7 @@ class DefaultDesktopAgentControllerComposition implements DesktopAgentController
 
   private createProjectionEffects(
     projection: ConversationProjectionAttachmentServer,
+    resourceDisplay: DesktopAgentResourceDisplayProjector,
     bind: (context: AgentHostRouteEffectContext) => void,
   ): DesktopAgentControllerEffects['projection'] {
     const run = async (
@@ -664,7 +678,15 @@ class DefaultDesktopAgentControllerComposition implements DesktopAgentController
       attach: (message, context) => run(() => projection.attach(message), message.key, context),
       acknowledge: (message, context) =>
         run(() => projection.acknowledge(message), message.key, context),
-      detach: (message, context) => run(() => projection.detach(message), message.key, context),
+      detach: (message, context) =>
+        run(
+          async () => {
+            await projection.detach(message);
+            resourceDisplay.releaseAttachment(message.key.attachmentId);
+          },
+          message.key,
+          context,
+        ),
     };
   }
 
@@ -677,7 +699,9 @@ class DefaultDesktopAgentControllerComposition implements DesktopAgentController
     readonly additionalInstructions?: string;
   }): Promise<void> {
     if (input.request.sessionMode !== 'agent') {
-      throw new Error(`Desktop Agent does not support session mode '${input.request.sessionMode}'.`);
+      throw new Error(
+        `Desktop Agent does not support session mode '${input.request.sessionMode}'.`,
+      );
     }
     if (
       input.request.attachments?.length ||
@@ -779,7 +803,8 @@ class DefaultDesktopAgentControllerComposition implements DesktopAgentController
     const provider = config.getProvider(selected.providerId);
     const model = config.getModel(selected.modelId);
     validateModelSelection(provider, model, selected.providerId, selected.modelId);
-    if (!provider || !model) throw new Error('Validated Desktop Agent model selection disappeared.');
+    if (!provider || !model)
+      throw new Error('Validated Desktop Agent model selection disappeared.');
     if (provider.apiKey) {
       await this.options.credentialRuntime.credentials.replace(
         provider.id,
@@ -850,8 +875,7 @@ class DefaultDesktopAgentControllerComposition implements DesktopAgentController
             ...(parameters.chatOptions.maxTokens === undefined
               ? {}
               : { maxTokens: parameters.chatOptions.maxTokens }),
-            ...(parameters.chatOptions.thinkingBudget &&
-            parameters.chatOptions.thinkingBudget > 0
+            ...(parameters.chatOptions.thinkingBudget && parameters.chatOptions.thinkingBudget > 0
               ? {
                   thinkingLevel: 'medium',
                   thinkingBudgets: { medium: parameters.chatOptions.thinkingBudget },
@@ -1007,9 +1031,9 @@ function projectSettingsMessage(
         description: '',
       })),
     })),
-    configuredProviders: settings.configuredProviders.map(
-      ({ apiKey: _apiKey, ...provider }) => ({ ...provider }),
-    ),
+    configuredProviders: settings.configuredProviders.map(({ apiKey: _apiKey, ...provider }) => ({
+      ...provider,
+    })),
   };
 }
 

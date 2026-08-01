@@ -22,19 +22,26 @@ describe('conversation-host-message', () => {
     });
   });
 
-  it('projects null active conversations', () => {
-    expect(buildActiveConversationMessage(null)).toEqual({
+  it('projects null active conversations', async () => {
+    await expect(buildActiveConversationMessage(null)).resolves.toEqual({
       type: 'activeConversation',
       conversation: null,
     });
   });
 
-  it('projects active conversation resource urls through host resolver', () => {
+  it('projects active conversation resources through a locator resolver', async () => {
+    const contentLocator = {
+      kind: 'workspace-file' as const,
+      path: 'images/out.png',
+    };
     const toolCall: ToolCall = {
       id: 'tool-1',
       name: 'GenerateImage',
       arguments: {},
-      result: { success: true, data: { url: '/tmp/out.png' } },
+      result: {
+        success: true,
+        data: { contentLocator, url: '/tmp/out.png', mimeType: 'image/png' },
+      },
     };
     const messageWithToolCalls = {
       id: 'msg-1',
@@ -44,7 +51,7 @@ describe('conversation-host-message', () => {
       toolCalls: [toolCall],
     } satisfies Message & { readonly toolCalls: readonly ToolCall[] };
 
-    expect(
+    await expect(
       buildActiveConversationMessage(
         {
           id: 'conv-1',
@@ -52,9 +59,11 @@ describe('conversation-host-message', () => {
           messages: [messageWithToolCalls],
           updatedAt: 100,
         },
-        { resolveLocalMediaPath: (filePath) => `webview://${filePath}` },
+        {
+          resolveContentLocator: async () => 'http://127.0.0.1:43125/v1/resources/image-token',
+        },
       ),
-    ).toEqual({
+    ).resolves.toEqual({
       type: 'activeConversation',
       conversation: {
         id: 'conv-1',
@@ -72,7 +81,12 @@ describe('conversation-host-message', () => {
                 arguments: {},
                 result: {
                   success: true,
-                  data: { url: 'webview:///tmp/out.png' },
+                  data: {
+                    contentLocator,
+                    url: 'images/out.png',
+                    mimeType: 'image/png',
+                    renderUri: 'http://127.0.0.1:43125/v1/resources/image-token',
+                  },
                 },
               },
             ],

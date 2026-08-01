@@ -1055,7 +1055,13 @@ function canOpenMedia(media: ResolvedCompositeMedia): boolean {
 }
 
 function isExternalOpenUrl(value: string): boolean {
-  return value.startsWith('https://') || value.startsWith('http://');
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'https:' && url.protocol !== 'http:') return false;
+    return url.hostname !== '127.0.0.1' && url.hostname !== 'localhost' && url.hostname !== '[::1]';
+  } catch {
+    return false;
+  }
 }
 
 function dedupeDiagnostics(

@@ -722,8 +722,7 @@ function requireArray(value: unknown, message: string): readonly unknown[] {
 
 function parseCutHtmlVideoDescriptor(value: unknown): CutHtmlVideoDescriptor {
   const record = requireRecord(value, 'Cut preview Video descriptor must be an object.');
-  const transport = requireMediaTransport(record['transport']);
-  const url = requireMediaUrl(record['url'], transport);
+  const url = requireMediaUrl(record['url']);
   const preparationProfile = record['preparationProfile'];
   if (
     preparationProfile !== 'h264-mp4-direct' &&
@@ -738,7 +737,6 @@ function parseCutHtmlVideoDescriptor(value: unknown): CutHtmlVideoDescriptor {
   }
   return {
     version: 1,
-    transport,
     url,
     mimeType: record['mimeType'],
     preparationProfile,
@@ -755,15 +753,13 @@ function parseCutHtmlVideoDescriptor(value: unknown): CutHtmlVideoDescriptor {
 
 function parseCutPcmStreamDescriptor(value: unknown): CutPcmStreamDescriptor {
   const record = requireRecord(value, 'Cut preview PCM descriptor must be an object.');
-  const transport = requireMediaTransport(record['transport']);
   if (record['version'] !== 1 || record['protocol'] !== 'neko-pcm-f32le-v1') {
     throw invalidPayload('Cut preview PCM descriptor is invalid.');
   }
   return {
     version: 1,
-    transport,
     protocol: 'neko-pcm-f32le-v1',
-    streamUrl: requireMediaUrl(record['streamUrl'], transport),
+    streamUrl: requireMediaUrl(record['streamUrl']),
     sampleRate: requirePositiveFinite(
       record['sampleRate'],
       'Cut preview PCM sample rate must be positive.',
@@ -815,22 +811,15 @@ function parseCutHostPreviewAudioPlayback(value: unknown): CutHostPreviewAudioPl
   };
 }
 
-function requireMediaTransport(value: unknown): CutHtmlVideoDescriptor['transport'] {
-  if (value !== 'http' && value !== 'authorized') {
-    throw invalidPayload('Cut preview media transport is invalid.');
-  }
-  return value;
-}
-
-function requireMediaUrl(value: unknown, transport: CutHtmlVideoDescriptor['transport']): string {
+function requireMediaUrl(value: unknown): string {
   if (typeof value !== 'string') throw invalidPayload('Cut preview media URL is invalid.');
   const url = new URL(value);
   const valid =
-    transport === 'http'
-      ? url.protocol === 'http:' && url.hostname === '127.0.0.1'
-      : url.protocol === 'neko-media:' && url.hostname === 'desktop';
-  if (!valid || url.username || url.password) {
-    throw invalidPayload('Cut preview media URL does not match its transport.');
+    url.protocol === 'openneko:' &&
+    url.hostname === 'resource' &&
+    /^\/[A-Za-z0-9_-]{32}$/u.test(url.pathname);
+  if (!valid || url.username || url.password || url.search || url.hash) {
+    throw invalidPayload('Cut preview media resource URL is invalid.');
   }
   return value;
 }

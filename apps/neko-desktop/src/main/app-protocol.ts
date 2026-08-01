@@ -6,8 +6,9 @@ import {
   DESKTOP_APP_HOST,
   DESKTOP_APP_ORIGIN,
   DESKTOP_APP_SCHEME,
-  DESKTOP_MEDIA_SCHEME,
+  DESKTOP_RESOURCE_HOST,
 } from './security';
+import type { DesktopResourceRegistry } from './desktop-resource-registry';
 import { resolveDesktopRendererAsset } from './renderer-asset-path';
 
 const MIME_TYPES: Readonly<Record<string, string>> = {
@@ -28,43 +29,58 @@ export function registerDesktopAppScheme(): void {
         standard: true,
         secure: true,
         supportFetchAPI: true,
-        corsEnabled: false,
-        bypassCSP: false,
-      },
-    },
-    {
-      scheme: DESKTOP_MEDIA_SCHEME,
-      privileges: {
-        standard: true,
-        secure: true,
-        supportFetchAPI: true,
         corsEnabled: true,
-        stream: true,
         bypassCSP: false,
       },
     },
   ]);
 }
 
-export function registerDesktopAppProtocol(rendererRoot: string): () => void {
+export function registerDesktopAppProtocol(
+  rendererRoot: string,
+  resources: Pick<DesktopResourceRegistry, 'handle'>,
+): () => void {
+  protocol.handle(DESKTOP_APP_SCHEME, createDesktopAppProtocolHandler(rendererRoot, resources));
+  return () => {
+    protocol.unhandle(DESKTOP_APP_SCHEME);
+  };
+}
+
+export function createDesktopAppProtocolHandler(
+  rendererRoot: string,
+  resources: Pick<DesktopResourceRegistry, 'handle'>,
+): (request: Request) => Promise<Response> {
   const absoluteRoot = path.resolve(rendererRoot);
   const csp = createDesktopContentSecurityPolicy(DESKTOP_APP_ORIGIN);
-  protocol.handle(DESKTOP_APP_SCHEME, async (request) => {
+  return async (request) => {
     try {
+      const url = new URL(request.url);
+      if (
+        url.protocol !== `${DESKTOP_APP_SCHEME}:` ||
+        url.username ||
+        url.password ||
+        url.search ||
+        url.hash
+      ) {
+        return new Response('Not Found', { status: 404 });
+      }
+      if (url.host === DESKTOP_RESOURCE_HOST) {
+        return resources.handle(request);
+      }
       if (request.method !== 'GET' && request.method !== 'HEAD') {
         return new Response('Method Not Allowed', {
           status: 405,
           headers: { Allow: 'GET, HEAD' },
         });
       }
-      const url = new URL(request.url);
-      if (url.host !== DESKTOP_APP_HOST || url.username || url.password) {
+      if (url.host !== DESKTOP_APP_HOST) {
         return new Response('Not Found', { status: 404 });
       }
       const requestedPath = decodeURIComponent(url.pathname === '/' ? '/index.html' : url.pathname);
       const filePath = resolveDesktopRendererAsset(absoluteRoot, requestedPath);
       const headers = new Headers({
-        'Content-Type': MIME_TYPES[path.extname(filePath).toLowerCase()] ?? 'application/octet-stream',
+        'Content-Type':
+          MIME_TYPES[path.extname(filePath).toLowerCase()] ?? 'application/octet-stream',
         'Content-Security-Policy': csp,
         'Cross-Origin-Opener-Policy': 'same-origin',
         'X-Content-Type-Options': 'nosniff',
@@ -79,17 +95,9 @@ export function registerDesktopAppProtocol(rendererRoot: string): () => void {
       }
       throw error;
     }
-  });
-  return () => {
-    protocol.unhandle(DESKTOP_APP_SCHEME);
   };
 }
 
 function isMissingFileError(error: unknown): boolean {
-  return (
-    typeof error === 'object' &&
-    error !== null &&
-    'code' in error &&
-    error.code === 'ENOENT'
-  );
+  return typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT';
 }

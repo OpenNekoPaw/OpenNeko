@@ -60,6 +60,7 @@ describe('Preview Host runtime contract', () => {
           descriptorId: 'descriptor-1',
           revision: 'content-2',
           contentLocator: { kind: 'workspace-file', path: 'models/cat.glb' },
+          url: 'openneko://resource/0123456789abcdefghijklmnopqrstuv',
           contentKind: 'model',
           mediaType: 'model/gltf-binary',
           displayName: 'cat.glb',
@@ -99,6 +100,7 @@ describe('Preview Host runtime contract', () => {
         descriptorId: 'descriptor-1',
         revision: 'content-2',
         contentLocator: { kind: 'workspace-file', path: 'scenes/scene.nkc' },
+        url: 'openneko://resource/0123456789abcdefghijklmnopqrstuv',
         contentKind: 'canvas',
         mediaType: 'application/json',
         displayName: 'scene.nkc',
@@ -114,6 +116,53 @@ describe('Preview Host runtime contract', () => {
         windowId: 'window-2',
       }),
     ).toThrowError(expect.objectContaining({ code: 'preview-stale-identity' }));
+  });
+
+  it('parses exact resource-set URLs and rejects private or filesystem schemes', () => {
+    expect(
+      parsePreviewMediaDescriptor({
+        descriptorId: 'descriptor-1',
+        revision: 'content-2',
+        contentLocator: { kind: 'workspace-file', path: 'models/cat.gltf' },
+        url: 'openneko://resource/0123456789abcdefghijklmnopqrstuv/cat.gltf',
+        resourceUris: {
+          'cat.gltf': 'openneko://resource/0123456789abcdefghijklmnopqrstuv/cat.gltf',
+          'cat.bin': 'openneko://resource/0123456789abcdefghijklmnopqrstuv/cat.bin',
+        },
+        contentKind: 'model',
+        mediaType: 'model/gltf+json',
+        displayName: 'cat.gltf',
+        byteLength: 42,
+      }),
+    ).toMatchObject({
+      resourceUris: {
+        'cat.bin': 'openneko://resource/0123456789abcdefghijklmnopqrstuv/cat.bin',
+      },
+    });
+
+    for (const url of [
+      'neko-media://desktop/token',
+      'neko-app://desktop/token',
+      'opennekomedia://resource/token',
+      'http://127.0.0.1:43125/v1/resources/token',
+      'file:///private/cat.gltf',
+      'media://desktop/token',
+      'video://desktop/token',
+      'audio://desktop/token',
+    ]) {
+      expect(() =>
+        parsePreviewMediaDescriptor({
+          descriptorId: 'descriptor-1',
+          revision: 'content-2',
+          contentLocator: { kind: 'workspace-file', path: 'models/cat.gltf' },
+          url,
+          contentKind: 'model',
+          mediaType: 'model/gltf+json',
+          displayName: 'cat.gltf',
+          byteLength: 42,
+        }),
+      ).toThrow('authorized OpenNeko resource');
+    }
   });
 
   it('parses closed and open-ended byte ranges', () => {

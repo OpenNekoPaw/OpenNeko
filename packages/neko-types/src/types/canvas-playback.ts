@@ -592,11 +592,11 @@ function projectNodeToUnit(
 ): CanvasPlaybackUnit {
   const override = metadata.nodeOverrides[node.id] ?? {};
   if (node.type === 'media') {
-    if (!node.data.assetPath && !node.data.contentLocator) {
+    if (!node.data.contentLocator) {
       diagnostics.push({
         code: 'playback-missing-media-source',
         severity: 'warning',
-        message: `Media node "${node.id}" has no stable source.`,
+        message: `Media node "${node.id}" has no canonical ContentLocator.`,
         adapterId: 'generic',
         nodeId: node.id,
       });

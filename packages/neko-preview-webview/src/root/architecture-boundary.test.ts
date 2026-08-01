@@ -34,13 +34,17 @@ describe('Preview Root architecture boundary', () => {
   it('consumes only opaque authorized media URLs without renderer-owned file transport', async () => {
     const source = await readFile(new URL('./index.tsx', import.meta.url), 'utf8');
 
-    expect(source).toContain('return `neko-media://desktop/');
-    expect(source).not.toMatch(/\b(?:https?|file|blob):\/\//u);
+    expect(source).toContain('const sourceUrl = descriptor.url;');
+    expect(source).toContain('const sourceUrl = projection.descriptor.url;');
+    expect(source).not.toContain('neko-media:');
+    expect(source).not.toContain('file:');
+    expect(source).not.toMatch(/\b(?:https?|blob):\/\//u);
     expect(source).not.toContain('URL.createObjectURL');
     expect(source).not.toContain('FileReader');
     expect(source).not.toContain('new Blob');
     expect(source).not.toContain('absolutePath');
     expect(source).not.toContain('workspacePath');
+    expectProductionRootSource('root/index.tsx', source);
   });
 });
 
