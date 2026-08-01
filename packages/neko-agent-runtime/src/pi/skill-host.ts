@@ -12,11 +12,11 @@ import {
 import { NodeExecutionEnv } from '@earendil-works/pi-agent-core/node';
 import type { ExternalProcessorResult } from '@neko-agent/types';
 
-export type SkillSourceKind = 'builtin' | 'personal' | 'project';
+export type SkillSourceKind = 'builtin' | 'personal' | 'plugin' | 'project';
 
-export interface SkillSource {
-  readonly kind: SkillSourceKind;
-}
+export type SkillSource =
+  | { readonly kind: 'builtin' | 'personal' | 'project' }
+  | { readonly kind: 'plugin'; readonly pluginId: string };
 
 export interface SkillSourceRoot {
   readonly path: string;
@@ -76,6 +76,8 @@ export interface SkillHostWarning {
   readonly skillName: string;
   readonly selectedSource: SkillSourceKind;
   readonly shadowedSource: SkillSourceKind;
+  readonly selectedPluginId?: string;
+  readonly shadowedPluginId?: string;
 }
 
 export interface SkillExternalProcessorPermissionInput {
@@ -143,8 +145,9 @@ interface StoredSkill {
 }
 
 const SOURCE_PRIORITY: Readonly<Record<SkillSourceKind, number>> = {
-  project: 3,
-  personal: 2,
+  project: 4,
+  personal: 3,
+  plugin: 2,
   builtin: 1,
 };
 
@@ -161,6 +164,7 @@ export class PiSkillHost {
   ) {}
 
   async discover(inputs: readonly SkillSourceRoot[]): Promise<PiSkillHostSnapshot> {
+    for (const input of inputs) validateSkillSource(input.source);
     const loaded = await loadSourcedSkills(
       this.env,
       inputs.map((input) => ({ path: input.path, source: input.source })),
@@ -198,7 +202,7 @@ export class PiSkillHost {
     }
 
     const warnings: SkillHostWarning[] = [];
-    const selected = selectProjectFirst(candidates, warnings);
+    const selected = selectBySourcePriority(candidates, warnings);
     return new PiSkillHostSnapshot(
       this.env,
       this.namespace,
@@ -410,14 +414,16 @@ export class PiSkillHostSnapshot {
   }
 }
 
-function selectProjectFirst(
+function selectBySourcePriority(
   candidates: readonly StoredSkill[],
   warnings: SkillHostWarning[],
 ): readonly StoredSkill[] {
-  const ordered = [...candidates].sort(
-    (left, right) =>
-      SOURCE_PRIORITY[right.record.source.kind] - SOURCE_PRIORITY[left.record.source.kind],
-  );
+  const ordered = [...candidates].sort((left, right) => {
+    const byPriority =
+      SOURCE_PRIORITY[right.record.source.kind] - SOURCE_PRIORITY[left.record.source.kind];
+    if (byPriority !== 0) return byPriority;
+    return sourceStableId(left.record.source).localeCompare(sourceStableId(right.record.source));
+  });
   const selected = new Map<string, StoredSkill>();
   for (const candidate of ordered) {
     const winner = selected.get(candidate.record.name);
@@ -433,10 +439,29 @@ function selectProjectFirst(
         skillName: candidate.record.name,
         selectedSource: winner.record.source.kind,
         shadowedSource: candidate.record.source.kind,
+        ...(winner.record.source.kind === 'plugin'
+          ? { selectedPluginId: winner.record.source.pluginId }
+          : {}),
+        ...(candidate.record.source.kind === 'plugin'
+          ? { shadowedPluginId: candidate.record.source.pluginId }
+          : {}),
       }),
     );
   }
   return Object.freeze([...selected.values()]);
+}
+
+function validateSkillSource(source: SkillSource): void {
+  if (
+    source.kind === 'plugin' &&
+    !/^[A-Za-z0-9][A-Za-z0-9._:-]*@[A-Za-z0-9][A-Za-z0-9._:-]*$/u.test(source.pluginId)
+  ) {
+    throw new Error(`Plugin Skill source has invalid plugin id '${source.pluginId}'.`);
+  }
+}
+
+function sourceStableId(source: SkillSource): string {
+  return source.kind === 'plugin' ? `plugin:${source.pluginId}` : source.kind;
 }
 
 async function fingerprintSkillPackage(

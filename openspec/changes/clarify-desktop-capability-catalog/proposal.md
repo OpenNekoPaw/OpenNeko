@@ -1,16 +1,33 @@
 ## Why
 
-Desktop Home 当前把全局 Skill 与 Canvas、Cut、Preview 等产品内置模块放在“能力”页面，并把后者展示为“内置能力”。这仍然没有回答用户真正需要的扩展目录问题：本机全局 Agent 环境启用了哪些插件、插件贡献了哪些 MCP Server、Skill 或 App，以及有哪些 personal/builtin Skill。产品模块不是插件或扩展，不应出现在这个目录。
+Desktop Home 已经移除了 Canvas、Cut、Preview 等伪“扩展”，但当前实现错误地读取
+Codex/OpenAI marketplace 和 `.codex-plugin` package。OpenNeko 是基于 Pi Agent 的独立
+应用，不能把其他应用的本地 marketplace、安装状态或缓存当成自己的插件目录。仅显示
+Computer Use 或 MCP 名称也会让用户误以为 Agent 已经可以调用，仍然属于伪能力声明。
 
 ## What Changes
 
-- **BREAKING**：Home 一级导航与管理 Surface 从“能力”改为“扩展”，删除 Desktop 内置领域能力目录。
-- 扩展页签读取 Codex 全局配置中明确启用的插件，并从对应缓存包的 `.codex-plugin/plugin.json` 投影真实 manifest 元数据。
-- 扩展记录展示名称、版本、开发者、Marketplace，以及 manifest 实际声明的 MCP Server、Skill 与 App 贡献；Computer Use 作为真实启用的插件显示，而不是作为 Desktop 内置能力。
-- 扩展目录不投影物理路径、启动命令、参数、环境变量、凭据或 connector secret，也不把“已在 Codex 全局配置启用”等同于“已在 OpenNeko Agent runtime 连接或可调用”。
-- Skill 页签继续只展示 personal 与 builtin 全局来源，排除 project Skill，并提供来源筛选与个人优先的稳定排序。
-- 保留内置 Skill 的 `en` / `zh-cn` 展示投影；插件 manifest 与 personal Skill 的作者元数据保持原文，不做静默机器翻译。
-- 缺失 Codex 配置表示没有全局扩展；配置、注册项、缓存包、manifest 或 contribution 损坏时返回安全、可计数的 diagnostic。
+- **BREAKING**：删除 Codex CLI、`~/.codex`、Codex marketplace 和 `.codex-plugin`
+  依赖，改由 Desktop Main 管理 OpenNeko 自有 marketplace snapshot 与安装根。
+- OpenNeko marketplace 首阶段由公开 `OpenNekoPaw/OpenNeko` 仓库维护并随 Desktop
+  打包；没有真实 OpenNeko 插件时返回空目录，不借用其他应用条目或伪造数据。
+- Extensions Surface 只投影 OpenNeko marketplace 或 OpenNeko 安装根中的插件；available
+  目录还必须通过 Pi SkillHost 或 OpenNeko MCP runtime 支持判定。
+- 可安装插件默认按内容创作相关性、通用生产力和其他类别排序，提供安装、卸载和
+  marketplace 刷新，并通过 revision 防止陈旧操作。
+- personal Skill 支持从本地目录安装和移除；plugin Skill 随插件生命周期管理；builtin
+  Skill 继续服务 Pi Agent，但不进入扩展管理目录。
+- 已安装插件的 Skill contribution 进入 Pi SkillHost，并携带明确 `pluginId` provenance。
+- 已安装且兼容的 MCP contribution 进入现有 `MCPManager -> ToolRegistry -> Pi`
+  canonical path；卸载时在无 active turn 后原子替换 runtime generation。
+- App-only、OAuth 或其他当前没有 OpenNeko runtime owner 的 contribution 明确显示为
+  unsupported，不注册 Tool，也不伪装成可执行。
+- Desktop shell、状态、操作、确认、空态与 diagnostics 完整支持 `en` / `zh-cn`；
+  manifest 和 personal Skill 作者元数据保持原文。
+- Extensions Surface 删除低价值的来源、状态、分类和排序控件，只保留搜索与
+  Skill/扩展页签；目录继续使用固定、确定性的产品排序。
+- Renderer 只发送 typed management intent；物理路径、命令、环境变量、凭据和 raw
+  repository diagnostic 不跨 preload 边界。
 
 ## Capabilities
 
@@ -24,8 +41,12 @@ Desktop Home 当前把全局 Skill 与 Canvas、Cut、Preview 等产品内置模
 
 ## Impact
 
-- `apps/neko-desktop/src/main/desktop-extension-catalog-reader.ts`：新增 Desktop-owned Codex 全局扩展读取 adapter。
-- `apps/neko-desktop/src/shared/home-management-contract.ts`：以 extension DTO 替换 builtin capability DTO，并升级 IPC channel/contract version。
-- `apps/neko-desktop/src/main/app-host.ts`、`ipc.ts`、`preload/index.ts`：组合并投影全局扩展与 Skill。
-- `apps/neko-desktop/src/renderer/`：更新导航、页签、筛选、扩展贡献展示、空状态和中英文文案。
-- Desktop producer/consumer、Renderer 与 Electron 真实运行态测试。
+- `apps/neko-desktop/src/main/`：OpenNeko plugin repository/installer、personal Skill
+  manager、Plugin runtime composition 与 Desktop typed IPC。
+- `apps/neko-desktop/resources/extension-marketplace/`：公开仓库维护、随包发布的
+  OpenNeko marketplace snapshot；只包含真实第一方维护 package。
+- `packages/neko-agent-runtime/src/pi/`：plugin Skill source/provenance 与确定性优先级。
+- `packages/neko-agent-runtime/src/mcp/`、`packages/neko-types/src/types/`：Plugin MCP
+  process/auth configuration 的最小 runtime contract。
+- `apps/neko-desktop/src/renderer/`：双语安装/卸载、Skill 管理、兼容性和 operation 状态。
+- Desktop producer/consumer、Pi Skill/MCP path、Evaluation harness 与真实 Electron 验收。

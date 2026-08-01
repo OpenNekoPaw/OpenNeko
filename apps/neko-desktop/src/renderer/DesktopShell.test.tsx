@@ -5,20 +5,16 @@ import type { DesktopShellProjection } from '../shared/shell-contract';
 import {
   activateWorkbenchMainView,
   applyWorkbenchDisplayMode,
-  DESKTOP_BUILTIN_SKILL_IDS,
   DesktopShellView,
-  filterAndSortHomeExtensions,
   filterAndSortHomeProjects,
-  filterAndSortHomeSkills,
   openCanvasDocumentWorkbench,
   parseHomeAssetSortOption,
-  parseHomeNamedSortOption,
   parseHomeProjectSortOption,
-  parseHomeSkillSourceFilter,
-  presentHomeSkill,
   resizePrimarySidebarWorkbench,
   resizeProjectDockWorkbench,
   resizeTimelineWorkbench,
+  searchAndOrderHomeExtensions,
+  searchAndOrderHomeSkills,
   setResourceDockPresentationWorkbench,
 } from './DesktopShell';
 import { createDesktopI18n } from './i18n';
@@ -36,94 +32,160 @@ import {
   DESKTOP_APPLICATION_SETTINGS_CONTRACT_VERSION,
 } from '../shared/application-settings-contract';
 import { DesktopApplicationSettingsProvider } from './application-settings-context';
+import type {
+  DesktopHomeExtensionItem,
+  DesktopHomeSkillItem,
+} from '../shared/home-management-contract';
+
+function skillFixture(
+  name: string,
+  source: 'personal' | 'plugin',
+  description: string,
+): DesktopHomeSkillItem {
+  const managementId = source === 'personal' ? `skill:${'a'.repeat(64)}` : '';
+  const sourceId = source === 'personal' ? source : 'story-tools@openneko';
+  return {
+    id: `${source}:${sourceId}:${name}`,
+    name,
+    description,
+    source,
+    sourceId,
+    managementId,
+    canRemove: source === 'personal',
+  };
+}
+
+function extensionFixture(
+  input: Pick<
+    DesktopHomeExtensionItem,
+    'id' | 'displayName' | 'description' | 'version' | 'mcpServerIds'
+  > &
+    Partial<Pick<DesktopHomeExtensionItem, 'appIds' | 'category'>>,
+): DesktopHomeExtensionItem {
+  const separator = input.id.lastIndexOf('@');
+  return {
+    id: input.id,
+    name: input.id.slice(0, separator),
+    displayName: input.displayName,
+    description: input.description,
+    version: input.version,
+    developer: 'OpenAI',
+    marketplace: input.id.slice(separator + 1),
+    category: input.category ?? 'Productivity',
+    installed: true,
+    enabled: true,
+    canInstall: false,
+    canRemove: true,
+    agentStatus: 'ready',
+    runtimeDiagnosticCode: '',
+    iconDataUrl: '',
+    mcpServerIds: input.mcpServerIds,
+    hasSkills: true,
+    appIds: input.appIds ?? [],
+  };
+}
 
 describe('DesktopShellView', () => {
   it('rejects unknown Home catalog sort options', () => {
     expect(parseHomeAssetSortOption('modified-descending')).toBe('modified-descending');
-    expect(parseHomeNamedSortOption('name-descending')).toBe('name-descending');
-    expect(parseHomeSkillSourceFilter('personal')).toBe('personal');
     expect(parseHomeProjectSortOption('updated-ascending')).toBe('updated-ascending');
     expect(() => parseHomeAssetSortOption('recent')).toThrow('Unknown Home asset sort option');
-    expect(() => parseHomeNamedSortOption('recent')).toThrow('Unknown Home catalog sort option');
-    expect(() => parseHomeSkillSourceFilter('project')).toThrow('Unknown Home Skill source filter');
     expect(() => parseHomeProjectSortOption('recent')).toThrow('Unknown Home project sort option');
   });
 
-  it('filters and deterministically sorts global extension and Project catalogs', () => {
+  it('searches and deterministically orders global extension and Project catalogs', () => {
     expect(
-      filterAndSortHomeSkills(
+      searchAndOrderHomeSkills(
         [
-          { name: 'Video', description: 'Edit clips', source: 'builtin' },
-          { name: 'Audio', description: 'Mix sound', source: 'personal' },
+          skillFixture('Video', 'plugin', 'Edit clips'),
+          skillFixture('Audio', 'personal', 'Mix sound'),
         ],
         '',
-        'name-ascending',
-        { source: 'all' },
       ).map((skill) => skill.name),
     ).toEqual(['Audio', 'Video']);
     expect(
-      filterAndSortHomeSkills(
+      searchAndOrderHomeSkills(
         [
-          { name: 'Video', description: 'Edit clips', source: 'builtin' },
-          { name: 'Audio', description: 'Mix sound', source: 'personal' },
+          skillFixture('Video', 'plugin', 'Edit clips'),
+          skillFixture('Audio', 'personal', 'Mix sound'),
         ],
-        '',
-        'name-ascending',
-        { source: 'builtin' },
+        'edit',
       ).map((skill) => skill.name),
     ).toEqual(['Video']);
     expect(
-      filterAndSortHomeExtensions(
+      searchAndOrderHomeExtensions(
         [
-          {
-            id: 'github@openai-api-curated',
-            name: 'github',
+          extensionFixture({
+            id: 'github@openneko',
             displayName: 'GitHub',
             description: 'Triage pull requests.',
             version: '0.1.6',
-            developer: 'OpenAI',
-            marketplace: 'openai-api-curated',
             mcpServerIds: ['github'],
-            hasSkills: true,
             appIds: ['github'],
-          },
-          {
-            id: 'computer-use@openai-bundled',
-            name: 'computer-use',
+          }),
+          extensionFixture({
+            id: 'computer-use@openneko',
             displayName: 'Computer Use',
             description: 'Control Mac apps.',
             version: '1.0.2',
-            developer: 'OpenAI',
-            marketplace: 'openai-bundled',
             mcpServerIds: ['computer-use'],
-            hasSkills: true,
-            appIds: [],
-          },
+          }),
         ],
         '',
-        'name-descending',
       ).map((extension) => extension.id),
-    ).toEqual(['github@openai-api-curated', 'computer-use@openai-bundled']);
+    ).toEqual(['computer-use@openneko', 'github@openneko']);
     expect(
-      filterAndSortHomeExtensions(
+      searchAndOrderHomeExtensions(
         [
-          {
-            id: 'computer-use@openai-bundled',
-            name: 'computer-use',
+          extensionFixture({
+            id: 'computer-use@openneko',
             displayName: 'Computer Use',
             description: 'Control Mac apps.',
             version: '1.0.2',
-            developer: 'OpenAI',
-            marketplace: 'openai-bundled',
             mcpServerIds: ['computer-use'],
-            hasSkills: true,
-            appIds: [],
-          },
+          }),
         ],
         'computer-use',
-        'name-ascending',
       ).map((extension) => extension.id),
-    ).toEqual(['computer-use@openai-bundled']);
+    ).toEqual(['computer-use@openneko']);
+    expect(
+      searchAndOrderHomeExtensions(
+        [
+          {
+            ...extensionFixture({
+              id: 'storyboard@market',
+              displayName: 'Storyboard',
+              description: 'Create visual stories.',
+              version: '1.0.0',
+              mcpServerIds: [],
+              category: 'Creativity',
+            }),
+            installed: false,
+            enabled: false,
+            canInstall: true,
+            canRemove: false,
+            agentStatus: 'not-installed',
+          },
+          extensionFixture({
+            id: 'documents@market',
+            displayName: 'Documents',
+            description: 'Create documents.',
+            version: '1.0.0',
+            mcpServerIds: [],
+            category: 'Productivity',
+          }),
+          extensionFixture({
+            id: 'build-apps@market',
+            displayName: 'Build Apps',
+            description: 'Build software.',
+            version: '1.0.0',
+            mcpServerIds: [],
+            category: 'Developer Tools',
+          }),
+        ],
+        '',
+      ).map((extension) => extension.id),
+    ).toEqual(['storyboard@market', 'documents@market', 'build-apps@market']);
     expect(
       filterAndSortHomeProjects(
         [
@@ -691,9 +753,7 @@ describe('DesktopShellView', () => {
     expect(markup).not.toContain('data-main-view-id="resource-browser:');
     const sidebar = extractPrimarySidebar(markup);
     expect(sidebar).not.toContain('Project resources');
-    expect(sidebar).not.toMatch(
-      /class="home-nav-button is-active"[^>]*aria-label="Asset Center"/u,
-    );
+    expect(sidebar).not.toMatch(/class="home-nav-button is-active"[^>]*aria-label="Asset Center"/u);
     vi.unstubAllGlobals();
   });
 
@@ -722,74 +782,29 @@ describe('DesktopShellView', () => {
     );
 
     expect(markup).toContain('搜索 Skill 或扩展');
-    expect(markup).toContain('扩展目录排序');
+    expect(markup).toContain('OpenNeko 与 Pi Agent 支持的扩展');
     expect(markup).toContain('扩展目录');
-    expect(markup).toContain('来源');
-    expect(markup).toContain('全部');
+    expect(markup).not.toContain('home-sort-control');
+    expect(markup).not.toContain('aria-label="来源"');
+    expect(markup).not.toContain('aria-label="状态"');
+    expect(markup).not.toContain('aria-label="分类"');
+    expect(markup).not.toContain('aria-label="扩展目录排序"');
     expect(markup).toContain('扩展');
     expect(markup).not.toContain('内置能力');
+    expect(markup).not.toContain('<option value="builtin">');
+    expect(markup).not.toContain('内置');
     expect(markup).not.toContain('选择项目');
-    expect(markup).not.toContain('插件');
     expect(markup).toContain('刷新目录');
-  });
 
-  it('localizes builtin catalog metadata without rewriting personal Skill metadata', () => {
     const english = createDesktopI18n('en');
-    const chinese = createDesktopI18n('zh-cn');
-    const builtin = {
-      name: 'audio-mixing',
-      description: 'Canonical model-facing description.',
-      source: 'builtin' as const,
-    };
-    const personal = {
-      name: 'my-skill',
-      description: '作者原文',
-      source: 'personal' as const,
-    };
-
-    expect(presentHomeSkill(builtin, english.t)).toEqual({
-      name: 'Audio mixing',
-      description: 'Balance levels, music, fades, normalization, and ducking.',
-    });
-    expect(presentHomeSkill(builtin, chinese.t)).toEqual({
-      name: '混音',
-      description: '平衡音量与配乐，并处理淡入淡出、标准化和闪避。',
-    });
-    expect(presentHomeSkill(personal, english.t)).toEqual({
-      name: 'my-skill',
-      description: '作者原文',
-    });
-    expect(presentHomeSkill(personal, chinese.t)).toEqual({
-      name: 'my-skill',
-      description: '作者原文',
-    });
-    expect(builtin).toEqual({
-      name: 'audio-mixing',
-      description: 'Canonical model-facing description.',
-      source: 'builtin',
-    });
-  });
-
-  it('keeps every packaged builtin Skill in the bilingual Desktop display catalog', () => {
-    const packagedSkillFiles = import.meta.glob(
-      '../../../../packages/neko-skills/skills/*/SKILL.md',
-      { eager: true, import: 'default', query: '?raw' },
+    const englishMarkup = renderToStaticMarkup(
+      <I18nProvider service={english.i18nService}>
+        <DesktopShellView projection={homeProjection()} homeSection="extensions" />
+      </I18nProvider>,
     );
-    const packagedSkillIds = Object.keys(packagedSkillFiles)
-      .map((path) => path.split('/').at(-2))
-      .filter((name): name is string => name !== undefined)
-      .sort();
-    const english = createDesktopI18n('en');
-    const chinese = createDesktopI18n('zh-cn');
-
-    expect([...DESKTOP_BUILTIN_SKILL_IDS].sort()).toEqual(packagedSkillIds);
-    for (const skillId of packagedSkillIds) {
-      for (const field of ['name', 'description'] as const) {
-        const key = `home.capabilities.builtinSkill.${skillId}.${field}`;
-        expect(english.t(key)).not.toBe(key);
-        expect(chinese.t(key)).not.toBe(key);
-      }
-    }
+    expect(englishMarkup).toContain('Search Skills or extensions');
+    expect(englishMarkup).toContain('Extension catalog');
+    expect(englishMarkup).not.toContain('home-sort-control');
   });
 
   it('renders independent Media Library and Asset Library controls without Project resources', () => {

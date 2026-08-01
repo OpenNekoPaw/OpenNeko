@@ -260,6 +260,31 @@ export function registerDesktopIpc(
       appHost.listHomeExtensions(requireSender(event), payload),
   );
   ipcMain.handle(
+    DESKTOP_HOME_MANAGEMENT_CHANNELS.extensionPluginInstall,
+    (event: IpcMainInvokeEvent, payload: unknown) =>
+      appHost.installHomeExtensionPlugin(requireSender(event), payload),
+  );
+  ipcMain.handle(
+    DESKTOP_HOME_MANAGEMENT_CHANNELS.extensionPluginRemove,
+    (event: IpcMainInvokeEvent, payload: unknown) =>
+      appHost.removeHomeExtensionPlugin(requireSender(event), payload),
+  );
+  ipcMain.handle(
+    DESKTOP_HOME_MANAGEMENT_CHANNELS.extensionMarketplacesRefresh,
+    (event: IpcMainInvokeEvent, payload: unknown) =>
+      appHost.refreshHomeExtensionMarketplaces(requireSender(event), payload),
+  );
+  ipcMain.handle(
+    DESKTOP_HOME_MANAGEMENT_CHANNELS.extensionPersonalSkillInstall,
+    (event: IpcMainInvokeEvent, payload: unknown) =>
+      appHost.installHomePersonalSkill(requireSender(event), payload),
+  );
+  ipcMain.handle(
+    DESKTOP_HOME_MANAGEMENT_CHANNELS.extensionPersonalSkillRemove,
+    (event: IpcMainInvokeEvent, payload: unknown) =>
+      appHost.removeHomePersonalSkill(requireSender(event), payload),
+  );
+  ipcMain.handle(
     DESKTOP_SHELL_CHANNELS.projectOpenContent,
     (event: IpcMainInvokeEvent, payload: unknown) =>
       appHost.openContentProject(requireSender(event), payload, () =>
@@ -348,6 +373,11 @@ export function registerDesktopIpc(
       DESKTOP_HOME_MANAGEMENT_CHANNELS.mediaLibrariesRemove,
       DESKTOP_HOME_MANAGEMENT_CHANNELS.mediaLibrariesReveal,
       DESKTOP_HOME_MANAGEMENT_CHANNELS.extensionsList,
+      DESKTOP_HOME_MANAGEMENT_CHANNELS.extensionPluginInstall,
+      DESKTOP_HOME_MANAGEMENT_CHANNELS.extensionPluginRemove,
+      DESKTOP_HOME_MANAGEMENT_CHANNELS.extensionMarketplacesRefresh,
+      DESKTOP_HOME_MANAGEMENT_CHANNELS.extensionPersonalSkillInstall,
+      DESKTOP_HOME_MANAGEMENT_CHANNELS.extensionPersonalSkillRemove,
       DESKTOP_SHELL_CHANNELS.projectOpenContent,
       DESKTOP_SHELL_CHANNELS.projectOpenCatalog,
       DESKTOP_SHELL_CHANNELS.projectRemoveRecent,

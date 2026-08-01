@@ -74,7 +74,7 @@ export interface ToolsFileFrontmatter {
 /**
  * Where the skill/command comes from
  */
-export type SkillSource = 'builtin' | 'personal' | 'project';
+export type SkillSource = 'builtin' | 'personal' | 'plugin' | 'project';
 
 /**
  * Canonical explicit entry point for a registry item that reuses the Skill

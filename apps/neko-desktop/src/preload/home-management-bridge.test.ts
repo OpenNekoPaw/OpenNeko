@@ -73,17 +73,26 @@ describe('Desktop Home management preload bridge', () => {
       return {
         schemaVersion: DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION,
         requestId: request.requestId,
+        catalogRevision: `sha256:${'a'.repeat(64)}`,
         skills: [],
         skillDiscovery: { diagnostics: [], duplicateCount: 0 },
         extensions: [
           {
-            id: 'computer-use@openai-bundled',
+            id: 'computer-use@openneko',
             name: 'computer-use',
             displayName: 'Computer Use',
             description: 'Control Mac apps.',
             version: '1.0.2',
             developer: 'OpenAI',
-            marketplace: 'openai-bundled',
+            marketplace: 'openneko',
+            category: 'Productivity',
+            installed: true,
+            enabled: true,
+            canInstall: false,
+            canRemove: true,
+            agentStatus: 'ready',
+            runtimeDiagnosticCode: '',
+            iconDataUrl: '',
             mcpServerIds: ['computer-use'],
             hasSkills: true,
             appIds: [],
@@ -98,7 +107,7 @@ describe('Desktop Home management preload bridge', () => {
     await expect(bridge.home.extensions.list()).resolves.toMatchObject({
       extensions: [
         {
-          id: 'computer-use@openai-bundled',
+          id: 'computer-use@openneko',
           mcpServerIds: ['computer-use'],
           hasSkills: true,
         },
@@ -112,6 +121,39 @@ describe('Desktop Home management preload bridge', () => {
       }),
     );
     expect(JSON.stringify(electron.invoke.mock.calls)).not.toContain('capabilities');
+  });
+
+  it('routes typed plugin mutation intent without accepting CLI arguments or paths', async () => {
+    const catalogRevision = `sha256:${'a'.repeat(64)}`;
+    electron.invoke.mockImplementation(
+      async (channel: string, request: { requestId: string; pluginId: string }) => {
+        expect(channel).toBe(DESKTOP_HOME_MANAGEMENT_CHANNELS.extensionPluginInstall);
+        expect(request.pluginId).toBe('computer-use@openneko');
+        expect(request).not.toHaveProperty('path');
+        expect(request).not.toHaveProperty('args');
+        return {
+          schemaVersion: DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION,
+          requestId: request.requestId,
+          status: 'completed',
+          operation: 'plugin-install',
+          targetId: request.pluginId,
+          catalogRevision,
+        };
+      },
+    );
+    const bridge = electron.bridge;
+    if (!bridge) throw new Error('Desktop preload bridge was not exposed.');
+
+    await expect(
+      bridge.home.extensions.installPlugin(
+        'computer-use@openneko',
+        catalogRevision,
+      ),
+    ).resolves.toMatchObject({
+      status: 'completed',
+      operation: 'plugin-install',
+      targetId: 'computer-use@openneko',
+    });
   });
 
   it('routes strict global media-library mutations without exposing absolute paths', async () => {

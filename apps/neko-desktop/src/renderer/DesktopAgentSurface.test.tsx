@@ -184,7 +184,14 @@ function installBridge(getBootstrap: typeof window.openNekoDesktop.agent.getBoot
           removeLibrary: vi.fn(),
           revealLibrary: vi.fn(),
         },
-        extensions: { list: vi.fn() },
+        extensions: {
+          list: vi.fn(),
+          installPlugin: vi.fn(),
+          removePlugin: vi.fn(),
+          refreshMarketplaces: vi.fn(),
+          installPersonalSkill: vi.fn(),
+          removePersonalSkill: vi.fn(),
+        },
       },
       shell: {
         getSnapshot: vi.fn(),

@@ -30,6 +30,10 @@ vi.mock('./DesktopCanvasSurface', () => ({
   DesktopCanvasSurface: () => <div data-testid="desktop-canvas-surface" />,
 }));
 
+vi.mock('./DesktopProjectPortabilityControl', () => ({
+  DesktopProjectPortabilityControl: () => null,
+}));
+
 vi.mock('./DesktopCutSurface', async () => {
   const { useEffect } = await import('react');
   return {

@@ -1142,7 +1142,7 @@ code {
   margin: 3px 0 0;
   color: var(--neko-fg);
   font-size: 27px;
-  letter-spacing: -0.035em;
+  letter-spacing: 0;
 }
 
 .home-management-header p:not(.section-label) {
@@ -1162,7 +1162,7 @@ code {
   min-height: 36px;
   padding: 0 12px;
   border: 1px solid var(--neko-desktop-border);
-  border-radius: 999px;
+  border-radius: 8px;
   color: var(--neko-fg-secondary);
   background: var(--neko-desktop-surface-raised);
   font-size: 11px;
@@ -1185,7 +1185,7 @@ code {
   gap: 6px;
   padding: 0 13px;
   border: 1px solid color-mix(in srgb, var(--neko-accent) 45%, var(--neko-desktop-border));
-  border-radius: 999px;
+  border-radius: 8px;
   color: var(--neko-button-foreground, #fff);
   background: var(--neko-accent);
   font-size: 11px;
@@ -1314,7 +1314,7 @@ code {
   gap: 11px;
   padding: 11px;
   border: 1px solid var(--neko-desktop-border);
-  border-radius: 14px;
+  border-radius: 8px;
   color: var(--neko-fg);
   background: color-mix(in srgb, var(--neko-desktop-surface-raised) 94%, transparent);
   box-shadow: var(--neko-shadow-sm);
@@ -1335,9 +1335,16 @@ button.home-management-card:hover {
   width: 36px;
   height: 36px;
   place-items: center;
-  border-radius: 10px;
+  border-radius: 6px;
   color: var(--neko-accent-strong);
   background: var(--neko-accent-soft);
+}
+
+.home-management-card-icon img {
+  width: 28px;
+  height: 28px;
+  border-radius: 5px;
+  object-fit: contain;
 }
 
 .home-management-card strong,
@@ -1352,6 +1359,7 @@ button.home-management-card:hover {
   display: inline-flex;
   align-items: center;
   gap: 5px;
+  justify-content: flex-end;
 }
 
 .home-management-card-actions button {

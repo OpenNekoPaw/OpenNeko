@@ -9,7 +9,10 @@ import {
   createDesktopHomeMediaLibraryChildrenRequest,
   createDesktopHomeMediaLibraryRequest,
   createDesktopHomeMediaLibrarySearchRequest,
+  createDesktopHomeCatalogMutationRequest,
   createDesktopHomeExtensionsRequest,
+  createDesktopHomePersonalSkillRemoveRequest,
+  createDesktopHomePluginMutationRequest,
   parseDesktopHomeAssetSearchRequest,
   parseDesktopHomeAssetSearchResult,
   parseDesktopHomeAssetImportRequest,
@@ -26,11 +29,17 @@ import {
   parseDesktopHomeMediaLibraryRevealResult,
   parseDesktopHomeMediaLibrarySearchRequest,
   parseDesktopHomeMediaLibrarySearchResult,
+  parseDesktopHomeCatalogMutationRequest,
+  parseDesktopHomeExtensionMutationResult,
   parseDesktopHomeExtensionsRequest,
   parseDesktopHomeExtensionsResult,
+  parseDesktopHomePersonalSkillRemoveRequest,
+  parseDesktopHomePluginMutationRequest,
 } from './home-management-contract';
 
 const endpointEpoch = 'app-1:window-1:1';
+const catalogRevision = `sha256:${'a'.repeat(64)}`;
+const managementId = `skill:${'b'.repeat(64)}`;
 
 describe('Desktop Home management contract', () => {
   it('keeps Asset Library queries independent from Media Library facets', () => {
@@ -322,7 +331,7 @@ describe('Desktop Home management contract', () => {
     ).toMatchObject({ status: 'ready', revision: 2 });
   });
 
-  it('accepts only sanitized global Skill and extension manifest projections', () => {
+  it('accepts only sanitized manageable Skill and extension projections', () => {
     const request = createDesktopHomeExtensionsRequest('request-2', 'endpoint-1');
     expect(parseDesktopHomeExtensionsRequest(request)).toEqual(request);
 
@@ -330,11 +339,16 @@ describe('Desktop Home management contract', () => {
       {
         schemaVersion: DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION,
         requestId: request.requestId,
+        catalogRevision,
         skills: [
           {
+            id: 'personal:personal:story-planner',
             name: 'story-planner',
             description: 'Plan a story.',
             source: 'personal',
+            sourceId: 'personal',
+            managementId,
+            canRemove: true,
           },
         ],
         skillDiscovery: {
@@ -343,32 +357,44 @@ describe('Desktop Home management contract', () => {
         },
         extensions: [
           {
-            id: 'computer-use@openai-bundled',
+            id: 'computer-use@openneko',
             name: 'computer-use',
             displayName: 'Computer Use',
             description: 'Control Mac apps.',
             version: '1.0.2',
             developer: 'OpenAI',
-            marketplace: 'openai-bundled',
+            marketplace: 'openneko',
+            category: 'Productivity',
+            installed: true,
+            enabled: true,
+            canInstall: false,
+            canRemove: true,
+            agentStatus: 'ready',
+            runtimeDiagnosticCode: '',
+            iconDataUrl: '',
             mcpServerIds: ['computer-use'],
             hasSkills: true,
             appIds: [],
           },
         ],
         extensionDiscovery: {
-          diagnostics: [{ code: 'package_missing', count: 1 }],
+          diagnostics: [{ code: 'runtime_failed', count: 1 }],
         },
       },
       request.requestId,
     );
 
     expect(result.skills[0]).toEqual({
+      id: 'personal:personal:story-planner',
       name: 'story-planner',
       description: 'Plan a story.',
       source: 'personal',
+      sourceId: 'personal',
+      managementId,
+      canRemove: true,
     });
     expect(result.extensions[0]).toMatchObject({
-      id: 'computer-use@openai-bundled',
+      id: 'computer-use@openneko',
       mcpServerIds: ['computer-use'],
       hasSkills: true,
     });
@@ -382,6 +408,7 @@ describe('Desktop Home management contract', () => {
     const payload = {
       schemaVersion: DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION,
       requestId: request.requestId,
+      catalogRevision,
       skills: [],
       skillDiscovery: {
         diagnostics: [
@@ -402,11 +429,41 @@ describe('Desktop Home management contract', () => {
     );
   });
 
+  it('rejects builtin Skills from the Home management result', () => {
+    const request = createDesktopHomeExtensionsRequest('request-builtin', 'endpoint-1');
+
+    expect(() =>
+      parseDesktopHomeExtensionsResult(
+        {
+          schemaVersion: DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION,
+          requestId: request.requestId,
+          catalogRevision,
+          skills: [
+            {
+              id: 'builtin:builtin:audio-mixing',
+              name: 'audio-mixing',
+              description: 'Mix audio.',
+              source: 'builtin',
+              sourceId: 'builtin',
+              managementId: '',
+              canRemove: false,
+            },
+          ],
+          skillDiscovery: { diagnostics: [], duplicateCount: 0 },
+          extensions: [],
+          extensionDiscovery: { diagnostics: [] },
+        },
+        request.requestId,
+      ),
+    ).toThrow('Desktop Home Skill source is invalid.');
+  });
+
   it('rejects removed capability payloads and unsafe extension fields', () => {
     const request = createDesktopHomeExtensionsRequest('request-4', 'endpoint-1');
     const base = {
       schemaVersion: DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION,
       requestId: request.requestId,
+      catalogRevision,
       skills: [],
       skillDiscovery: { diagnostics: [], duplicateCount: 0 },
       extensionDiscovery: { diagnostics: [] },
@@ -427,13 +484,21 @@ describe('Desktop Home management contract', () => {
           ...base,
           extensions: [
             {
-              id: 'computer-use@openai-bundled',
+              id: 'computer-use@openneko',
               name: 'computer-use',
               displayName: 'Computer Use',
               description: 'Control Mac apps.',
               version: '1.0.2',
               developer: 'OpenAI',
-              marketplace: 'openai-bundled',
+              marketplace: 'openneko',
+              category: 'Productivity',
+              installed: true,
+              enabled: true,
+              canInstall: false,
+              canRemove: true,
+              agentStatus: 'ready',
+              runtimeDiagnosticCode: '',
+              iconDataUrl: '',
               mcpServerIds: ['computer-use'],
               hasSkills: true,
               appIds: [],
@@ -444,5 +509,62 @@ describe('Desktop Home management contract', () => {
         request.requestId,
       ),
     ).toThrow('invalid');
+  });
+
+  it('round-trips typed extension mutations and rejects unsafe identifiers', () => {
+    const pluginRequest = createDesktopHomePluginMutationRequest(
+      'plugin-1',
+      endpointEpoch,
+      'computer-use@openneko',
+      catalogRevision,
+    );
+    const refreshRequest = createDesktopHomeCatalogMutationRequest(
+      'refresh-1',
+      endpointEpoch,
+      catalogRevision,
+    );
+    const removeSkillRequest = createDesktopHomePersonalSkillRemoveRequest(
+      'skill-1',
+      endpointEpoch,
+      managementId,
+      catalogRevision,
+    );
+
+    expect(parseDesktopHomePluginMutationRequest(pluginRequest)).toEqual(pluginRequest);
+    expect(parseDesktopHomeCatalogMutationRequest(refreshRequest)).toEqual(refreshRequest);
+    expect(parseDesktopHomePersonalSkillRemoveRequest(removeSkillRequest)).toEqual(
+      removeSkillRequest,
+    );
+    expect(
+      parseDesktopHomeExtensionMutationResult(
+        {
+          schemaVersion: DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION,
+          requestId: pluginRequest.requestId,
+          status: 'completed',
+          operation: 'plugin-install',
+          targetId: pluginRequest.pluginId,
+          catalogRevision,
+        },
+        pluginRequest.requestId,
+      ),
+    ).toMatchObject({
+      status: 'completed',
+      operation: 'plugin-install',
+      targetId: 'computer-use@openneko',
+    });
+    expect(() =>
+      createDesktopHomePluginMutationRequest(
+        'plugin-2',
+        endpointEpoch,
+        '../computer-use@openneko',
+        catalogRevision,
+      ),
+    ).toThrow('plugin id is invalid');
+    expect(() =>
+      parseDesktopHomePersonalSkillRemoveRequest({
+        ...removeSkillRequest,
+        managementId: '/Users/private/.codex/skills/story-planner',
+      }),
+    ).toThrow('management id is invalid');
   });
 });

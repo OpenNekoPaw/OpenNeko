@@ -25,6 +25,8 @@ export interface MCPStdioConfig {
   args?: string[];
   /** Environment variables */
   env?: Record<string, string>;
+  /** Whether to inherit the host process environment. Defaults to true. */
+  inheritProcessEnv?: boolean;
   /** Working directory */
   cwd?: string;
   /** Request timeout in ms (default: 30000) */

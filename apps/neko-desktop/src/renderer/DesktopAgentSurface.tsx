@@ -4,10 +4,10 @@ import type { AgentHostRuntimeAdapter } from '@neko-agent/types';
 import type { DesktopAgentBootstrapProjection } from '../shared/agent-contract';
 import type { DesktopProjectTabProjection } from '../shared/shell-contract';
 import { createElectronAgentHostRuntimeAdapter } from './desktop-agent-host-runtime-adapter';
+import { loadDesktopAgentWebviewRootModule } from './desktop-agent-module';
 
-const loadAgentWebviewRootModule = () => import('@neko-agent/webview/root');
 const AgentWebviewRoot = lazy(() =>
-  loadAgentWebviewRootModule().then((module) => ({ default: module.AgentWebviewRoot })),
+  loadDesktopAgentWebviewRootModule().then((module) => ({ default: module.AgentWebviewRoot })),
 );
 
 type DesktopAgentSurfaceState =
@@ -32,7 +32,7 @@ export function DesktopAgentSurface({
     let active = true;
     setState({ kind: 'loading' });
     void prepareDesktopAgentSurfaceResources({
-      loadModule: loadAgentWebviewRootModule,
+      loadModule: loadDesktopAgentWebviewRootModule,
       getBootstrap: () =>
         window.openNekoDesktop.agent.getBootstrap(tab.projectId, tab.viewId, tab.viewEpoch),
     })

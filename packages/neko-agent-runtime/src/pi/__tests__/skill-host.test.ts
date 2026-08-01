@@ -54,6 +54,52 @@ describe('PiSkillHost', () => {
     expect(snapshot.invoke('shared')).toContain('Project body');
   });
 
+  it('preserves plugin identity and deterministically selects same-name plugin Skills', async () => {
+    await createSkill(root, 'plugin-a', 'shared', 'Plugin A body');
+    await createSkill(root, 'plugin-b', 'shared', 'Plugin B body');
+    const snapshot = await new PiSkillHost(env, policy).discover([
+      {
+        path: join(root, 'plugin-b'),
+        source: { kind: 'plugin', pluginId: 'beta@market' },
+      },
+      {
+        path: join(root, 'plugin-a'),
+        source: { kind: 'plugin', pluginId: 'alpha@market' },
+      },
+    ]);
+
+    expect(snapshot.records[0]).toMatchObject({
+      name: 'shared',
+      source: { kind: 'plugin', pluginId: 'alpha@market' },
+    });
+    expect(snapshot.warnings).toEqual([
+      expect.objectContaining({
+        selectedSource: 'plugin',
+        selectedPluginId: 'alpha@market',
+        shadowedSource: 'plugin',
+        shadowedPluginId: 'beta@market',
+      }),
+    ]);
+    await expect(
+      snapshot.readModelSelectedContent(snapshot.records[0]!.locator.value),
+    ).resolves.toMatchObject({
+      receipt: {
+        skillName: 'shared',
+        source: { kind: 'plugin', pluginId: 'alpha@market' },
+      },
+    });
+    expect(snapshot.invoke('shared')).toContain('Plugin A body');
+  });
+
+  it('rejects a plugin Skill root without a valid plugin identity', async () => {
+    await createSkill(root, 'plugin', 'invalid-source', 'Body');
+    await expect(
+      new PiSkillHost(env, policy).discover([
+        { path: join(root, 'plugin'), source: { kind: 'plugin', pluginId: '../invalid' } },
+      ]),
+    ).rejects.toThrow('invalid plugin id');
+  });
+
   it('keeps explicit-only Skills invokable while excluding them from model disclosure', async () => {
     const directory = await createSkill(root, 'project', 'explicit-only', 'Explicit body');
     await writeFile(
@@ -210,7 +256,7 @@ describe('PiSkillHost', () => {
 
 async function createSkill(
   root: string,
-  source: SkillSourceKind,
+  source: string,
   name: string,
   body: string,
 ): Promise<string> {
@@ -224,6 +270,6 @@ function skillDocument(name: string, body: string): string {
   return `---\nname: ${name}\ndescription: ${name} fixture\n---\n${body}\n`;
 }
 
-function sourceRoots(root: string, sources: readonly SkillSourceKind[]) {
+function sourceRoots(root: string, sources: readonly Exclude<SkillSourceKind, 'plugin'>[]) {
   return sources.map((kind) => ({ path: join(root, kind), source: { kind } }));
 }

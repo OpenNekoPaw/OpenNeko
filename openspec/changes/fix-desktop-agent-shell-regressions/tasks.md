@@ -5,6 +5,7 @@
 - [x] 1.3 Add shared Popover stylesheet coverage and Desktop layout tests for opaque portal tokens plus `chat-main` with zero Main Views.
 - [x] 1.4 Add a controller-level red test covering tabless submit, Host-created conversation/Tab, empty projection frames, config hydration and visible optimistic text in the owning realm.
 - [x] 1.5 Add a production-renderer computed-style check for the Radix portal background/opacity and Desktop workbench red tests for default Workspace Canvas plus Resource Browser Main View open/focus.
+- [x] 1.6 Add a renderer-startup red test proving Agent module loading joins the bootstrap/settings readiness gate without creating a Project/View adapter.
 
 ## 2. Persistent Agent Home catalog
 
@@ -18,6 +19,7 @@
 - [x] 3.2 Establish the Agent Root Host subscription before descendant initialization requests and dispose it on adapter replacement/unmount.
 - [x] 3.3 Preserve the owning optimistic user message across empty initial snapshots and make missing config/send rejection clear the false executing state with a conversation diagnostic.
 - [x] 3.4 Bind pending send to the Host-created conversation/Tab realm, consume it only after the owning render coordinator receives the user message, and prevent ordinary Tab reconciliation from clearing it.
+- [x] 3.5 Move Agent module loading to one renderer-startup-owned promise and make every Agent Surface reuse it while keeping bootstrap and adapter state View scoped.
 
 ## 4. Desktop portal and Workbench layout
 

@@ -169,64 +169,39 @@ export const en = {
   'home.assetLibrary.noResults': 'No matching creative assets',
   'home.capabilities.eyebrow': 'Global catalog',
   'home.capabilities.description':
-    'Browse global Skills and enabled extension package manifests.',
+    'Manage global Skills and extensions supported by OpenNeko and Pi Agent.',
   'home.capabilities.search': 'Search Skills or extensions',
-  'home.capabilities.sort': 'Extension catalog sorting',
   'home.capabilities.tabs': 'Extension catalog',
   'home.capabilities.skills': 'Skills',
   'home.capabilities.extensions': 'Extensions',
   'home.capabilities.refresh': 'Refresh catalog',
+  'home.capabilities.refreshing': 'Refreshing...',
+  'home.capabilities.addSkill': 'Add Skill',
+  'home.capabilities.installing': 'Installing...',
+  'home.capabilities.install': 'Install',
+  'home.capabilities.remove': 'Remove',
+  'home.capabilities.removeSkill': 'Remove personal Skill',
+  'home.capabilities.confirmRemoveSkill': 'Remove personal Skill "{name}"?',
+  'home.capabilities.confirmInstallPlugin':
+    'Install extension "{name}" and make its supported Skills and MCP tools available to the Agent?',
+  'home.capabilities.confirmRemovePlugin': 'Remove extension "{name}"?',
+  'home.capabilities.status.installed': 'Installed',
+  'home.capabilities.status.available': 'Available',
+  'home.capabilities.agentStatus.not-installed': 'Not installed',
+  'home.capabilities.agentStatus.ready': 'Agent ready',
+  'home.capabilities.agentStatus.partial': 'Partially ready',
+  'home.capabilities.agentStatus.unsupported': 'Unsupported',
+  'home.capabilities.agentStatus.error': 'Runtime error',
   'home.capabilities.discoveryIssues':
     '{count} catalog issue(s) were found. Invalid or shadowed records are not shown.',
   'home.capabilities.noSkills': 'No matching global Skills',
-  'home.capabilities.noExtensions': 'No matching enabled extensions',
+  'home.capabilities.noExtensions': 'No matching extensions',
   'home.capabilities.extensionMcp': 'MCP: {ids}',
   'home.capabilities.extensionSkills': 'Skill contribution',
   'home.capabilities.extensionApps': 'App: {ids}',
   'home.capabilities.extensionNoContributions': 'No declared contributions',
-  'home.capabilities.source.label': 'Source',
-  'home.capabilities.source.all': 'All',
-  'home.capabilities.source.builtin': 'Built-in',
   'home.capabilities.source.personal': 'Personal',
-  'home.capabilities.builtinSkill.audio-mixing.name': 'Audio mixing',
-  'home.capabilities.builtinSkill.audio-mixing.description':
-    'Balance levels, music, fades, normalization, and ducking.',
-  'home.capabilities.builtinSkill.color-grading.name': 'Color grading',
-  'home.capabilities.builtinSkill.color-grading.description':
-    'Adjust exposure, contrast, white balance, saturation, and cinematic looks.',
-  'home.capabilities.builtinSkill.image.name': 'Image',
-  'home.capabilities.builtinSkill.image.description':
-    'Generate, edit, extend, enhance, compose, or prepare images.',
-  'home.capabilities.builtinSkill.media-production.name': 'Media production',
-  'home.capabilities.builtinSkill.media-production.description':
-    'Guide source-to-deliverable work through available creative capabilities.',
-  'home.capabilities.builtinSkill.media-quality-review.name': 'Media quality review',
-  'home.capabilities.builtinSkill.media-quality-review.description':
-    'Review assets, storyboards, projects, cuts, and deliverables with evidence.',
-  'home.capabilities.builtinSkill.scene-to-music.name': 'Scene to music',
-  'home.capabilities.builtinSkill.scene-to-music.description':
-    'Analyze scenes and plan background music for a timeline.',
-  'home.capabilities.builtinSkill.script-generation.name': 'Script generation',
-  'home.capabilities.builtinSkill.script-generation.description':
-    'Create and refine screenplays, story structures, and character arcs.',
-  'home.capabilities.builtinSkill.script-to-timeline.name': 'Script to timeline',
-  'home.capabilities.builtinSkill.script-to-timeline.description':
-    'Convert Fountain scripts and screenplays into timeline plans.',
-  'home.capabilities.builtinSkill.skill-creator.name': 'Skill creator',
-  'home.capabilities.builtinSkill.skill-creator.description':
-    'Design, create, refine, and validate reusable Agent Skills.',
-  'home.capabilities.builtinSkill.storyboard.name': 'Storyboard',
-  'home.capabilities.builtinSkill.storyboard.description':
-    'Explore source material and create structured storyboards when requested.',
-  'home.capabilities.builtinSkill.subtitle-assistant.name': 'Subtitle assistant',
-  'home.capabilities.builtinSkill.subtitle-assistant.description':
-    'Create, edit, time, translate, import, or export subtitles and captions.',
-  'home.capabilities.builtinSkill.video.name': 'Video',
-  'home.capabilities.builtinSkill.video.description':
-    'Generate or transform a video clip from prompts, images, or references.',
-  'home.capabilities.builtinSkill.video-editing.name': 'Video editing',
-  'home.capabilities.builtinSkill.video-editing.description':
-    'Trim, split, merge, transition, and retime clips on a timeline.',
+  'home.capabilities.source.plugin': 'Plugin',
   'home.projects.eyebrow': 'Creative projects',
   'home.projects.description':
     'Browse and continue every creative project. Agent conversations are not part of this catalog.',

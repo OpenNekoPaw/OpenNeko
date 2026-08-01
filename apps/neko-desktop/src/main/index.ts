@@ -74,7 +74,12 @@ import {
   listDesktopGlobalMediaLibraryConnections,
   resolveDesktopGlobalMediaLibraryTarget,
 } from './desktop-global-media-library-files';
-import { createDesktopExtensionCatalogReader } from './desktop-extension-catalog-reader';
+import {
+  createDesktopExtensionManager,
+  createOpenNekoExtensionRepository,
+} from './desktop-extension-manager';
+import { createDesktopExtensionAgentSupport } from './desktop-plugin-runtime';
+import { createDesktopPersonalSkillManager } from './desktop-personal-skill-manager';
 import { DesktopProjectPortabilityRuntime } from './desktop-project-portability-runtime';
 
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string | undefined;
@@ -124,12 +129,6 @@ async function startDesktop(): Promise<void> {
       assertAvailable: () => {
         if (!safeStorage.isEncryptionAvailable()) {
           throw new Error('Electron safeStorage encryption is unavailable.');
-        }
-        if (
-          process.platform === 'linux' &&
-          safeStorage.getSelectedStorageBackend() === 'basic_text'
-        ) {
-          throw new Error('Electron safeStorage selected the insecure basic_text backend.');
         }
       },
       encrypt: (value) => safeStorage.encryptString(value),
@@ -200,13 +199,23 @@ async function startDesktop(): Promise<void> {
       resourcesPath: process.resourcesPath,
     }),
   });
-  const configuredCodexHome = process.env['CODEX_HOME']?.trim();
-  if (configuredCodexHome && !path.isAbsolute(configuredCodexHome)) {
-    throw new Error('CODEX_HOME must be an absolute path.');
-  }
-  const extensionCatalog = createDesktopExtensionCatalogReader({
-    codexHome: configuredCodexHome || path.join(homedir, '.codex'),
+  const extensionManager = createDesktopExtensionManager({
+    repository: createOpenNekoExtensionRepository({
+      marketplaceRoot: path.join(
+        app.isPackaged ? process.resourcesPath : app.getAppPath(),
+        ...(app.isPackaged ? [] : ['resources']),
+        'extension-marketplace',
+      ),
+      installRoot: path.join(globalStorage.root, 'extensions', 'plugins'),
+      trashItem: (absolutePath) => shell.trashItem(absolutePath),
+    }),
+    agentSupport: createDesktopExtensionAgentSupport(),
   });
+  const initialExtensionSnapshot = await extensionManager.readCatalog();
+  extensionManager.setRuntimeReadiness(
+    initialExtensionSnapshot.revision,
+    await agentComposition.reconcilePluginRuntime(initialExtensionSnapshot),
+  );
   const windowsById = new Map<string, BrowserWindow>();
   const nativeThemeController = createDesktopNativeThemeController({
     nativeTheme,
@@ -222,6 +231,20 @@ async function startDesktop(): Promise<void> {
     }
     return owner;
   };
+  const personalSkillManager = createDesktopPersonalSkillManager({
+    personalSkillRoot: path.join(homedir, '.agents', 'skills'),
+    selectDirectory: async (windowId) => {
+      const result = await dialog.showOpenDialog(requireOwnerWindow(windowId), {
+        title: app.getLocale().toLocaleLowerCase().startsWith('zh')
+          ? '安装个人 Skill'
+          : 'Install Personal Skill',
+        buttonLabel: app.getLocale().toLocaleLowerCase().startsWith('zh') ? '安装' : 'Install',
+        properties: ['openDirectory'],
+      });
+      return result.canceled ? undefined : result.filePaths[0];
+    },
+    trashItem: (absolutePath) => shell.trashItem(absolutePath),
+  });
   const openHostPath = async (targetPath: string): Promise<void> => {
     const error = await shell.openPath(targetPath);
     if (error) throw new Error(error);
@@ -670,7 +693,8 @@ async function startDesktop(): Promise<void> {
     canvas: canvasRuntime,
     cut: cutRuntime,
     settings: applicationSettings,
-    extensionCatalog,
+    extensionManager,
+    personalSkillManager,
     openAgentAdvancedSettings: () => openHostPath(buildConfigFilePath(homedir)),
     instanceId: applicationInstanceId,
   });
@@ -1046,9 +1070,7 @@ function createDesktopGlobalLibraryThumbnailFactory(): DesktopResourceBrowserRun
           : new Error('Desktop global Library thumbnail request was cancelled.');
       }
       const size =
-        input.variant === 'icon'
-          ? { width: 160, height: 100 }
-          : { width: 640, height: 400 };
+        input.variant === 'icon' ? { width: 160, height: 100 } : { width: 640, height: 400 };
       if (input.mediaType === 'image') {
         return createDesktopThumbnailDataUrl(input.absolutePath, size);
       }

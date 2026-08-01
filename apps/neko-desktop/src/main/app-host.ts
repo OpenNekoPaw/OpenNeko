@@ -95,7 +95,10 @@ import {
   parseDesktopHomeMediaLibraryChildrenRequest,
   parseDesktopHomeMediaLibraryRequest,
   parseDesktopHomeMediaLibrarySearchRequest,
+  parseDesktopHomeCatalogMutationRequest,
   parseDesktopHomeExtensionsRequest,
+  parseDesktopHomePersonalSkillRemoveRequest,
+  parseDesktopHomePluginMutationRequest,
   type DesktopHomeAssetImportResult,
   type DesktopHomeAssetRemoveResult,
   type DesktopHomeAssetSearchResult,
@@ -107,6 +110,8 @@ import {
   type DesktopHomeMediaLibraryRevealResult,
   type DesktopHomeMediaLibrarySearchResult,
   type DesktopHomeExtensionsResult,
+  type DesktopHomeExtensionMutationKind,
+  type DesktopHomeExtensionMutationResult,
   type DesktopHomeManagementRequest,
 } from '../shared/home-management-contract';
 import {
@@ -117,7 +122,8 @@ import {
   type DesktopApplicationSettingsResponse,
 } from '../shared/application-settings-contract';
 import type { DesktopApplicationSettingsService } from './application-settings-service';
-import type { DesktopExtensionCatalogReader } from './desktop-extension-catalog-reader';
+import type { DesktopExtensionManager } from './desktop-extension-manager';
+import type { DesktopPersonalSkillManager } from './desktop-personal-skill-manager';
 import type { DesktopProjectPortabilityRuntime } from './desktop-project-portability-runtime';
 import type {
   DesktopProjectPortabilityCancelResult,
@@ -126,7 +132,6 @@ import type {
   DesktopProjectPortabilityPlanResult,
   DesktopProjectPortabilityProgressEvent,
 } from '../shared/project-portability-contract';
-
 
 export interface DesktopAppHostOptions {
   readonly host: NekoHostPorts;
@@ -141,7 +146,8 @@ export interface DesktopAppHostOptions {
   readonly canvas?: DesktopCanvasRuntime;
   readonly cut?: DesktopCutRuntime;
   readonly settings: DesktopApplicationSettingsService;
-  readonly extensionCatalog: DesktopExtensionCatalogReader;
+  readonly extensionManager: DesktopExtensionManager;
+  readonly personalSkillManager: DesktopPersonalSkillManager;
   readonly openAgentAdvancedSettings: () => Promise<void>;
   readonly instanceId?: string;
 }
@@ -705,29 +711,182 @@ export class DesktopAppHost {
     this.requireActive();
     const request = parseDesktopHomeExtensionsRequest(payload);
     await this.resolveHomeRequest(sender, request);
-    const [skillCatalog, extensionCatalog] = await Promise.all([
-      this.agent.readGlobalSkillCatalog(),
-      this.options.extensionCatalog.readCatalog(),
-    ]);
+    const extensionCatalog = await this.prepareExtensionCatalog();
+    const skillCatalog = await this.agent.readGlobalSkillCatalog();
     for (const skill of skillCatalog.records) {
       if (skill.source.kind === 'project') {
         throw new Error('Desktop global Skill catalog returned a Project-scoped Skill.');
       }
     }
+    const skills = await Promise.all(
+      skillCatalog.records
+        .filter((skill) => skill.source.kind !== 'builtin')
+        .map(async (skill) => {
+          const skillSource = skill.source;
+          const source = requireGlobalSkillSource(skillSource);
+          const sourceId = skillSource.kind === 'plugin' ? skillSource.pluginId : source;
+          const managementId =
+            source === 'personal'
+              ? await this.options.personalSkillManager.resolveManagementId(skill)
+              : undefined;
+          return {
+            id: `${source}:${sourceId}:${skill.name}`,
+            name: skill.name,
+            description: skill.description,
+            source,
+            sourceId,
+            managementId: managementId ?? '',
+            canRemove: managementId !== undefined,
+          };
+        }),
+    );
     return {
       schemaVersion: DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION,
       requestId: request.requestId,
-      skills: skillCatalog.records.map((skill) => ({
-        name: skill.name,
-        description: skill.description,
-        source: requireGlobalSkillSource(skill.source.kind),
-      })),
+      catalogRevision: extensionCatalog.revision,
+      skills,
       skillDiscovery: projectSkillDiscovery(skillCatalog),
       extensions: extensionCatalog.records,
       extensionDiscovery: {
         diagnostics: extensionCatalog.diagnostics,
       },
     };
+  }
+
+  async installHomeExtensionPlugin(
+    sender: DesktopSenderIdentity,
+    payload: unknown,
+  ): Promise<DesktopHomeExtensionMutationResult> {
+    const request = parseDesktopHomePluginMutationRequest(payload);
+    await this.resolveHomeRequest(sender, request);
+    this.requireAgentIdleForPluginMutation();
+    const snapshot = await this.options.extensionManager.installPlugin(
+      request.pluginId,
+      request.expectedCatalogRevision,
+    );
+    await this.activatePluginSnapshot(snapshot);
+    return createExtensionMutationResult(
+      request.requestId,
+      'plugin-install',
+      request.pluginId,
+      snapshot.revision,
+    );
+  }
+
+  async removeHomeExtensionPlugin(
+    sender: DesktopSenderIdentity,
+    payload: unknown,
+  ): Promise<DesktopHomeExtensionMutationResult> {
+    const request = parseDesktopHomePluginMutationRequest(payload);
+    await this.resolveHomeRequest(sender, request);
+    this.requireAgentIdleForPluginMutation();
+    const snapshot = await this.options.extensionManager.removePlugin(
+      request.pluginId,
+      request.expectedCatalogRevision,
+    );
+    await this.activatePluginSnapshot(snapshot);
+    return createExtensionMutationResult(
+      request.requestId,
+      'plugin-remove',
+      request.pluginId,
+      snapshot.revision,
+    );
+  }
+
+  async refreshHomeExtensionMarketplaces(
+    sender: DesktopSenderIdentity,
+    payload: unknown,
+  ): Promise<DesktopHomeExtensionMutationResult> {
+    const request = parseDesktopHomeCatalogMutationRequest(payload);
+    await this.resolveHomeRequest(sender, request);
+    this.requireAgentIdleForPluginMutation();
+    const snapshot = await this.options.extensionManager.refreshMarketplaces(
+      request.expectedCatalogRevision,
+    );
+    await this.activatePluginSnapshot(snapshot);
+    return createExtensionMutationResult(
+      request.requestId,
+      'marketplaces-refresh',
+      '',
+      snapshot.revision,
+    );
+  }
+
+  async installHomePersonalSkill(
+    sender: DesktopSenderIdentity,
+    payload: unknown,
+  ): Promise<DesktopHomeExtensionMutationResult> {
+    const request = parseDesktopHomeCatalogMutationRequest(payload);
+    const endpoint = await this.resolveHomeRequest(sender, request);
+    const catalog = await this.options.extensionManager.readCatalog();
+    if (catalog.revision !== request.expectedCatalogRevision) {
+      throw new Error('Desktop extension catalog changed; refresh before retrying.');
+    }
+    const result = await this.options.personalSkillManager.install(endpoint.windowId);
+    if (result.status === 'cancelled') {
+      return {
+        schemaVersion: DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION,
+        requestId: request.requestId,
+        status: 'cancelled',
+        operation: 'personal-skill-install',
+        targetId: '',
+        catalogRevision: catalog.revision,
+      };
+    }
+    return createExtensionMutationResult(
+      request.requestId,
+      'personal-skill-install',
+      result.name,
+      catalog.revision,
+    );
+  }
+
+  async removeHomePersonalSkill(
+    sender: DesktopSenderIdentity,
+    payload: unknown,
+  ): Promise<DesktopHomeExtensionMutationResult> {
+    const request = parseDesktopHomePersonalSkillRemoveRequest(payload);
+    await this.resolveHomeRequest(sender, request);
+    const [catalog, skills] = await Promise.all([
+      this.options.extensionManager.readCatalog(),
+      this.agent.readGlobalSkillCatalog(),
+    ]);
+    if (catalog.revision !== request.expectedCatalogRevision) {
+      throw new Error('Desktop extension catalog changed; refresh before retrying.');
+    }
+    const removed = await this.options.personalSkillManager.remove(
+      request.managementId,
+      skills.records,
+    );
+    return createExtensionMutationResult(
+      request.requestId,
+      'personal-skill-remove',
+      removed.name,
+      catalog.revision,
+    );
+  }
+
+  private async prepareExtensionCatalog() {
+    const snapshot = await this.options.extensionManager.readCatalog();
+    await this.activatePluginSnapshot(snapshot);
+    const projected = await this.options.extensionManager.readCatalog();
+    if (projected.revision !== snapshot.revision) {
+      throw new Error('Desktop extension catalog changed during Agent runtime composition.');
+    }
+    return projected;
+  }
+
+  private async activatePluginSnapshot(
+    snapshot: Awaited<ReturnType<DesktopExtensionManager['readCatalog']>>,
+  ): Promise<void> {
+    const readiness = await this.agent.reconcilePluginRuntime(snapshot);
+    this.options.extensionManager.setRuntimeReadiness(snapshot.revision, readiness);
+  }
+
+  private requireAgentIdleForPluginMutation(): void {
+    if (this.agent.hasActiveTurns()) {
+      throw new Error('Plugin management is unavailable while an Agent turn is active.');
+    }
   }
 
   async requestProjectProfile(
@@ -1262,7 +1421,8 @@ function projectSkillDiscovery(
     DesktopHomeExtensionsResult['skillDiscovery']['diagnostics'][number]
   >();
   for (const diagnostic of catalog.diagnostics) {
-    const source = requireGlobalSkillSource(diagnostic.source);
+    if (diagnostic.source === 'builtin') continue;
+    const source = requireGlobalSkillSourceKind(diagnostic.source);
     const key = `${source}:${diagnostic.code}`;
     const existing = grouped.get(key);
     grouped.set(key, {
@@ -1277,15 +1437,52 @@ function projectSkillDiscovery(
         `${left.source}:${left.code}`.localeCompare(`${right.source}:${right.code}`),
       ),
     ),
-    duplicateCount: catalog.warnings.length,
+    duplicateCount: catalog.warnings.filter((warning) => {
+      const selectedManageable = isHomeManageableSkillSourceKind(warning.selectedSource);
+      const shadowedManageable = isHomeManageableSkillSourceKind(warning.shadowedSource);
+      return selectedManageable && shadowedManageable;
+    }).length,
   };
 }
 
 function requireGlobalSkillSource(
+  source: DesktopAgentSkillCatalog['records'][number]['source'],
+): 'personal' | 'plugin' {
+  if (source.kind === 'personal' || source.kind === 'plugin') {
+    return source.kind;
+  }
+  throw new Error('Desktop Home Skill projection received an unmanaged Skill source.');
+}
+
+function requireGlobalSkillSourceKind(
   source: DesktopAgentSkillCatalog['diagnostics'][number]['source'],
-): 'builtin' | 'personal' {
-  if (source === 'builtin' || source === 'personal') return source;
+): 'personal' | 'plugin' {
+  if (source === 'personal' || source === 'plugin') return source;
   throw new Error('Desktop global Skill catalog cannot contain Project source metadata.');
+}
+
+function isHomeManageableSkillSourceKind(
+  source: DesktopAgentSkillCatalog['warnings'][number]['selectedSource'],
+): boolean {
+  if (source === 'personal' || source === 'plugin') return true;
+  if (source === 'builtin') return false;
+  throw new Error('Desktop global Skill catalog cannot contain Project source metadata.');
+}
+
+function createExtensionMutationResult(
+  requestId: string,
+  operation: DesktopHomeExtensionMutationKind,
+  targetId: string,
+  catalogRevision: string,
+): DesktopHomeExtensionMutationResult {
+  return {
+    schemaVersion: DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION,
+    requestId,
+    status: 'completed',
+    operation,
+    targetId,
+    catalogRevision,
+  };
 }
 
 function describeError(error: unknown): string {

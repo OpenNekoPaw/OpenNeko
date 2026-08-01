@@ -239,23 +239,33 @@ describe('DesktopApplication', () => {
     container.remove();
   });
 
-  it('renders enabled extension manifests with concrete MCP contribution ids', async () => {
+  it('renders extension contributions and confirms installation before dispatch', async () => {
     const projection = createProjection();
     const home = createHomeBridgeMock();
+    const catalogRevision = 'a'.repeat(64);
     home.extensions.list.mockResolvedValue({
       schemaVersion: DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION,
       requestId: 'extensions-1',
+      catalogRevision,
       skills: [],
       skillDiscovery: { diagnostics: [], duplicateCount: 0 },
       extensions: [
         {
-          id: 'computer-use@openai-bundled',
+          id: 'computer-use@openneko',
           name: 'computer-use',
           displayName: 'Computer Use',
           description: 'Control Mac apps.',
           version: '1.0.2',
           developer: 'OpenAI',
-          marketplace: 'openai-bundled',
+          marketplace: 'openneko',
+          category: 'Productivity',
+          installed: false,
+          enabled: false,
+          canInstall: true,
+          canRemove: false,
+          agentStatus: 'not-installed',
+          runtimeDiagnosticCode: '',
+          iconDataUrl: '',
           mcpServerIds: ['computer-use'],
           hasSkills: true,
           appIds: [],
@@ -263,6 +273,16 @@ describe('DesktopApplication', () => {
       ],
       extensionDiscovery: { diagnostics: [] },
     });
+    home.extensions.installPlugin.mockResolvedValue({
+      schemaVersion: DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION,
+      requestId: 'extensions-install-1',
+      status: 'completed',
+      operation: 'plugin-install',
+      targetId: 'computer-use@openneko',
+      catalogRevision: 'b'.repeat(64),
+    });
+    const confirm = vi.fn().mockReturnValueOnce(false).mockReturnValueOnce(true);
+    vi.stubGlobal('confirm', confirm);
     Object.defineProperty(window, 'openNekoDesktop', {
       configurable: true,
       value: {
@@ -318,6 +338,22 @@ describe('DesktopApplication', () => {
     expect(container.textContent).toContain('MCP: computer-use');
     expect(container.textContent).toContain('Skill contribution');
     expect(container.textContent).not.toContain('Built-in capabilities');
+
+    const install = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
+      (button) => button.textContent?.trim() === 'Install',
+    );
+    await act(async () => install?.click());
+    expect(home.extensions.installPlugin).not.toHaveBeenCalled();
+
+    await act(async () => install?.click());
+    await waitForDom(() => home.extensions.installPlugin.mock.calls.length === 1);
+    expect(confirm).toHaveBeenLastCalledWith(
+      'Install extension "Computer Use" and make its supported Skills and MCP tools available to the Agent?',
+    );
+    expect(home.extensions.installPlugin).toHaveBeenCalledWith(
+      'computer-use@openneko',
+      catalogRevision,
+    );
 
     await act(async () => root.unmount());
     container.remove();
@@ -571,7 +607,7 @@ describe('DesktopApplication', () => {
             revealLibrary,
             removeLibrary,
           },
-          extensions: { list: vi.fn() },
+          extensions: createExtensionsBridgeMock(),
         },
         shell: {
           getSnapshot: vi.fn(async () => projection),
@@ -1316,7 +1352,18 @@ function createHomeBridgeMock() {
       removeLibrary: vi.fn(),
       revealLibrary: vi.fn(),
     },
-    extensions: { list: vi.fn() },
+    extensions: createExtensionsBridgeMock(),
+  };
+}
+
+function createExtensionsBridgeMock() {
+  return {
+    list: vi.fn(),
+    installPlugin: vi.fn(),
+    removePlugin: vi.fn(),
+    refreshMarketplaces: vi.fn(),
+    installPersonalSkill: vi.fn(),
+    removePersonalSkill: vi.fn(),
   };
 }
 

@@ -26,6 +26,7 @@ import {
 } from './desktop-agent-app-host-composition';
 import { createDesktopAgentCredentialRuntime } from './desktop-agent-credential-runtime';
 import type { DesktopWorkspaceResolution } from './desktop-workspace-registry';
+import type { DesktopExtensionCatalogSnapshot } from './desktop-extension-manager';
 
 const MODEL: Model<'openai-completions'> = {
   id: 'main',
@@ -780,6 +781,153 @@ describe('DesktopAgentAppHostComposition', () => {
     await expect(fixture.composition.attachWorkspace(fixture.workspace)).rejects.toThrow(
       'composition is disposed',
     );
+  });
+
+  it('preflights every workspace before replacing any plugin Tool generation', async () => {
+    const fixture = await createFixture();
+    const firstWorkspace = await fixture.composition.attachWorkspace(fixture.workspace);
+    const secondWorkspacePath = join(fixture.root, 'workspace-second');
+    await mkdir(secondWorkspacePath, { recursive: true });
+    const secondWorkspace = await fixture.composition.attachWorkspace({
+      workspaceId: '22222222-2222-4222-8222-222222222222',
+      workspacePath: secondWorkspacePath,
+      displayName: 'Second fixture',
+      locator: { kind: 'variable', value: '${HOME}/workspace-second' },
+    });
+    secondWorkspace.tools.register({
+      ...fixtureTool(),
+      name: 'mcp__fixture__echo',
+    });
+
+    const pluginRoot = join(fixture.root, 'mcp-plugin');
+    await mkdir(pluginRoot, { recursive: true });
+    await writeFile(
+      join(pluginRoot, 'fixture-mcp.mjs'),
+      [
+        '#!/usr/bin/env node',
+        "import readline from 'node:readline';",
+        'const input = readline.createInterface({ input: process.stdin });',
+        "input.on('line', (line) => {",
+        '  const request = JSON.parse(line);',
+        '  if (request.id === undefined) return;',
+        "  const result = request.method === 'tools/list'",
+        "    ? { tools: [{ name: 'echo', description: 'Echo input', inputSchema: { type: 'object', properties: {} } }] }",
+        '    : { content: [] };',
+        "  process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id: request.id, result }) + '\\n');",
+        '});',
+        '',
+      ].join('\n'),
+      { mode: 0o755 },
+    );
+    await writeFile(
+      join(pluginRoot, '.mcp.json'),
+      JSON.stringify({
+        mcpServers: {
+          fixture: {
+            command: './fixture-mcp.mjs',
+            cwd: '.',
+          },
+        },
+      }),
+      'utf8',
+    );
+
+    await expect(
+      fixture.composition.reconcilePluginRuntime({
+        revision: `sha256:${'c'.repeat(64)}`,
+        records: [],
+        runtimeDescriptors: [
+          {
+            pluginId: 'fixture@openneko',
+            pluginRoot,
+            mcpDocumentPath: join(pluginRoot, '.mcp.json'),
+            mcpServerIds: ['fixture'],
+            appIds: [],
+          },
+        ],
+        diagnostics: [],
+      }),
+    ).rejects.toThrow("Plugin Tool 'mcp__fixture__echo' conflicts");
+    expect(firstWorkspace.tools.list().some((tool) => tool.name === 'mcp__fixture__echo')).toBe(
+      false,
+    );
+    expect(secondWorkspace.tools.list().some((tool) => tool.name === 'mcp__fixture__echo')).toBe(
+      true,
+    );
+  });
+
+  it('atomically projects plugin Skill generations into global and workspace Pi discovery', async () => {
+    const fixture = await createFixture();
+    const pluginRoot = join(fixture.root, 'plugin');
+    const skillRoot = join(pluginRoot, 'skills');
+    await mkdir(join(skillRoot, 'plugin-fixture'), { recursive: true });
+    await writeFile(
+      join(skillRoot, 'plugin-fixture', 'SKILL.md'),
+      [
+        '---',
+        'name: plugin-fixture',
+        'description: Plugin composition fixture',
+        '---',
+        'Plugin composition Skill body',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    const installed: DesktopExtensionCatalogSnapshot = {
+      revision: `sha256:${'a'.repeat(64)}`,
+      records: [],
+      runtimeDescriptors: [
+        {
+          pluginId: 'fixture@openneko',
+          pluginRoot,
+          skillRoot,
+          mcpServerIds: [],
+          appIds: [],
+        },
+      ],
+      diagnostics: [],
+    };
+
+    await expect(fixture.composition.reconcilePluginRuntime(installed)).resolves.toEqual(
+      new Map([
+        [
+          'fixture@openneko',
+          {
+            status: 'ready',
+            diagnosticCode: '',
+          },
+        ],
+      ]),
+    );
+    expect(await fixture.composition.readGlobalSkillCatalog()).toMatchObject({
+      records: [
+        expect.objectContaining({
+          name: 'plugin-fixture',
+          source: { kind: 'plugin', pluginId: 'fixture@openneko' },
+        }),
+      ],
+    });
+    const workspace = await fixture.composition.attachWorkspace(fixture.workspace);
+    expect(await workspace.readSkillCatalog(true)).toMatchObject({
+      records: expect.arrayContaining([
+        expect.objectContaining({
+          name: 'plugin-fixture',
+          source: { kind: 'plugin', pluginId: 'fixture@openneko' },
+        }),
+      ]),
+    });
+
+    await fixture.composition.reconcilePluginRuntime({
+      revision: `sha256:${'b'.repeat(64)}`,
+      records: [],
+      runtimeDescriptors: [],
+      diagnostics: [],
+    });
+    expect(
+      (await workspace.readSkillCatalog(true)).records.some(
+        (record) => record.source.kind === 'plugin',
+      ),
+    ).toBe(false);
   });
 
   async function createFixture() {

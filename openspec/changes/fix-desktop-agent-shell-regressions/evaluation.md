@@ -4,8 +4,9 @@ Date: 2026-07-31
 
 ## Evaluation Scope
 
-- Change/feature: Desktop Agent cold-start catalog projection, first-mount Host subscription
-  ordering, pending user-message visibility and conversation-scoped send failure projection.
+- Change/feature: Desktop Agent cold-start catalog projection, renderer-startup Agent module
+  preload, first-mount Host subscription ordering, pending user-message visibility and
+  conversation-scoped send failure projection.
 - Decision and owning suite: `reuse` the indexed `agent-runtime.workflow-controller` ownership for
   Desktop session/event behavior. No suite content is changed because the current runner cannot
   drive Electron Desktop composition or renderer projection.
@@ -27,8 +28,9 @@ Date: 2026-07-31
   - deterministic Pi/runtime tests prove exact workspace filtering, read-only catalog access,
     no lease acquisition, lifecycle disposal and fail-visible catalog errors;
   - deterministic Desktop tests prove Shell scopes Home before the first snapshot, Agent module and
-    bootstrap start concurrently, rejected sends become conversation errors, and empty Main accepts
-    `chat-main` but rejects `main-only`;
+    application bootstrap/settings start concurrently in one renderer readiness gate while
+    Project/View bootstrap remains Surface scoped, rejected sends become conversation errors, and
+    empty Main accepts `chat-main` but rejects `main-only`;
   - deterministic Agent Webview tests prove subscription precedes synchronous initialization
     response and one stable optimistic user message is visible before configuration and sent once
     after configuration;
@@ -41,6 +43,11 @@ Date: 2026-07-31
 
 - Key-free validation: `pnpm test:agent:eval` passed with 35 test files, 234 tests, 22 indexed
   suites and 50 dry-run cases; this is harness/schema/index/dry-run evidence only.
+- Renderer-startup validation:
+  `pnpm --filter @neko/app-desktop exec vitest run src/renderer/desktop-agent-module.test.ts src/renderer/desktop-renderer-startup.test.ts src/renderer/DesktopAgentSurface.test.tsx src/renderer/DesktopApplication.test.tsx`
+  passed with 4 files and 15 tests. The startup test first failed because Agent module loading was
+  absent, then passed after the startup and Surface paths were bound to one cached module promise;
+  the loader test additionally proves both callers receive the exact same promise.
 - Real cases and reports: the focused `agent-runtime.workflow-controller` run is recorded at
   `reports/agent-eval/fix-desktop-agent-shell-regressions/local-run-summary.json` with outcome
   `infrastructure-blocked`; no behavior report or provider-backed assertion is claimed.
@@ -57,6 +64,11 @@ Date: 2026-07-31
 - Agent surface evidence: the package Agent Root mounted in the isolated fixture without the
   previous loading stall. The fixture had no configured model, so the input reported no available
   model and a real send/reconciliation path could not be exercised.
+- Renderer-startup preload evidence: the rebuilt production package was launched from Home with a
+  fresh Electron user-data directory and an isolated synthetic workspace. The first Project open
+  mounted exactly one `data-owner-root="agent"` for the exact View identity with no
+  `.desktop-agent-status` loading surface. Canvas, Assets and Agent owner Roots remained distinct,
+  confirming that startup preload did not create a global Project/View adapter.
 - Blocked or unexecuted cases: `agent-runtime.workflow-controller` real execution remains
   `infrastructure-blocked` because no local Agent provider credential environment variable is
   available. Provider-backed send, Tool approval and checkpoint/cleanup are therefore not claimed

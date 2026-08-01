@@ -728,28 +728,8 @@ function HomeTemplateButton({
 }
 
 type HomeAssetSortOption = 'name-ascending' | 'name-descending' | 'modified-descending';
-type HomeNamedSortOption = 'name-ascending' | 'name-descending';
-type HomeSkillSourceFilter = 'all' | DesktopHomeSkillItem['source'];
 type HomeProjectSortOption =
   'updated-descending' | 'updated-ascending' | 'name-ascending' | 'name-descending';
-
-export const DESKTOP_BUILTIN_SKILL_IDS = [
-  'audio-mixing',
-  'color-grading',
-  'image',
-  'media-production',
-  'media-quality-review',
-  'scene-to-music',
-  'script-generation',
-  'script-to-timeline',
-  'skill-creator',
-  'storyboard',
-  'subtitle-assistant',
-  'video',
-  'video-editing',
-] as const;
-
-const DESKTOP_BUILTIN_SKILL_ID_SET: ReadonlySet<string> = new Set(DESKTOP_BUILTIN_SKILL_IDS);
 
 function HomeAssetCenter({ interactive }: { readonly interactive: boolean }): JSX.Element {
   return <DesktopGlobalLibrarySurface interactive={interactive} />;
@@ -758,12 +738,11 @@ function HomeAssetCenter({ interactive }: { readonly interactive: boolean }): JS
 function HomeExtensions({ interactive }: { readonly interactive: boolean }): JSX.Element {
   const { t } = useTranslation();
   const [tab, setTab] = useState<'skills' | 'extensions'>('skills');
-  const [source, setSource] = useState<HomeSkillSourceFilter>('all');
   const [query, setQuery] = useState('');
-  const [sort, setSort] = useState<HomeNamedSortOption>('name-ascending');
   const [catalogRevision, setCatalogRevision] = useState(0);
   const [result, setResult] = useState<DesktopHomeExtensionsResult>();
   const [error, setError] = useState<string>();
+  const [operationKey, setOperationKey] = useState<string>();
   useEffect(() => {
     if (!interactive) return;
     let active = true;
@@ -782,21 +761,30 @@ function HomeExtensions({ interactive }: { readonly interactive: boolean }): JSX
   }, [catalogRevision, interactive]);
   const normalizedQuery = query.trim().toLocaleLowerCase();
   const skills = useMemo(
-    () =>
-      filterAndSortHomeSkills(result?.skills ?? [], normalizedQuery, sort, {
-        source,
-        searchText: (skill) => {
-          const presentation = presentHomeSkill(skill, t);
-          return `${presentation.name} ${presentation.description}`;
-        },
-        sortName: (skill) => presentHomeSkill(skill, t).name,
-      }),
-    [normalizedQuery, result?.skills, sort, source, t],
+    () => searchAndOrderHomeSkills(result?.skills ?? [], normalizedQuery),
+    [normalizedQuery, result?.skills],
   );
   const extensions = useMemo(
-    () => filterAndSortHomeExtensions(result?.extensions ?? [], normalizedQuery, sort),
-    [normalizedQuery, result?.extensions, sort],
+    () => searchAndOrderHomeExtensions(result?.extensions ?? [], normalizedQuery),
+    [normalizedQuery, result?.extensions],
   );
+  const runMutation = useCallback(
+    async (key: string, operation: () => Promise<unknown>): Promise<void> => {
+      if (operationKey) return;
+      setOperationKey(key);
+      setError(undefined);
+      try {
+        await operation();
+        setCatalogRevision((revision) => revision + 1);
+      } catch (reason) {
+        setError(describeError(reason));
+      } finally {
+        setOperationKey(undefined);
+      }
+    },
+    [operationKey],
+  );
+  const expectedRevision = result?.catalogRevision;
   const discoveryIssueCount =
     (result?.skillDiscovery.diagnostics.reduce(
       (total, diagnostic) => total + diagnostic.count,
@@ -819,11 +807,36 @@ function HomeExtensions({ interactive }: { readonly interactive: boolean }): JSX
           <button
             type="button"
             className="home-management-refresh"
-            disabled={!interactive}
-            onClick={() => setCatalogRevision((revision) => revision + 1)}
+            disabled={!interactive || !expectedRevision || operationKey !== undefined}
+            onClick={() => {
+              if (!expectedRevision) return;
+              void runMutation('marketplaces-refresh', () =>
+                window.openNekoDesktop.home.extensions.refreshMarketplaces(expectedRevision),
+              );
+            }}
           >
-            {t('home.capabilities.refresh')}
+            {operationKey === 'marketplaces-refresh'
+              ? t('home.capabilities.refreshing')
+              : t('home.capabilities.refresh')}
           </button>
+          {tab === 'skills' ? (
+            <button
+              type="button"
+              className="home-management-primary-action"
+              disabled={!interactive || !expectedRevision || operationKey !== undefined}
+              onClick={() => {
+                if (!expectedRevision) return;
+                void runMutation('personal-skill-install', () =>
+                  window.openNekoDesktop.home.extensions.installPersonalSkill(expectedRevision),
+                );
+              }}
+            >
+              <PlusIcon size={14} />
+              {operationKey === 'personal-skill-install'
+                ? t('home.capabilities.installing')
+                : t('home.capabilities.addSkill')}
+            </button>
+          ) : null}
         </div>
       </header>
       <div className="home-management-toolbar">
@@ -837,33 +850,6 @@ function HomeExtensions({ interactive }: { readonly interactive: boolean }): JSX
           />
         </label>
         <div className="home-management-toolbar-actions">
-          {tab === 'skills' ? (
-            <label className="home-sort-control">
-              <span>{t('home.capabilities.source.label')}</span>
-              <select
-                aria-label={t('home.capabilities.source.label')}
-                value={source}
-                onChange={(event) =>
-                  setSource(parseHomeSkillSourceFilter(event.currentTarget.value))
-                }
-              >
-                <option value="all">{t('home.capabilities.source.all')}</option>
-                <option value="personal">{t('home.capabilities.source.personal')}</option>
-                <option value="builtin">{t('home.capabilities.source.builtin')}</option>
-              </select>
-            </label>
-          ) : null}
-          <label className="home-sort-control">
-            <span>{t('home.sort.label')}</span>
-            <select
-              aria-label={t('home.capabilities.sort')}
-              value={sort}
-              onChange={(event) => setSort(parseHomeNamedSortOption(event.currentTarget.value))}
-            >
-              <option value="name-ascending">{t('home.sort.nameAscending')}</option>
-              <option value="name-descending">{t('home.sort.nameDescending')}</option>
-            </select>
-          </label>
           <div className="home-segmented-control" aria-label={t('home.capabilities.tabs')}>
             <button
               type="button"
@@ -897,23 +883,51 @@ function HomeExtensions({ interactive }: { readonly interactive: boolean }): JSX
           ) : null}
           {tab === 'skills' ? (
             <div className="home-management-grid">
-              {skills.map((skill) => {
-                const presentation = presentHomeSkill(skill, t);
-                return (
-                  <article className="home-management-card" key={`${skill.source}:${skill.name}`}>
-                    <span className="home-management-card-icon">
-                      <PackageIcon size={18} />
-                    </span>
-                    <span>
-                      <strong>{presentation.name}</strong>
-                      <small>{presentation.description || skill.source}</small>
-                    </span>
+              {skills.map((skill) => (
+                <article className="home-management-card" key={skill.id}>
+                  <span className="home-management-card-icon">
+                    <PackageIcon size={18} />
+                  </span>
+                  <span>
+                    <strong>{skill.name}</strong>
+                    <small>{skill.description || skill.source}</small>
+                  </span>
+                  <span className="home-management-card-actions">
                     <span className="home-status-badge">
                       {t(`home.capabilities.source.${skill.source}`)}
                     </span>
-                  </article>
-                );
-              })}
+                    {skill.canRemove ? (
+                      <button
+                        type="button"
+                        className="is-danger"
+                        disabled={!expectedRevision || operationKey !== undefined}
+                        title={t('home.capabilities.removeSkill')}
+                        onClick={() => {
+                          if (
+                            !expectedRevision ||
+                            !window.confirm(
+                              t('home.capabilities.confirmRemoveSkill', {
+                                name: skill.name,
+                              }),
+                            )
+                          ) {
+                            return;
+                          }
+                          void runMutation(`skill-remove:${skill.id}`, () =>
+                            window.openNekoDesktop.home.extensions.removePersonalSkill(
+                              skill.managementId,
+                              expectedRevision,
+                            ),
+                          );
+                        }}
+                      >
+                        <TrashIcon size={13} />
+                        {t('home.capabilities.remove')}
+                      </button>
+                    ) : null}
+                  </span>
+                </article>
+              ))}
               {result && skills.length === 0 ? (
                 <HomeManagementEmpty
                   icon={<PackageIcon size={22} />}
@@ -926,17 +940,91 @@ function HomeExtensions({ interactive }: { readonly interactive: boolean }): JSX
               {extensions.map((extension) => (
                 <article className="home-management-card" key={extension.id}>
                   <span className="home-management-card-icon">
-                    <PackageIcon size={18} />
+                    {extension.iconDataUrl ? (
+                      <img alt="" src={extension.iconDataUrl} />
+                    ) : (
+                      <PackageIcon size={18} />
+                    )}
                   </span>
                   <span>
                     <strong>{extension.displayName}</strong>
                     <small>{extension.description || extension.id}</small>
+                    <small>
+                      {extension.developer || extension.marketplace} · {extension.version} ·{' '}
+                      {t(
+                        extension.installed
+                          ? 'home.capabilities.status.installed'
+                          : 'home.capabilities.status.available',
+                      )}
+                    </small>
                     <small title={formatHomeExtensionContributions(extension, t)}>
                       {formatHomeExtensionContributions(extension, t)}
                     </small>
                   </span>
-                  <span className="home-status-badge">
-                    {extension.developer || extension.marketplace} · {extension.version}
+                  <span className="home-management-card-actions">
+                    <span
+                      className={`home-status-badge ${
+                        extension.agentStatus === 'ready' ? 'is-ready' : ''
+                      }`}
+                      title={extension.runtimeDiagnosticCode}
+                    >
+                      {t(`home.capabilities.agentStatus.${extension.agentStatus}`)}
+                    </span>
+                    {extension.canInstall ? (
+                      <button
+                        type="button"
+                        disabled={!expectedRevision || operationKey !== undefined}
+                        onClick={() => {
+                          if (
+                            !expectedRevision ||
+                            !window.confirm(
+                              t('home.capabilities.confirmInstallPlugin', {
+                                name: extension.displayName,
+                              }),
+                            )
+                          ) {
+                            return;
+                          }
+                          void runMutation(`plugin-install:${extension.id}`, () =>
+                            window.openNekoDesktop.home.extensions.installPlugin(
+                              extension.id,
+                              expectedRevision,
+                            ),
+                          );
+                        }}
+                      >
+                        <PlusIcon size={13} />
+                        {t('home.capabilities.install')}
+                      </button>
+                    ) : null}
+                    {extension.canRemove ? (
+                      <button
+                        type="button"
+                        className="is-danger"
+                        disabled={!expectedRevision || operationKey !== undefined}
+                        onClick={() => {
+                          if (
+                            !expectedRevision ||
+                            !window.confirm(
+                              t('home.capabilities.confirmRemovePlugin', {
+                                name: extension.displayName,
+                              }),
+                            )
+                          ) {
+                            return;
+                          }
+                          void runMutation(`plugin-remove:${extension.id}`, () =>
+                            window.openNekoDesktop.home.extensions.removePlugin(
+                              extension.id,
+                              expectedRevision,
+                            ),
+                          );
+                        }}
+                      >
+                        <TrashIcon size={13} />
+                        {t('home.capabilities.remove')}
+                      </button>
+                    ) : null}
                   </span>
                 </article>
               ))}
@@ -1069,41 +1157,27 @@ function HomeAllProjects({
   );
 }
 
-export function filterAndSortHomeSkills(
+export function searchAndOrderHomeSkills(
   skills: readonly DesktopHomeSkillItem[],
   query: string,
-  sort: HomeNamedSortOption,
-  options: {
-    readonly source?: HomeSkillSourceFilter;
-    readonly searchText?: (skill: DesktopHomeSkillItem) => string;
-    readonly sortName?: (skill: DesktopHomeSkillItem) => string;
-  } = {},
 ): readonly DesktopHomeSkillItem[] {
   const normalizedQuery = query.trim().toLocaleLowerCase();
-  const source = options.source ?? 'all';
   return [...skills]
-    .filter((skill) => source === 'all' || skill.source === source)
-    .filter((skill) => {
-      const localizedText = options.searchText?.(skill) ?? '';
-      return `${skill.name} ${skill.description} ${skill.source} ${localizedText}`
+    .filter((skill) =>
+      `${skill.name} ${skill.description} ${skill.source}`
         .toLocaleLowerCase()
-        .includes(normalizedQuery);
-    })
+        .includes(normalizedQuery),
+    )
     .sort((left, right) => {
       const sourceCompared = homeSkillSourceRank(left.source) - homeSkillSourceRank(right.source);
       if (sourceCompared !== 0) return sourceCompared;
-      const nameCompared = (options.sortName?.(left) ?? left.name).localeCompare(
-        options.sortName?.(right) ?? right.name,
-      );
-      if (nameCompared !== 0) return sort === 'name-ascending' ? nameCompared : -nameCompared;
       return left.name.localeCompare(right.name);
     });
 }
 
-export function filterAndSortHomeExtensions(
+export function searchAndOrderHomeExtensions(
   extensions: readonly DesktopHomeExtensionItem[],
   query: string,
-  sort: HomeNamedSortOption,
 ): readonly DesktopHomeExtensionItem[] {
   const normalizedQuery = query.trim().toLocaleLowerCase();
   return [...extensions]
@@ -1115,6 +1189,7 @@ export function filterAndSortHomeExtensions(
         extension.description,
         extension.developer,
         extension.marketplace,
+        extension.category,
         ...extension.mcpServerIds,
         ...extension.appIds,
       ]
@@ -1123,11 +1198,26 @@ export function filterAndSortHomeExtensions(
         .includes(normalizedQuery),
     )
     .sort((left, right) => {
-      const compared =
-        left.displayName.localeCompare(right.displayName) ||
-        left.id.localeCompare(right.id);
-      return sort === 'name-ascending' ? compared : -compared;
+      const relevanceCompared =
+        homeExtensionCategoryRank(left.category) - homeExtensionCategoryRank(right.category);
+      if (relevanceCompared !== 0) return relevanceCompared;
+      if (left.installed !== right.installed) return left.installed ? -1 : 1;
+      return left.displayName.localeCompare(right.displayName) || left.id.localeCompare(right.id);
     });
+}
+
+function homeExtensionCategoryRank(category: string): number {
+  switch (category.trim().toLocaleLowerCase()) {
+    case 'creativity':
+      return 0;
+    case 'productivity':
+      return 1;
+    case 'data & analytics':
+    case 'education & research':
+      return 2;
+    default:
+      return 3;
+  }
 }
 
 export function filterAndSortHomeProjects(
@@ -1150,19 +1240,6 @@ export function filterAndSortHomeProjects(
         left.projectId.localeCompare(right.projectId);
       return sort === 'updated-ascending' ? compared : -compared;
     });
-}
-
-export function presentHomeSkill(
-  skill: DesktopHomeSkillItem,
-  t: TranslationFunction,
-): { readonly name: string; readonly description: string } {
-  if (skill.source !== 'builtin' || !DESKTOP_BUILTIN_SKILL_ID_SET.has(skill.name)) {
-    return { name: skill.name, description: skill.description };
-  }
-  return {
-    name: t(`home.capabilities.builtinSkill.${skill.name}.name`),
-    description: t(`home.capabilities.builtinSkill.${skill.name}.description`),
-  };
 }
 
 function formatHomeExtensionContributions(
@@ -1195,27 +1272,6 @@ export function parseHomeAssetSortOption(value: string): HomeAssetSortOption {
       return value;
     default:
       throw new Error(`Unknown Home asset sort option: ${value}`);
-  }
-}
-
-export function parseHomeNamedSortOption(value: string): HomeNamedSortOption {
-  switch (value) {
-    case 'name-ascending':
-    case 'name-descending':
-      return value;
-    default:
-      throw new Error(`Unknown Home catalog sort option: ${value}`);
-  }
-}
-
-export function parseHomeSkillSourceFilter(value: string): HomeSkillSourceFilter {
-  switch (value) {
-    case 'all':
-    case 'personal':
-    case 'builtin':
-      return value;
-    default:
-      throw new Error(`Unknown Home Skill source filter: ${value}`);
   }
 }
 
@@ -1301,9 +1357,7 @@ function ContentProjectWorkspace({
       tab={tab}
     />
   );
-  const resourceDockPresentation = useResourceDockPresentation(
-    workbench.resourceDock.presentation,
-  );
+  const resourceDockPresentation = useResourceDockPresentation(workbench.resourceDock.presentation);
   const resourceDock =
     resourceDockPresentation === 'hidden'
       ? undefined
@@ -1363,12 +1417,7 @@ function ContentProjectWorkspace({
       ? ('left' as const)
       : workbench.display.chatPosition;
   const leftDock = createAgentDock(workbench, 'left', effectiveAgentPosition, agentDock);
-  const rightAgentDock = createAgentDock(
-    workbench,
-    'right',
-    effectiveAgentPosition,
-    agentDock,
-  );
+  const rightAgentDock = createAgentDock(workbench, 'right', effectiveAgentPosition, agentDock);
   const rightDock = resourceDock ?? rightAgentDock;
   const resourceControl = (
     <WorkbenchIconButton
@@ -1980,8 +2029,7 @@ function createProjectDockResizeBinding({
 }: {
   readonly actions: ShellActions;
   readonly dock:
-    | NonNullable<ReturnType<typeof createAgentDock>>
-    | ReturnType<typeof createResourceDock>;
+    NonNullable<ReturnType<typeof createAgentDock>> | ReturnType<typeof createResourceDock>;
   readonly label: string;
   readonly workbench: DesktopWorkbenchLayoutProjection;
 }) {
@@ -2210,11 +2258,7 @@ function CreativeMainPlaceholder({
   );
 }
 
-function ResourceBrowserUnavailable({
-  diagnostic,
-}: {
-  readonly diagnostic: string;
-}): JSX.Element {
+function ResourceBrowserUnavailable({ diagnostic }: { readonly diagnostic: string }): JSX.Element {
   const { t } = useTranslation();
   return (
     <section className="resource-browser-unavailable" aria-label={t('workspace.resources')}>

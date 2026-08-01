@@ -41,6 +41,14 @@ import type {
 } from '../shared/shell-contract';
 import type { DesktopAgentCredentialRuntime } from './desktop-agent-credential-runtime';
 import type { DesktopWorkspaceResolution } from './desktop-workspace-registry';
+import type {
+  DesktopExtensionCatalogSnapshot,
+  DesktopExtensionRuntimeReadiness,
+} from './desktop-extension-manager';
+import {
+  buildDesktopPluginRuntimeGeneration,
+  type DesktopPluginRuntimeGeneration,
+} from './desktop-plugin-runtime';
 
 export interface DesktopAgentConversationOpenInput {
   readonly conversationId: string;
@@ -143,6 +151,10 @@ export interface DesktopAgentAppHostComposition {
   attachWorkspace(workspace: DesktopWorkspaceResolution): Promise<DesktopAgentWorkspaceRuntime>;
   getWorkspace(workspaceId: string): DesktopAgentWorkspaceRuntime | undefined;
   readGlobalSkillCatalog(): Promise<DesktopAgentSkillCatalog>;
+  hasActiveTurns(): boolean;
+  reconcilePluginRuntime(
+    snapshot: DesktopExtensionCatalogSnapshot,
+  ): Promise<ReadonlyMap<string, DesktopExtensionRuntimeReadiness>>;
   readHomeProjection(): DesktopAgentHomeProjection;
   subscribeHomeProjection(listener: () => void): () => void;
   dispose(): Promise<void>;
@@ -171,6 +183,8 @@ class DefaultDesktopAgentAppHostComposition implements DesktopAgentAppHostCompos
   private readonly homeProjectionListeners = new Set<() => void>();
   private homeWorkspaceScope: readonly string[] = [];
   private homeProjectionRevision = 0;
+  private pluginGeneration: DesktopPluginRuntimeGeneration | undefined;
+  private pluginRuntimeChanging = false;
   private disposed = false;
 
   constructor(private readonly options: CreateDesktopAgentAppHostCompositionOptions) {
@@ -244,8 +258,53 @@ class DefaultDesktopAgentAppHostComposition implements DesktopAgentAppHostCompos
         isTrusted: () => true,
         isEnabled: () => true,
       },
-    }).discover(roots);
+    }).discover([...roots, ...(this.pluginGeneration?.skillRoots ?? [])]);
     return projectDesktopAgentSkillCatalog(snapshot);
+  }
+
+  hasActiveTurns(): boolean {
+    this.requireActive();
+    return [...this.workspaces.values()].some((workspace) => workspace.hasActiveTurns());
+  }
+
+  async reconcilePluginRuntime(
+    snapshot: DesktopExtensionCatalogSnapshot,
+  ): Promise<ReadonlyMap<string, DesktopExtensionRuntimeReadiness>> {
+    this.requireActive();
+    if (this.pluginGeneration?.revision === snapshot.revision) {
+      return this.pluginGeneration.readiness;
+    }
+    if (this.pluginRuntimeChanging) {
+      throw new Error('Desktop plugin runtime generation is already changing.');
+    }
+    this.pluginRuntimeChanging = true;
+    try {
+      if (this.hasActiveTurns()) {
+        throw new Error('Desktop plugin runtime cannot change while an Agent turn is active.');
+      }
+      const next = await buildDesktopPluginRuntimeGeneration(snapshot);
+      if (this.hasActiveTurns()) {
+        await next.dispose();
+        throw new Error('Desktop plugin runtime cannot change while an Agent turn is active.');
+      }
+      try {
+        for (const workspace of this.workspaces.values()) {
+          workspace.assertPluginGenerationCompatible(next);
+        }
+        for (const workspace of this.workspaces.values()) {
+          workspace.applyPluginGeneration(next);
+        }
+      } catch (error) {
+        await next.dispose();
+        throw error;
+      }
+      const previous = this.pluginGeneration;
+      this.pluginGeneration = next;
+      await previous?.dispose();
+      return next.readiness;
+    } finally {
+      this.pluginRuntimeChanging = false;
+    }
   }
 
   readHomeProjection(): DesktopAgentHomeProjection {
@@ -296,6 +355,10 @@ class DefaultDesktopAgentAppHostComposition implements DesktopAgentAppHostCompos
     this.workspaces.clear();
     this.opening.clear();
     this.homeProjectionListeners.clear();
+    const pluginResult = await Promise.allSettled([
+      this.pluginGeneration?.dispose() ?? Promise.resolve(),
+    ]);
+    this.pluginGeneration = undefined;
     let catalogError: unknown;
     try {
       this.options.catalogReader.dispose();
@@ -311,6 +374,7 @@ class DefaultDesktopAgentAppHostComposition implements DesktopAgentAppHostCompos
     const errors = [
       ...pending.flatMap((result) => (result.status === 'rejected' ? [result.reason] : [])),
       ...results.flatMap((result) => (result.status === 'rejected' ? [result.reason] : [])),
+      ...pluginResult.flatMap((result) => (result.status === 'rejected' ? [result.reason] : [])),
       ...(catalogError === undefined ? [] : [catalogError]),
       ...(credentialError === undefined ? [] : [credentialError]),
     ];
@@ -342,7 +406,9 @@ class DefaultDesktopAgentAppHostComposition implements DesktopAgentAppHostCompos
       createIdentity: this.options.createIdentity ?? randomUUID,
       credentialRuntime: this.options.credentialRuntime,
       onHomeProjectionChanged: this.emitHomeProjectionChanged,
+      canStartTurn: () => !this.pluginRuntimeChanging,
     });
+    if (this.pluginGeneration) runtime.applyPluginGeneration(this.pluginGeneration);
     this.workspaces.set(workspace.workspaceId, runtime);
     this.emitHomeProjectionChanged();
     return runtime;
@@ -368,6 +434,7 @@ interface DefaultDesktopAgentWorkspaceRuntimeOptions {
   readonly createIdentity: () => string;
   readonly credentialRuntime: DesktopAgentCredentialRuntime;
   readonly onHomeProjectionChanged: () => void;
+  readonly canStartTurn: () => boolean;
 }
 
 class DefaultDesktopAgentWorkspaceRuntime implements DesktopAgentWorkspaceRuntime {
@@ -377,6 +444,8 @@ class DefaultDesktopAgentWorkspaceRuntime implements DesktopAgentWorkspaceRuntim
   private readonly projections = new Map<string, ConversationProjectionStore>();
   private readonly opening = new Map<string, Promise<DesktopAgentConversationOwner>>();
   private readonly activeTurnOperations = new Set<Promise<DesktopAgentTurnResult>>();
+  private pluginSkillRoots: readonly SkillSourceRoot[] = [];
+  private readonly pluginToolNames = new Set<string>();
   private disposed = false;
 
   constructor(private readonly options: DefaultDesktopAgentWorkspaceRuntimeOptions) {
@@ -453,6 +522,9 @@ class DefaultDesktopAgentWorkspaceRuntime implements DesktopAgentWorkspaceRuntim
 
   startTurn(input: DesktopAgentTurnInput): DesktopAgentTurnOperation {
     this.requireActive();
+    if (!this.options.canStartTurn()) {
+      throw new Error('Desktop Agent cannot start a turn while plugin runtime is changing.');
+    }
     const owner = this.requireConversation(input.conversationId);
     const identity: PiToolRunIdentity = Object.freeze({
       workspaceId: this.workspaceId,
@@ -472,6 +544,35 @@ class DefaultDesktopAgentWorkspaceRuntime implements DesktopAgentWorkspaceRuntim
 
   executeTurn(input: DesktopAgentTurnInput): Promise<DesktopAgentTurnResult> {
     return this.startTurn(input).completion;
+  }
+
+  hasActiveTurns(): boolean {
+    return this.activeTurnOperations.size > 0;
+  }
+
+  assertPluginGenerationCompatible(generation: DesktopPluginRuntimeGeneration): void {
+    this.requireActive();
+    if (this.hasActiveTurns()) {
+      throw new Error(
+        `Desktop Agent workspace '${this.workspaceId}' cannot replace plugin Tools during an active turn.`,
+      );
+    }
+    for (const tool of generation.tools) {
+      if (this.tools.has(tool.name) && !this.pluginToolNames.has(tool.name)) {
+        throw new Error(`Plugin Tool '${tool.name}' conflicts with a registered Tool.`);
+      }
+    }
+  }
+
+  applyPluginGeneration(generation: DesktopPluginRuntimeGeneration): void {
+    this.assertPluginGenerationCompatible(generation);
+    for (const name of this.pluginToolNames) this.tools.unregister(name);
+    this.pluginToolNames.clear();
+    for (const tool of generation.tools) {
+      this.tools.register(tool);
+      this.pluginToolNames.add(tool.name);
+    }
+    this.pluginSkillRoots = generation.skillRoots;
   }
 
   private async executeTurnOwned(
@@ -805,7 +906,7 @@ class DefaultDesktopAgentWorkspaceRuntime implements DesktopAgentWorkspaceRuntim
         isTrusted: ({ source }) => source.kind !== 'project' || workspaceTrusted,
         isEnabled: () => true,
       },
-    }).discover(roots);
+    }).discover([...roots, ...this.pluginSkillRoots]);
   }
 
   private requireConversation(conversationId: string): DesktopAgentConversationOwner {

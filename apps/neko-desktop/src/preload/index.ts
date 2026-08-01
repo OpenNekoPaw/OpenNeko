@@ -120,7 +120,10 @@ import {
   createDesktopHomeMediaLibraryChildrenRequest,
   createDesktopHomeMediaLibraryRequest,
   createDesktopHomeMediaLibrarySearchRequest,
+  createDesktopHomeCatalogMutationRequest,
   createDesktopHomeExtensionsRequest,
+  createDesktopHomePersonalSkillRemoveRequest,
+  createDesktopHomePluginMutationRequest,
   DESKTOP_HOME_MANAGEMENT_CHANNELS,
   parseDesktopHomeAssetImportResult,
   parseDesktopHomeAssetRemoveResult,
@@ -132,6 +135,7 @@ import {
   parseDesktopHomeMediaLibraryRemoveResult,
   parseDesktopHomeMediaLibraryRevealResult,
   parseDesktopHomeMediaLibrarySearchResult,
+  parseDesktopHomeExtensionMutationResult,
   parseDesktopHomeExtensionsResult,
   type OpenNekoDesktopHomeManagementBridge,
 } from '../shared/home-management-contract';
@@ -483,6 +487,69 @@ const bridge: OpenNekoDesktopBridge &
           request,
         );
         return parseDesktopHomeExtensionsResult(response, request.requestId);
+      },
+      async installPlugin(pluginId, expectedCatalogRevision) {
+        const request = createDesktopHomePluginMutationRequest(
+          nextRequestId('desktop-home-plugin-install'),
+          requireDesktopEndpointEpoch(),
+          pluginId,
+          expectedCatalogRevision,
+        );
+        const response: unknown = await ipcRenderer.invoke(
+          DESKTOP_HOME_MANAGEMENT_CHANNELS.extensionPluginInstall,
+          request,
+        );
+        return parseDesktopHomeExtensionMutationResult(response, request.requestId);
+      },
+      async removePlugin(pluginId, expectedCatalogRevision) {
+        const request = createDesktopHomePluginMutationRequest(
+          nextRequestId('desktop-home-plugin-remove'),
+          requireDesktopEndpointEpoch(),
+          pluginId,
+          expectedCatalogRevision,
+        );
+        const response: unknown = await ipcRenderer.invoke(
+          DESKTOP_HOME_MANAGEMENT_CHANNELS.extensionPluginRemove,
+          request,
+        );
+        return parseDesktopHomeExtensionMutationResult(response, request.requestId);
+      },
+      async refreshMarketplaces(expectedCatalogRevision) {
+        const request = createDesktopHomeCatalogMutationRequest(
+          nextRequestId('desktop-home-marketplaces-refresh'),
+          requireDesktopEndpointEpoch(),
+          expectedCatalogRevision,
+        );
+        const response: unknown = await ipcRenderer.invoke(
+          DESKTOP_HOME_MANAGEMENT_CHANNELS.extensionMarketplacesRefresh,
+          request,
+        );
+        return parseDesktopHomeExtensionMutationResult(response, request.requestId);
+      },
+      async installPersonalSkill(expectedCatalogRevision) {
+        const request = createDesktopHomeCatalogMutationRequest(
+          nextRequestId('desktop-home-personal-skill-install'),
+          requireDesktopEndpointEpoch(),
+          expectedCatalogRevision,
+        );
+        const response: unknown = await ipcRenderer.invoke(
+          DESKTOP_HOME_MANAGEMENT_CHANNELS.extensionPersonalSkillInstall,
+          request,
+        );
+        return parseDesktopHomeExtensionMutationResult(response, request.requestId);
+      },
+      async removePersonalSkill(managementId, expectedCatalogRevision) {
+        const request = createDesktopHomePersonalSkillRemoveRequest(
+          nextRequestId('desktop-home-personal-skill-remove'),
+          requireDesktopEndpointEpoch(),
+          managementId,
+          expectedCatalogRevision,
+        );
+        const response: unknown = await ipcRenderer.invoke(
+          DESKTOP_HOME_MANAGEMENT_CHANNELS.extensionPersonalSkillRemove,
+          request,
+        );
+        return parseDesktopHomeExtensionMutationResult(response, request.requestId);
       },
     },
   },

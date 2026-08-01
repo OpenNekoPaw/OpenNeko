@@ -14,6 +14,7 @@ import {
   createDesktopHomeMediaLibraryAddRequest,
   createDesktopHomeMediaLibraryRequest,
   createDesktopHomeExtensionsRequest,
+  createDesktopHomePluginMutationRequest,
 } from '../shared/home-management-contract';
 import {
   createDesktopConversationDeleteRequest,
@@ -43,9 +44,10 @@ import {
 } from './application-settings-repository';
 import { DesktopApplicationSettingsService } from './application-settings-service';
 import type {
-  DesktopExtensionCatalogReader,
   DesktopExtensionCatalogSnapshot,
-} from './desktop-extension-catalog-reader';
+  DesktopExtensionManager,
+} from './desktop-extension-manager';
+import type { DesktopPersonalSkillManager } from './desktop-personal-skill-manager';
 
 describe('DesktopAppHost', () => {
   it('keeps Desktop settings sender-bound and opens Agent configuration through its owner action', async () => {
@@ -65,7 +67,8 @@ describe('DesktopAppHost', () => {
       logger,
       shell: createShellService('app-1'),
       agent: createAgentComposition(),
-      extensionCatalog: createExtensionCatalog(),
+      extensionManager: createExtensionManager(),
+      personalSkillManager: createPersonalSkillManager(),
       settings,
       openAgentAdvancedSettings,
     });
@@ -136,7 +139,8 @@ describe('DesktopAppHost', () => {
       logger,
       shell: createShellService('app-1'),
       agent: createAgentComposition(),
-      extensionCatalog: createExtensionCatalog(),
+      extensionManager: createExtensionManager(),
+      personalSkillManager: createPersonalSkillManager(),
       settings: createSettingsService(),
       openAgentAdvancedSettings: vi.fn(async () => undefined),
     });
@@ -189,7 +193,8 @@ describe('DesktopAppHost', () => {
       logger,
       shell: createShellService('app-1'),
       agent,
-      extensionCatalog: createExtensionCatalog(),
+      extensionManager: createExtensionManager(),
+      personalSkillManager: createPersonalSkillManager(),
       settings: createSettingsService(),
       openAgentAdvancedSettings: vi.fn(async () => undefined),
     });
@@ -489,6 +494,19 @@ describe('DesktopAppHost', () => {
     fixture.agent.readGlobalSkillCatalog.mockResolvedValue({
       records: [
         {
+          name: 'audio-mixing',
+          description: 'Mix audio.',
+          source: { kind: 'builtin' as const },
+          trusted: true,
+          enabled: true,
+          fingerprint: 'builtin-must-stay-in-main',
+          locator: {
+            kind: 'skill' as const,
+            value: '/Applications/OpenNeko.app/Contents/Resources/skills/audio-mixing/SKILL.md',
+            fingerprint: 'builtin-must-stay-in-main',
+          },
+        },
+        {
           name: 'story-planner',
           description: 'Plan a story.',
           source: { kind: 'personal' as const },
@@ -501,8 +519,25 @@ describe('DesktopAppHost', () => {
             fingerprint: 'must-stay-in-main',
           },
         },
+        {
+          name: 'shot-list',
+          description: 'Build a shot list.',
+          source: { kind: 'plugin' as const, pluginId: 'story-tools@openneko' },
+          trusted: true,
+          enabled: true,
+          fingerprint: 'plugin-must-stay-in-main',
+          locator: {
+            kind: 'skill' as const,
+            value: '/Users/fixture/.openneko/extensions/story-tools/shot-list/SKILL.md',
+            fingerprint: 'plugin-must-stay-in-main',
+          },
+        },
       ],
       diagnostics: [
+        {
+          code: 'invalid_metadata' as const,
+          source: 'builtin' as const,
+        },
         {
           code: 'invalid_metadata' as const,
           source: 'personal' as const,
@@ -519,24 +554,40 @@ describe('DesktopAppHost', () => {
           selectedSource: 'personal' as const,
           shadowedSource: 'builtin' as const,
         },
+        {
+          code: 'duplicate-skill' as const,
+          skillName: 'story-planner',
+          selectedSource: 'personal' as const,
+          shadowedSource: 'plugin' as const,
+        },
       ],
     });
-    fixture.extensionCatalog.readCatalog.mockResolvedValue({
+    fixture.extensionManager.readCatalog.mockResolvedValue({
+      revision: `sha256:${'a'.repeat(64)}`,
       records: [
         {
-          id: 'computer-use@openai-bundled',
+          id: 'computer-use@openneko',
           name: 'computer-use',
           displayName: 'Computer Use',
           description: 'Control Mac apps.',
           version: '1.0.2',
           developer: 'OpenAI',
-          marketplace: 'openai-bundled',
+          marketplace: 'openneko',
+          category: 'Productivity',
+          installed: true,
+          enabled: true,
+          canInstall: false,
+          canRemove: true,
+          agentStatus: 'ready',
+          runtimeDiagnosticCode: '',
+          iconDataUrl: '',
           mcpServerIds: ['computer-use'],
           hasSkills: true,
           appIds: [],
         },
       ],
-      diagnostics: [{ code: 'package_missing', count: 1 }],
+      runtimeDescriptors: [],
+      diagnostics: [{ code: 'runtime_failed', count: 1 }],
     });
     const result = await fixture.appHost.listHomeExtensions(
       fixture.sender,
@@ -545,9 +596,22 @@ describe('DesktopAppHost', () => {
 
     expect(result.skills).toEqual([
       {
+        id: 'personal:personal:story-planner',
         name: 'story-planner',
         description: 'Plan a story.',
         source: 'personal',
+        sourceId: 'personal',
+        managementId: '',
+        canRemove: false,
+      },
+      {
+        id: 'plugin:story-tools@openneko:shot-list',
+        name: 'shot-list',
+        description: 'Build a shot list.',
+        source: 'plugin',
+        sourceId: 'story-tools@openneko',
+        managementId: '',
+        canRemove: false,
       },
     ]);
     expect(result.skillDiscovery).toEqual({
@@ -556,18 +620,20 @@ describe('DesktopAppHost', () => {
     });
     expect(result.extensions).toEqual([
       expect.objectContaining({
-        id: 'computer-use@openai-bundled',
+        id: 'computer-use@openneko',
         mcpServerIds: ['computer-use'],
         hasSkills: true,
       }),
     ]);
     expect(result.extensionDiscovery).toEqual({
-      diagnostics: [{ code: 'package_missing', count: 1 }],
+      diagnostics: [{ code: 'runtime_failed', count: 1 }],
     });
     expect(fixture.agent.attachWorkspace).not.toHaveBeenCalled();
     expect(JSON.stringify(result)).not.toContain('must-stay-in-main');
     expect(JSON.stringify(result)).not.toContain('/Users/fixture');
     expect(JSON.stringify(result)).not.toContain('story-planner/SKILL.md');
+    expect(JSON.stringify(result)).not.toContain('audio-mixing');
+    expect(JSON.stringify(result)).not.toContain('builtin-must-stay-in-main');
     expect(JSON.stringify(result)).not.toContain('ownerSlice');
     expect(JSON.stringify(result)).not.toContain('canvas');
     expect(JSON.stringify(result)).not.toContain('command');
@@ -583,7 +649,26 @@ describe('DesktopAppHost', () => {
       ),
     ).rejects.toThrow('endpoint identity is stale');
     expect(fixture.agent.readGlobalSkillCatalog).not.toHaveBeenCalled();
-    expect(fixture.extensionCatalog.readCatalog).not.toHaveBeenCalled();
+    expect(fixture.extensionManager.readCatalog).not.toHaveBeenCalled();
+  });
+
+  it('rejects plugin mutation while an Agent turn is active before changing the repository', async () => {
+    const fixture = await createShellAppHost();
+    vi.mocked(fixture.agent.hasActiveTurns).mockReturnValue(true);
+    const catalogRevision = `sha256:${'a'.repeat(64)}`;
+
+    await expect(
+      fixture.appHost.removeHomeExtensionPlugin(
+        fixture.sender,
+        createDesktopHomePluginMutationRequest(
+          'plugin-remove-1',
+          fixture.projection.endpointEpoch,
+          'computer-use@openneko',
+          catalogRevision,
+        ),
+      ),
+    ).rejects.toThrow('Agent turn is active');
+    expect(fixture.extensionManager.removePlugin).not.toHaveBeenCalled();
   });
 
   it('derives the Agent View grant from Shell and keeps incomplete startup unavailable', async () => {
@@ -717,7 +802,7 @@ async function createShellAppHost(options?: {
   const logger = createLogger();
   const fixture = createShellFixture('app-1');
   const agent = createAgentComposition();
-  const extensionCatalog = createExtensionCatalog();
+  const extensionManager = createExtensionManager();
   const appHost = new DesktopAppHost({
     host: createElectronNekoHostPorts({
       homedir: '/Users/fixture',
@@ -730,7 +815,8 @@ async function createShellAppHost(options?: {
     logger,
     shell: fixture.service,
     agent,
-    extensionCatalog,
+    extensionManager,
+    personalSkillManager: createPersonalSkillManager(),
     settings: createSettingsService(),
     openAgentAdvancedSettings: vi.fn(async () => undefined),
   });
@@ -746,7 +832,7 @@ async function createShellAppHost(options?: {
   return {
     appHost,
     agent,
-    extensionCatalog,
+    extensionManager,
     registry: fixture.registry,
     windowId,
     sender: {
@@ -757,14 +843,28 @@ async function createShellAppHost(options?: {
   };
 }
 
-function createExtensionCatalog(): DesktopExtensionCatalogReader & {
+function createExtensionManager(): DesktopExtensionManager & {
   readonly readCatalog: ReturnType<typeof vi.fn<() => Promise<DesktopExtensionCatalogSnapshot>>>;
 } {
   return {
     readCatalog: vi.fn<() => Promise<DesktopExtensionCatalogSnapshot>>(async () => ({
+      revision: `sha256:${'a'.repeat(64)}`,
       records: [],
+      runtimeDescriptors: [],
       diagnostics: [],
     })),
+    installPlugin: vi.fn(),
+    removePlugin: vi.fn(),
+    refreshMarketplaces: vi.fn(),
+    setRuntimeReadiness: vi.fn(),
+  };
+}
+
+function createPersonalSkillManager(): DesktopPersonalSkillManager {
+  return {
+    install: vi.fn(),
+    remove: vi.fn(),
+    resolveManagementId: vi.fn(async () => undefined),
   };
 }
 
@@ -811,6 +911,8 @@ function createAgentComposition(): DesktopAgentAppHostComposition & {
       diagnostics: [],
       warnings: [],
     })),
+    hasActiveTurns: vi.fn(() => false),
+    reconcilePluginRuntime: vi.fn(async () => new Map()),
     readHomeProjection: vi.fn(() => ({
       revision: 0,
       conversations: [],

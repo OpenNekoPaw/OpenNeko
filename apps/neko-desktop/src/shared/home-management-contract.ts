@@ -13,7 +13,7 @@ import {
   type GlobalMediaLibraryLocationKind,
 } from 'neko-assets/global-library/contract';
 
-export const DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION = 7 as const;
+export const DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION = 8 as const;
 
 export const DESKTOP_HOME_MANAGEMENT_CHANNELS = {
   assetsSearch: 'openneko:desktop:home:assets:search',
@@ -27,6 +27,11 @@ export const DESKTOP_HOME_MANAGEMENT_CHANNELS = {
   mediaLibrariesRemove: 'openneko:desktop:home:media-libraries:remove',
   mediaLibrariesReveal: 'openneko:desktop:home:media-libraries:reveal',
   extensionsList: 'openneko:desktop:home:extensions:list',
+  extensionPluginInstall: 'openneko:desktop:home:extensions:plugin-install',
+  extensionPluginRemove: 'openneko:desktop:home:extensions:plugin-remove',
+  extensionMarketplacesRefresh: 'openneko:desktop:home:extensions:marketplaces-refresh',
+  extensionPersonalSkillInstall: 'openneko:desktop:home:extensions:personal-skill-install',
+  extensionPersonalSkillRemove: 'openneko:desktop:home:extensions:personal-skill-remove',
 } as const;
 
 export type DesktopHomeCatalogSort = GlobalLibraryCatalogSort;
@@ -198,11 +203,24 @@ export interface DesktopHomeMediaLibraryRevealResult {
 
 export interface DesktopHomeExtensionsRequest extends DesktopHomeManagementRequest {}
 
+export type DesktopHomeSkillSource = 'personal' | 'plugin';
+
 export interface DesktopHomeSkillItem {
+  readonly id: string;
   readonly name: string;
   readonly description: string;
-  readonly source: 'builtin' | 'personal';
+  readonly source: DesktopHomeSkillSource;
+  readonly sourceId: string;
+  readonly managementId: string;
+  readonly canRemove: boolean;
 }
+
+export type DesktopHomeExtensionAgentStatus =
+  | 'not-installed'
+  | 'ready'
+  | 'partial'
+  | 'unsupported'
+  | 'error';
 
 export interface DesktopHomeExtensionItem {
   readonly id: string;
@@ -212,6 +230,14 @@ export interface DesktopHomeExtensionItem {
   readonly version: string;
   readonly developer: string;
   readonly marketplace: string;
+  readonly category: string;
+  readonly installed: boolean;
+  readonly enabled: boolean;
+  readonly canInstall: boolean;
+  readonly canRemove: boolean;
+  readonly agentStatus: DesktopHomeExtensionAgentStatus;
+  readonly runtimeDiagnosticCode: string;
+  readonly iconDataUrl: string;
   readonly mcpServerIds: readonly string[];
   readonly hasSkills: boolean;
   readonly appIds: readonly string[];
@@ -230,12 +256,14 @@ export interface DesktopHomeSkillDiscoveryProjection {
 }
 
 export type DesktopHomeExtensionDiagnosticCode =
-  | 'config_invalid'
-  | 'registration_invalid'
-  | 'package_missing'
-  | 'package_version_ambiguous'
+  | 'repository_unavailable'
+  | 'repository_failed'
+  | 'repository_invalid'
   | 'manifest_invalid'
-  | 'contribution_invalid';
+  | 'contribution_invalid'
+  | 'runtime_unsupported'
+  | 'runtime_failed'
+  | 'skill_invalid';
 
 export interface DesktopHomeExtensionDiscoveryProjection {
   readonly diagnostics: readonly {
@@ -247,11 +275,51 @@ export interface DesktopHomeExtensionDiscoveryProjection {
 export interface DesktopHomeExtensionsResult {
   readonly schemaVersion: typeof DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION;
   readonly requestId: string;
+  readonly catalogRevision: string;
   readonly skills: readonly DesktopHomeSkillItem[];
   readonly skillDiscovery: DesktopHomeSkillDiscoveryProjection;
   readonly extensions: readonly DesktopHomeExtensionItem[];
   readonly extensionDiscovery: DesktopHomeExtensionDiscoveryProjection;
 }
+
+export interface DesktopHomePluginMutationRequest extends DesktopHomeManagementRequest {
+  readonly pluginId: string;
+  readonly expectedCatalogRevision: string;
+}
+
+export interface DesktopHomeCatalogMutationRequest extends DesktopHomeManagementRequest {
+  readonly expectedCatalogRevision: string;
+}
+
+export interface DesktopHomePersonalSkillRemoveRequest extends DesktopHomeManagementRequest {
+  readonly managementId: string;
+  readonly expectedCatalogRevision: string;
+}
+
+export type DesktopHomeExtensionMutationKind =
+  | 'plugin-install'
+  | 'plugin-remove'
+  | 'marketplaces-refresh'
+  | 'personal-skill-install'
+  | 'personal-skill-remove';
+
+export type DesktopHomeExtensionMutationResult =
+  | {
+      readonly schemaVersion: typeof DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION;
+      readonly requestId: string;
+      readonly status: 'completed';
+      readonly operation: DesktopHomeExtensionMutationKind;
+      readonly targetId: string;
+      readonly catalogRevision: string;
+    }
+  | {
+      readonly schemaVersion: typeof DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION;
+      readonly requestId: string;
+      readonly status: 'cancelled';
+      readonly operation: 'personal-skill-install';
+      readonly targetId: '';
+      readonly catalogRevision: string;
+    };
 
 export interface OpenNekoDesktopHomeManagementBridge {
   readonly home: {
@@ -303,6 +371,24 @@ export interface OpenNekoDesktopHomeManagementBridge {
     };
     readonly extensions: {
       list(): Promise<DesktopHomeExtensionsResult>;
+      installPlugin(
+        pluginId: string,
+        expectedCatalogRevision: string,
+      ): Promise<DesktopHomeExtensionMutationResult>;
+      removePlugin(
+        pluginId: string,
+        expectedCatalogRevision: string,
+      ): Promise<DesktopHomeExtensionMutationResult>;
+      refreshMarketplaces(
+        expectedCatalogRevision: string,
+      ): Promise<DesktopHomeExtensionMutationResult>;
+      installPersonalSkill(
+        expectedCatalogRevision: string,
+      ): Promise<DesktopHomeExtensionMutationResult>;
+      removePersonalSkill(
+        managementId: string,
+        expectedCatalogRevision: string,
+      ): Promise<DesktopHomeExtensionMutationResult>;
     };
   };
 }
@@ -622,6 +708,93 @@ export function parseDesktopHomeExtensionsRequest(
   );
 }
 
+export function createDesktopHomePluginMutationRequest(
+  requestId: string,
+  endpointEpoch: string,
+  pluginId: string,
+  expectedCatalogRevision: string,
+): DesktopHomePluginMutationRequest {
+  return {
+    ...createDesktopHomeRequestIdentity(requestId, endpointEpoch),
+    pluginId: requirePluginId(pluginId),
+    expectedCatalogRevision: requireCatalogRevision(expectedCatalogRevision),
+  };
+}
+
+export function parseDesktopHomePluginMutationRequest(
+  value: unknown,
+): DesktopHomePluginMutationRequest {
+  const record = requireExactRecord(
+    value,
+    ['schemaVersion', 'requestId', 'endpointEpoch', 'pluginId', 'expectedCatalogRevision'],
+    'Desktop Home plugin mutation request is invalid.',
+  );
+  requireVersion(record['schemaVersion']);
+  return createDesktopHomePluginMutationRequest(
+    requireNonEmptyString(record['requestId'], 'Desktop Home requestId is required.'),
+    requireEndpointEpoch(record['endpointEpoch']),
+    requirePluginId(record['pluginId']),
+    requireCatalogRevision(record['expectedCatalogRevision']),
+  );
+}
+
+export function createDesktopHomeCatalogMutationRequest(
+  requestId: string,
+  endpointEpoch: string,
+  expectedCatalogRevision: string,
+): DesktopHomeCatalogMutationRequest {
+  return {
+    ...createDesktopHomeRequestIdentity(requestId, endpointEpoch),
+    expectedCatalogRevision: requireCatalogRevision(expectedCatalogRevision),
+  };
+}
+
+export function parseDesktopHomeCatalogMutationRequest(
+  value: unknown,
+): DesktopHomeCatalogMutationRequest {
+  const record = requireExactRecord(
+    value,
+    ['schemaVersion', 'requestId', 'endpointEpoch', 'expectedCatalogRevision'],
+    'Desktop Home extension catalog mutation request is invalid.',
+  );
+  requireVersion(record['schemaVersion']);
+  return createDesktopHomeCatalogMutationRequest(
+    requireNonEmptyString(record['requestId'], 'Desktop Home requestId is required.'),
+    requireEndpointEpoch(record['endpointEpoch']),
+    requireCatalogRevision(record['expectedCatalogRevision']),
+  );
+}
+
+export function createDesktopHomePersonalSkillRemoveRequest(
+  requestId: string,
+  endpointEpoch: string,
+  managementId: string,
+  expectedCatalogRevision: string,
+): DesktopHomePersonalSkillRemoveRequest {
+  return {
+    ...createDesktopHomeRequestIdentity(requestId, endpointEpoch),
+    managementId: requireManagementId(managementId),
+    expectedCatalogRevision: requireCatalogRevision(expectedCatalogRevision),
+  };
+}
+
+export function parseDesktopHomePersonalSkillRemoveRequest(
+  value: unknown,
+): DesktopHomePersonalSkillRemoveRequest {
+  const record = requireExactRecord(
+    value,
+    ['schemaVersion', 'requestId', 'endpointEpoch', 'managementId', 'expectedCatalogRevision'],
+    'Desktop Home personal Skill remove request is invalid.',
+  );
+  requireVersion(record['schemaVersion']);
+  return createDesktopHomePersonalSkillRemoveRequest(
+    requireNonEmptyString(record['requestId'], 'Desktop Home requestId is required.'),
+    requireEndpointEpoch(record['endpointEpoch']),
+    requireManagementId(record['managementId']),
+    requireCatalogRevision(record['expectedCatalogRevision']),
+  );
+}
+
 export function parseDesktopHomeAssetSearchResult(
   value: unknown,
   expectedRequestId: string,
@@ -846,6 +1019,7 @@ export function parseDesktopHomeExtensionsResult(
     [
       'schemaVersion',
       'requestId',
+      'catalogRevision',
       'skills',
       'skillDiscovery',
       'extensions',
@@ -861,10 +1035,56 @@ export function parseDesktopHomeExtensionsResult(
   return {
     schemaVersion: DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION,
     requestId,
+    catalogRevision: requireCatalogRevision(record['catalogRevision']),
     skills: record['skills'].map(parseSkillItem),
     skillDiscovery: parseSkillDiscovery(record['skillDiscovery']),
     extensions: record['extensions'].map(parseExtensionItem),
     extensionDiscovery: parseExtensionDiscovery(record['extensionDiscovery']),
+  };
+}
+
+export function parseDesktopHomeExtensionMutationResult(
+  value: unknown,
+  expectedRequestId: string,
+): DesktopHomeExtensionMutationResult {
+  const record = requireExactRecord(
+    value,
+    ['schemaVersion', 'requestId', 'status', 'operation', 'targetId', 'catalogRevision'],
+    'Desktop Home extension mutation result is invalid.',
+  );
+  requireVersion(record['schemaVersion']);
+  const requestId = requireRequestId(record['requestId'], expectedRequestId);
+  const operation = requireExtensionMutationKind(record['operation']);
+  const catalogRevision = requireCatalogRevision(record['catalogRevision']);
+  if (record['status'] === 'cancelled') {
+    if (operation !== 'personal-skill-install' || record['targetId'] !== '') {
+      throw new Error('Desktop Home cancelled extension mutation result is invalid.');
+    }
+    return {
+      schemaVersion: DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION,
+      requestId,
+      status: 'cancelled',
+      operation,
+      targetId: '',
+      catalogRevision,
+    };
+  }
+  if (record['status'] !== 'completed') {
+    throw new Error('Desktop Home extension mutation result status is invalid.');
+  }
+  return {
+    schemaVersion: DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION,
+    requestId,
+    status: 'completed',
+    operation,
+    targetId:
+      operation === 'marketplaces-refresh'
+        ? requireEmptyString(record['targetId'])
+        : requireNonEmptyString(
+            record['targetId'],
+            'Desktop Home extension mutation target is required.',
+          ),
+    catalogRevision,
   };
 }
 
@@ -996,16 +1216,48 @@ function parseAssetImportOutcome(value: unknown): DesktopHomeAssetImportOutcome 
 function parseSkillItem(value: unknown): DesktopHomeSkillItem {
   const record = requireExactRecord(
     value,
-    ['name', 'description', 'source'],
+    ['id', 'name', 'description', 'source', 'sourceId', 'managementId', 'canRemove'],
     'Desktop Home Skill item is invalid.',
   );
+  const source = requireSkillSource(record['source']);
+  const sourceId = requireNonEmptyString(
+    record['sourceId'],
+    'Desktop Home Skill source id is required.',
+  );
+  const managementId = requireString(
+    record['managementId'],
+    'Desktop Home Skill management id must be a string.',
+  );
+  if (typeof record['canRemove'] !== 'boolean') {
+    throw new Error('Desktop Home Skill removal capability is invalid.');
+  }
+  if (source === 'plugin') {
+    requirePluginId(sourceId);
+  } else if (sourceId !== source) {
+    throw new Error('Desktop Home Skill source identity is inconsistent.');
+  }
+  if (
+    (source === 'personal' && (!record['canRemove'] || managementId.length === 0)) ||
+    (source !== 'personal' && (record['canRemove'] || managementId.length > 0))
+  ) {
+    throw new Error('Desktop Home Skill management capability is inconsistent.');
+  }
+  const name = requireNonEmptyString(record['name'], 'Desktop Home Skill name is required.');
+  const id = requireNonEmptyString(record['id'], 'Desktop Home Skill id is required.');
+  if (!id.startsWith(`${source}:${sourceId}:`)) {
+    throw new Error('Desktop Home Skill identity is inconsistent.');
+  }
   return {
-    name: requireNonEmptyString(record['name'], 'Desktop Home Skill name is required.'),
+    id,
+    name,
     description: requireString(
       record['description'],
       'Desktop Home Skill description must be a string.',
     ),
-    source: requireSkillSource(record['source']),
+    source,
+    sourceId,
+    managementId: source === 'personal' ? requireManagementId(managementId) : '',
+    canRemove: record['canRemove'],
   };
 }
 
@@ -1020,6 +1272,14 @@ function parseExtensionItem(value: unknown): DesktopHomeExtensionItem {
       'version',
       'developer',
       'marketplace',
+      'category',
+      'installed',
+      'enabled',
+      'canInstall',
+      'canRemove',
+      'agentStatus',
+      'runtimeDiagnosticCode',
+      'iconDataUrl',
       'mcpServerIds',
       'hasSkills',
       'appIds',
@@ -1041,6 +1301,21 @@ function parseExtensionItem(value: unknown): DesktopHomeExtensionItem {
   if (typeof record['hasSkills'] !== 'boolean') {
     throw new Error('Desktop Home extension Skill contribution flag is invalid.');
   }
+  const installed = requireBoolean(record['installed'], 'installed');
+  const enabled = requireBoolean(record['enabled'], 'enabled');
+  const canInstall = requireBoolean(record['canInstall'], 'canInstall');
+  const canRemove = requireBoolean(record['canRemove'], 'canRemove');
+  if (
+    (installed && canInstall) ||
+    (!installed && canRemove) ||
+    (!installed && enabled)
+  ) {
+    throw new Error('Desktop Home extension management flags are inconsistent.');
+  }
+  const agentStatus = requireExtensionAgentStatus(record['agentStatus']);
+  if (!installed && agentStatus !== 'not-installed') {
+    throw new Error('Desktop Home extension Agent status is inconsistent.');
+  }
   return {
     id,
     name,
@@ -1061,6 +1336,17 @@ function parseExtensionItem(value: unknown): DesktopHomeExtensionItem {
       'Desktop Home extension developer must be a string.',
     ),
     marketplace,
+    category: requireString(
+      record['category'],
+      'Desktop Home extension category must be a string.',
+    ),
+    installed,
+    enabled,
+    canInstall,
+    canRemove,
+    agentStatus,
+    runtimeDiagnosticCode: requireExtensionDiagnosticValue(record['runtimeDiagnosticCode']),
+    iconDataUrl: requireExtensionIconDataUrl(record['iconDataUrl']),
     mcpServerIds: requireUniqueExtensionIdentifiers(
       record['mcpServerIds'],
       'Desktop Home extension MCP Server ids are invalid.',
@@ -1147,12 +1433,14 @@ function requireSkillDiagnosticCode(value: unknown): DesktopHomeSkillDiagnosticC
 
 function requireExtensionDiagnosticCode(value: unknown): DesktopHomeExtensionDiagnosticCode {
   if (
-    value !== 'config_invalid' &&
-    value !== 'registration_invalid' &&
-    value !== 'package_missing' &&
-    value !== 'package_version_ambiguous' &&
+    value !== 'repository_unavailable' &&
+    value !== 'repository_failed' &&
+    value !== 'repository_invalid' &&
     value !== 'manifest_invalid' &&
-    value !== 'contribution_invalid'
+    value !== 'contribution_invalid' &&
+    value !== 'runtime_unsupported' &&
+    value !== 'runtime_failed' &&
+    value !== 'skill_invalid'
   ) {
     throw new Error('Desktop Home extension diagnostic code is invalid.');
   }
@@ -1173,10 +1461,103 @@ function requireExtensionIdentifier(value: unknown, message: string): string {
 }
 
 function requireSkillSource(value: unknown): DesktopHomeSkillItem['source'] {
-  if (value !== 'builtin' && value !== 'personal') {
+  if (value !== 'personal' && value !== 'plugin') {
     throw new Error('Desktop Home Skill source is invalid.');
   }
   return value;
+}
+
+function requireExtensionAgentStatus(value: unknown): DesktopHomeExtensionAgentStatus {
+  if (
+    value !== 'not-installed' &&
+    value !== 'ready' &&
+    value !== 'partial' &&
+    value !== 'unsupported' &&
+    value !== 'error'
+  ) {
+    throw new Error('Desktop Home extension Agent status is invalid.');
+  }
+  return value;
+}
+
+function requireExtensionMutationKind(value: unknown): DesktopHomeExtensionMutationKind {
+  if (
+    value !== 'plugin-install' &&
+    value !== 'plugin-remove' &&
+    value !== 'marketplaces-refresh' &&
+    value !== 'personal-skill-install' &&
+    value !== 'personal-skill-remove'
+  ) {
+    throw new Error('Desktop Home extension mutation kind is invalid.');
+  }
+  return value;
+}
+
+function requireBoolean(value: unknown, label: string): boolean {
+  if (typeof value !== 'boolean') {
+    throw new Error(`Desktop Home extension ${label} flag is invalid.`);
+  }
+  return value;
+}
+
+function requireCatalogRevision(value: unknown): string {
+  const revision = requireNonEmptyString(
+    value,
+    'Desktop Home extension catalog revision is required.',
+  );
+  if (!/^sha256:[0-9a-f]{64}$/u.test(revision)) {
+    throw new Error('Desktop Home extension catalog revision is invalid.');
+  }
+  return revision;
+}
+
+function requirePluginId(value: unknown): string {
+  const id = requireNonEmptyString(value, 'Desktop Home plugin id is required.');
+  const separator = id.lastIndexOf('@');
+  if (separator <= 0 || separator === id.length - 1) {
+    throw new Error('Desktop Home plugin id is invalid.');
+  }
+  requireExtensionIdentifier(id.slice(0, separator), 'Desktop Home plugin id is invalid.');
+  requireExtensionIdentifier(id.slice(separator + 1), 'Desktop Home plugin id is invalid.');
+  return id;
+}
+
+function requireManagementId(value: unknown): string {
+  const id = requireNonEmptyString(value, 'Desktop Home Skill management id is required.');
+  if (!/^skill:[0-9a-f]{64}$/u.test(id)) {
+    throw new Error('Desktop Home Skill management id is invalid.');
+  }
+  return id;
+}
+
+function requireExtensionDiagnosticValue(value: unknown): string {
+  const code = requireString(
+    value,
+    'Desktop Home extension runtime diagnostic code must be a string.',
+  );
+  if (code !== '' && !/^[a-z][a-z0-9._-]*$/u.test(code)) {
+    throw new Error('Desktop Home extension runtime diagnostic code is invalid.');
+  }
+  return code;
+}
+
+function requireExtensionIconDataUrl(value: unknown): string {
+  const dataUrl = requireString(
+    value,
+    'Desktop Home extension icon data URL must be a string.',
+  );
+  if (
+    dataUrl !== '' &&
+    !/^data:image\/(?:png|jpeg|webp|gif|svg\+xml);base64,[A-Za-z0-9+/=]+$/u.test(dataUrl)
+  ) {
+    throw new Error('Desktop Home extension icon data URL is invalid.');
+  }
+  return dataUrl;
+}
+
+function requireEmptyString(value: unknown): '' {
+  if (value !== '') throw new Error('Desktop Home extension mutation target must be empty.');
+  return '';
 }
 
 function createDesktopHomeRequestIdentity(

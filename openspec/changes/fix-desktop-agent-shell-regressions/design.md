@@ -37,11 +37,17 @@ Workbench display menu 使用 Radix portal。首轮实现已把 semantic class �
 
 不选择“启动时 attach 所有 workspace”，因为它会把 Home 列表读取和 Project path/stat、provider/model composition、runtime 生命周期耦合，并加重启动卡顿。不选择复制到 Shell state，因为这会形成第二份可漂移 catalog。
 
-### 2. Agent module preparation 与 bootstrap 并行，adapter identity 仍由 bootstrap 决定
+### 2. Renderer 启动预加载 Agent module，adapter identity 仍由 View bootstrap 决定
 
-Desktop Agent Surface 在 effect 启动时同时请求 Agent module 和 Main bootstrap，使用同一个 owner identity fence。两者完成后一次性创建 adapter 和 Root；任一失败进入明确 error state。module promise 可以复用浏览器 module cache，但 adapter、connection 和 presentation state 仍是 View scoped。
+Desktop renderer 在 sender-bound application bootstrap、settings snapshot 和 Agent Webview
+module 都准备完成后才挂载 React Root。Agent module loader 拥有单一缓存 promise；启动门禁与
+后续 Surface 使用同一个 promise，不重复 import，也不在首次打开 Agent 时重新等待 chunk。
+module 加载失败阻止 renderer 被描述为 ready，并通过现有启动错误边界 fail-visible。
 
-不引入全局 Agent runtime singleton，也不把 module readiness 当作会话 owner。
+Agent Surface 挂载后才请求精确 Project/View/bootstrap，并用 owner identity fence 拒绝过期
+完成；adapter、connection、subscription 和 presentation state 继续是 View scoped。应用启动
+不得 attach 全部 workspace、创建 conversation/session/provider runtime 或把 module readiness
+当作会话 owner。
 
 ### 3. Root 在子组件 passive effects 前建立 Host 订阅
 
@@ -81,7 +87,8 @@ Resource Dock 不再是项目 Resource Browser 的成功路径。旧的 dock pre
 
 1. 先添加 catalog cold-start、Root 订阅顺序、跨 realm pending send、production Popover computed style、默认 Canvas 和 Resource Browser Main View 红测。
 2. 增加 Pi catalog reader 与 Desktop 初始化 scope，删除 Home 对“已 attach workspace 才可列出”的隐式路径。
-3. 并行 Agent module/bootstrap，并调整 Root 订阅时序。
+3. 在 renderer 启动门禁预加载 Agent module，让 Surface 复用同一 promise，并调整 Root
+   订阅时序。
 4. 接入 Popover semantic surface、默认 Workspace Canvas 和 Resource Browser Main View，断开项目 Resource Dock 成功路径。
 5. 运行受影响包测试/typecheck/build、Desktop package、quality gates 和真实 Electron 隔离场景。
 
