@@ -4,6 +4,11 @@
   "mode": "configuration",
   "suiteId": "skill.media-production",
   "caseId": "animation-production-plan",
+  "scenarioContract": {
+    "schema": "neko.agent-eval.scenario.v2",
+    "evidenceRefs": ["production-facts"],
+    "assertionIds": ["skill", "model", "output", "no-image", "no-video", "fallback"]
+  },
   "baselineVariantId": "ask-mode",
   "matrix": { "strategy": "focused", "maxVariants": 2 },
   "repetitions": 3,
@@ -41,9 +46,7 @@
         "runtimeConfigurationHash": "sha256:8f78f7165c321ad88c733dbbba2545cb1370d5de3480d33245c1243615e11e3e",
         "modelProfileId": "configured-default",
         "modelConfigurationHash": "sha256:e183fac48c090594694dc19a3e356145a40821960e6f06ad1a4b67e8dfc6f915"
-      },
-      "expectedPath": ["Desktop App session owner", "session.create runtimeConfig", "ask executionMode", "builtin media-production Skill", "session.facts configuration"],
-      "forbiddenFallback": ["evaluation-only mode flag", "direct AgentSession runner", "IDC stage", "Plan-to-Apply runtime"]
+      }
     },
     {
       "id": "plan-mode",
@@ -58,9 +61,7 @@
         "runtimeConfigurationHash": "sha256:ee3b5595b40c66f9dfa03dd1c9f84b1088c79a5e159aacc015040592ea304f5e",
         "modelProfileId": "configured-default",
         "modelConfigurationHash": "sha256:e183fac48c090594694dc19a3e356145a40821960e6f06ad1a4b67e8dfc6f915"
-      },
-      "expectedPath": ["Desktop App session owner", "session.create runtimeConfig", "plan executionMode", "Plan prompt composition", "builtin media-production Skill", "session.facts configuration"],
-      "forbiddenFallback": ["evaluation-only mode flag", "direct AgentSession runner", "IDC stage", "Plan-to-Apply runtime"]
+      }
     }
   ]
 }

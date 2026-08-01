@@ -26,6 +26,11 @@ function configurationPlan() {
     mode: 'configuration',
     suiteId: 'agent-runtime.model-binding',
     caseId: 'explicit-chat-model',
+    scenarioContract: {
+      schema: 'neko.agent-eval.scenario.v2',
+      evidenceRefs: ['model-facts'],
+      assertionIds: ['runtime', 'model'],
+    },
     baselineVariantId: 'baseline',
     matrix: { strategy: 'focused', maxVariants: 4 },
     repetitions: 3,
@@ -45,8 +50,6 @@ function configurationPlan() {
           modelProfileId: 'configured-default',
           modelConfigurationHash: HASH_B,
         },
-        expectedPath: ['Desktop App session owner', 'session.create runtimeConfig'],
-        forbiddenFallback: ['active session configuration', 'direct AgentSession runner'],
       },
       {
         id: 'thinking-128',
@@ -62,8 +65,6 @@ function configurationPlan() {
           modelProfileId: 'configured-default',
           modelConfigurationHash: HASH_B,
         },
-        expectedPath: ['Desktop App session owner', 'session.create runtimeConfig'],
-        forbiddenFallback: ['active session configuration', 'direct AgentSession runner'],
       },
     ],
   };
@@ -108,12 +109,6 @@ function implementationPlan() {
         executablePath: 'apps/neko-desktop/.vite/build/main.cjs',
         launchCommand: { command: 'node', args: ['{executable}'] },
       },
-      expectedPath: ['isolated worktree', 'isolated Desktop build', 'Desktop session driver'],
-      forbiddenFallback: [
-        'working-tree executable',
-        '__ablation marker',
-        'direct AgentSession runner',
-      ],
     })),
   };
 }
@@ -126,6 +121,11 @@ function selection(rubricRef) {
     },
     scenario: {
       id: 'explicit-chat-model',
+      evidenceContract: {
+        canonicalPath: ['Desktop renderer bridge', 'sender-bound controller', 'Pi Session'],
+        observables: [{ ref: 'model-facts', required: true }],
+      },
+      assertions: [{ id: 'runtime' }, { id: 'model' }],
       ...(rubricRef
         ? {
             rubric: {
@@ -170,6 +170,29 @@ describe('ablation authoring contracts', () => {
     const unsupported = configurationPlan();
     unsupported.variants[1].changes = ['runtime.skill-injection'];
     expect(() => validateAblationPlan(unsupported)).toThrow('does not match any supported variant');
+  });
+
+  it('rejects variant-owned paths and retired Scenario canonical paths', () => {
+    const duplicatedPath = configurationPlan();
+    duplicatedPath.variants[1].expectedPath = ['Desktop path'];
+    expect(() => validateAblationPlan(duplicatedPath)).toThrow('unknown field');
+
+    const staleSelection = selection();
+    staleSelection.scenario.evidenceContract.canonicalPath = [
+      'Desktop App session owner',
+      'AgentSession',
+    ];
+    expect(() => validateAblationQualityContract(configurationPlan(), staleSelection)).toThrow(
+      'retired Host/runtime term',
+    );
+  });
+
+  it('requires the plan to freeze the selected Scenario evidence and assertions', () => {
+    const plan = configurationPlan();
+    plan.scenarioContract.evidenceRefs = ['other-facts'];
+    expect(() => validateAblationQualityContract(plan, selection())).toThrow(
+      'Scenario required evidence refs do not match',
+    );
   });
 
   it('rejects missing effective configuration or external build evidence', () => {

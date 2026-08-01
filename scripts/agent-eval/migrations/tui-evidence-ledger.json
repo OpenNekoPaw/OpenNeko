@@ -1,0 +1,63 @@
+{
+  "schema": "neko.agent-eval.host-evidence-migration.v1",
+  "retiredHost": {
+    "kind": "tui",
+    "identity": "openneko-tui-retired-host",
+    "status": "retired"
+  },
+  "desktopBaselinePolicy": {
+    "targetHost": "desktop",
+    "historicalTuiComparison": "non-comparable",
+    "requiresNewDesktopBaseline": true
+  },
+  "reusableMappings": [
+    {
+      "kind": "scenario-intent",
+      "sourceRef": "historical-tui:complete-session-intent",
+      "desktopRefs": [
+        "agent-runtime.workflow-controller/queue-during-run",
+        "agent-runtime.workflow-controller/conversation-persistence-resume"
+      ]
+    },
+    {
+      "kind": "fixture",
+      "sourceRef": "historical-tui:synthetic-workspaces",
+      "desktopRefs": [
+        "shared-fixtures/creative-planning-workspace",
+        "shared-fixtures/media-library-workspace"
+      ]
+    },
+    {
+      "kind": "validator",
+      "sourceRef": "historical-tui:artifact-validators",
+      "desktopRefs": ["artifactChecks", "owning-domain validators"]
+    },
+    {
+      "kind": "rubric",
+      "sourceRef": "historical-tui:quality-rubrics",
+      "desktopRefs": ["scenario rubric refs", "allowlisted blind Judge policy"]
+    }
+  ],
+  "retiredBehaviors": [
+    {
+      "id": "terminal-resize",
+      "reason": "Terminal viewport ownership does not exist in the Desktop Agent product path.",
+      "disposition": "retired"
+    },
+    {
+      "id": "ink-markdown",
+      "reason": "Renderer Markdown and projection acceptance must be re-authored against Electron Desktop.",
+      "disposition": "reauthor-as-desktop-visible-scenario"
+    },
+    {
+      "id": "tui-status-bar",
+      "reason": "TUI presentation state is not a Desktop product requirement.",
+      "disposition": "retired"
+    },
+    {
+      "id": "cli-config-app-port",
+      "reason": "CLIConfig and TUI AppPort were retired with the Host and cannot own Desktop configuration evidence.",
+      "disposition": "retired"
+    }
+  ]
+}

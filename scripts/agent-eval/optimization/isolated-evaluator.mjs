@@ -172,6 +172,13 @@ export function createOptimizationAblationPlan(planInput, targets, selection) {
     mode: 'implementation',
     suiteId: selection.suite.id,
     caseId: selection.scenario.id,
+    scenarioContract: {
+      schema: selection.scenario.schema,
+      evidenceRefs: selection.scenario.evidenceContract.observables
+        .filter((observable) => observable.required)
+        .map((observable) => observable.ref),
+      assertionIds: selection.scenario.assertions.map((assertion) => assertion.id),
+    },
     baselineVariantId: 'optimization-base',
     matrix: { strategy: 'focused', maxVariants: 2 },
     repetitions: plan.requiredMatrix.repetitions,
@@ -363,19 +370,6 @@ function createVariant(id, role, changes, target) {
     skillIdentity: target.skillIdentity,
     developmentCheckpoint: target.developmentCheckpoint,
     buildTarget: target.buildTarget,
-    expectedPath: [
-      'detached Git worktree',
-      'isolated Desktop build',
-      'Desktop App session owner',
-      'Skill lifecycle',
-      'session.facts',
-    ],
-    forbiddenFallback: [
-      'working-tree executable',
-      'direct AgentSession runner',
-      'optimizer runtime flag',
-      'candidate label in Desktop runtime facts',
-    ],
   };
 }
 

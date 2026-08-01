@@ -18,7 +18,7 @@ function decision(behaviorId, suiteId) {
     userBehavior: `Exercise ${behaviorId} through the canonical Agent path.`,
     evidenceContract: {
       userBehavior: `Exercise ${behaviorId} through the canonical Agent path.`,
-      canonicalPath: ['Desktop App', 'host controller', 'AgentSession'],
+      canonicalPath: ['Desktop App', 'sender-bound controller', 'Pi Conversation runtime'],
       forbiddenFallback: ['direct Agent runner'],
       observables: [
         {

@@ -24,7 +24,7 @@
       "GetAsset for generated-output id",
       "implicit AssetLibrary membership",
       "SubAgent result lookup for media generation",
-      "AgentSession",
+      "retired Host session owner",
       "model-authored provider or model id",
       "nested mediaModels routing"
     ],

@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 import * as fs from 'node:fs/promises';
-import * as os from 'node:os';
 import { execFile as nodeExecFile } from 'node:child_process';
 import { resolve } from 'node:path';
+import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import {
@@ -28,17 +28,6 @@ const MATRIX_SUITES = Object.freeze([
   'skill.video',
   'skill.media-quality-review',
 ]);
-const CREDENTIAL_ENV_NAMES = Object.freeze([
-  'NEKO_API_KEY',
-  'LLM_API_KEY',
-  'NEKO_GATEWAY_API_KEY',
-  'OPENAI_API_KEY',
-  'ANTHROPIC_API_KEY',
-  'GOOGLE_API_KEY',
-  'DEEPSEEK_API_KEY',
-  'NEWAPI_API_KEY',
-]);
-
 export async function main(argv = process.argv.slice(2), io = defaultIo()) {
   const args = parseArgs(argv);
   const reportRoot = resolve(args.reportRoot ?? DEFAULT_REPORT_ROOT);
@@ -46,25 +35,8 @@ export async function main(argv = process.argv.slice(2), io = defaultIo()) {
   try {
     const suites = await discoverSuites();
     const suiteIds = await selectSuiteIds(args, suites);
-    const blocker = await readInfrastructureBlocker(io.env, {
-      homedir: io.homedir ?? os.homedir,
-      stat: io.stat ?? fs.stat,
-    });
-    if (blocker) {
-      summary = {
-        schema: 'neko.agent-eval.local-run-summary.v2',
-        mode: args.mode,
-        outcome: 'infrastructure-blocked',
-        selectedSuiteIds: suiteIds,
-        diagnostic: blocker,
-        runs: [],
-      };
-      await writeSummary(reportRoot, summary);
-      io.stdout.write(`${JSON.stringify(summary, null, 2)}\n`);
-      return 2;
-    }
     const selections = suiteIds.flatMap((suiteId) =>
-      selectSuiteCases(suites, { suiteId }).filter(
+      selectSuiteCases(suites, { suiteId, ...(args.caseId ? { caseId: args.caseId } : {}) }).filter(
         (selection) => selection.scenario.visibility === 'public',
       ),
     );
@@ -127,6 +99,7 @@ export function parseArgs(argv) {
     const value = argv[index + 1];
     if (name === '--mode') args.mode = requireValue(name, value);
     else if (name === '--suite') args.suiteId = requireValue(name, value);
+    else if (name === '--case') args.caseId = requireValue(name, value);
     else if (name === '--base-sha') args.baseSha = requireValue(name, value);
     else if (name === '--head-sha') args.headSha = requireValue(name, value);
     else if (name === '--report-root') args.reportRoot = requireValue(name, value);
@@ -180,21 +153,6 @@ async function readChangedPaths(baseSha, headSha, injectedExecFile = execFile) {
     .filter(Boolean);
 }
 
-async function readInfrastructureBlocker(env, io) {
-  if (!CREDENTIAL_ENV_NAMES.some((name) => typeof env[name] === 'string' && env[name].length > 0)) {
-    return 'No local Agent provider credential environment variable is available.';
-  }
-  const configPath = resolve(io.homedir(), '.neko', 'config.toml');
-  try {
-    const stat = await io.stat(configPath);
-    if (!stat.isFile()) return `Local Agent configuration is not a file: ${configPath}`;
-  } catch (error) {
-    if (error?.code === 'ENOENT') return `Local Agent configuration is missing: ${configPath}`;
-    throw error;
-  }
-  return undefined;
-}
-
 function classifyRuns(runs) {
   if (runs.some((run) => run.outcome === 'configuration-invalid')) return 'configuration-invalid';
   if (runs.some((run) => run.outcome === 'infrastructure-fail')) return 'infrastructure-fail';
@@ -236,8 +194,6 @@ function defaultIo() {
     env: process.env,
     stdout: process.stdout,
     cwd: () => process.cwd(),
-    homedir: os.homedir,
-    stat: fs.stat,
   };
 }
 

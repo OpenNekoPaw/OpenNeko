@@ -75,7 +75,7 @@ describe('Agent Evaluation local runner', () => {
     ).rejects.toThrow('missing suite');
   });
 
-  it('writes infrastructure-blocked evidence without spawning or mocking Agent', async () => {
+  it('writes exact provider/model/credential/cost blocker evidence without launching Desktop', async () => {
     const reportRoot = await fs.mkdtemp(join(os.tmpdir(), 'neko-agent-eval-local-'));
     temporaryDirectories.push(reportRoot);
     const stdout = capture();
@@ -84,7 +84,9 @@ describe('Agent Evaluation local runner', () => {
         '--mode',
         'focused',
         '--suite',
-        'agent-runtime.workflow-controller',
+        'agent-runtime.stream-delivery',
+        '--case',
+        'locator-backed-display-projection',
         '--report-root',
         reportRoot,
       ],
@@ -94,14 +96,14 @@ describe('Agent Evaluation local runner', () => {
     expect(JSON.parse(stdout.text())).toMatchObject({
       outcome: 'infrastructure-blocked',
       runs: [],
-      diagnostic: expect.stringContaining('credential'),
+      diagnostic: expect.stringContaining('provider, model, credential environment and cost'),
     });
     await expect(
       fs.readFile(join(reportRoot, 'local-run-summary.json'), 'utf8'),
     ).resolves.toContain('infrastructure-blocked');
   });
 
-  it('preserves the missing Desktop driver as infrastructure-blocked after preflight', async () => {
+  it('keeps missing cost approval distinct after exact provider/model selection', async () => {
     const reportRoot = await fs.mkdtemp(join(os.tmpdir(), 'neko-agent-eval-desktop-driver-'));
     temporaryDirectories.push(reportRoot);
     const stdout = capture();
@@ -110,16 +112,23 @@ describe('Agent Evaluation local runner', () => {
         '--mode',
         'focused',
         '--suite',
-        'agent-runtime.workflow-controller',
+        'agent-runtime.stream-delivery',
+        '--case',
+        'locator-backed-display-projection',
         '--report-root',
         reportRoot,
       ],
       {
-        env: { NEKO_API_KEY: 'test-only-present' },
+        env: {
+          FIXTURE_KEY: 'test-only-present',
+          OPENNEKO_AGENT_EVAL_PROVIDER_ID: 'provider-1',
+          OPENNEKO_AGENT_EVAL_MODEL_ID: 'model-1',
+          OPENNEKO_AGENT_EVAL_CREDENTIAL_ENV: 'FIXTURE_KEY',
+          OPENNEKO_AGENT_EVAL_CONFIG_PATH: '/synthetic/config.toml',
+          OPENNEKO_AGENT_EVAL_COST_APPROVED: 'false',
+        },
         stdout,
         cwd: () => '/repo',
-        homedir: () => '/synthetic-home',
-        stat: async () => ({ isFile: () => true }),
       },
     );
 
@@ -127,7 +136,7 @@ describe('Agent Evaluation local runner', () => {
     expect(JSON.parse(stdout.text())).toMatchObject({
       outcome: 'infrastructure-blocked',
       runs: [],
-      diagnostic: expect.stringContaining('Desktop application'),
+      diagnostic: expect.stringContaining('cost authorization is not approved'),
     });
   });
 });

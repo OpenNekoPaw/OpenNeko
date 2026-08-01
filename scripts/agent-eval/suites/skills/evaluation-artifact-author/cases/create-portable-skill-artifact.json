@@ -8,8 +8,10 @@
     "userBehavior": "Activate the project evaluation-artifact-author Skill and create one deterministic portable Skill package through the canonical native authoring capability.",
     "canonicalPath": [
       "Desktop App session owner",
+      "Desktop renderer/preload Agent bridge",
+      "sender-bound Desktop Agent controller",
       "Desktop Agent input queue",
-      "AgentSession",
+      "Pi Conversation runtime and Pi Session",
       "project Skill lifecycle trigger and prompt composition",
       "CreateSkill Tool",
       "project .agents/skills artifact",

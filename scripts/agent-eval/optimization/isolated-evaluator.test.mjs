@@ -197,7 +197,10 @@ function scenario(id, caseGroup, visibility, rubric = true) {
     suiteId: 'skill.creation-persona',
     caseGroup,
     visibility,
-    evidenceContract: {},
+    evidenceContract: {
+      canonicalPath: ['Desktop renderer bridge', 'sender-bound controller', 'Pi Session'],
+      observables: [{ ref: 'persona-facts', required: true }],
+    },
     fixtureRefs: ['empty-workspace'],
     runtimeProfileId: 'markdown',
     modelProfileIds: ['configured-default'],

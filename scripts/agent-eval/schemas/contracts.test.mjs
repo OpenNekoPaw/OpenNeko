@@ -25,8 +25,14 @@ const HASH_B = `sha256:${'b'.repeat(64)}`;
 
 function evidenceContract() {
   return {
-    userBehavior: 'Submit a prompt and receive one final answer through the canonical Desktop path.',
-    canonicalPath: ['Desktop App owner', 'input queue', 'AgentSession', 'facts'],
+    userBehavior:
+      'Submit a prompt and receive one final answer through the canonical Desktop path.',
+    canonicalPath: [
+      'Desktop renderer/preload Agent bridge',
+      'sender-bound controller',
+      'Pi Conversation runtime and Pi Session',
+      'facts',
+    ],
     forbiddenFallback: ['direct Agent turn runner'],
     observables: [
       {

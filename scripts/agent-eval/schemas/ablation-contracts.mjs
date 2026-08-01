@@ -38,7 +38,7 @@ const TEXT = s.string({ minLength: 1, maxLength: 20_000 });
 const SHORT_TEXT = s.string({ minLength: 1, maxLength: 1_000 });
 const HASH = s.string({ pattern: /^sha256:[a-f0-9]{64}$/u });
 const PATH = s.string({ minLength: 1, maxLength: 500, format: 'relative-path' });
-const STRING_LIST = s.array(SHORT_TEXT, { minLength: 1, maxLength: 100 });
+const ID_LIST = s.array(ID, { minLength: 1, maxLength: 200 });
 const METRIC_LIST = s.array(s.enum(ABLATION_METRICS), {
   minLength: ABLATION_METRICS.length,
   maxLength: ABLATION_METRICS.length,
@@ -60,9 +60,13 @@ const VARIANT_COMMON = {
   id: ID,
   role: s.enum(['baseline', 'variant']),
   description: TEXT,
-  expectedPath: STRING_LIST,
-  forbiddenFallback: STRING_LIST,
 };
+
+const SCENARIO_CONTRACT_REFERENCE_SCHEMA = s.object({
+  schema: s.literal('neko.agent-eval.scenario.v2'),
+  evidenceRefs: ID_LIST,
+  assertionIds: ID_LIST,
+});
 
 const CONFIGURATION_VARIANT_SCHEMA = s.object(
   {
@@ -134,6 +138,7 @@ const CONFIGURATION_PLAN_SCHEMA = s.object({
   mode: s.literal('configuration'),
   suiteId: ID,
   caseId: ID,
+  scenarioContract: SCENARIO_CONTRACT_REFERENCE_SCHEMA,
   baselineVariantId: ID,
   matrix: s.object({ strategy: s.literal('focused'), maxVariants: s.integer({ min: 2, max: 20 }) }),
   repetitions: s.integer({ min: 2, max: 100 }),
@@ -147,6 +152,7 @@ const IMPLEMENTATION_PLAN_SCHEMA = s.object({
   mode: s.literal('implementation'),
   suiteId: ID,
   caseId: ID,
+  scenarioContract: SCENARIO_CONTRACT_REFERENCE_SCHEMA,
   baselineVariantId: ID,
   matrix: s.object({ strategy: s.literal('focused'), maxVariants: s.integer({ min: 2, max: 20 }) }),
   repetitions: s.integer({ min: 2, max: 100 }),
@@ -303,6 +309,7 @@ export function validateAblationQualityContract(planInput, selection) {
   if (selection?.suite?.id !== plan.suiteId || selection?.scenario?.id !== plan.caseId) {
     throw new Error('ablationPlan quality validation requires the selected suite and scenario');
   }
+  validateScenarioContractReference(plan, selection.scenario);
   const policy = plan.comparisonPolicy.quality;
   const scenarioRubric = selection.scenario.rubric;
   if (policy.kind === 'hard-gates-only') {
@@ -336,6 +343,45 @@ export function validateAblationQualityContract(planInput, selection) {
     );
   }
   return plan;
+}
+
+function validateScenarioContractReference(plan, scenario) {
+  const requiredEvidenceRefs = scenario.evidenceContract?.observables
+    ?.filter((observable) => observable.required)
+    .map((observable) => observable.ref);
+  const assertionIds = scenario.assertions?.map((assertion) => assertion.id);
+  if (!Array.isArray(requiredEvidenceRefs) || !Array.isArray(assertionIds)) {
+    throw new Error('ablationPlan requires a validated Scenario evidence/assertion contract');
+  }
+  assertExactReferenceSet(
+    plan.scenarioContract.evidenceRefs,
+    requiredEvidenceRefs,
+    'Scenario required evidence refs',
+  );
+  assertExactReferenceSet(
+    plan.scenarioContract.assertionIds,
+    assertionIds,
+    'Scenario assertion ids',
+  );
+  const retiredPath = scenario.evidenceContract.canonicalPath.find((entry) =>
+    /\btui\b|\bagentsession\b|direct(?:\s|-)+(?:agent(?:\s|-)+)?(?:runtime|turn(?:\s|-)+runner)/iu.test(
+      entry,
+    ),
+  );
+  if (retiredPath) {
+    throw new Error(`Scenario canonical path contains a retired Host/runtime term: ${retiredPath}`);
+  }
+}
+
+function assertExactReferenceSet(actual, expected, label) {
+  assertUnique(actual, label);
+  const missing = expected.filter((value) => !actual.includes(value));
+  const unexpected = actual.filter((value) => !expected.includes(value));
+  if (missing.length > 0 || unexpected.length > 0) {
+    throw new Error(
+      `${label} do not match; missing=${missing.join(',') || 'none'} unexpected=${unexpected.join(',') || 'none'}`,
+    );
+  }
 }
 
 export function validateIsolatedBuildTarget(input) {
@@ -449,8 +495,7 @@ function validateHostSkillIdentity(identity, variantId) {
 }
 
 function hostIdentityWithoutFingerprint(identity) {
-  const { fingerprint: _fingerprint, ...stable } = identity;
-  return stable;
+  return Object.fromEntries(Object.entries(identity).filter(([key]) => key !== 'fingerprint'));
 }
 
 function assertExactMetrics(metrics) {

@@ -18,6 +18,11 @@ function plan() {
     mode: 'implementation',
     suiteId: 'skill.media-production',
     caseId: 'animation-production-plan',
+    scenarioContract: {
+      schema: 'neko.agent-eval.scenario.v2',
+      evidenceRefs: ['production-facts'],
+      assertionIds: ['skill', 'model', 'output', 'no-image', 'no-video', 'fallback'],
+    },
     baselineVariantId: 'base-guidance',
     matrix: { strategy: 'focused', maxVariants: 2 },
     repetitions: 2,
@@ -54,12 +59,6 @@ function plan() {
         executablePath: 'dist/cli.js',
         launchCommand: { command: 'node', args: ['{executable}'] },
       },
-      expectedPath: ['isolated worktree', 'isolated Desktop build', 'Desktop session driver'],
-      forbiddenFallback: [
-        'working-tree executable',
-        '__ablation marker',
-        'direct AgentSession runner',
-      ],
     })),
   };
 }
