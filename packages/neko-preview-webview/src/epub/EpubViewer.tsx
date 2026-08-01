@@ -885,6 +885,7 @@ export const EpubViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =
         setError(null);
         // Use one fetch-based request path for Desktop and embeddable archive URLs.
         const book = ePub(url, {
+          openAs: 'epub',
           requestMethod: fetchForEpub as (
             url: string,
             type: string,
