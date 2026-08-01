@@ -30,7 +30,14 @@ const EXCLUDED_DIRECTORIES = new Set([
 
 export interface DesktopProjectContentReferenceSnapshot {
   readonly owners: readonly ProjectContentReferenceOwnerSnapshot[];
+  readonly diagnostics: readonly DesktopProjectContentReferenceDiagnostic[];
   readonly requirements: WorkspaceMediaLibraryRequirementSnapshot;
+}
+
+export interface DesktopProjectContentReferenceDiagnostic {
+  readonly code: 'invalid-project-document';
+  readonly ownerKind: ProjectContentReferenceOwnerSnapshot['ownerKind'];
+  readonly ownerId: string;
 }
 
 export async function readDesktopProjectContentReferences(
@@ -38,21 +45,37 @@ export async function readDesktopProjectContentReferences(
 ): Promise<DesktopProjectContentReferenceSnapshot> {
   const projectDocuments = await listProjectDocuments(workspacePath);
   const owners: ProjectContentReferenceOwnerSnapshot[] = [];
+  const diagnostics: DesktopProjectContentReferenceDiagnostic[] = [];
+  const incompleteOwnerKinds = new Set<ProjectContentReferenceOwnerSnapshot['ownerKind']>();
   for (const documentPath of projectDocuments) {
     const extension = path.extname(documentPath).toLocaleLowerCase('en-US');
-    if (extension === '.nkc') {
-      owners.push(await readCanvasReferences(workspacePath, documentPath));
-    } else if (extension === '.otio') {
-      owners.push(await readCutReferences(workspacePath, documentPath));
+    try {
+      if (extension === '.nkc') {
+        owners.push(await readCanvasReferences(workspacePath, documentPath));
+      } else if (extension === '.otio') {
+        owners.push(await readCutReferences(workspacePath, documentPath));
+      }
+    } catch (error: unknown) {
+      if (!(error instanceof InvalidProjectDocumentError)) throw error;
+      diagnostics.push(error.diagnostic);
+      incompleteOwnerKinds.add(error.diagnostic.ownerKind);
     }
   }
-  owners.push(await readEntityRepresentationReferences(workspacePath));
+  try {
+    owners.push(await readEntityRepresentationReferences(workspacePath));
+  } catch (error: unknown) {
+    if (!(error instanceof InvalidProjectDocumentError)) throw error;
+    diagnostics.push(error.diagnostic);
+    incompleteOwnerKinds.add(error.diagnostic.ownerKind);
+  }
+  const expectedOwnerKinds = ['canvas', 'cut', 'entity-representation'] as const;
   const coverage = {
-    expectedOwnerKinds: ['canvas', 'cut', 'entity-representation'] as const,
-    coveredOwnerKinds: ['canvas', 'cut', 'entity-representation'] as const,
+    expectedOwnerKinds,
+    coveredOwnerKinds: expectedOwnerKinds.filter((kind) => !incompleteOwnerKinds.has(kind)),
   };
   return {
     owners,
+    diagnostics,
     requirements: aggregateWorkspaceMediaLibraryRequirements({ owners, coverage }),
   };
 }
@@ -79,17 +102,23 @@ async function readCanvasReferences(
   documentPath: string,
 ): Promise<ProjectContentReferenceOwnerSnapshot> {
   const bytes = await fs.readFile(documentPath);
+  const ownerId = workspaceRelativePath(workspacePath, documentPath);
   const loaded = loadNkc(bytes.toString('utf8'));
   if (!loaded.validation.valid) {
-    throw new Error(
-      `Canvas project document '${workspaceRelativePath(workspacePath, documentPath)}' is invalid.`,
-    );
+    throw invalidProjectDocument('canvas', ownerId);
+  }
+  let references: readonly ContentLocator[];
+  try {
+    references = collectNamedContentLocators(loaded.data);
+  } catch (error: unknown) {
+    if (!(error instanceof InvalidProjectDocumentContentError)) throw error;
+    throw invalidProjectDocument('canvas', ownerId);
   }
   return {
     ownerKind: 'canvas',
-    ownerId: workspaceRelativePath(workspacePath, documentPath),
+    ownerId,
     revision: fingerprint(bytes),
-    references: collectNamedContentLocators(loaded.data),
+    references,
   };
 }
 
@@ -101,12 +130,16 @@ async function rewriteCanvasReferences(
   const bytes = await fs.readFile(documentPath);
   const loaded = loadNkc(bytes.toString('utf8'));
   if (!loaded.validation.valid) {
-    throw new Error(
-      `Canvas project document '${workspaceRelativePath(workspacePath, documentPath)}' is invalid.`,
-    );
+    throw invalidProjectDocument('canvas', workspaceRelativePath(workspacePath, documentPath));
   }
   const data = structuredClone(loaded.data);
-  const rewrittenCount = rewriteNamedContentLocators(data, replacements);
+  let rewrittenCount: number;
+  try {
+    rewrittenCount = rewriteNamedContentLocators(data, replacements);
+  } catch (error: unknown) {
+    if (!(error instanceof InvalidProjectDocumentContentError)) throw error;
+    throw invalidProjectDocument('canvas', workspaceRelativePath(workspacePath, documentPath));
+  }
   if (rewrittenCount > 0) {
     await fs.writeFile(documentPath, saveNkc(data));
   }
@@ -118,12 +151,10 @@ async function readCutReferences(
 ): Promise<ProjectContentReferenceOwnerSnapshot> {
   const bytes = await fs.readFile(documentPath);
   const parsed = parseOtio(bytes);
-  if (!parsed.ok) {
-    throw new Error(
-      `Cut project document '${workspaceRelativePath(workspacePath, documentPath)}' is invalid.`,
-    );
-  }
   const ownerId = workspaceRelativePath(workspacePath, documentPath);
+  if (!parsed.ok) {
+    throw invalidProjectDocument('cut', ownerId);
+  }
   const documentDirectory = path.posix.dirname(ownerId);
   const references: ContentLocator[] = [];
   for (const track of parsed.document.tracks.children) {
@@ -133,7 +164,7 @@ async function readCutReferences(
         path.posix.normalize(path.posix.join(documentDirectory, item.media_reference.target_url)),
       );
       if (!targetPath) {
-        throw new Error(`Cut project document '${ownerId}' contains an invalid media target.`);
+        throw invalidProjectDocument('cut', ownerId);
       }
       references.push({ kind: 'workspace-file', path: targetPath });
     }
@@ -153,12 +184,10 @@ async function rewriteCutReferences(
 ): Promise<void> {
   const bytes = await fs.readFile(documentPath);
   const parsed = parseOtio(bytes);
-  if (!parsed.ok) {
-    throw new Error(
-      `Cut project document '${workspaceRelativePath(workspacePath, documentPath)}' is invalid.`,
-    );
-  }
   const ownerId = workspaceRelativePath(workspacePath, documentPath);
+  if (!parsed.ok) {
+    throw invalidProjectDocument('cut', ownerId);
+  }
   const documentDirectory = path.posix.dirname(ownerId);
   let rewrittenCount = 0;
   const document: OtioTimeline = {
@@ -175,7 +204,7 @@ async function rewriteCutReferences(
             ),
           );
           if (!sourcePath) {
-            throw new Error(`Cut project document '${ownerId}' contains an invalid media target.`);
+            throw invalidProjectDocument('cut', ownerId);
           }
           const replacement = replacements.get(sourcePath);
           if (!replacement) return item;
@@ -219,9 +248,20 @@ async function readEntityRepresentationReferences(
   try {
     value = JSON.parse(bytes.toString('utf8')) as unknown;
   } catch {
-    throw new Error('Entity representation binding project document is malformed.');
+    throw invalidProjectDocument(
+      'entity-representation',
+      ENTITY_REPRESENTATION_BINDING_WORKSPACE_PATH,
+    );
   }
-  const file = assertEntityRepresentationBindingFile(value);
+  let file: ReturnType<typeof assertEntityRepresentationBindingFile>;
+  try {
+    file = assertEntityRepresentationBindingFile(value);
+  } catch {
+    throw invalidProjectDocument(
+      'entity-representation',
+      ENTITY_REPRESENTATION_BINDING_WORKSPACE_PATH,
+    );
+  }
   return {
     ownerKind: 'entity-representation',
     ownerId: ENTITY_REPRESENTATION_BINDING_WORKSPACE_PATH,
@@ -251,9 +291,20 @@ async function rewriteEntityRepresentationReferences(
   try {
     value = JSON.parse(bytes.toString('utf8')) as unknown;
   } catch {
-    throw new Error('Entity representation binding project document is malformed.');
+    throw invalidProjectDocument(
+      'entity-representation',
+      ENTITY_REPRESENTATION_BINDING_WORKSPACE_PATH,
+    );
   }
-  const file = assertEntityRepresentationBindingFile(value);
+  let file: ReturnType<typeof assertEntityRepresentationBindingFile>;
+  try {
+    file = assertEntityRepresentationBindingFile(value);
+  } catch {
+    throw invalidProjectDocument(
+      'entity-representation',
+      ENTITY_REPRESENTATION_BINDING_WORKSPACE_PATH,
+    );
+  }
   let rewrittenCount = 0;
   const bindings = file.bindings.map((binding) => {
     const representation = replaceContentLocator(binding.representation, replacements);
@@ -281,7 +332,7 @@ function collectNamedContentLocators(value: unknown): readonly ContentLocator[] 
       if (key === 'contentLocator') {
         const locator = validateContentLocator(nested);
         if (!locator.ok) {
-          throw new Error('Canvas project document contains an invalid ContentLocator.');
+          throw new InvalidProjectDocumentContentError();
         }
         references.push(locator.locator);
         continue;
@@ -309,7 +360,7 @@ function rewriteNamedContentLocators(
       if (key === 'contentLocator') {
         const locator = validateContentLocator(nested);
         if (!locator.ok) {
-          throw new Error('Canvas project document contains an invalid ContentLocator.');
+          throw new InvalidProjectDocumentContentError();
         }
         const replacement = replaceContentLocator(locator.locator, replacements);
         if (replacement !== locator.locator) {
@@ -371,6 +422,26 @@ function workspaceRelativePath(workspacePath: string, filePath: string): string 
 
 function fingerprint(bytes: Uint8Array): string {
   return `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
+}
+
+class InvalidProjectDocumentError extends Error {
+  constructor(readonly diagnostic: DesktopProjectContentReferenceDiagnostic) {
+    super(`Project document '${diagnostic.ownerId}' is invalid.`);
+    this.name = 'InvalidProjectDocumentError';
+  }
+}
+
+class InvalidProjectDocumentContentError extends Error {}
+
+function invalidProjectDocument(
+  ownerKind: DesktopProjectContentReferenceDiagnostic['ownerKind'],
+  ownerId: string,
+): InvalidProjectDocumentError {
+  return new InvalidProjectDocumentError({
+    code: 'invalid-project-document',
+    ownerKind,
+    ownerId,
+  });
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

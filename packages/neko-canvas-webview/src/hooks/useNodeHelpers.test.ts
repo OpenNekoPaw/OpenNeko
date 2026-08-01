@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { createImportedMarkdownNodeData, createTableMarkdownNodeData } from './useNodeHelpers';
+import {
+  createImportedMarkdownNodeData,
+  createTableMarkdownNodeData,
+  requireCanvasWorkspaceContentLocator,
+} from './useNodeHelpers';
 
 describe('createImportedMarkdownNodeData', () => {
   it('creates an editable Markdown snapshot with portable provenance', () => {
@@ -46,5 +50,23 @@ describe('createTableMarkdownNodeData', () => {
       title: 'Table',
       content: '| Column 1 | Column 2 |\n| --- | --- |\n|  |  |',
     });
+  });
+});
+
+describe('requireCanvasWorkspaceContentLocator', () => {
+  it('promotes a durable project path to the canonical persisted identity', () => {
+    expect(requireCanvasWorkspaceContentLocator('media/clip.mp4')).toEqual({
+      kind: 'workspace-file',
+      path: 'media/clip.mp4',
+    });
+  });
+
+  it('rejects runtime URLs and absolute paths instead of persisting them', () => {
+    expect(() => requireCanvasWorkspaceContentLocator('blob:runtime-preview')).toThrow(
+      'workspace-relative',
+    );
+    expect(() => requireCanvasWorkspaceContentLocator('/Users/fixture/clip.mp4')).toThrow(
+      'workspace-relative',
+    );
   });
 });

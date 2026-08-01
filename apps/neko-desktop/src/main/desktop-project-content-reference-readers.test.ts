@@ -92,6 +92,53 @@ describe('Desktop project content reference readers', () => {
     expect(result.requirements.requirements).toEqual([]);
   });
 
+  it('keeps other owners readable and marks coverage incomplete for an invalid Canvas document', async () => {
+    const workspace = await mkdtemp(path.join(tmpdir(), 'neko-reference-readers-'));
+    await writeFile(
+      path.join(workspace, 'broken.nkc'),
+      JSON.stringify({
+        version: CURRENT_NKC_VERSION,
+        name: 'Broken',
+        viewport: { pan: { x: 0, y: 0 }, zoom: 1 },
+        nodes: [
+          {
+            id: 'media-a',
+            type: 'media',
+            position: { x: 0, y: 0 },
+            size: { width: 320, height: 180 },
+            zIndex: 1,
+            data: {
+              assetPath: 'https://example.test/runtime-only.mp4',
+              mediaType: 'video',
+            },
+          },
+        ],
+        connections: [],
+      }),
+    );
+
+    const result = await readDesktopProjectContentReferences(workspace);
+
+    expect(result.owners).toEqual([
+      expect.objectContaining({
+        ownerKind: 'entity-representation',
+        revision: 'absent',
+      }),
+    ]);
+    expect(result.diagnostics).toEqual([
+      {
+        code: 'invalid-project-document',
+        ownerKind: 'canvas',
+        ownerId: 'broken.nkc',
+      },
+    ]);
+    expect(result.requirements).toMatchObject({
+      coverage: 'incomplete',
+      missingOwnerKinds: ['canvas'],
+      requirements: [],
+    });
+  });
+
   it('rewrites only staged owner documents through their owning codecs', async () => {
     const workspace = await mkdtemp(path.join(tmpdir(), 'neko-reference-source-'));
     const stagedWorkspace = await mkdtemp(path.join(tmpdir(), 'neko-reference-staged-'));

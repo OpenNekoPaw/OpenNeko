@@ -113,6 +113,74 @@ describe('Desktop Resource Browser source', () => {
     ]);
   });
 
+  it('keeps inspectable Media Libraries available when one Canvas document is invalid', async () => {
+    const fixture = await createFixture();
+    const libraryRoot = path.join(fixture.root, 'Library');
+    await mkdir(libraryRoot);
+    await writeFile(path.join(libraryRoot, 'clip.mp4'), 'clip');
+    await mkdir(path.join(fixture.workspace, 'neko', 'assets'), { recursive: true });
+    await symlink(libraryRoot, path.join(fixture.workspace, 'neko', 'assets', 'Library'));
+    await writeFile(
+      path.join(fixture.workspace, 'Untitled.nkc'),
+      JSON.stringify({
+        version: '3.0',
+        name: 'Untitled',
+        viewport: { pan: { x: 0, y: 0 }, zoom: 1 },
+        nodes: [
+          {
+            id: 'media-a',
+            type: 'media',
+            position: { x: 0, y: 0 },
+            size: { width: 320, height: 180 },
+            zIndex: 1,
+            data: {
+              assetPath: 'https://example.test/runtime-only.mp4',
+              mediaType: 'video',
+            },
+          },
+        ],
+        connections: [],
+      }),
+    );
+    const host = createElectronNekoHostPorts({
+      homedir: fixture.root,
+      nekoHome: path.join(fixture.root, '.openneko'),
+      workspaceRoot: fixture.workspace,
+      version: '0.0.1',
+      logger: createLogger(),
+    });
+    const workspace = {
+      workspaceId: identity.workspaceId,
+      workspacePath: fixture.workspace,
+      displayName: 'Fixture',
+      locator: { kind: 'relative' as const, value: 'workspace' },
+    };
+    const workspaceMediaLibrarySync = new DesktopWorkspaceMediaLibrarySyncService(
+      path.join(fixture.root, '.openneko', 'media-libraries'),
+    );
+    const source = createDesktopResourceBrowserReadSource({
+      workspace,
+      host,
+      workspaceMediaLibrarySync,
+    });
+
+    await expect(source.media.search({ identity, query: '', limit: 20 })).resolves.toEqual([
+      expect.objectContaining({
+        label: 'Library',
+        availability: 'available',
+        libraryStatus: expect.objectContaining({
+          state: 'unreferenced-linked',
+        }),
+      }),
+    ]);
+    await expect(workspaceMediaLibrarySync.inspect(workspace)).resolves.toMatchObject({
+      coverage: 'incomplete',
+      portability: {
+        state: 'coverage-incomplete',
+      },
+    });
+  });
+
   it('keeps Asset Library content independent from connected Media Library files', async () => {
     const fixture = await createFixture();
     const globalAssetRoot = path.join(fixture.root, 'home', '.neko', 'assets');

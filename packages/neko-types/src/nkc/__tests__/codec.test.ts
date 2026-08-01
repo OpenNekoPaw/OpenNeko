@@ -56,6 +56,65 @@ describe('loadNkc', () => {
     expect(result.data.name).toBe('Test Canvas');
   });
 
+  it('migrates current-version path-only material nodes to canonical workspace locators', () => {
+    const result = loadNkc(
+      JSON.stringify({
+        ...VALID_CANVAS,
+        nodes: [
+          {
+            ...VALID_CANVAS.nodes[0],
+            data: {
+              assetPath: 'media/legacy.mp4',
+              mediaType: 'video',
+            },
+          },
+        ],
+      }),
+    );
+
+    expect(result.validation.valid).toBe(true);
+    expect(result.migration).toMatchObject({
+      fromVersion: '3.0',
+      toVersion: '3.0',
+      migrated: true,
+    });
+    expect(result.data.nodes[0]).toMatchObject({
+      type: 'media',
+      data: {
+        assetPath: 'media/legacy.mp4',
+        contentLocator: {
+          kind: 'workspace-file',
+          path: 'media/legacy.mp4',
+        },
+      },
+    });
+  });
+
+  it('keeps non-portable current-version material paths invalid', () => {
+    const result = loadNkc(
+      JSON.stringify({
+        ...VALID_CANVAS,
+        nodes: [
+          {
+            ...VALID_CANVAS.nodes[0],
+            data: {
+              assetPath: 'https://example.test/legacy.mp4',
+              mediaType: 'video',
+            },
+          },
+        ],
+      }),
+    );
+
+    expect(result.validation.valid).toBe(false);
+    expect(result.migration).toBeUndefined();
+    expect(result.validation.errors).toContainEqual(
+      expect.objectContaining({
+        field: 'nodes[0].data.contentLocator',
+      }),
+    );
+  });
+
   it('should return error result for invalid JSON', () => {
     const result = loadNkc('{ broken json!!!');
 

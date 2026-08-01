@@ -4,7 +4,9 @@ import type {
   ContentLocator,
   DroppedTextCanvasAsset,
   MarkdownCanvasNode,
+  WorkspaceFileContentLocator,
 } from '@neko/shared';
+import { normalizeWorkspaceContentPath } from '@neko/shared';
 import { buildCanvasNode } from '../utils/nodeFactory';
 
 export interface UseNodeHelpersOptions {
@@ -56,6 +58,14 @@ export function createImportedMarkdownNodeData(
       sourceName: asset.name,
     },
   };
+}
+
+export function requireCanvasWorkspaceContentLocator(value: string): WorkspaceFileContentLocator {
+  const path = normalizeWorkspaceContentPath(value);
+  if (!path || path !== value) {
+    throw new Error('Canvas persisted material path must be normalized and workspace-relative.');
+  }
+  return { kind: 'workspace-file', path };
 }
 
 export function useNodeHelpers(options: UseNodeHelpersOptions): UseNodeHelpersReturn {
@@ -117,16 +127,20 @@ export function useNodeHelpers(options: UseNodeHelpersOptions): UseNodeHelpersRe
         runtimeAssetPath?: string;
       },
     ) => {
-      const contentLocator = options?.contentLocator;
-      const runtimePath = options?.runtimeAssetPath ?? (contentLocator ? uri : undefined);
+      const contentLocator =
+        options?.contentLocator ?? (uri ? requireCanvasWorkspaceContentLocator(uri) : undefined);
+      if (!contentLocator) {
+        throw new Error('Canvas Media creation requires a canonical ContentLocator.');
+      }
+      const runtimePath = options?.runtimeAssetPath ?? uri;
       addNode(
         buildCanvasNode({
           type: 'media',
           position: pos,
           zIndex: nodeCount,
           data: {
-            assetPath: contentLocator ? '' : (uri ?? ''),
-            ...(contentLocator ? { contentLocator } : {}),
+            assetPath: '',
+            contentLocator,
             ...(runtimePath ? { runtimeAssetPath: runtimePath } : {}),
             ...(name ? { title: name } : {}),
             mediaType,
@@ -155,12 +169,13 @@ export function useNodeHelpers(options: UseNodeHelpersOptions): UseNodeHelpersRe
 
   const addFileAt = useCallback(
     (pos: { x: number; y: number }, path: string, title: string, mediaType?: string) => {
+      const contentLocator = requireCanvasWorkspaceContentLocator(path);
       addNode(
         buildCanvasNode({
           type: 'file',
           position: pos,
           zIndex: nodeCount,
-          data: { path, title, ...(mediaType ? { mediaType } : {}) },
+          data: { path, title, contentLocator, ...(mediaType ? { mediaType } : {}) },
         }),
       );
       reportAction('node.create', 'file', title);
