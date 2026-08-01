@@ -214,10 +214,7 @@ describe('Desktop architecture boundaries', () => {
       'utf8',
     );
     const canvasPreviewResolver = readFileSync(
-      path.join(
-        repositoryRoot,
-        'packages/neko-canvas-webview/src/preview/previewResolver.ts',
-      ),
+      path.join(repositoryRoot, 'packages/neko-canvas-webview/src/preview/previewResolver.ts'),
       'utf8',
     );
 
@@ -235,10 +232,7 @@ describe('Desktop architecture boundaries', () => {
     }
     expect(
       existsSync(
-        path.join(
-          repositoryRoot,
-          'packages/neko-media/src/node/NodeMediaLoopbackServer.ts',
-        ),
+        path.join(repositoryRoot, 'packages/neko-media/src/node/NodeMediaLoopbackServer.ts'),
       ),
     ).toBe(false);
 
@@ -252,17 +246,16 @@ describe('Desktop architecture boundaries', () => {
     expect(resourceRegistry).not.toMatch(/\bupstream\b/iu);
     expect(resourceRegistry).not.toContain('ContentLocator');
     expect(resourceRegistry).not.toContain('ResourceRef');
-    expect(resourceRegistry).not.toMatch(
-      /\b(?:MediaStream|RTCPeerConnection|getUserMedia)\b/u,
-    );
+    expect(resourceRegistry).not.toMatch(/\b(?:MediaStream|RTCPeerConnection|getUserMedia)\b/u);
 
     const resourceRefDeclarations = [
       ...walkProductionTypeScript(path.join(repositoryRoot, 'apps')),
       ...walkProductionTypeScript(path.join(repositoryRoot, 'packages')),
     ].flatMap((file) => {
       const content = readFileSync(file, 'utf8');
-      return /\b(?:interface|type|class)\s+\w*ResourceRef\b|\bimport\s+type\b[^;]*\bResourceRef\b/gu
-        .test(content)
+      return /\b(?:interface|type|class)\s+\w*ResourceRef\b|\bimport\s+type\b[^;]*\bResourceRef\b/gu.test(
+        content,
+      )
         ? [path.relative(repositoryRoot, file)]
         : [];
     });
@@ -371,8 +364,13 @@ describe('Desktop architecture boundaries', () => {
     expect(preload).toContain('workbench: {');
     expect(preload).toContain('resources: {');
     expect(preload).toContain('parseResourceBrowserSnapshotRequest');
+    expect(preload).toContain("process.argv.includes('--openneko-functional-fixture')");
+    expect(preload).toContain('createDesktopAgentAutomationRequest');
+    expect(preload).toContain('DESKTOP_AGENT_AUTOMATION_CHANNEL');
     expect(preload).not.toContain('ipcRenderer.send');
     expect(preload).not.toContain('executeCommand');
+    expect(preload).not.toContain('executeRuntime');
+    expect(preload).not.toContain('arbitraryChannel');
     expect(preload).not.toContain('channel: string');
     expect(contract).not.toContain('workspacePath');
     expect(contract).not.toContain('resolvedPath');
@@ -397,10 +395,7 @@ function walkTypeScript(directory: string): string[] {
   return readdirSync(directory)
     .filter(
       (entry) =>
-        entry !== 'node_modules' &&
-        entry !== 'dist' &&
-        entry !== 'coverage' &&
-        entry !== '.turbo',
+        entry !== 'node_modules' && entry !== 'dist' && entry !== 'coverage' && entry !== '.turbo',
     )
     .flatMap((entry) => {
       const file = path.join(directory, entry);

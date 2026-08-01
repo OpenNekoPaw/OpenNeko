@@ -1,5 +1,6 @@
 import type { OpenNekoDesktopBridge } from './bridge-contract';
 import type { OpenNekoDesktopAgentBridge } from './agent-contract';
+import type { OpenNekoDesktopAgentAutomationBridge } from './agent-automation-contract';
 import type { OpenNekoDesktopShellBridge } from './shell-contract';
 import type { OpenNekoDesktopResourceBrowserBridge } from './resource-browser-bridge-contract';
 import type { OpenNekoDesktopPreviewBridge } from './preview-bridge-contract';
@@ -14,6 +15,7 @@ declare global {
     readonly openNekoDesktop: OpenNekoDesktopBridge &
       OpenNekoDesktopShellBridge &
       OpenNekoDesktopAgentBridge &
+      OpenNekoDesktopAgentAutomationBridge &
       OpenNekoDesktopResourceBrowserBridge &
       OpenNekoDesktopPreviewBridge &
       OpenNekoDesktopCanvasBridge &

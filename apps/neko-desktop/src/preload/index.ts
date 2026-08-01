@@ -10,6 +10,12 @@ import {
   type OpenNekoDesktopAgentBridge,
 } from '../shared/agent-contract';
 import {
+  createDesktopAgentAutomationRequest,
+  DESKTOP_AGENT_AUTOMATION_CHANNEL,
+  parseDesktopAgentAutomationResult,
+  type OpenNekoDesktopAgentAutomationBridge,
+} from '../shared/agent-automation-contract';
+import {
   createDesktopBootstrapRequest,
   DESKTOP_BRIDGE_CHANNELS,
   parseDesktopBootstrapProjection,
@@ -201,6 +207,7 @@ const settingsListeners = new Set<
 const bridge: OpenNekoDesktopBridge &
   OpenNekoDesktopShellBridge &
   OpenNekoDesktopAgentBridge &
+  OpenNekoDesktopAgentAutomationBridge &
   OpenNekoDesktopResourceBrowserBridge &
   OpenNekoDesktopPreviewBridge &
   OpenNekoDesktopCanvasBridge &
@@ -258,6 +265,31 @@ const bridge: OpenNekoDesktopBridge &
         agentListeners.delete(listener);
       };
     },
+    ...(process.argv.includes('--openneko-functional-fixture')
+      ? {
+          automation: {
+            async execute(operation) {
+              const connection = currentAgentEventCursor?.connection;
+              if (!connection) {
+                throw new DesktopAgentContractError(
+                  'desktop-agent-identity-mismatch',
+                  'Desktop Agent automation requires a ready sender-bound bootstrap.',
+                );
+              }
+              const request = createDesktopAgentAutomationRequest(
+                nextRequestId('desktop-agent-automation'),
+                connection,
+                operation,
+              );
+              const response: unknown = await ipcRenderer.invoke(
+                DESKTOP_AGENT_AUTOMATION_CHANNEL,
+                request,
+              );
+              return parseDesktopAgentAutomationResult(response, request.requestId);
+            },
+          },
+        }
+      : {}),
   },
   bootstrap: {
     async get() {
@@ -737,10 +769,7 @@ const bridge: OpenNekoDesktopBridge &
         request.requestId,
         result.requestId,
       );
-      if (
-        result.status === 'planned' &&
-        result.plan.workspaceId !== request.identity.workspaceId
-      ) {
+      if (result.status === 'planned' && result.plan.workspaceId !== request.identity.workspaceId) {
         throw new Error('Desktop project portability plan Workspace identity does not match.');
       }
       currentProjectPortabilityIdentity = request.identity;
@@ -1226,8 +1255,7 @@ ipcRenderer.on(
     if (!identity || !isSameDesktopProjectPortabilityIdentity(event.identity, identity)) {
       return;
     }
-    const currentSequence =
-      projectPortabilityEventSequences.get(event.progress.snapshotId) ?? 0;
+    const currentSequence = projectPortabilityEventSequences.get(event.progress.snapshotId) ?? 0;
     if (event.sequence !== currentSequence + 1) return;
     projectPortabilityEventSequences.set(event.progress.snapshotId, event.sequence);
     for (const listener of projectPortabilityListeners) listener(event);

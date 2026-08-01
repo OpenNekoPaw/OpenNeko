@@ -1,6 +1,8 @@
 import * as path from 'node:path';
+import { assertDesktopAgentAutomationLaunch } from '../shared/agent-automation-contract';
 
 const FUNCTIONAL_FIXTURE_ARGUMENT = '--openneko-functional-fixture';
+const FUNCTIONAL_HIDDEN_ARGUMENT = '--openneko-functional-hidden';
 const FUNCTIONAL_FIXTURE_ENVIRONMENT = 'OPENNEKO_DESKTOP_FUNCTIONAL_HOME';
 const FUNCTIONAL_WORKSPACE_ENVIRONMENT = 'OPENNEKO_DESKTOP_FUNCTIONAL_WORKSPACE';
 const FUNCTIONAL_FIXTURE_PREFIX = 'openneko-desktop-functional-';
@@ -45,4 +47,37 @@ export function resolveDesktopFunctionalWorkspace(input: {
     throw new Error('Desktop functional workspace must be contained by the fixture home.');
   }
   return resolved;
+}
+
+export function resolveDesktopFunctionalWindowMode(argv: readonly string[]): 'visible' | 'hidden' {
+  if (!argv.includes(FUNCTIONAL_HIDDEN_ARGUMENT)) return 'visible';
+  if (!argv.includes(FUNCTIONAL_FIXTURE_ARGUMENT)) {
+    throw new Error('Desktop functional hidden mode requires the explicit fixture argument.');
+  }
+  return 'hidden';
+}
+
+export function resolveDesktopAgentAutomationLaunch(input: {
+  readonly argv: readonly string[];
+  readonly fixtureHome: string;
+  readonly userDataRoot: string;
+  readonly workspace: string | undefined;
+}): boolean {
+  if (!input.argv.includes(FUNCTIONAL_FIXTURE_ARGUMENT)) return false;
+  if (!input.workspace) {
+    throw new Error('Desktop Agent automation requires an isolated fixture Workspace.');
+  }
+  const fixtureHome = path.resolve(input.fixtureHome);
+  const userDataRoot = path.resolve(input.userDataRoot);
+  const relativeUserData = path.relative(fixtureHome, userDataRoot);
+  const isolatedUserData = !(
+    relativeUserData.length === 0 ||
+    relativeUserData.startsWith('..') ||
+    path.isAbsolute(relativeUserData)
+  );
+  if (!isolatedUserData) {
+    throw new Error('Desktop Agent automation requires isolated Electron userData.');
+  }
+  assertDesktopAgentAutomationLaunch({ fixtureLaunch: true, isolatedUserData });
+  return true;
 }

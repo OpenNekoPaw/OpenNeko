@@ -132,6 +132,11 @@ import type {
   DesktopProjectPortabilityPlanResult,
   DesktopProjectPortabilityProgressEvent,
 } from '../shared/project-portability-contract';
+import {
+  DESKTOP_AGENT_AUTOMATION_VERSION,
+  parseDesktopAgentAutomationRequest,
+  type DesktopAgentAutomationResult,
+} from '../shared/agent-automation-contract';
 
 export interface DesktopAppHostOptions {
   readonly host: NekoHostPorts;
@@ -150,6 +155,10 @@ export interface DesktopAppHostOptions {
   readonly personalSkillManager: DesktopPersonalSkillManager;
   readonly openAgentAdvancedSettings: () => Promise<void>;
   readonly instanceId?: string;
+  readonly agentAutomation?: {
+    reloadRenderer(windowId: string): void;
+    closeApplication(windowId: string): void;
+  };
 }
 
 export class DesktopAppHost {
@@ -346,6 +355,84 @@ export class DesktopAppHost {
       rendererEpoch: window.rendererEpoch,
     };
     return this.agentBridge.send(request, grant);
+  }
+
+  async executeAgentAutomation(
+    sender: DesktopSenderIdentity,
+    payload: unknown,
+  ): Promise<DesktopAgentAutomationResult> {
+    this.requireActive();
+    const automation = this.options.agentAutomation;
+    if (!automation) {
+      throw new Error('Desktop Agent automation is unavailable outside an isolated fixture.');
+    }
+    const request = parseDesktopAgentAutomationRequest(payload);
+    const window = this.windows.resolveSender(sender);
+    const view = await this.shell.resolveAgentViewGrant(window.windowId, request.connection);
+    const grant: DesktopAgentConnectionGrant = {
+      applicationInstanceId: this.applicationIdentity.instanceId,
+      windowId: window.windowId,
+      projectId: view.projectId,
+      workspaceId: view.workspaceId,
+      viewId: view.viewId,
+      viewEpoch: view.viewEpoch,
+      rendererEpoch: window.rendererEpoch,
+    };
+    switch (request.operation.kind) {
+      case 'wait-for-idle':
+        return {
+          schemaVersion: DESKTOP_AGENT_AUTOMATION_VERSION,
+          requestId: request.requestId,
+          status: 'idle',
+          identity: await this.agentBridge.waitForIdle(
+            request.connection,
+            grant,
+            request.operation.conversationId,
+            request.operation.timeoutMs,
+          ),
+        };
+      case 'read-facts':
+        return {
+          schemaVersion: DESKTOP_AGENT_AUTOMATION_VERSION,
+          requestId: request.requestId,
+          status: 'facts',
+          facts: this.agentBridge.readFacts(request.connection, grant, request.operation),
+        };
+      case 'reload-renderer': {
+        const facts = await this.agentBridge.disposeConnectionAndReadFacts(
+          request.connection,
+          grant,
+        );
+        automation.reloadRenderer(window.windowId);
+        return {
+          schemaVersion: DESKTOP_AGENT_AUTOMATION_VERSION,
+          requestId: request.requestId,
+          status: 'facts',
+          facts,
+        };
+      }
+      case 'close-application': {
+        const facts = await this.agentBridge.disposeConnectionAndReadFacts(
+          request.connection,
+          grant,
+        );
+        automation.closeApplication(window.windowId);
+        return {
+          schemaVersion: DESKTOP_AGENT_AUTOMATION_VERSION,
+          requestId: request.requestId,
+          status: 'facts',
+          facts,
+        };
+      }
+      case 'submit':
+      case 'queue':
+      case 'cancel':
+      case 'confirm':
+      case 'resume':
+        throw new Error(
+          `Desktop Agent automation operation '${request.operation.kind}' must use the ordinary public Agent bridge.`,
+        );
+    }
   }
 
   async openContentProject(
@@ -953,6 +1040,7 @@ export class DesktopAppHost {
       request.workbench,
     );
     this.preview?.reconcileWorkbench(window.windowId, projection.window.workbench);
+    this.canvas?.reconcileWorkbench(window.windowId, projection.window.workbench);
     this.cut?.reconcileWorkbench(window.windowId, projection.window.workbench);
     return {
       schemaVersion: DESKTOP_SHELL_CONTRACT_VERSION,
@@ -1403,6 +1491,7 @@ export class DesktopAppHost {
       this.agentBridge.detachView(window.windowId, closingView.viewId);
     }
     this.preview?.reconcileWorkbench(window.windowId, projection.window.workbench);
+    this.canvas?.reconcileWorkbench(window.windowId, projection.window.workbench);
     this.cut?.reconcileWorkbench(window.windowId, projection.window.workbench);
     return {
       schemaVersion: DESKTOP_SHELL_CONTRACT_VERSION,
@@ -1410,7 +1499,6 @@ export class DesktopAppHost {
       projection,
     };
   }
-
 }
 
 function projectSkillDiscovery(

@@ -26,6 +26,7 @@ import {
   type ContentLocator,
 } from '@neko/shared';
 import type { DesktopCanvasViewGrant } from './shell-service';
+import type { DesktopWorkbenchLayoutProjection } from '../shared/workbench-contract';
 import {
   DesktopCanvasMaterialAuthoringService,
   type DesktopCanvasExternalSource,
@@ -63,6 +64,7 @@ export interface DesktopCanvasMediaPort {
     workspace: DesktopCanvasViewGrant['workspace'],
   ): Promise<DesktopCanvasMediaResponse | undefined>;
   detachWindow(windowId: string): void;
+  detachView(windowId: string, viewId: string): void;
   dispose(): Promise<void>;
 }
 
@@ -266,6 +268,28 @@ export class DesktopCanvasRuntime {
     }
     this.options.media?.detachWindow(windowId);
     this.options.generation?.detachWindow(windowId);
+  }
+
+  reconcileWorkbench(windowId: string, workbench: DesktopWorkbenchLayoutProjection): void {
+    const attached = new Map(
+      workbench.main.views
+        .filter((view) => view.kind === 'canvas')
+        .map((view) => [view.viewId, view] as const),
+    );
+    for (const [key, entry] of this.sessions) {
+      if (entry.windowId !== windowId) continue;
+      const view = attached.get(entry.identity.viewId);
+      if (
+        view &&
+        view.viewEpoch === entry.identity.viewEpoch &&
+        view.documentId === entry.identity.documentId
+      ) {
+        continue;
+      }
+      entry.session.dispose();
+      this.sessions.delete(key);
+      this.options.media?.detachView(windowId, entry.identity.viewId);
+    }
   }
 
   async dispose(): Promise<void> {

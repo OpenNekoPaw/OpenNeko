@@ -119,6 +119,9 @@ describe('DesktopAppHost', () => {
         ),
       ),
     ).rejects.toThrow(/Unknown Desktop IPC sender/);
+    await expect(appHost.executeAgentAutomation(sender, {})).rejects.toThrow(
+      'unavailable outside an isolated fixture',
+    );
     await appHost.dispose();
   });
 

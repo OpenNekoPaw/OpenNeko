@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  resolveDesktopAgentAutomationLaunch,
   resolveDesktopFunctionalWorkspace,
+  resolveDesktopFunctionalWindowMode,
   resolveDesktopRuntimeHome,
 } from './desktop-functional-fixture';
 
@@ -13,6 +15,20 @@ describe('Desktop functional fixture home', () => {
         environment: {},
       }),
     ).toBe('/Users/example');
+  });
+
+  it('keeps ordinary and functional startup visible unless isolated hidden mode is explicit', () => {
+    expect(resolveDesktopFunctionalWindowMode([])).toBe('visible');
+    expect(resolveDesktopFunctionalWindowMode(['--openneko-functional-fixture'])).toBe('visible');
+    expect(
+      resolveDesktopFunctionalWindowMode([
+        '--openneko-functional-fixture',
+        '--openneko-functional-hidden',
+      ]),
+    ).toBe('hidden');
+    expect(() => resolveDesktopFunctionalWindowMode(['--openneko-functional-hidden'])).toThrow(
+      'explicit fixture argument',
+    );
   });
 
   it('accepts only an explicitly enabled, isolated absolute fixture root', () => {
@@ -66,7 +82,11 @@ describe('Desktop functional fixture home', () => {
       }),
     ).toBe(`${fixtureHome}/workspace`);
 
-    for (const workspace of ['relative-workspace', '/private/tmp/unrelated-workspace', fixtureHome]) {
+    for (const workspace of [
+      'relative-workspace',
+      '/private/tmp/unrelated-workspace',
+      fixtureHome,
+    ]) {
       expect(() =>
         resolveDesktopFunctionalWorkspace({
           argv: ['--openneko-functional-fixture'],
@@ -88,5 +108,33 @@ describe('Desktop functional fixture home', () => {
         },
       }),
     ).toThrow('explicit fixture argument');
+  });
+
+  it('enables Agent automation only for a fixture Workspace and contained userData', () => {
+    const fixtureHome = '/private/tmp/openneko-desktop-functional-agent';
+    expect(
+      resolveDesktopAgentAutomationLaunch({
+        argv: [],
+        fixtureHome,
+        userDataRoot: `${fixtureHome}/electron-user-data`,
+        workspace: `${fixtureHome}/workspace`,
+      }),
+    ).toBe(false);
+    expect(
+      resolveDesktopAgentAutomationLaunch({
+        argv: ['--openneko-functional-fixture'],
+        fixtureHome,
+        userDataRoot: `${fixtureHome}/electron-user-data`,
+        workspace: `${fixtureHome}/workspace`,
+      }),
+    ).toBe(true);
+    expect(() =>
+      resolveDesktopAgentAutomationLaunch({
+        argv: ['--openneko-functional-fixture'],
+        fixtureHome,
+        userDataRoot: '/private/tmp/shared-user-data',
+        workspace: `${fixtureHome}/workspace`,
+      }),
+    ).toThrow('isolated Electron userData');
   });
 });

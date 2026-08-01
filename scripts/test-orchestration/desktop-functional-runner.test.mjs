@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
+import { EventEmitter } from 'node:events';
 import { describe, it } from 'node:test';
-import { createAutomatedDesktopLaunch } from '../desktop-functional/runner.mjs';
+import {
+  createAutomatedDesktopLaunch,
+  createProcessController,
+} from '../desktop-functional/runner.mjs';
 import {
   validateDesktopFunctionalScenario,
   validatePreparedDesktopFixture,
@@ -54,6 +58,25 @@ describe('Desktop automated functional runner contract', () => {
     ]);
   });
 
+  it('uses the same isolated Electron launch path for hidden matrix mode', () => {
+    const launch = createAutomatedDesktopLaunch({
+      platform: 'darwin',
+      target: 'packaged',
+      fixtureHome: '/tmp/openneko-desktop-functional-agent',
+      userDataRoot: '/tmp/openneko-desktop-functional-agent/electron-user-data',
+      workspacePath: '/tmp/openneko-desktop-functional-agent/workspace',
+      debugPort: 43126,
+      windowMode: 'hidden',
+    });
+
+    assert.deepEqual(launch.args, [
+      '--openneko-functional-fixture',
+      '--openneko-functional-hidden',
+      '--user-data-dir=/tmp/openneko-desktop-functional-agent/electron-user-data',
+      '--remote-debugging-port=43126',
+    ]);
+  });
+
   it('keeps scenario ownership and prepared workspaces explicit', () => {
     const scenario = validateDesktopFunctionalScenario({
       id: 'cut-openneko-consumer',
@@ -77,5 +100,58 @@ describe('Desktop automated functional runner contract', () => {
         ),
       /inside its fixture home/u,
     );
+  });
+
+  it('terminates a surviving Desktop process group after its launcher exits', async () => {
+    const child = new EventEmitter();
+    child.pid = 43125;
+    child.stdout = undefined;
+    child.stderr = undefined;
+    const signals = [];
+    let alive = true;
+    const controller = createProcessController(
+      child,
+      '/tmp/openneko-desktop-functional-cut',
+      'darwin',
+      {
+        isTreeAlive: () => alive,
+        forceKillAfterMs: 0,
+        killTree: (_child, _platform, signal) => {
+          signals.push(signal);
+          alive = false;
+        },
+      },
+    );
+
+    child.emit('exit', 0, null);
+    await controller.stop();
+
+    assert.deepEqual(signals, ['SIGTERM']);
+  });
+
+  it('escalates a surviving Desktop process group to SIGKILL', async () => {
+    const child = new EventEmitter();
+    child.pid = 43126;
+    child.stdout = undefined;
+    child.stderr = undefined;
+    const signals = [];
+    let alive = true;
+    const controller = createProcessController(
+      child,
+      '/tmp/openneko-desktop-functional-cut',
+      'darwin',
+      {
+        isTreeAlive: () => alive,
+        forceKillAfterMs: 0,
+        killTree: (_child, _platform, signal) => {
+          signals.push(signal);
+          if (signal === 'SIGKILL') alive = false;
+        },
+      },
+    );
+
+    await controller.stop();
+
+    assert.deepEqual(signals, ['SIGTERM', 'SIGKILL']);
   });
 });

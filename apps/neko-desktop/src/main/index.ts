@@ -38,7 +38,9 @@ import { createDesktopAgentAppHostComposition } from './desktop-agent-app-host-c
 import { NodePiConversationCatalogReader } from '@neko/agent/pi';
 import { NodeVideoThumbnail } from '@neko/media/node';
 import {
+  resolveDesktopAgentAutomationLaunch,
   resolveDesktopFunctionalWorkspace,
+  resolveDesktopFunctionalWindowMode,
   resolveDesktopRuntimeHome,
 } from './desktop-functional-fixture';
 import { createDesktopAgentCredentialRuntime } from './desktop-agent-credential-runtime';
@@ -119,7 +121,14 @@ async function startDesktop(): Promise<void> {
     environment: process.env,
     fixtureHome: homedir,
   });
+  const functionalWindowMode = resolveDesktopFunctionalWindowMode(process.argv);
   const userData = app.getPath('userData');
+  const agentAutomationLaunch = resolveDesktopAgentAutomationLaunch({
+    argv: process.argv,
+    fixtureHome: homedir,
+    userDataRoot: userData,
+    workspace: functionalWorkspace,
+  });
   const globalStorage = resolveGlobalStorageLayout(homedir);
   const applicationSettings = new DesktopApplicationSettingsService(
     new DesktopApplicationSettingsRepository(
@@ -705,6 +714,24 @@ async function startDesktop(): Promise<void> {
     personalSkillManager,
     openAgentAdvancedSettings: () => openHostPath(buildConfigFilePath(homedir)),
     instanceId: applicationInstanceId,
+    ...(agentAutomationLaunch
+      ? {
+          agentAutomation: {
+            reloadRenderer: (windowId: string) => {
+              const owner = requireOwnerWindow(windowId);
+              setTimeout(() => {
+                if (!owner.isDestroyed()) owner.webContents.reload();
+              }, 0);
+            },
+            closeApplication: (windowId: string) => {
+              const owner = requireOwnerWindow(windowId);
+              setTimeout(() => {
+                if (!owner.isDestroyed()) owner.close();
+              }, 0);
+            },
+          },
+        }
+      : {}),
   });
   if (!appHost.agentBridge.startup.ready) {
     logger.warn('Desktop Agent capability is unavailable.', {
@@ -827,7 +854,7 @@ async function startDesktop(): Promise<void> {
           appHost.applicationIdentity.instanceId,
         );
         sendLifecycleEvent(createdWindow, event);
-        createdWindow.show();
+        if (functionalWindowMode === 'visible') createdWindow.show();
       });
       createdWindow.webContents.on('render-process-gone', (_event, details) => {
         if (shutdownStarted) return;

@@ -1,5 +1,6 @@
 import { ipcMain, type IpcMainInvokeEvent } from 'electron';
 import { DESKTOP_AGENT_CHANNELS } from '../shared/agent-contract';
+import { DESKTOP_AGENT_AUTOMATION_CHANNEL } from '../shared/agent-automation-contract';
 import { DESKTOP_BRIDGE_CHANNELS } from '../shared/bridge-contract';
 import { DESKTOP_SHELL_CHANNELS } from '../shared/shell-contract';
 import { DESKTOP_RESOURCE_BROWSER_CHANNELS } from '../shared/resource-browser-bridge-contract';
@@ -127,10 +128,7 @@ export function registerDesktopIpc(
     (event: IpcMainInvokeEvent, payload: unknown) =>
       appHost.executeProjectPortability(requireSender(event), payload, (progressEvent) => {
         if (!event.sender.isDestroyed()) {
-          event.sender.send(
-            DESKTOP_PROJECT_PORTABILITY_CHANNELS.progressEvent,
-            progressEvent,
-          );
+          event.sender.send(DESKTOP_PROJECT_PORTABILITY_CHANNELS.progressEvent, progressEvent);
         }
       }),
   );
@@ -182,6 +180,9 @@ export function registerDesktopIpc(
     DESKTOP_AGENT_CHANNELS.messageSend,
     (event: IpcMainInvokeEvent, payload: unknown) =>
       appHost.sendAgentMessage(requireSender(event), payload),
+  );
+  ipcMain.handle(DESKTOP_AGENT_AUTOMATION_CHANNEL, (event: IpcMainInvokeEvent, payload: unknown) =>
+    appHost.executeAgentAutomation(requireSender(event), payload),
   );
   ipcMain.handle(
     DESKTOP_BRIDGE_CHANNELS.bootstrapGet,
@@ -333,6 +334,7 @@ export function registerDesktopIpc(
     for (const channel of [
       DESKTOP_AGENT_CHANNELS.bootstrapGet,
       DESKTOP_AGENT_CHANNELS.messageSend,
+      DESKTOP_AGENT_AUTOMATION_CHANNEL,
       DESKTOP_APPLICATION_SETTINGS_CHANNELS.snapshotGet,
       DESKTOP_APPLICATION_SETTINGS_CHANNELS.update,
       DESKTOP_APPLICATION_SETTINGS_CHANNELS.agentAdvancedOpen,

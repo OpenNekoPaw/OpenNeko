@@ -94,6 +94,12 @@ export class DesktopCanvasMediaRuntime {
     this.trackCleanup(Promise.all(keys.map((key) => this.stopKey(key))).then(() => undefined));
   }
 
+  detachView(windowId: string, viewId: string): void {
+    const prefix = `${windowId}\u0000${viewId}\u0000`;
+    const keys = [...this.streams.keys()].filter((key) => key.startsWith(prefix));
+    this.trackCleanup(Promise.all(keys.map((key) => this.stopKey(key))).then(() => undefined));
+  }
+
   async dispose(): Promise<void> {
     if (this.disposed) return;
     this.disposed = true;

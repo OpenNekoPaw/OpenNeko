@@ -20,6 +20,7 @@ import {
 } from './desktop-canvas-material-actions';
 import { createDesktopGlobalMediaLibraryConnection } from './desktop-global-media-library-files';
 import type { DesktopCanvasViewGrant } from './shell-service';
+import { createDefaultDesktopWorkbenchLayout } from '../shared/workbench-contract';
 
 const roots: string[] = [];
 
@@ -101,10 +102,7 @@ describe('DesktopCanvasRuntime', () => {
 
     const snapshot = await runtime.getSnapshot('window-1', identity);
 
-    expect(snapshot.canvas.nodes.map((node) => node.id)).toEqual([
-      'legacy-media',
-      'legacy-file',
-    ]);
+    expect(snapshot.canvas.nodes.map((node) => node.id)).toEqual(['legacy-media', 'legacy-file']);
     expect(snapshot.canvas.connections.map((connection) => connection.id)).toEqual([
       'legacy-reference',
     ]);
@@ -400,8 +398,9 @@ describe('DesktopCanvasRuntime', () => {
       }),
       suggestedFileName: 'cat.png',
     });
-    await expect(readFile(path.join(linkedLibraryPath, 'Characters', 'cat-copy.png'), 'utf8'))
-      .resolves.toBe('image');
+    await expect(
+      readFile(path.join(linkedLibraryPath, 'Characters', 'cat-copy.png'), 'utf8'),
+    ).resolves.toBe('image');
     await expect(readFile(path.join(workspacePath, 'media', 'cat.png'), 'utf8')).resolves.toBe(
       'image',
     );
@@ -880,6 +879,7 @@ describe('DesktopCanvasRuntime', () => {
     const media = {
       execute,
       detachWindow: vi.fn(),
+      detachView: vi.fn(),
       dispose: vi.fn(async () => undefined),
     };
     const runtime = new DesktopCanvasRuntime({
@@ -923,6 +923,9 @@ describe('DesktopCanvasRuntime', () => {
       expect.objectContaining({ identity, nodeId: 'audio-1', type: 'media:probe' }),
       expect.objectContaining({ workspaceId: 'workspace-1', workspacePath }),
     );
+
+    runtime.reconcileWorkbench('window-1', createDefaultDesktopWorkbenchLayout('window-1'));
+    expect(media.detachView).toHaveBeenCalledWith('window-1', identity.viewId);
 
     runtime.detachWindow('window-1');
     expect(media.detachWindow).toHaveBeenCalledWith('window-1');
@@ -1069,8 +1072,7 @@ describe('DesktopCanvasRuntime', () => {
     expect(projected.status).toBe('accepted');
     if (projected.status !== 'accepted') throw new Error(projected.diagnostic.message);
     const generatedNode = projected.snapshot.canvas.nodes.find(
-      (node) =>
-        node.type === 'media' && node.data.contentLocator?.kind === 'generated-output',
+      (node) => node.type === 'media' && node.data.contentLocator?.kind === 'generated-output',
     );
     if (!generatedNode || generatedNode.type !== 'media') {
       throw new Error('Generated Canvas material was not projected.');
@@ -1196,16 +1198,8 @@ describe('DesktopCanvasRuntime', () => {
     roots.push(workspacePath, linkedLibraryPath, globalLibraryPath, externalSourcePath);
     await Promise.all([
       writeFixtureFile(workspacePath, 'cases/test.png', 'workspace-image'),
-      writeFixtureFile(
-        workspacePath,
-        'neko/generated/concept-frame.png',
-        'generated-image',
-      ),
-      writeFixtureFile(
-        workspacePath,
-        'neko/derived/crop/test-cropped.png',
-        'derived-image',
-      ),
+      writeFixtureFile(workspacePath, 'neko/generated/concept-frame.png', 'generated-image'),
+      writeFixtureFile(workspacePath, 'neko/derived/crop/test-cropped.png', 'derived-image'),
       writeFixtureFile(linkedLibraryPath, 'clips/linked.mp4', 'linked-video'),
       writeFixtureFile(globalLibraryPath, 'stills/global-frame.png', 'global-image'),
       writeFixtureFile(externalSourcePath, 'outside.png', 'external-image'),
@@ -1225,47 +1219,46 @@ describe('DesktopCanvasRuntime', () => {
     const generation: NonNullable<
       ConstructorParameters<typeof DesktopCanvasRuntime>[0]['generation']
     > = {
-      requestDraft: vi.fn(
-        async (input) =>
-          input.mediaKind === 'image'
-            ? {
-                ref: { kind: 'generation' as const, jobId: 'generation-phase-1-success' },
-                phase: 'succeeded' as const,
-                revision: 2,
-                title: 'Generate concept frame',
-                inputNodeIds: [...input.inputNodeIds],
-                mediaKind: 'image' as const,
-                summary: {
-                  prompt: 'Create a concept frame from the referenced image',
-                  model: 'fixture-image-model',
-                },
-                resultLocators: [
-                  {
-                    kind: 'generated-output' as const,
-                    outputId: 'concept-frame',
-                    revision: '2',
-                    digest: 'sha256:phase-1-generated',
-                    path: 'neko/generated/concept-frame.png',
-                  },
-                ],
-              }
-            : {
-                ref: { kind: 'generation' as const, jobId: 'generation-phase-1-failure' },
-                phase: 'failed' as const,
-                revision: 1,
-                title: 'Generate video',
-                inputNodeIds: [...input.inputNodeIds],
-                mediaKind: 'video' as const,
-                summary: {
-                  prompt: 'Generate a short video',
-                  model: 'fixture-video-model',
-                },
-                failure: {
-                  code: 'provider-failed',
-                  message: 'Fixture provider rejected the request',
-                  retryable: true,
-                },
+      requestDraft: vi.fn(async (input) =>
+        input.mediaKind === 'image'
+          ? {
+              ref: { kind: 'generation' as const, jobId: 'generation-phase-1-success' },
+              phase: 'succeeded' as const,
+              revision: 2,
+              title: 'Generate concept frame',
+              inputNodeIds: [...input.inputNodeIds],
+              mediaKind: 'image' as const,
+              summary: {
+                prompt: 'Create a concept frame from the referenced image',
+                model: 'fixture-image-model',
               },
+              resultLocators: [
+                {
+                  kind: 'generated-output' as const,
+                  outputId: 'concept-frame',
+                  revision: '2',
+                  digest: 'sha256:phase-1-generated',
+                  path: 'neko/generated/concept-frame.png',
+                },
+              ],
+            }
+          : {
+              ref: { kind: 'generation' as const, jobId: 'generation-phase-1-failure' },
+              phase: 'failed' as const,
+              revision: 1,
+              title: 'Generate video',
+              inputNodeIds: [...input.inputNodeIds],
+              mediaKind: 'video' as const,
+              summary: {
+                prompt: 'Generate a short video',
+                model: 'fixture-video-model',
+              },
+              failure: {
+                code: 'provider-failed',
+                message: 'Fixture provider rejected the request',
+                retryable: true,
+              },
+            },
       ),
       resolveResultActions: vi.fn(async () => ({
         regenerate: true,
@@ -1462,8 +1455,7 @@ describe('DesktopCanvasRuntime', () => {
     expect(
       snapshot.canvas.connections.some(
         (connection) =>
-          connection.sourceId === referencedSource.id &&
-          connection.type === 'derived-from',
+          connection.sourceId === referencedSource.id && connection.type === 'derived-from',
       ),
     ).toBe(true);
     expect(
@@ -1476,9 +1468,9 @@ describe('DesktopCanvasRuntime', () => {
     expect(
       await readFile(path.join(workspacePath, 'neko/imports/image/global-frame.png'), 'utf8'),
     ).toBe('global-image');
-    expect(
-      await readFile(path.join(workspacePath, 'neko/imports/image/outside.png'), 'utf8'),
-    ).toBe('external-image');
+    expect(await readFile(path.join(workspacePath, 'neko/imports/image/outside.png'), 'utf8')).toBe(
+      'external-image',
+    );
 
     snapshot = await executeAcceptedIntent(runtime, identity, snapshot, 'save-phase-1', {
       type: 'save',

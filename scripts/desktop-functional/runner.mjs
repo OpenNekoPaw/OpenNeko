@@ -48,6 +48,8 @@ export async function runAutomatedDesktopFunctional(options) {
   let cdp;
   let observation;
   let report;
+  const checkpoints = [];
+  const startedAt = Date.now();
   try {
     await Promise.all([
       mkdir(userDataRoot, { recursive: true }),
@@ -65,6 +67,7 @@ export async function runAutomatedDesktopFunctional(options) {
       userDataRoot,
       workspacePath: prepared.workspacePath,
       debugPort,
+      windowMode: options.windowMode ?? 'visible',
     });
     const platform = options.platform ?? process.platform;
     processController = createProcessController(
@@ -85,22 +88,34 @@ export async function runAutomatedDesktopFunctional(options) {
       'Desktop renderer loaded.',
       options.startupTimeoutMs ?? 60_000,
     );
-    await waitForDesktopBridge(cdp, options.startupTimeoutMs ?? 60_000);
     observation = createDesktopObservation(cdp, fixtureHome);
     await observation.start();
+    await waitForDesktopBridge(cdp, options.startupTimeoutMs ?? 60_000);
     const version = await cdp.send('Browser.getVersion');
+    const scenarioAbort = new AbortController();
     const evidence = await withTimeout(
       scenario.run({
         cdp,
         prepared,
-        evaluate: (expression) => evaluate(cdp, expression),
-        click: (selector, index, position) => clickElement(cdp, selector, index, position),
-        hover: (selector, index, position) => hoverElement(cdp, selector, index, position),
-        waitForSelector: (selector, timeoutMs) => waitForSelector(cdp, selector, timeoutMs),
+        signal: scenarioAbort.signal,
+        checkpoint: (label, detail = {}) => {
+          if (typeof label !== 'string' || label.length === 0) {
+            throw new Error('Desktop functional checkpoint requires a non-empty label.');
+          }
+          checkpoints.push({ label, elapsedMs: Date.now() - startedAt, detail });
+        },
+        evaluate: (expression) => abortable(evaluate(cdp, expression), scenarioAbort.signal),
+        click: (selector, index, position) =>
+          abortable(clickElement(cdp, selector, index, position), scenarioAbort.signal),
+        hover: (selector, index, position) =>
+          abortable(hoverElement(cdp, selector, index, position), scenarioAbort.signal),
+        waitForSelector: (selector, timeoutMs) =>
+          abortable(waitForSelector(cdp, selector, timeoutMs), scenarioAbort.signal),
         readOpenNekoResourceRequests: () => observation.openNekoResourceRequests(),
       }),
       options.scenarioTimeoutMs ?? 120_000,
       `Desktop functional scenario '${scenario.id}'`,
+      (error) => scenarioAbort.abort(error),
     );
     const observed = observation.finish();
     if (observed.poisonedRequestCount !== 0) {
@@ -126,6 +141,7 @@ export async function runAutomatedDesktopFunctional(options) {
         userAgent: version.userAgent,
       },
       observation: observed,
+      checkpoints,
       evidence,
     };
     await writeReport(reportPath, report, fixtureHome);
@@ -138,6 +154,7 @@ export async function runAutomatedDesktopFunctional(options) {
       target: options.target ?? 'development',
       error: redactText(error instanceof Error ? error.message : String(error), fixtureHome),
       observation: observation?.finish(),
+      checkpoints,
       process: processController?.snapshot(),
     };
     await writeReport(reportPath, report, fixtureHome);
@@ -159,6 +176,7 @@ export async function runAutomatedDesktopFunctional(options) {
 export function createAutomatedDesktopLaunch(input) {
   const commonArgs = [
     '--openneko-functional-fixture',
+    ...(input.windowMode === 'hidden' ? ['--openneko-functional-hidden'] : []),
     `--user-data-dir=${input.userDataRoot}`,
     `--remote-debugging-port=${String(input.debugPort)}`,
   ];
@@ -188,7 +206,7 @@ function createDesktopObservation(cdp, fixtureHome) {
   const responseMimeTypes = [];
   const consoleErrors = [];
   const consoleWarnings = [];
-  const exceptions = [];
+  const exceptions = new Map();
   const disposers = [];
   let finished;
   return {
@@ -224,7 +242,10 @@ function createDesktopObservation(cdp, fixtureHome) {
           else consoleWarnings.push(detail);
         }),
         cdp.on('Runtime.exceptionThrown', (event) => {
-          exceptions.push(
+          const exceptionId = event.exceptionDetails?.exceptionId;
+          if (typeof exceptionId !== 'number') return;
+          exceptions.set(
+            exceptionId,
             redactText(
               String(
                 event.exceptionDetails?.exception?.description ??
@@ -234,6 +255,9 @@ function createDesktopObservation(cdp, fixtureHome) {
               fixtureHome,
             ),
           );
+        }),
+        cdp.on('Runtime.exceptionRevoked', (event) => {
+          if (typeof event.exceptionId === 'number') exceptions.delete(event.exceptionId);
         }),
       );
       await Promise.all([
@@ -270,7 +294,7 @@ function createDesktopObservation(cdp, fixtureHome) {
         poisonedRequestCount: counts['poisoned-resource'] ?? 0,
         consoleErrors,
         consoleWarnings,
-        exceptions,
+        exceptions: [...exceptions.values()],
       };
       return finished;
     },
@@ -330,7 +354,19 @@ async function waitForDesktopBridge(cdp, timeoutMs) {
     }
     await delay(100);
   }
-  throw new Error('Desktop preload bridge was not ready before timeout.');
+  const diagnostic = await evaluate(
+    cdp,
+    `({
+      url: document.URL,
+      readyState: document.readyState,
+      alert: document.querySelector('[role="alert"]')?.textContent?.trim(),
+      hasDesktopBridge: typeof window.openNekoDesktop !== 'undefined',
+      body: document.body.innerText.slice(0, 600),
+    })`,
+  );
+  throw new Error(
+    `Desktop preload bridge was not ready before timeout. DOM: ${JSON.stringify(diagnostic)}`,
+  );
 }
 
 async function clickElement(cdp, selector, index = 0, position = {}) {
@@ -427,9 +463,10 @@ async function resolveElementPoint(cdp, selector, index, position) {
   return point;
 }
 
-function createProcessController(child, fixtureHome, platform) {
+export function createProcessController(child, fixtureHome, platform, controls = {}) {
   const output = [];
   let exit;
+  let launchError;
   const record = (chunk) => {
     const line = redactText(String(chunk), fixtureHome);
     output.push(line);
@@ -438,30 +475,86 @@ function createProcessController(child, fixtureHome, platform) {
   child.stdout?.on('data', record);
   child.stderr?.on('data', record);
   const exited = new Promise((resolveExit) => {
+    child.once('error', (error) => {
+      launchError = error;
+      exit = { code: undefined, signal: undefined };
+      resolveExit(exit);
+    });
     child.once('exit', (code, signal) => {
       exit = { code, signal };
       resolveExit(exit);
     });
   });
   return {
-    snapshot: () => ({ exit, output: output.join('').slice(-16_000) }),
+    snapshot: () => ({
+      exit,
+      ...(launchError ? { launchError: redactText(launchError.message, fixtureHome) } : {}),
+      output: output.join('').slice(-16_000),
+    }),
     async waitForOutput(fragment, timeoutMs) {
       const deadline = Date.now() + timeoutMs;
       while (Date.now() < deadline) {
         if (output.join('').includes(fragment)) return;
+        if (launchError) throw launchError;
         if (exit) throw new Error(`Desktop process exited before '${fragment}' was reported.`);
         await delay(100);
       }
       throw new Error(`Desktop process did not report '${fragment}' before timeout.`);
     },
     async stop() {
-      if (exit) return;
-      killProcessTree(child, platform, 'SIGTERM');
-      const stopped = await Promise.race([exited.then(() => true), delay(3_000).then(() => false)]);
-      if (!stopped && !exit) killProcessTree(child, platform, 'SIGKILL');
-      await exited;
+      const killTree = controls.killTree ?? killProcessTree;
+      const treeAlive = controls.isTreeAlive ?? isProcessTreeAlive;
+      const readExit = () => exit;
+      if (!treeAlive(child, platform, readExit)) return;
+      killTree(child, platform, 'SIGTERM');
+      if (
+        await waitForProcessTreeExit(
+          child,
+          platform,
+          readExit,
+          treeAlive,
+          controls.forceKillAfterMs ?? 3_000,
+        )
+      ) {
+        return;
+      }
+      killTree(child, platform, 'SIGKILL');
+      if (
+        !(await waitForProcessTreeExit(
+          child,
+          platform,
+          readExit,
+          treeAlive,
+          controls.failAfterKillMs ?? 1_000,
+        ))
+      ) {
+        throw new Error('Desktop functional process tree remained alive after SIGKILL.');
+      }
+      await Promise.race([exited, delay(100)]);
     },
   };
+}
+
+async function waitForProcessTreeExit(child, platform, readExit, isAlive, timeoutMs) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (!isAlive(child, platform, readExit)) return true;
+    await delay(50);
+  }
+  return !isAlive(child, platform, readExit);
+}
+
+function isProcessTreeAlive(child, platform, readExit) {
+  if (platform === 'win32') return readExit() === undefined;
+  if (!Number.isSafeInteger(child.pid) || child.pid <= 0) return false;
+  try {
+    process.kill(-child.pid, 0);
+    return true;
+  } catch (error) {
+    if (error?.code === 'ESRCH') return false;
+    if (error?.code === 'EPERM') return true;
+    throw error;
+  }
 }
 
 function killProcessTree(child, platform, signal) {
@@ -555,12 +648,13 @@ function redactText(value, fixtureHome) {
     );
 }
 
-function withTimeout(promise, milliseconds, label) {
+function withTimeout(promise, milliseconds, label, onTimeout) {
   return new Promise((resolveResult, reject) => {
-    const timeout = setTimeout(
-      () => reject(new Error(`${label} exceeded ${String(milliseconds)} ms.`)),
-      milliseconds,
-    );
+    const timeout = setTimeout(() => {
+      const error = new Error(`${label} exceeded ${String(milliseconds)} ms.`);
+      onTimeout?.(error);
+      reject(error);
+    }, milliseconds);
     promise.then(
       (value) => {
         clearTimeout(timeout);
@@ -568,6 +662,24 @@ function withTimeout(promise, milliseconds, label) {
       },
       (error) => {
         clearTimeout(timeout);
+        reject(error);
+      },
+    );
+  });
+}
+
+function abortable(promise, signal) {
+  if (signal.aborted) return Promise.reject(signal.reason);
+  return new Promise((resolveResult, reject) => {
+    const onAbort = () => reject(signal.reason);
+    signal.addEventListener('abort', onAbort, { once: true });
+    promise.then(
+      (value) => {
+        signal.removeEventListener('abort', onAbort);
+        resolveResult(value);
+      },
+      (error) => {
+        signal.removeEventListener('abort', onAbort);
         reject(error);
       },
     );
