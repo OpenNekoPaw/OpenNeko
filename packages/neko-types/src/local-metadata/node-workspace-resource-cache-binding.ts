@@ -29,12 +29,18 @@ export async function createNodeGlobalResourceCacheMetadataBinding(options: {
 }): Promise<NodeGlobalResourceCacheMetadataBinding> {
   const metadataStore = createNodeSqliteLocalMetadataStore({ homedir: options.homedir });
   try {
+    const databasePath = resolveGlobalStorageLayout(options.homedir).database;
     await metadataStore.open({
-      databasePath: resolveGlobalStorageLayout(options.homedir).database,
+      databasePath,
       busyTimeoutMs: 2_000,
     });
     await metadataStore.migrateNamespace(M1_LOCAL_METADATA_MIGRATIONS);
-    await metadataStore.migrateNamespace(RESOURCE_CACHE_MIGRATIONS);
+    await metadataStore.migrateNamespace(RESOURCE_CACHE_MIGRATIONS, {
+      destructiveBackup: {
+        destinationPath: `${databasePath}.pre-resource-cache-v2.bak`,
+        reason: 'migration',
+      },
+    });
     return {
       manifestStore: new LocalMetadataResourceCacheManifestStore({
         metadataStore,
@@ -56,12 +62,18 @@ export async function createNodeWorkspaceResourceCacheMetadataBinding(options: {
 }): Promise<NodeWorkspaceResourceCacheMetadataBinding> {
   const metadataStore = createNodeSqliteLocalMetadataStore({ homedir: options.homedir });
   try {
+    const databasePath = resolveGlobalStorageLayout(options.homedir).database;
     await metadataStore.open({
-      databasePath: resolveGlobalStorageLayout(options.homedir).database,
+      databasePath,
       busyTimeoutMs: 2_000,
     });
     await metadataStore.migrateNamespace(M1_LOCAL_METADATA_MIGRATIONS);
-    await metadataStore.migrateNamespace(RESOURCE_CACHE_MIGRATIONS);
+    await metadataStore.migrateNamespace(RESOURCE_CACHE_MIGRATIONS, {
+      destructiveBackup: {
+        destinationPath: `${databasePath}.pre-resource-cache-v2.bak`,
+        reason: 'migration',
+      },
+    });
     const identityResolution = await resolveNodeWorkspaceIdentity({
       workspaceRoot: options.workDir,
       homedir: options.homedir,

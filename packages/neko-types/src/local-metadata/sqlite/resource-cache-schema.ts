@@ -57,4 +57,13 @@ export const RESOURCE_CACHE_MIGRATIONS: readonly LocalMetadataMigration[] = [
         )`,
     ],
   },
+  {
+    namespace: 'resource-cache',
+    version: 2,
+    name: 'invalidate-retired-resource-ref-cache-entries',
+    checksum: 'sha256:invalidate-retired-resource-ref-cache-entries-v2',
+    ownership: 'cache',
+    destructive: true,
+    statements: ['DELETE FROM resource_cache_entries'],
+  },
 ];
