@@ -32,7 +32,15 @@ import {
   type ConversationProjectionStore,
 } from '@neko/agent/conversation-projection';
 import { createToolRegistry } from '@neko/agent/tool-registry';
+import { createHostAgentContentAccessRuntime } from '@neko/agent/runtime';
+import { createContentReadCapabilityProvider } from '@neko/content/document';
+import {
+  createNodeDocumentAccessService,
+  createNodeDocumentLowLevelAccess,
+} from '@neko/content/document/node';
 import { TOOL_NAMES_QUALITY, type IToolRegistry } from '@neko/shared';
+import { createNodeHostContentReadService } from '@neko/shared/content-access';
+import type { EffectiveAgentConfigurationProjection } from '@neko/platform/config/effective-agent-config';
 import type {
   DesktopAgentHomeActivitySummary,
   DesktopAgentHomeAttentionStatus,
@@ -40,6 +48,7 @@ import type {
   DesktopAgentHomeProjection,
 } from '../shared/shell-contract';
 import type { DesktopAgentCredentialRuntime } from './desktop-agent-credential-runtime';
+import { resolveDesktopWorkspaceContentLocator } from './desktop-content-locator';
 import type { DesktopWorkspaceResolution } from './desktop-workspace-registry';
 import type {
   DesktopExtensionCatalogSnapshot,
@@ -61,6 +70,7 @@ export interface DesktopAgentTurnInput {
   readonly conversationId: string;
   readonly prompt: string;
   readonly modelPolicy: AgentModelPolicy;
+  readonly configuration: DesktopAgentTurnConfigurationSnapshot;
   readonly permissionPolicy:
     PiToolPermissionPolicy | ((events: PiProductEventSink) => PiToolPermissionPolicy);
   readonly workspaceTrusted: boolean;
@@ -75,12 +85,22 @@ export interface DesktopAgentTurnResult {
   readonly identity: PiToolRunIdentity;
   readonly durability: NonNullable<ReturnType<NodePiConversationAuthority['getTurnDurability']>>;
   readonly projection: ReturnType<ConversationProjectionStore['snapshot']>;
+  readonly configuration: DesktopAgentTurnConfigurationSnapshot;
   readonly path: {
     readonly runtime: 'pi-conversation-runtime';
     readonly transcript: 'pi-session';
     readonly metadata: 'sqlite';
     readonly projection: 'conversation-projection-store';
   };
+}
+
+export interface DesktopAgentTurnConfigurationSnapshot {
+  readonly requested: EffectiveAgentConfigurationProjection;
+  readonly effective: EffectiveAgentConfigurationProjection;
+  readonly diagnostics: readonly {
+    readonly code: string;
+    readonly message: string;
+  }[];
 }
 
 export interface DesktopAgentTurnOperation {
@@ -450,6 +470,9 @@ class DefaultDesktopAgentWorkspaceRuntime implements DesktopAgentWorkspaceRuntim
 
   constructor(private readonly options: DefaultDesktopAgentWorkspaceRuntimeOptions) {
     this.models = createOpenNekoPiModels(options.credentialRuntime.credentials);
+    for (const tool of createDesktopContentReadTools(options.workspace)) {
+      this.tools.register(tool);
+    }
   }
 
   get workspaceId(): string {
@@ -641,6 +664,7 @@ class DefaultDesktopAgentWorkspaceRuntime implements DesktopAgentWorkspaceRuntim
       identity,
       durability,
       projection: owner.projection.snapshot(),
+      configuration: input.configuration,
       path: Object.freeze({
         runtime: 'pi-conversation-runtime',
         transcript: 'pi-session',
@@ -944,6 +968,25 @@ class DefaultDesktopAgentWorkspaceRuntime implements DesktopAgentWorkspaceRuntim
       throw new Error(`Desktop Agent workspace '${this.workspaceId}' is disposed.`);
     }
   }
+}
+
+function createDesktopContentReadTools(workspace: DesktopWorkspaceResolution) {
+  const documentLowLevelAccess = createNodeDocumentLowLevelAccess();
+  const contentAccessRuntime = createHostAgentContentAccessRuntime({
+    contentRead: createNodeHostContentReadService({
+      workspaceRoot: workspace.workspacePath,
+      documentEntryReader: {
+        readEntry: (sourcePath, entryPath) =>
+          documentLowLevelAccess.readEntry(sourcePath, entryPath),
+      },
+    }),
+    documentAccess: createNodeDocumentAccessService(),
+    resolveDocumentHostFilePath: (source) =>
+      resolveDesktopWorkspaceContentLocator(workspace, source),
+  });
+  return createContentReadCapabilityProvider({ contentAccessRuntime }).getTools({
+    hostContext: null,
+  });
 }
 
 interface ExecuteDesktopAgentConversationInput {

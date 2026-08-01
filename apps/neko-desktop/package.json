@@ -19,6 +19,7 @@
     "@neko-agent/types": "workspace:*",
     "@neko-agent/webview": "workspace:*",
     "@neko/agent": "workspace:*",
+    "@neko/content": "workspace:*",
     "@neko-canvas/domain": "workspace:*",
     "@neko-canvas/webview": "workspace:*",
     "@neko-cut/domain": "workspace:*",

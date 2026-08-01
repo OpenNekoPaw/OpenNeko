@@ -70,6 +70,28 @@ describe('image metadata probe', () => {
     });
   });
 
+  it('reads SVG dimensions without parsing or executing the document', () => {
+    const direct = new TextEncoder().encode(
+      '<?xml version="1.0"?><svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720"><script>throw new Error()</script></svg>',
+    );
+    const viewBox = new TextEncoder().encode(
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32.5 24"></svg>',
+    );
+
+    expect(probeImageMetadata(direct)).toEqual({
+      width: 1280,
+      height: 720,
+      mimeType: 'image/svg+xml',
+      byteSize: direct.length,
+    });
+    expect(probeImageMetadata(viewBox)).toEqual({
+      width: 32.5,
+      height: 24,
+      mimeType: 'image/svg+xml',
+      byteSize: viewBox.length,
+    });
+  });
+
   it('returns null for unknown bytes', () => {
     expect(probeImageMetadata(new Uint8Array([1, 2, 3]))).toBeNull();
   });

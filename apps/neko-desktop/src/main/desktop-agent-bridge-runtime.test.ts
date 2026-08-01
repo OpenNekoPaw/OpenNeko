@@ -73,11 +73,9 @@ describe('Desktop Agent bridge runtime', () => {
 
     await expect(
       runtime.send(
-        createDesktopAgentMessageRequest(
-          'message-1',
-          projection.connection,
-          { type: 'newConversation' },
-        ),
+        createDesktopAgentMessageRequest('message-1', projection.connection, {
+          type: 'newConversation',
+        }),
         grant(),
       ),
     ).resolves.toEqual({
@@ -100,15 +98,11 @@ describe('Desktop Agent bridge runtime', () => {
 
     await expect(
       runtime.send(
-        createDesktopAgentMessageRequest(
-          'message-1',
-          projection.connection,
-          {
-            type: 'sendToPlugin',
-            target: 'neko.neko-canvas',
-            assetPath: 'fixture.png',
-          },
-        ),
+        createDesktopAgentMessageRequest('message-1', projection.connection, {
+          type: 'sendToPlugin',
+          target: 'neko.neko-canvas',
+          assetPath: 'fixture.png',
+        }),
         grant(),
       ),
     ).resolves.toMatchObject({
@@ -155,11 +149,9 @@ describe('Desktop Agent bridge runtime', () => {
     for (const fixture of cases) {
       await expect(
         runtime.send(
-          createDesktopAgentMessageRequest(
-            'message-1',
-            fixture.connection,
-            { type: 'newConversation' },
-          ),
+          createDesktopAgentMessageRequest('message-1', fixture.connection, {
+            type: 'newConversation',
+          }),
           grant(),
         ),
       ).rejects.toMatchObject({ code: fixture.expectedCode });
@@ -219,10 +211,7 @@ describe('Desktop Agent bridge runtime', () => {
     const runtime = createDesktopAgentBridgeRuntime({
       controllerComposition: {
         ...createComposition(firstEffects),
-        createEffects: vi
-          .fn()
-          .mockReturnValueOnce(firstEffects)
-          .mockReturnValueOnce(nextEffects),
+        createEffects: vi.fn().mockReturnValueOnce(firstEffects).mockReturnValueOnce(nextEffects),
       },
       createIdentity: () => `connection-${++nextIdentity}`,
     });
@@ -307,24 +296,66 @@ describe('Desktop Agent bridge runtime', () => {
     expect(secondEffects.dispose).not.toHaveBeenCalled();
     await expect(
       runtime.send(
-        createDesktopAgentMessageRequest(
-          'message-old',
-          first.connection,
-          { type: 'newConversation' },
-        ),
+        createDesktopAgentMessageRequest('message-old', first.connection, {
+          type: 'newConversation',
+        }),
         firstGrant,
       ),
     ).rejects.toMatchObject({ code: 'desktop-agent-identity-mismatch' });
     await expect(
       runtime.send(
-        createDesktopAgentMessageRequest(
-          'message-current',
-          second.connection,
-          { type: 'newConversation' },
-        ),
+        createDesktopAgentMessageRequest('message-current', second.connection, {
+          type: 'newConversation',
+        }),
         secondGrant,
       ),
     ).resolves.toMatchObject({ status: 'accepted' });
+  });
+
+  it('runs terminal-idle only through exact connection-owned automation effects', async () => {
+    const waitForIdle = vi.fn(async () => ({
+      conversationId: 'conversation-1',
+      turnId: 'turn-1',
+      runId: 'run-1',
+    }));
+    const effects = createEffects({
+      waitForIdle,
+      readLatestTurnIdentity: () => undefined,
+      readFacts: () => {
+        throw new Error('Facts read is not expected.');
+      },
+      disposeAndReadFacts: async () => {
+        throw new Error('Facts disposal is not expected.');
+      },
+    });
+    const runtime = createDesktopAgentBridgeRuntime({
+      controllerComposition: createComposition(effects),
+      createIdentity: () => 'connection-1',
+    });
+    const projection = runtime.createBootstrap({
+      requestId: 'bootstrap-1',
+      grant: grant(),
+      workspace: workspace(),
+      publish: vi.fn(),
+    });
+    if (projection.status !== 'ready') throw new Error('Expected a ready Agent bootstrap.');
+
+    await expect(
+      runtime.waitForIdle(projection.connection, grant(), 'conversation-1', 30_000),
+    ).resolves.toEqual({
+      conversationId: 'conversation-1',
+      turnId: 'turn-1',
+      runId: 'run-1',
+    });
+    expect(waitForIdle).toHaveBeenCalledWith('conversation-1', 30_000);
+    expect(() =>
+      runtime.waitForIdle(
+        projection.connection,
+        { ...grant(), rendererEpoch: grant().rendererEpoch + 1 },
+        'conversation-1',
+        30_000,
+      ),
+    ).toThrow(expect.objectContaining({ code: 'desktop-agent-stale-renderer-epoch' }));
   });
 });
 
@@ -351,9 +382,12 @@ function createComposition(
   };
 }
 
-function createEffects(): DesktopAgentControllerEffects {
+function createEffects(
+  automation?: NonNullable<DesktopAgentControllerEffects['automation']>,
+): DesktopAgentControllerEffects {
   return {
     dispose: vi.fn(),
+    ...(automation === undefined ? {} : { automation }),
     conversation: {
       submitTurn: vi.fn(),
       confirmTool: vi.fn(),

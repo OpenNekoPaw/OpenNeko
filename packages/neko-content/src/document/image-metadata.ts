@@ -29,7 +29,58 @@ export function probeImageMetadata(bytes: Uint8Array): ImageMetadata | null {
   const bmp = readBmpMetadata(bytes);
   if (bmp) return bmp;
 
+  const svg = readSvgMetadata(bytes);
+  if (svg) return svg;
+
   return null;
+}
+
+function readSvgMetadata(bytes: Uint8Array): ImageMetadata | null {
+  const source = new TextDecoder().decode(bytes.subarray(0, Math.min(bytes.length, 64 * 1024)));
+  const tag = /<svg\b([^>]*)>/iu.exec(source);
+  if (!tag) return null;
+  const attributes = tag[1] ?? '';
+  const width = readSvgLength(attributes, 'width');
+  const height = readSvgLength(attributes, 'height');
+  const viewBox = readSvgViewBox(attributes);
+  return {
+    ...((width ?? viewBox?.width) ? { width: width ?? viewBox?.width } : {}),
+    ...((height ?? viewBox?.height) ? { height: height ?? viewBox?.height } : {}),
+    mimeType: 'image/svg+xml',
+    byteSize: bytes.length,
+  };
+}
+
+function readSvgLength(attributes: string, name: 'width' | 'height'): number | undefined {
+  const match = new RegExp(`\\b${name}\\s*=\\s*(["'])([^"']+)\\1`, 'iu').exec(attributes);
+  const value = /^([0-9]+(?:\.[0-9]+)?)(?:px)?$/iu.exec(match?.[2]?.trim() ?? '');
+  return readPositiveFiniteNumber(value?.[1]);
+}
+
+function readSvgViewBox(
+  attributes: string,
+): { readonly width: number; readonly height: number } | undefined {
+  const match = /\bviewBox\s*=\s*(["'])([^"']+)\1/iu.exec(attributes);
+  const values = (match?.[2] ?? '')
+    .trim()
+    .split(/[\s,]+/u)
+    .map(Number);
+  const width = values[2];
+  const height = values[3];
+  if (values.length !== 4 || !isPositiveFiniteNumber(width) || !isPositiveFiniteNumber(height)) {
+    return undefined;
+  }
+  return { width, height };
+}
+
+function readPositiveFiniteNumber(value: string | undefined): number | undefined {
+  if (value === undefined) return undefined;
+  const parsed = Number(value);
+  return isPositiveFiniteNumber(parsed) ? parsed : undefined;
+}
+
+function isPositiveFiniteNumber(value: number | undefined): value is number {
+  return value !== undefined && Number.isFinite(value) && value > 0;
 }
 
 function readPngMetadata(bytes: Uint8Array): ImageMetadata | null {

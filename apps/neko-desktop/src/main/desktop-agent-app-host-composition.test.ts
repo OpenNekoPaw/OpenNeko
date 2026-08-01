@@ -18,11 +18,16 @@ import {
   type PiProductAgentEvent,
 } from '@neko/agent/pi';
 import type { Tool } from '@neko/shared';
+import {
+  EFFECTIVE_AGENT_CONFIG_DIMENSIONS,
+  type EffectiveAgentConfigurationProjection,
+} from '@neko/platform/config/effective-agent-config';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   createDesktopAgentAppHostComposition,
   projectDesktopAgentHomeConversationSummary,
   type DesktopAgentAppHostComposition,
+  type DesktopAgentTurnConfigurationSnapshot,
 } from './desktop-agent-app-host-composition';
 import { createDesktopAgentCredentialRuntime } from './desktop-agent-credential-runtime';
 import type { DesktopWorkspaceResolution } from './desktop-workspace-registry';
@@ -67,7 +72,11 @@ describe('DesktopAgentAppHostComposition', () => {
     );
     workspace.tools.register(fixtureTool());
     expect(await fixture.composition.attachWorkspace(fixture.workspace)).toBe(workspace);
-    expect(workspace.tools.list().map((tool) => tool.name)).toEqual(['DesktopFixtureTool']);
+    expect(workspace.tools.list().map((tool) => tool.name)).toEqual([
+      'ReadDocument',
+      'ReadImage',
+      'DesktopFixtureTool',
+    ]);
     await workspace.openConversation({
       conversationId: 'conversation-1',
       models,
@@ -81,6 +90,7 @@ describe('DesktopAgentAppHostComposition', () => {
       conversationId: 'conversation-1',
       prompt: 'hello',
       modelPolicy: policy,
+      configuration: fixtureConfiguration(),
       permissionPolicy: allowTools(),
       workspaceTrusted: true,
       locale: 'en',
@@ -95,6 +105,7 @@ describe('DesktopAgentAppHostComposition', () => {
       prompt: 'ignored for explicit Skill',
       skillName: 'desktop-fixture',
       modelPolicy: policy,
+      configuration: fixtureConfiguration(),
       permissionPolicy: allowTools(),
       workspaceTrusted: true,
       locale: 'en',
@@ -114,6 +125,8 @@ describe('DesktopAgentAppHostComposition', () => {
       projection: 'conversation-projection-store',
     });
     expect(first.durability).toBe('durable');
+    expect(first.configuration).toEqual(fixtureConfiguration());
+    expect(Object.isFrozen(first.configuration)).toBe(true);
     expect(skill.durability).toBe('durable');
     expect(first.projection.turns[0]?.items).toContainEqual(
       expect.objectContaining({
@@ -276,6 +289,7 @@ describe('DesktopAgentAppHostComposition', () => {
       conversationId: 'conversation-a',
       prompt: 'alpha',
       modelPolicy: policy,
+      configuration: fixtureConfiguration(),
       permissionPolicy: allowTools(),
       workspaceTrusted: true,
       locale: 'en',
@@ -284,6 +298,7 @@ describe('DesktopAgentAppHostComposition', () => {
       conversationId: 'conversation-b',
       prompt: 'beta',
       modelPolicy: policy,
+      configuration: fixtureConfiguration(),
       permissionPolicy: allowTools(),
       workspaceTrusted: true,
       locale: 'en',
@@ -411,6 +426,7 @@ describe('DesktopAgentAppHostComposition', () => {
       conversationId: 'conversation-running',
       prompt: 'stay active',
       modelPolicy: policy,
+      configuration: fixtureConfiguration(),
       permissionPolicy: allowTools(),
       workspaceTrusted: true,
       locale: 'en',
@@ -600,6 +616,7 @@ describe('DesktopAgentAppHostComposition', () => {
       conversationId: 'conversation-cancel',
       prompt: 'wait',
       modelPolicy: fixturePolicy(),
+      configuration: fixtureConfiguration(),
       permissionPolicy: allowTools(),
       workspaceTrusted: true,
       locale: 'en',
@@ -639,6 +656,7 @@ describe('DesktopAgentAppHostComposition', () => {
       conversationId: 'conversation-restart',
       prompt: 'before restart',
       modelPolicy: fixturePolicy(),
+      configuration: fixtureConfiguration(),
       permissionPolicy: allowTools(),
       workspaceTrusted: true,
       locale: 'en',
@@ -665,6 +683,7 @@ describe('DesktopAgentAppHostComposition', () => {
       conversationId: 'conversation-restart',
       prompt: 'after restart',
       modelPolicy: fixturePolicy(),
+      configuration: fixtureConfiguration(),
       permissionPolicy: allowTools(),
       workspaceTrusted: true,
       locale: 'en',
@@ -713,6 +732,7 @@ describe('DesktopAgentAppHostComposition', () => {
       conversationId: 'conversation-quit',
       prompt: 'wait for quit',
       modelPolicy: fixturePolicy(),
+      configuration: fixtureConfiguration(),
       permissionPolicy: allowTools(),
       workspaceTrusted: true,
       locale: 'en',
@@ -781,6 +801,49 @@ describe('DesktopAgentAppHostComposition', () => {
     await expect(fixture.composition.attachWorkspace(fixture.workspace)).rejects.toThrow(
       'composition is disposed',
     );
+  });
+
+  it('registers the package-owned ContentLocator ReadImage capability for each workspace', async () => {
+    const fixture = await createFixture();
+    await writeFile(
+      join(fixture.workspace.workspacePath, 'station-illustration.svg'),
+      '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="24"></svg>',
+      'utf8',
+    );
+    const workspace = await fixture.composition.attachWorkspace(fixture.workspace);
+
+    const result = await workspace.tools.execute('ReadImage', {
+      mode: 'metadata',
+      analysis: 'describe',
+      max_images: 1,
+      images: [
+        {
+          contentLocator: {
+            kind: 'workspace-file',
+            path: 'station-illustration.svg',
+          },
+        },
+      ],
+    });
+
+    expect(result.success, JSON.stringify(result)).toBe(true);
+    expect(result).toMatchObject({
+      success: true,
+      data: {
+        imageCount: 1,
+        images: [
+          {
+            contentLocator: {
+              kind: 'workspace-file',
+              path: 'station-illustration.svg',
+            },
+            mimeType: 'image/svg+xml',
+            width: 32,
+            height: 24,
+          },
+        ],
+      },
+    });
   });
 
   it('preflights every workspace before replacing any plugin Tool generation', async () => {
@@ -1080,6 +1143,36 @@ function createFixtureModels(
     }),
   );
   return models;
+}
+
+function fixtureConfiguration(): DesktopAgentTurnConfigurationSnapshot {
+  const projection: EffectiveAgentConfigurationProjection = Object.freeze({
+    schemaVersion: 1,
+    profileId: 'effective-agent-aaaaaaaaaaaaaaaa',
+    digest: `sha256:${'a'.repeat(64)}`,
+    values: Object.freeze({
+      modelBinding: Object.freeze({
+        purpose: 'agent.main',
+        providerId: MODEL.provider,
+        modelId: MODEL.id,
+      }),
+      temperature: 0.7,
+      maxTokens: MODEL.maxTokens,
+      thinkingBudget: 0,
+      executionMode: 'ask',
+      outputFormat: 'markdown',
+    }),
+    sources: Object.freeze({
+      modelBinding: 'runtime',
+      temperature: 'default',
+      maxTokens: 'default',
+      thinkingBudget: 'default',
+      executionMode: 'default',
+      outputFormat: 'default',
+    }),
+    dimensions: EFFECTIVE_AGENT_CONFIG_DIMENSIONS,
+  });
+  return Object.freeze({ requested: projection, effective: projection, diagnostics: [] });
 }
 
 function assistant(text: string): AssistantMessage {

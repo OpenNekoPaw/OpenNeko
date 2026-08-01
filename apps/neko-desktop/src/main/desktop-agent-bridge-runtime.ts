@@ -22,11 +22,10 @@ import {
   type DesktopAgentUnavailableDiagnostic,
 } from '../shared/agent-contract';
 import type { DesktopAgentWorkspaceRuntime } from './desktop-agent-app-host-composition';
+import type { DesktopAgentNeutralFacts } from '../shared/agent-facts-contract';
 
 export interface DesktopAgentControllerComposition {
-  readonly requirements: Readonly<
-    Partial<Record<DesktopAgentRuntimeRequirement, true>>
-  >;
+  readonly requirements: Readonly<Partial<Record<DesktopAgentRuntimeRequirement, true>>>;
   createEffects(input: {
     readonly workspace: DesktopAgentWorkspaceRuntime;
     readonly identity: DesktopAgentConnectionIdentity;
@@ -35,6 +34,33 @@ export interface DesktopAgentControllerComposition {
 }
 
 export interface DesktopAgentControllerEffects extends AgentHostControllerEffectPorts {
+  readonly automation?: {
+    waitForIdle(
+      conversationId: string,
+      timeoutMs: number,
+    ): Promise<{
+      readonly conversationId: string;
+      readonly turnId: string;
+      readonly runId: string;
+    }>;
+    readLatestTurnIdentity(conversationId: string):
+      | {
+          readonly conversationId: string;
+          readonly turnId: string;
+          readonly runId: string;
+        }
+      | undefined;
+    readFacts(identity: {
+      readonly conversationId: string;
+      readonly turnId: string;
+      readonly runId: string;
+    }): DesktopAgentNeutralFacts;
+    disposeAndReadFacts(identity: {
+      readonly conversationId: string;
+      readonly turnId: string;
+      readonly runId: string;
+    }): Promise<DesktopAgentNeutralFacts>;
+  };
   dispose(): void;
 }
 
@@ -65,6 +91,21 @@ export interface DesktopAgentBridgeRuntime {
     request: DesktopAgentMessageRequest,
     grant: DesktopAgentConnectionGrant,
   ): Promise<DesktopAgentMessageResult>;
+  waitForIdle(
+    connection: DesktopAgentConnectionIdentity,
+    grant: DesktopAgentConnectionGrant,
+    conversationId: string,
+    timeoutMs: number,
+  ): Promise<{ readonly conversationId: string; readonly turnId: string; readonly runId: string }>;
+  readFacts(
+    connection: DesktopAgentConnectionIdentity,
+    grant: DesktopAgentConnectionGrant,
+    identity: { readonly conversationId: string; readonly turnId: string; readonly runId: string },
+  ): DesktopAgentNeutralFacts;
+  disposeConnectionAndReadFacts(
+    connection: DesktopAgentConnectionIdentity,
+    grant: DesktopAgentConnectionGrant,
+  ): Promise<DesktopAgentNeutralFacts>;
   detachView(windowId: string, viewId: string): void;
   detachWindow(windowId: string): void;
   dispose(): void;
@@ -81,11 +122,8 @@ export function auditDesktopAgentStartup(
   if (routeDiagnostics.length > 0) {
     throw new Error(routeDiagnostics.map((diagnostic) => diagnostic.message).join(' '));
   }
-  const missingRequirements = DESKTOP_AGENT_RUNTIME_REQUIREMENTS.filter(
-    (requirement) =>
-      requirement === 'pi-runtime'
-        ? !piRuntimeAvailable
-        : !composition?.requirements[requirement],
+  const missingRequirements = DESKTOP_AGENT_RUNTIME_REQUIREMENTS.filter((requirement) =>
+    requirement === 'pi-runtime' ? !piRuntimeAvailable : !composition?.requirements[requirement],
   );
   if (missingRequirements.length === 0 && composition) {
     return { ready: true };
@@ -117,6 +155,11 @@ interface DesktopAgentConnection {
   readonly controller: AgentHostMessageController;
   publish: (event: DesktopAgentMessageEvent) => void;
   readonly effects: DesktopAgentControllerEffects;
+  lastFactsIdentity?: {
+    readonly conversationId: string;
+    readonly turnId: string;
+    readonly runId: string;
+  };
   sequence: number;
 }
 
@@ -268,13 +311,45 @@ class DefaultDesktopAgentBridgeRuntime implements DesktopAgentBridgeRuntime {
     };
   }
 
+  waitForIdle(
+    connectionIdentity: DesktopAgentConnectionIdentity,
+    grant: DesktopAgentConnectionGrant,
+    conversationId: string,
+    timeoutMs: number,
+  ): Promise<{ readonly conversationId: string; readonly turnId: string; readonly runId: string }> {
+    const connection = this.requireAutomationConnection(connectionIdentity, grant);
+    const automation = requireAutomationEffects(connection);
+    return automation.waitForIdle(conversationId, timeoutMs);
+  }
+
+  readFacts(
+    connectionIdentity: DesktopAgentConnectionIdentity,
+    grant: DesktopAgentConnectionGrant,
+    identity: { readonly conversationId: string; readonly turnId: string; readonly runId: string },
+  ): DesktopAgentNeutralFacts {
+    const connection = this.requireAutomationConnection(connectionIdentity, grant);
+    const facts = requireAutomationEffects(connection).readFacts(identity);
+    connection.lastFactsIdentity = identity;
+    return facts;
+  }
+
+  async disposeConnectionAndReadFacts(
+    connectionIdentity: DesktopAgentConnectionIdentity,
+    grant: DesktopAgentConnectionGrant,
+  ): Promise<DesktopAgentNeutralFacts> {
+    const connection = this.requireAutomationConnection(connectionIdentity, grant);
+    const identity = connection.lastFactsIdentity;
+    if (!identity) {
+      throw new Error('Desktop Agent automation close requires facts to be read first.');
+    }
+    this.connections.delete(connection.identity.connectionId);
+    return requireAutomationEffects(connection).disposeAndReadFacts(identity);
+  }
+
   detachView(windowId: string, viewId: string): void {
     this.requireActive();
     for (const [connectionId, connection] of this.connections) {
-      if (
-        connection.identity.windowId === windowId &&
-        connection.identity.viewId === viewId
-      ) {
+      if (connection.identity.windowId === windowId && connection.identity.viewId === viewId) {
         this.disposeConnection(connectionId, connection);
       }
     }
@@ -309,14 +384,37 @@ class DefaultDesktopAgentBridgeRuntime implements DesktopAgentBridgeRuntime {
     if (this.disposed) throw new Error('Desktop Agent bridge runtime is disposed.');
   }
 
-  private disposeConnection(
-    connectionId: string,
-    connection: DesktopAgentConnection,
-  ): void {
+  private requireAutomationConnection(
+    connectionIdentity: DesktopAgentConnectionIdentity,
+    grant: DesktopAgentConnectionGrant,
+  ): DesktopAgentConnection {
+    this.requireActive();
+    assertConnectionIdentity(connectionIdentity, grant);
+    const connection = this.connections.get(connectionIdentity.connectionId);
+    if (!connection) {
+      throw new DesktopAgentContractError(
+        'desktop-agent-identity-mismatch',
+        `Unknown Desktop Agent connection '${connectionIdentity.connectionId}'.`,
+      );
+    }
+    assertConnectionIdentity(connectionIdentity, connection.identity);
+    return connection;
+  }
+
+  private disposeConnection(connectionId: string, connection: DesktopAgentConnection): void {
     if (this.connections.get(connectionId) !== connection) return;
     this.connections.delete(connectionId);
     connection.effects.dispose();
   }
+}
+
+function requireAutomationEffects(
+  connection: DesktopAgentConnection,
+): NonNullable<DesktopAgentControllerEffects['automation']> {
+  if (!connection.effects.automation) {
+    throw new Error('Desktop Agent complete-session automation facts are unavailable.');
+  }
+  return connection.effects.automation;
 }
 
 function isSameConnectionGrant(

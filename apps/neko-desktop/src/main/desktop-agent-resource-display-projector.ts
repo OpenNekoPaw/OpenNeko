@@ -8,10 +8,12 @@ import type { ConversationProjectionAttachmentHostFrame } from '@neko/agent/runt
 import { createNodeHostContentReadService } from '@neko/shared/content-access';
 import {
   contentLocatorKey,
+  isContentLocator,
   type ContentFingerprint,
   type ContentLocator,
 } from '@neko/shared';
 import type { DesktopAgentConnectionIdentity } from '../shared/agent-contract';
+import type { DesktopAgentResourceDisplayProjectionFact } from '../shared/agent-facts-contract';
 import type { DesktopWorkspaceResolution } from './desktop-workspace-registry';
 import type { DesktopResourceLease } from './desktop-resource-registry';
 
@@ -44,6 +46,7 @@ export function createDesktopAgentResourceDisplayProjector(input: {
   readonly identity: DesktopAgentConnectionIdentity;
   readonly workspace: DesktopWorkspaceResolution;
   readonly resources: DesktopAgentResourceDisplayRegistrationPort;
+  readonly recordProjection?: (fact: DesktopAgentResourceDisplayProjectionFact) => void;
 }): DesktopAgentResourceDisplayProjector {
   const contentRead = createNodeHostContentReadService({
     workspaceRoot: input.workspace.workspacePath,
@@ -90,9 +93,10 @@ export function createDesktopAgentResourceDisplayProjector(input: {
   return {
     async project(frame) {
       if (disposed) throw new Error('Desktop Agent resource display projector is disposed.');
+      let projected: ConversationProjectionAttachmentHostFrame;
       switch (frame.type) {
         case 'projectionSnapshot':
-          return {
+          projected = {
             ...frame,
             projection: await projectConversationProjectionSnapshotForResourceDisplay(
               frame.projection,
@@ -103,8 +107,9 @@ export function createDesktopAgentResourceDisplayProjector(input: {
               ),
             ),
           };
+          break;
         case 'projectionPatch':
-          return {
+          projected = {
             ...frame,
             patch: await projectConversationProjectionPatchForResourceDisplay(
               frame.patch,
@@ -115,11 +120,14 @@ export function createDesktopAgentResourceDisplayProjector(input: {
               ),
             ),
           };
+          break;
         case 'projectionDetach':
         case 'projectionProtocolDiagnostic':
-          return frame;
+          projected = frame;
+          break;
       }
-      return assertNeverProjectionFrame(frame);
+      recordProjectedResourceFacts(projected, input.recordProjection);
+      return projected;
     },
     releaseAttachment(attachmentId) {
       for (const [key, record] of leases) {
@@ -136,25 +144,101 @@ export function createDesktopAgentResourceDisplayProjector(input: {
     },
   };
 
-  function projectionOptions(
-    attachmentId: string,
-    conversationId: string,
-    generation: number,
-  ) {
+  function projectionOptions(attachmentId: string, conversationId: string, generation: number) {
     return {
-      resolveContentLocator: (
-        locator: ContentLocator,
-        context: { readonly mediaType?: string },
-      ) =>
-        resolveContentLocator(
-          locator,
-          context,
-          attachmentId,
-          conversationId,
-          generation,
-        ),
+      resolveContentLocator: (locator: ContentLocator, context: { readonly mediaType?: string }) =>
+        resolveContentLocator(locator, context, attachmentId, conversationId, generation),
     };
   }
+}
+
+function recordProjectedResourceFacts(
+  frame: ConversationProjectionAttachmentHostFrame,
+  record: ((fact: DesktopAgentResourceDisplayProjectionFact) => void) | undefined,
+): void {
+  if (!record) return;
+  switch (frame.type) {
+    case 'projectionSnapshot':
+      for (const turn of frame.projection.turns) {
+        for (const item of turn.items) recordTimelineItem(item, frame.key.conversationId, record);
+      }
+      return;
+    case 'projectionPatch':
+      for (const operation of frame.patch.operations) {
+        if (operation.operation === 'snapshot' || operation.operation === 'upsert') {
+          recordTimelineItem(operation.item, frame.key.conversationId, record);
+        }
+      }
+      return;
+    case 'projectionDetach':
+    case 'projectionProtocolDiagnostic':
+      return;
+  }
+}
+
+function recordTimelineItem(
+  item: Parameters<
+    typeof projectConversationProjectionSnapshotForResourceDisplay
+  >[0]['turns'][number]['items'][number],
+  conversationId: string,
+  record: (fact: DesktopAgentResourceDisplayProjectionFact) => void,
+): void {
+  if (item.kind !== 'tool_call' || item.payload.toolCall.result?.data === undefined) return;
+  collectProjectedResources(item.payload.toolCall.result.data, new WeakSet(), (projection) => {
+    record({
+      conversationId,
+      toolCallId: item.payload.toolCall.id,
+      projectionKind: 'tool-result',
+      ...projection,
+      renderTarget: 'agent-webview',
+    });
+  });
+}
+
+function collectProjectedResources(
+  value: unknown,
+  visited: WeakSet<object>,
+  record: (
+    projection: Pick<
+      DesktopAgentResourceDisplayProjectionFact,
+      'status' | 'locatorKind' | 'transport' | 'diagnosticCodes'
+    >,
+  ) => void,
+): void {
+  if (typeof value !== 'object' || value === null || visited.has(value)) return;
+  visited.add(value);
+  if (Array.isArray(value)) {
+    for (const item of value) collectProjectedResources(item, visited, record);
+    return;
+  }
+  const owner = Object.fromEntries(Object.entries(value));
+  const locator = isContentLocator(owner['contentLocator']) ? owner['contentLocator'] : undefined;
+  if (locator && (locator.kind === 'workspace-file' || locator.kind === 'generated-output')) {
+    const diagnosticCodes = readProjectionDiagnosticCodes(owner['resourceProjectionDiagnostics']);
+    const renderUri = owner['renderUri'];
+    const authorized =
+      typeof renderUri === 'string' && renderUri.startsWith('openneko://resource/');
+    if (authorized || diagnosticCodes.length > 0) {
+      record({
+        status: authorized ? 'authorized' : 'denied',
+        locatorKind: locator.kind,
+        transport: authorized ? 'openneko-resource' : 'none',
+        diagnosticCodes,
+      });
+    }
+  }
+  for (const item of Object.values(owner)) collectProjectedResources(item, visited, record);
+}
+
+function readProjectionDiagnosticCodes(value: unknown): readonly string[] {
+  if (!Array.isArray(value)) return [];
+  return Object.freeze(
+    value.flatMap((diagnostic) => {
+      if (typeof diagnostic !== 'object' || diagnostic === null) return [];
+      const code = Reflect.get(diagnostic, 'code');
+      return typeof code === 'string' ? [code] : [];
+    }),
+  );
 }
 
 function projectableWorkspacePath(locator: ContentLocator): string | undefined {
@@ -236,11 +320,5 @@ function isDisplayMediaType(value: string): boolean {
     value.startsWith('audio/') ||
     value.startsWith('video/') ||
     value === 'application/pdf'
-  );
-}
-
-function assertNeverProjectionFrame(frame: never): never {
-  throw new Error(
-    `Unsupported Desktop Agent projection frame: ${JSON.stringify(frame)}`,
   );
 }

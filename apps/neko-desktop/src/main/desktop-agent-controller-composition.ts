@@ -11,6 +11,7 @@ import {
   type OpenNekoPiModelConfig,
   type OpenNekoPiProtocolProfile,
   type PiProductEventSink,
+  type PiProductAgentEvent,
   type PiToolPermissionPolicy,
 } from '@neko/agent/pi';
 import {
@@ -49,6 +50,10 @@ import {
   type AssistantSettingsData,
 } from '@neko/platform/config/assistant-config';
 import { projectLlmParameters } from '@neko/platform/config/llm-parameter-projection';
+import {
+  createEffectiveAgentConfigurationProjection,
+  type EffectiveAgentWorkspaceConfigSnapshot,
+} from '@neko/platform/config/effective-agent-config';
 import type { ModelConfig as Model, ProviderConfig as Provider } from '@neko/shared';
 import type { NekoHostPorts } from '@neko/host/ports';
 import {
@@ -56,10 +61,15 @@ import {
   type DesktopAgentContentInteractionPort,
 } from './desktop-agent-content-effects';
 import type {
+  DesktopAgentTurnConfigurationSnapshot,
   DesktopAgentTurnInput,
   DesktopAgentWorkspaceRuntime,
 } from './desktop-agent-app-host-composition';
 import type { DesktopAgentCredentialRuntime } from './desktop-agent-credential-runtime';
+import {
+  createDesktopAgentFactsProjector,
+  type DesktopAgentFactsProjector,
+} from './desktop-agent-facts-projector';
 import type {
   DesktopAgentControllerComposition,
   DesktopAgentControllerEffects,
@@ -125,10 +135,12 @@ class DefaultDesktopAgentControllerComposition implements DesktopAgentController
       tabStateRevision: 0,
     };
     let post: AgentHostRouteEffectContext['post'] | undefined;
+    const facts = createDesktopAgentFactsProjector({ connection: input.identity });
     const resourceDisplay = createDesktopAgentResourceDisplayProjector({
       identity: input.identity,
       workspace: input.workspace.workspace,
       resources: this.options.resources,
+      recordProjection: (fact) => facts.recordResourceDisplayProjection(fact),
     });
     const projection = createConversationProjectionAttachmentServer({
       endpointEpoch: input.identity.connectionId,
@@ -180,19 +192,62 @@ class DefaultDesktopAgentControllerComposition implements DesktopAgentController
       }
       post = context.post;
     };
+    let disposal: Promise<void> | undefined;
+    const disposeOwned = (): Promise<void> => {
+      disposal ??= Promise.resolve().then(async () => {
+        try {
+          resourceDisplay.dispose();
+          await projection.abandon();
+          facts.dispose();
+        } catch (error) {
+          facts.failDisposal();
+          throw error;
+        }
+      });
+      return disposal;
+    };
     const effects: DesktopAgentControllerEffects = {
-      conversation: this.createConversationEffects(input.workspace, config, state, bind),
+      conversation: this.createConversationEffects(input.workspace, config, state, bind, facts),
       config: this.createConfigEffects(input.workspace, config, state, bind),
-      skill: this.createSkillEffects(input.workspace, config, bind),
+      skill: this.createSkillEffects(input.workspace, config, bind, facts),
       content: createDesktopAgentContentEffects({
         workspace: input.workspace.workspace,
         host: this.options.host,
         interaction: this.options.contentInteraction,
       }),
       projection: this.createProjectionEffects(projection, resourceDisplay, bind),
+      automation: {
+        waitForIdle: async (conversationId, timeoutMs) => {
+          const deadline = Date.now() + timeoutMs;
+          while (input.workspace.readActiveTurn(conversationId)) {
+            if (Date.now() >= deadline) {
+              throw new Error(
+                `Desktop Agent conversation '${conversationId}' did not reach terminal idle within ${timeoutMs}ms.`,
+              );
+            }
+            await waitForFactsPoll();
+          }
+          const identity = facts.readLatestIdentity(conversationId);
+          if (!identity) {
+            throw new Error(
+              `Desktop Agent conversation '${conversationId}' has no observed turn identity.`,
+            );
+          }
+          return {
+            conversationId: identity.conversationId,
+            turnId: identity.turnId,
+            runId: identity.runId,
+          };
+        },
+        readLatestTurnIdentity: (conversationId) => facts.readLatestIdentity(conversationId),
+        readFacts: (identity) => facts.readFacts(identity),
+        disposeAndReadFacts: async (identity) => {
+          await disposeOwned();
+          return facts.readFacts(identity);
+        },
+      },
       dispose: () => {
-        this.track(projection.abandon());
-        resourceDisplay.dispose();
+        this.track(disposeOwned());
       },
     };
     return effects;
@@ -218,6 +273,7 @@ class DefaultDesktopAgentControllerComposition implements DesktopAgentController
     config: ConfigManager,
     state: ConnectionState,
     bind: (context: AgentHostRouteEffectContext) => void,
+    facts: DesktopAgentFactsProjector,
   ): DesktopAgentControllerEffects['conversation'] {
     const postConversationList = async (context: AgentHostRouteEffectContext): Promise<void> => {
       bind(context);
@@ -276,6 +332,7 @@ class DefaultDesktopAgentControllerComposition implements DesktopAgentController
         config,
         request,
         context,
+        facts,
         ...(skillName ? { skillName } : {}),
         ...(additionalInstructions ? { additionalInstructions } : {}),
       });
@@ -559,6 +616,7 @@ class DefaultDesktopAgentControllerComposition implements DesktopAgentController
     workspace: DesktopAgentWorkspaceRuntime,
     config: ConfigManager,
     bind: (context: AgentHostRouteEffectContext) => void,
+    facts: DesktopAgentFactsProjector,
   ): DesktopAgentControllerEffects['skill'] {
     return {
       listSkills: async (context) => {
@@ -605,6 +663,7 @@ class DefaultDesktopAgentControllerComposition implements DesktopAgentController
           config,
           request,
           context,
+          facts,
           skillName,
           ...(args ? { additionalInstructions: args } : {}),
         });
@@ -620,7 +679,8 @@ class DefaultDesktopAgentControllerComposition implements DesktopAgentController
       },
       compressContext: async (conversationId, context) => {
         bind(context);
-        const policy = await this.resolveModelPolicy(workspace, config, {});
+        const settings = config.getAssistantRuntimeSettingsSnapshot();
+        const { policy } = await this.resolveModelPolicy(workspace, config, {}, settings);
         const result = await workspace.compactContext(
           conversationId,
           policy['agent.main'].model.contextWindow,
@@ -695,6 +755,7 @@ class DefaultDesktopAgentControllerComposition implements DesktopAgentController
     readonly config: ConfigManager;
     readonly request: AgentConversationControllerTurnRequest;
     readonly context: AgentHostRouteEffectContext;
+    readonly facts: DesktopAgentFactsProjector;
     readonly skillName?: string;
     readonly additionalInstructions?: string;
   }): Promise<void> {
@@ -720,8 +781,13 @@ class DefaultDesktopAgentControllerComposition implements DesktopAgentController
         `Desktop Agent conversation '${input.request.conversationId}' does not exist.`,
       );
     }
-    const policy = await this.resolveModelPolicy(input.workspace, input.config, input.request);
     const settings = input.config.getAssistantRuntimeSettingsSnapshot();
+    const resolved = await this.resolveModelPolicy(
+      input.workspace,
+      input.config,
+      input.request,
+      settings,
+    );
     const locale = normalizeLocale(input.request.locale);
     const promptBuilder = createSystemPromptBuilder({
       locale,
@@ -740,13 +806,14 @@ class DefaultDesktopAgentControllerComposition implements DesktopAgentController
     await input.workspace.openConversation({
       conversationId: input.request.conversationId,
       models: input.workspace.models,
-      initialModelPolicy: policy,
+      initialModelPolicy: resolved.policy,
       baseSystemPrompt: systemPrompt,
     });
     const turnInput: DesktopAgentTurnInput = {
       conversationId: input.request.conversationId,
       prompt: input.request.messageText,
-      modelPolicy: policy,
+      modelPolicy: resolved.policy,
+      configuration: resolved.configuration,
       permissionPolicy: (events) =>
         this.createPermissionPolicy(
           input.workspace,
@@ -762,7 +829,13 @@ class DefaultDesktopAgentControllerComposition implements DesktopAgentController
         ? { additionalInstructions: input.additionalInstructions }
         : {}),
     };
-    const operation = input.workspace.startTurn(turnInput);
+    const factsEvents = createDeferredDesktopAgentFactsEvents();
+    const observedTurnInput: DesktopAgentTurnInput = {
+      ...turnInput,
+      events: factsEvents.events,
+    };
+    const operation = input.workspace.startTurn(observedTurnInput);
+    factsEvents.bind(input.facts.beginTurn({ identity: operation.identity, systemPrompt }));
     await input.context.post({
       type: 'agentPhase',
       conversationId: input.request.conversationId,
@@ -770,7 +843,11 @@ class DefaultDesktopAgentControllerComposition implements DesktopAgentController
       timestamp: Date.now(),
     });
     try {
-      await operation.completion;
+      const turn = await operation.completion;
+      input.facts.completeTurn({
+        conversation: input.workspace.readConversationEvidence(input.request.conversationId),
+        turn,
+      });
     } finally {
       await input.context.post({
         type: 'agentPhase',
@@ -785,8 +862,11 @@ class DefaultDesktopAgentControllerComposition implements DesktopAgentController
     workspace: DesktopAgentWorkspaceRuntime,
     config: ConfigManager,
     request: Partial<AgentConversationControllerTurnRequest>,
-  ): Promise<AgentModelPolicy> {
-    const settings = config.getAssistantRuntimeSettingsSnapshot();
+    settings: ReturnType<ConfigManager['getAssistantRuntimeSettingsSnapshot']>,
+  ): Promise<{
+    readonly policy: AgentModelPolicy;
+    readonly configuration: DesktopAgentTurnConfigurationSnapshot;
+  }> {
     const selected =
       request.agentModels?.primary ??
       request.chatModel ??
@@ -800,6 +880,17 @@ class DefaultDesktopAgentControllerComposition implements DesktopAgentController
     if (!selected) {
       throw new Error('Choose a configured Desktop Agent provider and model before sending.');
     }
+    const selectionIsRequestOwned =
+      request.agentModels?.primary !== undefined || request.chatModel !== undefined;
+    const requestedSnapshot = config.getEffectiveAgentWorkspaceConfigSnapshot(
+      selectionIsRequestOwned
+        ? {
+            selectedProviderId: selected.providerId,
+            selectedModelId: selected.modelId,
+          }
+        : {},
+    );
+    const requestedConfiguration = createEffectiveAgentConfigurationProjection(requestedSnapshot);
     const provider = config.getProvider(selected.providerId);
     const model = config.getModel(selected.modelId);
     validateModelSelection(provider, model, selected.providerId, selected.modelId);
@@ -848,7 +939,7 @@ class DefaultDesktopAgentControllerComposition implements DesktopAgentController
       (diagnostic) => diagnostic.code === 'invalid-anthropic-thinking-sampling-combination',
     );
     if (blocking) throw new Error(blocking.message);
-    return resolveAgentModelPolicy({
+    const policy = resolveAgentModelPolicy({
       catalog: [
         {
           model: projectedModel,
@@ -886,6 +977,37 @@ class DefaultDesktopAgentControllerComposition implements DesktopAgentController
       },
       requirements: { 'agent.main': { capabilities: ['llm.chat'] } },
     });
+    const effectiveSnapshot: EffectiveAgentWorkspaceConfigSnapshot = {
+      ...requestedSnapshot,
+      temperature: parameters.chatOptions.temperature ?? requestedSnapshot.temperature,
+      maxTokens: parameters.chatOptions.maxTokens ?? requestedSnapshot.maxTokens,
+      thinkingBudget: parameters.chatOptions.thinkingBudget ?? requestedSnapshot.thinkingBudget,
+      sources: {
+        ...requestedSnapshot.sources,
+        ...(parameters.chatOptions.temperature === undefined ||
+        parameters.chatOptions.temperature === requestedSnapshot.temperature
+          ? {}
+          : { temperature: 'runtime' as const }),
+        ...(parameters.chatOptions.maxTokens === undefined ||
+        parameters.chatOptions.maxTokens === requestedSnapshot.maxTokens
+          ? {}
+          : { maxTokens: 'runtime' as const }),
+        ...(parameters.chatOptions.thinkingBudget === undefined ||
+        parameters.chatOptions.thinkingBudget === requestedSnapshot.thinkingBudget
+          ? {}
+          : { thinkingBudget: 'runtime' as const }),
+      },
+    };
+    const configuration: DesktopAgentTurnConfigurationSnapshot = Object.freeze({
+      requested: requestedConfiguration,
+      effective: createEffectiveAgentConfigurationProjection(effectiveSnapshot),
+      diagnostics: Object.freeze(
+        parameters.diagnostics.map((diagnostic) =>
+          Object.freeze({ code: diagnostic.code, message: diagnostic.message }),
+        ),
+      ),
+    });
+    return { policy, configuration };
   }
 
   private createPermissionPolicy(
@@ -1140,6 +1262,41 @@ function normalizeLocale(locale: string | undefined): 'en' | 'zh' {
 
 function ownerKey(workspaceId: string, conversationId: string): string {
   return `${workspaceId}\u0000${conversationId}`;
+}
+
+function createDeferredDesktopAgentFactsEvents(): {
+  readonly events: PiProductEventSink;
+  bind(sink: PiProductEventSink): void;
+} {
+  const buffered: PiProductAgentEvent[] = [];
+  let target: PiProductEventSink | undefined;
+  return {
+    events: {
+      emit(event) {
+        if (!target) {
+          buffered.push(event);
+          return;
+        }
+        return target.emit(event);
+      },
+    },
+    bind(sink) {
+      if (target) throw new Error('Desktop Agent facts event sink is already bound.');
+      target = sink;
+      for (const event of buffered.splice(0)) {
+        const result = target.emit(event);
+        if (result instanceof Promise) {
+          throw new Error(
+            'Desktop Agent facts projector must consume buffered events synchronously.',
+          );
+        }
+      }
+    },
+  };
+}
+
+function waitForFactsPoll(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 25));
 }
 
 function summarizeToolConfirmation(toolName: string, args: unknown): string {

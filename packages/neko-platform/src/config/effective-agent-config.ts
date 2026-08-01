@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 import {
   DEFAULT_CONFIG,
   DEFAULT_EXTENSION_CONFIG,
@@ -8,6 +10,7 @@ import {
   type MediaModelType,
   type ModelRefConfig,
   type UnifiedConfig,
+  stableStringify,
 } from '@neko/shared';
 import type { ConfigReadResult } from '@neko/shared/config/config-reader';
 import type { MCPServerPreset } from '../types/config';
@@ -21,6 +24,57 @@ import { isProviderConfigured } from './provider-configuration';
 import type { AssistantExecutionMode } from './assistant-config';
 
 export type EffectiveAgentConfigValueSource = 'user' | 'workspace' | 'runtime' | 'default';
+export type EffectiveAgentOutputFormat = 'text' | 'json' | 'markdown';
+export type EffectiveAgentConfigDimensionKey =
+  | 'modelBinding'
+  | 'temperature'
+  | 'maxTokens'
+  | 'thinkingBudget'
+  | 'executionMode'
+  | 'outputFormat';
+
+export interface EffectiveAgentConfigDimensionDescriptor {
+  readonly key: EffectiveAgentConfigDimensionKey;
+  readonly owner: 'platform-config';
+  readonly scope: 'turn';
+  readonly restart: 'not-required';
+  readonly valueType: 'model-binding' | 'number' | 'integer' | 'enum';
+}
+
+export const EFFECTIVE_AGENT_CONFIG_CONTRACT_VERSION = 1 as const;
+export const EFFECTIVE_AGENT_CONFIG_DIMENSIONS: readonly EffectiveAgentConfigDimensionDescriptor[] =
+  Object.freeze([
+    dimension('modelBinding', 'model-binding'),
+    dimension('temperature', 'number'),
+    dimension('maxTokens', 'integer'),
+    dimension('thinkingBudget', 'integer'),
+    dimension('executionMode', 'enum'),
+    dimension('outputFormat', 'enum'),
+  ]);
+
+export interface EffectiveAgentConfigurationValues {
+  readonly modelBinding: {
+    readonly purpose: 'agent.main';
+    readonly providerId: string;
+    readonly modelId: string;
+  };
+  readonly temperature: number;
+  readonly maxTokens: number;
+  readonly thinkingBudget: number;
+  readonly executionMode: AssistantExecutionMode;
+  readonly outputFormat: EffectiveAgentOutputFormat;
+}
+
+export interface EffectiveAgentConfigurationProjection {
+  readonly schemaVersion: typeof EFFECTIVE_AGENT_CONFIG_CONTRACT_VERSION;
+  readonly profileId: string;
+  readonly digest: `sha256:${string}`;
+  readonly values: EffectiveAgentConfigurationValues;
+  readonly sources: Readonly<
+    Record<EffectiveAgentConfigDimensionKey, EffectiveAgentConfigValueSource>
+  >;
+  readonly dimensions: typeof EFFECTIVE_AGENT_CONFIG_DIMENSIONS;
+}
 
 export interface EffectiveAgentConfigSelectionSource {
   readonly provider?: EffectiveAgentConfigValueSource;
@@ -29,6 +83,7 @@ export interface EffectiveAgentConfigSelectionSource {
   readonly maxTokens: EffectiveAgentConfigValueSource;
   readonly thinkingBudget: EffectiveAgentConfigValueSource;
   readonly executionMode: EffectiveAgentConfigValueSource;
+  readonly outputFormat: EffectiveAgentConfigValueSource;
   readonly mediaDefaults: Partial<Record<MediaModelType, EffectiveAgentConfigValueSource>>;
 }
 
@@ -39,6 +94,7 @@ export interface EffectiveAgentRuntimeOverrides {
   readonly maxTokens?: number;
   readonly thinkingBudget?: number;
   readonly executionMode?: AssistantExecutionMode;
+  readonly outputFormat?: EffectiveAgentOutputFormat;
   readonly defaultMediaModels?: Partial<Record<MediaModelType, string>>;
 }
 
@@ -52,6 +108,7 @@ export interface EffectiveAgentWorkspaceConfigSnapshot {
   readonly maxTokens: number;
   readonly thinkingBudget: number;
   readonly executionMode: AssistantExecutionMode;
+  readonly outputFormat: EffectiveAgentOutputFormat;
   readonly defaultMediaModels: Partial<Record<MediaModelType, string>>;
   readonly externalResearch: ExternalResearchConfig;
   readonly mcpServers: readonly MCPServerPreset[];
@@ -124,6 +181,10 @@ export function resolveEffectiveAgentWorkspaceConfigSnapshot(
     workspaceConfig,
     runtimeValue: runtime?.executionMode,
   });
+  const outputFormat: ConfigValue<EffectiveAgentOutputFormat> = {
+    value: runtime?.outputFormat ?? 'markdown',
+    source: runtime?.outputFormat === undefined ? 'default' : 'runtime',
+  };
   const mediaDefaults = resolveMediaDefaults(userConfig, workspaceConfig, runtime);
   const externalResearch = normalizeExternalResearchConfig(
     mergeConfigs(userConfig, workspaceConfig).externalResearch,
@@ -161,6 +222,7 @@ export function resolveEffectiveAgentWorkspaceConfigSnapshot(
     maxTokens: maxTokens.value,
     thinkingBudget: thinkingBudget.value,
     executionMode: executionMode.value,
+    outputFormat: outputFormat.value,
     defaultMediaModels: mediaDefaults.values,
     externalResearch,
     mcpServers: input.mcpServers.filter((server) => server.enabled !== false),
@@ -173,9 +235,128 @@ export function resolveEffectiveAgentWorkspaceConfigSnapshot(
       maxTokens: maxTokens.source,
       thinkingBudget: thinkingBudget.source,
       executionMode: executionMode.source,
+      outputFormat: outputFormat.source,
       mediaDefaults: mediaDefaults.sources,
     },
   };
+}
+
+export function createEffectiveAgentConfigurationProjection(
+  snapshot: EffectiveAgentWorkspaceConfigSnapshot,
+): EffectiveAgentConfigurationProjection {
+  if (snapshot.blockingDiagnostic) {
+    throw new Error(
+      `Effective Agent configuration is blocked: ${snapshot.blockingDiagnostic.code}`,
+    );
+  }
+  const providerId = requireIdentity(snapshot.providerId, 'provider');
+  const modelId = requireIdentity(snapshot.modelId, 'model');
+  assertFiniteRange(snapshot.temperature, 'temperature', 0, 2);
+  assertPositiveInteger(snapshot.maxTokens, 'maxTokens');
+  assertNonNegativeInteger(snapshot.thinkingBudget, 'thinkingBudget');
+  const values: EffectiveAgentConfigurationValues = Object.freeze({
+    modelBinding: Object.freeze({ purpose: 'agent.main', providerId, modelId }),
+    temperature: snapshot.temperature,
+    maxTokens: snapshot.maxTokens,
+    thinkingBudget: snapshot.thinkingBudget,
+    executionMode: snapshot.executionMode,
+    outputFormat: snapshot.outputFormat,
+  });
+  const sources = Object.freeze({
+    modelBinding: requireMatchingModelSource(snapshot.sources),
+    temperature: snapshot.sources.temperature,
+    maxTokens: snapshot.sources.maxTokens,
+    thinkingBudget: snapshot.sources.thinkingBudget,
+    executionMode: snapshot.sources.executionMode,
+    outputFormat: snapshot.sources.outputFormat,
+  });
+  const digest = configurationDigest(values, sources);
+  return Object.freeze({
+    schemaVersion: EFFECTIVE_AGENT_CONFIG_CONTRACT_VERSION,
+    profileId: `effective-agent-${digest.slice('sha256:'.length, 'sha256:'.length + 16)}`,
+    digest,
+    values,
+    sources,
+    dimensions: EFFECTIVE_AGENT_CONFIG_DIMENSIONS,
+  });
+}
+
+export function assertEffectiveAgentConfigurationProjection(
+  input: EffectiveAgentConfigurationProjection,
+): EffectiveAgentConfigurationProjection {
+  if (input.schemaVersion !== EFFECTIVE_AGENT_CONFIG_CONTRACT_VERSION) {
+    throw new Error(`Unsupported effective Agent configuration version: ${input.schemaVersion}`);
+  }
+  const expectedDigest = configurationDigest(input.values, input.sources);
+  if (input.digest !== expectedDigest) {
+    throw new Error('Effective Agent configuration digest does not match its frozen values.');
+  }
+  const expectedProfileId = `effective-agent-${expectedDigest.slice('sha256:'.length, 'sha256:'.length + 16)}`;
+  if (input.profileId !== expectedProfileId) {
+    throw new Error('Effective Agent configuration profile identity does not match its digest.');
+  }
+  return input;
+}
+
+function dimension(
+  key: EffectiveAgentConfigDimensionKey,
+  valueType: EffectiveAgentConfigDimensionDescriptor['valueType'],
+): EffectiveAgentConfigDimensionDescriptor {
+  return Object.freeze({
+    key,
+    owner: 'platform-config',
+    scope: 'turn',
+    restart: 'not-required',
+    valueType,
+  });
+}
+
+function configurationDigest(
+  values: EffectiveAgentConfigurationValues,
+  sources: EffectiveAgentConfigurationProjection['sources'],
+): `sha256:${string}` {
+  return `sha256:${createHash('sha256')
+    .update(
+      stableStringify({
+        schemaVersion: EFFECTIVE_AGENT_CONFIG_CONTRACT_VERSION,
+        values,
+        sources,
+      }),
+    )
+    .digest('hex')}`;
+}
+
+function requireMatchingModelSource(
+  sources: EffectiveAgentConfigSelectionSource,
+): EffectiveAgentConfigValueSource {
+  if (!sources.provider || !sources.model || sources.provider !== sources.model) {
+    throw new Error('Effective Agent provider/model sources must match for agent.main.');
+  }
+  return sources.provider;
+}
+
+function requireIdentity(value: string | null, label: string): string {
+  const normalized = value?.trim();
+  if (!normalized) throw new Error(`Effective Agent ${label} identity is required.`);
+  return normalized;
+}
+
+function assertFiniteRange(value: number, label: string, min: number, max: number): void {
+  if (!Number.isFinite(value) || value < min || value > max) {
+    throw new Error(`Effective Agent ${label} must be between ${min} and ${max}.`);
+  }
+}
+
+function assertPositiveInteger(value: number, label: string): void {
+  if (!Number.isSafeInteger(value) || value <= 0) {
+    throw new Error(`Effective Agent ${label} must be a positive integer.`);
+  }
+}
+
+function assertNonNegativeInteger(value: number, label: string): void {
+  if (!Number.isSafeInteger(value) || value < 0) {
+    throw new Error(`Effective Agent ${label} must be a non-negative integer.`);
+  }
 }
 
 function collectWorkspacePolicyDiagnostics(input: {

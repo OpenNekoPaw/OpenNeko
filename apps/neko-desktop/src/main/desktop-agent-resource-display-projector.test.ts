@@ -2,10 +2,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { ConversationProjectionAttachmentHostFrame } from '@neko/agent/runtime/projection/conversation-projection-attachment-server';
-import type {
-  AgentTurnTimelineItem,
-  AgentTurnTimelineToolCallItem,
-} from '@neko-agent/types';
+import type { AgentTurnTimelineItem, AgentTurnTimelineToolCallItem } from '@neko-agent/types';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   createDesktopAgentResourceDisplayProjector,
@@ -31,7 +28,13 @@ describe('Desktop Agent resource display projector', () => {
         release,
       }),
     );
-    const projector = createProjector(fixture.root, { registerFile });
+    const recordProjection = vi.fn();
+    const projector = createProjector(
+      fixture.root,
+      { registerFile },
+      'connection-1',
+      recordProjection,
+    );
 
     const projected = await projector.project(
       snapshotFrame({
@@ -68,6 +71,16 @@ describe('Desktop Agent resource display projector', () => {
       revision: expect.any(String),
     });
     expect(source?.absolutePath).toMatch(/[/\\]media[/\\]clip\.mp4$/u);
+    expect(recordProjection).toHaveBeenCalledWith({
+      conversationId: 'conversation-1',
+      toolCallId: 'tool-call-1',
+      projectionKind: 'tool-result',
+      status: 'authorized',
+      locatorKind: 'workspace-file',
+      transport: 'openneko-resource',
+      renderTarget: 'agent-webview',
+      diagnosticCodes: [],
+    });
 
     projector.releaseAttachment('attachment-1');
     expect(release).toHaveBeenCalledOnce();
@@ -76,7 +89,8 @@ describe('Desktop Agent resource display projector', () => {
   it('emits a visible diagnostic and never falls back to an unsafe display source', async () => {
     const root = await createTemporaryRoot();
     const registerFile = vi.fn();
-    const projector = createProjector(root, { registerFile });
+    const recordProjection = vi.fn();
+    const projector = createProjector(root, { registerFile }, 'connection-1', recordProjection);
 
     const projected = await projector.project(
       snapshotFrame({
@@ -113,6 +127,14 @@ describe('Desktop Agent resource display projector', () => {
       ]),
     });
     expect(registerFile).not.toHaveBeenCalled();
+    expect(recordProjection).toHaveBeenCalledWith(
+      expect.objectContaining({
+        toolCallId: 'tool-call-1',
+        status: 'denied',
+        transport: 'none',
+        diagnosticCodes: ['resource-projection-denied'],
+      }),
+    );
   });
 
   it('releases every outstanding lease when the owning connection is disposed', async () => {
@@ -154,11 +176,7 @@ describe('Desktop Agent resource display projector', () => {
       })),
     };
     const oldProjector = createProjector(fixture.root, oldResources, 'connection-1');
-    const currentProjector = createProjector(
-      fixture.root,
-      currentResources,
-      'connection-2',
-    );
+    const currentProjector = createProjector(fixture.root, currentResources, 'connection-2');
 
     await oldProjector.project(
       snapshotFrame({ contentLocator: fixture.locator, mimeType: 'video/mp4' }),
@@ -183,6 +201,9 @@ function createProjector(
   workspacePath: string,
   resources: DesktopAgentResourceDisplayRegistrationPort,
   connectionId = 'connection-1',
+  recordProjection?: Parameters<
+    typeof createDesktopAgentResourceDisplayProjector
+  >[0]['recordProjection'],
 ) {
   return createDesktopAgentResourceDisplayProjector({
     identity: {
@@ -202,6 +223,7 @@ function createProjector(
       locator: { kind: 'variable', value: '${HOME}/fixture' },
     },
     resources,
+    ...(recordProjection === undefined ? {} : { recordProjection }),
   });
 }
 
@@ -261,9 +283,7 @@ function snapshotFrame(data: unknown): ConversationProjectionAttachmentHostFrame
   };
 }
 
-function readToolResultData(
-  item: AgentTurnTimelineItem | undefined,
-): Record<string, unknown> {
+function readToolResultData(item: AgentTurnTimelineItem | undefined): Record<string, unknown> {
   if (!item || item.kind !== 'tool_call') throw new Error('Expected Tool Call timeline item.');
   const data = item.payload.toolCall.result?.data;
   if (!isRecord(data)) throw new Error('Expected Tool Call result data.');

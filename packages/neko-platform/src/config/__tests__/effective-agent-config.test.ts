@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { UnifiedConfig } from '@neko/shared';
 import type { ConfigReadResult } from '@neko/shared/config/config-reader';
-import { resolveEffectiveAgentWorkspaceConfigSnapshot } from '../effective-agent-config';
+import {
+  assertEffectiveAgentConfigurationProjection,
+  createEffectiveAgentConfigurationProjection,
+  EFFECTIVE_AGENT_CONFIG_DIMENSIONS,
+  resolveEffectiveAgentWorkspaceConfigSnapshot,
+} from '../effective-agent-config';
 import type { MCPServerPreset } from '../../types/config';
 import type { Model, Provider } from '../../types/provider';
 
@@ -175,6 +180,7 @@ describe('resolveEffectiveAgentWorkspaceConfigSnapshot', () => {
         maxTokens: 1234,
         thinkingBudget: 64,
         executionMode: 'plan',
+        outputFormat: 'json',
         defaultMediaModels: { image: 'runtime:image-model' },
       },
     });
@@ -185,6 +191,7 @@ describe('resolveEffectiveAgentWorkspaceConfigSnapshot', () => {
     expect(snapshot.maxTokens).toBe(1234);
     expect(snapshot.thinkingBudget).toBe(64);
     expect(snapshot.executionMode).toBe('plan');
+    expect(snapshot.outputFormat).toBe('json');
     expect(snapshot.defaultMediaModels.image).toBe('runtime:image-model');
     expect(snapshot.sources).toEqual(
       expect.objectContaining({
@@ -194,10 +201,69 @@ describe('resolveEffectiveAgentWorkspaceConfigSnapshot', () => {
         maxTokens: 'runtime',
         thinkingBudget: 'runtime',
         executionMode: 'runtime',
+        outputFormat: 'runtime',
       }),
     );
     expect(userConfig.temperature).toBe(0.3);
     expect(workspaceConfig.temperature).toBe(0.55);
+  });
+
+  it('projects a frozen typed identity and detects digest drift', () => {
+    const userConfig = createUserConfig();
+    const workspaceConfig = createWorkspaceConfig();
+    const snapshot = resolveEffectiveAgentWorkspaceConfigSnapshot({
+      userConfigReadResult: okConfig(USER_CONFIG_PATH, userConfig),
+      workspaceConfigReadResult: okConfig(WORKSPACE_CONFIG_PATH, workspaceConfig),
+      providers: explicitProviders(userConfig),
+      models: explicitModels(userConfig),
+      mcpServers: mergedMcpServers(userConfig, workspaceConfig),
+    });
+
+    const projection = createEffectiveAgentConfigurationProjection(snapshot);
+    expect(assertEffectiveAgentConfigurationProjection(projection)).toBe(projection);
+    expect(projection).toMatchObject({
+      schemaVersion: 1,
+      profileId: expect.stringMatching(/^effective-agent-[a-f0-9]{16}$/u),
+      digest: expect.stringMatching(/^sha256:[a-f0-9]{64}$/u),
+      values: {
+        modelBinding: {
+          purpose: 'agent.main',
+          providerId: 'explicit-user',
+          modelId: 'user-chat',
+        },
+        outputFormat: 'markdown',
+      },
+    });
+    expect(projection.dimensions).toBe(EFFECTIVE_AGENT_CONFIG_DIMENSIONS);
+    expect(Object.isFrozen(projection.values)).toBe(true);
+
+    expect(() =>
+      assertEffectiveAgentConfigurationProjection({
+        ...projection,
+        values: { ...projection.values, temperature: 1.2 },
+      }),
+    ).toThrow('digest does not match');
+  });
+
+  it('rejects invalid or incomplete effective configuration projection', () => {
+    const userConfig = createUserConfig();
+    const workspaceConfig = createWorkspaceConfig();
+    const snapshot = resolveEffectiveAgentWorkspaceConfigSnapshot({
+      userConfigReadResult: okConfig(USER_CONFIG_PATH, userConfig),
+      workspaceConfigReadResult: okConfig(WORKSPACE_CONFIG_PATH, workspaceConfig),
+      providers: explicitProviders(userConfig),
+      models: explicitModels(userConfig),
+      mcpServers: mergedMcpServers(userConfig, workspaceConfig),
+    });
+    expect(() =>
+      createEffectiveAgentConfigurationProjection({ ...snapshot, maxTokens: 0 }),
+    ).toThrow('positive integer');
+    expect(() =>
+      createEffectiveAgentConfigurationProjection({
+        ...snapshot,
+        sources: { ...snapshot.sources, model: 'runtime' },
+      }),
+    ).toThrow('provider/model sources must match');
   });
 
   it('does not silently fall back when workspace selects an invalid default model source', () => {

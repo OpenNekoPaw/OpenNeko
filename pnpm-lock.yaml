@@ -117,6 +117,9 @@ importers:
       '@neko/agent':
         specifier: workspace:*
         version: link:../../packages/neko-agent-runtime
+      '@neko/content':
+        specifier: workspace:*
+        version: link:../../packages/neko-content
       '@neko/entity':
         specifier: workspace:*
         version: link:../../packages/neko-entity
