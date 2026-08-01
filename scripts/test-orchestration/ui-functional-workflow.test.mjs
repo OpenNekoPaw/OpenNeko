@@ -10,6 +10,7 @@ const LOCAL_RUNTIME_SCRIPTS = Object.freeze([
   'dev:desktop',
   'package:desktop',
   'test:local:api',
+  'test:local:media-openneko',
 ]);
 
 describe('Desktop functional workflow boundary', () => {

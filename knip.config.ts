@@ -143,6 +143,7 @@ const config: KnipConfig = {
         'vite.preload.config.ts',
         'vite.renderer.config.ts',
         'src/main/index.ts',
+        'src/main/desktop-openneko-qualification.ts',
         'src/preload/index.ts',
       ],
       ignore: ['src/renderer/styles.css'],
