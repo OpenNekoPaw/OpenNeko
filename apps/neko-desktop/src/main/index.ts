@@ -16,7 +16,10 @@ import { DESKTOP_BRIDGE_CHANNELS, type DesktopLifecycleEvent } from '../shared/b
 import { DESKTOP_SHELL_CHANNELS, type DesktopShellProjectionEvent } from '../shared/shell-contract';
 import { DESKTOP_VITE_CSP_NONCE } from '../shared/vite-development-security';
 import { DesktopAppHost } from './app-host';
-import { registerDesktopAppProtocol, registerDesktopAppScheme } from './app-protocol';
+import {
+  registerDesktopOpenNekoProtocol,
+  registerDesktopOpenNekoScheme,
+} from './desktop-openneko-protocol';
 import { createDesktopWorkspaceRegistry } from './desktop-workspace-registry';
 import { createElectronNekoHostPorts } from './electron-host-ports';
 import { registerDesktopIpc } from './ipc';
@@ -85,7 +88,7 @@ void bootstrapDesktop().catch((error: unknown) => {
 });
 
 async function bootstrapDesktop(): Promise<void> {
-  registerDesktopAppScheme();
+  registerDesktopOpenNekoScheme();
   app.enableSandbox();
   if (!app.requestSingleInstanceLock()) {
     app.quit();
@@ -695,7 +698,7 @@ async function startDesktop(): Promise<void> {
   });
   logger.info('Desktop AppHost and IPC initialized.');
   const rendererRoot = path.join(__dirname, '..', 'renderer', MAIN_WINDOW_VITE_NAME);
-  const disposeProtocol = registerDesktopAppProtocol(rendererRoot, resourceRegistry);
+  const disposeProtocol = registerDesktopOpenNekoProtocol(rendererRoot, resourceRegistry);
   let shutdownStarted = false;
   let shutdownComplete = false;
 

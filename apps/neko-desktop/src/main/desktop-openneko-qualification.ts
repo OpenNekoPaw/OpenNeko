@@ -5,7 +5,10 @@ import * as path from 'node:path';
 import { PassThrough } from 'node:stream';
 import { promisify } from 'node:util';
 import { app, BrowserWindow, session } from 'electron';
-import { registerDesktopAppProtocol, registerDesktopAppScheme } from './app-protocol';
+import {
+  registerDesktopOpenNekoProtocol,
+  registerDesktopOpenNekoScheme,
+} from './desktop-openneko-protocol';
 import {
   DesktopResourceRegistry,
   registerDesktopResourceRequestAuthorization,
@@ -56,7 +59,7 @@ interface RendererQualificationResult {
   readonly gltfDependency: string;
 }
 
-registerDesktopAppScheme();
+registerDesktopOpenNekoScheme();
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 app.commandLine.appendSwitch('disable-renderer-backgrounding');
 
@@ -93,7 +96,7 @@ async function runQualification(): Promise<void> {
     session.defaultSession,
     registry,
   );
-  const disposeProtocol = registerDesktopAppProtocol(rendererRoot, registry);
+  const disposeProtocol = registerDesktopOpenNekoProtocol(rendererRoot, registry);
   const primary = createQualificationWindow();
   const secondary = createQualificationWindow();
   bindWindowLifecycle(primary, 'qualification-window-1', registry);

@@ -21,11 +21,11 @@ export interface DesktopContentSecurityPolicyOptions {
   readonly viteDevelopmentNonce?: string;
 }
 
-export const DESKTOP_APP_SCHEME = 'openneko';
+export const OPENNEKO_SCHEME = 'openneko';
 export const DESKTOP_APP_HOST = 'desktop';
-export const DESKTOP_APP_ORIGIN = `${DESKTOP_APP_SCHEME}://${DESKTOP_APP_HOST}`;
+export const DESKTOP_APP_ORIGIN = `${OPENNEKO_SCHEME}://${DESKTOP_APP_HOST}`;
 export const DESKTOP_RESOURCE_HOST = 'resource';
-export const DESKTOP_RESOURCE_ORIGIN = `${DESKTOP_APP_SCHEME}://${DESKTOP_RESOURCE_HOST}`;
+export const DESKTOP_RESOURCE_ORIGIN = `${OPENNEKO_SCHEME}://${DESKTOP_RESOURCE_HOST}`;
 
 export function createDesktopWebPreferences(preloadPath: string): WebPreferences {
   if (preloadPath.trim().length === 0) {
@@ -45,7 +45,7 @@ export function createDesktopWebPreferences(preloadPath: string): WebPreferences
 
 export function desktopRendererOrigin(url: string): string {
   const parsed = new URL(url);
-  if (parsed.protocol === `${DESKTOP_APP_SCHEME}:`) {
+  if (parsed.protocol === `${OPENNEKO_SCHEME}:`) {
     return `${parsed.protocol}//${parsed.host}`;
   }
   return parsed.origin;

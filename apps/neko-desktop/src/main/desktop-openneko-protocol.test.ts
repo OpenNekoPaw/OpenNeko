@@ -2,7 +2,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createDesktopAppProtocolHandler } from './app-protocol';
+import { createDesktopOpenNekoProtocolHandler } from './desktop-openneko-protocol';
 
 describe('Desktop OpenNeko protocol handler', () => {
   let rendererRoot: string | undefined;
@@ -16,7 +16,7 @@ describe('Desktop OpenNeko protocol handler', () => {
     rendererRoot = await mkdtemp(path.join(tmpdir(), 'desktop-openneko-protocol-'));
     await writeFile(path.join(rendererRoot, 'index.html'), '<main>OpenNeko</main>');
     const handleResource = vi.fn(async () => new Response('resource-bytes'));
-    const handle = createDesktopAppProtocolHandler(rendererRoot, {
+    const handle = createDesktopOpenNekoProtocolHandler(rendererRoot, {
       handle: handleResource,
     });
 
@@ -35,7 +35,7 @@ describe('Desktop OpenNeko protocol handler', () => {
   it('rejects unknown hosts without delegating or resolving a filesystem path', async () => {
     rendererRoot = await mkdtemp(path.join(tmpdir(), 'desktop-openneko-protocol-'));
     const handleResource = vi.fn(async () => new Response('unexpected'));
-    const handle = createDesktopAppProtocolHandler(rendererRoot, {
+    const handle = createDesktopOpenNekoProtocolHandler(rendererRoot, {
       handle: handleResource,
     });
 
@@ -55,7 +55,7 @@ describe('Desktop OpenNeko protocol handler', () => {
     rendererRoot = await mkdtemp(path.join(tmpdir(), 'desktop-openneko-protocol-'));
     await writeFile(path.join(rendererRoot, 'index.html'), '<main>unexpected</main>');
     const handleResource = vi.fn(async () => new Response('unexpected'));
-    const handle = createDesktopAppProtocolHandler(rendererRoot, {
+    const handle = createDesktopOpenNekoProtocolHandler(rendererRoot, {
       handle: handleResource,
     });
 

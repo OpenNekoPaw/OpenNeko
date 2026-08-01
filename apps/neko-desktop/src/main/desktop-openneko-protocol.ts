@@ -5,8 +5,8 @@ import {
   createDesktopContentSecurityPolicy,
   DESKTOP_APP_HOST,
   DESKTOP_APP_ORIGIN,
-  DESKTOP_APP_SCHEME,
   DESKTOP_RESOURCE_HOST,
+  OPENNEKO_SCHEME,
 } from './security';
 import type { DesktopResourceRegistry } from './desktop-resource-registry';
 import { resolveDesktopRendererAsset } from './renderer-asset-path';
@@ -21,10 +21,10 @@ const MIME_TYPES: Readonly<Record<string, string>> = {
   '.woff2': 'font/woff2',
 };
 
-export function registerDesktopAppScheme(): void {
+export function registerDesktopOpenNekoScheme(): void {
   protocol.registerSchemesAsPrivileged([
     {
-      scheme: DESKTOP_APP_SCHEME,
+      scheme: OPENNEKO_SCHEME,
       privileges: {
         standard: true,
         secure: true,
@@ -36,17 +36,20 @@ export function registerDesktopAppScheme(): void {
   ]);
 }
 
-export function registerDesktopAppProtocol(
+export function registerDesktopOpenNekoProtocol(
   rendererRoot: string,
   resources: Pick<DesktopResourceRegistry, 'handle'>,
 ): () => void {
-  protocol.handle(DESKTOP_APP_SCHEME, createDesktopAppProtocolHandler(rendererRoot, resources));
+  protocol.handle(
+    OPENNEKO_SCHEME,
+    createDesktopOpenNekoProtocolHandler(rendererRoot, resources),
+  );
   return () => {
-    protocol.unhandle(DESKTOP_APP_SCHEME);
+    protocol.unhandle(OPENNEKO_SCHEME);
   };
 }
 
-export function createDesktopAppProtocolHandler(
+export function createDesktopOpenNekoProtocolHandler(
   rendererRoot: string,
   resources: Pick<DesktopResourceRegistry, 'handle'>,
 ): (request: Request) => Promise<Response> {
@@ -56,7 +59,7 @@ export function createDesktopAppProtocolHandler(
     try {
       const url = new URL(request.url);
       if (
-        url.protocol !== `${DESKTOP_APP_SCHEME}:` ||
+        url.protocol !== `${OPENNEKO_SCHEME}:` ||
         url.username ||
         url.password ||
         url.search ||

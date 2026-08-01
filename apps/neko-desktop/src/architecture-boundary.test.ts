@@ -201,7 +201,10 @@ describe('Desktop architecture boundaries', () => {
   it('poisons retired Desktop media transports and path-derived resource identity', () => {
     const mainRoot = path.join(sourceRoot, 'main');
     const repositoryRoot = path.resolve(sourceRoot, '../../..');
-    const appProtocol = readFileSync(path.join(mainRoot, 'app-protocol.ts'), 'utf8');
+    const openNekoProtocol = readFileSync(
+      path.join(mainRoot, 'desktop-openneko-protocol.ts'),
+      'utf8',
+    );
     const resourceRegistry = readFileSync(
       path.join(mainRoot, 'desktop-resource-registry.ts'),
       'utf8',
@@ -219,6 +222,8 @@ describe('Desktop architecture boundaries', () => {
     );
 
     for (const retiredFile of [
+      'app-protocol.ts',
+      'app-protocol.test.ts',
       'desktop-media-protocol.ts',
       'desktop-media-protocol.test.ts',
       'desktop-media-descriptor-registry.ts',
@@ -237,11 +242,12 @@ describe('Desktop architecture boundaries', () => {
       ),
     ).toBe(false);
 
-    expect(appProtocol).toContain("protocol.handle(DESKTOP_APP_SCHEME");
-    expect(appProtocol.match(/protocol\.handle\(/gu)).toHaveLength(1);
-    expect(appProtocol).toContain('DESKTOP_RESOURCE_HOST');
-    expect(appProtocol).not.toContain('neko-app');
-    expect(appProtocol).not.toContain('neko-media');
+    expect(openNekoProtocol).toContain('protocol.handle(');
+    expect(openNekoProtocol).toContain('OPENNEKO_SCHEME');
+    expect(openNekoProtocol.match(/protocol\.handle\(/gu)).toHaveLength(1);
+    expect(openNekoProtocol).toContain('DESKTOP_RESOURCE_HOST');
+    expect(openNekoProtocol).not.toContain('neko-app');
+    expect(openNekoProtocol).not.toContain('neko-media');
     expect(resourceRegistry).not.toMatch(/\bcreateServer\s*\(/u);
     expect(resourceRegistry).not.toMatch(/\bupstream\b/iu);
     expect(resourceRegistry).not.toContain('ContentLocator');
