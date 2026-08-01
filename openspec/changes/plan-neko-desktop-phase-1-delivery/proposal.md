@@ -20,9 +20,9 @@ Phase 1 必须基于当前代码与 Accepted 架构重新建立 focused owner、
   产品组合根，旧宿主只允许出现在历史说明、拒绝测试或残留扫描中。
 - 将 durable content identity 收敛为 `ContentLocator`；路径、bytes、cache identity 和
   Renderer URL 只允许作为 Host/runtime materialization，不进入持久跨包事实。
-- 将 Desktop media successor 固定为 Main-owned scoped loopback HTTP gateway；旧
-  `neko-media:`/upstream proxy 只作为待删除路径，不再是 P1.5 目标架构。
-- 把当前剩余工作映射到 Agent/Shell、Assets/Canvas、Cut editing、HTTP resource gateway、
+- 将 Desktop media successor 固定为 Main-owned unified `openneko:` handler 与
+  exact-resource registry；旧 `neko-media:`/loopback HTTP/upstream proxy 只作为待删除路径。
+- 把当前剩余工作映射到 Agent/Shell、Assets/Canvas、Cut editing、OpenNeko resource transport、
   Preview/EPUB、support domains 和 final qualification focused changes。
 - 明确 CI 只拥有平台构建、确定性 unit/contract 和 headless functional evidence；真实 API
   Agent Evaluation 与图形化 Electron UI 验收必须显式本地运行。

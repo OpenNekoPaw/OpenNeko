@@ -1,5 +1,9 @@
 ## Why
 
+> 2026-08-01 supersession: this proposal records the retired VS Code/Extension Host migration.
+> Desktop document projection now uses the unified `openneko:` handler and exact-resource registry;
+> the loopback service and Rust Engine boundaries below are historical and MUST NOT be restored.
+
 Document previews currently register PDF, EPUB, DOCX, and CBZ sources through the Rust media Engine even though document archive/file access belongs to the Extension Host. The pruning change moved EPUB entry reads to Node but left the user-facing preview transport on Engine tokens; the resulting split ownership is unverified in a real Webview and currently fails to load EPUB files.
 
 ## What Changes

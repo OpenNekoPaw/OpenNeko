@@ -1,5 +1,11 @@
 ## Context
 
+> 2026-08-01 supersession: loopback URL, VS Code Host and transport-specific statements below are
+> retained only as historical evidence for the completed hardening work. The current Desktop path
+> is the single `openneko:` handler and exact-resource registry defined by
+> `replace-desktop-media-scheme-with-http-resource-gateway`; this change MUST NOT authorize a
+> loopback or private-scheme fallback.
+
 The canonical media route is Extension Host `NodeMediaRuntime` or a narrow
 domain adapter, tokenized loopback HTTP, muted browser video, and OpenNeko-owned
 PCM audio. Real files show that H.264/AAC/MP3 and 5.1-to-stereo PCM work. AV1

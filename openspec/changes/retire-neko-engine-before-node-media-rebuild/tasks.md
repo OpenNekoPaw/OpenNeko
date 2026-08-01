@@ -1,5 +1,9 @@
 # Tasks
 
+> 2026-08-01 transport update: completed VS Code and loopback tasks are historical execution
+> evidence. Current and future media validation must use Desktop and the unified OpenNeko resource
+> handler without restoring a retired host or transport.
+
 ## 1. Freeze the removal-first contract
 
 - [x] 1.1 Create proposal, design, delta spec, and task plan.

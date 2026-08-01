@@ -34,5 +34,5 @@ None.
 - `packages/neko-preview-webview/src/epub/EpubViewer.test.tsx`
 - Preview Webview tests and real Electron Desktop Preview qualification
 - No Desktop IPC, persisted project data, or public package contract changes
-- The active loopback HTTP resource-gateway change remains independent: it may replace the outer
-  archive URL later, but it does not own EPUB-internal resource readiness.
+- The unified OpenNeko resource transport owns the transient outer archive URL; this change owns
+  only EPUB-internal resource readiness and does not add another transport.

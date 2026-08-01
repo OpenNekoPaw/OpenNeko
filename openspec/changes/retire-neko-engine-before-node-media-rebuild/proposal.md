@@ -1,5 +1,9 @@
 # Change: retire Neko Engine before rebuilding shared media paths
 
+> 2026-08-01 transport update: this proposal's removal-first decisions remain authoritative, while
+> VS Code, Extension Host and loopback transport statements are historical. Current composition is
+> Electron Desktop with the unified `openneko://resource` path.
+
 ## Why
 
 Cut already has a Node/FFmpeg media path, but Preview, Canvas, Tools, Agent,

@@ -1,5 +1,10 @@
 ## Context
 
+> 2026-08-01 supersession: this design records the retired VS Code/Extension Host implementation.
+> The current Desktop path resolves documents in the owning Preview adapter and registers exact
+> files through `openneko://resource`; all loopback server, token, PNA and Rust Engine statements
+> below are historical and MUST NOT become a compatibility path.
+
 The Preview extension already renders documents in dedicated Webviews: PDF.js consumes byte ranges, zip.js consumes CBZ ranges, docx-preview consumes a complete DOCX buffer, and epub.js can consume an unpacked directory-style endpoint. The Extension Host owns workspace paths and already uses `@neko/content/document/node` for bounded EPUB entry reads, but `PreviewFileServer` still registers every document with `EngineClient` and sends an Engine URL to the Webview.
 
 The current EPUB URL has no `.epub` suffix and no trailing directory route. epub.js therefore treats it as a directory and requests `META-INF/container.xml` below a route that only accepts one token segment. Moving only archive parsing to Node left two owners and no valid end-to-end EPUB contract.

@@ -208,6 +208,7 @@ GLB、PDF、图片和单文件音视频继续使用单资源 registration。reso
 | Preview image/PDF/model | owning viewer/loader + exact resource URL/set |
 | Agent display | transient render URL + owning native card |
 | Agent/provider/Tool | `ContentLocator` or authorized real path, never render URL |
+| Tools media diff display | transport-neutral descriptor + transient resource URL |
 | Live capture/call | MediaStream/WebRTC |
 
 各 Cut document、Canvas View、Preview session 和 Agent conversation 独立拥有 generation 与

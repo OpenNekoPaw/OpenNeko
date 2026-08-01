@@ -34,7 +34,7 @@ Desktop 在 `app.ready` 前注册唯一 privileged `openneko:` scheme。同一�
 服务 `openneko://desktop` bundle 与 `openneko://resource` Range/PCM，不注册第二个媒体
 scheme，也不启动 loopback server。Desktop registry 只接受 owning service 已解析的 exact
 byte source、one-shot stream 或 frozen resource set，不解析 `ContentLocator`、项目事实或任意路径。
-它支持 GET/HEAD/OPTIONS、200/206/416、单段 Range、精确 MIME/长度、取消、背压和资源释放，
+它支持 GET/HEAD、200/206/416、单段 Range、精确 MIME/长度、取消、背压和资源释放，
 不得暴露绝对路径或使用 `file://`。完整边界见
 [`adr-neko-desktop-media-capability-and-security-boundary.md`](adr-neko-desktop-media-capability-and-security-boundary.md)。
 

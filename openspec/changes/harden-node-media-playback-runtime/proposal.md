@@ -1,5 +1,9 @@
 ## Why
 
+> 2026-08-01 transport update: the media behavior in this proposal remains relevant, but VS Code,
+> Extension Host and loopback transport statements are historical. Current runtime ownership and
+> byte projection use Desktop Main and the unified `openneko://resource` path.
+
 The Node/FFmpeg media path has replaced Neko Engine, but real media validation
 still exposes several correctness gaps: HDR proxy generation depends on an
 unqualified host FFmpeg build, browser PCM can schedule an unbounded amount of

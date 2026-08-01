@@ -1,5 +1,10 @@
 ## ADDED Requirements
 
+> 2026-08-01 supersession: every loopback, VS Code Webview, private-network and Rust Engine
+> requirement below records the retired host implementation. Current Desktop document projection is
+> governed by `desktop-openneko-resource-transport` and MUST NOT satisfy these scenarios through a
+> loopback or private media scheme.
+
 ### Requirement: Node exclusively owns document preview access
 
 The Preview Extension Host MUST be the only runtime that registers and serves PDF, EPUB, DOCX, and CBZ preview content. Document preview requests MUST NOT start, register with, unregister from, or fall back to the Rust Engine.

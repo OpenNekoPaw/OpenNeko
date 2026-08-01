@@ -10,9 +10,9 @@ P1.0 重新审计后的代码与 change 状态如下：
 | Application/Host   | `apps/neko-desktop`、`neko-desktop` identity、Electron Host ports、AppHost、typed preload 和安全基线已建立 | P0 build change 关闭 typecheck/package/Windows runner 证据；Host Proposed ADR 不自动成为 P1 gate       |
 | Shell/State        | Home、Project/Window/View identity、owner projection 和受控 Workbench 已建立                               | `fix-desktop-agent-shell-regressions` 完成本地图形化回归                                               |
 | Agent              | Pi/AgentSession/Conversation/Tool/Approval/Skill 与 Desktop composition 已接入                             | `integrate-desktop-agent-home`、Shell regression 和 capability catalog 完成真实 API/本地 Electron 验收 |
-| Assets/Canvas      | Assets Root、Resource Browser、完整 Canvas Root 与 workbench composition 已接入                            | `integrate-desktop-assets-canvas` 完成最终节点/UI 验收；HTTP gateway 接管媒体节点 transport            |
-| Cut                | Desktop Cut Root/OTIO/Export/Node media adapter 已接入                                                     | `redefine-openneko-lightweight-editing` 拥有剩余编辑/保存/生产力任务；HTTP gateway 拥有 transport      |
-| Preview/Media      | Preview viewers、Node/FFmpeg 和当前 custom-scheme transport 可运行                                         | HTTP gateway 替换 transport；`fix-epub-preview-resource-readiness` 完成 EPUB 本地 Electron 验收        |
+| Assets/Canvas      | Assets Root、Resource Browser、完整 Canvas Root 与 workbench composition 已接入                            | `integrate-desktop-assets-canvas` 完成最终节点/UI 验收；OpenNeko resource transport 接管媒体节点       |
+| Cut                | Desktop Cut Root/OTIO/Export/Node media adapter 已接入                                                     | `redefine-openneko-lightweight-editing` 拥有剩余编辑/保存/生产力任务；OpenNeko transport 拥有字节投影  |
+| Preview/Media      | Preview viewers、Node/FFmpeg 和 Desktop media transport 可运行                                             | OpenNeko resource transport 收敛；`fix-epub-preview-resource-readiness` 完成 EPUB 本地 Electron 验收   |
 | Generation/Quality | GenerationJob、Quality Gate 与相关投影基础存在                                                             | 尚未创建的 `integrate-desktop-creative-support-domains` 重新审计并组合                                 |
 | Chara/Entity/Tools | Chara、Entity、Search、Tools 能力分散存在，部分 package 是零 manifest consumer                             | zero-consumer disposition 提供证据；P1.6 只接入被明确保留的能力                                        |
 
@@ -62,15 +62,15 @@ P1.0 不实现产品代码。它把旧 program 的工作转移到当前事实对
 P0 build/typecheck gate + ResourceRef retirement
   -> P1.3 Agent/Shell acceptance
   -> P1.4 Assets/Canvas media acceptance
-  -> P1.5 Cut/Preview/HTTP gateway closure
+  -> P1.5 Cut/Preview/OpenNeko resource closure
   -> P1.6 retained supporting domains
   -> P1.7 reference-platform end-to-end qualification
 ```
 
-`retire-resource-ref-contract` 先关闭 public durable identity；HTTP gateway、Agent display、
+`retire-resource-ref-contract` 先关闭 public durable identity；OpenNeko resource、Agent display、
 Canvas、Preview 和后续 support-domain contract 不得继续新增或恢复 `ResourceRef`。
-P1.4/P1.5 的媒体路径由 HTTP gateway successor 统一替换，不能分别保留 custom scheme、
-upstream proxy 或普通 Canvas PCM 成功路径。
+P1.4/P1.5 的媒体路径由统一 `openneko:` scheme 与 exact-resource registry 替换，不能分别
+保留私有 media scheme、loopback HTTP、upstream proxy 或普通 Canvas PCM 成功路径。
 
 当前 successor ownership 为：
 
@@ -79,15 +79,15 @@ upstream proxy 或普通 Canvas PCM 成功路径。
 | P1.1 Foundation        | `bootstrap-neko-desktop-foundation`                                                                          | 已实施；最终 package 证据由 P0 build change 持续跟踪                                            |
 | P1.2 Shell/state       | `implement-desktop-shell-project-state`、Home/Workbench refinements                                          | 已实施；可见回归由 `fix-desktop-agent-shell-regressions` 验收                                   |
 | P1.3 Agent/Home        | `integrate-desktop-agent-home`、`clarify-desktop-capability-catalog`                                         | 保留剩余真实 API Evaluation 与本地 Electron scenario，不重复实现 Agent runtime                  |
-| P1.4 Assets/Canvas     | `integrate-desktop-assets-canvas`、HTTP gateway Canvas slice                                                 | Assets/Canvas child 只关闭剩余 UI/节点验收；媒体 transport 交给 gateway                         |
-| P1.5 Cut/Preview/Media | `redefine-openneko-lightweight-editing`、HTTP gateway、EPUB readiness、`integrate-desktop-cut-preview-media` | Cut 编辑、transport、格式 readiness 和最终文档分别由各 owner 关闭                               |
+| P1.4 Assets/Canvas     | `integrate-desktop-assets-canvas`、OpenNeko resource Canvas slice                                            | Assets/Canvas child 只关闭剩余 UI/节点验收；媒体 transport 交给 Desktop resource registry        |
+| P1.5 Cut/Preview/Media | `redefine-openneko-lightweight-editing`、OpenNeko resource、EPUB readiness、`integrate-desktop-cut-preview-media` | Cut 编辑、transport、格式 readiness 和最终文档分别由各 owner 关闭                            |
 | P1.6 Support domains   | 尚未创建 `integrate-desktop-creative-support-domains`                                                        | 先读取 zero-consumer disposition，再只接入明确保留的 Generation/Quality/Chara/Entity/Tools 能力 |
 | P1.7 Qualification     | 尚未创建 `qualify-neko-desktop-phase-1`                                                                      | 只做 frozen fixture、canonical-path assertion、图形化 E2E 和最终文档/归档                       |
 | Sync recovery          | `optimize-workspace-media-library-sync`                                                                      | 是独立 portability enhancement；除非 P1.7 后续 spec 显式需要，不自动成为 Phase 1 gate           |
 | Package topology       | Platform/Shared/Host/zero-consumer/identity Proposed changes                                                 | 保持独立架构线；Proposed ADR 未接受前不自动成为产品 Phase 1 gate                                |
 
 P1.3-P1.5 可以在各自 owner 内推进，但不得并行修改同一个 public contract。尤其
-ResourceRef retirement 与 HTTP gateway 的 shared/Agent/Canvas consumer migration 必须串行；
+ResourceRef retirement 与 OpenNeko resource 的 shared/Agent/Canvas consumer migration 必须串行；
 package identity normalization 必须等其 proposal 声明的 Platform/Shared/Host/zero-consumer
 前置完成后再原子执行。
 
@@ -280,10 +280,10 @@ Host/domain authority 与 renderer replica；不得创建全局 `desktopStore` �
 | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Agent              | 复用唯一 Agent controller、`AgentWebviewRoot`、Pi/AgentSession、Conversation projection 和 Tab render runtime；剩余工作只补真实 API Evaluation、Desktop route 和生命周期证据             |
 | Assets/Content     | 复用 `ContentLocator`、workspace-linked library、Entity/Search/local metadata 与 Assets-owned browser Root；Desktop 不建立第二套 catalog                                                 |
-| Canvas             | 完整 `CanvasRoot` 注入 versioned `CanvasHostAdapter`；`.nkc`/domain 保持真值；HTTP gateway successor 接管普通 audio/video transport 与真实媒体验收                                       |
-| Cut                | 完整 `CutRoot`/OTIO/Cut command/ExportJob 保持 authority；`redefine-openneko-lightweight-editing` 关闭编辑/保存缺口，HTTP gateway 保留 Cut mixed PCM                                     |
+| Canvas             | 完整 `CanvasRoot` 注入 versioned `CanvasHostAdapter`；`.nkc`/domain 保持真值；OpenNeko resource transport 接管普通 audio/video 与真实媒体验收                                          |
+| Cut                | 完整 `CutRoot`/OTIO/Cut command/ExportJob 保持 authority；`redefine-openneko-lightweight-editing` 关闭编辑/保存缺口，OpenNeko resource 保留 Cut mixed PCM                               |
 | Preview            | 建立 package-owned `PreviewRoot`/descriptor lifecycle，组合现有格式 renderer；只消费 Host 授权 ContentLocator/media descriptor；提供临时、固定和显式侧边 Preview View，不默认覆盖 Canvas |
-| Media              | Desktop Main 组合唯一 scoped loopback HTTP gateway，实现 token/owner/generation/Range/CORS/PNA/cancel/backpressure；删除 `neko-media:` 与 upstream proxy；PCM 只服务 Cut 等显式处理语义  |
+| Media              | Desktop Main 组合唯一 OpenNeko handler 与 exact-resource registry，实现 sender/owner/generation/Range/CORS/cancel/backpressure；删除 loopback HTTP、私有 media scheme 与 upstream proxy；PCM 只服务 Cut 等显式处理语义 |
 | Generation/Quality | 只通过 GenerationJob/Quality owner 的 command 和 projection 接入 Agent、Canvas、Activity；P1.3 只消费已有 Job link/status，P1.6 才组合具体领域 port；不建立 Desktop task                 |
 | Chara/Entity       | 根据 zero-consumer evidence 复用明确保留的 Chara application/core 和 Entity binding，通过 Agent/Context Dock 投影当前能力；不创建 CharacterProject/Version 或独立空编辑器                |
 | Tools/Diagnostics  | 将媒体比较/metadata/diagnostic 的 browser-safe presenter 与 Host effect 分离；日志和错误使用公共 Logger/Errors，不暴露绝对路径或 runtime console                                         |
@@ -323,7 +323,7 @@ launch Desktop
 - Agent 命中 Pi conversation runtime、Pi Session 与 Product Turn Bridge canonical path；
 - Assets/Canvas/Cut/Preview 命中各自 public adapter；
 - Generation/Export 命中 owning Job；
-- Desktop media 命中 Main-owned HTTP resource gateway/`@neko/media`；
+- Desktop media 命中 Main-owned OpenNeko handler、exact-resource registry 与 `@neko/media`；
 - `neko-media:`、upstream proxy、已退休宿主、`neko-home`、Engine/client、mock store 和 demo
   surface 被删除、poison 或 residue guard 拒绝后仍通过。
 
@@ -354,7 +354,7 @@ P1.7 至少验证：
 
 - Electron package、安装/启动、窗口、菜单、文件选择和应用退出；
 - Node 24/native dependency/FFmpeg closure；
-- scoped loopback HTTP gateway Range、图片/音频/视频/文档/3D preview；
+- scoped OpenNeko resource Range、图片/音频/视频/文档/3D preview；
 - SDR baseline；HDR/10-bit 只报告 capability/diagnostic，不成为 Phase 1 完成条件；
 - IME、快捷键、DPI、可访问性、crash/reload；
 - 隔离 synthetic workspace，禁止使用真实用户配置、credential 或私人素材。

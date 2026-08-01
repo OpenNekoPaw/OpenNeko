@@ -10,7 +10,7 @@ staging, and release composition before remaining media consumers are rebuilt.
 
 #### Scenario: Product activates
 
-- **WHEN** the OpenNeko VS Code extension activates during migration
+- **WHEN** the OpenNeko Desktop application activates
 - **THEN** no Engine feature or native Engine runtime is activated
 - **AND** no Engine command is registered as an available media capability
 
@@ -59,16 +59,16 @@ lifecycle infrastructure without exposing a broad product-level Engine facade.
 #### Scenario: Webview consumes prepared media
 
 - **WHEN** a Webview receives a prepared video or PCM descriptor
-- **THEN** the descriptor contains opaque loopback URLs and explicit version,
+- **THEN** the descriptor contains transient OpenNeko resource URLs and explicit version,
   format, and session identity
-- **AND** it contains no local path or Node/VS Code object
+- **AND** it contains no local path or Host runtime object
 
 ### Requirement: Media operations are explicit FFmpeg jobs
 
 The system SHALL implement probe, frame/thumbnail capture, waveform generation,
 audio/subtitle extraction, analysis input decoding, proxy preparation,
-transcode, and export as cancellable FFmpeg/ffprobe jobs owned by the Extension
-Host.
+transcode, and export as cancellable FFmpeg/ffprobe jobs owned by the injected
+Node adapter and Desktop Host composition.
 
 #### Scenario: Read media on demand
 
@@ -92,7 +92,7 @@ playback, and an explicit HDR preservation or SDR tone-map profile.
 
 #### Scenario: Source is not qualified for direct play
 
-- **WHEN** the actual VS Code Webview does not qualify the source codec,
+- **WHEN** the actual Electron Renderer does not qualify the source codec,
   container, bit depth, or HDR profile
 - **THEN** the host prepares the declared proxy profile
 - **AND** it reports that conversion rather than presenting it as direct play
@@ -125,16 +125,16 @@ removed and replacements pass canonical-path validation.
 
 ### Requirement: Runtime validation uses the canonical test workspace
 
-The system SHALL use `${HOME}/Git/neko-test` as the only Extension Development
-Host and Webview validation workspace. Generated synthetic media SHALL be
+The system SHALL use `${HOME}/Git/neko-test` as the only Desktop media validation
+workspace. Generated synthetic media SHALL be
 confined to its marker-owned `.neko/.functional/media-runtime` subtree.
 
 #### Scenario: Media runtime acceptance starts
 
 - **WHEN** a developer starts the media runtime validation launch
-- **THEN** the prelaunch task rebuilds
+- **THEN** the Desktop qualification task rebuilds
   `${HOME}/Git/neko-test/.neko/.functional/media-runtime`
-- **AND** the Development Host opens only `${HOME}/Git/neko-test`
+- **AND** Desktop opens only `${HOME}/Git/neko-test`
 - **AND** it does not use a repository-local or other workspace
 - **AND** fixture replacement does not delete the workspace root or
   user-provided media

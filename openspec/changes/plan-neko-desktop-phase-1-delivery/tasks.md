@@ -75,25 +75,25 @@
       controlled Canvas/Timeline/Model Main compositions without separate move-left/right buttons,
       independent Files/Media/Entity resource facets and package-owned bottom horizontal
       Canvas/Model toolbars; preserve all owner identities and command paths
-- [ ] 4.6 Close `integrate-desktop-assets-canvas` final UI/node scenario, then let the HTTP
-      resource-gateway Canvas slice replace ordinary audio/video transport and prove package-owned
+- [ ] 4.6 Close `integrate-desktop-assets-canvas` final UI/node scenario, then let the OpenNeko
+      resource Canvas slice replace ordinary audio/video transport and prove package-owned
       probe, poster, playback, isolation and cleanup in a local graphical Electron fixture
 
 ## 5. P1.5 Cut, Preview And Media
 
 - [x] 5.1 Record `integrate-desktop-cut-preview-media` as the implemented Cut/Preview composition
-      baseline and transfer its superseded `neko-media:` transport to the HTTP gateway successor
+      baseline and transfer its superseded `neko-media:`/HTTP transport to the OpenNeko resource successor
 - [ ] 5.2 Close retained Cut edit/save/preview/export and P1 productivity work through
       `redefine-openneko-lightweight-editing`; keep OTIO/Cut command/ExportJob authority and poison
       demo, active-editor and retired-host success paths
-- [ ] 5.3 Close package-owned Preview lifecycle and format readiness through the HTTP gateway
+- [ ] 5.3 Close package-owned Preview lifecycle and format readiness through the OpenNeko resource
       Preview slice plus `fix-epub-preview-resource-readiness`, including temporary/pinned/side View
       identity, documents and model resource sets
-- [ ] 5.4 After `retire-resource-ref-contract`, implement the single Main-owned HTTP gateway with
-      scoped token/origin/generation, Range/CORS/PNA/cancel/backpressure, Cut PCM and native
-      Canvas/Preview/Agent media; delete custom scheme and upstream proxy success
+- [ ] 5.4 After `retire-resource-ref-contract`, implement the single Main-owned OpenNeko handler and
+      exact-resource registry with scoped sender/origin/generation, Range/CORS/cancel/backpressure,
+      Cut PCM and native Canvas/Preview/Agent media; delete loopback HTTP, private scheme and proxy success
 - [ ] 5.5 Run focused producer/consumer and Node/FFmpeg checks, then isolated local graphical
-      Electron Cut/Canvas/Preview/EPUB scenarios proving the gateway and owning Roots were reached
+      Electron Cut/Canvas/Preview/EPUB scenarios proving the resource handler and owning Roots were reached
       while retired transports/hosts remained unavailable
 
 ## 6. P1.6 Supporting Creative Domains
@@ -120,8 +120,8 @@
 - [ ] 7.2 Verify launch → Content Project → Agent → Media Library → Canvas candidate/accept →
       Preview → Cut → Export → Activity/result → close/reopen/restart
 - [ ] 7.3 Assert canonical-path counters/poisoning for Pi conversation runtime, Pi Session, Product
-      Turn Bridge, package adapters, owning Jobs, `@neko/media` and the HTTP gateway; prove
-      custom-scheme/upstream proxy, legacy/demo/retired-host routes did not participate
+      Turn Bridge, package adapters, owning Jobs, `@neko/media` and the OpenNeko resource handler;
+      prove loopback HTTP/private media scheme/upstream proxy and legacy/demo routes did not participate
 - [ ] 7.4 Verify `darwin-arm64` package/install/startup, dependency closure, IME/keyboard/DPI/
       accessibility, renderer crash, app quit and resource release
 - [ ] 7.5 Run all applicable package tests, `pnpm build`, `pnpm test`, `pnpm check`,

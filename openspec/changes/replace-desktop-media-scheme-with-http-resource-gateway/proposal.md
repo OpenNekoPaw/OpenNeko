@@ -48,7 +48,12 @@ scheme 内用 host 区分可信应用资源与短生命周期授权资源。系�
 
 ### Modified Capabilities
 
-- 无。这个 active change 仍保留原目录名作为历史追踪，但 HTTP 不再是目标设计或生产能力。
+- `desktop-cut-node-media-runtime`：把 Cut seekable video 与 mixed PCM 从 loopback HTTP
+  收敛到统一 OpenNeko resource registration。
+- `standard-3d-model-preview`：把模型与精确依赖从 `ResourceRef`/`neko-media:` 收敛到
+  `ContentLocator` 与 transient OpenNeko resource set。
+- `model-preview-agent-context`：把模型与派生预览图身份从 `ResourceRef` 收敛到 validated
+  `ContentLocator`，并禁止 runtime resource URL 进入 Agent context。
 
 ## Impact
 
@@ -60,6 +65,8 @@ scheme 内用 host 区分可信应用资源与短生命周期授权资源。系�
 - `packages/neko-cut*`、`packages/neko-canvas*`、`packages/neko-preview*`、
   `packages/neko-agent*`：删除 `transport: 'http'` 判断，消费 Host 投影的临时 resource URL，
   不获得 Electron、Node 或文件系统能力。
+- `packages/neko-tools*`：媒体比较 descriptor 删除单值 HTTP transport；任何运行期媒体 URL
+  只作为 transient projection，Tools effect 继续使用 Host 授权的真实输入。
 - CSP 不再依赖动态端口、`http://127.0.0.1:*`、CORS 或 PNA；只声明同一
   `openneko:` scheme 下经过审计的 resource origin。
 - 不迁移用户数据。旧 `neko-app:`、HTTP URL、`neko-media:` 或其他运行期 URL 若出现在持久内容

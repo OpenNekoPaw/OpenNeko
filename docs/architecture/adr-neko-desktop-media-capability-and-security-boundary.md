@@ -45,7 +45,7 @@ Desktop 的价值是获得宿主、transport、版本和打包闭包控制权，
 | ---- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 职责 | `@neko/media` 与领域窄 port 拥有 probe、playback plan 和质量语义；Desktop Host 只拥有授权 transport、Electron lifecycle 和 capability projection。 |
 | 依赖 | renderer 只依赖浏览器安全 contract，不读取本地路径或 Node/Electron API；main 不解释 OTIO、Canvas 或项目事实。                                      |
-| 接口 | source、preview、export capability 分离；descriptor 明确 direct/remux/hardware-prepared、色彩模式、transport、session identity 和 diagnostic。     |
+| 接口 | source、preview、export capability 分离；descriptor 明确 direct/remux/hardware-prepared、色彩模式、transient resource projection、session identity 和 diagnostic。 |
 | 扩展 | codec、HDR output 和平台通过真实 fixture 资格矩阵扩展；同一 release/target 只选择一个 canonical plan，不保留自动 fallback。                        |
 | 测试 | 同一 fixture 覆盖 probe、按需读取、实际 seek/decode、色彩输出、代理、CSP、取消与资源释放；“可播放”和截图不能作为 HDR 证据。                        |
 
@@ -66,12 +66,12 @@ source ContentLocator
      ├─ hardware-prepared SDR file
      └─ explicit unsupported diagnostic
 
-VS Code Host
+Historical VS Code Host (retired)
   -> tokenized loopback HTTP Range / PCM
   -> Webview <video src> / Web Audio
 
 Desktop Host
-  -> secure streaming custom protocol Range / PCM
+  -> unified openneko://resource Range / PCM
   -> Electron renderer <video src> / Web Audio
 ```
 
@@ -131,7 +131,7 @@ Desktop 不把 `/absolute/path` 或 `file://` 交给 renderer。Electron 在 `ap
 
 - URL path 只包含 32 字符 CSPRNG opaque ID，不含路径或稳定内容身份；
 - opaque ID 只映射到 exact seekable resource、one-shot PCM 或 frozen resource set；
-- 响应实现 GET/HEAD/OPTIONS、200/206/416、单段 Range、精确 MIME/长度、取消、背压；
+- 响应实现 GET/HEAD、200/206/416、单段 Range、精确 MIME/长度、取消、背压；
 - registration 绑定 Window/View/session/renderer-epoch/generation 与允许的 `webContentsId`，
   不信任请求 header；
 - CSP 只开放 exact `openneko://resource` origin；CORS 只接受 exact Renderer origin；

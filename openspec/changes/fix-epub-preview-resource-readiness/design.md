@@ -30,7 +30,7 @@ alternate text appears.
 - Replace epub.js or implement EPUB archive parsing in OpenNeko.
 - Move EPUB entry projection into Desktop Main.
 - Change the Desktop Preview descriptor or persisted project formats.
-- Implement the separate loopback HTTP resource-gateway migration.
+- Change the unified OpenNeko resource transport or add a second document transport.
 - Add retries, compatibility branches, or a second EPUB rendering path.
 
 ## Decisions
@@ -73,9 +73,10 @@ No shared UI, theme, i18n runtime, path resolver, cache, or Desktop bridge is ad
 the existing document error rendering and package logger. EPUB readiness is specific to epub.js and
 has no matching abstraction in PDF, DOCX, or CBZ viewers.
 
-The active HTTP resource-gateway change may later replace the outer `neko-media:` archive URL. It
-must still preserve this first-render EPUB readiness contract unless it explicitly replaces
-epub.js archive resource projection with a new canonical entry projection.
+The outer archive URL is a transient `openneko://resource` projection from the Desktop exact-resource
+registry. This package-local readiness fix does not reinterpret that URL, persist it, or create
+another document transport; it only waits for epub.js to finish its internal archive-resource
+replacement before rendering.
 
 ## Risks / Trade-offs
 

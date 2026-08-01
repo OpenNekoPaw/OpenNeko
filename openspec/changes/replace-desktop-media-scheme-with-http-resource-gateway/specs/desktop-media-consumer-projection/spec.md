@@ -114,6 +114,19 @@ Host-resolved real filesystem paths; ordinary Agent sessions SHALL not gain Bash
 - **THEN** Host supplies the exact real input/output paths inside its execution scope
 - **AND** no `openneko:`, `neko-media:` or loopback display URL is passed to the command
 
+### Requirement: Tools media descriptors SHALL remain transport-neutral
+
+Tools media-diff audio, video and PCM descriptors SHALL describe only the owning representation,
+protocol framing and transient URL required by the package-owned consumer. They MUST NOT carry
+`transport: 'http'`, `MediaTransport` or another single-value transport discriminator. Authorized
+processors SHALL continue to receive validated real input/output paths rather than render URLs.
+
+#### Scenario: Tools displays a media comparison
+
+- **WHEN** the owning Host projects audio or video comparison resources
+- **THEN** the Tools Webview receives transport-neutral descriptors with transient resource URLs
+- **AND** no loopback, private scheme or second transport discriminator contributes to success
+
 ### Requirement: Finite and live resources SHALL use different runtime paths
 
 Finite files and bounded allowlisted dependency sets SHALL use the Desktop resource registry only

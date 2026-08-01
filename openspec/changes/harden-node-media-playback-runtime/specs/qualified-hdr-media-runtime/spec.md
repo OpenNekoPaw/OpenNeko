@@ -28,12 +28,12 @@ metadata.
 - **THEN** media activation fails before feature activation
 - **AND** Cut does not degrade to compressor-only or limiter-only output
 
-#### Scenario: VS Code development pre-launch staging
+#### Scenario: Desktop development pre-launch staging
 
-- **WHEN** `Debug Dev (All)` runs its product build task
+- **WHEN** the Desktop development build stages its media runtime
 - **THEN** the task receives the same explicit FFmpeg and ffprobe identity as
-  the Extension Host launch
-- **AND** the generated development extension stages and qualifies that runtime
+  Electron Main
+- **AND** the development application stages and qualifies that runtime
 - **AND** it does not depend on launch-environment inheritance or PATH fallback
 
 ### Requirement: Video processing is hardware-only
@@ -48,7 +48,7 @@ decode, filters, transcoding, proxy generation, or a software fallback.
 - **WHEN** the active Preview Webview has proved MP4 AV1 frame output for the
   active Electron runtime rather than relying on `canPlayType()` alone
 - **AND** the source is AV1 in an MP4-family container
-- **THEN** the host publishes the original bytes through tokenized HTTP Range
+- **THEN** the host publishes the original bytes through an OpenNeko Range resource
 - **AND** audio, when present, continues through OpenNeko PCM
 
 #### Scenario: Electron only reports AV1 type support
@@ -119,7 +119,7 @@ distinguish optional poster capture from playback preparation.
 #### Scenario: HDR poster capture is unavailable
 
 - **WHEN** HDR frame capture would require CPU filtering or hardware readback
-- **THEN** the Extension Host consumes the rejection
+- **THEN** the Desktop Host consumes the rejection
 - **AND** the Webview receives a hardware-only capture-frame diagnostic without
   invalidating a separately available playback route
 - **AND** no `unhandledRejection` is emitted
@@ -163,7 +163,7 @@ generation without treating intentional teardown as media corruption.
 - **WHEN** the player seeks the existing native video source and stops the old
   PCM session
 - **THEN** the editor-scoped video descriptor remains registered and Chromium
-  seeks it through HTTP Range without another remux or transcode
+  seeks it through OpenNeko Range without another remux or transcode
 - **AND** intentional FFmpeg termination is consumed as cancellation
 - **AND** the replacement descriptor starts at the requested media time
 
@@ -199,7 +199,7 @@ generation without treating intentional teardown as media corruption.
 
 ### Requirement: Obsolete Range requests cancel cleanly
 
-The tokenized loopback transport SHALL distinguish a browser-aborted response
+The OpenNeko resource handler SHALL distinguish a browser-aborted response
 from a media runtime or file IO failure.
 
 #### Scenario: Chromium replaces an active Range request
@@ -207,9 +207,9 @@ from a media runtime or file IO failure.
 - **WHEN** the Webview closes an in-flight file response during seek or source
   replacement
 - **AND** Node reports `ERR_STREAM_PREMATURE_CLOSE` after the response closes
-- **THEN** the loopback server completes that request without an error
+- **THEN** the resource handler treats that request as cancelled without an error
   diagnostic or synthetic 500 response
-- **AND** later Range requests for the same token remain available
+- **AND** later Range requests for the same live registration remain available
 
 ### Requirement: Partial corruption retains valid interval evidence
 

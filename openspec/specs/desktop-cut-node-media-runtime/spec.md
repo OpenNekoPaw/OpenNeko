@@ -77,7 +77,7 @@ PCM decoding, and export.
 ### Requirement: Preview uses declared native Range preparation
 
 Video preview SHALL use an explicit versioned native video descriptor and one
-opaque loopback Range URL. The Webview SHALL assign it directly to a muted
+opaque transient OpenNeko resource URL. The Webview SHALL assign it directly to a muted
 `<video>` element without application-level video byte fetching or buffering.
 
 #### Scenario: H.264 input
@@ -117,15 +117,16 @@ opaque loopback Range URL. The Webview SHALL assign it directly to a muted
 
 ### Requirement: All audible inputs use PCM
 
-The system SHALL decode every audible input, including video-embedded audio, to
-versioned framed float32 PCM delivered over loopback HTTP.
+The system SHALL decode and mix every audible timeline input, including video-embedded audio, into
+one versioned framed float32 PCM registration per owning Cut generation. PCM bytes SHALL be
+delivered through the unified OpenNeko resource handler.
 
 #### Scenario: Start synchronized audio
 
 - **WHEN** a preview interval contains audible inputs
-- **THEN** Desktop Main creates one PCM session per audible input
-- **AND** each descriptor reports protocol version, sample rate, channels, and
-  an opaque stream URL
+- **THEN** Desktop Main creates one owning mixed PCM registration for the Cut generation
+- **AND** its descriptor reports protocol version, sample rate, channels, and an opaque transient
+  resource URL
 - **AND** the video element remains muted
 
 #### Scenario: Start barrier for audible preview
@@ -140,7 +141,7 @@ versioned framed float32 PCM delivered over loopback HTTP.
 #### Scenario: Stop PCM
 
 - **WHEN** the preview is stopped, replaced, or disposed
-- **THEN** all FFmpeg children, HTTP responses, audio nodes, and session entries
+- **THEN** all FFmpeg children, resource responses, audio nodes, and registration entries
   owned by that preview are released
 
 ### Requirement: OpenNeko owns preview synchronization
@@ -170,19 +171,19 @@ explicit timeline origin, media origin, playback rate, and active interval.
 
 ### Requirement: Media bytes stay outside typed IPC
 
-The system SHALL transfer media segments and PCM bytes through session-scoped
-loopback HTTP URLs rather than Desktop typed IPC.
+The system SHALL transfer seekable media segments and PCM bytes through owner- and sender-scoped
+`openneko://resource` URLs rather than Desktop typed IPC.
 
 #### Scenario: Webview consumes media
 
 - **WHEN** the Webview receives a preview descriptor
 - **THEN** it receives no local filesystem path
-- **AND** it fetches only opaque loopback URLs
+- **AND** it consumes only opaque transient OpenNeko resource URLs
 
 #### Scenario: Unknown session URL
 
 - **WHEN** a request targets an expired, stopped, or unknown media session
-- **THEN** the server returns an explicit non-success response
+- **THEN** the resource handler returns an explicit non-success response
 - **AND** it does not resolve any workspace path from request text
 
 ### Requirement: Cut export is an FFmpeg job
@@ -215,7 +216,7 @@ switch.
 
 #### Scenario: Node adapter cannot initialize
 
-- **WHEN** FFmpeg binaries are absent or the loopback server cannot start
+- **WHEN** FFmpeg binaries, the injected media publisher, or the Desktop resource registry is unavailable
 - **THEN** Cut reports initialization failure
 - **AND** it does not retry with the Engine adapter
 

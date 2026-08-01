@@ -1,5 +1,8 @@
 ## 1. Regression Contract
 
+> 2026-08-01 transport update: completed loopback/VS Code tasks are historical execution evidence.
+> Current and future validation must use the unified OpenNeko resource handler without fallback.
+
 - [x] 1.1 Add red-capable tests for bounded PCM scheduling, scheduled-source
       disposal, and playback completion after the queued tail.
 - [x] 1.2 Add red-capable tests proving concurrent PCM tracks share one start

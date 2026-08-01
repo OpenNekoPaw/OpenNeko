@@ -1,5 +1,9 @@
 ## 1. Lock down the Node transport contract
 
+> 2026-08-01 supersession: completed loopback tasks below are historical implementation evidence.
+> Remaining Desktop qualification must use the unified OpenNeko resource path and may not restore
+> the retired server.
+
 - [x] 1.1 Add real loopback regression tests for PDF/DOCX/CBZ GET, HEAD, MIME, CORS, closed/open/suffix Range, invalid ranges, unknown tokens, revocation, and disposal.
 - [x] 1.2 Add EPUB directory-route tests for container/package/chapter/resource entry delivery, MIME mapping, missing entries, encoded traversal rejection, and bounded Node archive access.
 - [x] 1.3 Add provider/message lifecycle tests proving ready is idempotent, token ownership is panel-scoped, and no document path calls Engine commands or `EngineClient`.
@@ -21,6 +25,6 @@
 
 - [x] 4.1 Update the pruning design/verification to distinguish Node-owned document transport from Rust-owned media transport and record the replacement of the unverified EPUB path.
 - [x] 4.2 Run focused Preview extension/Webview and `@neko/content` tests, affected typechecks/builds, dependency/legacy/unused checks, strict OpenSpec validation, and `git diff --check`.
-- [ ] 4.3 Run real Electron Desktop scenarios for PDF, EPUB, DOCX, and CBZ, capturing DOM/network/console evidence that Node routes load and retired Engine document routes do not participate.
-  - Previous Extension-host evidence remains historical. Desktop DOM/network/console capture is still required and is tracked in `verification.md`.
+- [ ] 4.3 Run real Electron Desktop scenarios for PDF, EPUB, DOCX, and CBZ, capturing DOM/network/console evidence that OpenNeko resources load and retired loopback/Engine document routes do not participate.
+  - Previous Extension-host evidence remains historical. Desktop OpenNeko DOM/network/console capture is still required and is tracked in `verification.md`.
 - [x] 4.4 Apply the Neko quality-review gates, resolve actionable findings, and document any remaining repository-baseline blockers or runtime risks.

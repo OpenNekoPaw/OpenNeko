@@ -5,7 +5,7 @@
 ### Requirement: Browser PCM scheduling is duration-independent
 
 The browser PCM client SHALL keep decoded/scheduled audio within an explicit
-bounded lead and SHALL stop pulling loopback bytes until playback consumes
+bounded lead and SHALL stop pulling resource bytes until playback consumes
 enough buffered audio.
 
 #### Scenario: Long PCM stream is consumed
@@ -13,7 +13,7 @@ enough buffered audio.
 - **WHEN** FFmpeg can produce PCM faster than realtime for a long source
 - **THEN** scheduled `AudioBufferSourceNode` count and media lead remain within
   the configured high-water bound
-- **AND** HTTP/stream backpressure pauses further decode delivery
+- **AND** resource-stream backpressure pauses further decode delivery
 
 #### Scenario: Client is disposed
 
@@ -23,7 +23,7 @@ enough buffered audio.
 
 #### Scenario: PCM input reaches EOF before queued audio finishes
 
-- **WHEN** the loopback response ends while one or more scheduled sources are
+- **WHEN** the OpenNeko resource response ends while one or more scheduled sources are
   still audible
 - **THEN** playback completion is emitted only after the last scheduled source
   ends

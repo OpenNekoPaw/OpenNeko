@@ -1,5 +1,10 @@
 # Design: fail-closed Engine retirement and shared Node media runtime
 
+> 2026-08-01 supersession: Extension Host, VS Code, MSE and loopback transport statements below
+> record the retired migration target. The current Desktop composition uses package-owned native
+> consumers, `@neko/media` Node/browser primitives, and the single `openneko:` exact-resource path.
+> Historical text MUST NOT authorize a loopback, MSE or retired-host fallback.
+
 ## Five-layer analysis
 
 ### 1. Responsibilities
