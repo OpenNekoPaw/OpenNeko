@@ -16,7 +16,9 @@ AppHost identity、路径授权、OTIO revision、ExportJob 与媒体资源生�
 - 接入 package-owned Preview Root 与授权 ContentLocator/media descriptor transport，支持临时、
   固定和显式 side Preview；Canvas/Cut 内嵌预览继续留在所属 surface。
 - 让 Resource Browser 的图片/视频显示 Host 投影缩略图，并提供显式“预览”“添加到 Cut”目标
-  动作；不向 Renderer 暴露绝对路径、`file://`、localhost URL、cache path 或 token。
+  动作；只向 Renderer 投影 Desktop exact-resource registry 注册的短生命周期
+  `openneko://resource` URL，不暴露绝对路径、`file://`、任意 localhost、cache path
+  或独立 token 字段。
 - 保留 OTIO、Cut command、`@neko/media`、Node/FFmpeg preview、ExportJob 和 Preview package
   作为唯一事实来源；固定 demo timeline/preview 不得返回 production success。
 

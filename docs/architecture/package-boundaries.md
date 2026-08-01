@@ -2,8 +2,8 @@
 
 状态：Accepted
 
-更新日期：2026-07-31
-对应变更：`flatten-desktop-only-monorepo`
+更新日期：2026-08-01
+对应变更：`flatten-desktop-only-monorepo`、`replace-desktop-media-scheme-with-http-resource-gateway`
 
 本文定义当前一级 workspace 的依赖方向、公共能力 owner，以及 Electron Desktop 和
 Node/FFmpeg 媒体运行时的边界。包名、入口和示例只描述当前保留实现；已移除宿主不构成兼容要求。
@@ -56,11 +56,12 @@ Node media adapter -> FFmpeg/ffprobe process
 `packages/neko-media` 提供领域中立的媒体契约，以及隔离的 Node 与浏览器
 runtime 入口。
 
-- 通用入口只包含 probe、prepared media、PCM、失败范围和生命周期契约。
-- `@neko/media/node` 拥有 FFmpeg/ffprobe 进程与 opaque loopback
-  Range/PCM session，不依赖 Electron 或产品包。
-- `@neko/media/browser` 拥有原生 HTML video 生命周期与 PCM client，不访问
-  Node、Electron 或本地路径。
+- 通用入口只包含 probe、prepared media、seekable URL/PCM descriptor、失败范围和生命周期契约。
+- `@neko/media/node` 拥有 FFmpeg/ffprobe 进程、PCM framing、取消、背压和最小 file/PCM
+  publication port，不解析 `ContentLocator`、项目事实或工作区路径，也不拥有 Electron
+  protocol 或 Desktop exact-resource registry。
+- `@neko/media/browser` 拥有原生 HTML audio/video 生命周期与显式 PCM client，不访问
+  Node、Electron 或本地路径；普通单资源播放不得因 codec 或 transport 猜测自动改走 PCM。
 - Preview、Canvas、Tools、Agent、Assets 与 Cut 必须通过各自的窄领域端口组合
   这些能力，不得重新创建宽泛媒体 client facade。
 
@@ -107,7 +108,10 @@ runtime 入口。
 Desktop Main 拥有文件、凭据、外部进程、窗口和后台资源生命周期：
 
 - 组合 package public entry，并为每个窗口/编辑器实例创建显式 runtime；
-- 授权 loopback token、file root、stream descriptor 和 preview resource；
+- 在 owning service 解析 `ContentLocator` 后，把 exact seekable byte source、one-shot PCM 或
+  frozen resource set 注册到 app-lifetime Desktop exact-resource registry；
+- 为 Window/View/session/renderer-epoch/generation 注册和撤销 opaque resource，并绑定允许的
+  `webContentsId`；URL 不含本地路径或稳定内容身份，也不得持久化；
 - 通过领域窄 port 编排 `@neko/media/node` 操作；
 - 在窗口关闭、取消和应用退出路径显式释放资源。
 
@@ -128,8 +132,15 @@ Webview 负责浏览器沙箱内的 UI、用户交互和可恢复展示状态。
 - 可以使用 React、Zustand、`@neko/ui`、共享 Webview facade 和包自有 components/hooks。
 - 不能导入 `electron`、`node:*`、`fs`、`path` 或 Desktop Main/preload 实现。
 - 不能直接读写 workspace、持久项目事实、SecretStorage 或外部进程状态。
-- token、blob URL、stream handle 和 Webview URI 只能是短生命周期投影，不能写回项目文件。
+- `openneko://resource` URL、opaque ID、blob URL、stream handle 和 Webview URI 只能是短生命周期投影，不能
+  写回项目文件、Agent/provider/Tool 输入、clipboard 或未脱敏日志。
 - 媒体入口必须遵守 CSP、codec 和 Range 边界；错误应展示明确 diagnostic，不伪装成功。
+
+Desktop 应用和本地资源统一使用 `openneko:` scheme：`desktop` host 只服务可信 bundle，
+`resource` host 只服务短生命周期授权资源。CSP 只按已审计 consumer 开放
+`openneko://resource`；`session.webRequest` 使用实际 `webContentsId` 限制 sender。
+`neko-app:`、`neko-media:`、`opennekomedia:`、`file:` 以及私有
+`media:`/`video:`/`audio:` scheme 和 production loopback HTTP 都不是成功路径。
 
 涉及视觉、交互、CSP、焦点、IPC 或媒体的验收必须运行真实 Electron Desktop；普通浏览器只适合纯浏览器兼容辅助。
 
@@ -141,6 +152,10 @@ FFmpeg adapter 组成；不存在 Engine fallback。
 
 - H.264/Range、原生 HTML video、PCM、抽帧、波形、转码和导出遵循
   [`media-runtime.md`](media-runtime.md)。
+- Cut 有声 timeline 由 Host 混合 framed PCM 并拥有 master clock；Canvas 普通 audio/video、
+  Preview 和 Agent 展示使用原生 `<audio>` / `<video>`。Canvas 只有显式同步、混音或分析
+  operation 才可使用独立 processed/PCM contract；实时采集走 MediaStream/WebRTC 或专用
+  live runtime。
 - OTIO、Canvas 文档、Agent 会话和其他项目事实由 owning domain 持有，FFmpeg
   只是有界执行 adapter。
 - 新媒体能力先更新中立 contract，再接 owning package adapter 和真实 Webview

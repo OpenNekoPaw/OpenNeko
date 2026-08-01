@@ -34,8 +34,8 @@
       aligned with OTIO input boundaries.
 - [x] 3.7 Transfer the video file session across same-Clip PCM generations so
       retiring an audio window does not revoke retained native video.
-- [x] 3.8 Allow only `http://127.0.0.1:*` in the Cut Webview `media-src` CSP and
-      reject non-loopback video descriptors.
+- [x] 3.8 Allow only `openneko://resource` in the Cut Webview `media-src` CSP and
+      reject non-resource video descriptors.
 
 ## 4. Webview generation ownership
 

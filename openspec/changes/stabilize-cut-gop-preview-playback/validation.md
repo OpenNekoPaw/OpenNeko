@@ -2,6 +2,12 @@
 
 Date: 2026-07-27
 
+> 2026-08-01 supersession: all loopback URL, token and VS Code Host observations below are
+> historical evidence. The canonical Desktop transport is the single `openneko:` handler and
+> exact-resource registry qualified by
+> `replace-desktop-media-scheme-with-http-resource-gateway`; this document does not authorize a
+> loopback or legacy-scheme fallback.
+
 ### Native Range replacement status
 
 The sections below this status record the accepted MSE implementation before

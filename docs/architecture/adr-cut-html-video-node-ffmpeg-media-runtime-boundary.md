@@ -2,8 +2,8 @@
 
 状态：Accepted（Cut 已实施）
 日期：2026-07-27
-范围：`neko-cut`、`apps/neko-vscode`、拟议中的 `apps/neko-desktop`、
-Extension/Electron Host、`@neko/media`、OTIO、媒体预览、PCM、派生表示与导出。
+范围：`neko-cut`、`apps/neko-desktop`、Electron Host、`@neko/media`、OTIO、
+媒体预览、PCM、派生表示与导出。
 
 本文定义单 Video Track、多 Audio Track、单 Subtitle Track 的轻量 Cut 媒体运行时。
 它接续并提升
@@ -15,10 +15,10 @@ Extension/Electron Host、`@neko/media`、OTIO、媒体预览、PCM、派生表�
 
 Cut 需要连续播放多 Clip、随机 seek、独立 PCM 混音，以及对不兼容容器和 codec
 的明确处理。它不需要专业 NLE 的多层 compositor，也不应拥有浏览器已经实现的
-HTTP Range 调度、媒体缓存、demux、decoder backpressure 和 GOP 回收。
+Range 调度、媒体缓存、demux、decoder backpressure 和 GOP 回收。
 
-仓库中的 Preview 和 Canvas 已证明 VS Code Webview 可以在受限 CSP 下消费
-`http://127.0.0.1:*` 的授权媒体 URL。Cut 也已拥有两个重叠的 `<video>` 元素，
+仓库中的 Preview 和 Canvas 已证明 Electron Renderer 可以在严格 CSP 下消费
+`openneko://resource` 的授权媒体 URL。Cut 也已拥有两个重叠的 `<video>` 元素，
 能够在当前 Clip 播放时预热下一 Clip。继续维护 MSE 会重复 Chromium 的职责，
 并引入整段 fetch、手工 append、buffer window、取消和 EOF 状态机。
 
@@ -27,7 +27,7 @@ HTTP Range 调度、媒体缓存、demux、decoder backpressure 和 GOP 回收�
 | 层   | 决策                                                                                                                            |
 | ---- | ------------------------------------------------------------------------------------------------------------------------------- |
 | 职责 | Cut Core 解释 OTIO；Host 授权文件并运行 FFprobe/FFmpeg；Chromium 管理视频数据面；Webview 只管理双槽预热、切换和 Timeline 同步。 |
-| 依赖 | Webview 只接收 opaque loopback URL 和 runtime-neutral descriptor，不接收路径、FFmpeg DTO 或视频字节。                           |
+| 依赖 | Webview 只接收 opaque OpenNeko resource URL 和 runtime-neutral descriptor，不接收路径、FFmpeg DTO 或视频字节。                    |
 | 接口 | 视频 descriptor 只有 URL、MIME、profile、source-time origin 和 Clip duration；PCM 使用独立 descriptor。                         |
 | 扩展 | 新 codec 通过 Host preparation profile 加入，但输出仍实现同一个普通 Range 文件契约。                                            |
 | 测试 | 单元测试证明 direct path 不启动 FFmpeg，路径测试证明无 MSE/fetch，真实 Webview 验证 CSP、Range、首帧、边界和取消。              |
@@ -55,11 +55,11 @@ generation、session 和 cache entry 必须携带显式 document/session identit
 
 ### 2. 原生 `<video src>` 是唯一 Cut 视频路径
 
-VS Code 和未来 Desktop 共享以下 canonical path：
+Desktop 使用以下 canonical path：
 
 ```text
 authorized source or completed prepared file
-  -> tokenized loopback HTTP URL
+  -> owner/sender-bound openneko://resource URL
   -> browser HEAD / byte Range requests
   -> muted <video src>
   -> Chromium demux and decode
@@ -67,7 +67,7 @@ authorized source or completed prepared file
 
 Cut 不为视频调用 `fetch()`，不创建 `MediaSource` 或 `SourceBuffer`，不维护前后向
 buffer window，也不把完整文件读入应用内存。Node 只按浏览器请求的 Range 打开
-对应文件区间；HTTP response 自然承接 Node stream backpressure 和浏览器取消。
+对应文件区间；`Response` stream 自然承接 Node stream backpressure 和浏览器取消。
 
 `<video>` 必须静音。源视频音频和独立 Audio Track 统一进入 PCM path，避免双音频
 时钟。
@@ -103,10 +103,10 @@ qualified original file
 H.264 容器不兼容时，FFmpeg 从可解码随机访问点开始，以 `-c:v copy` 生成有界 MP4。
 其他 codec 或不合格 profile 使用目标平台已验证的完整硬件闭包：
 `darwin-arm64` 使用 VideoToolbox decode、`scale_vt` 和
-`h264_videotoolbox -allow_sw 0`；`linux-x64` 使用 VAAPI decode、
-HDR 时的 `tonemap_vaapi`、`scale_vaapi` 和 `h264_vaapi`。`libx264`、CPU scale、CPU tone-map 和自动
-fallback 不属于预览路径。平台参数与错误分类由 `@neko/media/node` 统一拥有，
-Cut adapter 不维护平台分支。
+`h264_videotoolbox -allow_sw 0`。`win32-x64` 尚无已资格化的完整硬件闭包，
+因此该目标上的不兼容 codec/profile 明确 unavailable；portable software runtime
+不构成预览转码资格。`libx264`、CPU scale、CPU tone-map 和自动 fallback 不属于预览
+路径。平台参数与错误分类由 `@neko/media/node` 统一拥有，Cut adapter 不维护平台分支。
 
 prepared output 必须完整、可 seek 且通过文件注册后才能发布 descriptor。它是
 session-owned 临时文件，stop/dispose 时删除。该路径接受比 direct source 更高的
@@ -133,25 +133,26 @@ probe 或 descriptor planning，但同时消费媒体的上限是 active + stand
 `src`。真正的 Clip/mapping boundary 才准备 standby。
 
 暂停与完整停止是不同的 Host operation。暂停只退休 PCM session，并保留当前
-video session、Range token、`src` 和 decoder；同 Clip seek 直接设置
+video session、Range registration、`src` 和 decoder；同 Clip seek 直接设置
 `video.currentTime`。跨 Clip seek 才准备并提升新的 paused standby。只有 Clip
-替换、明确 stop、panel dispose 或 document dispose 才撤销当前 video token。
+替换、明确 stop、panel dispose 或 document dispose 才撤销当前 video registration。
 
-### 6. Loopback file endpoint 是授权与 Range 边界
+### 6. OpenNeko resource handler 是授权与 Range 边界
 
-Loopback 必须：
+Desktop exact-resource registry 与统一 handler 必须：
 
-- 只监听 `127.0.0.1`，使用不可预测 token，不暴露文件路径；
+- 使用不可预测 opaque ID，不暴露文件路径或启动 TCP listener；
+- registration 绑定 Window/View/session/renderer-epoch/generation 和 `webContentsId`；
 - 支持 `HEAD`、`GET`、单 byte range、开放末端 range、`206`、
   `Content-Range`、`Accept-Ranges` 和明确 MIME；
-- 允许 Chromium 对同一 token 重试、重复和并发 Range；
+- 允许 Chromium 对同一 registration 重试、重复和并发 Range；
 - 只服务已注册文件，stop/dispose 后立即拒绝；
 - 将浏览器主动断开识别为正常取消，真实 IO 失败继续 fail-visible；
 - 不通过 Base64、普通 `postMessage` 或无界 Blob 传递媒体。
 
-Webview descriptor validation 只接受 `http://127.0.0.1:<port>/...`。Cut CSP 的
-`media-src` 只增加 `http://127.0.0.1:*`，不开放 `localhost`、宽泛 `http:`、
-`file:` 或 `*`。
+Webview descriptor validation 只接受 `openneko://resource/<opaque-id>`。Cut CSP 的
+`media-src` 只增加 exact `openneko://resource` origin，不开放 `localhost`、宽泛
+`http:`、`file:` 或 `*`。
 
 ### 7. 音频统一为 PCM
 

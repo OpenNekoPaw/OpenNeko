@@ -183,7 +183,8 @@ package 或 send-to-Agent owner 时，对应控件保持隐藏并暴露 capabili
 不得显示无 handler 的假按钮；拥有 source-add、undo/redo、preview 等 handler 的控件必须与
 VS Code 使用同一 `CanvasToolbar`、popover 和交互实现。Canvas 内嵌 audio/video Preview
 不是 Desktop 独立 viewer：Desktop adapter 必须复用 P1.5 的 `@neko/media` Node runtime，
-完成 probe、poster/frame capture、HTML video/PCM descriptor、seek/stop 与 session cleanup；
+完成 probe、poster/frame capture、原生 HTML audio/video descriptor、seek/stop 与 session
+cleanup；只有显式同步、混音或分析 operation 才可请求独立 processed/PCM descriptor，
 Canvas Webview 继续只渲染 package-owned `PreviewSurface`。
 
 ### 5. Canvas 多文档由文档 session 与 View identity组合
@@ -310,18 +311,15 @@ Desktop renderer 只组合 Assets Root 与 Preview compact surface，不实现 `
 dispose 都必须停止播放并释放 descriptor。异步完成结果必须以请求 identity fencing，旧目标
 不得覆盖新目标。
 
-Canvas 的 package-owned Node media runtime 可以继续在 Main 中使用 loopback HTTP
-准备视频与 PCM，但这些 upstream URL 不得进入 renderer。Desktop Canvas adapter 必须把每个
-upstream 注册为绑定 `webContentsId`、Window、Canvas View/session 和 revision 的
-`neko-media:` 描述符；`media:stop`、View detach 与 runtime dispose 释放同一 descriptor
-session。Canvas Webview 只通过注入的 Host subscription 接收 probe/stream 结果，不依赖
-VS Code 宿主才会投递的全局 `window.message`。
-
-Canvas Webview 的 Host boundary decoder 必须接受并保留 `@neko/media` 声明的全部
-`MediaTransport`，包括开发/VS Code 路径的 loopback `http` 和 Desktop sender-bound
-`authorized`。decoder 必须同时校验 transport 与 URL scheme/authority 一致，且回归测试
-必须使用 Desktop 实际返回的 `authorized` + `neko-media://desktop/...` 描述符并断言
-package-owned player 已挂载；只断言 `media:play` 发出不能作为播放成功证据。
+2026-08-01 起，`replace-desktop-media-scheme-with-http-resource-gateway` 取代此处原有
+HTTP upstream 二次代理、loopback gateway、`neko-media:` 和双 `MediaTransport` 决策。
+Desktop Canvas adapter 必须让 owning Host 从持久 `ContentLocator` 解析 exact
+original/prepared source，再注册到 Desktop exact-resource registry。普通 audio/video node
+只接收短生命周期 `openneko://resource` descriptor，分别由原生 `<audio>` 或单个带内嵌音频
+的 `<video>` 消费；不得创建
+普通播放 PCM、从持久 `previewUrl` 恢复 URL 或按路径反推 locator。`media:stop`、View detach
+与 runtime dispose 按 Canvas View/session/revision/generation 撤销同一 lease。Canvas Webview
+只通过注入的 Host subscription 接收结果，不依赖全局 `window.message`。
 
 ### 15. Project Resource Browser 恢复为固定右侧 Context Dock
 

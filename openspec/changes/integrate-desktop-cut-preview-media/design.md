@@ -3,6 +3,12 @@
 Desktop 的 Window workbench 已提供 Main split、Resource Dock 与底部 Timeline slot，但 Cut 和
 Preview 的 production Roots 仍依赖 VS Code transport：
 
+> 2026-08-01 supersession：本 change 中的 `neko-media:`、HTTP upstream proxy、loopback
+> gateway 和“Renderer 不接收 localhost”决策已由
+> `replace-desktop-media-scheme-with-http-resource-gateway` 取代。当前 canonical path 是
+> 统一 `openneko:` scheme 与 Desktop exact-resource registry；下述 2026-07-29
+> custom-protocol/HTTP 结果仅作为历史验收事实。
+
 - `CutWebviewRoot` 在 `CutOtioControllerProvider` 内从全局 VS Code facade 取得 bridge；
 - `CutHostAdapterSurface` 是固定 preview/track 演示，不读取 OTIO、不能编辑或导出；
 - Preview 由多个 VS Code Custom Editor entry 组成，尚无统一的 package-owned Runtime/Root；
@@ -25,12 +31,11 @@ Preview 的 production Roots 仍依赖 VS Code transport：
   重置为 0；现在只为新 owner 初始化 cursor，避免合法后续 event 被误判为乱序。
 - Cut preview/playback 已由 package-owned `CutPreviewRuntimeController` 组合
   `NodeFfmpegCutMediaAdapter` 与 `CutWorkspaceMediaPaths`；Desktop 不实现第二套播放器或
-  转码器。Node adapter 的 loopback stream 会在 Main 中重新授权为 Window/View/session/
-  generation-bound `neko-media:` descriptor，Renderer 不接收 localhost。
-- Electron custom protocol 不能用 `electron.net.fetch` 在 protocol handler 内反向消费该
-  loopback stream；真实打包验收会使请求永久停在 `NETWORK_LOADING/HAVE_NOTHING`。
-  canonical Host proxy 改为 Main 的标准 Fetch 实现，并保留 Range、MIME、abort、EOF 与
-  upstream response headers。打包验收已观察到 `206`、`HAVE_ENOUGH_DATA` 和实际 Cut 播放。
+  转码器。当前 Desktop Main 直接把 Node adapter 的 exact seekable source 或 mixed PCM
+  注册到 Window/View/session/renderer-epoch/generation-bound Desktop exact-resource registry。
+- 2026-07-29 的 custom-protocol-to-HTTP proxy 失败与后续 HTTP 通过只保留为历史可行性证据。
+  当前不再代理 upstream 或启动 TCP listener；同一个 `openneko` handler 直接返回
+  Range/PCM `Response` stream。
 - 当前真实 Desktop 验收已覆盖 Resource 拖入 Canvas、OTIO 打开完整 Cut Root、Cut 播放，
   以及 MP3、WebM、Fountain、GLB 的 package viewer。ExportJob、显式 add-to-Cut 与 side
   Preview 仍是本提案未完成项，不能据此将 P1.5 整体标记完成。
@@ -51,8 +56,8 @@ ExportJob。所有文件、流、FFmpeg 与生命周期 effect 必须停留在 M
 - Cut Stage 与 Timeline 使用同一个 session；多个 Cut 文档可打开，但 Phase 1 一次只渲染一个。
 - 建立统一 Preview Root，支持 image/video/audio/document/model 的临时、固定与 side View。
 - 让 Resource Browser 显示图片/视频缩略图，并显式投递到 Cut/Preview 目标。
-- 用 sender/session-bound descriptor 和 custom media protocol 支持 Range、取消和释放，不泄露路径
-  或服务 token。
+- 用 owner/session/sender-bound descriptor 和 app-lifetime OpenNeko resource capability
+  支持 Range、取消和释放，不泄露路径或独立 token 字段。
 
 **Non-Goals:**
 
@@ -112,19 +117,22 @@ Preview package新增 `PreviewHostRuntime` 与 `PreviewRoot`。Root 根据 Host 
 
 Canvas node 与 Cut clip preview 继续由 owning surface 内嵌。通用 Preview 不默认覆盖主创作区。
 
-### 4. 媒体使用不含路径和 token 的授权 descriptor
+### 4. 媒体使用 locator-backed、URL 非持久化的授权 descriptor
 
 projection 只包含 `descriptorId`、revision、content kind、必要的公开 metadata。小型缩略图由
-Host 解析为受限 image data URL；播放/文档/model 内容使用 `neko-media:` custom protocol 的
-opaque session/resource identity。Main registry 从实际 WebContents、Window/View/document
-session 与 endpoint epoch 授权请求并映射到 workspace ContentLocator 或 owning media source。
+Host 解析为受限 image data URL；播放/文档/model 内容由 owning service 解析
+`ContentLocator`，再把 exact resource 或 frozen dependency set 注册到 Desktop app-lifetime
+exact-resource registry。package-owned descriptor 同时保留 locator/revision 与短生命周期 URL；
+URL 不能成为第二内容身份。Main registry 按实际 Window/View/document session、endpoint epoch
+和 generation 注册、撤销 capability，并绑定实际 `webContentsId`，不信任客户端伪造的 sender header。
 
 协议必须支持 Range、MIME、取消、EOF 和 session disposal。URL 不包含绝对路径、`file://`、
-localhost、cache path、Engine/client token 或 provider secret。未知 descriptor、陈旧 revision、
-跨 Window/View 请求和已释放 session fail-closed。
+cache path、Engine/client token 或 provider secret；只允许 CSP 审计过的 exact
+`openneko://resource` origin。未知 descriptor、陈旧 revision、跨 owner generation/sender 和
+已释放 session fail-closed。
 
-备选方案是给 Renderer localhost URL 或 filesystem URL。拒绝，因为 URL 可跨 View 复用并绕过
-AppHost containment/cleanup。
+备选方案是给 Renderer filesystem URL、任意 localhost endpoint 或公共 URL 签发 facade。
+拒绝，因为它们会绕过 AppHost containment/cleanup 或形成第二资源 API。
 
 ### 5. Resource handoff 始终携带明确目标
 
@@ -167,8 +175,9 @@ production capability ready 时：
   canonical adapter，并用 guard 阻止回流。
 - [Preview 当前是多个独立 entry] → 复用 viewer 组件和 registry，不把所有 viewer 状态揉进
   单一 store。
-- [custom protocol 的 Range/隔离复杂] → 复用 `@neko/media` descriptor/stream owner，增加
-  sender/session/revision/Range 集成测试，不在 Renderer 增加 fallback。
+- [运行期 URL 被复制] → registration 绑定 `webContentsId`、exact resource scope、短生命周期、
+  日志脱敏与 owner/generation 撤销；增加 CSP/CORS、Range、sender isolation 和生命周期集成测试，
+  不在 Renderer 增加 fallback。
 - [视频缩略图生成成本] → 由 Host 按 descriptor revision 读取/缓存；列表只延迟解析可见项并在
   unmount 时取消。
 - [多个 Cut 文档占用 decoder] → 仅 active session 渲染并持有 preview；其他文档只保留 owner
@@ -178,7 +187,7 @@ production capability ready 时：
 
 1. 定义 Cut/Preview contracts、parsers、route coverage 与 debt guards。
 2. 让完整 Cut Root/Preview viewers 接受 injected runtime，并迁移 VS Code adapters。
-3. 实现 Desktop Cut/Preview Main/preload/AppHost composition 和 `neko-media:` authorization。
+3. 实现 Desktop Cut/Preview Main/preload/AppHost composition 和 OpenNeko resource authorization。
 4. 接入 Resource preview/add-to-Cut、Cut View switcher、Main split 与 Timeline。
 5. 删除/poison production demo surfaces，完成 package、Node/FFmpeg、VS Code EDH 与 Electron
    fixture 验收后标记 P1.5 ready。

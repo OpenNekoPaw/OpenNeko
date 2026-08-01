@@ -1,65 +1,66 @@
 ## Why
 
-Desktop 当前把 `@neko/media` 已生成的 tokenized loopback HTTP URL 再代理为
-`neko-media:`，形成两层 transport、两套授权/取消逻辑和额外字节转发，却没有扩大
-Chromium `<audio>`、`<video>`、纹理、10-bit 或 HDR 能力。真实 Electron 43.2.0 验证已证明
-标准 `127.0.0.1` HTTP 的 metadata、首帧、seek、Range、音频、WebGL2 纹理上传和本机吞吐可用，
-因此应在实施前把 Desktop 收敛到一个可授权、可测试的 HTTP canonical path，并明确 PCM 只服务
-真实时间线处理需求。
+OpenNeko 当前只支持 Electron Desktop。此前生产链路先由 `@neko/media` 启动
+`127.0.0.1` HTTP server，再由 Desktop 管理动态端口、CSP、CORS/PNA、bearer token 和 owner
+lease；更早的实现还把 HTTP 二次代理成 `neko-media:`。这些层级都只是向 Chromium 提供 bytes，
+不会扩大 `<audio>`、`<video>`、纹理、10-bit 或 HDR 能力。
+
+Electron 已经提供 standard/secure/fetch-capable custom scheme、`protocol.handle()` 的
+`Request`/`Response` 以及 `session.webRequest` 的 `webContentsId`。当前没有 Web client、远程
+gateway 或独立 HTTP API consumer，因此生产 loopback HTTP 是不必要的 transport 和安全表面。
+
+Desktop 已有应用 scheme `neko-app:`。最终设计把它统一重命名为产品级 `openneko:`，并在同一
+scheme 内用 host 区分可信应用资源与短生命周期授权资源。系统不得新增 `opennekomedia:`、
+`neko-media:`、`media:`、`video:`、`audio:` 或第二个 production transport。
 
 ## What Changes
 
-- 新增 app-lifetime、仅监听 `127.0.0.1` 的 Desktop HTTP resource gateway，通过不可预测、
-  短生命周期 capability token 向 Renderer 投影文件、派生文件、PCM 和复合资源依赖。
-- gateway 统一支持 `GET`、`HEAD`、单段 Range、`206`/`416`、明确 MIME、取消、背压、撤销、
-  精确 Renderer origin、CSP 和 Private Network Access；URL 不包含本地路径或稳定资源身份。
-- **BREAKING** 删除 Desktop `neko-media:` 注册、upstream 二次代理和
-  `MediaTransport: 'authorized'` 成功路径；生产 descriptor 只接受授权的 loopback HTTP URL，
-  旧 scheme 必须 fail-visible，不能 fallback。
-- Cut 保留原生 `<video>` Range 与 Host 混合的 framed PCM：所有可听 timeline 输入继续通过单一
-  PCM master clock，实现 clip gain、fade、overlap、变速、响度和 A/V 同步。
-- Canvas 的普通单资源音频改用原生 `<audio>` 或 Host 准备的 seekable 文件；只有声明同步、混音、
-  变速、分析或生成时序需求的 Canvas operation 才可请求 PCM，不保留按运行时猜测的双路径。
-- Preview 的 image/audio/video/document/model viewer 继续由 package owner 负责；音视频优先使用
-  原生元素，PDF/CBZ/模型及 glTF 外部 buffer/texture 通过 gateway 的受限资源集合和相对依赖解析
-  读取，不把协议设计局限为音视频。
-- Agent 消息、attachment、tool result 和 provider input 继续保存 `ContentLocator` 或 owning
-  domain identity；workspace-relative path 只作为授权 Tool 输入。只有 Renderer 展示投影得到
-  临时 HTTP URL。Agent 文件工具或受管 processor 在授权 Host 执行边界使用真实系统路径，HTTP
-  URL 不进入 shell、项目事实或 provider payload。
-- HLS/DASH 等点播清单可通过 HTTP 能力扩展；实时采集、通话和直播使用 `MediaStream`/WebRTC 或
-  专门 live runtime，不把无限实时流伪装成 seekable resource。
-- `file:` 不进入 Renderer；`data:` 仅用于有严格大小上限的小型内嵌表现；`blob:` 仅用于
-  Renderer 自生成且可释放的临时内容。保留 `neko-app:` 作为可信 Renderer bundle scheme。
-- 平台资格保持封闭：当前原生构建目标只有 `darwin-arm64` 与 `win32-x64`，Linux 只用于
-  host-neutral CI。本变更以 `darwin-arm64` 本地图形化 Electron 场景完成媒体运行态验收，并
-  保持 Windows package/typecheck 通过；完整 Windows 媒体/GPU 资格仍由 Phase 2 独立完成。
+- **BREAKING** 把 `neko-app://desktop/...` 统一为 `openneko://desktop/...`。
+- 在同一个 `openneko:` handler 中增加
+  `openneko://resource/<opaque-id>/<optional-relative-path>`，用于有限文件、Range、PCM stream
+  和精确 allowlisted dependency set。
+- 删除 production `DesktopHttpResourceGateway`、`NodeMediaLoopbackServer` 默认运行路径、
+  动态端口、CORS/PNA、loopback bearer authorization 和 HTTP qualification launcher。
+- 删除 descriptor 中冗余的 `transport: 'http'` / `MediaTransport`。运行期 URL 不是内容身份，
+  不得持久化或进入 Agent reasoning、provider、Tool 或 shell 参数。
+- Desktop Main 在 locator owner 完成解析和授权后注册精确资源；资源记录绑定
+  Window/View/session/renderer epoch/generation，并通过 `session.webRequest` 的
+  `webContentsId` 限制请求 sender。
+- 一个 `protocol.handle('openneko', ...)` 同时分发 `desktop` 和 `resource` host。未知 host、
+  method、token、依赖、revision 或 sender fail-visible，不做 HTTP/custom fallback。
+- 保持 `ContentLocator` 为唯一公共持久内容身份；不恢复 `ResourceRef`、path-to-locator 推断、
+  URL locator 或宽泛 Desktop content facade。
+- Cut 保留 Host 混合 framed PCM；Canvas 普通音视频、Preview 和 Agent 展示继续使用原生
+  `<audio>`/`<video>`。PDF、GLB/glTF、图片和其他有限资源复用同一 resource host。
+- 摄像头、麦克风、屏幕采集、通话和无限直播继续使用 `MediaStream`、WebRTC 或专门 live
+  runtime，不映射为 seekable resource URL。
+- 真实 Electron 资格必须覆盖 metadata、play、seek、Range、PCM、Canvas pixels、WebGL texture、
+  PDF、GLB/glTF dependencies、sender isolation、reload/close release 和 packaged macOS。
 
 ## Capabilities
 
 ### New Capabilities
 
-- `desktop-http-resource-gateway`: 定义 Desktop loopback HTTP 的授权模型、HTTP/Range/CSP/CORS/PNA
-  行为、复合资源解析、生命周期、安全边界、性能基线和平台资格。
-- `desktop-media-consumer-projection`: 定义 Cut、Canvas、Preview、Agent 对稳定资源身份、原生
-  `<audio>/<video>`、PCM、文档/模型依赖、工具路径和实时流的唯一消费路径。
+- `desktop-openneko-resource-transport`: 定义统一 `openneko:` scheme、resource registration、
+  Range/stream/resource-set response、sender authorization、生命周期和资格边界。
+- `desktop-media-consumer-projection`: 定义 Cut、Canvas、Preview、Agent 对
+  `ContentLocator`、原生媒体、PCM、文档/模型资源、Agent 文件工具和实时流的唯一消费路径。
 
 ### Modified Capabilities
 
-- 无。已归档的 `desktop-cut-node-media-runtime` 本身已要求 loopback HTTP 与 Cut PCM；本变更
-  保持该语义，并替代仍处于 active change 中的 Desktop `neko-media:` 规划。
+- 无。这个 active change 仍保留原目录名作为历史追踪，但 HTTP 不再是目标设计或生产能力。
 
 ## Impact
 
-- `packages/neko-media`：收敛 transport contract，泛化现有 loopback server 为授权 resource
-  gateway，并保留 Node/FFmpeg、Range、PCM 与 browser consumer 边界。
-- `apps/neko-desktop`：移除 `desktop-media-protocol` 二次代理和 `neko-media:` privilege/CSP；
-  Main composition 管理一个 gateway，preload 仍只传递 typed descriptor/identity。
+- `packages/neko-media`：保留 probe、FFmpeg、PCM framing、浏览器 consumer 和最小 host
+  publication port；删除 HTTP-only transport contract、resource-set gateway 扩张和默认
+  loopback server ownership。
+- `apps/neko-desktop`：`neko-app` 重命名为 `openneko`；同一个 app protocol handler 增加
+  resource host；新增一个必要的 Host-internal exact-resource registry，删除 HTTP gateway。
 - `packages/neko-cut*`、`packages/neko-canvas*`、`packages/neko-preview*`、
-  `packages/neko-agent*`：迁移 descriptor validation 与 consumer 路由，不获得文件系统能力。
-- 现有 active OpenSpec `define-desktop-media-capability-boundary`、
-  `integrate-desktop-cut-preview-media` 和 `integrate-desktop-assets-canvas` 中关于
-  `neko-media:`、拒绝 loopback URL 或 Canvas 全量 PCM 的规划由本变更取代；Node/FFmpeg、HDR、
-  平台和资源身份约束继续有效。
-- 架构文档需同步 `media-runtime.md`、Desktop 媒体 ADR、package boundaries 与 application
-  composition；不迁移或修改用户项目数据，因为 transport URL 从来不是持久事实。
+  `packages/neko-agent*`：删除 `transport: 'http'` 判断，消费 Host 投影的临时 resource URL，
+  不获得 Electron、Node 或文件系统能力。
+- CSP 不再依赖动态端口、`http://127.0.0.1:*`、CORS 或 PNA；只声明同一
+  `openneko:` scheme 下经过审计的 resource origin。
+- 不迁移用户数据。旧 `neko-app:`、HTTP URL、`neko-media:` 或其他运行期 URL 若出现在持久内容
+  中继续按非法/失效事实处理，不做一次性迁移或推断。

@@ -64,8 +64,10 @@ Canvas-node or Cut-clip embedded previews.
 
 The system MUST resolve thumbnails and preview media through Host-authorized descriptors scoped to
 the real WebContents, Window/View/document session, endpoint epoch and content revision. Renderer
-payloads MUST NOT contain absolute paths, `file://` URLs, arbitrary localhost URLs, cache paths,
-Engine/client tokens or provider secrets.
+payloads MUST retain the source ContentLocator and MAY contain only the short-lived
+`openneko://resource` URL issued by the Desktop exact-resource registry. They MUST NOT contain absolute
+paths, `file://` URLs, arbitrary localhost URLs, cache paths, private media schemes, Engine/client
+tokens or provider secrets.
 
 #### Scenario: Image or video appears in the Resource Browser
 

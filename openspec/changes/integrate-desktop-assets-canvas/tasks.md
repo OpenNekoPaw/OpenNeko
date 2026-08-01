@@ -161,10 +161,14 @@
 
 ## 12. Authorized Canvas Playback Descriptor Regression
 
-- [x] 12.1 Add a red Canvas consumer regression using the exact Desktop `authorized`
-      `neko-media://desktop/...` video and PCM descriptors and assert the package-owned players mount.
-- [x] 12.2 Move transport/URL validation to the owning `@neko/media` contract and make the Canvas
-      Host decoder preserve both declared transports without a Desktop-local viewer or fallback.
+The original dual-transport/`neko-media:`/HTTP regression was superseded on 2026-08-01 by
+`replace-desktop-media-scheme-with-http-resource-gateway`; the checked implementation intent now
+means the single locator-backed OpenNeko resource path below.
+
+- [x] 12.1 Add a red Canvas consumer regression using the exact Desktop OpenNeko audio/video
+      descriptors and assert the package-owned native players mount without ordinary PCM.
+- [x] 12.2 Keep URL validation in the owning `@neko/media` contract and make the Canvas Host decoder
+      accept only the canonical OpenNeko resource URL without a Desktop-local viewer or fallback.
 - [x] 12.3 Run focused Media/Canvas/Desktop tests and typechecks, strict OpenSpec validation,
       production Electron packaging and verify playback in the isolated `neko-test` fixture
       workspace.

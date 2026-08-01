@@ -1,9 +1,14 @@
 ## Context
 
-当前 VS Code 使用 `@neko/media`、Node/FFmpeg、tokenized loopback HTTP、Range、
-原生 `<video src>` 和 Web Audio。拟议 Desktop 使用 Electron，但 Electron renderer
-仍是 Chromium renderer；它只让 OpenNeko 拥有 main/preload/renderer、custom
-protocol 和 CSP 配置权，不自动扩大浏览器 codec 或最终显示能力。
+历史 VS Code 使用 `@neko/media`、Node/FFmpeg、tokenized loopback HTTP、Range、
+原生 `<video src>` 和 Web Audio。当前 Desktop 使用 Electron，但 Electron renderer
+仍是 Chromium renderer；它只让 OpenNeko 拥有 main/preload/renderer、protocol handler
+和 CSP 配置权，不自动扩大浏览器 codec 或最终显示能力。
+
+> 2026-08-01 supersession：本文原定的独立 custom media protocol 与后续 loopback HTTP
+> 已由 `replace-desktop-media-scheme-with-http-resource-gateway` 取代。以下决策已同步为
+> 一个产品级 `openneko:` scheme 与 Desktop exact-resource registry；10-bit/HDR、codec
+> 和输出资格边界不变。
 
 ## Goals / Non-Goals
 
@@ -48,13 +53,14 @@ GPU compositor、OS color management 和显示器链路。
   组合通过输出资格验证后才能启用。
 - 10-bit/HDR export 由 FFmpeg 输出验证决定，不依赖 renderer 当前是否为 SDR。
 
-### 3. Desktop 使用安全 custom protocol 按需读取
+### 3. Desktop 使用统一 OpenNeko resource transport 按需读取
 
-目标 transport 使用 Electron `protocol.handle()` 和启用 `stream` 的 secure
-custom scheme，把短生命周期 opaque URL 投影给原生 `<video src>`、`<audio src>` 或
-PCM consumer。handler
-实现 GET/HEAD、closed Range、206、Content-Range、MIME、token/owner/session、
-取消和背压。不得暴露绝对路径或使用 `file://`。
+Desktop 在 `app.ready` 前注册唯一 privileged `openneko:` scheme，同一个 protocol handler
+服务 `desktop` bundle 与 `resource` host。Main 把短生命周期 opaque URL 投影给原生
+`<video src>`、`<audio src>` 或显式 PCM consumer。resource handler 实现 GET/HEAD/OPTIONS、
+单段 Range、200/206/416、Content-Range、MIME、取消和背压。registration 只绑定 exact
+resource、one-shot PCM 或 frozen resource set，并携带 owner/generation 与 `webContentsId`；
+不得暴露绝对路径、使用 `file://` 或启动 loopback server。
 
 Preview/Canvas 的简单线性预览可直接把合格 profile 交给 `<video>`；Cut 继续使用
 原文件或完整 seekable prepared file 的 Range URL 与独立 PCM 路径。renderer 不得
@@ -67,14 +73,14 @@ fetch 视频、创建 `MediaSource`/`SourceBuffer` 或维护应用级缓冲窗�
 
 ```text
 direct accepted profile
-  -> custom protocol Range -> <video src>
+  -> OpenNeko Range -> <video src>
 
 accepted codec + incompatible container
-  -> explicit remux -> custom protocol Range -> <video src>
+  -> explicit remux -> OpenNeko Range -> <video src>
 
 unsupported codec/profile/color mode
   -> platform hardware preparation -> seekable file
-  -> custom protocol Range -> <video src>
+  -> OpenNeko Range -> <video src>
 
 unavailable required transform
   -> diagnostic
@@ -83,14 +89,15 @@ unavailable required transform
 ### 5. CSP 从宿主约束改为产品安全边界
 
 Desktop 自己定义 CSP，但不能删除 CSP。renderer 继续启用 sandbox、
-`contextIsolation` 和 `webSecurity`；custom scheme 不启用 `bypassCSP`。CSP 只向
-应用资源、typed IPC 所需边界和 `neko-media:` 开放最小范围；视频不开放 MSE `blob:`
-或任意网络来源。
+`contextIsolation` 和 `webSecurity`。CSP 只向可信 `openneko://desktop` bundle、typed IPC
+所需边界和 exact `openneko://resource` origin 开放最小范围；带 `Origin` 的请求只接受精确
+Renderer CORS，所有 resource 请求还必须匹配实际 `webContentsId`。视频不开放 MSE
+`blob:`、任意 `http:`、任意 localhost 或其他网络来源。
 
 ## Risks / Trade-offs
 
-- custom protocol 减少 loopback/CORS/PNA 摩擦，但必须对每个 Electron session/
-  partition 注册并验证 Range、stream 和 CSP 行为。
+- OpenNeko resource transport 复用 Chromium 原生媒体与 loader 行为，但必须验证
+  sender binding、exact-origin CSP/CORS、Range、stream、撤销和 app quit 清理。
 - Chromium 支持 HDR color space 不等于当前窗口输出 HDR；Display 和浏览器 API
   只能组成候选 capability snapshot。
 - Desktop 总体格式覆盖可因 FFmpeg 提升，但 direct `<video>` 覆盖不会自动超过

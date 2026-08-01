@@ -27,8 +27,10 @@
       image, video, audio, document and model viewers
 - [x] 3.2 Refactor viewer message/state hooks to consume the injected runtime and remove the VS Code
       Preview providers
-- [x] 3.3 Implement sender/session/revision-bound `neko-media:` descriptors with MIME, Range,
-      cancellation, EOF and cleanup through existing media owners
+- [x] 3.3 Implement owner/session/revision/sender-bound OpenNeko resource descriptors with MIME,
+      Range, cancellation, EOF and cleanup through existing media owners; the earlier
+      `neko-media:`/HTTP implementations were superseded by
+      `replace-desktop-media-scheme-with-http-resource-gateway`
 - [x] 3.4 Implement temporary, pinned and explicit side Preview Views without replacing Canvas/Cut
       embedded previews
 - [x] 3.5 Test unsupported viewers, cross-owner descriptor rejection, Range semantics, decoder/stream

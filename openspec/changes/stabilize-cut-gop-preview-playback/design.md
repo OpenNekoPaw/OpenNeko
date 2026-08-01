@@ -24,8 +24,8 @@ itself peaked at -7.62 dBFS.
    authorized Range resources; Chromium owns video buffering, demux, decoding,
    and transport backpressure; the Webview coordinator owns generation
    promotion and the Timeline clock.
-2. **Dependency:** the Webview continues to consume opaque loopback URLs and
-   runtime-neutral descriptors. It receives no path or FFmpeg command.
+2. **Dependency:** the Webview consumes transient `openneko://resource` URLs
+   and runtime-neutral descriptors. It receives no path or FFmpeg command.
 3. **Interface:** a prepared generation has one authorized video URL, explicit
    source-time origin, Timeline interval, and readiness. Active and standby
    generations are distinct owners.
@@ -41,8 +41,9 @@ itself peaked at -7.62 dBFS.
 
 ### 1. Compatible sources remain original Range resources
 
-For compatible H.264 MP4 and qualified VP8 WebM, the adapter registers the
-original source path with the shared loopback server. It does not invoke FFmpeg,
+For compatible H.264 MP4 and qualified VP8 WebM, the adapter publishes the
+original source through the injected `NodeMediaPublisher`; Desktop registers
+the exact file in its OpenNeko resource registry. It does not invoke FFmpeg,
 build a GOP index, copy a fragment, create a preview file, or read the media
 into application memory. The descriptor reports the Clip source-time origin;
 Chromium seeks through standard byte Range requests and performs its own
@@ -121,8 +122,8 @@ arbitrary non-zero sample is not cut to zero. The shared `AudioContext` remains
 the clock owner.
 
 PCM preparation must accumulate a bounded scheduling reserve before it reports
-readiness. One 20 ms packet is not readiness: the cold FFmpeg/loopback path can
-miss the next scheduling deadline even when the first packet arrived. The
+readiness. One 20 ms packet is not readiness: the cold FFmpeg/publication path
+can miss the next scheduling deadline even when the first packet arrived. The
 browser client buffers at least 100 ms without starting playback, then schedules
 that reserve against the explicit shared handoff time.
 
@@ -141,17 +142,17 @@ returned. Concurrent identical requests share one in-flight capture.
 
 ### 7. Preview bytes use one native HTML video path
 
-The descriptor contains one loopback URL, MIME type, preparation profile,
+The descriptor contains one transient OpenNeko resource URL, MIME type, preparation profile,
 source-time origin, and Clip duration. The Webview assigns that URL directly to
 one of its two `<video>` elements. It never calls `fetch()` for video, creates a
 `MediaSource`, appends a `SourceBuffer`, or maintains forward/backward buffer
 windows.
 
-The shared loopback file endpoint owns authorization, MIME, `HEAD`, byte Range,
+The Desktop OpenNeko resource handler owns authorization, MIME, `HEAD`, byte Range,
 `206`, `Content-Range`, cancellation, and revocation. Each browser request opens
 only the requested file interval. Browser retries and concurrent Range requests
-are valid; the endpoint is not single-consumer. Stopping or replacing a
-generation revokes its token and deletes any session-owned prepared file.
+are valid; seekable registrations are not single-consumer. Stopping or replacing a
+generation revokes its registration and deletes any session-owned prepared file.
 
 When playback pauses, the Host retires only PCM ownership and keeps the active
 video session registered. When a later generation retains the same video Clip
@@ -159,15 +160,14 @@ and replaces only its PCM window, Host activation transfers that video session
 identity into the new active generation before retiring the old record. A real
 Clip change or whole-preview stop revokes the video resource.
 
-The Cut Webview CSP explicitly allows only `http://127.0.0.1:*` in `media-src`
-for this transport. Descriptor validation rejects non-loopback URLs. There is
+The Cut Webview CSP explicitly allows only `openneko://resource` in `media-src`
+for this transport. Descriptor validation rejects non-resource URLs. There is
 no MSE, blob, whole-response fetch, or alternate video fallback.
 
 ## Reuse audit
 
-- Reuse the shared `HtmlVideoDescriptor` transport shape and
-  `NodeMediaLoopbackServer` file registration; Cut adds only its required
-  source-time origin.
+- Reuse the shared `HtmlVideoDescriptor` shape and injected `NodeMediaPublisher` file
+  registration; Cut adds only its required source-time origin.
 - Reuse the native HTML video lifecycle already proven by Preview and Canvas,
   while keeping Cut's synchronized priming in `@neko/media/browser`.
 - Keep `PcmAudioClient` as the explicit audio clock path; this decision removes

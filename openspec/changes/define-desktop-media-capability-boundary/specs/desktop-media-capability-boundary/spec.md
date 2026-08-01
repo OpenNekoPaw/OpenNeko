@@ -29,10 +29,12 @@ until the exact release target and output chain qualify an HDR preview profile.
 
 ### Requirement: Desktop media transport MUST be authorized and streamable
 
-The Desktop Host MUST project opaque, short-lived media URLs through a secure
-streaming custom protocol. The handler MUST support GET, HEAD, closed Range,
-206 responses, MIME, token/owner/session validation, cancellation, backpressure
-and cleanup. It MUST NOT expose local paths or use `file://`.
+The Desktop Host MUST project opaque, short-lived media URLs through the resource host of the single
+privileged `openneko:` scheme. The handler MUST support GET, HEAD, OPTIONS, single Range, 200/206/416
+responses, exact MIME and length, sender-bound authorization, cancellation, backpressure and cleanup.
+A registration MUST bind only one exact resource, one-shot PCM stream or frozen resource set plus
+exact owner/generation and `webContentsId`. It MUST NOT expose local paths, use `file://`, start a
+loopback server or retain a private media scheme.
 
 #### Scenario: User seeks within a large local video
 
@@ -60,12 +62,14 @@ fallback MUST NOT return success.
 
 Desktop renderer windows MUST keep Node integration disabled, context isolation
 and sandbox enabled, and `webSecurity` enabled. The app MUST define a restrictive
-CSP and MUST NOT enable custom-protocol `bypassCSP` to make media work.
+CSP that admits only exact `openneko://resource` for audited consumers. CORS MUST accept only the
+exact Renderer origin, and `session.webRequest` MUST reject missing or mismatched `webContentsId`.
+The app MUST NOT enable `bypassCSP` to make media work.
 
 #### Scenario: Renderer requests an unauthorized resource
 
-- **WHEN** renderer content requests `file://`, an arbitrary local path, arbitrary localhost,
-  an unknown custom-protocol token or an unknown IPC channel
+- **WHEN** renderer content requests `file://`, an arbitrary local path, localhost, an unknown or
+  revoked OpenNeko resource, a private media scheme, a mismatched sender or an unknown IPC channel
 - **THEN** the request fails visibly
 - **AND** no compatibility fallback, CSP bypass or direct disk access succeeds
 
@@ -83,13 +87,13 @@ support flags, playback state and screenshots MUST NOT be sufficient evidence.
 
 ### Requirement: Desktop media qualification MUST respect the closed release platform set
 
-Desktop media qualification MUST initially cover only the repository's canonical
-`darwin-arm64` and `linux-x64` release targets. Windows and other targets MUST
-remain unsupported until a separate platform-contract change supplies real
-target packaging, startup, transport, media and color evidence.
+Desktop native build qualification MUST cover only the repository's canonical `darwin-arm64` and
+`win32-x64` targets; Linux remains host-neutral CI only. A green Windows typecheck/package job is a
+build baseline, not Windows media/GPU/UI qualification. Each target MUST supply its own startup,
+transport, media and color evidence before the corresponding capability is claimed.
 
-#### Scenario: Windows Desktop media support is proposed
+#### Scenario: Windows package succeeds without graphical media evidence
 
-- **WHEN** a change proposes Windows direct playback, custom protocol or HDR support
-- **THEN** it first updates the closed platform contract through a separate OpenSpec
-- **AND** evidence from macOS, cross-compilation or Chromium documentation is rejected as Windows qualification
+- **WHEN** the native `win32-x64` typecheck and package job succeeds
+- **THEN** the product records only the build/software baseline
+- **AND** evidence from macOS, cross-compilation or Chromium documentation is rejected as Windows media, GPU or HDR qualification

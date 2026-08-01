@@ -2,7 +2,7 @@
 
 状态：Accepted
 
-更新日期：2026-07-27
+更新日期：2026-08-01
 
 OpenNeko 的本地媒体 canonical path 是 `@neko/media` 与各领域的窄媒体
 port。`packages/neko-engine` 和 `packages/neko-client` 已删除，不是可选
@@ -11,8 +11,8 @@ fallback。
 ## 职责
 
 - `@neko/media`：host-neutral probe、视频 descriptor、PCM、波形和失败范围契约。
-- `@neko/media/node`：FFmpeg/ffprobe 子进程、取消、诊断、tokenized loopback
-  HTTP、Range、PCM framing 和临时会话生命周期。
+- `@neko/media/node`：FFmpeg/ffprobe 子进程、取消、诊断、媒体文件准备、PCM framing
+  和最小 file/PCM publication port；不拥有 Electron transport。
 - `@neko/media/browser`：原生 HTML video 生命周期与 Web Audio 消费，不接触
   Node、Electron 或本地路径。
 - Preview、Canvas、Cut、Tools、Assets、Agent：各自拥有领域 port、操作编排和
@@ -25,20 +25,22 @@ domain controller
   -> domain media port
   -> @neko/media/node
   -> ffprobe / FFmpeg
-  -> opaque loopback HTTP Range / PCM
+  -> Desktop exact-resource registration
+  -> openneko://resource Range / PCM
   -> Webview <video src> / Web Audio
 ```
 
-Desktop 使用 Electron secure streaming custom protocol 承载授权后的 Range/PCM。
-该 protocol 只替换授权 transport，不创建第二套媒体策略或 MSE 视频
-路径。它仍需支持
-GET/HEAD、206、closed Range、token/owner/session、取消、背压和资源释放，不得暴露
-绝对路径或使用 `file://`。完整边界见
+Desktop 在 `app.ready` 前注册唯一 privileged `openneko:` scheme。同一个 protocol handler
+服务 `openneko://desktop` bundle 与 `openneko://resource` Range/PCM，不注册第二个媒体
+scheme，也不启动 loopback server。Desktop registry 只接受 owning service 已解析的 exact
+byte source、one-shot stream 或 frozen resource set，不解析 `ContentLocator`、项目事实或任意路径。
+它支持 GET/HEAD/OPTIONS、200/206/416、单段 Range、精确 MIME/长度、取消、背压和资源释放，
+不得暴露绝对路径或使用 `file://`。完整边界见
 [`adr-neko-desktop-media-capability-and-security-boundary.md`](adr-neko-desktop-media-capability-and-security-boundary.md)。
 
 ## 格式与质量策略
 
-- H.264 8-bit SDR MP4：`<video>` + HTTP Range 直接播放。
+- H.264 8-bit SDR MP4：`<video>` + OpenNeko Range 直接播放。
 - 已通过打包 Electron renderer 资格验证的 VP8：允许声明直接播放；当前产品优先
   H.264 路径，不以通用 Chromium 能力推断 Desktop 支持。
 - Preview renderer 以 versioned readiness payload 报告窄化的 MP4 codec 能力。
@@ -49,8 +51,9 @@ GET/HEAD、206、closed Range、token/owner/session、取消、背压和资源�
 - 10-bit、HDR10/PQ、HLG、HEVC、AV1、VP9：probe 与音频 PCM 可由 FFmpeg
   处理。未命中合格 native/remux profile 的视频只能进入目标平台的完整硬件闭包：
   `darwin-arm64` 使用 VideoToolbox 硬解、`scale_vt` 和
-  `h264_videotoolbox -allow_sw 0`；`linux-x64` 使用 VAAPI 硬解、
-  HDR 时使用 `tonemap_vaapi`，随后使用 `scale_vaapi` 和 `h264_vaapi`。
+  `h264_videotoolbox -allow_sw 0`。`win32-x64` 当前只有 portable software
+  descriptor baseline，尚无已资格化的 D3D11VA/DXVA2 decode/filter/encode 闭包，
+  因此不兼容视频明确 unavailable，不用 CPU 转码冒充预览成功。
   `libx264`、CPU `scale`、`zscale`、`tonemap` 以及编码前 `hwdownload`
   不得进入实时预览或预览代理路径。
 - 硬件 decoder/filter/encoder 缺失或拒绝源 profile 时返回
@@ -59,15 +62,25 @@ GET/HEAD、206、closed Range、token/owner/session、取消、背压和资源�
 - Desktop 也不因 Electron 而自动扩大 direct profile。只有精确 release target
   的真实变化帧 fixture 和输出链资格验证通过后，才能增加 direct codec 或
   `hdr-qualified-preview`；否则使用同一平台硬件 preparation path 或明确失败。
-- AAC、MP3、FLAC、PCM 以及 FFmpeg 构建可解码的多声道音轨统一解码为
-  48 kHz stereo float32 PCM。源 codec 和通道数仍由 probe 报告。
+- AAC、MP3、FLAC、PCM 以及 FFmpeg 构建可解码的多声道音轨可按显式处理操作解码为
+  48 kHz stereo float32 PCM。源 codec 和通道数仍由 probe 报告；普通单资源播放不因此
+  自动转为 PCM。
+
+| Consumer / operation | Canonical audio path |
+| --- | --- |
+| Cut 有声 timeline preview | Host 混合 framed PCM；muted `<video>` 跟随 Cut master clock |
+| Cut video-only interval | 原生 `<video>` clock，不创建 PCM |
+| Canvas 普通 audio/video node | 原生 `<audio>` 或带内嵌音频的单个 `<video>` |
+| Canvas 显式同步/混音/分析 | 独立版本化 processed/PCM contract |
+| Preview、Agent 展示 | 原生 `<audio>` / `<video>` |
+| camera/microphone/call/live capture | `MediaStream` / WebRTC 或专用 live runtime |
 
 PCM 浏览器调度采用显式 `prepare -> startAt` 两阶段：先取得首包，再由拥有
 timeline 的调用方在 Host 确认 generation activation 后选择未来
 `AudioContext` 时间。Webview 先预热静音视频 decoder 但不推进 Timeline，再在
 该时间同时启动视频与唯一 PCM master，避免冷启动和连接阶段的音频时钟抢跑。
 调度超前量以 1 秒高水位、
-0.5 秒低水位限制，HTTP reader 通过背压停止继续拉取，因此内存和
+0.5 秒低水位限制，resource stream reader 通过背压停止继续拉取，因此内存和
 `AudioBufferSourceNode` 数量不随素材时长增长。输入 EOF 不等于播放 EOF；
 只有最后一个已调度 source 实际结束后才通知播放完成，stop/seek/dispose 则
 立即中止 fetch 并停止、断开全部 source。
@@ -94,10 +107,10 @@ H.264 容器不兼容时完成 `-c:v copy` 的有界 MP4 后再发布普通 Rang
 后走同一个 `<video src>` contract；不允许 CPU fallback。平台命令、能力名和
 错误分类统一由 `@neko/media/node` backend strategy 拥有，Cut 不复制平台分支。
 
-当前发布 target 是 `darwin-arm64` 与 `linux-x64`。Windows 尚未进入发布矩阵；
-未来 Windows target 必须通过同一 strategy 接入完整且设备兼容的
+当前原生构建 target 是 `darwin-arm64` 与 `win32-x64`。Windows package 和 portable
+FFmpeg descriptor 只建立构建/软件基线；完整媒体资格仍需通过同一 strategy 接入设备兼容的
 decode/filter/encode 闭包。`d3d11va` 只表达硬解能力，不能单独充当通用 Windows
-硬件转码 backend。
+硬件转码 backend。Linux 仅运行 host-neutral 测试，不属于媒体 release target。
 
 Cut 导出复用相同的 Clip 音频事实，但对完整节目执行两遍响度处理：第一遍
 测量 integrated loudness、true peak、loudness range、threshold 与 target
@@ -121,7 +134,7 @@ SHA-256、SPDX 和必要 hardware accelerator/codec/filter signature。Compositi
 feature 激活前校验 descriptor、真实路径、checksum 与运行时资格，再注入精确
 可执行路径。`NodeMediaRuntime.qualify()` 报告直接依赖的
 decoder/encoder/filter，包括 `loudnorm`、`ebur128`、`alimiter`、AAC、FLAC、
-DTS 与当前平台硬件视频闭包；缺少任一必要能力会阻断媒体 feature 激活，不归类
+DTS，以及 macOS 硬件视频闭包或 Windows portable software floor；缺少任一必要能力会阻断媒体 feature 激活，不归类
 为素材损坏。
 
 ## 损坏与部分结果
@@ -135,15 +148,21 @@ DTS 与当前平台硬件视频闭包；缺少任一必要能力会阻断媒体 
 
 ## 安全与生命周期
 
-- Loopback 只监听 `127.0.0.1`，URL 使用不可预测 session token，不暴露路径。
-- 文件响应支持标准 byte Range，并允许 Chromium 重复或并发请求同一 token；
-  PCM 每个 token 只允许一个消费者。Chromium 在 seek/替换资源时关闭旧 Range
+- `openneko://resource/<opaque-id>` 不暴露路径或稳定内容身份；registration 绑定允许的
+  `webContentsId`、Window/View/session/renderer-epoch/generation。
+- 文件响应支持标准 byte Range，并允许 Chromium 重复或并发请求同一 registration；
+  PCM 每个 registration 只允许一个消费者。Chromium 在 seek/替换资源时关闭旧 Range
   response 属于正常取消；只有连接仍有效时的流关闭、FFmpeg 失败或真实文件 IO
-  失败才记录为 loopback 错误。
-- Renderer CSP 仅为媒体/文档 entry 开放授权 protocol，其他 entry 保持关闭。
+  失败才记录为资源错误。
+- Renderer CSP 只在 `media-src`、`img-src`、`connect-src` 和经审计需要的 `frame-src`
+  开放 exact `openneko://resource` origin，不能开放任意 `http:`、`localhost` 或 `*`。
 - Desktop renderer 保持 sandbox、context isolation、`webSecurity` 与严格 CSP；
-  custom scheme 不启用 `bypassCSP`，只向已授权 `neko-media:` 开放。
-- stop、seek、替换或 Desktop session dispose 必须终止子进程、撤销 token、结束 HTTP
+  带 `Origin` 的 resource 请求只返回精确 Renderer origin；`session.webRequest` 根据实际
+  `webContentsId` 拒绝 sender 缺失或不匹配的请求，不信任 Renderer header。
+- opaque ID 仅映射一个 exact resource、one-shot stream 或 frozen resource set；server-side
+  owner/generation 用于注册和撤销。
+  URL 不持久化、不进入 Agent/provider/Tool、clipboard、telemetry 或未脱敏日志。
+- stop、seek、替换或 Desktop session dispose 必须终止子进程、撤销 registration、结束
   响应并删除不再由其他 operation 拥有的 session 临时文件。未知 session 必须
   fail-visible。
 
@@ -152,8 +171,8 @@ DTS 与当前平台硬件视频闭包；缺少任一必要能力会阻断媒体 
 - `pnpm check:engine-retirement-boundary`
 - `pnpm --filter @neko/media test -- --run`
 - `pnpm validate:media-matrix ~/Git/neko-test/cases`
-- Desktop 必须在打包 Electron runtime 与隔离 fixture workspace 中验证 custom
-  protocol、Range、direct/prepared-file/PCM、CSP 和生命周期；HDR/10-bit 需要真实显示链
+- Desktop 必须在打包 Electron runtime 与隔离 fixture workspace 中验证 OpenNeko
+  handler、Range、direct/prepared-file/PCM、CSP/CORS、sender isolation 和生命周期；HDR/10-bit 需要真实显示链
   证据，不能由播放状态或 screenshot 推断。
 
 运行态验收 workspace 唯一允许 `${HOME}/Git/neko-test`。生成的媒体 fixture

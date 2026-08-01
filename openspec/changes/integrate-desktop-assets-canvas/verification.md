@@ -102,14 +102,19 @@ runtime differ from the production Rollup package:
 
 ## Workspace Authorization Boundary
 
+The `neko-media:` observation below records the 2026-07-29 implementation only. It was superseded
+on 2026-08-01 by `replace-desktop-media-scheme-with-http-resource-gateway`; the current production
+projection is an exact-resource, short-lived `openneko://resource` URL from the Desktop registry,
+while the durable identity remains the original ContentLocator.
+
 - The Desktop Host owns the selected Project workspace grant. The renderer is not granted arbitrary
   filesystem access to the whole directory.
 - Resource discovery projects portable `workspace-file` ContentLocators. Before any read or
   preview, Main resolves the real path and proves containment in the workspace root or an explicitly
   linked media-library root.
-- Preview projects one opaque `neko-media://desktop/<descriptorId>` URL for an exact authorized
-  resource. The descriptor is bound to the requesting Electron `webContents`, window, view and
-  preview session lifecycle and is released when that session/window closes.
+- At the time of this report, Preview projected one opaque
+  `neko-media://desktop/<descriptorId>` URL for an exact authorized resource. That historical
+  transport is not a current success path.
 - The renderer receives neither absolute paths nor a directory token. A future `.gltf` package with
   external buffers or textures must register the exact validated dependency resources; it must not
   widen the descriptor into workspace-wide access.

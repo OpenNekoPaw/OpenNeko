@@ -1,362 +1,262 @@
 ## Context
 
-OpenNeko 是本地 Electron Desktop，Renderer 仍是 Chromium sandbox。当前媒体链路同时存在：
+OpenNeko 是本地 Electron Desktop，Renderer 运行在 Chromium sandbox。当前实现已经删除
+`neko-media:` 二次代理，但把资源改成了 app-lifetime loopback HTTP：
 
 ```text
-Cut / Canvas Node runtime
-  -> NodeMediaLoopbackServer (127.0.0.1 HTTP)
-  -> DesktopMediaDescriptorRegistry
-  -> desktop-media-protocol upstream proxy
-  -> neko-media:
-  -> Renderer
+ContentLocator
+  -> owning Desktop adapter resolves an exact path/stream
+  -> DesktopHttpResourceGateway
+  -> NodeMediaLoopbackServer (127.0.0.1:<dynamic-port>)
+  -> native element / fetch / loader
 ```
 
-Preview 则把 Host 解析出的绝对路径注册到同一个 Desktop registry，再由 `neko-media:` 提供
-文件响应。两条路径最终都只是给 Chromium `<audio>`、`<video>`、PDF/model loader 或 Web Audio
-提供 bytes；custom scheme 不参与 codec decode、GPU compositor、纹理上传或 OS 色彩管理。
+这条链路引入 TCP listener、动态 CSP origin、CORS/PNA、bearer token 和两层 owner bookkeeping。
+当前没有 Web/remote consumer；所有请求都由同一个 Electron session 中的 Renderer 发起。
+Desktop 同时已有 `neko-app:` protocol 用来加载 Renderer bundle，因此可以用一个产品级 scheme
+直接覆盖两个职责。
 
-现有代码和 contract 的关键事实如下：
+目标链路为：
 
-| 范围          | 当前事实                                                                                   | 设计问题                                                          |
-| ------------- | ------------------------------------------------------------------------------------------ | ----------------------------------------------------------------- |
-| `@neko/media` | `MediaTransport = 'http' \| 'authorized'`，其中 `authorized` 固定为 `neko-media://desktop` | 同一字节资源存在两种 Desktop transport 事实                       |
-| Desktop Main  | registry 同时注册 file 与 upstream；upstream 把已授权 loopback HTTP 再 fetch/pipe 一次     | 重复 Range、取消、header、错误和生命周期逻辑                      |
-| Cut           | 原生 muted video + 多路/混合 PCM；PCM 是 timeline master clock                             | PCM 是真实领域需求，不能随协议迁移删除                            |
-| Canvas        | 单资源 audio/video 也被统一转换为 video + PCM                                              | 普通 node 播放没有多轨混音和 timeline master-clock 需求           |
-| Preview       | package viewer 已能直接消费 source URL；支持 image/audio/video/document/model              | transport 不能只按 audio/video 文件扩展名设计                     |
-| Agent         | 消息投影会把本地媒体 path 转成展示 URL；原生 audio/video card 已存在                       | 展示 URL、稳定 attachment 和 Tool/Bash 文件路径容易被混为一种身份 |
+```text
+ContentLocator
+  -> owning Desktop adapter resolves and authorizes an exact source
+  -> Desktop exact-resource registry
+  -> openneko protocol.handle
+  -> openneko://resource/<opaque-id>/<optional-relative-path>
+  -> package-owned native element / fetch / loader
+```
+
+应用自身使用：
+
+```text
+openneko://desktop/index.html
+openneko://desktop/<renderer-asset>
+```
 
 ### Five-Layer Analysis
 
-| 层   | 结论                                                                                                                                                                                 |
-| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 职责 | 领域 package 拥有 locator、播放/处理意图和 session；Desktop Main 拥有授权和 gateway 实例；`@neko/media/node` 拥有 FFmpeg/PCM 与可复用 loopback byte publisher；Renderer 只消费投影。 |
-| 依赖 | Renderer 不获得 Node/Electron/文件路径；gateway 不 import React，不解释 OTIO/NKC/Agent message；领域 package 不依赖 Desktop 实现。                                                   |
-| 接口 | 持久 `ContentLocator`/owning domain identity 与短生命周期 `DesktopResourceProjection` 分离；seekable file、one-shot PCM 和 resource set 使用显式 descriptor kind。                   |
-| 扩展 | HLS/DASH、glTF dependency set 和未来 XR 可在 HTTP resource model 上增加有 owner 的 adapter；实时流单独走 MediaStream/WebRTC。                                                        |
-| 测试 | contract/producer/consumer、HTTP/Range/CORS/PNA、真实 Electron、FFmpeg/PCM、纹理/HDR 资格、性能和 dispose 都需要路径级证据，并 poison `neko-media:`。                                |
-
-### Existing HTTP Evidence
-
-2026-07-31 在 `darwin-arm64`、Electron 43.2.0、Chromium 150 上运行的临时 spike 得到：
-
-| 场景                                 | 结果                                                                   |
-| ------------------------------------ | ---------------------------------------------------------------------- |
-| H.264 metadata                       | 26–66 ms                                                               |
-| H.264 first frame                    | 热启动约 34 ms；冷启动约 172–180 ms                                    |
-| H.264 seek                           | 22–36 ms                                                               |
-| WAV metadata / seek                  | 4–8 ms / 0.7–1.0 ms                                                    |
-| Renderer 读取 32 MiB                 | 671–685 MiB/s                                                          |
-| production `NodeMediaLoopbackServer` | 中位 820 MiB/s                                                         |
-| 1 MiB Range                          | 中位 2.7 ms；P95 3.7 ms                                                |
-| 内容与 GPU                           | SHA-256、变化帧、WebGL2 首次/重复纹理上传通过                          |
-| 10-bit/HDR input                     | Main10 HEVC、BT.2020/PQ bytes 与 metadata load 通过；未证明 HDR output |
-
-这些结果证明 HTTP 可作为本机播放/预览 transport，不证明 Windows、所有 codec、零拷贝、
-10-bit surface 或 HDR 显示链已经合格。临时 spike 不替代仓库内回归和真实发布目标资格。
+| 层 | 结论 |
+| --- | --- |
+| 职责 | Content/representation owner 解析 locator；领域 package 决定播放/处理意图；Desktop Main 拥有 exact-resource registration、sender authorization、响应和释放；`@neko/media` 只拥有 FFmpeg/PCM/浏览器媒体能力。 |
+| 依赖 | Renderer 不访问 Node/Electron/系统路径；领域 package 不依赖 Desktop；resource registry 不解释 locator、OTIO、NKC、Preview 或 Agent state；Desktop app handler 直接组合 registry。 |
+| 接口 | 持久身份只用 `ContentLocator`；representation、领域 ID、revision 与临时 URL 分离。descriptor 不再携带单值 `transport` discriminant。 |
+| 扩展 | finite files、Range、PCM 和 allowlisted dependency set 共享一个 resource host；新的媒体种类不新增 scheme；实时媒体继续使用 MediaStream/WebRTC。 |
+| 测试 | contract 与真实 Electron 同时断言 `openneko:` canonical path、sender binding、Range/stream、native consumer、资源释放，并 poison HTTP 与旧 scheme。 |
 
 ## Goals / Non-Goals
 
 **Goals:**
 
-- 删除 Desktop 私有媒体 scheme 和 HTTP 二次代理，建立唯一 loopback HTTP canonical path。
-- 保持 Renderer sandbox、CSP、路径非披露、capability-scoped access 和确定性释放。
-- 为 Cut、Canvas、Preview、Agent 明确同一 transport 上不同的领域消费策略。
-- 将 PCM 限定为 Cut timeline 或其他显式信号处理需求，而不是普通播放的默认格式适配层。
-- 支持 seekable audio/video、图片、文档、PDF Range、GLB/glTF 依赖和未来 HLS/DASH 资源集合。
-- 记录 HTTP 对纹理、10-bit、HDR 和跨平台能力的真实影响与资格边界。
+- 统一为一个 `openneko:` scheme 和一个 Electron protocol handler。
+- 删除 production loopback HTTP server 和它特有的 CSP、CORS、PNA、端口与 bearer 模型。
+- 保持 Renderer sandbox、路径非披露、精确授权、source revision fencing 和确定性释放。
+- 支持当前 Cut、Canvas、Preview、Agent 所需的 seekable bytes、PCM 与 glTF dependency set。
+- 保持 `ContentLocator` 为唯一公共持久内容身份。
+- 保留原生 `<audio>`/`<video>`、Canvas/WebGL、PDF/model loader 的 Chromium 能力。
 
 **Non-Goals:**
 
-- 不移除 `neko-app:`；它继续只加载可信 Desktop Renderer bundle。
-- 不以 HTTP 扩大 Chromium direct codec 白名单，不承诺 HDR/10-bit 输出或零拷贝纹理。
-- 不把 gateway 变成项目文件 API、通用远程 Web server、cache manager 或任意目录浏览器。
-- 不给普通 Agent 增加 Bash；不改变既有 PathAccessPolicy、trust、approval 和 processor ownership。
-- 不用 HTTP resource endpoint 承载摄像头、麦克风、通话或无限实时直播。
-- 不把 Windows package/typecheck 证据描述为完整 Windows 媒体/GPU 或发布资格。
+- 不新增 `opennekomedia:`、`neko-media:`、`media:`、`video:`、`audio:` 或 domain-local scheme。
+- 不把 registry 变成项目文件 API、Content resolver、cache manager 或目录浏览器。
+- 不把 `@neko/media` 变成 Desktop/Electron package。
+- 不用 scheme 名称推断 codec、纹理复用、10-bit 或 HDR 输出能力。
+- 不给 Agent 增加 Bash，也不把 Renderer URL 当作 Tool/provider/system path。
+- 不为没有当前 consumer 的 HLS/DASH、XR 或直播预建 provider。
 
 ## Decisions
 
-### 1. 稳定资源身份与 Renderer transport 完全分离
+### 1. 一个 scheme，两个 host
 
-项目事实、Agent message、attachment、Tool result 和跨包 handoff 继续只保存：
-
-- workspace-relative path；
-- `ContentLocator`、owning document/entry identity；
-- 既有允许的 `${VAR}/path` 配置引用；
-- 领域 document/session/revision identity。
-
-Desktop Main 在 exact Window/View/session/revision 已授权后创建短生命周期投影：
+Electron 在 app ready 前只注册：
 
 ```ts
-type DesktopResourceProjection =
-  | {
-      readonly version: 1;
-      readonly kind: 'seekable';
-      readonly url: string;
-      readonly mimeType: string;
-      readonly byteLength: number;
-    }
-  | {
-      readonly version: 1;
-      readonly kind: 'pcm-stream';
-      readonly url: string;
-      readonly protocol: 'neko-pcm-f32le-v1';
-      readonly sampleRate: number;
-      readonly channels: number;
-    }
-  | {
-      readonly version: 1;
-      readonly kind: 'resource-set';
-      readonly entryUrl: string;
-      readonly mimeType: string;
-    };
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: 'openneko',
+    privileges: {
+      standard: true,
+      secure: true,
+      supportFetchAPI: true,
+      corsEnabled: true,
+      bypassCSP: false,
+    },
+  },
+]);
 ```
 
-URL 形态由 Host-only gateway 产生，例如：
+同一个 `protocol.handle('openneko', ...)` 按 host 分发：
+
+| URL | Owner | 行为 |
+| --- | --- | --- |
+| `openneko://desktop/...` | app protocol | 只读 Renderer bundle，返回严格 CSP |
+| `openneko://resource/<id>/...` | exact-resource registry | 只读授权资源、stream 或 allowlisted dependency |
+| 其他 host | 无 | `404` |
+
+不注册第二个 scheme，也不为 media/model/document 建立独立 handler。`resource` 是运行时访问分区，
+不是新的公共资源领域或内容身份。
+
+`desktop` 与 `resource` 是不同 origin。CSP 只允许
+`openneko://resource` 出现在经过审计的 `media-src`、`img-src`、`connect-src` 等 directive。
+需要 Canvas/WebGL/Three.js 取像的 consumer 在设置 `src` 前设置 anonymous CORS；resource
+response 只允许 `openneko://desktop` 和当前 development Renderer origin。
+
+### 2. URL 和 descriptor 保持 transport-neutral
+
+`ContentLocator`、`ContentRepresentationLocator`、领域 ID 和 revision 继续由 owning contract
+持有。临时 URL 只存在于 Renderer descriptor：
 
 ```text
-http://127.0.0.1:<ephemeral-port>/v1/resources/<capability-token>
-http://127.0.0.1:<ephemeral-port>/v1/streams/<capability-token>
-http://127.0.0.1:<ephemeral-port>/v1/resource-sets/<capability-token>/<virtual-path>
+openneko://resource/<opaque-id>
+openneko://resource/<opaque-id>/<relative-dependency>
 ```
 
-token 不作为独立 DTO 字段，不写入日志、项目文件、Agent memory、provider input、clipboard 或
-recent state。Renderer 不依赖 route grammar，只把 URL 交给相应浏览器 consumer。释放按 owning
-session/generation 完成，Renderer 不需要持久 descriptorId 才能回收。
+opaque ID 只做运行时 lookup，不写入项目文件、Agent memory、provider payload、clipboard、
+recent state、日志或持久 cache。URL 不得回写 locator。
 
-拒绝让 `file:` 成为 Renderer transport：它扩大本地文件 origin 和路径披露面。`data:` 只保留
-现有有界 thumbnail/小型附件；`blob:` 只用于 Renderer 自己产生并显式 revoke 的临时内容。
-也不改名为 `media:`、`video:`、`audio:` 或 `neko-resource:`，因为改名不会消除私有协议维护成本。
+因为 production 只有一个 transport，`MediaTransport = 'http'` 及 descriptor 的
+`transport` 字段没有 discriminating value，必须删除。浏览器媒体 client 只消费 owning
+descriptor 的 URL；Desktop producer/bridge tests 负责证明 URL 来自 resource registry。
 
-### 2. 一个 app-lifetime gateway，由 Desktop Main 组合现有窄能力
+`file:` 仍禁止进入 Renderer。`data:` 只用于有严格大小上限的内嵌表现，`blob:` 只用于 Renderer
+自产生且显式 revoke 的内容。
 
-Desktop 在创建/加载 Renderer 前启动一个只绑定 `127.0.0.1` 随机端口的 gateway，并把精确
-origin 注入 CSP。应用退出时最后停止 gateway；Window/View/session/generation 关闭只撤销其
-注册项和在途响应。
+### 3. Registry 是唯一必要的 Host resource state
 
-实现优先演进现有 `NodeMediaLoopbackServer` 的 Range、PCM、取消和测试，而不是并行创建第二个
-HTTP stack。Desktop composition 向 Cut、Canvas、Preview 和 Agent display projector 注入同一
-publisher/registration port：
+Desktop Main 保留一个 app-lifetime exact-resource registry。它不是 gateway facade，不解析
+locator，也不暴露到 preload。它只接受 owning adapter 已授权的：
+
+- exact seekable file：绝对执行路径、MIME、byte length、revision/fingerprint；
+- one-shot PCM producer：创建函数、priming、AbortSignal 和 framing metadata；
+- frozen resource set：entry path 与 exact relative dependency allowlist；
+- owner：Window/View/session/renderer epoch/generation 和允许的 `webContentsId`。
+
+registration 返回运行期 URL 与 release handle。owner replace、View detach、renderer reload、
+Window close 和 app quit 撤销对应记录，并 abort in-flight file/PCM response。unknown/revoked ID
+返回明确非成功状态，不查找 active/recent owner。
+
+Cut/Canvas 的 Node media runtime 通过最小 publisher port 注册 file/PCM。Preview/Agent 直接调用
+registry 的 file/resource-set registration。不存在第二层 `DesktopHttpResourceGateway`、
+gateway client、provider、factory 或 public IPC registration API。
+
+### 4. Sender authorization 使用 Electron request context
+
+每个 registration 绑定允许的 `webContentsId`。Desktop 在 owning Electron session 上安装
+`session.webRequest.onBeforeRequest` filter：
 
 ```text
-Desktop Main owns gateway instance and capability registry
-  <- @neko/media/node publishes prepared file / PCM source
-  <- Preview adapter publishes exact file / document / model resource set
-  <- Agent display projector publishes an exact authorized attachment source
+openneko://resource/*
 ```
 
-gateway 只认识 byte source、MIME、seek/stream mode、resource-set allowlist 和 lifecycle owner，
-不认识 OTIO clip、Canvas node、Preview tab、Agent message 或 cache policy。各领域 runtime 先
-解析稳定 locator、校验 source/revision，再注册 source。这样不需要 interface/factory/registry
-多层叠加：一个 registry 是 capability 与生命周期的真实 owner，各领域只提供窄 registration。
+对每个请求读取 `details.webContentsId`，并根据 URL opaque ID 验证该 sender 是否属于
+registration。未知、无 sender、stale epoch 或不匹配请求被取消。`protocol.handle` 再次做
+token、method、revision、relative dependency 和 lifecycle lookup；两者都不信任 Renderer
+提供的 owner header。
 
-### 3. HTTP capability 是 bearer authorization，不伪装成 sender authentication
+授权 listener 与 protocol handler 在 app composition 中安装一次并显式释放。资格测试必须证明
+两个 WebContents 之间不能复用 URL，并覆盖 reload、detach 和 close。
 
-标准 TCP 请求不能可靠携带 Electron `webContentsId`。因此 gateway 不信任客户端提供的
-window/view/session header，也不声称每个 HTTP request 都能重新验证 sender。安全模型是：
+如果目标 Electron 版本不能对 custom scheme 可靠提供 `webContentsId`，资格场景必须失败并记录
+具体 Electron 行为；不得静默降级为纯 bearer、HTTP 或关闭 webSecurity。
 
-- 至少 128 bit CSPRNG capability token，只出现在 URL path；
-- token 只映射到一个 exact file/stream 或显式 resource-set allowlist；
-- 注册记录保留 server-side Window/View/session/revision/generation owner，用于签发和撤销；
-- session replace、stop、View detach、Window close、renderer epoch change 和 app quit 立即撤销；
-- 未知、过期、跨 generation 或已撤销 token 返回明确非成功状态；
-- URL 和 token 在 Logger/diagnostic 中脱敏；
-- token 不进入持久状态，另一进程只有先窃取 token 才能访问资源。
+### 5. Seekable response 实现 Range，但不实现 HTTP server
 
-精确 CSP 和 origin 是 defense in depth，不代替 token：
+resource handler 接受 `GET` 和 `HEAD`。seekable file 支持 full、closed、open-ended、suffix
+single Range，返回 `200`、`206` 或 `416` 以及：
 
-- production 只允许 `neko-app://desktop`，development 只允许当前 Vite origin；
-- `media-src`、需要纹理/图片的 `img-src`、需要 fetch 的 `connect-src` 只加入精确
-  `http://127.0.0.1:<port>`；
-- 只有 viewer 确实使用 frame navigation 时才加入 `frame-src`，不因 PDF/model blanket 开放；
-- server 对带 `Origin` 的请求只接受当前 Renderer origin，并返回该精确
-  `Access-Control-Allow-Origin`，不得返回 `*`；
-- 无 `Origin` 的 native media Range 请求仍依赖 bearer token；不能用伪造 header 提升 scope；
-- PNA preflight 仅接受允许的 origin/method/header，并在请求明确要求时返回
-  `Access-Control-Allow-Private-Network: true`；
-- 保持 `sandbox`、`contextIsolation`、`webSecurity`、导航拦截和 permission deny。
+- `Content-Type`
+- `Content-Length`
+- `Accept-Ranges: bytes`
+- partial response 的 `Content-Range`
+- `Cache-Control: no-store`
+- `X-Content-Type-Options: nosniff`
 
-这与 custom protocol 的权衡是显式的：custom handler 可看到 Electron request context，但当前
-实际授权也只检查 `webContentsId`，而持有 URL 的同一 Renderer 已能读取资源。HTTP 放弃协议级
-sender introspection，换取标准 Chromium 网络栈、直接 Range、无二次代理和更广泛 loader 兼容；
-高熵最小 capability 与确定性撤销保持本地产品所需边界。
+响应使用 file stream 与背压，不整文件读入 Buffer，不经 IPC/Base64/Blob。重复/并发 Range
+保持同一 frozen source revision。client cancel 中止该读取，但不消费 seekable registration。
+query、fragment、multiple Range、encoded traversal、NUL、unknown dependency 和 revision change
+fail-visible。
 
-### 4. gateway 实现完整而有限的 HTTP resource semantics
+这些是浏览器媒体/文档 loader 需要的 byte semantics，不代表存在 HTTP endpoint、TCP listener、
+CORS preflight 或 PNA。
 
-seekable resource 支持：
+### 6. PCM 保留为显式 one-shot stream
 
-- `GET`、`HEAD`、`OPTIONS`；
-- full response、一个 closed/open/suffix byte Range、`206`、`Content-Range`、
-  `Accept-Ranges: bytes` 和非法/不可满足 Range 的 `416`；
-- 精确 `Content-Length`、MIME、`X-Content-Type-Options: nosniff`；
-- Chromium 对同一 token 的重复/并发 Range；
-- client disconnect/AbortSignal 关闭 file handle、stream 和 FFmpeg child；
-- 背压，不整文件读入 Buffer，不经 typed IPC/Base64/Blob 复制；
-- session resource 默认 `Cache-Control: private, no-store`，避免撤销后从 HTTP cache 继续成功；
-- 非允许 method、未知 route、query-based path、encoded traversal、NUL 和 malformed URL
-  fail-visible。
+Cut timeline 的 Host-mixed framed PCM 是真实领域需求：它负责 trim、gain、fade、overlap、变速、
+loudness 和 master clock。registry 把 one-shot PCM producer 直接转换为 `Response` stream，
+保持 priming、背压、single-consumer、取消和 FFmpeg termination。
 
-PCM 是 single-consumer、chunked、framed stream，不支持 seek Range；重复消费返回冲突，stop
-会终止 FFmpeg。seek 通过 owning domain 停止旧 generation 并签发新 PCM stream，不在 HTTP
-层模拟随机访问。
+PCM 不支持 byte Range。seek 由 owning Cut generation 撤销旧 stream 并注册新 stream。Canvas
+普通音频/视频、Preview 与 Agent 不创建 PCM；它们使用完整 seekable file 和原生元素。
 
-resource set 使用同一 token 下的虚拟路径 allowlist。Preview/model adapter 在注册前解析并冻结
-glTF 等入口引用，只映射 exact dependency；路径 normalization 后拒绝 `..`、absolute URI、
-scheme-relative URI、未知文件和跨 root symlink。GLB 等单文件格式继续使用 seekable resource，
-不创建空泛目录授权。PDF/CBZ、DOCX/EPUB entry 和 model loader 由 Preview/content owner 选择
-Range、bounded bytes 或 resource set，不把 archive 解析职责放入 gateway。
+### 7. Resource set 只授权精确依赖
 
-### 5. HTTP 与 custom protocol 对浏览器媒体/GPU 能力等价
+Preview/model owner 在注册前解析并冻结 glTF 等入口及其相对依赖。一个 opaque ID 下的 virtual
+path 只映射 exact allowlist。registry 拒绝 `..`、absolute/scheme-relative URL、encoded
+separator、unknown entry、symlink/containment escape 和 source revision change。
 
-| 能力                                              | Custom protocol                                             | Loopback HTTP                                                     | 结论                                         |
-| ------------------------------------------------- | ----------------------------------------------------------- | ----------------------------------------------------------------- | -------------------------------------------- |
-| `<audio>` / `<video>` metadata、play、seek、Range | Electron 正确注册 secure/stream 后可用                      | Chromium 原生网络路径可用，已实测                                 | HTTP 不减少元素能力                          |
-| codec/container                                   | 由 Electron/Chromium build 决定                             | 相同                                                              | transport 不扩大格式支持                     |
-| WebGL/Three.js `VideoTexture`                     | 跨 origin 需正确 CORS/untainted source                      | 设置 `crossOrigin="anonymous"` 且精确 ACAO 后可用，已实测重复上传 | 不承诺零拷贝或复用 decoder surface           |
-| 10-bit input                                      | Chromium decoder/OS/GPU 决定                                | 相同 bytes 和 MIME                                                | metadata/decode success 不等于 10-bit output |
-| HDR                                               | Chromium compositor、OS color management、GPU、display 决定 | 相同                                                              | transport 与 HDR 资格无关                    |
-| CSP                                               | 需声明私有 scheme                                           | 需声明精确 ephemeral origin                                       | HTTP 必须在 load 前冻结 port/CSP             |
-| 授权                                              | handler 可读取 Electron request context                     | bearer capability + origin/CSP                                    | HTTP 的限制必须写入 threat model             |
-| loader 兼容                                       | 每个 Chromium/Electron API 需验证 scheme 行为               | 标准 URL/relative resolution                                      | 文档、模型、HLS/DASH 更自然                  |
+GLB、PDF、图片和单文件音视频继续使用单资源 registration。resource set 不提供目录 listing，
+也不因 loader 请求扩张 scope。
 
-需要 canvas/WebGL 取像或纹理的 media element 必须在设置 `src` 前设置
-`crossOrigin = 'anonymous'`；gateway 返回精确 CORS header。普通 native playback 不因此获得
-HDR、10-bit surface 或 zero-copy 保证。Texture reuse 的验收只声明像素可用和重复上传正确，
-不能从帧率或 API success 推断 GPU 内存零拷贝。
+### 8. Consumer 路径保持 package-owned
 
-### 6. PCM 按 consumer 的时间语义选择
+| Consumer | Canonical path |
+| --- | --- |
+| Cut timeline | muted native video + Host-mixed framed PCM |
+| Canvas ordinary audio | native `<audio>` |
+| Canvas ordinary video | native `<video>` with embedded audio |
+| Preview audio/video | owning native player |
+| Preview image/PDF/model | owning viewer/loader + exact resource URL/set |
+| Agent display | transient render URL + owning native card |
+| Agent/provider/Tool | `ContentLocator` or authorized real path, never render URL |
+| Live capture/call | MediaStream/WebRTC |
 
-| Consumer / operation                | Canonical audio path                   | 原因                                                            |
-| ----------------------------------- | -------------------------------------- | --------------------------------------------------------------- |
-| Cut timeline preview                | Host 混合 framed PCM，video muted      | clip trim/gain/fade、overlap、变速、loudness、统一 master clock |
-| Cut video-only interval             | `<video>` clock                        | 没有 audible PCM clock                                          |
-| Canvas 普通 audio node              | 原生 `<audio>`                         | 单资源播放、seek、volume、rate 由浏览器提供                     |
-| Canvas 普通 video node              | 原生 `<video>`，使用其内嵌音频         | 浏览器自己保持单文件 A/V 同步                                   |
-| Canvas 显式同步/混音/处理 operation | 版本化 PCM 或 prepared seekable output | 只有 contract 声明的信号处理需要才承担 PCM 成本                 |
-| Preview audio/video                 | 原生 `<audio>` / `<video>`             | 只读单资源预览；waveform/metadata 是独立派生操作                |
-| Agent message/attachment preview    | 原生 `<audio>` / `<video>`             | 展示不拥有 timeline 或音频处理                                  |
-| Live capture/call                   | `MediaStream` / WebRTC                 | 不是有限 seekable file                                          |
+各 Cut document、Canvas View、Preview session 和 Agent conversation 独立拥有 generation 与
+registration。active selection 只选择 UI，不作为资源 owner fallback。
 
-不根据 codec、播放失败或“当前只有一轨”在 native 与 PCM 间动态 fallback。Cut 始终使用其
-timeline PCM canonical path；Canvas 普通播放始终使用 native path。若 direct audio/video profile
-不合格，Host 在发布 descriptor 前显式准备完整 seekable 文件或返回 diagnostic。
+### 9. Transport 不决定 codec、纹理或颜色能力
 
-Canvas 迁移需新增适合普通音频的 native descriptor/consumer，并删除普通 node 创建
-`PcmAudioClient` 的成功路径。Cut 的 `CutPreviewClock`、bounded PCM、start barrier、drift、
-generation handoff 和 dispose 保持唯一事实，不复用 Canvas native player 来模拟 timeline。
+`openneko:` 与 loopback HTTP 都只提供 bytes。codec/container 由 Electron/Chromium build
+决定；纹理复用由 decoder/GPU/compositor 决定；10-bit/HDR 输出还取决于 OS、driver、显示器和
+色彩管理。资格分别记录：
 
-### 7. 各领域只拥有自己的投影和操作
+- metadata/play/seek/Range；
+- changing decoded pixels；
+- first/repeated WebGL texture upload；
+- 10-bit input metadata/decode；
+- HDR display output；
+- copied bytes/zero-copy 是否实际测量。
 
-**Cut**
+不得从 scheme、HTTP、播放成功或纹理像素成功推断 zero-copy、10-bit surface 或 HDR output。
 
-- OTIO/ContentLocator、document/session/revision 仍是 authority。
-- Node/FFmpeg 直接向共享 gateway 注册 original/remux/prepared video 和 mixed PCM，不再把 HTTP
-  URL交回 Desktop upstream proxy。
-- video descriptor 是 HTTP seekable resource；所有 audible timeline content 是一个 owning
-  generation 的 PCM stream，video 保持 muted。
-- active/standby、same-clip retain、seek、stop 和 ExportJob 语义不变。
+### 10. 迁移顺序
 
-**Canvas**
+1. 更新 OpenSpec 和 red tests，使 HTTP、`neko-app:`、`neko-media:`、`opennekomedia:` 和
+   `transport` 字段不能成为新路径成功来源。
+2. 注册 `openneko:`，让 app handler 同时分发 desktop/resource host。
+3. 实现 exact-resource registry、Range、PCM、resource set、sender authorization 和释放。
+4. 注入 Cut/Canvas publisher，迁移 Preview/Agent registration，删除 transport discriminant。
+5. 运行真实 Electron consumer matrix，证明 resource handler 与 package-owned consumer 被命中。
+6. 删除 HTTP gateway/server production path、qualification launcher、动态 CSP/CORS/PNA 和旧
+   scheme 残留。
+7. 同步 architecture/ADR/active changes，运行完整质量门禁并分批提交。
 
-- `.nkc` 继续保存 portable source identity，不保存 HTTP URL、PCM token 或播放状态。
-- 普通 media node 的 probe/prepare 在 Host；Renderer 使用 package-owned native audio/video
-  component。
-- 只有新的显式 processed-playback contract 可以返回 PCM；普通 node request 命中 PCM handler
-  必须失败测试。
-- 多 Canvas 实例各自拥有 operation/generation，gateway registry 只按 owner 回收，不使用 active
-  Canvas fallback。
-
-**Preview**
-
-- Preview Root/registry 继续选择 image、audio、video、document、model viewer；Desktop 不复制
-  viewer。
-- Preview session 可发布一个 seekable resource 或一个 exact resource set。temporary replace、
-  pin/side close、hover leave、source revision change 和 panel dispose 都撤销旧 capability。
-- glTF 外部 buffer/texture 保持相对 URL，PDF/document/model MIME 与 worker/asset CSP 分开审计。
-- 3D Reference 的 capture 输出仍先进入 workspace-owned `ContentLocator` 或 owning artifact
-  identity；HTTP URL 不是 Agent context。
-
-**Agent**
-
-- Pi/runtime 消费 attachment metadata、`ContentLocator` 或 owning document/artifact
-  identity；workspace-relative path 只进入授权 Tool 边界。只有 conversation-to-Webview
-  display projector 请求临时 HTTP projection。
-- tool/provider 输入保留稳定引用，provider materializer 在授权 Host 边界读取 bytes，不把
-  loopback URL 当成公网 provider URL。
-- `Read`/`Write`/`ReadImage`/`ReadDocument` 继续走 PathAccessPolicy 和 ContentReadService；
-  直接文件读写使用 workspace-relative input，由 Host 解析系统路径。
-- 普通创作 Agent 仍没有 Bash。若 Developer Mode 或受管 processor 明确授权 shell，Host 先校验
-  executable、cwd、env、network、input/output 和 approval，再以真实 workspace/system path 执行；
-  命令不得接收 HTTP URL，输出先成为 Host-owned locator，只有 owning workflow promotion 后才是
-  durable resource。
-
-### 8. 点播、实时、模型和 XR 使用不同的标准 Web 能力
-
-- 普通有限文件：gateway seekable resource + native element/loader。
-- HLS/DASH：gateway 发布 manifest 与 exact segment resource set；是否 direct native 或使用
-  audited player library由独立 consumer contract/qualification 决定。
-- 3D/model/XR 静态资源：HTTP resource set + loader；video texture 复用同一 media URL/CORS。
-- 摄像头、麦克风、屏幕采集：Electron permission/Host authorization 后投影 `MediaStream`。
-- 实时通话/远端直播：WebRTC 或专门 streaming runtime；鉴权、重连、latency 和 DRM 不进入本地
-  file gateway。
-
-gateway 不提前实现尚无 consumer 的 route/provider。上述扩展只定义协议归属，实施仍需独立
-OpenSpec 和真实场景。
-
-### 9. 平台和媒体资格保持按目标封闭
-
-当前原生构建 contract 只有 `darwin-arm64` 与 `win32-x64`，Linux 只运行 host-neutral CI。
-本变更已有 macOS arm64 feasibility evidence；完整媒体运行态验收必须在本地 packaged
-`darwin-arm64` Electron 上验证启动、CSP/PNA、audio/video、Range、模型/文档、取消和资源
-释放。Windows job 必须保持 typecheck/package 通过，但它不运行图形化 UI 场景，也不能据此
-声明 Windows 媒体/GPU 完整资格。
-
-direct codec、10-bit 和 HDR 继续由精确 Electron/Chromium、OS、架构、GPU/driver、显示器和
-FFmpeg build 的 manifest 决定。HTTP bytes/load/texture success 只能证明 transport 与 decode
-候选；HDR output 必须使用既有输出链资格方法。Windows 完整安装、凭据、GPU/媒体和发布资格
-继续由 Phase 2 在真实设备或明确授权的本地场景中独立验证。
-
-### 10. 迁移是一次 canonical path 替换
-
-实施顺序：
-
-1. 先冻结新的 projection/registration contracts 和 red tests，poison
-   `transport: 'authorized'`、`neko-media:` URL 与 protocol registration。
-2. 让 app-lifetime gateway 支持现有 file/PCM/Range 行为和新 security/resource-set contract。
-3. 先迁移 Preview/Agent 的直接文件 projection，再迁移 Canvas native audio/video，最后让 Cut
-   和 remaining Canvas processed operations 注入同一 gateway。
-4. CSP 在 gateway port 确定后生成；真实 Electron 路径验证通过前不删除旧代码，但旧代码在新
-   path tests 中必须 poison，不能作为 fallback success。
-5. 删除 `DesktopMediaDescriptorRegistry` upstream/file proxy、`desktop-media-protocol`、
-   `DESKTOP_MEDIA_SCHEME`、scheme privilege、authorized transport 和相关 dual-path fixture。
-6. 同步 active OpenSpec 与 accepted 架构文档，明确哪些旧规划被 supersede。
-7. 完成 macOS 参考平台运行态、Windows package/typecheck、性能对比、资源释放与 repository
-   quality gates 后才宣布迁移完成；不扩大 Windows 完整资格声明。
-
-这是 prelaunch transport 破坏性变更，没有用户数据 migration。Rollback 只能显式 revert 整个
-变更；不得在 production 保留 runtime flag、dual descriptor、custom-scheme fallback 或双写。
+这是 prelaunch canonical path 替换，不提供 runtime flag、dual descriptor 或 fallback。
 
 ## Risks / Trade-offs
 
-- [HTTP request 不能证明 `webContentsId`] → 明确采用 bearer capability；token 高熵、scope 最小、
-  不持久化/不记录并随 owner 立即撤销，CSP/origin 只做附加约束。
-- [ephemeral port 使 CSP 变成启动期依赖] → gateway 必须先于 app protocol/window load 启动；
-  启动失败直接阻止媒体能力 ready，不回退宽泛 `http:` 或 custom scheme。
-- [Windows PNA/CORS/codec 行为与 macOS 不同] → 本变更只要求 Windows native package/typecheck
-  不回退；完整 packaged UI/media 资格留给 Phase 2，不能用 macOS、Chrome 或 cross-build 替代。
-- [resource set 可能扩大目录读取] → 只注册解析后 exact virtual-path allowlist，不授权任意目录，
-  所有 dependency 做 containment、fingerprint 和 MIME 检查。
-- [native Canvas audio 改变 Web Audio UI/clock 行为] → 保留 package-owned UI，重写底层 native
-  consumer；用 save/reopen、seek、pause、rate、hover/replace 和多 Canvas isolation 场景验收。
-- [HTTP cache 可能在撤销后继续服务 bytes] → session resource 使用 `no-store`，撤销时 abort
-  response；测试证明旧 URL 在 replace/dispose 后不再成功。
-- [协议迁移被误解为 HDR/纹理升级] → capability matrix 和 UI 资格继续分离 transport、decode、
-  texture pixel correctness 与 display output。
-- [单 app gateway 成为共享资源] → registry record 按 owner/generation 隔离，server 本身无领域
-  可变状态；所有 listener、response、FFmpeg child 和 socket 在 owner/app dispose 明确释放。
+- [custom scheme loader 行为需要资格]：真实 Electron 覆盖 native media、Range、Canvas/WebGL、
+  PDF 和 glTF dependency，不用普通浏览器替代。
+- [sender context 可能因 Electron API 路径缺失]：资格必须验证 `webContentsId`；失败时暴露具体
+  blocker，不回退纯 bearer 或 HTTP。
+- [scheme privilege 按 scheme 而非 host]：handler 对 host/method/headers 分区，app asset
+  resolver 不接受 resource route，resource registry 不返回 executable app assets。
+- [resource host 跨 origin]：只为准确 consumer 返回精确 CORS，CSP 不开放通配 scheme 或网络。
+- [registry 可能变成宽泛 facade]：只接受 exact source/producer/allowlist 和 lifecycle owner，
+  不解析 locator、不浏览目录、不暴露 preload API。
+- [大文件与 stream 释放]：使用 stream/AbortSignal，测试 client cancel、owner revoke、reload、
+  Window close 与 app quit。
 
 ## Open Questions
 
-无阻塞设计问题。HLS/DASH player、远端直播/DRM、XR live media 与 HDR display qualification
-均需要出现明确产品 consumer 后通过独立 OpenSpec 决定，不在本变更中预建抽象。
+无阻塞产品决策。资格阶段若暴露 Electron custom scheme 的具体 loader 或 sender-context 缺陷，
+必须以失败证据更新本设计；不得自行恢复 HTTP 或新增第二个 scheme。

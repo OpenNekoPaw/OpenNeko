@@ -61,7 +61,7 @@ buffering, demux, decode backpressure, and seek to Chromium.
 #### Scenario: Browser requests media bytes
 
 - **WHEN** Chromium requests a full or partial media interval
-- **THEN** the loopback endpoint SHALL return standard file and Range responses
+- **THEN** the OpenNeko resource handler SHALL return standard file and Range responses
 - **AND** SHALL read only the requested file interval
 - **AND** the Webview SHALL NOT call `fetch()` for video
 - **AND** SHALL NOT create `MediaSource` or `SourceBuffer`
@@ -69,9 +69,9 @@ buffering, demux, decode backpressure, and seek to Chromium.
 #### Scenario: Video ownership ends
 
 - **WHEN** the generation is replaced or the preview session stops
-- **THEN** the Host SHALL revoke the authorized file token
+- **THEN** the Host SHALL revoke the authorized file registration
 - **AND** delete any session-owned prepared output
-- **AND** a revoked token SHALL fail visibly
+- **AND** a revoked resource URL SHALL fail visibly
 - **AND** no MSE or blob fallback SHALL return success
 
 #### Scenario: Audio generation retains the current video Clip
@@ -87,7 +87,7 @@ buffering, demux, decode backpressure, and seek to Chromium.
 
 - **WHEN** active playback pauses while its video Clip remains selected
 - **THEN** the Host SHALL stop the active PCM sessions
-- **AND** SHALL retain the active video session and authorized Range token
+- **AND** SHALL retain the active video session and authorized Range registration
 - **AND** the Webview SHALL pause without clearing or replacing `video.src`
 
 #### Scenario: Input requires media preparation
