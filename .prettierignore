@@ -6,6 +6,5 @@ coverage/
 target/
 pnpm-lock.yaml
 *.node
-.turbo/
 *.wasm
 *.d.ts

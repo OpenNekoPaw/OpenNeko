@@ -14,7 +14,6 @@ export default tseslint.config(
       '**/*.mjs',
       '**/*.cjs',
       '**/coverage/**',
-      '**/.turbo/**',
       '**/__mocks__/**',
     ],
   },

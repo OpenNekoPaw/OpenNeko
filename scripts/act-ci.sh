@@ -123,13 +123,11 @@ configure_local_runtime() {
   CACHE_MOUNTS=(
     "$CACHE_DIR/pnpm-store:/root/.local/share/pnpm/store"
     "$CACHE_DIR/corepack:/root/.cache/node/corepack"
-    "$CACHE_DIR/turbo:$ROOT_DIR/.turbo"
   )
 
   mkdir -p \
     "$CACHE_DIR/pnpm-store" \
-    "$CACHE_DIR/corepack" \
-    "$CACHE_DIR/turbo"
+    "$CACHE_DIR/corepack"
 
   CONTAINER_OPTIONS=""
   local mount_spec escaped_mount

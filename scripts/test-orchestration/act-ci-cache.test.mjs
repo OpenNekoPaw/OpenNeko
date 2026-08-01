@@ -101,7 +101,7 @@ test('act CI defaults to a prepared ARM64 Node runner with architecture-isolated
   assert.match(actLog, /ARG:--env\nARG:ACT_NATIVE_DEPS_READY=true/u);
   assert.match(actLog, /ARG:--env\nARG:npm_config_store_dir=\/root\/\.local\/share\/pnpm\/store/u);
 
-  for (const cacheName of ['pnpm-store', 'corepack', 'turbo']) {
+  for (const cacheName of ['pnpm-store', 'corepack']) {
     assert.match(
       actLog,
       new RegExp(`${escapeRegularExpression(path.join(architectureCache, cacheName))}:`, 'u'),
@@ -109,6 +109,7 @@ test('act CI defaults to a prepared ARM64 Node runner with architecture-isolated
   }
   assert.match(actLog, /pnpm-store:\/root\/\.local\/share\/pnpm\/store/u);
   assert.match(actLog, /corepack:\/root\/\.cache\/node\/corepack/u);
+  assert.doesNotMatch(actLog, /turbo/u);
   assert.doesNotMatch(actLog, /cargo-home|cargo-target|rustup/u);
   assert.match(dockerLog, /ARG:image\nARG:inspect/u);
   assert.match(dockerLog, /ARG:build/u);

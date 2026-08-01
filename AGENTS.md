@@ -49,7 +49,7 @@
   - 媒体运行时：Node.js + FFmpeg/ffprobe、loopback Range/PCM
   - AI：Vercel AI SDK + MCP Protocol
   - 类型契约：TypeScript package-owned contracts 与领域 codec
-  - 构建：pnpm 10 + Turborepo 2
+  - 构建：pnpm 10 workspace
   - 测试：Vitest、Node.js test runner、真实 Electron 场景
 - 共享基础核心包：
   - `packages/neko-types`：共享基础设施（Logger、i18n、Theme、Errors）
@@ -93,7 +93,7 @@
   - 本地资源必须由 Desktop Main 授权，并以 opaque URL、descriptor 或短生命周期 handle 投影。
 - Renderer/Webview 包负责 UI 渲染、用户交互、可恢复展示状态、浏览器图形/GPU 能力和授权媒体流消费；不得拥有工作区文件读写、持久项目事实、权限与信任、后台任务生命周期、运行时实例状态或宿主业务编排。
 - Desktop Main 或 host-neutral domain service 负责工作区 IO、持久化、权限、生命周期和业务编排；可复用的领域逻辑应进入独立 domain core，不要把它们堆入应用组合根。
-- Rust 引擎是计算逻辑和数据模型的权威来源；TypeScript 层负责 UI 与编排，不要重复实现 Rust 已定义的核心计算或数据变换。
+- Node/FFmpeg 媒体运行时负责宿主侧媒体探测、转码与流式读取；TypeScript owning packages 负责领域模型与编排，Renderer 不得重复实现宿主媒体逻辑。
 - 当前没有 Proto package；跨层 contract 由 owning package 的 L0 contract 或真实项目 codec 拥有。未来只有存在真实序列化 producer/consumer 时才可通过 OpenSpec 重新引入 Proto。
 - 路径系统只保存相对路径或 `${VAR}/path` 形式，避免写入绝对路径；优先复用 `PathResolver` 与现有设置机制。
 - 遵守共享层级隔离：

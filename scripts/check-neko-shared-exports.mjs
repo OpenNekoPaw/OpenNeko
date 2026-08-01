@@ -9,7 +9,6 @@ const DEFAULT_LEDGER_PATH = 'quality/ledgers/neko-shared-retired-module-ledger.j
 const SOURCE_EXTENSIONS = new Set(['.js', '.jsx', '.mjs', '.mts', '.ts', '.tsx']);
 const IGNORED_DIRECTORIES = new Set([
   '.git',
-  '.turbo',
   'coverage',
   'dist',
   'node_modules',

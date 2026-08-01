@@ -103,7 +103,7 @@ module.exports = {
 
   options: {
     doNotFollow: {
-      path: ['node_modules', 'dist', 'out', 'coverage', '\\.turbo'],
+      path: ['node_modules', 'dist', 'out', 'coverage'],
     },
     exclude: {
       path: [

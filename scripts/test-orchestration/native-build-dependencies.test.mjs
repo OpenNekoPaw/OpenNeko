@@ -32,7 +32,7 @@ test('CI and the prepared act image share the media runtime dependency list', as
   assert.match(dockerfile, /xargs apt-get install -y/u);
 });
 
-test('Turbo actions cache remains remote-only when act uses direct cache mounts', async () => {
+test('workflows do not restore retired Turbo task caches', async () => {
   const workflow = parse(await readFile('.github/workflows/ci.yml', 'utf8'));
   const turboCacheJobs = Object.entries(workflow.jobs)
     .filter(([, job]) =>
@@ -40,17 +40,5 @@ test('Turbo actions cache remains remote-only when act uses direct cache mounts'
     )
     .map(([jobName]) => jobName);
 
-  assert.deepEqual(turboCacheJobs, [
-    'static-build',
-    'desktop-package',
-    'test-ts',
-    'code-quality',
-  ]);
-  for (const jobName of turboCacheJobs) {
-    const cacheStep = workflow.jobs[jobName].steps.find(
-      (step) => step.uses === 'actions/cache@v5' && step.with?.path === '.turbo',
-    );
-    assert.ok(cacheStep, `expected ${jobName} to retain its remote Turbo cache`);
-    assert.equal(cacheStep.if, "${{ env.ACT != 'true' }}");
-  }
+  assert.deepEqual(turboCacheJobs, []);
 });

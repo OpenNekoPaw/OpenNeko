@@ -12,9 +12,6 @@ concurrency:
   group: ci-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
-env:
-  TURBO_TELEMETRY_DISABLED: 1
-
 jobs:
   promotion-source:
     name: Validate development branch to main promotion
@@ -48,15 +45,6 @@ jobs:
       - name: Enable Corepack
         run: corepack enable
 
-      - uses: actions/cache@v5
-        if: ${{ env.ACT != 'true' }}
-        with:
-          path: .turbo
-          key: turbo-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.sha }}
-          restore-keys: |
-            turbo-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-
-            turbo-${{ runner.os }}-
-
       - run: pnpm install --frozen-lockfile
 
       - name: Install media runtime dependency
@@ -89,15 +77,6 @@ jobs:
 
       - name: Enable Corepack
         run: corepack enable
-
-      - uses: actions/cache@v5
-        if: ${{ env.ACT != 'true' }}
-        with:
-          path: .turbo
-          key: turbo-desktop-${{ matrix.target }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.sha }}
-          restore-keys: |
-            turbo-desktop-${{ matrix.target }}-${{ hashFiles('pnpm-lock.yaml') }}-
-            turbo-desktop-${{ matrix.target }}-
 
       - run: pnpm install --frozen-lockfile
 
@@ -150,15 +129,6 @@ jobs:
       - name: Enable Corepack
         run: corepack enable
 
-      - uses: actions/cache@v5
-        if: ${{ env.ACT != 'true' }}
-        with:
-          path: .turbo
-          key: turbo-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.sha }}
-          restore-keys: |
-            turbo-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-
-            turbo-${{ runner.os }}-
-
       - run: pnpm install --frozen-lockfile
 
       - name: Install media runtime dependency
@@ -170,7 +140,7 @@ jobs:
       - name: Run unit and contract tests
         run: |
           if [ "${ACT:-}" = "true" ]; then
-            pnpm exec turbo run test --concurrency=1 --continue=always -- --coverage
+            pnpm --recursive --if-present --sort --no-bail --workspace-concurrency=1 run test -- --coverage
           else
             pnpm check:test
           fi
@@ -214,15 +184,6 @@ jobs:
 
       - name: Enable Corepack
         run: corepack enable
-
-      - uses: actions/cache@v5
-        if: ${{ env.ACT != 'true' }}
-        with:
-          path: .turbo
-          key: turbo-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.sha }}
-          restore-keys: |
-            turbo-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-
-            turbo-${{ runner.os }}-
 
       - run: pnpm install --frozen-lockfile
       - run: pnpm check:repository-quality

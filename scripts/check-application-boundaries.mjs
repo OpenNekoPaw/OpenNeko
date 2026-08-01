@@ -48,7 +48,7 @@ export async function checkApplicationBoundaries(root = repositoryRoot) {
 
 async function collectProductionFiles(directory, files) {
   for (const entry of await readdir(directory, { withFileTypes: true })) {
-    if (['node_modules', 'dist', 'coverage', '.turbo', '__tests__'].includes(entry.name)) continue;
+    if (['node_modules', 'dist', 'coverage', '__tests__'].includes(entry.name)) continue;
     const file = resolve(directory, entry.name);
     if (entry.isDirectory()) {
       await collectProductionFiles(file, files);

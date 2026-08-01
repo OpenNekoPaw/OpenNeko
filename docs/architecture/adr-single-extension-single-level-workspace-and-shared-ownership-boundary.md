@@ -2,7 +2,7 @@
 
 状态：Superseded / Historical（2026-07-31）
 日期：2026-07-29
-范围：`apps/neko-vscode`、`apps/neko-desktop`、`apps/neko-tui`、`packages/*`、pnpm/Turborepo workspace、VS Code Extension Host/Webview、Host ports、`@neko/shared`、平台打包与发布。
+范围：`apps/neko-vscode`、`apps/neko-desktop`、`apps/neko-tui`、`packages/*`、pnpm workspace、VS Code Extension Host/Webview、Host ports、`@neko/shared`、平台打包与发布。
 
 本文记录 OpenNeko 将 VS Code 产品收敛为单一扩展、将 workspace 收敛为 `apps/*` 与 `packages/*` 两个单层分组，并重新明确 App、共享 Package、Host adapter 和 `@neko/shared` 所有权的目标边界。
 
@@ -275,7 +275,7 @@ packager 不再创建或解包内部 feature VSIX。缺失资源、重复 contri
 - 将仍需复用的二级 workspace 提升到 `packages/*`。
 - 将 VS Code-only extension workspace 合并进 App。
 - 合并无独立消费者的薄 contract/test-utils。
-- 更新 pnpm、Turborepo、Vitest、Knip、dependency-cruiser、package groups 和 lockfile。
+- 更新 pnpm、Vitest、Knip、dependency-cruiser、package groups 和 lockfile。
 - 删除旧目录、旧 exports 和所有二级 workspace glob。
 
 ### 阶段三：Shared 所有权清理

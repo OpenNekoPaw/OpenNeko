@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { access, readFile } from 'node:fs/promises';
 import { describe, it } from 'node:test';
 import { parse } from 'yaml';
 
@@ -18,7 +18,12 @@ describe('development/main quality gate orchestration', () => {
     const packageJson = JSON.parse(await readFile('package.json', 'utf8'));
     const scripts = packageJson.scripts ?? {};
 
-    assert.equal(scripts['typecheck'], 'turbo run typecheck');
+    assert.equal(scripts['build'], 'pnpm --recursive --if-present --sort run build');
+    assert.equal(
+      scripts['build:ui'],
+      'pnpm --filter @neko/webview --filter @neko-tools/webview --filter @neko/preview-webview --filter @neko-agent/webview --filter @neko-canvas/webview run build',
+    );
+    assert.equal(scripts['typecheck'], 'pnpm --recursive --if-present --sort run typecheck');
     assert.equal(scripts['typecheck:desktop'], 'pnpm --dir apps/neko-desktop run typecheck');
     assert.equal(
       scripts['check:static-build'],
@@ -35,6 +40,14 @@ describe('development/main quality gate orchestration', () => {
     assert.equal(scripts['gate:remote'], 'pnpm check:ci');
     assert.equal(scripts['ci:local'], 'pnpm gate:local');
     assert.equal(scripts['ci:remote'], 'pnpm gate:remote');
+    assert.equal(
+      scripts['test'],
+      'pnpm --recursive --if-present --sort --workspace-concurrency=2 run test',
+    );
+    assert.equal(
+      scripts['test:coverage'],
+      'pnpm --recursive --if-present --sort --no-bail --workspace-concurrency=2 run test -- --coverage',
+    );
     assert.match(
       scripts['test:functional:headless'] ?? '',
       /^pnpm --dir apps\/neko-desktop exec vitest run /u,
@@ -44,6 +57,12 @@ describe('development/main quality gate orchestration', () => {
     }
     assert.doesNotMatch(scripts['gate:local'], /coverage/u);
     assert.doesNotMatch(scripts['gate:remote'], /test:local:/u);
+    assert.equal(scripts['lint:turbo'], undefined);
+    assert.equal(packageJson.devDependencies?.turbo, undefined);
+    await assert.rejects(access('turbo.json'));
+    for (const command of Object.values(scripts)) {
+      assert.doesNotMatch(command, /\bturbo\b/u);
+    }
   });
 
   it('runs remote CI only when dispatched manually or for a Pull Request to main', async () => {

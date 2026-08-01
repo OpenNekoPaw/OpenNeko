@@ -23,7 +23,7 @@ describe('desktop-only topology guard', () => {
         ],
         rootPackageJson: {
           scripts: {
-            build: 'turbo run build',
+            build: 'pnpm --recursive --if-present --sort run build',
             'package:desktop': 'pnpm --filter @neko/app-desktop package',
           },
           workspaces: ['apps/*', 'packages/*'],
