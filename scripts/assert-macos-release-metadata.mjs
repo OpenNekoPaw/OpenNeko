@@ -1,32 +1,16 @@
 #!/usr/bin/env node
 
-import { readFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { pathToFileURL } from 'node:url';
 
-const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const RELEASE_VERSION = /^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)$/u;
+const RELEASE_TAG = /^v((?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*))$/u;
 
-export function assertMacOSReleaseMetadata({ tag, version }) {
-  if (typeof version !== 'string' || !RELEASE_VERSION.test(version)) {
-    throw new Error(`OpenNeko Desktop release version is invalid: ${String(version)}.`);
+export function assertMacOSReleaseMetadata({ tag }) {
+  const match = typeof tag === 'string' ? RELEASE_TAG.exec(tag) : null;
+  if (!match) {
+    throw new Error(`OpenNeko macOS release tag is invalid: ${String(tag)}.`);
   }
-  const expectedTag = `v${version}`;
-  if (tag !== expectedTag) {
-    throw new Error(`OpenNeko macOS release tag mismatch: expected ${expectedTag}, received ${tag}.`);
-  }
+  const version = match[1];
   return Object.freeze({ tag, version });
-}
-
-export function readDesktopReleaseVersion(root = repositoryRoot) {
-  const manifest = JSON.parse(
-    readFileSync(resolve(root, 'apps/neko-desktop/package.json'), 'utf8'),
-  );
-  const version = manifest.version;
-  if (typeof version !== 'string' || !RELEASE_VERSION.test(version)) {
-    throw new Error(`OpenNeko Desktop release version is invalid: ${String(version)}.`);
-  }
-  return version;
 }
 
 function readArgument(name) {
@@ -39,9 +23,10 @@ function readArgument(name) {
 function main() {
   const result = assertMacOSReleaseMetadata({
     tag: readArgument('--tag'),
-    version: readDesktopReleaseVersion(),
   });
-  process.stdout.write(`OpenNeko macOS release metadata verified for ${result.tag}.\n`);
+  process.stdout.write(
+    `OpenNeko macOS release metadata verified for ${result.tag} (${result.version}).\n`,
+  );
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

@@ -10,6 +10,7 @@ import {
   prepareMacOSReleaseArtifacts,
   resolveMacOSReleaseZip,
 } from '../prepare-macos-release-artifacts.mjs';
+import { projectMacOSReleaseVersion } from '../project-macos-release-version.mjs';
 
 const roots = [];
 
@@ -18,19 +19,40 @@ afterEach(async () => {
 });
 
 describe('macOS release artifacts', () => {
-  it('requires the exact v-prefixed Desktop package version', () => {
-    assert.deepEqual(assertMacOSReleaseMetadata({ tag: 'v1.2.3', version: '1.2.3' }), {
+  it('accepts an exact stable tag without consulting the local Desktop version', () => {
+    assert.deepEqual(assertMacOSReleaseMetadata({ tag: 'v1.2.3' }), {
       tag: 'v1.2.3',
       version: '1.2.3',
     });
     assert.throws(
-      () => assertMacOSReleaseMetadata({ tag: 'v1.2.4', version: '1.2.3' }),
-      /macOS release tag mismatch: expected v1.2.3, received v1.2.4/u,
+      () => assertMacOSReleaseMetadata({ tag: '1.2.3' }),
+      /macOS release tag is invalid/u,
     );
     assert.throws(
-      () => assertMacOSReleaseMetadata({ tag: '1.2.3', version: '1.2.3' }),
-      /macOS release tag mismatch/u,
+      () => assertMacOSReleaseMetadata({ tag: 'v1.2.3-beta.1' }),
+      /macOS release tag is invalid/u,
     );
+  });
+
+  it('projects the tag version over an unrelated local manifest version', async () => {
+    const repositoryRoot = await createRoot();
+    const manifestPath = join(repositoryRoot, 'apps/neko-desktop/package.json');
+    await mkdir(dirname(manifestPath), { recursive: true });
+    await writeFile(
+      manifestPath,
+      `${JSON.stringify({ name: '@neko/app-desktop', version: '0.0.1' }, null, 2)}\n`,
+    );
+
+    assert.deepEqual(projectMacOSReleaseVersion({ repositoryRoot, tag: 'v1.2.3' }), {
+      manifestPath,
+      previousVersion: '0.0.1',
+      tag: 'v1.2.3',
+      version: '1.2.3',
+    });
+    assert.deepEqual(JSON.parse(await readFile(manifestPath, 'utf8')), {
+      name: '@neko/app-desktop',
+      version: '1.2.3',
+    });
   });
 
   it('accepts one exact versioned ZIP and writes its SHA-256 manifest', async () => {
@@ -41,7 +63,7 @@ describe('macOS release artifacts', () => {
     const bytes = Buffer.from('release-zip');
     await writeFile(zipPath, bytes);
 
-    const result = prepareMacOSReleaseArtifacts({ repositoryRoot, version });
+    const result = prepareMacOSReleaseArtifacts({ repositoryRoot, tag: `v${version}` });
     const digest = createHash('sha256').update(bytes).digest('hex');
     assert.deepEqual(result, {
       checksumPath: join(repositoryRoot, 'apps/neko-desktop/out/release/SHASUMS256.txt'),
@@ -57,7 +79,7 @@ describe('macOS release artifacts', () => {
   it('rejects missing, stale, or ambiguous ZIP output', async () => {
     const repositoryRoot = await createRoot();
     assert.throws(
-      () => prepareMacOSReleaseArtifacts({ repositoryRoot, version: '1.2.3' }),
+      () => prepareMacOSReleaseArtifacts({ repositoryRoot, tag: 'v1.2.3' }),
       /macOS release ZIP is missing/u,
     );
 
@@ -66,7 +88,7 @@ describe('macOS release artifacts', () => {
     await writeFile(expected, 'expected');
     await writeFile(join(dirname(expected), 'OpenNeko-darwin-arm64-1.2.2.zip'), 'stale');
     assert.throws(
-      () => prepareMacOSReleaseArtifacts({ repositoryRoot, version: '1.2.3' }),
+      () => prepareMacOSReleaseArtifacts({ repositoryRoot, tag: 'v1.2.3' }),
       /macOS release ZIP set is ambiguous/u,
     );
   });

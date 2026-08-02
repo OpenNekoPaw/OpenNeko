@@ -45,7 +45,7 @@ modules did not exist. After implementation, the same focused suite passed all 2
 - Re-run the GitHub Manual Gate after pushing the branch and record the macOS package job plus the
   Windows/Linux test-only matrix result.
 - Real Developer ID signing, Apple notarization, stapling, Gatekeeper validation, and GitHub Release
-  publication belong to `establish-macos-release-pipeline` and require repository secrets plus an
-  exact `v<desktop-version>` tag reachable from `origin/main`.
+  publication belong to `establish-macos-release-pipeline` and require repository secrets plus a
+  stable `v<semver>` tag reachable from `origin/main`; the local manifest version does not gate it.
 
 No Windows or Linux package, installer, startup, signing, or release qualification is claimed.

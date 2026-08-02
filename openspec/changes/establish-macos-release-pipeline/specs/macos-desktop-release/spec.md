@@ -2,13 +2,22 @@
 
 ### Requirement: macOS release source and version are authoritative
 
-The release workflow SHALL accept only an exact `v<Desktop package version>` tag whose commit is
-reachable from `main`.
+The release workflow SHALL accept only an exact stable `v<semver>` tag whose commit is reachable
+from `main`. The tag SHALL be the sole public release-version authority; the source Desktop
+manifest version SHALL NOT gate the release.
 
-#### Scenario: Tag and package version disagree
+#### Scenario: Release tag is invalid
 
-- **WHEN** the release tag does not exactly equal the version in `apps/neko-desktop/package.json`
+- **WHEN** the release tag is not exactly `v<major>.<minor>.<patch>`
 - **THEN** the workflow SHALL fail before packaging or publication
+
+#### Scenario: Local and release versions differ
+
+- **WHEN** a valid release tag differs from the version in `apps/neko-desktop/package.json`
+- **THEN** the workflow SHALL project the tag-derived version into the ephemeral release checkout
+  before Forge runs
+- **AND** the application and ZIP SHALL use the tag-derived version
+- **AND** the repository SHALL NOT require or persist a local manifest version change
 
 #### Scenario: Tag commit is outside main
 
@@ -46,7 +55,8 @@ release mode is absent.
 ### Requirement: Release artifact closure is exact
 
 The release workflow SHALL publish exactly one versioned `darwin-arm64` ZIP and one
-`SHASUMS256.txt` manifest derived from that ZIP after all native trust checks pass.
+`SHASUMS256.txt` manifest derived from that ZIP after all native trust checks pass. The ZIP version
+SHALL be derived from the release tag rather than the source Desktop manifest.
 
 #### Scenario: Forge output is missing or ambiguous
 
