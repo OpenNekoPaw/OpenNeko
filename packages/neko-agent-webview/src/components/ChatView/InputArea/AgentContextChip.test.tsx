@@ -2,7 +2,8 @@
 
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import type { AgentContextPayload, ContentLocator } from '@neko/shared';
+import type { AgentContextPayload } from '@neko-agent/contracts';
+import type { ContentLocator } from '@neko/content';
 import { AgentContextChip } from './AgentContextChip';
 
 describe('AgentContextChip', () => {

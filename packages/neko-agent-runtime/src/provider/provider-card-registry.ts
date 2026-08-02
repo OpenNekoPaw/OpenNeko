@@ -6,8 +6,8 @@ import type {
   ProviderGenerationCapability,
   ProviderId,
   ProviderModelId,
-} from '@neko/shared';
-import { isValidProviderId } from '@neko/shared';
+} from '@neko-agent/contracts';
+import { isValidProviderId } from '@neko-agent/contracts';
 
 const LAYER_ORDER: readonly ProviderCardLayer[] = ['builtin', 'personal', 'project'];
 

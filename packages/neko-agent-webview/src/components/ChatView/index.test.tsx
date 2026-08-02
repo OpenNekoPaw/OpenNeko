@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import type { CharacterDialogueSessionProjection, SubAgentWorkItem } from '@neko-agent/types';
+import type { CharacterDialogueSessionProjection, SubAgentWorkItem } from '@neko-agent/contracts';
 import { ChatView } from './index';
 
 const translations: Record<string, string> = {
@@ -18,18 +18,18 @@ const translations: Record<string, string> = {
   'chat.workItems.attentionTitle': 'Tasks requiring attention',
 };
 
-vi.mock('@/i18n/I18nContext', () => ({
+vi.mock('../../i18n/I18nContext', () => ({
   useTranslation: () => ({
     t: (key: string, params?: Record<string, string>) =>
       (translations[key] ?? key).replace(/\{(\w+)\}/g, (_, name: string) => params?.[name] ?? ''),
   }),
 }));
 
-vi.mock('@/components/ChatView/DropZone', () => ({
+vi.mock('./DropZone', () => ({
   DropZone: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
 
-vi.mock('@/components/ChatView/InputArea', () => ({
+vi.mock('./InputArea', () => ({
   InputArea: (props: {
     isComposing?: boolean;
     focusRequestOwner?: string;
@@ -43,7 +43,7 @@ vi.mock('@/components/ChatView/InputArea', () => ({
   ),
 }));
 
-vi.mock('@/components/ChatView/MessageList', () => ({
+vi.mock('./MessageList', () => ({
   MessageList: ({ activeSkillNotice }: { activeSkillNotice?: { skillName: string } | null }) => (
     <div data-testid="message-list">
       {activeSkillNotice ? <span>{activeSkillNotice.skillName}</span> : null}
@@ -51,11 +51,11 @@ vi.mock('@/components/ChatView/MessageList', () => ({
   ),
 }));
 
-vi.mock('@/components/ChatView/CharacterDialogueHeader', () => ({
+vi.mock('./CharacterDialogueHeader', () => ({
   CharacterDialogueHeader: () => <div data-testid="character-dialogue-header" />,
 }));
 
-vi.mock('@/components/ChatView/EmbodyCharacterHeader', () => ({
+vi.mock('./EmbodyCharacterHeader', () => ({
   EmbodyCharacterHeader: () => <div data-testid="embody-character-header" />,
 }));
 

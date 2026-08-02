@@ -3,18 +3,19 @@ import {
   AGENT_IMAGE_TRANSPORT_MAX_PAYLOADS,
   AGENT_IMAGE_TRANSPORT_MAX_SOURCE_IMAGES,
   AGENT_IMAGE_TRANSPORT_MAX_TOTAL_BYTES,
+} from '@neko-agent/contracts';
+import { getMimeType } from '@neko/media';
+import { validateContentLocator, type ContentLocator } from '@neko/content';
+import {
   TOOL_NAMES_MEDIA,
   TOOL_NAMES_PERCEPTION,
   TOOL_NAMES_QUALITY,
-  getMimeType,
-  validateContentLocator,
-  type ContentLocator,
-  type PerceptualAssetRef,
   type Tool,
   type ToolParameters,
   type ToolResult,
   type ToolResultAttachment,
-} from '@neko/shared';
+} from '@neko-agent/contracts';
+import { type PerceptualAssetRef } from '@neko/media';
 import { Type, type TObjectOptions } from 'typebox';
 import type { AgentToolResult, AgentToolUpdateCallback } from '@earendil-works/pi-agent-core';
 import type { ImageContent, TextContent } from '@earendil-works/pi-ai';

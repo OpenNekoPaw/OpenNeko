@@ -1,10 +1,7 @@
 import { useCallback } from 'react';
-import type {
-  CanvasNode,
-  ContentLocator,
-  DroppedTextCanvasAsset,
-  MarkdownCanvasNode,
-} from '@neko/shared';
+import type { DroppedTextCanvasAsset } from '@neko-canvas/domain';
+import type { ContentLocator } from '@neko/content';
+import type { CanvasNode, MarkdownCanvasNode } from '@neko-canvas/domain';
 import { buildCanvasNode } from '../utils/nodeFactory';
 
 export interface UseNodeHelpersOptions {

@@ -8,7 +8,7 @@ import type {
   ProviderTrainingProfile,
   StyleAffinityLevel,
   StyleFamily,
-} from '@neko/shared';
+} from '@neko-agent/contracts';
 
 const STYLE_FAMILIES: readonly StyleFamily[] = [
   'photorealistic',

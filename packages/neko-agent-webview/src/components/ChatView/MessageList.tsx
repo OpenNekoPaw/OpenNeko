@@ -7,19 +7,19 @@
 
 import { useRef, useEffect, useCallback, useMemo, type UIEvent } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { Message } from '@neko-agent/types';
-import type { TabViewportSnapshot } from '@/render-runtime/tab-render-runtime';
-import { MessageItem } from '@/components/ChatView/MessageItem';
-import { ContentBlockItem } from '@/components/ChatView/ContentBlockItem';
-import { ProcessRecordsGroup } from '@/components/ChatView/ProcessRecordsGroup';
-import { MessageAvatar } from '@/components/ChatView/MessageAvatar';
-import type { ActivationProgressTimeline } from '@/presenters/activation-progress-presenter';
-import type { MessageIdentityMap } from '@/components/ChatView/message-identity';
-import { useMessageActions } from '@/components/ChatView/MessageActionsContext';
+import { Message } from '@neko-agent/contracts';
+import type { TabViewportSnapshot } from '../../render-runtime/tab-render-runtime';
+import { MessageItem } from './MessageItem';
+import { ContentBlockItem } from './ContentBlockItem';
+import { ProcessRecordsGroup } from './ProcessRecordsGroup';
+import { MessageAvatar } from './MessageAvatar';
+import type { ActivationProgressTimeline } from '../../presenters/activation-progress-presenter';
+import type { MessageIdentityMap } from './message-identity';
+import { useMessageActions } from './MessageActionsContext';
 import {
   estimateMessageListItemHeight,
   projectMessageList,
-} from '@/presenters/message-list-presenter';
+} from '../../presenters/message-list-presenter';
 
 interface MessageListProps {
   messages: Message[];

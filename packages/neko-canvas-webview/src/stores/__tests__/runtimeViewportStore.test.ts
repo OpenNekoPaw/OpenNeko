@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import type { CanvasData } from '@neko/shared';
+import type { CanvasData } from '@neko-canvas/domain';
 import { useCanvasStore } from '../canvasStore';
 import { DEFAULT_RUNTIME_VIEWPORT, useRuntimeViewportStore } from '../runtimeViewportStore';
 

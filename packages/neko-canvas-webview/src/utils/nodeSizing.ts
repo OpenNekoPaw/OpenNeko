@@ -1,4 +1,4 @@
-import type { CanonicalCanvasNodeType } from '@neko/shared';
+import type { CanonicalCanvasNodeType } from '@neko-canvas/domain';
 
 export interface NodeSize {
   width: number;

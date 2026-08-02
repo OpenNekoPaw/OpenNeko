@@ -1,17 +1,16 @@
+import { validateContentLocator, type ContentLocator } from '@neko/content';
 import {
   deriveCanvasMaterialOrigin,
   isCanvasEntityRepresentationEvidence,
   isCanvasGenerationEvidence,
   isCanvasMaterialActionDescriptor,
-  validateContentLocator,
-  type CanvasNode,
   type CanvasMaterialActionDescriptor,
   type CanvasEntityRepresentationEvidence,
   type CanvasGenerationEvidence,
   type CanvasMaterialMediaKind,
   type CanvasMaterialOrigin,
-  type ContentLocator,
-} from '@neko/shared';
+} from './types/canvas-material-contracts';
+import { type CanvasNode } from './types/canvas';
 
 export interface CanvasMaterialActionTarget {
   readonly nodeId: string;

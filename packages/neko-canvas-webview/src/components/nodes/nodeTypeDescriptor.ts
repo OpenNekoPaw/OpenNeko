@@ -11,7 +11,7 @@
  */
 
 import type React from 'react';
-import type { CanvasNode, CanvasNodeType } from '@neko/shared';
+import type { CanvasNode, CanvasNodeType } from '@neko-canvas/domain';
 
 // =============================================================================
 // Types

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { t, setLocale } from '@/i18n';
+import { t, setLocale } from '../../i18n';
 import { projectCharacterFactLabel } from '../character-role-session-presenter';
 
 describe('projectCharacterFactLabel', () => {

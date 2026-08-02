@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   THREE_REFERENCE_PROTOCOL_VERSION,
-  contentLocatorsEqual,
   isThreeReferenceDiagnostic,
   isThreeReferenceIdentity,
   isThreeReferencePanoramaRuntimeDescriptor,
@@ -20,7 +19,8 @@ import {
   type ThreeReferencePoseState,
   type ThreeReferencePurpose,
   type ThreeReferenceStagingSnapshot,
-} from '@neko/shared';
+} from '@neko-preview/domain';
+import { contentLocatorsEqual } from '@neko/content';
 import { useTranslation } from '../i18n/I18nContext';
 import {
   browserThreeRuntimeFactory,

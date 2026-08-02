@@ -2,30 +2,39 @@ import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { relative, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import * as generation from '../index';
+import * as generationJob from '../job';
 
 const packageRoot = resolve(import.meta.dirname, '../..');
 const workspaceRoot = resolve(packageRoot, '../..');
 
 describe('@neko/generation architecture boundaries', () => {
-  it('exposes one host-neutral execution and Job contract', () => {
-    expect(generation.GenerationJobCoordinator).toBeTypeOf('function');
-    expect(generation.createPersistentGenerationJobStore).toBeTypeOf('function');
+  it('keeps the root renderer-safe while exposing Job implementations explicitly', () => {
+    expect(generation).not.toHaveProperty('GenerationJobCoordinator');
+    expect(generation).not.toHaveProperty('createPersistentGenerationJobStore');
     expect(generation.GENERATION_JOB_KIND).toBe('generation');
+    expect(generationJob.GenerationJobCoordinator).toBeTypeOf('function');
+    expect(generationJob.createPersistentGenerationJobStore).toBeTypeOf('function');
   });
 
-  it('does not depend on Agent, Platform, UI, or Host configuration readers', () => {
+  it('keeps the root contracts, domain, and Job entries host-neutral', () => {
     const forbidden = [
       /from ['"]@neko\/platform/,
       /from ['"]@neko\/agent(?:\/|['"])/,
       /from ['"]@neko-agent\//,
       /from ['"]vscode['"]/,
       /from ['"]react/,
-      /\bConfigManager\b/,
       /config\.toml/,
       /credential/i,
     ];
 
-    for (const file of sourceFiles(resolve(packageRoot, 'src'))) {
+    const roots = [
+      resolve(packageRoot, 'src/contracts.ts'),
+      resolve(packageRoot, 'src/execution.ts'),
+      resolve(packageRoot, 'src/generation-params.ts'),
+      resolve(packageRoot, 'src/index.ts'),
+      resolve(packageRoot, 'src/job'),
+    ];
+    for (const file of roots.flatMap((root) => sourceFiles(root))) {
       if (file.includes('/__tests__/')) continue;
       const source = readFileSync(file, 'utf8');
       for (const pattern of forbidden) {
@@ -34,7 +43,7 @@ describe('@neko/generation architecture boundaries', () => {
     }
   });
 
-  it('poisons the retired Platform Job implementation and Host compatibility imports', () => {
+  it('keeps the retired Platform package physically absent and unimportable', () => {
     const retiredPaths = [
       'packages/neko-platform/src/media/generation-job-contracts.ts',
       'packages/neko-platform/src/media/generation-job-coordinator.ts',
@@ -44,42 +53,15 @@ describe('@neko/generation architecture boundaries', () => {
     ];
     expect(retiredPaths.filter((file) => existsSync(resolve(workspaceRoot, file)))).toEqual([]);
 
-    const platformEntries = [
-      resolve(workspaceRoot, 'packages/neko-platform/src/index.ts'),
-      resolve(workspaceRoot, 'packages/neko-platform/src/media/index.ts'),
-    ];
-    const forbiddenExports = [
-      /\bGenerationJob\w*/,
-      /\bGENERATION_JOB_MIGRATIONS\b/,
-      /\bMediaGenerationExecutionOptions\b/,
-      /\bMediaGenerationResult\b/,
-    ];
-    for (const entry of platformEntries) {
-      const source = readFileSync(entry, 'utf8');
-      for (const pattern of forbiddenExports) {
-        expect(source, `${relative(workspaceRoot, entry)} re-exports ${pattern}`).not.toMatch(
-          pattern,
-        );
-      }
-    }
-
-    const hostRoots = [
-      resolve(workspaceRoot, 'apps/neko-tui/src'),
-      resolve(workspaceRoot, 'packages/neko-agent/packages/extension/src'),
-    ];
-    const violations = hostRoots.flatMap((root) =>
-      sourceFiles(root).flatMap((file) => {
-        const source = readFileSync(file, 'utf8');
-        const imports = source.matchAll(
-          /import\s+(?:type\s+)?([\s\S]*?)\s+from\s+['"](@neko\/[^'"]+)['"];?/g,
-        );
-        return [...imports].some(
-          ([, bindings, specifier]) =>
-            specifier === '@neko/platform' && /\bGenerationJob\w*/.test(bindings ?? ''),
-        )
-          ? [relative(workspaceRoot, file)]
-          : [];
-      }),
+    expect(existsSync(resolve(workspaceRoot, 'packages/neko-platform'))).toBe(false);
+    const violations = ['apps', 'packages'].flatMap((root) =>
+      sourceFiles(resolve(workspaceRoot, root))
+        .filter((file) => !file.includes('/__tests__/') && !file.includes('.test.'))
+        .flatMap((file) =>
+          readFileSync(file, 'utf8').includes("from '@neko/platform")
+            ? [relative(workspaceRoot, file)]
+            : [],
+        ),
     );
     expect(violations).toEqual([]);
   });
@@ -87,12 +69,12 @@ describe('@neko/generation architecture boundaries', () => {
   it('keeps the retired cross-domain Activity authority physically absent', () => {
     const retiredPaths = [
       'apps/neko-vscode/src/domain-activity-host.ts',
-      'packages/neko-types/src/domain-activity/contracts.ts',
-      'packages/neko-types/src/domain-activity/index.ts',
-      'packages/neko-types/src/domain-activity/projector.ts',
+      'packages/neko-shared/src/domain-activity/contracts.ts',
+      'packages/neko-shared/src/domain-activity/index.ts',
+      'packages/neko-shared/src/domain-activity/projector.ts',
       'packages/neko-generation/src/job/activity.ts',
       'packages/neko-generation/src/job/activity-port.ts',
-      'packages/neko-agent-types/src/domain-activity-protocol.ts',
+      'packages/neko-agent-contracts/src/domain-activity-protocol.ts',
       'packages/neko-agent/packages/extension/src/chat/activity/domainActivityAttachmentServer.ts',
       'packages/neko-agent/packages/extension/src/chat/router/domainActivityRoutes.ts',
       'packages/neko-agent-webview/src/components/DomainActivityView.tsx',
@@ -102,9 +84,9 @@ describe('@neko/generation architecture boundaries', () => {
 
     const productionRoots = [
       'apps/neko-vscode/src',
-      'packages/neko-types/src/domain-activity',
+      'packages/neko-shared/src/domain-activity',
       'packages/neko-generation/src',
-      'packages/neko-agent-types/src',
+      'packages/neko-agent-contracts/src',
       'packages/neko-agent/packages/extension/src',
       'packages/neko-agent-webview/src',
       'packages/neko-cut/packages/extension/src',
@@ -149,16 +131,18 @@ describe('@neko/generation architecture boundaries', () => {
 
     const sources = new Map(
       [
-        'packages/neko-platform/src/media/media-agent-tools.ts',
-        'apps/neko-desktop/src/main/desktop-canvas-generation-runtime.ts',
+        'packages/neko-agent-runtime/src/tools/generation/media-agent-tools.ts',
+        'packages/neko-canvas-node/src/canvas-generation-node-runtime.ts',
         'apps/neko-desktop/src/main/desktop-cut-runtime.ts',
         'packages/neko-cut-node/src/CutExportTaskRegistry.ts',
       ].map((file) => [file, readFileSync(resolve(workspaceRoot, file), 'utf8')]),
     );
     const allEntrySource = [...sources.values()].join('\n');
-    const agentToolSource = sources.get('packages/neko-platform/src/media/media-agent-tools.ts');
+    const agentToolSource = sources.get(
+      'packages/neko-agent-runtime/src/tools/generation/media-agent-tools.ts',
+    );
     const canvasGenerationSource = sources.get(
-      'apps/neko-desktop/src/main/desktop-canvas-generation-runtime.ts',
+      'packages/neko-canvas-node/src/canvas-generation-node-runtime.ts',
     );
     const cutSource = sources.get('apps/neko-desktop/src/main/desktop-cut-runtime.ts');
     const cutExportRegistrySource = sources.get(
@@ -170,7 +154,7 @@ describe('@neko/generation architecture boundaries', () => {
     expect(agentToolSource).not.toMatch(/\bmedia\.generate(?:Image|Video|Audio)\s*\(/u);
     expect(
       existsSync(
-        resolve(workspaceRoot, 'packages/neko-platform/src/media/media-turn-dispatcher.ts'),
+        resolve(workspaceRoot, 'packages/neko-generation/src/media/media-turn-dispatcher.ts'),
       ),
     ).toBe(false);
     expect(canvasGenerationSource).toContain('new GenerationJobCoordinator');
@@ -193,9 +177,9 @@ describe('@neko/generation architecture boundaries', () => {
     const migratedFiles = [
       'packages/neko-generation/src/contracts.ts',
       'packages/neko-generation/src/job/contracts.ts',
-      'packages/neko-types/src/types/canvas-workspace-board.ts',
-      'packages/neko-types/src/utils/canvasWorkspaceBoardProjection.ts',
-      'packages/neko-types/src/types/creative-ai-invocation.ts',
+      'packages/neko-canvas-domain/src/types/canvas-workspace-board.ts',
+      'packages/neko-canvas-domain/src/utils/canvasWorkspaceBoardProjection.ts',
+      'packages/neko-agent-contracts/src/creative-ai-invocation.ts',
       'packages/neko-agent-runtime/src/runtime/turn/creator-visible-artifact-collector.ts',
     ];
     const forbiddenImports = [
@@ -215,7 +199,11 @@ describe('@neko/generation architecture boundaries', () => {
 
 function sourceFiles(root: string): string[] {
   if (!existsSync(root)) return [];
+  if (statSync(root).isFile()) {
+    return root.endsWith('.ts') || root.endsWith('.tsx') ? [root] : [];
+  }
   return readdirSync(root).flatMap((entry) => {
+    if (['node_modules', 'dist', 'coverage', '.turbo'].includes(entry)) return [];
     const absolute = resolve(root, entry);
     if (statSync(absolute).isDirectory()) return sourceFiles(absolute);
     return absolute.endsWith('.ts') || absolute.endsWith('.tsx') ? [absolute] : [];

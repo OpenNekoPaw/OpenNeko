@@ -20,8 +20,8 @@ import type {
   ToolDefinitionProjectionOptions,
   IToolRegistry,
   AgentTraceContext,
-} from '@neko/shared';
-import { deriveAgentTraceContext, withAgentTrace } from '@neko/shared';
+} from '@neko-agent/contracts';
+import { deriveAgentTraceContext, withAgentTrace } from '@neko-agent/contracts';
 import { AgentError } from '../errors';
 import { getLogger } from '../utils/logger';
 import { validateSchema, formatValidationErrors } from './schema-validator';

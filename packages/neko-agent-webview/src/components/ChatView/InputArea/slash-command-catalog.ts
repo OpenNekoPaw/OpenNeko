@@ -4,7 +4,7 @@ import {
   type BuiltinSlashCommandDefinition,
   type BuiltinSlashCommandName,
   type RegisteredPluginSlashCommand,
-} from '@neko-agent/types';
+} from '@neko-agent/contracts';
 import type { SkillSummary } from './types';
 
 export type SlashCommandSource = 'builtin' | 'command-artifact' | 'plugin';

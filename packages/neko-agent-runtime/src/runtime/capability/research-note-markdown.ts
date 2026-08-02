@@ -1,4 +1,4 @@
-import type { ResearchNote, ResearchSource } from '@neko/shared';
+import type { ResearchNote, ResearchSource } from '@neko-agent/contracts';
 
 export interface ResearchNoteMarkdownFs {
   writeFile(path: string, content: string): Promise<void>;

@@ -18,11 +18,6 @@ export default defineConfig(({ command }) => {
     base: './',
     resolve: {
       preserveSymlinks: true,
-      alias: {
-        '@': path.resolve(__dirname, './src'),
-        '@neko/shared': path.resolve(__dirname, '../neko-types/src'),
-        '@neko/ui': path.resolve(__dirname, '../neko-ui/src'),
-      },
     },
     server: {
       port: 5173,
@@ -45,35 +40,12 @@ export default defineConfig(({ command }) => {
       },
     },
     worker: {
-      // Emit workers with the same relocatable asset policy as the main bundle.
       format: 'es',
       rollupOptions: {
         output: {
-          // Use inline format for workers
           entryFileNames: 'assets/[name].js',
         },
       },
-      plugins: () => [
-        {
-          name: 'worker-alias',
-          resolveId(source) {
-            const aliasMap: Record<string, string> = {
-              '@neko/shared': path.resolve(__dirname, '../neko-types/src/index.ts'),
-            };
-            if (aliasMap[source]) {
-              return aliasMap[source];
-            }
-            // Handle subpath imports
-            for (const [alias, target] of Object.entries(aliasMap)) {
-              if (source.startsWith(alias + '/')) {
-                const subpath = source.slice(alias.length);
-                return target.replace(/\/index\.ts$/, '') + subpath + '.ts';
-              }
-            }
-            return null;
-          },
-        },
-      ],
     },
     build: {
       outDir: 'dist',

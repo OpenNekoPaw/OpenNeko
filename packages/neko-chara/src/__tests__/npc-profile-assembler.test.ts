@@ -7,8 +7,8 @@ import type {
   CreativeEntityRelationshipProjection,
   EntityRepresentationBinding,
   VisualIdentityDraft,
-} from '@neko/shared';
-import { isNpcProfileSource } from '@neko/shared';
+} from '@neko-entity/domain';
+import { isNpcProfileSource } from '@neko/chara/contracts';
 import {
   NpcProfileAssembler,
   type NpcProfileAssemblerReaders,

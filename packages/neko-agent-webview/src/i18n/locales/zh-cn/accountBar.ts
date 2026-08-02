@@ -1,4 +1,4 @@
-import type { MessageBundle } from '@neko/shared';
+import type { MessageBundle } from '@neko/ui/i18n';
 
 export const accountBar = {
   'accountBar.connectTitle': '连接 AI 服务',

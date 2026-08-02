@@ -8,7 +8,7 @@
  * both valid configurations).
  */
 
-import type { MergedPreferences, UserPreferences } from '@neko-agent/types';
+import type { MergedPreferences, UserPreferences } from '@neko-agent/contracts';
 import { parsePreferences, mergePreferences } from './preferences-parser';
 import type { INekoPaths } from './neko-paths';
 

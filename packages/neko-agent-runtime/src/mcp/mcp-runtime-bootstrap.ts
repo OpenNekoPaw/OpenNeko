@@ -1,4 +1,5 @@
-import type { ExternalResearchConfigInput, MCPServerConfig, Tool } from '@neko/shared';
+import type { MCPServerConfig } from '@neko-agent/contracts';
+import type { ExternalResearchConfigInput, Tool } from '@neko-agent/contracts';
 import { createAllMCPTools } from './mcp-tool';
 import type {
   MCPAdapterOnlyToolBinding,

@@ -9,15 +9,15 @@
  * - Local: .neko/settings.local.json
  */
 
-import type {
-  HookEvent,
-  NekoSettings,
-  SettingsHookConfig,
-  SettingsHookAction,
-  HookInput,
-  HookOutput,
-} from '@neko/shared';
-import { matchHookMatcher } from '@neko/shared';
+import {
+  matchHookMatcher,
+  type HookEvent,
+  type HookInput,
+  type HookOutput,
+  type NekoSettings,
+  type SettingsHookAction,
+  type SettingsHookConfig,
+} from '@neko-agent/contracts';
 import { getLogger } from '../utils/logger';
 
 const logger = getLogger('SettingsHookLoader');

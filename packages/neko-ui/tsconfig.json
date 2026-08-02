@@ -14,12 +14,7 @@
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "noEmit": true,
-    "paths": {
-      "@neko/markdown": ["../neko-markdown/src/index.ts"],
-      "@neko/shared": ["../neko-types/src/index.ts"],
-      "@neko/shared/*": ["../neko-types/src/*"]
-    }
+    "noEmit": true
   },
   "include": ["src/**/*"]
 }

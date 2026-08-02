@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { IDocumentAccessService } from '@neko/content/document';
-import type { ContentRepresentationService } from '@neko/shared';
+import type { ContentRepresentationService } from '@neko/content';
 import { createHostAgentContentAccessRuntime } from '../capability/host-content-access-runtime-adapter';
 
 describe('HostAgentContentAccessRuntime document representations', () => {

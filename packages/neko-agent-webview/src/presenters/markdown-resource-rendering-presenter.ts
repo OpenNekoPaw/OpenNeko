@@ -1,4 +1,4 @@
-import type { ContentBlock, ToolCall } from '@neko-agent/types';
+import type { AgentContextPayload, ContentBlock, ToolCall } from '@neko-agent/contracts';
 import {
   normalizeMarkdownResourceLookupToken,
   projectNekoMarkdownExtensions,
@@ -11,17 +11,13 @@ import {
   type NekoMarkdownSemanticPromptSpan,
   type NekoMarkdownStableRef,
 } from '@neko/markdown';
+import { contentLocatorKey, isContentLocator, type ContentLocator } from '@neko/content';
+import { type PerceptionCard, type ToolResultAttachment } from '@neko-agent/contracts';
+import { type PerceptualAssetRef } from '@neko/media';
 import {
-  contentLocatorKey,
-  type AgentContextPayload,
   isRuntimeOnlyCanvasMarkdownResourceValue,
-  isContentLocator,
   type CanvasMarkdownContentBinding,
-  type ContentLocator,
-  type PerceptionCard,
-  type PerceptualAssetRef,
-  type ToolResultAttachment,
-} from '@neko/shared';
+} from '@neko-canvas/domain';
 import { isAuthorizedResourceDisplayUri } from './resource-display-uri';
 import type { AmbientCanvasNodeProjection } from './plugin-transfer-presenter';
 

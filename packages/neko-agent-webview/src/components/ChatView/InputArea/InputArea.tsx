@@ -12,7 +12,7 @@ import {
   useMemo,
   type ReactNode,
 } from 'react';
-import { SendIcon, StopIcon, PlusIcon, EditIcon, CloseIcon } from '@neko/shared/icons';
+import { SendIcon, StopIcon, PlusIcon, EditIcon, CloseIcon } from '@neko/ui/icons';
 import { ModeSelector } from './ModeSelector';
 import { SessionModeSelector } from './SessionModeSelector';
 import { ComposerConfigMenu } from './ComposerConfigMenu';
@@ -49,26 +49,23 @@ import { AgentContextChip } from './AgentContextChip';
 import { SuggestionChips } from './SuggestionChips';
 import { AmbientCanvasContextBar } from './AmbientCanvasContextBar';
 import { UsageIndicator } from './UsageIndicator';
-import { useTranslation } from '@/i18n/I18nContext';
-import { useInputHistory } from '@/hooks/useInputHistory';
-import { useInputAreaContext } from '@/components/ChatView/InputAreaContext';
+import { useTranslation } from '../../../i18n/I18nContext';
+import { useInputHistory } from '../../../hooks/useInputHistory';
+import { useInputAreaContext } from '../InputAreaContext';
 import { ComposerMenuRuntimeProvider } from './composer-menu-runtime';
-import { projectInputAreaUi } from '@/presenters/input-area-presenter';
-import { isOptimisticQueuedMessageItem } from '@/presenters/message-queue-presenter';
-import { projectClipboardTextToContextPayload } from '@/presenters/clipboard-context-presenter';
-import {
-  contentLocatorKey,
-  type AgentContextPayload,
-  type ChatModelOption,
-  type ContentLocator,
-} from '@neko/shared';
-import { projectContentLocatorPath } from '@/presenters/content-locator-presenter';
+import { projectInputAreaUi } from '../../../presenters/input-area-presenter';
+import { isOptimisticQueuedMessageItem } from '../../../presenters/message-queue-presenter';
+import { projectClipboardTextToContextPayload } from '../../../presenters/clipboard-context-presenter';
+import { type ChatModelOption } from '@neko-ai/contracts';
+import { contentLocatorKey, type ContentLocator } from '@neko/content';
+import type { AgentContextPayload } from '@neko-agent/contracts';
+import { projectContentLocatorPath } from '../../../presenters/content-locator-presenter';
 import type {
   AgentModelSlots,
   AgentQueuedMessageItem,
   ConversationKind,
   SessionMode,
-} from '@neko-agent/types';
+} from '@neko-agent/contracts';
 import { submitRoleplayEntrySelection } from '../roleplay-entry-action';
 
 interface InputAreaProps {
@@ -510,7 +507,11 @@ export function InputArea({
   };
 
   // Cycle execution mode: plan → ask → auto → plan
-  const EXECUTION_MODES: import('@neko-agent/types').ShellExecutionMode[] = ['plan', 'ask', 'auto'];
+  const EXECUTION_MODES: import('@neko-agent/contracts').ShellExecutionMode[] = [
+    'plan',
+    'ask',
+    'auto',
+  ];
   const cycleExecutionMode = useCallback(() => {
     const idx = EXECUTION_MODES.indexOf(executionMode);
     const next = EXECUTION_MODES[(idx + 1) % EXECUTION_MODES.length];

@@ -1,9 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import {
-  validateCompositeArtifact,
-  type CanvasPlaybackPlan,
-  type ContentLocator,
-} from '@neko/shared';
+import { type ContentLocator } from '@neko/content';
+import { type CanvasPlaybackPlan } from '@neko-canvas/domain';
+import { validateCompositeArtifact } from '@neko-agent/contracts';
 import { projectCanvasPlaybackRouteCard } from '../canvas-playback-route-presenter';
 
 function createPosterContentLocator(): ContentLocator {

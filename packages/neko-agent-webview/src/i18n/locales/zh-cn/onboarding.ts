@@ -1,4 +1,4 @@
-import type { MessageBundle } from '@neko/shared';
+import type { MessageBundle } from '@neko/ui/i18n';
 
 export const onboarding = {
   'onboarding.title': '开始使用 AI',

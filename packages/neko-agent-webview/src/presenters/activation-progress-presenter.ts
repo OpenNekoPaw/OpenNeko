@@ -1,4 +1,4 @@
-import type { AgentCapabilityActivationProgressEvent } from '@neko/shared';
+import type { AgentCapabilityActivationProgressEvent } from '@neko-agent/contracts';
 
 export interface ActivationProgressTimeline {
   readonly conversationId: string;

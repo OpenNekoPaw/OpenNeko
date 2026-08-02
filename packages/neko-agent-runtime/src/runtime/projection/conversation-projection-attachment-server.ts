@@ -9,8 +9,8 @@ import type {
   ProjectionPatchFrame,
   ProjectionSnapshotAcknowledgement,
   ProjectionSnapshotFrame,
-} from '@neko-agent/types';
-import { isSameProjectionAttachment } from '@neko-agent/types';
+} from '@neko-agent/contracts';
+import { isSameProjectionAttachment } from '@neko-agent/contracts';
 import type { ConversationProjectionStore } from './conversation-projection-store';
 
 export type ConversationProjectionAttachmentHostFrame = ProjectionAttachmentHostFrame<

@@ -1,13 +1,14 @@
+import { type ContentIoDiagnostic, type ContentReadService } from '../contracts/content-io';
 import {
-  type ContentIoDiagnostic,
-  type ContentReadService,
   type DocumentEntryContentLocator,
+  type WorkspaceFileContentLocator,
+} from '../contracts/content-locator';
+import {
   type DocumentFormat,
   type DocumentImageInfo,
   type DocumentReadResult,
   type DocumentSourceRef,
-  type WorkspaceFileContentLocator,
-} from '@neko/shared';
+} from '../contracts/document-reading';
 import { detectDocumentFormat, type IDocumentAccessService } from './document-access-service';
 
 export type DocumentContentAccessMode = 'content' | 'manifest' | 'range' | 'next';

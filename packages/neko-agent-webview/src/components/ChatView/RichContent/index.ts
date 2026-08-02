@@ -2,7 +2,7 @@
  * RichContent — Registry-driven content block rendering (ADR-6 §6.2)
  *
  * Usage:
- *   import { RichContentRenderer, registerDefaultRenderers } from '@/components/ChatView/RichContent';
+ *   import { RichContentRenderer, registerDefaultRenderers } from './';
  *   registerDefaultRenderers();  // once at app init
  *   <RichContentRenderer kind="video" data={{ src, poster, title, localPath }} inline />
  */
@@ -20,4 +20,4 @@ export type {
   AssetGalleryRichData,
   ComparisonGridRichData,
   StoryboardTableRichData,
-} from '@/presenters/composite-content-presenter';
+} from '../../../presenters/composite-content-presenter';

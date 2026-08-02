@@ -1,6 +1,6 @@
-import type { EmbodyCharacterSessionProjection } from '@neko-agent/types';
-import { AgentHostMessages } from '@/messages';
-import { useTranslation } from '@/i18n/I18nContext';
+import type { EmbodyCharacterSessionProjection } from '@neko-agent/contracts';
+import { AgentHostMessages } from '../../messages';
+import { useTranslation } from '../../i18n/I18nContext';
 
 interface EmbodyCharacterHeaderProps {
   session: EmbodyCharacterSessionProjection;

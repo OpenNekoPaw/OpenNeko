@@ -1,9 +1,9 @@
-import type { AgentState } from '@neko-agent/types';
+import type { AgentState } from '@neko-agent/contracts';
 import type {
   AgentStateStoreProjection,
   ProjectAgentPhaseInput,
   ProjectAgentStateSnapshotInput,
-} from '@neko-agent/types';
+} from '@neko-agent/contracts';
 
 export function projectAgentPhaseToStateStore(
   input: ProjectAgentPhaseInput,

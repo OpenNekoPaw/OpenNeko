@@ -4,7 +4,7 @@ import type {
   CanvasMaterialActionEffect,
   CanvasNode,
   CanvasViewport,
-} from '@neko/shared';
+} from '@neko-canvas/domain';
 import { Button, IconButton, Popover } from '@neko/ui/primitives';
 import {
   CopyIcon,
@@ -15,7 +15,7 @@ import {
   RefreshIcon,
   TrashIcon,
   ZoomInIcon,
-} from '@neko/shared/icons';
+} from '@neko/ui/icons';
 import {
   useCanvasStoreApi,
   useClipboardStoreApi,

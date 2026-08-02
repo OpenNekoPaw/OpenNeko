@@ -6,7 +6,7 @@ import type {
   DocumentManifest,
   DocumentRange,
   DocumentReadResult,
-} from '@neko/shared';
+} from '@neko/content';
 
 export type AgentContentAccessStatus =
   'ready' | 'missing-source' | 'unsupported-source' | 'unauthorized' | 'failed';

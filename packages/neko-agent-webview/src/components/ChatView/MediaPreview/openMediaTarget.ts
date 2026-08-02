@@ -1,4 +1,4 @@
-import { AgentHostMessages } from '@/messages';
+import { AgentHostMessages } from '../../../messages';
 
 export function openMediaTarget(target: string): void {
   if (isHostFileOpenTarget(target)) {

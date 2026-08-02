@@ -8,7 +8,7 @@ import {
   AGENT_SKILL_CONTROLLER_ROUTE_TYPES,
   type AgentHostControllerConnection,
 } from '../agent-host-controller-contract';
-import { ELECTRON_AGENT_HOST_ROUTE_COVERAGE } from '@neko-agent/types';
+import { ELECTRON_AGENT_HOST_ROUTE_COVERAGE } from '@neko-agent/contracts';
 
 describe('Agent Host controller contract', () => {
   it('partitions every Electron implemented route exactly once', () => {

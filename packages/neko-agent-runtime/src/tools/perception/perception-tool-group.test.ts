@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { TOOL_NAMES_PERCEPTION } from '@neko/shared';
+import { TOOL_NAMES_PERCEPTION } from '@neko-agent/contracts';
 import { perceptionToolGroup } from './perception-tool-group';
 
 describe('perceptionToolGroup', () => {

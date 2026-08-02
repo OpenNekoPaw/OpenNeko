@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createAgentMarkdownSessionKey } from '@/markdown/agent-markdown-session-registry';
+import { createAgentMarkdownSessionKey } from '../../markdown/agent-markdown-session-registry';
 import { createTabRenderRuntime, createTabRenderRuntimeRegistry } from '../tab-render-runtime';
 
 describe('TabRenderRuntime', () => {

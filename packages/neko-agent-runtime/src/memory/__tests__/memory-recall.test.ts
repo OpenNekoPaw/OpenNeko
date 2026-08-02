@@ -4,7 +4,7 @@
 
 import { describe, it, expect, vi } from 'vitest';
 import { MemoryRecall } from '../memory-recall';
-import type { IProjectMemoryManager } from '@neko/shared';
+import type { IProjectMemoryManager } from '@neko-agent/contracts';
 
 function createMockProjectMemory(content: string | null): IProjectMemoryManager {
   return {

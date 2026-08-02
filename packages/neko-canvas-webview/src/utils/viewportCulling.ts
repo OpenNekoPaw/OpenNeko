@@ -3,7 +3,7 @@
  * 只渲染可见区域内的节点，提升大规模内容下的性能
  */
 
-import type { CanvasNode, CanvasViewport } from '@neko/shared';
+import type { CanvasNode, CanvasViewport } from '@neko-canvas/domain';
 
 // =============================================================================
 // Types

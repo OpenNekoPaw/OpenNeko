@@ -7,16 +7,24 @@
   "exports": {
     ".": "./src/index.ts",
     "./application": "./src/application.ts",
+    "./application-settings": "./src/application-settings-contract.ts",
+    "./application-settings-service": "./src/application-settings-service.ts",
+    "./files": "./src/files/index.ts",
     "./ports": "./src/ports.ts",
     "./projection-attachment": "./src/projection-attachment.ts",
-    "./*": "./src/*"
+    "./settings": "./src/settings/index.ts"
   },
   "scripts": {
     "test": "vitest",
     "test:run": "vitest --run"
   },
   "dependencies": {
-    "@neko/shared": "workspace:*"
+    "@neko-ai/contracts": "workspace:*",
+    "@neko-assets/domain": "workspace:*",
+    "@neko-agent/contracts": "workspace:*",
+    "@neko/local-metadata": "workspace:*",
+    "@neko/shared": "workspace:*",
+    "smol-toml": "1.6.1"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

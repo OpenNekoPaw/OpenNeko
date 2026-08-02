@@ -5,7 +5,7 @@
  * the top-N items for prompt injection.
  */
 
-import type { IProjectMemoryManager } from '@neko/shared';
+import type { IProjectMemoryManager } from '@neko-agent/contracts';
 
 // =============================================================================
 // Types

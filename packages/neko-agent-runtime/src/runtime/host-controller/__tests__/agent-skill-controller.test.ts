@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { AgentWebviewToHostMessage } from '@neko-agent/types';
+import type { AgentWebviewToHostMessage } from '@neko-agent/contracts';
 import {
   tryHandleAgentSkillControllerRoute,
   type AgentHostRouteEffectContext,

@@ -1,7 +1,7 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ToolExecuteOptions } from '@neko/shared';
+import type { ToolExecuteOptions } from '@neko-agent/contracts';
 import { BashTool } from '../bash-tool';
 import type { CoreFileAccessPolicy } from '../file-access-policy';
 import { GrepTool } from '../grep-tool';

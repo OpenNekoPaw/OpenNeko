@@ -5,11 +5,11 @@ import type {
   ConversationSummary,
   AgentHostToWebviewMessage,
   OpenTab,
-} from '@neko-agent/types';
-import type { Message } from '@neko-agent/types';
-import type { AgentWorkItemStore } from '@/components/AgentWorkItem';
-import type { PluginsAvailable } from '@/components/ChatView/SendToMenu';
-import { ConversationRenderCoordinator } from '@/render-lifecycle/conversation-render-coordinator';
+} from '@neko-agent/contracts';
+import type { Message } from '@neko-agent/contracts';
+import type { AgentWorkItemStore } from '../../components/AgentWorkItem';
+import type { PluginsAvailable } from '../../components/ChatView/SendToMenu';
+import { ConversationRenderCoordinator } from '../../render-lifecycle/conversation-render-coordinator';
 import { conversationHandlers } from '../conversation-handlers';
 import { tabHandlers } from '../tab-handlers';
 import type {
@@ -24,7 +24,7 @@ const hostMessageMocks = vi.hoisted(() => ({
   getSettings: vi.fn(),
 }));
 
-vi.mock('@/messages', () => ({ AgentHostMessages: hostMessageMocks }));
+vi.mock('../../messages', () => ({ AgentHostMessages: hostMessageMocks }));
 
 describe('character role context isolation', () => {
   it('routes conversation diagnostics without replacing global UI state', () => {

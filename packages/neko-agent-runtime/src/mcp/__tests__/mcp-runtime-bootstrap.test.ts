@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { IMCPClient, MCPServerConfig, Tool } from '@neko/shared';
+import type { IMCPClient, MCPServerConfig } from '@neko-agent/contracts';
+import type { Tool } from '@neko-agent/contracts';
 import { MCPManager } from '../mcp-manager';
 import { connectMCPServersRuntime } from '../mcp-runtime-bootstrap';
 

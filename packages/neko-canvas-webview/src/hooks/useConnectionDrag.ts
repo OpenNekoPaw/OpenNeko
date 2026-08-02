@@ -5,12 +5,12 @@
 
 import { useState, useCallback, useEffect } from 'react';
 import type React from 'react';
-import type { CanvasConnection, CanvasNode, CanvasViewport } from '@neko/shared';
+import type { CanvasConnection, CanvasNode, CanvasViewport } from '@neko-canvas/domain';
 import {
   createNodeConnectionEndpoint,
   createPortConnectionEndpoint,
   getDefaultPorts,
-} from '@neko/shared';
+} from '@neko-canvas/domain';
 import type {
   CanvasConnectionMutationResult,
   CanvasConnectionRejectionReason,

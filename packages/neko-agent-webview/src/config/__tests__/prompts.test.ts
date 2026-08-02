@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { getPromptTypeName, getPromptTypeIcon } from '../prompts';
-import type { PromptPresetType } from '@neko/shared';
+import type { PromptPresetType } from '@neko-agent/contracts';
 
 describe('prompts config', () => {
   const validTypes: PromptPresetType[] = [

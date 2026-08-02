@@ -4,7 +4,7 @@
  */
 
 import type { ReactNode } from 'react';
-import type { CanvasViewport as ViewportType } from '@neko/shared';
+import type { CanvasViewport as ViewportType } from '@neko-canvas/domain';
 
 // =============================================================================
 // Types

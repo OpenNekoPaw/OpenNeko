@@ -8,7 +8,7 @@
 
 import { create, createStore, type StateCreator } from 'zustand';
 import type { StoreApi } from 'zustand/vanilla';
-import type { CanvasData } from '@neko/shared';
+import type { CanvasData } from '@neko-canvas/domain';
 
 // =============================================================================
 // Types

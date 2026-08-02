@@ -1,6 +1,6 @@
 import { create, createStore, type StateCreator } from 'zustand';
 import type { StoreApi } from 'zustand/vanilla';
-import type { CanvasViewport } from '@neko/shared';
+import type { CanvasViewport } from '@neko-canvas/domain';
 
 export interface RuntimeViewportState {
   viewport: CanvasViewport;

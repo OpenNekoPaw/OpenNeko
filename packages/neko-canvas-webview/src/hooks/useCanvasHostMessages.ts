@@ -7,7 +7,11 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { hasEditableActiveElement, isKeyboardFocusMessage } from '@neko/ui/keyboard';
-import type { CanvasHostPresentationState } from '@neko-canvas/domain';
+import type {
+  CanvasHostPresentationState,
+  ProjectedCanvasStatus,
+  ProjectionSourceChangeEvent,
+} from '@neko-canvas/domain';
 import type {
   CanvasData,
   CanvasNode,
@@ -20,15 +24,12 @@ import type {
   CanvasAgentContentPayload,
   FieldBinding,
   CanvasUpdateBlockRequest,
-  ProjectedCanvasStatus,
-  ProjectionSourceChangeEvent,
-} from '@neko/shared';
+} from '@neko-canvas/domain';
 import {
-  isCanvasNodeType,
-  isJsonPointerPath,
   isProjectFileSnapshotRequestMessage,
   PROJECT_FILE_SNAPSHOT_RESPONSE,
-} from '@neko/shared';
+} from '@neko/content/project-file-io';
+import { isCanvasNodeType, isJsonPointerPath } from '@neko-canvas/domain';
 import { setLocale } from '../i18n';
 import {
   useCanvasOperationStoreApi,

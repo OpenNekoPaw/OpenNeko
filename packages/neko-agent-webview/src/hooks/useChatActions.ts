@@ -21,23 +21,25 @@ import {
   type MessageModelProjection,
   type SessionMode,
   type TabType,
-} from '@neko-agent/types';
-import { AgentHostMessages } from '@/messages';
+} from '@neko-agent/contracts';
+import { AgentHostMessages } from '../messages';
 import type {
   MessageAttachment,
   SelectedFileReference,
-} from '@/components/ChatView/InputArea/types';
+} from '../components/ChatView/InputArea/types';
 import {
   getBuiltinSlashCommand,
   normalizeSlashCommandName,
   parseAgentInputTrigger,
+  type AgentContextPayload,
   type AgentMediaModelSelections,
-} from '@neko-agent/types';
+} from '@neko-agent/contracts';
 import { projectMessageModelSelection } from '../presenters/config-message-presenter';
 import { projectContextReferencesFromPayloads } from '../presenters/context-reference-presenter';
 import { projectContentLocatorPath } from '../presenters/content-locator-presenter';
 import { toAttachmentTypeFromPathReference } from '../presenters/reference-token-presenter';
-import { isDocumentFile, type AgentContextPayload, type ChatModelOption } from '@neko/shared';
+import { type ChatModelOption } from '@neko-ai/contracts';
+import { isDocumentFile } from '@neko/media';
 
 /** Per-category resolved media model for agent mode */
 export type AgentMediaModels = AgentMediaModelSelections;

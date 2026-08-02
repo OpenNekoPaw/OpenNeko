@@ -1,4 +1,4 @@
-import type { AgentTurnTimelineItem, ContentBlock, Message } from '@neko-agent/types';
+import type { AgentTurnTimelineItem, ContentBlock, Message } from '@neko-agent/contracts';
 
 export interface TimelineTurnRenderInput {
   readonly messageId: string;

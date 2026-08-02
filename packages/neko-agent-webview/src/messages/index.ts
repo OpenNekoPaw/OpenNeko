@@ -7,9 +7,9 @@ import type {
   PluginTransferPayload,
   SendMessageWebviewMessage,
   AgentWebviewToHostMessage,
-} from '@neko-agent/types';
-import type { ContentLocator, DocumentLocator } from '@neko/shared';
-import type { AgentContextType } from '@neko/shared';
+} from '@neko-agent/contracts';
+import type { ContentLocator, DocumentLocator } from '@neko/content';
+import type { AgentContextType } from '@neko-agent/contracts';
 
 export type { AgentHostRuntimeAdapter, AgentHostRuntimeSubscription };
 
@@ -82,7 +82,7 @@ export const AgentHostMessages = {
 
   /** Activate an ordinary conversation and its Tab projection atomically. */
   activateConversation: (
-    request: Omit<import('@neko-agent/types').ActivateConversationWebviewMessage, 'type'>,
+    request: Omit<import('@neko-agent/contracts').ActivateConversationWebviewMessage, 'type'>,
   ) => {
     postConversationMessage({ type: 'activateConversation', ...request });
   },
@@ -271,7 +271,7 @@ export const AgentHostMessages = {
    * @param activeTabId - Currently active tab ID
    */
   updateTabState: (
-    openTabs: Array<import('@neko-agent/types').OpenTab>,
+    openTabs: Array<import('@neko-agent/contracts').OpenTab>,
     activeTabId: string | null,
     expectedTabStateRevision: number,
   ) => {

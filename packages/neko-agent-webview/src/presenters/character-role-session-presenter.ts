@@ -1,4 +1,4 @@
-import type { ConversationKind, OpenTab } from '@neko-agent/types';
+import type { ConversationKind, OpenTab } from '@neko-agent/contracts';
 
 type Translate = (key: string, params?: Record<string, string | number>) => string;
 

@@ -1,14 +1,14 @@
 import { act } from 'react';
 import { render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { CharacterDialogueSessionProjection } from '@neko-agent/types';
-import { I18nProvider } from '@/i18n/I18nContext';
-import { i18nService, setLocale } from '@/i18n';
+import type { CharacterDialogueSessionProjection } from '@neko-agent/contracts';
+import { I18nProvider } from '../../i18n/I18nContext';
+import { i18nService, setLocale } from '../../i18n';
 import { CharacterDialogueHeader } from './CharacterDialogueHeader';
 
 const exitCharacterDialogueSession = vi.fn();
 
-vi.mock('@/messages', () => ({
+vi.mock('../../messages', () => ({
   AgentHostMessages: {
     exitCharacterDialogueSession: (...args: unknown[]) => exitCharacterDialogueSession(...args),
   },

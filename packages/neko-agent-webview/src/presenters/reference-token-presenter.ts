@@ -1,12 +1,7 @@
-import {
-  isDocumentFile,
-  isThreeReferenceContextData,
-  type AgentContextPayload,
-  type AttachmentType,
-  type ContentLocator,
-  type MessageAttachment,
-  type ThreeReferenceContextData,
-} from '@neko/shared';
+import { isThreeReferenceContextData, type ThreeReferenceContextData } from '@neko-preview/domain';
+import type { AgentContextPayload, AttachmentType, MessageAttachment } from '@neko-agent/contracts';
+import { isDocumentFile } from '@neko/media';
+import { type ContentLocator } from '@neko/content';
 import { projectContentLocatorPath } from './content-locator-presenter';
 
 export type ReferenceTokenProjectionKind =

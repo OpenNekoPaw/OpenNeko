@@ -3,13 +3,13 @@ import {
   validateCanonicalStoryboardTable,
   type StoryboardMediaRef,
   type StoryboardTable,
-} from '@neko/shared';
+} from '@neko-canvas/domain';
 import type {
   PluginTransferAssetRef,
   PluginTransferPayload,
   RequestCanvasAuthoringHandoffWebviewMessage,
-} from '@neko-agent/types';
-import type { StoryboardScene } from '@/components/ChatView/MediaPreview';
+} from '@neko-agent/contracts';
+import type { StoryboardScene } from '../components/ChatView/MediaPreview';
 import type {
   ResolvedCompositeMedia,
   ResolvedCompositeSection,

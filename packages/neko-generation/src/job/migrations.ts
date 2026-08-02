@@ -1,4 +1,4 @@
-import type { LocalMetadataMigration } from '@neko/shared';
+import type { LocalMetadataMigration } from '@neko/local-metadata';
 
 export const GENERATION_JOB_MIGRATIONS: readonly LocalMetadataMigration[] = [
   {

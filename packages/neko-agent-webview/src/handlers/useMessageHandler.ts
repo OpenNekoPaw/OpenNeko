@@ -5,14 +5,14 @@
  */
 
 import { useMemo, useCallback, useEffect, useRef, type MutableRefObject } from 'react';
-import {
-  createConfiguredRegistry,
-  type MessageHandlerContext,
-  type PendingForegroundConversationActivation,
-  type QueuedMessageEditRequest,
-  type ContextInjectionRequest,
-  type ConversationRenderStateUpdater,
-} from '@/handlers';
+import { createConfiguredRegistry } from './configured-registry';
+import type {
+  MessageHandlerContext,
+  PendingForegroundConversationActivation,
+  QueuedMessageEditRequest,
+  ContextInjectionRequest,
+  ConversationRenderStateUpdater,
+} from './types';
 import { getLogger } from '../utils/logger';
 import type {
   Message,
@@ -22,24 +22,24 @@ import type {
   SettingsState,
   AgentState,
   AgentQueuedMessageItem,
-} from '@neko-agent/types';
-import type { AgentWorkItemStore } from '@/components/AgentWorkItem';
-import type { PluginsAvailable } from '@/components/ChatView/SendToMenu';
-import type { ProjectFileInfo } from '@/hooks/useConfigState';
+} from '@neko-agent/contracts';
+import type { AgentWorkItemStore } from '../components/AgentWorkItem';
+import type { PluginsAvailable } from '../components/ChatView/SendToMenu';
+import type { ProjectFileInfo } from '../hooks/useConfigState';
 import type {
   SkillSummary,
   MentionItem,
   PluginSlashCommandDef,
-} from '@/components/ChatView/InputArea/types';
-import type { ActivationProgressTimeline } from '@/presenters/activation-progress-presenter';
-import type { ConversationRenderCoordinator } from '@/render-lifecycle/conversation-render-coordinator';
+} from '../components/ChatView/InputArea/types';
+import type { ActivationProgressTimeline } from '../presenters/activation-progress-presenter';
+import type { ConversationRenderCoordinator } from '../render-lifecycle/conversation-render-coordinator';
 import type { AgentHostToWebviewMessage } from './messages';
 import {
   bindConversationRenderRuntimeLifecycle,
   createConversationRenderRuntimeLifecycle,
   type ConversationRenderRuntimeLifecycle,
-} from '@/render-lifecycle/conversation-render-runtime-lifecycle';
-import { getAgentMarkdownSessionRegistry } from '@/markdown/agent-markdown-session-registry';
+} from '../render-lifecycle/conversation-render-runtime-lifecycle';
+import { getAgentMarkdownSessionRegistry } from '../markdown/agent-markdown-session-registry';
 
 const logger = getLogger('MessageHandler');
 const FOREIGN_FEATURE_HOST_MESSAGE_TYPES = new Set([

@@ -1,3 +1,14 @@
+export * from './canvas-cut-draft';
+export * from './canvas-generation-application-port';
+export * from './canvas-drop';
+export * from './canvas-markdown-capabilities';
+export * from './canvas-projection';
+export * from './canvas-semantic-storyboard';
+export * from './types/index';
+export * from './utils/index';
+export * from './nkc/index';
+export * from './project-file-io/index';
+
 export {
   WorkspaceBoardDeliveryLedger,
   type WorkspaceBoardDeliveryLedgerOptions,
@@ -23,6 +34,7 @@ export {
   CanvasHostRuntimeContractError,
   assertCanvasHostRuntimeIdentity,
   createCanvasHostIntentRequest,
+  createCanvasHostSessionId,
   createCanvasMaterialActionResolutionRequest,
   parseCanvasHostIntentRequest,
   parseCanvasHostIntentResult,
@@ -49,6 +61,18 @@ export {
   CanvasHostRuntimeSession,
   CanvasHostVisibleEffectError,
 } from './canvas-host-runtime-session';
+export {
+  CANVAS_COPY_TO_GLOBAL_MEDIA_LIBRARY_ACTION_ID,
+  CANVAS_COPY_TO_PROJECT_MEDIA_LIBRARY_ACTION_ID,
+  CANVAS_OPEN_IN_CUT_ACTION_ID,
+  CANVAS_PREVIEW_ACTION_ID,
+  CANVAS_REGENERATE_ACTION_ID,
+  CANVAS_REVEAL_ACTION_ID,
+  createCanvasMaterialActionOwner,
+  type CanvasGenerationActionAvailability,
+  type CanvasMaterialActionExecutionResult,
+  type CanvasMaterialActionOwner,
+} from './application/canvas-material-action-owner';
 export {
   portableMaterialPath,
   projectDerivedCanvasMaterialToCanvas,

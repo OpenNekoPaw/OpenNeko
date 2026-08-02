@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { AgentState } from '@neko-agent/types';
+import type { AgentState } from '@neko-agent/contracts';
 import { projectAgentPhaseToStateStore, projectAgentStateSnapshot } from '../agent-state-presenter';
 
 describe('agent state presenter', () => {

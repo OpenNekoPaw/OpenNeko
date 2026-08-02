@@ -5,7 +5,7 @@ import {
   type CanvasViewport,
   type GroupCanvasNode,
   type CanvasNode,
-} from '@neko/shared';
+} from '@neko-canvas/domain';
 import { toCodiconClassName } from '@neko/ui/icons';
 import { BaseNode } from './BaseNode';
 import { useScopedCanvasStore as useCanvasStore } from '../../stores/canvasStoreScope';

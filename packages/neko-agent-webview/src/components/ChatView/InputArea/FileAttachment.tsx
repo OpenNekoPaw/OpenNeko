@@ -4,7 +4,7 @@
  */
 
 import type { MessageAttachment } from './types';
-import { projectAttachmentReferenceToken } from '@/presenters/reference-token-presenter';
+import { projectAttachmentReferenceToken } from '../../../presenters/reference-token-presenter';
 import { ReferenceToken } from './ReferenceToken';
 
 /**

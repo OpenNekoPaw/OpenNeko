@@ -1,7 +1,7 @@
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useState } from 'react';
-import type { OpenTab } from '@neko-agent/types';
+import type { OpenTab } from '@neko-agent/contracts';
 import { useTabManager } from '../useTabManager';
 
 const hostMocks = vi.hoisted(() => ({
@@ -12,7 +12,7 @@ const hostMocks = vi.hoisted(() => ({
   deleteConversation: vi.fn(),
 }));
 
-vi.mock('@/messages', () => ({
+vi.mock('../../messages', () => ({
   AgentHostMessages: hostMocks,
 }));
 

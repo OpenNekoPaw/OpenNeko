@@ -1,4 +1,4 @@
-import type { AgentTurnTimelineOperation } from '@neko-agent/types';
+import type { AgentTurnTimelineOperation } from '@neko-agent/contracts';
 
 export interface ConversationProjectionOperationBuffer {
   readonly operationCount: number;

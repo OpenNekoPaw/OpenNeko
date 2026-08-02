@@ -9,7 +9,7 @@ import {
   type PreviewHostRuntime,
   type PreviewProjection,
   type PreviewRuntimeIdentity,
-} from '@neko-preview/contracts';
+} from '@neko-preview/domain';
 import { PreviewRoot, QuickPreviewSurface, getPreviewViewerRegistry } from './index';
 const playerStyles = readFileSync(resolve(__dirname, '../styles/player.css'), 'utf8');
 const modelStyles = readFileSync(resolve(__dirname, '../model/model.css'), 'utf8');

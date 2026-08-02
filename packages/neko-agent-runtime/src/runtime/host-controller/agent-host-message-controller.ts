@@ -1,4 +1,4 @@
-import type { AgentWebviewToHostMessage } from '@neko-agent/types';
+import type { AgentWebviewToHostMessage } from '@neko-agent/contracts';
 import { tryHandleAgentConfigControllerRoute } from './agent-config-controller';
 import { tryHandleAgentContentControllerRoute } from './agent-content-controller';
 import { tryHandleAgentConversationControllerRoute } from './agent-conversation-controller';

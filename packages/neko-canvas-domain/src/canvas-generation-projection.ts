@@ -1,17 +1,21 @@
 import {
   contentLocatorsEqual,
-  isCanvasMaterialGenerationContext,
-  planCanvasNodeCreation,
   validateContentLocator,
+  type GeneratedOutputContentLocator,
+} from '@neko/content';
+import {
+  isCanvasMaterialGenerationContext,
   type CanvasConnection,
   type CanvasData,
+  type CanvasMaterialGenerationContext,
+  type JobCanvasNode,
+} from './types/canvas';
+import { planCanvasNodeCreation } from './utils/canvasHeadlessAuthoring';
+import {
   type CanvasGenerationJobRef,
   type CanvasMaterialAuthoringIdentity,
-  type CanvasMaterialGenerationContext,
   type CanvasMaterialMediaKind,
-  type GeneratedOutputContentLocator,
-  type JobCanvasNode,
-} from '@neko/shared';
+} from './types/canvas-material-contracts';
 import type { JobFailureSummary, JobPhase } from '@neko/shared/job-lifecycle';
 import { projectResolvedCanvasMaterialToCanvas } from './canvas-content-authoring';
 

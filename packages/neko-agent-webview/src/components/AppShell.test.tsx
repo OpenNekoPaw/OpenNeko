@@ -1,15 +1,15 @@
 import { act, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import type { SettingsState } from '@neko-agent/types';
+import type { SettingsState } from '@neko-agent/contracts';
 import { AppShell } from './AppShell';
 
-vi.mock('@/components/Header', () => ({
+vi.mock('./Header', () => ({
   Header: ({ showAccountBar }: { readonly showAccountBar?: boolean }) => (
     <div data-testid="header" data-show-account-bar={String(showAccountBar)} />
   ),
 }));
 
-vi.mock('@/components/OnboardingFlow', () => ({
+vi.mock('./OnboardingFlow', () => ({
   OnboardingFlow: () => <div data-testid="onboarding" />,
 }));
 

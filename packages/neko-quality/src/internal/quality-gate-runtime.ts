@@ -1,3 +1,4 @@
+import { type ContentLocator } from '@neko/content';
 import {
   MEDIA_QUALITY_CONTRACT_VERSION,
   qualityTargetsMatch,
@@ -14,8 +15,7 @@ import {
   type QualityRepairAction,
   type QualityTarget,
   type QualityTargetKind,
-  type ContentLocator,
-} from '@neko/shared';
+} from '@neko/generation';
 
 export interface MediaQualityLLMService {
   chat(

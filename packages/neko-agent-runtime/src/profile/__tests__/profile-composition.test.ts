@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type {
-  ArtifactProfileDescriptor,
-  ProviderExpressionProfileDescriptor,
-  Skill,
-} from '@neko/shared';
+import type { ProviderExpressionProfileDescriptor, Skill } from '@neko-agent/contracts';
+import type { ArtifactProfileDescriptor } from '@neko-agent/contracts';
 import { ArtifactProfileRegistry, ProviderExpressionProfileRegistry } from '../profile-registry';
 import { composeAgentProfiles } from '../profile-composition';
 

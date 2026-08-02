@@ -5,7 +5,7 @@ import {
   type ConfigChangedMessage,
   type ConfigStateMessage,
   type GlobalErrorMessage,
-} from '@neko-agent/types';
+} from '@neko-agent/contracts';
 
 export interface ConfigBridgeRuntimeLogger {
   error(message: string, details?: unknown): void;

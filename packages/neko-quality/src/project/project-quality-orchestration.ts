@@ -1,18 +1,20 @@
 import {
-  MEDIA_QUALITY_CONTRACT_VERSION,
   PROJECT_QUALITY_CONTRACT_VERSION,
   validateProjectQualityResult,
   type ProjectQualityFacade,
   type ProjectQualityRequest,
   type ProjectQualityResult,
+} from './project-quality-contract';
+import { type ContentLocator } from '@neko/content';
+import {
+  MEDIA_QUALITY_CONTRACT_VERSION,
   type QualityDiagnostic,
   type QualityEvidence,
   type QualityEvaluatorClass,
   type QualityGateIssue,
   type QualityProjectRef,
   type QualityTarget,
-  type ContentLocator,
-} from '@neko/shared';
+} from '@neko/generation';
 
 export interface ProjectQualityFacadeResolver {
   resolve(project: QualityProjectRef): Promise<ProjectQualityFacade | undefined>;

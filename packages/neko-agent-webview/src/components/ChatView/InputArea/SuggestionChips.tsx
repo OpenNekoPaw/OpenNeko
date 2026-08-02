@@ -5,7 +5,7 @@
  * Clicking a suggestion pre-fills the input box but does NOT auto-send.
  */
 
-import type { AgentContextPayload } from '@neko/shared';
+import type { AgentContextPayload } from '@neko-agent/contracts';
 
 interface SuggestionChipsProps {
   contextChips: AgentContextPayload[];

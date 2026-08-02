@@ -4,12 +4,14 @@ import type {
   CreativeEntityRef,
   CreativeEntityRelationshipProjection,
   CreativeEntityRepresentationHint,
+} from '@neko-entity/domain';
+import type {
   NpcProfileFact,
   NpcProfileSource,
   NpcTranscriptArtifact,
   NpcTranscriptMessage,
-} from '@neko/shared';
-import { NPC_TRANSCRIPT_ARTIFACT_VERSION } from '@neko/shared';
+} from '@neko/chara/contracts';
+import { NPC_TRANSCRIPT_ARTIFACT_VERSION } from '@neko/chara/contracts';
 import type { CharacterModelTier, CharacterToolPolicy } from './character-runtime-policy';
 import { renderCharacterEvidenceBundle, type CharacterEvidenceBundle } from './character-evidence';
 

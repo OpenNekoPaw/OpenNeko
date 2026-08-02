@@ -4,11 +4,11 @@ import type {
   ConversationProjectionPatch,
   ConversationProjectionSnapshot,
   ConversationProjectionUpdate,
-} from '@neko-agent/types';
+} from '@neko-agent/contracts';
 import {
   applyAgentTurnProjectionOperations,
   cloneAgentTurnProjectionItem,
-} from '@neko-agent/types';
+} from '@neko-agent/contracts';
 
 export type ConversationProjectionListener = (patch: ConversationProjectionPatch) => void;
 

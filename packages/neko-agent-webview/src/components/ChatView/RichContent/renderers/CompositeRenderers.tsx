@@ -8,16 +8,16 @@ import type {
   ResolvedCompositeMedia,
   ResolvedCompositeSection,
   StoryboardTableRichData,
-} from '@/presenters/composite-content-presenter';
-import type { StoryboardSceneRow, StoryboardShotRow, StoryboardTextCue } from '@neko/shared';
-import type { StoryboardShotPlanOverlay } from '@neko/shared';
-import { AgentHostMessages } from '@/messages';
-import { SendToMenu } from '@/components/ChatView/SendToMenu';
-import { useTranslation } from '@/i18n/I18nContext';
+} from '../../../../presenters/composite-content-presenter';
+import type { StoryboardSceneRow, StoryboardShotRow, StoryboardTextCue } from '@neko-canvas/domain';
+import type { StoryboardShotPlanOverlay } from '@neko-agent/contracts';
+import { AgentHostMessages } from '../../../../messages';
+import { SendToMenu } from '../../SendToMenu';
+import { useTranslation } from '../../../../i18n/I18nContext';
 import {
   projectStoryboardTableAssetBatch,
   projectStoryboardTableCanvasAuthoringHandoff,
-} from '@/presenters/storyboard-transfer-presenter';
+} from '../../../../presenters/storyboard-transfer-presenter';
 
 function isStoryboardTableRichData(data: unknown): data is StoryboardTableRichData {
   return isCompositeData(data, 'storyboard-table');

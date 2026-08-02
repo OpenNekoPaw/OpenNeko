@@ -1,4 +1,4 @@
-import type { AutohealRuntimeEvent } from '@neko/shared/types/agent-autoheal';
+import type { AutohealRuntimeEvent } from '@neko-agent/contracts';
 import { getLogger } from '../utils/logger';
 
 const logger = getLogger('EventBus');

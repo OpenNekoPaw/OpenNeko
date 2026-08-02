@@ -1,4 +1,4 @@
-import type { ContentBlock, Message, ToolCall } from '@neko-agent/types';
+import type { ContentBlock, Message, ToolCall } from '@neko-agent/contracts';
 import type { PiConversationTranscriptEntry } from '../../pi';
 
 export function projectPiConversationEntries(

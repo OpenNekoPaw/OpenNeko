@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { NpcProfileSource } from '@neko/shared';
+import type { NpcProfileSource } from '@neko/chara/contracts';
 import { projectCharacterDialogueSystemPrompt } from '../core/character-dialogue-profile-projector';
 
 const entityRef = {

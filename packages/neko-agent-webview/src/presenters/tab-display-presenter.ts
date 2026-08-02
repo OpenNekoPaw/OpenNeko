@@ -4,7 +4,7 @@ import type {
   ConversationSummary,
   Message,
   OpenTab,
-} from '@neko-agent/types';
+} from '@neko-agent/contracts';
 
 export type TabDisplayStatus = 'running' | 'completed';
 

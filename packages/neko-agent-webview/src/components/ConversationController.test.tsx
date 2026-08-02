@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { useEffect, useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
-import type { AgentContextPayload } from '@neko/shared';
+import type { AgentContextPayload } from '@neko-agent/contracts';
 import type {
   AgentQueuedMessageItem,
   AgentState,
@@ -9,15 +9,15 @@ import type {
   ConversationSummary,
   Message,
   SettingsState,
-} from '@neko-agent/types';
-import type { ActivationProgressTimeline } from '@/presenters/activation-progress-presenter';
+} from '@neko-agent/contracts';
+import type { ActivationProgressTimeline } from '../presenters/activation-progress-presenter';
 import {
   createAgentMarkdownSessionKey,
   getAgentMarkdownSessionRegistry,
-} from '@/markdown/agent-markdown-session-registry';
-import { ConversationRenderCoordinator } from '@/render-lifecycle/conversation-render-coordinator';
-import type { TabRenderStore } from '@/render-runtime/tab-render-runtime';
-import { useTabRenderStore } from '@/render-runtime/useTabRenderStore';
+} from '../markdown/agent-markdown-session-registry';
+import { ConversationRenderCoordinator } from '../render-lifecycle/conversation-render-coordinator';
+import type { TabRenderStore } from '../render-runtime/tab-render-runtime';
+import { useTabRenderStore } from '../render-runtime/useTabRenderStore';
 import { ConversationController } from './ConversationController';
 
 const hostMocks = vi.hoisted(() => ({
@@ -40,7 +40,7 @@ const hostMocks = vi.hoisted(() => ({
   getMessageQueue: vi.fn(),
 }));
 
-vi.mock('@/messages', () => ({
+vi.mock('../messages', () => ({
   AgentHostMessages: hostMocks,
   getAgentHostRuntimeAdapter: () => ({
     getState: () => undefined,
@@ -48,7 +48,7 @@ vi.mock('@/messages', () => ({
   }),
 }));
 
-vi.mock('@/host-runtime-context', () => ({
+vi.mock('../host-runtime-context', () => ({
   useAgentHostRuntimeAdapter: () => ({
     hostKind: 'electron',
     runtimeId: 'conversation-controller-test',
@@ -67,7 +67,7 @@ vi.mock('@/host-runtime-context', () => ({
   }),
 }));
 
-vi.mock('@/i18n/I18nContext', () => ({
+vi.mock('../i18n/I18nContext', () => ({
   useTranslation: () => ({
     locale: 'en',
     t: (key: string) =>
@@ -131,7 +131,7 @@ vi.mock('@/i18n/I18nContext', () => ({
   }),
 }));
 
-vi.mock('@/components/ChatWorkspace', () => ({
+vi.mock('./ChatWorkspace', () => ({
   ChatWorkspace: (props: {
     tabRenderStore: TabRenderStore;
     messages?: Message[];
@@ -359,10 +359,10 @@ vi.mock('@/components/ChatWorkspace', () => ({
   },
 }));
 
-vi.mock('@/components/ChatView/InputArea', async () => {
+vi.mock('./ChatView/InputArea', async () => {
   const { useInputAreaContext } = await vi.importActual<
-    typeof import('@/components/ChatView/InputAreaContext')
-  >('@/components/ChatView/InputAreaContext');
+    typeof import('./ChatView/InputAreaContext')
+  >('./ChatView/InputAreaContext');
   return {
     InputArea: (props: {
       inputValue: string;
@@ -2137,7 +2137,7 @@ interface CreatePropsOptions {
   readonly workItemsByConversation?: Map<string, Map<string, AgentWorkItem>>;
   readonly settings?: SettingsState;
   readonly hasConfigSnapshot?: boolean;
-  readonly mentionItems?: readonly import('@/components/ChatView/InputArea/types').MentionItem[];
+  readonly mentionItems?: readonly import('./ChatView/InputArea/types').MentionItem[];
 }
 
 function createProps(

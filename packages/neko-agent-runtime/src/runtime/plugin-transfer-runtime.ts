@@ -13,7 +13,7 @@ import {
   type PluginsAvailable,
   type ProjectPluginsAvailableInput,
   type RegisteredPluginSlashCommand,
-} from '@neko-agent/types';
+} from '@neko-agent/contracts';
 
 type RuntimePluginTransferBuildPayload = Exclude<PluginTransferPayload, { kind: 'assetBatch' }>;
 

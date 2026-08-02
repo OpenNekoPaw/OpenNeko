@@ -1,9 +1,6 @@
-import type { CanvasMaterialGenerationContext, CanvasNode } from '@neko/shared';
-import {
-  deriveCanvasMaterialOrigin,
-  isCanvasGenerationEvidence,
-  validateContentLocator,
-} from '@neko/shared';
+import type { CanvasMaterialGenerationContext, CanvasNode } from '@neko-canvas/domain';
+import { validateContentLocator } from '@neko/content';
+import { deriveCanvasMaterialOrigin, isCanvasGenerationEvidence } from '@neko-canvas/domain';
 
 export type CanvasMaterialSource = 'referenced' | 'generated';
 export type CanvasMaterialMediaType = 'image' | 'video' | 'audio';

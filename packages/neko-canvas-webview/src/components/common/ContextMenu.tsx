@@ -17,7 +17,7 @@ import {
   UndoIcon,
   RedoIcon,
   PlayIcon,
-} from '@neko/shared/icons';
+} from '@neko/ui/icons';
 import { t } from '../../i18n';
 import { createCanvasAddActionIcon } from '../adapters/sharedCanvasUiAdapter';
 import {

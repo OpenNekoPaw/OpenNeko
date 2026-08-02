@@ -10,10 +10,10 @@
 
 import { useState, useRef } from 'react';
 import { useComposerControlMenu } from './composer-menu-runtime';
-import type { SessionMode } from '@neko-agent/types';
+import type { SessionMode } from '@neko-agent/contracts';
 import { useClickOutsideSingle } from './useClickOutside';
 import { useDropdownPlacement, type DropdownPlacement } from './useDropdownDirection';
-import { useTranslation } from '@/i18n/I18nContext';
+import { useTranslation } from '../../../i18n/I18nContext';
 import { SessionModeIcon } from './ComposerIcons';
 
 interface SessionModeSelectorProps {

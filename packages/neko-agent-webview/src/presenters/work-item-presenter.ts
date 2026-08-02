@@ -5,7 +5,7 @@ import type {
   AgentWorkItemStepStatus,
   Message,
   SubAgentWorkItem,
-} from '@neko-agent/types';
+} from '@neko-agent/contracts';
 
 export type AgentWorkItemStatusTone = 'neutral' | 'info' | 'success' | 'danger';
 

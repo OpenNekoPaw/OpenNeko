@@ -7,8 +7,8 @@
  * handled by the parent via onComplete).
  */
 import { useState } from 'react';
-import { useTranslation } from '@/i18n/I18nContext';
-import { AgentHostMessages } from '@/messages';
+import { useTranslation } from '../../i18n/I18nContext';
+import { AgentHostMessages } from '../../messages';
 
 type Step = 'choose' | 'fileOpened';
 

@@ -6,8 +6,8 @@
  * neko.agent.sendContext command.
  */
 
-import type { AgentContextPayload } from '@neko/shared';
-import { projectContextPayloadReferenceToken } from '@/presenters/reference-token-presenter';
+import type { AgentContextPayload } from '@neko-agent/contracts';
+import { projectContextPayloadReferenceToken } from '../../../presenters/reference-token-presenter';
 import { ReferenceToken, type ReferenceTokenVariant } from './ReferenceToken';
 
 interface AgentContextChipProps {

@@ -9,7 +9,7 @@
 
 import * as nodePath from 'node:path';
 import * as nodeFs from 'node:fs/promises';
-import type { IProjectMemoryManager, ProjectMemoryFileOps } from '@neko/shared';
+import type { IProjectMemoryManager, ProjectMemoryFileOps } from '@neko-agent/contracts';
 import { getLogger } from '../utils/logger';
 
 const logger = getLogger('ProjectMemoryManager');

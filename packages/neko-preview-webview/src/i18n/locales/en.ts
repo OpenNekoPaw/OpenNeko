@@ -1,7 +1,7 @@
 /**
  * English translations for neko-preview webview
  */
-import type { MessageBundle } from '@neko/shared';
+import type { MessageBundle } from '@neko/ui/i18n';
 
 const preview: MessageBundle = {
   // Host adapter

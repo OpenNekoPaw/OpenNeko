@@ -35,7 +35,7 @@ import type {
   UserPreferences,
   PreferenceSubjectRule,
   PreferenceCostThresholds,
-} from '@neko-agent/types';
+} from '@neko-agent/contracts';
 
 // =============================================================================
 // Result type

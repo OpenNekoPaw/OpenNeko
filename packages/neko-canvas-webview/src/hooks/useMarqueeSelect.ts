@@ -4,7 +4,7 @@
  */
 
 import { useState, useCallback, useRef, useEffect } from 'react';
-import type { CanvasNode, CanvasViewport } from '@neko/shared';
+import type { CanvasNode, CanvasViewport } from '@neko-canvas/domain';
 
 // =============================================================================
 // Types

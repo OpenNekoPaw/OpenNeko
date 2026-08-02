@@ -6,7 +6,7 @@ import {
   type ChildRunScope,
   type ConversationRunScope,
   type RuntimeScopeDiagnosticCode,
-} from '@neko-agent/types';
+} from '@neko-agent/contracts';
 
 export type ConversationRunRegistryErrorCode =
   | RuntimeScopeDiagnosticCode

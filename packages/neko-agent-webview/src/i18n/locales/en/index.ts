@@ -1,4 +1,4 @@
-import type { MessageBundle } from '@neko/shared';
+import type { MessageBundle } from '@neko/ui/i18n';
 
 import { accountBar } from './accountBar';
 import { chat } from './chat';

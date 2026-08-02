@@ -25,7 +25,7 @@ import type {
   ThreeReferencePoseState,
   ThreeReferencePurpose,
   ThreeReferenceRuntimePoseCapabilities,
-} from '@neko/shared';
+} from '@neko-preview/domain';
 import {
   applyDeclaredMannequinPose,
   createBlockoutReferencePreset,

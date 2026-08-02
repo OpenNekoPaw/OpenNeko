@@ -5,7 +5,7 @@
 
 import { useState, useRef } from 'react';
 import { useComposerControlMenu } from './composer-menu-runtime';
-import { ShellExecutionMode } from '@neko-agent/types';
+import { ShellExecutionMode } from '@neko-agent/contracts';
 import { useClickOutsideSingle } from './useClickOutside';
 import { ChevronDownIcon } from './DropdownMenu';
 import {
@@ -13,7 +13,7 @@ import {
   useDropdownPlacement,
   type DropdownPlacement,
 } from './useDropdownDirection';
-import { useTranslation } from '@/i18n/I18nContext';
+import { useTranslation } from '../../../i18n/I18nContext';
 
 interface ModeSelectorProps {
   mode: ShellExecutionMode;

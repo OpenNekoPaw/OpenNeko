@@ -5,7 +5,8 @@
  * These are always available to the agent alongside meta tools.
  */
 
-import type { Tool, IProjectMemoryManager } from '@neko/shared';
+import type { IProjectMemoryManager } from '@neko-agent/contracts';
+import type { Tool } from '@neko-agent/contracts';
 import { ReadTool } from './read-tool';
 import { WriteTool } from './write-tool';
 import { BashTool, type BashToolOptions } from './bash-tool';

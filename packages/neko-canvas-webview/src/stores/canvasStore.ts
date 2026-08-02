@@ -15,7 +15,7 @@ import type {
   CanvasUpdateBlockRequest,
   CanvasUpdateBlockResult,
   PortDefinition,
-} from '@neko/shared';
+} from '@neko-canvas/domain';
 import type { CanvasNodeUpdateOperation } from '@neko-canvas/domain';
 import {
   createNodeConnectionEndpoint,
@@ -23,7 +23,7 @@ import {
   getContainerPolicyName,
   getNodeParentId,
   isContainerNode,
-} from '@neko/shared';
+} from '@neko-canvas/domain';
 import { useHistoryStore, type HistoryStoreApi } from './historyStore';
 import { useCanvasOperationStore, type CanvasOperationStoreApi } from './canvasOperationStore';
 import {

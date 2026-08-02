@@ -1,7 +1,7 @@
-import type { ToolCall } from '@neko-agent/types';
-import { ImageGridCard } from '@/components/ChatView/MediaPreview/ImageGridCard';
-import { useTranslation } from '@/i18n/I18nContext';
-import type { GenerationJobCardProjection } from '@/presenters/tool-call-presenter';
+import type { ToolCall } from '@neko-agent/contracts';
+import { ImageGridCard } from '../MediaPreview/ImageGridCard';
+import { useTranslation } from '../../../i18n/I18nContext';
+import type { GenerationJobCardProjection } from '../../../presenters/tool-call-presenter';
 import { ErrorIcon, SuccessIcon, ToolLoadingSpinner, WarningIcon } from './icons';
 
 interface GenerationJobCardProps {

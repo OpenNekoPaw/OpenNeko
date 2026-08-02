@@ -5,14 +5,14 @@
  */
 
 import { useState, useCallback } from 'react';
-import type { SettingsState, ShellExecutionMode } from '@neko-agent/types';
-import type { MentionItem, PluginSlashCommandDef } from '@/components/ChatView/InputArea/types';
+import type { SettingsState, ShellExecutionMode } from '@neko-agent/contracts';
+import type { MentionItem, PluginSlashCommandDef } from '../components/ChatView/InputArea/types';
 
 /**
  * Project file info
  */
 export interface ProjectFileInfo {
-  locator: import('@neko/shared').WorkspaceFileContentLocator;
+  locator: import('@neko/content').WorkspaceFileContentLocator;
   name: string;
   type: 'file' | 'folder';
   icon?: string;

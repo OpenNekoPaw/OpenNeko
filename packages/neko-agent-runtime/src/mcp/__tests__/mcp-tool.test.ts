@@ -4,7 +4,7 @@
 
 import { describe, it, expect, vi } from 'vitest';
 import { MCPTool, createAllMCPTools, createMCPTools } from '../mcp-tool';
-import type { IMCPClient, MCPToolDefinition } from '@neko/shared';
+import type { IMCPClient, MCPToolDefinition } from '@neko-agent/contracts';
 import type { MCPManager } from '../mcp-manager';
 
 // Mock logger

@@ -7,15 +7,37 @@
  * - ToolCategoryRegistry: Registry for tool categorization and layer management
  * - createTool: Factory function for creating simple tools
  *
- * Note: Platform-specific tools (generation, analysis, document) remain in @neko/platform.
- * This module only contains core infrastructure that agent can use standalone.
+ * Domain capability adapters live beside the Agent registry and delegate through
+ * owning package ports; they do not implement domain behavior here.
  */
 
-// Base class and factory - import from shared
-export { BuiltinTool, createTool } from '@neko/shared';
+export {
+  BuiltinTool,
+  SAFETY_PRESETS,
+  buildTool,
+  createTool,
+  type BuildToolConfig,
+  type ToolSafetyPreset,
+} from './base';
 
 // Registry
 export { ToolRegistry, createToolRegistry } from './tool-registry';
+export { registerMediaAgentTools } from './generation/media-agent-tools';
+export {
+  createContentDocumentReadCapabilityProvider,
+  createContentMediaReadCapabilityProvider,
+  createContentReadCapabilityProvider,
+  type ContentReadCapabilityProviderDeps,
+} from './content/content-read-capability-provider';
+export {
+  createReadDocumentTool,
+  type ReadDocumentContentAccessRuntime,
+} from './content/read-document-tool';
+export {
+  createReadImageTool,
+  executeReadImage,
+  type ReadImageContentAccessRuntime,
+} from './content/read-image-tool';
 
 // Category registry
 export { ToolCategoryRegistry, createToolCategoryRegistry } from './tool-category-registry';
@@ -72,7 +94,7 @@ export {
   type PerceptionTranscribeClient,
 } from './perception';
 
-// Re-export types and constants from shared for convenience
+// Re-export Agent-owned tool contracts for convenience.
 export type {
   Tool,
   ToolCategory,
@@ -91,10 +113,10 @@ export type {
   LayerTokenUsage,
   IToolInjectionManager,
   InjectionEvent,
-  PerceptionToolMetadata,
-  PerceptionToolResult,
   InjectionEventListener,
-} from '@neko/shared';
+} from '@neko-agent/contracts';
+
+export type { PerceptionToolMetadata, PerceptionToolResult } from '@neko-agent/contracts';
 
 // Pattern matching utilities (shared by permission and skill modules)
 export {
@@ -108,4 +130,4 @@ export {
 export { resolveToolGroupTier } from './tier-resolver';
 
 // Re-export injection constants
-export { DEFAULT_INJECTION_CONFIG, CORE_TOOLS } from '@neko/shared';
+export { DEFAULT_INJECTION_CONFIG, CORE_TOOLS } from '@neko-agent/contracts';

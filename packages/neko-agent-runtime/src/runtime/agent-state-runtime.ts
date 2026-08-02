@@ -2,7 +2,7 @@ import {
   buildAgentStateSnapshotMessage,
   type AgentPhase,
   type AgentStateSnapshotMessage,
-} from '@neko-agent/types';
+} from '@neko-agent/contracts';
 
 export interface AgentStateRuntimeEntry {
   readonly conversationId: string;

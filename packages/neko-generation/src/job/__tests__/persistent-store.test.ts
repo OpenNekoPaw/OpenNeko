@@ -1,9 +1,10 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { resolveGlobalStorageLayout, type LocalMetadataStore } from '@neko/shared';
-import { createNodeSqliteLocalMetadataStore } from '@neko/shared/local-metadata/node-sqlite-local-metadata-store';
-import { M1_LOCAL_METADATA_MIGRATIONS } from '@neko/shared/local-metadata/sqlite';
+import { resolveGlobalStorageLayout } from '@neko/local-metadata';
+import type { LocalMetadataStore } from '@neko/local-metadata';
+import { createNodeSqliteLocalMetadataStore } from '@neko/local-metadata/node-sqlite-local-metadata-store';
+import { M1_LOCAL_METADATA_MIGRATIONS } from '@neko/local-metadata/sqlite';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { GenerationJobSnapshot } from '../contracts';
 import { GENERATION_JOB_MIGRATIONS, createPersistentGenerationJobStore } from '../store';

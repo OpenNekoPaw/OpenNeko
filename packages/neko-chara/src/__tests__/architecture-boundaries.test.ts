@@ -19,7 +19,7 @@ describe('neko-chara architecture boundaries', () => {
       /from ['"]@neko\/platform/,
       /from ['"]@neko\/entity\/host-vscode/,
       /from ['"]@neko\/search\/host-vscode/,
-      /from ['"]@neko\/content/,
+      /from ['"]@neko\/content\/(?:node|document\/node)['"]/,
       /from ['"][^'"]*webview[^'"]*['"]/i,
     ];
 
@@ -44,14 +44,14 @@ describe('neko-chara architecture boundaries', () => {
 
   it('removes the retired Entity and Agent Character implementation paths', () => {
     const retired = [
-      'packages/neko-entity/src/character-runtime-policy.ts',
-      'packages/neko-entity/src/character-evidence.ts',
-      'packages/neko-entity/src/character-dialogue-profile-projector.ts',
-      'packages/neko-entity/src/character-dialogue-session.ts',
-      'packages/neko-entity/src/character-dialogue-runtime.ts',
-      'packages/neko-entity/src/characterPurposeOperations.ts',
-      'packages/neko-entity/src/embody-character-session.ts',
-      'packages/neko-entity/src/projections/npcProfileAssembler.ts',
+      'packages/neko-entity-domain/src/character-runtime-policy.ts',
+      'packages/neko-entity-domain/src/character-evidence.ts',
+      'packages/neko-entity-domain/src/character-dialogue-profile-projector.ts',
+      'packages/neko-entity-domain/src/character-dialogue-session.ts',
+      'packages/neko-entity-domain/src/character-dialogue-runtime.ts',
+      'packages/neko-entity-domain/src/characterPurposeOperations.ts',
+      'packages/neko-entity-domain/src/embody-character-session.ts',
+      'packages/neko-entity-domain/src/projections/npcProfileAssembler.ts',
       'packages/neko-agent/packages/extension/src/chat/characterDialogueController.ts',
       'packages/neko-agent/packages/extension/src/chat/embodyCharacterController.ts',
       'packages/neko-agent/packages/extension/src/evidence/characterEvidenceLoader.ts',

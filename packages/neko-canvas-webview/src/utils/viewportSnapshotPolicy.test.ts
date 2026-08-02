@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { CanvasViewport } from '@neko/shared';
+import type { CanvasViewport } from '@neko-canvas/domain';
 import { createViewportSnapshotPolicy } from './viewportSnapshotPolicy';
 
 const VIEWPORT_A: CanvasViewport = {

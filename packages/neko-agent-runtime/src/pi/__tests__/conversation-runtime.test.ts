@@ -14,8 +14,7 @@ import {
   type SimpleStreamOptions,
 } from '@earendil-works/pi-ai';
 import { NodeExecutionEnv } from '@earendil-works/pi-agent-core/node';
-import { createReadDocumentTool } from '@neko/content/document';
-import type { Tool } from '@neko/shared';
+import type { Tool } from '@neko-agent/contracts';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { PiConversationRuntime } from '../conversation-runtime';
@@ -24,6 +23,7 @@ import { NodePiConversationAuthority } from '../node-conversation-authority';
 import { projectOpenNekoTool } from '../openneko-tool';
 import { PiSkillHost } from '../skill-host';
 import type { PiProductAgentEvent } from '../event-projector';
+import { createReadDocumentTool } from '../../tools';
 
 const MODEL: Model<'openai-completions'> = {
   id: 'main',

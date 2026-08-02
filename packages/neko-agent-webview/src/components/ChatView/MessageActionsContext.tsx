@@ -6,10 +6,10 @@
  */
 
 import { createContext, useContext, useMemo, type ReactNode } from 'react';
-import type { AgentWorkItem } from '@/components/AgentWorkItem';
-import type { PluginsAvailable } from '@/components/ChatView/SendToMenu';
-import type { AmbientCanvasNodeProjection } from '@/presenters/plugin-transfer-presenter';
-import type { AgentContextPayload } from '@neko/shared';
+import type { AgentWorkItem } from '../AgentWorkItem';
+import type { PluginsAvailable } from './SendToMenu';
+import type { AmbientCanvasNodeProjection } from '../../presenters/plugin-transfer-presenter';
+import type { AgentContextPayload } from '@neko-agent/contracts';
 
 export interface MessageActionsContextValue {
   activeConversationId?: string | null;

@@ -6,7 +6,7 @@
 
 import { defineHandler } from './types';
 import type { MessageHandler, HandlerRegistration } from './types';
-import type { ChatModelOption } from '@neko/shared';
+import type { ChatModelOption } from '@neko-ai/contracts';
 import type {
   SettingsDataMessage,
   ProjectFilesMessage,
@@ -26,7 +26,7 @@ import {
   projectSettingsMutationError,
 } from '../presenters/config-message-presenter';
 import { AgentHostMessages } from '../messages';
-import type { SettingsDataProjection } from '@neko-agent/types';
+import type { SettingsDataProjection } from '@neko-agent/contracts';
 
 /**
  * Handle 'settingsData' message - Settings from extension

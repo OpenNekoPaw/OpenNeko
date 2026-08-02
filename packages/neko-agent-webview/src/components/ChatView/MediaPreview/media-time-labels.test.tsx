@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { AudioCard } from './AudioCard';
 import { VideoCard } from './VideoCard';
 
-vi.mock('@/messages', () => ({
+vi.mock('../../../messages', () => ({
   AgentHostMessages: {
     openFile: vi.fn(),
     openUrl: vi.fn(),

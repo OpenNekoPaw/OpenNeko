@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { ExternalResearchProvider } from '@neko/shared';
+import type { ExternalResearchProvider } from '@neko-agent/contracts';
 import {
   createExternalResearchCapabilityProvider,
   resolveExternalResearchCapability,

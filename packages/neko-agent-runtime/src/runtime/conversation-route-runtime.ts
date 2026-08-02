@@ -1,4 +1,4 @@
-import { type GlobalErrorMessage } from '@neko-agent/types';
+import { type GlobalErrorMessage } from '@neko-agent/contracts';
 
 export interface ExplicitConversationMessage {
   readonly conversationId?: unknown;

@@ -3,4 +3,4 @@
  *
  * Re-exports shared Provider/hooks from @neko/shared.
  */
-export { I18nProvider, useTranslation } from '@neko/shared/i18n/react';
+export { I18nProvider, useTranslation } from '@neko/ui/i18n/react';

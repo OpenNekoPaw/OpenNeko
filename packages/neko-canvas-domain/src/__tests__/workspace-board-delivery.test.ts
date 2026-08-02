@@ -2,19 +2,16 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { afterEach, describe, expect, it } from 'vitest';
+import { resolveGlobalStorageLayout } from '@neko/local-metadata';
 import {
   createEmptyCanvasData,
   planCanvasWorkspaceBoardProjection,
-  resolveGlobalStorageLayout,
   type CanvasData,
-  type LocalMetadataStore,
   type CanvasWorkspaceProjectionRequest,
-} from '@neko/shared';
-import { createNodeSqliteLocalMetadataStore } from '@neko/shared/local-metadata/node-sqlite-local-metadata-store';
-import {
-  AGENT_STATE_MIGRATIONS,
-  M1_LOCAL_METADATA_MIGRATIONS,
-} from '@neko/shared/local-metadata/sqlite';
+} from '@neko-canvas/domain';
+import type { LocalMetadataStore } from '@neko/local-metadata';
+import { createNodeSqliteLocalMetadataStore } from '@neko/local-metadata/node-sqlite-local-metadata-store';
+import { AGENT_STATE_MIGRATIONS, M1_LOCAL_METADATA_MIGRATIONS } from '@neko/local-metadata/sqlite';
 import {
   WorkspaceBoardDeliveryCoordinator,
   WorkspaceBoardDeliveryLedger,

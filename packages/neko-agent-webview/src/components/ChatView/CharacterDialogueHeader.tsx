@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react';
-import type { NpcProfileFact } from '@neko/shared';
-import type { CharacterDialogueSessionProjection } from '@neko-agent/types';
-import { AgentHostMessages } from '@/messages';
-import { useTranslation } from '@/i18n/I18nContext';
-import { projectCharacterFactLabel } from '@/presenters/character-role-session-presenter';
+import type { NpcProfileFact } from '@neko/chara/contracts';
+import type { CharacterDialogueSessionProjection } from '@neko-agent/contracts';
+import { AgentHostMessages } from '../../messages';
+import { useTranslation } from '../../i18n/I18nContext';
+import { projectCharacterFactLabel } from '../../presenters/character-role-session-presenter';
 
 interface CharacterDialogueHeaderProps {
   session: CharacterDialogueSessionProjection;

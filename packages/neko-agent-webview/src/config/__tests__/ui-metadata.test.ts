@@ -120,8 +120,10 @@ describe('Provider UI Metadata', () => {
         'generic',
       ];
       chatProviders.forEach((id) => {
-        expect(PROVIDER_UI_METADATA[id]).toBeDefined();
-        expect(PROVIDER_UI_METADATA[id].category).toBe('chat');
+        const metadata = PROVIDER_UI_METADATA[id];
+        expect(metadata).toBeDefined();
+        if (!metadata) throw new Error(`Missing provider UI metadata for ${id}.`);
+        expect(metadata.category).toBe('chat');
       });
     });
 
@@ -137,8 +139,10 @@ describe('Provider UI Metadata', () => {
         'suno',
       ];
       mediaProviders.forEach((id) => {
-        expect(PROVIDER_UI_METADATA[id]).toBeDefined();
-        expect(PROVIDER_UI_METADATA[id].category).toBe('media');
+        const metadata = PROVIDER_UI_METADATA[id];
+        expect(metadata).toBeDefined();
+        if (!metadata) throw new Error(`Missing provider UI metadata for ${id}.`);
+        expect(metadata.category).toBe('media');
       });
     });
 

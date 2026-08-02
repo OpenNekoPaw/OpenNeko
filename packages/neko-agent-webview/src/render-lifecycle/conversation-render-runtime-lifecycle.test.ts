@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createAgentMarkdownSessionRegistry } from '@/markdown/agent-markdown-session-registry';
+import { createAgentMarkdownSessionRegistry } from '../markdown/agent-markdown-session-registry';
 import { createIdleConversationStreamingSnapshot } from './conversation-render-contract';
 import { ConversationRenderCoordinator } from './conversation-render-coordinator';
 import {

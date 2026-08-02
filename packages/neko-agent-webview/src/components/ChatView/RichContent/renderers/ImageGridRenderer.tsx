@@ -3,7 +3,7 @@
  */
 
 import type { RichContentProps, RichContentRendererEntry } from '../types';
-import { ImageGridCard } from '@/components/ChatView/MediaPreview';
+import { ImageGridCard } from '../../MediaPreview';
 
 // ---------------------------------------------------------------------------
 // Data shape

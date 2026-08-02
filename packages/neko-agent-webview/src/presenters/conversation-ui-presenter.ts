@@ -5,7 +5,7 @@ import type {
   ConversationMessagesProjection,
   ConversationStreamingState,
   OpenTab,
-} from '@neko-agent/types';
+} from '@neko-agent/contracts';
 import { projectConversationWorkItemsFromMessages } from './work-item-message-presenter';
 
 const DEFAULT_ERROR_MESSAGE = 'An error occurred';

@@ -1,5 +1,5 @@
-import type { DiffLine, DiffStats } from '@neko/shared';
-import type { CodeDiff } from '@neko-agent/types';
+import type { DiffLine, DiffStats } from '@neko/ui/utils';
+import type { CodeDiff } from '@neko-agent/contracts';
 
 export type DiffBlockTone = 'default' | 'success' | 'danger';
 export type DiffBlockOpacity = 'default' | 'muted';

@@ -6,23 +6,23 @@
  */
 
 import { useState, useCallback, memo, type ReactNode } from 'react';
-import type { ToolCall, ToolCallProgress } from '@neko-agent/types';
-import { useTranslation } from '@/i18n/I18nContext';
-import { RichContentRenderer } from '@/components/ChatView/RichContent';
-import { AgentHostMessages } from '@/messages';
-import { useMessageActions } from '@/components/ChatView/MessageActionsContext';
-import { SubAgentCard } from '@/components/ChatView/SubAgentCard';
-import type { AgentArtifactTransferPayload } from '@neko-agent/types';
-import type { CompositeArtifactPageRichData } from '@/components/ChatView/RichContent/renderers';
-import { selectRelatedSubAgentWorkItems } from '@/components/AgentWorkItem';
+import type { ToolCall, ToolCallProgress } from '@neko-agent/contracts';
+import { useTranslation } from '../../../i18n/I18nContext';
+import { RichContentRenderer } from '../RichContent';
+import { AgentHostMessages } from '../../../messages';
+import { useMessageActions } from '../MessageActionsContext';
+import { SubAgentCard } from '../SubAgentCard';
+import type { AgentArtifactTransferPayload } from '@neko-agent/contracts';
+import type { CompositeArtifactPageRichData } from '../RichContent/renderers';
+import { selectRelatedSubAgentWorkItems } from '../../AgentWorkItem';
 import {
   projectToolCallDisplayState,
   type CanvasAuthoringResultProjection,
   type CanvasAuthoringDiagnosticProjection,
   type CanvasAuthoringPromptFieldAlignmentProjection,
-} from '@/presenters/tool-call-presenter';
+} from '../../../presenters/tool-call-presenter';
 import { getLogger } from '../../../utils/logger';
-import { CopyIcon } from '@neko/shared/icons';
+import { CopyIcon } from '@neko/ui/icons';
 import {
   FileIcon,
   ChevronIcon,
@@ -57,7 +57,7 @@ function ToolCallDisplayComponent({
     setIsExpanded((prev) => !prev);
   }, []);
 
-  const handleOpenFile = useCallback((contentLocator: import('@neko/shared').ContentLocator) => {
+  const handleOpenFile = useCallback((contentLocator: import('@neko/content').ContentLocator) => {
     AgentHostMessages.openFile(contentLocator);
   }, []);
 

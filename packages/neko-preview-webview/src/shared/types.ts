@@ -12,7 +12,7 @@ import type {
   PreviewProjectionType,
   PreviewVariant,
   PreviewVariantRequest,
-} from '@neko/shared';
+} from '@neko-preview/domain';
 import type {
   HtmlVideoDescriptor,
   HtmlVideoNativeCapabilities,

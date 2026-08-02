@@ -1,15 +1,15 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import type { ComponentProps } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Message } from '@neko-agent/types';
-import { MessageActionsProvider } from '@/components/ChatView/MessageActionsContext';
+import type { Message } from '@neko-agent/contracts';
+import { MessageActionsProvider } from './MessageActionsContext';
 import { MessageList as MessageListComponent } from './MessageList';
 import type { MessageIdentityMap } from './message-identity';
-import { registerDefaultRenderers } from '@/components/ChatView/RichContent';
-import { I18nProvider } from '@/i18n/I18nContext';
-import { chat as enChat } from '@/i18n/locales/en/chat';
-import { chat as zhCnChat } from '@/i18n/locales/zh-cn/chat';
-import { I18nService } from '@neko/shared';
+import { registerDefaultRenderers } from './RichContent';
+import { I18nProvider } from '../../i18n/I18nContext';
+import { chat as enChat } from '../../i18n/locales/en/chat';
+import { chat as zhCnChat } from '../../i18n/locales/zh-cn/chat';
+import { I18nService } from '@neko/ui/i18n';
 
 const scrollToMock = vi.fn();
 const requestAnimationFrameMock = vi.fn<(callback: FrameRequestCallback) => number>();

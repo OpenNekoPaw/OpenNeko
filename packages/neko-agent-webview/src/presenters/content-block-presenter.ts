@@ -4,12 +4,12 @@ import type {
   ContentBlock,
   ToolCall,
   ToolCallProgress,
-} from '@neko-agent/types';
+} from '@neko-agent/contracts';
 import {
   projectCompositeBlockRichContent,
   type CompositeRichContentProjection,
 } from './composite-content-presenter';
-import type { PluginsAvailable } from '@/components/ChatView/SendToMenu';
+import type { PluginsAvailable } from '../components/ChatView/SendToMenu';
 
 export type ContentBlockRenderKind =
   | 'thinking'

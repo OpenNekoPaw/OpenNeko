@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { ContentReadService } from '@neko/shared';
+import type { ContentReadService } from '@neko/content';
 import { createNodeDocumentRasterRepresentationGenerator } from './node-document-raster-representation';
 
 describe('node document raster representation generator', () => {

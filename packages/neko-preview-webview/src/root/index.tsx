@@ -1,16 +1,14 @@
 import type {
+  ModelPreviewFormat,
+  ModelPreviewSourceDescriptor,
   PreviewContentKind,
   PreviewHostRuntime,
   PreviewMediaDescriptor,
   PreviewProjection,
   PreviewHostRuntimeRoute,
-} from '@neko-preview/contracts';
-import { PREVIEW_HOST_RUNTIME_ROUTES, PREVIEW_HOST_RUNTIME_VERSION } from '@neko-preview/contracts';
-import type {
-  SupportedLocale,
-  ModelPreviewFormat,
-  ModelPreviewSourceDescriptor,
-} from '@neko/shared';
+} from '@neko-preview/domain';
+import { PREVIEW_HOST_RUNTIME_ROUTES, PREVIEW_HOST_RUNTIME_VERSION } from '@neko-preview/domain';
+import type { SupportedLocale } from '@neko/ui/i18n';
 import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
 import { I18nProvider } from '../i18n/I18nContext';
 import { i18nService, setLocale } from '../i18n';

@@ -3,7 +3,7 @@ import { CanvasApp } from './CanvasApp';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { I18nProvider } from './i18n/I18nContext';
 import { i18nService, setLocale } from './i18n';
-import type { SupportedLocale } from '@neko/shared';
+import type { SupportedLocale } from '@neko/ui/i18n';
 import {
   CanvasHostProvider,
   createCanvasWebviewHost,

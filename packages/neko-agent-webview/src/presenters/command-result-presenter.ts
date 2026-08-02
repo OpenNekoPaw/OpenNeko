@@ -5,7 +5,7 @@ import type {
   SlashCommandResultProjection,
   SlashCommandResultProjectionOptions,
   SlashCommandResultMessage,
-} from '@neko-agent/types';
+} from '@neko-agent/contracts';
 
 const CHAT_ONLY_ACTIONS = new Set([
   'showSettings',

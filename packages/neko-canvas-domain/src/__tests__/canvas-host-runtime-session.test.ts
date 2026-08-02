@@ -2,7 +2,7 @@ import {
   createEmptyCanvasData,
   type CanvasMaterialActionDescriptor,
   type MediaCanvasNode,
-} from '@neko/shared';
+} from '@neko-canvas/domain';
 import { describe, expect, it, vi } from 'vitest';
 import {
   CanvasHostRuntimeSession,

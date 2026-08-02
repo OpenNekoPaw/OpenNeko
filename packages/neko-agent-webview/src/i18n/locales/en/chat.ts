@@ -1,4 +1,4 @@
-import type { MessageBundle } from '@neko/shared';
+import type { MessageBundle } from '@neko/ui/i18n';
 
 export const chat = {
   'chat.placeholder': 'Ask anything... (Shift+Enter for new line)',

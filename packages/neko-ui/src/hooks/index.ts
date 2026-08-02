@@ -6,7 +6,7 @@ export {
   usePersistedResize,
   useResizable,
   writePersistedResizeState,
-} from '@neko/shared/components';
+} from '../shared-primitives';
 export type {
   DragBindings,
   DragCallbacks,
@@ -29,4 +29,4 @@ export type {
   UseResizableOptions,
   UseResizableReturn,
   UseResizableUncontrolledOptions,
-} from '@neko/shared/components';
+} from '../shared-primitives';

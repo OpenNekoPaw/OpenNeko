@@ -227,7 +227,9 @@ export function parseTime(timeStr: string): number {
   if (parts.length === 3) {
     // HH:MM:SS or HH:MM:SS.mmm
     const [hours, minutes, secondsWithMs] = parts;
+    if (hours === undefined || minutes === undefined || secondsWithMs === undefined) return 0;
     const [secs, ms = '0'] = secondsWithMs.split('.');
+    if (secs === undefined) return 0;
     return (
       parseInt(hours, 10) * 3600 +
       parseInt(minutes, 10) * 60 +
@@ -237,6 +239,7 @@ export function parseTime(timeStr: string): number {
   } else if (parts.length === 2) {
     // MM:SS
     const [minutes, seconds] = parts;
+    if (minutes === undefined || seconds === undefined) return 0;
     return parseInt(minutes, 10) * 60 + parseInt(seconds, 10);
   }
 

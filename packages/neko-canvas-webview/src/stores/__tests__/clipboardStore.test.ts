@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { useClipboardStore } from '../clipboardStore';
-import type { CanvasNode, CanvasConnection } from '@neko/shared';
+import type { CanvasNode, CanvasConnection } from '@neko-canvas/domain';
 
 // =============================================================================
 // Test Helpers

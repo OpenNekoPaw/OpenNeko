@@ -1,5 +1,10 @@
-import type { CanvasConnection, CanvasNode, ConnectionAnchor, PortDefinition } from '@neko/shared';
-import { getDefaultPorts, resolveCanvasConnectionEndpoint } from '@neko/shared';
+import type {
+  CanvasConnection,
+  CanvasNode,
+  ConnectionAnchor,
+  PortDefinition,
+} from '@neko-canvas/domain';
+import { getDefaultPorts, resolveCanvasConnectionEndpoint } from '@neko-canvas/domain';
 
 interface Point {
   x: number;

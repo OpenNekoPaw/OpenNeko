@@ -1,12 +1,10 @@
+import { type ChatModelOption, type ModelType } from '@neko-ai/contracts';
+import { contentLocatorKey, isContentLocator } from '@neko/content';
 import {
-  contentLocatorKey,
-  isContentLocator,
   resolveAgentTokenBudget,
   type AgentContextPayload,
-  type ChatModelOption,
   type ModelSourceGroup,
-  type ModelType,
-} from '@neko/shared';
+} from '@neko-agent/contracts';
 import { projectContentLocatorPath } from './content-locator-presenter';
 import type {
   AgentMediaModelCategory,
@@ -41,7 +39,7 @@ import type {
   SettingsDataProjection,
   SettingsState,
   SettingsUpdatedMessage,
-} from '@neko-agent/types';
+} from '@neko-agent/contracts';
 import { t } from '../i18n';
 
 const AGENT_MEDIA_CATEGORIES: readonly AgentMediaModelCategory[] = ['image', 'video', 'audio'];

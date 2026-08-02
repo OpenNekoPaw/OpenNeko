@@ -5,21 +5,21 @@
  */
 
 import { useCallback } from 'react';
-import type { Message } from '@neko-agent/types';
+import type { Message } from '@neko-agent/contracts';
 import type {
   SlashCommand,
   SkillSummary,
   PluginSlashCommandDef,
-} from '@/components/ChatView/InputArea/types';
+} from '../components/ChatView/InputArea/types';
 import {
   createSkillInvocationCatalog,
   createSlashCommandCatalog,
   extractSlashCommandArgs,
   formatSkillInvocationHelpCatalog,
   formatSlashCommandHelpCatalog,
-} from '@/components/ChatView/InputArea/slash-command-catalog';
-import { useTranslation } from '@/i18n/I18nContext';
-import { AgentHostMessages } from '@/messages';
+} from '../components/ChatView/InputArea/slash-command-catalog';
+import { useTranslation } from '../i18n/I18nContext';
+import { AgentHostMessages } from '../messages';
 
 export interface UseSlashCommandsProps {
   skills: SkillSummary[];

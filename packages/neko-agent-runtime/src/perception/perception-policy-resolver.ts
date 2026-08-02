@@ -1,4 +1,4 @@
-import type { PerceptionPolicy, PerceptionPolicyContext } from '@neko/shared';
+import type { PerceptionPolicy, PerceptionPolicyContext } from '@neko-agent/contracts';
 
 export class PerceptionPolicyResolver {
   resolve(context: PerceptionPolicyContext): PerceptionPolicy {

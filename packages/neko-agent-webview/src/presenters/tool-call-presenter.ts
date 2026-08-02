@@ -1,19 +1,19 @@
-import type { ToolCall, ToolCallProgress } from '@neko-agent/types';
+import type { ToolCall, ToolCallProgress } from '@neko-agent/contracts';
 import type {
   ContentLocator,
   ContentRepresentationLocator,
-  CanvasWorkspaceDeliveryState,
   DocumentLocator,
   DocumentSourceRef,
-} from '@neko/shared';
+} from '@neko/content';
+import type { CanvasWorkspaceDeliveryState } from '@neko-canvas/domain';
 import {
-  isPublicGeneratedAssetResultUri,
   isContentRepresentationLocator,
   parseDocumentLocator,
   parseDocumentSourceRef,
   validateContentLocator,
-  validateCanvasAuthoringResultEnvelope,
-} from '@neko/shared';
+} from '@neko/content';
+import { isPublicGeneratedAssetResultUri } from '@neko/generation';
+import { validateCanvasAuthoringResultEnvelope } from '@neko-canvas/domain';
 import { isAuthorizedResourceDisplayUri } from './resource-display-uri';
 import {
   AUDIO_GENERATION_TOOLS,
@@ -21,7 +21,7 @@ import {
   IMAGE_GENERATION_TOOLS,
   VIDEO_GENERATION_TOOLS,
   getToolSummary,
-} from '@neko-agent/types';
+} from '@neko-agent/contracts';
 
 const IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.svg'] as const;
 const VIDEO_EXTENSIONS = ['.mp4', '.webm', '.mov', '.avi', '.mkv'] as const;

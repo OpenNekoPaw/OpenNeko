@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { MentionMenu, getFilteredMentionItems, getMentionIcon } from './MentionMenu';
 import type { MentionItem } from './types';
-import { projectContentLocatorPath } from '@/presenters/content-locator-presenter';
+import { projectContentLocatorPath } from '../../../presenters/content-locator-presenter';
 
 const translations: Record<string, string> = {
   'chat.input.mentionHint': 'Search mentions',
@@ -18,7 +18,7 @@ const translations: Record<string, string> = {
   'chat.input.mentionTags.entity.character': 'Character',
 };
 
-vi.mock('@/i18n/I18nContext', () => ({
+vi.mock('../../../i18n/I18nContext', () => ({
   useTranslation: () => ({
     t: (key: string, values?: Record<string, string>) =>
       values?.['filter']

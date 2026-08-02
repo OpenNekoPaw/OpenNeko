@@ -7,7 +7,7 @@ import {
   DEFAULT_CANVAS_DATA,
   type CanvasMaterialActionDescriptor,
   type MediaCanvasNode,
-} from '@neko/shared';
+} from '@neko-canvas/domain';
 import { describe, expect, it, vi } from 'vitest';
 import { createCanvasWebviewHost } from './canvas-webview-host';
 

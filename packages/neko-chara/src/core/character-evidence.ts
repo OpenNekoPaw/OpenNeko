@@ -4,12 +4,9 @@ import type {
   CreativeEntity,
   CreativeEntityOccurrenceProjection,
   CreativeEntityRef,
-  FountainScriptIndex,
-  NpcProfileFact,
-  NpcTranscriptMessage,
-  ProjectIndexFreshness,
-  ProjectSearchItem,
-} from '@neko/shared';
+} from '@neko-entity/domain';
+import type { FountainScriptIndex } from '@neko/content';
+import type { NpcProfileFact, NpcTranscriptMessage } from '@neko/chara/contracts';
 
 export type CharacterEvidenceMode =
   'character-dialogue' | 'embody-character' | 'character-validation';
@@ -18,6 +15,24 @@ export type CharacterEvidenceSourceKind =
   'entity-occurrence' | 'story-script-index' | 'project-search' | 'manual';
 
 export type CharacterEvidenceAuthority = 'confirmed' | 'suggested' | 'indexed';
+
+export type CharacterEvidenceIndexFreshness = 'fresh' | 'stale' | 'building' | 'partial' | 'failed';
+
+export interface CharacterEvidenceSearchItem {
+  readonly id: string;
+  readonly kind: string;
+  readonly label: string;
+  readonly freshness: CharacterEvidenceIndexFreshness;
+  readonly filePath?: string;
+  readonly navigationData?: Readonly<Record<string, unknown>>;
+  readonly metadata?: Readonly<Record<string, unknown>>;
+  readonly source: {
+    readonly partition: string;
+    readonly sourceId?: string;
+    readonly projectRelativePath?: string;
+    readonly filePath?: string;
+  };
+}
 
 export type CharacterEvidenceOmissionReason =
   | 'budget'
@@ -54,7 +69,7 @@ export interface CharacterEvidenceSourceRef {
   readonly uri?: string;
   readonly lineStart?: number;
   readonly lineEnd?: number;
-  readonly freshness?: ProjectIndexFreshness;
+  readonly freshness?: CharacterEvidenceIndexFreshness;
   readonly metadata?: CharacterEvidenceMetadata;
 }
 
@@ -75,7 +90,7 @@ export interface CharacterEvidenceChunk {
   readonly sourceRefs: readonly CharacterEvidenceSourceRef[];
   readonly authority: CharacterEvidenceAuthority;
   readonly relevance: CharacterEvidenceRelevance;
-  readonly freshness: ProjectIndexFreshness;
+  readonly freshness: CharacterEvidenceIndexFreshness;
   readonly knowledgeBoundary?: string;
   readonly metadata?: CharacterEvidenceMetadata;
 }
@@ -104,7 +119,7 @@ export interface CharacterEvidenceBundle {
   readonly query: string;
   readonly chunks: readonly CharacterEvidenceChunk[];
   readonly omitted: readonly CharacterEvidenceOmission[];
-  readonly freshness: ProjectIndexFreshness;
+  readonly freshness: CharacterEvidenceIndexFreshness;
   readonly budget: CharacterEvidenceBudget;
 }
 
@@ -144,7 +159,9 @@ export interface CharacterEvidenceProjectSearchInput {
 }
 
 export interface CharacterEvidenceProjectSearchReader {
-  search(input: CharacterEvidenceProjectSearchInput): Promise<readonly ProjectSearchItem[]>;
+  search(
+    input: CharacterEvidenceProjectSearchInput,
+  ): Promise<readonly CharacterEvidenceSearchItem[]>;
 }
 
 export interface CharacterEvidenceStoryIndexReader {
@@ -202,7 +219,7 @@ export interface CharacterEvidenceLocator {
   readonly lineStart?: number;
   readonly lineEnd?: number;
   readonly authority: CharacterEvidenceAuthority;
-  readonly freshness: ProjectIndexFreshness;
+  readonly freshness: CharacterEvidenceIndexFreshness;
   readonly metadata?: CharacterEvidenceMetadata;
 }
 
@@ -233,7 +250,7 @@ export const DEFAULT_CHARACTER_EVIDENCE_SUPPORTED_EXTENSIONS = [
   '.nekostory',
 ] as const;
 
-const FRESHNESS_SCORE: Readonly<Record<ProjectIndexFreshness, number>> = {
+const FRESHNESS_SCORE: Readonly<Record<CharacterEvidenceIndexFreshness, number>> = {
   fresh: 3,
   partial: 1,
   building: 0,
@@ -901,8 +918,8 @@ export function projectCharacterEvidenceBundleToProfileFacts(
 }
 
 export function aggregateCharacterEvidenceFreshness(
-  freshnessValues: readonly ProjectIndexFreshness[],
-): ProjectIndexFreshness {
+  freshnessValues: readonly CharacterEvidenceIndexFreshness[],
+): CharacterEvidenceIndexFreshness {
   if (freshnessValues.length === 0) return 'failed';
   if (freshnessValues.includes('failed')) return 'partial';
   if (freshnessValues.includes('building')) return 'building';
@@ -924,7 +941,7 @@ export function occurrenceProjectionToCharacterEvidenceLocators(
 }
 
 export function projectSearchItemToCharacterEvidenceLocators(
-  item: ProjectSearchItem,
+  item: CharacterEvidenceSearchItem,
 ): readonly CharacterEvidenceLocator[] {
   return projectSearchItemToLocator(item);
 }
@@ -1029,7 +1046,9 @@ function occurrenceProjectionToLocator(
   ];
 }
 
-function projectSearchItemToLocator(item: ProjectSearchItem): readonly CharacterEvidenceLocator[] {
+function projectSearchItemToLocator(
+  item: CharacterEvidenceSearchItem,
+): readonly CharacterEvidenceLocator[] {
   const candidatePath =
     readString(item.navigationData?.['filePath']) ??
     item.source.projectRelativePath ??
@@ -1195,9 +1214,9 @@ function collectBoundedCjkBigrams(token: string): readonly string[] {
 }
 
 function dedupeProjectSearchItems(
-  items: readonly ProjectSearchItem[],
-): readonly ProjectSearchItem[] {
-  const byId = new Map<string, ProjectSearchItem>();
+  items: readonly CharacterEvidenceSearchItem[],
+): readonly CharacterEvidenceSearchItem[] {
+  const byId = new Map<string, CharacterEvidenceSearchItem>();
   for (const item of items) {
     if (!byId.has(item.id)) byId.set(item.id, item);
   }
@@ -1236,7 +1255,7 @@ function clampLine(line: number, totalLines: number): number {
 }
 
 function readLineFromProjectSearchItem(
-  item: ProjectSearchItem,
+  item: CharacterEvidenceSearchItem,
   field: 'line' | 'lineStart' | 'lineEnd',
 ): number | undefined {
   const value = readNumber(item.navigationData?.[field]) ?? readNumber(item.metadata?.[field]);

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { AgentContextPayload, ContentLocator, MessageAttachment } from '@neko/shared';
+import type { AgentContextPayload, MessageAttachment } from '@neko-agent/contracts';
+import type { ContentLocator } from '@neko/content';
 import {
   formatReferenceBasename,
   formatReferenceParentPath,

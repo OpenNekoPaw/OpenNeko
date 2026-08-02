@@ -4,7 +4,7 @@
  */
 
 import { useMemo } from 'react';
-import type { CanvasNode, CanvasViewport } from '@neko/shared';
+import type { CanvasNode, CanvasViewport } from '@neko-canvas/domain';
 import { cullNodes, type CullingResult } from '../utils/viewportCulling';
 
 // =============================================================================

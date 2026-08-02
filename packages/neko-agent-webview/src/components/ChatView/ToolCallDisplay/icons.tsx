@@ -3,10 +3,10 @@
  * Also reusable by other Tool execution UI.
  */
 
-export { FileIcon, WarningIcon } from '@neko/shared/icons';
-export { ChevronDownIcon as ChevronIcon } from '@neko/shared/icons';
+export { FileIcon, WarningIcon } from '@neko/ui/icons';
+export { ChevronDownIcon as ChevronIcon } from '@neko/ui/icons';
 // SuccessIcon renders as a checkmark — reuse CheckIcon from shared
-export { CheckIcon as SuccessIcon } from '@neko/shared/icons';
+export { CheckIcon as SuccessIcon } from '@neko/ui/icons';
 
 // X cross used as error status indicator (different from shared ErrorIcon which is circle+X)
 export function ErrorIcon({ className }: { className?: string }) {

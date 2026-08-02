@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { AgentState, Message, OpenTab } from '@neko-agent/types';
+import type { AgentState, Message, OpenTab } from '@neko-agent/contracts';
 import {
   applyUserMessageToTabState,
   generateConversationTitle,

@@ -9,7 +9,8 @@
  * 2. Inferred from existing metadata (alwaysActive, priority, source)
  */
 
-import type { LoadingTier, ToolGroup } from '@neko/shared';
+import type { ToolGroup } from '@neko-agent/contracts';
+import type { LoadingTier } from '@neko-agent/contracts';
 
 /**
  * Resolve effective tier for a ToolGroup.

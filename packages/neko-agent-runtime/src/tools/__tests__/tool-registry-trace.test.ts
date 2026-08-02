@@ -1,13 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
+import { CapturedLogTransport, ConsoleLogger, LogLevel } from '@neko/shared';
 import {
-  CapturedLogTransport,
-  ConsoleLogger,
-  LogLevel,
   TIMELINE_RENDER_SERVICE_PORT_ID,
   createAgentTraceContext,
-  createTool,
   type ToolExecuteOptions,
-} from '@neko/shared';
+} from '@neko-agent/contracts';
+import { createTool } from '../base';
 
 interface TestJsonSchema {
   readonly description?: string;

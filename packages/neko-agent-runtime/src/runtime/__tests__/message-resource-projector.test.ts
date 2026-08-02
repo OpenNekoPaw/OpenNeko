@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { Message } from '@neko-agent/types';
+import type { Message } from '@neko-agent/contracts';
 import {
   isLocalMediaFilePath,
   projectMessagesForResourceDisplay,

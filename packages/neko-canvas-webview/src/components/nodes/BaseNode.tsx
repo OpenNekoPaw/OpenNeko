@@ -9,8 +9,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, type ReactNode } from 'react';
 import { getKeyboardBoundaryMetadata } from '@neko/ui/keyboard';
-import type { CanvasViewport, CanvasNodeType, PortDefinition } from '@neko/shared';
-import { getDefaultPorts } from '@neko/shared';
+import type { CanvasViewport, CanvasNodeType, PortDefinition } from '@neko-canvas/domain';
+import { getDefaultPorts } from '@neko-canvas/domain';
 import { useNodeDrag } from '../../hooks/useNodeDrag';
 import { useNodeResize, type ResizeHandle } from '../../hooks/useNodeResize';
 import { useNodeRotate } from '../../hooks/useNodeRotate';

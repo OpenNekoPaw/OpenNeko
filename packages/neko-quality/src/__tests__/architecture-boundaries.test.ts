@@ -16,13 +16,12 @@ describe('@neko/quality architecture boundaries', () => {
     expect(Reflect.has(core, 'createMultimodalPerceptionEvaluator')).toBe(false);
   });
 
-  it('depends only on shared contracts', () => {
+  it('depends only on explicit domain contracts', () => {
     const forbiddenImports = [
-      '@neko/agent',
+      '@neko-agent/runtime',
       '@neko-agent/',
       '@neko/platform',
-      '@neko/content',
-      '@neko/entity',
+      '@neko-entity/domain',
       '@neko/cut',
       'vscode',
       'react',
@@ -46,7 +45,7 @@ describe('@neko/quality architecture boundaries', () => {
       'packages/neko-agent/packages/extension/src/capabilities/quality/quality-review-validation.ts',
       'packages/neko-agent/packages/extension/src/capabilities/quality/index.ts',
       'packages/neko-agent/packages/extension/src/tools/projectQualityOrchestration.ts',
-      'packages/neko-types/src/types/quality/qa-types.ts',
+      'packages/neko-shared/src/types/quality/qa-types.ts',
     ];
 
     expect(retiredPaths.filter((file) => existsSync(resolve(workspaceRoot, file)))).toEqual([]);

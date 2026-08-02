@@ -9,7 +9,7 @@
  * Evaluation order: deny → allow → ask → mode-check
  */
 
-import type { ToolCallInfo } from '@neko/shared';
+import type { ToolCallInfo } from '@neko-agent/contracts';
 
 /**
  * Permission execution mode

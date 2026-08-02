@@ -6,7 +6,7 @@ const mockHostMessages = vi.hoisted(() => ({
   openUrl: vi.fn(),
 }));
 
-vi.mock('@/messages', () => ({
+vi.mock('../../../messages', () => ({
   AgentHostMessages: mockHostMessages,
 }));
 

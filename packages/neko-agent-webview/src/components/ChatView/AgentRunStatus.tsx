@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import type { AgentPhase, AgentState } from '@neko-agent/types';
-import { useTranslation } from '@/i18n/I18nContext';
+import type { AgentPhase, AgentState } from '@neko-agent/contracts';
+import { useTranslation } from '../../i18n/I18nContext';
 
 interface AgentRunStatusProps {
   readonly agentState: AgentState | null;

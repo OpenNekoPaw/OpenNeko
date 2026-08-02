@@ -5,7 +5,7 @@ import type {
   ProviderModelId,
   PromptFragment,
   StyleFamily,
-} from '@neko/shared';
+} from '@neko-agent/contracts';
 
 export type ProviderExpressionContextMode = 'selected' | 'candidates';
 export type ProviderExpressionTaskStage = 'planning' | 'routing' | 'generation';

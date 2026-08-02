@@ -10,7 +10,7 @@ import type {
   DocumentRange,
   DocumentRegion,
   DocumentSourceRef,
-} from '@neko/shared';
+} from '@neko/content';
 
 // =============================================================================
 // Desktop host → Webview

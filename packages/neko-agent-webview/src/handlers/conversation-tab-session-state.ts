@@ -1,4 +1,4 @@
-import type { OpenTab } from '@neko-agent/types';
+import type { OpenTab } from '@neko-agent/contracts';
 import type { MessageHandlerContext } from './types';
 
 export function openConversationTabBinding(context: MessageHandlerContext, tab: OpenTab): void {

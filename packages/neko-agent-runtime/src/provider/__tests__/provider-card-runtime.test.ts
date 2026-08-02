@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { IProviderCardRegistry, ProviderCard } from '@neko/shared';
+import type { IProviderCardRegistry, ProviderCard } from '@neko-agent/contracts';
 import { registerRuntimeProviderCardDirectories } from '../provider-card-runtime';
 
 describe('registerRuntimeProviderCardDirectories', () => {

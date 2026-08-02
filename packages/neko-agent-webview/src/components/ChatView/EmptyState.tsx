@@ -1,4 +1,4 @@
-import { useTranslation } from '@/i18n/I18nContext';
+import { useTranslation } from '../../i18n/I18nContext';
 import type { SkillSummary } from './InputArea/types';
 
 export type EmptyStateEntryAction = 'start-chat' | 'generate-assets' | 'roleplay';

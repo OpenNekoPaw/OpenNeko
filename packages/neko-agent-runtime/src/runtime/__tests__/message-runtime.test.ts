@@ -3,10 +3,9 @@ import { DEFAULT_MENTION_EXCLUDE_GLOB } from '../../input/mention-excludes';
 import {
   AGENT_RESOLVED_ENTITY_CONTEXT_KIND,
   AGENT_RESOLVED_ENTITY_CONTEXT_SCHEMA_VERSION,
-  contentLocatorKey,
   type AgentContextPayload,
-  type ContentLocator,
-} from '@neko/shared';
+} from '@neko-agent/contracts';
+import { contentLocatorKey, type ContentLocator } from '@neko/content';
 import {
   AGENT_TURN_PRECONDITION_MESSAGE,
   appendAmbientCanvasSystemPrompt,

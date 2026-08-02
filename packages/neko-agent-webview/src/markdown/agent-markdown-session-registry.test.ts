@@ -3,7 +3,7 @@ import type {
   AgentTurnTimelineAssistantTextItem,
   ConversationProjectionPatch,
   ConversationProjectionSnapshot,
-} from '@neko-agent/types';
+} from '@neko-agent/contracts';
 import {
   createAgentMarkdownSessionKey,
   createAgentMarkdownSessionRegistry,

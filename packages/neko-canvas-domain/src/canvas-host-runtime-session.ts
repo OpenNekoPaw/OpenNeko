@@ -1,10 +1,10 @@
+import type { ContentLocator } from '@neko/content';
+import type { CanvasData } from './types/canvas';
 import type {
-  CanvasData,
   CanvasMaterialActionDescriptor,
   CanvasMaterialActionIntent,
   CanvasMaterialAuthoringRequest,
-  ContentLocator,
-} from '@neko/shared';
+} from './types/canvas-material-contracts';
 import {
   CANVAS_HOST_RUNTIME_CONTRACT_VERSION,
   assertCanvasHostRuntimeIdentity,

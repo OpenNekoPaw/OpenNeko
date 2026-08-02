@@ -1,4 +1,5 @@
-import type { IStorageLayout, PathVariableMap, ResolvedPath } from '@neko/shared';
+import type { PathVariableMap, ResolvedPath } from '@neko/shared';
+import type { IStorageLayout } from '@neko/local-metadata';
 import type { HostContentPolicySnapshot } from './workspace-content-settings';
 
 export type HostMaybePromise<T> = T | Promise<T>;

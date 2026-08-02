@@ -1,10 +1,10 @@
-import type { ChatModelOption } from '@neko/shared';
-import type { SessionMode } from '@neko-agent/types';
+import type { ChatModelOption } from '@neko-ai/contracts';
+import type { SessionMode } from '@neko-agent/contracts';
 import { MediaCategoryIcon } from './ComposerIcons';
 import { SESSION_MODE_COLORS } from './SessionModeSelector';
 import type { EntryPromptMenu as EntryPromptMenuKind, GenCategory, MentionItem } from './types';
 import { useClickOutsideSingle } from './useClickOutside';
-import { useTranslation } from '@/i18n/I18nContext';
+import { useTranslation } from '../../../i18n/I18nContext';
 import { useRef } from 'react';
 import { RoleplayEntityList } from '../RoleplayEntityList';
 

@@ -1,7 +1,7 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it } from 'vitest';
-import type { GroupCanvasNode, MarkdownCanvasNode } from '@neko/shared';
+import type { GroupCanvasNode, MarkdownCanvasNode } from '@neko-canvas/domain';
 import { setLocale } from '../../i18n';
 import { GroupNode } from './GroupNode';
 

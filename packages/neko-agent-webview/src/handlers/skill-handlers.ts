@@ -7,7 +7,7 @@
 import { defineHandler } from './types';
 import type { MessageHandler, HandlerRegistration } from './types';
 import type { SkillsListMessage } from './messages';
-import { projectInputSkillSummaries } from '@/presenters/skill-presenter';
+import { projectInputSkillSummaries } from '../presenters/skill-presenter';
 
 /**
  * Handle 'skillsList' - Available skills from extension

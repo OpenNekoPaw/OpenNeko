@@ -21,7 +21,7 @@ const translations: Record<string, string> = {
   'chat.commands.source.project': 'Project',
 };
 
-vi.mock('@/i18n/I18nContext', () => ({
+vi.mock('../../../i18n/I18nContext', () => ({
   useTranslation: () => ({
     t: (key: string) => translations[key] ?? key,
   }),

@@ -16,14 +16,17 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@neko-assets/domain": "workspace:*",
     "@neko-canvas/domain": "workspace:*",
     "@neko/media": "workspace:*",
+    "@neko-preview/domain": "workspace:*",
     "@neko/shared": "workspace:*",
     "@neko/ui": "workspace:*",
     "clsx": "^2.1.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "zustand": "^4.4.7"
+    "zustand": "^4.4.7",
+    "@neko/content": "workspace:*"
   },
   "devDependencies": {
     "@types/react": "^18.2.43",

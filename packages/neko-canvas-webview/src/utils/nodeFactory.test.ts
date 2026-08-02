@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { CanonicalCanvasNodeType } from '@neko/shared';
+import type { CanonicalCanvasNodeType } from '@neko-canvas/domain';
 import { buildCanvasNode } from './nodeFactory';
 
 describe('buildCanvasNode', () => {

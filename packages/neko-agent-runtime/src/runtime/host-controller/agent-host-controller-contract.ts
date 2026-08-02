@@ -8,8 +8,8 @@ import {
   type ProjectionEndpointDiscoverRequest,
   type ProjectionSnapshotAcknowledgement,
   type UpdateTabStateWebviewMessage,
-} from '@neko-agent/types';
-import type { ContentLocator, DocumentLocator } from '@neko/shared';
+} from '@neko-agent/contracts';
+import type { ContentLocator, DocumentLocator } from '@neko/content';
 import type { AgentMessageRuntimeRequest } from '../turn/message-runtime';
 
 export interface AgentHostConnectionIdentity {

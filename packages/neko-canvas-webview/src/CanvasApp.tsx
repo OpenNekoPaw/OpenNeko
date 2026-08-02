@@ -6,17 +6,16 @@ import {
   useReportWebviewKeyboardFocus,
 } from '@neko/ui/keyboard';
 import { CreativeWorkbenchShell } from '@neko/ui/workbench';
-import { CANVAS_VERSION, validateCanvasBoardRef } from '@neko/shared';
+import { CANVAS_VERSION, validateCanvasBoardRef } from '@neko-canvas/domain';
+import type { CanvasDroppedAsset, ProjectedCanvasStatus } from '@neko-canvas/domain';
+import type { ContentLocator } from '@neko/content';
 import type {
   CanvasBoardNavigationDiagnostic,
   CanvasBoardRef,
   CanvasConnection,
   CanvasData,
-  CanvasDroppedAsset,
   CanvasViewport,
-  ContentLocator,
-  ProjectedCanvasStatus,
-} from '@neko/shared';
+} from '@neko-canvas/domain';
 import { createCanvasAgentActiveContext } from './utils/canvasAgentOperations';
 import {
   useCanvasStoreApi,

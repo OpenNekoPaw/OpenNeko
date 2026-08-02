@@ -1,4 +1,4 @@
-import type { AgentMarkdownSessionRegistry } from '@/markdown/agent-markdown-session-registry';
+import type { AgentMarkdownSessionRegistry } from '../markdown/agent-markdown-session-registry';
 import type { ConversationRenderCoordinator } from './conversation-render-coordinator';
 
 export type WebviewRenderVisibility = 'hidden' | 'visible';

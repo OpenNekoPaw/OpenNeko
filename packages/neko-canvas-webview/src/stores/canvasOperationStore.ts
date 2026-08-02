@@ -7,7 +7,7 @@
 
 import { create, createStore, type StateCreator } from 'zustand';
 import type { StoreApi } from 'zustand/vanilla';
-import type { CanvasNode, CanvasConnection } from '@neko/shared';
+import type { CanvasNode, CanvasConnection } from '@neko-canvas/domain';
 import type {
   CanvasEditOperation,
   CanvasNodeUpdateOperation,

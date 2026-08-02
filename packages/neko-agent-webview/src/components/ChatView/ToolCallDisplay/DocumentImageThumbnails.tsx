@@ -1,10 +1,10 @@
 import { memo, useCallback } from 'react';
-import { AgentHostMessages } from '@/messages';
-import { CopyIcon, FileIcon } from '@neko/shared/icons';
-import { SendToMenu } from '@/components/ChatView/SendToMenu';
-import { useMessageActions } from '@/components/ChatView/MessageActionsContext';
-import { projectCanvasContentTransferTarget } from '@/presenters/plugin-transfer-presenter';
-import type { DocumentImageThumbnailProjection } from '@/presenters/tool-call-presenter';
+import { AgentHostMessages } from '../../../messages';
+import { CopyIcon, FileIcon } from '@neko/ui/icons';
+import { SendToMenu } from '../SendToMenu';
+import { useMessageActions } from '../MessageActionsContext';
+import { projectCanvasContentTransferTarget } from '../../../presenters/plugin-transfer-presenter';
+import type { DocumentImageThumbnailProjection } from '../../../presenters/tool-call-presenter';
 
 interface DocumentImageThumbnailsProps {
   thumbnails: readonly DocumentImageThumbnailProjection[];

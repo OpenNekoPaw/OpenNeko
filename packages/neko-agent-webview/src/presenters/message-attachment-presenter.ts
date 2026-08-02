@@ -1,4 +1,4 @@
-import type { MessageAttachment } from '@neko/shared';
+import type { MessageAttachment } from '@neko-agent/contracts';
 
 export type MessageAttachmentPreviewKind = 'image' | 'audio' | 'video' | 'file';
 

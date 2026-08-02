@@ -11,8 +11,8 @@
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
-import type { ToolCallInfo } from '@neko/shared';
-import { DEFAULT_TOOL_TRAITS } from '@neko/shared';
+import type { ToolCallInfo } from '@neko-agent/contracts';
+import { DEFAULT_TOOL_TRAITS } from '@neko-agent/contracts';
 import { ToolTraitsRegistry, DEFAULT_CREATIVE_TOOL_TRAITS } from '../tool-traits-registry';
 import { PermissionRuleMatcher } from '../rule-matcher';
 import type { PermissionConfig } from '../types';

@@ -12,7 +12,7 @@
 
 import { getKeyboardBoundaryMetadata } from '@neko/ui/keyboard';
 import { HorizontalToolbar, ToolbarButton, ToolbarSeparator } from '@neko/ui/primitives';
-import { StorylineIcon } from '@neko/shared/icons';
+import { StorylineIcon } from '@neko/ui/icons';
 import { useScopedHistoryStore as useHistoryStore } from '../../stores/canvasStoreScope';
 import { t } from '../../i18n';
 import { DownloadIcon, UndoIcon, RedoIcon, PackageIcon, PointerIcon } from '@neko/ui/icons';

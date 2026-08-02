@@ -1,4 +1,4 @@
-import type { CanonicalCanvasNodeType } from '@neko/shared';
+import type { CanonicalCanvasNodeType } from '@neko-canvas/domain';
 
 export type CanvasAddActionId = 'text' | 'table' | 'image' | 'video' | 'audio' | 'director3d';
 

@@ -7,14 +7,14 @@ import {
   type CanvasHostRuntime,
   type CanvasHostSnapshot,
 } from '@neko-canvas/domain';
-import { isValidNkc, type CanvasData, type CanvasViewport } from '@neko/shared';
+import { isValidNkc, type CanvasData, type CanvasViewport } from '@neko-canvas/domain';
+import type { ContentLocator } from '@neko/content';
 import type {
   CanvasMaterialActionDescriptor,
   CanvasMaterialActionIntent,
   CanvasMaterialMediaKind,
   CanvasReferencedContentLocator,
-  ContentLocator,
-} from '@neko/shared';
+} from '@neko-canvas/domain';
 import type { CanvasHostMessagePort } from '../hooks/useCanvasHostMessages';
 import { createCanvasViewportSnapshotKey } from '../utils/viewportWebviewState';
 

@@ -13,7 +13,7 @@ import {
   type ExternalResearchSearchInput,
   type ExternalResearchSearchResult,
   type ResearchSource,
-} from '@neko/shared';
+} from '@neko-agent/contracts';
 import type { MCPToolCallManager } from '../../mcp/mcp-tool';
 
 export interface CreateMcpExternalResearchProviderOptions {

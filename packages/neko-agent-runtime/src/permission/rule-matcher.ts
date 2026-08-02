@@ -11,7 +11,7 @@
  * - "Read(src/**)" - Path pattern with glob
  */
 
-import type { ToolCallInfo } from '@neko/shared';
+import type { ToolCallInfo } from '@neko-agent/contracts';
 import type { PermissionRules, PermissionCheckResult, PermissionConfig } from './types';
 import { DEFAULT_READ_ONLY_TOOLS, READ_ONLY_MCP_PREFIXES } from './types';
 import type { ToolTraitsRegistry } from './tool-traits-registry';

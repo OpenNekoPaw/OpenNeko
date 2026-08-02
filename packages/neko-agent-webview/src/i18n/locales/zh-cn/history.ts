@@ -1,4 +1,4 @@
-import type { MessageBundle } from '@neko/shared';
+import type { MessageBundle } from '@neko/ui/i18n';
 
 export const history = {
   'history.title': '历史记录',

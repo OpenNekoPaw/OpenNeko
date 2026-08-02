@@ -6,7 +6,7 @@ import type {
   ExternalResearchSearchInput,
   ExternalResearchSearchResult,
   ResearchSource,
-} from '@neko/shared';
+} from '@neko-agent/contracts';
 
 export interface FakeExternalResearchProviderOptions {
   readonly id?: string;

@@ -5,7 +5,7 @@ import {
   type ContentRepresentationLocator,
   type ContentRepresentationService,
   type WorkspaceFileContentLocator,
-} from '@neko/shared';
+} from '@neko/content';
 import {
   createAgentContentAccessDiagnostic,
   type AgentContentAccessDiagnostic,
@@ -169,7 +169,7 @@ class HostAgentContentAccessRuntime implements AgentContentAccessRuntime {
       { status: 'ready' }
     >,
   ): Promise<{
-    readonly imageInfo?: readonly import('@neko/shared').DocumentImageInfo[];
+    readonly imageInfo?: readonly import('@neko/content').DocumentImageInfo[];
     readonly imageCount?: number;
     readonly imagesTruncated?: boolean;
     readonly diagnostics: readonly AgentContentAccessDiagnostic[];

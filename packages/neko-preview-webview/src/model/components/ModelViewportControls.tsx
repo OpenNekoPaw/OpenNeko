@@ -16,7 +16,7 @@ import {
   ScaleIcon,
 } from '@neko/ui/icons';
 import { getKeyboardBoundaryMetadata } from '@neko/ui/keyboard';
-import type { ThreeReferencePresetOption } from '@neko/shared';
+import type { ThreeReferencePresetOption } from '@neko-preview/domain';
 import { useTranslation } from '../../i18n/I18nContext';
 import {
   MODEL_CAMERA_PLACEMENTS,

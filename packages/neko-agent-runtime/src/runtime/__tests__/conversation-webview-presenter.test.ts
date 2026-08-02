@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Message, ToolCall } from '@neko-agent/types';
+import type { Message, ToolCall } from '@neko-agent/contracts';
 import {
   buildActiveConversationMessage,
   buildConversationListMessage,

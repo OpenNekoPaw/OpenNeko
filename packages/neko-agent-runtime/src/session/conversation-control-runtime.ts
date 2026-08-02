@@ -4,7 +4,7 @@ import {
   type AgentPhaseMessage,
   type HistoryClearedMessage,
   type MessageQueueSnapshotMessage,
-} from '@neko-agent/types';
+} from '@neko-agent/contracts';
 
 export type ConversationControlRuntimeMessage =
   HistoryClearedMessage | AgentPhaseMessage | MessageQueueSnapshotMessage;

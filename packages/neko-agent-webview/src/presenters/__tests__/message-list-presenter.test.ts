@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { ContentBlock } from '@neko-agent/types';
+import type { ContentBlock } from '@neko-agent/contracts';
 import { projectMessageList, projectMessageListItems } from '../message-list-presenter';
 
 describe('message-list-presenter', () => {

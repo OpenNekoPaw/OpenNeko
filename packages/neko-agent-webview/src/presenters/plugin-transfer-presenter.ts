@@ -1,13 +1,14 @@
 import type {
   NekoPluginKey,
   AmbientCanvasNode,
+  AgentContextPayload,
   PluginTransferMediaType,
   PluginTransferTarget,
   PluginTransferTargetMode,
   PluginTransferTargetRef,
   PluginsAvailable,
-} from '@neko-agent/types';
-import { isCanvasNodeType, type AgentContextPayload } from '@neko/shared';
+} from '@neko-agent/contracts';
+import { isCanvasNodeType } from '@neko-canvas/domain';
 
 export type AmbientCanvasNodeProjection = AmbientCanvasNode;
 

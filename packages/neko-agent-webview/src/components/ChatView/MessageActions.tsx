@@ -4,9 +4,9 @@
  */
 
 import { useState, useCallback, memo } from 'react';
-import { Message } from '@neko-agent/types';
+import { Message } from '@neko-agent/contracts';
 import { getLogger } from '../../utils/logger';
-import { CopyIcon, CheckIcon, EditIcon, RefreshIcon } from '@neko/shared/icons';
+import { CopyIcon, CheckIcon, EditIcon, RefreshIcon } from '@neko/ui/icons';
 
 const logger = getLogger('MessageActions');
 

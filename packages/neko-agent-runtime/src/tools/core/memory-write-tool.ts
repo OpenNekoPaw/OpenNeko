@@ -6,8 +6,13 @@
  * directly; clients or domain runtimes validate and persist accepted proposals.
  */
 
-import type { ToolResult, ToolCategory, ToolParameters, ToolExecuteOptions } from '@neko/shared';
-import { BuiltinTool } from '@neko/shared';
+import type {
+  ToolResult,
+  ToolCategory,
+  ToolParameters,
+  ToolExecuteOptions,
+} from '@neko-agent/contracts';
+import { BuiltinTool } from '../base';
 import { presentInvalidToolArguments, presentMemoryWriteFailure } from './core-tool-presentation';
 
 export type ProjectMemoryMutationAction = 'upsert' | 'remove';

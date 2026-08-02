@@ -1,4 +1,5 @@
-import { isDocumentFile, type MessageAttachment } from '@neko/shared';
+import type { MessageAttachment } from '@neko-agent/contracts';
+import { isDocumentFile } from '@neko/media';
 
 export type AgentRuntimePromptLocale = 'en' | 'zh';
 

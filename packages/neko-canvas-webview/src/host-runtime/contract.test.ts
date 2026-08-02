@@ -1,4 +1,4 @@
-import { DEFAULT_CANVAS_DATA } from '@neko/shared';
+import { DEFAULT_CANVAS_DATA } from '@neko-canvas/domain';
 import { describe, expect, it } from 'vitest';
 import {
   CANVAS_HOST_RUNTIME_CONTRACT_VERSION,

@@ -5,7 +5,7 @@ import {
   createCanvasPlaybackPlan,
   resolveEffectiveCanvasPlaybackRoutes,
   type CanvasPlaybackPlan,
-} from '@neko/shared';
+} from '@neko-canvas/domain';
 import { t } from '../../i18n';
 import { useScopedCanvasStore as useCanvasStore } from '../../stores/canvasStoreScope';
 

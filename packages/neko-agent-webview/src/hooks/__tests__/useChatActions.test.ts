@@ -1,7 +1,7 @@
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useRef } from 'react';
-import { parseSendMessageWebviewMessage } from '@neko-agent/types';
+import { parseSendMessageWebviewMessage } from '@neko-agent/contracts';
 import { useChatActions } from '../useChatActions';
 
 const hostMocks = vi.hoisted(() => ({
@@ -11,7 +11,7 @@ const hostMocks = vi.hoisted(() => ({
   cancelMessage: vi.fn(),
 }));
 
-vi.mock('@/messages', () => ({
+vi.mock('../../messages', () => ({
   AgentHostMessages: {
     sendMessage: hostMocks.sendMessage,
     invokeSlashCommand: hostMocks.invokeSlashCommand,

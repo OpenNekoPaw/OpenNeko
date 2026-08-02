@@ -14,7 +14,10 @@ import type {
   JsonBlockValidationResult,
   ValidationResultWithBlocks,
 } from './types';
-import type { AgentOutputValidationAdapter, AgentOutputValidationDiagnostic } from '@neko/shared';
+import type {
+  AgentOutputValidationAdapter,
+  AgentOutputValidationDiagnostic,
+} from '@neko-agent/contracts';
 import { DEFAULT_OUTPUT_CONSTRAINTS } from './types';
 
 // Import specialized components

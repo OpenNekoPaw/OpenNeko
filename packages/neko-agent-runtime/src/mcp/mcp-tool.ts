@@ -3,15 +3,14 @@
  */
 
 import type {
-  IMCPClient,
   Tool,
   ToolResult,
   ToolCategory,
-  MCPToolDefinition,
   ToolDefinition,
   ToolParameters,
   ToolParameterProperty,
-} from '@neko/shared';
+} from '@neko-agent/contracts';
+import type { IMCPClient, MCPToolDefinition } from '@neko-agent/contracts';
 import { getLogger } from '../utils/logger';
 
 const logger = getLogger('MCPTool');

@@ -1,20 +1,12 @@
 /**
- * @neko/agent - Agent Application Package
+ * @neko-agent/runtime - Agent Application Package
  *
  * Host-neutral Pi conversation runtime and OpenNeko product-boundary integrations.
  */
 
-// Re-export shared types for convenience
+// Re-export Agent contract types for convenience.
 export type {
   ToolCallInfo,
-  // MCP types
-  IMCPManager,
-  IMCPClient,
-  MCPServerConfig,
-  MCPToolDefinition,
-  MCPToolResult,
-  MCPResource,
-  MCPPrompt,
   // Tool types
   IToolRegistry,
   Tool,
@@ -22,7 +14,17 @@ export type {
   ToolCategory,
   ToolCallRequest,
   ChatMessage,
-} from '@neko/shared';
+} from '@neko-agent/contracts';
+
+export type {
+  IMCPClient,
+  IMCPManager,
+  MCPPrompt,
+  MCPResource,
+  MCPServerConfig,
+  MCPToolDefinition,
+  MCPToolResult,
+} from '@neko-agent/contracts';
 
 export {
   parseProviderCardMarkdown,
@@ -45,6 +47,32 @@ export {
   createProviderExpressionPromptFragments,
   type ProviderExpressionContextOptions,
 } from './provider';
+
+export {
+  composeProviderImageBatches,
+  normalizeProviderImage,
+  normalizeProviderImageDataUri,
+  type ProviderImageBatchLayout,
+  type ProviderImageBatchResult,
+  type ProviderImageBatchSource,
+} from './provider/image-batch-transport';
+export {
+  projectMultimodalPacketToChatMessageAsync,
+  projectMultimodalPacketToChatMessage,
+  projectPerceptionCardToContentParts,
+  resolveProviderInputModalities,
+  type AsyncMultimodalMessageProjectionOptions,
+  type AsyncMultimodalMessageProjectionResult,
+  type PerceptionAssetLoader,
+  type ProjectionDiagnostic,
+  type ProviderInputModalities,
+  type ProviderInputModalityResolverInput,
+  type MultimodalMessageProjectionOptions,
+  type ProviderReadyAssetPayload,
+  type VisionPreprocessPolicy,
+} from './provider/multimodal-message-projection';
+export * from './tools/search/project-search-capability-provider';
+export * from './tools/entity/creative-entity-capability-provider';
 
 export {
   AgentProfileRegistry,
@@ -99,6 +127,7 @@ export {
   // Injection constants
   DEFAULT_INJECTION_CONFIG,
   CORE_TOOLS,
+  createContentReadCapabilityProvider,
 } from './tools';
 
 // Export logger

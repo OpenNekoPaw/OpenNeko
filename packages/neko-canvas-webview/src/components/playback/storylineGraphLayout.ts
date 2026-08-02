@@ -1,4 +1,4 @@
-import type { CanvasPlaybackRouteCandidate, CanvasPlaybackUnit } from '@neko/shared';
+import type { CanvasPlaybackRouteCandidate, CanvasPlaybackUnit } from '@neko-canvas/domain';
 
 export interface StorylineGraphOccurrence {
   readonly routeId: string;

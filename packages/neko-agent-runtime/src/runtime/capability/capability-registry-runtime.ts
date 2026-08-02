@@ -1,4 +1,4 @@
-import { localizePromptFragment } from '@neko/shared';
+import { localizePromptFragment } from '@neko-agent/contracts';
 import type {
   AgentCapabilityContext,
   AgentCapabilityHostRequirement,
@@ -10,8 +10,6 @@ import type {
   AgentProfileRegistrationResult,
   AgentProfileSource,
   AgentProfileVersion,
-  ArtifactProfileDescriptor,
-  IArtifactProfileRegistry,
   IProviderCardRegistry,
   IProviderExpressionProfileRegistry,
   IToolCategoryRegistry,
@@ -20,8 +18,9 @@ import type {
   ProviderCard,
   ProviderExpressionProfileDescriptor,
   Tool,
-} from '@neko/shared';
-import { toProviderExpressionProfile } from '@neko/shared';
+} from '@neko-agent/contracts';
+import type { ArtifactProfileDescriptor, IArtifactProfileRegistry } from '@neko-agent/contracts';
+import { toProviderExpressionProfile } from '@neko-agent/contracts';
 
 export interface CapabilityProtocolInfo {
   readonly providerId: string;

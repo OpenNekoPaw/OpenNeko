@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { SnapEngine } from '../snapEngine';
-import type { CanvasNode } from '@neko/shared';
+import type { CanvasNode } from '@neko-canvas/domain';
 
 // =============================================================================
 // Test Helpers

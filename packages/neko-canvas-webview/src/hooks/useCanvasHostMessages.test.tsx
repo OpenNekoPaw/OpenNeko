@@ -3,7 +3,7 @@ import React from 'react';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { CanvasData } from '@neko/shared';
+import type { CanvasData } from '@neko-canvas/domain';
 import {
   useCanvasHostMessages,
   type UseCanvasHostMessagesOptions,

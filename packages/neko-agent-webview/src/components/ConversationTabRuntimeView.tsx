@@ -1,9 +1,9 @@
 import { useMemo, useRef, useSyncExternalStore } from 'react';
-import type { OpenTab } from '@neko-agent/types';
+import type { OpenTab } from '@neko-agent/contracts';
 import { ChatWorkspace, type ChatWorkspaceProps } from './ChatWorkspace';
-import type { TabRenderRuntime } from '@/render-runtime/tab-render-runtime';
-import { AgentMarkdownSessionRegistryProvider } from '@/markdown/agent-markdown-session-context';
-import { projectConversationProjectionRenderState } from '@/presenters/conversation-projection-presenter';
+import type { TabRenderRuntime } from '../render-runtime/tab-render-runtime';
+import { AgentMarkdownSessionRegistryProvider } from '../markdown/agent-markdown-session-context';
+import { projectConversationProjectionRenderState } from '../presenters/conversation-projection-presenter';
 
 export interface ConversationTabRuntimeViewProps extends Omit<
   ChatWorkspaceProps,

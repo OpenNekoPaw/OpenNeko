@@ -1,4 +1,4 @@
-import type { AgentContextPayload, AgentContextType } from '@neko/shared';
+import type { AgentContextPayload, AgentContextType } from '@neko-agent/contracts';
 
 export interface BuildAgentCreationMessageInput {
   readonly intent: string;

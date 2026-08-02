@@ -1,4 +1,4 @@
-import { nekoTailwindPreset } from '@neko/shared/theme/tailwind-preset';
+import { nekoTailwindPreset } from '@neko/ui/theme/tailwind-preset';
 
 /** @type {import('tailwindcss').Config} */
 export default {

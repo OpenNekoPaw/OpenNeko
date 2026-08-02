@@ -1,4 +1,4 @@
-import type { CanvasConnection, CanvasNode } from '@neko/shared';
+import type { CanvasConnection, CanvasNode } from '@neko-canvas/domain';
 
 export type CanvasInteractionPhase = 'idle' | 'fast-viewport' | 'transforming';
 

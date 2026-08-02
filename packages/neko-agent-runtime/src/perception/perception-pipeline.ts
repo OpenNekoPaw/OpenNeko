@@ -3,7 +3,7 @@ import type {
   PerceptionDiagnostics,
   PerceptionEvidenceEntry,
   PerceptionLayer,
-} from '@neko/shared';
+} from '@neko-agent/contracts';
 import type {
   MediaProbeResult,
   PerceptionClientRequest,

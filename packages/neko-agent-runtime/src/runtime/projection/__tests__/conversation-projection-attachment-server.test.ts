@@ -5,8 +5,8 @@ import type {
   ConversationProjectionSnapshot,
   ProjectionAttachmentHostFrame,
   ProjectionAttachmentKey,
-} from '@neko-agent/types';
-import { applyConversationProjectionPatch } from '@neko-agent/types';
+} from '@neko-agent/contracts';
+import { applyConversationProjectionPatch } from '@neko-agent/contracts';
 import { createConversationProjectionStore } from '../conversation-projection-store';
 import { createConversationProjectionAttachmentServer } from '../conversation-projection-attachment-server';
 

@@ -4,7 +4,7 @@ import {
   type QualityEvidence,
   type QualityGatePolicy,
   type QualityTarget,
-} from '@neko/shared';
+} from '@neko/generation';
 import {
   aggregateQualityGate,
   assertExternalPerceptionTarget,

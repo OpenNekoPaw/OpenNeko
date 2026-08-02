@@ -2,7 +2,12 @@
  * MCP Manager - Manages multiple MCP servers
  */
 
-import type { IMCPManager, IMCPClient, MCPServerConfig, MCPToolDefinition } from '@neko/shared';
+import type {
+  IMCPClient,
+  IMCPManager,
+  MCPServerConfig,
+  MCPToolDefinition,
+} from '@neko-agent/contracts';
 import { createMCPClient } from './mcp-client';
 import { AgentError } from '../errors';
 import { getLogger } from '../utils/logger';

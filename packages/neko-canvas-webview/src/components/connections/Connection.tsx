@@ -11,8 +11,8 @@
  */
 
 import { useMemo } from 'react';
-import type { CanvasConnection, CanvasNode } from '@neko/shared';
-import { findCanvasNodePort } from '@neko/shared';
+import type { CanvasConnection, CanvasNode } from '@neko-canvas/domain';
+import { findCanvasNodePort } from '@neko-canvas/domain';
 import { getConnectionPathGeometry } from './connectionGeometry';
 import { resolveConnectionTitle } from '../../i18n/connectionLabels';
 

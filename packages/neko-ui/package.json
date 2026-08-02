@@ -11,6 +11,12 @@
     "./icons": "./src/icons/index.ts",
     "./icons/codicon.css": "./src/icons/codicon.css",
     "./hooks": "./src/hooks/index.ts",
+    "./i18n/react": "./src/i18n/react.tsx",
+    "./i18n/webview": "./src/i18n/webview.ts",
+    "./i18n": "./src/i18n/index.ts",
+    "./theme": "./src/theme/index.ts",
+    "./theme/tailwind-preset": "./src/theme/tailwind-preset.ts",
+    "./shared-primitives": "./src/shared-primitives/index.ts",
     "./error-boundary": "./src/error-boundary/index.tsx",
     "./foundation": "./src/foundation/index.tsx",
     "./keyboard": "./src/keyboard/index.ts",
@@ -42,7 +48,13 @@
   },
   "peerDependencies": {
     "react": ">=18",
-    "react-dom": ">=18"
+    "react-dom": ">=18",
+    "tailwindcss": ">=3"
+  },
+  "peerDependenciesMeta": {
+    "tailwindcss": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@types/react": "^18.2.43",

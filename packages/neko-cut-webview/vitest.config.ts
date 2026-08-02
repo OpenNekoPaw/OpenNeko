@@ -1,5 +1,4 @@
 import { defineConfig } from 'vitest/config';
-import path from 'path';
 import { sharedCoverage } from '../../vitest.shared';
 
 export default defineConfig({
@@ -17,12 +16,5 @@ export default defineConfig({
         statements: 22,
       },
     }),
-  },
-  resolve: {
-    alias: {
-      '@': path.resolve(__dirname, 'src'),
-      '@neko/shared': path.resolve(__dirname, '../neko-types/src'),
-      '@neko/ui': path.resolve(__dirname, '../neko-ui/src'),
-    },
   },
 });

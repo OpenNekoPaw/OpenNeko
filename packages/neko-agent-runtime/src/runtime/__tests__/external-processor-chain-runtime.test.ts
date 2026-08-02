@@ -4,8 +4,8 @@ import {
   EXTERNAL_PROCESSOR_SCHEMA_VERSION,
   createExternalProcessorRegistry,
   type ExternalProcessorManifest,
-} from '@neko-agent/types';
-import type { ContentLocator } from '@neko/shared';
+} from '@neko-agent/contracts';
+import type { ContentLocator } from '@neko/content';
 import { createAgentExternalProcessorRuntime } from '../capability/external-processor-runtime';
 
 const removeBackgroundManifest = manifest('remove-background', {

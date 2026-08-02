@@ -2,7 +2,7 @@ import {
   isExternalResearchFetchResult,
   isExternalResearchSearchResult,
   type ResearchSource,
-} from '@neko/shared';
+} from '@neko-agent/contracts';
 
 export interface ExternalResearchTraceProjection {
   readonly toolName: 'WebSearch' | 'WebFetch';

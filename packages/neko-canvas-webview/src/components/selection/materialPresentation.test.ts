@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import type { CanvasGenerationEvidence, FileCanvasNode, MediaCanvasNode } from '@neko/shared';
+import type {
+  CanvasGenerationEvidence,
+  FileCanvasNode,
+  MediaCanvasNode,
+} from '@neko-canvas/domain';
 import { resolveCanvasMaterialPresentation } from './materialPresentation';
 
 const generatedLocator = {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { projectContextReferencesFromPayloads } from '../context-reference-presenter';
-import type { AgentContextPayload } from '@neko/shared';
+import type { AgentContextPayload } from '@neko-agent/contracts';
 
 describe('context-reference-presenter', () => {
   it('does not infer an Asset catalog id from presentation type', () => {

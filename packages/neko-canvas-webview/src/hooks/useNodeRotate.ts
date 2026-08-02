@@ -6,7 +6,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useDrag } from '@neko/ui/hooks';
-import type { CanvasViewport } from '@neko/shared';
+import type { CanvasViewport } from '@neko-canvas/domain';
 
 // =============================================================================
 // Types

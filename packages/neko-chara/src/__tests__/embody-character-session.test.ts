@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { CreativeEntityRef, NpcProfileSource } from '@neko/shared';
+import type { CreativeEntityRef } from '@neko-entity/domain';
+import type { NpcProfileSource } from '@neko/chara/contracts';
 import {
   EMBODY_CHARACTER_BLOCKED_TOOL_NAMES,
   EmbodyCharacterSession,

@@ -55,3 +55,9 @@ export {
   createAgentHostMessageController,
   type AgentHostMessageController,
 } from './agent-host-message-controller';
+
+export {
+  createAgentContentEffects,
+  type AgentContentInteractionPort,
+  type CreateAgentContentEffectsOptions,
+} from './agent-content-effects';

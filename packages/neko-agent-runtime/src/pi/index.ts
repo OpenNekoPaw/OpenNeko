@@ -150,3 +150,8 @@ export {
   PiToolConfirmationRegistry,
 } from './tool-confirmation-registry';
 export type { AuthEvent, AuthPrompt } from '@earendil-works/pi-ai';
+export {
+  createPersonalSkillManagementId,
+  createPersonalSkillManager,
+  type PersonalSkillManager,
+} from './personal-skill-manager';

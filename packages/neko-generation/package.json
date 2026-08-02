@@ -6,7 +6,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./job": "./src/job/index.ts"
+    "./job": "./src/job/index.ts",
+    "./media": "./src/media/index.ts"
   },
   "scripts": {
     "test": "vitest",
@@ -14,7 +15,15 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@neko/shared": "workspace:*"
+    "@neko-ai/contracts": "workspace:*",
+    "@neko-preview/domain": "workspace:*",
+    "@neko-ai/sdk": "workspace:*",
+    "@neko/content": "workspace:*",
+    "@neko-entity/domain": "workspace:*",
+    "@neko/local-metadata": "workspace:*",
+    "@neko/media": "workspace:*",
+    "@neko/shared": "workspace:*",
+    "ai": "^6.0.134"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

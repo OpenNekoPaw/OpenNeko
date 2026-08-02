@@ -1,5 +1,5 @@
-import type { CanvasNode } from '@neko/shared';
-import { getContainerChildIds, isGroupNode } from '@neko/shared';
+import type { CanvasNode } from '@neko-canvas/domain';
+import { getContainerChildIds, isGroupNode } from '@neko-canvas/domain';
 
 export interface Rect {
   x: number;

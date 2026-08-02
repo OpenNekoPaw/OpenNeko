@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { CanvasNode, GroupCanvasNode } from '@neko/shared';
+import type { CanvasNode, GroupCanvasNode } from '@neko-canvas/domain';
 import { projectCanvasNodeRenderPlan } from './canvasOrganization';
 
 describe('projectCanvasNodeRenderPlan', () => {

@@ -4,26 +4,23 @@ import type {
   ContentBlock,
   MediaRef,
   ToolCall,
-} from '@neko-agent/types';
+  ToolResultAttachment,
+  StoryboardPlanOverlay,
+} from '@neko-agent/contracts';
+import { normalizeStoryboardPlanOverlay } from '@neko-agent/contracts';
+import type { EntityMemoryContribution } from '@neko-search/domain';
+import type { ContentLocator } from '@neko/content';
 import type {
   StoryboardTable,
-  StoryboardPlanOverlay,
   StoryboardMediaRef,
   StoryboardValidationDiagnostic,
-  ContentLocator,
-  EntityMemoryContribution,
-  ToolResultAttachment,
-} from '@neko/shared';
-import {
-  contentLocatorKey,
-  isContentLocator,
-  isPublicGeneratedAssetResultUri,
-  isEntityMemoryContribution,
-  normalizeStoryboardPlanOverlay,
-  normalizeCanonicalStoryboardTable,
-} from '@neko/shared';
+} from '@neko-canvas/domain';
+import { isEntityMemoryContribution } from '@neko-search/domain';
+import { contentLocatorKey, isContentLocator } from '@neko/content';
+import { isPublicGeneratedAssetResultUri } from '@neko/generation';
+import { normalizeCanonicalStoryboardTable } from '@neko-canvas/domain';
 import { isAuthorizedResourceDisplayUri } from './resource-display-uri';
-import type { PluginsAvailable } from '@/components/ChatView/SendToMenu';
+import type { PluginsAvailable } from '../components/ChatView/SendToMenu';
 
 export type CompositeRichContentKind = 'storyboard-table' | 'comparison-grid' | 'asset-gallery';
 

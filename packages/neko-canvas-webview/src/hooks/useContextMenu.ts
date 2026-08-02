@@ -6,7 +6,7 @@
  */
 
 import { useCallback, useState } from 'react';
-import type { CanvasNode } from '@neko/shared';
+import type { CanvasNode } from '@neko-canvas/domain';
 import { buildCanvasMenuItems, buildNodeMenuItems } from '../components/common/ContextMenu';
 import type { MenuEntry } from '../components/common/ContextMenu';
 import {

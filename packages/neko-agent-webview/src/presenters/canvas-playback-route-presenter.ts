@@ -1,17 +1,19 @@
 import type {
-  ArtifactDiagnostic,
-  ArtifactJsonRecord,
-  ArtifactMediaItem,
-  ArtifactReference,
   CanvasPlaybackDiagnostic,
   CanvasPlaybackPlan,
   CanvasPlaybackRouteCandidate,
   CanvasPlaybackUnit,
+} from '@neko-canvas/domain';
+import type {
+  ArtifactDiagnostic,
+  ArtifactJsonRecord,
+  ArtifactMediaItem,
+  ArtifactReference,
   CompositeArtifact,
   CompositeArtifactBlock,
   GenericTable,
   GenericTableCell,
-} from '@neko/shared';
+} from '@neko-agent/contracts';
 
 export interface CanvasPlaybackRouteCardOptions {
   readonly routeId?: string;

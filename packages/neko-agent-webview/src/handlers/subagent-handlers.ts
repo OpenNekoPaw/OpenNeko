@@ -5,8 +5,8 @@
 import {
   appendSubAgentMessageToMessages,
   attachWorkItemToMessageByToolCall,
-} from '@/presenters/work-item-message-presenter';
-import { upsertWorkItemsForConversation } from '@/presenters/work-item-state-presenter';
+} from '../presenters/work-item-message-presenter';
+import { upsertWorkItemsForConversation } from '../presenters/work-item-state-presenter';
 import { defineHandler } from './types';
 import type { HandlerRegistration, MessageHandler, MessageHandlerContext } from './types';
 import type { SubAgentEventMessage } from './messages';

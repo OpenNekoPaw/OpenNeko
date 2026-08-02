@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { AgentState, ConversationSummary, OpenTab } from '@neko-agent/types';
+import type { AgentState, ConversationSummary, OpenTab } from '@neko-agent/contracts';
 import { projectHistoryCleanup, projectHistoryConversationItems } from '../history-menu-presenter';
 
 describe('history menu presenter', () => {

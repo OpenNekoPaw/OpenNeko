@@ -20,18 +20,18 @@ import type {
   ActiveConversationMessage,
   ConversationSnapshotMessage,
 } from './messages';
-import type { Message } from '@neko-agent/types';
+import type { Message } from '@neko-agent/contracts';
 import {
   projectActiveConversation,
   projectConversationError,
   projectHistoryClearedConversation,
 } from '../presenters/conversation-ui-presenter';
-import { upsertWorkItemsForConversation } from '@/presenters/work-item-state-presenter';
-import { findActiveTab, isCharacterRoleTab } from '@/presenters/character-role-session-presenter';
+import { upsertWorkItemsForConversation } from '../presenters/work-item-state-presenter';
+import { findActiveTab, isCharacterRoleTab } from '../presenters/character-role-session-presenter';
 import { shouldActivateForegroundConversation } from './foreground-activation';
-import { projectQueuedMessagesCleared } from '@/presenters/message-queue-presenter';
+import { projectQueuedMessagesCleared } from '../presenters/message-queue-presenter';
 import { updateConversation } from './message-updater';
-import { ingestConversationRenderSnapshot } from '@/render-lifecycle/conversation-render-state-adapter';
+import { ingestConversationRenderSnapshot } from '../render-lifecycle/conversation-render-state-adapter';
 
 /**
  * Handle 'error' message - Error occurred

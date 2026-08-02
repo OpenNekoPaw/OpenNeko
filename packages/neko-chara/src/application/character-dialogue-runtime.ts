@@ -1,6 +1,6 @@
 /** Chara-domain dialogue lifecycle orchestration. */
+import type { CreativeEntityRef } from '@neko-entity/domain';
 import type {
-  CreativeEntityRef,
   NpcEvaluationReport,
   NpcEvaluationSuggestion,
   NpcProfileSource,
@@ -8,8 +8,8 @@ import type {
   NpcTestMode,
   NpcTranscriptArtifact,
   NpcTranscriptMessage,
-} from '@neko/shared';
-import { NPC_TRANSCRIPT_ARTIFACT_VERSION } from '@neko/shared';
+} from '@neko/chara/contracts';
+import { NPC_TRANSCRIPT_ARTIFACT_VERSION } from '@neko/chara/contracts';
 import {
   CharacterDialogueSession,
   type CharacterDialogueResponder,
@@ -97,10 +97,6 @@ export interface CharacterDialogueHeadlessProbeInput {
   readonly projectRoot?: string;
 }
 
-export interface CharacterDialogueRuntimeLogger {
-  warn(message: string, meta?: Readonly<Record<string, unknown>>): void;
-}
-
 export type CharacterDialogueTranscriptEvaluator = (
   artifact: NpcTranscriptArtifact,
   options: { readonly locale?: string },
@@ -150,7 +146,6 @@ export interface CharacterDialogueRuntimeServiceOptions {
   readonly now?: () => string;
   readonly createSessionId?: (entityRef: CreativeEntityRef) => string;
   readonly createMessageId?: (role: NpcTranscriptMessage['role'], turnIndex: number) => string;
-  readonly logger?: CharacterDialogueRuntimeLogger;
 }
 
 export interface CreateCharacterDialogueSessionInput {
@@ -174,7 +169,6 @@ export class CharacterDialogueRuntimeService {
   private readonly createSessionId: (entityRef: CreativeEntityRef) => string;
   private readonly createMessageId:
     ((role: NpcTranscriptMessage['role'], turnIndex: number) => string) | undefined;
-  private readonly logger: CharacterDialogueRuntimeLogger | undefined;
 
   constructor(options: CharacterDialogueRuntimeServiceOptions) {
     this.ports = options.ports;
@@ -182,7 +176,6 @@ export class CharacterDialogueRuntimeService {
     this.locale = options.locale;
     this.createSessionId = options.createSessionId ?? createDefaultCharacterDialogueSessionId;
     this.createMessageId = options.createMessageId;
-    this.logger = options.logger;
   }
 
   async prepareProfileForLaunch(

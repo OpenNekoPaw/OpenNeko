@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { CanvasPlaybackRouteCandidate, CanvasPlaybackUnit } from '@neko/shared';
+import type { CanvasPlaybackRouteCandidate, CanvasPlaybackUnit } from '@neko-canvas/domain';
 import { buildStorylineGraphLayout } from './storylineGraphLayout';
 
 describe('buildStorylineGraphLayout', () => {

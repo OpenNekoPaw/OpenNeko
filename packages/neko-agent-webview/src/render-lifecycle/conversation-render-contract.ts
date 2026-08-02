@@ -1,4 +1,4 @@
-import type { AgentQueuedMessageItem, Message } from '@neko-agent/types';
+import type { AgentQueuedMessageItem, Message } from '@neko-agent/contracts';
 
 export type ConversationRetention = 'retained' | 'disposed';
 

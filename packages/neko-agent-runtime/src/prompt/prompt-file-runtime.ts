@@ -1,4 +1,4 @@
-import type { PromptPresetConfig, PromptSource } from '@neko/shared';
+import type { PromptPresetConfig, PromptSource } from '@neko-agent/contracts';
 import {
   DEFAULT_AGENTS_FILE_CONTENT,
   buildAgentsFileLoadPlan,

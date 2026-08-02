@@ -1,5 +1,5 @@
 import * as path from 'node:path';
-import type { CreateSkillTarget } from '@neko/shared';
+import type { CreateSkillTarget } from '@neko-agent/contracts';
 
 export const AGENT_SKILL_ROOT_DIR = '.agents' as const;
 export const AGENT_SKILL_SUBDIR = 'skills' as const;

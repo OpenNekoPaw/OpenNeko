@@ -9,3 +9,5 @@ export * from './utils';
 export * from './keyboard';
 export * from './foundation';
 export * from './markdown';
+export * from './i18n/index';
+export * from './theme/index';

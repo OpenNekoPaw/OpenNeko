@@ -1,5 +1,8 @@
 import * as THREE from 'three';
-import type { ThreeReferencePoseState, ThreeReferenceRuntimePoseCapabilities } from '@neko/shared';
+import type {
+  ThreeReferencePoseState,
+  ThreeReferenceRuntimePoseCapabilities,
+} from '@neko-preview/domain';
 
 export interface NeutralMannequinRuntime {
   readonly root: THREE.Group;

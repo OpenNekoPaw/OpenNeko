@@ -6,12 +6,9 @@ import type {
   AgentTurnTimelineToolCallItem,
   ConversationProjectionUpdate,
   ToolCall,
-} from '@neko-agent/types';
-import {
-  isContentLocator,
-  type ToolResultArtifactTransfer,
-  type ToolResultAttachment,
-} from '@neko/shared';
+} from '@neko-agent/contracts';
+import { isContentLocator } from '@neko/content';
+import { type ToolResultArtifactTransfer, type ToolResultAttachment } from '@neko-agent/contracts';
 
 import type { PiProductAgentEvent, PiProductEventSink } from './event-projector';
 import type { PiToolRunIdentity } from './capability-tool-bridge';

@@ -1,5 +1,5 @@
 import type { JobRef, JobSnapshotBase, VersionedJobStore } from '@neko/shared/job-lifecycle';
-import type { GeneratedOutputContentLocator } from '@neko/shared';
+import type { GeneratedOutputContentLocator } from '@neko/content';
 import type {
   AudioGenerationRequest,
   ImageGenerationRequest,

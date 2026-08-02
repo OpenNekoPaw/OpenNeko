@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type {
   AgentTurnTimelineAssistantTextItem,
   AgentTurnTimelineOperation,
-} from '@neko-agent/types';
+} from '@neko-agent/contracts';
 import { createConversationProjectionOperationBuffer } from '../conversation-projection-operation-buffer';
 
 const identity = {

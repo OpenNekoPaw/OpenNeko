@@ -22,7 +22,7 @@ import type {
   CanvasUpdateBlockRequest,
   CanvasUpdateBlockResult,
   JsonPointerPath,
-} from '@neko/shared';
+} from '@neko-canvas/domain';
 import {
   getContainerChildIds,
   getNodeParentId,
@@ -31,7 +31,7 @@ import {
   isJsonPointerPath,
   readJsonPointer,
   writeJsonPointer,
-} from '@neko/shared';
+} from '@neko-canvas/domain';
 import { addContainerChild } from './containerActions';
 import { autoArrangeContainer, findFreePosition } from './containerLayout';
 import { buildCanvasNode } from './nodeFactory';

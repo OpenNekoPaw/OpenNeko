@@ -10,9 +10,9 @@
  */
 
 import { useEffect, useState } from 'react';
-import { Header } from '@/components/Header';
-import { OnboardingFlow } from '@/components/OnboardingFlow';
-import { useConfigState, useResourceState } from '@/hooks';
+import { Header } from './Header';
+import { OnboardingFlow } from './OnboardingFlow';
+import { useConfigState, useResourceState } from '../hooks';
 import { ConversationController } from './ConversationController';
 
 export interface AppShellProps {

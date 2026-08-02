@@ -97,7 +97,7 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
       evaluate,
       'canvas:functional:video',
       'video',
-      '[data-owner-view-id="canvas:functional:video"] [data-testid="canvas-video-toggle-playback"]',
+      '[data-owner-view-id="canvas:functional:video"] [data-preview-surface="video"] [data-testid="canvas-video-toggle-playback"]',
     );
     checkpoint('canvas-video-playing', { currentTime: videoPlayback.currentTime });
     await hover(
@@ -112,7 +112,7 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
       evaluate,
       'canvas:functional:audio',
       'audio',
-      '[data-owner-view-id="canvas:functional:audio"] [data-testid="canvas-audio-toggle-playback"]',
+      '[data-owner-view-id="canvas:functional:audio"] [data-preview-surface="audio"] [data-testid="canvas-audio-toggle-playback"]',
     );
     checkpoint('canvas-audio-playing', { currentTime: audioPlayback.currentTime });
     const playback = {

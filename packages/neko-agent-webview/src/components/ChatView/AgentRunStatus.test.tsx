@@ -10,7 +10,7 @@ const translations: Record<string, string> = {
   'chat.agentRun.elapsedLabel': 'Elapsed time for this run',
 };
 
-vi.mock('@/i18n/I18nContext', () => ({
+vi.mock('../../i18n/I18nContext', () => ({
   useTranslation: () => ({
     t: (key: string, params?: Record<string, string>) =>
       (translations[key] ?? key).replace(/\{(\w+)\}/g, (_, name: string) => params?.[name] ?? ''),

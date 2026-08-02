@@ -1,9 +1,9 @@
 import { useLayoutEffect, useReducer, useRef } from 'react';
-import type { OpenTab } from '@neko-agent/types';
+import type { OpenTab } from '@neko-agent/contracts';
 import type {
   ConversationSessionState,
   ConversationSessionStateMap,
-} from '@/presenters/conversation-session-state-presenter';
+} from '../presenters/conversation-session-state-presenter';
 import {
   createTabComponentRetentionPolicy,
   type TabComponentRetentionPolicy,

@@ -8,7 +8,7 @@
  * import {
  *   createImageValidator,
  *   createOutputValidator,
- * } from '@neko/agent';
+ * } from '@neko-agent/runtime';
  *
  * const imageValidator = createImageValidator();
  * const outputValidator = createOutputValidator({ mermaidPreValidate: true });

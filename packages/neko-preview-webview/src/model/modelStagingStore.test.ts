@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { MODEL_PREVIEW_STAGING_SCHEMA_VERSION, type ModelPreviewStagingState } from '@neko/shared';
+import {
+  MODEL_PREVIEW_STAGING_SCHEMA_VERSION,
+  type ModelPreviewStagingState,
+} from '@neko-preview/domain';
 import {
   addModelCamera,
   addModelLight,

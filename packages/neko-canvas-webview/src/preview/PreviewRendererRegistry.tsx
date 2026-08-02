@@ -1,10 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  contentLocatorKey,
-  isContentLocator,
-  type DelegateAction,
-  type ContentLocator,
-} from '@neko/shared';
+import { contentLocatorKey, isContentLocator, type ContentLocator } from '@neko/content';
+import { type DelegateAction } from '@neko-canvas/domain';
 import {
   formatMediaTime as formatTime,
   isMediaResourceUrl,

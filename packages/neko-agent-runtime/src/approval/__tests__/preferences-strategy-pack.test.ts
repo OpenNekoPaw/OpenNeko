@@ -5,7 +5,7 @@ import { executionStrategyPack } from '../strategies/execution-strategy-pack';
 import { creationStrategyPack } from '../strategies/creation-strategy-pack';
 import { emptyPreferences } from '../../workspace/preferences-parser';
 import type { ApprovalRequest } from '../approval-types';
-import type { UserPreferences } from '@neko-agent/types';
+import type { UserPreferences } from '@neko-agent/contracts';
 
 function makeRequest(overrides: Partial<ApprovalRequest> = {}): ApprovalRequest {
   return {

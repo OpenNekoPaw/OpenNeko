@@ -1,4 +1,5 @@
-import type { CanvasPreviewRole, PreviewVariantRole } from '@neko/shared';
+import type { PreviewVariantRole } from '@neko-preview/domain';
+import type { CanvasPreviewRole } from '@neko-canvas/domain';
 interface PreviewMessagePort {
   postMessage(message: unknown): void;
   subscribe?(listener: (message: unknown) => void): () => void;
@@ -159,7 +160,7 @@ interface RuntimeVariantInput {
   sourceId: string;
   role: CanvasPreviewRole;
   mediaType?: string;
-  contentLocator: import('@neko/shared').ContentLocator;
+  contentLocator: import('@neko/content').ContentLocator;
 }
 
 interface RuntimeVariantRequest {

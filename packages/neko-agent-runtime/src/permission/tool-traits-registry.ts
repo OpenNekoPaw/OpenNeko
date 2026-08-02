@@ -10,8 +10,8 @@
  * 3. Traits can be overridden per-session
  */
 
-import type { ToolTraits } from '@neko/shared';
-import { DEFAULT_TOOL_TRAITS } from '@neko/shared';
+import type { ToolTraits } from '@neko-agent/contracts';
+import { DEFAULT_TOOL_TRAITS } from '@neko-agent/contracts';
 
 /**
  * Tool traits registry

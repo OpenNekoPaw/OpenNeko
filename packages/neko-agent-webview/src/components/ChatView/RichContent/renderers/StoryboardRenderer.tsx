@@ -3,8 +3,8 @@
  */
 
 import type { RichContentProps, RichContentRendererEntry } from '../types';
-import { StoryboardMessage, type StoryboardScene } from '@/components/ChatView/MediaPreview';
-import type { PluginsAvailable } from '@/components/ChatView/SendToMenu';
+import { StoryboardMessage, type StoryboardScene } from '../../MediaPreview';
+import type { PluginsAvailable } from '../../SendToMenu';
 
 // ---------------------------------------------------------------------------
 // Data shape

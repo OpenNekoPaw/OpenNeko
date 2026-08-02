@@ -1,4 +1,4 @@
-import type { Message } from '@neko-agent/types';
+import type { Message } from '@neko-agent/contracts';
 import {
   projectMessagesForResourceDisplay,
   type MessageResourceProjectionOptions,

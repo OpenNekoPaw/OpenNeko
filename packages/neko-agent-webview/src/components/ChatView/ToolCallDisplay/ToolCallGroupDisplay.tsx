@@ -1,6 +1,6 @@
 import { memo, useState, useCallback } from 'react';
-import type { ToolCall } from '@neko-agent/types';
-import type { ToolGroupContentBlockProjection } from '@/presenters/content-block-presenter';
+import type { ToolCall } from '@neko-agent/contracts';
+import type { ToolGroupContentBlockProjection } from '../../../presenters/content-block-presenter';
 import { ChevronIcon, SuccessIcon, ErrorIcon, ToolLoadingSpinner } from './icons';
 import { ToolCallDisplay } from './ToolCallDisplay';
 

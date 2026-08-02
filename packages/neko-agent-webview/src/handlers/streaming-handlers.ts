@@ -16,7 +16,7 @@ import type {
   AgentPhaseMessage,
   AgentStateSnapshotMessage,
 } from './messages';
-import type { AgentStateStoreProjection } from '@neko-agent/types';
+import type { AgentStateStoreProjection } from '@neko-agent/contracts';
 import { updateConversation } from './message-updater';
 import type { MessageHandlerContext } from './types';
 import {

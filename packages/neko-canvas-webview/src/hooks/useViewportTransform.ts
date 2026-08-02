@@ -5,7 +5,7 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react';
 import type React from 'react';
-import type { CanvasViewport } from '@neko/shared';
+import type { CanvasViewport } from '@neko-canvas/domain';
 
 // =============================================================================
 // Constants

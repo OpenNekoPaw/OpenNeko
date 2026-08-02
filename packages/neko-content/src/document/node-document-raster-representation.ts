@@ -2,11 +2,11 @@ import * as fs from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { execFile } from 'node:child_process';
+import type { ContentReadService } from '../contracts/content-io';
 import type {
-  ContentReadService,
   ContentRepresentationGenerator,
   ContentRepresentationGeneratorInput,
-} from '@neko/shared';
+} from '../contracts/content-representation';
 
 interface PdfScreenshot {
   readonly data: Uint8Array;

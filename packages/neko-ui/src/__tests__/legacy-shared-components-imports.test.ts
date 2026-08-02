@@ -14,56 +14,10 @@ const sourceExtensions = new Set(['.ts', '.tsx']);
 const skippedDirectories = new Set(['.turbo', 'build', 'dist', 'node_modules']);
 const sharedComponentsSpecifier = '@neko/shared/components';
 
-const legacySharedComponentsAllowlist: readonly SharedComponentsImportAllowance[] = [
-  {
-    filePath: 'packages/neko-agent-webview/src/components/ChatView/DropZone.tsx',
-    importNames: ['FileDropResult', 'useFileDrop'],
-  },
-  {
-    filePath: 'packages/neko-ui/src/hooks/hooks-compat.test.ts',
-    importNames: ['*'],
-  },
-  {
-    filePath: 'packages/neko-ui/src/hooks/index.ts',
-    importNames: [
-      'DragBindings',
-      'DragCallbacks',
-      'DragOptions',
-      'FileDropBindings',
-      'FileDropOptions',
-      'FileDropResult',
-      'FileDropResultType',
-      'PersistedResizeOptions',
-      'PersistedResizeReturn',
-      'ResizeBounds',
-      'ResizeEdge',
-      'ResizeHandleBindings',
-      'ResizeMode',
-      'ResizeOrientation',
-      'ResizePointerPosition',
-      'ResizeRect',
-      'ResizeState',
-      'UseResizableControlledOptions',
-      'UseResizableOptions',
-      'UseResizableReturn',
-      'UseResizableUncontrolledOptions',
-      'normalizeResizeState',
-      'readPersistedResizeState',
-      'useDrag',
-      'useFileDrop',
-      'usePersistedResize',
-      'useResizable',
-      'writePersistedResizeState',
-    ],
-  },
-  {
-    filePath: 'packages/neko-ui/src/primitives/resize-handle.ts',
-    importNames: ['ResizeHandle', 'ResizeHandleProps'],
-  },
-];
+const legacySharedComponentsAllowlist: readonly SharedComponentsImportAllowance[] = [];
 
 describe('legacy @neko/shared/components import cutoff', () => {
-  it('keeps remaining legacy imports explicitly exempted after Phase 3.3', () => {
+  it('keeps the removed Shared components entry unreferenced', () => {
     const sources = new Map(
       collectScanRoots().flatMap((root) =>
         collectSourceFiles(root).flatMap((filePath) => {
@@ -90,17 +44,17 @@ describe('legacy @neko/shared/components import cutoff', () => {
 });
 
 function collectScanRoots(): string[] {
-  const webviewSourceRoots = readdirSync(packagesRoot).flatMap((entry) => {
-    const webviewSrc = join(packagesRoot, entry, 'packages', 'webview', 'src');
+  const packageSourceRoots = readdirSync(packagesRoot).flatMap((entry) => {
+    const packageSrc = join(packagesRoot, entry, 'src');
 
-    if (!existsSync(webviewSrc)) {
+    if (!existsSync(packageSrc)) {
       return [];
     }
 
-    return [webviewSrc];
+    return [packageSrc];
   });
 
-  return [...webviewSourceRoots, join(packagesRoot, 'neko-ui', 'src')];
+  return packageSourceRoots;
 }
 
 function collectSourceFiles(directory: string): string[] {

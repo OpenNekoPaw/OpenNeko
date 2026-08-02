@@ -9,7 +9,7 @@ const translations: Record<string, string> = {
   'chat.usage.clickToCompress': 'Click to compress context',
 };
 
-vi.mock('@/i18n/I18nContext', () => ({
+vi.mock('../../../i18n/I18nContext', () => ({
   useTranslation: () => ({
     t: (key: string) => translations[key] ?? key,
   }),

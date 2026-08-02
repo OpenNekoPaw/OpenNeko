@@ -3,7 +3,7 @@ import {
   createEmptyCanvasData,
   type CanvasMaterialActionDescriptor,
   type CanvasNode,
-} from '@neko/shared';
+} from '@neko-canvas/domain';
 import {
   projectCanvasMaterialActionCatalog,
   resolveCanvasMaterialActionTargets,

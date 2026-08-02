@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
-import type { CanvasNode } from '@neko/shared';
+import type { CanvasNode } from '@neko-canvas/domain';
 import { buildCanvasNode } from '../../utils/nodeFactory';
 import { createCoreNodeRendererRegistry } from './coreNodeRenderers';
 import { renderCanvasNode } from './nodeRendererRegistry';

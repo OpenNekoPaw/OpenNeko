@@ -1,12 +1,14 @@
+import { BuiltinTool } from '../base';
 import {
-  BuiltinTool,
   TOOL_NAMES_PERCEPTION,
-  createPerceptionEvidenceToolResult,
-  type PerceptionToolMetadata,
   type ToolCategory,
   type ToolParameters,
   type ToolResult,
-} from '@neko/shared';
+} from '@neko-agent/contracts';
+import {
+  createPerceptionEvidenceToolResult,
+  type PerceptionToolMetadata,
+} from '@neko-agent/contracts';
 
 export interface PerceptionTranscribeClient {
   readonly perception: {

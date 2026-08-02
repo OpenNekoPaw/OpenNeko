@@ -6,8 +6,8 @@
  */
 
 import { useEffect, useMemo, useRef } from 'react';
-import type { CanvasConnection, CanvasNode, PortDefinition } from '@neko/shared';
-import { getDefaultPorts } from '@neko/shared';
+import type { CanvasConnection, CanvasNode, PortDefinition } from '@neko-canvas/domain';
+import { getDefaultPorts } from '@neko-canvas/domain';
 import { Connection } from './Connection';
 import {
   projectCanvasConnectionView,

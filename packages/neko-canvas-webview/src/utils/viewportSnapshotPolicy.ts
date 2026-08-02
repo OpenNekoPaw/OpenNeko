@@ -1,4 +1,4 @@
-import type { CanvasViewport } from '@neko/shared';
+import type { CanvasViewport } from '@neko-canvas/domain';
 
 export type ViewportSnapshotWriteReason = 'idle' | 'blur' | 'save' | 'close';
 

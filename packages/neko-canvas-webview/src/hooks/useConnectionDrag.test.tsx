@@ -3,7 +3,7 @@
 import { act, useEffect, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import { describe, expect, it, vi } from 'vitest';
-import type { CanvasNode } from '@neko/shared';
+import type { CanvasNode } from '@neko-canvas/domain';
 import {
   resolveConnectionDropTarget,
   useConnectionDrag,

@@ -1,4 +1,5 @@
-import { isContentLocator, serializeLocalMetadataJson, validateContentLocator } from '@neko/shared';
+import { serializeLocalMetadataJson } from '@neko/local-metadata';
+import { isContentLocator, validateContentLocator } from '@neko/content';
 import type { JobFailureSummary, JobPhase } from '@neko/shared/job-lifecycle';
 import {
   GENERATION_JOB_KIND,

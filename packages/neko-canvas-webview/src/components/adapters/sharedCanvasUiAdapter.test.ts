@@ -1,6 +1,6 @@
 import { isValidElement } from 'react';
 import { describe, expect, it } from 'vitest';
-import type { CanvasNode } from '@neko/shared';
+import type { CanvasNode } from '@neko-canvas/domain';
 import {
   createCanvasAddActionIcon,
   mapCanvasNodePropertyCommit,

@@ -1,4 +1,4 @@
-import type { LocalMetadataMigration } from '@neko/shared';
+import type { LocalMetadataMigration } from '@neko/local-metadata';
 
 // The schema is shared by all Node-based Cut Hosts.
 

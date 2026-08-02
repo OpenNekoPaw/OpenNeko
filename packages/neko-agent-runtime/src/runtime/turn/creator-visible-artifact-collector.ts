@@ -1,17 +1,17 @@
+import { hashStableValue } from '@neko/shared';
+import { contentLocatorKey, isContentLocator, type ContentLocator } from '@neko/content';
+import { type GeneratedAssetRevisionRef } from '@neko/generation';
 import {
-  contentLocatorKey,
-  hashStableValue,
-  isContentLocator,
   TOOL_NAMES_SYSTEM,
-  validateCompositeArtifact,
-  type CanvasWorkspaceArtifactDimensions,
-  type CanvasWorkspaceProjectionKind,
-  type ContentLocator,
-  type GeneratedAssetRevisionRef,
   type ToolResultArtifactTransfer,
   type ToolResultAttachment,
-} from '@neko/shared';
-import { extractCompositeContentFenceCandidates } from '@neko-agent/types';
+} from '@neko-agent/contracts';
+import {
+  type CanvasWorkspaceArtifactDimensions,
+  type CanvasWorkspaceProjectionKind,
+} from '@neko-canvas/domain';
+import { validateCompositeArtifact } from '@neko-agent/contracts';
+import { extractCompositeContentFenceCandidates } from '@neko-agent/contracts';
 
 export interface CreatorVisibleArtifactCandidate {
   readonly artifactId: string;

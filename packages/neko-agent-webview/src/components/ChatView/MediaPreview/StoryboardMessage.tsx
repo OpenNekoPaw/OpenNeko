@@ -10,9 +10,9 @@
  */
 
 import { useState, useCallback, memo } from 'react';
-import { ChevronDownIcon as ChevronIcon } from '@neko/shared/icons';
-import { SendToMenu, type PluginsAvailable } from '@/components/ChatView/SendToMenu';
-import { projectStoryboardScenesAssetBatch } from '@/presenters/storyboard-transfer-presenter';
+import { ChevronDownIcon as ChevronIcon } from '@neko/ui/icons';
+import { SendToMenu, type PluginsAvailable } from '../SendToMenu';
+import { projectStoryboardScenesAssetBatch } from '../../../presenters/storyboard-transfer-presenter';
 import { openMediaTarget } from './openMediaTarget';
 
 /** A single shot within a scene */

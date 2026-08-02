@@ -1,13 +1,13 @@
 import { useMemo, useRef, useState } from 'react';
-import type { MediaUnderstandingModels, SessionMode } from '@neko-agent/types';
-import type { ChatModelOption } from '@neko/shared';
-import { SettingsIcon } from '@neko/shared/icons';
+import type { MediaUnderstandingModels, SessionMode } from '@neko-agent/contracts';
+import type { ChatModelOption } from '@neko-ai/contracts';
+import { SettingsIcon } from '@neko/ui/icons';
 import type {
   MediaCategory,
   MediaModelSelection,
   MediaUnderstandingSelection,
-} from '@/components/ChatView/InputAreaContext';
-import { useTranslation } from '@/i18n/I18nContext';
+} from '../InputAreaContext';
+import { useTranslation } from '../../../i18n/I18nContext';
 import { ChevronDownIcon } from './DropdownMenu';
 import { MediaCategoryIcon, SessionModeIcon } from './ComposerIcons';
 import { ModelTagList } from './ModelTagList';

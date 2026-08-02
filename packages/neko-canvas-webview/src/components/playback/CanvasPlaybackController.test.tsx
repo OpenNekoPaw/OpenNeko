@@ -4,7 +4,7 @@ import React from 'react';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { CanvasPlaybackPlan } from '@neko/shared';
+import type { CanvasPlaybackPlan } from '@neko-canvas/domain';
 import {
   CanvasPlaybackController,
   buildDefaultPlaybackPath,

@@ -1,5 +1,5 @@
-import type { AgentWorkItem, Message, SubAgentWorkItem } from '@neko-agent/types';
-import { toSubAgentWorkItemStatus, validateChildRunScope } from '@neko-agent/types';
+import type { AgentWorkItem, Message, SubAgentWorkItem } from '@neko-agent/contracts';
+import { toSubAgentWorkItemStatus, validateChildRunScope } from '@neko-agent/contracts';
 
 export interface ProjectSubAgentToolResultInput {
   id: string;

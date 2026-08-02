@@ -5,7 +5,7 @@
  */
 
 import { useEffect, useRef } from 'react';
-import type { CanvasViewport } from '@neko/shared';
+import type { CanvasViewport } from '@neko-canvas/domain';
 
 const GRID_SIZE = 20;
 const GRID_MAJOR_INTERVAL = 5;

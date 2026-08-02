@@ -4,7 +4,7 @@ import type {
   ConversationProjectionPatch,
   ConversationProjectionSnapshot,
   ProjectionAttachmentKey,
-} from '@neko-agent/types';
+} from '@neko-agent/contracts';
 import { createConversationProjectionReplica } from '../conversation-projection-replica';
 import {
   createProjectionAttachmentClient,

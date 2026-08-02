@@ -3,7 +3,7 @@ import type {
   ConversationKind,
   EmbodyCharacterSessionProjection,
   Message,
-} from '@neko-agent/types';
+} from '@neko-agent/contracts';
 
 type Translate = (key: string, params?: Record<string, string | number>) => string;
 

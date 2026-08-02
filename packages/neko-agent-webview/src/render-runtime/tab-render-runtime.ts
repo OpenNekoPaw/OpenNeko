@@ -1,11 +1,11 @@
-import type { AgentContextPayload } from '@neko/shared';
+import type { AgentContextPayload } from '@neko-agent/contracts';
 import {
   type SessionMode,
   type ShellExecutionMode,
   type TabType,
   type AgentQueuedMessageItem,
   type AgentSessionDiagnosticMessage,
-} from '@neko-agent/types';
+} from '@neko-agent/contracts';
 import type {
   ComposerMenuState,
   EntryPromptMenu,
@@ -13,19 +13,19 @@ import type {
   GenerationParams,
   MessageAttachment,
   SelectedFileReference,
-} from '@/components/ChatView/InputArea/types';
+} from '../components/ChatView/InputArea/types';
 import {
   DEFAULT_COMPOSER_MENU_STATE,
   DEFAULT_GENERATION_PARAMS,
-} from '@/components/ChatView/InputArea/types';
+} from '../components/ChatView/InputArea/types';
 import type {
   MediaModelSelection,
   MediaUnderstandingSelection,
-} from '@/components/ChatView/InputAreaContext';
+} from '../components/ChatView/InputAreaContext';
 import {
   createAgentMarkdownSessionRegistry,
   type AgentMarkdownSessionRegistry,
-} from '@/markdown/agent-markdown-session-registry';
+} from '../markdown/agent-markdown-session-registry';
 import {
   createConversationProjectionReplica,
   type ConversationProjectionReplica,
@@ -155,7 +155,7 @@ export interface TabRenderRuntime extends TabRenderBinding {
     reason: 'endpoint-replaced' | 'protocol-fatal',
   ): void;
   acceptProjectionFrame(frame: ConversationProjectionAttachmentFrame): void;
-  detachProjection(reason: import('@neko-agent/types').ProjectionDetachMessage['reason']): void;
+  detachProjection(reason: import('@neko-agent/contracts').ProjectionDetachMessage['reason']): void;
   setVisible(visible: boolean): void;
   dispose(): void;
 }
@@ -405,7 +405,9 @@ class DefaultTabRenderRuntime implements TabRenderRuntime {
     client.accept(frame);
   }
 
-  detachProjection(reason: import('@neko-agent/types').ProjectionDetachMessage['reason']): void {
+  detachProjection(
+    reason: import('@neko-agent/contracts').ProjectionDetachMessage['reason'],
+  ): void {
     if (this.currentLifecycle === 'disposed') {
       throw new Error(`Tab render runtime ${this.tabId} is disposed.`);
     }

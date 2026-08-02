@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { contentLocatorKey } from '@neko/content';
 import {
-  contentLocatorKey,
   createCanvasPlaybackPlan,
   resolveEffectiveCanvasPlaybackRoutes,
   type CanvasData,
@@ -9,8 +9,8 @@ import {
   type CanvasPlaybackRouteCandidate,
   type CanvasPlaybackUnit,
   type CanvasPreviewRole,
-} from '@neko/shared';
-import { CloseIcon, EyeIcon, EyeOffIcon, FullscreenIcon, RestoreIcon } from '@neko/shared/icons';
+} from '@neko-canvas/domain';
+import { CloseIcon, EyeIcon, EyeOffIcon, FullscreenIcon, RestoreIcon } from '@neko/ui/icons';
 import { PlayIcon } from '@neko/ui/icons';
 import { getKeyboardBoundaryMetadata } from '@neko/ui/keyboard';
 import { IconButton } from '@neko/ui/primitives';

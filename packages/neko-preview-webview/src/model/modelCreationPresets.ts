@@ -1,4 +1,4 @@
-import type { ModelPreviewCameraPreset, ModelPreviewLightEntry } from '@neko/shared';
+import type { ModelPreviewCameraPreset, ModelPreviewLightEntry } from '@neko-preview/domain';
 
 export interface ModelCameraPlacementPreset {
   readonly id: string;

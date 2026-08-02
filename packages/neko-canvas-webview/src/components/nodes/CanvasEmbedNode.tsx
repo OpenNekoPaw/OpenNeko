@@ -1,5 +1,5 @@
-import type { CanvasEmbedCanvasNode, CanvasViewport } from '@neko/shared';
-import { LayersIcon } from '@neko/shared/icons';
+import type { CanvasEmbedCanvasNode, CanvasViewport } from '@neko-canvas/domain';
+import { LayersIcon } from '@neko/ui/icons';
 import { BaseNode } from './BaseNode';
 import { t } from '../../i18n';
 

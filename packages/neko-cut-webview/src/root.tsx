@@ -1,5 +1,5 @@
 import { useEffect, type ReactElement } from 'react';
-import type { SupportedLocale } from '@neko/shared';
+import type { SupportedLocale } from '@neko/ui/i18n';
 import App from './App';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { ToastProvider } from './components/Toast';

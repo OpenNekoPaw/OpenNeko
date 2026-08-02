@@ -8,7 +8,7 @@
 
 import { useCallback } from 'react';
 import { hasEditableActiveElement } from '@neko/ui/keyboard';
-import type { CanvasNode } from '@neko/shared';
+import type { CanvasNode } from '@neko-canvas/domain';
 import { useCanvasStoreApi } from '../stores/canvasStoreScope';
 import type { CanvasHostMessagePort } from './useCanvasHostMessages';
 import { isEditorLevelKeyboardAction } from './keyboardActionPolicy';

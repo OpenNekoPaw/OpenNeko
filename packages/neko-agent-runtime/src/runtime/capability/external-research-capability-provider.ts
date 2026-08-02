@@ -1,5 +1,5 @@
+import { createTool } from '../../tools/base';
 import {
-  createTool,
   createUnsupportedExternalResearchModeDiagnostic,
   isExternalResearchFetchInput,
   isExternalResearchFetchResult,
@@ -14,7 +14,7 @@ import {
   type ExternalResearchSearchInput,
   type Tool,
   type ToolResult,
-} from '@neko/shared';
+} from '@neko-agent/contracts';
 import { validateExternalResearchUrl } from './external-research-url-policy';
 
 export const EXTERNAL_RESEARCH_CAPABILITY_PROVIDER_ID = 'external-research' as const;

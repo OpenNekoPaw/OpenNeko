@@ -5,8 +5,8 @@
  */
 
 import { useState } from 'react';
-import type { AgentWorkItemStore } from '@/components/AgentWorkItem';
-import type { PluginsAvailable } from '@/components/ChatView/SendToMenu';
+import type { AgentWorkItemStore } from '../components/AgentWorkItem';
+import type { PluginsAvailable } from '../components/ChatView/SendToMenu';
 
 /**
  * Resource state shape

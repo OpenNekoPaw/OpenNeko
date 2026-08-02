@@ -6,8 +6,13 @@
  */
 
 import { execFile } from 'node:child_process';
-import type { ToolResult, ToolCategory, ToolParameters, ToolExecuteOptions } from '@neko/shared';
-import { BuiltinTool } from '@neko/shared';
+import type {
+  ToolResult,
+  ToolCategory,
+  ToolParameters,
+  ToolExecuteOptions,
+} from '@neko-agent/contracts';
+import { BuiltinTool } from '../base';
 import {
   presentInvalidToolArguments,
   presentOutputTruncationMarker,

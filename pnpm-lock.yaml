@@ -93,15 +93,33 @@ importers:
 
   apps/neko-desktop:
     dependencies:
-      '@neko-agent/types':
+      '@neko-agent/contracts':
         specifier: workspace:*
-        version: link:../../packages/neko-agent-types
+        version: link:../../packages/neko-agent-contracts
+      '@neko-agent/runtime':
+        specifier: workspace:*
+        version: link:../../packages/neko-agent-runtime
       '@neko-agent/webview':
         specifier: workspace:*
         version: link:../../packages/neko-agent-webview
+      '@neko-ai/contracts':
+        specifier: workspace:*
+        version: link:../../packages/neko-ai-contracts
+      '@neko-assets/domain':
+        specifier: workspace:*
+        version: link:../../packages/neko-assets-domain
+      '@neko-assets/node':
+        specifier: workspace:*
+        version: link:../../packages/neko-assets-node
+      '@neko-assets/webview':
+        specifier: workspace:*
+        version: link:../../packages/neko-assets-webview
       '@neko-canvas/domain':
         specifier: workspace:*
         version: link:../../packages/neko-canvas-domain
+      '@neko-canvas/node':
+        specifier: workspace:*
+        version: link:../../packages/neko-canvas-node
       '@neko-canvas/webview':
         specifier: workspace:*
         version: link:../../packages/neko-canvas-webview
@@ -111,45 +129,36 @@ importers:
       '@neko-cut/node':
         specifier: workspace:*
         version: link:../../packages/neko-cut-node
-      '@neko-preview/contracts':
+      '@neko-cut/webview':
         specifier: workspace:*
-        version: link:../../packages/neko-preview-contracts
-      '@neko/agent':
+        version: link:../../packages/neko-cut-webview
+      '@neko-entity/domain':
         specifier: workspace:*
-        version: link:../../packages/neko-agent-runtime
+        version: link:../../packages/neko-entity-domain
+      '@neko-preview/domain':
+        specifier: workspace:*
+        version: link:../../packages/neko-preview-domain
+      '@neko-preview/webview':
+        specifier: workspace:*
+        version: link:../../packages/neko-preview-webview
       '@neko/content':
         specifier: workspace:*
         version: link:../../packages/neko-content
-      '@neko/entity':
-        specifier: workspace:*
-        version: link:../../packages/neko-entity
-      '@neko/generation':
-        specifier: workspace:*
-        version: link:../../packages/neko-generation
       '@neko/host':
         specifier: workspace:*
         version: link:../../packages/neko-host
+      '@neko/local-metadata':
+        specifier: workspace:*
+        version: link:../../packages/neko-local-metadata
       '@neko/media':
         specifier: workspace:*
         version: link:../../packages/neko-media
-      '@neko/platform':
-        specifier: workspace:*
-        version: link:../../packages/neko-platform
-      '@neko/preview-webview':
-        specifier: workspace:*
-        version: link:../../packages/neko-preview-webview
       '@neko/shared':
         specifier: workspace:*
-        version: link:../../packages/neko-types
+        version: link:../../packages/neko-shared
       '@neko/ui':
         specifier: workspace:*
         version: link:../../packages/neko-ui
-      '@neko/webview':
-        specifier: workspace:*
-        version: link:../../packages/neko-cut-webview
-      neko-assets:
-        specifier: workspace:*
-        version: link:../../packages/neko-assets
       react:
         specifier: 18.3.1
         version: 18.3.1
@@ -215,6 +224,40 @@ importers:
         specifier: 4.1.2
         version: 4.1.2(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(jsdom@27.4.0)(vite@6.4.2(@types/node@24.13.3)(jiti@1.21.7)(terser@5.49.0)(tsx@4.21.0)(yaml@2.9.0))
 
+  packages/neko-agent-contracts:
+    dependencies:
+      '@neko-ai/contracts':
+        specifier: workspace:*
+        version: link:../neko-ai-contracts
+      '@neko-canvas/domain':
+        specifier: workspace:*
+        version: link:../neko-canvas-domain
+      '@neko-entity/domain':
+        specifier: workspace:*
+        version: link:../neko-entity-domain
+      '@neko-preview/domain':
+        specifier: workspace:*
+        version: link:../neko-preview-domain
+      '@neko-search/domain':
+        specifier: workspace:*
+        version: link:../neko-search-domain
+      '@neko/chara':
+        specifier: workspace:*
+        version: link:../neko-chara
+      '@neko/content':
+        specifier: workspace:*
+        version: link:../neko-content
+      '@neko/media':
+        specifier: workspace:*
+        version: link:../neko-media
+    devDependencies:
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
+      vitest:
+        specifier: 4.1.2
+        version: 4.1.2(@opentelemetry/api@1.9.0)(@types/node@25.7.0)(jsdom@27.4.0)(vite@6.4.2(@types/node@25.7.0)(jiti@2.7.0)(terser@5.49.0)(tsx@4.21.0)(yaml@2.9.0))
+
   packages/neko-agent-runtime:
     dependencies:
       '@earendil-works/pi-agent-core':
@@ -223,18 +266,51 @@ importers:
       '@earendil-works/pi-ai':
         specifier: ^0.80.7
         version: 0.80.7(ws@8.18.3)(zod@4.4.3)
-      '@neko-agent/types':
+      '@neko-agent/contracts':
         specifier: workspace:*
-        version: link:../neko-agent-types
+        version: link:../neko-agent-contracts
+      '@neko-assets/domain':
+        specifier: workspace:*
+        version: link:../neko-assets-domain
+      '@neko-canvas/domain':
+        specifier: workspace:*
+        version: link:../neko-canvas-domain
+      '@neko-entity/domain':
+        specifier: workspace:*
+        version: link:../neko-entity-domain
+      '@neko-entity/node':
+        specifier: workspace:*
+        version: link:../neko-entity-node
+      '@neko-preview/domain':
+        specifier: workspace:*
+        version: link:../neko-preview-domain
+      '@neko-search/domain':
+        specifier: workspace:*
+        version: link:../neko-search-domain
       '@neko/content':
         specifier: workspace:*
         version: link:../neko-content
+      '@neko/generation':
+        specifier: workspace:*
+        version: link:../neko-generation
+      '@neko/host':
+        specifier: workspace:*
+        version: link:../neko-host
+      '@neko/local-metadata':
+        specifier: workspace:*
+        version: link:../neko-local-metadata
+      '@neko/media':
+        specifier: workspace:*
+        version: link:../neko-media
       '@neko/shared':
         specifier: workspace:*
-        version: link:../neko-types
+        version: link:../neko-shared
       ajv:
         specifier: ^8.17.1
         version: 8.20.0
+      sharp:
+        specifier: ^0.35.3
+        version: 0.35.3(@types/node@24.13.3)
       typebox:
         specifier: ^1.1.38
         version: 1.1.38
@@ -249,46 +325,32 @@ importers:
         specifier: 4.1.2
         version: 4.1.2(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(jsdom@27.4.0)(vite@6.4.2(@types/node@24.13.3)(jiti@2.7.0)(terser@5.49.0)(tsx@4.21.0)(yaml@2.9.0))
 
-  packages/neko-agent-test-utils:
-    dependencies:
-      '@neko/agent':
-        specifier: workspace:*
-        version: link:../neko-agent-runtime
-      '@neko/shared':
-        specifier: workspace:*
-        version: link:../neko-types
-    devDependencies:
-      '@types/node':
-        specifier: ^24.0.0
-        version: 24.13.3
-      typescript:
-        specifier: ^5.7.2
-        version: 5.9.3
-      vitest:
-        specifier: 4.1.2
-        version: 4.1.2(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(jsdom@27.4.0)(vite@6.4.2(@types/node@24.13.3)(jiti@2.7.0)(terser@5.49.0)(tsx@4.21.0)(yaml@2.9.0))
-
-  packages/neko-agent-types:
-    dependencies:
-      '@neko/host':
-        specifier: workspace:*
-        version: link:../neko-host
-      '@neko/shared':
-        specifier: workspace:*
-        version: link:../neko-types
-    devDependencies:
-      typescript:
-        specifier: ^5.8.3
-        version: 5.9.3
-      vitest:
-        specifier: 4.1.2
-        version: 4.1.2(@opentelemetry/api@1.9.0)(@types/node@25.7.0)(jsdom@27.4.0)(vite@6.4.2(@types/node@25.7.0)(jiti@2.7.0)(terser@5.49.0)(tsx@4.21.0)(yaml@2.9.0))
-
   packages/neko-agent-webview:
     dependencies:
-      '@neko-agent/types':
+      '@neko-agent/contracts':
         specifier: workspace:*
-        version: link:../neko-agent-types
+        version: link:../neko-agent-contracts
+      '@neko-ai/contracts':
+        specifier: workspace:*
+        version: link:../neko-ai-contracts
+      '@neko-canvas/domain':
+        specifier: workspace:*
+        version: link:../neko-canvas-domain
+      '@neko-preview/domain':
+        specifier: workspace:*
+        version: link:../neko-preview-domain
+      '@neko-search/domain':
+        specifier: workspace:*
+        version: link:../neko-search-domain
+      '@neko/chara':
+        specifier: workspace:*
+        version: link:../neko-chara
+      '@neko/content':
+        specifier: workspace:*
+        version: link:../neko-content
+      '@neko/generation':
+        specifier: workspace:*
+        version: link:../neko-generation
       '@neko/markdown':
         specifier: workspace:*
         version: link:../neko-markdown
@@ -297,7 +359,7 @@ importers:
         version: link:../neko-media
       '@neko/shared':
         specifier: workspace:*
-        version: link:../neko-types
+        version: link:../neko-shared
       '@neko/ui':
         specifier: workspace:*
         version: link:../neko-ui
@@ -357,6 +419,15 @@ importers:
         specifier: 4.1.2
         version: 4.1.2(@opentelemetry/api@1.9.0)(@types/node@25.7.0)(jsdom@27.4.0)(vite@6.4.2(@types/node@25.7.0)(jiti@2.7.0)(terser@5.49.0)(tsx@4.21.0)(yaml@2.9.0))
 
+  packages/neko-ai-contracts:
+    devDependencies:
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: 4.1.2
+        version: 4.1.2(@opentelemetry/api@1.9.0)(@types/node@25.7.0)(jsdom@27.4.0)(vite@6.4.2(@types/node@25.7.0)(jiti@2.7.0)(terser@5.49.0)(tsx@4.21.0)(yaml@2.9.0))
+
   packages/neko-ai-sdk:
     dependencies:
       '@ai-sdk/openai':
@@ -365,12 +436,6 @@ importers:
       '@ai-sdk/provider':
         specifier: ^3.0.8
         version: 3.0.8
-      '@neko-agent/types':
-        specifier: workspace:*
-        version: link:../neko-agent-types
-      '@neko/shared':
-        specifier: workspace:*
-        version: link:../neko-types
       sharp:
         specifier: ^0.35.3
         version: 0.35.3(@types/node@25.7.0)
@@ -385,11 +450,79 @@ importers:
         specifier: 4.1.2
         version: 4.1.2(@opentelemetry/api@1.9.0)(@types/node@25.7.0)(jsdom@27.4.0)(vite@6.4.2(@types/node@25.7.0)(jiti@2.7.0)(terser@5.49.0)(tsx@4.21.0)(yaml@2.9.0))
 
-  packages/neko-assets:
+  packages/neko-assets-domain:
     dependencies:
+      '@neko-entity/domain':
+        specifier: workspace:*
+        version: link:../neko-entity-domain
+      '@neko/content':
+        specifier: workspace:*
+        version: link:../neko-content
       '@neko/shared':
         specifier: workspace:*
-        version: link:../neko-types
+        version: link:../neko-shared
+    devDependencies:
+      '@types/node':
+        specifier: ^24.0.0
+        version: 24.13.3
+      typescript:
+        specifier: ^5.3.2
+        version: 5.9.3
+      vitest:
+        specifier: 4.1.2
+        version: 4.1.2(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(jsdom@27.4.0)(vite@6.4.2(@types/node@24.13.3)(jiti@2.7.0)(terser@5.49.0)(tsx@4.21.0)(yaml@2.9.0))
+
+  packages/neko-assets-node:
+    dependencies:
+      '@neko-assets/domain':
+        specifier: workspace:*
+        version: link:../neko-assets-domain
+      '@neko-canvas/domain':
+        specifier: workspace:*
+        version: link:../neko-canvas-domain
+      '@neko-cut/domain':
+        specifier: workspace:*
+        version: link:../neko-cut-domain
+      '@neko-entity/domain':
+        specifier: workspace:*
+        version: link:../neko-entity-domain
+      '@neko-entity/node':
+        specifier: workspace:*
+        version: link:../neko-entity-node
+      '@neko-preview/domain':
+        specifier: workspace:*
+        version: link:../neko-preview-domain
+      '@neko/content':
+        specifier: workspace:*
+        version: link:../neko-content
+      '@neko/host':
+        specifier: workspace:*
+        version: link:../neko-host
+      '@neko/local-metadata':
+        specifier: workspace:*
+        version: link:../neko-local-metadata
+    devDependencies:
+      '@types/node':
+        specifier: ^24.0.0
+        version: 24.13.3
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: 4.1.2
+        version: 4.1.2(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(jsdom@27.4.0)(vite@6.4.2(@types/node@24.13.3)(jiti@2.7.0)(terser@5.49.0)(tsx@4.21.0)(yaml@2.9.0))
+
+  packages/neko-assets-webview:
+    dependencies:
+      '@neko-assets/domain':
+        specifier: workspace:*
+        version: link:../neko-assets-domain
+      '@neko/content':
+        specifier: workspace:*
+        version: link:../neko-content
+      '@neko/ui':
+        specifier: workspace:*
+        version: link:../neko-ui
       react:
         specifier: 18.3.1
         version: 18.3.1
@@ -409,21 +542,39 @@ importers:
       '@types/react-dom':
         specifier: 18.3.7
         version: 18.3.7(@types/react@18.3.31)
+      '@vitejs/plugin-react':
+        specifier: 4.3.4
+        version: 4.3.4(vite@6.4.2(@types/node@24.13.3)(jiti@2.7.0)(terser@5.49.0)(tsx@4.21.0)(yaml@2.9.0))
       jsdom:
         specifier: ^27.0.1
         version: 27.4.0
       typescript:
         specifier: ^5.3.2
         version: 5.9.3
+      vite:
+        specifier: 6.4.2
+        version: 6.4.2(@types/node@24.13.3)(jiti@2.7.0)(terser@5.49.0)(tsx@4.21.0)(yaml@2.9.0)
       vitest:
         specifier: 4.1.2
         version: 4.1.2(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(jsdom@27.4.0)(vite@6.4.2(@types/node@24.13.3)(jiti@2.7.0)(terser@5.49.0)(tsx@4.21.0)(yaml@2.9.0))
 
   packages/neko-canvas-domain:
     dependencies:
+      '@neko-entity/domain':
+        specifier: workspace:*
+        version: link:../neko-entity-domain
+      '@neko/content':
+        specifier: workspace:*
+        version: link:../neko-content
+      '@neko/generation':
+        specifier: workspace:*
+        version: link:../neko-generation
+      '@neko/local-metadata':
+        specifier: workspace:*
+        version: link:../neko-local-metadata
       '@neko/shared':
         specifier: workspace:*
-        version: link:../neko-types
+        version: link:../neko-shared
     devDependencies:
       '@types/node':
         specifier: ^24.0.0
@@ -435,17 +586,63 @@ importers:
         specifier: 4.1.2
         version: 4.1.2(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(jsdom@27.4.0)(vite@6.4.2(@types/node@24.13.3)(jiti@2.7.0)(terser@5.49.0)(tsx@4.21.0)(yaml@2.9.0))
 
-  packages/neko-canvas-webview:
+  packages/neko-canvas-node:
     dependencies:
+      '@neko-assets/domain':
+        specifier: workspace:*
+        version: link:../neko-assets-domain
+      '@neko-assets/node':
+        specifier: workspace:*
+        version: link:../neko-assets-node
       '@neko-canvas/domain':
         specifier: workspace:*
         version: link:../neko-canvas-domain
+      '@neko/content':
+        specifier: workspace:*
+        version: link:../neko-content
+      '@neko/generation':
+        specifier: workspace:*
+        version: link:../neko-generation
+      '@neko/host':
+        specifier: workspace:*
+        version: link:../neko-host
+      '@neko/local-metadata':
+        specifier: workspace:*
+        version: link:../neko-local-metadata
+      '@neko/shared':
+        specifier: workspace:*
+        version: link:../neko-shared
+    devDependencies:
+      '@types/node':
+        specifier: ^24.0.0
+        version: 24.13.3
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: 4.1.2
+        version: 4.1.2(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(jsdom@27.4.0)(vite@6.4.2(@types/node@24.13.3)(jiti@2.7.0)(terser@5.49.0)(tsx@4.21.0)(yaml@2.9.0))
+
+  packages/neko-canvas-webview:
+    dependencies:
+      '@neko-assets/domain':
+        specifier: workspace:*
+        version: link:../neko-assets-domain
+      '@neko-canvas/domain':
+        specifier: workspace:*
+        version: link:../neko-canvas-domain
+      '@neko-preview/domain':
+        specifier: workspace:*
+        version: link:../neko-preview-domain
+      '@neko/content':
+        specifier: workspace:*
+        version: link:../neko-content
       '@neko/media':
         specifier: workspace:*
         version: link:../neko-media
       '@neko/shared':
         specifier: workspace:*
-        version: link:../neko-types
+        version: link:../neko-shared
       '@neko/ui':
         specifier: workspace:*
         version: link:../neko-ui
@@ -495,9 +692,15 @@ importers:
 
   packages/neko-chara:
     dependencies:
+      '@neko-entity/domain':
+        specifier: workspace:*
+        version: link:../neko-entity-domain
+      '@neko/content':
+        specifier: workspace:*
+        version: link:../neko-content
       '@neko/shared':
         specifier: workspace:*
-        version: link:../neko-types
+        version: link:../neko-shared
     devDependencies:
       '@types/node':
         specifier: ^24.0.0
@@ -511,12 +714,9 @@ importers:
 
   packages/neko-content:
     dependencies:
-      '@neko/markdown':
-        specifier: workspace:*
-        version: link:../neko-markdown
       '@neko/shared':
         specifier: workspace:*
-        version: link:../neko-types
+        version: link:../neko-shared
       '@zip.js/zip.js':
         specifier: ^2.8.26
         version: 2.8.26
@@ -550,9 +750,6 @@ importers:
       xlsx:
         specifier: https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz
         version: https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz
-      yaml:
-        specifier: 2.9.0
-        version: 2.9.0
     devDependencies:
       '@types/node-fetch':
         specifier: ^2.6.13
@@ -578,12 +775,15 @@ importers:
       '@neko-cut/domain':
         specifier: workspace:*
         version: link:../neko-cut-domain
+      '@neko/local-metadata':
+        specifier: workspace:*
+        version: link:../neko-local-metadata
       '@neko/media':
         specifier: workspace:*
         version: link:../neko-media
       '@neko/shared':
         specifier: workspace:*
-        version: link:../neko-types
+        version: link:../neko-shared
     devDependencies:
       '@types/node':
         specifier: ^24.0.0
@@ -605,7 +805,7 @@ importers:
         version: link:../neko-media
       '@neko/shared':
         specifier: workspace:*
-        version: link:../neko-types
+        version: link:../neko-shared
       '@neko/ui':
         specifier: workspace:*
         version: link:../neko-ui
@@ -653,11 +853,14 @@ importers:
         specifier: 4.1.2
         version: 4.1.2(@opentelemetry/api@1.9.0)(@types/node@25.7.0)(jsdom@27.4.0)(vite@6.4.2(@types/node@25.7.0)(jiti@2.7.0)(terser@5.49.0)(tsx@4.21.0)(yaml@2.9.0))
 
-  packages/neko-entity:
+  packages/neko-entity-domain:
     dependencies:
+      '@neko/content':
+        specifier: workspace:*
+        version: link:../neko-content
       '@neko/shared':
         specifier: workspace:*
-        version: link:../neko-types
+        version: link:../neko-shared
     devDependencies:
       '@types/node':
         specifier: ^24.0.0
@@ -669,11 +872,54 @@ importers:
         specifier: 4.1.2
         version: 4.1.2(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(jsdom@27.4.0)(vite@6.4.2(@types/node@24.13.3)(jiti@2.7.0)(terser@5.49.0)(tsx@4.21.0)(yaml@2.9.0))
 
+  packages/neko-entity-node:
+    dependencies:
+      '@neko-entity/domain':
+        specifier: workspace:*
+        version: link:../neko-entity-domain
+      '@neko/local-metadata':
+        specifier: workspace:*
+        version: link:../neko-local-metadata
+    devDependencies:
+      '@types/node':
+        specifier: ^24.0.0
+        version: 24.13.3
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: 4.1.2
+        version: 4.1.2(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(jsdom@27.4.0)(vite@6.4.2(@types/node@24.13.3)(jiti@2.7.0)(terser@5.49.0)(tsx@4.21.0)(yaml@2.9.0))
+
   packages/neko-generation:
     dependencies:
+      '@neko-ai/contracts':
+        specifier: workspace:*
+        version: link:../neko-ai-contracts
+      '@neko-ai/sdk':
+        specifier: workspace:*
+        version: link:../neko-ai-sdk
+      '@neko-entity/domain':
+        specifier: workspace:*
+        version: link:../neko-entity-domain
+      '@neko-preview/domain':
+        specifier: workspace:*
+        version: link:../neko-preview-domain
+      '@neko/content':
+        specifier: workspace:*
+        version: link:../neko-content
+      '@neko/local-metadata':
+        specifier: workspace:*
+        version: link:../neko-local-metadata
+      '@neko/media':
+        specifier: workspace:*
+        version: link:../neko-media
       '@neko/shared':
         specifier: workspace:*
-        version: link:../neko-types
+        version: link:../neko-shared
+      ai:
+        specifier: ^6.0.134
+        version: 6.0.134(zod@4.4.3)
     devDependencies:
       '@types/node':
         specifier: ^24.0.0
@@ -687,15 +933,58 @@ importers:
 
   packages/neko-host:
     dependencies:
+      '@neko-agent/contracts':
+        specifier: workspace:*
+        version: link:../neko-agent-contracts
+      '@neko-ai/contracts':
+        specifier: workspace:*
+        version: link:../neko-ai-contracts
+      '@neko-assets/domain':
+        specifier: workspace:*
+        version: link:../neko-assets-domain
+      '@neko/local-metadata':
+        specifier: workspace:*
+        version: link:../neko-local-metadata
       '@neko/shared':
         specifier: workspace:*
-        version: link:../neko-types
+        version: link:../neko-shared
+      smol-toml:
+        specifier: 1.6.1
+        version: 1.6.1
     devDependencies:
       '@types/node':
         specifier: ^24.0.0
         version: 24.13.3
       typescript:
         specifier: ^5.8.3
+        version: 5.9.3
+      vitest:
+        specifier: 4.1.2
+        version: 4.1.2(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(jsdom@27.4.0)(vite@6.4.2(@types/node@24.13.3)(jiti@2.7.0)(terser@5.49.0)(tsx@4.21.0)(yaml@2.9.0))
+
+  packages/neko-local-metadata:
+    dependencies:
+      '@neko-entity/domain':
+        specifier: workspace:*
+        version: link:../neko-entity-domain
+      '@neko-search/domain':
+        specifier: workspace:*
+        version: link:../neko-search-domain
+      '@neko/content':
+        specifier: workspace:*
+        version: link:../neko-content
+      '@neko/media':
+        specifier: workspace:*
+        version: link:../neko-media
+      '@neko/shared':
+        specifier: workspace:*
+        version: link:../neko-shared
+    devDependencies:
+      '@types/node':
+        specifier: ^24.0.0
+        version: 24.13.3
+      typescript:
+        specifier: ^5.9.3
         version: 5.9.3
       vitest:
         specifier: 4.1.2
@@ -718,6 +1007,10 @@ importers:
         version: 4.1.2(@opentelemetry/api@1.9.0)(@types/node@25.7.0)(jsdom@27.4.0)(vite@6.4.2(@types/node@25.7.0)(jiti@2.7.0)(terser@5.49.0)(tsx@4.21.0)(yaml@2.9.0))
 
   packages/neko-media:
+    dependencies:
+      '@neko/content':
+        specifier: workspace:*
+        version: link:../neko-content
     devDependencies:
       '@types/node':
         specifier: ^24.0.0
@@ -732,36 +1025,33 @@ importers:
         specifier: 4.1.2
         version: 4.1.2(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(jsdom@27.4.0)(vite@6.4.2(@types/node@24.13.3)(jiti@2.7.0)(terser@5.49.0)(tsx@4.21.0)(yaml@2.9.0))
 
-  packages/neko-platform:
+  packages/neko-media-local-metadata:
     dependencies:
-      '@neko-agent/types':
+      '@neko/local-metadata':
         specifier: workspace:*
-        version: link:../neko-agent-types
-      '@neko/ai-sdk':
+        version: link:../neko-local-metadata
+      '@neko/media':
         specifier: workspace:*
-        version: link:../neko-ai-sdk
-      '@neko/generation':
-        specifier: workspace:*
-        version: link:../neko-generation
+        version: link:../neko-media
       '@neko/shared':
         specifier: workspace:*
-        version: link:../neko-types
-      ai:
-        specifier: ^6.0.134
-        version: 6.0.134(zod@4.4.3)
+        version: link:../neko-shared
     devDependencies:
-      '@neko/agent':
-        specifier: workspace:*
-        version: link:../neko-agent-runtime
+      '@types/node':
+        specifier: ^24.0.0
+        version: 24.13.3
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
       vitest:
         specifier: 4.1.2
-        version: 4.1.2(@opentelemetry/api@1.9.0)(@types/node@25.7.0)(jsdom@27.4.0)(vite@6.4.2(@types/node@25.7.0)(jiti@2.7.0)(terser@5.49.0)(tsx@4.21.0)(yaml@2.9.0))
+        version: 4.1.2(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(jsdom@27.4.0)(vite@6.4.2(@types/node@24.13.3)(jiti@2.7.0)(terser@5.49.0)(tsx@4.21.0)(yaml@2.9.0))
 
-  packages/neko-preview-contracts:
+  packages/neko-preview-domain:
     dependencies:
-      '@neko/shared':
+      '@neko/content':
         specifier: workspace:*
-        version: link:../neko-types
+        version: link:../neko-content
     devDependencies:
       typescript:
         specifier: ^5.8.3
@@ -772,15 +1062,18 @@ importers:
 
   packages/neko-preview-webview:
     dependencies:
-      '@neko-preview/contracts':
+      '@neko-preview/domain':
         specifier: workspace:*
-        version: link:../neko-preview-contracts
+        version: link:../neko-preview-domain
+      '@neko/content':
+        specifier: workspace:*
+        version: link:../neko-content
       '@neko/media':
         specifier: workspace:*
         version: link:../neko-media
       '@neko/shared':
         specifier: workspace:*
-        version: link:../neko-types
+        version: link:../neko-shared
       '@neko/ui':
         specifier: workspace:*
         version: link:../neko-ui
@@ -845,9 +1138,12 @@ importers:
 
   packages/neko-quality:
     dependencies:
-      '@neko/shared':
+      '@neko/content':
         specifier: workspace:*
-        version: link:../neko-types
+        version: link:../neko-content
+      '@neko/generation':
+        specifier: workspace:*
+        version: link:../neko-generation
     devDependencies:
       '@types/node':
         specifier: ^24.0.0
@@ -859,11 +1155,20 @@ importers:
         specifier: 4.1.2
         version: 4.1.2(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(jsdom@27.4.0)(vite@6.4.2(@types/node@24.13.3)(jiti@2.7.0)(terser@5.49.0)(tsx@4.21.0)(yaml@2.9.0))
 
-  packages/neko-search:
+  packages/neko-search-domain:
     dependencies:
-      '@neko/shared':
+      '@neko-entity/domain':
         specifier: workspace:*
-        version: link:../neko-types
+        version: link:../neko-entity-domain
+      '@neko/chara':
+        specifier: workspace:*
+        version: link:../neko-chara
+      '@neko/content':
+        specifier: workspace:*
+        version: link:../neko-content
+      '@neko/markdown':
+        specifier: workspace:*
+        version: link:../neko-markdown
     devDependencies:
       '@types/node':
         specifier: ^24.0.0
@@ -875,90 +1180,44 @@ importers:
         specifier: 4.1.2
         version: 4.1.2(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(jsdom@27.4.0)(vite@6.4.2(@types/node@24.13.3)(jiti@2.7.0)(terser@5.49.0)(tsx@4.21.0)(yaml@2.9.0))
 
-  packages/neko-skills: {}
-
-  packages/neko-tools-contracts:
-    devDependencies:
-      typescript:
-        specifier: ^5.8.3
-        version: 5.9.3
-      vitest:
-        specifier: 4.1.2
-        version: 4.1.2(@opentelemetry/api@1.9.0)(@types/node@25.7.0)(jsdom@27.4.0)(vite@6.4.2(@types/node@25.7.0)(jiti@2.7.0)(terser@5.49.0)(tsx@4.21.0)(yaml@2.9.0))
-
-  packages/neko-tools-webview:
+  packages/neko-search-local-metadata:
     dependencies:
-      '@neko-tools/contracts':
+      '@neko-entity/domain':
         specifier: workspace:*
-        version: link:../neko-tools-contracts
+        version: link:../neko-entity-domain
+      '@neko-search/domain':
+        specifier: workspace:*
+        version: link:../neko-search-domain
+      '@neko/content':
+        specifier: workspace:*
+        version: link:../neko-content
+      '@neko/local-metadata':
+        specifier: workspace:*
+        version: link:../neko-local-metadata
       '@neko/media':
         specifier: workspace:*
         version: link:../neko-media
       '@neko/shared':
         specifier: workspace:*
-        version: link:../neko-types
-      '@neko/ui':
-        specifier: workspace:*
-        version: link:../neko-ui
-      react:
-        specifier: ^18.2.0
-        version: 18.3.1
-      react-dom:
-        specifier: ^18.2.0
-        version: 18.3.1(react@18.3.1)
-    devDependencies:
-      '@types/react':
-        specifier: ^18.2.43
-        version: 18.3.31
-      '@types/react-dom':
-        specifier: ^18.2.17
-        version: 18.3.7(@types/react@18.3.31)
-      '@vitejs/plugin-react':
-        specifier: 4.3.4
-        version: 4.3.4(vite@6.4.2(@types/node@25.7.0)(jiti@2.7.0)(terser@5.49.0)(tsx@4.21.0)(yaml@2.9.0))
-      autoprefixer:
-        specifier: ^10.4.16
-        version: 10.4.27(postcss@8.5.6)
-      jsdom:
-        specifier: ^27.0.1
-        version: 27.4.0
-      postcss:
-        specifier: ^8.4.32
-        version: 8.5.6
-      tailwindcss:
-        specifier: ^3.3.6
-        version: 3.4.19(tsx@4.21.0)(yaml@2.9.0)
-      typescript:
-        specifier: ^5.3.2
-        version: 5.9.3
-      vite:
-        specifier: 6.4.2
-        version: 6.4.2(@types/node@25.7.0)(jiti@2.7.0)(terser@5.49.0)(tsx@4.21.0)(yaml@2.9.0)
-      vitest:
-        specifier: 4.1.2
-        version: 4.1.2(@opentelemetry/api@1.9.0)(@types/node@25.7.0)(jsdom@27.4.0)(vite@6.4.2(@types/node@25.7.0)(jiti@2.7.0)(terser@5.49.0)(tsx@4.21.0)(yaml@2.9.0))
-
-  packages/neko-types:
-    dependencies:
-      react:
-        specifier: '>=18'
-        version: 18.3.1
-      react-dom:
-        specifier: '>=18'
-        version: 18.3.1(react@18.3.1)
-      smol-toml:
-        specifier: 1.6.1
-        version: 1.6.1
-      tailwindcss:
-        specifier: '>=3'
-        version: 3.4.19(tsx@4.21.0)(yaml@2.9.0)
+        version: link:../neko-shared
     devDependencies:
       '@types/node':
         specifier: ^24.0.0
         version: 24.13.3
-      jsdom:
-        specifier: ^27.0.1
-        version: 27.4.0
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: 4.1.2
+        version: 4.1.2(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(jsdom@27.4.0)(vite@6.4.2(@types/node@24.13.3)(jiti@2.7.0)(terser@5.49.0)(tsx@4.21.0)(yaml@2.9.0))
+
+  packages/neko-shared:
+    devDependencies:
+      '@types/node':
+        specifier: ^24.0.0
+        version: 24.13.3
+
+  packages/neko-skills: {}
 
   packages/neko-ui:
     dependencies:
@@ -967,7 +1226,7 @@ importers:
         version: link:../neko-markdown
       '@neko/shared':
         specifier: workspace:*
-        version: link:../neko-types
+        version: link:../neko-shared
       '@radix-ui/react-collapsible':
         specifier: ^1.1.12
         version: 1.1.12(@types/react-dom@18.3.7(@types/react@18.3.27))(@types/react@18.3.27)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -1007,6 +1266,9 @@ importers:
       react-dom:
         specifier: '>=18'
         version: 18.3.1(react@18.3.1)
+      tailwindcss:
+        specifier: '>=3'
+        version: 3.4.19(tsx@4.21.0)(yaml@2.9.0)
     devDependencies:
       '@types/react':
         specifier: ^18.2.43
@@ -9944,6 +10206,17 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
+  '@vitejs/plugin-react@4.3.4(vite@6.4.2(@types/node@24.13.3)(jiti@2.7.0)(terser@5.49.0)(tsx@4.21.0)(yaml@2.9.0))':
+    dependencies:
+      '@babel/core': 7.29.0
+      '@babel/plugin-transform-react-jsx-self': 7.27.1(@babel/core@7.29.0)
+      '@babel/plugin-transform-react-jsx-source': 7.27.1(@babel/core@7.29.0)
+      '@types/babel__core': 7.20.5
+      react-refresh: 0.14.2
+      vite: 6.4.2(@types/node@24.13.3)(jiti@2.7.0)(terser@5.49.0)(tsx@4.21.0)(yaml@2.9.0)
+    transitivePeerDependencies:
+      - supports-color
+
   '@vitejs/plugin-react@4.3.4(vite@6.4.2(@types/node@25.7.0)(jiti@2.7.0)(terser@5.49.0)(tsx@4.21.0)(yaml@2.9.0))':
     dependencies:
       '@babel/core': 7.29.0
@@ -13278,6 +13551,39 @@ snapshots:
     optional: true
 
   setimmediate@1.0.5: {}
+
+  sharp@0.35.3(@types/node@24.13.3):
+    dependencies:
+      '@img/colour': 1.1.0
+      detect-libc: 2.1.2
+      semver: 7.8.5
+    optionalDependencies:
+      '@img/sharp-darwin-arm64': 0.35.3
+      '@img/sharp-darwin-x64': 0.35.3
+      '@img/sharp-freebsd-wasm32': 0.35.3
+      '@img/sharp-libvips-darwin-arm64': 1.3.2
+      '@img/sharp-libvips-darwin-x64': 1.3.2
+      '@img/sharp-libvips-linux-arm': 1.3.2
+      '@img/sharp-libvips-linux-arm64': 1.3.2
+      '@img/sharp-libvips-linux-ppc64': 1.3.2
+      '@img/sharp-libvips-linux-riscv64': 1.3.2
+      '@img/sharp-libvips-linux-s390x': 1.3.2
+      '@img/sharp-libvips-linux-x64': 1.3.2
+      '@img/sharp-libvips-linuxmusl-arm64': 1.3.2
+      '@img/sharp-libvips-linuxmusl-x64': 1.3.2
+      '@img/sharp-linux-arm': 0.35.3
+      '@img/sharp-linux-arm64': 0.35.3
+      '@img/sharp-linux-ppc64': 0.35.3
+      '@img/sharp-linux-riscv64': 0.35.3
+      '@img/sharp-linux-s390x': 0.35.3
+      '@img/sharp-linux-x64': 0.35.3
+      '@img/sharp-linuxmusl-arm64': 0.35.3
+      '@img/sharp-linuxmusl-x64': 0.35.3
+      '@img/sharp-webcontainers-wasm32': 0.35.3
+      '@img/sharp-win32-arm64': 0.35.3
+      '@img/sharp-win32-ia32': 0.35.3
+      '@img/sharp-win32-x64': 0.35.3
+      '@types/node': 24.13.3
 
   sharp@0.35.3(@types/node@25.7.0):
     dependencies:

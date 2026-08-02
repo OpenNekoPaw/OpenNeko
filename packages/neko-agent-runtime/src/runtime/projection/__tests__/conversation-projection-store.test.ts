@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { AgentTurnTimelineCompletion, AgentTurnTimelineOperation } from '@neko-agent/types';
+import type {
+  AgentTurnTimelineCompletion,
+  AgentTurnTimelineOperation,
+} from '@neko-agent/contracts';
 import { createConversationProjectionStore } from '../conversation-projection-store';
 
 function appendText(input: {

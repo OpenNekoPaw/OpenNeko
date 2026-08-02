@@ -1,5 +1,5 @@
-import type { CanonicalCanvasNodeType, CanvasNode } from '@neko/shared';
-import { CANVAS_NODE_TYPES } from '@neko/shared';
+import type { CanonicalCanvasNodeType, CanvasNode } from '@neko-canvas/domain';
+import { CANVAS_NODE_TYPES } from '@neko-canvas/domain';
 
 export interface ContainerPolicy {
   name: 'group';

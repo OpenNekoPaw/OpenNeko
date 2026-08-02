@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import { MannequinIcon } from '@neko/shared/icons';
-import { RoleplayEntityList } from '@/components/ChatView/RoleplayEntityList';
-import type { MentionItem } from '@/components/ChatView/InputArea/types';
-import { useTranslation } from '@/i18n/I18nContext';
+import { MannequinIcon } from '@neko/ui/icons';
+import { RoleplayEntityList } from '../ChatView/RoleplayEntityList';
+import type { MentionItem } from '../ChatView/InputArea/types';
+import { useTranslation } from '../../i18n/I18nContext';
 
 interface RoleplayMenuProps {
   items: readonly MentionItem[];

@@ -9,17 +9,15 @@ import type {
   AgentMultimodalHostAdapter,
   AgentMultimodalPacketLinkage,
   AgentToolModalityDeclaration,
-} from '@neko-agent/types';
-import type {
   ArtifactKind,
   ArtifactRef,
-  CanvasNodeType,
   MultimodalContextPacket,
   PerceptionInputKind,
   PerceptionInputRef,
   ProjectObjectRef,
   SelectionRef,
-} from '@neko/shared';
+} from '@neko-agent/contracts';
+import type { CanvasNodeType } from '@neko-canvas/domain';
 
 export interface CanvasSelectionContextNode {
   readonly nodeId: string;

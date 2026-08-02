@@ -1,16 +1,16 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { createRef, type ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { AgentContextPayload } from '@neko/shared';
+import type { AgentContextPayload } from '@neko-agent/contracts';
 import {
   parseSendMessageWebviewMessage,
   type Message,
   type SettingsState,
-} from '@neko-agent/types';
+} from '@neko-agent/contracts';
 import type { ChatWorkspaceProps } from './ChatWorkspace';
 import { ChatWorkspace } from './ChatWorkspace';
-import type { ComposerMenuState } from '@/components/ChatView/InputArea/types';
-import { createTabRenderRuntime } from '@/render-runtime/tab-render-runtime';
+import type { ComposerMenuState } from './ChatView/InputArea/types';
+import { createTabRenderRuntime } from '../render-runtime/tab-render-runtime';
 
 const hostMocks = vi.hoisted(() => ({
   sendMessage: vi.fn(),
@@ -27,11 +27,11 @@ const hostMocks = vi.hoisted(() => ({
   clearActiveSkill: vi.fn(),
 }));
 
-vi.mock('@/messages', () => ({
+vi.mock('../messages', () => ({
   AgentHostMessages: hostMocks,
 }));
 
-vi.mock('@/components/ChatView/InputAreaContext', () => ({
+vi.mock('./ChatView/InputAreaContext', () => ({
   InputAreaProvider: (props: {
     children: ReactNode;
     sessionMode?: 'agent' | 'image' | 'video' | 'audio';
@@ -83,7 +83,7 @@ vi.mock('@/components/ChatView/InputAreaContext', () => ({
   ),
 }));
 
-vi.mock('@/components/ChatView', () => ({
+vi.mock('./ChatView', () => ({
   ChatView: (props: {
     composerDisabled?: boolean;
     activeConversationId: string | null;
@@ -244,7 +244,7 @@ const keyboardMocks = vi.hoisted(() => ({
   useKeyboardShortcuts: vi.fn(),
 }));
 
-vi.mock('@/hooks/useKeyboardShortcuts', () => ({
+vi.mock('../hooks/useKeyboardShortcuts', () => ({
   COMMON_SHORTCUTS: {
     focusInput: (handler: () => void) => ({ id: 'focusInput', handler }),
     clearConversation: (handler: () => void) => ({ id: 'clearConversation', handler }),
@@ -255,7 +255,7 @@ vi.mock('@/hooks/useKeyboardShortcuts', () => ({
   useKeyboardShortcuts: keyboardMocks.useKeyboardShortcuts,
 }));
 
-vi.mock('@/hooks/useSlashCommands', () => ({
+vi.mock('../hooks/useSlashCommands', () => ({
   useSlashCommands: () => ({
     handleSlashCommand: vi.fn(),
   }),
@@ -934,7 +934,9 @@ function createProps(overrides: Partial<ChatWorkspaceProps> = {}): ChatWorkspace
     pluginCommands: [],
     workItems: [],
     pluginsAvailable: {},
-    setActiveTab: noop as React.Dispatch<React.SetStateAction<import('@neko-agent/types').TabType>>,
+    setActiveTab: noop as React.Dispatch<
+      React.SetStateAction<import('@neko-agent/contracts').TabType>
+    >,
     conversationCompressingRef: createRefWithCurrent(new Map()),
     contextTokenCount: 0,
     isCompressing: false,
@@ -943,7 +945,7 @@ function createProps(overrides: Partial<ChatWorkspaceProps> = {}): ChatWorkspace
     ambientNodes: [],
     agentState: null,
     setAmbientNodes: noop as React.Dispatch<
-      React.SetStateAction<import('@neko-agent/types').AmbientCanvasNode[]>
+      React.SetStateAction<import('@neko-agent/contracts').AmbientCanvasNode[]>
     >,
     onNewChat: noop,
     queuedEditDraftConflictMessage: 'Queued edit draft conflict',

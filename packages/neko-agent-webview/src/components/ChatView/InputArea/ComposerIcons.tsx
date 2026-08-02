@@ -1,6 +1,6 @@
-import type { SessionMode } from '@neko-agent/types';
-import type { IconProps } from '@neko/shared/icons';
-import { CameraIcon, PlayIcon, VolumeIcon } from '@neko/shared/icons';
+import type { SessionMode } from '@neko-agent/contracts';
+import type { IconProps } from '@neko/ui/icons';
+import { CameraIcon, PlayIcon, VolumeIcon } from '@neko/ui/icons';
 import type { GenCategory } from './types';
 
 type ComposerIconProps = Pick<IconProps, 'className' | 'size' | 'strokeWidth'>;

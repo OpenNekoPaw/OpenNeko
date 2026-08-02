@@ -1,4 +1,4 @@
-import { contentLocatorKey, isContentLocator, type ContentLocator } from '@neko/shared';
+import { contentLocatorKey, isContentLocator, type ContentLocator } from '@neko/content';
 import type {
   AgentTurnTimelineItem,
   AgentTurnTimelineOperation,
@@ -6,7 +6,7 @@ import type {
   ConversationProjectionSnapshot,
   Message,
   ToolCall,
-} from '@neko-agent/types';
+} from '@neko-agent/contracts';
 
 const MEDIA_FILE_EXTENSIONS = [
   '.png',

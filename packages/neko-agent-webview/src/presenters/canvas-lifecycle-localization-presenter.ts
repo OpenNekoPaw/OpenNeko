@@ -2,7 +2,7 @@ import type {
   AgentCapabilityAction,
   AgentCapabilityArtifactRef,
   AgentCapabilityInvocationResult,
-} from '@neko/shared';
+} from '@neko-agent/contracts';
 
 export type ChatTranslation = (key: string, params?: Record<string, string | number>) => string;
 

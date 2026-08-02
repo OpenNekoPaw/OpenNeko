@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { ToolCall } from '@neko-agent/types';
-import { validateCanvasMarkdownCapabilityInput, type AgentContextPayload } from '@neko/shared';
+import type { AgentContextPayload, ToolCall } from '@neko-agent/contracts';
+import { validateCanvasMarkdownCapabilityInput } from '@neko-canvas/domain';
 import {
   projectMarkdownResourceRendering,
   normalizeMarkdownResourceLookupToken,

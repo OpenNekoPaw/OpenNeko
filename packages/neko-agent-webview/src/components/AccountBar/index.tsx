@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
-import type { ConfiguredProvider } from '@neko-agent/types';
-import { useTranslation } from '@/i18n/I18nContext';
-import { AgentHostMessages } from '@/messages';
-import { EditIcon, FileIcon, SettingsIcon } from '@neko/shared/icons';
+import type { ConfiguredProvider } from '@neko-agent/contracts';
+import { useTranslation } from '../../i18n/I18nContext';
+import { AgentHostMessages } from '../../messages';
+import { EditIcon, FileIcon, SettingsIcon } from '@neko/ui/icons';
 
 interface AccountBarProps {
   configuredProviders: ConfiguredProvider[];

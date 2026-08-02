@@ -1,10 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import {
-  contentLocatorKey,
-  createGeneratedAssetRevisionRef,
-  hashStableValue,
-  type ContentLocator,
-} from '@neko/shared';
+import { hashStableValue } from '@neko/shared';
+import { contentLocatorKey, type ContentLocator } from '@neko/content';
+import { createGeneratedAssetRevisionRef } from '@neko/generation';
 import {
   collectCreatorVisibleArtifacts,
   type CreatorVisibleToolResult,

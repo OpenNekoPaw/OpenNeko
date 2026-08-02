@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import type { OpenTab } from '@neko-agent/types';
+import type { OpenTab } from '@neko-agent/contracts';
 import { TabBar } from './TabBar';
 
 const translations: Record<string, string> = {
@@ -11,7 +11,7 @@ const translations: Record<string, string> = {
   'header.tabStatus.completed': 'Completed',
 };
 
-vi.mock('@/i18n/I18nContext', () => ({
+vi.mock('../../i18n/I18nContext', () => ({
   useTranslation: () => ({
     t: (key: string) => translations[key] ?? key,
   }),
@@ -38,7 +38,9 @@ describe('TabBar', () => {
     fireEvent.click(screen.getByRole('tab', { name: 'New Chat' }));
     expect(onSwitchTab).toHaveBeenCalledWith('tab-1');
 
-    fireEvent.click(screen.getAllByRole('button', { name: 'Close tab' })[1]);
+    const closeButton = screen.getAllByRole('button', { name: 'Close tab' })[1];
+    if (!closeButton) throw new Error('Expected the active tab close button.');
+    fireEvent.click(closeButton);
     expect(onCloseTab).toHaveBeenCalledWith('tab-2', expect.anything());
   });
 

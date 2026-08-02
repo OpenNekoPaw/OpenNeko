@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { TOOL_NAMES_PERCEPTION, isPerceptionEvidenceToolResult } from '@neko/shared';
+import { isPerceptionEvidenceToolResult } from '@neko-agent/contracts';
+import { TOOL_NAMES_PERCEPTION } from '@neko-agent/contracts';
 import {
   PERCEPTION_AUDIO_TRANSCRIBE_METADATA,
   PERCEPTION_DESCRIBE_INPUT_METADATA,

@@ -7,8 +7,8 @@
 import { defineHandler } from './types';
 import type { MessageHandler, HandlerRegistration, MessageHandlerContext } from './types';
 import type { AgentCapabilityLifecycleResultMessage, SlashCommandResultMessage } from './messages';
-import type { SlashCommandResultEffect } from '@neko-agent/types';
-import type { ContentBlock } from '@neko-agent/types';
+import type { SlashCommandResultEffect } from '@neko-agent/contracts';
+import type { ContentBlock } from '@neko-agent/contracts';
 import {
   projectCloseCurrentConversationTab,
   projectSlashCommandResultMessage,

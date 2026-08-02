@@ -3,7 +3,7 @@ import type {
   ConversationStreamingState,
   ConversationSummary,
   OpenTab,
-} from '@neko-agent/types';
+} from '@neko-agent/contracts';
 
 export type HistoryConversationExecutionStatus = 'running' | 'completed';
 export type HistoryConversationProtectedReason = 'open' | 'running';

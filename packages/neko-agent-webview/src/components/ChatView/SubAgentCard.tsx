@@ -3,17 +3,17 @@
  */
 
 import { useState, useCallback } from 'react';
-import type { SubAgentWorkItem } from '@/components/AgentWorkItem';
+import type { SubAgentWorkItem } from '../AgentWorkItem';
 import {
   projectSubAgentCard,
   type AgentWorkItemStatusTone,
-} from '@/presenters/work-item-presenter';
+} from '../../presenters/work-item-presenter';
 import {
   SuccessIcon,
   ErrorIcon,
   ToolLoadingSpinner as LoadingSpinner,
-} from '@/components/ChatView/ToolCallDisplay';
-import { AgentRunSteps, ChevronIcon } from '@/components/ChatView/AgentRunSteps';
+} from './ToolCallDisplay/icons';
+import { AgentRunSteps, ChevronIcon } from './AgentRunSteps';
 
 interface SubAgentCardProps {
   item: SubAgentWorkItem;

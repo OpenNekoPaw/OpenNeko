@@ -3,7 +3,7 @@
  */
 
 import type { RichContentProps, RichContentRendererEntry } from '../types';
-import { VideoCard } from '@/components/ChatView/MediaPreview';
+import { VideoCard } from '../../MediaPreview';
 
 // ---------------------------------------------------------------------------
 // Data shape

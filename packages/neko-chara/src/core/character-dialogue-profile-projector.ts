@@ -1,10 +1,6 @@
 /** Character-domain system prompt projection. */
-import type {
-  EntityRepresentationTarget,
-  NpcProfileFact,
-  NpcProfileSource,
-  NpcTestMode,
-} from '@neko/shared';
+import type { EntityRepresentationTarget } from '@neko-entity/domain';
+import type { NpcProfileFact, NpcProfileSource, NpcTestMode } from '@neko/chara/contracts';
 
 export interface CharacterDialogueProfilePromptOptions {
   readonly mode?: NpcTestMode;

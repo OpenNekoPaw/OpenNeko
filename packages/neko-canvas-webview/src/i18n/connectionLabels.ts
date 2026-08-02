@@ -1,4 +1,4 @@
-import type { CanvasConnection, CanvasNode } from '@neko/shared';
+import type { CanvasConnection, CanvasNode } from '@neko-canvas/domain';
 import { t } from './index';
 
 export function resolveConnectionTypeLabel(type: CanvasConnection['type']): string {

@@ -6,7 +6,7 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useDrag } from '@neko/ui/hooks';
-import type { CanvasViewport } from '@neko/shared';
+import type { CanvasViewport } from '@neko-canvas/domain';
 import { DEFAULT_NODE_MIN_SIZE } from '../utils/nodeSizing';
 
 // =============================================================================

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { CanvasConnection, CanvasNode } from '@neko/shared';
+import type { CanvasConnection, CanvasNode } from '@neko-canvas/domain';
 import {
   createSequenceEdgeSyncPlan,
   createsDisallowedConnectionCycle,

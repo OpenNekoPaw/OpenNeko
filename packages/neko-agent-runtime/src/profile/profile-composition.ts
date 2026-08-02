@@ -1,13 +1,12 @@
-import type { AgentCapabilityDiagnostic } from '@neko-agent/types';
+import type { AgentCapabilityDiagnostic } from '@neko-agent/contracts';
 import type {
-  ArtifactProfileDescriptor,
-  IArtifactProfileRegistry,
   IProviderExpressionProfileRegistry,
   ProviderExpressionProfileDescriptor,
   Skill,
   SkillProfileReference,
-} from '@neko/shared';
-import { collectSkillProfileReferences } from '@neko/shared';
+} from '@neko-agent/contracts';
+import type { ArtifactProfileDescriptor, IArtifactProfileRegistry } from '@neko-agent/contracts';
+import { collectSkillProfileReferences } from '@neko-agent/contracts';
 
 export interface AgentProfileCompositionInput {
   readonly skill?: Pick<Skill, 'name' | 'profileReferences' | 'mediaWorkflow'>;

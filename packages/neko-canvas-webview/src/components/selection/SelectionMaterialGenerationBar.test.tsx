@@ -7,7 +7,7 @@ import type {
   CanvasNode,
   FileCanvasNode,
   MediaCanvasNode,
-} from '@neko/shared';
+} from '@neko-canvas/domain';
 import { setLocale } from '../../i18n';
 import { SelectionMaterialGenerationBar } from './SelectionMaterialGenerationBar';
 

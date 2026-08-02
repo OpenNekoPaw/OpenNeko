@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Message } from '@neko-agent/types';
+import type { Message } from '@neko-agent/contracts';
 import {
   hasQueuedUserMessages,
   isOptimisticQueuedMessageItem,

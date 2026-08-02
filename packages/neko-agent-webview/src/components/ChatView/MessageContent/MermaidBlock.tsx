@@ -9,7 +9,7 @@
  */
 
 import { useState, useEffect, useRef, useCallback, memo } from 'react';
-import { AgentHostMessages } from '@/messages';
+import { AgentHostMessages } from '../../../messages';
 import { useMessageActions } from '../MessageActionsContext';
 import { getLogger } from '../../../utils/logger';
 import {

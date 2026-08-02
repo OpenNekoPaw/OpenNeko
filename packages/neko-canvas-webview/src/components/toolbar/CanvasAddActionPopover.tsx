@@ -1,6 +1,6 @@
 import { useState, type ReactElement } from 'react';
 import { Popover, ToolbarButton } from '@neko/ui/primitives';
-import { PlusIcon } from '@neko/shared/icons';
+import { PlusIcon } from '@neko/ui/icons';
 import { t } from '../../i18n';
 import { createCanvasAddActionIcon } from '../adapters/sharedCanvasUiAdapter';
 import {

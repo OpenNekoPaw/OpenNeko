@@ -11,7 +11,7 @@ import type {
   ToolPurposeModelCompletionInput,
   ToolPurposeModelImage,
   ToolPurposeModelRuntime,
-} from '@neko/shared';
+} from '@neko-agent/contracts';
 
 import type { AgentModelPolicy, AgentModelPurpose, ResolvedAgentModelUse } from './model-policy';
 import { completePiPurposeModel } from './purpose-model-runtime';

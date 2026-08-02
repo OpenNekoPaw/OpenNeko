@@ -12,7 +12,7 @@ import {
   projectSettingsDataMessage,
   projectSettingsMutationError,
 } from '../config-message-presenter';
-import { buildConfigChangedMessage, buildConfigStateMessage } from '@neko-agent/types';
+import { buildConfigChangedMessage, buildConfigStateMessage } from '@neko-agent/contracts';
 
 describe('config message presenter', () => {
   beforeEach(() => {

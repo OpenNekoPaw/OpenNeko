@@ -6,11 +6,11 @@ import type {
   AgentProfileSource,
   AgentProfileValidationResult,
   AgentProfileVersion,
-  ArtifactProfileDescriptor,
   IAgentProfileRegistry,
   ProviderExpressionProfileDescriptor,
-} from '@neko/shared';
-import { validateAgentProfileIdentity } from '@neko/shared';
+} from '@neko-agent/contracts';
+import type { ArtifactProfileDescriptor } from '@neko-agent/contracts';
+import { validateAgentProfileIdentity } from '@neko-agent/contracts';
 
 export type AgentProfileDescriptor =
   ArtifactProfileDescriptor | ProviderExpressionProfileDescriptor;

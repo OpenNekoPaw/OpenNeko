@@ -3,7 +3,7 @@
  */
 
 import type { RichContentProps, RichContentRendererEntry } from '../types';
-import { AudioCard } from '@/components/ChatView/MediaPreview';
+import { AudioCard } from '../../MediaPreview';
 
 // ---------------------------------------------------------------------------
 // Data shape

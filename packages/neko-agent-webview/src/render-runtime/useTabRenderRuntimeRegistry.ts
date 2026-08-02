@@ -1,10 +1,10 @@
 import { useEffect, useLayoutEffect, useReducer, useRef } from 'react';
-import type { OpenTab } from '@neko-agent/types';
+import type { OpenTab } from '@neko-agent/contracts';
 import {
   createTabRenderRuntimeRegistry,
   type TabRenderRuntimeRegistry,
 } from './tab-render-runtime';
-import { useOptionalAgentHostRuntimeAdapter } from '@/host-runtime-context';
+import { useOptionalAgentHostRuntimeAdapter } from '../host-runtime-context';
 import {
   createTabRenderRealmStateCoordinator,
   type TabRenderRealmStateHost,

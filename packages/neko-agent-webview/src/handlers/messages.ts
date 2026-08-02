@@ -1,7 +1,7 @@
 /**
  * Desktop host → Webview message contracts
  *
- * Shared protocol definitions live in @neko-agent/types. This module remains
+ * Shared protocol definitions live in @neko-agent/contracts. This module remains
  * as a local compatibility barrel for existing handler imports.
  */
 
@@ -46,4 +46,4 @@ export type {
   SlashCommandResultMessage,
   SubAgentEventMessage,
   TabStateMessage,
-} from '@neko-agent/types';
+} from '@neko-agent/contracts';

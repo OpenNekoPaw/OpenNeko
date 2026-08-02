@@ -1,4 +1,4 @@
-import type { CanvasNode, CanvasViewport } from '@neko/shared';
+import type { CanvasNode, CanvasViewport } from '@neko-canvas/domain';
 import { BaseNode } from './BaseNode';
 import { t } from '../../i18n';
 

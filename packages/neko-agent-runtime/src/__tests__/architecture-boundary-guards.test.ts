@@ -14,9 +14,9 @@ const desktopMainSrc = join(workspaceRoot, 'apps/neko-desktop/src/main');
 const desktopPreloadSrc = join(workspaceRoot, 'apps/neko-desktop/src/preload');
 const platformSrc = join(packageRoot, 'neko-platform/src');
 const tuiSrc = join(workspaceRoot, 'apps/neko-tui/src/tui');
-const agentTypesSrc = join(packageRoot, 'neko-agent-types/src');
-const testUtilsSrc = join(packageRoot, 'neko-agent-test-utils/src');
-const sharedTypesSrc = join(workspaceRoot, 'packages/neko-types/src/types');
+const agentTypesSrc = join(packageRoot, 'neko-agent-contracts/src');
+const sharedSrc = join(packageRoot, 'neko-shared/src');
+const sharedTypesSrc = join(workspaceRoot, 'packages/neko-shared/src/types');
 
 function hasQuotedIdentity(source: string, identity: string): boolean {
   const escaped = identity.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -45,6 +45,7 @@ describe('agent architecture boundary guards', () => {
   });
 
   it('keeps the replaced Platform chat stack physically absent', () => {
+    expect(existsSync(join(packageRoot, 'neko-platform'))).toBe(false);
     for (const removedPath of [
       'service/service.ts',
       'service/shared-service-adapter.ts',
@@ -69,13 +70,6 @@ describe('agent architecture boundary guards', () => {
     ]) {
       expect(productionSource).not.toMatch(new RegExp(`\\b${removedSymbol}\\b`, 'u'));
     }
-
-    const manifest = JSON.parse(
-      readFileSync(join(packageRoot, 'neko-platform/package.json'), 'utf-8'),
-    ) as { dependencies?: Record<string, string> };
-    expect(
-      Object.keys(manifest.dependencies ?? {}).filter((name) => name.startsWith('@ai-sdk/')),
-    ).toEqual([]);
   });
 
   it('keeps retired experiment command, exports, markers, and runtime branches absent', () => {
@@ -126,16 +120,13 @@ describe('agent architecture boundary guards', () => {
     const hostRuntimeSources = [...listFiles(extensionSrc), ...listFiles(tuiSrc)].filter(
       (file) => (file.endsWith('.ts') || file.endsWith('.tsx')) && !isTestFile(file),
     );
-    const testUtilitySources = listFiles(testUtilsSrc).filter(
-      (file) => (file.endsWith('.ts') || file.endsWith('.tsx')) && !isTestFile(file),
-    );
     const symbolViolations = [...publicBarrels, ...hostRuntimeSources].flatMap((file) => {
       const source = stripTypeScriptComments(readFileSync(file, 'utf-8'));
       return forbiddenRuntimeSymbols
         .filter((symbol) => new RegExp(`\\b${symbol}\\b`, 'u').test(source))
         .map((symbol) => `${relative(repoRoot, file)} exposes retired ${symbol}`);
     });
-    const pathViolations = [...hostRuntimeSources, ...testUtilitySources].flatMap((file) => {
+    const pathViolations = hostRuntimeSources.flatMap((file) => {
       const source = stripTypeScriptComments(readFileSync(file, 'utf-8'));
       return ['tasks.json']
         .filter((legacyPath) => source.includes(legacyPath))
@@ -157,7 +148,6 @@ describe('agent architecture boundary guards', () => {
       ...listFiles(extensionSrc),
       ...listFiles(tuiSrc),
       ...listFiles(agentTypesSrc),
-      ...testUtilitySources,
     ].filter((file) => (file.endsWith('.ts') || file.endsWith('.tsx')) && !isTestFile(file));
     const identityViolations = [...productionSources, join(repoRoot, 'package.json')].flatMap(
       (file) => {
@@ -374,7 +364,7 @@ describe('agent architecture boundary guards', () => {
     expect(retiredFiles.filter((file) => existsSync(file))).toEqual([]);
 
     const publicSources = [
-      readFileSync(join(sharedTypesSrc, 'index.ts'), 'utf-8'),
+      readFileSync(join(sharedSrc, 'index.ts'), 'utf-8'),
       readFileSync(join(agentSrc, 'index.ts'), 'utf-8'),
     ].join('\n');
     for (const retiredSymbol of [
@@ -472,7 +462,7 @@ describe('agent architecture boundary guards', () => {
   });
 
   it('keeps creation profiles and creation-specific runtime planes out of core', () => {
-    const sharedSrc = join(workspaceRoot, 'packages/neko-types/src');
+    const sharedSrc = join(workspaceRoot, 'packages/neko-shared/src');
     const productionFiles = [
       ...listFiles(agentSrc),
       ...listFiles(agentTypesSrc),
@@ -507,7 +497,7 @@ describe('agent architecture boundary guards', () => {
   });
 
   it('keeps creative compression and hard-coded domain Skill routing out of Agent core', () => {
-    const sharedSrc = join(workspaceRoot, 'packages/neko-types/src');
+    const sharedSrc = join(workspaceRoot, 'packages/neko-shared/src');
     const productionFiles = [
       ...listFiles(agentSrc),
       ...listFiles(agentTypesSrc),
@@ -594,20 +584,20 @@ describe('agent architecture boundary guards', () => {
       expect(existsSync(removedPath)).toBe(false);
     }
 
-    const sharedTypesIndex = readFileSync(join(sharedTypesSrc, 'index.ts'), 'utf-8');
-    expect(sharedTypesIndex).not.toMatch(
+    const sharedIndex = readFileSync(join(sharedSrc, 'index.ts'), 'utf-8');
+    expect(sharedIndex).not.toMatch(
       /from ['"]\.\/(?:task(?:-view|-projection)?|agent-task-result-observation)['"]/u,
     );
-    const sharedPackageManifest = readFileSync(
-      join(sharedTypesSrc, '..', '..', 'package.json'),
-      'utf-8',
-    );
+    const sharedPackageManifest = readFileSync(join(sharedSrc, '..', 'package.json'), 'utf-8');
     expect(sharedPackageManifest).not.toMatch(
       /types\/(?:task(?:-view|-projection)?|agent-task-result-observation)/u,
     );
 
     const storyboardContract = stripTypeScriptComments(
-      readFileSync(join(sharedTypesSrc, 'canvas-semantic-storyboard.ts'), 'utf-8'),
+      readFileSync(
+        join(packageRoot, 'neko-canvas-domain/src/canvas-semantic-storyboard.ts'),
+        'utf-8',
+      ),
     );
     expect(storyboardContract).not.toMatch(
       /\b(?:CanvasStoryboardTaskRef|TaskProjectionRef|AgentTaskResultRef)\b/u,
@@ -928,7 +918,7 @@ describe('agent architecture boundary guards', () => {
 
   it('keeps storyboard CreativeTable field contracts out of Agent types and Webview rendering', () => {
     const sourceFiles = [
-      ...listFiles(join(packageRoot, 'neko-agent-types/src')),
+      ...listFiles(join(packageRoot, 'neko-agent-contracts/src')),
       ...listFiles(webviewSrc),
     ]
       .filter((file) => file.endsWith('.ts') || file.endsWith('.tsx'))
@@ -1372,7 +1362,7 @@ describe('agent architecture boundary guards', () => {
 
   it('keeps Webview-generated asset DTOs and render handles out of host-neutral contracts', () => {
     const hostNeutralRoots = [
-      join(packageRoot, 'neko-agent-types/src'),
+      join(packageRoot, 'neko-agent-contracts/src'),
       join(packageRoot, 'neko-agent-runtime/src'),
       join(packageRoot, 'neko-platform/src'),
     ];
@@ -1433,10 +1423,10 @@ describe('agent architecture boundary guards', () => {
     );
 
     expect(policyViolations).toEqual([]);
-    expect(existsSync(join(packageRoot, 'neko-search/src/core/aggregation.ts'))).toBe(true);
-    expect(existsSync(join(packageRoot, 'neko-entity/src/projections/projectSearch.ts'))).toBe(
-      true,
-    );
+    expect(existsSync(join(packageRoot, 'neko-search-domain/src/core/aggregation.ts'))).toBe(true);
+    expect(
+      existsSync(join(packageRoot, 'neko-search-domain/src/entity/project-search-projection.ts')),
+    ).toBe(true);
     expect(listFiles(extensionSrc).filter((file) => /\.[cm]?[jt]sx?$/.test(file))).toEqual([]);
   });
 
@@ -1542,7 +1532,7 @@ describe('agent architecture boundary guards', () => {
   it('keeps prompt-chain guidance free of creation observation state', () => {
     const sourceFiles = [
       ...listFiles(agentSrc),
-      ...listFiles(join(packageRoot, 'neko-agent-types/src')),
+      ...listFiles(join(packageRoot, 'neko-agent-contracts/src')),
       ...listFiles(extensionSrc),
       ...listFiles(tuiSrc),
     ]
@@ -1654,9 +1644,9 @@ describe('agent architecture boundary guards', () => {
       'packages/neko-agent-runtime/src/media-production/workflow-recovery-coordinator.ts',
       'packages/neko-agent-runtime/src/task/media-production-workflow-state.ts',
       'packages/neko-agent/packages/extension/src/services/mediaProductionProjectAuthoringResolver.ts',
-      'packages/neko-agent-types/src/prompt-chain-executable-plan.ts',
-      'packages/neko-agent-types/src/prompt-chain-workflow.ts',
-      'packages/neko-types/src/types/media-production-workflow.ts',
+      'packages/neko-agent-contracts/src/prompt-chain-executable-plan.ts',
+      'packages/neko-agent-contracts/src/prompt-chain-workflow.ts',
+      'packages/neko-shared/src/types/media-production-workflow.ts',
     ].filter((file) => existsSync(join(repoRoot, file)));
 
     expect([
@@ -1881,7 +1871,7 @@ describe('agent architecture boundary guards', () => {
       'packages/neko-agent-runtime/src/runtime/agent-native-creation-runtime.ts',
       'packages/neko-agent-runtime/src/workspace/staged-creation-snapshot-reader.ts',
       'packages/neko-agent-runtime/src/workspace/staged-creation-snapshot-store.ts',
-      'packages/neko-agent-types/src/creation-activity.ts',
+      'packages/neko-agent-contracts/src/creation-activity.ts',
     ];
     const existingForbiddenFiles = forbiddenFiles.filter((file) =>
       existsSync(join(repoRoot, file)),
@@ -1891,7 +1881,7 @@ describe('agent architecture boundary guards', () => {
 
     const sourceFiles = [
       ...listFiles(agentSrc),
-      ...listFiles(join(packageRoot, 'neko-agent-types/src')),
+      ...listFiles(join(packageRoot, 'neko-agent-contracts/src')),
       ...listFiles(extensionSrc),
       ...listFiles(webviewSrc),
     ]
@@ -1923,11 +1913,11 @@ describe('agent architecture boundary guards', () => {
 
   it('keeps new production code from importing legacy workflow trace DTOs as creation identity', () => {
     const allowedLegacyFiles = new Set([
-      'packages/neko-agent-types/src/index.ts',
-      'packages/neko-agent-types/src/webview-protocol.ts',
+      'packages/neko-agent-contracts/src/index.ts',
+      'packages/neko-agent-contracts/src/webview-protocol.ts',
     ]);
     const sourceFiles = [
-      ...listFiles(join(packageRoot, 'neko-agent-types/src')),
+      ...listFiles(join(packageRoot, 'neko-agent-contracts/src')),
       ...listFiles(agentSrc),
       ...listFiles(extensionSrc),
       ...listFiles(webviewSrc),
@@ -1947,12 +1937,12 @@ describe('agent architecture boundary guards', () => {
     );
 
     expect(violations).toEqual([]);
-    expect(existsSync(join(repoRoot, 'packages/neko-agent-types/src/workflow.ts'))).toBe(false);
+    expect(existsSync(join(repoRoot, 'packages/neko-agent-contracts/src/workflow.ts'))).toBe(false);
   });
 
   it('keeps production task projection names creation-native outside explicit legacy trace files', () => {
     const sourceFiles = [
-      ...listFiles(join(packageRoot, 'neko-agent-types/src')),
+      ...listFiles(join(packageRoot, 'neko-agent-contracts/src')),
       ...listFiles(agentSrc),
     ]
       .filter((file) => file.endsWith('.ts') || file.endsWith('.tsx'))

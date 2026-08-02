@@ -1,16 +1,16 @@
+import { hashStableValue } from '@neko/shared';
 import {
   CANVAS_WORKSPACE_BOARD_CONTRACT_VERSION,
   createSafeCanvasWorkspaceProjectionDiagnostic,
-  hashStableValue,
-  planCanvasWorkspaceBoardProjection,
   resolveCanvasWorkspaceBoardDocumentUri,
-  type CanvasData,
   type CanvasWorkspaceDeliveryClaim,
   type CanvasWorkspaceDeliveryReceipt,
   type CanvasWorkspaceProjectionDiagnostic,
   type CanvasWorkspaceProjectionRequest,
   type CanvasWorkspaceProjectionResult,
-} from '@neko/shared';
+} from './types/canvas-workspace-board';
+import { planCanvasWorkspaceBoardProjection } from './utils/canvasWorkspaceBoardProjection';
+import { type CanvasData } from './types/canvas';
 import {
   WorkspaceBoardDeliveryLedger,
   type WorkspaceBoardDeliveryTask,

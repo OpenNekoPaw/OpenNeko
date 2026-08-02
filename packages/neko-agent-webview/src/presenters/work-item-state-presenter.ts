@@ -4,8 +4,8 @@ import type {
   AgentWorkItemStep,
   AgentWorkItemStepStatus,
   AgentWorkItemStore,
-} from '@neko-agent/types';
-import { getAgentWorkItemRuntimeKey } from '@neko-agent/types';
+} from '@neko-agent/contracts';
+import { getAgentWorkItemRuntimeKey } from '@neko-agent/contracts';
 
 export function getWorkItemsForConversation(
   store: AgentWorkItemStore,

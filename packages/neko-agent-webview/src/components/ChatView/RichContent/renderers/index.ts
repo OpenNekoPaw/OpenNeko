@@ -21,4 +21,4 @@ export type {
   AssetGalleryRichData,
   ComparisonGridRichData,
   StoryboardTableRichData,
-} from '@/presenters/composite-content-presenter';
+} from '../../../../presenters/composite-content-presenter';

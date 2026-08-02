@@ -1,7 +1,7 @@
-import type { AmbientCanvasNodeProjection } from '@/presenters/plugin-transfer-presenter';
-import { projectAmbientCanvasContext } from '@/presenters/input-area-presenter';
-import { projectAmbientCanvasReferenceToken } from '@/presenters/reference-token-presenter';
-import { useTranslation } from '@/i18n/I18nContext';
+import type { AmbientCanvasNodeProjection } from '../../../presenters/plugin-transfer-presenter';
+import { projectAmbientCanvasContext } from '../../../presenters/input-area-presenter';
+import { projectAmbientCanvasReferenceToken } from '../../../presenters/reference-token-presenter';
+import { useTranslation } from '../../../i18n/I18nContext';
 import { ReferenceToken } from './ReferenceToken';
 
 interface AmbientCanvasContextBarProps {

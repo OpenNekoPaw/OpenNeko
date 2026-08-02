@@ -1,12 +1,11 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
+import { PROJECT_QUALITY_CONTRACT_VERSION, type ProjectQualityFacade } from '@neko/quality/project';
 import {
   MEDIA_QUALITY_CONTRACT_VERSION,
-  PROJECT_QUALITY_CONTRACT_VERSION,
-  type ProjectQualityFacade,
   type QualityProjectRef,
   type QualityTarget,
-} from '@neko/shared';
+} from '@neko/generation';
 import { collectProjectQualityEvidence } from '../project/index';
 
 const project: QualityProjectRef = {

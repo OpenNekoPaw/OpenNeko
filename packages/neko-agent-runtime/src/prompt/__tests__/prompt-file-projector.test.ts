@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { PromptPresetConfig } from '@neko/shared';
+import type { PromptPresetConfig } from '@neko-agent/contracts';
 import {
   DEFAULT_AGENTS_FILE_CONTENT,
   buildAgentsFileLoadPlan,

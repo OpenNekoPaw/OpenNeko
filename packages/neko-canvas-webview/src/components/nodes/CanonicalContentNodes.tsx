@@ -1,11 +1,11 @@
+import type { ContentLocator } from '@neko/content';
 import type {
-  ContentLocator,
   FileCanvasNode,
   JobCanvasNode,
   MarkdownCanvasNode,
   MediaCanvasNode,
-} from '@neko/shared';
-import { FileIcon } from '@neko/shared/icons';
+} from '@neko-canvas/domain';
+import { FileIcon } from '@neko/ui/icons';
 import { MarkdownDocumentView } from '@neko/ui/markdown';
 import { useMemo, useRef, useState } from 'react';
 import { t } from '../../i18n';

@@ -1,4 +1,4 @@
-import { useTranslation } from '@/i18n/I18nContext';
+import { useTranslation } from '../../i18n/I18nContext';
 import { getCategoryColor } from './InputArea/ModelIcon';
 import type { MentionItem } from './InputArea/types';
 

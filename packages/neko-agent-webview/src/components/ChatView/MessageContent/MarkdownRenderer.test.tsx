@@ -1,22 +1,22 @@
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { registerDefaultRenderers } from '@/components/ChatView/RichContent';
+import { registerDefaultRenderers } from '../RichContent';
 import { MarkdownRenderer } from './MarkdownRenderer';
-import type { MarkdownResourceRenderingProjection } from '@/presenters/markdown-resource-rendering-presenter';
-import type { ConversationProjectionPatch } from '@neko-agent/types';
+import type { MarkdownResourceRenderingProjection } from '../../../presenters/markdown-resource-rendering-presenter';
+import type { ConversationProjectionPatch } from '@neko-agent/contracts';
 import {
   createAgentMarkdownSessionKey,
   getAgentMarkdownSessionRegistry,
-} from '@/markdown/agent-markdown-session-registry';
+} from '../../../markdown/agent-markdown-session-registry';
 
-vi.mock('@/i18n/I18nContext', () => ({
+vi.mock('../../../i18n/I18nContext', () => ({
   useTranslation: () => ({
     t: (key: string, vars?: Record<string, unknown>) =>
       vars?.['count'] !== undefined ? `${String(vars['count'])} ${key}` : key,
   }),
 }));
 
-vi.mock('@/i18n', () => ({
+vi.mock('../../../i18n', () => ({
   t: (key: string, params?: Record<string, string | number>) =>
     ({
       'chat.structuredArtifact.generating': 'Generating structured content...',

@@ -11,9 +11,9 @@ import type {
   OpenTab,
   ConversationSummary,
   TabType,
-} from '@neko-agent/types';
-import { AgentHostMessages } from '@/messages';
-import { isCharacterRoleTab } from '@/presenters/character-role-session-presenter';
+} from '@neko-agent/contracts';
+import { AgentHostMessages } from '../messages';
+import { isCharacterRoleTab } from '../presenters/character-role-session-presenter';
 
 export interface UseTabManagerProps {
   openTabs: OpenTab[];

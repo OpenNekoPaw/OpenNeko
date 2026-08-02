@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import type { SupportedLocale } from '@neko/shared';
+import type { SupportedLocale } from '@neko/ui/i18n';
 import type { CreativeWorkbenchMainKind } from './creative-workbench';
 
 export type CreativeHostIntentAction = 'activate' | 'focus' | 'play' | 'pause' | 'seek' | 'inspect';

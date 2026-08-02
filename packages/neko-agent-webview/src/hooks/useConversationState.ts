@@ -10,13 +10,13 @@ import type {
   Message,
   ConversationSummary,
   OpenTab,
-} from '@neko-agent/types';
-import { ConversationRenderCoordinator } from '@/render-lifecycle/conversation-render-coordinator';
+} from '@neko-agent/contracts';
+import { ConversationRenderCoordinator } from '../render-lifecycle/conversation-render-coordinator';
 import {
   ingestConversationRenderSnapshot,
   type ConversationRenderStateUpdater as CanonicalConversationRenderStateUpdater,
   type ConversationRenderStreamingState,
-} from '@/render-lifecycle/conversation-render-state-adapter';
+} from '../render-lifecycle/conversation-render-state-adapter';
 
 /**
  * Streaming state for a conversation

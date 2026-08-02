@@ -1,11 +1,11 @@
 import type {
   ConversationProjectionPatch,
   ConversationProjectionSnapshot,
-} from '@neko-agent/types';
+} from '@neko-agent/contracts';
 import {
   applyConversationProjectionPatch,
   cloneConversationProjectionSnapshot,
-} from '@neko-agent/types';
+} from '@neko-agent/contracts';
 
 export interface ConversationProjectionReplicaSnapshot {
   readonly conversationId: string;

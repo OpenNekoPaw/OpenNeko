@@ -1,4 +1,4 @@
-import { mergeActivationProgressEvents } from '@/presenters/activation-progress-presenter';
+import { mergeActivationProgressEvents } from '../presenters/activation-progress-presenter';
 import { defineHandler } from './types';
 import type { HandlerRegistration, MessageHandler } from './types';
 import type { AgentCapabilityActivationProgressMessage } from './messages';

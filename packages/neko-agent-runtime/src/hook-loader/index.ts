@@ -5,7 +5,7 @@
  *
  * @example Settings-based hooks
  * ```typescript
- * import { SettingsHookLoader } from '@neko/agent';
+ * import { SettingsHookLoader } from '@neko-agent/runtime';
  *
  * const loader = new SettingsHookLoader({
  *   fs: nodeFileSystem,

@@ -11,18 +11,18 @@ import {
   parseCompositeContentJson,
   type ContentBlock,
   type ToolCall,
-} from '@neko-agent/types';
-import { ToolCallDisplay, ToolCallGroupDisplay } from '@/components/ChatView/ToolCallDisplay';
-import { DiffBlock } from '@/components/ChatView/DiffBlock';
-import { RichContentRenderer } from '@/components/ChatView/RichContent';
-import { MarkdownRenderer, ThinkingBlock } from '@/components/ChatView/MessageContent';
-import { MessageAvatar } from '@/components/ChatView/MessageAvatar';
-import { useMessageActions } from '@/components/ChatView/MessageActionsContext';
-import { SendToMenu } from '@/components/ChatView/SendToMenu';
-import { useTranslation } from '@/i18n/I18nContext';
-import { AgentHostMessages } from '@/messages';
-import { projectCanonicalStoryboardCanvasAuthoringHandoff } from '@/presenters/storyboard-transfer-presenter';
-import { projectMarkdownResourceRendering } from '@/presenters/markdown-resource-rendering-presenter';
+} from '@neko-agent/contracts';
+import { ToolCallDisplay, ToolCallGroupDisplay } from './ToolCallDisplay';
+import { DiffBlock } from './DiffBlock';
+import { RichContentRenderer } from './RichContent';
+import { MarkdownRenderer, ThinkingBlock } from './MessageContent';
+import { MessageAvatar } from './MessageAvatar';
+import { useMessageActions } from './MessageActionsContext';
+import { SendToMenu } from './SendToMenu';
+import { useTranslation } from '../../i18n/I18nContext';
+import { AgentHostMessages } from '../../messages';
+import { projectCanonicalStoryboardCanvasAuthoringHandoff } from '../../presenters/storyboard-transfer-presenter';
+import { projectMarkdownResourceRendering } from '../../presenters/markdown-resource-rendering-presenter';
 import {
   formatCanvasLifecycleActionLabel,
   formatCanvasLifecycleArtifactRef,
@@ -30,25 +30,27 @@ import {
   formatCanvasLifecycleDiagnosticSeverity,
   formatCanvasLifecycleStatus,
   type ChatTranslation,
-} from '@/presenters/canvas-lifecycle-localization-presenter';
-import { EditIcon, FileIcon, InfoIcon, PackageIcon, SettingsIcon } from '@neko/shared/icons';
+} from '../../presenters/canvas-lifecycle-localization-presenter';
+import { EditIcon, FileIcon, InfoIcon, PackageIcon, SettingsIcon } from '@neko/ui/icons';
 import {
   projectContentBlockUi,
   type ContentBlockHeaderIconKind,
   type ContentBlockHeaderTone,
   type ContentBlockUiProjection,
-} from '@/presenters/content-block-presenter';
+} from '../../presenters/content-block-presenter';
 import {
   isCanvasMarkdownCapabilityInput,
   isCanvasMarkdownCapabilityResult,
-  normalizeCanonicalStoryboardTable,
+  type CanvasMarkdownCapabilityResult,
+} from '@neko-canvas/domain';
+import {
   type AgentCapabilityAction,
   type AgentCapabilityInvocationInput,
   type AgentCapabilityInvocationResult,
-  type CanvasMarkdownCapabilityResult,
-} from '@neko/shared';
-import type { MessageSpeakerIdentity } from '@/components/ChatView/message-identity';
-import { createAgentMarkdownSessionKey } from '@/markdown/agent-markdown-session-registry';
+} from '@neko-agent/contracts';
+import { normalizeCanonicalStoryboardTable } from '@neko-canvas/domain';
+import type { MessageSpeakerIdentity } from './message-identity';
+import { createAgentMarkdownSessionKey } from '../../markdown/agent-markdown-session-registry';
 
 interface ContentBlockItemProps {
   /** The content block to render */
@@ -202,7 +204,7 @@ function renderBlockContent(
   conversationId: string | null,
   messageId: string,
   callbacks: Pick<
-    import('@/components/ChatView/MessageActionsContext').MessageActionsContextValue,
+    import('./MessageActionsContext').MessageActionsContextValue,
     'onAcceptDiff' | 'onRejectDiff' | 'pluginsAvailable' | 'contextChips' | 'ambientNodes'
   >,
   t: ChatTranslation,

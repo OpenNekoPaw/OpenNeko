@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { useHistoryStore } from '../historyStore';
-import type { CanvasData } from '@neko/shared';
+import type { CanvasData } from '@neko-canvas/domain';
 
 // =============================================================================
 // Test Helpers

@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import type { ChatModelOption } from '@neko/shared';
+import type { ChatModelOption } from '@neko-ai/contracts';
 import { ModeSelector } from './ModeSelector';
 import { ModelSelector } from './ModelSelector';
 import { SessionModeSelector } from './SessionModeSelector';
@@ -103,7 +103,7 @@ const models: ChatModelOption[] = [
   },
 ];
 
-vi.mock('@/i18n/I18nContext', () => ({
+vi.mock('../../../i18n/I18nContext', () => ({
   useTranslation: () => ({
     t: (key: string) => translations[key] ?? key,
   }),

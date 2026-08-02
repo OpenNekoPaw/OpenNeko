@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import type { AgentQueuedMessageItem, AgentState, AgentWorkItem, Message } from '@neko-agent/types';
+import type {
+  AgentQueuedMessageItem,
+  AgentState,
+  AgentWorkItem,
+  Message,
+} from '@neko-agent/contracts';
 import type { ActivationProgressTimeline } from '../activation-progress-presenter';
 import {
   projectActiveConversation,

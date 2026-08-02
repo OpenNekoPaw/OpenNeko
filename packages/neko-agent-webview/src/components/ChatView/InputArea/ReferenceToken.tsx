@@ -8,7 +8,7 @@ import {
   PlayIcon,
   ScissorsIcon,
   VolumeIcon,
-} from '@neko/shared/icons';
+} from '@neko/ui/icons';
 
 export type ReferenceTokenKind =
   'file' | 'image' | 'video' | 'audio' | 'canvas' | 'clip' | 'entity';

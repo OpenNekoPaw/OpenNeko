@@ -1,9 +1,15 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { cloneElement, isValidElement, useState } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { AgentContextPayload, ChatModelOption, MessageAttachment } from '@neko/shared';
-import type { ConversationKind, MediaUnderstandingModels, SessionMode } from '@neko-agent/types';
-import { InputAreaProvider } from '@/components/ChatView/InputAreaContext';
+import type {
+  AgentContextPayload,
+  ConversationKind,
+  MediaUnderstandingModels,
+  MessageAttachment,
+  SessionMode,
+} from '@neko-agent/contracts';
+import type { ChatModelOption } from '@neko-ai/contracts';
+import { InputAreaProvider } from '../InputAreaContext';
 import {
   DEFAULT_COMPOSER_MENU_STATE,
   DEFAULT_GENERATION_PARAMS,
@@ -18,7 +24,7 @@ const hostMocks = vi.hoisted(() => ({
   startCharacterDialogueFromSlash: vi.fn(),
 }));
 
-vi.mock('@/messages', () => ({
+vi.mock('../../../messages', () => ({
   AgentHostMessages: hostMocks,
 }));
 
@@ -357,7 +363,7 @@ const mediaUnderstandingModels: MediaUnderstandingModels = {
   },
 };
 
-vi.mock('@/i18n/I18nContext', () => ({
+vi.mock('../../../i18n/I18nContext', () => ({
   useTranslation: () => ({
     locale: 'zh-cn',
     t: (key: string, params?: Record<string, unknown>) =>
@@ -2226,7 +2232,7 @@ function Harness({
   isBusy = false,
   children,
 }: {
-  readonly ambientNodes?: import('@neko-agent/types').AmbientCanvasNode[];
+  readonly ambientNodes?: import('@neko-agent/contracts').AmbientCanvasNode[];
   readonly contextChips?: AgentContextPayload[];
   readonly conversationKind?: ConversationKind;
   readonly onRemoveContextChip?: (id: string) => void;

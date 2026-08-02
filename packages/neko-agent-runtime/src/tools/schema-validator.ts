@@ -6,10 +6,14 @@
  *
  * Supports: type, required, enum, minimum, maximum, minLength, pattern,
  * nested object/array properties, and anyOf.
- * Does NOT depend on Zod to keep @neko/agent lightweight.
+ * Does NOT depend on Zod to keep @neko-agent/runtime lightweight.
  */
 
-import type { ToolValidationError, ToolParameters, ToolParameterProperty } from '@neko/shared';
+import type {
+  ToolValidationError,
+  ToolParameters,
+  ToolParameterProperty,
+} from '@neko-agent/contracts';
 
 /**
  * Validate args against a ToolParameters schema.

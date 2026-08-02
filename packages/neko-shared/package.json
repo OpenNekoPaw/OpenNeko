@@ -1,0 +1,23 @@
+{
+  "name": "@neko/shared",
+  "description": "Shared types, protocols and utilities for OpenNeko",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "test": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./core": "./src/core/index.ts",
+    "./errors": "./src/errors/index.ts",
+    "./logger": "./src/logger/index.ts",
+    "./path": "./src/path/index.ts",
+    "./job-lifecycle": "./src/job-lifecycle/index.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0"
+  },
+  "license": "AGPL-3.0-or-later"
+}

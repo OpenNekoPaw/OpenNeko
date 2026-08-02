@@ -7,8 +7,8 @@ import type {
   ProjectionAttachmentProtocolDiagnosticCode,
   ProjectionDetachMessage,
   ProjectionSnapshotAcknowledgement,
-} from '@neko-agent/types';
-import { isSameProjectionAttachment } from '@neko-agent/types';
+} from '@neko-agent/contracts';
+import { isSameProjectionAttachment } from '@neko-agent/contracts';
 import type { ConversationProjectionReplica } from './conversation-projection-replica';
 
 export type ConversationProjectionAttachmentFrame = ProjectionAttachmentHostFrame<

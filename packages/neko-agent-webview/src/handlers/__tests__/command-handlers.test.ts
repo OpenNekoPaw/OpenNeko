@@ -1,14 +1,14 @@
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { AgentHostToWebviewMessage } from '@neko-agent/types';
-import type { Message } from '@neko-agent/types';
-import type { AgentWorkItemStore } from '@/components/AgentWorkItem';
-import type { PluginsAvailable } from '@/components/ChatView/SendToMenu';
-import { setLocale } from '@/i18n';
+import type { AgentHostToWebviewMessage } from '@neko-agent/contracts';
+import type { Message } from '@neko-agent/contracts';
+import type { AgentWorkItemStore } from '../../components/AgentWorkItem';
+import type { PluginsAvailable } from '../../components/ChatView/SendToMenu';
+import { setLocale } from '../../i18n';
 import { commandHandlers } from '../command-handlers';
 import type { HandlerRegistration, MessageHandlerContext, StreamingState } from '../types';
-import { ConversationRenderCoordinator } from '@/render-lifecycle/conversation-render-coordinator';
-import { ingestConversationRenderSnapshot } from '@/render-lifecycle/conversation-render-state-adapter';
+import { ConversationRenderCoordinator } from '../../render-lifecycle/conversation-render-coordinator';
+import { ingestConversationRenderSnapshot } from '../../render-lifecycle/conversation-render-state-adapter';
 
 describe('command handlers conversation isolation', () => {
   beforeEach(() => {

@@ -3,7 +3,7 @@
  * 提供网格吸附、节点边缘吸附、中心点对齐等功能
  */
 
-import type { CanvasNode } from '@neko/shared';
+import type { CanvasNode } from '@neko-canvas/domain';
 
 // =============================================================================
 // Types

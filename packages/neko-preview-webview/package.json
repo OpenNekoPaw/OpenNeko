@@ -1,5 +1,5 @@
 {
-  "name": "@neko/preview-webview",
+  "name": "@neko-preview/webview",
   "private": true,
   "version": "0.0.1",
   "type": "module",
@@ -14,7 +14,7 @@
   },
   "dependencies": {
     "@neko/media": "workspace:*",
-    "@neko-preview/contracts": "workspace:*",
+    "@neko-preview/domain": "workspace:*",
     "@neko/shared": "workspace:*",
     "@neko/ui": "workspace:*",
     "@vscode/codicons": "0.0.45",
@@ -24,7 +24,8 @@
     "pdfjs-dist": "^4.10.38",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "three": "^0.180.0"
+    "three": "^0.180.0",
+    "@neko/content": "workspace:*"
   },
   "devDependencies": {
     "@types/react": "^18.2.0",

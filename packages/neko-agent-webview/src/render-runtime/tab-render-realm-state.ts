@@ -1,8 +1,8 @@
-import type { GenCategory, GenerationParams } from '@/components/ChatView/InputArea/types';
+import type { GenCategory, GenerationParams } from '../components/ChatView/InputArea/types';
 import type {
   MediaModelSelection,
   MediaUnderstandingSelection,
-} from '@/components/ChatView/InputAreaContext';
+} from '../components/ChatView/InputAreaContext';
 import type {
   TabRenderBinding,
   TabRenderRuntimeRegistry,

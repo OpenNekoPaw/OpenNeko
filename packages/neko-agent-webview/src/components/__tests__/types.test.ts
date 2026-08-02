@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type {
   Message,
+  MessageAttachment,
   ToolCall,
   ConversationSummary,
   OpenTab,
@@ -8,8 +9,8 @@ import type {
   ShellExecutionMode,
   SettingsState,
   ConfiguredProvider,
-} from '@neko-agent/types';
-import type { ChatModelOption, MessageAttachment } from '@neko/shared';
+} from '@neko-agent/contracts';
+import type { ChatModelOption } from '@neko-ai/contracts';
 
 /**
  * Type validation tests
@@ -72,7 +73,7 @@ describe('types validation', () => {
         attachments: [attachment],
       };
       expect(message.attachments?.length).toBe(1);
-      expect(message.attachments?.[0].type).toBe('image');
+      expect(message.attachments?.[0]?.type).toBe('image');
     });
 
     it('should accept message with unified work item IDs', () => {

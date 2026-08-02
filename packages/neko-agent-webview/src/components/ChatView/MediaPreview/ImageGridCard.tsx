@@ -6,7 +6,7 @@
  */
 
 import { useState, useCallback, memo } from 'react';
-import { AgentHostMessages } from '@/messages';
+import { AgentHostMessages } from '../../../messages';
 import { openMediaTarget } from './openMediaTarget';
 
 interface ImageGridCardProps {

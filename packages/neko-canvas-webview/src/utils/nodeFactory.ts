@@ -5,14 +5,14 @@ import type {
   CanvasNodeType,
   CanvasSerializableRecord,
   CanvasSerializableValue,
-} from '@neko/shared';
+} from '@neko-canvas/domain';
+import { isContentLocator } from '@neko/content';
 import {
   isCanvasMaterialGenerationContext,
   isCanvasMaterialMediaKind,
   isCanvasNodeType,
-  isContentLocator,
   parseDocumentResourceStatus,
-} from '@neko/shared';
+} from '@neko-canvas/domain';
 import { isJobRef } from '@neko/shared/job-lifecycle';
 import { createBuiltInNodeTypeDescriptors } from '../components/nodes/nodeTypeDescriptors';
 

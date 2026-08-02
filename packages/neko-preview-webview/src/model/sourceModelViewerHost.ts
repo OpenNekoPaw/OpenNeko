@@ -3,8 +3,8 @@ import {
   type ModelPreviewSourceDescriptor,
   type ThreeReferenceHostMessage,
   type ThreeReferencePanelSubject,
-} from '@neko/shared';
-import { createSourceModelStaging } from '@neko-preview/contracts';
+} from '@neko-preview/domain';
+import { createSourceModelStaging } from '@neko-preview/domain';
 import type { ModelViewerHostPort } from './modelViewerHost';
 
 export function createSourceModelViewerHost(input: {

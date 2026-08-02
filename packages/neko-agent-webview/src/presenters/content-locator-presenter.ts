@@ -1,4 +1,4 @@
-import type { ContentLocator } from '@neko/shared';
+import type { ContentLocator } from '@neko/content';
 
 export function projectContentLocatorPath(locator: ContentLocator): string {
   switch (locator.kind) {

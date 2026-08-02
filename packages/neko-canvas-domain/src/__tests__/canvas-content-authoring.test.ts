@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import {
-  createEmptyCanvasData,
-  type CanvasGenerationEvidence,
-  type ContentLocator,
-} from '@neko/shared';
+import { type ContentLocator } from '@neko/content';
+import { createEmptyCanvasData, type CanvasGenerationEvidence } from '@neko-canvas/domain';
 import {
   portableMaterialPath,
   projectDerivedCanvasMaterialToCanvas,

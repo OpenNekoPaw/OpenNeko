@@ -2,8 +2,8 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import type {
   CharacterDialogueSessionProjection,
   EmbodyCharacterSessionProjection,
-} from '@neko-agent/types';
-import { setLocale, t } from '@/i18n';
+} from '@neko-agent/contracts';
+import { setLocale, t } from '../../i18n';
 import { projectMessageIdentities, selectMessageIdentity } from './message-identity';
 
 describe('projectMessageIdentities', () => {

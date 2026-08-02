@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import type { ToolGroup } from '@neko/shared';
+import type { ToolGroup } from '@neko-agent/contracts';
 import { resolveToolGroupTier } from '../tier-resolver';
 
 function createToolGroup(overrides: Partial<ToolGroup> = {}): ToolGroup {

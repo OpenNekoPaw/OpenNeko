@@ -6,8 +6,8 @@ import type {
   GroupCanvasNode,
   MarkdownCanvasNode,
   MediaCanvasNode,
-} from '@neko/shared';
-import { createNodeConnectionEndpoint, createPortConnectionEndpoint } from '@neko/shared';
+} from '@neko-canvas/domain';
+import { createNodeConnectionEndpoint, createPortConnectionEndpoint } from '@neko-canvas/domain';
 import { canCreateCanvasConnection, useCanvasStore } from '../canvasStore';
 import { useHistoryStore } from '../historyStore';
 import { useCanvasOperationStore } from '../canvasOperationStore';

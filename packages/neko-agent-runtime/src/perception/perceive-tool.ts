@@ -1,12 +1,12 @@
+import { BuiltinTool } from '../tools/base';
+import { validateContentLocator } from '@neko/content';
 import {
-  BuiltinTool,
   TOOL_NAMES_PERCEPTION,
-  validateContentLocator,
   type PerceiveToolInput,
   type ToolParameters,
   type ToolExecuteOptions,
   type ToolResult,
-} from '@neko/shared';
+} from '@neko-agent/contracts';
 import type { IPerceptionPipeline } from './contracts';
 
 const PERCEIVE_TOOL_NAME = TOOL_NAMES_PERCEPTION.PERCEIVE;

@@ -2,7 +2,7 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { CanvasViewport } from '@neko/shared';
+import type { CanvasViewport } from '@neko-canvas/domain';
 import { useThrottledCanvasViewport } from './useThrottledCanvasViewport';
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });

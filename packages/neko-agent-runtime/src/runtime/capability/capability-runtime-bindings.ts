@@ -1,8 +1,8 @@
 import type {
-  IArtifactProfileRegistry,
   IProviderCardRegistry,
   IProviderExpressionProfileRegistry,
-} from '@neko/shared';
+} from '@neko-agent/contracts';
+import type { IArtifactProfileRegistry } from '@neko-agent/contracts';
 import type { ToolCategoryRegistry } from '../../tools/tool-category-registry';
 import type { AgentExternalProcessorRuntime } from './external-processor-runtime';
 import type { AgentContentAccessRuntime } from './agent-content-access-runtime';

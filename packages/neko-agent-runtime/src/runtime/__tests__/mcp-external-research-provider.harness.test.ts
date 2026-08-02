@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { MCPServerConfig } from '@neko/shared';
+import type { MCPServerConfig } from '@neko-agent/contracts';
 import { MCPManager } from '../../mcp/mcp-manager';
 import { createMcpExternalResearchProvider } from '../capability/mcp-external-research-provider';
 

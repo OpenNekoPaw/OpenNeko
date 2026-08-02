@@ -1,11 +1,11 @@
 import { memo, useCallback, useState } from 'react';
-import type { ContentBlock, ToolCall } from '@neko-agent/types';
-import type { ContentBlockProcessGroupProjection } from '@/presenters/content-block-presenter';
-import { ContentBlockItem } from '@/components/ChatView/ContentBlockItem';
-import { MessageAvatar } from '@/components/ChatView/MessageAvatar';
-import type { MessageSpeakerIdentity } from '@/components/ChatView/message-identity';
-import { useTranslation } from '@/i18n/I18nContext';
-import { ChevronIcon, ToolLoadingSpinner } from '@/components/ChatView/ToolCallDisplay';
+import type { ContentBlock, ToolCall } from '@neko-agent/contracts';
+import type { ContentBlockProcessGroupProjection } from '../../presenters/content-block-presenter';
+import { ContentBlockItem } from './ContentBlockItem';
+import { MessageAvatar } from './MessageAvatar';
+import type { MessageSpeakerIdentity } from './message-identity';
+import { useTranslation } from '../../i18n/I18nContext';
+import { ChevronIcon, ToolLoadingSpinner } from './ToolCallDisplay';
 
 interface ProcessRecordsGroupProps {
   processGroup: ContentBlockProcessGroupProjection;

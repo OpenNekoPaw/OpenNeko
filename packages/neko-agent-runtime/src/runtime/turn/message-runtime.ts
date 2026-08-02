@@ -5,6 +5,7 @@ import type {
   AgentMediaModelSelections,
   AgentPhaseMessage,
   MediaUnderstandingModelSelections,
+  MessageAttachment,
   AgentModelSlots,
   AgentQueuedMessageSource,
   ContentBlock,
@@ -22,33 +23,27 @@ import type {
   ProjectMentionSource,
   RuntimeMediaModelSelections,
   SessionMode,
-} from '@neko-agent/types';
+} from '@neko-agent/contracts';
 import {
   buildAgentPhaseMessage,
   buildErrorMessage,
   buildGlobalErrorMessage,
-} from '@neko-agent/types';
-import type {
-  AgentContextPayload,
-  CanvasNodeType,
-  ContentLocator,
-  DocumentContextData,
-  DocumentLocator,
-  MessageAttachment,
-  ProviderGenerationCapability,
-  ThreeReferenceContextData,
-  ThreeReferenceOutput,
-  ThreeReferencePurpose,
-  ThreeReferenceMediaControls,
-} from '@neko/shared';
-import {
-  contentLocatorKey,
   isAgentResolvedEntityContextData,
-  isContentLocator,
-  isDocumentFile,
+  type AgentContextPayload,
+} from '@neko-agent/contracts';
+import {
   isThreeReferenceContextData,
   projectThreeReferenceMediaControls,
-} from '@neko/shared';
+  type ThreeReferenceContextData,
+  type ThreeReferenceMediaControls,
+  type ThreeReferenceOutput,
+  type ThreeReferencePurpose,
+} from '@neko-preview/domain';
+import type { ContentLocator, DocumentContextData, DocumentLocator } from '@neko/content';
+import type { ProviderGenerationCapability } from '@neko-agent/contracts';
+import type { CanvasNodeType } from '@neko-canvas/domain';
+import { isDocumentFile } from '@neko/media';
+import { contentLocatorKey, isContentLocator } from '@neko/content';
 import { DEFAULT_MENTION_EXCLUDE_GLOB } from '../../input/mention-excludes';
 import {
   extractFileReferencePaths,

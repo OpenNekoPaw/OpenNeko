@@ -5,7 +5,7 @@
  * Builtin MCP servers are loaded from platform via ConfigManager.
  */
 
-import type { MCPServerConfig, MCPServerCategory, MCPToolInfo } from '@neko/shared';
+import type { MCPServerConfig, MCPServerCategory, MCPToolInfo } from '@neko-agent/contracts';
 
 // Re-export types from shared package
 export type { MCPServerConfig, MCPServerCategory, MCPToolInfo };

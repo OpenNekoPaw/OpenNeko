@@ -4,7 +4,7 @@ import type {
   ModelPreviewLightEntry,
   ModelPreviewStagingState,
   ModelPreviewTransform,
-} from '@neko/shared';
+} from '@neko-preview/domain';
 import type { ModelCameraPlacementPreset, ModelLightPlacementPreset } from './modelCreationPresets';
 
 export const MAX_MODEL_PREVIEW_DIRECTIONAL_LIGHTS = 8;

@@ -8,7 +8,7 @@ import { defineHandler } from './types';
 import type { MessageHandler, HandlerRegistration } from './types';
 import type { TabStateMessage } from './messages';
 import { AgentHostMessages } from '../messages';
-import { isCharacterRoleTab } from '@/presenters/character-role-session-presenter';
+import { isCharacterRoleTab } from '../presenters/character-role-session-presenter';
 
 /**
  * Handle 'tabState' message - Restore tab state from extension

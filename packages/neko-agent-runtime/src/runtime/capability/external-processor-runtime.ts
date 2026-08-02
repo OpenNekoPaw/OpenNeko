@@ -13,8 +13,8 @@ import type {
   ExternalProcessorRegistrySubscription,
   ExternalProcessorResult,
   ExternalProcessorRunIdentity,
-} from '@neko-agent/types';
-import { isContentLocator, type ContentLocator } from '@neko/shared';
+} from '@neko-agent/contracts';
+import { isContentLocator, type ContentLocator } from '@neko/content';
 
 export interface AgentExternalProcessorRuntimeOptions {
   readonly registry: ExternalProcessorRegistry;

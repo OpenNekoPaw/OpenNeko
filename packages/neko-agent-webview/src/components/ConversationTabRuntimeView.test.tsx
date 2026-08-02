@@ -1,10 +1,10 @@
 import { act, render } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { SettingsState } from '@neko-agent/types';
-import { createTabRenderRuntime } from '@/render-runtime/tab-render-runtime';
-import { MarkdownRenderer } from '@/components/ChatView/MessageContent';
-import { createAgentMarkdownSessionKey } from '@/markdown/agent-markdown-session-registry';
+import type { SettingsState } from '@neko-agent/contracts';
+import { createTabRenderRuntime } from '../render-runtime/tab-render-runtime';
+import { MarkdownRenderer } from './ChatView/MessageContent';
+import { createAgentMarkdownSessionKey } from '../markdown/agent-markdown-session-registry';
 import {
   ConversationTabRuntimeView,
   type ConversationTabRuntimeViewProps,

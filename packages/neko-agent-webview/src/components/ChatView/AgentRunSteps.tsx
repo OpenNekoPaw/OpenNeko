@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
-import type { AgentWorkItemStep } from '@neko-agent/types';
-import { ChevronRightIcon as ChevronIcon } from '@neko/shared/icons';
-import { projectAgentWorkItemSteps } from '@/presenters/work-item-presenter';
+import type { AgentWorkItemStep } from '@neko-agent/contracts';
+import { ChevronRightIcon as ChevronIcon } from '@neko/ui/icons';
+import { projectAgentWorkItemSteps } from '../../presenters/work-item-presenter';
 
 interface AgentRunStepsProps {
   readonly steps: readonly AgentWorkItemStep[];
@@ -70,4 +70,4 @@ function stepIcon(kind: 'completed' | 'running' | 'failed' | 'pending'): string 
   }
 }
 
-export { ChevronRightIcon as ChevronIcon } from '@neko/shared/icons';
+export { ChevronRightIcon as ChevronIcon } from '@neko/ui/icons';

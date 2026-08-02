@@ -6,7 +6,7 @@
  */
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import type { DocumentLocator } from '@neko/shared';
+import type { DocumentLocator } from '@neko/content';
 import { postMessage } from './useHostMessage';
 
 export interface DocumentSelection {

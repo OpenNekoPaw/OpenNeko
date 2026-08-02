@@ -1,4 +1,4 @@
-import type { AgentWebviewToHostMessage } from '@neko-agent/types';
+import type { AgentWebviewToHostMessage } from '@neko-agent/contracts';
 import type {
   AgentConfigControllerEffectPort,
   AgentHostRouteEffectContext,

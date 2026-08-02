@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { ResearchNote } from '@neko/shared';
+import type { ResearchNote } from '@neko-agent/contracts';
 import {
   saveResearchNoteMarkdown,
   serializeResearchNoteMarkdown,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseCompositeContentJson, type ContentBlock, type ToolCall } from '@neko-agent/types';
+import { parseCompositeContentJson, type ContentBlock, type ToolCall } from '@neko-agent/contracts';
 import { projectCompositeBlockRichContent } from '../composite-content-presenter';
 
 describe('composite content presenter', () => {

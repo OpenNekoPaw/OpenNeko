@@ -4,7 +4,7 @@ import type {
   AgentHostToWebviewMessage,
   ProjectionAttachmentKey,
   AgentWebviewToHostMessage,
-} from '@neko-agent/types';
+} from '@neko-agent/contracts';
 import {
   createProjectionEndpointController,
   type ProjectionEndpointControllerErrorContext,

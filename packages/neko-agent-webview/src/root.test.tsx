@@ -2,23 +2,23 @@ import { render, screen } from '@testing-library/react';
 import { useEffect, type ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { WebviewFoundationProvider, createWebviewFoundation } from '@neko/ui/foundation';
-import type { AgentHostRuntimeAdapter } from '@neko-agent/types';
-import { NEKO_AGENT_HOST_MESSAGE_EVENT } from '@neko-agent/types/host-message-event';
+import type { AgentHostRuntimeAdapter } from '@neko-agent/contracts';
+import { NEKO_AGENT_HOST_MESSAGE_EVENT } from '@neko-agent/contracts/host-message-event';
 import { AgentWebviewRoot } from './root';
 
-vi.mock('@/components/ChatView/RichContent', () => ({
+vi.mock('./components/ChatView/RichContent', () => ({
   registerDefaultRenderers: vi.fn(),
 }));
 
-vi.mock('@/components/ErrorBoundary', () => ({
+vi.mock('./components/ErrorBoundary', () => ({
   ErrorBoundary: ({ children }: { readonly children: ReactNode }) => <>{children}</>,
 }));
 
-vi.mock('@/components/AppShell', async () => {
+vi.mock('./components/AppShell', async () => {
   const { useWebviewFoundation } =
     await vi.importActual<typeof import('@neko/ui/foundation')>('@neko/ui/foundation');
   const { useAgentHostRuntimeAdapter } =
-    await vi.importActual<typeof import('@/host-runtime-context')>('@/host-runtime-context');
+    await vi.importActual<typeof import('./host-runtime-context')>('./host-runtime-context');
   return {
     AppShell: ({ presentation }: { readonly presentation?: string }) => {
       const foundation = useWebviewFoundation();

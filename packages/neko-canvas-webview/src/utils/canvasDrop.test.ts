@@ -3,7 +3,7 @@ import {
   inferCanvasDroppedAssetKind,
   inferCanvasMediaType,
   inferCanvasTextFileFormat,
-} from '@neko/shared';
+} from '@neko-canvas/domain';
 
 describe('canvas drop classification', () => {
   it('classifies sources into canonical Canvas source intents', () => {

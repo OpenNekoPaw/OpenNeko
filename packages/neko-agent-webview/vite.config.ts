@@ -19,9 +19,6 @@ export default defineConfig({
   base: './',
   resolve: {
     alias: {
-      '@': path.resolve(__dirname, './src'),
-      '@neko-agent/types': path.resolve(__dirname, '../neko-agent-types/src'),
-      '@neko/shared': path.resolve(__dirname, '../neko-types/src'),
       d3: d3Dist,
     },
   },

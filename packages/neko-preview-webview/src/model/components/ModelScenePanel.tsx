@@ -6,7 +6,7 @@ import {
   type TreeViewAction,
   type TreeViewItem,
 } from '@neko/ui';
-import type { ModelPreviewStagingState } from '@neko/shared';
+import type { ModelPreviewStagingState } from '@neko-preview/domain';
 import { useTranslation } from '../../i18n/I18nContext';
 import {
   modelSceneSelectionId,

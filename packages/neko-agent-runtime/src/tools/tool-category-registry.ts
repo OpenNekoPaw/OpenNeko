@@ -15,8 +15,8 @@ import type {
   CategorizedTool,
   ToolInjectionLayer,
   IToolCategoryRegistry,
-} from '@neko/shared';
-import { DEFAULT_TOOL_CATEGORIES, CORE_TOOLS } from '@neko/shared';
+} from '@neko-agent/contracts';
+import { DEFAULT_TOOL_CATEGORIES, CORE_TOOLS } from '@neko-agent/contracts';
 
 /**
  * Tool Category Registry implementation

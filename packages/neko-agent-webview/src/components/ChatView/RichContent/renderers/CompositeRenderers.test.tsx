@@ -1,18 +1,18 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { I18nProvider } from '@/i18n/I18nContext';
-import { chat as enChat } from '@/i18n/locales/en/chat';
-import { chat as zhCnChat } from '@/i18n/locales/zh-cn/chat';
-import { registerDefaultRenderers, RichContentRenderer } from '@/components/ChatView/RichContent';
+import { I18nProvider } from '../../../../i18n/I18nContext';
+import { chat as enChat } from '../../../../i18n/locales/en/chat';
+import { chat as zhCnChat } from '../../../../i18n/locales/zh-cn/chat';
+import { registerDefaultRenderers, RichContentRenderer } from '..';
 import { richContentRegistry } from '../RichContentRegistry';
-import { I18nService } from '@neko/shared';
+import { I18nService } from '@neko/ui/i18n';
 import type { CompositeArtifactRichData } from './CompositeArtifactRenderer';
 import type {
   AssetGalleryRichData,
   ComparisonGridRichData,
   StoryboardTableRichData,
-} from '@/presenters/composite-content-presenter';
+} from '../../../../presenters/composite-content-presenter';
 
 describe('composite rich content renderers', () => {
   it('registers storyboard, comparison, and gallery renderers', () => {

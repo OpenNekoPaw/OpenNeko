@@ -1,4 +1,4 @@
-import type { LocalMetadataSqlRow, LocalMetadataStore } from '@neko/shared';
+import type { LocalMetadataSqlRow, LocalMetadataStore } from '@neko/local-metadata';
 import {
   assertInitialJobSnapshot,
   assertJobRef,

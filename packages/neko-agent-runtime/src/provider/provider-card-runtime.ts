@@ -1,12 +1,11 @@
+import { resolveGlobalStorageLayout, resolveStorageLayout } from '@neko/local-metadata';
 import {
-  resolveGlobalStorageLayout,
-  resolveStorageLayout,
   type IProviderCardRegistry,
   type IProviderExpressionProfileRegistry,
   type ProviderCard,
   type ProviderCardLayer,
-} from '@neko/shared';
-import { toProviderExpressionProfile } from '@neko/shared';
+} from '@neko-agent/contracts';
+import { toProviderExpressionProfile } from '@neko-agent/contracts';
 import {
   registerProviderCardDirectory,
   type ProviderCardLoadError,

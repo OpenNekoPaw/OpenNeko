@@ -9,8 +9,8 @@ import type {
   ConnectionType,
   GroupCanvasNode,
   MarkdownCanvasNode,
-} from '@neko/shared';
-import { getContainerChildIds } from '@neko/shared';
+} from '@neko-canvas/domain';
+import { getContainerChildIds } from '@neko-canvas/domain';
 import { t } from '../../i18n';
 import { resolveConnectionTypeLabel } from '../../i18n/connectionLabels';
 import {
@@ -27,7 +27,10 @@ export interface PropertyPanelProps {
   readonly onUpdateNode: (id: string, updates: Partial<CanvasNode>) => void;
   readonly onUpdateNodeData: (id: string, data: Record<string, unknown>) => void;
   readonly onUpdateConnection?: (id: string, updates: Partial<CanvasConnection>) => void;
-  readonly onUpdatePorts?: (id: string, ports: import('@neko/shared').PortDefinition[]) => void;
+  readonly onUpdatePorts?: (
+    id: string,
+    ports: import('@neko-canvas/domain').PortDefinition[],
+  ) => void;
   readonly onDeleteNode: (id: string) => void;
   readonly onToggleLock: (id: string) => void;
   readonly width?: number;

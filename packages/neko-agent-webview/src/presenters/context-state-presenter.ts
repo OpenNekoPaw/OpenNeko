@@ -5,7 +5,7 @@ import type {
   ProjectCompressionErrorInput,
   ProjectCompressionResultInput,
   ProjectContextTokenCountInput,
-} from '@neko-agent/types';
+} from '@neko-agent/contracts';
 
 export function projectContextTokenCount(
   input: ProjectContextTokenCountInput,

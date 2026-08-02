@@ -1,4 +1,4 @@
-import { AgentHostMessages } from '@/messages';
+import { AgentHostMessages } from '../../messages';
 import type { MentionItem } from './InputArea/types';
 
 export function submitRoleplayEntrySelection(item: MentionItem, initialUserMessage?: string): void {

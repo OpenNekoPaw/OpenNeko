@@ -5,12 +5,12 @@
 
 import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
 import { getKeyboardBoundaryMetadata } from '@neko/ui/keyboard';
+import type { ContentLocator } from '@neko/content';
 import type {
   CanvasNode,
   CanvasConnection,
   CanvasViewport as ViewportType,
-  ContentLocator,
-} from '@neko/shared';
+} from '@neko-canvas/domain';
 import { CanvasGrid } from './CanvasGrid';
 import { CanvasViewport } from './CanvasViewport';
 import { renderCanvasNode } from './nodes';

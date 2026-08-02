@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { CanvasData, CanvasViewport } from '@neko/shared';
+import type { CanvasData, CanvasViewport } from '@neko-canvas/domain';
 import {
   createCanvasViewportSnapshotKey,
   readCanvasViewportSnapshot,

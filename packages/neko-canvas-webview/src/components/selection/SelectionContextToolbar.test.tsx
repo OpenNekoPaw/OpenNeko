@@ -4,7 +4,11 @@ import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import type { CanvasMaterialActionDescriptor, CanvasNode, GroupCanvasNode } from '@neko/shared';
+import type {
+  CanvasMaterialActionDescriptor,
+  CanvasNode,
+  GroupCanvasNode,
+} from '@neko-canvas/domain';
 import { CanvasHostProvider, type CanvasWebviewHostPort } from '../../host-runtime';
 import { SelectionContextToolbar } from './SelectionContextToolbar';
 

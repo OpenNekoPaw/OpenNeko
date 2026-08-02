@@ -5,16 +5,18 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./core": "./src/core/index.ts",
+    "./node": "./src/node/index.ts",
+    "./project-file-io": "./src/project-file-io/index.ts",
     "./document": "./src/document/index.ts",
-    "./document/*": "./src/document/*.ts",
-    "./*": "./src/*"
+    "./document/node": "./src/document/node.ts"
   },
   "scripts": {
     "test": "vitest",
-    "test:run": "vitest --run"
+    "test:run": "vitest --run",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@neko/markdown": "workspace:*",
     "@neko/shared": "workspace:*",
     "@zip.js/zip.js": "^2.8.26",
     "adm-zip": "^0.6.0",
@@ -26,8 +28,7 @@
     "node-unrar-js": "^2.0.2",
     "officeparser": "^6.0.4",
     "pdf-parse": "^2.4.5",
-    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
-    "yaml": "2.9.0"
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   },
   "devDependencies": {
     "@types/node-fetch": "^2.6.13",

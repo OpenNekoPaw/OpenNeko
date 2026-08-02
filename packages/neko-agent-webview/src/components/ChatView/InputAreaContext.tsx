@@ -11,10 +11,10 @@ import type {
   MediaUnderstandingModels,
   ShellExecutionMode,
   SessionMode,
-} from '@neko-agent/types';
-import type { ConversationKind } from '@neko-agent/types';
-import type { ChatModelOption } from '@neko/shared';
-import type { AgentContextPayload } from '@neko/shared';
+} from '@neko-agent/contracts';
+import type { ConversationKind } from '@neko-agent/contracts';
+import type { ChatModelOption } from '@neko-ai/contracts';
+import type { AgentContextPayload } from '@neko-agent/contracts';
 import type {
   SlashCommand,
   SkillSummary,
@@ -22,7 +22,7 @@ import type {
   PluginSlashCommandDef,
   GenCategory,
   GenerationParams,
-} from '@/components/ChatView/InputArea/types';
+} from './InputArea/types';
 export type MediaCategory = 'image' | 'video' | 'audio';
 
 export interface MediaModelSelection {

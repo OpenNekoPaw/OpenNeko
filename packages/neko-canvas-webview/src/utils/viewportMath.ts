@@ -2,7 +2,7 @@
  * Viewport Math - Screen ↔ Canvas coordinate conversion utilities
  */
 
-import type { CanvasViewport } from '@neko/shared';
+import type { CanvasViewport } from '@neko-canvas/domain';
 
 // =============================================================================
 // Types

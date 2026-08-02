@@ -4,7 +4,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { validateSchema, formatValidationErrors } from '../schema-validator';
-import type { ToolParameterProperty, ToolParameters } from '@neko/shared';
+import type { ToolParameterProperty, ToolParameters } from '@neko-agent/contracts';
 
 const baseSchema: ToolParameters = {
   type: 'object',

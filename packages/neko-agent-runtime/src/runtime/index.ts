@@ -119,6 +119,27 @@ export {
 export { projectPiConversationEntries } from './projection/pi-conversation-history-projector';
 
 export {
+  createAgentResourceDisplayProjector,
+  type AgentResourceDisplayLease,
+  type AgentResourceDisplayHostIdentity,
+  type AgentResourceDisplayProjector,
+  type AgentResourceDisplayRegistrationPort,
+} from './projection/agent-resource-display-projector';
+
+export {
+  assertCompleteDesktopAgentNeutralFacts,
+  createDesktopAgentNeutralFacts,
+  type CreateDesktopAgentNeutralFactsInput,
+  type DesktopAgentConversationEvidence,
+  type DesktopAgentFactsTurnResult,
+} from './projection/desktop-agent-facts';
+
+export {
+  createDesktopAgentFactsProjector,
+  type DesktopAgentFactsProjector,
+} from './projection/desktop-agent-facts-projector';
+
+export {
   ExecutionOwnershipRegistryError,
   createExecutionOwnershipRegistry,
   createToolCallExecution,
@@ -323,7 +344,7 @@ export {
   type RunAgentMessageTurnRuntimeResult,
 } from './turn/message-runtime';
 
-export type { AgentFlatPurposeModelRefs } from '@neko-agent/types';
+export type { AgentFlatPurposeModelRefs } from '@neko-agent/contracts';
 
 export {
   AGENT_DOCUMENT_CONTEXT_INTENTS,

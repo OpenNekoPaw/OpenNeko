@@ -1,40 +1,37 @@
 import { memo } from 'react';
-import type { Message } from '@neko-agent/types';
-import { ToolCallDisplay, ToolCallGroupDisplay } from '@/components/ChatView/ToolCallDisplay';
-import { DiffBlock } from '@/components/ChatView/DiffBlock';
-import { SubAgentCard } from '@/components/ChatView/SubAgentCard';
-import { ProcessRecordsGroup } from '@/components/ChatView/ProcessRecordsGroup';
-import { ContentBlockItem } from '@/components/ChatView/ContentBlockItem';
-import { MessageActions } from '@/components/ChatView/MessageActions';
-import { RichContentRenderer } from '@/components/ChatView/RichContent';
-import { MarkdownRenderer, ThinkingBlock } from '@/components/ChatView/MessageContent';
-import { ImagePreview, AudioCard, VideoCard } from '@/components/ChatView/MediaPreview';
-import { MessageAvatar } from '@/components/ChatView/MessageAvatar';
-import type { PluginsAvailable } from '@/components/ChatView/SendToMenu';
-import { useMessageActions } from '@/components/ChatView/MessageActionsContext';
-import { selectMessageLevelSubAgentWorkItems } from '@/components/AgentWorkItem';
+import type { Message } from '@neko-agent/contracts';
+import { ToolCallDisplay, ToolCallGroupDisplay } from './ToolCallDisplay';
+import { DiffBlock } from './DiffBlock';
+import { SubAgentCard } from './SubAgentCard';
+import { ProcessRecordsGroup } from './ProcessRecordsGroup';
+import { ContentBlockItem } from './ContentBlockItem';
+import { MessageActions } from './MessageActions';
+import { RichContentRenderer } from './RichContent';
+import { MarkdownRenderer, ThinkingBlock } from './MessageContent';
+import { ImagePreview, AudioCard, VideoCard } from './MediaPreview';
+import { MessageAvatar } from './MessageAvatar';
+import type { PluginsAvailable } from './SendToMenu';
+import { useMessageActions } from './MessageActionsContext';
+import { selectMessageLevelSubAgentWorkItems } from '../AgentWorkItem';
 import {
   deriveToolCallsFromContentBlocks,
   projectContentBlocksDisplay,
   projectContentBlocksUi,
   type ContentBlockUiProjection,
-} from '@/presenters/content-block-presenter';
+} from '../../presenters/content-block-presenter';
 import {
   projectMessageAttachments,
   type MessageAttachmentProjection,
-} from '@/presenters/message-attachment-presenter';
+} from '../../presenters/message-attachment-presenter';
 import {
   projectAttachmentReferenceToken,
   projectMessageContextReferenceToken,
-} from '@/presenters/reference-token-presenter';
-import { AgentHostMessages } from '@/messages';
-import { projectMarkdownResourceRendering } from '@/presenters/markdown-resource-rendering-presenter';
-import {
-  selectMessageIdentity,
-  type MessageIdentityMap,
-} from '@/components/ChatView/message-identity';
-import { ReferenceToken } from '@/components/ChatView/InputArea/ReferenceToken';
-import { createAgentMarkdownSessionKey } from '@/markdown/agent-markdown-session-registry';
+} from '../../presenters/reference-token-presenter';
+import { AgentHostMessages } from '../../messages';
+import { projectMarkdownResourceRendering } from '../../presenters/markdown-resource-rendering-presenter';
+import { selectMessageIdentity, type MessageIdentityMap } from './message-identity';
+import { ReferenceToken } from './InputArea/ReferenceToken';
+import { createAgentMarkdownSessionKey } from '../../markdown/agent-markdown-session-registry';
 
 type MessageContextReference = NonNullable<Message['contextReferences']>[number];
 

@@ -7,6 +7,9 @@ import type {
   CreativeEntityRepresentationHint,
   EntityRepresentationBinding,
   EntityRepresentationTarget,
+  VisualIdentityDraft,
+} from '@neko-entity/domain';
+import type {
   NpcProfileFact,
   NpcProfileFactSource,
   NpcProfileRelationshipValue,
@@ -15,9 +18,8 @@ import type {
   NpcProfileSparsity,
   NpcProfileSparsityScore,
   NpcSerializableValue,
-  VisualIdentityDraft,
-} from '@neko/shared';
-import { contentLocatorKey } from '@neko/shared';
+} from '@neko/chara/contracts';
+import { contentLocatorKey } from '@neko/content';
 
 export interface NpcProfileRepresentationMetadata {
   readonly label?: string;

@@ -1,4 +1,4 @@
-import type { AgentQueuedMessageItem, Message } from '@neko-agent/types';
+import type { AgentQueuedMessageItem, Message } from '@neko-agent/contracts';
 
 const OPTIMISTIC_QUEUED_MESSAGE_ID_PREFIX = 'optimistic:';
 const QUEUE_MIRROR_MATCH_WINDOW_MS = 30_000;

@@ -1,7 +1,7 @@
-import type { TabType } from '@neko-agent/types';
-import { useTranslation } from '@/i18n/I18nContext';
-import { CloseIcon } from '@neko/shared/icons';
-import type { DisplayTab, TabDisplayStatus } from '@/presenters/tab-display-presenter';
+import type { TabType } from '@neko-agent/contracts';
+import { useTranslation } from '../../i18n/I18nContext';
+import { CloseIcon } from '@neko/ui/icons';
+import type { DisplayTab, TabDisplayStatus } from '../../presenters/tab-display-presenter';
 
 interface TabBarProps {
   tabs: DisplayTab[];

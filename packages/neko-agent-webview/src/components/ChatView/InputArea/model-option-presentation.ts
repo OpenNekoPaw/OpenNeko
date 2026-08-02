@@ -1,4 +1,4 @@
-import type { ChatModelOption, ModelType } from '@neko/shared';
+import type { ChatModelOption, ModelType } from '@neko-ai/contracts';
 
 type Translate = (key: string) => string;
 

@@ -1,4 +1,4 @@
-import type { CanvasData, CanvasViewport } from '@neko/shared';
+import type { CanvasData, CanvasViewport } from '@neko-canvas/domain';
 
 export interface CanvasWebviewState {
   readonly canvasViewportSnapshots?: Record<string, CanvasViewport>;

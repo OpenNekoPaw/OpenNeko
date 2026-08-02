@@ -1,3 +1,4 @@
+export * from './generation-params';
 export type {
   AudioGenerationRequest,
   ControlMode,
@@ -26,4 +27,5 @@ export type {
   MediaGenerationExecutionOptions,
   MediaGenerationResult,
 } from './execution';
-export * from './job/index';
+export * from './job/contracts';
+export * from './domain-contracts/index';

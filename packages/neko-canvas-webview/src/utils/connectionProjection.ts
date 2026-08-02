@@ -3,8 +3,8 @@ import type {
   CanvasNode,
   ConnectionType,
   ContainerPolicyName,
-} from '@neko/shared';
-import { getNodeParentId } from '@neko/shared';
+} from '@neko-canvas/domain';
+import { getNodeParentId } from '@neko-canvas/domain';
 
 export type CanvasConnectionProjectionMode = 'top-level' | 'local-container';
 

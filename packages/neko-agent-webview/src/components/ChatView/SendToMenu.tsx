@@ -9,9 +9,9 @@
  */
 
 import { memo, useCallback } from 'react';
-import { AgentHostMessages } from '@/messages';
-import { ArrowRightIcon, FileIcon, LayersIcon, ScissorsIcon, UploadIcon } from '@neko/shared/icons';
-import { useTranslation } from '@/i18n/I18nContext';
+import { AgentHostMessages } from '../../messages';
+import { ArrowRightIcon, FileIcon, LayersIcon, ScissorsIcon, UploadIcon } from '@neko/ui/icons';
+import { useTranslation } from '../../i18n/I18nContext';
 import type {
   PluginTransferAssetRef,
   PluginTransferMediaType,
@@ -21,11 +21,14 @@ import type {
   PluginTransferTargetRef,
   PluginsAvailable as SharedPluginsAvailable,
   RequestCanvasAuthoringHandoffWebviewMessage,
-} from '@neko-agent/types';
-import type { CanvasMarkdownCapabilityTarget, CanvasMarkdownContentBinding } from '@neko/shared';
-import { isRuntimeOnlyCanvasMarkdownResourceValue } from '@neko/shared';
+} from '@neko-agent/contracts';
+import {
+  isRuntimeOnlyCanvasMarkdownResourceValue,
+  type CanvasMarkdownCapabilityTarget,
+  type CanvasMarkdownContentBinding,
+} from '@neko-canvas/domain';
 import { projectPluginTransferMenu } from '../../presenters/plugin-transfer-presenter';
-import type { CanvasMarkdownHandoffRequest } from '@/presenters/canvas-markdown-handoff-presenter';
+import type { CanvasMarkdownHandoffRequest } from '../../presenters/canvas-markdown-handoff-presenter';
 
 /** Which plugins are installed */
 export type PluginsAvailable = SharedPluginsAvailable;

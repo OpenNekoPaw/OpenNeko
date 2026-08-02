@@ -1,4 +1,4 @@
-import type { ContentBlock, Message, ToolCall } from '@neko-agent/types';
+import type { ContentBlock, Message, ToolCall } from '@neko-agent/contracts';
 import {
   deriveToolCallsFromContentBlocks,
   mergeToolCalls,
@@ -6,9 +6,9 @@ import {
   projectContentBlocksUi,
   type ContentBlockProcessGroupProjection,
   type ContentBlockUiProjection,
-} from '@/presenters/content-block-presenter';
-import type { PluginsAvailable } from '@/components/ChatView/SendToMenu';
-import type { ActivationProgressTimeline } from '@/presenters/activation-progress-presenter';
+} from './content-block-presenter';
+import type { PluginsAvailable } from '../components/ChatView/SendToMenu';
+import type { ActivationProgressTimeline } from './activation-progress-presenter';
 
 export type MessageListItemKind =
   'message' | 'content_block' | 'process_group' | 'thinking_indicator';

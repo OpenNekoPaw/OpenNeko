@@ -376,7 +376,7 @@ function createCoordinator(
   resultCommitter: {
     commit: (
       input: unknown,
-    ) => Promise<readonly import('@neko/shared').GeneratedOutputContentLocator[]>;
+    ) => Promise<readonly import('@neko/content').GeneratedOutputContentLocator[]>;
   },
 ) {
   let id = 0;

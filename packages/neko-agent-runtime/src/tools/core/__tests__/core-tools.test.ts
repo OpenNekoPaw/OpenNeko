@@ -1,7 +1,8 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { IProjectMemoryManager, Tool } from '@neko/shared';
+import type { IProjectMemoryManager } from '@neko-agent/contracts';
+import type { Tool } from '@neko-agent/contracts';
 import { createCoreTools } from '../core-tools';
 
 describe('createCoreTools', () => {

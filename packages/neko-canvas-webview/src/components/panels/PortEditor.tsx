@@ -6,8 +6,13 @@
  */
 
 import { useState, useCallback } from 'react';
-import type { CanvasNode, PortDefinition, ConnectionAnchor, PortDataType } from '@neko/shared';
-import { getDefaultPorts } from '@neko/shared';
+import type {
+  CanvasNode,
+  PortDefinition,
+  ConnectionAnchor,
+  PortDataType,
+} from '@neko-canvas/domain';
+import { getDefaultPorts } from '@neko-canvas/domain';
 import { t } from '../../i18n';
 
 // =============================================================================

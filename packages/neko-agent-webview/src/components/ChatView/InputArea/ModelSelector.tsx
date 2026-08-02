@@ -4,7 +4,7 @@
 
 import { useMemo, useRef, useState } from 'react';
 import { useComposerControlMenu } from './composer-menu-runtime';
-import type { ChatModelOption } from '@neko/shared';
+import type { ChatModelOption } from '@neko-ai/contracts';
 import { useClickOutsideSingle } from './useClickOutside';
 import {
   dropdownPositionClass,
@@ -12,7 +12,7 @@ import {
   type DropdownPlacement,
 } from './useDropdownDirection';
 import { ChevronDownIcon } from './DropdownMenu';
-import { useTranslation } from '@/i18n/I18nContext';
+import { useTranslation } from '../../../i18n/I18nContext';
 import {
   buildModelTags,
   groupModelOptionsByProvider,

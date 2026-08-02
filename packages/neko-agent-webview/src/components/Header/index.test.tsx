@@ -2,7 +2,7 @@ import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { Header } from './index';
 
-vi.mock('@/components/AccountBar', () => ({
+vi.mock('../AccountBar', () => ({
   AccountBar: () => (
     <button type="button" aria-label="Account">
       Account
@@ -10,7 +10,7 @@ vi.mock('@/components/AccountBar', () => ({
   ),
 }));
 
-vi.mock('@/i18n/I18nContext', () => ({
+vi.mock('../../i18n/I18nContext', () => ({
   useTranslation: () => ({
     t: (key: string) =>
       ({

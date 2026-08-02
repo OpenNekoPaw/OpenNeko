@@ -1,15 +1,16 @@
 import type {
-  ImageOperationId,
-  ImageOutpaintExpansion,
-  ImageSplitProfileOptions,
-  ModelConfig,
-  ProviderConfig,
-  ContentLocator,
   ThreeReferenceCameraMediaReference,
   ThreeReferenceMediaOutputIdentity,
   ThreeReferencePanoramaOrientation,
+} from '@neko-preview/domain';
+import type { ModelConfig, ProviderConfig } from '@neko-ai/contracts';
+import type { ContentLocator } from '@neko/content';
+import type {
+  ImageOperationId,
+  ImageOutpaintExpansion,
+  ImageSplitProfileOptions,
   VideoOperationId,
-} from '@neko/shared';
+} from '@neko/generation';
 
 // =============================================================================
 // Generation Types

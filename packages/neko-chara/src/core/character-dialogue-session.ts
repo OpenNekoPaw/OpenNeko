@@ -1,11 +1,11 @@
+import type { CreativeEntityRef } from '@neko-entity/domain';
 import type {
-  CreativeEntityRef,
   NpcProfileSource,
   NpcTestMode,
   NpcTranscriptArtifact,
   NpcTranscriptMessage,
-} from '@neko/shared';
-import { NPC_TRANSCRIPT_ARTIFACT_VERSION } from '@neko/shared';
+} from '@neko/chara/contracts';
+import { NPC_TRANSCRIPT_ARTIFACT_VERSION } from '@neko/chara/contracts';
 import { projectCharacterDialogueSystemPrompt } from './character-dialogue-profile-projector';
 import type { CharacterModelTier, CharacterToolPolicy } from './character-runtime-policy';
 import { renderCharacterEvidenceBundle, type CharacterEvidenceBundle } from './character-evidence';

@@ -5,7 +5,7 @@ import type {
   AgentWorkItemStore,
   ConversationStreamingState,
   Message,
-} from '@neko-agent/types';
+} from '@neko-agent/contracts';
 import type { ActivationProgressTimeline } from './activation-progress-presenter';
 
 export type ConversationAmbientNode = AmbientCanvasNode;

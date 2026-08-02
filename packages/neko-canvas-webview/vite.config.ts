@@ -7,12 +7,6 @@ export default defineConfig({
   base: './',
   resolve: {
     preserveSymlinks: true,
-    alias: {
-      '@': path.resolve(__dirname, './src'),
-      '@neko/shared': path.resolve(__dirname, '../neko-types/src'),
-      '@neko/media': path.resolve(__dirname, '../neko-media/src'),
-      '@neko/ui': path.resolve(__dirname, '../neko-ui/src'),
-    },
   },
   server: {
     fs: {

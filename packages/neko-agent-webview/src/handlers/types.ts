@@ -5,7 +5,7 @@
  */
 
 import type { MutableRefObject } from 'react';
-import type { AgentContextPayload } from '@neko/shared';
+import type { AgentContextPayload } from '@neko-agent/contracts';
 import type { AgentHostToWebviewMessage, MessageOfType } from './messages';
 import type {
   Message,
@@ -17,22 +17,22 @@ import type {
   AgentState,
   AgentQueuedMessageItem,
   AgentSessionDiagnosticMessage,
-} from '@neko-agent/types';
-import type { AgentMarkdownSessionRegistry } from '@/markdown/agent-markdown-session-registry';
-import type { ActivationProgressTimeline } from '@/presenters/activation-progress-presenter';
-import type { AgentWorkItemStore } from '@/components/AgentWorkItem';
-import type { PluginsAvailable } from '@/components/ChatView/SendToMenu';
-import type { ProjectFileInfo } from '@/hooks/useConfigState';
+} from '@neko-agent/contracts';
+import type { AgentMarkdownSessionRegistry } from '../markdown/agent-markdown-session-registry';
+import type { ActivationProgressTimeline } from '../presenters/activation-progress-presenter';
+import type { AgentWorkItemStore } from '../components/AgentWorkItem';
+import type { PluginsAvailable } from '../components/ChatView/SendToMenu';
+import type { ProjectFileInfo } from '../hooks/useConfigState';
 import type {
   SkillSummary,
   MentionItem,
   PluginSlashCommandDef,
-} from '@/components/ChatView/InputArea/types';
-import type { ConversationRenderCoordinator } from '@/render-lifecycle/conversation-render-coordinator';
+} from '../components/ChatView/InputArea/types';
+import type { ConversationRenderCoordinator } from '../render-lifecycle/conversation-render-coordinator';
 import type {
   ConversationRenderStateUpdater as CanonicalConversationRenderStateUpdater,
   ConversationRenderStreamingState,
-} from '@/render-lifecycle/conversation-render-state-adapter';
+} from '../render-lifecycle/conversation-render-state-adapter';
 
 /**
  * Streaming state for a conversation

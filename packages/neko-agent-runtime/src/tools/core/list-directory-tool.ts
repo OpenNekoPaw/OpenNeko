@@ -6,8 +6,13 @@
 
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
-import type { ToolResult, ToolCategory, ToolParameters, ToolExecuteOptions } from '@neko/shared';
-import { BuiltinTool } from '@neko/shared';
+import type {
+  ToolResult,
+  ToolCategory,
+  ToolParameters,
+  ToolExecuteOptions,
+} from '@neko-agent/contracts';
+import { BuiltinTool } from '../base';
 import { createNoWorkspaceFileAccessPolicy, type CoreFileAccessPolicy } from './file-access-policy';
 import {
   presentCoreFileAccessDenial,

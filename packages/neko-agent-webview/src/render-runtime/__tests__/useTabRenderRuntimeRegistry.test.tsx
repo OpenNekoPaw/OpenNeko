@@ -1,7 +1,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
-import type { AgentHostRuntimeAdapter, OpenTab } from '@neko-agent/types';
+import type { AgentHostRuntimeAdapter, OpenTab } from '@neko-agent/contracts';
 import { AgentHostRuntimeProvider } from '../../host-runtime-context';
 import { useTabRenderRuntimeRegistry } from '../useTabRenderRuntimeRegistry';
 import { TAB_RENDER_REALM_STATE_VERSION } from '../tab-render-realm-state';

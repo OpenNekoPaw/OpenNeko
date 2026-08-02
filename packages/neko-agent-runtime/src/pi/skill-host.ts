@@ -10,7 +10,7 @@ import {
   type SkillDiagnostic,
 } from '@earendil-works/pi-agent-core';
 import { NodeExecutionEnv } from '@earendil-works/pi-agent-core/node';
-import type { ExternalProcessorResult } from '@neko-agent/types';
+import type { ExternalProcessorResult } from '@neko-agent/contracts';
 
 export type SkillSourceKind = 'builtin' | 'personal' | 'plugin' | 'project';
 

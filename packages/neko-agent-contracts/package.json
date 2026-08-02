@@ -1,0 +1,29 @@
+{
+  "name": "@neko-agent/contracts",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./host-message-event": "./src/host-message-event.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@neko-ai/contracts": "workspace:*",
+    "@neko-canvas/domain": "workspace:*",
+    "@neko-preview/domain": "workspace:*",
+    "@neko/chara": "workspace:*",
+    "@neko/content": "workspace:*",
+    "@neko-entity/domain": "workspace:*",
+    "@neko/media": "workspace:*",
+    "@neko-search/domain": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.3",
+    "vitest": "^4.1.2"
+  },
+  "license": "AGPL-3.0-or-later"
+}

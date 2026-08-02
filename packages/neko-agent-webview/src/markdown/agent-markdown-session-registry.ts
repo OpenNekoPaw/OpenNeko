@@ -8,7 +8,7 @@ import type {
   AgentTurnTimelineOperation,
   ConversationProjectionPatch,
   ConversationProjectionSnapshot,
-} from '@neko-agent/types';
+} from '@neko-agent/contracts';
 
 export interface AgentMarkdownSessionRegistryMetrics {
   readonly activeSessions: number;

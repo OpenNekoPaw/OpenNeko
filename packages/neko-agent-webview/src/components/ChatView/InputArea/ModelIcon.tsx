@@ -2,7 +2,7 @@
  * ModelIcon — category color tokens for model selectors.
  */
 
-import type { ModelType } from '@neko/shared';
+import type { ModelType } from '@neko-ai/contracts';
 
 const CATEGORY_COLORS: Record<ModelType, string> = {
   llm: '#10A37F',

@@ -33,8 +33,8 @@ import {
   OpenTab,
   SessionMode,
   TabType,
-} from '@neko-agent/types';
-import { AgentHostMessages } from '@/messages';
+} from '@neko-agent/contracts';
+import { AgentHostMessages } from '../messages';
 import type {
   SkillSummary,
   EntryPromptMenu,
@@ -42,64 +42,64 @@ import type {
   PluginSlashCommandDef,
   GenCategory,
   GenerationParams,
-} from '@/components/ChatView/InputArea/types';
-import { EmptyState, type EmptyStateEntryAction } from '@/components/ChatView/EmptyState';
-import { InputArea } from '@/components/ChatView/InputArea';
+} from './ChatView/InputArea/types';
+import { EmptyState, type EmptyStateEntryAction } from './ChatView/EmptyState';
+import { InputArea } from './ChatView/InputArea';
 import {
   InputAreaProvider,
   type MediaCategory,
   type MediaModelSelection,
-} from '@/components/ChatView/InputAreaContext';
-import { useTranslation } from '@/i18n/I18nContext';
-import type { AgentWorkItemStore } from '@/components/AgentWorkItem';
-import { removeConversationWorkItems } from '@/components/AgentWorkItem';
-import type { PluginsAvailable } from '@/components/ChatView/SendToMenu';
-import type { ProjectFileInfo } from '@/hooks/useConfigState';
+} from './ChatView/InputAreaContext';
+import { useTranslation } from '../i18n/I18nContext';
+import type { AgentWorkItemStore } from './AgentWorkItem';
+import { removeConversationWorkItems } from './AgentWorkItem';
+import type { PluginsAvailable } from './ChatView/SendToMenu';
+import type { ProjectFileInfo } from '../hooks/useConfigState';
 import {
   useConversationState,
   useTabManager,
   type PendingSendInput,
   type ConversationRenderStateUpdater,
-} from '@/hooks';
-import { useMessageHandler, type PendingForegroundConversationActivation } from '@/handlers';
-import type { ConversationSettingsSnapshot } from '@/handlers/types';
-import type { ActivationProgressTimeline } from '@/presenters/activation-progress-presenter';
-import { shouldActivateForegroundConversation } from '@/handlers/foreground-activation';
+} from '../hooks';
+import { useMessageHandler, type PendingForegroundConversationActivation } from '../handlers';
+import type { ConversationSettingsSnapshot } from '../handlers/types';
+import type { ActivationProgressTimeline } from '../presenters/activation-progress-presenter';
+import { shouldActivateForegroundConversation } from '../handlers/foreground-activation';
 import { ConversationTabRuntimeView } from './ConversationTabRuntimeView';
-import { useRetainedTabComponents } from '@/render-runtime/useRetainedTabComponents';
-import { isCharacterRoleConversationKind } from '@/presenters/character-role-session-presenter';
+import { useRetainedTabComponents } from '../render-runtime/useRetainedTabComponents';
+import { isCharacterRoleConversationKind } from '../presenters/character-role-session-presenter';
 import type {
   ConversationStreamingSnapshot,
   ForegroundConversationAvailability,
-} from '@/render-lifecycle/conversation-render-contract';
+} from '../render-lifecycle/conversation-render-contract';
 import {
   applyUserMessageToConversationSummaries,
   applyUserMessageToOpenTabs,
   projectDisplayTabs,
   type DisplayTab,
-} from '@/presenters/tab-display-presenter';
+} from '../presenters/tab-display-presenter';
 import {
   projectHistoryCleanup,
   projectHistoryConversationItems,
   type HistoryConversationItem,
-} from '@/presenters/history-menu-presenter';
-import { projectOptimisticQueuedMessageItem } from '@/presenters/message-queue-presenter';
+} from '../presenters/history-menu-presenter';
+import { projectOptimisticQueuedMessageItem } from '../presenters/message-queue-presenter';
 import {
   projectChatWorkspaceModelState,
   projectMediaModelSelectionDefaults,
   projectMediaModelSelectionForSessionModeChange,
-} from '@/presenters/config-message-presenter';
+} from '../presenters/config-message-presenter';
 import {
   type ConversationAmbientNode,
   type ConversationSessionState,
   projectConversationSessionState,
-} from '@/presenters/conversation-session-state-presenter';
-import { DEFAULT_GENERATION_PARAMS } from '@/components/ChatView/InputArea/types';
-import { useTabRenderRuntimeRegistry } from '@/render-runtime/useTabRenderRuntimeRegistry';
-import { useProjectionEndpoint } from '@/render-runtime/useProjectionEndpoint';
-import type { AgentContextPayload } from '@neko/shared';
-import type { ConversationRenderCoordinator } from '@/render-lifecycle/conversation-render-coordinator';
-import { submitRoleplayEntrySelection } from '@/components/ChatView/roleplay-entry-action';
+} from '../presenters/conversation-session-state-presenter';
+import { DEFAULT_GENERATION_PARAMS } from './ChatView/InputArea/types';
+import { useTabRenderRuntimeRegistry } from '../render-runtime/useTabRenderRuntimeRegistry';
+import { useProjectionEndpoint } from '../render-runtime/useProjectionEndpoint';
+import type { AgentContextPayload } from '@neko-agent/contracts';
+import type { ConversationRenderCoordinator } from '../render-lifecycle/conversation-render-coordinator';
+import { submitRoleplayEntrySelection } from './ChatView/roleplay-entry-action';
 
 // =============================================================================
 // Props
@@ -154,7 +154,7 @@ export interface ConversationControllerProps {
 // =============================================================================
 
 function applyConversationSettingsSnapshot(
-  store: import('@/render-runtime/tab-render-runtime').TabRenderStore,
+  store: import('../render-runtime/tab-render-runtime').TabRenderStore,
   snapshot: ConversationSettingsSnapshot,
 ): void {
   store.updateState((state) => {

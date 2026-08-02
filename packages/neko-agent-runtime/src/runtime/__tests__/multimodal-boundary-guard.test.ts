@@ -7,10 +7,10 @@ const REPO_ROOT = join(__dirname, '../../../../..');
 describe('multimodal perception architecture boundary guard', () => {
   it('keeps shared multimodal contracts free of VSCode and React dependencies', () => {
     const files = [
-      join(REPO_ROOT, 'packages/neko-types/src/types/perception-card.ts'),
-      join(REPO_ROOT, 'packages/neko-types/src/types/tool.ts'),
-      join(REPO_ROOT, 'packages/neko-types/src/types/provider-card.ts'),
-      join(REPO_ROOT, 'packages/neko-agent-types/src/message.ts'),
+      join(REPO_ROOT, 'packages/neko-agent-contracts/src/perception-card.ts'),
+      join(REPO_ROOT, 'packages/neko-agent-contracts/src/tool.ts'),
+      join(REPO_ROOT, 'packages/neko-agent-contracts/src/provider-card.ts'),
+      join(REPO_ROOT, 'packages/neko-agent-contracts/src/message.ts'),
     ];
 
     for (const file of files) {

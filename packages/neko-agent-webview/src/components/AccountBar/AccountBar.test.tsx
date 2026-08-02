@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ConfiguredProvider } from '@neko-agent/types';
+import type { ConfiguredProvider } from '@neko-agent/contracts';
 import { AccountBar } from './index';
 
 const messageMocks = vi.hoisted(() => ({
@@ -16,13 +16,13 @@ const translations: Record<string, string> = {
   'accountBar.openConfigFile': 'Open Config File',
 };
 
-vi.mock('@/i18n/I18nContext', () => ({
+vi.mock('../../i18n/I18nContext', () => ({
   useTranslation: () => ({
     t: (key: string) => translations[key] ?? key,
   }),
 }));
 
-vi.mock('@/messages', () => ({
+vi.mock('../../messages', () => ({
   AgentHostMessages: {
     openConfigFile: messageMocks.openConfigFile,
     openUserConfigFile: messageMocks.openUserConfigFile,

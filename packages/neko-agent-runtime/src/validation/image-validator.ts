@@ -4,7 +4,7 @@
  * Validates image content parts for size, format, and dimensions
  */
 
-import type { ImagePart } from '@neko/shared';
+import type { ImagePart } from '@neko-agent/contracts';
 import type { ImageConstraints, ImageInfo, ValidationError } from './types';
 import { DEFAULT_IMAGE_CONSTRAINTS } from './types';
 

@@ -1,17 +1,20 @@
+import { validateContentLocator, type ContentLocator } from '@neko/content';
 import {
   isCanvasMaterialActionDescriptor,
   isCanvasMaterialActionIntent,
   isCanvasMaterialAuthoringRequest,
-  isValidNkc,
-  validateContentLocator,
-  type CanvasData,
   type CanvasMaterialActionDescriptor,
   type CanvasMaterialActionIntent,
   type CanvasMaterialAuthoringRequest,
-  type ContentLocator,
-} from '@neko/shared';
+} from './types/canvas-material-contracts';
+import { isValidNkc } from './nkc/codec';
+import { type CanvasData } from './types/canvas';
 
 export const CANVAS_HOST_RUNTIME_CONTRACT_VERSION = 5 as const;
+
+export function createCanvasHostSessionId(viewId: string, viewEpoch: number): string {
+  return `canvas-session:${viewId}:${viewEpoch}`;
+}
 
 export const CANVAS_HOST_RUNTIME_ROUTES = {
   snapshotGet: 'snapshot.get',

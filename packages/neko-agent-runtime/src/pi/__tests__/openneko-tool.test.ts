@@ -3,8 +3,8 @@ import {
   TOOL_NAMES_PERCEPTION,
   TOOL_NAMES_QUALITY,
   type Tool,
-} from '@neko/shared';
-import { createReadDocumentTool, createReadImageTool } from '@neko/content/document';
+} from '@neko-agent/contracts';
+import { createReadDocumentTool, createReadImageTool } from '../../tools';
 import { Value } from 'typebox/value';
 import { describe, expect, it, vi } from 'vitest';
 

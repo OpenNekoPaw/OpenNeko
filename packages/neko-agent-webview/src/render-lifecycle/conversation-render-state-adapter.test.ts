@@ -1,4 +1,4 @@
-import type { Message } from '@neko-agent/types';
+import type { Message } from '@neko-agent/contracts';
 import { describe, expect, it } from 'vitest';
 import { ConversationRenderCoordinator } from './conversation-render-coordinator';
 import { ingestConversationRenderSnapshot } from './conversation-render-state-adapter';

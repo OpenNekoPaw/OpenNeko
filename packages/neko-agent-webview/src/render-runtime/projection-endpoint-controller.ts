@@ -3,8 +3,8 @@ import type {
   ConversationProjectionAttachmentHostFrame,
   AgentHostToWebviewMessage,
   ProjectionAttachmentKey,
-} from '@neko-agent/types';
-import { AGENT_WEBVIEW_PROTOCOL_VERSION, isSameProjectionAttachment } from '@neko-agent/types';
+} from '@neko-agent/contracts';
+import { AGENT_WEBVIEW_PROTOCOL_VERSION, isSameProjectionAttachment } from '@neko-agent/contracts';
 import type {
   TabProjectionAttachmentBinding,
   TabRenderBinding,

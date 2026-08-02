@@ -1,4 +1,4 @@
-import type { CanvasConnection, CanvasNode } from '@neko/shared';
+import type { CanvasConnection, CanvasNode } from './types/canvas';
 
 export type CanvasOperationSource = 'user' | 'ai' | 'system' | 'undo' | 'redo';
 

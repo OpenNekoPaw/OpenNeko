@@ -1,5 +1,5 @@
+import { hashStableValue } from '@neko/shared';
 import {
-  hashStableValue,
   isCanvasWorkspaceProjectionRequest,
   validateCanvasWorkspaceProjectionRequest,
   type CanvasWorkspaceDeliveryClaim,
@@ -7,8 +7,8 @@ import {
   type CanvasWorkspaceDeliveryState,
   type CanvasWorkspaceProjectionDiagnostic,
   type CanvasWorkspaceProjectionRequest,
-  type LocalMetadataStore,
-} from '@neko/shared';
+} from './types/canvas-workspace-board';
+import type { LocalMetadataStore } from '@neko/local-metadata';
 
 const DELIVERY_TASK_PREFIX = 'system:canvas-board-delivery:';
 const WRITER_TASK_PREFIX = 'system:canvas-board-writer:';

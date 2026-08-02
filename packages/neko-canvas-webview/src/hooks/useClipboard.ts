@@ -6,7 +6,7 @@
  */
 
 import { useCallback } from 'react';
-import type { CanvasNode, CanvasConnection } from '@neko/shared';
+import type { CanvasNode, CanvasConnection } from '@neko-canvas/domain';
 import {
   useCanvasStoreApi,
   useClipboardStoreApi,

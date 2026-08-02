@@ -7,7 +7,7 @@ import {
   calculateFitViewport,
   VIEWPORT_BUFFER,
 } from '../viewportCulling';
-import type { CanvasNode, CanvasViewport } from '@neko/shared';
+import type { CanvasNode, CanvasViewport } from '@neko-canvas/domain';
 import type { ViewportBounds } from '../viewportCulling';
 
 // =============================================================================

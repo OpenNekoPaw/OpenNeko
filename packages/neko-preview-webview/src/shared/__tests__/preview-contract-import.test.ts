@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { PanoramaViewState, PreviewManifest } from '@neko/shared';
-import { DEFAULT_PANORAMA_VIEW_STATE } from '@neko/shared';
+import type { PanoramaViewState, PreviewManifest } from '@neko-preview/domain';
+import { DEFAULT_PANORAMA_VIEW_STATE } from '@neko-preview/domain';
 
 describe('preview shared contracts in Webview-facing code', () => {
   it('imports preview DTOs without VSCode or React dependencies', () => {

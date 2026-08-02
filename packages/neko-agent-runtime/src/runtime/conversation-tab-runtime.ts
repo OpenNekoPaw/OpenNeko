@@ -17,8 +17,8 @@ import {
   type PrefillInputMessage,
   type TabState,
   type TabStateMessage,
-} from '@neko-agent/types';
-import type { AgentContextPayload } from '@neko/shared';
+} from '@neko-agent/contracts';
+import type { AgentContextPayload } from '@neko-agent/contracts';
 
 export type ConversationTabSyncReason =
   | 'no-active-tab-conversation'

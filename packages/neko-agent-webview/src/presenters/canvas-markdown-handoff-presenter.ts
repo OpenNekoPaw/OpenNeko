@@ -2,7 +2,7 @@ import {
   type CanvasMarkdownCapabilityTarget,
   type CanvasMarkdownContentBinding,
   isRuntimeOnlyCanvasMarkdownResourceValue,
-} from '@neko/shared';
+} from '@neko-canvas/domain';
 import type {
   CanvasAuthoringHandoffDiagnostic,
   CanvasAuthoringHandoffPromptSpan,
@@ -10,7 +10,7 @@ import type {
   CanvasAuthoringHandoffStableRef,
   PluginTransferProvenance,
   PluginTransferTargetRef,
-} from '@neko-agent/types';
+} from '@neko-agent/contracts';
 import type { MarkdownSourceRange } from '@neko/markdown';
 import type { MarkdownResourceRenderingProjection } from './markdown-resource-rendering-presenter';
 

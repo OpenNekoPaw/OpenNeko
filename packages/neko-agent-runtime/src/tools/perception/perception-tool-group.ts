@@ -1,4 +1,5 @@
-import { TOOL_NAMES_PERCEPTION, type ToolGroup } from '@neko/shared';
+import type { ToolGroup } from '@neko-agent/contracts';
+import { TOOL_NAMES_PERCEPTION } from '@neko-agent/contracts';
 
 export const perceptionToolGroup: ToolGroup = {
   name: 'perception-evidence',

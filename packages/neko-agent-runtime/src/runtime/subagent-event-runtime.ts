@@ -5,7 +5,7 @@ import {
   validateChildRunScope,
   type SubAgentEventMessage,
   type SubAgentWorkItemEvent,
-} from '@neko-agent/types';
+} from '@neko-agent/contracts';
 
 export interface ProjectSubAgentEventForConversationInput {
   readonly conversationId: string;

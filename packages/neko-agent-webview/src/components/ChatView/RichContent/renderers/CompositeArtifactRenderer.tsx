@@ -11,7 +11,7 @@ import type {
   GenericTableCell,
   GenericTableColumn,
   GenericTableRow,
-} from '@neko/shared';
+} from '@neko-agent/contracts';
 
 export type CompositeArtifactRichData = CompositeArtifact | CompositeArtifactPageRichData;
 

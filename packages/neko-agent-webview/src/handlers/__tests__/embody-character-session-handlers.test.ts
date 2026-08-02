@@ -4,11 +4,11 @@ import type {
   EmbodyCharacterSessionProjection,
   AgentHostToWebviewMessage,
   OpenTab,
-} from '@neko-agent/types';
-import type { Message } from '@neko-agent/types';
-import type { AgentWorkItemStore } from '@/components/AgentWorkItem';
-import type { PluginsAvailable } from '@/components/ChatView/SendToMenu';
-import { ConversationRenderCoordinator } from '@/render-lifecycle/conversation-render-coordinator';
+} from '@neko-agent/contracts';
+import type { Message } from '@neko-agent/contracts';
+import type { AgentWorkItemStore } from '../../components/AgentWorkItem';
+import type { PluginsAvailable } from '../../components/ChatView/SendToMenu';
+import { ConversationRenderCoordinator } from '../../render-lifecycle/conversation-render-coordinator';
 import { embodyCharacterSessionHandlers } from '../embody-character-session-handlers';
 import type { HandlerRegistration, MessageHandlerContext, StreamingState } from '../types';
 

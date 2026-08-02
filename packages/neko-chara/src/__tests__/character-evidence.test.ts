@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { CreativeEntityRef } from '@neko/shared';
+import type { CreativeEntityRef } from '@neko-entity/domain';
 import {
   createCharacterEvidenceStrategy,
   dedupeCharacterEvidenceChunks,

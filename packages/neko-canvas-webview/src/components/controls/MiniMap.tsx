@@ -4,7 +4,7 @@
  */
 
 import { useMemo, useCallback, useRef } from 'react';
-import type { CanonicalCanvasNodeType, CanvasNode, CanvasViewport } from '@neko/shared';
+import type { CanonicalCanvasNodeType, CanvasNode, CanvasViewport } from '@neko-canvas/domain';
 import { getTopLevelCanvasNodes } from '../../utils/canvasOrganization';
 
 // =============================================================================

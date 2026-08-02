@@ -1,0 +1,31 @@
+{
+  "name": "@neko-assets/node",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "description": "Node adapters for Assets and workspace Media Library ownership",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@neko-assets/domain": "workspace:*",
+    "@neko-canvas/domain": "workspace:*",
+    "@neko-cut/domain": "workspace:*",
+    "@neko/content": "workspace:*",
+    "@neko-entity/domain": "workspace:*",
+    "@neko-entity/node": "workspace:*",
+    "@neko/host": "workspace:*",
+    "@neko/local-metadata": "workspace:*",
+    "@neko-preview/domain": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.3",
+    "vitest": "4.1.2"
+  },
+  "license": "AGPL-3.0-or-later"
+}

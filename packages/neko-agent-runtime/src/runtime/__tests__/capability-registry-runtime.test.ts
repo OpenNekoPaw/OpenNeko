@@ -1,11 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import type {
   AgentCapabilityProvider,
-  ArtifactProfileDescriptor,
   PromptFragment,
   ProviderCard,
   Tool,
-} from '@neko/shared';
+} from '@neko-agent/contracts';
+import type { ArtifactProfileDescriptor } from '@neko-agent/contracts';
 import { ToolRegistry } from '../../tools';
 import { ArtifactProfileRegistry, ProviderExpressionProfileRegistry } from '../../profile';
 import { CapabilityRegistryRuntime } from '../capability/capability-registry-runtime';

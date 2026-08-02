@@ -1,14 +1,12 @@
 /**
  * Prompt Preset Configuration
  *
- * Re-exports types from shared package and provides utility functions.
- * Builtin prompts are loaded from platform via ConfigManager.
+ * Re-exports Agent-owned contracts and provides presentation utilities.
  */
 
-import type { PromptPresetType } from '@neko/shared';
+import type { PromptPresetType } from '@neko-agent/contracts';
 
-// Re-export types from shared package
-export type { PromptPresetConfig, PromptPresetType, PromptSource } from '@neko/shared';
+export type { PromptPresetConfig, PromptPresetType, PromptSource } from '@neko-agent/contracts';
 
 /**
  * Get prompt type display name

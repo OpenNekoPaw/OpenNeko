@@ -7,7 +7,7 @@
  */
 
 import type { MessageHandlerContext, StreamingState } from './types';
-import type { AgentQueuedMessageItem, Message } from '@neko-agent/types';
+import type { AgentQueuedMessageItem, Message } from '@neko-agent/contracts';
 
 /**
  * Result of a conversation update that may change streaming state.

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { ChildRunScope } from '@neko/shared';
-import { projectSubAgentEventToWorkItem } from '@neko-agent/types';
+import type { ChildRunScope } from '@neko-agent/contracts';
+import { projectSubAgentEventToWorkItem } from '@neko-agent/contracts';
 import {
   getWorkItemsForConversation,
   removeConversationWorkItems,

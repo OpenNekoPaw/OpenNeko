@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import type { HistoryConversationItem } from '@/presenters/history-menu-presenter';
+import type { HistoryConversationItem } from '../../presenters/history-menu-presenter';
 import { HistoryMenu } from './HistoryMenu';
 
 const translations: Record<string, string> = {
@@ -40,7 +40,7 @@ const translations: Record<string, string> = {
   'history.runStatus.running': 'Running',
 };
 
-vi.mock('@/i18n/I18nContext', () => ({
+vi.mock('../../i18n/I18nContext', () => ({
   useTranslation: () => ({
     t: (key: string, params?: Record<string, string | number>) => {
       const template = translations[key] ?? key;

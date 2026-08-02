@@ -1,10 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { AgentHostToWebviewMessage } from '@neko-agent/types';
-import type { AgentCapabilityActivationProgressEvent } from '@neko/shared';
+import type {
+  AgentCapabilityActivationProgressEvent,
+  AgentHostToWebviewMessage,
+} from '@neko-agent/contracts';
 import { activationProgressHandlers } from '../activation-progress-handlers';
 import type { MessageHandlerContext } from '../types';
-import type { ActivationProgressTimeline } from '@/presenters/activation-progress-presenter';
-import { ConversationRenderCoordinator } from '@/render-lifecycle/conversation-render-coordinator';
+import type { ActivationProgressTimeline } from '../../presenters/activation-progress-presenter';
+import { ConversationRenderCoordinator } from '../../render-lifecycle/conversation-render-coordinator';
 
 describe('activationProgressHandlers', () => {
   it('merges activation progress events into per-conversation timelines', () => {

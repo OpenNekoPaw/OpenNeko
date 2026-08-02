@@ -1,5 +1,5 @@
 import { useMemo, type ReactNode } from 'react';
-import type { CanvasNode, CanvasViewport } from '@neko/shared';
+import type { CanvasNode, CanvasViewport } from '@neko-canvas/domain';
 import { t } from '../../i18n';
 import {
   resolveCanvasMaterialPresentation,

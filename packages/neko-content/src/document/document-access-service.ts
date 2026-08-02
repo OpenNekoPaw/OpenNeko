@@ -11,7 +11,7 @@ import {
   type DocumentRange,
   type DocumentReadResult,
   type DocumentSourceRef,
-} from '@neko/shared';
+} from '../contracts/document-reading';
 import { probeImageMetadata } from './image-metadata';
 import {
   extractEpubImageEntryPaths,

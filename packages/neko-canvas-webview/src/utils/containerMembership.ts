@@ -1,5 +1,5 @@
-import type { CanvasNode } from '@neko/shared';
-import { getContainerPolicyName, getNodeParentId } from '@neko/shared';
+import type { CanvasNode } from '@neko-canvas/domain';
+import { getContainerPolicyName, getNodeParentId } from '@neko-canvas/domain';
 import {
   canContainerAcceptChild,
   createBuiltInContainerPolicyRegistry,

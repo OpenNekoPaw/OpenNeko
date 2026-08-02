@@ -7,30 +7,26 @@ import {
   type EmbodyCharacterSessionProjection,
   type AgentModelSlots,
   type AgentQueuedMessageItem,
-} from '@neko-agent/types';
-import { MessageList } from '@/components/ChatView/MessageList';
-import { MessageActionsProvider } from '@/components/ChatView/MessageActionsContext';
-import { InputArea, MessageAttachment } from '@/components/ChatView/InputArea';
-import type {
-  ComposerMenuState,
-  EntryPromptMenu,
-  SelectedFileReference,
-} from '@/components/ChatView/InputArea/types';
-import { DropZone } from '@/components/ChatView/DropZone';
-import type { PluginsAvailable } from '@/components/ChatView/SendToMenu';
-import type { AgentWorkItem, SubAgentWorkItem } from '@/components/AgentWorkItem';
-import { selectConversationAttentionWorkItems } from '@/presenters/work-item-presenter';
-import type { AgentContextPayload } from '@neko/shared';
-import type { AmbientCanvasNodeProjection } from '@/presenters/plugin-transfer-presenter';
-import type { ActivationProgressTimeline } from '@/presenters/activation-progress-presenter';
-import type { ForegroundConversationAvailability } from '@/render-lifecycle/conversation-render-contract';
-import type { TabViewportSnapshot } from '@/render-runtime/tab-render-runtime';
-import { CharacterDialogueHeader } from '@/components/ChatView/CharacterDialogueHeader';
-import { EmbodyCharacterHeader } from '@/components/ChatView/EmbodyCharacterHeader';
-import { AgentRunStatus } from '@/components/ChatView/AgentRunStatus';
-import { useTranslation } from '@/i18n/I18nContext';
-import { projectMessageIdentities } from '@/components/ChatView/message-identity';
-import { SubAgentCard } from '@/components/ChatView/SubAgentCard';
+} from '@neko-agent/contracts';
+import { MessageList } from './MessageList';
+import { MessageActionsProvider } from './MessageActionsContext';
+import { InputArea, MessageAttachment } from './InputArea';
+import type { ComposerMenuState, EntryPromptMenu, SelectedFileReference } from './InputArea/types';
+import { DropZone } from './DropZone';
+import type { PluginsAvailable } from './SendToMenu';
+import type { AgentWorkItem, SubAgentWorkItem } from '../AgentWorkItem';
+import { selectConversationAttentionWorkItems } from '../../presenters/work-item-presenter';
+import type { AgentContextPayload } from '@neko-agent/contracts';
+import type { AmbientCanvasNodeProjection } from '../../presenters/plugin-transfer-presenter';
+import type { ActivationProgressTimeline } from '../../presenters/activation-progress-presenter';
+import type { ForegroundConversationAvailability } from '../../render-lifecycle/conversation-render-contract';
+import type { TabViewportSnapshot } from '../../render-runtime/tab-render-runtime';
+import { CharacterDialogueHeader } from './CharacterDialogueHeader';
+import { EmbodyCharacterHeader } from './EmbodyCharacterHeader';
+import { AgentRunStatus } from './AgentRunStatus';
+import { useTranslation } from '../../i18n/I18nContext';
+import { projectMessageIdentities } from './message-identity';
+import { SubAgentCard } from './SubAgentCard';
 interface ChatViewProps {
   messages: Message[];
   inputValue: string;

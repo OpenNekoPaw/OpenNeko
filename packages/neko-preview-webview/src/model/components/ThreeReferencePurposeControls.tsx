@@ -15,7 +15,7 @@ import type {
   ThreeReferenceRuntimeJointConstraint,
   ThreeReferenceRuntimePosePreset,
   ThreeReferenceStagingSnapshot,
-} from '@neko/shared';
+} from '@neko-preview/domain';
 import { useTranslation } from '../../i18n/I18nContext';
 
 export interface ThreeReferencePurposeControlsProps {

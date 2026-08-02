@@ -5,7 +5,7 @@
  */
 
 import { useState, useCallback } from 'react';
-import { useTranslation } from '@/i18n/I18nContext';
+import { useTranslation } from '../../../i18n/I18nContext';
 import { getLogger } from '../../../utils/logger';
 
 const logger = getLogger('UsageIndicator');

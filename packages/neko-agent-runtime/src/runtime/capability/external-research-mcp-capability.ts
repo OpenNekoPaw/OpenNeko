@@ -1,4 +1,4 @@
-import type { AgentCapabilityProvider, ExternalResearchConfigInput } from '@neko/shared';
+import type { AgentCapabilityProvider, ExternalResearchConfigInput } from '@neko-agent/contracts';
 import type { MCPToolCallManager } from '../../mcp/mcp-tool';
 import { createExternalResearchCapabilityProvider } from './external-research-capability-provider';
 import { createMcpExternalResearchProvider } from './mcp-external-research-provider';

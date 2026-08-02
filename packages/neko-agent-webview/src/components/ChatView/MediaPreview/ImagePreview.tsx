@@ -5,7 +5,7 @@
  */
 
 import { useState, useCallback, memo } from 'react';
-import { ChevronDownIcon as ChevronIcon, ErrorIcon, OpenIcon } from '@neko/shared/icons';
+import { ChevronDownIcon as ChevronIcon, ErrorIcon, OpenIcon } from '@neko/ui/icons';
 import { openMediaTarget } from './openMediaTarget';
 
 interface ImagePreviewProps {

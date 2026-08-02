@@ -1,6 +1,6 @@
 import { act, renderHook } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import type { Message } from '@neko-agent/types';
+import type { Message } from '@neko-agent/contracts';
 import { useConversationState } from '../useConversationState';
 
 function createMessage(id: string, content: string): Message {

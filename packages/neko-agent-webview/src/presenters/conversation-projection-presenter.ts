@@ -3,7 +3,7 @@ import type {
   ConversationProjectionSnapshot,
   ConversationTurnProjection,
   Message,
-} from '@neko-agent/types';
+} from '@neko-agent/contracts';
 import { projectTimelineTurnToMessage } from './timeline-projection-presenter';
 
 export interface ConversationProjectionRenderInput {

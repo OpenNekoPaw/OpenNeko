@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { validateContentLocator } from '@neko/shared';
+import { validateContentLocator } from '@neko/content';
 import {
   isTerminalJobPhase,
   JobLifecycleError,
@@ -627,7 +627,7 @@ function normalizeProgress(progress: number): number {
 }
 
 function assertResultLocators(
-  resultLocators: readonly import('@neko/shared').GeneratedOutputContentLocator[],
+  resultLocators: readonly import('@neko/content').GeneratedOutputContentLocator[],
 ): void {
   if (
     resultLocators.length === 0 ||

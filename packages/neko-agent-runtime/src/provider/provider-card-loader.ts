@@ -1,5 +1,5 @@
 import { join, relative } from 'node:path';
-import type { IProviderCardRegistry, ProviderCard, ProviderCardLayer } from '@neko/shared';
+import type { IProviderCardRegistry, ProviderCard, ProviderCardLayer } from '@neko-agent/contracts';
 import { parseProviderCardMarkdown } from './provider-card-parser';
 
 export interface ProviderCardLoaderFs {

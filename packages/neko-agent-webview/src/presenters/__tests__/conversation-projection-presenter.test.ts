@@ -3,7 +3,7 @@ import type {
   AgentTurnTimelineAssistantTextItem,
   ConversationProjectionSnapshot,
   Message,
-} from '@neko-agent/types';
+} from '@neko-agent/contracts';
 import { projectConversationProjectionRenderState } from '../conversation-projection-presenter';
 
 describe('conversation projection presenter', () => {

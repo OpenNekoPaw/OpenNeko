@@ -1,5 +1,5 @@
-import type { CanvasNode, GroupCanvasNode } from '@neko/shared';
-import { getContainerChildIds, getContainerPolicyName, isGroupNode } from '@neko/shared';
+import type { CanvasNode, GroupCanvasNode } from '@neko-canvas/domain';
+import { getContainerChildIds, getContainerPolicyName, isGroupNode } from '@neko-canvas/domain';
 import { getContainerDescendantIds, reorderContainerChildren } from './containerActions';
 
 export type SpatialGroupSort = 'stable' | 'name' | 'type' | 'created';

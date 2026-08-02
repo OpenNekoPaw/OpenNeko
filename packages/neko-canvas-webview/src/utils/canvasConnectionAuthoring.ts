@@ -1,5 +1,5 @@
-import type { CanvasConnection, CanvasNode, PortDefinition } from '@neko/shared';
-import { arePortTypesCompatible, getDefaultPorts } from '@neko/shared';
+import type { CanvasConnection, CanvasNode, PortDefinition } from '@neko-canvas/domain';
+import { arePortTypesCompatible, getDefaultPorts } from '@neko-canvas/domain';
 import { createsDisallowedConnectionCycle } from './connectionProjection';
 
 export type CanvasConnectionRejectionReason =

@@ -1,10 +1,10 @@
+import type { ContentLocator } from '@neko/content';
 import type {
   AssetIdentityCapability,
   CanvasPreviewRole,
   CanvasPreviewVariant,
-  ContentLocator,
   DelegateAction,
-} from '@neko/shared';
+} from '@neko-canvas/domain';
 
 export interface PreviewSourceDescriptor {
   id: string;

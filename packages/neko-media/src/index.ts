@@ -1,3 +1,4 @@
+export * from './domain-contracts/index';
 export type {
   MediaAudioStream,
   MediaColorMetadata,
@@ -18,3 +19,4 @@ export type {
 export { isMediaResourceUrl } from './contracts';
 export { MediaCorruptionError, MediaRuntimeUnavailableError } from './errors';
 export { formatMediaTime, formatMediaTimeCentiseconds, formatMediaTimeWithFraction } from './time';
+export type { PerceptualAssetRef } from './perceptual-asset';

@@ -21,7 +21,8 @@ import {
   useRef,
   useState,
 } from 'react';
-import type { AgentContextPayload, ChatModelOption } from '@neko/shared';
+import type { AgentContextPayload } from '@neko-agent/contracts';
+import type { ChatModelOption } from '@neko-ai/contracts';
 import {
   ShellExecutionMode,
   SessionMode,
@@ -32,47 +33,47 @@ import {
   type AgentQueuedMessageItem,
   type AmbientCanvasNode,
   parseAmbientCanvasUpdateNodes,
-} from '@neko-agent/types';
+} from '@neko-agent/contracts';
 import type {
   MediaUnderstandingModelSelections,
   MediaUnderstandingModels,
   SettingsState,
   Message,
   TabType,
-} from '@neko-agent/types';
-import { AgentHostMessages } from '@/messages';
-import { ChatView } from '@/components/ChatView';
+} from '@neko-agent/contracts';
+import { AgentHostMessages } from '../messages';
+import { ChatView } from './ChatView';
 import {
   InputAreaProvider,
   type MediaModelSelection,
   type MediaUnderstandingSelection,
-} from '@/components/ChatView/InputAreaContext';
+} from './ChatView/InputAreaContext';
 import type {
   ComposerMenuState,
   EntryPromptMenu,
   SkillSummary,
   MentionItem,
   PluginSlashCommandDef,
-} from '@/components/ChatView/InputArea/types';
-import type { PluginsAvailable } from '@/components/ChatView/SendToMenu';
-import type { AgentWorkItem } from '@/components/AgentWorkItem';
-import type { ActivationProgressTimeline } from '@/presenters/activation-progress-presenter';
-import { projectTrailingMention } from '@/components/ChatView/InputArea/mention-input';
+} from './ChatView/InputArea/types';
+import type { PluginsAvailable } from './ChatView/SendToMenu';
+import type { AgentWorkItem } from './AgentWorkItem';
+import type { ActivationProgressTimeline } from '../presenters/activation-progress-presenter';
+import { projectTrailingMention } from './ChatView/InputArea/mention-input';
 import {
   useChatActions,
   type PendingSendIdentity,
   type PendingSendInput,
   useSlashCommands,
-} from '@/hooks';
-import { useKeyboardShortcuts, COMMON_SHORTCUTS } from '@/hooks/useKeyboardShortcuts';
+} from '../hooks';
+import { useKeyboardShortcuts, COMMON_SHORTCUTS } from '../hooks/useKeyboardShortcuts';
 import {
   projectChatWorkspaceModelState,
   projectMediaModelSelectionForSessionModeChange,
-} from '@/presenters/config-message-presenter';
-import { isCharacterRoleConversationKind } from '@/presenters/character-role-session-presenter';
-import type { ForegroundConversationAvailability } from '@/render-lifecycle/conversation-render-contract';
-import type { TabRenderStore, TabViewportSnapshot } from '@/render-runtime/tab-render-runtime';
-import { useTabRenderStore } from '@/render-runtime/useTabRenderStore';
+} from '../presenters/config-message-presenter';
+import { isCharacterRoleConversationKind } from '../presenters/character-role-session-presenter';
+import type { ForegroundConversationAvailability } from '../render-lifecycle/conversation-render-contract';
+import type { TabRenderStore, TabViewportSnapshot } from '../render-runtime/tab-render-runtime';
+import { useTabRenderStore } from '../render-runtime/useTabRenderStore';
 
 // =============================================================================
 // Props
@@ -278,9 +279,7 @@ export function ChatWorkspace({
     [updateTabRenderState],
   );
   const setAttachedFiles = useCallback<
-    React.Dispatch<
-      React.SetStateAction<import('@/components/ChatView/InputArea/types').MessageAttachment[]>
-    >
+    React.Dispatch<React.SetStateAction<import('./ChatView/InputArea/types').MessageAttachment[]>>
   >(
     (value) => {
       updateTabRenderState((state) => ({
@@ -291,7 +290,7 @@ export function ChatWorkspace({
   );
   const setSelectedFileReferences = useCallback<
     React.Dispatch<
-      React.SetStateAction<import('@/components/ChatView/InputArea/types').SelectedFileReference[]>
+      React.SetStateAction<import('./ChatView/InputArea/types').SelectedFileReference[]>
     >
   >(
     (value) => {

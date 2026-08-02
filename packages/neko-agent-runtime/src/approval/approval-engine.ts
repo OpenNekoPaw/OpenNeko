@@ -15,7 +15,11 @@
  * The engine itself is async to accommodate (3).
  */
 
-import { deriveAgentTraceContext, withAgentTrace, type AgentTraceContext } from '@neko/shared';
+import {
+  deriveAgentTraceContext,
+  withAgentTrace,
+  type AgentTraceContext,
+} from '@neko-agent/contracts';
 import { getLogger } from '../utils/logger';
 import type {
   ApprovalRequest,

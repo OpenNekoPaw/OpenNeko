@@ -5,7 +5,7 @@ import type {
   ProviderRouteInput,
   ProviderTarget,
   ProviderSelection,
-} from '@neko/shared';
+} from '@neko-agent/contracts';
 
 interface ScoredProvider {
   readonly card: ProviderCard;

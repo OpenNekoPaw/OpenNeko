@@ -2,7 +2,7 @@
  * Shared SVG icons for MermaidBlock and other message content components
  */
 
-export { CopyIcon, CheckIcon, DownloadIcon, RefreshIcon, CodeIcon } from '@neko/shared/icons';
+export { CopyIcon, CheckIcon, DownloadIcon, RefreshIcon, CodeIcon } from '@neko/ui/icons';
 
 // Unique icon — Mermaid diagram indicator (no shared equivalent)
 export function MermaidIcon({ className }: { className?: string }) {

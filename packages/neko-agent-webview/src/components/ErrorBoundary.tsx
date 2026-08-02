@@ -1,6 +1,6 @@
 import { WebviewErrorBoundary } from '@neko/ui/error-boundary';
 import type { ReactNode } from 'react';
-import { getLogger } from '@/utils/logger';
+import { getLogger } from '../utils/logger';
 
 const logger = getLogger('ErrorBoundary');
 

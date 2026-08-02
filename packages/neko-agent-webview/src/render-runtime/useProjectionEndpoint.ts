@@ -1,7 +1,7 @@
 import { useLayoutEffect, useMemo } from 'react';
-import { buildAgentSessionDiagnosticMessage, type OpenTab } from '@neko-agent/types';
-import { useAgentHostRuntimeAdapter } from '@/host-runtime-context';
-import { getLogger } from '@/utils/logger';
+import { buildAgentSessionDiagnosticMessage, type OpenTab } from '@neko-agent/contracts';
+import { useAgentHostRuntimeAdapter } from '../host-runtime-context';
+import { getLogger } from '../utils/logger';
 import {
   createProjectionAttachmentId,
   createProjectionEndpointController,

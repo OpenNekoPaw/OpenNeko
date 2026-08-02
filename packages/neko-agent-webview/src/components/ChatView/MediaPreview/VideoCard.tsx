@@ -1,7 +1,7 @@
 import { memo, useCallback, useState } from 'react';
 import { formatMediaTime } from '@neko/media';
-import { ChevronDownIcon as ChevronIcon, ErrorIcon } from '@neko/shared/icons';
-import { isAuthorizedResourceDisplayUri } from '@/presenters/resource-display-uri';
+import { ChevronDownIcon as ChevronIcon, ErrorIcon } from '@neko/ui/icons';
+import { isAuthorizedResourceDisplayUri } from '../../../presenters/resource-display-uri';
 
 interface VideoPlayerProps {
   src: string;

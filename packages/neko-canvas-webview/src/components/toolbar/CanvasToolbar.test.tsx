@@ -10,18 +10,15 @@ vi.mock('@neko/ui/icons', () => ({
   toCodiconClassName: (name: string) => `codicon codicon-${name}`,
   DownloadIcon: ({ size = 16 }: { size?: number }) => <span data-icon="download">{size}</span>,
   PackageIcon: ({ size = 16 }: { size?: number }) => <span data-icon="package">{size}</span>,
+  PlusIcon: ({ size = 16 }: { size?: number }) => <span data-icon="plus">{size}</span>,
   PointerIcon: ({ size = 16 }: { size?: number }) => <span data-icon="pointer">{size}</span>,
   RedoIcon: ({ size = 16 }: { size?: number }) => <span data-icon="redo">{size}</span>,
   RightPanelIcon: ({ size = 16 }: { size?: number }) => <span data-icon="right-panel">{size}</span>,
   RightPanelOffIcon: ({ size = 16 }: { size?: number }) => (
     <span data-icon="right-panel-off">{size}</span>
   ),
-  UndoIcon: ({ size = 16 }: { size?: number }) => <span data-icon="undo">{size}</span>,
-}));
-
-vi.mock('@neko/shared/icons', () => ({
-  PlusIcon: ({ size = 16 }: { size?: number }) => <span data-icon="plus">{size}</span>,
   StorylineIcon: ({ size = 16 }: { size?: number }) => <span data-icon="storyline">{size}</span>,
+  UndoIcon: ({ size = 16 }: { size?: number }) => <span data-icon="undo">{size}</span>,
 }));
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });

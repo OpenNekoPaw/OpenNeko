@@ -3,7 +3,7 @@ import type {
   ContentReadService,
   DocumentSourceRef,
   WorkspaceFileContentLocator,
-} from '@neko/shared';
+} from '@neko/content';
 import { DocumentContentAccessRuntime } from '../content-access-document-runtime';
 
 describe('DocumentContentAccessRuntime', () => {

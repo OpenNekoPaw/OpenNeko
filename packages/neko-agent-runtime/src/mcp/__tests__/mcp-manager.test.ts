@@ -4,7 +4,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { MCPManager } from '../mcp-manager';
-import type { IMCPClient, MCPServerConfig, MCPToolDefinition } from '@neko/shared';
+import type { IMCPClient, MCPServerConfig, MCPToolDefinition } from '@neko-agent/contracts';
 import { AgentError } from '../../errors';
 
 // Mock the mcp-client module

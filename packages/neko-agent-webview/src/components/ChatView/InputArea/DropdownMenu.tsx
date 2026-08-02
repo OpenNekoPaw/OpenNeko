@@ -1,1 +1,1 @@
-export { ChevronDownIcon } from '@neko/shared/icons';
+export { ChevronDownIcon } from '@neko/ui/icons';

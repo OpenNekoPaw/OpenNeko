@@ -1,4 +1,4 @@
-import type { ConversationKind, SessionMode } from '@neko-agent/types';
+import type { ConversationKind, SessionMode } from '@neko-agent/contracts';
 import type { AmbientCanvasNodeProjection } from './plugin-transfer-presenter';
 
 export interface InputAreaUiProjectionInput {

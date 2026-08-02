@@ -4,7 +4,7 @@ import type {
   AgentQueuedMessageDisplayKind,
   AgentQueuedMessageItem,
   AgentQueuedMessageSource,
-} from '@neko-agent/types';
+} from '@neko-agent/contracts';
 
 export type AgentMessageQueueOperationErrorCode =
   'stale-item' | 'invalid-queue-operation' | 'not-queueable';

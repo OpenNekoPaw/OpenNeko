@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { CONTENT_LOCATOR_DRAG_MIME } from '@neko/shared';
+import { CONTENT_LOCATOR_DRAG_MIME } from '@neko/content';
 import {
   applyCanvasAddSourceResult,
   createCanvasFilePickerAddSourceInput,

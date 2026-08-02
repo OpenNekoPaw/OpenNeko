@@ -1,4 +1,4 @@
-import type { PromptPresetConfig, PromptSource } from '@neko/shared';
+import type { PromptPresetConfig, PromptSource } from '@neko-agent/contracts';
 import * as path from 'node:path';
 import {
   resolveAgentsFile,

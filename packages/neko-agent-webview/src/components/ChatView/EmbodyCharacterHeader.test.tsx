@@ -1,14 +1,14 @@
 import { act } from 'react';
 import { render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { EmbodyCharacterSessionProjection } from '@neko-agent/types';
-import { I18nProvider } from '@/i18n/I18nContext';
-import { i18nService, setLocale } from '@/i18n';
+import type { EmbodyCharacterSessionProjection } from '@neko-agent/contracts';
+import { I18nProvider } from '../../i18n/I18nContext';
+import { i18nService, setLocale } from '../../i18n';
 import { EmbodyCharacterHeader } from './EmbodyCharacterHeader';
 
 const exitEmbodyCharacterSession = vi.fn();
 
-vi.mock('@/messages', () => ({
+vi.mock('../../messages', () => ({
   AgentHostMessages: {
     exitEmbodyCharacterSession: (...args: unknown[]) => exitEmbodyCharacterSession(...args),
   },

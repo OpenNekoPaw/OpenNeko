@@ -1,5 +1,5 @@
-import type { MessageContextReference } from '@neko-agent/types';
-import { isContentLocator, type AgentContextPayload, type ContentLocator } from '@neko/shared';
+import type { AgentContextPayload, MessageContextReference } from '@neko-agent/contracts';
+import { isContentLocator, type ContentLocator } from '@neko/content';
 
 export function projectContextReferencesFromPayloads(
   payloads: AgentContextPayload[] | undefined,

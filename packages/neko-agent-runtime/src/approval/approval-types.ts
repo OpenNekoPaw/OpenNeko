@@ -16,7 +16,7 @@
  * packs can route decisions without inspecting channel strings.
  */
 
-import type { AgentTraceContext } from '@neko/shared';
+import type { AgentTraceContext } from '@neko-agent/contracts';
 export type ApprovalParadigm = 'declarative' | 'imperative';
 
 // =============================================================================

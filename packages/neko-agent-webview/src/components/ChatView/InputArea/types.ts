@@ -2,10 +2,9 @@
  * InputArea Types and Constants
  */
 
-import type { AgentFileReference } from '@neko-agent/types';
+import type { AgentFileReference } from '@neko-agent/contracts';
 
-// Re-export MessageAttachment from shared
-export type { MessageAttachment, AttachmentType } from '@neko/shared';
+export type { AttachmentType, MessageAttachment } from '@neko-agent/contracts';
 
 // Command source type
 export type CommandSource = 'builtin' | 'command-artifact' | 'plugin';
@@ -38,7 +37,7 @@ export interface PluginSlashCommandDef {
 }
 
 /**
- * Skill summary for UI display (from @neko/platform)
+ * Skill summary projected by the Agent runtime for UI display.
  * Duplicated here to avoid direct dependency on platform package
  */
 export interface SkillSummary {
@@ -118,7 +117,7 @@ export const DEFAULT_COMPOSER_MENU_STATE: Readonly<ComposerMenuState> = {
 
 // Project file for @ reference
 export interface ProjectFile {
-  locator: import('@neko/shared').WorkspaceFileContentLocator;
+  locator: import('@neko/content').WorkspaceFileContentLocator;
   name: string;
   type: 'file' | 'folder';
   icon?: string;
@@ -143,7 +142,7 @@ export interface MentionItem {
   /** Secondary hint text */
   description?: string;
   /** Stable Host-issued content identity used when this item is selected. */
-  contentLocator?: import('@neko/shared').ContentLocator;
+  contentLocator?: import('@neko/content').ContentLocator;
   /** Optional icon supplied by host protocol */
   icon?: string;
   /** Source index that produced this candidate */
@@ -157,7 +156,7 @@ export interface MentionItem {
   /** Host-provided normalized or expanded search text */
   searchText?: string;
   /** For canvas-node / character / scene: payload for AgentContextChip */
-  contextPayload?: import('@neko/shared').AgentContextPayload;
+  contextPayload?: import('@neko-agent/contracts').AgentContextPayload;
   /** Optional thumbnail for visual enrichment (webview-safe URI or base64) */
   thumbnailUri?: string;
 }

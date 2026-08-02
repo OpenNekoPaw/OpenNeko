@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
+import type { CreativeEntityRef } from '@neko-entity/domain';
 import type {
-  CreativeEntityRef,
   NpcEvaluationReport,
   NpcProfileSource,
   NpcTranscriptArtifact,
-} from '@neko/shared';
+} from '@neko/chara/contracts';
 import {
   appendCharacterDialogueUserSupplement,
   createCharacterDialogueRuntimeService,

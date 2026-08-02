@@ -1,13 +1,12 @@
+import { type ContentLocator } from '@neko/content';
 import {
   deriveCanvasMaterialOrigin,
-  planCanvasNodeCreation,
-  type CanvasData,
-  type CanvasConnection,
   type CanvasEntityRepresentationEvidence,
   type CanvasGenerationEvidence,
   type CanvasMaterialMediaKind,
-  type ContentLocator,
-} from '@neko/shared';
+} from './types/canvas-material-contracts';
+import { planCanvasNodeCreation } from './utils/canvasHeadlessAuthoring';
+import { type CanvasData, type CanvasConnection } from './types/canvas';
 
 /**
  * Host-resolved, portable material ready for a Canvas commit.

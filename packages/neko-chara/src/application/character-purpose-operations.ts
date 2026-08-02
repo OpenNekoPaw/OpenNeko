@@ -1,23 +1,31 @@
 import {
   isNpcEvaluationReport,
   isNpcSerializableValue,
-  type ICapabilityPurposeTextRuntime,
   type NpcEvaluationReport,
   type NpcProfileFact,
   type NpcProfileSource,
   type NpcTranscriptArtifact,
   type NpcTranscriptMessage,
-} from '@neko/shared';
+} from '@neko/chara/contracts';
+
+export interface CharacterPurposeTextRuntime {
+  complete(input: {
+    purpose: string;
+    instruction: string;
+    input: string;
+    signal?: AbortSignal;
+  }): Promise<{ text: string }>;
+}
 
 export function requireCharacterPurposeRuntime(
-  runtime: ICapabilityPurposeTextRuntime | undefined,
+  runtime: CharacterPurposeTextRuntime | undefined,
   operation: string,
-): ICapabilityPurposeTextRuntime {
+): CharacterPurposeTextRuntime {
   if (!runtime) throw new Error(`${operation} requires the product purpose text runtime.`);
   return runtime;
 }
 
-export function createCharacterDialoguePurposeResponder(runtime: ICapabilityPurposeTextRuntime) {
+export function createCharacterDialoguePurposeResponder(runtime: CharacterPurposeTextRuntime) {
   return async (input: {
     readonly systemPrompt: string;
     readonly transcript: readonly NpcTranscriptMessage[];
@@ -37,7 +45,7 @@ export function createCharacterDialoguePurposeResponder(runtime: ICapabilityPurp
   };
 }
 
-export function createEmbodyCharacterPurposeResponder(runtime: ICapabilityPurposeTextRuntime) {
+export function createEmbodyCharacterPurposeResponder(runtime: CharacterPurposeTextRuntime) {
   return async (input: {
     readonly systemPrompt: string;
     readonly transcript: readonly NpcTranscriptMessage[];
@@ -64,7 +72,7 @@ export function createEmbodyCharacterPurposeResponder(runtime: ICapabilityPurpos
 }
 
 export async function evaluateCharacterDialogueWithPurpose(
-  runtime: ICapabilityPurposeTextRuntime,
+  runtime: CharacterPurposeTextRuntime,
   artifact: NpcTranscriptArtifact,
   locale?: string,
 ): Promise<NpcEvaluationReport> {
@@ -82,7 +90,7 @@ export async function evaluateCharacterDialogueWithPurpose(
 }
 
 export async function inferCharacterProfileFactsWithPurpose(
-  runtime: ICapabilityPurposeTextRuntime,
+  runtime: CharacterPurposeTextRuntime,
   profile: NpcProfileSource,
   observedAt: string,
 ): Promise<readonly NpcProfileFact[]> {

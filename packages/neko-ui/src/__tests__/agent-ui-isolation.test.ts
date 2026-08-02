@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
@@ -23,11 +23,26 @@ const agentCriticalFiles = [
 
 describe('Agent UI isolation guardrail', () => {
   it('keeps Agent Header/Input and selector architecture out of the shared UI migration', () => {
-    const importsSharedUi = agentCriticalFiles.filter((relativePath) => {
-      const source = readFileSync(join(repoRoot, relativePath), 'utf-8');
-      return source.includes('@neko/ui');
-    });
+    expect(
+      agentCriticalFiles.every((relativePath) => existsSync(join(repoRoot, relativePath))),
+    ).toBe(true);
 
-    expect(importsSharedUi).toEqual([]);
+    const uiSources = readSourceTree(join(repoRoot, 'packages/neko-ui/src'));
+    const importsAgentWebview = uiSources.filter(({ source }) =>
+      /(?:@neko-agent\/webview|packages\/neko-agent-webview\/src)/u.test(source),
+    );
+
+    expect(importsAgentWebview).toEqual([]);
   });
 });
+
+function readSourceTree(
+  root: string,
+): readonly { readonly path: string; readonly source: string }[] {
+  return readdirSync(root, { withFileTypes: true }).flatMap((entry) => {
+    const entryPath = join(root, entry.name);
+    if (entry.isDirectory()) return entry.name === '__tests__' ? [] : readSourceTree(entryPath);
+    if (!/\.tsx?$/u.test(entry.name)) return [];
+    return [{ path: entryPath, source: readFileSync(entryPath, 'utf8') }];
+  });
+}

@@ -18,3 +18,9 @@ export {
 } from './contracts';
 export { PerceptionPipeline, createPerceptionPipeline } from './perception-pipeline';
 export { type PerceiveToolConfig } from './perceive-tool';
+export {
+  resolvePerceptionContextPacket,
+  type PerceptionInputMaterializer,
+  type PerceptionInputMaterializerContext,
+  type ResolvePerceptionContextPacketOptions,
+} from './context-packet-materializer';

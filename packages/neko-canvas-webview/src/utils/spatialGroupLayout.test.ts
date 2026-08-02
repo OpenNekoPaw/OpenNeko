@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { CanvasNode, GroupCanvasNode, MarkdownCanvasNode } from '@neko/shared';
+import type { CanvasNode, GroupCanvasNode, MarkdownCanvasNode } from '@neko-canvas/domain';
 import {
   arrangeSpatialGroup,
   clampSpatialGroupResize,

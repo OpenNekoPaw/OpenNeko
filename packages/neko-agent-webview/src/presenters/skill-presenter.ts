@@ -1,4 +1,4 @@
-import type { SkillSummary } from '@/components/ChatView/InputArea/types';
+import type { SkillSummary } from '../components/ChatView/InputArea/types';
 
 export interface ProtocolSkillSummaryForUi {
   name: string;

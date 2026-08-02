@@ -5,7 +5,7 @@ import {
   type DocumentImageInfo,
   type DocumentLocator,
   type DocumentSourceRef,
-} from '@neko/shared';
+} from '../contracts/document-reading';
 import { probeImageMetadata } from './image-metadata';
 
 export interface DocumentContent {

@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { AgentHostToWebviewMessage } from '@neko-agent/types';
+import type { AgentHostToWebviewMessage } from '@neko-agent/contracts';
 import { configHandlers } from '../config-handlers';
 import type { MessageHandlerContext } from '../types';
-import { ConversationRenderCoordinator } from '@/render-lifecycle/conversation-render-coordinator';
+import { ConversationRenderCoordinator } from '../../render-lifecycle/conversation-render-coordinator';
 
 const messageMocks = vi.hoisted(() => ({
   updateSettingsMessage: vi.fn(),

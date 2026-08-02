@@ -7,22 +7,28 @@
 
 import { useCallback, useRef } from 'react';
 import {
-  CONTENT_LOCATOR_DRAG_MIME,
-  createProjectSourceAddClient,
   inferCanvasDroppedAssetKind,
   inferCanvasMediaType,
   inferCanvasTextFileFormat,
-  isMediaLibraryDragData,
-  parseContentLocatorDragData,
+  type CanvasDroppedAsset,
+} from '@neko-canvas/domain';
+import {
+  createProjectSourceAddClient,
   type ProjectSourceAddClient,
   type ProjectSourceAddClientInput,
   type ProjectSourceAddResult,
-  type CanvasDroppedAsset,
+} from '@neko/content/project-file-io';
+import {
+  CONTENT_LOCATOR_DRAG_MIME,
+  parseContentLocatorDragData,
   type ContentLocator,
+} from '@neko/content';
+import { isMediaLibraryDragData } from '@neko-assets/domain/contracts';
+import {
   type CanvasMaterialMediaKind,
   type CanvasNodeType,
   type CanvasReferencedContentLocator,
-} from '@neko/shared';
+} from '@neko-canvas/domain';
 import { useFileDrop } from '@neko/ui/hooks';
 import type { FileDropResult } from '@neko/ui/hooks';
 import { detectMediaType } from '../utils/mediaType';

@@ -16,16 +16,7 @@
     "noImplicitOverride": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
-    "noFallthroughCasesInSwitch": true,
-    "paths": {
-      "@/*": ["./src/*"],
-      "@neko/shared": ["../neko-types/src/index.ts"],
-      "@neko/shared/*": ["../neko-types/src/*"],
-      "@neko/media": ["../neko-media/src/index.ts"],
-      "@neko/media/*": ["../neko-media/src/*"],
-      "@neko/ui": ["../neko-ui/src/index.ts"],
-      "@neko/ui/*": ["../neko-ui/src/*"],
-    }
+    "noFallthroughCasesInSwitch": true
   },
   "include": ["src"],
   "references": [{ "path": "./tsconfig.node.json" }]

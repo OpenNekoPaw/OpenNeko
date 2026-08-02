@@ -11,6 +11,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@neko/local-metadata": "workspace:*",
     "@neko-cut/domain": "workspace:*",
     "@neko/media": "workspace:*",
     "@neko/shared": "workspace:*"

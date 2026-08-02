@@ -27,27 +27,26 @@ import {
   parseCompositeContentJson,
   parseCompositeContentJsonCandidates,
   type ContentBlock,
-} from '@neko-agent/types';
-import type { PluginsAvailable } from '@/components/ChatView/SendToMenu';
+} from '@neko-agent/contracts';
+import type { PluginsAvailable } from '../SendToMenu';
+import { isCanvasStoryboardReferenceImageProcessingPrompt } from '@neko-canvas/domain';
 import {
-  isCanvasStoryboardReferenceImageProcessingPrompt,
   resolveCreativeTableField,
   STORYBOARD_CREATIVE_TABLE_PROFILE,
-  validateCompositeArtifact,
   type CreativeTableFieldDescriptor,
-  type CompositeArtifact,
-} from '@neko/shared';
-import { RichContentRenderer } from '@/components/ChatView/RichContent';
-import { projectCompositeBlockRichContent } from '@/presenters/composite-content-presenter';
+} from '@neko-canvas/domain';
+import { validateCompositeArtifact, type CompositeArtifact } from '@neko-agent/contracts';
+import { RichContentRenderer } from '../RichContent';
+import { projectCompositeBlockRichContent } from '../../../presenters/composite-content-presenter';
 import {
   normalizeMarkdownResourceLookupToken,
   type MarkdownResourceDiagnostic,
   type MarkdownResourceRenderingProjection,
-} from '@/presenters/markdown-resource-rendering-presenter';
-import { getLocale, t } from '@/i18n';
+} from '../../../presenters/markdown-resource-rendering-presenter';
+import { getLocale, t } from '../../../i18n';
 import { CodeBlock } from './CodeBlock';
 import { MermaidBlock } from './MermaidBlock';
-import { useAgentMarkdownSessionRegistry } from '@/markdown/agent-markdown-session-context';
+import { useAgentMarkdownSessionRegistry } from '../../../markdown/agent-markdown-session-context';
 
 type MarkdownDisplayLocale = 'en' | 'zh-cn';
 

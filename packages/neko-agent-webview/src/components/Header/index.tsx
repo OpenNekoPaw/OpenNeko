@@ -1,13 +1,13 @@
-import type { TabType } from '@neko-agent/types';
-import { TabBar } from '@/components/Header/TabBar';
-import { HistoryMenu } from '@/components/Header/HistoryMenu';
-import { useTranslation } from '@/i18n/I18nContext';
-import { AccountBar } from '@/components/AccountBar';
-import type { ConfiguredProvider } from '@neko-agent/types';
-import { PlusIcon } from '@neko/shared/icons';
-import type { DisplayTab } from '@/presenters/tab-display-presenter';
-import type { HistoryConversationItem } from '@/presenters/history-menu-presenter';
-import type { MentionItem } from '@/components/ChatView/InputArea/types';
+import type { TabType } from '@neko-agent/contracts';
+import { TabBar } from './TabBar';
+import { HistoryMenu } from './HistoryMenu';
+import { useTranslation } from '../../i18n/I18nContext';
+import { AccountBar } from '../AccountBar';
+import type { ConfiguredProvider } from '@neko-agent/contracts';
+import { PlusIcon } from '@neko/ui/icons';
+import type { DisplayTab } from '../../presenters/tab-display-presenter';
+import type { HistoryConversationItem } from '../../presenters/history-menu-presenter';
+import type { MentionItem } from '../ChatView/InputArea/types';
 import { RoleplayMenu } from './RoleplayMenu';
 
 interface HeaderProps {

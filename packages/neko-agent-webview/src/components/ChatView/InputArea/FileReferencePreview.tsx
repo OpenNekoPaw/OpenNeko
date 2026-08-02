@@ -1,6 +1,6 @@
 import type { SelectedFileReference } from './types';
-import { projectPathReferenceToken } from '@/presenters/reference-token-presenter';
-import { projectContentLocatorPath } from '@/presenters/content-locator-presenter';
+import { projectPathReferenceToken } from '../../../presenters/reference-token-presenter';
+import { projectContentLocatorPath } from '../../../presenters/content-locator-presenter';
 import { ReferenceToken } from './ReferenceToken';
 
 interface FileReferencePreviewProps {

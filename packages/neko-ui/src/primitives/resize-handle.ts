@@ -1,2 +1,2 @@
-export { ResizeHandle } from '@neko/shared/components';
-export type { ResizeHandleProps } from '@neko/shared/components';
+export { ResizeHandle } from '../shared-primitives/ResizeHandle';
+export type { ResizeHandleProps } from '../shared-primitives/ResizeHandle';

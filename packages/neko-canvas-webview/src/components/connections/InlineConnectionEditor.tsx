@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import type { CanvasConnection, CanvasNode } from '@neko/shared';
-import { CANVAS_CONNECTION_TYPES, isCanvasConnectionType } from '@neko/shared';
+import type { CanvasConnection, CanvasNode } from '@neko-canvas/domain';
+import { CANVAS_CONNECTION_TYPES, isCanvasConnectionType } from '@neko-canvas/domain';
 import { t } from '../../i18n';
 import { getConnectionPathGeometry } from './connectionGeometry';
 import {

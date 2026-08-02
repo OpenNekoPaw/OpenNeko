@@ -5,9 +5,9 @@ import type {
   PerceptionFocus,
   PerceptionLayer,
   PerceptionPolicy,
-  PerceptualAssetRef,
   ToolResultBackfillPayload,
-} from '@neko/shared';
+} from '@neko-agent/contracts';
+import type { PerceptualAssetRef } from '@neko/media';
 
 export interface ResolvedPerceptualAsset {
   readonly assetId: string;

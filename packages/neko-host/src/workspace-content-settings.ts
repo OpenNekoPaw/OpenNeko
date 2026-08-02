@@ -1,10 +1,10 @@
+import { type PathVariableMap } from '@neko/shared';
 import {
   WORKSPACE_MEDIA_LIBRARY_DIRECTORY,
   validateWorkspaceLinkedMediaLibraryName,
   workspaceLinkedMediaLibraryPath,
-  type PathVariableMap,
   type WorkspaceLinkedMediaLibrary,
-} from '@neko/shared';
+} from '@neko-assets/domain/contracts';
 import type { NekoHostPorts } from './ports';
 
 export interface HostWorkspacePathVariableInput {

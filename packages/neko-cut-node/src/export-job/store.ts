@@ -1,4 +1,4 @@
-import type { LocalMetadataSqlRow, LocalMetadataStore } from '@neko/shared';
+import type { LocalMetadataSqlRow, LocalMetadataStore } from '@neko/local-metadata';
 
 // Storage remains injected so the owning Host selects its metadata backend.
 import {

@@ -11,7 +11,7 @@ import type {
   MCPToolResult,
   MCPResource,
   MCPPrompt,
-} from '@neko/shared';
+} from '@neko-agent/contracts';
 import { AgentError } from '../errors';
 import { getLogger } from '../utils/logger';
 

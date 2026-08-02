@@ -1,7 +1,7 @@
 import React from 'react';
 import type { PropertyDefinition, PropertyGroupDefinition, PropertyValue } from '@neko/ui/creative';
 import { toCodiconClassName, type CodiconName } from '@neko/ui/icons';
-import type { CanvasNode } from '@neko/shared';
+import type { CanvasNode } from '@neko-canvas/domain';
 import type { CanvasAddActionId } from '../../utils/canvasAddActions';
 
 export interface CanvasNodePropertyAdapterResult {

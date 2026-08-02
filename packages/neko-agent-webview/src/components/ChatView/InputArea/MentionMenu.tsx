@@ -17,12 +17,12 @@ import {
   PackageIcon,
   PlayIcon,
   VolumeIcon,
-} from '@neko/shared/icons';
+} from '@neko/ui/icons';
 import type { MentionItem } from './types';
 import { useClickOutsideSingle } from './useClickOutside';
-import { useTranslation } from '@/i18n/I18nContext';
-import type { AgentContextPayload } from '@neko/shared';
-import { projectContentLocatorPath } from '@/presenters/content-locator-presenter';
+import { useTranslation } from '../../../i18n/I18nContext';
+import type { AgentContextPayload } from '@neko-agent/contracts';
+import { projectContentLocatorPath } from '../../../presenters/content-locator-presenter';
 
 const KIND_ICONS: Record<string, string> = {
   file: 'file',

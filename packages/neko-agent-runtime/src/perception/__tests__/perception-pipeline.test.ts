@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { type PerceptionEvidenceEntry } from '@neko/shared';
+import { type PerceptionEvidenceEntry } from '@neko-agent/contracts';
 import type {
   MediaProbePort,
   PerceptionClientPort,

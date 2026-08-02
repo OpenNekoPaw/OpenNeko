@@ -5,9 +5,9 @@
  */
 
 import { useState, useMemo, memo } from 'react';
-import { computeDiff, computeDiffStats } from '@neko/shared/utils';
-import { CodeDiff } from '@neko-agent/types';
-import { useTranslation } from '@/i18n/I18nContext';
+import { computeDiff, computeDiffStats } from '@neko/ui/utils';
+import { CodeDiff } from '@neko-agent/contracts';
+import { useTranslation } from '../../i18n/I18nContext';
 import {
   projectDiffLinesUi,
   projectDiffBlockUiState,
@@ -15,7 +15,7 @@ import {
   type DiffBlockOpacity,
   type DiffBlockTone,
   type DiffLineTone,
-} from '@/presenters/diff-presenter';
+} from '../../presenters/diff-presenter';
 
 interface DiffBlockProps {
   diff: CodeDiff;
