@@ -32,7 +32,7 @@ function parseArguments(argv) {
     return candidate;
   };
   const target = value('--target');
-  if (target !== 'darwin-arm64' && target !== 'win32-x64') {
+  if (target !== 'darwin-arm64') {
     throw new Error(`Unsupported media runtime target: ${target}.`);
   }
   return Object.freeze({

@@ -101,10 +101,10 @@ qualified original file
 H.264 容器不兼容时，FFmpeg 从可解码随机访问点开始，以 `-c:v copy` 生成有界 MP4。
 其他 codec 或不合格 profile 使用目标平台已验证的完整硬件闭包：
 `darwin-arm64` 使用 VideoToolbox decode、`scale_vt` 和
-`h264_videotoolbox -allow_sw 0`。`win32-x64` 尚无已资格化的完整硬件闭包，
-因此该目标上的不兼容 codec/profile 明确 unavailable；portable software runtime
-不构成预览转码资格。`libx264`、CPU scale、CPU tone-map 和自动 fallback 不属于预览
-路径。平台参数与错误分类由 `@neko/media/node` 统一拥有，Cut adapter 不维护平台分支。
+`h264_videotoolbox -allow_sw 0`。Windows/Linux 不是 release target，不存在可进入产品的
+portable software 或硬件预览闭包。`libx264`、CPU scale、CPU tone-map 和自动 fallback
+不属于预览路径。平台参数与错误分类由 `@neko/media/node` 统一拥有，Cut adapter 不维护
+平台分支。
 
 prepared output 必须完整、可 seek 且通过文件注册后才能发布 descriptor。它是
 session-owned 临时文件，stop/dispose 时删除。该路径接受比 direct source 更高的

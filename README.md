@@ -47,16 +47,14 @@ OpenNeko is currently in **Alpha** and is primarily intended for source-based pr
 
 Requires Node.js 24+ and pnpm 10; the repository development toolchain is pinned to Node.js 24.18.0 LTS.
 
-Desktop build targets are limited to:
+Native Desktop package and release targets are limited to:
 
-| System  | Architecture | Current Desktop qualification                                     |
-| ------- | ------------ | ----------------------------------------------------------------- |
-| macOS   | ARM64        | Forge package; complete Phase 1 qualification is in progress      |
-| Windows | x64          | Native CI package is gated; runtime/release qualification pending |
+| System | Architecture | Current Desktop qualification                                      |
+| ------ | ------------ | ------------------------------------------------------------------ |
+| macOS  | ARM64        | Forge package verified; Developer ID/notarized Release is gated    |
 
-Linux is a host-neutral CI runner only and does not build a Desktop product. Intel Mac and other
-architectures are unsupported. Windows requires real-system startup, native dependency, credential,
-and Node/FFmpeg media read/export evidence before it is described as fully release-qualified.
+Windows x64 and Linux run typecheck, orchestration, SQLite, and host-neutral CI only. They do not
+invoke Forge or produce a Desktop artifact. Intel Mac and other architectures are unsupported.
 
 ```bash
 pnpm install
@@ -64,8 +62,9 @@ pnpm build
 pnpm dev:desktop
 ```
 
-`pnpm build` and `pnpm dev:desktop` run only on the two native targets above. Linux uses
-`pnpm check:static-build` for static validation.
+`pnpm build`, `pnpm dev:desktop`, `pnpm package:desktop`, and `pnpm make:desktop` run only on Apple
+Silicon macOS. Windows/Linux use the CI platform test or `pnpm check:static-build` for deterministic
+validation.
 
 Common validation commands:
 
@@ -79,7 +78,11 @@ pnpm gate:local
 
 Every non-empty branch name other than `main` is a development branch. Ordinary development-branch pushes do not run GitHub Actions; run `pnpm gate:local` before pushing, and dispatch CI manually when GitHub-runner evidence is needed. `main` is the only release branch and accepts Pull Requests from development branches. `Merge Gate` must complete all source checks.
 
-The repository now retains only the Electron Desktop build and Forge packaging entry points. Signing, notarization, cross-platform artifacts, or a formal Release workflow require a separate OpenSpec that defines target platforms, version authority, artifact closure, and real installation acceptance.
+The formal Release workflow accepts only an exact `v<Desktop version>` tag reachable from `main`.
+It creates a GitHub Release only after Developer ID signing, hardened runtime, notarization,
+stapling, Gatekeeper assessment, ZIP verification, and SHA-256 generation on Apple Silicon. Missing
+Apple credentials fail visibly; local package/make output remains ad-hoc signed and is not public
+release evidence.
 
 ## Project Entries
 

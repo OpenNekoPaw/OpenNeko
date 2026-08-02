@@ -82,36 +82,13 @@ describe('Sharp runtime staging', () => {
     );
   });
 
-  it('fails visibly with the missing target package name', async () => {
-    const root = await createTemporaryRoot();
-    const sourceRoot = join(root, 'sources');
-    for (const { packageName } of getSharpRuntimePackages('win32-x64')) {
-      if (packageName === '@img/sharp-win32-x64') continue;
-      const packageRoot = join(sourceRoot, packageName.replaceAll('/', '__'));
-      await mkdir(packageRoot, { recursive: true });
-      await writeFile(join(packageRoot, 'package.json'), JSON.stringify({ name: packageName }));
+  it('rejects Windows and Linux native targets', () => {
+    for (const target of ['win32-x64', 'linux-x64']) {
+      assert.throws(
+        () => getSharpRuntimePackages(target),
+        new RegExp(`Unsupported Sharp runtime target: ${target}`, 'u'),
+      );
     }
-    assert.throws(
-      () =>
-        stageSharpRuntime({
-          target: 'win32-x64',
-          outputRoot: join(root, 'dist'),
-          resolvePackageRoot: (packageName) => {
-            if (packageName === '@img/sharp-win32-x64') {
-              throw new Error(`Sharp runtime package is not installed: ${packageName}`);
-            }
-            return join(sourceRoot, packageName.replaceAll('/', '__'));
-          },
-        }),
-      /Sharp runtime package is not installed: @img\/sharp-win32-x64/u,
-    );
-  });
-
-  it('rejects the retired Linux target', () => {
-    assert.throws(
-      () => getSharpRuntimePackages('linux-x64'),
-      /Unsupported Sharp runtime target: linux-x64/u,
-    );
   });
 });
 

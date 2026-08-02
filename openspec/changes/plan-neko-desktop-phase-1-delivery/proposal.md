@@ -13,7 +13,8 @@ Assets/Canvas、Cut/Preview/resource、support domains 和 packaged qualificatio
 - ContentLocator 是 durable public identity；Main-owned resource gateway 是 renderer media 的
   唯一 materialization path。
 - CI deterministic evidence、real-provider Agent Evaluation 和 graphical Electron acceptance 分离。
-- 以 `darwin-arm64` 完整图形路径为 Phase 1 reference；`win32-x64` 保留 build/startup evidence。
+- 以 `darwin-arm64` 完整图形与 package 路径为 Phase 1 reference；Windows/Linux 只保留
+  deterministic test evidence。
 
 ## Capabilities
 

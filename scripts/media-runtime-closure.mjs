@@ -142,18 +142,14 @@ function inspectCapabilities(ffmpeg, ffprobe) {
 }
 
 function requiredCapabilitiesForTarget(target) {
-  if (target !== 'darwin-arm64' && target !== 'win32-x64') {
+  if (target !== 'darwin-arm64') {
     throw new Error(`Unsupported media runtime target: ${target}.`);
   }
-  const isDarwin = target === 'darwin-arm64';
   return Object.freeze({
-    hardwareAccelerators: Object.freeze(isDarwin ? ['videoToolbox'] : []),
+    hardwareAccelerators: Object.freeze(['videoToolbox']),
     decoders: COMMON_REQUIRED.decoders,
-    encoders: Object.freeze([
-      ...COMMON_REQUIRED.encoders,
-      ...(isDarwin ? ['h264VideoToolbox'] : ['h264']),
-    ]),
-    filters: Object.freeze([...COMMON_REQUIRED.filters, ...(isDarwin ? ['scaleVt'] : [])]),
+    encoders: Object.freeze([...COMMON_REQUIRED.encoders, 'h264VideoToolbox']),
+    filters: Object.freeze([...COMMON_REQUIRED.filters, 'scaleVt']),
   });
 }
 

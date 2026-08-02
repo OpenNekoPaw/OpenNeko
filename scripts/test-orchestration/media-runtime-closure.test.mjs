@@ -24,7 +24,7 @@ describe('OpenNeko media runtime closure', () => {
   it('requires an explicit verified bundle for packaged payloads', () => {
     const stageRoot = mkdtempSync(join(tmpdir(), 'openneko-media-stage-'));
     assert.throws(
-      () => stagePackagedMediaRuntime(stageRoot, 'win32-x64', undefined),
+      () => stagePackagedMediaRuntime(stageRoot, 'darwin-arm64', undefined),
       /requires NEKO_MEDIA_RUNTIME_ROOT/u,
     );
   });
@@ -54,43 +54,20 @@ describe('OpenNeko media runtime closure', () => {
     );
   });
 
-  it('requires the portable H.264 encoder for win32-x64', () => {
-    const root = createFixtureRuntime('win32-x64');
+  it('rejects Windows and Linux descriptor targets', () => {
+    const root = createFixtureRuntime();
     const descriptorPath = join(root, 'descriptor.json');
     const descriptor = JSON.parse(readFileSync(descriptorPath, 'utf8'));
-    descriptor.requiredCapabilities.encoders = descriptor.requiredCapabilities.encoders.filter(
-      (encoder) => encoder !== 'h264',
-    );
-    writeFileSync(descriptorPath, JSON.stringify(descriptor), 'utf8');
-
-    assert.throws(
-      () => assertRuntimeDirectory(root, 'win32-x64'),
-      /weakens required encoders capability h264/u,
-    );
-  });
-
-  it('rejects the retired Linux descriptor target', () => {
-    const root = createFixtureRuntime('win32-x64');
-    const descriptorPath = join(root, 'descriptor.json');
-    const descriptor = JSON.parse(readFileSync(descriptorPath, 'utf8'));
-    descriptor.target = 'linux-x64';
-    writeFileSync(descriptorPath, JSON.stringify(descriptor), 'utf8');
-
-    assert.throws(() => assertRuntimeDirectory(root, 'win32-x64'), /descriptor is invalid/u);
-  });
-
-  it('uses the Windows-native media build closure without Linux VAAPI', () => {
-    const source = readFileSync('scripts/build-media-runtime.sh', 'utf8');
-
-    assert.match(source, /win32-x64/u);
-    assert.match(source, /--target-os=mingw32/u);
-    assert.doesNotMatch(source, /--enable-vaapi/u);
-    assert.doesNotMatch(source, /--enable-libdrm/u);
-    assert.match(source, /--retry-all-errors/u);
+    for (const target of ['win32-x64', 'linux-x64']) {
+      descriptor.target = target;
+      writeFileSync(descriptorPath, JSON.stringify(descriptor), 'utf8');
+      assert.throws(() => assertRuntimeDirectory(root, 'darwin-arm64'), /descriptor is invalid/u);
+    }
   });
 });
 
-function createFixtureRuntime(target = 'darwin-arm64') {
+function createFixtureRuntime() {
+  const target = 'darwin-arm64';
   const root = mkdtempSync(join(tmpdir(), 'openneko-media-runtime-'));
   mkdirSync(join(root, 'bin'));
   const ffmpeg = Buffer.from('ffmpeg');
@@ -112,13 +89,10 @@ function createFixtureRuntime(target = 'darwin-arm64') {
         ffprobe: { file: 'bin/ffprobe', sha256: sha256(ffprobe) },
       },
       requiredCapabilities: {
-        hardwareAccelerators: target === 'darwin-arm64' ? ['videoToolbox'] : [],
+        hardwareAccelerators: ['videoToolbox'],
         decoders: ['h264', 'hevc', 'av1', 'vp8', 'vp9', 'aac', 'mp3', 'flac', 'dts'],
-        encoders: target === 'darwin-arm64' ? ['h264VideoToolbox', 'aac'] : ['h264', 'aac'],
-        filters:
-          target === 'darwin-arm64'
-            ? ['alimiter', 'loudnorm', 'ebur128', 'scaleVt']
-            : ['alimiter', 'loudnorm', 'ebur128'],
+        encoders: ['h264VideoToolbox', 'aac'],
+        filters: ['alimiter', 'loudnorm', 'ebur128', 'scaleVt'],
       },
     })}\n`,
   );

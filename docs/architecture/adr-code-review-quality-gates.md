@@ -126,8 +126,9 @@ coverage 和静态质量；不得启动 Electron GUI、依赖真实用户 fixtur
 
 `ci:local` 是 `gate:local` 的别名，`ci:remote` 是 `gate:remote` 的别名，`check:ci` 是远程
 源码门禁的基础组合。`act` 只能预检 Linux host-neutral job 形状，不替代 GitHub Actions
-中的真实 `darwin-arm64` / `win32-x64` package matrix。原生 package 是 Manual/Merge
-Gate 的必要证据，但仍不替代真实 GUI、安装、凭据与媒体场景。
+中的真实 `darwin-arm64` package job。Windows/Linux 只提供 platform-test 证据，不生成
+artifact。原生 macOS package 是 Manual/Merge Gate 的必要证据，但仍不替代真实 GUI、安装、
+凭据与媒体场景。
 
 CI 的测试证据分为全仓库 unit/contract coverage 与固定的 Desktop headless functional
 流程。后者可跨 Main/preload/composition 验证产品路径，但不得启动 Electron GUI、读取真实

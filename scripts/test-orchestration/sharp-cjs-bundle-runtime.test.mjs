@@ -7,10 +7,12 @@ import { afterEach, describe, it } from 'node:test';
 
 import { build } from 'esbuild';
 
+import { SUPPORTED_DESKTOP_TARGETS } from '../assert-supported-desktop-host.mjs';
 import { stageSharpRuntime } from '../stage-sharp-runtime.mjs';
 
 const require = createRequire(import.meta.url);
 const temporaryRoots = [];
+const nativeTarget = `${process.platform}-${process.arch}`;
 
 afterEach(async () => {
   await Promise.all(
@@ -19,46 +21,54 @@ afterEach(async () => {
 });
 
 describe('Sharp CommonJS bundle runtime', () => {
-  it('keeps Sharp external in every owning bundle and executes from its staged closure', async () => {
+  it('keeps Sharp external in the Desktop Main bundle', async () => {
     const desktopMainConfig = await readFile('apps/neko-desktop/vite.main.config.ts', 'utf8');
     assert.match(desktopMainConfig, /external:\s*\[['"]electron['"], ['"]sharp['"]\]/u);
-
-    const root = await mkdtemp(join(tmpdir(), 'openneko-sharp-cjs-bundle-'));
-    temporaryRoots.push(root);
-    const outputRoot = join(root, 'dist');
-    const bundlePath = join(outputRoot, 'extension.cjs');
-    const transportPath = resolve(
-      'packages/agent/runtime/src/provider/image-batch-transport.ts',
-    );
-    await build({
-      stdin: {
-        contents: `export { composeProviderImageBatches } from ${JSON.stringify(transportPath)};`,
-        resolveDir: process.cwd(),
-        sourcefile: 'sharp-contact-sheet-entry.ts',
-      },
-      bundle: true,
-      external: ['sharp'],
-      format: 'cjs',
-      outfile: bundlePath,
-      platform: 'node',
-    });
-    stageSharpRuntime({ outputRoot });
-
-    const runtime = require(bundlePath);
-    const sourceBytes = Buffer.from(
-      '<svg xmlns="http://www.w3.org/2000/svg" width="2" height="2"><rect width="2" height="2" fill="#fff"/></svg>',
-    );
-    const results = await runtime.composeProviderImageBatches(
-      [
-        { assetId: 'page-1', bytes: sourceBytes, mimeType: 'image/svg+xml' },
-        { assetId: 'page-2', bytes: sourceBytes, mimeType: 'image/svg+xml' },
-      ],
-      'overview',
-    );
-
-    assert.equal(results.length, 1);
-    assert.equal(results[0].mimeType, 'image/jpeg');
-    assert.deepEqual(results[0].sourceIndexes, [0, 1]);
-    assert.deepEqual([...results[0].bytes.subarray(0, 3)], [0xff, 0xd8, 0xff]);
   });
+
+  it(
+    'executes the staged Sharp closure on a supported native host',
+    {
+      skip: SUPPORTED_DESKTOP_TARGETS.includes(nativeTarget)
+        ? false
+        : `requires a supported native target; received ${nativeTarget}`,
+    },
+    async () => {
+      const root = await mkdtemp(join(tmpdir(), 'openneko-sharp-cjs-bundle-'));
+      temporaryRoots.push(root);
+      const outputRoot = join(root, 'dist');
+      const bundlePath = join(outputRoot, 'extension.cjs');
+      const transportPath = resolve('packages/agent/runtime/src/provider/image-batch-transport.ts');
+      await build({
+        stdin: {
+          contents: `export { composeProviderImageBatches } from ${JSON.stringify(transportPath)};`,
+          resolveDir: process.cwd(),
+          sourcefile: 'sharp-contact-sheet-entry.ts',
+        },
+        bundle: true,
+        external: ['sharp'],
+        format: 'cjs',
+        outfile: bundlePath,
+        platform: 'node',
+      });
+      stageSharpRuntime({ outputRoot, target: nativeTarget });
+
+      const runtime = require(bundlePath);
+      const sourceBytes = Buffer.from(
+        '<svg xmlns="http://www.w3.org/2000/svg" width="2" height="2"><rect width="2" height="2" fill="#fff"/></svg>',
+      );
+      const results = await runtime.composeProviderImageBatches(
+        [
+          { assetId: 'page-1', bytes: sourceBytes, mimeType: 'image/svg+xml' },
+          { assetId: 'page-2', bytes: sourceBytes, mimeType: 'image/svg+xml' },
+        ],
+        'overview',
+      );
+
+      assert.equal(results.length, 1);
+      assert.equal(results[0].mimeType, 'image/jpeg');
+      assert.deepEqual(results[0].sourceIndexes, [0, 1]);
+      assert.deepEqual([...results[0].bytes.subarray(0, 3)], [0xff, 0xd8, 0xff]);
+    },
+  );
 });

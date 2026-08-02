@@ -6,10 +6,10 @@
 
 本文只定义开发顺序、阶段边界和完成门禁。当前已发布/可运行事实仍以
 [`README_CN.md`](README_CN.md)、[`docs/architecture/client-targets.md`](docs/architecture/client-targets.md)
-和代码为准。Phase 1 领域接入仍在进行，因此 Desktop 尚不是受支持发布产品。原生构建目标
-已收敛为 `darwin-arm64` 与 `win32-x64`；macOS 已有本地 Forge package 证据，Windows 已
-进入真实 x64 CI package 门禁但完整运行态/发布资格仍待验证。Linux 只用于 host-neutral CI，
-Intel Mac 和其他架构不支持；专业工具、插件和 Desktop MCP 集成也尚未实现。
+和代码为准。Phase 1 领域接入仍在进行，因此 Desktop 尚不是受支持发布产品。原生 package /
+release 目标已收敛为 `darwin-arm64`；macOS 已有本地 Forge package 证据并建立正式
+Developer ID/公证 Release 门禁。Windows x64 与 Linux 只运行确定性测试，不生成 Desktop
+artifact；Intel Mac 和其他架构不支持。专业工具、插件和 Desktop MCP 集成也尚未实现。
 
 每个阶段必须拆成边界明确的 OpenSpec change，不允许用一个长期巨型 change 同时开发 Shell、
 跨平台、插件和全部专业工具。
@@ -20,8 +20,8 @@ Intel Mac 和其他架构不支持；专业工具、插件和 Desktop MCP 集成
 阶段 1：Desktop 前端与子包接入
   -> 稳定 Shell、状态协议和真实内容创作纵向路径
 
-阶段 2：跨平台资格验证
-  -> macOS / Windows 的真实安装、媒体、GPU、文件与发布证据
+阶段 2：macOS 发布资格验证
+  -> macOS 的真实安装、媒体、GPU、文件、签名、公证与发布证据
 
 阶段 3：MCP、插件与专业工具生态
   -> ComfyUI / NLE / Blender / Unity / Photoshop / Live2D 等受控集成
@@ -83,23 +83,21 @@ Intel Mac 和其他架构不支持；专业工具、插件和 Desktop MCP 集成
 - Desktop 不导入 VS Code Extension 私有实现，不恢复旧 Desktop、Workbench、Engine 或 client。
 - 第一阶段只在实施 OpenSpec 指定的参考平台做产品验收，不因此声明完整跨平台支持。
 
-## 阶段 2：跨平台能力与发布资格
+## 阶段 2：macOS 能力与发布资格
 
 ### 目标
 
-在不分叉领域逻辑和 Renderer 的前提下，让同一个 Desktop 应用通过 macOS 和 Windows
-的真实平台资格验证。Electron 能启动、交叉编译成功或单元测试通过都不等于平台支持。
+在不分叉领域逻辑和 Renderer 的前提下，让 Desktop 应用通过 Apple Silicon macOS 的真实
+发布资格验证。Electron 能启动、Forge package 成功或单元测试通过都不等于发布支持。
 
 ### 平台顺序
 
-| 目标           | 计划         | 资格边界                                                                    |
-| -------------- | ------------ | --------------------------------------------------------------------------- |
-| `darwin-arm64` | 第一参考平台 | 签名、公证、更新、Keychain、GPU/媒体、文件关联和真实创作流程                |
-| `win32-x64`    | 第二资格平台 | 验证安装/卸载、签名、更新、路径、长路径、进程、凭据、GPU/媒体和真实创作流程 |
+| 目标           | 计划         | 资格边界                                                     |
+| -------------- | ------------ | ------------------------------------------------------------ |
+| `darwin-arm64` | 唯一发布平台 | 签名、公证、Keychain、GPU/媒体、文件关联和真实创作流程       |
 
-当前原生构建闭集为 `darwin-arm64` 与 `win32-x64`。Windows package 证据不自动提升为
-完整产品资格；仍需完成本节运行态门禁。Linux 只允许运行 host-neutral CI，不得恢复
-Desktop artifact、native runtime 或 fallback；Intel Mac 和其他架构不支持。
+当前原生 package/release 闭集只有 `darwin-arm64`。Windows/Linux 只允许运行确定性 CI，
+不得恢复 Desktop artifact、native runtime 或 fallback；Intel Mac 和其他架构不支持。
 
 ### 横切能力
 

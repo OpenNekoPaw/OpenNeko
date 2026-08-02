@@ -32,12 +32,9 @@ describe('Desktop architecture boundaries', () => {
     expect(forgeConfig).toContain(
       'ad4a0ae3c37ee05aa06c7e2ed0627608389790f0505a2b0d20319efbe33ffe28',
     );
-    expect(forgeConfig).toContain('electron-v43.2.0-win32-x64.zip');
-    expect(forgeConfig).toContain(
-      'eba5f5088af40ecb364fe258809c79a5234c6ece5a75c64722772eba01b02786',
-    );
+    expect(forgeConfig).not.toContain('electron-v43.2.0-win32-');
     expect(forgeConfig).not.toContain('electron-v43.2.0-linux-');
-    expect(forgeConfig).toContain("new MakerZIP({}, ['darwin', 'win32'])");
+    expect(forgeConfig).toContain("new MakerZIP({}, ['darwin'])");
   });
 
   it('strictly configures every Electron V1 fuse', () => {

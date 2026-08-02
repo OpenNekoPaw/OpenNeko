@@ -7,9 +7,9 @@ Updated: 2026-07-31
 This roadmap defines delivery order and qualification gates. Current product facts remain defined by
 [`README.md`](README.md), [`docs/architecture/client-targets.md`](docs/architecture/client-targets.md),
 and the codebase. Phase 1 domain integration is still in progress and Desktop is not a supported
-release product. Native build targets are `darwin-arm64` and `win32-x64`; macOS has local Forge
-package evidence, while Windows is required by the real x64 CI package gate but still lacks complete
-runtime/release qualification. Linux is host-neutral CI only, Intel Mac and other architectures are
+release product. The sole native package/release target is `darwin-arm64`; macOS has local Forge
+package evidence and a formal Developer ID/notarization release gate. Windows x64 and Linux are
+deterministic test hosts only and produce no Desktop artifact. Intel Mac and other architectures are
 unsupported, and Desktop professional-tool/plugin integrations are not implemented.
 
 Each phase must be split into bounded OpenSpec changes. Shell, cross-platform work, the plugin
@@ -41,17 +41,14 @@ The phase is complete only when:
 
 Phase 1 uses an OpenSpec-selected reference platform and does not claim full cross-platform support.
 
-## Phase 2: Cross-platform qualification
+## Phase 2: macOS release qualification
 
-Qualify the same Desktop application on:
+Qualify `darwin-arm64` through real installation, startup, credential, native, media, creative
+workflow, Developer ID, notarization, Gatekeeper, and published-artifact evidence.
 
-1. `darwin-arm64`;
-2. `win32-x64`, through real Windows installation, startup, credential, native, media, and creative
-   workflow evidence.
-
-The native build set contains exactly `darwin-arm64` and `win32-x64`. Windows package construction
-does not complete product qualification. Linux remains a host-neutral CI runner and must not
-produce a Desktop artifact; Intel Mac and other architectures are unsupported.
+The native package/release set contains exactly `darwin-arm64`. Windows and Linux remain
+deterministic test hosts and must not produce a Desktop artifact; Intel Mac and other architectures
+are unsupported.
 
 Platform differences must stay behind narrow Host adapters and capability policies. Cross-compiling
 or launching Electron alone is not platform qualification.

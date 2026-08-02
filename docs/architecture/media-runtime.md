@@ -49,9 +49,9 @@ byte source、one-shot stream 或 frozen resource set，不解析 `ContentLocato
 - 10-bit、HDR10/PQ、HLG、HEVC、AV1、VP9：probe 与音频 PCM 可由 FFmpeg
   处理。未命中合格 native/remux profile 的视频只能进入目标平台的完整硬件闭包：
   `darwin-arm64` 使用 VideoToolbox 硬解、`scale_vt` 和
-  `h264_videotoolbox -allow_sw 0`。`win32-x64` 当前只有 portable software
-  descriptor baseline，尚无已资格化的 D3D11VA/DXVA2 decode/filter/encode 闭包，
-  因此不兼容视频明确 unavailable，不用 CPU 转码冒充预览成功。
+  `h264_videotoolbox -allow_sw 0`。Windows/Linux 不是 release target，不拥有 packaged
+  media descriptor 或可进入产品的 decode/filter/encode 闭包；不兼容视频明确
+  unavailable，不用 CPU 转码冒充预览成功。
   `libx264`、CPU `scale`、`zscale`、`tonemap` 以及编码前 `hwdownload`
   不得进入实时预览或预览代理路径。
 - 硬件 decoder/filter/encoder 缺失或拒绝源 profile 时返回
@@ -105,10 +105,9 @@ H.264 容器不兼容时完成 `-c:v copy` 的有界 MP4 后再发布普通 Rang
 后走同一个 `<video src>` contract；不允许 CPU fallback。平台命令、能力名和
 错误分类统一由 `@neko/media/node` backend strategy 拥有，Cut 不复制平台分支。
 
-当前原生构建 target 是 `darwin-arm64` 与 `win32-x64`。Windows package 和 portable
-FFmpeg descriptor 只建立构建/软件基线；完整媒体资格仍需通过同一 strategy 接入设备兼容的
-decode/filter/encode 闭包。`d3d11va` 只表达硬解能力，不能单独充当通用 Windows
-硬件转码 backend。Linux 仅运行 host-neutral 测试，不属于媒体 release target。
+当前原生 package/release target 只有 `darwin-arm64`。Windows/Linux 仅运行 host-neutral
+媒体与 orchestration 测试，不拥有 packaged FFmpeg descriptor、native runtime 或产品媒体
+backend；测试通过不构成媒体 release 资格。
 
 Cut 导出复用相同的 Clip 音频事实，但对完整节目执行两遍响度处理：第一遍
 测量 integrated loudness、true peak、loudness range、threshold 与 target
@@ -132,7 +131,7 @@ SHA-256、SPDX 和必要 hardware accelerator/codec/filter signature。Compositi
 feature 激活前校验 descriptor、真实路径、checksum 与运行时资格，再注入精确
 可执行路径。`NodeMediaRuntime.qualify()` 报告直接依赖的
 decoder/encoder/filter，包括 `loudnorm`、`ebur128`、`alimiter`、AAC、FLAC、
-DTS，以及 macOS 硬件视频闭包或 Windows portable software floor；缺少任一必要能力会阻断媒体 feature 激活，不归类
+DTS，以及 macOS 硬件视频闭包；缺少任一必要能力会阻断媒体 feature 激活，不归类
 为素材损坏。
 
 ## 损坏与部分结果

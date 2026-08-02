@@ -51,7 +51,8 @@
 - [x] 6.4.3 Run package-owned real Electron Preview scenarios proving the actual image/audio/video/PDF/GLB/glTF viewers, frozen dependency sets and exact session release.
 - [x] 6.4.4 Drive the real Desktop Agent complete-session input path through Pi Tool result, Timeline/conversation projection and the package-owned media card; prove the render URL never enters provider/Tool facts, or preserve the exact provider/model/cost infrastructure blocker without mock/direct injection.
 - [x] 6.4.5 Aggregate the development and applicable packaged consumer reports, prove the OpenNeko handler and package-owned consumers were hit, and prove every poisoned HTTP/legacy/fallback path remained untouched.
-- [x] 6.5 Run packaged `darwin-arm64`; keep native `win32-x64` typecheck/package green and record graphical Windows qualification as Phase 2.
+- [x] 6.5 Run packaged `darwin-arm64`; preserve the dated intermediate Windows evidence in
+      evaluation while the current platform contract keeps Windows/Linux test-only.
 
 ## 7. Documentation And Quality Gates
 

@@ -369,9 +369,9 @@ tool、未验证 exchange format 或成功 no-op。
    adapter，不建立跨领域万能 exporter。
 6. 逐工具、逐版本、逐平台扩大 capability level；无真实应用证据时保持 unavailable。
 
-当前原生构建平台闭集是 `darwin-arm64` 与 `win32-x64`，Linux 只用于 host-neutral CI。
-Integration 只声明目标软件真实支持且已经验证的平台；Windows package 不能替代逐工具
-运行态准入。某工具不支持当前 OS 时返回
+当前原生打包/发布平台闭集只有 `darwin-arm64`；Windows/Linux 只运行确定性测试。
+Integration 只声明目标软件真实支持且已经验证的平台；非 macOS 测试不能替代逐工具运行态
+准入。某工具不支持当前 OS 时返回
 `unsupported-platform`，不能通过 Wine、远程 UI 或未验证兼容层返回成功。
 Computer Use 还必须逐平台资格化 Screen Recording、Accessibility/Input、窗口枚举和
 受限截图能力；平台可启动应用不等于具备 Computer Use。远程桌面、锁屏或 headless

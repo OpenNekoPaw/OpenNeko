@@ -4,7 +4,6 @@
     "node": "24.0.0"
   },
   "targets": [
-    { "host": "electron-main", "os": "darwin", "arch": "arm64" },
-    { "host": "electron-main", "os": "win32", "arch": "x64" }
+    { "host": "electron-main", "os": "darwin", "arch": "arm64" }
   ]
 }

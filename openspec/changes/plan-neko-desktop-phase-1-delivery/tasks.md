@@ -36,7 +36,8 @@
       workflow with exact identity and side-effect assertions.
 - [ ] 4.3 Assert canonical-path counters/poisoning for Pi runtime/session, product controllers, package
       Roots, resource gateway, project writer and domain Jobs.
-- [ ] 4.4 Verify `darwin-arm64` package/install/startup and obtain `win32-x64` build/startup evidence.
+- [ ] 4.4 Verify `darwin-arm64` package/install/startup and retain Windows/Linux deterministic tests
+      without native artifacts.
 - [ ] 4.5 Run applicable package tests, build/check/quality gates, real-provider cases and Electron UI
       scenarios with explicit blockers and residual risks.
 - [ ] 4.6 Update current-capability documentation without claiming unsupported later-phase platforms or
