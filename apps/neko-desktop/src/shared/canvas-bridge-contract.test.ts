@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { createCanvasHostSessionId } from '@neko-canvas/domain';
 import {
-  createDesktopCanvasSessionId,
   isSameCanvasHostIdentity,
   parseDesktopCanvasHostIdentity,
   parseDesktopCanvasMediaRequest,
@@ -23,9 +23,7 @@ const identity = {
 describe('Desktop Canvas bridge contract', () => {
   it('parses every explicit owner identity field', () => {
     expect(parseDesktopCanvasHostIdentity(identity)).toEqual(identity);
-    expect(createDesktopCanvasSessionId(identity.viewId, identity.viewEpoch)).toBe(
-      identity.sessionId,
-    );
+    expect(createCanvasHostSessionId(identity.viewId, identity.viewEpoch)).toBe(identity.sessionId);
     expect(isSameCanvasHostIdentity(identity, { ...identity })).toBe(true);
   });
 

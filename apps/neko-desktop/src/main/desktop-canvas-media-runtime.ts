@@ -3,8 +3,8 @@ import * as path from 'node:path';
 import type { HtmlAudioDescriptor, HtmlVideoDescriptor, MediaProbe } from '@neko/media';
 import { NodeMediaRuntime, type NodeMediaPublisher } from '@neko/media/node';
 import type { CanvasHostRuntimeIdentity } from '@neko-canvas/domain';
-import type { DesktopWorkspaceResolution } from './desktop-workspace-registry';
-import { resolveDesktopWorkspaceContentLocator } from './desktop-content-locator';
+import type { AssetWorkspaceResolution } from '@neko-assets/domain/contracts';
+import { resolveWorkspaceContentLocator } from '@neko-assets/node';
 import type { DesktopResourceRegistry } from './desktop-resource-registry';
 import type {
   DesktopCanvasMediaInfo,
@@ -67,7 +67,7 @@ export class DesktopCanvasMediaRuntime {
 
   async execute(
     request: DesktopCanvasMediaRequest,
-    workspace: DesktopWorkspaceResolution,
+    workspace: AssetWorkspaceResolution,
   ): Promise<DesktopCanvasMediaResponse | undefined> {
     this.requireActive();
     const key = streamKey(request.identity, request.nodeId);
@@ -111,10 +111,10 @@ export class DesktopCanvasMediaRuntime {
 
   private async probe(
     request: Extract<DesktopCanvasMediaRequest, { readonly type: 'media:probe' }>,
-    workspace: DesktopWorkspaceResolution,
+    workspace: AssetWorkspaceResolution,
   ): Promise<DesktopCanvasMediaResponse> {
     try {
-      const sourcePath = await resolveDesktopWorkspaceContentLocator(workspace, request.locator);
+      const sourcePath = await resolveWorkspaceContentLocator(workspace, request.locator);
       return {
         type: 'media:probeResult',
         nodeId: request.nodeId,
@@ -131,11 +131,11 @@ export class DesktopCanvasMediaRuntime {
 
   private async play(
     request: Extract<DesktopCanvasMediaRequest, { readonly type: 'media:play' }>,
-    workspace: DesktopWorkspaceResolution,
+    workspace: AssetWorkspaceResolution,
     key: string,
   ): Promise<DesktopCanvasMediaResponse> {
     try {
-      const sourcePath = await resolveDesktopWorkspaceContentLocator(workspace, request.locator);
+      const sourcePath = await resolveWorkspaceContentLocator(workspace, request.locator);
       await this.stopKey(key);
       const handle = await this.startPlayback(
         request.identity,
@@ -189,10 +189,10 @@ export class DesktopCanvasMediaRuntime {
 
   private async captureFrame(
     request: Extract<DesktopCanvasMediaRequest, { readonly type: 'media:captureFrame' }>,
-    workspace: DesktopWorkspaceResolution,
+    workspace: AssetWorkspaceResolution,
   ): Promise<DesktopCanvasMediaResponse> {
     try {
-      const sourcePath = await resolveDesktopWorkspaceContentLocator(workspace, request.locator);
+      const sourcePath = await resolveWorkspaceContentLocator(workspace, request.locator);
       return {
         type: 'media:captureFrameResult',
         nodeId: request.nodeId,

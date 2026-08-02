@@ -27,7 +27,7 @@ import type {
 } from '@neko/host/ports';
 import type { ILogger } from '@neko/shared/logger';
 import { PathResolver, type PathVariableMap } from '@neko/shared/path';
-import { resolveStorageLayout } from '@neko/shared/types/storage';
+import { resolveStorageLayout } from '@neko/local-metadata';
 
 export interface ElectronNekoHostPortsOptions {
   readonly homedir: string;

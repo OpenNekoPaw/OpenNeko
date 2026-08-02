@@ -3,7 +3,7 @@ import {
   RESOURCE_BROWSER_CONTRACT_VERSION,
   type ResourceBrowserIdentity,
   type ResourceBrowserProjection,
-} from 'neko-assets/resource-browser/contract';
+} from '@neko-assets/domain/resource-browser/contract';
 import type { OpenNekoDesktopResourceBrowserBridge } from '../shared/resource-browser-bridge-contract';
 import { createElectronResourceBrowserHostRuntime } from './desktop-resource-browser-host-runtime';
 

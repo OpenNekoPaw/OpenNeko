@@ -1,8 +1,8 @@
-import { normalizeLocale, type SupportedLocale } from '@neko/shared';
-import { createWebviewI18n } from '@neko/shared/i18n/webview';
+import { normalizeLocale, type SupportedLocale } from '@neko/ui/i18n';
+import { createWebviewI18n } from '@neko/ui/i18n/webview';
 import { en } from './locales/en';
 import { zhCN } from './locales/zh-cn';
-import type { DesktopLocalePreference } from '../../shared/application-settings-contract';
+import type { DesktopLocalePreference } from '@neko/host/application-settings';
 
 export function createDesktopI18n(locale: SupportedLocale) {
   return createWebviewI18n({

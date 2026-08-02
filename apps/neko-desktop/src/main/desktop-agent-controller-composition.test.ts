@@ -1,18 +1,16 @@
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createOpenNekoPiModels } from '@neko/agent/pi';
-import { createToolRegistry } from '@neko/agent/tool-registry';
+import { createOpenNekoPiModels } from '@neko-agent/runtime/pi';
+import { createToolRegistry } from '@neko-agent/runtime/tool-registry';
 import type {
   AgentHostToWebviewMessage,
   AgentTurnTimelineToolCallItem,
   ConversationProjectionSnapshot,
-} from '@neko-agent/types';
+} from '@neko-agent/contracts';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { DesktopAgentWorkspaceRuntime } from './desktop-agent-app-host-composition';
-import {
-  auditDesktopAgentStartup,
-} from './desktop-agent-bridge-runtime';
+import { auditDesktopAgentStartup } from './desktop-agent-bridge-runtime';
 import {
   createDesktopAgentControllerComposition,
   projectDesktopAgentSecretSafeConfig,

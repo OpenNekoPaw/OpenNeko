@@ -1,5 +1,5 @@
 import type { CanvasHostRuntimeIdentity } from '@neko-canvas/domain';
-import { isContentLocator, type WorkspaceFileContentLocator } from '@neko/shared';
+import { isContentLocator, type WorkspaceFileContentLocator } from '@neko/content';
 import type { DesktopCanvasMediaRequest } from '../shared/canvas-bridge-contract';
 
 const DESKTOP_CANVAS_MEDIA_MESSAGE_TYPES = new Set([
@@ -191,11 +191,7 @@ function parsePreviewVariantMessage(message: unknown): {
   const contentLocator = readCanvasContentLocator(message);
   const role = message['role'];
   const mediaType = message['mediaType'];
-  if (
-    typeof requestId !== 'string' ||
-    requestId.length === 0 ||
-    !contentLocator
-  ) {
+  if (typeof requestId !== 'string' || requestId.length === 0 || !contentLocator) {
     throw new Error('Desktop Canvas preview message is invalid.');
   }
   if (role !== 'source' && role !== 'thumbnail' && role !== 'proxy' && role !== 'fov-crop') {
@@ -215,12 +211,10 @@ function parsePreviewVariantMessage(message: unknown): {
 function readCanvasContentLocator(
   message: Record<string, unknown>,
 ): WorkspaceFileContentLocator | undefined {
-  return (
-    isContentLocator(message['contentLocator']) &&
+  return isContentLocator(message['contentLocator']) &&
     message['contentLocator'].kind === 'workspace-file'
-      ? message['contentLocator']
-      : undefined
-  );
+    ? message['contentLocator']
+    : undefined;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

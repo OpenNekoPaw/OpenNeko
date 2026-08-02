@@ -3,8 +3,8 @@
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { I18nProvider } from '@neko/shared/i18n/react';
-import type { AgentHostRuntimeAdapter } from '@neko-agent/types';
+import { I18nProvider } from '@neko/ui/i18n/react';
+import type { AgentHostRuntimeAdapter } from '@neko-agent/contracts';
 import { DesktopAgentSurface, prepareDesktopAgentSurfaceResources } from './DesktopAgentSurface';
 import { createDesktopI18n } from './i18n';
 

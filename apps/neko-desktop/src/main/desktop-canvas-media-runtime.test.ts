@@ -109,7 +109,7 @@ describe('DesktopCanvasMediaRuntime', () => {
     expect(response).toMatchObject({
       type: 'media:probeResult',
       nodeId: 'audio-1',
-      error: 'Desktop ContentLocator is outside its authorized source.',
+      error: 'ContentLocator is outside its authorized workspace source.',
     });
     expect(media.probe).not.toHaveBeenCalled();
     await runtime.dispose();
@@ -191,9 +191,7 @@ describe('DesktopCanvasMediaRuntime', () => {
     if (response?.type !== 'media:streamReady' || !response.audio) {
       throw new Error('Expected native Canvas audio descriptor.');
     }
-    expect(response.audio.url).toMatch(
-      /^openneko:\/\/resource\/[A-Za-z0-9_-]{32}$/u,
-    );
+    expect(response.audio.url).toMatch(/^openneko:\/\/resource\/[A-Za-z0-9_-]{32}$/u);
     expect(await (await fetchResource(response.audio.url)).text()).toBe('fixture');
 
     registry.releaseWindow(identity.windowId);

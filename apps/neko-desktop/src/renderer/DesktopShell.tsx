@@ -24,7 +24,7 @@ import {
   WorkbenchEditorTabs,
   type ControlledWorkbenchResizeBinding,
 } from '@neko/ui';
-import { useTranslation } from '@neko/shared/i18n/react';
+import { useTranslation } from '@neko/ui/i18n/react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type {
   DesktopAgentHomeConversationSummary,
@@ -54,7 +54,8 @@ import { DesktopCanvasSurface } from './DesktopCanvasSurface';
 import { DesktopCutSurface } from './DesktopCutSurface';
 import { DesktopSettingsSurface } from './DesktopSettingsSurface';
 import { DesktopGlobalLibrarySurface } from './DesktopGlobalLibrarySurface';
-import { DesktopProjectPortabilityControl } from './DesktopProjectPortabilityControl';
+import { ProjectPortabilityControl } from '@neko-assets/webview/project-portability/control';
+import type { OpenNekoDesktopProjectPortabilityBridge } from '@neko-assets/domain/contracts';
 import {
   DesktopApplicationBrand,
   DesktopApplicationNavigationButton,
@@ -388,6 +389,7 @@ export function DesktopApplication(): JSX.Element {
             pending={pending}
             projection={projection}
             project={activeProject}
+            projectPortabilityPort={window.openNekoDesktop.projectPortability}
             initialConversation={
               agentNavigationTarget?.navigation.projectId === activeProject.projectId &&
               agentNavigationTarget.navigation.workspaceId === activeProject.workspaceId
@@ -1309,6 +1311,7 @@ function ContentProjectWorkspace({
   pending,
   projection,
   project,
+  projectPortabilityPort,
 }: {
   readonly actions: ShellActions;
   readonly initialConversation?: { readonly id: string; readonly title: string };
@@ -1316,6 +1319,7 @@ function ContentProjectWorkspace({
   readonly pending: boolean;
   readonly projection: DesktopShellProjection;
   readonly project: DesktopProjectCatalogItem;
+  readonly projectPortabilityPort?: OpenNekoDesktopProjectPortabilityBridge['projectPortability'];
 }): JSX.Element {
   const { t } = useTranslation();
   const [cutTimelineTarget, setCutTimelineTarget] = useState<HTMLDivElement | null>(null);
@@ -1471,6 +1475,7 @@ function ContentProjectWorkspace({
           pending={pending}
           project={project}
           projection={projection}
+          projectPortabilityPort={projectPortabilityPort}
           compact={!workbench.primarySidebar.visible}
         />
       }
@@ -1914,12 +1919,14 @@ function ProjectPrimarySidebar({
   project,
   projection,
   compact,
+  projectPortabilityPort,
 }: {
   readonly actions: ShellActions;
   readonly pending: boolean;
   readonly project: DesktopProjectCatalogItem;
   readonly projection: DesktopShellProjection;
   readonly compact: boolean;
+  readonly projectPortabilityPort?: OpenNekoDesktopProjectPortabilityBridge['projectPortability'];
 }): JSX.Element {
   const workbench = projection.window.workbench;
   const togglePrimarySidebar = (): void => {
@@ -1946,11 +1953,15 @@ function ProjectPrimarySidebar({
           <WorkbenchDisplayMenu actions={actions} disabled={pending} projection={projection} />
         }
         lifecycleControl={
-          <DesktopProjectPortabilityControl
-            disabled={pending}
-            project={project}
-            projection={projection}
-          />
+          projectPortabilityPort ? (
+            <ProjectPortabilityControl
+              disabled={pending}
+              endpointEpoch={projection.endpointEpoch}
+              project={project}
+              port={projectPortabilityPort}
+              windowId={projection.window.windowId}
+            />
+          ) : undefined
         }
       />
     </DesktopApplicationSidebarFrame>

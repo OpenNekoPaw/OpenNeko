@@ -3,12 +3,12 @@ import {
   RESOURCE_BROWSER_CONTRACT_VERSION,
   createResourceBrowserRecoveryPlanRequest,
   createResourceBrowserSnapshotRequest,
-} from 'neko-assets/resource-browser/contract';
+} from '@neko-assets/domain/resource-browser/contract';
 import { DESKTOP_RESOURCE_BROWSER_CHANNELS } from '../shared/resource-browser-bridge-contract';
 import {
   DESKTOP_PROJECT_PORTABILITY_CHANNELS,
   createDesktopProjectPortabilityRequest,
-} from '../shared/project-portability-contract';
+} from '@neko-assets/domain/contracts';
 
 const electron = vi.hoisted(() => ({
   bridge: undefined as typeof window.openNekoDesktop | undefined,
@@ -204,9 +204,7 @@ describe('Desktop Resource Browser recovery preload bridge', () => {
             operationRevision: 'sha256:abc',
             entryCount: 1,
             totalByteLength: 12,
-            libraries: [
-              { libraryName: 'Footage', entryCount: 1, totalByteLength: 12 },
-            ],
+            libraries: [{ libraryName: 'Footage', entryCount: 1, totalByteLength: 12 }],
           },
         };
       },

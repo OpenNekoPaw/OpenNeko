@@ -4,14 +4,6 @@
     "target": "ES2022",
     "module": "ESNext",
     "moduleResolution": "bundler",
-    "baseUrl": ".",
-    "paths": {
-      "@/*": ["../../packages/neko-agent-webview/src/*"],
-      "@neko-agent/types": ["../../packages/neko-agent-types/src/index.ts"],
-      "@neko-agent/types/*": ["../../packages/neko-agent-types/src/*"],
-      "@neko/shared": ["../../packages/neko-types/src/index.ts"],
-      "@neko/shared/*": ["../../packages/neko-types/src/*"]
-    },
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "jsx": "react-jsx",
     "strict": true,

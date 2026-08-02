@@ -2,8 +2,8 @@ import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { PREVIEW_HOST_RUNTIME_ROUTES, PREVIEW_HOST_RUNTIME_VERSION } from '@neko-preview/contracts';
-import type { ResourceBrowserIdentity } from 'neko-assets/resource-browser/contract';
+import { PREVIEW_HOST_RUNTIME_ROUTES, PREVIEW_HOST_RUNTIME_VERSION } from '@neko-preview/domain';
+import type { ResourceBrowserIdentity } from '@neko-assets/domain/resource-browser/contract';
 import {
   DESKTOP_PRIMARY_MAIN_GROUP_ID,
   DESKTOP_SECONDARY_MAIN_GROUP_ID,
@@ -478,27 +478,20 @@ describe('DesktopPreviewRuntime', () => {
     expect(projection.descriptor.resourceUris).toEqual({
       'scene.gltf': projection.descriptor.url,
       'scene.bin': new URL('scene.bin', projection.descriptor.url).toString(),
-      'textures/base.png': new URL(
-        'textures/base.png',
-        projection.descriptor.url,
-      ).toString(),
+      'textures/base.png': new URL('textures/base.png', projection.descriptor.url).toString(),
     });
     expect(await (await fetchResource(projection.descriptor.url)).json()).toMatchObject({
       buffers: [{ uri: 'scene.bin' }],
     });
     expect(
-      await (
-        await fetchResource(new URL('scene.bin', projection.descriptor.url))
-      ).text(),
+      await (await fetchResource(new URL('scene.bin', projection.descriptor.url))).text(),
     ).toBe('buffer');
     expect(
-      await (
-        await fetchResource(new URL('textures/base.png', projection.descriptor.url))
-      ).text(),
+      await (await fetchResource(new URL('textures/base.png', projection.descriptor.url))).text(),
     ).toBe('image');
-    expect(
-      (await fetchResource(new URL('undeclared.bin', projection.descriptor.url))).status,
-    ).toBe(404);
+    expect((await fetchResource(new URL('undeclared.bin', projection.descriptor.url))).status).toBe(
+      404,
+    );
 
     runtime.dispose();
     expect((await fetchResource(projection.descriptor.url)).status).toBe(404);

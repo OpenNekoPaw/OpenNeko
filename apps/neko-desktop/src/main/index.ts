@@ -35,7 +35,7 @@ import {
   DesktopShellStateRepository,
 } from './shell-state-repository';
 import { createDesktopAgentAppHostComposition } from './desktop-agent-app-host-composition';
-import { NodePiConversationCatalogReader } from '@neko/agent/pi';
+import { NodePiConversationCatalogReader } from '@neko-agent/runtime/pi';
 import { NodeVideoThumbnail } from '@neko/media/node';
 import {
   resolveDesktopAgentAutomationLaunch,
@@ -48,17 +48,17 @@ import { createDesktopAgentControllerComposition } from './desktop-agent-control
 import { createEncryptedDesktopSecretPort } from './encrypted-desktop-secret-port';
 import { createMacOSProtectedAuthPrompt } from './macos-protected-auth-prompt';
 import { closeDesktopWindows } from './window-lifecycle';
-import { resolveGlobalStorageLayout } from '@neko/shared/types/storage';
+import { resolveGlobalStorageLayout } from '@neko/local-metadata';
 import {
-  DesktopResourceBrowserRuntime,
-  type DesktopResourceBrowserRuntimeOptions,
-} from './desktop-resource-browser-runtime';
+  ResourceBrowserNodeRuntime,
+  type ResourceBrowserNodeRuntimeOptions,
+} from '@neko-assets/node';
 import {
   DesktopResourceRegistry,
   registerDesktopResourceRequestAuthorization,
 } from './desktop-resource-registry';
 import { DesktopPreviewRuntime } from './desktop-preview-runtime';
-import { DesktopCanvasGenerationRuntime } from './desktop-canvas-generation-runtime';
+import { CanvasGenerationNodeRuntime } from '@neko-canvas/node';
 import { DesktopCanvasRuntime } from './desktop-canvas-runtime';
 import { DesktopCanvasMediaRuntime } from './desktop-canvas-media-runtime';
 import { DesktopCutRuntime } from './desktop-cut-runtime';
@@ -67,25 +67,25 @@ import {
   createNodeDesktopApplicationSettingsFilePort,
   DesktopApplicationSettingsRepository,
 } from './application-settings-repository';
-import { DesktopApplicationSettingsService } from './application-settings-service';
+import { DesktopApplicationSettingsService } from '@neko/host/application-settings-service';
 import {
   DESKTOP_APPLICATION_SETTINGS_CHANNELS,
   type DesktopApplicationSettingsProjectionEvent,
-} from '../shared/application-settings-contract';
-import { buildConfigFilePath } from '@neko/platform/files';
+} from '@neko/host/application-settings';
+import { buildConfigFilePath } from '@neko/host/files';
 import { resolveDesktopBuiltinSkillRoot } from './desktop-builtin-skill-root';
-import { listWorkspaceLinkedMediaLibraries } from '@neko/shared/node/workspace-linked-media-libraries';
+import { listWorkspaceLinkedMediaLibraries } from '@neko-assets/node';
 import {
-  listDesktopGlobalMediaLibraryConnections,
-  resolveDesktopGlobalMediaLibraryTarget,
-} from './desktop-global-media-library-files';
+  listGlobalMediaLibraryConnections,
+  resolveGlobalMediaLibraryTarget,
+} from '@neko-assets/node';
 import {
   createDesktopExtensionManager,
   createOpenNekoExtensionRepository,
 } from './desktop-extension-manager';
 import { createDesktopExtensionAgentSupport } from './desktop-plugin-runtime';
-import { createDesktopPersonalSkillManager } from './desktop-personal-skill-manager';
-import { DesktopProjectPortabilityRuntime } from './desktop-project-portability-runtime';
+import { createPersonalSkillManager } from '@neko-agent/runtime/pi';
+import { ProjectPortabilityRuntime } from '@neko-assets/node';
 
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string | undefined;
 declare const MAIN_WINDOW_VITE_NAME: string;
@@ -248,7 +248,7 @@ async function startDesktop(): Promise<void> {
     }
     return owner;
   };
-  const personalSkillManager = createDesktopPersonalSkillManager({
+  const personalSkillManager = createPersonalSkillManager({
     personalSkillRoot: path.join(homedir, '.agents', 'skills'),
     selectDirectory: async (windowId) => {
       const result = await dialog.showOpenDialog(requireOwnerWindow(windowId), {
@@ -320,7 +320,7 @@ async function startDesktop(): Promise<void> {
     },
   });
   const canvasUsesChineseLabels = app.getLocale().toLocaleLowerCase().startsWith('zh');
-  const canvasGenerationRuntime = new DesktopCanvasGenerationRuntime({ homedir });
+  const canvasGenerationRuntime = new CanvasGenerationNodeRuntime({ homedir });
   const canvasRuntime = new DesktopCanvasRuntime({
     shell: shellService,
     host,
@@ -410,7 +410,7 @@ async function startDesktop(): Promise<void> {
     },
     requestGlobalMediaLibraryCopy: async ({ identity, suggestedFileName }) => {
       const libraries = (
-        await listDesktopGlobalMediaLibraryConnections(globalStorage.mediaLibraries)
+        await listGlobalMediaLibraryConnections(globalStorage.mediaLibraries)
       ).filter((library) => library.availability === 'available');
       const libraryId = await selectCanvasMediaLibrary({
         owner: requireOwnerWindow(identity.windowId),
@@ -419,7 +419,7 @@ async function startDesktop(): Promise<void> {
         identities: libraries.map((candidate) => candidate.libraryId),
       });
       if (!libraryId) return undefined;
-      const targetRoot = await resolveDesktopGlobalMediaLibraryTarget({
+      const targetRoot = await resolveGlobalMediaLibraryTarget({
         mediaLibraryRoot: globalStorage.mediaLibraries,
         libraryId,
       });
@@ -493,7 +493,7 @@ async function startDesktop(): Promise<void> {
     createPreviewVariant: ({ absolutePath }) =>
       createDesktopThumbnailDataUrl(absolutePath, { width: 640, height: 400 }),
   });
-  const resourceBrowser = new DesktopResourceBrowserRuntime({
+  const resourceBrowser = new ResourceBrowserNodeRuntime({
     globalAssetRoot: globalStorage.assets,
     globalMediaLibraryRoot: globalStorage.mediaLibraries,
     localMetadataRepositories: workspaceRegistry.metadataRepositories,
@@ -608,7 +608,7 @@ async function startDesktop(): Promise<void> {
   if (!metadataRepositories) {
     throw new Error('Desktop project portability requires the local metadata repository.');
   }
-  const projectPortability = new DesktopProjectPortabilityRuntime({
+  const projectPortability = new ProjectPortabilityRuntime({
     globalMediaLibraryRoot: globalStorage.mediaLibraries,
     metadataRepositories,
     shell: shellService,
@@ -1095,7 +1095,7 @@ async function createDesktopThumbnailDataUrl(
   throw new Error('Desktop could not project a thumbnail for this resource.');
 }
 
-function createDesktopGlobalLibraryThumbnailFactory(): DesktopResourceBrowserRuntimeOptions['createGlobalLibraryThumbnail'] {
+function createDesktopGlobalLibraryThumbnailFactory(): ResourceBrowserNodeRuntimeOptions['createGlobalLibraryThumbnail'] {
   const videoThumbnail = new NodeVideoThumbnail();
   const runBounded = createBoundedOperationRunner(4);
   return (input) =>

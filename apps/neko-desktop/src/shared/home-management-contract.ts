@@ -11,7 +11,7 @@ import {
   type GlobalLibraryThumbnailResult,
   type GlobalMediaLibraryItem,
   type GlobalMediaLibraryLocationKind,
-} from 'neko-assets/global-library/contract';
+} from '@neko-assets/domain/global-library/contract';
 
 export const DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION = 8 as const;
 
@@ -36,7 +36,7 @@ export const DESKTOP_HOME_MANAGEMENT_CHANNELS = {
 
 export type DesktopHomeCatalogSort = GlobalLibraryCatalogSort;
 export type DesktopHomeSortDirection = GlobalLibrarySortDirection;
-export type DesktopHomeMediaLibraryLocationKind = GlobalMediaLibraryLocationKind;
+export type MediaLibraryLocationKind = GlobalMediaLibraryLocationKind;
 export type DesktopHomeAssetItem = GlobalAssetItem;
 export type DesktopHomeMediaLibraryItem = GlobalMediaLibraryItem;
 
@@ -65,8 +65,7 @@ export interface DesktopHomeAssetRemoveRequest extends DesktopHomeExpectedRevisi
 }
 
 export interface DesktopHomeLibraryThumbnailRequest
-  extends DesktopHomeManagementRequest,
-    GlobalLibraryThumbnailRequest {}
+  extends DesktopHomeManagementRequest, GlobalLibraryThumbnailRequest {}
 
 export type DesktopHomeAssetImportOutcome = GlobalAssetImportOutcome;
 
@@ -94,9 +93,7 @@ export interface DesktopHomeAssetRemoveResult {
 }
 
 export interface DesktopHomeLibraryThumbnailResult
-  extends DesktopHomeManagementIdentity,
-    GlobalLibraryThumbnailResult {
-}
+  extends DesktopHomeManagementIdentity, GlobalLibraryThumbnailResult {}
 
 export type DesktopHomeAssetSearchResult =
   | {
@@ -129,7 +126,7 @@ export interface DesktopHomeMediaLibraryChildrenRequest extends DesktopHomeManag
 }
 
 export interface DesktopHomeMediaLibraryAddRequest extends DesktopHomeManagementRequest {
-  readonly locationKind: DesktopHomeMediaLibraryLocationKind;
+  readonly locationKind: MediaLibraryLocationKind;
   readonly expectedRevision: number;
 }
 
@@ -216,11 +213,7 @@ export interface DesktopHomeSkillItem {
 }
 
 export type DesktopHomeExtensionAgentStatus =
-  | 'not-installed'
-  | 'ready'
-  | 'partial'
-  | 'unsupported'
-  | 'error';
+  'not-installed' | 'ready' | 'partial' | 'unsupported' | 'error';
 
 export interface DesktopHomeExtensionItem {
   readonly id: string;
@@ -334,9 +327,7 @@ export interface OpenNekoDesktopHomeManagementBridge {
       remove(assetId: string, expectedRevision: number): Promise<DesktopHomeAssetRemoveResult>;
     };
     readonly libraryThumbnails: {
-      resolve(
-        request: GlobalLibraryThumbnailRequest,
-      ): Promise<DesktopHomeLibraryThumbnailResult>;
+      resolve(request: GlobalLibraryThumbnailRequest): Promise<DesktopHomeLibraryThumbnailResult>;
     };
     readonly mediaLibraries: {
       search(input: {
@@ -353,7 +344,7 @@ export interface OpenNekoDesktopHomeManagementBridge {
         readonly limit?: number;
       }): Promise<DesktopHomeMediaLibraryChildrenResult>;
       addLibrary(
-        locationKind: DesktopHomeMediaLibraryLocationKind,
+        locationKind: MediaLibraryLocationKind,
         expectedRevision: number,
       ): Promise<DesktopHomeMediaLibraryAddResult>;
       relinkLibrary(
@@ -470,9 +461,7 @@ export function createDesktopHomeAssetRemoveRequest(
   };
 }
 
-export function parseDesktopHomeAssetRemoveRequest(
-  value: unknown,
-): DesktopHomeAssetRemoveRequest {
+export function parseDesktopHomeAssetRemoveRequest(value: unknown): DesktopHomeAssetRemoveRequest {
   const record = requireExactRecord(
     value,
     ['schemaVersion', 'requestId', 'endpointEpoch', 'assetId', 'expectedRevision'],
@@ -629,7 +618,7 @@ export function parseDesktopHomeMediaLibraryChildrenRequest(
 export function createDesktopHomeMediaLibraryAddRequest(
   requestId: string,
   endpointEpoch: string,
-  locationKind: DesktopHomeMediaLibraryLocationKind,
+  locationKind: MediaLibraryLocationKind,
   expectedRevision: number,
 ): DesktopHomeMediaLibraryAddRequest {
   return {
@@ -693,9 +682,7 @@ export function createDesktopHomeExtensionsRequest(
   return createDesktopHomeRequestIdentity(requestId, endpointEpoch);
 }
 
-export function parseDesktopHomeExtensionsRequest(
-  value: unknown,
-): DesktopHomeExtensionsRequest {
+export function parseDesktopHomeExtensionsRequest(value: unknown): DesktopHomeExtensionsRequest {
   const record = requireExactRecord(
     value,
     ['schemaVersion', 'requestId', 'endpointEpoch'],
@@ -799,24 +786,14 @@ export function parseDesktopHomeAssetSearchResult(
   value: unknown,
   expectedRequestId: string,
 ): DesktopHomeAssetSearchResult {
-  return parseSearchResult(
-    value,
-    expectedRequestId,
-    'Asset Library',
-    parseGlobalAssetItem,
-  );
+  return parseSearchResult(value, expectedRequestId, 'Asset Library', parseGlobalAssetItem);
 }
 
 export function parseDesktopHomeMediaLibrarySearchResult(
   value: unknown,
   expectedRequestId: string,
 ): DesktopHomeMediaLibrarySearchResult {
-  return parseSearchResult(
-    value,
-    expectedRequestId,
-    'Media Library',
-    parseGlobalMediaLibraryItem,
-  );
+  return parseSearchResult(value, expectedRequestId, 'Media Library', parseGlobalMediaLibraryItem);
 }
 
 export function parseDesktopHomeMediaLibraryChildrenResult(
@@ -1305,11 +1282,7 @@ function parseExtensionItem(value: unknown): DesktopHomeExtensionItem {
   const enabled = requireBoolean(record['enabled'], 'enabled');
   const canInstall = requireBoolean(record['canInstall'], 'canInstall');
   const canRemove = requireBoolean(record['canRemove'], 'canRemove');
-  if (
-    (installed && canInstall) ||
-    (!installed && canRemove) ||
-    (!installed && enabled)
-  ) {
+  if ((installed && canInstall) || (!installed && canRemove) || (!installed && enabled)) {
     throw new Error('Desktop Home extension management flags are inconsistent.');
   }
   const agentStatus = requireExtensionAgentStatus(record['agentStatus']);
@@ -1542,10 +1515,7 @@ function requireExtensionDiagnosticValue(value: unknown): string {
 }
 
 function requireExtensionIconDataUrl(value: unknown): string {
-  const dataUrl = requireString(
-    value,
-    'Desktop Home extension icon data URL must be a string.',
-  );
+  const dataUrl = requireString(value, 'Desktop Home extension icon data URL must be a string.');
   if (
     dataUrl !== '' &&
     !/^data:image\/(?:png|jpeg|webp|gif|svg\+xml);base64,[A-Za-z0-9+/=]+$/u.test(dataUrl)
@@ -1606,7 +1576,7 @@ function requireMediaLibraryId(value: unknown): string {
 
 function requireAssetId(value: unknown): string {
   const assetId = requireNonEmptyString(value, 'Desktop Home Asset id is required.');
-  if (!/^asset-library:[a-f0-9]+$/u.test(assetId)) {
+  if (!/^global-asset-library:[a-f0-9]+$/u.test(assetId)) {
     throw new Error('Desktop Home Asset id is invalid.');
   }
   return assetId;
@@ -1620,7 +1590,7 @@ function requireAssetImportLabel(value: unknown): string {
   return label;
 }
 
-function requireMediaLibraryLocationKind(value: unknown): DesktopHomeMediaLibraryLocationKind {
+function requireMediaLibraryLocationKind(value: unknown): MediaLibraryLocationKind {
   if (value !== 'local' && value !== 'nas' && value !== 'cloud') {
     throw new Error('Desktop Home Media Library location kind is invalid.');
   }

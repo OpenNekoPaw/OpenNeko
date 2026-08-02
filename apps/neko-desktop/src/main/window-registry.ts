@@ -82,10 +82,7 @@ export class DesktopWindowRegistry {
     record.disposables.add(disposable);
   }
 
-  rendererLoading(
-    windowId: string,
-    applicationInstanceId: string,
-  ): DesktopLifecycleEvent {
+  rendererLoading(windowId: string, applicationInstanceId: string): DesktopLifecycleEvent {
     const record = this.requireWindow(windowId);
     record.rendererEpoch += 1;
     return this.createLifecycleEvent(record, applicationInstanceId, 'renderer-loading');

@@ -2,12 +2,12 @@ import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_DESKTOP_APPLICATION_PREFERENCES,
   DesktopApplicationSettingsContractError,
-} from '../shared/application-settings-contract';
+} from '@neko/host/application-settings';
 import {
   DesktopApplicationSettingsRepository,
   type DesktopApplicationSettingsFilePort,
 } from './application-settings-repository';
-import { DesktopApplicationSettingsService } from './application-settings-service';
+import { DesktopApplicationSettingsService } from '@neko/host/application-settings-service';
 
 describe('Desktop application settings persistence', () => {
   it('uses Desktop-only defaults without reading Agent configuration', async () => {
@@ -102,16 +102,16 @@ describe('Desktop application settings persistence', () => {
     expect(events).toEqual([1]);
     expect(file.content()).not.toContain('provider');
     expect(file.content()).not.toContain('apiKey');
-    await expect(
-      service.update(0, DEFAULT_DESKTOP_APPLICATION_PREFERENCES),
-    ).rejects.toBeInstanceOf(DesktopApplicationSettingsContractError);
+    await expect(service.update(0, DEFAULT_DESKTOP_APPLICATION_PREFERENCES)).rejects.toBeInstanceOf(
+      DesktopApplicationSettingsContractError,
+    );
   });
 
   it('fails visibly for invalid JSON and cross-authority fields', async () => {
     const invalidJson = createMemoryFile('{');
-    await expect(
-      new DesktopApplicationSettingsRepository(invalidJson).read(),
-    ).rejects.toThrow(/not valid JSON/);
+    await expect(new DesktopApplicationSettingsRepository(invalidJson).read()).rejects.toThrow(
+      /not valid JSON/,
+    );
 
     const agentPolluted = createMemoryFile(
       JSON.stringify({
@@ -123,9 +123,9 @@ describe('Desktop application settings persistence', () => {
         },
       }),
     );
-    await expect(
-      new DesktopApplicationSettingsRepository(agentPolluted).read(),
-    ).rejects.toThrow(/unexpected fields/);
+    await expect(new DesktopApplicationSettingsRepository(agentPolluted).read()).rejects.toThrow(
+      /unexpected fields/,
+    );
   });
 });
 

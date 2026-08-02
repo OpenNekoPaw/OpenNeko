@@ -3,18 +3,18 @@
 import { act, StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { I18nProvider } from '@neko/shared/i18n/react';
+import { I18nProvider } from '@neko/ui/i18n/react';
 import { createDefaultDesktopWorkbenchLayout } from '../shared/workbench-contract';
 import type { DesktopShellProjection } from '../shared/shell-contract';
 import {
   DEFAULT_DESKTOP_APPLICATION_PREFERENCES,
   DESKTOP_APPLICATION_SETTINGS_CONTRACT_VERSION,
-} from '../shared/application-settings-contract';
+} from '@neko/host/application-settings';
 import { DesktopApplication } from './DesktopShell';
 import { DesktopApplicationSettingsProvider } from './application-settings-context';
 import { createDesktopI18n } from './i18n';
 import { DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION } from '../shared/home-management-contract';
-import type { DesktopProjectPortabilityRequest } from '../shared/project-portability-contract';
+import type { DesktopProjectPortabilityRequest } from '@neko-assets/domain/contracts';
 
 vi.mock('./DesktopAgentSurface', () => ({
   DesktopAgentSurface: ({
@@ -141,14 +141,14 @@ describe('DesktopApplication', () => {
     const projectPortability = createProjectPortabilityBridgeMock();
     projectPortability.inspect.mockImplementation(
       async (request: DesktopProjectPortabilityRequest) => ({
-      version: 1,
-      requestId: request.requestId,
-      identity: request.identity,
-      portability: {
-        state: 'linked-ready',
-        requirementRevision: 'requirements:abc',
-        libraries: [],
-      },
+        version: 1,
+        requestId: request.requestId,
+        identity: request.identity,
+        portability: {
+          state: 'linked-ready',
+          requirementRevision: 'requirements:abc',
+          libraries: [],
+        },
       }),
     );
     Object.defineProperty(window, 'openNekoDesktop', {
@@ -550,8 +550,8 @@ describe('DesktopApplication', () => {
       revision: 0,
       items: [
         {
-          id: 'asset-library:abc123',
-          owner: 'asset-library' as const,
+          id: 'global-asset-library:abc123',
+          owner: 'global-asset-library' as const,
           label: 'owned.png',
           kind: 'asset' as const,
           mediaType: 'image',
@@ -642,13 +642,14 @@ describe('DesktopApplication', () => {
       (button) => button.textContent?.includes('Asset Center'),
     );
     await act(async () => assetCenter?.click());
-    await waitForDom(() =>
-      [...container.querySelectorAll<HTMLButtonElement>('button')].some((button) =>
-        button.textContent?.includes('Connect directory'),
-      ) &&
-      [...container.querySelectorAll<HTMLElement>('article')].some((entry) =>
-        entry.textContent?.includes('Footage'),
-      ),
+    await waitForDom(
+      () =>
+        [...container.querySelectorAll<HTMLButtonElement>('button')].some((button) =>
+          button.textContent?.includes('Connect directory'),
+        ) &&
+        [...container.querySelectorAll<HTMLElement>('article')].some((entry) =>
+          entry.textContent?.includes('Footage'),
+        ),
     );
 
     const add = [...container.querySelectorAll<HTMLButtonElement>('button')].find((button) =>

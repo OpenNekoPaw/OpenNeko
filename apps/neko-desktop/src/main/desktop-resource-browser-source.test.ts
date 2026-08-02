@@ -15,24 +15,24 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   ENTITY_REPRESENTATION_BINDING_FILE_VERSION,
   encodeEntityRepresentationBindingFile,
-} from '@neko/shared';
+} from '@neko-entity/domain';
 import type { ILogger } from '@neko/shared/logger';
-import type { ResourceBrowserIdentity } from 'neko-assets/resource-browser/contract';
-import { presentResourceBrowserContentItem } from 'neko-assets/resource-browser/presenter';
+import type { ResourceBrowserIdentity } from '@neko-assets/domain/resource-browser/contract';
+import { presentResourceBrowserContentItem } from '@neko-assets/domain/resource-browser/presenter';
 import { createElectronNekoHostPorts } from './electron-host-ports';
 import {
-  createDesktopResourceBrowserProjectionSource,
-  createDesktopResourceBrowserReadSource,
-  readDesktopGlobalMediaLibraryChildren,
-  searchDesktopGlobalAssetCatalog,
-  searchDesktopGlobalMediaLibraries,
-} from './desktop-resource-browser-source';
+  createResourceBrowserNodeProjectionSource,
+  createResourceBrowserNodeReadSource,
+  readGlobalMediaLibraryChildren,
+  searchGlobalAssetCatalog,
+  searchGlobalMediaLibraries,
+} from '@neko-assets/node';
 import {
-  createDesktopGlobalMediaLibraryConnection,
-  listDesktopGlobalMediaLibraryConnections,
-  removeDesktopGlobalMediaLibraryConnection,
-} from './desktop-global-media-library-files';
-import { DesktopWorkspaceMediaLibrarySyncService } from './desktop-workspace-media-library-sync';
+  createGlobalMediaLibraryConnection,
+  listGlobalMediaLibraryConnections,
+  removeGlobalMediaLibraryConnection,
+} from '@neko-assets/node';
+import { WorkspaceMediaLibrarySyncService } from '@neko-assets/node';
 
 const temporaryRoots: string[] = [];
 const identity: ResourceBrowserIdentity = {
@@ -90,10 +90,10 @@ describe('Desktop Resource Browser source', () => {
       displayName: 'Fixture',
       locator: { kind: 'relative' as const, value: 'workspace' },
     };
-    const source = createDesktopResourceBrowserReadSource({
+    const source = createResourceBrowserNodeReadSource({
       workspace,
       host,
-      workspaceMediaLibrarySync: new DesktopWorkspaceMediaLibrarySyncService(
+      workspaceMediaLibrarySync: new WorkspaceMediaLibrarySyncService(
         path.join(fixture.root, '.openneko', 'media-libraries'),
       ),
     });
@@ -155,10 +155,10 @@ describe('Desktop Resource Browser source', () => {
       displayName: 'Fixture',
       locator: { kind: 'relative' as const, value: 'workspace' },
     };
-    const workspaceMediaLibrarySync = new DesktopWorkspaceMediaLibrarySyncService(
+    const workspaceMediaLibrarySync = new WorkspaceMediaLibrarySyncService(
       path.join(fixture.root, '.openneko', 'media-libraries'),
     );
-    const source = createDesktopResourceBrowserReadSource({
+    const source = createResourceBrowserNodeReadSource({
       workspace,
       host,
       workspaceMediaLibrarySync,
@@ -203,13 +203,13 @@ describe('Desktop Resource Browser source', () => {
       version: '0.0.1',
       logger: createLogger(),
     });
-    const { libraryId } = await createDesktopGlobalMediaLibraryConnection({
+    const { libraryId } = await createGlobalMediaLibraryConnection({
       mediaLibraryRoot: globalMediaLibraryRoot,
       sourceDirectory: externalLibrary,
       locationKind: 'nas',
     });
 
-    const assets = await searchDesktopGlobalAssetCatalog({
+    const assets = await searchGlobalAssetCatalog({
       globalAssetRoot,
       files: host.files,
       query: '',
@@ -217,7 +217,7 @@ describe('Desktop Resource Browser source', () => {
       sortDirection: 'ascending',
       limit: 20,
     });
-    const libraries = await searchDesktopGlobalMediaLibraries({
+    const libraries = await searchGlobalMediaLibraries({
       mediaLibraryRoot: globalMediaLibraryRoot,
       files: host.files,
       query: '',
@@ -225,7 +225,7 @@ describe('Desktop Resource Browser source', () => {
       sortDirection: 'ascending',
       limit: 20,
     });
-    const searchMatches = await searchDesktopGlobalMediaLibraries({
+    const searchMatches = await searchGlobalMediaLibraries({
       mediaLibraryRoot: globalMediaLibraryRoot,
       files: host.files,
       query: 'external',
@@ -270,13 +270,13 @@ describe('Desktop Resource Browser source', () => {
       version: '0.0.1',
       logger: createLogger(),
     });
-    const { libraryId } = await createDesktopGlobalMediaLibraryConnection({
+    const { libraryId } = await createGlobalMediaLibraryConnection({
       mediaLibraryRoot,
       sourceDirectory: target,
       locationKind: 'cloud',
     });
 
-    const rootEntries = await readDesktopGlobalMediaLibraryChildren({
+    const rootEntries = await readGlobalMediaLibraryChildren({
       mediaLibraryRoot,
       files: host.files,
       libraryId,
@@ -285,7 +285,7 @@ describe('Desktop Resource Browser source', () => {
       sortDirection: 'ascending',
       limit: 20,
     });
-    const imageEntries = await readDesktopGlobalMediaLibraryChildren({
+    const imageEntries = await readGlobalMediaLibraryChildren({
       mediaLibraryRoot,
       files: host.files,
       libraryId,
@@ -305,7 +305,7 @@ describe('Desktop Resource Browser source', () => {
       expect.objectContaining({ kind: 'file', relativePath: 'images/hero.png' }),
     ]);
 
-    await removeDesktopGlobalMediaLibraryConnection({ mediaLibraryRoot, libraryId });
+    await removeGlobalMediaLibraryConnection({ mediaLibraryRoot, libraryId });
     await expect(readFile(path.join(target, 'images', 'hero.png'), 'utf8')).resolves.toBe('hero');
   });
 
@@ -319,7 +319,7 @@ describe('Desktop Resource Browser source', () => {
       version: '0.0.1',
       logger: createLogger(),
     });
-    const source = createDesktopResourceBrowserReadSource({
+    const source = createResourceBrowserNodeReadSource({
       workspace: {
         workspaceId: identity.workspaceId,
         workspacePath: fixture.workspace,
@@ -515,7 +515,7 @@ describe('Desktop Resource Browser source', () => {
           },
         },
       }),
-    ).rejects.toThrow('outside its authorized source');
+    ).rejects.toThrow('outside its authorized workspace source');
   });
 
   it('projects OTIO through Cut and Fountain through the package Preview route', async () => {
@@ -662,7 +662,7 @@ describe('Desktop Resource Browser source', () => {
       ).isSymbolicLink(),
     ).toBe(true);
     expect(
-      await listDesktopGlobalMediaLibraryConnections(
+      await listGlobalMediaLibraryConnections(
         path.join(fixture.root, '.openneko', 'media-libraries'),
       ),
     ).toEqual([
@@ -686,7 +686,7 @@ describe('Desktop Resource Browser source', () => {
     const selected = path.join(fixture.root, 'Global Footage');
     const globalMediaLibraryRoot = path.join(fixture.root, '.openneko', 'media-libraries');
     await mkdir(selected);
-    const { libraryId } = await createDesktopGlobalMediaLibraryConnection({
+    const { libraryId } = await createGlobalMediaLibraryConnection({
       mediaLibraryRoot: globalMediaLibraryRoot,
       sourceDirectory: selected,
       locationKind: 'nas',
@@ -718,9 +718,7 @@ describe('Desktop Resource Browser source', () => {
     });
 
     await expect(composition.interactions.addDirectoryLibrary({ identity })).rejects.toThrow();
-    await expect(listDesktopGlobalMediaLibraryConnections(globalMediaLibraryRoot)).resolves.toEqual(
-      [],
-    );
+    await expect(listGlobalMediaLibraryConnections(globalMediaLibraryRoot)).resolves.toEqual([]);
     expect(didMutateGlobalMediaLibraries).not.toHaveBeenCalled();
   });
 
@@ -862,24 +860,24 @@ function createComposition(
     readonly openPreview?: (input: {
       readonly identity: ResourceBrowserIdentity;
       readonly item: Parameters<
-        ReturnType<typeof createDesktopResourceBrowserProjectionSource>['interactions']['preview']
+        ReturnType<typeof createResourceBrowserNodeProjectionSource>['interactions']['preview']
       >[0]['item'];
       readonly absolutePath: string;
       readonly target: Parameters<
-        ReturnType<typeof createDesktopResourceBrowserProjectionSource>['interactions']['preview']
+        ReturnType<typeof createResourceBrowserNodeProjectionSource>['interactions']['preview']
       >[0]['target'];
     }) => Promise<void>;
     readonly openCut?: (input: {
       readonly identity: ResourceBrowserIdentity;
       readonly item: Parameters<
-        ReturnType<typeof createDesktopResourceBrowserProjectionSource>['interactions']['openCut']
+        ReturnType<typeof createResourceBrowserNodeProjectionSource>['interactions']['openCut']
       >[0]['item'];
       readonly absolutePath: string;
     }) => Promise<void>;
     readonly revealPath?: (absolutePath: string) => Promise<void>;
     readonly selectSource?: (windowId: string) => Promise<string | undefined>;
     readonly selectGlobalLibrary?: Parameters<
-      typeof createDesktopResourceBrowserProjectionSource
+      typeof createResourceBrowserNodeProjectionSource
     >[0]['selectGlobalLibrary'];
     readonly didMutateGlobalMediaLibraries?: () => void;
     readonly createThumbnail?: (absolutePath: string) => Promise<string>;
@@ -893,7 +891,7 @@ function createComposition(
     logger: createLogger(),
     revealPath: effects.revealPath,
   });
-  return createDesktopResourceBrowserProjectionSource({
+  return createResourceBrowserNodeProjectionSource({
     globalMediaLibraryRoot: path.join(path.dirname(workspacePath), '.openneko', 'media-libraries'),
     workspace: {
       workspaceId: 'workspace-1',

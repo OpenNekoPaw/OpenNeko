@@ -3,18 +3,18 @@ import {
   createAgentHostMessageController,
   type AgentHostControllerEffectPorts,
   type AgentHostMessageController,
-} from '@neko/agent/runtime/host-controller';
+} from '@neko-agent/runtime/runtime/host-controller';
 import {
   ELECTRON_AGENT_HOST_ROUTE_COVERAGE,
   createAgentHostRouteCoverageDiagnostics,
   createElectronAgentHostRouteUnavailableDiagnostic,
-} from '@neko-agent/types';
+  type DesktopAgentConnectionIdentity,
+} from '@neko-agent/contracts';
 import {
   DESKTOP_AGENT_CONTRACT_VERSION,
   DESKTOP_AGENT_RUNTIME_REQUIREMENTS,
   DesktopAgentContractError,
   type DesktopAgentBootstrapProjection,
-  type DesktopAgentConnectionIdentity,
   type DesktopAgentMessageEvent,
   type DesktopAgentMessageRequest,
   type DesktopAgentMessageResult,
@@ -22,7 +22,7 @@ import {
   type DesktopAgentUnavailableDiagnostic,
 } from '../shared/agent-contract';
 import type { DesktopAgentWorkspaceRuntime } from './desktop-agent-app-host-composition';
-import type { DesktopAgentNeutralFacts } from '../shared/agent-facts-contract';
+import type { DesktopAgentNeutralFacts } from '@neko-agent/contracts';
 
 export interface DesktopAgentControllerComposition {
   readonly requirements: Readonly<Partial<Record<DesktopAgentRuntimeRequirement, true>>>;

@@ -1,5 +1,6 @@
-import type {
-  ResourceBrowserChildrenRequest,
+import {
+  createResourceBrowserViewId,
+  type ResourceBrowserChildrenRequest,
   ResourceBrowserIdentity,
   ResourceBrowserIntentRequest,
   ResourceBrowserProjection,
@@ -17,7 +18,7 @@ import type {
   ResourceBrowserSnapshotRequest,
   ResourceBrowserThumbnailRequest,
   ResourceBrowserThumbnailResult,
-} from 'neko-assets/resource-browser/contract';
+} from '@neko-assets/domain/resource-browser/contract';
 
 export const DESKTOP_RESOURCE_BROWSER_CHANNELS = {
   snapshotGet: 'openneko:resources:snapshot:get',
@@ -71,7 +72,7 @@ export function createDesktopResourceBrowserIdentity(input: {
     projectId: input.projectId,
     workspaceId: input.workspaceId,
     windowId: input.windowId,
-    viewId: resourceBrowserViewId(input.projectViewId),
+    viewId: createResourceBrowserViewId(input.projectViewId),
     viewEpoch: input.projectViewEpoch,
     endpointEpoch: input.endpointEpoch,
   };
@@ -89,8 +90,4 @@ export function isSameResourceBrowserIdentity(
     left.viewEpoch === right.viewEpoch &&
     left.endpointEpoch === right.endpointEpoch
   );
-}
-
-export function resourceBrowserViewId(projectViewId: string): string {
-  return `resource-browser:${projectViewId}`;
 }

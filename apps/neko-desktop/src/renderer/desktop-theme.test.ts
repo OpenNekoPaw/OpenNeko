@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { describe, expect, it, vi } from 'vitest';
-import { nekoDesignTokens } from '@neko/shared/theme';
+import { nekoDesignTokens } from '@neko/ui/theme';
 import {
   applyResolvedDesktopTheme,
   desktopNativeThemeTokens,
@@ -45,16 +45,10 @@ describe('Desktop system theme', () => {
 
     const style = document.documentElement.style;
     expect(style.getPropertyValue('--neko-desktop-window')).toBe('#f7f7f6');
-    expect(style.getPropertyValue('--neko-desktop-chrome')).toBe(
-      'rgba(247, 247, 246, 0.94)',
-    );
+    expect(style.getPropertyValue('--neko-desktop-chrome')).toBe('rgba(247, 247, 246, 0.94)');
     expect(style.getPropertyValue('--neko-desktop-main')).toBe('#ffffff');
-    expect(style.getPropertyValue('--neko-desktop-surface-muted')).toBe(
-      '#f3f3f2',
-    );
-    expect(style.getPropertyValue('--neko-list-activeSelectionBackground')).toBe(
-      '#e8e8e7',
-    );
+    expect(style.getPropertyValue('--neko-desktop-surface-muted')).toBe('#f3f3f2');
+    expect(style.getPropertyValue('--neko-list-activeSelectionBackground')).toBe('#e8e8e7');
     expect(style.getPropertyValue('--neko-focusBorder')).toBe('#6d716f');
   });
 
@@ -63,18 +57,12 @@ describe('Desktop system theme', () => {
     const mediaQuery = {
       matches: false,
       addEventListener: vi.fn(
-        (
-          _type: 'change',
-          listener: (event: { readonly matches: boolean }) => void,
-        ) => {
+        (_type: 'change', listener: (event: { readonly matches: boolean }) => void) => {
           listeners.add(listener);
         },
       ),
       removeEventListener: vi.fn(
-        (
-          _type: 'change',
-          listener: (event: { readonly matches: boolean }) => void,
-        ) => {
+        (_type: 'change', listener: (event: { readonly matches: boolean }) => void) => {
           listeners.delete(listener);
         },
       ),
@@ -99,18 +87,12 @@ describe('Desktop system theme', () => {
     const mediaQuery = {
       matches: false,
       addEventListener: vi.fn(
-        (
-          _type: 'change',
-          listener: (event: { readonly matches: boolean }) => void,
-        ) => {
+        (_type: 'change', listener: (event: { readonly matches: boolean }) => void) => {
           listeners.add(listener);
         },
       ),
       removeEventListener: vi.fn(
-        (
-          _type: 'change',
-          listener: (event: { readonly matches: boolean }) => void,
-        ) => {
+        (_type: 'change', listener: (event: { readonly matches: boolean }) => void) => {
           listeners.delete(listener);
         },
       ),

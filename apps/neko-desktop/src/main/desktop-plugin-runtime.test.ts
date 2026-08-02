@@ -80,10 +80,9 @@ describe('Desktop plugin runtime', () => {
         }),
         'utf8',
       );
-      const parsed = await parsePluginMcpDocument(
-        mcpDescriptor(pluginRoot, ['github', 'figma']),
-        { GITHUB_TOKEN: 'secret-token' },
-      );
+      const parsed = await parsePluginMcpDocument(mcpDescriptor(pluginRoot, ['github', 'figma']), {
+        GITHUB_TOKEN: 'secret-token',
+      });
 
       expect(parsed.servers).toEqual([
         expect.objectContaining({
@@ -154,12 +153,10 @@ describe('Desktop plugin runtime', () => {
           appIds: [],
         }),
       ).resolves.toBe(true);
-      await expect(
-        support.isSupported(mcpDescriptor(pluginRoot, ['supported'])),
-      ).resolves.toBe(true);
-      await expect(
-        support.isSupported(mcpDescriptor(pluginRoot, ['oauth'])),
-      ).resolves.toBe(false);
+      await expect(support.isSupported(mcpDescriptor(pluginRoot, ['supported']))).resolves.toBe(
+        true,
+      );
+      await expect(support.isSupported(mcpDescriptor(pluginRoot, ['oauth']))).resolves.toBe(false);
       await expect(
         support.isSupported({
           pluginId: 'app-only@market',

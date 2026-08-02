@@ -2,7 +2,7 @@ import {
   createResourceBrowserSnapshotRequest,
   type ResourceBrowserHostRuntime,
   type ResourceBrowserIdentity,
-} from 'neko-assets/resource-browser/contract';
+} from '@neko-assets/domain/resource-browser/contract';
 import type { OpenNekoDesktopResourceBrowserBridge } from '../shared/resource-browser-bridge-contract';
 
 export function createElectronResourceBrowserHostRuntime(input: {

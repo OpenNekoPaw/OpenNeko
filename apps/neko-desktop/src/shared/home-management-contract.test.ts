@@ -225,25 +225,21 @@ describe('Desktop Home management contract', () => {
   });
 
   it('accepts exact Asset import/remove and thumbnail contracts without physical paths', () => {
-    const importRequest = createDesktopHomeAssetImportRequest(
-      'asset-import-1',
-      endpointEpoch,
-      4,
-    );
+    const importRequest = createDesktopHomeAssetImportRequest('asset-import-1', endpointEpoch, 4);
     const removeRequest = createDesktopHomeAssetRemoveRequest(
       'asset-remove-1',
       endpointEpoch,
-      'asset-library:abc123',
+      'global-asset-library:abc123',
       4,
     );
     const thumbnailRequest = createDesktopHomeLibraryThumbnailRequest(
       'thumbnail-1',
       endpointEpoch,
       {
-        owner: 'asset-library',
-        itemId: 'asset-library:abc123',
+        owner: 'global-asset-library',
+        itemId: 'global-asset-library:abc123',
         expectedCatalogRevision: 4,
-        descriptorId: 'asset-library:def456',
+        descriptorId: 'global-asset-library:def456',
         thumbnailRevision: '2026-07-31T00:00:00.000Z:42',
         variant: 'hover',
       },
@@ -260,7 +256,7 @@ describe('Desktop Home management contract', () => {
           status: 'completed',
           revision: 5,
           outcomes: [
-            { status: 'added', label: 'Hero.png', assetId: 'asset-library:abc123' },
+            { status: 'added', label: 'Hero.png', assetId: 'global-asset-library:abc123' },
             { status: 'conflict', label: 'Existing.png', diagnostic: 'Asset already exists.' },
           ],
         },
@@ -273,7 +269,7 @@ describe('Desktop Home management contract', () => {
           schemaVersion: DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION,
           requestId: 'asset-remove-1',
           status: 'removed',
-          assetId: 'asset-library:abc123',
+          assetId: 'global-asset-library:abc123',
           revision: 6,
         },
         'asset-remove-1',
@@ -310,8 +306,8 @@ describe('Desktop Home management contract', () => {
           revision: 2,
           items: [
             {
-              id: 'asset-library:abc123',
-              owner: 'asset-library',
+              id: 'global-asset-library:abc123',
+              owner: 'global-asset-library',
               label: 'Hero.png',
               kind: 'asset',
               mediaType: 'image',
@@ -319,7 +315,7 @@ describe('Desktop Home management contract', () => {
               modifiedAt: '2026-07-31T00:00:00.000Z',
               availability: 'available',
               thumbnail: {
-                descriptorId: 'asset-library:def456',
+                descriptorId: 'global-asset-library:def456',
                 revision: '2026-07-31T00:00:00.000Z:42',
                 mediaType: 'image',
               },

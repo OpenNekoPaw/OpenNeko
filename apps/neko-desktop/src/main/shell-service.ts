@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import type { HostDiagnostic } from '@neko/host/ports';
-import { DesktopAgentContractError, type DesktopAgentViewIdentity } from '../shared/agent-contract';
+import type { DesktopAgentViewIdentity } from '@neko-agent/contracts';
+import { DesktopAgentContractError } from '../shared/agent-contract';
 import {
   DESKTOP_SHELL_CONTRACT_VERSION,
   DesktopShellContractError,
@@ -27,15 +28,13 @@ import type {
   DesktopStoredProject,
   DesktopStoredWindow,
 } from './shell-state-repository';
-import type {
-  DesktopWorkspaceRegistry,
-  DesktopWorkspaceResolution,
-} from './desktop-workspace-registry';
+import type { DesktopWorkspaceRegistry } from './desktop-workspace-registry';
+import type { AssetWorkspaceResolution } from '@neko-assets/domain/contracts';
 import type { CanvasHostRuntimeIdentity } from '@neko-canvas/domain';
 import type { CutHostRuntimeIdentity } from '@neko-cut/domain';
-import { createDesktopCanvasSessionId } from '../shared/canvas-bridge-contract';
+import { createCanvasHostSessionId } from '@neko-canvas/domain';
 import { createDesktopCutSessionId } from '../shared/cut-bridge-contract';
-import type { DesktopStartupTargetPreference } from '../shared/application-settings-contract';
+import type { DesktopStartupTargetPreference } from '@neko/host/application-settings';
 
 const UNAVAILABLE_DOMAIN_CAPABILITIES: readonly DesktopDomainCapabilityProjection[] = [
   unavailableDomain('agent', 'P1.3'),
@@ -67,7 +66,7 @@ export interface DesktopAgentHomeProjectionSource {
 
 export interface DesktopShellOpenContentResult {
   readonly projection: DesktopShellProjection;
-  readonly workspace: DesktopWorkspaceResolution;
+  readonly workspace: AssetWorkspaceResolution;
 }
 
 export interface DesktopAgentViewGrant extends DesktopAgentViewIdentity {
@@ -77,12 +76,12 @@ export interface DesktopAgentViewGrant extends DesktopAgentViewIdentity {
 
 export interface DesktopCanvasViewGrant {
   readonly identity: CanvasHostRuntimeIdentity;
-  readonly workspace: DesktopWorkspaceResolution;
+  readonly workspace: AssetWorkspaceResolution;
 }
 
 export interface DesktopCutViewGrant {
   readonly identity: CutHostRuntimeIdentity;
-  readonly workspace: DesktopWorkspaceResolution;
+  readonly workspace: AssetWorkspaceResolution;
 }
 
 interface DesktopWindowRuntime {
@@ -306,7 +305,7 @@ export class DesktopShellService {
     };
   }
 
-  async resolveAgentWorkspace(workspaceId: string): Promise<DesktopWorkspaceResolution> {
+  async resolveAgentWorkspace(workspaceId: string): Promise<AssetWorkspaceResolution> {
     this.requireActive();
     const state = await this.options.stateRepository.read();
     const project = state.projects.find((candidate) => candidate.workspaceId === workspaceId);
@@ -326,7 +325,7 @@ export class DesktopShellService {
     return workspace;
   }
 
-  async resolveProjectWorkspace(projectId: string): Promise<DesktopWorkspaceResolution> {
+  async resolveProjectWorkspace(projectId: string): Promise<AssetWorkspaceResolution> {
     this.requireActive();
     const state = await this.options.stateRepository.read();
     const project = state.projects.find((candidate) => candidate.projectId === projectId);
@@ -360,7 +359,7 @@ export class DesktopShellService {
       view.workspaceId !== identity.workspaceId ||
       view.viewEpoch !== identity.viewEpoch ||
       view.documentId !== identity.documentId ||
-      identity.sessionId !== createDesktopCanvasSessionId(view.viewId, view.viewEpoch)
+      identity.sessionId !== createCanvasHostSessionId(view.viewId, view.viewEpoch)
     ) {
       throw new Error('Desktop Canvas View identity is not granted by the active Workbench.');
     }
@@ -1102,7 +1101,7 @@ function projectWorkbench(
 function openContentProject(
   state: DesktopShellStoredState,
   windowId: string,
-  workspace: DesktopWorkspaceResolution,
+  workspace: AssetWorkspaceResolution,
   now: string,
   createIdentity: () => string,
 ): DesktopShellStoredState {
@@ -1264,7 +1263,7 @@ function staleWorkbenchRevision(
 }
 
 function createStoredProject(
-  workspace: DesktopWorkspaceResolution,
+  workspace: AssetWorkspaceResolution,
   now: string,
 ): DesktopStoredProject {
   return {

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { DesktopApplicationSettingsProjection } from '../shared/application-settings-contract';
+import type { DesktopApplicationSettingsProjection } from '@neko/host/application-settings';
 import type { DesktopBootstrapProjection } from '../shared/bridge-contract';
 import { initializeDesktopRendererBridge } from './desktop-renderer-startup';
 

@@ -2,7 +2,7 @@ import { CanvasWebviewRoot } from '@neko-canvas/webview/root';
 import { useMemo } from 'react';
 import type { DesktopProjectCatalogItem, DesktopShellProjection } from '../shared/shell-contract';
 import type { DesktopWorkbenchViewRef } from '../shared/workbench-contract';
-import { createDesktopCanvasSessionId } from '../shared/canvas-bridge-contract';
+import { createCanvasHostSessionId } from '@neko-canvas/domain';
 import { createElectronCanvasHostRuntime } from './desktop-canvas-host-runtime';
 import { createDesktopCanvasWebviewDelegate } from './desktop-canvas-webview-delegate';
 
@@ -24,7 +24,7 @@ export function DesktopCanvasSurface({
       viewId: view.viewId,
       viewEpoch: view.viewEpoch,
       documentId,
-      sessionId: createDesktopCanvasSessionId(view.viewId, view.viewEpoch),
+      sessionId: createCanvasHostSessionId(view.viewId, view.viewEpoch),
       endpointEpoch: projection.endpointEpoch,
     }),
     [

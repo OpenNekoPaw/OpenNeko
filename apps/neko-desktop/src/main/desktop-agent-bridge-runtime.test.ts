@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createToolRegistry } from '@neko/agent/tool-registry';
-import { createOpenNekoPiModels } from '@neko/agent/pi';
+import { createToolRegistry } from '@neko-agent/runtime/tool-registry';
+import { createOpenNekoPiModels } from '@neko-agent/runtime/pi';
+import type { DesktopAgentConnectionIdentity } from '@neko-agent/contracts';
 import {
   createDesktopAgentMessageRequest,
   DesktopAgentContractError,
-  type DesktopAgentConnectionIdentity,
 } from '../shared/agent-contract';
 import type { DesktopAgentWorkspaceRuntime } from './desktop-agent-app-host-composition';
 import {

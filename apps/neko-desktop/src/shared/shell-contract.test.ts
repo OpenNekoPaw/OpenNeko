@@ -18,9 +18,7 @@ describe('Desktop Shell contract', () => {
       requestId: 'request-1',
       profile: 'character',
     });
-    expect(
-      createDesktopTabMutationRequest('request-2', 'tab-1', 'app-1:window-1:1', 4),
-    ).toEqual({
+    expect(createDesktopTabMutationRequest('request-2', 'tab-1', 'app-1:window-1:1', 4)).toEqual({
       schemaVersion: 1,
       requestId: 'request-2',
       expectedEndpointEpoch: 'app-1:window-1:1',
@@ -28,12 +26,7 @@ describe('Desktop Shell contract', () => {
       expectedWindowRevision: 4,
     });
     expect(
-      createDesktopProjectOpenRequest(
-        'request-3',
-        'content:workspace-1',
-        'app-1:window-1:1',
-        5,
-      ),
+      createDesktopProjectOpenRequest('request-3', 'content:workspace-1', 'app-1:window-1:1', 5),
     ).toEqual({
       schemaVersion: 1,
       requestId: 'request-3',
@@ -150,9 +143,7 @@ describe('Desktop Shell contract', () => {
           },
         ],
       }).domains,
-    ).toEqual([
-      { surface: 'media-library', status: 'ready', ownerSlice: 'P1.4' },
-    ]);
+    ).toEqual([{ surface: 'media-library', status: 'ready', ownerSlice: 'P1.4' }]);
     expect(
       parseDesktopShellProjection({
         ...validProjection(),

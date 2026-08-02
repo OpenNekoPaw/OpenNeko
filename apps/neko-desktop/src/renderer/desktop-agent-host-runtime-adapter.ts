@@ -1,4 +1,4 @@
-import type { AgentHostRuntimeAdapter } from '@neko-agent/types';
+import type { AgentHostRuntimeAdapter } from '@neko-agent/contracts';
 import type {
   DesktopAgentReadyBootstrapProjection,
   OpenNekoDesktopAgentBridge,

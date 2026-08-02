@@ -1,34 +1,32 @@
 import { mkdtemp, mkdir, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
-import { DEFAULT_CANVAS_DATA } from '@neko/shared';
+import { DEFAULT_CANVAS_DATA } from '@neko-canvas/domain';
 import type { ILogger } from '@neko/shared/logger';
 import {
   CANVAS_HOST_RUNTIME_CONTRACT_VERSION,
   parseCanvasHostIntentRequest,
   type CanvasHostIntentResult,
 } from '@neko-canvas/domain';
-import { createResourceBrowserSnapshotRequest } from 'neko-assets/resource-browser/contract';
+import { createResourceBrowserSnapshotRequest } from '@neko-assets/domain/resource-browser/contract';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createDesktopCanvasSessionId } from '../shared/canvas-bridge-contract';
+import { createCanvasHostSessionId } from '@neko-canvas/domain';
 import { createDesktopResourceBrowserIdentity } from '../shared/resource-browser-bridge-contract';
 import type { DesktopWorkbenchViewRef } from '../shared/workbench-contract';
 import {
-  createDesktopResourceToCanvasInteraction,
-  DesktopResourceBrowserRuntime,
-  type DesktopResourceBrowserRuntimeOptions,
-} from './desktop-resource-browser-runtime';
+  createResourceToCanvasInteraction,
+  ResourceBrowserNodeRuntime,
+  type ResourceBrowserNodeRuntimeOptions,
+} from '@neko-assets/node';
 import { createElectronNekoHostPorts } from './electron-host-ports';
-import { createDesktopGlobalMediaLibraryConnection } from './desktop-global-media-library-files';
+import { createGlobalMediaLibraryConnection } from '@neko-assets/node';
 import { DesktopShellService } from './shell-service';
 import {
   DesktopShellStateRepository,
   type DesktopShellStateFilePort,
 } from './shell-state-repository';
-import type {
-  DesktopWorkspaceRegistry,
-  DesktopWorkspaceResolution,
-} from './desktop-workspace-registry';
+import type { DesktopWorkspaceRegistry } from './desktop-workspace-registry';
+import type { AssetWorkspaceResolution } from '@neko-assets/domain/contracts';
 
 const temporaryRoots: string[] = [];
 
@@ -57,12 +55,12 @@ const canvasView: DesktopWorkbenchViewRef = {
   documentId: 'boards/a.nkc',
 };
 
-describe('createDesktopResourceToCanvasInteraction', () => {
+describe('createResourceToCanvasInteraction', () => {
   it('routes a stable ContentLocator to the exact revisioned Canvas session', async () => {
-    const executeIntent = vi.fn<DesktopResourceBrowserRuntimeOptions['canvas']['executeIntent']>(
+    const executeIntent = vi.fn<ResourceBrowserNodeRuntimeOptions['canvas']['executeIntent']>(
       async (_windowId, payload) => accepted(payload),
     );
-    const addToCanvas = createDesktopResourceToCanvasInteraction({
+    const addToCanvas = createResourceToCanvasInteraction({
       shell: shellWithViews([canvasView]),
       canvas: { executeIntent },
       windowId: 'window-1',
@@ -82,7 +80,7 @@ describe('createDesktopResourceToCanvasInteraction', () => {
       },
       target: {
         documentId: 'boards/a.nkc',
-        sessionId: createDesktopCanvasSessionId(canvasView.viewId, canvasView.viewEpoch),
+        sessionId: createCanvasHostSessionId(canvasView.viewId, canvasView.viewEpoch),
         expectedRevision: 4,
       },
     });
@@ -94,7 +92,7 @@ describe('createDesktopResourceToCanvasInteraction', () => {
         identity: expect.objectContaining({
           viewId: canvasView.viewId,
           documentId: 'boards/a.nkc',
-          sessionId: createDesktopCanvasSessionId(canvasView.viewId, canvasView.viewEpoch),
+          sessionId: createCanvasHostSessionId(canvasView.viewId, canvasView.viewEpoch),
         }),
         intent: {
           type: 'author-material',
@@ -103,10 +101,7 @@ describe('createDesktopResourceToCanvasInteraction', () => {
             identity: {
               projectId: 'project-1',
               canvasId: 'boards/a.nkc',
-              canvasSessionId: createDesktopCanvasSessionId(
-                canvasView.viewId,
-                canvasView.viewEpoch,
-              ),
+              canvasSessionId: createCanvasHostSessionId(canvasView.viewId, canvasView.viewEpoch),
             },
             locator: { kind: 'workspace-file', path: 'media/cat.png' },
             mediaKind: 'image',
@@ -118,8 +113,8 @@ describe('createDesktopResourceToCanvasInteraction', () => {
   });
 
   it('rejects a stale target instead of falling back to another active Canvas', async () => {
-    const executeIntent = vi.fn<DesktopResourceBrowserRuntimeOptions['canvas']['executeIntent']>();
-    const addToCanvas = createDesktopResourceToCanvasInteraction({
+    const executeIntent = vi.fn<ResourceBrowserNodeRuntimeOptions['canvas']['executeIntent']>();
+    const addToCanvas = createResourceToCanvasInteraction({
       shell: shellWithViews([
         {
           ...canvasView,
@@ -155,10 +150,10 @@ describe('createDesktopResourceToCanvasInteraction', () => {
   });
 
   it('retains stable Entity and active representation evidence in Canvas authoring', async () => {
-    const executeIntent = vi.fn<DesktopResourceBrowserRuntimeOptions['canvas']['executeIntent']>(
+    const executeIntent = vi.fn<ResourceBrowserNodeRuntimeOptions['canvas']['executeIntent']>(
       async (_windowId, payload) => accepted(payload),
     );
-    const addToCanvas = createDesktopResourceToCanvasInteraction({
+    const addToCanvas = createResourceToCanvasInteraction({
       shell: shellWithViews([canvasView]),
       canvas: { executeIntent },
       windowId: 'window-1',
@@ -186,7 +181,7 @@ describe('createDesktopResourceToCanvasInteraction', () => {
       },
       target: {
         documentId: 'boards/a.nkc',
-        sessionId: createDesktopCanvasSessionId(canvasView.viewId, canvasView.viewEpoch),
+        sessionId: createCanvasHostSessionId(canvasView.viewId, canvasView.viewEpoch),
         expectedRevision: 7,
       },
     });
@@ -214,7 +209,7 @@ describe('createDesktopResourceToCanvasInteraction', () => {
   });
 });
 
-describe('DesktopResourceBrowserRuntime Project identity', () => {
+describe('ResourceBrowserNodeRuntime Project identity', () => {
   it('authorizes the right-Dock browser through its Project View without a Resource Main View', async () => {
     const root = await mkdtemp(path.join(tmpdir(), 'openneko-project-resource-runtime-'));
     temporaryRoots.push(root);
@@ -270,7 +265,7 @@ describe('DesktopResourceBrowserRuntime Project identity', () => {
       logger: createLogger(),
       revealPath: () => undefined,
     });
-    const runtime = new DesktopResourceBrowserRuntime({
+    const runtime = new ResourceBrowserNodeRuntime({
       globalAssetRoot: path.join(root, '.neko', 'assets'),
       globalMediaLibraryRoot: path.join(root, '.neko', 'media-libraries'),
       shell,
@@ -323,7 +318,7 @@ describe('DesktopResourceBrowserRuntime Project identity', () => {
   });
 });
 
-describe('DesktopResourceBrowserRuntime global libraries', () => {
+describe('ResourceBrowserNodeRuntime global libraries', () => {
   it('resolves only the exact current thumbnail and rejects stale or cross-owner effects', async () => {
     const fixture = await createGlobalLibraryRuntimeFixture();
     const assetPath = path.join(fixture.assetRoot, 'hero.png');
@@ -332,7 +327,7 @@ describe('DesktopResourceBrowserRuntime global libraries', () => {
     await mkdir(externalRoot, { recursive: true });
     await writeFile(assetPath, 'image');
     await writeFile(path.join(externalRoot, 'shot.mp4'), 'video');
-    await createDesktopGlobalMediaLibraryConnection({
+    await createGlobalMediaLibraryConnection({
       mediaLibraryRoot: fixture.mediaLibraryRoot,
       sourceDirectory: externalRoot,
       locationKind: 'local',
@@ -416,7 +411,7 @@ describe('DesktopResourceBrowserRuntime global libraries', () => {
     const externalRoot = path.join(fixture.root, 'Footage');
     await mkdir(externalRoot, { recursive: true });
     await writeFile(path.join(externalRoot, 'shot.mp4'), 'video');
-    await createDesktopGlobalMediaLibraryConnection({
+    await createGlobalMediaLibraryConnection({
       mediaLibraryRoot: fixture.mediaLibraryRoot,
       sourceDirectory: externalRoot,
       locationKind: 'local',
@@ -456,7 +451,9 @@ describe('DesktopResourceBrowserRuntime global libraries', () => {
     let startedCount = 0;
     const fixture = await createGlobalLibraryRuntimeFixture({
       createGlobalLibraryThumbnail: vi.fn(
-        ({ signal }: Parameters<DesktopResourceBrowserRuntimeOptions['createGlobalLibraryThumbnail']>[0]) =>
+        ({
+          signal,
+        }: Parameters<ResourceBrowserNodeRuntimeOptions['createGlobalLibraryThumbnail']>[0]) =>
           new Promise<string>((_resolve, reject) => {
             startedCount += 1;
             if (startedCount === 2) thumbnailsStarted.resolve();
@@ -498,8 +495,7 @@ describe('DesktopResourceBrowserRuntime global libraries', () => {
         variant: 'hover',
       },
     } as const;
-    const pendingHoverThumbnail =
-      fixture.runtime.resolveHomeLibraryThumbnail(thumbnailRequest);
+    const pendingHoverThumbnail = fixture.runtime.resolveHomeLibraryThumbnail(thumbnailRequest);
     const pendingIconThumbnail = fixture.runtime.resolveHomeLibraryThumbnail({
       ...thumbnailRequest,
       request: { ...thumbnailRequest.request, variant: 'icon' },
@@ -544,10 +540,12 @@ function accepted(value: unknown): CanvasHostIntentResult {
   };
 }
 
-async function createGlobalLibraryRuntimeFixture(overrides: {
-  readonly selectGlobalAssetSources?: DesktopResourceBrowserRuntimeOptions['selectGlobalAssetSources'];
-  readonly createGlobalLibraryThumbnail?: DesktopResourceBrowserRuntimeOptions['createGlobalLibraryThumbnail'];
-} = {}) {
+async function createGlobalLibraryRuntimeFixture(
+  overrides: {
+    readonly selectGlobalAssetSources?: ResourceBrowserNodeRuntimeOptions['selectGlobalAssetSources'];
+    readonly createGlobalLibraryThumbnail?: ResourceBrowserNodeRuntimeOptions['createGlobalLibraryThumbnail'];
+  } = {},
+) {
   const root = await mkdtemp(path.join(tmpdir(), 'openneko-global-library-runtime-'));
   temporaryRoots.push(root);
   const home = path.join(root, 'home');
@@ -567,10 +565,9 @@ async function createGlobalLibraryRuntimeFixture(overrides: {
   const selectGlobalAssetSources =
     overrides.selectGlobalAssetSources ?? vi.fn(async () => undefined);
   const createGlobalLibraryThumbnail =
-    overrides.createGlobalLibraryThumbnail ??
-    vi.fn(async () => 'data:image/png;base64,AA==');
+    overrides.createGlobalLibraryThumbnail ?? vi.fn(async () => 'data:image/png;base64,AA==');
   const trashGlobalAsset = vi.fn(async () => undefined);
-  const runtime = new DesktopResourceBrowserRuntime({
+  const runtime = new ResourceBrowserNodeRuntime({
     globalAssetRoot: assetRoot,
     globalMediaLibraryRoot: mediaLibraryRoot,
     shell,
@@ -619,7 +616,7 @@ function createGlobalLibraryShell(): DesktopShellService {
     },
   };
   const registry: DesktopWorkspaceRegistry = {
-    resolve: async (): Promise<DesktopWorkspaceResolution> => {
+    resolve: async (): Promise<AssetWorkspaceResolution> => {
       throw new Error('Workspace resolution is not expected by this global-library test.');
     },
     dispose: async () => undefined,

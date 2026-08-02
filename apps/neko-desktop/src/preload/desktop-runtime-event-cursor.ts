@@ -1,5 +1,3 @@
-export function preserveDesktopBootstrapEventSequence(
-  current: number | undefined,
-): number {
+export function preserveDesktopBootstrapEventSequence(current: number | undefined): number {
   return current ?? 0;
 }

@@ -1,18 +1,15 @@
-import { nekoDesignTokens } from '@neko/shared/theme';
+import { nekoDesignTokens } from '@neko/ui/theme';
 import {
   DESKTOP_BACKGROUND_COLORS,
   type DesktopResolvedTheme,
 } from '../shared/desktop-presentation-contract';
-import type { DesktopThemePreference } from '../shared/application-settings-contract';
+import type { DesktopThemePreference } from '@neko/host/application-settings';
 
 const DESKTOP_DARK_THEME_QUERY = '(prefers-color-scheme: dark)';
 
 export interface DesktopThemeMediaQuery {
   readonly matches: boolean;
-  addEventListener(
-    type: 'change',
-    listener: (event: { readonly matches: boolean }) => void,
-  ): void;
+  addEventListener(type: 'change', listener: (event: { readonly matches: boolean }) => void): void;
   removeEventListener(
     type: 'change',
     listener: (event: { readonly matches: boolean }) => void,
@@ -98,9 +95,7 @@ export const desktopNativeThemeTokens = {
     '--neko-desktop-shadow-overlay':
       '0 2px 8px rgba(0, 0, 0, 0.34), 0 22px 58px rgba(0, 0, 0, 0.46)',
   },
-} as const satisfies Readonly<
-  Record<DesktopResolvedTheme, Readonly<Record<string, string>>>
->;
+} as const satisfies Readonly<Record<DesktopResolvedTheme, Readonly<Record<string, string>>>>;
 
 const desktopWebviewThemeTokens = {
   light: {
@@ -147,9 +142,7 @@ const desktopWebviewThemeTokens = {
     '--neko-scrollbarSlider-activeBackground': 'rgba(214, 224, 218, 0.34)',
     '--neko-inputValidation-errorBackground': '#3a2327',
   },
-} as const satisfies Readonly<
-  Record<DesktopResolvedTheme, Readonly<Record<string, string>>>
->;
+} as const satisfies Readonly<Record<DesktopResolvedTheme, Readonly<Record<string, string>>>>;
 
 const desktopWebviewSharedThemeTokens = {
   '--neko-editor-background': 'var(--neko-desktop-main)',
@@ -171,15 +164,11 @@ const desktopWebviewSharedThemeTokens = {
   '--neko-widget-border': 'var(--neko-desktop-border)',
   '--neko-toolbar-hoverBackground': 'var(--neko-desktop-control-hover)',
   '--neko-toolbar-activeBackground': 'var(--neko-desktop-control-pressed)',
-  '--neko-font-family':
-    '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif',
+  '--neko-font-family': '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif',
   '--neko-font-size': '13px',
 } as const;
 
-export function applyResolvedDesktopTheme(
-  target: Document,
-  theme: DesktopResolvedTheme,
-): void {
+export function applyResolvedDesktopTheme(target: Document, theme: DesktopResolvedTheme): void {
   const root = target.documentElement;
   const nekoThemeKind = theme === 'dark' ? 'neko-dark' : 'neko-light';
   root.dataset.nekoTheme = theme;
@@ -208,8 +197,7 @@ export function startDesktopTheme(
   initialPreference: DesktopThemePreference,
   providedMediaQuery?: DesktopThemeMediaQuery,
 ): DesktopThemeController {
-  const mediaQuery =
-    providedMediaQuery ?? target.defaultView?.matchMedia(DESKTOP_DARK_THEME_QUERY);
+  const mediaQuery = providedMediaQuery ?? target.defaultView?.matchMedia(DESKTOP_DARK_THEME_QUERY);
   if (!mediaQuery) {
     throw new Error('Desktop system theme requires matchMedia support.');
   }
@@ -240,10 +228,7 @@ export function startDesktopTheme(
   };
 }
 
-function applyTokens(
-  root: HTMLElement,
-  tokens: Readonly<Record<string, string>>,
-): void {
+function applyTokens(root: HTMLElement, tokens: Readonly<Record<string, string>>): void {
   for (const [name, value] of Object.entries(tokens)) {
     root.style.setProperty(name, value);
   }

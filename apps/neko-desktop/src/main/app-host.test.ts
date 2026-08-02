@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createToolRegistry } from '@neko/agent/tool-registry';
-import { createOpenNekoPiModels } from '@neko/agent/pi';
+import { createToolRegistry } from '@neko-agent/runtime/tool-registry';
+import { createOpenNekoPiModels } from '@neko-agent/runtime/pi';
 import type { ILogger } from '@neko/shared/logger';
 import { createDesktopAgentBootstrapRequest } from '../shared/agent-contract';
 import { createDesktopBootstrapRequest } from '../shared/bridge-contract';
@@ -8,7 +8,7 @@ import {
   DEFAULT_DESKTOP_APPLICATION_PREFERENCES,
   createDesktopApplicationSettingsRequest,
   createDesktopApplicationSettingsUpdateRequest,
-} from '../shared/application-settings-contract';
+} from '@neko/host/application-settings';
 import {
   createDesktopHomeAssetSearchRequest,
   createDesktopHomeMediaLibraryAddRequest,
@@ -27,10 +27,8 @@ import type {
   DesktopAgentWorkspaceRuntime,
 } from './desktop-agent-app-host-composition';
 import { createDesktopAgentCredentialRuntime } from './desktop-agent-credential-runtime';
-import type {
-  DesktopWorkspaceRegistry,
-  DesktopWorkspaceResolution,
-} from './desktop-workspace-registry';
+import type { DesktopWorkspaceRegistry } from './desktop-workspace-registry';
+import type { AssetWorkspaceResolution } from '@neko-assets/domain/contracts';
 import { createElectronNekoHostPorts } from './electron-host-ports';
 import { DESKTOP_APP_ORIGIN } from './security';
 import { DesktopShellService } from './shell-service';
@@ -42,12 +40,12 @@ import {
   DesktopApplicationSettingsRepository,
   type DesktopApplicationSettingsFilePort,
 } from './application-settings-repository';
-import { DesktopApplicationSettingsService } from './application-settings-service';
+import { DesktopApplicationSettingsService } from '@neko/host/application-settings-service';
 import type {
   DesktopExtensionCatalogSnapshot,
   DesktopExtensionManager,
 } from './desktop-extension-manager';
-import type { DesktopPersonalSkillManager } from './desktop-personal-skill-manager';
+import type { PersonalSkillManager } from '@neko-agent/runtime/pi';
 
 describe('DesktopAppHost', () => {
   it('keeps Desktop settings sender-bound and opens Agent configuration through its owner action', async () => {
@@ -863,7 +861,7 @@ function createExtensionManager(): DesktopExtensionManager & {
   };
 }
 
-function createPersonalSkillManager(): DesktopPersonalSkillManager {
+function createPersonalSkillManager(): PersonalSkillManager {
   return {
     install: vi.fn(),
     remove: vi.fn(),
@@ -905,7 +903,7 @@ function createAgentComposition(): DesktopAgentAppHostComposition & {
   return {
     credentialRuntime,
     setHomeWorkspaceScope: vi.fn<(workspaceIds: readonly string[]) => void>(),
-    attachWorkspace: vi.fn(async (workspace: DesktopWorkspaceResolution) =>
+    attachWorkspace: vi.fn(async (workspace: AssetWorkspaceResolution) =>
       createAgentWorkspaceRuntime(workspace.workspaceId),
     ),
     getWorkspace: vi.fn(() => undefined),
@@ -979,7 +977,7 @@ function createTestPiModels() {
   });
 }
 
-function createWorkspaceResolution(): DesktopWorkspaceResolution {
+function createWorkspaceResolution(): AssetWorkspaceResolution {
   return {
     workspaceId: '11111111-1111-4111-8111-111111111111',
     workspacePath: '/workspace/demo',

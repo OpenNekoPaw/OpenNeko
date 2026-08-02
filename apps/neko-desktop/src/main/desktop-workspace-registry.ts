@@ -1,31 +1,19 @@
 import { stat } from 'node:fs/promises';
 import * as path from 'node:path';
-import type {
-  LocalMetadataRepositories,
-  LocalMetadataStore,
-} from '@neko/shared/local-metadata';
-import { createNodeSqliteLocalMetadataStore } from '@neko/shared/local-metadata/node-sqlite-local-metadata-store';
-import { resolveNodeWorkspaceIdentity } from '@neko/shared/local-metadata/node-workspace-identity';
+import type { LocalMetadataRepositories, LocalMetadataStore } from '@neko/local-metadata';
+import { createNodeSqliteLocalMetadataStore } from '@neko/local-metadata/node-sqlite-local-metadata-store';
+import { resolveNodeWorkspaceIdentity } from '@neko/local-metadata/node-workspace-identity';
 import {
   AGENT_STATE_MIGRATIONS,
   M1_LOCAL_METADATA_MIGRATIONS,
   MEDIA_METADATA_MIGRATIONS,
-} from '@neko/shared/local-metadata/sqlite';
-import { resolveGlobalStorageLayout } from '@neko/shared/types/storage';
-
-export interface DesktopWorkspaceResolution {
-  readonly workspaceId: string;
-  readonly workspacePath: string;
-  readonly displayName: string;
-  readonly locator: {
-    readonly kind: 'relative' | 'variable';
-    readonly value: string;
-  };
-}
+} from '@neko/local-metadata/sqlite';
+import { resolveGlobalStorageLayout } from '@neko/local-metadata';
+import type { AssetWorkspaceResolution } from '@neko-assets/domain/contracts';
 
 export interface DesktopWorkspaceRegistry {
   readonly metadataRepositories?: LocalMetadataRepositories;
-  resolve(workspacePath: string): Promise<DesktopWorkspaceResolution>;
+  resolve(workspacePath: string): Promise<AssetWorkspaceResolution>;
   dispose(): Promise<void>;
 }
 
@@ -34,8 +22,7 @@ export async function createDesktopWorkspaceRegistry(options: {
   readonly metadataStore?: LocalMetadataStore;
 }): Promise<DesktopWorkspaceRegistry> {
   const homedir = path.resolve(options.homedir);
-  const metadataStore =
-    options.metadataStore ?? createNodeSqliteLocalMetadataStore({ homedir });
+  const metadataStore = options.metadataStore ?? createNodeSqliteLocalMetadataStore({ homedir });
   await metadataStore.open({
     databasePath: resolveGlobalStorageLayout(homedir).database,
     busyTimeoutMs: 2_000,
@@ -58,7 +45,7 @@ class NodeDesktopWorkspaceRegistry implements DesktopWorkspaceRegistry {
     return this.metadataStore.repositories;
   }
 
-  async resolve(workspacePath: string): Promise<DesktopWorkspaceResolution> {
+  async resolve(workspacePath: string): Promise<AssetWorkspaceResolution> {
     this.requireActive();
     const absolutePath = path.resolve(workspacePath);
     const workspaceStat = await stat(absolutePath);

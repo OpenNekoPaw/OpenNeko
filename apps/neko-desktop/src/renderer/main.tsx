@@ -1,6 +1,6 @@
 import { StrictMode, useCallback, useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { I18nProvider } from '@neko/shared/i18n/react';
+import { I18nProvider } from '@neko/ui/i18n/react';
 import { DesktopApplication } from './DesktopShell';
 import { startDesktopTheme, type DesktopThemeController } from './desktop-theme';
 import { applyDesktopLocale, createDesktopI18n, resolveDesktopLocalePreference } from './i18n';
@@ -8,8 +8,8 @@ import { DesktopApplicationSettingsProvider } from './application-settings-conte
 import type {
   DesktopApplicationPreferences,
   DesktopApplicationSettingsProjection,
-} from '../shared/application-settings-contract';
-import type { WebviewI18nAdapter } from '@neko/shared/i18n/webview';
+} from '@neko/host/application-settings';
+import type { WebviewI18nAdapter } from '@neko/ui/i18n/webview';
 import { initializeDesktopRendererBridge } from './desktop-renderer-startup';
 
 const rootElement = document.getElementById('root');

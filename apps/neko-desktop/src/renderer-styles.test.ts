@@ -110,7 +110,10 @@ describe('Desktop renderer styles', () => {
 
   it('keeps the Global Library as an aligned unframed workbench surface', () => {
     const packageStyles = readFileSync(
-      new URL('../../../packages/neko-assets/src/global-library/style.css', import.meta.url),
+      new URL(
+        '../../../packages/neko-assets-webview/src/global-library/style.css',
+        import.meta.url,
+      ),
       'utf8',
     );
     const browserRule = packageStyles.match(/\.global-library-browser\s*\{(?<body>[\s\S]*?)\n\}/u);

@@ -113,9 +113,7 @@ describe('Desktop Canvas Webview delegate', () => {
     });
     const delegate = createDesktopCanvasWebviewDelegate(identity);
 
-    expect(() => delegate.postMessage({ type: 'desktop:unknown' })).toThrow(
-      'unsupported message',
-    );
+    expect(() => delegate.postMessage({ type: 'desktop:unknown' })).toThrow('unsupported message');
     expect(() =>
       delegate.postMessage({
         type: 'media:probe',

@@ -8,9 +8,7 @@ export interface ResolveDesktopBuiltinSkillRootInput {
   readonly resourcesPath: string;
 }
 
-export function resolveDesktopBuiltinSkillRoot(
-  input: ResolveDesktopBuiltinSkillRootInput,
-): string {
+export function resolveDesktopBuiltinSkillRoot(input: ResolveDesktopBuiltinSkillRootInput): string {
   return input.isPackaged
     ? join(input.resourcesPath, DESKTOP_BUILTIN_SKILL_RESOURCE_DIRECTORY)
     : resolveDesktopBuiltinSkillSourceRoot(input.appPath);

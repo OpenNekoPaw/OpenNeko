@@ -10,10 +10,12 @@ import {
   type CanvasHostRuntimeIdentity,
   type CanvasHostSnapshot,
   type CanvasMaterialActionResolution,
-  type CanvasGenerationProjectionSnapshot,
   type CanvasMaterialActionTarget,
+  type CanvasGenerationApplicationPort,
+  createCanvasMaterialActionOwner,
 } from '@neko-canvas/domain';
 import type { NekoHostPorts } from '@neko/host/ports';
+import { type ContentLocator } from '@neko/content';
 import {
   CANVAS_VERSION,
   loadNkc,
@@ -23,17 +25,15 @@ import {
   type CanvasMediaLibraryCopyConflictPolicy,
   type CanvasMaterialMediaKind,
   type CanvasReferencedContentLocator,
-  type ContentLocator,
-} from '@neko/shared';
+} from '@neko-canvas/domain';
 import type { DesktopCanvasViewGrant } from './shell-service';
 import type { DesktopWorkbenchLayoutProjection } from '../shared/workbench-contract';
 import {
-  DesktopCanvasMaterialAuthoringService,
-  type DesktopCanvasExternalSource,
-} from './desktop-canvas-material-authoring';
-import { createDesktopCanvasMaterialActionOwner } from './desktop-canvas-material-actions';
-import { DesktopCanvasMediaLibraryCopyService } from './desktop-canvas-media-library-copy';
-import { resolveDesktopWorkspaceContentLocator } from './desktop-content-locator';
+  CanvasMaterialAuthoringService,
+  CanvasMediaLibraryCopyService,
+  type CanvasExternalSource,
+} from '@neko-canvas/node';
+import { resolveWorkspaceContentLocator } from '@neko-assets/node';
 import {
   parseDesktopCanvasMediaRequest,
   parseDesktopCanvasPreviewVariantRequest,
@@ -68,40 +68,10 @@ export interface DesktopCanvasMediaPort {
   dispose(): Promise<void>;
 }
 
-export interface DesktopCanvasGenerationPort {
-  requestDraft?(input: {
-    readonly identity: CanvasHostRuntimeIdentity;
-    readonly workspace: DesktopCanvasViewGrant['workspace'];
-    readonly mediaKind: CanvasMaterialMediaKind;
-    readonly position?: { readonly x: number; readonly y: number };
-    readonly inputNodeIds: readonly string[];
-  }): Promise<CanvasGenerationProjectionSnapshot | undefined>;
-  resolveResultActions?(input: {
-    readonly identity: CanvasHostRuntimeIdentity;
-    readonly workspace: DesktopCanvasViewGrant['workspace'];
-    readonly target: CanvasMaterialActionTarget;
-  }): Promise<{
-    readonly regenerate: boolean;
-    readonly editAndGenerate: boolean;
-  }>;
-  regenerateResult?(input: {
-    readonly identity: CanvasHostRuntimeIdentity;
-    readonly workspace: DesktopCanvasViewGrant['workspace'];
-    readonly target: CanvasMaterialActionTarget;
-  }): Promise<CanvasGenerationProjectionSnapshot>;
-  editAndGenerateResult?(input: {
-    readonly identity: CanvasHostRuntimeIdentity;
-    readonly workspace: DesktopCanvasViewGrant['workspace'];
-    readonly target: CanvasMaterialActionTarget;
-  }): Promise<CanvasGenerationProjectionSnapshot | undefined>;
-  detachWindow(windowId: string): void;
-  dispose(): Promise<void>;
-}
-
 export type DesktopCanvasSourceSelection =
   | {
       readonly kind: 'external-import';
-      readonly source: DesktopCanvasExternalSource;
+      readonly source: CanvasExternalSource;
     }
   | {
       readonly kind: 'workspace-reference';
@@ -125,8 +95,8 @@ export interface DesktopCanvasGlobalMediaLibraryCopySelection {
 
 export class DesktopCanvasRuntime {
   private readonly sessions = new Map<string, DesktopCanvasSessionEntry>();
-  private readonly materialAuthoring: DesktopCanvasMaterialAuthoringService;
-  private readonly mediaLibraryCopy: DesktopCanvasMediaLibraryCopyService;
+  private readonly materialAuthoring: CanvasMaterialAuthoringService;
+  private readonly mediaLibraryCopy: CanvasMediaLibraryCopyService;
   private disposed = false;
 
   constructor(
@@ -181,14 +151,14 @@ export class DesktopCanvasRuntime {
         readonly editAndGenerate?: string;
       };
       readonly media?: DesktopCanvasMediaPort;
-      readonly generation?: DesktopCanvasGenerationPort;
+      readonly generation?: CanvasGenerationApplicationPort;
     },
   ) {
-    this.materialAuthoring = new DesktopCanvasMaterialAuthoringService({
+    this.materialAuthoring = new CanvasMaterialAuthoringService({
       host: options.host,
       globalMediaLibraryRoot: options.globalMediaLibraryRoot,
     });
-    this.mediaLibraryCopy = new DesktopCanvasMediaLibraryCopyService({
+    this.mediaLibraryCopy = new CanvasMediaLibraryCopyService({
       globalMediaLibraryRoot: options.globalMediaLibraryRoot,
     });
   }
@@ -226,12 +196,9 @@ export class DesktopCanvasRuntime {
     const entry = await this.requireSession(windowId, request.identity);
     const createPreviewVariant = this.options.createPreviewVariant;
     if (!createPreviewVariant) {
-      throw new Error('Desktop Canvas preview variant capability is unavailable.');
+      throw new Error('Canvas preview variant capability is unavailable.');
     }
-    const absolutePath = await resolveDesktopWorkspaceContentLocator(
-      entry.workspace,
-      request.locator,
-    );
+    const absolutePath = await resolveWorkspaceContentLocator(entry.workspace, request.locator);
     return {
       requestId: request.requestId,
       url: await createPreviewVariant({
@@ -248,7 +215,7 @@ export class DesktopCanvasRuntime {
     const request = parseDesktopCanvasMediaRequest(value);
     const entry = await this.requireSession(windowId, request.identity);
     const media = this.options.media;
-    if (!media) throw new Error('Desktop Canvas media capability is unavailable.');
+    if (!media) throw new Error('Canvas media capability is unavailable.');
     return media.execute(request, entry.workspace);
   }
 
@@ -314,7 +281,7 @@ export class DesktopCanvasRuntime {
     const documentPath =
       identity.documentId === 'neko/boards/workspace.nkc'
         ? this.options.host.paths.join(grant.workspace.workspacePath, identity.documentId)
-        : await resolveDesktopWorkspaceContentLocator(grant.workspace, {
+        : await resolveWorkspaceContentLocator(grant.workspace, {
             kind: 'workspace-file',
             path: identity.documentId,
           });
@@ -331,10 +298,7 @@ export class DesktopCanvasRuntime {
     const editAndGenerate = generation?.editAndGenerateResult;
     const previewEffect = previewResource
       ? async (requestIdentity: CanvasHostRuntimeIdentity, locator: ContentLocator) => {
-          const absolutePath = await resolveDesktopWorkspaceContentLocator(
-            grant.workspace,
-            locator,
-          );
+          const absolutePath = await resolveWorkspaceContentLocator(grant.workspace, locator);
           await previewResource({
             identity: requestIdentity,
             locator,
@@ -346,14 +310,14 @@ export class DesktopCanvasRuntime {
       requestIdentity: CanvasHostRuntimeIdentity,
       locator: ContentLocator,
     ) => {
-      const absolutePath = await resolveDesktopWorkspaceContentLocator(grant.workspace, locator);
+      const absolutePath = await resolveWorkspaceContentLocator(grant.workspace, locator);
       const revealPath = this.options.host.external?.revealPath;
       if (!revealPath) {
-        throw new Error('Desktop Canvas reveal capability is unavailable.');
+        throw new Error('Canvas reveal capability is unavailable.');
       }
       await revealPath(absolutePath);
     };
-    const materialActionOwner = createDesktopCanvasMaterialActionOwner({
+    const materialActionOwner = createCanvasMaterialActionOwner({
       ...(this.options.materialActionLabels ? { labels: this.options.materialActionLabels } : {}),
       ...(previewEffect
         ? {
@@ -379,10 +343,7 @@ export class DesktopCanvasRuntime {
               resolveCut({
                 identity: requestIdentity,
                 target,
-                absolutePath: await resolveDesktopWorkspaceContentLocator(
-                  grant.workspace,
-                  target.locator,
-                ),
+                absolutePath: await resolveWorkspaceContentLocator(grant.workspace, target.locator),
               }),
             openInCut: async ({
               identity: requestIdentity,
@@ -394,10 +355,7 @@ export class DesktopCanvasRuntime {
               openInCut({
                 identity: requestIdentity,
                 target,
-                absolutePath: await resolveDesktopWorkspaceContentLocator(
-                  grant.workspace,
-                  target.locator,
-                ),
+                absolutePath: await resolveWorkspaceContentLocator(grant.workspace, target.locator),
               }),
           }
         : {}),
@@ -633,7 +591,7 @@ export class DesktopCanvasRuntime {
     try {
       const stat = await this.options.host.files.stat(documentPath);
       if (stat.type !== 'file') {
-        throw new Error('Desktop Canvas document is not a file.');
+        throw new Error('Canvas document is not a file.');
       }
     } catch (error: unknown) {
       if (isFileNotFound(error)) {
@@ -649,7 +607,7 @@ export class DesktopCanvasRuntime {
     }
     const loaded = loadNkc(await this.options.host.files.readText(documentPath));
     if (!loaded.validation.valid) {
-      throw new Error('Desktop Canvas document is invalid.');
+      throw new Error('Canvas document is invalid.');
     }
     return loaded.data;
   }
@@ -670,7 +628,7 @@ export class DesktopCanvasRuntime {
   }
 
   private requireActive(): void {
-    if (this.disposed) throw new Error('Desktop Canvas runtime is disposed.');
+    if (this.disposed) throw new Error('Canvas runtime is disposed.');
   }
 }
 
@@ -746,11 +704,11 @@ function portableBaseName(value: string): string {
 }
 
 async function requireMediaLibraryCopySuccess(
-  operation: ReturnType<DesktopCanvasMediaLibraryCopyService['copy']>,
+  operation: ReturnType<CanvasMediaLibraryCopyService['copy']>,
 ): Promise<void> {
   const result = await operation;
   if (result.status === 'unavailable') {
-    throw new Error(`Desktop Canvas Media Library copy failed: ${result.diagnostic.code}.`);
+    throw new Error(`Canvas Media Library copy failed: ${result.diagnostic.code}.`);
   }
 }
 

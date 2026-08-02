@@ -2,9 +2,10 @@ import { access, lstat, readFile, realpath } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import { isAbsolute, relative, resolve } from 'node:path';
 
-import { createAllMCPTools, MCPManager } from '@neko/agent';
-import { createNodePiSkillHost, type SkillSourceRoot } from '@neko/agent/pi';
-import type { MCPServerConfig, Tool } from '@neko/shared';
+import { createAllMCPTools, MCPManager } from '@neko-agent/runtime';
+import { createNodePiSkillHost, type SkillSourceRoot } from '@neko-agent/runtime/pi';
+import type { MCPServerConfig } from '@neko-agent/contracts';
+import type { Tool } from '@neko-agent/contracts';
 
 import type {
   DesktopExtensionAgentSupportPort,

@@ -21,9 +21,7 @@ export function createDesktopNativeThemeController(input: {
   readonly listWindows: () => Iterable<DesktopNativeThemeWindow>;
 }): DesktopNativeThemeController {
   const synchronizeWindowBackgrounds = (): void => {
-    const backgroundColor = resolveDesktopBackgroundColor(
-      input.nativeTheme.shouldUseDarkColors,
-    );
+    const backgroundColor = resolveDesktopBackgroundColor(input.nativeTheme.shouldUseDarkColors);
     for (const window of input.listWindows()) {
       if (!window.isDestroyed()) window.setBackgroundColor(backgroundColor);
     }

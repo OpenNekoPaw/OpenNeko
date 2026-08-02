@@ -4,7 +4,9 @@ import {
   type AgentHostRouteUnavailableDiagnostic,
   type AgentHostToWebviewMessage,
   type AgentWebviewToHostMessage,
-} from '@neko-agent/types';
+  type DesktopAgentConnectionIdentity,
+  type DesktopAgentViewIdentity,
+} from '@neko-agent/contracts';
 
 export const DESKTOP_AGENT_CONTRACT_VERSION = 1 as const;
 
@@ -23,22 +25,7 @@ export const DESKTOP_AGENT_RUNTIME_REQUIREMENTS = [
   'projection-effects',
 ] as const;
 
-export type DesktopAgentRuntimeRequirement =
-  (typeof DESKTOP_AGENT_RUNTIME_REQUIREMENTS)[number];
-
-export interface DesktopAgentViewIdentity {
-  readonly projectId: string;
-  readonly viewId: string;
-  readonly viewEpoch: number;
-}
-
-export interface DesktopAgentConnectionIdentity extends DesktopAgentViewIdentity {
-  readonly applicationInstanceId: string;
-  readonly windowId: string;
-  readonly workspaceId: string;
-  readonly rendererEpoch: number;
-  readonly connectionId: string;
-}
+export type DesktopAgentRuntimeRequirement = (typeof DESKTOP_AGENT_RUNTIME_REQUIREMENTS)[number];
 
 export interface DesktopAgentBootstrapRequest extends DesktopAgentViewIdentity {
   readonly schemaVersion: typeof DESKTOP_AGENT_CONTRACT_VERSION;
@@ -67,8 +54,7 @@ export interface DesktopAgentUnavailableBootstrapProjection {
 }
 
 export type DesktopAgentBootstrapProjection =
-  | DesktopAgentReadyBootstrapProjection
-  | DesktopAgentUnavailableBootstrapProjection;
+  DesktopAgentReadyBootstrapProjection | DesktopAgentUnavailableBootstrapProjection;
 
 export interface DesktopAgentMessageRequest {
   readonly schemaVersion: typeof DESKTOP_AGENT_CONTRACT_VERSION;
@@ -91,8 +77,7 @@ export interface DesktopAgentUnavailableMessageResult {
 }
 
 export type DesktopAgentMessageResult =
-  | DesktopAgentAcceptedMessageResult
-  | DesktopAgentUnavailableMessageResult;
+  DesktopAgentAcceptedMessageResult | DesktopAgentUnavailableMessageResult;
 
 export interface DesktopAgentMessageEvent {
   readonly schemaVersion: typeof DESKTOP_AGENT_CONTRACT_VERSION;
@@ -147,24 +132,16 @@ export function createDesktopAgentBootstrapRequest(
   };
 }
 
-export function parseDesktopAgentBootstrapRequest(
-  value: unknown,
-): DesktopAgentBootstrapRequest {
+export function parseDesktopAgentBootstrapRequest(value: unknown): DesktopAgentBootstrapRequest {
   const record = requireRecord(value, 'Desktop Agent bootstrap request must be an object.');
   requireVersion(record['schemaVersion']);
   return createDesktopAgentBootstrapRequest(
-    requireNonEmptyString(
-      record['requestId'],
-      'Desktop Agent bootstrap requestId is required.',
-    ),
+    requireNonEmptyString(record['requestId'], 'Desktop Agent bootstrap requestId is required.'),
     requireNonEmptyString(
       record['projectId'],
       'Desktop Agent bootstrap Project identity is required.',
     ),
-    requireNonEmptyString(
-      record['viewId'],
-      'Desktop Agent bootstrap View identity is required.',
-    ),
+    requireNonEmptyString(record['viewId'], 'Desktop Agent bootstrap View identity is required.'),
     requirePositiveInteger(
       record['viewEpoch'],
       'Desktop Agent bootstrap View epoch must be a positive integer.',
@@ -193,10 +170,7 @@ export function parseDesktopAgentMessageRequest(value: unknown): DesktopAgentMes
   const record = requireRecord(value, 'Desktop Agent message request must be an object.');
   requireVersion(record['schemaVersion']);
   return createDesktopAgentMessageRequest(
-    requireNonEmptyString(
-      record['requestId'],
-      'Desktop Agent message requestId is required.',
-    ),
+    requireNonEmptyString(record['requestId'], 'Desktop Agent message requestId is required.'),
     parseConnectionIdentity(record['connection']),
     record['message'],
   );
@@ -252,20 +226,14 @@ export function parseDesktopAgentMessageResult(
     const code = diagnostic['code'];
     if (
       (support !== 'unsupported' && support !== 'host-inapplicable') ||
-      (code !== 'agent-host-route-unsupported' &&
-        code !== 'agent-host-route-inapplicable') ||
+      (code !== 'agent-host-route-unsupported' && code !== 'agent-host-route-inapplicable') ||
       (support === 'unsupported' && code !== 'agent-host-route-unsupported') ||
       (support === 'host-inapplicable' && code !== 'agent-host-route-inapplicable')
     ) {
       throw invalidPayload('Desktop Agent route diagnostic support is invalid.');
     }
     const owner = diagnostic['owner'];
-    if (
-      owner !== undefined &&
-      owner !== 'P1.4' &&
-      owner !== 'P1.6' &&
-      owner !== 'Phase 3'
-    ) {
+    if (owner !== undefined && owner !== 'P1.4' && owner !== 'P1.6' && owner !== 'Phase 3') {
       throw invalidPayload('Desktop Agent route diagnostic owner is invalid.');
     }
     return {
@@ -326,10 +294,7 @@ function parseConnectionIdentity(value: unknown): DesktopAgentConnectionIdentity
       record['workspaceId'],
       'Desktop Agent Workspace identity is required.',
     ),
-    viewId: requireNonEmptyString(
-      record['viewId'],
-      'Desktop Agent View identity is required.',
-    ),
+    viewId: requireNonEmptyString(record['viewId'], 'Desktop Agent View identity is required.'),
     viewEpoch: requirePositiveInteger(
       record['viewEpoch'],
       'Desktop Agent View epoch must be a positive integer.',
@@ -398,9 +363,7 @@ function requireRuntimeRequirement(value: unknown): DesktopAgentRuntimeRequireme
   return value;
 }
 
-function requireAgentMessageType(
-  value: unknown,
-): AgentWebviewToHostMessage['type'] {
+function requireAgentMessageType(value: unknown): AgentWebviewToHostMessage['type'] {
   if (!isAgentWebviewToHostMessageType(value)) {
     throw invalidPayload(`Unknown Desktop Agent route '${String(value)}'.`);
   }
@@ -496,10 +459,7 @@ const AGENT_HOST_TO_WEBVIEW_MESSAGE_TYPES = [
 
 type AssertNever<Value extends never> = Value;
 export type DesktopAgentHostMessageTypeCoverage = AssertNever<
-  Exclude<
-    AgentHostToWebviewMessage['type'],
-    (typeof AGENT_HOST_TO_WEBVIEW_MESSAGE_TYPES)[number]
-  >
+  Exclude<AgentHostToWebviewMessage['type'], (typeof AGENT_HOST_TO_WEBVIEW_MESSAGE_TYPES)[number]>
 >;
 
 function isAgentHostToWebviewMessage(value: unknown): value is AgentHostToWebviewMessage {

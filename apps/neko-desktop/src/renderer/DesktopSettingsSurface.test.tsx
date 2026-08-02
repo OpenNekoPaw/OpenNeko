@@ -1,13 +1,13 @@
 // @vitest-environment jsdom
 
-import { I18nProvider } from '@neko/shared/i18n/react';
+import { I18nProvider } from '@neko/ui/i18n/react';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   DESKTOP_APPLICATION_SETTINGS_CONTRACT_VERSION,
   type DesktopApplicationSettingsProjection,
-} from '../shared/application-settings-contract';
+} from '@neko/host/application-settings';
 import { DesktopSettingsSurface } from './DesktopSettingsSurface';
 import { DesktopApplicationSettingsProvider } from './application-settings-context';
 import { createDesktopI18n } from './i18n';
@@ -89,16 +89,17 @@ describe('DesktopSettingsSurface', () => {
   it('exposes the application primary-sidebar resize control', async () => {
     const { container, root } = await renderSettings();
 
-    expect(
-      container.querySelector('[aria-label="Resize application navigation"]'),
-    ).not.toBeNull();
+    expect(container.querySelector('[aria-label="Resize application navigation"]')).not.toBeNull();
 
     await act(async () => root.unmount());
   });
 
   it('commits the final application sidebar width through the shared resize binding', async () => {
     const onResizeEnd = vi.fn();
-    vi.stubGlobal('requestAnimationFrame', vi.fn(() => 1));
+    vi.stubGlobal(
+      'requestAnimationFrame',
+      vi.fn(() => 1),
+    );
     vi.stubGlobal('cancelAnimationFrame', vi.fn());
     const { container, root } = await renderSettings({ onResizeEnd });
     const frame = container.querySelector<HTMLElement>(
@@ -138,10 +139,7 @@ describe('DesktopSettingsSurface', () => {
     const search = container.querySelector<HTMLInputElement>('input[type="search"]');
     if (!search) throw new Error('Settings fixture requires a search field.');
     await act(async () => {
-      const setValue = Object.getOwnPropertyDescriptor(
-        HTMLInputElement.prototype,
-        'value',
-      )?.set;
+      const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
       if (!setValue) throw new Error('HTMLInputElement value setter is unavailable.');
       setValue.call(search, 'theme');
       search.dispatchEvent(new Event('input', { bubbles: true }));
@@ -162,7 +160,9 @@ async function renderSettings({
   readonly onBack?: () => void;
   readonly onResizeEnd?: (width: number) => void;
   readonly openAgentAdvanced?: () => Promise<void>;
-  readonly update?: (preferences: DesktopApplicationSettingsProjection['preferences']) => Promise<void>;
+  readonly update?: (
+    preferences: DesktopApplicationSettingsProjection['preferences'],
+  ) => Promise<void>;
 } = {}) {
   const i18n = createDesktopI18n('en');
   const container = document.createElement('div');

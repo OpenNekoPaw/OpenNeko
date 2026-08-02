@@ -23,10 +23,6 @@ export const DESKTOP_CANVAS_CHANNELS = {
   projectionEvent: 'open-neko:canvas:projection-event',
 } as const;
 
-export function createDesktopCanvasSessionId(viewId: string, viewEpoch: number): string {
-  return `canvas-session:${viewId}:${viewEpoch}`;
-}
-
 export function parseDesktopCanvasHostIdentity(value: unknown): CanvasHostRuntimeIdentity {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     throw new Error('Desktop Canvas identity must be an object.');
@@ -298,9 +294,7 @@ export function parseDesktopCanvasMediaResponse(
       ...(video ? { video } : {}),
       ...(audio ? { audio } : {}),
       ...(typeof value['startTime'] === 'number' ? { startTime: value['startTime'] } : {}),
-      ...(typeof value['playbackRate'] === 'number'
-        ? { playbackRate: value['playbackRate'] }
-        : {}),
+      ...(typeof value['playbackRate'] === 'number' ? { playbackRate: value['playbackRate'] } : {}),
       ...(error ? { error } : {}),
     };
   }
@@ -400,10 +394,7 @@ function parseDesktopCanvasMediaInfo(value: unknown): DesktopCanvasMediaInfo {
     ...(value['audioChannels'] === undefined
       ? {}
       : {
-          audioChannels: requirePositiveNumber(
-            value['audioChannels'],
-            'media audio channel count',
-          ),
+          audioChannels: requirePositiveNumber(value['audioChannels'], 'media audio channel count'),
         }),
   };
 }

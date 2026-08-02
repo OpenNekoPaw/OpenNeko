@@ -18,11 +18,9 @@ describe('Desktop renderer asset path', () => {
     expect(() => resolveDesktopRendererAsset(rendererRoot, '/../main.js')).toThrow(
       'escapes its root',
     );
-    expect(() =>
-      resolveDesktopRendererAsset(rendererRoot, '/assets/../../main.js'),
-    ).toThrow('escapes its root');
-    expect(() => resolveDesktopRendererAsset(rendererRoot, '/asset\0.js')).toThrow(
-      'null byte',
+    expect(() => resolveDesktopRendererAsset(rendererRoot, '/assets/../../main.js')).toThrow(
+      'escapes its root',
     );
+    expect(() => resolveDesktopRendererAsset(rendererRoot, '/asset\0.js')).toThrow('null byte');
   });
 });

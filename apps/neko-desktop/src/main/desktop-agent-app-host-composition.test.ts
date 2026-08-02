@@ -16,12 +16,12 @@ import {
   NodePiConversationCatalogReader,
   resolveAgentModelPolicy,
   type PiProductAgentEvent,
-} from '@neko/agent/pi';
-import type { Tool } from '@neko/shared';
+} from '@neko-agent/runtime/pi';
 import {
   EFFECTIVE_AGENT_CONFIG_DIMENSIONS,
+  type Tool,
   type EffectiveAgentConfigurationProjection,
-} from '@neko/platform/config/effective-agent-config';
+} from '@neko-agent/contracts';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   createDesktopAgentAppHostComposition,
@@ -30,7 +30,7 @@ import {
   type DesktopAgentTurnConfigurationSnapshot,
 } from './desktop-agent-app-host-composition';
 import { createDesktopAgentCredentialRuntime } from './desktop-agent-credential-runtime';
-import type { DesktopWorkspaceResolution } from './desktop-workspace-registry';
+import type { AssetWorkspaceResolution } from '@neko-assets/domain/contracts';
 import type { DesktopExtensionCatalogSnapshot } from './desktop-extension-manager';
 
 const MODEL: Model<'openai-completions'> = {
@@ -1015,7 +1015,7 @@ describe('DesktopAgentAppHostComposition', () => {
       'utf8',
     );
     let identity = 0;
-    const workspace: DesktopWorkspaceResolution = {
+    const workspace: AssetWorkspaceResolution = {
       workspaceId: '11111111-1111-4111-8111-111111111111',
       workspacePath,
       displayName: 'Fixture',

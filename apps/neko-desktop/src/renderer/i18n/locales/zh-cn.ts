@@ -239,10 +239,8 @@ export const zhCN = {
   'workspace.portabilityState.linked-ready':
     '链接媒体在当前设备可用；在其他设备上可能需要重新链接。',
   'workspace.portabilityState.sync-requires-relink': '一个或多个必需媒体库需要重新链接。',
-  'workspace.portabilityState.portable-snapshot-ready':
-    '已有完成的便携快照与当前项目版本匹配。',
-  'workspace.portabilityState.coverage-incomplete':
-    '项目文档覆盖不完整，无法验证便携快照。',
+  'workspace.portabilityState.portable-snapshot-ready': '已有完成的便携快照与当前项目版本匹配。',
+  'workspace.portabilityState.coverage-incomplete': '项目文档覆盖不完整，无法验证便携快照。',
   'workspace.closeProjectResources': '关闭项目资源',
   'workspace.agentToDock': 'Agent 移至侧栏',
   'workspace.agentToMain': 'Agent 返回主面板',

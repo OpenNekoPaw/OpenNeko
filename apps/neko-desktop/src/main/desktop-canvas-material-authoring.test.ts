@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promis
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import type { CanvasHostRuntimeIdentity } from '@neko-canvas/domain';
+import { type ContentLocator } from '@neko/content';
 import {
   DEFAULT_CANVAS_DATA,
   isCanvasEmbedNode,
@@ -12,18 +13,17 @@ import {
   type CanvasMaterialMediaKind,
   type CanvasNode,
   type CanvasReferencedContentLocator,
-  type ContentLocator,
-} from '@neko/shared';
+} from '@neko-canvas/domain';
 import { ConsoleLogger } from '@neko/shared/logger';
 import {
   createWorkspaceLinkedMediaLibrary,
   listWorkspaceLinkedMediaLibraries,
-} from '@neko/shared/node/workspace-linked-media-libraries';
+} from '@neko-assets/node';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createElectronNekoHostPorts } from './electron-host-ports';
-import { DesktopCanvasMaterialAuthoringService } from './desktop-canvas-material-authoring';
-import { createDesktopGlobalMediaLibraryConnection } from './desktop-global-media-library-files';
-import type { DesktopWorkspaceResolution } from './desktop-workspace-registry';
+import { CanvasMaterialAuthoringService } from '@neko-canvas/node';
+import { createGlobalMediaLibraryConnection } from '@neko-assets/node';
+import type { AssetWorkspaceResolution } from '@neko-assets/domain/contracts';
 
 const roots: string[] = [];
 
@@ -33,7 +33,7 @@ afterEach(async () => {
   }
 });
 
-describe('DesktopCanvasMaterialAuthoringService', () => {
+describe('CanvasMaterialAuthoringService', () => {
   it('projects authorized workspace, linked-library, document and package locators exactly', async () => {
     const fixture = await createFixture();
     await writeFixtureFile(fixture.workspace.workspacePath, 'media/cat.png', 'cat');
@@ -47,7 +47,7 @@ describe('DesktopCanvasMaterialAuthoringService', () => {
       targetDirectory: linkedRoot,
     });
     const authorizePackageResource = vi.fn(async () => undefined);
-    const service = new DesktopCanvasMaterialAuthoringService({
+    const service = new CanvasMaterialAuthoringService({
       host: fixture.host,
       globalMediaLibraryRoot: fixture.globalMediaLibraryRoot,
       authorizePackageResource,
@@ -139,7 +139,7 @@ describe('DesktopCanvasMaterialAuthoringService', () => {
     roots.push(externalRoot);
     const firstSource = path.join(externalRoot, 'clip.mp4');
     await writeFile(firstSource, 'first');
-    const service = new DesktopCanvasMaterialAuthoringService({
+    const service = new CanvasMaterialAuthoringService({
       host: fixture.host,
       globalMediaLibraryRoot: fixture.globalMediaLibraryRoot,
     });
@@ -205,12 +205,12 @@ describe('DesktopCanvasMaterialAuthoringService', () => {
     const externalLibrary = await mkdtemp(path.join(tmpdir(), 'openneko-global-library-target-'));
     roots.push(externalLibrary);
     await writeFixtureFile(externalLibrary, 'stills/frame.png', 'frame');
-    const { libraryId } = await createDesktopGlobalMediaLibraryConnection({
+    const { libraryId } = await createGlobalMediaLibraryConnection({
       mediaLibraryRoot: fixture.globalMediaLibraryRoot,
       sourceDirectory: externalLibrary,
       locationKind: 'local',
     });
-    const service = new DesktopCanvasMaterialAuthoringService({
+    const service = new CanvasMaterialAuthoringService({
       host: fixture.host,
       globalMediaLibraryRoot: fixture.globalMediaLibraryRoot,
     });
@@ -271,7 +271,7 @@ describe('DesktopCanvasMaterialAuthoringService', () => {
     await writeFixtureFile(fixture.workspace.workspacePath, 'neko/imports/video/clip.mp4', 'kept');
     const sourcePath = path.join(externalRoot, 'clip.mp4');
     await writeFile(sourcePath, 'too-large');
-    const service = new DesktopCanvasMaterialAuthoringService({
+    const service = new CanvasMaterialAuthoringService({
       host: fixture.host,
       globalMediaLibraryRoot: fixture.globalMediaLibraryRoot,
       maxImportBytes: 4,
@@ -321,7 +321,7 @@ describe('DesktopCanvasMaterialAuthoringService', () => {
       'neko/derived/crop/source-cropped.png',
       'derived',
     );
-    const service = new DesktopCanvasMaterialAuthoringService({
+    const service = new CanvasMaterialAuthoringService({
       host: fixture.host,
       globalMediaLibraryRoot: fixture.globalMediaLibraryRoot,
     });
@@ -376,7 +376,7 @@ describe('DesktopCanvasMaterialAuthoringService', () => {
     const fixture = await createFixture();
     await writeFixtureFile(fixture.workspace.workspacePath, 'characters/neko-v1.png', 'v1');
     await writeFixtureFile(fixture.workspace.workspacePath, 'characters/neko-v2.png', 'v2');
-    const service = new DesktopCanvasMaterialAuthoringService({
+    const service = new CanvasMaterialAuthoringService({
       host: fixture.host,
       globalMediaLibraryRoot: fixture.globalMediaLibraryRoot,
     });
@@ -474,7 +474,7 @@ async function createFixture() {
     sessionId: 'canvas-session-1',
     endpointEpoch: 'endpoint-1',
   };
-  const workspace: DesktopWorkspaceResolution = {
+  const workspace: AssetWorkspaceResolution = {
     workspaceId: 'workspace-1',
     workspacePath,
     displayName: 'Fixture',
@@ -489,7 +489,7 @@ async function createFixture() {
       nekoHome: path.join(workspacePath, '.neko-home'),
       workspaceRoot: workspacePath,
       version: 'test',
-      logger: new ConsoleLogger('DesktopCanvasMaterialAuthoringTest'),
+      logger: new ConsoleLogger('CanvasMaterialAuthoringTest'),
     }),
   };
 }

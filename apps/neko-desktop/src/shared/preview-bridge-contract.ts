@@ -5,7 +5,7 @@ import {
   parsePreviewRuntimeRequest,
   type PreviewProjection,
   type PreviewRuntimeRequest,
-} from '@neko-preview/contracts';
+} from '@neko-preview/domain';
 
 export const DESKTOP_PREVIEW_CHANNELS = {
   snapshotGet: 'openneko:preview:snapshot:get',
@@ -59,20 +59,11 @@ export function parseDesktopPreviewBootstrapRequest(
     schemaVersion: PREVIEW_HOST_RUNTIME_VERSION,
     requestId: requireIdentity(record['requestId'], 'Desktop Preview request identity'),
     projectId: requireIdentity(record['projectId'], 'Desktop Preview Project identity'),
-    workspaceId: requireIdentity(
-      record['workspaceId'],
-      'Desktop Preview Workspace identity',
-    ),
+    workspaceId: requireIdentity(record['workspaceId'], 'Desktop Preview Workspace identity'),
     viewId: requireIdentity(record['viewId'], 'Desktop Preview View identity'),
-    viewEpoch: requireNonNegativeInteger(
-      record['viewEpoch'],
-      'Desktop Preview View epoch',
-    ),
+    viewEpoch: requireNonNegativeInteger(record['viewEpoch'], 'Desktop Preview View epoch'),
     sessionId: requireIdentity(record['sessionId'], 'Desktop Preview session identity'),
-    endpointEpoch: requireIdentity(
-      record['endpointEpoch'],
-      'Desktop Preview endpoint epoch',
-    ),
+    endpointEpoch: requireIdentity(record['endpointEpoch'], 'Desktop Preview endpoint epoch'),
   };
 }
 

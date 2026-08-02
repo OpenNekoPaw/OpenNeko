@@ -2,13 +2,13 @@ import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promis
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { AgentHostRouteEffectContext } from '@neko/agent/runtime/host-controller';
-import type { ILogger } from '@neko/shared/logger';
 import {
-  createDesktopAgentContentEffects,
-  type DesktopAgentContentInteractionPort,
-} from './desktop-agent-content-effects';
-import type { DesktopWorkspaceResolution } from './desktop-workspace-registry';
+  createAgentContentEffects,
+  type AgentContentInteractionPort,
+  type AgentHostRouteEffectContext,
+} from '@neko-agent/runtime/runtime/host-controller';
+import type { ILogger } from '@neko/shared/logger';
+import type { AssetWorkspaceResolution } from '@neko-assets/domain/contracts';
 import { createElectronNekoHostPorts } from './electron-host-ports';
 
 const temporaryDirectories: string[] = [];
@@ -326,11 +326,9 @@ describe('Desktop Agent content effects', () => {
   });
 });
 
-async function createFixture(
-  interactionOverrides: Partial<DesktopAgentContentInteractionPort> = {},
-) {
+async function createFixture(interactionOverrides: Partial<AgentContentInteractionPort> = {}) {
   const workspacePath = await createTemporaryDirectory();
-  const workspace: DesktopWorkspaceResolution = {
+  const workspace: AssetWorkspaceResolution = {
     workspaceId: '11111111-1111-4111-8111-111111111111',
     workspacePath,
     displayName: 'Fixture',
@@ -347,7 +345,7 @@ async function createFixture(
     openExternal,
     revealPath,
   });
-  const interaction: DesktopAgentContentInteractionPort = {
+  const interaction: AgentContentInteractionPort = {
     openContent: vi.fn(async () => undefined),
     revealDocument: vi.fn(async () => undefined),
     selectWorkspaceWriteTarget: vi.fn(async () => undefined),
@@ -356,7 +354,7 @@ async function createFixture(
   };
   return {
     context: createContext(workspace.workspaceId),
-    effects: createDesktopAgentContentEffects({ workspace, host, interaction }),
+    effects: createAgentContentEffects({ workspace, host, interaction }),
     host,
     interaction,
     openExternal,

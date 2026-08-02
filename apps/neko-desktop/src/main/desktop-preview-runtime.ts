@@ -14,12 +14,12 @@ import {
   type PreviewRuntimeRequest,
   type PreviewRuntimeIdentity,
   type PreviewViewPresentation,
-} from '@neko-preview/contracts';
+} from '@neko-preview/domain';
 import type {
   ResourceBrowserIdentity,
   ResourceBrowserItem,
   ResourceBrowserQuickPreviewDescriptor,
-} from 'neko-assets/resource-browser/contract';
+} from '@neko-assets/domain/resource-browser/contract';
 import {
   closeMainView,
   findMainGroupForView,
@@ -565,9 +565,7 @@ export class DesktopPreviewRuntime {
   }
 }
 
-function resolvePreviewContentLocator(
-  item: ResourceBrowserItem,
-): ResourceBrowserContentLocator {
+function resolvePreviewContentLocator(item: ResourceBrowserItem): ResourceBrowserContentLocator {
   if (item.facet === 'files' || item.facet === 'media') {
     return item.locator;
   }

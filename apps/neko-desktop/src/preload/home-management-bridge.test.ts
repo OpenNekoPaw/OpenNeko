@@ -145,10 +145,7 @@ describe('Desktop Home management preload bridge', () => {
     if (!bridge) throw new Error('Desktop preload bridge was not exposed.');
 
     await expect(
-      bridge.home.extensions.installPlugin(
-        'computer-use@openneko',
-        catalogRevision,
-      ),
+      bridge.home.extensions.installPlugin('computer-use@openneko', catalogRevision),
     ).resolves.toMatchObject({
       status: 'completed',
       operation: 'plugin-install',
@@ -255,7 +252,7 @@ describe('Desktop Home management preload bridge', () => {
               {
                 status: 'added',
                 label: 'hero.png',
-                assetId: 'asset-library:abc123',
+                assetId: 'global-asset-library:abc123',
               },
             ],
           };
@@ -273,7 +270,7 @@ describe('Desktop Home management preload bridge', () => {
           return {
             schemaVersion: DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION,
             requestId: request.requestId,
-            owner: 'asset-library',
+            owner: 'global-asset-library',
             itemId: request.itemId,
             expectedCatalogRevision: request.expectedCatalogRevision,
             descriptorId: request.descriptorId,
@@ -301,21 +298,23 @@ describe('Desktop Home management preload bridge', () => {
       status: 'completed',
       revision: 3,
     });
-    await expect(bridge.home.assets.remove('asset-library:abc123', 3)).resolves.toMatchObject({
+    await expect(
+      bridge.home.assets.remove('global-asset-library:abc123', 3),
+    ).resolves.toMatchObject({
       status: 'removed',
       revision: 4,
     });
     await expect(
       bridge.home.libraryThumbnails.resolve({
-        owner: 'asset-library',
-        itemId: 'asset-library:abc123',
+        owner: 'global-asset-library',
+        itemId: 'global-asset-library:abc123',
         expectedCatalogRevision: 4,
-        descriptorId: 'asset-library:def456',
+        descriptorId: 'global-asset-library:def456',
         thumbnailRevision: 'revision:4',
         variant: 'hover',
       }),
     ).resolves.toMatchObject({
-      itemId: 'asset-library:abc123',
+      itemId: 'global-asset-library:abc123',
       variant: 'hover',
     });
     await expect(

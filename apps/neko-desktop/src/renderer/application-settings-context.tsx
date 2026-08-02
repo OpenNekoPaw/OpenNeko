@@ -2,7 +2,7 @@ import { createContext, useContext, type ReactNode } from 'react';
 import type {
   DesktopApplicationPreferences,
   DesktopApplicationSettingsProjection,
-} from '../shared/application-settings-contract';
+} from '@neko/host/application-settings';
 
 export interface DesktopApplicationSettingsRuntime {
   readonly projection: DesktopApplicationSettingsProjection;
@@ -10,8 +10,9 @@ export interface DesktopApplicationSettingsRuntime {
   openAgentAdvanced(): Promise<void>;
 }
 
-const DesktopApplicationSettingsContext =
-  createContext<DesktopApplicationSettingsRuntime | null>(null);
+const DesktopApplicationSettingsContext = createContext<DesktopApplicationSettingsRuntime | null>(
+  null,
+);
 
 export function DesktopApplicationSettingsProvider({
   children,

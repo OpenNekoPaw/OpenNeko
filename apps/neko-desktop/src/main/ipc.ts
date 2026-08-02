@@ -8,8 +8,8 @@ import { DESKTOP_PREVIEW_CHANNELS } from '../shared/preview-bridge-contract';
 import { DESKTOP_CANVAS_CHANNELS } from '../shared/canvas-bridge-contract';
 import { DESKTOP_CUT_CHANNELS } from '../shared/cut-bridge-contract';
 import { DESKTOP_HOME_MANAGEMENT_CHANNELS } from '../shared/home-management-contract';
-import { DESKTOP_APPLICATION_SETTINGS_CHANNELS } from '../shared/application-settings-contract';
-import { DESKTOP_PROJECT_PORTABILITY_CHANNELS } from '../shared/project-portability-contract';
+import { DESKTOP_APPLICATION_SETTINGS_CHANNELS } from '@neko/host/application-settings';
+import { DESKTOP_PROJECT_PORTABILITY_CHANNELS } from '@neko-assets/domain/contracts';
 import type { DesktopAppHost } from './app-host';
 
 export function registerDesktopIpc(

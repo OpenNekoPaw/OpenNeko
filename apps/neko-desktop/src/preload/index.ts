@@ -70,7 +70,7 @@ import {
   parseResourceBrowserThumbnailRequest,
   parseResourceBrowserThumbnailResult,
   type ResourceBrowserIdentity,
-} from 'neko-assets/resource-browser/contract';
+} from '@neko-assets/domain/resource-browser/contract';
 import {
   DESKTOP_RESOURCE_BROWSER_CHANNELS,
   isSameResourceBrowserIdentity,
@@ -83,7 +83,7 @@ import {
   parseDesktopPreviewRuntimeRequest,
   type OpenNekoDesktopPreviewBridge,
 } from '../shared/preview-bridge-contract';
-import type { PreviewRuntimeIdentity } from '@neko-preview/contracts';
+import type { PreviewRuntimeIdentity } from '@neko-preview/domain';
 import {
   parseCanvasHostIntentRequest,
   parseCanvasHostIntentResult,
@@ -155,7 +155,7 @@ import {
   parseDesktopApplicationSettingsResponse,
   type DesktopApplicationSettingsProjection,
   type OpenNekoDesktopApplicationSettingsBridge,
-} from '../shared/application-settings-contract';
+} from '@neko/host/application-settings';
 import {
   DESKTOP_PROJECT_PORTABILITY_CHANNELS,
   isSameDesktopProjectPortabilityIdentity,
@@ -169,7 +169,7 @@ import {
   parseDesktopProjectPortabilityResumeRequest,
   type DesktopProjectPortabilityIdentity,
   type OpenNekoDesktopProjectPortabilityBridge,
-} from '../shared/project-portability-contract';
+} from '@neko-assets/domain/contracts';
 
 let requestSequence = 0;
 let currentDesktopEndpointEpoch: string | undefined;

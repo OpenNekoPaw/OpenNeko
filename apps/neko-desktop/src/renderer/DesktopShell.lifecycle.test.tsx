@@ -3,11 +3,11 @@
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { I18nProvider } from '@neko/shared/i18n/react';
+import { I18nProvider } from '@neko/ui/i18n/react';
 import {
   DEFAULT_DESKTOP_APPLICATION_PREFERENCES,
   DESKTOP_APPLICATION_SETTINGS_CONTRACT_VERSION,
-} from '../shared/application-settings-contract';
+} from '@neko/host/application-settings';
 import type { DesktopShellProjection } from '../shared/shell-contract';
 import {
   createDefaultDesktopWorkbenchLayout,
@@ -30,8 +30,8 @@ vi.mock('./DesktopCanvasSurface', () => ({
   DesktopCanvasSurface: () => <div data-testid="desktop-canvas-surface" />,
 }));
 
-vi.mock('./DesktopProjectPortabilityControl', () => ({
-  DesktopProjectPortabilityControl: () => null,
+vi.mock('@neko-assets/webview/project-portability/control', () => ({
+  ProjectPortabilityControl: () => null,
 }));
 
 vi.mock('./DesktopCutSurface', async () => {
@@ -89,9 +89,7 @@ describe('DesktopShell creative view lifecycle', () => {
     await act(async () => {
       root.render(renderShell(<DesktopShellView projection={initial} />));
     });
-    const cutSurface = container.querySelector<HTMLElement>(
-      '[data-testid="desktop-cut-surface"]',
-    );
+    const cutSurface = container.querySelector<HTMLElement>('[data-testid="desktop-cut-surface"]');
 
     expect(cutSurface?.dataset.presentation).toBe('editor');
     expect(cutSurface?.dataset.timelineTarget).toBe('attached');
@@ -99,9 +97,7 @@ describe('DesktopShell creative view lifecycle', () => {
 
     const switched = projectProjection('canvas:view-1:board', initial.window.workbench);
     await act(async () => {
-      root.render(
-        renderShell(<DesktopShellView projection={switched} />),
-      );
+      root.render(renderShell(<DesktopShellView projection={switched} />));
     });
 
     expect(container.querySelector('[data-testid="desktop-canvas-surface"]')).not.toBeNull();
@@ -116,11 +112,7 @@ describe('DesktopShell creative view lifecycle', () => {
       root.render(
         renderShell(
           <DesktopShellView
-            projection={projectProjection(
-              'canvas:view-1:board',
-              switched.window.workbench,
-              false,
-            )}
+            projection={projectProjection('canvas:view-1:board', switched.window.workbench, false)}
           />,
         ),
       );
@@ -192,9 +184,7 @@ function projectProjection(
       documentId: 'boards/board.nkc',
     },
   ];
-  const views = includeCut
-    ? allViews
-    : allViews.filter((view) => view.kind !== 'cut');
+  const views = includeCut ? allViews : allViews.filter((view) => view.kind !== 'cut');
   const workbench: DesktopWorkbenchLayoutProjection = {
     ...base,
     revision: base.revision + 1,

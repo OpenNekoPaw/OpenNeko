@@ -1,5 +1,8 @@
-import type { DesktopAgentConnectionIdentity } from '../shared/agent-contract';
-import type { AgentHostToWebviewMessage, AgentWebviewToHostMessage } from '@neko-agent/types';
+import type {
+  AgentHostToWebviewMessage,
+  AgentWebviewToHostMessage,
+  DesktopAgentConnectionIdentity,
+} from '@neko-agent/contracts';
 
 export interface DesktopAgentEventCursor {
   readonly connection: DesktopAgentConnectionIdentity;

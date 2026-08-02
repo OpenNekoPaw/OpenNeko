@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { DesktopAgentConnectionIdentity } from '../shared/agent-contract';
+import type { DesktopAgentConnectionIdentity } from '@neko-agent/contracts';
 import {
   advanceDesktopAgentBootstrapCursor,
   projectDesktopAgentSendFailure,

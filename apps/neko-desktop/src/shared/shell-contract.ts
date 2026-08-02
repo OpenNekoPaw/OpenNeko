@@ -77,8 +77,7 @@ export interface DesktopProjectTabProjection {
 }
 
 export type DesktopWindowActiveTarget =
-  | { readonly kind: 'home' }
-  | { readonly kind: 'project'; readonly tabId: string };
+  { readonly kind: 'home' } | { readonly kind: 'project'; readonly tabId: string };
 
 export interface DesktopWindowShellProjection {
   readonly windowId: string;
@@ -94,11 +93,7 @@ export interface DesktopAttentionProjection {
   readonly running: number;
 }
 
-export type DesktopAgentHomeAttentionStatus =
-  | 'none'
-  | 'needs-input'
-  | 'needs-review'
-  | 'running';
+export type DesktopAgentHomeAttentionStatus = 'none' | 'needs-input' | 'needs-review' | 'running';
 
 export type DesktopAgentHomeActivityKind =
   | 'conversation-updated'
@@ -181,8 +176,7 @@ export interface DesktopUnavailableDomainCapabilityProjection {
 }
 
 export type DesktopDomainCapabilityProjection =
-  | DesktopReadyDomainCapabilityProjection
-  | DesktopUnavailableDomainCapabilityProjection;
+  DesktopReadyDomainCapabilityProjection | DesktopUnavailableDomainCapabilityProjection;
 
 export interface DesktopShellProjection {
   readonly schemaVersion: typeof DESKTOP_SHELL_CONTRACT_VERSION;
@@ -283,10 +277,7 @@ export class DesktopShellContractError extends Error {
     | 'desktop-shell-project-identity-mismatch'
     | 'desktop-shell-conversation-not-found';
 
-  constructor(
-    code: DesktopShellContractError['code'],
-    message: string,
-  ) {
+  constructor(code: DesktopShellContractError['code'], message: string) {
     super(message);
     this.name = 'DesktopShellContractError';
     this.code = code;
@@ -384,11 +375,7 @@ export function createDesktopProjectOpenRequest(
   expectedWindowRevision: number,
 ): DesktopProjectOpenRequest {
   return {
-    ...createDesktopWindowMutationRequest(
-      requestId,
-      expectedEndpointEpoch,
-      expectedWindowRevision,
-    ),
+    ...createDesktopWindowMutationRequest(requestId, expectedEndpointEpoch, expectedWindowRevision),
     projectId: requireNonEmptyString(projectId, 'Desktop Project identity is required.'),
   };
 }
@@ -422,11 +409,7 @@ export function createDesktopConversationDeleteRequest(
   expectedAgentHomeRevision: number,
 ): DesktopConversationDeleteRequest {
   return {
-    ...createDesktopWindowMutationRequest(
-      requestId,
-      expectedEndpointEpoch,
-      expectedWindowRevision,
-    ),
+    ...createDesktopWindowMutationRequest(requestId, expectedEndpointEpoch, expectedWindowRevision),
     expectedAgentHomeRevision: requireNonNegativeInteger(
       expectedAgentHomeRevision,
       'Desktop expected Agent Home revision must be a non-negative integer.',
@@ -469,9 +452,7 @@ export function parseDesktopTabMutationRequest(value: unknown): DesktopTabMutati
   );
 }
 
-export function parseDesktopWindowMutationRequest(
-  value: unknown,
-): DesktopWindowMutationRequest {
+export function parseDesktopWindowMutationRequest(value: unknown): DesktopWindowMutationRequest {
   const record = requireRecord(value, 'Desktop Window mutation request must be an object.');
   const request = parseDesktopShellRequest(record);
   return createDesktopWindowMutationRequest(
@@ -501,10 +482,7 @@ export function parseDesktopProjectOpenRequest(value: unknown): DesktopProjectOp
 export function parseDesktopProjectRemoveRecentRequest(
   value: unknown,
 ): DesktopProjectRemoveRecentRequest {
-  const record = requireRecord(
-    value,
-    'Desktop Project remove-recent request must be an object.',
-  );
+  const record = requireRecord(value, 'Desktop Project remove-recent request must be an object.');
   const request = parseDesktopProjectOpenRequest(record);
   return createDesktopProjectRemoveRecentRequest(
     request.requestId,
@@ -636,10 +614,9 @@ export function parseDesktopShellProjection(value: unknown): DesktopShellProject
     catalogRecord['projects'],
     'Desktop Project catalog items must be an array.',
   ).map(parseProjectCatalogItem);
-  const tabs = requireArray(
-    windowRecord['tabs'],
-    'Desktop Project Tabs must be an array.',
-  ).map(parseProjectTab);
+  const tabs = requireArray(windowRecord['tabs'], 'Desktop Project Tabs must be an array.').map(
+    parseProjectTab,
+  );
   const activeTarget = parseActiveTarget(windowRecord['activeTarget']);
   const workbench = parseDesktopWorkbenchLayout(windowRecord['workbench']);
   const windowId = requireNonEmptyString(
@@ -649,10 +626,7 @@ export function parseDesktopShellProjection(value: unknown): DesktopShellProject
   if (workbench.windowId !== windowId) {
     throw invalidPayload('Desktop Workbench projection belongs to another Window.');
   }
-  if (
-    activeTarget.kind === 'project' &&
-    !tabs.some((tab) => tab.tabId === activeTarget.tabId)
-  ) {
+  if (activeTarget.kind === 'project' && !tabs.some((tab) => tab.tabId === activeTarget.tabId)) {
     throw invalidPayload('Desktop active Project Tab is not present in the Window projection.');
   }
   const projectIds = new Set(projects.map((project) => project.projectId));
@@ -664,10 +638,7 @@ export function parseDesktopShellProjection(value: unknown): DesktopShellProject
   }
   if (activeTarget.kind === 'project') {
     const activeTab = tabs.find((tab) => tab.tabId === activeTarget.tabId);
-    if (
-      !activeTab ||
-      workbench.main.views.some((view) => view.projectId !== activeTab.projectId)
-    ) {
+    if (!activeTab || workbench.main.views.some((view) => view.projectId !== activeTab.projectId)) {
       throw invalidPayload('Desktop Workbench View belongs to another active Project.');
     }
   }
@@ -733,13 +704,8 @@ export function parseDesktopShellProjection(value: unknown): DesktopShellProject
   };
 }
 
-function parseAgentHomeConversationSummary(
-  value: unknown,
-): DesktopAgentHomeConversationSummary {
-  const record = requireRecord(
-    value,
-    'Desktop Agent Home conversation summary must be an object.',
-  );
+function parseAgentHomeConversationSummary(value: unknown): DesktopAgentHomeConversationSummary {
+  const record = requireRecord(value, 'Desktop Agent Home conversation summary must be an object.');
   const navigation = parseDesktopAgentHomeNavigationIdentity(record['navigation']);
   const lastActivity = requireRecord(
     record['lastActivity'],
@@ -795,10 +761,7 @@ function parseAgentHomeConversationSummary(
 function parseDesktopAgentHomeNavigationIdentity(
   value: unknown,
 ): DesktopAgentHomeNavigationIdentity {
-  const navigation = requireRecord(
-    value,
-    'Desktop Agent Home navigation identity is required.',
-  );
+  const navigation = requireRecord(value, 'Desktop Agent Home navigation identity is required.');
   return {
     projectId: requireNonEmptyString(
       navigation['projectId'],
@@ -856,9 +819,7 @@ function requireIsoDateString(value: unknown, message: string): string {
   return date;
 }
 
-export function parseDesktopShellProjectionEvent(
-  value: unknown,
-): DesktopShellProjectionEvent {
+export function parseDesktopShellProjectionEvent(value: unknown): DesktopShellProjectionEvent {
   const record = requireRecord(value, 'Desktop Shell projection event must be an object.');
   requireVersion(record['schemaVersion']);
   const projection = parseDesktopShellProjection(record['projection']);
@@ -908,14 +869,8 @@ function parseProjectCatalogItem(value: unknown): DesktopProjectCatalogItem {
       record['displayName'],
       'Desktop Project display name is required.',
     ),
-    createdAt: requireNonEmptyString(
-      record['createdAt'],
-      'Desktop Project createdAt is required.',
-    ),
-    updatedAt: requireNonEmptyString(
-      record['updatedAt'],
-      'Desktop Project updatedAt is required.',
-    ),
+    createdAt: requireNonEmptyString(record['createdAt'], 'Desktop Project createdAt is required.'),
+    updatedAt: requireNonEmptyString(record['updatedAt'], 'Desktop Project updatedAt is required.'),
   };
 }
 
@@ -947,9 +902,7 @@ function parseActiveTarget(value: unknown): DesktopWindowActiveTarget {
   throw invalidPayload('Desktop Window active target is invalid.');
 }
 
-function parseDesktopDomainCapabilityProjection(
-  value: unknown,
-): DesktopDomainCapabilityProjection {
+function parseDesktopDomainCapabilityProjection(value: unknown): DesktopDomainCapabilityProjection {
   const record = requireRecord(value, 'Desktop domain capability must be an object.');
   const surface = requireDomainSurface(record['surface']);
   const ownerSlice = requireOwnerSlice(record['ownerSlice']);
@@ -1055,9 +1008,9 @@ function requireNonNegativeInteger(value: unknown, message: string): number {
   return value;
 }
 
-function readOptionalMetadata(
-  record: Readonly<Record<string, unknown>>,
-): { readonly metadata?: Readonly<Record<string, unknown>> } {
+function readOptionalMetadata(record: Readonly<Record<string, unknown>>): {
+  readonly metadata?: Readonly<Record<string, unknown>>;
+} {
   const metadata = record['metadata'];
   if (metadata === undefined) return {};
   return { metadata: requireRecord(metadata, 'Desktop diagnostic metadata must be an object.') };

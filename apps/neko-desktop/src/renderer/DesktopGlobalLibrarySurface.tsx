@@ -1,10 +1,10 @@
 import { lazy, Suspense, useMemo } from 'react';
-import { useTranslation } from '@neko/shared/i18n/react';
+import { useTranslation } from '@neko/ui/i18n/react';
 import { createDesktopGlobalLibraryRuntime } from './desktop-global-library-runtime';
 import { useDesktopApplicationSettings } from './application-settings-context';
 
 const GlobalLibraryBrowserRoot = lazy(async () => {
-  const module = await import('neko-assets/global-library/root');
+  const module = await import('@neko-assets/webview/global-library/root');
   return { default: module.GlobalLibraryBrowserRoot };
 });
 

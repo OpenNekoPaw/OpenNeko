@@ -8,17 +8,17 @@ import {
   type CanvasHostSnapshot,
 } from '@neko-canvas/domain';
 import { ConsoleLogger } from '@neko/shared/logger';
-import { createWorkspaceLinkedMediaLibrary } from '@neko/shared/node/workspace-linked-media-libraries';
+import { createWorkspaceLinkedMediaLibrary } from '@neko-assets/node';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createElectronNekoHostPorts } from './electron-host-ports';
 import { DesktopCanvasRuntime } from './desktop-canvas-runtime';
 import {
-  DESKTOP_CANVAS_COPY_TO_PROJECT_MEDIA_LIBRARY_ACTION_ID,
-  DESKTOP_CANVAS_OPEN_IN_CUT_ACTION_ID,
-  DESKTOP_CANVAS_PREVIEW_ACTION_ID,
-  DESKTOP_CANVAS_REGENERATE_ACTION_ID,
-} from './desktop-canvas-material-actions';
-import { createDesktopGlobalMediaLibraryConnection } from './desktop-global-media-library-files';
+  CANVAS_COPY_TO_PROJECT_MEDIA_LIBRARY_ACTION_ID,
+  CANVAS_OPEN_IN_CUT_ACTION_ID,
+  CANVAS_PREVIEW_ACTION_ID,
+  CANVAS_REGENERATE_ACTION_ID,
+} from '@neko-canvas/domain';
+import { createGlobalMediaLibraryConnection } from '@neko-assets/node';
 import type { DesktopCanvasViewGrant } from './shell-service';
 import { createDefaultDesktopWorkbenchLayout } from '../shared/workbench-contract';
 
@@ -250,7 +250,7 @@ describe('DesktopCanvasRuntime', () => {
     expect(resolution.descriptors).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          id: DESKTOP_CANVAS_PREVIEW_ACTION_ID,
+          id: CANVAS_PREVIEW_ACTION_ID,
           ownerId: 'preview',
         }),
       ]),
@@ -267,7 +267,7 @@ describe('DesktopCanvasRuntime', () => {
           type: 'execute-material-action',
           action: {
             identity: materialIdentity(identity),
-            actionId: DESKTOP_CANVAS_PREVIEW_ACTION_ID,
+            actionId: CANVAS_PREVIEW_ACTION_ID,
             expectedCanvasRevision: authored.snapshot.revision,
             selectedNodeIds: [node.id],
             payload: {},
@@ -359,7 +359,7 @@ describe('DesktopCanvasRuntime', () => {
     expect(resolution.descriptors).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          id: DESKTOP_CANVAS_COPY_TO_PROJECT_MEDIA_LIBRARY_ACTION_ID,
+          id: CANVAS_COPY_TO_PROJECT_MEDIA_LIBRARY_ACTION_ID,
           ownerId: 'media-library',
           effect: 'copy',
         }),
@@ -377,7 +377,7 @@ describe('DesktopCanvasRuntime', () => {
           type: 'execute-material-action',
           action: {
             identity: materialIdentity(identity),
-            actionId: DESKTOP_CANVAS_COPY_TO_PROJECT_MEDIA_LIBRARY_ACTION_ID,
+            actionId: CANVAS_COPY_TO_PROJECT_MEDIA_LIBRARY_ACTION_ID,
             expectedCanvasRevision: authored.snapshot.revision,
             selectedNodeIds: [node.id],
             payload: {},
@@ -478,7 +478,7 @@ describe('DesktopCanvasRuntime', () => {
     expect(resolution.descriptors).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          id: DESKTOP_CANVAS_OPEN_IN_CUT_ACTION_ID,
+          id: CANVAS_OPEN_IN_CUT_ACTION_ID,
           ownerId: 'cut',
         }),
       ]),
@@ -500,7 +500,7 @@ describe('DesktopCanvasRuntime', () => {
           type: 'execute-material-action',
           action: {
             identity: materialIdentity(identity),
-            actionId: DESKTOP_CANVAS_OPEN_IN_CUT_ACTION_ID,
+            actionId: CANVAS_OPEN_IN_CUT_ACTION_ID,
             expectedCanvasRevision: authored.snapshot.revision,
             selectedNodeIds: [node.id],
             payload: {},
@@ -1169,7 +1169,7 @@ describe('DesktopCanvasRuntime', () => {
     expect(resolution.descriptors).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          id: DESKTOP_CANVAS_REGENERATE_ACTION_ID,
+          id: CANVAS_REGENERATE_ACTION_ID,
           ownerId: 'generation',
         }),
       ]),
@@ -1210,7 +1210,7 @@ describe('DesktopCanvasRuntime', () => {
       targetDirectory: linkedLibraryPath,
     });
     const globalMediaLibraryRoot = path.join(workspacePath, '.global-media-libraries');
-    const { libraryId } = await createDesktopGlobalMediaLibraryConnection({
+    const { libraryId } = await createGlobalMediaLibraryConnection({
       mediaLibraryRoot: globalMediaLibraryRoot,
       sourceDirectory: globalLibraryPath,
       locationKind: 'local',

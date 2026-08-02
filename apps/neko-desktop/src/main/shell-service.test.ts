@@ -1,8 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import type {
-  DesktopWorkspaceRegistry,
-  DesktopWorkspaceResolution,
-} from './desktop-workspace-registry';
+import type { DesktopWorkspaceRegistry } from './desktop-workspace-registry';
+import type { AssetWorkspaceResolution } from '@neko-assets/domain/contracts';
 import { DesktopShellService } from './shell-service';
 import {
   DesktopShellStateRepository,
@@ -68,9 +66,7 @@ describe('DesktopShellService', () => {
     second.service.setRendererEpoch(restoredWindowId, 1);
     await second.service.getProjection(restoredWindowId);
 
-    expect(setHomeWorkspaceScope).toHaveBeenCalledWith([
-      '11111111-1111-4111-8111-111111111111',
-    ]);
+    expect(setHomeWorkspaceScope).toHaveBeenCalledWith(['11111111-1111-4111-8111-111111111111']);
   });
 
   it('projects only fully composed Agent and Resource Browser capabilities as ready', async () => {
@@ -826,7 +822,7 @@ describe('DesktopShellService', () => {
 
 function createFixture(file = createMemoryFile(), startupTarget: 'home' | 'restore' = 'home') {
   let identity = 0;
-  const resolution: DesktopWorkspaceResolution = {
+  const resolution: AssetWorkspaceResolution = {
     workspaceId: '11111111-1111-4111-8111-111111111111',
     workspacePath: '/workspace/demo',
     displayName: 'Demo',

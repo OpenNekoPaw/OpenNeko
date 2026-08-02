@@ -1,13 +1,13 @@
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { ConversationProjectionAttachmentHostFrame } from '@neko/agent/runtime/projection/conversation-projection-attachment-server';
-import type { AgentTurnTimelineItem, AgentTurnTimelineToolCallItem } from '@neko-agent/types';
+import type { ConversationProjectionAttachmentHostFrame } from '@neko-agent/runtime/runtime/projection/conversation-projection-attachment-server';
+import type { AgentTurnTimelineItem, AgentTurnTimelineToolCallItem } from '@neko-agent/contracts';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
-  createDesktopAgentResourceDisplayProjector,
-  type DesktopAgentResourceDisplayRegistrationPort,
-} from './desktop-agent-resource-display-projector';
+  createAgentResourceDisplayProjector,
+  type AgentResourceDisplayRegistrationPort,
+} from '@neko-agent/runtime/runtime';
 import type { DesktopResourceLease } from './desktop-resource-registry';
 
 const temporaryRoots: string[] = [];
@@ -22,7 +22,7 @@ describe('Desktop Agent resource display projector', () => {
   it('preserves locator and MIME while adding only a transient OpenNeko render projection', async () => {
     const fixture = await createFixture('media/clip.mp4');
     const release = vi.fn();
-    const registerFile = vi.fn<DesktopAgentResourceDisplayRegistrationPort['registerFile']>(
+    const registerFile = vi.fn<AgentResourceDisplayRegistrationPort['registerFile']>(
       async (): Promise<DesktopResourceLease> => ({
         url: 'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
         release,
@@ -199,13 +199,11 @@ describe('Desktop Agent resource display projector', () => {
 
 function createProjector(
   workspacePath: string,
-  resources: DesktopAgentResourceDisplayRegistrationPort,
+  resources: AgentResourceDisplayRegistrationPort,
   connectionId = 'connection-1',
-  recordProjection?: Parameters<
-    typeof createDesktopAgentResourceDisplayProjector
-  >[0]['recordProjection'],
+  recordProjection?: Parameters<typeof createAgentResourceDisplayProjector>[0]['recordProjection'],
 ) {
-  return createDesktopAgentResourceDisplayProjector({
+  return createAgentResourceDisplayProjector({
     identity: {
       applicationInstanceId: 'app-1',
       windowId: 'window-1',

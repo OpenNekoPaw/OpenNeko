@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
-import { I18nProvider } from '@neko/shared/i18n/react';
+import { I18nProvider } from '@neko/ui/i18n/react';
 import type { DesktopShellProjection } from '../shared/shell-contract';
 import {
   activateWorkbenchMainView,
@@ -30,7 +30,7 @@ import {
 import {
   DEFAULT_DESKTOP_APPLICATION_PREFERENCES,
   DESKTOP_APPLICATION_SETTINGS_CONTRACT_VERSION,
-} from '../shared/application-settings-contract';
+} from '@neko/host/application-settings';
 import { DesktopApplicationSettingsProvider } from './application-settings-context';
 import type {
   DesktopHomeExtensionItem,

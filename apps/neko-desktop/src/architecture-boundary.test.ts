@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { desktopFuseConfig } from '../fuse.config.js';
 
 const sourceRoot = path.resolve(import.meta.dirname);
+const repositoryRoot = path.resolve(sourceRoot, '../../..');
 
 describe('Desktop architecture boundaries', () => {
   it('uses explicit CommonJS extensions for Electron main and preload bundles', () => {
@@ -103,7 +104,10 @@ describe('Desktop architecture boundaries', () => {
 
   it('keeps Desktop Agent content effects sender-bound and locator-authorized', () => {
     const source = readFileSync(
-      path.join(sourceRoot, 'main', 'desktop-agent-content-effects.ts'),
+      path.join(
+        repositoryRoot,
+        'packages/neko-agent-runtime/src/runtime/host-controller/agent-content-effects.ts',
+      ),
       'utf8',
     );
 
@@ -113,20 +117,26 @@ describe('Desktop architecture boundaries', () => {
     expect(source).not.toContain('activeWorkspace');
     expect(source).not.toContain('ChatViewProvider');
     expect(source).not.toContain('vscode.commands');
+    expect(existsSync(path.join(sourceRoot, 'main', 'desktop-agent-content-effects.ts'))).toBe(
+      false,
+    );
   });
 
   it('keeps Resource Browser effects owner-bound, portable and outside the renderer', () => {
-    const mainRoot = path.join(sourceRoot, 'main');
+    const assetsNodeRoot = path.join(repositoryRoot, 'packages/neko-assets-node/src');
     const runtime = readFileSync(
-      path.join(mainRoot, 'desktop-resource-browser-runtime.ts'),
+      path.join(assetsNodeRoot, 'resource-browser-node-runtime.ts'),
       'utf8',
     );
-    const source = readFileSync(path.join(mainRoot, 'desktop-resource-browser-source.ts'), 'utf8');
-    const sync = readFileSync(
-      path.join(mainRoot, 'desktop-workspace-media-library-sync.ts'),
+    const source = readFileSync(
+      path.join(assetsNodeRoot, 'resource-browser-node-source.ts'),
       'utf8',
     );
-    const locator = readFileSync(path.join(mainRoot, 'desktop-content-locator.ts'), 'utf8');
+    const sync = readFileSync(path.join(assetsNodeRoot, 'workspace-media-library-sync.ts'), 'utf8');
+    const locator = readFileSync(
+      path.join(repositoryRoot, 'packages/neko-assets-node/src/workspace-content-locator.ts'),
+      'utf8',
+    );
     const bridgeContract = readFileSync(
       path.join(sourceRoot, 'shared', 'resource-browser-bridge-contract.ts'),
       'utf8',
@@ -136,14 +146,21 @@ describe('Desktop architecture boundaries', () => {
     expect(runtime).toContain('resolveAgentWorkspace');
     expect(source).toContain('listWorkspaceLinkedMediaLibraries');
     expect(locator).toContain('realpath');
-    expect(source).toContain('resolveDesktopWorkspaceContentLocator');
-    expect(source).toContain('DesktopWorkspaceMediaLibrarySyncService');
+    expect(source).toContain('resolveWorkspaceContentLocator');
+    expect(source).toContain('WorkspaceMediaLibrarySyncService');
     expect(source).not.toContain('createWorkspaceLinkedMediaLibrary');
     expect(sync).toContain('createWorkspaceLinkedMediaLibrary');
     expect(sync).toContain('planRecovery');
     expect(sync).toContain('applyRecovery');
     expect(bridgeContract).not.toContain('absolutePath');
     expect(bridgeContract).not.toContain('selectedDirectory');
+    for (const retired of [
+      'desktop-resource-browser-runtime.ts',
+      'desktop-resource-browser-source.ts',
+      'desktop-workspace-media-library-sync.ts',
+    ]) {
+      expect(existsSync(path.join(sourceRoot, 'main', retired))).toBe(false);
+    }
   });
 
   it('keeps Node, Electron and VS Code imports out of renderer', () => {
@@ -181,10 +198,10 @@ describe('Desktop architecture boundaries', () => {
     );
     const shell = readFileSync(path.join(sourceRoot, 'renderer', 'DesktopShell.tsx'), 'utf8');
 
-    expect(cutSurface).toContain("import('@neko/webview/root')");
+    expect(cutSurface).toContain("import('@neko-cut/webview/root')");
     expect(cutSurface).toMatch(/<CutWebviewRoot[\s\S]*bridge=\{bridge\}/u);
     expect(cutSurface).toContain('timelineTarget={timelineTarget}');
-    expect(previewSurface).toContain("import('@neko/preview-webview/root')");
+    expect(previewSurface).toContain("import('@neko-preview/webview/root')");
     expect(previewSurface).toContain('<PreviewRoot runtime={runtime}');
     for (const source of [cutSurface, previewSurface, shell]) {
       expect(source).not.toContain('/host-adapter');
@@ -282,7 +299,7 @@ describe('Desktop architecture boundaries', () => {
 
     for (const sourcePattern of [
       '../../packages/neko-agent-webview/src/**/*.{ts,tsx}',
-      '../../packages/neko-assets/src/resource-browser/**/*.{ts,tsx}',
+      '../../packages/neko-assets-domain/src/resource-browser/**/*.{ts,tsx}',
       '../../packages/neko-canvas-webview/src/**/*.{ts,tsx}',
       '../../packages/neko-cut-webview/src/**/*.{ts,tsx}',
       '../../packages/neko-preview-webview/src/**/*.{ts,tsx}',
@@ -292,7 +309,7 @@ describe('Desktop architecture boundaries', () => {
     expect(canvasRoot).toContain('data-canvas-webview-root="true"');
   });
 
-  it('deduplicates shared runtimes and resolves embedded package Roots from source in Vite development', () => {
+  it('deduplicates shared runtimes and resolves embedded package Roots through public exports', () => {
     const rendererConfig = readFileSync(
       path.resolve(sourceRoot, '..', 'vite.renderer.config.ts'),
       'utf8',
@@ -303,20 +320,21 @@ describe('Desktop architecture boundaries', () => {
     expect(rendererConfig).toContain("'three/addons/loaders/GLTFLoader.js'");
     expect(rendererConfig).toContain("'use-sync-external-store/shim/with-selector.js'");
     expect(rendererConfig).toMatch(/dedupe:\s*\[[^\]]*'react'[^\]]*'zustand'/s);
-    expect(rendererConfig).toContain('find: /^@neko-canvas\\/webview\\/root$/');
-    expect(rendererConfig).toContain("'../../packages/neko-canvas-webview/src/root.tsx'");
-    expect(rendererConfig).toContain('find: /^@neko\\/webview\\/root$/');
-    expect(rendererConfig).toContain("'../../packages/neko-cut-webview/src/root.tsx'");
-    expect(rendererConfig).toContain('find: /^@neko\\/preview-webview\\/root$/');
-    expect(rendererConfig).toContain("'../../packages/neko-preview-webview/src/root/index.tsx'");
-    expect(rendererConfig).toContain('find: /^neko-assets\\/resource-browser\\/root$/');
-    expect(rendererConfig).toContain("'../../packages/neko-assets/src/resource-browser/root.tsx'");
-    expect(rendererConfig).toContain('find: /^neko-assets\\/resource-browser\\/contract$/');
-    expect(rendererConfig).toContain(
-      "'../../packages/neko-assets/src/resource-browser/contract.ts'",
-    );
-    expect(rendererConfig).toContain('find: /^neko-assets\\/global-library\\/root$/');
-    expect(rendererConfig).toContain("'../../packages/neko-assets/src/global-library/root.tsx'");
+    expect(rendererConfig).not.toContain('find: /^@neko');
+    expect(rendererConfig).not.toContain("'../../packages/");
+    const publicRoots = [
+      ['packages/neko-canvas-webview/package.json', './root'],
+      ['packages/neko-cut-webview/package.json', './root'],
+      ['packages/neko-preview-webview/package.json', './root'],
+      ['packages/neko-assets-webview/package.json', './resource-browser/root'],
+      ['packages/neko-assets-webview/package.json', './global-library/root'],
+    ] as const;
+    for (const [manifestPath, exportName] of publicRoots) {
+      const manifest = JSON.parse(
+        readFileSync(path.join(repositoryRoot, manifestPath), 'utf8'),
+      ) as { readonly exports?: Readonly<Record<string, string>> };
+      expect(manifest.exports?.[exportName]).toMatch(/^\.\/src\//u);
+    }
     expect(rendererConfig).toMatch(
       /exclude:\s*\[[^\]]*'@neko-canvas\/domain'[^\]]*'@neko-canvas\/webview\/root'/s,
     );

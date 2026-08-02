@@ -1,4 +1,4 @@
-import { useTranslation } from '@neko/shared/i18n/react';
+import { useTranslation } from '@neko/ui/i18n/react';
 import { ResizeHandle, useResizable, type ControlledWorkbenchResizeBinding } from '@neko/ui';
 import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
 import { APPLICATION_PRIMARY_SIDEBAR_DEFAULT_WIDTH } from '../shared/workbench-contract';

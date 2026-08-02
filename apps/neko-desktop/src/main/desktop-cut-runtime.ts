@@ -34,12 +34,12 @@ import {
 } from '@neko-cut/node';
 import type { NekoHostPorts } from '@neko/host/ports';
 import type { NodeMediaPublisher } from '@neko/media/node';
-import type { WorkspaceFileContentLocator } from '@neko/shared';
+import type { WorkspaceFileContentLocator } from '@neko/content';
 import type {
   ResourceBrowserContentItem,
   ResourceBrowserIdentity,
   ResourceBrowserItem,
-} from 'neko-assets/resource-browser/contract';
+} from '@neko-assets/domain/resource-browser/contract';
 import type { DesktopShellService } from './shell-service';
 import {
   getActiveMainView,
@@ -48,7 +48,7 @@ import {
   type DesktopWorkbenchLayoutProjection,
 } from '../shared/workbench-contract';
 import { createDesktopCutSessionId } from '../shared/cut-bridge-contract';
-import { resolveDesktopWorkspaceContentLocator } from './desktop-content-locator';
+import { resolveWorkspaceContentLocator } from '@neko-assets/node';
 import type { DesktopResourceRegistry } from './desktop-resource-registry';
 
 interface DesktopCutRuntimeEntry {
@@ -144,7 +144,7 @@ export class DesktopCutRuntime {
       throw new Error('Desktop Cut Resource owner is stale.');
     }
     const workspace = await this.options.shell.resolveAgentWorkspace(project.workspaceId);
-    const resolvedPath = await resolveDesktopWorkspaceContentLocator(workspace, locator);
+    const resolvedPath = await resolveWorkspaceContentLocator(workspace, locator);
     if (resolvedPath !== input.absolutePath) {
       throw new Error('Desktop Cut Resource path does not match its authorized ContentLocator.');
     }
@@ -231,7 +231,7 @@ export class DesktopCutRuntime {
     const workspace = await this.options.shell.resolveAgentWorkspace(
       input.resourceIdentity.workspaceId,
     );
-    const sourcePath = await resolveDesktopWorkspaceContentLocator(workspace, input.item.locator);
+    const sourcePath = await resolveWorkspaceContentLocator(workspace, input.item.locator);
     const importer = await CutWorkspaceMediaImporter.create(entry.workspacePath);
     const prepared = await importer.prepare(entry.documentPath, sourcePath);
     const mediaAdapter =
@@ -632,7 +632,7 @@ export class DesktopCutRuntime {
       this.sessions.set(key, entry);
       return entry;
     }
-    const documentPath = await resolveDesktopWorkspaceContentLocator(grant.workspace, {
+    const documentPath = await resolveWorkspaceContentLocator(grant.workspace, {
       kind: 'workspace-file',
       path: identity.documentId,
     });

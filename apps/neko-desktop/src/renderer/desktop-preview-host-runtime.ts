@@ -2,7 +2,7 @@ import {
   PREVIEW_HOST_RUNTIME_VERSION,
   type PreviewHostRuntime,
   type PreviewRuntimeIdentity,
-} from '@neko-preview/contracts';
+} from '@neko-preview/domain';
 import type { OpenNekoDesktopPreviewBridge } from '../shared/preview-bridge-contract';
 import { createDesktopPreviewBootstrapRequest } from '../shared/preview-bridge-contract';
 
@@ -29,9 +29,7 @@ export function createElectronPreviewHostRuntime(input: {
     },
     async execute(request) {
       if (request.schemaVersion !== PREVIEW_HOST_RUNTIME_VERSION) {
-        throw new Error(
-          `Desktop Preview route '${request.route}' uses an unsupported version.`,
-        );
+        throw new Error(`Desktop Preview route '${request.route}' uses an unsupported version.`);
       }
       return input.bridge.preview.execute(request);
     },

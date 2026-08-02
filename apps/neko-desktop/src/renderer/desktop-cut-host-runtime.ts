@@ -4,9 +4,7 @@ import type {
   CutHostRuntimeRequest,
 } from '@neko-cut/domain';
 
-export function createElectronCutHostRuntime(
-  identity: CutHostRuntimeIdentity,
-): CutHostRuntime {
+export function createElectronCutHostRuntime(identity: CutHostRuntimeIdentity): CutHostRuntime {
   return {
     identity: { ...identity },
     getSnapshot: () => window.openNekoDesktop.cut.getSnapshot(identity),

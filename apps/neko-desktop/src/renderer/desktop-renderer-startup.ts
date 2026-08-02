@@ -1,7 +1,7 @@
 import type {
   DesktopApplicationSettingsProjection,
   OpenNekoDesktopApplicationSettingsBridge,
-} from '../shared/application-settings-contract';
+} from '@neko/host/application-settings';
 import type { OpenNekoDesktopBridge } from '../shared/bridge-contract';
 import { loadDesktopAgentWebviewRootModule } from './desktop-agent-module';
 

@@ -1,13 +1,43 @@
 import react from '@vitejs/plugin-react';
-import { createEpubJsPatchPlugin } from '@neko/preview-webview/epubjs-vite-patch-plugin';
-import { defineConfig } from 'vite';
+import { createEpubJsPatchPlugin } from '@neko-preview/webview/epubjs-vite-patch-plugin';
+import { defineConfig, type Plugin } from 'vite';
+import { realpathSync } from 'node:fs';
 import path from 'node:path';
 import { DESKTOP_VITE_CSP_NONCE } from './src/shared/vite-development-security';
 
 const functionalFixtureHome = process.env['OPENNEKO_DESKTOP_FUNCTIONAL_HOME'];
+const canonicalWorkspacePublicEntries = new Set([
+  '@neko-agent/webview/root',
+  '@neko-canvas/webview/root',
+  '@neko-cut/webview/root',
+  '@neko-cut/webview/runtime-bridge',
+  '@neko-preview/webview/root',
+]);
+
+function createWorkspacePublicEntryCanonicalizationPlugin(): Plugin {
+  return {
+    name: 'openneko-workspace-public-entry-canonicalization',
+    enforce: 'pre',
+    async resolveId(source, importer) {
+      if (!canonicalWorkspacePublicEntries.has(source)) {
+        return null;
+      }
+
+      const resolved = await this.resolve(source, importer, { skipSelf: true });
+      if (!resolved) {
+        throw new Error(`Unable to resolve workspace public entry: ${source}`);
+      }
+
+      const suffixIndex = resolved.id.search(/[?#]/u);
+      const filePath = suffixIndex >= 0 ? resolved.id.slice(0, suffixIndex) : resolved.id;
+      const suffix = suffixIndex >= 0 ? resolved.id.slice(suffixIndex) : '';
+      return { ...resolved, id: `${realpathSync(filePath)}${suffix}` };
+    },
+  };
+}
 
 export default defineConfig({
-  plugins: [react(), createEpubJsPatchPlugin()],
+  plugins: [createWorkspacePublicEntryCanonicalizationPlugin(), react(), createEpubJsPatchPlugin()],
   ...(functionalFixtureHome
     ? { cacheDir: path.join(functionalFixtureHome, 'vite-renderer-cache') }
     : {}),
@@ -15,107 +45,56 @@ export default defineConfig({
     cspNonce: DESKTOP_VITE_CSP_NONCE,
   },
   resolve: {
-    dedupe: ['react', 'react-dom', 'zustand', 'use-sync-external-store'],
-    alias: [
-      {
-        find: /^@neko-canvas\/webview\/root$/,
-        replacement: path.resolve(
-          import.meta.dirname,
-          '../../packages/neko-canvas-webview/src/root.tsx',
-        ),
-      },
-      {
-        find: /^@neko\/webview\/root$/,
-        replacement: path.resolve(
-          import.meta.dirname,
-          '../../packages/neko-cut-webview/src/root.tsx',
-        ),
-      },
-      {
-        find: /^@neko\/preview-webview\/root$/,
-        replacement: path.resolve(
-          import.meta.dirname,
-          '../../packages/neko-preview-webview/src/root/index.tsx',
-        ),
-      },
-      {
-        find: /^neko-assets\/resource-browser\/root$/,
-        replacement: path.resolve(
-          import.meta.dirname,
-          '../../packages/neko-assets/src/resource-browser/root.tsx',
-        ),
-      },
-      {
-        find: /^neko-assets\/resource-browser\/contract$/,
-        replacement: path.resolve(
-          import.meta.dirname,
-          '../../packages/neko-assets/src/resource-browser/contract.ts',
-        ),
-      },
-      {
-        find: /^neko-assets\/global-library\/root$/,
-        replacement: path.resolve(
-          import.meta.dirname,
-          '../../packages/neko-assets/src/global-library/root.tsx',
-        ),
-      },
-      {
-        find: /^@neko-agent\/webview\/root$/,
-        replacement: path.resolve(
-          import.meta.dirname,
-          '../../packages/neko-agent-webview/src/root.tsx',
-        ),
-      },
-      {
-        find: /^@neko-agent\/types$/,
-        replacement: path.resolve(
-          import.meta.dirname,
-          '../../packages/neko-agent-types/src/index.ts',
-        ),
-      },
-      {
-        find: /^@neko-agent\/types\//,
-        replacement: `${path.resolve(import.meta.dirname, '../../packages/neko-agent-types/src')}/`,
-      },
-      {
-        find: /^@neko\/shared$/,
-        replacement: path.resolve(import.meta.dirname, '../../packages/neko-types/src/index.ts'),
-      },
-      {
-        find: /^@neko\/shared\//,
-        replacement: `${path.resolve(import.meta.dirname, '../../packages/neko-types/src')}/`,
-      },
-      {
-        find: /^@\//,
-        replacement: `${path.resolve(
-          import.meta.dirname,
-          '../../packages/neko-agent-webview/src',
-        )}/`,
-      },
+    dedupe: [
+      '@neko-agent/webview',
+      '@neko-assets/webview',
+      '@neko-canvas/webview',
+      '@neko-cut/webview',
+      '@neko-preview/webview',
+      '@neko/ui',
+      'react',
+      'react-dom',
+      'zustand',
+      'use-sync-external-store',
     ],
   },
   optimizeDeps: {
     exclude: [
+      '@neko-agent/webview/root',
       '@neko-canvas/domain',
       '@neko-canvas/webview/root',
+      '@neko-cut/webview/root',
+      '@neko-cut/webview/runtime-bridge',
+      '@neko-preview/webview/root',
       '@neko/media',
       '@neko/media/browser',
-      '@neko/preview-webview/root',
-      '@neko/webview/root',
     ],
     include: [
       '@zip.js/zip.js',
+      '@neko-agent/contracts',
+      '@neko-agent/contracts/host-message-event',
+      '@neko-assets/domain/contracts',
+      '@neko/content/project-file-io',
+      '@neko/generation',
+      '@neko/markdown',
+      '@neko-search/domain',
+      '@neko/shared',
+      '@neko/shared/job-lifecycle',
       '@neko/ui/creative',
       '@neko/ui/hooks',
       '@neko/ui/icons',
       '@neko/ui/keyboard',
       '@neko/ui/markdown',
       '@neko/ui/primitives',
+      '@neko/ui/utils',
       '@neko/ui/workbench',
+      '@tanstack/react-virtual',
       'clsx',
       'docx-preview',
       'epubjs',
+      'mermaid',
       'pdfjs-dist',
+      'prism-react-renderer',
       'three',
       'three/addons/controls/DragControls.js',
       'three/addons/controls/OrbitControls.js',

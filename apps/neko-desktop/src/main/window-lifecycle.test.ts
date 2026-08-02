@@ -1,8 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import {
-  closeDesktopWindows,
-  type DesktopClosableWindow,
-} from './window-lifecycle';
+import { closeDesktopWindows, type DesktopClosableWindow } from './window-lifecycle';
 
 describe('closeDesktopWindows', () => {
   it('waits for every live Window to close before resolving', async () => {

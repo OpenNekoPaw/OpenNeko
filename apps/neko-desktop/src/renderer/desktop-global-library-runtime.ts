@@ -1,4 +1,4 @@
-import type { GlobalLibraryBrowserRuntime } from 'neko-assets/global-library/contract';
+import type { GlobalLibraryBrowserRuntime } from '@neko-assets/domain/global-library/contract';
 import type { OpenNekoDesktopHomeManagementBridge } from '../shared/home-management-contract';
 
 export function createDesktopGlobalLibraryRuntime(
@@ -51,10 +51,7 @@ export function createDesktopGlobalLibraryRuntime(
       };
     },
     async addMediaLibrary(locationKind, expectedRevision) {
-      const result = await bridge.home.mediaLibraries.addLibrary(
-        locationKind,
-        expectedRevision,
-      );
+      const result = await bridge.home.mediaLibraries.addLibrary(locationKind, expectedRevision);
       return result.status === 'cancelled'
         ? { status: result.status, revision: result.revision }
         : {
@@ -64,10 +61,7 @@ export function createDesktopGlobalLibraryRuntime(
           };
     },
     async relinkMediaLibrary(libraryId, expectedRevision) {
-      const result = await bridge.home.mediaLibraries.relinkLibrary(
-        libraryId,
-        expectedRevision,
-      );
+      const result = await bridge.home.mediaLibraries.relinkLibrary(libraryId, expectedRevision);
       return result.status === 'cancelled'
         ? { status: result.status, revision: result.revision }
         : {
@@ -77,10 +71,7 @@ export function createDesktopGlobalLibraryRuntime(
           };
     },
     async removeMediaLibrary(libraryId, expectedRevision) {
-      const result = await bridge.home.mediaLibraries.removeLibrary(
-        libraryId,
-        expectedRevision,
-      );
+      const result = await bridge.home.mediaLibraries.removeLibrary(libraryId, expectedRevision);
       return {
         status: result.status,
         libraryId: result.libraryId,
@@ -88,10 +79,7 @@ export function createDesktopGlobalLibraryRuntime(
       };
     },
     async revealMediaLibrary(libraryId, expectedRevision) {
-      const result = await bridge.home.mediaLibraries.revealLibrary(
-        libraryId,
-        expectedRevision,
-      );
+      const result = await bridge.home.mediaLibraries.revealLibrary(libraryId, expectedRevision);
       return {
         status: result.status,
         libraryId: result.libraryId,

@@ -46,7 +46,9 @@ describe('Desktop builtin Skill root', () => {
     );
 
     await expect(access(join(sourceRoot, 'storyboard', 'SKILL.md'))).resolves.toBeUndefined();
-    await expect(access(join(extensionMarketplaceRoot, 'marketplace.json'))).resolves.toBeUndefined();
+    await expect(
+      access(join(extensionMarketplaceRoot, 'marketplace.json')),
+    ).resolves.toBeUndefined();
     expect(forgeConfig.packagerConfig?.extraResource).toEqual([
       sourceRoot,
       extensionMarketplaceRoot,

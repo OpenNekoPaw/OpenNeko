@@ -61,10 +61,10 @@ import type {
   ResourceBrowserSnapshotRequest,
   ResourceBrowserThumbnailRequest,
   ResourceBrowserThumbnailResult,
-} from 'neko-assets/resource-browser/contract';
-import type { DesktopResourceBrowserRuntime } from './desktop-resource-browser-runtime';
+} from '@neko-assets/domain/resource-browser/contract';
+import type { ResourceBrowserNodeRuntime } from '@neko-assets/node';
 import type { DesktopPreviewRuntime } from './desktop-preview-runtime';
-import type { PreviewProjection, PreviewRuntimeRequest } from '@neko-preview/contracts';
+import type { PreviewProjection, PreviewRuntimeRequest } from '@neko-preview/domain';
 import type {
   CanvasHostIntentResult,
   CanvasHostProjectionEvent,
@@ -120,18 +120,18 @@ import {
   parseDesktopApplicationSettingsUpdateRequest,
   type DesktopAgentAdvancedSettingsResult,
   type DesktopApplicationSettingsResponse,
-} from '../shared/application-settings-contract';
-import type { DesktopApplicationSettingsService } from './application-settings-service';
+} from '@neko/host/application-settings';
+import type { DesktopApplicationSettingsService } from '@neko/host/application-settings-service';
 import type { DesktopExtensionManager } from './desktop-extension-manager';
-import type { DesktopPersonalSkillManager } from './desktop-personal-skill-manager';
-import type { DesktopProjectPortabilityRuntime } from './desktop-project-portability-runtime';
+import type { PersonalSkillManager } from '@neko-agent/runtime/pi';
+import type { ProjectPortabilityRuntime } from '@neko-assets/node';
 import type {
   DesktopProjectPortabilityCancelResult,
   DesktopProjectPortabilityExecuteResult,
   DesktopProjectPortabilityInspectResult,
   DesktopProjectPortabilityPlanResult,
   DesktopProjectPortabilityProgressEvent,
-} from '../shared/project-portability-contract';
+} from '@neko-assets/domain/contracts';
 import {
   DESKTOP_AGENT_AUTOMATION_VERSION,
   parseDesktopAgentAutomationRequest,
@@ -145,14 +145,14 @@ export interface DesktopAppHostOptions {
   readonly shell: DesktopShellService;
   readonly agent: DesktopAgentAppHostComposition;
   readonly agentControllerComposition?: DesktopAgentControllerComposition;
-  readonly resourceBrowser?: DesktopResourceBrowserRuntime;
-  readonly projectPortability?: DesktopProjectPortabilityRuntime;
+  readonly resourceBrowser?: ResourceBrowserNodeRuntime;
+  readonly projectPortability?: ProjectPortabilityRuntime;
   readonly preview?: DesktopPreviewRuntime;
   readonly canvas?: DesktopCanvasRuntime;
   readonly cut?: DesktopCutRuntime;
   readonly settings: DesktopApplicationSettingsService;
   readonly extensionManager: DesktopExtensionManager;
-  readonly personalSkillManager: DesktopPersonalSkillManager;
+  readonly personalSkillManager: PersonalSkillManager;
   readonly openAgentAdvancedSettings: () => Promise<void>;
   readonly instanceId?: string;
   readonly agentAutomation?: {
@@ -167,8 +167,8 @@ export class DesktopAppHost {
   readonly shell: DesktopShellService;
   readonly agent: DesktopAgentAppHostComposition;
   readonly agentBridge: DesktopAgentBridgeRuntime;
-  readonly resourceBrowser: DesktopResourceBrowserRuntime | undefined;
-  readonly projectPortability: DesktopProjectPortabilityRuntime | undefined;
+  readonly resourceBrowser: ResourceBrowserNodeRuntime | undefined;
+  readonly projectPortability: ProjectPortabilityRuntime | undefined;
   readonly preview: DesktopPreviewRuntime | undefined;
   readonly canvas: DesktopCanvasRuntime | undefined;
   readonly cut: DesktopCutRuntime | undefined;
@@ -1431,14 +1431,14 @@ export class DesktopAppHost {
     };
   }
 
-  private requireResourceBrowser(): DesktopResourceBrowserRuntime {
+  private requireResourceBrowser(): ResourceBrowserNodeRuntime {
     if (!this.resourceBrowser) {
       throw new Error('Desktop Resource Browser runtime is unavailable.');
     }
     return this.resourceBrowser;
   }
 
-  private requireProjectPortability(): DesktopProjectPortabilityRuntime {
+  private requireProjectPortability(): ProjectPortabilityRuntime {
     if (!this.projectPortability) {
       throw new Error('Desktop project portability runtime is unavailable.');
     }

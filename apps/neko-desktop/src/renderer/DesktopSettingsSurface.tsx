@@ -6,9 +6,9 @@ import {
   SearchIcon,
   SettingsIcon,
 } from '@neko/ui';
-import { useTranslation } from '@neko/shared/i18n/react';
+import { useTranslation } from '@neko/ui/i18n/react';
 import { useMemo, useState, type ReactNode } from 'react';
-import type { DesktopApplicationPreferences } from '../shared/application-settings-contract';
+import type { DesktopApplicationPreferences } from '@neko/host/application-settings';
 import { useDesktopApplicationSettings } from './application-settings-context';
 import {
   DesktopApplicationBrand,

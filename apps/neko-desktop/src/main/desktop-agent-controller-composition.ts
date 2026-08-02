@@ -1,7 +1,7 @@
 import { join } from 'node:path';
 
-import { createSystemPromptBuilder } from '@neko/agent/prompt/system-prompt-builder';
-import { createConversationId } from '@neko/agent/session/conversation-id';
+import { createSystemPromptBuilder } from '@neko-agent/runtime/prompt/system-prompt-builder';
+import { createConversationId } from '@neko-agent/runtime/session/conversation-id';
 import {
   PiToolConfirmationRegistry,
   registerOpenNekoPiProvider,
@@ -13,20 +13,22 @@ import {
   type PiProductEventSink,
   type PiProductAgentEvent,
   type PiToolPermissionPolicy,
-} from '@neko/agent/pi';
+} from '@neko-agent/runtime/pi';
 import {
   type AgentHostRouteEffectContext,
   type AgentConversationControllerTurnRequest,
-} from '@neko/agent/runtime/host-controller';
+  createAgentContentEffects,
+  type AgentContentInteractionPort,
+} from '@neko-agent/runtime/runtime/host-controller';
 import {
   createAgentConversationMessageQueue,
   type AgentConversationMessageQueue,
-} from '@neko/agent/runtime/session/agent-message-queue';
+} from '@neko-agent/runtime/runtime/session/agent-message-queue';
 import {
   createConversationProjectionAttachmentServer,
   type ConversationProjectionAttachmentServer,
-} from '@neko/agent/runtime/projection/conversation-projection-attachment-server';
-import { projectPiConversationEntries } from '@neko/agent/runtime/projection/pi-conversation-history-projector';
+} from '@neko-agent/runtime/runtime/projection/conversation-projection-attachment-server';
+import { projectPiConversationEntries } from '@neko-agent/runtime/runtime/projection/pi-conversation-history-projector';
 import {
   AGENT_WEBVIEW_PROTOCOL_VERSION,
   buildAgentStateSnapshotMessage,
@@ -40,46 +42,40 @@ import {
   type ProjectionAttachmentKey,
   type SettingsDataMessage,
   type TabState,
-} from '@neko-agent/types';
-import { ConfigManager } from '@neko/platform/config/config-manager';
-import { FileUserConfigManager } from '@neko/platform/config/user-config';
+} from '@neko-agent/contracts';
+import { ConfigManager } from '@neko/host/settings';
+import { FileUserConfigManager } from '@neko/host/settings';
 import {
   buildAssistantSettingsDataMessage,
   buildAssistantSettingsUpdatedMessage,
   type AssistantConfigState,
   type AssistantSettingsData,
-} from '@neko/platform/config/assistant-config';
-import { projectLlmParameters } from '@neko/platform/config/llm-parameter-projection';
+} from '@neko/host/settings';
+import { projectLlmParameters } from '@neko/host/settings';
 import {
   createEffectiveAgentConfigurationProjection,
   type EffectiveAgentWorkspaceConfigSnapshot,
-} from '@neko/platform/config/effective-agent-config';
-import type { ModelConfig as Model, ProviderConfig as Provider } from '@neko/shared';
+} from '@neko/host/settings';
+import type { ModelConfig as Model, ProviderConfig as Provider } from '@neko-ai/contracts';
 import type { NekoHostPorts } from '@neko/host/ports';
-import {
-  createDesktopAgentContentEffects,
-  type DesktopAgentContentInteractionPort,
-} from './desktop-agent-content-effects';
 import type {
   DesktopAgentTurnConfigurationSnapshot,
   DesktopAgentTurnInput,
   DesktopAgentWorkspaceRuntime,
 } from './desktop-agent-app-host-composition';
 import type { DesktopAgentCredentialRuntime } from './desktop-agent-credential-runtime';
-import {
-  createDesktopAgentFactsProjector,
-  type DesktopAgentFactsProjector,
-} from './desktop-agent-facts-projector';
 import type {
   DesktopAgentControllerComposition,
   DesktopAgentControllerEffects,
 } from './desktop-agent-bridge-runtime';
-import type { DesktopAgentConnectionIdentity } from '../shared/agent-contract';
+import type { DesktopAgentConnectionIdentity } from '@neko-agent/contracts';
 import {
-  createDesktopAgentResourceDisplayProjector,
-  type DesktopAgentResourceDisplayRegistrationPort,
-  type DesktopAgentResourceDisplayProjector,
-} from './desktop-agent-resource-display-projector';
+  createDesktopAgentFactsProjector,
+  createAgentResourceDisplayProjector,
+  type DesktopAgentFactsProjector,
+  type AgentResourceDisplayRegistrationPort,
+  type AgentResourceDisplayProjector,
+} from '@neko-agent/runtime/runtime';
 
 export interface DesktopAgentConfigInteractionPort {
   openUserConfig(input: {
@@ -96,9 +92,9 @@ export interface CreateDesktopAgentControllerCompositionOptions {
   readonly host: Pick<NekoHostPorts, 'files' | 'paths' | 'accessPolicy' | 'external'>;
   readonly userHome: string;
   readonly credentialRuntime: DesktopAgentCredentialRuntime;
-  readonly contentInteraction: DesktopAgentContentInteractionPort;
+  readonly contentInteraction: AgentContentInteractionPort;
   readonly configInteraction: DesktopAgentConfigInteractionPort;
-  readonly resources: DesktopAgentResourceDisplayRegistrationPort;
+  readonly resources: AgentResourceDisplayRegistrationPort;
   readonly reportError: (error: Error) => void;
 }
 
@@ -136,7 +132,7 @@ class DefaultDesktopAgentControllerComposition implements DesktopAgentController
     };
     let post: AgentHostRouteEffectContext['post'] | undefined;
     const facts = createDesktopAgentFactsProjector({ connection: input.identity });
-    const resourceDisplay = createDesktopAgentResourceDisplayProjector({
+    const resourceDisplay = createAgentResourceDisplayProjector({
       identity: input.identity,
       workspace: input.workspace.workspace,
       resources: this.options.resources,
@@ -210,7 +206,7 @@ class DefaultDesktopAgentControllerComposition implements DesktopAgentController
       conversation: this.createConversationEffects(input.workspace, config, state, bind, facts),
       config: this.createConfigEffects(input.workspace, config, state, bind),
       skill: this.createSkillEffects(input.workspace, config, bind, facts),
-      content: createDesktopAgentContentEffects({
+      content: createAgentContentEffects({
         workspace: input.workspace.workspace,
         host: this.options.host,
         interaction: this.options.contentInteraction,
@@ -696,7 +692,7 @@ class DefaultDesktopAgentControllerComposition implements DesktopAgentController
 
   private createProjectionEffects(
     projection: ConversationProjectionAttachmentServer,
-    resourceDisplay: DesktopAgentResourceDisplayProjector,
+    resourceDisplay: AgentResourceDisplayProjector,
     bind: (context: AgentHostRouteEffectContext) => void,
   ): DesktopAgentControllerEffects['projection'] {
     const run = async (

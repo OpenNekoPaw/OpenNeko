@@ -6,21 +6,18 @@ import {
   DESKTOP_APPLICATION_SETTINGS_CONTRACT_VERSION,
   DesktopApplicationSettingsContractError,
   parseDesktopApplicationPreferences,
-  type DesktopApplicationPreferences,
-} from '../shared/application-settings-contract';
-
-export interface DesktopApplicationSettingsStoredState {
-  readonly schemaVersion: typeof DESKTOP_APPLICATION_SETTINGS_CONTRACT_VERSION;
-  readonly storageRevision: number;
-  readonly preferences: DesktopApplicationPreferences;
-}
+} from '@neko/host/application-settings';
+import type {
+  DesktopApplicationSettingsRepositoryPort,
+  DesktopApplicationSettingsStoredState,
+} from '@neko/host/application-settings-service';
 
 export interface DesktopApplicationSettingsFilePort {
   readTextIfExists(): Promise<string | null>;
   writeTextAtomic(content: string): Promise<void>;
 }
 
-export class DesktopApplicationSettingsRepository {
+export class DesktopApplicationSettingsRepository implements DesktopApplicationSettingsRepositoryPort {
   constructor(private readonly file: DesktopApplicationSettingsFilePort) {}
 
   async read(): Promise<DesktopApplicationSettingsStoredState> {
@@ -112,10 +109,7 @@ function parseDesktopApplicationSettingsStoredState(
     throw invalidState(`Desktop application settings have unexpected fields: ${keys.join(', ')}.`);
   }
   const schemaVersion = record['schemaVersion'];
-  if (
-    schemaVersion !== 1 &&
-    schemaVersion !== DESKTOP_APPLICATION_SETTINGS_CONTRACT_VERSION
-  ) {
+  if (schemaVersion !== 1 && schemaVersion !== DESKTOP_APPLICATION_SETTINGS_CONTRACT_VERSION) {
     throw new DesktopApplicationSettingsContractError(
       'unsupported-desktop-application-settings-version',
       `Unsupported Desktop application settings version '${String(schemaVersion)}'.`,

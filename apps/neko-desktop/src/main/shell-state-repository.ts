@@ -287,11 +287,7 @@ function parseStoredWindow(
   const workbench =
     sourceVersion === DESKTOP_SHELL_STATE_V1
       ? createDefaultDesktopWorkbenchLayout(windowId)
-      : parseStoredWorkbench(
-          record['workbench'],
-          windowId,
-          sourceVersion,
-        );
+      : parseStoredWorkbench(record['workbench'], windowId, sourceVersion);
   return {
     windowId,
     revision: requireNonNegativeInteger(

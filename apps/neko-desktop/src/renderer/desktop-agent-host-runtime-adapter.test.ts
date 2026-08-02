@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { AgentHostToWebviewMessage } from '@neko-agent/types';
+import type { AgentHostToWebviewMessage } from '@neko-agent/contracts';
 import {
   createElectronAgentHostRuntimeAdapter,
   type DesktopAgentPresentationStorage,

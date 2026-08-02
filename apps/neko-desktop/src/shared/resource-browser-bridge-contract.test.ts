@@ -1,8 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import {
-  createDesktopResourceBrowserIdentity,
-  resourceBrowserViewId,
-} from './resource-browser-bridge-contract';
+import { createResourceBrowserViewId } from '@neko-assets/domain/resource-browser/contract';
+import { createDesktopResourceBrowserIdentity } from './resource-browser-bridge-contract';
 
 describe('Desktop Resource Browser bridge contract', () => {
   it('derives the Resource Browser identity from the owning Project View', () => {
@@ -19,7 +17,7 @@ describe('Desktop Resource Browser bridge contract', () => {
       projectId: 'project-1',
       workspaceId: 'workspace-1',
       windowId: 'window-1',
-      viewId: resourceBrowserViewId('project-view-1'),
+      viewId: createResourceBrowserViewId('project-view-1'),
       viewEpoch: 4,
       endpointEpoch: 'endpoint-1',
     });

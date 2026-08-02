@@ -37,10 +37,7 @@ export interface DesktopBootstrapProjection {
   readonly status: 'foundation-ready';
 }
 
-export type DesktopLifecycleEventType =
-  | 'renderer-loading'
-  | 'renderer-ready'
-  | 'window-closing';
+export type DesktopLifecycleEventType = 'renderer-loading' | 'renderer-ready' | 'window-closing';
 
 export interface DesktopLifecycleEvent {
   readonly schemaVersion: typeof DESKTOP_BRIDGE_CONTRACT_VERSION;
@@ -66,10 +63,7 @@ export class DesktopBridgeContractError extends Error {
     | 'unsupported-desktop-bridge-version'
     | 'desktop-bridge-request-mismatch';
 
-  constructor(
-    code: DesktopBridgeContractError['code'],
-    message: string,
-  ) {
+  constructor(code: DesktopBridgeContractError['code'], message: string) {
     super(message);
     this.name = 'DesktopBridgeContractError';
     this.code = code;
@@ -177,10 +171,7 @@ export function parseDesktopLifecycleEvent(value: unknown): DesktopLifecycleEven
       record['applicationInstanceId'],
       'Desktop lifecycle applicationInstanceId is required.',
     ),
-    windowId: requireNonEmptyString(
-      record['windowId'],
-      'Desktop lifecycle windowId is required.',
-    ),
+    windowId: requireNonEmptyString(record['windowId'], 'Desktop lifecycle windowId is required.'),
     rendererEpoch: requireNonNegativeInteger(
       record['rendererEpoch'],
       'Desktop lifecycle rendererEpoch must be a non-negative integer.',

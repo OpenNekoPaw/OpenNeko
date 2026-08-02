@@ -25,22 +25,22 @@ import {
   type PiToolRunIdentity,
   type SkillSourceRoot,
   type SkillSourceKind,
-} from '@neko/agent/pi';
+} from '@neko-agent/runtime/pi';
 import {
   createConversationProjectionStore,
   type ConversationProjectionListener,
   type ConversationProjectionStore,
-} from '@neko/agent/conversation-projection';
-import { createToolRegistry } from '@neko/agent/tool-registry';
-import { createHostAgentContentAccessRuntime } from '@neko/agent/runtime';
-import { createContentReadCapabilityProvider } from '@neko/content/document';
+} from '@neko-agent/runtime/conversation-projection';
+import { createToolRegistry } from '@neko-agent/runtime/tool-registry';
+import { createHostAgentContentAccessRuntime } from '@neko-agent/runtime/runtime';
+import { createContentReadCapabilityProvider } from '@neko-agent/runtime';
 import {
   createNodeDocumentAccessService,
   createNodeDocumentLowLevelAccess,
 } from '@neko/content/document/node';
-import { TOOL_NAMES_QUALITY, type IToolRegistry } from '@neko/shared';
-import { createNodeHostContentReadService } from '@neko/shared/content-access';
-import type { EffectiveAgentConfigurationProjection } from '@neko/platform/config/effective-agent-config';
+import { TOOL_NAMES_QUALITY, type IToolRegistry } from '@neko-agent/contracts';
+import { createNodeHostContentReadService } from '@neko/content/node';
+import type { EffectiveAgentConfigurationProjection } from '@neko-agent/contracts';
 import type {
   DesktopAgentHomeActivitySummary,
   DesktopAgentHomeAttentionStatus,
@@ -48,8 +48,8 @@ import type {
   DesktopAgentHomeProjection,
 } from '../shared/shell-contract';
 import type { DesktopAgentCredentialRuntime } from './desktop-agent-credential-runtime';
-import { resolveDesktopWorkspaceContentLocator } from './desktop-content-locator';
-import type { DesktopWorkspaceResolution } from './desktop-workspace-registry';
+import { resolveWorkspaceContentLocator } from '@neko-assets/node';
+import type { AssetWorkspaceResolution } from '@neko-assets/domain/contracts';
 import type {
   DesktopExtensionCatalogSnapshot,
   DesktopExtensionRuntimeReadiness,
@@ -118,7 +118,7 @@ export interface DesktopAgentConversationEvidence {
 
 export interface DesktopAgentWorkspaceRuntime {
   readonly workspaceId: string;
-  readonly workspace: DesktopWorkspaceResolution;
+  readonly workspace: AssetWorkspaceResolution;
   readonly models: ReturnType<typeof createOpenNekoPiModels>;
   readonly tools: IToolRegistry;
   createConversation(conversationId: string): Promise<void>;
@@ -168,7 +168,7 @@ export interface DesktopAgentSkillCatalog {
 export interface DesktopAgentAppHostComposition {
   readonly credentialRuntime: DesktopAgentCredentialRuntime;
   setHomeWorkspaceScope(workspaceIds: readonly string[]): void;
-  attachWorkspace(workspace: DesktopWorkspaceResolution): Promise<DesktopAgentWorkspaceRuntime>;
+  attachWorkspace(workspace: AssetWorkspaceResolution): Promise<DesktopAgentWorkspaceRuntime>;
   getWorkspace(workspaceId: string): DesktopAgentWorkspaceRuntime | undefined;
   readGlobalSkillCatalog(): Promise<DesktopAgentSkillCatalog>;
   hasActiveTurns(): boolean;
@@ -236,7 +236,7 @@ class DefaultDesktopAgentAppHostComposition implements DesktopAgentAppHostCompos
   }
 
   async attachWorkspace(
-    workspace: DesktopWorkspaceResolution,
+    workspace: AssetWorkspaceResolution,
   ): Promise<DesktopAgentWorkspaceRuntime> {
     this.requireActive();
     const existing = this.workspaces.get(workspace.workspaceId);
@@ -404,7 +404,7 @@ class DefaultDesktopAgentAppHostComposition implements DesktopAgentAppHostCompos
   }
 
   private async openWorkspace(
-    workspace: DesktopWorkspaceResolution,
+    workspace: AssetWorkspaceResolution,
   ): Promise<DefaultDesktopAgentWorkspaceRuntime> {
     const authority = await NodePiConversationAuthority.create({
       userDataRoot: this.options.userDataRoot,
@@ -446,7 +446,7 @@ class DefaultDesktopAgentAppHostComposition implements DesktopAgentAppHostCompos
 }
 
 interface DefaultDesktopAgentWorkspaceRuntimeOptions {
-  readonly workspace: DesktopWorkspaceResolution;
+  readonly workspace: AssetWorkspaceResolution;
   readonly authority: NodePiConversationAuthority;
   readonly userHome: string;
   readonly builtinSkillRoot?: string;
@@ -479,11 +479,11 @@ class DefaultDesktopAgentWorkspaceRuntime implements DesktopAgentWorkspaceRuntim
     return this.options.workspace.workspaceId;
   }
 
-  get workspace(): DesktopWorkspaceResolution {
+  get workspace(): AssetWorkspaceResolution {
     return this.options.workspace;
   }
 
-  assertWorkspace(workspace: DesktopWorkspaceResolution): void {
+  assertWorkspace(workspace: AssetWorkspaceResolution): void {
     if (
       workspace.workspaceId !== this.workspaceId ||
       workspace.workspacePath !== this.options.workspace.workspacePath
@@ -970,7 +970,7 @@ class DefaultDesktopAgentWorkspaceRuntime implements DesktopAgentWorkspaceRuntim
   }
 }
 
-function createDesktopContentReadTools(workspace: DesktopWorkspaceResolution) {
+function createDesktopContentReadTools(workspace: AssetWorkspaceResolution) {
   const documentLowLevelAccess = createNodeDocumentLowLevelAccess();
   const contentAccessRuntime = createHostAgentContentAccessRuntime({
     contentRead: createNodeHostContentReadService({
@@ -981,8 +981,7 @@ function createDesktopContentReadTools(workspace: DesktopWorkspaceResolution) {
       },
     }),
     documentAccess: createNodeDocumentAccessService(),
-    resolveDocumentHostFilePath: (source) =>
-      resolveDesktopWorkspaceContentLocator(workspace, source),
+    resolveDocumentHostFilePath: (source) => resolveWorkspaceContentLocator(workspace, source),
   });
   return createContentReadCapabilityProvider({ contentAccessRuntime }).getTools({
     hostContext: null,

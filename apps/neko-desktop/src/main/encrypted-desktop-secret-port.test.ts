@@ -53,9 +53,7 @@ describe('EncryptedDesktopSecretPort', () => {
       },
     });
 
-    await expect(unavailable.get('provider:a')).rejects.toThrow(
-      'fixture encryption unavailable',
-    );
+    await expect(unavailable.get('provider:a')).rejects.toThrow('fixture encryption unavailable');
 
     const filePath = join(root, 'invalid.json');
     await writeFile(filePath, '{"schemaVersion":99,"entries":{}}\n', 'utf8');
