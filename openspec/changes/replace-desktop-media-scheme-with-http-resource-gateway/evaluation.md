@@ -79,9 +79,9 @@ consumer 已通过，也不能作为恢复 HTTP fallback 的依据。
   32 MiB read, exact `206` Range headers, four post-release `404` responses and no renderer console
   messages. Raw report:
   `reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-01T03-36-13-828Z-packaged/report.json`.
-- Windows: the native `win32-x64` workflow remains the build/typecheck/package baseline. Graphical
-  Windows HTTP/CSP/PNA, media, GPU, texture and display qualification remains Phase 2 and cannot be
-  inferred from this macOS report or a cross-platform workflow definition.
+- Windows: at the time of this dated run, the intermediate workflow still contained a native
+  `win32-x64` package baseline. The current platform contract supersedes that path: Windows is now
+  deterministic test-only and this historical macOS report never qualified Windows product support.
 - This historical scenario qualified only the then-current HTTP transport/browser/GPU primitive.
   It does not replace the current OpenNeko or package-owned Cut, Canvas, Preview and Agent matrices.
 
@@ -136,9 +136,8 @@ consumer 已通过，也不能作为恢复 HTTP fallback 的依据。
 - Raw OpenNeko report: gitignored
   `reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-01T09-30-36.286Z-openneko/report.json`.
 - Passed: `pnpm build` and explicit `pnpm package:desktop` generated the
-  `OpenNeko-darwin-arm64/OpenNeko.app` package. The Desktop platform contract keeps native
-  `darwin-arm64` and `win32-x64` typecheck/package jobs and rejects unsupported targets; the
-  Windows package itself was not executable on this macOS host.
+  `OpenNeko-darwin-arm64/OpenNeko.app` package. The current Desktop platform contract retains only
+  the native `darwin-arm64` package job; Windows/Linux test jobs cannot create an artifact.
 - Final stable-worktree reruns passed `pnpm build`, `pnpm test`, `pnpm check`,
   `pnpm check:quality`, `pnpm check:legacy-debt`, `pnpm check:unused` and
   `pnpm test:agent:eval`. Agent Evaluation reported 37 files / 245 tests and all 22 suites / 51
@@ -166,9 +165,8 @@ consumer 已通过，也不能作为恢复 HTTP fallback 的依据。
 - The separate Desktop Agent evaluation-matrix change still owns reload/reconnect, application
   restart, multi-worker isolation and full repeated-matrix orchestration. Those broader driver
   controls are not claimed by this single authorized Tool-result display scenario.
-- Native Windows typecheck/package and graphical media/GPU qualification were not run on this
-  `darwin-arm64` host. The workflow contract was validated, but Windows runtime behavior remains
-  Phase 2.
+- Windows/Linux platform tests do not qualify native package, graphical media/GPU, or product
+  runtime behavior. This change makes no non-macOS product claim.
 - HDR display output and zero-copy remain respectively `not-qualified` and `not-measured`.
 - Preview matrices can still record two non-fatal Agent handler warnings for broadcast
   `document:statusUpdate` / `document:saveState` messages. They produced no console error, Renderer

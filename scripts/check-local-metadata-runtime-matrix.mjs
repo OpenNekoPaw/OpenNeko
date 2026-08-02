@@ -70,10 +70,7 @@ export async function validateLocalMetadataRuntimeMatrix() {
     targetKeys.add(`${target.host}:${target.os}:${target.arch}`);
   }
   const expectedHosts = ['electron-main'];
-  const expectedPlatforms = [
-    ['darwin', 'arm64'],
-    ['win32', 'x64'],
-  ];
+  const expectedPlatforms = [['darwin', 'arm64']];
   for (const host of expectedHosts) {
     for (const [os, arch] of expectedPlatforms) {
       if (!targetKeys.has(`${host}:${os}:${arch}`)) {
@@ -81,7 +78,7 @@ export async function validateLocalMetadataRuntimeMatrix() {
       }
     }
   }
-  if (targetKeys.size !== 2) errors.push(`Runtime matrix must contain 2 unique targets`);
+  if (targetKeys.size !== 1) errors.push(`Runtime matrix must contain 1 unique target`);
 
   for (const packageJsonPath of await collectPackageJsonPaths(packageRoot)) {
     const packageJson = await readJson(packageJsonPath);
@@ -127,6 +124,6 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     for (const error of errors) console.error(error);
     process.exitCode = 1;
   } else {
-    console.log('Local metadata runtime matrix is valid (2 Desktop targets).');
+    console.log('Local metadata runtime matrix is valid (1 Desktop target).');
   }
 }

@@ -71,7 +71,8 @@
     "prepare": "husky",
     "dev:desktop": "pnpm --filter @neko/app-desktop dev",
     "build:desktop": "pnpm --filter @neko/app-desktop build",
-    "package:desktop": "pnpm --filter @neko/app-desktop package"
+    "package:desktop": "pnpm --filter @neko/app-desktop package",
+    "make:desktop": "pnpm --filter @neko/app-desktop make"
   },
   "lint-staged": {
     "packages/**/src/**/*.{ts,tsx}": [

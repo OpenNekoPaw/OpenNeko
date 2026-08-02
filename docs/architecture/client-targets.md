@@ -30,13 +30,12 @@ Desktop 原生构建目标精确为：
 
 | Target         | 原生构建 Host       | 当前证据                                             |
 | -------------- | ------------------- | ---------------------------------------------------- |
-| `darwin-arm64` | Apple Silicon macOS | 本地 Forge package 已验证                            |
-| `win32-x64`    | x64 Windows         | GitHub Actions 原生 package 门禁；完整运行态资格待补 |
+| `darwin-arm64` | Apple Silicon macOS | 本地 Forge package 已验证；正式签名/公证 Release 已建门禁 |
 
-Linux 只运行 lint、测试、OpenSpec、依赖分析和 browser-safe build 等 host-neutral
-检查，不调用 Forge，不生成 Linux Desktop artifact。Intel macOS、Windows ARM/IA32
-和其他目标在 Forge 前 fail-visible。原生 package 成功只证明构建闭包，不能替代安装、
-启动、凭据、媒体/GPU、文件和完整创作路径资格。
+Windows x64 与 Linux 只运行 typecheck、orchestration、SQLite、lint、测试、OpenSpec、依赖
+分析和 browser-safe build 等确定性检查，不调用 Forge，不生成 Desktop artifact。Intel
+macOS、Windows 和 Linux package 以及其他目标在 Forge 前 fail-visible。原生 package 成功
+只证明构建闭包，不能替代安装、启动、凭据、媒体/GPU、文件和完整创作路径资格。
 
 ## Package 复用
 
@@ -60,7 +59,7 @@ Linux 只运行 lint、测试、OpenSpec、依赖分析和 browser-safe build �
 | Main/preload/IPC | Desktop contract/security tests、unknown message 与 stale identity rejection                   |
 | Renderer/UI      | package build/test，加真实 Electron visual/interaction/CSP/message 场景                        |
 | Media            | Node/FFmpeg focused tests、Range/PCM/取消/释放和 production bundle inspection                  |
-| Product          | macOS/Windows 原生 `pnpm package:desktop`、隔离 fixture project-open 与受影响 creative surface |
+| Product          | macOS 原生 `pnpm package:desktop`、隔离 fixture project-open 与受影响 creative surface         |
 
 相关边界见 [`application-composition.md`](application-composition.md)、
 [`package-boundaries.md`](package-boundaries.md) 和 [`media-runtime.md`](media-runtime.md)。

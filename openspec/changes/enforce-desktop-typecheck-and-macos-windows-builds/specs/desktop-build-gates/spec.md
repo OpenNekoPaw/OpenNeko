@@ -13,8 +13,9 @@ native Desktop packaging and SHALL fail when that check fails.
 
 ### Requirement: Host-neutral validation does not create native Desktop artifacts
 
-The repository SHALL provide a host-neutral validation path for format, lint, TypeScript, and
-browser-safe package builds that does not invoke Electron Forge packaging.
+The repository SHALL provide deterministic Windows/Linux validation paths for format, lint,
+TypeScript, orchestration, runtime compatibility, and browser-safe package builds without invoking
+Electron Forge packaging.
 
 #### Scenario: Static CI runs on Linux
 
@@ -22,36 +23,41 @@ browser-safe package builds that does not invoke Electron Forge packaging.
 - **THEN** it SHALL validate source and browser-safe outputs
 - **AND** it SHALL NOT create or upload a Linux Desktop application
 
-### Requirement: Native packages are built on matching hosts
+#### Scenario: Platform compatibility runs on Windows
 
-Remote native package validation SHALL build `darwin-arm64` on an Apple Silicon macOS runner and
-`win32-x64` on an x64 Windows runner.
+- **WHEN** the Windows platform test job runs
+- **THEN** it SHALL validate Desktop types and deterministic native-runtime contracts
+- **AND** it SHALL NOT invoke Forge package, make, publish, or Desktop artifact upload
 
-#### Scenario: Native package matrix runs
+### Requirement: Native package is built on the matching macOS host
+
+Remote native package validation SHALL build only `darwin-arm64` on an Apple Silicon macOS runner.
+
+#### Scenario: Native package job runs
 
 - **WHEN** the remote build workflow executes
-- **THEN** both canonical targets SHALL run `@neko/app-desktop` typecheck and package on their
-  matching host runner
-- **AND** each job SHALL upload the matching Forge package output
+- **THEN** the macOS job SHALL run `@neko/app-desktop` typecheck, native Sharp closure, and package
+- **AND** it SHALL upload only the matching Forge package output
 
-#### Scenario: Cross-host packaging is proposed
+#### Scenario: Forge returns without the canonical package output
 
-- **WHEN** a workflow attempts to use macOS or Linux cross-packaging as Windows qualification
-- **THEN** repository orchestration tests SHALL fail
+- **WHEN** the native package process returns but the macOS executable is absent
+- **THEN** the repository-owned package command SHALL fail before artifact upload
+- **AND** the missing package SHALL NOT be represented as successful native evidence
 
-### Requirement: Aggregate gates require all native targets
+### Requirement: Aggregate gates require macOS package and platform tests
 
-Manual and pull-request aggregate gates SHALL treat both native target packages as required
-evidence.
+Manual and pull-request aggregate gates SHALL require the macOS native package plus deterministic
+Windows/Linux test evidence.
 
-#### Scenario: A native target fails or is skipped
+#### Scenario: Required package or platform test fails
 
-- **WHEN** either macOS or Windows native packaging does not succeed
-- **THEN** the aggregate gate SHALL fail rather than treating the missing artifact as optional
+- **WHEN** the macOS package or a required Windows/Linux test job fails or is skipped
+- **THEN** the aggregate gate SHALL fail rather than treating the missing evidence as optional
 
 ### Requirement: CI validation classes are explicit and deterministic
 
-The remote gate SHALL validate native platform packages, deterministic unit/contract tests, and a
+The remote gate SHALL validate the macOS native package, deterministic unit/contract tests, and a
 named headless Desktop functional subset as separate required evidence.
 
 #### Scenario: Headless functional CI runs

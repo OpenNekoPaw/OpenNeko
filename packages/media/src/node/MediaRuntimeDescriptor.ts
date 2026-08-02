@@ -11,7 +11,7 @@ import { NodeMediaRuntime } from './NodeMediaRuntime';
 
 export const MEDIA_RUNTIME_DESCRIPTOR_SCHEMA = 'openneko.media-runtime.v2';
 
-export type MediaRuntimeTarget = 'darwin-arm64' | 'win32-x64';
+export type MediaRuntimeTarget = 'darwin-arm64';
 
 export interface MediaRuntimeDescriptor {
   readonly schemaVersion: typeof MEDIA_RUNTIME_DESCRIPTOR_SCHEMA;
@@ -119,7 +119,7 @@ function parseMediaRuntimeDescriptor(value: unknown): MediaRuntimeDescriptor {
     throw new Error('Media runtime descriptor schema is invalid.');
   }
   const target = value['target'];
-  if (target !== 'darwin-arm64' && target !== 'win32-x64') {
+  if (target !== 'darwin-arm64') {
     throw new Error('Media runtime descriptor fields are invalid.');
   }
   const ffmpegVersion = readRequiredString(value, 'ffmpegVersion');
@@ -198,16 +198,10 @@ function assertCapabilityFloor(
   capabilities: MediaRuntimeDescriptor['requiredCapabilities'],
 ): void {
   const required = {
-    hardwareAccelerators: target === 'darwin-arm64' ? (['videoToolbox'] as const) : ([] as const),
+    hardwareAccelerators: ['videoToolbox'] as const,
     decoders: DECODER_CAPABILITIES,
-    encoders:
-      target === 'darwin-arm64'
-        ? (['h264VideoToolbox', 'aac'] as const)
-        : (['h264', 'aac'] as const),
-    filters:
-      target === 'darwin-arm64'
-        ? (['alimiter', 'loudnorm', 'ebur128', 'scaleVt'] as const)
-        : (['alimiter', 'loudnorm', 'ebur128'] as const),
+    encoders: ['h264VideoToolbox', 'aac'] as const,
+    filters: ['alimiter', 'loudnorm', 'ebur128', 'scaleVt'] as const,
   };
   for (const section of ['hardwareAccelerators', 'decoders', 'encoders', 'filters'] as const) {
     for (const capability of required[section]) {

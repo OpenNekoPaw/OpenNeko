@@ -34,18 +34,11 @@ configure_args=(
   "--disable-shared"
   "--enable-static"
 )
-if [[ "${target}" == "darwin-arm64" ]]; then
-  configure_args+=("--enable-videotoolbox" "--enable-audiotoolbox")
-elif [[ "${target}" == "win32-x64" ]]; then
-  configure_args+=(
-    "--target-os=mingw32"
-    "--arch=x86_64"
-    "--enable-mediafoundation"
-  )
-else
+if [[ "${target}" != "darwin-arm64" ]]; then
   echo "Unsupported media runtime target: ${target}." >&2
   exit 1
 fi
+configure_args+=("--enable-videotoolbox" "--enable-audiotoolbox")
 
 (
   cd "${source_root}"

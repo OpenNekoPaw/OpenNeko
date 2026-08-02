@@ -12,6 +12,7 @@ import {
 } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 const require = createRequire(import.meta.url);
 
@@ -31,12 +32,6 @@ const SHARP_TARGET_RUNTIME_PACKAGES = Object.freeze({
     Object.freeze({
       packageName: '@img/sharp-libvips-darwin-arm64',
       specifier: '@img/sharp-libvips-darwin-arm64/lib',
-    }),
-  ]),
-  'win32-x64': Object.freeze([
-    Object.freeze({
-      packageName: '@img/sharp-win32-x64',
-      specifier: '@img/sharp-win32-x64/sharp.node',
     }),
   ]),
 });
@@ -136,7 +131,7 @@ function readArgument(name) {
   return value;
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   try {
     main();
   } catch (error) {

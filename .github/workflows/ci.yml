@@ -57,15 +57,45 @@ jobs:
         run: pnpm check:static-build
 
   desktop-package:
-    name: Desktop Package (${{ matrix.target }})
+    name: Desktop Package (darwin-arm64)
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .node-version
+          package-manager-cache: false
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Typecheck Desktop
+        run: pnpm typecheck:desktop
+
+      - name: Validate native Sharp bundle runtime
+        run: node --test scripts/test-orchestration/sharp-cjs-bundle-runtime.test.mjs
+
+      - name: Package Desktop
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
+        run: pnpm package:desktop
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: openneko-darwin-arm64
+          path: apps/neko-desktop/out/OpenNeko-darwin-arm64/
+          if-no-files-found: error
+          retention-days: 14
+
+  platform-test:
+    name: Platform Test (${{ matrix.os }})
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - target: darwin-arm64
-            os: macos-15
-          - target: win32-x64
-            os: windows-2025
+        os: [ubuntu-latest, windows-2025]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v5
@@ -83,37 +113,18 @@ jobs:
       - name: Typecheck Desktop
         run: pnpm typecheck:desktop
 
-      - name: Package Desktop
-        run: pnpm package:desktop
+      - name: Validate local metadata runtime
+        run: pnpm check:local-metadata-runtimes
 
-      - uses: actions/upload-artifact@v6
-        with:
-          name: openneko-${{ matrix.target }}
-          path: apps/neko-desktop/out/OpenNeko-${{ matrix.target }}/
-          if-no-files-found: error
-          retention-days: 14
+      - name: Test local metadata store
+        run: pnpm --dir packages/local-metadata exec vitest run src/node-sqlite-local-metadata-store.test.ts
 
-  local-metadata-runtime:
-    name: Local Metadata Runtime (${{ matrix.os }})
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [macos-15, windows-2025]
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v5
-
-      - uses: actions/setup-node@v5
-        with:
-          node-version-file: .node-version
-          package-manager-cache: false
-
-      - name: Enable Corepack
-        run: corepack enable
-
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm check:local-metadata-runtimes
-      - run: pnpm --dir packages/local-metadata exec vitest run src/node-sqlite-local-metadata-store.test.ts
+      - name: Run platform orchestration tests
+        run: >-
+          node --test
+          scripts/test-orchestration/desktop-build-platforms.test.mjs
+          scripts/test-orchestration/local-metadata-runtime-matrix.test.mjs
+          scripts/test-orchestration/sharp-cjs-bundle-runtime.test.mjs
 
   test-ts:
     name: Unit & Contract Tests
@@ -225,7 +236,7 @@ jobs:
     needs:
       - static-build
       - desktop-package
-      - local-metadata-runtime
+      - platform-test
       - test-ts
       - functional-test
       - code-quality
@@ -246,7 +257,7 @@ jobs:
           "Manual Gate"
           static-build
           desktop-package
-          local-metadata-runtime
+          platform-test
           test-ts
           functional-test
           code-quality
@@ -259,7 +270,7 @@ jobs:
     needs:
       - static-build
       - desktop-package
-      - local-metadata-runtime
+      - platform-test
       - test-ts
       - functional-test
       - code-quality
@@ -282,7 +293,7 @@ jobs:
           "Merge Gate"
           static-build
           desktop-package
-          local-metadata-runtime
+          platform-test
           test-ts
           functional-test
           code-quality

@@ -290,10 +290,10 @@ acceptance, and browser-only rendering MUST NOT be represented as Electron UI ac
 
 Electron Desktop MUST remain the only product composition root. Shared contract changes MUST retain
 their current Desktop producer/consumer and canonical-path tests without restoring a retired host,
-compatibility package or fallback. Native build targets SHALL remain exactly `darwin-arm64` and
-`win32-x64`; Linux SHALL remain host-neutral CI only. Phase 1 MAY use `darwin-arm64` as its complete
-graphical reference platform, but a Windows package MUST NOT be represented as complete Windows
-installation, media/GPU or release qualification.
+compatibility package or fallback. The native package/release target SHALL remain exactly
+`darwin-arm64`; Windows/Linux SHALL remain deterministic test-only hosts. Phase 1 SHALL use
+`darwin-arm64` as its complete graphical and package reference platform without inferring product
+support from non-macOS test results.
 
 #### Scenario: A shared adapter changes
 
@@ -304,6 +304,7 @@ installation, media/GPU or release qualification.
 #### Scenario: A Phase 1 package is demonstrated
 
 - **WHEN** a Phase 1 Desktop package or build is produced
-- **THEN** documentation identifies exact `darwin-arm64`/`win32-x64` build evidence and the
-  `darwin-arm64` graphical qualification actually performed
-- **AND** it does not imply full Windows qualification or Phase 3 MCP/plugin/professional-tool support
+- **THEN** documentation identifies exact `darwin-arm64` package/graphical evidence and
+  Windows/Linux deterministic test evidence actually performed
+- **AND** it does not imply non-macOS product qualification or Phase 3 MCP/plugin/professional-tool
+  support

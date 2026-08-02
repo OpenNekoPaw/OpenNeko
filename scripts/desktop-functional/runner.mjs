@@ -610,9 +610,6 @@ function packagedExecutable(platform) {
       'apps/neko-desktop/out/OpenNeko-darwin-arm64/OpenNeko.app/Contents/MacOS/OpenNeko',
     );
   }
-  if (platform === 'win32') {
-    return resolve(repositoryRoot, 'apps/neko-desktop/out/OpenNeko-win32-x64/OpenNeko.exe');
-  }
   throw new Error(`Packaged Desktop functional scenarios do not support '${platform}'.`);
 }
 

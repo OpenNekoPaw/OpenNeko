@@ -3,8 +3,11 @@ import { FusesPlugin } from '@electron-forge/plugin-fuses';
 import { VitePlugin } from '@electron-forge/plugin-vite';
 import type { ForgeConfig } from '@electron-forge/shared-types';
 import { fileURLToPath } from 'node:url';
+import { resolveMacOSForgeTrust } from '../../scripts/resolve-macos-forge-trust.mjs';
 import { desktopFuseConfig } from './fuse.config.js';
 import { resolveDesktopBuiltinSkillSourceRoot } from './src/main/desktop-builtin-skill-root.js';
+
+const macOSForgeTrust = resolveMacOSForgeTrust();
 
 const config: ForgeConfig = {
   packagerConfig: {
@@ -14,8 +17,6 @@ const config: ForgeConfig = {
       checksums: {
         'electron-v43.2.0-darwin-arm64.zip':
           'ad4a0ae3c37ee05aa06c7e2ed0627608389790f0505a2b0d20319efbe33ffe28',
-        'electron-v43.2.0-win32-x64.zip':
-          'eba5f5088af40ecb364fe258809c79a5234c6ece5a75c64722772eba01b02786',
       },
     },
     extraResource: [
@@ -24,16 +25,12 @@ const config: ForgeConfig = {
     ],
     executableName: 'OpenNeko',
     name: 'OpenNeko',
-    osxSign: {
-      identity: '-',
-      identityValidation: false,
-      optionsForFile: () => ({
-        additionalArguments: ['--options', '0'],
-        hardenedRuntime: false,
-      }),
-    },
+    osxSign: macOSForgeTrust.osxSign,
+    ...(macOSForgeTrust.osxNotarize === undefined
+      ? {}
+      : { osxNotarize: macOSForgeTrust.osxNotarize }),
   },
-  makers: [new MakerZIP({}, ['darwin', 'win32'])],
+  makers: [new MakerZIP({}, ['darwin'])],
   plugins: [
     new VitePlugin({
       build: [

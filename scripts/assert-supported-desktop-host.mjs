@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 
-export const SUPPORTED_DESKTOP_TARGETS = Object.freeze(['darwin-arm64', 'win32-x64']);
+import { pathToFileURL } from 'node:url';
+
+export const SUPPORTED_DESKTOP_TARGETS = Object.freeze(['darwin-arm64']);
 
 export function resolveSupportedDesktopTarget(platform = process.platform, arch = process.arch) {
   const target = `${platform}-${arch}`;
@@ -15,7 +17,7 @@ function main() {
   process.stdout.write(`OpenNeko Desktop build host: ${target}.\n`);
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   try {
     main();
   } catch (error) {

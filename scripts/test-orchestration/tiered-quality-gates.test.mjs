@@ -6,7 +6,7 @@ import { parse } from 'yaml';
 const SHARED_GATE_JOBS = Object.freeze([
   'static-build',
   'desktop-package',
-  'local-metadata-runtime',
+  'platform-test',
   'test-ts',
   'functional-test',
   'code-quality',

@@ -112,15 +112,19 @@ Canvas/WebGL2 重复纹理上传、sender isolation 和 capability 撤销。原�
 `reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/`。
 Main10 decode/texture 成功不等于 10-bit surface、zero-copy 或 HDR display output 资格。
 
-Desktop 原生构建只接受 `darwin-arm64` 与 `win32-x64`；Linux 可运行 host-neutral
-仓库检查，但在 Forge 前被拒绝。两个目标都固定 Electron `43.2.0` 归档 checksum，
-并在真实匹配 Host 的 CI job 中 typecheck、package 和上传 artifact。Windows package
-仍不等价于安装、启动、凭据、媒体/GPU 和发布资格完成。
+Desktop 原生 package/make/release 只接受 `darwin-arm64`。Windows x64 与 Linux 运行
+typecheck、orchestration、SQLite 和 host-neutral 仓库测试，但在 Forge 前被拒绝且不上传
+Desktop artifact。macOS 固定 Electron `43.2.0` 归档 checksum，并在真实匹配 Host 的 CI
+job 中 typecheck、验证 Sharp closure、package 和上传 artifact。
 
 `darwin-arm64` 开发包使用 ad-hoc 签名，并保持 sandbox、CSP、ASAR integrity、安全 fuses，
 同时关闭 `file://` extra privileges。Electron V1 fuse 使用严格完整配置：
 `LoadBrowserProcessSpecificV8Snapshot` 保持关闭，因为 Electron `43.2.0` macOS 分发包不包含
 browser-specific snapshot；其余安全取值均显式固定，包括启用 `WasmTrapHandlers`。
-Electron `43.2.0` 的两个目标归档 checksum 已固定，package 可直接校验本地缓存而不重复
-下载 `SHASUMS256.txt`。Developer ID、hardened runtime、notarization、Windows signing/
-installer 和 release channel 属于 Phase 2。
+Electron `43.2.0` 的 macOS 归档 checksum 已固定，package 可直接校验本地缓存而不重复
+下载 `SHASUMS256.txt`。精确 `v<Desktop version>` tag 会在 `main` 历史上运行正式 Release：
+导入临时 Developer ID keychain，启用 hardened runtime，完成 Apple notarization、staple、
+strict codesign、Gatekeeper、ZIP 与 `SHASUMS256.txt` 验证后才创建 GitHub Release。需要配置
+`MACOS_CERTIFICATE_P12_BASE64`、`MACOS_CERTIFICATE_PASSWORD`、`MACOS_SIGNING_IDENTITY`、
+`APPLE_ID`、`APPLE_APP_SPECIFIC_PASSWORD` 和 `APPLE_TEAM_ID` repository secrets；缺失时
+fail-visible，不回退 ad-hoc 发布。

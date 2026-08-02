@@ -60,16 +60,6 @@ describe('MediaRuntimeDescriptor', () => {
     ).rejects.toThrow('Media runtime descriptor schema is invalid.');
   });
 
-  it('fails closed when the packaged target does not match the host', async () => {
-    const root = await createRuntimeRoot(roots);
-
-    await expect(
-      verifyMediaRuntimeDirectory(root, 'win32-x64', {
-        process: new QualifiedProcess(),
-      }),
-    ).rejects.toThrow('Media runtime target mismatch: expected win32-x64, received darwin-arm64.');
-  });
-
   it('fails closed when a declared capability is absent', async () => {
     const root = await createRuntimeRoot(roots);
 
@@ -112,70 +102,22 @@ describe('MediaRuntimeDescriptor', () => {
     ).rejects.toThrow('Media runtime descriptor weakens required filters capability loudnorm.');
   });
 
-  it('requires the portable H.264 encoder for win32-x64', async () => {
-    const root = await createRuntimeRoot(roots, 'win32-x64');
-    const descriptorPath = join(root, 'descriptor.json');
-    const descriptor: unknown = JSON.parse(await readFile(descriptorPath, 'utf8'));
-    if (
-      typeof descriptor !== 'object' ||
-      descriptor === null ||
-      !('requiredCapabilities' in descriptor)
-    ) {
-      throw new Error('Fixture descriptor is invalid.');
-    }
-    const requiredCapabilities = descriptor.requiredCapabilities;
-    if (
-      typeof requiredCapabilities !== 'object' ||
-      requiredCapabilities === null ||
-      !('encoders' in requiredCapabilities) ||
-      !Array.isArray(requiredCapabilities.encoders)
-    ) {
-      throw new Error('Fixture capability signature is invalid.');
-    }
-    requiredCapabilities.encoders = requiredCapabilities.encoders.filter(
-      (encoder) => encoder !== 'h264',
-    );
-    await writeFile(descriptorPath, JSON.stringify(descriptor), 'utf8');
-
-    await expect(
-      verifyMediaRuntimeDirectory(root, 'win32-x64', {
-        process: new QualifiedProcess(),
-      }),
-    ).rejects.toThrow('Media runtime descriptor weakens required encoders capability h264.');
-  });
-
-  it('accepts the Windows software baseline without claiming hardware acceleration', async () => {
-    const root = await createRuntimeRoot(roots, 'win32-x64');
-    await expect(
-      verifyMediaRuntimeDirectory(root, 'win32-x64', {
-        process: new QualifiedProcess(),
-      }),
-    ).resolves.toMatchObject({
-      descriptor: {
-        requiredCapabilities: {
-          hardwareAccelerators: [],
-          encoders: ['h264', 'aac'],
-          filters: ['alimiter', 'loudnorm', 'ebur128'],
-        },
-      },
-    });
-  });
-
-  it('rejects the retired Linux descriptor target', async () => {
-    const root = await createRuntimeRoot(roots, 'win32-x64');
+  it('rejects Windows and Linux descriptor targets', async () => {
+    const root = await createRuntimeRoot(roots);
     const descriptorPath = join(root, 'descriptor.json');
     const descriptor: unknown = JSON.parse(await readFile(descriptorPath, 'utf8'));
     if (typeof descriptor !== 'object' || descriptor === null || !('target' in descriptor)) {
       throw new Error('Fixture descriptor is invalid.');
     }
-    descriptor.target = 'linux-x64';
-    await writeFile(descriptorPath, JSON.stringify(descriptor), 'utf8');
-
-    await expect(
-      verifyMediaRuntimeDirectory(root, 'win32-x64', {
-        process: new QualifiedProcess(),
-      }),
-    ).rejects.toThrow('Media runtime descriptor fields are invalid.');
+    for (const target of ['win32-x64', 'linux-x64']) {
+      descriptor.target = target;
+      await writeFile(descriptorPath, JSON.stringify(descriptor), 'utf8');
+      await expect(
+        verifyMediaRuntimeDirectory(root, 'darwin-arm64', {
+          process: new QualifiedProcess(),
+        }),
+      ).rejects.toThrow('Media runtime descriptor fields are invalid.');
+    }
   });
 });
 
@@ -223,10 +165,8 @@ class QualifiedProcess implements FfmpegProcessPort {
   }
 }
 
-async function createRuntimeRoot(
-  roots: string[],
-  target: 'darwin-arm64' | 'win32-x64' = 'darwin-arm64',
-): Promise<string> {
+async function createRuntimeRoot(roots: string[]): Promise<string> {
+  const target = 'darwin-arm64';
   const root = await mkdtemp(join(tmpdir(), 'openneko-media-runtime-'));
   roots.push(root);
   await mkdir(join(root, 'bin'));
@@ -256,13 +196,10 @@ async function createRuntimeRoot(
           ffprobe: { file: 'bin/ffprobe', sha256: sha256(ffprobe) },
         },
         requiredCapabilities: {
-          hardwareAccelerators: target === 'darwin-arm64' ? ['videoToolbox'] : [],
+          hardwareAccelerators: ['videoToolbox'],
           decoders: ['h264', 'hevc', 'av1', 'vp8', 'vp9', 'aac', 'mp3', 'flac', 'dts'],
-          encoders: target === 'darwin-arm64' ? ['h264VideoToolbox', 'aac'] : ['h264', 'aac'],
-          filters:
-            target === 'darwin-arm64'
-              ? ['alimiter', 'loudnorm', 'ebur128', 'scaleVt']
-              : ['alimiter', 'loudnorm', 'ebur128'],
+          encoders: ['h264VideoToolbox', 'aac'],
+          filters: ['alimiter', 'loudnorm', 'ebur128', 'scaleVt'],
         },
       },
       null,

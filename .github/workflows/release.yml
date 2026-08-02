@@ -1,0 +1,142 @@
+name: Release macOS
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  source-gate:
+    name: Release Source Gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .node-version
+          package-manager-cache: false
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Validate release metadata
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: node scripts/assert-macos-release-metadata.mjs --tag "$RELEASE_TAG"
+
+      - name: Validate release source is on main
+        run: |
+          git fetch origin main:refs/remotes/origin/main
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+
+      - name: Install media runtime dependency
+        run: |
+          sudo apt-get update
+          xargs sudo apt-get install -y < scripts/act/media-runtime-packages.txt
+
+      - name: Run release source gates
+        run: pnpm check:static-build && pnpm check:test && pnpm check:repository-quality
+
+  macos-release:
+    name: Release macOS (darwin-arm64)
+    needs: [source-gate]
+    runs-on: macos-15
+    permissions:
+      contents: write
+    env:
+      OPENNEKO_MACOS_RELEASE: 'true'
+      MACOS_CERTIFICATE_P12_BASE64: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
+      MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+      MACOS_SIGNING_IDENTITY: ${{ secrets.MACOS_SIGNING_IDENTITY }}
+      MACOS_KEYCHAIN_PATH: ${{ runner.temp }}/openneko-release.keychain-db
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .node-version
+          package-manager-cache: false
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Validate release metadata and main ancestry
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          node scripts/assert-macos-release-metadata.mjs --tag "$RELEASE_TAG"
+          git fetch origin main:refs/remotes/origin/main
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+
+      - name: Import Developer ID certificate
+        run: |
+          test -n "$MACOS_CERTIFICATE_P12_BASE64"
+          test -n "$MACOS_CERTIFICATE_PASSWORD"
+          printf '%s' "$MACOS_CERTIFICATE_P12_BASE64" | base64 --decode > "$RUNNER_TEMP/openneko-release.p12"
+          security create-keychain -p "$MACOS_CERTIFICATE_PASSWORD" "$MACOS_KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$MACOS_KEYCHAIN_PATH"
+          security unlock-keychain -p "$MACOS_CERTIFICATE_PASSWORD" "$MACOS_KEYCHAIN_PATH"
+          security import "$RUNNER_TEMP/openneko-release.p12" -k "$MACOS_KEYCHAIN_PATH" -P "$MACOS_CERTIFICATE_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security
+          security list-keychains -d user -s "$MACOS_KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$MACOS_CERTIFICATE_PASSWORD" "$MACOS_KEYCHAIN_PATH"
+
+      - name: Typecheck Desktop
+        run: pnpm typecheck:desktop
+
+      - name: Validate native Sharp bundle runtime
+        run: node --test scripts/test-orchestration/sharp-cjs-bundle-runtime.test.mjs
+
+      - name: Make signed and notarized macOS release
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
+        run: pnpm make:desktop
+
+      - name: Verify macOS trust and ZIP closure
+        run: |
+          APP_PATH="apps/neko-desktop/out/OpenNeko-darwin-arm64/OpenNeko.app"
+          VERSION="$(node -p "require('./apps/neko-desktop/package.json').version")"
+          ZIP_PATH="apps/neko-desktop/out/make/zip/darwin/arm64/OpenNeko-darwin-arm64-${VERSION}.zip"
+          codesign --verify --deep --strict --verbose=4 "$APP_PATH"
+          SIGNATURE_DETAILS="$(codesign -dv --verbose=4 "$APP_PATH" 2>&1)"
+          grep -Fq "Authority=$MACOS_SIGNING_IDENTITY" <<< "$SIGNATURE_DETAILS"
+          grep -Fq "TeamIdentifier=$APPLE_TEAM_ID" <<< "$SIGNATURE_DETAILS"
+          grep -Eq 'flags=.*\(runtime\)' <<< "$SIGNATURE_DETAILS"
+          xcrun stapler validate "$APP_PATH"
+          spctl --assess --type execute --verbose=4 "$APP_PATH"
+          unzip -t "$ZIP_PATH"
+          node scripts/prepare-macos-release-artifacts.mjs
+
+      - name: Create GitHub release
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          VERSION="$(node -p "require('./apps/neko-desktop/package.json').version")"
+          ZIP_PATH="apps/neko-desktop/out/make/zip/darwin/arm64/OpenNeko-darwin-arm64-${VERSION}.zip"
+          CHECKSUM_PATH="apps/neko-desktop/out/release/SHASUMS256.txt"
+          gh release create "$RELEASE_TAG" "$ZIP_PATH" "$CHECKSUM_PATH" --verify-tag --generate-notes --title "OpenNeko ${RELEASE_TAG}"
+
+      - name: Delete ephemeral signing keychain
+        if: always()
+        run: |
+          security delete-keychain "$MACOS_KEYCHAIN_PATH" || true
+          rm -f "$RUNNER_TEMP/openneko-release.p12"

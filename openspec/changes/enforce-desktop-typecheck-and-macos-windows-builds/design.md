@@ -1,174 +1,120 @@
 ## Context
 
-`@neko/app-desktop` currently maps `build` to `electron-forge package`, while the root
-`check:build` runs format, lint, and `turbo run build` without a typecheck dependency. Forge/Vite
-transpilation therefore creates a native package even when Desktop contracts fail `tsc --noEmit`.
-Because the remote build job runs on Ubuntu, the same command also creates an implicit Linux
-Desktop package.
+`@neko/app-desktop` mapped `build` to `electron-forge package`, while the root gate did not require
+Desktop `tsc --noEmit`. Forge/Vite could therefore create native bytes while Desktop contracts were
+invalid. Ubuntu also exposed an accidental Linux package path, and an intermediate implementation
+added Windows packaging before product qualification existed.
 
-The retired packaging matrix described `darwin-arm64` and `linux-x64`. The current product decision
-replaces Linux with Windows. Linux remains useful as a fast host-neutral CI environment, but it must not be a product
-package or release-runtime target.
-
-This is a local Electron product. Native package evidence must come from the target host, and an
-unsupported host must fail before Forge can create an artifact.
+The current product decision is narrower: `darwin-arm64` is the only package and release target.
+Windows and Linux remain useful deterministic test environments, but neither may invoke Forge or
+stage a release-native runtime. Native package evidence must come from the matching Apple Silicon
+host, and every unsupported host must fail before Forge.
 
 ## Goals / Non-Goals
 
 **Goals:**
 
 - Make Desktop `tsc --noEmit` an unavoidable build-gate dependency.
-- Keep host-neutral checks runnable on Ubuntu without packaging a Linux application.
-- Package `darwin-arm64` and `win32-x64` on real matching CI runners.
-- Run deterministic unit/contract and headless Desktop functional paths in CI without starting a
-  graphical Electron process or using provider credentials.
-- Keep real API Agent Evaluation and graphical Electron UI acceptance local-only.
-- Define one closed target set and project it into Forge, runtime staging, metadata matrices, tests,
-  and long-lived documentation.
-- Fail visibly for Linux, Intel macOS, Windows ARM/IA32, and unknown targets.
+- Keep deterministic checks runnable on Ubuntu and Windows without packaging an application.
+- Package only `darwin-arm64` on a matching CI runner.
+- Run deterministic unit/contract and headless Desktop functional paths in CI without a graphical
+  Electron process or provider credentials.
+- Define one closed release target and project it into Forge, runtime staging, metadata matrices,
+  tests, and current documentation.
+- Fail visibly for Windows, Linux, Intel macOS, and unknown package/runtime targets.
 
 **Non-Goals:**
 
-- Add Linux Desktop packaging or retain it as a fallback.
-- Cross-package Windows artifacts from macOS or Linux.
-- Implement signing, notarization, Windows installer/update channels, or hardware-accelerated
-  Windows media in this P0 build change.
-- Claim full Phase 2 user-flow qualification merely because a Windows package is constructed.
+- Package Windows/Linux or retain either as a fallback.
+- Cross-package macOS from Windows/Linux.
+- Implement the formal Developer ID/notarized GitHub Release workflow in this change; that boundary
+  is owned by `establish-macos-release-pipeline`.
 - Run provider-backed Agent behavior Evaluation or graphical UI automation from GitHub Actions.
 
 ## Decisions
 
-### 1. Separate static validation from native packaging
+### 1. Separate deterministic validation from native packaging
 
-The root exposes a host-neutral static build gate containing format, lint, workspace typecheck, and
-browser-safe package builds. Native `pnpm build` continues to include the Desktop package, but it is
-only valid on a supported host.
+The root exposes a host-neutral static gate containing format, lint, workspace typecheck, and
+browser-safe builds. Ubuntu owns the full source/coverage/quality graph. A named platform-test job
+runs on Windows and Linux for Desktop typecheck, orchestration, and local-metadata compatibility.
+Neither path can invoke Forge.
 
-Alternative considered: keep running `pnpm build` on Ubuntu and ignore the Linux output. Rejected
-because the command would continue to provide a reachable Linux product success path.
+Alternative considered: keep a generic package matrix and ignore non-macOS artifacts. Rejected
+because it leaves unsupported product success paths reachable.
 
-### 2. Make typecheck a Turbo task and an explicit build-gate predecessor
+### 2. Make typecheck an explicit build-gate predecessor
 
-The root `typecheck` command runs `turbo run typecheck`. `check:build` and the host-neutral static
-gate execute it before any package build. The orchestration regression test asserts the actual
-root scripts and Desktop package script rather than trusting a successful Forge invocation.
+The root `typecheck` command and host-neutral gate execute every existing explicit package
+typecheck, including Desktop. Browser packages that already own build-time typechecking retain
+their current scripts; no redundant compiler abstraction is introduced.
 
-This change does not create redundant package-local compiler configurations. Existing package
-`build` scripts that already run `tsc --noEmit` remain build owners; the new gate closes the
-specific Desktop omission and executes all existing explicit `typecheck` scripts.
+### 3. Validate the sole native host before Forge
 
-Alternative considered: make Turbo `build` depend globally on `typecheck`. Rejected because many
-browser packages intentionally use `build` as their typecheck, which would require an unrelated
-workspace-wide script migration and could create duplicate compiler work.
+A repository-owned Node entry maps only `darwin` + `arm64` to `darwin-arm64`. Desktop `build`,
+`package`, `make`, and `dev` call it before Forge. Injected-platform tests prove Windows, Linux,
+Intel macOS, and unknown targets fail without spawning Forge.
 
-### 3. Validate the native host before invoking Forge
+The guard belongs to repository/Desktop build orchestration. It has no user-data effect and does
+not own domain behavior.
 
-A repository-owned Node entry point maps only:
+### 4. Use one real native package job
 
-- `darwin` + `arm64` to `darwin-arm64`
-- `win32` + `x64` to `win32-x64`
-
-Desktop `build`, `package`, and `make` call this assertion before Forge. The function is unit tested
-with injected platform and architecture values so Linux and mismatched architectures are proven to
-fail without spawning Forge.
-
-Alternative considered: rely only on the GitHub Actions matrix. Rejected because local scripts and
-future workflows could still create unsupported artifacts.
-
-### 4. Use real host-native package jobs
-
-The remote graph keeps host-neutral jobs on Ubuntu and adds one native Desktop package matrix:
+The remote graph contains one native job:
 
 | Target         | Runner              | Command                |
 | -------------- | ------------------- | ---------------------- |
 | `darwin-arm64` | Apple Silicon macOS | `pnpm package:desktop` |
-| `win32-x64`    | Windows x64         | `pnpm package:desktop` |
 
-Both jobs first run Desktop typecheck and upload their exact Forge output. Aggregate gates require
-the matrix job, so a skipped or failed target blocks promotion.
+The job runs Desktop typecheck and the matching Sharp executable closure, gives Forge/Vite a 4 GiB
+heap budget, asserts the canonical `.app` executable after Forge, and uploads only the exact macOS
+package directory. Aggregate gates require this job plus Windows/Linux deterministic tests.
 
-Alternative considered: cross-package Windows from macOS. Rejected because it cannot establish the
-native dependency, path, fuse, or packaged-startup boundary.
+### 5. Native release-runtime closures contain only macOS
 
-### 5. Windows media packaging uses a software baseline
+Forge checksums/makers, Sharp staging, media descriptors/bundle preparation, local-metadata release
+matrix, and package output assertions accept only `darwin-arm64`. The intermediate Windows
+software media descriptor and Sharp staging path are removed rather than kept as unused release
+compatibility code.
 
-The existing media descriptor contract requires VideoToolbox for macOS and VAAPI for Linux. The
-Windows target replaces Linux with a portable software baseline: required decoders, H.264/AAC
-encoders, and common audio filters; its required hardware-accelerator list is empty. Hardware
-acceleration remains an explicit future capability and must not be simulated by VAAPI or a generic
-fallback.
+Windows/Linux tests can still exercise host-neutral media logic, runtime parsing, Node SQLite, path
+semantics, and diagnostics. Typed runtime snapshots may retain `win32`, `linux`, `browser`, and
+`unknown` observation vocabulary; observation does not imply package support.
 
-Sharp staging uses `@img/sharp-win32-x64`; unlike macOS/Linux Sharp distributions, the Windows
-native package does not require a separate `@img/sharp-libvips-win32-x64` package.
+### 6. Separate deterministic CI from local behavior acceptance
 
-### 6. Keep runtime platform vocabulary broader than release support
-
-Typed renderer/host snapshots may still represent `linux`, `browser`, or `unknown` for diagnostics
-and host-neutral tests. Release matrices, native package scripts, and staged runtime targets are
-the canonical closed set. Removing diagnostic vocabulary would conflate observation with support.
-
-### 7. Separate deterministic CI tests from local behavior and UI acceptance
-
-CI owns three distinct evidence classes:
-
-1. matching-host Desktop package construction for `darwin-arm64` and `win32-x64`;
-2. deterministic workspace unit, contract, and coverage tests;
-3. a named headless Desktop functional subset that exercises Main/preload/product composition
-   paths without a graphical Electron process, real user data, credentials, or provider calls.
-
-Agent Evaluation means provider-backed AI behavior evidence and remains an explicit local action.
-The key-free Evaluation harness also remains local-only because it is authoring infrastructure, not
-an ordinary product unit-test owner. Graphical Electron UI acceptance uses an isolated temporary
-functional home and separate Electron user-data directory through a local launcher. Neither local
-surface is reachable from GitHub workflows or generic CI script composition.
-
-Alternative considered: call all Vitest coverage "functional testing." Rejected because it would
-hide whether CI contains a bounded product-flow check. Alternative considered: launch Electron or
-provider-backed cases in CI. Rejected because graphical lifecycle evidence and credential/cost
-authorization require an explicit local owner.
+CI owns native macOS package construction, deterministic unit/contract coverage, Windows/Linux
+platform compatibility, and a credential-free headless Desktop functional subset. Provider-backed
+Agent Evaluation and graphical Electron acceptance remain explicit local commands with isolated
+fixtures and are unreachable from generic CI composition.
 
 ## Risks / Trade-offs
 
-- [Windows package compiles but complete product flows remain unqualified] → The CI artifact is
-  build evidence only; Phase 2 still requires packaged startup, protected credential UI, media,
-  GPU, filesystem, installer, signing, and end-to-end evidence on Windows.
-- [Current parallel Desktop code already has TypeScript errors] → The new gate must expose these
-  errors. Fixes are limited to the owning contracts and regression tests; no fallback or type
-  suppression is allowed.
-- [macOS package job duration increases] → Turbo caching remains enabled for static work, while
-  native packaging stays uncached because host artifacts are correctness evidence.
-- [Old active changes mention Linux] → Long-lived architecture and roadmap facts are updated here;
-  historical/archive evidence remains unchanged. Conflicting active changes must be rebased when
-  they next modify release qualification.
-- [Windows FFmpeg bundle construction depends on a native toolchain] → The target contract and
-  descriptor are implemented now, but a release bundle is not accepted until a Windows-native
-  build/qualification job provides the executable closure.
-- [Headless functional tests are mistaken for graphical acceptance] → The CI job and command are
-  named headless, and static guards keep the graphical launcher unreachable from remote gates.
-- [AI regressions are missed by deterministic CI] → Agent behavior changes still require explicit
-  local real-API Evaluation evidence under the Evaluation policy; CI never fabricates that result.
+- [Windows/Linux code regresses despite no package] → Their test jobs remain required aggregate-gate
+  evidence, but passing tests are never described as product qualification.
+- [macOS package duration or memory grows] → Native packaging remains uncached and uses a bounded
+  4 GiB CI heap; missing output fails before artifact upload.
+- [Active historical designs mention Windows/Linux packages] → Current architecture and active
+  delivery facts are rebased; archived dated evidence remains unchanged.
+- [Formal release is mistaken for package CI] → Signing/notarization/tag/publication requirements
+  live in the separate `establish-macos-release-pipeline` capability.
+- [Headless tests are mistaken for graphical acceptance] → Job names and reachability guards keep
+  graphical launchers out of CI.
 
 ## Migration Plan
 
-1. Add regression tests for the build/typecheck chain, host-target rejection, CI runner matrix, and
-   platform runtime matrices.
-2. Add the root typecheck/static gate and the supported-host package assertion.
-3. Update Forge checksums/makers and GitHub Actions aggregation.
-4. Replace Linux with Windows in Sharp, media descriptor, and local metadata release matrices.
-5. Update current architecture and roadmap documentation while preserving dated historical
+1. Change orchestration tests to require macOS-only packaging and Windows/Linux test-only jobs.
+2. Restrict host/output guards, Forge, Sharp, media, and local-metadata release matrices to macOS.
+3. Remove obsolete Windows/Linux native package/runtime paths and their positive tests.
+4. Rebase current architecture, README, roadmap, and active OpenSpec facts.
+5. Run focused orchestration/runtime tests, Desktop typecheck/package, and repository gates.
+6. Push the updated branch and rerun the GitHub Manual Gate for real macOS and platform-test
    evidence.
-6. Add explicit deterministic functional CI coverage and local-only guards for Evaluation and
-   graphical UI acceptance.
-7. Run focused orchestration/media tests, Desktop typecheck/test/package, and repository gates.
-8. Obtain `win32-x64` CI artifact evidence on the real Windows runner before describing Windows as
-   release-qualified.
 
-Rollback restores the prior scripts and CI graph as one atomic change. It must not retain both
-Linux and Windows success paths.
+Rollback must restore one previous target matrix atomically; it must not retain simultaneous
+macOS-only and multi-platform release success paths.
 
 ## Open Questions
 
-- Windows installer format, code-signing identity, update channel, and protected provider-auth UI
-  remain Phase 2 decisions; ZIP/package construction does not decide them.
-- The Windows hardware-video backend remains unavailable until a separate capability change
-  qualifies D3D11VA/DXVA2 decode and a matching encode/scale pipeline.
+None for the platform closure. Developer ID credentials, notarization, public artifacts, and first
+tag evidence are tracked by `establish-macos-release-pipeline`.

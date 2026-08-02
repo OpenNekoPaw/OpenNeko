@@ -44,16 +44,14 @@ OpenNeko 目前处于 **Alpha** 阶段，以源码体验和产品验证为主。
 
 要求 Node.js 24+ 和 pnpm 10；仓库开发工具链固定为 Node.js 24.18.0 LTS。
 
-Desktop 构建目标仅限：
+Desktop 原生打包/发布目标仅限：
 
-| 系统    | 架构  | 当前 Desktop 资格                                 |
-| ------- | ----- | ------------------------------------------------- |
-| macOS   | ARM64 | Forge package；完整 Phase 1 资格仍在进行          |
-| Windows | x64   | 原生 CI package 已纳入门禁；运行态/发布资格待验证 |
+| 系统  | 架构  | 当前 Desktop 资格                                      |
+| ----- | ----- | ------------------------------------------------------ |
+| macOS | ARM64 | Forge package 已验证；Developer ID/公证 Release 已建门禁 |
 
-Linux 只用于 host-neutral CI，不构建 Desktop 产品；Intel Mac 与其他架构不支持。Windows
-只有在真实系统继续通过应用启动、原生依赖、凭据、Node/FFmpeg 媒体读取和导出路径后，
-才能描述为完整发布资格。
+Windows x64 与 Linux 只运行 typecheck、orchestration、SQLite 和 host-neutral CI，不调用
+Forge、不生成 Desktop artifact。Intel Mac 与其他架构不支持。
 
 ```bash
 pnpm install
@@ -61,8 +59,9 @@ pnpm build
 pnpm dev:desktop
 ```
 
-`pnpm build` 和 `pnpm dev:desktop` 只允许在上述两个原生目标运行；Linux 使用
-`pnpm check:static-build` 做静态验证。
+`pnpm build`、`pnpm dev:desktop`、`pnpm package:desktop` 和 `pnpm make:desktop` 只允许在
+Apple Silicon macOS 运行；Windows/Linux 使用 CI platform-test 或
+`pnpm check:static-build` 做确定性验证。
 
 常用验证命令：
 
@@ -76,7 +75,10 @@ pnpm gate:local
 
 除 `main` 外的非空分支名都属于开发分支，普通开发分支 push 不自动运行 GitHub Actions；提交前使用 `pnpm gate:local`，需要 GitHub runner 证据时从 Actions 手动运行 CI。`main` 是唯一发布分支，只接受开发分支到 `main` 的 Pull Request；`Merge Gate` 必须完成完整源码检查。
 
-当前仓库只保留 Electron Desktop 构建与 Forge 打包入口。新增签名、公证、跨平台产物或正式 Release workflow 前，必须通过独立 OpenSpec 定义目标平台、版本来源、产物闭包和真实安装验收。
+正式 Release workflow 只接受 `main` 历史上的精确 `v<Desktop version>` tag，在 Apple
+Silicon runner 上完成 Developer ID、hardened runtime、公证、staple、Gatekeeper、ZIP 与
+SHA-256 后才创建 GitHub Release。缺失 Apple 凭据时 fail-visible；本地 package/make 保持
+ad-hoc 签名且不构成公开发布证据。
 
 ## 项目入口
 
