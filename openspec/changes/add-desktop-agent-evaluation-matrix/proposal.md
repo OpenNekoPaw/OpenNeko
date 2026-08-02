@@ -46,7 +46,7 @@ Skill、Tool、模型、配置和工作流变更无法获得批量、可重复�
   Agent suite、评分或实验语义。
 - `scripts/agent-eval`: 恢复真实 `runV2Case()`、Worker Pool、matrix/shard/budget、Desktop driver adapter、
   配置/实现消融、comparability、报告和 TUI baseline 迁移。
-- `packages/neko-agent-runtime` 与 package-owned contracts：仅在现有产品契约缺少通用有效配置或中立
+- `packages/agent/runtime` 与 package-owned contracts：仅在现有产品契约缺少通用有效配置或中立
   facts 时扩展最小 host-neutral contract；不得加入 Evaluation suite、score、variant 或 pass/fail 概念。
 - 依赖 `integrate-desktop-agent-home` 的唯一 Agent controller、Pi/session、permission、Tool/Skill 和
   projection 组合；该依赖未完成时真实 case 必须保持 `infrastructure-blocked`。

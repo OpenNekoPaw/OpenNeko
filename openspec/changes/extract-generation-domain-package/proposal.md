@@ -23,5 +23,5 @@ GenerationJob 的 owner。剩余工作是用一个显式授权的真实 provider
 
 ## Impact
 
-- `packages/neko-generation`、Desktop Agent/Canvas consumers 和 provider runtime。
+- `packages/generation`、Desktop Agent/Canvas consumers 和 provider runtime。
 - 不保留 TUI/VS Code consumer、Platform Job re-export、双 store/coordinator 或 fallback。

@@ -218,7 +218,7 @@ Webview/React 变更新增组件前，review 必须确认已经做过组件复�
 
 新功能涉及组件样式、主题、国际化、日志、错误/诊断、配置、路径、文件保存/读写、资源授权、缓存、DTO 或跨包契约时，review 必须确认已经做过公共基础能力审计：
 
-- 是否优先复用或更新 `@neko/shared`、`@neko/ui`、`@neko/media`、`@neko-entity/domain`、`@neko-search/domain`、project-file-io、resource cache 或既有 domain service。
+- 是否优先复用或更新 `@neko/shared`、`@neko/ui`、`@neko/media`、`@neko/entity-domain`、`@neko/search-domain`、project-file-io、resource cache 或既有 domain service。
 - 是否避免了 package-local design system、theme token、i18n runtime、logger/error 类型、项目文件 IO、cache manager、path resolver、媒体 HTTP/WS client 或共享 DTO 的并行实现。
 - 如果公共入口缺少能力，是否优先扩展公共契约、公共 adapter、公共 hook/primitive 或 domain service，而不是复制一份功能包私有实现。
 - 如果能力留在 owning package，是否说明了业务边界、依赖方向、后续提取条件和验证命令。

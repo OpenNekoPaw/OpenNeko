@@ -1,7 +1,7 @@
 ## 1. Contracts And Storage Ownership
 
 - [x] 1.1 Define host-neutral requirement, owner-revision, link-state, recovery-plan, portability, and
-      diagnostic contracts in `packages/neko-shared` without Node paths, runtime URLs, global IDs, or
+      diagnostic contracts in `packages/shared` without Node paths, runtime URLs, global IDs, or
       target-bearing fields.
 - [x] 1.2 Add contract tests that reject unknown states, stale revisions, absolute paths, symlink
       targets, active-workspace fallback, `library.json`, and alternate resolver payloads.

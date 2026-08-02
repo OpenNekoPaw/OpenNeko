@@ -26,5 +26,5 @@ Phase 1 program，不再维护旧宿主 adapter 目标。
 ## Impact
 
 - `apps/neko-desktop` Main/preload/renderer Cut/Preview composition。
-- `packages/neko-cut`、`packages/neko-preview`、`packages/neko-media` 和 Assets handoff。
+- `packages/cut/*`、`packages/preview/*`、`packages/media` 和 Assets handoff。
 - 不保留 VS Code/Engine compatibility 或第二条媒体 transport。

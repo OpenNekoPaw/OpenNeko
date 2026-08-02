@@ -25,7 +25,7 @@ Electron Desktop 的 Agent 入口在冷启动、首次挂载和项目主面板�
 ## Impact
 
 - `apps/neko-desktop` Main AppHost、Shell service、preload/renderer Agent adapter、Workbench renderer 与 Desktop CSS。
-- `packages/neko-agent-runtime` 的持久 conversation catalog 读取边界。
-- `packages/neko-agent-webview` 的 Root 订阅时序和 conversation/tab 投影测试。
-- `packages/neko-ui` 的 Popover surface contract 与样式测试。
+- `packages/agent/runtime` 的持久 conversation catalog 读取边界。
+- `packages/agent/webview` 的 Root 订阅时序和 conversation/tab 投影测试。
+- `packages/ui` 的 Popover surface contract 与样式测试。
 - Desktop Workbench Main View contract、Canvas/Assets 组合、聚焦测试、真实 Electron 验收和相关架构/状态文档。

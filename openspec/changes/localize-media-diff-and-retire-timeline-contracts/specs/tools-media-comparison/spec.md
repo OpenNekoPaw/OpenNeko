@@ -18,7 +18,7 @@ Neko Tools SHALL compare explicit image, audio and video resource pairs, includi
 
 ### Requirement: Tools contracts are package-owned and runtime validated
 
-The Extension and Webview SHALL communicate through the zero-dependency `@neko-tools/contracts` package. Every request and event SHALL include a supported schema version, explicit `sessionId` and `requestId`, and SHALL be runtime validated before use.
+The Host adapter and Webview SHALL communicate through the zero-dependency `@neko/tools-contracts` package. Every request and event SHALL include a supported schema version, explicit `sessionId` and `requestId`, and SHALL be runtime validated before use.
 
 #### Scenario: A valid result reaches its owning viewer
 

@@ -3,9 +3,9 @@
 状态：Accepted
 
 更新日期：2026-08-02
-对应变更：`enforce-thin-desktop-application-root`
+对应变更：`enforce-thin-desktop-application-root`、`normalize-package-naming-topology`
 
-本文定义一级 `packages/*` workspace 的稳定角色、拆包条件、命名、公开入口和产品状态语义。
+本文定义 `packages/*` 与 `packages/*/*` workspace 的稳定角色、拆包条件、命名、公开入口和产品状态语义。
 具体领域行为仍由 `docs/domains/` 和对应 OpenSpec 拥有；本文只约束拓扑与依赖方向。
 
 ## 角色分类
@@ -29,7 +29,7 @@
 
 ## 独立 package 的准入条件
 
-一级 package 表达真实 ownership 和依赖闭包，不以发布、消费者数量或当前 Host 数量为前提。
+workspace package 表达真实 ownership 和依赖闭包，不以发布、消费者数量或当前 Host 数量为前提。
 同时满足以下条件时应建立独立 package：
 
 1. 有单一且可命名的 owning responsibility；
@@ -45,14 +45,15 @@
 ## 家族与命名
 
 - 跨领域基础能力使用 `@neko/<capability>`，例如 `@neko/ui`、`@neko/media`、`@neko/shared`。
-- 领域家族使用 `@neko-<domain>/<role>`，例如 `@neko-agent/contracts`、
-  `@neko-agent/runtime`、`@neko-agent/webview`。
+- 领域家族统一使用单一 scope 下的 `@neko/<domain>-<role>`，例如 `@neko/agent-contracts`、
+  `@neko/agent-runtime`、`@neko/agent-webview`。
 - 单一依赖闭包的领域可保留 `@neko/<domain>`；不要为了命名对称建立空的 contracts、Node 或 Webview 包。
 - 当 L0 contract 被其他领域的 contracts/Webview 消费，而同领域 application/runtime 具有更重依赖时，
   必须形成独立 contracts 闭包；例如 `@neko/chara/contracts` 不得通过 `@neko/chara` runtime 聚合入口暴露。
-- package 名、目录名、导入名和质量台账 identity 必须一一对应；领域家族统一使用
-  `@neko-<domain>/<role>`，例如 Cut Webview 的 canonical identity 是 `@neko-cut/webview`。
-- 测试 package 归入对应领域家族，例如 `@neko-agent/test-utils`；零生产消费者且不能证明独立价值时，
+- package 名、目录名、导入名和质量台账 identity 必须一一对应；拆分家族位于
+  `packages/<domain>/<role>`，manifest identity 为 `@neko/<domain>-<role>`；单包 owner 位于
+  `packages/<name>`，identity 为 `@neko/<name>`。
+- 测试 package 归入对应领域家族，例如 `@neko/agent-test-utils`；零生产消费者且不能证明独立价值时，
   合并到 owning package 的 testing subpath 或删除。
 
 改名必须在一个有界迁移中同步 manifest、lockfile、imports、Vite/Vitest alias、脚本、质量台账和文档，

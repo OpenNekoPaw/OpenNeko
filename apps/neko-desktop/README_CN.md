@@ -89,8 +89,8 @@ pnpm --filter @neko/app-desktop package
 pnpm --filter @neko/app-desktop dev
 pnpm test:functional:headless
 pnpm test:local:ui
-pnpm test:local:ui -- --scenario=all-openneko-consumers
-pnpm test:local:ui -- --scenario=all-openneko-consumers --target=packaged
+pnpm test:local:ui --scenario=all-openneko-consumers
+pnpm test:local:ui --scenario=all-openneko-consumers --target=packaged
 pnpm test:local:media-openneko
 ```
 

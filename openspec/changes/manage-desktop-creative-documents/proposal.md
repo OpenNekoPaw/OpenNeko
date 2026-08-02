@@ -44,13 +44,13 @@ None.
 
 ## Impact
 
-- `packages/neko-assets-domain`: Resource Browser contracts, labels, capability projection, toolbar/context
+- `packages/assets/domain`: Resource Browser contracts, labels, capability projection, toolbar/context
   menu composition, selection, keyboard behavior, and focused UI tests.
-- `packages/neko-ui`: reuse of existing context-menu primitives; no package-local design system or
+- `packages/ui`: reuse of existing context-menu primitives; no package-local design system or
   duplicate menu primitive.
-- `packages/neko-canvas-domain` / `packages/neko-shared`: public empty-NKC creation and canonical codec
+- `packages/canvas/domain` / `packages/shared`: public empty-NKC creation and canonical codec
   entry points consumed through a narrow Desktop owner port.
-- `packages/neko-cut-domain`: existing OTIO factory/session create and serialization paths consumed
+- `packages/cut/domain`: existing OTIO factory/session create and serialization paths consumed
   through a narrow Desktop owner port.
 - `apps/neko-desktop` shared/Main/preload/renderer: sender-bound lifecycle contract, workspace path
   authorization, import/trash orchestration, open-session and task checks, Workbench reconciliation,

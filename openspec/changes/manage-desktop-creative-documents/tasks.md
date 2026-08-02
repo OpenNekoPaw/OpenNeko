@@ -113,8 +113,8 @@
 
 - [ ] 8.1 Run `pnpm --filter neko-assets test`,
   `pnpm --filter neko-assets typecheck:resource-browser`,
-  `pnpm --filter @neko-canvas/domain test`, `pnpm --filter @neko-canvas/domain typecheck`,
-  `pnpm --filter @neko-cut/domain test`, and `pnpm --filter @neko-cut/domain typecheck`.
+  `pnpm --filter @neko/canvas-domain test`, `pnpm --filter @neko/canvas-domain typecheck`,
+  `pnpm --filter @neko/cut-domain test`, and `pnpm --filter @neko/cut-domain typecheck`.
 - [ ] 8.2 Run the focused Desktop contract/Main/preload/renderer tests, then
   `pnpm --filter @neko/app-desktop test` and `pnpm --filter @neko/app-desktop typecheck`.
 - [ ] 8.3 Run `pnpm build`, `pnpm test`, `pnpm check`, `pnpm check:legacy-debt`, and

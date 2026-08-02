@@ -31,7 +31,7 @@ Workbench display menu 使用 Radix portal。首轮实现已把 semantic class �
 
 ### 1. Pi authority 提供只读 catalog reader，Desktop AppHost 提供 workspace scope
 
-`packages/neko-agent-runtime` 增加只读 catalog reader，只投影 `PiConversationCatalogRecord`，不创建 `PiConversationRuntime`、lease、session reader 或 model registry。Desktop 初始化从 Shell state 读取已登记 workspace identity 集合，并在第一个窗口 claim 前将该 scope 注入 Agent AppHost。
+`packages/agent/runtime` 增加只读 catalog reader，只投影 `PiConversationCatalogRecord`，不创建 `PiConversationRuntime`、lease、session reader 或 model registry。Desktop 初始化从 Shell state 读取已登记 workspace identity 集合，并在第一个窗口 claim 前将该 scope 注入 Agent AppHost。
 
 `readHomeProjection()` 以 scope 内的持久 catalog 为基础，再用已 attach workspace 的实时 projection/active run 覆盖 attention。这样 Home 与执行 runtime 共享同一 Pi catalog authority，又不靠打开所有 Project 产生重型 runtime。
 

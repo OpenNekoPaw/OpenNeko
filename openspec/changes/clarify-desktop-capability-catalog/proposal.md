@@ -45,8 +45,8 @@ Computer Use 或 MCP 名称也会让用户误以为 Agent 已经可以调用，�
   manager、Plugin runtime composition 与 Desktop typed IPC。
 - `apps/neko-desktop/resources/extension-marketplace/`：公开仓库维护、随包发布的
   OpenNeko marketplace snapshot；只包含真实第一方维护 package。
-- `packages/neko-agent-runtime/src/pi/`：plugin Skill source/provenance 与确定性优先级。
-- `packages/neko-agent-runtime/src/mcp/`、`packages/neko-shared/src/types/`：Plugin MCP
+- `packages/agent/runtime/src/pi/`：plugin Skill source/provenance 与确定性优先级。
+- `packages/agent/runtime/src/mcp/`、`packages/shared/src/types/`：Plugin MCP
   process/auth configuration 的最小 runtime contract。
 - `apps/neko-desktop/src/renderer/`：双语安装/卸载、Skill 管理、兼容性和 operation 状态。
 - Desktop producer/consumer、Pi Skill/MCP path、Evaluation harness 与真实 Electron 验收。

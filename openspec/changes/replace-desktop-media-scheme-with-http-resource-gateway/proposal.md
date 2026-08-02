@@ -57,13 +57,13 @@ scheme 内用 host 区分可信应用资源与短生命周期授权资源。系�
 
 ## Impact
 
-- `packages/neko-media`：保留 probe、FFmpeg、PCM framing、浏览器 consumer 和最小 host
+- `packages/media`：保留 probe、FFmpeg、PCM framing、浏览器 consumer 和最小 host
   publication port；删除 HTTP-only transport contract、resource-set gateway 扩张和默认
   loopback server ownership。
 - `apps/neko-desktop`：`neko-app` 重命名为 `openneko`；同一个 app protocol handler 增加
   resource host；新增一个必要的 Host-internal exact-resource registry，删除 HTTP gateway。
-- `packages/neko-cut*`、`packages/neko-canvas*`、`packages/neko-preview*`、
-  `packages/neko-agent*`：删除 `transport: 'http'` 判断，消费 Host 投影的临时 resource URL，
+- `packages/cut/*`、`packages/canvas/*`、`packages/preview/*`、
+  `packages/agent/*`：删除 `transport: 'http'` 判断，消费 Host 投影的临时 resource URL，
   不获得 Electron、Node 或文件系统能力。
 - `packages/neko-tools*`：媒体比较 descriptor 删除单值 HTTP transport；任何运行期媒体 URL
   只作为 transient projection，Tools effect 继续使用 Host 授权的真实输入。

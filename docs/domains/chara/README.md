@@ -1,7 +1,7 @@
 # Chara 领域
 
 Chara 是 Character 创作、发布版本、运行绑定和角色语义的 owner。当前第一阶段
-host-neutral kernel 位于 `packages/neko-chara`，已从 Entity 和旧 Agent 宿主实现收回
+host-neutral kernel 位于 `packages/chara`，已从 Entity 和旧 Agent 宿主实现收回
 Character Dialogue、Embody、角色证据、Profile Assembly 和角色 purpose operation，但没有
 Desktop manifest consumer、Host adapter 或可用产品入口。
 

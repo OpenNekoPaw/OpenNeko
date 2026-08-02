@@ -4,7 +4,7 @@
 
 更新日期：2026-08-01
 
-范围：`apps/neko-desktop`、一级 `packages/*`、Electron Main/preload/renderer、领域 runtime、Agent、媒体与外部专业工具。
+范围：`apps/neko-desktop`、`packages/*` 与 `packages/*/*` canonical workspace、Electron Main/preload/renderer、领域 runtime、Agent、媒体与外部专业工具。
 
 ## 决策
 
@@ -34,13 +34,13 @@ Electron renderer
 
 | 能力 | Owner | Desktop 组合方式 |
 | --- | --- | --- |
-| Agent | `packages/neko-agent` | Main 拥有 session registry 与 Host adapter；renderer 只消费对话投影 |
-| Canvas | `packages/neko-canvas` 与 `neko-canvas-webview` | package-owned authoring/host port 与 browser-safe UI |
-| Cut | `packages/neko-cut` 与 `neko-cut-webview` | OTIO/application port、Node/FFmpeg adapter 与 renderer UI |
-| Preview | `packages/neko-preview` 与 `neko-preview-webview` | 授权只读 session、资源 descriptor 与 browser renderer |
+| Agent | `packages/agent/{contracts,runtime,webview}` | Main 拥有 session registry 与 Host adapter；renderer 只消费对话投影 |
+| Canvas | `packages/canvas/{domain,node,webview}` | package-owned authoring/host port 与 browser-safe UI |
+| Cut | `packages/cut/{domain,node,webview}` | OTIO/application port、Node/FFmpeg adapter 与 renderer UI |
+| Preview | `packages/preview/{domain,webview}` | 授权只读 session、资源 descriptor 与 browser renderer |
 | Assets/Entity | owning domain packages | ContentLocator、domain facade、Desktop 文件授权和 React surface |
 | Generation/Quality/Character | owning domain packages | 只有建立真实 Desktop入口、adapter 和路径级验收后才成为产品能力 |
-| Shared UI/infra | `neko-ui`、`neko-types`、package-owned L0 contracts | 复用公共入口，不在应用根复制 design system、日志、错误或 DTO |
+| Shared UI/infra | `@neko/ui`、`@neko/shared`、package-owned L0 contracts | 复用公共入口，不在应用根复制 design system、日志、错误或 DTO |
 
 ## 运行时所有权
 

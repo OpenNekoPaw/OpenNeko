@@ -31,6 +31,6 @@ Chara 当前只定义单角色 Character Dialogue/Embody 内核，尚未为单�
 - `@neko/chara` 继续拥有 Character identity/version/run、参与策略和记忆候选；不拥有游戏规则、窗口、设备 handle 或输入注入。
 - 未来 `neko-world` / Game Activity owner 拥有 Gameplay、游戏状态、席位、动作校验、存档和 observation；当前缺失时保持 unavailable。
 - Game Activity owner 还拥有可重建的 Game Capability Profile、规则/动作 schema、episode experience 和 adaptation artifact；这些不是 Character memory，也不包含重新训练后的私有模型权重。
-- `@neko-agent/runtime` 继续拥有唯一 Pi/AgentSession、conversation/turn、Tool Call、模型和不可变配置快照，不增加 Character-specific Agent loop。
+- `@neko/agent-runtime` 继续拥有唯一 Pi/AgentSession、conversation/turn、Tool Call、模型和不可变配置快照，不增加 Character-specific Agent loop。
 - Desktop Main 未来只实现 sender-bound Activity/Computer Use Host adapter、精确 target binding、OS 权限、输入原语和 lifecycle；Renderer 只消费房间与 live activity 投影。
 - 稳定文档更新 `docs/domains/chara/README.md`、`docs/domains/chara/architecture.md` 和 `docs/architecture/package-boundaries.md`；详细未实施设计保留在本 OpenSpec。

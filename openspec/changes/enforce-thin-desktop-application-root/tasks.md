@@ -39,7 +39,7 @@
 
 - [x] 5.1 Normalize Agent to explicit contracts/runtime/Webview identities, narrow runtime exports, route provider adapters without Platform, and merge or remove the zero-consumer test-utils package.
 - [x] 5.2 Move Canvas authoring, material action, Media Library handoff, and related Shared contracts into Canvas domain/application and the necessary Node adapter, leaving only concrete Desktop authorization and wiring.
-- [x] 5.3 Preserve Cut domain/node/Webview separation while renaming the generic `@neko-cut/webview` identity and replacing wildcard or internal aliases with explicit entries.
+- [x] 5.3 Preserve Cut domain/node/Webview separation while renaming the generic `@neko/cut-webview` identity and replacing wildcard or internal aliases with explicit entries.
 - [x] 5.4 Split `neko-assets` into domain/application, Node adapter, and Webview dependency closures; migrate Desktop Media Library sync, recovery, copy, and portability responsibilities to the correct owner.
 - [x] 5.5 Reclassify Preview policy and state from contracts into a domain owner, establish any required Node content adapter, and keep Webview browser-only while Desktop retains only resource authorization and composition.
 - [x] 5.6 Complete the Tools media-comparison domain/contract, Node/Media adapter, Webview, and Desktop producer path under the owning Tools OpenSpec, or retire the inactive packages if that product path is rejected.

@@ -6,7 +6,7 @@
 对应变更：`replace-desktop-media-scheme-with-http-resource-gateway`、
 `enforce-thin-desktop-application-root`
 
-OpenNeko 只有一个可执行产品组合根：`apps/neko-desktop`。一级 `packages/*` workspace
+OpenNeko 只有一个可执行产品组合根：`apps/neko-desktop`。`packages/*` 与 `packages/*/*` canonical workspace
 提供 host-neutral contract、领域 runtime、Node adapter 和 browser-safe UI；应用根负责把它们
 组合为 Electron Main、preload 和 renderer 运行时。Application root 是部署、信任和 concrete
 adapter 边界，不是业务逻辑 owner；当前只有 Desktop 一个 Host，也不改变这个职责划分。
@@ -16,9 +16,9 @@ adapter 边界，不是业务逻辑 owner；当前只有 Desktop 一个 Host，�
 | 层级                | Canonical root                                                           | 拥有                                                                                                   | 不得拥有                                                                                    |
 | ------------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------- |
 | Desktop application | `apps/neko-desktop`                                                      | Electron 生命周期、Main/preload/renderer、typed IPC、文件与凭据授权 adapter、窗口/产品 shell、产品打包 | 领域事实或 contract 副本、业务状态机/策略/事务、跨领域万能 router、package internal imports |
-| Host/runtime        | `packages/neko-host`、`packages/neko-media`、各领域 runtime/node package | host-neutral ports、Node/FFmpeg 执行、资源生命周期                                                     | React UI、应用生命周期、对 `apps/*` 的依赖                                                  |
-| Browser UI          | `packages/neko-ui`、一级 `*-webview` package、`packages/neko-assets-webview`    | React UI、交互、browser media client、package-owned Desktop host port                                  | Node/Electron API、文件路径、持久事实、后台任务 owner                                       |
-| L0/domain           | `packages/neko-shared` 与各领域 contract/core package                     | 类型契约、领域规则、authoring、validation                                                              | Electron、React、应用内部实现                                                               |
+| Host/runtime        | `packages/host`、`packages/media`、各领域 runtime/node package | host-neutral ports、Node/FFmpeg 执行、资源生命周期                                                     | React UI、应用生命周期、对 `apps/*` 的依赖                                                  |
+| Browser UI          | `packages/ui`、一级 `*-webview` package、`packages/assets/webview`    | React UI、交互、browser media client、package-owned Desktop host port                                  | Node/Electron API、文件路径、持久事实、后台任务 owner                                       |
+| L0/domain           | `packages/shared` 与各领域 contract/core package                     | 类型契约、领域规则、authoring、validation                                                              | Electron、React、应用内部实现                                                               |
 
 ## 依赖方向
 

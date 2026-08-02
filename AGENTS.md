@@ -52,10 +52,10 @@
   - 构建：pnpm 10 workspace
   - 测试：Vitest、Node.js test runner、真实 Electron 场景
 - 共享基础核心包：
-  - `packages/neko-shared`：共享基础设施（Logger、i18n、Theme、Errors）
-  - `packages/neko-media`：Node/FFmpeg 与浏览器媒体运行时
+  - `packages/shared`：共享基础设施（Logger、i18n、Theme、Errors）
+  - `packages/media`：Node/FFmpeg 与浏览器媒体运行时
   - package-owned L0 contracts：Desktop Main/preload/renderer 跨 runtime 类型契约
-- 保留能力和业务逻辑均由一级 `packages/*` workspace 拥有；`apps/neko-desktop` 是唯一、薄的
+- 保留能力和业务逻辑均由 `packages/*` 或 `packages/*/*` canonical workspace 拥有；`apps/neko-desktop` 是唯一、薄的
   Electron 应用组合根，只负责产品入口、信任边界、concrete adapter 与 wiring。完整边界见
   `docs/architecture/application-composition.md` 和 `docs/architecture/package-boundaries.md`。
 
@@ -80,7 +80,7 @@
 - `docs/research/` 放调研、竞品、市场、技术 spike 和 UX 分析；此类文档必须带日期、来源或不确定性说明。
 - `docs/status/` 放带日期的 gap、迁移进度、健康度和审计快照；此类文档不作为长期架构事实来源，也不承担任务管理。
 - `openspec/changes/` 放仍在设计或实施中的变更；稳定结论再提升到 `docs/architecture/` 或 `docs/domains/`。
-- `packages/<pkg>/docs/` 放只服务某个包的实现、配置和维护说明。
+- `packages/<pkg>/docs/` 或 `packages/<family>/<role>/docs/` 放只服务某个包的实现、配置和维护说明。
 - 新增或移动文档前，先判断它是系统约束、领域模型、调研分析、当前状态、开发变更还是包私有实现。
 - 不要把领域内部架构放入 `docs/architecture/<domain>/`；应放入 `docs/domains/<domain>/architecture.md`。
 - 不要把实现日志、命令输出、阶段完成记录或临时状态写成架构事实。
@@ -163,11 +163,11 @@
 - 锁只用于无法隔离的真实共享资源，例如持久存储原子写入、设备句柄或外部进程协调；使用时必须明确 owner、作用域、生命周期、锁顺序、取消/超时和并发测试。
 - 功能设计、架构设计、模块设计和问题修复必须收敛到唯一 canonical path；内部设计问题应修改设计和契约，不得通过兼容层、fallback、双实现、多路条件分发或锁叠加维持错误结构。
 - 实现新功能前，优先复用现有资源：
-  - `packages/neko-shared/src/`
+  - `packages/shared/src/`
   - package-owned L0 contracts
-  - `packages/neko-ui/src/`
-  - `packages/neko-cut-webview/src/components/`
-  - `packages/neko-cut-webview/src/hooks/`
+  - `packages/ui/src/`
+  - `packages/cut/webview/src/components/`
+  - `packages/cut/webview/src/hooks/`
 - `@neko/platform` 已删除；配置、provider、Generation、Content 与 Host 能力必须直接使用其 owning package 的公开入口，不得重新建立聚合 facade。
 - 新功能涉及组件样式、主题、国际化、日志、错误/诊断、配置、路径、文件保存/读写、资源授权、缓存、DTO 或跨包契约时，必须先做公共基础能力审计：判断应复用现有公共入口、更新公共契约/adapter，还是确实保留在 owning package。
 - 禁止在功能包内并行实现 package-local design system、theme token、i18n runtime、logger/error 类型、项目文件 IO、cache manager、path resolver、宽泛媒体 client 或无 owner 的共享 DTO；确需新增公共能力时优先进入 `@neko/shared`、`@neko/ui`、owning package L0 contract 或既有 domain service。

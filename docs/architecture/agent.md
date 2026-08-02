@@ -3,7 +3,7 @@
 更新日期：2026-07-31
 
 本文件定义 OpenNeko Agent 的系统级边界。运行时包级边界见
-[`packages/neko-agent-runtime/src/runtime/README.md`](../../packages/neko-agent-runtime/src/runtime/README.md)，
+[`packages/agent/runtime/src/runtime/README.md`](../../packages/agent/runtime/src/runtime/README.md)，
 目标 ADR 见 [`adr-pi-agent-runtime.md`](adr-pi-agent-runtime.md)。
 
 Pi 是唯一 canonical Agent、主模型、Tool 调度、Skill 读取和 transcript/context 执行路径。

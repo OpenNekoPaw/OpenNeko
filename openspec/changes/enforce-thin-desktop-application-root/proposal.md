@@ -52,7 +52,7 @@ Assets、Canvas、Preview、Cut 和 Local Metadata 均通过明确 owner 与公�
 
 - 架构与开发规范：`docs/architecture/application-composition.md`、
   `docs/architecture/package-boundaries.md`、`AGENTS.md`。
-- 主要迁移面：`apps/neko-desktop/src/{main,preload,renderer,shared}`、`packages/neko-shared`、
+- 主要迁移面：`apps/neko-desktop/src/{main,preload,renderer,shared}`、`packages/shared`、
   `packages/neko-platform`、Assets/Canvas/Preview/Tools/Agent package families、workspace manifests、
   Vite aliases 和架构门禁。
 - **BREAKING**：内部 workspace package name、exports 和 import specifier 将按 family 分批调整；仓库尚未
