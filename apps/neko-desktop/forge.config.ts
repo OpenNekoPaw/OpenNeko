@@ -1,4 +1,4 @@
-import { MakerZIP } from '@electron-forge/maker-zip';
+import { MakerDMG } from '@electron-forge/maker-dmg';
 import { FusesPlugin } from '@electron-forge/plugin-fuses';
 import { VitePlugin } from '@electron-forge/plugin-vite';
 import type { ForgeConfig } from '@electron-forge/shared-types';
@@ -26,11 +26,8 @@ const config: ForgeConfig = {
     executableName: 'OpenNeko',
     name: 'OpenNeko',
     osxSign: macOSForgeTrust.osxSign,
-    ...(macOSForgeTrust.osxNotarize === undefined
-      ? {}
-      : { osxNotarize: macOSForgeTrust.osxNotarize }),
   },
-  makers: [new MakerZIP({}, ['darwin'])],
+  makers: [new MakerDMG({}, ['darwin'])],
   plugins: [
     new VitePlugin({
       build: [

@@ -41,6 +41,8 @@ allowBuilds:
   electron: true
   es5-ext: set this to true or false
   esbuild: set this to true or false
+  fs-xattr: true
   keytar: set this to true or false
+  macos-alias: true
   sharp: set this to true or false
   tesseract.js: set this to true or false

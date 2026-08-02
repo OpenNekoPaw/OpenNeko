@@ -48,7 +48,7 @@ Desktop 原生打包/发布目标仅限：
 
 | 系统  | 架构  | 当前 Desktop 资格                                      |
 | ----- | ----- | ------------------------------------------------------ |
-| macOS | ARM64 | Forge package 已验证；Developer ID/公证 Release 已建门禁 |
+| macOS | ARM64 | Forge DMG 已验证；支持 ad-hoc GitHub 预发布             |
 
 Windows x64 与 Linux 只运行 typecheck、orchestration、SQLite 和 host-neutral CI，不调用
 Forge、不生成 Desktop artifact。Intel Mac 与其他架构不支持。
@@ -75,11 +75,12 @@ pnpm gate:local
 
 除 `main` 外的非空分支名都属于开发分支，普通开发分支 push 不自动运行 GitHub Actions；提交前使用 `pnpm gate:local`，需要 GitHub runner 证据时从 Actions 手动运行 CI。`main` 是唯一发布分支，只接受开发分支到 `main` 的 Pull Request；`Merge Gate` 必须完成完整源码检查。
 
-正式 Release workflow 只接受 `main` 历史上的稳定 `v<semver>` tag；tag 是公开版本的唯一
+macOS Preview Release workflow 只接受 `main` 历史上的稳定 `v<semver>` tag；tag 是公开版本的唯一
 权威，无需匹配本地 Desktop manifest 版本。Runner 仅在临时 checkout 中把 tag 版本投影给
-Forge，完成 Developer ID、hardened runtime、公证、staple、Gatekeeper、ZIP 与 SHA-256 后才
-创建 GitHub Release。缺失 Apple 凭据时 fail-visible；本地 package/make 保持 ad-hoc 签名且
-不构成公开发布证据。
+Forge；严格验证 ad-hoc 签名与 DMG 完整性后，只把一个 Apple Silicon DMG 和
+`SHASUMS256.txt` 发布为 GitHub prerelease。当前预览不需要 Apple 凭据，也没有 Developer ID
+签名或 Apple 公证；macOS 可能需要在“系统设置 → 隐私与安全性”中选择“仍要打开”。正常通过
+Gatekeeper 的稳定发布通道仍属于后续发布资格工作。
 
 ## 项目入口
 

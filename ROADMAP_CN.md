@@ -2,13 +2,13 @@
 
 状态：方向性路线，不承诺发布日期
 
-更新日期：2026-07-31
+更新日期：2026-08-03
 
 本文只定义开发顺序、阶段边界和完成门禁。当前已发布/可运行事实仍以
 [`README_CN.md`](README_CN.md)、[`docs/architecture/client-targets.md`](docs/architecture/client-targets.md)
 和代码为准。Phase 1 领域接入仍在进行，因此 Desktop 尚不是受支持发布产品。原生 package /
-release 目标已收敛为 `darwin-arm64`；macOS 已有本地 Forge package 证据并建立正式
-Developer ID/公证 Release 门禁。Windows x64 与 Linux 只运行确定性测试，不生成 Desktop
+release 目标已收敛为 `darwin-arm64`；macOS 已有通过验证的 ad-hoc DMG prerelease 路径，
+Developer ID/公证仍是阶段 2 门禁。Windows x64 与 Linux 只运行确定性测试，不生成 Desktop
 artifact；Intel Mac 和其他架构不支持。专业工具、插件和 Desktop MCP 集成也尚未实现。
 
 每个阶段必须拆成边界明确的 OpenSpec change，不允许用一个长期巨型 change 同时开发 Shell、

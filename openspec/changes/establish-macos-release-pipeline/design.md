@@ -1,22 +1,22 @@
 ## Context
 
-OpenNeko currently produces an ad-hoc-signed `darwin-arm64` Forge package for local development.
-There is no GitHub Release workflow, and the repository does not define how a tag, application
-version, signing identity, notarization credentials, ZIP output, checksum, or published release
-relate. The product is a local Electron Desktop application; release assembly belongs to the
-Application composition root and GitHub workflow boundary rather than a domain package.
+OpenNeko produces an ad-hoc-signed `darwin-arm64` Forge package and has a tag-triggered workflow.
+The workflow currently stops when paid Apple credentials are absent, while the present open-source
+channel needs an explicitly unnotarized preview DMG. The product is a local Electron Desktop
+application; release assembly belongs to the Application composition root and GitHub workflow
+boundary rather than a domain package.
 
 Ownership remains:
 
 - producer: the release tag selects the public version, a repository script projects it into the
-  ephemeral Desktop manifest, and `forge.config.ts` produces versioned native output;
+  ephemeral Desktop manifest, and `forge.config.ts` produces the versioned DMG;
 - consumer: the repository release workflow validates and publishes that output;
 - canonical path: Electron Forge `make` for `darwin-arm64`, followed by repository-owned release
   assertions;
-- runtime boundary: GitHub-hosted Apple Silicon macOS with an ephemeral signing keychain and Apple
-  notarization service;
-- replaced path: ad-hoc package directories or manually uploaded ZIPs cannot become release
-  evidence;
+- runtime boundary: GitHub-hosted Apple Silicon macOS using explicit ad-hoc signing and native DMG
+  tooling without Apple credentials;
+- replaced path: Developer ID-only publication and manually uploaded ZIPs cannot become current
+  preview evidence;
 - user data: no project, settings, credential-store, or workspace data is read or migrated.
 
 ## Goals / Non-Goals
@@ -24,18 +24,19 @@ Ownership remains:
 **Goals:**
 
 - Make macOS Apple Silicon the sole native package and public release target.
-- Require source, version, signature, hardened-runtime, notarization, Gatekeeper, artifact, and
-  checksum evidence before publication.
-- Keep secrets outside repository state and logs.
-- Keep development packaging usable with ad-hoc signing while making release mode fail on missing
-  configuration.
+- Require source, version, ad-hoc signature, DMG integrity, disclosure, artifact, and checksum
+  evidence before preview publication.
+- Keep the current preview path free of Apple secrets.
+- Keep development and preview packaging on one explicit ad-hoc Forge trust mode.
 - Keep Windows and Linux available only for deterministic tests.
 
 **Non-Goals:**
 
 - Package or publish Windows/Linux artifacts.
-- Add Intel/universal macOS output, Mac App Store delivery, DMG/PKG installers, auto-update, or a
-  release channel beyond GitHub Releases.
+- Add Intel/universal macOS output, Mac App Store delivery, PKG installers, auto-update, or a release
+  channel beyond GitHub Releases.
+- Claim Developer ID signing, notarization, or normal Gatekeeper acceptance; those require a future
+  formal-release change and Apple Developer Program credentials.
 - Claim compatibility for untested macOS versions merely because Electron can start on them.
 - Change application runtime behavior, domain contracts, project formats, or user data.
 
@@ -47,7 +48,7 @@ A release tag MUST be an exact stable `v<major>.<minor>.<patch>` value and the t
 reachable from `origin/main`. The local `apps/neko-desktop/package.json` version remains a
 development/package default and does not restrict the public release version. After frozen-lockfile
 installation, the macOS release job projects the tag-derived version into its ephemeral checkout
-before Forge runs. Forge therefore writes one version into the application metadata and MakerZIP
+before Forge runs. Forge therefore writes one version into the application metadata and MakerDMG
 name, while no repository version file is committed or required to match the tag.
 
 Alternative considered: require developers to update and commit the Desktop manifest before every
@@ -57,48 +58,48 @@ releases to fail before any native work began.
 Alternative considered: rename only the final ZIP. Rejected because the archive name and the
 application's embedded version would diverge.
 
-### 2. Development and release signing are explicit modes
+### 2. Development and preview packaging share one explicit trust mode
 
-Default `package`/`make` keeps the current ad-hoc signature for local validation. The release
-workflow sets one explicit release-mode environment value. Forge configuration then requires a
-Developer ID Application identity, ephemeral keychain path, Apple ID, app-specific password, and
-team ID; no value has a fallback. Release mode enables identity validation, hardened runtime, and
-Electron Packager notarization.
+Default `package`/`make` and the current tag workflow use the same explicit ad-hoc signature. The
+workflow does not set a release-signing mode, import a keychain, or read Apple credentials. It
+verifies the ad-hoc package and marks the GitHub Release as a prerelease with an unnotarized warning.
 
 The signing mode remains in `apps/neko-desktop` because it configures Electron application bytes
 and macOS trust metadata. It does not decide a domain result and is not a reusable host-neutral
 business service.
 
-Alternative considered: silently fall back to ad-hoc signing when CI secrets are absent. Rejected
-because an unsigned public artifact would be reported as a successful release.
+Alternative considered: conditionally use Developer ID when secrets happen to exist and otherwise
+fall back to ad-hoc signing. Rejected because one tag would have ambiguous trust semantics. A future
+signed channel must be explicit and separately specified.
 
-### 3. The signing certificate exists only in an ephemeral keychain
+### 3. The current preview path owns no Apple credential lifecycle
 
-The workflow decodes the base64 PKCS#12 certificate into the runner temporary directory, imports it
-into a task-specific keychain, configures codesign access, and deletes the keychain in an `always()`
-cleanup step. Notarization uses an Apple app-specific password passed only through masked secrets.
+The workflow does not decode a certificate, create a keychain, or call Apple's notarization service.
+This removes secret ownership from the current preview boundary. Developer ID and notarization are
+deferred until the project intentionally establishes a formal signed distribution channel.
 
 Alternative considered: commit a certificate/profile or use the login keychain. Rejected because it
 widens secret lifetime and makes cleanup/ownership ambiguous.
 
-### 4. Release output is one verified ZIP plus one checksum manifest
+### 4. Preview output is one verified DMG plus one checksum manifest
 
 Forge `make` remains the sole distributable producer and the maker is restricted to `darwin`.
-A repository-owned assertion resolves the exact versioned ZIP, rejects missing or ambiguous output,
-computes SHA-256, and writes `SHASUMS256.txt`. The workflow separately verifies the packaged app
-with `codesign`, `stapler`, and Gatekeeper before publishing.
+A repository-owned assertion resolves the exact versioned DMG, rejects missing or ambiguous output,
+computes SHA-256, and writes `SHASUMS256.txt`. The workflow verifies the packaged app's ad-hoc
+signature and the DMG with native macOS tooling before publishing.
 
-Alternative considered: upload the unpacked Forge package directory. Rejected because it is not a
-stable downloadable artifact and has no singular checksum identity.
+Alternative considered: retain ZIP as a second distributable. Rejected because it creates parallel
+preview artifacts and weakens the canonical installation path.
 
 ### 5. Publication is the final side effect
 
-The tag workflow runs source gates and every native release assertion before invoking `gh release
-create`. It publishes only the exact ZIP and checksum manifest. GitHub contents write permission is
-granted only to the publishing job; ordinary CI remains read-only.
+The tag workflow runs source gates and every native preview assertion before invoking `gh release
+create --prerelease`. It publishes only the exact DMG and checksum manifest together with explicit
+unnotarized installation notes. GitHub contents write permission is granted only to the publishing
+job; ordinary CI remains read-only.
 
-Alternative considered: create a draft release before building. Rejected because failed signing or
-notarization would leave an externally visible release object without accepted artifacts.
+Alternative considered: create a draft release before building. Rejected because failed signature
+or DMG integrity checks would leave an externally visible release object without accepted artifacts.
 
 ### 6. Platform tests remain separate from package support
 
@@ -108,34 +109,32 @@ The macOS native job is the only CI job allowed to package, make, or upload a De
 
 ## Risks / Trade-offs
 
-- [Apple credentials are not configured] → Release mode fails before Forge; repository code can be
-  validated locally, but a real public release remains blocked until repository secrets are added.
-- [Apple notarization service is unavailable] → The tag run fails and no GitHub Release is created;
-  rerun the same immutable tag after service recovery.
-- [ZIP maker output naming changes] → The exact artifact assertion fails visibly and must be updated
+- [Users expect normal Gatekeeper acceptance] → Release notes state that the preview is ad-hoc
+  signed and unnotarized and explain the manual “Open Anyway” path.
+- [DMG maker output naming changes] → The exact artifact assertion fails visibly and must be updated
   with a regression test before publication resumes.
-- [Tag projection fails or Forge ignores it] → The exact tag-derived ZIP assertion fails before
+- [Tag projection fails or Forge ignores it] → The exact tag-derived DMG assertion fails before
   trust verification or publication; the workflow never renames a mismatched artifact into success.
 - [Only macOS 15 is exercised remotely] → Do not claim older-version compatibility without a
   separate real-host acceptance matrix.
-- [No installer or updater] → The first release surface is a notarized ZIP; DMG/PKG and updates
-  require a later capability change.
+- [No formal signed channel or updater] → Developer ID/notarization and updates require later
+  capability changes.
 
 ## Migration Plan
 
 1. Restrict native product/runtime matrices to `darwin-arm64`; retain Windows/Linux test jobs.
-2. Add release-mode Forge signing/notarization configuration and deterministic unit tests.
-3. Add release metadata/artifact assertions and workflow-shape tests.
-4. Add the tag-triggered release workflow and update release documentation.
-5. Run local package/make verification in development mode and all repository gates.
-6. Configure GitHub secrets, push an exact stable version tag from `main`, and record the first real
-   signing/notarization/Gatekeeper/GitHub Release evidence.
+2. Keep Forge ad-hoc signing explicit and add the macOS DMG maker.
+3. Add tag-owned DMG/checksum assertions and workflow-shape tests.
+4. Remove Apple credential/notarization steps from the current preview workflow and add prerelease
+   disclosure.
+5. Run local DMG verification and all repository gates.
+6. Push a new stable version tag from `main` and record the first DMG preview release evidence.
 
-Rollback removes the tag workflow and release-mode configuration together. Already-published
+Rollback removes the tag workflow and DMG preview configuration together. Already-published
 GitHub Releases are external records and must not be silently overwritten or deleted by rollback.
 
 ## Open Questions
 
-- The first real tag run and Apple credential setup remain external repository-owner actions.
-- DMG/PKG format, auto-update, stable/beta channels, and older-macOS qualification remain future
-  decisions.
+- The first DMG preview tag run remains an external repository-owner action.
+- Developer ID/notarization, PKG format, auto-update, stable channels, and older-macOS qualification
+  remain future decisions.

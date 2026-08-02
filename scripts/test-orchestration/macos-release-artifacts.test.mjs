@@ -8,7 +8,7 @@ import { afterEach, describe, it } from 'node:test';
 import {
   assertMacOSReleaseMetadata,
   prepareMacOSReleaseArtifacts,
-  resolveMacOSReleaseZip,
+  resolveMacOSReleaseDmg,
 } from '../prepare-macos-release-artifacts.mjs';
 import { projectMacOSReleaseVersion } from '../project-macos-release-version.mjs';
 
@@ -55,41 +55,45 @@ describe('macOS release artifacts', () => {
     });
   });
 
-  it('accepts one exact versioned ZIP and writes its SHA-256 manifest', async () => {
+  it('accepts one exact versioned DMG and writes its SHA-256 manifest', async () => {
     const repositoryRoot = await createRoot();
     const version = '1.2.3';
-    const zipPath = resolveMacOSReleaseZip({ repositoryRoot, version });
-    await mkdir(dirname(zipPath), { recursive: true });
-    const bytes = Buffer.from('release-zip');
-    await writeFile(zipPath, bytes);
+    const dmgPath = resolveMacOSReleaseDmg({ repositoryRoot, version });
+    assert.equal(
+      dmgPath,
+      join(repositoryRoot, 'apps/neko-desktop/out/make/OpenNeko-1.2.3-arm64.dmg'),
+    );
+    await mkdir(dirname(dmgPath), { recursive: true });
+    const bytes = Buffer.from('release-dmg');
+    await writeFile(dmgPath, bytes);
 
     const result = prepareMacOSReleaseArtifacts({ repositoryRoot, tag: `v${version}` });
     const digest = createHash('sha256').update(bytes).digest('hex');
     assert.deepEqual(result, {
       checksumPath: join(repositoryRoot, 'apps/neko-desktop/out/release/SHASUMS256.txt'),
+      dmgPath,
       sha256: digest,
-      zipPath,
     });
     assert.equal(
       await readFile(result.checksumPath, 'utf8'),
-      `${digest}  OpenNeko-darwin-arm64-1.2.3.zip\n`,
+      `${digest}  OpenNeko-1.2.3-arm64.dmg\n`,
     );
   });
 
-  it('rejects missing, stale, or ambiguous ZIP output', async () => {
+  it('rejects missing, stale, or ambiguous DMG output', async () => {
     const repositoryRoot = await createRoot();
     assert.throws(
       () => prepareMacOSReleaseArtifacts({ repositoryRoot, tag: 'v1.2.3' }),
-      /macOS release ZIP is missing/u,
+      /macOS release DMG is missing/u,
     );
 
-    const expected = resolveMacOSReleaseZip({ repositoryRoot, version: '1.2.3' });
+    const expected = resolveMacOSReleaseDmg({ repositoryRoot, version: '1.2.3' });
     await mkdir(dirname(expected), { recursive: true });
     await writeFile(expected, 'expected');
-    await writeFile(join(dirname(expected), 'OpenNeko-darwin-arm64-1.2.2.zip'), 'stale');
+    await writeFile(join(dirname(expected), 'OpenNeko-1.2.2-arm64.dmg'), 'stale');
     assert.throws(
       () => prepareMacOSReleaseArtifacts({ repositoryRoot, tag: 'v1.2.3' }),
-      /macOS release ZIP set is ambiguous/u,
+      /macOS release DMG set is ambiguous/u,
     );
   });
 });

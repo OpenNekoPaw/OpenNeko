@@ -1,40 +1,46 @@
 ## Verification
 
-Date: `2026-08-02`
+Date: `2026-08-03`
 
 Local host: `darwin-arm64`
 
 ## Local Evidence
 
-- Release/platform regression tests passed, including tag-owned release versioning independent of
-  the local Desktop manifest, release-secret rejection, mutable Forge trust configuration, explicit
-  Developer ID/Team ID/hardened-runtime workflow checks, macOS-only CI reachability, and exact
-  artifact closure.
-- `pnpm typecheck:desktop` passed with the Forge trust helper declaration included.
-- `pnpm make:desktop` produced
-  `apps/neko-desktop/out/make/zip/darwin/arm64/OpenNeko-darwin-arm64-0.0.1.zip`.
-- Local packaging remained intentionally ad-hoc signed; strict `codesign` verification and ZIP
-  integrity validation passed.
-- `node scripts/prepare-macos-release-artifacts.mjs --tag v0.0.1` accepted exactly one versioned ZIP
-  and generated the matching SHA-256 manifest.
-- A focused temporary-workspace test proved local manifest `0.0.1` plus tag `v1.2.3` projects
-  `1.2.3` before Forge and resolves only the tag-versioned ZIP.
-- Strict OpenSpec validation passed.
-- `pnpm ci:local` passed formatting, lint with zero errors, all workspace typechecks/builds, the
-  native macOS package, 4,799 workspace tests, and repository quality.
-- The tag-version follow-up passed 9 focused release tests, 87 orchestration tests, strict OpenSpec
-  validation, `git diff --check`, and a fresh `pnpm ci:local`; the real local manifest remained
-  `0.0.1` before and after the gate.
+- A forced frozen-lockfile install built the MakerDMG native closure after `fs-xattr` and
+  `macos-alias` were explicitly approved in `pnpm-workspace.yaml`.
+- `pnpm typecheck:desktop` passed with the ad-hoc-only Forge trust helper declaration.
+- `pnpm make:desktop` produced the canonical 130 MiB preview image at
+  `apps/neko-desktop/out/make/OpenNeko-0.0.1-arm64.dmg`.
+- `codesign --verify --deep --strict --verbose=4` passed for the packaged application; signature
+  inspection reported `Signature=adhoc` and `TeamIdentifier=not set`.
+- `hdiutil verify` accepted the DMG, and
+  `node scripts/prepare-macos-release-artifacts.mjs --tag v0.0.1` accepted exactly that versioned
+  DMG and generated `SHASUMS256.txt` with SHA-256
+  `dea6f2804b8dc33fbc62f014d28fa06deeff85f99f22ef72257191319e3f0550`.
+- `shasum -a 256 -c ../release/SHASUMS256.txt` passed from the DMG output directory.
+- Eight focused release tests passed. They cover tag-owned versioning, canonical DMG naming,
+  missing/stale/ambiguous output, ad-hoc-only Forge trust, required native dependency builds,
+  absent Apple credential/notarization branches, prerelease disclosure, and ZIP publication
+  removal.
+- The focused Desktop architecture boundary passed 17 tests with MakerDMG as the sole configured
+  maker, and the complete orchestration gate passed 86 tests.
+- `pnpm exec openspec validate establish-macos-release-pipeline --strict`,
+  `pnpm check:legacy-debt`, `pnpm check:unused`, and `git diff --check` passed.
+- A fresh `pnpm ci:local` passed formatting, lint with zero errors, all workspace typechecks,
+  builds and tests, Desktop packaging, dependency analysis, repository architecture/quality gates,
+  and strict validation of all 32 OpenSpec items.
 
 ## External Acceptance Pending
 
-The workflow implementation is locally verified, but no production release claim is made. Final
-acceptance requires all configured Apple repository secrets and a stable `v<semver>` tag whose
-commit is reachable from `origin/main`. The GitHub run must prove Developer ID identity,
-notarization, stapling, Gatekeeper acceptance, checksum publication, and GitHub Release creation.
+The local DMG and workflow implementation are verified, but no new GitHub prerelease claim is made.
+Final acceptance requires a new exact stable `v<semver>` tag whose commit is reachable from
+`origin/main`. The tag run must prove the ad-hoc identity, DMG integrity, checksum assets, explicit
+unnotarized installation warning, and GitHub prerelease publication on the hosted Apple Silicon
+runner.
 
-Tag run `v0.1.2` ([Actions run 30753986320](https://github.com/OpenNekoPaw/OpenNeko/actions/runs/30753986320))
-failed before this follow-up because the old workflow compared it with local manifest `0.0.1`.
-After merging this follow-up, use a new immutable tag to obtain real trust and publication evidence.
+The current preview path intentionally does not use Apple repository secrets, Developer ID,
+notarization, stapling, or normal Gatekeeper assessment. Users may need macOS System Settings →
+Privacy & Security → Open Anyway. A normally trusted stable channel requires a separate future
+Developer ID/notarization change.
 
 Windows and Linux are compatibility-test hosts only and have no package or release artifact.

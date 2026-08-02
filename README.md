@@ -51,7 +51,7 @@ Native Desktop package and release targets are limited to:
 
 | System | Architecture | Current Desktop qualification                                      |
 | ------ | ------------ | ------------------------------------------------------------------ |
-| macOS  | ARM64        | Forge package verified; Developer ID/notarized Release is gated    |
+| macOS  | ARM64        | Forge DMG verified; ad-hoc GitHub prerelease is supported          |
 
 Windows x64 and Linux run typecheck, orchestration, SQLite, and host-neutral CI only. They do not
 invoke Forge or produce a Desktop artifact. Intel Mac and other architectures are unsupported.
@@ -78,12 +78,13 @@ pnpm gate:local
 
 Every non-empty branch name other than `main` is a development branch. Ordinary development-branch pushes do not run GitHub Actions; run `pnpm gate:local` before pushing, and dispatch CI manually when GitHub-runner evidence is needed. `main` is the only release branch and accepts Pull Requests from development branches. `Merge Gate` must complete all source checks.
 
-The formal Release workflow accepts an exact stable `v<semver>` tag reachable from `main`; that tag
+The macOS Preview Release workflow accepts an exact stable `v<semver>` tag reachable from `main`; that tag
 owns the public version and does not need to match the local Desktop manifest version. The runner
-projects the tag version only into its ephemeral checkout before Forge. It creates a GitHub Release
-only after Developer ID signing, hardened runtime, notarization, stapling, Gatekeeper assessment,
-ZIP verification, and SHA-256 generation on Apple Silicon. Missing Apple credentials fail visibly;
-local package/make output remains ad-hoc signed and is not public release evidence.
+projects the tag version only into its ephemeral checkout before Forge. It publishes one ad-hoc
+signed Apple Silicon DMG and `SHASUMS256.txt` as a GitHub prerelease only after strict code-signature
+and DMG integrity checks. This preview does not require Apple credentials and is not Developer ID
+signed or notarized; macOS may require **System Settings → Privacy & Security → Open Anyway**.
+A normal Gatekeeper-approved stable channel remains future release-qualification work.
 
 ## Project Entries
 

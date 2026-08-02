@@ -1,21 +1,13 @@
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import { describe, it } from 'node:test';
+import { parse } from 'yaml';
 
 import { resolveMacOSForgeTrust } from '../resolve-macos-forge-trust.mjs';
 
-const RELEASE_ENVIRONMENT = Object.freeze({
-  OPENNEKO_MACOS_RELEASE: 'true',
-  MACOS_SIGNING_IDENTITY: 'Developer ID Application: OpenNeko (TEAMID1234)',
-  MACOS_KEYCHAIN_PATH: '/tmp/openneko-release.keychain-db',
-  APPLE_ID: 'release@example.com',
-  APPLE_APP_SPECIFIC_PASSWORD: 'app-specific-password',
-  APPLE_TEAM_ID: 'TEAMID1234',
-});
-
 describe('macOS Forge trust configuration', () => {
-  it('keeps local packages explicitly ad-hoc signed', () => {
-    const trust = resolveMacOSForgeTrust({});
-    assert.equal(trust.release, false);
+  it('keeps every preview package explicitly ad-hoc signed', () => {
+    const trust = resolveMacOSForgeTrust();
     assert.equal(trust.osxSign.identity, '-');
     assert.equal(trust.osxSign.identityValidation, false);
     assert.equal(trust.osxNotarize, undefined);
@@ -26,46 +18,17 @@ describe('macOS Forge trust configuration', () => {
     });
   });
 
-  it('requires every release credential without an ad-hoc fallback', () => {
-    for (const name of [
-      'MACOS_SIGNING_IDENTITY',
-      'MACOS_KEYCHAIN_PATH',
-      'APPLE_ID',
-      'APPLE_APP_SPECIFIC_PASSWORD',
-      'APPLE_TEAM_ID',
-    ]) {
-      const environment = { ...RELEASE_ENVIRONMENT };
-      delete environment[name];
-      assert.throws(
-        () => resolveMacOSForgeTrust(environment),
-        new RegExp(`Missing required macOS release environment: ${name}`, 'u'),
-      );
-    }
-  });
-
-  it('enables Developer ID hardened runtime and notarization only in release mode', () => {
-    const trust = resolveMacOSForgeTrust(RELEASE_ENVIRONMENT);
-    assert.equal(trust.release, true);
-    assert.equal(Object.isFrozen(trust.osxSign), false);
-    assert.equal(Object.isFrozen(trust.osxNotarize), false);
-    assert.deepEqual(trust.osxSign, {
-      identity: RELEASE_ENVIRONMENT.MACOS_SIGNING_IDENTITY,
-      identityValidation: true,
-      keychain: RELEASE_ENVIRONMENT.MACOS_KEYCHAIN_PATH,
-      optionsForFile: trust.osxSign.optionsForFile,
-    });
-    assert.deepEqual(trust.osxSign.optionsForFile(), { hardenedRuntime: true });
-    assert.deepEqual(trust.osxNotarize, {
-      appleId: RELEASE_ENVIRONMENT.APPLE_ID,
-      appleIdPassword: RELEASE_ENVIRONMENT.APPLE_APP_SPECIFIC_PASSWORD,
-      teamId: RELEASE_ENVIRONMENT.APPLE_TEAM_ID,
-    });
-  });
-
-  it('rejects an ambiguous release-mode value', () => {
-    assert.throws(
-      () => resolveMacOSForgeTrust({ OPENNEKO_MACOS_RELEASE: '1' }),
-      /OPENNEKO_MACOS_RELEASE must be exactly 'true'/u,
+  it('has no paid Apple credential or notarization branch', async () => {
+    const source = await readFile('scripts/resolve-macos-forge-trust.mjs', 'utf8');
+    assert.doesNotMatch(
+      source,
+      /OPENNEKO_MACOS_RELEASE|MACOS_SIGNING_IDENTITY|MACOS_KEYCHAIN_PATH|APPLE_ID|APPLE_APP_SPECIFIC_PASSWORD|APPLE_TEAM_ID|osxNotarize/u,
     );
+  });
+
+  it('allows the DMG maker native dependency to build during frozen installs', async () => {
+    const workspace = parse(await readFile('pnpm-workspace.yaml', 'utf8'));
+    assert.equal(workspace.allowBuilds?.['fs-xattr'], true);
+    assert.equal(workspace.allowBuilds?.['macos-alias'], true);
   });
 });
