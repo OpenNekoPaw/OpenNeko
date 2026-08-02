@@ -34,8 +34,9 @@ explicit link recovery; ordinary sync does not copy external media bytes. For a 
 users can create an independent portable snapshot containing only media actually referenced by the
 project. The global Library Browser and project Resource Browser keep independent UI state.
 
-The repository also retains Chara, Search, Quality, and media-comparison Tools packages, but they do
-not all have Desktop product paths yet. Character projects, Interactive World, professional-tool
+The repository also retains Chara, Search, and Quality packages, but they do not all have Desktop
+product paths yet. The former media-comparison Tools packages are retired. Character projects,
+Interactive World, professional-tool
 integrations, and a standalone asset-comparison surface remain unavailable or planned; package
 existence alone does not make them product capabilities.
 

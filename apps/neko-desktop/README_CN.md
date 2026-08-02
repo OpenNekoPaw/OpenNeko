@@ -90,6 +90,7 @@ pnpm --filter @neko/app-desktop dev
 pnpm test:functional:headless
 pnpm test:local:ui
 pnpm test:local:ui --scenario=all-openneko-consumers
+pnpm test:local:ui --scenario=desktop-state-sqlite-migration
 pnpm test:local:ui --scenario=all-openneko-consumers --target=packaged
 pnpm test:local:media-openneko
 ```
@@ -105,6 +106,10 @@ pnpm test:local:media-openneko
 Preview 的 package-owned 场景。两种模式都会创建隔离 functional home 与独立 Electron
 user-data 目录，并在退出后清理临时目录。`--target=packaged` 使用当前平台已生成的 Desktop
 package；运行前必须先执行 `pnpm package:desktop`。图形化入口不得加入 CI。
+
+`--scenario=desktop-state-sqlite-migration` 连续启动两个独立 Electron 进程：首次验证旧 Shell /
+应用设置 JSON 的事务导入、内容一致归档和 SQLite commit，第二次使用损坏的 legacy poison
+文件验证已提交 marker 后仅从 `~/.neko/neko.db` 恢复，且不会重新读取、归档或改写旧 authority。
 
 `pnpm test:local:media-openneko` 使用合成 H.264/WAV/Main10-PQ 和 32 MiB fixture 运行专用
 Electron OpenNeko resource qualification，验证 metadata、seek、Range、SHA-256、变化帧、

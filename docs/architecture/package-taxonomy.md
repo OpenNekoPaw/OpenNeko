@@ -73,16 +73,21 @@ workspace package 表达真实 ownership 和依赖闭包，不以发布、消费
 
 package 是否存在与是否进入当前 Desktop 产品是两个不同事实。机器可读 package catalog 必须标记：
 
-| 状态                 | 语义                                                              | 约束                                                       |
-| -------------------- | ----------------------------------------------------------------- | ---------------------------------------------------------- |
-| `active-product`     | 已由 Desktop 生产 composition 消费                                | 必须有真实 producer/consumer 与运行态验收                  |
-| `retained-kernel`    | 当前未进入产品，但保留的领域核心或验证能力有明确 owner 和后续入口 | 不得声称产品可用；必须保持测试、边界和无隐式注册           |
-| `inactive-prototype` | 尚未批准或尚无完整生产调用链的原型                                | 不得被扫描、自动注册、fallback 或空命令伪装为能力          |
-| `content-only`       | 由宿主显式加载的静态内容 package                                  | 加载路径、校验和资源生命周期必须显式；不得假装代码 runtime |
+| 状态                 | 语义                                                       | 约束                                                            |
+| -------------------- | ---------------------------------------------------------- | --------------------------------------------------------------- |
+| `active-product`     | 从受支持应用生产入口经 value import 可达的代码             | 必须有真实 producer/consumer；不自动表示包内所有 operation 可用 |
+| `retained-kernel`    | 当前生产入口不可达，但保留的领域核心或验证能力有明确 owner | 不得声称产品可用；不得被隐式注册                                |
+| `inactive-prototype` | 尚未批准且生产入口不可达的原型                             | 不得被扫描、自动注册、fallback 或空命令伪装为能力               |
+| `content-only`       | 由宿主显式加载的静态内容 package                           | 加载路径、校验和资源生命周期必须显式；不得假装代码 runtime      |
 
-零消费者不是自动删除依据，也不是能力已交付的证据。Chara、Search、Quality、Tools 等 package 在没有
-真实 Desktop composition 前必须标记为 retained 或 inactive；若没有稳定 owner、可验证核心或明确的
-活跃变更，则删除优于保留空壳。禁止为了让 catalog 看起来完整而增加空 runtime/Webview package。
+`productStatus` 只回答 package 代码是否进入受支持产品图，不回答某个 UI/operation 是否开放；后者由
+capability catalog 独立声明。`quality/package-product-status.json` 固定真实生产入口，并只允许带 owner、
+原因、验证路径、review condition 和到期日的非字面动态边；通用 allowlist 禁止。门禁排除显式
+type-only、测试和登记的 migration-only 模块，并在状态冲突时输出最短 value-import 路径。
+
+零消费者不是自动删除依据，也不是能力已交付的证据。生产不可达且有稳定 owner、可验证核心或明确
+活跃变更的包可标记 retained/inactive；否则删除优于保留空壳。禁止为了让 catalog 看起来完整而增加
+空 runtime/Webview package。
 
 ## Desktop 与迁移
 
@@ -91,6 +96,7 @@ Electron Desktop 是唯一应用组合根，但不是默认业务 owner。领域
 生命周期释放。完整边界见 [`application-composition.md`](application-composition.md) 和
 [`package-boundaries.md`](package-boundaries.md)。
 
-当前 workspace 已按本分类登记 32 个源码 package；Tools 原型已退役，Chara、Search、Quality 等
-未接入能力以 `retained-kernel` 标记。角色目录、依赖方向、显式 exports、运行环境与产品状态由
-`quality/package-roles.json` 和仓库质量门禁持续校验。
+当前 workspace 已按本分类登记源码 package；Tools 原型已退役。Chara 与 Search 的部分 validator/
+guard 已进入生产依赖图，因此 package 状态为 `active-product`，但这不表示独立 Chara/Search UI 已
+开放；Quality 等生产不可达核心保持 `retained-kernel`。角色目录、依赖方向、显式 exports、运行环境
+与产品状态由 `quality/package-roles.json`、`quality/package-product-status.json` 和仓库质量门禁持续校验。

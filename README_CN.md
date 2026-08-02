@@ -32,8 +32,8 @@ OpenNeko 面向希望自主掌控项目文件、模型接入和创作流程的�
 会显示缺失的项目媒体库并要求显式恢复连接；普通同步不会复制外部媒体字节。需要完整移交时，可
 创建只收集项目实际引用媒体的独立便携快照。全局资源中心与项目资源管理器保持独立状态。
 
-仓库还保留 Chara、Search、Quality 和媒体比较 Tools 等领域包，但它们尚未全部形成 Desktop
-产品路径。角色项目、Interactive World、专业工具接入和独立素材比较界面当前必须视为 unavailable
+仓库还保留 Chara、Search 和 Quality 等领域包，但它们尚未全部形成 Desktop 产品路径；原媒体比较
+Tools 子包已经退役。角色项目、Interactive World、专业工具接入和独立素材比较界面当前必须视为 unavailable
 或规划中能力，不能仅因子包存在而视为已经可用。
 
 ## 当前状态
