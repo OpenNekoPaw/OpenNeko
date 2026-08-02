@@ -4,7 +4,10 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 
 const repoRoot = process.cwd();
-const webviewRoots = findWebviewRoots(join(repoRoot, 'packages'));
+const packageRoleCatalog = JSON.parse(
+  readFileSync(join(repoRoot, 'quality/package-roles.json'), 'utf8'),
+);
+const webviewRoots = findWebviewRoots(repoRoot, packageRoleCatalog);
 const sourceExtensions = new Set(['.ts', '.tsx', '.js', '.jsx']);
 const nodeBuiltinModules = new Set([
   'assert',
@@ -86,6 +89,12 @@ const forbiddenPathRules = [
   },
 ];
 const forbiddenImportSpecifiers = [
+  {
+    rule: 'webview-no-node-only-package-entry',
+    matches: (specifier) => /^@neko(?:-[^/]+)?\/[^/]+\/(?:.*\/)?node(?:\/|$)/u.test(specifier),
+    message:
+      'Production Webview source must not import a package Node-only entry. Request the capability through its typed Desktop host port.',
+  },
   {
     rule: 'webview-no-obsolete-agent-keyboard-reporter-import',
     matches: (specifier) =>
@@ -202,16 +211,16 @@ process.stdout.write(
   )}\n`,
 );
 
-function findWebviewRoots(packagesRoot) {
+function findWebviewRoots(repositoryRoot, catalog) {
   const roots = [];
-  for (const packageName of readdirSync(packagesRoot)) {
-    if (!packageName.endsWith('-webview') && packageName !== 'neko-assets') continue;
-    const sourceRoot = join(packagesRoot, packageName, 'src');
+  for (const entry of catalog.packages) {
+    if (!entry.roles.includes('webview')) continue;
+    const sourceRoot = join(repositoryRoot, entry.path, 'src');
     if (existsDirectory(sourceRoot)) {
       roots.push(sourceRoot);
     }
   }
-  return roots;
+  return roots.sort();
 }
 
 function existsDirectory(path) {

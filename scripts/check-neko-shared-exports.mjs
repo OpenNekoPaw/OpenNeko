@@ -21,7 +21,9 @@ function normalizePath(value) {
 }
 
 function moduleStem(source) {
-  return source.replace(/^packages\/neko-types\/src\//u, '').replace(/\.(?:ts|tsx)$/u, '');
+  return source
+    .replace(/^packages\/(?:neko-types|neko-shared)\/src\//u, '')
+    .replace(/\.(?:ts|tsx)$/u, '');
 }
 
 function directPublicEntry(source) {
@@ -81,7 +83,7 @@ function validateLedger(ledger) {
 
   const sources = new Set();
   for (const row of ledger.modules) {
-    if (typeof row.source !== 'string' || !row.source.startsWith('packages/neko-types/src/')) {
+    if (typeof row.source !== 'string' || !row.source.startsWith('packages/neko-shared/src/')) {
       errors.push(`invalid retired source: ${String(row.source)}`);
       continue;
     }
@@ -154,11 +156,11 @@ function collectCurrentSharedRootExports(rootDir, sourceFiles) {
   const sharedSourceFiles = sourceFiles
     .filter(
       (file) =>
-        file.startsWith('packages/neko-types/src/') &&
+        file.startsWith('packages/neko-shared/src/') &&
         (file.endsWith('.ts') || file.endsWith('.tsx')),
     )
     .map((file) => path.join(rootDir, file));
-  const rootEntry = path.join(rootDir, 'packages/neko-types/src/index.ts');
+  const rootEntry = path.join(rootDir, 'packages/neko-shared/src/index.ts');
   if (!sharedSourceFiles.includes(rootEntry)) {
     return null;
   }
@@ -212,7 +214,7 @@ export async function checkRetiredSharedModules({
   const retiredRootExports = new Set(ledger.retiredRootExports);
   const currentRootExports = collectCurrentSharedRootExports(rootDir, sourceFiles);
   if (currentRootExports === null) {
-    errors.push('cannot resolve packages/neko-types/src/index.ts for root export validation');
+    errors.push('cannot resolve packages/neko-shared/src/index.ts for root export validation');
   } else {
     for (const name of retiredRootExports) {
       if (currentRootExports.has(name)) {

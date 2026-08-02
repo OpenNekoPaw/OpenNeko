@@ -22,8 +22,8 @@ const RULES = Object.freeze([
     '.codex/skills/neko-agent-evaluation/',
   ]),
   rule('timeline-projection-authority', 'agent-runtime.stream-delivery', [
-    'packages/neko-agent-types/src/agent-turn-timeline.ts',
-    'packages/neko-agent-types/src/conversation-projection.ts',
+    'packages/neko-agent-contracts/src/agent-turn-timeline.ts',
+    'packages/neko-agent-contracts/src/conversation-projection.ts',
     'packages/neko-agent-runtime/src/pi/timeline-projector.ts',
     'packages/neko-agent-runtime/src/runtime/projection/',
     'packages/neko-agent-runtime/src/runtime/index.ts',
@@ -48,7 +48,7 @@ const RULES = Object.freeze([
     'packages/neko-agent-runtime/src/input/message-resource-projector.ts',
     'packages/neko-agent-webview/src/presenters/resource-display-uri.ts',
     'packages/neko-agent-webview/src/components/ChatView/MediaPreview/',
-    'apps/neko-desktop/src/main/desktop-agent-resource-display-projector.ts',
+    'packages/neko-agent-runtime/src/runtime/projection/agent-resource-display-projector.ts',
   ]),
   regexRule(
     'portable-skill-content',
@@ -60,21 +60,19 @@ const RULES = Object.freeze([
   ]),
   rule('skill-runtime', 'agent-runtime.skill-runtime', [
     'packages/neko-agent-runtime/src/skill/',
-    'packages/neko-platform/src/skill/',
+    'packages/neko-agent-runtime/src/pi/personal-skill-manager',
     'packages/neko-skills/src/builtins/',
   ]),
   rule('capability-tool-routing', 'agent-runtime.perception-routing', [
     'packages/neko-quality/src/',
     'packages/neko-agent-runtime/src/tools/',
     'packages/neko-agent-runtime/src/runtime/capability/capability-runtime-bindings.ts',
-    'packages/neko-platform/src/capability/',
-    'packages/neko-platform/src/service/shared-service-adapter.ts',
-    'packages/neko-agent-types/src/capability',
+    'packages/neko-agent-contracts/src/capability',
   ]),
   rule('provider-model-routing', 'agent-runtime.model-binding', [
     'packages/neko-agent-runtime/src/provider/',
-    'packages/neko-platform/src/llm/',
-    'packages/neko-platform/src/config/',
+    'packages/neko-agent-runtime/src/pi/openneko-provider',
+    'packages/neko-host/src/settings/',
     'packages/neko-ai-sdk/src/',
   ]),
   rule('session-workflows', 'agent-runtime.workflow-controller', [
@@ -88,14 +86,13 @@ const RULES = Object.freeze([
     'packages/neko-agent-runtime/src/task/',
     'packages/neko-agent-runtime/src/runtime/continuation',
     'packages/neko-agent-runtime/src/runtime/session/execution-ownership',
-    'packages/neko-agent-types/src/agent-message-queue',
-    'packages/neko-platform/src/media/media-agent-tools',
-    'packages/neko-platform/src/media/media-generation-executor',
-    'packages/neko-platform/src/media/media-turn-dispatcher',
-    'apps/neko-desktop/src/main/desktop-canvas-generation-runtime',
+    'packages/neko-agent-contracts/src/agent-message-queue',
+    'packages/neko-agent-runtime/src/tools/generation/media-agent-tools',
+    'packages/neko-generation/src/media/media-generation-executor',
+    'packages/neko-canvas-node/src/canvas-generation-node-runtime',
   ]),
   rule('creative-media-workflow', 'agent-runtime.creative-media-workflow', [
-    'packages/neko-platform/src/media/',
+    'packages/neko-generation/src/media/',
   ]),
   rule('desktop-event-projection', 'agent-runtime.stream-delivery', [
     'apps/neko-desktop/src/preload/desktop-agent-event-cursor',
@@ -147,14 +144,14 @@ export function isAgentEvaluationRelevantPath(rawPath) {
     path.startsWith('.agents/skills/') ||
     path.startsWith('packages/neko-skills/src/builtins/') ||
     path.startsWith('packages/neko-agent-runtime/src/') ||
-    path.startsWith('packages/neko-agent-types/src/') ||
+    path.startsWith('packages/neko-agent-contracts/src/') ||
     path.startsWith('packages/neko-ai-sdk/src/') ||
     path.startsWith('apps/neko-desktop/src/main/desktop-agent') ||
     path.startsWith('apps/neko-desktop/src/preload/desktop-agent') ||
     path.startsWith('apps/neko-desktop/src/renderer/DesktopAgent') ||
     path.startsWith('apps/neko-desktop/src/renderer/desktop-agent') ||
     path.startsWith('packages/neko-agent-webview/src/') ||
-    path.startsWith('packages/neko-platform/src/') ||
+    path.startsWith('packages/neko-host/src/settings/') ||
     path === 'packages/neko-content/src/document/read-document-tool.ts' ||
     path === 'packages/neko-content/src/document/read-image-tool.ts' ||
     path.startsWith('scripts/agent-eval/')

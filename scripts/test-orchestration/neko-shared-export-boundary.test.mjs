@@ -7,7 +7,7 @@ import { test } from 'node:test';
 import { checkRetiredSharedModules } from '../check-neko-shared-exports.mjs';
 
 const retiredModule = {
-  source: 'packages/neko-types/src/types/retired-contract.ts',
+  source: 'packages/neko-shared/src/types/retired-contract.ts',
   semanticOwner: '@neko/example',
   layer: 'L0',
   disposition: 'remove',
@@ -20,7 +20,7 @@ async function createFixture() {
   const rootDir = await mkdtemp(path.join(tmpdir(), 'neko-shared-exports-'));
   await Promise.all([
     mkdir(path.join(rootDir, 'apps/example/src'), { recursive: true }),
-    mkdir(path.join(rootDir, 'packages/neko-types/src/types'), { recursive: true }),
+    mkdir(path.join(rootDir, 'packages/neko-shared/src/types'), { recursive: true }),
     mkdir(path.join(rootDir, 'quality/ledgers'), { recursive: true }),
   ]);
   await writeFile(
@@ -72,11 +72,11 @@ test('retired Shared root symbols cannot be exported or imported again', async (
   const rootDir = await createFixture();
   await Promise.all([
     writeFile(
-      path.join(rootDir, 'packages/neko-types/src/types/index.ts'),
+      path.join(rootDir, 'packages/neko-shared/src/types/index.ts'),
       'export interface RetiredContract { readonly id: string; }\n',
     ),
     writeFile(
-      path.join(rootDir, 'packages/neko-types/src/index.ts'),
+      path.join(rootDir, 'packages/neko-shared/src/index.ts'),
       "export * from './types/index';\n",
     ),
     writeFile(

@@ -10,7 +10,7 @@ const HOOK_ORDER_RULE = 'react-hooks/rules-of-hooks';
 const CONSOLE_RULE = 'no-console';
 const TIMING_ATTACK_RULE = 'security/detect-possible-timing-attacks';
 const FUNCTIONAL_MJS_PATTERN = 'scripts/desktop-functional/**/*.mjs';
-const CONSOLE_BOUNDARY_FILES = ['packages/neko-types/src/logger/console-logger.ts'];
+const CONSOLE_BOUNDARY_FILES = ['packages/neko-shared/src/logger/console-logger.ts'];
 
 test('critical production ESLint rules remain blocking', () => {
   assert.equal(readLastRuleSetting(EXPLICIT_ANY_RULE, isProductionTypeScriptConfig), 'error');

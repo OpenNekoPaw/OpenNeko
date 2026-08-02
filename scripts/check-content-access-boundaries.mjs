@@ -8,10 +8,10 @@ const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const browserRoots = [
   'apps/neko-desktop/src/renderer',
   'packages/neko-agent-webview/src',
+  'packages/neko-assets-webview/src',
   'packages/neko-canvas-webview/src',
   'packages/neko-cut-webview/src',
   'packages/neko-preview-webview/src',
-  'packages/neko-tools-webview/src',
 ];
 const prohibitedImports = new Set([
   'electron',

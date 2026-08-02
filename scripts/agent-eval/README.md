@@ -10,14 +10,18 @@ Evaluation infrastructure but is not itself AI behavior Evaluation.
 ## Current Runtime Status
 
 The Desktop application is the only product host. The previous TUI debug-automation driver has been
-removed, and Desktop does not yet expose an equivalent complete-session evaluation driver.
+removed. Desktop now exposes an isolated complete-session driver for the M1
+`locator-backed-display-projection` case through the public Agent bridge and fixture-only automation
+contract.
 
 Therefore:
 
 - `pnpm test:agent:eval` validates the key-free harness, schemas, suite discovery, hard gates,
   reports, comparisons and dry-run contracts.
-- A real provider-backed case is `infrastructure-blocked` until Desktop owns a complete-session
-  driver.
+- The supported M1 case launches the real Desktop composition, submits through the public Agent
+  input path, verifies terminal facts and closes the application.
+- Other indexed cases remain `infrastructure-blocked` until their owning Desktop scenario adapter
+  exists.
 - Key-free harness success is not real Agent behavior acceptance.
 - The runner must not import `AgentSession` directly or substitute a mock provider, final-answer
   text or default success for missing runtime evidence.
@@ -28,7 +32,7 @@ Therefore:
   Tool execution and user-visible event projection.
 - `scripts/agent-eval` owns authoring decisions, suites, fixtures, hard assertions, artifact checks,
   Judges, comparisons, reports and exit codes.
-- A future Desktop driver must enter the same Desktop Agent composition used by the product and
+- Desktop scenario adapters must enter the same Desktop Agent composition used by the product and
   expose bounded evaluation-neutral facts.
 - Runtime facts may expose identities, hashes, states, diagnostics, usage and dropped counts. They
   must not expose suite, case, score, baseline, optimizer or pass/fail concepts.
@@ -92,11 +96,10 @@ Select a focused real run:
 node scripts/agent-eval/local-run.mjs --mode focused --suite skill.storyboard
 ```
 
-Until a Desktop complete-session driver exists, real runs return `infrastructure-blocked` with exit
-code 2. Missing credentials, provider access or Judge configuration remain independent
-infrastructure blockers and never trigger mock or fallback execution. Passing credential/config
-preflight does not change the missing-driver classification: the runner preserves
-`infrastructure-blocked` and exit code 2.
+The M1 real case requires explicit provider/model/configuration/credential environment and cost
+authorization. Missing authorization, unavailable provider access, or a case without a Desktop
+scenario adapter returns `infrastructure-blocked` with exit code 2 and never triggers mock or
+fallback execution.
 
 Validate an ablation plan without starting runtime behavior:
 

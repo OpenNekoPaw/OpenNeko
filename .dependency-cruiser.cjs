@@ -1,3 +1,12 @@
+const packageRoleCatalog = require('./quality/package-roles.json');
+
+function rolePathPattern(role, predicate = () => true) {
+  const paths = packageRoleCatalog.packages
+    .filter((entry) => entry.roles.includes(role) && predicate(entry))
+    .map((entry) => entry.path.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  return `^(?:${paths.join('|')})/`;
+}
+
 /** @type {import('dependency-cruiser').IConfiguration} */
 module.exports = {
   forbidden: [
@@ -17,26 +26,14 @@ module.exports = {
     // ── Rule 2: Layer 0 has zero internal dependencies ─
     {
       name: 'layer0-no-internal-deps',
-      comment:
-        'Foundation packages (@neko/shared, @neko/host, @neko/media, @neko/proto) must not depend on feature packages',
+      comment: '@neko/shared is the zero-workspace-dependency L0 foundation',
       severity: 'error',
       from: {
-        path: [
-          '^packages/neko-types/',
-          '^packages/neko-host/',
-          '^packages/neko-media/',
-          '^packages/neko-proto/',
-        ],
+        path: '^packages/neko-shared/',
       },
       to: {
         path: '^packages/',
-        pathNot: [
-          // Allow self-references and Layer 0 peers
-          '^packages/neko-types/',
-          '^packages/neko-host/',
-          '^packages/neko-media/',
-          '^packages/neko-proto/',
-        ],
+        pathNot: '^packages/neko-shared/',
       },
     },
 
@@ -46,11 +43,34 @@ module.exports = {
       comment: 'Webview packages run in the renderer sandbox and cannot access host modules',
       severity: 'error',
       from: {
-        path: '^packages/(?:neko-(?:agent|canvas|cut|preview|tools)-webview|neko-assets)/',
+        path: rolePathPattern('webview'),
       },
       to: {
         path: '^(?:electron|vscode)$',
       },
+    },
+
+    {
+      name: 'domain-no-webview-runtime',
+      comment: 'Host-neutral domain packages must not depend on Webview implementations',
+      severity: 'error',
+      from: { path: rolePathPattern('domain') },
+      to: { path: rolePathPattern('webview') },
+    },
+    {
+      name: 'contracts-no-runtime-implementation',
+      comment: 'Pure contract packages must not depend on runtime implementations',
+      severity: 'error',
+      from: {
+        path: rolePathPattern(
+          'contracts',
+          (entry) =>
+            !entry.roles.some((role) =>
+              ['domain', 'application', 'runtime', 'node', 'webview'].includes(role),
+            ),
+        ),
+      },
+      to: { path: rolePathPattern('runtime') },
     },
 
     // ── Rule 4: Character and Quality domain ownership ────────────
@@ -66,11 +86,10 @@ module.exports = {
     },
     {
       name: 'agent-runtime-no-chara-domain',
-      comment:
-        'Generic Agent runtime packages remain domain-neutral; only the host composition package may depend on neko-chara',
+      comment: 'Generic Agent provider/runtime packages remain independent from Chara behavior',
       severity: 'error',
       from: {
-        path: '^packages/neko-(?:agent-runtime|ai-sdk|platform|agent-webview|agent-types)/',
+        path: '^packages/neko-(?:agent-runtime|ai-sdk)/',
       },
       to: {
         path: '^packages/neko-chara/',
@@ -79,12 +98,17 @@ module.exports = {
     {
       name: 'quality-domain-only-shared-contracts',
       comment:
-        'neko-quality is host-neutral and may depend only on Layer 0 shared contracts',
+        'Quality stays host-neutral and may consume only shared, content, and generation contracts',
       severity: 'error',
       from: { path: '^packages/neko-quality/' },
       to: {
         path: '^packages/',
-        pathNot: ['^packages/neko-quality/', '^packages/neko-types/'],
+        pathNot: [
+          '^packages/neko-quality/',
+          '^packages/neko-shared/',
+          '^packages/neko-content/',
+          '^packages/neko-generation/',
+        ],
       },
     },
     {
@@ -93,7 +117,7 @@ module.exports = {
         'Generic Agent runtime packages remain Quality-neutral; only host composition may depend on neko-quality',
       severity: 'error',
       from: {
-        path: '^packages/neko-(?:agent-runtime|ai-sdk|platform|agent-webview|agent-types)/',
+        path: '^packages/neko-(?:agent-runtime|ai-sdk|agent-webview)/',
       },
       to: {
         path: '^packages/neko-quality/',

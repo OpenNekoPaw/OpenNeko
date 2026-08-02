@@ -23,17 +23,17 @@ const requiredSemanticClasses = [
 const allowedSemanticClasses = new Set([...requiredSemanticClasses, 'needs-review']);
 const failingProductionSemanticClasses = new Set(['delete-now', 'migrate-now', 'needs-review']);
 const retiredAssetCatalogBoundaryPathPatterns = [
-  'packages/neko-types/src/local-metadata/node-workspace-storage-inspection.ts',
-  'packages/neko-types/src/types/asset/workspace-linked-media-library.ts',
-  'packages/neko-types/src/types/content-locator.ts',
+  'packages/neko-local-metadata/src/node-workspace-storage-inspection.ts',
+  'packages/neko-assets-domain/src/workspace-linked-media-library.ts',
+  'packages/neko-content/src/contracts/content-locator.ts',
 ];
 const canonicalGlobalAssetLibraryPathPatterns = [
-  'apps/neko-desktop/src/main/desktop-global-asset-files.ts',
-  'apps/neko-desktop/src/main/desktop-resource-browser-runtime.ts',
-  'apps/neko-desktop/src/main/desktop-resource-browser-source.ts',
-  'packages/neko-assets/src/global-library/contract.ts',
-  'packages/neko-assets/src/global-library/controller.ts',
-  'packages/neko-assets/src/global-library/root.tsx',
+  'packages/neko-assets-node/src/global-asset-files.ts',
+  'packages/neko-assets-node/src/resource-browser-node-runtime.ts',
+  'packages/neko-assets-node/src/resource-browser-node-source.ts',
+  'packages/neko-assets-domain/src/global-library/contract.ts',
+  'packages/neko-assets-domain/src/global-library/controller.ts',
+  'packages/neko-assets-domain/src/global-library/root.tsx',
 ];
 // Match both the owning boundary and its rejection marker so unrelated debt in the same file fails.
 const explicitBoundaryRejectionRules = [
@@ -58,11 +58,11 @@ const explicitBoundaryRejectionRules = [
     markers: ['rejectlegacymediapathrequest', 'legacy-path-target-rejected'],
   },
   {
-    path: 'packages/neko-types/src/local-metadata/node-generated-output-projection-binding.ts',
+    path: 'packages/neko-generation/src/media/local-metadata/generated-output-projection-store.ts',
     markers: ['invalid or legacy projection'],
   },
   {
-    path: 'packages/neko-types/src/nkc/index.ts',
+    path: 'packages/neko-canvas-domain/src/nkc/index.ts',
     markers: [
       'canvas_material_legacy_evidence_kinds',
       'inspectlegacycanvasmaterialnodes',
@@ -71,8 +71,12 @@ const explicitBoundaryRejectionRules = [
     ],
   },
   {
-    path: 'packages/neko-types/src/types/canvas-material-contracts.ts',
+    path: 'packages/neko-canvas-domain/src/types/canvas-material-contracts.ts',
     markers: ['canvas-material-legacy-generation-evidence'],
+  },
+  {
+    path: 'packages/neko-generation/src/domain-contracts/media-quality.ts',
+    markers: ['legacy-path-target-rejected'],
   },
 ];
 const retiredAssetCatalogRules = [
@@ -344,8 +348,7 @@ function buildQualityGate(nonTestMatches, catalogMatches = []) {
   return {
     scope: 'non-agent',
     excludedAgentOccurrences: nonTestMatches.length - governedMatches.length,
-    status:
-      failingMatches.length === 0 && catalogViolations.length === 0 ? 'passed' : 'failed',
+    status: failingMatches.length === 0 && catalogViolations.length === 0 ? 'passed' : 'failed',
     failingProductionSemanticClasses: [...failingProductionSemanticClasses].sort(),
     blockingOccurrences: failingMatches.length + catalogViolations.length,
     classes,
@@ -598,6 +601,9 @@ function classifySurface(file, line, term) {
   if (isCurrentBridgeSurface(lowerFile, lowerLine)) {
     return 'current-bridge';
   }
+  if (isMigrationOnlySurface(lowerFile)) {
+    return 'migration-only';
+  }
   if (isBoundaryCanonicalizerSurface(lowerFile, lowerLine)) {
     return 'boundary-canonicalizer';
   }
@@ -615,6 +621,16 @@ function classifySurface(file, line, term) {
   }
 
   return 'needs-review';
+}
+
+function isMigrationOnlySurface(lowerFile) {
+  return containsAny(lowerFile, [
+    'packages/neko-canvas-domain/src/nkc/canvas-material-migration.ts',
+    'packages/neko-generation/src/media/generated-asset-index.ts',
+    'packages/neko-generation/src/media/generated-output-adoption.ts',
+    'packages/neko-generation/src/media/index.ts',
+    'packages/neko-local-metadata/src/migration-planner.ts',
+  ]);
 }
 
 function isGeneratedPath(file) {
@@ -744,7 +760,7 @@ function isBoundaryCanonicalizerSurface(lowerFile, lowerLine) {
       'node-workspace-storage-inspection.ts',
       'node-workspace-resource-cache-binding.ts',
       'project-authoring/index.ts',
-      'types/storage.ts',
+      'neko-local-metadata/src/storage.ts',
       'local-metadata/migration-planner.ts',
       'nkc/validator.ts',
       'canvas-workspace-board.ts',
@@ -925,11 +941,9 @@ function isAgentGovernedPath(file) {
   return (
     file.startsWith('packages/neko-agent/') ||
     file.startsWith('packages/neko-agent-runtime/') ||
-    file.startsWith('packages/neko-agent-test-utils/') ||
-    file.startsWith('packages/neko-agent-types/') ||
+    file.startsWith('packages/neko-agent-contracts/') ||
     file.startsWith('packages/neko-agent-webview/') ||
-    file.startsWith('packages/neko-ai-sdk/') ||
-    file.startsWith('packages/neko-platform/')
+    file.startsWith('packages/neko-ai-sdk/')
   );
 }
 
@@ -1299,7 +1313,9 @@ function printQualityGate(qualityGate) {
   }
   const catalog = qualityGate.retiredAssetCatalogViolations;
   if (catalog.occurrences > 0) {
-    console.log(`- retired-asset-catalog: ${catalog.occurrences} occurrences in ${catalog.files} files`);
+    console.log(
+      `- retired-asset-catalog: ${catalog.occurrences} occurrences in ${catalog.files} files`,
+    );
     for (const example of catalog.examples.slice(0, 8)) {
       console.log(`  ${example.file}:${example.line} [${example.rule}] ${example.text}`);
     }
@@ -1360,7 +1376,7 @@ function runSelfTest() {
   const cases = [
     {
       value: classifySurface(
-        'packages/neko-types/src/generated/timeline.engine.ts',
+        'packages/neko-shared/src/generated/timeline.engine.ts',
         'legacy field',
         'legacy',
       ),
@@ -1392,7 +1408,7 @@ function runSelfTest() {
     },
     {
       value: classifySurface(
-        'packages/neko-types/src/types/asset/classifier.ts',
+        'packages/neko-shared/src/types/asset/classifier.ts',
         "source?: 'llm' | 'fallback';",
         'fallback',
       ),
@@ -1400,7 +1416,7 @@ function runSelfTest() {
     },
     {
       value: classifySurface(
-        'packages/neko-types/src/types/narrative-production-binding.ts',
+        'packages/neko-shared/src/types/narrative-production-binding.ts',
         "'fallback',",
         'fallback',
       ),
@@ -1447,21 +1463,7 @@ function runSelfTest() {
     {
       value: buildQualityGate([
         {
-          file: 'packages/neko-agent-test-utils/src/poison-paths.ts',
-          packageName: '@neko-agent/test-utils',
-          lineNumber: 1,
-          term: 'legacy',
-          text: 'direct legacy Agent Webview Markdown parse',
-          isTest: false,
-          semanticClass: 'migrate-now',
-        },
-      ]).status,
-      expected: 'passed',
-    },
-    {
-      value: buildQualityGate([
-        {
-          file: 'packages/neko-types/src/project-file-io/save-session.ts',
+          file: 'packages/neko-shared/src/project-file-io/save-session.ts',
           packageName: '@neko/shared',
           lineNumber: 1,
           term: 'fallback',
@@ -1476,7 +1478,7 @@ function runSelfTest() {
       value: buildQualityGate([
         {
           file: 'packages/neko-agent-runtime/src/runtime.ts',
-          packageName: '@neko/agent',
+          packageName: '@neko-agent/runtime',
           lineNumber: 1,
           term: 'legacy',
           text: 'legacy runtime alias',
@@ -1520,7 +1522,7 @@ function runSelfTest() {
     },
     {
       value: classifySurface(
-        'packages/neko-types/src/local-metadata/node-generated-output-projection-binding.ts',
+        'packages/neko-shared/src/local-metadata/node-generated-output-projection-binding.ts',
         'Resource contains an invalid or legacy projection.',
         'legacy',
       ),
@@ -1528,7 +1530,7 @@ function runSelfTest() {
     },
     {
       value: classifySurface(
-        'packages/neko-types/src/nkc/index.ts',
+        'packages/neko-shared/src/nkc/index.ts',
         'inspectLegacyCanvasMaterialNodes,',
         'legacy',
       ),
@@ -1536,7 +1538,7 @@ function runSelfTest() {
     },
     {
       value: classifySurface(
-        'packages/neko-types/src/types/canvas-material-contracts.ts',
+        'packages/neko-shared/src/types/canvas-material-contracts.ts',
         "code: 'canvas-material-legacy-generation-evidence',",
         'legacy',
       ),
@@ -1544,21 +1546,21 @@ function runSelfTest() {
     },
     {
       value: retiredAssetCatalogAllowlist(
-        'packages/neko-types/src/types/content-locator.ts',
+        'packages/neko-shared/src/types/content-locator.ts',
         'asset-uri',
       ),
       expected: 'boundary-rejection',
     },
     {
       value: retiredAssetCatalogAllowlist(
-        'packages/neko-assets/src/global-library/contract.ts',
+        'packages/neko-assets-domain/src/global-library/contract.ts',
         'search-partition',
       ),
       expected: 'canonical-global-asset-library',
     },
     {
       value: retiredAssetCatalogAllowlist(
-        'packages/neko-assets/src/global-library/contract.ts',
+        'packages/neko-assets-domain/src/global-library/contract.ts',
         'catalog-type',
       ),
       expected: undefined,
@@ -1572,8 +1574,8 @@ function runSelfTest() {
     },
     {
       value: matchesGlob(
-        'packages/neko-types/src/types/storyboard-table.ts',
-        'packages/neko-types/src/types/*.ts',
+        'packages/neko-shared/src/types/storyboard-table.ts',
+        'packages/neko-shared/src/types/*.ts',
       ),
       expected: true,
     },

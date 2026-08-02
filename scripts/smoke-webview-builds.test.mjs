@@ -12,10 +12,10 @@ describe('first-level Webview smoke discovery', () => {
 
     assert.deepEqual(webviews.map((webview) => path.relative(repositoryRoot, webview.dir)).sort(), [
       'packages/neko-agent-webview',
+      'packages/neko-assets-webview',
       'packages/neko-canvas-webview',
       'packages/neko-cut-webview',
       'packages/neko-preview-webview',
-      'packages/neko-tools-webview',
     ]);
   });
 

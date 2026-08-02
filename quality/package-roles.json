@@ -1,0 +1,293 @@
+{
+  "version": 1,
+  "packages": [
+    {
+      "path": "packages/neko-agent-runtime",
+      "name": "@neko-agent/runtime",
+      "family": "agent",
+      "roles": ["application", "runtime"],
+      "runtimes": ["host-neutral", "node"],
+      "productStatus": "active-product",
+      "architectureState": "converged"
+    },
+    {
+      "path": "packages/neko-agent-contracts",
+      "name": "@neko-agent/contracts",
+      "family": "agent",
+      "roles": ["contracts"],
+      "runtimes": ["host-neutral"],
+      "productStatus": "active-product",
+      "architectureState": "converged"
+    },
+    {
+      "path": "packages/neko-agent-webview",
+      "name": "@neko-agent/webview",
+      "family": "agent",
+      "roles": ["webview"],
+      "runtimes": ["browser"],
+      "productStatus": "active-product",
+      "architectureState": "converged"
+    },
+    {
+      "path": "packages/neko-ai-contracts",
+      "name": "@neko-ai/contracts",
+      "family": "ai",
+      "roles": ["contracts"],
+      "runtimes": ["host-neutral"],
+      "productStatus": "active-product",
+      "architectureState": "converged"
+    },
+    {
+      "path": "packages/neko-ai-sdk",
+      "name": "@neko-ai/sdk",
+      "family": "ai",
+      "roles": ["infrastructure"],
+      "runtimes": ["host-neutral", "node"],
+      "productStatus": "active-product",
+      "architectureState": "converged"
+    },
+    {
+      "path": "packages/neko-assets-domain",
+      "name": "@neko-assets/domain",
+      "family": "assets",
+      "roles": ["contracts", "domain", "application"],
+      "runtimes": ["host-neutral"],
+      "productStatus": "active-product",
+      "architectureState": "converged"
+    },
+    {
+      "path": "packages/neko-assets-node",
+      "name": "@neko-assets/node",
+      "family": "assets",
+      "roles": ["node"],
+      "runtimes": ["node"],
+      "productStatus": "active-product",
+      "architectureState": "converged"
+    },
+    {
+      "path": "packages/neko-assets-webview",
+      "name": "@neko-assets/webview",
+      "family": "assets",
+      "roles": ["webview"],
+      "runtimes": ["browser"],
+      "productStatus": "active-product",
+      "architectureState": "converged"
+    },
+    {
+      "path": "packages/neko-canvas-domain",
+      "name": "@neko-canvas/domain",
+      "family": "canvas",
+      "roles": ["contracts", "domain"],
+      "runtimes": ["host-neutral"],
+      "productStatus": "active-product",
+      "architectureState": "converged"
+    },
+    {
+      "path": "packages/neko-canvas-node",
+      "name": "@neko-canvas/node",
+      "family": "canvas",
+      "roles": ["node"],
+      "runtimes": ["node"],
+      "productStatus": "active-product",
+      "architectureState": "converged"
+    },
+    {
+      "path": "packages/neko-canvas-webview",
+      "name": "@neko-canvas/webview",
+      "family": "canvas",
+      "roles": ["webview"],
+      "runtimes": ["browser"],
+      "productStatus": "active-product",
+      "architectureState": "converged"
+    },
+    {
+      "path": "packages/neko-chara",
+      "name": "@neko/chara",
+      "family": "chara",
+      "roles": ["contracts", "domain", "application", "testing"],
+      "runtimes": ["host-neutral", "test"],
+      "productStatus": "retained-kernel",
+      "architectureState": "converged"
+    },
+    {
+      "path": "packages/neko-content",
+      "name": "@neko/content",
+      "family": "content",
+      "roles": ["contracts", "domain", "node"],
+      "runtimes": ["host-neutral", "node"],
+      "productStatus": "active-product",
+      "architectureState": "converged"
+    },
+    {
+      "path": "packages/neko-cut-domain",
+      "name": "@neko-cut/domain",
+      "family": "cut",
+      "roles": ["contracts", "domain"],
+      "runtimes": ["host-neutral"],
+      "productStatus": "active-product",
+      "architectureState": "converged"
+    },
+    {
+      "path": "packages/neko-cut-node",
+      "name": "@neko-cut/node",
+      "family": "cut",
+      "roles": ["node"],
+      "runtimes": ["node"],
+      "productStatus": "active-product",
+      "architectureState": "converged"
+    },
+    {
+      "path": "packages/neko-cut-webview",
+      "name": "@neko-cut/webview",
+      "family": "cut",
+      "roles": ["webview"],
+      "runtimes": ["browser"],
+      "productStatus": "active-product",
+      "architectureState": "converged"
+    },
+    {
+      "path": "packages/neko-entity-domain",
+      "name": "@neko-entity/domain",
+      "family": "entity",
+      "roles": ["contracts", "domain"],
+      "runtimes": ["host-neutral"],
+      "productStatus": "active-product",
+      "architectureState": "converged"
+    },
+    {
+      "path": "packages/neko-entity-node",
+      "name": "@neko-entity/node",
+      "family": "entity",
+      "roles": ["node"],
+      "runtimes": ["node"],
+      "productStatus": "retained-kernel",
+      "architectureState": "converged"
+    },
+    {
+      "path": "packages/neko-generation",
+      "name": "@neko/generation",
+      "family": "generation",
+      "roles": ["contracts", "domain", "application", "node"],
+      "runtimes": ["host-neutral", "node"],
+      "productStatus": "active-product",
+      "architectureState": "converged"
+    },
+    {
+      "path": "packages/neko-host",
+      "name": "@neko/host",
+      "family": "host",
+      "roles": ["contracts", "infrastructure", "node"],
+      "runtimes": ["host-neutral", "node"],
+      "productStatus": "active-product",
+      "architectureState": "converged"
+    },
+    {
+      "path": "packages/neko-local-metadata",
+      "name": "@neko/local-metadata",
+      "family": "local-metadata",
+      "roles": ["infrastructure", "contracts", "node", "testing"],
+      "runtimes": ["host-neutral", "node", "test"],
+      "productStatus": "active-product",
+      "architectureState": "converged"
+    },
+    {
+      "path": "packages/neko-markdown",
+      "name": "@neko/markdown",
+      "family": "markdown",
+      "roles": ["infrastructure"],
+      "runtimes": ["host-neutral", "browser"],
+      "productStatus": "active-product",
+      "architectureState": "converged"
+    },
+    {
+      "path": "packages/neko-media",
+      "name": "@neko/media",
+      "family": "media",
+      "roles": ["infrastructure", "node"],
+      "runtimes": ["host-neutral", "node", "browser"],
+      "productStatus": "active-product",
+      "architectureState": "converged"
+    },
+    {
+      "path": "packages/neko-media-local-metadata",
+      "name": "@neko-media/local-metadata",
+      "family": "media",
+      "roles": ["node"],
+      "runtimes": ["node"],
+      "productStatus": "retained-kernel",
+      "architectureState": "converged"
+    },
+    {
+      "path": "packages/neko-preview-domain",
+      "name": "@neko-preview/domain",
+      "family": "preview",
+      "roles": ["contracts", "domain"],
+      "runtimes": ["host-neutral"],
+      "productStatus": "active-product",
+      "architectureState": "converged"
+    },
+    {
+      "path": "packages/neko-preview-webview",
+      "name": "@neko-preview/webview",
+      "family": "preview",
+      "roles": ["webview"],
+      "runtimes": ["browser"],
+      "productStatus": "active-product",
+      "architectureState": "converged"
+    },
+    {
+      "path": "packages/neko-quality",
+      "name": "@neko/quality",
+      "family": "quality",
+      "roles": ["domain", "testing"],
+      "runtimes": ["host-neutral", "test"],
+      "productStatus": "retained-kernel",
+      "architectureState": "converged"
+    },
+    {
+      "path": "packages/neko-search-domain",
+      "name": "@neko-search/domain",
+      "family": "search",
+      "roles": ["domain"],
+      "runtimes": ["host-neutral"],
+      "productStatus": "retained-kernel",
+      "architectureState": "converged"
+    },
+    {
+      "path": "packages/neko-search-local-metadata",
+      "name": "@neko-search/local-metadata",
+      "family": "search",
+      "roles": ["node"],
+      "runtimes": ["node"],
+      "productStatus": "retained-kernel",
+      "architectureState": "converged"
+    },
+    {
+      "path": "packages/neko-skills",
+      "name": "@neko/skills",
+      "family": "skills",
+      "roles": ["content-only"],
+      "runtimes": ["content"],
+      "productStatus": "content-only",
+      "architectureState": "converged"
+    },
+    {
+      "path": "packages/neko-shared",
+      "name": "@neko/shared",
+      "family": "shared",
+      "roles": ["infrastructure", "contracts", "node"],
+      "runtimes": ["host-neutral", "node", "browser"],
+      "productStatus": "active-product",
+      "architectureState": "converged"
+    },
+    {
+      "path": "packages/neko-ui",
+      "name": "@neko/ui",
+      "family": "ui",
+      "roles": ["infrastructure"],
+      "runtimes": ["browser"],
+      "productStatus": "active-product",
+      "architectureState": "converged"
+    }
+  ]
+}

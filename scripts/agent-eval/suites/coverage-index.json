@@ -22,7 +22,7 @@
     { "kind": "prompt-layer", "id": "ephemeral", "disposition": "excluded", "deterministicValidation": { "command": "pnpm --dir packages/neko-agent-runtime exec vitest run src/session/__tests__/system-prompt-builder.test.ts", "reason": "The canonical Builder has no Orchestrator-owned ephemeral module path; execution-mode selection and non-mutating composition are deterministic and covered by the Builder contract tests." } },
 
     { "kind": "agent-runtime-capability", "id": "evaluation-platform", "disposition": "excluded", "deterministicValidation": { "command": "pnpm test:agent:eval", "reason": "Evaluation platform code is external test infrastructure and cannot change target Agent behavior by itself." } },
-    { "kind": "agent-runtime-capability", "id": "desktop-session-driver", "disposition": "excluded", "deterministicValidation": { "command": "pnpm test:agent:eval", "reason": "Desktop does not yet expose a complete-session evaluation driver; the key-free harness validates schemas and fails real execution as infrastructure-blocked." } },
+    { "kind": "agent-runtime-capability", "id": "desktop-session-driver", "disposition": "suite", "suiteIds": ["agent-runtime.stream-delivery"] },
     { "kind": "agent-runtime-capability", "id": "prompt-composition", "disposition": "suite", "suiteIds": ["agent-runtime.prompt-composition"] },
     { "kind": "agent-runtime-capability", "id": "skill-runtime", "disposition": "suite", "suiteIds": ["agent-runtime.skill-runtime", "skill.storyboard"] },
     { "kind": "agent-runtime-capability", "id": "capability-tool-routing", "disposition": "suite", "suiteIds": ["agent-runtime.perception-routing", "skill.skill-creator", "skill.image", "skill.video"] },

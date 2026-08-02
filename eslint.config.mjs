@@ -83,7 +83,7 @@ export default tseslint.config(
 
   // Explicit console output boundaries: the shared transport and a local manual executable.
   {
-    files: ['packages/neko-types/src/logger/console-logger.ts'],
+    files: ['packages/neko-shared/src/logger/console-logger.ts'],
     rules: {
       'no-console': 'off',
     },

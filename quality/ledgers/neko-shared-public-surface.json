@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "package": "@neko/shared",
+  "targetRetainedEntries": [".", "./core", "./errors", "./job-lifecycle", "./logger", "./path"],
+  "migrations": [],
+  "removedEntries": [
+    {
+      "entry": "./*",
+      "reason": "Wildcard exports bypass package ownership and are permanently forbidden.",
+      "removalTask": "enforce-thin-desktop-application-root:4.2"
+    },
+    {
+      "entry": "./components",
+      "reason": "React components and hooks are owned by @neko/ui.",
+      "removalTask": "enforce-thin-desktop-application-root:4.3"
+    },
+    {
+      "entry": "./icons",
+      "reason": "Icons are owned by @neko/ui/icons.",
+      "removalTask": "enforce-thin-desktop-application-root:4.3"
+    },
+    {
+      "entry": "./theme",
+      "reason": "Theme contracts and tokens are owned by @neko/ui/theme.",
+      "removalTask": "enforce-thin-desktop-application-root:4.3"
+    },
+    {
+      "entry": "./i18n",
+      "reason": "Webview internationalization is owned by @neko/ui/i18n.",
+      "removalTask": "enforce-thin-desktop-application-root:4.3"
+    },
+    {
+      "entry": "./types/index",
+      "reason": "Domain contracts are exported by their owning packages.",
+      "removalTask": "enforce-thin-desktop-application-root:4.4"
+    },
+    {
+      "entry": "./types/storage",
+      "reason": "Storage classification and layout contracts are owned by @neko/local-metadata.",
+      "removalTask": "enforce-thin-desktop-application-root:4.5"
+    },
+    {
+      "entry": "./utils",
+      "reason": "UI diff helpers are owned by @neko/ui/utils; general infrastructure remains in focused Shared entries.",
+      "removalTask": "enforce-thin-desktop-application-root:4.4"
+    }
+  ]
+}

@@ -144,7 +144,7 @@ describe('v2 contained artifact checks', () => {
       assertSupportedArtifactValidators([
         {
           kind: 'file',
-          validatorId: '@neko/agent/validation',
+          validatorId: '@neko-agent/runtime/validation',
         },
       ]),
     ).toThrow('dynamic modules, commands, and target-package imports are forbidden');
