@@ -6,6 +6,7 @@ import { parse } from 'yaml';
 describe('macOS release workflow', () => {
   it('publishes only a verified Apple Silicon release after source gates', async () => {
     const workflow = parse(await readFile('.github/workflows/release.yml', 'utf8'));
+    assert.equal(workflow.name, 'Release macOS');
     assert.deepEqual(workflow.on?.push?.tags, ['v*']);
     assert.equal(workflow.permissions?.contents, 'read');
 
@@ -21,6 +22,14 @@ describe('macOS release workflow', () => {
     assert.equal(release?.['runs-on'], 'macos-15');
     assert.deepEqual(release?.needs, ['source-gate']);
     assert.equal(release?.permissions?.contents, 'write');
+    assert.equal(release?.env?.MACOS_KEYCHAIN_PATH, undefined);
+    const signingPathStep = release.steps?.find(
+      (candidate) => candidate.name === 'Configure ephemeral signing paths',
+    );
+    assert.equal(
+      signingPathStep?.run,
+      'echo "MACOS_KEYCHAIN_PATH=$RUNNER_TEMP/openneko-release.keychain-db" >> "$GITHUB_ENV"',
+    );
     const source = JSON.stringify(release);
     for (const required of [
       'assert-macos-release-metadata.mjs',
@@ -42,6 +51,7 @@ describe('macOS release workflow', () => {
       (candidate) => candidate.name === 'Verify macOS trust and ZIP closure',
     );
     assert.ok(trustStep?.run?.includes("grep -Eq 'flags=.*\\(runtime\\)'"));
+    assert.doesNotMatch(source, /runner\.temp/u);
     assert.doesNotMatch(source, /windows|linux|win32-x64|linux-x64/u);
   });
 });
