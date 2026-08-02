@@ -13,33 +13,32 @@
 
 ## 分层
 
-| 层                 | 典型入口                                                                                                | 职责                                                                                 | 不应承担                                                |
-| ------------------ | ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ | ------------------------------------------------------- |
-| L0 shared contract | `@neko/shared`、`@neko/shared/theme`、`@neko/shared/i18n`、`@neko/shared/logger`、`@neko/shared/errors` | 零依赖类型、token、i18n core、logger/error contract、retry/backoff、diagnostic shape | React 组件、DOM、Electron API、功能包业务               |
-| Desktop host       | `apps/neko-desktop` Main/preload                                                                        | 原生主题和 locale、typed IPC、host logger/error adapter、资源授权                    | React UI、高频媒体帧、领域决策                          |
-| L2 renderer UI     | `@neko/ui`、`@neko/shared/i18n/react`、`@neko/shared/i18n/webview`、包内 renderer roots                 | React 组件、主题消费、用户交互、ErrorBoundary、toast/projection                      | 读取工作区文件、调用 Electron API、持久化 runtime token |
-| Media/Node runtime | `@neko/media/node`、FFmpeg diagnostics                                                                  | 计算错误、稳定 code/details、runtime diagnostics                                     | 用户提示文案、renderer UI 决策                          |
-| Domain packages    | 各创作包 domain/runtime/renderer root                                                                   | 领域 UI、领域文案、领域错误上下文、业务 diagnostic                                   | 重新定义横切 logger/i18n/theme/error 基础设施           |
+| 层                 | 典型入口                                                                                                                             | 职责                                                               | 不应承担                                                |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------ | ------------------------------------------------------- |
+| L0 shared contract | `@neko/shared`、`@neko/shared/core`、`@neko/shared/logger`、`@neko/shared/errors`、`@neko/shared/path`、`@neko/shared/job-lifecycle` | 零依赖基础类型、logger/error contract、路径与任务生命周期契约      | React 组件、DOM、Electron API、主题、i18n、功能包业务   |
+| Desktop host       | `apps/neko-desktop` Main/preload                                                                                                     | 原生主题和 locale、typed IPC、host logger/error adapter、资源授权  | React UI、高频媒体帧、领域决策                          |
+| L2 renderer UI     | `@neko/ui`、`@neko/ui/theme`、`@neko/ui/i18n`、`@neko/ui/i18n/react`、`@neko/ui/i18n/webview`、包内 renderer roots                   | React 组件、主题与 i18n、用户交互、ErrorBoundary、toast/projection | 读取工作区文件、调用 Electron API、持久化 runtime token |
+| Media/Node runtime | `@neko/media/node`、FFmpeg diagnostics                                                                                               | 计算错误、稳定 code/details、runtime diagnostics                   | 用户提示文案、renderer UI 决策                          |
+| Domain packages    | 各创作包 domain/runtime/renderer root                                                                                                | 领域 UI、领域文案、领域错误上下文、业务 diagnostic                 | 重新定义横切 logger/i18n/theme/error 基础设施           |
 
 ## 五层约束
 
-| 维度 | 约束                                                                                                                                                                  |
-| ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 职责 | `@neko/shared` 提供 contract；`@neko/ui` 提供无业务 React UI；Desktop Main 负责宿主提示和日志输出；renderer 负责呈现和交互；媒体 runtime 返回可分类错误与 diagnostics |
-| 依赖 | `@neko/ui` 可依赖 `@neko/shared` 和 React/Radix，但不能依赖 Electron、Node-only module 或功能包；`@neko/shared` 主入口不导入 React/DOM/Electron                       |
-| 接口 | 主题走 CSS variables/Tailwind preset；国际化走 `I18nService` 与 Desktop settings；错误走 `BaseError`/diagnostic；日志走 `ILogger`/transport                           |
-| 扩展 | 新 UI 先判断是否无业务且跨包复用；新文案先判断运行平面；新错误先分类 code/category/retryable；新日志先确定 source、level、transport 和敏感字段                        |
-| 测试 | 通过 `@neko/ui` boundary tests、i18n bundle fallback、logger registry tests、ErrorHandler tests、Desktop IPC producer/consumer tests 和媒体 diagnostic tests 固化边界 |
+| 维度 | 约束                                                                                                                                                                                                           |
+| ---- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 职责 | `@neko/shared` 提供 host-neutral 基础 contract；`@neko/ui` 提供 renderer 主题、i18n 和无业务 React UI；Desktop Main 负责宿主提示和日志输出；renderer 负责呈现和交互；媒体 runtime 返回可分类错误与 diagnostics |
+| 依赖 | `@neko/ui` 可依赖 `@neko/shared` 和 React/Radix，但不能依赖 Electron、Node-only module 或功能包；`@neko/shared` 主入口不导入 React/DOM/Electron                                                                |
+| 接口 | 主题走 CSS variables/Tailwind preset；国际化走 `I18nService` 与 Desktop settings；错误走 `BaseError`/diagnostic；日志走 `ILogger`/transport                                                                    |
+| 扩展 | 新 UI 先判断是否无业务且跨包复用；新文案先判断运行平面；新错误先分类 code/category/retryable；新日志先确定 source、level、transport 和敏感字段                                                                 |
+| 测试 | 通过 `@neko/ui` boundary tests、i18n bundle fallback、logger registry tests、ErrorHandler tests、Desktop IPC producer/consumer tests 和媒体 diagnostic tests 固化边界                                          |
 
 ## UI 公共层
 
-`@neko/ui` 是新的 L2 React 公共 UI 包，当前公共入口包括 `viewport`、`primitives`、`creative`、`icons`、`hooks`、`workbench`、`keyboard`、`utils` 和 `test-utils`。
+`@neko/ui` 是 L2 renderer 公共 UI 包。公共入口以 `packages/ui/package.json` 的 `exports` 为准，当前包括 `primitives`、`creative`、`icons`、`hooks`、`i18n`、`theme`、`foundation`、`workbench`、`keyboard`、`markdown`、`error-boundary`、`utils` 和 `test-utils` 等。
 
 | 可进入 `@neko/ui`                                                                      | 留在功能包内                                                                |
 | -------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
 | Button、IconButton、Badge、Dialog、Select、Slider、Tabs、Toolbar、Tooltip 等无业务原语 | Agent Header/Input/ModelSelector、Timeline 具体业务面板、Canvas 专属节点 UI |
-| CreativeWorkbenchShell、CreativeLeftRail、MainPanelControlLayer 等创作工具壳           | 某领域的具体工具状态、命令协议、runtime command 组装                        |
-| ViewportShell、OverlayRenderer、frame metadata bridge                                  | 具体 Canvas/Cut/Preview 媒体状态机                                          |
+| CreativeWorkbenchShell、EditorWorkbenchShell、受控布局与 host adapter frame            | 某领域的具体工具状态、命令协议、媒体状态机与领域 viewport                   |
 | KeyboardBoundary、keyboard dispatcher、focus CSS                                       | 功能包快捷键业务命令和编辑器状态                                            |
 | 通用 property panel、number slider、timeline ruler、tree view                          | 领域 schema、文件格式、素材实体业务                                         |
 
@@ -52,7 +51,7 @@ Renderer UI 统一进入 `@neko/ui`；旧 `@neko/shared/components` 入口已经
 - `@neko/ui` 组件只接收 props/callbacks/typed data，不主动读取全局 package state。
 - 被多个 renderer surface 复用且无领域语义的控件可以进入 `@neko/ui`；只在一个领域成立的交互留在领域包。
 - Cut、Canvas、Preview、Assets、Tools 等被动状态投影到 Desktop shell 的 owning activity/attention surface，避免各 surface 重复状态栏。
-- Agent 聊天输入、模型选择、会话模式、媒体模型栏等 Agent-first 交互留在 `@neko/agent-runtime-webview`，不迁入 `@neko/ui`。
+- Agent 聊天输入、模型选择、会话模式、媒体模型栏等 Agent-first 交互留在 `@neko/agent-webview`，不迁入 `@neko/ui`。
 
 ## 统一主题
 
@@ -60,7 +59,7 @@ Renderer UI 统一进入 `@neko/ui`；旧 `@neko/shared/components` 入口已经
 
 ```text
 Desktop theme preference + nativeTheme
-  -> @neko/shared/theme nekoDesignTokens
+  -> @neko/ui/theme nekoDesignTokens
   -> nekoTailwindPreset and --neko-* variables
   -> @neko/ui components and package-local CSS
 ```
@@ -84,12 +83,12 @@ Desktop theme preference + nativeTheme
 
 国际化按运行平面拆开，避免 renderer bundle、Desktop host 文案和 Agent prompt 文案混用。
 
-| 平面               | 入口                                                                   | 规则                                                                          |
-| ------------------ | ---------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| Desktop host       | application settings + OS locale                                       | Main 只投影稳定 locale 与 typed diagnostic，不维护第二套 renderer bundle      |
-| Renderer           | `I18nService`、`detectWebviewLocale`、`I18nProvider`、`useTranslation` | 每个 package-owned surface 注册命名空间 bundle，React 通过 provider/hook 消费 |
-| Agent Skill/Prompt | Skill localized content、provider cards、prompt fragments              | 用 Agent/Skill 自己的 locale 规则，不把 prompt 文案混入 UI bundle             |
-| Node/FFmpeg/领域 runtime | error code/details                                                | 返回 code 和诊断上下文，不承担最终 UI 翻译                                    |
+| 平面                     | 入口                                                                   | 规则                                                                          |
+| ------------------------ | ---------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| Desktop host             | application settings + OS locale                                       | Main 只投影稳定 locale 与 typed diagnostic，不维护第二套 renderer bundle      |
+| Renderer                 | `I18nService`、`detectWebviewLocale`、`I18nProvider`、`useTranslation` | 每个 package-owned surface 注册命名空间 bundle，React 通过 provider/hook 消费 |
+| Agent Skill/Prompt       | Skill localized content、provider cards、prompt fragments              | 用 Agent/Skill 自己的 locale 规则，不把 prompt 文案混入 UI bundle             |
+| Node/FFmpeg/领域 runtime | error code/details                                                     | 返回 code 和诊断上下文，不承担最终 UI 翻译                                    |
 
 ### Renderer i18n 模型
 
@@ -103,7 +102,7 @@ detectWebviewLocale()
 
 规则：
 
-- Renderer 包可以有本地 `src/i18n/index.ts` 和 `I18nContext.tsx`，但它们应是 `@neko/shared/i18n/*` 的薄包装或 bundle 注册入口。
+- Renderer 包可以有本地 `src/i18n/index.ts` 和 `I18nContext.tsx`，但它们应是 `@neko/ui/i18n/*` 的薄包装或 bundle 注册入口。
 - bundle key 应命名空间化，例如 `preview.*`、`mediaDiff.*`、`audio.*`，避免跨包 key 冲突。
 - `I18nService` 找不到翻译时返回 key；这适合开发期暴露缺失文案，不能依赖它作为正式文案。
 - Desktop Main 不使用 renderer `I18nService`；renderer 不直接调用 Electron API 获取 locale。
@@ -198,18 +197,18 @@ ffprobe / FFmpeg / loopback error
 
 ## 反模式
 
-| 反模式                                      | 风险                   | 正确边界                                                     |
-| ------------------------------------------- | ---------------------- | ------------------------------------------------------------ |
-| 把 React 组件放进 `@neko/shared` 主入口     | L0 被 React/DOM 污染   | 公共 UI 统一进入 `@neko/ui`                                  |
-| `@neko/ui` 导入功能包、Electron 或 Node API | 公共 UI 变成业务层     | UI 只接 props/callbacks/typed data                           |
-| Renderer 绕过 preload 直接调用宿主 API      | 沙箱边界破坏           | Renderer 使用 package-owned host runtime 和 typed IPC        |
-| Desktop Main 使用 renderer bundle 翻译      | 文案来源混乱           | Main 投影稳定 code/locale，renderer 负责用户文案             |
-| 用 `console.log` 做正式日志                 | 无级别、无来源、难排查 | 使用 `ILogger` 和 package logger registry                    |
-| 业务层直接 `showErrorMessage` 到处散落      | 无法统一显示策略和测试 | 通过 `IErrorHandler` 或集中 adapter                          |
-| UI 解析错误字符串决定重试                   | 文案变更破坏逻辑       | 使用 `code/category/retryable/retryAfter`                    |
-| adapter 只返回字符串错误                    | UI 无法分类恢复        | 返回 `code`、message、details/diagnostic                     |
-| 高吞吐循环写 info/debug 日志                | 卡顿和日志噪声         | 采样、聚合或 trace-level gated                               |
-| 各 renderer surface 重复展示被动状态        | 多包 UI 不一致         | 被动状态投影到 Desktop shell owning surface                  |
+| 反模式                                      | 风险                   | 正确边界                                              |
+| ------------------------------------------- | ---------------------- | ----------------------------------------------------- |
+| 把 React 组件放进 `@neko/shared` 主入口     | L0 被 React/DOM 污染   | 公共 UI 统一进入 `@neko/ui`                           |
+| `@neko/ui` 导入功能包、Electron 或 Node API | 公共 UI 变成业务层     | UI 只接 props/callbacks/typed data                    |
+| Renderer 绕过 preload 直接调用宿主 API      | 沙箱边界破坏           | Renderer 使用 package-owned host runtime 和 typed IPC |
+| Desktop Main 使用 renderer bundle 翻译      | 文案来源混乱           | Main 投影稳定 code/locale，renderer 负责用户文案      |
+| 用 `console.log` 做正式日志                 | 无级别、无来源、难排查 | 使用 `ILogger` 和 package logger registry             |
+| 业务层直接 `showErrorMessage` 到处散落      | 无法统一显示策略和测试 | 通过 `IErrorHandler` 或集中 adapter                   |
+| UI 解析错误字符串决定重试                   | 文案变更破坏逻辑       | 使用 `code/category/retryable/retryAfter`             |
+| adapter 只返回字符串错误                    | UI 无法分类恢复        | 返回 `code`、message、details/diagnostic              |
+| 高吞吐循环写 info/debug 日志                | 卡顿和日志噪声         | 采样、聚合或 trace-level gated                        |
+| 各 renderer surface 重复展示被动状态        | 多包 UI 不一致         | 被动状态投影到 Desktop shell owning surface           |
 
 ## 与其他架构文档的关系
 

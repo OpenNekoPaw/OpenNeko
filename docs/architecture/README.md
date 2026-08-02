@@ -58,7 +58,7 @@ composition。
 | [`client-targets.md`](client-targets.md)                                                                                                                     | OpenNeko Desktop 的产品目标、职责边界和验证重点                                                                             |
 | [`media-runtime.md`](media-runtime.md)                                                                                                                       | Node/FFmpeg、OpenNeko Range/PCM、原生媒体 consumer、编解码、10-bit/HDR hardware preparation 和损坏范围边界                  |
 | [`headless-project-authoring.md`](headless-project-authoring.md)                                                                                             | `.nk*` 持久项目写入的无 UI authoring 边界、operation 分类、canonical 入口和客户端适配                                       |
-| [`package-boundaries.md`](package-boundaries.md)                                                                                                             | 一级 package、UI 层、公共代码、Desktop OpenNeko resource capability、Node 媒体运行时约束和验证命令                          |
+| [`package-boundaries.md`](package-boundaries.md)                                                                                                             | owning package、UI 层、公共代码、Desktop OpenNeko resource capability、Node 媒体运行时约束和验证命令                        |
 | [`package-taxonomy.md`](package-taxonomy.md)                                                                                                                 | Workspace package 角色、拆包条件、领域家族命名、显式 exports 与产品状态语义                                                 |
 | [`proto-and-wire-contracts.md`](proto-and-wire-contracts.md)                                                                                                 | Wire contract、package-owned contract、项目格式与未来 Proto 准入条件                                                        |
 | [`ui-theme-i18n-error-logging.md`](ui-theme-i18n-error-logging.md)                                                                                           | UI 公共层、主题 token、国际化、错误处理、日志和诊断边界                                                                     |
@@ -83,7 +83,7 @@ composition。
 | 单个领域内部架构             | `docs/domains/<domain>/architecture.md` |
 | 尚未稳定的开发变更           | `openspec/changes/`                     |
 | 供脚本和 CI 消费的 JSON 台账 | `quality/`                              |
-| 单包实现细节                 | `packages/<pkg>/docs/`                  |
+| 单包实现细节                 | canonical package root 下的 `docs/`     |
 
 ## 写作要求
 

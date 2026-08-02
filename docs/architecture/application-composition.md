@@ -13,12 +13,12 @@ adapter 边界，不是业务逻辑 owner；当前只有 Desktop 一个 Host，�
 
 ## 当前组合
 
-| 层级                | Canonical root                                                           | 拥有                                                                                                   | 不得拥有                                                                                    |
-| ------------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------- |
-| Desktop application | `apps/neko-desktop`                                                      | Electron 生命周期、Main/preload/renderer、typed IPC、文件与凭据授权 adapter、窗口/产品 shell、产品打包 | 领域事实或 contract 副本、业务状态机/策略/事务、跨领域万能 router、package internal imports |
+| 层级                | Canonical root                                                 | 拥有                                                                                                   | 不得拥有                                                                                    |
+| ------------------- | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------- |
+| Desktop application | `apps/neko-desktop`                                            | Electron 生命周期、Main/preload/renderer、typed IPC、文件与凭据授权 adapter、窗口/产品 shell、产品打包 | 领域事实或 contract 副本、业务状态机/策略/事务、跨领域万能 router、package internal imports |
 | Host/runtime        | `packages/host`、`packages/media`、各领域 runtime/node package | host-neutral ports、Node/FFmpeg 执行、资源生命周期                                                     | React UI、应用生命周期、对 `apps/*` 的依赖                                                  |
-| Browser UI          | `packages/ui`、一级 `*-webview` package、`packages/assets/webview`    | React UI、交互、browser media client、package-owned Desktop host port                                  | Node/Electron API、文件路径、持久事实、后台任务 owner                                       |
-| L0/domain           | `packages/shared` 与各领域 contract/core package                     | 类型契约、领域规则、authoring、validation                                                              | Electron、React、应用内部实现                                                               |
+| Browser UI          | `packages/ui` 与各 `packages/<family>/webview` package         | React UI、交互、browser media client、package-owned Desktop host port                                  | Node/Electron API、文件路径、持久事实、后台任务 owner                                       |
+| L0/domain           | `packages/shared` 与各领域 contracts/domain package            | 类型契约、领域规则、authoring、validation                                                              | Electron、React、应用内部实现                                                               |
 
 ## 依赖方向
 
@@ -28,15 +28,15 @@ apps/neko-desktop
   -> host/runtime/domain contracts
   -> shared or package-owned L0 contracts
 
-packages/* -X-> apps/*
+all packages/** package roots -X-> apps/*
 renderer/webview packages -X-> electron or node:*
 ```
 
-- 所有保留 workspace package 的 `package.json` 必须直接位于 `packages/<name>`。
-- Desktop 只能通过 package public entry 组合能力，不得导入 `packages/*/src`。
+- 所有 workspace manifest 必须位于 `packages/<name>` 或 `packages/<family>/<role>`；family 容器不得拥有 `package.json`。
+- Desktop 只能通过 package public entry 组合能力，不得导入 canonical package root 下的 `src/` 内部实现。
 - Main 拥有文件、凭据、进程、窗口和后台资源；preload 只投影最小 typed port；renderer
   只拥有浏览器 UI 和可恢复展示状态。
-- 一级 package 表达业务 ownership 和依赖方向，不要求先有第二个 Host 或第二个消费者；只有一个
+- 独立 workspace package 表达业务 ownership 和依赖方向，不要求先有第二个 Host 或第二个消费者；只有一个
   Desktop 调用方的领域规则、状态机和 workflow 仍必须由 owning package 拥有。
 - 每个 runtime/session/task/editor 实例独立拥有可变状态和资源，active selection 只选择
   展示投影，不是状态 owner。
@@ -67,7 +67,7 @@ renderer/webview packages -X-> electron or node:*
 
 判断逻辑是否应下沉时，依次审计职责、依赖、接口、扩展和测试：若它决定领域结果、只依赖可注入
 port、输入输出已经是领域 contract、随业务规则而变化，并可在不启动 Electron 时完成 authoritative
-test，则必须进入对应一级 package。Desktop handler 只做边界解析、sender/路径授权、调用 package
+test，则必须进入对应 owning package。Desktop handler 只做边界解析、sender/路径授权、调用 package
 public port、投影结果和释放资源。
 
 不能以“当前只有 Desktop”“只有一个调用方”或“尚无 TUI/VS Code”为由把业务实现留在应用根；这类
@@ -79,7 +79,7 @@ application settings、Agent content/facts/resource projection 与 personal Skil
 package。Desktop 对这些能力只保留 sender/path/trust 授权、Electron 资源绑定、native interaction、
 public port wiring 与 disposal；旧 app-owned 路径由边界测试和 legacy gate 持续 poison。
 
-一级 package 的角色、拆分条件、领域家族命名和 inactive capability 语义统一遵循
+workspace package 的角色、拆分条件、领域家族命名和 inactive capability 语义统一遵循
 [`package-taxonomy.md`](package-taxonomy.md)，应用根不得通过私有 source alias 或 wildcard export
 绕过这些边界。
 
@@ -109,7 +109,7 @@ audio/video、Preview 与 Agent 展示使用原生 `<audio>` / `<video>`；文�
 
 ## 验证
 
-- `node scripts/check-desktop-only-topology.mjs` 证明只有一个应用根、一级 package 和无
+- `node scripts/check-desktop-only-topology.mjs` 证明只有一个应用根、canonical package root 和无
   removed-host production path。
 - `pnpm check:application-boundaries` 验证 package-to-app、renderer-to-Node/Electron 和
   Main-to-React 依赖违规。

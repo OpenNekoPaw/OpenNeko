@@ -14,9 +14,13 @@
 
 非平凡功能、跨包修改、公共契约或架构变更必须先建立或更新 OpenSpec artifacts。简单文档和局部修正可以直接实施，但仍需符合当前架构。
 
-触及 `apps/*` 或 `packages/*` 生产模块时，OpenSpec design/tasks 和交付 review 必须记录 owning
+触及 `apps/*`、`packages/*` 或 `packages/*/*` 生产模块时，OpenSpec design/tasks 和交付 review 必须记录 owning
 responsibility、package role、canonical public path、producer/consumer、runtime boundary、旧路径
 删除/poison 条件、用户数据语义与验证命令。仅说明“当前只有 Desktop”或只给最终测试结果不算完成证据。
+
+内部 package 统一使用 `@neko/*`。新增或移动 package 前先更新 `quality/package-roles.json`；消费方
+必须使用 manifest 中显式声明的 public export，不得直接导入 `packages/**/src`，也不得增加旧 scope、
+TypeScript path alias 或兼容 re-export。
 
 ## 本地开发
 

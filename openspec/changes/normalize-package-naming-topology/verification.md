@@ -33,6 +33,27 @@
 
 All commands passed after migration fixes. The real Electron command passed the isolated development Cut, Canvas, and Preview consumer scenarios. The Agent evaluation harness passed 245 tests and dry-ran 22 suites containing 51 cases. The headless Desktop functional command passed 104 tests.
 
+## Documentation and ignore-rule follow-up
+
+- Root README and contributing guides now document the canonical `packages/<name>` and
+  `packages/<family>/<role>` layouts, the single `@neko/*` scope, and public-export-only imports.
+- Architecture navigation, package taxonomy/boundaries, and the `@neko/shared`, `@neko/ui`, and
+  `@neko/assets-domain` package READMEs now match current package roots and manifest exports.
+- `.gitignore` no longer ignores every `test/` or `tests/` directory. Generated coverage,
+  Playwright, local fixture, report, and build outputs remain ignored by explicit rules.
+- Removing the broad test-directory rule exposed
+  `packages/canvas/webview/src/test/setupCanvasStoreScope.ts`, a Vitest setup source referenced by
+  the package configuration; it is now included as source instead of remaining silently untracked.
+- A root-script audit confirmed that every `pnpm` command shown in the root README and contributing
+  guides resolves to an existing root script.
+- `git check-ignore` proved that a representative source `test/` path is visible while `dist/`,
+  `coverage/`, `.test-workspaces/`, and root `reports/` remain ignored.
+- `pnpm check:test-orchestration`, `pnpm check:package-boundaries`, `pnpm check:package-roles`,
+  `pnpm check:product-brand`, `pnpm --filter @neko/canvas-webview test`, targeted Prettier checks,
+  `pnpm check:openspec`, strict change validation, and `git diff --check` passed.
+- A post-documentation `pnpm ci:local` rerun passed the complete build, 4,799 workspace tests,
+  repository-quality checks, and native macOS arm64 Desktop packaging.
+
 ## Residual risk
 
 - ESLint reports 206 pre-existing warnings and zero errors; the migration introduced no lint error.

@@ -4,7 +4,7 @@
  * Browser/DOM-dependent utilities for webview locale detection.
  * Import via: @neko/ui/i18n/webview (only in webview context)
  *
- * NOT exported from the main @neko/shared entry to avoid
+ * NOT exported from the aggregate @neko/ui entry to avoid
  * requiring DOM types in Node.js consumers.
  */
 

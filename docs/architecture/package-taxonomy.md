@@ -11,7 +11,7 @@
 ## 角色分类
 
 每个 workspace package 必须声明一个主要角色。一个目录若同时拥有多个运行环境或变化方向，
-必须通过明确 subpath 隔离；只有满足“独立拆包”条件时才拆成多个一级 package。
+必须通过明确 subpath 隔离；只有满足“独立拆包”条件时才拆成多个 workspace package。
 
 | 角色             | 职责                                                 | 允许依赖                                                        | 禁止拥有                                            |
 | ---------------- | ---------------------------------------------------- | --------------------------------------------------------------- | --------------------------------------------------- |
@@ -63,7 +63,7 @@ workspace package 表达真实 ownership 和依赖闭包，不以发布、消费
 
 - 每个生产 consumer 只能通过 package manifest 的显式 `exports` 访问 public entry。
 - 禁止 `"./*"` wildcard export；每个 root/subpath 必须列出明确的 types 与 runtime target。
-- 禁止消费 `packages/*/src/*`、未导出的内部文件或用 TypeScript/Vite/Vitest alias 绕过 public entry。
+- 禁止消费 canonical package root 下的 `src/*`、未导出的内部文件或用 TypeScript/Vite/Vitest alias 绕过 public entry。
 - `node` entry 不得被 Renderer/Webview 解析；browser entry 不得隐式引入 Node builtin、Electron 或
   Node-only transitive dependency。
 - root entry 只导出该包最小稳定 surface。大型可选能力、不同运行环境和测试 helper 使用显式 subpath。

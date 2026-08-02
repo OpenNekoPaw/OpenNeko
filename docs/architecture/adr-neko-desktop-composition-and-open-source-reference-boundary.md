@@ -8,7 +8,7 @@
 
 ## 决策
 
-`apps/neko-desktop` 是唯一产品组合根。它组合既有一级 package 的公共入口，拥有 Electron
+`apps/neko-desktop` 是唯一产品组合根。它组合既有 owning package 的公共入口，拥有 Electron
 生命周期、typed IPC、安全策略、文件与凭据授权、窗口、资源 registry 和产品打包；领域事实、
 领域 operation、媒体算法与 UI primitive 继续由 owning package 持有。
 
@@ -22,25 +22,25 @@ Electron renderer
 
 ## 五层边界
 
-| 层 | 决策 |
-| --- | --- |
-| 职责 | App 只组合和管理宿主生命周期；领域 package 拥有业务事实与操作。 |
+| 层   | 决策                                                                                 |
+| ---- | ------------------------------------------------------------------------------------ |
+| 职责 | App 只组合和管理宿主生命周期；领域 package 拥有业务事实与操作。                      |
 | 依赖 | `apps/neko-desktop -> package public entry -> L0 contract`；package 不反向依赖 app。 |
 | 接口 | Main/preload/renderer 只通过 package-owned typed contract 和最小 Desktop port 通信。 |
-| 扩展 | 新领域先建立 owning package contract/application port，再由 Desktop 显式注入。 |
-| 测试 | package 测 contract/domain；Desktop 测 IPC、安全、组合、资源释放和真实用户路径。 |
+| 扩展 | 新领域先建立 owning package contract/application port，再由 Desktop 显式注入。       |
+| 测试 | package 测 contract/domain；Desktop 测 IPC、安全、组合、资源释放和真实用户路径。     |
 
 ## Package 复用
 
-| 能力 | Owner | Desktop 组合方式 |
-| --- | --- | --- |
-| Agent | `packages/agent/{contracts,runtime,webview}` | Main 拥有 session registry 与 Host adapter；renderer 只消费对话投影 |
-| Canvas | `packages/canvas/{domain,node,webview}` | package-owned authoring/host port 与 browser-safe UI |
-| Cut | `packages/cut/{domain,node,webview}` | OTIO/application port、Node/FFmpeg adapter 与 renderer UI |
-| Preview | `packages/preview/{domain,webview}` | 授权只读 session、资源 descriptor 与 browser renderer |
-| Assets/Entity | owning domain packages | ContentLocator、domain facade、Desktop 文件授权和 React surface |
-| Generation/Quality/Character | owning domain packages | 只有建立真实 Desktop入口、adapter 和路径级验收后才成为产品能力 |
-| Shared UI/infra | `@neko/ui`、`@neko/shared`、package-owned L0 contracts | 复用公共入口，不在应用根复制 design system、日志、错误或 DTO |
+| 能力                         | Owner                                                  | Desktop 组合方式                                                    |
+| ---------------------------- | ------------------------------------------------------ | ------------------------------------------------------------------- |
+| Agent                        | `packages/agent/{contracts,runtime,webview}`           | Main 拥有 session registry 与 Host adapter；renderer 只消费对话投影 |
+| Canvas                       | `packages/canvas/{domain,node,webview}`                | package-owned authoring/host port 与 browser-safe UI                |
+| Cut                          | `packages/cut/{domain,node,webview}`                   | OTIO/application port、Node/FFmpeg adapter 与 renderer UI           |
+| Preview                      | `packages/preview/{domain,webview}`                    | 授权只读 session、资源 descriptor 与 browser renderer               |
+| Assets/Entity                | owning domain packages                                 | ContentLocator、domain facade、Desktop 文件授权和 React surface     |
+| Generation/Quality/Character | owning domain packages                                 | 只有建立真实 Desktop入口、adapter 和路径级验收后才成为产品能力      |
+| Shared UI/infra              | `@neko/ui`、`@neko/shared`、package-owned L0 contracts | 复用公共入口，不在应用根复制 design system、日志、错误或 DTO        |
 
 ## 运行时所有权
 

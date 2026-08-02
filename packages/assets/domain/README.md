@@ -1,4 +1,4 @@
-# Neko Assets
+# @neko/assets-domain
 
 Neko Assets owns the Desktop Media Library surface and composes the Creative Entity browser. It does not maintain an Asset catalog or a second semantic identity model.
 
@@ -51,4 +51,5 @@ Library connection unlinks only the managed connection; removing an Asset valida
 owned regular file and moves it to the operating-system trash. Hover previews are static images and
 do not open or autoplay a media session.
 
-Legacy Asset catalog data is handled only by the explicit inspection and migration facilities in `@neko/shared`; normal Neko Assets runtime does not read it.
+Retired Entity Asset graph data is handled only by explicit inspection and migration in
+`@neko/entity-node`; the normal Assets runtime does not read a legacy Asset catalog.

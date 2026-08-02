@@ -20,6 +20,12 @@ Non-trivial features, cross-package work, public contracts, and architecture cha
 OpenSpec artifacts before implementation. Small documentation and local corrections can proceed
 directly but must still follow the current architecture.
 
+Changes to production modules under `apps/*`, `packages/*`, or `packages/*/*` must record the
+owning responsibility, package role, canonical public path, producer/consumer, runtime boundary,
+legacy-path removal conditions, user-data semantics, and validation commands. Internal packages
+use the single `@neko/*` scope. Consumers must use explicit manifest exports instead of importing
+`packages/**/src` or adding legacy scopes, path aliases, or compatibility re-exports.
+
 ## Local Development
 
 Node.js 24+ and pnpm 10 are required.

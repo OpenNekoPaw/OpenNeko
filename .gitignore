@@ -19,26 +19,29 @@
 !.codex/skills/neko-quality-review/
 !.codex/skills/neko-quality-review/**
 
-# 依赖库
+# 依赖库与非 pnpm 锁文件
 node_modules/
 *.dll
 *.so
 *.dylib
+bun.lock
+bun.lockb
+package-lock.json
+npm-shrinkwrap.json
+yarn.lock
 
-# 构建产物
+# 构建产物（适用于一级和两级 package root）
 dist/
 out/
 build/
 .vite/
 
-# 锁文件（pnpm-lock.yaml 必须提交，CI 依赖它）
-bun.lock
-package-lock.json
-
-# 测试
-test/
+# 测试与本地 fixture 产物；不得忽略源码中的 test/ 或 tests/
 test-results/
 playwright-report/
+coverage/
+.nyc_output/
+.test-workspaces/
 
 # 本地测试与评估运行证据（提交稳定摘要，不提交原始运行产物）
 /reports/
@@ -75,19 +78,10 @@ debug-artifacts/
 # Native Node addon build outputs
 *.node
 
-# 测试覆盖率
-tests/
-test/
-coverage/
-.nyc_output/
-
 # 环境变量（保留示例文件）
 .env
 .env.*
 !.env.example
-
-# Bun build artifacts
-*.bun-build
 
 # 系统杂项
 .DS_Store

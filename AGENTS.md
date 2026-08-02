@@ -80,7 +80,7 @@
 - `docs/research/` 放调研、竞品、市场、技术 spike 和 UX 分析；此类文档必须带日期、来源或不确定性说明。
 - `docs/status/` 放带日期的 gap、迁移进度、健康度和审计快照；此类文档不作为长期架构事实来源，也不承担任务管理。
 - `openspec/changes/` 放仍在设计或实施中的变更；稳定结论再提升到 `docs/architecture/` 或 `docs/domains/`。
-- `packages/<pkg>/docs/` 或 `packages/<family>/<role>/docs/` 放只服务某个包的实现、配置和维护说明。
+- `packages/<name>/docs/` 或 `packages/<family>/<role>/docs/` 放只服务某个包的实现、配置和维护说明。
 - 新增或移动文档前，先判断它是系统约束、领域模型、调研分析、当前状态、开发变更还是包私有实现。
 - 不要把领域内部架构放入 `docs/architecture/<domain>/`；应放入 `docs/domains/<domain>/architecture.md`。
 - 不要把实现日志、命令输出、阶段完成记录或临时状态写成架构事实。

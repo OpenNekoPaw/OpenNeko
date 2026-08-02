@@ -23,7 +23,7 @@ OpenNeko is for creators who want control over their project files, model connec
 | Creative Agent     | Desktop project conversations, context, tool use, and controlled content generation |
 | Canvas             | Organize Markdown, media, files, groups, generation Jobs, and Canvas references     |
 | Video Timeline     | Lightweight audio/video arrangement, preview, and Node/FFmpeg export                |
-| Media and Entity   | Browse workspace/global libraries, recover project links, and project Entity media   |
+| Media and Entity   | Browse workspace/global libraries, recover project links, and project Entity media  |
 | Read-only Preview  | Preview common documents, images, audio/video, and supported standard 3D models     |
 
 Available generation and understanding features depend on your configured APIs, model access, and local services.
@@ -84,6 +84,20 @@ The repository now retains only the Electron Desktop build and Forge packaging e
 ## Project Entries
 
 - [OpenNeko Desktop](./apps/neko-desktop/): the sole application composition root for visual creation, editing, preview, and Agent collaboration.
+
+## Repository Layout
+
+- `apps/neko-desktop`: the only Electron application composition root; it owns Host lifecycle, typed IPC, security boundaries, and the product shell.
+- `packages/<family>/<role>`: domain families with independent dependency closures, such as `packages/agent/runtime` and `packages/assets/webview`.
+- `packages/<name>`: single-closure packages such as `packages/media`, `packages/shared`, and `packages/ui`.
+- `quality/`: machine-readable package roles, test ownership, and debt ledgers; it is not a runtime package.
+- `openspec/changes/`: changes still under design or implementation.
+
+All internal packages use the `@neko/*` scope. Grouped packages use
+`@neko/<family>-<role>` and singleton packages use `@neko/<name>`. Legacy scopes, directory aliases,
+and direct `packages/**/src` imports are not supported. See
+[Package roles and naming](./docs/architecture/package-taxonomy.md) and
+[Package boundaries](./docs/architecture/package-boundaries.md).
 
 ## Documentation and Contributing
 

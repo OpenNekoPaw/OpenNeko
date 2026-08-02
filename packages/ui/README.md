@@ -4,28 +4,21 @@
 
 ## Public Entrypoints
 
-| Entrypoint | Responsibility |
-|------------|----------------|
-| `@neko/ui` | Curated Webview UI exports |
-| `@neko/ui/viewport` | Viewport shell, overlays, toolbar, prediction, diagnostics, and semantic workflow test utilities |
-| `@neko/ui/primitives` | Base UI primitives including buttons, overlays, selection, tabs, menus, scroll, and status controls |
-| `@neko/ui/creative` | Creative editor DTOs and PropertyPanel, TreeView, NumberInput, NumberSlider, ColorPicker, ColorSwatch, and keyframe controls |
-| `@neko/ui/icons` | Shared SVG icons and codicon mapping helpers |
-| `@neko/ui/hooks` | React/Webview hooks re-exported from the legacy shared component surface during migration |
-| `@neko/ui/test-utils` | Boundary, a11y, focus, and token assertion helpers |
-
-## Viewport Compatibility
-
-The existing viewport exports remain behavior-compatible during the UI design system migration:
-
-- `ViewportShell`
-- `OverlayRenderer`
-- `ViewportToolbar`
-- `ViewportPredictionLayer`
-- viewport local state reducers and input helpers
-- frame metadata bridge
-- overlay diagnostics helpers
-- semantic viewport workflow test helpers
+| Entrypoint                                               | Responsibility                                                           |
+| -------------------------------------------------------- | ------------------------------------------------------------------------ |
+| `@neko/ui`                                               | Curated browser-safe aggregate entry                                     |
+| `@neko/ui/primitives`, `./shared-primitives`             | Buttons, overlays, selection, tabs, menus, scroll, and status primitives |
+| `@neko/ui/creative`                                      | Property, tree, keyframe, ruler, and seek presentation contracts         |
+| `@neko/ui/icons`, `./icons/codicon.css`                  | Shared SVG icons, codicon mapping helpers, and codicon stylesheet        |
+| `@neko/ui/hooks`                                         | Reusable React/Webview hooks                                             |
+| `@neko/ui/i18n`, `./i18n/react`, `./i18n/webview`        | Host-neutral, React, and DOM-specific i18n entries                       |
+| `@neko/ui/theme`, `./theme/tailwind-preset`              | Theme contracts and tokens; explicit Tailwind preset entry               |
+| `@neko/ui/foundation`                                    | Browser-safe Webview foundation                                          |
+| `@neko/ui/keyboard`, `./keyboard/focus.css`              | Keyboard/focus contracts, dispatcher, and focus stylesheet               |
+| `@neko/ui/markdown`                                      | Markdown presentation components                                         |
+| `@neko/ui/workbench`, `./workbench/editor-workbench.css` | Creative workbench, Host adapter frame, and stylesheet                   |
+| `@neko/ui/error-boundary`                                | Webview error boundary                                                   |
+| `@neko/ui/test-utils`, `@neko/ui/utils`                  | Test assertions and small browser-safe utilities                         |
 
 ## Boundaries
 
@@ -37,4 +30,7 @@ The existing viewport exports remain behavior-compatible during the UI design sy
 
 ## P2 Creative Placeholders
 
-`AssetBrowser` and `MediaTransportControls` remain documented P2 placeholders until a migrated package needs them. `AssetBrowser` must align with the asset federation registry DTOs before gaining a shell. `MediaTransportControls` must be introduced by an owning package adapter so playback, compositor, and engine authority stay outside `@neko/ui`.
+`AssetBrowserPlaceholderProps` and `MediaTransportControlsPlaceholderProps` are type-only planning
+contracts; this package does not export working controls for them. A future implementation requires
+an owning package adapter so library, playback, compositor, and media authority remain outside
+`@neko/ui`.

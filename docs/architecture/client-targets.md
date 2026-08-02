@@ -43,7 +43,7 @@ Linux 只运行 lint、测试、OpenSpec、依赖分析和 browser-safe build �
 - `@neko/shared`、`@neko/host`、`@neko/media`、`@neko/content` 和 `@neko/entity-domain`
   提供当前 Desktop 路径使用的 host-neutral 能力。
 - `@neko/ui` 和一级 Webview package 只提供 browser-safe React UI。
-- Agent、Assets、Canvas、Cut、Preview 和 Generation 由各自一级 package 拥有 contract、
+- Agent、Assets、Canvas、Cut、Preview 和 Generation 由各自 owning package 拥有 contract、
   runtime/node adapter 或 UI；Desktop 通过 public entry 显式注入。
 - `@neko/chara`、`@neko/search-domain` 和 `@neko/quality` 仍是保留 package；
   接入前必须建立真实 Desktop composition、产品入口和路径级验收，不能因 package 存在而

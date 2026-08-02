@@ -82,6 +82,20 @@ pnpm gate:local
 
 - [OpenNeko Desktop](./apps/neko-desktop/)：图形化创作、编辑、预览与 Agent 协作的唯一应用组合根。
 
+## 仓库结构
+
+- `apps/neko-desktop`：唯一 Electron 应用组合根，只拥有宿主生命周期、typed IPC、安全边界和产品 shell。
+- `packages/<family>/<role>`：具有独立依赖闭包的领域家族，例如 `packages/agent/runtime`、`packages/assets/webview`。
+- `packages/<name>`：单一依赖闭包的 package，例如 `packages/media`、`packages/shared`、`packages/ui`。
+- `quality/`：package role、测试 ownership 和债务台账等机器可读治理输入，不是运行时 package。
+- `openspec/changes/`：仍在设计或实施中的变更。
+
+所有内部 package 统一使用 `@neko/*` scope。分组 package 使用
+`@neko/<family>-<role>`，单体 package 使用 `@neko/<name>`；不得通过旧 scope、目录 alias
+或直接导入 `packages/**/src` 绕过 public exports。完整规则见
+[Package 角色与命名](./docs/architecture/package-taxonomy.md)和
+[Package 边界](./docs/architecture/package-boundaries.md)。
+
 ## 文档与参与
 
 - [文档导航](./docs/README.md)
