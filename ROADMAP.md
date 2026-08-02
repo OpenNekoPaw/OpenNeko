@@ -2,13 +2,13 @@
 
 Status: directional roadmap; no release dates are promised.
 
-Updated: 2026-07-31
+Updated: 2026-08-03
 
 This roadmap defines delivery order and qualification gates. Current product facts remain defined by
 [`README.md`](README.md), [`docs/architecture/client-targets.md`](docs/architecture/client-targets.md),
 and the codebase. Phase 1 domain integration is still in progress and Desktop is not a supported
-release product. The sole native package/release target is `darwin-arm64`; macOS has local Forge
-package evidence and a formal Developer ID/notarization release gate. Windows x64 and Linux are
+release product. The sole native package/release target is `darwin-arm64`; macOS has a verified
+ad-hoc DMG prerelease path, while Developer ID/notarization remains a Phase 2 gate. Windows x64 and Linux are
 deterministic test hosts only and produce no Desktop artifact. Intel Mac and other architectures are
 unsupported, and Desktop professional-tool/plugin integrations are not implemented.
 

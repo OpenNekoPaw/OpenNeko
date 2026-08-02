@@ -34,7 +34,8 @@ describe('Desktop architecture boundaries', () => {
     );
     expect(forgeConfig).not.toContain('electron-v43.2.0-win32-');
     expect(forgeConfig).not.toContain('electron-v43.2.0-linux-');
-    expect(forgeConfig).toContain("new MakerZIP({}, ['darwin'])");
+    expect(forgeConfig).toContain("new MakerDMG({}, ['darwin'])");
+    expect(forgeConfig).not.toContain('MakerZIP');
   });
 
   it('strictly configures every Electron V1 fuse', () => {
