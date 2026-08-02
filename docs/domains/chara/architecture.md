@@ -69,6 +69,119 @@ CharacterProject draft 更新不得静默改变已启动运行。
 每个 active CharacterRun 至多映射一个 primary AgentSession。Companion relationship 可以
 顺序创建多个 run/session，但不能通过共享 responder、active tab 或会话参数切换模拟并发实例。
 
+## 产品设计：角色数量 × 互动类型
+
+用户可见体验只暴露角色数量和互动类型两个正交维度：
+
+| 产品预设    | Character topology | Interaction | 运行含义                                                           |
+| ----------- | ------------------ | ----------- | ------------------------------------------------------------------ |
+| 单角色对话  | `single-character` | `dialogue`  | 用户与一个 agent-controlled character 对话                         |
+| 单角色 Play | `single-character` | `play`      | 一个角色代打、陪玩、观战或指导，并绑定可选游戏席位                 |
+| 多角色对话  | `multi-character`  | `dialogue`  | 用户与多个独立 CharacterRun 在同一 revisioned room 中互动          |
+| 多角色 Play | `multi-character`  | `play`      | 多角色共享聊天室与授权游戏 observation，按角色分别绑定游戏参与职责 |
+
+四种预设必须复用同一 participant、room event、AgentSession 和 Activity contract，不能形成四套
+controller、transcript 或 UI store。`Embody Character` 仍是用户扮演一个角色、只读 evaluator
+提供证据反馈的 authoring workflow；它不拥有游戏输入，也不是 Play mode。Play-use 是 Play 内部
+用于观察、决策和控制游戏的技术机制，不是第五种产品模式。
+
+每个 participant 必须携带稳定 participant identity 和显式 controller：human、agent 或
+deterministic system。agent-controlled character 才创建 CharacterRun 与 primary AgentSession；
+human-controlled character 不得同时启动隐藏的角色扮演 Agent。World Director、room coordinator
+和规则裁判使用独立 scope，不伪装成普通 CharacterVersion。
+
+## 房间、配置与回合
+
+Dialogue-only workspace/rehearsal room 可以由 Chara application owner 管理临时互动；正式剧情或
+游戏房间的规则、event、save、branch 和 replay 由 World/Game owner 管理。两者都必须提供唯一
+有序 room timeline；每个 committed event 携带 room、actor、visibility、source turn/action、
+expected revision 和 committed revision。并行模型推理只能产生 provisional intent，公开发言与
+同席位动作按 revision 串行提交。
+
+角色 Agent 配置分成四层：
+
+1. `CharacterVersion`：冻结的 canon、知识边界、对话样例和默认角色 policy；
+2. `CharacterRun` binding：runtime kind、participant policy、memory owner 和 Activity ref；
+3. conversation config：精确 provider/model/parameters、capability 与参与策略 revision；
+4. turn snapshot：当前 turn 冻结的模型、permission、room/memory revision 和授权 observation。
+
+CharacterProject 更新不得改变 active run。runtime kind、CharacterVersion 或 memory owner 变化
+必须创建新 run 或显式 binding transaction；conversation/model 参数修改只能影响后续 turn。
+每个 agent-controlled participant 独立拥有上述配置和 AgentSession，不能通过共享 responder 后
+切换 profile/model 模拟多个角色。
+
+Room/World/Game owner 必须先按 participant visibility、team/seat、save/branch、actor knowledge
+和 owner revision 过滤 observation。角色只接收当前回合的不可变 view；密聊、隐藏身份、未感知
+事件和其他席位的 private state 不得因共享房间、语义相似或模型常识进入上下文。
+
+## 技术概念：LLM、VLA、记忆与上下文
+
+Play 使用分层智能，不要求一个模型同时承担长程策略、角色表达和每帧控制：
+
+```text
+CharacterVersion + authorized memory/context
+  -> LLM / AgentSession
+       roleplay + rules + strategy + collaboration + long-horizon goal
+  -> VLA / low-latency control policy
+       cropped observation + short goal -> bounded action chunk
+  -> Game Activity verifier
+       state/outcome/revision -> replan or commit
+```
+
+- LLM 拥有当前 AgentSession 的角色表达、规则理解、长期目标、策略、队友沟通、记忆查询、
+  上下文压缩和重规划；不直接拥有游戏事实或 Host 输入。
+- VLA（Vision-Language-Action）或等价 control policy 负责实时游戏的短时视觉到动作闭环；
+  只接收裁剪 observation、短期 goal、允许 action space 和 stop condition，不拥有 Character canon、
+  relationship memory、room timeline 或 game save。
+- Game Activity owner 校验 action、seat、state、expected revision 和 outcome；模型生成的动作在
+  owner 接受前只是 provisional intent。
+
+不同游戏类型复用同一层级，但选择不同路径：
+
+| 游戏类型           | 主要输入/动作                       | 模型与运行重点                                                   |
+| ------------------ | ----------------------------------- | ---------------------------------------------------------------- |
+| 回合制/策略游戏    | 结构化 state、规则、离散合法 action | LLM 长程规划为主，VLA 可选；每回合由 Game owner 校验             |
+| 实时/动作游戏      | 连续画面、手柄/键鼠 action chunk    | VLA/低延迟 policy 负责短时闭环，LLM 只在事件/目标/失败边界重规划 |
+| 多人/合作/对抗游戏 | seat、team、visibility、room event  | 独立 AgentSession、逐席位 lease、私有观察过滤与有序协作          |
+
+角色记忆、游戏经验和运行上下文必须分离：
+
+| 信息                                    | Owner                                        |
+| --------------------------------------- | -------------------------------------------- |
+| 角色 canon、知识边界、说话方式          | CharacterVersion                             |
+| 剧情/日常长期记忆                       | NarrativeSave / UserCharacterRelationship    |
+| conversation transcript/compaction      | AgentSession                                 |
+| 当前游戏状态、规则进度、胜负和存档      | Game / World owner                           |
+| 规则摘要、动作语义、示范和 episode 结果 | Game Activity experience/playbook projection |
+| 当前回合的预算化上下文                  | 可重建 Context Materializer snapshot         |
+
+Context Materializer 固定按以下顺序组合并保留 source identity/revision：冻结 profile → 授权剧情/
+关系 memory view → 游戏规则与 playbook → room/team/private event view → 当前 game observation →
+当前 goal、permission、model 与 control-lease receipt。LLM 接收预算化文本/结构化 context；VLA
+只接收短时控制所需 context。原始连续帧不进入 durable transcript，Agent compaction 也不能升级为
+角色或游戏事实。
+
+## 跨游戏快速学习
+
+Play 的目标是跨新游戏快速适应，不是为每款游戏训练专用模型。Game Activity 使用通用、版本化
+`GameCapabilityProfile` 描述：
+
+- observation：structured、pixels 或 hybrid；
+- action space：semantic、discrete、continuous 或 text；
+- timing：turn-based 或 realtime；
+- seat、team、visibility、reset/checkpoint、verification 和 target qualification。
+
+Profile 只描述接口和约束，不包含固定坐标宏、按游戏名称分支的 Character controller 或私有模型
+权重。新游戏的 canonical adaptation path 是：识别并资格化目标 → 检索授权规则/教程 → 在教程、
+训练场或安全 checkpoint 校准 observation/action → 可选记录少量用户示范 → LLM 生成初始策略 →
+VLA/control policy 进行有限试玩 → verifier 评估 outcome → 保存可删除、带版本和来源的 episode
+experience。后续 session 通过 retrieval 与 in-context demonstration 复用经验，常规接入不重新
+训练模型。
+
+game/version/UI/action fingerprint 不兼容时，旧 experience 必须失效并重新校准。无法在 step、
+延迟、安全和验证预算内适应时，只能保持 commentator/coach、assisted/needs-review 或 unavailable，
+不能通过无限探索、静默输入或伪造“已学会”返回成功。
+
 ## 对话记忆作用域
 
 对话在创建时绑定且仅绑定一个 memory scope：
@@ -207,6 +320,45 @@ CompanionRun
 Chara 不拥有媒体播放、游戏状态、设备 handle、任意输入控制或外部应用状态，只保存稳定
 Activity ref、参与策略和经筛选的记忆候选。
 
+Play-use 是 CharacterRun 参与 Game Activity 的能力，不是 Character Dialogue 增加键鼠权限。
+角色参与职责固定为：
+
+| Play-use role | 权限与用途                                                              |
+| ------------- | ----------------------------------------------------------------------- |
+| `commentator` | 只观察并参与聊天室，不提交游戏动作                                      |
+| `coach`       | 分析局面并给出建议，不持有控制 lease                                    |
+| `co-player`   | 控制一个明确、独立的游戏席位                                            |
+| `delegate`    | 在用户明确授权期间临时控制用户席位，用户可随时 Pause、Stop 或 Take over |
+
+Play-use canonical path 固定为：
+
+```text
+CharacterRun
+  -> primary AgentSession
+  -> typed Tool Call / Game Activity request
+  -> Game Activity owner
+  -> structured adapter or qualified ComputerUseSession
+  -> Desktop Host target/observation/input port
+```
+
+每个可写游戏席位同时最多一个 controller lease。多角色存在不自动授予多个 Agent 输入权；
+commentator/coach 永远只读，co-player 必须绑定独立 seat，delegate 使用可撤销的用户 seat lease。
+控制交接携带 ActivitySession、seat、controller 和 expected revision 并原子提交。用户输入、接管、
+目标窗口/进程失配、焦点或权限变化必须暂停控制；恢复前重新验证 target 和 pending action。
+
+Game Activity/adapter 拥有游戏语义、允许动作、席位、状态、完成判断和 verification；Desktop Host
+只拥有精确 app/process/window binding、授权截图/region、聚焦和输入原语。Computer Use 必须是
+预先选择并资格化的 transport，执行有限的 `observe -> validate target -> propose -> approve ->
+act -> observe -> verify` 循环，携带 timeout、step budget、action traits 和 evidence policy；API、
+adapter 或 target 失败不得静默切换为任意键鼠控制。用户可见 UI 必须持续投影 Pause、Stop 和
+Take over。
+
+普通 bounded Character Dialogue 使用精确 `character.dialogue` purpose。Play 分别解析完整
+AgentSession 的 `game.plan` LLM、可选 `game.observe` perception model 与 `game.control` VLA/control
+model；同一多模态模型可以承担多个 role，但 receipt 必须记录每个 purpose 的确切 provider、model
+和 parameters。UI 的 fast/balanced/powerful 只能是 preset。缺失 capability、credential 或 binding
+时返回 unavailable diagnostic，不回退另一 participant、其他 purpose 或 first-compatible model。
+
 剧情有效能力使用 Host permission、workspace trust、CharacterVersion policy、World binding
 policy 与 NarrativeRun scope 的交集；日常有效能力使用 Host permission、workspace trust、
 CharacterVersion policy、relationship policy 与 Activity scope 的交集。任何层只能收窄授权。
@@ -219,6 +371,7 @@ CharacterVersion policy、relationship policy 与 Activity scope 的交集。任
 | 剧情事件、关系、分支和用户互动      | NarrativeSave / WorldSave            |
 | 日常跨会话长期互动记忆              | UserCharacterRelationship            |
 | 当前短期上下文与未提交候选          | NarrativeCharacterRun / CompanionRun |
+| 游戏规则、状态、存档和可重建经验    | Game / World / Activity owner        |
 | embedding、压缩、索引和召回排序     | 可重建 Memory infrastructure         |
 | transcript、Tool Call 与 compaction | AgentSession                         |
 
@@ -312,7 +465,10 @@ ports。不得恢复 Dashboard evidence reader、宽泛 workspace 搜索、Agent
 fallback。Search 成功但没有角色场景是合法空证据；Entity/Search 等必需依赖失败必须终止
 当前启动或回合，并且不得调用 responder。
 
-角色模型选择与证据检索是两条独立契约。角色用途使用全局 `character.dialogue` / `character.profile` 精确绑定；Chara 不复制 Agent 会话级模型切换状态，也不在绑定或证据失败时回退 Agent/default model。
+角色模型选择与证据检索是两条独立契约。bounded 角色用途使用 `character.dialogue` /
+`character.profile` 精确绑定；完整 CharacterRun 的 participant/conversation override 由 Agent owner
+解析并冻结为 turn snapshot。Chara 不复制 provider registry、credential 或 Agent 会话级可变模型
+状态，也不在绑定、capability 或证据失败时回退 Agent/default model。
 
 ## 错误与演进边界
 
@@ -327,4 +483,5 @@ fallback。Search 成功但没有角色场景是合法空证据；Entity/Search 
   作为 Character 长期记忆 authority；它们分别属于 Workspace Memory、AgentSession 或临时
   scratchpad。
 - CharacterProject/Version、NarrativeSave/World、UserCharacterRelationship、持久恢复、
-  Companion Activity 和独立 Webview 未实现时必须 fail-visible。
+  Companion Activity、多人 room、Play-use、Game/Device/Computer Use Host port 和独立 Webview
+  未实现或未经真实平台/游戏版本资格验证时必须 fail-visible。

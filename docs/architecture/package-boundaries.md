@@ -4,7 +4,7 @@
 
 更新日期：2026-08-01
 对应变更：`replace-desktop-media-scheme-with-http-resource-gateway`、
-`enforce-thin-desktop-application-root`
+`enforce-thin-desktop-application-root`、`define-character-chatroom-play-use`
 
 本文定义当前一级 workspace 的依赖方向、公共能力 owner，以及 Electron Desktop 和
 Node/FFmpeg 媒体运行时的边界。包名、入口和示例只描述当前 Electron Desktop 实现。
@@ -243,6 +243,32 @@ Agent、Renderer、Device、表现 runtime 和 host adapter。`neko-agent` 不�
 Character core 不导入 World 私有实现；运行期环境交互通过窄 port 或 host-owned adapter 组合。
 
 角色只拥有说话、动作、表情、移动意图、感知、交互 affordance 和个体行为策略；地图、目标、任务、战斗、经济、成长、事件调度和整体胜负状态归 World。当前缺失的 Character Project/Version、World、Device/Live、Scene/Puppet 和持久 2D/3D 路径必须保持 fail-visible，不能因为基础 package 已建立就宣称支持。
+
+角色互动体验按 `single-character | multi-character` topology 与 `dialogue | play` interaction
+两个维度组合成单角色对话、多角色对话、单角色 Play 和多角色 Play 四个产品预设。Play-use 只是
+Play 的内部执行机制。预设只组合共享 contract，不建立四套
+session/controller。每个 agent-controlled character 映射独立 CharacterRun 和 primary
+AgentSession；room 只共享带 actor/visibility/revision 的有序 event projection，不共享 responder、
+transcript、模型配置或 memory view。human-controlled participant 不创建隐藏角色 Agent。
+
+Play-use 表示角色通过 Game Activity 进行代打、陪玩、观战或指导。`commentator` / `coach` 只读，
+`co-player` / `delegate` 必须绑定明确 ActivitySession、seat 和 per-seat exclusive control lease；
+同一 seat 不得由多个 Agent 并发输入。Game/World owner 拥有规则、状态、席位、动作验证和结果，
+Desktop Host 拥有精确 app/process/window binding、OS 权限、授权 observation 与输入原语，Chara
+只拥有角色参与策略、稳定 Activity ref 和经筛选的记忆候选。Computer Use 只能作为显式、资格化、
+有 step budget 且可 Pause/Stop/Take over 的 transport，不能在 adapter/API 失败后静默接管键鼠。
+
+Play 的模型分工固定为：LLM/AgentSession 负责角色表达、规则理解、长期策略、协作、记忆和上下文
+编排；VLA 或等价低延迟 control policy 负责实时游戏的短时 observation-to-action chunk；Game
+Activity owner 负责 action/state/revision/outcome 验证。回合制策略游戏可以只用结构化 LLM
+planning，实时动作游戏使用 VLA 短时闭环，多人游戏增加 seat/team/visibility 和 room coordination，
+但都复用同一 Activity contract。
+
+新游戏通过 versioned GameCapabilityProfile、规则/教程检索、安全校准、可选用户示范、有限 episode
+试玩、结果验证和 retrieval/in-context experience 快速适应。Game-specific adapter 只表达目标、
+observation/action/verification seam；Chara、Agent 和 Desktop 不得按游戏名称增加专用 controller，
+常规接入不得要求重新训练基础模型。游戏经验属于 Game Activity 的可重建 projection，不得写入
+CharacterVersion、relationship memory 或 Agent compaction。
 
 角色创作与运行使用以下 canonical split：
 
