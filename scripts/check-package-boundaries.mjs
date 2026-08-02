@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { existsSync } from 'node:fs';
 import { readdir, readFile, stat } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import path from 'node:path';
@@ -10,8 +11,9 @@ const require = createRequire(import.meta.url);
 const ts = require('typescript');
 const exceptionPath = 'quality/ledgers/package-boundary-exceptions.json';
 const dependencySections = ['dependencies', 'optionalDependencies', 'peerDependencies'];
+const manifestDependencySections = [...dependencySections, 'devDependencies'];
 
-export function inspectPackageManifestBoundary(entry, familySize = 1) {
+export function inspectPackageManifestBoundary(entry) {
   const findings = [];
   const exports = entry.manifest.exports;
   if (exports && typeof exports === 'object' && !Array.isArray(exports)) {
@@ -29,38 +31,73 @@ export function inspectPackageManifestBoundary(entry, familySize = 1) {
     }
   }
 
-  const expectedPath = expectedPackagePath(entry.manifest.name);
-  if (expectedPath && expectedPath !== entry.path) {
+  const expectedName = expectedPackageName(entry.path);
+  if (expectedName && expectedName !== entry.manifest.name) {
     findings.push(
       finding(
         'package-directory-identity',
         `${entry.path}/package.json`,
-        `${entry.manifest.name} -> ${expectedPath}`,
-        'Package name and first-level directory identity must correspond.',
+        `${entry.path} -> ${entry.manifest.name}`,
+        `Canonical package path must declare ${expectedName}.`,
       ),
     );
   }
-  if (!entry.manifest.name.startsWith('@neko')) {
+  if (!entry.manifest.name.startsWith('@neko/')) {
     findings.push(
       finding(
         'package-name-policy',
         `${entry.path}/package.json`,
         entry.manifest.name,
-        'Workspace package names must use the @neko infrastructure or @neko-<domain> family scope.',
+        'Workspace package names must use the single @neko/* scope.',
       ),
     );
   }
-  if (
-    familySize > 1 &&
-    !entry.manifest.name.startsWith(`@neko-${entry.family}/`) &&
-    !['shared', 'ui', 'host', 'media'].includes(entry.family)
-  ) {
+  if (entry.path.startsWith('packages/neko-')) {
     findings.push(
       finding(
-        'package-family-identity',
+        'package-path-policy',
         `${entry.path}/package.json`,
-        `${entry.family}:${entry.manifest.name}`,
-        'Multi-package domain families must use @neko-<domain>/<role> identities.',
+        entry.path,
+        'Workspace package paths must not repeat the neko- prefix.',
+      ),
+    );
+  }
+  for (const section of manifestDependencySections) {
+    for (const dependency of Object.keys(entry.manifest[section] ?? {})) {
+      if (/^@neko-[a-z0-9-]+\//u.test(dependency)) {
+        findings.push(
+          finding(
+            'legacy-package-identity',
+            `${entry.path}/package.json`,
+            dependency,
+            'Workspace dependencies must not use a legacy multi-scope package identity.',
+          ),
+        );
+      }
+    }
+  }
+  return findings;
+}
+
+export function inspectLegacyPackageNaming({ path: entryPath, source }) {
+  const findings = [];
+  for (const match of source.matchAll(/@neko-[a-z0-9-]+\/[a-z0-9._/-]+/gu)) {
+    findings.push(
+      finding(
+        'legacy-package-identity',
+        entryPath,
+        match[0],
+        'Executable source and current configuration must use the single @neko/* scope.',
+      ),
+    );
+  }
+  for (const match of source.matchAll(/packages\/neko-[a-z0-9-*]+/gu)) {
+    findings.push(
+      finding(
+        'legacy-package-path',
+        entryPath,
+        match[0],
+        'Executable source and current configuration must use canonical package roots.',
       ),
     );
   }
@@ -105,13 +142,7 @@ export function inspectCanonicalPathFixture({ path: entryPath, legacyFallbackRet
 export async function inspectPackageBoundaries(root = repositoryRoot) {
   const catalog = JSON.parse(await readFile(path.join(root, 'quality/package-roles.json'), 'utf8'));
   const packageEntries = await readPackageEntries(root, catalog);
-  const familySizes = new Map();
-  for (const entry of catalog.packages) {
-    familySizes.set(entry.family, (familySizes.get(entry.family) ?? 0) + 1);
-  }
-  const findings = packageEntries.flatMap((entry) =>
-    inspectPackageManifestBoundary(entry, familySizes.get(entry.family) ?? 1),
-  );
+  const findings = packageEntries.flatMap((entry) => inspectPackageManifestBoundary(entry));
   const workspaceByName = [...packageEntries].sort(
     (left, right) => right.manifest.name.length - left.manifest.name.length,
   );
@@ -121,6 +152,7 @@ export async function inspectPackageBoundaries(root = repositoryRoot) {
     for (const file of await findFiles(sourceRoot, isProductionSource)) {
       const source = await readFile(file, 'utf8');
       const relativeFile = repositoryPath(root, file);
+      findings.push(...inspectLegacyPackageNaming({ path: relativeFile, source }));
       for (const specifier of extractImportSpecifiers(source)) {
         const target = workspaceByName.find(
           (candidate) =>
@@ -174,10 +206,17 @@ export async function inspectPackageBoundaries(root = repositoryRoot) {
 
   const appEntry = await readApplicationEntry(root);
   if (appEntry) {
+    findings.push(
+      ...inspectLegacyPackageNaming({
+        path: `${appEntry.path}/package.json`,
+        source: JSON.stringify(appEntry.manifest),
+      }),
+    );
     const sourceRoot = path.join(root, appEntry.path, 'src');
     for (const file of await findFiles(sourceRoot, isProductionSource)) {
       const source = await readFile(file, 'utf8');
       const relativeFile = repositoryPath(root, file);
+      findings.push(...inspectLegacyPackageNaming({ path: relativeFile, source }));
       for (const specifier of extractImportSpecifiers(source)) {
         const target = workspaceByName.find(
           (candidate) =>
@@ -229,6 +268,7 @@ export async function inspectPackageBoundaries(root = repositoryRoot) {
   for (const file of configFiles) {
     const source = await readFile(file, 'utf8');
     const relativeFile = repositoryPath(root, file);
+    findings.push(...inspectLegacyPackageNaming({ path: relativeFile, source }));
     for (const target of extractConfigurationSourceTargets(file, source)) {
       const resolved = resolveConfigurationTarget(file, target);
       const packageSource = resolved && packageSourcePath(root, resolved);
@@ -245,6 +285,13 @@ export async function inspectPackageBoundaries(root = repositoryRoot) {
         );
       }
     }
+  }
+
+  for (const file of await findNamingConfigurationFiles(root)) {
+    const source = await readFile(file, 'utf8');
+    findings.push(
+      ...inspectLegacyPackageNaming({ path: repositoryPath(root, file), source }),
+    );
   }
 
   const deduplicated = [
@@ -326,10 +373,10 @@ async function readExceptionLedger(root) {
   }
 }
 
-function expectedPackagePath(name) {
-  const scoped = /^@([^/]+)\/(.+)$/u.exec(name);
-  if (scoped) return `packages/${scoped[1]}-${scoped[2]}`;
-  if (/^[a-z0-9][a-z0-9-]*$/u.test(name)) return `packages/${name}`;
+function expectedPackageName(packagePath) {
+  const segments = packagePath.split('/');
+  if (segments.length === 2) return `@neko/${segments[1]}`;
+  if (segments.length === 3) return `@neko/${segments[1]}-${segments[2]}`;
   return undefined;
 }
 
@@ -353,20 +400,25 @@ function resolvePrivateSourceImport(root, sourceFile, specifier) {
     const resolved = path.resolve(path.dirname(sourceFile), specifier);
     return packageSourcePath(root, resolved);
   }
-  const match = /(?:^|\/)packages\/([^/]+)\/src(?:\/|$)/u.exec(specifier);
-  return match ? `packages/${match[1]}/src/` : undefined;
+  const match = /(?:^|\/)(packages\/[^/]+(?:\/[^/]+)?\/src)(?:\/|$)/u.exec(specifier);
+  return match ? `${match[1]}/` : undefined;
 }
 
 function packageSourcePath(root, target) {
   const relative = repositoryPath(root, target);
-  const match = /^packages\/([^/]+)\/src(?:\/|$)/u.exec(relative);
-  return match ? `packages/${match[1]}/src/` : undefined;
+  const match = /^(packages\/[^/]+(?:\/[^/]+)?\/src)(?:\/|$)/u.exec(relative);
+  return match ? `${match[1]}/` : undefined;
 }
 
 function packageOwnerPath(root, file) {
   const relative = repositoryPath(root, file);
-  const match = /^(packages\/[^/]+|apps\/[^/]+)(?:\/|$)/u.exec(relative);
-  return match?.[1];
+  const appMatch = /^(apps\/[^/]+)(?:\/|$)/u.exec(relative);
+  if (appMatch) return appMatch[1];
+  const segments = relative.split('/');
+  if (segments[0] !== 'packages') return undefined;
+  const sourceIndex = segments.indexOf('src');
+  if (sourceIndex !== 2 && sourceIndex !== 3) return undefined;
+  return segments.slice(0, sourceIndex).join('/');
 }
 
 async function findConfigurationFiles(root) {
@@ -381,6 +433,21 @@ async function findConfigurationFiles(root) {
     );
   }
   return files;
+}
+
+async function findNamingConfigurationFiles(root) {
+  const rootFiles = [
+    '.dependency-cruiser.cjs',
+    'eslint.config.mjs',
+    'knip.config.ts',
+    'package.json',
+    'pnpm-workspace.yaml',
+    'tsconfig.json',
+  ].map((file) => path.join(root, file));
+  return [
+    ...rootFiles.filter((file) => existsSync(file)),
+    ...(await findFiles(path.join(root, '.github', 'workflows'), (file) => /\.ya?ml$/u.test(file))),
+  ];
 }
 
 function extractConfigurationSourceTargets(file, source) {

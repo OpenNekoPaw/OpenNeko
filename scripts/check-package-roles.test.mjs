@@ -3,8 +3,8 @@ import { describe, it } from 'node:test';
 import { validatePackageRoleCatalog } from './check-package-roles.mjs';
 
 const validPackage = {
-  path: 'packages/neko-example-domain',
-  name: '@neko-example/domain',
+  path: 'packages/example/domain',
+  name: '@neko/example-domain',
   family: 'example',
   roles: ['contracts', 'domain'],
   runtimes: ['host-neutral'],
@@ -13,7 +13,7 @@ const validPackage = {
 };
 
 describe('package role catalog', () => {
-  it('accepts an exact first-level workspace inventory', () => {
+  it('accepts a canonical grouped workspace inventory', () => {
     assert.deepEqual(
       validatePackageRoleCatalog({ version: 1, packages: [validPackage] }, [
         { path: validPackage.path, name: validPackage.name },
@@ -38,7 +38,7 @@ describe('package role catalog', () => {
       },
       [
         { path: validPackage.path, name: validPackage.name },
-        { path: 'packages/neko-missing', name: '@neko/missing' },
+        { path: 'packages/missing', name: '@neko/missing' },
       ],
     );
 
@@ -49,5 +49,24 @@ describe('package role catalog', () => {
     );
     assert.ok(findings.some((finding) => finding.includes('does not match manifest name')));
     assert.ok(findings.some((finding) => finding.includes('missing from role catalog')));
+  });
+
+  it('rejects legacy scopes, redundant prefixes and path/name mismatches', () => {
+    const findings = validatePackageRoleCatalog(
+      {
+        version: 1,
+        packages: [
+          {
+            ...validPackage,
+            path: 'packages/neko-example-domain',
+            name: '@neko-example/domain',
+          },
+        ],
+      },
+      [{ path: 'packages/neko-example-domain', name: '@neko-example/domain' }],
+    );
+
+    assert.ok(findings.some((finding) => finding.includes('redundant packages/neko-*')));
+    assert.ok(findings.some((finding) => finding.includes('single @neko/* scope')));
   });
 });

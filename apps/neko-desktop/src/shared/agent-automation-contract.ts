@@ -1,8 +1,8 @@
-import type { DesktopAgentConnectionIdentity } from '@neko-agent/contracts';
+import type { DesktopAgentConnectionIdentity } from '@neko/agent-contracts';
 import {
   parseDesktopAgentNeutralFacts,
   type DesktopAgentNeutralFacts,
-} from '@neko-agent/contracts';
+} from '@neko/agent-contracts';
 
 export const DESKTOP_AGENT_AUTOMATION_VERSION = 1 as const;
 export const DESKTOP_AGENT_AUTOMATION_CHANNEL =

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { loadDesktopAgentWebviewRootModule } from './desktop-agent-module';
 
-vi.mock('@neko-agent/webview/root', () => ({
+vi.mock('@neko/agent-webview/root', () => ({
   AgentWebviewRoot: vi.fn(),
 }));
 

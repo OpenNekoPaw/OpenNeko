@@ -6,9 +6,9 @@ import {
   createAgentContentEffects,
   type AgentContentInteractionPort,
   type AgentHostRouteEffectContext,
-} from '@neko-agent/runtime/runtime/host-controller';
+} from '@neko/agent-runtime/runtime/host-controller';
 import type { ILogger } from '@neko/shared/logger';
-import type { AssetWorkspaceResolution } from '@neko-assets/domain/contracts';
+import type { AssetWorkspaceResolution } from '@neko/assets-domain/contracts';
 import { createElectronNekoHostPorts } from './electron-host-ports';
 
 const temporaryDirectories: string[] = [];

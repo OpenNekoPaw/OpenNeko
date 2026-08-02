@@ -7,7 +7,7 @@ import {
   type AuthPrompt,
   type PersistedUserCredential,
   type UserCredentialPersistence,
-} from '@neko-agent/runtime/pi';
+} from '@neko/agent-runtime/pi';
 import type { HostSecretPort } from '@neko/host/ports';
 
 const CREDENTIAL_SECRET_KEY_PREFIX = 'openneko.agent.pi.credential.v1:';

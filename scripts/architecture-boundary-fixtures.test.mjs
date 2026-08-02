@@ -5,6 +5,7 @@ import { checkApplicationBoundaries } from './check-application-boundaries.mjs';
 import {
   inspectApplicationResponsibility,
   inspectCanonicalPathFixture,
+  inspectLegacyPackageNaming,
   reconcileBoundaryExceptions,
 } from './check-package-boundaries.mjs';
 import { validatePackageRoleCatalog } from './check-package-roles.mjs';
@@ -28,17 +29,29 @@ describe('architecture boundary failing fixtures', () => {
     const rules = new Map(dependencyConfig.forbidden.map((rule) => [rule.name, rule]));
     const domainRule = rules.get('domain-no-webview-runtime');
     const contractRule = rules.get('contracts-no-runtime-implementation');
-    assert.ok(new RegExp(domainRule.from.path).test('packages/neko-cut-domain/src/index.ts'));
-    assert.ok(new RegExp(domainRule.to.path).test('packages/neko-cut-webview/src/root.tsx'));
-    assert.ok(new RegExp(contractRule.from.path).test('packages/neko-agent-contracts/src/index.ts'));
-    assert.ok(new RegExp(contractRule.to.path).test('packages/neko-agent-runtime/src/index.ts'));
+    assert.ok(new RegExp(domainRule.from.path).test('packages/cut/domain/src/index.ts'));
+    assert.ok(new RegExp(domainRule.to.path).test('packages/cut/webview/src/root.tsx'));
+    assert.ok(new RegExp(contractRule.from.path).test('packages/agent/contracts/src/index.ts'));
+    assert.ok(new RegExp(contractRule.to.path).test('packages/agent/runtime/src/index.ts'));
   });
 
   it('rejects package-role omissions', () => {
     const findings = validatePackageRoleCatalog({ version: 1, packages: [] }, [
-      { path: 'packages/neko-missing', name: '@neko/missing' },
+      { path: 'packages/missing/domain', name: '@neko/missing-domain' },
     ]);
     assert.ok(findings.some((finding) => finding.includes('missing from role catalog')));
+  });
+
+  it('rejects legacy package scopes and redundant physical paths in executable inputs', () => {
+    const findings = inspectLegacyPackageNaming({
+      path: 'vite.config.ts',
+      source:
+        "import '@neko-example/runtime'; const source = 'packages/neko-example-runtime/src';",
+    });
+    assert.deepEqual(
+      findings.map((finding) => finding.rule),
+      ['legacy-package-identity', 'legacy-package-path'],
+    );
   });
 
   it('rejects business ownership in apps and successful legacy fallbacks', () => {

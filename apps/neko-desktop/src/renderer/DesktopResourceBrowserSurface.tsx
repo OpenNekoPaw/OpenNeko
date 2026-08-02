@@ -10,12 +10,12 @@ import { createElectronResourceBrowserHostRuntime } from './desktop-resource-bro
 import { useDesktopApplicationSettings } from './application-settings-context';
 
 const ResourceBrowserRoot = lazy(async () => {
-  const module = await import('@neko-assets/webview/resource-browser/root');
+  const module = await import('@neko/assets-webview/resource-browser/root');
   return { default: module.ResourceBrowserRoot };
 });
 
 const QuickPreviewSurface = lazy(async () => {
-  const module = await import('@neko-preview/webview/root');
+  const module = await import('@neko/preview-webview/root');
   return { default: module.QuickPreviewSurface };
 });
 

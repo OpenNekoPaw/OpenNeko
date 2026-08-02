@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { NodeExecutionEnv } from '@earendil-works/pi-agent-core/node';
-import { PiSkillHost } from '../../../packages/neko-agent-runtime/src/pi/skill-host.ts';
+import { PiSkillHost } from '../../../packages/agent/runtime/src/pi/skill-host.ts';
 import { discoverSuites } from './discovery.mjs';
 import { EXPECTED_BUILTIN_SKILLS, loadCoverageIndex } from './coverage-index.mjs';
 
@@ -14,7 +14,7 @@ describe('Agent Evaluation coverage index', () => {
         isTrusted: () => true,
         isEnabled: () => true,
       }).discover([
-        { path: 'packages/neko-skills/skills', source: { kind: 'builtin' } },
+        { path: 'packages/skills/skills', source: { kind: 'builtin' } },
       ])
     ).records;
     await env.cleanup();

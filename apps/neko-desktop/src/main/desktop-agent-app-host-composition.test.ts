@@ -16,12 +16,12 @@ import {
   NodePiConversationCatalogReader,
   resolveAgentModelPolicy,
   type PiProductAgentEvent,
-} from '@neko-agent/runtime/pi';
+} from '@neko/agent-runtime/pi';
 import {
   EFFECTIVE_AGENT_CONFIG_DIMENSIONS,
   type Tool,
   type EffectiveAgentConfigurationProjection,
-} from '@neko-agent/contracts';
+} from '@neko/agent-contracts';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   createDesktopAgentAppHostComposition,
@@ -30,7 +30,7 @@ import {
   type DesktopAgentTurnConfigurationSnapshot,
 } from './desktop-agent-app-host-composition';
 import { createDesktopAgentCredentialRuntime } from './desktop-agent-credential-runtime';
-import type { AssetWorkspaceResolution } from '@neko-assets/domain/contracts';
+import type { AssetWorkspaceResolution } from '@neko/assets-domain/contracts';
 import type { DesktopExtensionCatalogSnapshot } from './desktop-extension-manager';
 
 const MODEL: Model<'openai-completions'> = {

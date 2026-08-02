@@ -6,7 +6,7 @@ import type {
   CanvasHostSnapshot,
   CanvasMaterialActionResolution,
   CanvasMaterialActionResolutionRequest,
-} from '@neko-canvas/domain';
+} from '@neko/canvas-domain';
 import type {
   HtmlAudioDescriptor,
   HtmlVideoDescriptor,

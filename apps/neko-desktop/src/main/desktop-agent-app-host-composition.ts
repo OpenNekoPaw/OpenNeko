@@ -25,22 +25,22 @@ import {
   type PiToolRunIdentity,
   type SkillSourceRoot,
   type SkillSourceKind,
-} from '@neko-agent/runtime/pi';
+} from '@neko/agent-runtime/pi';
 import {
   createConversationProjectionStore,
   type ConversationProjectionListener,
   type ConversationProjectionStore,
-} from '@neko-agent/runtime/conversation-projection';
-import { createToolRegistry } from '@neko-agent/runtime/tool-registry';
-import { createHostAgentContentAccessRuntime } from '@neko-agent/runtime/runtime';
-import { createContentReadCapabilityProvider } from '@neko-agent/runtime';
+} from '@neko/agent-runtime/conversation-projection';
+import { createToolRegistry } from '@neko/agent-runtime/tool-registry';
+import { createHostAgentContentAccessRuntime } from '@neko/agent-runtime/runtime';
+import { createContentReadCapabilityProvider } from '@neko/agent-runtime';
 import {
   createNodeDocumentAccessService,
   createNodeDocumentLowLevelAccess,
 } from '@neko/content/document/node';
-import { TOOL_NAMES_QUALITY, type IToolRegistry } from '@neko-agent/contracts';
+import { TOOL_NAMES_QUALITY, type IToolRegistry } from '@neko/agent-contracts';
 import { createNodeHostContentReadService } from '@neko/content/node';
-import type { EffectiveAgentConfigurationProjection } from '@neko-agent/contracts';
+import type { EffectiveAgentConfigurationProjection } from '@neko/agent-contracts';
 import type {
   DesktopAgentHomeActivitySummary,
   DesktopAgentHomeAttentionStatus,
@@ -48,8 +48,8 @@ import type {
   DesktopAgentHomeProjection,
 } from '../shared/shell-contract';
 import type { DesktopAgentCredentialRuntime } from './desktop-agent-credential-runtime';
-import { resolveWorkspaceContentLocator } from '@neko-assets/node';
-import type { AssetWorkspaceResolution } from '@neko-assets/domain/contracts';
+import { resolveWorkspaceContentLocator } from '@neko/assets-node';
+import type { AssetWorkspaceResolution } from '@neko/assets-domain/contracts';
 import type {
   DesktopExtensionCatalogSnapshot,
   DesktopExtensionRuntimeReadiness,

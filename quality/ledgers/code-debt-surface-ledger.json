@@ -35,35 +35,35 @@
   "requiredCoverage": [
     {
       "id": "REQ-LCDR-001",
-      "pathPattern": "packages/neko-shared/src/types/storyboard-table.ts",
+      "pathPattern": "packages/shared/src/types/storyboard-table.ts",
       "ledgerEntryId": "LCDR-001",
       "allowRemovedEntry": true
     },
     {
       "id": "REQ-LCDR-002",
-      "pathPattern": "packages/neko-shared/src/types/asset/manifest.ts",
+      "pathPattern": "packages/shared/src/types/asset/manifest.ts",
       "ledgerEntryId": "LCDR-002",
       "allowRemovedEntry": true
     },
     {
       "id": "REQ-LCDR-003",
-      "pathPattern": "packages/neko-local-metadata/src/storage.ts",
+      "pathPattern": "packages/local-metadata/src/storage.ts",
       "ledgerEntryId": "LCDR-003"
     },
     {
       "id": "REQ-LCDR-004",
-      "pathPattern": "packages/neko-canvas-domain/src/**/*.ts",
+      "pathPattern": "packages/canvas/domain/src/**/*.ts",
       "ledgerEntryId": "LCDR-004"
     },
     {
       "id": "REQ-LCDR-005",
-      "pathPattern": "packages/neko-canvas-webview/src/components/**/*.tsx",
+      "pathPattern": "packages/canvas/webview/src/components/**/*.tsx",
       "ledgerEntryId": "LCDR-005",
       "allowRemovedEntry": true
     },
     {
       "id": "REQ-LCDR-006",
-      "pathPattern": "packages/neko-assets-domain/src/services/CharacterAssetExportService.ts",
+      "pathPattern": "packages/assets/domain/src/services/CharacterAssetExportService.ts",
       "ledgerEntryId": "LCDR-006",
       "allowRemovedEntry": true
     },
@@ -82,19 +82,19 @@
     },
     {
       "id": "REQ-LCDR-009",
-      "pathPattern": "packages/neko-shared/src/generated/*.engine.ts",
+      "pathPattern": "packages/shared/src/generated/*.engine.ts",
       "ledgerEntryId": "LCDR-009",
       "requiredWhileMatched": false,
       "allowRemovedEntry": true
     },
     {
       "id": "REQ-LCDR-010",
-      "pathPattern": "packages/neko-preview-webview/src/**/*.tsx",
+      "pathPattern": "packages/preview/webview/src/**/*.tsx",
       "ledgerEntryId": "LCDR-010"
     },
     {
       "id": "REQ-LCDR-025",
-      "pathPattern": "packages/neko-preview-webview/src/**/*Viewer.tsx",
+      "pathPattern": "packages/preview/webview/src/**/*Viewer.tsx",
       "ledgerEntryId": "LCDR-025",
       "allowRemovedEntry": true
     },
@@ -112,18 +112,18 @@
     },
     {
       "id": "REQ-LCDR-011",
-      "pathPattern": "packages/neko-entity-domain/src/**/*.ts",
+      "pathPattern": "packages/entity/domain/src/**/*.ts",
       "ledgerEntryId": "LCDR-011"
     },
     {
       "id": "REQ-LCDR-015",
-      "pathPattern": "packages/neko-canvas-domain/src/nkc/migrator.ts",
+      "pathPattern": "packages/canvas/domain/src/nkc/migrator.ts",
       "ledgerEntryId": "LCDR-015",
       "allowRemovedEntry": true
     },
     {
       "id": "REQ-LCDR-016",
-      "pathPattern": "packages/neko-shared/src/path/workspace-media-path.ts",
+      "pathPattern": "packages/shared/src/path/workspace-media-path.ts",
       "ledgerEntryId": "LCDR-016",
       "requiredWhileMatched": false
     },
@@ -135,24 +135,24 @@
     },
     {
       "id": "REQ-LCDR-030",
-      "pathPattern": "packages/neko-local-metadata/src/*.ts",
+      "pathPattern": "packages/local-metadata/src/*.ts",
       "ledgerEntryId": "LCDR-030"
     },
     {
       "id": "REQ-LCDR-031",
-      "pathPattern": "packages/neko-canvas-domain/src/canvas-semantic-storyboard.ts",
+      "pathPattern": "packages/canvas/domain/src/canvas-semantic-storyboard.ts",
       "ledgerEntryId": "LCDR-031"
     },
     {
       "id": "REQ-LCDR-032",
-      "pathPattern": "packages/neko-shared/src/types/skill.ts",
+      "pathPattern": "packages/shared/src/types/skill.ts",
       "ledgerEntryId": "LCDR-032",
       "requiredWhileMatched": false,
       "allowRemovedEntry": true
     },
     {
       "id": "REQ-LCDR-034",
-      "pathPattern": "packages/neko-host/src/settings/config-core/*.ts",
+      "pathPattern": "packages/host/src/settings/config-core/*.ts",
       "ledgerEntryId": "LCDR-034"
     }
   ],
@@ -166,23 +166,23 @@
       "status": "removed",
       "owner": "neko-types",
       "paths": [
-        "packages/neko-shared/src/types/storyboard-table.ts",
-        "packages/neko-shared/src/types/__tests__/storyboard-table.test.ts"
+        "packages/shared/src/types/storyboard-table.ts",
+        "packages/shared/src/types/__tests__/storyboard-table.test.ts"
       ],
       "replacement": "Canonical storyboard tables using scenes[] / shots[] and canonical media references.",
       "removeCondition": "Removed in cleanup-remaining-legacy-debt-surfaces; canonical normalizer rejects pre-schema template/sections payloads.",
       "validation": {
         "commands": [
-          "pnpm --dir packages/neko-shared exec vitest run src/types/__tests__/storyboard-table.test.ts",
-          "rg -i \"normalizeLegacyStoryboardSections|LegacyStoryboardMediaRef|LegacyStoryboardSection|MAX_LEGACY|normalizeLegacyMediaRef|normalizeLegacyMediaRole|ambiguous-legacy-media-ref|fallbackTitle\" packages/neko-shared/src/types/storyboard-table.ts packages/neko-shared/src/types/__tests__/storyboard-table.test.ts"
+          "pnpm --dir packages/shared exec vitest run src/types/__tests__/storyboard-table.test.ts",
+          "rg -i \"normalizeLegacyStoryboardSections|LegacyStoryboardMediaRef|LegacyStoryboardSection|MAX_LEGACY|normalizeLegacyMediaRef|normalizeLegacyMediaRole|ambiguous-legacy-media-ref|fallbackTitle\" packages/shared/src/types/storyboard-table.ts packages/shared/src/types/__tests__/storyboard-table.test.ts"
         ]
       },
       "stalePatterns": [
         {
           "pattern": "normalizeLegacyStoryboardSections|LegacyStoryboardMediaRef|LegacyStoryboardSection|MAX_LEGACY|normalizeLegacyMediaRef|normalizeLegacyMediaRole|ambiguous-legacy-media-ref|fallbackTitle",
           "paths": [
-            "packages/neko-shared/src/types/storyboard-table.ts",
-            "packages/neko-shared/src/types/__tests__/storyboard-table.test.ts"
+            "packages/shared/src/types/storyboard-table.ts",
+            "packages/shared/src/types/__tests__/storyboard-table.test.ts"
           ]
         }
       ]
@@ -196,8 +196,8 @@
       "status": "removed",
       "owner": "neko-types",
       "paths": [
-        "packages/neko-shared/src/types/asset/manifest.ts",
-        "packages/neko-shared/src/types/asset/__tests__/manifest-contract.test.ts",
+        "packages/shared/src/types/asset/manifest.ts",
+        "packages/shared/src/types/asset/__tests__/manifest-contract.test.ts",
         "packages/neko-market/packages/core/src/registry/installed-registry.ts",
         "packages/neko-market/packages/core/src/registry/installed-registry.test.ts"
       ],
@@ -205,16 +205,16 @@
       "removeCondition": "Removed in cleanup-remaining-legacy-debt-surfaces; installed registry now accepts only canonical AssetType records and drops pre-v4 package type records.",
       "validation": {
         "commands": [
-          "pnpm --dir packages/neko-shared exec vitest run src/types/asset/__tests__/manifest-contract.test.ts",
+          "pnpm --dir packages/shared exec vitest run src/types/asset/__tests__/manifest-contract.test.ts",
           "pnpm --dir packages/neko-market/packages/core exec vitest run src/registry/installed-registry.test.ts",
-          "rg -i \"LegacyAssetType|LegacyMetadataPatch|LegacyAssetTypeMigration|LEGACY_TYPE_MIGRATIONS|getLegacyAssetTypeMigration|isLegacyAssetType|mediaPatch|modelPatch|migrates legacy installed AssetType\" packages/neko-shared/src/types/asset packages/neko-market/packages/core/src/registry"
+          "rg -i \"LegacyAssetType|LegacyMetadataPatch|LegacyAssetTypeMigration|LEGACY_TYPE_MIGRATIONS|getLegacyAssetTypeMigration|isLegacyAssetType|mediaPatch|modelPatch|migrates legacy installed AssetType\" packages/shared/src/types/asset packages/neko-market/packages/core/src/registry"
         ]
       },
       "stalePatterns": [
         {
           "pattern": "LegacyAssetType|LegacyMetadataPatch|LegacyAssetTypeMigration|LEGACY_TYPE_MIGRATIONS|getLegacyAssetTypeMigration|isLegacyAssetType|mediaPatch|modelPatch|migrates legacy installed AssetType",
           "paths": [
-            "packages/neko-shared/src/types/asset/**/*.ts",
+            "packages/shared/src/types/asset/**/*.ts",
             "packages/neko-market/packages/core/src/registry/**/*.ts"
           ]
         }
@@ -228,92 +228,92 @@
       "action": "migrate",
       "status": "active",
       "owner": "neko-local-metadata",
-      "paths": ["packages/neko-local-metadata/src/storage.ts"],
+      "paths": ["packages/local-metadata/src/storage.ts"],
       "replacement": "Canonical local metadata storage contract plus fail-visible diagnostics consumed by explicit inspection and migration entrypoints.",
       "removeCondition": "Remove individual deprecated-workspace diagnostic codes only after the corresponding inspection and migration readers are retired and retained workspaces no longer require them.",
       "validation": {
         "commands": [
-          "pnpm --dir packages/neko-local-metadata test",
-          "rg -n \"deprecated-hook-catalog|legacy-workspace-metadata|deprecated-workspace-directory\" packages/neko-local-metadata/src/storage.ts packages/neko-local-metadata/src/node-workspace-storage-inspection.ts"
+          "pnpm --dir packages/local-metadata test",
+          "rg -n \"deprecated-hook-catalog|legacy-workspace-metadata|deprecated-workspace-directory\" packages/local-metadata/src/storage.ts packages/local-metadata/src/node-workspace-storage-inspection.ts"
         ]
       },
       "notes": "These values are current diagnostic identities for explicit inspection and migration. They do not enable a normal-runtime fallback or legacy success path."
     },
     {
       "id": "LCDR-004",
-      "package": "@neko-canvas/domain",
+      "package": "@neko/canvas-domain",
       "surface": "Canvas material inspection and explicit prelaunch NKC migration readers",
       "semanticClass": "migration-only",
       "action": "migrate",
       "status": "active",
       "owner": "neko-canvas-domain",
       "paths": [
-        "packages/neko-canvas-domain/src/nkc/**/*.ts",
-        "packages/neko-canvas-domain/src/types/canvas-material-contracts.ts"
+        "packages/canvas/domain/src/nkc/**/*.ts",
+        "packages/canvas/domain/src/types/canvas-material-contracts.ts"
       ],
       "replacement": "Canonical Canvas node metadata, container childPlacements, content metadata, port-based connection fields, and required CanvasPlaybackPlan.routeCandidates.",
       "removeCondition": "Canvas Webview and fixtures consume only canonical Canvas contract fields; legacy playback route derivation has been removed and routeCandidates are required.",
       "validation": {
         "commands": [
-          "pnpm --dir packages/neko-canvas-domain exec vitest run",
-          "rg -i \"legacy|migration\" packages/neko-canvas-domain/src/nkc packages/neko-canvas-domain/src/types/canvas-material-contracts.ts"
+          "pnpm --dir packages/canvas/domain exec vitest run",
+          "rg -i \"legacy|migration\" packages/canvas/domain/src/nkc packages/canvas/domain/src/types/canvas-material-contracts.ts"
         ]
       },
       "stalePatterns": [
         {
           "pattern": "legacy-entry|deriveLegacyCanvasPlaybackRoute|routeCandidates\\?:|route candidates are absent",
           "paths": [
-            "packages/neko-canvas-domain/**/*.ts",
-            "packages/neko-canvas-webview/**/*.ts",
-            "packages/neko-canvas-webview/**/*.tsx"
+            "packages/canvas/domain/**/*.ts",
+            "packages/canvas/webview/**/*.ts",
+            "packages/canvas/webview/**/*.tsx"
           ]
         }
       ]
     },
     {
       "id": "LCDR-005",
-      "package": "@neko-canvas/webview",
+      "package": "@neko/canvas-webview",
       "surface": "Canvas Webview legacy anchors, cells path, group childIds, LegacyNodeRenderer, and fallback renderer naming",
       "semanticClass": "migrate-now",
       "action": "migrate",
       "status": "removed",
       "owner": "neko-canvas",
       "paths": [
-        "packages/neko-canvas-webview/src/components/connections/*.tsx",
-        "packages/neko-canvas-webview/src/components/content/*.tsx",
-        "packages/neko-canvas-webview/src/components/nodes/*.tsx",
-        "packages/neko-canvas-webview/src/CanvasApp.tsx"
+        "packages/canvas/webview/src/components/connections/*.tsx",
+        "packages/canvas/webview/src/components/content/*.tsx",
+        "packages/canvas/webview/src/components/nodes/*.tsx",
+        "packages/canvas/webview/src/CanvasApp.tsx"
       ],
       "replacement": "Port-based connection geometry, container.childPlacements, composable content metadata, and explicit default/placeholder renderers.",
       "removeCondition": "Removed in cleanup-remaining-legacy-debt-surfaces: CanvasConnection now uses canonical sourceEndpoint/targetEndpoint, GroupCanvasNode no longer mirrors container children through data.childIds, GalleryCell/data.cells and galleryMigration were deleted, and Webview generation updates write media child nodes plus container.childPlacements metadata.",
       "validation": {
         "commands": [
-          "pnpm --dir packages/neko-shared test -- --run src/nkc/__tests__/validator.test.ts src/nkc/__tests__/codec.test.ts src/nkc/__tests__/migrator.test.ts src/nkc/__tests__/layered-canvas.test.ts src/utils/__tests__/storyboardPlanner.test.ts src/types/__tests__/canvas-playback.test.ts",
-          "pnpm --dir packages/neko-canvas-webview exec vitest run src/utils/connectionProjection.test.ts src/stores/__tests__/canvasStore.test.ts src/stores/__tests__/clipboardStore.test.ts src/utils/canvasAgentOperations.test.ts src/utils/containerActions.test.ts src/utils/nodeFactory.test.ts src/components/content/NodeContentDispatcher.test.ts src/components/playback/CanvasPlaybackController.test.tsx src/utils/renderRefreshTiering.test.ts",
-          "pnpm --dir packages/neko-canvas-webview build",
-          "rg -n \"LegacyNodeRenderer|renderLegacy|Legacy path|legacy-node|FallbackNode|FallbackNodeProps|fallback card|fallback cards|renderFallbackBlock|fallbackExt|fallbackLabel\" packages/neko-canvas-webview/src",
-          "rg -n \"sourceAnchor|targetAnchor|GalleryCell|data\\.cells|galleryMigration|migrateGalleryV1ToContainer|legacy anchor|Legacy cells path|getLegacyAnchorPoint|legacy-group-childIds|getLegacyContainerChildIds\" packages/neko-canvas-webview/src packages/neko-shared/src/types/canvas.ts packages/neko-shared/src/utils/canvasLayered.ts packages/neko-shared/src/nkc/migrator.ts"
+          "pnpm --dir packages/shared test -- --run src/nkc/__tests__/validator.test.ts src/nkc/__tests__/codec.test.ts src/nkc/__tests__/migrator.test.ts src/nkc/__tests__/layered-canvas.test.ts src/utils/__tests__/storyboardPlanner.test.ts src/types/__tests__/canvas-playback.test.ts",
+          "pnpm --dir packages/canvas/webview exec vitest run src/utils/connectionProjection.test.ts src/stores/__tests__/canvasStore.test.ts src/stores/__tests__/clipboardStore.test.ts src/utils/canvasAgentOperations.test.ts src/utils/containerActions.test.ts src/utils/nodeFactory.test.ts src/components/content/NodeContentDispatcher.test.ts src/components/playback/CanvasPlaybackController.test.tsx src/utils/renderRefreshTiering.test.ts",
+          "pnpm --dir packages/canvas/webview build",
+          "rg -n \"LegacyNodeRenderer|renderLegacy|Legacy path|legacy-node|FallbackNode|FallbackNodeProps|fallback card|fallback cards|renderFallbackBlock|fallbackExt|fallbackLabel\" packages/canvas/webview/src",
+          "rg -n \"sourceAnchor|targetAnchor|GalleryCell|data\\.cells|galleryMigration|migrateGalleryV1ToContainer|legacy anchor|Legacy cells path|getLegacyAnchorPoint|legacy-group-childIds|getLegacyContainerChildIds\" packages/canvas/webview/src packages/shared/src/types/canvas.ts packages/shared/src/utils/canvasLayered.ts packages/shared/src/nkc/migrator.ts"
         ]
       },
       "stalePatterns": [
         {
           "pattern": "LegacyNodeRenderer|renderLegacy|Legacy path|legacy-node|FallbackNode|FallbackNodeProps|fallback card|fallback cards|renderFallbackBlock|fallbackExt|fallbackLabel|sourceAnchor|targetAnchor|GalleryCell|data\\.cells|galleryMigration|migrateGalleryV1ToContainer|legacy anchor|Legacy cells path|getLegacyAnchorPoint|legacy-group-childIds|getLegacyContainerChildIds",
           "paths": [
-            "packages/neko-canvas-webview/src/CanvasApp.tsx",
-            "packages/neko-canvas-webview/src/components/connections/**/*.ts",
-            "packages/neko-canvas-webview/src/components/connections/**/*.tsx",
-            "packages/neko-canvas-webview/src/components/content/**/*.ts",
-            "packages/neko-canvas-webview/src/components/content/**/*.tsx",
-            "packages/neko-canvas-webview/src/components/nodes/**/*.ts",
-            "packages/neko-canvas-webview/src/components/nodes/**/*.tsx",
-            "packages/neko-canvas-webview/src/hooks/useVSCodeMessages.ts",
-            "packages/neko-canvas-webview/src/stores/**/*.ts",
-            "packages/neko-canvas-webview/src/utils/canvasAgentOperations.ts",
-            "packages/neko-canvas-webview/src/utils/containerActions.ts",
-            "packages/neko-canvas-webview/src/utils/nodeFactory.ts",
-            "packages/neko-shared/src/types/canvas.ts",
-            "packages/neko-shared/src/utils/canvasLayered.ts",
-            "packages/neko-shared/src/nkc/migrator.ts"
+            "packages/canvas/webview/src/CanvasApp.tsx",
+            "packages/canvas/webview/src/components/connections/**/*.ts",
+            "packages/canvas/webview/src/components/connections/**/*.tsx",
+            "packages/canvas/webview/src/components/content/**/*.ts",
+            "packages/canvas/webview/src/components/content/**/*.tsx",
+            "packages/canvas/webview/src/components/nodes/**/*.ts",
+            "packages/canvas/webview/src/components/nodes/**/*.tsx",
+            "packages/canvas/webview/src/hooks/useVSCodeMessages.ts",
+            "packages/canvas/webview/src/stores/**/*.ts",
+            "packages/canvas/webview/src/utils/canvasAgentOperations.ts",
+            "packages/canvas/webview/src/utils/containerActions.ts",
+            "packages/canvas/webview/src/utils/nodeFactory.ts",
+            "packages/shared/src/types/canvas.ts",
+            "packages/shared/src/utils/canvasLayered.ts",
+            "packages/shared/src/nkc/migrator.ts"
           ]
         }
       ]
@@ -327,27 +327,27 @@
       "status": "removed",
       "owner": "neko-assets",
       "paths": [
-        "packages/neko-assets-domain/src/services/CharacterAssetExportService.ts",
-        "packages/neko-assets-domain/src/services/CharacterAssetExportService.test.ts",
-        "packages/neko-shared/src/types/asset-export.ts",
-        "packages/neko-shared/src/types/asset/entity.ts"
+        "packages/assets/domain/src/services/CharacterAssetExportService.ts",
+        "packages/assets/domain/src/services/CharacterAssetExportService.test.ts",
+        "packages/shared/src/types/asset-export.ts",
+        "packages/shared/src/types/asset/entity.ts"
       ],
       "replacement": "Canonical .nkentity bindings[] entries. Optional Live2D resources are represented as role='live2d' bindings instead of duplicated nativePuppet legacyFallbackRef metadata.",
       "removeCondition": "Removed in cleanup-remaining-legacy-debt-surfaces; no current importer reads legacyFallbackRef and export tests assert optional Live2D bindings through canonical bindings[].",
       "validation": {
         "commands": [
-          "pnpm --dir packages/neko-assets-domain exec vitest run src/services/CharacterAssetExportService.test.ts",
-          "pnpm --dir packages/neko-shared exec vitest run src/types/__tests__/asset-export-contract.test.ts src/types/asset/__tests__/manifest-contract.test.ts",
-          "rg -i \"legacyFallbackRef|legacy_fallback_ref|fallbackRef\" packages/neko-assets-domain packages/neko-shared/src/types/asset-export.ts packages/neko-shared/src/types/asset/entity.ts"
+          "pnpm --dir packages/assets/domain exec vitest run src/services/CharacterAssetExportService.test.ts",
+          "pnpm --dir packages/shared exec vitest run src/types/__tests__/asset-export-contract.test.ts src/types/asset/__tests__/manifest-contract.test.ts",
+          "rg -i \"legacyFallbackRef|legacy_fallback_ref|fallbackRef\" packages/assets/domain packages/shared/src/types/asset-export.ts packages/shared/src/types/asset/entity.ts"
         ]
       },
       "stalePatterns": [
         {
           "pattern": "legacyFallbackRef|legacy_fallback_ref|fallbackRef",
           "paths": [
-            "packages/neko-assets-domain/src/**/*.ts",
-            "packages/neko-shared/src/types/asset-export.ts",
-            "packages/neko-shared/src/types/asset/entity.ts"
+            "packages/assets/domain/src/**/*.ts",
+            "packages/shared/src/types/asset-export.ts",
+            "packages/shared/src/types/asset/entity.ts"
           ]
         }
       ]
@@ -396,7 +396,7 @@
       "validation": {
         "commands": [
           "pnpm check:unused",
-          "rg \"inp-parser|PuppetMotionInstallTarget|export/index\" packages/neko-puppet packages/neko-shared docs"
+          "rg \"inp-parser|PuppetMotionInstallTarget|export/index\" packages/neko-puppet packages/shared docs"
         ]
       },
       "stalePatterns": [
@@ -408,16 +408,16 @@
     },
     {
       "id": "LCDR-018",
-      "package": "@neko-canvas/webview",
+      "package": "@neko/canvas-webview",
       "surface": "Canvas Webview unused InlineControls, content barrel shim, and ImageViewer",
       "semanticClass": "delete-now",
       "action": "delete",
       "status": "removed",
       "owner": "neko-canvas",
       "paths": [
-        "packages/neko-canvas-webview/src/components/common/InlineControls.tsx",
-        "packages/neko-canvas-webview/src/components/content/index.ts",
-        "packages/neko-canvas-webview/src/components/media/ImageViewer.tsx"
+        "packages/canvas/webview/src/components/common/InlineControls.tsx",
+        "packages/canvas/webview/src/components/content/index.ts",
+        "packages/canvas/webview/src/components/media/ImageViewer.tsx"
       ],
       "replacement": "Current Canvas components import concrete modules directly and use existing media players/content dispatchers.",
       "removeCondition": "No current imports or package entrypoints reference the deleted files.",
@@ -425,16 +425,16 @@
       "validation": {
         "commands": [
           "pnpm check:unused",
-          "rg -w \"InlineControls|InlineSelect|InlineInput|InlineTextarea|ImageViewer\" packages/neko-canvas-webview/src || true",
-          "rg \"components/content/index\" packages/neko-canvas-webview/src || true"
+          "rg -w \"InlineControls|InlineSelect|InlineInput|InlineTextarea|ImageViewer\" packages/canvas/webview/src || true",
+          "rg \"components/content/index\" packages/canvas/webview/src || true"
         ]
       },
       "stalePatterns": [
         {
           "pattern": "\\bInlineControls\\b|\\bInlineSelect\\b|\\bInlineInput\\b|\\bInlineTextarea\\b|\\bImageViewer\\b|components/content/index",
           "paths": [
-            "packages/neko-canvas-webview/src/**/*.ts",
-            "packages/neko-canvas-webview/src/**/*.tsx"
+            "packages/canvas/webview/src/**/*.ts",
+            "packages/canvas/webview/src/**/*.tsx"
           ]
         }
       ]
@@ -529,7 +529,7 @@
       "action": "delete",
       "status": "removed",
       "owner": "architecture",
-      "paths": ["packages/neko-shared/src/generated/*.engine.ts"],
+      "paths": ["packages/shared/src/generated/*.engine.ts"],
       "replacement": "Owning package TypeScript contracts; future Proto requires a real serialized producer/consumer boundary.",
       "removeCondition": "Removed with the NKV/Timeline contract retirement.",
       "removedAt": "2026-07-27",
@@ -549,15 +549,15 @@
       "status": "active",
       "owner": "neko-preview",
       "paths": [
-        "packages/neko-preview-webview/src/**/*.tsx",
-        "packages/neko-preview-webview/vite.config.ts"
+        "packages/preview/webview/src/**/*.tsx",
+        "packages/preview/webview/vite.config.ts"
       ],
       "replacement": "defaultLabel, placeholderText, emptyState, or unavailableLabel naming for display defaults.",
       "removeCondition": "Presentation-only fallback helpers are renamed; remaining fallback occurrences handle actual file/runtime failure.",
       "validation": {
         "commands": [
-          "rg -i \"fallback\" packages/neko-preview-webview/src packages/neko-preview-webview/vite.config.ts",
-          "pnpm --filter @neko-preview/webview test"
+          "rg -i \"fallback\" packages/preview/webview/src packages/preview/webview/vite.config.ts",
+          "pnpm --filter @neko/preview-webview test"
         ]
       }
     },
@@ -571,18 +571,18 @@
       "owner": "neko-preview",
       "paths": [
         "packages/neko-preview/packages/extension/src/types/document-messages.ts",
-        "packages/neko-preview-webview/src/shared/document-types.ts",
-        "packages/neko-preview-webview/src/docx/DocxViewer.tsx",
-        "packages/neko-preview-webview/src/cbz/CbzViewer.tsx",
-        "packages/neko-preview-webview/src/epub/EpubViewer.tsx",
-        "packages/neko-preview-webview/src/pdf/PdfViewer.tsx"
+        "packages/preview/webview/src/shared/document-types.ts",
+        "packages/preview/webview/src/docx/DocxViewer.tsx",
+        "packages/preview/webview/src/cbz/CbzViewer.tsx",
+        "packages/preview/webview/src/epub/EpubViewer.tsx",
+        "packages/preview/webview/src/pdf/PdfViewer.tsx"
       ],
       "replacement": "Canonical document:data payload uses a required webview URL produced by document preview providers.",
       "removeCondition": "Removed after all current document providers were confirmed to send payload.url.",
       "validation": {
         "commands": [
-          "pnpm --dir packages/neko-preview-webview build",
-          "rg -n \"payload\\.data|Base64-encoded file content|loadDocx\\(|loadCbz\\(|loadEpub\\(|loadPdf\\(|Legacy: load DOCX|Load CBZ from base64|load EPUB from base64\" packages/neko-preview/packages/extension/src packages/neko-preview-webview/src -g \"*.ts\" -g \"*.tsx\""
+          "pnpm --dir packages/preview/webview build",
+          "rg -n \"payload\\.data|Base64-encoded file content|loadDocx\\(|loadCbz\\(|loadEpub\\(|loadPdf\\(|Legacy: load DOCX|Load CBZ from base64|load EPUB from base64\" packages/neko-preview/packages/extension/src packages/preview/webview/src -g \"*.ts\" -g \"*.tsx\""
         ]
       },
       "stalePatterns": [
@@ -590,8 +590,8 @@
           "pattern": "payload\\.data|Base64-encoded file content|loadDocx\\(|loadCbz\\(|loadEpub\\(|loadPdf\\(|Legacy: load DOCX|Load CBZ from base64|load EPUB from base64",
           "paths": [
             "packages/neko-preview/packages/extension/src/**/*.ts",
-            "packages/neko-preview-webview/src/**/*.ts",
-            "packages/neko-preview-webview/src/**/*.tsx"
+            "packages/preview/webview/src/**/*.ts",
+            "packages/preview/webview/src/**/*.tsx"
           ]
         }
       ]
@@ -635,7 +635,7 @@
       "owner": "neko-preview",
       "paths": [
         "packages/neko-preview/packages/extension/src/types/document-messages.ts",
-        "packages/neko-preview-webview/src/shared/document-types.ts",
+        "packages/preview/webview/src/shared/document-types.ts",
         "packages/neko-preview/packages/extension/src/providers/document/documentProviderHelper.ts"
       ],
       "replacement": "Webview document:sendToAi messages carry a required semantic DocumentLocator; Extension enriches source/range without inferring locator from context.",
@@ -644,7 +644,7 @@
         "commands": [
           "pnpm --dir packages/neko-preview compile:extension",
           "pnpm --dir packages/neko-preview exec vitest run packages/extension/src/__tests__/documentProtocol.test.ts",
-          "rg -n \"buildLegacyLocator|locator\\?: DocumentLocator|payload\\.locator\\?\" packages/neko-preview/packages/extension/src/providers/document/documentProviderHelper.ts packages/neko-preview/packages/extension/src/types/document-messages.ts packages/neko-preview-webview/src/shared/document-types.ts"
+          "rg -n \"buildLegacyLocator|locator\\?: DocumentLocator|payload\\.locator\\?\" packages/neko-preview/packages/extension/src/providers/document/documentProviderHelper.ts packages/neko-preview/packages/extension/src/types/document-messages.ts packages/preview/webview/src/shared/document-types.ts"
         ]
       },
       "stalePatterns": [
@@ -653,7 +653,7 @@
           "paths": [
             "packages/neko-preview/packages/extension/src/providers/document/documentProviderHelper.ts",
             "packages/neko-preview/packages/extension/src/types/document-messages.ts",
-            "packages/neko-preview-webview/src/shared/document-types.ts"
+            "packages/preview/webview/src/shared/document-types.ts"
           ]
         }
       ]
@@ -666,12 +666,12 @@
       "action": "preserve",
       "status": "active",
       "owner": "neko-entity",
-      "paths": ["packages/neko-entity-domain/src/**/*.ts"],
+      "paths": ["packages/entity/domain/src/**/*.ts"],
       "replacement": "Current entity status model and representation resolver; rename only if product status vocabulary changes before launch or representation fallback is replaced by an explicit selection policy.",
       "removeCondition": "Entity product vocabulary no longer uses deprecated as a domain lifecycle state and representation resolution no longer exposes fallback metadata.",
       "validation": {
         "commands": [
-          "rg -i \"deprecated|fallback\" packages/neko-entity-domain/src",
+          "rg -i \"deprecated|fallback\" packages/entity/domain/src",
           "pnpm --filter neko-entity test"
         ]
       }
@@ -685,11 +685,11 @@
       "status": "removed",
       "owner": "neko-types-vscode",
       "paths": [
-        "packages/neko-shared/src/vscode/extension/legacy-resource-cache-provider.ts",
-        "packages/neko-shared/src/vscode/extension/document-resource-cache-provider.ts",
-        "packages/neko-shared/src/vscode/extension/content-access-providers.ts",
-        "packages/neko-shared/src/types/content-access.ts",
-        "packages/neko-shared/src/types/project-cache-search.ts",
+        "packages/shared/src/vscode/extension/legacy-resource-cache-provider.ts",
+        "packages/shared/src/vscode/extension/document-resource-cache-provider.ts",
+        "packages/shared/src/vscode/extension/content-access-providers.ts",
+        "packages/shared/src/types/content-access.ts",
+        "packages/shared/src/types/project-cache-search.ts",
         "packages/neko-canvas/packages/extension/src/editor/canvasEditorProvider.ts",
         "packages/neko-canvas/packages/extension/src/editor/narrativePreviewBridge.ts"
       ],
@@ -697,21 +697,21 @@
       "removeCondition": "Removed in cleanup-remaining-legacy-debt-surfaces; no production caller imports the legacy provider or reads legacyCachePath metadata.",
       "validation": {
         "commands": [
-          "pnpm --dir packages/neko-shared exec vitest run src/vscode/extension/__tests__/document-resource-cache-provider.test.ts src/vscode/extension/__tests__/resource-cache-service.test.ts src/types/__tests__/content-access.test.ts src/types/__tests__/project-cache-search.test.ts",
+          "pnpm --dir packages/shared exec vitest run src/vscode/extension/__tests__/document-resource-cache-provider.test.ts src/vscode/extension/__tests__/resource-cache-service.test.ts src/types/__tests__/content-access.test.ts src/types/__tests__/project-cache-search.test.ts",
           "pnpm --dir packages/neko-canvas/packages/extension exec vitest run src/__tests__/protocol.test.ts src/editor/narrativePreviewBridge.test.ts",
           "pnpm --dir packages/neko-agent exec vitest run packages/extension/src/services/__tests__/documentResourceCacheProvider.test.ts packages/extension/src/tools/__tests__/readDocumentImageTool.test.ts packages/extension/src/tools/__tests__/readDocumentTool.test.ts packages/extension/src/tools/__tests__/semanticCoverageTool.test.ts",
-          "rg -n \"legacyCachePath|legacy-cache-path|LegacyResourceCacheProvider|legacy-resource-cache-provider|readLegacyCachePath|LEGACY_RESOURCE_CACHE_PROVIDER_ID|ContentLegacyCachePathRef|isLegacyCachePathContentRef\" packages/neko-shared packages/neko-canvas packages/neko-agent -g \"*.ts\" -g \"*.tsx\" --glob '!**/__tests__/**' --glob '!**/*.test.ts' --glob '!**/*.test.tsx'"
+          "rg -n \"legacyCachePath|legacy-cache-path|LegacyResourceCacheProvider|legacy-resource-cache-provider|readLegacyCachePath|LEGACY_RESOURCE_CACHE_PROVIDER_ID|ContentLegacyCachePathRef|isLegacyCachePathContentRef\" packages/shared packages/neko-canvas packages/neko-agent -g \"*.ts\" -g \"*.tsx\" --glob '!**/__tests__/**' --glob '!**/*.test.ts' --glob '!**/*.test.tsx'"
         ]
       },
       "stalePatterns": [
         {
           "pattern": "legacyCachePath|legacy-cache-path|LegacyResourceCacheProvider|legacy-resource-cache-provider|readLegacyCachePath|LEGACY_RESOURCE_CACHE_PROVIDER_ID|ContentLegacyCachePathRef|isLegacyCachePathContentRef",
           "paths": [
-            "packages/neko-shared/src/vscode/extension/document-resource-cache-provider.ts",
-            "packages/neko-shared/src/vscode/extension/content-access-providers.ts",
-            "packages/neko-shared/src/vscode/extension/index.ts",
-            "packages/neko-shared/src/types/content-access.ts",
-            "packages/neko-shared/src/types/project-cache-search.ts",
+            "packages/shared/src/vscode/extension/document-resource-cache-provider.ts",
+            "packages/shared/src/vscode/extension/content-access-providers.ts",
+            "packages/shared/src/vscode/extension/index.ts",
+            "packages/shared/src/types/content-access.ts",
+            "packages/shared/src/types/project-cache-search.ts",
             "packages/neko-canvas/packages/extension/src/editor/canvasEditorProvider.ts",
             "packages/neko-canvas/packages/extension/src/editor/narrativePreviewBridge.ts"
           ]
@@ -720,22 +720,22 @@
     },
     {
       "id": "LCDR-015",
-      "package": "@neko-canvas/domain",
+      "package": "@neko/canvas-domain",
       "surface": "NKC layered canvas explicit version migration readers",
       "semanticClass": "boundary-canonicalizer",
       "action": "migrate",
       "status": "active",
       "owner": "neko-canvas-domain",
       "paths": [
-        "packages/neko-canvas-domain/src/nkc/migrator.ts",
-        "packages/neko-canvas-domain/src/nkc/__tests__/layered-canvas.test.ts"
+        "packages/canvas/domain/src/nkc/migrator.ts",
+        "packages/canvas/domain/src/nkc/__tests__/layered-canvas.test.ts"
       ],
       "replacement": "Canonical NKC layered canvas version normalizer with no prelaunch-only field migrations inside runtime paths.",
       "removeCondition": "Remove version readers only after valuable prelaunch NKC documents are migrated or explicitly rejected and canonical load tests no longer require them.",
       "validation": {
         "commands": [
-          "pnpm --dir packages/neko-canvas-domain test -- --run src/nkc/__tests__/migrator.test.ts src/nkc/__tests__/layered-canvas.test.ts",
-          "rg -n \"sourceAnchor|targetAnchor|sourcePort|targetPort|getLegacyContainerChildIds|legacy-group-childIds|legacy anchor\" packages/neko-canvas-domain/src/nkc"
+          "pnpm --dir packages/canvas/domain test -- --run src/nkc/__tests__/migrator.test.ts src/nkc/__tests__/layered-canvas.test.ts",
+          "rg -n \"sourceAnchor|targetAnchor|sourcePort|targetPort|getLegacyContainerChildIds|legacy-group-childIds|legacy anchor\" packages/canvas/domain/src/nkc"
         ]
       }
     },
@@ -748,15 +748,15 @@
       "status": "active",
       "owner": "neko-types-path",
       "paths": [
-        "packages/neko-shared/src/path/workspace-media-path.ts",
-        "packages/neko-shared/src/path/__tests__/workspace-media-path.test.ts"
+        "packages/shared/src/path/workspace-media-path.ts",
+        "packages/shared/src/path/__tests__/workspace-media-path.test.ts"
       ],
       "replacement": "Canonical workspace media path resolver using relative or variable-based paths only.",
       "removeCondition": "Path producers and tests use only canonical workspace media path variants.",
       "validation": {
         "commands": [
-          "pnpm --dir packages/neko-shared exec vitest run src/path/__tests__/workspace-media-path.test.ts",
-          "rg -i \"legacy|fallback\" packages/neko-shared/src/path/workspace-media-path.ts packages/neko-shared/src/path/__tests__/workspace-media-path.test.ts"
+          "pnpm --dir packages/shared exec vitest run src/path/__tests__/workspace-media-path.test.ts",
+          "rg -i \"legacy|fallback\" packages/shared/src/path/workspace-media-path.ts packages/shared/src/path/__tests__/workspace-media-path.test.ts"
         ]
       }
     },
@@ -792,22 +792,22 @@
       "action": "delete",
       "status": "removed",
       "owner": "neko-types",
-      "paths": ["packages/neko-shared/src/types/live-compositor.ts"],
+      "paths": ["packages/shared/src/types/live-compositor.ts"],
       "replacement": "No retained Live product consumer; future live composition must introduce a new owning contract through an active OpenSpec change.",
       "removeCondition": "Removed after confirming that only the deleted contract fixture and tests consumed LiveCompositor symbols.",
       "removedAt": "2026-07-19",
       "validation": {
         "commands": [
           "pnpm check:unused",
-          "rg -n \"LiveCompositor|live-compositor\" packages/neko-shared/src/types"
+          "rg -n \"LiveCompositor|live-compositor\" packages/shared/src/types"
         ]
       },
       "stalePatterns": [
         {
           "pattern": "LiveCompositor|live-compositor",
           "paths": [
-            "packages/neko-shared/src/types/**/*.ts",
-            "packages/neko-shared/src/types/**/*.json"
+            "packages/shared/src/types/**/*.ts",
+            "packages/shared/src/types/**/*.json"
           ]
         }
       ]
@@ -843,29 +843,29 @@
       "status": "removed",
       "owner": "neko-assets",
       "paths": [
-        "packages/neko-assets-domain/packages/asset/src/service/PathResolver.ts",
-        "packages/neko-assets-domain/packages/asset/src/__tests__/service/PathResolver.test.ts",
-        "packages/neko-assets-domain/packages/asset/src/service/index.ts",
-        "packages/neko-assets-domain/src/extension.ts",
-        "packages/neko-assets-domain/src/services/MediaMetadataCache.ts",
-        "packages/neko-assets-domain/src/services/MediaLibrarySettingsService.ts",
-        "packages/neko-assets-domain/packages/asset/src/service/AssetLibrary.ts"
+        "packages/assets/domain/packages/asset/src/service/PathResolver.ts",
+        "packages/assets/domain/packages/asset/src/__tests__/service/PathResolver.test.ts",
+        "packages/assets/domain/packages/asset/src/service/index.ts",
+        "packages/assets/domain/src/extension.ts",
+        "packages/assets/domain/src/services/MediaMetadataCache.ts",
+        "packages/assets/domain/src/services/MediaLibrarySettingsService.ts",
+        "packages/assets/domain/packages/asset/src/service/AssetLibrary.ts"
       ],
       "replacement": "@neko/shared PathResolver and PathVariableMap imports at current call sites.",
       "removeCondition": "Removed after repo scan showed the @neko/asset service/PathResolver file only re-exported @neko/shared and current callers could import the canonical shared contract directly.",
       "removedAt": "2026-06-13",
       "validation": {
         "commands": [
-          "rg -n \"service/PathResolver|\\./PathResolver|@neko/asset.*PathResolver\" packages/neko-assets-domain packages/neko-cut -g \"*.ts\" -g \"*.tsx\"",
-          "pnpm --dir packages/neko-assets-domain/packages/asset run build"
+          "rg -n \"service/PathResolver|\\./PathResolver|@neko/asset.*PathResolver\" packages/assets/domain packages/neko-cut -g \"*.ts\" -g \"*.tsx\"",
+          "pnpm --dir packages/assets/domain/packages/asset run build"
         ]
       },
       "stalePatterns": [
         {
           "pattern": "service/PathResolver|\\./PathResolver|@neko/asset.*PathResolver",
           "paths": [
-            "packages/neko-assets-domain/**/*.ts",
-            "packages/neko-assets-domain/**/*.tsx",
+            "packages/assets/domain/**/*.ts",
+            "packages/assets/domain/**/*.tsx",
             "packages/neko-cut/**/*.ts",
             "packages/neko-cut/**/*.tsx"
           ]
@@ -882,37 +882,37 @@
       "status": "active",
       "owner": "neko-types-local-metadata",
       "paths": [
-        "packages/neko-local-metadata/src/node-workspace-storage-inspection.ts",
-        "packages/neko-media-local-metadata/src/node-proxy-manifest-migration.ts",
-        "packages/neko-search-local-metadata/src/node-search-projection-migration.ts",
-        "packages/neko-media-local-metadata/src/node-media-metadata-migration.ts",
-        "packages/neko-entity-node/src/node-entity-asset-projection-migration.ts"
+        "packages/local-metadata/src/node-workspace-storage-inspection.ts",
+        "packages/media-local-metadata/src/node-proxy-manifest-migration.ts",
+        "packages/search/local-metadata/src/node-search-projection-migration.ts",
+        "packages/media-local-metadata/src/node-media-metadata-migration.ts",
+        "packages/entity/node/src/node-entity-asset-projection-migration.ts"
       ],
       "replacement": "Canonical local metadata stores populated by explicit, verified migration commands that preserve valuable prelaunch workspace data.",
       "removeCondition": "Remove individual migration readers only after retained workspaces no longer require the source format and inspection reports prove the format is absent or safely rebuildable.",
       "validation": {
         "commands": [
-          "pnpm --dir packages/neko-local-metadata test",
-          "rg -n \"legacy|deprecated|migration\" packages/neko-local-metadata packages/neko-media-local-metadata packages/neko-search-local-metadata packages/neko-entity-node -g \"*.ts\""
+          "pnpm --dir packages/local-metadata test",
+          "rg -n \"legacy|deprecated|migration\" packages/local-metadata packages/media-local-metadata packages/search/local-metadata packages/entity/node -g \"*.ts\""
         ]
       },
       "notes": "These modules are explicit migration and inspection entrypoints, not successful runtime fallback readers. Verification failures throw and remain fail-visible."
     },
     {
       "id": "LCDR-031",
-      "package": "@neko-canvas/domain",
+      "package": "@neko/canvas-domain",
       "surface": "Canvas semantic storyboard migration diagnostics and provenance",
       "semanticClass": "boundary-canonicalizer",
       "action": "migrate",
       "status": "active",
       "owner": "neko-canvas",
-      "paths": ["packages/neko-canvas-domain/src/canvas-semantic-storyboard.ts"],
+      "paths": ["packages/canvas/domain/src/canvas-semantic-storyboard.ts"],
       "replacement": "Canonical semantic storyboard prompt documents with explicit migration-required states and provenance records.",
       "removeCondition": "Remove legacy prompt migration inputs only after persisted storyboard data is migrated or rejected explicitly and canonical prompt authority tests no longer require them.",
       "validation": {
         "commands": [
-          "pnpm --dir packages/neko-canvas-domain test",
-          "rg -n \"legacy|migration-required|migrationProvenance\" packages/neko-canvas-domain/src/canvas-semantic-storyboard.ts"
+          "pnpm --dir packages/canvas/domain test",
+          "rg -n \"legacy|migration-required|migrationProvenance\" packages/canvas/domain/src/canvas-semantic-storyboard.ts"
         ]
       },
       "notes": "Legacy prompt fields never become canonical authority implicitly; ambiguous or malformed inputs produce explicit diagnostics."
@@ -925,13 +925,13 @@
       "action": "migrate",
       "status": "removed",
       "owner": "neko-agent-contracts",
-      "paths": ["packages/neko-shared/src/types/skill.ts"],
+      "paths": ["packages/shared/src/types/skill.ts"],
       "replacement": "Portable SKILL.md contracts plus Neko overlay metadata, with legacy metadata accepted only by explicit migration and validation APIs.",
       "removeCondition": "Remove legacy Skill metadata contracts after all persisted custom Skills and Host policy call sites use portable Skill and overlay contracts without compatibility validation.",
       "validation": {
         "commands": [
-          "pnpm --dir packages/neko-shared test",
-          "rg -n \"legacy|deprecated|compatibility\" packages/neko-shared/src/types/skill.ts"
+          "pnpm --dir packages/shared test",
+          "rg -n \"legacy|deprecated|compatibility\" packages/shared/src/types/skill.ts"
         ]
       },
       "notes": "Canonical package loading does not read legacy metadata implicitly; the retained surface exists for explicit migration and diagnostics."
@@ -945,16 +945,16 @@
       "status": "active",
       "owner": "neko-host-settings",
       "paths": [
-        "packages/neko-host/src/settings/config-core/types.ts",
-        "packages/neko-host/src/settings/config-core/config-normalizer.ts",
-        "packages/neko-host/src/settings/config-core/toml-config.ts"
+        "packages/host/src/settings/config-core/types.ts",
+        "packages/host/src/settings/config-core/config-normalizer.ts",
+        "packages/host/src/settings/config-core/toml-config.ts"
       ],
       "replacement": "Provider-owned credential/OAuth configuration and no retained Market registry configuration; old config sections remain opaque round-trippable user data only.",
       "removeCondition": "Remove these sections only after an explicit migration or rejection flow preserves valuable user settings and config round-trip tests no longer require the old keys.",
       "validation": {
         "commands": [
-          "pnpm --dir packages/neko-host exec vitest run src/settings/config-core/config-normalizer.test.ts src/settings/config-core/toml-config.test.ts",
-          "rg -n \"auth|market\" packages/neko-host/src/settings/config-core"
+          "pnpm --dir packages/host exec vitest run src/settings/config-core/config-normalizer.test.ts src/settings/config-core/toml-config.test.ts",
+          "rg -n \"auth|market\" packages/host/src/settings/config-core"
         ]
       },
       "notes": "No retained product route, repository, command, provider fallback, or successful no-op consumes these sections."
@@ -968,16 +968,16 @@
       "status": "active",
       "owner": "neko-generation",
       "paths": [
-        "packages/neko-generation/src/media/generated-asset-index.ts",
-        "packages/neko-generation/src/media/generated-output-adoption.ts",
-        "packages/neko-generation/src/media/index.ts"
+        "packages/generation/src/media/generated-asset-index.ts",
+        "packages/generation/src/media/generated-output-adoption.ts",
+        "packages/generation/src/media/index.ts"
       ],
       "replacement": "Canonical Generation output records and workspace-owned content locators.",
       "removeCondition": "Remove only after retained prelaunch generated outputs have been explicitly adopted, rejected, or declared disposable.",
       "validation": {
         "commands": [
-          "pnpm --dir packages/neko-generation exec vitest run src/media/__tests__/generated-output-adoption.test.ts src/media/__tests__/generated-asset-index.test.ts",
-          "rg -n \"legacy|migration\" packages/neko-generation/src/media/generated-asset-index.ts packages/neko-generation/src/media/generated-output-adoption.ts"
+          "pnpm --dir packages/generation exec vitest run src/media/__tests__/generated-output-adoption.test.ts src/media/__tests__/generated-asset-index.test.ts",
+          "rg -n \"legacy|migration\" packages/generation/src/media/generated-asset-index.ts packages/generation/src/media/generated-output-adoption.ts"
         ]
       },
       "notes": "These APIs are explicit preservation operations and are not invoked as a fallback from the canonical generation path."
@@ -991,15 +991,15 @@
       "status": "active",
       "owner": "neko-generation",
       "paths": [
-        "packages/neko-generation/src/domain-contracts/media-quality.ts",
-        "packages/neko-generation/src/media/local-metadata/generated-output-projection-store.ts"
+        "packages/generation/src/domain-contracts/media-quality.ts",
+        "packages/generation/src/media/local-metadata/generated-output-projection-store.ts"
       ],
       "replacement": "Canonical content locators and validated generated-output projections.",
       "removeCondition": "Remove diagnostics only when every persisted producer is canonical and unknown retired payloads remain fail-closed by another versioned boundary.",
       "validation": {
         "commands": [
-          "pnpm --dir packages/neko-generation test",
-          "rg -n \"legacy-path-target-rejected|invalid or legacy projection\" packages/neko-generation/src"
+          "pnpm --dir packages/generation test",
+          "rg -n \"legacy-path-target-rejected|invalid or legacy projection\" packages/generation/src"
         ]
       }
     },
@@ -1011,13 +1011,13 @@
       "action": "preserve",
       "status": "active",
       "owner": "neko-local-metadata",
-      "paths": ["packages/neko-local-metadata/src/migration-planner.ts"],
+      "paths": ["packages/local-metadata/src/migration-planner.ts"],
       "replacement": "Canonical package-owned local metadata stores with explicit inspect, plan, apply, and verify phases.",
       "removeCondition": "Remove source classifications only after valuable prelaunch local metadata no longer requires migration or explicit rejection.",
       "validation": {
         "commands": [
-          "pnpm --dir packages/neko-local-metadata test",
-          "rg -n \"legacy|deprecated|migration\" packages/neko-local-metadata/src/migration-planner.ts"
+          "pnpm --dir packages/local-metadata test",
+          "rg -n \"legacy|deprecated|migration\" packages/local-metadata/src/migration-planner.ts"
         ]
       },
       "notes": "Planning never reads retired data as canonical runtime state."

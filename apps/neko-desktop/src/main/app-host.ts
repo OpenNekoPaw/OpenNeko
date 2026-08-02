@@ -61,17 +61,17 @@ import type {
   ResourceBrowserSnapshotRequest,
   ResourceBrowserThumbnailRequest,
   ResourceBrowserThumbnailResult,
-} from '@neko-assets/domain/resource-browser/contract';
-import type { ResourceBrowserNodeRuntime } from '@neko-assets/node';
+} from '@neko/assets-domain/resource-browser/contract';
+import type { ResourceBrowserNodeRuntime } from '@neko/assets-node';
 import type { DesktopPreviewRuntime } from './desktop-preview-runtime';
-import type { PreviewProjection, PreviewRuntimeRequest } from '@neko-preview/domain';
+import type { PreviewProjection, PreviewRuntimeRequest } from '@neko/preview-domain';
 import type {
   CanvasHostIntentResult,
   CanvasHostProjectionEvent,
   CanvasHostRuntimeIdentity,
   CanvasHostSnapshot,
   CanvasMaterialActionResolution,
-} from '@neko-canvas/domain';
+} from '@neko/canvas-domain';
 import {
   parseDesktopCanvasHostIdentity,
   type DesktopCanvasMediaResponse,
@@ -82,7 +82,7 @@ import type {
   CutHostRuntimeProjectionEvent,
   CutHostRuntimeResult,
   CutHostRuntimeSnapshot,
-} from '@neko-cut/domain';
+} from '@neko/cut-domain';
 import { parseDesktopCutHostIdentity } from '../shared/cut-bridge-contract';
 import type { DesktopCutRuntime } from './desktop-cut-runtime';
 import {
@@ -123,15 +123,15 @@ import {
 } from '@neko/host/application-settings';
 import type { DesktopApplicationSettingsService } from '@neko/host/application-settings-service';
 import type { DesktopExtensionManager } from './desktop-extension-manager';
-import type { PersonalSkillManager } from '@neko-agent/runtime/pi';
-import type { ProjectPortabilityRuntime } from '@neko-assets/node';
+import type { PersonalSkillManager } from '@neko/agent-runtime/pi';
+import type { ProjectPortabilityRuntime } from '@neko/assets-node';
 import type {
   DesktopProjectPortabilityCancelResult,
   DesktopProjectPortabilityExecuteResult,
   DesktopProjectPortabilityInspectResult,
   DesktopProjectPortabilityPlanResult,
   DesktopProjectPortabilityProgressEvent,
-} from '@neko-assets/domain/contracts';
+} from '@neko/assets-domain/contracts';
 import {
   DESKTOP_AGENT_AUTOMATION_VERSION,
   parseDesktopAgentAutomationRequest,

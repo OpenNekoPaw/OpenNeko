@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { DesktopWorkspaceRegistry } from './desktop-workspace-registry';
-import type { AssetWorkspaceResolution } from '@neko-assets/domain/contracts';
+import type { AssetWorkspaceResolution } from '@neko/assets-domain/contracts';
 import { DesktopShellService } from './shell-service';
 import {
   DesktopShellStateRepository,

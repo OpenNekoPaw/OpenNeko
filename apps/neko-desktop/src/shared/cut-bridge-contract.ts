@@ -5,7 +5,7 @@ import {
   type CutHostRuntimeRequest,
   type CutHostRuntimeResult,
   type CutHostRuntimeSnapshot,
-} from '@neko-cut/domain';
+} from '@neko/cut-domain';
 
 export const DESKTOP_CUT_CHANNELS = {
   snapshotGet: 'open-neko:cut:snapshot-get',

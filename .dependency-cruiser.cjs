@@ -29,11 +29,11 @@ module.exports = {
       comment: '@neko/shared is the zero-workspace-dependency L0 foundation',
       severity: 'error',
       from: {
-        path: '^packages/neko-shared/',
+        path: '^packages/shared/',
       },
       to: {
         path: '^packages/',
-        pathNot: '^packages/neko-shared/',
+        pathNot: '^packages/shared/',
       },
     },
 
@@ -79,9 +79,9 @@ module.exports = {
       comment:
         'neko-chara may consume Agent contracts, but must not depend on Agent runtime, platform, Webview, or provider implementations',
       severity: 'error',
-      from: { path: '^packages/neko-chara/' },
+      from: { path: '^packages/chara/' },
       to: {
-        path: '^packages/neko-(?:agent-runtime|ai-sdk|platform|agent-webview)/',
+        path: '^packages/(?:agent/(?:runtime|webview)|ai/sdk|platform)/',
       },
     },
     {
@@ -89,10 +89,10 @@ module.exports = {
       comment: 'Generic Agent provider/runtime packages remain independent from Chara behavior',
       severity: 'error',
       from: {
-        path: '^packages/neko-(?:agent-runtime|ai-sdk)/',
+        path: '^packages/(?:agent/runtime|ai/sdk)/',
       },
       to: {
-        path: '^packages/neko-chara/',
+        path: '^packages/chara/',
       },
     },
     {
@@ -100,14 +100,14 @@ module.exports = {
       comment:
         'Quality stays host-neutral and may consume only shared, content, and generation contracts',
       severity: 'error',
-      from: { path: '^packages/neko-quality/' },
+      from: { path: '^packages/quality/' },
       to: {
         path: '^packages/',
         pathNot: [
-          '^packages/neko-quality/',
-          '^packages/neko-shared/',
-          '^packages/neko-content/',
-          '^packages/neko-generation/',
+          '^packages/quality/',
+          '^packages/shared/',
+          '^packages/content/',
+          '^packages/generation/',
         ],
       },
     },
@@ -117,10 +117,10 @@ module.exports = {
         'Generic Agent runtime packages remain Quality-neutral; only host composition may depend on neko-quality',
       severity: 'error',
       from: {
-        path: '^packages/neko-(?:agent-runtime|ai-sdk|agent-webview)/',
+        path: '^packages/(?:agent/(?:runtime|webview)|ai/sdk)/',
       },
       to: {
-        path: '^packages/neko-quality/',
+        path: '^packages/quality/',
       },
     },
   ],

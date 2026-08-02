@@ -14,7 +14,7 @@ describe('Engine product retirement boundary', () => {
   it('rejects production imports of the retired Engine client', async () => {
     const files = new Map([
       [
-        'packages/neko-preview-webview/src/preview.ts',
+        'packages/preview/webview/src/preview.ts',
         "import { EngineClient } from '@neko/neko-client';",
       ],
     ]);

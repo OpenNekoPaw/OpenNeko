@@ -3,12 +3,12 @@ import {
   RESOURCE_BROWSER_CONTRACT_VERSION,
   createResourceBrowserRecoveryPlanRequest,
   createResourceBrowserSnapshotRequest,
-} from '@neko-assets/domain/resource-browser/contract';
+} from '@neko/assets-domain/resource-browser/contract';
 import { DESKTOP_RESOURCE_BROWSER_CHANNELS } from '../shared/resource-browser-bridge-contract';
 import {
   DESKTOP_PROJECT_PORTABILITY_CHANNELS,
   createDesktopProjectPortabilityRequest,
-} from '@neko-assets/domain/contracts';
+} from '@neko/assets-domain/contracts';
 
 const electron = vi.hoisted(() => ({
   bridge: undefined as typeof window.openNekoDesktop | undefined,

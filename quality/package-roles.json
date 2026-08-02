@@ -2,8 +2,8 @@
   "version": 1,
   "packages": [
     {
-      "path": "packages/neko-agent-runtime",
-      "name": "@neko-agent/runtime",
+      "path": "packages/agent/runtime",
+      "name": "@neko/agent-runtime",
       "family": "agent",
       "roles": ["application", "runtime"],
       "runtimes": ["host-neutral", "node"],
@@ -11,8 +11,8 @@
       "architectureState": "converged"
     },
     {
-      "path": "packages/neko-agent-contracts",
-      "name": "@neko-agent/contracts",
+      "path": "packages/agent/contracts",
+      "name": "@neko/agent-contracts",
       "family": "agent",
       "roles": ["contracts"],
       "runtimes": ["host-neutral"],
@@ -20,8 +20,8 @@
       "architectureState": "converged"
     },
     {
-      "path": "packages/neko-agent-webview",
-      "name": "@neko-agent/webview",
+      "path": "packages/agent/webview",
+      "name": "@neko/agent-webview",
       "family": "agent",
       "roles": ["webview"],
       "runtimes": ["browser"],
@@ -29,8 +29,8 @@
       "architectureState": "converged"
     },
     {
-      "path": "packages/neko-ai-contracts",
-      "name": "@neko-ai/contracts",
+      "path": "packages/ai/contracts",
+      "name": "@neko/ai-contracts",
       "family": "ai",
       "roles": ["contracts"],
       "runtimes": ["host-neutral"],
@@ -38,8 +38,8 @@
       "architectureState": "converged"
     },
     {
-      "path": "packages/neko-ai-sdk",
-      "name": "@neko-ai/sdk",
+      "path": "packages/ai/sdk",
+      "name": "@neko/ai-sdk",
       "family": "ai",
       "roles": ["infrastructure"],
       "runtimes": ["host-neutral", "node"],
@@ -47,8 +47,8 @@
       "architectureState": "converged"
     },
     {
-      "path": "packages/neko-assets-domain",
-      "name": "@neko-assets/domain",
+      "path": "packages/assets/domain",
+      "name": "@neko/assets-domain",
       "family": "assets",
       "roles": ["contracts", "domain", "application"],
       "runtimes": ["host-neutral"],
@@ -56,8 +56,8 @@
       "architectureState": "converged"
     },
     {
-      "path": "packages/neko-assets-node",
-      "name": "@neko-assets/node",
+      "path": "packages/assets/node",
+      "name": "@neko/assets-node",
       "family": "assets",
       "roles": ["node"],
       "runtimes": ["node"],
@@ -65,8 +65,8 @@
       "architectureState": "converged"
     },
     {
-      "path": "packages/neko-assets-webview",
-      "name": "@neko-assets/webview",
+      "path": "packages/assets/webview",
+      "name": "@neko/assets-webview",
       "family": "assets",
       "roles": ["webview"],
       "runtimes": ["browser"],
@@ -74,8 +74,8 @@
       "architectureState": "converged"
     },
     {
-      "path": "packages/neko-canvas-domain",
-      "name": "@neko-canvas/domain",
+      "path": "packages/canvas/domain",
+      "name": "@neko/canvas-domain",
       "family": "canvas",
       "roles": ["contracts", "domain"],
       "runtimes": ["host-neutral"],
@@ -83,8 +83,8 @@
       "architectureState": "converged"
     },
     {
-      "path": "packages/neko-canvas-node",
-      "name": "@neko-canvas/node",
+      "path": "packages/canvas/node",
+      "name": "@neko/canvas-node",
       "family": "canvas",
       "roles": ["node"],
       "runtimes": ["node"],
@@ -92,8 +92,8 @@
       "architectureState": "converged"
     },
     {
-      "path": "packages/neko-canvas-webview",
-      "name": "@neko-canvas/webview",
+      "path": "packages/canvas/webview",
+      "name": "@neko/canvas-webview",
       "family": "canvas",
       "roles": ["webview"],
       "runtimes": ["browser"],
@@ -101,7 +101,7 @@
       "architectureState": "converged"
     },
     {
-      "path": "packages/neko-chara",
+      "path": "packages/chara",
       "name": "@neko/chara",
       "family": "chara",
       "roles": ["contracts", "domain", "application", "testing"],
@@ -110,7 +110,7 @@
       "architectureState": "converged"
     },
     {
-      "path": "packages/neko-content",
+      "path": "packages/content",
       "name": "@neko/content",
       "family": "content",
       "roles": ["contracts", "domain", "node"],
@@ -119,8 +119,8 @@
       "architectureState": "converged"
     },
     {
-      "path": "packages/neko-cut-domain",
-      "name": "@neko-cut/domain",
+      "path": "packages/cut/domain",
+      "name": "@neko/cut-domain",
       "family": "cut",
       "roles": ["contracts", "domain"],
       "runtimes": ["host-neutral"],
@@ -128,8 +128,8 @@
       "architectureState": "converged"
     },
     {
-      "path": "packages/neko-cut-node",
-      "name": "@neko-cut/node",
+      "path": "packages/cut/node",
+      "name": "@neko/cut-node",
       "family": "cut",
       "roles": ["node"],
       "runtimes": ["node"],
@@ -137,8 +137,8 @@
       "architectureState": "converged"
     },
     {
-      "path": "packages/neko-cut-webview",
-      "name": "@neko-cut/webview",
+      "path": "packages/cut/webview",
+      "name": "@neko/cut-webview",
       "family": "cut",
       "roles": ["webview"],
       "runtimes": ["browser"],
@@ -146,8 +146,8 @@
       "architectureState": "converged"
     },
     {
-      "path": "packages/neko-entity-domain",
-      "name": "@neko-entity/domain",
+      "path": "packages/entity/domain",
+      "name": "@neko/entity-domain",
       "family": "entity",
       "roles": ["contracts", "domain"],
       "runtimes": ["host-neutral"],
@@ -155,8 +155,8 @@
       "architectureState": "converged"
     },
     {
-      "path": "packages/neko-entity-node",
-      "name": "@neko-entity/node",
+      "path": "packages/entity/node",
+      "name": "@neko/entity-node",
       "family": "entity",
       "roles": ["node"],
       "runtimes": ["node"],
@@ -164,7 +164,7 @@
       "architectureState": "converged"
     },
     {
-      "path": "packages/neko-generation",
+      "path": "packages/generation",
       "name": "@neko/generation",
       "family": "generation",
       "roles": ["contracts", "domain", "application", "node"],
@@ -173,7 +173,7 @@
       "architectureState": "converged"
     },
     {
-      "path": "packages/neko-host",
+      "path": "packages/host",
       "name": "@neko/host",
       "family": "host",
       "roles": ["contracts", "infrastructure", "node"],
@@ -182,7 +182,7 @@
       "architectureState": "converged"
     },
     {
-      "path": "packages/neko-local-metadata",
+      "path": "packages/local-metadata",
       "name": "@neko/local-metadata",
       "family": "local-metadata",
       "roles": ["infrastructure", "contracts", "node", "testing"],
@@ -191,7 +191,7 @@
       "architectureState": "converged"
     },
     {
-      "path": "packages/neko-markdown",
+      "path": "packages/markdown",
       "name": "@neko/markdown",
       "family": "markdown",
       "roles": ["infrastructure"],
@@ -200,7 +200,7 @@
       "architectureState": "converged"
     },
     {
-      "path": "packages/neko-media",
+      "path": "packages/media",
       "name": "@neko/media",
       "family": "media",
       "roles": ["infrastructure", "node"],
@@ -209,8 +209,8 @@
       "architectureState": "converged"
     },
     {
-      "path": "packages/neko-media-local-metadata",
-      "name": "@neko-media/local-metadata",
+      "path": "packages/media-local-metadata",
+      "name": "@neko/media-local-metadata",
       "family": "media",
       "roles": ["node"],
       "runtimes": ["node"],
@@ -218,8 +218,8 @@
       "architectureState": "converged"
     },
     {
-      "path": "packages/neko-preview-domain",
-      "name": "@neko-preview/domain",
+      "path": "packages/preview/domain",
+      "name": "@neko/preview-domain",
       "family": "preview",
       "roles": ["contracts", "domain"],
       "runtimes": ["host-neutral"],
@@ -227,8 +227,8 @@
       "architectureState": "converged"
     },
     {
-      "path": "packages/neko-preview-webview",
-      "name": "@neko-preview/webview",
+      "path": "packages/preview/webview",
+      "name": "@neko/preview-webview",
       "family": "preview",
       "roles": ["webview"],
       "runtimes": ["browser"],
@@ -236,7 +236,7 @@
       "architectureState": "converged"
     },
     {
-      "path": "packages/neko-quality",
+      "path": "packages/quality",
       "name": "@neko/quality",
       "family": "quality",
       "roles": ["domain", "testing"],
@@ -245,8 +245,8 @@
       "architectureState": "converged"
     },
     {
-      "path": "packages/neko-search-domain",
-      "name": "@neko-search/domain",
+      "path": "packages/search/domain",
+      "name": "@neko/search-domain",
       "family": "search",
       "roles": ["domain"],
       "runtimes": ["host-neutral"],
@@ -254,8 +254,8 @@
       "architectureState": "converged"
     },
     {
-      "path": "packages/neko-search-local-metadata",
-      "name": "@neko-search/local-metadata",
+      "path": "packages/search/local-metadata",
+      "name": "@neko/search-local-metadata",
       "family": "search",
       "roles": ["node"],
       "runtimes": ["node"],
@@ -263,7 +263,7 @@
       "architectureState": "converged"
     },
     {
-      "path": "packages/neko-skills",
+      "path": "packages/skills",
       "name": "@neko/skills",
       "family": "skills",
       "roles": ["content-only"],
@@ -272,7 +272,7 @@
       "architectureState": "converged"
     },
     {
-      "path": "packages/neko-shared",
+      "path": "packages/shared",
       "name": "@neko/shared",
       "family": "shared",
       "roles": ["infrastructure", "contracts", "node"],
@@ -281,7 +281,7 @@
       "architectureState": "converged"
     },
     {
-      "path": "packages/neko-ui",
+      "path": "packages/ui",
       "name": "@neko/ui",
       "family": "ui",
       "roles": ["infrastructure"],

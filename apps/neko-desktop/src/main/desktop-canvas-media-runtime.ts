@@ -2,9 +2,9 @@ import { stat } from 'node:fs/promises';
 import * as path from 'node:path';
 import type { HtmlAudioDescriptor, HtmlVideoDescriptor, MediaProbe } from '@neko/media';
 import { NodeMediaRuntime, type NodeMediaPublisher } from '@neko/media/node';
-import type { CanvasHostRuntimeIdentity } from '@neko-canvas/domain';
-import type { AssetWorkspaceResolution } from '@neko-assets/domain/contracts';
-import { resolveWorkspaceContentLocator } from '@neko-assets/node';
+import type { CanvasHostRuntimeIdentity } from '@neko/canvas-domain';
+import type { AssetWorkspaceResolution } from '@neko/assets-domain/contracts';
+import { resolveWorkspaceContentLocator } from '@neko/assets-node';
 import type { DesktopResourceRegistry } from './desktop-resource-registry';
 import type {
   DesktopCanvasMediaInfo,

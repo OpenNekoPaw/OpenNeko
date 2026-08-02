@@ -30,7 +30,7 @@ vi.mock('./DesktopCanvasSurface', () => ({
   DesktopCanvasSurface: () => <div data-testid="desktop-canvas-surface" />,
 }));
 
-vi.mock('@neko-assets/webview/project-portability/control', () => ({
+vi.mock('@neko/assets-webview/project-portability/control', () => ({
   ProjectPortabilityControl: () => null,
 }));
 

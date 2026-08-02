@@ -54,8 +54,8 @@ import { DesktopCanvasSurface } from './DesktopCanvasSurface';
 import { DesktopCutSurface } from './DesktopCutSurface';
 import { DesktopSettingsSurface } from './DesktopSettingsSurface';
 import { DesktopGlobalLibrarySurface } from './DesktopGlobalLibrarySurface';
-import { ProjectPortabilityControl } from '@neko-assets/webview/project-portability/control';
-import type { OpenNekoDesktopProjectPortabilityBridge } from '@neko-assets/domain/contracts';
+import { ProjectPortabilityControl } from '@neko/assets-webview/project-portability/control';
+import type { OpenNekoDesktopProjectPortabilityBridge } from '@neko/assets-domain/contracts';
 import {
   DesktopApplicationBrand,
   DesktopApplicationNavigationButton,

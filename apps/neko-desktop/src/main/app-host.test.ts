@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createToolRegistry } from '@neko-agent/runtime/tool-registry';
-import { createOpenNekoPiModels } from '@neko-agent/runtime/pi';
+import { createToolRegistry } from '@neko/agent-runtime/tool-registry';
+import { createOpenNekoPiModels } from '@neko/agent-runtime/pi';
 import type { ILogger } from '@neko/shared/logger';
 import { createDesktopAgentBootstrapRequest } from '../shared/agent-contract';
 import { createDesktopBootstrapRequest } from '../shared/bridge-contract';
@@ -28,7 +28,7 @@ import type {
 } from './desktop-agent-app-host-composition';
 import { createDesktopAgentCredentialRuntime } from './desktop-agent-credential-runtime';
 import type { DesktopWorkspaceRegistry } from './desktop-workspace-registry';
-import type { AssetWorkspaceResolution } from '@neko-assets/domain/contracts';
+import type { AssetWorkspaceResolution } from '@neko/assets-domain/contracts';
 import { createElectronNekoHostPorts } from './electron-host-ports';
 import { DESKTOP_APP_ORIGIN } from './security';
 import { DesktopShellService } from './shell-service';
@@ -45,7 +45,7 @@ import type {
   DesktopExtensionCatalogSnapshot,
   DesktopExtensionManager,
 } from './desktop-extension-manager';
-import type { PersonalSkillManager } from '@neko-agent/runtime/pi';
+import type { PersonalSkillManager } from '@neko/agent-runtime/pi';
 
 describe('DesktopAppHost', () => {
   it('keeps Desktop settings sender-bound and opens Agent configuration through its owner action', async () => {

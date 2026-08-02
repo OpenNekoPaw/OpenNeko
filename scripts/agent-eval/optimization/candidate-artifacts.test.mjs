@@ -13,7 +13,7 @@ import {
 const HASH_A = `sha256:${'a'.repeat(64)}`;
 const HASH_B = `sha256:${'b'.repeat(64)}`;
 const NOW = '2026-07-14T00:00:00.000Z';
-const TARGET = 'packages/neko-skills/src/builtins/creation-persona.ts';
+const TARGET = 'packages/skills/src/builtins/creation-persona.ts';
 const temporaryDirectories = [];
 
 afterEach(async () => {
@@ -160,7 +160,7 @@ async function workspace() {
   const root = await fs.mkdtemp(join(os.tmpdir(), 'neko-optimization-artifacts-'));
   temporaryDirectories.push(root);
   const targetFile = join(root, TARGET);
-  await fs.mkdir(join(root, 'packages/neko-skills/src/builtins'), { recursive: true });
+  await fs.mkdir(join(root, 'packages/skills/src/builtins'), { recursive: true });
   await fs.writeFile(targetFile, 'canonical-content\n');
   return { root, targetFile, outputRoot: join(root, 'artifacts') };
 }
@@ -197,7 +197,7 @@ describe('optimization candidate artifacts', () => {
       ),
     ).rejects.toMatchObject({ code: 'candidate-patch-fingerprint-mismatch' });
 
-    const otherPatch = patchText.replaceAll(TARGET, 'packages/neko-skills/src/builtins/other.ts');
+    const otherPatch = patchText.replaceAll(TARGET, 'packages/skills/src/builtins/other.ts');
     await expect(
       writeOptimizationCandidateArtifacts(
         { plan: plan(), candidate: candidate(otherPatch), patchText: otherPatch },

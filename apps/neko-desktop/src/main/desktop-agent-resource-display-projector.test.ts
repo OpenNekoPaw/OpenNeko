@@ -1,13 +1,13 @@
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { ConversationProjectionAttachmentHostFrame } from '@neko-agent/runtime/runtime/projection/conversation-projection-attachment-server';
-import type { AgentTurnTimelineItem, AgentTurnTimelineToolCallItem } from '@neko-agent/contracts';
+import type { ConversationProjectionAttachmentHostFrame } from '@neko/agent-runtime/runtime/projection/conversation-projection-attachment-server';
+import type { AgentTurnTimelineItem, AgentTurnTimelineToolCallItem } from '@neko/agent-contracts';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   createAgentResourceDisplayProjector,
   type AgentResourceDisplayRegistrationPort,
-} from '@neko-agent/runtime/runtime';
+} from '@neko/agent-runtime/runtime';
 import type { DesktopResourceLease } from './desktop-resource-registry';
 
 const temporaryRoots: string[] = [];

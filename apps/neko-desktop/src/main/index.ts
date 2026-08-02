@@ -35,7 +35,7 @@ import {
   DesktopShellStateRepository,
 } from './shell-state-repository';
 import { createDesktopAgentAppHostComposition } from './desktop-agent-app-host-composition';
-import { NodePiConversationCatalogReader } from '@neko-agent/runtime/pi';
+import { NodePiConversationCatalogReader } from '@neko/agent-runtime/pi';
 import { NodeVideoThumbnail } from '@neko/media/node';
 import {
   resolveDesktopAgentAutomationLaunch,
@@ -52,13 +52,13 @@ import { resolveGlobalStorageLayout } from '@neko/local-metadata';
 import {
   ResourceBrowserNodeRuntime,
   type ResourceBrowserNodeRuntimeOptions,
-} from '@neko-assets/node';
+} from '@neko/assets-node';
 import {
   DesktopResourceRegistry,
   registerDesktopResourceRequestAuthorization,
 } from './desktop-resource-registry';
 import { DesktopPreviewRuntime } from './desktop-preview-runtime';
-import { CanvasGenerationNodeRuntime } from '@neko-canvas/node';
+import { CanvasGenerationNodeRuntime } from '@neko/canvas-node';
 import { DesktopCanvasRuntime } from './desktop-canvas-runtime';
 import { DesktopCanvasMediaRuntime } from './desktop-canvas-media-runtime';
 import { DesktopCutRuntime } from './desktop-cut-runtime';
@@ -74,18 +74,18 @@ import {
 } from '@neko/host/application-settings';
 import { buildConfigFilePath } from '@neko/host/files';
 import { resolveDesktopBuiltinSkillRoot } from './desktop-builtin-skill-root';
-import { listWorkspaceLinkedMediaLibraries } from '@neko-assets/node';
+import { listWorkspaceLinkedMediaLibraries } from '@neko/assets-node';
 import {
   listGlobalMediaLibraryConnections,
   resolveGlobalMediaLibraryTarget,
-} from '@neko-assets/node';
+} from '@neko/assets-node';
 import {
   createDesktopExtensionManager,
   createOpenNekoExtensionRepository,
 } from './desktop-extension-manager';
 import { createDesktopExtensionAgentSupport } from './desktop-plugin-runtime';
-import { createPersonalSkillManager } from '@neko-agent/runtime/pi';
-import { ProjectPortabilityRuntime } from '@neko-assets/node';
+import { createPersonalSkillManager } from '@neko/agent-runtime/pi';
+import { ProjectPortabilityRuntime } from '@neko/assets-node';
 
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string | undefined;
 declare const MAIN_WINDOW_VITE_NAME: string;

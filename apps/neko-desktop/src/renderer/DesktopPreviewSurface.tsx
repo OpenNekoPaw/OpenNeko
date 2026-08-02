@@ -5,7 +5,7 @@ import type { DesktopWorkbenchViewRef } from '../shared/workbench-contract';
 import { createElectronPreviewHostRuntime } from './desktop-preview-host-runtime';
 
 const PreviewRoot = lazy(async () => {
-  const module = await import('@neko-preview/webview/root');
+  const module = await import('@neko/preview-webview/root');
   return { default: module.PreviewRoot };
 });
 

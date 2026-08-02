@@ -2,7 +2,7 @@ import type {
   CutHostRuntime,
   CutHostRuntimeIdentity,
   CutHostRuntimeRequest,
-} from '@neko-cut/domain';
+} from '@neko/cut-domain';
 
 export function createElectronCutHostRuntime(identity: CutHostRuntimeIdentity): CutHostRuntime {
   return {

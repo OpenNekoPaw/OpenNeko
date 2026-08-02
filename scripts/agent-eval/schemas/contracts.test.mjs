@@ -418,7 +418,7 @@ describe('agent evaluation v2 suite and scenario contracts', () => {
         path: 'output/result.json',
         digest: HASH,
         validatorId: 'json-document-v1',
-        validatorModule: '@neko-agent/runtime/validation',
+        validatorModule: '@neko/agent-runtime/validation',
       },
     ];
     expect(() => validateScenarioForExecution(dynamic)).toThrow(

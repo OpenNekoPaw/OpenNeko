@@ -6,9 +6,9 @@ import {
   type CanvasHostIntent,
   type CanvasHostRuntimeIdentity,
   type CanvasHostSnapshot,
-} from '@neko-canvas/domain';
+} from '@neko/canvas-domain';
 import { ConsoleLogger } from '@neko/shared/logger';
-import { createWorkspaceLinkedMediaLibrary } from '@neko-assets/node';
+import { createWorkspaceLinkedMediaLibrary } from '@neko/assets-node';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createElectronNekoHostPorts } from './electron-host-ports';
 import { DesktopCanvasRuntime } from './desktop-canvas-runtime';
@@ -17,8 +17,8 @@ import {
   CANVAS_OPEN_IN_CUT_ACTION_ID,
   CANVAS_PREVIEW_ACTION_ID,
   CANVAS_REGENERATE_ACTION_ID,
-} from '@neko-canvas/domain';
-import { createGlobalMediaLibraryConnection } from '@neko-assets/node';
+} from '@neko/canvas-domain';
+import { createGlobalMediaLibraryConnection } from '@neko/assets-node';
 import type { DesktopCanvasViewGrant } from './shell-service';
 import { createDefaultDesktopWorkbenchLayout } from '../shared/workbench-contract';
 

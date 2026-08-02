@@ -15,10 +15,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   ENTITY_REPRESENTATION_BINDING_FILE_VERSION,
   encodeEntityRepresentationBindingFile,
-} from '@neko-entity/domain';
+} from '@neko/entity-domain';
 import type { ILogger } from '@neko/shared/logger';
-import type { ResourceBrowserIdentity } from '@neko-assets/domain/resource-browser/contract';
-import { presentResourceBrowserContentItem } from '@neko-assets/domain/resource-browser/presenter';
+import type { ResourceBrowserIdentity } from '@neko/assets-domain/resource-browser/contract';
+import { presentResourceBrowserContentItem } from '@neko/assets-domain/resource-browser/presenter';
 import { createElectronNekoHostPorts } from './electron-host-ports';
 import {
   createResourceBrowserNodeProjectionSource,
@@ -26,13 +26,13 @@ import {
   readGlobalMediaLibraryChildren,
   searchGlobalAssetCatalog,
   searchGlobalMediaLibraries,
-} from '@neko-assets/node';
+} from '@neko/assets-node';
 import {
   createGlobalMediaLibraryConnection,
   listGlobalMediaLibraryConnections,
   removeGlobalMediaLibraryConnection,
-} from '@neko-assets/node';
-import { WorkspaceMediaLibrarySyncService } from '@neko-assets/node';
+} from '@neko/assets-node';
+import { WorkspaceMediaLibrarySyncService } from '@neko/assets-node';
 
 const temporaryRoots: string[] = [];
 const identity: ResourceBrowserIdentity = {

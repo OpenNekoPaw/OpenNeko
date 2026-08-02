@@ -18,7 +18,7 @@ import {
   type CutHostRuntimeResult,
   type CutHostRuntimeSnapshot,
   type CutMediaRuntimeAdapter,
-} from '@neko-cut/domain';
+} from '@neko/cut-domain';
 import {
   CutExportTaskRegistry,
   CutPreviewRuntimeController,
@@ -31,7 +31,7 @@ import {
   readCutExportSettings,
   readClipRepresentationRequests,
   type CutPreviewRuntimeEvent,
-} from '@neko-cut/node';
+} from '@neko/cut-node';
 import type { NekoHostPorts } from '@neko/host/ports';
 import type { NodeMediaPublisher } from '@neko/media/node';
 import type { WorkspaceFileContentLocator } from '@neko/content';
@@ -39,7 +39,7 @@ import type {
   ResourceBrowserContentItem,
   ResourceBrowserIdentity,
   ResourceBrowserItem,
-} from '@neko-assets/domain/resource-browser/contract';
+} from '@neko/assets-domain/resource-browser/contract';
 import type { DesktopShellService } from './shell-service';
 import {
   getActiveMainView,
@@ -48,7 +48,7 @@ import {
   type DesktopWorkbenchLayoutProjection,
 } from '../shared/workbench-contract';
 import { createDesktopCutSessionId } from '../shared/cut-bridge-contract';
-import { resolveWorkspaceContentLocator } from '@neko-assets/node';
+import { resolveWorkspaceContentLocator } from '@neko/assets-node';
 import type { DesktopResourceRegistry } from './desktop-resource-registry';
 
 interface DesktopCutRuntimeEntry {

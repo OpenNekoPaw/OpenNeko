@@ -1,4 +1,4 @@
-import type { PreviewContentKind } from '@neko-preview/domain';
+import type { PreviewContentKind } from '@neko/preview-domain';
 
 export const DESKTOP_WORKBENCH_CONTRACT_VERSION = 3 as const;
 export const APPLICATION_PRIMARY_SIDEBAR_DEFAULT_WIDTH = 240;

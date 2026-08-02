@@ -2,7 +2,7 @@ import type {
   AgentHostToWebviewMessage,
   AgentWebviewToHostMessage,
   DesktopAgentConnectionIdentity,
-} from '@neko-agent/contracts';
+} from '@neko/agent-contracts';
 
 export interface DesktopAgentEventCursor {
   readonly connection: DesktopAgentConnectionIdentity;

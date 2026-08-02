@@ -2,8 +2,8 @@ import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { PREVIEW_HOST_RUNTIME_ROUTES, PREVIEW_HOST_RUNTIME_VERSION } from '@neko-preview/domain';
-import type { ResourceBrowserIdentity } from '@neko-assets/domain/resource-browser/contract';
+import { PREVIEW_HOST_RUNTIME_ROUTES, PREVIEW_HOST_RUNTIME_VERSION } from '@neko/preview-domain';
+import type { ResourceBrowserIdentity } from '@neko/assets-domain/resource-browser/contract';
 import {
   DESKTOP_PRIMARY_MAIN_GROUP_ID,
   DESKTOP_SECONDARY_MAIN_GROUP_ID,

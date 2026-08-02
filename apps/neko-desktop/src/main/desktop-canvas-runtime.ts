@@ -13,7 +13,7 @@ import {
   type CanvasMaterialActionTarget,
   type CanvasGenerationApplicationPort,
   createCanvasMaterialActionOwner,
-} from '@neko-canvas/domain';
+} from '@neko/canvas-domain';
 import type { NekoHostPorts } from '@neko/host/ports';
 import { type ContentLocator } from '@neko/content';
 import {
@@ -25,15 +25,15 @@ import {
   type CanvasMediaLibraryCopyConflictPolicy,
   type CanvasMaterialMediaKind,
   type CanvasReferencedContentLocator,
-} from '@neko-canvas/domain';
+} from '@neko/canvas-domain';
 import type { DesktopCanvasViewGrant } from './shell-service';
 import type { DesktopWorkbenchLayoutProjection } from '../shared/workbench-contract';
 import {
   CanvasMaterialAuthoringService,
   CanvasMediaLibraryCopyService,
   type CanvasExternalSource,
-} from '@neko-canvas/node';
-import { resolveWorkspaceContentLocator } from '@neko-assets/node';
+} from '@neko/canvas-node';
+import { resolveWorkspaceContentLocator } from '@neko/assets-node';
 import {
   parseDesktopCanvasMediaRequest,
   parseDesktopCanvasPreviewVariantRequest,

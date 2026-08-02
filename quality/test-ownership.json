@@ -9,218 +9,218 @@
       "testScope": "src/**/*.test.{ts,tsx}"
     },
     {
-      "path": "packages/neko-agent-runtime",
-      "owner": "packages/neko-agent-runtime",
+      "path": "packages/agent/runtime",
+      "owner": "packages/agent/runtime",
       "mode": "self",
       "sourceScope": "src/**/*.{ts,tsx}",
       "testScope": "src/**/*.test.{ts,tsx}"
     },
     {
-      "path": "packages/neko-agent-contracts",
-      "owner": "packages/neko-agent-contracts",
+      "path": "packages/agent/contracts",
+      "owner": "packages/agent/contracts",
       "mode": "self",
       "sourceScope": "src/**/*.{ts,tsx}",
       "testScope": "src/**/*.test.{ts,tsx}"
     },
     {
-      "path": "packages/neko-ai-contracts",
-      "owner": "packages/neko-ai-contracts",
+      "path": "packages/ai/contracts",
+      "owner": "packages/ai/contracts",
       "mode": "self",
       "sourceScope": "src/**/*.ts",
       "testScope": "src/**/*.test.ts"
     },
     {
-      "path": "packages/neko-ai-sdk",
-      "owner": "packages/neko-ai-sdk",
+      "path": "packages/ai/sdk",
+      "owner": "packages/ai/sdk",
       "mode": "self",
       "sourceScope": "src/**/*.{ts,tsx}",
       "testScope": "src/**/*.test.{ts,tsx}"
     },
     {
-      "path": "packages/neko-agent-webview",
-      "owner": "packages/neko-agent-webview",
+      "path": "packages/agent/webview",
+      "owner": "packages/agent/webview",
       "mode": "self",
       "sourceScope": "src/**/*.{ts,tsx}",
       "testScope": "src/**/*.test.{ts,tsx}"
     },
     {
-      "path": "packages/neko-assets-domain",
-      "owner": "packages/neko-assets-domain",
+      "path": "packages/assets/domain",
+      "owner": "packages/assets/domain",
       "mode": "self",
       "sourceScope": "src/**/*.{ts,tsx}",
       "testScope": "src/**/*.test.{ts,tsx}"
     },
     {
-      "path": "packages/neko-assets-node",
-      "owner": "packages/neko-assets-node",
+      "path": "packages/assets/node",
+      "owner": "packages/assets/node",
       "mode": "self",
       "sourceScope": "src/**/*.ts",
       "testScope": "src/**/*.test.ts"
     },
     {
-      "path": "packages/neko-assets-webview",
-      "owner": "packages/neko-assets-webview",
+      "path": "packages/assets/webview",
+      "owner": "packages/assets/webview",
       "mode": "self",
       "sourceScope": "src/**/*.{ts,tsx}",
       "testScope": "src/**/*.test.{ts,tsx}"
     },
     {
-      "path": "packages/neko-canvas-domain",
-      "owner": "packages/neko-canvas-domain",
+      "path": "packages/canvas/domain",
+      "owner": "packages/canvas/domain",
       "mode": "self",
       "sourceScope": "src/**/*.{ts,tsx}",
       "testScope": "src/**/*.test.{ts,tsx}"
     },
     {
-      "path": "packages/neko-canvas-node",
-      "owner": "packages/neko-canvas-node",
+      "path": "packages/canvas/node",
+      "owner": "packages/canvas/node",
       "mode": "self",
       "sourceScope": "src/**/*.ts",
       "testScope": "src/**/*.test.ts"
     },
     {
-      "path": "packages/neko-canvas-webview",
-      "owner": "packages/neko-canvas-webview",
+      "path": "packages/canvas/webview",
+      "owner": "packages/canvas/webview",
       "mode": "self",
       "sourceScope": "src/**/*.{ts,tsx}",
       "testScope": "src/**/*.test.{ts,tsx}"
     },
     {
-      "path": "packages/neko-chara",
-      "owner": "packages/neko-chara",
+      "path": "packages/chara",
+      "owner": "packages/chara",
       "mode": "self",
       "sourceScope": "src/**/*.{ts,tsx}",
       "testScope": "src/**/*.test.{ts,tsx}"
     },
     {
-      "path": "packages/neko-media",
-      "owner": "packages/neko-media",
+      "path": "packages/media",
+      "owner": "packages/media",
       "mode": "self",
       "sourceScope": "src/**/*.{ts,tsx}",
       "testScope": "src/**/*.test.{ts,tsx}"
     },
     {
-      "path": "packages/neko-media-local-metadata",
-      "owner": "packages/neko-media-local-metadata",
+      "path": "packages/media-local-metadata",
+      "owner": "packages/media-local-metadata",
       "mode": "self",
       "sourceScope": "src/**/*.ts",
       "testScope": "src/**/*.test.ts"
     },
     {
-      "path": "packages/neko-content",
-      "owner": "packages/neko-content",
+      "path": "packages/content",
+      "owner": "packages/content",
       "mode": "self",
       "sourceScope": "src/**/*.{ts,tsx}",
       "testScope": "src/**/*.test.{ts,tsx}"
     },
     {
-      "path": "packages/neko-quality",
-      "owner": "packages/neko-quality",
+      "path": "packages/quality",
+      "owner": "packages/quality",
       "mode": "self",
       "sourceScope": "src/**/*.{ts,tsx}",
       "testScope": "src/**/*.test.{ts,tsx}"
     },
     {
-      "path": "packages/neko-cut-domain",
-      "owner": "packages/neko-cut-domain",
+      "path": "packages/cut/domain",
+      "owner": "packages/cut/domain",
       "mode": "self",
       "sourceScope": "src/**/*.{ts,tsx}",
       "testScope": "src/**/*.test.{ts,tsx}"
     },
     {
-      "path": "packages/neko-cut-node",
-      "owner": "packages/neko-cut-node",
+      "path": "packages/cut/node",
+      "owner": "packages/cut/node",
       "mode": "self",
       "sourceScope": "src/**/*.{ts,tsx}",
       "testScope": "src/**/*.test.{ts,tsx}"
     },
     {
-      "path": "packages/neko-cut-webview",
-      "owner": "packages/neko-cut-webview",
+      "path": "packages/cut/webview",
+      "owner": "packages/cut/webview",
       "mode": "self",
       "sourceScope": "src/**/*.{ts,tsx}",
       "testScope": "src/**/*.test.{ts,tsx}"
     },
     {
-      "path": "packages/neko-entity-domain",
-      "owner": "packages/neko-entity-domain",
+      "path": "packages/entity/domain",
+      "owner": "packages/entity/domain",
       "mode": "self",
       "sourceScope": "src/**/*.{ts,tsx}",
       "testScope": "src/**/*.test.{ts,tsx}"
     },
     {
-      "path": "packages/neko-entity-node",
-      "owner": "packages/neko-entity-node",
+      "path": "packages/entity/node",
+      "owner": "packages/entity/node",
       "mode": "self",
       "sourceScope": "src/**/*.ts",
       "testScope": "src/**/*.test.ts"
     },
     {
-      "path": "packages/neko-generation",
-      "owner": "packages/neko-generation",
+      "path": "packages/generation",
+      "owner": "packages/generation",
       "mode": "self",
       "sourceScope": "src/**/*.{ts,tsx}",
       "testScope": "src/**/*.test.{ts,tsx}"
     },
     {
-      "path": "packages/neko-host",
-      "owner": "packages/neko-host",
+      "path": "packages/host",
+      "owner": "packages/host",
       "mode": "self",
       "sourceScope": "src/**/*.{ts,tsx}",
       "testScope": "src/**/*.test.{ts,tsx}"
     },
     {
-      "path": "packages/neko-local-metadata",
-      "owner": "packages/neko-local-metadata",
+      "path": "packages/local-metadata",
+      "owner": "packages/local-metadata",
       "mode": "self",
       "sourceScope": "src/**/*.ts",
       "testScope": "src/**/*.test.ts"
     },
     {
-      "path": "packages/neko-markdown",
-      "owner": "packages/neko-markdown",
+      "path": "packages/markdown",
+      "owner": "packages/markdown",
       "mode": "self",
       "sourceScope": "src/**/*.{ts,tsx}",
       "testScope": "src/**/*.test.{ts,tsx}"
     },
     {
-      "path": "packages/neko-preview-domain",
-      "owner": "packages/neko-preview-domain",
+      "path": "packages/preview/domain",
+      "owner": "packages/preview/domain",
       "mode": "self",
       "sourceScope": "src/**/*.ts",
       "testScope": "src/**/*.test.ts"
     },
     {
-      "path": "packages/neko-preview-webview",
-      "owner": "packages/neko-preview-webview",
+      "path": "packages/preview/webview",
+      "owner": "packages/preview/webview",
       "mode": "self",
       "sourceScope": "src/**/*.{ts,tsx}",
       "testScope": "src/**/*.test.{ts,tsx}"
     },
     {
-      "path": "packages/neko-search-domain",
-      "owner": "packages/neko-search-domain",
+      "path": "packages/search/domain",
+      "owner": "packages/search/domain",
       "mode": "self",
       "sourceScope": "src/**/*.{ts,tsx}",
       "testScope": "src/**/*.test.{ts,tsx}"
     },
     {
-      "path": "packages/neko-search-local-metadata",
-      "owner": "packages/neko-search-local-metadata",
+      "path": "packages/search/local-metadata",
+      "owner": "packages/search/local-metadata",
       "mode": "self",
       "sourceScope": "src/**/*.ts",
       "testScope": "src/**/*.test.ts"
     },
     {
-      "path": "packages/neko-shared",
-      "owner": "packages/neko-shared",
+      "path": "packages/shared",
+      "owner": "packages/shared",
       "mode": "self",
       "sourceScope": "src/**/*.{ts,tsx}",
       "testScope": "src/**/*.test.{ts,tsx}"
     },
     {
-      "path": "packages/neko-ui",
-      "owner": "packages/neko-ui",
+      "path": "packages/ui",
+      "owner": "packages/ui",
       "mode": "self",
       "sourceScope": "src/**/*.{ts,tsx}",
       "testScope": "src/**/*.test.{ts,tsx}"

@@ -1,13 +1,13 @@
 import { lazy, Suspense, useMemo } from 'react';
 import { useTranslation } from '@neko/ui/i18n/react';
-import { createCutHostRuntimeWebviewBridge } from '@neko-cut/webview/runtime-bridge';
+import { createCutHostRuntimeWebviewBridge } from '@neko/cut-webview/runtime-bridge';
 import type { DesktopProjectCatalogItem, DesktopShellProjection } from '../shared/shell-contract';
 import type { DesktopWorkbenchViewRef } from '../shared/workbench-contract';
 import { createDesktopCutSessionId } from '../shared/cut-bridge-contract';
 import { createElectronCutHostRuntime } from './desktop-cut-host-runtime';
 
 const CutWebviewRoot = lazy(async () => {
-  const module = await import('@neko-cut/webview/root');
+  const module = await import('@neko/cut-webview/root');
   return { default: module.CutWebviewRoot };
 });
 

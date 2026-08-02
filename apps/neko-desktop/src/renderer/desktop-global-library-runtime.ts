@@ -1,4 +1,4 @@
-import type { GlobalLibraryBrowserRuntime } from '@neko-assets/domain/global-library/contract';
+import type { GlobalLibraryBrowserRuntime } from '@neko/assets-domain/global-library/contract';
 import type { OpenNekoDesktopHomeManagementBridge } from '../shared/home-management-contract';
 
 export function createDesktopGlobalLibraryRuntime(

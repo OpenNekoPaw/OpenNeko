@@ -11,20 +11,20 @@ describe('first-level Webview smoke discovery', () => {
     const webviews = discoverWebviews(repositoryRoot);
 
     assert.deepEqual(webviews.map((webview) => path.relative(repositoryRoot, webview.dir)).sort(), [
-      'packages/neko-agent-webview',
-      'packages/neko-assets-webview',
-      'packages/neko-canvas-webview',
-      'packages/neko-cut-webview',
-      'packages/neko-preview-webview',
+      'packages/agent/webview',
+      'packages/assets/webview',
+      'packages/canvas/webview',
+      'packages/cut/webview',
+      'packages/preview/webview',
     ]);
   });
 
   it('filters by package identity without restoring nested discovery', () => {
-    const webviews = discoverWebviews(repositoryRoot, new Set(['@neko-agent/webview']));
+    const webviews = discoverWebviews(repositoryRoot, new Set(['@neko/agent-webview']));
 
     assert.deepEqual(
       webviews.map((webview) => webview.name),
-      ['@neko-agent/webview'],
+      ['@neko/agent-webview'],
     );
     assert.equal(webviews[0]?.dir.includes(`${path.sep}packages${path.sep}webview`), false);
   });

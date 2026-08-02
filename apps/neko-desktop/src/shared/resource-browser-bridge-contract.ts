@@ -18,7 +18,7 @@ import {
   ResourceBrowserSnapshotRequest,
   ResourceBrowserThumbnailRequest,
   ResourceBrowserThumbnailResult,
-} from '@neko-assets/domain/resource-browser/contract';
+} from '@neko/assets-domain/resource-browser/contract';
 
 export const DESKTOP_RESOURCE_BROWSER_CHANNELS = {
   snapshotGet: 'openneko:resources:snapshot:get',

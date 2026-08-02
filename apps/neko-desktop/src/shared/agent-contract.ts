@@ -6,7 +6,7 @@ import {
   type AgentWebviewToHostMessage,
   type DesktopAgentConnectionIdentity,
   type DesktopAgentViewIdentity,
-} from '@neko-agent/contracts';
+} from '@neko/agent-contracts';
 
 export const DESKTOP_AGENT_CONTRACT_VERSION = 1 as const;
 

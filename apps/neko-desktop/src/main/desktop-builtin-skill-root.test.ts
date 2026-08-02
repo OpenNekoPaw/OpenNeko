@@ -16,7 +16,7 @@ describe('Desktop builtin Skill root', () => {
         isPackaged: false,
         resourcesPath: '/ignored',
       }),
-    ).toBe(resolve('/repo/apps/neko-desktop', '../../packages/neko-skills/skills'));
+    ).toBe(resolve('/repo/apps/neko-desktop', '../../packages/skills/skills'));
   });
 
   it('resolves the copied application resource in a packaged build', () => {

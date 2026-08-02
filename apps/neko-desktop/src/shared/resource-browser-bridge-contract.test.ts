@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createResourceBrowserViewId } from '@neko-assets/domain/resource-browser/contract';
+import { createResourceBrowserViewId } from '@neko/assets-domain/resource-browser/contract';
 import { createDesktopResourceBrowserIdentity } from './resource-browser-bridge-contract';
 
 describe('Desktop Resource Browser bridge contract', () => {

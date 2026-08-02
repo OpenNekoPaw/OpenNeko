@@ -1,7 +1,7 @@
 import { join } from 'node:path';
 
-import { createSystemPromptBuilder } from '@neko-agent/runtime/prompt/system-prompt-builder';
-import { createConversationId } from '@neko-agent/runtime/session/conversation-id';
+import { createSystemPromptBuilder } from '@neko/agent-runtime/prompt/system-prompt-builder';
+import { createConversationId } from '@neko/agent-runtime/session/conversation-id';
 import {
   PiToolConfirmationRegistry,
   registerOpenNekoPiProvider,
@@ -13,22 +13,22 @@ import {
   type PiProductEventSink,
   type PiProductAgentEvent,
   type PiToolPermissionPolicy,
-} from '@neko-agent/runtime/pi';
+} from '@neko/agent-runtime/pi';
 import {
   type AgentHostRouteEffectContext,
   type AgentConversationControllerTurnRequest,
   createAgentContentEffects,
   type AgentContentInteractionPort,
-} from '@neko-agent/runtime/runtime/host-controller';
+} from '@neko/agent-runtime/runtime/host-controller';
 import {
   createAgentConversationMessageQueue,
   type AgentConversationMessageQueue,
-} from '@neko-agent/runtime/runtime/session/agent-message-queue';
+} from '@neko/agent-runtime/runtime/session/agent-message-queue';
 import {
   createConversationProjectionAttachmentServer,
   type ConversationProjectionAttachmentServer,
-} from '@neko-agent/runtime/runtime/projection/conversation-projection-attachment-server';
-import { projectPiConversationEntries } from '@neko-agent/runtime/runtime/projection/pi-conversation-history-projector';
+} from '@neko/agent-runtime/runtime/projection/conversation-projection-attachment-server';
+import { projectPiConversationEntries } from '@neko/agent-runtime/runtime/projection/pi-conversation-history-projector';
 import {
   AGENT_WEBVIEW_PROTOCOL_VERSION,
   buildAgentStateSnapshotMessage,
@@ -42,7 +42,7 @@ import {
   type ProjectionAttachmentKey,
   type SettingsDataMessage,
   type TabState,
-} from '@neko-agent/contracts';
+} from '@neko/agent-contracts';
 import { ConfigManager } from '@neko/host/settings';
 import { FileUserConfigManager } from '@neko/host/settings';
 import {
@@ -56,7 +56,7 @@ import {
   createEffectiveAgentConfigurationProjection,
   type EffectiveAgentWorkspaceConfigSnapshot,
 } from '@neko/host/settings';
-import type { ModelConfig as Model, ProviderConfig as Provider } from '@neko-ai/contracts';
+import type { ModelConfig as Model, ProviderConfig as Provider } from '@neko/ai-contracts';
 import type { NekoHostPorts } from '@neko/host/ports';
 import type {
   DesktopAgentTurnConfigurationSnapshot,
@@ -68,14 +68,14 @@ import type {
   DesktopAgentControllerComposition,
   DesktopAgentControllerEffects,
 } from './desktop-agent-bridge-runtime';
-import type { DesktopAgentConnectionIdentity } from '@neko-agent/contracts';
+import type { DesktopAgentConnectionIdentity } from '@neko/agent-contracts';
 import {
   createDesktopAgentFactsProjector,
   createAgentResourceDisplayProjector,
   type DesktopAgentFactsProjector,
   type AgentResourceDisplayRegistrationPort,
   type AgentResourceDisplayProjector,
-} from '@neko-agent/runtime/runtime';
+} from '@neko/agent-runtime/runtime';
 
 export interface DesktopAgentConfigInteractionPort {
   openUserConfig(input: {

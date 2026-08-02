@@ -53,10 +53,11 @@ export function validatePackageRoleCatalog(catalog, workspacePackages) {
   for (const [index, entry] of catalog.packages.entries()) {
     const label = `catalog.packages[${index}]`;
     validateExactKeys(label, entry, packageKeys, findings);
-    if (typeof entry.path !== 'string' || !/^packages\/[^/]+$/u.test(entry.path)) {
-      findings.push(`${label}.path must identify one first-level packages/* workspace`);
+    if (typeof entry.path !== 'string' || !/^packages\/[^/]+(?:\/[^/]+)?$/u.test(entry.path)) {
+      findings.push(`${label}.path must identify a packages/* or packages/*/* workspace`);
       continue;
     }
+    validateCanonicalPackageIdentity(label, entry, findings);
     if (catalogByPath.has(entry.path)) findings.push(`duplicate catalog path: ${entry.path}`);
     catalogByPath.set(entry.path, entry);
 
@@ -129,20 +130,50 @@ export async function inspectPackageRoles(root = repositoryRoot) {
 
 async function discoverWorkspacePackages(root) {
   const packagesRoot = path.join(root, 'packages');
-  const entries = await readdir(packagesRoot, { withFileTypes: true });
   const packages = [];
-  for (const entry of entries) {
-    if (!entry.isDirectory()) continue;
-    const packageRoot = path.join(packagesRoot, entry.name);
-    const manifestPath = path.join(packageRoot, 'package.json');
-    if (!(await isFile(manifestPath))) continue;
-    const manifest = await readJson(manifestPath);
-    packages.push({
-      path: `packages/${entry.name}`,
-      name: manifest.name,
-    });
+  const familyEntries = await readdir(packagesRoot, { withFileTypes: true });
+  for (const familyEntry of familyEntries) {
+    if (!familyEntry.isDirectory()) continue;
+    const familyRoot = path.join(packagesRoot, familyEntry.name);
+    const familyManifestPath = path.join(familyRoot, 'package.json');
+    if (await isFile(familyManifestPath)) {
+      const manifest = await readJson(familyManifestPath);
+      packages.push({ path: `packages/${familyEntry.name}`, name: manifest.name });
+      continue;
+    }
+    const roleEntries = await readdir(familyRoot, { withFileTypes: true });
+    for (const roleEntry of roleEntries) {
+      if (!roleEntry.isDirectory()) continue;
+      const manifestPath = path.join(familyRoot, roleEntry.name, 'package.json');
+      if (!(await isFile(manifestPath))) continue;
+      const manifest = await readJson(manifestPath);
+      packages.push({
+        path: `packages/${familyEntry.name}/${roleEntry.name}`,
+        name: manifest.name,
+      });
+    }
   }
   return packages.sort((left, right) => left.path.localeCompare(right.path));
+}
+
+function validateCanonicalPackageIdentity(label, entry, findings) {
+  if (entry.path.startsWith('packages/neko-')) {
+    findings.push(`${label}.path must not use the redundant packages/neko-* prefix`);
+  }
+  if (typeof entry.name !== 'string' || !entry.name.startsWith('@neko/')) {
+    findings.push(`${label}.name must use the single @neko/* scope`);
+    return;
+  }
+  const segments = entry.path.split('/');
+  const expectedName =
+    segments.length === 3
+      ? `@neko/${segments[1]}-${segments[2]}`
+      : `@neko/${segments[1]}`;
+  if (entry.name !== expectedName) {
+    findings.push(
+      `${label} path/name mismatch: ${entry.path} must declare ${expectedName}, found ${entry.name}`,
+    );
+  }
 }
 
 function validateExactKeys(label, value, expectedKeys, findings) {

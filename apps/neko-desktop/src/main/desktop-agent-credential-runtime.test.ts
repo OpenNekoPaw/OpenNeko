@@ -1,4 +1,4 @@
-import type { AuthEvent } from '@neko-agent/runtime/pi';
+import type { AuthEvent } from '@neko/agent-runtime/pi';
 import { describe, expect, it, vi } from 'vitest';
 import {
   createDesktopAgentCredentialRuntime,

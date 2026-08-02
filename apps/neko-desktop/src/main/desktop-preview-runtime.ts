@@ -14,12 +14,12 @@ import {
   type PreviewRuntimeRequest,
   type PreviewRuntimeIdentity,
   type PreviewViewPresentation,
-} from '@neko-preview/domain';
+} from '@neko/preview-domain';
 import type {
   ResourceBrowserIdentity,
   ResourceBrowserItem,
   ResourceBrowserQuickPreviewDescriptor,
-} from '@neko-assets/domain/resource-browser/contract';
+} from '@neko/assets-domain/resource-browser/contract';
 import {
   closeMainView,
   findMainGroupForView,

@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import type { HostDiagnostic } from '@neko/host/ports';
-import type { DesktopAgentViewIdentity } from '@neko-agent/contracts';
+import type { DesktopAgentViewIdentity } from '@neko/agent-contracts';
 import { DesktopAgentContractError } from '../shared/agent-contract';
 import {
   DESKTOP_SHELL_CONTRACT_VERSION,
@@ -29,10 +29,10 @@ import type {
   DesktopStoredWindow,
 } from './shell-state-repository';
 import type { DesktopWorkspaceRegistry } from './desktop-workspace-registry';
-import type { AssetWorkspaceResolution } from '@neko-assets/domain/contracts';
-import type { CanvasHostRuntimeIdentity } from '@neko-canvas/domain';
-import type { CutHostRuntimeIdentity } from '@neko-cut/domain';
-import { createCanvasHostSessionId } from '@neko-canvas/domain';
+import type { AssetWorkspaceResolution } from '@neko/assets-domain/contracts';
+import type { CanvasHostRuntimeIdentity } from '@neko/canvas-domain';
+import type { CutHostRuntimeIdentity } from '@neko/cut-domain';
+import { createCanvasHostSessionId } from '@neko/canvas-domain';
 import { createDesktopCutSessionId } from '../shared/cut-bridge-contract';
 import type { DesktopStartupTargetPreference } from '@neko/host/application-settings';
 

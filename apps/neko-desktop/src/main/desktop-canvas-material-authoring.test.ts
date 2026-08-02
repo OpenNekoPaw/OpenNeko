@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
-import type { CanvasHostRuntimeIdentity } from '@neko-canvas/domain';
+import type { CanvasHostRuntimeIdentity } from '@neko/canvas-domain';
 import { type ContentLocator } from '@neko/content';
 import {
   DEFAULT_CANVAS_DATA,
@@ -13,17 +13,17 @@ import {
   type CanvasMaterialMediaKind,
   type CanvasNode,
   type CanvasReferencedContentLocator,
-} from '@neko-canvas/domain';
+} from '@neko/canvas-domain';
 import { ConsoleLogger } from '@neko/shared/logger';
 import {
   createWorkspaceLinkedMediaLibrary,
   listWorkspaceLinkedMediaLibraries,
-} from '@neko-assets/node';
+} from '@neko/assets-node';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createElectronNekoHostPorts } from './electron-host-ports';
-import { CanvasMaterialAuthoringService } from '@neko-canvas/node';
-import { createGlobalMediaLibraryConnection } from '@neko-assets/node';
-import type { AssetWorkspaceResolution } from '@neko-assets/domain/contracts';
+import { CanvasMaterialAuthoringService } from '@neko/canvas-node';
+import { createGlobalMediaLibraryConnection } from '@neko/assets-node';
+import type { AssetWorkspaceResolution } from '@neko/assets-domain/contracts';
 
 const roots: string[] = [];
 

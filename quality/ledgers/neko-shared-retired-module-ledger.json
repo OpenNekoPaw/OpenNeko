@@ -518,71 +518,71 @@
   ],
   "modules": [
     {
-      "source": "packages/neko-shared/src/i18n/core.ts",
+      "source": "packages/shared/src/i18n/core.ts",
       "semanticOwner": "@neko/ui/i18n",
       "layer": "L0",
       "disposition": "remove",
       "target": null,
       "dataImpact": "none",
-      "reason": "Canonical implementation moved to packages/neko-ui/src/i18n/core.ts; the former Shared path must never resolve."
+      "reason": "Canonical implementation moved to packages/ui/src/i18n/core.ts; the former Shared path must never resolve."
     },
     {
-      "source": "packages/neko-shared/src/i18n/index.ts",
+      "source": "packages/shared/src/i18n/index.ts",
       "semanticOwner": "@neko/ui/i18n",
       "layer": "L0",
       "disposition": "remove",
       "target": null,
       "dataImpact": "none",
-      "reason": "Canonical implementation moved to packages/neko-ui/src/i18n/index.ts; the former Shared path must never resolve."
+      "reason": "Canonical implementation moved to packages/ui/src/i18n/index.ts; the former Shared path must never resolve."
     },
     {
-      "source": "packages/neko-shared/src/i18n/strict.ts",
+      "source": "packages/shared/src/i18n/strict.ts",
       "semanticOwner": "@neko/ui/i18n",
       "layer": "L0",
       "disposition": "remove",
       "target": null,
       "dataImpact": "none",
-      "reason": "Canonical implementation moved to packages/neko-ui/src/i18n/strict.ts; the former Shared path must never resolve."
+      "reason": "Canonical implementation moved to packages/ui/src/i18n/strict.ts; the former Shared path must never resolve."
     },
     {
-      "source": "packages/neko-shared/src/i18n/types.ts",
+      "source": "packages/shared/src/i18n/types.ts",
       "semanticOwner": "@neko/ui/i18n",
       "layer": "L0",
       "disposition": "remove",
       "target": null,
       "dataImpact": "none",
-      "reason": "Canonical implementation moved to packages/neko-ui/src/i18n/types.ts; the former Shared path must never resolve."
+      "reason": "Canonical implementation moved to packages/ui/src/i18n/types.ts; the former Shared path must never resolve."
     },
     {
-      "source": "packages/neko-shared/src/theme/index.ts",
+      "source": "packages/shared/src/theme/index.ts",
       "semanticOwner": "@neko/ui/theme",
       "layer": "L0",
       "disposition": "remove",
       "target": null,
       "dataImpact": "none",
-      "reason": "Canonical implementation moved to packages/neko-ui/src/theme/index.ts; the former Shared path must never resolve."
+      "reason": "Canonical implementation moved to packages/ui/src/theme/index.ts; the former Shared path must never resolve."
     },
     {
-      "source": "packages/neko-shared/src/theme/tokens.ts",
+      "source": "packages/shared/src/theme/tokens.ts",
       "semanticOwner": "@neko/ui/theme",
       "layer": "L0",
       "disposition": "remove",
       "target": null,
       "dataImpact": "none",
-      "reason": "Canonical implementation moved to packages/neko-ui/src/theme/tokens.ts; the former Shared path must never resolve."
+      "reason": "Canonical implementation moved to packages/ui/src/theme/tokens.ts; the former Shared path must never resolve."
     },
     {
-      "source": "packages/neko-shared/src/theme/types.ts",
+      "source": "packages/shared/src/theme/types.ts",
       "semanticOwner": "@neko/ui/theme",
       "layer": "L0",
       "disposition": "remove",
       "target": null,
       "dataImpact": "none",
-      "reason": "Canonical implementation moved to packages/neko-ui/src/theme/types.ts; the former Shared path must never resolve."
+      "reason": "Canonical implementation moved to packages/ui/src/theme/types.ts; the former Shared path must never resolve."
     },
     {
-      "source": "packages/neko-shared/src/types/agent-feedback.ts",
-      "semanticOwner": "@neko-agent/runtime/types",
+      "source": "packages/shared/src/types/agent-feedback.ts",
+      "semanticOwner": "@neko/agent-runtime/types",
       "layer": "L0",
       "disposition": "remove",
       "target": null,
@@ -590,8 +590,8 @@
       "reason": "Pi replaced the exported feedback state model and no production consumer remains."
     },
     {
-      "source": "packages/neko-shared/src/types/aiAction.ts",
-      "semanticOwner": "@neko-agent/runtime/types",
+      "source": "packages/shared/src/types/aiAction.ts",
+      "semanticOwner": "@neko/agent-runtime/types",
       "layer": "L0",
       "disposition": "remove",
       "target": null,
@@ -599,7 +599,7 @@
       "reason": "The retired AI action catalog has no production consumer or persisted codec."
     },
     {
-      "source": "packages/neko-shared/src/types/artifact-projection.ts",
+      "source": "packages/shared/src/types/artifact-projection.ts",
       "semanticOwner": "@neko/canvas/domain",
       "layer": "L0",
       "disposition": "remove",
@@ -608,7 +608,7 @@
       "reason": "The projection helpers are test-only orphan code and are not a persisted artifact codec."
     },
     {
-      "source": "packages/neko-shared/src/types/audioAutomation.ts",
+      "source": "packages/shared/src/types/audioAutomation.ts",
       "semanticOwner": "@neko/media",
       "layer": "L0",
       "disposition": "remove",
@@ -617,7 +617,7 @@
       "reason": "The retired Engine audio automation contract has no production consumer."
     },
     {
-      "source": "packages/neko-shared/src/types/audioEffectParams.ts",
+      "source": "packages/shared/src/types/audioEffectParams.ts",
       "semanticOwner": "@neko/media",
       "layer": "L0",
       "disposition": "remove",
@@ -626,7 +626,7 @@
       "reason": "The retired Engine audio effect parameter registry has no production consumer."
     },
     {
-      "source": "packages/neko-shared/src/types/audioMix.ts",
+      "source": "packages/shared/src/types/audioMix.ts",
       "semanticOwner": "@neko/media",
       "layer": "L0",
       "disposition": "remove",
@@ -635,7 +635,7 @@
       "reason": "The retired Engine audio mix model has only a package-local test consumer."
     },
     {
-      "source": "packages/neko-shared/src/types/audioTempo.ts",
+      "source": "packages/shared/src/types/audioTempo.ts",
       "semanticOwner": "@neko/media",
       "layer": "L0",
       "disposition": "remove",
@@ -644,7 +644,7 @@
       "reason": "The retired Engine tempo model has only a package-local test consumer."
     },
     {
-      "source": "packages/neko-shared/src/types/canvas-timeline-sync.ts",
+      "source": "packages/shared/src/types/canvas-timeline-sync.ts",
       "semanticOwner": "@neko/canvas/domain",
       "layer": "L0",
       "disposition": "remove",
@@ -653,17 +653,17 @@
       "reason": "The unused Canvas and retired Timeline synchronization DTO has no production consumer."
     },
     {
-      "source": "packages/neko-shared/src/types/config.ts",
-      "semanticOwner": "@neko-ai/contracts",
+      "source": "packages/shared/src/types/config.ts",
+      "semanticOwner": "@neko/ai-contracts",
       "layer": "L0",
       "disposition": "remove",
       "target": null,
       "dataImpact": "none",
-      "reason": "Canonical implementation moved to packages/neko-ai-contracts/src/config.ts; the former Shared path must never resolve."
+      "reason": "Canonical implementation moved to packages/ai/contracts/src/config.ts; the former Shared path must never resolve."
     },
     {
-      "source": "packages/neko-shared/src/types/context-manager.ts",
-      "semanticOwner": "@neko-agent/runtime/types",
+      "source": "packages/shared/src/types/context-manager.ts",
+      "semanticOwner": "@neko/agent-runtime/types",
       "layer": "L0",
       "disposition": "remove",
       "target": null,
@@ -671,8 +671,8 @@
       "reason": "The retired layered context manager state has no production consumer or persisted codec."
     },
     {
-      "source": "packages/neko-shared/src/types/context-persistence.ts",
-      "semanticOwner": "@neko-agent/runtime/types",
+      "source": "packages/shared/src/types/context-persistence.ts",
+      "semanticOwner": "@neko/agent-runtime/types",
       "layer": "L0",
       "disposition": "remove",
       "target": null,
@@ -680,8 +680,8 @@
       "reason": "Pi replaced the exported context persistence state and no production consumer remains."
     },
     {
-      "source": "packages/neko-shared/src/types/conversation-compressor.ts",
-      "semanticOwner": "@neko-agent/runtime/types",
+      "source": "packages/shared/src/types/conversation-compressor.ts",
+      "semanticOwner": "@neko/agent-runtime/types",
       "layer": "L0",
       "disposition": "remove",
       "target": null,
@@ -689,8 +689,8 @@
       "reason": "Pi owns current conversation compaction and the old DTO has no production consumer."
     },
     {
-      "source": "packages/neko-shared/src/types/creative-entity-facade.ts",
-      "semanticOwner": "@neko-entity/domain",
+      "source": "packages/shared/src/types/creative-entity-facade.ts",
+      "semanticOwner": "@neko/entity-domain",
       "layer": "L0",
       "disposition": "remove",
       "target": null,
@@ -698,7 +698,7 @@
       "reason": "The retired facade protocol has only a package-local test consumer and no persisted codec."
     },
     {
-      "source": "packages/neko-shared/src/types/creative-media-capability-registry.ts",
+      "source": "packages/shared/src/types/creative-media-capability-registry.ts",
       "semanticOwner": "@neko/generation",
       "layer": "L0",
       "disposition": "remove",
@@ -707,7 +707,7 @@
       "reason": "The unused registry has no production adapter registration and only a package-local test consumer."
     },
     {
-      "source": "packages/neko-shared/src/types/generated-asset-quality-adapter.ts",
+      "source": "packages/shared/src/types/generated-asset-quality-adapter.ts",
       "semanticOwner": "@neko/quality",
       "layer": "L0",
       "disposition": "remove",
@@ -716,7 +716,7 @@
       "reason": "The generated-asset Quality adapter has no production caller and is not a persisted evidence codec."
     },
     {
-      "source": "packages/neko-shared/src/types/index.ts",
+      "source": "packages/shared/src/types/index.ts",
       "semanticOwner": "package-owned contracts",
       "layer": "L0",
       "disposition": "remove",
@@ -725,7 +725,7 @@
       "reason": "The catch-all Shared index was removed after every consumer switched to an owning package."
     },
     {
-      "source": "packages/neko-shared/src/types/media-import.ts",
+      "source": "packages/shared/src/types/media-import.ts",
       "semanticOwner": "@neko/assets",
       "layer": "L0",
       "disposition": "remove",
@@ -734,7 +734,7 @@
       "reason": "The old media import DTO has only a package-local test consumer and no persisted manifest owner."
     },
     {
-      "source": "packages/neko-shared/src/types/media-stream.ts",
+      "source": "packages/shared/src/types/media-stream.ts",
       "semanticOwner": "@neko/media",
       "layer": "L0",
       "disposition": "remove",
@@ -743,8 +743,8 @@
       "reason": "The retired media stream status contract has no production consumer."
     },
     {
-      "source": "packages/neko-shared/src/types/memory.ts",
-      "semanticOwner": "@neko-agent/runtime/types",
+      "source": "packages/shared/src/types/memory.ts",
+      "semanticOwner": "@neko/agent-runtime/types",
       "layer": "L0",
       "disposition": "remove",
       "target": null,
@@ -752,7 +752,7 @@
       "reason": "The obsolete Agent memory alias has no production consumer."
     },
     {
-      "source": "packages/neko-shared/src/types/reference-resolution.ts",
+      "source": "packages/shared/src/types/reference-resolution.ts",
       "semanticOwner": "@neko/content",
       "layer": "L0",
       "disposition": "remove",
@@ -761,8 +761,8 @@
       "reason": "The resolver, batch, projection, and contributor framework has no production consumer after removing its unused Agent manifest field."
     },
     {
-      "source": "packages/neko-shared/src/types/skill-conflict.ts",
-      "semanticOwner": "@neko-agent/runtime/types",
+      "source": "packages/shared/src/types/skill-conflict.ts",
+      "semanticOwner": "@neko/agent-runtime/types",
       "layer": "L0",
       "disposition": "remove",
       "target": null,
@@ -770,8 +770,8 @@
       "reason": "Pi uses turn-scoped Skill selection and the old conflict state has no production consumer."
     },
     {
-      "source": "packages/neko-shared/src/types/skill-lifecycle.ts",
-      "semanticOwner": "@neko-agent/runtime/types",
+      "source": "packages/shared/src/types/skill-lifecycle.ts",
+      "semanticOwner": "@neko/agent-runtime/types",
       "layer": "L0",
       "disposition": "remove",
       "target": null,
@@ -779,16 +779,16 @@
       "reason": "Pi uses turn-scoped Skill selection and the old persistent lifecycle has no production consumer."
     },
     {
-      "source": "packages/neko-shared/src/types/storage.ts",
+      "source": "packages/shared/src/types/storage.ts",
       "semanticOwner": "@neko/local-metadata",
       "layer": "L0",
       "disposition": "remove",
       "target": null,
       "dataImpact": "none",
-      "reason": "Canonical implementation moved to packages/neko-local-metadata/src/storage.ts; the former Shared path must never resolve."
+      "reason": "Canonical implementation moved to packages/local-metadata/src/storage.ts; the former Shared path must never resolve."
     },
     {
-      "source": "packages/neko-shared/src/types/storyboard-planner.ts",
+      "source": "packages/shared/src/types/storyboard-planner.ts",
       "semanticOwner": "@neko/canvas/domain",
       "layer": "L0",
       "disposition": "remove",
@@ -797,7 +797,7 @@
       "reason": "The obsolete storyboard planning DTO has no production consumer or persisted codec."
     },
     {
-      "source": "packages/neko-shared/src/types/storyboard-readiness.ts",
+      "source": "packages/shared/src/types/storyboard-readiness.ts",
       "semanticOwner": "@neko/canvas/domain",
       "layer": "L0",
       "disposition": "remove",
@@ -806,8 +806,8 @@
       "reason": "The unused readiness DTO has no production consumer or persisted storyboard codec."
     },
     {
-      "source": "packages/neko-shared/src/types/subagent-reviewer.ts",
-      "semanticOwner": "@neko-agent/runtime/types",
+      "source": "packages/shared/src/types/subagent-reviewer.ts",
+      "semanticOwner": "@neko/agent-runtime/types",
       "layer": "L0",
       "disposition": "remove",
       "target": null,
@@ -815,8 +815,8 @@
       "reason": "The retired reviewer-only Subagent contract has no production consumer or runtime role."
     },
     {
-      "source": "packages/neko-shared/src/types/subagent.ts",
-      "semanticOwner": "@neko-agent/runtime/types",
+      "source": "packages/shared/src/types/subagent.ts",
+      "semanticOwner": "@neko/agent-runtime/types",
       "layer": "L0",
       "disposition": "remove",
       "target": null,
@@ -824,16 +824,16 @@
       "reason": "Pi replaced the exported SubAgent UI state and no production consumer remains."
     },
     {
-      "source": "packages/neko-shared/src/utils/diff.ts",
+      "source": "packages/shared/src/utils/diff.ts",
       "semanticOwner": "@neko/ui/utils",
       "layer": "L0",
       "disposition": "remove",
       "target": null,
       "dataImpact": "none",
-      "reason": "Canonical implementation moved to packages/neko-ui/src/utils/diff.ts; the former Shared path must never resolve."
+      "reason": "Canonical implementation moved to packages/ui/src/utils/diff.ts; the former Shared path must never resolve."
     },
     {
-      "source": "packages/neko-shared/src/utils/index.ts",
+      "source": "packages/shared/src/utils/index.ts",
       "semanticOwner": "focused owning packages",
       "layer": "L0",
       "disposition": "remove",

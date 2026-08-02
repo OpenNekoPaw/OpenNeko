@@ -2,7 +2,7 @@ import type {
   CanvasHostIntentRequest,
   CanvasHostRuntime,
   CanvasHostRuntimeIdentity,
-} from '@neko-canvas/domain';
+} from '@neko/canvas-domain';
 
 export function createElectronCanvasHostRuntime(
   identity: CanvasHostRuntimeIdentity,

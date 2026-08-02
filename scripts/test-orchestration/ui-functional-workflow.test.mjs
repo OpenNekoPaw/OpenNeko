@@ -80,11 +80,12 @@ describe('Desktop functional workflow boundary', () => {
     for (const scriptName of ['format', 'format:check']) {
       const command = packageJson.scripts?.[scriptName] ?? '';
       assert.match(command, /scripts\/desktop-functional\/\*\*\/\*\.mjs/u);
-      assert.match(command, /packages\/\*-webview\/functional\/\*\*\/\*\.mjs/u);
+      assert.match(command, /packages\/\*\/webview\/functional\/\*\*\/\*\.mjs/u);
     }
 
     assert.match(desktopReadme, /pnpm test:local:media-openneko/u);
     assert.match(desktopReadme, /--scenario=all-openneko-consumers/u);
+    assert.doesNotMatch(desktopReadme, /test:local:ui -- --scenario/u);
     assert.doesNotMatch(desktopReadme, /test:local:media-http/u);
 
     assert.ok(gitignoreEntries.includes('/reports/'));

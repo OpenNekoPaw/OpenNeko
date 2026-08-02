@@ -14,7 +14,7 @@ const FORBIDDEN_SOURCE_PATTERNS = [
 
 const FORBIDDEN_ROOT_SCRIPT_PATTERN =
   /(?:^|:)(?:vscode|vsix)(?::|$)|\b(?:vscode|vsix|neko-tui|app-tui)\b/iu;
-const EXPECTED_WORKSPACE_PATTERNS = Object.freeze(['apps/*', 'packages/*']);
+const EXPECTED_WORKSPACE_PATTERNS = Object.freeze(['apps/*', 'packages/*', 'packages/*/*']);
 const ALLOWED_VSCODE_ASSET_DEPENDENCIES = new Set(['@vscode/codicons']);
 
 export function inspectDesktopOnlyTopology({
@@ -146,7 +146,7 @@ async function findNestedPackages(repositoryRoot) {
     .map((filePath) => toRepositoryPath(repositoryRoot, filePath))
     .filter((filePath) => {
       const segments = filePath.split('/');
-      return segments.length > 3;
+      return segments.length > 4;
     });
 }
 
@@ -163,7 +163,8 @@ async function readWorkspacePackageEntries(repositoryRoot) {
     .flat()
     .filter((filePath) => {
       const relativePath = toRepositoryPath(repositoryRoot, filePath);
-      return relativePath.split('/').length === 3;
+      const depth = relativePath.split('/').length;
+      return depth === 3 || depth === 4;
     });
   return Promise.all(
     packageJsonPaths.map(async (filePath) => ({

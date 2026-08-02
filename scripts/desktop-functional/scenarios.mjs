@@ -1,6 +1,6 @@
-import { canvasOpenNekoConsumerScenario } from '../../packages/neko-canvas-webview/functional/desktop-openneko-consumer.mjs';
-import { cutOpenNekoConsumerScenario } from '../../packages/neko-cut-webview/functional/desktop-openneko-consumer.mjs';
-import { previewOpenNekoConsumerScenario } from '../../packages/neko-preview-webview/functional/desktop-openneko-consumer.mjs';
+import { canvasOpenNekoConsumerScenario } from '../../packages/canvas/webview/functional/desktop-openneko-consumer.mjs';
+import { cutOpenNekoConsumerScenario } from '../../packages/cut/webview/functional/desktop-openneko-consumer.mjs';
+import { previewOpenNekoConsumerScenario } from '../../packages/preview/webview/functional/desktop-openneko-consumer.mjs';
 
 const scenarios = new Map(
   [

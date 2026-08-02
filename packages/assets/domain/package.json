@@ -1,0 +1,35 @@
+{
+  "name": "@neko/assets-domain",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Desktop resource browser and media library copy contracts",
+  "license": "AGPL-3.0-or-later",
+  "exports": {
+    "./contracts": "./src/contracts/index.ts",
+    "./global-library": "./src/global-library/index.ts",
+    "./global-library/contract": "./src/global-library/contract.ts",
+    "./global-library/controller": "./src/global-library/controller.ts",
+    "./media-library-copy": "./src/services/MediaLibraryCopyService.ts",
+    "./resource-browser": "./src/resource-browser/index.ts",
+    "./resource-browser/contract": "./src/resource-browser/contract.ts",
+    "./resource-browser/controller": "./src/resource-browser/controller.ts",
+    "./resource-browser/content-tree-source": "./src/resource-browser/content-tree-source.ts",
+    "./resource-browser/ports": "./src/resource-browser/ports.ts",
+    "./resource-browser/presenter": "./src/resource-browser/presenter.ts"
+  },
+  "scripts": {
+    "lint": "eslint src --ext ts,tsx",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@neko/content": "workspace:*",
+    "@neko/entity-domain": "workspace:*",
+    "@neko/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.3.2",
+    "vitest": "^4.1.2"
+  }
+}

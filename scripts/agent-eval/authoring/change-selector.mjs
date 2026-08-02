@@ -22,33 +22,33 @@ const RULES = Object.freeze([
     '.codex/skills/neko-agent-evaluation/',
   ]),
   rule('timeline-projection-authority', 'agent-runtime.stream-delivery', [
-    'packages/neko-agent-contracts/src/agent-turn-timeline.ts',
-    'packages/neko-agent-contracts/src/conversation-projection.ts',
-    'packages/neko-agent-runtime/src/pi/timeline-projector.ts',
-    'packages/neko-agent-runtime/src/runtime/projection/',
-    'packages/neko-agent-runtime/src/runtime/index.ts',
-    'packages/neko-agent-runtime/src/runtime/turn/message-runtime.ts',
-    'packages/neko-agent-runtime/src/runtime/turn/multimodal-context-packet.ts',
-    'packages/neko-agent-runtime/src/runtime/turn/timeline-context-runtime.ts',
-    'packages/neko-agent-runtime/src/runtime/__tests__/message-runtime.test.ts',
-    'packages/neko-agent-runtime/src/runtime/__tests__/multimodal-context-packet.test.ts',
-    'packages/neko-agent-runtime/src/runtime/__tests__/timeline-context-runtime.test.ts',
-    'packages/neko-agent-webview/src/handlers/legacy-active-content-handlers.ts',
-    'packages/neko-agent-webview/src/presenters/conversation-projection-presenter.ts',
-    'packages/neko-agent-webview/src/presenters/timeline-projection-presenter.ts',
-    'packages/neko-agent-webview/src/render-runtime/',
+    'packages/agent/contracts/src/agent-turn-timeline.ts',
+    'packages/agent/contracts/src/conversation-projection.ts',
+    'packages/agent/runtime/src/pi/timeline-projector.ts',
+    'packages/agent/runtime/src/runtime/projection/',
+    'packages/agent/runtime/src/runtime/index.ts',
+    'packages/agent/runtime/src/runtime/turn/message-runtime.ts',
+    'packages/agent/runtime/src/runtime/turn/multimodal-context-packet.ts',
+    'packages/agent/runtime/src/runtime/turn/timeline-context-runtime.ts',
+    'packages/agent/runtime/src/runtime/__tests__/message-runtime.test.ts',
+    'packages/agent/runtime/src/runtime/__tests__/multimodal-context-packet.test.ts',
+    'packages/agent/runtime/src/runtime/__tests__/timeline-context-runtime.test.ts',
+    'packages/agent/webview/src/handlers/legacy-active-content-handlers.ts',
+    'packages/agent/webview/src/presenters/conversation-projection-presenter.ts',
+    'packages/agent/webview/src/presenters/timeline-projection-presenter.ts',
+    'packages/agent/webview/src/render-runtime/',
   ]),
   rule('tool-result-delivery', 'agent-runtime.stream-delivery', [
-    'packages/neko-content/src/document/read-document-tool.ts',
-    'packages/neko-content/src/document/read-image-tool.ts',
-    'packages/neko-agent-runtime/src/pi/event-projector.ts',
+    'packages/content/src/document/read-document-tool.ts',
+    'packages/content/src/document/read-image-tool.ts',
+    'packages/agent/runtime/src/pi/event-projector.ts',
     'apps/neko-desktop/src/main/desktop-agent-bridge-runtime.ts',
   ]),
   rule('resource-display-projection', 'agent-runtime.stream-delivery', [
-    'packages/neko-agent-runtime/src/input/message-resource-projector.ts',
-    'packages/neko-agent-webview/src/presenters/resource-display-uri.ts',
-    'packages/neko-agent-webview/src/components/ChatView/MediaPreview/',
-    'packages/neko-agent-runtime/src/runtime/projection/agent-resource-display-projector.ts',
+    'packages/agent/runtime/src/input/message-resource-projector.ts',
+    'packages/agent/webview/src/presenters/resource-display-uri.ts',
+    'packages/agent/webview/src/components/ChatView/MediaPreview/',
+    'packages/agent/runtime/src/runtime/projection/agent-resource-display-projector.ts',
   ]),
   regexRule(
     'portable-skill-content',
@@ -56,43 +56,43 @@ const RULES = Object.freeze([
     /^(?:\.codex|\.agents)\/skills\/([a-z0-9][a-z0-9._-]*)\//u,
   ),
   rule('prompt-composition', 'agent-runtime.prompt-composition', [
-    'packages/neko-agent-runtime/src/prompt/',
+    'packages/agent/runtime/src/prompt/',
   ]),
   rule('skill-runtime', 'agent-runtime.skill-runtime', [
-    'packages/neko-agent-runtime/src/skill/',
-    'packages/neko-agent-runtime/src/pi/personal-skill-manager',
-    'packages/neko-skills/src/builtins/',
+    'packages/agent/runtime/src/skill/',
+    'packages/agent/runtime/src/pi/personal-skill-manager',
+    'packages/skills/src/builtins/',
   ]),
   rule('capability-tool-routing', 'agent-runtime.perception-routing', [
-    'packages/neko-quality/src/',
-    'packages/neko-agent-runtime/src/tools/',
-    'packages/neko-agent-runtime/src/runtime/capability/capability-runtime-bindings.ts',
-    'packages/neko-agent-contracts/src/capability',
+    'packages/quality/src/',
+    'packages/agent/runtime/src/tools/',
+    'packages/agent/runtime/src/runtime/capability/capability-runtime-bindings.ts',
+    'packages/agent/contracts/src/capability',
   ]),
   rule('provider-model-routing', 'agent-runtime.model-binding', [
-    'packages/neko-agent-runtime/src/provider/',
-    'packages/neko-agent-runtime/src/pi/openneko-provider',
-    'packages/neko-host/src/settings/',
-    'packages/neko-ai-sdk/src/',
+    'packages/agent/runtime/src/provider/',
+    'packages/agent/runtime/src/pi/openneko-provider',
+    'packages/host/src/settings/',
+    'packages/ai/sdk/src/',
   ]),
   rule('session-workflows', 'agent-runtime.workflow-controller', [
-    'packages/neko-agent-runtime/src/session/',
-    'packages/neko-agent-runtime/src/subagent/',
+    'packages/agent/runtime/src/session/',
+    'packages/agent/runtime/src/subagent/',
     'apps/neko-desktop/src/main/desktop-agent-app-host-composition',
     'apps/neko-desktop/src/main/desktop-agent-controller-composition',
     'apps/neko-desktop/src/renderer/DesktopAgentSurface',
   ]),
   rule('tool-call-lifecycle', 'agent-runtime.workflow-controller', [
-    'packages/neko-agent-runtime/src/task/',
-    'packages/neko-agent-runtime/src/runtime/continuation',
-    'packages/neko-agent-runtime/src/runtime/session/execution-ownership',
-    'packages/neko-agent-contracts/src/agent-message-queue',
-    'packages/neko-agent-runtime/src/tools/generation/media-agent-tools',
-    'packages/neko-generation/src/media/media-generation-executor',
-    'packages/neko-canvas-node/src/canvas-generation-node-runtime',
+    'packages/agent/runtime/src/task/',
+    'packages/agent/runtime/src/runtime/continuation',
+    'packages/agent/runtime/src/runtime/session/execution-ownership',
+    'packages/agent/contracts/src/agent-message-queue',
+    'packages/agent/runtime/src/tools/generation/media-agent-tools',
+    'packages/generation/src/media/media-generation-executor',
+    'packages/canvas/node/src/canvas-generation-node-runtime',
   ]),
   rule('creative-media-workflow', 'agent-runtime.creative-media-workflow', [
-    'packages/neko-generation/src/media/',
+    'packages/generation/src/media/',
   ]),
   rule('desktop-event-projection', 'agent-runtime.stream-delivery', [
     'apps/neko-desktop/src/preload/desktop-agent-event-cursor',
@@ -142,18 +142,18 @@ export function isAgentEvaluationRelevantPath(rawPath) {
   return (
     path.startsWith('.codex/skills/') ||
     path.startsWith('.agents/skills/') ||
-    path.startsWith('packages/neko-skills/src/builtins/') ||
-    path.startsWith('packages/neko-agent-runtime/src/') ||
-    path.startsWith('packages/neko-agent-contracts/src/') ||
-    path.startsWith('packages/neko-ai-sdk/src/') ||
+    path.startsWith('packages/skills/src/builtins/') ||
+    path.startsWith('packages/agent/runtime/src/') ||
+    path.startsWith('packages/agent/contracts/src/') ||
+    path.startsWith('packages/ai/sdk/src/') ||
     path.startsWith('apps/neko-desktop/src/main/desktop-agent') ||
     path.startsWith('apps/neko-desktop/src/preload/desktop-agent') ||
     path.startsWith('apps/neko-desktop/src/renderer/DesktopAgent') ||
     path.startsWith('apps/neko-desktop/src/renderer/desktop-agent') ||
-    path.startsWith('packages/neko-agent-webview/src/') ||
-    path.startsWith('packages/neko-host/src/settings/') ||
-    path === 'packages/neko-content/src/document/read-document-tool.ts' ||
-    path === 'packages/neko-content/src/document/read-image-tool.ts' ||
+    path.startsWith('packages/agent/webview/src/') ||
+    path.startsWith('packages/host/src/settings/') ||
+    path === 'packages/content/src/document/read-document-tool.ts' ||
+    path === 'packages/content/src/document/read-image-tool.ts' ||
     path.startsWith('scripts/agent-eval/')
   );
 }

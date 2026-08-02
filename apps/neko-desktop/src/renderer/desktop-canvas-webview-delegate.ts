@@ -1,4 +1,4 @@
-import type { CanvasHostRuntimeIdentity } from '@neko-canvas/domain';
+import type { CanvasHostRuntimeIdentity } from '@neko/canvas-domain';
 import { isContentLocator, type WorkspaceFileContentLocator } from '@neko/content';
 import type { DesktopCanvasMediaRequest } from '../shared/canvas-bridge-contract';
 

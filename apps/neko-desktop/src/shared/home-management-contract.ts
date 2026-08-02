@@ -11,7 +11,7 @@ import {
   type GlobalLibraryThumbnailResult,
   type GlobalMediaLibraryItem,
   type GlobalMediaLibraryLocationKind,
-} from '@neko-assets/domain/global-library/contract';
+} from '@neko/assets-domain/global-library/contract';
 
 export const DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION = 8 as const;
 

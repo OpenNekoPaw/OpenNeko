@@ -106,7 +106,7 @@ describe('Desktop architecture boundaries', () => {
     const source = readFileSync(
       path.join(
         repositoryRoot,
-        'packages/neko-agent-runtime/src/runtime/host-controller/agent-content-effects.ts',
+        'packages/agent/runtime/src/runtime/host-controller/agent-content-effects.ts',
       ),
       'utf8',
     );
@@ -123,7 +123,7 @@ describe('Desktop architecture boundaries', () => {
   });
 
   it('keeps Resource Browser effects owner-bound, portable and outside the renderer', () => {
-    const assetsNodeRoot = path.join(repositoryRoot, 'packages/neko-assets-node/src');
+    const assetsNodeRoot = path.join(repositoryRoot, 'packages/assets/node/src');
     const runtime = readFileSync(
       path.join(assetsNodeRoot, 'resource-browser-node-runtime.ts'),
       'utf8',
@@ -134,7 +134,7 @@ describe('Desktop architecture boundaries', () => {
     );
     const sync = readFileSync(path.join(assetsNodeRoot, 'workspace-media-library-sync.ts'), 'utf8');
     const locator = readFileSync(
-      path.join(repositoryRoot, 'packages/neko-assets-node/src/workspace-content-locator.ts'),
+      path.join(repositoryRoot, 'packages/assets/node/src/workspace-content-locator.ts'),
       'utf8',
     );
     const bridgeContract = readFileSync(
@@ -179,9 +179,9 @@ describe('Desktop architecture boundaries', () => {
     );
     const shell = readFileSync(path.join(sourceRoot, 'renderer', 'DesktopShell.tsx'), 'utf8');
 
-    expect(surface).toContain("from '@neko-canvas/webview/root'");
+    expect(surface).toContain("from '@neko/canvas-webview/root'");
     expect(surface).toContain('<CanvasWebviewRoot');
-    expect(surface).not.toContain('@neko-canvas/webview/host-adapter');
+    expect(surface).not.toContain('@neko/canvas-webview/host-adapter');
     expect(surface).not.toContain('CanvasHostAdapterSurface');
     expect(shell).toContain('<DesktopCanvasSurface');
     expect(shell).not.toContain('CanvasHostAdapterSurface');
@@ -198,10 +198,10 @@ describe('Desktop architecture boundaries', () => {
     );
     const shell = readFileSync(path.join(sourceRoot, 'renderer', 'DesktopShell.tsx'), 'utf8');
 
-    expect(cutSurface).toContain("import('@neko-cut/webview/root')");
+    expect(cutSurface).toContain("import('@neko/cut-webview/root')");
     expect(cutSurface).toMatch(/<CutWebviewRoot[\s\S]*bridge=\{bridge\}/u);
     expect(cutSurface).toContain('timelineTarget={timelineTarget}');
-    expect(previewSurface).toContain("import('@neko-preview/webview/root')");
+    expect(previewSurface).toContain("import('@neko/preview-webview/root')");
     expect(previewSurface).toContain('<PreviewRoot runtime={runtime}');
     for (const source of [cutSurface, previewSurface, shell]) {
       expect(source).not.toContain('/host-adapter');
@@ -231,7 +231,7 @@ describe('Desktop architecture boundaries', () => {
       'utf8',
     );
     const canvasPreviewResolver = readFileSync(
-      path.join(repositoryRoot, 'packages/neko-canvas-webview/src/preview/previewResolver.ts'),
+      path.join(repositoryRoot, 'packages/canvas/webview/src/preview/previewResolver.ts'),
       'utf8',
     );
 
@@ -249,7 +249,7 @@ describe('Desktop architecture boundaries', () => {
     }
     expect(
       existsSync(
-        path.join(repositoryRoot, 'packages/neko-media/src/node/NodeMediaLoopbackServer.ts'),
+        path.join(repositoryRoot, 'packages/media/src/node/NodeMediaLoopbackServer.ts'),
       ),
     ).toBe(false);
 
@@ -293,16 +293,16 @@ describe('Desktop architecture boundaries', () => {
       'utf8',
     );
     const canvasRoot = readFileSync(
-      path.resolve(sourceRoot, '../../../packages/neko-canvas-webview/src/root.tsx'),
+      path.resolve(sourceRoot, '../../../packages/canvas/webview/src/root.tsx'),
       'utf8',
     );
 
     for (const sourcePattern of [
-      '../../packages/neko-agent-webview/src/**/*.{ts,tsx}',
-      '../../packages/neko-assets-domain/src/resource-browser/**/*.{ts,tsx}',
-      '../../packages/neko-canvas-webview/src/**/*.{ts,tsx}',
-      '../../packages/neko-cut-webview/src/**/*.{ts,tsx}',
-      '../../packages/neko-preview-webview/src/**/*.{ts,tsx}',
+      '../../packages/agent/webview/src/**/*.{ts,tsx}',
+      '../../packages/assets/domain/src/resource-browser/**/*.{ts,tsx}',
+      '../../packages/canvas/webview/src/**/*.{ts,tsx}',
+      '../../packages/cut/webview/src/**/*.{ts,tsx}',
+      '../../packages/preview/webview/src/**/*.{ts,tsx}',
     ]) {
       expect(tailwindConfig).toContain(sourcePattern);
     }
@@ -323,11 +323,11 @@ describe('Desktop architecture boundaries', () => {
     expect(rendererConfig).not.toContain('find: /^@neko');
     expect(rendererConfig).not.toContain("'../../packages/");
     const publicRoots = [
-      ['packages/neko-canvas-webview/package.json', './root'],
-      ['packages/neko-cut-webview/package.json', './root'],
-      ['packages/neko-preview-webview/package.json', './root'],
-      ['packages/neko-assets-webview/package.json', './resource-browser/root'],
-      ['packages/neko-assets-webview/package.json', './global-library/root'],
+      ['packages/canvas/webview/package.json', './root'],
+      ['packages/cut/webview/package.json', './root'],
+      ['packages/preview/webview/package.json', './root'],
+      ['packages/assets/webview/package.json', './resource-browser/root'],
+      ['packages/assets/webview/package.json', './global-library/root'],
     ] as const;
     for (const [manifestPath, exportName] of publicRoots) {
       const manifest = JSON.parse(
@@ -336,7 +336,7 @@ describe('Desktop architecture boundaries', () => {
       expect(manifest.exports?.[exportName]).toMatch(/^\.\/src\//u);
     }
     expect(rendererConfig).toMatch(
-      /exclude:\s*\[[^\]]*'@neko-canvas\/domain'[^\]]*'@neko-canvas\/webview\/root'/s,
+      /exclude:\s*\[[^\]]*'@neko\/canvas-domain'[^\]]*'@neko\/canvas-webview\/root'/s,
     );
   });
 

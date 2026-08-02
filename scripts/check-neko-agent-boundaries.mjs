@@ -6,11 +6,11 @@ import { fileURLToPath } from 'node:url';
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const hostNeutralRoots = [
-  'packages/neko-agent-runtime/src',
-  'packages/neko-agent-contracts/src',
-  'packages/neko-ai-sdk/src',
+  'packages/agent/runtime/src',
+  'packages/agent/contracts/src',
+  'packages/ai/sdk/src',
 ];
-const browserRoots = ['packages/neko-agent-webview/src'];
+const browserRoots = ['packages/agent/webview/src'];
 
 export async function checkNekoAgentBoundaries(root = repositoryRoot) {
   const findings = [];
@@ -58,7 +58,7 @@ export async function checkNekoAgentBoundaries(root = repositoryRoot) {
     resolve(root, 'apps/neko-desktop/src/main/desktop-agent-controller-composition.ts'),
     'utf8',
   );
-  if (!desktopComposition.includes("from '@neko-agent/runtime/runtime/host-controller'")) {
+  if (!desktopComposition.includes("from '@neko/agent-runtime/runtime/host-controller'")) {
     findings.push(
       'Desktop Agent composition must consume the public host-controller runtime contract.',
     );

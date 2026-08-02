@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createCanvasHostSessionId } from '@neko-canvas/domain';
+import { createCanvasHostSessionId } from '@neko/canvas-domain';
 import {
   isSameCanvasHostIdentity,
   parseDesktopCanvasHostIdentity,

@@ -14,7 +14,7 @@ import { DesktopApplication } from './DesktopShell';
 import { DesktopApplicationSettingsProvider } from './application-settings-context';
 import { createDesktopI18n } from './i18n';
 import { DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION } from '../shared/home-management-contract';
-import type { DesktopProjectPortabilityRequest } from '@neko-assets/domain/contracts';
+import type { DesktopProjectPortabilityRequest } from '@neko/assets-domain/contracts';
 
 vi.mock('./DesktopAgentSurface', () => ({
   DesktopAgentSurface: ({

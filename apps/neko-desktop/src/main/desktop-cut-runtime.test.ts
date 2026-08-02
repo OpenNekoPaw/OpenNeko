@@ -11,7 +11,7 @@ import {
   parseOtio,
   serializeOtio,
   type CutHostRuntimeIdentity,
-} from '@neko-cut/domain';
+} from '@neko/cut-domain';
 import { ConsoleLogger } from '@neko/shared/logger';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createElectronNekoHostPorts } from './electron-host-ports';

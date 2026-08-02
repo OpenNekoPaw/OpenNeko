@@ -4,7 +4,7 @@ import { createDesktopGlobalLibraryRuntime } from './desktop-global-library-runt
 import { useDesktopApplicationSettings } from './application-settings-context';
 
 const GlobalLibraryBrowserRoot = lazy(async () => {
-  const module = await import('@neko-assets/webview/global-library/root');
+  const module = await import('@neko/assets-webview/global-library/root');
   return { default: module.GlobalLibraryBrowserRoot };
 });
 

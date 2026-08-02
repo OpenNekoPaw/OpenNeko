@@ -3,7 +3,7 @@
 import { readFile } from 'node:fs/promises';
 
 const root = process.cwd();
-const manifest = JSON.parse(await readFile(`${root}/packages/neko-shared/package.json`, 'utf8'));
+const manifest = JSON.parse(await readFile(`${root}/packages/shared/package.json`, 'utf8'));
 const ledger = JSON.parse(
   await readFile(`${root}/quality/ledgers/neko-shared-public-surface.json`, 'utf8'),
 );

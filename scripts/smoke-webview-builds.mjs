@@ -58,8 +58,8 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
 export function discoverWebviews(repositoryRoot, selectedPackages = new Set()) {
   const packagesDir = join(repositoryRoot, 'packages');
   return readdirSync(packagesDir, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory() && entry.name.endsWith('-webview'))
-    .map((entry) => join(packagesDir, entry.name, 'package.json'))
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => join(packagesDir, entry.name, 'webview', 'package.json'))
     .filter((packageJsonPath) => existsSync(packageJsonPath))
     .map((packageJsonPath) => {
       const raw = JSON.parse(readFileSync(packageJsonPath, 'utf8'));

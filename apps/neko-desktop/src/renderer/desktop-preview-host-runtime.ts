@@ -2,7 +2,7 @@ import {
   PREVIEW_HOST_RUNTIME_VERSION,
   type PreviewHostRuntime,
   type PreviewRuntimeIdentity,
-} from '@neko-preview/domain';
+} from '@neko/preview-domain';
 import type { OpenNekoDesktopPreviewBridge } from '../shared/preview-bridge-contract';
 import { createDesktopPreviewBootstrapRequest } from '../shared/preview-bridge-contract';
 

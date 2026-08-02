@@ -1,32 +1,32 @@
 import { mkdtemp, mkdir, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
-import { DEFAULT_CANVAS_DATA } from '@neko-canvas/domain';
+import { DEFAULT_CANVAS_DATA } from '@neko/canvas-domain';
 import type { ILogger } from '@neko/shared/logger';
 import {
   CANVAS_HOST_RUNTIME_CONTRACT_VERSION,
   parseCanvasHostIntentRequest,
   type CanvasHostIntentResult,
-} from '@neko-canvas/domain';
-import { createResourceBrowserSnapshotRequest } from '@neko-assets/domain/resource-browser/contract';
+} from '@neko/canvas-domain';
+import { createResourceBrowserSnapshotRequest } from '@neko/assets-domain/resource-browser/contract';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createCanvasHostSessionId } from '@neko-canvas/domain';
+import { createCanvasHostSessionId } from '@neko/canvas-domain';
 import { createDesktopResourceBrowserIdentity } from '../shared/resource-browser-bridge-contract';
 import type { DesktopWorkbenchViewRef } from '../shared/workbench-contract';
 import {
   createResourceToCanvasInteraction,
   ResourceBrowserNodeRuntime,
   type ResourceBrowserNodeRuntimeOptions,
-} from '@neko-assets/node';
+} from '@neko/assets-node';
 import { createElectronNekoHostPorts } from './electron-host-ports';
-import { createGlobalMediaLibraryConnection } from '@neko-assets/node';
+import { createGlobalMediaLibraryConnection } from '@neko/assets-node';
 import { DesktopShellService } from './shell-service';
 import {
   DesktopShellStateRepository,
   type DesktopShellStateFilePort,
 } from './shell-state-repository';
 import type { DesktopWorkspaceRegistry } from './desktop-workspace-registry';
-import type { AssetWorkspaceResolution } from '@neko-assets/domain/contracts';
+import type { AssetWorkspaceResolution } from '@neko/assets-domain/contracts';
 
 const temporaryRoots: string[] = [];
 

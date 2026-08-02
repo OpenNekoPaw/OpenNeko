@@ -1,7 +1,7 @@
 export function validateDesktopFunctionalScenario(value) {
   if (!isRecord(value)) throw new Error('Desktop functional scenario must be an object.');
   requireIdentity(value.id, 'id');
-  requireIdentity(value.owner, 'owner');
+  requirePackageOwner(value.owner);
   if (typeof value.prepare !== 'function') {
     throw new Error(`Desktop functional scenario '${value.id}' requires prepare().`);
   }
@@ -31,6 +31,12 @@ export function validatePreparedDesktopFixture(value, fixtureHome) {
 function requireIdentity(value, label) {
   if (typeof value !== 'string' || !/^[a-z0-9][a-z0-9._-]*$/u.test(value)) {
     throw new Error(`Desktop functional scenario ${label} is invalid.`);
+  }
+}
+
+function requirePackageOwner(value) {
+  if (typeof value !== 'string' || !/^@neko\/[a-z0-9][a-z0-9._-]*$/u.test(value)) {
+    throw new Error('Desktop functional scenario owner is invalid.');
   }
 }
 

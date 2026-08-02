@@ -8,7 +8,7 @@ const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const files = {
   surface: 'apps/neko-desktop/src/renderer/DesktopCanvasSurface.tsx',
   hostRuntime: 'apps/neko-desktop/src/renderer/desktop-canvas-host-runtime.ts',
-  workspace: 'packages/neko-canvas-webview/src/components/playback/PlaybackWorkspace.tsx',
+  workspace: 'packages/canvas/webview/src/components/playback/PlaybackWorkspace.tsx',
 };
 
 export async function checkCanvasPlaybackBoundary(root = repositoryRoot) {
@@ -26,7 +26,7 @@ export async function checkCanvasPlaybackBoundary(root = repositoryRoot) {
     findings,
     'surface',
     sources.surface,
-    "from '@neko-canvas/webview/root'",
+    "from '@neko/canvas-webview/root'",
     'Desktop Canvas must mount the public Canvas Webview root.',
   );
   requireAnchor(

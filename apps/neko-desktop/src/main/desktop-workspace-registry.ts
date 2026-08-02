@@ -9,7 +9,7 @@ import {
   MEDIA_METADATA_MIGRATIONS,
 } from '@neko/local-metadata/sqlite';
 import { resolveGlobalStorageLayout } from '@neko/local-metadata';
-import type { AssetWorkspaceResolution } from '@neko-assets/domain/contracts';
+import type { AssetWorkspaceResolution } from '@neko/assets-domain/contracts';
 
 export interface DesktopWorkspaceRegistry {
   readonly metadataRepositories?: LocalMetadataRepositories;

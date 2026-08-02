@@ -80,11 +80,11 @@ describe('Desktop automated functional runner contract', () => {
   it('keeps scenario ownership and prepared workspaces explicit', () => {
     const scenario = validateDesktopFunctionalScenario({
       id: 'cut-openneko-consumer',
-      owner: 'neko-cut-webview',
+      owner: '@neko/cut-webview',
       prepare() {},
       run() {},
     });
-    assert.equal(scenario.owner, 'neko-cut-webview');
+    assert.equal(scenario.owner, '@neko/cut-webview');
     assert.deepEqual(
       validatePreparedDesktopFixture(
         { workspacePath: '/tmp/openneko-desktop-functional-cut/workspace' },

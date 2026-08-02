@@ -5,7 +5,7 @@ import {
   parsePreviewRuntimeRequest,
   type PreviewProjection,
   type PreviewRuntimeRequest,
-} from '@neko-preview/domain';
+} from '@neko/preview-domain';
 
 export const DESKTOP_PREVIEW_CHANNELS = {
   snapshotGet: 'openneko:preview:snapshot:get',

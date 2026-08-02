@@ -27,7 +27,7 @@ export default tseslint.config(
       'scripts/desktop-functional/**/*.mjs',
       'scripts/run-desktop-ui-functional.mjs',
       'scripts/test-orchestration/desktop-functional-runner.test.mjs',
-      'packages/*-webview/functional/**/*.mjs',
+      'packages/*/webview/functional/**/*.mjs',
     ],
     languageOptions: {
       globals: {
@@ -83,7 +83,7 @@ export default tseslint.config(
 
   // Explicit console output boundaries: the shared transport and a local manual executable.
   {
-    files: ['packages/neko-shared/src/logger/console-logger.ts'],
+    files: ['packages/shared/src/logger/console-logger.ts'],
     rules: {
       'no-console': 'off',
     },
@@ -102,7 +102,7 @@ export default tseslint.config(
       'scripts/desktop-functional/**/*.mjs',
       'scripts/run-desktop-ui-functional.mjs',
       'scripts/test-orchestration/desktop-functional-runner.test.mjs',
-      'packages/*-webview/functional/**/*.mjs',
+      'packages/*/webview/functional/**/*.mjs',
     ],
     rules: {
       ...security.configs.recommended.rules,

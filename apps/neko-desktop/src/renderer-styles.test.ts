@@ -111,7 +111,7 @@ describe('Desktop renderer styles', () => {
   it('keeps the Global Library as an aligned unframed workbench surface', () => {
     const packageStyles = readFileSync(
       new URL(
-        '../../../packages/neko-assets-webview/src/global-library/style.css',
+        '../../../packages/assets/webview/src/global-library/style.css',
         import.meta.url,
       ),
       'utf8',

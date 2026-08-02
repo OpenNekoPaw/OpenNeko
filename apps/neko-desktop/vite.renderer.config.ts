@@ -1,5 +1,5 @@
 import react from '@vitejs/plugin-react';
-import { createEpubJsPatchPlugin } from '@neko-preview/webview/epubjs-vite-patch-plugin';
+import { createEpubJsPatchPlugin } from '@neko/preview-webview/epubjs-vite-patch-plugin';
 import { defineConfig, type Plugin } from 'vite';
 import { realpathSync } from 'node:fs';
 import path from 'node:path';
@@ -7,11 +7,11 @@ import { DESKTOP_VITE_CSP_NONCE } from './src/shared/vite-development-security';
 
 const functionalFixtureHome = process.env['OPENNEKO_DESKTOP_FUNCTIONAL_HOME'];
 const canonicalWorkspacePublicEntries = new Set([
-  '@neko-agent/webview/root',
-  '@neko-canvas/webview/root',
-  '@neko-cut/webview/root',
-  '@neko-cut/webview/runtime-bridge',
-  '@neko-preview/webview/root',
+  '@neko/agent-webview/root',
+  '@neko/canvas-webview/root',
+  '@neko/cut-webview/root',
+  '@neko/cut-webview/runtime-bridge',
+  '@neko/preview-webview/root',
 ]);
 
 function createWorkspacePublicEntryCanonicalizationPlugin(): Plugin {
@@ -46,11 +46,11 @@ export default defineConfig({
   },
   resolve: {
     dedupe: [
-      '@neko-agent/webview',
-      '@neko-assets/webview',
-      '@neko-canvas/webview',
-      '@neko-cut/webview',
-      '@neko-preview/webview',
+      '@neko/agent-webview',
+      '@neko/assets-webview',
+      '@neko/canvas-webview',
+      '@neko/cut-webview',
+      '@neko/preview-webview',
       '@neko/ui',
       'react',
       'react-dom',
@@ -60,24 +60,24 @@ export default defineConfig({
   },
   optimizeDeps: {
     exclude: [
-      '@neko-agent/webview/root',
-      '@neko-canvas/domain',
-      '@neko-canvas/webview/root',
-      '@neko-cut/webview/root',
-      '@neko-cut/webview/runtime-bridge',
-      '@neko-preview/webview/root',
+      '@neko/agent-webview/root',
+      '@neko/canvas-domain',
+      '@neko/canvas-webview/root',
+      '@neko/cut-webview/root',
+      '@neko/cut-webview/runtime-bridge',
+      '@neko/preview-webview/root',
       '@neko/media',
       '@neko/media/browser',
     ],
     include: [
       '@zip.js/zip.js',
-      '@neko-agent/contracts',
-      '@neko-agent/contracts/host-message-event',
-      '@neko-assets/domain/contracts',
+      '@neko/agent-contracts',
+      '@neko/agent-contracts/host-message-event',
+      '@neko/assets-domain/contracts',
       '@neko/content/project-file-io',
       '@neko/generation',
       '@neko/markdown',
-      '@neko-search/domain',
+      '@neko/search-domain',
       '@neko/shared',
       '@neko/shared/job-lifecycle',
       '@neko/ui/creative',

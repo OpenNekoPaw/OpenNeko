@@ -14,7 +14,7 @@ const HASH_B = `sha256:${'b'.repeat(64)}`;
 const HASH_C = `sha256:${'c'.repeat(64)}`;
 const HASH_D = `sha256:${'d'.repeat(64)}`;
 const NOW = '2026-07-14T00:00:00.000Z';
-const TARGET_FILE = 'packages/neko-skills/src/builtins/creation-persona.ts';
+const TARGET_FILE = 'packages/skills/src/builtins/creation-persona.ts';
 const temporaryDirectories = [];
 
 afterEach(async () => {

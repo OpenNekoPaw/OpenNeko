@@ -1,8 +1,8 @@
-import { CanvasWebviewRoot } from '@neko-canvas/webview/root';
+import { CanvasWebviewRoot } from '@neko/canvas-webview/root';
 import { useMemo } from 'react';
 import type { DesktopProjectCatalogItem, DesktopShellProjection } from '../shared/shell-contract';
 import type { DesktopWorkbenchViewRef } from '../shared/workbench-contract';
-import { createCanvasHostSessionId } from '@neko-canvas/domain';
+import { createCanvasHostSessionId } from '@neko/canvas-domain';
 import { createElectronCanvasHostRuntime } from './desktop-canvas-host-runtime';
 import { createDesktopCanvasWebviewDelegate } from './desktop-canvas-webview-delegate';
 

@@ -68,7 +68,7 @@ function target(fingerprint = HASH_A) {
   return {
     kind: 'skill-content',
     identity: identity(fingerprint),
-    targetFile: 'packages/neko-skills/src/builtins/creation-persona.ts',
+    targetFile: 'packages/skills/src/builtins/creation-persona.ts',
   };
 }
 
@@ -144,7 +144,7 @@ function approval(overrides = {}) {
     candidateFingerprint: HASH_B,
     approver: 'human@example.invalid',
     scope: {
-      targetFiles: ['packages/neko-skills/src/builtins/creation-persona.ts'],
+      targetFiles: ['packages/skills/src/builtins/creation-persona.ts'],
       allowedSections: ['Rationale'],
     },
     budget: budget(),

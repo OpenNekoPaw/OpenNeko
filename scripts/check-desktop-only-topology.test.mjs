@@ -3,21 +3,21 @@ import { describe, it } from 'node:test';
 import { inspectDesktopOnlyTopology } from './check-desktop-only-topology.mjs';
 
 describe('desktop-only topology guard', () => {
-  it('accepts one Desktop app and first-level host-neutral packages', () => {
+  it('accepts one Desktop app and canonical grouped host-neutral packages', () => {
     assert.deepEqual(
       inspectDesktopOnlyTopology({
         appPackagePaths: ['apps/neko-desktop/package.json'],
         nestedPackagePaths: [],
         packageEntries: [
           {
-            path: 'packages/neko-ui/package.json',
+            path: 'packages/ui/package.json',
             manifest: { dependencies: { '@vscode/codicons': '0.0.45' } },
           },
         ],
-        pnpmWorkspacePatterns: ['apps/*', 'packages/*'],
+        pnpmWorkspacePatterns: ['apps/*', 'packages/*', 'packages/*/*'],
         productionSourceEntries: [
           {
-            path: 'packages/neko-agent-webview/src/root.tsx',
+            path: 'packages/agent/webview/src/root.tsx',
             content: "import { createRoot } from 'react-dom/client';",
           },
         ],
@@ -26,7 +26,7 @@ describe('desktop-only topology guard', () => {
             build: 'pnpm --recursive --if-present --sort run build',
             'package:desktop': 'pnpm --filter @neko/app-desktop package',
           },
-          workspaces: ['apps/*', 'packages/*'],
+          workspaces: ['apps/*', 'packages/*', 'packages/*/*'],
           devDependencies: {
             electron: '43.2.0',
           },
@@ -43,21 +43,21 @@ describe('desktop-only topology guard', () => {
         'apps/neko-tui/package.json',
         'apps/neko-vscode/package.json',
       ],
-      nestedPackagePaths: ['packages/neko-agent-webview/package.json'],
+      nestedPackagePaths: ['packages/agent/packages/webview/package.json'],
       packageEntries: [
         {
-          path: 'packages/neko-preview-webview/package.json',
+          path: 'packages/preview/webview/package.json',
           manifest: { devDependencies: { '@types/vscode': '^1.99.0' } },
         },
       ],
       pnpmWorkspacePatterns: ['apps/*', 'packages/*/packages/*'],
       productionSourceEntries: [
         {
-          path: 'packages/neko-chara/src/host-vscode/index.ts',
+          path: 'packages/chara/src/host-vscode/index.ts',
           content: "import * as vscode from 'vscode';",
         },
         {
-          path: 'packages/neko-agent-webview/src/bridge.ts',
+          path: 'packages/agent/webview/src/bridge.ts',
           content: "const host = acquireVsCodeApi(); const uri = 'vscode-webview://legacy';",
         },
       ],

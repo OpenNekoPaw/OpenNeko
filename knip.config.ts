@@ -18,20 +18,20 @@ const config: KnipConfig = {
   ],
   ignoreIssues: {
     // Internal editor API surfaces: intentionally exported for feature modules
-    'packages/neko-cut-webview/src/types.ts': ['exports'],
-    'packages/neko-cut-webview/src/types/**/*.ts': ['exports'],
-    'packages/neko-cut-webview/src/constants.ts': ['exports'],
-    'packages/neko-cut-webview/src/utils/index.ts': ['exports'],
-    'packages/neko-cut-webview/src/utils/speed.ts': ['exports'],
-    'packages/neko-cut-webview/src/utils/waveform.ts': ['exports'],
-    'packages/neko-cut-webview/src/utils/pyramidThumbnail.ts': ['exports'],
+    'packages/cut/webview/src/types.ts': ['exports'],
+    'packages/cut/webview/src/types/**/*.ts': ['exports'],
+    'packages/cut/webview/src/constants.ts': ['exports'],
+    'packages/cut/webview/src/utils/index.ts': ['exports'],
+    'packages/cut/webview/src/utils/speed.ts': ['exports'],
+    'packages/cut/webview/src/utils/waveform.ts': ['exports'],
+    'packages/cut/webview/src/utils/pyramidThumbnail.ts': ['exports'],
     // Logger facades expose test-injection hooks for package Webview tests.
-    'packages/neko-canvas-webview/src/utils/logger.ts': ['exports'],
-    'packages/neko-cut-webview/src/utils/logger.ts': ['exports'],
-    'packages/neko-preview-webview/src/utils/logger.ts': ['exports'],
+    'packages/canvas/webview/src/utils/logger.ts': ['exports'],
+    'packages/cut/webview/src/utils/logger.ts': ['exports'],
+    'packages/preview/webview/src/utils/logger.ts': ['exports'],
     // Shared contract files consumed as package-level type surfaces
-    'packages/neko-canvas-webview/src/types/extendedCanvas.ts': ['exports'],
-    'packages/neko-preview-webview/src/shared/document-types.ts': ['exports'],
+    'packages/canvas/webview/src/types/extendedCanvas.ts': ['exports'],
+    'packages/preview/webview/src/shared/document-types.ts': ['exports'],
   },
 
   workspaces: {
@@ -63,7 +63,7 @@ const config: KnipConfig = {
       ],
     },
     // ── Layer 0: Library packages ──────────────────────
-    'packages/neko-shared': {
+    'packages/shared': {
       entry: [
         'src/index.ts',
         'src/core/index.ts',
@@ -73,12 +73,12 @@ const config: KnipConfig = {
         'src/path/index.ts',
       ],
     },
-    'packages/neko-ai-contracts': {},
-    'packages/neko-content': {
+    'packages/ai/contracts': {},
+    'packages/content': {
       entry: ['src/index.ts', 'src/document/index.ts'],
     },
-    'packages/neko-media': {},
-    'packages/neko-chara': {
+    'packages/media': {},
+    'packages/chara': {
       entry: [
         'src/index.ts',
         'src/application/index.ts',
@@ -86,9 +86,9 @@ const config: KnipConfig = {
         'src/testing/index.ts',
       ],
     },
-    'packages/neko-generation': {},
-    'packages/neko-quality': {},
-    'packages/neko-entity-domain': {
+    'packages/generation': {},
+    'packages/quality': {},
+    'packages/entity/domain': {
       entry: [
         'src/index.ts',
         'src/core/index.ts',
@@ -98,7 +98,7 @@ const config: KnipConfig = {
         'src/testing/index.ts',
       ],
     },
-    'packages/neko-search-domain': {
+    'packages/search/domain': {
       entry: [
         'src/index.ts',
         'src/core/index.ts',
@@ -106,7 +106,7 @@ const config: KnipConfig = {
         'src/testing/index.ts',
       ],
     },
-    'packages/neko-ui': {
+    'packages/ui': {
       entry: [
         'src/index.ts',
         'src/creative/index.ts',
@@ -132,15 +132,15 @@ const config: KnipConfig = {
       ignoreDependencies: ['tailwindcss'], // Optional peer used only by the exported preset.
     },
 
-    'packages/neko-assets-domain': {},
-    'packages/neko-assets-webview': {
+    'packages/assets/domain': {},
+    'packages/assets/webview': {
       entry: [
         'src/global-library/root.tsx',
         'src/project-portability/ProjectPortabilityControl.tsx',
         'src/resource-browser/root.tsx',
       ],
     },
-    'packages/neko-cut-webview': {
+    'packages/cut/webview': {
       entry: [
         'functional/desktop-openneko-consumer.mjs',
         'src/host-adapter/index.tsx',
@@ -159,14 +159,14 @@ const config: KnipConfig = {
       ],
       ignore: ['src/renderer/styles.css'],
     },
-    'packages/neko-agent-webview': {
+    'packages/agent/webview': {
       ignore: [
         // Barrel exports
         'src/components/ChatView/InputArea/index.ts',
         'src/config/index.ts',
       ],
     },
-    'packages/neko-agent-runtime': {
+    'packages/agent/runtime': {
       entry: [
         'src/index.ts',
         'src/approval/index.ts',
@@ -177,7 +177,7 @@ const config: KnipConfig = {
         'src/workspace/index.ts',
       ],
     },
-    'packages/neko-canvas-webview': {
+    'packages/canvas/webview': {
       entry: [
         'functional/desktop-openneko-consumer.mjs',
         'src/host-adapter/index.tsx',
@@ -192,7 +192,7 @@ const config: KnipConfig = {
         'src/components/panels/PropertyPanel.tsx',
       ],
     },
-    'packages/neko-preview-webview': {
+    'packages/preview/webview': {
       entry: [
         'functional/desktop-openneko-consumer.mjs',
         'scripts/three-reference-preset-feasibility.mts',

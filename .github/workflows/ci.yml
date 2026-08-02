@@ -113,7 +113,7 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
       - run: pnpm check:local-metadata-runtimes
-      - run: pnpm --dir packages/neko-types exec vitest run src/local-metadata/node-sqlite-local-metadata-store.test.ts
+      - run: pnpm --dir packages/local-metadata exec vitest run src/node-sqlite-local-metadata-store.test.ts
 
   test-ts:
     name: Unit & Contract Tests

@@ -9,7 +9,7 @@ import { DESKTOP_CANVAS_CHANNELS } from '../shared/canvas-bridge-contract';
 import { DESKTOP_CUT_CHANNELS } from '../shared/cut-bridge-contract';
 import { DESKTOP_HOME_MANAGEMENT_CHANNELS } from '../shared/home-management-contract';
 import { DESKTOP_APPLICATION_SETTINGS_CHANNELS } from '@neko/host/application-settings';
-import { DESKTOP_PROJECT_PORTABILITY_CHANNELS } from '@neko-assets/domain/contracts';
+import { DESKTOP_PROJECT_PORTABILITY_CHANNELS } from '@neko/assets-domain/contracts';
 import type { DesktopAppHost } from './app-host';
 
 export function registerDesktopIpc(

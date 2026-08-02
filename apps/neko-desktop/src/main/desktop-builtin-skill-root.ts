@@ -15,5 +15,5 @@ export function resolveDesktopBuiltinSkillRoot(input: ResolveDesktopBuiltinSkill
 }
 
 export function resolveDesktopBuiltinSkillSourceRoot(desktopAppPath: string): string {
-  return resolve(desktopAppPath, '../../packages/neko-skills/skills');
+  return resolve(desktopAppPath, '../../packages/skills/skills');
 }
