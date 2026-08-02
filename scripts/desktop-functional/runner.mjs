@@ -93,6 +93,7 @@ export async function runAutomatedDesktopFunctional(options) {
     await waitForDesktopBridge(cdp, options.startupTimeoutMs ?? 60_000);
     const version = await cdp.send('Browser.getVersion');
     const scenarioAbort = new AbortController();
+    let screenshotSequence = 0;
     const evidence = await withTimeout(
       scenario.run({
         cdp,
@@ -109,6 +110,36 @@ export async function runAutomatedDesktopFunctional(options) {
           abortable(clickElement(cdp, selector, index, position), scenarioAbort.signal),
         hover: (selector, index, position) =>
           abortable(hoverElement(cdp, selector, index, position), scenarioAbort.signal),
+        drag: (sourceSelector, targetSelector, dragOptions) =>
+          abortable(
+            dragDesktopElement(cdp, sourceSelector, targetSelector, dragOptions),
+            scenarioAbort.signal,
+          ),
+        type: (selector, text, index, inputOptions) =>
+          abortable(
+            typeDesktopText(cdp, selector, text, index, {
+              ...inputOptions,
+              platform: options.platform ?? process.platform,
+            }),
+            scenarioAbort.signal,
+          ),
+        pressKey: (key, modifiers) =>
+          abortable(pressDesktopKey(cdp, key, modifiers), scenarioAbort.signal),
+        scroll: (selector, index, scrollOptions) =>
+          abortable(
+            scrollDesktopElement(cdp, selector, index, scrollOptions),
+            scenarioAbort.signal,
+          ),
+        screenshot: (label = 'screenshot') =>
+          abortable(
+            writeDesktopScreenshot({
+              cdp,
+              reportPath,
+              label,
+              sequence: (screenshotSequence += 1),
+            }),
+            scenarioAbort.signal,
+          ),
         waitForSelector: (selector, timeoutMs) =>
           abortable(waitForSelector(cdp, selector, timeoutMs), scenarioAbort.signal),
         readOpenNekoResourceRequests: () => observation.openNekoResourceRequests(),
@@ -183,6 +214,11 @@ export function createAutomatedDesktopLaunch(input) {
   const environment = Object.freeze({
     OPENNEKO_DESKTOP_FUNCTIONAL_HOME: input.fixtureHome,
     OPENNEKO_DESKTOP_FUNCTIONAL_WORKSPACE: input.workspacePath,
+    OPENNEKO_DESKTOP_FUNCTIONAL_CUT_EXPORT: join(
+      input.workspacePath,
+      'exports',
+      'functional-cut-export.mp4',
+    ),
   });
   if (input.target === 'packaged') {
     return Object.freeze({
@@ -408,6 +444,188 @@ async function hoverElement(cdp, selector, index = 0, position = {}) {
     buttons: 0,
     pointerType: 'mouse',
   });
+}
+
+export async function typeDesktopText(cdp, selector, text, index = 0, options = {}) {
+  if (typeof text !== 'string') {
+    throw new Error('Desktop text input requires a string value.');
+  }
+  await clickElement(cdp, selector, index, options.position);
+  if (options.clear !== false) {
+    const selectionModifier = options.platform === 'darwin' ? 'Meta' : 'Control';
+    await pressDesktopKey(cdp, 'a', [selectionModifier]);
+    await pressDesktopKey(cdp, 'Backspace');
+  }
+  if (text.length > 0) {
+    await cdp.send('Input.insertText', { text });
+  }
+}
+
+export async function pressDesktopKey(cdp, key, modifiers = []) {
+  if (typeof key !== 'string' || key.length === 0) {
+    throw new Error('Desktop keyboard input requires a non-empty key.');
+  }
+  const modifierMask = resolveModifierMask(modifiers);
+  const descriptor = describeKey(key);
+  const event = {
+    modifiers: modifierMask,
+    key: descriptor.key,
+    code: descriptor.code,
+    windowsVirtualKeyCode: descriptor.virtualKeyCode,
+    nativeVirtualKeyCode: descriptor.virtualKeyCode,
+  };
+  await cdp.send('Input.dispatchKeyEvent', { type: 'keyDown', ...event });
+  await cdp.send('Input.dispatchKeyEvent', { type: 'keyUp', ...event });
+}
+
+export async function scrollDesktopElement(cdp, selector, index = 0, options = {}) {
+  const deltaX = options.deltaX ?? 0;
+  const deltaY = options.deltaY ?? 0;
+  if (!Number.isFinite(deltaX) || !Number.isFinite(deltaY)) {
+    throw new Error('Desktop scroll deltas must be finite numbers.');
+  }
+  if (deltaX === 0 && deltaY === 0) {
+    throw new Error('Desktop scroll requires a non-zero delta.');
+  }
+  const point = await waitForElementPoint(cdp, selector, index, options.position ?? {});
+  await cdp.send('Input.dispatchMouseEvent', {
+    type: 'mouseMoved',
+    x: point.x,
+    y: point.y,
+    button: 'none',
+    buttons: 0,
+    pointerType: 'mouse',
+  });
+  await cdp.send('Input.dispatchMouseEvent', {
+    type: 'mouseWheel',
+    x: point.x,
+    y: point.y,
+    deltaX,
+    deltaY,
+    button: 'none',
+    buttons: 0,
+    pointerType: 'mouse',
+  });
+}
+
+export async function dragDesktopElement(cdp, sourceSelector, targetSelector, options = {}) {
+  const source = await waitForElementPoint(
+    cdp,
+    sourceSelector,
+    options.sourceIndex ?? 0,
+    options.sourcePosition ?? {},
+  );
+  const target = await waitForElementPoint(
+    cdp,
+    targetSelector,
+    options.targetIndex ?? 0,
+    options.targetPosition ?? {},
+  );
+  await cdp.send('Input.dispatchMouseEvent', {
+    type: 'mouseMoved',
+    x: source.x,
+    y: source.y,
+    button: 'none',
+    buttons: 0,
+    pointerType: 'mouse',
+  });
+  await cdp.send('Input.dispatchMouseEvent', {
+    type: 'mousePressed',
+    x: source.x,
+    y: source.y,
+    button: 'left',
+    buttons: 1,
+    clickCount: 1,
+    pointerType: 'mouse',
+  });
+  await cdp.send('Input.dispatchMouseEvent', {
+    type: 'mouseMoved',
+    x: target.x,
+    y: target.y,
+    button: 'left',
+    buttons: 1,
+    pointerType: 'mouse',
+  });
+  await cdp.send('Input.dispatchMouseEvent', {
+    type: 'mouseReleased',
+    x: target.x,
+    y: target.y,
+    button: 'left',
+    buttons: 0,
+    clickCount: 1,
+    pointerType: 'mouse',
+  });
+}
+
+export async function captureDesktopScreenshot(cdp) {
+  const result = await cdp.send('Page.captureScreenshot', {
+    format: 'png',
+    fromSurface: true,
+    captureBeyondViewport: false,
+  });
+  if (typeof result?.data !== 'string' || result.data.length === 0) {
+    throw new Error('Desktop screenshot capture returned no PNG data.');
+  }
+  return result.data;
+}
+
+async function writeDesktopScreenshot({ cdp, reportPath, label, sequence }) {
+  if (typeof label !== 'string' || label.length === 0) {
+    throw new Error('Desktop screenshot requires a non-empty label.');
+  }
+  const safeLabel = label
+    .normalize('NFKD')
+    .replace(/[^a-zA-Z0-9_-]+/gu, '-')
+    .replace(/^-+|-+$/gu, '')
+    .slice(0, 64);
+  if (safeLabel.length === 0) {
+    throw new Error('Desktop screenshot label must contain a filename-safe character.');
+  }
+  const filename = `${String(sequence).padStart(2, '0')}-${safeLabel}.png`;
+  const directory = join(dirname(reportPath), 'screenshots');
+  await mkdir(directory, { recursive: true });
+  await writeFile(join(directory, filename), Buffer.from(await captureDesktopScreenshot(cdp), 'base64'));
+  return Object.freeze({ artifact: `screenshots/${filename}` });
+}
+
+function resolveModifierMask(modifiers) {
+  if (!Array.isArray(modifiers)) {
+    throw new Error('Desktop keyboard modifiers must be an array.');
+  }
+  const values = Object.freeze({ Alt: 1, Control: 2, Meta: 4, Shift: 8 });
+  return modifiers.reduce((mask, modifier) => {
+    const value = values[modifier];
+    if (value === undefined) {
+      throw new Error(`Unsupported Desktop keyboard modifier '${String(modifier)}'.`);
+    }
+    return mask | value;
+  }, 0);
+}
+
+function describeKey(input) {
+  const named = {
+    ArrowDown: ['ArrowDown', 'ArrowDown', 40],
+    ArrowLeft: ['ArrowLeft', 'ArrowLeft', 37],
+    ArrowRight: ['ArrowRight', 'ArrowRight', 39],
+    ArrowUp: ['ArrowUp', 'ArrowUp', 38],
+    Backspace: ['Backspace', 'Backspace', 8],
+    Enter: ['Enter', 'Enter', 13],
+    Escape: ['Escape', 'Escape', 27],
+    Space: [' ', 'Space', 32],
+    Tab: ['Tab', 'Tab', 9],
+  };
+  const descriptor = named[input];
+  if (descriptor) {
+    return { key: descriptor[0], code: descriptor[1], virtualKeyCode: descriptor[2] };
+  }
+  if (/^[a-z]$/iu.test(input)) {
+    const upper = input.toLocaleUpperCase('en-US');
+    return { key: input, code: `Key${upper}`, virtualKeyCode: upper.charCodeAt(0) };
+  }
+  if (/^[0-9]$/u.test(input)) {
+    return { key: input, code: `Digit${input}`, virtualKeyCode: input.charCodeAt(0) };
+  }
+  throw new Error(`Unsupported Desktop keyboard key '${input}'.`);
 }
 
 async function waitForElementPoint(cdp, selector, index, position) {

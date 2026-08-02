@@ -542,3 +542,4 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function invalidPayload(message: string): PreviewContractError {
   return new PreviewContractError('invalid-preview-payload', message);
 }
+export * from './session-registry';

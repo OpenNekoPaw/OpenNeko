@@ -30,7 +30,7 @@ import type {
   DesktopAgentHomeConversationSummary,
   DesktopProjectCatalogItem,
   DesktopShellProjection,
-} from '../shared/shell-contract';
+} from '@neko/host/desktop-shell-contract';
 import type {
   DesktopHomeExtensionItem,
   DesktopHomeExtensionsResult,
@@ -46,7 +46,7 @@ import {
   splitMainView,
   type DesktopWorkbenchLayoutProjection,
   type DesktopWorkbenchMainGroup,
-} from '../shared/workbench-contract';
+} from '@neko/host/desktop-workbench-contract';
 import { DesktopAgentSurface } from './DesktopAgentSurface';
 import { DesktopResourceBrowserSurface } from './DesktopResourceBrowserSurface';
 import { DesktopPreviewSurface } from './DesktopPreviewSurface';

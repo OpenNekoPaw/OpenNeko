@@ -30,19 +30,19 @@ import {
   type DesktopOpenContentResult,
   type DesktopProfileRequestResult,
   type DesktopShellResponse,
-} from '../shared/shell-contract';
+} from '@neko/host/desktop-shell-contract';
 import { DesktopWindowRegistry, type DesktopSenderIdentity } from './window-registry';
 import type {
-  DesktopAgentAppHostComposition,
-  DesktopAgentSkillCatalog,
-} from './desktop-agent-app-host-composition';
+  AgentAppHost,
+  AgentControllerComposition,
+  AgentSkillCatalog,
+} from '@neko/agent-runtime/application';
 import {
   createDesktopAgentBridgeRuntime,
   type DesktopAgentBridgeRuntime,
   type DesktopAgentConnectionGrant,
-  type DesktopAgentControllerComposition,
 } from './desktop-agent-bridge-runtime';
-import type { DesktopShellService } from './shell-service';
+import type { DesktopShellService } from '@neko/host/desktop-shell-service';
 import type {
   ResourceBrowserChildrenRequest,
   ResourceBrowserIntentRequest,
@@ -122,7 +122,7 @@ import {
   type DesktopApplicationSettingsResponse,
 } from '@neko/host/application-settings';
 import type { DesktopApplicationSettingsService } from '@neko/host/application-settings-service';
-import type { DesktopExtensionManager } from './desktop-extension-manager';
+import type { AgentExtensionManager } from '@neko/agent-runtime/extensions';
 import type { PersonalSkillManager } from '@neko/agent-runtime/pi';
 import type { ProjectPortabilityRuntime } from '@neko/assets-node';
 import type {
@@ -143,15 +143,15 @@ export interface DesktopAppHostOptions {
   readonly version: string;
   readonly logger: ILogger;
   readonly shell: DesktopShellService;
-  readonly agent: DesktopAgentAppHostComposition;
-  readonly agentControllerComposition?: DesktopAgentControllerComposition;
+  readonly agent: AgentAppHost;
+  readonly agentControllerComposition?: AgentControllerComposition;
   readonly resourceBrowser?: ResourceBrowserNodeRuntime;
   readonly projectPortability?: ProjectPortabilityRuntime;
   readonly preview?: DesktopPreviewRuntime;
   readonly canvas?: DesktopCanvasRuntime;
   readonly cut?: DesktopCutRuntime;
   readonly settings: DesktopApplicationSettingsService;
-  readonly extensionManager: DesktopExtensionManager;
+  readonly extensionManager: AgentExtensionManager;
   readonly personalSkillManager: PersonalSkillManager;
   readonly openAgentAdvancedSettings: () => Promise<void>;
   readonly instanceId?: string;
@@ -165,7 +165,7 @@ export class DesktopAppHost {
   readonly applicationIdentity: NekoApplicationIdentity;
   readonly windows = new DesktopWindowRegistry();
   readonly shell: DesktopShellService;
-  readonly agent: DesktopAgentAppHostComposition;
+  readonly agent: AgentAppHost;
   readonly agentBridge: DesktopAgentBridgeRuntime;
   readonly resourceBrowser: ResourceBrowserNodeRuntime | undefined;
   readonly projectPortability: ProjectPortabilityRuntime | undefined;
@@ -964,7 +964,7 @@ export class DesktopAppHost {
   }
 
   private async activatePluginSnapshot(
-    snapshot: Awaited<ReturnType<DesktopExtensionManager['readCatalog']>>,
+    snapshot: Awaited<ReturnType<AgentExtensionManager['readCatalog']>>,
   ): Promise<void> {
     const readiness = await this.agent.reconcilePluginRuntime(snapshot);
     this.options.extensionManager.setRuntimeReadiness(snapshot.revision, readiness);
@@ -1295,7 +1295,9 @@ export class DesktopAppHost {
   ): Promise<CutHostRuntimeResult> {
     this.requireActive();
     const window = this.windows.resolveSender(sender);
-    return this.requireCut().execute(window.windowId, payload);
+    const result = await this.requireCut().execute(window.windowId, payload);
+    await deliverCutAgentContext(result, window.windowId, this.agentBridge);
+    return result;
   }
 
   detachWindowResources(windowId: string, webContentsId: number): void {
@@ -1501,8 +1503,25 @@ export class DesktopAppHost {
   }
 }
 
+export async function deliverCutAgentContext(
+  result: CutHostRuntimeResult,
+  windowId: string,
+  agentBridge: Pick<DesktopAgentBridgeRuntime, 'injectContext'>,
+): Promise<void> {
+  if (result.output?.type !== 'agent-context') return;
+  if (result.snapshot.identity.windowId !== windowId) {
+    throw new Error('Cut Agent context result belongs to another Desktop Window.');
+  }
+  await agentBridge.injectContext({
+    windowId,
+    projectId: result.snapshot.identity.projectId,
+    workspaceId: result.snapshot.identity.workspaceId,
+    payload: result.output.payload,
+  });
+}
+
 function projectSkillDiscovery(
-  catalog: DesktopAgentSkillCatalog,
+  catalog: AgentSkillCatalog,
 ): DesktopHomeExtensionsResult['skillDiscovery'] {
   const grouped = new Map<
     string,
@@ -1534,7 +1553,7 @@ function projectSkillDiscovery(
 }
 
 function requireGlobalSkillSource(
-  source: DesktopAgentSkillCatalog['records'][number]['source'],
+  source: AgentSkillCatalog['records'][number]['source'],
 ): 'personal' | 'plugin' {
   if (source.kind === 'personal' || source.kind === 'plugin') {
     return source.kind;
@@ -1543,14 +1562,14 @@ function requireGlobalSkillSource(
 }
 
 function requireGlobalSkillSourceKind(
-  source: DesktopAgentSkillCatalog['diagnostics'][number]['source'],
+  source: AgentSkillCatalog['diagnostics'][number]['source'],
 ): 'personal' | 'plugin' {
   if (source === 'personal' || source === 'plugin') return source;
   throw new Error('Desktop global Skill catalog cannot contain Project source metadata.');
 }
 
 function isHomeManageableSkillSourceKind(
-  source: DesktopAgentSkillCatalog['warnings'][number]['selectedSource'],
+  source: AgentSkillCatalog['warnings'][number]['selectedSource'],
 ): boolean {
   if (source === 'personal' || source === 'plugin') return true;
   if (source === 'builtin') return false;

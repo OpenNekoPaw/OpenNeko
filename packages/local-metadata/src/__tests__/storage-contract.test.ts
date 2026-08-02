@@ -4,6 +4,7 @@ import {
   createWorkspacePortableLocator,
   diagnoseDuplicateWorkspaceIdentity,
   diagnoseWorkspaceContentPlacement,
+  decideNekoStorageAuthority,
   ensureWorkspaceIdentityDescriptor,
   getNekoStorageClassification,
   listNekoStorageClassifications,
@@ -19,7 +20,7 @@ const WORKSPACE_ID = '9b2de3b5-5f50-4be4-9551-71fb5b512489';
 
 describe('storage classification', () => {
   it('classifies every canonical storage responsibility', () => {
-    expect(listNekoStorageClassifications()).toHaveLength(11);
+    expect(listNekoStorageClassifications()).toHaveLength(13);
     expect(getNekoStorageClassification('project-facts')).toMatchObject({
       scope: 'project-fact',
       tracking: 'git-trackable',
@@ -36,8 +37,101 @@ describe('storage classification', () => {
     expect(getNekoStorageClassification('conversation-journals')).toMatchObject({
       storageClass: 'raw-journal',
       durability: 'authoritative',
+      authorityKind: 'file',
+      sqliteRole: 'prohibited',
+    });
+    expect(getNekoStorageClassification('raw-logs')).toMatchObject({
+      authorityKind: 'log-file',
+      sqliteRole: 'prohibited',
+      tracking: 'outside-workspace',
+    });
+    expect(getNekoStorageClassification('secret-credentials')).toMatchObject({
+      authorityKind: 'secret-store',
+      sensitivity: 'secret',
+      sqliteRole: 'prohibited',
     });
   });
+
+  it.each([
+    [
+      'application settings',
+      'structured-state',
+      'ui-managed',
+      'machine-local',
+      'non-secret',
+      false,
+      'sqlite-state',
+    ],
+    ['raw logs', 'raw-log', 'opaque', 'machine-local', 'local-sensitive', false, 'log-file'],
+    [
+      'project facts',
+      'user-content',
+      'user-content',
+      'workspace-portable',
+      'non-secret',
+      false,
+      'file',
+    ],
+    [
+      'portable Agent definitions',
+      'structured-state',
+      'user-content',
+      'user-exportable',
+      'local-sensitive',
+      false,
+      'file',
+    ],
+    [
+      'credentials',
+      'structured-state',
+      'ui-managed',
+      'machine-local',
+      'secret',
+      false,
+      'secret-store',
+    ],
+    [
+      'Pi transcripts',
+      'journal',
+      'user-content',
+      'user-exportable',
+      'local-sensitive',
+      false,
+      'file',
+    ],
+    [
+      'rebuildable index',
+      'structured-metadata',
+      'opaque',
+      'machine-local',
+      'local-sensitive',
+      true,
+      'sqlite-cache',
+    ],
+    [
+      'retained artifact',
+      'large-artifact',
+      'user-content',
+      'user-exportable',
+      'non-secret',
+      false,
+      'file',
+    ],
+    ['session scratch', 'ephemeral', 'opaque', 'machine-local', 'local-sensitive', false, 'memory'],
+  ] as const)(
+    'admits %s to its canonical authority',
+    (_label, dataKind, userManagement, portability, sensitivity, rebuildable, authorityKind) => {
+      expect(
+        decideNekoStorageAuthority({
+          dataKind,
+          userManagement,
+          portability,
+          sensitivity,
+          rebuildable,
+        }),
+      ).toMatchObject({ authorityKind });
+    },
+  );
 
   it('fails visibly for an unknown managed storage classification', () => {
     expect(() => getNekoStorageClassification('package-private-bucket')).toThrowError(

@@ -28,7 +28,8 @@
     "./utils": "./src/utils/index.ts"
   },
   "scripts": {
-    "test": "vitest",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "check": "tsc --noEmit"
   },
   "dependencies": {

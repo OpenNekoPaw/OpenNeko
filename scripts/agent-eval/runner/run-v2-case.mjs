@@ -6,9 +6,12 @@ import { validateScenarioForExecution } from '../schemas/contracts.mjs';
 export async function runV2Case(selection, options = {}) {
   if (!selection) throw configurationError('Desktop Agent Evaluation selection is required.');
   createV2DryRun(selection);
-  if (selection.scenario.id !== 'locator-backed-display-projection') {
+  if (
+    selection.scenario.id !== 'locator-backed-display-projection' &&
+    selection.scenario.id !== 'cut-context-handoff'
+  ) {
     throw infrastructureBlocker(
-      `Desktop Agent M1 execution currently supports only locator-backed-display-projection; '${selection.scenario.id}' requires its owning Desktop scenario adapter.`,
+      `Desktop Agent execution has no scenario adapter for '${selection.scenario.id}'.`,
     );
   }
   const authorization = readProviderAuthorization(options.providerAuthorization, options.env ?? {});

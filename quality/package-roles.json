@@ -106,7 +106,7 @@
       "family": "chara",
       "roles": ["contracts", "domain", "application", "testing"],
       "runtimes": ["host-neutral", "test"],
-      "productStatus": "retained-kernel",
+      "productStatus": "active-product",
       "architectureState": "converged"
     },
     {
@@ -160,7 +160,7 @@
       "family": "entity",
       "roles": ["node"],
       "runtimes": ["node"],
-      "productStatus": "retained-kernel",
+      "productStatus": "active-product",
       "architectureState": "converged"
     },
     {
@@ -250,7 +250,7 @@
       "family": "search",
       "roles": ["domain"],
       "runtimes": ["host-neutral"],
-      "productStatus": "retained-kernel",
+      "productStatus": "active-product",
       "architectureState": "converged"
     },
     {

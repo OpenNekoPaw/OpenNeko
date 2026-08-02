@@ -2,7 +2,7 @@ import { lazy, Suspense, useEffect, useState } from 'react';
 import { useTranslation } from '@neko/ui/i18n/react';
 import type { AgentHostRuntimeAdapter } from '@neko/agent-contracts';
 import type { DesktopAgentBootstrapProjection } from '../shared/agent-contract';
-import type { DesktopProjectTabProjection } from '../shared/shell-contract';
+import type { DesktopProjectTabProjection } from '@neko/host/desktop-shell-contract';
 import { createElectronAgentHostRuntimeAdapter } from './desktop-agent-host-runtime-adapter';
 import { loadDesktopAgentWebviewRootModule } from './desktop-agent-module';
 

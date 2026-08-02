@@ -26,8 +26,8 @@ import {
   type CanvasMaterialMediaKind,
   type CanvasReferencedContentLocator,
 } from '@neko/canvas-domain';
-import type { DesktopCanvasViewGrant } from './shell-service';
-import type { DesktopWorkbenchLayoutProjection } from '../shared/workbench-contract';
+import type { DesktopCanvasViewGrant } from '@neko/host/desktop-shell-service';
+import type { DesktopWorkbenchLayoutProjection } from '@neko/host/desktop-workbench-contract';
 import {
   CanvasMaterialAuthoringService,
   CanvasMediaLibraryCopyService,

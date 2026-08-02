@@ -14,6 +14,8 @@ Human-readable architecture decisions, review policies, and validation matrices 
 | `ledgers/agent-code-debt-lcd-register.json` | Agent-specific legacy compatibility debt register for Agent boundary checks and review evidence. |
 | `local-metadata-runtime-matrix.json`        | Supported SQLite Host, OS, architecture, and minimum runtime matrix.                             |
 | `package-roles.json`                        | Complete workspace package role, runtime, product-status, and architecture-state catalog.        |
+| `package-product-status.json`               | Supported production entries plus exact expiring declarations for non-literal runtime edges.     |
+| `storage-authority-sources.json`            | Exact expiring declarations for read-only or migration-only non-canonical storage sources.       |
 | `skill-development-history/history.json`    | Immutable, evidence-linked local Skill development checkpoints; excludes Market release state.   |
 
 ## Rules

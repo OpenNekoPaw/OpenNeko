@@ -7,7 +7,19 @@ describe('Desktop Agent external driver adapter', () => {
     const driver = createDesktopAgentDriver({ evaluate });
     await driver.connect({ projectId: 'project-1', viewId: 'view-1', viewEpoch: 1 });
     await driver.createConversation();
-    await driver.submit({ conversationId: 'conversation-1', prompt: 'hello' });
+    await driver.submit({
+      conversationId: 'conversation-1',
+      prompt: 'hello',
+      contextPayloads: [
+        {
+          type: 'cut-clip',
+          id: 'cut:clip-1',
+          label: 'Clip 1',
+          summary: 'Explicit Cut Clip',
+          data: { clipId: 'clip-1' },
+        },
+      ],
+    });
     await driver.queue({ conversationId: 'conversation-1', prompt: 'follow up' });
     await driver.cancel({ conversationId: 'conversation-1', turnId: 'turn-1', runId: 'run-1' });
     await driver.confirm({
@@ -33,6 +45,7 @@ describe('Desktop Agent external driver adapter', () => {
     const expressions = evaluate.mock.calls.map(([expression]) => expression).join('\n');
     expect(expressions).toContain('window.openNekoDesktop?.agent');
     expect(expressions).toContain("type: 'sendMessage'");
+    expect(expressions).toContain('contextPayloads');
     expect(expressions).toContain("type: 'newConversation'");
     expect(expressions).toContain("type: 'confirmTool'");
     expect(expressions).toContain("kind: 'wait-for-idle'");

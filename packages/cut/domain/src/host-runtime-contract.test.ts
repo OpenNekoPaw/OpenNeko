@@ -43,6 +43,7 @@ describe('Cut Host runtime contract', () => {
       'export.start',
       'export.cancel',
       'document.save',
+      'document.create',
       'presentation.update',
     ]);
   });

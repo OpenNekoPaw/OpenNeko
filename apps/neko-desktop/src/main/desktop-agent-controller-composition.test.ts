@@ -9,13 +9,13 @@ import type {
   ConversationProjectionSnapshot,
 } from '@neko/agent-contracts';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { DesktopAgentWorkspaceRuntime } from './desktop-agent-app-host-composition';
+import type { AgentWorkspaceRuntime } from '@neko/agent-runtime/application';
 import { auditDesktopAgentStartup } from './desktop-agent-bridge-runtime';
 import {
-  createDesktopAgentControllerComposition,
-  projectDesktopAgentSecretSafeConfig,
-} from './desktop-agent-controller-composition';
-import { createDesktopAgentCredentialRuntime } from './desktop-agent-credential-runtime';
+  createAgentControllerComposition,
+  projectAgentSecretSafeConfig,
+} from '@neko/agent-runtime/application';
+import { createAgentCredentialRuntime } from '@neko/agent-runtime/pi';
 
 const temporaryRoots: string[] = [];
 
@@ -25,11 +25,11 @@ afterEach(async () => {
   );
 });
 
-describe('Desktop Agent controller composition', () => {
+describe('Agent controller composition', () => {
   it('advertises the complete base effect composition and routes through workspace owners', async () => {
     const workspace = createWorkspace();
     const posted: AgentHostToWebviewMessage[] = [];
-    const composition = createDesktopAgentControllerComposition({
+    const composition = createAgentControllerComposition({
       host: createHost(),
       userHome: '/Users/fixture',
       credentialRuntime: createCredentialRuntime(),
@@ -94,6 +94,28 @@ describe('Desktop Agent controller composition', () => {
       'tabState',
       'activeConversation',
     ]);
+    const tabState = posted.find((message) => message.type === 'tabState');
+    if (!tabState || tabState.type !== 'tabState' || !tabState.tabState) {
+      throw new Error('Expected Agent tab state.');
+    }
+    const { activeTabId, openTabs } = tabState.tabState;
+    if (!openTabs || activeTabId === undefined) throw new Error('Expected complete Agent tab state.');
+    const activeTab = openTabs.find((tab) => tab.id === activeTabId);
+    if (!activeTab) throw new Error('Expected an active Agent conversation Tab.');
+    const cutContext = {
+      type: 'cut-clip' as const,
+      id: 'cut:clip-1',
+      label: 'Clip 1',
+      summary: 'Explicit Cut Clip',
+      data: { documentId: 'project.otio', clipId: 'clip-1' },
+    };
+    await effects.injectContext(cutContext);
+    expect(posted.at(-1)).toEqual({
+      type: 'injectContext',
+      tabId: activeTab.id,
+      conversationId: activeTab.conversationId,
+      payload: cutContext,
+    });
 
     await effects.projection.discoverEndpoint(
       {
@@ -115,7 +137,7 @@ describe('Desktop Agent controller composition', () => {
   });
 
   it('removes credential material from renderer config projection', () => {
-    const projected = projectDesktopAgentSecretSafeConfig({
+    const projected = projectAgentSecretSafeConfig({
       providers: [],
       configuredProviders: [
         {
@@ -155,7 +177,7 @@ describe('Desktop Agent controller composition', () => {
     const workspace = createWorkspace(root, projection);
     const release = vi.fn();
     const reportError = vi.fn();
-    const composition = createDesktopAgentControllerComposition({
+    const composition = createAgentControllerComposition({
       host: createHost(),
       userHome: '/Users/fixture',
       credentialRuntime: createCredentialRuntime(),
@@ -237,7 +259,7 @@ function createWorkspace(
     projectionVersion: 0,
     turns: [],
   },
-): DesktopAgentWorkspaceRuntime & {
+): AgentWorkspaceRuntime & {
   readonly createConversation: ReturnType<typeof vi.fn>;
 } {
   const records: Array<{
@@ -376,7 +398,7 @@ function createHost() {
 }
 
 function createCredentialRuntime() {
-  return createDesktopAgentCredentialRuntime({
+  return createAgentCredentialRuntime({
     secrets: {
       get: async () => undefined,
       set: async () => undefined,

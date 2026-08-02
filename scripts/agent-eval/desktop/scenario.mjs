@@ -40,29 +40,39 @@ export function createDesktopAgentEvaluationScenario(selection, authorization) {
       await driver.submit({
         conversationId: conversation.conversationId,
         prompt: execution.prompt,
+        ...(execution.contextPayloads ? { contextPayloads: execution.contextPayloads } : {}),
       });
       const idle = await driver.waitForIdle(conversation.conversationId, execution.timeoutMs);
       checkpoint('agent-terminal-idle', { identity: idle.identity });
       const projection = await driver.readProjection(conversation.conversationId);
       const pendingFacts = await driver.readFacts(idle.identity);
       assertFactsContainNoRenderUrl(pendingFacts.facts);
-      const mediaCard = await waitForPackageOwnedMediaCard(
-        evaluate,
-        readOpenNekoResourceRequests,
-        30_000,
-      );
-      checkpoint('agent-package-media-card-rendered', mediaCard);
+      const mediaCard =
+        selection.scenario.id === 'locator-backed-display-projection'
+          ? await waitForPackageOwnedMediaCard(evaluate, readOpenNekoResourceRequests, 30_000)
+          : undefined;
+      if (mediaCard) checkpoint('agent-package-media-card-rendered', mediaCard);
       const closed = await driver.closeApplication();
       if (closed.status !== 'facts') {
         throw new Error('Desktop Agent close did not return final disposal facts.');
       }
       assertFactsContainNoRenderUrl(closed.facts);
-      assertLocatorDisplayProjectionEvidence({
-        facts: closed.facts,
-        projection,
-        identity: idle.identity,
-        authorization,
-      });
+      if (selection.scenario.id === 'locator-backed-display-projection') {
+        assertLocatorDisplayProjectionEvidence({
+          facts: closed.facts,
+          projection,
+          identity: idle.identity,
+          authorization,
+        });
+      } else {
+        assertCutContextHandoffEvidence({
+          facts: closed.facts,
+          projection,
+          identity: idle.identity,
+          authorization,
+          contextPayloads: execution.contextPayloads,
+        });
+      }
       return {
         conversationId: conversation.conversationId,
         identity: idle.identity,
@@ -72,7 +82,10 @@ export function createDesktopAgentEvaluationScenario(selection, authorization) {
       };
     },
     assertObservation(observed, evidence) {
-      if (observed.openNekoResourceRequestCount < 1) {
+      if (
+        selection.scenario.id === 'locator-backed-display-projection' &&
+        observed.openNekoResourceRequestCount < 1
+      ) {
         throw new Error('Desktop Agent media card did not reach the OpenNeko resource handler.');
       }
       if (evidence.facts.disposal.status !== 'disposed') {
@@ -108,7 +121,11 @@ function readSingleTurnExecution(scenario) {
   if (typeof prompt !== 'string' || prompt.trim().length === 0) {
     throw configurationError('Desktop Agent sample prompt is unavailable.');
   }
-  return { prompt, timeoutMs };
+  return {
+    prompt,
+    timeoutMs,
+    ...(submit[0]?.contextPayloads ? { contextPayloads: submit[0].contextPayloads } : {}),
+  };
 }
 
 async function readAuthorizedConfiguration(authorization) {
@@ -235,6 +252,63 @@ function assertLocatorDisplayProjectionEvidence(input) {
   }
   if (/ResourceRef|resourceRef|neko-media:|opennekomedia:|file:/u.test(projected)) {
     throw new Error('Desktop Agent public Timeline projection used a forbidden media fallback.');
+  }
+}
+
+function assertCutContextHandoffEvidence(input) {
+  assertCanonicalTurnEvidence(input);
+  const payload = input.contextPayloads?.[0];
+  if (input.contextPayloads?.length !== 1 || payload?.type !== 'cut-clip') {
+    throw new Error('Desktop Agent Cut context Evaluation requires one explicit Cut payload.');
+  }
+  const projected = JSON.stringify(input.projection);
+  if (!projected.includes(payload.summary) || !projected.includes('CUT_CONTEXT_HANDOFF_OK')) {
+    throw new Error('Desktop Agent Cut context or terminal marker is missing from the Timeline.');
+  }
+  if (/active editor|recent editor|executeAIAction/iu.test(projected)) {
+    throw new Error('Desktop Agent Cut context used a forbidden target fallback.');
+  }
+}
+
+function assertCanonicalTurnEvidence(input) {
+  const facts = input.facts;
+  if (
+    facts.identity.conversationId !== input.identity.conversationId ||
+    facts.identity.turnId !== input.identity.turnId ||
+    facts.identity.runId !== input.identity.runId
+  ) {
+    throw new Error('Desktop Agent terminal facts identity is stale or mismatched.');
+  }
+  if (
+    facts.configuration.effective.values.modelBinding.providerId !==
+      input.authorization.providerId ||
+    facts.configuration.effective.values.modelBinding.modelId !== input.authorization.modelId
+  ) {
+    throw new Error('Desktop Agent effective provider/model differs from the approved identity.');
+  }
+  if (
+    facts.runtimePath.controller !== 'sender-bound-desktop-agent-controller' ||
+    facts.runtimePath.runtime !== 'pi-conversation-runtime' ||
+    facts.runtimePath.transcript !== 'pi-session' ||
+    facts.runtimePath.metadata !== 'sqlite' ||
+    facts.runtimePath.projection !== 'conversation-projection-store' ||
+    facts.runtimePath.forbiddenPathCount !== 0
+  ) {
+    throw new Error(
+      'Desktop Agent terminal facts did not use the canonical complete-session path.',
+    );
+  }
+  if (
+    facts.projection.terminalState !== 'completed' ||
+    facts.persistence.checkpoint !== 'observed' ||
+    facts.disposal.status !== 'disposed'
+  ) {
+    throw new Error(
+      'Desktop Agent terminal projection, persistence or disposal facts are incomplete.',
+    );
+  }
+  if (facts.diagnostics.items.some((diagnostic) => diagnostic.severity === 'error')) {
+    throw new Error('Desktop Agent terminal facts contain a runtime error diagnostic.');
   }
 }
 

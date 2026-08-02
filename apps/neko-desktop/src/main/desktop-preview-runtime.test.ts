@@ -10,7 +10,7 @@ import {
   createDefaultDesktopWorkbenchLayout,
   getActiveMainView,
   openOrFocusMainView,
-} from '../shared/workbench-contract';
+} from '@neko/host/desktop-workbench-contract';
 import { DesktopResourceRegistry } from './desktop-resource-registry';
 import { DesktopPreviewRuntime, type DesktopPreviewShellPort } from './desktop-preview-runtime';
 

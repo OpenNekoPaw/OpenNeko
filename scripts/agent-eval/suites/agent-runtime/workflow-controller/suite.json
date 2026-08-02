@@ -80,6 +80,12 @@
       "file": "cases/workspace-board-delivery-resume.json",
       "group": "failure",
       "visibility": "public"
+    },
+    {
+      "id": "cut-context-handoff",
+      "file": "cases/cut-context-handoff.json",
+      "group": "regression",
+      "visibility": "public"
     }
   ],
   "rubricRefs": [],

@@ -12,7 +12,7 @@ import { createResourceBrowserSnapshotRequest } from '@neko/assets-domain/resour
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createCanvasHostSessionId } from '@neko/canvas-domain';
 import { createDesktopResourceBrowserIdentity } from '../shared/resource-browser-bridge-contract';
-import type { DesktopWorkbenchViewRef } from '../shared/workbench-contract';
+import type { DesktopWorkbenchViewRef } from '@neko/host/desktop-workbench-contract';
 import {
   createResourceToCanvasInteraction,
   ResourceBrowserNodeRuntime,
@@ -20,11 +20,8 @@ import {
 } from '@neko/assets-node';
 import { createElectronNekoHostPorts } from './electron-host-ports';
 import { createGlobalMediaLibraryConnection } from '@neko/assets-node';
-import { DesktopShellService } from './shell-service';
-import {
-  DesktopShellStateRepository,
-  type DesktopShellStateFilePort,
-} from './shell-state-repository';
+import { DesktopShellService } from '@neko/host/desktop-shell-service';
+import { createInMemoryDesktopShellStateRepository } from '@neko/host/testing/desktop-shell-state';
 import type { DesktopWorkspaceRegistry } from './desktop-workspace-registry';
 import type { AssetWorkspaceResolution } from '@neko/assets-domain/contracts';
 
@@ -224,15 +221,9 @@ describe('ResourceBrowserNodeRuntime Project identity', () => {
       }),
       dispose: async () => undefined,
     };
-    let shellContent: string | null = null;
     const shell = new DesktopShellService({
       applicationInstanceId: 'app-1',
-      stateRepository: new DesktopShellStateRepository({
-        readTextIfExists: async () => shellContent,
-        writeTextAtomic: async (content) => {
-          shellContent = content;
-        },
-      }),
+      stateRepository: createInMemoryDesktopShellStateRepository(),
       workspaceRegistry: registry,
       startupTarget: 'restore',
       createIdentity: () => 'window-1',
@@ -608,13 +599,6 @@ async function createGlobalLibraryRuntimeFixture(
 }
 
 function createGlobalLibraryShell(): DesktopShellService {
-  let content: string | null = null;
-  const file: DesktopShellStateFilePort = {
-    readTextIfExists: async () => content,
-    writeTextAtomic: async (next) => {
-      content = next;
-    },
-  };
   const registry: DesktopWorkspaceRegistry = {
     resolve: async (): Promise<AssetWorkspaceResolution> => {
       throw new Error('Workspace resolution is not expected by this global-library test.');
@@ -623,7 +607,7 @@ function createGlobalLibraryShell(): DesktopShellService {
   };
   return new DesktopShellService({
     applicationInstanceId: 'app-1',
-    stateRepository: new DesktopShellStateRepository(file),
+    stateRepository: createInMemoryDesktopShellStateRepository(),
     workspaceRegistry: registry,
     startupTarget: 'restore',
     createIdentity: () => 'window-1',

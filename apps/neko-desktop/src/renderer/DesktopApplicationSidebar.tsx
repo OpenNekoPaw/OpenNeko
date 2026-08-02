@@ -1,7 +1,7 @@
 import { useTranslation } from '@neko/ui/i18n/react';
 import { ResizeHandle, useResizable, type ControlledWorkbenchResizeBinding } from '@neko/ui';
 import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
-import { APPLICATION_PRIMARY_SIDEBAR_DEFAULT_WIDTH } from '../shared/workbench-contract';
+import { APPLICATION_PRIMARY_SIDEBAR_DEFAULT_WIDTH } from '@neko/host/desktop-workbench-contract';
 
 export function DesktopApplicationSidebarFrame({
   children,

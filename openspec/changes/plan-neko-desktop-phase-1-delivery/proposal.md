@@ -6,7 +6,8 @@ Assets/Canvas、Cut/Preview/resource、support domains 和 packaged qualificatio
 
 ## What Changes
 
-- 以 Electron Desktop 为唯一 product composition root。
+- 以 Electron Desktop 为唯一薄 product composition root；业务事实、workflow 和 Job 由 owning
+  packages 持有，Desktop 只做信任边界、native adapter、wiring 与 projection。
 - 固定 Home → Content Project → Agent/Media Library/Canvas/Cut/Preview → Generation/Export 的
   Phase 1 vertical workflow。
 - 将每个剩余 gate 分配给一个 focused child change；program 只记录依赖和完成条件。

@@ -7,15 +7,18 @@ workflow and applicable package/release gates are complete.
 ## Dependency order
 
 1. Close Desktop build/typecheck and supported package evidence.
-2. Close Agent/Home and Assets/Canvas deterministic plus Electron acceptance.
+2. Close Agent/Home and Canvas deterministic plus Electron acceptance; Asset Library, Media Library and
+   Entity remain in their dedicated changes and are outside the current P0/P1 execution slice.
 3. Complete Cut editing, Preview lifecycle and the Main-owned resource gateway.
-4. Integrate retained Generation/Quality, Chara/Entity and Tools/Diagnostics surfaces.
+4. Integrate retained Generation/Quality and Chara surfaces; keep retired Tools absent.
 5. Run one frozen end-to-end qualification workspace and package/startup matrix.
 
 ## Ownership
 
-- Electron Main owns workspace IO, project facts, sender identity, authorization, persistent state,
-  background Jobs and resource lifecycle.
+- Owning packages own project facts, host-neutral workspace/application services, persistent-state
+  contracts, business workflows and background Job state.
+- Electron Main owns sender/window identity, trust/path authorization, concrete Electron/file/process
+  adapters, native resource lifecycle, package wiring and result projection.
 - Preload exposes fixed minimal typed ports.
 - Renderer owns package Roots, interaction and recoverable presentation state only.
 - Domain packages own their contracts and deterministic behavior; the app composition root injects Host
@@ -23,8 +26,10 @@ workflow and applicable package/release gates are complete.
 
 ## Completion workflow
 
-The authoritative scenario is launch → Home → Content Project → Agent → Media Library → Canvas
-candidate/accept → Cut edit/preview/export, with support-domain projections where retained. It must prove
+The complete Phase 1 scenario remains launch → Home → Content Project → Agent → Media Library → Canvas
+candidate/accept → Cut edit/preview/export. The current non-library P0/P1 slice qualifies Home, Agent,
+Canvas, Cut and Preview independently and does not mark the complete Phase 1 program done while the
+excluded library/entity changes remain open. Final qualification must prove
 explicit Project/Workspace/View/document/conversation/job identities, stable content identity, package-
 owned Roots and the Main resource handler. Demo, raw-path, active-object and retired-runtime poison paths
 must remain untouched.

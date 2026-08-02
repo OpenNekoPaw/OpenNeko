@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "applicationEntries": [
+    "apps/neko-desktop/src/main/index.ts",
+    "apps/neko-desktop/src/preload/index.ts",
+    "apps/neko-desktop/src/renderer/main.tsx"
+  ],
+  "migrationOnlyModules": [],
+  "dynamicEdges": []
+}

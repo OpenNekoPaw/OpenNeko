@@ -9,20 +9,29 @@
     "./application": "./src/application.ts",
     "./application-settings": "./src/application-settings-contract.ts",
     "./application-settings-service": "./src/application-settings-service.ts",
+    "./application-settings-state": "./src/application-settings-state.ts",
+    "./desktop-shell-contract": "./src/desktop-shell-contract.ts",
+    "./desktop-shell-service": "./src/desktop-shell-service.ts",
+    "./desktop-shell-state": "./src/desktop-shell-state.ts",
+    "./desktop-workbench-contract": "./src/desktop-workbench-contract.ts",
+    "./testing/desktop-shell-state": "./src/testing/in-memory-desktop-shell-state-repository.ts",
     "./files": "./src/files/index.ts",
     "./ports": "./src/ports.ts",
     "./projection-attachment": "./src/projection-attachment.ts",
     "./settings": "./src/settings/index.ts"
   },
   "scripts": {
-    "test": "vitest",
+    "test": "vitest run",
     "test:run": "vitest --run"
   },
   "dependencies": {
     "@neko/ai-contracts": "workspace:*",
     "@neko/assets-domain": "workspace:*",
     "@neko/agent-contracts": "workspace:*",
+    "@neko/canvas-domain": "workspace:*",
+    "@neko/cut-domain": "workspace:*",
     "@neko/local-metadata": "workspace:*",
+    "@neko/preview-domain": "workspace:*",
     "@neko/shared": "workspace:*",
     "smol-toml": "1.6.1"
   },

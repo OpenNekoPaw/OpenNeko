@@ -1,0 +1,219 @@
+import type {
+  PreviewProjection,
+  PreviewRuntimeIdentity,
+  PreviewViewPresentation,
+} from './index.js';
+
+export interface PreviewSessionSnapshot {
+  readonly identity: PreviewRuntimeIdentity;
+  readonly projection: PreviewProjection;
+}
+
+export interface PreviewSessionTransition {
+  readonly sessionId: string;
+  readonly expectedRevision: number;
+  readonly next: PreviewSessionSnapshot;
+}
+
+export class PreviewSessionRegistry {
+  private readonly sessions = new Map<string, PreviewSessionSnapshot>();
+  private readonly transientSessions = new Map<string, string>();
+  private disposed = false;
+
+  register(projection: PreviewProjection): readonly string[] {
+    this.requireActive();
+    const sessionId = projection.identity.sessionId;
+    if (this.sessions.has(sessionId)) {
+      throw new Error(`Preview session '${sessionId}' is already registered.`);
+    }
+    this.sessions.set(sessionId, freezeSession(projection));
+    if (projection.presentation === 'pinned') return [];
+    const released: string[] = [];
+    for (const [candidateId, candidate] of this.sessions) {
+      if (
+        candidateId === sessionId ||
+        candidate.identity.windowId !== projection.identity.windowId ||
+        candidate.identity.projectId !== projection.identity.projectId ||
+        candidate.projection.presentation !== projection.presentation
+      ) {
+        continue;
+      }
+      this.sessions.delete(candidateId);
+      released.push(candidateId);
+    }
+    return Object.freeze(released);
+  }
+
+  unregister(sessionId: string): void {
+    this.requireActive();
+    if (!this.sessions.delete(sessionId)) {
+      throw new Error(`Preview session '${sessionId}' is unavailable.`);
+    }
+  }
+
+  read(sessionId: string): PreviewSessionSnapshot {
+    this.requireActive();
+    const session = this.sessions.get(sessionId);
+    if (!session) throw new Error(`Preview session '${sessionId}' is unavailable.`);
+    return session;
+  }
+
+  assertIdentity(identity: PreviewRuntimeIdentity): PreviewSessionSnapshot {
+    const session = this.read(identity.sessionId);
+    assertSessionIdentity(session.identity, identity);
+    return session;
+  }
+
+  planPresentation(
+    sessionId: string,
+    presentation: Exclude<PreviewViewPresentation, 'temporary'>,
+    nextViewId: string,
+  ): PreviewSessionTransition {
+    const session = this.read(sessionId);
+    if (session.projection.presentation === presentation) {
+      return {
+        sessionId,
+        expectedRevision: session.identity.revision,
+        next: session,
+      };
+    }
+    const identity: PreviewRuntimeIdentity = Object.freeze({
+      ...session.identity,
+      viewId: nextViewId,
+      revision: session.identity.revision + 1,
+    });
+    const projection = Object.freeze<PreviewProjection>({
+      ...session.projection,
+      identity,
+      presentation,
+    });
+    return Object.freeze({
+      sessionId,
+      expectedRevision: session.identity.revision,
+      next: freezeSession(projection),
+    });
+  }
+
+  planClose(sessionId: string): PreviewSessionTransition {
+    const session = this.read(sessionId);
+    const identity: PreviewRuntimeIdentity = Object.freeze({
+      ...session.identity,
+      revision: session.identity.revision + 1,
+    });
+    const projection = Object.freeze<PreviewProjection>({
+      schemaVersion: 1,
+      identity,
+      presentation: session.projection.presentation,
+      status: 'unavailable',
+      diagnostic: {
+        code: 'preview-descriptor-released',
+        message: 'Preview View was closed.',
+      },
+    });
+    return Object.freeze({
+      sessionId,
+      expectedRevision: session.identity.revision,
+      next: freezeSession(projection),
+    });
+  }
+
+  commit(transition: PreviewSessionTransition): PreviewSessionSnapshot {
+    this.requireActive();
+    const current = this.read(transition.sessionId);
+    if (current.identity.revision !== transition.expectedRevision) {
+      throw new Error(
+        `Preview session '${transition.sessionId}' revision ${transition.expectedRevision} is stale; current revision is ${current.identity.revision}.`,
+      );
+    }
+    this.sessions.set(transition.sessionId, transition.next);
+    return transition.next;
+  }
+
+  commitClose(transition: PreviewSessionTransition): PreviewProjection {
+    this.commit(transition);
+    this.sessions.delete(transition.sessionId);
+    return transition.next.projection;
+  }
+
+  registerTransient(windowId: string, sessionId: string): void {
+    this.requireActive();
+    if (this.transientSessions.has(sessionId) || this.sessions.has(sessionId)) {
+      throw new Error(`Preview session '${sessionId}' is already registered.`);
+    }
+    this.transientSessions.set(sessionId, windowId);
+  }
+
+  releaseTransient(windowId: string, sessionId: string): void {
+    this.requireActive();
+    if (this.transientSessions.get(sessionId) !== windowId) {
+      throw new Error(`Quick Preview session '${sessionId}' is unavailable.`);
+    }
+    this.transientSessions.delete(sessionId);
+  }
+
+  reconcileWindow(windowId: string, attachedSessionIds: readonly string[]): readonly string[] {
+    this.requireActive();
+    const attached = new Set(attachedSessionIds);
+    const released: string[] = [];
+    for (const [sessionId, session] of this.sessions) {
+      if (session.identity.windowId !== windowId || attached.has(sessionId)) continue;
+      this.sessions.delete(sessionId);
+      released.push(sessionId);
+    }
+    return Object.freeze(released);
+  }
+
+  detachWindow(windowId: string): readonly string[] {
+    this.requireActive();
+    const released: string[] = [];
+    for (const [sessionId, session] of this.sessions) {
+      if (session.identity.windowId !== windowId) continue;
+      this.sessions.delete(sessionId);
+      released.push(sessionId);
+    }
+    for (const [sessionId, ownerWindowId] of this.transientSessions) {
+      if (ownerWindowId !== windowId) continue;
+      this.transientSessions.delete(sessionId);
+      released.push(sessionId);
+    }
+    return Object.freeze(released);
+  }
+
+  dispose(): readonly string[] {
+    if (this.disposed) return [];
+    this.disposed = true;
+    const released = Object.freeze([...this.sessions.keys(), ...this.transientSessions.keys()]);
+    this.sessions.clear();
+    this.transientSessions.clear();
+    return released;
+  }
+
+  private requireActive(): void {
+    if (this.disposed) throw new Error('Preview session registry is disposed.');
+  }
+}
+
+function freezeSession(projection: PreviewProjection): PreviewSessionSnapshot {
+  return Object.freeze({ identity: projection.identity, projection });
+}
+
+function assertSessionIdentity(
+  expected: PreviewRuntimeIdentity,
+  actual: PreviewRuntimeIdentity,
+): void {
+  for (const key of [
+    'projectId',
+    'workspaceId',
+    'windowId',
+    'viewId',
+    'viewEpoch',
+    'documentId',
+    'sessionId',
+    'endpointEpoch',
+    'revision',
+  ] as const) {
+    if (expected[key] !== actual[key]) {
+      throw new Error(`Preview ${key} does not match its owning runtime.`);
+    }
+  }
+}

@@ -1,9 +1,12 @@
 import { lazy, Suspense, useMemo } from 'react';
 import { useTranslation } from '@neko/ui/i18n/react';
 import { createCutHostRuntimeWebviewBridge } from '@neko/cut-webview/runtime-bridge';
-import type { DesktopProjectCatalogItem, DesktopShellProjection } from '../shared/shell-contract';
-import type { DesktopWorkbenchViewRef } from '../shared/workbench-contract';
-import { createDesktopCutSessionId } from '../shared/cut-bridge-contract';
+import type {
+  DesktopProjectCatalogItem,
+  DesktopShellProjection,
+} from '@neko/host/desktop-shell-contract';
+import type { DesktopWorkbenchViewRef } from '@neko/host/desktop-workbench-contract';
+import { createCutHostSessionId } from '@neko/cut-domain';
 import { createElectronCutHostRuntime } from './desktop-cut-host-runtime';
 
 const CutWebviewRoot = lazy(async () => {
@@ -36,7 +39,7 @@ export function DesktopCutSurface({
         viewId: view.viewId,
         viewEpoch: view.viewEpoch,
         documentId,
-        sessionId: createDesktopCutSessionId(view.viewId, view.viewEpoch),
+        sessionId: createCutHostSessionId(view.viewId, view.viewEpoch),
         endpointEpoch: projection.endpointEpoch,
       }),
     [

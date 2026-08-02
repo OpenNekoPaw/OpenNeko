@@ -4,7 +4,9 @@
 
 The system SHALL persist Desktop shell state and application settings in state-owned repositories in
 the existing user-level local metadata database. It MUST NOT create a workspace database, a second
-Desktop database, or a permanent JSON fallback.
+Desktop database, or a permanent JSON fallback. Every persisted field MUST be classified as non-secret,
+machine-local, UI-managed application or operational state under the repository storage-authority
+policy.
 
 #### Scenario: Desktop restarts after migration
 
@@ -56,11 +58,22 @@ The export MUST NOT be invoked as a normal runtime fallback.
 
 ### Requirement: Unrelated data retains its current owner
 
-The migration MUST exclude workspace identity, project facts, journals/logs, media and artifact
-bytes, and credentials or mount secrets.
+The migration MUST exclude legacy and target workspace identity, project facts, journals/logs, media and artifact
+bytes, credentials or mount secrets, portable Agent configuration, Pi Session/transcript content,
+conversation manifests, explicit memory/preferences, Skills, prompts, profiles, and workspace
+configuration. Rebuildable Agent/workspace indexes and operational state MAY enter canonical SQLite
+only through their owning changes; this migration MUST NOT claim them.
 
 #### Scenario: Desktop local state migration completes
 
 - **WHEN** shell state and application settings are committed to SQLite
-- **THEN** `.neko/workspace.json`, project JSON/NKC/OTIO, and JSONL journals/logs remain files
+- **THEN** legacy `.neko/workspace.json`, target `neko/project.json`, project JSON/NKC/OTIO, and JSONL
+  journals/logs remain outside this migration
 - **AND** credentials remain in SecretStorage or the system keychain
+
+#### Scenario: Agent and workspace data exist beside legacy Desktop state
+
+- **WHEN** Desktop local state migration scans its two legacy JSON inputs
+- **THEN** it imports only classified shell/application fields
+- **AND** it does not read, copy, index, delete, or archive Agent, log, memory, configuration, or
+  workspace-owned data

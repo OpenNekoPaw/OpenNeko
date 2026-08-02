@@ -6,13 +6,15 @@ import {
   createDesktopAgentMessageRequest,
   DesktopAgentContractError,
 } from '../shared/agent-contract';
-import type { DesktopAgentWorkspaceRuntime } from './desktop-agent-app-host-composition';
+import type {
+  AgentControllerComposition,
+  AgentControllerEffects,
+  AgentWorkspaceRuntime,
+} from '@neko/agent-runtime/application';
 import {
   auditDesktopAgentStartup,
   createDesktopAgentBridgeRuntime,
   type DesktopAgentConnectionGrant,
-  type DesktopAgentControllerComposition,
-  type DesktopAgentControllerEffects,
 } from './desktop-agent-bridge-runtime';
 
 describe('Desktop Agent bridge runtime', () => {
@@ -113,6 +115,47 @@ describe('Desktop Agent bridge runtime', () => {
         owner: 'Phase 3',
       },
     });
+  });
+
+  it('injects context only into the exact project/workspace connection', async () => {
+    const effects = createEffects();
+    const runtime = createDesktopAgentBridgeRuntime({
+      controllerComposition: createComposition(effects),
+      createIdentity: () => 'connection-1',
+    });
+    runtime.createBootstrap({
+      requestId: 'bootstrap-1',
+      grant: grant(),
+      workspace: workspace(),
+      publish: vi.fn(),
+    });
+    const payload = {
+      type: 'cut-clip' as const,
+      id: 'cut:clip-1',
+      label: 'Clip 1',
+      summary: 'Explicit Cut Clip',
+      data: { documentId: 'project.otio', clipId: 'clip-1' },
+    };
+
+    await expect(
+      runtime.injectContext({
+        windowId: 'window-1',
+        projectId: 'project-1',
+        workspaceId: 'workspace-1',
+        payload,
+      }),
+    ).resolves.toBeUndefined();
+    expect(effects.injectContext).toHaveBeenCalledWith(payload);
+
+    await expect(
+      runtime.injectContext({
+        windowId: 'window-1',
+        projectId: 'project-forged',
+        workspaceId: 'workspace-1',
+        payload,
+      }),
+    ).rejects.toThrow('found 0');
+    expect(effects.injectContext).toHaveBeenCalledOnce();
   });
 
   it('rejects forged owner identity and stale renderer/View epochs before effects', async () => {
@@ -366,9 +409,7 @@ function createReadyRuntime() {
   });
 }
 
-function createComposition(
-  effects: DesktopAgentControllerEffects,
-): DesktopAgentControllerComposition {
+function createComposition(effects: AgentControllerEffects): AgentControllerComposition {
   return {
     requirements: {
       'pi-runtime': true,
@@ -383,10 +424,11 @@ function createComposition(
 }
 
 function createEffects(
-  automation?: NonNullable<DesktopAgentControllerEffects['automation']>,
-): DesktopAgentControllerEffects {
+  automation?: NonNullable<AgentControllerEffects['automation']>,
+): AgentControllerEffects {
   return {
     dispose: vi.fn(),
+    injectContext: vi.fn(),
     ...(automation === undefined ? {} : { automation }),
     conversation: {
       submitTurn: vi.fn(),
@@ -453,7 +495,7 @@ function grant(): DesktopAgentConnectionGrant {
   };
 }
 
-function workspace(): DesktopAgentWorkspaceRuntime {
+function workspace(): AgentWorkspaceRuntime {
   return {
     workspaceId: 'workspace-1',
     workspace: {

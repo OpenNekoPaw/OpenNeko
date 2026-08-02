@@ -7,7 +7,7 @@ describe('all-suite key-free dry-run', () => {
       schema: 'neko.agent-eval.all-suite-dry-run.v2',
       ok: true,
       suiteCount: 22,
-      caseCount: 51,
+      caseCount: 52,
     });
   });
 
@@ -29,8 +29,6 @@ describe('all-suite key-free dry-run', () => {
   });
 
   it('rejects case selection without an owning suite', () => {
-    expect(() => parseDryRunArgs(['--case', 'unknown'])).toThrow(
-      '--case requires --suite',
-    );
+    expect(() => parseDryRunArgs(['--case', 'unknown'])).toThrow('--case requires --suite');
   });
 });

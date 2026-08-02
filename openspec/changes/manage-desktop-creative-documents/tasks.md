@@ -1,5 +1,8 @@
 ## 1. Freeze contracts and owner boundaries
 
+- [ ] 1.0 Establish `@neko/content/project-file-io` as the canonical owner of the host-neutral
+      creative-document lifecycle coordinator and public contract; Desktop may retain only sender/path
+      authorization, native picker/trash/file adapters, Workbench projection and composition.
 - [ ] 1.1 Define the versioned Desktop creative-document create/import/open/trash-plan/trash-apply
   request, result, diagnostic, identity, document-kind, and plan contracts with strict parsers and
   producer/consumer tests.
@@ -27,7 +30,8 @@
 
 ## 3. Implement Desktop create, import, and open coordination
 
-- [ ] 3.1 Add `CreativeDocumentLifecycleCoordinator` with explicit owner injection, sender-bound
+- [ ] 3.1 Add package-owned `CreativeDocumentLifecycleCoordinator` with explicit owner and Host-port
+      injection; keep sender binding in the Desktop adapter and require
   workspace authorization, portable directory/name resolution, request idempotency, and typed
   fail-visible diagnostics.
 - [ ] 3.2 Implement same-directory staging and exclusive publication for new/imported documents,
@@ -103,8 +107,8 @@
   route, direct workspace permanent-delete entry, active/recent target fallback, and any aliases
   replaced inside this change boundary.
 - [ ] 7.2 Add path-level architecture tests proving Assets stays browser-safe, Main stays React-free,
-  preload exposes only the lifecycle port, owner codecs/sessions are invoked, and legacy paths cannot
-  return success.
+  preload exposes only the lifecycle port, the package-owned coordinator and owner codecs/sessions
+  are invoked, app-local workflow is poisoned, and legacy paths cannot return success.
 - [ ] 7.3 Update Desktop/Assets documentation and relevant architecture/domain navigation with the
   lifecycle owner, Resource Browser versus empty-Main responsibilities, import reference behavior,
   system-trash semantics, and protected workspace Canvas boundary.

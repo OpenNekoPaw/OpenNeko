@@ -125,6 +125,9 @@ export function driverExpression(command) {
           conversationId: requireText(command.conversationId, 'Conversation identity'),
           message: requireText(command.prompt, 'Agent prompt'),
           sessionMode: 'agent',
+          ...(Array.isArray(command.contextPayloads)
+            ? { contextPayloads: command.contextPayloads }
+            : {}),
           ...(command.chatModel ? { chatModel: command.chatModel } : {}),
           ...(command.llmConfig ? { llmConfig: command.llmConfig } : {}),
         });

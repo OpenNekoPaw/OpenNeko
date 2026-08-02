@@ -1,4 +1,4 @@
-import type { DesktopShellProjection } from './shell-contract';
+import type { DesktopShellProjection } from '@neko/host/desktop-shell-contract';
 
 export interface DesktopShellProjectionCursor {
   readonly endpointEpoch: string;

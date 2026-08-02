@@ -1,14 +1,19 @@
 import { randomUUID } from 'node:crypto';
 import {
   createAgentHostMessageController,
-  type AgentHostControllerEffectPorts,
   type AgentHostMessageController,
 } from '@neko/agent-runtime/runtime/host-controller';
+import type {
+  AgentControllerComposition,
+  AgentControllerEffects,
+  AgentWorkspaceRuntime,
+} from '@neko/agent-runtime/application';
 import {
   ELECTRON_AGENT_HOST_ROUTE_COVERAGE,
   createAgentHostRouteCoverageDiagnostics,
   createElectronAgentHostRouteUnavailableDiagnostic,
   type DesktopAgentConnectionIdentity,
+  type AgentContextPayload,
 } from '@neko/agent-contracts';
 import {
   DESKTOP_AGENT_CONTRACT_VERSION,
@@ -18,51 +23,9 @@ import {
   type DesktopAgentMessageEvent,
   type DesktopAgentMessageRequest,
   type DesktopAgentMessageResult,
-  type DesktopAgentRuntimeRequirement,
   type DesktopAgentUnavailableDiagnostic,
 } from '../shared/agent-contract';
-import type { DesktopAgentWorkspaceRuntime } from './desktop-agent-app-host-composition';
 import type { DesktopAgentNeutralFacts } from '@neko/agent-contracts';
-
-export interface DesktopAgentControllerComposition {
-  readonly requirements: Readonly<Partial<Record<DesktopAgentRuntimeRequirement, true>>>;
-  createEffects(input: {
-    readonly workspace: DesktopAgentWorkspaceRuntime;
-    readonly identity: DesktopAgentConnectionIdentity;
-  }): DesktopAgentControllerEffects;
-  dispose?(): Promise<void>;
-}
-
-export interface DesktopAgentControllerEffects extends AgentHostControllerEffectPorts {
-  readonly automation?: {
-    waitForIdle(
-      conversationId: string,
-      timeoutMs: number,
-    ): Promise<{
-      readonly conversationId: string;
-      readonly turnId: string;
-      readonly runId: string;
-    }>;
-    readLatestTurnIdentity(conversationId: string):
-      | {
-          readonly conversationId: string;
-          readonly turnId: string;
-          readonly runId: string;
-        }
-      | undefined;
-    readFacts(identity: {
-      readonly conversationId: string;
-      readonly turnId: string;
-      readonly runId: string;
-    }): DesktopAgentNeutralFacts;
-    disposeAndReadFacts(identity: {
-      readonly conversationId: string;
-      readonly turnId: string;
-      readonly runId: string;
-    }): Promise<DesktopAgentNeutralFacts>;
-  };
-  dispose(): void;
-}
 
 export interface DesktopAgentStartupAudit {
   readonly ready: boolean;
@@ -84,13 +47,19 @@ export interface DesktopAgentBridgeRuntime {
   createBootstrap(input: {
     readonly requestId: string;
     readonly grant: DesktopAgentConnectionGrant;
-    readonly workspace: DesktopAgentWorkspaceRuntime | undefined;
+    readonly workspace: AgentWorkspaceRuntime | undefined;
     readonly publish: (event: DesktopAgentMessageEvent) => void;
   }): DesktopAgentBootstrapProjection;
   send(
     request: DesktopAgentMessageRequest,
     grant: DesktopAgentConnectionGrant,
   ): Promise<DesktopAgentMessageResult>;
+  injectContext(input: {
+    readonly windowId: string;
+    readonly projectId: string;
+    readonly workspaceId: string;
+    readonly payload: AgentContextPayload;
+  }): Promise<void>;
   waitForIdle(
     connection: DesktopAgentConnectionIdentity,
     grant: DesktopAgentConnectionGrant,
@@ -112,7 +81,7 @@ export interface DesktopAgentBridgeRuntime {
 }
 
 export function auditDesktopAgentStartup(
-  composition?: DesktopAgentControllerComposition,
+  composition?: AgentControllerComposition,
   piRuntimeAvailable = true,
 ): DesktopAgentStartupAudit {
   const routeDiagnostics = createAgentHostRouteCoverageDiagnostics({
@@ -144,7 +113,7 @@ export function auditDesktopAgentStartup(
 }
 
 export function createDesktopAgentBridgeRuntime(input: {
-  readonly controllerComposition?: DesktopAgentControllerComposition;
+  readonly controllerComposition?: AgentControllerComposition;
   readonly createIdentity?: () => string;
 }): DesktopAgentBridgeRuntime {
   return new DefaultDesktopAgentBridgeRuntime(input);
@@ -154,7 +123,7 @@ interface DesktopAgentConnection {
   readonly identity: DesktopAgentConnectionIdentity;
   readonly controller: AgentHostMessageController;
   publish: (event: DesktopAgentMessageEvent) => void;
-  readonly effects: DesktopAgentControllerEffects;
+  readonly effects: AgentControllerEffects;
   lastFactsIdentity?: {
     readonly conversationId: string;
     readonly turnId: string;
@@ -170,7 +139,7 @@ class DefaultDesktopAgentBridgeRuntime implements DesktopAgentBridgeRuntime {
 
   constructor(
     private readonly input: {
-      readonly controllerComposition?: DesktopAgentControllerComposition;
+      readonly controllerComposition?: AgentControllerComposition;
       readonly createIdentity?: () => string;
     },
   ) {
@@ -180,7 +149,7 @@ class DefaultDesktopAgentBridgeRuntime implements DesktopAgentBridgeRuntime {
   createBootstrap(input: {
     readonly requestId: string;
     readonly grant: DesktopAgentConnectionGrant;
-    readonly workspace: DesktopAgentWorkspaceRuntime | undefined;
+    readonly workspace: AgentWorkspaceRuntime | undefined;
     readonly publish: (event: DesktopAgentMessageEvent) => void;
   }): DesktopAgentBootstrapProjection {
     this.requireActive();
@@ -311,6 +280,28 @@ class DefaultDesktopAgentBridgeRuntime implements DesktopAgentBridgeRuntime {
     };
   }
 
+  async injectContext(input: {
+    readonly windowId: string;
+    readonly projectId: string;
+    readonly workspaceId: string;
+    readonly payload: AgentContextPayload;
+  }): Promise<void> {
+    this.requireActive();
+    const matches = [...this.connections.values()].filter(
+      (connection) =>
+        connection.identity.windowId === input.windowId &&
+        connection.identity.projectId === input.projectId &&
+        connection.identity.workspaceId === input.workspaceId,
+    );
+    const target = matches[0];
+    if (matches.length !== 1 || target === undefined) {
+      throw new Error(
+        `Desktop Agent context target requires exactly one bound connection; found ${matches.length}.`,
+      );
+    }
+    await target.effects.injectContext(input.payload);
+  }
+
   waitForIdle(
     connectionIdentity: DesktopAgentConnectionIdentity,
     grant: DesktopAgentConnectionGrant,
@@ -410,7 +401,7 @@ class DefaultDesktopAgentBridgeRuntime implements DesktopAgentBridgeRuntime {
 
 function requireAutomationEffects(
   connection: DesktopAgentConnection,
-): NonNullable<DesktopAgentControllerEffects['automation']> {
+): NonNullable<AgentControllerEffects['automation']> {
   if (!connection.effects.automation) {
     throw new Error('Desktop Agent complete-session automation facts are unavailable.');
   }

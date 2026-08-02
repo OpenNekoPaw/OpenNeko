@@ -2,7 +2,7 @@ import { ipcMain, type IpcMainInvokeEvent } from 'electron';
 import { DESKTOP_AGENT_CHANNELS } from '../shared/agent-contract';
 import { DESKTOP_AGENT_AUTOMATION_CHANNEL } from '../shared/agent-automation-contract';
 import { DESKTOP_BRIDGE_CHANNELS } from '../shared/bridge-contract';
-import { DESKTOP_SHELL_CHANNELS } from '../shared/shell-contract';
+import { DESKTOP_SHELL_CHANNELS } from '@neko/host/desktop-shell-contract';
 import { DESKTOP_RESOURCE_BROWSER_CHANNELS } from '../shared/resource-browser-bridge-contract';
 import { DESKTOP_PREVIEW_CHANNELS } from '../shared/preview-bridge-contract';
 import { DESKTOP_CANVAS_CHANNELS } from '../shared/canvas-bridge-contract';

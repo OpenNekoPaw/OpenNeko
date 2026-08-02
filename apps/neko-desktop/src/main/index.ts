@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { lstat, realpath } from 'node:fs/promises';
 import * as path from 'node:path';
 import {
@@ -13,7 +13,10 @@ import {
 } from 'electron';
 import { ConsoleLogger } from '@neko/shared/logger';
 import { DESKTOP_BRIDGE_CHANNELS, type DesktopLifecycleEvent } from '../shared/bridge-contract';
-import { DESKTOP_SHELL_CHANNELS, type DesktopShellProjectionEvent } from '../shared/shell-contract';
+import {
+  DESKTOP_SHELL_CHANNELS,
+  type DesktopShellProjectionEvent,
+} from '@neko/host/desktop-shell-contract';
 import { DESKTOP_VITE_CSP_NONCE } from '../shared/vite-development-security';
 import { DesktopAppHost } from './app-host';
 import {
@@ -29,26 +32,33 @@ import {
   DESKTOP_APP_ORIGIN,
   createDesktopWebPreferences,
 } from './security';
-import { DesktopShellService } from './shell-service';
+import { DesktopShellService } from '@neko/host/desktop-shell-service';
 import {
-  createNodeDesktopShellStateFilePort,
-  DesktopShellStateRepository,
-} from './shell-state-repository';
-import { createDesktopAgentAppHostComposition } from './desktop-agent-app-host-composition';
+  createEmptyDesktopShellState,
+  parseDesktopShellStoredState,
+} from '@neko/host/desktop-shell-state';
+import { createAgentAppHost } from '@neko/agent-runtime/application';
 import { NodePiConversationCatalogReader } from '@neko/agent-runtime/pi';
 import { NodeVideoThumbnail } from '@neko/media/node';
 import {
   resolveDesktopAgentAutomationLaunch,
+  resolveDesktopFunctionalCutExport,
   resolveDesktopFunctionalWorkspace,
   resolveDesktopFunctionalWindowMode,
   resolveDesktopRuntimeHome,
 } from './desktop-functional-fixture';
-import { createDesktopAgentCredentialRuntime } from './desktop-agent-credential-runtime';
-import { createDesktopAgentControllerComposition } from './desktop-agent-controller-composition';
+import { createAgentCredentialRuntime } from '@neko/agent-runtime/pi';
+import { createAgentControllerComposition } from '@neko/agent-runtime/application';
 import { createEncryptedDesktopSecretPort } from './encrypted-desktop-secret-port';
 import { createMacOSProtectedAuthPrompt } from './macos-protected-auth-prompt';
 import { closeDesktopWindows } from './window-lifecycle';
-import { resolveGlobalStorageLayout } from '@neko/local-metadata';
+import {
+  DESKTOP_STATE_AUTHORITY_KEYS,
+  migrateDesktopStateToSqlite,
+  resolveGlobalStorageLayout,
+  SqliteVersionedJsonStateRepository,
+} from '@neko/local-metadata';
+import { createNodeSqliteLocalMetadataStore } from '@neko/local-metadata/node';
 import {
   ResourceBrowserNodeRuntime,
   type ResourceBrowserNodeRuntimeOptions,
@@ -64,9 +74,9 @@ import { DesktopCanvasMediaRuntime } from './desktop-canvas-media-runtime';
 import { DesktopCutRuntime } from './desktop-cut-runtime';
 import { createDesktopNativeThemeController } from './desktop-native-theme';
 import {
-  createNodeDesktopApplicationSettingsFilePort,
-  DesktopApplicationSettingsRepository,
-} from './application-settings-repository';
+  createDefaultDesktopApplicationSettingsState,
+  parseDesktopApplicationSettingsStoredState,
+} from '@neko/host/application-settings-state';
 import { DesktopApplicationSettingsService } from '@neko/host/application-settings-service';
 import {
   DESKTOP_APPLICATION_SETTINGS_CHANNELS,
@@ -80,12 +90,13 @@ import {
   resolveGlobalMediaLibraryTarget,
 } from '@neko/assets-node';
 import {
-  createDesktopExtensionManager,
+  createAgentExtensionManager,
+  createAgentExtensionSupport,
   createOpenNekoExtensionRepository,
-} from './desktop-extension-manager';
-import { createDesktopExtensionAgentSupport } from './desktop-plugin-runtime';
+} from '@neko/agent-runtime/extensions';
 import { createPersonalSkillManager } from '@neko/agent-runtime/pi';
 import { ProjectPortabilityRuntime } from '@neko/assets-node';
+import { createDesktopRetiredJsonStatePort } from './desktop-state-migration-adapter';
 
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string | undefined;
 declare const MAIN_WINDOW_VITE_NAME: string;
@@ -122,6 +133,11 @@ async function startDesktop(): Promise<void> {
     fixtureHome: homedir,
   });
   const functionalWindowMode = resolveDesktopFunctionalWindowMode(process.argv);
+  const functionalCutExport = resolveDesktopFunctionalCutExport({
+    argv: process.argv,
+    environment: process.env,
+    workspace: functionalWorkspace,
+  });
   const userData = app.getPath('userData');
   const agentAutomationLaunch = resolveDesktopAgentAutomationLaunch({
     argv: process.argv,
@@ -130,13 +146,45 @@ async function startDesktop(): Promise<void> {
     workspace: functionalWorkspace,
   });
   const globalStorage = resolveGlobalStorageLayout(homedir);
-  const applicationSettings = new DesktopApplicationSettingsService(
-    new DesktopApplicationSettingsRepository(
-      createNodeDesktopApplicationSettingsFilePort(
-        path.join(userData, 'state', 'desktop-application-settings.v1.json'),
-      ),
-    ),
-  );
+  const localMetadataStore = createNodeSqliteLocalMetadataStore({ homedir });
+  await localMetadataStore.open({
+    databasePath: globalStorage.database,
+    busyTimeoutMs: 5_000,
+  });
+  const shellStateCodec = {
+    createEmpty: createEmptyDesktopShellState,
+    parse: parseDesktopShellStoredState,
+    readStorageRevision: (state: ReturnType<typeof createEmptyDesktopShellState>) =>
+      state.storageRevision,
+  };
+  const applicationSettingsCodec = {
+    createEmpty: createDefaultDesktopApplicationSettingsState,
+    parse: parseDesktopApplicationSettingsStoredState,
+    readStorageRevision: (state: ReturnType<typeof createDefaultDesktopApplicationSettingsState>) =>
+      state.storageRevision,
+  };
+  const retiredJsonState = createDesktopRetiredJsonStatePort({
+    shellStatePath: path.join(userData, 'state', 'desktop-shell-state.json'),
+    applicationSettingsPath: path.join(userData, 'state', 'desktop-application-settings.v1.json'),
+  });
+  try {
+    await migrateDesktopStateToSqlite({
+      store: localMetadataStore,
+      retiredJson: retiredJsonState,
+      shellCodec: shellStateCodec,
+      settingsCodec: applicationSettingsCodec,
+      digest: (content) => createHash('sha256').update(content).digest('hex'),
+    });
+  } catch (error) {
+    await localMetadataStore.dispose();
+    throw error;
+  }
+  const applicationSettingsRepository = new SqliteVersionedJsonStateRepository({
+    store: localMetadataStore,
+    authorityKey: DESKTOP_STATE_AUTHORITY_KEYS.applicationSettings,
+    codec: applicationSettingsCodec,
+  });
+  const applicationSettings = new DesktopApplicationSettingsService(applicationSettingsRepository);
   const initialApplicationSettings = await applicationSettings.initialize();
   nativeTheme.themeSource = initialApplicationSettings.preferences.theme;
   const applicationInstanceId = randomUUID();
@@ -178,7 +226,7 @@ async function startDesktop(): Promise<void> {
   logger.info('Desktop OpenNeko resource registry initialized.');
   const workspaceRegistry = await createDesktopWorkspaceRegistry({ homedir });
   logger.info('Desktop workspace registry initialized.');
-  const credentialRuntime = createDesktopAgentCredentialRuntime({
+  const credentialRuntime = createAgentCredentialRuntime({
     secrets,
     prompt: createMacOSProtectedAuthPrompt({
       openExternal: async (url) => {
@@ -195,16 +243,18 @@ async function startDesktop(): Promise<void> {
   });
   const shellService = new DesktopShellService({
     applicationInstanceId,
-    stateRepository: new DesktopShellStateRepository(
-      createNodeDesktopShellStateFilePort(path.join(userData, 'state', 'desktop-shell-state.json')),
-    ),
+    stateRepository: new SqliteVersionedJsonStateRepository({
+      store: localMetadataStore,
+      authorityKey: DESKTOP_STATE_AUTHORITY_KEYS.shell,
+      codec: shellStateCodec,
+    }),
     workspaceRegistry,
     startupTarget: initialApplicationSettings.preferences.startupTarget,
   });
   const agentCatalogReader = await NodePiConversationCatalogReader.create({
     userDataRoot: globalStorage.root,
   });
-  const agentComposition = createDesktopAgentAppHostComposition({
+  const agentComposition = createAgentAppHost({
     userDataRoot: globalStorage.root,
     userHome: homedir,
     hostId: `electron:${applicationInstanceId}`,
@@ -216,7 +266,7 @@ async function startDesktop(): Promise<void> {
       resourcesPath: process.resourcesPath,
     }),
   });
-  const extensionManager = createDesktopExtensionManager({
+  const extensionManager = createAgentExtensionManager({
     repository: createOpenNekoExtensionRepository({
       marketplaceRoot: path.join(
         app.isPackaged ? process.resourcesPath : app.getAppPath(),
@@ -226,7 +276,7 @@ async function startDesktop(): Promise<void> {
       installRoot: path.join(globalStorage.root, 'extensions', 'plugins'),
       trashItem: (absolutePath) => shell.trashItem(absolutePath),
     }),
-    agentSupport: createDesktopExtensionAgentSupport(),
+    agentSupport: createAgentExtensionSupport(),
   });
   const initialExtensionSnapshot = await extensionManager.readCatalog();
   extensionManager.setRuntimeReadiness(
@@ -296,6 +346,7 @@ async function startDesktop(): Promise<void> {
       return result.canceled ? undefined : result.filePaths;
     },
     selectExportDestination: async ({ identity, workspacePath, outputName, container }) => {
+      if (functionalCutExport) return functionalCutExport;
       const owner = requireOwnerWindow(identity.windowId);
       const fileName = `${outputName.replace(/\.(?:mp4|mov)$/iu, '')}.${container}`;
       const result = await dialog.showSaveDialog(owner, {
@@ -630,7 +681,7 @@ async function startDesktop(): Promise<void> {
       return result.filePath;
     },
   });
-  const agentControllerComposition = createDesktopAgentControllerComposition({
+  const agentControllerComposition = createAgentControllerComposition({
     host,
     userHome: homedir,
     credentialRuntime,
@@ -973,6 +1024,7 @@ async function startDesktop(): Promise<void> {
     nativeThemeController.dispose();
     disposeIpc();
     await appHost.dispose();
+    await localMetadataStore.dispose();
     resourceRegistry.dispose();
     disposeResourceAuthorization();
     disposeProtocol();

@@ -10,7 +10,7 @@
     "./media": "./src/media/index.ts"
   },
   "scripts": {
-    "test": "vitest",
+    "test": "vitest run",
     "test:run": "vitest --run",
     "typecheck": "tsc --noEmit"
   },

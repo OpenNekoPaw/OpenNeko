@@ -7,7 +7,7 @@ VS Code 或其他 Host 而改变。一级 `packages/*` 按领域和运行时边�
 现有架构文档已经禁止 Application 层复制领域事实，但约束仍不足以阻止业务规则继续进入应用根。
 以下内容记录实施前基线；其中的路径、数量和漂移状态不是当前架构事实。
 
-## Implementation Outcome
+## Implementation Status
 
 - 32 个源码 package 已全部登记为 `converged`，package role、依赖、strict TS、exports、manifest 和
   source-alias 门禁均从 workspace 自动发现。
@@ -17,8 +17,10 @@ VS Code 或其他 Host 而改变。一级 `packages/*` 按领域和运行时边�
   contracts、storage/local metadata 和全部领域 contract 已迁入明确 owner。
 - AI family 使用 `@neko/ai-contracts` 与 `@neko/ai-sdk`；Agent、Assets、Canvas、Cut、Preview family
   使用 contracts/domain/runtime/node/webview 的真实依赖闭包，不为对称性建立空包。
-- Desktop 中所有清单里的 `D` 职责均已迁移；应用根只保留 Electron trust boundary、concrete adapter、
-  shell、typed bridge、composition 和 disposal。
+- 初始清单中的独立 `D` 文件已迁移或删除，但若干标记为 `S` / `H` 的大型混合 runtime 仍同时持有
+  composition 与业务状态。它们不是可接受先例：Agent/Extension、Cut、Preview、Shell/Settings 的聚焦
+  change 必须把 session、catalog、revision、冲突、安装、导出和迁移 workflow 下沉后，Desktop 才只保留
+  Electron trust boundary、concrete adapter、typed bridge、composition 和 disposal。
 
 ### 迁移前责任基线
 
@@ -158,7 +160,7 @@ owner。`contracts` 可以包含纯 codec/validator，但不得包含状态、�
 | Cut family                             | 保留 domain/node/webview，只修正 `@neko/cut-webview` identity 并收紧 exports                                                                                                          |
 | Assets family                          | 建立 domain/application、node、webview 三个 dependency closure，Desktop 只保留 native selection/trash/path authorization adapter                                                      |
 | Preview family                         | 将现有 contracts 中的 MIME、staging 和状态策略识别为 domain；保留 browser Webview，Node 内容解析按真实依赖建立 entry/package                                                          |
-| Tools family                           | 由现有 media comparison OpenSpec 建立 domain/contracts、Node/Media adapter 和 Webview 的真实 producer/consumer；未接通前不宣称产品能力                                                |
+| Tools family                           | 当前产品路径已退役且不保留空 package；未来只有新 OpenSpec 建立真实 owner/producer/consumer/Electron 路径后才能重新引入                                                             |
 | Media                                  | 保留单 package 的 root contract + `./node` + `./browser` 模式；规模小、无 feature dependency，不为形式拆包                                                                            |
 | Content                                | 保留一个 owner，但用显式 core/document/node entries 隔离 Node reader，删除 wildcard export                                                                                            |
 | Entity/Generation/Chara/Search/Quality | 同依赖闭包的 core/application/provider 继续用单 package 显式 subpath；无 Desktop consumer 的包标记 retained kernel，不创建空 node/webview package                                     |

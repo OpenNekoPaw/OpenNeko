@@ -13,10 +13,6 @@ export const DESKTOP_CUT_CHANNELS = {
   projectionEvent: 'open-neko:cut:projection-event',
 } as const;
 
-export function createDesktopCutSessionId(viewId: string, viewEpoch: number): string {
-  return `cut-session:${viewId}:${viewEpoch}`;
-}
-
 export function parseDesktopCutHostIdentity(value: unknown): CutHostRuntimeIdentity {
   return parseCutHostRuntimeIdentity(value);
 }

@@ -7,6 +7,7 @@
     ".": "./src/index.ts",
     "./validation": "./src/validation/index.ts",
     "./approval": "./src/approval/index.ts",
+    "./application": "./src/application/index.ts",
     "./pi": "./src/pi/index.ts",
     "./input/mention-excludes": "./src/input/mention-excludes.ts",
     "./input/workspace-ignore": "./src/input/workspace-ignore.ts",
@@ -19,12 +20,13 @@
     "./runtime/projection/pi-conversation-history-projector": "./src/runtime/projection/pi-conversation-history-projector.ts",
     "./runtime/session/agent-message-queue": "./src/runtime/session/agent-message-queue.ts",
     "./conversation-projection": "./src/runtime/projection/conversation-projection-store.ts",
+    "./extensions": "./src/extensions/index.ts",
     "./tool-registry": "./src/tools/tool-registry.ts",
     "./tools": "./src/tools/index.ts",
     "./workspace": "./src/workspace/index.ts"
   },
   "scripts": {
-    "test": "vitest",
+    "test": "vitest run",
     "test:run": "vitest --run",
     "typecheck": "tsc --noEmit"
   },
@@ -32,7 +34,9 @@
     "@earendil-works/pi-agent-core": "^0.80.7",
     "@earendil-works/pi-ai": "^0.80.7",
     "@neko/agent-contracts": "workspace:*",
+    "@neko/ai-contracts": "workspace:*",
     "@neko/assets-domain": "workspace:*",
+    "@neko/assets-node": "workspace:*",
     "@neko/canvas-domain": "workspace:*",
     "@neko/preview-domain": "workspace:*",
     "@neko/content": "workspace:*",

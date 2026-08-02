@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process';
 
-import type { DesktopProtectedAuthPromptPort } from './desktop-agent-credential-runtime';
+import type { ProtectedAuthPromptPort } from '@neko/agent-runtime/pi';
 
 const TEXT_PROMPT_SCRIPT = `
 on run argv
@@ -39,7 +39,7 @@ export interface CreateMacOSProtectedAuthPromptOptions {
 
 export function createMacOSProtectedAuthPrompt(
   options: CreateMacOSProtectedAuthPromptOptions,
-): DesktopProtectedAuthPromptPort {
+): ProtectedAuthPromptPort {
   if (process.platform !== 'darwin') {
     throw new Error('Desktop protected provider authentication currently requires macOS.');
   }
@@ -87,7 +87,7 @@ export function createMacOSProtectedAuthPrompt(
 }
 
 async function notify(
-  event: Parameters<DesktopProtectedAuthPromptPort['notify']>[0],
+  event: Parameters<ProtectedAuthPromptPort['notify']>[0],
   options: CreateMacOSProtectedAuthPromptOptions,
 ): Promise<void> {
   switch (event.type) {

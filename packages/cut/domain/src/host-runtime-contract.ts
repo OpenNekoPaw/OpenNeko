@@ -8,6 +8,7 @@ import type {
   CutThumbnailDensity,
 } from './media-ports';
 import type { CutExportTaskSnapshot } from './export-tasks';
+import type { AgentContextPayload } from '@neko/agent-contracts';
 
 export const CUT_HOST_RUNTIME_VERSION = 1 as const;
 
@@ -30,6 +31,7 @@ export const CUT_HOST_RUNTIME_ROUTES = {
   exportStart: 'export.start',
   exportCancel: 'export.cancel',
   save: 'document.save',
+  documentCreate: 'document.create',
   presentationUpdate: 'presentation.update',
 } as const;
 
@@ -45,6 +47,13 @@ export interface CutHostRuntimeIdentity {
   readonly documentId: string;
   readonly sessionId: string;
   readonly endpointEpoch: string;
+}
+
+export function createCutHostSessionId(viewId: string, viewEpoch: number): string {
+  if (viewId.trim().length === 0 || !Number.isSafeInteger(viewEpoch) || viewEpoch < 1) {
+    throw new Error('Cut Host session identity requires a View identity and positive epoch.');
+  }
+  return `cut-session:${viewId}:${viewEpoch}`;
 }
 
 export interface CutHostPresentationState {
@@ -106,6 +115,10 @@ export interface CutHostRuntimeResult {
     | {
         readonly type: 'preview';
         readonly message: CutHostPreviewMessage;
+      }
+    | {
+        readonly type: 'agent-context';
+        readonly payload: AgentContextPayload;
       };
 }
 

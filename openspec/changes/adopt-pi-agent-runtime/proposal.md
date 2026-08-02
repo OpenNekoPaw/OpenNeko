@@ -7,8 +7,9 @@ runtime，但生产包体、启动成本、provider license、CredentialStore/OA
 ## What Changes
 
 - 固定 Electron Main 中唯一的 Pi conversation authority；renderer 只消费 sender-bound projection。
-- 保持 Pi Session 为 transcript authority，并将 Conversation/Branch catalog、permission、Tool/Job、
-  Resource identity 与 UI projection 留在 OpenNeko product owners。
+- 保持 Pi Session 为 transcript authority；将用户可迁移的 Conversation title/branch/export topology
+  放入版本化 conversation manifest，将 lease/checkpoint/permission/Tool/Job、Resource identity 与
+  可重建 UI projection 留在 OpenNeko product owners 和统一 `neko.db` namespace。
 - 保持每 turn 的扁平 `purpose -> model + parameters` 快照、program-owned CredentialStore、显式
   permission 和 provider/model fail-visible 语义，禁止 legacy Agent/provider/session fallback。
 - 完成 production Desktop Agent bundle/startup、license、secret/OAuth/cancellation 与 path-disclosure
@@ -29,6 +30,9 @@ runtime，但生产包体、启动成本、provider license、CredentialStore/OA
 
 ## Impact
 
-- `apps/neko-desktop` Agent composition、Main/preload/renderer 生命周期与打包。
+- `packages/agent/runtime` program-level conversation/Pi application authority；`apps/neko-desktop`
+  只保留 Agent public-port composition、Main/preload/renderer Electron 生命周期与打包。
 - Agent runtime、Pi provider/auth、Skill、Session、CredentialStore 和 Evaluation diagnostics。
+- `govern-local-storage-authorities` 定义的 portable conversation、canonical SQLite 与 secret/log
+  authority；本变更最终验收必须消费该唯一边界。
 - 不保留 VS Code、TUI、旧 AgentSession/Executor、Platform chat 或旧 transcript 兼容路径。

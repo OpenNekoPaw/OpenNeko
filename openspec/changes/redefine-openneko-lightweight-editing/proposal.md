@@ -32,7 +32,8 @@ renderer，但完整 edit/save/reopen、跨 Clip 预览、Inspector/Timeline pro
 
 ## Impact
 
-- `apps/neko-desktop` Cut document/view/session、Main/preload/renderer 和 shell status projection。
+- `packages/cut/domain` / `packages/cut/node` own Cut document/session/command/preview/export application
+  lifecycle；`apps/neko-desktop` 只保留授权 adapter、Main/preload/renderer wiring 和 shell status projection。
 - `packages/cut/{domain,node,webview}` OTIO Domain、Node adapter、renderer components/hooks/store 与 ExportJob。
 - `packages/media` Node/FFmpeg、Range/PCM 和资源生命周期。
 - 用户 `.otio` 与媒体文件保持字节安全；不提供 NKV 双读、迁移或兼容 fallback。

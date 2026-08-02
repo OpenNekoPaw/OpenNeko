@@ -57,6 +57,33 @@ const ID_LIST = s.array(ID, { minLength: 1, maxLength: 100 });
 const EXTERNAL_ID_LIST = s.array(EXTERNAL_ID, { minLength: 1, maxLength: 100 });
 const ENV_NAME = s.string({ pattern: /^[A-Z][A-Z0-9_]*$/u });
 
+const AGENT_CONTEXT_PAYLOAD_SCHEMA = s.object(
+  {
+    type: s.enum([
+      'canvas-node',
+      'cut-clip',
+      'story-selection',
+      'character',
+      'scene',
+      'asset',
+      'media',
+      'entity',
+      'sketch-layer',
+      '3d-reference',
+      'audio-clip',
+      'file',
+      'image',
+      'document-selection',
+      'canvas-storyboard-action-intent',
+    ]),
+    id: EXTERNAL_ID,
+    label: SHORT_TEXT,
+    summary: SHORT_TEXT,
+    data: s.anyJson(),
+  },
+  { intent: SHORT_TEXT },
+);
+
 export const HOST_SKILL_IDENTITY_SCHEMA = s.object({
   name: ID,
   source: s.enum(['project', 'personal', 'builtin', 'market', 'plugin']),
@@ -195,10 +222,7 @@ const FIXTURE_SCHEMA = s.object(
     mutable: s.boolean(),
   },
   {
-    links: s.array(
-      s.object({ path: PATH, target: PATH }),
-      { minLength: 1, maxLength: 100 },
-    ),
+    links: s.array(s.object({ path: PATH, target: PATH }), { minLength: 1, maxLength: 100 }),
   },
 );
 
@@ -268,7 +292,10 @@ const SUITE_INDEX_SCHEMA = s.object({
 const STEP_SCHEMA = s.union([
   s.object(
     { id: ID, kind: s.literal('submit'), prompt: TEXT },
-    { delayMs: s.integer({ min: 0, max: 600_000 }) },
+    {
+      delayMs: s.integer({ min: 0, max: 600_000 }),
+      contextPayloads: s.array(AGENT_CONTEXT_PAYLOAD_SCHEMA, { minLength: 1, maxLength: 20 }),
+    },
   ),
   s.object({ id: ID, kind: s.literal('queue'), prompt: TEXT, afterStepId: ID }),
   s.object({ id: ID, kind: s.literal('wait-for-idle'), timeoutMs: s.integer({ min: 1 }) }),
@@ -447,13 +474,10 @@ const ASSERTION_SCHEMA = s.union([
   s.object({
     ...ASSERTION_COMMON,
     kind: s.literal('terminal-idle'),
-    concerns: s.array(
-      s.enum([
-        'turnIdle',
-        'continuationQueueIdle',
-      ]),
-      { minLength: 1, maxLength: 2 },
-    ),
+    concerns: s.array(s.enum(['turnIdle', 'continuationQueueIdle']), {
+      minLength: 1,
+      maxLength: 2,
+    }),
   }),
   s.object(
     {
@@ -466,13 +490,7 @@ const ASSERTION_SCHEMA = s.union([
   s.object({
     ...ASSERTION_COMMON,
     kind: s.literal('resource-display-projection'),
-    projectionKind: s.enum([
-      'attachment',
-      'tool-result',
-      'perception',
-      'timeline',
-      'artifact',
-    ]),
+    projectionKind: s.enum(['attachment', 'tool-result', 'perception', 'timeline', 'artifact']),
     status: s.enum(['authorized', 'denied']),
     locatorKind: s.enum([
       'workspace-file',
@@ -498,12 +516,15 @@ const ASSERTION_SCHEMA = s.union([
       locale: s.enum(['en', 'en-us', 'zh', 'zh-cn', 'ja', 'ja-jp']),
     },
   ),
-  s.object({
-    ...ASSERTION_COMMON,
-    kind: s.literal('artifact'),
-    artifactRef: EXTERNAL_ID,
-    validatorStatus: s.literal('valid'),
-  }, { validatorId: ID }),
+  s.object(
+    {
+      ...ASSERTION_COMMON,
+      kind: s.literal('artifact'),
+      artifactRef: EXTERNAL_ID,
+      validatorStatus: s.literal('valid'),
+    },
+    { validatorId: ID },
+  ),
   s.object(
     {
       ...ASSERTION_COMMON,

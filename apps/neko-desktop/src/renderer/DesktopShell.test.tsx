@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import { I18nProvider } from '@neko/ui/i18n/react';
-import type { DesktopShellProjection } from '../shared/shell-contract';
+import type { DesktopShellProjection } from '@neko/host/desktop-shell-contract';
 import {
   activateWorkbenchMainView,
   applyWorkbenchDisplayMode,
@@ -26,7 +26,7 @@ import {
   openOrFocusMainView,
   showWorkbenchTimeline,
   splitMainView,
-} from '../shared/workbench-contract';
+} from '@neko/host/desktop-workbench-contract';
 import {
   DEFAULT_DESKTOP_APPLICATION_PREFERENCES,
   DESKTOP_APPLICATION_SETTINGS_CONTRACT_VERSION,

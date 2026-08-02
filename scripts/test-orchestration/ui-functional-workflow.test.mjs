@@ -9,9 +9,6 @@ const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const REMOTE_GATE_ROOTS = Object.freeze(['check:ci', 'gate:remote', 'ci:remote']);
 const LOCAL_RUNTIME_SCRIPTS = Object.freeze([
   'dev:desktop',
-  'test:local:api',
-  'test:local:ui',
-  'test:local:media-openneko',
 ]);
 
 describe('Desktop functional workflow boundary', () => {
@@ -121,7 +118,12 @@ describe('Desktop functional workflow boundary', () => {
       ...workflowRoots,
     ]);
 
-    for (const localScript of LOCAL_RUNTIME_SCRIPTS) {
+    const explicitLocalScripts = [
+      ...LOCAL_RUNTIME_SCRIPTS,
+      ...Object.keys(scripts).filter((scriptName) => scriptName.startsWith('test:local:')),
+    ];
+    assert.ok(explicitLocalScripts.length > 1, 'expected explicit local test commands');
+    for (const localScript of explicitLocalScripts) {
       assert.equal(typeof scripts[localScript], 'string', `missing local script: ${localScript}`);
       assert.equal(
         reachableScripts.has(localScript),

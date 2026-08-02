@@ -39,7 +39,7 @@ import {
   parseDesktopShellResponse,
   type DesktopShellProjectionEvent,
   type OpenNekoDesktopShellBridge,
-} from '../shared/shell-contract';
+} from '@neko/host/desktop-shell-contract';
 import {
   advanceDesktopShellProjectionCursor,
   type DesktopShellProjectionCursor,
@@ -105,6 +105,7 @@ import {
   type OpenNekoDesktopCanvasBridge,
 } from '../shared/canvas-bridge-contract';
 import {
+  CUT_HOST_RUNTIME_ROUTES,
   parseCutHostRuntimeProjectionEvent,
   parseCutHostRuntimeRequest,
   parseCutHostRuntimeResult,
@@ -976,7 +977,11 @@ const bridge: OpenNekoDesktopBridge &
     async execute(value) {
       const request = parseCutHostRuntimeRequest(value);
       const identity = currentCutIdentities.get(cutIdentityKey(request.identity));
-      if (!identity || !isSameCutHostIdentity(request.identity, identity)) {
+      const createsDocument = request.route === CUT_HOST_RUNTIME_ROUTES.documentCreate;
+      if (
+        (!identity && !createsDocument) ||
+        (identity !== undefined && !isSameCutHostIdentity(request.identity, identity))
+      ) {
         throw new Error('Desktop Cut request requires a current owner-bound snapshot.');
       }
       const response: unknown = await ipcRenderer.invoke(
@@ -984,8 +989,17 @@ const bridge: OpenNekoDesktopBridge &
         request,
       );
       const result = parseCutHostRuntimeResult(response);
-      if (!isSameCutHostIdentity(result.snapshot.identity, identity)) {
+      const expectedIdentity = identity ?? request.identity;
+      if (!isSameCutHostIdentity(result.snapshot.identity, expectedIdentity)) {
         throw new Error('Desktop Cut response owner identity does not match.');
+      }
+      if (createsDocument) {
+        const key = cutIdentityKey(result.snapshot.identity);
+        currentCutIdentities.set(key, result.snapshot.identity);
+        currentCutEventSequences.set(
+          key,
+          preserveDesktopBootstrapEventSequence(currentCutEventSequences.get(key)),
+        );
       }
       return result;
     },

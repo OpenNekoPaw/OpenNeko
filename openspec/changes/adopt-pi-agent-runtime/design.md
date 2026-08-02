@@ -21,19 +21,23 @@ runtime，而是证明生产 Desktop 组合满足性能、许可、凭据和安�
 
 ### One Desktop conversation authority
 
-Electron Main owns one program-level authority indexing conversation-scoped Pi runtimes. Each active
+`@neko/agent-runtime` owns one program-level application authority indexing conversation-scoped Pi
+runtimes. Electron Main constructs it from package public ports and owns only sender-bound IPC, credential/
+content concrete adapters, application lifecycle and disposal. Each active
 conversation owns its Pi Agent, active Pi Session branch, queues, abort state, immutable model-policy
 snapshot and event projection. UI selection never becomes runtime state ownership.
 
 Multiple Desktop windows may observe the same conversation. Only the current fenced execution lease
 holder may advance a turn or commit its terminal checkpoint; stale epochs fail visibly.
 
-### One transcript and one product catalog
+### One transcript, one portable manifest, and one operational catalog
 
 Pi Session JSONL is the sole transcript/context/compaction authority. OpenNeko SQLite owns only
-Conversation/Branch mapping, workspace binding, product lifecycle identities, permission facts and
-replaceable listing projections. Workspace files never store Agent transcripts, and no legacy reader,
-dual write, importer or fallback can return success.
+machine-local execution leases/checkpoints, task/runtime lifecycle identities, permission facts and
+replaceable listing/search projections in the canonical `~/.neko/neko.db`. A versioned user-global
+conversation manifest owns the user-visible title, branch topology, export identity and Pi Session
+references so conversations can be transferred without copying SQLite. Workspace files never store
+Agent transcripts, and no legacy reader, dual write, importer or fallback can return success.
 
 ### Flat model and credential projection
 

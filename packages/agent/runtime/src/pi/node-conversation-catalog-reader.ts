@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
 import type { PiConversationCatalogRecord } from './node-conversation-authority';
+import { openNodePiConversationStorage } from './node-conversation-storage';
 
 export interface CreateNodePiConversationCatalogReaderOptions {
   readonly userDataRoot: string;
@@ -31,9 +32,11 @@ export class NodePiConversationCatalogReader implements PiConversationCatalogRea
   static async create(
     options: CreateNodePiConversationCatalogReaderOptions,
   ): Promise<NodePiConversationCatalogReader> {
+    const storage = await openNodePiConversationStorage(options.userDataRoot);
+    storage.database.close();
     const sqlite = await import('node:sqlite');
     return new NodePiConversationCatalogReader(
-      join(options.userDataRoot, 'agent', 'pi', 'metadata.sqlite'),
+      join(options.userDataRoot, 'neko.db'),
       sqlite.DatabaseSync,
     );
   }
