@@ -57,6 +57,7 @@ jobs:
       contents: write
     env:
       OPENNEKO_MACOS_RELEASE: 'true'
+      RELEASE_TAG: ${{ github.ref_name }}
       MACOS_CERTIFICATE_P12_BASE64: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
       MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
       MACOS_SIGNING_IDENTITY: ${{ secrets.MACOS_SIGNING_IDENTITY }}
@@ -83,12 +84,13 @@ jobs:
       - run: pnpm install --frozen-lockfile
 
       - name: Validate release metadata and main ancestry
-        env:
-          RELEASE_TAG: ${{ github.ref_name }}
         run: |
           node scripts/assert-macos-release-metadata.mjs --tag "$RELEASE_TAG"
           git fetch origin main:refs/remotes/origin/main
           git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+
+      - name: Project tag version into release checkout
+        run: node scripts/project-macos-release-version.mjs --tag "$RELEASE_TAG"
 
       - name: Import Developer ID certificate
         run: |
@@ -116,7 +118,7 @@ jobs:
       - name: Verify macOS trust and ZIP closure
         run: |
           APP_PATH="apps/neko-desktop/out/OpenNeko-darwin-arm64/OpenNeko.app"
-          VERSION="$(node -p "require('./apps/neko-desktop/package.json').version")"
+          VERSION="${RELEASE_TAG#v}"
           ZIP_PATH="apps/neko-desktop/out/make/zip/darwin/arm64/OpenNeko-darwin-arm64-${VERSION}.zip"
           codesign --verify --deep --strict --verbose=4 "$APP_PATH"
           SIGNATURE_DETAILS="$(codesign -dv --verbose=4 "$APP_PATH" 2>&1)"
@@ -126,13 +128,11 @@ jobs:
           xcrun stapler validate "$APP_PATH"
           spctl --assess --type execute --verbose=4 "$APP_PATH"
           unzip -t "$ZIP_PATH"
-          node scripts/prepare-macos-release-artifacts.mjs
+          node scripts/prepare-macos-release-artifacts.mjs --tag "$RELEASE_TAG"
 
       - name: Create GitHub release
-        env:
-          RELEASE_TAG: ${{ github.ref_name }}
         run: |
-          VERSION="$(node -p "require('./apps/neko-desktop/package.json').version")"
+          VERSION="${RELEASE_TAG#v}"
           ZIP_PATH="apps/neko-desktop/out/make/zip/darwin/arm64/OpenNeko-darwin-arm64-${VERSION}.zip"
           CHECKSUM_PATH="apps/neko-desktop/out/release/SHASUMS256.txt"
           gh release create "$RELEASE_TAG" "$ZIP_PATH" "$CHECKSUM_PATH" --verify-tag --generate-notes --title "OpenNeko ${RELEASE_TAG}"

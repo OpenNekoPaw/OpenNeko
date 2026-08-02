@@ -8,7 +8,8 @@ Application composition root and GitHub workflow boundary rather than a domain p
 
 Ownership remains:
 
-- producer: `apps/neko-desktop/package.json` and `forge.config.ts` produce versioned native output;
+- producer: the release tag selects the public version, a repository script projects it into the
+  ephemeral Desktop manifest, and `forge.config.ts` produces versioned native output;
 - consumer: the repository release workflow validates and publishes that output;
 - canonical path: Electron Forge `make` for `darwin-arm64`, followed by repository-owned release
   assertions;
@@ -40,14 +41,21 @@ Ownership remains:
 
 ## Decisions
 
-### 1. Version and source authority are exact and singular
+### 1. The tag is the singular public version authority
 
-`apps/neko-desktop/package.json` owns the application version. A release tag MUST be exactly
-`v<version>` and the tagged commit MUST be reachable from `origin/main`. The workflow uses a full
-checkout and validates both facts before installing dependencies or invoking Forge.
+A release tag MUST be an exact stable `v<major>.<minor>.<patch>` value and the tagged commit MUST be
+reachable from `origin/main`. The local `apps/neko-desktop/package.json` version remains a
+development/package default and does not restrict the public release version. After frozen-lockfile
+installation, the macOS release job projects the tag-derived version into its ephemeral checkout
+before Forge runs. Forge therefore writes one version into the application metadata and MakerZIP
+name, while no repository version file is committed or required to match the tag.
 
-Alternative considered: use the tag as an independent version authority. Rejected because it
-permits package metadata and artifact names to diverge.
+Alternative considered: require developers to update and commit the Desktop manifest before every
+tag. Rejected because it couples local development versioning to publication and caused valid tag
+releases to fail before any native work began.
+
+Alternative considered: rename only the final ZIP. Rejected because the archive name and the
+application's embedded version would diverge.
 
 ### 2. Development and release signing are explicit modes
 
@@ -106,6 +114,8 @@ The macOS native job is the only CI job allowed to package, make, or upload a De
   rerun the same immutable tag after service recovery.
 - [ZIP maker output naming changes] → The exact artifact assertion fails visibly and must be updated
   with a regression test before publication resumes.
+- [Tag projection fails or Forge ignores it] → The exact tag-derived ZIP assertion fails before
+  trust verification or publication; the workflow never renames a mismatched artifact into success.
 - [Only macOS 15 is exercised remotely] → Do not claim older-version compatibility without a
   separate real-host acceptance matrix.
 - [No installer or updater] → The first release surface is a notarized ZIP; DMG/PKG and updates
@@ -118,7 +128,7 @@ The macOS native job is the only CI job allowed to package, make, or upload a De
 3. Add release metadata/artifact assertions and workflow-shape tests.
 4. Add the tag-triggered release workflow and update release documentation.
 5. Run local package/make verification in development mode and all repository gates.
-6. Configure GitHub secrets, push an exact version tag from `main`, and record the first real
+6. Configure GitHub secrets, push an exact stable version tag from `main`, and record the first real
    signing/notarization/Gatekeeper/GitHub Release evidence.
 
 Rollback removes the tag workflow and release-mode configuration together. Already-published

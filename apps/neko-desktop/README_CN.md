@@ -122,9 +122,10 @@ job 中 typecheck、验证 Sharp closure、package 和上传 artifact。
 `LoadBrowserProcessSpecificV8Snapshot` 保持关闭，因为 Electron `43.2.0` macOS 分发包不包含
 browser-specific snapshot；其余安全取值均显式固定，包括启用 `WasmTrapHandlers`。
 Electron `43.2.0` 的 macOS 归档 checksum 已固定，package 可直接校验本地缓存而不重复
-下载 `SHASUMS256.txt`。精确 `v<Desktop version>` tag 会在 `main` 历史上运行正式 Release：
-导入临时 Developer ID keychain，启用 hardened runtime，完成 Apple notarization、staple、
-strict codesign、Gatekeeper、ZIP 与 `SHASUMS256.txt` 验证后才创建 GitHub Release。需要配置
+下载 `SHASUMS256.txt`。`main` 历史上的稳定 `v<semver>` tag 是正式 Release 的版本权威，
+无需与本地 manifest 版本一致；workflow 只在临时 checkout 中投影 tag 版本。随后导入临时
+Developer ID keychain，启用 hardened runtime，完成 Apple notarization、staple、strict
+codesign、Gatekeeper、ZIP 与 `SHASUMS256.txt` 验证后才创建 GitHub Release。需要配置
 `MACOS_CERTIFICATE_P12_BASE64`、`MACOS_CERTIFICATE_PASSWORD`、`MACOS_SIGNING_IDENTITY`、
 `APPLE_ID`、`APPLE_APP_SPECIFIC_PASSWORD` 和 `APPLE_TEAM_ID` repository secrets；缺失时
 fail-visible，不回退 ad-hoc 发布。

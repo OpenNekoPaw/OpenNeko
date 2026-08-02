@@ -22,6 +22,7 @@ describe('macOS release workflow', () => {
     assert.equal(release?.['runs-on'], 'macos-15');
     assert.deepEqual(release?.needs, ['source-gate']);
     assert.equal(release?.permissions?.contents, 'write');
+    assert.equal(release?.env?.RELEASE_TAG, '${{ github.ref_name }}');
     assert.equal(release?.env?.MACOS_KEYCHAIN_PATH, undefined);
     const signingPathStep = release.steps?.find(
       (candidate) => candidate.name === 'Configure ephemeral signing paths',
@@ -30,12 +31,20 @@ describe('macOS release workflow', () => {
       signingPathStep?.run,
       'echo "MACOS_KEYCHAIN_PATH=$RUNNER_TEMP/openneko-release.keychain-db" >> "$GITHUB_ENV"',
     );
+    const projectionIndex = release.steps?.findIndex(
+      (candidate) => candidate.name === 'Project tag version into release checkout',
+    );
+    const makeIndex = release.steps?.findIndex(
+      (candidate) => candidate.name === 'Make signed and notarized macOS release',
+    );
+    assert.ok(projectionIndex >= 0 && makeIndex >= 0 && projectionIndex < makeIndex);
     const source = JSON.stringify(release);
     for (const required of [
       'assert-macos-release-metadata.mjs',
       'git merge-base --is-ancestor',
       'OPENNEKO_MACOS_RELEASE',
       'MACOS_CERTIFICATE_P12_BASE64',
+      'project-macos-release-version.mjs',
       'pnpm make:desktop',
       'codesign --verify --deep --strict',
       'Authority=$MACOS_SIGNING_IDENTITY',
@@ -51,6 +60,9 @@ describe('macOS release workflow', () => {
       (candidate) => candidate.name === 'Verify macOS trust and ZIP closure',
     );
     assert.ok(trustStep?.run?.includes("grep -Eq 'flags=.*\\(runtime\\)'"));
+    assert.match(trustStep?.run ?? '', /VERSION="\$\{RELEASE_TAG#v\}"/u);
+    assert.match(trustStep?.run ?? '', /prepare-macos-release-artifacts\.mjs --tag/u);
+    assert.doesNotMatch(source, /package\.json['"]\)\.version/u);
     assert.doesNotMatch(source, /runner\.temp/u);
     assert.doesNotMatch(source, /windows|linux|win32-x64|linux-x64/u);
   });

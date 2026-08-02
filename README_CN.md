@@ -75,10 +75,11 @@ pnpm gate:local
 
 除 `main` 外的非空分支名都属于开发分支，普通开发分支 push 不自动运行 GitHub Actions；提交前使用 `pnpm gate:local`，需要 GitHub runner 证据时从 Actions 手动运行 CI。`main` 是唯一发布分支，只接受开发分支到 `main` 的 Pull Request；`Merge Gate` 必须完成完整源码检查。
 
-正式 Release workflow 只接受 `main` 历史上的精确 `v<Desktop version>` tag，在 Apple
-Silicon runner 上完成 Developer ID、hardened runtime、公证、staple、Gatekeeper、ZIP 与
-SHA-256 后才创建 GitHub Release。缺失 Apple 凭据时 fail-visible；本地 package/make 保持
-ad-hoc 签名且不构成公开发布证据。
+正式 Release workflow 只接受 `main` 历史上的稳定 `v<semver>` tag；tag 是公开版本的唯一
+权威，无需匹配本地 Desktop manifest 版本。Runner 仅在临时 checkout 中把 tag 版本投影给
+Forge，完成 Developer ID、hardened runtime、公证、staple、Gatekeeper、ZIP 与 SHA-256 后才
+创建 GitHub Release。缺失 Apple 凭据时 fail-visible；本地 package/make 保持 ad-hoc 签名且
+不构成公开发布证据。
 
 ## 项目入口
 

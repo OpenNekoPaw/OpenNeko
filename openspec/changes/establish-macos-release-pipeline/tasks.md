@@ -5,6 +5,8 @@
 - [x] 1.2 Add failing tests for exact tag/version authority, required release credentials, and
       development/release signing isolation
 - [x] 1.3 Add failing tests for the exact versioned ZIP and SHA-256 artifact closure
+- [x] 1.4 Add regression tests proving a tag selects the release version independently of the local
+      Desktop manifest and is projected before Forge
 
 ## 2. macOS Release Implementation
 
@@ -16,6 +18,8 @@
 - [x] 2.4 Update CI so macOS alone packages while Windows/Linux run deterministic platform tests
 - [x] 2.5 Add the tag-triggered macOS release workflow with source gates, native trust checks,
       checksum creation, and final GitHub Release publication
+- [x] 2.6 Make the stable semver tag the release-version authority and project it only in the
+      ephemeral release checkout
 
 ## 3. Documentation And Consistency
 
@@ -23,11 +27,15 @@
       to describe macOS-only package/release and Windows/Linux test-only status
 - [x] 3.2 Prove obsolete Windows/Linux package paths cannot return success and document that no user
       data or runtime business contract changed
+- [x] 3.3 Update release documentation and verification evidence to separate local development
+      versioning from tag-owned public versioning
 
 ## 4. Verification
 
 - [x] 4.1 Run focused release/platform/Sharp/media/local-metadata tests and strict OpenSpec validation
 - [x] 4.2 Run Desktop typecheck, local macOS package/make plus artifact inspection, repository quality,
       legacy/unused checks, `pnpm ci:local`, and `git diff --check`
-- [ ] 4.3 Configure GitHub Apple secrets and run an exact version tag from `main`; record real
+- [ ] 4.3 Configure GitHub Apple secrets and run a stable version tag from `main`; record real
       Developer ID, notarization, stapling, Gatekeeper, checksum, and GitHub Release evidence
+- [x] 4.4 Run focused release tests, orchestration quality, strict OpenSpec validation, and diff
+      checks for tag-owned release versioning

@@ -78,11 +78,12 @@ pnpm gate:local
 
 Every non-empty branch name other than `main` is a development branch. Ordinary development-branch pushes do not run GitHub Actions; run `pnpm gate:local` before pushing, and dispatch CI manually when GitHub-runner evidence is needed. `main` is the only release branch and accepts Pull Requests from development branches. `Merge Gate` must complete all source checks.
 
-The formal Release workflow accepts only an exact `v<Desktop version>` tag reachable from `main`.
-It creates a GitHub Release only after Developer ID signing, hardened runtime, notarization,
-stapling, Gatekeeper assessment, ZIP verification, and SHA-256 generation on Apple Silicon. Missing
-Apple credentials fail visibly; local package/make output remains ad-hoc signed and is not public
-release evidence.
+The formal Release workflow accepts an exact stable `v<semver>` tag reachable from `main`; that tag
+owns the public version and does not need to match the local Desktop manifest version. The runner
+projects the tag version only into its ephemeral checkout before Forge. It creates a GitHub Release
+only after Developer ID signing, hardened runtime, notarization, stapling, Gatekeeper assessment,
+ZIP verification, and SHA-256 generation on Apple Silicon. Missing Apple credentials fail visibly;
+local package/make output remains ad-hoc signed and is not public release evidence.
 
 ## Project Entries
 

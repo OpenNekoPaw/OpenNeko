@@ -5,10 +5,7 @@ import { mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'n
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-import {
-  assertMacOSReleaseMetadata,
-  readDesktopReleaseVersion,
-} from './assert-macos-release-metadata.mjs';
+import { assertMacOSReleaseMetadata } from './assert-macos-release-metadata.mjs';
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -23,8 +20,9 @@ export function resolveMacOSReleaseZip({ repositoryRoot: root = repositoryRoot, 
 
 export function prepareMacOSReleaseArtifacts({
   repositoryRoot: root = repositoryRoot,
-  version = readDesktopReleaseVersion(root),
+  tag,
 } = {}) {
+  const { version } = assertMacOSReleaseMetadata({ tag });
   const zipPath = resolveMacOSReleaseZip({ repositoryRoot: root, version });
   let zipStat;
   try {
@@ -53,10 +51,17 @@ export function prepareMacOSReleaseArtifacts({
 }
 
 function main() {
-  const result = prepareMacOSReleaseArtifacts();
+  const result = prepareMacOSReleaseArtifacts({ tag: readArgument('--tag') });
   process.stdout.write(
     `OpenNeko macOS release artifacts verified: ${result.zipPath}; checksum: ${result.checksumPath}.\n`,
   );
+}
+
+function readArgument(name) {
+  const index = process.argv.indexOf(name);
+  const value = index < 0 ? undefined : process.argv[index + 1];
+  if (!value) throw new Error(`Missing required argument ${name}.`);
+  return value;
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
