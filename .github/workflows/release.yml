@@ -60,7 +60,6 @@ jobs:
       MACOS_CERTIFICATE_P12_BASE64: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
       MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
       MACOS_SIGNING_IDENTITY: ${{ secrets.MACOS_SIGNING_IDENTITY }}
-      MACOS_KEYCHAIN_PATH: ${{ runner.temp }}/openneko-release.keychain-db
       APPLE_ID: ${{ secrets.APPLE_ID }}
       APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
       APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
@@ -77,6 +76,9 @@ jobs:
 
       - name: Enable Corepack
         run: corepack enable
+
+      - name: Configure ephemeral signing paths
+        run: echo "MACOS_KEYCHAIN_PATH=$RUNNER_TEMP/openneko-release.keychain-db" >> "$GITHUB_ENV"
 
       - run: pnpm install --frozen-lockfile
 
