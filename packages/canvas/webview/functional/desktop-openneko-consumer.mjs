@@ -85,6 +85,22 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
     await waitForSelector(
       '[data-owner-view-id="canvas:functional:video"] [data-testid="canvas-media-node"][data-media-type="video"]',
     );
+    await click(
+      '[data-owner-view-id="canvas:functional:video"] [data-canvas-toolbar-action="open-add-node-popover"]',
+    );
+    await waitForSelector('[data-canvas-add-action="text"]');
+    await click('[data-canvas-add-action="text"]');
+    const authoredNodeCount = await waitForCanvasNodeCount(evaluate, 'canvas:functional:video', 2);
+    checkpoint('canvas-node-authored', { nodeCount: authoredNodeCount });
+    await click(
+      '[data-owner-view-id="canvas:functional:video"] [data-node-presentation][data-node-id="video-node"]',
+      0,
+      { xRatio: 0.5, yRatio: 0.95 },
+    );
+    await waitForSelector(
+      '[data-owner-view-id="canvas:functional:video"] [data-selection-action="preview:open"]',
+    );
+    checkpoint('canvas-material-actions-resolved');
     await hover(
       '[data-owner-view-id="canvas:functional:video"] [data-testid="canvas-media-node"][data-media-type="video"]',
     );
@@ -144,6 +160,7 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
     return {
       ownerRoot: 'canvas',
       rootCount: 2,
+      authoredNodeCount,
       locatorBackedNodes: ['video', 'audio'],
       nativeElements: ['video', 'audio'],
       videoAdvancedTo: playback.videoTime,
@@ -161,6 +178,7 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
     }
     if (
       evidence.rootCount !== 2 ||
+      evidence.authoredNodeCount !== 2 ||
       !evidence.isolatedUrls ||
       evidence.videoAdvancedTo <= 0 ||
       evidence.audioAdvancedTo <= 0
@@ -172,6 +190,21 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
     }
   },
 });
+
+async function waitForCanvasNodeCount(evaluate, viewId, expectedCount) {
+  const deadline = Date.now() + 5_000;
+  while (Date.now() < deadline) {
+    const nodeCount = await evaluate(`(() => {
+      const root = document.querySelector('[data-owner-view-id=${JSON.stringify(viewId)}]');
+      return root?.querySelectorAll('[data-node-presentation]').length ?? 0;
+    })()`);
+    if (nodeCount === expectedCount) return nodeCount;
+    await delay(100);
+  }
+  throw new Error(
+    `Canvas View '${viewId}' did not reach ${String(expectedCount)} authored nodes before timeout.`,
+  );
+}
 
 async function waitForCanvasRoots(evaluate) {
   const deadline = Date.now() + 30_000;
