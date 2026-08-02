@@ -5,8 +5,22 @@ VS Code 或其他 Host 而改变。一级 `packages/*` 按领域和运行时边�
 当前消费者但具有稳定业务 owner 的逻辑。
 
 现有架构文档已经禁止 Application 层复制领域事实，但约束仍不足以阻止业务规则继续进入应用根。
-抽样审计确认以下生产代码包含不直接依赖 Electron 的状态、策略或业务事务，应作为迁移候选继续做
-owner 级审计：
+以下内容记录实施前基线；其中的路径、数量和漂移状态不是当前架构事实。
+
+## Implementation Outcome
+
+- 32 个源码 package 已全部登记为 `converged`，package role、依赖、strict TS、exports、manifest 和
+  source-alias 门禁均从 workspace 自动发现。
+- `@neko/platform` 与 Tools/TUI/VS Code 旧路径已删除；Agent test-utils 合并到 owning package，未保留
+  facade、alias 或成功 fallback。
+- `@neko/shared` 收敛为 core/errors/job-lifecycle/logger/path；UI theme/i18n/diff、AI provider/model
+  contracts、storage/local metadata 和全部领域 contract 已迁入明确 owner。
+- AI family 使用 `@neko-ai/contracts` 与 `@neko-ai/sdk`；Agent、Assets、Canvas、Cut、Preview family
+  使用 contracts/domain/runtime/node/webview 的真实依赖闭包，不为对称性建立空包。
+- Desktop 中所有清单里的 `D` 职责均已迁移；应用根只保留 Electron trust boundary、concrete adapter、
+  shell、typed bridge、composition 和 disposal。
+
+### 迁移前责任基线
 
 | 当前区域                                                                               | 已观察职责                                                           | 目标判断                                                                 |
 | -------------------------------------------------------------------------------------- | -------------------------------------------------------------------- | ------------------------------------------------------------------------ |
@@ -18,17 +32,17 @@ owner 级审计：
 | `desktop-resource-browser-runtime.ts`                                                  | controller 状态、搜索/恢复/变更业务编排与 Desktop shell adapter 混合 | 拆分 package-owned controller/application service 与薄 Desktop adapter   |
 | `application-settings-service.ts`                                                      | revision、串行更新、projection event 状态机                          | 明确的 settings owner package；Desktop 保留 Electron persistence adapter |
 
-对全部 28 个 package 的 manifest、exports、消费者、运行环境和源码职责审计还确认了以下系统性漂移：
+对当时全部 28 个 package 的 manifest、exports、消费者、运行环境和源码职责审计确认了以下系统性漂移：
 
-| 当前区域                               | 证据                                                                                                                 | 目标判断                                                                |
-| -------------------------------------- | -------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
-| `@neko/shared` (`packages/neko-types`) | 约 7.8 万行生产源码；同时包含领域 types、local metadata、React components、Node IO 和 config；23 个 package consumer | 收缩为最小跨领域基础层；领域、React、Node 和 config 职责按 owner 迁出   |
-| `@neko/platform`                       | 约 1.6 万行；混合 Agent config、AI provider、Generation media lifecycle 和 files；只有 Desktop consumer              | 完全解体，不保留新的 Platform facade                                    |
-| `neko-assets`                          | contract/controller/service/React root 同包且 Main/Renderer 共同消费                                                 | 拆分 Assets domain/application、Node adapter 和 Webview                 |
-| Agent family                           | runtime 为 `@neko/agent`，contracts 为 `@neko-agent/types`，Webview/test-utils 使用另一 scope；多个 `./*`            | 保留真实 runtime split，统一 family 名称并把 `types` 收敛为 contracts   |
-| Cut/Preview family                     | Cut Webview 名为通用 `@neko/webview`；Preview contracts 与 Webview scope 不一致                                      | 保持运行环境分离，统一 domain family identity                           |
-| Tools family                           | contracts 只有 dormant Webview consumer；Webview 无 exports、无产品 consumer                                         | 由 Tools OpenSpec 接通 domain/node/webview 全路径，否则保持未激活或退役 |
-| package gates                          | 默认 `check:deps` 只列出部分 source roots；若手工巡检全部 `packages` 当前无 cycle/规则违规                           | 门禁必须从 workspace 自动发现全部 package，不能依赖手写闭集             |
+| 当前区域                                | 证据                                                                                                                  | 目标判断                                                                |
+| --------------------------------------- | --------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| `@neko/shared` (`packages/neko-shared`) | 约 7.8 万行生产源码；同时包含领域 types、local metadata、React components、Node IO 和 config；23 个 package consumer  | 收缩为最小跨领域基础层；领域、React、Node 和 config 职责按 owner 迁出   |
+| `@neko/platform`                        | 约 1.6 万行；混合 Agent config、AI provider、Generation media lifecycle 和 files；只有 Desktop consumer               | 完全解体，不保留新的 Platform facade                                    |
+| `neko-assets`                           | contract/controller/service/React root 同包且 Main/Renderer 共同消费                                                  | 拆分 Assets domain/application、Node adapter 和 Webview                 |
+| Agent family                            | runtime 为 `@neko-agent/runtime`，contracts 为 `@neko-agent/contracts`，Webview/test-utils 使用另一 scope；多个 `./*` | 保留真实 runtime split，统一 family 名称并把 `types` 收敛为 contracts   |
+| Cut/Preview family                      | Cut Webview 名为通用 `@neko-cut/webview`；Preview contracts 与 Webview scope 不一致                                   | 保持运行环境分离，统一 domain family identity                           |
+| Tools family                            | contracts 只有 dormant Webview consumer；Webview 无 exports、无产品 consumer                                          | 由 Tools OpenSpec 接通 domain/node/webview 全路径，否则保持未激活或退役 |
+| package gates                           | 默认 `check:deps` 只列出部分 source roots；若手工巡检全部 `packages` 当前无 cycle/规则违规                            | 门禁必须从 workspace 自动发现全部 package，不能依赖手写闭集             |
 
 运行环境隔离本身已有有效基础：全量 dependency-cruiser 对 1,504 个模块和 4,503 条依赖未发现 cycle，
 Webview boundary 检查覆盖六个 browser root 且通过。问题主要是 package ownership、命名、exports 和
@@ -130,7 +144,7 @@ owner。`contracts` 可以包含纯 codec/validator，但不得包含状态、�
 
 基础设施继续使用 `@neko/*`；同一领域存在多个独立 runtime package 时统一使用
 `@neko-<domain>/*`。目录名必须能直接映射 package identity，不能再出现 `neko-types -> @neko/shared`
-或 `neko-cut-webview -> @neko/webview` 这类隐式关系。
+或 `neko-cut-webview -> @neko-cut/webview` 这类隐式关系。
 
 | 当前边界                               | 目标边界                                                                                                                                                                              |
 | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -138,9 +152,10 @@ owner。`contracts` 可以包含纯 codec/validator，但不得包含状态、�
 | `@neko/shared/components`              | 迁入 `@neko/ui`，删除 legacy compatibility export                                                                                                                                     |
 | shared local metadata / project IO     | 通用 storage/IO port 与 Node/SQLite adapter 使用明确 runtime entry；领域 binding、migration、projection schema 回 owning package；是否建立窄 `@neko/local-metadata` 由 inventory 决定 |
 | `@neko/platform`                       | 最终不存在；config 回 Agent/Host settings，provider 回 AI adapter，generated-output lifecycle 回 Generation，files 回 Host/Content                                                    |
-| Agent family                           | `@neko-agent/contracts`、`@neko-agent/runtime`、`@neko-agent/webview`；AI SDK 作为明确 provider adapter；无外部 consumer 的 test-utils 并入 runtime/testing                           |
+| AI family                              | `@neko-ai/contracts` 提供 provider/model L0 contract；`@neko-ai/sdk` 提供 provider adapter                                                                                            |
+| Agent family                           | `@neko-agent/contracts`、`@neko-agent/runtime`、`@neko-agent/webview`；无外部 consumer 的 test-utils 并入 runtime/testing                                                             |
 | Canvas family                          | 保留 domain/webview，把 app-owned authoring、material action、Media Library handoff 拆到 domain/application 与必要的 node adapter                                                     |
-| Cut family                             | 保留 domain/node/webview，只修正 `@neko/webview` identity 并收紧 exports                                                                                                              |
+| Cut family                             | 保留 domain/node/webview，只修正 `@neko-cut/webview` identity 并收紧 exports                                                                                                          |
 | Assets family                          | 建立 domain/application、node、webview 三个 dependency closure，Desktop 只保留 native selection/trash/path authorization adapter                                                      |
 | Preview family                         | 将现有 contracts 中的 MIME、staging 和状态策略识别为 domain；保留 browser Webview，Node 内容解析按真实依赖建立 entry/package                                                          |
 | Tools family                           | 由现有 media comparison OpenSpec 建立 domain/contracts、Node/Media adapter 和 Webview 的真实 producer/consumer；未接通前不宣称产品能力                                                |
@@ -233,7 +248,7 @@ no-fallback gate；本变更不复制其 case、provider、codec 或 UI 任务�
 ## Migration Plan
 
 1. 冻结向 Desktop、Shared 和 Platform 新增业务 owner；让 package/gate discovery 覆盖全部 workspace。
-2. 建立 `apps/neko-desktop` 与 28 个 package 的责任、public entry、runtime、consumer、用户数据和目标
+2. 建立 `apps/neko-desktop` 与迁移前 28 个 package 的责任、public entry、runtime、consumer、用户数据和目标
    owner inventory。
 3. 先建立目标 package entry 和 contract，把无 Electron import、依赖闭包清晰的低风险 service 按
    domain slice 迁出 Desktop/Shared/Platform。
@@ -248,15 +263,15 @@ no-fallback gate；本变更不复制其 case、provider、codec 或 UI 任务�
 回滚只允许回滚某批新 package path，并恢复明确失败状态；不得让旧 app-owned 业务实现作为 fallback
 继续成功。任何用户数据格式变化必须使用该领域单独批准的迁移方案。
 
-## Open Questions
+## Resolved Decisions
 
-- Application settings 最终归入 `@neko/host` 的产品设置能力，还是建立更窄的 settings package，需要在
-  inventory 中结合 provider/model、theme/i18n 和窗口设置 owner 一并判断。
-- local metadata 的通用 SQLite/store infrastructure 是否形成窄 `@neko/local-metadata`，还是保留在 Host
-  runtime 并把所有领域 binding 分散到 owners，需要以跨领域依赖和 transaction boundary 决定。
-- Canvas material action 中跨 Canvas、Preview、Cut、Generation 的 handoff catalog 应由 Canvas public
-  contract 还是中立 contribution owner 管理，需要先审计现有 package contribution seam。
-- AI SDK adapter 最终使用基础设施 `@neko/ai-sdk` 还是 Agent family identity，需要确认 Generation 等非
-  Agent consumer 是否直接复用相同 provider adapter。
-- 静态职责门禁采用 package role manifest、explicit exports 还是 source allowlist，需要在完成首轮
-  inventory 后以可维护性和误报率选择；依赖根发现必须自动化这一点不再开放。
+- Application settings contract/service 归 `@neko/host`；Desktop 只实现原子文件 repository、凭据和
+  Electron 投影。
+- 通用 storage classification、workspace identity 与 SQLite store 归 `@neko/local-metadata`；Media、
+  Search、Entity 的 binding/migration 由各自 local-metadata/node owner 持有。
+- Canvas material action、authoring 与 handoff 归 Canvas domain/node，Desktop 只注入授权资源与 native
+  adapter。
+- provider/model L0 contract 与 provider adapter 分别归 `@neko-ai/contracts`、`@neko-ai/sdk`，Generation
+  可直接消费而不依赖 Agent runtime。
+- package role catalog、manifest explicit exports 与 source boundary rules 共同作为静态门禁；临时 surface
+  freeze 和 transfer ledger 已在 inventory 清零后删除。

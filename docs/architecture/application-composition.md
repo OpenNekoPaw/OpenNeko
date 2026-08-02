@@ -2,7 +2,7 @@
 
 状态：Accepted
 
-更新日期：2026-08-01
+更新日期：2026-08-02
 对应变更：`replace-desktop-media-scheme-with-http-resource-gateway`、
 `enforce-thin-desktop-application-root`
 
@@ -17,8 +17,8 @@ adapter 边界，不是业务逻辑 owner；当前只有 Desktop 一个 Host，�
 | ------------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------- |
 | Desktop application | `apps/neko-desktop`                                                      | Electron 生命周期、Main/preload/renderer、typed IPC、文件与凭据授权 adapter、窗口/产品 shell、产品打包 | 领域事实或 contract 副本、业务状态机/策略/事务、跨领域万能 router、package internal imports |
 | Host/runtime        | `packages/neko-host`、`packages/neko-media`、各领域 runtime/node package | host-neutral ports、Node/FFmpeg 执行、资源生命周期                                                     | React UI、应用生命周期、对 `apps/*` 的依赖                                                  |
-| Browser UI          | `packages/neko-ui`、一级 `*-webview` package、`packages/neko-assets`     | React UI、交互、browser media client、package-owned Desktop host port                                  | Node/Electron API、文件路径、持久事实、后台任务 owner                                       |
-| L0/domain           | `packages/neko-types` 与各领域 contract/core package                     | 类型契约、领域规则、authoring、validation                                                              | Electron、React、应用内部实现                                                               |
+| Browser UI          | `packages/neko-ui`、一级 `*-webview` package、`packages/neko-assets-webview`    | React UI、交互、browser media client、package-owned Desktop host port                                  | Node/Electron API、文件路径、持久事实、后台任务 owner                                       |
+| L0/domain           | `packages/neko-shared` 与各领域 contract/core package                     | 类型契约、领域规则、authoring、validation                                                              | Electron、React、应用内部实现                                                               |
 
 ## 依赖方向
 
@@ -74,11 +74,14 @@ public port、投影结果和释放资源。
 条件只意味着不应建立 speculative multi-host framework。没有明确 owner 的跨领域业务先通过 OpenSpec
 定义中立职责，不得放进 `@neko/desktop-core` 或其他 catch-all package。
 
-当前实现尚未完全满足这一目标：抽样发现 Canvas material action/authoring、Media Library sync、
-project portability、Resource Browser orchestration 和 application settings state 等候选职责仍与
-Desktop adapter 混合。候选清单、owner 假设和迁移任务由活跃变更
-[`enforce-thin-desktop-application-root`](../../openspec/changes/enforce-thin-desktop-application-root/design.md)
-管理；这些现状是待迁移架构漂移，不构成新增代码的先例。
+Canvas material authoring/generation、Media Library sync、project portability、Resource Browser、
+application settings、Agent content/facts/resource projection 与 personal Skill lifecycle 已迁入各自
+package。Desktop 对这些能力只保留 sender/path/trust 授权、Electron 资源绑定、native interaction、
+public port wiring 与 disposal；旧 app-owned 路径由边界测试和 legacy gate 持续 poison。
+
+一级 package 的角色、拆分条件、领域家族命名和 inactive capability 语义统一遵循
+[`package-taxonomy.md`](package-taxonomy.md)，应用根不得通过私有 source alias 或 wildcard export
+绕过这些边界。
 
 ## 唯一宿主
 

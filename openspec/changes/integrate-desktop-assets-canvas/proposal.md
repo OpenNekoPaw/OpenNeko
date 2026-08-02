@@ -28,5 +28,5 @@ Workbench composition；剩余工作是对当前 shared UI/Canvas/resource path 
 ## Impact
 
 - `apps/neko-desktop` Workbench/Main/preload/renderer。
-- `packages/neko-assets`、`packages/neko-canvas`、shared UI 与 resource gateway consumers。
+- `packages/neko-assets-domain`、`packages/neko-canvas`、shared UI 与 resource gateway consumers。
 - 不保留 VS Code TreeView/Custom Editor 兼容目标或第二套资源 catalog。

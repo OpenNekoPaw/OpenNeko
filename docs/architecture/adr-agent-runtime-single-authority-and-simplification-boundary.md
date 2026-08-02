@@ -37,9 +37,9 @@ Desktop Agent composition 只注册公共 application port 和 Host adapter，�
 Quality、Canvas、Cut 或 Generation 的可变状态。领域之间通过 typed ref、command、event 或 facade
 协作，不通过 Agent package 内部 controller 中转。
 
-`packages/neko-platform` 是迁移中的边界，不得继续聚合 config、tools、prompts、media 和 provider
-为万能 manager。能力按真实 owner 移入小 contract/service；单一稳定调用链不额外叠加 factory、
-registry、provider 和 facade。
+`@neko/platform` 已删除。config、tools、prompts、media 和 provider 直接由 Agent contracts/runtime、
+Host settings、Generation、Content 等真实 owner 暴露窄入口；不得重新建立万能 manager 或兼容
+facade。单一稳定调用链不额外叠加 factory、registry、provider 和 facade。
 
 外部处理器只有存在真实 manifest、Desktop executor、审批策略和端到端 consumer 时才注册；它是
 受管 Tool implementation，不是平行 Capability 系统。

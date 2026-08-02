@@ -56,6 +56,29 @@ OpenNeko 采用“架构优先、契约优先、风险分级、证据驱动”�
 - 公共契约、关键分支和失败路径有测试或明确残余风险。
 - 影响行为、架构、配置、包入口或公共契约时同步更新对应文档。
 
+## Package 与 Desktop ownership evidence
+
+新增或实质修改 `apps/*`、`packages/*` 生产模块时，OpenSpec design/tasks 与质量 review 必须提供
+同一组结构化证据：
+
+| 字段                  | 必须回答                                                                                         |
+| --------------------- | ------------------------------------------------------------------------------------------------ |
+| Owning responsibility | 谁拥有规则、状态、生命周期、错误和数据；不能只写当前文件或 Desktop                               |
+| Package role          | contracts/domain/application/runtime/node/webview/infrastructure/testing/content-only 中的哪一类 |
+| Canonical path        | 唯一 public export、port、handler/adapter 和调用链；旧路径如何删除、poison 或 fail-closed        |
+| Producer / consumer   | 哪个模块产生 contract/事实，哪些真实生产调用方消费，依赖是否在 manifest 声明                     |
+| Runtime boundary      | host-neutral、Node、browser、Electron Main/preload/renderer 的能力与资源 owner                   |
+| Verification          | producer test、consumer/delegation test、路径断言，以及适用的 Node/Electron 运行态命令           |
+| User data             | project/settings/credential/SQLite/生成产物是保留、迁移、重建、拒绝还是有意丢弃                  |
+
+只写“当前只有 Desktop”“只有一个调用方”或最终测试结果，不构成 ownership/canonical-path 证据。
+Application 层保留生产逻辑时必须说明其 Electron trust/window/lifecycle 依赖，以及为何无法通过窄 port
+成为 host-neutral domain/application service。缺少上述证据时不得将架构任务标记完成。
+
+机器门禁使用 `quality/package-roles.json` 和
+`quality/ledgers/package-boundary-exceptions.json` 验证 package 覆盖、角色、依赖、exports、identity 和
+source alias；当前例外必须有 owner 和 removal task，新增例外默认失败，已经消失的例外必须同步删除。
+
 ## 三类验证入口
 
 OpenNeko 使用本地开发、手动远程验证和合并验收三类入口。除 `main` 外的非空分支名都属于开发分支，普通开发分支 push 不自动触发 GitHub Actions；`main` 是唯一发布分支，只接受开发分支到 `main` 的 Pull Request。
@@ -127,9 +150,10 @@ dry-run，是 key-free harness 自测，不等于真实 Agent 行为验收。真
 Desktop App/session owner，并通过 Desktop Agent input queue 提交消息；直接调用 turn runner、
 替换 runtime assembly 或使用 mock business tool 不能作为证据。
 
-当前 Desktop 尚未暴露 complete-session evaluation driver。需要真实 provider-backed case 时，
-runner 必须返回 `infrastructure-blocked`，并在交付说明中记录缺失 owner；不得回退到已移除
-仅 headless driver、单元 runner 或只凭最终文本宣称通过。
+Desktop 已为 `locator-backed-display-projection` 提供首个 complete-session evaluation driver，
+通过公开 Agent bridge、隔离 fixture、terminal facts 和应用关闭释放完成真实路径验收。其他 case
+若尚无 owning Desktop scenario adapter，runner 必须返回 `infrastructure-blocked` 并记录缺失 owner；
+不得回退到已移除的 TUI/headless driver、单元 runner 或只凭最终文本宣称通过。
 
 原始 Evaluation 报告写入 gitignored `reports/agent-eval/`。长期文档只提交脱敏摘要，保留
 suite/case/run、identity、assertion/artifact refs、failure classification 和 residual risk，
@@ -194,7 +218,7 @@ Webview/React 变更新增组件前，review 必须确认已经做过组件复�
 
 新功能涉及组件样式、主题、国际化、日志、错误/诊断、配置、路径、文件保存/读写、资源授权、缓存、DTO 或跨包契约时，review 必须确认已经做过公共基础能力审计：
 
-- 是否优先复用或更新 `@neko/shared`、`@neko/ui`、`@neko/media`、`@neko/entity`、`@neko/search`、project-file-io、resource cache 或既有 domain service。
+- 是否优先复用或更新 `@neko/shared`、`@neko/ui`、`@neko/media`、`@neko-entity/domain`、`@neko-search/domain`、project-file-io、resource cache 或既有 domain service。
 - 是否避免了 package-local design system、theme token、i18n runtime、logger/error 类型、项目文件 IO、cache manager、path resolver、媒体 HTTP/WS client 或共享 DTO 的并行实现。
 - 如果公共入口缺少能力，是否优先扩展公共契约、公共 adapter、公共 hook/primitive 或 domain service，而不是复制一份功能包私有实现。
 - 如果能力留在 owning package，是否说明了业务边界、依赖方向、后续提取条件和验证命令。

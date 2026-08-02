@@ -1,9 +1,13 @@
 ## Why
 
-`apps/neko-desktop` 已被定义为唯一 Electron 产品组合根，但当前仍包含可脱离 Electron 的领域规则；
-同时 28 个 `packages/*` workspace 采用了不一致的 `types/contracts/domain/runtime/node/webview`
-划分，`@neko/shared`、`@neko/platform` 和 `neko-assets` 继续聚合跨领域或跨运行环境职责。需要把
+`apps/neko-desktop` 已被定义为唯一 Electron 产品组合根，但迁移前仍包含可脱离 Electron 的领域规则；
+同时当时的 28 个 `packages/*` workspace 采用了不一致的 `types/contracts/domain/runtime/node/webview`
+划分，`@neko/shared`、`@neko/platform` 和 `neko-assets` 聚合了跨领域或跨运行环境职责。需要把
 Desktop 薄组合根与 package ownership 一起收敛，形成唯一、可验证的依赖和业务执行路径。
+
+截至 2026-08-02，迁移形成 32 个源码 package：Desktop 仍是唯一应用，Platform、Tools、TUI 和
+VS Code 旧宿主均已退役；Shared 只保留 core/errors/job-lifecycle/logger/path 六个公开入口，AI、Agent、
+Assets、Canvas、Preview、Cut 和 Local Metadata 均通过明确 owner 与公开入口接入。
 
 ## What Changes
 
@@ -48,7 +52,7 @@ Desktop 薄组合根与 package ownership 一起收敛，形成唯一、可验�
 
 - 架构与开发规范：`docs/architecture/application-composition.md`、
   `docs/architecture/package-boundaries.md`、`AGENTS.md`。
-- 主要迁移面：`apps/neko-desktop/src/{main,preload,renderer,shared}`、`packages/neko-types`、
+- 主要迁移面：`apps/neko-desktop/src/{main,preload,renderer,shared}`、`packages/neko-shared`、
   `packages/neko-platform`、Assets/Canvas/Preview/Tools/Agent package families、workspace manifests、
   Vite aliases 和架构门禁。
 - **BREAKING**：内部 workspace package name、exports 和 import specifier 将按 family 分批调整；仓库尚未

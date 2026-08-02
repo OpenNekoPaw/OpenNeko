@@ -45,8 +45,8 @@ information needed to explain, validate, and efficiently restore the required li
 
 ## Impact
 
-- Shared contracts and host-neutral aggregation in `packages/neko-types`.
-- Assets Resource Browser projections and interactions in `packages/neko-assets`.
+- Shared contracts and host-neutral aggregation in `packages/neko-shared`.
+- Assets Resource Browser projections and interactions in `packages/neko-assets-domain`.
 - Desktop Main project-document composition, global Media Library matching, link mutation, content
   access, copy staging, and typed IPC in `apps/neko-desktop`.
 - Canvas, Cut, Entity representation, and future project-document owners that expose portable content

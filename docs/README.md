@@ -12,6 +12,7 @@
 | 系统分层和硬约束              | [`architecture/README.md`](architecture/README.md)                         |
 | 仓库工作规则                  | [`../AGENTS.md`](../AGENTS.md)                                             |
 | 子包边界、UI 层和公共代码规范 | [`architecture/package-boundaries.md`](architecture/package-boundaries.md) |
+| Package 角色、拆分与命名      | [`architecture/package-taxonomy.md`](architecture/package-taxonomy.md)     |
 | 系统级架构决策                | [`architecture/README.md`](architecture/README.md)                         |
 | 领域能力和领域架构            | [`domains/README.md`](domains/README.md)                                   |
 | 活跃设计变更                  | [`../openspec/`](../openspec/)                                             |
@@ -19,15 +20,15 @@
 
 ## 分类规则
 
-| 文档类型   | 位置                     | 说明                                                 |
-| ---------- | ------------------------ | ---------------------------------------------------- |
-| 系统架构   | `docs/architecture/`     | 跨领域、跨包、跨运行平面的约束和 ADR                 |
-| 领域文档   | `docs/domains/<domain>/` | 单个创作领域的能力模型、数据流和领域架构             |
-| 开发中变更 | `openspec/changes/`      | 尚未固化的需求、设计、任务和规格变更                 |
-| 任务队列   | 根目录 TODO（存在时）    | 当前排队事项和轻量行动项，不承载设计正文             |
-| 产品路线   | 根目录 Roadmap（存在时） | 方向性目标和优先级，不承诺具体发布节奏               |
-| 质量输入   | `quality/`               | 供脚本和 CI 消费的 JSON 台账、规则数据和门禁输入     |
-| 包私有实现 | `packages/<pkg>/docs/`   | 只服务某个包的配置、实现和维护说明                   |
+| 文档类型   | 位置                     | 说明                                             |
+| ---------- | ------------------------ | ------------------------------------------------ |
+| 系统架构   | `docs/architecture/`     | 跨领域、跨包、跨运行平面的约束和 ADR             |
+| 领域文档   | `docs/domains/<domain>/` | 单个创作领域的能力模型、数据流和领域架构         |
+| 开发中变更 | `openspec/changes/`      | 尚未固化的需求、设计、任务和规格变更             |
+| 任务队列   | 根目录 TODO（存在时）    | 当前排队事项和轻量行动项，不承载设计正文         |
+| 产品路线   | 根目录 Roadmap（存在时） | 方向性目标和优先级，不承诺具体发布节奏           |
+| 质量输入   | `quality/`               | 供脚本和 CI 消费的 JSON 台账、规则数据和门禁输入 |
+| 包私有实现 | `packages/<pkg>/docs/`   | 只服务某个包的配置、实现和维护说明               |
 
 ## 写入原则
 

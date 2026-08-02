@@ -28,7 +28,7 @@ CharacterProject
 - `CompanionRun` 拥有一次日常互动或陪伴活动的短期上下文、候选记忆和运行资源。
 - Agent transcript、UI tab、Canvas Storyline 和 Memory index 都不是上述事实的 owner。
 
-`@neko/entity` 只提供通用 Entity identity、alias、occurrence、可重建 relationship
+`@neko-entity/domain` 只提供通用 Entity identity、alias、occurrence、可重建 relationship
 projection、representation 和稳定 ref。Content/Assets、Renderer、Voice、Media、Game、
 Device 和其他 Activity owner 继续拥有各自事实与执行实现。
 

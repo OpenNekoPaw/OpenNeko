@@ -14,6 +14,10 @@
 
 非平凡功能、跨包修改、公共契约或架构变更必须先建立或更新 OpenSpec artifacts。简单文档和局部修正可以直接实施，但仍需符合当前架构。
 
+触及 `apps/*` 或 `packages/*` 生产模块时，OpenSpec design/tasks 和交付 review 必须记录 owning
+responsibility、package role、canonical public path、producer/consumer、runtime boundary、旧路径
+删除/poison 条件、用户数据语义与验证命令。仅说明“当前只有 Desktop”或只给最终测试结果不算完成证据。
+
 ## 本地开发
 
 要求 Node.js 24+ 和 pnpm 10。

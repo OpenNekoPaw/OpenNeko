@@ -9,12 +9,12 @@ schema: spec-driven
 #     We use conventional commits
 #     Domain: e-commerce platform
 
-# Per-artifact rules (optional)
-# Add custom rules for specific artifacts.
-# Example:
-#   rules:
-#     proposal:
-#       - Keep proposals under 500 words
-#       - Always include a "Non-goals" section
-#     tasks:
-#       - Break tasks into chunks of max 2 hours
+rules:
+  proposal:
+    - When a change touches apps/* or packages/* production modules, Impact must identify the owning responsibility and affected package role; a Desktop-only caller is not ownership evidence.
+  design:
+    - For changed Desktop or package production modules, record the owner, package role, canonical public entry/path, producer and consumer, runtime boundary, replaced path, and user-data impact.
+    - Record why any production logic retained in apps/* requires the Application boundary and why it is not host-neutral business behavior.
+  tasks:
+    - Every ownership migration must include producer tests, consumer/delegation tests, runtime verification where applicable, and deletion/poison/fail-closed proof for the replaced path.
+    - Completion tasks must list actual verification commands and residual risks; result-only success without canonical-path evidence is insufficient.

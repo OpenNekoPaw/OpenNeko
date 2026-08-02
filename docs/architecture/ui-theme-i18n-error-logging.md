@@ -43,7 +43,7 @@
 | KeyboardBoundary、keyboard dispatcher、focus CSS                                       | 功能包快捷键业务命令和编辑器状态                                            |
 | 通用 property panel、number slider、timeline ruler、tree view                          | 领域 schema、文件格式、素材实体业务                                         |
 
-新 Renderer UI 进入 `@neko/ui`；`@neko/shared/components` 不作为新增 UI 的公共入口。现有调用方应按组件 owner 和依赖层级迁移，不得形成双 design system。
+Renderer UI 统一进入 `@neko/ui`；旧 `@neko/shared/components` 入口已经移除，不得重新引入平行 design system。
 
 ### UI 边界规则
 
@@ -52,7 +52,7 @@
 - `@neko/ui` 组件只接收 props/callbacks/typed data，不主动读取全局 package state。
 - 被多个 renderer surface 复用且无领域语义的控件可以进入 `@neko/ui`；只在一个领域成立的交互留在领域包。
 - Cut、Canvas、Preview、Assets、Tools 等被动状态投影到 Desktop shell 的 owning activity/attention surface，避免各 surface 重复状态栏。
-- Agent 聊天输入、模型选择、会话模式、媒体模型栏等 Agent-first 交互留在 `@neko/agent-webview`，不迁入 `@neko/ui`。
+- Agent 聊天输入、模型选择、会话模式、媒体模型栏等 Agent-first 交互留在 `@neko-agent/runtime-webview`，不迁入 `@neko/ui`。
 
 ## 统一主题
 
@@ -200,7 +200,7 @@ ffprobe / FFmpeg / loopback error
 
 | 反模式                                      | 风险                   | 正确边界                                                     |
 | ------------------------------------------- | ---------------------- | ------------------------------------------------------------ |
-| 把 React 组件放进 `@neko/shared` 主入口     | L0 被 React/DOM 污染   | 新 UI 进入 `@neko/ui`，legacy 才用 `@neko/shared/components` |
+| 把 React 组件放进 `@neko/shared` 主入口     | L0 被 React/DOM 污染   | 公共 UI 统一进入 `@neko/ui`                                  |
 | `@neko/ui` 导入功能包、Electron 或 Node API | 公共 UI 变成业务层     | UI 只接 props/callbacks/typed data                           |
 | Renderer 绕过 preload 直接调用宿主 API      | 沙箱边界破坏           | Renderer 使用 package-owned host runtime 和 typed IPC        |
 | Desktop Main 使用 renderer bundle 翻译      | 文案来源混乱           | Main 投影稳定 code/locale，renderer 负责用户文案             |

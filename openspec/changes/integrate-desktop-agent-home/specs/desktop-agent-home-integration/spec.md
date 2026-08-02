@@ -21,7 +21,7 @@ or host-inapplicable.
 
 ### Requirement: Desktop uses one canonical Agent message controller
 
-Host-neutral Agent orchestration MUST be owned by `@neko/agent` and composed from responsibility-specific
+Host-neutral Agent orchestration MUST be owned by `@neko-agent/runtime` and composed from responsibility-specific
 route handlers. Electron MUST inject Desktop Host effects into that controller and MUST NOT maintain
 a parallel router, conversation, Tool, Skill, configuration, or projection implementation.
 
