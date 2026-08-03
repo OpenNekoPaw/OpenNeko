@@ -405,7 +405,7 @@ export class DesktopShellService {
             : await workspaceGrantAuthority.restore(
                 request.windowId,
                 `workspace-grant:project:${this.createIdentity()}`,
-                targetProject.workspaceId,
+                requireStoredProject(state, request.intent.projectId).workspaceId,
               );
         const opened = openContentProject(
           state,
