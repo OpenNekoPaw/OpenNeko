@@ -13,7 +13,7 @@ import type {
 } from '@neko/preview-domain/authorized-session';
 import { PREVIEW_HOST_RUNTIME_ROUTES, PREVIEW_HOST_RUNTIME_VERSION } from '@neko/preview-domain';
 import type { SupportedLocale } from '@neko/ui/i18n';
-import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactElement, type ReactNode } from 'react';
 import { I18nProvider } from '../i18n/I18nContext';
 import { i18nService, setLocale } from '../i18n';
 import { ModelViewer } from '../model/ModelViewer';
@@ -109,6 +109,42 @@ export function getPreviewViewerRegistry(): readonly PreviewViewerRegistration[]
   return VIEWERS;
 }
 
+export function PreviewPresentation({
+  actions,
+  authorizedPreviewSessionId,
+  descriptor,
+  locale,
+}: {
+  readonly actions?: ReactNode;
+  readonly authorizedPreviewSessionId?: string;
+  readonly descriptor: PreviewMediaDescriptor;
+  readonly locale: SupportedLocale;
+}): ReactElement {
+  const viewer = VIEWERS.find((candidate) => candidate.kind === descriptor.contentKind);
+  if (!viewer) {
+    return <PreviewStatus message={label(locale, '没有可用的预览器', 'No viewer is available')} />;
+  }
+  return (
+    <section
+      className="neko-preview-root"
+      data-authorized-preview-session-id={authorizedPreviewSessionId}
+      data-preview-kind={descriptor.contentKind}
+      data-preview-presentation-owner="preview-webview"
+    >
+      <header>
+        <div className="neko-preview-root__heading">
+          <strong>{descriptor.displayName}</strong>
+          <span>{descriptor.mediaType}</span>
+        </div>
+        {actions}
+      </header>
+      <div className="neko-preview-root__viewer">
+        {viewer.render({ descriptor, sourceUrl: descriptor.url, locale })}
+      </div>
+    </section>
+  );
+}
+
 export function PreviewRoot({ locale, runtime }: PreviewRootProps): ReactElement {
   const [state, setState] = useState<PreviewRootState>({ kind: 'loading' });
   const [pendingRoute, setPendingRoute] = useState<PreviewHostRuntimeRoute>();
@@ -149,42 +185,31 @@ export function PreviewRoot({ locale, runtime }: PreviewRootProps): ReactElement
   }, [runtime]);
 
   if (state.kind === 'loading') {
-    return (
-      <div className="neko-preview-root__status">
-        {label(locale, '正在载入预览…', 'Loading preview…')}
-      </div>
-    );
+    return <PreviewStatus message={label(locale, '正在载入预览…', 'Loading preview…')} />;
   }
   if (state.kind === 'error') {
     return (
-      <div className="neko-preview-root__status is-error" role="alert">
-        <strong>{label(locale, '预览不可用', 'Preview unavailable')}</strong>
-        <span>{state.message}</span>
-      </div>
+      <PreviewStatus
+        error
+        message={state.message}
+        title={label(locale, '预览不可用', 'Preview unavailable')}
+      />
     );
   }
   const projection = state.projection;
   if (projection.status !== 'ready') {
     return (
-      <div className="neko-preview-root__status is-error" role="status">
-        <strong>
-          {projection.status === 'unsupported'
+      <PreviewStatus
+        error
+        message={projection.diagnostic.message}
+        title={
+          projection.status === 'unsupported'
             ? label(locale, '暂不支持此文件', 'Unsupported file')
-            : label(locale, '预览不可用', 'Preview unavailable')}
-        </strong>
-        <span>{projection.diagnostic.message}</span>
-      </div>
+            : label(locale, '预览不可用', 'Preview unavailable')
+        }
+      />
     );
   }
-  const viewer = VIEWERS.find((candidate) => candidate.kind === projection.descriptor.contentKind);
-  if (!viewer) {
-    return (
-      <div className="neko-preview-root__status is-error" role="status">
-        {label(locale, '没有可用的预览器', 'No viewer is available')}
-      </div>
-    );
-  }
-  const sourceUrl = projection.descriptor.url;
   const executeViewRoute = async (route: PreviewHostRuntimeRoute): Promise<void> => {
     setPendingRoute(route);
     try {
@@ -202,12 +227,10 @@ export function PreviewRoot({ locale, runtime }: PreviewRootProps): ReactElement
     }
   };
   return (
-    <section className="neko-preview-root" data-preview-kind={projection.descriptor.contentKind}>
-      <header>
-        <div className="neko-preview-root__heading">
-          <strong>{projection.descriptor.displayName}</strong>
-          <span>{projection.descriptor.mediaType}</span>
-        </div>
+    <PreviewPresentation
+      descriptor={projection.descriptor}
+      locale={locale}
+      actions={
         <div
           className="neko-preview-root__actions"
           aria-label={label(locale, '预览布局', 'Preview layout')}
@@ -235,11 +258,8 @@ export function PreviewRoot({ locale, runtime }: PreviewRootProps): ReactElement
             onClick={() => void executeViewRoute(PREVIEW_HOST_RUNTIME_ROUTES.viewClose)}
           />
         </div>
-      </header>
-      <div className="neko-preview-root__viewer">
-        {viewer.render({ descriptor: projection.descriptor, sourceUrl, locale })}
-      </div>
-    </section>
+      }
+    />
   );
 }
 
@@ -274,54 +294,40 @@ export function AuthorizedPreviewRoot({
     };
   }, [runtime]);
   if (error) {
-    return (
-      <div className="neko-preview-root__status is-error" role="alert">
-        {error}
-      </div>
-    );
+    return <PreviewStatus error message={error} />;
   }
   if (!projection) {
-    return (
-      <div className="neko-preview-root__status">
-        {label(locale, '正在载入预览…', 'Loading preview…')}
-      </div>
-    );
+    return <PreviewStatus message={label(locale, '正在载入预览…', 'Loading preview…')} />;
   }
   if (projection.status !== 'ready') {
-    return (
-      <div className="neko-preview-root__status is-error" role="status">
-        {projection.diagnostic.message}
-      </div>
-    );
-  }
-  const viewer = VIEWERS.find((candidate) => candidate.kind === projection.descriptor.contentKind);
-  if (!viewer) {
-    return (
-      <div className="neko-preview-root__status is-error" role="status">
-        {label(locale, '没有可用的预览器', 'No viewer is available')}
-      </div>
-    );
+    return <PreviewStatus error message={projection.diagnostic.message} />;
   }
   return (
-    <section
-      className="neko-preview-root"
-      data-authorized-preview-session-id={projection.identity.previewSessionId}
-      data-preview-kind={projection.descriptor.contentKind}
+    <PreviewPresentation
+      authorizedPreviewSessionId={projection.identity.previewSessionId}
+      descriptor={projection.descriptor}
+      locale={locale}
+    />
+  );
+}
+
+function PreviewStatus({
+  error = false,
+  message,
+  title,
+}: {
+  readonly error?: boolean;
+  readonly message: string;
+  readonly title?: string;
+}): ReactElement {
+  return (
+    <div
+      className={`neko-preview-root__status${error ? ' is-error' : ''}`}
+      role={error ? 'alert' : 'status'}
     >
-      <header>
-        <div className="neko-preview-root__heading">
-          <strong>{projection.descriptor.displayName}</strong>
-          <span>{projection.descriptor.mediaType}</span>
-        </div>
-      </header>
-      <div className="neko-preview-root__viewer">
-        {viewer.render({
-          descriptor: projection.descriptor,
-          sourceUrl: projection.descriptor.url,
-          locale,
-        })}
-      </div>
-    </section>
+      {title ? <strong>{title}</strong> : null}
+      <span>{message}</span>
+    </div>
   );
 }
 

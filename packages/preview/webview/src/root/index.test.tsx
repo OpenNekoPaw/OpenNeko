@@ -10,7 +10,13 @@ import {
   type PreviewProjection,
   type PreviewRuntimeIdentity,
 } from '@neko/preview-domain';
-import { PreviewRoot, QuickPreviewSurface, getPreviewViewerRegistry } from './index';
+import type { AuthorizedPreviewSessionRuntime } from '@neko/preview-domain/authorized-session';
+import {
+  AuthorizedPreviewRoot,
+  PreviewRoot,
+  QuickPreviewSurface,
+  getPreviewViewerRegistry,
+} from './index';
 const playerStyles = readFileSync(resolve(__dirname, '../styles/player.css'), 'utf8');
 const modelStyles = readFileSync(resolve(__dirname, '../model/model.css'), 'utf8');
 const rootStyles = readFileSync(resolve(__dirname, './style.css'), 'utf8');
@@ -56,6 +62,82 @@ describe('PreviewRoot', () => {
       'document',
       'model',
     ]);
+  });
+
+  it('uses one package-owned presentation and viewer registry for Workspace and authorized previews', async () => {
+    const descriptor = {
+      descriptorId: 'descriptor-shared-image',
+      revision: 'revision-1',
+      contentLocator: previewContentLocator,
+      url: 'http://127.0.0.1:43125/v1/resources/shared-image-token',
+      contentKind: 'image' as const,
+      mediaType: 'image/png',
+      displayName: 'shared.png',
+      byteLength: 42,
+    };
+    const workspaceContainer = document.createElement('div');
+    const authorizedContainer = document.createElement('div');
+    document.body.append(workspaceContainer, authorizedContainer);
+    const workspaceRoot = createRoot(workspaceContainer);
+    const authorizedRoot = createRoot(authorizedContainer);
+    const authorizedIdentity = {
+      previewSessionId: 'authorized-preview-1',
+      windowId: 'window-1',
+      owner: {
+        kind: 'asset-center' as const,
+        assetCenterSessionId: 'asset-center-1',
+        resourceOwner: 'media-library' as const,
+        itemId: 'media-library:item-1',
+      },
+      revision: 1,
+    };
+    const authorizedRuntime: AuthorizedPreviewSessionRuntime = {
+      identity: authorizedIdentity,
+      getSnapshot: async () => ({
+        schemaVersion: 1,
+        identity: authorizedIdentity,
+        status: 'ready',
+        descriptor,
+      }),
+      subscribe: () => () => undefined,
+    };
+
+    await act(async () => {
+      workspaceRoot.render(
+        <PreviewRoot
+          locale="en"
+          runtime={createRuntime({
+            schemaVersion: PREVIEW_HOST_RUNTIME_VERSION,
+            identity,
+            presentation: 'side',
+            status: 'ready',
+            descriptor,
+          })}
+        />,
+      );
+      authorizedRoot.render(<AuthorizedPreviewRoot locale="en" runtime={authorizedRuntime} />);
+    });
+    await act(async () => Promise.resolve());
+
+    for (const container of [workspaceContainer, authorizedContainer]) {
+      expect(
+        container.querySelector('[data-preview-presentation-owner="preview-webview"]'),
+      ).toBeTruthy();
+      expect(container.querySelector('img')?.getAttribute('src')).toBe(descriptor.url);
+      expect(container.querySelector('.neko-preview-root__heading')?.textContent).toContain(
+        'shared.png',
+      );
+    }
+    expect(
+      authorizedContainer
+        .querySelector('.neko-preview-root')
+        ?.getAttribute('data-authorized-preview-session-id'),
+    ).toBe('authorized-preview-1');
+
+    await act(async () => {
+      workspaceRoot.unmount();
+      authorizedRoot.unmount();
+    });
   });
 
   it('renders a Host-owned text descriptor without receiving a raw path', async () => {
