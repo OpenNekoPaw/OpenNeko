@@ -485,6 +485,102 @@ describe('DesktopShellService', () => {
     expect(await fixture.service.getSceneProjection(windowId)).toEqual(scene);
   });
 
+  it('treats the active Workspace Project as an idempotent Scene transition', async () => {
+    const repository = createInMemoryDesktopShellStateRepository();
+    const workspace = {
+      workspaceId: '11111111-1111-4111-8111-111111111111',
+      workspacePath: '/workspace/demo',
+      displayName: 'Demo',
+      locator: { kind: 'variable' as const, value: '${HOME}/workspace/demo' },
+    };
+    const restore = vi.fn(async () => workspace);
+    const authority = new DesktopWorkspaceGrantAuthority({
+      resolver: { resolve: vi.fn(async () => workspace), restore },
+      createIdentity: () => 'project-grant',
+    });
+    const fixture = createFixture(repository, 'home', authority);
+    const windowId = await fixture.service.claimWindowId();
+    fixture.service.setRendererEpoch(windowId, 1);
+    const initial = await fixture.service.getProjection(windowId);
+    const opened = await fixture.service.openContent(
+      windowId,
+      workspace.workspacePath,
+      initial.endpointEpoch,
+      initial.window.revision,
+    );
+    const project = opened.projection.catalog.projects[0]!;
+    const workspaceResult = await fixture.service.transitionScene(
+      createDesktopSceneTransitionRequest({
+        requestId: 'scene-request-open-project',
+        expectedEndpointEpoch: opened.projection.endpointEpoch,
+        windowId,
+        expectedWindowRevision: opened.projection.window.revision,
+        expectedSceneRevision: opened.projection.window.scene.revision,
+        intent: { kind: 'open-project-workspace', projectId: project.projectId },
+      }),
+    );
+    if (workspaceResult.status !== 'transitioned') {
+      throw new Error('Workspace Project fixture did not transition.');
+    }
+    const state = await repository.read();
+    const storedWindow = state.windows[0]!;
+    const context = workspaceResult.scene.context;
+    if (context.kind !== 'agent' || context.scope.kind !== 'workspace') {
+      throw new Error('Workspace Project fixture requires Workspace Agent scope.');
+    }
+    const scope = { ...context.scope, conversationId: 'conversation-1' };
+    const scene = parseDesktopWorkbenchSceneProjection({
+      ...workspaceResult.scene,
+      revision: workspaceResult.scene.revision + 1,
+      context: { ...context, scope },
+      slots: {
+        ...workspaceResult.scene.slots,
+        interaction: {
+          kind: 'agent',
+          agentViewId: context.agentViewId,
+          phase: 'session',
+          scope,
+        },
+      },
+    });
+    await repository.commit(state.storageRevision, {
+      ...state,
+      storageRevision: state.storageRevision + 1,
+      windows: [{ ...storedWindow, revision: storedWindow.revision + 1, scene }],
+    });
+    const before = await fixture.service.getProjection(windowId);
+    restore.mockClear();
+
+    expect(before.window.activeTarget).toEqual({
+      kind: 'project',
+      tabId: before.window.tabs.find((candidate) => candidate.projectId === project.projectId)
+        ?.tabId,
+    });
+    expect(before.window.scene.context).toMatchObject({
+      kind: 'agent',
+      scope: { kind: 'workspace', workspaceId: project.workspaceId },
+    });
+
+    const result = await fixture.service.transitionScene(
+      createDesktopSceneTransitionRequest({
+        requestId: 'scene-request-current-project',
+        expectedEndpointEpoch: before.endpointEpoch,
+        windowId,
+        expectedWindowRevision: before.window.revision,
+        expectedSceneRevision: scene.revision,
+        intent: { kind: 'open-project-workspace', projectId: project.projectId },
+      }),
+    );
+
+    expect(result).toEqual({
+      status: 'transitioned',
+      requestId: 'scene-request-current-project',
+      scene,
+    });
+    expect(restore).not.toHaveBeenCalled();
+    expect(await fixture.service.getProjection(windowId)).toEqual(before);
+  });
+
   it('persists Sidebar CAS independently from Window and Workbench revisions', async () => {
     const file = createMemoryFile();
     const first = createFixture(file);

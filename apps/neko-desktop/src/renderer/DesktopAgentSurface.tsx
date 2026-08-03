@@ -154,10 +154,10 @@ export function DesktopAgentSurface(props: DesktopAgentSurfaceProps): JSX.Elemen
           agentPresentation={props.agentPresentation}
           composerWorkspace={props.composerWorkspace}
           initialConversation={
-            props.binding === 'workspace'
-              ? props.initialConversation
-              : props.agentPresentation.kind === 'session'
-                ? { id: props.agentPresentation.conversationId, title: '' }
+            props.agentPresentation?.kind === 'session'
+              ? { id: props.agentPresentation.conversationId, title: '' }
+              : props.binding === 'workspace'
+                ? props.initialConversation
                 : undefined
           }
           initialInput={props.binding === 'workspace' ? props.initialInput : undefined}

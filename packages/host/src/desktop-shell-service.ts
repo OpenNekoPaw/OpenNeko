@@ -355,11 +355,30 @@ export class DesktopShellService {
         request.intent.kind === 'open-workspace' ||
         request.intent.kind === 'open-project-workspace'
       ) {
+        const targetProject =
+          request.intent.kind === 'open-project-workspace'
+            ? requireStoredProject(state, request.intent.projectId)
+            : undefined;
         const conversationId =
           window.scene.context.kind === 'agent'
             ? window.scene.context.scope.conversationId
             : undefined;
         if (conversationId) {
+          if (
+            targetProject &&
+            window.activeTarget.kind === 'project' &&
+            window.activeTarget.tabId ===
+              requireProjectTab(window, targetProject.projectId).tabId &&
+            window.scene.context.kind === 'agent' &&
+            window.scene.context.scope.kind === 'workspace' &&
+            window.scene.context.scope.workspaceId === targetProject.workspaceId
+          ) {
+            return {
+              status: 'transitioned',
+              requestId: request.requestId,
+              scene: window.scene,
+            };
+          }
           return {
             status: 'rejected',
             requestId: request.requestId,
@@ -386,7 +405,7 @@ export class DesktopShellService {
             : await workspaceGrantAuthority.restore(
                 request.windowId,
                 `workspace-grant:project:${this.createIdentity()}`,
-                requireStoredProject(state, request.intent.projectId).workspaceId,
+                targetProject.workspaceId,
               );
         const opened = openContentProject(
           state,

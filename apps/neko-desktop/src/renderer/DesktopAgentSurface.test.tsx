@@ -91,6 +91,39 @@ describe('DesktopAgentSurface', () => {
     await act(async () => root.unmount());
   });
 
+  it('restores the exact Workspace conversation projected by the active Scene', async () => {
+    const getBootstrap = vi.fn(async () => readyBootstrap());
+    installBridge(getBootstrap);
+    const container = document.createElement('div');
+    document.body.append(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        <TestAgentSurface
+          agentPresentation={{
+            schemaVersion: 1,
+            kind: 'session',
+            conversationId: 'workspace-conversation-1',
+            scope: {
+              kind: 'workspace',
+              workspaceId: 'workspace-1',
+              workspaceGrantId: 'workspace-grant-1',
+            },
+          }}
+        />,
+      );
+    });
+    await act(async () => undefined);
+
+    const agentRoot = container.querySelector('[data-testid="agent-root"]');
+    expect(agentRoot?.getAttribute('data-agent-presentation')).toBe('session');
+    expect(agentRoot?.getAttribute('data-initial-conversation-id')).toBe(
+      'workspace-conversation-1',
+    );
+    await act(async () => root.unmount());
+  });
+
   it('starts the Agent module and owner bootstrap concurrently', async () => {
     const started: string[] = [];
     let resolveModule: (() => void) | undefined;
@@ -235,9 +268,11 @@ describe('DesktopAgentSurface', () => {
 });
 
 function TestAgentSurface({
+  agentPresentation,
   composerWorkspace,
   initialConversation,
 }: {
+  readonly agentPresentation?: AgentRootPresentation;
   readonly composerWorkspace?:
     | { readonly kind: 'assistant'; readonly onChoose: () => void; readonly disabled?: boolean }
     | { readonly kind: 'workspace'; readonly label: string };
@@ -247,6 +282,7 @@ function TestAgentSurface({
   return (
     <I18nProvider service={i18n.i18nService}>
       <DesktopAgentSurface
+        agentPresentation={agentPresentation}
         binding="workspace"
         composerWorkspace={composerWorkspace}
         initialConversation={initialConversation}

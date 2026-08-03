@@ -43,6 +43,13 @@ Sidebar visibility, width, hover reveal and resize lifecycle SHALL be a versione
 - **AND** selecting an item uses an exact typed Project or conversation identity
 - **AND** no active, first or recent Project fallback chooses a different Workspace
 
+#### Scenario: User toggles the application sidebar
+
+- **WHEN** the PrimarySidebar is expanded or collapsed in any scene
+- **THEN** a dedicated icon control remains visible in the window-level sidebar chrome
+- **AND** the control exposes the inverse action without using the application brand text as the only target
+- **AND** the same sidebar presentation CAS handles both directions
+
 ### Requirement: Workbench uses explicit variable scene shapes
 
 The shared Workbench SHALL reuse the Workspace visual/layout primitives while supporting scene-specific slot counts. It MUST NOT force every scene into the same manager/main split, reinterpret Interaction as Main, place a management Main Root in a narrow manager dock, or drop the Workspace style scope while claiming component reuse.
@@ -103,12 +110,24 @@ The existing package-owned `AgentWebviewRoot`, controller, composer and Host pro
 - **THEN** its existing Header, Tabs, history, composer, model, commands, Skills, execution/approval, voice and Host-message behavior remain unchanged
 - **AND** draft-only branches do not affect its scope or route classification
 
+#### Scenario: Workspace scene restores an active conversation
+
+- **WHEN** the exact Workspace scene scope contains a conversation identity
+- **THEN** the Workspace-bound Agent Root opens that exact conversation rather than rendering the draft Entry EmptyState
+- **AND** its header, transcript, turn state and composer remain attached to the Workspace runtime
+
 #### Scenario: Desktop opens without an active conversation
 
 - **WHEN** the initial Agent scene has no conversation
 - **THEN** Workbench mounts the same AgentWebviewRoot in draft presentation
 - **AND** model configuration, launch-safe commands/Skills, authorized file/reference controls and available voice controls remain usable
 - **AND** conversation Tabs/history are hidden and no conversation or scratch is created by rendering or editing the draft
+
+#### Scenario: Agent-only draft uses the complete Agent layout
+
+- **WHEN** the Agent draft is the only business panel in a wide Workbench
+- **THEN** the package-owned EmptyState and composer share one bounded readable width and alignment
+- **AND** the dock presentation remains responsive when the same Root is composed in a narrow Workspace Agent panel
 
 #### Scenario: Agent composer uses the shared compact Workbench presentation
 
@@ -147,6 +166,12 @@ Workspace capability SHALL be activated only from an explicit user directory/Pro
 - **WHEN** the user selects another directory while a conversation is active
 - **THEN** the application returns `new-conversation-required`
 - **AND** the original context, grants, transcript, active turn and scene binding remain unchanged
+
+#### Scenario: Active conversation reopens its current Project
+
+- **WHEN** the user selects the exact current Project from PrimarySidebar while its Workspace conversation is active
+- **THEN** Host treats the typed navigation as an idempotent transition to the existing scene
+- **AND** it does not report `new-conversation-required`, create a grant or rebind the conversation
 
 ### Requirement: Assistant scope uses bounded user-space and recoverable scratch
 
@@ -216,6 +241,7 @@ The resource center SHALL use one Assets-owned `AssetCenterSession` for catalog,
 - **WHEN** Assets commits an exact resource selection
 - **THEN** the Assets application service obtains an authorized preview descriptor and binds a PreviewSession to that AssetCenterSession in Secondary Main
 - **AND** Preview renders through its package-owned Root without receiving a raw path
+- **AND** the authorized Preview and Workspace Preview reuse the same package-owned preview presentation and viewer registry
 
 #### Scenario: Selected resource cannot be previewed
 
@@ -238,6 +264,7 @@ Extensions and project management SHALL place their package-owned management Roo
 - **WHEN** the corresponding PrimarySidebar action is activated
 - **THEN** Host transitions to the exact management scene and Workbench composes its catalog plus available detail Surface
 - **AND** selection does not implicitly open a Workspace or create an Agent conversation
+- **AND** the management Root retains the bounded page width, header hierarchy, toolbar grouping and scan-friendly catalog density of the established management presentation instead of stretching controls across the full Main canvas
 
 #### Scenario: User opens Settings
 
