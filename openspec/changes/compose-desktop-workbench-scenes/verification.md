@@ -46,6 +46,22 @@ These tests prove exact version 5 migration of `project-catalog`, `asset-catalog
 `extension-catalog` and `assistant-resources` into canonical v6 slots. The current v6 codec and
 unknown version 5 Manager Surface kinds remain fail-visible.
 
+The 9.9 qualification regression rerun added and passed focused path evidence for:
+
+- restoring the exact Workspace Scene conversation through `DesktopAgentSurface` instead of showing
+  the draft EmptyState;
+- treating the exact active Project as an idempotent Host transition without grant restore, Scene
+  mutation or conversation rebinding, while retaining the different-scope rejection;
+- keeping the dedicated PrimarySidebar icon outside the brand in expanded and compact states;
+- using one package-owned `PreviewPresentation` and viewer registry for Workspace and authorized
+  Asset Center previews;
+- restoring bounded Project/Extension management geometry and explicit empty states;
+- deriving Workspace Resource Browser authority from the exact Scene, Agent View, Project and Tab.
+
+The final full rerun passed `pnpm build`, `pnpm test`, `pnpm check` and `pnpm check:quality`. The
+updated totals include Preview Webview `16 files / 85 tests`, Agent Webview `90 / 689`, Host
+`36 / 313`, Assets Node `9 / 50` and Desktop `65 / 326`.
+
 ## Repository Gates
 
 The following repository gates passed during qualification:
@@ -83,6 +99,16 @@ Chrome 150 window on macOS arm64:
 The Composer refinement rerun also passed in the current development runtime:
 
 `reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-03T20-03-09.111Z-desktop-workbench-scenes-development/report.json`
+
+The 9.9 development Electron rerun passed after the final presentation changes:
+
+`reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-03T20-47-50.423Z-desktop-workbench-scenes-development/report.json`
+
+It records the dedicated compact Sidebar control outside the brand, bounded 1006 px Project and
+Extension management Roots inside a 1072 px Main, Asset Center Preview owned by `preview-webview`,
+and aligned EmptyState/composer widths of 820 px in Agent-only and 334 px in the Workspace dock. The
+isolated run exercised Workspace Resources, all display modes, exact recent Project restore and
+application restart with `poisonedRequestCount: 0`, no console errors and no renderer exceptions.
 
 The scenario proves:
 
