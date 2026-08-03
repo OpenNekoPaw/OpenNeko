@@ -11,9 +11,11 @@ the transcript; a portable conversation manifest owns user-visible title/branch/
 SQLite owns operational state and replaceable catalog projections. Multiple windows share the fenced
 execution authority without sharing mutable UI selection.
 
-The package-owned Agent Root consumes Conversation/Tab/Timeline/Tool/Approval/Skill projections. Home
-handoff switches the exact Project View, waits for catalog hydration and activates the requested
-conversation. Unknown routes, missing config, stale identity and unavailable capabilities fail visibly.
+The package-owned Agent Root consumes Conversation/Tab/Timeline/Tool/Approval/Skill projections.
+Conversation restore resolves its exact persisted scope and attaches the requested conversation. The
+standalone Home handoff and layout contract are superseded by `compose-desktop-workbench-scenes`; this
+change retains only the package-owned runtime/controller/projection baseline. Unknown routes, missing
+config, stale identity and unavailable capabilities fail visibly.
 
 ## Remaining gate
 

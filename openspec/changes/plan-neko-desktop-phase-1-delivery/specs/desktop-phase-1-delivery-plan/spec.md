@@ -5,7 +5,7 @@
 ### Requirement: Phase 1 is delivered through bounded dependent changes
 
 Desktop Phase 1 MUST be implemented through bounded OpenSpec changes for foundation, Shell/state,
-Agent/Home, Assets/Canvas, Cut/Preview/Media, support domains, and final qualification. Each child
+Agent/Unified Workbench, Assets/Canvas, Cut/Preview/Media, support domains, and final qualification. Each child
 change MUST define its own canonical path, replaced legacy path, tests, data impact, and completion
 gate. The program MUST NOT maintain one parallel Desktop implementation until every package is
 integrated. The program checklist MUST track focused change gates and MUST NOT duplicate stale
@@ -148,7 +148,7 @@ independent Resource facets.
 #### Scenario: User collapses the primary sidebar
 
 - **WHEN** the user toggles the expanded primary sidebar
-- **THEN** Desktop retains a compact icon rail with Home, project and settings navigation
+- **THEN** Desktop retains a compact icon rail with Agent, Workspace, resource and Settings scene navigation
 - **AND** Project/View attachments, dock owners and domain runtimes are not recreated
 
 #### Scenario: User composes Chat and the Main Creative Surface

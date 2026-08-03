@@ -1,7 +1,9 @@
-## 1. Agent and creative workbench
+## 1. Agent and unified creative workbench
 
-- [ ] 1.1 Close `integrate-desktop-agent-home`, `fix-desktop-agent-shell-regressions` and
-      `clarify-desktop-capability-catalog` with deterministic, applicable real-provider and Electron evidence.
+- [ ] 1.1 Close `integrate-desktop-agent-home`, `compose-desktop-workbench-scenes`,
+      `fix-desktop-agent-shell-regressions` and `clarify-desktop-capability-catalog` with deterministic,
+      applicable real-provider and Electron evidence; the standalone Home composer/handoff is not a
+      completion path.
 - [ ] 1.2 Close `integrate-desktop-assets-canvas` and the resource Canvas slice with package-owned Root,
       node authoring, playback, isolation and cleanup evidence.
 
@@ -33,8 +35,8 @@
 ## 4. Final qualification
 
 - [ ] 4.1 Create `qualify-neko-desktop-phase-1` with frozen synthetic workspace/media fixtures.
-- [ ] 4.2 Run the authoritative launch → Content Project → Agent → Media Library → Canvas → Cut → Export
-      workflow with exact identity and side-effect assertions.
+- [ ] 4.2 Run the authoritative launch → unified Agent Workbench → explicit directory Workspace →
+      Media Library → Canvas → Cut → Export workflow with exact identity and side-effect assertions.
 - [ ] 4.3 Assert canonical-path counters/poisoning for Pi runtime/session, product controllers, package
       Roots, resource gateway, project writer and domain Jobs.
 - [ ] 4.4 Verify `darwin-arm64` package/install/startup and retain Windows/Linux deterministic tests
