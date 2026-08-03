@@ -61,10 +61,15 @@ workspace runtime、不打开 transcript 或获取 execution lease。Agent Root 
 菜单不得复制背景或依赖消费者 Tailwind 扫描共享包源码。Workbench 在没有 creative Main View
 时允许 `Chat + Main` 并展示明确空 Main surface；`Main only` 仍要求已有 Main View。
 
-完整 provider-backed 宿主验收仍未完成：真实 provider/model 调用尚未获得成本授权，且当前
-没有 Desktop complete-session evaluation driver。确定性测试、key-free Evaluation harness、production
-package 和无模型成本的 Electron Shell/Agent Root 路径不能替代真实模型、Tool approval 与
-checkpoint/cleanup 的完整验收。
+完整 provider-backed 宿主验收仍未完成：Evaluation 只使用用户区 `~/.neko/config.toml`，不接受其他
+用户配置、JSON/YAML 或 mock 降级。Desktop 边界验证原生 TOML 后将其原样复制到隔离 fixture，
+不执行格式编译、不合并默认值、不推断 provider，也不写回用户目录；凭据仍由产品配置 owner 解析。
+当前宿主尚未提供显式 provider/model 与成本授权，因此不会启动 Desktop 或真实 API。当前已实现通过公开 Agent bridge
+与 fixture-only automation contract 运行的 Desktop complete-session driver、通用多轮 workflow
+interpreter、Tool approval、cancel/recovery、renderer reload/reconnect、application restart/disposal、重复
+matrix、预算/分片和完整报告阶段，并增加受保护的可见 Tool/Timeline/reload/focus/close 场景。确定性测试、
+key-free Evaluation harness、production package 和无模型成本的 Electron Shell/Agent Root 路径仍不能
+替代真实模型、真实 UI 与消融验收。
 Canvas 工具栏按宿主 capability 显示。Desktop 当前已接通 source-add、selection/pan、
 undo/redo、资源放置、Preview、Cut、Media Library copy 和已提交 Generation result 的
 regenerate。Generation draft/edit-and-generate、playback、Canvas export/package 与
@@ -106,6 +111,16 @@ pnpm test:local:media-openneko
 Preview 的 package-owned 场景。两种模式都会创建隔离 functional home 与独立 Electron
 user-data 目录，并在退出后清理临时目录。`--target=packaged` 使用当前平台已生成的 Desktop
 package；运行前必须先执行 `pnpm package:desktop`。图形化入口不得加入 CI。
+
+共享 Desktop functional runner 只拥有 Electron launch、fixture/userData 隔离、CDP 输入、等待、
+截图、控制台/异常观测、报告和进程清理。点击、悬停、键盘输入、文本输入、拖拽和滚动等是宿主级
+交互原语；具体 UI 流程、稳定 `testId`/role selector、业务断言和 authoritative side effect 由 owning
+package 场景维护。普通新场景不得在共享 runner 中按 scenario id 增加业务分支。
+
+Agent Evaluation 的 suite、Scenario、assertion、ablation、pass/fail 和报告语义全部位于外部
+`scripts/agent-eval`。Desktop 只提供固定 typed 产品操作与中立 facts，不解析测试计划，也不根据
+case、Skill 或 variant 选择成功路径。Agent Evaluation harness、真实 API、隐藏/可见 Desktop matrix
+和所有消融入口均为显式本地操作，不得加入 GitHub Actions 或通用 CI。
 
 `--scenario=desktop-state-sqlite-migration` 连续启动两个独立 Electron 进程：首次验证旧 Shell /
 应用设置 JSON 的事务导入、内容一致归档和 SQLite commit，第二次使用损坏的 legacy poison

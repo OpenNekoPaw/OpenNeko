@@ -1,7 +1,7 @@
 # Agent Evaluation v2 测试设计指南
 
-本文说明如何把 Prompt、Skill、Capability/Tool、Provider/Model、
-`AgentSession`、任务恢复、产物或 Desktop 行为变更转成可执行 Evaluation。
+本文说明如何把 Prompt、Skill、Capability/Tool、Provider/Model、Desktop Agent 工作流、
+任务恢复、产物或 Desktop 行为变更转成可执行 Evaluation。
 严格字段与 evaluator 以 `schemas/contracts.mjs` 和 runner 实现为准；本文不作为
 平行 schema。
 
@@ -47,6 +47,23 @@ package id、semver、发布或安装状态替代。
 至少一个 observable 必须是 required。仅有最终回答文本、退出码、Judge 分数或
 人工判断不构成 path evidence。需要的 facts 或公开 validator 不存在时，case 状态是
 blocked by missing observability；不要把弱文本匹配改写成通过。
+
+### 声明式生成与执行边界
+
+Evaluation Skill 可以根据变更、coverage index、能力目录、facts 和 validator catalog 辅助生成
+authoring decision、suite/scenario/assertion/ablation plan 草案。草案必须进入现有 strict schema、
+index 和普通代码评审；Skill 不持有 step 协议、handler 注册、pass/fail、凭据、进程生命周期或
+CI 策略。
+
+普通新 case 不生成 `.mjs` 执行脚本，也不在中央 runner 增加 `scenario.id` 白名单。已有操作和证据
+足够时，只提交声明式 Scenario、fixture/assertion 引用和必要的 package-owned validator。未知 step、
+缺失 evaluator 或产品没有暴露的 evidence 必须在 Desktop 启动前失败；不得让 Skill 动态补代码、
+推断执行或用最终文本替代证据。
+
+当前不建设独立 compiler package/service。`validateScenarioForExecution()` 继续拥有 schema、引用、
+supported-kind 与 workflow 状态机校验；runner 内部的薄解析只冻结 fixture、profiles、budget、步骤和
+assertion refs，再交给通用 workflow interpreter。内部 resolved case 不持久化或独立版本化。只有出现
+跨进程计划传输、多个真实执行后端或不可变计划缓存后，才通过后续设计评估提取。
 
 ## 3. 测试范围
 
@@ -102,8 +119,8 @@ Ablation plan 使用严格 `neko.agent-eval.ablation-plan.v1`，默认只允许�
 - blind Judge 不接收 candidate label、revision、patch、build identity 或 Skill variant
   fingerprint。完整身份只进入外部 report/hard-gate evidence。
 
-执行入口为 `node scripts/agent-eval/ablation/run.mjs --plan <id>`；`--dry-run` 只验证
-authoring 与 selection，不是行为验收。每个 sample 继续生成标准报告，matrix 只增加
+执行入口为显式本地 `node scripts/agent-eval/ablation/run.mjs --plan <id>`；`--dry-run` 只验证
+authoring 与 selection，不是行为验收，也不得加入 GitHub Actions 或通用 CI。每个 sample 继续生成标准报告，matrix 只增加
 `variant-delta.json`，汇总 pass/hard gates、tokens/cost、p50/p95 latency、iterations、
 Tool/retry 和适用的真实输出内容 quality，不得用效率收益覆盖 correctness failure，
 也不得把 hard-gate/格式通过映射成 content quality。
@@ -145,10 +162,13 @@ Capability、Tool、Model、Runtime、Workflow suites 位于
 - timeout/repetition budget；
 - 可选的 domain rubric。
 
-当前 controller 支持 `submit`、延迟 `submit`、`queue`、`wait-for-idle`、`cancel`、`resume`、
-closed-loop `feedback` 和 terminal `resize`。活跃 turn 中的新用户输入必须使用
-`queue`；case 必须以 terminal idle 收敛。每条消息都通过 Desktop Agent input queue，不能直接
-注入 Agent turn 或 history。
+Scenario schema 与 Desktop driver contract 已表达 `submit`、延迟 `submit`、`queue`、
+`wait-for-idle`、`cancel`、`confirm`、`resume`、closed-loop `feedback` 和 terminal `resize`。
+活跃 turn 中的新用户输入必须使用 `queue`；case 必须以 terminal idle 收敛。每条消息都通过
+Desktop Agent input queue，不能直接注入 Agent turn 或 history。当前通用 workflow interpreter
+执行 `submit`、`queue`、`confirm`、`cancel`、`resume`、`feedback` 与 `wait-for-idle`；`resize`
+尚未接入 Desktop Agent runner，必须在启动前以 `configuration-invalid` 失败。缺失公开产品操作或
+evidence adapter 时同样不得添加 per-case adapter 绕过。
 
 当前 hard gates 覆盖 runtime error、fully idle、canonical turn、final answer、
 Skill identity/status、prompt composition、Markdown path、model/no-fallback、Tool call、
