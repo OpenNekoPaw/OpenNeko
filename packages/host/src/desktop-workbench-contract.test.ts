@@ -21,8 +21,7 @@ describe('Desktop Workbench contract', () => {
       schemaVersion: DESKTOP_WORKBENCH_CONTRACT_VERSION,
       windowId: 'window-1',
       revision: 0,
-      primarySidebar: { visible: true, width: 240 },
-      resourceDock: { presentation: 'hidden', width: 320 },
+      resourceDock: { presentation: 'docked', width: 320 },
       display: { mode: 'chat-only', chatPosition: 'left', chatWidth: 360 },
       main: {
         views: [],
@@ -31,6 +30,16 @@ describe('Desktop Workbench contract', () => {
       },
       timeline: { presentation: 'hidden', height: 240 },
     });
+  });
+
+  it('rejects the legacy primarySidebar field on the canonical Workbench contract', () => {
+    const current = createDefaultDesktopWorkbenchLayout('window-1');
+    expect(() =>
+      parseDesktopWorkbenchLayout({
+        ...current,
+        primarySidebar: { visible: true, width: 240 },
+      }),
+    ).toThrow('Desktop Workbench layout has unexpected fields');
   });
 
   it('opens, focuses and splits Main Views without changing Chat presentation', () => {
@@ -248,7 +257,7 @@ describe('Desktop Workbench contract', () => {
     });
   });
 
-  it('rejects unknown versions and does not retain unknown path fields', () => {
+  it('rejects unknown versions and unknown renderer/path fields', () => {
     expect(() =>
       parseDesktopWorkbenchLayout({
         ...createDefaultDesktopWorkbenchLayout('window-1'),
@@ -259,17 +268,21 @@ describe('Desktop Workbench contract', () => {
         code: 'unsupported-desktop-workbench-version',
       }),
     );
-    const projection = parseDesktopWorkbenchLayout({
-      ...createDefaultDesktopWorkbenchLayout('window-1'),
-      workspacePath: '/Users/private/project',
-      display: {
-        ...createDefaultDesktopWorkbenchLayout('window-1').display,
-        conversation: { secret: 'renderer-owned-state' },
-      },
-    });
-    expect(projection).not.toHaveProperty('workspacePath');
-    expect(projection.display).not.toHaveProperty('conversation');
-    expect(JSON.stringify(projection)).not.toContain('/Users/private');
+    expect(() =>
+      parseDesktopWorkbenchLayout({
+        ...createDefaultDesktopWorkbenchLayout('window-1'),
+        workspacePath: '/Users/private/project',
+      }),
+    ).toThrow('Desktop Workbench layout has unexpected fields');
+    expect(() =>
+      parseDesktopWorkbenchLayout({
+        ...createDefaultDesktopWorkbenchLayout('window-1'),
+        display: {
+          ...createDefaultDesktopWorkbenchLayout('window-1').display,
+          conversation: { secret: 'renderer-owned-state' },
+        },
+      }),
+    ).toThrow('Desktop Workbench display projection has unexpected fields');
   });
 });
 

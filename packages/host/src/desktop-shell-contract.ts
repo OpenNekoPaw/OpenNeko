@@ -3,8 +3,16 @@ import {
   parseDesktopWorkbenchLayout,
   type DesktopWorkbenchLayoutProjection,
 } from './desktop-workbench-contract';
+import {
+  parseDesktopApplicationSidebarProjection,
+  parseDesktopWorkbenchSceneProjection,
+  type DesktopApplicationSidebarProjection,
+  type DesktopWorkbenchSceneProjection,
+  type DesktopSceneTransitionIntent,
+  type DesktopSceneTransitionResult,
+} from './desktop-scene-contract';
 
-export const DESKTOP_SHELL_CONTRACT_VERSION = 1 as const;
+export const DESKTOP_SHELL_CONTRACT_VERSION = 2 as const;
 
 export const DESKTOP_SHELL_CHANNELS = {
   snapshotGet: 'openneko:desktop:shell:snapshot:get',
@@ -18,6 +26,8 @@ export const DESKTOP_SHELL_CHANNELS = {
   tabActivate: 'openneko:desktop:tab:activate',
   tabClose: 'openneko:desktop:tab:close',
   workbenchUpdate: 'openneko:desktop:workbench:update',
+  applicationSidebarUpdate: 'openneko:desktop:application-sidebar:update',
+  sceneTransition: 'openneko:desktop:scene:transition',
 } as const;
 
 export type DesktopProjectProfile = 'content' | 'character' | 'world';
@@ -85,6 +95,8 @@ export interface DesktopWindowShellProjection {
   readonly activeTarget: DesktopWindowActiveTarget;
   readonly tabs: readonly DesktopProjectTabProjection[];
   readonly workbench: DesktopWorkbenchLayoutProjection;
+  readonly scene: DesktopWorkbenchSceneProjection;
+  readonly applicationSidebar: DesktopApplicationSidebarProjection;
 }
 
 export interface DesktopAttentionProjection {
@@ -233,6 +245,22 @@ export interface OpenNekoDesktopShellBridge {
       expectedWindowRevision: number,
       expectedWorkbenchRevision: number,
     ): Promise<DesktopShellProjection>;
+  };
+  readonly applicationSidebar: {
+    update(
+      windowId: string,
+      visible: boolean,
+      width: number,
+      expectedSidebarRevision: number,
+    ): Promise<DesktopShellProjection>;
+  };
+  readonly scenes: {
+    transition(
+      windowId: string,
+      intent: DesktopSceneTransitionIntent,
+      expectedWindowRevision: number,
+      expectedSceneRevision: number,
+    ): Promise<DesktopSceneTransitionResult>;
   };
 }
 
@@ -588,12 +616,19 @@ export function parseDesktopShellProjection(value: unknown): DesktopShellProject
   );
   const activeTarget = parseActiveTarget(windowRecord['activeTarget']);
   const workbench = parseDesktopWorkbenchLayout(windowRecord['workbench']);
+  const scene = parseDesktopWorkbenchSceneProjection(windowRecord['scene']);
+  const applicationSidebar = parseDesktopApplicationSidebarProjection(
+    windowRecord['applicationSidebar'],
+  );
   const windowId = requireNonEmptyString(
     windowRecord['windowId'],
     'Desktop Window identity is required.',
   );
   if (workbench.windowId !== windowId) {
     throw invalidPayload('Desktop Workbench projection belongs to another Window.');
+  }
+  if (scene.windowId !== windowId || applicationSidebar.windowId !== windowId) {
+    throw invalidPayload('Desktop Scene or Application Sidebar belongs to another Window.');
   }
   if (activeTarget.kind === 'project' && !tabs.some((tab) => tab.tabId === activeTarget.tabId)) {
     throw invalidPayload('Desktop active Project Tab is not present in the Window projection.');
@@ -641,6 +676,8 @@ export function parseDesktopShellProjection(value: unknown): DesktopShellProject
       activeTarget,
       tabs,
       workbench,
+      scene,
+      applicationSidebar,
     },
     agentHome: {
       revision: requireNonNegativeInteger(

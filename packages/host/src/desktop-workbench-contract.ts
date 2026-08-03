@@ -1,12 +1,10 @@
 import type { PreviewContentKind } from '@neko/preview-domain';
 
-export const DESKTOP_WORKBENCH_CONTRACT_VERSION = 3 as const;
-export const APPLICATION_PRIMARY_SIDEBAR_DEFAULT_WIDTH = 240;
+export const DESKTOP_WORKBENCH_CONTRACT_VERSION = 4 as const;
 export const DESKTOP_PRIMARY_MAIN_GROUP_ID = 'main:primary';
 export const DESKTOP_SECONDARY_MAIN_GROUP_ID = 'main:secondary';
 
 export const DESKTOP_WORKBENCH_LIMITS = {
-  primarySidebarWidth: { min: 208, max: 360 },
   dockWidth: { min: 280, max: 520 },
   timelineHeight: { min: 160, max: 480 },
   mainViewCount: { min: 0, max: 8 },
@@ -49,10 +47,6 @@ export interface DesktopWorkbenchLayoutProjection {
   readonly schemaVersion: typeof DESKTOP_WORKBENCH_CONTRACT_VERSION;
   readonly windowId: string;
   readonly revision: number;
-  readonly primarySidebar: {
-    readonly visible: boolean;
-    readonly width: number;
-  };
   readonly resourceDock: {
     readonly presentation: DesktopWorkbenchDockPresentation;
     readonly width: number;
@@ -101,12 +95,8 @@ export function createDefaultDesktopWorkbenchLayout(
     schemaVersion: DESKTOP_WORKBENCH_CONTRACT_VERSION,
     windowId: requireNonEmptyString(windowId, 'Desktop Workbench Window identity is required.'),
     revision: 0,
-    primarySidebar: {
-      visible: true,
-      width: APPLICATION_PRIMARY_SIDEBAR_DEFAULT_WIDTH,
-    },
     resourceDock: {
-      presentation: 'hidden',
+      presentation: 'docked',
       width: 320,
     },
     display: {
@@ -129,9 +119,10 @@ export function createDefaultDesktopWorkbenchLayout(
 export function parseDesktopWorkbenchLayout(value: unknown): DesktopWorkbenchLayoutProjection {
   const record = requireRecord(value, 'Desktop Workbench layout must be an object.');
   requireVersion(record['schemaVersion']);
-  const primarySidebar = requireRecord(
-    record['primarySidebar'],
-    'Desktop Workbench primary sidebar projection is required.',
+  requireExactKeys(
+    record,
+    ['schemaVersion', 'windowId', 'revision', 'resourceDock', 'display', 'main', 'timeline'],
+    'Desktop Workbench layout',
   );
   const resourceDock = requireRecord(
     record['resourceDock'],
@@ -140,6 +131,11 @@ export function parseDesktopWorkbenchLayout(value: unknown): DesktopWorkbenchLay
   const display = requireRecord(
     record['display'],
     'Desktop Workbench display projection is required.',
+  );
+  requireExactKeys(
+    display,
+    ['mode', 'chatPosition', 'chatWidth'],
+    'Desktop Workbench display projection',
   );
   const main = requireRecord(record['main'], 'Desktop Workbench Main projection is required.');
   const timeline = requireRecord(
@@ -206,17 +202,6 @@ export function parseDesktopWorkbenchLayout(value: unknown): DesktopWorkbenchLay
       record['revision'],
       'Desktop Workbench revision must be a non-negative integer.',
     ),
-    primarySidebar: {
-      visible: requireBoolean(
-        primarySidebar['visible'],
-        'Desktop Workbench primary sidebar visibility is invalid.',
-      ),
-      width: requireBoundedNumber(
-        primarySidebar['width'],
-        DESKTOP_WORKBENCH_LIMITS.primarySidebarWidth,
-        'Desktop Workbench primary sidebar width is invalid.',
-      ),
-    },
     resourceDock: {
       presentation: requireOneOf(
         resourceDock['presentation'],
@@ -272,10 +257,7 @@ export function migrateDesktopWorkbenchV1(value: unknown): DesktopWorkbenchLayou
       `Desktop Workbench v1 migration received version: ${String(record['schemaVersion'])}.`,
     );
   }
-  const primarySidebar = requireRecord(
-    record['primarySidebar'],
-    'Desktop Workbench v1 primary sidebar projection is required.',
-  );
+  migrateDesktopWorkbenchSidebarV1ToV3(record);
   const resourceDock = requireRecord(
     record['resourceDock'],
     'Desktop Workbench v1 Resource Dock projection is required.',
@@ -377,17 +359,6 @@ export function migrateDesktopWorkbenchV1(value: unknown): DesktopWorkbenchLayou
       record['revision'],
       'Desktop Workbench v1 revision is invalid.',
     ),
-    primarySidebar: {
-      visible: requireBoolean(
-        primarySidebar['visible'],
-        'Desktop Workbench v1 primary sidebar visibility is invalid.',
-      ),
-      width: requireBoundedNumber(
-        primarySidebar['width'],
-        DESKTOP_WORKBENCH_LIMITS.primarySidebarWidth,
-        'Desktop Workbench v1 primary sidebar width is invalid.',
-      ),
-    },
     resourceDock: {
       presentation: requireOneOf(
         resourceDock['presentation'],
@@ -527,8 +498,15 @@ export function migrateDesktopWorkbenchV2(value: unknown): DesktopWorkbenchLayou
   );
 
   return parseDesktopWorkbenchLayout({
-    ...record,
     schemaVersion: DESKTOP_WORKBENCH_CONTRACT_VERSION,
+    windowId: requireNonEmptyString(
+      record['windowId'],
+      'Desktop Workbench v2 Window identity is required.',
+    ),
+    revision: requireNonNegativeInteger(
+      record['revision'],
+      'Desktop Workbench v2 revision is invalid.',
+    ),
     resourceDock: {
       presentation:
         resourceViewIds.size > 0
@@ -557,7 +535,60 @@ export function migrateDesktopWorkbenchV2(value: unknown): DesktopWorkbenchLayou
         : DESKTOP_PRIMARY_MAIN_GROUP_ID,
       ...(migratedGroups.length === 2 && split !== undefined ? { split } : {}),
     },
+    timeline: record['timeline'],
   });
+}
+
+export function migrateDesktopWorkbenchV3(value: unknown): DesktopWorkbenchLayoutProjection {
+  const record = requireRecord(value, 'Desktop Workbench v3 layout must be an object.');
+  if (record['schemaVersion'] !== 3) {
+    throw new DesktopWorkbenchContractError(
+      'unsupported-desktop-workbench-version',
+      `Desktop Workbench v3 migration received version: ${String(record['schemaVersion'])}.`,
+    );
+  }
+  migrateDesktopWorkbenchSidebarV1ToV3(record);
+  return parseDesktopWorkbenchLayout({
+    schemaVersion: DESKTOP_WORKBENCH_CONTRACT_VERSION,
+    windowId: record['windowId'],
+    revision: record['revision'],
+    resourceDock: record['resourceDock'],
+    display: record['display'],
+    main: record['main'],
+    timeline: record['timeline'],
+  });
+}
+
+export function migrateDesktopWorkbenchSidebarV1ToV3(value: unknown): {
+  readonly visible: boolean;
+  readonly width: number;
+} {
+  const record = requireRecord(value, 'Desktop Workbench v1-v3 layout must be an object.');
+  if (
+    record['schemaVersion'] !== 1 &&
+    record['schemaVersion'] !== 2 &&
+    record['schemaVersion'] !== 3
+  ) {
+    throw new DesktopWorkbenchContractError(
+      'unsupported-desktop-workbench-version',
+      `Desktop Workbench sidebar migration received version: ${String(record['schemaVersion'])}.`,
+    );
+  }
+  const primarySidebar = requireRecord(
+    record['primarySidebar'],
+    'Desktop Workbench v1-v3 primary sidebar projection is required.',
+  );
+  return {
+    visible: requireBoolean(
+      primarySidebar['visible'],
+      'Desktop Workbench v1-v3 primary sidebar visibility is invalid.',
+    ),
+    width: requireBoundedNumber(
+      primarySidebar['width'],
+      { min: 208, max: 360 },
+      'Desktop Workbench v1-v3 primary sidebar width is invalid.',
+    ),
+  };
 }
 
 export function setWorkbenchDisplayMode(
@@ -1248,6 +1279,18 @@ function requireRecord(value: unknown, message: string): Record<string, unknown>
     throw invalidPayload(message);
   }
   return value as Record<string, unknown>;
+}
+
+function requireExactKeys(
+  record: Readonly<Record<string, unknown>>,
+  expectedKeys: readonly string[],
+  label: string,
+): void {
+  const actual = Object.keys(record).sort();
+  const expected = [...expectedKeys].sort();
+  if (actual.length !== expected.length || actual.some((key, index) => key !== expected[index])) {
+    throw invalidPayload(`${label} has unexpected fields: ${actual.join(', ')}.`);
+  }
 }
 
 function requireArray(value: unknown, message: string): readonly unknown[] {

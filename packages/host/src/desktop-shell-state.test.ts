@@ -1,10 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import {
   createEmptyDesktopShellState,
+  DESKTOP_DEFAULT_ASSISTANT_SPACE_ID,
+  DESKTOP_SHELL_STATE_VERSION,
   DesktopShellStateError,
   parseDesktopShellStoredState,
   type DesktopShellStoredState,
 } from './desktop-shell-state';
+import {
+  createDefaultDesktopAgentScene,
+  createDefaultDesktopApplicationSidebar,
+} from './desktop-scene-contract';
 import { createDefaultDesktopWorkbenchLayout } from './desktop-workbench-contract';
 import { createInMemoryDesktopShellStateRepository } from './testing/in-memory-desktop-shell-state-repository';
 
@@ -41,6 +47,8 @@ describe('Desktop Shell state codec', () => {
             },
           ],
           workbench: createDefaultDesktopWorkbenchLayout('window-1'),
+          scene: createDefaultDesktopAgentScene('window-1', DESKTOP_DEFAULT_ASSISTANT_SPACE_ID),
+          applicationSidebar: createDefaultDesktopApplicationSidebar('window-1'),
         },
       ],
     };
@@ -66,11 +74,17 @@ describe('Desktop Shell state codec', () => {
     });
     const migrated = parseDesktopShellStoredState(JSON.parse(content));
 
-    expect(migrated.schemaVersion).toBe(4);
+    expect(migrated.schemaVersion).toBe(DESKTOP_SHELL_STATE_VERSION);
     expect(migrated.windows[0]?.workbench).toEqual(createDefaultDesktopWorkbenchLayout('window-1'));
     expect({ ...migrated, storageRevision: 1 }).toMatchObject({
-      schemaVersion: 4,
-      windows: [{ workbench: { schemaVersion: 3, display: { mode: 'chat-only' } } }],
+      schemaVersion: DESKTOP_SHELL_STATE_VERSION,
+      windows: [
+        {
+          scene: { context: { kind: 'agent', scope: { kind: 'assistant' } } },
+          applicationSidebar: { visible: true, width: 240 },
+          workbench: { schemaVersion: 4, display: { mode: 'chat-only' } },
+        },
+      ],
     });
   });
 
@@ -133,11 +147,11 @@ describe('Desktop Shell state codec', () => {
     const migrated = parseDesktopShellStoredState(JSON.parse(content));
 
     expect(migrated).toMatchObject({
-      schemaVersion: 4,
+      schemaVersion: DESKTOP_SHELL_STATE_VERSION,
       windows: [
         {
           workbench: {
-            schemaVersion: 3,
+            schemaVersion: 4,
             display: { mode: 'chat-main', chatPosition: 'left' },
             main: {
               groups: [
@@ -202,11 +216,11 @@ describe('Desktop Shell state codec', () => {
     const migrated = parseDesktopShellStoredState(JSON.parse(content));
 
     expect(migrated).toMatchObject({
-      schemaVersion: 4,
+      schemaVersion: DESKTOP_SHELL_STATE_VERSION,
       windows: [
         {
           workbench: {
-            schemaVersion: 3,
+            schemaVersion: 4,
             revision: 9,
             resourceDock: { presentation: 'docked', width: 416 },
             display: { mode: 'chat-only', chatPosition: 'right' },
@@ -220,6 +234,191 @@ describe('Desktop Shell state codec', () => {
       ],
     });
     expect(migrated.windows[0]?.workbench.resourceDock).not.toHaveProperty('position');
+  });
+
+  it('migrates the version 4 Workbench sidebar exactly once into the Window aggregate', () => {
+    const legacyWorkbench = {
+      ...createDefaultDesktopWorkbenchLayout('window-1'),
+      schemaVersion: 3,
+      primarySidebar: { visible: false, width: 312 },
+    };
+    const migrated = parseDesktopShellStoredState({
+      schemaVersion: 4,
+      storageRevision: 7,
+      catalogRevision: 0,
+      primaryWindowId: 'window-1',
+      projects: [],
+      windows: [
+        {
+          windowId: 'window-1',
+          revision: 3,
+          activeTarget: { kind: 'home' },
+          tabs: [],
+          workbench: legacyWorkbench,
+        },
+      ],
+    });
+
+    expect(migrated).toMatchObject({
+      schemaVersion: DESKTOP_SHELL_STATE_VERSION,
+      storageRevision: 7,
+      windows: [
+        {
+          scene: {
+            windowId: 'window-1',
+            context: { kind: 'agent', scope: { kind: 'assistant' } },
+          },
+          applicationSidebar: {
+            windowId: 'window-1',
+            revision: 0,
+            visible: false,
+            width: 312,
+          },
+        },
+      ],
+    });
+  });
+
+  it('migrates version 5 management catalogs and Assistant resources into canonical Scene slots', () => {
+    const migrated = parseDesktopShellStoredState(createVersion5RetiredSceneState());
+
+    expect(migrated).toMatchObject({
+      schemaVersion: DESKTOP_SHELL_STATE_VERSION,
+      storageRevision: 894,
+      windows: [
+        {
+          scene: {
+            context: {
+              kind: 'project-management',
+              projectManagementSessionId: 'project-management:1',
+            },
+            slots: {
+              main: {
+                kind: 'project-management',
+                projectManagementSessionId: 'project-management:1',
+              },
+              status: { kind: 'scene-status', sceneId: 'scene:window-1:project-management' },
+            },
+          },
+        },
+        {
+          scene: {
+            context: { kind: 'agent', scope: { kind: 'assistant' } },
+            slots: {
+              interaction: { kind: 'agent', phase: 'draft' },
+              status: { kind: 'scene-status', sceneId: 'scene:window-2:agent' },
+            },
+          },
+        },
+      ],
+    });
+    expect(migrated.windows[0]?.scene.slots).not.toHaveProperty('leftManager');
+    expect(migrated.windows[1]?.scene.slots).not.toHaveProperty('leftManager');
+  });
+
+  it('keeps retired Manager Surface kinds invalid in the current stored-state version', () => {
+    expect(() =>
+      parseDesktopShellStoredState({
+        ...createVersion5RetiredSceneState(),
+        schemaVersion: DESKTOP_SHELL_STATE_VERSION,
+      }),
+    ).toThrow("Unknown Manager Surface kind 'project-catalog'");
+  });
+
+  it('keeps unknown Manager Surface kinds fail-visible while migrating version 5', () => {
+    expect(() =>
+      parseDesktopShellStoredState(
+        createVersion5RetiredManagementState({
+          context: {
+            kind: 'project-management',
+            projectManagementSessionId: 'project-management:1',
+          },
+          catalog: {
+            kind: 'future-catalog',
+            projectManagementSessionId: 'project-management:1',
+          },
+          detail: {
+            kind: 'project-detail',
+            projectManagementSessionId: 'project-management:1',
+          },
+        }),
+      ),
+    ).toThrow("Unknown Manager Surface kind 'future-catalog'");
+  });
+
+  it.each([
+    {
+      label: 'Asset',
+      context: { kind: 'asset-center', assetCenterSessionId: 'asset-center:1' },
+      catalog: { kind: 'asset-catalog', assetCenterSessionId: 'asset-center:1' },
+      management: { kind: 'asset-management', assetCenterSessionId: 'asset-center:1' },
+      detail: {
+        kind: 'asset-preview',
+        assetCenterSessionId: 'asset-center:1',
+        previewSessionId: 'preview:1',
+      },
+    },
+    {
+      label: 'Extension',
+      context: {
+        kind: 'extensions',
+        extensionManagementSessionId: 'extension-management:1',
+      },
+      catalog: {
+        kind: 'extension-catalog',
+        extensionManagementSessionId: 'extension-management:1',
+      },
+      management: {
+        kind: 'extension-management',
+        extensionManagementSessionId: 'extension-management:1',
+      },
+      detail: {
+        kind: 'extension-detail',
+        extensionManagementSessionId: 'extension-management:1',
+      },
+    },
+  ])(
+    'migrates version 5 $label management and detail placement',
+    ({ context, catalog, management, detail }) => {
+      const migrated = parseDesktopShellStoredState(
+        createVersion5RetiredManagementState({ context, catalog, detail }),
+      );
+
+      expect(migrated.windows[0]?.scene.slots).toMatchObject({
+        main: management,
+        secondaryMain: detail,
+      });
+      expect(migrated.windows[0]?.scene.slots).not.toHaveProperty('leftManager');
+    },
+  );
+
+  it('rejects stored Scene and Sidebar projections owned by another Window', () => {
+    const state = withPrimaryWindow(createEmptyDesktopShellState(), 'window-1');
+    const window = state.windows[0];
+    if (!window) throw new Error('Expected the primary Window fixture.');
+
+    expect(() =>
+      parseDesktopShellStoredState({
+        ...state,
+        windows: [
+          {
+            ...window,
+            scene: { ...window.scene, windowId: 'window-2' },
+          },
+        ],
+      }),
+    ).toThrow('Desktop stored Scene belongs to another Window');
+    expect(() =>
+      parseDesktopShellStoredState({
+        ...state,
+        windows: [
+          {
+            ...window,
+            applicationSidebar: { ...window.applicationSidebar, windowId: 'window-2' },
+          },
+        ],
+      }),
+    ).toThrow('Desktop stored Application Sidebar belongs to another Window');
   });
 });
 
@@ -238,6 +437,105 @@ function withPrimaryWindow(
         activeTarget: { kind: 'home' },
         tabs: [],
         workbench: createDefaultDesktopWorkbenchLayout(windowId),
+        scene: createDefaultDesktopAgentScene(windowId, DESKTOP_DEFAULT_ASSISTANT_SPACE_ID),
+        applicationSidebar: createDefaultDesktopApplicationSidebar(windowId),
+      },
+    ],
+  };
+}
+
+function createVersion5RetiredSceneState(): unknown {
+  const projectSceneId = 'scene:window-1:project-management';
+  const assistantScene = createDefaultDesktopAgentScene(
+    'window-2',
+    DESKTOP_DEFAULT_ASSISTANT_SPACE_ID,
+  );
+  return {
+    schemaVersion: 5,
+    storageRevision: 894,
+    catalogRevision: 0,
+    primaryWindowId: 'window-1',
+    projects: [],
+    windows: [
+      {
+        windowId: 'window-1',
+        revision: 28,
+        activeTarget: { kind: 'home' },
+        tabs: [],
+        workbench: createDefaultDesktopWorkbenchLayout('window-1'),
+        scene: {
+          schemaVersion: 1,
+          sceneId: projectSceneId,
+          windowId: 'window-1',
+          revision: 28,
+          context: {
+            kind: 'project-management',
+            projectManagementSessionId: 'project-management:1',
+          },
+          slots: {
+            leftManager: {
+              kind: 'project-catalog',
+              projectManagementSessionId: 'project-management:1',
+            },
+            status: { kind: 'scene-status', sceneId: projectSceneId },
+          },
+        },
+        applicationSidebar: createDefaultDesktopApplicationSidebar('window-1'),
+      },
+      {
+        windowId: 'window-2',
+        revision: 0,
+        activeTarget: { kind: 'home' },
+        tabs: [],
+        workbench: createDefaultDesktopWorkbenchLayout('window-2'),
+        scene: {
+          ...assistantScene,
+          slots: {
+            ...assistantScene.slots,
+            leftManager: {
+              kind: 'assistant-resources',
+              assistantSpaceId: DESKTOP_DEFAULT_ASSISTANT_SPACE_ID,
+            },
+          },
+        },
+        applicationSidebar: createDefaultDesktopApplicationSidebar('window-2'),
+      },
+    ],
+  };
+}
+
+function createVersion5RetiredManagementState(input: {
+  readonly context: Readonly<Record<string, unknown>>;
+  readonly catalog: Readonly<Record<string, unknown>>;
+  readonly detail: Readonly<Record<string, unknown>>;
+}): unknown {
+  const sceneId = 'scene:window-1:management';
+  return {
+    schemaVersion: 5,
+    storageRevision: 12,
+    catalogRevision: 0,
+    primaryWindowId: 'window-1',
+    projects: [],
+    windows: [
+      {
+        windowId: 'window-1',
+        revision: 3,
+        activeTarget: { kind: 'home' },
+        tabs: [],
+        workbench: createDefaultDesktopWorkbenchLayout('window-1'),
+        scene: {
+          schemaVersion: 1,
+          sceneId,
+          windowId: 'window-1',
+          revision: 3,
+          context: input.context,
+          slots: {
+            leftManager: input.catalog,
+            main: input.detail,
+            status: { kind: 'scene-status', sceneId },
+          },
+        },
+        applicationSidebar: createDefaultDesktopApplicationSidebar('window-1'),
       },
     ],
   };

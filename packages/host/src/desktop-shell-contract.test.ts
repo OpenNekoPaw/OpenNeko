@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  DESKTOP_SHELL_CONTRACT_VERSION,
   createDesktopConversationDeleteRequest,
   createDesktopProfileRequest,
   createDesktopProjectOpenRequest,
@@ -10,16 +11,20 @@ import {
   parseDesktopShellProjectionEvent,
 } from './desktop-shell-contract';
 import { createDefaultDesktopWorkbenchLayout } from './desktop-workbench-contract';
+import {
+  createDefaultDesktopAgentScene,
+  createDefaultDesktopApplicationSidebar,
+} from './desktop-scene-contract';
 
 describe('Desktop Shell contract', () => {
   it('creates fixed profile and revision-bound Tab requests', () => {
     expect(createDesktopProfileRequest('request-1', 'character')).toEqual({
-      schemaVersion: 1,
+      schemaVersion: DESKTOP_SHELL_CONTRACT_VERSION,
       requestId: 'request-1',
       profile: 'character',
     });
     expect(createDesktopTabMutationRequest('request-2', 'tab-1', 'app-1:window-1:1', 4)).toEqual({
-      schemaVersion: 1,
+      schemaVersion: DESKTOP_SHELL_CONTRACT_VERSION,
       requestId: 'request-2',
       expectedEndpointEpoch: 'app-1:window-1:1',
       tabId: 'tab-1',
@@ -28,7 +33,7 @@ describe('Desktop Shell contract', () => {
     expect(
       createDesktopProjectOpenRequest('request-3', 'content:workspace-1', 'app-1:window-1:1', 5),
     ).toEqual({
-      schemaVersion: 1,
+      schemaVersion: DESKTOP_SHELL_CONTRACT_VERSION,
       requestId: 'request-3',
       expectedEndpointEpoch: 'app-1:window-1:1',
       expectedWindowRevision: 5,
@@ -43,7 +48,7 @@ describe('Desktop Shell contract', () => {
         3,
       ),
     ).toEqual({
-      schemaVersion: 1,
+      schemaVersion: DESKTOP_SHELL_CONTRACT_VERSION,
       requestId: 'request-4',
       expectedEndpointEpoch: 'app-1:window-1:1',
       expectedWindowRevision: 5,
@@ -63,7 +68,7 @@ describe('Desktop Shell contract', () => {
         7,
       ),
     ).toEqual({
-      schemaVersion: 1,
+      schemaVersion: DESKTOP_SHELL_CONTRACT_VERSION,
       requestId: 'request-5',
       expectedEndpointEpoch: 'app-1:window-1:1',
       expectedWindowRevision: 5,
@@ -109,7 +114,7 @@ describe('Desktop Shell contract', () => {
   it('rejects projection events whose Window identity does not match', () => {
     expect(() =>
       parseDesktopShellProjectionEvent({
-        schemaVersion: 1,
+        schemaVersion: DESKTOP_SHELL_CONTRACT_VERSION,
         applicationInstanceId: 'app-1',
         windowId: 'window-2',
         rendererEpoch: 1,
@@ -117,6 +122,19 @@ describe('Desktop Shell contract', () => {
         projection: validProjection(),
       }),
     ).toThrowError(DesktopShellContractError);
+  });
+
+  it('rejects the pre-Scene Shell wire version', () => {
+    expect(() =>
+      parseDesktopShellProjection({
+        ...validProjection(),
+        schemaVersion: 1,
+      }),
+    ).toThrowError(
+      expect.objectContaining<Partial<DesktopShellContractError>>({
+        code: 'unsupported-desktop-shell-version',
+      }),
+    );
   });
 
   it('accepts ready domains only in their owning Phase 1 slices', () => {
@@ -181,7 +199,7 @@ describe('Desktop Shell contract', () => {
 
 function validProjection() {
   return {
-    schemaVersion: 1 as const,
+    schemaVersion: DESKTOP_SHELL_CONTRACT_VERSION,
     applicationInstanceId: 'app-1',
     endpointEpoch: 'app-1:window-1:1',
     projectionRevision: 2,
@@ -211,6 +229,8 @@ function validProjection() {
         },
       ],
       workbench: createDefaultDesktopWorkbenchLayout('window-1'),
+      scene: createDefaultDesktopAgentScene('window-1', 'assistant-space:test'),
+      applicationSidebar: createDefaultDesktopApplicationSidebar('window-1'),
     },
     agentHome: {
       revision: 0,

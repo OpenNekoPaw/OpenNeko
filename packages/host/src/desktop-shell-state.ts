@@ -5,20 +5,36 @@ import type {
   DesktopWindowActiveTarget,
 } from './desktop-shell-contract';
 import {
+  createDefaultDesktopAgentScene,
+  createDefaultDesktopApplicationSidebar,
+  parseDesktopApplicationSidebarProjection,
+  parseDesktopWorkbenchSceneProjection,
+  type DesktopApplicationSidebarProjection,
+  type DesktopWorkbenchSceneProjection,
+} from './desktop-scene-contract';
+import {
   createDefaultDesktopWorkbenchLayout,
   migrateDesktopWorkbenchV1,
   migrateDesktopWorkbenchV2,
+  migrateDesktopWorkbenchV3,
   parseDesktopWorkbenchLayout,
+  migrateDesktopWorkbenchSidebarV1ToV3,
   type DesktopWorkbenchLayoutProjection,
 } from './desktop-workbench-contract';
 
-export const DESKTOP_SHELL_STATE_VERSION = 4 as const;
+export const DESKTOP_SHELL_STATE_VERSION = 6 as const;
 // Version 1 remains readable because it contains user-owned local Project and Window state.
 const DESKTOP_SHELL_STATE_V1 = 1 as const;
 // Version 2 carries the prelaunch Workbench v1 presentation.
 const DESKTOP_SHELL_STATE_V2 = 2 as const;
 // Version 3 carries the prelaunch Workbench v2 presentation.
 const DESKTOP_SHELL_STATE_V3 = 3 as const;
+// Version 4 is the final state whose Workbench owned the application sidebar.
+const DESKTOP_SHELL_STATE_V4 = 4 as const;
+// Version 5 contains prelaunch Scene slots whose management catalogs lived in Manager surfaces.
+const DESKTOP_SHELL_STATE_V5 = 5 as const;
+
+export const DESKTOP_DEFAULT_ASSISTANT_SPACE_ID = 'assistant-space:local-user' as const;
 
 export interface DesktopStoredProject {
   readonly projectId: string;
@@ -40,6 +56,8 @@ export interface DesktopStoredWindow {
   readonly activeTarget: DesktopWindowActiveTarget;
   readonly tabs: readonly DesktopProjectTabProjection[];
   readonly workbench: DesktopWorkbenchLayoutProjection;
+  readonly scene: DesktopWorkbenchSceneProjection;
+  readonly applicationSidebar: DesktopApplicationSidebarProjection;
 }
 
 export interface DesktopShellStoredState {
@@ -97,6 +115,8 @@ export function parseDesktopShellStoredState(value: unknown): DesktopShellStored
   const sourceVersion = record['schemaVersion'];
   if (
     sourceVersion !== DESKTOP_SHELL_STATE_VERSION &&
+    sourceVersion !== DESKTOP_SHELL_STATE_V5 &&
+    sourceVersion !== DESKTOP_SHELL_STATE_V4 &&
     sourceVersion !== DESKTOP_SHELL_STATE_V3 &&
     sourceVersion !== DESKTOP_SHELL_STATE_V2 &&
     sourceVersion !== DESKTOP_SHELL_STATE_V1
@@ -220,6 +240,8 @@ function parseStoredWindow(
   projectIds: ReadonlySet<string>,
   sourceVersion:
     | typeof DESKTOP_SHELL_STATE_VERSION
+    | typeof DESKTOP_SHELL_STATE_V5
+    | typeof DESKTOP_SHELL_STATE_V4
     | typeof DESKTOP_SHELL_STATE_V3
     | typeof DESKTOP_SHELL_STATE_V2
     | typeof DESKTOP_SHELL_STATE_V1,
@@ -229,7 +251,17 @@ function parseStoredWindow(
     record,
     sourceVersion === DESKTOP_SHELL_STATE_V1
       ? ['windowId', 'revision', 'activeTarget', 'tabs']
-      : ['windowId', 'revision', 'activeTarget', 'tabs', 'workbench'],
+      : sourceVersion === DESKTOP_SHELL_STATE_VERSION || sourceVersion === DESKTOP_SHELL_STATE_V5
+        ? [
+            'windowId',
+            'revision',
+            'activeTarget',
+            'tabs',
+            'workbench',
+            'scene',
+            'applicationSidebar',
+          ]
+        : ['windowId', 'revision', 'activeTarget', 'tabs', 'workbench'],
     'Desktop stored Window',
   );
   const tabs = requireArray(record['tabs'], 'Desktop stored Project Tabs must be an array.').map(
@@ -259,6 +291,21 @@ function parseStoredWindow(
     sourceVersion === DESKTOP_SHELL_STATE_V1
       ? createDefaultDesktopWorkbenchLayout(windowId)
       : parseStoredWorkbench(record['workbench'], windowId, sourceVersion);
+  const scene =
+    sourceVersion === DESKTOP_SHELL_STATE_VERSION
+      ? parseStoredScene(record['scene'], windowId)
+      : sourceVersion === DESKTOP_SHELL_STATE_V5
+        ? migrateStoredSceneV5(record['scene'], windowId)
+        : createDefaultDesktopAgentScene(windowId, DESKTOP_DEFAULT_ASSISTANT_SPACE_ID);
+  const applicationSidebar =
+    sourceVersion === DESKTOP_SHELL_STATE_VERSION || sourceVersion === DESKTOP_SHELL_STATE_V5
+      ? parseStoredApplicationSidebar(record['applicationSidebar'], windowId)
+      : {
+          ...createDefaultDesktopApplicationSidebar(windowId),
+          ...(sourceVersion === DESKTOP_SHELL_STATE_V1
+            ? {}
+            : migrateDesktopWorkbenchSidebarV1ToV3(record['workbench'])),
+        };
   return {
     windowId,
     revision: requireNonNegativeInteger(
@@ -268,6 +315,8 @@ function parseStoredWindow(
     activeTarget,
     tabs,
     workbench,
+    scene,
+    applicationSidebar,
   };
 }
 
@@ -276,6 +325,8 @@ function parseStoredWorkbench(
   windowId: string,
   sourceVersion:
     | typeof DESKTOP_SHELL_STATE_VERSION
+    | typeof DESKTOP_SHELL_STATE_V5
+    | typeof DESKTOP_SHELL_STATE_V4
     | typeof DESKTOP_SHELL_STATE_V3
     | typeof DESKTOP_SHELL_STATE_V2,
 ): DesktopWorkbenchLayoutProjection {
@@ -286,7 +337,9 @@ function parseStoredWorkbench(
         ? migrateDesktopWorkbenchV1(value)
         : sourceVersion === DESKTOP_SHELL_STATE_V3
           ? migrateDesktopWorkbenchV2(value)
-          : parseDesktopWorkbenchLayout(value);
+          : sourceVersion === DESKTOP_SHELL_STATE_V4
+            ? migrateDesktopWorkbenchV3(value)
+            : parseDesktopWorkbenchLayout(value);
   } catch (error) {
     throw invalidState(
       `Desktop stored Workbench layout is invalid: ${
@@ -298,6 +351,158 @@ function parseStoredWorkbench(
     throw invalidState('Desktop stored Workbench belongs to another Window.');
   }
   return workbench;
+}
+
+function parseStoredScene(value: unknown, windowId: string): DesktopWorkbenchSceneProjection {
+  let scene: DesktopWorkbenchSceneProjection;
+  try {
+    scene = parseDesktopWorkbenchSceneProjection(value);
+  } catch (error) {
+    throw invalidState(
+      `Desktop stored Scene is invalid: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+  if (scene.windowId !== windowId) {
+    throw invalidState('Desktop stored Scene belongs to another Window.');
+  }
+  return scene;
+}
+
+function migrateStoredSceneV5(value: unknown, windowId: string): DesktopWorkbenchSceneProjection {
+  const record = requireRecord(value, 'Desktop version 5 Scene must be an object.');
+  const slots = requireRecord(record['slots'], 'Desktop version 5 Scene slots must be an object.');
+  const leftManager = slots['leftManager'];
+  if (!isUnknownRecord(leftManager)) return parseStoredScene(value, windowId);
+
+  const kind = leftManager['kind'];
+  if (kind === 'assistant-resources') {
+    requireExactKeys(
+      leftManager,
+      ['kind', 'assistantSpaceId'],
+      'Desktop version 5 Assistant Resources Surface',
+    );
+    const assistantSpaceId = requireNonEmptyString(
+      leftManager['assistantSpaceId'],
+      'Desktop version 5 Assistant Space identity is required.',
+    );
+    const migrated = parseStoredScene(
+      { ...record, slots: copySlotsWithout(slots, ['leftManager']) },
+      windowId,
+    );
+    if (
+      migrated.context.kind !== 'agent' ||
+      migrated.context.scope.kind !== 'assistant' ||
+      migrated.context.scope.assistantSpaceId !== assistantSpaceId
+    ) {
+      throw invalidState('Desktop version 5 Assistant Resources Surface has a scope mismatch.');
+    }
+    return migrated;
+  }
+
+  const management = readVersion5ManagementCatalog(leftManager);
+  if (!management) return parseStoredScene(value, windowId);
+  if (slots['secondaryMain'] !== undefined) {
+    throw invalidState('Desktop version 5 management Scene already contains Secondary Main.');
+  }
+  const previousMain = slots['main'];
+  return parseStoredScene(
+    {
+      ...record,
+      slots: {
+        ...copySlotsWithout(slots, ['leftManager', 'main']),
+        main: {
+          kind: management.mainKind,
+          [management.identityField]: management.identity,
+        },
+        ...(previousMain === undefined ? {} : { secondaryMain: previousMain }),
+      },
+    },
+    windowId,
+  );
+}
+
+function readVersion5ManagementCatalog(surface: Readonly<Record<string, unknown>>):
+  | {
+      readonly mainKind: 'asset-management' | 'extension-management' | 'project-management';
+      readonly identityField:
+        'assetCenterSessionId' | 'extensionManagementSessionId' | 'projectManagementSessionId';
+      readonly identity: string;
+    }
+  | undefined {
+  const kind = surface['kind'];
+  if (kind === 'asset-catalog') {
+    requireExactKeys(
+      surface,
+      ['kind', 'assetCenterSessionId'],
+      'Desktop version 5 Asset Catalog Surface',
+    );
+    return {
+      mainKind: 'asset-management',
+      identityField: 'assetCenterSessionId',
+      identity: requireNonEmptyString(
+        surface['assetCenterSessionId'],
+        'Desktop version 5 Asset Center Session identity is required.',
+      ),
+    };
+  }
+  if (kind === 'extension-catalog') {
+    requireExactKeys(
+      surface,
+      ['kind', 'extensionManagementSessionId'],
+      'Desktop version 5 Extension Catalog Surface',
+    );
+    return {
+      mainKind: 'extension-management',
+      identityField: 'extensionManagementSessionId',
+      identity: requireNonEmptyString(
+        surface['extensionManagementSessionId'],
+        'Desktop version 5 Extension Management Session identity is required.',
+      ),
+    };
+  }
+  if (kind === 'project-catalog') {
+    requireExactKeys(
+      surface,
+      ['kind', 'projectManagementSessionId'],
+      'Desktop version 5 Project Catalog Surface',
+    );
+    return {
+      mainKind: 'project-management',
+      identityField: 'projectManagementSessionId',
+      identity: requireNonEmptyString(
+        surface['projectManagementSessionId'],
+        'Desktop version 5 Project Management Session identity is required.',
+      ),
+    };
+  }
+  return undefined;
+}
+
+function copySlotsWithout(
+  slots: Readonly<Record<string, unknown>>,
+  removed: readonly string[],
+): Readonly<Record<string, unknown>> {
+  return Object.fromEntries(Object.entries(slots).filter(([slot]) => !removed.includes(slot)));
+}
+
+function parseStoredApplicationSidebar(
+  value: unknown,
+  windowId: string,
+): DesktopApplicationSidebarProjection {
+  let sidebar: DesktopApplicationSidebarProjection;
+  try {
+    sidebar = parseDesktopApplicationSidebarProjection(value);
+  } catch (error) {
+    throw invalidState(
+      `Desktop stored Application Sidebar is invalid: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+  }
+  if (sidebar.windowId !== windowId) {
+    throw invalidState('Desktop stored Application Sidebar belongs to another Window.');
+  }
+  return sidebar;
 }
 
 function parseStoredTab(value: unknown): DesktopProjectTabProjection {
