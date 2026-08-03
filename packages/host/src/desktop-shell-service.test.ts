@@ -260,6 +260,118 @@ describe('DesktopShellService', () => {
     expect(committed.agentHome.conversations).toEqual([]);
   });
 
+  it('keeps Workspace Scene refs atomic with Workbench updates and startup restoration', async () => {
+    const repository = createInMemoryDesktopShellStateRepository();
+    const workspace: AssetWorkspaceResolution = {
+      workspaceId: '11111111-1111-4111-8111-111111111111',
+      workspacePath: '/workspace/demo',
+      displayName: 'Demo',
+      locator: { kind: 'variable', value: '${HOME}/workspace/demo' },
+    };
+    const authority = new DesktopWorkspaceGrantAuthority({
+      resolver: { resolve: vi.fn(async () => workspace) },
+      createIdentity: () => 'grant-1',
+    });
+    const first = createFixture(repository, 'home', authority);
+    const windowId = await first.service.claimWindowId();
+    first.service.setRendererEpoch(windowId, 1);
+    const initial = await first.service.getProjection(windowId);
+    const opened = await first.service.openContent(
+      windowId,
+      workspace.workspacePath,
+      initial.endpointEpoch,
+      initial.window.revision,
+    );
+    const grant = authority.authorize({
+      windowId,
+      label: workspace.displayName,
+      hostResource: workspace.workspacePath,
+    });
+    await first.service.transitionScene(
+      createDesktopSceneTransitionRequest({
+        requestId: 'scene-request-workspace-preview',
+        expectedEndpointEpoch: opened.projection.endpointEpoch,
+        windowId,
+        expectedWindowRevision: opened.projection.window.revision,
+        expectedSceneRevision: opened.projection.window.scene.revision,
+        intent: { kind: 'open-workspace', workspaceGrantId: grant.workspaceGrantId },
+      }),
+    );
+    const workspaceProjection = await first.service.getProjection(windowId);
+    const current = workspaceProjection.window.workbench;
+    const project = workspaceProjection.catalog.projects[0]!;
+    const tab = workspaceProjection.window.tabs[0]!;
+    const previewViewId = `preview:${tab.viewId}:temporary`;
+    const updated = await first.service.updateWorkbench(
+      windowId,
+      workspaceProjection.endpointEpoch,
+      workspaceProjection.window.revision,
+      current.revision,
+      {
+        ...current,
+        revision: current.revision + 1,
+        main: {
+          views: [
+            {
+              viewId: previewViewId,
+              viewEpoch: tab.viewEpoch,
+              projectId: project.projectId,
+              workspaceId: workspace.workspaceId,
+              kind: 'preview',
+              ownerId: 'preview-session:temporary-1',
+              displayLabel: 'resource-1',
+              documentId: 'resource-1',
+              previewPresentation: 'temporary',
+            },
+          ],
+          groups: [
+            {
+              groupId: DESKTOP_PRIMARY_MAIN_GROUP_ID,
+              viewIds: [previewViewId],
+              activeViewId: previewViewId,
+            },
+          ],
+          activeGroupId: DESKTOP_PRIMARY_MAIN_GROUP_ID,
+        },
+      },
+    );
+
+    expect(updated.window.scene.slots.main).toEqual({
+      kind: 'workspace-main',
+      workspaceId: workspace.workspaceId,
+      viewId: previewViewId,
+      viewEpoch: 1,
+    });
+    first.service.setRendererEpoch(windowId, 2);
+    const reattached = await first.service.getProjection(windowId);
+    expect(reattached.window.scene.slots.main).toMatchObject({
+      viewId: previewViewId,
+      viewEpoch: 2,
+    });
+    expect(reattached.window.workbench.main.views[0]).toMatchObject({
+      viewId: previewViewId,
+      viewEpoch: 2,
+    });
+    first.service.releaseWindow(windowId);
+    await first.service.dispose();
+
+    const restored = createFixture(repository, 'restore');
+    const restoredWindowId = await restored.service.claimWindowId();
+    restored.service.setRendererEpoch(restoredWindowId, 1);
+    const restoredProjection = await restored.service.getProjection(restoredWindowId);
+    const restoredMainView = restoredProjection.window.workbench.main.views[0]!;
+    expect(restoredMainView).toMatchObject({
+      kind: 'canvas',
+      documentId: 'neko/boards/workspace.nkc',
+    });
+    expect(restoredProjection.window.scene.slots.main).toEqual({
+      kind: 'workspace-main',
+      workspaceId: workspace.workspaceId,
+      viewId: restoredMainView.viewId,
+      viewEpoch: restoredMainView.viewEpoch,
+    });
+  });
+
   it('opens a recent Project through its exact identity and a restored Workspace grant', async () => {
     const repository = createInMemoryDesktopShellStateRepository();
     const workspace = {

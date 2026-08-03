@@ -240,12 +240,17 @@ export class DesktopShellService {
       }
       const restoredWindow = requireStoredWindow(state, windowId);
       const restoredWorkbench = restoreWindowWorkbench(state, restoredWindow);
+      const restoredScene = synchronizeWorkspaceSceneWithWorkbench(
+        restoredWindow.scene,
+        restoredWorkbench,
+      );
       const restoredActiveTarget =
         this.options.startupTarget === 'home' && restoredWindow.activeTarget.kind !== 'home'
           ? ({ kind: 'home' } as const)
           : restoredWindow.activeTarget;
       if (
         restoredWorkbench !== restoredWindow.workbench ||
+        restoredScene !== restoredWindow.scene ||
         restoredActiveTarget !== restoredWindow.activeTarget
       ) {
         await this.options.stateRepository.commit(state.storageRevision, {
@@ -258,6 +263,7 @@ export class DesktopShellService {
                   revision: window.revision + 1,
                   activeTarget: restoredActiveTarget,
                   workbench: restoredWorkbench,
+                  scene: restoredScene,
                 }
               : window,
           ),
@@ -1245,16 +1251,18 @@ export class DesktopShellService {
             viewEpoch: persistedViewEpoch,
           };
         });
+        const workbench = {
+          ...parsed,
+          main: {
+            ...parsed.main,
+            views: normalizedViews,
+          },
+        };
         return {
           ...window,
           revision: window.revision + 1,
-          workbench: {
-            ...parsed,
-            main: {
-              ...parsed.main,
-              views: normalizedViews,
-            },
-          },
+          workbench,
+          scene: synchronizeWorkspaceSceneWithWorkbench(window.scene, workbench),
         };
       },
     );
@@ -1548,7 +1556,7 @@ function projectShellState(
         viewEpoch: tab.viewEpoch + Math.max(0, rendererEpoch - 1),
       })),
       workbench: projectWorkbench(window.workbench, Math.max(0, rendererEpoch - 1)),
-      scene: window.scene,
+      scene: projectScene(window.scene, Math.max(0, rendererEpoch - 1)),
       applicationSidebar: window.applicationSidebar,
     },
     agentHome,
@@ -1568,6 +1576,37 @@ function projectWorkbench(
         ...view,
         viewEpoch: view.viewEpoch + rendererEpochOffset,
       })),
+    },
+  };
+}
+
+function projectScene(
+  scene: DesktopWorkbenchSceneProjection,
+  rendererEpochOffset: number,
+): DesktopWorkbenchSceneProjection {
+  if (
+    scene.context.kind !== 'agent' ||
+    scene.context.scope.kind !== 'workspace' ||
+    rendererEpochOffset === 0
+  ) {
+    return scene;
+  }
+  const main = scene.slots.main;
+  if (main?.kind !== 'workspace-main') {
+    throw new DesktopSceneContractError(
+      'desktop-scene-scope-mismatch',
+      'Workspace Scene requires its authoritative Main View during projection.',
+    );
+  }
+  const timeline = scene.slots.timeline;
+  return {
+    ...scene,
+    slots: {
+      ...scene.slots,
+      main: { ...main, viewEpoch: main.viewEpoch + rendererEpochOffset },
+      ...(timeline
+        ? { timeline: { ...timeline, viewEpoch: timeline.viewEpoch + rendererEpochOffset } }
+        : {}),
     },
   };
 }
@@ -1922,6 +1961,86 @@ function createWorkspaceAgentScene(input: {
           }
         : {}),
       status: { kind: 'scene-status', sceneId },
+    },
+  });
+}
+
+function synchronizeWorkspaceSceneWithWorkbench(
+  scene: DesktopWorkbenchSceneProjection,
+  workbench: DesktopWorkbenchLayoutProjection,
+): DesktopWorkbenchSceneProjection {
+  if (scene.context.kind !== 'agent' || scene.context.scope.kind !== 'workspace') return scene;
+  const workspaceId = scene.context.scope.workspaceId;
+
+  const activeGroup = workbench.main.groups.find(
+    (group) => group.groupId === workbench.main.activeGroupId,
+  );
+  const activeView = activeGroup?.activeViewId
+    ? workbench.main.views.find(
+        (view) => view.viewId === activeGroup.activeViewId && view.workspaceId === workspaceId,
+      )
+    : undefined;
+  if (!activeView) {
+    throw new DesktopSceneContractError(
+      'desktop-scene-scope-mismatch',
+      `Workspace '${workspaceId}' has no authoritative active Main View.`,
+    );
+  }
+
+  const timelineView = workbench.timeline.ownerViewId
+    ? workbench.main.views.find(
+        (view) =>
+          view.viewId === workbench.timeline.ownerViewId && view.workspaceId === workspaceId,
+      )
+    : undefined;
+  if (workbench.timeline.ownerViewId && !timelineView) {
+    throw new DesktopSceneContractError(
+      'desktop-scene-scope-mismatch',
+      `Workspace '${workspaceId}' Timeline owner is not attached to its Workbench.`,
+    );
+  }
+
+  const main = {
+    kind: 'workspace-main' as const,
+    workspaceId,
+    viewId: activeView.viewId,
+    viewEpoch: activeView.viewEpoch,
+  };
+  const timeline = timelineView
+    ? {
+        kind: 'workspace-timeline' as const,
+        workspaceId,
+        viewId: timelineView.viewId,
+        viewEpoch: timelineView.viewEpoch,
+        ownerId: timelineView.ownerId,
+      }
+    : undefined;
+  const currentMain = scene.slots.main;
+  const currentTimeline = scene.slots.timeline;
+  if (
+    currentMain?.kind === 'workspace-main' &&
+    currentMain.workspaceId === main.workspaceId &&
+    currentMain.viewId === main.viewId &&
+    currentMain.viewEpoch === main.viewEpoch &&
+    ((!currentTimeline && !timeline) ||
+      (currentTimeline &&
+        timeline &&
+        currentTimeline.workspaceId === timeline.workspaceId &&
+        currentTimeline.viewId === timeline.viewId &&
+        currentTimeline.viewEpoch === timeline.viewEpoch &&
+        currentTimeline.ownerId === timeline.ownerId))
+  ) {
+    return scene;
+  }
+
+  const { main: _main, timeline: _timeline, ...retainedSlots } = scene.slots;
+  return parseDesktopWorkbenchSceneProjection({
+    ...scene,
+    revision: scene.revision + 1,
+    slots: {
+      ...retainedSlots,
+      main,
+      ...(timeline ? { timeline } : {}),
     },
   });
 }
