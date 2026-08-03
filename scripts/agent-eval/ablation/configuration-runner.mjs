@@ -1,4 +1,4 @@
-import { runV2Case } from '../runner/run-v2-case.mjs';
+import { runV2CaseRepeated } from '../runner/run-v2-case.mjs';
 import { writeAblationDeltaReport } from '../reports/report-writer.mjs';
 import {
   ABLATION_SCHEMAS,
@@ -24,9 +24,10 @@ export async function runConfigurationAblation(planInput, options = {}) {
   validateAblationQualityContract(plan, selection);
   const runId = options.runId ?? `ablation-${Date.now().toString(36)}`;
   const runs = [];
-  for (const variant of plan.variants) {
+  const executionOrder = randomize(plan.variants, options.random ?? Math.random);
+  for (const variant of executionOrder) {
     const variantSelection = createVariantSelection(selection, plan, variant);
-    const run = await (options.runCase ?? runV2Case)(variantSelection, {
+    const run = await (options.runCase ?? runV2CaseRepeated)(variantSelection, {
       ...(options.caseOptions ?? {}),
       runId: `${runId}-${variant.id}`,
       outputRoot: options.outputRoot,
@@ -38,7 +39,14 @@ export async function runConfigurationAblation(planInput, options = {}) {
   const files = await (options.writeDelta ?? writeAblationDeltaReport)(delta, {
     outputRoot: options.outputRoot,
   });
-  return { outcome: delta.outcome, runId, runs, delta, files };
+  return {
+    outcome: delta.outcome,
+    runId,
+    executionOrder: executionOrder.map((variant) => variant.id),
+    runs,
+    delta,
+    files,
+  };
 }
 
 export function createConfigurationAblationDryRun(planInput, selection) {
@@ -77,9 +85,12 @@ function createConfigurationDelta(plan, runId, runs) {
     baselineRun.run,
     plan.comparisonPolicy.quality,
   );
-  const variants = runs.map(({ variant, run }) => {
+  const variants = plan.variants.map((plannedVariant) => {
+    const { variant, run } = requireVariantRun(runs, plannedVariant.id);
     const summary = summarizeRun(variant, run, plan.comparisonPolicy.quality);
-    const diagnostics = compareRunPolicies(baselineRun.run, run);
+    const diagnostics = compareRunPolicies(baselineRun.run, run, {
+      allowDifferences: ['runtime policy'],
+    });
     if (
       variant.role === 'variant' &&
       variant.changes.length > 0 &&
@@ -123,6 +134,12 @@ function createConfigurationDelta(plan, runId, runs) {
         : []),
     ],
   });
+}
+
+function requireVariantRun(runs, variantId) {
+  const entry = runs.find(({ variant }) => variant.id === variantId);
+  if (!entry) throw configurationError(`configuration ablation run is missing ${variantId}`);
+  return entry;
 }
 
 async function resolveSelection(plan, options) {
@@ -171,6 +188,12 @@ function summarizeRun(variant, run, qualityPolicy) {
     }
     return identity;
   });
+  const configurationEvidence = run.samples.flatMap((sample) =>
+    typeof sample.result.effectiveConfiguration?.digest === 'string'
+      ? [validateConfigurationEvidence(variant, sample)]
+      : [],
+  );
+  const requestedDigests = configurationEvidence.map((item) => item.requested.digest);
   const effectiveDigests = effectiveIdentities
     .map((identity) => identity.digest)
     .filter((digest) => typeof digest === 'string');
@@ -186,11 +209,77 @@ function summarizeRun(variant, run, qualityPolicy) {
       kind: 'configuration',
       ...variant.expectedConfiguration,
       ...(effectiveDigests.length === effectiveIdentities.length
-        ? { status: 'observed', effectiveDigests }
+        ? {
+            status: 'observed',
+            requestedDigests,
+            effectiveDigests,
+            dimensionSources: collectDimensionSources(configurationEvidence),
+          }
         : { status: 'missing', diagnostics: [...new Set(missingDiagnostics)] }),
     },
     metrics: projectAggregateMetrics(aggregate, qualityPolicy, run.samples),
   };
+}
+
+const CONFIGURATION_KEYS = Object.freeze([
+  'modelBinding',
+  'temperature',
+  'maxTokens',
+  'thinkingBudget',
+  'executionMode',
+  'outputFormat',
+]);
+
+const CHANGE_TO_KEY = Object.freeze({
+  'model-profile': 'modelBinding',
+  'runtime.temperature': 'temperature',
+  'runtime.max-tokens': 'maxTokens',
+  'runtime.thinking-budget': 'thinkingBudget',
+  'runtime.execution-mode': 'executionMode',
+  'runtime.output-format': 'outputFormat',
+});
+
+function validateConfigurationEvidence(variant, sample) {
+  const evidence = sample.configurationEvidence;
+  if (!evidence?.requested || !evidence?.effective) {
+    throw configurationError(
+      `variant ${variant.id} is missing requested/effective Desktop configuration facts`,
+    );
+  }
+  if (evidence.effective.digest !== sample.result.effectiveConfiguration.digest) {
+    throw configurationError(`variant ${variant.id} effective configuration digest drifted`);
+  }
+  for (const projection of [evidence.requested, evidence.effective]) {
+    const dimensions = projection.dimensions?.map((dimension) => dimension.key);
+    if (!sameValues(dimensions, CONFIGURATION_KEYS)) {
+      throw configurationError(`variant ${variant.id} configuration dimensions are incomplete`);
+    }
+    if (
+      CONFIGURATION_KEYS.some(
+        (key) => !['user', 'workspace', 'runtime', 'default'].includes(projection.sources?.[key]),
+      )
+    ) {
+      throw configurationError(`variant ${variant.id} configuration sources are incomplete`);
+    }
+  }
+  for (const change of variant.changes) {
+    const key = CHANGE_TO_KEY[change];
+    if (!key || evidence.effective.sources[key] !== 'runtime') {
+      throw configurationError(
+        `variant ${variant.id} changed dimension ${change} without a runtime source fact`,
+      );
+    }
+  }
+  return evidence;
+}
+
+function collectDimensionSources(configurationEvidence) {
+  return Object.fromEntries(
+    CONFIGURATION_KEYS.map((key) => [
+      key,
+      [...new Set(configurationEvidence.map((item) => item.effective.sources[key]))],
+    ]),
+  );
 }
 
 function findProfile(profiles, id, label) {
@@ -201,4 +290,13 @@ function findProfile(profiles, id, label) {
 
 function configurationError(message) {
   return Object.assign(new Error(message), { code: 'configuration-invalid' });
+}
+
+function randomize(values, random) {
+  const result = [...values];
+  for (let index = result.length - 1; index > 0; index -= 1) {
+    const selected = Math.floor(random() * (index + 1));
+    [result[index], result[selected]] = [result[selected], result[index]];
+  }
+  return result;
 }

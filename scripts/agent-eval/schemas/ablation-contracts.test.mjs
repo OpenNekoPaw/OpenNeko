@@ -167,9 +167,16 @@ describe('ablation authoring contracts', () => {
     flag.variants[1].runtimeFlags = { __ablation: true };
     expect(() => validateAblationPlan(flag)).toThrow('unknown field');
 
-    const unsupported = configurationPlan();
-    unsupported.variants[1].changes = ['runtime.skill-injection'];
-    expect(() => validateAblationPlan(unsupported)).toThrow('does not match any supported variant');
+    for (const dimension of [
+      'runtime.skill-injection',
+      'runtime.tool-toggle',
+      'runtime.permission-bypass',
+      'runtime.prompt-fragment',
+    ]) {
+      const unsupported = configurationPlan();
+      unsupported.variants[1].changes = [dimension];
+      expect(() => validateAblationPlan(unsupported)).toThrow('implementation ablation');
+    }
   });
 
   it('rejects variant-owned paths and retired Scenario canonical paths', () => {

@@ -84,7 +84,6 @@ function fakeRun(selected, executableFingerprint) {
       })),
     },
   }));
-  const qualityMean = selected.suite.target.identity.fingerprint === HASH_A ? 4.5 : 3.5;
   return {
     outcome: 'pass',
     samples,
@@ -121,16 +120,17 @@ describe('implementation ablation runner', () => {
         sourceFingerprint: index === 0 ? HASH_A : HASH_B,
         buildRecipeFingerprint: HASH_C,
         executableFingerprint: index === 0 ? HASH_A : HASH_B,
+        executablePath: `/tmp/worktree-${index}/OpenNeko`,
         launch: { command: 'node', args: [`/tmp/worktree-${index}/dist/cli.js`] },
         cleanup: cleanups[index],
       };
     });
     const runCase = vi.fn(async (selected, options) => {
       expect(options).toMatchObject({
-        debugCommand: 'node',
+        target: 'packaged',
+        executablePath: expect.stringContaining('/OpenNeko'),
         judgeTargetVisibility: 'identity-only',
       });
-      expect(options.debugCommandArgsPrefix[0]).toContain('/dist/cli.js');
       expect(JSON.stringify(selected)).not.toContain('buildRecipeFingerprint');
       expect(JSON.stringify(selected)).not.toContain('__ablation');
       const skillGate = selected.scenario.assertions.find(
@@ -141,6 +141,7 @@ describe('implementation ablation runner', () => {
     });
     const run = await runImplementationAblation(plan(), {
       runId: 'implementation-pilot',
+      random: () => 0.999,
       prepareBuild,
       runCase,
       writeDelta: async () => ({ variantDelta: '/tmp/implementation-delta.json' }),
@@ -169,12 +170,14 @@ describe('implementation ablation runner', () => {
     const cleanup = vi.fn();
     await expect(
       runImplementationAblation(plan(), {
+        random: () => 0.999,
         prepareBuild: async () => ({
           workspace: '/tmp/worktree',
           revision: 'revision',
           sourceFingerprint: HASH_A,
           buildRecipeFingerprint: HASH_C,
           executableFingerprint: HASH_A,
+          executablePath: '/tmp/worktree/OpenNeko',
           launch: { command: 'node', args: ['/tmp/worktree/dist/cli.js'] },
           cleanup,
         }),
@@ -190,12 +193,14 @@ describe('implementation ablation runner', () => {
     let index = 0;
     const selectedPlan = plan();
     const run = await runImplementationAblation(selectedPlan, {
+      random: () => 0.999,
       prepareBuild: async () => ({
         workspace: `/tmp/worktree-${index}`,
         revision: `revision-${index++}`,
         sourceFingerprint: HASH_A,
         buildRecipeFingerprint: HASH_C,
         executableFingerprint: HASH_A,
+        executablePath: '/tmp/worktree/OpenNeko',
         launch: { command: 'node', args: ['/tmp/worktree/dist/cli.js'] },
         cleanup: async () => {},
       }),

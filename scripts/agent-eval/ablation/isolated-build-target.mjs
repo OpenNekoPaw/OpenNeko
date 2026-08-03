@@ -2,7 +2,9 @@ import { createHash } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import * as fs from 'node:fs/promises';
 import * as os from 'node:os';
-import { dirname, join, relative, resolve, sep } from 'node:path';
+import { join, relative, resolve, sep } from 'node:path';
+import process from 'node:process';
+import { clearTimeout, setTimeout } from 'node:timers';
 import { validateIsolatedBuildTarget } from '../schemas/ablation-contracts.mjs';
 
 const OUTPUT_LIMIT = 64 * 1024;
