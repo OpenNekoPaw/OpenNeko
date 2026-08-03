@@ -2,6 +2,7 @@ import { canvasOpenNekoConsumerScenario } from '../../packages/canvas/webview/fu
 import { cutOpenNekoConsumerScenario } from '../../packages/cut/webview/functional/desktop-openneko-consumer.mjs';
 import { previewOpenNekoConsumerScenario } from '../../packages/preview/webview/functional/desktop-openneko-consumer.mjs';
 import { desktopStateSqliteMigrationScenario } from './desktop-state-sqlite-migration.mjs';
+import { desktopWorkbenchScenesScenario } from './desktop-workbench-scenes.mjs';
 
 const scenarios = new Map(
   [
@@ -9,6 +10,7 @@ const scenarios = new Map(
     canvasOpenNekoConsumerScenario,
     previewOpenNekoConsumerScenario,
     desktopStateSqliteMigrationScenario,
+    desktopWorkbenchScenesScenario,
   ].map((scenario) => [scenario.id, scenario]),
 );
 

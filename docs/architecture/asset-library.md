@@ -1,6 +1,6 @@
 # 资源库架构：媒体库与素材库
 
-更新日期：2026-08-02
+更新日期：2026-08-04
 
 > 当前稳定约束仍是：普通文件通过 **Media Library / 媒体库** 和 `ContentLocator`
 > 直接访问，不需要 catalog membership。独立 **Asset Library / 素材库** 仅管理显式导入、
@@ -114,6 +114,14 @@ staging 中只收集权威引用的 linked bytes，校验 fingerprint，重写 s
 全局资源中心与项目资源管理器是独立 surface：前者管理机器级连接和 owned Asset，后者只浏览
 当前项目、投影缺失需求并提交恢复 intent。两者不得共享 selection、filter、layout 或 active
 state；便携快照进度属于项目生命周期 surface。
+
+全局资源中心由 Assets-owned `AssetCenterSession` 独立拥有 catalog、filter、selection 和 revision。
+在统一 Desktop Workbench 中，Asset Management Root 始终位于 Main；选择可预览内容后，Assets
+application service 通过 Host port 授权 exact `ContentLocator` 并创建短生命周期 PreviewSession，
+Preview Root 只进入可选 Secondary Main。Desktop 不拥有 selection，不从扩展名推断 preview kind，
+renderer 不接收 raw path。scene switch、renderer reload、Window teardown 或 selection replacement
+必须释放旧 Preview handle，同时保留 Assets session facts。项目 Workspace 的右侧 Resources manager
+继续使用自己的 workspace-scoped state，不得复用全局资源中心 session。
 
 ### 素材云同步（目标）
 

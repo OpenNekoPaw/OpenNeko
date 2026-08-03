@@ -1,6 +1,6 @@
 # Agent 横切架构
 
-更新日期：2026-07-31
+更新日期：2026-08-04
 
 本文件定义 OpenNeko Agent 的系统级边界。运行时包级边界见
 [`packages/agent/runtime/src/runtime/README.md`](../../packages/agent/runtime/src/runtime/README.md)，
@@ -118,11 +118,18 @@ SQLite listing preview、message count 等字段是可重建投影，不是第�
 不得存放 Pi transcript；旧 Journal、history hydration 或 workspace transcript importer 不能
 恢复正常会话。
 
-Desktop Home 冷启动只通过 Pi owning package 的只读 catalog reader 投影当前 Desktop Project
-catalog scope 内的 conversation metadata。该读取不 attach workspace runtime、不打开 Pi
-Session、不读取 transcript，也不获取 execution lease；只有已 attach workspace 可以按精确
-workspace/conversation identity 覆盖实时 attention。catalog 缺失表示尚无历史数据，catalog
-损坏或 schema 不匹配必须 fail-visible，不能伪装成成功空列表。
+Desktop 统一 Workbench 冷启动通过 Pi owning package 的只读 catalog reader 投影最近 Agent
+conversation metadata。该读取不 attach workspace runtime、不打开 Pi Session、不读取 transcript，
+也不获取 execution lease；只有显式 attach 的 exact conversation 可以覆盖实时 attention。catalog
+缺失表示尚无历史数据，catalog 损坏或 schema 不匹配必须 fail-visible，不能伪装成成功空列表。
+
+同一个 `AgentWebviewRoot` 同时承载 `draft | session` presentation；phase 只决定是否已有 conversation，
+不更换 controller、composer 或 Root identity。`assistant | workspace` scope 与 phase 正交：Assistant
+使用用户级授权资源和 conversation scratch；Workspace 必须来自 exact persisted identity 或显式
+sender-bound directory grant。draft 编辑不创建 conversation/scratch，第一条提交由 Agent application
+authority 原子提交 context、conversation、initial message 和 pending turn，并以稳定 request/turn
+identity 幂等启动 provider。任何 Workspace-only capability 在 Assistant scope 下必须返回
+`workspace-scope-required`，不得回退到 active/first/recent Project。
 
 turn terminal checkpoint 具有 `volatile`、`persisting`、`durable`、
 `persistence-delayed` 状态。持久化失败必须暴露 diagnostic；process-local backfill 不能伪装成

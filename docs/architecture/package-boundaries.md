@@ -2,10 +2,10 @@
 
 状态：Accepted
 
-更新日期：2026-08-02
+更新日期：2026-08-04
 对应变更：`replace-desktop-media-scheme-with-http-resource-gateway`、
 `enforce-thin-desktop-application-root`、`normalize-package-naming-topology`、
-`define-character-chatroom-play-use`
+`define-character-chatroom-play-use`、`compose-desktop-workbench-scenes`
 
 本文定义当前一级 workspace 的依赖方向、公共能力 owner，以及 Electron Desktop 和
 Node/FFmpeg 媒体运行时的边界。包名、入口和示例只描述当前 Electron Desktop 实现。
@@ -112,7 +112,9 @@ provider、下载、输出落盘与生命周期实现只能从 `@neko/generation
 
 - 只拥有无业务 UI primitive、viewport/layout、foundation、keyboard/focus、hooks 和测试辅助。
 - 不拥有 contribution registry、产品生命周期、宿主权限、媒体执行 operation 或 Agent runtime。
-- `workbench` UI 若保留，只是 render-only primitive；它不得依赖已移除 Workbench Core，也不得成为第二套 runtime registry。
+- `workbench` UI 是所有 Desktop scene 复用的 render-only layout primitive；它不得依赖已移除
+  Workbench Core、解释领域 Surface ref 或成为第二套 runtime registry。Desktop 只通过 slot 组合
+  package-owned Root，并复用同一 Workspace layout/style scope。
 - 新增组件前先审计公共 primitive、同包 components/hooks/shared 和相邻保留包；跨两个以上 Webview 的无业务 UI 才适合提升到公共层。
 - 生产 Renderer/Webview 不直接访问 Electron/Node 或建立本地 mock/fallback transport，应使用
   package-owned typed Desktop host port。
@@ -150,6 +152,12 @@ Desktop app-owned Canvas、Assets、Application Settings 与 Agent 业务 owner 
 `enforce-thin-desktop-application-root` 收敛到 package public entry。Main 中保留的大型 runtime
 是 Electron trust/resource adapter 与 package session composition，不构成领域实现先例；新增或触碰
 时仍必须通过五层审计和 application boundary gate。
+
+Desktop Window scene 与 PrimarySidebar projection 由 `@neko/host` 拥有。Desktop renderer 只将
+validated Interaction/Main/Secondary Main/Manager/Timeline/Status refs 映射到 package public Root；
+不得把 Asset/Extension management Root 放入 manager dock，不得让 Preview/Detail 取代 management
+Main，也不得通过 active/first/recent Project fallback 决定 Workspace scope。目录授权只由 preload
+投影 sender-bound opaque grant，raw path 不进入 renderer contract。
 
 文件发现边界：
 

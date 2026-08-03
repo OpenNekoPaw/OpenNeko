@@ -2,9 +2,9 @@
 
 状态：Accepted
 
-更新日期：2026-08-02
+更新日期：2026-08-04
 对应变更：`replace-desktop-media-scheme-with-http-resource-gateway`、
-`enforce-thin-desktop-application-root`
+`enforce-thin-desktop-application-root`、`compose-desktop-workbench-scenes`
 
 OpenNeko 只有一个可执行产品组合根：`apps/neko-desktop`。`packages/*` 与 `packages/*/*` canonical workspace
 提供 host-neutral contract、领域 runtime、Node adapter 和 browser-safe UI；应用根负责把它们
@@ -88,6 +88,27 @@ workspace package 的角色、拆分条件、领域家族命名和 inactive capa
 产品、开发、测试和发布入口均以 Electron Desktop 为唯一 canonical path。不得通过 alias、
 动态 optional import、平行 package、fallback transport、空命令或成功 no-op 建立第二条宿主路径。
 唯一宿主只限定产品入口，不把 Application 层提升为领域 owner。
+
+## Desktop Workbench 组合
+
+每个 Desktop Window 只组合一个 `ControlledWorkbenchShell` 和一个持续存在的
+PrimarySidebar。Host 以 closed、versioned scene projection 拥有当前 scene、slot refs 与独立的
+sidebar presentation revision；renderer 只能把已验证的 package public Root 映射到
+Interaction、Main、Secondary Main、Manager、Timeline 和 Status slot，不得根据 route、当前组件、
+active/first/recent Project 或模型文本推断场景和权限。
+
+Workbench 是可变形态，不是固定的 Workspace 页面：默认 Agent draft 只有 Interaction；Assistant
+激活后是 Agent + Preview Main；Workspace 是 Agent + creative Main + 右侧 Workspace Resources；
+资源中心与扩展中心分别把 Asset Management 和 Extension Management 放入 Main，选中对象的
+Preview/Detail 只能进入可选 Secondary Main。Settings 和项目管理同样使用该 Shell。未具备真实
+owner/runtime/public Root 的 Character/Chatroom scene 必须返回 owner-qualified unavailable，Desktop
+不得伪造占位业务 UI。
+
+PrimarySidebar 独立消费 Host 的项目 catalog 和 Agent conversation catalog，因此场景切换、renderer
+reload 和应用重启不得丢失最近项目、最近会话及其精确 identity 操作。sidebar 展开、折叠和宽度修改只
+更新 sidebar aggregate，不修改 Workspace revision。Workspace 只能由显式 Project identity 或
+sender/Window-bound opaque directory grant 打开；取消授权保持原 scene，且不得创建 Workspace 或
+conversation。
 
 ## 数据与资源
 
