@@ -277,7 +277,7 @@ export function GlobalLibraryBrowserRoot({
                   })
                 }
               >
-                <PlusIcon size={15} />
+                <PlusIcon size={14} />
                 <span>{labels.addLibrary}</span>
               </button>
             </>
@@ -298,7 +298,7 @@ export function GlobalLibraryBrowserRoot({
                 })
               }
             >
-              <UploadIcon size={15} />
+              <UploadIcon size={14} />
               <span>{labels.importAssets}</span>
             </button>
           )}
@@ -307,7 +307,7 @@ export function GlobalLibraryBrowserRoot({
 
       <div className="global-library-browser__toolbar">
         <label className="global-library-browser__search">
-          <SearchIcon size={15} />
+          <SearchIcon size={16} />
           <input
             aria-label={catalog === 'media-library' ? labels.searchMedia : labels.searchAssets}
             placeholder={catalog === 'media-library' ? labels.searchMedia : labels.searchAssets}
@@ -332,7 +332,7 @@ export function GlobalLibraryBrowserRoot({
             aria-pressed={viewMode === 'list'}
             onClick={() => changeViewMode('list')}
           >
-            <LayersIcon size={15} />
+            <LayersIcon size={14} />
           </button>
           <button
             type="button"
@@ -341,7 +341,7 @@ export function GlobalLibraryBrowserRoot({
             aria-pressed={viewMode === 'grid'}
             onClick={() => changeViewMode('grid')}
           >
-            <GridIcon size={15} />
+            <GridIcon size={14} />
           </button>
         </div>
         <button
@@ -351,7 +351,7 @@ export function GlobalLibraryBrowserRoot({
           disabled={!interactive || pendingMutation}
           onClick={refresh}
         >
-          <RefreshIcon size={15} />
+          <RefreshIcon size={14} />
         </button>
         <div className="global-library-browser__facets">
           <button

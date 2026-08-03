@@ -7,7 +7,7 @@
   margin: 0 auto;
   padding: clamp(66px, 10vh, 104px) 0 52px;
   flex-direction: column;
-  color: var(--neko-text-primary, #202124);
+  color: var(--neko-fg, var(--neko-foreground, #202124));
   font-size: 12px;
 }
 
@@ -45,7 +45,7 @@
 
 .global-library-browser__header-copy .section-label {
   margin: 0;
-  color: var(--neko-text-tertiary, #8b9097);
+  color: var(--neko-fg-muted, var(--neko-descriptionForeground, #8b9097));
   font-size: 10px;
   font-weight: 650;
 }
@@ -53,7 +53,7 @@
 .global-library-browser__header-copy > p:not(.section-label) {
   max-width: 620px;
   margin: 7px 0 0;
-  color: var(--neko-text-secondary, #6c7178);
+  color: var(--neko-fg-secondary, var(--neko-descriptionForeground, #6c7178));
   font-size: 12px;
 }
 
@@ -74,12 +74,26 @@
   gap: 6px;
   border: 1px solid var(--neko-border, #d4d7dc);
   border-radius: 8px;
-  background: var(--neko-surface, #fff);
-  color: inherit;
+  color: var(--neko-fg-secondary, var(--neko-descriptionForeground, #6c7178));
+  background: var(--neko-elevated, var(--neko-editorWidget-background, #fff));
 }
 
 .global-library-browser__commands button {
   padding: 0 13px;
+  border-color: color-mix(in srgb, var(--neko-accent) 45%, var(--neko-border));
+  color: var(--neko-button-foreground, #fff);
+  background: var(--neko-accent, var(--neko-button-background, #343735));
+  font-weight: 650;
+}
+
+.global-library-browser__commands button:hover:not(:disabled) {
+  background: var(--neko-button-hoverBackground, var(--neko-accent));
+}
+
+.global-library-browser__commands button:disabled,
+.global-library-browser__toolbar > button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
 }
 
 .global-library-browser__toolbar {
@@ -99,7 +113,8 @@
   border: 1px solid var(--neko-border, #d4d7dc);
   border-radius: 12px;
   padding: 0 12px;
-  background: var(--neko-surface, #fff);
+  color: var(--neko-fg-secondary, var(--neko-descriptionForeground, #6c7178));
+  background: var(--neko-elevated, var(--neko-input-background, #fff));
 }
 
 .global-library-browser__search input {
@@ -109,7 +124,11 @@
   border: 0;
   outline: 0;
   background: transparent;
-  color: inherit;
+  color: var(--neko-fg, var(--neko-input-foreground, #202124));
+}
+
+.global-library-browser__search input::placeholder {
+  color: var(--neko-input-placeholderForeground, var(--neko-fg-muted, #8b9097));
 }
 
 .global-library-browser select {
@@ -117,8 +136,8 @@
   padding: 0 10px;
   border: 1px solid var(--neko-border, #d4d7dc);
   border-radius: 8px;
-  background: var(--neko-surface, #fff);
-  color: inherit;
+  background: var(--neko-elevated, var(--neko-dropdown-background, #fff));
+  color: var(--neko-fg, var(--neko-dropdown-foreground, #202124));
 }
 
 .global-library-browser__view-switcher,
@@ -128,7 +147,7 @@
   padding: 3px;
   border: 1px solid var(--neko-border, #d4d7dc);
   border-radius: 11px;
-  background: var(--neko-surface-subtle, #f4f6f7);
+  background: var(--neko-button-secondaryBackground, var(--neko-hover, #f4f6f7));
 }
 
 .global-library-browser__view-switcher button,
@@ -138,6 +157,17 @@
   border-radius: 8px;
   padding: 0 9px;
   background: transparent;
+}
+
+.global-library-browser__view-switcher button {
+  width: 30px;
+  padding: 0;
+}
+
+.global-library-browser__toolbar > button {
+  width: 36px;
+  min-width: 36px;
+  padding: 0;
 }
 
 .global-library-browser__view-switcher button:first-child,
@@ -152,9 +182,9 @@
 }
 
 .global-library-browser button[aria-pressed='true'] {
-  color: var(--neko-text-primary, #202124);
-  background: var(--neko-surface, #fff);
-  box-shadow: 0 2px 8px rgb(0 0 0 / 10%);
+  color: var(--neko-list-activeSelectionForeground, var(--neko-fg, #202124));
+  background: var(--neko-list-activeSelectionBackground, var(--neko-accent-soft, #e8e8e7));
+  box-shadow: var(--neko-shadow-sm, 0 2px 8px rgb(0 0 0 / 10%));
   font-weight: 650;
 }
 
@@ -217,8 +247,8 @@
 .global-library-browser__entry:hover,
 .global-library-browser__entry:focus-visible,
 .global-library-browser__entry[data-selected='true'] {
-  border-color: var(--neko-border-strong, #aeb4bc);
-  background: var(--neko-surface-subtle, #f4f6f7);
+  border-color: color-mix(in srgb, var(--neko-accent) 30%, var(--neko-border));
+  background: var(--neko-hover, #f4f6f7);
 }
 
 .global-library-browser__thumbnail {
@@ -229,7 +259,8 @@
   justify-content: center;
   overflow: hidden;
   border-radius: 4px;
-  background: var(--neko-surface-muted, #e9ecef);
+  color: var(--neko-accent, currentColor);
+  background: var(--neko-accent-soft, #e9ecef);
 }
 
 [data-view-mode='grid'] .global-library-browser__thumbnail {
@@ -266,7 +297,7 @@
 
 .global-library-browser__entry-copy small,
 .global-library-browser__size {
-  color: var(--neko-text-secondary, #6c7178);
+  color: var(--neko-fg-secondary, var(--neko-descriptionForeground, #6c7178));
   font-size: 11px;
 }
 
@@ -307,8 +338,8 @@
   border: 1px solid var(--neko-border, #d4d7dc);
   border-radius: 6px;
   padding: 4px;
-  background: var(--neko-surface, #fff);
-  box-shadow: 0 8px 24px rgb(0 0 0 / 16%);
+  background: var(--neko-elevated, var(--neko-menu-background, #fff));
+  box-shadow: var(--neko-shadow-md, 0 8px 24px rgb(0 0 0 / 16%));
 }
 
 .global-library-browser__menu > div button {
@@ -329,7 +360,7 @@
   width: min(320px, 70vw);
   aspect-ratio: 8 / 5;
   overflow: hidden;
-  border: 1px solid var(--neko-border-strong, #aeb4bc);
+  border: 1px solid var(--neko-border, #aeb4bc);
   border-radius: 6px;
   background: #111;
   box-shadow: 0 10px 30px rgb(0 0 0 / 24%);
@@ -346,13 +377,15 @@
 }
 
 .global-library-browser__diagnostic {
-  border: 1px solid #c64545;
-  color: #a82626;
+  border: 1px solid color-mix(in srgb, var(--neko-danger) 45%, var(--neko-border));
+  color: var(--neko-danger, #a82626);
+  background: var(--neko-inputValidation-errorBackground, transparent);
 }
 
 .global-library-browser__notice {
-  border: 1px solid #4c8b6f;
-  color: #276449;
+  border: 1px solid color-mix(in srgb, var(--neko-accent) 45%, var(--neko-border));
+  color: var(--neko-accent, #276449);
+  background: var(--neko-accent-soft, transparent);
 }
 
 .global-library-browser__loading,
@@ -360,7 +393,7 @@
   display: grid;
   min-height: 160px;
   place-items: center;
-  color: var(--neko-text-secondary, #6c7178);
+  color: var(--neko-fg-secondary, var(--neko-descriptionForeground, #6c7178));
 }
 
 .global-library-browser__visually-hidden {

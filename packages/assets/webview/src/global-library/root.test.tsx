@@ -60,6 +60,25 @@ describe('GlobalLibraryBrowserRoot', () => {
       container.querySelector('.global-library-browser__header-copy p:not(.section-label)')
         ?.textContent,
     ).toBe('Manage reusable media connections without copying source files into every project.');
+    expect(
+      [...container.querySelectorAll<HTMLButtonElement>('button')]
+        .find((button) => button.textContent?.includes('Connect directory'))
+        ?.querySelector('svg')
+        ?.getAttribute('width'),
+    ).toBe('14');
+    expect(
+      container
+        .querySelector('input[aria-label="Search media libraries"]')
+        ?.closest('label')
+        ?.querySelector('svg')
+        ?.getAttribute('width'),
+    ).toBe('16');
+    expect(
+      container.querySelector('button[aria-label="List view"] svg')?.getAttribute('width'),
+    ).toBe('14');
+    expect(container.querySelector('button[aria-label="Refresh"] svg')?.getAttribute('width')).toBe(
+      '14',
+    );
     expect(container.textContent).not.toContain('Global Library controller is disposed.');
     expect(dispose).not.toHaveBeenCalled();
 
