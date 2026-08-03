@@ -48,6 +48,18 @@ describe('ResourceBrowserRoot', () => {
     vi.unstubAllGlobals();
   });
 
+  it('omits duplicate package chrome when embedded while keeping toolbar actions', async () => {
+    const runtime = createRuntime();
+    render(<ResourceBrowserRoot runtime={runtime} locale="en" chrome="embedded" />);
+
+    await screen.findByText('cat.png');
+    expect(screen.queryByText('Resource management')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Configure media libraries' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Refresh' })).toBeTruthy();
+    expect(document.querySelector('.neko-resource-browser__toolbar')).toBeTruthy();
+    expect(document.querySelector('.neko-resource-browser__header')).toBeNull();
+  });
+
   it('opens a previewable item on single click without a persistent action footer', async () => {
     const runtime = createRuntime();
     render(

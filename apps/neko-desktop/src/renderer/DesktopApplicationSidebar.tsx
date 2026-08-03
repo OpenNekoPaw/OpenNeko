@@ -63,18 +63,37 @@ export function DesktopApplicationSidebarFrame({
 }
 
 export function DesktopApplicationBrand({
-  control,
+  showMark = true,
+  titleAction,
 }: {
-  readonly control?: ReactNode;
+  readonly showMark?: boolean;
+  readonly titleAction?: {
+    readonly disabled?: boolean;
+    readonly label: string;
+    readonly onClick: () => void;
+  };
 }): JSX.Element {
   const { t } = useTranslation();
   return (
     <div className="home-brand">
-      <span className="brand-mark" aria-hidden="true">
-        N
-      </span>
-      <strong>{t('app.name')}</strong>
-      {control}
+      {showMark ? (
+        <span className="brand-mark" aria-hidden="true">
+          N
+        </span>
+      ) : null}
+      {titleAction ? (
+        <button
+          type="button"
+          className="home-brand-title"
+          aria-label={titleAction.label}
+          disabled={titleAction.disabled}
+          onClick={titleAction.onClick}
+        >
+          <strong>{t('app.name')}</strong>
+        </button>
+      ) : (
+        <strong>{t('app.name')}</strong>
+      )}
     </div>
   );
 }

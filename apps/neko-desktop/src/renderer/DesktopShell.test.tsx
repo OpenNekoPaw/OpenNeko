@@ -269,7 +269,7 @@ describe('DesktopShellView', () => {
     expect(resources.display.chatWidth).toBe(workbench.display.chatWidth);
   });
 
-  it('reveals Project resources without creating a Main View and keeps Agent on the left', () => {
+  it('reveals Resource management without creating a Main View and keeps Agent on the left', () => {
     const initial = {
       ...createDefaultDesktopWorkbenchLayout('window-1'),
       display: {
@@ -286,6 +286,45 @@ describe('DesktopShellView', () => {
     expect(applyWorkbenchDisplayMode(revealed, 'chat-main-right').display.chatPosition).toBe(
       'left',
     );
+  });
+
+  it('renders a normal empty Main surface after the last creative Tab closes', () => {
+    const projection = homeProjection();
+    const project = projection.catalog.projects[0]!;
+    const markup = renderShell(
+      <DesktopShellView
+        projection={{
+          ...projection,
+          window: {
+            ...projection.window,
+            activeTarget: { kind: 'project', tabId: 'tab-1' },
+            tabs: [
+              {
+                tabId: 'tab-1',
+                projectId: project.projectId,
+                viewId: 'view-1',
+                viewEpoch: 1,
+              },
+            ],
+            workbench: {
+              ...createDefaultDesktopWorkbenchLayout('window-1'),
+              display: {
+                ...createDefaultDesktopWorkbenchLayout('window-1').display,
+                mode: 'chat-main',
+              },
+            },
+          },
+        }}
+      />,
+    );
+
+    expect(markup).toContain('data-empty-main="true"');
+    expect(markup).toContain('No creative document');
+    expect(markup).toContain(
+      'Open a Canvas, Preview, Cut, or Resource management view to continue.',
+    );
+    expect(markup).not.toContain('desktop-canvas-not-mounted');
+    expect(markup).not.toContain('Canvas is still unavailable in this slice.');
   });
 
   it('mounts an active Cut View into Main with its package timeline Host slot', () => {
@@ -356,6 +395,15 @@ describe('DesktopShellView', () => {
 
   it('renders Home from the authoritative catalog without inventing domain success', () => {
     const markup = renderShell(<DesktopShellView projection={homeProjection()} />);
+    const brandStart = markup.indexOf('<div class="home-brand">');
+    const brandEnd = markup.indexOf('</div>', brandStart);
+    const brandMarkup = markup.slice(brandStart, brandEnd);
+    const headingStart = markup.indexOf('<header class="home-launchpad-heading">');
+    const headingEnd = markup.indexOf('</header>', headingStart);
+    const headingMarkup = markup.slice(headingStart, headingEnd);
+    const intentStart = markup.indexOf('<div class="home-intent-actions">');
+    const intentEnd = markup.indexOf('</div>', intentStart);
+    const intentMarkup = markup.slice(intentStart, intentEnd);
     const composerStart = markup.indexOf('data-agent-entry="project-handoff"');
     const composerEnd = markup.indexOf('</form>', composerStart);
     const composerMarkup = markup.slice(composerStart, composerEnd);
@@ -363,6 +411,14 @@ describe('DesktopShellView', () => {
     expect(markup).toContain('Creation intent');
     expect(markup).toContain('data-home-composition="task-launchpad"');
     expect(markup).toContain('data-home-surface="application"');
+    expect(brandMarkup.match(/OpenNeko/gu)).toHaveLength(1);
+    expect(brandMarkup).toContain('home-brand-title');
+    expect(brandMarkup).not.toContain('brand-mark');
+    expect(brandMarkup).not.toContain('<svg');
+    expect(brandMarkup).not.toContain('home-brand-toggle');
+    expect(headingMarkup).not.toContain('home-launchpad-heading-icon');
+    expect(headingMarkup).not.toContain('<svg');
+    expect(intentMarkup).toContain('<svg');
     expect(composerMarkup).toContain('data-home-agent-panel="composer"');
     expect(composerMarkup.match(/<textarea/gu)).toHaveLength(1);
     expect(composerMarkup).toContain('rows="1"');
@@ -453,9 +509,9 @@ describe('DesktopShellView', () => {
       expect(sidebar).not.toContain('project-primary-brand-copy');
       expect(sidebar).not.toContain('project-layout-controls');
     }
-    expect(homeSidebar).not.toContain('Project resources');
-    expect(projectSidebar).not.toContain('Project resources');
-    expect(projectMarkup).toContain('aria-label="Project resources"');
+    expect(homeSidebar).not.toContain('Resource management');
+    expect(projectSidebar).not.toContain('Resource management');
+    expect(projectMarkup).toContain('aria-label="Resource management"');
     expect(homeSidebar).not.toContain('data-workbench-display-control="primary-sidebar"');
     expect(projectSidebar).toContain('data-workbench-display-control="primary-sidebar"');
     expect(projectSidebar).toContain('aria-label="Display"');
@@ -504,7 +560,7 @@ describe('DesktopShellView', () => {
     expect(markup).toContain('home-navigation project-primary-sidebar');
     expect(markup).not.toContain('project-capabilities');
     expect(markup).not.toContain('Creative surfaces');
-    expect(markup).toContain('aria-label="Project resources"');
+    expect(markup).toContain('aria-label="Resource management"');
     expect(markup).not.toContain('project-workbench-header');
     expect(markup).not.toContain('project-view-switcher');
     expect(markup).not.toContain('project-view-navigation');
@@ -566,7 +622,7 @@ describe('DesktopShellView', () => {
     expect(projectCatalogMarkup).not.toContain('Timeline payload must stay owner-only');
   });
 
-  it('renders Project resources on the right and moves Agent to an independent left Dock', () => {
+  it('renders Resource management on the right and moves Agent to an independent left Dock', () => {
     const projection = homeProjection();
     const markup = renderShell(
       <DesktopShellView
@@ -629,7 +685,8 @@ describe('DesktopShellView', () => {
     expect(markup).toContain('data-primary-sidebar-placement="flush"');
     expect(markup).toContain('data-primary-sidebar-hover-reveal="true"');
     expect(markup).toContain('data-primary-sidebar-expanded-width="240"');
-    expect(markup).toContain('home-brand-toggle');
+    expect(markup).toContain('home-brand-title');
+    expect(markup).not.toContain('home-brand-toggle');
     expect(markup).toContain('data-workbench-display-control="primary-sidebar"');
     expect(markup).toContain('Recent projects');
     expect(markup).toContain('Recent Agent conversations');
@@ -677,7 +734,7 @@ describe('DesktopShellView', () => {
     );
 
     expect(markup).not.toContain('project-dock-stack');
-    expect(markup).toContain('Creative main surface');
+    expect(markup).toContain('No creative document');
     expect(markup).toContain('neko-controlled-workbench-dock--left" data-presentation="docked"');
     expect(markup).toContain('neko-controlled-workbench-dock--right" data-presentation="docked"');
     expect(markup).toContain('data-dock-owner="resources"');
@@ -752,7 +809,7 @@ describe('DesktopShellView', () => {
     expect(markup).toContain('neko-controlled-workbench-dock--right');
     expect(markup).not.toContain('data-main-view-id="resource-browser:');
     const sidebar = extractPrimarySidebar(markup);
-    expect(sidebar).not.toContain('Project resources');
+    expect(sidebar).not.toContain('Resource management');
     expect(sidebar).not.toMatch(/class="home-nav-button is-active"[^>]*aria-label="Asset Center"/u);
     vi.unstubAllGlobals();
   });

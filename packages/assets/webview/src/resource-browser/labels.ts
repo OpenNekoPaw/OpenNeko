@@ -51,7 +51,7 @@ export interface ResourceBrowserLabels {
 
 const labels: Record<SupportedLocale, ResourceBrowserLabels> = {
   en: {
-    title: 'Resources',
+    title: 'Resource management',
     files: 'Files',
     media: 'Media',
     materials: 'Materials',
@@ -100,7 +100,7 @@ const labels: Record<SupportedLocale, ResourceBrowserLabels> = {
     mediaLibraries: 'Media libraries',
   },
   'zh-cn': {
-    title: '资源',
+    title: '资源管理',
     files: '目录',
     media: '媒体',
     materials: '素材',

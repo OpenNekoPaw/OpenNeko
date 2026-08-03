@@ -4,6 +4,15 @@ import { describe, expect, it } from 'vitest';
 const styles = readFileSync(new URL('./renderer/styles.css', import.meta.url), 'utf8');
 
 describe('Desktop renderer styles', () => {
+  it('scopes package-owned Workbench roots to the pure-white Main surface', () => {
+    expect(styles).toMatch(
+      /\.desktop-agent-root\s*\{[^}]*--neko-sideBar-background:\s*var\(--neko-desktop-main\)/u,
+    );
+    expect(styles).toMatch(
+      /\.desktop-resource-browser-root\s*\{[^}]*--neko-sideBar-background:\s*var\(--neko-desktop-main\)/u,
+    );
+  });
+
   it('keeps the temporary primary-sidebar hover hit region continuous', () => {
     const frameRule = styles.match(
       /\.application-primary-sidebar-frame\s*>\s*\.home-navigation\s*\{(?<body>[\s\S]*?)\n\}/u,
@@ -41,13 +50,32 @@ describe('Desktop renderer styles', () => {
     expect(settingsSearchRule?.groups?.body).toMatch(/width\s*:\s*100%/u);
   });
 
-  it('hides the visibility control on the idle compact rail and reveals it with the sidebar', () => {
+  it('uses a text-only primary brand action without icon chrome', () => {
+    const titleRule = styles.match(/\.home-brand-title\s*\{(?<body>[\s\S]*?)\n\}/u);
+
+    expect(titleRule?.groups?.body).toMatch(/background\s*:\s*transparent/u);
+    expect(titleRule?.groups?.body).toMatch(/border\s*:\s*0/u);
+    expect(styles).not.toContain('.home-brand-toggle');
+  });
+
+  it('centers the Home Agent launchpad with a constrained-height safety rule', () => {
+    const overviewRule = styles.match(/\.home-overview\s*\{(?<body>[\s\S]*?)\n\}/u);
+
+    expect(overviewRule?.groups?.body).toMatch(/display\s*:\s*grid/u);
+    expect(overviewRule?.groups?.body).toMatch(/place-items\s*:\s*center/u);
+    expect(overviewRule?.groups?.body).toMatch(/box-sizing\s*:\s*border-box/u);
     expect(styles).toMatch(
-      /\.home-navigation--compact\s+\.home-brand-toggle\s*\{[\s\S]*?display\s*:\s*none/u,
+      /@media \(max-height: 720px\)[\s\S]*?\.home-overview\s*\{[\s\S]*?place-items\s*:\s*start center/u,
     );
-    expect(styles).toMatch(
-      /data-primary-sidebar-hover-reveal='true'[\s\S]*?:is\(\s*:hover,\s*:focus-within\s*\)[\s\S]*?\.home-brand-toggle\s*\{[\s\S]*?display\s*:\s*inline-flex/u,
-    );
+  });
+
+  it('centers the Agent heading text without a decorative icon tile', () => {
+    const headingRule = styles.match(/\.home-launchpad-heading\s*\{(?<body>[\s\S]*?)\n\}/u);
+
+    expect(headingRule?.groups?.body).toMatch(/display\s*:\s*grid/u);
+    expect(headingRule?.groups?.body).toMatch(/justify-items\s*:\s*center/u);
+    expect(headingRule?.groups?.body).toMatch(/text-align\s*:\s*center/u);
+    expect(styles).not.toContain('.home-launchpad-heading-icon');
   });
 
   it('presents the Home Agent handoff as one focused responsive composer', () => {
@@ -110,10 +138,7 @@ describe('Desktop renderer styles', () => {
 
   it('keeps the Global Library as an aligned unframed workbench surface', () => {
     const packageStyles = readFileSync(
-      new URL(
-        '../../../packages/assets/webview/src/global-library/style.css',
-        import.meta.url,
-      ),
+      new URL('../../../packages/assets/webview/src/global-library/style.css', import.meta.url),
       'utf8',
     );
     const browserRule = packageStyles.match(/\.global-library-browser\s*\{(?<body>[\s\S]*?)\n\}/u);
@@ -148,6 +173,18 @@ describe('Desktop renderer styles', () => {
     );
     expect(packageStyles).toMatch(
       /\.global-library-browser__loading,[\s\S]*?\.global-library-browser__empty\s*\{[\s\S]*?place-items\s*:\s*center/u,
+    );
+    expect(packageStyles).toMatch(
+      /\.global-library-browser__toolbar\s*>\s*button\s*\{[\s\S]*?width\s*:\s*36px[\s\S]*?min-width\s*:\s*36px/u,
+    );
+    expect(packageStyles).toMatch(
+      /\.global-library-browser__commands button\s*\{[\s\S]*?background\s*:\s*var\(--neko-accent/u,
+    );
+    expect(packageStyles).toMatch(
+      /\.global-library-browser button\[aria-pressed='true'\]\s*\{[\s\S]*?var\(--neko-list-activeSelectionBackground/u,
+    );
+    expect(packageStyles).not.toMatch(
+      /var\(--neko-(?:text-(?:primary|secondary|tertiary)|surface-(?:subtle|muted)|border-strong)/u,
     );
   });
 });

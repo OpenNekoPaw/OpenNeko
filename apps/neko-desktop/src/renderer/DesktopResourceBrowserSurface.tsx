@@ -64,6 +64,7 @@ export function DesktopResourceBrowserSurface({
         }
       >
         <ResourceBrowserRoot
+          chrome="embedded"
           runtime={runtime}
           locale={locale}
           defaultViewMode={applicationSettings.projection.preferences.resourceBrowserView}

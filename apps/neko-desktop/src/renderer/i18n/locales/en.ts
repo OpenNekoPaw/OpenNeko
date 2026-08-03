@@ -242,7 +242,7 @@ export const en = {
   'workspace.canvasAndTimeline': 'Canvas + Timeline',
   'workspace.canvasAndModel': 'Canvas + Model',
   'workspace.resources': 'Resources',
-  'workspace.projectResources': 'Project resources',
+  'workspace.projectResources': 'Resource management',
   'workspace.portability': 'Project portability',
   'workspace.portabilityLoading': 'Checking project media',
   'workspace.portabilityCreate': 'Create portable snapshot',
@@ -263,7 +263,7 @@ export const en = {
     'A completed portable snapshot matches the current project revision.',
   'workspace.portabilityState.coverage-incomplete':
     'Project document coverage is incomplete. A portable snapshot cannot be verified.',
-  'workspace.closeProjectResources': 'Close project resources',
+  'workspace.closeProjectResources': 'Close resource management',
   'workspace.agentToDock': 'Agent to side',
   'workspace.agentToMain': 'Agent to main',
   'workspace.timeline': 'Timeline',
@@ -275,6 +275,8 @@ export const en = {
   'workspace.resizeMainSplit': 'Resize Main split',
   'workspace.mainTabs.label': 'Open creative documents',
   'workspace.mainTabs.empty': 'No creative document',
+  'workspace.mainTabs.emptyDetail':
+    'Open a Canvas, Preview, Cut, or Resource management view to continue.',
   'workspace.mainTabs.close': 'Close {name}',
   'workspace.mainTabs.splitRight': 'Move active tab to a right split',
   'workspace.mainTabs.splitDown': 'Move active tab to a lower split',

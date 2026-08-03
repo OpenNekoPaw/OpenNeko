@@ -368,9 +368,33 @@ code {
   font-size: 14px;
 }
 
-.home-brand > button {
-  margin-left: auto;
+.home-brand-title {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  color: var(--neko-desktop-text-strong);
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
   -webkit-app-region: no-drag;
+}
+
+.home-brand-title:hover:not(:disabled) {
+  color: var(--neko-fg);
+}
+
+.home-brand-title:focus-visible {
+  border-radius: 4px;
+  outline: 2px solid var(--neko-focusBorder);
+  outline-offset: 3px;
+}
+
+.home-brand-title:disabled {
+  cursor: wait;
+  opacity: 0.55;
 }
 
 .home-navigation--compact {
@@ -383,11 +407,6 @@ code {
   flex-direction: column;
   gap: 8px;
   padding-inline: 0;
-}
-
-.home-navigation--compact .home-brand-toggle {
-  display: none;
-  margin-left: 0;
 }
 
 .home-navigation--compact .home-brand strong,
@@ -436,16 +455,6 @@ code {
   flex-direction: row;
   gap: 9px;
   padding: 0 8px 8px;
-}
-
-.application-primary-sidebar-frame[data-primary-sidebar-hover-reveal='true']:is(
-    :hover,
-    :focus-within
-  )
-  .home-navigation--compact
-  .home-brand-toggle {
-  display: inline-flex;
-  margin-left: auto;
 }
 
 .application-primary-sidebar-frame[data-primary-sidebar-hover-reveal='true']:is(
@@ -684,10 +693,13 @@ code {
 }
 
 .home-overview {
+  display: grid;
   width: min(920px, calc(100% - 64px));
   min-height: 100%;
+  box-sizing: border-box;
+  place-items: center;
   margin: 0 auto;
-  padding: clamp(72px, 11vh, 124px) 0 56px;
+  padding: clamp(36px, 6vh, 64px) 0;
 }
 
 .home-start {
@@ -696,24 +708,10 @@ code {
 }
 
 .home-launchpad-heading {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 14px;
+  display: grid;
+  justify-items: center;
   margin-bottom: 24px;
-}
-
-.home-launchpad-heading-icon {
-  display: inline-grid;
-  width: 48px;
-  height: 48px;
-  flex: 0 0 auto;
-  place-items: center;
-  border: 1px solid var(--neko-desktop-border);
-  border-radius: 14px;
-  color: var(--neko-desktop-text);
-  background: var(--neko-desktop-surface-raised);
-  box-shadow: var(--neko-desktop-shadow-surface);
+  text-align: center;
 }
 
 .home-launchpad-heading h1 {
@@ -2158,8 +2156,9 @@ button.home-management-card:hover {
 .desktop-agent-root {
   overflow: hidden;
   color: var(--neko-fg);
-  background: var(--neko-desktop-surface);
-  --agent-bg: var(--neko-desktop-surface);
+  background: var(--neko-desktop-main);
+  --neko-sideBar-background: var(--neko-desktop-main);
+  --agent-bg: var(--neko-desktop-main);
   --agent-elevated: var(--neko-desktop-surface-raised);
 }
 
@@ -2169,7 +2168,8 @@ button.home-management-card:hover {
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  background: var(--neko-desktop-surface);
+  background: var(--neko-desktop-main);
+  --neko-sideBar-background: var(--neko-desktop-main);
 }
 
 .desktop-resource-browser-root .resource-dock-loading {
@@ -2312,14 +2312,17 @@ button.home-management-card:hover {
   }
 }
 
+@media (max-height: 720px) {
+  .home-overview {
+    place-items: start center;
+    padding-block: 40px;
+  }
+}
+
 @media (max-width: 720px) {
   .home-overview {
     width: calc(100% - 28px);
     padding-top: 52px;
-  }
-
-  .home-launchpad-heading {
-    justify-content: flex-start;
   }
 
   .home-launchpad-heading h1 {

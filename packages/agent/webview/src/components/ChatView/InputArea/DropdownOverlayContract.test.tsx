@@ -249,6 +249,18 @@ describe('dropdown overlay presentation contract', () => {
     expect(triggerRule).toContain('max-width: 144px');
   });
 
+  it('keeps the Desktop composer continuous with the Main conversation surface', () => {
+    const css = readFileSync(resolve(__dirname, '../../../index.css'), 'utf8');
+    const desktopDockRule = css.match(/\[data-presentation='desktop-dock'\]\s*\{(?<body>[^}]+)\}/)
+      ?.groups?.body;
+
+    expect(desktopDockRule).toMatch(
+      /--agent-bg:\s*var\(\s*--neko-sideBar-background,\s*var\(--neko-desktop-main/u,
+    );
+    expect(desktopDockRule).toContain('--agent-composer-rail-bg: var(--agent-bg)');
+    expect(desktopDockRule).toContain('--agent-composer-rail-border: transparent');
+  });
+
   it('keeps preset and generation parameter dialogs bounded with field headers', () => {
     const css = readFileSync(resolve(__dirname, '../../../index.css'), 'utf8');
     const presetRule = css.match(/\.agent-dropdown-menu-preset\s*\{(?<body>[^}]+)\}/)?.groups?.body;

@@ -546,9 +546,6 @@ function HomeStartCreating({
         data-home-composition="task-launchpad"
       >
         <header className="home-launchpad-heading">
-          <span className="home-launchpad-heading-icon" aria-hidden="true">
-            <StorylineIcon size={24} />
-          </span>
           <div>
             <h1 id="home-start-title">{t('home.start.title')}</h1>
             <p>{t('home.start.subtitle')}</p>
@@ -1688,40 +1685,33 @@ function MainViewGroupSurface({
         </div>
       </header>
       <div className="project-main-group__content">
-        {views.length === 0
-          ? renderWorkbenchMainView({
-              allowCutRuntime,
-              canvasCapability,
-              previewCapability,
-              cutCapability,
-              project,
-              projection,
-              view: undefined,
-            })
-          : views.map((view) => {
-              const active = view.viewId === activeView?.viewId;
-              return (
-                <div
-                  className="project-main-view-stack__item"
-                  data-active={active ? 'true' : 'false'}
-                  data-main-view-id={view.viewId}
-                  hidden={!active}
-                  key={`${view.viewId}:${view.viewEpoch}`}
-                >
-                  {renderWorkbenchMainView({
-                    allowCutRuntime,
-                    canvasCapability,
-                    previewCapability,
-                    cutCapability,
-                    project,
-                    projection,
-                    timelineTarget:
-                      view.viewId === timelineOwnerViewId ? timelineTarget : undefined,
-                    view,
-                  })}
-                </div>
-              );
-            })}
+        {views.length === 0 ? (
+          <EmptyMainSurface />
+        ) : (
+          views.map((view) => {
+            const active = view.viewId === activeView?.viewId;
+            return (
+              <div
+                className="project-main-view-stack__item"
+                data-active={active ? 'true' : 'false'}
+                data-main-view-id={view.viewId}
+                hidden={!active}
+                key={`${view.viewId}:${view.viewEpoch}`}
+              >
+                {renderWorkbenchMainView({
+                  allowCutRuntime,
+                  canvasCapability,
+                  previewCapability,
+                  cutCapability,
+                  project,
+                  projection,
+                  timelineTarget: view.viewId === timelineOwnerViewId ? timelineTarget : undefined,
+                  view,
+                })}
+              </div>
+            );
+          })
+        )}
       </div>
     </section>
   );
@@ -1744,15 +1734,15 @@ function renderWorkbenchMainView({
   readonly project: DesktopProjectCatalogItem;
   readonly projection: DesktopShellProjection;
   readonly timelineTarget?: Element;
-  readonly view: DesktopWorkbenchLayoutProjection['main']['views'][number] | undefined;
+  readonly view: DesktopWorkbenchLayoutProjection['main']['views'][number];
 }): JSX.Element {
-  if (view?.kind === 'preview' && previewCapability?.status === 'ready') {
+  if (view.kind === 'preview' && previewCapability?.status === 'ready') {
     return <DesktopPreviewSurface project={project} projection={projection} view={view} />;
   }
-  if (view?.kind === 'canvas' && canvasCapability?.status === 'ready') {
+  if (view.kind === 'canvas' && canvasCapability?.status === 'ready') {
     return <DesktopCanvasSurface project={project} projection={projection} view={view} />;
   }
-  if (view?.kind === 'cut' && cutCapability?.status === 'ready') {
+  if (view.kind === 'cut' && cutCapability?.status === 'ready') {
     if (!allowCutRuntime) {
       return (
         <CreativeMainPlaceholder
@@ -2269,6 +2259,23 @@ function CreativeMainPlaceholder({
   );
 }
 
+function EmptyMainSurface(): JSX.Element {
+  const { t } = useTranslation();
+  return (
+    <section
+      aria-label={t('workspace.mainTabs.empty')}
+      className="creative-main-placeholder dotted-surface"
+      data-empty-main="true"
+    >
+      <div>
+        <GridIcon size={24} />
+        <h2>{t('workspace.mainTabs.empty')}</h2>
+        <p>{t('workspace.mainTabs.emptyDetail')}</p>
+      </div>
+    </section>
+  );
+}
+
 function ResourceBrowserUnavailable({ diagnostic }: { readonly diagnostic: string }): JSX.Element {
   const { t } = useTranslation();
   return (
@@ -2457,15 +2464,12 @@ function PrimarySidebarBrand({
   const { t } = useTranslation();
   return (
     <DesktopApplicationBrand
-      control={
-        <IconButton
-          className="home-brand-toggle"
-          disabled={disabled}
-          label={compact ? t('workspace.expandSidebar') : t('workspace.collapseSidebar')}
-          icon={<RightPanelIcon size={16} />}
-          onClick={onToggle}
-        />
-      }
+      showMark={false}
+      titleAction={{
+        disabled,
+        label: compact ? t('workspace.expandSidebar') : t('workspace.collapseSidebar'),
+        onClick: onToggle,
+      }}
     />
   );
 }

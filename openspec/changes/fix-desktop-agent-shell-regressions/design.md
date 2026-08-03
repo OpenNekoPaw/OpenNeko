@@ -6,6 +6,14 @@ Agent Surface 又把两个独立的准备步骤串行化：renderer 等待 Main 
 
 Workbench display menu 使用 Radix portal。首轮实现已把 semantic class 编入 production renderer bundle，但真实 Electron 仍显示透明表面，证明源码/产物字符串检查不足以验证 portal 的最终 token、层叠与实际窗口 bundle。布局菜单虽然允许空 Main 选择 `chat-main`，却只渲染 `desktop-canvas-not-mounted` placeholder；这与项目打开即进入创作 Canvas 的产品路径不一致。
 
+Workbench 的侧边栏、Dock、Main split 与 Timeline 共用 `@neko/ui` 的 `useResizable`。该 hook 用 ref 阻止真实卸载后的 state update，但 effect 只在 cleanup 把 ref 置为未挂载，没有在 setup 恢复。Desktop renderer 本身运行在 React StrictMode 下；开发期 effect 重放后，仍然挂载的 resize owner 会被永久误判为已卸载，因此 pointerup 已完成尺寸提交和 `onResizeEnd`，却跳过 `setIsResizing(false)`，最终留下 `data-resizing="true"` 与持续可见的提示线。
+
+Desktop light theme 已定义 `main=#ffffff`、`surface=#fafafa`、`surface-muted=#f3f3f2` 三层表面。创作 Main 使用纯白 `main`，Agent 与 Resource Browser 的外层 Dock 及 package Root 却分别读取 `surface` 或全局 `--neko-sideBar-background=surface-muted`，形成三个主区域底色不一致。Agent composer rail 还额外绘制顶部分隔线，Resource Browser 则在 Desktop Dock 标题下再次渲染 package 标题栏，进一步制造视觉割裂。全局 sidebar token 仍服务应用导航，不应为修复这两个 Workbench consumer 而改变。
+
+Home 一级侧栏品牌行同时渲染 `N` 品牌块、`OpenNeko` 与面板图标，和下方已有图标导航形成重复 chrome。右侧 Agent launchpad 虽然横向居中，但依靠固定顶部 padding 定位，在高窗口中明显偏上。品牌行仍需保留 sidebar 展开/折叠能力，因此不能简单删除交互入口。
+
+Agent launchpad 标题仍在独立的 raised icon tile 后显示“与 OpenNeko 一起创作”，但下方常用任务与模板已经提供足够的功能图标语义。标题图标不承担 action 或状态，仅重复装饰层级，并让标题、副标题的视觉轴偏向图标后的左对齐。
+
 首轮 pending-send 测试直接向一个固定 `ChatWorkspace` 注入 request，没有经过 tabless composer、新 conversation、Tab runtime reconciliation、空 conversation/Timeline projection 和 visible realm replacement。真实截图中 Host 已投影“执行中”，而用户消息仍为空，说明执行状态和 optimistic message 落在了不同 owner 或 pending request 在 owning message commit 前被清除。
 
 ## Goals / Non-Goals
@@ -18,6 +26,12 @@ Workbench display menu 使用 Radix portal。首轮实现已把 semantic class �
 - Desktop portal surface 在深浅主题下都有稳定不透明背景、边框和层级，并由 production renderer computed style 证明。
 - Project 没有 Main View 时由 Host 打开 canonical Workspace Canvas，不建立 renderer 私有文档事实。
 - 项目 Resource Browser 以独立 Main View identity 打开/聚焦/关闭/恢复，不再通过 Resource Dock 展示。
+- 共享 resize primitive 在 StrictMode effect 重放和真实卸载两种生命周期下都保持正确的 pointer session 与视觉反馈语义。
+- Agent、创作 Main 与 Resource Browser Dock 统一使用 Desktop Main surface；输入控件、弹层和应用导航仍使用各自语义 token。
+- Agent composer rail 与对话区共用主表面且不绘制区域分隔线；Resource Browser 的 Desktop 嵌入模式只显示一层“资源管理”Dock chrome。
+- Home 一级侧栏品牌行只呈现 `OpenNeko` 文字，并让该文字继续承担可访问的展开/折叠操作。
+- Home Agent launchpad 在主区域有足够高度时垂直、水平居中；低高度与窄窗口仍可滚动并从顶部安全展示。
+- Home Agent launchpad 标题不渲染无交互的图标 tile，标题与副标题在同一居中轴上展示；功能入口图标保持不变。
 
 **Non-Goals:**
 
@@ -65,13 +79,35 @@ pending send 由 controller 按 request identity 绑定到 Host 创建的 conver
 
 Project attach/restoration 由 `DesktopShellService` 检查当前 project-owned Main Views。若没有可恢复的 Main owner，Host 通过现有 `openOrFocusMainView()` 创建一个指向 `neko/boards/workspace.nkc` 的 Canvas View，并选择 `chat-main`。Canvas runtime 继续负责缺失 Board 的空文档加载和首次保存；renderer 不创建或写入 `.nkc`。已有 Canvas/Preview/Cut/Resource Browser View 按持久 workbench 恢复，不重复创建默认 View。
 
-空 Main placeholder 从正常 Project 路径移除；缺失 Canvas capability或 Canvas 加载失败显示明确 diagnostic，不回退到伪 Canvas。
+Project 已 attach 后，用户可以关闭最后一个 Main Tab；该当前会话状态由 renderer 显示为正常的空 Main surface，不附加 Canvas diagnostic，也不立即重建默认 Canvas。下一次 Project attach/restoration 仍按上述 Host 规则恢复 canonical Workspace Canvas。缺失 Canvas capability 或 Canvas 加载失败只针对实际 Canvas View 显示明确 diagnostic，不回退到伪 Canvas。
 
 ### 6. Resource Browser 是 Workbench Main View
 
 项目 Resource Browser 复用现有 `DesktopResourceBrowserSurface` 和 Assets-owned Root，增加 `resource-browser` Main View kind 与稳定 project/workspace owner identity。一级导航的资源入口只构造/聚焦该 View，通过现有 workbench CAS 更新；Main group、Tab、close、focus、split 和恢复继续由通用 Workbench contract 拥有。
 
 Resource Dock 不再是项目 Resource Browser 的成功路径。旧的 dock presentation 只能在 schema 迁移时被拒绝或归一化为隐藏，renderer 不再挂载第二份 Resource Browser Root。
+
+### 7. Resize mounted guard 由 effect setup/cleanup 对称拥有
+
+`useResizable` 继续作为所有 Desktop resize surface 的唯一 pointer session owner，不在 Desktop Sidebar、Workbench Dock 或业务组件中复制清理分支。它的 effect setup 必须把 mounted guard 恢复为 `true`，cleanup 才置为 `false` 并清除 animation frame、pending size 与 pointer identity。这样 React StrictMode 的 setup → cleanup → setup 探测保持幂等，而真实卸载仍禁止后续 state update。
+
+不通过移除 resize indicator CSS 或给某个 Sidebar 单独加 pointerup handler掩盖问题，因为错误状态由共享 hook 产生，并影响所有使用者。回归测试必须在 StrictMode 中走完整 pointerdown → pointerup，断言 `onResizeEnd` 只执行一次且 `isResizing` 恢复为 false。
+
+### 8. Desktop composition scope 统一 Workbench Main surface
+
+Agent 和 Resource Browser 继续由各自 package Root 拥有内部样式和语义 token；Desktop composition 在 `.desktop-agent-root` 与 `.desktop-resource-browser-root` 边界把 `--neko-sideBar-background` 重投影为 `--neko-desktop-main`。Agent 的 `desktop-dock` presentation 尊重该组合边界，而不是再次硬选 `--neko-desktop-surface`；composer rail 继承同一背景并将区域分隔线设为透明。这样三个 Workbench 主区域在 light theme 下统一为 `#ffffff`，但输入控件、卡片、菜单和真实应用导航仍由既有语义 token 控制。
+
+Resource Browser 增加显式 Desktop 嵌入展示模式。standalone 模式保留 package 标题；Desktop Dock 模式由 Desktop shell 渲染唯一的“资源管理”标题，package 将新增/刷新操作合入搜索工具栏，不再渲染第二层“资源”标题栏。该 prop 只控制 chrome composition，不改变资源状态、搜索或 Host contract。
+
+不修改全局 `--neko-sideBar-background`，因为应用一级导航、真正的 Sidebar 及其他 Webview 仍需要 muted 层。不在 Agent/Assets package 内硬编码 `#fafafa`，因为暗色主题必须继续从 Desktop token 自动解析。单元契约测试锁定 composition scope，真实 packaged Electron 场景读取两个 package Root 的 computed background。
+
+### 9. Home 品牌与 launchpad 使用最小 chrome
+
+`DesktopApplicationBrand` 提供纯文字 action 变体，Home/Project 的 application primary sidebar 使用该变体：隐藏 `brand-mark`，不再传入独立图标按钮，并由 `OpenNeko` 文字按钮调用现有 `togglePrimarySidebarWorkbench` 路径。Settings 等非一级侧栏 consumer 保留默认品牌展示，避免用全局 CSS 隐藏所有品牌资产。
+
+`.home-overview` 作为 Home Main 的唯一 launchpad 布局 owner，通过 grid 居中 `.home-start`，不修改 composer、快捷任务或模板卡片的内部 ownership。窄宽度继续使用既有宽度 media query；低视口高度切换为顶部对齐，避免居中造成上方内容不可达。
+
+Agent 标题层只删除 `home-launchpad-heading-icon` 节点及其专属 CSS，`.home-launchpad-heading` 改为单列居中文本容器。`StorylineIcon` 继续用于“规划创作”等真实 action，不因标题去装饰而修改共享 icon 能力或任务结构。
 
 ## Risks / Trade-offs
 
@@ -82,14 +118,20 @@ Resource Dock 不再是项目 Resource Browser 的成功路径。旧的 dock pre
 - [通用 Popover 样式影响其他消费者] → 使用现有 token contract、primitive 聚焦测试和 production computed style，不加入业务菜单专属背景。
 - [默认 Workspace Board 尚不存在] → Canvas runtime 只在内存中加载空 Canvas，首次真实保存才创建 canonical 文件，不由 Shell 伪造内容。
 - [Resource Browser 从 Dock 迁到 Main 影响恢复] → Workbench parser 显式迁移/拒绝旧 presentation，并用路径级测试证明 renderer 只挂载 Main View Root。
+- [mounted guard 修复导致真实卸载后更新] → setup/cleanup 对称维护 guard，cleanup 同时取消 frame、丢弃 pending size 与 pointer identity；StrictMode 和真实 unmount 分别覆盖。
+- [Main surface scope 破坏 package 内部层次] → 只重投影 package 已有 sidebar semantic token并消除 composer 区域分隔；input/menu token 保持不变，并在 Agent、Resource Browser 两个真实 Root 上读取 computed style。
+- [移除重复 Resource Browser 标题导致功能操作丢失] → Desktop 嵌入模式将新增/刷新操作合入搜索工具栏，并用可访问角色测试断言标题唯一且操作仍可用。
+- [移除品牌图标导致 Sidebar 无法切换] → `OpenNeko` 文字本身保留现有 toggle action 和可访问标签，compact hover reveal 仍可恢复文字操作。
+- [垂直居中导致低窗口内容顶部溢出] → 使用低高度 media query 切换为顶部对齐，并由真实 Electron 大/小窗口检查可滚动性。
+- [标题去图标削弱任务辨识] → 只移除无交互标题 tile，常用任务和模板的功能图标继续由各自 action 拥有。
 
 ## Migration Plan
 
-1. 先添加 catalog cold-start、Root 订阅顺序、跨 realm pending send、production Popover computed style、默认 Canvas 和 Resource Browser Main View 红测。
+1. 先添加 catalog cold-start、Root 订阅顺序、跨 realm pending send、production Popover computed style、默认 Canvas、Resource Browser Main View 和 StrictMode resize lifecycle 红测。
 2. 增加 Pi catalog reader 与 Desktop 初始化 scope，删除 Home 对“已 attach workspace 才可列出”的隐式路径。
 3. 在 renderer 启动门禁预加载 Agent module，让 Surface 复用同一 promise，并调整 Root
    订阅时序。
-4. 接入 Popover semantic surface、默认 Workspace Canvas 和 Resource Browser Main View，断开项目 Resource Dock 成功路径。
+4. 接入 Popover semantic surface、默认 Workspace Canvas、Resource Browser Main View、对称的 resize mounted guard 与 Desktop Dock surface scope，断开项目 Resource Dock 成功路径。
 5. 运行受影响包测试/typecheck/build、Desktop package、quality gates 和真实 Electron 隔离场景。
 
 回滚应整体恢复旧行为；没有持久 schema 或用户数据迁移。任何 catalog 读取失败必须阻止 Agent Home 被描述为成功空列表，并显示 diagnostic。

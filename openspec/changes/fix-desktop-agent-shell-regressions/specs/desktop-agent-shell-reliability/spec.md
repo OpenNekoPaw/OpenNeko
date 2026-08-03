@@ -107,6 +107,12 @@ The Desktop Host SHALL open or focus `neko/boards/workspace.nkc` as the default 
 - **WHEN** a Project is reopened with a persisted Canvas, Preview, Cut, or Resource Browser Main View
 - **THEN** the Host restores that View without creating a duplicate Workspace Canvas
 
+#### Scenario: User closes the last Main View in the current session
+
+- **WHEN** an attached Project user closes its last Canvas, Preview, Cut, or Resource Browser Main View
+- **THEN** the renderer displays an explicit empty Main surface without a Canvas failure diagnostic
+- **AND** the Host does not recreate the default Workspace Canvas until the Project is attached or restored again
+
 #### Scenario: Canvas capability fails
 
 - **WHEN** the default Canvas View cannot obtain a valid Canvas runtime
@@ -133,3 +139,73 @@ The Desktop Workbench SHALL open the project Resource Browser as an independent 
 - **WHEN** a persisted Resource Browser View is restored or closed
 - **THEN** it follows the same epoch, group membership, focus and close contract as other Main Views
 - **AND** no project Resource Dock success path participates
+
+### Requirement: Workbench resize feedback follows the active pointer session
+
+The shared resize primitive SHALL expose resizing feedback only while its owning pointer session is active and SHALL remain lifecycle-correct when React replays effect setup and cleanup under StrictMode.
+
+#### Scenario: Resize completes under React StrictMode
+
+- **WHEN** a sidebar, Dock, Main split, or Timeline resize starts and its owning pointer session ends after React has replayed the primitive effect lifecycle
+- **THEN** the final size is committed exactly once
+- **AND** the owning surface clears its resizing state immediately
+- **AND** the resize indicator does not remain visible because the mounted component was mistaken for an unmounted component
+
+#### Scenario: Resize component really unmounts
+
+- **WHEN** a resize owner unmounts during an active pointer session
+- **THEN** pending animation-frame work and pointer ownership are discarded
+- **AND** no state update or resize-end callback is emitted after unmount
+
+### Requirement: Desktop Workbench primary regions share one Main surface
+
+The Desktop renderer SHALL scope Agent and Resource Browser package Roots to the same Main surface used by the creative Main region without changing the global sidebar token used by application navigation. The Agent composer rail SHALL remain visually continuous with the conversation surface. A Desktop-embedded Resource Browser SHALL rely on the Desktop Dock for its single visible title and SHALL keep package actions in the content toolbar.
+
+#### Scenario: Agent and Resource Browser render in the light Desktop theme
+
+- **WHEN** the Agent conversation or Resource Browser is mounted inside a Desktop Workbench Dock
+- **THEN** its package Root computed background uses `--neko-desktop-main` (`#ffffff`)
+- **AND** it does not use the Workbench surface (`#fafafa`) or muted sidebar surface (`#f3f3f2`)
+- **AND** the Agent composer rail uses the same computed background without an independent top divider
+- **AND** inputs and dialogs remain distinguishable through their semantic control tokens
+
+#### Scenario: Desktop theme changes to dark
+
+- **WHEN** the same package Root is rendered in the dark Desktop theme
+- **THEN** it follows the dark `--neko-desktop-main` value without a package-local light color override
+
+#### Scenario: Resource Browser is embedded in Resource management
+
+- **WHEN** Desktop mounts the Resource Browser inside the Resource management Dock
+- **THEN** exactly one visible Dock title identifies the surface as Resource management
+- **AND** the package does not render a second Resources title row
+- **AND** add-library and refresh actions remain available in the unified content toolbar
+
+### Requirement: Home uses minimal brand chrome and a centered Agent launchpad
+
+The Desktop Home application primary sidebar SHALL render one `OpenNeko` text brand without a brand mark or a separate icon control. The text brand SHALL preserve the existing sidebar visibility action. The Home Agent launchpad SHALL be centered within the available Main region when the viewport has sufficient height and SHALL remain safely scrollable at constrained sizes.
+
+#### Scenario: Home opens with the primary sidebar expanded
+
+- **WHEN** Desktop renders the Home create entry
+- **THEN** the application brand row contains only the visible `OpenNeko` text
+- **AND** it contains no brand mark or icon glyph
+- **AND** activating the text uses the existing sidebar visibility action
+
+#### Scenario: Home opens in a spacious window
+
+- **WHEN** the Main region is taller than the Agent launchpad content
+- **THEN** the launchpad is horizontally and vertically centered in the available Home Main region
+
+#### Scenario: Home window height is constrained
+
+- **WHEN** the launchpad cannot fit comfortably while centered
+- **THEN** the layout aligns from the top with bounded padding
+- **AND** Home Main remains scrollable without clipping the heading or composer
+
+#### Scenario: Agent launchpad heading is rendered
+
+- **WHEN** Desktop displays the Home Agent creation entry
+- **THEN** the heading contains no standalone decorative icon tile
+- **AND** its title and subtitle share one centered text axis
+- **AND** common task and quick-start actions retain their functional icons

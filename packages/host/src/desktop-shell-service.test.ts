@@ -6,7 +6,7 @@ import {
   createInMemoryDesktopShellStateRepository,
   type InMemoryDesktopShellStateRepository,
 } from './testing/in-memory-desktop-shell-state-repository';
-import { DESKTOP_PRIMARY_MAIN_GROUP_ID } from './desktop-workbench-contract';
+import { closeMainView, DESKTOP_PRIMARY_MAIN_GROUP_ID } from './desktop-workbench-contract';
 
 describe('DesktopShellService', () => {
   it('starts at Home by default without deleting restored project tabs', async () => {
@@ -157,6 +157,49 @@ describe('DesktopShellService', () => {
     expect(opened.projection.window.workbench.main.groups[0]).toMatchObject({
       viewIds: [opened.projection.window.workbench.main.views[0]?.viewId],
       activeViewId: opened.projection.window.workbench.main.views[0]?.viewId,
+    });
+  });
+
+  it('restores the canonical Workspace Canvas before projecting an active Project with an empty Main group', async () => {
+    const file = createMemoryFile();
+    const first = createFixture(file);
+    const windowId = await first.service.claimWindowId();
+    first.service.setRendererEpoch(windowId, 1);
+    const initial = await first.service.getProjection(windowId);
+    const opened = await first.service.openContent(
+      windowId,
+      '/workspace/demo',
+      initial.endpointEpoch,
+      initial.window.revision,
+    );
+    const current = opened.projection.window.workbench;
+    const canvasView = current.main.views[0];
+    if (!canvasView) throw new Error('Expected the default Workspace Canvas View.');
+    await first.service.updateWorkbench(
+      windowId,
+      opened.projection.endpointEpoch,
+      opened.projection.window.revision,
+      current.revision,
+      closeMainView(current, canvasView.viewId),
+    );
+    first.service.releaseWindow(windowId);
+    await first.service.dispose();
+
+    const restored = createFixture(file, 'restore');
+    const restoredWindow = await restored.service.claimWindowId();
+    restored.service.setRendererEpoch(restoredWindow, 1);
+    const projection = await restored.service.getProjection(restoredWindow);
+
+    expect(projection.window.activeTarget.kind).toBe('project');
+    expect(projection.window.workbench.main.views).toEqual([
+      expect.objectContaining({
+        kind: 'canvas',
+        documentId: 'neko/boards/workspace.nkc',
+      }),
+    ]);
+    expect(projection.window.workbench.main.groups[0]).toMatchObject({
+      viewIds: [projection.window.workbench.main.views[0]?.viewId],
+      activeViewId: projection.window.workbench.main.views[0]?.viewId,
     });
   });
 
@@ -627,17 +670,12 @@ describe('DesktopShellService', () => {
     first.service.releaseWindow(windowId);
     await first.service.dispose();
 
-    const restored = createFixture(file);
+    const restored = createFixture(file, 'restore');
     const restoredWindow = await restored.service.claimWindowId();
     restored.service.setRendererEpoch(restoredWindow, 1);
-    const homeProjection = await restored.service.getProjection(restoredWindow);
-    const projection = await restored.service.activateTab(
-      restoredWindow,
-      homeProjection.window.tabs[0]!.tabId,
-      homeProjection.endpointEpoch,
-      homeProjection.window.revision,
-    );
+    const projection = await restored.service.getProjection(restoredWindow);
 
+    expect(projection.window.activeTarget.kind).toBe('project');
     expect(projection.window.workbench).toMatchObject({
       display: { mode: 'chat-main' },
       main: {

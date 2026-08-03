@@ -21,10 +21,10 @@
   justify-content: space-between;
 }
 
-.neko-resource-browser__header > div {
+.neko-resource-browser__toolbar {
   display: flex;
   align-items: center;
-  gap: 3px;
+  gap: 2px;
 }
 
 .neko-resource-browser__library-menu {
@@ -88,7 +88,8 @@
   font-size: 11px;
 }
 
-.neko-resource-browser__header button {
+.neko-resource-browser__header button,
+.neko-resource-browser__toolbar .neko-resource-browser__icon-button {
   width: 28px;
   height: 28px;
   padding: 0;

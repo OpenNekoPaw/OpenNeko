@@ -102,7 +102,7 @@ describe('DesktopApplication', () => {
     container.remove();
   });
 
-  it('dispatches global Asset Center and Project resources through independent owners', async () => {
+  it('dispatches global Asset Center and Resource management through independent owners', async () => {
     const base = createProjection();
     const project = {
       projectId: 'content:workspace-1',
@@ -193,7 +193,7 @@ describe('DesktopApplication', () => {
     await act(async () => root.render(<TestApplication />));
 
     const projectResources = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
-      (button) => button.getAttribute('aria-label') === 'Project resources',
+      (button) => button.getAttribute('aria-label') === 'Resource management',
     );
     await act(async () => projectResources?.click());
     await waitForDom(() => updateWorkbench.mock.calls.length === 1);

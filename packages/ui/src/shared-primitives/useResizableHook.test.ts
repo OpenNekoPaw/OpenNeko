@@ -1,10 +1,12 @@
 // @vitest-environment jsdom
 
-import React, { useEffect } from 'react';
+import React, { StrictMode, useEffect } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { act } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useResizable, type UseResizableOptions, type UseResizableReturn } from './useResizable';
+
+Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 
 describe('useResizable hook lifecycle', () => {
   let host: HTMLDivElement;
@@ -182,6 +184,57 @@ describe('useResizable hook lifecycle', () => {
     expect(onResizeEnd).toHaveBeenCalledWith(240);
   });
 
+  it('clears resizing state after pointer capture ends under React StrictMode', () => {
+    const onResizeEnd = vi.fn();
+
+    renderHarness({
+      size: 240,
+      onResizeEnd,
+      captureWidth: 800,
+      captureHeight: 400,
+      strictMode: true,
+    });
+
+    const handle = getHandle();
+
+    act(() => {
+      latest?.handleProps.onPointerDown(createPointerEvent(handle, 1, 0, 0));
+      latest?.handleProps.onPointerUp(createPointerEvent(handle, 1, 0, 0));
+    });
+
+    expect(latest?.isResizing).toBe(false);
+    expect(onResizeEnd).toHaveBeenCalledOnce();
+  });
+
+  it('discards a pending resize frame when the owner unmounts', () => {
+    const onSizeChange = vi.fn();
+    const onResizeEnd = vi.fn();
+
+    renderHarness({
+      size: 240,
+      onSizeChange,
+      onResizeEnd,
+      captureWidth: 800,
+      captureHeight: 400,
+    });
+
+    const handle = getHandle();
+    act(() => {
+      latest?.handleProps.onPointerDown(createPointerEvent(handle, 1, 0, 0));
+      latest?.handleProps.onPointerMove(createPointerEvent(handle, 1, 590, 0));
+    });
+    expect(animationFrameCallbacks.size).toBe(1);
+
+    act(() => {
+      root.unmount();
+    });
+
+    expect(animationFrameCallbacks.size).toBe(0);
+    expect(onSizeChange).not.toHaveBeenCalled();
+    expect(onResizeEnd).not.toHaveBeenCalled();
+    root = createRoot(host);
+  });
+
   it('updates uncontrolled size from pointer movement', () => {
     renderHarness({
       initialSize: 0.5,
@@ -218,6 +271,7 @@ describe('useResizable hook lifecycle', () => {
     maxSize?: number;
     captureWidth: number;
     captureHeight: number;
+    strictMode?: boolean;
   }) {
     const {
       captureWidth,
@@ -276,8 +330,9 @@ describe('useResizable hook lifecycle', () => {
       );
     }
 
+    const harness = React.createElement(Harness);
     act(() => {
-      root.render(React.createElement(Harness));
+      root.render(options.strictMode ? React.createElement(StrictMode, null, harness) : harness);
     });
   }
 

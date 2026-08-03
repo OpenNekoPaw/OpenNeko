@@ -6,6 +6,11 @@
 - [x] 1.4 Add a controller-level red test covering tabless submit, Host-created conversation/Tab, empty projection frames, config hydration and visible optimistic text in the owning realm.
 - [x] 1.5 Add a production-renderer computed-style check for the Radix portal background/opacity and Desktop workbench red tests for default Workspace Canvas plus Resource Browser Main View open/focus.
 - [x] 1.6 Add a renderer-startup red test proving Agent module loading joins the bootstrap/settings readiness gate without creating a Project/View adapter.
+- [x] 1.7 Add a StrictMode red test proving a completed shared resize pointer session clears `isResizing` while committing `onResizeEnd` once.
+- [x] 1.8 Add Desktop and package CSS contract tests proving Agent and Resource Browser Roots share the Workbench Main surface and the Agent composer rail has no separate region divider.
+- [x] 1.9 Add a Resource Browser embedded-chrome red test proving Desktop renders one Resource management title while add/refresh actions remain available.
+- [x] 1.10 Add Home renderer/CSS red tests proving the application brand contains only interactive `OpenNeko` text and the Agent launchpad is centered with a low-height safety rule.
+- [x] 1.11 Add Home renderer/CSS red tests proving the Agent heading has no standalone icon tile and centers its title/subtitle without removing action icons.
 
 ## 2. Persistent Agent Home catalog
 
@@ -27,6 +32,11 @@
 - [x] 4.2 Enable Chat + Main for an empty primary Main group, render the explicit empty Main surface, and keep Main only disabled until a Main View exists.
 - [x] 4.3 Replace the empty Main placeholder path with Host-owned default `neko/boards/workspace.nkc` Canvas open/focus and preserve existing project-owned Main Views on restore.
 - [x] 4.4 Add `resource-browser` as an independent Workbench Main View, route the project navigation entry through open/focus, reuse the existing Assets Root, and disconnect the project Resource Dock render path.
+- [x] 4.5 Make the shared resize mounted guard symmetric across effect setup/cleanup so Sidebar, Dock, Main split and Timeline indicators clear after drag under React StrictMode.
+- [x] 4.6 Scope Agent and Resource Browser Desktop package Roots to `--neko-desktop-main`, keep the global muted sidebar token unchanged, and remove the Agent composer rail region divider.
+- [x] 4.7 Rename the Desktop Dock to Resource management and render Resource Browser in embedded mode without its duplicate package title row.
+- [x] 4.8 Replace Home primary-sidebar brand icons with the existing visibility action on `OpenNeko` text and center the Home Agent launchpad without changing its internal feature ownership.
+- [x] 4.9 Remove the decorative Agent heading icon tile and align the launchpad title/subtitle on one centered text axis while preserving task/template icons.
 
 ## 5. Verification and documentation
 

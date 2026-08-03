@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { act } from 'react';
+import { act, StrictMode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -188,17 +188,19 @@ describe('editor workbench shell primitives', () => {
 
     act(() => {
       root.render(
-        <ControlledWorkbenchShell
-          primarySidebar={<div data-testid="primary" />}
-          primarySidebarWidth={232}
-          primarySidebarResize={{
-            label: 'Resize primary',
-            minSize: 208,
-            maxSize: 360,
-            onResizeEnd,
-          }}
-          main={<div data-testid="main" />}
-        />,
+        <StrictMode>
+          <ControlledWorkbenchShell
+            primarySidebar={<div data-testid="primary" />}
+            primarySidebarWidth={232}
+            primarySidebarResize={{
+              label: 'Resize primary',
+              minSize: 208,
+              maxSize: 360,
+              onResizeEnd,
+            }}
+            main={<div data-testid="main" />}
+          />
+        </StrictMode>,
       );
     });
 
@@ -225,10 +227,16 @@ describe('editor workbench shell primitives', () => {
 
     act(() => {
       dispatchPointer(handle, 'pointerdown', 1, 232, 0);
+    });
+
+    expect(panel.dataset['resizing']).toBe('true');
+
+    act(() => {
       dispatchPointer(handle, 'pointermove', 1, 300, 0);
       dispatchPointer(handle, 'pointerup', 1, 300, 0);
     });
 
+    expect(panel.dataset['resizing']).toBe('false');
     expect(onResizeEnd).toHaveBeenCalledOnce();
     expect(onResizeEnd).toHaveBeenCalledWith(300);
     expect(shell.style.getPropertyValue('--neko-controlled-primary-width')).toBe('300px');

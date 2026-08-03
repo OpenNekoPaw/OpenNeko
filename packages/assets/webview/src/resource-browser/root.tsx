@@ -55,6 +55,7 @@ import './style.css';
 export interface ResourceBrowserRootProps {
   readonly runtime: ResourceBrowserHostRuntime;
   readonly locale: SupportedLocale;
+  readonly chrome?: 'standalone' | 'embedded';
   readonly defaultViewMode?: 'list' | 'grid';
   readonly previewTarget?: {
     readonly viewId: string;
@@ -83,6 +84,7 @@ interface ResourceBrowserDisplayState {
 const displayStateByProject = new Map<string, ResourceBrowserDisplayState>();
 
 export function ResourceBrowserRoot({
+  chrome = 'standalone',
   defaultViewMode = 'list',
   locale,
   onOpenCanvas,
@@ -504,9 +506,22 @@ export function ResourceBrowserRoot({
 
   return (
     <section className="neko-resource-browser" aria-label={labels.title}>
-      <header className="neko-resource-browser__header">
-        <strong>{labels.title}</strong>
+      {chrome === 'standalone' ? (
+        <header className="neko-resource-browser__header">
+          <strong>{labels.title}</strong>
+        </header>
+      ) : null}
+      <form className="neko-resource-browser__search" onSubmit={submitSearch}>
         <div>
+          <SearchIcon size={14} aria-hidden="true" />
+          <input
+            aria-label={labels.search}
+            placeholder={labels.searchPlaceholder}
+            value={query}
+            onChange={(event) => setQuery(event.currentTarget.value)}
+          />
+        </div>
+        <div className="neko-resource-browser__toolbar">
           <div
             className="neko-resource-browser__library-menu"
             ref={libraryMenuRef}
@@ -563,37 +578,26 @@ export function ResourceBrowserRoot({
           >
             <RefreshIcon size={15} />
           </button>
-        </div>
-      </header>
-      <form className="neko-resource-browser__search" onSubmit={submitSearch}>
-        <div>
-          <SearchIcon size={14} aria-hidden="true" />
-          <input
-            aria-label={labels.search}
-            placeholder={labels.searchPlaceholder}
-            value={query}
-            onChange={(event) => setQuery(event.currentTarget.value)}
-          />
-        </div>
-        <div className="neko-resource-browser__view-modes">
-          <button
-            type="button"
-            aria-label={labels.listView}
-            aria-pressed={viewMode === 'list'}
-            title={labels.listView}
-            onClick={() => setViewMode('list')}
-          >
-            <FileIcon size={14} />
-          </button>
-          <button
-            type="button"
-            aria-label={labels.gridView}
-            aria-pressed={viewMode === 'grid'}
-            title={labels.gridView}
-            onClick={() => setViewMode('grid')}
-          >
-            <GridIcon size={14} />
-          </button>
+          <div className="neko-resource-browser__view-modes">
+            <button
+              type="button"
+              aria-label={labels.listView}
+              aria-pressed={viewMode === 'list'}
+              title={labels.listView}
+              onClick={() => setViewMode('list')}
+            >
+              <FileIcon size={14} />
+            </button>
+            <button
+              type="button"
+              aria-label={labels.gridView}
+              aria-pressed={viewMode === 'grid'}
+              title={labels.gridView}
+              onClick={() => setViewMode('grid')}
+            >
+              <GridIcon size={14} />
+            </button>
+          </div>
         </div>
       </form>
       <div className="neko-resource-browser__facets" role="tablist">

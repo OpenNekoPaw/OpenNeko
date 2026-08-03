@@ -218,7 +218,7 @@ export class DesktopShellService {
         return windowId;
       }
       const restoredWindow = requireStoredWindow(state, windowId);
-      const restoredWorkbench = restoreTransientWorkbench(state, restoredWindow);
+      const restoredWorkbench = restoreWindowWorkbench(state, restoredWindow);
       const restoredActiveTarget =
         this.options.startupTarget === 'home' && restoredWindow.activeTarget.kind !== 'home'
           ? ({ kind: 'home' } as const)
@@ -1246,17 +1246,20 @@ function attachProjectWorkbench(
   });
 }
 
-function restoreTransientWorkbench(
+function restoreWindowWorkbench(
   state: DesktopShellStoredState,
   window: DesktopStoredWindow,
 ): DesktopWorkbenchLayoutProjection {
-  const hasTemporaryPreview = window.workbench.main.views.some(
-    (view) =>
+  let restored = window.workbench;
+  for (const view of window.workbench.main.views) {
+    if (
       view.kind === 'preview' &&
       view.previewPresentation === 'temporary' &&
-      view.ownerId.startsWith('preview-session:'),
-  );
-  if (!hasTemporaryPreview) return window.workbench;
+      view.ownerId.startsWith('preview-session:')
+    ) {
+      restored = closeMainView(restored, view.viewId);
+    }
+  }
   if (window.activeTarget.kind === 'project') {
     const activeTabId = window.activeTarget.tabId;
     const tab = window.tabs.find((candidate) => candidate.tabId === activeTabId);
@@ -1265,21 +1268,12 @@ function restoreTransientWorkbench(
         `Desktop active Project Tab '${activeTabId}' is unavailable during Workbench restore.`,
       );
     }
-    let restored = window.workbench;
-    for (const view of window.workbench.main.views) {
-      if (
-        view.kind === 'preview' &&
-        view.previewPresentation === 'temporary' &&
-        view.ownerId.startsWith('preview-session:')
-      ) {
-        restored = closeMainView(restored, view.viewId);
-      }
-    }
-    return restored;
+    return attachProjectWorkbench(restored, requireStoredProject(state, tab.projectId));
   }
+  if (restored === window.workbench) return restored;
   return {
     ...createDefaultDesktopWorkbenchLayout(window.windowId),
-    revision: window.workbench.revision + 1,
+    revision: restored.revision,
   };
 }
 

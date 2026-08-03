@@ -302,15 +302,15 @@ export function useResizable<TElement extends HTMLElement = HTMLElement>(
     [commitPendingSize],
   );
 
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
       cancelScheduledSize();
       pendingSizeRef.current = null;
       mountedRef.current = false;
       activePointerIdRef.current = null;
-    },
-    [cancelScheduledSize],
-  );
+    };
+  }, [cancelScheduledSize]);
 
   const finishResize = useCallback(
     (event: React.PointerEvent<HTMLElement>, releaseCapture: boolean) => {
