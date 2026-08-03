@@ -7,15 +7,22 @@ import { DESKTOP_RESOURCE_BROWSER_CHANNELS } from '../shared/resource-browser-br
 import { DESKTOP_PREVIEW_CHANNELS } from '../shared/preview-bridge-contract';
 import { DESKTOP_CANVAS_CHANNELS } from '../shared/canvas-bridge-contract';
 import { DESKTOP_CUT_CHANNELS } from '../shared/cut-bridge-contract';
-import { DESKTOP_HOME_MANAGEMENT_CHANNELS } from '../shared/home-management-contract';
 import { DESKTOP_APPLICATION_SETTINGS_CHANNELS } from '@neko/host/application-settings';
 import { DESKTOP_PROJECT_PORTABILITY_CHANNELS } from '@neko/assets-domain/contracts';
+import { ASSET_CENTER_HOST_CHANNEL } from '@neko/assets-domain/asset-center/host-contract';
+import { AGENT_EXTENSION_MANAGEMENT_HOST_CHANNEL } from '@neko/agent-contracts/extension-management-host';
+import { AGENT_LAUNCH_HOST_CHANNEL } from '@neko/agent-contracts/agent-launch-host';
+import { ASSISTANT_RESOURCE_HOST_CHANNEL } from '@neko/agent-contracts/assistant-resource-host';
+import { DESKTOP_WORKSPACE_GRANT_CHANNEL } from '@neko/host/desktop-workspace-grant-contract';
 import type { DesktopAppHost } from './app-host';
 
 export function registerDesktopIpc(
   appHost: DesktopAppHost,
   options: {
     readonly selectContentWorkspace: (event: IpcMainInvokeEvent) => Promise<string | undefined>;
+    readonly selectWorkspaceGrant: (
+      event: IpcMainInvokeEvent,
+    ) => Promise<{ readonly label: string; readonly hostResource: string } | undefined>;
   },
 ): () => void {
   ipcMain.handle(
@@ -41,6 +48,17 @@ export function registerDesktopIpc(
           event.sender.send(DESKTOP_AGENT_CHANNELS.messageEvent, agentEvent);
         }
       }),
+  );
+  ipcMain.handle(AGENT_LAUNCH_HOST_CHANNEL, (event: IpcMainInvokeEvent, payload: unknown) =>
+    appHost.executeAgentLaunchRequest(requireSender(event), payload),
+  );
+  ipcMain.handle(ASSISTANT_RESOURCE_HOST_CHANNEL, (event: IpcMainInvokeEvent, payload: unknown) =>
+    appHost.executeAssistantResourceRequest(requireSender(event), payload),
+  );
+  ipcMain.handle(DESKTOP_WORKSPACE_GRANT_CHANNEL, (event: IpcMainInvokeEvent, payload: unknown) =>
+    appHost.chooseWorkspaceGrant(requireSender(event), payload, () =>
+      options.selectWorkspaceGrant(event),
+    ),
   );
   ipcMain.handle(DESKTOP_CUT_CHANNELS.snapshotGet, (event: IpcMainInvokeEvent, payload: unknown) =>
     appHost.getCutSnapshot(requireSender(event), payload, (cutEvent) => {
@@ -206,84 +224,14 @@ export function registerDesktopIpc(
       appHost.createShellSnapshot(requireSender(event), payload),
   );
   ipcMain.handle(
-    DESKTOP_HOME_MANAGEMENT_CHANNELS.assetsSearch,
+    ASSET_CENTER_HOST_CHANNEL,
     (event: IpcMainInvokeEvent, payload: unknown) =>
-      appHost.searchHomeAssets(requireSender(event), payload),
+      appHost.executeAssetCenter(requireSender(event), payload),
   );
   ipcMain.handle(
-    DESKTOP_HOME_MANAGEMENT_CHANNELS.assetsImport,
+    AGENT_EXTENSION_MANAGEMENT_HOST_CHANNEL,
     (event: IpcMainInvokeEvent, payload: unknown) =>
-      appHost.importHomeAssets(requireSender(event), payload),
-  );
-  ipcMain.handle(
-    DESKTOP_HOME_MANAGEMENT_CHANNELS.assetsRemove,
-    (event: IpcMainInvokeEvent, payload: unknown) =>
-      appHost.removeHomeAsset(requireSender(event), payload),
-  );
-  ipcMain.handle(
-    DESKTOP_HOME_MANAGEMENT_CHANNELS.libraryThumbnailResolve,
-    (event: IpcMainInvokeEvent, payload: unknown) =>
-      appHost.resolveHomeLibraryThumbnail(requireSender(event), payload),
-  );
-  ipcMain.handle(
-    DESKTOP_HOME_MANAGEMENT_CHANNELS.mediaLibrariesSearch,
-    (event: IpcMainInvokeEvent, payload: unknown) =>
-      appHost.searchHomeMediaLibraries(requireSender(event), payload),
-  );
-  ipcMain.handle(
-    DESKTOP_HOME_MANAGEMENT_CHANNELS.mediaLibrariesChildren,
-    (event: IpcMainInvokeEvent, payload: unknown) =>
-      appHost.readHomeMediaLibraryChildren(requireSender(event), payload),
-  );
-  ipcMain.handle(
-    DESKTOP_HOME_MANAGEMENT_CHANNELS.mediaLibrariesAdd,
-    (event: IpcMainInvokeEvent, payload: unknown) =>
-      appHost.addHomeMediaLibrary(requireSender(event), payload),
-  );
-  ipcMain.handle(
-    DESKTOP_HOME_MANAGEMENT_CHANNELS.mediaLibrariesRelink,
-    (event: IpcMainInvokeEvent, payload: unknown) =>
-      appHost.relinkHomeMediaLibrary(requireSender(event), payload),
-  );
-  ipcMain.handle(
-    DESKTOP_HOME_MANAGEMENT_CHANNELS.mediaLibrariesRemove,
-    (event: IpcMainInvokeEvent, payload: unknown) =>
-      appHost.removeHomeMediaLibrary(requireSender(event), payload),
-  );
-  ipcMain.handle(
-    DESKTOP_HOME_MANAGEMENT_CHANNELS.mediaLibrariesReveal,
-    (event: IpcMainInvokeEvent, payload: unknown) =>
-      appHost.revealHomeMediaLibrary(requireSender(event), payload),
-  );
-  ipcMain.handle(
-    DESKTOP_HOME_MANAGEMENT_CHANNELS.extensionsList,
-    (event: IpcMainInvokeEvent, payload: unknown) =>
-      appHost.listHomeExtensions(requireSender(event), payload),
-  );
-  ipcMain.handle(
-    DESKTOP_HOME_MANAGEMENT_CHANNELS.extensionPluginInstall,
-    (event: IpcMainInvokeEvent, payload: unknown) =>
-      appHost.installHomeExtensionPlugin(requireSender(event), payload),
-  );
-  ipcMain.handle(
-    DESKTOP_HOME_MANAGEMENT_CHANNELS.extensionPluginRemove,
-    (event: IpcMainInvokeEvent, payload: unknown) =>
-      appHost.removeHomeExtensionPlugin(requireSender(event), payload),
-  );
-  ipcMain.handle(
-    DESKTOP_HOME_MANAGEMENT_CHANNELS.extensionMarketplacesRefresh,
-    (event: IpcMainInvokeEvent, payload: unknown) =>
-      appHost.refreshHomeExtensionMarketplaces(requireSender(event), payload),
-  );
-  ipcMain.handle(
-    DESKTOP_HOME_MANAGEMENT_CHANNELS.extensionPersonalSkillInstall,
-    (event: IpcMainInvokeEvent, payload: unknown) =>
-      appHost.installHomePersonalSkill(requireSender(event), payload),
-  );
-  ipcMain.handle(
-    DESKTOP_HOME_MANAGEMENT_CHANNELS.extensionPersonalSkillRemove,
-    (event: IpcMainInvokeEvent, payload: unknown) =>
-      appHost.removeHomePersonalSkill(requireSender(event), payload),
+      appHost.executeExtensionManagement(requireSender(event), payload),
   );
   ipcMain.handle(
     DESKTOP_SHELL_CHANNELS.projectOpenContent,
@@ -330,9 +278,22 @@ export function registerDesktopIpc(
     (event: IpcMainInvokeEvent, payload: unknown) =>
       appHost.updateWorkbench(requireSender(event), payload),
   );
+  ipcMain.handle(
+    DESKTOP_SHELL_CHANNELS.applicationSidebarUpdate,
+    (event: IpcMainInvokeEvent, payload: unknown) =>
+      appHost.updateApplicationSidebar(requireSender(event), payload),
+  );
+  ipcMain.handle(
+    DESKTOP_SHELL_CHANNELS.sceneTransition,
+    (event: IpcMainInvokeEvent, payload: unknown) =>
+      appHost.transitionScene(requireSender(event), payload),
+  );
   return () => {
     for (const channel of [
       DESKTOP_AGENT_CHANNELS.bootstrapGet,
+      AGENT_LAUNCH_HOST_CHANNEL,
+      ASSISTANT_RESOURCE_HOST_CHANNEL,
+      DESKTOP_WORKSPACE_GRANT_CHANNEL,
       DESKTOP_AGENT_CHANNELS.messageSend,
       DESKTOP_AGENT_AUTOMATION_CHANNEL,
       DESKTOP_APPLICATION_SETTINGS_CHANNELS.snapshotGet,
@@ -364,22 +325,8 @@ export function registerDesktopIpc(
       DESKTOP_CUT_CHANNELS.requestExecute,
       DESKTOP_BRIDGE_CHANNELS.bootstrapGet,
       DESKTOP_SHELL_CHANNELS.snapshotGet,
-      DESKTOP_HOME_MANAGEMENT_CHANNELS.assetsSearch,
-      DESKTOP_HOME_MANAGEMENT_CHANNELS.assetsImport,
-      DESKTOP_HOME_MANAGEMENT_CHANNELS.assetsRemove,
-      DESKTOP_HOME_MANAGEMENT_CHANNELS.libraryThumbnailResolve,
-      DESKTOP_HOME_MANAGEMENT_CHANNELS.mediaLibrariesSearch,
-      DESKTOP_HOME_MANAGEMENT_CHANNELS.mediaLibrariesChildren,
-      DESKTOP_HOME_MANAGEMENT_CHANNELS.mediaLibrariesAdd,
-      DESKTOP_HOME_MANAGEMENT_CHANNELS.mediaLibrariesRelink,
-      DESKTOP_HOME_MANAGEMENT_CHANNELS.mediaLibrariesRemove,
-      DESKTOP_HOME_MANAGEMENT_CHANNELS.mediaLibrariesReveal,
-      DESKTOP_HOME_MANAGEMENT_CHANNELS.extensionsList,
-      DESKTOP_HOME_MANAGEMENT_CHANNELS.extensionPluginInstall,
-      DESKTOP_HOME_MANAGEMENT_CHANNELS.extensionPluginRemove,
-      DESKTOP_HOME_MANAGEMENT_CHANNELS.extensionMarketplacesRefresh,
-      DESKTOP_HOME_MANAGEMENT_CHANNELS.extensionPersonalSkillInstall,
-      DESKTOP_HOME_MANAGEMENT_CHANNELS.extensionPersonalSkillRemove,
+      ASSET_CENTER_HOST_CHANNEL,
+      AGENT_EXTENSION_MANAGEMENT_HOST_CHANNEL,
       DESKTOP_SHELL_CHANNELS.projectOpenContent,
       DESKTOP_SHELL_CHANNELS.projectOpenCatalog,
       DESKTOP_SHELL_CHANNELS.projectRemoveRecent,
@@ -389,6 +336,8 @@ export function registerDesktopIpc(
       DESKTOP_SHELL_CHANNELS.tabActivate,
       DESKTOP_SHELL_CHANNELS.tabClose,
       DESKTOP_SHELL_CHANNELS.workbenchUpdate,
+      DESKTOP_SHELL_CHANNELS.applicationSidebarUpdate,
+      DESKTOP_SHELL_CHANNELS.sceneTransition,
     ]) {
       ipcMain.removeHandler(channel);
     }

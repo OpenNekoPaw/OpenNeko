@@ -35,24 +35,38 @@ export interface DesktopAgentStartupAudit {
 export interface DesktopAgentConnectionGrant {
   readonly applicationInstanceId: string;
   readonly windowId: string;
-  readonly projectId: string;
   readonly workspaceId: string;
   readonly viewId: string;
   readonly viewEpoch: number;
   readonly rendererEpoch: number;
+  readonly projectId: string;
 }
+
+export interface DesktopAssistantAgentConnectionGrant {
+  readonly applicationInstanceId: string;
+  readonly windowId: string;
+  readonly workspaceId: string;
+  readonly viewId: string;
+  readonly viewEpoch: number;
+  readonly rendererEpoch: number;
+  readonly assistantSpaceId: string;
+}
+
+export type DesktopAnyAgentConnectionGrant =
+  | DesktopAgentConnectionGrant
+  | DesktopAssistantAgentConnectionGrant;
 
 export interface DesktopAgentBridgeRuntime {
   readonly startup: DesktopAgentStartupAudit;
   createBootstrap(input: {
     readonly requestId: string;
-    readonly grant: DesktopAgentConnectionGrant;
+    readonly grant: DesktopAnyAgentConnectionGrant;
     readonly workspace: AgentWorkspaceRuntime | undefined;
     readonly publish: (event: DesktopAgentMessageEvent) => void;
   }): DesktopAgentBootstrapProjection;
   send(
     request: DesktopAgentMessageRequest,
-    grant: DesktopAgentConnectionGrant,
+    grant: DesktopAnyAgentConnectionGrant,
   ): Promise<DesktopAgentMessageResult>;
   injectContext(input: {
     readonly windowId: string;
@@ -62,18 +76,18 @@ export interface DesktopAgentBridgeRuntime {
   }): Promise<void>;
   waitForIdle(
     connection: DesktopAgentConnectionIdentity,
-    grant: DesktopAgentConnectionGrant,
+    grant: DesktopAnyAgentConnectionGrant,
     conversationId: string,
     timeoutMs: number,
   ): Promise<{ readonly conversationId: string; readonly turnId: string; readonly runId: string }>;
   readFacts(
     connection: DesktopAgentConnectionIdentity,
-    grant: DesktopAgentConnectionGrant,
+    grant: DesktopAnyAgentConnectionGrant,
     identity: { readonly conversationId: string; readonly turnId: string; readonly runId: string },
   ): DesktopAgentNeutralFacts;
   disposeConnectionAndReadFacts(
     connection: DesktopAgentConnectionIdentity,
-    grant: DesktopAgentConnectionGrant,
+    grant: DesktopAnyAgentConnectionGrant,
   ): Promise<DesktopAgentNeutralFacts>;
   detachView(windowId: string, viewId: string): void;
   detachWindow(windowId: string): void;
@@ -148,7 +162,7 @@ class DefaultDesktopAgentBridgeRuntime implements DesktopAgentBridgeRuntime {
 
   createBootstrap(input: {
     readonly requestId: string;
-    readonly grant: DesktopAgentConnectionGrant;
+    readonly grant: DesktopAnyAgentConnectionGrant;
     readonly workspace: AgentWorkspaceRuntime | undefined;
     readonly publish: (event: DesktopAgentMessageEvent) => void;
   }): DesktopAgentBootstrapProjection {
@@ -245,7 +259,7 @@ class DefaultDesktopAgentBridgeRuntime implements DesktopAgentBridgeRuntime {
 
   async send(
     request: DesktopAgentMessageRequest,
-    grant: DesktopAgentConnectionGrant,
+    grant: DesktopAnyAgentConnectionGrant,
   ): Promise<DesktopAgentMessageResult> {
     this.requireActive();
     assertConnectionIdentity(request.connection, grant);
@@ -290,6 +304,7 @@ class DefaultDesktopAgentBridgeRuntime implements DesktopAgentBridgeRuntime {
     const matches = [...this.connections.values()].filter(
       (connection) =>
         connection.identity.windowId === input.windowId &&
+        'projectId' in connection.identity &&
         connection.identity.projectId === input.projectId &&
         connection.identity.workspaceId === input.workspaceId,
     );
@@ -304,7 +319,7 @@ class DefaultDesktopAgentBridgeRuntime implements DesktopAgentBridgeRuntime {
 
   waitForIdle(
     connectionIdentity: DesktopAgentConnectionIdentity,
-    grant: DesktopAgentConnectionGrant,
+    grant: DesktopAnyAgentConnectionGrant,
     conversationId: string,
     timeoutMs: number,
   ): Promise<{ readonly conversationId: string; readonly turnId: string; readonly runId: string }> {
@@ -315,7 +330,7 @@ class DefaultDesktopAgentBridgeRuntime implements DesktopAgentBridgeRuntime {
 
   readFacts(
     connectionIdentity: DesktopAgentConnectionIdentity,
-    grant: DesktopAgentConnectionGrant,
+    grant: DesktopAnyAgentConnectionGrant,
     identity: { readonly conversationId: string; readonly turnId: string; readonly runId: string },
   ): DesktopAgentNeutralFacts {
     const connection = this.requireAutomationConnection(connectionIdentity, grant);
@@ -326,7 +341,7 @@ class DefaultDesktopAgentBridgeRuntime implements DesktopAgentBridgeRuntime {
 
   async disposeConnectionAndReadFacts(
     connectionIdentity: DesktopAgentConnectionIdentity,
-    grant: DesktopAgentConnectionGrant,
+    grant: DesktopAnyAgentConnectionGrant,
   ): Promise<DesktopAgentNeutralFacts> {
     const connection = this.requireAutomationConnection(connectionIdentity, grant);
     const identity = connection.lastFactsIdentity;
@@ -377,7 +392,7 @@ class DefaultDesktopAgentBridgeRuntime implements DesktopAgentBridgeRuntime {
 
   private requireAutomationConnection(
     connectionIdentity: DesktopAgentConnectionIdentity,
-    grant: DesktopAgentConnectionGrant,
+    grant: DesktopAnyAgentConnectionGrant,
   ): DesktopAgentConnection {
     this.requireActive();
     assertConnectionIdentity(connectionIdentity, grant);
@@ -409,13 +424,13 @@ function requireAutomationEffects(
 }
 
 function isSameConnectionGrant(
-  actual: DesktopAgentConnectionGrant,
-  expected: DesktopAgentConnectionGrant,
+  actual: DesktopAnyAgentConnectionGrant,
+  expected: DesktopAnyAgentConnectionGrant,
 ): boolean {
   return (
     actual.applicationInstanceId === expected.applicationInstanceId &&
     actual.windowId === expected.windowId &&
-    actual.projectId === expected.projectId &&
+    sameConnectionOwner(actual, expected) &&
     actual.workspaceId === expected.workspaceId &&
     actual.viewId === expected.viewId &&
     actual.viewEpoch === expected.viewEpoch &&
@@ -425,7 +440,7 @@ function isSameConnectionGrant(
 
 function assertConnectionIdentity(
   actual: DesktopAgentConnectionIdentity,
-  expected: DesktopAgentConnectionGrant,
+  expected: DesktopAnyAgentConnectionGrant,
 ): void {
   if (actual.rendererEpoch !== expected.rendererEpoch) {
     throw new DesktopAgentContractError(
@@ -442,7 +457,7 @@ function assertConnectionIdentity(
   if (
     actual.applicationInstanceId !== expected.applicationInstanceId ||
     actual.windowId !== expected.windowId ||
-    actual.projectId !== expected.projectId ||
+    !sameConnectionOwner(actual, expected) ||
     actual.workspaceId !== expected.workspaceId ||
     actual.viewId !== expected.viewId
   ) {
@@ -451,4 +466,13 @@ function assertConnectionIdentity(
       `Desktop Agent connection '${actual.connectionId}' does not match its sender-derived owner grant.`,
     );
   }
+}
+
+function sameConnectionOwner(
+  actual: DesktopAgentConnectionIdentity | DesktopAnyAgentConnectionGrant,
+  expected: DesktopAnyAgentConnectionGrant,
+): boolean {
+  return 'assistantSpaceId' in actual
+    ? 'assistantSpaceId' in expected && actual.assistantSpaceId === expected.assistantSpaceId
+    : 'projectId' in expected && actual.projectId === expected.projectId;
 }

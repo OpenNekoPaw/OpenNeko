@@ -19,8 +19,11 @@ import {
 import { createDesktopRetiredJsonStatePort } from './desktop-state-migration-adapter';
 import {
   createEmptyDesktopShellState,
+  DESKTOP_SHELL_STATE_VERSION,
   parseDesktopShellStoredState,
 } from '@neko/host/desktop-shell-state';
+import { createDefaultDesktopApplicationSidebar } from '@neko/host/desktop-scene-contract';
+import { createDefaultDesktopWorkbenchLayout } from '@neko/host/desktop-workbench-contract';
 
 const roots: string[] = [];
 
@@ -72,6 +75,90 @@ describe('Desktop SQLite application state composition', () => {
       await restoredSettings.dispose();
     } finally {
       await second.store.dispose();
+    }
+  });
+
+  it('reads and upgrades a version 5 management Scene already stored in SQLite', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'openneko-desktop-state-v5-scene-'));
+    roots.push(root);
+    const store = createNodeSqliteLocalMetadataStore({ homedir: root });
+    await store.open({ databasePath: join(root, '.neko', 'neko.db'), busyTimeoutMs: 1_000 });
+    const repository = new SqliteVersionedJsonStateRepository({
+      store,
+      authorityKey: DESKTOP_STATE_AUTHORITY_KEYS.shell,
+      codec: shellCodec,
+    });
+    await repository.prepare();
+    const sceneId = 'scene:window-1:project-management';
+    const retiredState = {
+      schemaVersion: 5,
+      storageRevision: 17,
+      catalogRevision: 0,
+      primaryWindowId: 'window-1',
+      projects: [],
+      windows: [
+        {
+          windowId: 'window-1',
+          revision: 4,
+          activeTarget: { kind: 'home' },
+          tabs: [],
+          workbench: createDefaultDesktopWorkbenchLayout('window-1'),
+          scene: {
+            schemaVersion: 1,
+            sceneId,
+            windowId: 'window-1',
+            revision: 4,
+            context: {
+              kind: 'project-management',
+              projectManagementSessionId: 'project-management:1',
+            },
+            slots: {
+              leftManager: {
+                kind: 'project-catalog',
+                projectManagementSessionId: 'project-management:1',
+              },
+              status: { kind: 'scene-status', sceneId },
+            },
+          },
+          applicationSidebar: createDefaultDesktopApplicationSidebar('window-1'),
+        },
+      ],
+    };
+    await store.transaction(
+      { mode: 'state-write', ownership: 'state', operation: 'seed-version-5-shell-scene' },
+      ({ sql }) =>
+        sql.run(
+          `INSERT INTO desktop_application_state(
+             authority_key, storage_revision, document_json, updated_at
+           ) VALUES (?, ?, ?, ?)`,
+          [
+            DESKTOP_STATE_AUTHORITY_KEYS.shell,
+            retiredState.storageRevision,
+            JSON.stringify(retiredState),
+            '2026-08-04T00:00:00.000Z',
+          ],
+        ),
+    );
+
+    try {
+      await expect(repository.read()).resolves.toMatchObject({
+        schemaVersion: DESKTOP_SHELL_STATE_VERSION,
+        storageRevision: 17,
+        windows: [
+          {
+            scene: {
+              slots: {
+                main: {
+                  kind: 'project-management',
+                  projectManagementSessionId: 'project-management:1',
+                },
+              },
+            },
+          },
+        ],
+      });
+    } finally {
+      await store.dispose();
     }
   });
 

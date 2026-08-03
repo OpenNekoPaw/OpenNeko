@@ -15,6 +15,7 @@ import {
   auditDesktopAgentStartup,
   createDesktopAgentBridgeRuntime,
   type DesktopAgentConnectionGrant,
+  type DesktopAssistantAgentConnectionGrant,
 } from './desktop-agent-bridge-runtime';
 
 describe('Desktop Agent bridge runtime', () => {
@@ -86,6 +87,53 @@ describe('Desktop Agent bridge runtime', () => {
       status: 'accepted',
     });
     expect(effects.conversation.createConversation).toHaveBeenCalledOnce();
+  });
+
+  it('routes an Assistant session through the same controller without a synthetic Project grant', async () => {
+    const effects = createEffects();
+    const runtime = createDesktopAgentBridgeRuntime({
+      controllerComposition: createComposition(effects),
+      createIdentity: () => 'assistant-connection-1',
+    });
+    const projection = runtime.createBootstrap({
+      requestId: 'assistant-bootstrap-1',
+      grant: assistantGrant(),
+      workspace: workspace('assistant-space:local-user'),
+      publish: vi.fn(),
+    });
+    if (projection.status !== 'ready') throw new Error('Expected a ready Assistant bootstrap.');
+
+    expect(projection.connection).toMatchObject({
+      assistantSpaceId: 'assistant-space:local-user',
+      workspaceId: 'assistant-space:local-user',
+      connectionId: 'assistant-connection-1',
+    });
+    expect(JSON.stringify(projection.connection)).not.toContain('projectId');
+    await expect(
+      runtime.send(
+        createDesktopAgentMessageRequest('assistant-message-1', projection.connection, {
+          type: 'getConversations',
+        }),
+        assistantGrant(),
+      ),
+    ).resolves.toMatchObject({ status: 'accepted' });
+    expect(effects.conversation.listConversations).toHaveBeenCalledOnce();
+    await expect(
+      runtime.send(
+        createDesktopAgentMessageRequest('assistant-message-wrong-owner', projection.connection, {
+          type: 'getConversations',
+        }),
+        {
+          applicationInstanceId: 'app-1',
+          windowId: 'window-1',
+          projectId: 'project-forbidden',
+          workspaceId: 'assistant-space:local-user',
+          viewId: 'agent-view:window-1',
+          viewEpoch: 1,
+          rendererEpoch: 1,
+        },
+      ),
+    ).rejects.toMatchObject({ code: 'desktop-agent-identity-mismatch' });
   });
 
   it('returns the exhaustive typed diagnostic for unsupported routes', async () => {
@@ -495,11 +543,11 @@ function grant(): DesktopAgentConnectionGrant {
   };
 }
 
-function workspace(): AgentWorkspaceRuntime {
+function workspace(workspaceId = 'workspace-1'): AgentWorkspaceRuntime {
   return {
-    workspaceId: 'workspace-1',
+    workspaceId,
     workspace: {
-      workspaceId: 'workspace-1',
+      workspaceId,
       workspacePath: '/workspace/demo',
       displayName: 'Demo',
       locator: { kind: 'variable', value: '${HOME}/workspace/demo' },
@@ -528,5 +576,17 @@ function workspace(): AgentWorkspaceRuntime {
     readConversationProjection: vi.fn(),
     subscribeConversationProjection: vi.fn(),
     dispose: vi.fn(),
+  };
+}
+
+function assistantGrant(): DesktopAssistantAgentConnectionGrant {
+  return {
+    applicationInstanceId: 'app-1',
+    windowId: 'window-1',
+    assistantSpaceId: 'assistant-space:local-user',
+    workspaceId: 'assistant-space:local-user',
+    viewId: 'agent-view:window-1',
+    viewEpoch: 1,
+    rendererEpoch: 1,
   };
 }

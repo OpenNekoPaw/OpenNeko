@@ -5,6 +5,7 @@ import {
   type AgentHostToWebviewMessage,
   type AgentWebviewToHostMessage,
   type DesktopAgentConnectionIdentity,
+  type DesktopAssistantAgentViewIdentity,
   type DesktopAgentViewIdentity,
 } from '@neko/agent-contracts';
 
@@ -27,10 +28,21 @@ export const DESKTOP_AGENT_RUNTIME_REQUIREMENTS = [
 
 export type DesktopAgentRuntimeRequirement = (typeof DESKTOP_AGENT_RUNTIME_REQUIREMENTS)[number];
 
-export interface DesktopAgentBootstrapRequest extends DesktopAgentViewIdentity {
+export interface DesktopWorkspaceAgentBootstrapRequest extends DesktopAgentViewIdentity {
   readonly schemaVersion: typeof DESKTOP_AGENT_CONTRACT_VERSION;
   readonly requestId: string;
 }
+
+export interface DesktopAssistantAgentBootstrapRequest
+  extends Omit<DesktopAssistantAgentViewIdentity, 'viewEpoch'> {
+  readonly schemaVersion: typeof DESKTOP_AGENT_CONTRACT_VERSION;
+  readonly requestId: string;
+  readonly conversationId: string;
+}
+
+export type DesktopAgentBootstrapRequest =
+  | DesktopWorkspaceAgentBootstrapRequest
+  | DesktopAssistantAgentBootstrapRequest;
 
 export interface DesktopAgentReadyBootstrapProjection {
   readonly schemaVersion: typeof DESKTOP_AGENT_CONTRACT_VERSION;
@@ -93,6 +105,11 @@ export interface OpenNekoDesktopAgentBridge {
       viewId: string,
       viewEpoch: number,
     ): Promise<DesktopAgentBootstrapProjection>;
+    getAssistantBootstrap(
+      assistantSpaceId: string,
+      conversationId: string,
+      viewId: string,
+    ): Promise<DesktopAgentBootstrapProjection>;
     send(message: AgentWebviewToHostMessage): void;
     subscribe(listener: (message: AgentHostToWebviewMessage) => void): () => void;
   };
@@ -132,9 +149,54 @@ export function createDesktopAgentBootstrapRequest(
   };
 }
 
+export function createDesktopAssistantAgentBootstrapRequest(
+  requestId: string,
+  assistantSpaceId: string,
+  conversationId: string,
+  viewId: string,
+): DesktopAssistantAgentBootstrapRequest {
+  return {
+    schemaVersion: DESKTOP_AGENT_CONTRACT_VERSION,
+    requestId: requireNonEmptyString(requestId, 'Desktop Agent bootstrap requestId is required.'),
+    assistantSpaceId: requireNonEmptyString(
+      assistantSpaceId,
+      'Desktop Agent Assistant Space identity is required.',
+    ),
+    conversationId: requireNonEmptyString(
+      conversationId,
+      'Desktop Agent Conversation identity is required.',
+    ),
+    viewId: requireNonEmptyString(viewId, 'Desktop Agent View identity is required.'),
+  };
+}
+
 export function parseDesktopAgentBootstrapRequest(value: unknown): DesktopAgentBootstrapRequest {
   const record = requireRecord(value, 'Desktop Agent bootstrap request must be an object.');
   requireVersion(record['schemaVersion']);
+  if ('assistantSpaceId' in record) {
+    requireExactKeys(
+      record,
+      ['schemaVersion', 'requestId', 'assistantSpaceId', 'conversationId', 'viewId'],
+      'Desktop Assistant Agent bootstrap request',
+    );
+    return createDesktopAssistantAgentBootstrapRequest(
+      requireNonEmptyString(record['requestId'], 'Desktop Agent bootstrap requestId is required.'),
+      requireNonEmptyString(
+        record['assistantSpaceId'],
+        'Desktop Agent Assistant Space identity is required.',
+      ),
+      requireNonEmptyString(
+        record['conversationId'],
+        'Desktop Agent Conversation identity is required.',
+      ),
+      requireNonEmptyString(record['viewId'], 'Desktop Agent bootstrap View identity is required.'),
+    );
+  }
+  requireExactKeys(
+    record,
+    ['schemaVersion', 'requestId', 'projectId', 'viewId', 'viewEpoch'],
+    'Desktop Workspace Agent bootstrap request',
+  );
   return createDesktopAgentBootstrapRequest(
     requireNonEmptyString(record['requestId'], 'Desktop Agent bootstrap requestId is required.'),
     requireNonEmptyString(
@@ -277,7 +339,7 @@ export function parseDesktopAgentMessageEvent(value: unknown): DesktopAgentMessa
 
 function parseConnectionIdentity(value: unknown): DesktopAgentConnectionIdentity {
   const record = requireRecord(value, 'Desktop Agent connection identity is required.');
-  return {
+  const common = {
     applicationInstanceId: requireNonEmptyString(
       record['applicationInstanceId'],
       'Desktop Agent application instance identity is required.',
@@ -285,10 +347,6 @@ function parseConnectionIdentity(value: unknown): DesktopAgentConnectionIdentity
     windowId: requireNonEmptyString(
       record['windowId'],
       'Desktop Agent Window identity is required.',
-    ),
-    projectId: requireNonEmptyString(
-      record['projectId'],
-      'Desktop Agent Project identity is required.',
     ),
     workspaceId: requireNonEmptyString(
       record['workspaceId'],
@@ -306,6 +364,50 @@ function parseConnectionIdentity(value: unknown): DesktopAgentConnectionIdentity
     connectionId: requireNonEmptyString(
       record['connectionId'],
       'Desktop Agent connection identity is required.',
+    ),
+  };
+  if ('assistantSpaceId' in record) {
+    requireExactKeys(
+      record,
+      [
+        'applicationInstanceId',
+        'windowId',
+        'assistantSpaceId',
+        'workspaceId',
+        'viewId',
+        'viewEpoch',
+        'rendererEpoch',
+        'connectionId',
+      ],
+      'Desktop Assistant Agent connection identity',
+    );
+    return {
+      ...common,
+      assistantSpaceId: requireNonEmptyString(
+        record['assistantSpaceId'],
+        'Desktop Agent Assistant Space identity is required.',
+      ),
+    };
+  }
+  requireExactKeys(
+    record,
+    [
+      'applicationInstanceId',
+      'windowId',
+      'projectId',
+      'workspaceId',
+      'viewId',
+      'viewEpoch',
+      'rendererEpoch',
+      'connectionId',
+    ],
+    'Desktop Workspace Agent connection identity',
+  );
+  return {
+    ...common,
+    projectId: requireNonEmptyString(
+      record['projectId'],
+      'Desktop Agent Project identity is required.',
     ),
   };
 }
@@ -389,6 +491,17 @@ function requireRecord(value: unknown, message: string): Readonly<Record<string,
     throw invalidPayload(message);
   }
   return value;
+}
+
+function requireExactKeys(
+  record: Readonly<Record<string, unknown>>,
+  keys: readonly string[],
+  label: string,
+): void {
+  const actual = Object.keys(record);
+  if (actual.length !== keys.length || actual.some((key) => !keys.includes(key))) {
+    throw invalidPayload(`${label} contains unsupported fields.`);
+  }
 }
 
 function requireArray(value: unknown, message: string): readonly unknown[] {

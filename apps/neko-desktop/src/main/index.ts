@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { lstat, realpath } from 'node:fs/promises';
+import { lstat, mkdir, realpath, rm } from 'node:fs/promises';
 import * as path from 'node:path';
 import {
   app,
@@ -10,6 +10,7 @@ import {
   safeStorage,
   session,
   shell,
+  systemPreferences,
 } from 'electron';
 import { ConsoleLogger } from '@neko/shared/logger';
 import { DESKTOP_BRIDGE_CHANNELS, type DesktopLifecycleEvent } from '../shared/bridge-contract';
@@ -37,7 +38,13 @@ import {
   createEmptyDesktopShellState,
   parseDesktopShellStoredState,
 } from '@neko/host/desktop-shell-state';
-import { createAgentAppHost } from '@neko/agent-runtime/application';
+import {
+  createAgentAppHost,
+  createAgentConversationLifecycleService,
+  createAssistantResourceService,
+  createPersistentAgentConversationLifecycleRepository,
+  AGENT_CONVERSATION_LIFECYCLE_MIGRATIONS,
+} from '@neko/agent-runtime/application';
 import { NodePiConversationCatalogReader } from '@neko/agent-runtime/pi';
 import { NodeVideoThumbnail } from '@neko/media/node';
 import {
@@ -60,6 +67,7 @@ import {
 } from '@neko/local-metadata';
 import { createNodeSqliteLocalMetadataStore } from '@neko/local-metadata/node';
 import {
+  AssetCenterNodeRuntime,
   ResourceBrowserNodeRuntime,
   type ResourceBrowserNodeRuntimeOptions,
 } from '@neko/assets-node';
@@ -83,6 +91,7 @@ import {
   type DesktopApplicationSettingsProjectionEvent,
 } from '@neko/host/application-settings';
 import { buildConfigFilePath } from '@neko/host/files';
+import { ConfigManager, FileUserConfigManager } from '@neko/host/settings';
 import { resolveDesktopBuiltinSkillRoot } from './desktop-builtin-skill-root';
 import { listWorkspaceLinkedMediaLibraries } from '@neko/assets-node';
 import {
@@ -97,6 +106,9 @@ import {
 import { createPersonalSkillManager } from '@neko/agent-runtime/pi';
 import { ProjectPortabilityRuntime } from '@neko/assets-node';
 import { createDesktopRetiredJsonStatePort } from './desktop-state-migration-adapter';
+import { createDesktopAgentLaunchRuntime } from './desktop-agent-launch-runtime';
+import { createDesktopAssistantPreviewRuntime } from './desktop-assistant-preview-runtime';
+import { DesktopWorkspaceGrantAuthority } from '@neko/host/desktop-workspace-grant-authority';
 
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string | undefined;
 declare const MAIN_WINDOW_VITE_NAME: string;
@@ -175,6 +187,7 @@ async function startDesktop(): Promise<void> {
       settingsCodec: applicationSettingsCodec,
       digest: (content) => createHash('sha256').update(content).digest('hex'),
     });
+    await localMetadataStore.migrateNamespace(AGENT_CONVERSATION_LIFECYCLE_MIGRATIONS);
   } catch (error) {
     await localMetadataStore.dispose();
     throw error;
@@ -225,6 +238,9 @@ async function startDesktop(): Promise<void> {
   );
   logger.info('Desktop OpenNeko resource registry initialized.');
   const workspaceRegistry = await createDesktopWorkspaceRegistry({ homedir });
+  const workspaceGrantAuthority = new DesktopWorkspaceGrantAuthority({
+    resolver: workspaceRegistry,
+  });
   logger.info('Desktop workspace registry initialized.');
   const credentialRuntime = createAgentCredentialRuntime({
     secrets,
@@ -249,6 +265,7 @@ async function startDesktop(): Promise<void> {
       codec: shellStateCodec,
     }),
     workspaceRegistry,
+    workspaceGrantAuthority,
     startupTarget: initialApplicationSettings.preferences.startupTarget,
   });
   const agentCatalogReader = await NodePiConversationCatalogReader.create({
@@ -265,6 +282,14 @@ async function startDesktop(): Promise<void> {
       isPackaged: app.isPackaged,
       resourcesPath: process.resourcesPath,
     }),
+  });
+  const assistantSpaceRoot = path.join(globalStorage.root, 'assistant-spaces', 'local-user');
+  await mkdir(assistantSpaceRoot, { recursive: true });
+  const assistantAgentWorkspace = await agentComposition.attachWorkspace({
+    workspaceId: 'assistant-space:local-user',
+    workspacePath: assistantSpaceRoot,
+    displayName: 'Assistant',
+    locator: { kind: 'relative', value: 'assistant-spaces/local-user' },
   });
   const extensionManager = createAgentExtensionManager({
     repository: createOpenNekoExtensionRepository({
@@ -590,6 +615,7 @@ async function startDesktop(): Promise<void> {
       });
     },
     selectGlobalMediaLibrarySource: async (windowId) => {
+      if (functionalWorkspace) return functionalWorkspace;
       const owner = requireOwnerWindow(windowId);
       const chinese = app.getLocale().toLocaleLowerCase().startsWith('zh');
       const result = await dialog.showOpenDialog(owner, {
@@ -605,6 +631,9 @@ async function startDesktop(): Promise<void> {
       return selectedPath;
     },
     selectGlobalAssetSources: async (windowId) => {
+      if (functionalWorkspace) {
+        return [path.join(functionalWorkspace, 'media', 'frame.png')];
+      }
       const owner = requireOwnerWindow(windowId);
       const chinese = app.getLocale().toLocaleLowerCase().startsWith('zh');
       const result = await dialog.showOpenDialog(owner, {
@@ -654,6 +683,13 @@ async function startDesktop(): Promise<void> {
       return result.filePaths;
     },
     trashGlobalAsset: (assetPath) => shell.trashItem(assetPath),
+  });
+  const assetCenter = new AssetCenterNodeRuntime({
+    resourceBrowser,
+    resources: {
+      registerFile: (owner, resource) => resourceRegistry.registerFile(owner, resource),
+      releaseSession: (sessionId) => resourceRegistry.releaseSession(sessionId),
+    },
   });
   const metadataRepositories = workspaceRegistry.metadataRepositories;
   if (!metadataRepositories) {
@@ -748,6 +784,139 @@ async function startDesktop(): Promise<void> {
       });
     },
   });
+  const agentLaunch = createDesktopAgentLaunchRuntime({
+    agent: agentComposition,
+    config: new ConfigManager({
+      userConfigManager: new FileUserConfigManager({
+        filePath: buildConfigFilePath(homedir),
+      }),
+    }),
+    readTextResource: (hostResource) => host.files.readText(hostResource),
+    selectResource: async ({ windowId, resourceKind }) => {
+      const owner = requireOwnerWindow(windowId);
+      if (resourceKind === 'microphone') {
+        if (process.platform !== 'darwin') {
+          throw new Error('Desktop microphone authorization is unavailable on this platform.');
+        }
+        const authorized = await systemPreferences.askForMediaAccess('microphone');
+        return authorized ? { label: 'Microphone' } : undefined;
+      }
+      if (functionalWorkspace) {
+        const selectedPath =
+          resourceKind === 'directory'
+            ? functionalWorkspace
+            : path.join(functionalWorkspace, 'agent-reference.txt');
+        return { label: path.basename(selectedPath), hostResource: selectedPath };
+      }
+      const result = await dialog.showOpenDialog(owner, {
+        title: resourceKind === 'directory' ? 'Authorize Directory' : 'Authorize File',
+        buttonLabel: 'Authorize',
+        properties: [resourceKind === 'directory' ? 'openDirectory' : 'openFile'],
+      });
+      if (result.canceled) return undefined;
+      const selectedPath = result.filePaths[0];
+      if (!selectedPath) {
+        throw new Error('Desktop Agent authorization completed without a selected resource.');
+      }
+      return { label: path.basename(selectedPath), hostResource: selectedPath };
+    },
+  });
+  const resolveScratchRoot = (ref: {
+    readonly conversationId: string;
+    readonly scratchArtifactId: string;
+  }): string =>
+    path.join(
+      globalStorage.root,
+      'assistant-scratch',
+      ref.conversationId,
+      ref.scratchArtifactId,
+    );
+  const conversationLifecycle = createAgentConversationLifecycleService({
+    repository: createPersistentAgentConversationLifecycleRepository({
+      metadataStore: localMetadataStore,
+    }),
+    grants: {
+      validate: ({ context, resourceGrantIds }) =>
+        agentLaunch.validateResourceGrants(context, resourceGrantIds),
+      resolveForTurn: ({ context, resourceGrantIds }) =>
+        agentLaunch.resolveResourceContexts(context, resourceGrantIds),
+    },
+    scratch: {
+      create: async (ref) => {
+        await mkdir(resolveScratchRoot(ref), { recursive: true });
+      },
+      release: async (ref) => {
+        const artifactRoot = resolveScratchRoot(ref);
+        const artifactStat = await lstat(artifactRoot).catch((error: unknown) => {
+          if (isMissingPathError(error)) return undefined;
+          throw error;
+        });
+        if (!artifactStat?.isDirectory()) {
+          throw new Error(`Assistant Scratch artifact '${ref.scratchArtifactId}' has no Host handle.`);
+        }
+        await rm(artifactRoot, { recursive: true, force: false });
+      },
+      authorizePreview: async () => {
+        throw new Error('Assistant Scratch Preview authorization is unavailable.');
+      },
+    },
+    publication: {
+      publishToAssets: async () => {
+        throw new Error('Assistant Scratch publication to Assets is unavailable.');
+      },
+      publishToWorkspace: async () => {
+        throw new Error('Assistant Scratch publication to Workspace is unavailable.');
+      },
+    },
+    provider: {
+      start: async (request) => {
+        const workspace =
+          request.context.kind === 'assistant'
+            ? assistantAgentWorkspace
+            : (agentComposition.getWorkspace(request.context.workspaceId) ??
+              (await agentComposition.attachWorkspace(
+                await shellService.resolveAgentWorkspace(request.context.workspaceId),
+              )));
+        await workspace.createConversation(request.conversationId);
+        const startInitialTurn = agentControllerComposition.startInitialTurn;
+        if (!startInitialTurn) {
+          throw new Error('Agent initial-turn provider adapter is unavailable.');
+        }
+        await startInitialTurn({
+          workspace,
+          conversationId: request.conversationId,
+          turnId: request.turnId,
+          messageText: request.messageText,
+          providerId: request.configuration.providerId,
+          modelId: request.configuration.modelId,
+          locale: 'en',
+          contextPayloads: request.contextPayloads,
+        });
+      },
+    },
+    createIdentity: randomUUID,
+    now: () => new Date().toISOString(),
+    conversationContextMigration: {
+      resolveExactWorkspaceIdentity: async (conversationId) => {
+        const storedConversation = agentComposition.findConversation(conversationId);
+        return storedConversation
+          ? {
+              workspaceId: storedConversation.workspaceId,
+              workspaceGrantId: `workspace-grant:migrated:${conversationId}`,
+            }
+          : undefined;
+      },
+    },
+  });
+  const assistantPreview = createDesktopAssistantPreviewRuntime({
+    resolveScratchRoot,
+    resources: resourceRegistry,
+  });
+  const assistantResources = createAssistantResourceService({
+    lifecycle: conversationLifecycle,
+    grants: agentLaunch,
+    preview: assistantPreview,
+  });
   const appHost = new DesktopAppHost({
     host,
     version: app.getVersion(),
@@ -755,7 +924,13 @@ async function startDesktop(): Promise<void> {
     shell: shellService,
     agent: agentComposition,
     agentControllerComposition,
+    agentLaunch,
+    workspaceGrants: workspaceGrantAuthority,
+    conversationLifecycle,
+    assistantResources,
+    assistantPreviewLifecycle: assistantPreview,
     resourceBrowser,
+    assetCenter,
     projectPortability,
     preview: previewRuntime,
     canvas: canvasRuntime,
@@ -790,6 +965,14 @@ async function startDesktop(): Promise<void> {
     });
   }
   const disposeIpc = registerDesktopIpc(appHost, {
+    selectWorkspaceGrant: async (event) => {
+      const owner = BrowserWindow.fromWebContents(event.sender);
+      if (!owner) throw new Error('Desktop workspace picker requires a registered BrowserWindow.');
+      const selectedPath = functionalWorkspace ?? (await chooseWorkspaceDirectory(owner));
+      return selectedPath
+        ? { label: path.basename(selectedPath), hostResource: selectedPath }
+        : undefined;
+    },
     selectContentWorkspace: async (event) => {
       const owner = BrowserWindow.fromWebContents(event.sender);
       if (!owner) throw new Error('Desktop workspace picker requires a registered BrowserWindow.');
@@ -1031,6 +1214,20 @@ async function startDesktop(): Promise<void> {
   }
 }
 
+async function chooseWorkspaceDirectory(owner: BrowserWindow): Promise<string | undefined> {
+  const result = await dialog.showOpenDialog(owner, {
+    title: 'Open Workspace',
+    buttonLabel: 'Open Workspace',
+    properties: ['openDirectory', 'createDirectory'],
+  });
+  if (result.canceled) return undefined;
+  const selectedPath = result.filePaths[0];
+  if (!selectedPath) {
+    throw new Error('Desktop workspace picker completed without a selected directory.');
+  }
+  return selectedPath;
+}
+
 async function selectCanvasMediaLibrary(input: {
   readonly owner: BrowserWindow;
   readonly title: string;
@@ -1124,6 +1321,10 @@ function readDevelopmentUrl(): string | undefined {
   return typeof MAIN_WINDOW_VITE_DEV_SERVER_URL === 'undefined'
     ? undefined
     : MAIN_WINDOW_VITE_DEV_SERVER_URL;
+}
+
+function isMissingPathError(error: unknown): boolean {
+  return error instanceof Error && Reflect.get(error, 'code') === 'ENOENT';
 }
 
 function portableSnapshotName(displayName: string): string {

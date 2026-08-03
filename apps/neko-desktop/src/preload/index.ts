@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import {
   createDesktopAgentBootstrapRequest,
+  createDesktopAssistantAgentBootstrapRequest,
   createDesktopAgentMessageRequest,
   DESKTOP_AGENT_CHANNELS,
   DesktopAgentContractError,
@@ -40,6 +41,11 @@ import {
   type DesktopShellProjectionEvent,
   type OpenNekoDesktopShellBridge,
 } from '@neko/host/desktop-shell-contract';
+import {
+  createDesktopApplicationSidebarMutationRequest,
+  createDesktopSceneTransitionRequest,
+  parseDesktopSceneTransitionResult,
+} from '@neko/host/desktop-scene-contract';
 import {
   advanceDesktopShellProjectionCursor,
   type DesktopShellProjectionCursor,
@@ -119,34 +125,6 @@ import {
   type OpenNekoDesktopCutBridge,
 } from '../shared/cut-bridge-contract';
 import {
-  createDesktopHomeAssetImportRequest,
-  createDesktopHomeAssetRemoveRequest,
-  createDesktopHomeAssetSearchRequest,
-  createDesktopHomeLibraryThumbnailRequest,
-  createDesktopHomeMediaLibraryAddRequest,
-  createDesktopHomeMediaLibraryChildrenRequest,
-  createDesktopHomeMediaLibraryRequest,
-  createDesktopHomeMediaLibrarySearchRequest,
-  createDesktopHomeCatalogMutationRequest,
-  createDesktopHomeExtensionsRequest,
-  createDesktopHomePersonalSkillRemoveRequest,
-  createDesktopHomePluginMutationRequest,
-  DESKTOP_HOME_MANAGEMENT_CHANNELS,
-  parseDesktopHomeAssetImportResult,
-  parseDesktopHomeAssetRemoveResult,
-  parseDesktopHomeAssetSearchResult,
-  parseDesktopHomeLibraryThumbnailResult,
-  parseDesktopHomeMediaLibraryAddResult,
-  parseDesktopHomeMediaLibraryChildrenResult,
-  parseDesktopHomeMediaLibraryRelinkResult,
-  parseDesktopHomeMediaLibraryRemoveResult,
-  parseDesktopHomeMediaLibraryRevealResult,
-  parseDesktopHomeMediaLibrarySearchResult,
-  parseDesktopHomeExtensionMutationResult,
-  parseDesktopHomeExtensionsResult,
-  type OpenNekoDesktopHomeManagementBridge,
-} from '../shared/home-management-contract';
-import {
   createDesktopApplicationSettingsRequest,
   createDesktopApplicationSettingsUpdateRequest,
   DESKTOP_APPLICATION_SETTINGS_CHANNELS,
@@ -171,9 +149,39 @@ import {
   type DesktopProjectPortabilityIdentity,
   type OpenNekoDesktopProjectPortabilityBridge,
 } from '@neko/assets-domain/contracts';
+import {
+  ASSET_CENTER_HOST_CHANNEL,
+  parseAssetCenterHostRequest,
+  parseAssetCenterHostResult,
+  type OpenNekoAssetCenterBridge,
+} from '@neko/assets-domain/asset-center/host-contract';
+import {
+  AGENT_LAUNCH_CONTRACT_VERSION,
+  AGENT_LAUNCH_HOST_CHANNEL,
+  parseAgentLaunchHostRequest,
+  parseAgentLaunchHostResult,
+  type OpenNekoAgentLaunchBridge,
+} from '@neko/agent-contracts/agent-launch-host';
+import {
+  ASSISTANT_RESOURCE_HOST_CHANNEL,
+  parseAssistantResourceHostRequest,
+  parseAssistantResourceHostResult,
+  type OpenNekoAssistantResourceBridge,
+} from '@neko/agent-contracts/assistant-resource-host';
+import {
+  DESKTOP_WORKSPACE_GRANT_CHANNEL,
+  createDesktopWorkspaceGrantChooseRequest,
+  parseDesktopWorkspaceGrantChooseResult,
+  type OpenNekoDesktopWorkspaceGrantBridge,
+} from '@neko/host/desktop-workspace-grant-contract';
+import {
+  AGENT_EXTENSION_MANAGEMENT_HOST_CHANNEL,
+  parseAgentExtensionManagementHostRequest,
+  parseAgentExtensionManagementHostResult,
+  type OpenNekoAgentExtensionManagementBridge,
+} from '@neko/agent-contracts/extension-management-host';
 
 let requestSequence = 0;
-let currentDesktopEndpointEpoch: string | undefined;
 let latestShellProjection: DesktopShellProjectionCursor | undefined;
 let currentAgentEventCursor: DesktopAgentEventCursor | undefined;
 const agentListeners = new Set<Parameters<OpenNekoDesktopAgentBridge['agent']['subscribe']>[0]>();
@@ -213,9 +221,94 @@ const bridge: OpenNekoDesktopBridge &
   OpenNekoDesktopPreviewBridge &
   OpenNekoDesktopCanvasBridge &
   OpenNekoDesktopCutBridge &
-  OpenNekoDesktopHomeManagementBridge &
+  OpenNekoAssetCenterBridge &
+  OpenNekoAgentLaunchBridge &
+  OpenNekoAssistantResourceBridge &
+  OpenNekoDesktopWorkspaceGrantBridge &
+  OpenNekoAgentExtensionManagementBridge &
   OpenNekoDesktopApplicationSettingsBridge &
   OpenNekoDesktopProjectPortabilityBridge = {
+  assistantResources: {
+    async execute(value) {
+      const request = parseAssistantResourceHostRequest(value);
+      const response: unknown = await ipcRenderer.invoke(ASSISTANT_RESOURCE_HOST_CHANNEL, request);
+      return parseAssistantResourceHostResult(response, request.requestId);
+    },
+  },
+  agentLaunch: {
+    async attach(viewId, scope) {
+      const request = parseAgentLaunchHostRequest({
+        schemaVersion: AGENT_LAUNCH_CONTRACT_VERSION,
+        requestId: nextRequestId('agent-launch-attach'),
+        operation: 'attach',
+        viewId,
+        scope,
+      });
+      const response: unknown = await ipcRenderer.invoke(AGENT_LAUNCH_HOST_CHANNEL, request);
+      const result = parseAgentLaunchHostResult(response, request.requestId);
+      if (result.status !== 'ready') {
+        throw new Error(`Agent launch attach returned '${result.status}'.`);
+      }
+      return result.catalog;
+    },
+    async authorizeResource(connection, resourceKind) {
+      const request = parseAgentLaunchHostRequest({
+        schemaVersion: AGENT_LAUNCH_CONTRACT_VERSION,
+        requestId: nextRequestId('agent-launch-authorize'),
+        operation: 'authorize-resource',
+        connection,
+        resourceKind,
+      });
+      const response: unknown = await ipcRenderer.invoke(AGENT_LAUNCH_HOST_CHANNEL, request);
+      const result = parseAgentLaunchHostResult(response, request.requestId);
+      if (result.status === 'cancelled') return undefined;
+      if (result.status !== 'ready') {
+        throw new Error(`Agent launch authorization returned '${result.status}'.`);
+      }
+      return result.catalog;
+    },
+    async submitDraft(connection, input) {
+      const request = parseAgentLaunchHostRequest({
+        schemaVersion: AGENT_LAUNCH_CONTRACT_VERSION,
+        requestId: nextRequestId('agent-launch-submit-draft'),
+        operation: 'submit-draft',
+        connection,
+        input,
+      });
+      const response: unknown = await ipcRenderer.invoke(AGENT_LAUNCH_HOST_CHANNEL, request);
+      const result = parseAgentLaunchHostResult(response, request.requestId);
+      if (result.status !== 'committed') {
+        throw new Error(`Agent draft submit returned '${result.status}'.`);
+      }
+      return result.projection;
+    },
+    async detach(connection) {
+      const request = parseAgentLaunchHostRequest({
+        schemaVersion: AGENT_LAUNCH_CONTRACT_VERSION,
+        requestId: nextRequestId('agent-launch-detach'),
+        operation: 'detach',
+        connection,
+      });
+      const response: unknown = await ipcRenderer.invoke(AGENT_LAUNCH_HOST_CHANNEL, request);
+      const result = parseAgentLaunchHostResult(response, request.requestId);
+      if (result.status !== 'detached') {
+        throw new Error(`Agent launch detach returned '${result.status}'.`);
+      }
+    },
+  },
+  workspaceGrants: {
+    async choose(windowId, expectedWindowRevision) {
+      const context = requireShellMutationContext();
+      const request = createDesktopWorkspaceGrantChooseRequest({
+        requestId: nextRequestId('desktop-workspace-grant-choose'),
+        expectedEndpointEpoch: context.endpointEpoch,
+        windowId,
+        expectedWindowRevision,
+      });
+      const response: unknown = await ipcRenderer.invoke(DESKTOP_WORKSPACE_GRANT_CHANNEL, request);
+      return parseDesktopWorkspaceGrantChooseResult(response, request.requestId);
+    },
+  },
   agent: {
     async getBootstrap(projectId, viewId, viewEpoch) {
       const request = createDesktopAgentBootstrapRequest(
@@ -223,6 +316,24 @@ const bridge: OpenNekoDesktopBridge &
         projectId,
         viewId,
         viewEpoch,
+      );
+      const response: unknown = await ipcRenderer.invoke(
+        DESKTOP_AGENT_CHANNELS.bootstrapGet,
+        request,
+      );
+      const projection = parseDesktopAgentBootstrapProjection(response, request.requestId);
+      currentAgentEventCursor =
+        projection.status === 'ready'
+          ? advanceDesktopAgentBootstrapCursor(currentAgentEventCursor, projection.connection)
+          : undefined;
+      return projection;
+    },
+    async getAssistantBootstrap(assistantSpaceId, conversationId, viewId) {
+      const request = createDesktopAssistantAgentBootstrapRequest(
+        nextRequestId('desktop-assistant-agent-bootstrap'),
+        assistantSpaceId,
+        conversationId,
+        viewId,
       );
       const response: unknown = await ipcRenderer.invoke(
         DESKTOP_AGENT_CHANNELS.bootstrapGet,
@@ -302,11 +413,6 @@ const bridge: OpenNekoDesktopBridge &
         request,
       );
       const projection = parseDesktopBootstrapProjection(response, requestId);
-      currentDesktopEndpointEpoch = createDesktopEndpointEpoch(
-        projection.application.instanceId,
-        projection.window.windowId,
-        projection.window.rendererEpoch,
-      );
       return projection;
     },
   },
@@ -314,11 +420,6 @@ const bridge: OpenNekoDesktopBridge &
     subscribe(listener: (event: DesktopLifecycleEvent) => void): () => void {
       const handler = (_event: Electron.IpcRendererEvent, value: unknown): void => {
         const event = parseDesktopLifecycleEvent(value);
-        currentDesktopEndpointEpoch = createDesktopEndpointEpoch(
-          event.applicationInstanceId,
-          event.windowId,
-          event.rendererEpoch,
-        );
         listener(event);
       };
       ipcRenderer.on(DESKTOP_BRIDGE_CHANNELS.lifecycleEvent, handler);
@@ -377,213 +478,21 @@ const bridge: OpenNekoDesktopBridge &
       };
     },
   },
-  home: {
-    assets: {
-      async search(input) {
-        const request = createDesktopHomeAssetSearchRequest(
-          nextRequestId('desktop-home-assets'),
-          requireDesktopEndpointEpoch(),
-          input,
-        );
-        const response: unknown = await ipcRenderer.invoke(
-          DESKTOP_HOME_MANAGEMENT_CHANNELS.assetsSearch,
-          request,
-        );
-        return parseDesktopHomeAssetSearchResult(response, request.requestId);
-      },
-      async importFiles(expectedRevision) {
-        const request = createDesktopHomeAssetImportRequest(
-          nextRequestId('desktop-home-assets-import'),
-          requireDesktopEndpointEpoch(),
-          expectedRevision,
-        );
-        const response: unknown = await ipcRenderer.invoke(
-          DESKTOP_HOME_MANAGEMENT_CHANNELS.assetsImport,
-          request,
-        );
-        return parseDesktopHomeAssetImportResult(response, request.requestId);
-      },
-      async remove(assetId, expectedRevision) {
-        const request = createDesktopHomeAssetRemoveRequest(
-          nextRequestId('desktop-home-assets-remove'),
-          requireDesktopEndpointEpoch(),
-          assetId,
-          expectedRevision,
-        );
-        const response: unknown = await ipcRenderer.invoke(
-          DESKTOP_HOME_MANAGEMENT_CHANNELS.assetsRemove,
-          request,
-        );
-        return parseDesktopHomeAssetRemoveResult(response, request.requestId);
-      },
+  assetCenter: {
+    async execute(input) {
+      const request = parseAssetCenterHostRequest(input);
+      const response: unknown = await ipcRenderer.invoke(ASSET_CENTER_HOST_CHANNEL, request);
+      return parseAssetCenterHostResult(response, request);
     },
-    libraryThumbnails: {
-      async resolve(input) {
-        const request = createDesktopHomeLibraryThumbnailRequest(
-          nextRequestId('desktop-home-library-thumbnail'),
-          requireDesktopEndpointEpoch(),
-          input,
-        );
-        const response: unknown = await ipcRenderer.invoke(
-          DESKTOP_HOME_MANAGEMENT_CHANNELS.libraryThumbnailResolve,
-          request,
-        );
-        return parseDesktopHomeLibraryThumbnailResult(response, request.requestId);
-      },
-    },
-    mediaLibraries: {
-      async search(input) {
-        const request = createDesktopHomeMediaLibrarySearchRequest(
-          nextRequestId('desktop-home-media-libraries'),
-          requireDesktopEndpointEpoch(),
-          input,
-        );
-        const response: unknown = await ipcRenderer.invoke(
-          DESKTOP_HOME_MANAGEMENT_CHANNELS.mediaLibrariesSearch,
-          request,
-        );
-        return parseDesktopHomeMediaLibrarySearchResult(response, request.requestId);
-      },
-      async children(input) {
-        const request = createDesktopHomeMediaLibraryChildrenRequest(
-          nextRequestId('desktop-home-media-library-children'),
-          requireDesktopEndpointEpoch(),
-          input,
-        );
-        const response: unknown = await ipcRenderer.invoke(
-          DESKTOP_HOME_MANAGEMENT_CHANNELS.mediaLibrariesChildren,
-          request,
-        );
-        return parseDesktopHomeMediaLibraryChildrenResult(response, request.requestId);
-      },
-      async addLibrary(locationKind, expectedRevision) {
-        const request = createDesktopHomeMediaLibraryAddRequest(
-          nextRequestId('desktop-home-media-library-add'),
-          requireDesktopEndpointEpoch(),
-          locationKind,
-          expectedRevision,
-        );
-        const response: unknown = await ipcRenderer.invoke(
-          DESKTOP_HOME_MANAGEMENT_CHANNELS.mediaLibrariesAdd,
-          request,
-        );
-        return parseDesktopHomeMediaLibraryAddResult(response, request.requestId);
-      },
-      async relinkLibrary(libraryId, expectedRevision) {
-        const request = createDesktopHomeMediaLibraryRequest(
-          nextRequestId('desktop-home-media-library-relink'),
-          requireDesktopEndpointEpoch(),
-          libraryId,
-          expectedRevision,
-        );
-        const response: unknown = await ipcRenderer.invoke(
-          DESKTOP_HOME_MANAGEMENT_CHANNELS.mediaLibrariesRelink,
-          request,
-        );
-        return parseDesktopHomeMediaLibraryRelinkResult(response, request.requestId);
-      },
-      async removeLibrary(libraryId, expectedRevision) {
-        const request = createDesktopHomeMediaLibraryRequest(
-          nextRequestId('desktop-home-media-library-remove'),
-          requireDesktopEndpointEpoch(),
-          libraryId,
-          expectedRevision,
-        );
-        const response: unknown = await ipcRenderer.invoke(
-          DESKTOP_HOME_MANAGEMENT_CHANNELS.mediaLibrariesRemove,
-          request,
-        );
-        return parseDesktopHomeMediaLibraryRemoveResult(response, request.requestId);
-      },
-      async revealLibrary(libraryId, expectedRevision) {
-        const request = createDesktopHomeMediaLibraryRequest(
-          nextRequestId('desktop-home-media-library-reveal'),
-          requireDesktopEndpointEpoch(),
-          libraryId,
-          expectedRevision,
-        );
-        const response: unknown = await ipcRenderer.invoke(
-          DESKTOP_HOME_MANAGEMENT_CHANNELS.mediaLibrariesReveal,
-          request,
-        );
-        return parseDesktopHomeMediaLibraryRevealResult(response, request.requestId);
-      },
-    },
-    extensions: {
-      async list() {
-        const request = createDesktopHomeExtensionsRequest(
-          nextRequestId('desktop-home-extensions'),
-          requireDesktopEndpointEpoch(),
-        );
-        const response: unknown = await ipcRenderer.invoke(
-          DESKTOP_HOME_MANAGEMENT_CHANNELS.extensionsList,
-          request,
-        );
-        return parseDesktopHomeExtensionsResult(response, request.requestId);
-      },
-      async installPlugin(pluginId, expectedCatalogRevision) {
-        const request = createDesktopHomePluginMutationRequest(
-          nextRequestId('desktop-home-plugin-install'),
-          requireDesktopEndpointEpoch(),
-          pluginId,
-          expectedCatalogRevision,
-        );
-        const response: unknown = await ipcRenderer.invoke(
-          DESKTOP_HOME_MANAGEMENT_CHANNELS.extensionPluginInstall,
-          request,
-        );
-        return parseDesktopHomeExtensionMutationResult(response, request.requestId);
-      },
-      async removePlugin(pluginId, expectedCatalogRevision) {
-        const request = createDesktopHomePluginMutationRequest(
-          nextRequestId('desktop-home-plugin-remove'),
-          requireDesktopEndpointEpoch(),
-          pluginId,
-          expectedCatalogRevision,
-        );
-        const response: unknown = await ipcRenderer.invoke(
-          DESKTOP_HOME_MANAGEMENT_CHANNELS.extensionPluginRemove,
-          request,
-        );
-        return parseDesktopHomeExtensionMutationResult(response, request.requestId);
-      },
-      async refreshMarketplaces(expectedCatalogRevision) {
-        const request = createDesktopHomeCatalogMutationRequest(
-          nextRequestId('desktop-home-marketplaces-refresh'),
-          requireDesktopEndpointEpoch(),
-          expectedCatalogRevision,
-        );
-        const response: unknown = await ipcRenderer.invoke(
-          DESKTOP_HOME_MANAGEMENT_CHANNELS.extensionMarketplacesRefresh,
-          request,
-        );
-        return parseDesktopHomeExtensionMutationResult(response, request.requestId);
-      },
-      async installPersonalSkill(expectedCatalogRevision) {
-        const request = createDesktopHomeCatalogMutationRequest(
-          nextRequestId('desktop-home-personal-skill-install'),
-          requireDesktopEndpointEpoch(),
-          expectedCatalogRevision,
-        );
-        const response: unknown = await ipcRenderer.invoke(
-          DESKTOP_HOME_MANAGEMENT_CHANNELS.extensionPersonalSkillInstall,
-          request,
-        );
-        return parseDesktopHomeExtensionMutationResult(response, request.requestId);
-      },
-      async removePersonalSkill(managementId, expectedCatalogRevision) {
-        const request = createDesktopHomePersonalSkillRemoveRequest(
-          nextRequestId('desktop-home-personal-skill-remove'),
-          requireDesktopEndpointEpoch(),
-          managementId,
-          expectedCatalogRevision,
-        );
-        const response: unknown = await ipcRenderer.invoke(
-          DESKTOP_HOME_MANAGEMENT_CHANNELS.extensionPersonalSkillRemove,
-          request,
-        );
-        return parseDesktopHomeExtensionMutationResult(response, request.requestId);
-      },
+  },
+  extensionManagement: {
+    async execute(input) {
+      const request = parseAgentExtensionManagementHostRequest(input);
+      const response: unknown = await ipcRenderer.invoke(
+        AGENT_EXTENSION_MANAGEMENT_HOST_CHANNEL,
+        request,
+      );
+      return parseAgentExtensionManagementHostResult(response, request);
     },
   },
   resources: {
@@ -1180,6 +1089,48 @@ const bridge: OpenNekoDesktopBridge &
       );
     },
   },
+  applicationSidebar: {
+    async update(windowId, visible, width, expectedSidebarRevision) {
+      const context = requireShellMutationContext();
+      const request = createDesktopApplicationSidebarMutationRequest({
+        requestId: nextRequestId('desktop-application-sidebar-update'),
+        expectedEndpointEpoch: context.endpointEpoch,
+        windowId,
+        expectedSidebarRevision,
+        visible,
+        width,
+      });
+      const response: unknown = await ipcRenderer.invoke(
+        DESKTOP_SHELL_CHANNELS.applicationSidebarUpdate,
+        request,
+      );
+      return rememberShellProjection(
+        parseDesktopShellResponse(response, request.requestId).projection,
+      );
+    },
+  },
+  scenes: {
+    async transition(windowId, intent, expectedWindowRevision, expectedSceneRevision) {
+      const context = requireShellMutationContext();
+      const request = createDesktopSceneTransitionRequest({
+        requestId: nextRequestId('desktop-scene-transition'),
+        expectedEndpointEpoch: context.endpointEpoch,
+        windowId,
+        expectedWindowRevision,
+        expectedSceneRevision,
+        intent,
+      });
+      const response: unknown = await ipcRenderer.invoke(
+        DESKTOP_SHELL_CHANNELS.sceneTransition,
+        request,
+      );
+      const result = parseDesktopSceneTransitionResult(response);
+      if (result.requestId !== request.requestId) {
+        throw new Error('Desktop Scene transition response request identity does not match.');
+      }
+      return result;
+    },
+  },
 };
 
 ipcRenderer.on(
@@ -1301,21 +1252,6 @@ contextBridge.exposeInMainWorld('openNekoDesktop', bridge);
 function nextRequestId(prefix: string): string {
   requestSequence += 1;
   return `${prefix}-${Date.now()}-${requestSequence}`;
-}
-
-function createDesktopEndpointEpoch(
-  applicationInstanceId: string,
-  windowId: string,
-  rendererEpoch: number,
-): string {
-  return `${applicationInstanceId}:${windowId}:${rendererEpoch}`;
-}
-
-function requireDesktopEndpointEpoch(): string {
-  if (!currentDesktopEndpointEpoch) {
-    throw new Error('Desktop Home request requires a sender-bound bootstrap identity.');
-  }
-  return currentDesktopEndpointEpoch;
 }
 
 function rememberShellProjection<

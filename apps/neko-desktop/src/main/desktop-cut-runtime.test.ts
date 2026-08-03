@@ -27,6 +27,10 @@ import {
   setWorkbenchDisplayMode,
   type DesktopWorkbenchLayoutProjection,
 } from '@neko/host/desktop-workbench-contract';
+import {
+  createDefaultDesktopAgentScene,
+  createDefaultDesktopApplicationSidebar,
+} from '@neko/host/desktop-scene-contract';
 
 const roots: string[] = [];
 
@@ -173,6 +177,8 @@ describe('DesktopCutRuntime', () => {
           },
         ],
         workbench,
+        scene: createDefaultDesktopAgentScene('window-1', 'assistant-space:test'),
+        applicationSidebar: createDefaultDesktopApplicationSidebar('window-1'),
       },
       agentHome: {
         revision: 0,

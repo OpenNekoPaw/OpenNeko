@@ -46,11 +46,20 @@ export function isSameDesktopAgentEventConnection(
   return (
     left.applicationInstanceId === right.applicationInstanceId &&
     left.windowId === right.windowId &&
-    left.projectId === right.projectId &&
+    sameAgentConnectionOwner(left, right) &&
     left.workspaceId === right.workspaceId &&
     left.viewId === right.viewId &&
     left.viewEpoch === right.viewEpoch &&
     left.rendererEpoch === right.rendererEpoch &&
     left.connectionId === right.connectionId
   );
+}
+
+function sameAgentConnectionOwner(
+  left: DesktopAgentConnectionIdentity,
+  right: DesktopAgentConnectionIdentity,
+): boolean {
+  return 'assistantSpaceId' in left
+    ? 'assistantSpaceId' in right && left.assistantSpaceId === right.assistantSpaceId
+    : 'projectId' in right && left.projectId === right.projectId;
 }

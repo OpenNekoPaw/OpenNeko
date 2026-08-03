@@ -10,10 +10,12 @@ import {
 } from '@neko/local-metadata/sqlite';
 import { resolveGlobalStorageLayout } from '@neko/local-metadata';
 import type { AssetWorkspaceResolution } from '@neko/assets-domain/contracts';
+import { PathResolver } from '@neko/shared/path';
 
 export interface DesktopWorkspaceRegistry {
   readonly metadataRepositories?: LocalMetadataRepositories;
   resolve(workspacePath: string): Promise<AssetWorkspaceResolution>;
+  restore?(workspaceId: string): Promise<AssetWorkspaceResolution>;
   dispose(): Promise<void>;
 }
 
@@ -63,6 +65,27 @@ class NodeDesktopWorkspaceRegistry implements DesktopWorkspaceRegistry {
       displayName: path.basename(absolutePath),
       locator: resolution.locator,
     };
+  }
+
+  async restore(workspaceId: string): Promise<AssetWorkspaceResolution> {
+    this.requireActive();
+    const record = await this.metadataStore.repositories.workspaces.get(workspaceId);
+    if (!record) {
+      throw new Error(`Persisted Workspace '${workspaceId}' is not registered.`);
+    }
+    const locator = record.currentLocator;
+    const workspacePath =
+      locator.kind === 'variable'
+        ? new PathResolver(new Map([['HOME', this.homedir]])).resolve(locator.value)
+        : path.resolve(this.homedir, locator.value);
+    if (!path.isAbsolute(workspacePath) || workspacePath.includes('${')) {
+      throw new Error(`Persisted Workspace '${workspaceId}' locator cannot be resolved.`);
+    }
+    const resolution = await this.resolve(workspacePath);
+    if (resolution.workspaceId !== workspaceId) {
+      throw new Error(`Persisted Workspace '${workspaceId}' resolved to another identity.`);
+    }
+    return resolution;
   }
 
   async dispose(): Promise<void> {
