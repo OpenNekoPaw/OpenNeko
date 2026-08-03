@@ -54,7 +54,7 @@
 
 ## 7. Documentation and qualification
 
-- [x] 7.1 Update `scripts/agent-eval/README.md`, test-case authoring guidance, Desktop functional documentation and quality-gate policy with evidence levels, declarative Skill-assisted authoring, thin runner resolution, driver ownership, matrix/shard/budget usage, configuration versus implementation ablation, TUI migration rules and local-only execution boundaries.
+- [x] 7.1 Update `AGENTS.md`, the Chinese/English contribution guides, `scripts/agent-eval/README.md`, test-case authoring guidance, Desktop functional documentation and quality-gate policy with evidence levels, declarative Skill-assisted authoring, thin runner resolution, driver ownership, matrix/shard/budget usage, configuration versus implementation ablation, TUI migration rules, the canonical `~/.neko/config.toml` source and local-only execution boundaries.
 - [x] 7.2 Run `pnpm test:agent:eval`, all-suite dry-run and focused ablation dry-runs; record suite/case counts and key-free scope without claiming real Agent behavior acceptance.
   - 2026-08-03 key-free evidence: 45 Agent Evaluation test files / 284 tests passed; all-suite dry-run validated 22 suites / 53 cases; thinking-budget and media-production ablation plans completed dry-run only. No provider request, Electron launch or real ablation sample was executed.
 - [x] 7.3 Run focused real Desktop cases for canonical turn, Tool/Skill permission, cancellation and persistence/recovery with configured provider evidence, or record the exact infrastructure blocker.

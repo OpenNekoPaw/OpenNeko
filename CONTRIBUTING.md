@@ -40,6 +40,12 @@ Touch only files in the requested scope and preserve unrelated working-tree chan
 Webview code must not access Electron or Node APIs directly; Host capabilities must be exposed
 through minimal typed Desktop ports.
 
+Agent Evaluation uses strict declarative suite, Scenario, assertion, and ablation artifacts. A Skill
+may assist coverage decisions and draft authoring, but it must not generate per-case executable
+scripts or own runtime protocols. Deterministic resolution remains in the existing runner unless a
+new OpenSpec establishes a real standalone compiler boundary such as cross-process plans, multiple
+execution backends, or stable plan caching.
+
 ## Validation
 
 Select validation in proportion to the affected surface. Unit tests alone are not completion
@@ -55,6 +61,14 @@ pnpm package:desktop
 Documentation-only changes require formatting, local-link checks, and `git diff --check`. Desktop
 visual, interaction, CSP, IPC, focus, or media changes also require focused acceptance in the real
 Electron application.
+
+Agent Evaluation harnesses, including `pnpm test:agent:eval`, real API runs, hidden or visible
+Desktop sessions, repeated matrices, ablations, and graphical Electron acceptance are explicit
+local-only developer operations. They must not be added to GitHub Actions or generic CI/gate
+commands. Key-free and dry-run results prove platform readiness only, not real Agent behavior. Real
+API Evaluation reads only `~/.neko/config.toml`; the path cannot be redirected, credentials remain
+owned by product configuration, and provider/model selection plus cost authorization stay explicit.
+See [`scripts/agent-eval/README.md`](scripts/agent-eval/README.md) for the local entrypoints.
 
 ## Change Description
 

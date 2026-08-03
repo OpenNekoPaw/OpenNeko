@@ -115,6 +115,16 @@
 - 工具名允许出现在机器可读元数据中，例如 `allowedTools`、`optionalTools`、`toolDefinitions`、tool registry、tool schema 和测试 fixture；不得以自然语言教程形式进入 Skill prompt content。
 - 新增/修改 Skill 时必须补充或维护防回流测试，确保 builtin/custom skill content 不重新包含被系统提示词或子包 capability 拥有的工具协议。
 
+## Agent Evaluation 开发边界
+
+- Agent Evaluation 是仓库外部测试平台能力，由 `scripts/agent-eval` 拥有 suite、Scenario、fixture、assertion、Judge、comparison、报告和调度；不得注册为产品 Skill、capability、普通用户入口、第二个 Agent controller 或 direct runtime runner。
+- Evaluation Skill 只负责覆盖判断、声明式 authoring 草案和证据解释；可执行测试意图必须进入严格 suite/Scenario/assertion/ablation artifact。Skill 不得生成或执行每 case JavaScript、注册 handler、决定 outcome、持有凭据/进程协议，中央 runner 也不得按 `scenario.id`、Skill 名或业务功能名增加成功分支。
+- 确定性 case 解析由现有 Evaluation runner 复用 strict schema、引用、profile、supported-kind 和 workflow 状态机完成。没有跨进程持久计划、多个真实执行后端或不可变计划缓存等实际消费者时，不得新建 compiler service、workspace package、动态插件系统或通用 UI/Agent DSL；达到提取条件后必须通过 OpenSpec 重新定义 owner、contract、lifecycle、errors 和验证证据。
+- `pnpm test:agent:eval`、key-free harness、provider-backed case、hidden/visible Desktop、重复 matrix、configuration/implementation ablation 和图形化 Electron 验收都必须由开发者通过显式本地入口运行，不得直接或间接加入 GitHub Actions、`check:ci`、`gate:local`、`gate:remote`、`ci:local`、`ci:remote` 或其他通用 CI script composition。CI 只能运行普通 unit/contract/headless 测试和“本地入口不可达”的编排回归。
+- 真实 API Evaluation 唯一允许的用户配置来源是 `~/.neko/config.toml`；本地 CLI 和环境变量不得改写该路径，也不得回退到 JSON/YAML、其他用户配置或 mock。Evaluation 只在启动前验证原生 TOML，并以 `0600` 权限原样复制到隔离 fixture；不得编译另一格式、合并默认值、推断 provider、写回用户目录或把配置内容写入报告。
+- `~/.neko/config.toml` 内凭据由产品配置 owner 解析；Evaluation 不得读取、打印或投影 secret。provider/model identity 与成本授权必须显式提供，缺失时在启动 Desktop 和调用 API 前返回 `infrastructure-blocked`。
+- key-free、dry-run、mock、最终文本、单次 Judge 或 hidden window 结果只表示 harness/authoring readiness，不是 Agent 行为、模型质量、真实 API、UI 或消融验收证据。
+
 ## 设计与实现规范
 
 ### Application root 与业务 ownership
@@ -245,10 +255,10 @@
 | 残留、兼容层、冗余或依赖清理                                                                                                | `pnpm check:legacy-debt`、`pnpm check:unused`，或说明已由 `pnpm ci:local` / `pnpm check:quality` 覆盖                                     |
 | package-owned wire contract、Desktop IPC 或跨层 message                                                                     | 生产者/消费者测试、契约路径断言，以及受影响 Electron 运行态或集成验证                                                                     |
 | Node/FFmpeg 媒体 runtime                                                                                                    | 聚焦 Node/FFmpeg、Range/PCM、取消与资源释放测试；涉及 Renderer 时增加真实 Electron 媒体路径验收                                           |
-| Agent evaluation harness、scenario manifest、debug automation 或 facts 契约                                                 | `pnpm test:agent:eval`；该命令仅是 key-free harness 自测，不得描述为真实 Agent 行为验收                                                   |
+| Agent evaluation harness、scenario manifest、debug automation 或 facts 契约                                                 | 显式本地运行 `pnpm test:agent:eval`；该命令不得进入 CI，且仅是 key-free harness 自测，不得描述为真实 Agent 行为验收                       |
 | prompt、Skill、capability/tool routing、provider/model、AgentSession、validation/recovery 或 Desktop Agent event projection | 按 `.codex/skills/neko-agent-evaluation/SKILL.md` 规划并运行聚焦脚本 evaluation；无法运行真实 case 时记录阻塞条件和残余风险               |
 | Renderer/Webview 视觉、交互、CSP、消息、焦点或媒体                                                                          | 受影响构建/测试，加真实 Electron Desktop 聚焦场景；普通浏览器/Vite/Chrome 不能替代 preload/IPC/窗口生命周期验收；UI 运行态测试不得进入 CI |
-| 发布链路或影响面不易限定的高风险改动                                                                                        | `pnpm ci:local` 加所有受影响领域的 evaluation、Electron Desktop UI 或 Node/FFmpeg 运行态验证                                              |
+| 发布链路或影响面不易限定的高风险改动                                                                                        | `pnpm ci:local`，并按领域分别显式本地运行适用的 evaluation、Electron Desktop UI 或 Node/FFmpeg 运行态验证；不得把本地专用入口并入 CI 命令 |
 
 - 新路径、迁移和 bug 修复必须同时验证结果与执行路径：断言 canonical contract、handler、renderer、adapter 或 Node/FFmpeg path 被命中，并证明 legacy/fallback 路径未参与。
 - 验证应重点发现循环依赖、Layer 0 反向依赖、Renderer/Webview 依赖 Electron/Node、Desktop Main 依赖 React、包到应用反向依赖等架构违规。
@@ -292,8 +302,10 @@ pnpm check:quality
 pnpm check:legacy-debt
 pnpm check:unused
 
-# Agent 与 Desktop 运行态
+# Agent Evaluation（仅显式本地运行，不得加入 CI 组合）
 pnpm test:agent:eval
+
+# Desktop package
 pnpm package:desktop
 
 ```

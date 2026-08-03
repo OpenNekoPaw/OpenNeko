@@ -34,6 +34,8 @@ pnpm dev:desktop
 
 只修改与任务有关的文件，不要覆盖工作区中不属于你的改动。Renderer/Webview 不得直接访问 Electron 或 Node API；宿主能力必须通过最小 typed Desktop port 提供。
 
+Agent Evaluation 使用严格的声明式 suite、Scenario、assertion 和 ablation artifact。Skill 可以辅助覆盖判断和草案生成，但不得生成每 case 可执行脚本或拥有运行时协议；确定性解析保留在现有 runner，除非新的 OpenSpec 证明存在跨进程计划、多个真实后端或稳定缓存等独立编译边界。
+
 ## 验证
 
 按影响范围选择验证，不能只以单元测试通过作为非平凡变更的完成证据：
@@ -46,6 +48,8 @@ pnpm package:desktop
 ```
 
 纯文档修改至少运行格式、链接和 `git diff --check`。涉及 Desktop 视觉、交互、CSP、IPC、焦点或媒体时，还必须在真实 Electron 应用中完成聚焦验收。
+
+Agent Evaluation harness（包括 `pnpm test:agent:eval`）、真实 API、hidden/visible Desktop、重复 matrix、消融和图形化 Electron 验收只能由开发者显式本地运行，不得加入 GitHub Actions 或通用 CI/gate 命令。key-free 与 dry-run 结果只证明测试平台就绪，不代表真实 Agent 行为。真实 API 唯一读取 `~/.neko/config.toml`，配置路径不可重定向；凭据由产品配置 owner 解析，provider/model 与成本授权仍需显式提供。具体入口见 [`scripts/agent-eval/README.md`](scripts/agent-eval/README.md)。
 
 ## 提交说明
 
