@@ -193,6 +193,8 @@ Draft 隐藏 conversation Tabs/history 等 session-only chrome，但继续复用
 
 Capability catalog 必须标记 scope requirements。Assistant draft 不展示 Workspace-only Tool/Skill 为可执行成功能力；缺少 Workspace scope 时返回 typed `workspace-scope-required`，不能 fallback 到 active Project。Root 不因 scope 改变而换成另一套 controller。
 
+Composer 视觉继续由 `@neko/agent-webview` 拥有并增强现有 `InputArea`、`ComposerConfigMenu`、`SessionModeSelector` 与 `ModeSelector`，不创建 Desktop composer 或平行控件。Desktop 只通过 Agent Root 的 React presentation prop 注入 Assistant 的目录选择命令，或当前 Project catalog 已有的安全 `displayName`；该短生命周期 UI projection 不进入 Agent authority、conversation facts 或持久 Scene schema。Composer 将目录上下文、textarea 与工具条收进同一居中悬浮表面，保留现有 `+`、模式、模型、命令、Skill、usage、审批和发送/停止能力；不复制 Codex 的 branch/local 元信息。窄 dock 通过 package-owned responsive CSS 收缩低优先级标签并允许工具条在稳定边界内换行，菜单仍向上定位且不得溢出 Workbench。
+
 ### 6. Explicit directory authorization creates Workspace scope
 
 目录选择是明确用户操作，不是模型推断：

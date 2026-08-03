@@ -110,6 +110,15 @@ The existing package-owned `AgentWebviewRoot`, controller, composer and Host pro
 - **AND** model configuration, launch-safe commands/Skills, authorized file/reference controls and available voice controls remain usable
 - **AND** conversation Tabs/history are hidden and no conversation or scratch is created by rendering or editing the draft
 
+#### Scenario: Agent composer uses the shared compact Workbench presentation
+
+- **WHEN** the package-owned Agent Root renders in Assistant or Workspace scope
+- **THEN** the existing composer is presented as one centered, elevated input surface with an integrated Workspace context strip and compact control toolbar
+- **AND** add/resource authorization, creative mode, model configuration, commands, Skills, execution/approval, usage and send/stop behavior remain available according to their existing capability projection
+- **AND** Assistant scope offers explicit Workspace directory selection while Workspace scope shows only the authorized user-visible Workspace label, never an absolute path
+- **AND** branch and local-runtime metadata are not added to the composer
+- **AND** narrow Workbench docks keep the input, controls and upward-opening menus within the visible surface without overlap
+
 #### Scenario: A capability requires Workspace scope
 
 - **WHEN** an Agent draft or Assistant session encounters a Tool, command or Skill requiring Workspace files or domain mutation

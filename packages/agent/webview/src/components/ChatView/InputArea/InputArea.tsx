@@ -12,7 +12,7 @@ import {
   useMemo,
   type ReactNode,
 } from 'react';
-import { SendIcon, StopIcon, PlusIcon, EditIcon, CloseIcon } from '@neko/ui/icons';
+import { SendIcon, StopIcon, PlusIcon, EditIcon, CloseIcon, FolderIcon } from '@neko/ui/icons';
 import { ModeSelector } from './ModeSelector';
 import { SessionModeSelector } from './SessionModeSelector';
 import { ComposerConfigMenu } from './ComposerConfigMenu';
@@ -67,6 +67,7 @@ import type {
   SessionMode,
 } from '@neko/agent-contracts';
 import { submitRoleplayEntrySelection } from '../roleplay-entry-action';
+import { useComposerWorkspacePresentation } from '../../ComposerWorkspaceContext';
 
 interface InputAreaProps {
   inputValue: string;
@@ -215,6 +216,7 @@ export function InputArea({
   focusRequestTarget = 'none',
   focusRequestRevision = 0,
 }: InputAreaProps) {
+  const composerWorkspace = useComposerWorkspacePresentation();
   // Global configuration from context (model, modes, compression, skills)
   const {
     sessionMode,
@@ -950,7 +952,26 @@ export function InputArea({
         )}
 
         {/* ── Input container ── */}
-        <div className="agent-composer-shell relative mx-2 mb-2">
+        <div className="agent-composer-shell relative">
+          {composerWorkspace ? (
+            <div className="agent-composer-workspace" aria-label={t('chat.input.workspace.label')}>
+              <FolderIcon size={14} />
+              {composerWorkspace.kind === 'assistant' ? (
+                <button
+                  type="button"
+                  className="agent-composer-workspace-button"
+                  disabled={composerWorkspace.disabled}
+                  onClick={composerWorkspace.onChoose}
+                >
+                  {t('chat.input.workspace.choose')}
+                </button>
+              ) : (
+                <span className="agent-composer-workspace-label" title={composerWorkspace.label}>
+                  {composerWorkspace.label}
+                </span>
+              )}
+            </div>
+          ) : null}
           {/* Slash command menu */}
           <SlashCommandMenu
             isOpen={slashMenuOpen}

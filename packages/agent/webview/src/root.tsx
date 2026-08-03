@@ -17,6 +17,10 @@ import { AgentHostRuntimeProvider } from './host-runtime-context';
 import type { AgentHostRuntimeAdapter } from './messages';
 import type { AgentRootPresentation } from '@neko/agent-contracts';
 import { setAgentHostRuntimeAdapter } from './messages';
+import {
+  ComposerWorkspaceProvider,
+  type AgentComposerWorkspacePresentation,
+} from './components/ComposerWorkspaceContext';
 import './index.css';
 
 registerDefaultRenderers();
@@ -29,12 +33,14 @@ export interface AgentWebviewRootProps {
   readonly initialInput?: { readonly id: string; readonly value: string };
   readonly presentation?: 'default' | 'desktop-dock';
   readonly agentPresentation?: AgentRootPresentation;
+  readonly composerWorkspace?: AgentComposerWorkspacePresentation;
 }
 
 export function AgentWebviewRoot({
   foundation,
   hostRuntimeAdapter,
   agentPresentation,
+  composerWorkspace,
   initialConversation,
   initialInput,
   locale,
@@ -71,18 +77,22 @@ export function AgentWebviewRoot({
       >
         <AgentHostRuntimeProvider adapter={hostRuntimeAdapter}>
           <I18nProvider service={i18nService}>
-            <AppShell
-              agentPresentation={agentPresentation}
-              initialConversation={initialConversation}
-              initialInput={initialInput}
-              presentation={presentation}
-            />
+            <ComposerWorkspaceProvider value={composerWorkspace}>
+              <AppShell
+                agentPresentation={agentPresentation}
+                initialConversation={initialConversation}
+                initialInput={initialInput}
+                presentation={presentation}
+              />
+            </ComposerWorkspaceProvider>
           </I18nProvider>
         </AgentHostRuntimeProvider>
       </AgentWebviewFoundationBoundary>
     </ErrorBoundary>
   );
 }
+
+export type { AgentComposerWorkspacePresentation } from './components/ComposerWorkspaceContext';
 
 interface AgentWebviewFoundationBoundaryProps {
   readonly foundation?: WebviewFoundationContextValue;

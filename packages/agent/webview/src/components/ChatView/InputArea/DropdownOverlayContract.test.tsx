@@ -249,16 +249,25 @@ describe('dropdown overlay presentation contract', () => {
     expect(triggerRule).toContain('max-width: 144px');
   });
 
-  it('keeps the Desktop composer continuous with the Main conversation surface', () => {
+  it('keeps the Desktop composer centered and elevated above the Main conversation surface', () => {
     const css = readFileSync(resolve(__dirname, '../../../index.css'), 'utf8');
     const desktopDockRule = css.match(/\[data-presentation='desktop-dock'\]\s*\{(?<body>[^}]+)\}/)
       ?.groups?.body;
+    const shellRule = css.match(/\.agent-composer-shell\s*\{(?<body>[^}]+)\}/)?.groups?.body;
+    const railRule = css.match(/\.agent-composer-rail\s*\{(?<body>[^}]+)\}/)?.groups?.body;
+    const narrowRule = css.match(/@media \(max-width: 520px\)\s*\{(?<body>[\s\S]+?)\n\}/)?.groups
+      ?.body;
 
     expect(desktopDockRule).toMatch(
       /--agent-bg:\s*var\(\s*--neko-sideBar-background,\s*var\(--neko-desktop-main/u,
     );
     expect(desktopDockRule).toContain('--agent-composer-rail-bg: var(--agent-bg)');
     expect(desktopDockRule).toContain('--agent-composer-rail-border: transparent');
+    expect(shellRule).toContain('max-width: 820px');
+    expect(shellRule).toContain('margin-inline: auto');
+    expect(railRule).toContain('padding:');
+    expect(narrowRule).toContain('.agent-composer-toolbar');
+    expect(narrowRule).toContain('flex-wrap: wrap');
   });
 
   it('keeps preset and generation parameter dialogs bounded with field headers', () => {

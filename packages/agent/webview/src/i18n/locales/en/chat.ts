@@ -243,6 +243,8 @@ export const chat = {
   'chat.input.cancel': 'Cancel (Esc)',
   'chat.input.attach': 'Attach file',
   'chat.input.attachFile': 'Attach file',
+  'chat.input.workspace.label': 'Working directory',
+  'chat.input.workspace.choose': 'Choose working directory',
   'chat.input.commands': 'Commands',
   'chat.input.skills': 'Skills',
   'chat.input.mediaModelCalls': 'Media model calls: {count}',

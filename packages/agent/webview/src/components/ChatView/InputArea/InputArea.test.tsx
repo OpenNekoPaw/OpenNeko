@@ -17,6 +17,10 @@ import {
   type SelectedFileReference,
 } from './types';
 import { InputArea } from './InputArea';
+import {
+  ComposerWorkspaceProvider,
+  type AgentComposerWorkspacePresentation,
+} from '../../ComposerWorkspaceContext';
 
 const hostMocks = vi.hoisted(() => ({
   invokeSkill: vi.fn(),
@@ -35,6 +39,8 @@ const translations: Record<string, string> = {
   'chat.input.thinkingPlaceholder': '正在回答... 请等待或取消后再发送',
   'chat.input.attach': '添加附件',
   'chat.input.attachFile': '添加附件',
+  'chat.input.workspace.label': '工作目录',
+  'chat.input.workspace.choose': '选择工作目录',
   'chat.input.send': '发送',
   'chat.input.queue': '加入队列',
   'chat.input.skills': '技能',
@@ -654,6 +660,33 @@ describe('InputArea composer controls', () => {
     expect(screen.getByTitle('命令').className).toContain('agent-composer-tool-button');
     expect(document.querySelector('.agent-composer-toolbar')).toBeTruthy();
     expect(document.querySelector('.agent-composer-textarea')).toBeTruthy();
+  });
+
+  it('integrates the authorized Workspace label without branch or local runtime metadata', () => {
+    render(
+      <Harness composerWorkspace={{ kind: 'workspace', label: 'OpenNeko' }}>
+        <InputArea inputValue="" isThinking={false} onInputChange={vi.fn()} onSend={vi.fn()} />
+      </Harness>,
+    );
+
+    const context = screen.getByLabelText('工作目录');
+    expect(context.className).toContain('agent-composer-workspace');
+    expect(context.textContent).toContain('OpenNeko');
+    expect(document.querySelector('.agent-composer-shell')?.contains(context)).toBe(true);
+    expect(screen.queryByText(/branch|分支|local|本地/iu)).toBeNull();
+  });
+
+  it('keeps Assistant Workspace authorization in the package-owned composer', () => {
+    const onChoose = vi.fn();
+    render(
+      <Harness composerWorkspace={{ kind: 'assistant', onChoose }}>
+        <InputArea inputValue="" isThinking={false} onInputChange={vi.fn()} onSend={vi.fn()} />
+      </Harness>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '选择工作目录' }));
+
+    expect(onChoose).toHaveBeenCalledOnce();
   });
 
   it('sends the primary Agent model without composer LLM parameters', () => {
@@ -2258,6 +2291,7 @@ function Harness({
   selectedFileReferences = [],
   onSelectedFileReferencesChange = vi.fn(),
   isBusy = false,
+  composerWorkspace,
   children,
 }: {
   readonly ambientNodes?: import('@neko/agent-contracts').AmbientCanvasNode[];
@@ -2295,9 +2329,10 @@ function Harness({
     typeof InputArea
   >['onSelectedFileReferencesChange'];
   readonly isBusy?: boolean;
+  readonly composerWorkspace?: AgentComposerWorkspacePresentation;
   readonly children: React.ReactNode;
 }) {
-  return (
+  const inputArea = (
     <InputAreaProvider
       isBusy={isBusy}
       selectedModel={selectedModel}
@@ -2335,6 +2370,11 @@ function Harness({
         onSelectedFileReferencesChange,
       })}
     </InputAreaProvider>
+  );
+  return composerWorkspace ? (
+    <ComposerWorkspaceProvider value={composerWorkspace}>{inputArea}</ComposerWorkspaceProvider>
+  ) : (
+    inputArea
   );
 }
 

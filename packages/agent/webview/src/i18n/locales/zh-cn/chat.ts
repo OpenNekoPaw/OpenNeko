@@ -226,6 +226,8 @@ export const chat = {
   'chat.input.cancel': '取消 (Esc)',
   'chat.input.attach': '添加附件',
   'chat.input.attachFile': '添加附件',
+  'chat.input.workspace.label': '工作目录',
+  'chat.input.workspace.choose': '选择工作目录',
   'chat.input.commands': '命令',
   'chat.input.skills': '技能',
   'chat.input.mediaModelCalls': '媒体模型调用：{count}',

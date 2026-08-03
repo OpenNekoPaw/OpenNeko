@@ -69,7 +69,7 @@ export function ModeSelector({ mode, onChange }: ModeSelectorProps) {
         }}
         aria-haspopup="menu"
         aria-expanded={isOpen}
-        className="agent-control-chip"
+        className="agent-control-chip agent-execution-mode-trigger"
         title={`${t('chat.executionMode.title')} (Shift+Tab)`}
       >
         <span className="agent-control-chip-text">
