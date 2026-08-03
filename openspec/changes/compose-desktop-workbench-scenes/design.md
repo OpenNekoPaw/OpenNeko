@@ -261,7 +261,17 @@ Extensions 使用 Agent extension application contract 与 package public manage
 
 若当前没有真实 detail Root，scene 只挂载 owner-qualified catalog/empty/unavailable Surface，不在 Desktop 创建临时 domain implementation。所有 scene 都保留同一 PrimarySidebar、Workbench、主题和 resize lifecycle。
 
-### 11. Ownership and canonical paths
+Management Main 与可选 Preview/Detail 使用 Workspace Main 相同的 panel chrome、tab/header/content frame 和 resize primitive。Assets、Extensions 与 Projects 只提供各自 package-owned management/detail content，不复制 Workspace Preview viewer 或在 Desktop 创建第二套 panel implementation。组合时 management panel 使用紧凑目录宽度，Preview/Detail 获得主要内容宽度；未选择 detail 时明确省略或显示 owner-qualified empty Surface。
+
+### 11. Scene activation and empty Main are atomic presentation states
+
+打开显式 Project/Workspace 或恢复 conversation 时，Host Shell 在一个 stored-state commit 中同时更新 exact Project `activeTarget`、对应 Workbench attachment、Scene scope/slots 与 Agent `draft | session` phase。Desktop 只有在该提交完成后才返回 transition success；renderer 不得先启动旧 scope 的 launch adapter，再等待布局或 Agent 状态补齐。App composition 可以在返回前 attach 对应 package runtime，但不能用 active/recent Project fallback 修复不一致状态。
+
+Workspace 的 Main View 集允许因用户关闭最后一个 Preview/View 暂时为空。此时 Workbench 保留 primary group，Scene 移除 `slots.main` 和无 owner 的 Timeline，同时继续保留 exact Workspace scope、Agent Interaction、Workspace Resources 与 Status。renderer epoch projection 只更新实际存在的 Main/Timeline ref；不得把空 Main 当作 scene corruption。应用重启时现有 `attachProjectWorkbench` 恢复 canonical Canvas，但运行中的关闭操作不隐式发明另一个 View。
+
+Pi transcript 中 `stopReason: error` 的 assistant entry 必须把持久化的 `errorMessage` 投影到 package-owned Agent error presentation。空 content 不得把真实 diagnostic 降级成只有固定 `Error` 标题；错误仍保持 conversation/turn scoped，不自动重试或伪装成功。
+
+### 12. Ownership and canonical paths
 
 | Owner                      | Public path / role                                                   | Producer                      | Consumer                   | Replaced path / user data                                              |
 | -------------------------- | -------------------------------------------------------------------- | ----------------------------- | -------------------------- | ---------------------------------------------------------------------- |

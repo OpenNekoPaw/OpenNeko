@@ -616,12 +616,12 @@ function resolveWorkspaceSceneProject(
 ): DesktopProjectCatalogItem | undefined {
   const { context, slots } = projection.window.scene;
   if (context.kind !== 'agent' || context.scope.kind !== 'workspace') return undefined;
-  if (slots.main?.kind !== 'workspace-main') {
-    throw new Error('Workspace Scene requires its exact Workspace Main Surface ref.');
+  if (slots.main && slots.main.kind !== 'workspace-main') {
+    throw new Error('Workspace Scene Main Surface must use its exact Workspace View ref.');
   }
   const workspaceMain = slots.main;
   const workspaceScope = context.scope;
-  if (workspaceMain.workspaceId !== workspaceScope.workspaceId) {
+  if (workspaceMain && workspaceMain.workspaceId !== workspaceScope.workspaceId) {
     throw new Error('Workspace Scene Main Surface does not match its scope.');
   }
   const project = projection.catalog.projects.find(
@@ -641,14 +641,18 @@ function resolveWorkspaceSceneProject(
   ) {
     throw new Error('Workspace Scene Agent Surface does not match its exact Window View.');
   }
-  const mainView = projection.window.workbench.main.views.find(
-    (candidate) =>
-      candidate.viewId === workspaceMain.viewId &&
-      candidate.viewEpoch === workspaceMain.viewEpoch &&
-      candidate.workspaceId === workspaceScope.workspaceId &&
-      candidate.projectId === project.projectId,
-  );
-  if (!mainView) throw new Error('Workspace Scene Main Surface has no exact Workbench View.');
+  if (workspaceMain) {
+    const mainView = projection.window.workbench.main.views.find(
+      (candidate) =>
+        candidate.viewId === workspaceMain.viewId &&
+        candidate.viewEpoch === workspaceMain.viewEpoch &&
+        candidate.workspaceId === workspaceScope.workspaceId &&
+        candidate.projectId === project.projectId,
+    );
+    if (!mainView) throw new Error('Workspace Scene Main Surface has no exact Workbench View.');
+  } else if (projection.window.workbench.main.views.length > 0) {
+    throw new Error('Workspace Scene without Main cannot retain Workbench Views.');
+  }
   return project;
 }
 

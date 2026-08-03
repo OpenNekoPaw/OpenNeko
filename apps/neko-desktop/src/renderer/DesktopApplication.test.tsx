@@ -372,6 +372,78 @@ describe('DesktopApplication scene lifecycle', () => {
     );
     await act(async () => root.unmount());
   });
+
+  it('keeps the Workspace Agent layout mounted when the authoritative Main group is empty', async () => {
+    const base = createProjection();
+    const project = {
+      projectId: 'content:workspace-empty',
+      workspaceId: 'workspace-empty',
+      profile: 'content' as const,
+      displayName: 'Empty Workspace',
+      createdAt: '2026-08-04T00:00:00.000Z',
+      updatedAt: '2026-08-04T00:00:00.000Z',
+    };
+    const tab = {
+      tabId: 'tab:workspace-empty',
+      projectId: project.projectId,
+      viewId: 'agent-view:workspace-empty',
+      viewEpoch: 1,
+    };
+    const sceneId = 'scene:window-1:workspace-empty';
+    const projection: DesktopShellProjection = {
+      ...base,
+      catalog: { revision: 1, projects: [project] },
+      window: {
+        ...base.window,
+        activeTarget: { kind: 'project', tabId: tab.tabId },
+        tabs: [tab],
+        workbench: {
+          ...createDefaultDesktopWorkbenchLayout('window-1'),
+          display: {
+            ...createDefaultDesktopWorkbenchLayout('window-1').display,
+            mode: 'chat-main',
+          },
+        },
+        scene: parseDesktopWorkbenchSceneProjection({
+          schemaVersion: DESKTOP_SCENE_CONTRACT_VERSION,
+          sceneId,
+          windowId: 'window-1',
+          revision: 1,
+          context: {
+            kind: 'agent',
+            agentViewId: tab.viewId,
+            scope: {
+              kind: 'workspace',
+              workspaceId: project.workspaceId,
+              workspaceGrantId: 'workspace-grant:empty',
+            },
+          },
+          slots: {
+            interaction: {
+              kind: 'agent',
+              agentViewId: tab.viewId,
+              phase: 'draft',
+              scope: {
+                kind: 'workspace',
+                workspaceId: project.workspaceId,
+                workspaceGrantId: 'workspace-grant:empty',
+              },
+            },
+            rightManager: { kind: 'workspace-resources', workspaceId: project.workspaceId },
+            status: { kind: 'scene-status', sceneId },
+          },
+        }),
+      },
+    };
+    installBridge({ projection });
+
+    const { container, root } = await renderApplication();
+
+    expect(container.querySelector('[data-empty-main="true"]')).not.toBeNull();
+    expect(container.querySelector('.agent-workspace')).not.toBeNull();
+    expect(container.querySelector('[data-neko-controlled-workbench="true"]')).not.toBeNull();
+    await act(async () => root.unmount());
+  });
 });
 
 function installBridge({

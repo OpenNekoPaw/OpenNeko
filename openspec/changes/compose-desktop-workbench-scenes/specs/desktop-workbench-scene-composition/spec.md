@@ -116,6 +116,13 @@ The existing package-owned `AgentWebviewRoot`, controller, composer and Host pro
 - **THEN** the Workspace-bound Agent Root opens that exact conversation rather than rendering the draft Entry EmptyState
 - **AND** its header, transcript, turn state and composer remain attached to the Workspace runtime
 
+#### Scenario: Conversation restore activates its complete Workspace presentation
+
+- **WHEN** the user opens an exact persisted Workspace conversation from any other scene
+- **THEN** Host commits the target Project attachment, Workbench layout, Workspace Scene and Agent session phase as one stored presentation transition
+- **AND** transition success is returned only after the exact conversation scope can bootstrap against that Scene
+- **AND** renderer never exposes the conversation transcript in the previous draft or management layout
+
 #### Scenario: Desktop opens without an active conversation
 
 - **WHEN** the initial Agent scene has no conversation
@@ -154,6 +161,13 @@ Workspace capability SHALL be activated only from an explicit user directory/Pro
 - **THEN** Host validates the grant, establishes an exact Workspace identity and activates Agent + Workspace Main + Workspace Resources composition
 - **AND** the same Agent Root remains mounted
 - **AND** no conversation is created until the user submits a message or explicitly creates one
+
+#### Scenario: User opens an existing Project Workspace
+
+- **WHEN** the user activates an exact Project from PrimarySidebar or project management
+- **THEN** Host commits its active Project target, attached Workbench and Workspace Agent draft Scene together
+- **AND** the returned projection immediately contains Agent + Workspace Main + Workspace Resources with matching identities
+- **AND** no old Assistant launch scope or unrelated Project can bootstrap during the transition
 
 #### Scenario: User cancels directory selection
 
@@ -225,6 +239,13 @@ Submitting an Agent draft SHALL validate the explicit scope and grants, atomical
 - **THEN** the conversation and initial message remain with a typed failed or recoverable turn diagnostic
 - **AND** the application does not roll back into a Home handoff, empty success or different scope
 
+#### Scenario: A persisted Pi turn contains an error diagnostic
+
+- **WHEN** an assistant transcript entry has `stopReason: error` and a non-empty `errorMessage`
+- **THEN** the Agent transcript projects that diagnostic into the conversation-scoped error message
+- **AND** an empty assistant content array does not reduce it to a label-only Error card
+- **AND** Desktop does not retry, hide or rewrite the failed turn as success
+
 ### Requirement: Resource center keeps Assets management as Main and composes optional Preview
 
 The resource center SHALL use one Assets-owned `AssetCenterSession` for catalog, filtering, selection and revision. Workbench SHALL place the Assets Management Root in Main and MAY add a Secondary Main Preview Root bound to an authorized descriptor for the selected resource. Preview MUST NOT replace or narrow the management Main. Desktop MUST NOT own Asset selection, resource facts, ContentLocator interpretation or preview-kind policy.
@@ -266,6 +287,13 @@ Extensions and project management SHALL place their package-owned management Roo
 - **AND** selection does not implicitly open a Workspace or create an Agent conversation
 - **AND** the management Root retains the bounded page width, header hierarchy, toolbar grouping and scan-friendly catalog density of the established management presentation instead of stretching controls across the full Main canvas
 
+#### Scenario: Management selection opens Preview or Detail
+
+- **WHEN** Assets, Extensions or Projects provides a selected Preview/Detail Surface
+- **THEN** Workbench composes a compact management panel beside a primary Preview/Detail panel using the shared Workspace panel chrome and resize primitive
+- **AND** Preview content continues through the canonical `@neko/preview-webview` presentation and viewer registry
+- **AND** Desktop does not implement another viewer, nested page card or management-owned preview renderer
+
 #### Scenario: User opens Settings
 
 - **WHEN** Settings is selected from any scene
@@ -281,6 +309,13 @@ Every Agent connection, Workspace View, management session, Preview resource and
 - **WHEN** the renderer reloads while any scene is active
 - **THEN** it restores the exact versioned scene/sidebar projections and attaches each allowed Root to matching identities
 - **AND** it does not create duplicate conversations, workspaces, AssetCenter sessions, Preview sessions, execution leases or sidebar owners
+
+#### Scenario: User closes the last Workspace Main View
+
+- **WHEN** the only Workspace Main View is closed
+- **THEN** Workbench retains its empty primary group and Scene removes the Main and unowned Timeline refs
+- **AND** the exact Workspace Agent Interaction and Workspace Resources remain active and usable
+- **AND** renderer projection, Preview cleanup and later workbench mutations do not require a fabricated active Main View
 
 #### Scenario: A stored prelaunch management scene is upgraded
 

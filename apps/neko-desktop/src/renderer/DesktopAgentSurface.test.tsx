@@ -265,6 +265,47 @@ describe('DesktopAgentSurface', () => {
     expect(detach).toHaveBeenCalledWith(launchCatalog('assistant:1', 1, 'launch-1').connection);
     await act(async () => root.unmount());
   });
+
+  it('does not render a new session phase through the previous launch adapter', async () => {
+    let resolveSession: ((value: ReturnType<typeof readyAssistantBootstrap>) => void) | undefined;
+    const sessionBootstrap = new Promise<ReturnType<typeof readyAssistantBootstrap>>((resolve) => {
+      resolveSession = resolve;
+    });
+    const getBootstrap = vi.fn(async () => readyBootstrap());
+    const getAssistantBootstrap = vi.fn(() => sessionBootstrap);
+    const attach = vi.fn(async () => launchCatalog('assistant:1', 1, 'launch-1'));
+    const detach = vi.fn(async () => undefined);
+    installBridge(getBootstrap, { attach, detach, getAssistantBootstrap });
+    const container = document.createElement('div');
+    document.body.append(container);
+    const root = createRoot(container);
+
+    await act(async () => root.render(<TestLaunchAgentSurface assistantSpaceId="assistant:1" />));
+    await act(async () => undefined);
+    const agentRoot = container.querySelector('[data-testid="agent-root"]');
+    expect(agentRoot?.getAttribute('data-agent-presentation')).toBe('draft');
+
+    await act(async () =>
+      root.render(
+        <TestLaunchAgentSurface
+          assistantSpaceId="assistant:1"
+          conversationId="conversation:1"
+        />,
+      ),
+    );
+
+    expect(container.querySelector('[data-testid="agent-root"]')).toBe(agentRoot);
+    expect(agentRoot?.getAttribute('data-agent-presentation')).toBe('draft');
+    expect(agentRoot?.closest('.desktop-agent-root')?.hasAttribute('hidden')).toBe(true);
+    expect(container.querySelector('.desktop-agent-status')).not.toBeNull();
+
+    resolveSession?.(readyAssistantBootstrap());
+    await act(async () => undefined);
+    expect(container.querySelector('[data-testid="agent-root"]')).toBe(agentRoot);
+    expect(agentRoot?.getAttribute('data-agent-presentation')).toBe('session');
+    expect(agentRoot?.closest('.desktop-agent-root')?.hasAttribute('hidden')).toBe(false);
+    await act(async () => root.unmount());
+  });
 });
 
 function TestAgentSurface({

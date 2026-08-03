@@ -21,9 +21,16 @@ const AgentWebviewRoot = lazy(() =>
 
 type DesktopAgentSurfaceState =
   | { readonly kind: 'loading' }
-  | { readonly kind: 'ready'; readonly adapter: AgentHostRuntimeAdapter }
-  | { readonly kind: 'unavailable'; readonly message: string }
-  | { readonly kind: 'error'; readonly message: string };
+  | {
+      readonly kind: 'ready';
+      readonly connectionKey: string;
+      readonly adapter: AgentHostRuntimeAdapter;
+      readonly agentPresentation?: AgentRootPresentation;
+      readonly initialConversation?: { readonly id: string; readonly title: string };
+      readonly initialInput?: { readonly id: string; readonly value: string };
+    }
+  | { readonly kind: 'unavailable'; readonly connectionKey: string; readonly message: string }
+  | { readonly kind: 'error'; readonly connectionKey: string; readonly message: string };
 
 type DesktopAgentSurfaceProps =
   | {
@@ -50,6 +57,7 @@ export function DesktopAgentSurface(props: DesktopAgentSurfaceProps): JSX.Elemen
   const projectId = props.binding === 'workspace' ? props.tab.projectId : undefined;
   const agentPresentation = props.agentPresentation;
   const binding = props.binding;
+  const connectionKey = createDesktopAgentConnectionKey(props);
 
   useEffect(() => {
     let active = true;
@@ -98,7 +106,11 @@ export function DesktopAgentSurface(props: DesktopAgentSurfaceProps): JSX.Elemen
           return;
         }
         if ('status' in bootstrap && bootstrap.status === 'unavailable') {
-          setState({ kind: 'unavailable', message: bootstrap.diagnostic.message });
+          setState({
+            kind: 'unavailable',
+            connectionKey,
+            message: bootstrap.diagnostic.message,
+          });
           return;
         }
         if (!('status' in bootstrap)) {
@@ -108,7 +120,18 @@ export function DesktopAgentSurface(props: DesktopAgentSurfaceProps): JSX.Elemen
           });
           const previous = launchAdapterRef.current;
           launchAdapterRef.current = launchAdapter;
-          setState({ kind: 'ready', adapter: launchAdapter });
+          setState({
+            kind: 'ready',
+            connectionKey,
+            adapter: launchAdapter,
+            ...(agentPresentation ? { agentPresentation } : {}),
+            ...(props.binding === 'workspace' && props.initialConversation
+              ? { initialConversation: props.initialConversation }
+              : {}),
+            ...(props.binding === 'workspace' && props.initialInput
+              ? { initialInput: props.initialInput }
+              : {}),
+          });
           if (previous) reportCleanupFailure(previous.dispose());
           return;
         }
@@ -116,20 +139,30 @@ export function DesktopAgentSurface(props: DesktopAgentSurfaceProps): JSX.Elemen
         launchAdapterRef.current = undefined;
         setState({
           kind: 'ready',
+          connectionKey,
           adapter: createElectronAgentHostRuntimeAdapter({
             bridge: window.openNekoDesktop,
             bootstrap,
           }),
+          ...(agentPresentation ? { agentPresentation } : {}),
+          ...(props.binding === 'workspace' && props.initialConversation
+            ? { initialConversation: props.initialConversation }
+            : {}),
+          ...(props.binding === 'workspace' && props.initialInput
+            ? { initialInput: props.initialInput }
+            : {}),
         });
         if (previous) reportCleanupFailure(previous.dispose());
       })
       .catch((error: unknown) => {
-        if (active) setState({ kind: 'error', message: describeError(error) });
+        if (active) {
+          setState({ kind: 'error', connectionKey, message: describeError(error) });
+        }
       });
     return () => {
       active = false;
     };
-  }, [agentPresentation, binding, projectId, viewEpoch, viewId]);
+  }, [binding, connectionKey, projectId, viewEpoch, viewId]);
 
   useEffect(
     () => () => {
@@ -143,30 +176,71 @@ export function DesktopAgentSurface(props: DesktopAgentSurfaceProps): JSX.Elemen
   if (state.kind === 'loading') {
     return <AgentSurfaceStatus message={t('agent.connecting')} />;
   }
-  if (state.kind === 'unavailable' || state.kind === 'error') {
+  if (
+    state.connectionKey === connectionKey &&
+    (state.kind === 'unavailable' || state.kind === 'error')
+  ) {
     return <AgentSurfaceStatus message={state.message} error />;
   }
+  if (state.kind !== 'ready') {
+    return <AgentSurfaceStatus message={t('agent.connecting')} />;
+  }
+  const connectionReady = state.connectionKey === connectionKey;
   return (
-    <div className="desktop-agent-root" data-owner-root="agent" data-view-id={viewId}>
-      <Suspense fallback={<AgentSurfaceStatus message={t('agent.loading')} />}>
-        <AgentWebviewRoot
-          hostRuntimeAdapter={state.adapter}
-          agentPresentation={props.agentPresentation}
-          composerWorkspace={props.composerWorkspace}
-          initialConversation={
-            props.agentPresentation?.kind === 'session'
-              ? { id: props.agentPresentation.conversationId, title: '' }
-              : props.binding === 'workspace'
-                ? props.initialConversation
-                : undefined
-          }
-          initialInput={props.binding === 'workspace' ? props.initialInput : undefined}
-          locale={locale}
-          presentation="desktop-dock"
-        />
-      </Suspense>
-    </div>
+    <>
+      <div
+        className="desktop-agent-root"
+        data-owner-root="agent"
+        data-view-id={viewId}
+        hidden={!connectionReady}
+      >
+        <Suspense fallback={<AgentSurfaceStatus message={t('agent.loading')} />}>
+          <AgentWebviewRoot
+            hostRuntimeAdapter={state.adapter}
+            agentPresentation={state.agentPresentation}
+            composerWorkspace={props.composerWorkspace}
+            initialConversation={
+              state.agentPresentation?.kind === 'session'
+                ? { id: state.agentPresentation.conversationId, title: '' }
+                : state.initialConversation
+            }
+            initialInput={state.initialInput}
+            locale={locale}
+            presentation="desktop-dock"
+          />
+        </Suspense>
+      </div>
+      {connectionReady ? null : <AgentSurfaceStatus message={t('agent.connecting')} />}
+    </>
   );
+}
+
+function createDesktopAgentConnectionKey(props: DesktopAgentSurfaceProps): string {
+  const viewId = props.binding === 'workspace' ? props.tab.viewId : props.viewId;
+  const viewEpoch = props.binding === 'workspace' ? props.tab.viewEpoch : 'launch';
+  const presentation = props.agentPresentation;
+  if (!presentation) {
+    if (props.binding !== 'workspace') {
+      throw new Error('Launch-bound Agent requires an explicit presentation identity.');
+    }
+    return ['workspace', props.tab.projectId, viewId, viewEpoch, 'implicit-session'].join(':');
+  }
+  const scope =
+    presentation.scope.kind === 'assistant'
+      ? ['assistant', presentation.scope.assistantSpaceId]
+      : [
+          'workspace',
+          presentation.scope.workspaceId,
+          presentation.scope.workspaceGrantId,
+        ];
+  return [
+    props.binding,
+    viewId,
+    viewEpoch,
+    presentation.kind,
+    presentation.kind === 'session' ? presentation.conversationId : 'draft',
+    ...scope,
+  ].join(':');
 }
 
 export async function prepareDesktopAgentSurfaceResources(input: {

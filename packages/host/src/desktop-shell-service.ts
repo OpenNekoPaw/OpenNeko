@@ -591,6 +591,12 @@ export class DesktopShellService {
       }
       const context = input.context;
       let draft: DesktopWorkbenchSceneProjection;
+      let workspaceAttachment:
+        | {
+            readonly tab: DesktopStoredWindow['tabs'][number];
+            readonly workbench: DesktopWorkbenchLayoutProjection;
+          }
+        | undefined;
       if (context.kind === 'assistant') {
         draft = parseDesktopWorkbenchSceneProjection({
           ...createDefaultDesktopAgentScene(request.windowId, context.assistantSpaceId),
@@ -613,12 +619,14 @@ export class DesktopShellService {
             `Workspace Conversation '${conversationId}' has no exact Window View.`,
           );
         }
+        const workbench = attachProjectWorkbench(window.workbench, project);
+        workspaceAttachment = { tab, workbench };
         draft = createWorkspaceAgentScene({
           current: window.scene,
           workspaceGrantId: context.workspaceGrantId,
           workspaceId: context.workspaceId,
           tab,
-          workbench: window.workbench,
+          workbench,
         });
       }
       const scene = attachConversationToDraftScene(draft, context, conversationId);
@@ -628,7 +636,18 @@ export class DesktopShellService {
         storageRevision: state.storageRevision + 1,
         windows: state.windows.map((candidate) =>
           candidate.windowId === request.windowId
-            ? { ...candidate, revision: candidate.revision + 1, scene }
+            ? workspaceAttachment
+              ? {
+                  ...candidate,
+                  revision: candidate.revision + 1,
+                  activeTarget: {
+                    kind: 'project',
+                    tabId: workspaceAttachment.tab.tabId,
+                  },
+                  workbench: workspaceAttachment.workbench,
+                  scene,
+                }
+              : { ...candidate, revision: candidate.revision + 1, scene }
             : candidate,
         ),
       });
@@ -1611,10 +1630,10 @@ function projectScene(
     return scene;
   }
   const main = scene.slots.main;
-  if (main?.kind !== 'workspace-main') {
+  if (main && main.kind !== 'workspace-main') {
     throw new DesktopSceneContractError(
       'desktop-scene-scope-mismatch',
-      'Workspace Scene requires its authoritative Main View during projection.',
+      'Workspace Scene Main Surface must use its authoritative Workspace View.',
     );
   }
   const timeline = scene.slots.timeline;
@@ -1622,7 +1641,7 @@ function projectScene(
     ...scene,
     slots: {
       ...scene.slots,
-      main: { ...main, viewEpoch: main.viewEpoch + rendererEpochOffset },
+      ...(main ? { main: { ...main, viewEpoch: main.viewEpoch + rendererEpochOffset } } : {}),
       ...(timeline
         ? { timeline: { ...timeline, viewEpoch: timeline.viewEpoch + rendererEpochOffset } }
         : {}),
@@ -2000,10 +2019,19 @@ function synchronizeWorkspaceSceneWithWorkbench(
       )
     : undefined;
   if (!activeView) {
-    throw new DesktopSceneContractError(
-      'desktop-scene-scope-mismatch',
-      `Workspace '${workspaceId}' has no authoritative active Main View.`,
-    );
+    if (workbench.main.views.length > 0) {
+      throw new DesktopSceneContractError(
+        'desktop-scene-scope-mismatch',
+        `Workspace '${workspaceId}' has Views without an authoritative active Main View.`,
+      );
+    }
+    const { main: _main, timeline: _timeline, ...retainedSlots } = scene.slots;
+    if (!_main && !_timeline) return scene;
+    return parseDesktopWorkbenchSceneProjection({
+      ...scene,
+      revision: scene.revision + 1,
+      slots: retainedSlots,
+    });
   }
 
   const timelineView = workbench.timeline.ownerViewId

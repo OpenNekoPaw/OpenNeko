@@ -753,6 +753,28 @@ describe('DesktopAppHost', () => {
         },
       },
     });
+    const committed = await fixture.appHost.shell.getProjection(fixture.windowId);
+    const activeProject = committed.catalog.projects.find(
+      (candidate) => candidate.workspaceId === workspace.workspaceId,
+    );
+    const activeTab = committed.window.tabs.find(
+      (candidate) => candidate.projectId === activeProject?.projectId,
+    );
+    expect(activeProject).toBeDefined();
+    expect(activeTab).toBeDefined();
+    expect(committed.window.activeTarget).toEqual({
+      kind: 'project',
+      tabId: activeTab?.tabId,
+    });
+    expect(committed.window.workbench.main.views).toContainEqual(
+      expect.objectContaining({
+        projectId: activeProject?.projectId,
+        workspaceId: workspace.workspaceId,
+      }),
+    );
+    expect(committed.window.scene).toEqual(
+      restored.status === 'transitioned' ? restored.scene : undefined,
+    );
     expect(fixture.registry.resolve).toHaveBeenCalledWith(workspace.workspacePath);
     await fixture.appHost.dispose();
   });

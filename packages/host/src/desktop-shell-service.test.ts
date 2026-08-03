@@ -735,6 +735,141 @@ describe('DesktopShellService', () => {
     });
   });
 
+  it('keeps the Workspace Agent Scene active when its last Main View closes', async () => {
+    const authority = new DesktopWorkspaceGrantAuthority({
+      resolver: {
+        resolve: vi.fn(async () => ({
+          workspaceId: '11111111-1111-4111-8111-111111111111',
+          workspacePath: '/workspace/demo',
+          displayName: 'Demo',
+          locator: { kind: 'variable' as const, value: '${HOME}/workspace/demo' },
+        })),
+      },
+      createIdentity: () => 'grant-live-workspace',
+    });
+    const fixture = createFixture(createMemoryFile(), 'home', authority);
+    const windowId = await fixture.service.claimWindowId();
+    fixture.service.setRendererEpoch(windowId, 1);
+    const initial = await fixture.service.getProjection(windowId);
+    const grant = authority.authorize({
+      windowId,
+      label: 'Demo',
+      hostResource: '/workspace/demo',
+    });
+    await fixture.service.transitionScene(
+      createDesktopSceneTransitionRequest({
+        requestId: 'activate-live-workspace',
+        expectedEndpointEpoch: initial.endpointEpoch,
+        windowId,
+        expectedWindowRevision: initial.window.revision,
+        expectedSceneRevision: initial.window.scene.revision,
+        intent: { kind: 'open-workspace', workspaceGrantId: grant.workspaceGrantId },
+      }),
+    );
+    const active = await fixture.service.getProjection(windowId);
+    const mainView = active.window.workbench.main.views[0];
+    if (!mainView) throw new Error('Expected the canonical Workspace Main View.');
+
+    const closed = await fixture.service.updateWorkbench(
+      windowId,
+      active.endpointEpoch,
+      active.window.revision,
+      active.window.workbench.revision,
+      closeMainView(active.window.workbench, mainView.viewId),
+    );
+
+    expect(closed.window.workbench.main).toMatchObject({
+      views: [],
+      groups: [{ groupId: DESKTOP_PRIMARY_MAIN_GROUP_ID, viewIds: [] }],
+    });
+    expect(closed.window.scene).toMatchObject({
+      context: {
+        kind: 'agent',
+        scope: {
+          kind: 'workspace',
+          workspaceId: '11111111-1111-4111-8111-111111111111',
+        },
+      },
+      slots: {
+        interaction: { kind: 'agent', phase: 'draft' },
+        rightManager: { kind: 'workspace-resources' },
+      },
+    });
+    expect(closed.window.scene.slots.main).toBeUndefined();
+    expect(closed.window.scene.slots.timeline).toBeUndefined();
+
+    fixture.service.setRendererEpoch(windowId, 2);
+    const reattached = await fixture.service.getProjection(windowId);
+    expect(reattached.window.scene.slots.main).toBeUndefined();
+    expect(reattached.window.scene.slots.interaction).toMatchObject({
+      kind: 'agent',
+      phase: 'draft',
+    });
+  });
+
+  it('restores a Workspace conversation with its Project target, Workbench and Agent phase together', async () => {
+    const file = createMemoryFile();
+    const first = createFixture(file);
+    const windowId = await first.service.claimWindowId();
+    first.service.setRendererEpoch(windowId, 1);
+    const initial = await first.service.getProjection(windowId);
+    const opened = await first.service.openContent(
+      windowId,
+      '/workspace/demo',
+      initial.endpointEpoch,
+      initial.window.revision,
+    );
+    const project = opened.projection.catalog.projects[0];
+    const tab = opened.projection.window.tabs[0];
+    if (!project || !tab) throw new Error('Expected the persisted Workspace Project and Tab.');
+    first.service.releaseWindow(windowId);
+    await first.service.dispose();
+
+    const restored = createFixture(file, 'home');
+    const restoredWindowId = await restored.service.claimWindowId();
+    restored.service.setRendererEpoch(restoredWindowId, 1);
+    const entry = await restored.service.getProjection(restoredWindowId);
+    expect(entry.window.activeTarget).toEqual({ kind: 'home' });
+
+    const result = await restored.service.restoreAgentConversation({
+      request: createDesktopSceneTransitionRequest({
+        requestId: 'restore-workspace-conversation-atomically',
+        expectedEndpointEpoch: entry.endpointEpoch,
+        windowId: restoredWindowId,
+        expectedWindowRevision: entry.window.revision,
+        expectedSceneRevision: entry.window.scene.revision,
+        intent: { kind: 'restore-conversation', conversationId: 'conversation-workspace-1' },
+      }),
+      context: {
+        schemaVersion: 1,
+        kind: 'workspace',
+        workspaceId: project.workspaceId,
+        workspaceGrantId: 'workspace-grant:conversation-workspace-1',
+      },
+    });
+
+    expect(result).toMatchObject({
+      status: 'transitioned',
+      scene: {
+        context: {
+          kind: 'agent',
+          scope: { kind: 'workspace', conversationId: 'conversation-workspace-1' },
+        },
+        slots: { interaction: { kind: 'agent', phase: 'session' } },
+      },
+    });
+    if (result.status !== 'transitioned') throw new Error('Expected Workspace restore.');
+    const committed = await restored.service.getProjection(restoredWindowId);
+    expect(committed.window.activeTarget).toEqual({ kind: 'project', tabId: tab.tabId });
+    expect(committed.window.workbench.main.views).toEqual([
+      expect.objectContaining({
+        projectId: project.projectId,
+        workspaceId: project.workspaceId,
+      }),
+    ]);
+    expect(committed.window.scene).toEqual(result.scene);
+  });
+
   it('shares a Project owner while isolating cross-window Tab and View identity', async () => {
     const fixture = createFixture();
     const firstWindow = await fixture.service.claimWindowId();
