@@ -63,7 +63,11 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
     );
     const assetPreview = await inspectWorkbench(evaluate, 'management', 'asset-management');
     assertManagementMain(assetPreview, 'asset-management');
-    if (!assetPreview.previewInSecondary || assetPreview.previewKind !== 'image') {
+    if (
+      !assetPreview.previewInSecondary ||
+      assetPreview.previewKind !== 'image' ||
+      assetPreview.previewPresentationOwner !== 'preview-webview'
+    ) {
       throw new Error('Asset Preview was not composed as an image in Secondary Main.');
     }
     const assetPreviewScreenshot = await screenshot('asset-management-with-preview-large');
@@ -73,6 +77,7 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
     await waitForSelector('.agent-extension-management-root');
     const extensions = await inspectWorkbench(evaluate, 'management', 'extension-management');
     assertManagementMain(extensions, 'extension-management');
+    assertBoundedManagement(extensions, 'extension-management');
     const extensionsScreenshot = await screenshot('extension-management-main-large');
     checkpoint('extension-management-main-large', extensions);
 
@@ -80,6 +85,8 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
     await waitForSelector('.project-management-catalog');
     const projects = await inspectWorkbench(evaluate, 'management', 'project-management');
     assertManagementMain(projects, 'project-management');
+    assertBoundedManagement(projects, 'project-management');
+    const projectsScreenshot = await screenshot('project-management-main-large');
     checkpoint('project-management-main-large', projects);
 
     await click('.home-navigation-footer__actions button:last-child');
@@ -151,6 +158,7 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
         assetsScreenshot,
         assetPreviewScreenshot,
         extensionsScreenshot,
+        projectsScreenshot,
         workspaceScreenshot,
         smallAssetsScreenshot,
       ],
@@ -254,13 +262,29 @@ async function exercisePrimarySidebar(evaluate, click, drag) {
     const projection = await window.openNekoDesktop.shell.getSnapshot();
     return projection.window.applicationSidebar;
   })()`);
-  await click('.home-brand-title');
+  await click('.primary-sidebar-toggle');
   await waitForCondition(
     evaluate,
     `document.querySelector('[data-primary-sidebar="application"]')?.classList.contains('home-navigation--compact') === true`,
     'PrimarySidebar did not enter its compact presentation.',
   );
-  await click('.home-brand-title');
+  const compactToggle = await evaluate(`(() => {
+    const toggle = document.querySelector('.primary-sidebar-toggle');
+    const brand = document.querySelector('.home-brand');
+    return {
+      exists: toggle instanceof HTMLButtonElement,
+      outsideBrand: toggle instanceof HTMLElement && brand instanceof HTMLElement && !brand.contains(toggle),
+      label: toggle?.getAttribute('aria-label'),
+    };
+  })()`);
+  if (
+    !compactToggle.exists ||
+    !compactToggle.outsideBrand ||
+    compactToggle.label !== '展开侧边栏'
+  ) {
+    throw new Error('Compact PrimarySidebar lost its dedicated expand control.');
+  }
+  await click('.primary-sidebar-toggle');
   await waitForCondition(
     evaluate,
     `document.querySelector('[data-primary-sidebar="application"]')?.classList.contains('home-navigation--compact') === false`,
@@ -285,7 +309,7 @@ async function exercisePrimarySidebar(evaluate, click, drag) {
       'PrimarySidebar toggle/resize did not preserve an expanded resized projection.',
     );
   }
-  return { initial, committed };
+  return { initial, compactToggle, committed };
 }
 
 async function exerciseWorkspaceDisplayModes(evaluate, click) {
@@ -402,6 +426,7 @@ async function inspectComposerPresentation(evaluate) {
     const shell = document.querySelector('.agent-composer-shell');
     const toolbar = document.querySelector('.agent-composer-toolbar');
     const workspace = document.querySelector('.agent-composer-workspace');
+    const emptyPanel = document.querySelector('.agent-empty-state--desktop-dock .agent-empty-panel');
     const owner = shell?.closest('[data-dock-owner="agent"], [data-primary-surface="agent"]');
     if (!(shell instanceof HTMLElement) || !(toolbar instanceof HTMLElement) ||
         !(workspace instanceof HTMLElement) || !(owner instanceof HTMLElement)) {
@@ -410,6 +435,7 @@ async function inspectComposerPresentation(evaluate) {
     const shellRect = shell.getBoundingClientRect();
     const toolbarRect = toolbar.getBoundingClientRect();
     const ownerRect = owner.getBoundingClientRect();
+    const emptyPanelRect = emptyPanel instanceof HTMLElement ? emptyPanel.getBoundingClientRect() : undefined;
     const style = getComputedStyle(shell);
     return {
       workspaceLabel: workspace.textContent?.trim() ?? '',
@@ -419,6 +445,11 @@ async function inspectComposerPresentation(evaluate) {
       fitsSurface: shellRect.left >= ownerRect.left && shellRect.right <= ownerRect.right,
       toolbarFitsSurface:
         toolbar.scrollWidth <= toolbar.clientWidth && toolbarRect.right <= shellRect.right,
+      emptyPanelWidth: emptyPanelRect?.width ?? 0,
+      emptyPanelAligned:
+        emptyPanelRect !== undefined &&
+        Math.abs(emptyPanelRect.left - shellRect.left) <= 1 &&
+        Math.abs(emptyPanelRect.right - shellRect.right) <= 1,
       branchMetadataCount: document.querySelectorAll(
         '[data-composer-branch], [data-composer-runtime-location]',
       ).length,
@@ -485,6 +516,9 @@ async function inspectWorkbench(evaluate, expectedShape, expectedOwner) {
       previewKind: shell
         .querySelector('.neko-controlled-workbench-main__secondary [data-preview-kind]')
         ?.getAttribute('data-preview-kind'),
+      previewPresentationOwner: shell
+        .querySelector('.neko-controlled-workbench-main__secondary [data-preview-presentation-owner]')
+        ?.getAttribute('data-preview-presentation-owner'),
       mainDisplay: main instanceof HTMLElement ? getComputedStyle(main).display : undefined,
       mainWidth: mainRect?.width ?? 0,
       ownerWidth: ownerRect?.width ?? 0,
@@ -520,6 +554,8 @@ function assertWorkspaceComposer(detail, scope) {
     !detail.hasShadow ||
     detail.shellWidth > 820 ||
     !detail.fitsSurface ||
+    !detail.emptyPanelAligned ||
+    detail.emptyPanelWidth > 820 ||
     detail.branchMetadataCount !== 0 ||
     (scope === 'assistant' && !detail.workspaceLabel.includes('选择工作目录')) ||
     (scope === 'workspace' && detail.workspaceLabel !== 'workspace')
@@ -527,6 +563,12 @@ function assertWorkspaceComposer(detail, scope) {
     throw new Error(
       `Agent ${scope} composer did not preserve its compact Workspace presentation: ${JSON.stringify(detail)}`,
     );
+  }
+}
+
+function assertBoundedManagement(detail, owner) {
+  if (detail.ownerWidth > 1020 || detail.ownerWidth >= detail.mainWidth) {
+    throw new Error(`${owner} did not retain its bounded management page geometry.`);
   }
 }
 

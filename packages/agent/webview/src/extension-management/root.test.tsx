@@ -1,5 +1,17 @@
-import { describe, expect, it } from 'vitest';
-import { searchAndOrderAgentExtensions, searchAndOrderAgentSkills } from './root';
+// @vitest-environment jsdom
+
+import { render, screen, waitFor } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vitest';
+import type { AgentExtensionManagementRuntime } from '@neko/agent-contracts/extension-management';
+import {
+  AgentExtensionManagementRoot,
+  searchAndOrderAgentExtensions,
+  searchAndOrderAgentSkills,
+} from './root';
+
+vi.mock('@neko/ui/i18n/react', () => ({
+  useTranslation: () => ({ t: (key: string) => key }),
+}));
 
 describe('AgentExtensionManagementRoot', () => {
   it('keeps filtering and ordering package-owned and deterministic', () => {
@@ -17,6 +29,34 @@ describe('AgentExtensionManagementRoot', () => {
         '',
       ).map((item) => item.id),
     ).toEqual(['computer-use@openneko', 'github@openneko']);
+  });
+
+  it('renders an explicit empty state for the active catalog', async () => {
+    const identity = { extensionManagementSessionId: 'extension-session-1', windowId: 'window-1' };
+    const runtime: AgentExtensionManagementRuntime = {
+      identity,
+      getSnapshot: async () => ({
+        identity,
+        catalogRevision: 'revision-1',
+        skills: [],
+        skillDiscovery: { diagnostics: [], duplicateCount: 0 },
+        extensions: [],
+        extensionDiscovery: { diagnostics: [] },
+      }),
+      installPlugin: vi.fn(),
+      removePlugin: vi.fn(),
+      refreshMarketplaces: vi.fn(),
+      installPersonalSkill: vi.fn(),
+      removePersonalSkill: vi.fn(),
+      dispose: vi.fn(),
+    };
+
+    render(
+      <AgentExtensionManagementRoot confirmAction={() => true} interactive runtime={runtime} />,
+    );
+
+    await waitFor(() => expect(screen.getByText('home.capabilities.noSkills')).toBeTruthy());
+    expect(document.querySelector('.management-surface-empty')).not.toBeNull();
   });
 });
 

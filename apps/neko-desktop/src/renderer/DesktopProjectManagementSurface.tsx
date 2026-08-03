@@ -4,10 +4,7 @@ import { useMemo, useState } from 'react';
 import type { DesktopProjectCatalogItem } from '@neko/host/desktop-shell-contract';
 
 export type DesktopProjectManagementSort =
-  | 'updated-descending'
-  | 'updated-ascending'
-  | 'name-ascending'
-  | 'name-descending';
+  'updated-descending' | 'updated-ascending' | 'name-ascending' | 'name-descending';
 
 export function DesktopProjectCatalogSurface({
   interactive,
@@ -65,6 +62,12 @@ export function DesktopProjectCatalogSurface({
         </button>
       </div>
       <div className={`management-surface-list is-${view}`}>
+        {visible.length === 0 ? (
+          <div className="management-surface-empty">
+            <FolderIcon size={24} />
+            <span>{t('home.projects.noResults')}</span>
+          </div>
+        ) : null}
         {visible.map((project) => (
           <button
             type="button"
@@ -134,10 +137,14 @@ export function filterAndSortProjectCatalog(
     .filter((project) => project.displayName.toLocaleLowerCase().includes(normalized))
     .sort((left, right) => {
       if (sort === 'name-ascending' || sort === 'name-descending') {
-        const compared = left.displayName.localeCompare(right.displayName) || left.projectId.localeCompare(right.projectId);
+        const compared =
+          left.displayName.localeCompare(right.displayName) ||
+          left.projectId.localeCompare(right.projectId);
         return sort === 'name-ascending' ? compared : -compared;
       }
-      const compared = Date.parse(left.updatedAt) - Date.parse(right.updatedAt) || left.projectId.localeCompare(right.projectId);
+      const compared =
+        Date.parse(left.updatedAt) - Date.parse(right.updatedAt) ||
+        left.projectId.localeCompare(right.projectId);
       return sort === 'updated-ascending' ? compared : -compared;
     });
 }

@@ -48,7 +48,7 @@ export function EmptyState({
 
   if (presentation === 'desktop-dock') {
     return (
-      <div className="agent-empty-state agent-empty-state--desktop-dock flex min-h-0 flex-1 select-none items-end overflow-y-auto px-4 pb-4">
+      <div className="agent-empty-state agent-empty-state--desktop-dock flex min-h-0 flex-1 select-none items-end overflow-y-auto px-3 pb-4">
         <section
           className="agent-empty-panel w-full min-w-0"
           aria-labelledby="neko-agent-empty-title"

@@ -148,6 +148,16 @@ export function AgentExtensionManagementRoot({
         </div>
       ) : null}
       <div className="management-surface-list">
+        {(tab === 'skills' ? skills.length === 0 : extensions.length === 0) ? (
+          <div className="management-surface-empty">
+            <PackageIcon size={24} />
+            <span>
+              {t(
+                tab === 'skills' ? 'home.capabilities.noSkills' : 'home.capabilities.noExtensions',
+              )}
+            </span>
+          </div>
+        ) : null}
         {(tab === 'skills'
           ? skills.map((item) => ({ kind: 'skill' as const, item }))
           : extensions.map((item) => ({ kind: 'extension' as const, item }))

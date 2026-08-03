@@ -53,8 +53,31 @@ describe('Desktop Project Management surfaces', () => {
         sessionId="project-management:empty"
       />,
     );
-    expect(markup.container.querySelector('[data-project-management-session="project-management:empty"]')).not.toBeNull();
-    expect(filterAndSortProjectCatalog([project('b'), project('a')], '', 'name-ascending').map((item) => item.displayName)).toEqual(['a', 'b']);
+    expect(
+      markup.container.querySelector(
+        '[data-project-management-session="project-management:empty"]',
+      ),
+    ).not.toBeNull();
+    expect(
+      filterAndSortProjectCatalog([project('b'), project('a')], '', 'name-ascending').map(
+        (item) => item.displayName,
+      ),
+    ).toEqual(['a', 'b']);
+    await act(async () => markup.root.unmount());
+  });
+
+  it('renders an explicit empty catalog state', async () => {
+    const markup = await renderWithI18n(
+      <DesktopProjectCatalogSurface
+        interactive
+        onSelect={vi.fn()}
+        projects={[]}
+        sessionId="project-management:empty-catalog"
+      />,
+    );
+
+    expect(markup.container.textContent).toContain('No matching projects');
+    expect(markup.container.querySelector('.management-surface-empty')).not.toBeNull();
     await act(async () => markup.root.unmount());
   });
 });
