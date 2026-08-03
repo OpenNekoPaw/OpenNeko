@@ -88,13 +88,25 @@ export interface ResourceBrowserShellProjection {
     }[];
   };
   readonly window: {
-    readonly activeTarget: { readonly kind: string; readonly tabId?: string };
     readonly tabs: readonly {
       readonly tabId: string;
       readonly projectId: string;
       readonly viewId: string;
       readonly viewEpoch: number;
     }[];
+    readonly scene: {
+      readonly context:
+        | {
+            readonly kind: 'agent';
+            readonly agentViewId: string;
+            readonly scope:
+              | { readonly kind: 'assistant' }
+              | { readonly kind: 'workspace'; readonly workspaceId: string };
+          }
+        | {
+            readonly kind: 'asset-center' | 'extensions' | 'project-management' | 'settings';
+          };
+    };
     readonly workbench: {
       readonly main: {
         readonly views: readonly ResourceBrowserWorkbenchView[];
@@ -815,10 +827,12 @@ export class ResourceBrowserNodeRuntime {
     if (identity.windowId !== windowId || identity.endpointEpoch !== projection.endpointEpoch) {
       throw new Error('Desktop Resource Browser owner identity is stale.');
     }
-    const activeTarget = projection.window.activeTarget;
+    const sceneContext = projection.window.scene.context;
     const tab =
-      activeTarget.kind === 'project'
-        ? projection.window.tabs.find((candidate) => candidate.tabId === activeTarget.tabId)
+      sceneContext.kind === 'agent' &&
+      sceneContext.scope.kind === 'workspace' &&
+      sceneContext.scope.workspaceId === identity.workspaceId
+        ? projection.window.tabs.find((candidate) => candidate.viewId === sceneContext.agentViewId)
         : undefined;
     const project =
       tab?.projectId === identity.projectId

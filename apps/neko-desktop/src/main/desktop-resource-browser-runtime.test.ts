@@ -21,6 +21,8 @@ import {
 import { createElectronNekoHostPorts } from './electron-host-ports';
 import { createGlobalMediaLibraryConnection } from '@neko/assets-node';
 import { DesktopShellService } from '@neko/host/desktop-shell-service';
+import { createDesktopSceneTransitionRequest } from '@neko/host/desktop-scene-contract';
+import { DesktopWorkspaceGrantAuthority } from '@neko/host/desktop-workspace-grant-authority';
 import { createInMemoryDesktopShellStateRepository } from '@neko/host/testing/desktop-shell-state';
 import type { DesktopWorkspaceRegistry } from './desktop-workspace-registry';
 import type { AssetWorkspaceResolution } from '@neko/assets-domain/contracts';
@@ -221,10 +223,15 @@ describe('ResourceBrowserNodeRuntime Project identity', () => {
       }),
       dispose: async () => undefined,
     };
+    const workspaceGrantAuthority = new DesktopWorkspaceGrantAuthority({
+      resolver: registry,
+      createIdentity: () => 'workspace-grant-1',
+    });
     const shell = new DesktopShellService({
       applicationInstanceId: 'app-1',
       stateRepository: createInMemoryDesktopShellStateRepository(),
       workspaceRegistry: registry,
+      workspaceGrantAuthority,
       startupTarget: 'restore',
       createIdentity: () => 'window-1',
     });
@@ -237,7 +244,22 @@ describe('ResourceBrowserNodeRuntime Project identity', () => {
       initial.endpointEpoch,
       initial.window.revision,
     );
-    const projection = opened.projection;
+    const workspaceGrant = workspaceGrantAuthority.authorize({
+      windowId,
+      label: 'Workspace',
+      hostResource: workspacePath,
+    });
+    await shell.transitionScene(
+      createDesktopSceneTransitionRequest({
+        requestId: 'open-workspace-scene',
+        expectedEndpointEpoch: opened.projection.endpointEpoch,
+        windowId,
+        expectedWindowRevision: opened.projection.window.revision,
+        expectedSceneRevision: opened.projection.window.scene.revision,
+        intent: { kind: 'open-workspace', workspaceGrantId: workspaceGrant.workspaceGrantId },
+      }),
+    );
+    const projection = await shell.getProjection(windowId);
     const tab = projection.window.tabs[0];
     const project = projection.catalog.projects[0];
     if (!tab || !project) throw new Error('Project Resource runtime fixture failed to attach.');
@@ -299,6 +321,22 @@ describe('ResourceBrowserNodeRuntime Project identity', () => {
             requestId: 'snapshot-stale',
             identity: { ...identity, viewId: 'resource-browser:legacy-main-view' },
           }),
+        ),
+      ).rejects.toThrow('Project is not attached');
+      await shell.transitionScene(
+        createDesktopSceneTransitionRequest({
+          requestId: 'leave-workspace-scene',
+          expectedEndpointEpoch: projection.endpointEpoch,
+          windowId,
+          expectedWindowRevision: projection.window.revision,
+          expectedSceneRevision: projection.window.scene.revision,
+          intent: { kind: 'open-agent-assistant' },
+        }),
+      );
+      await expect(
+        runtime.getSnapshot(
+          windowId,
+          createResourceBrowserSnapshotRequest({ requestId: 'snapshot-assistant', identity }),
         ),
       ).rejects.toThrow('Project is not attached');
     } finally {
