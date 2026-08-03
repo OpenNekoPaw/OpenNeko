@@ -325,7 +325,7 @@ describe('Desktop architecture boundaries', () => {
       ['packages/cut/webview/package.json', './root'],
       ['packages/preview/webview/package.json', './root'],
       ['packages/assets/webview/package.json', './resource-browser/root'],
-      ['packages/assets/webview/package.json', './global-library/root'],
+      ['packages/assets/webview/package.json', './asset-management/root'],
     ] as const;
     for (const [manifestPath, exportName] of publicRoots) {
       const manifest = JSON.parse(

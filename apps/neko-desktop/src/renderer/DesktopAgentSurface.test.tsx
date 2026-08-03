@@ -4,18 +4,20 @@ import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { I18nProvider } from '@neko/ui/i18n/react';
-import type { AgentHostRuntimeAdapter } from '@neko/agent-contracts';
+import type { AgentHostRuntimeAdapter, AgentRootPresentation } from '@neko/agent-contracts';
 import { DesktopAgentSurface, prepareDesktopAgentSurfaceResources } from './DesktopAgentSurface';
 import { createDesktopI18n } from './i18n';
 
 vi.mock('@neko/agent-webview/root', () => ({
   AgentWebviewRoot: ({
     hostRuntimeAdapter,
+    agentPresentation,
     initialConversation,
     locale,
     presentation,
   }: {
     readonly hostRuntimeAdapter: AgentHostRuntimeAdapter;
+    readonly agentPresentation?: AgentRootPresentation;
     readonly initialConversation?: { readonly id: string; readonly title: string };
     readonly locale: string;
     readonly presentation: string;
@@ -25,6 +27,7 @@ vi.mock('@neko/agent-webview/root', () => ({
       data-initial-conversation-id={initialConversation?.id}
       data-initial-conversation-title={initialConversation?.title}
       data-presentation={presentation}
+      data-agent-presentation={agentPresentation?.kind}
     >
       {hostRuntimeAdapter.runtimeId}:{locale}
     </div>
@@ -129,6 +132,93 @@ describe('DesktopAgentSurface', () => {
     expect(container.querySelector('[data-testid="agent-root"]')).toBeNull();
     await act(async () => root.unmount());
   });
+
+  it('mounts Assistant draft through the same Root and detaches its exact launch epoch', async () => {
+    const getBootstrap = vi.fn(async () => readyBootstrap());
+    const attach = vi.fn(async () => launchCatalog('assistant:1', 1, 'launch-1'));
+    const detach = vi.fn(async () => undefined);
+    installBridge(getBootstrap, { attach, detach });
+    const container = document.createElement('div');
+    document.body.append(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(<TestLaunchAgentSurface assistantSpaceId="assistant:1" />);
+    });
+    await act(async () => undefined);
+
+    const rootNode = container.querySelector('[data-testid="agent-root"]');
+    expect(attach).toHaveBeenCalledWith('agent-view:window-1', {
+      kind: 'assistant',
+      assistantSpaceId: 'assistant:1',
+    });
+    expect(rootNode?.getAttribute('data-agent-presentation')).toBe('draft');
+    expect(container.textContent).toContain('neko.agent.webview.electron.launch:launch-1:en');
+
+    await act(async () => root.unmount());
+    expect(detach).toHaveBeenCalledWith(launchCatalog('assistant:1', 1, 'launch-1').connection);
+  });
+
+  it('keeps the Root DOM identity while replacing the launch adapter by exact epoch', async () => {
+    const getBootstrap = vi.fn(async () => readyBootstrap());
+    const attach = vi
+      .fn()
+      .mockResolvedValueOnce(launchCatalog('assistant:1', 1, 'launch-1'))
+      .mockResolvedValueOnce(launchCatalog('assistant:2', 2, 'launch-2'));
+    const detach = vi.fn(async () => undefined);
+    installBridge(getBootstrap, { attach, detach });
+    const container = document.createElement('div');
+    document.body.append(container);
+    const root = createRoot(container);
+
+    await act(async () => root.render(<TestLaunchAgentSurface assistantSpaceId="assistant:1" />));
+    await act(async () => undefined);
+    const firstRoot = container.querySelector('[data-testid="agent-root"]');
+    await act(async () => root.render(<TestLaunchAgentSurface assistantSpaceId="assistant:2" />));
+    await act(async () => undefined);
+
+    expect(container.querySelector('[data-testid="agent-root"]')).toBe(firstRoot);
+    expect(container.textContent).toContain('neko.agent.webview.electron.launch:launch-2:en');
+    expect(detach).toHaveBeenCalledWith(launchCatalog('assistant:1', 1, 'launch-1').connection);
+    await act(async () => root.unmount());
+  });
+
+  it('keeps the Root DOM identity while attaching an Assistant committed session', async () => {
+    const getBootstrap = vi.fn(async () => readyBootstrap());
+    const getAssistantBootstrap = vi.fn(async () => readyAssistantBootstrap());
+    const attach = vi.fn(async () => launchCatalog('assistant:1', 1, 'launch-1'));
+    const detach = vi.fn(async () => undefined);
+    installBridge(getBootstrap, { attach, detach, getAssistantBootstrap });
+    const container = document.createElement('div');
+    document.body.append(container);
+    const root = createRoot(container);
+
+    await act(async () => root.render(<TestLaunchAgentSurface assistantSpaceId="assistant:1" />));
+    await act(async () => undefined);
+    const firstRoot = container.querySelector('[data-testid="agent-root"]');
+    await act(async () =>
+      root.render(
+        <TestLaunchAgentSurface
+          assistantSpaceId="assistant:1"
+          conversationId="conversation:1"
+        />,
+      ),
+    );
+    await act(async () => undefined);
+
+    const sessionRoot = container.querySelector('[data-testid="agent-root"]');
+    expect(sessionRoot).toBe(firstRoot);
+    expect(sessionRoot?.getAttribute('data-agent-presentation')).toBe('session');
+    expect(sessionRoot?.getAttribute('data-initial-conversation-id')).toBe('conversation:1');
+    expect(container.textContent).toContain('neko.agent.webview.electron:assistant-connection-1:en');
+    expect(getAssistantBootstrap).toHaveBeenCalledWith(
+      'assistant:1',
+      'conversation:1',
+      'agent-view:window-1',
+    );
+    expect(detach).toHaveBeenCalledWith(launchCatalog('assistant:1', 1, 'launch-1').connection);
+    await act(async () => root.unmount());
+  });
 });
 
 function TestAgentSurface({
@@ -140,6 +230,7 @@ function TestAgentSurface({
   return (
     <I18nProvider service={i18n.i18nService}>
       <DesktopAgentSurface
+        binding="workspace"
         initialConversation={initialConversation}
         tab={{
           tabId: 'tab-1',
@@ -152,12 +243,55 @@ function TestAgentSurface({
   );
 }
 
-function installBridge(getBootstrap: typeof window.openNekoDesktop.agent.getBootstrap): void {
+function TestLaunchAgentSurface({
+  assistantSpaceId,
+  conversationId,
+}: {
+  readonly assistantSpaceId: string;
+  readonly conversationId?: string;
+}) {
+  const i18n = createDesktopI18n('en');
+  return (
+    <I18nProvider service={i18n.i18nService}>
+      <DesktopAgentSurface
+        binding="launch"
+        viewId="agent-view:window-1"
+        agentPresentation={{
+          schemaVersion: 1,
+          ...(conversationId
+            ? { kind: 'session' as const, conversationId }
+            : { kind: 'draft' as const }),
+          scope: { kind: 'assistant', assistantSpaceId },
+        }}
+      />
+    </I18nProvider>
+  );
+}
+
+function installBridge(
+  getBootstrap: typeof window.openNekoDesktop.agent.getBootstrap,
+  launch?: {
+    readonly attach: typeof window.openNekoDesktop.agentLaunch.attach;
+    readonly detach: typeof window.openNekoDesktop.agentLaunch.detach;
+    readonly getAssistantBootstrap?: typeof window.openNekoDesktop.agent.getAssistantBootstrap;
+  },
+): void {
   Object.defineProperty(window, 'openNekoDesktop', {
     configurable: true,
     value: {
+      assetCenter: { execute: vi.fn() },
+      assistantResources: { execute: vi.fn() },
+      extensionManagement: { execute: vi.fn() },
+      agentLaunch: {
+        attach: launch?.attach ?? vi.fn(),
+        authorizeResource: vi.fn(),
+        submitDraft: vi.fn(),
+        detach: launch?.detach ?? vi.fn(),
+      },
+      workspaceGrants: { choose: vi.fn() },
       agent: {
         getBootstrap,
+        getAssistantBootstrap: launch?.getAssistantBootstrap ?? vi.fn(),
         send: vi.fn(),
         subscribe: vi.fn(() => () => undefined),
       },
@@ -168,30 +302,6 @@ function installBridge(getBootstrap: typeof window.openNekoDesktop.agent.getBoot
         update: vi.fn(),
         openAgentAdvanced: vi.fn(),
         subscribe: vi.fn(() => () => undefined),
-      },
-      home: {
-        assets: {
-          search: vi.fn(),
-          importFiles: vi.fn(),
-          remove: vi.fn(),
-        },
-        libraryThumbnails: { resolve: vi.fn() },
-        mediaLibraries: {
-          search: vi.fn(),
-          children: vi.fn(),
-          addLibrary: vi.fn(),
-          relinkLibrary: vi.fn(),
-          removeLibrary: vi.fn(),
-          revealLibrary: vi.fn(),
-        },
-        extensions: {
-          list: vi.fn(),
-          installPlugin: vi.fn(),
-          removePlugin: vi.fn(),
-          refreshMarketplaces: vi.fn(),
-          installPersonalSkill: vi.fn(),
-          removePersonalSkill: vi.fn(),
-        },
       },
       shell: {
         getSnapshot: vi.fn(),
@@ -210,6 +320,8 @@ function installBridge(getBootstrap: typeof window.openNekoDesktop.agent.getBoot
         close: vi.fn(),
       },
       workbench: { update: vi.fn() },
+      applicationSidebar: { update: vi.fn() },
+      scenes: { transition: vi.fn() },
       resources: createResourceBridgeMock(),
       projectPortability: {
         inspect: vi.fn(),
@@ -235,6 +347,45 @@ function installBridge(getBootstrap: typeof window.openNekoDesktop.agent.getBoot
       },
     } satisfies typeof window.openNekoDesktop,
   });
+}
+
+function readyAssistantBootstrap() {
+  return {
+    schemaVersion: 1 as const,
+    requestId: 'assistant-request-1',
+    status: 'ready' as const,
+    connection: {
+      applicationInstanceId: 'app-1',
+      windowId: 'window-1',
+      assistantSpaceId: 'assistant:1',
+      workspaceId: 'assistant:1',
+      viewId: 'agent-view:window-1',
+      viewEpoch: 1,
+      rendererEpoch: 1,
+      connectionId: 'assistant-connection-1',
+    },
+  };
+}
+
+function launchCatalog(assistantSpaceId: string, connectionEpoch: number, connectionId: string) {
+  return {
+    schemaVersion: 1 as const,
+    connection: {
+      schemaVersion: 1 as const,
+      applicationInstanceId: 'app-1',
+      windowId: 'window-1',
+      viewId: 'agent-view:window-1',
+      rendererEpoch: 1,
+      connectionEpoch,
+      connectionId,
+      scope: { kind: 'assistant' as const, assistantSpaceId },
+    },
+    revision: 0,
+    models: [],
+    commands: [],
+    skills: [],
+    resources: [],
+  };
 }
 
 function createResourceBridgeMock() {

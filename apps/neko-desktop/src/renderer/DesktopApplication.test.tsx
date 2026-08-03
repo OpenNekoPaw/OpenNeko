@@ -5,7 +5,17 @@ import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { I18nProvider } from '@neko/ui/i18n/react';
 import { createDefaultDesktopWorkbenchLayout } from '@neko/host/desktop-workbench-contract';
-import type { DesktopShellProjection } from '@neko/host/desktop-shell-contract';
+import {
+  DESKTOP_SCENE_CONTRACT_VERSION,
+  createDefaultDesktopAgentScene,
+  createDefaultDesktopApplicationSidebar,
+  parseDesktopWorkbenchSceneProjection,
+} from '@neko/host/desktop-scene-contract';
+import {
+  DESKTOP_SHELL_CONTRACT_VERSION,
+  type DesktopShellProjection,
+  type DesktopShellProjectionEvent,
+} from '@neko/host/desktop-shell-contract';
 import {
   DEFAULT_DESKTOP_APPLICATION_PREFERENCES,
   DESKTOP_APPLICATION_SETTINGS_CONTRACT_VERSION,
@@ -13,31 +23,44 @@ import {
 import { DesktopApplication } from './DesktopShell';
 import { DesktopApplicationSettingsProvider } from './application-settings-context';
 import { createDesktopI18n } from './i18n';
-import { DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION } from '../shared/home-management-contract';
-import type { DesktopProjectPortabilityRequest } from '@neko/assets-domain/contracts';
+import { DesktopExtensionManagementRuntime } from './desktop-extension-management-runtime';
 
-vi.mock('./DesktopAgentSurface', () => ({
-  DesktopAgentSurface: ({
-    initialConversation,
+Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+
+vi.mock('./DesktopExtensionManagementSurface', () => ({
+  DesktopExtensionManagementSurface: ({
+    runtime,
   }: {
-    readonly initialConversation?: { readonly id: string; readonly title: string };
+    readonly runtime: DesktopExtensionManagementRuntime;
   }) => (
     <div
-      data-testid="desktop-agent-surface"
-      data-initial-conversation-id={initialConversation?.id}
-      data-initial-conversation-title={initialConversation?.title}
+      data-extension-management-root="agent"
+      data-extension-management-session={runtime.identity.extensionManagementSessionId}
     />
   ),
 }));
 
-describe('DesktopApplication', () => {
+describe('DesktopApplication scene lifecycle', () => {
   afterEach(() => {
+    document.body.replaceChildren();
     vi.restoreAllMocks();
-    vi.unstubAllGlobals();
   });
 
-  it('owns exactly one Shell subscription while mounted under React StrictMode', async () => {
+  it('owns one Shell subscription and commits Sidebar state only through Sidebar CAS', async () => {
     const projection = createProjection();
+    const updateWorkbench = vi.fn();
+    const updateApplicationSidebar = vi.fn(async () => ({
+      ...projection,
+      projectionRevision: projection.projectionRevision + 1,
+      window: {
+        ...projection.window,
+        applicationSidebar: {
+          ...projection.window.applicationSidebar,
+          revision: 1,
+          visible: false,
+        },
+      },
+    }));
     let activeSubscriptions = 0;
     const subscribe = vi.fn(() => {
       activeSubscriptions += 1;
@@ -45,1243 +68,356 @@ describe('DesktopApplication', () => {
         activeSubscriptions -= 1;
       };
     });
-    Object.defineProperty(window, 'openNekoDesktop', {
-      configurable: true,
-      value: {
-        agent: {
-          getBootstrap: vi.fn(),
-          send: vi.fn(),
-          subscribe: vi.fn(() => () => undefined),
-        },
-        bootstrap: { get: vi.fn() },
-        lifecycle: { subscribe: vi.fn(() => () => undefined) },
-        settings: createSettingsBridgeMock(),
-        home: createHomeBridgeMock(),
-        shell: {
-          getSnapshot: vi.fn(async () => projection),
-          subscribe,
-        },
-        projects: {
-          open: vi.fn(),
-          openContent: vi.fn(),
-          removeRecent: vi.fn(),
-          requestProfile: vi.fn(),
-        },
-        conversations: { delete: vi.fn() },
-        tabs: {
-          activateHome: vi.fn(),
-          activate: vi.fn(),
-          close: vi.fn(),
-        },
-        workbench: { update: vi.fn() },
-        resources: createResourceBridgeMock(),
-        projectPortability: createProjectPortabilityBridgeMock(),
-        preview: createPreviewBridgeMock(),
-        canvas: createCanvasBridgeMock(),
-        cut: createCutBridgeMock(),
-      } satisfies typeof window.openNekoDesktop,
+    installBridge({
+      projection,
+      subscribe,
+      updateApplicationSidebar,
+      updateWorkbench,
     });
-    const container = document.createElement('div');
-    document.body.append(container);
-    const root = createRoot(container);
-
-    await act(async () => {
-      root.render(
-        <StrictMode>
-          <TestApplication />
-        </StrictMode>,
-      );
-    });
+    const { container, root } = await renderApplication(true);
 
     expect(subscribe).toHaveBeenCalledTimes(2);
     expect(activeSubscriptions).toBe(1);
-    expect(container.textContent).toContain('Start creating');
+    expect(container.querySelectorAll('[data-neko-controlled-workbench="true"]')).toHaveLength(1);
+    expect(container.querySelectorAll('[data-primary-sidebar="application"]')).toHaveLength(1);
+
+    const collapse = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Collapse sidebar"]',
+    );
+    if (!collapse) throw new Error('Desktop fixture requires the Sidebar toggle.');
+    await act(async () => collapse.click());
+    await waitFor(() => updateApplicationSidebar.mock.calls.length === 1);
+    expect(updateApplicationSidebar).toHaveBeenCalledWith('window-1', false, 240, 0);
+    expect(updateWorkbench).not.toHaveBeenCalled();
 
     await act(async () => root.unmount());
     expect(activeSubscriptions).toBe(0);
-    container.remove();
   });
 
-  it('dispatches global Asset Center and Resource management through independent owners', async () => {
-    const base = createProjection();
-    const project = {
-      projectId: 'content:workspace-1',
-      workspaceId: 'workspace-1',
-      profile: 'content' as const,
-      displayName: 'Fixture',
-      createdAt: '2026-07-31T00:00:00.000Z',
-      updatedAt: '2026-07-31T00:00:00.000Z',
-    };
-    const tab = {
-      tabId: 'tab-1',
-      projectId: project.projectId,
-      viewId: 'view-1',
-      viewEpoch: 1,
-    };
-    const projection: DesktopShellProjection = {
-      ...base,
-      catalog: {
-        revision: 1,
-        projects: [project],
-      },
+  it('keeps the Workbench and PrimarySidebar mounted while Host switches to Settings', async () => {
+    const assistant = createProjection();
+    const settings = {
+      ...assistant,
+      projectionRevision: assistant.projectionRevision + 1,
       window: {
-        ...base.window,
-        activeTarget: { kind: 'project', tabId: tab.tabId },
-        tabs: [tab],
+        ...assistant.window,
+        revision: assistant.window.revision + 1,
+        scene: settingsScene(),
       },
     };
-    const activateHome = vi.fn(async () => ({
-      ...projection,
-      window: {
-        ...projection.window,
-        activeTarget: { kind: 'home' as const },
-      },
-    }));
-    const updateWorkbench = vi.fn(async () => projection);
-    const projectPortability = createProjectPortabilityBridgeMock();
-    projectPortability.inspect.mockImplementation(
-      async (request: DesktopProjectPortabilityRequest) => ({
-        version: 1,
-        requestId: request.requestId,
-        identity: request.identity,
-        portability: {
-          state: 'linked-ready',
-          requirementRevision: 'requirements:abc',
-          libraries: [],
-        },
-      }),
-    );
-    Object.defineProperty(window, 'openNekoDesktop', {
-      configurable: true,
-      value: {
-        agent: {
-          getBootstrap: vi.fn(),
-          send: vi.fn(),
-          subscribe: vi.fn(() => () => undefined),
-        },
-        bootstrap: { get: vi.fn() },
-        lifecycle: { subscribe: vi.fn(() => () => undefined) },
-        settings: createSettingsBridgeMock(),
-        home: createHomeBridgeMock(),
-        shell: {
-          getSnapshot: vi.fn(async () => projection),
-          subscribe: vi.fn(() => () => undefined),
-        },
-        projects: {
-          open: vi.fn(),
-          openContent: vi.fn(),
-          removeRecent: vi.fn(),
-          requestProfile: vi.fn(),
-        },
-        conversations: { delete: vi.fn() },
-        tabs: {
-          activateHome,
-          activate: vi.fn(),
-          close: vi.fn(),
-        },
-        workbench: { update: updateWorkbench },
-        resources: createResourceBridgeMock(),
-        projectPortability,
-        preview: createPreviewBridgeMock(),
-        canvas: createCanvasBridgeMock(),
-        cut: createCutBridgeMock(),
-      } satisfies typeof window.openNekoDesktop,
+    let snapshot = assistant;
+    const transition = vi.fn(async () => {
+      snapshot = settings;
+      return {
+        status: 'transitioned' as const,
+        requestId: 'transition-1',
+        scene: settings.window.scene,
+      };
     });
-    const container = document.createElement('div');
-    document.body.append(container);
-    const root = createRoot(container);
-    await act(async () => root.render(<TestApplication />));
-
-    const projectResources = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
-      (button) => button.getAttribute('aria-label') === 'Resource management',
-    );
-    await act(async () => projectResources?.click());
-    await waitForDom(() => updateWorkbench.mock.calls.length === 1);
-
-    expect(updateWorkbench).toHaveBeenCalledWith(
-      expect.objectContaining({
-        resourceDock: { presentation: 'docked', width: 320 },
-        main: projection.window.workbench.main,
-      }),
-      projection.window.revision,
-      projection.window.workbench.revision,
-    );
-    expect(activateHome).not.toHaveBeenCalled();
-
-    vi.stubGlobal(
-      'ResizeObserver',
-      class {
-        observe(): void {}
-        unobserve(): void {}
-        disconnect(): void {}
-      },
-    );
-    const portabilityControl = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
-      (button) => button.getAttribute('aria-label') === 'Project portability',
-    );
-    await act(async () => portabilityControl?.click());
-    await waitForDom(() => projectPortability.inspect.mock.calls.length === 1);
-    expect(document.body.textContent).toContain(
-      'Linked media is available on this machine. Other machines may require relinking.',
-    );
-    expect(projectPortability.plan).not.toHaveBeenCalled();
-
-    const assetCenter = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
-      (button) => button.textContent?.trim() === 'Asset Center',
-    );
-    await act(async () => assetCenter?.click());
-    await waitForDom(() => activateHome.mock.calls.length === 1);
-
-    expect(activateHome).toHaveBeenCalledWith(projection.window.revision);
-    expect(updateWorkbench).toHaveBeenCalledTimes(1);
-
-    await act(async () => root.unmount());
-    container.remove();
-  });
-
-  it('renders extension contributions and confirms installation before dispatch', async () => {
-    const projection = createProjection();
-    const home = createHomeBridgeMock();
-    const catalogRevision = 'a'.repeat(64);
-    home.extensions.list.mockResolvedValue({
-      schemaVersion: DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION,
-      requestId: 'extensions-1',
-      catalogRevision,
-      skills: [],
-      skillDiscovery: { diagnostics: [], duplicateCount: 0 },
-      extensions: [
-        {
-          id: 'computer-use@openneko',
-          name: 'computer-use',
-          displayName: 'Computer Use',
-          description: 'Control Mac apps.',
-          version: '1.0.2',
-          developer: 'OpenAI',
-          marketplace: 'openneko',
-          category: 'Productivity',
-          installed: false,
-          enabled: false,
-          canInstall: true,
-          canRemove: false,
-          agentStatus: 'not-installed',
-          runtimeDiagnosticCode: '',
-          iconDataUrl: '',
-          mcpServerIds: ['computer-use'],
-          hasSkills: true,
-          appIds: [],
-        },
-      ],
-      extensionDiscovery: { diagnostics: [] },
+    installBridge({
+      projection: assistant,
+      getSnapshot: vi.fn(async () => snapshot),
+      transition,
     });
-    home.extensions.installPlugin.mockResolvedValue({
-      schemaVersion: DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION,
-      requestId: 'extensions-install-1',
-      status: 'completed',
-      operation: 'plugin-install',
-      targetId: 'computer-use@openneko',
-      catalogRevision: 'b'.repeat(64),
-    });
-    const confirm = vi.fn().mockReturnValueOnce(false).mockReturnValueOnce(true);
-    vi.stubGlobal('confirm', confirm);
-    Object.defineProperty(window, 'openNekoDesktop', {
-      configurable: true,
-      value: {
-        agent: {
-          getBootstrap: vi.fn(),
-          send: vi.fn(),
-          subscribe: vi.fn(() => () => undefined),
-        },
-        bootstrap: { get: vi.fn() },
-        lifecycle: { subscribe: vi.fn(() => () => undefined) },
-        settings: createSettingsBridgeMock(),
-        home,
-        shell: {
-          getSnapshot: vi.fn(async () => projection),
-          subscribe: vi.fn(() => () => undefined),
-        },
-        projects: {
-          open: vi.fn(),
-          openContent: vi.fn(),
-          removeRecent: vi.fn(),
-          requestProfile: vi.fn(),
-        },
-        conversations: { delete: vi.fn() },
-        tabs: {
-          activateHome: vi.fn(async () => projection),
-          activate: vi.fn(),
-          close: vi.fn(),
-        },
-        workbench: { update: vi.fn() },
-        resources: createResourceBridgeMock(),
-        projectPortability: createProjectPortabilityBridgeMock(),
-        preview: createPreviewBridgeMock(),
-        canvas: createCanvasBridgeMock(),
-        cut: createCutBridgeMock(),
-      } satisfies typeof window.openNekoDesktop,
-    });
-    const container = document.createElement('div');
-    document.body.append(container);
-    const root = createRoot(container);
-    await act(async () => root.render(<TestApplication />));
-
-    const navigationButton = [...container.querySelectorAll('button')].find(
-      (button) => button.textContent?.trim() === 'Extensions',
-    );
-    await act(async () => navigationButton?.click());
-    const extensionTab = [...container.querySelectorAll('button')]
-      .filter((button) => button.textContent?.trim() === 'Extensions')
-      .at(-1);
-    await act(async () => extensionTab?.click());
-
-    expect(home.extensions.list).toHaveBeenCalledOnce();
-    expect(container.textContent).toContain('Computer Use');
-    expect(container.textContent).toContain('MCP: computer-use');
-    expect(container.textContent).toContain('Skill contribution');
-    expect(container.textContent).not.toContain('Built-in capabilities');
-
-    const install = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
-      (button) => button.textContent?.trim() === 'Install',
-    );
-    await act(async () => install?.click());
-    expect(home.extensions.installPlugin).not.toHaveBeenCalled();
-
-    await act(async () => install?.click());
-    await waitForDom(() => home.extensions.installPlugin.mock.calls.length === 1);
-    expect(confirm).toHaveBeenLastCalledWith(
-      'Install extension "Computer Use" and make its supported Skills and MCP tools available to the Agent?',
-    );
-    expect(home.extensions.installPlugin).toHaveBeenCalledWith(
-      'computer-use@openneko',
-      catalogRevision,
-    );
-
-    await act(async () => root.unmount());
-    container.remove();
-  });
-
-  it('opens application Settings from Home without requiring a Project and returns to Home', async () => {
-    const projection = createProjection();
-    Object.defineProperty(window, 'openNekoDesktop', {
-      configurable: true,
-      value: {
-        agent: {
-          getBootstrap: vi.fn(),
-          send: vi.fn(),
-          subscribe: vi.fn(() => () => undefined),
-        },
-        bootstrap: { get: vi.fn() },
-        lifecycle: { subscribe: vi.fn(() => () => undefined) },
-        settings: createSettingsBridgeMock(),
-        home: createHomeBridgeMock(),
-        shell: {
-          getSnapshot: vi.fn(async () => projection),
-          subscribe: vi.fn(() => () => undefined),
-        },
-        projects: {
-          open: vi.fn(),
-          openContent: vi.fn(),
-          removeRecent: vi.fn(),
-          requestProfile: vi.fn(),
-        },
-        conversations: { delete: vi.fn() },
-        tabs: {
-          activateHome: vi.fn(),
-          activate: vi.fn(),
-          close: vi.fn(),
-        },
-        workbench: { update: vi.fn() },
-        resources: createResourceBridgeMock(),
-        projectPortability: createProjectPortabilityBridgeMock(),
-        preview: createPreviewBridgeMock(),
-        canvas: createCanvasBridgeMock(),
-        cut: createCutBridgeMock(),
-      } satisfies typeof window.openNekoDesktop,
-    });
-    const container = document.createElement('div');
-    document.body.append(container);
-    const root = createRoot(container);
-    await act(async () => root.render(<TestApplication />));
-
+    const { container, root } = await renderApplication();
+    const workbench = container.querySelector('[data-neko-controlled-workbench="true"]');
+    const sidebar = container.querySelector('[data-primary-sidebar="application"]');
     const settingsButton = container.querySelector<HTMLButtonElement>(
       'button[aria-label="Desktop settings"]',
     );
-    expect(settingsButton?.disabled).toBe(false);
-    await act(async () => settingsButton?.click());
-    expect(container.textContent).toContain('Startup destination');
+    if (!workbench || !sidebar || !settingsButton) {
+      throw new Error('Desktop fixture requires Workbench navigation.');
+    }
 
-    const back = [...container.querySelectorAll('button')].find(
-      (button) => button.textContent?.trim() === 'Back to OpenNeko',
+    await act(async () => settingsButton.click());
+    await waitFor(() => container.querySelector('[data-settings-surface="main"]') !== null);
+    expect(transition).toHaveBeenCalledWith(
+      'window-1',
+      { kind: 'open-settings' },
+      assistant.window.revision,
+      assistant.window.scene.revision,
     );
-    await act(async () => back?.click());
-    expect(container.textContent).toContain('Start creating');
+    expect(container.querySelector('[data-neko-controlled-workbench="true"]')).toBe(workbench);
+    expect(container.querySelector('[data-primary-sidebar="application"]')).toBe(sidebar);
+    expect(container.querySelector('[data-settings-surface="navigation"]')).not.toBeNull();
+    expect(container.querySelector('[data-settings-surface="main"]')).not.toBeNull();
     await act(async () => root.unmount());
-    container.remove();
   });
 
-  it('opens another Project from the unified Home Project selector', async () => {
-    const base = createProjection();
-    const projection: DesktopShellProjection = {
-      ...base,
-      catalog: {
-        revision: 1,
-        projects: [
-          {
-            projectId: 'content:workspace-1',
-            workspaceId: 'workspace-1',
-            profile: 'content',
-            displayName: 'Fixture',
-            createdAt: '2026-07-28T00:00:00.000Z',
-            updatedAt: '2026-07-28T00:00:00.000Z',
-          },
-        ],
-      },
-    };
-    const openContent = vi.fn(async () => ({
-      schemaVersion: 1 as const,
-      requestId: 'open-project-1',
-      status: 'cancelled' as const,
-      projection,
-    }));
-    Object.defineProperty(window, 'openNekoDesktop', {
-      configurable: true,
-      value: {
-        agent: {
-          getBootstrap: vi.fn(),
-          send: vi.fn(),
-          subscribe: vi.fn(() => () => undefined),
-        },
-        bootstrap: { get: vi.fn() },
-        lifecycle: { subscribe: vi.fn(() => () => undefined) },
-        settings: createSettingsBridgeMock(),
-        home: createHomeBridgeMock(),
-        shell: {
-          getSnapshot: vi.fn(async () => projection),
-          subscribe: vi.fn(() => () => undefined),
-        },
-        projects: {
-          open: vi.fn(),
-          openContent,
-          removeRecent: vi.fn(),
-          requestProfile: vi.fn(),
-        },
-        conversations: { delete: vi.fn() },
-        tabs: {
-          activateHome: vi.fn(),
-          activate: vi.fn(),
-          close: vi.fn(),
-        },
-        workbench: { update: vi.fn() },
-        resources: createResourceBridgeMock(),
-        projectPortability: createProjectPortabilityBridgeMock(),
-        preview: createPreviewBridgeMock(),
-        canvas: createCanvasBridgeMock(),
-        cut: createCutBridgeMock(),
-      } satisfies typeof window.openNekoDesktop,
-    });
-    const container = document.createElement('div');
-    document.body.append(container);
-    const root = createRoot(container);
-    await act(async () => root.render(<TestApplication />));
-
-    const projectSelector = container.querySelector<HTMLSelectElement>(
-      'select[aria-label="Project"]',
-    );
-    expect(projectSelector?.value).toBe('content:workspace-1');
-    await act(async () => {
-      if (!projectSelector) return;
-      projectSelector.value = '';
-      projectSelector.dispatchEvent(new Event('change', { bubbles: true }));
-    });
-
-    expect(openContent).toHaveBeenCalledOnce();
-    expect(projectSelector?.value).toBe('content:workspace-1');
-    await act(async () => root.unmount());
-    container.remove();
-  });
-
-  it('keeps Media Library directory connections independent from the Asset Library', async () => {
+  it('shows owner-qualified unavailable without replacing the current scene', async () => {
     const projection = createProjection();
-    const mediaSearch = vi.fn(async () => ({
-      schemaVersion: DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION,
-      requestId: 'media-search',
-      status: 'ready' as const,
-      revision: 0,
-      items: [
-        {
-          id: 'media-library:local:Footage:root',
-          owner: 'media-library' as const,
-          libraryId: 'media-library:local:Footage',
-          libraryLabel: 'Footage',
-          label: 'Footage',
-          description: 'local',
-          kind: 'library' as const,
-          locationKind: 'local' as const,
-          relativePath: '',
-          mediaType: 'directory',
-          availability: 'available' as const,
+    const getSnapshot = vi.fn(async () => projection);
+    const transition = vi.fn(async () => ({
+      status: 'unavailable' as const,
+      requestId: 'transition-1',
+      diagnostic: {
+        code: 'desktop-scene-owner-unavailable' as const,
+        severity: 'error' as const,
+        message: 'Asset Center owner is unavailable.',
+        metadata: {
+          owner: 'workspace-authority' as const,
+          intentKind: 'open-workspace' as const,
         },
-      ],
+      },
     }));
-    const children = vi.fn(async () => ({
-      schemaVersion: DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION,
-      requestId: 'media-children',
-      status: 'ready' as const,
-      revision: 0,
-      items: [
-        {
-          id: 'media-library:local:Footage:shots',
-          owner: 'media-library' as const,
-          libraryId: 'media-library:local:Footage',
-          libraryLabel: 'Footage',
-          label: 'shots',
-          description: '.',
-          kind: 'directory' as const,
-          locationKind: 'local' as const,
-          relativePath: 'shots',
-          mediaType: 'directory',
-          availability: 'available' as const,
-        },
-      ],
-    }));
-    const assetSearch = vi.fn(async () => ({
-      schemaVersion: DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION,
-      requestId: 'asset-search',
-      status: 'ready' as const,
-      revision: 0,
-      items: [
-        {
-          id: 'global-asset-library:abc123',
-          owner: 'global-asset-library' as const,
-          label: 'owned.png',
-          kind: 'asset' as const,
-          mediaType: 'image',
-          availability: 'available' as const,
-        },
-      ],
-    }));
-    const addLibrary = vi.fn(async () => ({
-      schemaVersion: DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION,
-      requestId: 'media-add',
-      status: 'added' as const,
-      libraryId: 'media-library:local:Footage',
-      revision: 1,
-    }));
-    const revealLibrary = vi.fn(async () => ({
-      schemaVersion: DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION,
-      requestId: 'media-reveal',
-      status: 'revealed' as const,
-      libraryId: 'media-library:local:Footage',
-      revision: 0,
-    }));
-    const removeLibrary = vi.fn(async () => ({
-      schemaVersion: DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION,
-      requestId: 'media-remove',
-      status: 'removed' as const,
-      libraryId: 'media-library:local:Footage',
-      revision: 1,
-    }));
-    vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValue(true);
-    Object.defineProperty(window, 'openNekoDesktop', {
-      configurable: true,
-      value: {
-        agent: {
-          getBootstrap: vi.fn(),
-          send: vi.fn(),
-          subscribe: vi.fn(() => () => undefined),
-        },
-        bootstrap: { get: vi.fn() },
-        lifecycle: { subscribe: vi.fn(() => () => undefined) },
-        settings: createSettingsBridgeMock(),
-        home: {
-          assets: {
-            search: assetSearch,
-            importFiles: vi.fn(),
-            remove: vi.fn(),
-          },
-          libraryThumbnails: { resolve: vi.fn() },
-          mediaLibraries: {
-            search: mediaSearch,
-            children,
-            addLibrary,
-            relinkLibrary: vi.fn(),
-            revealLibrary,
-            removeLibrary,
-          },
-          extensions: createExtensionsBridgeMock(),
-        },
-        shell: {
-          getSnapshot: vi.fn(async () => projection),
-          subscribe: vi.fn(() => () => undefined),
-        },
-        projects: {
-          open: vi.fn(),
-          openContent: vi.fn(),
-          removeRecent: vi.fn(),
-          requestProfile: vi.fn(),
-        },
-        conversations: { delete: vi.fn() },
-        tabs: {
-          activateHome: vi.fn(),
-          activate: vi.fn(),
-          close: vi.fn(),
-        },
-        workbench: { update: vi.fn() },
-        resources: createResourceBridgeMock(),
-        projectPortability: createProjectPortabilityBridgeMock(),
-        preview: createPreviewBridgeMock(),
-        canvas: createCanvasBridgeMock(),
-        cut: createCutBridgeMock(),
-      } satisfies typeof window.openNekoDesktop,
-    });
-    const container = document.createElement('div');
-    document.body.append(container);
-    const root = createRoot(container);
-    await act(async () => root.render(<TestApplication />));
-
+    installBridge({ projection, getSnapshot, transition });
+    const { container, root } = await renderApplication();
     const assetCenter = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
-      (button) => button.textContent?.includes('Asset Center'),
+      (button) => button.textContent?.trim() === 'Asset Center',
     );
-    await act(async () => assetCenter?.click());
-    await waitForDom(
-      () =>
-        [...container.querySelectorAll<HTMLButtonElement>('button')].some((button) =>
-          button.textContent?.includes('Connect directory'),
-        ) &&
-        [...container.querySelectorAll<HTMLElement>('article')].some((entry) =>
-          entry.textContent?.includes('Footage'),
-        ),
-    );
+    if (!assetCenter) throw new Error('Desktop fixture requires Asset Center navigation.');
+    await act(async () => assetCenter.click());
+    await waitFor(() => container.textContent?.includes('Asset Center owner is unavailable.'));
 
-    const add = [...container.querySelectorAll<HTMLButtonElement>('button')].find((button) =>
-      button.textContent?.includes('Connect directory'),
+    expect(transition).toHaveBeenCalledWith(
+      'window-1',
+      { kind: 'open-asset-center' },
+      projection.window.revision,
+      projection.window.scene.revision,
     );
-    await act(async () => add?.click());
-    expect(addLibrary).toHaveBeenCalledWith('local', 0);
-    await act(async () => {
-      await new Promise((resolve) => window.setTimeout(resolve, 180));
-    });
+    expect(getSnapshot).toHaveBeenCalledTimes(1);
+    expect(container.textContent).toContain('Connecting to Agent');
+    await act(async () => root.unmount());
+  });
 
-    const reveal = [...container.querySelectorAll<HTMLButtonElement>('button')].find((button) =>
-      button.textContent?.includes('Show in file manager'),
-    );
-    const searchCountBeforeReveal = mediaSearch.mock.calls.length;
-    await act(async () => reveal?.click());
-    expect(revealLibrary).toHaveBeenCalledWith('media-library:local:Footage', 0);
-    await waitForDom(
-      () =>
-        mediaSearch.mock.calls.length > searchCountBeforeReveal &&
-        [...container.querySelectorAll<HTMLElement>('article')].some((entry) =>
-          entry.textContent?.includes('Footage'),
-        ),
-    );
-
-    expect(container.textContent).not.toContain('Browse');
-    expect(container.textContent).not.toContain('Open folder');
-    const libraryEntry = [...container.querySelectorAll<HTMLElement>('article')].find((entry) =>
-      entry.textContent?.includes('Footage'),
-    );
-    await act(async () =>
-      libraryEntry?.dispatchEvent(new MouseEvent('dblclick', { bubbles: true })),
-    );
-    await act(async () => {
-      await new Promise((resolve) => window.setTimeout(resolve, 180));
-    });
-    expect(children).toHaveBeenCalledWith(
-      expect.objectContaining({
-        libraryId: 'media-library:local:Footage',
-        relativePath: '',
+  it('applies exact Shell events without creating another Workbench owner', async () => {
+    const projection = createProjection();
+    let listener: ((event: DesktopShellProjectionEvent) => void) | undefined;
+    installBridge({
+      projection,
+      subscribe: vi.fn((next) => {
+        listener = next;
+        return () => undefined;
       }),
-    );
-
-    const back = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
-      (button) => button.textContent === 'Libraries',
-    );
-    await act(async () => back?.click());
-    await act(async () => {
-      await new Promise((resolve) => window.setTimeout(resolve, 180));
     });
-
-    const remove = [...container.querySelectorAll<HTMLButtonElement>('button')].find((button) =>
-      button.textContent?.includes('Remove'),
-    );
-    const searchCountBeforeCancel = mediaSearch.mock.calls.length;
-    await act(async () => remove?.click());
-    expect(removeLibrary).not.toHaveBeenCalled();
-    await waitForDom(
-      () =>
-        mediaSearch.mock.calls.length > searchCountBeforeCancel &&
-        [...container.querySelectorAll<HTMLButtonElement>('button')].some((button) =>
-          button.textContent?.includes('Remove'),
-        ),
-    );
-    const removeAfterCancel = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
-      (button) => button.textContent?.includes('Remove'),
-    );
-    await act(async () => removeAfterCancel?.click());
-    expect(window.confirm).toHaveBeenCalledWith(
-      'Remove the connection to "Footage"? External files are preserved.',
-    );
-    await waitForDom(() => removeLibrary.mock.calls.length === 1);
-    expect(removeLibrary).toHaveBeenCalledWith('media-library:local:Footage', 0);
-    await act(async () => {
-      await new Promise((resolve) => window.setTimeout(resolve, 180));
-    });
-    const assetLibrary = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
-      (button) => button.textContent === 'Asset Library',
-    );
-    await act(async () => assetLibrary?.click());
-    await act(async () => {
-      await new Promise((resolve) => window.setTimeout(resolve, 180));
-    });
-    expect(
-      container.querySelector<HTMLInputElement>('input[placeholder="Search assets"]'),
-    ).not.toBeNull();
-    expect(assetSearch).toHaveBeenCalled();
-    expect(assetSearch).toHaveBeenCalledWith(
-      expect.not.objectContaining({ facet: expect.anything() }),
-    );
-
-    await act(async () => root.unmount());
-    container.remove();
-  });
-
-  it('exposes distinct cleanup actions for recent Projects and Agent conversations', async () => {
-    const base = createProjection();
-    const projection: DesktopShellProjection = {
-      ...base,
-      catalog: {
-        revision: 1,
-        projects: [
-          {
-            projectId: 'content:workspace-1',
-            workspaceId: 'workspace-1',
-            profile: 'content',
-            displayName: 'Fixture',
-            createdAt: '2026-07-28T00:00:00.000Z',
-            updatedAt: '2026-07-28T00:00:00.000Z',
-          },
-        ],
-      },
-      agentHome: {
-        revision: 1,
-        attention: { needsInput: 0, needsReview: 0, running: 0 },
-        conversations: [
-          {
-            navigation: {
-              projectId: 'content:workspace-1',
-              workspaceId: 'workspace-1',
-              conversationId: 'conversation-1',
-            },
-            title: 'Conversation one',
-            updatedAt: '2026-07-28T00:01:00.000Z',
-            attention: 'none',
-            lastActivity: {
-              kind: 'conversation-updated',
-              occurredAt: '2026-07-28T00:01:00.000Z',
-            },
-          },
-        ],
-      },
-    };
-    const open = vi.fn();
-    const removeRecent = vi.fn(async () => projection);
-    const deleteConversation = vi.fn(async () => projection);
-    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
-    Object.defineProperty(window, 'openNekoDesktop', {
-      configurable: true,
-      value: {
-        agent: {
-          getBootstrap: vi.fn(),
-          send: vi.fn(),
-          subscribe: vi.fn(() => () => undefined),
-        },
-        bootstrap: { get: vi.fn() },
-        lifecycle: { subscribe: vi.fn(() => () => undefined) },
-        settings: createSettingsBridgeMock(),
-        home: createHomeBridgeMock(),
-        shell: {
-          getSnapshot: vi.fn(async () => projection),
-          subscribe: vi.fn(() => () => undefined),
-        },
-        projects: {
-          open,
-          openContent: vi.fn(),
-          removeRecent,
-          requestProfile: vi.fn(),
-        },
-        conversations: { delete: deleteConversation },
-        tabs: {
-          activateHome: vi.fn(),
-          activate: vi.fn(),
-          close: vi.fn(),
-        },
-        workbench: { update: vi.fn() },
-        resources: createResourceBridgeMock(),
-        projectPortability: createProjectPortabilityBridgeMock(),
-        preview: createPreviewBridgeMock(),
-        canvas: createCanvasBridgeMock(),
-        cut: createCutBridgeMock(),
-      } satisfies typeof window.openNekoDesktop,
-    });
-    const container = document.createElement('div');
-    document.body.append(container);
-    const root = createRoot(container);
-
-    await act(async () => root.render(<TestApplication />));
-
-    const removeProjectButton = container.querySelector<HTMLButtonElement>(
-      'button[aria-label="Remove Fixture from recent projects"]',
-    );
-    const deleteConversationButton = container.querySelector<HTMLButtonElement>(
-      'button[aria-label="Delete conversation Conversation one"]',
-    );
-    expect(removeProjectButton).not.toBeNull();
-    expect(deleteConversationButton).not.toBeNull();
-
-    await act(async () => removeProjectButton?.click());
-    expect(removeRecent).toHaveBeenCalledWith('content:workspace-1', 0, 1);
-    expect(open).not.toHaveBeenCalled();
-
-    await act(async () => deleteConversationButton?.click());
-    expect(deleteConversation).toHaveBeenCalledWith(
-      {
-        projectId: 'content:workspace-1',
-        workspaceId: 'workspace-1',
-        conversationId: 'conversation-1',
-      },
-      0,
-      1,
-    );
-    expect(open).not.toHaveBeenCalled();
-
-    await act(async () => root.unmount());
-    confirm.mockRestore();
-    container.remove();
-  });
-
-  it('sends primary-sidebar display selection through the revision-bound Workbench bridge', async () => {
-    vi.stubGlobal(
-      'ResizeObserver',
-      class {
-        observe(): void {}
-        unobserve(): void {}
-        disconnect(): void {}
-      },
-    );
-    const base = createProjection();
-    const workbench = {
-      ...createDefaultDesktopWorkbenchLayout('window-1'),
-      revision: 1,
-      main: {
-        views: [
-          {
-            viewId: 'cut:view-1:story',
-            viewEpoch: 1,
-            projectId: 'content:workspace-1',
-            workspaceId: 'workspace-1',
-            kind: 'cut' as const,
-            ownerId: 'cut-session:story',
-            displayLabel: 'story.otio',
-            documentId: 'cuts/story.otio',
-          },
-        ],
-        groups: [
-          {
-            groupId: 'main:primary',
-            viewIds: ['cut:view-1:story'],
-            activeViewId: 'cut:view-1:story',
-          },
-        ],
-        activeGroupId: 'main:primary',
-      },
-    };
-    const projection: DesktopShellProjection = {
-      ...base,
-      catalog: {
-        revision: 1,
-        projects: [
-          {
-            projectId: 'content:workspace-1',
-            workspaceId: 'workspace-1',
-            profile: 'content',
-            displayName: 'Demo',
-            createdAt: '2026-07-28T00:00:00.000Z',
-            updatedAt: '2026-07-28T00:00:00.000Z',
-          },
-        ],
-      },
-      window: {
-        ...base.window,
-        revision: 2,
-        activeTarget: { kind: 'project', tabId: 'tab-1' },
-        tabs: [
-          {
-            tabId: 'tab-1',
-            projectId: 'content:workspace-1',
-            viewId: 'view-1',
-            viewEpoch: 1,
-          },
-        ],
-        workbench,
-      },
-      domains: [
-        { surface: 'agent', status: 'ready', ownerSlice: 'P1.3' },
-        {
-          surface: 'media-library',
-          status: 'unavailable',
-          ownerSlice: 'P1.4',
-          diagnosticCode: 'desktop-domain-surface-unavailable',
-        },
-        {
-          surface: 'canvas',
-          status: 'unavailable',
-          ownerSlice: 'P1.4',
-          diagnosticCode: 'desktop-domain-surface-unavailable',
-        },
-      ],
-    };
-    const update = vi.fn(async (nextWorkbench) => ({
+    const { container, root } = await renderApplication();
+    const workbench = container.querySelector('[data-neko-controlled-workbench="true"]');
+    const settings = {
       ...projection,
       projectionRevision: projection.projectionRevision + 1,
       window: {
         ...projection.window,
         revision: projection.window.revision + 1,
-        workbench: nextWorkbench,
-      },
-    }));
-    Object.defineProperty(window, 'openNekoDesktop', {
-      configurable: true,
-      value: {
-        agent: {
-          getBootstrap: vi.fn(),
-          send: vi.fn(),
-          subscribe: vi.fn(() => () => undefined),
-        },
-        bootstrap: { get: vi.fn() },
-        lifecycle: { subscribe: vi.fn(() => () => undefined) },
-        settings: createSettingsBridgeMock(),
-        home: createHomeBridgeMock(),
-        shell: {
-          getSnapshot: vi.fn(async () => projection),
-          subscribe: vi.fn(() => () => undefined),
-        },
-        projects: {
-          open: vi.fn(),
-          openContent: vi.fn(),
-          removeRecent: vi.fn(),
-          requestProfile: vi.fn(),
-        },
-        conversations: { delete: vi.fn() },
-        tabs: {
-          activateHome: vi.fn(),
-          activate: vi.fn(),
-          close: vi.fn(),
-        },
-        workbench: { update },
-        resources: createResourceBridgeMock(),
-        projectPortability: createProjectPortabilityBridgeMock(),
-        preview: createPreviewBridgeMock(),
-        canvas: createCanvasBridgeMock(),
-        cut: createCutBridgeMock(),
-      } satisfies typeof window.openNekoDesktop,
-    });
-    const container = document.createElement('div');
-    document.body.append(container);
-    const root = createRoot(container);
-
-    await act(async () => root.render(<TestApplication />));
-    const display = [...container.querySelectorAll('button')].find(
-      (button) => button.getAttribute('aria-label') === 'Display',
-    );
-    expect(display).toBeDefined();
-    expect(
-      [...container.querySelectorAll('button')].some(
-        (button) => button.getAttribute('aria-label') === 'Timeline',
-      ),
-    ).toBe(false);
-    await act(async () => {
-      display?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    });
-    const mainOnly = [...document.body.querySelectorAll('button')].find(
-      (button) => button.textContent === 'Main only',
-    );
-    expect(mainOnly).toBeDefined();
-    await act(async () => {
-      mainOnly?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    });
-
-    expect(update).toHaveBeenCalledWith(
-      expect.objectContaining({
-        revision: 2,
-        display: expect.objectContaining({ mode: 'main-only' }),
-      }),
-      2,
-      1,
-    );
-
-    await act(async () => root.unmount());
-    container.remove();
-  });
-
-  it('navigates a Home conversation through its stable Project identity', async () => {
-    const base = createProjection();
-    const projection: DesktopShellProjection = {
-      ...base,
-      catalog: {
-        revision: 1,
-        projects: [
-          {
-            projectId: 'content:workspace-1',
-            workspaceId: 'workspace-1',
-            profile: 'content',
-            displayName: 'Fixture',
-            createdAt: '2026-07-28T00:00:00.000Z',
-            updatedAt: '2026-07-28T00:00:00.000Z',
-          },
-        ],
-      },
-      window: {
-        ...base.window,
-        revision: 2,
-        tabs: [
-          {
-            tabId: 'tab-1',
-            projectId: 'content:workspace-1',
-            viewId: 'view-1',
-            viewEpoch: 1,
-          },
-        ],
-      },
-      agentHome: {
-        revision: 1,
-        attention: { needsInput: 0, needsReview: 0, running: 0 },
-        conversations: [
-          {
-            navigation: {
-              projectId: 'content:workspace-1',
-              workspaceId: 'workspace-1',
-              conversationId: 'conversation-1',
-            },
-            title: 'Conversation one',
-            updatedAt: '2026-07-28T00:01:00.000Z',
-            attention: 'none',
-            lastActivity: {
-              kind: 'conversation-updated',
-              occurredAt: '2026-07-28T00:01:00.000Z',
-            },
-          },
-        ],
+        scene: settingsScene(),
       },
     };
-    const activeProjection: DesktopShellProjection = {
+    await act(async () => {
+      listener?.({
+        schemaVersion: DESKTOP_SHELL_CONTRACT_VERSION,
+        applicationInstanceId: projection.applicationInstanceId,
+        windowId: projection.window.windowId,
+        rendererEpoch: 1,
+        sequence: 1,
+        projection: settings,
+      });
+    });
+    expect(container.querySelector('[data-neko-controlled-workbench="true"]')).toBe(workbench);
+    expect(container.querySelector('[data-settings-surface="main"]')).not.toBeNull();
+    await act(async () => root.unmount());
+  });
+
+  it('disposes the exact Extensions runtime when Settings replaces its Scene slots', async () => {
+    const assistant = createProjection();
+    const projection = {
+      ...assistant,
+      window: { ...assistant.window, scene: extensionsScene('extension-management:window-1:1') },
+    };
+    let listener: ((event: DesktopShellProjectionEvent) => void) | undefined;
+    const dispose = vi.spyOn(DesktopExtensionManagementRuntime.prototype, 'dispose');
+    installBridge({
+      projection,
+      subscribe: vi.fn((next) => {
+        listener = next;
+        return () => undefined;
+      }),
+    });
+    const { container, root } = await renderApplication();
+    expect(
+      container.querySelector(
+        '[data-extension-management-session="extension-management:window-1:1"]',
+      ),
+    ).not.toBeNull();
+
+    const settings = {
       ...projection,
-      projectionRevision: 2,
+      projectionRevision: projection.projectionRevision + 1,
       window: {
         ...projection.window,
-        revision: 3,
-        activeTarget: { kind: 'project', tabId: 'tab-1' },
+        revision: projection.window.revision + 1,
+        scene: settingsScene(),
       },
-      domains: [
-        {
-          surface: 'agent',
-          status: 'ready',
-          ownerSlice: 'P1.3',
-        },
-      ],
     };
-    const activate = vi.fn(async () => activeProjection);
-    Object.defineProperty(window, 'openNekoDesktop', {
-      configurable: true,
-      value: {
-        agent: {
-          getBootstrap: vi.fn(),
-          send: vi.fn(),
-          subscribe: vi.fn(() => () => undefined),
-        },
-        bootstrap: { get: vi.fn() },
-        lifecycle: { subscribe: vi.fn(() => () => undefined) },
-        settings: createSettingsBridgeMock(),
-        home: createHomeBridgeMock(),
-        shell: {
-          getSnapshot: vi.fn(async () => projection),
-          subscribe: vi.fn(() => () => undefined),
-        },
-        projects: {
-          open: vi.fn(),
-          openContent: vi.fn(),
-          removeRecent: vi.fn(),
-          requestProfile: vi.fn(),
-        },
-        conversations: { delete: vi.fn() },
-        tabs: {
-          activateHome: vi.fn(),
-          activate,
-          close: vi.fn(),
-        },
-        workbench: { update: vi.fn() },
-        resources: createResourceBridgeMock(),
-        projectPortability: createProjectPortabilityBridgeMock(),
-        preview: createPreviewBridgeMock(),
-        canvas: createCanvasBridgeMock(),
-        cut: createCutBridgeMock(),
-      } satisfies typeof window.openNekoDesktop,
-    });
-    const container = document.createElement('div');
-    document.body.append(container);
-    const root = createRoot(container);
-    await act(async () => root.render(<TestApplication />));
-    const conversationButton = [...container.querySelectorAll('button')].find((button) =>
-      button.textContent?.includes('Conversation one'),
-    );
-    expect(conversationButton).toBeDefined();
-
     await act(async () => {
-      conversationButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      listener?.({
+        schemaVersion: DESKTOP_SHELL_CONTRACT_VERSION,
+        applicationInstanceId: projection.applicationInstanceId,
+        windowId: projection.window.windowId,
+        rendererEpoch: 1,
+        sequence: 1,
+        projection: settings,
+      });
     });
-
-    expect(activate).toHaveBeenCalledWith('tab-1', 2);
-    expect(
-      container
-        .querySelector('[data-testid="desktop-agent-surface"]')
-        ?.getAttribute('data-initial-conversation-id'),
-    ).toBe('conversation-1');
-    expect(
-      container
-        .querySelector('[data-testid="desktop-agent-surface"]')
-        ?.getAttribute('data-initial-conversation-title'),
-    ).toBe('Conversation one');
+    expect(dispose).toHaveBeenCalledTimes(1);
+    expect(container.querySelector('[data-extension-management-root="agent"]')).toBeNull();
+    expect(container.querySelector('[data-settings-surface="main"]')).not.toBeNull();
     await act(async () => root.unmount());
-    container.remove();
   });
 
-  it('reopens a closed Project before activating its Home conversation', async () => {
+  it('routes recent Project and conversation actions with their exact projection identities', async () => {
     const base = createProjection();
+    const project = {
+      projectId: 'content:workspace-1',
+      workspaceId: 'workspace-1',
+      profile: 'content' as const,
+      displayName: 'Project one',
+      createdAt: '2026-07-28T00:00:00.000Z',
+      updatedAt: '2026-07-29T00:00:00.000Z',
+    };
     const conversation = {
       navigation: {
-        projectId: 'content:workspace-1',
-        workspaceId: 'workspace-1',
+        projectId: project.projectId,
+        workspaceId: project.workspaceId,
         conversationId: 'conversation-1',
       },
       title: 'Conversation one',
-      updatedAt: '2026-07-28T00:01:00.000Z',
+      updatedAt: '2026-07-29T00:00:00.000Z',
       attention: 'none' as const,
       lastActivity: {
         kind: 'conversation-updated' as const,
-        occurredAt: '2026-07-28T00:01:00.000Z',
+        occurredAt: '2026-07-29T00:00:00.000Z',
       },
     };
     const projection: DesktopShellProjection = {
       ...base,
-      catalog: {
-        revision: 1,
-        projects: [
-          {
-            projectId: 'content:workspace-1',
-            workspaceId: 'workspace-1',
-            profile: 'content',
-            displayName: 'Fixture',
-            createdAt: '2026-07-28T00:00:00.000Z',
-            updatedAt: '2026-07-28T00:00:00.000Z',
-          },
-        ],
-      },
+      catalog: { revision: 3, projects: [project] },
       agentHome: {
-        revision: 1,
-        attention: { needsInput: 0, needsReview: 0, running: 0 },
+        revision: 4,
         conversations: [conversation],
+        attention: { needsInput: 0, needsReview: 0, running: 0 },
       },
     };
-    const reopenedProjection: DesktopShellProjection = {
-      ...projection,
-      projectionRevision: 2,
-      window: {
-        ...projection.window,
-        revision: 1,
-        activeTarget: {
-          kind: 'project',
-          tabId: 'tab:window-1:content:workspace-1',
-        },
-        tabs: [
-          {
-            tabId: 'tab:window-1:content:workspace-1',
-            projectId: 'content:workspace-1',
-            viewId: 'view-reopened',
-            viewEpoch: 1,
-          },
-        ],
-      },
-      domains: [{ surface: 'agent', status: 'ready', ownerSlice: 'P1.3' }],
-    };
-    const open = vi.fn(async () => ({
-      schemaVersion: 1 as const,
-      requestId: 'reopen-1',
-      status: 'opened' as const,
-      projection: reopenedProjection,
-    }));
-    const activate = vi.fn();
-    Object.defineProperty(window, 'openNekoDesktop', {
-      configurable: true,
-      value: {
-        agent: {
-          getBootstrap: vi.fn(),
-          send: vi.fn(),
-          subscribe: vi.fn(() => () => undefined),
-        },
-        bootstrap: { get: vi.fn() },
-        lifecycle: { subscribe: vi.fn(() => () => undefined) },
-        settings: createSettingsBridgeMock(),
-        home: createHomeBridgeMock(),
-        shell: {
-          getSnapshot: vi.fn(async () => projection),
-          subscribe: vi.fn(() => () => undefined),
-        },
-        projects: {
-          open,
-          openContent: vi.fn(),
-          removeRecent: vi.fn(),
-          requestProfile: vi.fn(),
-        },
-        conversations: { delete: vi.fn() },
-        tabs: {
-          activateHome: vi.fn(),
-          activate,
-          close: vi.fn(),
-        },
-        workbench: { update: vi.fn() },
-        resources: createResourceBridgeMock(),
-        projectPortability: createProjectPortabilityBridgeMock(),
-        preview: createPreviewBridgeMock(),
-        canvas: createCanvasBridgeMock(),
-        cut: createCutBridgeMock(),
-      } satisfies typeof window.openNekoDesktop,
+    const transition = vi.fn(
+      async (
+        _windowId: string,
+        _intent: unknown,
+        _windowRevision: number,
+        _sceneRevision: number,
+      ) => ({
+        status: 'transitioned' as const,
+        requestId: 'recent-transition',
+        scene: projection.window.scene,
+      }),
+    );
+    const deleteConversation = vi.fn(async () => projection);
+    const removeRecentProject = vi.fn(async () => projection);
+    installBridge({
+      projection,
+      transition,
+      deleteConversation,
+      removeRecentProject,
     });
-    const container = document.createElement('div');
-    document.body.append(container);
-    const root = createRoot(container);
-    await act(async () => root.render(<TestApplication />));
-    const conversationButton = [...container.querySelectorAll('button')].find((button) =>
-      button.textContent?.includes('Conversation one'),
+    vi.spyOn(globalThis, 'confirm').mockReturnValue(true);
+    const { container, root } = await renderApplication();
+
+    const projectButton = [
+      ...container.querySelectorAll<HTMLButtonElement>('.home-project-link'),
+    ].find((button) => button.textContent?.includes(project.displayName));
+    const conversationButton = [
+      ...container.querySelectorAll<HTMLButtonElement>('.home-project-link'),
+    ].find((button) => button.textContent?.includes(conversation.title));
+    if (!projectButton || !conversationButton) {
+      throw new Error('Desktop fixture requires recent Project and conversation actions.');
+    }
+    await act(async () => projectButton.click());
+    await waitFor(() => transition.mock.calls.length === 1);
+    await act(async () => conversationButton.click());
+    await waitFor(() => transition.mock.calls.length === 2);
+    expect(transition).toHaveBeenNthCalledWith(
+      1,
+      projection.window.windowId,
+      { kind: 'open-project-workspace', projectId: project.projectId },
+      projection.window.revision,
+      projection.window.scene.revision,
+    );
+    expect(transition).toHaveBeenNthCalledWith(
+      2,
+      projection.window.windowId,
+      { kind: 'restore-conversation', conversationId: conversation.navigation.conversationId },
+      projection.window.revision,
+      projection.window.scene.revision,
     );
 
-    await act(async () => {
-      conversationButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    });
-
-    expect(open).toHaveBeenCalledWith('content:workspace-1');
-    expect(activate).not.toHaveBeenCalled();
-    expect(
-      container
-        .querySelector('[data-testid="desktop-agent-surface"]')
-        ?.getAttribute('data-initial-conversation-id'),
-    ).toBe('conversation-1');
+    const removeButton = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Remove Project one from recent projects"]',
+    );
+    const deleteButton = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Delete conversation Conversation one"]',
+    );
+    if (!removeButton || !deleteButton) {
+      throw new Error('Desktop fixture requires recent removal actions.');
+    }
+    await act(async () => removeButton.click());
+    await waitFor(() => removeRecentProject.mock.calls.length === 1);
+    expect(removeRecentProject).toHaveBeenCalledWith(
+      project.projectId,
+      projection.window.revision,
+      projection.catalog.revision,
+    );
+    await act(async () => deleteButton.click());
+    await waitFor(() => deleteConversation.mock.calls.length === 1);
+    expect(deleteConversation).toHaveBeenCalledWith(
+      conversation.navigation,
+      projection.window.revision,
+      projection.agentHome.revision,
+    );
     await act(async () => root.unmount());
-    container.remove();
   });
 });
 
-function TestApplication(): JSX.Element {
+function installBridge({
+  getSnapshot = vi.fn(async () => projection),
+  projection,
+  subscribe = vi.fn(() => () => undefined),
+  transition = vi.fn(),
+  deleteConversation = vi.fn(),
+  removeRecentProject = vi.fn(),
+  updateApplicationSidebar = vi.fn(),
+  updateWorkbench = vi.fn(),
+}: {
+  readonly getSnapshot?: () => Promise<DesktopShellProjection>;
+  readonly projection: DesktopShellProjection;
+  readonly subscribe?: (listener: (event: DesktopShellProjectionEvent) => void) => () => void;
+  readonly transition?: ReturnType<typeof vi.fn>;
+  readonly deleteConversation?: ReturnType<typeof vi.fn>;
+  readonly removeRecentProject?: ReturnType<typeof vi.fn>;
+  readonly updateApplicationSidebar?: ReturnType<typeof vi.fn>;
+  readonly updateWorkbench?: ReturnType<typeof vi.fn>;
+}): void {
+  Object.defineProperty(window, 'openNekoDesktop', {
+    configurable: true,
+    value: {
+      shell: { getSnapshot, subscribe },
+      scenes: { transition },
+      conversations: { delete: deleteConversation },
+      projects: { removeRecent: removeRecentProject },
+      applicationSidebar: { update: updateApplicationSidebar },
+      workbench: { update: updateWorkbench },
+      agentLaunch: {
+        attach: vi.fn(() => new Promise(() => undefined)),
+        authorizeResource: vi.fn(),
+        detach: vi.fn(),
+      },
+      projectPortability: undefined,
+    },
+  });
+}
+
+async function renderApplication(strict = false) {
   const i18n = createDesktopI18n('en');
-  return (
+  const container = document.createElement('div');
+  document.body.append(container);
+  const root = createRoot(container);
+  const application = (
     <I18nProvider service={i18n.i18nService}>
       <DesktopApplicationSettingsProvider
         value={{
@@ -1291,145 +427,79 @@ function TestApplication(): JSX.Element {
             eventSequence: 0,
             preferences: DEFAULT_DESKTOP_APPLICATION_PREFERENCES,
           },
-          update: vi.fn(),
-          openAgentAdvanced: vi.fn(),
+          update: async () => undefined,
+          openAgentAdvanced: async () => undefined,
         }}
       >
         <DesktopApplication />
       </DesktopApplicationSettingsProvider>
     </I18nProvider>
   );
-}
-
-function createResourceBridgeMock() {
-  return {
-    getSnapshot: vi.fn(),
-    children: vi.fn(),
-    resolveThumbnail: vi.fn(),
-    resolveQuickPreview: vi.fn(),
-    releaseQuickPreview: vi.fn(),
-    planRecovery: vi.fn(),
-    applyRecovery: vi.fn(),
-    cancelRecovery: vi.fn(),
-    search: vi.fn(),
-    execute: vi.fn(),
-    subscribe: vi.fn(() => () => undefined),
-  };
-}
-
-function createProjectPortabilityBridgeMock() {
-  return {
-    inspect: vi.fn(),
-    plan: vi.fn(),
-    resume: vi.fn(),
-    execute: vi.fn(),
-    cancel: vi.fn(),
-    subscribe: vi.fn(() => () => undefined),
-  };
-}
-
-function createSettingsBridgeMock() {
-  return {
-    get: vi.fn(),
-    update: vi.fn(),
-    openAgentAdvanced: vi.fn(),
-    subscribe: vi.fn(() => () => undefined),
-  };
-}
-
-function createHomeBridgeMock() {
-  return {
-    assets: {
-      search: vi.fn(),
-      importFiles: vi.fn(),
-      remove: vi.fn(),
-    },
-    libraryThumbnails: { resolve: vi.fn() },
-    mediaLibraries: {
-      search: vi.fn(),
-      children: vi.fn(),
-      addLibrary: vi.fn(),
-      relinkLibrary: vi.fn(),
-      removeLibrary: vi.fn(),
-      revealLibrary: vi.fn(),
-    },
-    extensions: createExtensionsBridgeMock(),
-  };
-}
-
-function createExtensionsBridgeMock() {
-  return {
-    list: vi.fn(),
-    installPlugin: vi.fn(),
-    removePlugin: vi.fn(),
-    refreshMarketplaces: vi.fn(),
-    installPersonalSkill: vi.fn(),
-    removePersonalSkill: vi.fn(),
-  };
-}
-
-function createPreviewBridgeMock() {
-  return {
-    getSnapshot: vi.fn(),
-    execute: vi.fn(),
-  };
-}
-
-function createCanvasBridgeMock() {
-  return {
-    getSnapshot: vi.fn(),
-    resolveMaterialActions: vi.fn(),
-    executeIntent: vi.fn(),
-    resolvePreviewVariant: vi.fn(),
-    executeMediaRequest: vi.fn(),
-    subscribe: vi.fn(() => () => undefined),
-  };
-}
-
-function createCutBridgeMock() {
-  return {
-    getSnapshot: vi.fn(),
-    execute: vi.fn(),
-    subscribe: vi.fn(() => () => undefined),
-  };
-}
-
-async function waitForDom(predicate: () => boolean): Promise<void> {
-  for (let attempt = 0; attempt < 50; attempt += 1) {
-    if (predicate()) return;
-    await act(async () => {
-      await new Promise((resolve) => window.setTimeout(resolve, 20));
-    });
-  }
-  throw new Error('Desktop test DOM condition was not reached.');
+  await act(async () => root.render(strict ? <StrictMode>{application}</StrictMode> : application));
+  await waitFor(() => container.querySelector('[data-neko-controlled-workbench="true"]') !== null);
+  return { container, root };
 }
 
 function createProjection(): DesktopShellProjection {
   return {
-    schemaVersion: 1,
+    schemaVersion: DESKTOP_SHELL_CONTRACT_VERSION,
     applicationInstanceId: 'app-1',
     endpointEpoch: 'app-1:window-1:1',
-    projectionRevision: 1,
-    catalog: {
-      revision: 0,
-      projects: [],
-    },
+    projectionRevision: 2,
+    catalog: { revision: 0, projects: [] },
     window: {
       windowId: 'window-1',
-      revision: 0,
+      revision: 1,
       activeTarget: { kind: 'home' },
       tabs: [],
       workbench: createDefaultDesktopWorkbenchLayout('window-1'),
+      scene: createDefaultDesktopAgentScene('window-1', 'assistant-space:test'),
+      applicationSidebar: createDefaultDesktopApplicationSidebar('window-1'),
     },
     agentHome: {
       revision: 0,
       conversations: [],
-      attention: {
-        needsInput: 0,
-        needsReview: 0,
-        running: 0,
-      },
+      attention: { needsInput: 0, needsReview: 0, running: 0 },
     },
     domains: [],
   };
+}
+
+function settingsScene() {
+  const sceneId = 'scene:window-1:settings';
+  return parseDesktopWorkbenchSceneProjection({
+    schemaVersion: DESKTOP_SCENE_CONTRACT_VERSION,
+    sceneId,
+    windowId: 'window-1',
+    revision: 1,
+    context: { kind: 'settings', settingsSectionId: 'general' },
+    slots: {
+      leftManager: { kind: 'settings-navigation', settingsSectionId: 'general' },
+      main: { kind: 'settings-main', settingsSectionId: 'general' },
+      status: { kind: 'scene-status', sceneId },
+    },
+  });
+}
+
+function extensionsScene(extensionManagementSessionId: string) {
+  const sceneId = 'scene:window-1:extensions';
+  return parseDesktopWorkbenchSceneProjection({
+    schemaVersion: DESKTOP_SCENE_CONTRACT_VERSION,
+    sceneId,
+    windowId: 'window-1',
+    revision: 1,
+    context: { kind: 'extensions', extensionManagementSessionId },
+    slots: {
+      main: { kind: 'extension-management', extensionManagementSessionId },
+      status: { kind: 'scene-status', sceneId },
+    },
+  });
+}
+
+async function waitFor(assertion: () => boolean | undefined): Promise<void> {
+  for (let index = 0; index < 20; index += 1) {
+    if (assertion()) return;
+    await act(async () => Promise.resolve());
+  }
+  throw new Error('Desktop application fixture did not reach the expected state.');
 }

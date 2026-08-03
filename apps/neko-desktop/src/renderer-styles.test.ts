@@ -118,13 +118,27 @@ describe('Desktop renderer styles', () => {
     expect(styles).toMatch(/--neko-popover-foreground\s*:\s*var\(--neko-fg\)/u);
   });
 
-  it('gives the package-owned Global Library its complete Home viewport', () => {
+  it('gives the package-owned Asset Management Root its complete Workbench viewport', () => {
     const globalLibraryRootRule = styles.match(
-      /\.desktop-global-library-root\s*\{(?<body>[\s\S]*?)\n\}/u,
+      /\.desktop-asset-management-root\s*\{(?<body>[\s\S]*?)\n\}/u,
     );
 
     expect(globalLibraryRootRule?.groups?.body).toMatch(/height\s*:\s*100%/u);
     expect(globalLibraryRootRule?.groups?.body).toMatch(/min-height\s*:\s*0/u);
+  });
+
+  it('expands Agent-only into the full business area and removes the empty Main column', () => {
+    const shellRule = styles.match(
+      /\.desktop-scene-workbench--agent-only\.neko-controlled-workbench-shell\s*\{(?<body>[\s\S]*?)\n\}/u,
+    );
+    const mainRule = styles.match(
+      /\.desktop-scene-workbench--agent-only\s+\.neko-controlled-workbench-main\s*\{(?<body>[\s\S]*?)\n\}/u,
+    );
+
+    expect(shellRule?.groups?.body).toMatch(
+      /grid-template-columns\s*:[\s\S]*?var\(--neko-controlled-primary-width\)[\s\S]*?minmax\(420px, 1fr\)[\s\S]*?0[\s\S]*?0/u,
+    );
+    expect(mainRule?.groups?.body).toMatch(/display\s*:\s*none/u);
   });
 
   it('gives the package-owned Preview Root its complete Workbench viewport', () => {
@@ -134,6 +148,13 @@ describe('Desktop renderer styles', () => {
     expect(previewSurfaceRule?.groups?.body).toMatch(/height\s*:\s*100%/u);
     expect(previewSurfaceRule?.groups?.body).toMatch(/min-height\s*:\s*0/u);
     expect(previewSurfaceRule?.groups?.body).toMatch(/overflow\s*:\s*hidden/u);
+  });
+
+  it('styles owner-qualified management Roots without superseded Home management selectors', () => {
+    expect(styles).toMatch(/\.agent-extension-management-root,[\s\S]*?\.project-management-catalog\s*\{/u);
+    expect(styles).toMatch(/\.management-surface-list\s*\{[\s\S]*?display\s*:\s*grid/u);
+    expect(styles).toMatch(/\.project-management-detail\s*\{[\s\S]*?height\s*:\s*100%/u);
+    expect(styles).not.toMatch(/\.home-(?:management|project-(?:selector|list|grid|card)|sort-control|search-field|segmented-control|status-badge)/u);
   });
 
   it('keeps the Global Library as an aligned unframed workbench surface', () => {

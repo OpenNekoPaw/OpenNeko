@@ -8,11 +8,19 @@ import {
   DEFAULT_DESKTOP_APPLICATION_PREFERENCES,
   DESKTOP_APPLICATION_SETTINGS_CONTRACT_VERSION,
 } from '@neko/host/application-settings';
-import type { DesktopShellProjection } from '@neko/host/desktop-shell-contract';
+import {
+  DESKTOP_SHELL_CONTRACT_VERSION,
+  type DesktopShellProjection,
+} from '@neko/host/desktop-shell-contract';
 import {
   createDefaultDesktopWorkbenchLayout,
   type DesktopWorkbenchLayoutProjection,
 } from '@neko/host/desktop-workbench-contract';
+import {
+  DESKTOP_SCENE_CONTRACT_VERSION,
+  createDefaultDesktopApplicationSidebar,
+  parseDesktopWorkbenchSceneProjection,
+} from '@neko/host/desktop-scene-contract';
 import { DesktopApplicationSettingsProvider } from './application-settings-context';
 import { DesktopShellView } from './DesktopShell';
 import { createDesktopI18n } from './i18n';
@@ -210,7 +218,7 @@ function projectProjection(
     },
   };
   return {
-    schemaVersion: 1,
+    schemaVersion: DESKTOP_SHELL_CONTRACT_VERSION,
     applicationInstanceId: 'app-1',
     endpointEpoch: 'app-1:window-1:1',
     projectionRevision: 2,
@@ -231,6 +239,51 @@ function projectProjection(
         },
       ],
       workbench,
+      scene: parseDesktopWorkbenchSceneProjection({
+        schemaVersion: DESKTOP_SCENE_CONTRACT_VERSION,
+        sceneId: 'scene:window-1:workspace-1',
+        windowId: 'window-1',
+        revision: 1,
+        context: {
+          kind: 'agent',
+          agentViewId: 'view-1',
+          scope: {
+            kind: 'workspace',
+            workspaceId: project.workspaceId,
+            workspaceGrantId: 'workspace-grant-1',
+          },
+        },
+        slots: {
+          interaction: {
+            kind: 'agent',
+            agentViewId: 'view-1',
+            phase: 'draft',
+            scope: {
+              kind: 'workspace',
+              workspaceId: project.workspaceId,
+              workspaceGrantId: 'workspace-grant-1',
+            },
+          },
+          main: {
+            kind: 'workspace-main',
+            workspaceId: project.workspaceId,
+            viewId: activeViewId,
+            viewEpoch: 1,
+          },
+          timeline: {
+            kind: 'workspace-timeline',
+            workspaceId: project.workspaceId,
+            viewId: 'cut:view-1:story',
+            viewEpoch: 1,
+            ownerId: 'cut-session:story',
+          },
+          status: {
+            kind: 'scene-status',
+            sceneId: 'scene:window-1:workspace-1',
+          },
+        },
+      }),
+      applicationSidebar: createDefaultDesktopApplicationSidebar('window-1'),
     },
     agentHome: {
       revision: 0,

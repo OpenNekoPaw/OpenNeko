@@ -1,66 +1,5 @@
 import { useTranslation } from '@neko/ui/i18n/react';
-import { ResizeHandle, useResizable, type ControlledWorkbenchResizeBinding } from '@neko/ui';
-import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
-import { APPLICATION_PRIMARY_SIDEBAR_DEFAULT_WIDTH } from '@neko/host/desktop-workbench-contract';
-
-export function DesktopApplicationSidebarFrame({
-  children,
-  compact,
-  expandedWidth,
-  resize,
-}: {
-  readonly children: ReactNode;
-  readonly compact: boolean;
-  readonly expandedWidth: number;
-  readonly resize?: ControlledWorkbenchResizeBinding;
-}): JSX.Element {
-  const width = compact ? 64 : expandedWidth;
-  const [liveWidth, setLiveWidth] = useState(width);
-  useEffect(() => {
-    setLiveWidth(width);
-  }, [width]);
-  const resizeState = useResizable<HTMLDivElement>({
-    edge: 'left',
-    mode: 'pixel',
-    size: liveWidth,
-    minSize: resize?.minSize,
-    maxSize: resize?.maxSize,
-    disabled: compact || !resize,
-    onSizeChange: setLiveWidth,
-    onResizeEnd: resize?.onResizeEnd,
-  });
-  const frameStyle: CSSProperties & {
-    '--application-primary-sidebar-expanded-width': string;
-  } = {
-    '--application-primary-sidebar-expanded-width': `${expandedWidth}px`,
-    width: resizeState.size,
-  };
-  return (
-    <div
-      ref={(element) => {
-        resizeState.containerRef.current = element;
-      }}
-      className="application-primary-sidebar-frame"
-      data-primary-sidebar-frame="application"
-      data-primary-sidebar-placement="flush"
-      data-primary-sidebar-default-width={APPLICATION_PRIMARY_SIDEBAR_DEFAULT_WIDTH}
-      data-primary-sidebar-expanded-width={expandedWidth}
-      data-primary-sidebar-hover-reveal={compact ? 'true' : 'false'}
-      data-primary-sidebar-width={resizeState.size}
-      data-resizing={resizeState.isResizing ? 'true' : 'false'}
-      style={frameStyle}
-    >
-      {children}
-      {resize && !compact ? (
-        <ResizeHandle
-          className="neko-controlled-workbench-resize-handle neko-controlled-workbench-resize-handle--right"
-          handleProps={resizeState.handleProps}
-          label={resize.label}
-        />
-      ) : null}
-    </div>
-  );
-}
+import type { ReactNode } from 'react';
 
 export function DesktopApplicationBrand({
   showMark = true,
@@ -76,11 +15,6 @@ export function DesktopApplicationBrand({
   const { t } = useTranslation();
   return (
     <div className="home-brand">
-      {showMark ? (
-        <span className="brand-mark" aria-hidden="true">
-          N
-        </span>
-      ) : null}
       {titleAction ? (
         <button
           type="button"
@@ -89,10 +23,22 @@ export function DesktopApplicationBrand({
           disabled={titleAction.disabled}
           onClick={titleAction.onClick}
         >
+          {showMark ? (
+            <span className="brand-mark" aria-hidden="true">
+              N
+            </span>
+          ) : null}
           <strong>{t('app.name')}</strong>
         </button>
       ) : (
-        <strong>{t('app.name')}</strong>
+        <>
+          {showMark ? (
+            <span className="brand-mark" aria-hidden="true">
+              N
+            </span>
+          ) : null}
+          <strong>{t('app.name')}</strong>
+        </>
       )}
     </div>
   );

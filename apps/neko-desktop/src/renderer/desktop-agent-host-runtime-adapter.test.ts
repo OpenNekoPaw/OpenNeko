@@ -14,6 +14,7 @@ describe('Electron AgentHostRuntimeAdapter', () => {
       bridge: {
         agent: {
           getBootstrap: vi.fn(),
+          getAssistantBootstrap: vi.fn(),
           send,
           subscribe,
         },
@@ -68,6 +69,7 @@ describe('Electron AgentHostRuntimeAdapter', () => {
       bridge: {
         agent: {
           getBootstrap: vi.fn(),
+          getAssistantBootstrap: vi.fn(),
           send: vi.fn(),
           subscribe,
         },
@@ -87,6 +89,7 @@ function bridge() {
   return {
     agent: {
       getBootstrap: vi.fn(),
+      getAssistantBootstrap: vi.fn(),
       send: vi.fn(),
       subscribe: vi.fn(() => vi.fn()),
     },

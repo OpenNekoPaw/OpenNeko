@@ -39,4 +39,35 @@ describe('DesktopApplicationBrand', () => {
     act(() => root.unmount());
     container.remove();
   });
+
+  it('keeps the compact brand mark inside the sidebar action hit target', () => {
+    const onClick = vi.fn();
+    const i18n = createDesktopI18n('en');
+    const container = document.createElement('div');
+    document.body.append(container);
+    const root = createRoot(container);
+    act(() => {
+      root.render(
+        <I18nProvider service={i18n.i18nService}>
+          <DesktopApplicationBrand
+            showMark
+            titleAction={{ label: 'Expand sidebar', onClick }}
+          />
+        </I18nProvider>,
+      );
+    });
+
+    const title = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Expand sidebar"]',
+    );
+    if (!title) throw new Error('Expected the compact OpenNeko title action.');
+    expect(title.querySelector('.brand-mark')?.textContent).toBe('N');
+    expect(container.querySelector('.home-brand > .brand-mark')).toBeNull();
+
+    act(() => title.click());
+    expect(onClick).toHaveBeenCalledOnce();
+
+    act(() => root.unmount());
+    container.remove();
+  });
 });
