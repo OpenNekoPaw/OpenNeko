@@ -83,6 +83,39 @@ describe('projectPiConversationEntries', () => {
       ]),
     ).toThrow('without its assistant tool call');
   });
+
+  it('preserves the persisted Pi diagnostic for an error-only assistant entry', () => {
+    expect(
+      projectPiConversationEntries([
+        messageEntry('assistant-error', 'user-entry', {
+          role: 'assistant',
+          content: [],
+          api: 'openai-completions',
+          provider: 'fixture',
+          model: 'fixture-model',
+          usage: {
+            input: 0,
+            output: 0,
+            cacheRead: 0,
+            cacheWrite: 0,
+            totalTokens: 0,
+            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+          },
+          stopReason: 'error',
+          errorMessage: 'Provider runtime module is unavailable.',
+          timestamp: 20,
+        }),
+      ]),
+    ).toEqual([
+      {
+        id: 'assistant-error',
+        role: 'assistant',
+        content: 'Provider runtime module is unavailable.',
+        timestamp: 20,
+        isError: true,
+      },
+    ]);
+  });
 });
 
 function messageEntry(

@@ -58,6 +58,18 @@ The 9.9 qualification regression rerun added and passed focused path evidence fo
 - restoring bounded Project/Extension management geometry and explicit empty states;
 - deriving Workspace Resource Browser authority from the exact Scene, Agent View, Project and Tab.
 
+The 9.10/9.11 regression rerun added path evidence for:
+
+- atomically restoring a Workspace conversation's Project target, attached Workbench, Scene session
+  phase and exact Agent adapter rather than rendering the session through the previous draft scope;
+- closing the last Workspace Main View while retaining the exact Workspace Agent and Resources,
+  removing only the Scene Main/Timeline refs and continuing renderer-epoch projection;
+- preserving an error-only Pi assistant entry's persisted `errorMessage` in the canonical transcript
+  projection instead of producing a label-only Error card.
+
+Focused commands passed with Host `36 files / 315 tests`, Desktop `3 files / 37 tests`, Agent
+projector `3 / 3`, Desktop and Agent Runtime typechecks, and `git diff --check`.
+
 The final full rerun passed `pnpm build`, `pnpm test`, `pnpm check` and `pnpm check:quality`. The
 updated totals include Preview Webview `16 files / 85 tests`, Agent Webview `90 / 689`, Host
 `36 / 313`, Assets Node `9 / 50` and Desktop `65 / 326`.

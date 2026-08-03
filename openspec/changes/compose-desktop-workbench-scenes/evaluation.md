@@ -1,6 +1,6 @@
 # Agent Evaluation
 
-Date: 2026-08-03
+Date: 2026-08-04
 
 ## Evaluation Scope
 
@@ -70,3 +70,21 @@ supports their public operations and facts:
   restore remain unverified by Evaluation.
 - Key-free success, dry-run selection, mock output or an ordinary Workspace final answer must not be
   described as acceptance for this change.
+
+## Error Diagnostic And Activation Regression Decision
+
+- Workspace conversation activation continues to `reuse`
+  `agent-runtime.workflow-controller/conversation-persistence-resume` for real successful
+  persistence/resume behavior. New Host/AppHost/renderer deterministic path tests additionally prove
+  that Project target, Workbench, Scene session phase and exact adapter identity activate together;
+  the prior Assistant launch adapter cannot render or execute under the restored Workspace scope.
+- Pi error-only transcript presentation is `excluded` from provider-backed Evaluation. The changed
+  function is a pure, strict projection from a persisted Pi assistant entry to one UI Message; it
+  does not select a provider/model, start/retry a turn, route a Tool or mutate session authority.
+  `pnpm --dir packages/agent/runtime exec vitest run
+  src/runtime/projection/__tests__/pi-conversation-history-projector.test.ts` is the authoritative
+  deterministic validation.
+- Canonical path: Pi Session error entry with `stopReason: error` and `errorMessage` ->
+  `projectPiConversationEntries` -> conversation-scoped `Message.isError` -> package-owned Agent
+  error card. Forbidden fallback: empty content, fixed label-only Error, automatic retry, hidden
+  failed turn or Desktop-owned error renderer.
