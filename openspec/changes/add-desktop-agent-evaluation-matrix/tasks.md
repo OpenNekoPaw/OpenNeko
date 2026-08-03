@@ -18,41 +18,52 @@
 - [x] 3.1 Define a fixed typed fixture-only Desktop automation control/facts contract and poison arbitrary IPC, arbitrary command, filesystem, shell, credential and owner-selection paths.
 - [x] 3.2 Extend Desktop functional launch to support hidden and visible modes with unique fixture home, Electron `userData`, Workspace and dynamic control/CDP port while preserving ordinary startup when the fixture flag is absent.
 - [x] 3.3 Implement the Desktop driver adapter that submits, queues, cancels, confirms, resumes and reads projections through the renderer/preload public Agent bridge instead of importing Main or Pi turn APIs.
-- [ ] 3.4 Implement terminal-idle, reload/reconnect, conversation restore, application restart and disposal controls with exact identity, checkpoint, lease and cleanup evidence.
-- [ ] 3.5 Add concurrent two-process isolation tests covering single-instance locking, settings, credentials, SQLite/Pi Session, ports, reports and teardown.
-- [ ] 3.6 Add protected visible Electron cases for Tool approval, Timeline projection, renderer reload/focus and graceful window/application close using the same driver and facts as hidden mode.
+- [x] 3.4 Implement terminal-idle, reload/reconnect, conversation restore, application restart and disposal controls with exact identity, checkpoint, lease and cleanup evidence.
+- [x] 3.5 Add concurrent two-process isolation tests covering single-instance locking, settings, credentials, SQLite/Pi Session, ports, reports and teardown.
+- [x] 3.6 Add protected visible Electron cases for Tool approval, Timeline projection, renderer reload/focus and graceful window/application close using the same driver and facts as hidden mode.
 
 ## 4. Complete-session Evaluation runner
 
 - [x] 4.1 Replace the `runV2Case()` infrastructure-blocked stub with one isolated Desktop sample execution path, retaining the exact blocker when the driver, configuration, credential, provider or required facts are unavailable.
-- [ ] 4.2 Restore deterministic hard-gate, artifact-check, owning-validator, Judge, baseline and report stages around Desktop facts without copying Evaluation outcome logic into Desktop.
-- [ ] 4.3 Restore repeated samples and aggregate reports while retaining every attempt, effective identity, assertion result, artifact, usage/cost availability and residual risk.
-- [ ] 4.4 Implement failure attribution and exit-code handling that keeps configuration-invalid, case-fail, infrastructure-blocked/fail and non-comparable distinct and never retries behavior failure into success.
-- [ ] 4.5 Add canonical positive, unavailable/denied, Tool approval, cancellation and persistence/recovery runner tests with poisoned retired-host/direct-runtime fallbacks.
+- [x] 4.2 Add a thin pure `resolveExecutionCase` step inside the existing runner by reusing strict schema, reference, supported-kind and workflow-state validation; keep the resolved case internal without a compiler service/package, persisted plan, dynamic plugin system or universal UI/Agent DSL.
+- [x] 4.3 Replace the exact single-submit/idle adapter and concrete `scenario.id` whitelist with a common exhaustive workflow interpreter for supported submit/queue/confirm/cancel/resume/feedback/idle operations, preserving exact public-projection identities and fail-visible unsupported steps.
+- [x] 4.4 Replace case-id assertion/media branches with Scenario assertion/evidence references and package-owned validators; ordinary new cases must require only indexed declarative artifacts when existing operations and evidence suffice.
+- [x] 4.5 Restore deterministic hard-gate, artifact-check, owning-validator, Judge, baseline and report stages around Desktop facts without copying Evaluation outcome logic into Desktop.
+- [x] 4.6 Restore repeated samples and aggregate reports while retaining every attempt, effective identity, assertion result, artifact, usage/cost availability and residual risk.
+- [x] 4.7 Implement failure attribution and exit-code handling that keeps configuration-invalid, case-fail, infrastructure-blocked/fail and non-comparable distinct and never retries behavior failure into success.
+- [x] 4.8 Add canonical positive, unavailable/denied, Tool approval, cancellation and persistence/recovery runner tests with poisoned retired-host/direct-runtime fallbacks, plus authoring tests proving Skill-generated drafts cannot register code or bypass unsupported operations.
 
 ## 5. Batch matrix scheduling
 
-- [ ] 5.1 Define strict matrix and stable sample/shard identity contracts for suite, case, configuration, model, build, repetition and evidence level, rejecting unknown or unsupported combinations before launch.
-- [ ] 5.2 Implement deterministic focused/matrix expansion and sharding with duplicate, missing and policy-drift detection.
-- [ ] 5.3 Implement a bounded Worker Pool with separate ordinary text, external Tool, media/GPU/FFmpeg and visible UI resource limits and measured configurable defaults.
-- [ ] 5.4 Prefer one fingerprinted prebuilt Desktop executable per target, keep Vite development launch focused-only and cache immutable implementation builds by verified recipe/executable fingerprint.
-- [ ] 5.5 Implement timeout, repetition, token, cost and provider quota budgets with admission stop, explicit skipped coverage and pre-turn-only infrastructure retry accounting.
-- [ ] 5.6 Aggregate completed shards only after validating immutable inputs, full sample retention and report redaction; make missing/duplicate/drifted shard evidence non-comparable.
+- [x] 5.1 Define strict matrix and stable sample/shard identity contracts for suite, case, configuration, model, build, repetition and evidence level, rejecting unknown or unsupported combinations before launch.
+- [x] 5.2 Implement deterministic focused/matrix expansion and sharding with duplicate, missing and policy-drift detection.
+- [x] 5.3 Implement a bounded Worker Pool with separate ordinary text, external Tool, media/GPU/FFmpeg and visible UI resource limits and measured configurable defaults.
+- [x] 5.4 Prefer one fingerprinted prebuilt Desktop executable per target, keep Vite development launch focused-only and cache immutable implementation builds by verified recipe/executable fingerprint.
+- [x] 5.5 Implement timeout, repetition, token, cost and provider quota budgets with admission stop, explicit skipped coverage and pre-turn-only infrastructure retry accounting.
+- [x] 5.6 Aggregate completed shards only after validating immutable inputs, full sample retention and report redaction; make missing/duplicate/drifted shard evidence non-comparable.
 
 ## 6. Configuration and implementation ablation
 
-- [ ] 6.1 Update configuration ablation to apply only declared product settings and verify requested/effective profiles, per-dimension sources and changed digests from Desktop facts.
-- [ ] 6.2 Reject unsupported Skill/Tool/permission/Prompt switches as configuration variants and route them to owning product-setting work or implementation ablation.
-- [ ] 6.3 Update implementation ablation to prepare isolated Desktop revision/patch/build targets, verify source/recipe/executable fingerprints and execute every target through the same Desktop driver.
-- [ ] 6.4 Freeze and validate comparability contracts across scenario, fixture, provider/model, runtime policy, Prompt/Skill/Tool identity, permission, validators, Judge, budget, sampling and target differences.
-- [ ] 6.5 Randomize comparable baseline/candidate order, blind Judges and holdouts to target identity, retain uncertainty and make protected correctness failures dominate efficiency/quality deltas.
+- [x] 6.1 Update configuration ablation to apply only declared product settings and verify requested/effective profiles, per-dimension sources and changed digests from Desktop facts.
+- [x] 6.2 Reject unsupported Skill/Tool/permission/Prompt switches as configuration variants and route them to owning product-setting work or implementation ablation.
+- [x] 6.3 Update implementation ablation to prepare isolated Desktop revision/patch/build targets, verify source/recipe/executable fingerprints and execute every target through the same Desktop driver.
+- [x] 6.4 Freeze and validate comparability contracts across scenario, fixture, provider/model, runtime policy, Prompt/Skill/Tool identity, permission, validators, Judge, budget, sampling and target differences.
+- [x] 6.5 Randomize comparable baseline/candidate order, blind Judges and holdouts to target identity, retain uncertainty and make protected correctness failures dominate efficiency/quality deltas.
 - [ ] 6.6 Establish new Desktop baselines for migrated pilot plans and prove historical TUI baseline selection is rejected as non-comparable.
+  - Historical TUI baseline selection is covered by the migration ledger and rejection tests. New Desktop baseline approval remains blocked until real provider samples can be produced from the authorized `~/.neko/config.toml`; key-free or infrastructure-blocked samples are deliberately ineligible.
 
 ## 7. Documentation and qualification
 
-- [ ] 7.1 Update `scripts/agent-eval/README.md`, test-case authoring guidance and Desktop functional documentation with evidence levels, driver ownership, matrix/shard/budget usage, configuration versus implementation ablation and TUI migration rules.
-- [ ] 7.2 Run `pnpm test:agent:eval`, all-suite dry-run and focused ablation dry-runs; record suite/case counts and key-free scope without claiming real Agent behavior acceptance.
-- [ ] 7.3 Run focused real Desktop cases for canonical turn, Tool/Skill permission, cancellation and persistence/recovery with configured provider evidence, or record the exact infrastructure blocker.
+- [x] 7.1 Update `scripts/agent-eval/README.md`, test-case authoring guidance, Desktop functional documentation and quality-gate policy with evidence levels, declarative Skill-assisted authoring, thin runner resolution, driver ownership, matrix/shard/budget usage, configuration versus implementation ablation, TUI migration rules and local-only execution boundaries.
+- [x] 7.2 Run `pnpm test:agent:eval`, all-suite dry-run and focused ablation dry-runs; record suite/case counts and key-free scope without claiming real Agent behavior acceptance.
+  - 2026-08-03 key-free evidence: 45 Agent Evaluation test files / 284 tests passed; all-suite dry-run validated 22 suites / 53 cases; thinking-budget and media-production ablation plans completed dry-run only. No provider request, Electron launch or real ablation sample was executed.
+- [x] 7.3 Run focused real Desktop cases for canonical turn, Tool/Skill permission, cancellation and persistence/recovery with configured provider evidence, or record the exact infrastructure blocker.
+  - 2026-08-03 blocker: the user-authorized source is exactly `~/.neko/config.toml` and is available on the qualification host. Credentials remain owned by that product configuration, but the explicit provider/model and cost authorization variables are not set, so execution remains stopped before provider calls, Electron or cost, with no alternate user configuration, JSON/YAML or mock fallback. Key-free tests prove native TOML is validated and copied unchanged into the isolated fixture.
 - [ ] 7.4 Run a repeated hidden Desktop matrix with at least two isolated workers and verify sample/shard aggregation, budgets, no cross-sample state and complete cleanup.
+  - 2026-08-03 preflight evidence: the fingerprinted packaged executable expanded two repetitions with two Desktop/provider workers, retained two attempts and produced a comparable shard aggregate. Both samples stopped before Electron launch at incomplete explicit provider authorization; process/storage isolation and cleanup therefore remain unqualified.
 - [ ] 7.5 Run one configuration and one isolated implementation ablation with new Desktop baselines, matching policies, repeated samples and assertion-level delta evidence.
-- [ ] 7.6 Run protected visible Electron acceptance, `pnpm check:legacy-debt`, `pnpm check:unused`, affected builds/tests and applicable `pnpm ci:local` gates; document unexecuted provider/platform cases and residual risk.
+  - 2026-08-03 blocker: real configuration and implementation variants have the authorized TOML source but still require explicit provider/model and cost authorization, so no provider sample or valid Desktop baseline exists. Historical TUI evidence remains rejected and no synthetic baseline was created.
+- [x] 7.6 Run protected visible Electron acceptance, `pnpm check:legacy-debt`, `pnpm check:unused`, affected builds/tests and applicable `pnpm ci:local` gates; document unexecuted provider/platform cases and residual risk.
+  - `pnpm check:legacy-debt`, `pnpm check:unused`, `pnpm test:agent:eval`, both ablation dry-runs, focused orchestration tests and `pnpm ci:local` passed. `pnpm ci:local` covered format, lint, strict typecheck, production build/package, all workspace tests, architecture/storage/orchestration/OpenSpec gates and proved local Evaluation/UI/API/ablation entrypoints remain CI-unreachable.
+  - Protected visible Electron/provider acceptance was not launched because explicit provider/model and cost authorization are unavailable. macOS arm64 package validation passed; no other platform claims are made.
+- [x] 7.7 Add orchestration regression coverage proving Agent Evaluation, real API, graphical Desktop and all ablation entrypoints remain unreachable from GitHub Actions and generic CI script composition.

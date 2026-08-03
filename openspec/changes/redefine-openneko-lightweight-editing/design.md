@@ -49,7 +49,9 @@ uses authorized native video and bounded PCM; thumbnail/waveform/frame results a
 No file bytes, absolute paths, runtime handles or cache identities cross ordinary IPC.
 
 Export freezes the accepted in-memory document revision and immutable settings into an explicit
-ExportJob. Main owns progress, cancellation, reconciliation, staging, validation and atomic replacement.
+ExportJob. `@neko/cut-node` owns progress, cancellation, reconciliation, staging-plan, validation and
+atomic-publication workflow through injected file/process ports. Desktop Main supplies authorized concrete
+ports, binds sender/window identity, projects status and disposes resources; it does not own ExportJob state.
 Closing or reconstructing the renderer does not cancel a background Job. Shell status selects the exact
 document/job and never falls back to active or recent editors.
 

@@ -1,7 +1,7 @@
 import { lazy, Suspense, useMemo } from 'react';
 import { useTranslation } from '@neko/ui/i18n/react';
-import type { DesktopProjectCatalogItem, DesktopShellProjection } from '../shared/shell-contract';
-import type { DesktopWorkbenchViewRef } from '../shared/workbench-contract';
+import type { DesktopProjectCatalogItem, DesktopShellProjection } from '@neko/host/desktop-shell-contract';
+import type { DesktopWorkbenchViewRef } from '@neko/host/desktop-workbench-contract';
 import { createElectronPreviewHostRuntime } from './desktop-preview-host-runtime';
 
 const PreviewRoot = lazy(async () => {

@@ -67,7 +67,7 @@ describe('Desktop architecture boundaries', () => {
       'vscode',
     ]);
     const composition = readFileSync(
-      path.join(mainRoot, 'desktop-agent-app-host-composition.ts'),
+      path.join(sourceRoot, '../../../packages/agent/runtime/src/application/agent-app-host.ts'),
       'utf8',
     );
 
@@ -84,7 +84,7 @@ describe('Desktop architecture boundaries', () => {
     const mainRoot = path.join(sourceRoot, 'main');
     const application = readFileSync(path.join(mainRoot, 'index.ts'), 'utf8');
     const credentialRuntime = readFileSync(
-      path.join(mainRoot, 'desktop-agent-credential-runtime.ts'),
+      path.join(sourceRoot, '../../../packages/agent/runtime/src/pi/credential-runtime.ts'),
       'utf8',
     );
     const authPrompt = readFileSync(path.join(mainRoot, 'macos-protected-auth-prompt.ts'), 'utf8');

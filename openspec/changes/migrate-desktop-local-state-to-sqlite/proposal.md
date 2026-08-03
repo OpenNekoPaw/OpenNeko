@@ -1,6 +1,6 @@
 ## Why
 
-Desktop shell state and application settings are durable machine-local structured state, but they
+Desktop shell state and application settings are UI-managed machine-local application state, but they
 currently use separate whole-file JSON repositories under Electron `userData/state`. OpenNeko
 already has one user-level SQLite authority for structured local metadata, transactions, migrations,
 backup, and integrity checks. Keeping these two stores outside that authority duplicates durability
@@ -22,8 +22,12 @@ combining them with link recovery would blur responsibilities and create an unsa
   release rollback requires it.
 - Remove normal dual-read and dual-write behavior after migration; an unknown schema, conflict, or
   failed transaction remains visible and leaves the legacy source untouched.
-- Keep workspace identity, project facts, journals/logs, media/artifact bytes, and credentials with
-  their current owners.
+- Apply the repository-wide local-storage admission policy: only these application-owned settings and
+  operational shell values enter SQLite; file format alone never makes other JSON/TOML/Markdown data
+  eligible.
+- Keep portable/user-managed Agent configuration, conversation content, explicit memory, workspace
+  identity and project facts, journals/logs, media/artifact bytes, and credentials with their distinct
+  owners.
 
 ## Capabilities
 
@@ -32,9 +36,15 @@ combining them with link recovery would blur responsibilities and create an unsa
 - `desktop-local-state-sqlite-migration`: Transactional migration and rollback of Desktop shell state
   and application preferences into the existing user-level local metadata store.
 
+### Modified Capabilities
+
+<!-- None. The change consumes `local-storage-authority-policy` from the dedicated governance change. -->
+
 ## Impact
 
-- Desktop Main shell-state and application-settings repository composition.
-- User-level local metadata schema, migration ledger, backup, and integrity checks.
+- `@neko/host`: shell-state and application-settings contracts/services.
+- `@neko/local-metadata`: SQLite repositories, schema, migration ledger, transactional legacy-import
+  and downgrade-export workflow through injected file/archive ports.
+- Desktop Main: Electron `userData` path/native file adapters, startup wiring and diagnostics only.
 - Desktop startup/restart behavior and release rollback tooling.
 - Focused migration, crash-recovery, downgrade-export, and real Electron startup validation.

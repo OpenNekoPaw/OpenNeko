@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import * as fs from 'node:fs/promises';
 import { dirname, relative, resolve, sep } from 'node:path';
+import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 import {
   createConfigurationAblationDryRun,
@@ -12,6 +13,7 @@ import {
 } from './implementation-runner.mjs';
 import { validateAblationPlan } from '../schemas/ablation-contracts.mjs';
 import { discoverSuites, selectSuiteCases } from '../suites/discovery.mjs';
+import { withCanonicalUserConfiguration } from '../runner/user-configuration.mjs';
 
 const SCRIPT_PATH = fileURLToPath(import.meta.url);
 const ABLATION_ROOT = dirname(SCRIPT_PATH);
@@ -42,7 +44,7 @@ export async function main(argv = process.argv.slice(2), io = defaultIo()) {
       discovered,
       repositoryRoot: REPOSITORY_ROOT,
       workspaceParent: args.workspaceParent,
-      env: io.env,
+      env: withCanonicalUserConfiguration(io.env),
     };
     const result =
       plan.mode === 'configuration'

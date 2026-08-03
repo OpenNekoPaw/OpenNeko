@@ -1,14 +1,9 @@
-import { mkdtemp, rm, stat } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-
 import { createProvider, type OAuthCredential } from '@earendil-works/pi-ai';
 import { builtinProviders } from '@earendil-works/pi-ai/providers/all';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
   InMemoryUserCredentialPersistence,
-  NodeSqliteUserCredentialPersistence,
   OpenNekoCredentialStore,
   PiProviderAuthController,
   parsePersistedUserCredential,
@@ -53,31 +48,7 @@ describe('OpenNekoCredentialStore', () => {
     }
   });
 
-  it('persists one user-global credential view across Host connections', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'neko-pi-credentials-'));
-    const tuiPersistence = NodeSqliteUserCredentialPersistence.open({ userDataRoot: root });
-    const tui = new OpenNekoCredentialStore(tuiPersistence, () => 1_800_000_000_000);
-    await tui.replace('newapi', { type: 'api_key', key: 'shared-secret' }, 'user-config-import');
-    tui.dispose();
-
-    const vscodePersistence = NodeSqliteUserCredentialPersistence.open({
-      userDataRoot: root,
-    });
-    const vscode = new OpenNekoCredentialStore(vscodePersistence);
-    await expect(vscode.read('newapi')).resolves.toEqual({
-      type: 'api_key',
-      key: 'shared-secret',
-    });
-    await expect(vscode.status('newapi')).resolves.toMatchObject({
-      provenance: 'user-config-import',
-      fingerprint: expect.stringMatching(/^[0-9a-f]{16}$/),
-    });
-    expect((await stat(join(root, 'agent', 'pi', 'credentials.sqlite'))).mode & 0o777).toBe(0o600);
-    vscode.dispose();
-    await rm(root, { recursive: true, force: true });
-  });
-
-  it('shares one program-level durable view across Desktop runtime consumers', async () => {
+  it('shares one program-level Host-secret view across Desktop runtime consumers', async () => {
     const persistence = new InMemoryUserCredentialPersistence();
     const programStore = new OpenNekoCredentialStore(persistence, () => 1_800_000_000_000);
     const tuiConsumer = programStore;

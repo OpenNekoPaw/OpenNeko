@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  compareRunPolicies,
-  metricDelta,
-  projectAggregateMetrics,
-} from './variant-delta.mjs';
+import { compareRunPolicies, metricDelta, projectAggregateMetrics } from './variant-delta.mjs';
 
 function aggregate(overrides = {}) {
   return {
@@ -121,5 +117,48 @@ describe('ablation content-quality projection', () => {
         run('variant-output-hash', 'different-judge-model'),
       ),
     ).toContain('content-quality Judge policy differs');
+  });
+
+  it('detects prompt, permission, validator and budget policy drift', () => {
+    const sample = (overrides = {}) => ({
+      result: {
+        target: { kind: 'runtime', id: 'target' },
+        repositoryRevision: 'revision',
+        fixtureDigest: 'fixture',
+        modelIdentity: { providerId: 'provider', modelId: 'model' },
+        effectiveConfiguration: { runtimeProfileId: 'runtime', modelProfileId: 'model-profile' },
+        assertions: [{ id: 'path' }],
+      },
+      comparisonPolicyEvidence: {
+        scenario: { id: 'case' },
+        prompts: [{ id: 'submit', prompt: 'same' }],
+        skills: [],
+        tools: [{ name: 'Write', status: 'success' }],
+        permissions: [{ toolName: 'Write', approved: true }],
+        validators: [{ id: 'artifact', validatorId: 'json-document-v1' }],
+        budget: { timeoutMs: 1000, repetitions: 2 },
+        ...overrides,
+      },
+    });
+    const baseline = { samples: [sample()] };
+    const current = {
+      samples: [
+        sample({
+          prompts: [{ id: 'submit', prompt: 'drift' }],
+          permissions: [{ toolName: 'Write', approved: false }],
+          validators: [{ id: 'artifact', validatorId: 'other' }],
+          budget: { timeoutMs: 2000, repetitions: 2 },
+        }),
+      ],
+    };
+
+    expect(compareRunPolicies(baseline, current)).toEqual(
+      expect.arrayContaining([
+        'prompt policy differs',
+        'permission policy differs',
+        'validator policy differs',
+        'budget and sampling policy differs',
+      ]),
+    );
   });
 });

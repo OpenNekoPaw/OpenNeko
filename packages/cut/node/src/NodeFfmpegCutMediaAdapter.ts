@@ -968,11 +968,12 @@ export class NodeFfmpegCutMediaAdapter implements CutMediaRuntimeAdapter {
         audioFilters.push(`[${input.inputIndex}:a:0]${clipFilters.join(',')}[${label}]`);
         audioLabels.push(`[${label}]`);
       }
-      if (audioLabels.length === 1) {
-        audioFilters.push(`${audioLabels[0]}atrim=duration=${decimal(playbackEnd)}[amaster]`);
-      } else if (audioLabels.length > 1) {
+      if (audioLabels.length > 0) {
         audioFilters.push(
-          `${audioLabels.join('')}amix=inputs=${audioLabels.length}:duration=longest:normalize=0,atrim=duration=${decimal(playbackEnd)}[amaster]`,
+          `anullsrc=r=${settings.audioSampleRate}:cl=stereo:d=${decimal(playbackEnd)}[asilence]`,
+        );
+        audioFilters.push(
+          `[asilence]${audioLabels.join('')}amix=inputs=${audioLabels.length + 1}:duration=longest:normalize=0,atrim=duration=${decimal(playbackEnd)}[amaster]`,
         );
       }
     }
@@ -1511,7 +1512,7 @@ function readFiniteLoudnessValue(value: Readonly<Record<string, unknown>>, key: 
   const parsed =
     typeof raw === 'number' ? raw : typeof raw === 'string' ? Number.parseFloat(raw) : Number.NaN;
   if (!Number.isFinite(parsed)) {
-    throw new Error(`FFmpeg loudnorm measurement ${key} is not finite.`);
+    throw new Error(`FFmpeg loudnorm measurement ${key} is not finite: ${JSON.stringify(value)}.`);
   }
   return parsed;
 }

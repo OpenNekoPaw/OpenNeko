@@ -77,6 +77,21 @@ describe('Agent Evaluation local-only boundary', () => {
       'node scripts/agent-eval/local-run.mjs',
       'real provider-backed Evaluation must retain one explicit local command',
     );
+    assert.equal(
+      scripts['test:local:agent:ablation:thinking'],
+      'node scripts/agent-eval/ablation/run.mjs --plan thinking-budget',
+      'thinking-budget ablation must retain one explicit local command',
+    );
+    assert.equal(
+      scripts['test:local:agent:ablation:media-production'],
+      'node scripts/agent-eval/ablation/run.mjs --plan media-production-guidance',
+      'media-production ablation must retain one explicit local command',
+    );
+    assert.match(
+      scripts['test:local:agent:ablation:dry-run'],
+      /ablation\/run\.mjs.+--dry-run.+ablation\/run\.mjs.+--dry-run/u,
+      'ablation manifest validation must remain explicitly local-only',
+    );
     assert.equal((await stat('scripts/agent-eval/local-run.mjs')).isFile(), true);
   });
 });

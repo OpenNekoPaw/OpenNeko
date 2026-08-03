@@ -13,10 +13,11 @@ OpenNeko 自己维护真实插件，并让安装后的 portable Skill/MCP contri
    metadata 与 contribution locator；
 3. Pi SkillHost 拥有 Skill discovery、fingerprint、selection 与 read receipt；
 4. `MCPManager`、MCP Tool wrapper 与 Pi Tool projection 拥有 MCP 连接和调用；
-5. Desktop Main 的 Agent support policy 组合 Pi SkillHost 与 OpenNeko MCP parser，拥有可安装
-   插件的产品兼容性判定；
-6. Desktop Main 拥有 marketplace snapshot、Host path、contained atomic install/remove、
-   runtime generation 和 typed IPC；
+5. `@neko/agent-runtime/extensions` 的 support policy 组合 Pi SkillHost 与 OpenNeko MCP parser，拥有
+   可安装插件的产品兼容性判定；
+6. `@neko/agent-runtime/extensions` 拥有 catalog、contained atomic install/remove workflow、runtime
+   generation 和 operation state；Desktop Main 只拥有 marketplace snapshot/install-root、文件/进程/
+   credential concrete adapter、typed IPC、composition 与 disposal；
 7. Renderer 只拥有搜索、固定内容创作优先排序、operation 状态、确认与本地化展示。
 
 公共能力与复用审计结论：
@@ -69,13 +70,14 @@ OpenNeko 自己维护真实插件，并让安装后的 portable Skill/MCP contri
 
 ### 2. OpenNeko repository 是唯一 inventory/mutation authority
 
-Desktop Main 通过注入的 repository port 读取 versioned OpenNeko marketplace snapshot，
-并只管理 `${NEKO_HOME}/extensions/plugins` 下的 installed package。首阶段 snapshot 位于公开
+Agent extension application service 通过注入的 repository/file ports 读取 versioned OpenNeko
+marketplace snapshot，并只管理 `${NEKO_HOME}/extensions/plugins` 下的 installed package。Desktop
+Main 解析实际 app path 并注入受限 adapter，不解释 manifest 或决定 mutation。首阶段 snapshot 位于公开
 `OpenNekoPaw/OpenNeko` 仓库并随 Desktop 打包，因此不需要 registry 服务，也不依赖用户
 机器上的 Codex/OpenAI marketplace。未来远程 Git snapshot 只能替换 repository port，不能
 改变安装根、package contract、trust 或 Pi runtime owner。
 
-available 项必须再经过 Desktop 注入的 Agent support policy：
+available 项必须再经过 Agent runtime 拥有的 support policy：
 
 - Skill contribution 必须能被 Pi SkillHost 发现且没有 diagnostic/warning；
 - MCP contribution 必须至少包含一个 OpenNeko 当前支持且通过 containment/auth 校验的
@@ -95,7 +97,7 @@ mutation 后重新读取 catalog，再更新 Agent runtime。
 
 ### 3. 插件 runtime generation
 
-Desktop AppHost 拥有一个当前 plugin generation：
+Agent runtime extension service 拥有一个当前 plugin generation：
 
 - verified plugin Skill roots；
 - 已连接 MCP manager 和动态发现的 MCP Tool；
@@ -106,8 +108,9 @@ Desktop AppHost 拥有一个当前 plugin generation：
 workspace unregister 旧 plugin Tool、register 新 Tool，然后旧 MCP manager 显式 dispose。构建
 失败保留旧 generation并返回明确 diagnostic；不回退 manifest-only success。
 
-MCP stdio `cwd`、相对 command、允许继承的 env 名称和 timeout 在 Main 内解析。HTTP bearer
-env 可以复用现有 secret environment；OAuth 尚无 owner，标记 unsupported。MCP Server id 冲突
+MCP stdio `cwd`、相对 command、允许继承的 env 名称和 timeout 由 Agent extension service 解析并
+通过受限 process/env port 执行。HTTP bearer credential 通过 Desktop 注入的 secret adapter 解析；
+OAuth 尚无 owner，标记 unsupported。MCP Server id 冲突
 或 Tool name 冲突使对应 plugin 不进入 ready generation。
 
 ### 4. Skill source 与管理
@@ -120,8 +123,9 @@ env 可以复用现有 secret environment；OAuth 尚无 owner，标记 unsuppor
 Skill fingerprint、locator 和 read receipt 继续由 Pi SkillHost 计算；manifest metadata 不能
 代替 Skill receipt。
 
-personal Skill 安装由 Desktop 选择本地目录，在临时 staging 内进行 containment、symlink、
-大小和 Pi discovery 校验，再原子写入 `~/.agents/skills/<name>`。已存在目标 fail-visible。
+personal Skill 安装由 Desktop native picker 返回授权来源，Agent extension service 在临时 staging
+内进行 containment、symlink、大小和 Pi discovery 校验，再经注入 file port 原子写入
+`~/.agents/skills/<name>`。已存在目标 fail-visible。
 移除只接受 Main 重新解析出的 opaque management id，并移动到系统废纸篓。builtin 与 plugin
 Skill 不提供单独移除。
 

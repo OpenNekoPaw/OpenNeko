@@ -20,31 +20,25 @@ import {
   createDesktopConversationDeleteRequest,
   createDesktopProjectOpenRequest,
   createDesktopWindowMutationRequest,
-} from '../shared/shell-contract';
+} from '@neko/host/desktop-shell-contract';
 import { DesktopAppHost } from './app-host';
-import type {
-  DesktopAgentAppHostComposition,
-  DesktopAgentWorkspaceRuntime,
-} from './desktop-agent-app-host-composition';
-import { createDesktopAgentCredentialRuntime } from './desktop-agent-credential-runtime';
+import type { AgentAppHost, AgentWorkspaceRuntime } from '@neko/agent-runtime/application';
+import { createAgentCredentialRuntime } from '@neko/agent-runtime/pi';
 import type { DesktopWorkspaceRegistry } from './desktop-workspace-registry';
 import type { AssetWorkspaceResolution } from '@neko/assets-domain/contracts';
 import { createElectronNekoHostPorts } from './electron-host-ports';
 import { DESKTOP_APP_ORIGIN } from './security';
-import { DesktopShellService } from './shell-service';
+import { DesktopShellService } from '@neko/host/desktop-shell-service';
+import { createInMemoryDesktopShellStateRepository } from '@neko/host/testing/desktop-shell-state';
 import {
-  DesktopShellStateRepository,
-  type DesktopShellStateFilePort,
-} from './shell-state-repository';
-import {
-  DesktopApplicationSettingsRepository,
-  type DesktopApplicationSettingsFilePort,
-} from './application-settings-repository';
-import { DesktopApplicationSettingsService } from '@neko/host/application-settings-service';
+  DesktopApplicationSettingsService,
+  type DesktopApplicationSettingsRepositoryPort,
+  type DesktopApplicationSettingsStoredState,
+} from '@neko/host/application-settings-service';
 import type {
-  DesktopExtensionCatalogSnapshot,
-  DesktopExtensionManager,
-} from './desktop-extension-manager';
+  AgentExtensionCatalogSnapshot,
+  AgentExtensionManager,
+} from '@neko/agent-runtime/extensions';
 import type { PersonalSkillManager } from '@neko/agent-runtime/pi';
 
 describe('DesktopAppHost', () => {
@@ -770,13 +764,7 @@ function createShellFixture(applicationInstanceId: string): {
     readonly resolve: ReturnType<typeof vi.fn>;
   };
 } {
-  let content: string | null = null;
-  const file: DesktopShellStateFilePort = {
-    readTextIfExists: async () => content,
-    writeTextAtomic: async (next) => {
-      content = next;
-    },
-  };
+  const repository = createInMemoryDesktopShellStateRepository();
   const registry: DesktopWorkspaceRegistry & {
     readonly resolve: ReturnType<typeof vi.fn>;
   } = {
@@ -789,7 +777,7 @@ function createShellFixture(applicationInstanceId: string): {
     registry,
     service: new DesktopShellService({
       applicationInstanceId,
-      stateRepository: new DesktopShellStateRepository(file),
+      stateRepository: repository,
       workspaceRegistry: registry,
       startupTarget: 'restore',
       createIdentity: () => 'window-1',
@@ -844,11 +832,11 @@ async function createShellAppHost(options?: {
   };
 }
 
-function createExtensionManager(): DesktopExtensionManager & {
-  readonly readCatalog: ReturnType<typeof vi.fn<() => Promise<DesktopExtensionCatalogSnapshot>>>;
+function createExtensionManager(): AgentExtensionManager & {
+  readonly readCatalog: ReturnType<typeof vi.fn<() => Promise<AgentExtensionCatalogSnapshot>>>;
 } {
   return {
-    readCatalog: vi.fn<() => Promise<DesktopExtensionCatalogSnapshot>>(async () => ({
+    readCatalog: vi.fn<() => Promise<AgentExtensionCatalogSnapshot>>(async () => ({
       revision: `sha256:${'a'.repeat(64)}`,
       records: [],
       runtimeDescriptors: [],
@@ -870,17 +858,25 @@ function createPersonalSkillManager(): PersonalSkillManager {
 }
 
 function createSettingsService(): DesktopApplicationSettingsService {
-  let content: string | null = null;
-  const file: DesktopApplicationSettingsFilePort = {
-    readTextIfExists: async () => content,
-    writeTextAtomic: async (next) => {
-      content = next;
+  let state: DesktopApplicationSettingsStoredState = {
+    schemaVersion: 2,
+    storageRevision: 0,
+    preferences: DEFAULT_DESKTOP_APPLICATION_PREFERENCES,
+  };
+  const repository: DesktopApplicationSettingsRepositoryPort = {
+    read: async () => state,
+    commit: async (expectedRevision, next) => {
+      if (state.storageRevision !== expectedRevision) {
+        throw new Error('Fixture settings revision is stale.');
+      }
+      state = next;
+      return state;
     },
   };
-  return new DesktopApplicationSettingsService(new DesktopApplicationSettingsRepository(file));
+  return new DesktopApplicationSettingsService(repository);
 }
 
-function createAgentComposition(): DesktopAgentAppHostComposition & {
+function createAgentComposition(): AgentAppHost & {
   readonly attachWorkspace: ReturnType<typeof vi.fn>;
   readonly setHomeWorkspaceScope: ReturnType<typeof vi.fn>;
   readonly getWorkspace: ReturnType<typeof vi.fn>;
@@ -888,7 +884,7 @@ function createAgentComposition(): DesktopAgentAppHostComposition & {
   readonly readHomeProjection: ReturnType<typeof vi.fn>;
   readonly dispose: ReturnType<typeof vi.fn>;
 } {
-  const credentialRuntime = createDesktopAgentCredentialRuntime({
+  const credentialRuntime = createAgentCredentialRuntime({
     secrets: {
       get: async () => undefined,
       set: async () => undefined,
@@ -924,7 +920,7 @@ function createAgentComposition(): DesktopAgentAppHostComposition & {
   };
 }
 
-function createAgentWorkspaceRuntime(workspaceId: string): DesktopAgentWorkspaceRuntime {
+function createAgentWorkspaceRuntime(workspaceId: string): AgentWorkspaceRuntime {
   const unavailable = async (): Promise<never> => {
     throw new Error('Agent workspace runtime operation is not expected by this AppHost test.');
   };

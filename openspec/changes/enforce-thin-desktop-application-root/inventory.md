@@ -7,7 +7,7 @@
 | 范围              | 完成结果                                                                                                                               | Canonical owner / 处置                                  |
 | ----------------- | -------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
 | Workspace         | 32 个源码 package 全部由 role catalog 自动发现，`architectureState` 均为 `converged`                                                   | `quality/package-roles.json`                            |
-| Desktop `D` 项    | 业务 ownership 清零；旧 service 路径已删除，保留的同名 contract/bridge 仅定义 Desktop channel、sender identity 与 transport projection | Agent/Host、Canvas、Assets、Entity、Generation、Preview |
+| Desktop 独立 `D` 项 | Agent、Extension、Cut、Preview、Shell/settings 已下沉；本轮明确排除的 creative-document 与 Assets/Entity/Media Library 仍由各自 change 管理 | Agent runtime、Host、Cut、Preview、Content 等 owner |
 | Shared            | 只保留 `.`、`core`、`errors`、`job-lifecycle`、`logger`、`path`                                                                        | UI、AI、Local Metadata 和各领域 owner 接收其余职责      |
 | Platform          | package、alias、依赖、源码与成功路径全部删除                                                                                           | Host settings、AI contracts/SDK、Generation、Content    |
 | Tools/TUI/VS Code | 未形成当前 Desktop 产品闭包，已退役而非保留空 capability                                                                               | 无自动发现、命令或 fallback                             |
@@ -15,8 +15,10 @@
 
 ### User data disposition
 
-- Application settings 继续使用 Desktop 原子文件 repository；Host contract/service 保留 revision 与 schema
-  语义，provider secret 仍只经加密 credential port，不写入 projection、报告或测试 fixture。
+- Application settings 与 Shell state 已由 `@neko/host` contract/service 管理，并通过
+  `@neko/local-metadata` repository 写入 canonical `~/.neko/neko.db`；Desktop 只负责迁移期旧文件
+  adapter、启动 wiring 与 native theme/window projection。Provider secret 仍只经加密 credential port，
+  不写入 projection、报告或测试 fixture。
 - Workspace/project locator、`.nkc`、Media Library link 和可移植引用不因代码移动而改写；非法绝对路径、
   未知 schema 与旧 runtime handle 继续 fail-visible。
 - SQLite/local metadata 使用唯一全局数据库与明确 workspace identity。valuable local state 采用显式迁移，
@@ -49,6 +51,19 @@
   preservation、migration、rebuild 与 deliberate rejection 语义见上节；所有 migration 入口均与正常运行
   canonical path 分离并保持 fail-visible。
 
+### Remaining mixed-runtime convergence
+
+| Current Desktop module | Package owner / focused change | Business responsibility that must leave apps | Desktop responsibility retained |
+| --- | --- | --- | --- |
+| Agent composition adapters in `app-host.ts` / `index.ts` | `@neko/agent-runtime`; `integrate-desktop-agent-home`, `adopt-pi-agent-runtime`, `clarify-desktop-capability-catalog` | **已迁移：** conversation/session authority、turn lifecycle、credential interaction、catalog/install/generation planning | credential/native port binding、sender-bound IPC、construction and disposal |
+| `desktop-cut-runtime.ts` | `@neko/cut-domain` / `@neko/cut-node`; `redefine-openneko-lightweight-editing` | **已迁移：** document session、command routing、preview/export lifecycle、revision/conflict policy | authorized file/resource/process adapters and Workbench projection |
+| `desktop-preview-runtime.ts` | `@neko/preview-domain`; `integrate-desktop-cut-preview-media` | **已迁移：** Preview session registry/state transition and lifecycle | sender/path authorization、exact-resource registration and View projection |
+| Host shell/settings composition in `index.ts` | `@neko/host`, `@neko/local-metadata`; `migrate-desktop-local-state-to-sqlite` | **已迁移：** contract、codec、revision/CAS、repository schema、migration/downgrade workflow | Electron paths、authorized retired-JSON adapter、startup sequencing、native theme/window projection |
+| creative-document create/import/trash coordinator | `@neko/content/project-file-io`; `manage-desktop-creative-documents` | document transaction, plan/CAS, owner coordination and failure recovery | sender/path authorization, native picker/trash adapters and Workbench projection |
+
+Canvas/Assets/Entity/Media Library convergence remains owned by their separately scoped changes and is not
+claimed complete by this audit.
+
 ## Migration baseline
 
 以下清单覆盖迁移前 `apps/neko-desktop/src/{main,preload,renderer,shared}` 的全部 96 个生产 TypeScript
@@ -65,8 +80,8 @@
 | 分类 | 生产模块                                                                                                                                                                                                                                                                                                                                                                                                      | 当前职责与结论                                                                                                                                                                        |
 | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | A    | `app-host.ts`, `index.ts`, `ipc.ts`, `security.ts`, `window-lifecycle.ts`, `window-registry.ts`, `renderer-asset-path.ts`, `renderer-recovery.ts`, `desktop-openneko-protocol.ts`, `desktop-resource-registry.ts`, `desktop-functional-fixture.ts`, `desktop-openneko-qualification.ts`                                                                                                                       | Electron 启动、窗口、typed IPC、CSP/protocol、exact-resource registry、fixture/qualification；属于 executable/trust boundary，可保留，但 IPC handler 必须只委托 public package port。 |
-| S    | `desktop-agent-app-host-composition.ts`, `desktop-agent-controller-composition.ts`, `desktop-agent-bridge-runtime.ts`, `desktop-extension-manager.ts`, `desktop-plugin-runtime.ts`, `shell-service.ts`                                                                                                                                                                                                        | 产品组合、Agent/extension/plugin 注册和 shell orchestration；只允许构造、绑定、路由和释放。现有大模块需在各领域迁移后复审，禁止保留领域决策。                                         |
-| H    | `application-settings-repository.ts`, `desktop-agent-credential-runtime.ts`, `desktop-builtin-skill-root.ts`, `desktop-content-locator.ts`, `desktop-global-asset-files.ts`, `desktop-global-media-library-files.ts`, `desktop-native-theme.ts`, `desktop-workspace-registry.ts`, `electron-host-ports.ts`, `encrypted-desktop-secret-port.ts`, `macos-protected-auth-prompt.ts`, `shell-state-repository.ts` | 文件、凭据、OS prompt、theme、workspace 和 shell persistence 的 concrete adapter。Repository 可留在 Desktop；schema/policy/use case 必须由 owner contract 驱动。                      |
+| S    | `desktop-agent-bridge-runtime.ts`                                                                                                                                                                                                                                                                                                              | 产品组合与 Agent bridge projection；只允许构造、绑定、路由和释放。Agent/extension/plugin 与 Shell 业务 owner 已迁出。                                                              |
+| H    | `desktop-builtin-skill-root.ts`, `desktop-content-locator.ts`, `desktop-global-asset-files.ts`, `desktop-global-media-library-files.ts`, `desktop-native-theme.ts`, `desktop-workspace-registry.ts`, `electron-host-ports.ts`, `encrypted-desktop-secret-port.ts`, `macos-protected-auth-prompt.ts`, `desktop-state-migration-adapter.ts`                                                                    | 文件、凭据、OS prompt、theme、workspace 与 retired-JSON migration concrete adapter；schema/policy/use case 由 package owner contract 驱动。                                           |
 | H    | `desktop-canvas-generation-runtime.ts`, `desktop-canvas-media-runtime.ts`, `desktop-canvas-runtime.ts`, `desktop-cut-runtime.ts`, `desktop-preview-runtime.ts`                                                                                                                                                                                                                                                | 当前把 package runtime 与 Electron resource/IPC 绑定；迁移后只保留 sender/path 授权、package port 调用、descriptor 投影和释放。                                                       |
 | D    | `application-settings-service.ts`                                                                                                                                                                                                                                                                                                                                                                             | 同时决定配置解析、有效值与产品设置行为；目标为 Agent/Host settings application owner，Desktop 只保留 repository/credential adapter。                                                  |
 | D    | `desktop-agent-content-effects.ts`, `desktop-agent-facts.ts`, `desktop-agent-facts-projector.ts`, `desktop-agent-resource-display-projector.ts`, `desktop-personal-skill-manager.ts`                                                                                                                                                                                                                          | Agent effect、facts/projection、resource display 和 personal Skill lifecycle；目标为 Agent contracts/runtime/content owner，Desktop 只绑定真实 Host effect。                          |

@@ -9,3 +9,5 @@ export * from './migration-planner';
 export * from './user-diagnostic';
 export * from './secret-boundary';
 export * from './storage';
+export * from './versioned-json-state-repository';
+export * from './desktop-state-migration';

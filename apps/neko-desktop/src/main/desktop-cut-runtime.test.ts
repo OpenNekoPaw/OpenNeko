@@ -19,14 +19,14 @@ import { DesktopCutRuntime } from './desktop-cut-runtime';
 import {
   DESKTOP_SHELL_CONTRACT_VERSION,
   type DesktopShellProjection,
-} from '../shared/shell-contract';
+} from '@neko/host/desktop-shell-contract';
 import {
   createDefaultDesktopWorkbenchLayout,
   getActiveMainView,
   openOrFocusMainView,
   setWorkbenchDisplayMode,
   type DesktopWorkbenchLayoutProjection,
-} from '../shared/workbench-contract';
+} from '@neko/host/desktop-workbench-contract';
 
 const roots: string[] = [];
 
@@ -35,6 +35,71 @@ afterEach(async () => {
 });
 
 describe('DesktopCutRuntime', () => {
+  it('creates and appends an explicit workspace OTIO target through the authorized writer', async () => {
+    const workspacePath = await mkdtemp(path.join(tmpdir(), 'openneko-cut-create-'));
+    roots.push(workspacePath);
+    await mkdir(path.join(workspacePath, 'cuts'), { recursive: true });
+    const identity = createIdentity('cuts/new-story.otio');
+    const runtime = createRuntime(workspacePath, identity);
+    const created = await runtime.execute(identity.windowId, {
+      schemaVersion: CUT_HOST_RUNTIME_VERSION,
+      requestId: 'create-request',
+      commandId: 'create-command',
+      route: CUT_HOST_RUNTIME_ROUTES.documentCreate,
+      identity,
+      expectedRevision: 0,
+      payload: {
+        type: 'cut:document-create',
+        name: 'New Story',
+        profile: {
+          profile: '1080p30',
+          editRateNumerator: 30,
+          editRateDenominator: 1,
+          width: 1920,
+          height: 1080,
+        },
+        items: [
+          {
+            kind: 'media',
+            clipId: 'route-clip-1',
+            name: 'Opening',
+            targetUrl: '../media/opening.mp4',
+            durationFrames: 60,
+            rate: 30,
+          },
+        ],
+      },
+    });
+    expect(created.snapshot).toMatchObject({ revision: 1, dirty: false });
+
+    const appended = await runtime.execute(identity.windowId, {
+      schemaVersion: CUT_HOST_RUNTIME_VERSION,
+      requestId: 'append-request',
+      commandId: 'append-command',
+      route: CUT_HOST_RUNTIME_ROUTES.commandExecute,
+      identity,
+      expectedRevision: 1,
+      payload: {
+        type: 'append-route',
+        items: [{ kind: 'gap', durationFrames: 30, rate: 30 }],
+      },
+    });
+    expect(appended.snapshot).toMatchObject({ revision: 2, dirty: true });
+    await runtime.execute(identity.windowId, {
+      schemaVersion: CUT_HOST_RUNTIME_VERSION,
+      requestId: 'save-request',
+      commandId: 'save-command',
+      route: CUT_HOST_RUNTIME_ROUTES.save,
+      identity,
+      expectedRevision: 2,
+    });
+    const persisted = parseOtio(await readFile(path.join(workspacePath, identity.documentId)));
+    expect(persisted).toMatchObject({ ok: true });
+    if (!persisted.ok) throw new Error('Created Desktop Cut target is invalid.');
+    expect(persisted.document.tracks.children[0]?.children).toHaveLength(2);
+    await runtime.dispose();
+  });
+
   it('keeps Chat + Canvas active while binding the lower Timeline to one Cut document', async () => {
     const workspacePath = await realpath(await mkdtemp(path.join(tmpdir(), 'openneko-cut-focus-')));
     roots.push(workspacePath);
@@ -133,6 +198,7 @@ describe('DesktopCutRuntime', () => {
         getProjection: vi.fn(async () => getProjection()),
         updateWorkbench,
         resolveAgentWorkspace: vi.fn(async () => workspace),
+        resolveCutCreationGrant: vi.fn(),
         resolveCutViewGrant: vi.fn(),
       },
       host: createElectronNekoHostPorts({
@@ -694,7 +760,7 @@ describe('DesktopCutRuntime', () => {
     await vi.waitFor(() => expect(stopPcm).toHaveBeenCalledWith('pcm-session-1'));
     const disposeCallsBeforePcmSettled = dispose.mock.calls.length;
     failStopPcm?.();
-    await expect(runtime.dispose()).rejects.toThrow('Desktop Cut sessions could not be disposed.');
+    await expect(runtime.dispose()).rejects.toThrow('Cut sessions could not be disposed.');
     expect(disposeCallsBeforePcmSettled).toBe(0);
     expect(dispose).toHaveBeenCalledOnce();
   });
@@ -956,6 +1022,7 @@ function createRuntime(
       getProjection: vi.fn(),
       updateWorkbench: vi.fn(),
       resolveAgentWorkspace: vi.fn(async () => workspace),
+      resolveCutCreationGrant: vi.fn(async () => ({ identity, workspace })),
       resolveCutViewGrant: vi.fn(async (_windowId, requestedIdentity) => {
         const authoritative = identityAuthority?.current ?? identity;
         if (

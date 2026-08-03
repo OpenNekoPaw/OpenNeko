@@ -61,4 +61,12 @@
 - [x] 7.2 Run full workspace dependency, strict TypeScript, Webview, application, export, manifest, unused-code, legacy-debt, test, and build gates after all package and import migrations.
 - [x] 7.3 Run packaged or development Electron scenarios for affected IPC, window, security, credential, file, SQLite, media, reload, cancellation, and disposal paths using isolated fixture workspaces.
 - [x] 7.4 Verify user project/settings/credential data handling for every moved persistence adapter and document migration, preservation, rebuild, or deliberate rejection semantics.
-- [x] 7.5 Remove temporary role exceptions and migration ledgers, update stable package/application architecture and domain docs, validate OpenSpec strictly, and archive only after the ownership inventory is empty.
+- [x] 7.5 Remove temporary role exceptions, update stable package/application architecture and domain docs, validate OpenSpec strictly, and preserve a truthful residual ownership inventory rather than treating package creation as business migration completion.
+
+## 8. Residual Application Ownership
+
+- [x] 8.1 Re-audit mixed Desktop `S` / `H` runtimes under the current thin-Application rules and record exact package owner, focused change, replaced business responsibility, retained Electron adapter, and verification boundary.
+- [x] 8.2 Close the Agent/Extension focused changes after moving conversation, catalog, install/runtime-generation and related workflow state to `@neko/agent-runtime` public entries and poisoning app-owned behavior.
+- [x] 8.3 Close Cut/Preview focused changes after moving document/session/export/preview lifecycle state to their package owners and reducing Desktop runtimes to authorization, projection and concrete adapters.
+- [ ] 8.4 Close Host settings and creative-document focused changes after moving repository migration and document lifecycle transactions to package-owned services with Desktop delegation tests.
+- [ ] 8.5 Re-run application-boundary, dependency, legacy, unused, build/test and isolated Electron path gates; archive only when every non-excluded residual item is closed or has an explicit separately approved blocker.

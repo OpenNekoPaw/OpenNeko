@@ -4,8 +4,8 @@ import { act, StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { I18nProvider } from '@neko/ui/i18n/react';
-import { createDefaultDesktopWorkbenchLayout } from '../shared/workbench-contract';
-import type { DesktopShellProjection } from '../shared/shell-contract';
+import { createDefaultDesktopWorkbenchLayout } from '@neko/host/desktop-workbench-contract';
+import type { DesktopShellProjection } from '@neko/host/desktop-shell-contract';
 import {
   DEFAULT_DESKTOP_APPLICATION_PREFERENCES,
   DESKTOP_APPLICATION_SETTINGS_CONTRACT_VERSION,

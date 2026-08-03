@@ -114,3 +114,23 @@ application restart where required, and final disposal without bypassing the own
 - **WHEN** a case cancels an explicitly identified active run and waits for complete idle
 - **THEN** the Pi run, continuation queue, Tool/Job projection and durable checkpoint reach an asserted terminal state
 - **AND** application shutdown does not claim success while resources or persistence remain unknown
+
+### Requirement: The Desktop driver exposes operations, not case semantics
+
+The Desktop driver MUST expose fixed typed product-equivalent operations and bounded neutral facts. It MUST NOT own
+suite discovery, Scenario ids, Skill authoring, assertion selection, ablation variants, scores or outcomes. Package-
+specific visible checks MUST remain in owning functional scenarios or validators while reusing the common Desktop
+process and interaction primitives.
+
+#### Scenario: A new workflow case is authored
+
+- **WHEN** the Scenario uses submit, queue, cancel, confirm, resume, idle, reload or disposal operations already
+  supported by the public Desktop path
+- **THEN** the common workflow interpreter invokes the existing driver operations in declared order
+- **AND** the Desktop driver is unchanged and does not branch on the case id
+
+#### Scenario: A new product operation is required
+
+- **WHEN** no current public product operation or neutral fact can express required user behavior or evidence
+- **THEN** the owning product contract is reviewed and minimally extended before the case can execute
+- **AND** Evaluation remains blocked instead of generating direct IPC, DOM inference or a case-specific bypass

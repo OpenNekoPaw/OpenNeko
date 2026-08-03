@@ -116,3 +116,22 @@ that are re-authored for Desktop MAY be reused.
   Desktop users
 - **THEN** the owner creates a new Desktop renderer/visible Scenario with Desktop facts and acceptance evidence
 - **AND** the retired TUI path and score remain historical only
+
+### Requirement: Ablation plans remain declarative and local-only
+
+An ablation experiment MUST be authored as a strict plan that references an indexed Scenario, declared variants and
+existing comparison policy. Creating a new experiment MUST NOT generate a per-plan executable script, modify the
+Scenario runner or move experiment execution into a Skill. Plan validation, dry-run, real provider samples and
+comparison MUST remain explicit local developer operations outside generic CI.
+
+#### Scenario: A new supported ablation is added
+
+- **WHEN** the experiment changes a declared product configuration or an isolated implementation target
+- **THEN** the author adds a plan that reuses the same Scenario resolver, Desktop driver, hard gates and validators
+- **AND** the common ablation runner expands the plan without a plan-specific executable branch
+
+#### Scenario: CI references an ablation plan or dry-run
+
+- **WHEN** generic gate composition or a GitHub Actions workflow is audited
+- **THEN** configuration, implementation and dry-run ablation entrypoints are unreachable
+- **AND** no experiment result or report is produced as CI evidence

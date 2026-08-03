@@ -19,12 +19,14 @@ Electron, and project paths must remain portable workspace-relative locators out
 
 ### Five-layer analysis
 
-- **Responsibility:** Assets owns Resource Browser interaction presentation; Desktop owns sender-bound
-  workspace mutation and cross-owner orchestration; Canvas/Cut own document construction, validation,
-  serialization, dirty state, and session disposal; Workbench owns only View projection.
-- **Dependencies:** Renderer depends on one Desktop creative-document L0 contract and public UI
-  primitives. Desktop Main depends on public Canvas/Cut owner ports, Host workspace/path ports, and an
-  injected Electron trash adapter. No feature package imports another feature package's internals.
+- **Responsibility:** Assets owns Resource Browser interaction presentation;
+  `@neko/content/project-file-io` owns the host-neutral lifecycle transaction and cross-owner
+  orchestration; Canvas/Cut own document construction, validation, serialization, dirty state, and
+  session disposal; Desktop owns sender/path authorization, native adapters and Workbench projection.
+- **Dependencies:** Renderer depends on one package-owned creative-document L0 contract and public UI
+  primitives. The project-file-io application service depends on narrow Canvas/Cut owner, workspace,
+  reference, publication and trash ports. Desktop supplies their Electron implementations without
+  exposing package internals.
 - **Interfaces:** one versioned create/import/open/trash-plan/trash-apply command family carries
   explicit Project/Workspace/Window/endpoint identity, portable target locators, request identity, and
   expected revisions/fingerprints.
@@ -63,12 +65,14 @@ Electron, and project paths must remain portable workspace-relative locators out
 
 ## Decisions
 
-### 1. Desktop owns one creative-document lifecycle coordinator
+### 1. Content project-file-io owns one creative-document lifecycle coordinator
 
-Add a Desktop application-level `CreativeDocumentLifecycleCoordinator` composed from narrow
+Add a host-neutral `CreativeDocumentLifecycleCoordinator` under the public
+`@neko/content/project-file-io` application entry, composed from narrow
 `CanvasDocumentOwner`, `CutDocumentOwner`, workspace authorization, reference inspection, Shell
-projection, and `trashItem(absolutePath)` ports. The coordinator is the only create/import/trash
-executor. Assets and empty Main submit intents; they do not serialize files or update Workbench first.
+projection, publication and `trashItem(absolutePath)` ports. The coordinator is the only
+create/import/trash executor. Desktop binds sender/path identity and supplies concrete ports; Assets
+and empty Main submit intents and do not serialize files or update Workbench first.
 
 The shared contract uses exhaustive document kinds and routes:
 
@@ -108,7 +112,8 @@ Names are NFC-normalized, portable, visible, non-reserved filenames. The Host ap
 extension only when absent, rejects a mismatched extension, and returns a conflict diagnostic if the
 target exists. It does not silently overwrite or choose a suffix for an explicitly named project.
 
-Main writes owner-produced bytes to same-directory staging and publishes exclusively. A publish
+The package application service writes owner-produced bytes through an injected same-directory
+staging/publication port and publishes exclusively. A publish
 failure removes staging and leaves Workbench and the Resource Browser unchanged. Only after
 publication succeeds does Main open/focus the exact document and refresh its Resource Browser
 projection.
@@ -120,7 +125,8 @@ implicit `workspace.nkc` asymmetry.
 ### 3. Import copies only a validated project document
 
 Import is initiated through a sender-bound native file picker restricted to the requested document
-kind. Main requires an external regular non-symlink file, validates bytes through the matching owner,
+kind. Desktop authorizes the returned source; the package service requires an external regular
+non-symlink file through its injected port, validates bytes through the matching owner,
 and copies it through same-directory staging and exclusive publication into an explicit authorized
 workspace directory. Existing workspace documents are opened from Resource Browser rather than
 re-imported.
@@ -194,8 +200,8 @@ when references exist. Missing reference coverage, invalid project documents, ch
 sessions, or active owner tasks reject apply visibly.
 
 After validation, the coordinator marks the operation as deleting, asks the owner to save or discard
-and release all document-scoped preview/media/session resources, calls the injected Electron
-`trashItem`, then removes matching Views across the project's Desktop windows and refreshes Resources.
+and release all document-scoped preview/media/session resources, calls the injected trash port, then
+requests matching View removal and Resource refresh through projection ports.
 Workbench mutation is committed only after trash succeeds. If `trashItem` fails while the file
 remains, Main remounts/reopens the previous Views from the unchanged file and returns a diagnostic.
 

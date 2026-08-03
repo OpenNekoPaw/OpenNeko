@@ -19,8 +19,8 @@ import {
   CANVAS_REGENERATE_ACTION_ID,
 } from '@neko/canvas-domain';
 import { createGlobalMediaLibraryConnection } from '@neko/assets-node';
-import type { DesktopCanvasViewGrant } from './shell-service';
-import { createDefaultDesktopWorkbenchLayout } from '../shared/workbench-contract';
+import type { DesktopCanvasViewGrant } from '@neko/host/desktop-shell-service';
+import { createDefaultDesktopWorkbenchLayout } from '@neko/host/desktop-workbench-contract';
 
 const roots: string[] = [];
 

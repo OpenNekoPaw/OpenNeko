@@ -8,11 +8,11 @@ import {
   DEFAULT_DESKTOP_APPLICATION_PREFERENCES,
   DESKTOP_APPLICATION_SETTINGS_CONTRACT_VERSION,
 } from '@neko/host/application-settings';
-import type { DesktopShellProjection } from '../shared/shell-contract';
+import type { DesktopShellProjection } from '@neko/host/desktop-shell-contract';
 import {
   createDefaultDesktopWorkbenchLayout,
   type DesktopWorkbenchLayoutProjection,
-} from '../shared/workbench-contract';
+} from '@neko/host/desktop-workbench-contract';
 import { DesktopApplicationSettingsProvider } from './application-settings-context';
 import { DesktopShellView } from './DesktopShell';
 import { createDesktopI18n } from './i18n';

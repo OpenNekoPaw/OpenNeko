@@ -7,3 +7,4 @@ export * from './NodeFfmpegCutMediaAdapter';
 export * from './cutExportRequest';
 export * from './export-job';
 export * from './previewSelection';
+export * from './CutApplicationRuntime';

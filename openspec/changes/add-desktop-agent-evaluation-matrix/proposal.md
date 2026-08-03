@@ -22,6 +22,15 @@ Skill、Tool、模型、配置和工作流变更无法获得批量、可重复�
   `AgentSession`、TUI AppPort、自由文本路径替换等成功验收路径。
 - 保持 key-free 校验、artifact validator、Judge、comparison 和报告在外部 Evaluation 平台，Desktop
   只执行真实产品会话并暴露有界、中立 facts。
+- 将测试扩展收敛为声明式 authoring：Skill 只辅助生成或更新 suite/scenario/assertion/ablation plan
+  草案，strict schema 与现有 Evaluation runner 才是执行真相；普通新 case 不生成可执行 JavaScript，
+  不在中央脚本增加 `scenario.id` 白名单或业务分支。
+- 不建设独立编译服务、workspace package 或通用 UI/Agent DSL；在现有 runner 内用薄的
+  `resolveExecutionCase` 复用 schema、引用和状态机校验，再由通用 workflow interpreter 与既有
+  hard-gate/validator 管线执行。只有出现跨进程持久计划、多个真实后端或稳定缓存需求后，才通过
+  后续 OpenSpec 评估提取正式编译模块。
+- 保持 Agent Evaluation harness、真实 provider API、Desktop UI 和所有消融入口为开发者显式本地
+  命令；通用 CI/GitHub Actions 只能验证普通 unit/contract/headless 与“本地入口不可达”编排约束。
 
 ## Capabilities
 
@@ -45,10 +54,11 @@ Skill、Tool、模型、配置和工作流变更无法获得批量、可重复�
 - `scripts/desktop-functional`: 复用进程、fixture、`userData`、CDP/控制端口和脱敏观测基础，但不拥有
   Agent suite、评分或实验语义。
 - `scripts/agent-eval`: 恢复真实 `runV2Case()`、Worker Pool、matrix/shard/budget、Desktop driver adapter、
-  配置/实现消融、comparability、报告和 TUI baseline 迁移。
+  声明式 authoring、薄 case 解析、通用 workflow interpreter、配置/实现消融、comparability、报告和
+  TUI baseline 迁移；不得为每个 case 增加固定 runner/adapter。
 - `packages/agent/runtime` 与 package-owned contracts：仅在现有产品契约缺少通用有效配置或中立
   facts 时扩展最小 host-neutral contract；不得加入 Evaluation suite、score、variant 或 pass/fail 概念。
 - 依赖 `integrate-desktop-agent-home` 的唯一 Agent controller、Pi/session、permission、Tool/Skill 和
   projection 组合；该依赖未完成时真实 case 必须保持 `infrastructure-blocked`。
-- 不恢复 `apps/neko-tui`，不增加直接 runtime/`AgentSession` runner，不把 provider-backed Evaluation
-  或可见 Electron UI 验收加入通用 CI。
+- 不恢复 `apps/neko-tui`，不增加直接 runtime/`AgentSession` runner，不把 Agent Evaluation harness、
+  provider-backed Evaluation、Desktop UI 或消融实验加入通用 CI。

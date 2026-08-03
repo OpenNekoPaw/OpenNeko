@@ -14,6 +14,17 @@ export function createFailureAttribution(input) {
     });
     sources.push({ id, sourceKind: gate.kind ?? gate.id, evidenceRefs: gate.evidenceRefs });
   }
+  for (const check of input.artifactChecks ?? []) {
+    if (check.status === 'pass') continue;
+    const id = `artifact-${check.id}`;
+    observedFailures.push({
+      id,
+      kind: 'artifact-validator',
+      summary: check.message ?? `Artifact validator ${check.id} did not pass.`,
+      evidenceRefs: check.evidenceRefs,
+    });
+    sources.push({ id, sourceKind: check.kind, evidenceRefs: check.evidenceRefs });
+  }
   if (input.executionError) {
     observedFailures.push({
       id: 'execution-failure',
@@ -36,7 +47,23 @@ export function createFailureAttribution(input) {
     });
     sources.push({
       id: 'judge-failure',
-      sourceKind: readErrorCode(input.judgeError) === 'execution' ? 'quality' : readErrorCode(input.judgeError),
+      sourceKind:
+        readErrorCode(input.judgeError) === 'execution'
+          ? 'quality'
+          : readErrorCode(input.judgeError),
+      evidenceRefs: ['judge.result'],
+    });
+  }
+  if (input.judgeFailure) {
+    observedFailures.push({
+      id: 'judge-quality-failure',
+      kind: 'judge-quality',
+      summary: input.judgeFailure.summary,
+      evidenceRefs: ['judge.result'],
+    });
+    sources.push({
+      id: 'judge-quality-failure',
+      sourceKind: 'quality',
       evidenceRefs: ['judge.result'],
     });
   }
@@ -62,30 +89,75 @@ export function createFailureAttribution(input) {
 
 function hypothesize(kind) {
   if (kind === 'skill') {
-    return hypothesis('skill-content', 0.65, 'Skill composition and output delta.', 'Review Skill content and prompt composition evidence.');
+    return hypothesis(
+      'skill-content',
+      0.65,
+      'Skill composition and output delta.',
+      'Review Skill content and prompt composition evidence.',
+    );
   }
   if (kind === 'model') {
-    return hypothesis('routing', 0.75, 'Requested-to-effective routing trace.', 'Review model profile application and provider routing.');
+    return hypothesis(
+      'routing',
+      0.75,
+      'Requested-to-effective routing trace.',
+      'Review model profile application and provider routing.',
+    );
   }
   if (kind === 'tool-call') {
-    return hypothesis('capability-tool', 0.65, 'Owning capability diagnostics and Tool result details.', 'Handoff to the owning Capability/Tool maintainer.');
+    return hypothesis(
+      'capability-tool',
+      0.65,
+      'Owning capability diagnostics and Tool result details.',
+      'Handoff to the owning Capability/Tool maintainer.',
+    );
   }
   if (kind === 'artifact' || kind === 'file') {
-    return hypothesis('artifact-authoring', 0.7, 'Owning artifact validator diagnostics.', 'Review authoring and validator evidence together.');
+    return hypothesis(
+      'artifact-authoring',
+      0.7,
+      'Owning artifact validator diagnostics.',
+      'Review authoring and validator evidence together.',
+    );
   }
   if (kind === 'final-answer' || kind === 'structured-output') {
-    return hypothesis('prompt', 0.4, 'Prompt-versus-model controlled comparison.', 'Compare Prompt and model variants before assigning ownership.');
+    return hypothesis(
+      'prompt',
+      0.4,
+      'Prompt-versus-model controlled comparison.',
+      'Compare Prompt and model variants before assigning ownership.',
+    );
   }
   if (kind === 'judge' || String(kind).startsWith('judge-')) {
-    return hypothesis('evaluation-infrastructure', 0.8, 'Judge provider response and parser diagnostic.', 'Review Judge provider availability and output contract.');
+    return hypothesis(
+      'evaluation-infrastructure',
+      0.8,
+      'Judge provider response and parser diagnostic.',
+      'Review Judge provider availability and output contract.',
+    );
   }
   if (kind === 'quality') {
-    return hypothesis('prompt', 0.35, 'Controlled Prompt, Skill, and model quality comparison.', 'Run a controlled optimization Evaluation before assigning the quality defect.');
+    return hypothesis(
+      'prompt',
+      0.35,
+      'Controlled Prompt, Skill, and model quality comparison.',
+      'Run a controlled optimization Evaluation before assigning the quality defect.',
+    );
   }
   if (String(kind).includes('provider') || String(kind).includes('timeout')) {
-    return hypothesis('provider-infrastructure', 0.7, 'Provider request status and network diagnostic.', 'Retry only after provider infrastructure is healthy.');
+    return hypothesis(
+      'provider-infrastructure',
+      0.7,
+      'Provider request status and network diagnostic.',
+      'Retry only after provider infrastructure is healthy.',
+    );
   }
-  return hypothesis('runtime-session', 0.45, 'Owning runtime trace at the first violated contract.', 'Trace the session/controller path before changing Prompt or Skill content.');
+  return hypothesis(
+    'runtime-session',
+    0.45,
+    'Owning runtime trace at the first violated contract.',
+    'Trace the session/controller path before changing Prompt or Skill content.',
+  );
 }
 
 function hypothesis(owner, confidence, missingEvidence, handoff) {

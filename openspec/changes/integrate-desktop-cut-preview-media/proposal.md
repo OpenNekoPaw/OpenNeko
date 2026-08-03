@@ -6,7 +6,8 @@ Phase 1 program，不再维护旧宿主 adapter 目标。
 
 ## What Changes
 
-- Desktop Main 以 sender-bound identity 组合 Cut/Preview runtime、document/View/session 和 lifecycle。
+- Cut/Preview package public application entries own document/View/session lifecycle；Desktop Main 以
+  sender-bound identity 注入授权 resource/native adapter 并组合、投影和释放 runtime。
 - Renderer 只消费 package-owned Roots 与短生命周期授权 resource descriptors。
 - OTIO、Cut commands、Node/FFmpeg、ExportJob 与 Preview package 保持唯一 authority。
 - demo、全局 bridge、raw path、private scheme、loopback proxy 和 retired-host transport 不能成功。

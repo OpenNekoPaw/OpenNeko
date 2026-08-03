@@ -1,0 +1,143 @@
+{
+  "schema": "neko.agent-eval.scenario.v2",
+  "id": "cut-context-handoff",
+  "suiteId": "agent-runtime.workflow-controller",
+  "caseGroup": "regression",
+  "visibility": "public",
+  "evidenceContract": {
+    "userBehavior": "Send one explicit current Cut Clip selection to an exact Desktop Agent conversation, then ask Agent to acknowledge the attached read-only editing context.",
+    "canonicalPath": [
+      "Cut document/session/revision selection",
+      "shared AgentContextPayload",
+      "exact sender-bound Desktop Agent connection",
+      "public Agent sendMessage bridge",
+      "Agent context message enhancement",
+      "Pi Conversation runtime and Pi Session",
+      "terminal answer"
+    ],
+    "forbiddenFallback": [
+      "active Cut editor inference",
+      "recent Cut editor inference",
+      "legacy executeAIAction",
+      "direct model call from Cut Webview",
+      "direct Pi conversation mutation"
+    ],
+    "observables": [
+      {
+        "ref": "cut-context-facts",
+        "kind": "runtime-fact",
+        "description": "Exact Desktop turn identity, canonical Pi runtime path, Cut context summary in the Timeline, terminal marker, and zero forbidden-path facts.",
+        "required": true
+      }
+    ],
+    "expectedResult": "The exact Cut payload reaches the selected Agent conversation as visible context, participates in the Pi turn, and produces the requested terminal marker without changing the Cut document.",
+    "expectedFailure": "Missing/stale context, wrong conversation identity, target inference, legacy helper participation, runtime diagnostics, or a missing marker fails visibly."
+  },
+  "fixtureRefs": ["empty-workspace"],
+  "runtimeProfileId": "canonical-default",
+  "modelProfileIds": ["configured-default"],
+  "steps": [
+    {
+      "id": "submit-cut-context",
+      "kind": "submit",
+      "prompt": "Read only the attached Cut context. Reply with the selected Clip name and time range, then output CUT_CONTEXT_HANDOFF_OK on its own line.",
+      "contextPayloads": [
+        {
+          "type": "cut-clip",
+          "id": "cut:edits/qualification.otio:track:video-1:clip:clip-motion-a:r7",
+          "label": "Motion A with mixed audio",
+          "summary": "Video Clip “Motion A with mixed audio” at 0.000s–2.000s.",
+          "data": {
+            "schemaVersion": 1,
+            "kind": "cut-clip-selection",
+            "projectId": "project-fixture",
+            "workspaceId": "workspace-fixture",
+            "document": {
+              "locator": {
+                "kind": "workspace-file",
+                "path": "edits/qualification.otio"
+              },
+              "sessionId": "cut-session-fixture",
+              "revision": 7
+            },
+            "selection": {
+              "kind": "clip",
+              "trackId": "video-1",
+              "trackKind": "Video",
+              "clipId": "clip-motion-a",
+              "timeRange": {
+                "startSeconds": 0,
+                "durationSeconds": 2
+              },
+              "media": {
+                "targetUrl": "../media/motion-with-audio.mp4",
+                "sourceStartSeconds": 0,
+                "playbackRate": 1,
+                "enabled": true,
+                "audio": {
+                  "muted": false,
+                  "gain": 1,
+                  "fadeInSeconds": 0,
+                  "fadeOutSeconds": 0
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "idle",
+      "kind": "wait-for-idle",
+      "timeoutMs": 120000
+    }
+  ],
+  "assertions": [
+    {
+      "id": "runtime",
+      "kind": "runtime-errors-empty",
+      "evidenceRef": "cut-context-facts"
+    },
+    {
+      "id": "pi-runtime",
+      "kind": "pi-runtime",
+      "implementation": "pi-agent-core",
+      "transcriptAuthority": "pi-session",
+      "productMetadataAuthority": "sqlite",
+      "purpose": "agent.main",
+      "workspaceLocatorKind": "virtual",
+      "turnDurability": "durable",
+      "evidenceRef": "cut-context-facts"
+    },
+    {
+      "id": "no-target-fallback",
+      "kind": "no-fallback",
+      "forbiddenRefs": [
+        "active-cut-editor",
+        "recent-cut-editor",
+        "executeAIAction",
+        "direct-cut-model-call",
+        "direct-pi-conversation-mutation"
+      ],
+      "evidenceRef": "cut-context-facts"
+    },
+    {
+      "id": "terminal",
+      "kind": "terminal-idle",
+      "concerns": ["turnIdle", "continuationQueueIdle"],
+      "evidenceRef": "cut-context-facts"
+    },
+    {
+      "id": "answer",
+      "kind": "final-answer",
+      "mode": "contains",
+      "text": ["Motion A with mixed audio", "0.000s–2.000s", "CUT_CONTEXT_HANDOFF_OK"],
+      "evidenceRef": "cut-context-facts"
+    }
+  ],
+  "artifactChecks": [],
+  "budget": {
+    "timeoutMs": 120000,
+    "repetitions": 1
+  }
+}

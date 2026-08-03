@@ -9,10 +9,12 @@ import {
   getPreviewMediaType,
   parsePreviewProjection,
   parsePreviewRuntimeRequest,
+  PreviewSessionRegistry,
   type PreviewContentKind,
   type PreviewProjection,
   type PreviewRuntimeRequest,
   type PreviewRuntimeIdentity,
+  type PreviewSessionSnapshot,
   type PreviewViewPresentation,
 } from '@neko/preview-domain';
 import type {
@@ -25,7 +27,7 @@ import {
   findMainGroupForView,
   openOrFocusMainView,
   type DesktopWorkbenchLayoutProjection,
-} from '../shared/workbench-contract';
+} from '@neko/host/desktop-workbench-contract';
 import {
   parseDesktopPreviewBootstrapRequest,
   type DesktopPreviewBootstrapRequest,
@@ -72,18 +74,8 @@ export interface DesktopPreviewRuntimeOptions {
   readonly createIdentity?: () => string;
 }
 
-interface DesktopPreviewSession {
-  identity: PreviewRuntimeIdentity;
-  projection: PreviewProjection;
-}
-
-interface DesktopTransientPreviewSession {
-  readonly windowId: string;
-}
-
 export class DesktopPreviewRuntime {
-  private readonly sessions = new Map<string, DesktopPreviewSession>();
-  private readonly transientSessions = new Map<string, DesktopTransientPreviewSession>();
+  private readonly sessions = new PreviewSessionRegistry();
   private readonly createIdentity: () => string;
   private disposed = false;
 
@@ -194,10 +186,6 @@ export class DesktopPreviewRuntime {
         },
       });
     }
-    this.sessions.set(sessionId, {
-      identity: runtimeIdentity,
-      projection,
-    });
     const currentWorkbench = shellProjection.window.workbench;
     const previewView: DesktopWorkbenchLayoutProjection['main']['views'][number] = {
       viewId,
@@ -222,7 +210,6 @@ export class DesktopPreviewRuntime {
         revision: currentWorkbench.revision + 1,
       };
     } catch (error) {
-      this.sessions.delete(sessionId);
       this.options.resources.releaseSession(sessionId);
       throw error;
     }
@@ -234,15 +221,11 @@ export class DesktopPreviewRuntime {
         currentWorkbench.revision,
         workbench,
       );
-      this.releasePresentationSession(
-        input.identity.windowId,
-        input.identity.projectId,
-        presentation,
-        sessionId,
-      );
+      for (const releasedSessionId of this.sessions.register(projection)) {
+        this.options.resources.releaseSession(releasedSessionId);
+      }
       return projection;
     } catch (error) {
-      this.sessions.delete(sessionId);
       this.options.resources.releaseSession(sessionId);
       throw error;
     }
@@ -302,9 +285,7 @@ export class DesktopPreviewRuntime {
         revision,
       },
     );
-    this.transientSessions.set(previewSessionId, {
-      windowId: input.identity.windowId,
-    });
+    this.sessions.registerTransient(input.identity.windowId, previewSessionId);
     return {
       previewSessionId,
       descriptor: {
@@ -322,12 +303,8 @@ export class DesktopPreviewRuntime {
 
   releaseQuickPreview(windowId: string, previewSessionId: string): void {
     this.requireActive();
-    const session = this.transientSessions.get(previewSessionId);
-    if (!session || session.windowId !== windowId) {
-      throw new Error(`Desktop quick Preview session '${previewSessionId}' is unavailable.`);
-    }
+    this.sessions.releaseTransient(windowId, previewSessionId);
     this.options.resources.releaseSession(previewSessionId);
-    this.transientSessions.delete(previewSessionId);
   }
 
   async getSnapshot(
@@ -336,8 +313,7 @@ export class DesktopPreviewRuntime {
   ): Promise<PreviewProjection> {
     this.requireActive();
     const request = parseDesktopPreviewBootstrapRequest(value);
-    const session = this.sessions.get(request.sessionId);
-    if (!session) throw new Error(`Desktop Preview session '${request.sessionId}' is unavailable.`);
+    const session = this.sessions.read(request.sessionId);
     const projection = await this.options.shell.getProjection(windowId);
     const view = projection.window.workbench.main.views.find(
       (candidate) =>
@@ -375,11 +351,7 @@ export class DesktopPreviewRuntime {
     if (request.identity.windowId !== windowId) {
       throw new Error('Desktop Preview request belongs to another Window.');
     }
-    const session = this.sessions.get(request.identity.sessionId);
-    if (!session) {
-      throw new Error(`Desktop Preview session '${request.identity.sessionId}' is unavailable.`);
-    }
-    assertPreviewRuntimeIdentity(session.identity, request.identity);
+    const session = this.sessions.assertIdentity(request.identity);
     const shellProjection = await this.options.shell.getProjection(windowId);
     const currentWorkbench = shellProjection.window.workbench;
     const view = currentWorkbench.main.views.find(
@@ -406,61 +378,25 @@ export class DesktopPreviewRuntime {
   }
 
   detachWindow(windowId: string): void {
-    for (const [sessionId, session] of this.sessions) {
-      if (session.identity.windowId !== windowId) continue;
+    for (const sessionId of this.sessions.detachWindow(windowId)) {
       this.options.resources.releaseSession(sessionId);
-      this.sessions.delete(sessionId);
-    }
-    for (const [sessionId, session] of this.transientSessions) {
-      if (session.windowId !== windowId) continue;
-      this.options.resources.releaseSession(sessionId);
-      this.transientSessions.delete(sessionId);
     }
   }
 
   reconcileWorkbench(windowId: string, workbench: DesktopWorkbenchLayoutProjection): void {
-    const attachedSessionIds = new Set(
-      workbench.main.views.filter((view) => view.kind === 'preview').map((view) => view.ownerId),
-    );
-    for (const [sessionId, session] of this.sessions) {
-      if (session.identity.windowId !== windowId || attachedSessionIds.has(sessionId)) {
-        continue;
-      }
+    const attachedSessionIds = workbench.main.views
+      .filter((view) => view.kind === 'preview')
+      .map((view) => view.ownerId);
+    for (const sessionId of this.sessions.reconcileWindow(windowId, attachedSessionIds)) {
       this.options.resources.releaseSession(sessionId);
-      this.sessions.delete(sessionId);
     }
   }
 
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
-    for (const sessionId of this.sessions.keys()) {
+    for (const sessionId of this.sessions.dispose()) {
       this.options.resources.releaseSession(sessionId);
-    }
-    this.sessions.clear();
-    for (const sessionId of this.transientSessions.keys()) {
-      this.options.resources.releaseSession(sessionId);
-    }
-    this.transientSessions.clear();
-  }
-
-  private releasePresentationSession(
-    windowId: string,
-    projectId: string,
-    presentation: 'temporary' | 'side',
-    retainedSessionId?: string,
-  ): void {
-    for (const [sessionId, session] of this.sessions) {
-      if (
-        sessionId === retainedSessionId ||
-        session.identity.windowId !== windowId ||
-        session.identity.projectId !== projectId ||
-        session.projection.presentation !== presentation
-      ) {
-        continue;
-      }
-      this.options.resources.releaseSession(sessionId);
-      this.sessions.delete(sessionId);
     }
   }
 
@@ -469,7 +405,7 @@ export class DesktopPreviewRuntime {
   }
 
   private async updatePresentation(
-    session: DesktopPreviewSession,
+    session: PreviewSessionSnapshot,
     shellProjection: DesktopPreviewShellProjection,
     view: DesktopWorkbenchLayoutProjection['main']['views'][number],
     presentation: Exclude<PreviewViewPresentation, 'temporary'>,
@@ -480,16 +416,11 @@ export class DesktopPreviewRuntime {
       session.projection.presentation === 'temporary'
         ? `preview:${view.viewId.split(':')[1] ?? view.viewId}:${session.identity.sessionId}`
         : view.viewId;
-    const nextIdentity: PreviewRuntimeIdentity = {
-      ...session.identity,
-      viewId: nextViewId,
-      revision: session.identity.revision + 1,
-    };
-    const nextProjection = parsePreviewProjection({
-      ...session.projection,
-      identity: nextIdentity,
+    const transition = this.sessions.planPresentation(
+      session.identity.sessionId,
       presentation,
-    });
+      nextViewId,
+    );
     const nextView: DesktopWorkbenchLayoutProjection['main']['views'][number] = {
       ...view,
       viewId: nextViewId,
@@ -512,46 +443,6 @@ export class DesktopPreviewRuntime {
       ...workbench,
       revision: currentWorkbench.revision + 1,
     };
-    const previousIdentity = session.identity;
-    const previousProjection = session.projection;
-    session.identity = nextIdentity;
-    session.projection = nextProjection;
-    try {
-      await this.options.shell.updateWorkbench(
-        session.identity.windowId,
-        shellProjection.endpointEpoch,
-        shellProjection.window.revision,
-        currentWorkbench.revision,
-        workbench,
-      );
-      return nextProjection;
-    } catch (error) {
-      session.identity = previousIdentity;
-      session.projection = previousProjection;
-      throw error;
-    }
-  }
-
-  private async closeSession(
-    session: DesktopPreviewSession,
-    shellProjection: DesktopPreviewShellProjection,
-    view: DesktopWorkbenchLayoutProjection['main']['views'][number],
-  ): Promise<PreviewProjection> {
-    const currentWorkbench = shellProjection.window.workbench;
-    const workbench = closeMainView(currentWorkbench, view.viewId);
-    const closedProjection = parsePreviewProjection({
-      schemaVersion: PREVIEW_HOST_RUNTIME_VERSION,
-      identity: {
-        ...session.identity,
-        revision: session.identity.revision + 1,
-      },
-      presentation: session.projection.presentation,
-      status: 'unavailable',
-      diagnostic: {
-        code: 'preview-descriptor-released',
-        message: 'Desktop Preview View was closed.',
-      },
-    });
     await this.options.shell.updateWorkbench(
       session.identity.windowId,
       shellProjection.endpointEpoch,
@@ -559,9 +450,26 @@ export class DesktopPreviewRuntime {
       currentWorkbench.revision,
       workbench,
     );
-    this.sessions.delete(session.identity.sessionId);
+    return this.sessions.commit(transition).projection;
+  }
+
+  private async closeSession(
+    session: PreviewSessionSnapshot,
+    shellProjection: DesktopPreviewShellProjection,
+    view: DesktopWorkbenchLayoutProjection['main']['views'][number],
+  ): Promise<PreviewProjection> {
+    const currentWorkbench = shellProjection.window.workbench;
+    const workbench = closeMainView(currentWorkbench, view.viewId);
+    const transition = this.sessions.planClose(session.identity.sessionId);
+    await this.options.shell.updateWorkbench(
+      session.identity.windowId,
+      shellProjection.endpointEpoch,
+      shellProjection.window.revision,
+      currentWorkbench.revision,
+      workbench,
+    );
     this.options.resources.releaseSession(session.identity.sessionId);
-    return closedProjection;
+    return this.sessions.commitClose(transition);
   }
 }
 

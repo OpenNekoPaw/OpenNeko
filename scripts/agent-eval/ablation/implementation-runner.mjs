@@ -1,4 +1,4 @@
-import { runV2Case } from '../runner/run-v2-case.mjs';
+import { runV2CaseRepeated } from '../runner/run-v2-case.mjs';
 import { writeAblationDeltaReport } from '../reports/report-writer.mjs';
 import {
   ABLATION_SCHEMAS,
@@ -25,23 +25,29 @@ export async function runImplementationAblation(planInput, options = {}) {
   validateAblationQualityContract(plan, selection);
   const runId = options.runId ?? `ablation-${Date.now().toString(36)}`;
   const runs = [];
-  for (const variant of plan.variants) {
-    let prepared;
-    try {
-      prepared = await (options.prepareBuild ?? prepareIsolatedBuildTarget)(variant.buildTarget, {
-        repositoryRoot: options.repositoryRoot,
-        workspaceParent: options.workspaceParent,
-        env: options.env,
-      });
+  const executionOrder = randomize(plan.variants, options.random ?? Math.random);
+  const preparedTargets = new Map();
+  try {
+    for (const variant of executionOrder) {
+      const cacheKey = buildCacheKey(variant.buildTarget);
+      let prepared = preparedTargets.get(cacheKey);
+      if (!prepared) {
+        prepared = await (options.prepareBuild ?? prepareIsolatedBuildTarget)(variant.buildTarget, {
+          repositoryRoot: options.repositoryRoot,
+          workspaceParent: options.workspaceParent,
+          env: options.env,
+        });
+        preparedTargets.set(cacheKey, prepared);
+      }
       const variantSelection = createVariantSelection(selection, plan, variant, prepared);
-      const run = await (options.runCase ?? runV2Case)(variantSelection, {
+      const run = await (options.runCase ?? runV2CaseRepeated)(variantSelection, {
         ...(options.caseOptions ?? {}),
         runId: `${runId}-${variant.id}`,
         outputRoot: options.outputRoot,
         env: options.env,
-        cwd: prepared.workspace,
-        debugCommand: prepared.launch.command,
-        debugCommandArgsPrefix: prepared.launch.args,
+        target: 'packaged',
+        executablePath: prepared.executablePath,
+        executableFingerprint: prepared.executableFingerprint,
         judgeTargetVisibility: 'identity-only',
       });
       runs.push({
@@ -54,15 +60,22 @@ export async function runImplementationAblation(planInput, options = {}) {
           executableFingerprint: prepared.executableFingerprint,
         },
       });
-    } finally {
-      await prepared?.cleanup();
     }
+  } finally {
+    for (const prepared of preparedTargets.values()) await prepared.cleanup();
   }
   const delta = createImplementationDelta(plan, runId, runs);
   const files = await (options.writeDelta ?? writeAblationDeltaReport)(delta, {
     outputRoot: options.outputRoot,
   });
-  return { outcome: delta.outcome, runId, runs, delta, files };
+  return {
+    outcome: delta.outcome,
+    runId,
+    executionOrder: executionOrder.map((variant) => variant.id),
+    runs,
+    delta,
+    files,
+  };
 }
 
 export function createImplementationAblationDryRun(planInput, selection) {
@@ -100,10 +113,11 @@ function createImplementationDelta(plan, runId, runs) {
   if (!baselineRun) throw implementationError('implementation ablation baseline run is missing');
   const baselineSummary = summarizeRun(baselineRun, plan.comparisonPolicy.quality);
   const baselineConfiguration = effectiveConfigurationEvidence(baselineRun.run);
-  const variants = runs.map((entry) => {
+  const variants = plan.variants.map((variant) => {
+    const entry = requireVariantRun(runs, variant.id);
     const summary = summarizeRun(entry, plan.comparisonPolicy.quality);
     const diagnostics = compareRunPolicies(baselineRun.run, entry.run, {
-      allowDifferences: ['target identity', 'repository revision'],
+      allowDifferences: ['target identity', 'repository revision', 'skill policy'],
     });
     const configuration = effectiveConfigurationEvidence(entry.run);
     if (configuration.status === 'missing') {
@@ -144,6 +158,12 @@ function createImplementationDelta(plan, runId, runs) {
       'Ablation deltas remain descriptive; provider variance requires repeated independent runs.',
     ],
   });
+}
+
+function requireVariantRun(runs, variantId) {
+  const entry = runs.find(({ variant }) => variant.id === variantId);
+  if (!entry) throw implementationError(`implementation ablation run is missing ${variantId}`);
+  return entry;
 }
 
 async function resolveSelection(plan, options) {
@@ -221,4 +241,22 @@ function effectiveConfigurationEvidence(run) {
 
 function implementationError(message) {
   return Object.assign(new Error(message), { code: 'configuration-invalid' });
+}
+
+function randomize(values, random) {
+  const result = [...values];
+  for (let index = result.length - 1; index > 0; index -= 1) {
+    const selected = Math.floor(random() * (index + 1));
+    [result[index], result[selected]] = [result[selected], result[index]];
+  }
+  return result;
+}
+
+function buildCacheKey(target) {
+  return JSON.stringify({
+    sourceFingerprint: target.sourceFingerprint,
+    buildRecipeFingerprint: target.buildRecipeFingerprint,
+    executablePath: target.executablePath,
+    patchFingerprint: target.patchFingerprint,
+  });
 }

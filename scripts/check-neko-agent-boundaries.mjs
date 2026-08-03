@@ -54,19 +54,36 @@ export async function checkNekoAgentBoundaries(root = repositoryRoot) {
     }
   }
 
-  const desktopComposition = await readFile(
-    resolve(root, 'apps/neko-desktop/src/main/desktop-agent-controller-composition.ts'),
+  const agentComposition = await readFile(
+    resolve(root, 'packages/agent/runtime/src/application/agent-controller-composition.ts'),
     'utf8',
   );
-  if (!desktopComposition.includes("from '@neko/agent-runtime/runtime/host-controller'")) {
+  if (!agentComposition.includes("from '@neko/agent-runtime/runtime/host-controller'")) {
     findings.push(
-      'Desktop Agent composition must consume the public host-controller runtime contract.',
+      'Agent application composition must consume the public host-controller runtime contract.',
     );
+  }
+  const desktopBridge = await readFile(
+    resolve(root, 'apps/neko-desktop/src/main/desktop-agent-bridge-runtime.ts'),
+    'utf8',
+  );
+  if (!desktopBridge.includes("from '@neko/agent-runtime/application'")) {
+    findings.push('Desktop Agent bridge must consume the package-owned application contract.');
+  }
+  for (const forbidden of [
+    'PiConversationRuntime',
+    'NodePiConversationAuthority',
+    'ConfigManager',
+    'buildAgentPluginRuntimeGeneration',
+  ]) {
+    if (desktopBridge.includes(forbidden)) {
+      findings.push(`Desktop Agent bridge retains package-owned business runtime ${forbidden}`);
+    }
   }
 
   return {
     status: findings.length === 0 ? 'passed' : 'failed',
-    checkedFiles: hostNeutralFiles.length + browserFiles.length + 1,
+    checkedFiles: hostNeutralFiles.length + browserFiles.length + 2,
     findings,
   };
 }

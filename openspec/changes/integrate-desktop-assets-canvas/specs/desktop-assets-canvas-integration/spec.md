@@ -197,6 +197,15 @@ new revision. Missing, stale or mismatched identity MUST fail visibly.
 - **THEN** Host rejects it and obtains a new authoritative snapshot
 - **AND** it does not apply last-write-wins or mutate the currently active Canvas
 
+#### Scenario: Material actions resolve beside a local Canvas status update
+
+- **WHEN** the package-owned Canvas Root requests material actions and queues a local Canvas status
+  update in the same renderer scheduling turn
+- **THEN** the Webview Host waits until its renderer-originated operation queue is stable before
+  submitting the revisioned material-action request
+- **AND** Main does not receive a predictably stale request from that local ordering race
+- **AND** a genuinely stale View or concurrent external revision remains rejected visibly
+
 ### Requirement: Workspace Board and candidate ownership remain canonical
 
 Agent Workspace Board delivery, generated candidates and acceptance SHALL continue through their

@@ -37,6 +37,23 @@ export type NekoStorageClass =
 
 export type NekoMetadataOwnership = 'state' | 'cache';
 
+export type NekoStorageAuthorityKind =
+  'file' | 'sqlite-state' | 'sqlite-cache' | 'secret-store' | 'log-file' | 'memory';
+
+export type NekoStorageUserManagement = 'opaque' | 'ui-managed' | 'user-content';
+
+export type NekoStoragePortability = 'machine-local' | 'workspace-portable' | 'user-exportable';
+
+export type NekoStorageSensitivity = 'non-secret' | 'local-sensitive' | 'secret';
+
+export type NekoStorageSqliteRole = 'authority' | 'projection' | 'prohibited';
+
+export type NekoStorageDeletionPolicy =
+  'owner-controlled' | 'user-controlled' | 'retention-controlled' | 'session-scoped';
+
+export type NekoStorageRetentionPolicy =
+  'owner-policy' | 'explicit-user-action' | 'rebuildable' | 'managed-rotation' | 'session';
+
 export type NekoStorageDurability =
   'authoritative' | 'valuable-local-state' | 'rebuildable' | 'ephemeral';
 
@@ -47,7 +64,9 @@ export type NekoStorageOwner =
   | 'local-metadata-store'
   | 'resource-cache'
   | 'host-extension'
-  | 'media-library';
+  | 'media-library'
+  | 'secret-store'
+  | 'runtime';
 
 export type NekoTrackingPolicy = 'git-trackable' | 'gitignored' | 'outside-workspace';
 
@@ -91,7 +110,9 @@ export type NekoStorageClassificationId =
   | 'raw-logs'
   | 'extension-private-files'
   | 'retained-media'
-  | 'scratch-data';
+  | 'scratch-data'
+  | 'secret-credentials'
+  | 'ephemeral-memory';
 
 export interface NekoStorageClassification {
   readonly id: NekoStorageClassificationId;
@@ -100,11 +121,48 @@ export interface NekoStorageClassification {
   readonly metadataOwnership: NekoMetadataOwnership | null;
   readonly durability: NekoStorageDurability;
   readonly owner: NekoStorageOwner;
+  readonly authorityKind: NekoStorageAuthorityKind;
+  readonly userManagement: NekoStorageUserManagement;
+  readonly portability: NekoStoragePortability;
+  readonly sensitivity: NekoStorageSensitivity;
+  readonly sqliteRole: NekoStorageSqliteRole;
+  readonly deletion: NekoStorageDeletionPolicy;
+  readonly retention: NekoStorageRetentionPolicy;
   readonly defaultLocation: string;
   readonly tracking: NekoTrackingPolicy;
   readonly cleanup: NekoCleanupPolicy;
   readonly migration: NekoMigrationPolicy;
   readonly backup: NekoBackupPolicy;
+}
+
+export type NekoStorageAdmissionDataKind =
+  | 'structured-state'
+  | 'structured-metadata'
+  | 'raw-log'
+  | 'journal'
+  | 'user-content'
+  | 'large-artifact'
+  | 'ephemeral';
+
+export interface NekoStorageAdmissionRequest {
+  readonly dataKind: NekoStorageAdmissionDataKind;
+  readonly userManagement: NekoStorageUserManagement;
+  readonly portability: NekoStoragePortability;
+  readonly sensitivity: NekoStorageSensitivity;
+  readonly rebuildable: boolean;
+}
+
+export interface NekoStorageAdmissionDecision {
+  readonly authorityKind: NekoStorageAuthorityKind;
+  readonly sqliteRole: NekoStorageSqliteRole;
+  readonly reason:
+    | 'secret-boundary'
+    | 'append-oriented-evidence'
+    | 'user-managed-or-portable'
+    | 'large-byte-content'
+    | 'ephemeral-state'
+    | 'rebuildable-structured-metadata'
+    | 'machine-local-ui-state';
 }
 
 export interface NekoStorageDiagnostic {
@@ -197,6 +255,13 @@ const STORAGE_CLASSIFICATIONS: Readonly<
     metadataOwnership: null,
     durability: 'authoritative',
     owner: 'project-domain',
+    authorityKind: 'file',
+    userManagement: 'user-content',
+    portability: 'workspace-portable',
+    sensitivity: 'non-secret',
+    sqliteRole: 'prohibited',
+    deletion: 'user-controlled',
+    retention: 'owner-policy',
     defaultLocation: '<workspace>/neko/',
     tracking: 'git-trackable',
     cleanup: 'never-automatic',
@@ -210,6 +275,13 @@ const STORAGE_CLASSIFICATIONS: Readonly<
     metadataOwnership: null,
     durability: 'authoritative',
     owner: 'user',
+    authorityKind: 'file',
+    userManagement: 'user-content',
+    portability: 'user-exportable',
+    sensitivity: 'local-sensitive',
+    sqliteRole: 'prohibited',
+    deletion: 'user-controlled',
+    retention: 'explicit-user-action',
     defaultLocation: '~/.neko/',
     tracking: 'outside-workspace',
     cleanup: 'never-automatic',
@@ -223,8 +295,15 @@ const STORAGE_CLASSIFICATIONS: Readonly<
     metadataOwnership: null,
     durability: 'authoritative',
     owner: 'user',
-    defaultLocation: '<workspace>/.neko/',
-    tracking: 'gitignored',
+    authorityKind: 'file',
+    userManagement: 'user-content',
+    portability: 'workspace-portable',
+    sensitivity: 'non-secret',
+    sqliteRole: 'prohibited',
+    deletion: 'user-controlled',
+    retention: 'owner-policy',
+    defaultLocation: '<workspace>/neko/',
+    tracking: 'git-trackable',
     cleanup: 'never-automatic',
     migration: 'diagnose',
     backup: 'required',
@@ -236,6 +315,13 @@ const STORAGE_CLASSIFICATIONS: Readonly<
     metadataOwnership: 'state',
     durability: 'valuable-local-state',
     owner: 'local-metadata-store',
+    authorityKind: 'sqlite-state',
+    userManagement: 'ui-managed',
+    portability: 'machine-local',
+    sensitivity: 'non-secret',
+    sqliteRole: 'authority',
+    deletion: 'owner-controlled',
+    retention: 'owner-policy',
     defaultLocation: '~/.neko/neko.db#state',
     tracking: 'outside-workspace',
     cleanup: 'explicit-confirmation',
@@ -249,6 +335,13 @@ const STORAGE_CLASSIFICATIONS: Readonly<
     metadataOwnership: 'cache',
     durability: 'rebuildable',
     owner: 'local-metadata-store',
+    authorityKind: 'sqlite-cache',
+    userManagement: 'opaque',
+    portability: 'machine-local',
+    sensitivity: 'local-sensitive',
+    sqliteRole: 'projection',
+    deletion: 'owner-controlled',
+    retention: 'rebuildable',
     defaultLocation: '~/.neko/neko.db#cache',
     tracking: 'outside-workspace',
     cleanup: 'rebuildable-only',
@@ -262,8 +355,15 @@ const STORAGE_CLASSIFICATIONS: Readonly<
     metadataOwnership: null,
     durability: 'rebuildable',
     owner: 'resource-cache',
-    defaultLocation: '<workspace>/.neko/.cache/',
-    tracking: 'gitignored',
+    authorityKind: 'file',
+    userManagement: 'opaque',
+    portability: 'machine-local',
+    sensitivity: 'local-sensitive',
+    sqliteRole: 'prohibited',
+    deletion: 'owner-controlled',
+    retention: 'rebuildable',
+    defaultLocation: '~/.neko/cache/workspaces/<workspaceId>/',
+    tracking: 'outside-workspace',
     cleanup: 'rebuildable-only',
     migration: 'rebuild',
     backup: 'not-applicable',
@@ -275,6 +375,13 @@ const STORAGE_CLASSIFICATIONS: Readonly<
     metadataOwnership: null,
     durability: 'authoritative',
     owner: 'agent',
+    authorityKind: 'file',
+    userManagement: 'user-content',
+    portability: 'user-exportable',
+    sensitivity: 'local-sensitive',
+    sqliteRole: 'prohibited',
+    deletion: 'user-controlled',
+    retention: 'explicit-user-action',
     defaultLocation: '~/.neko/journals/',
     tracking: 'outside-workspace',
     cleanup: 'never-automatic',
@@ -283,13 +390,20 @@ const STORAGE_CLASSIFICATIONS: Readonly<
   },
   'raw-logs': {
     id: 'raw-logs',
-    scope: 'project-local',
+    scope: 'user-global',
     storageClass: 'raw-log',
     metadataOwnership: null,
     durability: 'valuable-local-state',
     owner: 'host-extension',
+    authorityKind: 'log-file',
+    userManagement: 'opaque',
+    portability: 'machine-local',
+    sensitivity: 'local-sensitive',
+    sqliteRole: 'prohibited',
+    deletion: 'retention-controlled',
+    retention: 'managed-rotation',
     defaultLocation: '<managed-log-root>/',
-    tracking: 'gitignored',
+    tracking: 'outside-workspace',
     cleanup: 'retention-policy',
     migration: 'diagnose',
     backup: 'optional',
@@ -301,6 +415,13 @@ const STORAGE_CLASSIFICATIONS: Readonly<
     metadataOwnership: null,
     durability: 'rebuildable',
     owner: 'host-extension',
+    authorityKind: 'file',
+    userManagement: 'opaque',
+    portability: 'machine-local',
+    sensitivity: 'local-sensitive',
+    sqliteRole: 'prohibited',
+    deletion: 'retention-controlled',
+    retention: 'owner-policy',
     defaultLocation: '<globalStorageUri>/',
     tracking: 'outside-workspace',
     cleanup: 'retention-policy',
@@ -314,6 +435,13 @@ const STORAGE_CLASSIFICATIONS: Readonly<
     metadataOwnership: null,
     durability: 'authoritative',
     owner: 'media-library',
+    authorityKind: 'file',
+    userManagement: 'user-content',
+    portability: 'user-exportable',
+    sensitivity: 'non-secret',
+    sqliteRole: 'prohibited',
+    deletion: 'user-controlled',
+    retention: 'explicit-user-action',
     defaultLocation: '<workspace-or-media-library>/',
     tracking: 'gitignored',
     cleanup: 'explicit-confirmation',
@@ -327,10 +455,57 @@ const STORAGE_CLASSIFICATIONS: Readonly<
     metadataOwnership: null,
     durability: 'ephemeral',
     owner: 'host-extension',
+    authorityKind: 'file',
+    userManagement: 'opaque',
+    portability: 'machine-local',
+    sensitivity: 'local-sensitive',
+    sqliteRole: 'prohibited',
+    deletion: 'session-scoped',
+    retention: 'session',
     defaultLocation: '<managed-scratch-root>/',
     tracking: 'gitignored',
     cleanup: 'retention-policy',
     migration: 'promote',
+    backup: 'not-applicable',
+  },
+  'secret-credentials': {
+    id: 'secret-credentials',
+    scope: 'user-global',
+    storageClass: 'valuable-local-state',
+    metadataOwnership: null,
+    durability: 'valuable-local-state',
+    owner: 'secret-store',
+    authorityKind: 'secret-store',
+    userManagement: 'ui-managed',
+    portability: 'machine-local',
+    sensitivity: 'secret',
+    sqliteRole: 'prohibited',
+    deletion: 'user-controlled',
+    retention: 'explicit-user-action',
+    defaultLocation: '<system-credential-store>/',
+    tracking: 'outside-workspace',
+    cleanup: 'explicit-confirmation',
+    migration: 'backup-and-migrate',
+    backup: 'not-applicable',
+  },
+  'ephemeral-memory': {
+    id: 'ephemeral-memory',
+    scope: 'scratch',
+    storageClass: 'scratch',
+    metadataOwnership: null,
+    durability: 'ephemeral',
+    owner: 'runtime',
+    authorityKind: 'memory',
+    userManagement: 'opaque',
+    portability: 'machine-local',
+    sensitivity: 'local-sensitive',
+    sqliteRole: 'prohibited',
+    deletion: 'session-scoped',
+    retention: 'session',
+    defaultLocation: '<process-memory>/',
+    tracking: 'outside-workspace',
+    cleanup: 'retention-policy',
+    migration: 'none',
     backup: 'not-applicable',
   },
 };
@@ -351,6 +526,53 @@ export function getNekoStorageClassification(id: string): NekoStorageClassificat
 
 export function listNekoStorageClassifications(): readonly NekoStorageClassification[] {
   return Object.values(STORAGE_CLASSIFICATIONS);
+}
+
+export function decideNekoStorageAuthority(
+  request: NekoStorageAdmissionRequest,
+): NekoStorageAdmissionDecision {
+  if (request.sensitivity === 'secret') {
+    return { authorityKind: 'secret-store', sqliteRole: 'prohibited', reason: 'secret-boundary' };
+  }
+  if (request.dataKind === 'raw-log') {
+    return {
+      authorityKind: 'log-file',
+      sqliteRole: 'prohibited',
+      reason: 'append-oriented-evidence',
+    };
+  }
+  if (
+    request.dataKind === 'journal' ||
+    request.dataKind === 'user-content' ||
+    request.userManagement === 'user-content' ||
+    request.portability !== 'machine-local'
+  ) {
+    return { authorityKind: 'file', sqliteRole: 'prohibited', reason: 'user-managed-or-portable' };
+  }
+  if (request.dataKind === 'large-artifact') {
+    return { authorityKind: 'file', sqliteRole: 'prohibited', reason: 'large-byte-content' };
+  }
+  if (request.dataKind === 'ephemeral') {
+    return { authorityKind: 'memory', sqliteRole: 'prohibited', reason: 'ephemeral-state' };
+  }
+  if (request.rebuildable || request.dataKind === 'structured-metadata') {
+    return {
+      authorityKind: 'sqlite-cache',
+      sqliteRole: 'projection',
+      reason: 'rebuildable-structured-metadata',
+    };
+  }
+  if (request.dataKind === 'structured-state' && request.userManagement === 'ui-managed') {
+    return {
+      authorityKind: 'sqlite-state',
+      sqliteRole: 'authority',
+      reason: 'machine-local-ui-state',
+    };
+  }
+  throw new NekoStorageContractError({
+    code: 'unknown-managed-storage',
+    message: 'Storage admission request does not match an approved authority.',
+  });
 }
 
 export function diagnoseWorkspaceContentPlacement(

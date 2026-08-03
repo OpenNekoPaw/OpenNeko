@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   resolveDesktopAgentAutomationLaunch,
+  resolveDesktopFunctionalCutExport,
   resolveDesktopFunctionalWorkspace,
   resolveDesktopFunctionalWindowMode,
   resolveDesktopRuntimeHome,
@@ -108,6 +109,32 @@ describe('Desktop functional fixture home', () => {
         },
       }),
     ).toThrow('explicit fixture argument');
+  });
+
+  it('accepts a Cut export only inside an explicitly isolated fixture Workspace', () => {
+    const workspace = '/private/tmp/openneko-desktop-functional-cut/workspace';
+    expect(
+      resolveDesktopFunctionalCutExport({
+        argv: ['--openneko-functional-fixture'],
+        workspace,
+        environment: {
+          OPENNEKO_DESKTOP_FUNCTIONAL_CUT_EXPORT: `${workspace}/exports/qualified.mp4`,
+        },
+      }),
+    ).toBe('exports/qualified.mp4');
+    for (const target of [
+      'relative.mp4',
+      '/private/tmp/outside.mp4',
+      `${workspace}/exports/invalid.txt`,
+    ]) {
+      expect(() =>
+        resolveDesktopFunctionalCutExport({
+          argv: ['--openneko-functional-fixture'],
+          workspace,
+          environment: { OPENNEKO_DESKTOP_FUNCTIONAL_CUT_EXPORT: target },
+        }),
+      ).toThrow('functional Cut export');
+    }
   });
 
   it('enables Agent automation only for a fixture Workspace and contained userData', () => {

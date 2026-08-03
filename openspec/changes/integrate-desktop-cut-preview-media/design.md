@@ -1,7 +1,9 @@
 ## Current design
 
-Desktop Main owns Cut document sessions, Preview View sessions, sender authorization and resource
-lifecycle. Preload exposes fixed typed intents; renderer mounts the package-owned Cut/Preview Roots and
+`@neko/cut-domain` / `@neko/cut-node` own Cut document and export sessions;
+`@neko/preview-domain` owns Preview View/session state and policy. Desktop Main owns sender/path
+authorization, exact-resource registration, Workbench projection, concrete native adapters and application
+disposal only. Preload exposes fixed typed intents; renderer mounts the package-owned Cut/Preview Roots and
 never receives absolute paths or runtime handles.
 
 Cut Stage and Timeline share one explicit document/session identity. Preview temporary, pinned and side
@@ -14,6 +16,7 @@ private scheme, arbitrary localhost URL, raw path or retired Host adapter can re
 
 ## Remaining gate
 
-After the resource-gateway and package-owned Cut/Preview Electron scenarios pass, update current
+After the remaining app-owned Cut/Preview session state moves to package public application entries and
+the package-owned Electron scenarios pass, update current
 capability documentation and Phase 1 program 5.x. The documentation must describe only the current
 Desktop path and its remaining risks.

@@ -64,15 +64,22 @@
 - [x] 7.7 Remove the low-value Skill source and extension status/category/sort selectors while
       preserving search, tabs and deterministic product ordering.
 
-## 8. Agent evaluation and verification
+## 8. Package Ownership Convergence
 
-- [x] 8.1 Add deterministic producer/consumer, repository adapter, personal Skill, Pi plugin Skill,
+- [ ] 8.1 Define the `@neko/agent-runtime/extensions` public application contract for catalog, support policy, mutation, personal Skill and plugin runtime-generation lifecycle without Electron or Desktop DTO ownership.
+- [ ] 8.2 Move extension manifest/repository validation, contained install/remove planning, personal Skill validation and Plugin Skill/MCP contribution/readiness logic from Desktop Main to the Agent runtime entry with producer tests.
+- [ ] 8.3 Reduce `desktop-extension-manager.ts` and `desktop-plugin-runtime.ts` to bundled-resource/install-root, native trash/picker, process/env/credential adapters, typed IPC composition and disposal; delete or poison app-owned policy/state paths.
+- [ ] 8.4 Add Desktop consumer/delegation and path-poison tests proving all catalog/mutation/generation outcomes come from the Agent package and no foreign marketplace or app-owned fallback returns success.
+
+## 9. Agent evaluation and verification
+
+- [x] 9.1 Add deterministic producer/consumer, repository adapter, personal Skill, Pi plugin Skill,
       MCP registration/call, generation swap and no-fallback tests.
-- [x] 8.2 Record and validate the Agent Evaluation authoring decision for plugin Skill/MCP routing;
+- [x] 9.2 Record and validate the Agent Evaluation authoring decision for plugin Skill/MCP routing;
       update/create focused canonical and failure coverage as required.
-- [ ] 8.3 Run focused tests, Desktop and affected package typecheck/build, `pnpm test:agent:eval`,
+- [ ] 9.3 Run focused tests, Desktop and affected package typecheck/build, `pnpm test:agent:eval`,
       strict OpenSpec, boundary/debt/unused checks and `git diff --check`.
-- [ ] 8.4 Validate plugin install/remove state, personal Skill management, both locales and Agent
+- [ ] 9.4 Validate plugin install/remove state, personal Skill management, both locales and Agent
       runtime readiness in a real Electron Desktop host without mutating non-fixture user data.
-- [x] 8.5 Perform the Neko quality review and record unavailable provider-backed Desktop
+- [x] 9.5 Perform the Neko quality review and record unavailable provider-backed Desktop
       complete-session evidence as an explicit infrastructure blocker when applicable.

@@ -1,4 +1,4 @@
-import { access, mkdtemp, readdir, rm } from 'node:fs/promises';
+import { access, mkdir, mkdtemp, readdir, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -8,6 +8,7 @@ import {
   NodePiConversationAuthority,
   type ConversationExecutionLease,
 } from '../node-conversation-authority';
+import { migratePiConversationSchema } from '../node-conversation-storage';
 
 describe('NodePiConversationAuthority', () => {
   let root: string;
@@ -53,9 +54,9 @@ describe('NodePiConversationAuthority', () => {
       activeBranchId: 'branch-main',
       title: 'Renamed fixture',
     });
-    expect(await readdir(join(root, 'agent', 'pi'))).toEqual(
-      expect.arrayContaining(['metadata.sqlite', 'sessions']),
-    );
+    await expect(stat(join(root, 'neko.db'))).resolves.toMatchObject({ size: expect.any(Number) });
+    expect(await readdir(join(root, 'agent', 'pi'))).toEqual(expect.arrayContaining(['sessions']));
+    await expect(access(join(root, 'agent', 'pi', 'metadata.sqlite'))).rejects.toThrow();
 
     await authority.dispose();
     authorities.splice(authorities.indexOf(authority), 1);
@@ -225,7 +226,7 @@ describe('NodePiConversationAuthority', () => {
     });
 
     const sqlite = await import('node:sqlite');
-    const sabotage = new sqlite.DatabaseSync(join(root, 'agent', 'pi', 'metadata.sqlite'));
+    const sabotage = new sqlite.DatabaseSync(join(root, 'neko.db'));
     sabotage.exec(`
       CREATE TRIGGER reject_compaction_leaf_update
       BEFORE UPDATE OF leaf_id ON pi_branches
@@ -284,6 +285,40 @@ describe('NodePiConversationAuthority', () => {
     expect(() =>
       authority.updateConversationTitle(lease, 'missing-conversation', 'Missing'),
     ).toThrowError(expect.objectContaining({ code: 'conversation-not-found' }));
+  });
+
+  it('transactionally imports and archives the retired Agent metadata database', async () => {
+    const legacyRoot = join(root, 'agent', 'pi');
+    await mkdir(legacyRoot, { recursive: true });
+    const sqlite = await import('node:sqlite');
+    const legacy = new sqlite.DatabaseSync(join(legacyRoot, 'metadata.sqlite'));
+    migratePiConversationSchema(legacy);
+    legacy
+      .prepare(
+        `INSERT INTO pi_conversations
+          (workspace_id, conversation_id, title, active_branch_id, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        'workspace-1',
+        'legacy-conversation',
+        'Legacy title',
+        'legacy-branch',
+        '2026-08-01T00:00:00.000Z',
+        '2026-08-01T00:00:00.000Z',
+      );
+    legacy.close();
+
+    const authority = await createAuthority('desktop-migration');
+
+    expect(authority.readConversation('legacy-conversation')).toMatchObject({
+      workspaceId: 'workspace-1',
+      title: 'Legacy title',
+    });
+    await expect(access(join(legacyRoot, 'metadata.sqlite'))).rejects.toThrow();
+    await expect(stat(join(legacyRoot, 'metadata.sqlite.migrated-v1'))).resolves.toMatchObject({
+      size: expect.any(Number),
+    });
   });
 
   it('deletes catalog metadata and every mapped Pi Session through the fenced writer', async () => {

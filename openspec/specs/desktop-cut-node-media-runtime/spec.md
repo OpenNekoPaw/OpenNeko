@@ -3,9 +3,7 @@
 ## Purpose
 
 TBD - created by archiving change replace-cut-engine-with-node-ffmpeg-runtime. Update Purpose after archive.
-
 ## Requirements
-
 ### Requirement: Cut media ports remain runtime-neutral
 
 The system SHALL expose Cut media operations through domain-owned ports that do
@@ -132,17 +130,14 @@ delivered through the unified OpenNeko resource handler.
 #### Scenario: Start barrier for audible preview
 
 - **WHEN** the Webview connects an audible preview interval
-- **THEN** the host primes the paused PCM transport so that bounded bytes can
-  reach the Webview without activating video playback
-- **THEN** connection does not complete until every authoritative PCM client
-  has scheduled its first valid packet and exposes a ready media clock
+- **THEN** the host primes the paused PCM transport so that bounded bytes can reach the Webview without activating video playback
+- **THEN** connection does not complete until every authoritative PCM client has scheduled its first valid packet and exposes a ready media clock
 - **AND** the muted video does not start before that barrier
 
 #### Scenario: Stop PCM
 
 - **WHEN** the preview is stopped, replaced, or disposed
-- **THEN** all FFmpeg children, resource responses, audio nodes, and registration entries
-  owned by that preview are released
+- **THEN** all FFmpeg children, resource responses, audio nodes, and registration entries owned by that preview are released
 
 ### Requirement: OpenNeko owns preview synchronization
 
@@ -205,8 +200,7 @@ owned cancellable FFmpeg job with staged output and post-write validation.
 
 ### Requirement: Cut switches through one canonical composition path
 
-The Cut composition root SHALL select only the Node/FFmpeg adapter after the
-switch.
+The Cut composition root SHALL select only the Node/FFmpeg adapter after the switch.
 
 #### Scenario: Canonical adapter selected
 

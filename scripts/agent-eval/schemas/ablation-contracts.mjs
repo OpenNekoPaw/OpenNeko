@@ -219,7 +219,18 @@ const CONFIGURATION_EXECUTION_IDENTITY_SCHEMA = s.union([
     modelProfileId: ID,
     modelConfigurationHash: HASH,
     status: s.literal('observed'),
+    requestedDigests: s.array(HASH, { minLength: 1, maxLength: 100 }),
     effectiveDigests: s.array(HASH, { minLength: 1, maxLength: 100 }),
+    dimensionSources: s.object({
+      modelBinding: s.array(s.enum(['user', 'workspace', 'runtime', 'default']), { minLength: 1 }),
+      temperature: s.array(s.enum(['user', 'workspace', 'runtime', 'default']), { minLength: 1 }),
+      maxTokens: s.array(s.enum(['user', 'workspace', 'runtime', 'default']), { minLength: 1 }),
+      thinkingBudget: s.array(s.enum(['user', 'workspace', 'runtime', 'default']), {
+        minLength: 1,
+      }),
+      executionMode: s.array(s.enum(['user', 'workspace', 'runtime', 'default']), { minLength: 1 }),
+      outputFormat: s.array(s.enum(['user', 'workspace', 'runtime', 'default']), { minLength: 1 }),
+    }),
   }),
   s.object({
     kind: s.literal('configuration'),
@@ -284,6 +295,7 @@ const ABLATION_DELTA_SCHEMA = s.object({
 });
 
 export function validateAblationPlan(input) {
+  assertConfigurationDimensionOwnership(input);
   validateStrict(input, ABLATION_PLAN_SCHEMA, 'ablationPlan');
   assertUnique(
     input.variants.map((variant) => variant.id),
@@ -302,6 +314,21 @@ export function validateAblationPlan(input) {
   for (const variant of input.variants) validateFocusedVariant(variant);
   if (input.mode === 'implementation') validateSkillImplementationIdentity(input.variants);
   return input;
+}
+
+function assertConfigurationDimensionOwnership(input) {
+  if (input?.mode !== 'configuration' || !Array.isArray(input.variants)) return;
+  for (const variant of input.variants) {
+    if (!Array.isArray(variant?.changes)) continue;
+    for (const change of variant.changes) {
+      if (typeof change !== 'string' || CONFIGURATION_DIMENSIONS.includes(change)) continue;
+      if (/(?:skill|tool|permission|prompt)/iu.test(change)) {
+        throw new Error(
+          `configuration change '${change}' is not a declared product setting; route it to owning product-setting work or implementation ablation`,
+        );
+      }
+    }
+  }
 }
 
 export function validateAblationQualityContract(planInput, selection) {

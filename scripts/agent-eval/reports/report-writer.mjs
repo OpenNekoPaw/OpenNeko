@@ -81,6 +81,17 @@ export function createM1ReportDocuments(input) {
         complete: true,
         data: gate,
       })),
+      ...(input.artifactChecks ?? []).map((check) => ({
+        ref: `artifact-check.${check.id}`,
+        kind: 'validator',
+        source: check.id,
+        summary:
+          check.status === 'pass'
+            ? 'Artifact check and owning validator passed.'
+            : (check.message ?? 'Artifact check failed without a diagnostic.'),
+        complete: true,
+        data: check,
+      })),
       ...(input.judge
         ? [
             {
@@ -118,6 +129,7 @@ export function createM1ReportDocuments(input) {
     hardGates,
     evidence,
     artifactManifest,
+    artifactChecks: input.artifactChecks ?? [],
     judge: input.judge,
     failureAttribution,
   });
@@ -328,6 +340,15 @@ function renderQualityReport(input) {
           .map((item) => `- \`${item.ref}\`: ${item.validatorStatus}`)
           .join('\n')
       : '- None.',
+    '',
+    '## Artifact Checks',
+    '',
+    ...(input.artifactChecks.length > 0
+      ? input.artifactChecks.map(
+          (check) =>
+            `- \`${check.id}\`: ${check.status}${check.message ? ` — ${check.message}` : ''}`,
+        )
+      : ['- None.']),
     '',
     '## Output Content Quality',
     '',

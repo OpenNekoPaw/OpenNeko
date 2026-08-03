@@ -49,6 +49,7 @@ function fakeRun(runtimeProfileId, effectiveDigest, overrides = {}) {
         { id: 'idle', status: 'pass', evidenceRefs: ['turn-facts'] },
       ],
     },
+    configurationEvidence: configurationEvidence(effectiveDigest),
   }));
   return {
     outcome: 'pass',
@@ -68,6 +69,32 @@ function fakeRun(runtimeProfileId, effectiveDigest, overrides = {}) {
   };
 }
 
+function configurationEvidence(effectiveDigest) {
+  const keys = [
+    ['modelBinding', 'model-binding'],
+    ['temperature', 'number'],
+    ['maxTokens', 'integer'],
+    ['thinkingBudget', 'integer'],
+    ['executionMode', 'enum'],
+    ['outputFormat', 'enum'],
+  ];
+  const projection = {
+    schemaVersion: 1,
+    profileId: 'effective-agent-profile',
+    digest: effectiveDigest,
+    values: {},
+    sources: Object.fromEntries(keys.map(([key]) => [key, 'runtime'])),
+    dimensions: keys.map(([key, valueType]) => ({
+      key,
+      valueType,
+      owner: 'agent-config',
+      scope: 'turn',
+      restart: 'not-required',
+    })),
+  };
+  return { requested: globalThis.structuredClone(projection), effective: projection };
+}
+
 describe('configuration ablation runner', () => {
   it('selects supported profiles, runs every repetition through runV2Case, and writes one delta extension', async () => {
     const selectedPlan = await plan();
@@ -79,6 +106,7 @@ describe('configuration ablation runner', () => {
     const writeDelta = vi.fn(async () => ({ variantDelta: '/tmp/variant-delta.json' }));
     const run = await runConfigurationAblation(selectedPlan, {
       runId: 'config-pilot',
+      random: () => 0.999,
       runCase,
       writeDelta,
     });
@@ -117,13 +145,14 @@ describe('configuration ablation runner', () => {
   it('retains missing effective configuration evidence as configuration-invalid', async () => {
     const selectedPlan = await plan();
     const run = await runConfigurationAblation(selectedPlan, {
+      random: () => 0.999,
       runCase: async (selected) => {
         const result = fakeRun(selected.scenario.runtimeProfileId, HASH_ZERO, {
           outcome: 'configuration-invalid',
         });
         result.samples[0].result.effectiveConfiguration = {
           runtimeProfileId: selected.scenario.runtimeProfileId,
-        modelProfileId: 'nekoapi-gpt-5.5',
+          modelProfileId: 'nekoapi-gpt-5.5',
           status: 'missing',
           diagnostic: 'missing fact',
         };
@@ -141,6 +170,7 @@ describe('configuration ablation runner', () => {
   it('marks policy drift and an unchanged effective digest as non-comparable', async () => {
     const selectedPlan = await plan();
     const run = await runConfigurationAblation(selectedPlan, {
+      random: () => 0.999,
       runCase: async (selected) => {
         const result = fakeRun(selected.scenario.runtimeProfileId, HASH_ZERO);
         if (selected.scenario.runtimeProfileId === 'thinking-128') {
@@ -157,6 +187,40 @@ describe('configuration ablation runner', () => {
         'effective configuration digest did not change from baseline',
       ]),
     );
+  });
+
+  it('randomizes execution order while retaining stable baseline/candidate reporting', async () => {
+    const selectedPlan = await plan();
+    const run = await runConfigurationAblation(selectedPlan, {
+      random: () => 0,
+      runCase: async (selected) => {
+        const profileId = selected.scenario.runtimeProfileId;
+        return fakeRun(profileId, profileId === 'thinking-0' ? HASH_ZERO : HASH_ONE);
+      },
+      writeDelta: async () => ({ variantDelta: '/tmp/randomized.json' }),
+    });
+
+    expect(run.executionOrder).toEqual(['thinking-128', 'thinking-0']);
+    expect(run.delta.variants.map((variant) => variant.id)).toEqual(['thinking-0', 'thinking-128']);
+  });
+
+  it('rejects a changed dimension without a matching Desktop source fact', async () => {
+    const selectedPlan = await plan();
+    await expect(
+      runConfigurationAblation(selectedPlan, {
+        random: () => 0.999,
+        runCase: async (selected) => {
+          const profileId = selected.scenario.runtimeProfileId;
+          const result = fakeRun(profileId, profileId === 'thinking-0' ? HASH_ZERO : HASH_ONE);
+          if (profileId === 'thinking-128') {
+            for (const sample of result.samples) {
+              sample.configurationEvidence.effective.sources.thinkingBudget = 'default';
+            }
+          }
+          return result;
+        },
+      }),
+    ).rejects.toThrow('without a runtime source fact');
   });
 
   it('creates a key-free dry-run without starting a Desktop session driver', async () => {

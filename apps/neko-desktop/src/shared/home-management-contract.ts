@@ -12,6 +12,11 @@ import {
   type GlobalMediaLibraryItem,
   type GlobalMediaLibraryLocationKind,
 } from '@neko/assets-domain/global-library/contract';
+import type {
+  AgentExtensionCatalogItem,
+  AgentExtensionDiagnosticCode,
+  AgentExtensionStatus,
+} from '@neko/agent-contracts';
 
 export const DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION = 8 as const;
 
@@ -212,29 +217,9 @@ export interface DesktopHomeSkillItem {
   readonly canRemove: boolean;
 }
 
-export type DesktopHomeExtensionAgentStatus =
-  'not-installed' | 'ready' | 'partial' | 'unsupported' | 'error';
+export type DesktopHomeExtensionAgentStatus = AgentExtensionStatus;
 
-export interface DesktopHomeExtensionItem {
-  readonly id: string;
-  readonly name: string;
-  readonly displayName: string;
-  readonly description: string;
-  readonly version: string;
-  readonly developer: string;
-  readonly marketplace: string;
-  readonly category: string;
-  readonly installed: boolean;
-  readonly enabled: boolean;
-  readonly canInstall: boolean;
-  readonly canRemove: boolean;
-  readonly agentStatus: DesktopHomeExtensionAgentStatus;
-  readonly runtimeDiagnosticCode: string;
-  readonly iconDataUrl: string;
-  readonly mcpServerIds: readonly string[];
-  readonly hasSkills: boolean;
-  readonly appIds: readonly string[];
-}
+export type DesktopHomeExtensionItem = AgentExtensionCatalogItem;
 
 export type DesktopHomeSkillDiagnosticCode =
   'file_info_failed' | 'list_failed' | 'read_failed' | 'parse_failed' | 'invalid_metadata';
@@ -248,15 +233,7 @@ export interface DesktopHomeSkillDiscoveryProjection {
   readonly duplicateCount: number;
 }
 
-export type DesktopHomeExtensionDiagnosticCode =
-  | 'repository_unavailable'
-  | 'repository_failed'
-  | 'repository_invalid'
-  | 'manifest_invalid'
-  | 'contribution_invalid'
-  | 'runtime_unsupported'
-  | 'runtime_failed'
-  | 'skill_invalid';
+export type DesktopHomeExtensionDiagnosticCode = AgentExtensionDiagnosticCode;
 
 export interface DesktopHomeExtensionDiscoveryProjection {
   readonly diagnostics: readonly {

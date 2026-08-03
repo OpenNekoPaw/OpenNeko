@@ -5,7 +5,7 @@ export function createDesktopAgentDriver(input) {
     throw driverError('Desktop Agent driver requires a CDP renderer evaluate function');
   }
   const evaluate = (command) => input.evaluate(driverExpression(command));
-  return Object.freeze({
+  const operations = {
     async connect(identity) {
       return evaluate({ kind: 'connect', identity });
     },
@@ -27,6 +27,23 @@ export function createDesktopAgentDriver(input) {
     async resume(command) {
       return evaluate({ kind: 'resume', ...command });
     },
+    async waitForIdentity(conversationId, afterEventOffset, timeoutMs) {
+      return evaluate({
+        kind: 'wait-for-identity',
+        conversationId,
+        afterEventOffset,
+        timeoutMs,
+      });
+    },
+    async waitForPendingTool(conversationId, toolName, afterEventOffset, timeoutMs) {
+      return evaluate({
+        kind: 'wait-for-pending-tool',
+        conversationId,
+        toolName,
+        afterEventOffset,
+        timeoutMs,
+      });
+    },
     async readProjection(conversationId) {
       return evaluate({ kind: 'read-projection', conversationId });
     },
@@ -45,7 +62,80 @@ export function createDesktopAgentDriver(input) {
     async dispose() {
       return evaluate({ kind: 'dispose' });
     },
+  };
+  return Object.freeze({
+    ...operations,
+    async reloadAndRestore(command) {
+      const previous = requireConnection(command?.connection, 'reload');
+      await operations.reloadRenderer();
+      await requireLifecycle(input.waitForRenderer, 'renderer reload')();
+      const connected = await operations.connect(previous);
+      assertReloadIdentity(previous, connected.connection);
+      const resumed = await operations.resume({
+        conversationId: command.conversationId,
+        timeoutMs: command.timeoutMs,
+      });
+      return Object.freeze({ connection: connected.connection, snapshot: resumed.snapshot });
+    },
+    async restartAndRestore(command) {
+      const previous = requireConnection(command?.connection, 'application restart');
+      await requireLifecycle(input.restartApplication, 'application restart')();
+      await requireLifecycle(input.waitForRenderer, 'application restart readiness')();
+      const connected = await operations.connect(previous);
+      assertRestartIdentity(previous, connected.connection);
+      const resumed = await operations.resume({
+        conversationId: command.conversationId,
+        timeoutMs: command.timeoutMs,
+      });
+      return Object.freeze({ connection: connected.connection, snapshot: resumed.snapshot });
+    },
+    async closeAndDispose() {
+      const closed = await operations.closeApplication();
+      if (closed?.status !== 'facts' || !closed.facts) {
+        throw new Error('Desktop Agent close did not return final disposal facts.');
+      }
+      if (closed.facts.disposal?.status !== 'disposed') {
+        throw new Error('Desktop Agent close returned incomplete disposal evidence.');
+      }
+      const local = await operations.dispose();
+      return Object.freeze({ facts: closed.facts, local });
+    },
   });
+}
+
+function requireLifecycle(operation, label) {
+  if (typeof operation !== 'function') {
+    throw driverError(`Desktop Agent ${label} lifecycle control is unavailable.`);
+  }
+  return operation;
+}
+
+function requireConnection(connection, label) {
+  if (!connection || typeof connection !== 'object') {
+    throw driverError(`Desktop Agent ${label} requires the prior connection identity.`);
+  }
+  return connection;
+}
+
+function assertReloadIdentity(previous, current) {
+  if (
+    current?.applicationInstanceId !== previous.applicationInstanceId ||
+    current?.workspaceId !== previous.workspaceId ||
+    current?.rendererEpoch === previous.rendererEpoch ||
+    current?.connectionId === previous.connectionId
+  ) {
+    throw new Error('Desktop Agent renderer reload identity did not advance exactly.');
+  }
+}
+
+function assertRestartIdentity(previous, current) {
+  if (
+    current?.applicationInstanceId === previous.applicationInstanceId ||
+    current?.workspaceId !== previous.workspaceId ||
+    current?.connectionId === previous.connectionId
+  ) {
+    throw new Error('Desktop Agent application restart identity did not restore exactly.');
+  }
 }
 
 export function driverExpression(command) {
@@ -88,6 +178,86 @@ export function driverExpression(command) {
       }
       for (const item of Object.values(value)) collectIdentity(state, item);
     };
+    const findIdentity = (value, conversationId) => {
+      if (!value || typeof value !== 'object') return undefined;
+      if (
+        value.conversationId === conversationId &&
+        typeof value.turnId === 'string' && value.turnId.length > 0 &&
+        typeof value.runId === 'string' && value.runId.length > 0
+      ) {
+        return {
+          conversationId: value.conversationId,
+          turnId: value.turnId,
+          runId: value.runId,
+        };
+      }
+      const values = Array.isArray(value) ? value : Object.values(value);
+      for (const item of values) {
+        const identity = findIdentity(item, conversationId);
+        if (identity) return identity;
+      }
+      return undefined;
+    };
+    const findPendingTool = (value, conversationId, toolName) => {
+      if (!value || typeof value !== 'object') return undefined;
+      const toolCall = value.kind === 'tool_call' ? value.payload?.toolCall : undefined;
+      if (
+        value.conversationId === conversationId &&
+        typeof value.turnId === 'string' && value.turnId.length > 0 &&
+        typeof value.runId === 'string' && value.runId.length > 0 &&
+        toolCall?.name === toolName &&
+        toolCall.pendingConfirmation === true &&
+        typeof toolCall.id === 'string' && toolCall.id.length > 0
+      ) {
+        return {
+          conversationId: value.conversationId,
+          turnId: value.turnId,
+          runId: value.runId,
+          toolCallId: toolCall.id,
+          toolName,
+        };
+      }
+      const values = Array.isArray(value) ? value : Object.values(value);
+      for (const item of values) {
+        const pending = findPendingTool(item, conversationId, toolName);
+        if (pending) return pending;
+      }
+      return undefined;
+    };
+    const belongsToConversation = (value, conversationId) => {
+      if (!value || typeof value !== 'object') return false;
+      if (value.conversationId === conversationId || value.conversation?.id === conversationId) {
+        return true;
+      }
+      const values = Array.isArray(value) ? value : Object.values(value);
+      return values.some((item) => belongsToConversation(item, conversationId));
+    };
+    const isProjectionEvent = (value) => {
+      if (!value || typeof value !== 'object') return false;
+      if (
+        value.type === 'projectionSnapshot' ||
+        value.type === 'projectionPatch' ||
+        value.type === 'conversationProjectionPatch'
+      ) {
+        return true;
+      }
+      const values = Array.isArray(value) ? value : Object.values(value);
+      return values.some((item) => isProjectionEvent(item));
+    };
+    const waitForEvent = async (state, afterEventOffset, timeoutMs, select, failureMessage) => {
+      const offset = Number.isInteger(afterEventOffset) && afterEventOffset >= 0
+        ? afterEventOffset
+        : state.events.length;
+      const deadline = Date.now() + (Number.isFinite(timeoutMs) ? timeoutMs : 10000);
+      while (Date.now() < deadline) {
+        for (const event of state.events.slice(offset)) {
+          const selected = select(event);
+          if (selected) return selected;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 25));
+      }
+      throw new Error(failureMessage);
+    };
     const assertObservedIdentity = (state, identity) => {
       const key =
         requireText(identity?.conversationId, 'Conversation identity') + '\\u0000' +
@@ -119,16 +289,20 @@ export function driverExpression(command) {
       }
       case 'submit':
       case 'queue': {
-        requireState();
+        const state = requireState();
+        const eventOffset = state.events.length;
         bridge.send({
           type: 'sendMessage',
           conversationId: requireText(command.conversationId, 'Conversation identity'),
           message: requireText(command.prompt, 'Agent prompt'),
           sessionMode: 'agent',
+          ...(Array.isArray(command.contextPayloads)
+            ? { contextPayloads: command.contextPayloads }
+            : {}),
           ...(command.chatModel ? { chatModel: command.chatModel } : {}),
           ...(command.llmConfig ? { llmConfig: command.llmConfig } : {}),
         });
-        return { accepted: true };
+        return { accepted: true, eventOffset };
       }
       case 'create-conversation': {
         const state = requireState();
@@ -150,7 +324,7 @@ export function driverExpression(command) {
         const state = requireState();
         assertObservedIdentity(state, command.identity);
         bridge.send({ type: 'cancelMessage', conversationId: command.identity.conversationId });
-        return { accepted: true };
+        return { accepted: true, identity: command.identity };
       }
       case 'confirm': {
         const state = requireState();
@@ -161,21 +335,64 @@ export function driverExpression(command) {
           toolCallId: requireText(command.toolCallId, 'Tool Call identity'),
           approved: command.approved === true,
         });
-        return { accepted: true };
+        return {
+          accepted: true,
+          identity: {
+            conversationId: command.conversationId,
+            turnId: command.turnId,
+            runId: command.runId,
+          },
+          toolCallId: command.toolCallId,
+        };
       }
       case 'resume': {
-        requireState();
+        const state = requireState();
+        const eventOffset = state.events.length;
+        const conversationId = requireText(command.conversationId, 'Conversation identity');
         bridge.send({
           type: 'getConversationSnapshot',
-          conversationId: requireText(command.conversationId, 'Conversation identity'),
+          conversationId,
         });
-        return { accepted: true };
+        const snapshot = await waitForEvent(
+          state,
+          eventOffset,
+          command.timeoutMs,
+          (event) => event?.type === 'conversationSnapshot' && event?.conversation?.id === conversationId
+            ? event.conversation
+            : undefined,
+          'Desktop Agent resume did not publish a conversation snapshot.',
+        );
+        return { accepted: true, eventOffset, snapshot };
+      }
+      case 'wait-for-identity': {
+        const state = requireState();
+        const conversationId = requireText(command.conversationId, 'Conversation identity');
+        const identity = await waitForEvent(
+          state,
+          command.afterEventOffset,
+          command.timeoutMs,
+          (event) => findIdentity(event, conversationId),
+          'Desktop Agent public projection did not publish a turn/run identity.',
+        );
+        return identity;
+      }
+      case 'wait-for-pending-tool': {
+        const state = requireState();
+        const conversationId = requireText(command.conversationId, 'Conversation identity');
+        const toolName = requireText(command.toolName, 'Tool name');
+        return waitForEvent(
+          state,
+          command.afterEventOffset,
+          command.timeoutMs,
+          (event) => findPendingTool(event, conversationId, toolName),
+          'Desktop Agent public projection did not publish the requested pending Tool confirmation.',
+        );
       }
       case 'read-projection': {
         const state = requireState();
         const conversationId = requireText(command.conversationId, 'Conversation identity');
         const events = state.events.filter(
-          (event) => event?.conversationId === conversationId || event?.conversation?.id === conversationId,
+          (event) => belongsToConversation(event, conversationId) && isProjectionEvent(event),
         );
         return { connection: state.connection, events };
       }

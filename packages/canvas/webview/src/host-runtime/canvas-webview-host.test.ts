@@ -301,6 +301,83 @@ describe('createCanvasWebviewHost', () => {
     session.dispose();
   });
 
+  it('waits for a same-turn Canvas status enqueue before resolving material actions', async () => {
+    const identity = {
+      projectId: 'project-1',
+      workspaceId: 'workspace-1',
+      windowId: 'window-1',
+      viewId: 'view-1',
+      viewEpoch: 1,
+      documentId: 'neko/boards/workspace.nkc',
+      sessionId: 'session-1',
+      endpointEpoch: 'endpoint-1',
+    };
+    const node: MediaCanvasNode = {
+      id: 'media-image',
+      type: 'media',
+      position: { x: 20, y: 30 },
+      size: { width: 320, height: 180 },
+      zIndex: 1,
+      data: {
+        assetPath: 'media/cat.png',
+        mediaType: 'image',
+        contentLocator: { kind: 'workspace-file', path: 'media/cat.png' },
+      },
+    };
+    const descriptor: CanvasMaterialActionDescriptor = {
+      id: 'preview:open',
+      ownerId: 'preview',
+      label: 'Preview',
+      mediaKinds: ['image'],
+      origins: ['referenced', 'generated'],
+      selection: { minimum: 1, maximum: 1 },
+      effect: 'read',
+    };
+    const session = new CanvasHostRuntimeSession({
+      identity,
+      initialCanvas: { ...DEFAULT_CANVAS_DATA, nodes: [node] },
+      effects: {
+        resolveMaterialActions: vi.fn(async () => [descriptor]),
+      },
+    });
+    const requestedRevisions: number[] = [];
+    const runtime: CanvasHostRuntime = {
+      identity,
+      getSnapshot: () => session.getSnapshot(),
+      resolveMaterialActions(request) {
+        requestedRevisions.push(request.expectedRevision);
+        return session.resolveMaterialActions(request);
+      },
+      subscribe: (listener) => session.subscribe(listener),
+      executeIntent: (request) => session.executeIntent(request),
+    };
+    const host = createCanvasWebviewHost(runtime);
+    const messages: unknown[] = [];
+    host.subscribe((message) => messages.push(message));
+    host.postMessage({ type: 'ready' });
+    await vi.waitFor(() => {
+      expect(messages).toContainEqual({
+        type: 'update',
+        data: { ...DEFAULT_CANVAS_DATA, nodes: [node] },
+      });
+    });
+
+    const resolution = host.resolveMaterialActions([node.id]);
+    host.postMessage({
+      type: 'canvasStatus',
+      data: {
+        ...DEFAULT_CANVAS_DATA,
+        nodes: [node],
+        _selection: { nodeIds: [node.id] },
+      },
+    });
+
+    await expect(resolution).resolves.toEqual([descriptor]);
+    expect(requestedRevisions).toEqual([1]);
+    host.dispose();
+    session.dispose();
+  });
+
   it.each(['stale rejection', 'stale response'] as const)(
     'keeps a content-unavailable node open after a concurrent move returns a %s',
     async (concurrencyResult) => {

@@ -40,6 +40,12 @@
       "visibility": "public"
     },
     {
+      "id": "tool-approval-visible",
+      "file": "cases/tool-approval-visible.json",
+      "group": "workflow",
+      "visibility": "public"
+    },
+    {
       "id": "media-tool-terminal-result",
       "file": "cases/media-tool-terminal-result.json",
       "group": "workflow",
@@ -79,6 +85,12 @@
       "id": "workspace-board-delivery-resume",
       "file": "cases/workspace-board-delivery-resume.json",
       "group": "failure",
+      "visibility": "public"
+    },
+    {
+      "id": "cut-context-handoff",
+      "file": "cases/cut-context-handoff.json",
+      "group": "regression",
       "visibility": "public"
     }
   ],

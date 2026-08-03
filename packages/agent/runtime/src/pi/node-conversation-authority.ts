@@ -1,5 +1,3 @@
-import { mkdir } from 'node:fs/promises';
-import { join } from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
 
 import {
@@ -12,6 +10,7 @@ import {
   type SessionTreeEntry,
 } from '@earendil-works/pi-agent-core';
 import { NodeExecutionEnv } from '@earendil-works/pi-agent-core/node';
+import { openNodePiConversationStorage } from './node-conversation-storage';
 
 export interface ConversationExecutionLease {
   readonly conversationId: string;
@@ -160,21 +159,8 @@ export class NodePiConversationAuthority {
         'leaseTtlMs must be a positive integer.',
       );
     }
-    const root = join(options.userDataRoot, 'agent', 'pi');
-    const sessionsRoot = join(root, 'sessions');
-    await mkdir(sessionsRoot, { recursive: true });
-    const sqlite = await import('node:sqlite');
-    const database = new sqlite.DatabaseSync(join(root, 'metadata.sqlite'), {
-      enableForeignKeyConstraints: true,
-      timeout: 5_000,
-    });
-    database.exec(`
-      PRAGMA journal_mode = WAL;
-      PRAGMA foreign_keys = ON;
-      PRAGMA synchronous = FULL;
-      PRAGMA busy_timeout = 5000;
-    `);
-    migrate(database);
+    const root = `${options.userDataRoot}/agent/pi`;
+    const { database, sessionsRoot } = await openNodePiConversationStorage(options.userDataRoot);
     const env = new NodeExecutionEnv({ cwd: root });
     return new NodePiConversationAuthority(
       database,
@@ -804,60 +790,6 @@ export class NodePiConversationAuthority {
       throw error;
     }
   }
-}
-
-function migrate(database: DatabaseSync): void {
-  database.exec(`
-    CREATE TABLE IF NOT EXISTS pi_conversations (
-      workspace_id TEXT NOT NULL,
-      conversation_id TEXT PRIMARY KEY,
-      title TEXT NOT NULL,
-      active_branch_id TEXT NOT NULL,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
-    );
-    CREATE INDEX IF NOT EXISTS pi_conversations_workspace_updated
-      ON pi_conversations(workspace_id, updated_at DESC);
-
-    CREATE TABLE IF NOT EXISTS pi_branches (
-      conversation_id TEXT NOT NULL,
-      branch_id TEXT NOT NULL,
-      parent_branch_id TEXT,
-      state TEXT NOT NULL CHECK(state IN ('active', 'historical')),
-      pi_session_id TEXT NOT NULL UNIQUE,
-      pi_session_created_at TEXT NOT NULL,
-      pi_session_cwd TEXT NOT NULL,
-      pi_session_path TEXT NOT NULL,
-      pi_parent_session_path TEXT,
-      pi_metadata_json TEXT,
-      leaf_id TEXT,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL,
-      PRIMARY KEY(conversation_id, branch_id),
-      FOREIGN KEY(conversation_id) REFERENCES pi_conversations(conversation_id) ON DELETE CASCADE
-    );
-
-    CREATE TABLE IF NOT EXISTS pi_execution_leases (
-      conversation_id TEXT PRIMARY KEY,
-      holder_id TEXT NOT NULL,
-      epoch INTEGER NOT NULL,
-      expires_at INTEGER NOT NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS pi_turn_checkpoints (
-      conversation_id TEXT NOT NULL,
-      turn_id TEXT NOT NULL,
-      branch_id TEXT NOT NULL,
-      pi_session_id TEXT NOT NULL,
-      leaf_id TEXT,
-      writer_epoch INTEGER NOT NULL,
-      terminal_state TEXT NOT NULL CHECK(terminal_state IN ('completed', 'cancelled', 'failed')),
-      committed_at TEXT NOT NULL,
-      PRIMARY KEY(conversation_id, turn_id),
-      FOREIGN KEY(conversation_id, branch_id) REFERENCES pi_branches(conversation_id, branch_id)
-        ON DELETE CASCADE
-    );
-  `);
 }
 
 function insertBranch(database: DatabaseSync, branch: PiConversationBranchRecord): void {

@@ -1,0 +1,111 @@
+{
+  "schema": "neko.agent-eval.scenario.v2",
+  "id": "tool-approval-visible",
+  "suiteId": "agent-runtime.workflow-controller",
+  "caseGroup": "workflow",
+  "visibility": "public",
+  "execution": {
+    "evidenceLevel": "visible-desktop",
+    "resourceClass": "visible-ui",
+    "protected": true,
+    "lifecycleChecks": ["renderer-reload", "composer-focus", "graceful-close"]
+  },
+  "evidenceContract": {
+    "userBehavior": "Approve one workspace Write Tool call in the visible Desktop, observe its terminal Timeline result, reload the renderer, restore the same conversation, restore composer focus, and close gracefully.",
+    "canonicalPath": [
+      "Desktop Agent public bridge",
+      "Pi Conversation runtime",
+      "Tool confirmation projection",
+      "Write Tool terminal result",
+      "Timeline projection",
+      "renderer reconnect",
+      "Pi Session restore",
+      "graceful Desktop close"
+    ],
+    "forbiddenFallback": [
+      "direct runtime invocation",
+      "retired Host session owner",
+      "implicit Tool approval",
+      "in-memory-only restore",
+      "legacy Agent event projector"
+    ],
+    "observables": [
+      {
+        "ref": "visible-tool-facts",
+        "kind": "runtime-fact",
+        "description": "Public Tool confirmation identity, terminal Timeline result, renderer reconnect identity, restored Pi Session snapshot, focused composer and disposal facts.",
+        "required": true
+      }
+    ],
+    "expectedResult": "The visible Desktop approves exactly the projected Write call, completes it, restores the same conversation after renderer reload, focuses the composer and records disposal.",
+    "expectedFailure": "A missing pending Tool identity, implicit approval, failed Write, stale reconnect, empty restore, missing focus or incomplete disposal fails visibly."
+  },
+  "fixtureRefs": ["empty-workspace"],
+  "runtimeProfileId": "canonical-default",
+  "modelProfileIds": ["configured-default"],
+  "steps": [
+    {
+      "id": "submit",
+      "kind": "submit",
+      "prompt": "Use the Write Tool once to create notes/approval-visible.txt containing exactly APPROVAL_VISIBLE_OK. Wait for explicit approval and then reply with APPROVAL_VISIBLE_OK."
+    },
+    {
+      "id": "approve-write",
+      "kind": "confirm",
+      "afterStepId": "submit",
+      "toolName": "Write",
+      "approved": true,
+      "timeoutMs": 120000
+    },
+    { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 120000 }
+  ],
+  "assertions": [
+    { "id": "runtime", "kind": "runtime-errors-empty", "evidenceRef": "visible-tool-facts" },
+    { "id": "idle", "kind": "fully-idle", "evidenceRef": "visible-tool-facts" },
+    {
+      "id": "pi-runtime",
+      "kind": "pi-runtime",
+      "implementation": "pi-agent-core",
+      "transcriptAuthority": "pi-session",
+      "productMetadataAuthority": "sqlite",
+      "purpose": "agent.main",
+      "workspaceLocatorKind": "virtual",
+      "turnDurability": "durable",
+      "evidenceRef": "visible-tool-facts"
+    },
+    {
+      "id": "write",
+      "kind": "tool-call",
+      "name": "Write",
+      "status": "success",
+      "evidenceRef": "visible-tool-facts"
+    },
+    {
+      "id": "timeline",
+      "kind": "timeline-projection",
+      "terminalStatus": "completed",
+      "toolName": "Write",
+      "evidenceRef": "visible-tool-facts"
+    },
+    {
+      "id": "answer",
+      "kind": "final-answer",
+      "mode": "contains",
+      "text": ["APPROVAL_VISIBLE_OK"],
+      "evidenceRef": "visible-tool-facts"
+    },
+    {
+      "id": "no-fallback",
+      "kind": "no-fallback",
+      "forbiddenRefs": [
+        "direct-runtime-invocation",
+        "retired-host-session-owner",
+        "implicit-tool-approval",
+        "legacy-agent-event-projector"
+      ],
+      "evidenceRef": "visible-tool-facts"
+    }
+  ],
+  "artifactChecks": [],
+  "budget": { "timeoutMs": 180000, "repetitions": 1 }
+}

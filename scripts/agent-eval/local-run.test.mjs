@@ -20,10 +20,24 @@ describe('Agent Evaluation local runner', () => {
       suiteId: 'skill.storyboard',
       repetitions: 1,
     });
-    expect(parseArgs(['--mode', 'matrix', '--repetitions', '3'])).toEqual({
+    expect(
+      parseArgs([
+        '--mode',
+        'matrix',
+        '--repetitions',
+        '3',
+        '--desktop-executable',
+        '/tmp/OpenNeko',
+        '--desktop-fingerprint',
+        `sha256:${'a'.repeat(64)}`,
+      ]),
+    ).toEqual({
       mode: 'matrix',
       repetitions: 3,
+      desktopExecutable: '/tmp/OpenNeko',
+      desktopFingerprint: `sha256:${'a'.repeat(64)}`,
     });
+    expect(() => parseArgs(['--mode', 'matrix'])).toThrow('--desktop-executable');
     expect(() => parseArgs(['--mode', 'matrix', '--repetitions', '21'])).toThrow('1..20');
   });
 
@@ -75,7 +89,7 @@ describe('Agent Evaluation local runner', () => {
     ).rejects.toThrow('missing suite');
   });
 
-  it('writes exact provider/model/credential/cost blocker evidence without launching Desktop', async () => {
+  it('writes exact provider/model/cost blocker evidence without launching Desktop', async () => {
     const reportRoot = await fs.mkdtemp(join(os.tmpdir(), 'neko-agent-eval-local-'));
     temporaryDirectories.push(reportRoot);
     const stdout = capture();
@@ -96,7 +110,7 @@ describe('Agent Evaluation local runner', () => {
     expect(JSON.parse(stdout.text())).toMatchObject({
       outcome: 'infrastructure-blocked',
       runs: [],
-      diagnostic: expect.stringContaining('provider, model, credential environment and cost'),
+      diagnostic: expect.stringContaining('provider, model and cost'),
     });
     await expect(
       fs.readFile(join(reportRoot, 'local-run-summary.json'), 'utf8'),
@@ -120,10 +134,8 @@ describe('Agent Evaluation local runner', () => {
       ],
       {
         env: {
-          FIXTURE_KEY: 'test-only-present',
           OPENNEKO_AGENT_EVAL_PROVIDER_ID: 'provider-1',
           OPENNEKO_AGENT_EVAL_MODEL_ID: 'model-1',
-          OPENNEKO_AGENT_EVAL_CREDENTIAL_ENV: 'FIXTURE_KEY',
           OPENNEKO_AGENT_EVAL_CONFIG_PATH: '/synthetic/config.toml',
           OPENNEKO_AGENT_EVAL_COST_APPROVED: 'false',
         },

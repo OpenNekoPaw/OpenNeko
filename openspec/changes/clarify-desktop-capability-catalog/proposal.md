@@ -8,7 +8,8 @@ Computer Use 或 MCP 名称也会让用户误以为 Agent 已经可以调用，�
 ## What Changes
 
 - **BREAKING**：删除 Codex CLI、`~/.codex`、Codex marketplace 和 `.codex-plugin`
-  依赖，改由 Desktop Main 管理 OpenNeko 自有 marketplace snapshot 与安装根。
+  依赖，改由 `@neko/agent-runtime` 的 extension application entry 管理 OpenNeko 自有 catalog、
+  package lifecycle 与 Agent contribution；Desktop Main 只注入 bundled snapshot、安装根和原生 adapter。
 - OpenNeko marketplace 首阶段由公开 `OpenNekoPaw/OpenNeko` 仓库维护并随 Desktop
   打包；没有真实 OpenNeko 插件时返回空目录，不借用其他应用条目或伪造数据。
 - Extensions Surface 只投影 OpenNeko marketplace 或 OpenNeko 安装根中的插件；available
@@ -41,12 +42,15 @@ Computer Use 或 MCP 名称也会让用户误以为 Agent 已经可以调用，�
 
 ## Impact
 
-- `apps/neko-desktop/src/main/`：OpenNeko plugin repository/installer、personal Skill
-  manager、Plugin runtime composition 与 Desktop typed IPC。
+- `packages/agent/runtime`：OpenNeko extension catalog、manifest/support policy、install/remove transaction、
+  personal Skill lifecycle、Plugin Skill/MCP contribution 与 runtime generation application service。
+- `apps/neko-desktop/src/main/`：bundled snapshot/install-root、native picker/trash、process/env/credential
+  concrete adapter、composition、disposal 与 Desktop typed IPC；不得保留 catalog/install/runtime policy。
 - `apps/neko-desktop/resources/extension-marketplace/`：公开仓库维护、随包发布的
   OpenNeko marketplace snapshot；只包含真实第一方维护 package。
 - `packages/agent/runtime/src/pi/`：plugin Skill source/provenance 与确定性优先级。
-- `packages/agent/runtime/src/mcp/`、`packages/shared/src/types/`：Plugin MCP
+- `packages/agent/runtime/src/mcp/`、package-owned Agent contracts：Plugin MCP
   process/auth configuration 的最小 runtime contract。
-- `apps/neko-desktop/src/renderer/`：双语安装/卸载、Skill 管理、兼容性和 operation 状态。
+- `packages/agent/webview` 与 Desktop renderer placement：双语安装/卸载、Skill 管理、兼容性和
+  operation 状态；Renderer 不拥有 mutation 或 runtime state。
 - Desktop producer/consumer、Pi Skill/MCP path、Evaluation harness 与真实 Electron 验收。

@@ -244,6 +244,14 @@ export function createCanvasWebviewHost(
     });
   };
 
+  const waitForOperationQueueToSettle = async (): Promise<void> => {
+    let observedTail: Promise<void>;
+    do {
+      observedTail = operationTail;
+      await observedTail;
+    } while (observedTail !== operationTail);
+  };
+
   const supportsMessage = (messageType: string): boolean =>
     delegate !== undefined && (delegate.supportsMessage?.(messageType) ?? true);
 
@@ -287,7 +295,7 @@ export function createCanvasWebviewHost(
       return next;
     },
     async resolveMaterialActions(selectedNodeIds) {
-      await operationTail;
+      await waitForOperationQueueToSettle();
       let current = snapshot ?? (await runtime.getSnapshot());
       const resolveForSnapshot = (target: CanvasHostSnapshot) => {
         materialActionRequestSequence += 1;

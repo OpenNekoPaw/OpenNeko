@@ -7,7 +7,7 @@ Canvas and Cut with inconsistent document lifecycles.
 
 ## What Changes
 
-- Add one Desktop-owned creative-document lifecycle command path for explicit `.nkc` and `.otio`
+- Add one package-owned creative-document lifecycle command path for explicit `.nkc` and `.otio`
   create, external-file import, open/focus, and move-to-system-trash operations.
 - Make the Project Resource Browser the primary management surface with facet-aware toolbar actions,
   item and blank-area context menus, keyboard access, and capability-projected commands.
@@ -48,12 +48,14 @@ None.
   menu composition, selection, keyboard behavior, and focused UI tests.
 - `packages/ui`: reuse of existing context-menu primitives; no package-local design system or
   duplicate menu primitive.
-- `packages/canvas/domain` / `packages/shared`: public empty-NKC creation and canonical codec
-  entry points consumed through a narrow Desktop owner port.
+- `packages/content/project-file-io`: host-neutral creative-document lifecycle application service,
+  transactional publication/trash workflow, owner ports, reference inspection and diagnostics.
+- `packages/canvas/domain`: public empty-NKC creation and canonical codec entry points consumed
+  through a narrow document-owner port.
 - `packages/cut/domain`: existing OTIO factory/session create and serialization paths consumed
   through a narrow Desktop owner port.
-- `apps/neko-desktop` shared/Main/preload/renderer: sender-bound lifecycle contract, workspace path
-  authorization, import/trash orchestration, open-session and task checks, Workbench reconciliation,
+- `apps/neko-desktop` shared/Main/preload/renderer: sender-bound decoding, workspace path
+  authorization, native picker/trash and file adapters, package-service wiring, Workbench projection,
   Resource Browser refresh, empty-Main shortcuts, diagnostics, and real Electron acceptance.
 - Project files and user data: no schema migration or SQLite record is introduced; the workspace
   filesystem remains authoritative, and destructive operations use the recoverable system trash.

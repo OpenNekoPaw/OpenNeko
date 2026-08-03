@@ -50,11 +50,7 @@ function projectContentQuality(aggregate, policy, samples) {
     }
     return { status: 'not-evaluated', reason: 'hard-gates-only' };
   }
-  if (
-    distribution.samples > 0 &&
-    hasMean &&
-    hasVariance
-  ) {
+  if (distribution.samples > 0 && hasMean && hasVariance) {
     return {
       status: 'available',
       rubricRef: policy.rubricRef,
@@ -85,17 +81,40 @@ export function compareRunPolicies(baseline, current, options = {}) {
     ['fixture digest', (result) => result.fixtureDigest],
     ['model identity', (result) => result.modelIdentity],
     ['hard-gate policy', (result) => result.assertions.map((item) => item.id)],
+    [
+      'runtime policy',
+      (result) => ({
+        runtimeProfileId: result.effectiveConfiguration?.runtimeProfileId,
+        modelProfileId: result.effectiveConfiguration?.modelProfileId,
+      }),
+    ],
   ]) {
     if (!allowed.has(label) && !sameValues(baselineResults.map(read), currentResults.map(read))) {
       diagnostics.push(`${label} differs`);
     }
   }
+  for (const [label, key] of [
+    ['scenario contract', 'scenario'],
+    ['prompt policy', 'prompts'],
+    ['skill policy', 'skills'],
+    ['tool policy', 'tools'],
+    ['permission policy', 'permissions'],
+    ['validator policy', 'validators'],
+    ['budget and sampling policy', 'budget'],
+  ]) {
+    if (
+      !allowed.has(label) &&
+      !sameValues(
+        baseline.samples.map((sample) => sample.comparisonPolicyEvidence?.[key]),
+        current.samples.map((sample) => sample.comparisonPolicyEvidence?.[key]),
+      )
+    ) {
+      diagnostics.push(`${label} differs`);
+    }
+  }
   if (
     !allowed.has('content-quality Judge policy') &&
-    !sameValues(
-      baseline.samples.map(projectJudgePolicy),
-      current.samples.map(projectJudgePolicy),
-    )
+    !sameValues(baseline.samples.map(projectJudgePolicy), current.samples.map(projectJudgePolicy))
   ) {
     diagnostics.push('content-quality Judge policy differs');
   }

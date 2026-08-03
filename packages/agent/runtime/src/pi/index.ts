@@ -105,8 +105,12 @@ export {
   type PiConversationCompactionResult,
 } from './conversation-runtime';
 export {
+  migratePiConversationSchema,
+  openNodePiConversationStorage,
+  type NodePiConversationStorage,
+} from './node-conversation-storage';
+export {
   InMemoryUserCredentialPersistence,
-  NodeSqliteUserCredentialPersistence,
   OpenNekoCredentialError,
   OpenNekoCredentialStore,
   PiProviderAuthController,
@@ -115,11 +119,15 @@ export {
   type CredentialProvenance,
   type CredentialStatus,
   type OpenNekoCredentialErrorCode,
-  type OpenNodeSqliteUserCredentialPersistenceOptions,
   type PersistedUserCredential,
   type ProviderLoginMethod,
   type UserCredentialPersistence,
 } from './credential-store';
+export {
+  createAgentCredentialRuntime,
+  type AgentCredentialRuntime,
+  type ProtectedAuthPromptPort,
+} from './credential-runtime';
 export {
   OpenNekoPiProviderProjectionError,
   createOpenNekoPiModels,

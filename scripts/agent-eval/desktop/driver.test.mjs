@@ -7,7 +7,19 @@ describe('Desktop Agent external driver adapter', () => {
     const driver = createDesktopAgentDriver({ evaluate });
     await driver.connect({ projectId: 'project-1', viewId: 'view-1', viewEpoch: 1 });
     await driver.createConversation();
-    await driver.submit({ conversationId: 'conversation-1', prompt: 'hello' });
+    await driver.submit({
+      conversationId: 'conversation-1',
+      prompt: 'hello',
+      contextPayloads: [
+        {
+          type: 'cut-clip',
+          id: 'cut:clip-1',
+          label: 'Clip 1',
+          summary: 'Explicit Cut Clip',
+          data: { clipId: 'clip-1' },
+        },
+      ],
+    });
     await driver.queue({ conversationId: 'conversation-1', prompt: 'follow up' });
     await driver.cancel({ conversationId: 'conversation-1', turnId: 'turn-1', runId: 'run-1' });
     await driver.confirm({
@@ -33,6 +45,7 @@ describe('Desktop Agent external driver adapter', () => {
     const expressions = evaluate.mock.calls.map(([expression]) => expression).join('\n');
     expect(expressions).toContain('window.openNekoDesktop?.agent');
     expect(expressions).toContain("type: 'sendMessage'");
+    expect(expressions).toContain('contextPayloads');
     expect(expressions).toContain("type: 'newConversation'");
     expect(expressions).toContain("type: 'confirmTool'");
     expect(expressions).toContain("kind: 'wait-for-idle'");
@@ -57,7 +70,167 @@ describe('Desktop Agent external driver adapter', () => {
     expect(expression).toContain('operation identity was not observed');
   });
 
+  it('waits for exact identities and pending Tool confirmation from public projection events', async () => {
+    let publish;
+    const sent = [];
+    const previousWindow = globalThis.window;
+    globalThis.window = {
+      openNekoDesktop: {
+        agent: {
+          getBootstrap: vi.fn(async () => ({
+            status: 'ready',
+            connection: { projectId: 'project-1', viewId: 'view-1', viewEpoch: 1 },
+          })),
+          subscribe: vi.fn((listener) => {
+            publish = listener;
+            return () => {};
+          }),
+          send: vi.fn((message) => sent.push(message)),
+        },
+      },
+    };
+    const driver = createDesktopAgentDriver({
+      evaluate: async (expression) => (0, eval)(expression),
+    });
+    try {
+      await driver.connect({ projectId: 'project-1', viewId: 'view-1', viewEpoch: 1 });
+      const submitted = await driver.submit({
+        conversationId: 'conversation-1',
+        prompt: 'hello',
+      });
+      publish({
+        type: 'projectionPatch',
+        patch: {
+          type: 'conversationProjectionPatch',
+          conversationId: 'conversation-1',
+          turnId: 'turn-1',
+          runId: 'run-1',
+          operations: [
+            {
+              operation: 'upsert',
+              item: {
+                kind: 'tool_call',
+                conversationId: 'conversation-1',
+                turnId: 'turn-1',
+                runId: 'run-1',
+                payload: {
+                  toolCall: { id: 'tool-1', name: 'Write', pendingConfirmation: true },
+                },
+              },
+            },
+          ],
+        },
+      });
+
+      await expect(
+        driver.waitForIdentity('conversation-1', submitted.eventOffset, 1000),
+      ).resolves.toEqual({
+        conversationId: 'conversation-1',
+        turnId: 'turn-1',
+        runId: 'run-1',
+      });
+      await expect(
+        driver.waitForPendingTool('conversation-1', 'Write', submitted.eventOffset, 1000),
+      ).resolves.toEqual({
+        conversationId: 'conversation-1',
+        turnId: 'turn-1',
+        runId: 'run-1',
+        toolCallId: 'tool-1',
+        toolName: 'Write',
+      });
+      publish({
+        type: 'conversationSnapshot',
+        conversation: {
+          id: 'conversation-1',
+          messages: [{ role: 'user', content: 'Do not use ResourceRef or file:' }],
+        },
+      });
+      await expect(driver.readProjection('conversation-1')).resolves.toMatchObject({
+        events: [expect.objectContaining({ type: 'projectionPatch' })],
+      });
+      expect(sent).toEqual([
+        expect.objectContaining({ type: 'sendMessage', conversationId: 'conversation-1' }),
+      ]);
+    } finally {
+      await driver.dispose();
+      globalThis.window = previousWindow;
+    }
+  });
+
   it('fails as infrastructure-blocked when no renderer evaluator exists', () => {
     expect(() => createDesktopAgentDriver({})).toThrow('requires a CDP renderer evaluate function');
   });
+
+  it('reloads, reconnects and restores the exact conversation with an advanced renderer lease', async () => {
+    const next = connection('app-1', 2, 'connection-2');
+    const evaluate = vi
+      .fn()
+      .mockResolvedValueOnce({ status: 'accepted' })
+      .mockResolvedValueOnce({ connection: next })
+      .mockResolvedValueOnce({
+        accepted: true,
+        snapshot: { id: 'conversation-1', messages: [] },
+      });
+    const waitForRenderer = vi.fn(async () => undefined);
+    const driver = createDesktopAgentDriver({ evaluate, waitForRenderer });
+    const prior = connection('app-1', 1, 'connection-1');
+
+    await expect(
+      driver.reloadAndRestore({
+        connection: prior,
+        conversationId: 'conversation-1',
+        timeoutMs: 1000,
+      }),
+    ).resolves.toMatchObject({
+      connection: { applicationInstanceId: 'app-1', rendererEpoch: 2 },
+      snapshot: { id: 'conversation-1' },
+    });
+    expect(waitForRenderer).toHaveBeenCalledOnce();
+  });
+
+  it('restarts the application, restores workspace/conversation identity and requires disposal facts', async () => {
+    const prior = connection('app-1', 1, 'connection-1');
+    const next = connection('app-2', 1, 'connection-2');
+    const evaluate = vi
+      .fn()
+      .mockResolvedValueOnce({ connection: next })
+      .mockResolvedValueOnce({
+        accepted: true,
+        snapshot: { id: 'conversation-1', messages: [] },
+      })
+      .mockResolvedValueOnce({
+        status: 'facts',
+        facts: { disposal: { status: 'disposed' } },
+      })
+      .mockResolvedValueOnce({ disposed: true });
+    const restartApplication = vi.fn(async () => undefined);
+    const waitForRenderer = vi.fn(async () => undefined);
+    const driver = createDesktopAgentDriver({ evaluate, restartApplication, waitForRenderer });
+
+    await expect(
+      driver.restartAndRestore({
+        connection: prior,
+        conversationId: 'conversation-1',
+        timeoutMs: 1000,
+      }),
+    ).resolves.toMatchObject({ connection: { applicationInstanceId: 'app-2' } });
+    await expect(driver.closeAndDispose()).resolves.toMatchObject({
+      facts: { disposal: { status: 'disposed' } },
+      local: { disposed: true },
+    });
+    expect(restartApplication).toHaveBeenCalledOnce();
+  });
 });
+
+function connection(applicationInstanceId, rendererEpoch, connectionId) {
+  return {
+    applicationInstanceId,
+    windowId: 'window-1',
+    projectId: 'project-1',
+    workspaceId: 'workspace-1',
+    viewId: 'view-1',
+    viewEpoch: 1,
+    rendererEpoch,
+    connectionId,
+  };
+}

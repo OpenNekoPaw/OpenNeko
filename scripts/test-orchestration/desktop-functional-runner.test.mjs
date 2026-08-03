@@ -2,8 +2,13 @@ import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { describe, it } from 'node:test';
 import {
+  captureDesktopScreenshot,
   createAutomatedDesktopLaunch,
   createProcessController,
+  dragDesktopElement,
+  pressDesktopKey,
+  scrollDesktopElement,
+  typeDesktopText,
 } from '../desktop-functional/runner.mjs';
 import {
   validateDesktopFunctionalScenario,
@@ -34,6 +39,8 @@ describe('Desktop automated functional runner contract', () => {
     assert.deepEqual(launch.environment, {
       OPENNEKO_DESKTOP_FUNCTIONAL_HOME: '/tmp/openneko-desktop-functional-cut',
       OPENNEKO_DESKTOP_FUNCTIONAL_WORKSPACE: '/tmp/openneko-desktop-functional-cut/workspace',
+      OPENNEKO_DESKTOP_FUNCTIONAL_CUT_EXPORT:
+        '/tmp/openneko-desktop-functional-cut/workspace/exports/functional-cut-export.mp4',
     });
   });
 
@@ -77,6 +84,20 @@ describe('Desktop automated functional runner contract', () => {
     ]);
   });
 
+  it('launches the exact fingerprint-verified packaged executable supplied by Evaluation', () => {
+    const launch = createAutomatedDesktopLaunch({
+      platform: 'darwin',
+      target: 'packaged',
+      executablePath: '/tmp/isolated-build/OpenNeko.app/Contents/MacOS/OpenNeko',
+      fixtureHome: '/tmp/openneko-desktop-functional-isolated-build',
+      userDataRoot: '/tmp/openneko-desktop-functional-isolated-build/electron-user-data',
+      workspacePath: '/tmp/openneko-desktop-functional-isolated-build/workspace',
+      debugPort: 43127,
+    });
+
+    assert.equal(launch.command, '/tmp/isolated-build/OpenNeko.app/Contents/MacOS/OpenNeko');
+  });
+
   it('keeps scenario ownership and prepared workspaces explicit', () => {
     const scenario = validateDesktopFunctionalScenario({
       id: 'cut-openneko-consumer',
@@ -99,6 +120,96 @@ describe('Desktop automated functional runner contract', () => {
           '/tmp/openneko-desktop-functional-cut',
         ),
       /inside its fixture home/u,
+    );
+  });
+
+  it('drives text, keyboard, scrolling, and screenshot evidence through CDP', async () => {
+    const calls = [];
+    const cdp = {
+      async send(method, params) {
+        calls.push({ method, params });
+        if (method === 'Runtime.evaluate') {
+          return { result: { value: { x: 40, y: 20, hitTarget: true } } };
+        }
+        if (method === 'Page.captureScreenshot') {
+          return { data: Buffer.from('synthetic-png').toString('base64') };
+        }
+        return {};
+      },
+    };
+
+    await typeDesktopText(cdp, '[data-testid="prompt"]', 'hello', 0, {
+      platform: 'darwin',
+    });
+    await pressDesktopKey(cdp, 'Enter', ['Shift']);
+    await scrollDesktopElement(cdp, '[data-testid="timeline"]', 0, { deltaY: 240 });
+    await dragDesktopElement(cdp, '[data-testid="clip"]', '[data-testid="track"]');
+    const screenshot = await captureDesktopScreenshot(cdp);
+
+    assert.equal(Buffer.from(screenshot, 'base64').toString('utf8'), 'synthetic-png');
+    assert.deepEqual(
+      calls.filter((call) => call.method === 'Input.insertText'),
+      [{ method: 'Input.insertText', params: { text: 'hello' } }],
+    );
+    assert.deepEqual(
+      calls
+        .filter((call) => call.method === 'Input.dispatchKeyEvent')
+        .map((call) => [call.params.type, call.params.key, call.params.modifiers]),
+      [
+        ['keyDown', 'a', 4],
+        ['keyUp', 'a', 4],
+        ['keyDown', 'Backspace', 0],
+        ['keyUp', 'Backspace', 0],
+        ['keyDown', 'Enter', 8],
+        ['keyUp', 'Enter', 8],
+      ],
+    );
+    assert.deepEqual(
+      calls.find(
+        (call) => call.method === 'Input.dispatchMouseEvent' && call.params.type === 'mouseWheel',
+      )?.params,
+      {
+        type: 'mouseWheel',
+        x: 40,
+        y: 20,
+        deltaX: 0,
+        deltaY: 240,
+        button: 'none',
+        buttons: 0,
+        pointerType: 'mouse',
+      },
+    );
+    assert.deepEqual(
+      calls
+        .filter(
+          (call) =>
+            call.method === 'Input.dispatchMouseEvent' &&
+            ['mousePressed', 'mouseReleased'].includes(call.params.type),
+        )
+        .slice(-2)
+        .map((call) => [call.params.type, call.params.buttons]),
+      [
+        ['mousePressed', 1],
+        ['mouseReleased', 0],
+      ],
+    );
+    assert.deepEqual(calls.at(-1), {
+      method: 'Page.captureScreenshot',
+      params: { format: 'png', fromSurface: true, captureBeyondViewport: false },
+    });
+  });
+
+  it('fails visibly for invalid keyboard and scroll requests', async () => {
+    const cdp = { send: async () => ({}) };
+
+    await assert.rejects(() => pressDesktopKey(cdp, 'F13'), /Unsupported Desktop keyboard key/u);
+    await assert.rejects(
+      () => pressDesktopKey(cdp, 'Enter', ['Command']),
+      /Unsupported Desktop keyboard modifier/u,
+    );
+    await assert.rejects(
+      () => scrollDesktopElement(cdp, 'body', 0, { deltaY: 0 }),
+      /requires a non-zero delta/u,
     );
   });
 

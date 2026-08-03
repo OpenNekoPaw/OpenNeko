@@ -4,7 +4,7 @@ import type {
   DesktopProjectCatalogItem,
   DesktopProjectTabProjection,
   DesktopShellProjection,
-} from '../shared/shell-contract';
+} from '@neko/host/desktop-shell-contract';
 import { createDesktopResourceBrowserIdentity } from '../shared/resource-browser-bridge-contract';
 import { createElectronResourceBrowserHostRuntime } from './desktop-resource-browser-host-runtime';
 import { useDesktopApplicationSettings } from './application-settings-context';
