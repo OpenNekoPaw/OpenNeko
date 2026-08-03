@@ -132,9 +132,10 @@ artifact。原生 macOS package 是 Manual/Merge Gate 的必要证据，但仍�
 
 CI 的测试证据分为全仓库 unit/contract coverage 与固定的 Desktop headless functional
 流程。后者可跨 Main/preload/composition 验证产品路径，但不得启动 Electron GUI、读取真实
-用户目录、使用 provider credential 或调用真实 AI API。真实 API Agent Evaluation 与图形化
-Electron UI 验收都必须由开发者通过显式本地命令启动，不得进入 GitHub Actions 或通用 CI
-script composition。
+用户目录、使用 provider credential 或调用真实 AI API。Agent Evaluation key-free harness、真实
+API/hidden Desktop case、重复 matrix、configuration/implementation ablation 与图形化 Electron UI
+验收都必须由开发者通过显式本地命令启动，不得进入 GitHub Actions 或通用 CI script composition；
+CI 只保留本地入口不可达的编排回归证据。
 
 代码债务、边界例外、发布通道等机器可读门禁输入放在 `quality/`，由脚本和 CI 消费；本文只记录质量政策、验证矩阵和人工 review 边界。
 

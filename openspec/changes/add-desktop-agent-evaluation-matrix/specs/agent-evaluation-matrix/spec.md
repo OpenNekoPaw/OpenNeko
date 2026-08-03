@@ -103,3 +103,61 @@ evidence levels. Generic CI MUST NOT claim provider-backed behavior or graphical
 - **WHEN** release evidence includes hidden Desktop matrix and visible protected cases
 - **THEN** the summary lists each executed evidence level, blocked cases, provider/model identity and residual risk
 - **AND** missing visible or real-provider evidence remains explicit rather than inferred from another level
+
+### Requirement: Evaluation authoring is declarative and runner resolution stays thin
+
+The Evaluation platform MUST treat strict suite, Scenario, assertion, fixture and ablation artifacts as the authored
+test intent. A Skill MAY assist creation or analysis of those artifacts, but MUST NOT own executable operation
+protocols, handler registration, outcome assignment or execution policy. The existing runner MUST resolve validated
+references and execute supported workflow steps without per-case executable scripts or `scenario.id` success branches.
+
+#### Scenario: A new case uses existing operations and evidence
+
+- **WHEN** an owner adds a case whose steps, fixture, assertions and evidence are already supported
+- **THEN** the author adds or updates only indexed declarative artifacts and package-owned domain assertions
+- **AND** no central runner whitelist, case-specific adapter or generated JavaScript success path is required
+
+#### Scenario: Generated authoring requests an unsupported operation
+
+- **WHEN** a Skill-generated or manually authored Scenario references an unknown step, missing evaluator or evidence
+  contract that the product does not expose
+- **THEN** strict validation fails before Desktop launch with an owning diagnostic
+- **AND** the platform does not ask the Skill to infer execution, dynamically register code or substitute weak output
+
+### Requirement: Case resolution does not create a second compiler platform
+
+The runner MUST reuse the existing Scenario schema, workflow-state validation, profile resolution and supported-kind
+checks to create an internal immutable resolved case before execution. The resolved case MUST remain an implementation
+detail until cross-process persistence, multiple real execution backends or immutable plan caching establish a real
+extraction boundary.
+
+#### Scenario: A supported workflow is prepared
+
+- **WHEN** an indexed selection passes strict validation
+- **THEN** a pure runner step resolves its fixture, profiles, budget, ordered steps and assertion references
+- **AND** the workflow interpreter executes the result through the common Desktop driver and Evaluation stages
+
+#### Scenario: A standalone compiler abstraction is proposed without a consumer
+
+- **WHEN** the same behavior can be expressed by the existing schema, resolver and runner path
+- **THEN** the implementation MUST NOT add a compiler service, workspace package, persisted plan, dynamic plugin
+  system or universal UI/Agent DSL
+- **AND** future extraction requires documented consumers, lifecycle, errors and verification evidence
+
+### Requirement: Evaluation execution remains explicitly local-only
+
+The Evaluation platform MUST keep Agent Evaluation harnesses, provider-backed behavior, hidden or visible Desktop
+samples, repeated matrices and configuration or implementation ablation behind explicit local developer entrypoints.
+Generic CI and GitHub Actions MUST NOT directly or transitively execute those entrypoints or upload their reports.
+
+#### Scenario: CI orchestration is validated
+
+- **WHEN** repository CI workflows and generic gate script graphs are audited
+- **THEN** no Agent Evaluation, real API, graphical Desktop or ablation entrypoint is reachable
+- **AND** CI may only report ordinary unit, contract, headless and orchestration-boundary evidence
+
+#### Scenario: A local Evaluation dry-run passes
+
+- **WHEN** a developer explicitly runs key-free or ablation validation from a local checkout
+- **THEN** the result is labeled local harness or authoring readiness only
+- **AND** it does not become CI evidence or real Agent behavior acceptance

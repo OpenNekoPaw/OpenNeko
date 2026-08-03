@@ -37,12 +37,17 @@ infrastructure 与外部 Evaluation platform。设计必须同时保证唯一产
 
 - 不恢复 `apps/neko-tui`、VS Code Host、TUI debug protocol 或任何别名/兼容 runner。
 - 不把 Evaluation 注册成 Agent Skill、产品 capability、普通用户入口或第二个 Agent controller。
+- 不让 Skill 持有运行时操作协议、step schema、handler 注册、pass/fail 或 CI 策略；Skill 只负责
+  authoring 方法、覆盖判断、草案生成和证据解释。
 - 不允许 Evaluation 通过任意 Electron IPC、文件系统、secret、Host object 或 direct runtime API
   绕过 sender-bound 产品契约。
 - 不把 key-free dry-run、mock output、最终文本匹配、单次 Judge score 或隐藏窗口本身描述为充分
   验收证据。
-- 不在通用 CI 中运行 provider-backed matrix 或可见 Electron UI；CI 只运行 key-free、deterministic
-  和明确允许的 headless infrastructure gates。
+- 不在通用 CI 中运行 Agent Evaluation harness、provider-backed matrix、消融计划或可见 Electron UI；
+  本变更只保留开发者显式本地入口，CI 运行普通 deterministic unit/contract/headless gate 和本地入口
+  不可达的编排检查。
+- 不创建独立 compiler service/workspace、动态测试插件系统或统一 UI/Agent DSL；当前只补齐现有
+  schema validation、case resolution 与 execution 之间的薄连接。
 - 不保证模型输出确定性；系统只保证执行身份、路径、证据、预算、失败分类和统计过程可审计。
 
 ## Decisions
@@ -165,6 +170,43 @@ CLIConfig 和 AppPort case 退役；若对应用户行为仍有价值，应建�
 启动时验证所需 Desktop facts 和 route capability；依赖未完成时真实 case 保持
 `infrastructure-blocked`，并指出缺失 contract。不得通过 mock、direct runtime 或旧 Host 暂时通过。
 
+### 9. Skill 负责 authoring，声明式 artifact 负责测试意图
+
+Evaluation Skill 读取变更、suite coverage、能力目录、facts 与 validator catalog，辅助形成
+`reuse`、`update`、`create` 或 `excluded` 决策，以及 suite/scenario/assertion/ablation plan 草案。
+生成结果必须进入现有严格 schema、index 和普通代码评审；Skill 不直接执行测试、不注册 handler、
+不修改 schema 真相，也不依据上下文动态补全缺失步骤。
+
+普通新 UI 或 Agent case 只增加声明式场景、fixture 引用和 assertion 引用。只有出现 schema 尚未表达的
+真实产品操作或新的领域证据边界时，才由 owning package 增加 typed operation、neutral fact 或
+domain validator；生成的未实现骨架必须 fail-visible，不能默认成功。中央 runner 不得按
+`scenario.id`、Skill 名称或产品功能名称选择专用成功路径。
+
+备选方案是让 Skill 直接生成并执行 JavaScript。该方案不可严格校验、不可稳定复现，也会把凭据、
+进程生命周期、pass/fail 和产品协议混入 prompt content，因此拒绝。
+
+### 10. 确定性解析留在现有 Runner，不单独建设编译平台
+
+现有 `validateScenarioForExecution()` 已拥有 strict schema、引用、supported-kind 和 workflow 状态机
+校验，dry-run 已解析 fixture、runtime/model profile 与 report policy。本变更只在既有 runner 内增加
+纯、无副作用的薄解析步骤，将已验证 selection 冻结为内部 `ResolvedExecutionCase`，随后交给通用
+workflow interpreter、Desktop driver 和既有 assertion/artifact/Judge/report 阶段。
+
+`ResolvedExecutionCase` 当前不持久化、不单独版本化、不跨进程传输，也不引入新的 workspace、服务、
+factory/registry/provider 层。步骤分发优先使用对现有 union 的穷尽处理；未知 kind、缺失 evaluator、
+非法 identity 或 unsupported evidence 必须在启动 Desktop 前失败。只有 matrix/shard 实现证明需要稳定
+跨进程计划、多个真实执行后端或不可变缓存时，才在同一 change 中评估最小提取，不能预先建设平台。
+
+### 11. 执行 lane 由仓库策略决定且保持本地
+
+Scenario 可以声明所需 evidence level 和资源，但不能自行选择 CI。Agent Evaluation key-free harness、
+hidden/visible Desktop、真实 provider API、重复 matrix 和 configuration/implementation ablation 都通过
+显式本地入口运行；GitHub Actions 与通用 CI script graph 不得直接或间接引用这些入口。普通
+unit/contract/headless 测试仍可在 CI 验证产品与编排边界，但不能据此宣称 Agent 行为、UI 或消融结果。
+
+本地入口隔离 fixture、userData、凭据和报告，原始报告保持 gitignored。任何未来把 Evaluation 引入
+受信任 CI 的需求都必须创建独立 OpenSpec，不能在本变更中预留自动启用分支。
+
 ## Risks / Trade-offs
 
 - **[Electron Worker 消耗明显高于 TUI]** → 使用预构建 executable、有界并发、资源分类、分片和
@@ -183,6 +225,10 @@ CLIConfig 和 AppPort case 退役；若对应用户行为仍有价值，应建�
   count 管理；必需事实被截断时 case blocked，不增加通用 debug dump。
 - **[实现消融构建成本过高]** → 按 source/build recipe fingerprint 缓存不可变 build；baseline 与
   candidate 仍使用独立 target 和新的 sample lifecycle。
+- **[声明式场景演化成万能 DSL]** → 只表达已存在的产品操作、证据和 assertion 引用；领域 UI 与产物
+  语义留在 owning package，新增跨域抽象前要求两个以上同生命周期、同错误模型的真实复用点。
+- **[薄解析重新膨胀成编译平台]** → 当前不新增 package、持久计划、动态插件或独立版本；先以纯函数、
+  穷尽步骤解释和既有 schema/hard-gate 组合完成，达到明确提取条件后再设计。
 
 ## Migration Plan
 
@@ -190,16 +236,18 @@ CLIConfig 和 AppPort case 退役；若对应用户行为仍有价值，应建�
    `integrate-desktop-agent-home` 的最终 qualification。
 2. 扩展 Desktop functional launch 为可选择隐藏窗口的隔离 automation mode，验证并行
    `userData`、single-instance lock、端口、安全和清理。
-3. 实现 Desktop complete-session driver 与 `runV2Case()` 单样本路径，先覆盖一个 canonical turn、
-   一个 Tool approval 和一个 reload/resume case。
-4. 恢复重复采样、artifact checks、Judge、baseline 和报告写入，再接入 matrix Worker Pool、预算、
-   资源分类与 shard。
+3. 在现有 schema/runner 内实现薄 `resolveExecutionCase` 与通用 workflow interpreter，删除具体
+   `scenario.id` 白名单、单次 submit/idle 限制和按 case 选择 assertion 的分支；先覆盖一个 canonical
+   turn、一个 Tool approval、一个 cancellation 和一个 reload/resume case。
+4. 让 Skill/authoring 只生成或更新声明式 artifact，恢复 assertion-driven hard gates、artifact checks、
+   Judge、baseline 和报告写入，再接入 matrix Worker Pool、预算、资源分类与 shard。
 5. 增加产品有效配置快照/digest，迁移现有 runtime/model profiles；删除 ablation plan 中重复的自由
    文本 path 和 TUI/`AgentSession` 残留。
 6. 接通 configuration 与 implementation ablation，建立新的 Desktop baseline；历史 TUI 数据只写入
    迁移 ledger，不参与 delta。
-7. 运行 key-free 全套门禁、focused real Desktop cases、重复 matrix 和 protected visible Electron
-   cases，记录不可用 provider/凭据/平台阻塞。
+7. 通过显式本地入口运行 key-free 全套门禁、focused real Desktop cases、重复 matrix、消融和
+   protected visible Electron cases，记录不可用 provider/凭据/平台阻塞；用通用 CI 编排测试证明这些
+   入口不可达。
 
 回滚时可以禁用新的外部 matrix entrypoint，并让真实 case 回到明确的 `infrastructure-blocked`；不得
 回滚到 TUI、direct runtime 或 mock 成功路径。所有临时 fixture 和报告可重建，用户项目、设置、凭据
@@ -213,5 +261,5 @@ CLIConfig 和 AppPort case 退役；若对应用户行为仍有价值，应建�
   GPU、启动时间和 API rate-limit 基线后确定。
 - 哪些 Skill/Tool/permission 开关属于长期产品 session settings，哪些必须保持 implementation ablation，
   需要按 owning package 逐项审计后加入配置 catalog。
-- provider-backed matrix 的受信任执行环境和凭据注入方式仍是本地优先；若未来进入受信任 CI，需要
-  单独 OpenSpec 定义 secret、artifact retention、成本和审批边界。
+- 是否需要在 matrix/shard 阶段持久化 `ResolvedExecutionCase`，必须由跨进程传输、缓存和多个真实
+  执行后端的实现证据决定；在此之前保持 runner 内部对象。
