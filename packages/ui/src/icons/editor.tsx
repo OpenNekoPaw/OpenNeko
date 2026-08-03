@@ -255,6 +255,27 @@ export function RightPanelIcon({ size = 16, className, strokeWidth = 2 }: IconPr
   );
 }
 
+export function LeftPanelIcon({ size = 16, className, strokeWidth = 2 }: IconProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      className={className}
+      {...base(strokeWidth)}
+    >
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <path d="M9 4v16" />
+      <path d="M5 8h1.5" />
+      <path d="M5 12h1.5" />
+      <path d="M5 16h1.5" />
+      <path d="M13 8h4" />
+      <path d="M13 12h4" />
+      <path d="M13 16h4" />
+    </svg>
+  );
+}
+
 export function RightPanelOffIcon({ size = 16, className, strokeWidth = 2 }: IconProps) {
   return (
     <svg

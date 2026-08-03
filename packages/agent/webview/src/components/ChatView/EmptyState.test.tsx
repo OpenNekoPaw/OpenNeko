@@ -96,6 +96,7 @@ describe('EmptyState', () => {
     expect(screen.getByText('Describe an idea or mention a resource.')).toBeTruthy();
     expect(screen.getByText('Try a Skill')).toBeTruthy();
     expect(screen.getAllByRole('button')).toHaveLength(4);
+    expect(document.querySelector('.agent-empty-state--desktop-dock')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'disabled' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'e' })).toBeNull();
 

@@ -6,6 +6,7 @@ import {
   GridIcon,
   IconButton,
   InfoIcon,
+  LeftPanelIcon,
   PackageIcon,
   PlusIcon,
   Popover,
@@ -1961,14 +1962,17 @@ function PrimarySidebarBrand({
 }): JSX.Element {
   const { t } = useTranslation();
   return (
-    <DesktopApplicationBrand
-      showMark={compact}
-      titleAction={{
-        disabled,
-        label: compact ? t('workspace.expandSidebar') : t('workspace.collapseSidebar'),
-        onClick: onToggle,
-      }}
-    />
+    <div className="primary-sidebar-brand">
+      <DesktopApplicationBrand showMark={compact} />
+      <IconButton
+        className="primary-sidebar-toggle"
+        disabled={disabled}
+        icon={<LeftPanelIcon size={17} />}
+        label={compact ? t('workspace.expandSidebar') : t('workspace.collapseSidebar')}
+        title={compact ? t('workspace.expandSidebar') : t('workspace.collapseSidebar')}
+        onClick={onToggle}
+      />
+    </div>
   );
 }
 

@@ -151,10 +151,17 @@ describe('Desktop renderer styles', () => {
   });
 
   it('styles owner-qualified management Roots without superseded Home management selectors', () => {
-    expect(styles).toMatch(/\.agent-extension-management-root,[\s\S]*?\.project-management-catalog\s*\{/u);
+    const rootRule = styles.match(
+      /\.agent-extension-management-root,[\s\S]*?\.project-management-catalog\s*\{(?<body>[\s\S]*?)\n\}/u,
+    );
+    expect(rootRule?.groups?.body).toMatch(/width\s*:\s*min\(1020px, calc\(100% - 64px\)\)/u);
+    expect(rootRule?.groups?.body).toMatch(/margin\s*:\s*0 auto/u);
+    expect(rootRule?.groups?.body).toMatch(/padding\s*:\s*clamp\(66px, 10vh, 104px\) 0 52px/u);
     expect(styles).toMatch(/\.management-surface-list\s*\{[\s\S]*?display\s*:\s*grid/u);
     expect(styles).toMatch(/\.project-management-detail\s*\{[\s\S]*?height\s*:\s*100%/u);
-    expect(styles).not.toMatch(/\.home-(?:management|project-(?:selector|list|grid|card)|sort-control|search-field|segmented-control|status-badge)/u);
+    expect(styles).not.toMatch(
+      /\.home-(?:management|project-(?:selector|list|grid|card)|sort-control|search-field|segmented-control|status-badge)/u,
+    );
   });
 
   it('keeps the Global Library as an aligned unframed workbench surface', () => {

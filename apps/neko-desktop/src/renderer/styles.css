@@ -368,6 +368,23 @@ code {
   font-size: 14px;
 }
 
+.primary-sidebar-brand {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.primary-sidebar-brand .home-brand {
+  min-width: 0;
+  flex: 1;
+}
+
+.primary-sidebar-toggle {
+  flex: 0 0 auto;
+}
+
 .home-brand-title {
   display: inline-flex;
   min-width: 0;
@@ -409,6 +426,11 @@ code {
   padding-inline: 0;
 }
 
+.home-navigation--compact .primary-sidebar-brand {
+  width: 100%;
+  flex-direction: column;
+}
+
 .home-navigation--compact .home-brand strong,
 .home-navigation--compact .home-recent-navigation,
 .home-navigation--compact .attention-summary {
@@ -444,6 +466,15 @@ code {
   .home-navigation--compact {
   align-items: stretch;
   padding-inline: 12px;
+}
+
+.application-primary-sidebar-frame[data-primary-sidebar-hover-reveal='true']:is(
+    :hover,
+    :focus-within
+  )
+  .home-navigation--compact
+  .primary-sidebar-brand {
+  flex-direction: row;
 }
 
 .application-primary-sidebar-frame[data-primary-sidebar-hover-reveal='true']:is(
@@ -1077,33 +1108,34 @@ code {
 .agent-extension-management-root,
 .project-management-catalog {
   box-sizing: border-box;
-  width: 100%;
-  height: 100%;
+  width: min(1020px, calc(100% - 64px));
+  min-height: 100%;
   min-width: 0;
-  min-height: 0;
-  padding: 18px;
+  margin: 0 auto;
+  padding: clamp(66px, 10vh, 104px) 0 52px;
   overflow: auto;
 }
 
 .management-surface-header {
   display: flex;
-  align-items: flex-start;
+  align-items: flex-end;
   justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 16px;
+  gap: 24px;
+  margin-bottom: 22px;
 }
 
 .management-surface-header h2 {
   margin: 3px 0 0;
   color: var(--neko-fg);
-  font-size: 17px;
+  font-size: 27px;
   letter-spacing: 0;
 }
 
 .management-surface-header p:not(.section-label) {
+  max-width: 620px;
   margin: 5px 0 0;
   color: var(--neko-fg-secondary);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .management-surface-actions {
@@ -1146,7 +1178,7 @@ code {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 14px;
+  margin-bottom: 16px;
 }
 
 .management-surface-toolbar > button {
@@ -1221,17 +1253,21 @@ code {
 
 .management-surface-list {
   display: grid;
-  gap: 6px;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--neko-desktop-border);
+  border-radius: 8px;
+  background: var(--neko-desktop-surface-raised);
 }
 
 .management-surface-list.is-grid {
-  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
 }
 
 .management-surface-row {
   display: grid;
   min-width: 0;
-  min-height: 60px;
+  min-height: 72px;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px;
@@ -1239,7 +1275,7 @@ code {
   border: 1px solid var(--neko-desktop-border);
   border-radius: 6px;
   color: var(--neko-fg);
-  background: var(--neko-desktop-surface-raised);
+  background: var(--neko-desktop-control);
   text-align: left;
 }
 

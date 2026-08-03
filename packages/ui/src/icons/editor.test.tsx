@@ -5,6 +5,7 @@ import {
   EyeIcon,
   EyeOffIcon,
   LockIcon,
+  LeftPanelIcon,
   RightPanelIcon,
   RightPanelOffIcon,
   StorylineIcon,
@@ -12,7 +13,8 @@ import {
 } from './editor';
 
 describe('editor icons', () => {
-  it('exports shared right panel visibility icons', () => {
+  it('exports shared panel visibility icons', () => {
+    expect(renderToStaticMarkup(<LeftPanelIcon />)).toContain('M9 4v16');
     expect(renderToStaticMarkup(<RightPanelIcon />)).toContain('<rect');
     expect(renderToStaticMarkup(<RightPanelOffIcon />)).toContain('M5 21 21 5');
   });

@@ -2,14 +2,13 @@
 
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { I18nProvider } from '@neko/ui/i18n/react';
 import { DesktopApplicationBrand } from './DesktopApplicationSidebar';
 import { createDesktopI18n } from './i18n';
 
 describe('DesktopApplicationBrand', () => {
-  it('uses the text-only OpenNeko title as the existing sidebar action', () => {
-    const onClick = vi.fn();
+  it('renders the expanded text-only OpenNeko brand as presentation', () => {
     const i18n = createDesktopI18n('en');
     const container = document.createElement('div');
     document.body.append(container);
@@ -17,31 +16,20 @@ describe('DesktopApplicationBrand', () => {
     act(() => {
       root.render(
         <I18nProvider service={i18n.i18nService}>
-          <DesktopApplicationBrand
-            showMark={false}
-            titleAction={{ label: 'Collapse sidebar', onClick }}
-          />
+          <DesktopApplicationBrand showMark={false} />
         </I18nProvider>,
       );
     });
 
-    const title = container.querySelector<HTMLButtonElement>(
-      'button[aria-label="Collapse sidebar"]',
-    );
-    if (!title) throw new Error('Expected the OpenNeko title action.');
-    expect(title.textContent).toBe('OpenNeko');
+    expect(container.querySelector('.home-brand')?.textContent).toBe('OpenNeko');
     expect(container.querySelector('.brand-mark')).toBeNull();
-    expect(title.querySelector('svg')).toBeNull();
-
-    act(() => title.click());
-    expect(onClick).toHaveBeenCalledOnce();
+    expect(container.querySelector('button')).toBeNull();
 
     act(() => root.unmount());
     container.remove();
   });
 
-  it('keeps the compact brand mark inside the sidebar action hit target', () => {
-    const onClick = vi.fn();
+  it('keeps the compact brand mark in the brand presentation', () => {
     const i18n = createDesktopI18n('en');
     const container = document.createElement('div');
     document.body.append(container);
@@ -49,23 +37,13 @@ describe('DesktopApplicationBrand', () => {
     act(() => {
       root.render(
         <I18nProvider service={i18n.i18nService}>
-          <DesktopApplicationBrand
-            showMark
-            titleAction={{ label: 'Expand sidebar', onClick }}
-          />
+          <DesktopApplicationBrand showMark />
         </I18nProvider>,
       );
     });
 
-    const title = container.querySelector<HTMLButtonElement>(
-      'button[aria-label="Expand sidebar"]',
-    );
-    if (!title) throw new Error('Expected the compact OpenNeko title action.');
-    expect(title.querySelector('.brand-mark')?.textContent).toBe('N');
-    expect(container.querySelector('.home-brand > .brand-mark')).toBeNull();
-
-    act(() => title.click());
-    expect(onClick).toHaveBeenCalledOnce();
+    expect(container.querySelector('.home-brand > .brand-mark')?.textContent).toBe('N');
+    expect(container.querySelector('button')).toBeNull();
 
     act(() => root.unmount());
     container.remove();

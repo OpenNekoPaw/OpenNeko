@@ -55,6 +55,7 @@ export {
   ScissorsIcon,
   LayersIcon,
   StorylineIcon,
+  LeftPanelIcon,
   RightPanelIcon,
   RightPanelOffIcon,
   FullscreenIcon,

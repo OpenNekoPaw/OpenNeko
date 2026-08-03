@@ -667,6 +667,11 @@ body {
   overflow-wrap: anywhere;
 }
 
+.agent-empty-state--desktop-dock .agent-empty-panel {
+  max-width: 820px;
+  margin-inline: auto;
+}
+
 .agent-empty-title {
   letter-spacing: 0;
 }

@@ -104,10 +104,31 @@ describe('Desktop scene Workbench', () => {
       expect(markup.match(/data-neko-controlled-workbench="true"/gu) ?? []).toHaveLength(1);
       expect(markup.match(/data-primary-sidebar="application"/gu) ?? []).toHaveLength(1);
       expect(markup.match(/neko-controlled-workbench-primary/gu) ?? []).toHaveLength(1);
+      expect(markup.match(/primary-sidebar-toggle/gu) ?? []).toHaveLength(1);
+      expect(markup).toContain('aria-label="Collapse sidebar"');
+      expect(markup).not.toContain('home-brand-title');
       expect(markup).toContain('workspace-1');
       expect(markup).toContain('Conversation one');
     },
   );
+
+  it('keeps the dedicated Sidebar toggle visible in compact presentation', () => {
+    const projection = agentProjection();
+    const markup = renderShell(
+      <DesktopShellView
+        projection={{
+          ...projection,
+          window: {
+            ...projection.window,
+            applicationSidebar: { ...projection.window.applicationSidebar, visible: false },
+          },
+        }}
+      />,
+    );
+
+    expect(markup.match(/primary-sidebar-toggle/gu) ?? []).toHaveLength(1);
+    expect(markup).toContain('aria-label="Expand sidebar"');
+  });
 
   it('composes Settings navigation and Main inside the same Workbench', () => {
     const markup = renderShell(
