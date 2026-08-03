@@ -1,6 +1,6 @@
 # Agent Evaluation
 
-Date: 2026-07-31
+Date: 2026-08-03
 
 ## Evaluation Scope
 
@@ -69,6 +69,47 @@ Date: 2026-07-31
   mounted exactly one `data-owner-root="agent"` for the exact View identity with no
   `.desktop-agent-status` loading surface. Canvas, Assets and Agent owner Roots remained distinct,
   confirming that startup preload did not create a global Project/View adapter.
+- Restored Canvas regression evidence (2026-08-03): a user-visible packaged-state report proved the
+  earlier fresh-Project check did not cover restart from a persisted empty Main group. Two
+  `DesktopShellService` tests reproduced both an empty Main restore and a temporary Preview cleanup;
+  both failed before the Host restore fix and passed afterward as part of 33 `@neko/host` test files
+  and 281 tests. `pnpm typecheck:desktop` and `pnpm package:desktop` passed.
+- Packaged empty-Main and restart acceptance (2026-08-03):
+  `pnpm test:local:ui --scenario canvas-openneko-consumer --target packaged` passed against one
+  isolated Electron/SQLite fixture. The scenario closed every Main View, verified both Canvas media
+  resources were released, and observed the Chinese empty surface “没有打开的创作文档” with guidance
+  text but no `<code>` diagnostic or `desktop-canvas-not-mounted`. It then set
+  `startupTarget=restore`, restarted the same packaged application, and observed one package-owned
+  Canvas Root for the sole `neko/boards/workspace.nkc` View. No console error or renderer exception
+  was observed. The gitignored report is
+  `reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-03T03-17-20.412Z-canvas-openneko-consumer-packaged/report.json`; its screenshot artifacts are
+  `screenshots/01-empty-main-after-last-tab-closed.png` and
+  `screenshots/02-default-workspace-canvas-restored.png`.
+- Packaged resize lifecycle acceptance (2026-08-03): the same production Electron scenario dragged
+  the shared left Dock resize handle from `360px` to `447.6796875px` after the restart path. The
+  resulting DOM contained zero `[data-resizing="true"]` owners, with no console error or renderer
+  exception. The screenshot artifact is
+  `screenshots/03-left-dock-resize-indicator-cleared.png` under the report above. Focused hook and
+  Workbench tests additionally ran the pointerdown/pointerup lifecycle under React StrictMode and
+  proved `onResizeEnd` was emitted once while the owning surface returned to
+  `data-resizing="false"`.
+- Packaged Workbench surface and Resource management acceptance (2026-08-03): the rebuilt packaged
+  Electron scenario computed `rgb(255, 255, 255)` for the Agent package Root, Agent composer rail,
+  Resource Browser Root and resource search input. The composer rail top border resolved to
+  transparent, the Resource Browser contained zero package header rows, and the Desktop Dock
+  contained exactly one “资源管理” title. The embedded content toolbar still exposed “配置媒体库”、
+  “刷新”、“列表视图”和“网格视图”, proving the duplicate title row was removed without losing
+  package-owned actions. The passed report is
+  `reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-03T03-57-05.458Z-canvas-openneko-consumer-packaged/report.json`; the inspected screenshot is
+  `screenshots/05-desktop-dock-theme-surfaces.png` under that report.
+- Packaged Home brand and launchpad acceptance (2026-08-03): the production Electron Home fixture
+  rendered one `OpenNeko` brand child with zero `svg`/`.brand-mark` descendants while retaining the
+  localized sidebar action label. The Agent heading contained zero decorative icons and used centered
+  text while its common-task actions retained four functional icons. The launchpad center differed
+  from the available Home Main center by `0px` horizontally and `0.00390625px` vertically. The passed
+  report is
+  `reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-03T03-50-29.088Z-canvas-openneko-consumer-packaged/report.json`; the inspected screenshot is
+  `screenshots/01-home-agent-entry-centered.png` under that report.
 - Blocked or unexecuted cases: `agent-runtime.workflow-controller` real execution remains
   `infrastructure-blocked` because no local Agent provider credential environment variable is
   available. Provider-backed send, Tool approval and checkpoint/cleanup are therefore not claimed
