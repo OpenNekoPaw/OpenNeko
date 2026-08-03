@@ -84,6 +84,20 @@ describe('Desktop automated functional runner contract', () => {
     ]);
   });
 
+  it('launches the exact fingerprint-verified packaged executable supplied by Evaluation', () => {
+    const launch = createAutomatedDesktopLaunch({
+      platform: 'darwin',
+      target: 'packaged',
+      executablePath: '/tmp/isolated-build/OpenNeko.app/Contents/MacOS/OpenNeko',
+      fixtureHome: '/tmp/openneko-desktop-functional-isolated-build',
+      userDataRoot: '/tmp/openneko-desktop-functional-isolated-build/electron-user-data',
+      workspacePath: '/tmp/openneko-desktop-functional-isolated-build/workspace',
+      debugPort: 43127,
+    });
+
+    assert.equal(launch.command, '/tmp/isolated-build/OpenNeko.app/Contents/MacOS/OpenNeko');
+  });
+
   it('keeps scenario ownership and prepared workspaces explicit', () => {
     const scenario = validateDesktopFunctionalScenario({
       id: 'cut-openneko-consumer',
@@ -152,8 +166,7 @@ describe('Desktop automated functional runner contract', () => {
     );
     assert.deepEqual(
       calls.find(
-        (call) =>
-          call.method === 'Input.dispatchMouseEvent' && call.params.type === 'mouseWheel',
+        (call) => call.method === 'Input.dispatchMouseEvent' && call.params.type === 'mouseWheel',
       )?.params,
       {
         type: 'mouseWheel',

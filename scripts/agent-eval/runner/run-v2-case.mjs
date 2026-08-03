@@ -1,45 +1,149 @@
 import { resolve } from 'node:path';
 import { runAutomatedDesktopFunctional } from '../../desktop-functional/runner.mjs';
+import { assertDesktopEvidenceSupport } from '../desktop/evidence.mjs';
 import { createDesktopAgentEvaluationScenario } from '../desktop/scenario.mjs';
+import { createAggregateReport, writeAggregateReport } from '../reports/aggregate-report.mjs';
 import { validateScenarioForExecution } from '../schemas/contracts.mjs';
+import { runEvaluationPipeline } from './evaluation-pipeline.mjs';
+import { annotateEvaluationError } from './outcomes.mjs';
 
 export async function runV2Case(selection, options = {}) {
   if (!selection) throw configurationError('Desktop Agent Evaluation selection is required.');
-  createV2DryRun(selection);
-  if (
-    selection.scenario.id !== 'locator-backed-display-projection' &&
-    selection.scenario.id !== 'cut-context-handoff'
-  ) {
-    throw infrastructureBlocker(
-      `Desktop Agent execution has no scenario adapter for '${selection.scenario.id}'.`,
-    );
-  }
+  const executionCase = resolveExecutionCase(selection);
+  assertDesktopEvidenceSupport(executionCase.assertions);
   const authorization = readProviderAuthorization(options.providerAuthorization, options.env ?? {});
   const runDesktop = options.runDesktop ?? runAutomatedDesktopFunctional;
   const scenario = (options.createScenario ?? createDesktopAgentEvaluationScenario)(
-    selection,
+    executionCase,
     authorization,
   );
-  const runId = options.runId ?? `${selection.scenario.id}-${Date.now().toString(36)}`;
+  const runId = options.runId ?? `${executionCase.caseId}-${Date.now().toString(36)}`;
   const outputRoot = resolve(options.outputRoot ?? 'reports/agent-eval');
-  const execution = await runDesktop({
-    scenario,
-    target: options.target ?? 'development',
-    windowMode: options.windowMode ?? 'hidden',
-    reportPath: resolve(outputRoot, runId, 'desktop-functional.json'),
-    scenarioTimeoutMs: selection.scenario.budget.timeoutMs,
+  const startedAt = Date.now();
+  let execution;
+  try {
+    execution = await runDesktop({
+      scenario,
+      target: options.target ?? 'development',
+      windowMode: options.windowMode ?? 'hidden',
+      reportPath: resolve(outputRoot, runId, 'desktop-functional.json'),
+      scenarioTimeoutMs: executionCase.budget.timeoutMs,
+      executablePath: options.executablePath,
+      executableFingerprint: options.executableFingerprint,
+    });
+  } catch (error) {
+    throw annotateEvaluationError(error, {
+      code: 'infrastructure-fail',
+      phase: 'execution',
+      executionIdentityCreated: true,
+    });
+  }
+  const pipeline = await (options.runPipeline ?? runEvaluationPipeline)(
+    {
+      selection,
+      executionCase,
+      authorization,
+      desktopEvidence: execution.report.evidence,
+      desktopReportPath: execution.reportPath,
+      runId,
+      reportId: options.reportId,
+      latencyMs: Date.now() - startedAt,
+    },
+    {
+      outputRoot,
+      env: options.env ?? {},
+      fetch: options.fetch,
+      callJudgeProvider: options.callJudgeProvider,
+      judgeTargetVisibility: options.judgeTargetVisibility,
+      command: options.command,
+      residualRisk: options.residualRisk,
+      writeReport: options.writeReport,
+      runJudge: options.runJudge,
+      compareBaseline: options.compareBaseline,
+    },
+  );
+  return {
+    ...pipeline,
+    desktopReportPath: execution.reportPath,
+    desktopReportLocation: `${runId}/desktop-functional.json`,
+  };
+}
+
+export async function runV2CaseRepeated(selection, options = {}) {
+  const executionCase = resolveExecutionCase(selection);
+  assertDesktopEvidenceSupport(executionCase.assertions);
+  const repetitions = executionCase.budget.repetitions;
+  const caseRunId = options.runId ?? `${executionCase.caseId}-${Date.now().toString(36)}`;
+  const width = String(repetitions).length;
+  const runSample = options.runSample ?? runV2Case;
+  const samples = [];
+  for (let repetition = 1; repetition <= repetitions; repetition += 1) {
+    const sampleRunId = `${caseRunId}-r${String(repetition).padStart(width, '0')}`;
+    samples.push(
+      await runSample(selection, {
+        ...options,
+        runId: sampleRunId,
+        reportId: sampleRunId,
+      }),
+    );
+  }
+  const aggregate = createAggregateReport({
+    reportId: caseRunId,
+    selection,
+    repetitions,
+    samples,
+  });
+  const aggregateFile = await (options.writeAggregate ?? writeAggregateReport)(aggregate, {
+    outputRoot: options.outputRoot,
   });
   return {
-    outcome: 'pass',
-    result: {
-      reportLocations: [execution.reportPath],
-      facts: execution.report.evidence?.facts,
-    },
+    outcome: aggregate.outcome,
+    reportId: caseRunId,
+    repetitions,
+    samples,
+    aggregate,
+    aggregateFile,
   };
 }
 
 export function createV2DryRun(selection) {
-  validateScenarioForExecution(selection.scenario);
+  const executionCase = resolveExecutionCase(selection);
+  return {
+    ok: true,
+    dryRun: true,
+    schema: 'neko.agent-eval.dry-run.v2',
+    suiteId: executionCase.suiteId,
+    caseId: executionCase.caseId,
+    target: executionCase.target,
+    caseGroup: executionCase.caseGroup,
+    fixture: executionCase.fixture,
+    runtimeProfile: executionCase.runtimeProfile,
+    modelProfiles: executionCase.modelProfiles,
+    steps: executionCase.steps,
+    assertions: executionCase.assertions,
+    reportPolicy: executionCase.reportPolicy,
+  };
+}
+
+export function resolveExecutionCase(selection) {
+  if (!selection?.suite || !selection?.scenario) {
+    throw configurationError('Desktop Agent Evaluation suite and scenario are required.');
+  }
+  try {
+    validateScenarioForExecution(selection.scenario);
+  } catch (error) {
+    throw configurationError(
+      `Desktop Agent Evaluation scenario is invalid: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+  const unsupportedStep = selection.scenario.steps.find(
+    (step) => !DESKTOP_WORKFLOW_STEP_KINDS.has(step.kind),
+  );
+  if (unsupportedStep) {
+    throw configurationError(
+      `Desktop Agent workflow step '${unsupportedStep.kind}' is not supported by the Desktop execution boundary.`,
+    );
+  }
   const fixture = readSingleFixture(selection.suite, selection.scenario);
   const runtimeProfile = readProfile(
     selection.suite.runtimeProfiles,
@@ -49,22 +153,36 @@ export function createV2DryRun(selection) {
   const modelProfiles = selection.scenario.modelProfileIds.map((id) =>
     readProfile(selection.suite.modelProfiles, id, 'model'),
   );
-  return {
-    ok: true,
-    dryRun: true,
-    schema: 'neko.agent-eval.dry-run.v2',
-    suiteId: selection.suite.id,
-    caseId: selection.scenario.id,
-    target: selection.suite.target,
-    caseGroup: selection.scenario.caseGroup,
-    fixture,
-    runtimeProfile,
-    modelProfiles,
-    steps: selection.scenario.steps,
-    assertions: selection.scenario.assertions,
-    reportPolicy: selection.suite.reportPolicy,
-  };
+  return deepFreeze(
+    globalThis.structuredClone({
+      schema: 'neko.agent-eval.execution-case.v1',
+      suiteId: selection.suite.id,
+      caseId: selection.scenario.id,
+      target: selection.suite.target,
+      caseGroup: selection.scenario.caseGroup,
+      fixture,
+      runtimeProfile,
+      modelProfiles,
+      steps: selection.scenario.steps,
+      assertions: selection.scenario.assertions,
+      artifactChecks: selection.scenario.artifactChecks,
+      evidenceContract: selection.scenario.evidenceContract,
+      budget: selection.scenario.budget,
+      reportPolicy: selection.suite.reportPolicy,
+      execution: selection.scenario.execution,
+    }),
+  );
 }
+
+const DESKTOP_WORKFLOW_STEP_KINDS = new Set([
+  'submit',
+  'queue',
+  'wait-for-idle',
+  'cancel',
+  'confirm',
+  'resume',
+  'feedback',
+]);
 
 function readSingleFixture(suite, scenario) {
   if (scenario.fixtureRefs.length !== 1) {
@@ -79,6 +197,12 @@ function readProfile(items, id, label) {
   return item;
 }
 
+function deepFreeze(value) {
+  if (!value || typeof value !== 'object' || Object.isFrozen(value)) return value;
+  for (const item of Object.values(value)) deepFreeze(item);
+  return Object.freeze(value);
+}
+
 function configurationError(message) {
   const error = new Error(message);
   error.code = 'configuration-invalid';
@@ -90,20 +214,17 @@ function readProviderAuthorization(explicit, env) {
     explicit ??
     (env.OPENNEKO_AGENT_EVAL_PROVIDER_ID ||
     env.OPENNEKO_AGENT_EVAL_MODEL_ID ||
-    env.OPENNEKO_AGENT_EVAL_CREDENTIAL_ENV ||
-    env.OPENNEKO_AGENT_EVAL_CONFIG_PATH ||
     env.OPENNEKO_AGENT_EVAL_COST_APPROVED
       ? {
           providerId: env.OPENNEKO_AGENT_EVAL_PROVIDER_ID,
           modelId: env.OPENNEKO_AGENT_EVAL_MODEL_ID,
-          credentialEnvName: env.OPENNEKO_AGENT_EVAL_CREDENTIAL_ENV,
           configurationFile: env.OPENNEKO_AGENT_EVAL_CONFIG_PATH,
           costApproved: env.OPENNEKO_AGENT_EVAL_COST_APPROVED === 'true',
         }
       : undefined);
   if (!input) {
     throw infrastructureBlocker(
-      'Real Desktop Agent evaluation requires explicit provider, model, credential environment and cost authorization.',
+      'Real Desktop Agent evaluation requires explicit provider, model and cost authorization.',
     );
   }
   for (const [label, value] of [
@@ -115,27 +236,12 @@ function readProviderAuthorization(explicit, env) {
       throw infrastructureBlocker(`Desktop Agent ${label} authorization is missing.`);
     }
   }
-  if (
-    typeof input.credentialEnvName !== 'string' ||
-    !/^[A-Z][A-Z0-9_]*$/u.test(input.credentialEnvName)
-  ) {
-    throw infrastructureBlocker('Desktop Agent credential environment authorization is invalid.');
-  }
-  if (
-    typeof env[input.credentialEnvName] !== 'string' ||
-    env[input.credentialEnvName].length === 0
-  ) {
-    throw infrastructureBlocker(
-      `Desktop Agent credential environment '${input.credentialEnvName}' is unavailable.`,
-    );
-  }
   if (input.costApproved !== true) {
     throw infrastructureBlocker('Desktop Agent provider cost authorization is not approved.');
   }
   return Object.freeze({
     providerId: input.providerId,
     modelId: input.modelId,
-    credentialEnvName: input.credentialEnvName,
     configurationFile: resolve(input.configurationFile),
     costApproved: true,
   });

@@ -13,6 +13,7 @@ export const SCHEMAS = Object.freeze({
   comparison: 'neko.agent-eval.comparison.v2',
   rubric: 'neko.agent-eval.rubric.v2',
   judge: 'neko.agent-eval.judge.v2',
+  aggregate: 'neko.agent-eval.aggregate.v2',
   failureAttribution: 'neko.agent-eval.failure-attribution.v2',
   suiteIndex: 'neko.agent-eval.suite-index.v2',
 });
@@ -660,6 +661,20 @@ const BUDGET_SCHEMA = s.object(
   { maxTokens: s.integer({ min: 1 }), maxCostUsd: s.number({ min: 0 }) },
 );
 
+const DESKTOP_EXECUTION_SCHEMA = s.object(
+  {
+    evidenceLevel: s.enum(['key-free', 'hidden-desktop', 'visible-desktop']),
+    resourceClass: s.enum(['text', 'external-tool', 'media', 'visible-ui']),
+    protected: s.boolean(),
+  },
+  {
+    lifecycleChecks: s.array(s.enum(['renderer-reload', 'composer-focus', 'graceful-close']), {
+      minLength: 1,
+      maxLength: 3,
+    }),
+  },
+);
+
 const SCENARIO_SCHEMA = s.object(
   {
     schema: s.literal(SCHEMAS.scenario),
@@ -676,7 +691,7 @@ const SCENARIO_SCHEMA = s.object(
     artifactChecks: s.array(ARTIFACT_CHECK_SCHEMA, { maxLength: 100 }),
     budget: BUDGET_SCHEMA,
   },
-  { rubric: RUBRIC_SCHEMA },
+  { rubric: RUBRIC_SCHEMA, execution: DESKTOP_EXECUTION_SCHEMA },
 );
 
 const ASSERTION_RESULT_SCHEMA = s.object(
@@ -858,6 +873,69 @@ const JUDGE_RESULT_SCHEMA = s.object({
   summary: TEXT,
   disposition: s.enum(['eligible', 'supplemental']),
   usage: s.object({ inputTokens: s.integer({ min: 0 }), outputTokens: s.integer({ min: 0 }) }),
+});
+
+const AGGREGATE_SAMPLE_SCHEMA = s.object(
+  {
+    repetition: s.integer({ min: 1 }),
+    result: RESULT_SCHEMA,
+    artifactChecks: s.array(
+      s.object(
+        {
+          id: ID,
+          kind: ID,
+          status: s.enum(['pass', 'fail']),
+          evidenceRefs: ID_LIST,
+        },
+        { message: TEXT, details: s.anyJson() },
+      ),
+      { maxLength: 100 },
+    ),
+    artifacts: s.array(ARTIFACT_MANIFEST_ENTRY_SCHEMA, { maxLength: 1_000 }),
+    desktopReport: PATH,
+  },
+  {
+    judge: JUDGE_RESULT_SCHEMA,
+    baselineDiff: COMPARISON_SCHEMA,
+  },
+);
+const AGGREGATE_SCHEMA = s.object({
+  schema: s.literal(SCHEMAS.aggregate),
+  reportId: ID,
+  suiteId: ID,
+  caseId: ID,
+  outcome: s.enum(OUTCOMES),
+  repetitions: s.integer({ min: 1, max: 100 }),
+  samples: s.array(AGGREGATE_SAMPLE_SCHEMA, { minLength: 1, maxLength: 100 }),
+  statistics: s.object(
+    {
+      samples: s.integer({ min: 1 }),
+      passRate: s.number({ min: 0, max: 1 }),
+      outcomeCounts: s.object({
+        pass: s.integer({ min: 0 }),
+        caseFail: s.integer({ min: 0 }),
+        infrastructureFail: s.integer({ min: 0 }),
+        configurationInvalid: s.integer({ min: 0 }),
+        nonComparable: s.integer({ min: 0 }),
+      }),
+      usageAvailability: s.object({
+        inputTokens: s.integer({ min: 0 }),
+        outputTokens: s.integer({ min: 0 }),
+        costUsd: s.integer({ min: 0 }),
+      }),
+      usageTotals: s.object(
+        { latencyMs: s.integer({ min: 0 }) },
+        {
+          inputTokens: s.integer({ min: 0 }),
+          outputTokens: s.integer({ min: 0 }),
+          costUsd: s.number({ min: 0 }),
+        },
+      ),
+    },
+    { scoreDistribution: DISTRIBUTION_SCHEMA },
+  ),
+  residualRisk: s.array(TEXT, { maxLength: 200 }),
+  aggregateLocation: PATH,
 });
 
 const FAILURE_ATTRIBUTION_SCHEMA = s.object({
@@ -1180,6 +1258,24 @@ export function validateComparison(input) {
   }
   if (input.outcome === 'non-comparable' && input.improvementPercent !== undefined) {
     throw new Error('non-comparable comparison must not include improvementPercent');
+  }
+  return input;
+}
+
+export function validateAggregate(input) {
+  validateStrict(input, AGGREGATE_SCHEMA, 'aggregate');
+  if (
+    input.samples.length !== input.repetitions ||
+    input.statistics.samples !== input.repetitions
+  ) {
+    throw new Error('aggregate sample count must equal repetitions');
+  }
+  const repetitions = input.samples.map((sample) => sample.repetition);
+  assertUnique(repetitions, 'aggregate sample repetitions');
+  for (const sample of input.samples) {
+    if (sample.result.suiteId !== input.suiteId || sample.result.caseId !== input.caseId) {
+      throw new Error('aggregate sample suite/case identity does not match the aggregate');
+    }
   }
   return input;
 }

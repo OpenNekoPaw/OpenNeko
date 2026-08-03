@@ -1,18 +1,26 @@
 import { cp, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
+import { parse as parseToml } from 'smol-toml';
 import { openFixtureWorkspace } from '../../desktop-functional/desktop-operations.mjs';
+import { evaluateArtifactChecks } from '../runner/artifact-checks.mjs';
 import { createDesktopAgentDriver } from './driver.mjs';
+import { requiresOpenNekoResourceObservation } from './evidence.mjs';
+import { executeDesktopAgentWorkflow } from './workflow.mjs';
 
-export function createDesktopAgentEvaluationScenario(selection, authorization) {
-  const fixture = readSingleFixture(selection);
-  const execution = readSingleTurnExecution(selection.scenario);
+export function createDesktopAgentEvaluationScenario(executionCase, authorization) {
+  const mediaObservationRequired = requiresOpenNekoResourceObservation(executionCase.assertions);
   return Object.freeze({
-    id: `agent-eval-${selection.scenario.id}`,
-    owner: 'neko-agent-evaluation',
+    id: `agent-eval-${executionCase.caseId}`,
+    owner: '@neko/agent-runtime',
     async prepare({ fixtureHome, repositoryRoot }) {
       const workspacePath = join(fixtureHome, 'workspace');
-      const fixtureSource = resolve(repositoryRoot, 'scripts', 'agent-eval', fixture.root);
+      const fixtureSource = resolve(
+        repositoryRoot,
+        'scripts',
+        'agent-eval',
+        executionCase.fixture.root,
+      );
       await cp(fixtureSource, workspacePath, { recursive: true, errorOnExist: true });
       const configText = await readAuthorizedConfiguration(authorization);
       await mkdir(join(fixtureHome, '.neko'), { recursive: true });
@@ -26,119 +34,122 @@ export function createDesktopAgentEvaluationScenario(selection, authorization) {
         modelId: authorization.modelId,
       };
     },
-    async run({ evaluate, waitForSelector, checkpoint, readOpenNekoResourceRequests }) {
+    async run({
+      prepared,
+      evaluate,
+      waitForSelector,
+      click,
+      waitForDesktopBridge,
+      restartApplication,
+      checkpoint,
+      readOpenNekoResourceRequests,
+    }) {
       const opened = await openFixtureWorkspace(evaluate);
       await waitForSelector('[data-owner-root="agent"]', 30_000);
-      const driver = createDesktopAgentDriver({ evaluate });
-      await driver.connect({
+      const driver = createDesktopAgentDriver({
+        evaluate,
+        waitForRenderer: async () => {
+          await waitForDesktopBridge(30_000);
+          await waitForSelector('[data-owner-root="agent"]', 30_000);
+        },
+        restartApplication,
+      });
+      const connected = await driver.connect({
         projectId: opened.project.projectId,
         viewId: opened.tab.viewId,
         viewEpoch: opened.tab.viewEpoch,
       });
       const conversation = await driver.createConversation();
       checkpoint('agent-conversation-created', { conversationId: conversation.conversationId });
-      await driver.submit({
+      const workflow = await executeDesktopAgentWorkflow({
+        driver,
         conversationId: conversation.conversationId,
-        prompt: execution.prompt,
-        ...(execution.contextPayloads ? { contextPayloads: execution.contextPayloads } : {}),
+        steps: executionCase.steps,
+        defaultTimeoutMs: executionCase.budget.timeoutMs,
+        checkpoint,
       });
-      const idle = await driver.waitForIdle(conversation.conversationId, execution.timeoutMs);
-      checkpoint('agent-terminal-idle', { identity: idle.identity });
+      const identity = workflow.terminalIdle.identity;
+      let resumed = await driver.resume({
+        conversationId: conversation.conversationId,
+        timeoutMs: executionCase.budget.timeoutMs,
+      });
       const projection = await driver.readProjection(conversation.conversationId);
-      const pendingFacts = await driver.readFacts(idle.identity);
-      assertFactsContainNoRenderUrl(pendingFacts.facts);
-      const mediaCard =
-        selection.scenario.id === 'locator-backed-display-projection'
-          ? await waitForPackageOwnedMediaCard(evaluate, readOpenNekoResourceRequests, 30_000)
-          : undefined;
+      const pendingFacts = await driver.readFacts(identity);
+      const lifecycle = {};
+      if (executionCase.execution?.lifecycleChecks?.includes('renderer-reload')) {
+        const restored = await driver.reloadAndRestore({
+          connection: connected.connection,
+          conversationId: conversation.conversationId,
+          timeoutMs: executionCase.budget.timeoutMs,
+        });
+        resumed = { accepted: true, snapshot: restored.snapshot };
+        lifecycle.rendererReload = {
+          status: 'restored',
+          connection: restored.connection,
+        };
+      }
+      if (executionCase.execution?.lifecycleChecks?.includes('composer-focus')) {
+        await click('[data-owner-root="agent"] .agent-composer-textarea');
+        const focused = await evaluate(
+          `document.activeElement?.matches('[data-owner-root="agent"] .agent-composer-textarea') === true`,
+        );
+        if (focused !== true)
+          throw new Error('Desktop Agent composer did not retain visible focus.');
+        lifecycle.composerFocus = { status: 'focused' };
+      }
+      const mediaCard = mediaObservationRequired
+        ? await waitForPackageOwnedMediaCard(evaluate, readOpenNekoResourceRequests, 30_000)
+        : undefined;
       if (mediaCard) checkpoint('agent-package-media-card-rendered', mediaCard);
+      const openNekoResourceRequestCount = readOpenNekoResourceRequests().length;
+      const artifactChecks = await evaluateArtifactChecks(executionCase.artifactChecks, {
+        workspace: prepared.workspacePath,
+        facts: pendingFacts.facts,
+      });
       const closed = await driver.closeApplication();
       if (closed.status !== 'facts') {
         throw new Error('Desktop Agent close did not return final disposal facts.');
       }
-      assertFactsContainNoRenderUrl(closed.facts);
-      if (selection.scenario.id === 'locator-backed-display-projection') {
-        assertLocatorDisplayProjectionEvidence({
-          facts: closed.facts,
-          projection,
-          identity: idle.identity,
-          authorization,
-        });
-      } else {
-        assertCutContextHandoffEvidence({
-          facts: closed.facts,
-          projection,
-          identity: idle.identity,
-          authorization,
-          contextPayloads: execution.contextPayloads,
-        });
+      if (executionCase.execution?.lifecycleChecks?.includes('graceful-close')) {
+        lifecycle.gracefulClose = { status: 'disposed' };
       }
       return {
         conversationId: conversation.conversationId,
-        identity: idle.identity,
+        identity,
         projection,
+        snapshot: resumed.snapshot,
         facts: closed.facts,
+        workflow,
+        artifactChecks,
+        mediaObservationRequired,
+        openNekoResourceRequestCount,
         mediaCard,
+        lifecycle,
       };
-    },
-    assertObservation(observed, evidence) {
-      if (
-        selection.scenario.id === 'locator-backed-display-projection' &&
-        observed.openNekoResourceRequestCount < 1
-      ) {
-        throw new Error('Desktop Agent media card did not reach the OpenNeko resource handler.');
-      }
-      if (evidence.facts.disposal.status !== 'disposed') {
-        throw new Error('Desktop Agent complete-session resources were not disposed.');
-      }
     },
   });
 }
 
-function readSingleFixture(selection) {
-  if (selection.scenario.fixtureRefs.length !== 1) {
-    throw configurationError('Desktop Agent sample requires exactly one fixture.');
-  }
-  const fixtureId = selection.scenario.fixtureRefs[0];
-  const fixture = selection.suite.fixtures.find((candidate) => candidate.id === fixtureId);
-  if (!fixture) throw configurationError(`Desktop Agent fixture '${fixtureId}' is unavailable.`);
-  return fixture;
-}
-
-function readSingleTurnExecution(scenario) {
-  const submit = scenario.steps.filter((step) => step.kind === 'submit');
-  const idle = scenario.steps.filter((step) => step.kind === 'wait-for-idle');
-  const unsupported = scenario.steps.filter(
-    (step) => step.kind !== 'submit' && step.kind !== 'wait-for-idle',
-  );
-  if (submit.length !== 1 || idle.length !== 1 || unsupported.length > 0) {
-    throw configurationError(
-      'Desktop Agent M1 sample supports exactly one submit followed by one wait-for-idle step.',
-    );
-  }
-  const prompt = submit[0]?.prompt;
-  const timeoutMs = idle[0]?.timeoutMs ?? scenario.budget.timeoutMs;
-  if (typeof prompt !== 'string' || prompt.trim().length === 0) {
-    throw configurationError('Desktop Agent sample prompt is unavailable.');
-  }
-  return {
-    prompt,
-    timeoutMs,
-    ...(submit[0]?.contextPayloads ? { contextPayloads: submit[0].contextPayloads } : {}),
-  };
-}
-
 async function readAuthorizedConfiguration(authorization) {
-  const configText = await readFile(authorization.configurationFile, 'utf8');
-  const placeholder = `\${${authorization.credentialEnvName}}`;
-  if (!configText.includes(placeholder)) {
+  const configText = await readFile(authorization.configurationFile, 'utf8').catch(() => {
     throw authorizationError(
-      `Authorized Desktop Agent configuration must reference ${placeholder} instead of embedding a credential.`,
+      'Authorized Desktop Agent configuration ~/.neko/config.toml is unavailable.',
     );
+  });
+  return validateAuthorizedUserConfiguration(configText, authorization);
+}
+
+export function validateAuthorizedUserConfiguration(configText, authorization) {
+  let parsed;
+  try {
+    parsed = parseToml(configText);
+  } catch {
+    throw authorizationError('Authorized Desktop Agent configuration TOML is invalid.');
   }
+  const declaredConfiguration = JSON.stringify(parsed);
   if (
-    !configText.includes(authorization.providerId) ||
-    !configText.includes(authorization.modelId)
+    !declaredConfiguration.includes(authorization.providerId) ||
+    !declaredConfiguration.includes(authorization.modelId)
   ) {
     throw authorizationError(
       'Authorized Desktop Agent configuration does not declare the approved provider/model identity.',
@@ -166,156 +177,6 @@ async function waitForPackageOwnedMediaCard(evaluate, readRequests, timeoutMs) {
   throw new Error('Package-owned Agent media card did not render an OpenNeko image.');
 }
 
-function assertFactsContainNoRenderUrl(facts) {
-  const serialized = JSON.stringify(facts);
-  if (
-    /openneko:\/\/resource\/|neko-media:|opennekomedia:|file:|https?:\/\/(?:127\.0\.0\.1|localhost)/u.test(
-      serialized,
-    )
-  ) {
-    throw new Error('Desktop Agent provider/Tool facts contain a render transport URL.');
-  }
-}
-
-function assertLocatorDisplayProjectionEvidence(input) {
-  const facts = input.facts;
-  if (
-    facts.identity.conversationId !== input.identity.conversationId ||
-    facts.identity.turnId !== input.identity.turnId ||
-    facts.identity.runId !== input.identity.runId
-  ) {
-    throw new Error('Desktop Agent terminal facts identity is stale or mismatched.');
-  }
-  if (
-    facts.configuration.effective.values.modelBinding.providerId !==
-      input.authorization.providerId ||
-    facts.configuration.effective.values.modelBinding.modelId !== input.authorization.modelId
-  ) {
-    throw new Error('Desktop Agent effective provider/model differs from the approved identity.');
-  }
-  if (
-    facts.runtimePath.controller !== 'sender-bound-desktop-agent-controller' ||
-    facts.runtimePath.runtime !== 'pi-conversation-runtime' ||
-    facts.runtimePath.transcript !== 'pi-session' ||
-    facts.runtimePath.metadata !== 'sqlite' ||
-    facts.runtimePath.projection !== 'conversation-projection-store' ||
-    facts.runtimePath.forbiddenPathCount !== 0
-  ) {
-    throw new Error(
-      'Desktop Agent terminal facts did not use the canonical complete-session path.',
-    );
-  }
-  if (
-    facts.projection.terminalState !== 'completed' ||
-    facts.persistence.checkpoint !== 'observed' ||
-    facts.disposal.status !== 'disposed'
-  ) {
-    throw new Error(
-      'Desktop Agent terminal projection, persistence or disposal facts are incomplete.',
-    );
-  }
-  const tool = facts.receipts.tools.items.find(
-    (candidate) => candidate.name === 'ReadImage' && candidate.status === 'success',
-  );
-  if (!tool?.callId) throw new Error('Desktop Agent ReadImage success receipt is unavailable.');
-  const display = facts.resourceDisplayProjections.items.find(
-    (candidate) =>
-      candidate.toolCallId === tool.callId &&
-      candidate.projectionKind === 'tool-result' &&
-      candidate.status === 'authorized' &&
-      candidate.locatorKind === 'workspace-file' &&
-      candidate.transport === 'openneko-resource' &&
-      candidate.renderTarget === 'agent-webview' &&
-      candidate.diagnosticCodes.length === 0,
-  );
-  if (!display) {
-    throw new Error('Desktop Agent authorized locator-backed display projection is unavailable.');
-  }
-  const incomplete = [
-    ...Object.values(facts.receipts),
-    facts.resourceDisplayProjections,
-    facts.diagnostics,
-  ].filter((collection) => collection.droppedCount !== 0);
-  if (incomplete.length > 0) throw new Error('Desktop Agent required facts were truncated.');
-  if (facts.diagnostics.items.some((diagnostic) => diagnostic.severity === 'error')) {
-    throw new Error('Desktop Agent terminal facts contain a runtime error diagnostic.');
-  }
-  const projected = JSON.stringify(input.projection);
-  if (
-    !projected.includes('ReadImage') ||
-    !projected.includes('station-illustration.svg') ||
-    !projected.includes('LOCATOR_DISPLAY_PROJECTION_OK')
-  ) {
-    throw new Error(
-      'Desktop Agent public Timeline projection is missing Tool, locator or final marker.',
-    );
-  }
-  if (/ResourceRef|resourceRef|neko-media:|opennekomedia:|file:/u.test(projected)) {
-    throw new Error('Desktop Agent public Timeline projection used a forbidden media fallback.');
-  }
-}
-
-function assertCutContextHandoffEvidence(input) {
-  assertCanonicalTurnEvidence(input);
-  const payload = input.contextPayloads?.[0];
-  if (input.contextPayloads?.length !== 1 || payload?.type !== 'cut-clip') {
-    throw new Error('Desktop Agent Cut context Evaluation requires one explicit Cut payload.');
-  }
-  const projected = JSON.stringify(input.projection);
-  if (!projected.includes(payload.summary) || !projected.includes('CUT_CONTEXT_HANDOFF_OK')) {
-    throw new Error('Desktop Agent Cut context or terminal marker is missing from the Timeline.');
-  }
-  if (/active editor|recent editor|executeAIAction/iu.test(projected)) {
-    throw new Error('Desktop Agent Cut context used a forbidden target fallback.');
-  }
-}
-
-function assertCanonicalTurnEvidence(input) {
-  const facts = input.facts;
-  if (
-    facts.identity.conversationId !== input.identity.conversationId ||
-    facts.identity.turnId !== input.identity.turnId ||
-    facts.identity.runId !== input.identity.runId
-  ) {
-    throw new Error('Desktop Agent terminal facts identity is stale or mismatched.');
-  }
-  if (
-    facts.configuration.effective.values.modelBinding.providerId !==
-      input.authorization.providerId ||
-    facts.configuration.effective.values.modelBinding.modelId !== input.authorization.modelId
-  ) {
-    throw new Error('Desktop Agent effective provider/model differs from the approved identity.');
-  }
-  if (
-    facts.runtimePath.controller !== 'sender-bound-desktop-agent-controller' ||
-    facts.runtimePath.runtime !== 'pi-conversation-runtime' ||
-    facts.runtimePath.transcript !== 'pi-session' ||
-    facts.runtimePath.metadata !== 'sqlite' ||
-    facts.runtimePath.projection !== 'conversation-projection-store' ||
-    facts.runtimePath.forbiddenPathCount !== 0
-  ) {
-    throw new Error(
-      'Desktop Agent terminal facts did not use the canonical complete-session path.',
-    );
-  }
-  if (
-    facts.projection.terminalState !== 'completed' ||
-    facts.persistence.checkpoint !== 'observed' ||
-    facts.disposal.status !== 'disposed'
-  ) {
-    throw new Error(
-      'Desktop Agent terminal projection, persistence or disposal facts are incomplete.',
-    );
-  }
-  if (facts.diagnostics.items.some((diagnostic) => diagnostic.severity === 'error')) {
-    throw new Error('Desktop Agent terminal facts contain a runtime error diagnostic.');
-  }
-}
-
 function authorizationError(message) {
   return Object.assign(new Error(message), { code: 'infrastructure-blocked' });
-}
-
-function configurationError(message) {
-  return Object.assign(new Error(message), { code: 'configuration-invalid' });
 }

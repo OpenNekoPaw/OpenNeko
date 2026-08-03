@@ -47,6 +47,7 @@ export async function runAutomatedDesktopFunctional(options) {
   let processController;
   let cdp;
   let observation;
+  const observations = [];
   let report;
   const checkpoints = [];
   const startedAt = Date.now();
@@ -68,29 +69,51 @@ export async function runAutomatedDesktopFunctional(options) {
       workspacePath: prepared.workspacePath,
       debugPort,
       windowMode: options.windowMode ?? 'visible',
+      executablePath: options.executablePath,
+      executableFingerprint: options.executableFingerprint,
     });
     const platform = options.platform ?? process.platform;
-    processController = createProcessController(
-      (options.spawnProcess ?? spawn)(launch.command, launch.args, {
-        cwd: repositoryRoot,
-        env: { ...process.env, ...launch.environment },
-        stdio: ['ignore', 'pipe', 'pipe'],
-        detached: platform !== 'win32',
-      }),
-      fixtureHome,
-      platform,
-    );
-    cdp = await (options.connectCdp ?? connectDesktopCdp)({
-      port: debugPort,
-      timeoutMs: options.startupTimeoutMs ?? 60_000,
-    });
-    await processController.waitForOutput(
-      'Desktop renderer loaded.',
-      options.startupTimeoutMs ?? 60_000,
-    );
-    observation = createDesktopObservation(cdp, fixtureHome);
-    await observation.start();
-    await waitForDesktopBridge(cdp, options.startupTimeoutMs ?? 60_000);
+    const launchRuntime = async () => {
+      processController = createProcessController(
+        (options.spawnProcess ?? spawn)(launch.command, launch.args, {
+          cwd: repositoryRoot,
+          env: { ...process.env, ...launch.environment },
+          stdio: ['ignore', 'pipe', 'pipe'],
+          detached: platform !== 'win32',
+        }),
+        fixtureHome,
+        platform,
+      );
+      cdp = await (options.connectCdp ?? connectDesktopCdp)({
+        port: debugPort,
+        timeoutMs: options.startupTimeoutMs ?? 60_000,
+      });
+      await processController.waitForOutput(
+        'Desktop renderer loaded.',
+        options.startupTimeoutMs ?? 60_000,
+      );
+      observation = createDesktopObservation(cdp, fixtureHome);
+      observations.push(observation);
+      await observation.start();
+      await waitForDesktopBridge(cdp, options.startupTimeoutMs ?? 60_000);
+    };
+    const restartApplication = async () => {
+      observation?.finish();
+      if (cdp) {
+        try {
+          await Promise.race([cdp.send('Browser.close'), delay(1_000)]);
+        } catch {
+          // The old process is stopped below even when Browser.close races with teardown.
+        }
+        cdp.close();
+      }
+      await processController?.stop();
+      cdp = undefined;
+      processController = undefined;
+      await launchRuntime();
+      return { restarted: true };
+    };
+    await launchRuntime();
     const version = await cdp.send('Browser.getVersion');
     const scenarioAbort = new AbortController();
     let screenshotSequence = 0;
@@ -142,13 +165,17 @@ export async function runAutomatedDesktopFunctional(options) {
           ),
         waitForSelector: (selector, timeoutMs) =>
           abortable(waitForSelector(cdp, selector, timeoutMs), scenarioAbort.signal),
-        readOpenNekoResourceRequests: () => observation.openNekoResourceRequests(),
+        waitForDesktopBridge: (timeoutMs) =>
+          abortable(waitForDesktopBridge(cdp, timeoutMs), scenarioAbort.signal),
+        restartApplication: () => abortable(restartApplication(), scenarioAbort.signal),
+        readOpenNekoResourceRequests: () =>
+          observations.flatMap((item) => item.openNekoResourceRequests()),
       }),
       options.scenarioTimeoutMs ?? 120_000,
       `Desktop functional scenario '${scenario.id}'`,
       (error) => scenarioAbort.abort(error),
     );
-    const observed = observation.finish();
+    const observed = mergeDesktopObservations(observations.map((item) => item.finish()));
     if (observed.poisonedRequestCount !== 0) {
       throw new Error(
         `Desktop functional scenario '${scenario.id}' reached ${observed.poisonedRequestCount} poisoned resource request(s).`,
@@ -165,6 +192,13 @@ export async function runAutomatedDesktopFunctional(options) {
       status: 'passed',
       scenario: { id: scenario.id, owner: scenario.owner },
       target: options.target ?? 'development',
+      build:
+        options.target === 'packaged'
+          ? {
+              executableFingerprint: options.executableFingerprint,
+              source: options.executablePath ? 'explicit' : 'canonical-package-output',
+            }
+          : { source: 'development' },
       runtime: {
         platform: options.platform ?? process.platform,
         architecture: process.arch,
@@ -184,7 +218,10 @@ export async function runAutomatedDesktopFunctional(options) {
       scenario: { id: scenario.id, owner: scenario.owner },
       target: options.target ?? 'development',
       error: redactText(error instanceof Error ? error.message : String(error), fixtureHome),
-      observation: observation?.finish(),
+      observation:
+        observations.length > 0
+          ? mergeDesktopObservations(observations.map((item) => item.finish()))
+          : undefined,
       checkpoints,
       process: processController?.snapshot(),
     };
@@ -204,6 +241,35 @@ export async function runAutomatedDesktopFunctional(options) {
   }
 }
 
+function mergeDesktopObservations(items) {
+  const sumRecords = (key) => {
+    const result = {};
+    for (const item of items) {
+      for (const [name, count] of Object.entries(item[key] ?? {})) {
+        result[name] = (result[name] ?? 0) + count;
+      }
+    }
+    return result;
+  };
+  return {
+    requestCounts: sumRecords('requestCounts'),
+    requestSurfaces: [...new Set(items.flatMap((item) => item.requestSurfaces ?? []))],
+    responseMimeTypeCounts: sumRecords('responseMimeTypeCounts'),
+    openNekoResourceRequestCount: items.reduce(
+      (total, item) => total + (item.openNekoResourceRequestCount ?? 0),
+      0,
+    ),
+    pcmResponseCount: items.reduce((total, item) => total + (item.pcmResponseCount ?? 0), 0),
+    poisonedRequestCount: items.reduce(
+      (total, item) => total + (item.poisonedRequestCount ?? 0),
+      0,
+    ),
+    consoleErrors: items.flatMap((item) => item.consoleErrors ?? []),
+    consoleWarnings: items.flatMap((item) => item.consoleWarnings ?? []),
+    exceptions: items.flatMap((item) => item.exceptions ?? []),
+  };
+}
+
 export function createAutomatedDesktopLaunch(input) {
   const commonArgs = [
     '--openneko-functional-fixture',
@@ -221,8 +287,13 @@ export function createAutomatedDesktopLaunch(input) {
     ),
   });
   if (input.target === 'packaged') {
+    if (input.executablePath !== undefined && !String(input.executablePath).trim()) {
+      throw new Error('Packaged Desktop executable path must be non-empty.');
+    }
     return Object.freeze({
-      command: packagedExecutable(input.platform),
+      command: input.executablePath
+        ? resolve(input.executablePath)
+        : packagedExecutable(input.platform),
       args: Object.freeze(commonArgs),
       environment,
     });
@@ -584,7 +655,10 @@ async function writeDesktopScreenshot({ cdp, reportPath, label, sequence }) {
   const filename = `${String(sequence).padStart(2, '0')}-${safeLabel}.png`;
   const directory = join(dirname(reportPath), 'screenshots');
   await mkdir(directory, { recursive: true });
-  await writeFile(join(directory, filename), Buffer.from(await captureDesktopScreenshot(cdp), 'base64'));
+  await writeFile(
+    join(directory, filename),
+    Buffer.from(await captureDesktopScreenshot(cdp), 'base64'),
+  );
   return Object.freeze({ artifact: `screenshots/${filename}` });
 }
 

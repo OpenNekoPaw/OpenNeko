@@ -1,4 +1,5 @@
 import { evaluateStructuredOutput } from './structured-output.mjs';
+import { isDesktopEvaluationFacts, runDesktopHardGate } from '../desktop/evidence.mjs';
 
 const EVALUATION_OUTCOMES = Object.freeze({
   pass: 'pass',
@@ -50,6 +51,9 @@ function evaluateGate(assertion, facts, context) {
 }
 
 function runGate(assertion, facts, context) {
+  if (isDesktopEvaluationFacts(facts)) {
+    return runDesktopHardGate(assertion, facts, context);
+  }
   switch (assertion.kind) {
     case 'runtime-errors-empty':
       return assertRuntimeErrorsEmpty(facts);
@@ -510,7 +514,9 @@ function assertQueueState(assertion, facts) {
   if (assertion.status === 'queued') {
     const minPending = assertion.minPending ?? 1;
     if (step.method !== 'message.submit' || step.queued !== true) {
-      throw new Error(`step ${assertion.stepId} was not accepted by the active Desktop Agent queue`);
+      throw new Error(
+        `step ${assertion.stepId} was not accepted by the active Desktop Agent queue`,
+      );
     }
     if (!Number.isInteger(queue.pendingCount) || queue.pendingCount < minPending) {
       throw new Error(
@@ -780,10 +786,7 @@ function assertResourceDisplayProjection(assertion, facts) {
       `Resource display projection exposed non-redacted field(s): ${unknownKeys.join(', ')}`,
     );
   }
-  if (
-    !nonEmpty(projection.conversationId) ||
-    projection.conversationId !== facts?.conversationId
-  ) {
+  if (!nonEmpty(projection.conversationId) || projection.conversationId !== facts?.conversationId) {
     throw new Error('Resource display projection conversation identity is unavailable or stale');
   }
   if (projection.toolCallId !== undefined) {
@@ -934,10 +937,6 @@ function formatProcessEvent(event) {
   return JSON.stringify(event);
 }
 
-function readNonNegativeInteger(value) {
-  return Number.isInteger(value) && value >= 0 ? value : 0;
-}
-
 function assertArtifact(assertion, facts) {
   assertCompleteEvidence(facts, ['artifacts']);
   const artifacts = arrayOrEmpty(facts?.artifacts);
@@ -994,9 +993,7 @@ function assertArtifact(assertion, facts) {
     deliveryStatus: artifact.deliveryStatus,
     validatorId: artifact.validator.id,
     validatorStatus: artifact.validator.status,
-    ...(assertion.contentLocatorKind
-      ? { contentLocatorKind: artifact.contentLocator.kind }
-      : {}),
+    ...(assertion.contentLocatorKind ? { contentLocatorKind: artifact.contentLocator.kind } : {}),
   };
 }
 
@@ -1056,7 +1053,9 @@ function requireSuccessfulToolCall(calls, name) {
       call?.resultObservation === 'available',
   );
   if (matching.length !== 1) {
-    throw new Error(`expected exactly one successful ${name} Tool Call; observed ${matching.length}`);
+    throw new Error(
+      `expected exactly one successful ${name} Tool Call; observed ${matching.length}`,
+    );
   }
   return matching[0];
 }
@@ -1091,7 +1090,9 @@ function assertContentLocatorEvidence(locator, expectedKind) {
       }
     }
     if (!isPortableWorkspacePath(locator.path)) {
-      throw new Error('generated-output content locator path is not portable and workspace-relative');
+      throw new Error(
+        'generated-output content locator path is not portable and workspace-relative',
+      );
     }
   }
 }
@@ -1104,7 +1105,8 @@ function isPortableWorkspacePath(value) {
   if (/^[A-Za-z][A-Za-z0-9+.-]*:/u.test(value)) return false;
   const segments = value.split('/');
   return !segments.some(
-    (segment) => segment.length === 0 || segment === '.' || segment === '..' || segment.includes(':'),
+    (segment) =>
+      segment.length === 0 || segment === '.' || segment === '..' || segment.includes(':'),
   );
 }
 
