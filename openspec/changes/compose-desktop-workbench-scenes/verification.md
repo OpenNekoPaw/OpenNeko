@@ -22,12 +22,19 @@ The following focused producer/consumer checks passed during this change:
 - `pnpm --filter @neko/app-desktop test`
 - affected package typechecks and renderer production builds
 
-The final focused rerun passed with Host `36 files / 311 tests`, Assets Webview `5 files / 34
+The final focused rerun passed with Host `36 files / 312 tests`, Assets Webview `5 files / 34
 tests`, Desktop `65 files / 323 tests`, and the repository typecheck. Tests assert the Host
 scene/sidebar codecs and CAS path,
 package-owned Root delegation, exact directory grant and Workspace restore, Assistant first-submit
 idempotency, AssetCenter selection/Preview lifecycle, one Workbench/PrimarySidebar structure, and
 poisoned Home/raw-path/active-first-recent-Project fallback paths.
+
+The Host focused regression additionally proves that Workspace Workbench mutations atomically update
+the Scene Main/Timeline refs, renderer epoch projection advances both aggregates together, and startup
+restoration rebuilds the Scene refs from the restored authoritative Workbench. The Desktop Resource
+Browser regression proves that its controller authorization is derived from the exact Workspace Scene,
+Agent View, Project and Tab identities; leaving that Scene fails closed even if the retired active target
+still names the Project.
 
 The stored-state startup regression additionally passed:
 
@@ -73,6 +80,10 @@ Chrome 150 window on macOS arm64:
 
 `reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-03T17-58-17.728Z-desktop-workbench-scenes-packaged/report.json`
 
+The Composer refinement rerun also passed in the current development runtime:
+
+`reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-03T20-03-09.111Z-desktop-workbench-scenes-development/report.json`
+
 The scenario proves:
 
 - exactly one Workbench and PrimarySidebar in Agent, Assets, Extensions, Project Management,
@@ -87,6 +98,17 @@ The scenario proves:
 - explicit opaque directory grant activates the exact Workspace with Agent + creative Main + right
   Resources, all display modes, zero early conversations, restart restore and no renderer raw path;
 - `poisonedRequestCount: 0`, no console errors and no renderer exceptions.
+
+The latest run records the Assistant composer at 820 px inside a 1190 px owner and the narrow
+Workspace composer at 334 px inside a 358 px owner. Both remain within their Workbench surface, retain
+mode/model/approval and compact tool controls, keep the toolbar within the composer, open with an
+elevated shadow, and expose zero branch/local-runtime metadata. Assistant shows the integrated
+`选择工作目录` action; Workspace shows only the safe fixture label `workspace`.
+
+A development launch against the existing user state also restored PrimarySidebar recent Projects and
+conversations, the exact Workspace Agent/Canvas/Resources composition, and the integrated Composer
+without a renderer exception. The Scene/Workbench and Resource Browser authority fixes preserve that
+state instead of clearing or rewriting the user database.
 
 Native picker cancellation and Assistant first-submit/provider execution are covered by deterministic
 Desktop producer/consumer tests. They are not claimed as provider-backed Electron acceptance because
