@@ -1,6 +1,7 @@
 .global-library-browser {
   box-sizing: border-box;
   display: flex;
+  container-type: inline-size;
   width: min(1020px, calc(100% - 64px));
   min-height: 0;
   height: 100%;
@@ -143,6 +144,7 @@
 .global-library-browser__view-switcher,
 .global-library-browser__facets {
   display: flex;
+  flex-shrink: 0;
   gap: 2px;
   padding: 3px;
   border: 1px solid var(--neko-border, #d4d7dc);
@@ -157,6 +159,10 @@
   border-radius: 8px;
   padding: 0 9px;
   background: transparent;
+}
+
+.global-library-browser__facets button {
+  white-space: nowrap;
 }
 
 .global-library-browser__view-switcher button {
@@ -403,6 +409,20 @@
   overflow: hidden;
   clip: rect(0 0 0 0);
   white-space: nowrap;
+}
+
+@container (max-width: 700px) {
+  .global-library-browser__toolbar {
+    align-items: stretch;
+    flex-wrap: wrap;
+  }
+
+  .global-library-browser__search {
+    width: 100%;
+    min-width: 100%;
+    max-width: none;
+    flex-basis: 100%;
+  }
 }
 
 @media (max-width: 720px) {

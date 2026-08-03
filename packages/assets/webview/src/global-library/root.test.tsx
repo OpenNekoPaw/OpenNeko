@@ -10,15 +10,16 @@ import type {
   GlobalLibraryItem,
   GlobalMediaLibraryItem,
 } from '@neko/assets-domain/global-library/contract';
-import { GlobalLibraryController } from '@neko/assets-domain/global-library/controller';
-import { GlobalLibraryBrowserRoot } from './root';
+import { AssetCenterController } from '@neko/assets-domain/asset-center/controller';
+import { AssetCenterSession } from '@neko/assets-domain/asset-center/session';
+import { AssetManagementRoot } from './root';
 
 Object.defineProperty(globalThis, 'IS_REACT_ACT_ENVIRONMENT', {
   configurable: true,
   value: true,
 });
 
-describe('GlobalLibraryBrowserRoot', () => {
+describe('AssetManagementRoot', () => {
   afterEach(() => {
     vi.useRealTimers();
     vi.restoreAllMocks();
@@ -27,9 +28,18 @@ describe('GlobalLibraryBrowserRoot', () => {
 
   it('keeps its controller active across React StrictMode effect replay', async () => {
     vi.useFakeTimers();
-    const dispose = vi.spyOn(GlobalLibraryController.prototype, 'dispose');
     const library = createLibrary();
     const runtime = createRuntime(library);
+    const dispose = vi.spyOn(runtime.management, 'dispose');
+    const releaseSubscription = vi.fn();
+    const subscribe = runtime.management.subscribe.bind(runtime.management);
+    vi.spyOn(runtime.management, 'subscribe').mockImplementation((listener) => {
+      const release = subscribe(listener);
+      return () => {
+        releaseSubscription();
+        release();
+      };
+    });
     const container = document.createElement('div');
     document.body.append(container);
     const root = createRoot(container);
@@ -37,18 +47,24 @@ describe('GlobalLibraryBrowserRoot', () => {
     await act(async () => {
       root.render(
         <StrictMode>
-          <GlobalLibraryBrowserRoot
-            runtime={runtime}
+          <AssetManagementRoot
+            runtime={runtime.management}
             locale="en"
-            defaultViewMode="grid"
             confirmAction={() => true}
           />
         </StrictMode>,
       );
     });
+    const connectButton = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
+      (button) => button.textContent?.includes('Connect directory'),
+    );
+    expect(container.querySelector('[data-catalog-status="loading"]')).not.toBeNull();
+    expect(connectButton?.disabled).toBe(true);
     await act(async () => vi.advanceTimersByTimeAsync(160));
 
-    expect(runtime.searchMediaLibraries).toHaveBeenCalledTimes(1);
+    expect(runtime.source.searchMediaLibraries).toHaveBeenCalledTimes(1);
+    expect(container.querySelector('[data-catalog-status="ready"]')).not.toBeNull();
+    expect(connectButton?.disabled).toBe(false);
     expect(container.textContent).toContain('Footage');
     expect(
       container.querySelector('.global-library-browser__header-copy .section-label')?.textContent,
@@ -83,27 +99,20 @@ describe('GlobalLibraryBrowserRoot', () => {
     expect(dispose).not.toHaveBeenCalled();
 
     await act(async () => root.unmount());
-    await Promise.resolve();
-    expect(dispose).toHaveBeenCalledTimes(1);
+    expect(releaseSubscription).toHaveBeenCalled();
+    expect(dispose).not.toHaveBeenCalled();
   });
 
   it('shares list/grid state and opens directories only through activation', async () => {
     const library = createLibrary();
     const runtime = createRuntime(library);
-    const onViewModeChange = vi.fn();
     const container = document.createElement('div');
     document.body.append(container);
     const root = createRoot(container);
 
     await act(async () => {
       root.render(
-        <GlobalLibraryBrowserRoot
-          runtime={runtime}
-          locale="en"
-          defaultViewMode="grid"
-          confirmAction={() => true}
-          onViewModeChange={onViewModeChange}
-        />,
+        <AssetManagementRoot runtime={runtime.management} locale="en" confirmAction={() => true} />,
       );
     });
     await act(async () => wait(180));
@@ -116,20 +125,20 @@ describe('GlobalLibraryBrowserRoot', () => {
     const listButton = container.querySelector<HTMLButtonElement>('button[aria-label="List view"]');
     await act(async () => listButton?.click());
     expect(collection?.dataset['viewMode']).toBe('list');
-    expect(onViewModeChange).toHaveBeenCalledWith('list');
+    expect(runtime.management.getSnapshot().filter.viewMode).toBe('list');
 
     const entry = container.querySelector<HTMLElement>('article');
     await act(async () => {
       entry?.click();
       await wait(0);
     });
-    expect(runtime.readMediaLibraryChildren).not.toHaveBeenCalled();
+    expect(runtime.source.readMediaLibraryChildren).not.toHaveBeenCalled();
 
     await act(async () => {
       entry?.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, detail: 2 }));
     });
     await act(async () => wait(180));
-    expect(runtime.readMediaLibraryChildren).toHaveBeenCalledWith(
+    expect(runtime.source.readMediaLibraryChildren).toHaveBeenCalledWith(
       expect.objectContaining({
         libraryId: library.libraryId,
         relativePath: '',
@@ -161,16 +170,11 @@ describe('GlobalLibraryBrowserRoot', () => {
 
     await act(async () => {
       root.render(
-        <GlobalLibraryBrowserRoot
-          runtime={runtime}
-          locale="en"
-          defaultViewMode="grid"
-          confirmAction={() => true}
-        />,
+        <AssetManagementRoot runtime={runtime.management} locale="en" confirmAction={() => true} />,
       );
     });
     await act(async () => vi.advanceTimersByTimeAsync(160));
-    expect(runtime.resolveThumbnail).toHaveBeenCalledWith(
+    expect(runtime.source.resolveThumbnail).toHaveBeenCalledWith(
       expect.objectContaining({ itemId: item.id, variant: 'icon' }),
     );
 
@@ -181,7 +185,7 @@ describe('GlobalLibraryBrowserRoot', () => {
       entry?.blur();
       await vi.advanceTimersByTimeAsync(100);
     });
-    expect(runtime.resolveThumbnail).not.toHaveBeenCalledWith(
+    expect(runtime.source.resolveThumbnail).not.toHaveBeenCalledWith(
       expect.objectContaining({ variant: 'hover' }),
     );
     expect(container.querySelector('.global-library-browser__hover-preview')).toBeNull();
@@ -190,7 +194,7 @@ describe('GlobalLibraryBrowserRoot', () => {
       entry?.focus();
       await vi.advanceTimersByTimeAsync(190);
     });
-    expect(runtime.resolveThumbnail).toHaveBeenCalledWith(
+    expect(runtime.source.resolveThumbnail).toHaveBeenCalledWith(
       expect.objectContaining({ itemId: item.id, variant: 'hover' }),
     );
     expect(container.querySelector('.global-library-browser__hover-preview img')).not.toBeNull();
@@ -208,7 +212,7 @@ describe('GlobalLibraryBrowserRoot', () => {
       relativePath: 'shots',
     };
     const runtime = createRuntime(library);
-    runtime.readMediaLibraryChildren = vi
+    runtime.source.readMediaLibraryChildren = vi
       .fn()
       .mockResolvedValueOnce({ revision: 0, items: [directory] })
       .mockResolvedValue({ revision: 0, items: [] });
@@ -218,12 +222,7 @@ describe('GlobalLibraryBrowserRoot', () => {
 
     await act(async () => {
       root.render(
-        <GlobalLibraryBrowserRoot
-          runtime={runtime}
-          locale="en"
-          defaultViewMode="grid"
-          confirmAction={() => true}
-        />,
+        <AssetManagementRoot runtime={runtime.management} locale="en" confirmAction={() => true} />,
       );
     });
     await act(async () => wait(180));
@@ -233,7 +232,7 @@ describe('GlobalLibraryBrowserRoot', () => {
       libraryEntry?.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Enter' }));
     });
     await act(async () => wait(180));
-    expect(runtime.readMediaLibraryChildren).toHaveBeenLastCalledWith(
+    expect(runtime.source.readMediaLibraryChildren).toHaveBeenLastCalledWith(
       expect.objectContaining({ libraryId: library.libraryId, relativePath: '' }),
     );
 
@@ -242,7 +241,7 @@ describe('GlobalLibraryBrowserRoot', () => {
       nestedEntry?.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Enter' }));
     });
     await act(async () => wait(180));
-    expect(runtime.readMediaLibraryChildren).toHaveBeenLastCalledWith(
+    expect(runtime.source.readMediaLibraryChildren).toHaveBeenLastCalledWith(
       expect.objectContaining({ libraryId: library.libraryId, relativePath: 'shots' }),
     );
 
@@ -255,7 +254,7 @@ describe('GlobalLibraryBrowserRoot', () => {
     );
     await act(async () => rootButton?.click());
     await act(async () => wait(180));
-    expect(runtime.searchMediaLibraries).toHaveBeenCalledTimes(2);
+    expect(runtime.source.searchMediaLibraries).toHaveBeenCalledTimes(2);
 
     await act(async () => root.unmount());
   });
@@ -270,23 +269,18 @@ describe('GlobalLibraryBrowserRoot', () => {
       relativePath: 'sequences/shots',
     };
     const runtime = createRuntime(library);
-    runtime.searchMediaLibraries = vi
+    runtime.source.searchMediaLibraries = vi
       .fn()
       .mockResolvedValueOnce({ revision: 0, items: [library] })
       .mockResolvedValueOnce({ revision: 0, items: [searchDirectory] });
-    runtime.readMediaLibraryChildren = vi.fn(async () => ({ revision: 0, items: [] }));
+    runtime.source.readMediaLibraryChildren = vi.fn(async () => ({ revision: 0, items: [] }));
     const container = document.createElement('div');
     document.body.append(container);
     const root = createRoot(container);
 
     await act(async () => {
       root.render(
-        <GlobalLibraryBrowserRoot
-          runtime={runtime}
-          locale="en"
-          defaultViewMode="grid"
-          confirmAction={() => true}
-        />,
+        <AssetManagementRoot runtime={runtime.management} locale="en" confirmAction={() => true} />,
       );
     });
     await act(async () => wait(180));
@@ -328,8 +322,8 @@ describe('GlobalLibraryBrowserRoot', () => {
       availability: 'available',
     };
     const runtime = createRuntime(asset);
-    runtime.searchAssets = vi.fn(async () => ({ revision: 4, items: [asset] }));
-    runtime.importAssets = vi.fn(async () => ({
+    runtime.source.searchAssets = vi.fn(async () => ({ revision: 4, items: [asset] }));
+    runtime.source.importAssets = vi.fn(async () => ({
       status: 'completed' as const,
       revision: 4,
       outcomes: [{ status: 'added' as const, label: 'hero.png', assetId: asset.id }],
@@ -341,10 +335,9 @@ describe('GlobalLibraryBrowserRoot', () => {
 
     await act(async () => {
       root.render(
-        <GlobalLibraryBrowserRoot
-          runtime={runtime}
+        <AssetManagementRoot
+          runtime={runtime.management}
           locale="en"
-          defaultViewMode="list"
           confirmAction={confirmAction}
         />,
       );
@@ -361,7 +354,7 @@ describe('GlobalLibraryBrowserRoot', () => {
     );
     await act(async () => importButton?.click());
     await act(async () => wait(180));
-    expect(runtime.importAssets).toHaveBeenCalledWith(4);
+    expect(runtime.source.importAssets).toHaveBeenCalledWith(4);
 
     const removeButton = container.querySelector<HTMLButtonElement>(
       'button[aria-label="Move asset to trash: hero.png"]',
@@ -369,8 +362,8 @@ describe('GlobalLibraryBrowserRoot', () => {
     await act(async () => removeButton?.click());
     await act(async () => wait(0));
     expect(confirmAction).toHaveBeenCalledWith('Move "hero.png" to the system trash?');
-    expect(runtime.removeAsset).toHaveBeenCalledWith(asset.id, 4);
-    expect(runtime.removeMediaLibrary).not.toHaveBeenCalled();
+    expect(runtime.source.removeAsset).toHaveBeenCalledWith(asset.id, 4);
+    expect(runtime.source.removeMediaLibrary).not.toHaveBeenCalled();
 
     await act(async () => root.unmount());
   });
@@ -386,11 +379,11 @@ describe('GlobalLibraryBrowserRoot', () => {
     };
     const refreshed = deferred<GlobalAssetProjection>();
     const runtime = createRuntime(asset);
-    runtime.searchAssets = vi
+    runtime.source.searchAssets = vi
       .fn()
       .mockResolvedValueOnce({ revision: 4, items: [asset] })
       .mockImplementationOnce(() => refreshed.promise);
-    runtime.importAssets = vi.fn(async () => ({
+    runtime.source.importAssets = vi.fn(async () => ({
       status: 'completed' as const,
       revision: 5,
       outcomes: [{ status: 'added' as const, label: 'hero.png', assetId: asset.id }],
@@ -401,12 +394,7 @@ describe('GlobalLibraryBrowserRoot', () => {
 
     await act(async () => {
       root.render(
-        <GlobalLibraryBrowserRoot
-          runtime={runtime}
-          locale="en"
-          defaultViewMode="list"
-          confirmAction={() => true}
-        />,
+        <AssetManagementRoot runtime={runtime.management} locale="en" confirmAction={() => true} />,
       );
     });
     await act(async () => wait(180));
@@ -461,7 +449,7 @@ describe('GlobalLibraryBrowserRoot', () => {
       },
     };
     const runtime = createRuntime(item);
-    runtime.resolveThumbnail = vi.fn(async (request) => {
+    runtime.source.resolveThumbnail = vi.fn(async (request) => {
       if (request.variant === 'hover') return hover.promise;
       return { ...request, dataUrl: 'data:image/png;base64,AA==' };
     });
@@ -471,12 +459,7 @@ describe('GlobalLibraryBrowserRoot', () => {
 
     await act(async () => {
       root.render(
-        <GlobalLibraryBrowserRoot
-          runtime={runtime}
-          locale="en"
-          defaultViewMode="grid"
-          confirmAction={() => true}
-        />,
+        <AssetManagementRoot runtime={runtime.management} locale="en" confirmAction={() => true} />,
       );
     });
     await act(async () => vi.advanceTimersByTimeAsync(160));
@@ -512,10 +495,9 @@ describe('GlobalLibraryBrowserRoot', () => {
     const unsupportedRoot = createRoot(container);
     await act(async () => {
       unsupportedRoot.render(
-        <GlobalLibraryBrowserRoot
-          runtime={unsupportedRuntime}
+        <AssetManagementRoot
+          runtime={unsupportedRuntime.management}
           locale="zh-cn"
-          defaultViewMode="grid"
           confirmAction={() => true}
         />,
       );
@@ -523,7 +505,7 @@ describe('GlobalLibraryBrowserRoot', () => {
     await act(async () => vi.advanceTimersByTimeAsync(400));
     container.querySelector<HTMLElement>('article')?.focus();
     await act(async () => vi.advanceTimersByTimeAsync(200));
-    expect(unsupportedRuntime.resolveThumbnail).not.toHaveBeenCalled();
+    expect(unsupportedRuntime.source.resolveThumbnail).not.toHaveBeenCalled();
     expect(container.querySelector('select[aria-label="排序"]')).not.toBeNull();
     expect(container.querySelector('.global-library-browser__thumbnail svg')).not.toBeNull();
 
@@ -545,8 +527,11 @@ function createLibrary(): GlobalMediaLibraryItem {
   };
 }
 
-function createRuntime(item: GlobalLibraryItem): GlobalLibraryBrowserRuntime {
-  return {
+function createRuntime(item: GlobalLibraryItem): {
+  readonly management: AssetCenterController;
+  readonly source: GlobalLibraryBrowserRuntime;
+} {
+  const source: GlobalLibraryBrowserRuntime = {
     searchAssets: vi.fn(async () => ({
       revision: 0,
       items: item.owner === 'global-asset-library' ? [item] : [],
@@ -578,6 +563,22 @@ function createRuntime(item: GlobalLibraryItem): GlobalLibraryBrowserRuntime {
       libraryId,
       revision: 0,
     })),
+  };
+  const session = new AssetCenterSession({
+    assetCenterSessionId: 'asset-center:window-1',
+    windowId: 'window-1',
+  });
+  return {
+    source,
+    management: new AssetCenterController(session, source, {
+      resolve: async ({ itemId }) => ({
+        kind: 'workspace-file',
+        path:
+          item.owner === 'media-library' && item.kind === 'file'
+            ? item.relativePath
+            : `${itemId.replaceAll(':', '-')}.bin`,
+      }),
+    }),
   };
 }
 

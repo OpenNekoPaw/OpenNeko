@@ -77,6 +77,7 @@ import {
 import { importGlobalAssetFiles, removeGlobalAssetFile } from './global-asset-files';
 import { createCanvasHostSessionId } from '@neko/canvas-domain';
 import { createResourceBrowserViewId } from '@neko/assets-domain/resource-browser/contract';
+import type { ContentLocator } from '@neko/content';
 
 export interface ResourceBrowserShellProjection {
   readonly endpointEpoch: string;
@@ -623,6 +624,38 @@ export class ResourceBrowserNodeRuntime {
       controllers.delete(controller);
       if (controllers.size === 0) this.homeThumbnailControllers.delete(input.windowId);
     }
+  }
+
+  async resolveAssetCenterSelection(input: {
+    readonly windowId: string;
+    readonly endpointEpoch: string;
+    readonly owner: GlobalLibraryItem['owner'];
+    readonly itemId: string;
+    readonly expectedCatalogRevision: number;
+  }): Promise<{
+    readonly item: GlobalLibraryItem;
+    readonly contentLocator: ContentLocator;
+    readonly absolutePath: string;
+  }> {
+    await this.requireHomeEndpoint(input.windowId, input.endpointEpoch);
+    this.requireHomeRevision(input.expectedCatalogRevision);
+    const item = this.requireHomeItem(input.windowId, input.itemId, input.owner);
+    if (item.owner === 'media-library' && item.kind !== 'file') {
+      throw new Error('Asset Center selection requires a content item.');
+    }
+    const absolutePath = await this.resolveHomeItemPath(item);
+    const relativePath =
+      item.owner === 'media-library'
+        ? item.relativePath
+        : path.relative(this.options.globalAssetRoot, absolutePath).split(path.sep).join('/');
+    if (!relativePath || relativePath.startsWith('../') || path.posix.isAbsolute(relativePath)) {
+      throw new Error('Asset Center selection escaped its authorized owner root.');
+    }
+    return {
+      item,
+      contentLocator: { kind: 'workspace-file', path: relativePath },
+      absolutePath,
+    };
   }
 
   detachWindow(windowId: string): void {

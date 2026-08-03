@@ -7,6 +7,10 @@ import type {
   PreviewProjection,
   PreviewHostRuntimeRoute,
 } from '@neko/preview-domain';
+import type {
+  AuthorizedPreviewSessionProjection,
+  AuthorizedPreviewSessionRuntime,
+} from '@neko/preview-domain/authorized-session';
 import { PREVIEW_HOST_RUNTIME_ROUTES, PREVIEW_HOST_RUNTIME_VERSION } from '@neko/preview-domain';
 import type { SupportedLocale } from '@neko/ui/i18n';
 import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
@@ -234,6 +238,88 @@ export function PreviewRoot({ locale, runtime }: PreviewRootProps): ReactElement
       </header>
       <div className="neko-preview-root__viewer">
         {viewer.render({ descriptor: projection.descriptor, sourceUrl, locale })}
+      </div>
+    </section>
+  );
+}
+
+export function AuthorizedPreviewRoot({
+  locale,
+  runtime,
+}: {
+  readonly locale: SupportedLocale;
+  readonly runtime: AuthorizedPreviewSessionRuntime;
+}): ReactElement {
+  const [projection, setProjection] = useState<AuthorizedPreviewSessionProjection>();
+  const [error, setError] = useState<string>();
+  useEffect(() => {
+    setLocale(locale);
+  }, [locale]);
+  useEffect(() => {
+    let active = true;
+    const unsubscribe = runtime.subscribe((next) => {
+      if (active) setProjection(next);
+    });
+    void runtime.getSnapshot().then(
+      (next) => {
+        if (active) setProjection(next);
+      },
+      (reason: unknown) => {
+        if (active) setError(describeError(reason));
+      },
+    );
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, [runtime]);
+  if (error) {
+    return (
+      <div className="neko-preview-root__status is-error" role="alert">
+        {error}
+      </div>
+    );
+  }
+  if (!projection) {
+    return (
+      <div className="neko-preview-root__status">
+        {label(locale, '正在载入预览…', 'Loading preview…')}
+      </div>
+    );
+  }
+  if (projection.status !== 'ready') {
+    return (
+      <div className="neko-preview-root__status is-error" role="status">
+        {projection.diagnostic.message}
+      </div>
+    );
+  }
+  const viewer = VIEWERS.find((candidate) => candidate.kind === projection.descriptor.contentKind);
+  if (!viewer) {
+    return (
+      <div className="neko-preview-root__status is-error" role="status">
+        {label(locale, '没有可用的预览器', 'No viewer is available')}
+      </div>
+    );
+  }
+  return (
+    <section
+      className="neko-preview-root"
+      data-authorized-preview-session-id={projection.identity.previewSessionId}
+      data-preview-kind={projection.descriptor.contentKind}
+    >
+      <header>
+        <div className="neko-preview-root__heading">
+          <strong>{projection.descriptor.displayName}</strong>
+          <span>{projection.descriptor.mediaType}</span>
+        </div>
+      </header>
+      <div className="neko-preview-root__viewer">
+        {viewer.render({
+          descriptor: projection.descriptor,
+          sourceUrl: projection.descriptor.url,
+          locale,
+        })}
       </div>
     </section>
   );

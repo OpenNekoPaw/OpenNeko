@@ -20,3 +20,4 @@ export * from './workspace-media-library-sync';
 export * from './resource-browser-node-source';
 export * from './global-asset-files';
 export * from './resource-browser-node-runtime';
+export * from './asset-center-node-runtime';

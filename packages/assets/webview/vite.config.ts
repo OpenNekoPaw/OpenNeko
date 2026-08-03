@@ -10,6 +10,7 @@ export default defineConfig({
     lib: {
       entry: {
         'global-library': resolve(import.meta.dirname, 'src/global-library/root.tsx'),
+        'asset-center-main': resolve(import.meta.dirname, 'src/global-library/main-root.tsx'),
         'resource-browser': resolve(import.meta.dirname, 'src/resource-browser/root.tsx'),
       },
       formats: ['es'],
@@ -20,6 +21,8 @@ export default defineConfig({
         'react/jsx-runtime',
         '@neko/assets-domain/global-library/contract',
         '@neko/assets-domain/global-library/controller',
+        '@neko/assets-domain/asset-center/contract',
+        '@neko/assets-domain/asset-center/controller',
         '@neko/assets-domain/resource-browser/contract',
         '@neko/shared',
         '@neko/ui/icons',

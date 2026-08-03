@@ -15,7 +15,6 @@ import type { SupportedLocale } from '@neko/ui/i18n';
 import React, {
   useCallback,
   useEffect,
-  useMemo,
   useRef,
   useState,
   type KeyboardEvent,
@@ -23,59 +22,39 @@ import React, {
 } from 'react';
 import {
   type GlobalAssetItem,
-  type GlobalLibraryBrowserRuntime,
   type GlobalLibraryItem,
   type GlobalLibraryViewMode,
   type GlobalMediaLibraryItem,
   type GlobalMediaLibraryLocationKind,
 } from '@neko/assets-domain/global-library/contract';
-import { GlobalLibraryController } from '@neko/assets-domain/global-library/controller';
+import type {
+  AssetCenterDirectoryContext,
+  AssetCenterFilterProjection,
+  AssetCenterSessionProjection,
+} from '@neko/assets-domain/asset-center/contract';
+import type { AssetCenterManagementRuntime } from '@neko/assets-domain/asset-center/controller';
 import { getGlobalLibraryLabels } from './labels';
 import './style.css';
 
-export interface GlobalLibraryBrowserRootProps {
-  readonly runtime: GlobalLibraryBrowserRuntime;
+export interface AssetManagementRootProps {
+  readonly runtime: AssetCenterManagementRuntime;
   readonly locale: SupportedLocale;
-  readonly defaultViewMode: GlobalLibraryViewMode;
   readonly interactive?: boolean;
-  readonly onViewModeChange?: (mode: GlobalLibraryViewMode) => void | Promise<void>;
   readonly confirmAction: (message: string) => boolean | Promise<boolean>;
 }
 
 type Catalog = 'media-library' | 'global-asset-library';
 type Sort = 'name-ascending' | 'name-descending' | 'modified-descending';
-type CatalogState =
-  | { readonly kind: 'loading' }
-  | { readonly kind: 'ready'; readonly items: readonly GlobalLibraryItem[] }
-  | { readonly kind: 'error'; readonly message: string };
 
-interface DirectoryContext {
-  readonly libraryId: string;
-  readonly libraryLabel: string;
-  readonly locationKind: GlobalMediaLibraryLocationKind;
-  readonly relativePath: string;
-}
-
-export function GlobalLibraryBrowserRoot({
+export function AssetManagementRoot({
   confirmAction,
-  defaultViewMode,
   interactive = true,
   locale,
-  onViewModeChange,
   runtime,
-}: GlobalLibraryBrowserRootProps): ReactElement {
+}: AssetManagementRootProps): ReactElement {
   const labels = getGlobalLibraryLabels(locale);
-  const controller = useMemo(() => new GlobalLibraryController(runtime), [runtime]);
-  const controllerLifetime = useMemo(() => ({ mounted: false, released: false }), [controller]);
-  const [catalog, setCatalog] = useState<Catalog>('media-library');
-  const [state, setState] = useState<CatalogState>({ kind: 'loading' });
-  const [query, setQuery] = useState('');
-  const [sort, setSort] = useState<Sort>('name-ascending');
-  const [viewMode, setViewMode] = useState(defaultViewMode);
+  const [projection, setProjection] = useState<AssetCenterSessionProjection>();
   const [locationKind, setLocationKind] = useState<GlobalMediaLibraryLocationKind>('local');
-  const [directory, setDirectory] = useState<DirectoryContext>();
-  const [selectedId, setSelectedId] = useState<string>();
-  const [refreshSequence, setRefreshSequence] = useState(0);
   const [pendingMutation, setPendingMutation] = useState(false);
   const [notice, setNotice] = useState<string>();
   const [mutationError, setMutationError] = useState<string>();
@@ -97,78 +76,70 @@ export function GlobalLibraryBrowserRoot({
     setHoverPreview(undefined);
   }, []);
 
-  const readCurrentCatalog = useCallback(() => {
-    const input = toSearchInput(query, sort);
-    return catalog === 'global-asset-library'
-      ? controller.searchAssets(input)
-      : directory && query.length === 0
-        ? controller.readMediaLibraryChildren({
-            ...input,
-            libraryId: directory.libraryId,
-            relativePath: directory.relativePath,
-          })
-        : controller.searchMediaLibraries(input);
-  }, [catalog, controller, directory, query, sort]);
-
   useEffect(() => {
-    controllerLifetime.mounted = true;
-    return () => {
-      controllerLifetime.mounted = false;
-      cancelHoverPreview();
-      queueMicrotask(() => {
-        if (!controllerLifetime.mounted && !controllerLifetime.released) {
-          controllerLifetime.released = true;
-          controller.dispose();
-        }
-      });
-    };
-  }, [cancelHoverPreview, controller, controllerLifetime]);
-
-  useEffect(() => {
-    setViewMode(defaultViewMode);
-  }, [defaultViewMode]);
-
-  useEffect(() => {
-    if (!interactive) return;
     let active = true;
-    setState({ kind: 'loading' });
+    void Promise.resolve(runtime.getSnapshot()).then((snapshot) => {
+      if (active) setProjection(snapshot);
+    });
+    const unsubscribe = runtime.subscribe(setProjection);
+    return () => {
+      active = false;
+      cancelHoverPreview();
+      unsubscribe();
+    };
+  }, [cancelHoverPreview, runtime]);
+
+  useEffect(() => {
+    if (!interactive || !projection || projection.catalog.status !== 'loading') return;
+    let active = true;
     cancelHoverPreview();
     const timeout = setTimeout(() => {
-      void readCurrentCatalog().then(
-        (projection) => {
-          if (!active) return;
-          setState({ kind: 'ready', items: projection.items });
-          if (focusCollectionAfterRead.current) {
-            focusCollectionAfterRead.current = false;
-            requestAnimationFrame(() => collectionRef.current?.focus());
+      void runtime.refresh(projection.revision).then(
+        () => {
+          if (active) {
+            if (focusCollectionAfterRead.current) {
+              focusCollectionAfterRead.current = false;
+              requestAnimationFrame(() => collectionRef.current?.focus());
+            }
           }
         },
-        (error: unknown) => {
-          if (active) setState({ kind: 'error', message: describeError(error) });
-        },
+        () => undefined,
       );
     }, 150);
     return () => {
       active = false;
       clearTimeout(timeout);
     };
-  }, [cancelHoverPreview, interactive, readCurrentCatalog, refreshSequence]);
+  }, [cancelHoverPreview, interactive, projection, runtime]);
 
   const refresh = (): void => {
-    setRefreshSequence((value) => value + 1);
+    if (!projection) return;
+    setPendingMutation(true);
+    void runtime.refresh(projection.revision).finally(() => setPendingMutation(false));
+  };
+
+  const updateFilter = (filter: AssetCenterFilterProjection): void => {
+    if (!projection) return;
+    void Promise.resolve(runtime.updateFilter(projection.revision, filter))
+      .then(setProjection)
+      .catch((error: unknown) => setMutationError(describeError(error)));
   };
 
   const selectCatalog = (next: Catalog): void => {
+    if (!projection) return;
     cancelHoverPreview();
-    setCatalog(next);
-    setDirectory(undefined);
-    setQuery('');
-    setSelectedId(undefined);
+    updateFilter({
+      ...projection.filter,
+      catalog: next,
+      query: '',
+      directory: undefined,
+    });
     setNotice(undefined);
     setMutationError(undefined);
   };
 
   const activateDirectory = (item: GlobalMediaLibraryItem): void => {
+    if (!projection) return;
     if (
       item.availability !== 'available' ||
       (item.kind !== 'library' && item.kind !== 'directory')
@@ -176,13 +147,15 @@ export function GlobalLibraryBrowserRoot({
       return;
     }
     cancelHoverPreview();
-    setQuery('');
-    setSelectedId(undefined);
-    setDirectory({
-      libraryId: item.libraryId,
-      libraryLabel: item.libraryLabel,
-      locationKind: item.locationKind,
-      relativePath: item.relativePath,
+    updateFilter({
+      ...projection.filter,
+      query: '',
+      directory: {
+        libraryId: item.libraryId,
+        libraryLabel: item.libraryLabel,
+        locationKind: item.locationKind,
+        relativePath: item.relativePath,
+      },
     });
     focusCollectionAfterRead.current = true;
   };
@@ -193,7 +166,7 @@ export function GlobalLibraryBrowserRoot({
     const generation = hoverGeneration.current;
     hoverTimer.current = setTimeout(() => {
       hoverTimer.current = undefined;
-      void controller.resolveThumbnail(item, 'hover').then(
+      void runtime.resolveThumbnail(item, 'hover').then(
         (result) => {
           if (
             generation === hoverGeneration.current &&
@@ -214,18 +187,14 @@ export function GlobalLibraryBrowserRoot({
     setPendingMutation(true);
     setMutationError(undefined);
     setNotice(undefined);
-    let refreshing = false;
     try {
       const nextNotice = await operation();
-      refreshing = true;
-      setState({ kind: 'loading' });
       cancelHoverPreview();
-      const projection = await readCurrentCatalog();
-      setState({ kind: 'ready', items: projection.items });
+      const current = await Promise.resolve(runtime.getSnapshot());
+      await runtime.refresh(current.revision);
       if (nextNotice) setNotice(nextNotice);
     } catch (error: unknown) {
       const message = describeError(error);
-      if (refreshing) setState({ kind: 'error', message });
       setMutationError(message);
     } finally {
       setPendingMutation(false);
@@ -233,16 +202,34 @@ export function GlobalLibraryBrowserRoot({
   };
 
   const changeViewMode = (mode: GlobalLibraryViewMode): void => {
-    setViewMode(mode);
-    void onViewModeChange?.(mode);
+    if (projection) updateFilter({ ...projection.filter, viewMode: mode });
   };
 
-  const items = state.kind === 'ready' ? state.items : [];
+  if (!projection) {
+    return (
+      <section className="global-library-browser" data-owner-root="asset-management">
+        <div className="global-library-browser__loading" role="status">
+          {labels.loading}
+        </div>
+      </section>
+    );
+  }
+  const { catalog, directory, query, viewMode } = projection.filter;
+  const sort = toSort(projection.filter);
+  const items =
+    projection.catalog.status === 'ready'
+      ? projection.catalog.entries.map((entry) => entry.item)
+      : [];
   const title = catalog === 'media-library' ? labels.titleMedia : labels.titleAssets;
   const description =
     catalog === 'media-library' ? labels.descriptionMedia : labels.descriptionAssets;
   return (
-    <section className="global-library-browser" data-owner-root="global-library-browser">
+    <section
+      className="global-library-browser"
+      data-owner-root="asset-management"
+      data-asset-center-session-id={projection.identity.assetCenterSessionId}
+      data-catalog-status={projection.catalog.status}
+    >
       <header className="global-library-browser__header">
         <div className="global-library-browser__header-copy">
           <p className="section-label">{labels.eyebrow}</p>
@@ -257,7 +244,7 @@ export function GlobalLibraryBrowserRoot({
                 <select
                   aria-label={labels.location}
                   value={locationKind}
-                  disabled={pendingMutation}
+                  disabled={pendingMutation || projection.catalog.status !== 'ready'}
                   onChange={(event) =>
                     setLocationKind(requireLocationKind(event.currentTarget.value))
                   }
@@ -269,11 +256,11 @@ export function GlobalLibraryBrowserRoot({
               </label>
               <button
                 type="button"
-                disabled={!interactive || pendingMutation}
+                disabled={!interactive || pendingMutation || projection.catalog.status !== 'ready'}
                 onClick={() =>
                   void runMutation(async () => {
-                    const result = await controller.addMediaLibrary(locationKind);
-                    return result.status === 'cancelled' ? labels.cancelled : undefined;
+                    await runtime.addMediaLibrary(locationKind, projection.revision);
+                    return undefined;
                   })
                 }
               >
@@ -284,17 +271,11 @@ export function GlobalLibraryBrowserRoot({
           ) : (
             <button
               type="button"
-              disabled={!interactive || pendingMutation}
+              disabled={!interactive || pendingMutation || projection.catalog.status !== 'ready'}
               onClick={() =>
                 void runMutation(async () => {
-                  const result = await controller.importAssets();
-                  if (result.status === 'cancelled') return labels.cancelled;
-                  const failures = result.outcomes.filter((outcome) => outcome.status !== 'added');
-                  return failures.length === 0
-                    ? labels.imported
-                    : `${labels.imported} ${failures
-                        .map((outcome) => `${outcome.label}: ${outcome.diagnostic}`)
-                        .join(' ')}`;
+                  await runtime.importAssets(projection.revision);
+                  return labels.imported;
                 })
               }
             >
@@ -312,13 +293,20 @@ export function GlobalLibraryBrowserRoot({
             aria-label={catalog === 'media-library' ? labels.searchMedia : labels.searchAssets}
             placeholder={catalog === 'media-library' ? labels.searchMedia : labels.searchAssets}
             value={query}
-            onChange={(event) => setQuery(event.currentTarget.value)}
+            onChange={(event) =>
+              updateFilter({
+                ...projection.filter,
+                query: event.currentTarget.value,
+              })
+            }
           />
         </label>
         <select
           aria-label={labels.sort}
           value={sort}
-          onChange={(event) => setSort(requireSort(event.currentTarget.value))}
+          onChange={(event) =>
+            updateFilter(withSort(projection.filter, requireSort(event.currentTarget.value)))
+          }
         >
           <option value="name-ascending">{labels.nameAscending}</option>
           <option value="name-descending">{labels.nameDescending}</option>
@@ -348,7 +336,7 @@ export function GlobalLibraryBrowserRoot({
           type="button"
           title={labels.refresh}
           aria-label={labels.refresh}
-          disabled={!interactive || pendingMutation}
+          disabled={!interactive || pendingMutation || projection.catalog.status !== 'ready'}
           onClick={refresh}
         >
           <RefreshIcon size={14} />
@@ -378,8 +366,10 @@ export function GlobalLibraryBrowserRoot({
           rootLabel={labels.root}
           onNavigate={(relativePath) => {
             cancelHoverPreview();
-            setSelectedId(undefined);
-            setDirectory(relativePath === undefined ? undefined : { ...directory, relativePath });
+            updateFilter({
+              ...projection.filter,
+              directory: relativePath === undefined ? undefined : { ...directory, relativePath },
+            });
           }}
         />
       ) : null}
@@ -394,11 +384,11 @@ export function GlobalLibraryBrowserRoot({
         </p>
       ) : null}
 
-      {state.kind === 'error' ? (
+      {projection.catalog.status === 'unavailable' ? (
         <p className="global-library-browser__diagnostic" role="alert">
-          {state.message}
+          {projection.catalog.diagnostic.message}
         </p>
-      ) : state.kind === 'loading' ? (
+      ) : projection.catalog.status === 'loading' ? (
         <div className="global-library-browser__loading" role="status">
           {labels.loading}
         </div>
@@ -414,12 +404,12 @@ export function GlobalLibraryBrowserRoot({
           {items.map((item) => (
             <GlobalLibraryEntry
               key={item.id}
-              controller={controller}
+              controller={runtime}
               item={item}
               labels={labels}
               locale={locale}
               pendingMutation={pendingMutation}
-              selected={selectedId === item.id}
+              selected={projection.selection?.itemId === item.id}
               viewMode={viewMode}
               hoverPreview={hoverPreview?.itemId === item.id ? hoverPreview.dataUrl : undefined}
               onActivate={() => {
@@ -427,7 +417,21 @@ export function GlobalLibraryBrowserRoot({
               }}
               onHoverStart={() => beginHoverPreview(item)}
               onHoverEnd={cancelHoverPreview}
-              onSelect={() => setSelectedId(item.id)}
+              onSelect={() => {
+                if (
+                  item.owner === 'media-library' &&
+                  (item.kind === 'library' || item.kind === 'directory')
+                ) {
+                  return;
+                }
+                void runtime
+                  .select({
+                    expectedRevision: projection.revision,
+                    owner: item.owner,
+                    itemId: item.id,
+                  })
+                  .catch((error: unknown) => setMutationError(describeError(error)));
+              }}
               onRemoveAsset={(asset) =>
                 void runMutation(async () => {
                   if (
@@ -435,14 +439,14 @@ export function GlobalLibraryBrowserRoot({
                   ) {
                     return labels.cancelled;
                   }
-                  await controller.removeAsset(asset);
+                  await runtime.removeAsset(asset, projection.revision);
                   return labels.removed;
                 })
               }
               onRelinkLibrary={(library) =>
                 void runMutation(async () => {
-                  const result = await controller.relinkMediaLibrary(library.libraryId);
-                  return result.status === 'cancelled' ? labels.cancelled : labels.relinked;
+                  await runtime.relinkMediaLibrary(library.libraryId, projection.revision);
+                  return labels.relinked;
                 })
               }
               onRemoveLibrary={(library) =>
@@ -454,14 +458,13 @@ export function GlobalLibraryBrowserRoot({
                   ) {
                     return labels.cancelled;
                   }
-                  await controller.removeMediaLibrary(library.libraryId);
-                  if (directory?.libraryId === library.libraryId) setDirectory(undefined);
+                  await runtime.removeMediaLibrary(library.libraryId, projection.revision);
                   return labels.removed;
                 })
               }
               onRevealLibrary={(library) =>
                 void runMutation(async () => {
-                  await controller.revealMediaLibrary(library.libraryId);
+                  await runtime.revealMediaLibrary(library.libraryId, projection.revision);
                   return labels.revealed;
                 })
               }
@@ -491,7 +494,7 @@ function GlobalLibraryEntry({
   selected,
   viewMode,
 }: {
-  readonly controller: GlobalLibraryController;
+  readonly controller: Pick<AssetCenterManagementRuntime, 'resolveThumbnail'>;
   readonly hoverPreview?: string;
   readonly item: GlobalLibraryItem;
   readonly labels: ReturnType<typeof getGlobalLibraryLabels>;
@@ -590,7 +593,7 @@ function GlobalLibraryIcon({
   controller,
   item,
 }: {
-  readonly controller: GlobalLibraryController;
+  readonly controller: Pick<AssetCenterManagementRuntime, 'resolveThumbnail'>;
   readonly item: GlobalLibraryItem;
 }): ReactElement {
   const [visible, setVisible] = useState(false);
@@ -659,7 +662,7 @@ function Breadcrumbs({
   rootLabel,
 }: {
   readonly ariaLabel: string;
-  readonly directory: DirectoryContext;
+  readonly directory: AssetCenterDirectoryContext;
   readonly onNavigate: (relativePath: string | undefined) => void;
   readonly rootLabel: string;
 }): ReactElement {
@@ -685,16 +688,23 @@ function Breadcrumbs({
   );
 }
 
-function toSearchInput(query: string, sort: Sort) {
+function withSort(filter: AssetCenterFilterProjection, sort: Sort): AssetCenterFilterProjection {
   return {
-    query,
+    ...filter,
     sortBy: sort === 'modified-descending' ? ('modifiedAt' as const) : ('name' as const),
     sortDirection:
       sort === 'name-descending' || sort === 'modified-descending'
         ? ('descending' as const)
         : ('ascending' as const),
-    limit: 160,
   };
+}
+
+function toSort(filter: AssetCenterFilterProjection): Sort {
+  return filter.sortBy === 'modifiedAt'
+    ? 'modified-descending'
+    : filter.sortDirection === 'descending'
+      ? 'name-descending'
+      : 'name-ascending';
 }
 
 function requireSort(value: string): Sort {

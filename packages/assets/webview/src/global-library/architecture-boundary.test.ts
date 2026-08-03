@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 const packageRoot = resolve(import.meta.dirname, '../..');
 const workspaceRoot = resolve(packageRoot, '../../..');
 
-describe('Global Library architecture boundary', () => {
+describe('Asset Management architecture boundary', () => {
   it('keeps browser-safe package entries free of Electron and Node runtime imports', async () => {
     const sources = await Promise.all(
       ['root.tsx', 'labels.ts'].map((file) =>
@@ -20,34 +20,23 @@ describe('Global Library architecture boundary', () => {
 
   it('keeps the Desktop renderer adapter on package public entries', async () => {
     const surface = await readFile(
-      resolve(workspaceRoot, 'apps/neko-desktop/src/renderer/DesktopGlobalLibrarySurface.tsx'),
+      resolve(workspaceRoot, 'apps/neko-desktop/src/renderer/DesktopAssetManagementSurface.tsx'),
       'utf8',
     );
-    expect(surface).toContain("import('@neko/assets-webview/global-library/root')");
+    expect(surface).toContain("import('@neko/assets-webview/asset-management/root')");
     expect(surface).not.toContain('packages/assets/domain/src');
   });
 
-  it('registers and deterministically releases every global-library IPC route', async () => {
+  it('uses one package-owned Asset Center IPC route and poisons Home asset routes', async () => {
     const ipc = await readFile(resolve(workspaceRoot, 'apps/neko-desktop/src/main/ipc.ts'), 'utf8');
     const disposeStart = ipc.indexOf('return () => {');
     expect(disposeStart).toBeGreaterThan(0);
     const registration = ipc.slice(0, disposeStart);
     const disposal = ipc.slice(disposeStart);
-    for (const channel of [
-      'assetsSearch',
-      'assetsImport',
-      'assetsRemove',
-      'libraryThumbnailResolve',
-      'mediaLibrariesSearch',
-      'mediaLibrariesChildren',
-      'mediaLibrariesAdd',
-      'mediaLibrariesRelink',
-      'mediaLibrariesRemove',
-      'mediaLibrariesReveal',
-    ]) {
-      const route = `DESKTOP_HOME_MANAGEMENT_CHANNELS.${channel}`;
-      expect(registration).toContain(route);
-      expect(disposal).toContain(route);
-    }
+    expect(registration).toContain('ASSET_CENTER_HOST_CHANNEL');
+    expect(disposal).toContain('ASSET_CENTER_HOST_CHANNEL');
+    expect(ipc).not.toMatch(
+      /DESKTOP_HOME_MANAGEMENT_CHANNELS\.(?:assets|libraryThumbnail|mediaLibraries)/u,
+    );
   });
 });

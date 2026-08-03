@@ -1,0 +1,539 @@
+import { randomUUID } from 'node:crypto';
+import { stat } from 'node:fs/promises';
+import { contentLocatorsEqual, type ContentLocator } from '@neko/content';
+import {
+  AssetCenterController,
+  AssetCenterSession,
+  createDefaultAssetCenterFilter,
+  type AssetCenterFilterProjection,
+  type AssetCenterSessionIdentity,
+  type AssetCenterSessionProjection,
+} from '@neko/assets-domain/asset-center';
+import type {
+  GlobalAssetItem,
+  GlobalLibraryBrowserRuntime,
+  GlobalLibraryItem,
+  GlobalLibraryThumbnailVariant,
+  GlobalMediaLibraryLocationKind,
+} from '@neko/assets-domain/global-library';
+import {
+  AUTHORIZED_PREVIEW_SESSION_VERSION,
+  parseAuthorizedPreviewSessionProjection,
+  type AuthorizedPreviewSessionProjection,
+} from '@neko/preview-domain/authorized-session';
+import type { PreviewMediaDescriptor } from '@neko/preview-domain';
+import { detectPreviewContentKind, getPreviewMediaType } from '@neko/preview-domain';
+import type { ResourceBrowserNodeRuntime } from './resource-browser-node-runtime';
+
+type AssetCenterResourceBrowserPort = Pick<
+  ResourceBrowserNodeRuntime,
+  | 'searchHomeAssets'
+  | 'searchHomeMediaLibraries'
+  | 'readHomeMediaLibraryChildren'
+  | 'resolveHomeLibraryThumbnail'
+  | 'importHomeAssets'
+  | 'removeHomeAsset'
+  | 'addHomeMediaLibrary'
+  | 'relinkHomeMediaLibrary'
+  | 'removeHomeMediaLibrary'
+  | 'revealHomeMediaLibrary'
+  | 'resolveAssetCenterSelection'
+>;
+
+export interface AssetCenterNodeRuntimeOptions {
+  readonly resourceBrowser: AssetCenterResourceBrowserPort;
+  readonly createIdentity?: () => string;
+  readonly resources: {
+    registerFile(
+      owner: {
+        readonly windowId: string;
+        readonly viewId: string;
+        readonly sessionId: string;
+        readonly endpointEpoch: string;
+        readonly revision: string;
+        readonly generation: string;
+      },
+      resource: {
+        readonly absolutePath: string;
+        readonly mediaType: string;
+        readonly revision: string;
+      },
+    ): Promise<{
+      readonly url: string;
+      readonly resourceUris?: Readonly<Record<string, string>>;
+    }>;
+    releaseSession(sessionId: string): void;
+  };
+}
+
+interface SessionEntry {
+  controller: AssetCenterController;
+  endpointEpoch: string;
+}
+
+interface ResolvedSelection {
+  readonly item: GlobalLibraryItem;
+  readonly contentLocator: ContentLocator;
+  readonly absolutePath: string;
+}
+
+interface PendingPreview {
+  readonly previewSessionId: string;
+  readonly identity: AssetCenterSessionIdentity;
+  readonly itemId: string;
+  readonly descriptorId: string;
+}
+
+export class AssetCenterNodeRuntime {
+  private readonly sessions = new Map<string, SessionEntry>();
+  private readonly resolvedSelections = new Map<string, ResolvedSelection>();
+  private readonly pendingPreviews = new Map<string, PendingPreview>();
+  private readonly previews = new Map<string, AuthorizedPreviewSessionProjection>();
+  private readonly createIdentity: () => string;
+  private disposed = false;
+
+  constructor(private readonly options: AssetCenterNodeRuntimeOptions) {
+    this.createIdentity = options.createIdentity ?? randomUUID;
+  }
+
+  attach(input: {
+    readonly identity: AssetCenterSessionIdentity;
+    readonly endpointEpoch: string;
+    readonly initialViewMode?: AssetCenterFilterProjection['viewMode'];
+  }): AssetCenterSessionProjection {
+    this.requireActive();
+    const existing = this.sessions.get(input.identity.assetCenterSessionId);
+    if (existing) {
+      assertIdentity(existing.controller.identity, input.identity);
+      existing.endpointEpoch = input.endpointEpoch;
+      return existing.controller.getSnapshot();
+    }
+    const entry = {} as SessionEntry;
+    const browser = this.createBrowserRuntime(input.identity, () => entry.endpointEpoch);
+    const session = new AssetCenterSession(input.identity, {
+      ...createDefaultAssetCenterFilter(),
+      ...(input.initialViewMode ? { viewMode: input.initialViewMode } : {}),
+    });
+    const controller = new AssetCenterController(
+      session,
+      browser,
+      {
+        resolve: async ({ identity, owner, itemId, expectedCatalogRevision }) => {
+          const resolved = await this.options.resourceBrowser.resolveAssetCenterSelection({
+            windowId: identity.windowId,
+            endpointEpoch: entry.endpointEpoch,
+            owner,
+            itemId,
+            expectedCatalogRevision,
+          });
+          this.resolvedSelections.set(
+            selectionKey(identity.assetCenterSessionId, itemId),
+            resolved,
+          );
+          return resolved.contentLocator;
+        },
+      },
+      {
+        contentAuthorization: {
+          authorize: async ({ identity, itemId, contentLocator }) => {
+            const key = selectionKey(identity.assetCenterSessionId, itemId);
+            const resolved = this.resolvedSelections.get(key);
+            if (!resolved || !contentLocatorsEqual(resolved.contentLocator, contentLocator)) {
+              return {
+                status: 'unavailable',
+                diagnostic: {
+                  code: 'preview-source-unavailable',
+                  message: 'Asset Center selection authorization is stale.',
+                },
+              };
+            }
+            const previewSessionId = `preview:asset-center:${this.createIdentity()}`;
+            const contentKind = detectPreviewContentKind(resolved.item.label);
+            const mediaType = getPreviewMediaType(resolved.item.label);
+            if (!contentKind || !mediaType) {
+              return {
+                status: 'unavailable',
+                diagnostic: {
+                  code: 'preview-unsupported-kind',
+                  message: `Preview does not support '${resolved.item.label}'.`,
+                },
+              };
+            }
+            try {
+              const file = await stat(resolved.absolutePath);
+              if (!file.isFile()) throw new Error('Asset Center Preview source is not a file.');
+              const revision = `${file.mtimeMs}:${file.size}`;
+              const lease = await this.options.resources.registerFile(
+                {
+                  windowId: identity.windowId,
+                  viewId: identity.assetCenterSessionId,
+                  sessionId: previewSessionId,
+                  endpointEpoch: entry.endpointEpoch,
+                  revision,
+                  generation: '0',
+                },
+                { absolutePath: resolved.absolutePath, mediaType, revision },
+              );
+              const descriptor: PreviewMediaDescriptor = {
+                descriptorId: `descriptor:${previewSessionId}`,
+                revision,
+                contentLocator,
+                url: lease.url,
+                ...(lease.resourceUris ? { resourceUris: lease.resourceUris } : {}),
+                contentKind,
+                mediaType,
+                displayName: resolved.item.label,
+                byteLength: file.size,
+              };
+              this.pendingPreviews.set(descriptor.descriptorId, {
+                previewSessionId,
+                identity,
+                itemId,
+                descriptorId: descriptor.descriptorId,
+              });
+              return { status: 'ready', descriptor };
+            } catch (error: unknown) {
+              return {
+                status: 'unavailable',
+                diagnostic: {
+                  code: 'preview-source-unavailable',
+                  message: error instanceof Error ? error.message : String(error),
+                },
+              };
+            }
+          },
+        },
+        previewSessions: {
+          create: async ({ identity, selection, descriptor }) => {
+            const pending = this.pendingPreviews.get(descriptor.descriptorId);
+            if (
+              !pending ||
+              pending.identity.assetCenterSessionId !== identity.assetCenterSessionId ||
+              pending.identity.windowId !== identity.windowId ||
+              pending.itemId !== selection.itemId
+            ) {
+              throw new Error('Asset Center Preview authorization is stale.');
+            }
+            this.pendingPreviews.delete(descriptor.descriptorId);
+            const projection = parseAuthorizedPreviewSessionProjection({
+              schemaVersion: AUTHORIZED_PREVIEW_SESSION_VERSION,
+              identity: {
+                previewSessionId: pending.previewSessionId,
+                windowId: identity.windowId,
+                owner: {
+                  kind: 'asset-center',
+                  assetCenterSessionId: identity.assetCenterSessionId,
+                  resourceOwner: selection.owner,
+                  itemId: selection.itemId,
+                },
+                revision: 0,
+              },
+              status: 'ready',
+              descriptor,
+            });
+            this.previews.set(pending.previewSessionId, projection);
+            return projection;
+          },
+          release: async ({ identity, previewSessionId }) => {
+            const projection = this.previews.get(previewSessionId);
+            if (
+              !projection ||
+              projection.identity.windowId !== identity.windowId ||
+              projection.identity.owner.kind !== 'asset-center' ||
+              projection.identity.owner.assetCenterSessionId !== identity.assetCenterSessionId
+            ) {
+              throw new Error(`Asset Center Preview session '${previewSessionId}' is unavailable.`);
+            }
+            this.previews.delete(previewSessionId);
+            this.options.resources.releaseSession(previewSessionId);
+          },
+        },
+      },
+    );
+    entry.controller = controller;
+    entry.endpointEpoch = input.endpointEpoch;
+    this.sessions.set(input.identity.assetCenterSessionId, entry);
+    return controller.getSnapshot();
+  }
+
+  getSnapshot(identity: AssetCenterSessionIdentity): AssetCenterSessionProjection {
+    return this.requireSession(identity).controller.getSnapshot();
+  }
+
+  updateFilter(input: {
+    readonly identity: AssetCenterSessionIdentity;
+    readonly expectedRevision: number;
+    readonly filter: AssetCenterFilterProjection;
+  }): AssetCenterSessionProjection {
+    return this.requireSession(input.identity).controller.updateFilter(
+      input.expectedRevision,
+      input.filter,
+    );
+  }
+
+  refresh(input: {
+    readonly identity: AssetCenterSessionIdentity;
+    readonly expectedRevision: number;
+  }): Promise<AssetCenterSessionProjection> {
+    return this.requireSession(input.identity).controller.refresh(input.expectedRevision);
+  }
+
+  select(input: {
+    readonly identity: AssetCenterSessionIdentity;
+    readonly expectedRevision: number;
+    readonly owner: GlobalLibraryItem['owner'];
+    readonly itemId: string;
+  }): Promise<AssetCenterSessionProjection> {
+    return this.requireSession(input.identity).controller.select(input);
+  }
+
+  resolveThumbnail(input: {
+    readonly identity: AssetCenterSessionIdentity;
+    readonly expectedRevision: number;
+    readonly itemId: string;
+    readonly variant: GlobalLibraryThumbnailVariant;
+  }) {
+    const entry = this.requireSession(input.identity);
+    const item = this.requireCatalogItem(entry, input.expectedRevision, input.itemId);
+    return entry.controller.resolveThumbnail(item, input.variant);
+  }
+
+  async importAssets(input: {
+    readonly identity: AssetCenterSessionIdentity;
+    readonly expectedRevision: number;
+  }): Promise<AssetCenterSessionProjection> {
+    const controller = this.requireSession(input.identity).controller;
+    await controller.importAssets(input.expectedRevision);
+    return controller.getSnapshot();
+  }
+
+  async removeAsset(input: {
+    readonly identity: AssetCenterSessionIdentity;
+    readonly expectedRevision: number;
+    readonly itemId: string;
+  }): Promise<AssetCenterSessionProjection> {
+    const entry = this.requireSession(input.identity);
+    const item = this.requireCatalogItem(entry, input.expectedRevision, input.itemId);
+    if (item.owner !== 'global-asset-library') {
+      throw new Error(`Asset Center item '${input.itemId}' is not a global Asset.`);
+    }
+    await entry.controller.removeAsset(item satisfies GlobalAssetItem, input.expectedRevision);
+    return entry.controller.getSnapshot();
+  }
+
+  async addMediaLibrary(input: {
+    readonly identity: AssetCenterSessionIdentity;
+    readonly expectedRevision: number;
+    readonly locationKind: GlobalMediaLibraryLocationKind;
+  }): Promise<AssetCenterSessionProjection> {
+    const controller = this.requireSession(input.identity).controller;
+    await controller.addMediaLibrary(input.locationKind, input.expectedRevision);
+    return controller.getSnapshot();
+  }
+
+  async relinkMediaLibrary(input: {
+    readonly identity: AssetCenterSessionIdentity;
+    readonly expectedRevision: number;
+    readonly libraryId: string;
+  }): Promise<AssetCenterSessionProjection> {
+    const controller = this.requireSession(input.identity).controller;
+    await controller.relinkMediaLibrary(input.libraryId, input.expectedRevision);
+    return controller.getSnapshot();
+  }
+
+  async removeMediaLibrary(input: {
+    readonly identity: AssetCenterSessionIdentity;
+    readonly expectedRevision: number;
+    readonly libraryId: string;
+  }): Promise<AssetCenterSessionProjection> {
+    const controller = this.requireSession(input.identity).controller;
+    await controller.removeMediaLibrary(input.libraryId, input.expectedRevision);
+    return controller.getSnapshot();
+  }
+
+  async revealMediaLibrary(input: {
+    readonly identity: AssetCenterSessionIdentity;
+    readonly expectedRevision: number;
+    readonly libraryId: string;
+  }): Promise<AssetCenterSessionProjection> {
+    const controller = this.requireSession(input.identity).controller;
+    await controller.revealMediaLibrary(input.libraryId, input.expectedRevision);
+    return controller.getSnapshot();
+  }
+
+  getPreview(identity: AssetCenterSessionIdentity, previewSessionId: string) {
+    this.requireSession(identity);
+    const preview = this.previews.get(previewSessionId);
+    if (
+      !preview ||
+      preview.identity.windowId !== identity.windowId ||
+      preview.identity.owner.kind !== 'asset-center' ||
+      preview.identity.owner.assetCenterSessionId !== identity.assetCenterSessionId
+    ) {
+      throw new Error(`Asset Center Preview session '${previewSessionId}' is unavailable.`);
+    }
+    return preview;
+  }
+
+  async detachView(identity: AssetCenterSessionIdentity): Promise<AssetCenterSessionProjection> {
+    const controller = this.requireSession(identity).controller;
+    return controller.detachPreview();
+  }
+
+  detachWindow(windowId: string): void {
+    for (const [sessionId, entry] of this.sessions) {
+      if (entry.controller.identity.windowId !== windowId) continue;
+      for (const [previewSessionId, preview] of this.previews) {
+        if (preview.identity.windowId !== windowId) continue;
+        this.previews.delete(previewSessionId);
+        this.options.resources.releaseSession(previewSessionId);
+      }
+      entry.controller.dispose();
+      this.sessions.delete(sessionId);
+    }
+  }
+
+  dispose(): void {
+    if (this.disposed) return;
+    this.disposed = true;
+    for (const previewSessionId of this.previews.keys()) {
+      this.options.resources.releaseSession(previewSessionId);
+    }
+    this.previews.clear();
+    for (const entry of this.sessions.values()) entry.controller.dispose();
+    this.sessions.clear();
+    this.pendingPreviews.clear();
+    this.resolvedSelections.clear();
+  }
+
+  private createBrowserRuntime(
+    identity: AssetCenterSessionIdentity,
+    endpointEpoch: () => string,
+  ): GlobalLibraryBrowserRuntime {
+    const resources = this.options.resourceBrowser;
+    return {
+      searchAssets: (input) =>
+        resources.searchHomeAssets({
+          windowId: identity.windowId,
+          endpointEpoch: endpointEpoch(),
+          ...input,
+          limit: input.limit ?? 160,
+        }),
+      searchMediaLibraries: (input) =>
+        resources.searchHomeMediaLibraries({
+          windowId: identity.windowId,
+          endpointEpoch: endpointEpoch(),
+          ...input,
+          limit: input.limit ?? 160,
+        }),
+      readMediaLibraryChildren: (input) =>
+        resources.readHomeMediaLibraryChildren({
+          windowId: identity.windowId,
+          endpointEpoch: endpointEpoch(),
+          ...input,
+          limit: input.limit ?? 160,
+        }),
+      resolveThumbnail: (request) =>
+        resources.resolveHomeLibraryThumbnail({
+          windowId: identity.windowId,
+          endpointEpoch: endpointEpoch(),
+          request,
+        }),
+      importAssets: (expectedRevision) =>
+        resources.importHomeAssets({
+          windowId: identity.windowId,
+          endpointEpoch: endpointEpoch(),
+          expectedRevision,
+        }),
+      removeAsset: (assetId, expectedRevision) =>
+        resources.removeHomeAsset({
+          windowId: identity.windowId,
+          endpointEpoch: endpointEpoch(),
+          assetId,
+          expectedRevision,
+        }),
+      addMediaLibrary: (locationKind, expectedRevision) =>
+        resources.addHomeMediaLibrary({
+          windowId: identity.windowId,
+          endpointEpoch: endpointEpoch(),
+          locationKind,
+          expectedRevision,
+        }),
+      relinkMediaLibrary: (libraryId, expectedRevision) =>
+        resources.relinkHomeMediaLibrary({
+          windowId: identity.windowId,
+          endpointEpoch: endpointEpoch(),
+          libraryId,
+          expectedRevision,
+        }),
+      removeMediaLibrary: async (libraryId, expectedRevision) => ({
+        status: 'removed',
+        libraryId,
+        revision: await resources.removeHomeMediaLibrary({
+          windowId: identity.windowId,
+          endpointEpoch: endpointEpoch(),
+          libraryId,
+          expectedRevision,
+        }),
+      }),
+      revealMediaLibrary: async (libraryId, expectedRevision) => ({
+        status: 'revealed',
+        libraryId,
+        revision: await resources.revealHomeMediaLibrary({
+          windowId: identity.windowId,
+          endpointEpoch: endpointEpoch(),
+          libraryId,
+          expectedRevision,
+        }),
+      }),
+    };
+  }
+
+  private requireSession(identity: AssetCenterSessionIdentity): SessionEntry {
+    this.requireActive();
+    const entry = this.sessions.get(identity.assetCenterSessionId);
+    if (!entry)
+      throw new Error(`Asset Center session '${identity.assetCenterSessionId}' is unavailable.`);
+    assertIdentity(entry.controller.identity, identity);
+    return entry;
+  }
+
+  private requireCatalogItem(
+    entry: SessionEntry,
+    expectedRevision: number,
+    itemId: string,
+  ): GlobalLibraryItem {
+    const projection = entry.controller.getSnapshot();
+    if (projection.revision !== expectedRevision) {
+      throw new Error(
+        `Asset Center session revision ${expectedRevision} is stale; current revision is ${projection.revision}.`,
+      );
+    }
+    if (projection.catalog.status !== 'ready') {
+      throw new Error('Asset Center catalog is unavailable.');
+    }
+    const item = projection.catalog.entries.find((entry) => entry.item.id === itemId)?.item;
+    if (!item) throw new Error(`Asset Center item '${itemId}' is unavailable.`);
+    return item;
+  }
+
+  private requireActive(): void {
+    if (this.disposed) throw new Error('Asset Center Node runtime is disposed.');
+  }
+}
+
+function assertIdentity(
+  expected: AssetCenterSessionIdentity,
+  actual: AssetCenterSessionIdentity,
+): void {
+  if (
+    expected.assetCenterSessionId !== actual.assetCenterSessionId ||
+    expected.windowId !== actual.windowId
+  ) {
+    throw new Error('Asset Center session identity does not match its owning Window.');
+  }
+}
+
+function selectionKey(assetCenterSessionId: string, itemId: string): string {
+  return `${assetCenterSessionId}\u0000${itemId}`;
+}
