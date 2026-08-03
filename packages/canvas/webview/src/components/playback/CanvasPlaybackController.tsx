@@ -31,6 +31,14 @@ export interface PlaybackCompletionSignal {
   readonly nonce: number;
 }
 
+export function resolveCanvasPlaybackRequestState(
+  currentUnitId: string,
+  request: CanvasPlaybackRequest | undefined,
+  sessionPlaying: boolean,
+): CanvasPlaybackRequest['state'] {
+  return request?.unitId === currentUnitId ? request.state : sessionPlaying ? 'playing' : 'paused';
+}
+
 export type CanvasPlaybackUnitChangeOrigin = 'navigation' | 'playback';
 
 export interface CanvasPlaybackControllerProps {

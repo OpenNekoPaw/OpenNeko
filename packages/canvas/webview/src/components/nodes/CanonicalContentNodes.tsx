@@ -11,7 +11,11 @@ import { useMemo, useRef, useState } from 'react';
 import { t } from '../../i18n';
 import { useOptionalCanvasHost } from '../../host-runtime';
 import { PreviewSurface } from '../../preview/PreviewRendererRegistry';
-import type { PreviewSourceDescriptor } from '../../preview/types';
+import type {
+  PreviewPlaybackInteractionHandler,
+  PreviewPlaybackInteractionState,
+  PreviewSourceDescriptor,
+} from '../../preview/types';
 import { BaseNode } from './BaseNode';
 import type { NodeRendererCommonProps } from './nodeRendererTypes';
 
@@ -21,6 +25,27 @@ type CanonicalNodeProps<TNode> = NodeRendererCommonProps & {
 };
 
 type CanvasMediaType = NonNullable<MediaCanvasNode['data']['mediaType']>;
+export type MediaPlaybackOwner = 'idle' | 'hover' | 'manual-playing' | 'manual-paused';
+export type MediaPlaybackInteraction =
+  'pointer-enter' | 'pointer-leave' | PreviewPlaybackInteractionState;
+
+export function transitionMediaPlaybackOwner(
+  owner: MediaPlaybackOwner,
+  interaction: MediaPlaybackInteraction,
+): MediaPlaybackOwner {
+  switch (interaction) {
+    case 'pointer-enter':
+      return owner === 'idle' ? 'hover' : owner;
+    case 'pointer-leave':
+      return owner === 'hover' ? 'idle' : owner;
+    case 'playing':
+      return 'manual-playing';
+    case 'paused':
+      return 'manual-paused';
+    case 'ended':
+      return 'idle';
+  }
+}
 
 export function MarkdownNode({
   node,
@@ -81,16 +106,31 @@ export function MediaNode({ node, isSelected, ...baseProps }: CanonicalNodeProps
     node.data.title || node.data.assetPath.split('/').pop() || resolveMediaTypeLabel(mediaType);
   const hoverSequence = useRef(0);
   const [hoverRequestId, setHoverRequestId] = useState<string>();
-  const [isHovering, setIsHovering] = useState(false);
+  const [playbackOwner, setPlaybackOwner] = useState<MediaPlaybackOwner>('idle');
+  const [manualPlaybackTime, setManualPlaybackTime] = useState(0);
   const playbackControl = useMemo(() => {
     if (mediaType === 'image' || !hoverRequestId) return undefined;
     return {
       requestId: hoverRequestId,
-      state: isHovering ? ('playing' as const) : ('stopped' as const),
-      startTimeSeconds: 0,
+      state:
+        playbackOwner === 'hover' || playbackOwner === 'manual-playing'
+          ? ('playing' as const)
+          : playbackOwner === 'manual-paused'
+            ? ('paused' as const)
+            : ('stopped' as const),
+      startTimeSeconds:
+        playbackOwner === 'manual-playing' || playbackOwner === 'manual-paused'
+          ? manualPlaybackTime
+          : 0,
       persistence: 'transient' as const,
     };
-  }, [hoverRequestId, isHovering, mediaType]);
+  }, [hoverRequestId, manualPlaybackTime, mediaType, playbackOwner]);
+  const handlePlaybackInteraction: PreviewPlaybackInteractionHandler = (state, currentTime) => {
+    hoverSequence.current += 1;
+    setHoverRequestId(`canvas-manual:${node.id}:${hoverSequence.current}`);
+    setManualPlaybackTime(currentTime);
+    setPlaybackOwner((owner) => transitionMediaPlaybackOwner(owner, state));
+  };
   const previewSource = useMemo<PreviewSourceDescriptor>(
     () => ({
       id: `canvas-node:${node.id}`,
@@ -119,7 +159,16 @@ export function MediaNode({ node, isSelected, ...baseProps }: CanonicalNodeProps
       <div
         data-testid="canvas-media-node"
         data-media-type={mediaType}
-        data-playback-state={mediaType === 'image' ? undefined : isHovering ? 'playing' : 'stopped'}
+        data-playback-state={
+          mediaType === 'image'
+            ? undefined
+            : playbackOwner === 'hover' || playbackOwner === 'manual-playing'
+              ? 'playing'
+              : playbackOwner === 'manual-paused'
+                ? 'paused'
+                : 'stopped'
+        }
+        data-playback-owner={mediaType === 'image' ? undefined : playbackOwner}
         className={
           mediaType === 'audio'
             ? 'canvas-audio-node flex h-full min-h-0 flex-col'
@@ -127,13 +176,14 @@ export function MediaNode({ node, isSelected, ...baseProps }: CanonicalNodeProps
         }
         onPointerEnter={() => {
           if (mediaType === 'image' || !contentLocator) return;
+          if (playbackOwner !== 'idle') return;
           hoverSequence.current += 1;
           setHoverRequestId(`canvas-hover:${node.id}:${hoverSequence.current}`);
-          setIsHovering(true);
+          setPlaybackOwner((owner) => transitionMediaPlaybackOwner(owner, 'pointer-enter'));
         }}
         onPointerLeave={() => {
           if (mediaType === 'image') return;
-          setIsHovering(false);
+          setPlaybackOwner((owner) => transitionMediaPlaybackOwner(owner, 'pointer-leave'));
         }}
       >
         {mediaType === 'audio' ? (
@@ -166,6 +216,7 @@ export function MediaNode({ node, isSelected, ...baseProps }: CanonicalNodeProps
               chrome="full-bleed"
               audioLayout={mediaType === 'audio' ? 'node-card' : undefined}
               playbackControl={playbackControl}
+              onPlaybackInteraction={handlePlaybackInteraction}
             />
           )}
         </div>

@@ -12,6 +12,7 @@ import { isImagePreviewUrl, isSafeWebviewUrl, WebviewPreviewResolver } from './p
 import { PreviewRuntime } from './previewRuntime';
 import type {
   PreviewPlaybackControl,
+  PreviewPlaybackInteractionHandler,
   PreviewSourceDescriptor,
   RuntimePreviewVariant,
 } from './types';
@@ -34,6 +35,7 @@ export interface PreviewRendererProps {
   playbackControl?: PreviewPlaybackControl;
   chrome?: 'contained' | 'full-bleed';
   audioLayout?: AudioPlayerLayout;
+  onPlaybackInteraction?: PreviewPlaybackInteractionHandler;
 }
 
 export type PreviewRenderer = React.ComponentType<PreviewRendererProps>;
@@ -786,11 +788,23 @@ function getVisualPreviewImageClassName(
   return 'h-full w-full object-contain';
 }
 
+function usePlaybackRequestConsumptionFence(): React.MutableRefObject<string | undefined> {
+  const consumedRequestRef = useRef<string | undefined>();
+  useEffect(
+    () => () => {
+      consumedRequestRef.current = undefined;
+    },
+    [],
+  );
+  return consumedRequestRef;
+}
+
 function VideoPreviewRenderer({
   source,
   surfaceKind = 'inline',
   playbackControl,
   chrome = 'contained',
+  onPlaybackInteraction,
 }: PreviewRendererProps): React.ReactNode {
   const variant = useResolvedVariant(source, 'video-poster');
   const thumbnailUrl =
@@ -821,7 +835,7 @@ function VideoPreviewRenderer({
   );
 
   const posterUrl = capturedFrame ?? thumbnailUrl;
-  const consumedPlaybackRequestRef = useRef<string | undefined>();
+  const consumedPlaybackRequestRef = usePlaybackRequestConsumptionFence();
   const onPlaybackTimeUpdate = playbackControl?.onTimeUpdate;
   const onPlaybackEnded = playbackControl?.onEnded;
 
@@ -869,6 +883,7 @@ function VideoPreviewRenderer({
 
   const handleEnded = useCallback(
     (currentTime: number) => {
+      onPlaybackInteraction?.('ended', currentTime);
       onPlaybackEnded?.({
         sourceId: source.id,
         mediaType: 'video',
@@ -876,7 +891,7 @@ function VideoPreviewRenderer({
         duration: stream?.duration ?? currentTime,
       });
     },
-    [onPlaybackEnded, source.id, stream?.duration],
+    [onPlaybackEnded, onPlaybackInteraction, source.id, stream?.duration],
   );
 
   if (stream) {
@@ -909,6 +924,7 @@ function VideoPreviewRenderer({
           }
           playbackStartTime={playbackControl?.startTimeSeconds ?? stream.startTime}
           onEnded={handleEnded}
+          onPlaybackInteraction={onPlaybackInteraction}
         />
       </div>
     );
@@ -936,13 +952,17 @@ function VideoPreviewRenderer({
           {formatTime(mediaDescription.duration)}
         </span>
       ) : null}
-      {playbackControl ? null : (
+      {!playbackControl || playbackControl.state === 'stopped' ? (
         <button
           type="button"
           className="absolute inset-0 flex items-center justify-center text-white/80 hover:text-white"
           onMouseDown={(e) => e.stopPropagation()}
           onClick={(e) => {
             e.stopPropagation();
+            if (onPlaybackInteraction) {
+              onPlaybackInteraction('playing', 0);
+              return;
+            }
             startPlayback();
           }}
           disabled={probing || !canStartPlayback}
@@ -951,7 +971,7 @@ function VideoPreviewRenderer({
         >
           {probing ? '...' : '▶'}
         </button>
-      )}
+      ) : null}
     </div>
   );
 }
@@ -966,6 +986,7 @@ function AudioPreviewRenderer({
   playbackControl,
   chrome = 'contained',
   audioLayout = 'transport',
+  onPlaybackInteraction,
 }: PreviewRendererProps): React.ReactNode {
   const assetPath = source.asset?.path;
   const contentLocator = readPreviewSourceContentLocator(source);
@@ -990,7 +1011,7 @@ function AudioPreviewRenderer({
     knownDuration,
     playbackControl?.persistence ?? 'surface',
   );
-  const consumedPlaybackRequestRef = useRef<string | undefined>();
+  const consumedPlaybackRequestRef = usePlaybackRequestConsumptionFence();
   const onPlaybackTimeUpdate = playbackControl?.onTimeUpdate;
   const onPlaybackEnded = playbackControl?.onEnded;
 
@@ -1038,6 +1059,7 @@ function AudioPreviewRenderer({
 
   const handleEnded = useCallback(
     (currentTime: number) => {
+      onPlaybackInteraction?.('ended', currentTime);
       onPlaybackEnded?.({
         sourceId: source.id,
         mediaType: 'audio',
@@ -1045,7 +1067,7 @@ function AudioPreviewRenderer({
         duration: stream?.duration ?? currentTime,
       });
     },
-    [onPlaybackEnded, source.id, stream?.duration],
+    [onPlaybackEnded, onPlaybackInteraction, source.id, stream?.duration],
   );
 
   if (stream?.audio) {
@@ -1075,6 +1097,7 @@ function AudioPreviewRenderer({
           }
           playbackStartTime={playbackControl?.startTimeSeconds ?? stream.startTime}
           onEnded={handleEnded}
+          onPlaybackInteraction={onPlaybackInteraction}
         />
       </div>
     );
@@ -1096,9 +1119,13 @@ function AudioPreviewRenderer({
         duration={mediaDescription.duration}
         isPlaying={false}
         disabled={probing || !canStartPlayback}
-        showPlaybackButton={!playbackControl}
+        showPlaybackButton={!playbackControl || playbackControl.state === 'stopped'}
         onTogglePlay={(event) => {
           event?.stopPropagation();
+          if (onPlaybackInteraction) {
+            onPlaybackInteraction('playing', 0);
+            return;
+          }
           startPlayback();
         }}
         playbackLabel={t('toolbar.playbackPlay')}

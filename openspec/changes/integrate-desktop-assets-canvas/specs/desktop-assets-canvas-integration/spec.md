@@ -138,6 +138,13 @@ playback state, mutate `.nkc` facts, expose an absolute path or introduce a Desk
 - **AND** leaving the node, hiding its View or unmounting its Root stops playback and releases the
   stream without changing the Canvas document
 
+#### Scenario: User takes manual control of hovered Canvas media
+
+- **WHEN** a user presses the audio or video playback control while the node owns a transient hover preview
+- **THEN** Canvas transfers that exact media session to explicit manual playback ownership
+- **AND** pointer leave does not stop, restart or replace the manually controlled playback
+- **AND** a later manual pause or resume is applied by one click without a competing hover command
+
 #### Scenario: User hovers a Resource Browser media item
 
 - **WHEN** the pointer remains over an image, audio or video resource long enough to request quick
@@ -153,6 +160,34 @@ playback state, mutate `.nkc` facts, expose an absolute path or introduce a Desk
   an image, audio or video
 - **THEN** the Host rejects or skips quick preview visibly according to the typed contract
 - **AND** it does not fall back to a path, thumbnail-only fake playback or the currently active item
+
+### Requirement: Storyline transport commands are immediate
+
+Canvas Storyline SHALL apply each play or pause request to the current preview unit in the same
+interaction cycle. The request identity and requested state SHALL be the command authority for that
+preview; separately projected session state MUST NOT delay, invert or require repetition of the
+command.
+
+#### Scenario: User starts and pauses Storyline media
+
+- **WHEN** the current Storyline unit is an audio or video preview and the user presses Play or Pause
+- **THEN** the exact current preview receives the corresponding command once on the first click
+- **AND** the transport icon and session projection converge to that command
+- **AND** no stale hover, previous request or delayed session state participates
+
+### Requirement: Model thumbnails remain truthful projections
+
+Canvas and Assets SHALL display a thumbnail for an imported 3D model after the package-owned Preview
+renderer has successfully loaded and captured that exact model revision. Until such a capture exists,
+the surface SHALL display an explicit model/file placeholder and MUST NOT claim that a generic icon or
+unrelated image is the model thumbnail.
+
+#### Scenario: Imported model has no captured thumbnail
+
+- **WHEN** a model file is introduced before a revision-matched Preview capture is available
+- **THEN** Canvas and Assets display the model placeholder without blocking import or model Preview
+- **AND** a later thumbnail implementation uses a disposable revision-fenced image projection
+- **AND** it does not expose a raw path or add another model renderer to Canvas or Desktop
 
 ### Requirement: Canvas Root consumes one injected host runtime
 

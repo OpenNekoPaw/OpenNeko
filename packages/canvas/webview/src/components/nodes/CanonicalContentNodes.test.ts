@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import { transitionMediaPlaybackOwner } from './CanonicalContentNodes';
 
 const source = readFileSync(new URL('./CanonicalContentNodes.tsx', import.meta.url), 'utf8');
 
@@ -14,7 +15,7 @@ describe('canonical content node runtime boundaries', () => {
     expect(source).toContain('canvas-audio-node-title');
     expect(source).toContain('onPointerEnter');
     expect(source).toContain('onPointerLeave');
-    expect(source).toContain("persistence: 'transient'");
+    expect(source).toContain("'transient' as const");
     expect(source).not.toContain('<audio');
     expect(source).not.toContain('<video');
   });
@@ -24,5 +25,14 @@ describe('canonical content node runtime boundaries', () => {
     expect(source).toContain("t('node.contentLocatorMissing')");
     expect(source).toContain('!contentLocator ?');
     expect(source).toContain('onActivate={contentLocator && onOpen');
+  });
+
+  it('stops only transient hover playback when the pointer leaves', () => {
+    expect(transitionMediaPlaybackOwner('idle', 'pointer-enter')).toBe('hover');
+    expect(transitionMediaPlaybackOwner('hover', 'pointer-leave')).toBe('idle');
+    expect(transitionMediaPlaybackOwner('hover', 'playing')).toBe('manual-playing');
+    expect(transitionMediaPlaybackOwner('manual-playing', 'pointer-leave')).toBe('manual-playing');
+    expect(transitionMediaPlaybackOwner('manual-playing', 'paused')).toBe('manual-paused');
+    expect(transitionMediaPlaybackOwner('manual-paused', 'pointer-leave')).toBe('manual-paused');
   });
 });

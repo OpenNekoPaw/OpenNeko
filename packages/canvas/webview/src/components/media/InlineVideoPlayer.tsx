@@ -5,6 +5,7 @@ import { ProgressBar } from '@neko/ui/creative';
 import { PlayIcon, PauseIcon, VolumeIcon, VolumeOffIcon } from '@neko/ui/icons';
 import { t } from '../../i18n';
 import { getLogger } from '../../utils/logger';
+import type { PreviewPlaybackInteractionHandler } from '../../preview/types';
 
 const logger = getLogger('InlineVideoPlayer');
 const DEFAULT_VOLUME = 0.8;
@@ -28,6 +29,7 @@ export interface InlineVideoPlayerProps {
   playbackRequestId?: string;
   playbackStartTime?: number;
   onEnded?: (currentTime: number) => void;
+  onPlaybackInteraction?: PreviewPlaybackInteractionHandler;
 }
 
 export function InlineVideoPlayer({
@@ -45,6 +47,7 @@ export function InlineVideoPlayer({
   playbackRequestId,
   playbackStartTime,
   onEnded,
+  onPlaybackInteraction,
 }: InlineVideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const animationFrameRef = useRef(0);
@@ -69,7 +72,11 @@ export function InlineVideoPlayer({
   }, []);
 
   useEffect(() => {
-    return disposeStreams;
+    return () => {
+      handledPlaybackRequestRef.current = undefined;
+      handledPlaybackStateRef.current = undefined;
+      disposeStreams();
+    };
   }, [disposeStreams, playbackRate, video]);
 
   useEffect(() => {
@@ -211,7 +218,17 @@ export function InlineVideoPlayer({
             type="button"
             data-testid="canvas-video-toggle-playback"
             className="flex h-6 w-6 items-center justify-center rounded text-white/85 hover:text-white"
-            onClick={isPlaying ? pause : resume}
+            onClick={() => {
+              if (onPlaybackInteraction) {
+                onPlaybackInteraction(isPlaying ? 'paused' : 'playing', currentTimeRef.current);
+                return;
+              }
+              if (isPlaying) {
+                pause();
+                return;
+              }
+              resume();
+            }}
             aria-label={playbackLabel}
             title={playbackLabel}
           >

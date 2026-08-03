@@ -35,6 +35,12 @@ export interface PreviewPlaybackControl {
   onEnded?: (event: PreviewPlaybackEndedEvent) => void;
 }
 
+export type PreviewPlaybackInteractionState = 'playing' | 'paused' | 'ended';
+export type PreviewPlaybackInteractionHandler = (
+  state: PreviewPlaybackInteractionState,
+  currentTimeSeconds: number,
+) => void;
+
 export interface RuntimePreviewVariant extends CanvasPreviewVariant {
   runtimeUrl?: string;
   runtimeToken?: string;

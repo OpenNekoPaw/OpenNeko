@@ -4,6 +4,7 @@ import { ProgressBar } from '@neko/ui/creative';
 import { PlayIcon, PauseIcon, VolumeIcon, VolumeOffIcon } from '@neko/ui/icons';
 import { t } from '../../i18n';
 import { getLogger } from '../../utils/logger';
+import type { PreviewPlaybackInteractionHandler } from '../../preview/types';
 
 const logger = getLogger('InlineAudioPlayer');
 
@@ -31,6 +32,7 @@ export interface InlineAudioPlayerProps {
   playbackRequestId?: string;
   playbackStartTime?: number;
   onEnded?: (currentTime: number) => void;
+  onPlaybackInteraction?: PreviewPlaybackInteractionHandler;
 }
 
 export function InlineAudioPlayer({
@@ -48,16 +50,19 @@ export function InlineAudioPlayer({
   playbackRequestId,
   playbackStartTime,
   onEnded,
+  onPlaybackInteraction,
 }: InlineAudioPlayerProps) {
   const elementRef = useRef<HTMLAudioElement>(null);
   const currentTimeRef = useRef(startTime);
   const handledPlaybackRequestRef = useRef<string | undefined>();
   const handledPlaybackStateRef = useRef<'playing' | 'paused' | undefined>();
+  const playbackGenerationRef = useRef(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(startTime);
   const [isMuted, setIsMuted] = useState(false);
 
   useEffect(() => {
+    playbackGenerationRef.current += 1;
     currentTimeRef.current = startTime;
     setCurrentTime(startTime);
     const element = elementRef.current;
@@ -71,6 +76,9 @@ export function InlineAudioPlayer({
       element.load();
     }
     return () => {
+      playbackGenerationRef.current += 1;
+      handledPlaybackRequestRef.current = undefined;
+      handledPlaybackStateRef.current = undefined;
       const current = elementRef.current;
       if (!current) return;
       current.pause();
@@ -80,6 +88,7 @@ export function InlineAudioPlayer({
   }, [audio, playbackRate, startTime]);
 
   const pause = useCallback(() => {
+    playbackGenerationRef.current += 1;
     const element = elementRef.current;
     element?.pause();
     if (element) currentTimeRef.current = element.currentTime;
@@ -90,6 +99,8 @@ export function InlineAudioPlayer({
   const resume = useCallback(() => {
     const element = elementRef.current;
     if (!element) return;
+    const generation = playbackGenerationRef.current + 1;
+    playbackGenerationRef.current = generation;
     element.playbackRate = playbackRate;
     element.muted = isMuted;
     if (Math.abs(element.currentTime - currentTimeRef.current) > PLAYBACK_SEEK_EPSILON_SECONDS) {
@@ -98,10 +109,12 @@ export function InlineAudioPlayer({
     void element
       .play()
       .then(() => {
+        if (generation !== playbackGenerationRef.current) return;
         setIsPlaying(true);
         onResume();
       })
       .catch((error: unknown) => {
+        if (generation !== playbackGenerationRef.current) return;
         logger.warn(`Inline audio playback failed: ${String(error)}`);
       });
   }, [isMuted, onResume, playbackRate]);
@@ -109,10 +122,14 @@ export function InlineAudioPlayer({
   const handleTogglePlay = useCallback(
     (event?: React.MouseEvent) => {
       event?.stopPropagation();
+      if (onPlaybackInteraction) {
+        onPlaybackInteraction(isPlaying ? 'paused' : 'playing', currentTimeRef.current);
+        return;
+      }
       if (isPlaying) pause();
       else resume();
     },
-    [isPlaying, pause, resume],
+    [isPlaying, onPlaybackInteraction, pause, resume],
   );
 
   const handleSeekCommit = useCallback(

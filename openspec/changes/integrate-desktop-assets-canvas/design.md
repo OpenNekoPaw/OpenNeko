@@ -24,3 +24,24 @@ without duplicate document owners.
 Run focused shared UI/Canvas/resource tests and typechecks, strict OpenSpec, then an isolated Electron
 scenario proving the actual Assets and Canvas Roots, node authoring, resource playback, two-View
 isolation and cleanup. Browser-only or demo surfaces do not qualify.
+
+## Playback interaction ownership follow-up
+
+Canvas media nodes distinguish transient hover playback from explicit manual playback. Pointer enter
+may acquire the transient owner and pointer leave stops only that owner. A media control gesture
+transfers ownership to the manual interaction; later pointer leave cannot stop, restart or replace
+that playback. The package-owned Preview surface reports the explicit user playback intent back to the
+Canvas node, while Desktop continues to own only the authorized media stream boundary.
+
+Storyline transport requests are the immediate command authority for the current media unit. The
+Preview control must consume the request's `playing` or `paused` state in the same render that receives
+its request identity instead of waiting for a separately projected session state update. The session
+store remains the durable presentation projection, but cannot override or delay the exact transport
+command that produced it.
+
+3D model thumbnails are desirable visual projections, but the current image/video thumbnail factory
+cannot produce them and a generic file icon must not be reported as a model thumbnail. A later Preview
+and Assets contract extension should capture a disposable image after the package-owned model viewer
+successfully loads the exact model revision, fence stale revisions and retain the model icon until the
+capture is available. It must not persist an absolute path or introduce a second 3D renderer in Canvas
+or Desktop.

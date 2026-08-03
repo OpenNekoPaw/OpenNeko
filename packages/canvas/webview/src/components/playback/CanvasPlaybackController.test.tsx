@@ -8,6 +8,7 @@ import type { CanvasPlaybackPlan } from '@neko/canvas-domain';
 import {
   CanvasPlaybackController,
   buildDefaultPlaybackPath,
+  resolveCanvasPlaybackRequestState,
   resolveCanvasPlaybackViewState,
 } from './CanvasPlaybackController';
 import { useCanvasStore } from '../../stores/canvasStore';
@@ -75,6 +76,33 @@ describe('CanvasPlaybackController', () => {
       canPlay: true,
     });
     expect(buildDefaultPlaybackPath(plan())).toEqual(['markdown-1', 'media-1']);
+  });
+
+  it('applies the exact transport request before a delayed session projection', () => {
+    expect(
+      resolveCanvasPlaybackRequestState(
+        'media-1',
+        {
+          unitId: 'media-1',
+          requestId: 'play-1',
+          startTimeMs: 0,
+          state: 'playing',
+        },
+        false,
+      ),
+    ).toBe('playing');
+    expect(
+      resolveCanvasPlaybackRequestState(
+        'media-1',
+        {
+          unitId: 'media-1',
+          requestId: 'pause-1',
+          startTimeMs: 250,
+          state: 'paused',
+        },
+        true,
+      ),
+    ).toBe('paused');
   });
 
   it('centers transport controls without rendering time labels', () => {

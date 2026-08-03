@@ -30,6 +30,7 @@ import type {
 } from '../../preview/types';
 import {
   CanvasPlaybackControls,
+  resolveCanvasPlaybackRequestState,
   useCanvasPlaybackController,
   type CanvasPlaybackControllerModel,
   type CanvasPlaybackRequest,
@@ -336,7 +337,11 @@ export function PlaybackWorkspace({ canvasPane, className }: PlaybackWorkspacePr
   );
   const previewPlaybackControl = useMemo<PreviewPlaybackControl | undefined>(() => {
     if (!currentUnitId) return undefined;
-    const state = session.playbackState === 'playing' ? 'playing' : 'paused';
+    const state = resolveCanvasPlaybackRequestState(
+      currentUnitId,
+      playbackRequest,
+      session.playbackState === 'playing',
+    );
     if (playbackRequest?.unitId !== currentUnitId) {
       return {
         requestId: `route-idle-${currentUnitId}`,
@@ -378,14 +383,6 @@ export function PlaybackWorkspace({ canvasPane, className }: PlaybackWorkspacePr
     },
     onPlayingChange: (playing) => {
       setPlaybackState(playing ? 'playing' : 'paused');
-      if (!playing && currentUnit) {
-        setPlaybackRequest((previous) => ({
-          unitId: currentUnit.id,
-          startTimeMs: session.playheadMs,
-          state: 'paused',
-          requestId: `route-pause-${Date.now()}-${previous?.requestId ?? 'initial'}`,
-        }));
-      }
     },
     onSeek: selectPlaybackTime,
     onPlaybackRequest: (request) => {
