@@ -9,7 +9,14 @@ import {
   isAgentEvaluationRelevantPath,
   selectEvaluationCoverage,
 } from './authoring/change-selector.mjs';
-import { runV2Case } from './runner/run-v2-case.mjs';
+import { runV2CaseRepeated } from './runner/run-v2-case.mjs';
+import { aggregateMatrixShards, createMatrixPlan, executeMatrixPlan } from './matrix/runtime.mjs';
+import {
+  classifyEvaluationError,
+  classifyEvaluationOutcomes,
+  evaluationExitCode,
+} from './runner/outcomes.mjs';
+import { withCanonicalUserConfiguration } from './runner/user-configuration.mjs';
 import { discoverSuites, selectSuiteCases } from './suites/discovery.mjs';
 
 const execFile = promisify(nodeExecFile);
@@ -40,6 +47,51 @@ export async function main(argv = process.argv.slice(2), io = defaultIo()) {
         (selection) => selection.scenario.visibility === 'public',
       ),
     );
+    if (args.mode === 'matrix') {
+      const selected = filterMatrixEvidenceLane(selections, args);
+      const plan = await createMatrixPlan(selected.selections, {
+        matrixId: args.matrixId ?? `local-${Date.now().toString(36)}`,
+        strategy: 'matrix',
+        evidenceLevel: args.evidenceLevel ?? 'hidden-desktop',
+        repetitions: args.repetitions,
+        shard: { index: args.shardIndex ?? 0, count: args.shardCount ?? 1 },
+        build: {
+          id: 'local-packaged-desktop',
+          kind: 'packaged',
+          executablePath: args.desktopExecutable,
+          fingerprint: args.desktopFingerprint,
+        },
+        limits: {
+          capacitySource: args.capacitySource ?? 'conservative-local-defaults-v1',
+          desktop: args.desktopWorkers ?? 2,
+          provider: args.providerWorkers ?? 2,
+        },
+      });
+      const shard = await executeMatrixPlan(plan, {
+        caseOptions: { env: withCanonicalUserConfiguration(io.env), outputRoot: reportRoot },
+      });
+      const aggregate = plan.shard.count === 1 ? aggregateMatrixShards(plan, [shard]) : undefined;
+      summary = {
+        schema: 'neko.agent-eval.local-run-summary.v2',
+        mode: 'matrix',
+        outcome: aggregate?.outcome ?? shard.outcome,
+        repetitions: args.repetitions,
+        selectedSuiteIds: suiteIds,
+        matrix: {
+          matrixId: plan.matrixId,
+          policyDigest: plan.policyDigest,
+          shard: plan.shard,
+          build: plan.build,
+          excludedVisibleCases: selected.excludedVisibleCases,
+          result: shard,
+          ...(aggregate ? { aggregate } : {}),
+        },
+        runs: shard.samples.map(projectMatrixSample),
+      };
+      await writeSummary(reportRoot, summary);
+      io.stdout.write(`${JSON.stringify(summary, null, 2)}\n`);
+      return exitCode(summary.outcome);
+    }
     const runs = [];
     for (const [index, selection] of selections.entries()) {
       const repeatedSelection = {
@@ -49,8 +101,8 @@ export async function main(argv = process.argv.slice(2), io = defaultIo()) {
           budget: { ...selection.scenario.budget, repetitions: args.repetitions },
         },
       };
-      const run = await runV2Case(repeatedSelection, {
-        env: io.env,
+      const run = await runV2CaseRepeated(repeatedSelection, {
+        env: withCanonicalUserConfiguration(io.env),
         cwd: io.cwd(),
         outputRoot: reportRoot,
         runId: `${args.mode}-${index + 1}-${Date.now().toString(36)}`,
@@ -59,7 +111,12 @@ export async function main(argv = process.argv.slice(2), io = defaultIo()) {
         suiteId: selection.suite.id,
         caseId: selection.scenario.id,
         outcome: run.outcome,
-        reportLocations: run.result.reportLocations,
+        aggregate: run.aggregate.aggregateLocation,
+        samples: run.samples.map((sample) => ({
+          runId: sample.result.runId,
+          outcome: sample.outcome,
+          reportLocations: sample.result.reportLocations,
+        })),
       });
     }
     const outcome = classifyRuns(runs);
@@ -75,10 +132,7 @@ export async function main(argv = process.argv.slice(2), io = defaultIo()) {
     io.stdout.write(`${JSON.stringify(summary, null, 2)}\n`);
     return exitCode(outcome);
   } catch (error) {
-    const outcome =
-      readErrorCode(error) === 'infrastructure-blocked'
-        ? 'infrastructure-blocked'
-        : 'configuration-invalid';
+    const outcome = classifyEvaluationError(error, 'configuration-invalid');
     summary = {
       schema: 'neko.agent-eval.local-run-summary.v2',
       mode: args.mode ?? 'unknown',
@@ -103,6 +157,17 @@ export function parseArgs(argv) {
     else if (name === '--base-sha') args.baseSha = requireValue(name, value);
     else if (name === '--head-sha') args.headSha = requireValue(name, value);
     else if (name === '--report-root') args.reportRoot = requireValue(name, value);
+    else if (name === '--matrix-id') args.matrixId = requireValue(name, value);
+    else if (name === '--evidence-level') args.evidenceLevel = requireValue(name, value);
+    else if (name === '--desktop-executable') args.desktopExecutable = requireValue(name, value);
+    else if (name === '--desktop-fingerprint') args.desktopFingerprint = requireValue(name, value);
+    else if (name === '--capacity-source') args.capacitySource = requireValue(name, value);
+    else if (name === '--shard-index') args.shardIndex = readBoundedInteger(name, value, 0, 1023);
+    else if (name === '--shard-count') args.shardCount = readBoundedInteger(name, value, 1, 1024);
+    else if (name === '--desktop-workers')
+      args.desktopWorkers = readBoundedInteger(name, value, 1, 32);
+    else if (name === '--provider-workers')
+      args.providerWorkers = readBoundedInteger(name, value, 1, 32);
     else if (name === '--repetitions') {
       args.repetitions = Number.parseInt(requireValue(name, value), 10);
       if (!Number.isInteger(args.repetitions) || args.repetitions < 1 || args.repetitions > 20) {
@@ -114,6 +179,18 @@ export function parseArgs(argv) {
   if (args.mode !== 'focused' && args.mode !== 'matrix') {
     throw new Error('--mode must be focused or matrix');
   }
+  if (
+    args.evidenceLevel !== undefined &&
+    !['hidden-desktop', 'visible-desktop'].includes(args.evidenceLevel)
+  ) {
+    throw new Error('--evidence-level must be hidden-desktop or visible-desktop');
+  }
+  if (args.mode === 'matrix' && (!args.desktopExecutable || !args.desktopFingerprint)) {
+    throw new Error('--mode matrix requires --desktop-executable and --desktop-fingerprint');
+  }
+  const shardCount = args.shardCount ?? 1;
+  const shardIndex = args.shardIndex ?? 0;
+  if (shardIndex >= shardCount) throw new Error('--shard-index must be less than --shard-count');
   return args;
 }
 
@@ -154,26 +231,11 @@ async function readChangedPaths(baseSha, headSha, injectedExecFile = execFile) {
 }
 
 function classifyRuns(runs) {
-  if (runs.some((run) => run.outcome === 'configuration-invalid')) return 'configuration-invalid';
-  if (runs.some((run) => run.outcome === 'infrastructure-fail')) return 'infrastructure-fail';
-  if (runs.some((run) => run.outcome === 'infrastructure-blocked')) {
-    return 'infrastructure-blocked';
-  }
-  if (runs.some((run) => run.outcome === 'case-fail')) return 'case-fail';
-  if (runs.some((run) => run.outcome === 'non-comparable')) return 'non-comparable';
-  return 'pass';
-}
-
-function readErrorCode(error) {
-  if (typeof error !== 'object' || error === null || !('code' in error)) return undefined;
-  return typeof error.code === 'string' ? error.code : undefined;
+  return classifyEvaluationOutcomes(runs.map((run) => run.outcome));
 }
 
 function exitCode(outcome) {
-  if (outcome === 'pass') return 0;
-  if (outcome === 'configuration-invalid') return 3;
-  if (outcome === 'infrastructure-fail' || outcome === 'infrastructure-blocked') return 2;
-  return 1;
+  return evaluationExitCode(outcome);
 }
 
 async function writeSummary(reportRoot, summary) {
@@ -187,6 +249,49 @@ async function writeSummary(reportRoot, summary) {
 function requireValue(name, value) {
   if (!value || value.startsWith('--')) throw new Error(`${name} requires a value`);
   return value;
+}
+
+function readBoundedInteger(name, value, minimum, maximum) {
+  const parsed = Number.parseInt(requireValue(name, value), 10);
+  if (!Number.isInteger(parsed) || parsed < minimum || parsed > maximum) {
+    throw new Error(`${name} must be an integer in ${minimum}..${maximum}`);
+  }
+  return parsed;
+}
+
+function filterMatrixEvidenceLane(selections, args) {
+  const evidenceLevel = args.evidenceLevel ?? 'hidden-desktop';
+  if (evidenceLevel === 'visible-desktop') {
+    return { selections, excludedVisibleCases: [] };
+  }
+  const visible = selections.filter(
+    (selection) => selection.scenario.execution?.evidenceLevel === 'visible-desktop',
+  );
+  if (args.caseId && visible.length > 0) {
+    throw new Error(`selected case requires visible Desktop evidence: ${args.caseId}`);
+  }
+  return {
+    selections: selections.filter(
+      (selection) => selection.scenario.execution?.evidenceLevel !== 'visible-desktop',
+    ),
+    excludedVisibleCases: visible.map(
+      (selection) => `${selection.suite.id}/${selection.scenario.id}`,
+    ),
+  };
+}
+
+function projectMatrixSample(sample) {
+  return {
+    suiteId: sample.identity.suiteId,
+    caseId: sample.identity.caseId,
+    sampleId: sample.sampleId,
+    outcome: sample.outcome,
+    attempts: sample.attempts,
+    ...(sample.run?.result?.reportLocations
+      ? { reportLocations: sample.run.result.reportLocations }
+      : {}),
+    ...(sample.residualCoverage ? { residualCoverage: sample.residualCoverage } : {}),
+  };
 }
 
 function defaultIo() {
