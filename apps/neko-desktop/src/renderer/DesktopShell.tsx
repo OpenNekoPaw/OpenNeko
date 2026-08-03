@@ -390,19 +390,13 @@ function DesktopSceneWorkbench({
         data-agent-scope="assistant"
         data-primary-surface="agent"
       >
-        <div className="desktop-assistant-agent__toolbar">
-          <button
-            type="button"
-            className="desktop-assistant-agent__workspace-button"
-            disabled={pending || !interactive}
-            onClick={actions.onChooseWorkspace}
-          >
-            <FolderIcon size={16} />
-            <span>{t('agent.openWorkspace')}</span>
-          </button>
-        </div>
         <DesktopAgentSurface
           binding="launch"
+          composerWorkspace={{
+            kind: 'assistant',
+            onChoose: actions.onChooseWorkspace,
+            disabled: pending || !interactive,
+          }}
           viewId={assistantContext.agentViewId}
           agentPresentation={createAssistantAgentPresentation(assistantScope)}
         />
@@ -1765,6 +1759,7 @@ function AgentWorkspaceSurface({
         <DesktopAgentSurface
           agentPresentation={agentPresentation}
           binding="workspace"
+          composerWorkspace={{ kind: 'workspace', label: project.displayName }}
           initialConversation={initialConversation}
           initialInput={initialInput}
           tab={tab}

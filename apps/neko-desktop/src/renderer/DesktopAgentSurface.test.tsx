@@ -13,12 +13,16 @@ vi.mock('@neko/agent-webview/root', () => ({
     hostRuntimeAdapter,
     agentPresentation,
     initialConversation,
+    composerWorkspace,
     locale,
     presentation,
   }: {
     readonly hostRuntimeAdapter: AgentHostRuntimeAdapter;
     readonly agentPresentation?: AgentRootPresentation;
     readonly initialConversation?: { readonly id: string; readonly title: string };
+    readonly composerWorkspace?:
+      | { readonly kind: 'assistant'; readonly onChoose: () => void; readonly disabled?: boolean }
+      | { readonly kind: 'workspace'; readonly label: string };
     readonly locale: string;
     readonly presentation: string;
   }) => (
@@ -28,6 +32,11 @@ vi.mock('@neko/agent-webview/root', () => ({
       data-initial-conversation-title={initialConversation?.title}
       data-presentation={presentation}
       data-agent-presentation={agentPresentation?.kind}
+      data-composer-workspace={
+        composerWorkspace?.kind === 'workspace'
+          ? composerWorkspace.label
+          : composerWorkspace?.kind ?? 'none'
+      }
     >
       {hostRuntimeAdapter.runtimeId}:{locale}
     </div>
@@ -51,6 +60,7 @@ describe('DesktopAgentSurface', () => {
     await act(async () => {
       root.render(
         <TestAgentSurface
+          composerWorkspace={{ kind: 'workspace', label: 'OpenNeko' }}
           initialConversation={{ id: 'conversation-1', title: 'Conversation one' }}
         />,
       );
@@ -75,6 +85,9 @@ describe('DesktopAgentSurface', () => {
     expect(container.querySelector('[data-owner-root="agent"]')?.getAttribute('data-view-id')).toBe(
       'view-1',
     );
+    expect(
+      container.querySelector('[data-testid="agent-root"]')?.getAttribute('data-composer-workspace'),
+    ).toBe('OpenNeko');
     await act(async () => root.unmount());
   });
 
@@ -222,8 +235,12 @@ describe('DesktopAgentSurface', () => {
 });
 
 function TestAgentSurface({
+  composerWorkspace,
   initialConversation,
 }: {
+  readonly composerWorkspace?:
+    | { readonly kind: 'assistant'; readonly onChoose: () => void; readonly disabled?: boolean }
+    | { readonly kind: 'workspace'; readonly label: string };
   readonly initialConversation?: { readonly id: string; readonly title: string };
 }): JSX.Element {
   const i18n = createDesktopI18n('en');
@@ -231,6 +248,7 @@ function TestAgentSurface({
     <I18nProvider service={i18n.i18nService}>
       <DesktopAgentSurface
         binding="workspace"
+        composerWorkspace={composerWorkspace}
         initialConversation={initialConversation}
         tab={{
           tabId: 'tab-1',

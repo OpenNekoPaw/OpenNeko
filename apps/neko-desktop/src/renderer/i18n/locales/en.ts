@@ -280,7 +280,6 @@ export const en = {
   'workspace.futureOwner': 'Owned by {owner}',
   'agent.connecting': 'Connecting to Agent…',
   'agent.loading': 'Loading Agent interface…',
-  'agent.openWorkspace': 'Open workspace',
   'attention.needsInput': 'Needs input',
   'attention.needsReview': 'Needs review',
   'attention.running': 'Running',

@@ -256,7 +256,6 @@ export const zhCN = {
   'workspace.futureOwner': '由 {owner} 提供',
   'agent.connecting': '正在连接 Agent…',
   'agent.loading': '正在加载 Agent 界面…',
-  'agent.openWorkspace': '打开工作区',
   'attention.needsInput': '需要输入',
   'attention.needsReview': '需要审阅',
   'attention.running': '运行中',

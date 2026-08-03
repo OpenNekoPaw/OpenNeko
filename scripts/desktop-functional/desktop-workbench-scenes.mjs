@@ -102,7 +102,12 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
       throw new Error('Workspace did not compose Agent, creative Main and right Resources.');
     }
     const workspaceScreenshot = await screenshot('workspace-large');
-    checkpoint('workspace-large', { ...workspace, workspaceActivation });
+    const workspaceComposer = await inspectComposerPresentation(evaluate);
+    assertWorkspaceComposer(workspaceComposer, 'workspace');
+    if (workspaceComposer.ownerWidth >= 400 || !workspaceComposer.toolbarFitsSurface) {
+      throw new Error('Agent composer did not qualify the narrow Workspace dock presentation.');
+    }
+    checkpoint('workspace-large', { ...workspace, workspaceActivation, workspaceComposer });
 
     const displayModes = await exerciseWorkspaceDisplayModes(evaluate, click);
     checkpoint('workspace-display-modes', displayModes);
@@ -378,13 +383,47 @@ async function activateDisplayMode(evaluate, index) {
 }
 
 async function inspectAgentDraftControls(evaluate) {
-  return evaluate(`(() => ({
+  const controls = await evaluate(`(() => ({
     composerCount: document.querySelectorAll('.agent-composer-shell').length,
     textareaCount: document.querySelectorAll('.agent-composer-textarea').length,
     toolButtonCount: document.querySelectorAll('.agent-composer-tool-button').length,
-    hasWorkspaceChoice: Boolean(document.querySelector('.desktop-assistant-agent__workspace-button')),
+    hasWorkspaceChoice: Boolean(document.querySelector('.agent-composer-workspace-button')),
+    hasLegacyWorkspaceToolbar: Boolean(document.querySelector('.desktop-assistant-agent__toolbar')),
+    hasMode: Boolean(document.querySelector('.agent-control-chip-mode')),
+    hasModel: Boolean(document.querySelector('.agent-model-config-trigger')),
+    hasApproval: Boolean(document.querySelector('.agent-execution-mode-trigger')),
     sessionTabsVisible: Boolean(document.querySelector('[data-testid="conversation-tabs"]')),
   }))()`);
+  return { ...controls, composer: await inspectComposerPresentation(evaluate) };
+}
+
+async function inspectComposerPresentation(evaluate) {
+  return evaluate(`(() => {
+    const shell = document.querySelector('.agent-composer-shell');
+    const toolbar = document.querySelector('.agent-composer-toolbar');
+    const workspace = document.querySelector('.agent-composer-workspace');
+    const owner = shell?.closest('[data-dock-owner="agent"], [data-primary-surface="agent"]');
+    if (!(shell instanceof HTMLElement) || !(toolbar instanceof HTMLElement) ||
+        !(workspace instanceof HTMLElement) || !(owner instanceof HTMLElement)) {
+      throw new Error('Agent composer presentation is incomplete.');
+    }
+    const shellRect = shell.getBoundingClientRect();
+    const toolbarRect = toolbar.getBoundingClientRect();
+    const ownerRect = owner.getBoundingClientRect();
+    const style = getComputedStyle(shell);
+    return {
+      workspaceLabel: workspace.textContent?.trim() ?? '',
+      hasShadow: style.boxShadow !== 'none',
+      shellWidth: shellRect.width,
+      ownerWidth: ownerRect.width,
+      fitsSurface: shellRect.left >= ownerRect.left && shellRect.right <= ownerRect.right,
+      toolbarFitsSurface:
+        toolbar.scrollWidth <= toolbar.clientWidth && toolbarRect.right <= shellRect.right,
+      branchMetadataCount: document.querySelectorAll(
+        '[data-composer-branch], [data-composer-runtime-location]',
+      ).length,
+    };
+  })()`);
 }
 
 async function activateAssetEntry(evaluate, label, eventName) {
@@ -463,10 +502,30 @@ function assertAgentDraftControls(detail) {
     detail.textareaCount !== 1 ||
     detail.toolButtonCount < 1 ||
     !detail.hasWorkspaceChoice ||
+    detail.hasLegacyWorkspaceToolbar ||
+    !detail.hasMode ||
+    !detail.hasModel ||
+    !detail.hasApproval ||
     detail.sessionTabsVisible
   ) {
     throw new Error(
       'Agent draft did not retain the complete launch-safe Workspace Agent controls.',
+    );
+  }
+  assertWorkspaceComposer(detail.composer, 'assistant');
+}
+
+function assertWorkspaceComposer(detail, scope) {
+  if (
+    !detail.hasShadow ||
+    detail.shellWidth > 820 ||
+    !detail.fitsSurface ||
+    detail.branchMetadataCount !== 0 ||
+    (scope === 'assistant' && !detail.workspaceLabel.includes('选择工作目录')) ||
+    (scope === 'workspace' && detail.workspaceLabel !== 'workspace')
+  ) {
+    throw new Error(
+      `Agent ${scope} composer did not preserve its compact Workspace presentation: ${JSON.stringify(detail)}`,
     );
   }
 }

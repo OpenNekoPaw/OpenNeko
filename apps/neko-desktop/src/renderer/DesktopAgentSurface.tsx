@@ -13,6 +13,7 @@ import {
   type ElectronAgentLaunchHostRuntimeAdapter,
 } from './desktop-agent-launch-host-runtime-adapter';
 import { loadDesktopAgentWebviewRootModule } from './desktop-agent-module';
+import type { AgentComposerWorkspacePresentation } from '@neko/agent-webview/root';
 
 const AgentWebviewRoot = lazy(() =>
   loadDesktopAgentWebviewRootModule().then((module) => ({ default: module.AgentWebviewRoot })),
@@ -31,11 +32,13 @@ type DesktopAgentSurfaceProps =
       readonly initialInput?: { readonly id: string; readonly value: string };
       readonly tab: DesktopProjectTabProjection;
       readonly agentPresentation?: AgentRootPresentation;
+      readonly composerWorkspace?: AgentComposerWorkspacePresentation;
     }
   | {
       readonly binding: 'launch';
       readonly agentPresentation: AgentRootPresentation;
       readonly viewId: string;
+      readonly composerWorkspace?: AgentComposerWorkspacePresentation;
     };
 
 export function DesktopAgentSurface(props: DesktopAgentSurfaceProps): JSX.Element {
@@ -149,6 +152,7 @@ export function DesktopAgentSurface(props: DesktopAgentSurfaceProps): JSX.Elemen
         <AgentWebviewRoot
           hostRuntimeAdapter={state.adapter}
           agentPresentation={props.agentPresentation}
+          composerWorkspace={props.composerWorkspace}
           initialConversation={
             props.binding === 'workspace'
               ? props.initialConversation
