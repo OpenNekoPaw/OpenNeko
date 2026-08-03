@@ -10,6 +10,7 @@ export interface CreateNodePiConversationCatalogReaderOptions {
 
 export interface PiConversationCatalogReader {
   listConversations(workspaceIds: readonly string[]): readonly PiConversationCatalogRecord[];
+  findConversation(conversationId: string): PiConversationCatalogRecord | undefined;
   dispose(): void;
 }
 
@@ -65,6 +66,31 @@ export class NodePiConversationCatalogReader implements PiConversationCatalogRea
     }
   }
 
+  findConversation(conversationId: string): PiConversationCatalogRecord | undefined {
+    this.requireActive();
+    const exactConversationId = requireConversationId(conversationId);
+    if (!existsSync(this.databasePath)) return undefined;
+    const database = new this.Database(this.databasePath, {
+      readOnly: true,
+      timeout: 5_000,
+    });
+    try {
+      const rows = database
+        .prepare(
+          `SELECT workspace_id, conversation_id, title, active_branch_id, created_at, updated_at
+             FROM pi_conversations
+            WHERE conversation_id = ?`,
+        )
+        .all(exactConversationId);
+      if (rows.length > 1) {
+        throw new Error(`Pi Conversation '${exactConversationId}' resolves to multiple records.`);
+      }
+      return rows.length === 0 ? undefined : parseConversationRecord(rows[0]);
+    } finally {
+      database.close();
+    }
+  }
+
   dispose(): void {
     this.disposed = true;
   }
@@ -101,4 +127,11 @@ function requireWorkspaceId(workspaceId: string): string {
     throw new TypeError('Pi conversation catalog workspaceId is required.');
   }
   return workspaceId;
+}
+
+function requireConversationId(conversationId: string): string {
+  if (conversationId.trim().length === 0) {
+    throw new TypeError('Pi conversation catalog conversationId is required.');
+  }
+  return conversationId;
 }

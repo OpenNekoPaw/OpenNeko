@@ -15,6 +15,7 @@ import {
 import { NEKO_AGENT_HOST_MESSAGE_EVENT } from '@neko/agent-contracts/host-message-event';
 import { AgentHostRuntimeProvider } from './host-runtime-context';
 import type { AgentHostRuntimeAdapter } from './messages';
+import type { AgentRootPresentation } from '@neko/agent-contracts';
 import { setAgentHostRuntimeAdapter } from './messages';
 import './index.css';
 
@@ -27,11 +28,13 @@ export interface AgentWebviewRootProps {
   readonly initialConversation?: { readonly id: string; readonly title: string };
   readonly initialInput?: { readonly id: string; readonly value: string };
   readonly presentation?: 'default' | 'desktop-dock';
+  readonly agentPresentation?: AgentRootPresentation;
 }
 
 export function AgentWebviewRoot({
   foundation,
   hostRuntimeAdapter,
+  agentPresentation,
   initialConversation,
   initialInput,
   locale,
@@ -69,6 +72,7 @@ export function AgentWebviewRoot({
         <AgentHostRuntimeProvider adapter={hostRuntimeAdapter}>
           <I18nProvider service={i18nService}>
             <AppShell
+              agentPresentation={agentPresentation}
               initialConversation={initialConversation}
               initialInput={initialInput}
               presentation={presentation}

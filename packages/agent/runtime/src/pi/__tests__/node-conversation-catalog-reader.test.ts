@@ -32,6 +32,15 @@ describe('NodePiConversationCatalogReader', () => {
         conversationId: 'conversation-a',
       }),
     ]);
+    expect(reader.findConversation('conversation-a')).toMatchObject({
+      workspaceId: 'workspace-a',
+      conversationId: 'conversation-a',
+    });
+    expect(reader.findConversation('conversation-b')).toMatchObject({
+      workspaceId: 'workspace-b',
+      conversationId: 'conversation-b',
+    });
+    expect(reader.findConversation('conversation-missing')).toBeUndefined();
 
     const lease = workspaceA.acquireLease('conversation-a');
     expect(lease.holderId).toBe('host:workspace-a');
@@ -42,6 +51,7 @@ describe('NodePiConversationCatalogReader', () => {
     const reader = await NodePiConversationCatalogReader.create({ userDataRoot: root });
 
     expect(reader.listConversations(['workspace-a'])).toEqual([]);
+    expect(reader.findConversation('conversation-a')).toBeUndefined();
     reader.dispose();
     expect(() => reader.listConversations(['workspace-a'])).toThrow(
       'Pi conversation catalog reader is disposed',

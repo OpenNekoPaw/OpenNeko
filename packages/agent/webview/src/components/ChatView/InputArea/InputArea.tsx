@@ -101,6 +101,7 @@ interface InputAreaProps {
   attachedFiles?: MessageAttachment[];
   /** Callback to update attached files (when managed externally) */
   onAttachedFilesChange?: (files: MessageAttachment[]) => void;
+  onAuthorizeResource?: () => Promise<AgentContextPayload | undefined>;
   /** Session-bound @file references selected from the mention menu. */
   selectedFileReferences?: SelectedFileReference[];
   onSelectedFileReferencesChange?: (references: SelectedFileReference[]) => void;
@@ -204,6 +205,7 @@ export function InputArea({
   disabled = false,
   attachedFiles: externalAttachedFiles,
   onAttachedFilesChange,
+  onAuthorizeResource,
   selectedFileReferences: externalSelectedFileReferences,
   onSelectedFileReferencesChange,
   isComposing = false,
@@ -1036,7 +1038,15 @@ export function InputArea({
             {/* Attachment button */}
             <button
               type="button"
-              onClick={() => fileInputRef.current?.click()}
+              onClick={() => {
+                if (onAuthorizeResource) {
+                  void onAuthorizeResource().then((payload) => {
+                    if (payload) onAddContextChip?.(payload);
+                  });
+                  return;
+                }
+                fileInputRef.current?.click();
+              }}
               className="agent-composer-tool-button"
               title={t('chat.input.attach')}
             >
@@ -1049,6 +1059,7 @@ export function InputArea({
               accept="image/*,video/*,audio/*,.txt,.md,.json,.js,.ts,.tsx,.jsx,.py,.go,.rs,.java,.c,.cpp,.h,.hpp,.css,.html,.xml,.yaml,.yml,.toml"
               className="hidden"
               onChange={handleFileSelect}
+              disabled={onAuthorizeResource !== undefined}
             />
 
             {(inputAreaProjection.showSessionModeSelector ||

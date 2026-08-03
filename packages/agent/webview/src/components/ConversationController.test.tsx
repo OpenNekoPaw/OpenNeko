@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { useEffect, useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
-import type { AgentContextPayload } from '@neko/agent-contracts';
+import { createAgentDraftPresentation, type AgentContextPayload } from '@neko/agent-contracts';
 import type {
   AgentQueuedMessageItem,
   AgentState,
@@ -38,6 +38,7 @@ const hostMocks = vi.hoisted(() => ({
   getConversationSnapshot: vi.fn(),
   getContextTokenCount: vi.fn(),
   getMessageQueue: vi.fn(),
+  submitDraft: vi.fn(),
 }));
 
 vi.mock('../messages', () => ({
@@ -45,6 +46,7 @@ vi.mock('../messages', () => ({
   getAgentHostRuntimeAdapter: () => ({
     getState: () => undefined,
     setState: vi.fn(),
+    submitDraft: hostMocks.submitDraft,
   }),
 }));
 
@@ -56,6 +58,7 @@ vi.mock('../host-runtime-context', () => ({
     subscribe: vi.fn(() => ({ dispose: vi.fn() })),
     getState: () => undefined,
     setState: vi.fn(),
+    submitDraft: hostMocks.submitDraft,
   }),
   useOptionalAgentHostRuntimeAdapter: () => ({
     hostKind: 'electron',
@@ -439,6 +442,62 @@ vi.mock('./ChatView/InputArea', async () => {
 });
 
 describe('ConversationController entry state', () => {
+  it('keeps the existing entry controller and controls available in draft presentation', () => {
+    vi.clearAllMocks();
+    render(
+      <ConversationController
+        {...createProps()}
+        agentPresentation={createAgentDraftPresentation({
+          kind: 'workspace',
+          workspaceId: 'workspace-1',
+          workspaceGrantId: 'workspace-grant-1',
+        })}
+        emptyStatePresentation="desktop-dock"
+      />,
+    );
+
+    expect(screen.queryByTestId('header')).toBeNull();
+    expect(screen.getByText('Hi, create with chat')).toBeTruthy();
+    expect(screen.getByRole('textbox')).toBeTruthy();
+    expect(screen.getByTestId('entry-config-state').textContent).toBe('ready:false');
+    expect(hostMocks.getConversations).not.toHaveBeenCalled();
+    expect(hostMocks.getActiveConversation).not.toHaveBeenCalled();
+    expect(hostMocks.getTabState).not.toHaveBeenCalled();
+    expect(hostMocks.refreshConfigSnapshot).toHaveBeenCalledTimes(1);
+    expect(hostMocks.getAgentStates).toHaveBeenCalledTimes(1);
+    expect(hostMocks.getSkills).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: {
+            type: 'skillsList',
+            skills: [
+              {
+                id: 'storyboard',
+                name: 'storyboard',
+                description: 'Build a storyboard.',
+                tags: [],
+                source: 'project',
+                enabled: true,
+              },
+            ],
+          },
+        }),
+      );
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'storyboard' }));
+    expect(screen.getByRole('textbox')).toHaveProperty('value', '$storyboard ');
+
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: '@hero' } });
+    expect(hostMocks.searchProjectFiles).toHaveBeenCalledWith('hero', undefined, {
+      purpose: 'entry',
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Select Entity Mention' }));
+    expect(screen.getByTestId('entry-context-chips').textContent).toContain('小橘');
+    expect(hostMocks.newConversation).not.toHaveBeenCalled();
+  });
+
   it('prefills an explicit Desktop Skill invocation without sending it', () => {
     render(<ConversationController {...createProps()} emptyStatePresentation="desktop-dock" />);
 

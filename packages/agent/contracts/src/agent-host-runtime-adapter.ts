@@ -17,11 +17,29 @@ export interface AgentHostRuntimeAdapter {
   subscribe(listener: (message: AgentHostToWebviewMessage) => void): AgentHostRuntimeSubscription;
   getState(): unknown;
   setState(state: unknown): void;
+  submitDraft?(
+    input: import('./agent-draft-submit').AgentDraftSubmitInput,
+  ): Promise<import('./agent-draft-submit').AgentDraftSubmitProjection>;
+  authorizeResource?(
+    resourceKind: import('./agent-launch').AgentLaunchResourceKind,
+  ): Promise<import('./agent-context').AgentContextPayload | undefined>;
 }
 
 export type AgentHostRouteSupport = 'implemented' | 'unsupported' | 'host-inapplicable';
 
 export type AgentHostRouteUnavailableSupport = Exclude<AgentHostRouteSupport, 'implemented'>;
+
+export type AgentHostRouteConnectionRequirement = 'launch-or-session' | 'session';
+export type AgentHostRouteScopeRequirement = 'any' | 'workspace';
+
+export interface AgentHostRouteAuthority {
+  readonly connection: AgentHostRouteConnectionRequirement;
+  readonly scope: AgentHostRouteScopeRequirement;
+}
+
+export type AgentHostRouteAuthorityRecord = Readonly<
+  Record<AgentWebviewToHostMessageType, AgentHostRouteAuthority>
+>;
 
 export type AgentHostRouteFutureOwner = 'P1.4' | 'P1.6' | 'Phase 3';
 
@@ -58,6 +76,19 @@ export interface AgentHostRouteUnavailableDiagnostic {
   readonly owner?: AgentHostRouteFutureOwner;
   readonly message: string;
 }
+
+export interface AgentHostWorkspaceScopeRequiredDiagnostic {
+  readonly code: 'workspace-scope-required';
+  readonly severity: 'error';
+  readonly hostKind: AgentHostKind;
+  readonly messageType: AgentWebviewToHostMessageType;
+  readonly requiredScope: 'workspace';
+  readonly actualScope: 'assistant';
+  readonly message: string;
+}
+
+export type AgentHostRouteDiagnostic =
+  AgentHostRouteUnavailableDiagnostic | AgentHostWorkspaceScopeRequiredDiagnostic;
 
 export const ELECTRON_AGENT_HOST_ROUTE_COVERAGE = {
   sendMessage: 'implemented',
@@ -113,6 +144,66 @@ export const ELECTRON_AGENT_HOST_ROUTE_COVERAGE = {
   projectionSnapshotAck: 'implemented',
   projectionDetach: 'implemented',
 } as const satisfies AgentHostRouteSupportRecord;
+
+const LAUNCH_ANY = { connection: 'launch-or-session', scope: 'any' } as const;
+const LAUNCH_WORKSPACE = { connection: 'launch-or-session', scope: 'workspace' } as const;
+const SESSION_ANY = { connection: 'session', scope: 'any' } as const;
+const SESSION_WORKSPACE = { connection: 'session', scope: 'workspace' } as const;
+
+export const AGENT_HOST_ROUTE_AUTHORITY = {
+  sendMessage: SESSION_ANY,
+  searchProjectFiles: LAUNCH_WORKSPACE,
+  confirmTool: SESSION_ANY,
+  activateConversation: SESSION_ANY,
+  clearHistory: SESSION_ANY,
+  cancelMessage: SESSION_ANY,
+  getContextTokenCount: SESSION_ANY,
+  compressContext: SESSION_ANY,
+  getMessageQueue: SESSION_ANY,
+  promoteQueuedMessage: SESSION_ANY,
+  cancelQueuedMessage: SESSION_ANY,
+  editQueuedMessage: SESSION_ANY,
+  deleteConversation: SESSION_ANY,
+  newConversation: SESSION_ANY,
+  clearAllConversations: SESSION_ANY,
+  getConversations: SESSION_ANY,
+  getActiveConversation: SESSION_ANY,
+  getAgentStates: LAUNCH_ANY,
+  getSettings: SESSION_ANY,
+  getConversationSnapshot: SESSION_ANY,
+  getConfig: LAUNCH_ANY,
+  refreshConfigSnapshot: LAUNCH_ANY,
+  getSkills: LAUNCH_ANY,
+  openUserConfigFile: LAUNCH_ANY,
+  openConfigFile: SESSION_WORKSPACE,
+  getTabState: SESSION_ANY,
+  updateSettings: SESSION_ANY,
+  updateTabState: SESSION_ANY,
+  openFile: SESSION_ANY,
+  revealDocumentLocator: SESSION_ANY,
+  revealFile: SESSION_ANY,
+  openUrl: LAUNCH_ANY,
+  sendToPlugin: SESSION_WORKSPACE,
+  invokeAgentCapabilityLifecycle: SESSION_WORKSPACE,
+  requestCanvasAuthoringHandoff: SESSION_WORKSPACE,
+  'dnd:start': SESSION_WORKSPACE,
+  mermaidError: SESSION_ANY,
+  downloadSvg: SESSION_WORKSPACE,
+  invokeSlashCommand: SESSION_ANY,
+  invokeSkill: SESSION_ANY,
+  invokePluginSlashCommand: SESSION_ANY,
+  startCharacterDialogueFromSlash: SESSION_WORKSPACE,
+  confirmRoleplayCandidate: SESSION_WORKSPACE,
+  exitCharacterDialogueSession: SESSION_WORKSPACE,
+  exitEmbodyCharacterSession: SESSION_WORKSPACE,
+  revealContextSource: SESSION_ANY,
+  webviewKeyboardFocus: LAUNCH_ANY,
+  webviewKeyboardEditable: LAUNCH_ANY,
+  projectionEndpointDiscover: SESSION_ANY,
+  projectionAttach: SESSION_ANY,
+  projectionSnapshotAck: SESSION_ANY,
+  projectionDetach: SESSION_ANY,
+} as const satisfies AgentHostRouteAuthorityRecord;
 
 export const ELECTRON_AGENT_HOST_UNSUPPORTED_ROUTE_OWNERS = {
   sendToPlugin: 'Phase 3',
@@ -188,4 +279,24 @@ export function createElectronAgentHostRouteUnavailableDiagnostic(
     support,
     ...(owner ? { owner } : {}),
   });
+}
+
+export function createAgentHostWorkspaceScopeRequiredDiagnostic(
+  messageType: AgentWebviewToHostMessageType,
+): AgentHostWorkspaceScopeRequiredDiagnostic {
+  return {
+    code: 'workspace-scope-required',
+    severity: 'error',
+    hostKind: 'electron',
+    messageType,
+    requiredScope: 'workspace',
+    actualScope: 'assistant',
+    message: `Agent route '${messageType}' requires an explicitly authorized Workspace scope.`,
+  };
+}
+
+export function classifyAgentHostRoute(
+  messageType: AgentWebviewToHostMessageType,
+): AgentHostRouteAuthority {
+  return AGENT_HOST_ROUTE_AUTHORITY[messageType];
 }

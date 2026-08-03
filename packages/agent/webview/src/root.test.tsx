@@ -2,7 +2,7 @@ import { render, screen } from '@testing-library/react';
 import { useEffect, type ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { WebviewFoundationProvider, createWebviewFoundation } from '@neko/ui/foundation';
-import type { AgentHostRuntimeAdapter } from '@neko/agent-contracts';
+import type { AgentHostRuntimeAdapter, AgentRootPresentation } from '@neko/agent-contracts';
 import { NEKO_AGENT_HOST_MESSAGE_EVENT } from '@neko/agent-contracts/host-message-event';
 import { AgentWebviewRoot } from './root';
 
@@ -20,7 +20,13 @@ vi.mock('./components/AppShell', async () => {
   const { useAgentHostRuntimeAdapter } =
     await vi.importActual<typeof import('./host-runtime-context')>('./host-runtime-context');
   return {
-    AppShell: ({ presentation }: { readonly presentation?: string }) => {
+    AppShell: ({
+      agentPresentation,
+      presentation,
+    }: {
+      readonly agentPresentation?: AgentRootPresentation;
+      readonly presentation?: string;
+    }) => {
       const foundation = useWebviewFoundation();
       const adapter = useAgentHostRuntimeAdapter();
       useEffect(() => {
@@ -37,6 +43,11 @@ vi.mock('./components/AppShell', async () => {
           <span data-testid="foundation-runtime">{foundation.runtimeId}</span>
           <span data-testid="adapter-runtime">{adapter.runtimeId}</span>
           <span data-testid="presentation">{presentation}</span>
+          <span data-testid="agent-presentation">
+            {agentPresentation
+              ? `${agentPresentation.kind}:${agentPresentation.scope.kind}`
+              : 'none'}
+          </span>
         </>
       );
     },
@@ -94,6 +105,22 @@ describe('AgentWebviewRoot foundation wiring', () => {
     );
 
     expect(screen.getByTestId('presentation').textContent).toBe('desktop-dock');
+  });
+
+  it('forwards the exact Agent draft presentation to the package-owned shell', () => {
+    render(
+      <AgentWebviewRoot
+        agentPresentation={{
+          schemaVersion: 1,
+          kind: 'draft',
+          scope: { kind: 'assistant', assistantSpaceId: 'assistant:1' },
+        }}
+        hostRuntimeAdapter={createAdapter('assistant-draft-adapter')}
+        locale="en"
+      />,
+    );
+
+    expect(screen.getByTestId('agent-presentation').textContent).toBe('draft:assistant');
   });
 
   it('subscribes before a descendant initialization request receives a synchronous response', () => {

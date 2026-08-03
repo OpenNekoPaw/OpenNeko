@@ -400,6 +400,7 @@ describe('AgentAppHost', () => {
         listConversations: () => {
           throw new Error('catalog fixture failed');
         },
+        findConversation: () => undefined,
         dispose: () => undefined,
       },
     });

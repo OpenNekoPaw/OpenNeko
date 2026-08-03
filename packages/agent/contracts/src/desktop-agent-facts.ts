@@ -370,12 +370,14 @@ function configurationSource(
 }
 
 function parseConnection(input: unknown): DesktopAgentConnectionIdentity {
+  const source = requireRecord(input, 'Desktop Agent facts connection');
+  const ownerKey = 'assistantSpaceId' in source ? 'assistantSpaceId' : 'projectId';
   const record = exactRecord(
-    input,
+    source,
     [
       'applicationInstanceId',
       'windowId',
-      'projectId',
+      ownerKey,
       'workspaceId',
       'viewId',
       'viewEpoch',
@@ -384,16 +386,20 @@ function parseConnection(input: unknown): DesktopAgentConnectionIdentity {
     ],
     'Desktop Agent facts connection',
   );
-  return Object.freeze({
+  const common = {
     applicationInstanceId: text(record['applicationInstanceId'], 'application'),
     windowId: text(record['windowId'], 'Window'),
-    projectId: text(record['projectId'], 'Project'),
     workspaceId: text(record['workspaceId'], 'Workspace'),
     viewId: text(record['viewId'], 'View'),
     viewEpoch: positiveInteger(record['viewEpoch'], 'View epoch'),
     rendererEpoch: positiveInteger(record['rendererEpoch'], 'renderer epoch'),
     connectionId: text(record['connectionId'], 'connection'),
-  });
+  };
+  return Object.freeze(
+    ownerKey === 'assistantSpaceId'
+      ? { ...common, assistantSpaceId: text(record[ownerKey], 'Assistant Space') }
+      : { ...common, projectId: text(record[ownerKey], 'Project') },
+  );
 }
 
 function parsePromptReceipt(input: unknown): DesktopAgentPromptReceipt {

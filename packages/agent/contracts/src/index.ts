@@ -10,7 +10,13 @@ export * from './agent-capability-activation';
 export * from './agent-context';
 export * from './agent-home';
 export * from './agent-image-transport';
+export * from './agent-launch';
+export * from './agent-launch-host';
 export * from './agent-output-validation';
+export * from './agent-root-presentation';
+export * from './agent-conversation-context';
+export * from './assistant-resource-host';
+export * from './agent-draft-submit';
 export * from './agent-token-budget';
 export * from './creative-ai-invocation';
 export * from './config';
@@ -18,6 +24,8 @@ export * from './desktop-agent-connection';
 export * from './desktop-agent-facts';
 export * from './effective-agent-configuration';
 export * from './extension-catalog';
+export * from './extension-management';
+export * from './extension-management-host';
 export * from './hook';
 export * from './message-attachment';
 export * from './mcp';
@@ -117,21 +125,30 @@ export type {
   AgentHostRouteCoverageAuditInput,
   AgentHostRouteCoverageDiagnostic,
   AgentHostRouteCoverageInput,
+  AgentHostRouteAuthority,
+  AgentHostRouteAuthorityRecord,
+  AgentHostRouteConnectionRequirement,
+  AgentHostRouteDiagnostic,
   AgentHostRouteFutureOwner,
+  AgentHostRouteScopeRequirement,
   AgentHostRouteSupport,
   AgentHostRouteSupportRecord,
   AgentHostRouteUnavailableDiagnostic,
   AgentHostRouteUnavailableSupport,
+  AgentHostWorkspaceScopeRequiredDiagnostic,
   AgentHostRuntimeAdapter,
   AgentHostRuntimeSubscription,
   AgentWebviewToHostMessageType,
   AgentWebviewToHostMessageTypeCoverage,
 } from './agent-host-runtime-adapter';
 export {
+  AGENT_HOST_ROUTE_AUTHORITY,
   ELECTRON_AGENT_HOST_ROUTE_COVERAGE,
   ELECTRON_AGENT_HOST_UNSUPPORTED_ROUTE_OWNERS,
+  classifyAgentHostRoute,
   createAgentHostRouteCoverageDiagnostics,
   createAgentHostRouteUnavailableDiagnostic,
+  createAgentHostWorkspaceScopeRequiredDiagnostic,
   createElectronAgentHostRouteUnavailableDiagnostic,
 } from './agent-host-runtime-adapter';
 export type { EnabledStateRecord } from './enabled-state';
@@ -635,6 +652,7 @@ export * from './agent-capability';
 export * from './agent-observation';
 export * from './agent-profile';
 export * from './agent-runtime-scope';
+export * from './agent-root-presentation';
 export * from './agent-trace';
 export * from './decision-rationale';
 export * from './domain-routing';

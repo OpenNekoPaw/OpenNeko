@@ -76,6 +76,7 @@ export interface AgentConversationOpenInput {
 export interface AgentTurnInput {
   readonly conversationId: string;
   readonly prompt: string;
+  readonly turnId?: string;
   readonly modelPolicy: AgentModelPolicy;
   readonly configuration: AgentTurnConfigurationSnapshot;
   readonly permissionPolicy:
@@ -178,6 +179,7 @@ export interface AgentAppHost {
   setHomeWorkspaceScope(workspaceIds: readonly string[]): void;
   attachWorkspace(workspace: AssetWorkspaceResolution): Promise<AgentWorkspaceRuntime>;
   getWorkspace(workspaceId: string): AgentWorkspaceRuntime | undefined;
+  findConversation(conversationId: string): PiConversationCatalogRecord | undefined;
   readGlobalSkillCatalog(): Promise<AgentSkillCatalog>;
   hasActiveTurns(): boolean;
   reconcilePluginRuntime(
@@ -266,6 +268,11 @@ class DefaultAgentAppHost implements AgentAppHost {
   getWorkspace(workspaceId: string): AgentWorkspaceRuntime | undefined {
     this.requireActive();
     return this.workspaces.get(workspaceId);
+  }
+
+  findConversation(conversationId: string): PiConversationCatalogRecord | undefined {
+    this.requireActive();
+    return this.options.catalogReader.findConversation(conversationId);
   }
 
   async readGlobalSkillCatalog(): Promise<AgentSkillCatalog> {
@@ -557,7 +564,7 @@ class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
       workspaceId: this.workspaceId,
       conversationId: input.conversationId,
       branchId: owner.branchId,
-      turnId: this.options.createIdentity(),
+      turnId: input.turnId ?? this.options.createIdentity(),
       runId: this.options.createIdentity(),
     });
     const operation = this.executeTurnOwned(input, identity);

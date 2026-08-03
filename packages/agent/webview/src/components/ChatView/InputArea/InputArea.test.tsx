@@ -1586,6 +1586,34 @@ describe('InputArea composer controls', () => {
     expect(onAttachedFilesChange).toHaveBeenCalledWith([]);
   });
 
+  it('uses Host authorization for draft attachments and adds only the opaque context payload', async () => {
+    const payload: AgentContextPayload = {
+      type: 'file',
+      id: 'grant-1',
+      label: 'notes.txt',
+      summary: 'Authorized file: notes.txt',
+      data: { resourceGrantId: 'grant-1', resourceKind: 'file' },
+    };
+    const onAuthorizeResource = vi.fn(async () => payload);
+    const onAddContextChip = vi.fn();
+    render(
+      <Harness onAddContextChip={onAddContextChip}>
+        <InputArea
+          inputValue=""
+          isThinking={false}
+          onInputChange={vi.fn()}
+          onSend={vi.fn()}
+          onAuthorizeResource={onAuthorizeResource}
+        />
+      </Harness>,
+    );
+
+    fireEvent.click(screen.getByTitle('添加附件'));
+    await vi.waitFor(() => expect(onAddContextChip).toHaveBeenCalledWith(payload));
+    expect(onAuthorizeResource).toHaveBeenCalledOnce();
+    expect(JSON.stringify(onAddContextChip.mock.calls)).not.toContain('/Users');
+  });
+
   it('moves completed @file mentions into reference tokens and preserves @path on send', () => {
     const onSend = vi.fn();
     render(

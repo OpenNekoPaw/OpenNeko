@@ -45,6 +45,7 @@ export interface AgentHostRouteEffectPort<Message extends AgentWebviewToHostMess
 
 export interface AgentConversationControllerTurnRequest extends AgentMessageRuntimeRequest {
   readonly source: 'user-message' | 'mermaid-feedback';
+  readonly turnId?: string;
 }
 
 export interface AgentConversationControllerEffectPort {

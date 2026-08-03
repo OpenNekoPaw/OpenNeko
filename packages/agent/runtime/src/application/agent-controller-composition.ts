@@ -127,6 +127,16 @@ export interface AgentControllerComposition {
     readonly workspace: AgentWorkspaceRuntime;
     readonly identity: DesktopAgentConnectionIdentity;
   }): AgentControllerEffects;
+  startInitialTurn?(input: {
+    readonly workspace: AgentWorkspaceRuntime;
+    readonly conversationId: string;
+    readonly turnId: string;
+    readonly messageText: string;
+    readonly providerId: string;
+    readonly modelId: string;
+    readonly locale: 'en' | 'zh';
+    readonly contextPayloads?: readonly AgentContextPayload[];
+  }): Promise<void>;
   dispose?(): Promise<void>;
 }
 
@@ -318,6 +328,65 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
       },
     };
     return effects;
+  }
+
+  async startInitialTurn(input: {
+    readonly workspace: AgentWorkspaceRuntime;
+    readonly conversationId: string;
+    readonly turnId: string;
+    readonly messageText: string;
+    readonly providerId: string;
+    readonly modelId: string;
+    readonly locale: 'en' | 'zh';
+    readonly contextPayloads?: readonly AgentContextPayload[];
+  }): Promise<void> {
+    const facts = createDesktopAgentFactsProjector({
+      connection: {
+        applicationInstanceId: 'agent-conversation-authority',
+        windowId: `conversation:${input.conversationId}`,
+        projectId: `conversation:${input.conversationId}`,
+        workspaceId: input.workspace.workspaceId,
+        viewId: `conversation:${input.conversationId}`,
+        viewEpoch: 1,
+        rendererEpoch: 1,
+        connectionId: `initial-turn:${input.turnId}`,
+      },
+    });
+    try {
+      await this.executeTurn({
+        workspace: input.workspace,
+        config: this.getConfig(input.workspace),
+        request: {
+          source: 'user-message',
+          conversationId: input.conversationId,
+          messageText: input.messageText,
+          sessionMode: 'agent',
+          locale: input.locale,
+          chatModel: {
+            providerId: input.providerId,
+            modelId: input.modelId,
+            category: 'llm',
+          },
+          turnId: input.turnId,
+          ...(input.contextPayloads?.length ? { contextPayloads: input.contextPayloads } : {}),
+        },
+        context: {
+          identity: {
+            hostKind: 'electron',
+            applicationId: 'agent-conversation-authority',
+            windowId: `conversation:${input.conversationId}`,
+            viewId: `conversation:${input.conversationId}`,
+            workspaceId: input.workspace.workspaceId,
+            rendererEpoch: 'authority',
+            connectionId: `initial-turn:${input.turnId}`,
+          },
+          post: () => undefined,
+        },
+        facts,
+      });
+    } finally {
+      facts.dispose();
+    }
   }
 
   async dispose(): Promise<void> {
@@ -875,6 +944,7 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
     const turnInput: AgentTurnInput = {
       conversationId: input.request.conversationId,
       prompt: input.request.messageText,
+      ...(input.request.turnId === undefined ? {} : { turnId: input.request.turnId }),
       modelPolicy: resolved.policy,
       configuration: resolved.configuration,
       permissionPolicy: (events) =>
