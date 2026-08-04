@@ -35,7 +35,7 @@ Agent 不拥有：
 | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 职责 | Pi 拥有 generic Agent execution、Tool scheduling、Skill read 和 transcript/context；OpenNeko Agent 拥有产品 identity、policy 与 projection；领域包拥有执行和事实；Host 拥有 IO、trust、credential interaction 与 UI transport。 |
 | 依赖 | Renderer 只依赖共享 contract；Desktop Main composition 依赖 host-neutral runtime 和具体领域 port；Agent core 不依赖 Electron、React 或具体领域实现；领域包不反向依赖 Agent。                                                    |
-| 接口 | conversation/branch/turn/run/tool-call identity、Tool schema、model-purpose snapshot、Capability contribution、domain Job port、Timeline patch 和 ContentLocator 分层定义；禁止自由 JSON 和 active-state fallback。                |
+| 接口 | conversation/branch/turn/run/tool-call identity、Tool schema、model-purpose snapshot、Capability contribution、domain Job port、Timeline patch 和 ContentLocator 分层定义；禁止自由 JSON 和 active-state fallback。             |
 | 扩展 | 新 provider 通过 Pi registration 或 owning media runtime 接入；新 Skill 使用 Pi `SKILL.md`；新领域能力先由 owning package 定义 contract，再通过 contribution 注入。                                                             |
 | 测试 | deterministic path/schema/identity/permission 测试证明 canonical path；key-free evaluation 验证 harness；真实 Desktop complete-session 场景证明模型与 UI 行为。                                                                 |
 
@@ -122,6 +122,20 @@ Desktop 统一 Workbench 冷启动通过 Pi owning package 的只读 catalog rea
 conversation metadata。该读取不 attach workspace runtime、不打开 Pi Session、不读取 transcript，
 也不获取 execution lease；只有显式 attach 的 exact conversation 可以覆盖实时 attention。catalog
 缺失表示尚无历史数据，catalog 损坏或 schema 不匹配必须 fail-visible，不能伪装成成功空列表。
+
+Conversation 导航必须区分三种正交身份：`conversationId` 选择 AgentSession transcript；closed
+`assistant | workspace | character + characterRun | room + roomRun` owner 选择 capability、memory 和
+Scene authority；可选 `groupedProjectId` 只决定 PrimarySidebar 中的放置位置。不得用四个 nullable ID、
+synthetic `content:<workspaceId>` Project、active/recent Project 或 UI Tab 表达 owner。Workspace owner
+由 Host 与唯一 Project 的 `workspaceId` 精确匹配；Assistant/Character/Room 可以不绑定 Project，绑定
+Project 也不会获得 Workspace 文件权限、记忆或 Scene scope。
+
+Agent Home projection 是 owner-qualified conversation catalog 的唯一 producer，Host 将其与 Project
+catalog 组合成唯一 grouped navigation projection。Project header 只打开 exact Workspace-bound Draft，
+conversation child 才恢复 exact `conversationId + owner` session。PrimarySidebar 是 Desktop 用户可见的
+会话切换入口；Desktop dock 隐藏 Agent package 内部 Tab、新建和 History 导航，但保留独立 runtime
+state。Character/Room owner contract 在其 public runtime/Scene 尚未组合前只可返回带 exact owner kind
+的 unavailable，不得读取为 executable Assistant/Workspace context。
 
 同一个 `AgentWebviewRoot` 同时承载 `draft | session` presentation；phase 只决定是否已有 conversation，
 不更换 controller、composer 或 Root identity。`assistant | workspace` scope 与 phase 正交：Assistant
