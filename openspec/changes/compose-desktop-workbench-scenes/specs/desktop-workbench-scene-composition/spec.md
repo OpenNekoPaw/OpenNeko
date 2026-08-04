@@ -138,6 +138,14 @@ The existing package-owned `AgentWebviewRoot`, controller, composer and Host pro
 - **AND** it binds the exact current draft and commits the first Assistant conversation through the canonical draft-submit transaction
 - **AND** no owner-selection card blocks sending and no active, first or recent Project fallback participates
 
+#### Scenario: Direct Entry Draft submit carries an authorized file
+
+- **WHEN** the user explicitly authorizes a file in the exact `unbound` Entry Draft and submits directly
+- **THEN** Host validates every requested grant before mutation and binds only that launch connection and draft's grants to the exact AssistantSpace
+- **AND** the canonical first-submit transaction consumes the authorized file under Assistant scope
+- **AND** missing, cross-connection, cross-draft or previously bound grants fail visibly without partially rebinding the remaining grants
+- **AND** an idempotent retry for the same AssistantSpace does not duplicate or expand authorization
+
 #### Scenario: Workspace owner binding activates the Agent presentation
 
 - **WHEN** an exact Entry Draft is bound to a Workspace through a directory or Project selection

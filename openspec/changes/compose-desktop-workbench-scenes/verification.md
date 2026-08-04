@@ -214,6 +214,41 @@ OS dialog screenshot. Assistant provider execution is not claimed as accepted be
 real provider/model case was available; the visible scenario proves only local commit, preflight
 failure checkpointing, exact activation and restore.
 
+The 10.12-10.15 final development and rebuilt packaged qualification passed on the current code:
+
+`reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-04T09-53-37.943Z-desktop-workbench-scenes-development/report.json`
+
+`reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-04T09-55-27.603Z-desktop-workbench-scenes-packaged/report.json`
+
+Both visible Electron 43.2.0 / Chrome 150 runs prove that fresh and repeated Start Creating drafts
+contain zero owner-choice cards and zero early conversations. Direct send transitions the exact
+`unbound` draft into one Assistant conversation/session, renders the committed initial message and
+restores the same conversation from PrimarySidebar. Directory selection still activates the exact
+Workspace draft with no early conversation; Character/Room remains owner-qualified unavailable and
+does not fall back to another scope.
+
+Both reports also record `entry-draft-assistant-reference-ready` with `type: file` and label
+`agent-reference.txt` before direct send. The exact Entry Draft grant is rebound to the committed
+AssistantSpace, consumed by the canonical first-submit preflight and restored with the same session.
+The producer regression additionally proves that one missing/cross-connection grant rejects the whole
+binding set without partially changing a valid grant, while same-Assistant retry remains idempotent.
+
+Asset Preview and Project Detail record `data-main-composition="independent-shells"`, exact Primary
+and Secondary shell identities, a 10 px sibling gutter and no overlap. At 1440 x 960 the panels are
+364/698 px; at 1040 x 700 Asset Preview remains visible at 228/434 px. The enclosing Main has no
+border/radius/shadow and visible overflow, while both child shells have a 1 px border, 18 px radius,
+surface shadow and hidden overflow. Preview remains owned by `preview-webview`, and neither shell
+adds a Workbench tab strip. Both reports have `poisonedRequestCount: 0`, no console errors, warnings
+or renderer exceptions.
+
+The final repository qualification passed `pnpm build`, `pnpm test`, `pnpm check`,
+`pnpm check:quality`, explicit `pnpm check:legacy-debt`, `pnpm check:unused` and
+`pnpm check:application-boundaries`, `git diff --check`, key-free Agent Evaluation and strict OpenSpec
+validation. Relevant full-test totals are Agent Contracts `41 files / 281 tests`, Agent Webview
+`90 / 697`, Agent Runtime `115 / 1076`, Host `36 / 318`, UI `47 / 204` and Desktop `65 / 342`.
+Application-boundary findings were zero across 1427 checked files; the unused scan reported only the
+existing 73 configuration hints and no blocking production path.
+
 ## Agent Evaluation
 
 `pnpm test:agent:eval` passed its key-free checks: `45 files / 284 tests`, with `22 suites / 53 cases`
@@ -221,6 +256,9 @@ selected in dry-run. This proves harness/schema/index readiness only. The five f
 and directory cases remain infrastructure-blocked because the existing Desktop complete-session
 driver does not expose Assistant draft submit, native directory authorization, scene/scope facts,
 first-submit claim count or forbidden Project-resolution participation. See `evaluation.md`.
+The change-to-suite selector now maps `desktop-agent-launch-runtime` to the existing
+`session-workflows -> agent-runtime.workflow-controller` owner; its focused selector regression passed
+`5 / 5` and rejects default-suite substitution.
 
 The focused real-run preflight for
 `agent-runtime.workflow-controller/conversation-persistence-resume` returned

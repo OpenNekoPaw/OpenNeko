@@ -203,6 +203,8 @@ Draft 隐藏 conversation Tabs/history 等 session-only chrome，但继续复用
 
 Entry Draft 的 `unbound` scope 只允许 scope-neutral catalog，以及目录/Project、未来 Character/Room 等会扩大或改变 owner 的显式选择。普通直接提交由 package-owned Agent 入口确定性绑定 Assistant 用户区并沿既有 local transaction 创建 exact session；它不依赖关键词、模型推断或 active Project。选择目录/Project 绑定 Workspace draft并激活 creative slots；选择未来 Character/Room 绑定对应 owner。入口不得用 owner 选择卡阻塞普通输入。每次再次点击“开始创作”都回到新的 `unbound` draft，而不是恢复任何已有 conversation。
 
+Entry Draft 中显式授权的文件仍归 exact launch connection 与 `draftId` 所有。确定性 Assistant 首次提交在 conversation validation 前先校验请求中的全部 grant，再将匹配的 `unbound` grants 原子绑定到 exact AssistantSpace；缺失、跨 connection、跨 draft、已绑定其他 scope 或 conversation 的 grant 必须 fail-visible，且验证失败不能造成部分 scope 修改。相同 AssistantSpace 的幂等重试保持成功，但不得扩大授权集合或接受其他 draft 的 grant。
+
 Capability catalog 必须标记 scope requirements。Assistant draft 不展示 Workspace-only Tool/Skill 为可执行成功能力；缺少 Workspace scope 时返回 typed `workspace-scope-required`，不能 fallback 到 active Project。Root 不因 scope 改变而换成另一套 controller。
 
 Composer 视觉继续由 `@neko/agent-webview` 拥有并增强现有 `InputArea`、`ComposerConfigMenu`、`SessionModeSelector` 与 `ModeSelector`，不创建 Desktop composer 或平行控件。Desktop 只通过 Agent Root 的 React presentation prop 注入 Assistant 的目录选择命令，或当前 Project catalog 已有的安全 `displayName`；该短生命周期 UI projection 不进入 Agent authority、conversation facts 或持久 Scene schema。Composer 将目录上下文、textarea 与工具条收进同一居中悬浮表面，保留现有 `+`、模式、模型、命令、Skill、usage、审批和发送/停止能力；不复制 Codex 的 branch/local 元信息。窄 dock 通过 package-owned responsive CSS 收缩低优先级标签并允许工具条在稳定边界内换行，菜单仍向上定位且不得溢出 Workbench。

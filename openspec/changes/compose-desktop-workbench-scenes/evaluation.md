@@ -8,7 +8,9 @@ Date: 2026-08-04
   sender-bound directory grants, first-submit lifecycle and forbidden Project fallback.
 - Decision and owning suite: `update` the indexed `agent-runtime.workflow-controller` suite owned by
   `agent-runtime.workflow-controller`. The behavior remains one Desktop Agent session workflow; a
-  second suite or Agent controller would split the canonical owner.
+  second suite or Agent controller would split the canonical owner. The change-to-suite selector
+  maps `desktop-agent-launch-runtime` to this existing `session-workflows` owner so focused runs do
+  not fail with `unmapped-coverage` before evaluating the changed path.
 - Why real Evaluation is required: scope selection, effective model binding, initial-turn execution,
   resource use and recovery can change real Agent behavior. Scene codecs, grant containment and
   Shell placement also have deterministic producer/consumer and Electron acceptance requirements.
@@ -102,9 +104,15 @@ src/runtime/projection/__tests__/pi-conversation-history-projector.test.ts` is t
   committed Assistant message renders immediately in session phase and restores through the exact
   recent-conversation identity after leaving the Agent scene. This does not replace the still-blocked
   provider-backed `assistant-first-submit-exactly-once` success case or prove model output quality.
-- Entry Draft mode selection and unavailable Character/Room dispatch are `excluded` from
-  provider-backed Evaluation. They are pre-session presentation decisions: changing a creative mode
-  may update only package-owned draft configuration, while owner binding remains an explicit card or
-  directory action. The focused `ConversationController` regression proves no Assistant transition,
-  conversation creation, draft submit, roleplay search or prompt menu participates. A real provider
-  turn cannot add evidence to this negative boundary because correct behavior starts no turn.
+- Entry Draft owner-card removal and creative mode selection are `excluded` from provider-backed
+  Evaluation as pre-session presentation decisions. Focused Webview and Electron assertions prove
+  that a fresh `unbound` draft has zero owner cards, retains launch-safe configuration/resources and
+  does not create a conversation before submit.
+- Direct Entry Draft submit is not excluded from Agent behavior acceptance: it is the
+  `assistant-first-submit-exactly-once` workflow above. Deterministic Host/AppHost/renderer tests and
+  visible Electron runs prove exact `unbound -> assistant -> session` binding, one local conversation,
+  committed initial message and exact restore. Provider-backed model execution remains blocked by the
+  missing driver facts and explicit provider/model/cost authorization, so no model behavior is claimed.
+- Future Character/Room selection remains an explicit owner-qualified path. The current Desktop has no
+  qualified Character/Room owner/runtime/Surface, so the path must fail visibly and cannot fall back to
+  Assistant or Workspace. A real provider turn cannot add evidence until that owner exists.

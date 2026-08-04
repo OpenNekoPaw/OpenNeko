@@ -131,10 +131,18 @@ authority 原子提交 context、conversation、initial message 和 pending turn
 identity 幂等启动 provider。任何 Workspace-only capability 在 Assistant scope 下必须返回
 `workspace-scope-required`，不得回退到 active/first/recent Project。
 
-每次 Start Creating 都创建新的 `unbound` draft identity。只有该状态显示 Assistant、Workspace 与
-Character/Room owner 选择；显式绑定 Assistant 或 Workspace 后，同一 Root 立即显示 owner-qualified
-activated draft，清除旧 Tabs、transcript、输入引用和瞬态错误，同时保留模型目录与用户设置。Desktop
-只投影 Host 已提交的 phase/scope，不通过 active Project、组件状态或 React key 推断或重建 Agent。
+每次 Start Creating 都创建新的 `unbound` draft identity，入口不显示强制 owner 选择卡。未选择 owner
+而直接提交时，draft-submit target 由 Agent entry contract 确定性绑定 Assistant 用户区；显式选择
+Project/directory grant 时绑定 Workspace；未来显式选择 Character/Room 时绑定对应 owner。对话内容只在
+已绑定 scope 内决定能力或生成模式，不能发明 owner identity、目录授权或权限范围。owner 绑定后，同一
+Root 立即显示 owner-qualified activated presentation，清除旧 Tabs、transcript、输入引用和瞬态错误，
+同时保留模型目录与用户设置。Desktop 只投影 Host 已提交的 phase/scope，不通过 active Project、组件
+状态或 React key 推断或重建 Agent；尚不存在的 Character/Room owner 必须 fail-visible。
+
+Entry Draft 显式授权的资源 grant 绑定到 exact launch connection 与 `draftId`。直接提交切换到
+Assistant 时，Desktop Main 必须先完整验证请求中的 grant 集合，再将匹配 grants 原子绑定到 exact
+AssistantSpace；缺失、跨 connection、跨 draft 或已绑定其他 scope/conversation 的 grant 必须失败且
+不能产生部分修改。相同 AssistantSpace 的首次提交重试保持幂等。
 
 turn terminal checkpoint 具有 `volatile`、`persisting`、`durable`、
 `persistence-delayed` 状态。持久化失败必须暴露 diagnostic；process-local backfill 不能伪装成

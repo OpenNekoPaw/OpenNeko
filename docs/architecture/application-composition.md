@@ -110,16 +110,19 @@ reload 和应用重启不得丢失最近项目、最近会话及其精确 identi
 sender/Window-bound opaque directory grant 打开；取消授权保持原 scene，且不得创建 Workspace 或
 conversation。
 
-Entry Draft 只有在 `unbound` scope 下显示 Assistant、Workspace 与尚不可用的 Character/Room owner
-选择；owner 绑定完成后，同一 Agent Root 必须立即切换到对应 activated draft presentation，不得在首次
-提交前继续显示入口选择。Workspace 布局控件属于窗口级 presentation chrome，只在 exact Workspace
-scene 中出现在 PrimarySidebar 顶部品牌控件组、紧邻 sidebar 显隐按钮；不得放入 footer、Main tab 或
-领域 Root。
+Entry Draft 的 `unbound` scope 不显示强制 owner 卡片。用户未选择 owner 而直接发送时，Host 以 exact
+draft identity 确定性绑定 Assistant 用户区，并在同一事务中创建首次 conversation/session；选择显式
+Project 或 sender/Window-bound directory grant 时绑定 Workspace；未来选择 Character/Room 时绑定对应
+owner。对话文本、模型输出和 active/first/recent Project 都不得推断或扩大 owner 权限。尚未提供真实
+Character/Room owner 的选择必须 fail-visible，不能降级为 Assistant 或 Workspace。Workspace 布局控件
+属于窗口级 presentation chrome，只在 exact Workspace scene 中出现在 PrimarySidebar 顶部品牌控件组、
+紧邻 sidebar 显隐按钮；不得放入 footer、Main tab 或领域 Root。
 
 Workspace Main 的真实多 View group 是唯一拥有 Workbench tab strip 的区域。其 Preview 内容通过
 canonical `@neko/preview-webview` content-only presentation 渲染，不再添加 descriptor header。Assets、
-Extensions 与 Projects 的 management 和可选 Preview/Detail 分别占据两个共享 panel shell，通过同一
-resize primitive 连接，但两个 shell 都不制造单项 tab strip。Workspace Resources 复用 package-owned
+Extensions 与 Projects 的 management 和可选 Preview/Detail 分别占据两个兄弟 panel shell，通过同一
+resize primitive 和可见 gutter 连接。两个 shell 各自拥有边框、圆角、背景、阴影、裁切和 overflow
+边界，不能共享一块连续 Main 底板，也不制造单项 tab strip。Workspace Resources 复用 package-owned
 Root，并隐藏与 Host 自动 projection 重复的顶部全局刷新；relink、recovery 等领域操作仍由该 Root 保留。
 
 ## 数据与资源
