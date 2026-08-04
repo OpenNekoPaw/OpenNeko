@@ -72,4 +72,20 @@ describe('agent-state-runtime', () => {
 
     expect(runtime.snapshot()).toEqual([]);
   });
+
+  it('publishes running and terminal removal snapshots to late-bound presentation owners', () => {
+    const runtime = createAgentStateRuntime();
+    runtime.update({ conversationId: 'conv-1', phase: 'thinking', startedAt: 100 });
+    const snapshots: unknown[] = [];
+    const unsubscribe = runtime.subscribe((snapshot) => snapshots.push(snapshot));
+
+    expect(runtime.snapshot()).toEqual([
+      { conversationId: 'conv-1', phase: 'thinking', startedAt: 100 },
+    ]);
+    runtime.update({ conversationId: 'conv-1', phase: 'idle', startedAt: 200 });
+    unsubscribe();
+    runtime.update({ conversationId: 'conv-2', phase: 'acting', startedAt: 300 });
+
+    expect(snapshots).toEqual([[]]);
+  });
 });

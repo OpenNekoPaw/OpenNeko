@@ -70,8 +70,10 @@ import type {
 import type { AgentCredentialRuntime } from '@neko/agent-runtime/pi';
 import type { DesktopAgentConnectionIdentity } from '@neko/agent-contracts';
 import {
+  createAgentStateRuntime,
   createDesktopAgentFactsProjector,
   createAgentResourceDisplayProjector,
+  type AgentStateRuntime,
   type DesktopAgentFactsProjector,
   type AgentResourceDisplayRegistrationPort,
   type AgentResourceDisplayProjector,
@@ -129,7 +131,7 @@ export interface AgentControllerComposition {
     readonly identity: DesktopAgentConnectionIdentity;
     readonly initialConversationId?: string;
   }): AgentControllerEffects;
-  startInitialTurn?(input: {
+  readonly startInitialTurn?: (input: {
     readonly workspace: AgentWorkspaceRuntime;
     readonly conversationId: string;
     readonly turnId: string;
@@ -138,7 +140,7 @@ export interface AgentControllerComposition {
     readonly modelId: string;
     readonly locale: 'en' | 'zh';
     readonly contextPayloads?: readonly AgentContextPayload[];
-  }): Promise<void>;
+  }) => Promise<void>;
   dispose?(): Promise<void>;
 }
 
@@ -181,6 +183,7 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
   private readonly configs = new Map<string, ConfigManager>();
   private readonly queues = new Map<string, AgentConversationMessageQueue>();
   private readonly confirmations = new Map<string, PiToolConfirmationRegistry>();
+  private readonly agentStates = new Map<string, AgentStateRuntime>();
   private readonly pendingDisposals = new Set<Promise<void>>();
 
   constructor(private readonly options: CreateAgentControllerCompositionOptions) {}
@@ -217,6 +220,15 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
       tabStateRevision: 0,
     };
     let post: AgentHostRouteEffectContext['post'] | undefined;
+    const agentStates = this.getAgentStates(input.workspace.workspaceId);
+    const unsubscribeAgentStates = agentStates.subscribe((snapshot) => {
+      if (!post) return;
+      this.track(
+        Promise.resolve()
+          .then(() => post?.(buildAgentStateSnapshotMessage([...snapshot])))
+          .then(() => undefined),
+      );
+    });
     const facts = createDesktopAgentFactsProjector({ connection: input.identity });
     const resourceDisplay = createAgentResourceDisplayProjector({
       identity: input.identity,
@@ -278,6 +290,7 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
     const disposeOwned = (): Promise<void> => {
       disposal ??= Promise.resolve().then(async () => {
         try {
+          unsubscribeAgentStates();
           resourceDisplay.dispose();
           await projection.abandon();
           facts.dispose();
@@ -339,7 +352,7 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
     return effects;
   }
 
-  async startInitialTurn(input: {
+  readonly startInitialTurn = async (input: {
     readonly workspace: AgentWorkspaceRuntime;
     readonly conversationId: string;
     readonly turnId: string;
@@ -348,7 +361,7 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
     readonly modelId: string;
     readonly locale: 'en' | 'zh';
     readonly contextPayloads?: readonly AgentContextPayload[];
-  }): Promise<void> {
+  }): Promise<void> => {
     const facts = createDesktopAgentFactsProjector({
       connection: {
         applicationInstanceId: 'agent-conversation-authority',
@@ -405,7 +418,7 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
     } finally {
       facts.dispose();
     }
-  }
+  };
 
   async dispose(): Promise<void> {
     for (const confirmation of this.confirmations.values()) confirmation.cancelAll();
@@ -420,6 +433,7 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
     if (errors.length > 0) {
       throw new AggregateError(errors, 'Failed to dispose Agent controller effects.');
     }
+    this.agentStates.clear();
   }
 
   private createConversationEffects(
@@ -560,6 +574,7 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
       deleteConversation: async ({ conversationId, activateNext }, context) => {
         bind(context);
         await workspace.deleteConversation(conversationId);
+        this.getAgentStates(workspace.workspaceId).clear(conversationId);
         this.queues.delete(ownerKey(workspace.workspaceId, conversationId));
         this.confirmations.get(ownerKey(workspace.workspaceId, conversationId))?.cancelAll();
         this.confirmations.delete(ownerKey(workspace.workspaceId, conversationId));
@@ -594,15 +609,7 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
       readAgentStates: async (context) => {
         bind(context);
         await context.post(
-          buildAgentStateSnapshotMessage(
-            workspace
-              .listConversations()
-              .flatMap((record) =>
-                workspace.readActiveTurn(record.conversationId)
-                  ? [{ conversationId: record.conversationId, phase: 'thinking' as const }]
-                  : [],
-              ),
-          ),
+          buildAgentStateSnapshotMessage(this.getAgentStates(workspace.workspaceId).snapshot()),
         );
       },
       readConversationSnapshot: async (conversationId, context) => {
@@ -990,11 +997,10 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
     };
     const operation = input.workspace.startTurn(observedTurnInput);
     factsEvents.bind(input.facts.beginTurn({ identity: operation.identity, systemPrompt }));
-    await input.context.post({
-      type: 'agentPhase',
+    this.getAgentStates(input.workspace.workspaceId).update({
       conversationId: input.request.conversationId,
       phase: 'thinking',
-      timestamp: Date.now(),
+      startedAt: Date.now(),
     });
     try {
       const turn = await operation.completion;
@@ -1003,11 +1009,10 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
         turn,
       });
     } finally {
-      await input.context.post({
-        type: 'agentPhase',
+      this.getAgentStates(input.workspace.workspaceId).update({
         conversationId: input.request.conversationId,
         phase: 'idle',
-        timestamp: Date.now(),
+        startedAt: Date.now(),
       });
     }
   }
@@ -1242,6 +1247,14 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
     const confirmations = new PiToolConfirmationRegistry();
     this.confirmations.set(key, confirmations);
     return confirmations;
+  }
+
+  private getAgentStates(workspaceId: string): AgentStateRuntime {
+    const existing = this.agentStates.get(workspaceId);
+    if (existing) return existing;
+    const created = createAgentStateRuntime();
+    this.agentStates.set(workspaceId, created);
+    return created;
   }
 
   private track(operation: Promise<void>): void {

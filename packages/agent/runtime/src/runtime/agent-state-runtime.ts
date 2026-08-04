@@ -22,6 +22,7 @@ export interface AgentStateRuntime {
   update(input: UpdateAgentStateRuntimeInput): void;
   clear(conversationId: string): void;
   snapshot(): AgentStateRuntimeEntry[];
+  subscribe(listener: (snapshot: readonly AgentStateRuntimeEntry[]) => void): () => void;
 }
 
 export function buildAgentRuntimeStateSnapshotMessage(
@@ -36,6 +37,7 @@ export function createAgentStateRuntime(): AgentStateRuntime {
 
 class DefaultAgentStateRuntime implements AgentStateRuntime {
   private readonly states = new Map<string, Omit<AgentStateRuntimeEntry, 'conversationId'>>();
+  private readonly listeners = new Set<(snapshot: readonly AgentStateRuntimeEntry[]) => void>();
 
   update(input: UpdateAgentStateRuntimeInput): void {
     if (input.phase === 'idle') {
@@ -48,10 +50,12 @@ class DefaultAgentStateRuntime implements AgentStateRuntime {
       ...(input.toolName !== undefined ? { toolName: input.toolName } : {}),
       startedAt: input.startedAt,
     });
+    this.publish();
   }
 
   clear(conversationId: string): void {
-    this.states.delete(conversationId);
+    if (!this.states.delete(conversationId)) return;
+    this.publish();
   }
 
   snapshot(): AgentStateRuntimeEntry[] {
@@ -61,5 +65,15 @@ class DefaultAgentStateRuntime implements AgentStateRuntime {
       ...(state.toolName !== undefined ? { toolName: state.toolName } : {}),
       startedAt: state.startedAt,
     }));
+  }
+
+  subscribe(listener: (snapshot: readonly AgentStateRuntimeEntry[]) => void): () => void {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
+
+  private publish(): void {
+    const snapshot = this.snapshot();
+    for (const listener of this.listeners) listener(snapshot);
   }
 }

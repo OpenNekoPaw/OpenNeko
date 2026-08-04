@@ -393,7 +393,12 @@ export function parseAgentConversationLifecycleRecord(
   if ('diagnostic' in pendingRecord) pendingKeys.push('diagnostic');
   const pendingTurn = exactRecord(pendingRecord, pendingKeys, 'Agent pending turn');
   const status = pendingTurn['status'];
-  if (status !== 'pending' && status !== 'running' && status !== 'failed') {
+  if (
+    status !== 'pending' &&
+    status !== 'running' &&
+    status !== 'completed' &&
+    status !== 'failed'
+  ) {
     throw persistenceError(
       'decode-agent-conversation-lifecycle',
       `Unknown Agent pending turn status '${String(status)}'.`,

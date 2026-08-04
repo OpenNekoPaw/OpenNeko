@@ -4,6 +4,26 @@ import { join } from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
 
 const LEGACY_MIGRATION_ID = 'agent-pi-metadata-sqlite-v1';
+const CANONICAL_CONVERSATION_COLUMNS = [
+  'workspace_id:TEXT:1:0',
+  'conversation_id:TEXT:0:1',
+  'title:TEXT:1:0',
+  'active_branch_id:TEXT:1:0',
+  'created_at:TEXT:1:0',
+  'updated_at:TEXT:1:0',
+] as const;
+const EMBEDDED_CONTEXT_CONVERSATION_COLUMNS = [
+  'context_schema_version:INTEGER:1:0',
+  'context_kind:TEXT:1:0',
+  'context_id:TEXT:1:0',
+  'project_id:TEXT:0:0',
+  'workspace_id:TEXT:0:0',
+  'conversation_id:TEXT:0:1',
+  'title:TEXT:1:0',
+  'active_branch_id:TEXT:1:0',
+  'created_at:TEXT:1:0',
+  'updated_at:TEXT:1:0',
+] as const;
 const PI_TABLES = [
   'pi_conversations',
   'pi_branches',
@@ -45,6 +65,7 @@ export async function openNodePiConversationStorage(
 }
 
 export function migratePiConversationSchema(database: DatabaseSync): void {
+  migrateEmbeddedConversationContextTable(database);
   database.exec(`
     CREATE TABLE IF NOT EXISTS pi_conversations (
       workspace_id TEXT NOT NULL,
@@ -102,6 +123,103 @@ export function migratePiConversationSchema(database: DatabaseSync): void {
       completed_at TEXT NOT NULL
     ) STRICT;
   `);
+}
+
+function migrateEmbeddedConversationContextTable(database: DatabaseSync): void {
+  const shape = readTableShape(database, 'pi_conversations');
+  if (shape === undefined || sameShape(shape, CANONICAL_CONVERSATION_COLUMNS)) return;
+  if (!sameShape(shape, EMBEDDED_CONTEXT_CONVERSATION_COLUMNS)) {
+    throw new Error(`Pi conversation table schema is unsupported: ${shape.join(', ')}.`);
+  }
+  const invalidRows = database
+    .prepare(
+      `SELECT COUNT(*) AS count
+         FROM pi_conversations
+        WHERE context_schema_version <> 1
+           OR context_kind NOT IN ('scratch', 'workspace-authoring')
+           OR typeof(context_id) <> 'text'
+           OR length(trim(context_id)) = 0
+           OR typeof(conversation_id) <> 'text'
+           OR length(trim(conversation_id)) = 0
+           OR typeof(title) <> 'text'
+           OR length(trim(title)) = 0
+           OR typeof(active_branch_id) <> 'text'
+           OR length(trim(active_branch_id)) = 0
+           OR typeof(created_at) <> 'text'
+           OR length(trim(created_at)) = 0
+           OR typeof(updated_at) <> 'text'
+           OR length(trim(updated_at)) = 0
+           OR (context_kind = 'scratch' AND (project_id IS NOT NULL OR workspace_id IS NOT NULL))
+           OR (context_kind = 'workspace-authoring' AND
+               (project_id IS NULL OR workspace_id IS NULL OR workspace_id <> context_id))`,
+    )
+    .get();
+  if (readInteger(invalidRows, 'count') !== 0) {
+    throw new Error('Retired Pi conversation context table contains invalid rows.');
+  }
+
+  const foreignKeysEnabled = readPragmaInteger(database, 'foreign_keys') === 1;
+  if (foreignKeysEnabled) database.exec('PRAGMA foreign_keys = OFF');
+  database.exec('BEGIN IMMEDIATE');
+  try {
+    database.exec(`
+      CREATE TABLE pi_conversations__canonical (
+        workspace_id TEXT NOT NULL,
+        conversation_id TEXT PRIMARY KEY,
+        title TEXT NOT NULL,
+        active_branch_id TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      INSERT INTO pi_conversations__canonical (
+        workspace_id, conversation_id, title, active_branch_id, created_at, updated_at
+      )
+      SELECT COALESCE(workspace_id, context_id), conversation_id, title, active_branch_id,
+             created_at, updated_at
+        FROM pi_conversations;
+      DROP TABLE pi_conversations;
+      ALTER TABLE pi_conversations__canonical RENAME TO pi_conversations;
+      CREATE INDEX pi_conversations_workspace_updated
+        ON pi_conversations(workspace_id, updated_at DESC);
+    `);
+    const violations = database.prepare('PRAGMA foreign_key_check').all();
+    if (violations.length > 0) {
+      throw new Error('Pi conversation table migration violates foreign-key integrity.');
+    }
+    database.exec('COMMIT');
+  } catch (error) {
+    database.exec('ROLLBACK');
+    throw error;
+  } finally {
+    if (foreignKeysEnabled) database.exec('PRAGMA foreign_keys = ON');
+  }
+}
+
+function readTableShape(database: DatabaseSync, table: string): readonly string[] | undefined {
+  const record = database
+    .prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?`)
+    .get(table);
+  if (record === undefined) return undefined;
+  return database
+    .prepare(`PRAGMA table_info(${table})`)
+    .all()
+    .map((row) => {
+      const name = readString(row, 'name');
+      const type = readString(row, 'type').toUpperCase();
+      const notNull = readInteger(row, 'notnull');
+      const primaryKey = readInteger(row, 'pk');
+      return `${name}:${type}:${notNull}:${primaryKey}`;
+    });
+}
+
+function sameShape(actual: readonly string[], expected: readonly string[]): boolean {
+  return (
+    actual.length === expected.length && actual.every((entry, index) => entry === expected[index])
+  );
+}
+
+function readPragmaInteger(database: DatabaseSync, pragma: 'foreign_keys'): number {
+  return readInteger(database.prepare(`PRAGMA ${pragma}`).get(), pragma);
 }
 
 async function migrateLegacyPiConversationStorage(

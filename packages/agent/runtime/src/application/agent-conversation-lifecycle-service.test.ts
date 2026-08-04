@@ -44,6 +44,10 @@ describe('Agent Conversation lifecycle service', () => {
         contextPayloads: [],
       }),
     );
+    await fixture.service.waitForProviderIdle();
+    await expect(fixture.service.readConversation(first.conversationId)).resolves.toMatchObject({
+      pendingTurn: { requestId: input.requestId, status: 'completed' },
+    });
   });
 
   it('resolves authorized Resource grants into provider context after the exactly-once claim', async () => {
@@ -96,6 +100,11 @@ describe('Agent Conversation lifecycle service', () => {
     releaseContext([]);
     await fixture.service.waitForProviderIdle();
     expect(fixture.provider.start).toHaveBeenCalledOnce();
+    await expect(fixture.service.readConversation(committed.conversationId)).resolves.toMatchObject(
+      {
+        pendingTurn: { status: 'completed' },
+      },
+    );
   });
 
   it('records provider context resolution failure after session activation', async () => {
@@ -185,11 +194,14 @@ describe('Agent Conversation lifecycle service', () => {
     const repository = createInMemoryAgentConversationLifecycleRepository();
     const first = createFixture({ repository });
     const committed = await first.service.firstSubmit(assistantInput('request-replay'));
+    await first.service.waitForProviderIdle();
+    const completed = await first.service.readConversation(committed.conversationId);
     const replacement = createFixture({ repository });
 
     const replay = await replacement.service.firstSubmit(assistantInput('request-replay'));
 
-    expect(replay).toEqual(committed);
+    expect(replay).toEqual(completed);
+    expect(replay.pendingTurn.status).toBe('completed');
     expect(replacement.session.materialize).toHaveBeenCalledOnce();
     expect(replacement.session.materialize).toHaveBeenCalledWith({
       conversationId: committed.conversationId,

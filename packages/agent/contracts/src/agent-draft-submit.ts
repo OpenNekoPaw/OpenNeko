@@ -30,7 +30,7 @@ export interface AgentDraftSubmitProjection {
   readonly schemaVersion: typeof AGENT_CONVERSATION_CONTEXT_VERSION;
   readonly conversationId: string;
   readonly turnId: string;
-  readonly turnStatus: 'pending' | 'running' | 'failed';
+  readonly turnStatus: 'pending' | 'running' | 'completed' | 'failed';
   readonly diagnostic?: string;
 }
 
@@ -97,7 +97,12 @@ export function parseAgentDraftSubmitProjection(value: unknown): AgentDraftSubmi
     }
   }
   const turnStatus = record['turnStatus'];
-  if (turnStatus !== 'pending' && turnStatus !== 'running' && turnStatus !== 'failed') {
+  if (
+    turnStatus !== 'pending' &&
+    turnStatus !== 'running' &&
+    turnStatus !== 'completed' &&
+    turnStatus !== 'failed'
+  ) {
     throw new Error(`Unknown Agent draft turn status '${String(turnStatus)}'.`);
   }
   const diagnostic = record['diagnostic'];

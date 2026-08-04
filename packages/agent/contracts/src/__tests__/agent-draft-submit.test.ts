@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseAgentDraftSubmitInput } from '../agent-draft-submit';
+import { parseAgentDraftSubmitInput, parseAgentDraftSubmitProjection } from '../agent-draft-submit';
 
 describe('Agent draft submit contract', () => {
   it('accepts deterministic Assistant entry targeting for the exact unbound draft', () => {
@@ -51,5 +51,21 @@ describe('Agent draft submit contract', () => {
         configuration: { providerId: 'openai', modelId: 'gpt-5', executionMode: 'ask' },
       }),
     ).toThrow('unsupported fields');
+  });
+
+  it('projects a completed initial provider turn as a terminal launch state', () => {
+    expect(
+      parseAgentDraftSubmitProjection({
+        schemaVersion: 1,
+        conversationId: 'conversation-1',
+        turnId: 'turn-1',
+        turnStatus: 'completed',
+      }),
+    ).toEqual({
+      schemaVersion: 1,
+      conversationId: 'conversation-1',
+      turnId: 'turn-1',
+      turnStatus: 'completed',
+    });
   });
 });

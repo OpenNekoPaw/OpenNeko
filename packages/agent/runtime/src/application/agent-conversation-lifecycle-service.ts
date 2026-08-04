@@ -8,7 +8,7 @@ import {
   type AgentContextPayload,
 } from '@neko/agent-contracts';
 
-export type AgentPendingTurnStatus = 'pending' | 'running' | 'failed';
+export type AgentPendingTurnStatus = 'pending' | 'running' | 'completed' | 'failed';
 
 export interface AgentConversationLifecycleRecord {
   readonly schemaVersion: typeof AGENT_CONVERSATION_CONTEXT_VERSION;
@@ -256,6 +256,10 @@ export function createAgentConversationLifecycleService(options: {
         resourceGrantIds: exact.initialMessage.resourceGrantIds,
         contextPayloads,
         configuration: exact.configuration,
+      });
+      await options.repository.updatePendingTurn(exact.conversationId, {
+        ...exact.pendingTurn,
+        status: 'completed',
       });
     })().catch(async (error: unknown) => {
       await options.repository.updatePendingTurn(exact.conversationId, {
