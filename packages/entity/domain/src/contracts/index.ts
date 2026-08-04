@@ -5,3 +5,5 @@ export * from './creative-entity-identity';
 export * from './creativeEntityLineage';
 export * from './entity-representation-binding';
 export * from './entity-asset-projection';
+export * from './project-entity-document';
+export * from './project-entity-references';
