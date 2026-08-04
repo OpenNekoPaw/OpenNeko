@@ -91,5 +91,5 @@
 - [ ] 10.4 Add package-owned Agent Webview draft transition/reset that clears prior session presentation state while preserving the same Root, global model catalog and user settings.
 - [ ] 10.5 Bind Assistant/Workspace only through explicit current-draft transitions and keep unavailable Character/Room owners fail-visible; preserve atomic first-submit session activation.
 - [ ] 10.6 Add producer/consumer path tests proving stale drafts fail, old conversations remain unchanged, old Tabs/transcript cannot appear in a new draft, and recent session/container actions retain distinct semantics.
-- [ ] 10.7 Fix Asset Center runtime ownership so StrictMode effect remount cannot reuse a disposed runtime; add a regression that fails before the fix and preserves fail-visible final disposal.
+- [x] 10.7 Fix Asset Center runtime ownership so StrictMode effect remount cannot reuse a disposed runtime; add a regression that fails before the fix and preserves fail-visible final disposal.
 - [ ] 10.8 Run focused Host/Agent/Desktop tests, Agent Evaluation, full quality gates and real development/packaged Electron startup/reload scenarios; record canonical-path evidence and residual risks.

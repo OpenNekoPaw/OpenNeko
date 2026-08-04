@@ -828,6 +828,7 @@ function useDesktopAssetCenterScene(input: {
     );
   }, [assetCenterSessionId, input.endpointEpoch, input.scene.windowId, input.viewMode]);
   const [sessionProjection, setSessionProjection] = useState<AssetCenterSessionProjection>();
+  useDisposeRuntime(runtime);
   useEffect(() => {
     setSessionProjection(undefined);
     if (!runtime) return;
@@ -841,7 +842,6 @@ function useDesktopAssetCenterScene(input: {
     return () => {
       active = false;
       unsubscribe();
-      runtime.dispose();
     };
   }, [runtime]);
   return {
@@ -864,8 +864,25 @@ function useDesktopExtensionManagementScene(
       window.openNekoDesktop,
     );
   }, [endpointEpoch, scene.windowId, sessionId]);
-  useEffect(() => () => runtime?.dispose(), [runtime]);
+  useDisposeRuntime(runtime);
   return runtime;
+}
+
+function useDisposeRuntime<T extends { dispose(): void }>(runtime: T | undefined): void {
+  const disposalTokens = useRef(new Map<T, symbol>());
+  useEffect(() => {
+    if (!runtime) return;
+    const token = Symbol('desktop-runtime-disposal');
+    disposalTokens.current.set(runtime, token);
+    return () => {
+      // StrictMode remounts effects without recreating the memoized runtime.
+      queueMicrotask(() => {
+        if (disposalTokens.current.get(runtime) !== token) return;
+        disposalTokens.current.delete(runtime);
+        runtime.dispose();
+      });
+    };
+  }, [runtime]);
 }
 
 function useDesktopProjectManagementScene(

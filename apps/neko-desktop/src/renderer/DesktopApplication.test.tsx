@@ -319,7 +319,7 @@ describe('DesktopApplication scene lifecycle', () => {
     );
     installBridge({ projection, assetCenterExecute });
 
-    const { container, root } = await renderApplication();
+    const { container, root } = await renderApplication(true);
     await waitFor(
       () => container.querySelector('[data-preview-session="preview:asset-center:1"]') !== null,
     );
@@ -330,6 +330,11 @@ describe('DesktopApplication scene lifecycle', () => {
       container.querySelector('[data-asset-preview-surface="preview-webview-adapter"]'),
     ).not.toBeNull();
     await act(async () => root.unmount());
+    await act(async () => Promise.resolve());
+    expect(assetCenterExecute.mock.calls.map(([request]) => request.route)).toEqual([
+      'attach',
+      'preview.detach',
+    ]);
   });
 
   it('turns Project selection into a compact management panel and primary Detail panel', async () => {
