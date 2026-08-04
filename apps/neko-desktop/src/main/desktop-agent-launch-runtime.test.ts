@@ -58,6 +58,75 @@ describe('Desktop Agent launch native adapter', () => {
     await runtime.detach(catalog.connection);
     expect(() => runtime.readCatalog(catalog.connection)).toThrow('Stale Agent launch connection');
   });
+
+  it('atomically binds exact unbound draft grants to Assistant scope', async () => {
+    let identity = 0;
+    const runtime = createDesktopAgentLaunchRuntime({
+      agent: {
+        readGlobalSkillCatalog: async () => ({ records: [], diagnostics: [], warnings: [] }),
+      },
+      config: { getAssistantConfigState: () => createConfigState() },
+      selectResource: async () => ({
+        label: 'brief.txt',
+        hostResource: '/Users/private/brief.txt',
+      }),
+      readTextResource: async () => 'Assistant brief',
+      createIdentity: () => `identity-${++identity}`,
+    });
+    const catalog = await runtime.attach({
+      applicationInstanceId: 'app-1',
+      windowId: 'window-1',
+      viewId: 'agent-view:window-1',
+      rendererEpoch: 1,
+      scope: { kind: 'unbound', draftId: 'draft:1' },
+    });
+    await runtime.authorizeResource(catalog.connection, 'file');
+    const assistantContext = {
+      schemaVersion: 1 as const,
+      kind: 'assistant' as const,
+      assistantSpaceId: 'assistant:1',
+      baseGrantIds: ['identity-2'],
+    };
+
+    await expect(
+      runtime.validateResourceGrants(assistantContext, ['identity-2']),
+    ).rejects.toThrow("Agent Resource grant 'identity-2' belongs to another scope.");
+    await expect(
+      runtime.bindAssistantResourceGrants(catalog.connection, 'assistant:1', [
+        'identity-2',
+        'missing-grant',
+      ]),
+    ).rejects.toThrow("Agent Resource grant 'missing-grant' does not belong to its launch connection.");
+    await expect(
+      runtime.validateResourceGrants(assistantContext, ['identity-2']),
+    ).rejects.toThrow("Agent Resource grant 'identity-2' belongs to another scope.");
+
+    const otherCatalog = await runtime.attach({
+      applicationInstanceId: 'app-1',
+      windowId: 'window-2',
+      viewId: 'agent-view:window-2',
+      rendererEpoch: 1,
+      scope: { kind: 'unbound', draftId: 'draft:2' },
+    });
+    await runtime.authorizeResource(otherCatalog.connection, 'file');
+    await expect(
+      runtime.bindAssistantResourceGrants(catalog.connection, 'assistant:1', ['identity-4']),
+    ).rejects.toThrow("Agent Resource grant 'identity-4' does not belong to its launch connection.");
+
+    await runtime.bindAssistantResourceGrants(catalog.connection, 'assistant:1', ['identity-2']);
+    await runtime.bindAssistantResourceGrants(catalog.connection, 'assistant:1', ['identity-2']);
+    await expect(
+      runtime.resolveResourceContexts(assistantContext, ['identity-2']),
+    ).resolves.toEqual([
+      {
+        type: 'file',
+        id: 'identity-2',
+        label: 'brief.txt',
+        summary: 'Authorized file: brief.txt',
+        data: { text: 'Assistant brief' },
+      },
+    ]);
+  });
 });
 
 function createConfigState() {

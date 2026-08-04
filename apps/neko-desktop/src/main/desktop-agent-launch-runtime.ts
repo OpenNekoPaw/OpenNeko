@@ -19,6 +19,15 @@ export interface DesktopAgentLaunchNativeSelection {
   readonly hostResource?: string;
 }
 
+interface DesktopAgentResourceGrant {
+  readonly connectionId: string;
+  readonly resourceKind: AgentLaunchResourceKind;
+  scope: AgentAuthorityScopeProjection;
+  readonly label: string;
+  readonly hostResource?: string;
+  conversationId?: string;
+}
+
 export interface DesktopAgentLaunchRuntime {
   attach(input: {
     readonly applicationInstanceId: string;
@@ -32,6 +41,11 @@ export interface DesktopAgentLaunchRuntime {
     connection: AgentLaunchConnectionIdentity,
     resourceKind: AgentLaunchResourceKind,
   ): Promise<AgentLaunchCatalogProjection | undefined>;
+  bindAssistantResourceGrants(
+    connection: AgentLaunchConnectionIdentity,
+    assistantSpaceId: string,
+    resourceGrantIds: readonly string[],
+  ): Promise<void>;
   detach(connection: AgentLaunchConnectionIdentity): Promise<void>;
   validateResourceGrants(
     context: AgentConversationContext,
@@ -66,17 +80,7 @@ export function createDesktopAgentLaunchRuntime(input: {
   readonly readTextResource: (hostResource: string) => Promise<string>;
 }): DesktopAgentLaunchRuntime {
   const createIdentity = input.createIdentity ?? randomUUID;
-  const grants = new Map<
-    string,
-    {
-      readonly connectionId: string;
-      readonly resourceKind: AgentLaunchResourceKind;
-      readonly scope: AgentAuthorityScopeProjection;
-      readonly label: string;
-      readonly hostResource?: string;
-      conversationId?: string;
-    }
-  >();
+  const grants = new Map<string, DesktopAgentResourceGrant>();
   const service: AgentLaunchApplicationService = createAgentLaunchApplicationService({
     createIdentity,
     catalog: {
@@ -127,6 +131,36 @@ export function createDesktopAgentLaunchRuntime(input: {
     readCatalog: (connection) => service.readCatalog(connection),
     authorizeResource: (connection, resourceKind) =>
       service.authorizeResource(connection, resourceKind),
+    async bindAssistantResourceGrants(connection, assistantSpaceId, resourceGrantIds) {
+      if (connection.scope.kind !== 'unbound') {
+        throw new Error('Assistant Resource grant binding requires an unbound launch connection.');
+      }
+      const targetScope = { kind: 'assistant' as const, assistantSpaceId };
+      const pending: DesktopAgentResourceGrant[] = [];
+      for (const resourceGrantId of resourceGrantIds) {
+        const grant = grants.get(resourceGrantId);
+        if (!grant || grant.connectionId !== connection.connectionId) {
+          throw new Error(
+            `Agent Resource grant '${resourceGrantId}' does not belong to its launch connection.`,
+          );
+        }
+        if (
+          grant.scope.kind === 'assistant' &&
+          grant.scope.assistantSpaceId === assistantSpaceId
+        ) {
+          continue;
+        }
+        if (
+          grant.scope.kind !== 'unbound' ||
+          grant.scope.draftId !== connection.scope.draftId ||
+          grant.conversationId
+        ) {
+          throw new Error(`Agent Resource grant '${resourceGrantId}' belongs to another scope.`);
+        }
+        pending.push(grant);
+      }
+      for (const grant of pending) grant.scope = targetScope;
+    },
     detach: (connection) => service.detach(connection),
     detachWindow: (windowId) => service.detachWindow(windowId),
     dispose: () => service.dispose(),

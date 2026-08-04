@@ -472,7 +472,8 @@ describe('DesktopAppHost', () => {
       createIdentity: () => `first-submit-${(identity += 1)}`,
       now: () => '2026-08-03T00:00:00.000Z',
     });
-    const fixture = await createShellAppHost({ conversationLifecycle });
+    const agentLaunch = createAgentLaunchRuntime();
+    const fixture = await createShellAppHost({ conversationLifecycle, agentLaunch });
     const scene = fixture.projection.window.scene;
     if (scene.context.kind !== 'agent' || scene.context.scope.kind !== 'unbound') {
       throw new Error('Assistant first-submit fixture requires an unbound Entry Draft.');
@@ -495,7 +496,7 @@ describe('DesktopAppHost', () => {
         schemaVersion: 1 as const,
         target: { kind: 'automatic-assistant' as const, draftId: scene.context.scope.draftId },
         messageText: 'Create a plan',
-        resourceGrantIds: [],
+        resourceGrantIds: ['grant:entry-1'],
         configuration: { providerId: 'openai', modelId: 'gpt-5', executionMode: 'ask' as const },
       },
     };
@@ -505,6 +506,11 @@ describe('DesktopAppHost', () => {
 
     expect(second).toEqual(first);
     expect(providerStart).toHaveBeenCalledOnce();
+    expect(agentLaunch.bindAssistantResourceGrants).toHaveBeenCalledWith(
+      connection,
+      'assistant-space:local-user',
+      ['grant:entry-1'],
+    );
     expect(first).toMatchObject({ status: 'committed' });
     const committedScene = await fixture.appHost.shell.getSceneProjection(fixture.windowId);
     expect(committedScene).toMatchObject({
@@ -1654,6 +1660,7 @@ function createAgentLaunchRuntime(): DesktopAgentLaunchRuntime {
       throw new Error('Agent launch catalog read is not expected by this AppHost test.');
     }),
     validateResourceGrants: vi.fn(async () => undefined),
+    bindAssistantResourceGrants: vi.fn(async () => undefined),
     resolveResourceContexts: vi.fn(async () => []),
     commitResourceGrants: vi.fn(),
     readConversationResourceGrants: vi.fn(() => []),

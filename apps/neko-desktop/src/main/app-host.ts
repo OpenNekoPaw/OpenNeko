@@ -536,6 +536,11 @@ export class DesktopAppHost {
           assistantSpaceId: scene.context.scope.assistantSpaceId,
           baseGrantIds: request.input.resourceGrantIds,
         };
+        await this.agentLaunch.bindAssistantResourceGrants(
+          connection,
+          scene.context.scope.assistantSpaceId,
+          request.input.resourceGrantIds,
+        );
         if (scene.context.scope.conversationId) {
           existingRecord = await this.conversationLifecycle.readFirstSubmitByRequest(
             request.requestId,
