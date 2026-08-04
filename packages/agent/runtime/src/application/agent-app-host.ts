@@ -53,7 +53,9 @@ import type {
   AgentHomeAttentionStatus,
   AgentHomeConversationSummary,
   AgentHomeProjection,
+  AgentConversationOwnerRef,
 } from '@neko/agent-contracts';
+import { AGENT_HOME_PROJECTION_VERSION } from '@neko/agent-contracts';
 import type { AgentCredentialRuntime } from '../pi/credential-runtime';
 import { resolveWorkspaceContentLocator } from '@neko/assets-node';
 import type { AssetWorkspaceResolution } from '@neko/assets-domain/contracts';
@@ -348,10 +350,11 @@ class DefaultAgentAppHost implements AgentAppHost {
     const conversations = this.options.catalogReader
       .listConversations(this.homeWorkspaceScope)
       .map((record) => {
+        const owner = projectAgentConversationOwner(record, this.homeConversationWorkspaceIds);
         const workspace = this.workspaces.get(record.workspaceId);
         return workspace
-          ? workspace.projectHomeConversation(record)
-          : projectAgentHomeConversationSummary(record, undefined, undefined);
+          ? workspace.projectHomeConversation(record, owner)
+          : projectAgentHomeConversationSummary(record, owner, undefined, undefined);
       })
       .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
     const attention = {
@@ -360,6 +363,7 @@ class DefaultAgentAppHost implements AgentAppHost {
       running: countAttention(conversations, 'running'),
     };
     return freezeClone({
+      schemaVersion: AGENT_HOME_PROJECTION_VERSION,
       revision: this.homeProjectionRevision,
       conversations,
       attention,
@@ -841,7 +845,10 @@ class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
     return this.requireProjection(conversationId).subscribe(listener);
   }
 
-  projectHomeConversation(record: PiConversationCatalogRecord): AgentHomeConversationSummary {
+  projectHomeConversation(
+    record: PiConversationCatalogRecord,
+    ownerRef: AgentConversationOwnerRef,
+  ): AgentHomeConversationSummary {
     this.requireActive();
     if (record.workspaceId !== this.workspaceId) {
       throw new Error(
@@ -851,6 +858,7 @@ class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
     const owner = this.conversations.get(record.conversationId);
     return projectAgentHomeConversationSummary(
       record,
+      ownerRef,
       owner?.projection.snapshot(),
       owner?.readActiveIdentity(),
     );
@@ -1223,6 +1231,7 @@ function composeEventSinks(
 
 export function projectAgentHomeConversationSummary(
   record: PiConversationCatalogRecord,
+  owner: AgentConversationOwnerRef,
   projection: ReturnType<ConversationProjectionStore['snapshot']> | undefined,
   active: Pick<PiToolRunIdentity, 'turnId' | 'runId'> | undefined,
 ): AgentHomeConversationSummary {
@@ -1291,15 +1300,39 @@ export function projectAgentHomeConversationSummary(
   }
   return {
     navigation: {
-      projectId: `content:${record.workspaceId}`,
-      workspaceId: record.workspaceId,
       conversationId: record.conversationId,
+      owner,
     },
     title: record.title,
     updatedAt: record.updatedAt,
     attention,
     lastActivity,
   };
+}
+
+function projectAgentConversationOwner(
+  record: PiConversationCatalogRecord,
+  assistantSpaceIds: readonly string[],
+): AgentConversationOwnerRef {
+  if (record.context?.kind === 'assistant') {
+    if (record.context.assistantSpaceId !== record.workspaceId) {
+      throw new Error(
+        `Agent catalog Conversation '${record.conversationId}' Assistant Space does not match its Pi runtime scope.`,
+      );
+    }
+    return { kind: 'assistant', assistantSpaceId: record.context.assistantSpaceId };
+  }
+  if (record.context?.kind === 'workspace') {
+    if (record.context.workspaceId !== record.workspaceId) {
+      throw new Error(
+        `Agent catalog Conversation '${record.conversationId}' Workspace context does not match its Pi runtime scope.`,
+      );
+    }
+    return { kind: 'workspace', workspaceId: record.context.workspaceId };
+  }
+  return assistantSpaceIds.includes(record.workspaceId)
+    ? { kind: 'assistant', assistantSpaceId: record.workspaceId }
+    : { kind: 'workspace', workspaceId: record.workspaceId };
 }
 
 function projectGenerationJobSummary(

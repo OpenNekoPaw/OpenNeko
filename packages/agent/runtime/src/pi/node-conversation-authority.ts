@@ -10,6 +10,7 @@ import {
   type SessionTreeEntry,
 } from '@earendil-works/pi-agent-core';
 import { NodeExecutionEnv } from '@earendil-works/pi-agent-core/node';
+import type { AgentConversationContext } from '@neko/agent-contracts';
 import { openNodePiConversationStorage } from './node-conversation-storage';
 
 export interface ConversationExecutionLease {
@@ -26,6 +27,7 @@ export interface PiConversationCatalogRecord {
   readonly activeBranchId: string;
   readonly createdAt: string;
   readonly updatedAt: string;
+  readonly context?: AgentConversationContext;
 }
 
 export interface PiConversationBranchRecord {

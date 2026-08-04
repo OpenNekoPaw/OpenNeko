@@ -58,6 +58,43 @@ describe('NodePiConversationCatalogReader', () => {
     );
   });
 
+  it('joins the exact persisted conversation context from the canonical SQLite snapshot', async () => {
+    await createConversation('assistant-space:local-user', 'conversation-assistant');
+    await writeConversationContext('conversation-assistant', 1, {
+      schemaVersion: 1,
+      kind: 'assistant',
+      assistantSpaceId: 'assistant-space:local-user',
+      baseGrantIds: [],
+    });
+    const reader = await NodePiConversationCatalogReader.create({ userDataRoot: root });
+    readers.push(reader);
+
+    expect(reader.findConversation('conversation-assistant')).toMatchObject({
+      conversationId: 'conversation-assistant',
+      context: {
+        schemaVersion: 1,
+        kind: 'assistant',
+        assistantSpaceId: 'assistant-space:local-user',
+      },
+    });
+  });
+
+  it('fails visibly when persisted context metadata has a mismatched version', async () => {
+    await createConversation('workspace-a', 'conversation-a');
+    await writeConversationContext('conversation-a', 2, {
+      schemaVersion: 1,
+      kind: 'workspace',
+      workspaceId: 'workspace-a',
+      workspaceGrantId: 'grant-a',
+    });
+    const reader = await NodePiConversationCatalogReader.create({ userDataRoot: root });
+    readers.push(reader);
+
+    expect(() => reader.findConversation('conversation-a')).toThrow(
+      "Pi conversation context version '2' does not match its payload.",
+    );
+  });
+
   async function createConversation(
     workspaceId: string,
     conversationId: string,
@@ -77,5 +114,30 @@ describe('NodePiConversationCatalogReader', () => {
     });
     authority.releaseLease(lease);
     return authority;
+  }
+
+  async function writeConversationContext(
+    conversationId: string,
+    contextVersion: number,
+    context: object,
+  ): Promise<void> {
+    const sqlite = await import('node:sqlite');
+    const database = new sqlite.DatabaseSync(join(root, 'neko.db'));
+    try {
+      database.exec(`CREATE TABLE IF NOT EXISTS agent_conversation_context (
+        conversation_id TEXT PRIMARY KEY,
+        context_version INTEGER NOT NULL,
+        context_json TEXT NOT NULL
+      ) STRICT`);
+      database
+        .prepare(
+          `INSERT INTO agent_conversation_context(
+             conversation_id, context_version, context_json
+           ) VALUES (?, ?, ?)`,
+        )
+        .run(conversationId, contextVersion, JSON.stringify(context));
+    } finally {
+      database.close();
+    }
   }
 });

@@ -376,9 +376,11 @@ describe('AgentAppHost', () => {
       expect.arrayContaining([
         expect.objectContaining({
           navigation: {
-            projectId: `content:${fixture.workspace.workspaceId}`,
-            workspaceId: fixture.workspace.workspaceId,
             conversationId: 'conversation-a',
+            owner: {
+              kind: 'workspace',
+              workspaceId: fixture.workspace.workspaceId,
+            },
           },
           attention: 'none',
           lastActivity: expect.objectContaining({ kind: 'turn-completed' }),
@@ -405,8 +407,11 @@ describe('AgentAppHost', () => {
       conversations: [
         {
           navigation: {
-            workspaceId: fixture.workspace.workspaceId,
             conversationId: 'conversation-cold-start',
+            owner: {
+              kind: 'workspace',
+              workspaceId: fixture.workspace.workspaceId,
+            },
           },
           attention: 'none',
         },
@@ -591,6 +596,7 @@ describe('AgentAppHost', () => {
         createdAt: '2026-07-28T00:00:00.000Z',
         updatedAt: '2026-07-28T00:01:00.000Z',
       },
+      { kind: 'workspace', workspaceId: 'workspace-1' },
       {
         conversationId: 'conversation-generation',
         projectionVersion: 1,
@@ -657,6 +663,7 @@ describe('AgentAppHost', () => {
         createdAt: '2026-07-28T00:00:00.000Z',
         updatedAt: '2026-07-28T00:01:00.000Z',
       },
+      { kind: 'workspace', workspaceId: 'workspace-1' },
       {
         conversationId: 'conversation-confirmation',
         projectionVersion: 1,

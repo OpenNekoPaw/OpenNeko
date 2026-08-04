@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
+import { parseAgentConversationContext } from '@neko/agent-contracts';
 import type { PiConversationCatalogRecord } from './node-conversation-authority';
 import { openNodePiConversationStorage } from './node-conversation-storage';
 
@@ -52,12 +53,15 @@ export class NodePiConversationCatalogReader implements PiConversationCatalogRea
     });
     try {
       const placeholders = scope.map(() => '?').join(', ');
+      const contextProjection = conversationContextProjection(database);
       return database
         .prepare(
-          `SELECT workspace_id, conversation_id, title, active_branch_id, created_at, updated_at
-             FROM pi_conversations
-            WHERE workspace_id IN (${placeholders})
-            ORDER BY updated_at DESC`,
+          `SELECT p.workspace_id, p.conversation_id, p.title, p.active_branch_id,
+                  p.created_at, p.updated_at, ${contextProjection.select}
+             FROM pi_conversations p
+             ${contextProjection.join}
+            WHERE p.workspace_id IN (${placeholders})
+            ORDER BY p.updated_at DESC`,
         )
         .all(...scope)
         .map(parseConversationRecord);
@@ -75,11 +79,14 @@ export class NodePiConversationCatalogReader implements PiConversationCatalogRea
       timeout: 5_000,
     });
     try {
+      const contextProjection = conversationContextProjection(database);
       const rows = database
         .prepare(
-          `SELECT workspace_id, conversation_id, title, active_branch_id, created_at, updated_at
-             FROM pi_conversations
-            WHERE conversation_id = ?`,
+          `SELECT p.workspace_id, p.conversation_id, p.title, p.active_branch_id,
+                  p.created_at, p.updated_at, ${contextProjection.select}
+             FROM pi_conversations p
+             ${contextProjection.join}
+            WHERE p.conversation_id = ?`,
         )
         .all(exactConversationId);
       if (rows.length > 1) {
@@ -104,6 +111,18 @@ function parseConversationRecord(value: unknown): PiConversationCatalogRecord {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     throw new TypeError('Pi conversation catalog row must be an object.');
   }
+  const contextJson = readOptionalString(value, 'context_json');
+  const contextVersion = readOptionalInteger(value, 'context_version');
+  if ((contextJson === undefined) !== (contextVersion === undefined)) {
+    throw new TypeError('Pi conversation catalog row has incomplete context metadata.');
+  }
+  const context =
+    contextJson === undefined ? undefined : parseAgentConversationContext(JSON.parse(contextJson));
+  if (context !== undefined && context.schemaVersion !== contextVersion) {
+    throw new TypeError(
+      `Pi conversation context version '${String(contextVersion)}' does not match its payload.`,
+    );
+  }
   return Object.freeze({
     workspaceId: readRequiredString(value, 'workspace_id'),
     conversationId: readRequiredString(value, 'conversation_id'),
@@ -111,12 +130,46 @@ function parseConversationRecord(value: unknown): PiConversationCatalogRecord {
     activeBranchId: readRequiredString(value, 'active_branch_id'),
     createdAt: readRequiredString(value, 'created_at'),
     updatedAt: readRequiredString(value, 'updated_at'),
+    ...(context === undefined ? {} : { context }),
   });
+}
+
+function conversationContextProjection(database: DatabaseSync): {
+  readonly select: string;
+  readonly join: string;
+} {
+  const table = database
+    .prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?`)
+    .get('agent_conversation_context');
+  return table === undefined
+    ? { select: 'NULL AS context_version, NULL AS context_json', join: '' }
+    : {
+        select: 'c.context_version, c.context_json',
+        join: 'LEFT JOIN agent_conversation_context c ON c.conversation_id = p.conversation_id',
+      };
 }
 
 function readRequiredString(value: object, key: string): string {
   const field = (value as Record<string, unknown>)[key];
   if (typeof field !== 'string' || field.length === 0) {
+    throw new TypeError(`Pi conversation catalog row has invalid ${key}.`);
+  }
+  return field;
+}
+
+function readOptionalString(value: object, key: string): string | undefined {
+  const field = Object.fromEntries(Object.entries(value))[key];
+  if (field === null || field === undefined) return undefined;
+  if (typeof field !== 'string' || field.length === 0) {
+    throw new TypeError(`Pi conversation catalog row has invalid ${key}.`);
+  }
+  return field;
+}
+
+function readOptionalInteger(value: object, key: string): number | undefined {
+  const field = Object.fromEntries(Object.entries(value))[key];
+  if (field === null || field === undefined) return undefined;
+  if (typeof field !== 'number' || !Number.isSafeInteger(field) || field < 0) {
     throw new TypeError(`Pi conversation catalog row has invalid ${key}.`);
   }
   return field;
