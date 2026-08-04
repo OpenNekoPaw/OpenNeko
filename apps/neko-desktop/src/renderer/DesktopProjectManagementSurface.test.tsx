@@ -6,7 +6,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { I18nProvider } from '@neko/ui/i18n/react';
 import {
   DesktopProjectCatalogSurface,
-  DesktopProjectDetailSurface,
   filterAndSortProjectCatalog,
 } from './DesktopProjectManagementSurface';
 import { createDesktopI18n } from './i18n';
@@ -22,54 +21,35 @@ describe('Desktop Project Management surfaces', () => {
     const onSelect = vi.fn();
     const onOpen = vi.fn();
     const { container, root } = await renderWithI18n(
-      <>
-        <DesktopProjectCatalogSurface
-          interactive
-          onSelect={onSelect}
-          projects={[project()]}
-          sessionId="project-management:1"
-        />
-        <DesktopProjectDetailSurface
-          interactive
-          onOpen={onOpen}
-          project={project()}
-          sessionId="project-management:1"
-        />
-      </>,
+      <DesktopProjectCatalogSurface
+        interactive
+        onOpen={onOpen}
+        onSelect={onSelect}
+        projects={[project()]}
+        sessionId="project-management:1"
+      />,
     );
     await act(async () => findButton(container, 'Demo').click());
     expect(onSelect).toHaveBeenCalledWith('project-1');
     expect(onOpen).not.toHaveBeenCalled();
-    await act(async () => findButton(container, 'Open project').click());
+    await act(async () => findButton(container, 'Open project: Demo').click());
     expect(onOpen).toHaveBeenCalledWith('project-1');
     await act(async () => root.unmount());
   });
 
-  it('renders an owner-qualified empty detail and sorts deterministically', async () => {
-    const markup = await renderWithI18n(
-      <DesktopProjectDetailSurface
-        interactive={false}
-        onOpen={vi.fn()}
-        sessionId="project-management:empty"
-      />,
-    );
-    expect(
-      markup.container.querySelector(
-        '[data-project-management-session="project-management:empty"]',
-      ),
-    ).not.toBeNull();
+  it('sorts the catalog deterministically without creating a Detail surface', () => {
     expect(
       filterAndSortProjectCatalog([project('b'), project('a')], '', 'name-ascending').map(
         (item) => item.displayName,
       ),
     ).toEqual(['a', 'b']);
-    await act(async () => markup.root.unmount());
   });
 
   it('renders an explicit empty catalog state', async () => {
     const markup = await renderWithI18n(
       <DesktopProjectCatalogSurface
         interactive
+        onOpen={vi.fn()}
         onSelect={vi.fn()}
         projects={[]}
         sessionId="project-management:empty-catalog"
@@ -96,6 +76,7 @@ async function renderWithI18n(node: JSX.Element) {
 function findButton(container: HTMLElement, label: string): HTMLButtonElement {
   const button = [...container.querySelectorAll('button')].find(
     (candidate) =>
+      candidate.getAttribute('aria-label') === label ||
       candidate.textContent?.trim() === label ||
       candidate.querySelector('strong')?.textContent?.trim() === label,
   );

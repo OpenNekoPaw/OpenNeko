@@ -121,8 +121,14 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
     ) {
       throw new Error('Asset Preview was not composed as an image in Secondary Main.');
     }
-    if (!assetPreview.previewDescriptorHeaderVisible) {
-      throw new Error('Asset Preview lost its descriptor header inside the tabless detail shell.');
+    if (assetPreview.previewDescriptorHeaderVisible) {
+      throw new Error('Asset Preview rendered a duplicate descriptor header.');
+    }
+    if (
+      assetPreview.primaryMainBackground !== assetPreview.secondaryMainBackground ||
+      assetPreview.previewBackground !== 'rgba(0, 0, 0, 0)'
+    ) {
+      throw new Error('Asset Preview did not inherit the management shell theme.');
     }
     const assetPreviewResize = await exerciseManagementMainSplit(evaluate, drag);
     const assetPreviewScreenshot = await screenshot('asset-management-with-preview-large');
@@ -194,15 +200,21 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
     await waitForNavigationButton(evaluate, 3);
     await click('.home-primary-navigation .home-nav-button', 3);
     await waitForSelector('.project-management-catalog .management-surface-row');
-    await click('.project-management-catalog .management-surface-row');
-    await waitForSelector('[data-workbench-main-panel="project-detail"]');
-    const projectDetail = await inspectWorkbench(evaluate, 'management', 'project-management');
-    assertManagementDetailSplit(projectDetail, 'project-management', 'project-detail');
-    if (!projectDetail.projectDetailInSecondary) {
-      throw new Error('Project Detail was not composed in the shared Secondary Main panel.');
+    await click('.project-management-catalog .management-surface-row__select');
+    await waitForSelector(
+      '.project-management-catalog .management-surface-row[data-selected="true"]',
+    );
+    const projectSelection = await inspectWorkbench(evaluate, 'management', 'project-management');
+    assertSharedManagementPanel(projectSelection, 'project-management');
+    if (
+      projectSelection.projectDetailInSecondary ||
+      projectSelection.mainPanelIds.includes('project-detail') ||
+      !projectSelection.projectOpenActionVisible
+    ) {
+      throw new Error('Project selection reserved a sparse Detail shell or lost explicit open.');
     }
-    const projectDetailScreenshot = await screenshot('project-management-with-detail-large');
-    checkpoint('project-management-with-detail-large', projectDetail);
+    const projectSelectionScreenshot = await screenshot('project-management-selected-large');
+    checkpoint('project-management-selected-large', projectSelection);
 
     await waitForNavigationButton(evaluate, 1);
     await click('.home-primary-navigation .home-nav-button', 1);
@@ -339,7 +351,7 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
         assets,
         extensions,
         projects,
-        projectDetail,
+        projectSelection,
         settings,
         workspace,
         workspacePreview,
@@ -353,7 +365,7 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
         assetPreviewScreenshot,
         extensionsScreenshot,
         projectsScreenshot,
-        projectDetailScreenshot,
+        projectSelectionScreenshot,
         workspaceScreenshot,
         workspacePreviewScreenshot,
         smallAssetsScreenshot,
@@ -1079,6 +1091,9 @@ async function inspectWorkbench(evaluate, expectedShape, expectedOwner) {
     const previewPresentation = shell.querySelector(
       '.neko-controlled-workbench-main__secondary [data-preview-presentation-owner="preview-webview"]',
     );
+    const previewStyle = previewPresentation instanceof HTMLElement
+      ? getComputedStyle(previewPresentation)
+      : undefined;
     return {
       shellCount: document.querySelectorAll('[data-neko-controlled-workbench="true"]').length,
       primaryCount: document.querySelectorAll('[data-primary-sidebar="application"]').length,
@@ -1101,6 +1116,7 @@ async function inspectWorkbench(evaluate, expectedShape, expectedOwner) {
         previewPresentation instanceof HTMLElement
           ? previewPresentation.getBoundingClientRect().height
           : 0,
+      previewBackground: previewStyle?.backgroundColor,
       previewDescriptorHeaderVisible: Boolean(
         shell.querySelector(
           '.neko-controlled-workbench-main__secondary .neko-preview-root > header',
@@ -1110,6 +1126,9 @@ async function inspectWorkbench(evaluate, expectedShape, expectedOwner) {
         shell.querySelector(
           '.neko-controlled-workbench-main__secondary .project-management-detail',
         ),
+      ),
+      projectOpenActionVisible: Boolean(
+        shell.querySelector('.project-management-catalog .management-surface-row-actions button'),
       ),
       mainPanelIds: [...shell.querySelectorAll('[data-workbench-main-panel]')].map(
         (element) => element.getAttribute('data-workbench-main-panel'),
@@ -1161,12 +1180,14 @@ async function inspectWorkbench(evaluate, expectedShape, expectedOwner) {
       primaryMainBorderRadius: primaryMainStyle?.borderRadius,
       primaryMainOverflow: primaryMainStyle?.overflow,
       primaryMainShadow: primaryMainStyle?.boxShadow,
+      primaryMainBackground: primaryMainStyle?.backgroundColor,
       secondaryMainBorderWidth: secondaryMainStyle
         ? parseFloat(secondaryMainStyle.borderTopWidth)
         : 0,
       secondaryMainBorderRadius: secondaryMainStyle?.borderRadius,
       secondaryMainOverflow: secondaryMainStyle?.overflow,
       secondaryMainShadow: secondaryMainStyle?.boxShadow,
+      secondaryMainBackground: secondaryMainStyle?.backgroundColor,
       mainPanelsOverlap:
         mainPrimaryRect !== undefined && mainSecondaryRect !== undefined
           ? mainPrimaryRect.right > mainSecondaryRect.left + 1

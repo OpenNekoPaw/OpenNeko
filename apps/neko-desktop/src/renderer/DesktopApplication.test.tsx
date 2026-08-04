@@ -363,7 +363,7 @@ describe('DesktopApplication scene lifecycle', () => {
     ]);
   });
 
-  it('turns Project selection into a compact management panel and primary Detail panel', async () => {
+  it('keeps low-information Project selection in the full management Main', async () => {
     const base = createProjection();
     const project = {
       projectId: 'content:workspace-1',
@@ -381,14 +381,20 @@ describe('DesktopApplication scene lifecycle', () => {
     installBridge({ projection });
 
     const { container, root } = await renderApplication();
-    const projectButton = container.querySelector<HTMLButtonElement>('.management-surface-row');
+    const projectButton = container.querySelector<HTMLButtonElement>(
+      '.management-surface-row__select',
+    );
     if (!projectButton) throw new Error('Project management fixture requires a Project row.');
     await act(async () => projectButton.click());
-    await waitFor(
-      () => container.querySelector('[data-workbench-main-panel="project-detail"]') !== null,
-    );
+    await waitFor(() => projectButton.getAttribute('aria-pressed') === 'true');
 
-    expectManagementSplit(container, 'project-management', 'project-detail');
+    const shell = container.querySelector<HTMLElement>('[data-neko-controlled-workbench="true"]');
+    expect(shell?.dataset.mainSplit).toBe('none');
+    expect(shell?.dataset.mainComposition).toBe('continuous');
+    expect(container.querySelector('[data-workbench-main-panel="project-detail"]')).toBeNull();
+    expect(container.querySelector('[data-workbench-main-shell="secondary"]')).toBeNull();
+    expect(container.querySelector('[data-workbench-main-gutter="true"]')).toBeNull();
+    expect(container.querySelector('[aria-label="Open project: Project one"]')).not.toBeNull();
     expect(container.textContent).toContain('Project one');
     await act(async () => root.unmount());
   });

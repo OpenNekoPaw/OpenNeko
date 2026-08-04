@@ -167,7 +167,8 @@ describe('Desktop renderer styles', () => {
     expect(rootRule?.groups?.body).toMatch(/margin\s*:\s*0 auto/u);
     expect(rootRule?.groups?.body).toMatch(/padding\s*:\s*clamp\(66px, 10vh, 104px\) 0 52px/u);
     expect(styles).toMatch(/\.management-surface-list\s*\{[\s\S]*?display\s*:\s*grid/u);
-    expect(styles).toMatch(/\.project-management-detail\s*\{[\s\S]*?height\s*:\s*100%/u);
+    expect(styles).toMatch(/\.management-surface-row-actions button\s*\{[\s\S]*?width\s*:\s*28px/u);
+    expect(styles).not.toMatch(/\.project-management-detail(?:__content)?\s*\{/u);
     expect(styles).not.toMatch(
       /\.home-(?:management|project-(?:selector|list|grid|card)|sort-control|search-field|segmented-control|status-badge)/u,
     );

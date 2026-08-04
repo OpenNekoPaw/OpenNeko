@@ -116,7 +116,9 @@ describe('PreviewRoot', () => {
           })}
         />,
       );
-      authorizedRoot.render(<AuthorizedPreviewRoot locale="en" runtime={authorizedRuntime} />);
+      authorizedRoot.render(
+        <AuthorizedPreviewRoot chrome="content-only" locale="en" runtime={authorizedRuntime} />,
+      );
     });
     await act(async () => Promise.resolve());
 
@@ -130,9 +132,10 @@ describe('PreviewRoot', () => {
       workspaceContainer.querySelector('.neko-preview-root')?.getAttribute('data-preview-chrome'),
     ).toBe('content-only');
     expect(workspaceContainer.querySelector('.neko-preview-root > header')).toBeNull();
-    expect(authorizedContainer.querySelector('.neko-preview-root__heading')?.textContent).toContain(
-      'shared.png',
-    );
+    expect(
+      authorizedContainer.querySelector('.neko-preview-root')?.getAttribute('data-preview-chrome'),
+    ).toBe('content-only');
+    expect(authorizedContainer.querySelector('.neko-preview-root > header')).toBeNull();
     expect(
       authorizedContainer
         .querySelector('.neko-preview-root')
