@@ -450,6 +450,31 @@ describe('MessageList auto-scroll lifecycle', () => {
     expect(screen.queryByRole('status', { name: 'Agent execution in progress' })).toBeNull();
   });
 
+  it('places every rendered transcript item inside the shared centered rail', () => {
+    virtualItems = [
+      { index: 0, key: 'message', start: 0 },
+      { index: 1, key: 'execution-activity', start: 80 },
+    ];
+    const { container } = renderWithI18n(
+      <MessageActionsProvider>
+        <MessageList
+          messages={[createMessage('message-1')]}
+          isThinking
+          streamingMessageId={null}
+          activeConversationId="conv-1"
+          agentState={{ phase: 'thinking', startedAt: Date.now() }}
+        />
+      </MessageActionsProvider>,
+    );
+
+    const items = [...container.querySelectorAll('.agent-message-list-item')];
+    const rails = [...container.querySelectorAll('.agent-transcript-rail')];
+    expect(rails).toHaveLength(items.length);
+    expect(
+      items.every((item) => item.firstElementChild?.classList.contains('agent-transcript-rail')),
+    ).toBe(true);
+  });
+
   it('does not render activation progress as a standalone row above messages', () => {
     virtualItems = [];
 

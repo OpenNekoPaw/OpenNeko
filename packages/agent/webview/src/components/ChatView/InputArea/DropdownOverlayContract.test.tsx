@@ -255,6 +255,8 @@ describe('dropdown overlay presentation contract', () => {
       ?.groups?.body;
     const shellRule = css.match(/\.agent-composer-shell\s*\{(?<body>[^}]+)\}/)?.groups?.body;
     const railRule = css.match(/\.agent-composer-rail\s*\{(?<body>[^}]+)\}/)?.groups?.body;
+    const transcriptRailRule = css.match(/\.agent-transcript-rail\s*\{(?<body>[^}]+)\}/)?.groups
+      ?.body;
     const narrowRule = css.match(/@media \(max-width: 520px\)\s*\{(?<body>[\s\S]+?)\n\}/)?.groups
       ?.body;
 
@@ -265,6 +267,9 @@ describe('dropdown overlay presentation contract', () => {
     expect(desktopDockRule).toContain('--agent-composer-rail-border: transparent');
     expect(shellRule).toContain('max-width: 820px');
     expect(shellRule).toContain('margin-inline: auto');
+    expect(transcriptRailRule).toContain('width: calc(100% - 24px)');
+    expect(transcriptRailRule).toContain('max-width: 820px');
+    expect(transcriptRailRule).toContain('margin-inline: auto');
     expect(railRule).toContain('padding:');
     expect(narrowRule).toContain('.agent-composer-toolbar');
     expect(narrowRule).toContain('flex-wrap: wrap');

@@ -64,7 +64,22 @@ function reconcilePendingUserMessages(
   });
   return retainedPendingMessages.length === 0
     ? hostMessages
-    : [...hostMessages, ...retainedPendingMessages];
+    : insertMessagesChronologically(hostMessages, retainedPendingMessages);
+}
+
+function insertMessagesChronologically(
+  messages: readonly Message[],
+  insertedMessages: readonly Message[],
+): readonly Message[] {
+  const merged = [...messages];
+  for (const message of insertedMessages) {
+    const insertionIndex = merged.findIndex(
+      (candidate) => candidate.timestamp >= message.timestamp,
+    );
+    if (insertionIndex === -1) merged.push(message);
+    else merged.splice(insertionIndex, 0, message);
+  }
+  return merged;
 }
 
 function isPendingUserMessage(message: Message): boolean {

@@ -88,11 +88,13 @@ export function Header({
           </button>
         ) : null}
 
-        <RoleplayMenu
-          items={roleplayItems}
-          onRequestItems={onRequestRoleplayItems}
-          onSelectItem={onSelectRoleplayItem}
-        />
+        {showConversationNavigation ? (
+          <RoleplayMenu
+            items={roleplayItems}
+            onRequestItems={onRequestRoleplayItems}
+            onSelectItem={onSelectRoleplayItem}
+          />
+        ) : null}
 
         {/* History dropdown */}
         {showConversationNavigation ? (

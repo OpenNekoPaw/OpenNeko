@@ -29,7 +29,7 @@ vi.mock('../../i18n/I18nContext', () => ({
 }));
 
 describe('Header', () => {
-  it('keeps role selection but hides package-owned conversation navigation in Desktop dock', () => {
+  it('hides all package-owned conversation navigation in Desktop dock', () => {
     render(
       <Header
         tabs={[]}
@@ -54,7 +54,7 @@ describe('Header', () => {
     const header = screen.getByRole('banner');
     expect(within(header).queryByRole('button', { name: 'New Chat' })).toBeNull();
     expect(within(header).queryByRole('button', { name: 'History' })).toBeNull();
-    expect(within(header).getByRole('button', { name: 'Role Session' })).toBeTruthy();
+    expect(within(header).queryByRole('button', { name: 'Role Session' })).toBeNull();
     expect(within(header).getByRole('button', { name: 'Account' })).toBeTruthy();
   });
 

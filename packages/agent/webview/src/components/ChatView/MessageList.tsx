@@ -259,41 +259,43 @@ export function MessageList({
               }}
             >
               <div className="agent-message-list-item py-0.5">
-                {item.kind === 'execution_activity' ? (
-                  <AgentExecutionActivity agentState={item.agentState} />
-                ) : item.kind === 'content_block' ? (
-                  <ContentBlockItem
-                    projection={item.projection}
-                    isFirst={item.isFirst}
-                    isLast={item.isLast}
-                    isStreaming={item.isStreaming}
-                    conversationId={activeConversationId}
-                    messageId={item.messageId}
-                    workItemIds={item.workItemIds}
-                    siblingBlocks={item.siblingBlocks}
-                    ambientToolCalls={item.ambientToolCalls}
-                    assistantIdentity={identities.assistant}
-                  />
-                ) : item.kind === 'process_group' ? (
-                  <ProcessRecordsGroup
-                    processGroup={item.processGroup}
-                    isFirst={item.isFirst}
-                    isStreaming={item.isStreaming}
-                    conversationId={activeConversationId}
-                    messageId={item.messageId}
-                    workItemIds={item.workItemIds}
-                    siblingBlocks={item.siblingBlocks}
-                    ambientToolCalls={item.ambientToolCalls}
-                    assistantIdentity={identities.assistant}
-                  />
-                ) : (
-                  <MessageItem
-                    message={item.message}
-                    isGrouped={item.isGrouped}
-                    conversationId={activeConversationId}
-                    identities={identities}
-                  />
-                )}
+                <div className="agent-transcript-rail">
+                  {item.kind === 'execution_activity' ? (
+                    <AgentExecutionActivity agentState={item.agentState} />
+                  ) : item.kind === 'content_block' ? (
+                    <ContentBlockItem
+                      projection={item.projection}
+                      isFirst={item.isFirst}
+                      isLast={item.isLast}
+                      isStreaming={item.isStreaming}
+                      conversationId={activeConversationId}
+                      messageId={item.messageId}
+                      workItemIds={item.workItemIds}
+                      siblingBlocks={item.siblingBlocks}
+                      ambientToolCalls={item.ambientToolCalls}
+                      assistantIdentity={identities.assistant}
+                    />
+                  ) : item.kind === 'process_group' ? (
+                    <ProcessRecordsGroup
+                      processGroup={item.processGroup}
+                      isFirst={item.isFirst}
+                      isStreaming={item.isStreaming}
+                      conversationId={activeConversationId}
+                      messageId={item.messageId}
+                      workItemIds={item.workItemIds}
+                      siblingBlocks={item.siblingBlocks}
+                      ambientToolCalls={item.ambientToolCalls}
+                      assistantIdentity={identities.assistant}
+                    />
+                  ) : (
+                    <MessageItem
+                      message={item.message}
+                      isGrouped={item.isGrouped}
+                      conversationId={activeConversationId}
+                      identities={identities}
+                    />
+                  )}
+                </div>
               </div>
             </div>
           );
