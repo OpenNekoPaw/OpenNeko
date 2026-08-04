@@ -102,3 +102,9 @@ src/runtime/projection/__tests__/pi-conversation-history-projector.test.ts` is t
   committed Assistant message renders immediately in session phase and restores through the exact
   recent-conversation identity after leaving the Agent scene. This does not replace the still-blocked
   provider-backed `assistant-first-submit-exactly-once` success case or prove model output quality.
+- Entry Draft mode selection and unavailable Character/Room dispatch are `excluded` from
+  provider-backed Evaluation. They are pre-session presentation decisions: changing a creative mode
+  may update only package-owned draft configuration, while owner binding remains an explicit card or
+  directory action. The focused `ConversationController` regression proves no Assistant transition,
+  conversation creation, draft submit, roleplay search or prompt menu participates. A real provider
+  turn cannot add evidence to this negative boundary because correct behavior starts no turn.

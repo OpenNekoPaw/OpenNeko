@@ -554,6 +554,54 @@ describe('ConversationController entry state', () => {
     expect(hostMocks.submitDraft).not.toHaveBeenCalled();
   });
 
+  it('keeps draft mode selection scope-neutral until an owner is selected', () => {
+    vi.clearAllMocks();
+    const selectAssistant = vi.fn();
+    render(
+      <ConversationController
+        {...createProps()}
+        agentPresentation={createAgentDraftPresentation('draft-entry-mode', {
+          kind: 'unbound',
+          draftId: 'draft-entry-mode',
+        })}
+        emptyStatePresentation="desktop-dock"
+        entryScopeActions={{ selectAssistant, selectWorkspace: vi.fn() }}
+      />,
+    );
+
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'keep this draft' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Select Video Generation' }));
+
+    expect(selectAssistant).not.toHaveBeenCalled();
+    expect(hostMocks.newConversation).not.toHaveBeenCalled();
+    expect(hostMocks.submitDraft).not.toHaveBeenCalled();
+    expect(screen.getByRole('textbox')).toHaveProperty('value', 'keep this draft');
+  });
+
+  it('keeps unavailable Character and Room selection out of the roleplay menu', () => {
+    vi.clearAllMocks();
+    render(
+      <ConversationController
+        {...createProps()}
+        agentPresentation={createAgentDraftPresentation('draft-entry-character', {
+          kind: 'unbound',
+          draftId: 'draft-entry-character',
+        })}
+        emptyStatePresentation="desktop-dock"
+        entryScopeActions={{ selectAssistant: vi.fn(), selectWorkspace: vi.fn() }}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Character / Room' }));
+
+    expect(screen.getByRole('alert').textContent).toContain(
+      'Character and Room scope is not available.',
+    );
+    expect(screen.getByTestId('entry-page-menu').textContent).toBe('none');
+    expect(hostMocks.searchProjectFiles).not.toHaveBeenCalled();
+    expect(hostMocks.newConversation).not.toHaveBeenCalled();
+  });
+
   it('removes Entry Draft owner choices after Workspace activation', () => {
     render(
       <ConversationController

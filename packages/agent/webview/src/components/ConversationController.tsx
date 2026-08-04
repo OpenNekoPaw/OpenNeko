@@ -1042,11 +1042,12 @@ export function ConversationController({
           setPendingSendRequest(null);
           setInitialInputRequest(null);
           setInitialSessionModeRequest(null);
-          setEntryPromptMenu('roleplay');
           if (agentPresentation?.kind === 'draft') {
+            setEntryPromptMenu(null);
             setGlobalError('Character and Room scope is not available.');
             return;
           }
+          setEntryPromptMenu('roleplay');
           handleRequestRoleplayItems();
           return;
       }
@@ -1198,14 +1199,6 @@ export function ConversationController({
     (mode: SessionMode) => {
       setEntrySessionMode(mode);
       setEntryAction('start-chat');
-      if (agentPresentation?.kind === 'draft' && agentPresentation.scope.kind === 'unbound') {
-        const selectAssistant = entryScopeActions?.selectAssistant;
-        if (!selectAssistant) {
-          setGlobalError('Assistant scope selection is unavailable.');
-        } else {
-          selectAssistant(agentPresentation.draftId);
-        }
-      }
       setEntryMediaModelSelection((prev) => {
         const projection = projectMediaModelSelectionForSessionModeChange({
           sessionMode: mode,
@@ -1215,11 +1208,16 @@ export function ConversationController({
         return projection.updated ? projection.mediaModelSelection : prev;
       });
     },
-    [activeSettings.chatModelOptions, agentPresentation, entryScopeActions],
+    [activeSettings.chatModelOptions],
   );
 
   const handleEntryGenerationModeSelect = useCallback(
     (mode: Extract<SessionMode, GenCategory>) => {
+      if (isDraftPresentation) {
+        handleEntrySessionModeChange(mode);
+        setEntryPromptMenu(null);
+        return;
+      }
       const messageText = entryInputValueRef.current.trim();
       handleEntrySessionModeChange(mode);
       startNewForegroundConversationWithGenerationMode(mode, messageText);
@@ -1227,6 +1225,7 @@ export function ConversationController({
     },
     [
       handleEntrySessionModeChange,
+      isDraftPresentation,
       startNewForegroundConversationWithGenerationMode,
       updateEntryInputValue,
     ],

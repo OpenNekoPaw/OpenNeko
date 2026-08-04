@@ -78,6 +78,13 @@ the exact active conversation and Tab at revision zero, and a missing conversati
 The initial-turn regression also proves preflight checkpoint idempotency and preservation of an
 existing Pi checkpoint after provider execution has started.
 
+The final quality review found and removed one implicit owner-binding path in the Entry Draft:
+changing creative mode no longer invokes Assistant selection or the legacy new-conversation path,
+and unavailable Character/Room selection no longer opens the roleplay prompt menu before reporting
+its diagnostic. The focused `ConversationController` regression passed `1 file / 50 tests` and
+asserts zero Assistant transition, conversation creation, draft submit and roleplay search while
+retaining the draft input.
+
 The final full rerun passed `pnpm build`, `pnpm test`, `pnpm check` and `pnpm check:quality`. The
 updated totals include Preview Webview `16 files / 85 tests`, Agent Webview `90 / 689`, Host
 `36 / 313`, Assets Node `9 / 50` and Desktop `65 / 326`.
