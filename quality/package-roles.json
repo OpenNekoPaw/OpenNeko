@@ -268,7 +268,7 @@
       "family": "search",
       "roles": ["node"],
       "runtimes": ["node"],
-      "productStatus": "retained-kernel",
+      "productStatus": "active-product",
       "architectureState": "converged"
     },
     {
