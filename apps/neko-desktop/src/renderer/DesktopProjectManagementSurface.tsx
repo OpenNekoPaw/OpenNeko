@@ -1,4 +1,4 @@
-import { FolderIcon, GridIcon, LayersIcon, SearchIcon } from '@neko/ui';
+import { FolderIcon, GridIcon, LayersIcon, OpenIcon, SearchIcon } from '@neko/ui';
 import { useTranslation } from '@neko/ui/i18n/react';
 import { useMemo, useState } from 'react';
 import type { DesktopProjectCatalogItem } from '@neko/host/desktop-shell-contract';
@@ -8,12 +8,14 @@ export type DesktopProjectManagementSort =
 
 export function DesktopProjectCatalogSurface({
   interactive,
+  onOpen,
   onSelect,
   projects,
   selectedProjectId,
   sessionId,
 }: {
   readonly interactive: boolean;
+  readonly onOpen: (projectId: string) => void;
   readonly onSelect: (projectId: string) => void;
   readonly projects: readonly DesktopProjectCatalogItem[];
   readonly selectedProjectId?: string;
@@ -69,60 +71,38 @@ export function DesktopProjectCatalogSurface({
           </div>
         ) : null}
         {visible.map((project) => (
-          <button
-            type="button"
+          <div
             className="management-surface-row"
-            aria-pressed={project.projectId === selectedProjectId}
-            disabled={!interactive}
+            data-selected={project.projectId === selectedProjectId}
             key={project.projectId}
-            onClick={() => onSelect(project.projectId)}
           >
-            <FolderIcon size={17} />
-            <span className="management-surface-copy">
-              <strong>{project.displayName}</strong>
-              <small>{formatProjectDate(project.updatedAt, locale)}</small>
+            <button
+              type="button"
+              className="management-surface-row__select"
+              aria-pressed={project.projectId === selectedProjectId}
+              disabled={!interactive}
+              onClick={() => onSelect(project.projectId)}
+            >
+              <FolderIcon size={17} />
+              <span className="management-surface-copy">
+                <strong>{project.displayName}</strong>
+                <small>{formatProjectDate(project.updatedAt, locale)}</small>
+              </span>
+            </button>
+            <span className="management-surface-row-actions">
+              <button
+                type="button"
+                aria-label={`${t('home.openProject')}: ${project.displayName}`}
+                disabled={!interactive}
+                title={t('home.openProject')}
+                onClick={() => onOpen(project.projectId)}
+              >
+                <OpenIcon size={15} />
+              </button>
             </span>
-          </button>
+          </div>
         ))}
       </div>
-    </section>
-  );
-}
-
-export function DesktopProjectDetailSurface({
-  interactive,
-  onOpen,
-  project,
-  sessionId,
-}: {
-  readonly interactive: boolean;
-  readonly onOpen: (projectId: string) => void;
-  readonly project?: DesktopProjectCatalogItem;
-  readonly sessionId: string;
-}): JSX.Element {
-  const { locale, t } = useTranslation();
-  return (
-    <section className="project-management-detail" data-project-management-session={sessionId}>
-      {project ? (
-        <div className="project-management-detail__content">
-          <FolderIcon size={26} />
-          <h2>{project.displayName}</h2>
-          <dl>
-            <dt>{t('home.projects.updated')}</dt>
-            <dd>{formatProjectDate(project.updatedAt, locale)}</dd>
-            <dt>{t('home.projects.created')}</dt>
-            <dd>{formatProjectDate(project.createdAt, locale)}</dd>
-          </dl>
-          <button type="button" disabled={!interactive} onClick={() => onOpen(project.projectId)}>
-            {t('home.openProject')}
-          </button>
-        </div>
-      ) : (
-        <div className="management-surface-empty">
-          <FolderIcon size={24} />
-          <span>{t('home.projects.select')}</span>
-        </div>
-      )}
     </section>
   );
 }

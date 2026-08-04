@@ -49,7 +49,7 @@ export function DesktopAssistantPreviewSurface({
   );
   return (
     <Suspense fallback={null}>
-      <AuthorizedPreviewRoot locale={locale} runtime={runtime} />
+      <AuthorizedPreviewRoot chrome="content-only" locale={locale} runtime={runtime} />
     </Suspense>
   );
 }

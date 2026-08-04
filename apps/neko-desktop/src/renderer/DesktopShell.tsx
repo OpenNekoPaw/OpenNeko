@@ -58,10 +58,7 @@ import {
 import { DesktopAssetManagementSurface } from './DesktopAssetManagementSurface';
 import { DesktopExtensionManagementSurface } from './DesktopExtensionManagementSurface';
 import { DesktopExtensionManagementRuntime } from './desktop-extension-management-runtime';
-import {
-  DesktopProjectCatalogSurface,
-  DesktopProjectDetailSurface,
-} from './DesktopProjectManagementSurface';
+import { DesktopProjectCatalogSurface } from './DesktopProjectManagementSurface';
 import { DesktopAssetCenterMainSurface } from './DesktopAssetCenterMainSurface';
 import { DesktopAssistantPreviewSurface } from './DesktopAssistantPreviewSurface';
 import { DesktopAssetCenterRuntime } from './desktop-asset-center-runtime';
@@ -433,7 +430,7 @@ function DesktopSceneWorkbench({
         projection={assetCenter.projection}
       />
     ) : undefined;
-  const managementDetailVisible = Boolean(assetPreview || projectManagement.project);
+  const managementDetailVisible = Boolean(assetPreview);
   const mainContent =
     settingsSection !== undefined ? (
       <DesktopSettingsMainSurface section={settingsSection} />
@@ -451,6 +448,7 @@ function DesktopSceneWorkbench({
     ) : scene.context.kind === 'project-management' ? (
       <DesktopProjectCatalogSurface
         interactive={interactive}
+        onOpen={actions.onSelectProject}
         onSelect={projectManagement.select}
         projects={projection.catalog.projects}
         selectedProjectId={projectManagement.project?.projectId}
@@ -486,7 +484,7 @@ function DesktopSceneWorkbench({
         label={t('home.allProjects')}
         panelId="project-management"
         role="management"
-        size={managementDetailVisible ? 'compact' : 'full'}
+        size="full"
       >
         {mainContent}
       </StaticWorkbenchMainPanelSurface>
@@ -507,34 +505,18 @@ function DesktopSceneWorkbench({
       workspaceSlots.leftDock
     ) : undefined;
   const workspaceScene = scene.context.kind === 'agent' && scene.context.scope.kind === 'workspace';
-  const managementSplitScene =
-    scene.context.kind === 'asset-center' || scene.context.kind === 'project-management';
+  const managementSplitScene = scene.context.kind === 'asset-center';
   const rightDock = workspaceScene ? workspaceSlots.rightDock : undefined;
   const secondaryMainContent =
-    scene.context.kind === 'asset-center' ? (
-      assetPreview
-    ) : scene.context.kind === 'project-management' && projectManagement.project ? (
-      <DesktopProjectDetailSurface
-        interactive={interactive}
-        onOpen={actions.onSelectProject}
-        project={projectManagement.project}
-        sessionId={scene.context.projectManagementSessionId}
-      />
-    ) : workspaceScene ? (
-      workspaceSlots.secondaryMain
-    ) : undefined;
+    scene.context.kind === 'asset-center'
+      ? assetPreview
+      : workspaceScene
+        ? workspaceSlots.secondaryMain
+        : undefined;
   const secondaryMain = assetPreview ? (
     <StaticWorkbenchMainPanelSurface
       label={t('workspace.preview')}
       panelId="asset-preview"
-      role="detail"
-    >
-      {secondaryMainContent}
-    </StaticWorkbenchMainPanelSurface>
-  ) : projectManagement.project ? (
-    <StaticWorkbenchMainPanelSurface
-      label={projectManagement.project.displayName}
-      panelId="project-detail"
       role="detail"
     >
       {secondaryMainContent}

@@ -36,6 +36,12 @@ export interface PreviewRootProps {
 
 export type PreviewChrome = 'default' | 'content-only';
 
+export interface AuthorizedPreviewRootProps {
+  readonly runtime: AuthorizedPreviewSessionRuntime;
+  readonly locale: SupportedLocale;
+  readonly chrome?: PreviewChrome;
+}
+
 export interface QuickPreviewSurfaceProps {
   readonly descriptor: PreviewMediaDescriptor;
   readonly locale: SupportedLocale;
@@ -127,7 +133,12 @@ export function PreviewPresentation({
 }): ReactElement {
   const viewer = VIEWERS.find((candidate) => candidate.kind === descriptor.contentKind);
   if (!viewer) {
-    return <PreviewStatus message={label(locale, '没有可用的预览器', 'No viewer is available')} />;
+    return (
+      <PreviewStatus
+        chrome={chrome}
+        message={label(locale, '没有可用的预览器', 'No viewer is available')}
+      />
+    );
   }
   return (
     <section
@@ -197,11 +208,14 @@ export function PreviewRoot({
   }, [runtime]);
 
   if (state.kind === 'loading') {
-    return <PreviewStatus message={label(locale, '正在载入预览…', 'Loading preview…')} />;
+    return (
+      <PreviewStatus chrome={chrome} message={label(locale, '正在载入预览…', 'Loading preview…')} />
+    );
   }
   if (state.kind === 'error') {
     return (
       <PreviewStatus
+        chrome={chrome}
         error
         message={state.message}
         title={label(locale, '预览不可用', 'Preview unavailable')}
@@ -212,6 +226,7 @@ export function PreviewRoot({
   if (projection.status !== 'ready') {
     return (
       <PreviewStatus
+        chrome={chrome}
         error
         message={projection.diagnostic.message}
         title={
@@ -277,12 +292,10 @@ export function PreviewRoot({
 }
 
 export function AuthorizedPreviewRoot({
+  chrome = 'default',
   locale,
   runtime,
-}: {
-  readonly locale: SupportedLocale;
-  readonly runtime: AuthorizedPreviewSessionRuntime;
-}): ReactElement {
+}: AuthorizedPreviewRootProps): ReactElement {
   const [projection, setProjection] = useState<AuthorizedPreviewSessionProjection>();
   const [error, setError] = useState<string>();
   useEffect(() => {
@@ -307,17 +320,20 @@ export function AuthorizedPreviewRoot({
     };
   }, [runtime]);
   if (error) {
-    return <PreviewStatus error message={error} />;
+    return <PreviewStatus chrome={chrome} error message={error} />;
   }
   if (!projection) {
-    return <PreviewStatus message={label(locale, '正在载入预览…', 'Loading preview…')} />;
+    return (
+      <PreviewStatus chrome={chrome} message={label(locale, '正在载入预览…', 'Loading preview…')} />
+    );
   }
   if (projection.status !== 'ready') {
-    return <PreviewStatus error message={projection.diagnostic.message} />;
+    return <PreviewStatus chrome={chrome} error message={projection.diagnostic.message} />;
   }
   return (
     <PreviewPresentation
       authorizedPreviewSessionId={projection.identity.previewSessionId}
+      chrome={chrome}
       descriptor={projection.descriptor}
       locale={locale}
     />
@@ -325,10 +341,12 @@ export function AuthorizedPreviewRoot({
 }
 
 function PreviewStatus({
+  chrome = 'default',
   error = false,
   message,
   title,
 }: {
+  readonly chrome?: PreviewChrome;
   readonly error?: boolean;
   readonly message: string;
   readonly title?: string;
@@ -336,6 +354,7 @@ function PreviewStatus({
   return (
     <div
       className={`neko-preview-root__status${error ? ' is-error' : ''}`}
+      data-preview-chrome={chrome}
       role={error ? 'alert' : 'status'}
     >
       {title ? <strong>{title}</strong> : null}
