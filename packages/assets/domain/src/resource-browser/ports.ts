@@ -1,5 +1,6 @@
 import type { CreativeEntity, EntityRepresentationBinding } from '@neko/entity-domain';
 import type { ContentLocator } from '@neko/content';
+import type { GlobalAssetItem } from '../global-library/contract';
 import type {
   MediaLibraryProjectionEntry,
   WorkspaceMediaLibraryStatus,
@@ -59,9 +60,18 @@ export interface ResourceBrowserEntityReader {
   }>;
 }
 
+export interface ResourceBrowserAssetReader {
+  list(input: {
+    readonly identity: ResourceBrowserIdentity;
+    readonly query: string;
+    readonly limit: number;
+  }): Promise<readonly GlobalAssetItem[]>;
+}
+
 export interface ResourceBrowserProjectionSource {
   readonly files: ResourceBrowserFilesReader;
   readonly media: ResourceBrowserMediaSearch;
+  readonly assets: ResourceBrowserAssetReader;
   readonly entities: ResourceBrowserEntityReader;
   refresh(identity: ResourceBrowserIdentity): Promise<void>;
 }

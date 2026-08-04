@@ -91,6 +91,7 @@ describe('Desktop Resource Browser source', () => {
       locator: { kind: 'relative' as const, value: 'workspace' },
     };
     const source = createResourceBrowserNodeReadSource({
+      globalAssetRoot: path.join(fixture.root, '.openneko', 'assets'),
       workspace,
       host,
       workspaceMediaLibrarySync: new WorkspaceMediaLibrarySyncService(
@@ -159,6 +160,7 @@ describe('Desktop Resource Browser source', () => {
       path.join(fixture.root, '.openneko', 'media-libraries'),
     );
     const source = createResourceBrowserNodeReadSource({
+      globalAssetRoot: path.join(fixture.root, '.openneko', 'assets'),
       workspace,
       host,
       workspaceMediaLibrarySync,
@@ -320,6 +322,7 @@ describe('Desktop Resource Browser source', () => {
       logger: createLogger(),
     });
     const source = createResourceBrowserNodeReadSource({
+      globalAssetRoot: path.join(fixture.root, '.openneko', 'assets'),
       workspace: {
         workspaceId: identity.workspaceId,
         workspacePath: fixture.workspace,
@@ -337,8 +340,11 @@ describe('Desktop Resource Browser source', () => {
     ]);
   });
 
-  it('projects workspace files, linked media and Character representations as portable locators', async () => {
+  it('projects Files, Media, Assets and Entities through their owning identities', async () => {
     const fixture = await createFixture();
+    const globalAssetRoot = path.join(fixture.root, '.openneko', 'assets');
+    await mkdir(globalAssetRoot, { recursive: true });
+    await writeFile(path.join(globalAssetRoot, 'lighting.png'), 'asset');
     const mediaRoot = path.join(fixture.root, 'linked-media');
     await mkdir(mediaRoot);
     await writeFile(path.join(mediaRoot, 'voice.wav'), 'audio');
@@ -403,6 +409,11 @@ describe('Desktop Resource Browser source', () => {
       query: '',
       limit: 20,
     });
+    const assets = await composition.source.assets.list({
+      identity,
+      query: 'lighting',
+      limit: 20,
+    });
 
     expect(media).toEqual(
       expect.arrayContaining([
@@ -425,6 +436,14 @@ describe('Desktop Resource Browser source', () => {
         },
       ],
     });
+    expect(assets).toEqual([
+      expect.objectContaining({
+        owner: 'global-asset-library',
+        label: 'lighting.png',
+        kind: 'asset',
+        availability: 'available',
+      }),
+    ]);
     expect(
       allMedia.some(
         (entry) => entry.locator.kind === 'workspace-file' && entry.locator.path === 'index.ts',
@@ -442,7 +461,7 @@ describe('Desktop Resource Browser source', () => {
           entry.locator.kind === 'workspace-file' && entry.locator.path === 'workspace-only.mp4',
       ),
     ).toBe(false);
-    expect(JSON.stringify({ media, entityProjection })).not.toContain(fixture.root);
+    expect(JSON.stringify({ media, assets, entityProjection })).not.toContain(fixture.root);
   });
 
   it('opens an in-app Preview, reveals an authorized item and rejects an unmanaged symlink escape', async () => {
@@ -892,6 +911,7 @@ function createComposition(
     revealPath: effects.revealPath,
   });
   return createResourceBrowserNodeProjectionSource({
+    globalAssetRoot: path.join(path.dirname(workspacePath), '.openneko', 'assets'),
     globalMediaLibraryRoot: path.join(path.dirname(workspacePath), '.openneko', 'media-libraries'),
     workspace: {
       workspaceId: 'workspace-1',

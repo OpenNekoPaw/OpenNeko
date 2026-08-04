@@ -78,7 +78,7 @@ interface ResourceBrowserDisplayState {
   readonly query: string;
   readonly viewMode: 'list' | 'grid';
   readonly expandedIds: ReadonlySet<string>;
-  readonly selectedId?: string;
+  readonly selectedIdByFacet: Readonly<Partial<Record<ResourceBrowserFacet, string>>>;
   readonly activeContainerByFacet: Readonly<Partial<Record<'files' | 'media', string>>>;
 }
 
@@ -99,7 +99,9 @@ export function ResourceBrowserRoot({
   const initialDisplayState = displayStateByProject.get(displayStateKey);
   const [state, setState] = useState<ResourceBrowserRootState>({ kind: 'loading' });
   const [query, setQuery] = useState(initialDisplayState?.query ?? '');
-  const [selectedId, setSelectedId] = useState<string | undefined>(initialDisplayState?.selectedId);
+  const [selectedIdByFacet, setSelectedIdByFacet] = useState<
+    Readonly<Partial<Record<ResourceBrowserFacet, string>>>
+  >(() => initialDisplayState?.selectedIdByFacet ?? {});
   const [pending, setPending] = useState(false);
   const [libraryMenuOpen, setLibraryMenuOpen] = useState(false);
   const [recovery, setRecovery] = useState<
@@ -248,7 +250,7 @@ export function ResourceBrowserRoot({
       query,
       viewMode,
       expandedIds: new Set(expandedIds),
-      ...(selectedId ? { selectedId } : {}),
+      selectedIdByFacet,
       activeContainerByFacet,
     });
     activeDisplayStateKey.current = displayStateKey;
@@ -257,14 +259,14 @@ export function ResourceBrowserRoot({
     setQuery(saved?.query ?? '');
     setViewMode(saved?.viewMode ?? defaultViewMode);
     setExpandedIds(saved?.expandedIds ?? new Set());
-    setSelectedId(saved?.selectedId);
+    setSelectedIdByFacet(saved?.selectedIdByFacet ?? {});
     setActiveContainerByFacet(saved?.activeContainerByFacet ?? {});
   }, [
     activeContainerByFacet,
     defaultViewMode,
     expandedIds,
     displayStateKey,
-    selectedId,
+    selectedIdByFacet,
     query,
     viewMode,
   ]);
@@ -278,14 +280,15 @@ export function ResourceBrowserRoot({
       query,
       viewMode,
       expandedIds: new Set(expandedIds),
-      ...(selectedId ? { selectedId } : {}),
+      selectedIdByFacet,
       activeContainerByFacet,
     });
-  }, [activeContainerByFacet, expandedIds, query, selectedId, viewMode]);
+  }, [activeContainerByFacet, expandedIds, query, selectedIdByFacet, viewMode]);
 
   const runSearch = async (facet: ResourceBrowserFacet, nextQuery: string): Promise<void> => {
     requestSequence.current += 1;
     const requestNumber = requestSequence.current;
+    if (facet !== 'media') setLibraryMenuOpen(false);
     setPending(true);
     try {
       const projection = await runtime.search(
@@ -297,10 +300,12 @@ export function ResourceBrowserRoot({
         }),
       );
       if (requestNumber === requestSequence.current) {
-        setSelectedId(undefined);
-        if (facet === 'materials') {
-          setActiveContainerByFacet({});
-        }
+        setSelectedIdByFacet((current) => {
+          const selected = current[facet];
+          return !selected || projection.items.some((item) => item.resourceId === selected)
+            ? current
+            : { ...current, [facet]: undefined };
+        });
         setState({ kind: 'ready', projection });
       }
     } catch (error: unknown) {
@@ -363,6 +368,7 @@ export function ResourceBrowserRoot({
   }
 
   const projection = state.projection;
+  const selectedId = selectedIdByFacet[projection.facet];
   const requestRecovery = async (
     item: ResourceBrowserItem,
     candidate: 'existing-global' | 'select-directory',
@@ -524,52 +530,54 @@ export function ResourceBrowserRoot({
           />
         </div>
         <div className="neko-resource-browser__toolbar">
-          <div
-            className="neko-resource-browser__library-menu"
-            ref={libraryMenuRef}
-            onKeyDown={(event) => {
-              if (event.key === 'Escape') setLibraryMenuOpen(false);
-            }}
-          >
-            <button
-              type="button"
-              className="neko-resource-browser__icon-button"
-              disabled={pending}
-              aria-label={labels.configureMediaLibraries}
-              aria-haspopup="menu"
-              aria-expanded={libraryMenuOpen}
-              title={labels.configureMediaLibraries}
-              onClick={() => setLibraryMenuOpen((open) => !open)}
+          {projection.facet === 'media' ? (
+            <div
+              className="neko-resource-browser__library-menu"
+              ref={libraryMenuRef}
+              onKeyDown={(event) => {
+                if (event.key === 'Escape') setLibraryMenuOpen(false);
+              }}
             >
-              <PlusIcon size={15} />
-            </button>
-            {libraryMenuOpen ? (
-              <div className="neko-resource-browser__library-menu-content" role="menu">
-                <button
-                  type="button"
-                  role="menuitem"
-                  onClick={() => {
-                    setLibraryMenuOpen(false);
-                    void execute(RESOURCE_BROWSER_ROUTES.linkGlobalLibrary);
-                  }}
-                >
-                  <PackageIcon size={14} aria-hidden="true" />
-                  <span>{labels.linkGlobalLibrary}</span>
-                </button>
-                <button
-                  type="button"
-                  role="menuitem"
-                  onClick={() => {
-                    setLibraryMenuOpen(false);
-                    void execute(RESOURCE_BROWSER_ROUTES.addDirectoryLibrary);
-                  }}
-                >
-                  <FolderIcon size={14} aria-hidden="true" />
-                  <span>{labels.addDirectoryLibrary}</span>
-                </button>
-              </div>
-            ) : null}
-          </div>
+              <button
+                type="button"
+                className="neko-resource-browser__icon-button"
+                disabled={pending}
+                aria-label={labels.configureMediaLibraries}
+                aria-haspopup="menu"
+                aria-expanded={libraryMenuOpen}
+                title={labels.configureMediaLibraries}
+                onClick={() => setLibraryMenuOpen((open) => !open)}
+              >
+                <PlusIcon size={15} />
+              </button>
+              {libraryMenuOpen ? (
+                <div className="neko-resource-browser__library-menu-content" role="menu">
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setLibraryMenuOpen(false);
+                      void execute(RESOURCE_BROWSER_ROUTES.linkGlobalLibrary);
+                    }}
+                  >
+                    <PackageIcon size={14} aria-hidden="true" />
+                    <span>{labels.linkGlobalLibrary}</span>
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setLibraryMenuOpen(false);
+                      void execute(RESOURCE_BROWSER_ROUTES.addDirectoryLibrary);
+                    }}
+                  >
+                    <FolderIcon size={14} aria-hidden="true" />
+                    <span>{labels.addDirectoryLibrary}</span>
+                  </button>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
           {refreshControl === 'visible' ? (
             <button
               type="button"
@@ -605,7 +613,7 @@ export function ResourceBrowserRoot({
         </div>
       </form>
       <div className="neko-resource-browser__facets" role="tablist">
-        {(['files', 'media', 'materials'] as const).map((facet) => (
+        {(['files', 'media', 'assets', 'entities'] as const).map((facet) => (
           <button
             type="button"
             role="tab"
@@ -687,7 +695,10 @@ export function ResourceBrowserRoot({
                     : {})}
                   style={viewMode === 'list' ? { paddingLeft: 7 + item.depth * 14 } : undefined}
                   onClick={(event) => {
-                    setSelectedId(item.resourceId);
+                    setSelectedIdByFacet((current) => ({
+                      ...current,
+                      [projection.facet]: item.resourceId,
+                    }));
                     if (event.detail > 1) return;
                     if (item.role === 'directory' || item.role === 'library-root') {
                       return;
@@ -733,13 +744,19 @@ export function ResourceBrowserRoot({
                     }
                     if (event.key === 'ArrowRight' && !expandedIds.has(item.resourceId)) {
                       event.preventDefault();
-                      setSelectedId(item.resourceId);
+                      setSelectedIdByFacet((current) => ({
+                        ...current,
+                        [projection.facet]: item.resourceId,
+                      }));
                       void toggleTreeContainer(navigableFacet, item);
                       return;
                     }
                     if (event.key === 'ArrowLeft' && expandedIds.has(item.resourceId)) {
                       event.preventDefault();
-                      setSelectedId(item.resourceId);
+                      setSelectedIdByFacet((current) => ({
+                        ...current,
+                        [projection.facet]: item.resourceId,
+                      }));
                       void toggleTreeContainer(navigableFacet, item);
                     }
                   }}
@@ -907,7 +924,7 @@ function hasManagedLibraryLink(item: ResourceBrowserItem): boolean {
 function canDragResourceToCanvas(item: ResourceBrowserItem): boolean {
   return (
     item.capabilities.includes('add-to-canvas') &&
-    (item.facet === 'materials' ? item.representationLocator !== undefined : true)
+    (item.facet === 'entities' ? item.representationLocator !== undefined : item.facet !== 'assets')
   );
 }
 
@@ -1066,7 +1083,7 @@ function buildBreadcrumbs(
 
 function isWorkspaceDocument(item: ResourceBrowserItem, extension: '.nkc' | '.otio'): boolean {
   return (
-    item.facet !== 'materials' &&
+    (item.facet === 'files' || item.facet === 'media') &&
     item.locator.kind === 'workspace-file' &&
     item.locator.path.toLocaleLowerCase().endsWith(extension)
   );
@@ -1076,7 +1093,12 @@ function startResourceCanvasDrag(
   event: DragEvent<HTMLButtonElement>,
   item: ResourceBrowserItem,
 ): void {
-  const locator = item.facet === 'materials' ? item.representationLocator : item.locator;
+  const locator =
+    item.facet === 'entities'
+      ? item.representationLocator
+      : item.facet === 'assets'
+        ? undefined
+        : item.locator;
   if (!locator || !item.capabilities.includes('add-to-canvas')) {
     event.preventDefault();
     return;
@@ -1218,6 +1240,8 @@ function ResourceBrowserPlaceholderIcon({
       return <FileIcon size={15} />;
     case 'document':
       return <CodeIcon size={15} />;
+    case 'asset':
+      return <PackageIcon size={15} />;
     case 'character':
       return <CubeIcon size={15} />;
     case 'scene':

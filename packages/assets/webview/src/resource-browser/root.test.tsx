@@ -296,11 +296,20 @@ describe('ResourceBrowserRoot', () => {
 
     await screen.findByText('cat.png');
     expect(screen.queryByRole('tab', { name: '全部' })).toBeNull();
-    expect(screen.queryByRole('tab', { name: '实体' })).toBeNull();
-    fireEvent.click(screen.getByRole('tab', { name: '素材' }));
+    expect(screen.getByRole('tab', { name: '目录' })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: '媒体库' })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: '素材库' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('tab', { name: '实体' }));
     await waitFor(() =>
       expect(runtime.search).toHaveBeenCalledWith(
-        expect.objectContaining({ facet: 'materials', route: 'search' }),
+        expect.objectContaining({ facet: 'entities', route: 'search' }),
+      ),
+    );
+    expect(screen.queryByRole('button', { name: '配置媒体库' })).toBeNull();
+    fireEvent.click(screen.getByRole('tab', { name: '媒体库' }));
+    await waitFor(() =>
+      expect(runtime.search).toHaveBeenCalledWith(
+        expect.objectContaining({ facet: 'media', route: 'search' }),
       ),
     );
     fireEvent.click(screen.getByRole('button', { name: '配置媒体库' }));
@@ -316,6 +325,78 @@ describe('ResourceBrowserRoot', () => {
       expect(runtime.execute).toHaveBeenCalledWith(
         expect.objectContaining({ route: 'source.add-directory-library' }),
       ),
+    );
+  });
+
+  it('preserves selection independently while switching owner facets', async () => {
+    const filesProjection: ResourceBrowserProjection = {
+      ...projection,
+      identity: {
+        ...projection.identity,
+        projectId: 'project-facet-selection',
+        workspaceId: 'workspace-facet-selection',
+      },
+      facet: 'files',
+      items: [
+        {
+          resourceId: 'content:brief',
+          facet: 'files',
+          role: 'content',
+          depth: 0,
+          kind: 'file',
+          label: 'brief.md',
+          locator: { kind: 'workspace-file', path: 'brief.md' },
+          capabilities: ['reveal'],
+        },
+      ],
+    };
+    const assetsProjection: ResourceBrowserProjection = {
+      ...filesProjection,
+      facet: 'assets',
+      items: [
+        {
+          resourceId: 'asset:lighting',
+          facet: 'assets',
+          role: 'asset',
+          depth: 0,
+          kind: 'asset',
+          label: 'Lighting preset',
+          assetRef: { assetId: 'global-asset-library:lighting' },
+          availability: 'available',
+          capabilities: [],
+        },
+      ],
+    };
+    const runtime = createRuntime(filesProjection);
+    runtime.search.mockImplementation(async (request) =>
+      request.facet === 'assets'
+        ? { ...assetsProjection, revision: request.facet.length }
+        : { ...filesProjection, revision: request.facet.length },
+    );
+    render(<ResourceBrowserRoot runtime={runtime} locale="en" />);
+
+    const file = await screen.findByText('brief.md');
+    fireEvent.click(file);
+    fireEvent.click(screen.getByRole('tab', { name: 'Asset library' }));
+    const asset = await screen.findByText('Lighting preset');
+    fireEvent.click(asset);
+    fireEvent.click(screen.getByRole('tab', { name: 'Files' }));
+    await waitFor(() =>
+      expect(
+        screen
+          .getByText('brief.md')
+          .closest('.neko-resource-browser__item-row')
+          ?.getAttribute('data-selected'),
+      ).toBe('true'),
+    );
+    fireEvent.click(screen.getByRole('tab', { name: 'Asset library' }));
+    await waitFor(() =>
+      expect(
+        screen
+          .getByText('Lighting preset')
+          .closest('.neko-resource-browser__item-row')
+          ?.getAttribute('data-selected'),
+      ).toBe('true'),
     );
   });
 

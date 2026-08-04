@@ -7,13 +7,19 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
   async prepare({ fixtureHome, repositoryRoot }) {
     const workspacePath = join(fixtureHome, 'workspace');
     const configRoot = join(fixtureHome, '.neko');
+    const assetRoot = join(configRoot, 'assets');
     await Promise.all([
       mkdir(workspacePath, { recursive: true }),
       mkdir(configRoot, { recursive: true }),
+      mkdir(assetRoot, { recursive: true }),
     ]);
     await copyFile(
       join(repositoryRoot, 'docs/assets/openneko-desktop.png'),
       join(workspacePath, 'preview.png'),
+    );
+    await copyFile(
+      join(repositoryRoot, 'docs/assets/openneko-desktop.png'),
+      join(assetRoot, 'workspace-lighting.png'),
     );
     await writeFile(
       join(workspacePath, 'agent-reference.txt'),
@@ -526,7 +532,7 @@ async function inspectEntryDraft(evaluate, forbiddenDraftIds = []) {
 }
 
 async function inspectActivatedWorkspaceAgent(evaluate) {
-  return evaluate(`(() => {
+  const initial = await evaluate(`(() => {
     const scope = document.querySelector('[data-agent-scope="workspace"]');
     const title = scope?.querySelector('.agent-empty-title')?.textContent?.trim() ?? '';
     const ownerActions = scope?.querySelectorAll('.agent-empty-action').length ?? 0;
@@ -548,7 +554,7 @@ async function inspectWorkspaceResourceChrome(evaluate) {
     ))`,
     'Workspace Resource Browser toolbar did not become ready.',
   );
-  return evaluate(`(() => {
+  const initial = await evaluate(`(() => {
     const browser = document.querySelector('.desktop-resource-browser-root');
     if (!(browser instanceof HTMLElement)) {
       throw new Error('Workspace Resource Browser is unavailable.');
@@ -556,17 +562,89 @@ async function inspectWorkspaceResourceChrome(evaluate) {
     const refreshCount = browser.querySelectorAll(
       'button[aria-label="Refresh"], button[aria-label="刷新"]',
     ).length;
-    const libraryControlCount = browser.querySelectorAll(
+    const initialLibraryControlCount = browser.querySelectorAll(
       '.neko-resource-browser__library-menu button',
     ).length;
-    if (refreshCount !== 0 || libraryControlCount < 1) {
+    const facets = [...browser.querySelectorAll('.neko-resource-browser__facets [role="tab"]')];
+    const facetLabels = facets.map((item) => item.textContent?.trim() ?? '');
+    if (refreshCount !== 0 || initialLibraryControlCount !== 0 || facets.length !== 4) {
       throw new Error(
         'Workspace Resource Browser chrome does not match its embedded contract: ' +
-          JSON.stringify({ refreshCount, libraryControlCount }),
+          JSON.stringify({ refreshCount, initialLibraryControlCount, facetLabels }),
       );
     }
-    return { refreshCount, libraryControlCount };
+    const mediaFacet = facets.find((item) =>
+      ['媒体库', 'Media library'].includes(item.textContent?.trim() ?? ''),
+    );
+    if (!(mediaFacet instanceof HTMLButtonElement)) {
+      throw new Error('Workspace Resource Browser Media facet is unavailable.');
+    }
+    mediaFacet.click();
+    return { refreshCount, initialLibraryControlCount, facetLabels };
   })()`);
+  await waitForCondition(
+    evaluate,
+    `(() => {
+      const browser = document.querySelector('.desktop-resource-browser-root');
+      const selected = browser?.querySelector('.neko-resource-browser__facets [aria-selected="true"]');
+      return ['媒体库', 'Media library'].includes(selected?.textContent?.trim() ?? '') &&
+        browser?.querySelectorAll('.neko-resource-browser__library-menu button').length === 1;
+    })()`,
+    'Workspace Resource Browser did not activate the Media facet and its management action.',
+  );
+  const switched = await evaluate(`(() => {
+    const browser = document.querySelector('.desktop-resource-browser-root');
+    if (!(browser instanceof HTMLElement)) {
+      throw new Error('Workspace Resource Browser is unavailable after Media activation.');
+    }
+    const facets = [...browser.querySelectorAll('.neko-resource-browser__facets [role="tab"]')];
+    const assetFacet = facets.find((item) =>
+      ['素材库', 'Asset library'].includes(item.textContent?.trim() ?? ''),
+    );
+    if (!(assetFacet instanceof HTMLButtonElement)) {
+      throw new Error('Workspace Resource Browser Asset facet is unavailable.');
+    }
+    assetFacet.click();
+    return true;
+  })()`);
+  if (!switched) throw new Error('Workspace Resource Browser Asset facet click failed.');
+  await waitForCondition(
+    evaluate,
+    `(() => {
+      const browser = document.querySelector('.desktop-resource-browser-root');
+      const selected = browser?.querySelector('.neko-resource-browser__facets [aria-selected="true"]');
+      const hasAsset = [...(browser?.querySelectorAll('.neko-resource-browser__item strong') ?? [])]
+        .some((item) => item.textContent?.trim() === 'workspace-lighting.png');
+      return ['素材库', 'Asset library'].includes(selected?.textContent?.trim() ?? '') &&
+        browser?.querySelectorAll('.neko-resource-browser__library-menu button').length === 0 &&
+        hasAsset;
+    })()`,
+    'Workspace Resource Browser did not project the fixture through the Asset owner.',
+  );
+  const switchedBack = await evaluate(`(() => {
+    const browser = document.querySelector('.desktop-resource-browser-root');
+    const facets = [...(browser?.querySelectorAll('.neko-resource-browser__facets [role="tab"]') ?? [])];
+    const filesFacet = facets.find((item) =>
+      ['目录', 'Files'].includes(item.textContent?.trim() ?? ''),
+    );
+    if (!(filesFacet instanceof HTMLButtonElement)) {
+      throw new Error('Workspace Resource Browser Files facet is unavailable.');
+    }
+    const retiredMaterialsFacetVisible = facets.some(
+      (item) => item.textContent?.trim() === 'Materials' || item.textContent?.trim() === '素材',
+    );
+    if (retiredMaterialsFacetVisible) {
+      throw new Error('Workspace Resource Browser retained the retired Materials facet.');
+    }
+    filesFacet.click();
+    return {
+      assetLabel: 'workspace-lighting.png',
+      facetLabels: facets.map((item) => item.textContent?.trim() ?? ''),
+      libraryControlCountInMedia: 1,
+      retiredMaterialsFacetVisible,
+    };
+  })()`);
+  return { ...initial, ...switchedBack };
 }
 
 async function openWorkspacePreview(evaluate) {

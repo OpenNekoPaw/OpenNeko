@@ -1,7 +1,9 @@
 import { type CreativeEntity, type EntityRepresentationBinding } from '@neko/entity-domain';
 import { contentLocatorKey } from '@neko/content';
 import { type MediaLibraryProjectionEntry } from '@neko/assets-domain/contracts';
+import type { GlobalAssetItem } from '../global-library/contract';
 import type {
+  ResourceBrowserAssetItem,
   ResourceBrowserCapability,
   ResourceBrowserContentItem,
   ResourceBrowserEntityItem,
@@ -59,7 +61,7 @@ export function presentResourceBrowserEntityItem(
   const representationLocator = binding?.representation;
   return {
     resourceId: stableResourceId('entity', `${entity.kind}:${entity.id}`),
-    facet: 'materials',
+    facet: 'entities',
     kind: entity.kind,
     label: entity.displayName ?? entity.canonicalName,
     ...(entity.aliases.length > 0 ? { description: entity.aliases.join(', ') } : {}),
@@ -88,12 +90,32 @@ export function presentResourceBrowserEntityItem(
         }
       : {}),
     capabilities: representationLocator
-      ? [
-          'preview',
-          ...(options.canvasAvailable ? (['add-to-canvas'] as const) : []),
-          'add-to-agent',
-        ]
-      : ['add-to-agent'],
+      ? ['preview', ...(options.canvasAvailable ? (['add-to-canvas'] as const) : [])]
+      : [],
+  };
+}
+
+export function presentResourceBrowserAssetItem(asset: GlobalAssetItem): ResourceBrowserAssetItem {
+  return {
+    resourceId: stableResourceId('asset', asset.id),
+    facet: 'assets',
+    kind: 'asset',
+    label: asset.label,
+    ...(asset.description ? { description: asset.description } : {}),
+    role: 'asset',
+    depth: 0,
+    assetRef: { assetId: asset.id },
+    availability: asset.availability,
+    ...(asset.thumbnail
+      ? {
+          thumbnail: {
+            descriptorId: asset.thumbnail.descriptorId,
+            revision: asset.thumbnail.revision,
+            mediaType: asset.thumbnail.mediaType,
+          },
+        }
+      : {}),
+    capabilities: [],
   };
 }
 

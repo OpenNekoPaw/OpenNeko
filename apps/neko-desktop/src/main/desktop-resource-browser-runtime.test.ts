@@ -162,7 +162,7 @@ describe('createResourceToCanvasInteraction', () => {
       identity: resourceIdentity,
       item: {
         resourceId: 'entity:character-neko',
-        facet: 'materials',
+        facet: 'entities',
         role: 'entity',
         depth: 0,
         kind: 'character',
@@ -176,7 +176,7 @@ describe('createResourceToCanvasInteraction', () => {
         },
         representationBindingId: 'binding-neko-portrait',
         representationRole: 'portrait',
-        capabilities: ['preview', 'add-to-canvas', 'add-to-agent'],
+        capabilities: ['preview', 'add-to-canvas'],
       },
       target: {
         documentId: 'boards/a.nkc',

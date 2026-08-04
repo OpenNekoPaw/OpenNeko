@@ -61,11 +61,11 @@ describe('Resource Browser controller', () => {
       descriptorId: thumbnail?.descriptorId,
       dataUrl: 'data:image/png;base64,aW1hZ2U=',
     });
-    const materials = await controller.search(
+    const entities = await controller.search(
       createResourceBrowserSearchRequest({
         requestId: 'search-1',
         identity,
-        facet: 'materials',
+        facet: 'entities',
         query: 'neko',
       }),
     );
@@ -91,8 +91,8 @@ describe('Resource Browser controller', () => {
     });
 
     expect(snapshot.facet).toBe('files');
-    expect(materials.items[0]).toMatchObject({
-      facet: 'materials',
+    expect(entities.items[0]).toMatchObject({
+      facet: 'entities',
       kind: 'character',
       label: 'Neko',
       representationLocator: { kind: 'workspace-file', path: 'characters/neko.png' },
@@ -212,7 +212,7 @@ describe('Resource Browser controller', () => {
       identity,
       source,
       interactions: createInteractions(),
-      initialFacet: 'materials',
+      initialFacet: 'entities',
     });
     await controller.getSnapshot();
     const listener = vi.fn();
@@ -332,6 +332,17 @@ function createSource(): ResourceBrowserProjectionSource & {
     media: {
       search: vi.fn(async () => [media]),
       children: vi.fn(async () => []),
+    },
+    assets: {
+      list: vi.fn(async () => [
+        {
+          id: 'global-asset-library:lighting',
+          owner: 'global-asset-library' as const,
+          label: 'Lighting preset',
+          kind: 'asset' as const,
+          availability: 'available' as const,
+        },
+      ]),
     },
     entities: { list: vi.fn(async () => ({ entities: [entity], bindings: [binding] })) },
     refresh: vi.fn(async () => undefined),

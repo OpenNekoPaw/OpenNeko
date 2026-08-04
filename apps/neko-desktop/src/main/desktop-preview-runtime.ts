@@ -477,7 +477,7 @@ function resolvePreviewContentLocator(item: ResourceBrowserItem): ResourceBrowse
   if (item.facet === 'files' || item.facet === 'media') {
     return item.locator;
   }
-  if ('representationLocator' in item && item.representationLocator) {
+  if (item.facet === 'entities' && item.representationLocator) {
     return item.representationLocator;
   }
   throw new Error(`Desktop Preview item '${item.resourceId}' has no content locator.`);
@@ -486,7 +486,7 @@ function resolvePreviewContentLocator(item: ResourceBrowserItem): ResourceBrowse
 type ResourceBrowserContentLocator =
   | Extract<ResourceBrowserItem, { readonly facet: 'files' | 'media' }>['locator']
   | NonNullable<
-      Extract<ResourceBrowserItem, { readonly facet: 'materials' }>['representationLocator']
+      Extract<ResourceBrowserItem, { readonly facet: 'entities' }>['representationLocator']
     >;
 
 interface PublishedPreviewResource {

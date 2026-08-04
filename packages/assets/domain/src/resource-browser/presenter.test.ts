@@ -1,6 +1,10 @@
 import type { CreativeEntity, EntityRepresentationBinding } from '@neko/entity-domain';
 import { describe, expect, it } from 'vitest';
-import { presentResourceBrowserContentItem, presentResourceBrowserEntityItem } from './presenter';
+import {
+  presentResourceBrowserAssetItem,
+  presentResourceBrowserContentItem,
+  presentResourceBrowserEntityItem,
+} from './presenter';
 import type { ResourceBrowserContentEntry } from './ports';
 
 describe('Resource Browser presenter', () => {
@@ -49,7 +53,7 @@ describe('Resource Browser presenter', () => {
     });
 
     expect(item).toMatchObject({
-      facet: 'materials',
+      facet: 'entities',
       kind: 'character',
       entityStatus: 'confirmed',
       representationAvailability: 'active',
@@ -60,8 +64,27 @@ describe('Resource Browser presenter', () => {
       },
       representationBindingId: 'confirmed-active',
       representationRole: 'portrait',
-      capabilities: ['preview', 'add-to-canvas', 'add-to-agent'],
+      capabilities: ['preview', 'add-to-canvas'],
     });
+  });
+
+  it('projects reusable Assets without exposing a global filesystem path', () => {
+    const item = presentResourceBrowserAssetItem({
+      id: 'global-asset-library:lighting',
+      owner: 'global-asset-library',
+      label: 'Lighting preset',
+      kind: 'asset',
+      availability: 'available',
+    });
+
+    expect(item).toMatchObject({
+      facet: 'assets',
+      kind: 'asset',
+      role: 'asset',
+      assetRef: { assetId: 'global-asset-library:lighting' },
+      capabilities: [],
+    });
+    expect(JSON.stringify(item)).not.toContain('/Users/');
   });
 
   it('offers Cut handoff only for bindable video or audio media', () => {

@@ -4,7 +4,8 @@ export interface ResourceBrowserLabels {
   readonly title: string;
   readonly files: string;
   readonly media: string;
-  readonly materials: string;
+  readonly assets: string;
+  readonly entities: string;
   readonly search: string;
   readonly searchPlaceholder: string;
   readonly refresh: string;
@@ -53,8 +54,9 @@ const labels: Record<SupportedLocale, ResourceBrowserLabels> = {
   en: {
     title: 'Resource management',
     files: 'Files',
-    media: 'Media',
-    materials: 'Materials',
+    media: 'Media library',
+    assets: 'Asset library',
+    entities: 'Entities',
     search: 'Search',
     searchPlaceholder: 'Search project resources…',
     refresh: 'Refresh',
@@ -102,8 +104,9 @@ const labels: Record<SupportedLocale, ResourceBrowserLabels> = {
   'zh-cn': {
     title: '资源管理',
     files: '目录',
-    media: '媒体',
-    materials: '素材',
+    media: '媒体库',
+    assets: '素材库',
+    entities: '实体',
     search: '搜索',
     searchPlaceholder: '搜索项目资源…',
     refresh: '刷新',

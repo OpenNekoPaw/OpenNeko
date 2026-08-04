@@ -47,6 +47,7 @@ const EXCLUDED_DIRECTORIES = new Set([
 ]);
 
 export interface ResourceBrowserNodeSourceOptions {
+  readonly globalAssetRoot: string;
   readonly globalMediaLibraryRoot: string;
   readonly workspaceMediaLibrarySync?: WorkspaceMediaLibrarySyncService;
   readonly workspace: AssetWorkspaceResolution;
@@ -82,7 +83,7 @@ export interface ResourceBrowserNodeSourceOptions {
 
 export type ResourceBrowserNodeReadSourceOptions = Pick<
   ResourceBrowserNodeSourceOptions,
-  'workspace' | 'host' | 'workspaceMediaLibrarySync'
+  'globalAssetRoot' | 'workspace' | 'host' | 'workspaceMediaLibrarySync'
 >;
 
 export async function searchGlobalAssetCatalog(input: {
@@ -231,6 +232,17 @@ export function createResourceBrowserNodeReadSource(
       search: async ({ query, limit }) => listWorkspaceProjection(options, query, limit, true),
       children: async ({ parent, limit }) => readMediaLibraryChildren(options, parent, limit),
     },
+    assets: {
+      list: async ({ query, limit }) =>
+        searchGlobalAssetCatalog({
+          globalAssetRoot: options.globalAssetRoot,
+          files: options.host.files,
+          query,
+          sortBy: 'name',
+          sortDirection: 'ascending',
+          limit,
+        }),
+    },
     entities: {
       list: async () =>
         readConfirmedEntityResources({
@@ -326,15 +338,30 @@ export function createResourceBrowserNodeProjectionSource(
       });
     },
     async preview({ identity, item, target }): Promise<void> {
-      const absolutePath = await resolveResourceBrowserItemPath(options.workspace, item);
+      const absolutePath = await resolveResourceBrowserItemPath({
+        workspace: options.workspace,
+        globalAssetRoot: options.globalAssetRoot,
+        files: options.host.files,
+        item,
+      });
       await options.openPreview({ identity, item, absolutePath, target });
     },
     async openCut({ identity, item }): Promise<void> {
-      const absolutePath = await resolveResourceBrowserItemPath(options.workspace, item);
+      const absolutePath = await resolveResourceBrowserItemPath({
+        workspace: options.workspace,
+        globalAssetRoot: options.globalAssetRoot,
+        files: options.host.files,
+        item,
+      });
       await options.openCut({ identity, item, absolutePath });
     },
     async reveal({ item }): Promise<void> {
-      const absolutePath = await resolveResourceBrowserItemPath(options.workspace, item);
+      const absolutePath = await resolveResourceBrowserItemPath({
+        workspace: options.workspace,
+        globalAssetRoot: options.globalAssetRoot,
+        files: options.host.files,
+        item,
+      });
       const external = options.host.external;
       if (!external?.revealPath) {
         throw new Error('Desktop Resource Browser reveal capability is unavailable.');
@@ -342,7 +369,12 @@ export function createResourceBrowserNodeProjectionSource(
       await external.revealPath(absolutePath);
     },
     async resolveThumbnail({ item }): Promise<string> {
-      const absolutePath = await resolveResourceBrowserItemPath(options.workspace, item);
+      const absolutePath = await resolveResourceBrowserItemPath({
+        workspace: options.workspace,
+        globalAssetRoot: options.globalAssetRoot,
+        files: options.host.files,
+        item,
+      });
       return options.createThumbnail(absolutePath);
     },
     addToCanvas: options.addToCanvas,
@@ -669,15 +701,25 @@ function isCutDocument(locatorPath: string): boolean {
   return path.posix.extname(locatorPath).toLocaleLowerCase() === '.otio';
 }
 
-export async function resolveResourceBrowserItemPath(
-  workspace: AssetWorkspaceResolution,
-  item: Parameters<ResourceBrowserInteractionPort['preview']>[0]['item'],
-): Promise<string> {
-  const locator = item.facet === 'materials' ? item.representationLocator : item.locator;
+export async function resolveResourceBrowserItemPath(input: {
+  readonly workspace: AssetWorkspaceResolution;
+  readonly globalAssetRoot: string;
+  readonly files: NekoHostPorts['files'];
+  readonly item: Parameters<ResourceBrowserInteractionPort['preview']>[0]['item'];
+}): Promise<string> {
+  if (input.item.facet === 'assets') {
+    return resolveGlobalAssetItemPath({
+      globalAssetRoot: input.globalAssetRoot,
+      files: input.files,
+      itemId: input.item.assetRef.assetId,
+    });
+  }
+  const locator =
+    input.item.facet === 'entities' ? input.item.representationLocator : input.item.locator;
   if (!locator) {
     throw new Error('Desktop Resource Browser item has no local presentation.');
   }
-  return resolveWorkspaceContentLocator(workspace, locator);
+  return resolveWorkspaceContentLocator(input.workspace, locator);
 }
 
 function dedupeProjection(

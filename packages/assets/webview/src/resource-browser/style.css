@@ -157,7 +157,7 @@
 
 .neko-resource-browser__facets {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 3px;
   padding: 3px 7px;
   border-bottom: 1px solid var(--neko-border, #e2e5e3);

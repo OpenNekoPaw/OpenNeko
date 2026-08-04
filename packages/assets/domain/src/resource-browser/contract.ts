@@ -12,7 +12,7 @@ import {
   type WorkspaceMediaLibraryStatus,
 } from '@neko/assets-domain/contracts';
 
-export const RESOURCE_BROWSER_CONTRACT_VERSION = 8 as const;
+export const RESOURCE_BROWSER_CONTRACT_VERSION = 9 as const;
 
 export function createResourceBrowserViewId(projectViewId: string): string {
   return `resource-browser:${projectViewId}`;
@@ -42,7 +42,7 @@ export const RESOURCE_BROWSER_ROUTES = {
 
 export type ResourceBrowserRoute =
   (typeof RESOURCE_BROWSER_ROUTES)[keyof typeof RESOURCE_BROWSER_ROUTES];
-export type ResourceBrowserFacet = 'files' | 'media' | 'materials';
+export type ResourceBrowserFacet = 'files' | 'media' | 'assets' | 'entities';
 export type ResourceBrowserItemKind =
   | 'directory'
   | 'file'
@@ -50,13 +50,14 @@ export type ResourceBrowserItemKind =
   | 'video'
   | 'audio'
   | 'document'
+  | 'asset'
   | 'character'
   | 'scene'
   | 'object'
   | 'location'
   | 'style';
 export type ResourceBrowserCapability =
-  'preview' | 'open-cut' | 'add-to-cut' | 'reveal' | 'add-to-canvas' | 'add-to-agent';
+  'preview' | 'open-cut' | 'add-to-cut' | 'reveal' | 'add-to-canvas';
 
 export interface ResourceBrowserIdentity {
   readonly projectId: string;
@@ -86,7 +87,7 @@ interface ResourceBrowserItemBase {
   readonly description?: string;
   readonly capabilities: readonly ResourceBrowserCapability[];
   readonly thumbnail?: ResourceBrowserThumbnailDescriptor;
-  readonly role: 'directory' | 'library-root' | 'content' | 'entity';
+  readonly role: 'directory' | 'library-root' | 'content' | 'asset' | 'entity';
   readonly parentResourceId?: string;
   readonly depth: number;
   readonly libraryName?: string;
@@ -98,8 +99,18 @@ export interface ResourceBrowserContentItem extends ResourceBrowserItemBase {
   readonly locator: ContentLocator;
 }
 
+export interface ResourceBrowserAssetItem extends ResourceBrowserItemBase {
+  readonly facet: 'assets';
+  readonly kind: 'asset';
+  readonly role: 'asset';
+  readonly assetRef: {
+    readonly assetId: string;
+  };
+  readonly availability: 'available' | 'unavailable';
+}
+
 export interface ResourceBrowserEntityItem extends ResourceBrowserItemBase {
-  readonly facet: 'materials';
+  readonly facet: 'entities';
   readonly entityRef: ResourceBrowserEntityRef;
   readonly entityStatus: 'confirmed';
   readonly representationAvailability: 'active' | 'unbound';
@@ -108,7 +119,8 @@ export interface ResourceBrowserEntityItem extends ResourceBrowserItemBase {
   readonly representationRole?: EntityRepresentationRole;
 }
 
-export type ResourceBrowserItem = ResourceBrowserContentItem | ResourceBrowserEntityItem;
+export type ResourceBrowserItem =
+  ResourceBrowserContentItem | ResourceBrowserAssetItem | ResourceBrowserEntityItem;
 
 export interface ResourceBrowserProjection {
   readonly schemaVersion: typeof RESOURCE_BROWSER_CONTRACT_VERSION;
@@ -1201,7 +1213,7 @@ function parseResourceBrowserItem(value: unknown): ResourceBrowserItem {
     ...readOptionalLibraryName(record['libraryName']),
     ...readOptionalLibraryStatus(record['libraryStatus']),
   };
-  if (facet === 'materials') {
+  if (facet === 'entities') {
     if (base.libraryStatus) {
       throw invalidPayload('Resource Browser Entity must not contain Media Library status.');
     }
@@ -1230,7 +1242,23 @@ function parseResourceBrowserItem(value: unknown): ResourceBrowserItem {
       ...representation,
     };
   }
-  if (base.role === 'entity') {
+  if (facet === 'assets') {
+    if (base.libraryStatus) {
+      throw invalidPayload('Resource Browser Asset must not contain Media Library status.');
+    }
+    if (base.kind !== 'asset' || base.role !== 'asset') {
+      throw invalidPayload('Resource Browser Asset kind or role is invalid.');
+    }
+    return {
+      ...base,
+      facet,
+      kind: base.kind,
+      role: base.role,
+      assetRef: parseResourceBrowserAssetRef(record['assetRef']),
+      availability: requireResourceAvailability(record['availability']),
+    };
+  }
+  if (base.role === 'asset' || base.role === 'entity') {
     throw invalidPayload('Resource Browser content item role is invalid.');
   }
   if (base.libraryStatus && base.role !== 'library-root') {
@@ -1244,6 +1272,27 @@ function parseResourceBrowserItem(value: unknown): ResourceBrowserItem {
     facet,
     locator: requireContentLocator(record['locator'], 'locator'),
   };
+}
+
+function parseResourceBrowserAssetRef(value: unknown): { readonly assetId: string } {
+  const record = requireRecord(value, 'Resource Browser Asset identity is required.');
+  const keys = Object.keys(record);
+  if (keys.length !== 1 || keys[0] !== 'assetId') {
+    throw invalidPayload('Resource Browser Asset identity contains unsupported fields.');
+  }
+  return {
+    assetId: requireOpaqueIdentity(
+      record['assetId'],
+      'Resource Browser Asset identity is required.',
+    ),
+  };
+}
+
+function requireResourceAvailability(value: unknown): 'available' | 'unavailable' {
+  if (value !== 'available' && value !== 'unavailable') {
+    throw invalidPayload('Resource Browser Asset availability is invalid.');
+  }
+  return value;
 }
 
 function requireConfirmedEntityStatus(value: unknown): 'confirmed' {
@@ -1535,7 +1584,7 @@ function requireContentLocator(value: unknown, field: string): ContentLocator {
 }
 
 function requireFacet(value: unknown): ResourceBrowserFacet {
-  if (value !== 'files' && value !== 'media' && value !== 'materials') {
+  if (value !== 'files' && value !== 'media' && value !== 'assets' && value !== 'entities') {
     throw invalidPayload('Resource Browser facet is invalid.');
   }
   return value;
@@ -1549,6 +1598,7 @@ function requireItemKind(value: unknown): ResourceBrowserItemKind {
     'video',
     'audio',
     'document',
+    'asset',
     'character',
     'scene',
     'object',
@@ -1562,11 +1612,14 @@ function requireItemKind(value: unknown): ResourceBrowserItemKind {
   return match;
 }
 
-function requireItemRole(value: unknown): 'directory' | 'library-root' | 'content' | 'entity' {
+function requireItemRole(
+  value: unknown,
+): 'directory' | 'library-root' | 'content' | 'asset' | 'entity' {
   if (
     value !== 'directory' &&
     value !== 'library-root' &&
     value !== 'content' &&
+    value !== 'asset' &&
     value !== 'entity'
   ) {
     throw invalidPayload('Resource Browser item role is invalid.');
@@ -1606,7 +1659,6 @@ function requireCapability(value: unknown): ResourceBrowserCapability {
     'add-to-cut',
     'reveal',
     'add-to-canvas',
-    'add-to-agent',
   ];
   const match = allowed.find((candidate) => candidate === value);
   if (!match) {

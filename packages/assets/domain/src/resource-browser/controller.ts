@@ -30,7 +30,11 @@ import {
   type ResourceBrowserThumbnailRequest,
   type ResourceBrowserThumbnailResult,
 } from './contract';
-import { presentResourceBrowserContentItem, presentResourceBrowserEntityItem } from './presenter';
+import {
+  presentResourceBrowserAssetItem,
+  presentResourceBrowserContentItem,
+  presentResourceBrowserEntityItem,
+} from './presenter';
 import type { ResourceBrowserInteractionPort, ResourceBrowserProjectionSource } from './ports';
 
 export interface ResourceBrowserControllerOptions {
@@ -376,7 +380,15 @@ export class ResourceBrowserController implements ResourceBrowserHostRuntime {
                 canvasAvailable: this.options.canvasAvailable,
               }),
             )
-          : await this.readMaterials(query, limit);
+          : facet === 'assets'
+            ? (
+                await this.options.source.assets.list({
+                  identity: this.identity,
+                  query,
+                  limit,
+                })
+              ).map(presentResourceBrowserAssetItem)
+            : await this.readEntities(query, limit);
     return parseResourceBrowserProjection({
       schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
       identity: this.identity,
@@ -387,7 +399,7 @@ export class ResourceBrowserController implements ResourceBrowserHostRuntime {
     });
   }
 
-  private async readMaterials(query: string, limit: number) {
+  private async readEntities(query: string, limit: number) {
     const result = await this.options.source.entities.list({
       identity: this.identity,
       query,

@@ -71,7 +71,7 @@ describe('Resource Browser contract', () => {
     });
   });
 
-  it('parses portable ContentLocator and workspace Material projections', () => {
+  it('parses portable ContentLocator, Asset and Entity projections', () => {
     const media = parseResourceBrowserProjection(
       projection('media', [
         {
@@ -91,11 +91,26 @@ describe('Resource Browser contract', () => {
         },
       ]),
     );
-    const materials = parseResourceBrowserProjection(
-      projection('materials', [
+    const assets = parseResourceBrowserProjection(
+      projection('assets', [
+        {
+          resourceId: 'asset-1',
+          facet: 'assets',
+          role: 'asset',
+          depth: 0,
+          kind: 'asset',
+          label: 'Lighting preset',
+          assetRef: { assetId: 'global-asset-library:lighting' },
+          availability: 'available',
+          capabilities: [],
+        },
+      ]),
+    );
+    const entities = parseResourceBrowserProjection(
+      projection('entities', [
         {
           resourceId: 'entity-1',
-          facet: 'materials',
+          facet: 'entities',
           role: 'entity',
           depth: 0,
           kind: 'character',
@@ -106,14 +121,15 @@ describe('Resource Browser contract', () => {
           representationLocator: { kind: 'workspace-file', path: 'characters/neko.png' },
           representationBindingId: 'binding-neko-portrait',
           representationRole: 'portrait',
-          capabilities: ['preview', 'add-to-agent', 'add-to-canvas'],
+          capabilities: ['preview', 'add-to-canvas'],
         },
       ]),
     );
 
     expect(media.items[0]?.capabilities).toContain('add-to-cut');
     expect(media.items[0]?.facet).toBe('media');
-    expect(materials.items[0]?.facet).toBe('materials');
+    expect(assets.items[0]?.facet).toBe('assets');
+    expect(entities.items[0]?.facet).toBe('entities');
   });
 
   it('parses hierarchical File projections and revisioned library management', () => {
@@ -198,10 +214,10 @@ describe('Resource Browser contract', () => {
     ).toThrowError(ResourceBrowserContractError);
     expect(() =>
       parseResourceBrowserProjection(
-        projection('materials', [
+        projection('entities', [
           {
             resourceId: 'entity-1',
-            facet: 'materials',
+            facet: 'entities',
             kind: 'character',
             label: 'Neko',
             entityRef: {
@@ -209,7 +225,7 @@ describe('Resource Browser contract', () => {
               entityKind: 'character',
               projectRoot: '/Users/private/project',
             },
-            capabilities: ['add-to-agent'],
+            capabilities: [],
           },
         ]),
       ),
@@ -373,7 +389,7 @@ describe('Resource Browser contract', () => {
   });
 
   it('rejects legacy generic source and facet routes', () => {
-    for (const facet of ['all', 'entities']) {
+    for (const facet of ['all', 'materials']) {
       expect(() =>
         parseResourceBrowserProjection({
           ...projection('files', []),
@@ -454,7 +470,7 @@ describe('Resource Browser contract', () => {
   });
 });
 
-function projection(facet: 'files' | 'media' | 'materials', items: readonly unknown[]) {
+function projection(facet: 'files' | 'media' | 'assets' | 'entities', items: readonly unknown[]) {
   return {
     schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
     identity,

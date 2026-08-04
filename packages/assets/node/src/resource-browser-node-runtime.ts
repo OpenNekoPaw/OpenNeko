@@ -242,7 +242,12 @@ export class ResourceBrowserNodeRuntime {
     if (workspace.workspaceId !== request.identity.workspaceId) {
       throw new Error('Desktop Resource Browser quick preview Workspace is stale.');
     }
-    const absolutePath = await resolveResourceBrowserItemPath(workspace, item);
+    const absolutePath = await resolveResourceBrowserItemPath({
+      workspace,
+      globalAssetRoot: this.options.globalAssetRoot,
+      files: this.options.host.files,
+      item,
+    });
     const opened = await this.options.openQuickPreview({
       identity: request.identity,
       item,
@@ -885,6 +890,7 @@ export class ResourceBrowserNodeRuntime {
       await this.options.cut.addResource({ resourceIdentity, item, target });
     };
     const composition = createResourceBrowserNodeProjectionSource({
+      globalAssetRoot: this.options.globalAssetRoot,
       globalMediaLibraryRoot: this.options.globalMediaLibraryRoot,
       workspaceMediaLibrarySync: this.workspaceMediaLibrarySync,
       workspace,
@@ -984,7 +990,12 @@ export function createResourceToCanvasInteraction(options: {
       sessionId: target.sessionId,
       endpointEpoch: resourceIdentity.endpointEpoch,
     };
-    const locator = item.facet === 'materials' ? item.representationLocator : item.locator;
+    const locator =
+      item.facet === 'entities'
+        ? item.representationLocator
+        : item.facet === 'assets'
+          ? undefined
+          : item.locator;
     if (!locator) {
       throw new Error('Resource Browser item has no Canvas representation.');
     }
@@ -1019,7 +1030,7 @@ export function createResourceToCanvasInteraction(options: {
             locator,
             mediaKind: resourceItemMediaKind(item),
             title: item.label,
-            ...(item.facet === 'materials'
+            ...(item.facet === 'entities'
               ? {
                   entity: {
                     entityId: item.entityRef.entityId,
@@ -1039,7 +1050,7 @@ export function createResourceToCanvasInteraction(options: {
 }
 
 function requireEntityRepresentationBindingId(
-  item: Extract<ResourceBrowserItem, { readonly facet: 'materials' }>,
+  item: Extract<ResourceBrowserItem, { readonly facet: 'entities' }>,
 ): string {
   if (!item.representationBindingId) {
     throw new Error('Resource Browser Entity has no active representation binding identity.');
@@ -1048,7 +1059,7 @@ function requireEntityRepresentationBindingId(
 }
 
 function requireEntityRepresentationRole(
-  item: Extract<ResourceBrowserItem, { readonly facet: 'materials' }>,
+  item: Extract<ResourceBrowserItem, { readonly facet: 'entities' }>,
 ) {
   if (!item.representationRole) {
     throw new Error('Resource Browser Entity has no active representation role.');
@@ -1071,6 +1082,7 @@ function resourceItemMediaKind(item: ResourceBrowserItem): CanvasMaterialMediaKi
       return 'other';
     }
     case 'directory':
+    case 'asset':
     case 'character':
     case 'scene':
     case 'object':

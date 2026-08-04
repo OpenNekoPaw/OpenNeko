@@ -146,7 +146,7 @@ export class DesktopCutRuntime {
 
   supportsOpen(item: ResourceBrowserItem): item is DesktopCutOpenResourceItem {
     this.requireActive();
-    if (item.facet === 'materials') return false;
+    if (item.facet !== 'files' && item.facet !== 'media') return false;
     return (
       item.locator.kind === 'workspace-file' &&
       item.locator.path.toLocaleLowerCase().endsWith('.otio')
