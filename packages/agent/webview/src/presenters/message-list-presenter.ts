@@ -63,7 +63,6 @@ export interface MessageListExecutionActivityItemProjection {
 
 export interface MessageListProjectionInput {
   messages: readonly Message[];
-  isThinking: boolean;
   agentState?: AgentState | null;
   streamingMessageId: string | null;
   plugins?: PluginsAvailable;
@@ -194,18 +193,23 @@ export function projectMessageListItems(
 
 function projectExecutionActivity(input: MessageListProjectionInput): AgentState | false {
   const state = input.agentState;
-  if (!state || state.phase === 'idle' || input.streamingMessageId) return false;
+  if (!state || state.phase === 'idle') return false;
   if (hasLiveCanonicalExecutionRecord(input.messages)) return false;
   return state;
 }
 
 function hasLiveCanonicalExecutionRecord(messages: readonly Message[]): boolean {
-  return messages.some(
+  const lastUserMessageIndex = findLastIndex(messages, (message) => message.role === 'user');
+  return messages.slice(lastUserMessageIndex + 1).some(
     (message) =>
-      message.isStreaming === true ||
+      (message.isStreaming === true && message.content.trim().length > 0) ||
       message.contentBlocks?.some((block) => {
-        if (block.type === 'thinking') return block.isThinkingComplete !== true;
-        if (block.type === 'text') return block.isStreaming === true;
+        if (block.type === 'thinking') {
+          return block.isThinkingComplete !== true && (block.thinking?.trim().length ?? 0) > 0;
+        }
+        if (block.type === 'text') {
+          return block.isStreaming === true && (block.content?.trim().length ?? 0) > 0;
+        }
         if (block.type === 'tool_call')
           return block.toolCall !== undefined && !block.toolCall.result;
         return false;

@@ -7,7 +7,6 @@ describe('message-list-presenter', () => {
     const state = { phase: 'thinking' as const, startedAt: 1_000 };
     const projection = projectMessageList({
       messages: [],
-      isThinking: true,
       agentState: state,
       streamingMessageId: null,
     });
@@ -43,25 +42,80 @@ describe('message-list-presenter', () => {
     expect(
       projectMessageList({
         messages: [pendingToolMessage],
-        isThinking: true,
         agentState: state,
         streamingMessageId: null,
       }).showExecutionActivity,
     ).toBe(false);
     expect(
       projectMessageList({
-        messages: [{ ...pendingToolMessage, isStreaming: true }],
-        isThinking: true,
+        messages: [
+          {
+            id: 'assistant-stream',
+            role: 'assistant',
+            content: 'Visible response',
+            timestamp: 1_100,
+            isStreaming: true,
+          },
+        ],
         agentState: state,
-        streamingMessageId: 'assistant-tool',
+        streamingMessageId: 'assistant-stream',
       }).showExecutionActivity,
     ).toBe(false);
+  });
+
+  it('keeps activity visible for an empty streaming message shell', () => {
+    const projection = projectMessageList({
+      messages: [
+        {
+          id: 'assistant-stream',
+          role: 'assistant',
+          content: '',
+          timestamp: 1_100,
+          isStreaming: true,
+        },
+      ],
+      agentState: { phase: 'thinking', startedAt: 1_000 },
+      streamingMessageId: 'assistant-stream',
+    });
+
+    expect(projection.showExecutionActivity).toBe(true);
+    expect(projection.items.at(-1)?.kind).toBe('execution_activity');
+  });
+
+  it('does not let a historical pending tool suppress a later turn activity', () => {
+    const projection = projectMessageList({
+      messages: [
+        {
+          id: 'historical-tool',
+          role: 'assistant',
+          content: '',
+          timestamp: 1_000,
+          contentBlocks: [
+            {
+              id: 'historical-tool-block',
+              type: 'tool_call',
+              timestamp: 1_000,
+              toolCall: { id: 'tool-old', name: 'ReadDocument', arguments: {} },
+            },
+          ],
+        },
+        {
+          id: 'current-user',
+          role: 'user',
+          content: 'Start another turn',
+          timestamp: 2_000,
+        },
+      ],
+      agentState: { phase: 'thinking', startedAt: 2_000 },
+      streamingMessageId: null,
+    });
+
+    expect(projection.showExecutionActivity).toBe(true);
   });
 
   it('does not infer execution activity from legacy thinking state without AgentState', () => {
     const projection = projectMessageList({
       messages: [],
-      isThinking: true,
       agentState: null,
       streamingMessageId: null,
     });
@@ -73,7 +127,6 @@ describe('message-list-presenter', () => {
   it('does not project activation progress as a standalone conversation-level list item', () => {
     const projection = projectMessageList({
       messages: [],
-      isThinking: false,
       streamingMessageId: null,
       activationProgress: [
         {

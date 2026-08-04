@@ -62,13 +62,12 @@ export function MessageList({
     () =>
       projectMessageList({
         messages,
-        isThinking,
         agentState,
         streamingMessageId,
         plugins: pluginsAvailable,
         activationProgress,
       }),
-    [messages, isThinking, agentState, streamingMessageId, pluginsAvailable, activationProgress],
+    [messages, agentState, streamingMessageId, pluginsAvailable, activationProgress],
   );
 
   const flattenedItems = projection.items;

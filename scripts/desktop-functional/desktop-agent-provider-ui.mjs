@@ -79,6 +79,7 @@ export const desktopAgentProviderUiScenario = Object.freeze({
       })()`,
       'Visible Entry Draft did not enable its send control.',
     );
+    await beginExecutionActivityObservation(evaluate);
     await click('.agent-composer-send');
 
     await waitForCondition(
@@ -95,6 +96,12 @@ export const desktopAgentProviderUiScenario = Object.freeze({
       'visible-assistant-conversation-materialized',
       await inspectProviderWaitState(evaluate),
     );
+    await waitForCondition(
+      evaluate,
+      `(() => window.__openNekoAgentProviderUiObservation?.sawTranscriptActivity === true)()`,
+      'Visible Desktop Agent did not project live execution activity into the transcript.',
+    );
+    checkpoint('visible-transcript-execution-activity', await inspectProviderWaitState(evaluate));
 
     await waitForProviderResponse(
       evaluate,
@@ -131,6 +138,7 @@ export const desktopAgentProviderUiScenario = Object.freeze({
           responseVisible &&
           activeConversationVisible &&
           !document.querySelector('.agent-run-status') &&
+          !document.querySelector('.agent-execution-activity') &&
           !document.querySelector('.agent-composer-stop') &&
           Boolean(document.querySelector('.agent-composer-textarea'));
       })()`,
@@ -228,7 +236,13 @@ async function inspectCompletedConversation(evaluate) {
       'attachment-identity-mismatch',
       'attachment endpoint mismatch',
     ].filter((diagnostic) => document.body.textContent?.includes(diagnostic));
-    if (!(response instanceof HTMLElement) || alerts.length > 0 || forbiddenDiagnostics.length > 0) {
+    const activityObservation = window.__openNekoAgentProviderUiObservation;
+    activityObservation?.observer.disconnect();
+    if (!(response instanceof HTMLElement) || alerts.length > 0 || forbiddenDiagnostics.length > 0 ||
+        activityObservation?.sawTranscriptActivity !== true ||
+        activityObservation.sawLegacyRunStatus === true ||
+        document.querySelector('.agent-execution-activity') ||
+        document.querySelector('.agent-run-status')) {
       throw new Error('Visible provider response completed with a launch or projection diagnostic.');
     }
     const activeNavigation = document.querySelector(
@@ -248,7 +262,38 @@ async function inspectCompletedConversation(evaluate) {
       conversationCount: projection.agentHome.conversations.length,
       alerts,
       forbiddenDiagnostics,
+      executionActivity: {
+        appearedInTranscript: activityObservation.sawTranscriptActivity,
+        legacyStatusAppeared: activityObservation.sawLegacyRunStatus,
+        terminalActivityVisible: Boolean(document.querySelector('.agent-execution-activity')),
+      },
     };
+  })()`);
+}
+
+async function beginExecutionActivityObservation(evaluate) {
+  await evaluate(`(() => {
+    window.__openNekoAgentProviderUiObservation?.observer?.disconnect();
+    const observation = {
+      sawTranscriptActivity: false,
+      sawLegacyRunStatus: false,
+      observer: undefined,
+    };
+    const inspect = () => {
+      const activity = document.querySelector(
+        '[data-owner-root="agent"] .agent-message-list .agent-execution-activity',
+      );
+      observation.sawTranscriptActivity ||= activity instanceof HTMLElement;
+      observation.sawLegacyRunStatus ||= document.querySelector('.agent-run-status') !== null;
+    };
+    observation.observer = new MutationObserver(inspect);
+    observation.observer.observe(document.body, {
+      attributes: true,
+      childList: true,
+      subtree: true,
+    });
+    window.__openNekoAgentProviderUiObservation = observation;
+    inspect();
   })()`);
 }
 
@@ -339,7 +384,13 @@ async function inspectProviderWaitState(evaluate) {
         '.primary-conversation-group[data-group-kind="assistant"] ' +
           '.primary-recent-conversation-row[data-active="true"] .home-conversation-link',
       )),
-      runStatus: document.querySelector('.agent-run-status')?.textContent?.trim() ?? undefined,
+      transcriptActivity: document.querySelector(
+        '[data-owner-root="agent"] .agent-message-list .agent-execution-activity',
+      )?.textContent?.trim() ?? undefined,
+      sawTranscriptActivity:
+        window.__openNekoAgentProviderUiObservation?.sawTranscriptActivity === true,
+      sawLegacyRunStatus:
+        window.__openNekoAgentProviderUiObservation?.sawLegacyRunStatus === true,
       composerAvailable: Boolean(document.querySelector('.agent-composer-textarea')),
       stopControlVisible: Boolean(document.querySelector('.agent-composer-stop')),
       visibleMessages: [...document.querySelectorAll(
