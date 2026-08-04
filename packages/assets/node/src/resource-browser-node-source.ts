@@ -53,6 +53,7 @@ export interface ResourceBrowserNodeSourceOptions {
   readonly workspaceMediaLibrarySync?: WorkspaceMediaLibrarySyncService;
   readonly workspace: AssetWorkspaceResolution;
   readonly entityProjections?: Pick<EntityAssetProjectionRepository, 'list'>;
+  readonly refreshEntityProjections?: (workspace: AssetWorkspaceResolution) => Promise<void>;
   readonly host: Pick<NekoHostPorts, 'files' | 'external'>;
   readonly openPreview: (input: {
     readonly identity: ResourceBrowserIdentity;
@@ -86,7 +87,12 @@ export interface ResourceBrowserNodeSourceOptions {
 
 export type ResourceBrowserNodeReadSourceOptions = Pick<
   ResourceBrowserNodeSourceOptions,
-  'globalAssetRoot' | 'workspace' | 'host' | 'workspaceMediaLibrarySync' | 'entityProjections'
+  | 'globalAssetRoot'
+  | 'workspace'
+  | 'host'
+  | 'workspaceMediaLibrarySync'
+  | 'entityProjections'
+  | 'refreshEntityProjections'
 >;
 
 export async function searchGlobalAssetCatalog(input: {
@@ -248,6 +254,7 @@ export function createResourceBrowserNodeReadSource(
     },
     entities: {
       list: async () => {
+        await options.refreshEntityProjections?.(options.workspace);
         const result = await readProjectEntityManagementResources({
           workspace: options.workspace,
           ...(options.entityProjections

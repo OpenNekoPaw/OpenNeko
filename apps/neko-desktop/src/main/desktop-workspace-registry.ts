@@ -5,8 +5,10 @@ import { createNodeSqliteLocalMetadataStore } from '@neko/local-metadata/node-sq
 import { resolveNodeWorkspaceIdentity } from '@neko/local-metadata/node-workspace-identity';
 import {
   AGENT_STATE_MIGRATIONS,
+  ENTITY_ASSET_PROJECTION_MIGRATIONS,
   M1_LOCAL_METADATA_MIGRATIONS,
   MEDIA_METADATA_MIGRATIONS,
+  SEARCH_PROJECTION_MIGRATIONS,
 } from '@neko/local-metadata/sqlite';
 import { resolveGlobalStorageLayout } from '@neko/local-metadata';
 import type { AssetWorkspaceResolution } from '@neko/assets-domain/contracts';
@@ -24,15 +26,28 @@ export async function createDesktopWorkspaceRegistry(options: {
   readonly metadataStore?: LocalMetadataStore;
 }): Promise<DesktopWorkspaceRegistry> {
   const homedir = path.resolve(options.homedir);
+  const ownsMetadataStore = options.metadataStore === undefined;
   const metadataStore = options.metadataStore ?? createNodeSqliteLocalMetadataStore({ homedir });
-  await metadataStore.open({
-    databasePath: resolveGlobalStorageLayout(homedir).database,
-    busyTimeoutMs: 2_000,
-  });
+  const databasePath = resolveGlobalStorageLayout(homedir).database;
+  if (metadataStore.state === 'closed') {
+    await metadataStore.open({
+      databasePath,
+      busyTimeoutMs: 2_000,
+    });
+  } else if (metadataStore.state !== 'open') {
+    throw new Error('Desktop workspace registry requires an open local metadata Store.');
+  }
   await metadataStore.migrateNamespace(M1_LOCAL_METADATA_MIGRATIONS);
   await metadataStore.migrateNamespace(AGENT_STATE_MIGRATIONS);
   await metadataStore.migrateNamespace(MEDIA_METADATA_MIGRATIONS);
-  return new NodeDesktopWorkspaceRegistry(homedir, metadataStore);
+  await metadataStore.migrateNamespace(SEARCH_PROJECTION_MIGRATIONS);
+  await metadataStore.migrateNamespace(ENTITY_ASSET_PROJECTION_MIGRATIONS, {
+    destructiveBackup: {
+      destinationPath: `${databasePath}.pre-project-entity-projections-v3.bak`,
+      reason: 'migration',
+    },
+  });
+  return new NodeDesktopWorkspaceRegistry(homedir, metadataStore, ownsMetadataStore);
 }
 
 class NodeDesktopWorkspaceRegistry implements DesktopWorkspaceRegistry {
@@ -41,6 +56,7 @@ class NodeDesktopWorkspaceRegistry implements DesktopWorkspaceRegistry {
   constructor(
     private readonly homedir: string,
     private readonly metadataStore: LocalMetadataStore,
+    private readonly ownsMetadataStore: boolean,
   ) {}
 
   get metadataRepositories(): LocalMetadataRepositories {
@@ -91,7 +107,7 @@ class NodeDesktopWorkspaceRegistry implements DesktopWorkspaceRegistry {
   async dispose(): Promise<void> {
     if (this.disposed) return;
     this.disposed = true;
-    await this.metadataStore.dispose();
+    if (this.ownsMetadataStore) await this.metadataStore.dispose();
   }
 
   private requireActive(): void {

@@ -902,6 +902,9 @@ importers:
       '@neko/local-metadata':
         specifier: workspace:*
         version: link:../../local-metadata
+      '@neko/search-local-metadata':
+        specifier: workspace:*
+        version: link:../../search/local-metadata
     devDependencies:
       '@types/node':
         specifier: ^24.0.0

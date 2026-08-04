@@ -691,6 +691,124 @@ describe('Desktop Resource Browser source', () => {
     ]);
   });
 
+  it('combines canonical Entities with candidate and binding-attention local metadata', async () => {
+    const fixture = await createFixture();
+    await mkdir(path.join(fixture.workspace, 'neko'), { recursive: true });
+    await writeFile(
+      path.join(fixture.workspace, 'neko', 'entities.json'),
+      JSON.stringify({
+        schemaVersion: 1,
+        projectId: 'workspace-1',
+        revision: 4,
+        entities: [
+          {
+            entityId: 'character-rin',
+            kind: 'character',
+            names: { canonical: 'Rin', aliases: [] },
+            facts: {},
+            representations: [
+              {
+                bindingId: 'binding-rin',
+                target: { kind: 'workspace-file', path: 'characters/rin.png' },
+                role: 'portrait',
+                source: 'user',
+                acceptedAt: '2026-08-05T00:00:00.000Z',
+              },
+            ],
+            lifecycle: { state: 'active' },
+            createdAt: '2026-08-05T00:00:00.000Z',
+            updatedAt: '2026-08-05T00:00:00.000Z',
+          },
+        ],
+      }),
+    );
+    const list = vi.fn(async () => [
+      {
+        projectionId: 'candidate:mio',
+        kind: 'entity-candidate' as const,
+        sourceId: 'document:story',
+        candidateId: 'candidate-mio',
+        freshness: 'fresh' as const,
+        value: {
+          candidateId: 'candidate-mio',
+          kind: 'character' as const,
+          proposedNames: { canonical: 'Mio', aliases: [] },
+          freshness: 'fresh' as const,
+          evidence: [
+            {
+              evidenceId: 'evidence:mio',
+              owner: 'document' as const,
+              sourceId: 'document:story',
+            },
+          ],
+        },
+        updatedAt: '2026-08-05T01:00:00.000Z',
+      },
+      {
+        projectionId: 'binding:rin',
+        kind: 'binding-availability' as const,
+        sourceId: 'workspace-file:characters/rin.png',
+        entityId: 'character-rin',
+        freshness: 'fresh' as const,
+        value: {
+          bindingId: 'binding-rin',
+          entityId: 'character-rin',
+          entityKind: 'character' as const,
+          representation: { kind: 'workspace-file' as const, path: 'characters/rin.png' },
+          role: 'portrait' as const,
+          owner: 'workspace-file' as const,
+          availability: 'needs-attention' as const,
+          attention: {
+            diagnostic: { code: 'content-missing' as const },
+            action: 'rebind' as const,
+          },
+          checkedAt: '2026-08-05T01:00:00.000Z',
+        },
+        updatedAt: '2026-08-05T01:00:00.000Z',
+      },
+    ]);
+    const refreshEntityProjections = vi.fn(async () => undefined);
+
+    const result = await createComposition(fixture.workspace, {
+      entityProjections: { list },
+      refreshEntityProjections,
+    }).source.entities.list({ identity, query: '', limit: 20 });
+
+    expect(refreshEntityProjections).toHaveBeenCalledWith(
+      expect.objectContaining({ workspaceId: 'workspace-1', workspacePath: fixture.workspace }),
+    );
+    expect(list).toHaveBeenCalledWith({
+      partition: {
+        scope: 'workspace',
+        workspaceId: 'workspace-1',
+        domain: 'entity-asset-projection',
+      },
+      kinds: ['entity-candidate', 'binding-availability'],
+    });
+    expect(result).toMatchObject({
+      projectRevision: 4,
+      projections: [
+        {
+          projectionId: 'entity:character-rin',
+          status: 'needs-attention',
+          entity: { entityId: 'character-rin' },
+          bindingAvailability: [
+            {
+              bindingId: 'binding-rin',
+              availability: 'needs-attention',
+              attention: { action: 'rebind' },
+            },
+          ],
+        },
+        {
+          projectionId: 'candidate:candidate-mio',
+          status: 'candidate',
+          candidate: { candidateId: 'candidate-mio' },
+        },
+      ],
+    });
+  });
+
   it('adds a selected directory through links without copying the library', async () => {
     const fixture = await createFixture();
     const selected = path.join(fixture.root, 'Media Source');
@@ -933,6 +1051,12 @@ function createComposition(
     >[0]['selectGlobalLibrary'];
     readonly didMutateGlobalMediaLibraries?: () => void;
     readonly createThumbnail?: (absolutePath: string) => Promise<string>;
+    readonly entityProjections?: Parameters<
+      typeof createResourceBrowserNodeProjectionSource
+    >[0]['entityProjections'];
+    readonly refreshEntityProjections?: Parameters<
+      typeof createResourceBrowserNodeProjectionSource
+    >[0]['refreshEntityProjections'];
   } = {},
 ) {
   const host = createElectronNekoHostPorts({
@@ -952,6 +1076,8 @@ function createComposition(
       displayName: 'Fixture',
       locator: { kind: 'relative', value: 'workspace' },
     },
+    entityProjections: effects.entityProjections,
+    refreshEntityProjections: effects.refreshEntityProjections,
     host,
     openPreview: effects.openPreview ?? (async () => undefined),
     openCut: effects.openCut ?? (async () => undefined),

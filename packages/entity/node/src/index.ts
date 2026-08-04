@@ -7,3 +7,4 @@ export * from './node-project-entity-migration';
 export * from './node-project-entity-representation-references';
 export * from './node-project-entity-binding-availability';
 export * from './node-project-entity-inspector-runtime';
+export * from './node-project-entity-projection-runtime';

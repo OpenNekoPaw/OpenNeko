@@ -48,7 +48,10 @@ import {
 } from '@neko/agent-runtime/application';
 import { NodePiConversationCatalogReader } from '@neko/agent-runtime/pi';
 import { NodeVideoThumbnail } from '@neko/media/node';
-import { NodeProjectEntityInspectorRuntime } from '@neko/entity-node';
+import {
+  NodeProjectEntityInspectorRuntime,
+  NodeProjectEntityProjectionRuntime,
+} from '@neko/entity-node';
 import {
   resolveDesktopAgentAutomationLaunch,
   resolveDesktopFunctionalCutExport,
@@ -243,7 +246,19 @@ async function startDesktop(): Promise<void> {
     resourceRegistry,
   );
   logger.info('Desktop OpenNeko resource registry initialized.');
-  const workspaceRegistry = await createDesktopWorkspaceRegistry({ homedir });
+  const workspaceRegistry = await createDesktopWorkspaceRegistry({
+    homedir,
+    metadataStore: localMetadataStore,
+  });
+  const metadataRepositories = workspaceRegistry.metadataRepositories;
+  if (!metadataRepositories) {
+    throw new Error('Desktop runtime requires the local metadata repositories.');
+  }
+  const entityProjectionRuntime = new NodeProjectEntityProjectionRuntime({
+    homedir,
+    metadataStore: localMetadataStore,
+    projections: metadataRepositories.entityAssetProjections,
+  });
   const workspaceGrantAuthority = new DesktopWorkspaceGrantAuthority({
     resolver: workspaceRegistry,
   });
@@ -580,7 +595,8 @@ async function startDesktop(): Promise<void> {
   const resourceBrowser = new ResourceBrowserNodeRuntime({
     globalAssetRoot: globalStorage.assets,
     globalMediaLibraryRoot: globalStorage.mediaLibraries,
-    localMetadataRepositories: workspaceRegistry.metadataRepositories,
+    localMetadataRepositories: metadataRepositories,
+    refreshEntityProjections: (workspace) => entityProjectionRuntime.refresh(workspace),
     shell: shellService,
     host,
     canvas: canvasRuntime,
@@ -706,10 +722,6 @@ async function startDesktop(): Promise<void> {
       releaseSession: (sessionId) => resourceRegistry.releaseSession(sessionId),
     },
   });
-  const metadataRepositories = workspaceRegistry.metadataRepositories;
-  if (!metadataRepositories) {
-    throw new Error('Desktop project portability requires the local metadata repository.');
-  }
   const projectPortability = new ProjectPortabilityRuntime({
     globalMediaLibraryRoot: globalStorage.mediaLibraries,
     metadataRepositories,
@@ -1242,6 +1254,7 @@ async function startDesktop(): Promise<void> {
     nativeThemeController.dispose();
     disposeIpc();
     await appHost.dispose();
+    await entityProjectionRuntime.dispose();
     await localMetadataStore.dispose();
     resourceRegistry.dispose();
     disposeResourceAuthorization();

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import type {
@@ -19,7 +19,10 @@ describe('NodeProjectEntityInspectorRuntime', () => {
 
   it('confirms through the canonical repository and consumes every candidate source', async () => {
     const root = await createRoot(roots);
-    const projections = new MemoryProjectionRepository([candidateRecord('source-story')]);
+    const projections = new MemoryProjectionRepository([
+      candidateRecord('source-story'),
+      candidateRecord('source-notes'),
+    ]);
     const runtime = createRuntime(root, projections);
 
     await runtime.execute(confirmIntent());
@@ -85,6 +88,25 @@ describe('NodeProjectEntityInspectorRuntime', () => {
 
     await expect(runtime.execute(confirmIntent())).rejects.toMatchObject({
       diagnostics: [{ code: 'project-entity-candidate-not-found' }],
+    });
+    await expect(repository(root).load()).resolves.toMatchObject({ revision: 0, entities: [] });
+  });
+
+  it('fails visibly on a corrupt recovery journal before applying another operation', async () => {
+    const root = await createRoot(roots);
+    await mkdir(path.join(root, 'neko'), { recursive: true });
+    await writeFile(path.join(root, 'neko', 'entity-operation-journal.json'), '{invalid', 'utf8');
+    const runtime = createRuntime(root);
+
+    await expect(
+      runtime.execute({
+        type: 'edit',
+        expectedRevision: 0,
+        entityId: 'entity-rin',
+        changes: { facts: { role: 'lead' } },
+      }),
+    ).rejects.toMatchObject({
+      diagnostics: [{ code: 'project-entity-io-failed' }],
     });
     await expect(repository(root).load()).resolves.toMatchObject({ revision: 0, entities: [] });
   });

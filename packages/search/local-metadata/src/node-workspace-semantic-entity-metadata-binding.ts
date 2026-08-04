@@ -14,7 +14,11 @@ import type {
 import type { DocumentLocator } from '@neko/content';
 import { isSemanticSourceDescriptor } from '@neko/search-domain';
 import { resolveGlobalStorageLayout } from '@neko/local-metadata';
-import type { LocalMetadataPartition, LocalMetadataPartitionRevision } from '@neko/local-metadata';
+import type {
+  LocalMetadataPartition,
+  LocalMetadataPartitionRevision,
+  LocalMetadataStore,
+} from '@neko/local-metadata';
 import { createNodeSqliteLocalMetadataStore } from '@neko/local-metadata/node-sqlite-local-metadata-store';
 import { resolveNodeWorkspaceIdentity } from '@neko/local-metadata/node-workspace-identity';
 import type { SemanticProjectionRecord } from '@neko/local-metadata';
@@ -55,16 +59,23 @@ export interface NodeWorkspaceSemanticEntityMetadataBinding extends ProjectEntit
 export async function createNodeWorkspaceSemanticEntityMetadataBinding(options: {
   readonly homedir: string;
   readonly workDir: string;
+  readonly metadataStore?: LocalMetadataStore;
   readonly createWorkspaceId?: () => string;
   readonly now?: () => string;
 }): Promise<NodeWorkspaceSemanticEntityMetadataBinding> {
-  const metadataStore = createNodeSqliteLocalMetadataStore({ homedir: options.homedir });
+  const ownsMetadataStore = options.metadataStore === undefined;
+  const metadataStore =
+    options.metadataStore ?? createNodeSqliteLocalMetadataStore({ homedir: options.homedir });
   try {
     const databasePath = resolveGlobalStorageLayout(options.homedir).database;
-    await metadataStore.open({
-      databasePath,
-      busyTimeoutMs: 2_000,
-    });
+    if (metadataStore.state === 'closed') {
+      await metadataStore.open({
+        databasePath,
+        busyTimeoutMs: 2_000,
+      });
+    } else if (metadataStore.state !== 'open') {
+      throw new Error('Semantic Entity metadata requires an open local metadata Store.');
+    }
     await metadataStore.migrateNamespace(M1_LOCAL_METADATA_MIGRATIONS);
     await metadataStore.migrateNamespace(SEARCH_PROJECTION_MIGRATIONS);
     await metadataStore.migrateNamespace(ENTITY_ASSET_PROJECTION_MIGRATIONS, {
@@ -322,10 +333,10 @@ export async function createNodeWorkspaceSemanticEntityMetadataBinding(options: 
       },
       readSemanticRevision: () => metadataStore.readPartitionRevision(semanticPartition),
       readEntityRevision: () => metadataStore.readPartitionRevision(entityPartition),
-      dispose: () => metadataStore.dispose(),
+      dispose: () => (ownsMetadataStore ? metadataStore.dispose() : Promise.resolve()),
     };
   } catch (error) {
-    await metadataStore.dispose();
+    if (ownsMetadataStore) await metadataStore.dispose();
     throw error;
   }
 }

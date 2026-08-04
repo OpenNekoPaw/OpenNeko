@@ -135,6 +135,7 @@ export interface ResourceBrowserNodeRuntimeOptions {
   readonly globalAssetRoot: string;
   readonly globalMediaLibraryRoot: string;
   readonly localMetadataRepositories?: LocalMetadataRepositories;
+  readonly refreshEntityProjections?: ResourceBrowserNodeSourceOptions['refreshEntityProjections'];
   readonly shell: ResourceBrowserShellPort;
   readonly host: Pick<NekoHostPorts, 'files' | 'external'>;
   readonly openPreview: ResourceBrowserNodeSourceOptions['openPreview'];
@@ -901,6 +902,7 @@ export class ResourceBrowserNodeRuntime {
       globalMediaLibraryRoot: this.options.globalMediaLibraryRoot,
       workspaceMediaLibrarySync: this.workspaceMediaLibrarySync,
       entityProjections: this.options.localMetadataRepositories?.entityAssetProjections,
+      refreshEntityProjections: this.options.refreshEntityProjections,
       workspace,
       host: this.options.host,
       openPreview: this.options.openPreview,
