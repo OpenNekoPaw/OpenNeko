@@ -25,6 +25,7 @@ Desktop 目前由 `DesktopShell` 在 Home、Project workspace 和 Settings 三�
 - 同一 Workbench primitive 支持 Agent-only、Agent + Main、Agent + Main + Manager 和 management Main + optional Secondary Main 等明确形态。
 - 一级侧栏只提交 typed scene intent，不渲染或拥有领域页面。
 - 同一个 AgentWebviewRoot 服务入口 draft、Assistant session 和 Workspace session。
+- 每次“开始创作”创建新的未绑定 Entry Draft identity，旧 session UI 状态不能泄漏到新 draft。
 - Assistant 使用 OpenNeko 用户资源、显式文件 grant 和可恢复 conversation scratch。
 - 用户显式选择目录后获得 Workspace scope 和现有 creative Workbench composition，不自动创建 conversation。
 - 资源中心以 Assets management 为 Main，authorized Preview 只作为可选 Secondary Main。
@@ -38,6 +39,7 @@ Desktop 目前由 `DesktopShell` 在 Home、Project workspace 和 Settings 三�
 - 不创建通用页面 DSL、动态 scene registry、Desktop manager bag 或第二个 Agent controller。
 - 不在本变更实现跨 Assistant/Workspace 或跨目录的 linked conversation/artifact handoff；只禁止原地 rebind。
 - 不为缺失的 management detail producer 复制 Desktop-owned 临时业务 UI。
+- 不把未实现的 Character/Room owner伪装成普通单 Agent conversation，也不在本变更实现其业务 runtime。
 
 ## Decisions
 
@@ -150,7 +152,8 @@ Codec 必须验证 context 与每个 slot 的 identity/scope 一致。例如 Ass
 
 ```ts
 type DesktopSceneTransitionIntent =
-  | { kind: 'open-agent-assistant' }
+  | { kind: 'open-agent-entry' }
+  | { kind: 'bind-agent-assistant'; draftId: AgentDraftId }
   | { kind: 'open-workspace'; workspaceGrantId: WorkspaceGrantId }
   | { kind: 'open-asset-center' }
   | { kind: 'open-extensions' }
@@ -162,6 +165,8 @@ type DesktopSceneTransitionIntent =
 Request 携带 requestId、endpoint epoch、Window identity、expected window revision 和 expected scene revision。Host Shell service 根据 owner facts 产生下一个 projection；renderer 不根据 route string、组件可用性、active/first/recent Project 或模型文本推断 scene。显式请求尚未具备 owner/runtime/Surface 的 Character/World scene 时返回 owner-qualified unavailable。
 
 Renderer reload 从 Host projection 恢复精确 scene。关闭最后一个 conversation 只回到同 scope 的 Agent draft，不默认切换目录或 Project。跨 scope/目录的 active conversation 不可原地 rebind。
+
+`open-agent-entry` 每次必须分配新的 `draftId` 和 presentation epoch，即使当前已经位于 Agent scene。它原子清除 Scene 中的 conversation/scope binding，但不删除任何持久 conversation。`bind-agent-assistant` 与显式 directory/Project action 只能绑定当前 exact draft；stale draft intent 必须失败。未来 Character/Room owner 提供 contract 前，相关绑定返回 owner-qualified unavailable。
 
 ### 4. Sidebar is a separate window presentation aggregate
 
@@ -185,11 +190,15 @@ Sidebar mutation 携带 expected sidebar revision，并只更新 sidebar aggrega
 
 ```ts
 type AgentRootPresentation =
-  | { kind: 'draft'; scope: AgentScopeProjection }
+  | { kind: 'draft'; draftId: AgentDraftId; scope: { kind: 'unbound' } | AgentScopeProjection }
   | { kind: 'session'; scope: AgentScopeProjection; conversationId: ConversationId };
 ```
 
 Draft 隐藏 conversation Tabs/history 等 session-only chrome，但继续复用当前 `ConversationController`、`EmptyState`、`InputAreaProvider` 和 `InputArea`。模型配置、launch-safe commands/Skills、授权文件/引用、语音入口以及创建 turn 后的执行/审批均走相同 Webview contract。普通 workspace session 未传入 draft presentation 时，现有 DOM、Host messages 和行为保持不变。
+
+`draftId` 是 presentation instance identity，不是 conversation identity。Controller 观察到新的 `draftId` 时，必须在 package 内完成一次显式 draft transition：清空 `openTabs`、`activeConversationId`、retained transcript/render subscription、entry input/reference 和 transient error；全局模型 catalog、用户 settings 与静态 capability catalog 不重建。Desktop 不通过 React `key` 重建第二个 Root，也不发送伪造 close-tab 消息来达到清理效果。
+
+Entry Draft 的 `unbound` scope 只允许 scope-neutral catalog 与“选择 Assistant / 选择目录 / 未来选择 Character 或 Room”的显式操作。选择 Assistant 绑定 AssistantSpace draft；选择目录/Project绑定 Workspace draft并激活 creative slots；首次提交沿既有 local transaction 变成 exact session。每次再次点击“开始创作”都回到新的 `unbound` draft，而不是恢复任何已有 conversation。
 
 Capability catalog 必须标记 scope requirements。Assistant draft 不展示 Workspace-only Tool/Skill 为可执行成功能力；缺少 Workspace scope 时返回 typed `workspace-scope-required`，不能 fallback 到 active Project。Root 不因 scope 改变而换成另一套 controller。
 
@@ -273,9 +282,18 @@ Pi transcript 中 `stopReason: error` 的 assistant entry 必须把持久化的 
 
 ### 12. Ownership and canonical paths
 
+### 12. Renderer runtime lifetime is separate from effect subscription lifetime
+
+Desktop scene adapters such as `DesktopAssetCenterRuntime` are view-scoped resources. A React effect that subscribes to an existing runtime owns only that subscription; its cleanup cannot permanently dispose the memoized runtime because StrictMode deliberately executes an extra setup/cleanup/setup cycle. Runtime creation and final disposal must share the same identity owner and dispose only when the identity is replaced or the component actually leaves the tree.
+
+The canonical fix remains fail-visible after final disposal: methods on a disposed runtime still throw. It must not make `dispose()` reversible, ignore subscribe-after-dispose, add a fallback runtime or remove StrictMode. A StrictMode renderer regression plus a real Electron reload/startup scenario proves the lifecycle path.
+
+### 13. Ownership and canonical paths
+
 | Owner                      | Public path / role                                                   | Producer                      | Consumer                   | Replaced path / user data                                              |
 | -------------------------- | -------------------------------------------------------------------- | ----------------------------- | -------------------------- | ---------------------------------------------------------------------- |
 | Scene/sidebar/transition   | `@neko/host/desktop-shell-contract` + Shell service                  | Host-neutral Shell service    | Desktop renderer/preload   | 替换 Home/Project/Settings branch；迁移 sidebar presentation value     |
+| Entry Draft identity       | `@neko/host/desktop-scene-contract`                                  | Host Scene authority          | Agent presentation adapter | 新 draft 不删除旧 conversation；旧稳定入口 identity 被替换             |
 | Workbench primitive        | `@neko/ui/workbench`                                                 | React primitive               | Desktop scene composer     | 删除平行/nested Shell consumers                                        |
 | Agent presentation         | `@neko/agent-webview/root`                                           | Agent Webview                 | Desktop Agent Surface      | 删除 Home composer/initialInput；不复制 controller                     |
 | Scope/conversation/scratch | `@neko/agent-contracts` + `@neko/agent-runtime/application`          | Agent authority               | Desktop adapter/Agent Root | 补齐 existing Workspace context；新增 Assistant user-space，不暴露路径 |
@@ -298,6 +316,8 @@ Pi transcript 中 `stopReason: error` 的 assistant entry 必须把持久化的 
 - [缺失 Extensions/Project detail Root] -> owner-qualified empty/unavailable；不复制 app-local domain UI。
 - [Sidebar 双写] -> 原子切换 producer/consumer并 poison旧 Workbench sidebar update。
 - [已写入的 prelaunch scene 无法启动] -> Shell state 升级到 v6，仅迁移 v5 中已知的 management catalog 与 Assistant resources Manager Surface；当前或未知 kind 继续 fail-visible。
+- [新 draft 显示旧 session] -> Host 分配 exact `draftId`，Agent package 在 identity transition 时清除 instance state，并 poison stable Scene/View fallback。
+- [StrictMode cleanup 使 Desktop 白屏] -> subscription cleanup 与 runtime final disposal 分离；保留 disposed fail-visible，并以 StrictMode + development/packaged Electron exception 证据验证。
 
 ## Migration Plan
 
@@ -310,6 +330,7 @@ Pi transcript 中 `stopReason: error` 的 assistant entry 必须把持久化的 
 7. 增加 directory grant、AssistantSpace/scratch、conversation context migration和幂等 first-submit authority。
 8. 删除 Home composer、agentInitialInput、模型 intent scene routing与所有默认 Project fallback。
 9. 运行 package tests/build、Agent evaluation、legacy/boundary gates和隔离真实 Electron大/小窗口场景。
+10. 引入 unbound Entry Draft identity、显式 scope binding 与 package-owned presentation reset；修复 renderer runtime StrictMode lifecycle并复验用户启动路径。
 
 回滚只能整体恢复上一稳定 commit 的 composition，不能删除实施期间创建的 conversation、published Asset、Workspace或用户授权记录。新 schema 若已写入，旧版本必须明确拒绝或执行有版本的单次迁移；不能静默回退 Home composer、默认 Project或双 sidebar路径。
 
@@ -320,3 +341,4 @@ Pi transcript 中 `stopReason: error` 的 assistant entry 必须把持久化的 
 - 跨 Assistant/Workspace或跨目录的 linked continuation不在本变更实现；active conversation返回 `new-conversation-required`。
 - Assistant Preview v1使用现有 Preview Root支持的、可由 Host Content authorization生成 descriptor的内容类型；不支持类型显示 typed unavailable且保留引用。
 - 语音能力只保证入口与 workspace使用同一现有 capability projection；本变更不补建缺失的语音 runtime。
+- PrimarySidebar 保留最近项，但分为 exact session restore 与 container open：conversation恢复 session，Project打开 Workspace draft；Character/Room owner可用后由其投影顶层 session/container，不暴露内部 AgentSession。

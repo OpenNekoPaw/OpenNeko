@@ -82,3 +82,14 @@
 - [x] 9.10 Make Project/Workspace and conversation restore atomically activate `activeTarget`, Workbench, Scene and Agent phase; allow a live Workspace Scene with an empty Main after closing the last View and add Host/AppHost/renderer path regressions.
 - [x] 9.11 Preserve Pi `errorMessage` in the canonical transcript projection, prove failed turns remain diagnostic and successful turns remain conversational, and update/reuse the focused Agent workflow/stream-delivery evaluation evidence.
 - [x] 9.12 Reuse Workspace panel chrome and resize composition for Assets, Extensions and Projects management + optional Preview/Detail, retain `@neko/preview-webview` as the sole viewer implementation, and qualify large/small Electron layouts.
+
+## 10. Entry Draft Identity And Renderer Startup Recovery
+
+- [x] 10.1 Update proposal/design/spec for unbound Entry Draft, per-click draft identity, exact session versus container recent navigation, and StrictMode-safe view-runtime ownership.
+- [ ] 10.2 Add Host scene contract/codec and stored-state migration for exact Entry Draft identity; keep current unknown versions and kinds fail-visible.
+- [ ] 10.3 Make every Start Creating action allocate a new unbound draft without conversation, AssistantSpace, Workspace or stable Scene/View fallback.
+- [ ] 10.4 Add package-owned Agent Webview draft transition/reset that clears prior session presentation state while preserving the same Root, global model catalog and user settings.
+- [ ] 10.5 Bind Assistant/Workspace only through explicit current-draft transitions and keep unavailable Character/Room owners fail-visible; preserve atomic first-submit session activation.
+- [ ] 10.6 Add producer/consumer path tests proving stale drafts fail, old conversations remain unchanged, old Tabs/transcript cannot appear in a new draft, and recent session/container actions retain distinct semantics.
+- [ ] 10.7 Fix Asset Center runtime ownership so StrictMode effect remount cannot reuse a disposed runtime; add a regression that fails before the fix and preserves fail-visible final disposal.
+- [ ] 10.8 Run focused Host/Agent/Desktop tests, Agent Evaluation, full quality gates and real development/packaged Electron startup/reload scenarios; record canonical-path evidence and residual risks.

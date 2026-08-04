@@ -104,6 +104,27 @@ The Host-neutral scene authority SHALL produce a versioned projection with exact
 
 The existing package-owned `AgentWebviewRoot`, controller, composer and Host protocol SHALL serve Agent draft, Assistant session and Workspace session. Draft/session presentation MAY alter only session chrome; it MUST NOT create a Desktop composer, second controller or alternative message route.
 
+#### Scenario: Start Creating opens a fresh Entry Draft
+
+- **WHEN** the user activates Start Creating from any draft, session, Workspace or management scene
+- **THEN** Host allocates a new exact draft identity in an unbound Agent scene
+- **AND** the scene has no conversation, AssistantSpace, Workspace, Character or Room binding
+- **AND** no existing conversation is opened, changed or deleted
+
+#### Scenario: A new draft replaces visible session state
+
+- **WHEN** the same Agent Root observes a different draft identity after showing a session
+- **THEN** the package-owned controller clears open Tabs, active conversation, transcript subscriptions, entry input/references and transient errors for the old presentation instance
+- **AND** it retains global model catalogs and user settings
+- **AND** Desktop does not remount a second controller or infer the reset from active Project state
+
+#### Scenario: User selects an Agent owner from Entry Draft
+
+- **WHEN** the user explicitly chooses Assistant or a Workspace directory/Project for the current exact draft
+- **THEN** Host binds that draft to the matching owner-qualified scope and activates its Workbench shape without creating a conversation
+- **AND** the first submit creates one exact conversation/session and atomically activates its Agent phase and layout
+- **AND** a stale draft identity or unavailable Character/Room owner fails visibly
+
 #### Scenario: Workspace conversation renders normally
 
 - **WHEN** AgentWebviewRoot mounts an active Workspace conversation
@@ -303,6 +324,35 @@ Extensions and project management SHALL place their package-owned management Roo
 ### Requirement: Scene and Surface lifecycle remains instance-scoped
 
 Every Agent connection, Workspace View, management session, Preview resource and subscription SHALL remain scoped to explicit Window/View/session identity. Scene activation SHALL select presentation only and MUST NOT become the owner of conversation, Workspace, Asset or configuration mutable facts.
+
+#### Scenario: React StrictMode remounts scene effects
+
+- **WHEN** development React performs its setup, cleanup and setup cycle for a scene subscription
+- **THEN** subscription cleanup releases only that subscription and the exact runtime remains active for the second setup
+- **AND** final scene removal or identity replacement disposes the runtime exactly once
+- **AND** operations after final disposal still fail visibly
+
+#### Scenario: Desktop renderer starts with an Asset Center scene
+
+- **WHEN** Desktop restores or opens an Asset Center scene in development or packaged Electron
+- **THEN** the renderer mounts a non-empty Workbench without uncaught runtime-disposed exceptions
+- **AND** reload restores the exact scene/session and does not leak duplicate subscriptions or Preview handles
+
+### Requirement: Recent navigation distinguishes sessions from containers
+
+PrimarySidebar SHALL keep owner-qualified recent session and recent container projections. Selecting a recent session SHALL restore its exact interactive session. Selecting a Project or future Character/Room container SHALL open that owner and create a new bound draft, not restore an unrelated prior conversation or expose an internal role AgentSession.
+
+#### Scenario: User selects a recent conversation
+
+- **WHEN** a recent Assistant, Workspace, Character dialogue or Room session is selected
+- **THEN** Host restores that exact top-level session identity and its complete Workbench/Agent state atomically
+- **AND** no first, active or recent container fallback chooses another owner
+
+#### Scenario: User selects a recent Project
+
+- **WHEN** a recent Project is selected without an explicit conversation identity
+- **THEN** Host opens that exact Workspace and a new Workspace-bound draft
+- **AND** no old Project conversation is opened implicitly
 
 #### Scenario: Renderer reload restores a scene
 
