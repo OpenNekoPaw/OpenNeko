@@ -126,6 +126,7 @@ export interface AgentControllerComposition {
   createEffects(input: {
     readonly workspace: AgentWorkspaceRuntime;
     readonly identity: DesktopAgentConnectionIdentity;
+    readonly initialConversationId?: string;
   }): AgentControllerEffects;
   startInitialTurn?(input: {
     readonly workspace: AgentWorkspaceRuntime;
@@ -186,11 +187,32 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
   createEffects(input: {
     readonly workspace: AgentWorkspaceRuntime;
     readonly identity: DesktopAgentConnectionIdentity;
+    readonly initialConversationId?: string;
   }): AgentControllerEffects {
     const config = this.getConfig(input.workspace);
+    const initialConversation =
+      input.initialConversationId === undefined
+        ? undefined
+        : input.workspace
+            .listConversations()
+            .find((record) => record.conversationId === input.initialConversationId);
+    if (input.initialConversationId !== undefined && initialConversation === undefined) {
+      throw new Error(
+        `Desktop Agent initial Conversation '${input.initialConversationId}' does not exist in Workspace '${input.workspace.workspaceId}'.`,
+      );
+    }
+    const initialTab = initialConversation
+      ? {
+          id: `tab-${initialConversation.conversationId}`,
+          title: initialConversation.title,
+          conversationId: initialConversation.conversationId,
+        }
+      : undefined;
     const state: ConnectionState = {
-      activeConversationId: null,
-      tabState: { openTabs: [], activeTabId: null },
+      activeConversationId: initialConversation?.conversationId ?? null,
+      tabState: initialTab
+        ? { openTabs: [initialTab], activeTabId: initialTab.id }
+        : { openTabs: [], activeTabId: null },
       tabStateRevision: 0,
     };
     let post: AgentHostRouteEffectContext['post'] | undefined;
@@ -353,37 +375,46 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
       },
     });
     try {
-      await this.executeTurn({
-        workspace: input.workspace,
-        config: this.getConfig(input.workspace),
-        request: {
-          source: 'user-message',
+      try {
+        await this.executeTurn({
+          workspace: input.workspace,
+          config: this.getConfig(input.workspace),
+          request: {
+            source: 'user-message',
+            conversationId: input.conversationId,
+            messageText: input.messageText,
+            sessionMode: 'agent',
+            locale: input.locale,
+            chatModel: {
+              providerId: input.providerId,
+              modelId: input.modelId,
+              category: 'llm',
+            },
+            turnId: input.turnId,
+            ...(input.contextPayloads?.length ? { contextPayloads: input.contextPayloads } : {}),
+          },
+          context: {
+            identity: {
+              hostKind: 'electron',
+              applicationId: 'agent-conversation-authority',
+              windowId: `conversation:${input.conversationId}`,
+              viewId: `conversation:${input.conversationId}`,
+              workspaceId: input.workspace.workspaceId,
+              rendererEpoch: 'authority',
+              connectionId: `initial-turn:${input.turnId}`,
+            },
+            post: () => undefined,
+          },
+          facts,
+        });
+      } catch (error) {
+        await input.workspace.checkpointFailedInitialTurn({
           conversationId: input.conversationId,
-          messageText: input.messageText,
-          sessionMode: 'agent',
-          locale: input.locale,
-          chatModel: {
-            providerId: input.providerId,
-            modelId: input.modelId,
-            category: 'llm',
-          },
           turnId: input.turnId,
-          ...(input.contextPayloads?.length ? { contextPayloads: input.contextPayloads } : {}),
-        },
-        context: {
-          identity: {
-            hostKind: 'electron',
-            applicationId: 'agent-conversation-authority',
-            windowId: `conversation:${input.conversationId}`,
-            viewId: `conversation:${input.conversationId}`,
-            workspaceId: input.workspace.workspaceId,
-            rendererEpoch: 'authority',
-            connectionId: `initial-turn:${input.turnId}`,
-          },
-          post: () => undefined,
-        },
-        facts,
-      });
+          messageText: input.messageText,
+        });
+        throw error;
+      }
     } finally {
       facts.dispose();
     }

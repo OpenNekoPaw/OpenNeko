@@ -543,6 +543,63 @@ describe('PiConversationRuntime', () => {
     runtime.dispose();
   });
 
+  it('checkpoints the submitted message when provider transport startup fails', async () => {
+    const lease = authority.acquireLease('conversation-1');
+    await authority.createConversation({
+      lease,
+      conversationId: 'conversation-1',
+      branchId: 'branch-main',
+    });
+    const models = createFixtureModels(() => {
+      throw new Error('provider transport is offline');
+    });
+    const modelPolicy = policy();
+    const runtime = await PiConversationRuntime.open({
+      authority,
+      lease,
+      conversationId: 'conversation-1',
+      branchId: 'branch-main',
+      models,
+      initialModelPolicy: modelPolicy,
+      baseSystemPrompt: 'OpenNeko fixture',
+    });
+
+    await expect(
+      runtime.execute({
+        turnId: 'turn-provider-startup-failed',
+        runId: 'run-provider-startup-failed',
+        prompt: 'retain this submitted message',
+        modelPolicy,
+        skillSnapshot: await emptySkills(),
+        capabilityTools: [],
+        permissionPolicy: { preflight: () => ({ allowed: true }) },
+        workspaceTrusted: true,
+        events: { emit: () => undefined },
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(
+      (await authority.readBranchEntries('conversation-1', 'branch-main'))
+        .filter((entry) => entry.type === 'message')
+        .map((entry) => entry.message),
+    ).toMatchObject([
+      {
+        role: 'user',
+        content: [{ type: 'text', text: 'retain this submitted message' }],
+      },
+      {
+        role: 'assistant',
+        content: [],
+        stopReason: 'error',
+        errorMessage: 'provider transport is offline',
+      },
+    ]);
+    expect(
+      authority.readCheckpoint('conversation-1', 'turn-provider-startup-failed'),
+    ).toMatchObject({ terminalState: 'failed' });
+    runtime.dispose();
+  });
+
   it('keeps the writer lease alive between turns for the lifetime of the runtime', async () => {
     await authority.dispose();
     vi.useFakeTimers();

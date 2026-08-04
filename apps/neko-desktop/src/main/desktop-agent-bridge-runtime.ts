@@ -53,8 +53,7 @@ export interface DesktopAssistantAgentConnectionGrant {
 }
 
 export type DesktopAnyAgentConnectionGrant =
-  | DesktopAgentConnectionGrant
-  | DesktopAssistantAgentConnectionGrant;
+  DesktopAgentConnectionGrant | DesktopAssistantAgentConnectionGrant;
 
 export interface DesktopAgentBridgeRuntime {
   readonly startup: DesktopAgentStartupAudit;
@@ -62,6 +61,7 @@ export interface DesktopAgentBridgeRuntime {
     readonly requestId: string;
     readonly grant: DesktopAnyAgentConnectionGrant;
     readonly workspace: AgentWorkspaceRuntime | undefined;
+    readonly initialConversationId?: string;
     readonly publish: (event: DesktopAgentMessageEvent) => void;
   }): DesktopAgentBootstrapProjection;
   send(
@@ -135,6 +135,7 @@ export function createDesktopAgentBridgeRuntime(input: {
 
 interface DesktopAgentConnection {
   readonly identity: DesktopAgentConnectionIdentity;
+  readonly initialConversationId?: string;
   readonly controller: AgentHostMessageController;
   publish: (event: DesktopAgentMessageEvent) => void;
   readonly effects: AgentControllerEffects;
@@ -164,6 +165,7 @@ class DefaultDesktopAgentBridgeRuntime implements DesktopAgentBridgeRuntime {
     readonly requestId: string;
     readonly grant: DesktopAnyAgentConnectionGrant;
     readonly workspace: AgentWorkspaceRuntime | undefined;
+    readonly initialConversationId?: string;
     readonly publish: (event: DesktopAgentMessageEvent) => void;
   }): DesktopAgentBootstrapProjection {
     this.requireActive();
@@ -197,6 +199,7 @@ class DefaultDesktopAgentBridgeRuntime implements DesktopAgentBridgeRuntime {
     }
     for (const connection of this.connections.values()) {
       if (!isSameConnectionGrant(connection.identity, input.grant)) continue;
+      if (connection.initialConversationId !== input.initialConversationId) continue;
       connection.publish = input.publish;
       return {
         schemaVersion: DESKTOP_AGENT_CONTRACT_VERSION,
@@ -221,9 +224,15 @@ class DefaultDesktopAgentBridgeRuntime implements DesktopAgentBridgeRuntime {
     const effects = composition.createEffects({
       workspace: input.workspace,
       identity,
+      ...(input.initialConversationId === undefined
+        ? {}
+        : { initialConversationId: input.initialConversationId }),
     });
     const connection: DesktopAgentConnection = {
       identity,
+      ...(input.initialConversationId === undefined
+        ? {}
+        : { initialConversationId: input.initialConversationId }),
       controller: createAgentHostMessageController(effects, {
         identity: {
           hostKind: 'electron',

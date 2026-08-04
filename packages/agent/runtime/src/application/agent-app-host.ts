@@ -134,6 +134,11 @@ export interface AgentWorkspaceRuntime {
   deleteConversation(conversationId: string): Promise<void>;
   clearAllConversations(): Promise<void>;
   openConversation(input: AgentConversationOpenInput): Promise<void>;
+  checkpointFailedInitialTurn(input: {
+    readonly conversationId: string;
+    readonly turnId: string;
+    readonly messageText: string;
+  }): Promise<void>;
   startTurn(input: AgentTurnInput): AgentTurnOperation;
   executeTurn(input: AgentTurnInput): Promise<AgentTurnResult>;
   cancelTurn(conversationId: string, identity: Pick<PiToolRunIdentity, 'turnId' | 'runId'>): void;
@@ -196,6 +201,7 @@ export interface CreateAgentAppHostOptions {
   readonly hostId: string;
   readonly credentialRuntime: AgentCredentialRuntime;
   readonly catalogReader: PiConversationCatalogReader;
+  readonly homeConversationWorkspaceIds?: readonly string[];
   readonly builtinSkillRoot?: string;
   readonly assetLoader?: PiToolResultAssetLoader;
   readonly createIdentity?: () => string;
@@ -209,7 +215,8 @@ class DefaultAgentAppHost implements AgentAppHost {
   private readonly workspaces = new Map<string, DefaultAgentWorkspaceRuntime>();
   private readonly opening = new Map<string, Promise<DefaultAgentWorkspaceRuntime>>();
   private readonly homeProjectionListeners = new Set<() => void>();
-  private homeWorkspaceScope: readonly string[] = [];
+  private readonly homeConversationWorkspaceIds: readonly string[];
+  private homeWorkspaceScope: readonly string[];
   private homeProjectionRevision = 0;
   private pluginGeneration: AgentPluginRuntimeGeneration | undefined;
   private pluginRuntimeChanging = false;
@@ -217,6 +224,10 @@ class DefaultAgentAppHost implements AgentAppHost {
 
   constructor(private readonly options: CreateAgentAppHostOptions) {
     requireIdentity(options.hostId, 'Agent Host');
+    this.homeConversationWorkspaceIds = normalizeWorkspaceScope(
+      options.homeConversationWorkspaceIds ?? [],
+    );
+    this.homeWorkspaceScope = this.homeConversationWorkspaceIds;
   }
 
   get credentialRuntime(): AgentCredentialRuntime {
@@ -225,21 +236,14 @@ class DefaultAgentAppHost implements AgentAppHost {
 
   setHomeWorkspaceScope(workspaceIds: readonly string[]): void {
     this.requireActive();
-    const next = [
-      ...new Set(
-        workspaceIds.map((workspaceId) => {
-          requireIdentity(workspaceId, 'Workspace');
-          return workspaceId;
-        }),
-      ),
-    ].sort();
+    const next = normalizeWorkspaceScope([...this.homeConversationWorkspaceIds, ...workspaceIds]);
     if (
       next.length === this.homeWorkspaceScope.length &&
       next.every((workspaceId, index) => workspaceId === this.homeWorkspaceScope[index])
     ) {
       return;
     }
-    this.homeWorkspaceScope = Object.freeze(next);
+    this.homeWorkspaceScope = next;
     this.emitHomeProjectionChanged();
   }
 
@@ -552,6 +556,44 @@ class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
 
   async openConversation(input: AgentConversationOpenInput): Promise<void> {
     await this.getOrOpenConversation(input);
+  }
+
+  async checkpointFailedInitialTurn(input: {
+    readonly conversationId: string;
+    readonly turnId: string;
+    readonly messageText: string;
+  }): Promise<void> {
+    this.requireActive();
+    const record = this.options.authority.readConversation(input.conversationId);
+    if (!record) {
+      throw new Error(`Agent conversation '${input.conversationId}' does not exist.`);
+    }
+    if (this.options.authority.readCheckpoint(input.conversationId, input.turnId)) return;
+    const lease = this.options.authority.acquireLease(input.conversationId);
+    try {
+      if (
+        this.options.authority.getTurnDurability(input.conversationId, input.turnId) === undefined
+      ) {
+        this.options.authority.startTurnDurability(input.conversationId, input.turnId);
+      }
+      await this.options.authority.checkpointTurn({
+        lease,
+        conversationId: input.conversationId,
+        branchId: record.activeBranchId,
+        turnId: input.turnId,
+        terminalState: 'failed',
+        messages: [
+          {
+            role: 'user',
+            content: input.messageText,
+            timestamp: Date.now(),
+          },
+        ],
+      });
+      this.options.onHomeProjectionChanged();
+    } finally {
+      this.options.authority.releaseLease(lease);
+    }
   }
 
   startTurn(input: AgentTurnInput): AgentTurnOperation {
@@ -1306,6 +1348,17 @@ function countAttention(
   status: Exclude<AgentHomeAttentionStatus, 'none'>,
 ): number {
   return conversations.filter((conversation) => conversation.attention === status).length;
+}
+
+function normalizeWorkspaceScope(workspaceIds: readonly string[]): readonly string[] {
+  return Object.freeze(
+    [...new Set(workspaceIds)]
+      .map((workspaceId) => {
+        requireIdentity(workspaceId, 'Workspace');
+        return workspaceId;
+      })
+      .sort(),
+  );
 }
 
 function freezeClone<T>(value: T): T {

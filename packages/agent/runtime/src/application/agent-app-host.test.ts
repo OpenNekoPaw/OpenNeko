@@ -178,6 +178,33 @@ describe('AgentAppHost', () => {
     expect(piStorage.every((content) => !content.includes(protectedSecret))).toBe(true);
   });
 
+  it('checkpoints the exact initial user message when execution fails before Pi starts', async () => {
+    const fixture = await createFixture();
+    const workspace = await fixture.composition.attachWorkspace(fixture.workspace);
+    await workspace.createConversation('conversation-preflight-failed');
+    await workspace.checkpointFailedInitialTurn({
+      conversationId: 'conversation-preflight-failed',
+      turnId: 'turn-preflight-failed',
+      messageText: 'retain the locally committed prompt',
+    });
+    await workspace.checkpointFailedInitialTurn({
+      conversationId: 'conversation-preflight-failed',
+      turnId: 'turn-preflight-failed',
+      messageText: 'retain the locally committed prompt',
+    });
+
+    expect(
+      (await workspace.readConversationEntries('conversation-preflight-failed'))
+        .filter((entry) => entry.type === 'message')
+        .map((entry) => entry.message),
+    ).toMatchObject([
+      {
+        role: 'user',
+        content: 'retain the locally committed prompt',
+      },
+    ]);
+  });
+
   it('discovers project, personal and builtin Skills through one sanitized catalog path', async () => {
     const fixture = await createFixture();
     const builtinSkillRoot = join(fixture.root, 'builtin-skills');
@@ -387,6 +414,63 @@ describe('AgentAppHost', () => {
     });
     restored.setHomeWorkspaceScope([]);
     expect(restored.readHomeProjection().conversations).toEqual([]);
+  });
+
+  it('retains immutable Assistant conversations while Project Home scope changes', async () => {
+    const fixture = await createFixture();
+    const assistantSpaceId = 'assistant-space:local-user';
+    const observedScopes: string[][] = [];
+    const conversations = [
+      {
+        workspaceId: assistantSpaceId,
+        conversationId: 'conversation-assistant',
+        title: 'Assistant conversation',
+        activeBranchId: 'main',
+        createdAt: '2026-08-04T00:00:00.000Z',
+        updatedAt: '2026-08-04T00:02:00.000Z',
+      },
+      {
+        workspaceId: fixture.workspace.workspaceId,
+        conversationId: 'conversation-project',
+        title: 'Project conversation',
+        activeBranchId: 'main',
+        createdAt: '2026-08-04T00:00:00.000Z',
+        updatedAt: '2026-08-04T00:01:00.000Z',
+      },
+    ] as const;
+    const composition = createAgentAppHost({
+      userDataRoot: fixture.userDataRoot,
+      userHome: fixture.userHome,
+      hostId: 'desktop-host-assistant-home-scope',
+      credentialRuntime: createTestCredentialRuntime(),
+      catalogReader: {
+        listConversations: (workspaceIds) => {
+          observedScopes.push([...workspaceIds]);
+          return conversations.filter((record) => workspaceIds.includes(record.workspaceId));
+        },
+        findConversation: (conversationId) =>
+          conversations.find((record) => record.conversationId === conversationId),
+        dispose: () => undefined,
+      },
+      homeConversationWorkspaceIds: [assistantSpaceId],
+    });
+    compositions.push(composition);
+
+    composition.setHomeWorkspaceScope([fixture.workspace.workspaceId, assistantSpaceId]);
+    expect(
+      composition
+        .readHomeProjection()
+        .conversations.map((conversation) => conversation.navigation.conversationId),
+    ).toEqual(['conversation-assistant', 'conversation-project']);
+    expect(observedScopes.at(-1)).toEqual([fixture.workspace.workspaceId, assistantSpaceId]);
+
+    composition.setHomeWorkspaceScope([]);
+    expect(
+      composition
+        .readHomeProjection()
+        .conversations.map((conversation) => conversation.navigation.conversationId),
+    ).toEqual(['conversation-assistant']);
+    expect(observedScopes.at(-1)).toEqual([assistantSpaceId]);
   });
 
   it('fails visibly when the persisted Home catalog cannot be read', async () => {

@@ -389,6 +389,7 @@ export class DesktopAppHost {
           rendererEpoch: window.rendererEpoch,
         },
         workspace,
+        initialConversationId: request.conversationId,
         publish,
       });
     }
@@ -408,10 +409,23 @@ export class DesktopAppHost {
         await this.shell.resolveAgentWorkspace(grant.workspaceId),
       );
     }
+    const scene = await this.shell.getSceneProjection(window.windowId);
+    const interaction = scene.slots.interaction;
+    const initialConversationId =
+      scene.context.kind === 'agent' &&
+      scene.context.agentViewId === grant.viewId &&
+      scene.context.scope.kind === 'workspace' &&
+      scene.context.scope.workspaceId === grant.workspaceId &&
+      interaction?.kind === 'agent' &&
+      interaction.phase === 'session' &&
+      interaction.agentViewId === grant.viewId
+        ? scene.context.scope.conversationId
+        : undefined;
     return this.agentBridge.createBootstrap({
       requestId: request.requestId,
       grant,
       workspace,
+      ...(initialConversationId === undefined ? {} : { initialConversationId }),
       publish,
     });
   }
@@ -458,10 +472,7 @@ export class DesktopAppHost {
       throw new Error('Agent launch connection does not match its sender-bound Desktop identity.');
     }
     if (request.operation === 'authorize-resource') {
-      const catalog = await this.agentLaunch.authorizeResource(
-        connection,
-        request.resourceKind,
-      );
+      const catalog = await this.agentLaunch.authorizeResource(connection, request.resourceKind);
       return catalog
         ? {
             schemaVersion: AGENT_LAUNCH_CONTRACT_VERSION,
@@ -662,7 +673,11 @@ export class DesktopAppHost {
     this.requireActive();
     const request = parseDesktopAgentMessageRequest(payload);
     const window = this.windows.resolveSender(sender);
-    const grant = await this.resolveAgentConnectionGrant(window.windowId, window.rendererEpoch, request.connection);
+    const grant = await this.resolveAgentConnectionGrant(
+      window.windowId,
+      window.rendererEpoch,
+      request.connection,
+    );
     return this.agentBridge.send(request, grant);
   }
 
@@ -1479,7 +1494,11 @@ export class DesktopAppHost {
     this.cut?.detachWindow(windowId);
     this.options.assistantPreviewLifecycle?.detachWindow(windowId);
     void this.agentLaunch.detachWindow(windowId).catch((error: unknown) => {
-      this.reportError('desktop-agent-launch-detach-failed', 'Failed to detach Agent launch Window.', error);
+      this.reportError(
+        'desktop-agent-launch-detach-failed',
+        'Failed to detach Agent launch Window.',
+        error,
+      );
     });
   }
 
@@ -1625,7 +1644,9 @@ export class DesktopAppHost {
         interaction.phase !== 'session' ||
         interaction.agentViewId !== connection.viewId
       ) {
-        throw new Error('Desktop Assistant Agent connection does not match the exact active Scene.');
+        throw new Error(
+          'Desktop Assistant Agent connection does not match the exact active Scene.',
+        );
       }
       const record = await this.conversationLifecycle.readConversation(conversationId);
       if (

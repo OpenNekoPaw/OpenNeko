@@ -295,6 +295,68 @@ describe('Desktop Agent bridge runtime', () => {
     ).resolves.toMatchObject({ status: 'accepted' });
   });
 
+  it('replaces the exact View connection when its bootstrap Conversation changes', async () => {
+    let nextIdentity = 0;
+    const firstEffects = createEffects();
+    const nextEffects = createEffects();
+    const createEffectsForConnection = vi
+      .fn()
+      .mockReturnValueOnce(firstEffects)
+      .mockReturnValueOnce(nextEffects);
+    const runtime = createDesktopAgentBridgeRuntime({
+      controllerComposition: {
+        ...createComposition(firstEffects),
+        createEffects: createEffectsForConnection,
+      },
+      createIdentity: () => `connection-${++nextIdentity}`,
+    });
+    const exactGrant = grant();
+    const first = runtime.createBootstrap({
+      requestId: 'bootstrap-1',
+      grant: exactGrant,
+      workspace: workspace(),
+      initialConversationId: 'conversation-1',
+      publish: vi.fn(),
+    });
+    const next = runtime.createBootstrap({
+      requestId: 'bootstrap-2',
+      grant: exactGrant,
+      workspace: workspace(),
+      initialConversationId: 'conversation-2',
+      publish: vi.fn(),
+    });
+    if (first.status !== 'ready' || next.status !== 'ready') {
+      throw new Error('Expected ready Agent bootstraps.');
+    }
+
+    expect(next.connection.connectionId).not.toBe(first.connection.connectionId);
+    expect(createEffectsForConnection).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ initialConversationId: 'conversation-1' }),
+    );
+    expect(createEffectsForConnection).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ initialConversationId: 'conversation-2' }),
+    );
+    expect(firstEffects.dispose).toHaveBeenCalledOnce();
+    await expect(
+      runtime.send(
+        createDesktopAgentMessageRequest('message-stale', first.connection, {
+          type: 'newConversation',
+        }),
+        exactGrant,
+      ),
+    ).rejects.toMatchObject({ code: 'desktop-agent-identity-mismatch' });
+    await expect(
+      runtime.send(
+        createDesktopAgentMessageRequest('message-current', next.connection, {
+          type: 'newConversation',
+        }),
+        exactGrant,
+      ),
+    ).resolves.toMatchObject({ status: 'accepted' });
+  });
+
   it('replaces the connection when the renderer epoch advances', async () => {
     let nextIdentity = 0;
     const firstEffects = createEffects();
@@ -559,6 +621,7 @@ function workspace(workspaceId = 'workspace-1'): AgentWorkspaceRuntime {
     }),
     tools: createToolRegistry(),
     createConversation: vi.fn(),
+    checkpointFailedInitialTurn: vi.fn(),
     deleteConversation: vi.fn(),
     clearAllConversations: vi.fn(),
     openConversation: vi.fn(),

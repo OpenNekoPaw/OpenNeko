@@ -21,6 +21,7 @@ import { useTabRenderStore } from '../render-runtime/useTabRenderStore';
 import { ConversationController } from './ConversationController';
 
 const hostMocks = vi.hoisted(() => ({
+  runtimeId: 'conversation-controller-test',
   getConversations: vi.fn(),
   getActiveConversation: vi.fn(),
   refreshConfigSnapshot: vi.fn(),
@@ -53,7 +54,7 @@ vi.mock('../messages', () => ({
 vi.mock('../host-runtime-context', () => ({
   useAgentHostRuntimeAdapter: () => ({
     hostKind: 'electron',
-    runtimeId: 'conversation-controller-test',
+    runtimeId: hostMocks.runtimeId,
     send: vi.fn(),
     subscribe: vi.fn(() => ({ dispose: vi.fn() })),
     getState: () => undefined,
@@ -62,7 +63,7 @@ vi.mock('../host-runtime-context', () => ({
   }),
   useOptionalAgentHostRuntimeAdapter: () => ({
     hostKind: 'electron',
-    runtimeId: 'conversation-controller-test',
+    runtimeId: hostMocks.runtimeId,
     send: vi.fn(),
     subscribe: vi.fn(() => ({ dispose: vi.fn() })),
     getState: () => undefined,
@@ -600,6 +601,92 @@ describe('ConversationController entry state', () => {
         expectedTabStateRevision: 0,
       }),
     );
+  });
+
+  it('waits for the replacement runtime catalog before activating its session target', () => {
+    vi.clearAllMocks();
+    hostMocks.runtimeId = 'runtime-draft';
+    const view = render(
+      <ConversationController
+        {...createProps()}
+        initialConversation={{ id: 'conversation-draft', title: 'Draft runtime session' }}
+      />,
+    );
+
+    act(() => {
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: {
+            type: 'conversationList',
+            conversations: [
+              {
+                id: 'conversation-draft',
+                title: 'Draft runtime session',
+                createdAt: '2026-08-04T00:00:00.000Z',
+                updatedAt: '2026-08-04T00:01:00.000Z',
+                messageCount: 1,
+              },
+            ],
+          },
+        }),
+      );
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: {
+            type: 'tabState',
+            revision: 0,
+            tabState: { openTabs: [], activeTabId: null },
+          },
+        }),
+      );
+    });
+    expect(hostMocks.activateConversation).toHaveBeenCalledTimes(1);
+
+    hostMocks.runtimeId = 'runtime-session';
+    view.rerender(
+      <ConversationController
+        {...createProps()}
+        initialConversation={{ id: 'conversation-session', title: 'Committed session' }}
+      />,
+    );
+    expect(hostMocks.activateConversation).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: {
+            type: 'conversationList',
+            conversations: [
+              {
+                id: 'conversation-session',
+                title: 'Committed session',
+                createdAt: '2026-08-04T00:02:00.000Z',
+                updatedAt: '2026-08-04T00:03:00.000Z',
+                messageCount: 2,
+              },
+            ],
+          },
+        }),
+      );
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: {
+            type: 'tabState',
+            revision: 0,
+            tabState: { openTabs: [], activeTabId: null },
+          },
+        }),
+      );
+    });
+
+    expect(hostMocks.activateConversation).toHaveBeenCalledTimes(2);
+    expect(hostMocks.activateConversation).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        conversationId: 'conversation-session',
+        expectedTabStateRevision: 0,
+      }),
+    );
+    hostMocks.runtimeId = 'conversation-controller-test';
   });
 
   it('fails visibly without activating another conversation when the navigation target is missing', () => {

@@ -2,7 +2,10 @@ import { describe, expect, it, vi } from 'vitest';
 import { createToolRegistry } from '@neko/agent-runtime/tool-registry';
 import { createOpenNekoPiModels } from '@neko/agent-runtime/pi';
 import type { ILogger } from '@neko/shared/logger';
-import { createDesktopAgentBootstrapRequest } from '../shared/agent-contract';
+import {
+  createDesktopAgentBootstrapRequest,
+  createDesktopAssistantAgentBootstrapRequest,
+} from '../shared/agent-contract';
 import { createDesktopBootstrapRequest } from '../shared/bridge-contract';
 import {
   DEFAULT_DESKTOP_APPLICATION_PREFERENCES,
@@ -323,7 +326,8 @@ describe('DesktopAppHost', () => {
     );
     expect(selected.status).toBe('authorized');
     expect(JSON.stringify(selected)).not.toContain('/Users/fixture');
-    if (selected.status !== 'authorized') throw new Error('Expected an authorized Workspace grant.');
+    if (selected.status !== 'authorized')
+      throw new Error('Expected an authorized Workspace grant.');
     const transition = await fixture.appHost.transitionScene(
       fixture.sender,
       createDesktopSceneTransitionRequest({
@@ -411,7 +415,10 @@ describe('DesktopAppHost', () => {
       scratch: {
         create: async () => undefined,
         release: async () => undefined,
-        authorizePreview: async () => ({ previewSessionId: 'preview-1', descriptorId: 'descriptor-1' }),
+        authorizePreview: async () => ({
+          previewSessionId: 'preview-1',
+          descriptorId: 'descriptor-1',
+        }),
       },
       publication: {
         publishToAssets: async () => ({ assetId: 'asset-1' }),
@@ -480,7 +487,10 @@ describe('DesktopAppHost', () => {
       scratch: {
         create: async () => undefined,
         release: async () => undefined,
-        authorizePreview: async () => ({ previewSessionId: 'preview-1', descriptorId: 'descriptor-1' }),
+        authorizePreview: async () => ({
+          previewSessionId: 'preview-1',
+          descriptorId: 'descriptor-1',
+        }),
       },
       publication: {
         publishToAssets: async () => ({ assetId: 'asset-1' }),
@@ -543,6 +553,27 @@ describe('DesktopAppHost', () => {
       },
     });
     expect(JSON.stringify(restored)).not.toContain('projectId');
+    const restoredScene = restored.status === 'transitioned' ? restored.scene : undefined;
+    if (!restoredScene || restoredScene.context.kind !== 'agent') {
+      throw new Error('Expected an exact restored Assistant Scene.');
+    }
+    vi.mocked(fixture.agent.getWorkspace).mockReturnValue(
+      createAgentWorkspaceRuntime('assistant-space:local-user'),
+    );
+    const createBootstrap = vi.spyOn(fixture.appHost.agentBridge, 'createBootstrap');
+    await fixture.appHost.createAgentBootstrap(
+      fixture.sender,
+      createDesktopAssistantAgentBootstrapRequest(
+        'assistant-bootstrap-restored',
+        'assistant-space:local-user',
+        record.conversationId,
+        restoredScene.context.agentViewId,
+      ),
+      vi.fn(),
+    );
+    expect(createBootstrap).toHaveBeenCalledWith(
+      expect.objectContaining({ initialConversationId: record.conversationId }),
+    );
     await fixture.appHost.dispose();
   });
 
@@ -622,7 +653,10 @@ describe('DesktopAppHost', () => {
       scratchArtifactId: 'scratch:1',
     });
     expect(await fixture.appHost.shell.getSceneProjection(fixture.windowId)).toMatchObject({
-      context: { kind: 'agent', scope: { kind: 'assistant', conversationId: record.conversationId } },
+      context: {
+        kind: 'agent',
+        scope: { kind: 'assistant', conversationId: record.conversationId },
+      },
       slots: {
         main: {
           kind: 'assistant-preview',
@@ -649,7 +683,9 @@ describe('DesktopAppHost', () => {
       previewSessionId: 'preview:assistant:1',
     });
     expect(assistantResources.releasePreview).toHaveBeenCalledOnce();
-    expect((await fixture.appHost.shell.getSceneProjection(fixture.windowId)).slots.main).toBeUndefined();
+    expect(
+      (await fixture.appHost.shell.getSceneProjection(fixture.windowId)).slots.main,
+    ).toBeUndefined();
     await fixture.appHost.dispose();
   });
 
@@ -661,7 +697,10 @@ describe('DesktopAppHost', () => {
       scratch: {
         create: async () => undefined,
         release: async () => undefined,
-        authorizePreview: async () => ({ previewSessionId: 'preview-1', descriptorId: 'descriptor-1' }),
+        authorizePreview: async () => ({
+          previewSessionId: 'preview-1',
+          descriptorId: 'descriptor-1',
+        }),
       },
       publication: {
         publishToAssets: async () => ({ assetId: 'asset-1' }),
@@ -776,6 +815,24 @@ describe('DesktopAppHost', () => {
       restored.status === 'transitioned' ? restored.scene : undefined,
     );
     expect(fixture.registry.resolve).toHaveBeenCalledWith(workspace.workspacePath);
+    if (!activeTab) throw new Error('Expected the restored Workspace Project Tab.');
+    vi.mocked(fixture.agent.getWorkspace).mockReturnValue(
+      createAgentWorkspaceRuntime(workspace.workspaceId),
+    );
+    const createBootstrap = vi.spyOn(fixture.appHost.agentBridge, 'createBootstrap');
+    await fixture.appHost.createAgentBootstrap(
+      fixture.sender,
+      createDesktopAgentBootstrapRequest(
+        'workspace-bootstrap-restored',
+        activeTab.projectId,
+        activeTab.viewId,
+        activeTab.viewEpoch,
+      ),
+      vi.fn(),
+    );
+    expect(createBootstrap).toHaveBeenCalledWith(
+      expect.objectContaining({ initialConversationId: record.conversationId }),
+    );
     await fixture.appHost.dispose();
   });
 
@@ -1159,9 +1216,9 @@ describe('DesktopAppHost', () => {
         intent: { kind: 'open-settings', sectionId: 'general' },
       }),
     );
-    await expect(fixture.appHost.executeExtensionManagement(fixture.sender, request)).rejects.toThrow(
-      'does not match the active Scene',
-    );
+    await expect(
+      fixture.appHost.executeExtensionManagement(fixture.sender, request),
+    ).rejects.toThrow('does not match the active Scene');
   });
 
   it('rejects plugin mutation while an Agent turn is active before changing the repository', async () => {
@@ -1327,7 +1384,10 @@ function createConversationLifecycle() {
     scratch: {
       create: async () => undefined,
       release: async () => undefined,
-      authorizePreview: async () => ({ previewSessionId: 'preview-1', descriptorId: 'descriptor-1' }),
+      authorizePreview: async () => ({
+        previewSessionId: 'preview-1',
+        descriptorId: 'descriptor-1',
+      }),
     },
     publication: {
       publishToAssets: async () => ({ assetId: 'asset-1' }),
@@ -1430,8 +1490,7 @@ async function openExtensionsScene(fixture: Awaited<ReturnType<typeof createShel
     projection,
     identity: {
       windowId: fixture.windowId,
-      extensionManagementSessionId:
-        projection.window.scene.context.extensionManagementSessionId,
+      extensionManagementSessionId: projection.window.scene.context.extensionManagementSessionId,
     },
   };
 }
@@ -1559,6 +1618,7 @@ function createAgentWorkspaceRuntime(workspaceId: string): AgentWorkspaceRuntime
     models: createTestPiModels(),
     tools: createToolRegistry(),
     createConversation: unavailable,
+    checkpointFailedInitialTurn: unavailable,
     deleteConversation: unavailable,
     clearAllConversations: unavailable,
     openConversation: unavailable,

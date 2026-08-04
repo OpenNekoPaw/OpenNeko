@@ -144,6 +144,9 @@ async function startDesktop(): Promise<void> {
     environment: process.env,
     fixtureHome: homedir,
   });
+  const functionalWorkspacePickerCancellationMarker = functionalWorkspace
+    ? path.join(homedir, '.openneko-functional-cancel-workspace-picker-once')
+    : undefined;
   const functionalWindowMode = resolveDesktopFunctionalWindowMode(process.argv);
   const functionalCutExport = resolveDesktopFunctionalCutExport({
     argv: process.argv,
@@ -268,6 +271,7 @@ async function startDesktop(): Promise<void> {
     workspaceGrantAuthority,
     startupTarget: initialApplicationSettings.preferences.startupTarget,
   });
+  const assistantSpaceId = 'assistant-space:local-user';
   const agentCatalogReader = await NodePiConversationCatalogReader.create({
     userDataRoot: globalStorage.root,
   });
@@ -277,6 +281,7 @@ async function startDesktop(): Promise<void> {
     hostId: `electron:${applicationInstanceId}`,
     credentialRuntime,
     catalogReader: agentCatalogReader,
+    homeConversationWorkspaceIds: [assistantSpaceId],
     builtinSkillRoot: resolveDesktopBuiltinSkillRoot({
       appPath: app.getAppPath(),
       isPackaged: app.isPackaged,
@@ -286,7 +291,7 @@ async function startDesktop(): Promise<void> {
   const assistantSpaceRoot = path.join(globalStorage.root, 'assistant-spaces', 'local-user');
   await mkdir(assistantSpaceRoot, { recursive: true });
   const assistantAgentWorkspace = await agentComposition.attachWorkspace({
-    workspaceId: 'assistant-space:local-user',
+    workspaceId: assistantSpaceId,
     workspacePath: assistantSpaceRoot,
     displayName: 'Assistant',
     locator: { kind: 'relative', value: 'assistant-spaces/local-user' },
@@ -825,12 +830,7 @@ async function startDesktop(): Promise<void> {
     readonly conversationId: string;
     readonly scratchArtifactId: string;
   }): string =>
-    path.join(
-      globalStorage.root,
-      'assistant-scratch',
-      ref.conversationId,
-      ref.scratchArtifactId,
-    );
+    path.join(globalStorage.root, 'assistant-scratch', ref.conversationId, ref.scratchArtifactId);
   const conversationLifecycle = createAgentConversationLifecycleService({
     repository: createPersistentAgentConversationLifecycleRepository({
       metadataStore: localMetadataStore,
@@ -852,7 +852,9 @@ async function startDesktop(): Promise<void> {
           throw error;
         });
         if (!artifactStat?.isDirectory()) {
-          throw new Error(`Assistant Scratch artifact '${ref.scratchArtifactId}' has no Host handle.`);
+          throw new Error(
+            `Assistant Scratch artifact '${ref.scratchArtifactId}' has no Host handle.`,
+          );
         }
         await rm(artifactRoot, { recursive: true, force: false });
       },
@@ -968,6 +970,12 @@ async function startDesktop(): Promise<void> {
     selectWorkspaceGrant: async (event) => {
       const owner = BrowserWindow.fromWebContents(event.sender);
       if (!owner) throw new Error('Desktop workspace picker requires a registered BrowserWindow.');
+      if (
+        functionalWorkspacePickerCancellationMarker &&
+        (await consumeFunctionalMarker(functionalWorkspacePickerCancellationMarker))
+      ) {
+        return undefined;
+      }
       const selectedPath = functionalWorkspace ?? (await chooseWorkspaceDirectory(owner));
       return selectedPath
         ? { label: path.basename(selectedPath), hostResource: selectedPath }
@@ -1211,6 +1219,16 @@ async function startDesktop(): Promise<void> {
     resourceRegistry.dispose();
     disposeResourceAuthorization();
     disposeProtocol();
+  }
+}
+
+async function consumeFunctionalMarker(markerPath: string): Promise<boolean> {
+  try {
+    await rm(markerPath, { force: false });
+    return true;
+  } catch (error) {
+    if (isMissingPathError(error)) return false;
+    throw error;
   }
 }
 

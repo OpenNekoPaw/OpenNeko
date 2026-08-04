@@ -31,6 +31,7 @@ export interface UseTabManagerProps {
   onActivateCharacterRoleTab?: (tab: OpenTab) => void;
   hasLocalConversationActivity?: (conversationId: string) => boolean;
   onConfigSnapshotRequested?: () => void;
+  revisionOwnerId: string;
   tabStateRevision: number;
   onTabStateRevisionAllocated: (revision: number) => void;
 }
@@ -55,15 +56,23 @@ export function useTabManager({
   onActivateCharacterRoleTab,
   hasLocalConversationActivity,
   onConfigSnapshotRequested,
+  revisionOwnerId,
   tabStateRevision,
   onTabStateRevisionAllocated,
 }: UseTabManagerProps): UseTabManagerReturn {
   const optimisticTabStateRevisionRef = useRef(tabStateRevision);
   const activationIdRef = useRef(0);
-  optimisticTabStateRevisionRef.current = Math.max(
-    optimisticTabStateRevisionRef.current,
-    tabStateRevision,
-  );
+  const revisionOwnerRef = useRef(revisionOwnerId);
+  if (revisionOwnerRef.current !== revisionOwnerId) {
+    revisionOwnerRef.current = revisionOwnerId;
+    optimisticTabStateRevisionRef.current = 0;
+    activationIdRef.current = 0;
+  } else {
+    optimisticTabStateRevisionRef.current = Math.max(
+      optimisticTabStateRevisionRef.current,
+      tabStateRevision,
+    );
+  }
 
   const beginTabStateMutation = useCallback((): number => {
     const expectedRevision = optimisticTabStateRevisionRef.current;

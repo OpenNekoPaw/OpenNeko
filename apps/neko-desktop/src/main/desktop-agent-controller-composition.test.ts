@@ -26,6 +26,181 @@ afterEach(async () => {
 });
 
 describe('Agent controller composition', () => {
+  it('checkpoints the initial message when provider preflight fails before a Pi turn starts', async () => {
+    const workspace = createWorkspace();
+    await workspace.createConversation('conversation-1');
+    const composition = createAgentControllerComposition({
+      host: createHost(),
+      userHome: '/Users/fixture',
+      credentialRuntime: createCredentialRuntime(),
+      resources: {
+        registerFile: vi.fn(async () => ({
+          url: 'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+          release: vi.fn(),
+        })),
+      },
+      contentInteraction: {
+        openContent: vi.fn(),
+        revealDocument: vi.fn(),
+        selectWorkspaceWriteTarget: vi.fn(),
+      },
+      configInteraction: {
+        openUserConfig: vi.fn(),
+        openWorkspaceConfig: vi.fn(),
+      },
+      reportError: vi.fn(),
+    });
+
+    await expect(
+      composition.startInitialTurn?.({
+        workspace,
+        conversationId: 'conversation-1',
+        turnId: 'turn-1',
+        messageText: 'retain this prompt',
+        providerId: 'provider-missing',
+        modelId: 'model-missing',
+        locale: 'en',
+      }),
+    ).rejects.toThrow('Effective Agent configuration is blocked: missingConfig');
+    expect(workspace.checkpointFailedInitialTurn).toHaveBeenCalledWith({
+      conversationId: 'conversation-1',
+      turnId: 'turn-1',
+      messageText: 'retain this prompt',
+    });
+    await composition.dispose?.();
+  });
+
+  it('bootstraps the exact persisted Conversation as the active Tab at revision zero', async () => {
+    const workspace = createWorkspace();
+    await workspace.createConversation('conversation-1');
+    const composition = createAgentControllerComposition({
+      host: createHost(),
+      userHome: '/Users/fixture',
+      credentialRuntime: createCredentialRuntime(),
+      resources: {
+        registerFile: vi.fn(async () => ({
+          url: 'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+          release: vi.fn(),
+        })),
+      },
+      contentInteraction: {
+        openContent: vi.fn(),
+        revealDocument: vi.fn(),
+        selectWorkspaceWriteTarget: vi.fn(),
+      },
+      configInteraction: {
+        openUserConfig: vi.fn(),
+        openWorkspaceConfig: vi.fn(),
+      },
+      reportError: vi.fn(),
+    });
+    const effects = composition.createEffects({
+      workspace,
+      identity: {
+        applicationInstanceId: 'app-1',
+        windowId: 'window-1',
+        projectId: 'project-1',
+        workspaceId: workspace.workspaceId,
+        viewId: 'view-1',
+        viewEpoch: 1,
+        rendererEpoch: 1,
+        connectionId: 'connection-1',
+      },
+      initialConversationId: 'conversation-1',
+    });
+    const posted: AgentHostToWebviewMessage[] = [];
+    const context = {
+      identity: {
+        hostKind: 'electron' as const,
+        applicationId: 'neko-desktop',
+        windowId: 'window-1',
+        viewId: 'view-1',
+        workspaceId: workspace.workspaceId,
+        rendererEpoch: '1',
+        connectionId: 'connection-1',
+      },
+      post: async (message: AgentHostToWebviewMessage) => {
+        posted.push(message);
+      },
+    };
+
+    await effects.config.readTabState(context);
+    await effects.conversation.readActiveConversation(context);
+
+    expect(posted).toEqual([
+      {
+        type: 'tabState',
+        tabState: {
+          openTabs: [
+            {
+              id: 'tab-conversation-1',
+              title: 'New conversation',
+              conversationId: 'conversation-1',
+            },
+          ],
+          activeTabId: 'tab-conversation-1',
+        },
+        revision: 0,
+      },
+      {
+        type: 'activeConversation',
+        conversation: {
+          id: 'conversation-1',
+          title: 'New conversation',
+          messages: [],
+        },
+      },
+    ]);
+
+    effects.dispose();
+    await composition.dispose?.();
+  });
+
+  it('rejects a bootstrap Conversation that is absent from the exact Workspace runtime', async () => {
+    const workspace = createWorkspace();
+    const composition = createAgentControllerComposition({
+      host: createHost(),
+      userHome: '/Users/fixture',
+      credentialRuntime: createCredentialRuntime(),
+      resources: {
+        registerFile: vi.fn(async () => ({
+          url: 'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+          release: vi.fn(),
+        })),
+      },
+      contentInteraction: {
+        openContent: vi.fn(),
+        revealDocument: vi.fn(),
+        selectWorkspaceWriteTarget: vi.fn(),
+      },
+      configInteraction: {
+        openUserConfig: vi.fn(),
+        openWorkspaceConfig: vi.fn(),
+      },
+      reportError: vi.fn(),
+    });
+
+    expect(() =>
+      composition.createEffects({
+        workspace,
+        identity: {
+          applicationInstanceId: 'app-1',
+          windowId: 'window-1',
+          projectId: 'project-1',
+          workspaceId: workspace.workspaceId,
+          viewId: 'view-1',
+          viewEpoch: 1,
+          rendererEpoch: 1,
+          connectionId: 'connection-1',
+        },
+        initialConversationId: 'conversation-missing',
+      }),
+    ).toThrow(
+      "Desktop Agent initial Conversation 'conversation-missing' does not exist in Workspace 'workspace-1'.",
+    );
+    await composition.dispose?.();
+  });
+
   it('advertises the complete base effect composition and routes through workspace owners', async () => {
     const workspace = createWorkspace();
     const posted: AgentHostToWebviewMessage[] = [];
@@ -99,7 +274,8 @@ describe('Agent controller composition', () => {
       throw new Error('Expected Agent tab state.');
     }
     const { activeTabId, openTabs } = tabState.tabState;
-    if (!openTabs || activeTabId === undefined) throw new Error('Expected complete Agent tab state.');
+    if (!openTabs || activeTabId === undefined)
+      throw new Error('Expected complete Agent tab state.');
     const activeTab = openTabs.find((tab) => tab.id === activeTabId);
     if (!activeTab) throw new Error('Expected an active Agent conversation Tab.');
     const cutContext = {
@@ -261,6 +437,7 @@ function createWorkspace(
   },
 ): AgentWorkspaceRuntime & {
   readonly createConversation: ReturnType<typeof vi.fn>;
+  readonly checkpointFailedInitialTurn: ReturnType<typeof vi.fn>;
 } {
   const records: Array<{
     workspaceId: string;
@@ -295,6 +472,7 @@ function createWorkspace(
     }),
     tools: createToolRegistry(),
     createConversation,
+    checkpointFailedInitialTurn: vi.fn(async () => undefined),
     deleteConversation: vi.fn(),
     clearAllConversations: vi.fn(),
     openConversation: vi.fn(),

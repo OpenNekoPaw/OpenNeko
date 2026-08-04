@@ -250,6 +250,7 @@ export function ConversationController({
   );
   const [globalError, setGlobalError] = useState<string | null>(null);
   const [initialNavigationHydration, setInitialNavigationHydration] = useState({
+    runtimeId: hostRuntimeAdapter.runtimeId,
     conversationList: false,
     tabState: false,
   });
@@ -326,6 +327,12 @@ export function ConversationController({
     useRef<PendingForegroundConversationActivation | null>(null);
   const tabStateRevisionRef = useRef(0);
   const restoredConversationIdsRef = useRef(new Set<string>());
+  const navigationRuntimeOwnerRef = useRef(hostRuntimeAdapter.runtimeId);
+  if (navigationRuntimeOwnerRef.current !== hostRuntimeAdapter.runtimeId) {
+    navigationRuntimeOwnerRef.current = hostRuntimeAdapter.runtimeId;
+    tabStateRevisionRef.current = 0;
+    restoredConversationIdsRef.current.clear();
+  }
   const [isForegroundConversationActivationPending, setIsForegroundConversationActivationPending] =
     useState(false);
   const reportConversationDiagnostic = useCallback(
@@ -807,6 +814,31 @@ export function ConversationController({
     controllerMessageHandlerRef.current = handleMessage;
   }, [handleMessage]);
 
+  const markInitialNavigationHydrated = useCallback(
+    (type: 'conversationList' | 'tabState') => {
+      setInitialNavigationHydration((current) => ({
+        runtimeId: hostRuntimeAdapter.runtimeId,
+        conversationList:
+          type === 'conversationList' ||
+          (current.runtimeId === hostRuntimeAdapter.runtimeId && current.conversationList),
+        tabState:
+          type === 'tabState' ||
+          (current.runtimeId === hostRuntimeAdapter.runtimeId && current.tabState),
+      }));
+    },
+    [hostRuntimeAdapter.runtimeId],
+  );
+
+  useEffect(() => {
+    tabStateRevisionRef.current = 0;
+    restoredConversationIdsRef.current.clear();
+    setInitialNavigationHydration({
+      runtimeId: hostRuntimeAdapter.runtimeId,
+      conversationList: false,
+      tabState: false,
+    });
+  }, [hostRuntimeAdapter.runtimeId]);
+
   useEffect(() => {
     const handleControllerMessage = (event: MessageEvent) => {
       const type = (event.data as { type?: string } | undefined)?.type;
@@ -814,27 +846,21 @@ export function ConversationController({
         return;
       }
       if (type === 'conversationList' || type === 'tabState') {
-        setInitialNavigationHydration((current) => ({
-          ...current,
-          [type]: true,
-        }));
+        markInitialNavigationHydrated(type);
       }
       controllerMessageHandlerRef.current(event);
     };
 
     window.addEventListener('message', handleControllerMessage);
     return () => window.removeEventListener('message', handleControllerMessage);
-  }, []);
+  }, [markInitialNavigationHydrated]);
 
   useEffect(() => {
     const handleScopedDesktopHostMessage = (event: Event) => {
       const message = (event as CustomEvent<AgentHostToWebviewMessage>).detail;
       if (!message?.type) return;
       if (message.type === 'conversationList' || message.type === 'tabState') {
-        setInitialNavigationHydration((current) => ({
-          ...current,
-          [message.type]: true,
-        }));
+        markInitialNavigationHydrated(message.type);
       }
       controllerMessageHandlerRef.current({
         data: message,
@@ -844,7 +870,7 @@ export function ConversationController({
     window.addEventListener(NEKO_AGENT_HOST_MESSAGE_EVENT, handleScopedDesktopHostMessage);
     return () =>
       window.removeEventListener(NEKO_AGENT_HOST_MESSAGE_EVENT, handleScopedDesktopHostMessage);
-  }, []);
+  }, [markInitialNavigationHydrated]);
 
   // ---- Request data on mount ----
   useEffect(() => {
@@ -1267,6 +1293,7 @@ export function ConversationController({
     onConversationActivated: requestConversationResourceSnapshot,
     onActivateCharacterRoleTab: activateCharacterRoleTab,
     onConfigSnapshotRequested: requestConfigSnapshot,
+    revisionOwnerId: hostRuntimeAdapter.runtimeId,
     tabStateRevision: tabStateRevisionRef.current,
     onTabStateRevisionAllocated: (revision) => {
       tabStateRevisionRef.current = revision;
@@ -1286,12 +1313,13 @@ export function ConversationController({
   useEffect(() => {
     if (
       !initialConversation ||
+      initialNavigationHydration.runtimeId !== hostRuntimeAdapter.runtimeId ||
       !initialNavigationHydration.conversationList ||
       !initialNavigationHydration.tabState
     ) {
       return;
     }
-    const navigationKey = `${initialConversation.id}\u0000${initialConversation.title}`;
+    const navigationKey = `${hostRuntimeAdapter.runtimeId}\u0000${initialConversation.id}\u0000${initialConversation.title}`;
     if (activatedInitialConversationRef.current === navigationKey) return;
     activatedInitialConversationRef.current = navigationKey;
     const conversation = conversations.find((candidate) => candidate.id === initialConversation.id);
@@ -1303,6 +1331,7 @@ export function ConversationController({
   }, [
     conversations,
     handleOpenTab,
+    hostRuntimeAdapter.runtimeId,
     initialConversation,
     initialNavigationHydration.conversationList,
     initialNavigationHydration.tabState,
