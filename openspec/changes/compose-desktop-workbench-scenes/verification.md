@@ -187,6 +187,21 @@ tabless shell, and management/detail panel tab-header lists remain empty. Large/
 management split resize, application restart and renderer error checks passed without touching user
 state.
 
+After the final explicit-owner routing fix, the complete development and packaged scenarios passed
+again on the final code:
+
+`reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-04T08-45-33.509Z-desktop-workbench-scenes-development/report.json`
+
+`reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-04T08-47-12.574Z-desktop-workbench-scenes-packaged/report.json`
+
+The final qualification rerun passed `pnpm build`, `pnpm test`, `pnpm check`,
+`pnpm check:quality`, `pnpm check:legacy-debt`, `pnpm check:unused`,
+`pnpm check:application-boundaries`, the key-free Agent Evaluation harness and strict OpenSpec
+validation. Agent Webview finished at `90 files / 698 tests`, Agent Runtime at `115 / 1076`, Host at
+`36 / 318`, Preview Webview at `16 / 85`, Assets Webview at `5 / 36` and Desktop at `65 / 342`.
+Quality and application-boundary findings were zero; the unused scan reported only 73 configuration
+hints and no blocking production path.
+
 A development launch against the existing user state also restored PrimarySidebar recent Projects and
 conversations, the exact Workspace Agent/Canvas/Resources composition, and the integrated Composer
 without a renderer exception. The Scene/Workbench and Resource Browser authority fixes preserve that
