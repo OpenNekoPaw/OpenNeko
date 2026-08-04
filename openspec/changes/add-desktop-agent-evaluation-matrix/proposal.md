@@ -14,6 +14,10 @@ Skill、Tool、模型、配置和工作流变更无法获得批量、可重复�
   独立 `userData`/Workspace/Conversation/端口、预算、分片和 fail-visible outcome。
 - 将真实实验分为隐藏窗口的 Desktop Session Matrix 与少量可见 Desktop Acceptance；两者共享同一
   Desktop runtime、driver 和事实契约，不能形成第二套 Agent Host。
+- 可见功能验收必须通过实际 composer、PrimarySidebar、审批和领域 UI 控件发起真实 API 行为；隐藏
+  batch 继续通过完整 Desktop session owner 的公开 Agent input path 批量运行，不能用 direct turn runner。
+- 建立基础 Agent 回归矩阵：正常/多轮对话、上下文压缩、完整重开 transcript、生成记录恢复、多会话
+  切换和会话隔离；每项记录 visible/batch disposition、canonical path、terminal 和 no-fallback 证据。
 - 增加产品拥有、session-scoped 的有效 Agent 配置投影，覆盖支持的模型和运行时设置，并输出稳定
   identity、来源与 digest；Evaluation 不得注入产品不存在的业务开关。
 - 收敛配置消融与实现消融：配置变体复用同一 Desktop 构建，Prompt/Skill/router/runtime 实现变体

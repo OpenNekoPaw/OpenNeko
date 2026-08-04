@@ -68,6 +68,13 @@ local-only developer operations. They must not be added to GitHub Actions or gen
 commands. Key-free and dry-run results prove platform readiness only, not real Agent behavior. Real
 API Evaluation reads only `~/.neko/config.toml`; the path cannot be redirected, credentials remain
 owned by product configuration, and provider/model selection plus cost authorization stay explicit.
+
+Agent feature acceptance must drive actual controls in a visible Electron window and call a real
+provider API. Batch regression runs without a visible UI but retains the complete Desktop session
+owner, public Agent input path, and real API; it must not use a direct turn runner or mock. The
+foundational matrix covers real conversation, context compaction, transcript restoration after a
+complete reopen, restored generation records, conversation switching, and conversation isolation.
+Delivery evidence must list covered, unexecuted, and blocked cells with residual risk.
 See [`scripts/agent-eval/README.md`](scripts/agent-eval/README.md) for the local entrypoints.
 
 ## Change Description

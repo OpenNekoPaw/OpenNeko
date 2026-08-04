@@ -58,6 +58,13 @@ with the window when the Scenario requires graphical evidence.
 - **THEN** the same driver runs it with a visible Electron window and explicit UI/runtime assertions
 - **AND** browser-only, Main-only or hidden-output evidence does not replace the required visible acceptance
 
+#### Scenario: User-facing Agent feature is accepted
+
+- **WHEN** a developer validates composer submit, conversation switching, approval or a domain interaction
+- **THEN** automation operates the actual visible UI controls and the product calls the real provider API
+- **AND** the report proves the exact UI action, conversation/Scene identity, rendered result and terminal controls
+- **AND** a bridge-created conversation, direct submit call or seeded database cannot satisfy the scenario
+
 ### Requirement: Desktop exposes bounded evaluation-neutral facts
 
 Desktop MUST expose versioned, bounded facts from authoritative owners for execution identity, effective

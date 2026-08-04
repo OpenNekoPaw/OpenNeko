@@ -62,9 +62,11 @@ Electron Desktop，并通过 Renderer/preload 的固定 Agent bridge 进入 send
 采用两个观察档位，而不是两个 Host：
 
 - **Desktop Session Matrix**：真实 Electron、preload、renderer 和 AppHost 全部启动，但窗口保持
-  隐藏，不执行视觉断言；用于大矩阵和重复采样。
-- **Desktop Visible Acceptance**：同一 executable、driver 和事实契约，窗口可见并执行输入、审批、
-  focus、reload、关闭和视觉投影断言；只覆盖受保护的代表性 case。
+  隐藏，不执行视觉断言；用于大矩阵和重复采样。它通过公开 Agent input path 操作完整 session，
+  不等于 Main-only/headless turn runner。
+- **Desktop Visible Acceptance**：同一 executable、runtime 和事实契约，窗口可见，并通过实际
+  composer、PrimarySidebar、审批和领域 UI 控件执行输入、切换、focus、reload、关闭和视觉投影断言。
+  Automation 可以定位/操作/观察控件，但不得通过 bridge 直接创建会话或提交目标功能的成功状态。
 
 备选方案是恢复 TUI 或创建 Main-only runner。TUI 会重新引入第二套配置/Tool/Skill/session owner；
 Main-only runner会跳过 preload、sender identity 和 renderer projection，二者都不能作为当前产品验收。
@@ -206,6 +208,19 @@ unit/contract/headless 测试仍可在 CI 验证产品与编排边界，但不�
 
 本地入口隔离 fixture、userData、凭据和报告，原始报告保持 gitignored。任何未来把 Evaluation 引入
 受信任 CI 的需求都必须创建独立 OpenSpec，不能在本变更中预留自动启用分支。
+
+### 12. 基础 Agent 行为使用固定覆盖矩阵
+
+AgentSession、持久化、生成 workflow 和 Desktop projection 的基础矩阵固定覆盖：正常首轮/多轮
+对话与 terminal UI；canonical context compaction 后 continuation；销毁并重建完整 owner/应用后的
+transcript 顺序和内容；生成 Tool/Job/progress/terminal/artifact 记录恢复；两个以上会话的目标 transcript
+和 owner-qualified Scene 切换；以及 transcript、queue、configuration、context、artifact、cancel 和
+异步状态隔离。
+
+每个 cell 记录 visible、hidden batch、deterministic 或不适用 disposition。受影响开发可以运行最小
+子集，但必须解释其余 cell；AgentSession/持久化/projection 的发布验收必须关闭全部适用 cell。最终
+文本只能证明输出，不能替代 provider/model identity、conversation/turn/run identity、canonical path、
+terminal、restore 和 no-fallback 证据。
 
 ## Risks / Trade-offs
 

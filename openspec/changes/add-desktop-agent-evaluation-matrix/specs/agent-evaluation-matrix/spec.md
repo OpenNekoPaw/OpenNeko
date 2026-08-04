@@ -104,6 +104,27 @@ evidence levels. Generic CI MUST NOT claim provider-backed behavior or graphical
 - **THEN** the summary lists each executed evidence level, blocked cases, provider/model identity and residual risk
 - **AND** missing visible or real-provider evidence remains explicit rather than inferred from another level
 
+### Requirement: Foundational Agent behavior has a fixed coverage matrix
+
+The platform MUST track coverage for basic and multi-turn conversation, context compaction and continuation,
+transcript restoration after complete owner/application reopen, generation record restoration, conversation
+switching and conversation isolation. Every affected change MUST record each cell as executed, unaffected or
+blocked; AgentSession, persistence, projection and release qualification MUST NOT use one happy-path case as the
+whole matrix.
+
+#### Scenario: Foundational conversation behavior changes
+
+- **WHEN** a change affects session lifecycle, persistence, generation workflow or Desktop projection
+- **THEN** selected visible and hidden real-provider cases cover every affected matrix cell
+- **AND** assertions prove provider/model, conversation/turn/run, terminal, restore and no-fallback evidence
+- **AND** transcript, queue, configuration, context, artifact and asynchronous state isolation are checked where multiple conversations participate
+
+#### Scenario: A matrix cell is not executed
+
+- **WHEN** a required compaction, reopen, generation, switching or isolation case cannot run
+- **THEN** the report identifies its exact infrastructure/product blocker and residual risk
+- **AND** another lane, key-free test or final-text match does not mark that cell passed
+
 ### Requirement: Evaluation authoring is declarative and runner resolution stays thin
 
 The Evaluation platform MUST treat strict suite, Scenario, assertion, fixture and ablation artifacts as the authored
