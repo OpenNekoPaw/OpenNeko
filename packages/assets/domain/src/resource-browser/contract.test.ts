@@ -119,6 +119,7 @@ describe('Resource Browser contract', () => {
           entityStatus: 'confirmed',
           sourceOwners: ['project-entity'],
           attentionBindingIds: [],
+          inspector: inspector({ status: 'confirmed', entityId: 'character-1' }),
           representationAvailability: 'active',
           representationLocator: { kind: 'workspace-file', path: 'characters/neko.png' },
           representationBindingId: 'binding-neko-portrait',
@@ -418,6 +419,32 @@ describe('Resource Browser contract', () => {
     }
   });
 
+  it('parses candidates without promoting them to stable Entity identity', () => {
+    const result = parseResourceBrowserProjection(
+      projection('entities', [
+        {
+          resourceId: 'candidate-1',
+          facet: 'entities',
+          role: 'entity',
+          depth: 0,
+          kind: 'character',
+          label: 'Nova',
+          candidateRef: { candidateId: 'candidate-nova', entityKind: 'character' },
+          entityStatus: 'candidate',
+          sourceOwners: ['document'],
+          evidenceCount: 1,
+          inspector: inspector({ status: 'candidate', candidateId: 'candidate-nova' }),
+          capabilities: [],
+        },
+      ]),
+    );
+    expect(result.items[0]).toMatchObject({
+      entityStatus: 'candidate',
+      candidateRef: { candidateId: 'candidate-nova' },
+    });
+    expect(result.items[0]).not.toHaveProperty('entityRef');
+  });
+
   it('requires explicit Preview and Cut handoff targets', () => {
     expect(
       parseResourceBrowserIntentRequest({
@@ -480,5 +507,25 @@ function projection(facet: 'files' | 'media' | 'assets' | 'entities', items: rea
     facet,
     query: '',
     items,
+  };
+}
+
+function inspector(
+  identity:
+    | { readonly status: 'confirmed'; readonly entityId: string }
+    | { readonly status: 'candidate'; readonly candidateId: string },
+) {
+  return {
+    projectRevision: 3,
+    status: identity.status,
+    kind: 'character',
+    names: { canonical: 'Nova', aliases: [] },
+    facts: {},
+    ...('entityId' in identity
+      ? { entityId: identity.entityId }
+      : { candidateId: identity.candidateId, evidence: [] }),
+    bindings: [],
+    operations: identity.status === 'candidate' ? ['confirm'] : ['edit'],
+    blockers: [],
   };
 }

@@ -7,5 +7,6 @@ export * from './entity-representation-binding';
 export * from './entity-asset-projection';
 export * from './project-entity-document';
 export * from './project-entity-assets';
+export * from './project-entity-inspector';
 export * from './project-entity-operations';
 export * from './project-entity-references';

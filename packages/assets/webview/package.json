@@ -17,6 +17,8 @@
   },
   "dependencies": {
     "@neko/assets-domain": "workspace:*",
+    "@neko/entity-domain": "workspace:*",
+    "@neko/entity-webview": "workspace:*",
     "@neko/ui": "workspace:*",
     "react": "18.3.1",
     "react-dom": "18.3.1",

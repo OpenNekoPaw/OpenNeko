@@ -55,6 +55,7 @@ export interface ResourceBrowserEntityReader {
     readonly query: string;
     readonly limit: number;
   }): Promise<{
+    readonly projectRevision: number;
     readonly projections: readonly ProjectEntityManagementProjection[];
   }>;
 }

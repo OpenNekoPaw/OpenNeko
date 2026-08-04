@@ -12,6 +12,7 @@ export interface ProjectEntityResources {
 }
 
 export interface ProjectEntityManagementResources {
+  readonly projectRevision: number;
   readonly projections: readonly ProjectEntityManagementProjection[];
 }
 
@@ -39,6 +40,7 @@ export async function readProjectEntityManagementResources(input: {
     projectId: input.workspace.workspaceId,
   }).load(input.signal);
   return {
+    projectRevision: document.revision,
     projections: projectEntityManagement({
       document,
       candidates: input.candidates ?? [],

@@ -346,6 +346,7 @@ function createSource(): ResourceBrowserProjectionSource & {
     },
     entities: {
       list: vi.fn(async () => ({
+        projectRevision: 3,
         projections: [
           {
             projectionId: `entity:${entity.entityId}`,

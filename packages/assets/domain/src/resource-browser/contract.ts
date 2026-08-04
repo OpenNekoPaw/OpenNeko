@@ -1,8 +1,10 @@
 import {
+  assertProjectEntityInspectorProjection,
   isEntityRepresentationRole,
   isCreativeEntityKind,
   type CreativeEntityKind,
   type EntityRepresentationRole,
+  type ProjectEntityInspectorProjection,
 } from '@neko/entity-domain';
 import { validateContentLocator, type ContentLocator } from '@neko/content';
 import {
@@ -117,6 +119,7 @@ export interface ResourceBrowserAssetItem extends ResourceBrowserItemBase {
 interface ResourceBrowserEntityItemBase extends ResourceBrowserItemBase {
   readonly facet: 'entities';
   readonly sourceOwners: readonly string[];
+  readonly inspector: ProjectEntityInspectorProjection;
 }
 
 export type ResourceBrowserEntityItem =
@@ -1238,10 +1241,17 @@ function parseResourceBrowserItem(value: unknown): ResourceBrowserItem {
     }
     const entityStatus = requireEntityStatus(record['entityStatus']);
     const sourceOwners = requireStringArray(record['sourceOwners'], 'Entity source owners');
+    const inspector = parseEntityInspector(record['inspector']);
+    if (inspector.status !== entityStatus || inspector.kind !== base.kind) {
+      throw invalidPayload('Resource Browser Entity Inspector identity is inconsistent.');
+    }
     if (entityStatus === 'candidate') {
       const candidateRef = parseResourceBrowserCandidateRef(record['candidateRef']);
       if (base.kind !== candidateRef.entityKind) {
         throw invalidPayload('Resource Browser candidate kind does not match its identity.');
+      }
+      if (inspector.candidateId !== candidateRef.candidateId) {
+        throw invalidPayload('Resource Browser candidate Inspector identity is inconsistent.');
       }
       if (
         record['entityRef'] !== undefined ||
@@ -1259,6 +1269,7 @@ function parseResourceBrowserItem(value: unknown): ResourceBrowserItem {
         candidateRef,
         entityStatus,
         sourceOwners,
+        inspector,
         evidenceCount: requireNonNegativeInteger(
           record['evidenceCount'],
           'Resource Browser candidate evidence count is invalid.',
@@ -1268,6 +1279,9 @@ function parseResourceBrowserItem(value: unknown): ResourceBrowserItem {
     const entityRef = parseResourceBrowserEntityRef(record['entityRef']);
     if (base.kind !== entityRef.entityKind) {
       throw invalidPayload('Resource Browser Entity kind does not match its Entity identity.');
+    }
+    if (inspector.entityId !== entityRef.entityId) {
+      throw invalidPayload('Resource Browser Entity Inspector identity is inconsistent.');
     }
     const representationAvailability = requireRepresentationAvailability(
       record['representationAvailability'],
@@ -1284,6 +1298,7 @@ function parseResourceBrowserItem(value: unknown): ResourceBrowserItem {
       entityRef,
       entityStatus,
       sourceOwners,
+      inspector,
       attentionBindingIds: requireStringArray(
         record['attentionBindingIds'],
         'Entity attention binding identities',
@@ -1322,6 +1337,14 @@ function parseResourceBrowserItem(value: unknown): ResourceBrowserItem {
     facet,
     locator: requireContentLocator(record['locator'], 'locator'),
   };
+}
+
+function parseEntityInspector(value: unknown): ProjectEntityInspectorProjection {
+  try {
+    return assertProjectEntityInspectorProjection(value);
+  } catch {
+    throw invalidPayload('Resource Browser Entity Inspector projection is invalid.');
+  }
 }
 
 function parseResourceBrowserAssetRef(value: unknown): { readonly assetId: string } {

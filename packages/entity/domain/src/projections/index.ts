@@ -5,3 +5,4 @@ export {
 } from './bindingAvailabilityProjection';
 export * from './projectEntityAssetLifecycleProjection';
 export * from './projectEntityManagementProjection';
+export * from './projectEntityInspectorProjection';

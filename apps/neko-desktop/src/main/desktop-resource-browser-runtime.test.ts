@@ -171,6 +171,17 @@ describe('createResourceToCanvasInteraction', () => {
         entityStatus: 'confirmed',
         sourceOwners: ['project-entity'],
         attentionBindingIds: [],
+        inspector: {
+          projectRevision: 3,
+          status: 'confirmed',
+          kind: 'character',
+          names: { canonical: 'Neko', aliases: [] },
+          facts: {},
+          entityId: 'character-neko',
+          bindings: [],
+          operations: ['edit'],
+          blockers: [],
+        },
         representationAvailability: 'active',
         representationLocator: {
           kind: 'workspace-file',

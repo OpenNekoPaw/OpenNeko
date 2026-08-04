@@ -97,6 +97,7 @@ describe('readProjectEntityResources', () => {
       ],
     });
 
+    expect(result.projectRevision).toBe(1);
     expect(result.projections.map(({ projectionId, status }) => [projectionId, status])).toEqual([
       ['entity:deprecated-character', 'deprecated'],
       ['candidate:candidate-nova', 'candidate'],

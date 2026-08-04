@@ -50,6 +50,8 @@ import {
   type ResourceBrowserRecoveryPlanResult,
 } from '@neko/assets-domain/resource-browser/contract';
 import { getResourceBrowserLabels } from './labels';
+import { EntityInspector } from '@neko/entity-webview/inspector';
+import type { ProjectEntityInspectorIntent } from '@neko/entity-domain';
 import './style.css';
 
 export interface ResourceBrowserRootProps {
@@ -67,6 +69,7 @@ export interface ResourceBrowserRootProps {
   readonly renderQuickPreview?: (
     descriptor: ResourceBrowserQuickPreviewResult['descriptor'],
   ) => ReactNode;
+  readonly onEntityIntent?: (intent: ProjectEntityInspectorIntent) => void | Promise<void>;
 }
 
 type ResourceBrowserRootState =
@@ -88,6 +91,7 @@ export function ResourceBrowserRoot({
   chrome = 'standalone',
   defaultViewMode = 'list',
   locale,
+  onEntityIntent,
   onOpenCanvas,
   previewTarget,
   refreshControl = 'visible',
@@ -369,6 +373,8 @@ export function ResourceBrowserRoot({
 
   const projection = state.projection;
   const selectedId = selectedIdByFacet[projection.facet];
+  const selectedItem = projection.items.find((item) => item.resourceId === selectedId);
+  const selectedEntity = selectedItem?.facet === 'entities' ? selectedItem : undefined;
   const requestRecovery = async (
     item: ResourceBrowserItem,
     candidate: 'existing-global' | 'select-directory',
@@ -846,6 +852,14 @@ export function ResourceBrowserRoot({
           ))
         )}
       </div>
+      {selectedEntity ? (
+        <EntityInspector
+          disabled={pending || !onEntityIntent}
+          locale={locale}
+          projection={selectedEntity.inspector}
+          onIntent={(intent) => onEntityIntent?.(intent)}
+        />
+      ) : null}
       {recovery ? (
         <div className="neko-resource-browser__dialog-backdrop">
           <div

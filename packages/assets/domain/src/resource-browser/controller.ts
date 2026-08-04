@@ -422,6 +422,7 @@ export class ResourceBrowserController implements ResourceBrowserHostRuntime {
       .map((projection) =>
         presentResourceBrowserEntityItem(projection, {
           canvasAvailable: this.options.canvasAvailable,
+          projectRevision: result.projectRevision,
         }),
       );
   }

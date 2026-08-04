@@ -1,4 +1,7 @@
-import type { ProjectEntityManagementProjection } from '@neko/entity-domain';
+import {
+  projectEntityInspector,
+  type ProjectEntityManagementProjection,
+} from '@neko/entity-domain';
 import { contentLocatorKey } from '@neko/content';
 import { type MediaLibraryProjectionEntry } from '@neko/assets-domain/contracts';
 import type { GlobalAssetItem } from '../global-library/contract';
@@ -48,8 +51,12 @@ export function presentResourceBrowserContentItem(
 
 export function presentResourceBrowserEntityItem(
   projection: ProjectEntityManagementProjection,
-  options: { readonly canvasAvailable?: boolean } = {},
+  options: { readonly canvasAvailable?: boolean; readonly projectRevision: number },
 ): ResourceBrowserEntityItem {
+  const inspector = projectEntityInspector({
+    projectRevision: options.projectRevision,
+    projection,
+  });
   if (projection.status === 'candidate') {
     const candidate = projection.candidate;
     return {
@@ -64,6 +71,7 @@ export function presentResourceBrowserEntityItem(
       entityStatus: 'candidate',
       sourceOwners: projection.sourceOwners,
       evidenceCount: candidate.evidence.length,
+      inspector,
       role: 'entity',
       depth: 0,
       capabilities: [],
@@ -89,6 +97,7 @@ export function presentResourceBrowserEntityItem(
     entityStatus: projection.status,
     sourceOwners: projection.sourceOwners,
     attentionBindingIds,
+    inspector,
     representationAvailability:
       attentionBindingIds.length > 0
         ? 'needs-attention'

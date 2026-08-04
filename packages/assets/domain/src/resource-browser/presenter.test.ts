@@ -62,7 +62,7 @@ describe('Resource Browser presenter', () => {
         bindingAvailability: [],
         sourceOwners: ['project-entity'],
       },
-      { canvasAvailable: true },
+      { canvasAvailable: true, projectRevision: 3 },
     );
 
     expect(item).toMatchObject({
@@ -84,20 +84,23 @@ describe('Resource Browser presenter', () => {
   });
 
   it('projects candidates with evidence ownership but without a stable Entity identity', () => {
-    const item = presentResourceBrowserEntityItem({
-      projectionId: 'candidate:candidate-neko',
-      status: 'candidate',
-      candidate: {
-        candidateId: 'candidate-neko',
-        kind: 'character',
-        proposedNames: { canonical: 'Neko?', aliases: [] },
-        freshness: 'fresh',
-        evidence: [
-          { evidenceId: 'evidence-workspace', owner: 'workspace', sourceId: 'story.fountain' },
-        ],
+    const item = presentResourceBrowserEntityItem(
+      {
+        projectionId: 'candidate:candidate-neko',
+        status: 'candidate',
+        candidate: {
+          candidateId: 'candidate-neko',
+          kind: 'character',
+          proposedNames: { canonical: 'Neko?', aliases: [] },
+          freshness: 'fresh',
+          evidence: [
+            { evidenceId: 'evidence-workspace', owner: 'workspace', sourceId: 'story.fountain' },
+          ],
+        },
+        sourceOwners: ['workspace'],
       },
-      sourceOwners: ['workspace'],
-    });
+      { projectRevision: 3 },
+    );
 
     expect(item).toMatchObject({
       entityStatus: 'candidate',
