@@ -71,7 +71,7 @@ import type {
   EntityAssetProjectionRepository,
   EntityBindingAvailabilityProjectionValue,
 } from '@neko/entity-domain';
-import { isCreativeEntityCandidate, isCreativeEntityKind } from '@neko/entity-domain';
+import { isCreativeEntityKind, isProjectEntityCandidateProjection } from '@neko/entity-domain';
 import {
   isEntityRepresentationBindingAvailability,
   isEntityRepresentationRole,
@@ -2378,9 +2378,8 @@ function isEntityAssetProjectionRecord(value: unknown): value is EntityAssetProj
       return isCreativeEntityRelationshipProjection(value['value']);
     case 'entity-candidate':
       return (
-        isCreativeEntityCandidate(value['value']) &&
-        value['candidateId'] === value['value'].id &&
-        isCandidateProjectionPortable(value['value'])
+        isProjectEntityCandidateProjection(value['value']) &&
+        value['candidateId'] === value['value'].candidateId
       );
     case 'binding-availability':
       return (
@@ -2490,6 +2489,9 @@ function isCreativeEntitySourceMetadata(value: unknown): boolean {
       value['sourceKind'] === 'story' ||
       value['sourceKind'] === 'canvas' ||
       value['sourceKind'] === 'asset' ||
+      value['sourceKind'] === 'workspace' ||
+      value['sourceKind'] === 'media-library' ||
+      value['sourceKind'] === 'managed-asset' ||
       value['sourceKind'] === 'agent' ||
       value['sourceKind'] === 'document' ||
       value['sourceKind'] === 'importer' ||
@@ -2554,43 +2556,6 @@ function isPortableProjectionRef(value: string): boolean {
     !normalized.includes('/.neko/.cache/') &&
     !normalized.startsWith('.neko/.cache/')
   );
-}
-
-function isCandidateProjectionPortable(
-  candidate: Extract<EntityAssetProjectionRecord, { readonly kind: 'entity-candidate' }>['value'],
-): boolean {
-  return (
-    candidate.sourceRefs.every(isPortableProjectionRef) &&
-    candidate.provenance.every(
-      (item) =>
-        (item.sourceRef === undefined || isPortableProjectionRef(item.sourceRef)) &&
-        !containsForbiddenProjectionMetadataPath(item.metadata),
-    ) &&
-    (candidate.resolvedEntityRef?.projectRoot === undefined ||
-      isPortableProjectionRef(candidate.resolvedEntityRef.projectRoot)) &&
-    !containsForbiddenProjectionMetadataPath(candidate.metadata)
-  );
-}
-
-function containsForbiddenProjectionMetadataPath(
-  value: Record<string, unknown> | undefined,
-): boolean {
-  if (!value) return false;
-  return Object.entries(value).some(([key, entry]) => {
-    if (
-      (key === 'projectRoot' || key === 'absolutePath' || key === 'cachePath') &&
-      typeof entry === 'string' &&
-      !isPortableProjectionRef(entry)
-    ) {
-      return true;
-    }
-    if (Array.isArray(entry)) {
-      return entry.some((item) =>
-        isRecord(item) ? containsForbiddenProjectionMetadataPath(item) : false,
-      );
-    }
-    return isRecord(entry) ? containsForbiddenProjectionMetadataPath(entry) : false;
-  });
 }
 
 function isMediaFileMetadata(value: unknown): value is MediaFileMetadata {

@@ -71,7 +71,6 @@ describe('Entity project search projections', () => {
       projectRoot: '/workspace',
       service: {
         list: async () => [],
-        listCandidates: async () => [],
       },
       automaticCandidateProjection: {
         partition,
@@ -92,17 +91,18 @@ describe('Entity project search projections', () => {
               freshness: 'fresh' as const,
               updatedAt: '2026-07-19T00:00:00.000Z',
               value: {
-                id: 'candidate:auto:character:小橘',
+                candidateId: 'candidate:auto:character:小橘',
                 kind: 'character' as const,
-                name: '小橘',
-                aliases: ['橘仔'],
-                status: 'open' as const,
-                identityBasis: 'user-named' as const,
-                provenance: [],
-                sourceRefs: ['${WORKSPACE}/cases/test.fountain'],
-                createdAt: '2026-07-19T00:00:00.000Z',
-                updatedAt: '2026-07-19T00:00:00.000Z',
-                metadata: { projectionKind: 'automatic-entity-candidate' },
+                proposedNames: { canonical: '小橘', aliases: ['橘仔'] },
+                freshness: 'fresh' as const,
+                evidence: [
+                  {
+                    evidenceId: 'evidence:小橘',
+                    owner: 'workspace' as const,
+                    sourceId: 'workspace:cases/test.fountain',
+                    locator: { kind: 'workspace-file' as const, path: 'cases/test.fountain' },
+                  },
+                ],
               },
             },
           ],
@@ -126,9 +126,9 @@ describe('Entity project search projections', () => {
         label: '小橘',
         navigationData: expect.objectContaining({
           candidateId: 'candidate:auto:character:小橘',
-          sourceRef: '${WORKSPACE}/cases/test.fountain',
+          sourceRef: 'workspace:cases/test.fountain',
         }),
-        metadata: expect.objectContaining({ status: 'open' }),
+        metadata: expect.objectContaining({ freshness: 'fresh', evidenceCount: 1 }),
       }),
     ]);
 

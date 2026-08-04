@@ -1,10 +1,10 @@
 import type { ContentLocator } from '@neko/content';
 import type {
-  CreativeEntityCandidate,
   CreativeEntityOccurrenceProjection,
   CreativeEntityRelationshipProjection,
 } from './creative-entity-asset-composition';
 import type { CreativeEntityKind } from './creative-entity-identity';
+import type { ProjectEntityCandidateProjection } from './project-entity-document';
 import type { CreativeGraphNode, CreativeRelationEdge } from './creative-entity-graph';
 import type {
   EntityRepresentationBindingAvailability,
@@ -68,7 +68,7 @@ export type EntityAssetProjectionRecord =
     })
   | (EntityAssetProjectionRecordBase & {
       readonly kind: 'entity-candidate';
-      readonly value: CreativeEntityCandidate;
+      readonly value: ProjectEntityCandidateProjection;
     })
   | (EntityAssetProjectionRecordBase & {
       readonly kind: 'binding-availability';

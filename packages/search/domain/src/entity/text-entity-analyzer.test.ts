@@ -1,44 +1,14 @@
 import type { SemanticSourceAnalysisInput, SemanticTextSegment } from '../contracts';
-import type { CreativeEntity } from '@neko/entity-domain';
+import type { ProjectEntityRecord } from '@neko/entity-domain';
 import { describe, expect, it } from 'vitest';
-import { projectAutomaticEntityCandidateReview, TextEntityAnalyzer } from './text-entity-analyzer';
+import { TextEntityAnalyzer } from './text-entity-analyzer';
 
-const entities: readonly CreativeEntity[] = [
-  {
-    id: 'char_rin',
-    kind: 'character',
-    canonicalName: 'Rin',
-    aliases: ['凛'],
-    status: 'confirmed',
-  },
-  {
-    id: 'char_alice_one',
-    kind: 'character',
-    canonicalName: 'Alice',
-    aliases: [],
-    status: 'confirmed',
-  },
-  {
-    id: 'char_alice_two',
-    kind: 'character',
-    canonicalName: 'Alice',
-    aliases: [],
-    status: 'confirmed',
-  },
-  {
-    id: 'char_morgan',
-    kind: 'character',
-    canonicalName: 'Morgan',
-    aliases: [],
-    status: 'confirmed',
-  },
-  {
-    id: 'location_morgan',
-    kind: 'location',
-    canonicalName: 'Morgan',
-    aliases: [],
-    status: 'confirmed',
-  },
+const entities: readonly ProjectEntityRecord[] = [
+  entity('char_rin', 'character', 'Rin', ['凛']),
+  entity('char_alice_one', 'character', 'Alice'),
+  entity('char_alice_two', 'character', 'Alice'),
+  entity('char_morgan', 'character', 'Morgan'),
+  entity('location_morgan', 'location', 'Morgan'),
 ];
 
 describe('TextEntityAnalyzer', () => {
@@ -73,7 +43,7 @@ describe('TextEntityAnalyzer', () => {
     expect(result.candidates).toEqual([]);
   });
 
-  it('creates structural candidates and marks ambiguous exact names', async () => {
+  it('creates canonical structural candidate projections', async () => {
     const analyzer = new TextEntityAnalyzer();
     const result = await analyzer.analyze(
       input([
@@ -86,12 +56,14 @@ describe('TextEntityAnalyzer', () => {
     expect(result.candidates).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          name: 'New Hero',
-          metadata: expect.objectContaining({ reviewStatus: 'suggested' }),
+          proposedNames: { canonical: 'New Hero', aliases: [] },
+          freshness: 'fresh',
+          evidence: expect.arrayContaining([
+            expect.objectContaining({ owner: 'workspace', sourceId: 'workspace:story.fountain' }),
+          ]),
         }),
         expect.objectContaining({
-          name: 'Alice',
-          metadata: expect.objectContaining({ reviewStatus: 'ambiguous' }),
+          proposedNames: { canonical: 'Alice', aliases: [] },
         }),
       ]),
     );
@@ -111,47 +83,40 @@ describe('TextEntityAnalyzer', () => {
     expect(result.candidates).toEqual([
       expect.objectContaining({
         kind: 'location',
-        name: 'Rin',
-        metadata: expect.objectContaining({ reviewStatus: 'ambiguous' }),
+        proposedNames: { canonical: 'Rin', aliases: [] },
       }),
     ]);
   });
 
-  it('aggregates source observations into exception-oriented review items', async () => {
+  it('preserves workspace, document, managed Asset and Media Library ownership', async () => {
     const analyzer = new TextEntityAnalyzer();
-    const first = await analyzer.analyze(
-      input([segment('fountain-character', 'Nova', 1, 'character', 'Nova')]),
-    );
-    const secondInput = input([segment('fountain-character', 'Nova', 1, 'character', 'Nova')]);
-    const second = await analyzer.analyze({
-      ...secondInput,
-      source: {
-        ...secondInput.source,
-        sourceId: 'workspace:second.fountain',
-        relativePath: 'second.fountain',
-        portablePath: `${'${WORKSPACE}'}/second.fountain`,
-      },
-    });
-    const review = projectAutomaticEntityCandidateReview([
-      ...first.candidates,
-      ...second.candidates,
-    ]);
-    expect(review).toEqual([
-      expect.objectContaining({ reviewStatus: 'suggested', distinctSourceCount: 2 }),
-    ]);
+    for (const owner of ['workspace', 'document', 'managed-asset', 'media-library'] as const) {
+      const result = await analyzer.analyze(
+        input(
+          [segment('fountain-character', 'Nova', 1, 'character', 'Nova')],
+          'discover-candidates',
+          owner,
+        ),
+      );
+      expect(result.candidates[0]?.evidence).toEqual([
+        expect.objectContaining({ owner, sourceId: `${owner}:story.fountain` }),
+      ]);
+      expect(result.occurrences[0]?.source.sourceKind).toBe(owner);
+    }
   });
 });
 
 function input(
   segments: readonly SemanticTextSegment[],
   analysisMode: 'link-existing' | 'discover-candidates' = 'discover-candidates',
+  rootKind: SemanticSourceAnalysisInput['source']['rootKind'] = 'workspace',
 ): SemanticSourceAnalysisInput {
   return {
     source: {
-      sourceId: 'workspace:story.fountain',
+      sourceId: `${rootKind}:story.fountain`,
       workspaceId: 'workspace-1',
-      rootId: 'workspace',
-      rootKind: 'workspace',
+      rootId: rootKind,
+      rootKind,
       relativePath: 'story.fountain',
       portablePath: `${'${WORKSPACE}'}/story.fountain`,
       format: 'fountain',
@@ -161,8 +126,26 @@ function input(
       modifiedAtMs: 1,
     },
     segments,
-    entities: { revision: 'entities-v1', entities },
+    entities: { revision: 1, entities },
     analyzedAt: '2026-07-18T00:00:00.000Z',
+  };
+}
+
+function entity(
+  entityId: string,
+  kind: ProjectEntityRecord['kind'],
+  canonical: string,
+  aliases: readonly string[] = [],
+): ProjectEntityRecord {
+  return {
+    entityId,
+    kind,
+    names: { canonical, aliases },
+    facts: {},
+    representations: [],
+    lifecycle: { state: 'active' },
+    createdAt: '2026-07-18T00:00:00.000Z',
+    updatedAt: '2026-07-18T00:00:00.000Z',
   };
 }
 

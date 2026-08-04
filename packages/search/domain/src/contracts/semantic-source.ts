@@ -1,11 +1,12 @@
 import type { CharacterMemorySourceRange, EntityMention } from '@neko/chara';
 import { isCharacterMemorySourceRef, type CharacterMemorySourceRef } from '@neko/chara';
 import type {
-  CreativeEntity,
-  CreativeEntityCandidate,
   CreativeEntityKind,
   CreativeEntityRef,
   CreativeEntityOccurrenceProjection,
+  ProjectEntityCandidateProjection,
+  ProjectEntityCandidateSourceOwner,
+  ProjectEntityRecord,
 } from '@neko/entity-domain';
 import { parseDocumentLocator, type DocumentLocator } from '@neko/content';
 import type {
@@ -34,7 +35,12 @@ export const SEMANTIC_SOURCE_FORMATS = [
   'docx',
 ] as const;
 
-export const SEMANTIC_SOURCE_ROOT_KINDS = ['workspace', 'media-library'] as const;
+export const SEMANTIC_SOURCE_ROOT_KINDS = [
+  'workspace',
+  'document',
+  'managed-asset',
+  'media-library',
+] as const satisfies readonly ProjectEntityCandidateSourceOwner[];
 
 export const SEMANTIC_TEXT_SEGMENT_KINDS = [
   'heading',
@@ -49,19 +55,10 @@ export const SEMANTIC_TEXT_SEGMENT_KINDS = [
   'structured-string',
 ] as const;
 
-export const AUTOMATIC_ENTITY_CANDIDATE_REVIEW_STATUSES = [
-  'observed',
-  'matched',
-  'suggested',
-  'ambiguous',
-] as const;
-
 export type SemanticSourceAnalysisMode = (typeof SEMANTIC_SOURCE_ANALYSIS_MODES)[number];
 export type SemanticSourceFormat = (typeof SEMANTIC_SOURCE_FORMATS)[number];
 export type SemanticSourceRootKind = (typeof SEMANTIC_SOURCE_ROOT_KINDS)[number];
 export type SemanticTextSegmentKind = (typeof SEMANTIC_TEXT_SEGMENT_KINDS)[number];
-export type AutomaticEntityCandidateReviewStatus =
-  (typeof AUTOMATIC_ENTITY_CANDIDATE_REVIEW_STATUSES)[number];
 
 export interface SemanticSourceScope {
   readonly workspaceId: string;
@@ -138,8 +135,8 @@ export interface SemanticSourceDiagnostic {
 }
 
 export interface SemanticEntitySnapshot {
-  readonly revision: string;
-  readonly entities: readonly CreativeEntity[];
+  readonly revision: number;
+  readonly entities: readonly ProjectEntityRecord[];
 }
 
 export interface SemanticSourceAnalysisInput {
@@ -153,12 +150,12 @@ export interface SemanticSourceAnalysisInput {
 export interface SemanticSourceAnalysisResult {
   readonly sourceId: string;
   readonly sourceFingerprint: string;
-  readonly entityRevision: string;
+  readonly entityRevision: number;
   readonly index: CompactMediaSemanticIndex;
   readonly evidence: readonly SemanticEvidenceProjection[];
   readonly mentions: readonly EntityMention[];
   readonly occurrences: readonly CreativeEntityOccurrenceProjection[];
-  readonly candidates: readonly CreativeEntityCandidate[];
+  readonly candidates: readonly ProjectEntityCandidateProjection[];
   readonly diagnostics: readonly SemanticSourceDiagnostic[];
 }
 
@@ -168,28 +165,9 @@ export interface SemanticSourceAnalyzer {
   analyze(input: SemanticSourceAnalysisInput): Promise<SemanticSourceAnalysisResult>;
 }
 
-export interface AutomaticEntityCandidateProjectionMetadata {
-  readonly projectionKind: 'automatic-entity-candidate';
-  readonly normalizedName: string;
-  readonly reviewStatus: AutomaticEntityCandidateReviewStatus;
-  readonly sourceOccurrenceCount: number;
-  readonly explicitStructuralMentionCount: number;
-  readonly mentionIds: readonly string[];
-  readonly entityRevision: string;
-  readonly matchedEntityId?: string;
-}
-
-export interface AutomaticEntityCandidateReviewItem {
-  readonly candidate: CreativeEntityCandidate;
-  readonly reviewStatus: AutomaticEntityCandidateReviewStatus;
-  readonly distinctSourceCount: number;
-  readonly occurrenceCount: number;
-  readonly explicitStructuralMentionCount: number;
-  readonly mentionIds: readonly string[];
-}
-
 export interface SemanticEntityOccurrenceRecord {
   readonly occurrenceId: string;
+  readonly owner: ProjectEntityCandidateSourceOwner;
   readonly sourceId: string;
   readonly sourceFingerprint: string;
   readonly freshness: ProjectIndexFreshness;
@@ -216,12 +194,6 @@ export function isSemanticSourceRootKind(value: unknown): value is SemanticSourc
 
 export function isSemanticTextSegmentKind(value: unknown): value is SemanticTextSegmentKind {
   return includesString(SEMANTIC_TEXT_SEGMENT_KINDS, value);
-}
-
-export function isAutomaticEntityCandidateReviewStatus(
-  value: unknown,
-): value is AutomaticEntityCandidateReviewStatus {
-  return includesString(AUTOMATIC_ENTITY_CANDIDATE_REVIEW_STATUSES, value);
 }
 
 export function isSemanticSourceScope(value: unknown): value is SemanticSourceScope {
@@ -289,23 +261,6 @@ export function isSemanticEvidenceProjection(value: unknown): value is SemanticE
 export function isCompactMediaSemanticIndex(value: unknown): value is CompactMediaSemanticIndex {
   return (
     isMediaSemanticIndex(value) && !Object.prototype.hasOwnProperty.call(value, 'textSegments')
-  );
-}
-
-export function isAutomaticEntityCandidateProjectionMetadata(
-  value: unknown,
-): value is AutomaticEntityCandidateProjectionMetadata {
-  if (!isRecord(value)) return false;
-  return (
-    value['projectionKind'] === 'automatic-entity-candidate' &&
-    isNonEmptyString(value['normalizedName']) &&
-    isAutomaticEntityCandidateReviewStatus(value['reviewStatus']) &&
-    isNonNegativeSafeInteger(value['sourceOccurrenceCount']) &&
-    isNonNegativeSafeInteger(value['explicitStructuralMentionCount']) &&
-    Array.isArray(value['mentionIds']) &&
-    value['mentionIds'].every(isNonEmptyString) &&
-    isNonEmptyString(value['entityRevision']) &&
-    (value['matchedEntityId'] === undefined || isNonEmptyString(value['matchedEntityId']))
   );
 }
 

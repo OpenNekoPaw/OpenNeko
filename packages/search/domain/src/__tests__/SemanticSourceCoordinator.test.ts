@@ -196,7 +196,7 @@ function createFixture(files: readonly SemanticSourceFileObservation[]) {
         markSourceStale: markStale,
       },
       getEntitySnapshot: async (): Promise<SemanticEntitySnapshot> => ({
-        revision: 'entities-v1',
+        revision: 1,
         entities: [],
       }),
       extractText: ({ source }) => [

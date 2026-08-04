@@ -30,12 +30,18 @@ export async function createNodeWorkspaceEntityAssetMetadataBinding(options: {
 }): Promise<NodeWorkspaceEntityAssetMetadataBinding> {
   const metadataStore = createNodeSqliteLocalMetadataStore({ homedir: options.homedir });
   try {
+    const databasePath = resolveGlobalStorageLayout(options.homedir).database;
     await metadataStore.open({
-      databasePath: resolveGlobalStorageLayout(options.homedir).database,
+      databasePath,
       busyTimeoutMs: 2_000,
     });
     await metadataStore.migrateNamespace(M1_LOCAL_METADATA_MIGRATIONS);
-    await metadataStore.migrateNamespace(ENTITY_ASSET_PROJECTION_MIGRATIONS);
+    await metadataStore.migrateNamespace(ENTITY_ASSET_PROJECTION_MIGRATIONS, {
+      destructiveBackup: {
+        destinationPath: `${databasePath}.pre-project-entity-candidate-v2.bak`,
+        reason: 'migration',
+      },
+    });
     const identityResolution = await resolveNodeWorkspaceIdentity({
       workspaceRoot: options.workDir,
       homedir: options.homedir,

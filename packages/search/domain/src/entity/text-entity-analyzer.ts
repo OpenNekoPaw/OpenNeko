@@ -1,6 +1,4 @@
 import type {
-  AutomaticEntityCandidateProjectionMetadata,
-  AutomaticEntityCandidateReviewItem,
   SemanticEvidenceProjection,
   SemanticEntitySnapshot,
   SemanticSourceAnalysisInput,
@@ -9,13 +7,12 @@ import type {
   SemanticTextSegment,
 } from '../contracts';
 import type {
-  CreativeEntity,
-  CreativeEntityCandidate,
   CreativeEntityKind,
   CreativeEntityOccurrenceProjection,
+  ProjectEntityCandidateProjection,
+  ProjectEntityRecord,
 } from '@neko/entity-domain';
 import type { EntityMention } from '@neko/chara';
-import { isAutomaticEntityCandidateProjectionMetadata } from '../contracts';
 import { parseEntityUri } from '@neko/entity-domain';
 import { normalizeCharacterLookupKey } from '@neko/entity-domain';
 import { stableIdPart } from '@neko/entity-domain';
@@ -104,55 +101,9 @@ export class TextEntityAnalyzer implements SemanticSourceAnalyzer {
   }
 }
 
-export function projectAutomaticEntityCandidateReview(
-  candidates: readonly CreativeEntityCandidate[],
-): readonly AutomaticEntityCandidateReviewItem[] {
-  const groups = new Map<string, AutomaticCandidateAggregate>();
-  for (const candidate of candidates) {
-    const metadata = candidate.metadata;
-    if (!isAutomaticEntityCandidateProjectionMetadata(metadata)) continue;
-    const current = groups.get(candidate.id) ?? {
-      candidate,
-      sourceRefs: new Set<string>(),
-      occurrenceCount: 0,
-      explicitStructuralMentionCount: 0,
-      mentionIds: new Set<string>(),
-      ambiguous: false,
-      matched: false,
-    };
-    candidate.sourceRefs.forEach((sourceRef) => current.sourceRefs.add(sourceRef));
-    metadata.mentionIds.forEach((mentionId) => current.mentionIds.add(mentionId));
-    current.occurrenceCount += metadata.sourceOccurrenceCount;
-    current.explicitStructuralMentionCount += metadata.explicitStructuralMentionCount;
-    current.ambiguous ||= metadata.reviewStatus === 'ambiguous';
-    current.matched ||= metadata.reviewStatus === 'matched';
-    current.candidate = mergeAutomaticCandidate(current.candidate, candidate);
-    groups.set(candidate.id, current);
-  }
-  return [...groups.values()]
-    .map((group) => {
-      const reviewStatus: AutomaticEntityCandidateReviewItem['reviewStatus'] = group.ambiguous
-        ? 'ambiguous'
-        : group.matched
-          ? 'matched'
-          : group.sourceRefs.size >= 2 || group.explicitStructuralMentionCount >= 3
-            ? 'suggested'
-            : 'observed';
-      return {
-        candidate: group.candidate,
-        reviewStatus,
-        distinctSourceCount: group.sourceRefs.size,
-        occurrenceCount: group.occurrenceCount,
-        explicitStructuralMentionCount: group.explicitStructuralMentionCount,
-        mentionIds: [...group.mentionIds].sort(),
-      };
-    })
-    .sort(compareReviewItems);
-}
-
 interface EntityNameIndex {
-  readonly byId: ReadonlyMap<string, CreativeEntity>;
-  readonly byName: ReadonlyMap<string, readonly CreativeEntity[]>;
+  readonly byId: ReadonlyMap<string, ProjectEntityRecord>;
+  readonly byName: ReadonlyMap<string, readonly ProjectEntityRecord[]>;
   readonly labels: readonly { readonly label: string; readonly normalized: string }[];
 }
 
@@ -160,36 +111,23 @@ interface CandidateObservation {
   readonly id: string;
   readonly kind: CreativeEntityKind;
   readonly name: string;
-  readonly normalizedName: string;
-  readonly mentionIds: string[];
-  readonly sourceRefs: Set<string>;
-  occurrenceCount: number;
-  explicitStructuralMentionCount: number;
-  reviewStatus: AutomaticEntityCandidateProjectionMetadata['reviewStatus'];
-}
-
-interface AutomaticCandidateAggregate {
-  candidate: CreativeEntityCandidate;
-  readonly sourceRefs: Set<string>;
-  occurrenceCount: number;
-  explicitStructuralMentionCount: number;
-  readonly mentionIds: Set<string>;
-  ambiguous: boolean;
-  matched: boolean;
+  readonly evidenceIds: string[];
 }
 
 function buildEntityNameIndex(snapshot: SemanticEntitySnapshot): EntityNameIndex {
-  const byId = new Map<string, CreativeEntity>();
-  const byName = new Map<string, CreativeEntity[]>();
+  const byId = new Map<string, ProjectEntityRecord>();
+  const byName = new Map<string, ProjectEntityRecord[]>();
   const labels = new Map<string, string>();
   for (const entity of snapshot.entities) {
-    if (entity.status !== 'confirmed') continue;
-    byId.set(entity.id, entity);
-    for (const label of [entity.canonicalName, entity.displayName, ...entity.aliases]) {
+    if (entity.lifecycle.state !== 'active') continue;
+    byId.set(entity.entityId, entity);
+    for (const label of [entity.names.canonical, entity.names.display, ...entity.names.aliases]) {
       if (!label?.trim()) continue;
       const normalized = normalizeCharacterLookupKey(label);
       const entities = byName.get(normalized) ?? [];
-      if (!entities.some((candidate) => candidate.id === entity.id)) entities.push(entity);
+      if (!entities.some((candidate) => candidate.entityId === entity.entityId)) {
+        entities.push(entity);
+      }
       byName.set(normalized, entities);
       const previous = labels.get(normalized);
       if (!previous || label.length > previous.length) labels.set(normalized, label);
@@ -284,19 +222,9 @@ function collectExplicitCandidateObservation(
     id,
     kind,
     name,
-    normalizedName,
-    mentionIds: [],
-    sourceRefs: new Set<string>(),
-    occurrenceCount: 0,
-    explicitStructuralMentionCount: 0,
-    reviewStatus: exact.length > 0 ? 'ambiguous' : 'observed',
+    evidenceIds: [],
   };
-  current.mentionIds.push(mentionId);
-  current.sourceRefs.add(input.source.portablePath);
-  current.occurrenceCount += 1;
-  current.explicitStructuralMentionCount += 1;
-  if (exact.length > 0) current.reviewStatus = 'ambiguous';
-  else if (current.explicitStructuralMentionCount >= 3) current.reviewStatus = 'suggested';
+  current.evidenceIds.push(mentionId);
   observations.set(id, current);
   const range = mentionRange(segment, 0, name.length);
   mentions.push({
@@ -316,7 +244,7 @@ function collectExplicitCandidateObservation(
     label: name,
     source: {
       sourceId: input.source.sourceId,
-      sourceKind: 'document',
+      sourceKind: input.source.rootKind,
       sourceRef: input.source.portablePath,
       providerId: ANALYZER_ID,
       freshness: 'fresh',
@@ -334,41 +262,34 @@ function collectExplicitCandidateObservation(
 function candidateFromObservation(
   input: SemanticSourceAnalysisInput,
   observation: CandidateObservation,
-): CreativeEntityCandidate {
-  const metadata: AutomaticEntityCandidateProjectionMetadata = {
-    projectionKind: 'automatic-entity-candidate',
-    normalizedName: observation.normalizedName,
-    reviewStatus: observation.reviewStatus,
-    sourceOccurrenceCount: observation.occurrenceCount,
-    explicitStructuralMentionCount: observation.explicitStructuralMentionCount,
-    mentionIds: observation.mentionIds,
-    entityRevision: input.entities.revision,
-  };
+): ProjectEntityCandidateProjection {
   return {
-    id: observation.id,
+    candidateId: observation.id,
     kind: observation.kind,
-    name: observation.name,
-    status: 'open',
-    identityBasis: 'user-named',
-    provenance: [
-      {
-        providerId: ANALYZER_ID,
-        sourceKind: 'document',
-        sourceRef: input.source.portablePath,
-        observedAt: input.analyzedAt,
-      },
-    ],
-    sourceRefs: [...observation.sourceRefs],
-    createdAt: input.analyzedAt,
-    updatedAt: input.analyzedAt,
-    metadata: { ...metadata },
+    proposedNames: { canonical: observation.name, aliases: [] },
+    freshness: 'fresh',
+    evidence: observation.evidenceIds.map((evidenceId) => ({
+      evidenceId,
+      owner: input.source.rootKind,
+      sourceId: input.source.sourceId,
+      ...(input.source.rootKind === 'workspace' || input.source.rootKind === 'document'
+        ? {
+            locator: {
+              kind: 'workspace-file' as const,
+              path: input.source.relativePath,
+            },
+          }
+        : {}),
+      label: observation.name,
+      observedAt: input.analyzedAt,
+    })),
   };
 }
 
 function addLinkedMention(
   input: SemanticSourceAnalysisInput,
   segment: SemanticTextSegment,
-  entity: CreativeEntity,
+  entity: ProjectEntityRecord,
   text: string,
   offset: number,
   mentions: EntityMention[],
@@ -376,12 +297,12 @@ function addLinkedMention(
   mentionKeys: Set<string>,
   matchKind: 'stable-ref' | 'exact-name',
 ): void {
-  const key = `${segment.segmentId}:${offset}:${entity.id}`;
+  const key = `${segment.segmentId}:${offset}:${entity.entityId}`;
   if (mentionKeys.has(key)) return;
   mentionKeys.add(key);
   const range = mentionRange(segment, offset, text.length);
   const mentionId = `${input.source.sourceId}:mention:${mentions.length}`;
-  const entityRef = { entityId: entity.id, entityKind: entity.kind };
+  const entityRef = { entityId: entity.entityId, entityKind: entity.kind };
   mentions.push({
     mentionId,
     kind: 'name',
@@ -398,7 +319,7 @@ function addLinkedMention(
     label: text,
     source: {
       sourceId: input.source.sourceId,
-      sourceKind: 'document',
+      sourceKind: input.source.rootKind,
       sourceRef: input.source.portablePath,
       providerId: ANALYZER_ID,
       freshness: 'fresh',
@@ -508,41 +429,6 @@ function hasCompatibleBoundary(text: string, label: string, offset: number): boo
 
 function isAsciiWord(value: string | undefined): boolean {
   return value !== undefined && /[A-Za-z0-9_]/u.test(value);
-}
-
-function mergeAutomaticCandidate(
-  left: CreativeEntityCandidate,
-  right: CreativeEntityCandidate,
-): CreativeEntityCandidate {
-  return {
-    ...left,
-    provenance: uniqueByJson([...left.provenance, ...right.provenance]),
-    sourceRefs: [...new Set([...left.sourceRefs, ...right.sourceRefs])],
-    updatedAt: right.updatedAt ?? left.updatedAt,
-  };
-}
-
-function compareReviewItems(
-  left: AutomaticEntityCandidateReviewItem,
-  right: AutomaticEntityCandidateReviewItem,
-): number {
-  const priority = { ambiguous: 0, suggested: 1, observed: 2, matched: 3 } as const;
-  return (
-    priority[left.reviewStatus] - priority[right.reviewStatus] ||
-    right.distinctSourceCount - left.distinctSourceCount ||
-    right.occurrenceCount - left.occurrenceCount ||
-    left.candidate.name.localeCompare(right.candidate.name)
-  );
-}
-
-function uniqueByJson<T>(values: readonly T[]): readonly T[] {
-  const seen = new Set<string>();
-  return values.filter((value) => {
-    const key = JSON.stringify(value);
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
 }
 
 function assertNotAborted(signal: AbortSignal | undefined): void {

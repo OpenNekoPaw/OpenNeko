@@ -868,9 +868,6 @@ importers:
       '@neko/content':
         specifier: workspace:*
         version: link:../../content
-      '@neko/shared':
-        specifier: workspace:*
-        version: link:../../shared
     devDependencies:
       '@types/node':
         specifier: ^24.0.0

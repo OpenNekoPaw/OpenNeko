@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  isAutomaticEntityCandidateProjectionMetadata,
   isCompactMediaSemanticIndex,
   isSemanticEvidenceProjection,
   isSemanticSourceDescriptor,
@@ -36,7 +35,19 @@ describe('semantic source contracts', () => {
     ).toBe(true);
   });
 
-  it('rejects active-path identity and malformed candidate projection metadata', () => {
+  it('accepts every discovery owner and rejects active-path identity', () => {
+    for (const rootKind of ['workspace', 'document', 'managed-asset', 'media-library'] as const) {
+      expect(
+        isSemanticSourceScope({
+          workspaceId: 'workspace-1',
+          rootId: `root-${rootKind}`,
+          rootKind,
+          portableRoot: `\${${rootKind.toUpperCase().replace('-', '_')}}`,
+          analysisMode: 'discover-candidates',
+          priority: 0,
+        }),
+      ).toBe(true);
+    }
     expect(
       isSemanticSourceScope({
         workspaceId: '',
@@ -60,17 +71,6 @@ describe('semantic source contracts', () => {
         fingerprint: 'sha256:source-v1',
         sizeBytes: 120,
         modifiedAtMs: 10,
-      }),
-    ).toBe(false);
-    expect(
-      isAutomaticEntityCandidateProjectionMetadata({
-        projectionKind: 'automatic-entity-candidate',
-        normalizedName: 'rin',
-        reviewStatus: 'confirmed',
-        sourceOccurrenceCount: 1,
-        explicitStructuralMentionCount: 1,
-        mentionIds: ['mention-1'],
-        entityRevision: 'entities-v1',
       }),
     ).toBe(false);
   });

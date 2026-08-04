@@ -257,6 +257,7 @@ function sameLocator(left: DocumentLocator, right: DocumentLocator): boolean {
 function occurrenceRecord(locator: DocumentLocator) {
   return {
     occurrenceId: 'occurrence-1',
+    owner: 'document' as const,
     sourceId: 'workspace:story.pdf',
     sourceFingerprint: 'sha256:pdf',
     freshness: 'fresh' as const,

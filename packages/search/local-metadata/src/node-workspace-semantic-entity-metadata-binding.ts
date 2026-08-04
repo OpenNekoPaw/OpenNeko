@@ -1,17 +1,24 @@
 import type {
+  ProjectEntityDiscoveryOccurrenceQuery,
+  ProjectEntityDiscoveryProjectionBatch,
+  ProjectEntityDiscoveryProjectionPort,
   SemanticEntityOccurrenceRecord,
   SemanticOccurrenceEntityLinks,
   SemanticSourceAnalysisResult,
   SemanticSourceDescriptor,
 } from '@neko/search-domain';
-import type { CreativeEntityCandidate, EntityAssetProjectionRecord } from '@neko/entity-domain';
+import type {
+  EntityAssetProjectionRecord,
+  ProjectEntityCandidateSourceOwner,
+} from '@neko/entity-domain';
 import type { DocumentLocator } from '@neko/content';
 import { isSemanticSourceDescriptor } from '@neko/search-domain';
 import { resolveGlobalStorageLayout } from '@neko/local-metadata';
 import type { LocalMetadataPartition, LocalMetadataPartitionRevision } from '@neko/local-metadata';
 import { createNodeSqliteLocalMetadataStore } from '@neko/local-metadata/node-sqlite-local-metadata-store';
 import { resolveNodeWorkspaceIdentity } from '@neko/local-metadata/node-workspace-identity';
-import type { SemanticProjectionRecord, SemanticProjectionRepository } from '@neko/local-metadata';
+import type { SemanticProjectionRecord } from '@neko/local-metadata';
+import { assertProjectEntityDiscoveryProjectionBatch } from '@neko/search-domain';
 import {
   ENTITY_ASSET_PROJECTION_MIGRATIONS,
   M1_LOCAL_METADATA_MIGRATIONS,
@@ -25,7 +32,7 @@ export interface SemanticEntitySourceCommitRequest {
   readonly updatedAt: string;
 }
 
-export interface NodeWorkspaceSemanticEntityMetadataBinding {
+export interface NodeWorkspaceSemanticEntityMetadataBinding extends ProjectEntityDiscoveryProjectionPort {
   readonly workspaceId: string;
   readonly semanticPartition: LocalMetadataPartition;
   readonly entityPartition: LocalMetadataPartition;
@@ -34,7 +41,6 @@ export interface NodeWorkspaceSemanticEntityMetadataBinding {
   replaceSource(request: SemanticEntitySourceCommitRequest): Promise<void>;
   deleteSource(sourceId: string, updatedAt: string): Promise<boolean>;
   markSourceStale(sourceId: string, diagnostic: string, updatedAt: string): Promise<void>;
-  listAutomaticCandidates(): Promise<readonly CreativeEntityCandidate[]>;
   findOccurrencesByEntity(entityId: string): Promise<readonly SemanticEntityOccurrenceRecord[]>;
   findEntityLinksByOccurrence(occurrenceId: string): Promise<SemanticOccurrenceEntityLinks | null>;
   findEntityLinksByLocator(
@@ -54,13 +60,19 @@ export async function createNodeWorkspaceSemanticEntityMetadataBinding(options: 
 }): Promise<NodeWorkspaceSemanticEntityMetadataBinding> {
   const metadataStore = createNodeSqliteLocalMetadataStore({ homedir: options.homedir });
   try {
+    const databasePath = resolveGlobalStorageLayout(options.homedir).database;
     await metadataStore.open({
-      databasePath: resolveGlobalStorageLayout(options.homedir).database,
+      databasePath,
       busyTimeoutMs: 2_000,
     });
     await metadataStore.migrateNamespace(M1_LOCAL_METADATA_MIGRATIONS);
     await metadataStore.migrateNamespace(SEARCH_PROJECTION_MIGRATIONS);
-    await metadataStore.migrateNamespace(ENTITY_ASSET_PROJECTION_MIGRATIONS);
+    await metadataStore.migrateNamespace(ENTITY_ASSET_PROJECTION_MIGRATIONS, {
+      destructiveBackup: {
+        destinationPath: `${databasePath}.pre-project-entity-candidate-v2.bak`,
+        reason: 'migration',
+      },
+    });
     const identityResolution = await resolveNodeWorkspaceIdentity({
       workspaceRoot: options.workDir,
       homedir: options.homedir,
@@ -145,10 +157,51 @@ export async function createNodeWorkspaceSemanticEntityMetadataBinding(options: 
             await repositories.entityAssetProjections.replaceSource({
               partition: entityPartition,
               sourceId: request.source.sourceId,
-              records: entityProjectionRecords(request),
+              records: discoveryProjectionRecords({
+                source: {
+                  sourceId: request.source.sourceId,
+                  owner: request.source.rootKind,
+                  fingerprint: request.source.fingerprint,
+                },
+                candidates: request.result.candidates,
+                occurrences: request.result.occurrences,
+                updatedAt: request.updatedAt,
+              }),
               updatedAt: request.updatedAt,
             });
           },
+        ),
+      replaceDiscoverySource: (request) =>
+        metadataStore.transaction(
+          {
+            mode: 'cache-write',
+            ownership: 'cache',
+            operation: 'replace-project-entity-discovery-source',
+          },
+          ({ repositories }) => {
+            const checked = assertProjectEntityDiscoveryProjectionBatch(request);
+            return repositories.entityAssetProjections.replaceSource({
+              partition: entityPartition,
+              sourceId: checked.source.sourceId,
+              records: discoveryProjectionRecords(checked),
+              updatedAt: checked.updatedAt,
+            });
+          },
+        ),
+      deleteDiscoverySource: (sourceId, updatedAt) =>
+        metadataStore.transaction(
+          {
+            mode: 'cache-write',
+            ownership: 'cache',
+            operation: 'delete-project-entity-discovery-source',
+          },
+          ({ repositories }) =>
+            repositories.entityAssetProjections.replaceSource({
+              partition: entityPartition,
+              sourceId,
+              records: [],
+              updatedAt,
+            }),
         ),
       deleteSource: (sourceId, updatedAt) =>
         metadataStore.transaction(
@@ -214,25 +267,28 @@ export async function createNodeWorkspaceSemanticEntityMetadataBinding(options: 
             await repositories.entityAssetProjections.replaceSource({
               partition: entityPartition,
               sourceId,
-              records: entityRecords.map((record) => ({
-                ...record,
-                freshness: 'stale',
-                updatedAt,
-              })),
+              records: entityRecords.map((record) => staleProjectionRecord(record, updatedAt)),
               updatedAt,
             });
           },
         ),
-      listAutomaticCandidates: async () => {
+      listCandidateProjections: async () => {
         const records = await metadataStore.repositories.entityAssetProjections.list({
           partition: entityPartition,
           kinds: ['entity-candidate'],
         });
         return records.flatMap((record) =>
-          record.kind === 'entity-candidate' &&
-          record.value.metadata?.['projectionKind'] === 'automatic-entity-candidate'
-            ? [record.value]
-            : [],
+          record.kind === 'entity-candidate' ? [record.value] : [],
+        );
+      },
+      listDiscoveryOccurrences: async (query = {}) => {
+        const records = await metadataStore.repositories.entityAssetProjections.list({
+          partition: entityPartition,
+          kinds: ['entity-occurrence'],
+          ...projectionQuery(query),
+        });
+        return records.flatMap((record) =>
+          record.kind === 'entity-occurrence' ? [record.value] : [],
         );
       },
       findOccurrencesByEntity: async (entityId) => {
@@ -241,11 +297,7 @@ export async function createNodeWorkspaceSemanticEntityMetadataBinding(options: 
           kinds: ['entity-occurrence'],
           entityId,
         });
-        return loadSemanticOccurrenceRecords(
-          records,
-          metadataStore.repositories.semanticProjections,
-          semanticPartition,
-        );
+        return loadSemanticOccurrenceRecords(records);
       },
       findEntityLinksByOccurrence: async (occurrenceId) => {
         const records = await metadataStore.repositories.entityAssetProjections.list({
@@ -253,11 +305,7 @@ export async function createNodeWorkspaceSemanticEntityMetadataBinding(options: 
           projectionId: occurrenceId,
           kinds: ['entity-occurrence'],
         });
-        const occurrences = await loadSemanticOccurrenceRecords(
-          records,
-          metadataStore.repositories.semanticProjections,
-          semanticPartition,
-        );
+        const occurrences = await loadSemanticOccurrenceRecords(records);
         const occurrence = occurrences[0];
         return occurrence ? occurrenceLinks(occurrence) : null;
       },
@@ -267,11 +315,7 @@ export async function createNodeWorkspaceSemanticEntityMetadataBinding(options: 
           sourceId,
           kinds: ['entity-occurrence'],
         });
-        const occurrences = await loadSemanticOccurrenceRecords(
-          records,
-          metadataStore.repositories.semanticProjections,
-          semanticPartition,
-        );
+        const occurrences = await loadSemanticOccurrenceRecords(records);
         return occurrences
           .filter((record) => sameDocumentLocator(record.occurrence.locator, locator))
           .map(occurrenceLinks);
@@ -288,33 +332,24 @@ export async function createNodeWorkspaceSemanticEntityMetadataBinding(options: 
 
 async function loadSemanticOccurrenceRecords(
   records: readonly EntityAssetProjectionRecord[],
-  semanticRepository: SemanticProjectionRepository,
-  semanticPartition: LocalMetadataPartition,
 ): Promise<readonly SemanticEntityOccurrenceRecord[]> {
-  const sources = new Map<string, SemanticProjectionRecord>();
   const results: SemanticEntityOccurrenceRecord[] = [];
   for (const record of records) {
     if (record.kind !== 'entity-occurrence') continue;
-    let source = sources.get(record.sourceId);
-    if (!source) {
-      source = (await semanticRepository.get(semanticPartition, record.sourceId)) ?? undefined;
-      if (!source) {
-        throw new Error(`Semantic occurrence source is unavailable: ${record.sourceId}`);
-      }
-      sources.set(record.sourceId, source);
-    }
     const occurrence = record.value;
     if (
       occurrence.occurrenceId !== record.projectionId ||
-      occurrence.sourceFingerprint !== source.sourceFingerprint ||
+      occurrence.source.sourceId !== record.sourceId ||
+      !occurrence.sourceFingerprint ||
       !occurrence.locator
     ) {
       throw new Error(`Semantic occurrence projection is inconsistent: ${record.projectionId}`);
     }
     results.push({
       occurrenceId: record.projectionId,
+      owner: discoveryOwner(occurrence.source.sourceKind),
       sourceId: record.sourceId,
-      sourceFingerprint: source.sourceFingerprint,
+      sourceFingerprint: occurrence.sourceFingerprint,
       freshness: record.freshness === 'rebuilding' ? 'building' : record.freshness,
       occurrence,
     });
@@ -373,33 +408,90 @@ function semanticRecord(request: SemanticEntitySourceCommitRequest): SemanticPro
   };
 }
 
-function entityProjectionRecords(
-  request: SemanticEntitySourceCommitRequest,
+function discoveryProjectionRecords(
+  request: ProjectEntityDiscoveryProjectionBatch,
 ): readonly EntityAssetProjectionRecord[] {
-  const occurrenceRecords: EntityAssetProjectionRecord[] = request.result.occurrences.map(
+  const checked = assertProjectEntityDiscoveryProjectionBatch(request);
+  const occurrenceRecords: EntityAssetProjectionRecord[] = checked.occurrences.map(
     (occurrence) => ({
       projectionId: requireSemanticOccurrenceId(occurrence),
       kind: 'entity-occurrence',
-      sourceId: request.source.sourceId,
+      sourceId: checked.source.sourceId,
       ...(occurrence.entityRef ? { entityId: occurrence.entityRef.entityId } : {}),
       ...(occurrence.candidateId ? { candidateId: occurrence.candidateId } : {}),
-      freshness: 'fresh',
+      freshness: projectionRecordFreshness(occurrence.source.freshness),
       value: occurrence,
-      updatedAt: request.updatedAt,
+      updatedAt: checked.updatedAt,
     }),
   );
-  const candidateRecords: EntityAssetProjectionRecord[] = request.result.candidates.map(
-    (candidate) => ({
-      projectionId: `${request.source.sourceId}:candidate:${candidate.id}`,
-      kind: 'entity-candidate',
-      sourceId: request.source.sourceId,
-      candidateId: candidate.id,
-      freshness: 'fresh',
-      value: candidate,
-      updatedAt: request.updatedAt,
-    }),
-  );
+  const candidateRecords: EntityAssetProjectionRecord[] = checked.candidates.map((candidate) => ({
+    projectionId: `${checked.source.sourceId}:candidate:${candidate.candidateId}`,
+    kind: 'entity-candidate',
+    sourceId: checked.source.sourceId,
+    candidateId: candidate.candidateId,
+    freshness: projectionRecordFreshness(candidate.freshness),
+    value: candidate,
+    updatedAt: checked.updatedAt,
+  }));
   return [...occurrenceRecords, ...candidateRecords];
+}
+
+function staleProjectionRecord(
+  record: EntityAssetProjectionRecord,
+  updatedAt: string,
+): EntityAssetProjectionRecord {
+  if (record.kind === 'entity-candidate') {
+    return {
+      ...record,
+      freshness: 'stale',
+      value: { ...record.value, freshness: 'stale' },
+      updatedAt,
+    };
+  }
+  if (record.kind === 'entity-occurrence') {
+    return {
+      ...record,
+      freshness: 'stale',
+      value: {
+        ...record.value,
+        source: { ...record.value.source, freshness: 'stale', updatedAt },
+      },
+      updatedAt,
+    };
+  }
+  return { ...record, freshness: 'stale', updatedAt };
+}
+
+function projectionRecordFreshness(
+  freshness: 'fresh' | 'stale' | 'building' | 'partial' | 'failed' | undefined,
+): EntityAssetProjectionRecord['freshness'] {
+  if (freshness === 'building') return 'rebuilding';
+  if (freshness === 'stale' || freshness === 'partial' || freshness === 'failed') return 'stale';
+  return 'fresh';
+}
+
+function projectionQuery(query: ProjectEntityDiscoveryOccurrenceQuery): {
+  readonly sourceId?: string;
+  readonly entityId?: string;
+  readonly candidateId?: string;
+} {
+  return {
+    ...(query.sourceId === undefined ? {} : { sourceId: query.sourceId }),
+    ...(query.entityId === undefined ? {} : { entityId: query.entityId }),
+    ...(query.candidateId === undefined ? {} : { candidateId: query.candidateId }),
+  };
+}
+
+function discoveryOwner(sourceKind: string): ProjectEntityCandidateSourceOwner {
+  if (
+    sourceKind === 'workspace' ||
+    sourceKind === 'document' ||
+    sourceKind === 'managed-asset' ||
+    sourceKind === 'media-library'
+  ) {
+    return sourceKind;
+  }
+  throw new Error(`Project Entity occurrence source owner is invalid: ${sourceKind}`);
 }
 
 function requireSemanticOccurrenceId(

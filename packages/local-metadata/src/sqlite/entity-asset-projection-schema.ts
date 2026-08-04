@@ -45,4 +45,16 @@ export const ENTITY_ASSET_PROJECTION_MIGRATIONS: readonly LocalMetadataMigration
         ON entity_asset_projections(partition_key, asset_ref, projection_kind)`,
     ],
   },
+  {
+    namespace: 'entity-asset-projection',
+    version: 2,
+    name: 'rebuild-project-entity-candidate-projections',
+    checksum: 'sha256:rebuild-project-entity-candidate-projections-v2',
+    ownership: 'cache',
+    destructive: true,
+    statements: [
+      `DELETE FROM entity_asset_projections
+        WHERE projection_kind = 'entity-candidate'`,
+    ],
+  },
 ];

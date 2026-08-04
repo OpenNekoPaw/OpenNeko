@@ -79,6 +79,9 @@ export type CreativeEntitySourceKind =
   | 'story'
   | 'canvas'
   | 'asset'
+  | 'workspace'
+  | 'media-library'
+  | 'managed-asset'
   | 'agent'
   | 'document'
   | 'importer'
@@ -481,6 +484,9 @@ export const CREATIVE_ENTITY_SOURCE_KINDS: readonly CreativeEntitySourceKind[] =
   'story',
   'canvas',
   'asset',
+  'workspace',
+  'media-library',
+  'managed-asset',
   'agent',
   'document',
   'importer',

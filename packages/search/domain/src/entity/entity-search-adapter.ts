@@ -6,9 +6,9 @@ import type {
 } from '../contracts';
 import type {
   CreativeEntity,
-  CreativeEntityCandidate,
   EntityAssetProjectionPartition,
   EntityAssetProjectionRepository,
+  ProjectEntityCandidateProjection,
 } from '@neko/entity-domain';
 import type { CreativeEntityService } from '@neko/entity-domain';
 
@@ -23,7 +23,7 @@ export {
 
 export interface EntitySearchAdapterOptions {
   readonly projectRoot: string;
-  readonly service: Pick<CreativeEntityService, 'list' | 'listCandidates'>;
+  readonly service: Pick<CreativeEntityService, 'list'>;
   readonly automaticCandidateProjection?: {
     readonly repository: Pick<EntityAssetProjectionRepository, 'list'>;
     readonly partition: EntityAssetProjectionPartition;
@@ -59,25 +59,21 @@ class EntitySearchAdapter implements ProjectSearchAdapter {
       return [];
     }
 
-    const [entities, persistedCandidates, projectedCandidates] = await Promise.all([
+    const [entities, projectedCandidates] = await Promise.all([
       this.options.service.list(),
-      this.options.service.listCandidates('open'),
       this.loadAutomaticCandidates(),
     ]);
     const exactItemId = query.text.trim();
     const text = exactItemId.toLocaleLowerCase();
     const candidatesById = new Map<string, CandidateSearchProjection>();
     for (const candidate of projectedCandidates) {
-      candidatesById.set(candidate.candidate.id, candidate);
-    }
-    for (const candidate of persistedCandidates) {
-      candidatesById.set(candidate.id, { candidate });
+      candidatesById.set(candidate.candidate.candidateId, candidate);
     }
     const items = [
       ...entities.map((entity) => entityToSearchItem(entity, this.options.projectRoot)),
-      ...[...candidatesById.values()]
-        .filter(({ candidate }) => !text || candidate.identityBasis === 'user-named')
-        .map((candidate) => candidateToSearchItem(candidate, this.options.projectRoot)),
+      ...[...candidatesById.values()].map((candidate) =>
+        candidateToSearchItem(candidate, this.options.projectRoot),
+      ),
     ];
     const allowedKinds = query.kinds ? new Set(query.kinds) : undefined;
     return items
@@ -97,11 +93,7 @@ class EntitySearchAdapter implements ProjectSearchAdapter {
       kinds: ['entity-candidate'],
     });
     return records.flatMap((record) => {
-      if (
-        record.kind !== 'entity-candidate' ||
-        record.value.status !== 'open' ||
-        record.value.metadata?.['projectionKind'] !== 'automatic-entity-candidate'
-      ) {
+      if (record.kind !== 'entity-candidate' || record.value.freshness === 'failed') {
         return [];
       }
       return [
@@ -157,7 +149,7 @@ function entityToSearchItem(entity: CreativeEntity, projectRoot: string): Projec
 }
 
 interface CandidateSearchProjection {
-  readonly candidate: CreativeEntityCandidate;
+  readonly candidate: ProjectEntityCandidateProjection;
   readonly projectionId?: string;
   readonly sourceId?: string;
   readonly freshness?: ProjectSearchItem['freshness'];
@@ -168,54 +160,47 @@ function candidateToSearchItem(
   projectRoot: string,
 ): ProjectSearchItem {
   const candidate = projection.candidate;
-  const sourceRef = candidate.sourceRefs.find((value) => value.trim().length > 0);
+  const sourceRef = candidate.evidence.find((value) => value.locator)?.sourceId;
+  const label = candidate.proposedNames.display ?? candidate.proposedNames.canonical;
   return {
     id: projection.projectionId
       ? `entity-projection:${projection.projectionId}`
-      : `candidate:${candidate.kind}:${candidate.id}`,
+      : `candidate:${candidate.kind}:${candidate.candidateId}`,
     kind: 'entity-candidate',
-    label:
-      candidate.identityBasis === 'user-named' ? candidate.name : pendingCandidateLabel(candidate),
-    description:
-      candidate.identityBasis === 'user-named'
-        ? `${candidate.kind} candidate`
-        : `${candidate.kind} candidate · pending name`,
+    label,
+    description: `${candidate.kind} candidate`,
     source: {
       partition: 'creative-entities',
       sourceId: projection.sourceId ?? 'neko-entity',
       sourceKind: 'candidate',
-      refId: candidate.id,
+      refId: candidate.candidateId,
       metadata: {
         entityKind: candidate.kind,
-        status: candidate.status,
-        identityBasis: candidate.identityBasis,
+        freshness: candidate.freshness,
       },
     },
     projectRoot,
-    canonicalName: candidate.name,
-    aliases: candidate.aliases,
+    canonicalName: candidate.proposedNames.canonical,
+    aliases: candidate.proposedNames.aliases,
     searchText: [
-      candidate.name,
-      ...(candidate.aliases ?? []),
+      label,
+      candidate.proposedNames.canonical,
+      ...candidate.proposedNames.aliases,
       candidate.kind,
-      candidate.status,
-      ...candidate.sourceRefs,
+      candidate.freshness,
+      ...candidate.evidence.flatMap((evidence) => [evidence.sourceId, evidence.label ?? '']),
     ].join(' '),
     navigationData: {
-      candidateId: candidate.id,
+      candidateId: candidate.candidateId,
       kind: candidate.kind,
       source: projection.sourceId ?? 'neko-entity',
       ...(sourceRef ? { sourceRef } : {}),
     },
     freshness: projection.freshness ?? 'fresh',
     metadata: {
-      ...(candidate.metadata ?? {}),
-      status: candidate.status,
-      identityBasis: candidate.identityBasis,
+      freshness: candidate.freshness,
+      evidenceCount: candidate.evidence.length,
+      ...(candidate.confidence === undefined ? {} : { confidence: candidate.confidence }),
     },
   };
-}
-
-function pendingCandidateLabel(candidate: CreativeEntityCandidate): string {
-  return candidate.name.trim() ? `${candidate.name} (pending name)` : 'Unnamed candidate';
 }

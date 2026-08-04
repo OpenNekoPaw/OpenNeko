@@ -14,7 +14,7 @@
 
 ## 3. Candidates, availability, and references
 
-- [ ] 3.1 Implement workspace/document/Asset/Media candidate and occurrence projections in Search/local metadata without writing canonical Entity facts.
+- [x] 3.1 Implement workspace/document/Asset/Media candidate and occurrence projections in Search/local metadata without writing canonical Entity facts.
 - [ ] 3.2 Implement explicit create, confirm, merge-into, dismiss, merge, deprecate, and delete operations with expected revision and complete reference plans.
 - [ ] 3.3 Derive binding availability and needs-attention state through owning resource ports for files, documents, generated outputs, and exact Asset revisions.
 - [ ] 3.4 Add tests proving candidate disappearance, missing files, removed links, unavailable accounts, and uninstalled Assets never delete or mutate confirmed Entity facts.
