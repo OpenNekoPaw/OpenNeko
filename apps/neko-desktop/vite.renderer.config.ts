@@ -60,6 +60,8 @@ export default defineConfig({
   },
   optimizeDeps: {
     exclude: [
+      '@neko/agent-contracts',
+      '@neko/agent-contracts/host-message-event',
       '@neko/agent-webview/root',
       '@neko/canvas-domain',
       '@neko/canvas-webview/root',
@@ -71,8 +73,6 @@ export default defineConfig({
     ],
     include: [
       '@zip.js/zip.js',
-      '@neko/agent-contracts',
-      '@neko/agent-contracts/host-message-event',
       '@neko/assets-domain/contracts',
       '@neko/content/project-file-io',
       '@neko/generation',

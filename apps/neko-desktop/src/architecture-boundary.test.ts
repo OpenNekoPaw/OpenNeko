@@ -336,6 +336,11 @@ describe('Desktop architecture boundaries', () => {
     expect(rendererConfig).toMatch(
       /exclude:\s*\[[^\]]*'@neko\/canvas-domain'[^\]]*'@neko\/canvas-webview\/root'/s,
     );
+    const optimizeDepsExclude = rendererConfig.match(/exclude:\s*\[([^\]]*)\]/s)?.[1];
+    const optimizeDepsInclude = rendererConfig.match(/include:\s*\[([^\]]*)\]/s)?.[1];
+    expect(optimizeDepsExclude).toContain("'@neko/agent-contracts'");
+    expect(optimizeDepsExclude).toContain("'@neko/agent-contracts/host-message-event'");
+    expect(optimizeDepsInclude).not.toContain("'@neko/agent-contracts'");
   });
 
   it('releases window resources through the registered sender identity after Electron closes', () => {
