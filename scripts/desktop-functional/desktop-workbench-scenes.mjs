@@ -243,11 +243,9 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
       initialEntryDraft.draftId,
       workspaceActivation.draftId,
     ]);
-    const assistantDraft = await bindAssistantDraft(evaluate);
-    checkpoint('fresh-entry-draft-assistant-bind', {
+    checkpoint('fresh-entry-draft-ready', {
       initialEntryDraft,
       freshEntryDraft,
-      assistantDraft,
     });
     await evaluate(`(() => {
       globalThis.__openNekoAgentSessionEvents = [];
@@ -296,6 +294,9 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
     );
     await click('.agent-composer-send');
     const assistantActivation = await waitForAssistantSession(evaluate);
+    if (assistantActivation.conversationCount !== freshEntryDraft.conversationCount + 1) {
+      throw new Error('Direct Entry Draft submit did not create exactly one Assistant session.');
+    }
     await click('.home-primary-navigation .home-nav-button', 1);
     await waitForSelector('[data-owner-root="asset-management"]');
     await waitForSelector('.home-conversation-link');
@@ -433,26 +434,17 @@ async function inspectEntryDraft(evaluate, forbiddenDraftIds = []) {
     if (!(textarea instanceof HTMLTextAreaElement) || textarea.value !== '') {
       throw new Error('Entry Draft did not reset its composer input.');
     }
-    const actionLabels = [...document.querySelectorAll('.agent-empty-action')].map(
+    const ownerChoiceLabels = [...document.querySelectorAll('.agent-empty-action')].map(
       (element) => element.textContent?.trim() ?? '',
     );
-    const expectedLabels = [
-      ['助手', 'Assistant'],
-      ['工作区', 'Workspace'],
-      ['角色 / 群聊', 'Character / Room'],
-    ];
-    if (
-      actionLabels.length !== expectedLabels.length ||
-      expectedLabels.some((variants) => !variants.some((label) => actionLabels.includes(label))) ||
-      actionLabels.includes('生成素材') ||
-      actionLabels.includes('Generate Assets')
-    ) {
-      throw new Error('Entry Draft did not present exact Agent owner choices.');
+    if (ownerChoiceLabels.length !== 0) {
+      throw new Error('Entry Draft still blocks direct input with explicit owner choices.');
     }
     return {
       draftId: context.scope.draftId,
       conversationCount: projection.agentHome.conversations.length,
-      actionLabels,
+      ownerChoiceLabels,
+      roleplayPromptVisible: Boolean(document.querySelector('[data-testid="entry-page-menu"]')),
     };
   })()`);
 }
@@ -542,50 +534,6 @@ async function openWorkspacePreview(evaluate) {
       throw new Error('Workspace Preview rendered duplicate tab or descriptor chrome.');
     }
     return { chrome, tabHeaderCount, internalHeaderCount };
-  })()`);
-}
-
-async function bindAssistantDraft(evaluate) {
-  return evaluate(`(async () => {
-    const before = await window.openNekoDesktop.shell.getSnapshot();
-    const beforeContext = before.window.scene.context;
-    if (beforeContext.kind !== 'agent' || beforeContext.scope.kind !== 'unbound') {
-      throw new Error('Assistant binding requires an unbound Entry Draft.');
-    }
-    const root = document.querySelector('.desktop-agent-root');
-    const action = document.querySelector('[data-agent-scope="unbound"] .agent-empty-action');
-    if (!(action instanceof HTMLButtonElement) || action.disabled) {
-      throw new Error('Entry Draft Assistant action is unavailable.');
-    }
-    action.click();
-    const deadline = Date.now() + 10_000;
-    while (Date.now() < deadline) {
-      const projection = await window.openNekoDesktop.shell.getSnapshot();
-      const context = projection.window.scene.context;
-      if (context.kind === 'agent' && context.scope.kind === 'assistant') {
-        if (context.scope.draftId !== beforeContext.scope.draftId) {
-          throw new Error('Assistant binding replaced the exact Entry Draft identity.');
-        }
-        if (projection.agentHome.conversations.length !== before.agentHome.conversations.length) {
-          throw new Error('Assistant binding created a conversation before first submit.');
-        }
-        while (Date.now() < deadline) {
-          if (document.querySelector('[data-agent-scope="assistant"] .agent-composer-textarea')) {
-            if (document.querySelector('.desktop-agent-root') !== root) {
-              throw new Error('Assistant binding remounted the package-owned Agent Root.');
-            }
-            return {
-              draftId: context.scope.draftId,
-              assistantSpaceId: context.scope.assistantSpaceId,
-              conversationCount: projection.agentHome.conversations.length,
-            };
-          }
-          await new Promise((resolve) => setTimeout(resolve, 50));
-        }
-      }
-      await new Promise((resolve) => setTimeout(resolve, 50));
-    }
-    throw new Error('Entry Draft did not bind to Assistant before timeout.');
   })()`);
 }
 
@@ -1090,6 +1038,17 @@ async function inspectWorkbench(evaluate, expectedShape, expectedOwner) {
     const mainSecondaryRect = mainSecondary instanceof HTMLElement
       ? mainSecondary.getBoundingClientRect()
       : undefined;
+    const mainGutter = shell.querySelector('[data-workbench-main-gutter="true"]');
+    const mainGutterRect = mainGutter instanceof HTMLElement
+      ? mainGutter.getBoundingClientRect()
+      : undefined;
+    const mainStyle = main instanceof HTMLElement ? getComputedStyle(main) : undefined;
+    const primaryMainStyle = mainPrimary instanceof HTMLElement
+      ? getComputedStyle(mainPrimary)
+      : undefined;
+    const secondaryMainStyle = mainSecondary instanceof HTMLElement
+      ? getComputedStyle(mainSecondary)
+      : undefined;
     const controlledShell = shell.closest('[data-neko-controlled-workbench="true"]');
     const previewPresentation = shell.querySelector(
       '.neko-controlled-workbench-main__secondary [data-preview-presentation-owner="preview-webview"]',
@@ -1148,6 +1107,7 @@ async function inspectWorkbench(evaluate, expectedShape, expectedOwner) {
         ),
       ),
       mainSplit: controlledShell?.getAttribute('data-main-split'),
+      mainComposition: main?.getAttribute('data-main-composition'),
       mainSplitRatio:
         controlledShell instanceof HTMLElement
           ? parseFloat(
@@ -1157,6 +1117,30 @@ async function inspectWorkbench(evaluate, expectedShape, expectedOwner) {
       hasMainSplitResize: Boolean(
         shell.querySelector('.neko-controlled-workbench-main-split-handle--columns'),
       ),
+      primaryMainShell: mainPrimary?.getAttribute('data-workbench-main-shell'),
+      secondaryMainShell: mainSecondary?.getAttribute('data-workbench-main-shell'),
+      hasMainGutter: mainGutter instanceof HTMLElement,
+      mainGutterWidth: mainGutterRect?.width ?? 0,
+      mainShellGap:
+        mainPrimaryRect !== undefined && mainSecondaryRect !== undefined
+          ? mainSecondaryRect.left - mainPrimaryRect.right
+          : 0,
+      enclosingMainBorderWidth: mainStyle ? parseFloat(mainStyle.borderTopWidth) : 0,
+      enclosingMainBorderRadius: mainStyle?.borderRadius,
+      enclosingMainOverflow: mainStyle?.overflow,
+      enclosingMainShadow: mainStyle?.boxShadow,
+      primaryMainBorderWidth: primaryMainStyle
+        ? parseFloat(primaryMainStyle.borderTopWidth)
+        : 0,
+      primaryMainBorderRadius: primaryMainStyle?.borderRadius,
+      primaryMainOverflow: primaryMainStyle?.overflow,
+      primaryMainShadow: primaryMainStyle?.boxShadow,
+      secondaryMainBorderWidth: secondaryMainStyle
+        ? parseFloat(secondaryMainStyle.borderTopWidth)
+        : 0,
+      secondaryMainBorderRadius: secondaryMainStyle?.borderRadius,
+      secondaryMainOverflow: secondaryMainStyle?.overflow,
+      secondaryMainShadow: secondaryMainStyle?.boxShadow,
       mainPanelsOverlap:
         mainPrimaryRect !== undefined && mainSecondaryRect !== undefined
           ? mainPrimaryRect.right > mainSecondaryRect.left + 1
@@ -1240,8 +1224,26 @@ function assertManagementDetailSplit(detail, managementPanelId, detailPanelId) {
     detail.panelTabHeaderIds.includes(detailPanelId) ||
     !detail.compactPanelIds.includes(managementPanelId) ||
     detail.mainSplit !== 'columns' ||
+    detail.mainComposition !== 'independent-shells' ||
     Math.abs(detail.mainSplitRatio - 0.34) > 0.025 ||
     !detail.hasMainSplitResize ||
+    detail.primaryMainShell !== 'primary' ||
+    detail.secondaryMainShell !== 'secondary' ||
+    !detail.hasMainGutter ||
+    Math.abs(detail.mainGutterWidth - 10) > 1 ||
+    Math.abs(detail.mainShellGap - 10) > 1 ||
+    detail.enclosingMainBorderWidth !== 0 ||
+    detail.enclosingMainBorderRadius !== '0px' ||
+    detail.enclosingMainOverflow !== 'visible' ||
+    detail.enclosingMainShadow !== 'none' ||
+    detail.primaryMainBorderWidth <= 0 ||
+    detail.secondaryMainBorderWidth <= 0 ||
+    detail.primaryMainBorderRadius === '0px' ||
+    detail.secondaryMainBorderRadius === '0px' ||
+    detail.primaryMainOverflow !== 'hidden' ||
+    detail.secondaryMainOverflow !== 'hidden' ||
+    detail.primaryMainShadow === 'none' ||
+    detail.secondaryMainShadow === 'none' ||
     detail.mainPanelsOverlap ||
     detail.primaryMainWidth <= 0 ||
     detail.secondaryMainWidth <= detail.primaryMainWidth
