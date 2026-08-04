@@ -421,6 +421,35 @@ describe('MessageList auto-scroll lifecycle', () => {
     expect(processRecordsButton.querySelector('.animate-spin')).toBeNull();
   });
 
+  it('renders temporary execution activity inside the transcript and removes it at idle', () => {
+    virtualItems = [{ index: 1, key: 'execution-activity', start: 80 }];
+    const props = {
+      messages: [createMessage('message-1')],
+      isThinking: true,
+      streamingMessageId: null,
+      activeConversationId: 'conv-1',
+    };
+    const { container, rerender } = renderWithI18n(
+      <MessageActionsProvider>
+        <MessageList {...props} agentState={{ phase: 'thinking', startedAt: Date.now() }} />
+      </MessageActionsProvider>,
+    );
+
+    const transcript = container.querySelector('.agent-message-list');
+    const activity = screen.getByRole('status', { name: 'Agent execution in progress' });
+    expect(transcript?.contains(activity)).toBe(true);
+    expect(activity.textContent).toContain('Working');
+    expect(activity.textContent).not.toContain('Thinking');
+    expect(container.querySelector('.agent-run-status')).toBeNull();
+
+    rerender(
+      <MessageActionsProvider>
+        <MessageList {...props} isThinking={false} agentState={null} />
+      </MessageActionsProvider>,
+    );
+    expect(screen.queryByRole('status', { name: 'Agent execution in progress' })).toBeNull();
+  });
+
   it('does not render activation progress as a standalone row above messages', () => {
     virtualItems = [];
 

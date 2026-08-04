@@ -15,6 +15,7 @@ Electron Desktop 的 Agent 入口在冷启动、首次挂载和项目主面板�
 - 修正 Desktop Agent 与 Resource Browser Dock 的主题作用域，使三个 Workbench 主区域统一使用纯白 Main surface；同时消除 Agent 对话区与输入区的分区底色，并去除“资源管理”Dock 内重复的 package 标题栏。
 - 精简 Home 应用一级侧栏的品牌 chrome，使标题行只显示可交互的 `OpenNeko` 文字且不再渲染品牌或折叠图标；同时让右侧 Agent 创作入口在可用主区域中居中展示。
 - 收敛 Home Agent 入口标题 chrome，移除标题前重复的 Agent 图标，并让标题与副标题共享居中文本轴；任务与模板功能图标继续保留。
+- 将 Agent 运行状态投影到所属会话的 transcript 时间线，复用既有 thinking、Tool Call、Process Record 与 streaming message 展示；移除 composer 上方独立的“思考中/执行中”状态条。
 
 ## Capabilities
 
@@ -31,6 +32,7 @@ Electron Desktop 的 Agent 入口在冷启动、首次挂载和项目主面板�
 - `apps/neko-desktop` Main AppHost、Shell service、preload/renderer Agent adapter、Workbench renderer 与 Desktop CSS。
 - `packages/agent/runtime` 的持久 conversation catalog 读取边界。
 - `packages/agent/webview` 的 Root 订阅时序和 conversation/tab 投影测试。
+- `packages/agent/webview` 的 MessageList 执行活动投影、工具记录去重和运行态可访问性测试。
 - `packages/ui` 的 Popover surface contract、共享 resize lifecycle 与样式测试。
 - Desktop theme scope 对 Agent/Assets package Root 的 surface token 投影与 production computed-style 验收。
 - Desktop Workbench Main View contract、Canvas/Assets 组合、聚焦测试、真实 Electron 验收和相关架构/状态文档。

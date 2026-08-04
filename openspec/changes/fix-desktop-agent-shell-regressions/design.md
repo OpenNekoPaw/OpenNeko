@@ -14,6 +14,8 @@ Home 一级侧栏品牌行同时渲染 `N` 品牌块、`OpenNeko` 与面板图�
 
 Agent launchpad 标题仍在独立的 raised icon tile 后显示“与 OpenNeko 一起创作”，但下方常用任务与模板已经提供足够的功能图标语义。标题图标不承担 action 或状态，仅重复装饰层级，并让标题、副标题的视觉轴偏向图标后的左对齐。
 
+Agent Webview 同时渲染两份运行提示：MessageList 尾部的 thinking 气泡，以及 composer 上方固定的 `AgentRunStatus`。后者脱离 conversation scroll owner，并把 thinking、acting、streaming 压成一条通用文字；真实 Tool Call、Process Record 和流式 assistant message 已经在 transcript 中按发生顺序投影，因此固定状态条既重复又无法表达 Codex 式执行过程。
+
 首轮 pending-send 测试直接向一个固定 `ChatWorkspace` 注入 request，没有经过 tabless composer、新 conversation、Tab runtime reconciliation、空 conversation/Timeline projection 和 visible realm replacement。真实截图中 Host 已投影“执行中”，而用户消息仍为空，说明执行状态和 optimistic message 落在了不同 owner 或 pending request 在 owning message commit 前被清除。
 
 ## Goals / Non-Goals
@@ -32,6 +34,8 @@ Agent launchpad 标题仍在独立的 raised icon tile 后显示“与 OpenNeko 
 - Home 一级侧栏品牌行只呈现 `OpenNeko` 文字，并让该文字继续承担可访问的展开/折叠操作。
 - Home Agent launchpad 在主区域有足够高度时垂直、水平居中；低高度与窄窗口仍可滚动并从顶部安全展示。
 - Home Agent launchpad 标题不渲染无交互的图标 tile，标题与副标题在同一居中轴上展示；功能入口图标保持不变。
+- Agent 执行活动只在所属 conversation transcript 内展示；真实 thinking 内容、工具调用、生成记录和 streaming assistant message 继续使用既有 canonical projection，运行等待期仅显示不含“思考中”文案的轻量活动项。
+- conversation 切换、late attachment 与 state snapshot 恢复时只投影目标 conversation 的活动；idle 后移除临时活动项，不把运行态写成持久伪消息。
 
 **Non-Goals:**
 
@@ -109,6 +113,14 @@ Resource Browser 增加显式 Desktop 嵌入展示模式。standalone 模式保�
 
 Agent 标题层只删除 `home-launchpad-heading-icon` 节点及其专属 CSS，`.home-launchpad-heading` 改为单列居中文本容器。`StorylineIcon` 继续用于“规划创作”等真实 action，不因标题去装饰而修改共享 icon 能力或任务结构。
 
+### 10. Agent 执行状态由 conversation transcript presentation 投影
+
+`AgentStateRuntime` 继续是 authoritative run phase owner，Webview 不复制状态机，也不把 phase 写入 transcript。`ConversationController` 仍按 conversation identity 选择状态快照，并把目标会话的 `AgentState` 交给 MessageList presentation。MessageList 在没有可代表当前活动的 streaming assistant message 或真实工具/process item 时，才在虚拟列表尾部增加临时 execution activity item。
+
+thinking 等待期使用无“思考中”文字的轻量动态活动；acting 阶段若已有同轮 Tool Call 或 Process Record，则只显示真实记录；streaming 阶段由正在增长的 assistant message 表达，不增加第二条状态。进入 idle 后临时 item 消失，已完成/失败的工具与生成记录按既有 Timeline projection 保留。固定在 composer 上方的 `AgentRunStatus` 和其独立 elapsed timer 被删除。
+
+该方案复用 `message-list-presenter`、`ThinkingBlock`、`ProcessRecordsGroup`、`ToolCallDisplay` 与 streaming message，不新增 renderer-owned执行历史、第二套 design system 或从文本猜测出的完成状态。真实 Electron 验收必须在 provider 回答完成前观察 transcript activity 或真实 process record，并同时证明 `.agent-run-status` 从未出现。
+
 ## Risks / Trade-offs
 
 - [全局 catalog 包含历史非 Desktop workspace] → AppHost 必须使用 Shell Project catalog workspace scope 过滤，未知 workspace 不投影到 Home。
@@ -124,6 +136,8 @@ Agent 标题层只删除 `home-launchpad-heading-icon` 节点及其专属 CSS，
 - [移除品牌图标导致 Sidebar 无法切换] → `OpenNeko` 文字本身保留现有 toggle action 和可访问标签，compact hover reveal 仍可恢复文字操作。
 - [垂直居中导致低窗口内容顶部溢出] → 使用低高度 media query 切换为顶部对齐，并由真实 Electron 大/小窗口检查可滚动性。
 - [标题去图标削弱任务辨识] → 只移除无交互标题 tile，常用任务和模板的功能图标继续由各自 action 拥有。
+- [临时 activity 与工具/流式内容重复] → presenter 根据 authoritative streaming identity 和 transcript process projection去重；完成态只由既有消息/工具投影保留，activity 不持久化。
+- [虚拟列表 activity 导致滚动跳动] → activity 作为普通估高 item 参与现有 follow-tail 逻辑；detached viewport 不以无 message owner 的临时 item 作为恢复锚点。
 
 ## Migration Plan
 

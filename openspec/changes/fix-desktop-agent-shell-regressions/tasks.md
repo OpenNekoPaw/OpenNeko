@@ -11,6 +11,7 @@
 - [x] 1.9 Add a Resource Browser embedded-chrome red test proving Desktop renders one Resource management title while add/refresh actions remain available.
 - [x] 1.10 Add Home renderer/CSS red tests proving the application brand contains only interactive `OpenNeko` text and the Agent launchpad is centered with a low-height safety rule.
 - [x] 1.11 Add Home renderer/CSS red tests proving the Agent heading has no standalone icon tile and centers its title/subtitle without removing action icons.
+- [x] 1.12 Add Agent Webview red tests proving live activity is inside MessageList, the composer-adjacent run-status region is absent, canonical tool/streaming records are not duplicated, and idle/conversation switching clears the temporary item.
 
 ## 2. Persistent Agent Home catalog
 
@@ -25,6 +26,7 @@
 - [x] 3.3 Preserve the owning optimistic user message across empty initial snapshots and make missing config/send rejection clear the false executing state with a conversation diagnostic.
 - [x] 3.4 Bind pending send to the Host-created conversation/Tab realm, consume it only after the owning render coordinator receives the user message, and prevent ordinary Tab reconciliation from clearing it.
 - [x] 3.5 Move Agent module loading to one renderer-startup-owned promise and make every Agent Surface reuse it while keeping bootstrap and adapter state View scoped.
+- [x] 3.6 Project the active conversation Agent state through MessageList, replace the legacy thinking bubble with a transcript execution activity, and delete the independent `AgentRunStatus` path.
 
 ## 4. Desktop portal and Workbench layout
 
@@ -44,3 +46,4 @@
 - [ ] 5.2 Package and inspect Electron Desktop against an isolated fixture for cold-start recents, Agent load/send visibility, themed menus and all Chat/Main modes.
 - [x] 5.3 Update active Desktop/Agent architecture or status documentation, record evaluation evidence and blockers, and complete the Neko quality review.
 - [ ] 5.4 Re-run focused tests/build/evaluation and isolated Electron acceptance for opaque Popover computed style, visible sent text, default Canvas and Resource Browser Main View; replace superseded evidence and repeat quality review.
+- [ ] 5.5 Extend `desktop-agent-provider-ui` to observe live transcript execution with the real provider, prove the legacy status region is absent throughout the run, and retain terminal response/lifecycle evidence.

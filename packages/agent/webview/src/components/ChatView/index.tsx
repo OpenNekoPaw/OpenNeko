@@ -23,7 +23,6 @@ import type { ForegroundConversationAvailability } from '../../render-lifecycle/
 import type { TabViewportSnapshot } from '../../render-runtime/tab-render-runtime';
 import { CharacterDialogueHeader } from './CharacterDialogueHeader';
 import { EmbodyCharacterHeader } from './EmbodyCharacterHeader';
-import { AgentRunStatus } from './AgentRunStatus';
 import { useTranslation } from '../../i18n/I18nContext';
 import { projectMessageIdentities } from './message-identity';
 import { SubAgentCard } from './SubAgentCard';
@@ -204,6 +203,7 @@ export function ChatView({
               <MessageList
                 messages={messages}
                 isThinking={isThinking}
+                agentState={agentState}
                 streamingMessageId={streamingMessageId}
                 activeConversationId={activeConversationId}
                 identities={messageIdentities}
@@ -214,8 +214,6 @@ export function ChatView({
             </>
           )}
         </MessageActionsProvider>
-
-        <AgentRunStatus agentState={agentState} />
 
         {/* Input Area */}
         <InputArea

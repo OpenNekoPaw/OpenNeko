@@ -1,4 +1,4 @@
-import type { ContentBlock, Message, ToolCall } from '@neko/agent-contracts';
+import type { AgentState, ContentBlock, Message, ToolCall } from '@neko/agent-contracts';
 import {
   deriveToolCallsFromContentBlocks,
   mergeToolCalls,
@@ -11,13 +11,13 @@ import type { PluginsAvailable } from '../components/ChatView/SendToMenu';
 import type { ActivationProgressTimeline } from './activation-progress-presenter';
 
 export type MessageListItemKind =
-  'message' | 'content_block' | 'process_group' | 'thinking_indicator';
+  'message' | 'content_block' | 'process_group' | 'execution_activity';
 
 export type MessageListProjectionItem =
   | MessageListMessageItemProjection
   | MessageListContentBlockItemProjection
   | MessageListProcessGroupItemProjection
-  | MessageListThinkingItemProjection;
+  | MessageListExecutionActivityItemProjection;
 
 export interface MessageListMessageItemProjection {
   kind: 'message';
@@ -54,8 +54,9 @@ export interface MessageListProcessGroupItemProjection {
   estimatedHeight: number;
 }
 
-export interface MessageListThinkingItemProjection {
-  kind: 'thinking_indicator';
+export interface MessageListExecutionActivityItemProjection {
+  kind: 'execution_activity';
+  agentState: AgentState;
   ownerMessageId: null;
   estimatedHeight: number;
 }
@@ -63,6 +64,7 @@ export interface MessageListThinkingItemProjection {
 export interface MessageListProjectionInput {
   messages: readonly Message[];
   isThinking: boolean;
+  agentState?: AgentState | null;
   streamingMessageId: string | null;
   plugins?: PluginsAvailable;
   activationProgress?: readonly ActivationProgressTimeline[];
@@ -71,17 +73,17 @@ export interface MessageListProjectionInput {
 export interface MessageListProjection {
   items: MessageListProjectionItem[];
   itemCount: number;
-  showThinkingIndicator: boolean;
+  showExecutionActivity: boolean;
   streamingItemIndex: number;
 }
 
 const MESSAGE_LIST_ESTIMATED_MESSAGE_HEIGHT = 80;
 const MESSAGE_LIST_ESTIMATED_CONTENT_BLOCK_HEIGHT = 60;
-const MESSAGE_LIST_THINKING_INDICATOR_HEIGHT = 50;
+const MESSAGE_LIST_EXECUTION_ACTIVITY_HEIGHT = 34;
 
 export function projectMessageList(input: MessageListProjectionInput): MessageListProjection {
-  const showThinkingIndicator = input.isThinking && !input.streamingMessageId;
-  const items = projectMessageListItems(input.messages, showThinkingIndicator, {
+  const executionActivity = projectExecutionActivity(input);
+  const items = projectMessageListItems(input.messages, executionActivity, {
     plugins: input.plugins,
     activationProgress: input.activationProgress,
   });
@@ -89,14 +91,14 @@ export function projectMessageList(input: MessageListProjectionInput): MessageLi
   return {
     items,
     itemCount: items.length,
-    showThinkingIndicator,
+    showExecutionActivity: executionActivity !== false,
     streamingItemIndex: findMessageListStreamingItemIndex(items, input.streamingMessageId),
   };
 }
 
 export function projectMessageListItems(
   messages: readonly Message[],
-  showThinkingIndicator: boolean,
+  executionActivity: AgentState | false,
   options: Pick<MessageListProjectionInput, 'plugins' | 'activationProgress'> = {},
 ): MessageListProjectionItem[] {
   const items: MessageListProjectionItem[] = [];
@@ -178,15 +180,37 @@ export function projectMessageListItems(
     }
   }
 
-  if (showThinkingIndicator) {
+  if (executionActivity) {
     items.push({
-      kind: 'thinking_indicator',
+      kind: 'execution_activity',
+      agentState: executionActivity,
       ownerMessageId: null,
-      estimatedHeight: MESSAGE_LIST_THINKING_INDICATOR_HEIGHT,
+      estimatedHeight: MESSAGE_LIST_EXECUTION_ACTIVITY_HEIGHT,
     });
   }
 
   return items;
+}
+
+function projectExecutionActivity(input: MessageListProjectionInput): AgentState | false {
+  const state = input.agentState;
+  if (!state || state.phase === 'idle' || input.streamingMessageId) return false;
+  if (hasLiveCanonicalExecutionRecord(input.messages)) return false;
+  return state;
+}
+
+function hasLiveCanonicalExecutionRecord(messages: readonly Message[]): boolean {
+  return messages.some(
+    (message) =>
+      message.isStreaming === true ||
+      message.contentBlocks?.some((block) => {
+        if (block.type === 'thinking') return block.isThinkingComplete !== true;
+        if (block.type === 'text') return block.isStreaming === true;
+        if (block.type === 'tool_call')
+          return block.toolCall !== undefined && !block.toolCall.result;
+        return false;
+      }) === true,
+  );
 }
 
 function findMessageListStreamingItemIndex(

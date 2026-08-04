@@ -7,12 +7,12 @@
 
 import { useRef, useEffect, useCallback, useMemo, type UIEvent } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { Message } from '@neko/agent-contracts';
+import type { AgentState, Message } from '@neko/agent-contracts';
 import type { TabViewportSnapshot } from '../../render-runtime/tab-render-runtime';
 import { MessageItem } from './MessageItem';
 import { ContentBlockItem } from './ContentBlockItem';
 import { ProcessRecordsGroup } from './ProcessRecordsGroup';
-import { MessageAvatar } from './MessageAvatar';
+import { AgentExecutionActivity } from './AgentExecutionActivity';
 import type { ActivationProgressTimeline } from '../../presenters/activation-progress-presenter';
 import type { MessageIdentityMap } from './message-identity';
 import { useMessageActions } from './MessageActionsContext';
@@ -24,6 +24,7 @@ import {
 interface MessageListProps {
   messages: Message[];
   isThinking: boolean;
+  agentState?: AgentState | null;
   streamingMessageId: string | null;
   activeConversationId: string | null;
   identities: MessageIdentityMap;
@@ -35,6 +36,7 @@ interface MessageListProps {
 export function MessageList({
   messages,
   isThinking,
+  agentState = null,
   streamingMessageId,
   activeConversationId,
   identities,
@@ -61,11 +63,12 @@ export function MessageList({
       projectMessageList({
         messages,
         isThinking,
+        agentState,
         streamingMessageId,
         plugins: pluginsAvailable,
         activationProgress,
       }),
-    [messages, isThinking, streamingMessageId, pluginsAvailable, activationProgress],
+    [messages, isThinking, agentState, streamingMessageId, pluginsAvailable, activationProgress],
   );
 
   const flattenedItems = projection.items;
@@ -257,8 +260,8 @@ export function MessageList({
               }}
             >
               <div className="agent-message-list-item py-0.5">
-                {item.kind === 'thinking_indicator' ? (
-                  <ThinkingIndicator identity={identities.assistant} />
+                {item.kind === 'execution_activity' ? (
+                  <AgentExecutionActivity agentState={item.agentState} />
                 ) : item.kind === 'content_block' ? (
                   <ContentBlockItem
                     projection={item.projection}
@@ -343,40 +346,4 @@ function getElementWindow(element: HTMLElement | null): Window | null {
 
 function isScrollableElementConnected(element: HTMLElement): boolean {
   return Boolean(element.isConnected && element.ownerDocument.defaultView);
-}
-
-// Thinking indicator component (matches new message layout)
-function ThinkingIndicator({ identity }: { identity: MessageIdentityMap['assistant'] }) {
-  return (
-    <div className="py-0.5">
-      <div className="flex gap-2.5 px-3 py-1.5">
-        {/* Avatar */}
-        <div className="flex-shrink-0 w-7 pt-0.5">
-          <MessageAvatar
-            role="assistant"
-            label={identity.avatarLabel}
-            imageUri={identity.avatarUri}
-            size="md"
-            title={identity.title}
-          />
-        </div>
-        {/* Content */}
-        <div className="flex-1 min-w-0 max-w-[85%]">
-          <div className="flex items-center gap-2 mb-0.5">
-            <span className="text-[11px] font-medium text-[var(--neko-textLink-foreground)]">
-              {identity.displayName}
-            </span>
-          </div>
-          {/* Bubble with dots */}
-          <div className="agent-bubble agent-bubble-assistant inline-block rounded-2xl rounded-tl-md px-3 py-2">
-            <div className="flex gap-1">
-              <span className="w-1.5 h-1.5 bg-[var(--neko-descriptionForeground)] rounded-full animate-bounce [animation-delay:-0.32s]" />
-              <span className="w-1.5 h-1.5 bg-[var(--neko-descriptionForeground)] rounded-full animate-bounce [animation-delay:-0.16s]" />
-              <span className="w-1.5 h-1.5 bg-[var(--neko-descriptionForeground)] rounded-full animate-bounce" />
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
 }

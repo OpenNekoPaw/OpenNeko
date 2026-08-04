@@ -209,3 +209,33 @@ The Desktop Home application primary sidebar SHALL render one `OpenNeko` text br
 - **THEN** the heading contains no standalone decorative icon tile
 - **AND** its title and subtitle share one centered text axis
 - **AND** common task and quick-start actions retain their functional icons
+
+### Requirement: Agent execution activity belongs to the conversation transcript
+
+The Agent Webview SHALL present live execution activity inside the owning conversation transcript and SHALL NOT render an independent run-status region next to the composer. It SHALL reuse authoritative thinking content, Tool Call, Process Record, generation and streaming-message projections instead of creating a parallel execution history.
+
+#### Scenario: A turn is waiting for its first projected record
+
+- **WHEN** the owning conversation is active and its Agent state is running but no streaming assistant message or process record is available yet
+- **THEN** MessageList renders one lightweight live activity item at the transcript tail
+- **AND** the item does not display a standalone `Thinking` or `思考中` label
+- **AND** no run-status region is rendered between the transcript and composer
+
+#### Scenario: Tool or streaming output becomes visible
+
+- **WHEN** the active turn projects a Tool Call, Process Record, generation record, thinking content, or streaming assistant message
+- **THEN** the canonical transcript item displays its live status in occurrence order
+- **AND** the generic activity item does not duplicate the canonical record
+
+#### Scenario: The turn becomes idle or the user switches conversations
+
+- **WHEN** the owning turn reaches idle or another conversation becomes active
+- **THEN** the temporary activity item is removed or replaced by the target conversation's own state
+- **AND** completed or failed canonical execution records remain visible in their owning transcript
+- **AND** no run state is inferred from another conversation or persisted as a synthetic message
+
+#### Scenario: Agent state attaches after the Webview
+
+- **WHEN** a state snapshot for the active conversation arrives after mount or reload
+- **THEN** the transcript activity reflects that exact conversation snapshot
+- **AND** stale or mismatched conversation state is not displayed

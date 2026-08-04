@@ -3,6 +3,73 @@ import type { ContentBlock } from '@neko/agent-contracts';
 import { projectMessageList, projectMessageListItems } from '../message-list-presenter';
 
 describe('message-list-presenter', () => {
+  it('projects one transcript activity while a run has no canonical live record', () => {
+    const state = { phase: 'thinking' as const, startedAt: 1_000 };
+    const projection = projectMessageList({
+      messages: [],
+      isThinking: true,
+      agentState: state,
+      streamingMessageId: null,
+    });
+
+    expect(projection.showExecutionActivity).toBe(true);
+    expect(projection.items).toEqual([
+      {
+        kind: 'execution_activity',
+        agentState: state,
+        ownerMessageId: null,
+        estimatedHeight: 34,
+      },
+    ]);
+  });
+
+  it('lets canonical streaming and pending tool records replace generic activity', () => {
+    const state = { phase: 'acting' as const, toolName: 'ReadDocument', startedAt: 1_000 };
+    const pendingToolMessage = {
+      id: 'assistant-tool',
+      role: 'assistant' as const,
+      content: '',
+      timestamp: 1_100,
+      contentBlocks: [
+        {
+          id: 'tool-block',
+          type: 'tool_call' as const,
+          timestamp: 1_100,
+          toolCall: { id: 'tool-1', name: 'ReadDocument', arguments: {} },
+        },
+      ],
+    };
+
+    expect(
+      projectMessageList({
+        messages: [pendingToolMessage],
+        isThinking: true,
+        agentState: state,
+        streamingMessageId: null,
+      }).showExecutionActivity,
+    ).toBe(false);
+    expect(
+      projectMessageList({
+        messages: [{ ...pendingToolMessage, isStreaming: true }],
+        isThinking: true,
+        agentState: state,
+        streamingMessageId: 'assistant-tool',
+      }).showExecutionActivity,
+    ).toBe(false);
+  });
+
+  it('does not infer execution activity from legacy thinking state without AgentState', () => {
+    const projection = projectMessageList({
+      messages: [],
+      isThinking: true,
+      agentState: null,
+      streamingMessageId: null,
+    });
+
+    expect(projection.showExecutionActivity).toBe(false);
+    expect(projection.items).toEqual([]);
+  });
+
   it('does not project activation progress as a standalone conversation-level list item', () => {
     const projection = projectMessageList({
       messages: [],
