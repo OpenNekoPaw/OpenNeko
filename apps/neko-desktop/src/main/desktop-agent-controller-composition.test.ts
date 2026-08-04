@@ -437,6 +437,7 @@ function createWorkspace(
   },
 ): AgentWorkspaceRuntime & {
   readonly createConversation: ReturnType<typeof vi.fn>;
+  readonly ensureConversation: ReturnType<typeof vi.fn>;
   readonly checkpointFailedInitialTurn: ReturnType<typeof vi.fn>;
 } {
   const records: Array<{
@@ -472,6 +473,11 @@ function createWorkspace(
     }),
     tools: createToolRegistry(),
     createConversation,
+    ensureConversation: vi.fn(async (conversationId: string) => {
+      if (!records.some((record) => record.conversationId === conversationId)) {
+        await createConversation(conversationId);
+      }
+    }),
     checkpointFailedInitialTurn: vi.fn(async () => undefined),
     deleteConversation: vi.fn(),
     clearAllConversations: vi.fn(),

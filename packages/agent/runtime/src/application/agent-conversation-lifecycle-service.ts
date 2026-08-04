@@ -116,8 +116,16 @@ export interface AgentProviderExecutionPort {
   }): Promise<void>;
 }
 
+export interface AgentConversationSessionMaterializationPort {
+  materialize(input: {
+    readonly conversationId: string;
+    readonly context: AgentConversationContext;
+  }): Promise<void>;
+}
+
 export interface AgentConversationLifecycleService {
   firstSubmit(input: AgentFirstSubmitInput): Promise<AgentConversationLifecycleRecord>;
+  waitForProviderIdle(): Promise<void>;
   readConversation(conversationId: string): Promise<AgentConversationLifecycleRecord>;
   readFirstSubmitByRequest(
     requestId: string,
@@ -160,7 +168,9 @@ export function createAgentConversationLifecycleService(options: {
   readonly grants: AgentResourceGrantValidationPort;
   readonly scratch: AgentScratchHostPort;
   readonly publication: AgentScratchPublicationPort;
+  readonly session: AgentConversationSessionMaterializationPort;
   readonly provider: AgentProviderExecutionPort;
+  readonly reportError: (error: Error) => void;
   readonly createIdentity: () => string;
   readonly now: () => string;
   readonly conversationContextMigration?: {
@@ -173,6 +183,17 @@ export function createAgentConversationLifecycleService(options: {
     >;
   };
 }): AgentConversationLifecycleService {
+  const providerExecutions = new Set<Promise<void>>();
+  const trackProviderExecution = (operation: Promise<void>): void => {
+    providerExecutions.add(operation);
+    void operation.then(
+      () => providerExecutions.delete(operation),
+      (error: unknown) => {
+        providerExecutions.delete(operation);
+        options.reportError(toError(error));
+      },
+    );
+  };
   const firstSubmit = async (
     input: AgentFirstSubmitInput,
   ): Promise<AgentConversationLifecycleRecord> => {
@@ -212,8 +233,16 @@ export function createAgentConversationLifecycleService(options: {
         `Agent first-submit request '${requestId}' conflicts with committed request '${exact.pendingTurn.requestId}'.`,
       );
     }
+    await options.session.materialize({
+      conversationId: exact.conversationId,
+      context: exact.context,
+    });
     if (!(await options.repository.claimProviderExecution(exact.pendingTurn.turnId))) return exact;
-    try {
+    const running = await options.repository.updatePendingTurn(exact.conversationId, {
+      ...exact.pendingTurn,
+      status: 'running',
+    });
+    const execution = (async () => {
       const contextPayloads = await options.grants.resolveForTurn({
         context: exact.context,
         resourceGrantIds: exact.initialMessage.resourceGrantIds,
@@ -228,17 +257,15 @@ export function createAgentConversationLifecycleService(options: {
         contextPayloads,
         configuration: exact.configuration,
       });
-      return options.repository.updatePendingTurn(exact.conversationId, {
-        ...exact.pendingTurn,
-        status: 'running',
-      });
-    } catch (error) {
-      return options.repository.updatePendingTurn(exact.conversationId, {
+    })().catch(async (error: unknown) => {
+      await options.repository.updatePendingTurn(exact.conversationId, {
         ...exact.pendingTurn,
         status: 'failed',
         diagnostic: describeError(error),
       });
-    }
+    });
+    trackProviderExecution(execution);
+    return running;
   };
 
   const readConversation = async (
@@ -291,6 +318,11 @@ export function createAgentConversationLifecycleService(options: {
 
   return {
     firstSubmit,
+    async waitForProviderIdle() {
+      while (providerExecutions.size > 0) {
+        await Promise.all([...providerExecutions]);
+      }
+    },
     readConversation,
     readFirstSubmitByRequest: (requestId) =>
       options.repository.readFirstSubmitByRequest(
@@ -520,6 +552,10 @@ function requireUniqueIdentities(value: readonly string[], label: string): reado
 
 function describeError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function toError(error: unknown): Error {
+  return error instanceof Error ? error : new Error(String(error));
 }
 
 function requireExecutionMode(value: 'plan' | 'ask' | 'auto'): 'plan' | 'ask' | 'auto' {

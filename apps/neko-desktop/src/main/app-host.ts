@@ -1677,6 +1677,11 @@ export class DesktopAppHost {
       errors.push(error);
     }
     try {
+      await this.conversationLifecycle.waitForProviderIdle();
+    } catch (error) {
+      errors.push(error);
+    }
+    try {
       await this.options.agentControllerComposition?.dispose?.();
     } catch (error) {
       errors.push(error);

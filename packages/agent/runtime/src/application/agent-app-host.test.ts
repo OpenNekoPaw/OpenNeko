@@ -416,6 +416,29 @@ describe('AgentAppHost', () => {
     expect(restored.readHomeProjection().conversations).toEqual([]);
   });
 
+  it('idempotently materializes one exact conversation for lifecycle replay', async () => {
+    const fixture = await createFixture();
+    const workspace = await fixture.composition.attachWorkspace(fixture.workspace);
+
+    await Promise.all([
+      workspace.ensureConversation('conversation-materialized'),
+      workspace.ensureConversation('conversation-materialized'),
+    ]);
+    await workspace.ensureConversation('conversation-materialized');
+
+    expect(
+      workspace
+        .listConversations()
+        .filter((record) => record.conversationId === 'conversation-materialized'),
+    ).toHaveLength(1);
+    expect(workspace.readConversationProjection('conversation-materialized')).toMatchObject({
+      conversationId: 'conversation-materialized',
+    });
+    await expect(workspace.createConversation('conversation-materialized')).rejects.toMatchObject({
+      code: 'conversation-exists',
+    });
+  });
+
   it('retains immutable Assistant conversations while Project Home scope changes', async () => {
     const fixture = await createFixture();
     const assistantSpaceId = 'assistant-space:local-user';

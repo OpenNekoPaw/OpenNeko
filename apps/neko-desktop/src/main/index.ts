@@ -13,6 +13,7 @@ import {
   systemPreferences,
 } from 'electron';
 import { ConsoleLogger } from '@neko/shared/logger';
+import type { AgentConversationContext } from '@neko/agent-contracts';
 import { DESKTOP_BRIDGE_CHANNELS, type DesktopLifecycleEvent } from '../shared/bridge-contract';
 import {
   DESKTOP_SHELL_CHANNELS,
@@ -831,6 +832,13 @@ async function startDesktop(): Promise<void> {
     readonly scratchArtifactId: string;
   }): string =>
     path.join(globalStorage.root, 'assistant-scratch', ref.conversationId, ref.scratchArtifactId);
+  const resolveConversationWorkspace = async (context: AgentConversationContext) =>
+    context.kind === 'assistant'
+      ? assistantAgentWorkspace
+      : (agentComposition.getWorkspace(context.workspaceId) ??
+        (await agentComposition.attachWorkspace(
+          await shellService.resolveAgentWorkspace(context.workspaceId),
+        )));
   const conversationLifecycle = createAgentConversationLifecycleService({
     repository: createPersistentAgentConversationLifecycleRepository({
       metadataStore: localMetadataStore,
@@ -870,16 +878,15 @@ async function startDesktop(): Promise<void> {
         throw new Error('Assistant Scratch publication to Workspace is unavailable.');
       },
     },
+    session: {
+      materialize: async (request) => {
+        const workspace = await resolveConversationWorkspace(request.context);
+        await workspace.ensureConversation(request.conversationId);
+      },
+    },
     provider: {
       start: async (request) => {
-        const workspace =
-          request.context.kind === 'assistant'
-            ? assistantAgentWorkspace
-            : (agentComposition.getWorkspace(request.context.workspaceId) ??
-              (await agentComposition.attachWorkspace(
-                await shellService.resolveAgentWorkspace(request.context.workspaceId),
-              )));
-        await workspace.createConversation(request.conversationId);
+        const workspace = await resolveConversationWorkspace(request.context);
         const startInitialTurn = agentControllerComposition.startInitialTurn;
         if (!startInitialTurn) {
           throw new Error('Agent initial-turn provider adapter is unavailable.');
@@ -895,6 +902,13 @@ async function startDesktop(): Promise<void> {
           contextPayloads: request.contextPayloads,
         });
       },
+    },
+    reportError: (error) => {
+      host.diagnostics?.report({
+        code: 'desktop-agent-provider-execution-failed',
+        severity: 'error',
+        message: error.message,
+      });
     },
     createIdentity: randomUUID,
     now: () => new Date().toISOString(),

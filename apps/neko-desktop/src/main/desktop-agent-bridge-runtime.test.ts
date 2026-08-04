@@ -621,6 +621,7 @@ function workspace(workspaceId = 'workspace-1'): AgentWorkspaceRuntime {
     }),
     tools: createToolRegistry(),
     createConversation: vi.fn(),
+    ensureConversation: vi.fn(),
     checkpointFailedInitialTurn: vi.fn(),
     deleteConversation: vi.fn(),
     clearAllConversations: vi.fn(),

@@ -351,6 +351,62 @@ describe('DesktopAppHost', () => {
     });
     expect(fixture.registry.resolve).toHaveBeenCalledWith('/Users/fixture/demo');
     expect(fixture.agent.attachWorkspace).toHaveBeenCalledWith(resolution);
+
+    const workspaceScene = await fixture.appHost.shell.getSceneProjection(fixture.windowId);
+    if (
+      workspaceScene.context.kind !== 'agent' ||
+      workspaceScene.context.scope.kind !== 'workspace'
+    ) {
+      throw new Error('Expected an exact Workspace-bound Agent draft.');
+    }
+    const workspaceConnection = createLaunchCatalog({
+      applicationInstanceId: 'app-1',
+      windowId: fixture.windowId,
+      viewId: workspaceScene.context.agentViewId,
+      rendererEpoch: 1,
+      connectionEpoch: 1,
+      connectionId: 'launch-workspace-1',
+      scope: {
+        kind: 'workspace',
+        workspaceId: workspaceScene.context.scope.workspaceId,
+        workspaceGrantId: workspaceScene.context.scope.workspaceGrantId,
+      },
+    }).connection;
+    await expect(
+      fixture.appHost.executeAgentLaunchRequest(fixture.sender, {
+        schemaVersion: AGENT_LAUNCH_CONTRACT_VERSION,
+        requestId: 'workspace-first-submit-1',
+        operation: 'submit-draft',
+        connection: workspaceConnection,
+        input: {
+          schemaVersion: 1,
+          target: {
+            kind: 'bound-context',
+            context: {
+              schemaVersion: 1,
+              kind: 'workspace',
+              workspaceId: workspaceScene.context.scope.workspaceId,
+              workspaceGrantId: workspaceScene.context.scope.workspaceGrantId,
+            },
+          },
+          messageText: 'Continue in the selected workspace',
+          resourceGrantIds: [],
+          configuration: { providerId: 'openai', modelId: 'gpt-5', executionMode: 'ask' },
+        },
+      }),
+    ).resolves.toMatchObject({ status: 'committed' });
+    expect(await fixture.appHost.shell.getSceneProjection(fixture.windowId)).toMatchObject({
+      context: {
+        kind: 'agent',
+        scope: {
+          kind: 'workspace',
+          workspaceId: 'workspace-explicit',
+          workspaceGrantId: selected.grant.workspaceGrantId,
+          conversationId: expect.stringMatching(/^conversation:/),
+        },
+      },
+      slots: { interaction: { phase: 'session' } },
+    });
   });
 
   it('binds Agent launch attach to the exact Assistant Scene and renderer epoch', async () => {
@@ -451,7 +507,12 @@ describe('DesktopAppHost', () => {
   });
 
   it('automatically binds an unbound Entry Draft to Assistant and commits first submit once', async () => {
-    const providerStart = vi.fn(async () => undefined);
+    let finishProvider: (() => void) | undefined;
+    const providerCompletion = new Promise<void>((resolve) => {
+      finishProvider = resolve;
+    });
+    const providerStart = vi.fn(() => providerCompletion);
+    const materializeSession = vi.fn(async () => undefined);
     let identity = 0;
     const conversationLifecycle = createAgentConversationLifecycleService({
       repository: createInMemoryAgentConversationLifecycleRepository(),
@@ -468,7 +529,9 @@ describe('DesktopAppHost', () => {
         publishToAssets: async () => ({ assetId: 'asset-1' }),
         publishToWorkspace: async () => ({ documentId: 'document-1' }),
       },
+      session: { materialize: materializeSession },
       provider: { start: providerStart },
+      reportError: vi.fn(),
       createIdentity: () => `first-submit-${(identity += 1)}`,
       now: () => '2026-08-03T00:00:00.000Z',
     });
@@ -502,10 +565,17 @@ describe('DesktopAppHost', () => {
     };
 
     const first = await fixture.appHost.executeAgentLaunchRequest(fixture.sender, request);
-    const second = await fixture.appHost.executeAgentLaunchRequest(fixture.sender, request);
-
-    expect(second).toEqual(first);
     expect(providerStart).toHaveBeenCalledOnce();
+    expect(materializeSession).toHaveBeenCalledOnce();
+    expect(materializeSession).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        conversationId: 'conversation:first-submit-1',
+        context: expect.objectContaining({
+          kind: 'assistant',
+          assistantSpaceId: 'assistant-space:local-user',
+        }),
+      }),
+    );
     expect(agentLaunch.bindAssistantResourceGrants).toHaveBeenCalledWith(
       connection,
       'assistant-space:local-user',
@@ -521,6 +591,10 @@ describe('DesktopAppHost', () => {
       slots: { interaction: { phase: 'session' } },
     });
     expect(JSON.stringify(committedScene)).not.toContain('projectId');
+    finishProvider?.();
+    await conversationLifecycle.waitForProviderIdle();
+    const second = await fixture.appHost.executeAgentLaunchRequest(fixture.sender, request);
+    expect(second).toEqual(first);
     await fixture.appHost.dispose();
   });
 
@@ -541,7 +615,9 @@ describe('DesktopAppHost', () => {
         publishToAssets: async () => ({ assetId: 'asset-1' }),
         publishToWorkspace: async () => ({ documentId: 'document-1' }),
       },
+      session: { materialize: async () => undefined },
       provider: { start: async () => undefined },
+      reportError: vi.fn(),
       createIdentity: () => `restore-${(identity += 1)}`,
       now: () => '2026-08-03T00:00:00.000Z',
     });
@@ -751,7 +827,9 @@ describe('DesktopAppHost', () => {
         publishToAssets: async () => ({ assetId: 'asset-1' }),
         publishToWorkspace: async () => ({ documentId: 'document-1' }),
       },
+      session: { materialize: async () => undefined },
       provider: { start: async () => undefined },
+      reportError: vi.fn(),
       createIdentity: () => `workspace-restore-${(identity += 1)}`,
       now: () => '2026-08-03T00:00:00.000Z',
     });
@@ -1438,7 +1516,9 @@ function createConversationLifecycle() {
       publishToAssets: async () => ({ assetId: 'asset-1' }),
       publishToWorkspace: async () => ({ documentId: 'document-1' }),
     },
+    session: { materialize: async () => undefined },
     provider: { start: async () => undefined },
+    reportError: vi.fn(),
     createIdentity: () => `lifecycle-${(identity += 1)}`,
     now: () => '2026-08-03T00:00:00.000Z',
   });
@@ -1683,6 +1763,7 @@ function createAgentWorkspaceRuntime(workspaceId: string): AgentWorkspaceRuntime
     models: createTestPiModels(),
     tools: createToolRegistry(),
     createConversation: unavailable,
+    ensureConversation: unavailable,
     checkpointFailedInitialTurn: unavailable,
     deleteConversation: unavailable,
     clearAllConversations: unavailable,

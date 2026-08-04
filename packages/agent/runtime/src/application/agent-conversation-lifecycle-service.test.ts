@@ -29,6 +29,11 @@ describe('Agent Conversation lifecycle service', () => {
     });
     expect(replay.conversationId).toBe(first.conversationId);
     expect(replay.pendingTurn.turnId).toBe(first.pendingTurn.turnId);
+    expect(fixture.session.materialize).toHaveBeenCalledTimes(2);
+    expect(fixture.session.materialize).toHaveBeenLastCalledWith({
+      conversationId: first.conversationId,
+      context: input.context,
+    });
     expect(fixture.provider.start).toHaveBeenCalledOnce();
     expect(fixture.provider.start).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -70,6 +75,46 @@ describe('Agent Conversation lifecycle service', () => {
         ],
       }),
     );
+  });
+
+  it('activates the committed session before provider context resolution completes', async () => {
+    const fixture = createFixture();
+    let releaseContext: ((value: readonly []) => void) | undefined;
+    fixture.grants.resolveForTurn.mockImplementationOnce(
+      () =>
+        new Promise<readonly []>((resolve) => {
+          releaseContext = resolve;
+        }),
+    );
+
+    const committed = await fixture.service.firstSubmit(assistantInput('request-context-pending'));
+
+    expect(committed.pendingTurn.status).toBe('running');
+    expect(fixture.session.materialize).toHaveBeenCalledOnce();
+    expect(fixture.provider.start).not.toHaveBeenCalled();
+    if (!releaseContext) throw new Error('Expected provider context resolution to be pending.');
+    releaseContext([]);
+    await fixture.service.waitForProviderIdle();
+    expect(fixture.provider.start).toHaveBeenCalledOnce();
+  });
+
+  it('records provider context resolution failure after session activation', async () => {
+    const fixture = createFixture();
+    fixture.grants.resolveForTurn.mockRejectedValueOnce(new Error('resource unavailable'));
+
+    const committed = await fixture.service.firstSubmit(assistantInput('request-context-failure'));
+
+    expect(committed.pendingTurn.status).toBe('running');
+    await fixture.service.waitForProviderIdle();
+    await expect(fixture.service.readConversation(committed.conversationId)).resolves.toMatchObject(
+      {
+        pendingTurn: {
+          status: 'failed',
+          diagnostic: 'resource unavailable',
+        },
+      },
+    );
+    expect(fixture.provider.start).not.toHaveBeenCalled();
   });
 
   it('lazily migrates and persists only an exact legacy Workspace Conversation context', async () => {
@@ -119,18 +164,38 @@ describe('Agent Conversation lifecycle service', () => {
       resourceGrantIds: ['resource-grant:1'],
       configuration: configuration(),
     });
-    expect(committed.pendingTurn).toMatchObject({
+    expect(committed.pendingTurn).toMatchObject({ status: 'running' });
+    await fixture.service.waitForProviderIdle();
+    const failed = await fixture.service.readConversation(committed.conversationId);
+    expect(failed.pendingTurn).toMatchObject({
       status: 'failed',
       diagnostic: 'provider unavailable',
     });
     const reloaded = createFixture({ repository });
     await expect(reloaded.service.readConversation(committed.conversationId)).resolves.toEqual(
-      committed,
+      failed,
     );
     expect(fixture.grants.validate).toHaveBeenCalledWith({
       context: committed.context,
       resourceGrantIds: ['resource-grant:1'],
     });
+  });
+
+  it('repairs session materialization after a committed provider claim without restarting it', async () => {
+    const repository = createInMemoryAgentConversationLifecycleRepository();
+    const first = createFixture({ repository });
+    const committed = await first.service.firstSubmit(assistantInput('request-replay'));
+    const replacement = createFixture({ repository });
+
+    const replay = await replacement.service.firstSubmit(assistantInput('request-replay'));
+
+    expect(replay).toEqual(committed);
+    expect(replacement.session.materialize).toHaveBeenCalledOnce();
+    expect(replacement.session.materialize).toHaveBeenCalledWith({
+      conversationId: committed.conversationId,
+      context: committed.context,
+    });
+    expect(replacement.provider.start).not.toHaveBeenCalled();
   });
 
   it('isolates scratch by Conversation and publishes before cleanup', async () => {
@@ -306,18 +371,24 @@ function createFixture(options?: {
         })
       : vi.fn(async () => undefined),
   };
+  const session = {
+    materialize: vi.fn(async () => undefined),
+  };
   return {
     repository,
     grants,
     scratch,
     publication,
     provider,
+    session,
     service: createAgentConversationLifecycleService({
       repository,
       grants,
       scratch,
       publication,
+      session,
       provider,
+      reportError: vi.fn(),
       createIdentity: () => `identity-${(identity += 1)}`,
       now: () => '2026-08-03T00:00:00.000Z',
       ...(options?.resolveExactWorkspaceIdentity

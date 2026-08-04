@@ -131,6 +131,7 @@ export interface AgentWorkspaceRuntime {
   readonly models: ReturnType<typeof createOpenNekoPiModels>;
   readonly tools: IToolRegistry;
   createConversation(conversationId: string): Promise<void>;
+  ensureConversation(conversationId: string): Promise<void>;
   deleteConversation(conversationId: string): Promise<void>;
   clearAllConversations(): Promise<void>;
   openConversation(input: AgentConversationOpenInput): Promise<void>;
@@ -478,6 +479,7 @@ class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
   private readonly conversations = new Map<string, AgentConversationOwner>();
   private readonly projections = new Map<string, ConversationProjectionStore>();
   private readonly opening = new Map<string, Promise<AgentConversationOwner>>();
+  private readonly materializing = new Map<string, Promise<void>>();
   private readonly activeTurnOperations = new Set<Promise<AgentTurnResult>>();
   private pluginSkillRoots: readonly SkillSourceRoot[] = [];
   private readonly pluginToolNames = new Set<string>();
@@ -524,6 +526,24 @@ class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
     }
     this.requireProjection(conversationId);
     this.options.onHomeProjectionChanged();
+  }
+
+  async ensureConversation(conversationId: string): Promise<void> {
+    this.requireActive();
+    requireIdentity(conversationId, 'Conversation');
+    if (this.options.authority.readConversation(conversationId)) {
+      this.requireProjection(conversationId);
+      return;
+    }
+    const pending = this.materializing.get(conversationId);
+    if (pending) return pending;
+    const operation = this.createConversation(conversationId);
+    this.materializing.set(conversationId, operation);
+    try {
+      await operation;
+    } finally {
+      this.materializing.delete(conversationId);
+    }
   }
 
   async deleteConversation(conversationId: string): Promise<void> {
