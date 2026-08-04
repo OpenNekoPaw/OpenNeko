@@ -38,7 +38,7 @@ export async function createNodeWorkspaceEntityAssetMetadataBinding(options: {
     await metadataStore.migrateNamespace(M1_LOCAL_METADATA_MIGRATIONS);
     await metadataStore.migrateNamespace(ENTITY_ASSET_PROJECTION_MIGRATIONS, {
       destructiveBackup: {
-        destinationPath: `${databasePath}.pre-project-entity-candidate-v2.bak`,
+        destinationPath: `${databasePath}.pre-project-entity-projections-v3.bak`,
         reason: 'migration',
       },
     });

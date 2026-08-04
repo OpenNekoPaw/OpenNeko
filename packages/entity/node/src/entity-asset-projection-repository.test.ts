@@ -20,7 +20,7 @@ async function migrateEntityAssetProjectionNamespace(
 ): Promise<void> {
   await store.migrateNamespace(ENTITY_ASSET_PROJECTION_MIGRATIONS, {
     destructiveBackup: {
-      destinationPath: `${databasePath}.pre-project-entity-candidate-v2.bak`,
+      destinationPath: `${databasePath}.pre-project-entity-projections-v3.bak`,
       reason: 'migration',
     },
   });
@@ -58,7 +58,7 @@ describe('Entity/Asset projection repository', () => {
     expect(names).toEqual(['entity_asset_projections']);
   });
 
-  it('rebuilds retired candidate cache rows without removing other projections', async () => {
+  it('rebuilds retired candidate and binding cache rows without removing other projections', async () => {
     const homedir = await mkdtemp(join(tmpdir(), 'neko-entity-candidate-v2-'));
     temporaryDirectories.push(homedir);
     const databasePath = resolveGlobalStorageLayout(homedir).database;
@@ -133,6 +133,40 @@ describe('Entity/Asset projection repository', () => {
             retiredValue.sourceId,
             retiredValue.candidateId,
             JSON.stringify(retiredValue),
+            updatedAt,
+          ],
+        );
+        const retiredBinding = {
+          projectionId: 'binding:retired',
+          kind: 'binding-availability',
+          sourceId: 'retired-binding-runtime',
+          entityId: 'character-retired',
+          freshness: 'fresh',
+          value: {
+            bindingId: 'binding:retired',
+            entityId: 'character-retired',
+            entityKind: 'character',
+            representation: { kind: 'workspace-file', path: 'retired.png' },
+            role: 'portrait',
+            status: 'confirmed',
+            availability: 'active',
+          },
+          updatedAt,
+        };
+        await sql.run(
+          `INSERT INTO entity_asset_projections (
+             partition_key, partition_scope, workspace_id, projection_kind, projection_id,
+             source_id, entity_id, related_entity_id, candidate_id, asset_ref, freshness,
+             projection_json, updated_at
+           ) VALUES (?, ?, ?, 'binding-availability', ?, ?, ?, NULL, NULL, NULL, 'fresh', ?, ?)`,
+          [
+            String(row['partition_key']),
+            String(row['partition_scope']),
+            String(row['workspace_id']),
+            retiredBinding.projectionId,
+            retiredBinding.sourceId,
+            retiredBinding.entityId,
+            JSON.stringify(retiredBinding),
             updatedAt,
           ],
         );
@@ -263,9 +297,10 @@ describe('Entity/Asset projection repository', () => {
             entityKind: 'character',
             representation: { kind: 'workspace-file', path: 'neko/assets/rin.png' },
             role: 'portrait',
-            status: 'confirmed',
-            availability: 'active',
+            owner: 'workspace-file',
+            availability: 'available',
             isDefault: true,
+            checkedAt: updatedAt,
           },
           updatedAt,
         },

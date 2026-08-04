@@ -57,4 +57,16 @@ export const ENTITY_ASSET_PROJECTION_MIGRATIONS: readonly LocalMetadataMigration
         WHERE projection_kind = 'entity-candidate'`,
     ],
   },
+  {
+    namespace: 'entity-asset-projection',
+    version: 3,
+    name: 'rebuild-project-entity-binding-availability',
+    checksum: 'sha256:rebuild-project-entity-binding-availability-v3',
+    ownership: 'cache',
+    destructive: true,
+    statements: [
+      `DELETE FROM entity_asset_projections
+        WHERE projection_kind = 'binding-availability'`,
+    ],
+  },
 ];

@@ -8,4 +8,5 @@ export * from './representationResolver';
 export * from './representationAccess';
 export * from './CreativeEntityService';
 export * from './ProjectEntityOperationService';
+export * from './ProjectEntityBindingAvailabilityService';
 export * from './retiredAuthority';

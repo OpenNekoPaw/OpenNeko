@@ -69,14 +69,12 @@ import type {
   EntityAssetProjectionRecord,
   EntityAssetProjectionReplaceSourceRequest,
   EntityAssetProjectionRepository,
-  EntityBindingAvailabilityProjectionValue,
 } from '@neko/entity-domain';
-import { isCreativeEntityKind, isProjectEntityCandidateProjection } from '@neko/entity-domain';
 import {
-  isEntityRepresentationBindingAvailability,
-  isEntityRepresentationRole,
+  isCreativeEntityKind,
+  isEntityBindingAvailabilityProjectionValue,
+  isProjectEntityCandidateProjection,
 } from '@neko/entity-domain';
-import { isContentLocator } from '@neko/content';
 import type { MediaFileMetadata } from '@neko/media';
 import {
   isResourceCacheEntry,
@@ -2503,29 +2501,6 @@ function isCreativeEntitySourceMetadata(value: unknown): boolean {
       (typeof value['updatedAt'] === 'string' &&
         Number.isFinite(Date.parse(value['updatedAt'])))) &&
     (value['metadata'] === undefined || isRecord(value['metadata']))
-  );
-}
-
-function isEntityBindingAvailabilityProjectionValue(
-  value: unknown,
-): value is EntityBindingAvailabilityProjectionValue {
-  return (
-    isRecord(value) &&
-    typeof value['bindingId'] === 'string' &&
-    value['bindingId'].trim().length > 0 &&
-    typeof value['entityId'] === 'string' &&
-    value['entityId'].trim().length > 0 &&
-    isCreativeEntityKind(value['entityKind']) &&
-    isContentLocator(value['representation']) &&
-    isEntityRepresentationRole(value['role']) &&
-    (value['status'] === 'suggested' ||
-      value['status'] === 'confirmed' ||
-      value['status'] === 'rejected') &&
-    isEntityRepresentationBindingAvailability(value['availability']) &&
-    (value['orphanedAt'] === undefined ||
-      (typeof value['orphanedAt'] === 'string' &&
-        Number.isFinite(Date.parse(value['orphanedAt'])))) &&
-    (value['isDefault'] === undefined || typeof value['isDefault'] === 'boolean')
   );
 }
 
