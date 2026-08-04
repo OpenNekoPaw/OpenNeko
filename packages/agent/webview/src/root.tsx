@@ -39,6 +39,7 @@ export interface AgentWebviewRootProps {
 
 export interface AgentEntryScopeActions {
   readonly selectAssistant: (draftId: string) => void;
+  readonly selectWorkspace: () => void;
 }
 
 export function AgentWebviewRoot({

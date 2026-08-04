@@ -66,6 +66,20 @@ export const chat = {
   'chat.emptyState.entry.startChat': 'Start Chat',
   'chat.emptyState.entry.generateAssets': 'Generate Assets',
   'chat.emptyState.entry.roleplay': 'Roleplay',
+  'chat.emptyState.scope.title': 'Choose a creative space',
+  'chat.emptyState.scope.description': 'Choose Assistant, a Workspace, or Character and Room.',
+  'chat.emptyState.scope.assistant': 'Assistant',
+  'chat.emptyState.scope.assistantHelper':
+    'Start a new Assistant session with user-space resources.',
+  'chat.emptyState.scope.workspace': 'Workspace',
+  'chat.emptyState.scope.workspaceHelper':
+    'Choose a folder and enable canvas, preview, and project resources.',
+  'chat.emptyState.scope.characterRoom': 'Character / Room',
+  'chat.emptyState.scope.characterRoomHelper':
+    'Character and Room capabilities are not available yet.',
+  'chat.emptyState.scope.assistantActiveTitle': 'Assistant is ready',
+  'chat.emptyState.scope.workspaceActiveTitle': 'Workspace is ready',
+  'chat.emptyState.scope.activeDescription': 'Enter a message to start a new conversation.',
   'chat.emptyState.entry.startChatHelper':
     'Develop story, character, world, or creative direction directly with the Agent.',
   'chat.emptyState.entry.generateAssetsHelper':

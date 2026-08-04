@@ -385,6 +385,13 @@ code {
   flex: 0 0 auto;
 }
 
+.primary-sidebar-brand__controls {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 4px;
+}
+
 .home-brand-title {
   display: inline-flex;
   min-width: 0;
@@ -431,6 +438,10 @@ code {
   flex-direction: column;
 }
 
+.home-navigation--compact .primary-sidebar-brand__controls {
+  flex-direction: column;
+}
+
 .home-navigation--compact .home-brand strong,
 .home-navigation--compact .home-recent-navigation,
 .home-navigation--compact .attention-summary {
@@ -474,6 +485,15 @@ code {
   )
   .home-navigation--compact
   .primary-sidebar-brand {
+  flex-direction: row;
+}
+
+.application-primary-sidebar-frame[data-primary-sidebar-hover-reveal='true']:is(
+    :hover,
+    :focus-within
+  )
+  .home-navigation--compact
+  .primary-sidebar-brand__controls {
   flex-direction: row;
 }
 

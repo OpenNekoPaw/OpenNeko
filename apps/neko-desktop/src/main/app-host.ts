@@ -1214,6 +1214,7 @@ export class DesktopAppHost {
       }
       const result = await this.shell.restoreAgentConversation({ request, context });
       if (result.status === 'transitioned') {
+        await this.attachWorkspaceAgentScene(result.scene);
         this.releaseReplacedAssistantPreview(
           previous.window.scene,
           result.scene,
@@ -1224,6 +1225,7 @@ export class DesktopAppHost {
     }
     const result = await this.shell.transitionScene(request);
     if (result.status === 'transitioned') {
+      await this.attachWorkspaceAgentScene(result.scene);
       this.releaseReplacedAssistantPreview(
         previous.window.scene,
         result.scene,
@@ -1231,6 +1233,13 @@ export class DesktopAppHost {
       );
     }
     return result;
+  }
+
+  private async attachWorkspaceAgentScene(scene: DesktopWorkbenchSceneProjection): Promise<void> {
+    if (scene.context.kind !== 'agent' || scene.context.scope.kind !== 'workspace') return;
+    await this.agent.attachWorkspace(
+      await this.shell.resolveAgentWorkspace(scene.context.scope.workspaceId),
+    );
   }
 
   async getResourceBrowserSnapshot(

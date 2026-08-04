@@ -350,6 +350,7 @@ describe('DesktopAppHost', () => {
       },
     });
     expect(fixture.registry.resolve).toHaveBeenCalledWith('/Users/fixture/demo');
+    expect(fixture.agent.attachWorkspace).toHaveBeenCalledWith(resolution);
   });
 
   it('binds Agent launch attach to the exact Assistant Scene and renderer epoch', async () => {

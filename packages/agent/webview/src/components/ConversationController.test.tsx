@@ -88,6 +88,17 @@ vi.mock('../i18n/I18nContext', () => ({
         'chat.emptyState.desktopDockTitle': 'Hi, create with chat',
         'chat.emptyState.desktopDockDescription': 'Describe an idea or mention a resource.',
         'chat.emptyState.desktopDockSkills': 'Try a Skill',
+        'chat.emptyState.scope.title': 'Choose a creative space',
+        'chat.emptyState.scope.description': 'Choose an owner.',
+        'chat.emptyState.scope.assistant': 'Assistant',
+        'chat.emptyState.scope.assistantHelper': 'Assistant helper',
+        'chat.emptyState.scope.workspace': 'Workspace',
+        'chat.emptyState.scope.workspaceHelper': 'Workspace helper',
+        'chat.emptyState.scope.characterRoom': 'Character / Room',
+        'chat.emptyState.scope.characterRoomHelper': 'Character helper',
+        'chat.emptyState.scope.assistantActiveTitle': 'Assistant is ready',
+        'chat.emptyState.scope.workspaceActiveTitle': 'Workspace is ready',
+        'chat.emptyState.scope.activeDescription': 'Start a conversation.',
         'chat.input.placeholder': 'Type anything...',
         'chat.input.thinkingPlaceholder': 'Type next message...',
         'chat.input.queuePlaceholder': '{count} queued...',
@@ -458,7 +469,7 @@ describe('ConversationController entry state', () => {
     );
 
     expect(screen.queryByTestId('header')).toBeNull();
-    expect(screen.getByText('Hi, create with chat')).toBeTruthy();
+    expect(screen.getByText('Workspace is ready')).toBeTruthy();
     expect(screen.getByRole('textbox')).toBeTruthy();
     expect(screen.getByTestId('entry-config-state').textContent).toBe('ready:false');
     expect(hostMocks.getConversations).not.toHaveBeenCalled();
@@ -510,15 +521,55 @@ describe('ConversationController entry state', () => {
           draftId: 'draft-entry-1',
         })}
         emptyStatePresentation="desktop-dock"
-        entryScopeActions={{ selectAssistant }}
+        entryScopeActions={{ selectAssistant, selectWorkspace: vi.fn() }}
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Start Chat' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Assistant' }));
 
     expect(selectAssistant).toHaveBeenCalledWith('draft-entry-1');
     expect(hostMocks.newConversation).not.toHaveBeenCalled();
     expect(hostMocks.submitDraft).not.toHaveBeenCalled();
+  });
+
+  it('delegates Workspace owner selection without creating a conversation', () => {
+    vi.clearAllMocks();
+    const selectWorkspace = vi.fn();
+    render(
+      <ConversationController
+        {...createProps()}
+        agentPresentation={createAgentDraftPresentation('draft-entry-workspace', {
+          kind: 'unbound',
+          draftId: 'draft-entry-workspace',
+        })}
+        emptyStatePresentation="desktop-dock"
+        entryScopeActions={{ selectAssistant: vi.fn(), selectWorkspace }}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Workspace' }));
+
+    expect(selectWorkspace).toHaveBeenCalledOnce();
+    expect(hostMocks.newConversation).not.toHaveBeenCalled();
+    expect(hostMocks.submitDraft).not.toHaveBeenCalled();
+  });
+
+  it('removes Entry Draft owner choices after Workspace activation', () => {
+    render(
+      <ConversationController
+        {...createProps()}
+        agentPresentation={createAgentDraftPresentation('draft-workspace-1', {
+          kind: 'workspace',
+          workspaceId: 'workspace-1',
+          workspaceGrantId: 'workspace-grant-1',
+        })}
+        emptyStatePresentation="desktop-dock"
+      />,
+    );
+
+    expect(screen.getByRole('heading', { name: 'Workspace is ready' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Assistant' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Workspace' })).toBeNull();
   });
 
   it('resets prior presentation state when the same controller receives a fresh draft identity', () => {
@@ -586,7 +637,7 @@ describe('ConversationController entry state', () => {
           draftId: 'draft-new',
         })}
         emptyStatePresentation="desktop-dock"
-        entryScopeActions={{ selectAssistant: vi.fn() }}
+        entryScopeActions={{ selectAssistant: vi.fn(), selectWorkspace: vi.fn() }}
       />,
     );
 

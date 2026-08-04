@@ -130,6 +130,18 @@ describe('Desktop scene Workbench', () => {
     expect(markup).toContain('aria-label="Expand sidebar"');
   });
 
+  it('places Workspace layout control beside the top sidebar visibility control', () => {
+    const markup = renderShell(<DesktopShellView projection={workspaceProjection()} />);
+    const topControls = markup.match(
+      /<div class="primary-sidebar-brand__controls">([\s\S]*?)<\/div>/u,
+    )?.[1];
+
+    expect(topControls).toContain('data-workbench-display-control="primary-sidebar"');
+    expect(topControls).toContain('primary-sidebar-toggle');
+    const footer = markup.match(/<div class="home-navigation-footer">([\s\S]*?)<\/div>/u)?.[1];
+    expect(footer).not.toContain('data-workbench-display-control');
+  });
+
   it('composes Settings navigation and Main inside the same Workbench', () => {
     const markup = renderShell(
       <DesktopShellView projection={projectionWithScene(settingsScene('appearance'))} />,
@@ -138,6 +150,17 @@ describe('Desktop scene Workbench', () => {
     expect(markup).toContain('data-settings-surface="main"');
     expect(markup).toContain('Theme');
     expect(markup).not.toContain('data-primary-sidebar-frame="application"');
+  });
+
+  it.each([
+    ['asset-management', projectionWithScene(assetCenterScene())],
+    ['extension-management', projectionWithScene(extensionsScene())],
+    ['project-management', projectionWithScene(projectManagementScene())],
+  ])('uses a tabless shared panel shell for %s', (panelId, projection) => {
+    const markup = renderShell(<DesktopShellView projection={projection} />);
+
+    expect(markup).toContain(`data-workbench-main-panel="${panelId}"`);
+    expect(markup).not.toContain('project-main-group__tabs');
   });
 
   it('mounts Asset Preview only from the same Scene and AssetCenterSession ref', () => {

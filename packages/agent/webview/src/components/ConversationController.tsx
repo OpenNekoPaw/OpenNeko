@@ -1023,6 +1023,21 @@ export function ConversationController({
             selectAssistant(agentPresentation.draftId);
           }
           return;
+        case 'workspace':
+          setPendingSendRequest(null);
+          setInitialInputRequest(null);
+          setInitialSessionModeRequest(null);
+          setEntryPromptMenu(null);
+          if (agentPresentation?.kind !== 'draft' || agentPresentation.scope.kind !== 'unbound') {
+            setGlobalError('Workspace scope selection requires an unbound Entry Draft.');
+            return;
+          }
+          if (!entryScopeActions) {
+            setGlobalError('Workspace scope selection is unavailable.');
+            return;
+          }
+          entryScopeActions.selectWorkspace();
+          return;
         case 'roleplay':
           setPendingSendRequest(null);
           setInitialInputRequest(null);
@@ -1530,6 +1545,9 @@ export function ConversationController({
           <div className="flex min-h-0 flex-1 flex-col">
             <EmptyState
               presentation={emptyStatePresentation}
+              draftScope={
+                agentPresentation?.kind === 'draft' ? agentPresentation.scope.kind : undefined
+              }
               selectedAction={entryAction}
               disabled={isForegroundConversationActivationPending}
               onEntryAction={handleEntryAction}

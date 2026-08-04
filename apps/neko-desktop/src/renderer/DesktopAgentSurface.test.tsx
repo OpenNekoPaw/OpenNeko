@@ -233,7 +233,7 @@ describe('DesktopAgentSurface', () => {
       root.render(
         <TestLaunchAgentSurface
           assistantSpaceId="assistant:1"
-          entryScopeActions={{ selectAssistant }}
+          entryScopeActions={{ selectAssistant, selectWorkspace: vi.fn() }}
         />,
       );
     });
@@ -384,7 +384,10 @@ function TestLaunchAgentSurface({
 }: {
   readonly assistantSpaceId: string;
   readonly conversationId?: string;
-  readonly entryScopeActions?: { readonly selectAssistant: (draftId: string) => void };
+  readonly entryScopeActions?: {
+    readonly selectAssistant: (draftId: string) => void;
+    readonly selectWorkspace: () => void;
+  };
 }) {
   const i18n = createDesktopI18n('en');
   return (

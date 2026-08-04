@@ -410,6 +410,7 @@ function DesktopSceneWorkbench({
                 ? {
                     selectAssistant: (draftId) =>
                       actions.onTransitionScene({ kind: 'bind-agent-assistant', draftId }),
+                    selectWorkspace: actions.onChooseWorkspace,
                   }
                 : undefined
             }
@@ -652,20 +653,7 @@ function StaticWorkbenchMainPanelSurface({
   readonly size?: 'compact' | 'full';
 }): JSX.Element {
   return (
-    <WorkbenchMainPanelSurface
-      panelId={panelId}
-      role={role}
-      size={size}
-      tabs={
-        <WorkbenchEditorTabs
-          activeId={panelId}
-          emptyLabel={label}
-          label={label}
-          tabs={[{ id: panelId, label }]}
-          onSelect={() => undefined}
-        />
-      }
-    >
+    <WorkbenchMainPanelSurface label={label} panelId={panelId} role={role} size={size}>
       {children}
     </WorkbenchMainPanelSurface>
   );
@@ -676,6 +664,7 @@ function WorkbenchMainPanelSurface({
   active,
   children,
   mainGroupId,
+  label,
   panelId,
   role = 'workspace',
   size = 'full',
@@ -685,10 +674,11 @@ function WorkbenchMainPanelSurface({
   readonly active?: boolean;
   readonly children: ReactNode;
   readonly mainGroupId?: string;
+  readonly label?: string;
   readonly panelId: string;
   readonly role?: 'workspace' | 'management' | 'detail';
   readonly size?: 'compact' | 'full';
-  readonly tabs: ReactNode;
+  readonly tabs?: ReactNode;
 }): JSX.Element {
   return (
     <section
@@ -698,11 +688,14 @@ function WorkbenchMainPanelSurface({
       data-panel-role={role}
       data-panel-size={size}
       data-workbench-main-panel={panelId}
+      aria-label={label}
     >
-      <header className="project-main-group__tabs">
-        {tabs}
-        {actions ? <div className="project-main-group__actions">{actions}</div> : null}
-      </header>
+      {tabs || actions ? (
+        <header className="project-main-group__tabs">
+          {tabs}
+          {actions ? <div className="project-main-group__actions">{actions}</div> : null}
+        </header>
+      ) : null}
       <div className="project-main-group__content">{children}</div>
     </section>
   );
@@ -1982,7 +1975,12 @@ function ApplicationPrimarySidebar({
       }`}
       data-primary-sidebar="application"
     >
-      <PrimarySidebarBrand compact={compact} disabled={disabled} onToggle={onToggle} />
+      <PrimarySidebarBrand
+        compact={compact}
+        disabled={disabled}
+        layoutControl={layoutControl}
+        onToggle={onToggle}
+      />
       <nav className="home-primary-navigation" aria-label={t('workspace.primaryNavigation')}>
         <DesktopApplicationNavigationButton
           active={activeSection === 'create'}
@@ -2024,7 +2022,6 @@ function ApplicationPrimarySidebar({
       />
       <PrimarySidebarFooter
         lifecycleControl={lifecycleControl}
-        layoutControl={layoutControl}
         onOpenSettings={onOpenSettings}
         projection={projection}
       />
@@ -2120,36 +2117,39 @@ function PrimaryRecentNavigation({
 function PrimarySidebarBrand({
   compact,
   disabled = false,
+  layoutControl,
   onToggle,
 }: {
   readonly compact: boolean;
   readonly disabled?: boolean;
+  readonly layoutControl?: JSX.Element;
   readonly onToggle: () => void;
 }): JSX.Element {
   const { t } = useTranslation();
   return (
     <div className="primary-sidebar-brand">
       <DesktopApplicationBrand showMark={compact} />
-      <IconButton
-        className="primary-sidebar-toggle"
-        disabled={disabled}
-        icon={<LeftPanelIcon size={17} />}
-        label={compact ? t('workspace.expandSidebar') : t('workspace.collapseSidebar')}
-        title={compact ? t('workspace.expandSidebar') : t('workspace.collapseSidebar')}
-        onClick={onToggle}
-      />
+      <div className="primary-sidebar-brand__controls">
+        {layoutControl}
+        <IconButton
+          className="primary-sidebar-toggle"
+          disabled={disabled}
+          icon={<LeftPanelIcon size={17} />}
+          label={compact ? t('workspace.expandSidebar') : t('workspace.collapseSidebar')}
+          title={compact ? t('workspace.expandSidebar') : t('workspace.collapseSidebar')}
+          onClick={onToggle}
+        />
+      </div>
     </div>
   );
 }
 
 function PrimarySidebarFooter({
   lifecycleControl,
-  layoutControl,
   onOpenSettings,
   projection,
 }: {
   readonly lifecycleControl?: JSX.Element;
-  readonly layoutControl?: JSX.Element;
   readonly onOpenSettings: () => void;
   readonly projection: DesktopShellProjection;
 }): JSX.Element {
@@ -2159,7 +2159,6 @@ function PrimarySidebarFooter({
       <AttentionSummary projection={projection} />
       <div className="home-navigation-footer__actions">
         {lifecycleControl}
-        {layoutControl}
         <Tooltip content={t('shell.settingsLabel')}>
           <IconButton
             label={t('shell.settingsLabel')}
