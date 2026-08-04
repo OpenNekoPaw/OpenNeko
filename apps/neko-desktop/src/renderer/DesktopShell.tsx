@@ -1912,6 +1912,7 @@ function AgentWorkspaceSurface({
   return (
     <section
       className="agent-workspace"
+      data-agent-scope={agentPresentation?.scope.kind}
       data-primary-surface="agent"
       aria-label={`${t('workspace.agent')} · ${project.displayName}`}
     >

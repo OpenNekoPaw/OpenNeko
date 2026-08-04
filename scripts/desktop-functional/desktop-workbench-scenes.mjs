@@ -116,6 +116,9 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
     ) {
       throw new Error('Asset Preview was not composed as an image in Secondary Main.');
     }
+    if (!assetPreview.previewDescriptorHeaderVisible) {
+      throw new Error('Asset Preview lost its descriptor header inside the tabless detail shell.');
+    }
     const assetPreviewResize = await exerciseManagementMainSplit(evaluate, drag);
     const assetPreviewScreenshot = await screenshot('asset-management-with-preview-large');
     checkpoint('asset-management-with-preview-large', { ...assetPreview, assetPreviewResize });
@@ -159,13 +162,26 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
     if (!workspace.hasAgentDock || !workspace.hasRightDock || !workspace.hasWorkspaceMain) {
       throw new Error('Workspace did not compose Agent, creative Main and right Resources.');
     }
+    assertWorkspaceTopControls(workspace);
+    const workspaceAgentActivation = await inspectActivatedWorkspaceAgent(evaluate);
+    const workspaceResourceChrome = await inspectWorkspaceResourceChrome(evaluate);
     const workspaceScreenshot = await screenshot('workspace-large');
     const workspaceComposer = await inspectComposerPresentation(evaluate);
     assertWorkspaceComposer(workspaceComposer, 'workspace');
     if (workspaceComposer.ownerWidth >= 400 || !workspaceComposer.toolbarFitsSurface) {
       throw new Error('Agent composer did not qualify the narrow Workspace dock presentation.');
     }
-    checkpoint('workspace-large', { ...workspace, workspaceActivation, workspaceComposer });
+    checkpoint('workspace-large', {
+      ...workspace,
+      workspaceActivation,
+      workspaceAgentActivation,
+      workspaceResourceChrome,
+      workspaceComposer,
+    });
+
+    const workspacePreview = await openWorkspacePreview(evaluate);
+    const workspacePreviewScreenshot = await screenshot('workspace-preview-content-only-large');
+    checkpoint('workspace-preview-content-only-large', workspacePreview);
 
     const displayModes = await exerciseWorkspaceDisplayModes(evaluate, click);
     checkpoint('workspace-display-modes', displayModes);
@@ -303,6 +319,7 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
         projectDetail,
         settings,
         workspace,
+        workspacePreview,
         smallAssets,
         assistantActivation,
         assistantRestore,
@@ -315,6 +332,7 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
         projectsScreenshot,
         projectDetailScreenshot,
         workspaceScreenshot,
+        workspacePreviewScreenshot,
         smallAssetsScreenshot,
         assistantRestoreScreenshot,
       ],
@@ -415,10 +433,115 @@ async function inspectEntryDraft(evaluate, forbiddenDraftIds = []) {
     if (!(textarea instanceof HTMLTextAreaElement) || textarea.value !== '') {
       throw new Error('Entry Draft did not reset its composer input.');
     }
+    const actionLabels = [...document.querySelectorAll('.agent-empty-action')].map(
+      (element) => element.textContent?.trim() ?? '',
+    );
+    const expectedLabels = [
+      ['助手', 'Assistant'],
+      ['工作区', 'Workspace'],
+      ['角色 / 群聊', 'Character / Room'],
+    ];
+    if (
+      actionLabels.length !== expectedLabels.length ||
+      expectedLabels.some((variants) => !variants.some((label) => actionLabels.includes(label))) ||
+      actionLabels.includes('生成素材') ||
+      actionLabels.includes('Generate Assets')
+    ) {
+      throw new Error('Entry Draft did not present exact Agent owner choices.');
+    }
     return {
       draftId: context.scope.draftId,
       conversationCount: projection.agentHome.conversations.length,
+      actionLabels,
     };
+  })()`);
+}
+
+async function inspectActivatedWorkspaceAgent(evaluate) {
+  return evaluate(`(() => {
+    const scope = document.querySelector('[data-agent-scope="workspace"]');
+    const title = scope?.querySelector('.agent-empty-title')?.textContent?.trim() ?? '';
+    const ownerActions = scope?.querySelectorAll('.agent-empty-action').length ?? 0;
+    if (!(scope instanceof HTMLElement) || ownerActions !== 0) {
+      throw new Error('Workspace-bound Agent retained the unbound owner-selection prompt.');
+    }
+    if (title !== '工作区已就绪' && title !== 'Workspace is ready') {
+      throw new Error('Workspace-bound Agent did not project its activated draft state.');
+    }
+    return { title, ownerActions };
+  })()`);
+}
+
+async function inspectWorkspaceResourceChrome(evaluate) {
+  await waitForCondition(
+    evaluate,
+    `Boolean(document.querySelector(
+      '.desktop-resource-browser-root .neko-resource-browser__toolbar',
+    ))`,
+    'Workspace Resource Browser toolbar did not become ready.',
+  );
+  return evaluate(`(() => {
+    const browser = document.querySelector('.desktop-resource-browser-root');
+    if (!(browser instanceof HTMLElement)) {
+      throw new Error('Workspace Resource Browser is unavailable.');
+    }
+    const refreshCount = browser.querySelectorAll(
+      'button[aria-label="Refresh"], button[aria-label="刷新"]',
+    ).length;
+    const libraryControlCount = browser.querySelectorAll(
+      '.neko-resource-browser__library-menu button',
+    ).length;
+    if (refreshCount !== 0 || libraryControlCount < 1) {
+      throw new Error(
+        'Workspace Resource Browser chrome does not match its embedded contract: ' +
+          JSON.stringify({ refreshCount, libraryControlCount }),
+      );
+    }
+    return { refreshCount, libraryControlCount };
+  })()`);
+}
+
+async function openWorkspacePreview(evaluate) {
+  await waitForCondition(
+    evaluate,
+    `(() => [...document.querySelectorAll('.neko-resource-browser__item')].some(
+      (item) => item.textContent?.includes('preview.png'),
+    ))()`,
+    'Workspace Resource Browser did not list the Preview fixture.',
+  );
+  await evaluate(`(() => {
+    const item = [...document.querySelectorAll('.neko-resource-browser__item')].find(
+      (candidate) => candidate.textContent?.includes('preview.png'),
+    );
+    if (!(item instanceof HTMLButtonElement)) {
+      throw new Error('Workspace Preview fixture item is unavailable.');
+    }
+    item.click();
+    return true;
+  })()`);
+  await waitForCondition(
+    evaluate,
+    `Boolean(document.querySelector(
+      '.project-main-view-stack__item[data-active="true"] .desktop-preview-surface .neko-preview-root',
+    ))`,
+    'Workspace Preview did not become the active Workbench View.',
+  );
+  return evaluate(`(() => {
+    const activeView = document.querySelector(
+      '.project-main-view-stack__item[data-active="true"]',
+    );
+    const preview = activeView?.querySelector('.desktop-preview-surface .neko-preview-root');
+    const group = activeView?.closest('[data-workbench-main-panel]');
+    const tabHeaderCount = group?.querySelectorAll(':scope > .project-main-group__tabs').length ?? 0;
+    const internalHeaderCount = preview?.querySelectorAll(':scope > header').length ?? 0;
+    const chrome = preview?.getAttribute('data-preview-chrome');
+    if (!(preview instanceof HTMLElement) || chrome !== 'content-only') {
+      throw new Error('Workspace Preview did not reuse the canonical content-only presentation.');
+    }
+    if (tabHeaderCount !== 1 || internalHeaderCount !== 0) {
+      throw new Error('Workspace Preview rendered duplicate tab or descriptor chrome.');
+    }
+    return { chrome, tabHeaderCount, internalHeaderCount };
   })()`);
 }
 
@@ -993,6 +1116,11 @@ async function inspectWorkbench(evaluate, expectedShape, expectedOwner) {
         previewPresentation instanceof HTMLElement
           ? previewPresentation.getBoundingClientRect().height
           : 0,
+      previewDescriptorHeaderVisible: Boolean(
+        shell.querySelector(
+          '.neko-controlled-workbench-main__secondary .neko-preview-root > header',
+        ),
+      ),
       projectDetailInSecondary: Boolean(
         shell.querySelector(
           '.neko-controlled-workbench-main__secondary .project-management-detail',
@@ -1004,6 +1132,21 @@ async function inspectWorkbench(evaluate, expectedShape, expectedOwner) {
       compactPanelIds: [
         ...shell.querySelectorAll('[data-workbench-main-panel][data-panel-size="compact"]'),
       ].map((element) => element.getAttribute('data-workbench-main-panel')),
+      panelTabHeaderIds: [...shell.querySelectorAll('.project-main-group__tabs')]
+        .map((element) => element.closest('[data-workbench-main-panel]')?.getAttribute(
+          'data-workbench-main-panel',
+        ))
+        .filter(Boolean),
+      layoutControlInTopBrand: Boolean(
+        primary?.querySelector(
+          '.primary-sidebar-brand__controls [data-workbench-display-control="primary-sidebar"]',
+        ),
+      ),
+      layoutControlInFooter: Boolean(
+        primary?.querySelector(
+          '.home-navigation-footer [data-workbench-display-control="primary-sidebar"]',
+        ),
+      ),
       mainSplit: controlledShell?.getAttribute('data-main-split'),
       mainSplitRatio:
         controlledShell instanceof HTMLElement
@@ -1076,6 +1219,7 @@ function assertBoundedManagement(detail, owner) {
 function assertSharedManagementPanel(detail, managementPanelId) {
   if (
     !detail.mainPanelIds.includes(managementPanelId) ||
+    detail.panelTabHeaderIds.includes(managementPanelId) ||
     detail.compactPanelIds.includes(managementPanelId) ||
     detail.mainSplit !== 'none' ||
     detail.hasMainSplitResize
@@ -1092,6 +1236,8 @@ function assertManagementDetailSplit(detail, managementPanelId, detailPanelId) {
     !detail.ownerInMain ||
     !detail.mainPanelIds.includes(managementPanelId) ||
     !detail.mainPanelIds.includes(detailPanelId) ||
+    detail.panelTabHeaderIds.includes(managementPanelId) ||
+    detail.panelTabHeaderIds.includes(detailPanelId) ||
     !detail.compactPanelIds.includes(managementPanelId) ||
     detail.mainSplit !== 'columns' ||
     Math.abs(detail.mainSplitRatio - 0.34) > 0.025 ||
@@ -1102,6 +1248,14 @@ function assertManagementDetailSplit(detail, managementPanelId, detailPanelId) {
   ) {
     throw new Error(
       `Management + Detail did not preserve the shared compact Workbench composition: ${JSON.stringify(detail)}`,
+    );
+  }
+}
+
+function assertWorkspaceTopControls(detail) {
+  if (!detail.layoutControlInTopBrand || detail.layoutControlInFooter) {
+    throw new Error(
+      'Workspace layout control is not beside the PrimarySidebar visibility control.',
     );
   }
 }

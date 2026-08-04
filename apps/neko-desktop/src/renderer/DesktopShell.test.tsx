@@ -252,6 +252,7 @@ describe('Desktop scene Workbench', () => {
     const markup = renderShell(<DesktopShellView projection={projection} />);
     expect(markup.match(/data-neko-controlled-workbench="true"/gu) ?? []).toHaveLength(1);
     expect(markup.match(/data-primary-surface="agent"/gu) ?? []).toHaveLength(1);
+    expect(markup).toContain('data-agent-scope="workspace"');
     expect(markup).toContain('data-workbench-main-panel="workspace:main:primary"');
     expect(markup).toContain('data-main-view-id="cut:view-1:story"');
     expect(markup).toContain('data-testid="desktop-cut-timeline-slot"');
