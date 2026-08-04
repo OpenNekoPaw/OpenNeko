@@ -93,6 +93,6 @@
 - [x] 10.6 Add producer/consumer path tests proving stale drafts fail, old conversations remain unchanged, old Tabs/transcript cannot appear in a new draft, and recent session/container actions retain distinct semantics.
 - [x] 10.7 Fix Asset Center runtime ownership so StrictMode effect remount cannot reuse a disposed runtime; add a regression that fails before the fix and preserves fail-visible final disposal.
 - [ ] 10.8 Run focused Host/Agent/Desktop tests, Agent Evaluation, full quality gates and real development/packaged Electron startup/reload scenarios; record canonical-path evidence and residual risks.
-- [ ] 10.9 Correct Entry Draft owner prompts, remove unbound prompts after Workspace binding, and place the Workspace layout control beside the PrimarySidebar top visibility control; add Agent/Desktop/AppHost path regressions.
-- [ ] 10.10 Render Workspace Preview through canonical content-only Preview chrome, compose management/detail as independent tabless shells, and hide only the Workspace Resource Browser global refresh control; add package/Desktop regressions.
-- [ ] 10.11 Qualify the corrected Agent activation and shell chrome in isolated development and packaged Electron at large/small sizes, then update `verification.md` and architecture documentation.
+- [x] 10.9 Correct Entry Draft owner prompts, remove unbound prompts after Workspace binding, and place the Workspace layout control beside the PrimarySidebar top visibility control; add Agent/Desktop/AppHost path regressions.
+- [x] 10.10 Render Workspace Preview through canonical content-only Preview chrome, compose management/detail as independent tabless shells, and hide only the Workspace Resource Browser global refresh control; add package/Desktop regressions.
+- [x] 10.11 Qualify the corrected Agent activation and shell chrome in isolated development and packaged Electron at large/small sizes, then update `verification.md` and architecture documentation.

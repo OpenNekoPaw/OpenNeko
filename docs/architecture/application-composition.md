@@ -110,6 +110,18 @@ reload 和应用重启不得丢失最近项目、最近会话及其精确 identi
 sender/Window-bound opaque directory grant 打开；取消授权保持原 scene，且不得创建 Workspace 或
 conversation。
 
+Entry Draft 只有在 `unbound` scope 下显示 Assistant、Workspace 与尚不可用的 Character/Room owner
+选择；owner 绑定完成后，同一 Agent Root 必须立即切换到对应 activated draft presentation，不得在首次
+提交前继续显示入口选择。Workspace 布局控件属于窗口级 presentation chrome，只在 exact Workspace
+scene 中出现在 PrimarySidebar 顶部品牌控件组、紧邻 sidebar 显隐按钮；不得放入 footer、Main tab 或
+领域 Root。
+
+Workspace Main 的真实多 View group 是唯一拥有 Workbench tab strip 的区域。其 Preview 内容通过
+canonical `@neko/preview-webview` content-only presentation 渲染，不再添加 descriptor header。Assets、
+Extensions 与 Projects 的 management 和可选 Preview/Detail 分别占据两个共享 panel shell，通过同一
+resize primitive 连接，但两个 shell 都不制造单项 tab strip。Workspace Resources 复用 package-owned
+Root，并隐藏与 Host 自动 projection 重复的顶部全局刷新；relink、recovery 等领域操作仍由该 Root 保留。
+
 ## 数据与资源
 
 - 项目文件和 Desktop settings 是受保护用户数据；宿主清理不得删除、覆盖或静默迁移它们。

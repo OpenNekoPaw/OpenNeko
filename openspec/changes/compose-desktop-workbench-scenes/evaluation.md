@@ -52,6 +52,10 @@ supports their public operations and facts:
   cases validate driver readiness but cannot claim Assistant/directory coverage.
 - Real cases and reports: not run. A provider-backed run requires native `~/.neko/config.toml`,
   explicit provider/model identity, cost authorization and the missing driver operations/facts below.
+- Focused provider preflight: `node scripts/agent-eval/local-run.mjs --mode focused --suite
+  agent-runtime.workflow-controller --case conversation-persistence-resume` returned
+  `infrastructure-blocked` before Desktop/API launch because explicit provider, model and cost
+  authorization were absent. The redacted local summary is `reports/agent-eval/local-run-summary.json`.
 - Blocked or unexecuted cases: all five proposed cases above remain blocked by unsupported Desktop
   operations and missing path facts. They are intentionally not authored as non-executable or
   final-text-only scenarios.

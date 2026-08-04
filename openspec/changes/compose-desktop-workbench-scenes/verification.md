@@ -164,6 +164,22 @@ mode/model/approval and compact tool controls, keep the toolbar within the compo
 elevated shadow, and expose zero branch/local-runtime metadata. Assistant shows the integrated
 `选择工作目录` action; Workspace shows only the safe fixture label `workspace`.
 
+The 10.9-10.11 development and packaged qualification reruns passed after the corrected Agent
+activation and panel chrome changes:
+
+`reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-04T07-40-08.681Z-desktop-workbench-scenes-development/report.json`
+
+`reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-04T07-44-59.640Z-desktop-workbench-scenes-packaged/report.json`
+
+Both isolated Electron runs record the Workspace Agent title `工作区已就绪` with zero owner-selection
+actions, the Workspace layout control in the PrimarySidebar top brand controls and not the footer,
+zero global refresh controls in Workspace Resources while its library control remains available, and
+Workspace Preview chrome `content-only` with one outer Workbench tab strip and zero internal headers.
+Assets Preview remains owned by `preview-webview`, keeps its descriptor header in the independent
+tabless shell, and management/detail panel tab-header lists remain empty. Large/small layout,
+management split resize, application restart and renderer error checks passed without touching user
+state.
+
 A development launch against the existing user state also restored PrimarySidebar recent Projects and
 conversations, the exact Workspace Agent/Canvas/Resources composition, and the integrated Composer
 without a renderer exception. The Scene/Workbench and Resource Browser authority fixes preserve that
@@ -183,6 +199,11 @@ selected in dry-run. This proves harness/schema/index readiness only. The five f
 and directory cases remain infrastructure-blocked because the existing Desktop complete-session
 driver does not expose Assistant draft submit, native directory authorization, scene/scope facts,
 first-submit claim count or forbidden Project-resolution participation. See `evaluation.md`.
+
+The focused real-run preflight for
+`agent-runtime.workflow-controller/conversation-persistence-resume` returned
+`infrastructure-blocked` before Desktop/API launch with the exact diagnostic that explicit provider,
+model and cost authorization are required. No provider behavior is claimed from this preflight.
 
 ## Quality Review And Residual Risk
 
