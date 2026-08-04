@@ -150,6 +150,15 @@ describe('Desktop renderer styles', () => {
     expect(previewSurfaceRule?.groups?.body).toMatch(/overflow\s*:\s*hidden/u);
   });
 
+  it('keeps Asset names visible in a compact management panel', () => {
+    expect(styles).toMatch(
+      /\.desktop-workbench-main-panel\[data-panel-size='compact'\][\s\S]*?\.global-library-browser__collection\[data-view-mode='list'\][\s\S]*?\.global-library-browser__entry\s*\{[\s\S]*?grid-template-columns\s*:\s*40px minmax\(0, 1fr\) 28px/u,
+    );
+    expect(styles).toMatch(
+      /\.desktop-workbench-main-panel\[data-panel-size='compact'\]\s+\.global-library-browser__size\s*\{[\s\S]*?display\s*:\s*none/u,
+    );
+  });
+
   it('styles owner-qualified management Roots without superseded Home management selectors', () => {
     const rootRule = styles.match(
       /\.agent-extension-management-root,[\s\S]*?\.project-management-catalog\s*\{(?<body>[\s\S]*?)\n\}/u,

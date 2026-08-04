@@ -23,7 +23,7 @@ import {
   type ControlledWorkbenchShellProps,
 } from '@neko/ui';
 import { useTranslation } from '@neko/ui/i18n/react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type {
   DesktopAgentHomeConversationSummary,
   DesktopProjectCatalogItem,
@@ -356,6 +356,7 @@ function DesktopSceneWorkbench({
   });
   const extensionManagement = useDesktopExtensionManagementScene(scene, projection.endpointEpoch);
   const projectManagement = useDesktopProjectManagementScene(scene, projection.catalog.projects);
+  const [managementSplitRatio, setManagementSplitRatio] = useState(0.34);
   const sidebar = projection.window.applicationSidebar;
   const compact = !sidebar.visible;
   const activeSection: HomeSection =
@@ -426,7 +427,8 @@ function DesktopSceneWorkbench({
         projection={assetCenter.projection}
       />
     ) : undefined;
-  const main =
+  const managementDetailVisible = Boolean(assetPreview || projectManagement.project);
+  const mainContent =
     settingsSection !== undefined ? (
       <DesktopSettingsMainSurface section={settingsSection} />
     ) : scene.context.kind === 'asset-center' ? (
@@ -455,6 +457,36 @@ function DesktopSceneWorkbench({
     ) : (
       <SceneSurfaceUnavailable owner="agent" />
     );
+  const main =
+    scene.context.kind === 'asset-center' ? (
+      <StaticWorkbenchMainPanelSurface
+        label={t('home.mediaLibrary')}
+        panelId="asset-management"
+        role="management"
+        size={managementDetailVisible ? 'compact' : 'full'}
+      >
+        {mainContent}
+      </StaticWorkbenchMainPanelSurface>
+    ) : scene.context.kind === 'extensions' ? (
+      <StaticWorkbenchMainPanelSurface
+        label={t('home.capabilities')}
+        panelId="extension-management"
+        role="management"
+      >
+        {mainContent}
+      </StaticWorkbenchMainPanelSurface>
+    ) : scene.context.kind === 'project-management' ? (
+      <StaticWorkbenchMainPanelSurface
+        label={t('home.allProjects')}
+        panelId="project-management"
+        role="management"
+        size={managementDetailVisible ? 'compact' : 'full'}
+      >
+        {mainContent}
+      </StaticWorkbenchMainPanelSurface>
+    ) : (
+      mainContent
+    );
   const leftDock =
     settingsSection !== undefined ? (
       <DesktopSettingsNavigationSurface
@@ -469,8 +501,10 @@ function DesktopSceneWorkbench({
       workspaceSlots.leftDock
     ) : undefined;
   const workspaceScene = scene.context.kind === 'agent' && scene.context.scope.kind === 'workspace';
+  const managementSplitScene =
+    scene.context.kind === 'asset-center' || scene.context.kind === 'project-management';
   const rightDock = workspaceScene ? workspaceSlots.rightDock : undefined;
-  const secondaryMain =
+  const secondaryMainContent =
     scene.context.kind === 'asset-center' ? (
       assetPreview
     ) : scene.context.kind === 'project-management' && projectManagement.project ? (
@@ -483,6 +517,25 @@ function DesktopSceneWorkbench({
     ) : workspaceScene ? (
       workspaceSlots.secondaryMain
     ) : undefined;
+  const secondaryMain = assetPreview ? (
+    <StaticWorkbenchMainPanelSurface
+      label={t('workspace.preview')}
+      panelId="asset-preview"
+      role="detail"
+    >
+      {secondaryMainContent}
+    </StaticWorkbenchMainPanelSurface>
+  ) : projectManagement.project ? (
+    <StaticWorkbenchMainPanelSurface
+      label={projectManagement.project.displayName}
+      panelId="project-detail"
+      role="detail"
+    >
+      {secondaryMainContent}
+    </StaticWorkbenchMainPanelSurface>
+  ) : (
+    secondaryMainContent
+  );
   const sceneShape = assistantScope
     ? assistantPreview
       ? 'assistant'
@@ -537,12 +590,17 @@ function DesktopSceneWorkbench({
       })}
       main={main}
       secondaryMain={secondaryMain}
-      mainSplit={assetPreview || projectManagement.project ? 'columns' : workspaceSlots.mainSplit}
-      mainSplitRatio={
-        assetPreview || projectManagement.project ? 0.68 : workspaceSlots.mainSplitRatio
-      }
+      mainSplit={managementDetailVisible ? 'columns' : workspaceSlots.mainSplit}
+      mainSplitRatio={managementSplitScene ? managementSplitRatio : workspaceSlots.mainSplitRatio}
       mainSplitResize={
-        assetPreview || projectManagement.project ? undefined : workspaceSlots.mainSplitResize
+        managementDetailVisible
+          ? {
+              label: t('workspace.resizeMainSplit'),
+              minSize: DESKTOP_WORKBENCH_LIMITS.mainSplitRatio.min,
+              maxSize: DESKTOP_WORKBENCH_LIMITS.mainSplitRatio.max,
+              onResizeEnd: setManagementSplitRatio,
+            }
+          : workspaceSlots.mainSplitResize
       }
       leftDock={leftDock}
       leftDockPresentation={
@@ -563,6 +621,76 @@ function DesktopSceneWorkbench({
       rightDock={rightDock}
       rightDockPresentation={workspaceScene ? workspaceSlots.rightDockPresentation : 'hidden'}
     />
+  );
+}
+
+function StaticWorkbenchMainPanelSurface({
+  children,
+  label,
+  panelId,
+  role,
+  size = 'full',
+}: {
+  readonly children: ReactNode;
+  readonly label: string;
+  readonly panelId: string;
+  readonly role: 'management' | 'detail';
+  readonly size?: 'compact' | 'full';
+}): JSX.Element {
+  return (
+    <WorkbenchMainPanelSurface
+      panelId={panelId}
+      role={role}
+      size={size}
+      tabs={
+        <WorkbenchEditorTabs
+          activeId={panelId}
+          emptyLabel={label}
+          label={label}
+          tabs={[{ id: panelId, label }]}
+          onSelect={() => undefined}
+        />
+      }
+    >
+      {children}
+    </WorkbenchMainPanelSurface>
+  );
+}
+
+function WorkbenchMainPanelSurface({
+  actions,
+  active,
+  children,
+  mainGroupId,
+  panelId,
+  role = 'workspace',
+  size = 'full',
+  tabs,
+}: {
+  readonly actions?: ReactNode;
+  readonly active?: boolean;
+  readonly children: ReactNode;
+  readonly mainGroupId?: string;
+  readonly panelId: string;
+  readonly role?: 'workspace' | 'management' | 'detail';
+  readonly size?: 'compact' | 'full';
+  readonly tabs: ReactNode;
+}): JSX.Element {
+  return (
+    <section
+      className="project-main-group desktop-workbench-main-panel"
+      data-active={active === undefined ? undefined : active ? 'true' : 'false'}
+      data-main-group={mainGroupId}
+      data-panel-role={role}
+      data-panel-size={size}
+      data-workbench-main-panel={panelId}
+    >
+      <header className="project-main-group__tabs">
+        {tabs}
+        {actions ? <div className="project-main-group__actions">{actions}</div> : null}
+      </header>
+      <div className="project-main-group__content">{children}</div>
+    </section>
   );
 }
 
@@ -1109,12 +1237,34 @@ function MainViewGroupSurface({
   const activeView = views.find((view) => view.viewId === group.activeViewId);
   const canSplit = Boolean(activeView && activeView.kind !== 'cut' && group.viewIds.length > 1);
   return (
-    <section
-      className="project-main-group"
-      data-main-group={group.groupId}
-      data-active={workbench.main.activeGroupId === group.groupId ? 'true' : 'false'}
-    >
-      <header className="project-main-group__tabs">
+    <WorkbenchMainPanelSurface
+      active={workbench.main.activeGroupId === group.groupId}
+      actions={
+        <>
+          {resourceControl}
+          <WorkbenchIconButton
+            disabled={pending || !canSplit}
+            icon={<RightPanelIcon size={15} />}
+            label={t('workspace.mainTabs.splitRight')}
+            onClick={() => {
+              if (!activeView) throw new Error('Desktop Main split requires an active View.');
+              actions.onUpdateWorkbench(splitMainView(workbench, activeView.viewId, 'columns'));
+            }}
+          />
+          <WorkbenchIconButton
+            disabled={pending || !canSplit}
+            icon={<GridIcon size={15} />}
+            label={t('workspace.mainTabs.splitDown')}
+            onClick={() => {
+              if (!activeView) throw new Error('Desktop Main split requires an active View.');
+              actions.onUpdateWorkbench(splitMainView(workbench, activeView.viewId, 'rows'));
+            }}
+          />
+        </>
+      }
+      mainGroupId={group.groupId}
+      panelId={`workspace:${group.groupId}`}
+      tabs={
         <WorkbenchEditorTabs
           activeId={group.activeViewId}
           emptyLabel={t('workspace.mainTabs.empty')}
@@ -1138,58 +1288,36 @@ function MainViewGroupSurface({
             actions.onUpdateWorkbench(openOrFocusMainView(workbench, view));
           }}
         />
-        <div className="project-main-group__actions">
-          {resourceControl}
-          <WorkbenchIconButton
-            disabled={pending || !canSplit}
-            icon={<RightPanelIcon size={15} />}
-            label={t('workspace.mainTabs.splitRight')}
-            onClick={() => {
-              if (!activeView) throw new Error('Desktop Main split requires an active View.');
-              actions.onUpdateWorkbench(splitMainView(workbench, activeView.viewId, 'columns'));
-            }}
-          />
-          <WorkbenchIconButton
-            disabled={pending || !canSplit}
-            icon={<GridIcon size={15} />}
-            label={t('workspace.mainTabs.splitDown')}
-            onClick={() => {
-              if (!activeView) throw new Error('Desktop Main split requires an active View.');
-              actions.onUpdateWorkbench(splitMainView(workbench, activeView.viewId, 'rows'));
-            }}
-          />
-        </div>
-      </header>
-      <div className="project-main-group__content">
-        {views.length === 0 ? (
-          <EmptyMainSurface />
-        ) : (
-          views.map((view) => {
-            const active = view.viewId === activeView?.viewId;
-            return (
-              <div
-                className="project-main-view-stack__item"
-                data-active={active ? 'true' : 'false'}
-                data-main-view-id={view.viewId}
-                hidden={!active}
-                key={`${view.viewId}:${view.viewEpoch}`}
-              >
-                {renderWorkbenchMainView({
-                  allowCutRuntime,
-                  canvasCapability,
-                  previewCapability,
-                  cutCapability,
-                  project,
-                  projection,
-                  timelineTarget: view.viewId === timelineOwnerViewId ? timelineTarget : undefined,
-                  view,
-                })}
-              </div>
-            );
-          })
-        )}
-      </div>
-    </section>
+      }
+    >
+      {views.length === 0 ? (
+        <EmptyMainSurface />
+      ) : (
+        views.map((view) => {
+          const active = view.viewId === activeView?.viewId;
+          return (
+            <div
+              className="project-main-view-stack__item"
+              data-active={active ? 'true' : 'false'}
+              data-main-view-id={view.viewId}
+              hidden={!active}
+              key={`${view.viewId}:${view.viewEpoch}`}
+            >
+              {renderWorkbenchMainView({
+                allowCutRuntime,
+                canvasCapability,
+                previewCapability,
+                cutCapability,
+                project,
+                projection,
+                timelineTarget: view.viewId === timelineOwnerViewId ? timelineTarget : undefined,
+                view,
+              })}
+            </div>
+          );
+        })
+      )}
+    </WorkbenchMainPanelSurface>
   );
 }
 

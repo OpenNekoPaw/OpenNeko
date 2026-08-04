@@ -1,11 +1,21 @@
 // @vitest-environment jsdom
 
 import { renderToStaticMarkup } from 'react-dom/server';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { createDefaultAssetCenterFilter } from '@neko/assets-domain/asset-center/contract';
 import { AssetCenterMainRoot } from './main-root';
 
+const globalLibraryStyles = readFileSync(resolve(__dirname, './style.css'), 'utf8');
+
 describe('AssetCenterMainRoot', () => {
+  it('owns a stable full-frame size for the canonical Preview presentation', () => {
+    expect(globalLibraryStyles).toMatch(
+      /\.asset-center-main\s*\{[^}]*height:\s*100%;[^}]*min-height:\s*0;/u,
+    );
+  });
+
   it('projects empty and unavailable states under the exact Session identity', () => {
     const empty = renderToStaticMarkup(
       <AssetCenterMainRoot

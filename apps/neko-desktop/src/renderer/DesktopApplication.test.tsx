@@ -24,6 +24,10 @@ import { DesktopApplication } from './DesktopShell';
 import { DesktopApplicationSettingsProvider } from './application-settings-context';
 import { createDesktopI18n } from './i18n';
 import { DesktopExtensionManagementRuntime } from './desktop-extension-management-runtime';
+import {
+  createDefaultAssetCenterFilter,
+  type AssetCenterSessionProjection,
+} from '@neko/assets-domain/asset-center/contract';
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 
@@ -36,6 +40,25 @@ vi.mock('./DesktopExtensionManagementSurface', () => ({
     <div
       data-extension-management-root="agent"
       data-extension-management-session={runtime.identity.extensionManagementSessionId}
+    />
+  ),
+}));
+
+vi.mock('./DesktopAssetManagementSurface', () => ({
+  DesktopAssetManagementSurface: () => <div data-asset-management-root="assets" />,
+}));
+
+vi.mock('./DesktopAssetCenterMainSurface', () => ({
+  DesktopAssetCenterMainSurface: ({
+    projection,
+  }: {
+    readonly projection: AssetCenterSessionProjection;
+  }) => (
+    <div
+      data-asset-preview-surface="preview-webview-adapter"
+      data-preview-session={
+        projection.preview.status === 'ready' ? projection.preview.previewSessionId : undefined
+      }
     />
   ),
 }));
@@ -263,6 +286,82 @@ describe('DesktopApplication scene lifecycle', () => {
     await act(async () => root.unmount());
   });
 
+  it('composes Asset management and Preview with shared panels and a resizable compact split', async () => {
+    const base = createProjection();
+    const assetCenterSessionId = 'asset-center:window-1:1';
+    const scene = assetCenterPreviewScene();
+    const projection: DesktopShellProjection = {
+      ...base,
+      window: { ...base.window, scene },
+    };
+    const sessionProjection: AssetCenterSessionProjection = {
+      schemaVersion: 1,
+      identity: {
+        assetCenterSessionId,
+        windowId: scene.windowId,
+      },
+      revision: 1,
+      filter: createDefaultAssetCenterFilter(),
+      catalog: { status: 'loading' },
+      preview: {
+        status: 'ready',
+        itemId: 'global-asset-library:item-1',
+        previewSessionId: 'preview:asset-center:1',
+      },
+    };
+    const assetCenterExecute = vi.fn(
+      async (request: { readonly requestId: string; readonly route: string }) => ({
+        schemaVersion: 1 as const,
+        requestId: request.requestId,
+        route: request.route,
+        projection: sessionProjection,
+      }),
+    );
+    installBridge({ projection, assetCenterExecute });
+
+    const { container, root } = await renderApplication();
+    await waitFor(
+      () => container.querySelector('[data-preview-session="preview:asset-center:1"]') !== null,
+    );
+
+    expectManagementSplit(container, 'asset-management', 'asset-preview');
+    expect(container.querySelector('[data-asset-management-root="assets"]')).not.toBeNull();
+    expect(
+      container.querySelector('[data-asset-preview-surface="preview-webview-adapter"]'),
+    ).not.toBeNull();
+    await act(async () => root.unmount());
+  });
+
+  it('turns Project selection into a compact management panel and primary Detail panel', async () => {
+    const base = createProjection();
+    const project = {
+      projectId: 'content:workspace-1',
+      workspaceId: 'workspace-1',
+      profile: 'content' as const,
+      displayName: 'Project one',
+      createdAt: '2026-07-28T00:00:00.000Z',
+      updatedAt: '2026-07-29T00:00:00.000Z',
+    };
+    const projection: DesktopShellProjection = {
+      ...base,
+      catalog: { revision: 1, projects: [project] },
+      window: { ...base.window, scene: projectManagementScene() },
+    };
+    installBridge({ projection });
+
+    const { container, root } = await renderApplication();
+    const projectButton = container.querySelector<HTMLButtonElement>('.management-surface-row');
+    if (!projectButton) throw new Error('Project management fixture requires a Project row.');
+    await act(async () => projectButton.click());
+    await waitFor(
+      () => container.querySelector('[data-workbench-main-panel="project-detail"]') !== null,
+    );
+
+    expectManagementSplit(container, 'project-management', 'project-detail');
+    expect(container.textContent).toContain('Project one');
+    await act(async () => root.unmount());
+  });
+
   it('routes recent Project and conversation actions with their exact projection identities', async () => {
     const base = createProjection();
     const project = {
@@ -455,6 +554,7 @@ function installBridge({
   removeRecentProject = vi.fn(),
   updateApplicationSidebar = vi.fn(),
   updateWorkbench = vi.fn(),
+  assetCenterExecute = vi.fn(),
 }: {
   readonly getSnapshot?: () => Promise<DesktopShellProjection>;
   readonly projection: DesktopShellProjection;
@@ -464,6 +564,7 @@ function installBridge({
   readonly removeRecentProject?: ReturnType<typeof vi.fn>;
   readonly updateApplicationSidebar?: ReturnType<typeof vi.fn>;
   readonly updateWorkbench?: ReturnType<typeof vi.fn>;
+  readonly assetCenterExecute?: ReturnType<typeof vi.fn>;
 }): void {
   Object.defineProperty(window, 'openNekoDesktop', {
     configurable: true,
@@ -474,6 +575,7 @@ function installBridge({
       projects: { removeRecent: removeRecentProject },
       applicationSidebar: { update: updateApplicationSidebar },
       workbench: { update: updateWorkbench },
+      assetCenter: { execute: assetCenterExecute },
       agentLaunch: {
         attach: vi.fn(() => new Promise(() => undefined)),
         authorizeResource: vi.fn(),
@@ -566,6 +668,60 @@ function extensionsScene(extensionManagementSessionId: string) {
       status: { kind: 'scene-status', sceneId },
     },
   });
+}
+
+function assetCenterPreviewScene() {
+  const sceneId = 'scene:window-1:asset-center';
+  const assetCenterSessionId = 'asset-center:window-1:1';
+  return parseDesktopWorkbenchSceneProjection({
+    schemaVersion: DESKTOP_SCENE_CONTRACT_VERSION,
+    sceneId,
+    windowId: 'window-1',
+    revision: 1,
+    context: { kind: 'asset-center', assetCenterSessionId },
+    slots: {
+      main: { kind: 'asset-management', assetCenterSessionId },
+      secondaryMain: {
+        kind: 'asset-preview',
+        assetCenterSessionId,
+        previewSessionId: 'preview:asset-center:1',
+      },
+      status: { kind: 'scene-status', sceneId },
+    },
+  });
+}
+
+function projectManagementScene() {
+  const sceneId = 'scene:window-1:project-management';
+  const projectManagementSessionId = 'project-management:window-1:1';
+  return parseDesktopWorkbenchSceneProjection({
+    schemaVersion: DESKTOP_SCENE_CONTRACT_VERSION,
+    sceneId,
+    windowId: 'window-1',
+    revision: 1,
+    context: { kind: 'project-management', projectManagementSessionId },
+    slots: {
+      main: { kind: 'project-management', projectManagementSessionId },
+      status: { kind: 'scene-status', sceneId },
+    },
+  });
+}
+
+function expectManagementSplit(
+  container: HTMLElement,
+  managementPanelId: string,
+  detailPanelId: string,
+): void {
+  const shell = container.querySelector<HTMLElement>('[data-neko-controlled-workbench="true"]');
+  expect(shell?.dataset.mainSplit).toBe('columns');
+  expect(shell?.style.getPropertyValue('--neko-controlled-main-split-ratio')).toBe('34%');
+  expect(
+    container.querySelector(
+      `[data-workbench-main-panel="${managementPanelId}"][data-panel-size="compact"]`,
+    ),
+  ).not.toBeNull();
+  expect(container.querySelector(`[data-workbench-main-panel="${detailPanelId}"]`)).not.toBeNull();
+  expect(container.querySelector('[aria-label="Resize Main split"]')).not.toBeNull();
 }
 
 async function waitFor(assertion: () => boolean | undefined): Promise<void> {
