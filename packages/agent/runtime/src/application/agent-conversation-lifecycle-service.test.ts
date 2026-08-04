@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   createAgentConversationLifecycleService,
   createInMemoryAgentConversationLifecycleRepository,
+  projectAgentConversationInitialMessage,
 } from './agent-conversation-lifecycle-service';
 
 describe('Agent Conversation lifecycle service', () => {
@@ -29,6 +30,12 @@ describe('Agent Conversation lifecycle service', () => {
     });
     expect(replay.conversationId).toBe(first.conversationId);
     expect(replay.pendingTurn.turnId).toBe(first.pendingTurn.turnId);
+    expect(projectAgentConversationInitialMessage(first)).toEqual({
+      id: first.initialMessage.messageId,
+      role: 'user',
+      content: 'Inspect this workspace',
+      timestamp: Date.parse('2026-08-03T00:00:00.000Z'),
+    });
     expect(fixture.session.materialize).toHaveBeenCalledTimes(2);
     expect(fixture.session.materialize).toHaveBeenLastCalledWith({
       conversationId: first.conversationId,

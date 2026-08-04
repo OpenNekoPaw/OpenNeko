@@ -6,6 +6,7 @@ import {
   type AgentConversationContext,
   type AgentScratchArtifactRef,
   type AgentContextPayload,
+  type Message,
 } from '@neko/agent-contracts';
 
 export type AgentPendingTurnStatus = 'pending' | 'running' | 'completed' | 'failed';
@@ -40,6 +41,23 @@ export interface AgentFirstSubmitInput {
   readonly messageText: string;
   readonly resourceGrantIds: readonly string[];
   readonly configuration: AgentConversationLifecycleRecord['configuration'];
+}
+
+export function projectAgentConversationInitialMessage(
+  record: AgentConversationLifecycleRecord,
+): Message {
+  const timestamp = Date.parse(record.createdAt);
+  if (!Number.isFinite(timestamp)) {
+    throw new Error(
+      `Agent Conversation '${record.conversationId}' has an invalid creation timestamp.`,
+    );
+  }
+  return {
+    id: record.initialMessage.messageId,
+    role: 'user',
+    content: record.initialMessage.text,
+    timestamp,
+  };
 }
 
 export interface AgentConversationLifecycleRepositoryPort {

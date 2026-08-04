@@ -136,6 +136,40 @@ describe('Desktop Agent bridge runtime', () => {
     ).rejects.toMatchObject({ code: 'desktop-agent-identity-mismatch' });
   });
 
+  it('passes the persisted initial user message into the exact session effects owner', () => {
+    const effects = createEffects();
+    const createEffectsForSession = vi.fn(() => effects);
+    const runtime = createDesktopAgentBridgeRuntime({
+      controllerComposition: {
+        ...createComposition(effects),
+        createEffects: createEffectsForSession,
+      },
+      createIdentity: () => 'assistant-connection-initial-message',
+    });
+    const initialConversationMessage = {
+      id: 'message-initial-1',
+      role: 'user' as const,
+      content: 'retain this prompt',
+      timestamp: Date.parse('2026-08-03T00:00:00.000Z'),
+    };
+
+    runtime.createBootstrap({
+      requestId: 'assistant-bootstrap-initial-message',
+      grant: assistantGrant(),
+      workspace: workspace('assistant-space:local-user'),
+      initialConversationId: 'conversation-1',
+      initialConversationMessage,
+      publish: vi.fn(),
+    });
+
+    expect(createEffectsForSession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        initialConversationId: 'conversation-1',
+        initialConversationMessage,
+      }),
+    );
+  });
+
   it('returns the exhaustive typed diagnostic for unsupported routes', async () => {
     const runtime = createReadyRuntime();
     const projection = runtime.createBootstrap({

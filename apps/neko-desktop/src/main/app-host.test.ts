@@ -722,7 +722,15 @@ describe('DesktopAppHost', () => {
       vi.fn(),
     );
     expect(createBootstrap).toHaveBeenCalledWith(
-      expect.objectContaining({ initialConversationId: record.conversationId }),
+      expect.objectContaining({
+        initialConversationId: record.conversationId,
+        initialConversationMessage: {
+          id: record.initialMessage.messageId,
+          role: 'user',
+          content: 'Restore me',
+          timestamp: Date.parse('2026-08-03T00:00:00.000Z'),
+        },
+      }),
     );
     await fixture.appHost.dispose();
   });
@@ -1088,7 +1096,15 @@ describe('DesktopAppHost', () => {
       vi.fn(),
     );
     expect(createBootstrap).toHaveBeenCalledWith(
-      expect.objectContaining({ initialConversationId: record.conversationId }),
+      expect.objectContaining({
+        initialConversationId: record.conversationId,
+        initialConversationMessage: {
+          id: record.initialMessage.messageId,
+          role: 'user',
+          content: 'Restore this Workspace',
+          timestamp: Date.parse('2026-08-03T00:00:00.000Z'),
+        },
+      }),
     );
     await fixture.appHost.dispose();
   });

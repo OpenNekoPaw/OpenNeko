@@ -153,6 +153,12 @@ describe('Agent controller composition', () => {
         connectionId: 'connection-1',
       },
       initialConversationId: 'conversation-1',
+      initialConversationMessage: {
+        id: 'message-initial-1',
+        role: 'user',
+        content: 'retain this prompt',
+        timestamp: Date.parse('2026-07-28T00:00:00.000Z'),
+      },
     });
     const posted: AgentHostToWebviewMessage[] = [];
     const context = {
@@ -193,7 +199,14 @@ describe('Agent controller composition', () => {
         conversation: {
           id: 'conversation-1',
           title: 'New conversation',
-          messages: [],
+          messages: [
+            {
+              id: 'message-initial-1',
+              role: 'user',
+              content: 'retain this prompt',
+              timestamp: Date.parse('2026-07-28T00:00:00.000Z'),
+            },
+          ],
         },
       },
     ]);

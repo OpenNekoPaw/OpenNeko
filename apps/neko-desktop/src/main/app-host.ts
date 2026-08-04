@@ -32,7 +32,6 @@ import {
   type DesktopShellResponse,
 } from '@neko/host/desktop-shell-contract';
 import {
-  createDesktopSceneTransitionRequest,
   parseDesktopApplicationSidebarMutationRequest,
   parseDesktopSceneTransitionRequest,
   type DesktopWorkbenchSceneProjection,
@@ -146,7 +145,10 @@ import {
   type DesktopWorkspaceGrantChooseResult,
 } from '@neko/host/desktop-workspace-grant-contract';
 import type { DesktopWorkspaceGrantAuthority } from '@neko/host/desktop-workspace-grant-authority';
-import type { AgentConversationLifecycleService } from '@neko/agent-runtime/application';
+import {
+  projectAgentConversationInitialMessage,
+  type AgentConversationLifecycleService,
+} from '@neko/agent-runtime/application';
 import type { AssistantResourceService } from '@neko/agent-runtime/application';
 import {
   isSameAgentConversationOwner,
@@ -396,6 +398,7 @@ export class DesktopAppHost {
         },
         workspace,
         initialConversationId: request.conversationId,
+        initialConversationMessage: projectAgentConversationInitialMessage(record),
         publish,
       });
     }
@@ -427,11 +430,27 @@ export class DesktopAppHost {
       interaction.agentViewId === grant.viewId
         ? scene.context.scope.conversationId
         : undefined;
+    const initialConversationRecord = initialConversationId
+      ? await this.conversationLifecycle.readConversation(initialConversationId)
+      : undefined;
+    if (
+      initialConversationRecord &&
+      (initialConversationRecord.context.kind !== 'workspace' ||
+        initialConversationRecord.context.workspaceId !== grant.workspaceId)
+    ) {
+      throw new Error('Desktop Workspace Agent bootstrap lifecycle belongs to another Workspace.');
+    }
     return this.agentBridge.createBootstrap({
       requestId: request.requestId,
       grant,
       workspace,
       ...(initialConversationId === undefined ? {} : { initialConversationId }),
+      ...(initialConversationRecord === undefined
+        ? {}
+        : {
+            initialConversationMessage:
+              projectAgentConversationInitialMessage(initialConversationRecord),
+          }),
       publish,
     });
   }
@@ -920,7 +939,9 @@ export class DesktopAppHost {
     if (owner.kind === 'workspace') {
       workspace =
         this.agent.getWorkspace(owner.workspaceId) ??
-        (await this.agent.attachWorkspace(await this.shell.resolveAgentWorkspace(owner.workspaceId)));
+        (await this.agent.attachWorkspace(
+          await this.shell.resolveAgentWorkspace(owner.workspaceId),
+        ));
     } else if (owner.kind === 'assistant') {
       const assistant = this.agent.getWorkspace(owner.assistantSpaceId);
       if (!assistant) {
@@ -1922,7 +1943,9 @@ export class DesktopAppHost {
   }
 }
 
-function conversationOwnerFromContext(context: AgentConversationContext): AgentConversationOwnerRef {
+function conversationOwnerFromContext(
+  context: AgentConversationContext,
+): AgentConversationOwnerRef {
   return context.kind === 'assistant'
     ? { kind: 'assistant', assistantSpaceId: context.assistantSpaceId }
     : { kind: 'workspace', workspaceId: context.workspaceId };

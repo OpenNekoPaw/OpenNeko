@@ -43,6 +43,7 @@ import {
   type DesktopAgentNeutralFacts,
   type AgentContextPayload,
   type OpenTab,
+  type Message,
   type ProjectionAttachmentKey,
   type SettingsDataMessage,
   type TabState,
@@ -130,6 +131,7 @@ export interface AgentControllerComposition {
     readonly workspace: AgentWorkspaceRuntime;
     readonly identity: DesktopAgentConnectionIdentity;
     readonly initialConversationId?: string;
+    readonly initialConversationMessage?: Message;
   }): AgentControllerEffects;
   readonly startInitialTurn?: (input: {
     readonly workspace: AgentWorkspaceRuntime;
@@ -192,6 +194,7 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
     readonly workspace: AgentWorkspaceRuntime;
     readonly identity: DesktopAgentConnectionIdentity;
     readonly initialConversationId?: string;
+    readonly initialConversationMessage?: Message;
   }): AgentControllerEffects {
     const config = this.getConfig(input.workspace);
     const initialConversation =
@@ -205,6 +208,15 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
         `Desktop Agent initial Conversation '${input.initialConversationId}' does not exist in Workspace '${input.workspace.workspaceId}'.`,
       );
     }
+    if (input.initialConversationMessage && input.initialConversationId === undefined) {
+      throw new Error('Desktop Agent initial message requires an initial Conversation identity.');
+    }
+    if (input.initialConversationMessage && input.initialConversationMessage.role !== 'user') {
+      throw new Error('Desktop Agent initial Conversation message must belong to the user.');
+    }
+    const initialConversationMessage = input.initialConversationMessage
+      ? { ...input.initialConversationMessage }
+      : undefined;
     const initialTab = initialConversation
       ? {
           id: `tab-${initialConversation.conversationId}`,
@@ -302,7 +314,19 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
       return disposal;
     };
     const effects: AgentControllerEffects = {
-      conversation: this.createConversationEffects(input.workspace, config, state, bind, facts),
+      conversation: this.createConversationEffects(
+        input.workspace,
+        config,
+        state,
+        bind,
+        facts,
+        input.initialConversationId === undefined
+          ? undefined
+          : {
+              conversationId: input.initialConversationId,
+              ...(initialConversationMessage ? { message: initialConversationMessage } : {}),
+            },
+      ),
       config: this.createConfigEffects(input.workspace, config, state, bind),
       skill: this.createSkillEffects(input.workspace, config, bind, facts),
       content: createAgentContentEffects({
@@ -442,6 +466,10 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
     state: ConnectionState,
     bind: (context: AgentHostRouteEffectContext) => void,
     facts: DesktopAgentFactsProjector,
+    initialConversation?: {
+      readonly conversationId: string;
+      readonly message?: Message;
+    },
   ): AgentControllerEffects['conversation'] {
     const postConversationList = async (context: AgentHostRouteEffectContext): Promise<void> => {
       bind(context);
@@ -475,14 +503,20 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
         .find((candidate) => candidate.conversationId === conversationId);
       if (!record)
         throw new Error(`Desktop Agent conversation '${conversationId}' does not exist.`);
+      const projectedMessages = projectPiConversationEntries(
+        await workspace.readConversationEntries(conversationId),
+      );
       await context.post({
         type: 'activeConversation',
         ...(activation ? { activation } : {}),
         conversation: {
           id: conversationId,
           title: record.title,
-          messages: projectPiConversationEntries(
-            await workspace.readConversationEntries(conversationId),
+          messages: reconcileInitialConversationMessage(
+            conversationId,
+            projectedMessages,
+            initialConversation?.conversationId,
+            initialConversation?.message,
           ),
         },
       });
@@ -1267,6 +1301,29 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
       },
     );
   }
+}
+
+function reconcileInitialConversationMessage(
+  conversationId: string,
+  messages: readonly Message[],
+  initialConversationId: string | undefined,
+  initialMessage: Message | undefined,
+): Message[] {
+  if (conversationId !== initialConversationId || !initialMessage) return [...messages];
+  if (
+    messages.some(
+      (message) =>
+        message.role === 'user' &&
+        (message.id === initialMessage.id || message.content === initialMessage.content),
+    )
+  ) {
+    return [...messages];
+  }
+  const insertionIndex = messages.findIndex(
+    (message) => message.timestamp >= initialMessage.timestamp,
+  );
+  if (insertionIndex === -1) return [...messages, initialMessage];
+  return [...messages.slice(0, insertionIndex), initialMessage, ...messages.slice(insertionIndex)];
 }
 
 export async function waitForDesktopAgentIdle(input: {

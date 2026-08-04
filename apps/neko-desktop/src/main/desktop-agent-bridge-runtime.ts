@@ -14,6 +14,7 @@ import {
   createElectronAgentHostRouteUnavailableDiagnostic,
   type DesktopAgentConnectionIdentity,
   type AgentContextPayload,
+  type Message,
 } from '@neko/agent-contracts';
 import {
   DESKTOP_AGENT_CONTRACT_VERSION,
@@ -62,6 +63,7 @@ export interface DesktopAgentBridgeRuntime {
     readonly grant: DesktopAnyAgentConnectionGrant;
     readonly workspace: AgentWorkspaceRuntime | undefined;
     readonly initialConversationId?: string;
+    readonly initialConversationMessage?: Message;
     readonly publish: (event: DesktopAgentMessageEvent) => void;
   }): DesktopAgentBootstrapProjection;
   send(
@@ -167,6 +169,7 @@ class DefaultDesktopAgentBridgeRuntime implements DesktopAgentBridgeRuntime {
     readonly grant: DesktopAnyAgentConnectionGrant;
     readonly workspace: AgentWorkspaceRuntime | undefined;
     readonly initialConversationId?: string;
+    readonly initialConversationMessage?: Message;
     readonly publish: (event: DesktopAgentMessageEvent) => void;
   }): DesktopAgentBootstrapProjection {
     this.requireActive();
@@ -228,6 +231,9 @@ class DefaultDesktopAgentBridgeRuntime implements DesktopAgentBridgeRuntime {
       ...(input.initialConversationId === undefined
         ? {}
         : { initialConversationId: input.initialConversationId }),
+      ...(input.initialConversationMessage === undefined
+        ? {}
+        : { initialConversationMessage: input.initialConversationMessage }),
     });
     const connection: DesktopAgentConnection = {
       identity,
