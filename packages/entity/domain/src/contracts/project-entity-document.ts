@@ -14,7 +14,7 @@ export const PROJECT_ENTITY_CANDIDATE_SOURCE_OWNERS = [
   'workspace',
   'document',
   'media-library',
-  'asset-library',
+  'managed-asset',
 ] as const;
 export const PROJECT_ENTITY_CANDIDATE_FRESHNESS_STATES = [
   'fresh',

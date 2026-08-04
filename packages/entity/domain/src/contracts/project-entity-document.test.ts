@@ -224,7 +224,7 @@ describe('Project Entity document contract', () => {
           },
           {
             evidenceId: 'evidence-asset-rin',
-            owner: 'asset-library',
+            owner: 'managed-asset',
             sourceId: 'asset-rin',
           },
         ],
