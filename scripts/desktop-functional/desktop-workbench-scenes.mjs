@@ -16,6 +16,11 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
       join(workspacePath, 'preview.png'),
     );
     await writeFile(
+      join(workspacePath, 'agent-reference.txt'),
+      'Functional Assistant reference.\n',
+      'utf8',
+    );
+    await writeFile(
       join(fixtureHome, '.openneko-functional-cancel-workspace-picker-once'),
       'cancel-next-workspace-picker\n',
       'utf8',
@@ -283,6 +288,23 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
         },
       );
     })()`);
+    await click('.agent-composer-tool-button', 0);
+    await waitForCondition(
+      evaluate,
+      `(() => {
+        const reference = document.querySelector('[data-agent-context-type="file"]');
+        return reference?.textContent?.includes('agent-reference.txt') === true;
+      })()`,
+      'Entry Draft did not retain the explicitly authorized Assistant file reference.',
+    );
+    const authorizedAssistantReference = await evaluate(`(() => {
+      const reference = document.querySelector('[data-agent-context-type="file"]');
+      return {
+        type: reference?.getAttribute('data-agent-context-type'),
+        label: reference?.textContent?.trim(),
+      };
+    })()`);
+    checkpoint('entry-draft-assistant-reference-ready', authorizedAssistantReference);
     await type('.agent-composer-textarea', 'Verify atomic Assistant session activation.');
     await waitForCondition(
       evaluate,
@@ -440,11 +462,15 @@ async function inspectEntryDraft(evaluate, forbiddenDraftIds = []) {
     if (ownerChoiceLabels.length !== 0) {
       throw new Error('Entry Draft still blocks direct input with explicit owner choices.');
     }
+    const roleplayPromptVisible = Boolean(document.querySelector('[data-testid="entry-page-menu"]'));
+    if (roleplayPromptVisible) {
+      throw new Error('Entry Draft still exposes the retired blocking owner prompt menu.');
+    }
     return {
       draftId: context.scope.draftId,
       conversationCount: projection.agentHome.conversations.length,
       ownerChoiceLabels,
-      roleplayPromptVisible: Boolean(document.querySelector('[data-testid="entry-page-menu"]')),
+      roleplayPromptVisible,
     };
   })()`);
 }

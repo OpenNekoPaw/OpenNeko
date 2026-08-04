@@ -80,6 +80,7 @@ const RULES = Object.freeze([
     'packages/agent/runtime/src/subagent/',
     'apps/neko-desktop/src/main/desktop-agent-app-host-composition',
     'apps/neko-desktop/src/main/desktop-agent-controller-composition',
+    'apps/neko-desktop/src/main/desktop-agent-launch-runtime',
     'apps/neko-desktop/src/renderer/DesktopAgentSurface',
   ]),
   rule('tool-call-lifecycle', 'agent-runtime.workflow-controller', [

@@ -143,6 +143,7 @@ describe('Agent Evaluation change-to-suite selector', () => {
     const paths = [
       'apps/neko-desktop/src/main/desktop-agent-app-host-composition.ts',
       'apps/neko-desktop/src/main/desktop-agent-controller-composition.ts',
+      'apps/neko-desktop/src/main/desktop-agent-launch-runtime.ts',
       'apps/neko-desktop/src/renderer/DesktopAgentSurface.tsx',
     ];
     expect(paths.every(isAgentEvaluationRelevantPath)).toBe(true);
