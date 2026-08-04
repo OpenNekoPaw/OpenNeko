@@ -229,6 +229,29 @@ case 也必须记录排除原因，不能假装已迁移。
 
 ## 8. 渐进验证与报告判读
 
+### 8.1 真实 API 双 lane 与基础矩阵
+
+单功能验收使用可见 Electron UI + 真实 API：必须从实际 composer、PrimarySidebar、审批或领域
+控件发起，验证消息、终态、导航/Scene identity 和错误展示。不得通过 automation bridge 直接创建
+目标会话或写入成功 fixture。
+
+批量回归使用无可见 UI 的完整 Desktop session + 真实 API：继续走公开 Agent input path、生产
+provider/model 配置、Pi Session、SQLite 和 projection；不得切换成 direct turn runner、mock provider
+或第二套 session assembly。
+
+基础矩阵如下；测试 artifact 应为每项记录 case、lane、provider/model、identity、terminal state、
+canonical/no-fallback evidence 和结果：
+
+1. 基础对话：首轮和多轮回复可见，turn terminal，composer 恢复可用；
+2. 上下文压缩：压缩命中 canonical compaction，conversation identity 不变，压缩后可继续对话；
+3. 重开恢复：销毁并重建 owner/应用后，transcript 顺序、内容和 continuation 正常；
+4. 生成记录：生成 Tool、Job、进度、终态、artifact identity 在恢复后仍正常投影；
+5. 会话切换：两个以上会话切换时只展示目标 transcript、运行态与 owner-qualified Scene；
+6. 会话隔离：交错提交时 transcript、queue、配置、context、artifact、取消和异步终态不串线。
+
+受影响开发可运行矩阵子集，但必须记录其余项为何不受影响或尚未执行；AgentSession、持久化、
+projection 或发布验收不得以单一 happy-path case 代替整套适用矩阵。
+
 先运行 key-free 全量 harness：
 
 ```bash

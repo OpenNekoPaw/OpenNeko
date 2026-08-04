@@ -127,6 +127,19 @@ Evaluation platform:
    fixtures are available; otherwise preserve the exact infrastructure blocker;
 4. use repeated samples when making stability or quality claims.
 
+For user-facing Agent features, require one visible Desktop path driven through
+the actual user controls and a real provider. For batch behavior coverage, keep
+the complete Desktop session owner and real provider while running without a
+visible UI. Neither lane may replace the Desktop assembly with a direct turn
+runner or mock, and neither lane substitutes for the other.
+
+Audit the foundational matrix whenever session, persistence, generation or
+projection behavior changes: basic and multi-turn conversation, context
+compaction and continuation, transcript restoration after owner/application
+reopen, restored generation records, conversation switching, and isolation of
+conversation-scoped transcript, queue, configuration, context, artifact and
+asynchronous state. Record covered, unaffected and blocked cells explicitly.
+
 Concrete commands, suite/scenario fields, controller operations, assertion
 kinds, and report file layouts belong in the platform developer documentation,
 not in this Skill.

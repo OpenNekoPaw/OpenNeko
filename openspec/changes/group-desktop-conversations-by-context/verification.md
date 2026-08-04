@@ -18,12 +18,13 @@ active/first/recent Project 作为 owner fallback。
 
 以下命令通过：
 
-- `pnpm --filter @neko/agent-contracts test`: 42 files / 285 tests；覆盖四种 owner、未知 kind/version、重复会话和 identity mismatch。
-- `pnpm --filter @neko/agent-runtime test`: 116 files / 1085 tests；覆盖 Pi catalog/context join、Assistant/Workspace owner 投影、旧 synthetic Project 路径移除和 Desktop terminal-idle identity fence。
+- `pnpm --filter @neko/agent-contracts test`: 42 files / 286 tests；覆盖四种 owner、未知 kind/version、重复会话、identity mismatch 和 initial-turn completed projection。
+- `pnpm --filter @neko/agent-runtime test`: 116 files / 1088 tests；覆盖 Pi catalog/context join、Assistant/Workspace owner 投影、旧 synthetic Project 路径移除、晚附着 Desktop terminal-idle 和 lifecycle completed。
 - `pnpm --filter @neko/agent-webview test`: 90 files / 699 tests；覆盖 Desktop 组合下隐藏 package Tabs/History。
 - `pnpm --filter @neko/host test`: 36 files / 323 tests；覆盖权威分组、确定性排序、精确 restore/delete、Character/Room unavailable 和 Project Draft 激活。
-- `pnpm --filter @neko/app-desktop test`: 65 files / 348 tests；覆盖 Main delegation、renderer 分组、折叠/展开、首条消息原子 Scene 激活和 fixture-only automation v2 contract。
+- `pnpm --filter @neko/app-desktop test`: 65 files / 349 tests；覆盖 Main delegation、renderer 分组、折叠/展开、首条消息原子 Scene 激活、receiver-independent initial turn 和 fixture-only automation v2 contract。
 - `pnpm exec vitest run packages/host/src/desktop-shell-service.test.ts packages/host/src/desktop-shell-contract.test.ts packages/host/src/desktop-scene-contract.test.ts apps/neko-desktop/src/main/app-host.test.ts apps/neko-desktop/src/renderer/DesktopShell.test.tsx`: 5 files / 102 tests，最终修复后通过。
+- `pnpm exec vitest run packages/agent/contracts/src/__tests__/agent-draft-submit.test.ts packages/agent/runtime/src/application/agent-conversation-lifecycle-service.test.ts packages/agent/runtime/src/application/agent-conversation-lifecycle-repository.test.ts packages/agent/runtime/src/runtime/__tests__/agent-state-runtime.test.ts apps/neko-desktop/src/main/desktop-agent-controller-composition.test.ts packages/agent/runtime/src/pi/__tests__/node-conversation-authority.test.ts apps/neko-desktop/src/main/app-host.test.ts`：7 files / 67 tests，通过；覆盖 receiver-independent initial-turn port、晚附着 UI terminal state、lifecycle completed、重放不重启 provider 和旧 Pi 表迁移。
 - Agent Contracts、Agent Runtime、Agent Webview 和 Desktop 受影响 typecheck 通过；Host 没有 package `typecheck` script，生产类型路径由 root build/package 覆盖。
 - `pnpm build`、`pnpm test`、`pnpm check`、`pnpm check:quality`、`pnpm check:legacy-debt`、`pnpm check:application-boundaries` 通过。
 - `pnpm check:unused`: Knip 无 issue，仅输出既存 configuration hints。
@@ -86,16 +87,27 @@ provider-backed case 不将其扩大为 Assistant/Character/Room 行为验收。
 
 所有场景使用隔离 synthetic fixture：
 
-| Target      | Scenario                          | Result                                                                                       | Report                                                                                                                                                                |
-| ----------- | --------------------------------- | -------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| development | `desktop-workbench-scenes`        | passed，17 checkpoints                                                                       | `reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-04T15-02-00.864Z-desktop-workbench-scenes-development/report.json`        |
-| packaged    | `desktop-workbench-scenes`        | passed，17 checkpoints，0 console error/warning/exception/poison                             | `reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-04T15-50-18.563Z-desktop-workbench-scenes-packaged/report.json`           |
-| development | `desktop-conversation-navigation` | passed，6→5 collapse、expand、exact delete/restore                                           | `reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-04T15-38-25.663Z-desktop-conversation-navigation-development/report.json` |
-| packaged    | `desktop-conversation-navigation` | passed，6→5 collapse、expand、exact delete/restore；0 console error/warning/exception/poison | `reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-04T15-50-40.024Z-desktop-conversation-navigation-packaged/report.json`    |
+| Target      | Scenario                          | Result                                                                                                                                                      | Report                                                                                                                                                                |
+| ----------- | --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| development | `desktop-workbench-scenes`        | passed，17 checkpoints                                                                                                                                      | `reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-04T15-02-00.864Z-desktop-workbench-scenes-development/report.json`        |
+| packaged    | `desktop-workbench-scenes`        | passed，17 checkpoints，0 console error/warning/exception/poison                                                                                            | `reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-04T15-50-18.563Z-desktop-workbench-scenes-packaged/report.json`           |
+| development | `desktop-conversation-navigation` | passed，6→5 collapse、expand、exact delete/restore                                                                                                          | `reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-04T15-38-25.663Z-desktop-conversation-navigation-development/report.json` |
+| packaged    | `desktop-conversation-navigation` | passed，6→5 collapse、expand、exact delete/restore；0 console error/warning/exception/poison                                                                | `reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-04T15-50-40.024Z-desktop-conversation-navigation-packaged/report.json`    |
+| development | `desktop-agent-provider-ui`       | passed，可见 Entry composer + 真实 API；Assistant materialize、真实回复、Sidebar active、terminal UI/lifecycle completed；0 console error/warning/exception | `reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-04T17-46-16.954Z-desktop-agent-provider-ui-development/report.json`       |
 
 导航场景还断言删除非活动会话不会改变 active session，恢复原会话后 transcript 可见，且 Agent package
 Tabs/History 均不存在。Workbench 场景覆盖 Entry Draft、Workspace Draft、Project exact restore、reload、
 管理/预览组合以及 1440×960 和 1040×700 布局。
+
+可见 provider 场景从空的 unbound Entry Draft 开始，通过 textarea 和 send control 提交，没有调用
+bridge 创建会话。实际选择 `nekoapi-chat / gpt-5.6-luna`，回复包含唯一 marker；同一 Assistant
+conversation 在 PrimarySidebar 激活，Agent Home 为 `turn-completed`，Thinking/Stop 均消失，SQLite
+launch lifecycle 记录同一 conversation/turn 为 `completed`。场景不读取或记录 secret/config content。
+
+早期失败先后暴露并修复了三处真实路径问题：Desktop 将 class method 解构后调用导致 receiver 丢失；
+authority-started turn 的 idle 只发往 no-op authority connection，晚附着 UI 保留 Thinking；launch lifecycle
+缺少 completed 终态。修复后 initial-turn port 为绑定函数，Workspace-owned AgentStateRuntime 向所有连接
+投影 terminal removal，provider resolve 后持久化 completed；没有 active/recent Workspace fallback。
 
 早期 packaged 报告
 `2026-08-04T14-56-10.513Z-desktop-workbench-scenes-packaged/report.json` 失败于首条 Assistant 消息已写入
@@ -118,6 +130,11 @@ pre-commit 审查还删除了 Host 切换到 Agent canonical parser 后遗留的
 Desktop 仍只拥有 Electron sender/window、typed bridge 和 React composition；owner、grouping、排序、CAS 和
 lifecycle 规则位于 Agent/Host owning packages。
 
+本轮 `neko-quality-review` 按 L4 Agent 核心会话路径复审，无 blocking finding。初始 turn 使用
+function-valued application port；运行态复用 Workspace-owned `AgentStateRuntime`，renderer connection
+只订阅投影；Desktop Main 只负责 exact runtime resolution 和 wiring。验证包含真实可见 Electron、真实
+provider、producer/consumer contract、全量 build/test/check、legacy/unused/boundary gate 和严格 OpenSpec。
+
 提交按职责拆分为：`1389367e`（Agent contracts/runtime/catalog）、`17a12467`（Host/Desktop/UI/scenario）
 和第三批 OpenSpec/architecture/evidence 文档。
 
@@ -125,5 +142,7 @@ lifecycle 规则位于 Agent/Host owning packages。
 
 - Character/Room 仅有严格导航 owner contract；CharacterRun/RoomRun runtime、Scene surfaces 和 restore/delete adapter 尚未组合，当前按设计 fail visible。
 - provider-backed persistence-resume 已完成单次真实 API 验证，但单样本不支持稳定性或模型质量结论，
-  也不覆盖 dispose/recreate owner 或完整应用重启恢复。
+  可见 UI 基础对话也已完成真实 API 验证；单样本不支持稳定性或模型质量结论。
+- 新规范要求的上下文压缩、完整应用重开 transcript、生成记录恢复、多会话切换和会话隔离 batch/UI
+  矩阵尚未在本变更中全部实跑；当前不能据此声明完整 Agent 回归矩阵已关闭。
 - 非 Workspace conversation 的显式“关联/移出 Project”交互不在本变更范围；contract 保留可选 group identity，但没有发明 drag/drop 或隐式关联。

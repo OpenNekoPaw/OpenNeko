@@ -157,6 +157,17 @@ Desktop 已为 `locator-backed-display-projection` 提供首个 complete-session
 若尚无 owning Desktop scenario adapter，runner 必须返回 `infrastructure-blocked` 并记录缺失 owner；
 不得回退到已移除的 TUI/headless driver、单元 runner 或只凭最终文本宣称通过。
 
+Agent 验收使用两条本地专用 lane。功能级验收必须从可见 Electron UI 的 composer、PrimarySidebar、
+审批或领域控件发起真实 API 行为，并断言用户可见终态；批量回归必须以无可见 UI 的完整 Desktop
+session owner 驱动同一公开 Agent input path 和真实 API。hidden lane 不等于 direct/headless Agent
+runtime，不能跳过 Desktop composition、持久化或 projection。
+
+基础回归矩阵包含：正常对话、上下文压缩后 continuation、完整重开后的 transcript 恢复、生成
+Job/Tool/产物记录恢复、会话切换展示、会话隔离。AgentSession、持久化、生成 workflow 或 Desktop
+projection 变更必须运行受影响子集并记录整套矩阵 disposition；发布验收必须关闭全部适用项。UI
+报告与 batch report 均需记录 provider/model、conversation/turn/run identity、terminal state、
+canonical/no-fallback evidence 和脱敏 artifact refs。
+
 原始 Evaluation 报告写入 gitignored `reports/agent-eval/`。长期文档只提交脱敏摘要，保留
 suite/case/run、identity、assertion/artifact refs、failure classification 和 residual risk，
 并移除 credential、hidden prompt、raw provider config、绝对用户路径与未授权内容。

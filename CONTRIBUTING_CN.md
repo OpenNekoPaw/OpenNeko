@@ -51,6 +51,8 @@ pnpm package:desktop
 
 Agent Evaluation harness（包括 `pnpm test:agent:eval`）、真实 API、hidden/visible Desktop、重复 matrix、消融和图形化 Electron 验收只能由开发者显式本地运行，不得加入 GitHub Actions 或通用 CI/gate 命令。key-free 与 dry-run 结果只证明测试平台就绪，不代表真实 Agent 行为。真实 API 唯一读取 `~/.neko/config.toml`，配置路径不可重定向；凭据由产品配置 owner 解析，provider/model 与成本授权仍需显式提供。具体入口见 [`scripts/agent-eval/README.md`](scripts/agent-eval/README.md)。
 
+Agent 用户功能验收必须从可见 Electron UI 的真实控件发起并调用真实 API；批量回归使用无可见 UI 的完整 Desktop session 与真实 API，不得改用 direct turn runner 或 mock。基础矩阵包括真实对话、上下文压缩、完整重开后的对话记录、生成记录恢复、会话切换展示和会话隔离；交付时列出已覆盖项、未执行项和剩余风险。
+
 ## 提交说明
 
 交付或 Pull Request 应说明变更摘要、关键设计、验证命令与结果、未执行项和剩余风险。影响当前能力、架构、契约或入口时，同步对应的中文文档；英文入口语义受影响时同步英文版本。

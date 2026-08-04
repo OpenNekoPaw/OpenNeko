@@ -10,6 +10,10 @@
 - [x] 2.2 Replace Project-required conversation validation with exact conversation + owner validation for restore/delete; prove standalone Assistant lifecycle operations require no Project and wrong-owner operations fail closed.
 - [x] 2.3 Keep Project header activation distinct from conversation restore, preserve same-Workspace runtime reuse, and return owner-qualified unavailable for Character/Room restore before owner composition.
 - [x] 2.4 Add supported stored/wire migration or derived-projection rebuild behavior and tests preserving existing Assistant/Workspace conversation identities while unknown versions/kinds and unresolved context fail visibly.
+- [x] 2.5 Add strict one-time migration from the retired embedded-context `pi_conversations` table to the canonical Pi catalog shape; preserve rows/branches, keep unresolved Scratch ownership unqualified, reject unknown shapes and prove the former NOT NULL launch failure.
+- [x] 2.6 Make the initial provider turn a receiver-independent Agent application port, invoke it with the exact materialized Assistant/Workspace runtime, and add a regression test for detached composition-boundary invocation.
+- [x] 2.7 Route initial and connected turn phase snapshots through the exact Workspace-owned Agent state runtime so late UI attachment receives terminal idle; prove completed Entry replies do not retain Thinking/Stop presentation.
+- [x] 2.8 Persist a completed initial-turn lifecycle terminal after the provider port resolves; keep failures visible and prove replay does not restart a claimed terminal turn.
 
 ## 3. Desktop Composition And Sidebar
 
@@ -23,9 +27,12 @@
 - [x] 4.1 Update Agent, Desktop application composition, package boundaries and Chara owner documentation with transcript/context/group separation and PrimarySidebar switching rules.
 - [x] 4.2 Record `neko-agent-evaluation` disposition and focused canonical-path/no-fallback evidence for Assistant versus Workspace restore; run key-free validation and a provider-backed Desktop complete-session conversation with persisted resume.
 - [x] 4.3 Run isolated development and packaged Electron scenarios for grouped navigation, Project Draft activation, Assistant/Workspace restore/delete, expand/collapse, reload and narrow/large layouts; record evidence in `verification.md`.
+- [x] 4.4 Run a visible provider-backed Electron scenario through the actual Agent composer; prove UI submit, launch/materialization, rendered assistant response, sidebar conversation presence and absence of global errors without bridge-created conversation setup.
+- [x] 4.5 Update Agent development acceptance policy with visible UI + real API feature verification, hidden complete-Desktop + real API batch evaluation, and the conversation/compaction/reopen/generation-record/switching/isolation baseline matrix.
 
 ## 5. Quality And Completion
 
 - [x] 5.1 Run focused Agent contracts/runtime, Host and Desktop tests plus affected typechecks/builds; record exact commands and path-level assertions in `verification.md`.
 - [x] 5.2 Run `pnpm build`, `pnpm test`, `pnpm check`, `pnpm check:quality`, `pnpm check:legacy-debt`, `pnpm check:unused`, `pnpm check:application-boundaries`, `git diff --check` and strict OpenSpec validation.
 - [x] 5.3 Apply `neko-quality-review`, resolve all findings, document user-data migration behavior and residual Character/Room/provider-backed risks, and split commits by contract/runtime, Host/Desktop UI, and docs/evidence.
+- [x] 5.4 Re-run focused migration/runtime/Desktop tests, key-free Evaluation, strict OpenSpec, affected typechecks/build and quality review; record the visible UI report and remaining recovery risks.

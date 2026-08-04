@@ -296,6 +296,17 @@ Agent 行为。真实行为结论需要 configured-provider Desktop complete-ses
 effective model、usage/cost、artifact/path fact 与 no-fallback evidence。Desktop UI 行为必须
 使用打包 Electron 与合成 fixture workspace 验收。
 
+Agent 开发验收固定分为两个互补 lane：单个用户功能必须在可见 Electron 中通过真实 UI 控件
+提交并调用真实 API，验证回复、运行终态、导航/Scene identity 与错误展示；批量行为回归使用
+无可见 UI 的完整 Desktop session owner 和同一公开 input path 调用真实 API。hidden batch 不是
+headless/direct turn runtime，visible UI 也不能用 automation bridge 预建会话来替代用户操作。
+
+AgentSession、持久化或 projection 的基线矩阵至少覆盖：基础多轮对话；压缩前后 continuation 与
+identity 不变；完整 owner/应用重开后 transcript 顺序和内容恢复；生成 Tool/Job/产物记录恢复；
+两个以上会话切换后只显示目标 transcript/Scene；以及 conversation-scoped queue、配置、context、
+artifact 和异步状态不串线。每项同时断言 canonical path、真实 provider identity、terminal state
+和 no-fallback，不能只匹配最终文本。
+
 ## 禁止恢复的路径
 
 - `AgentSession` / `AgentExecutor` / Think-Act-ReAct；

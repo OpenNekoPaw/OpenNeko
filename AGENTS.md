@@ -124,6 +124,9 @@
 - 真实 API Evaluation 唯一允许的用户配置来源是 `~/.neko/config.toml`；本地 CLI 和环境变量不得改写该路径，也不得回退到 JSON/YAML、其他用户配置或 mock。Evaluation 只在启动前验证可读的原生 TOML，不得要求精确的 POSIX 权限模式、修改用户配置权限、编译另一格式、合并默认值、推断 provider、写回用户目录或把配置内容写入报告。配置原样复制到隔离 fixture 时可为新建的 fixture 文件选用安全默认权限，但该默认值不是源配置的运行资格条件。
 - `~/.neko/config.toml` 内凭据由产品配置 owner 解析；Evaluation 不得读取、打印或投影 secret。provider/model identity 与成本授权必须显式提供，缺失时在启动 Desktop 和调用 API 前返回 `infrastructure-blocked`。
 - key-free、dry-run、mock、最终文本、单次 Judge 或 hidden window 结果只表示 harness/authoring readiness，不是 Agent 行为、模型质量、真实 API、UI 或消融验收证据。
+- Agent 用户功能的开发验收必须使用可见真实 Electron UI，通过用户可操作的 composer、会话导航、审批和领域控件发起，并使用真实 API 验证最终回复、运行终态、会话/Scene identity 和错误展示；automation bridge、直接 IPC/turn 调用或预置数据库不得替代该 UI 路径。
+- Agent 批量行为回归必须使用无可见 UI 的完整 Desktop session owner + 真实 API，通过公开 Agent input path 驱动；不得为批量速度改用 direct runtime runner、mock provider、最终文本 fixture 或第二套 session assembly。批量 lane 与可见 UI lane 是互补证据，任一方不得替代另一方。
+- Agent 基线覆盖至少包括：基础真实对话与终态收敛、上下文压缩后的继续对话、完整 owner/应用重开后的 transcript 恢复、生成 Job/Tool/产物记录恢复、多个会话的正确切换展示，以及 transcript/queue/config/context/artifact 的会话隔离。变更可按影响范围运行子集，但 AgentSession、持久化、projection 或发布验收必须记录整套矩阵的覆盖、未执行项与风险。
 
 ## 设计与实现规范
 
@@ -247,18 +250,18 @@
 
 - 单元测试只是实现级反馈，不代表功能验收完成。新增功能、bug 修复和非平凡重构必须按影响范围完成从局部到系统的验证；若同时命中多种变更类型，验证要求取并集。
 
-| 变更类型                                                                                                                    | 最低必要验证                                                                                                                              |
-| --------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| 纯文档、注释或无运行时影响的元数据                                                                                          | `git diff --check`，并检查相关链接、路径、schema 或文档一致性                                                                             |
-| 局部 TypeScript 逻辑或 bug 修复                                                                                             | 修复前可失败的聚焦回归/单元测试、受影响包 typecheck/build；涉及调用链时补集成或路径断言                                                   |
-| 共享 TypeScript 契约、跨包重构或高风险路径                                                                                  | 生产者和消费者测试、`pnpm build`、`pnpm test`、`pnpm check`；必要时运行 `pnpm ci:local` 或与远端 CI 对应的聚焦门禁                        |
-| 残留、兼容层、冗余或依赖清理                                                                                                | `pnpm check:legacy-debt`、`pnpm check:unused`，或说明已由 `pnpm ci:local` / `pnpm check:quality` 覆盖                                     |
-| package-owned wire contract、Desktop IPC 或跨层 message                                                                     | 生产者/消费者测试、契约路径断言，以及受影响 Electron 运行态或集成验证                                                                     |
-| Node/FFmpeg 媒体 runtime                                                                                                    | 聚焦 Node/FFmpeg、Range/PCM、取消与资源释放测试；涉及 Renderer 时增加真实 Electron 媒体路径验收                                           |
-| Agent evaluation harness、scenario manifest、debug automation 或 facts 契约                                                 | 显式本地运行 `pnpm test:agent:eval`；该命令不得进入 CI，且仅是 key-free harness 自测，不得描述为真实 Agent 行为验收                       |
-| prompt、Skill、capability/tool routing、provider/model、AgentSession、validation/recovery 或 Desktop Agent event projection | 按 `.codex/skills/neko-agent-evaluation/SKILL.md` 规划并运行聚焦脚本 evaluation；无法运行真实 case 时记录阻塞条件和残余风险               |
-| Renderer/Webview 视觉、交互、CSP、消息、焦点或媒体                                                                          | 受影响构建/测试，加真实 Electron Desktop 聚焦场景；普通浏览器/Vite/Chrome 不能替代 preload/IPC/窗口生命周期验收；UI 运行态测试不得进入 CI |
-| 发布链路或影响面不易限定的高风险改动                                                                                        | `pnpm ci:local`，并按领域分别显式本地运行适用的 evaluation、Electron Desktop UI 或 Node/FFmpeg 运行态验证；不得把本地专用入口并入 CI 命令 |
+| 变更类型                                                                                                                    | 最低必要验证                                                                                                                                                                                                   |
+| --------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 纯文档、注释或无运行时影响的元数据                                                                                          | `git diff --check`，并检查相关链接、路径、schema 或文档一致性                                                                                                                                                  |
+| 局部 TypeScript 逻辑或 bug 修复                                                                                             | 修复前可失败的聚焦回归/单元测试、受影响包 typecheck/build；涉及调用链时补集成或路径断言                                                                                                                        |
+| 共享 TypeScript 契约、跨包重构或高风险路径                                                                                  | 生产者和消费者测试、`pnpm build`、`pnpm test`、`pnpm check`；必要时运行 `pnpm ci:local` 或与远端 CI 对应的聚焦门禁                                                                                             |
+| 残留、兼容层、冗余或依赖清理                                                                                                | `pnpm check:legacy-debt`、`pnpm check:unused`，或说明已由 `pnpm ci:local` / `pnpm check:quality` 覆盖                                                                                                          |
+| package-owned wire contract、Desktop IPC 或跨层 message                                                                     | 生产者/消费者测试、契约路径断言，以及受影响 Electron 运行态或集成验证                                                                                                                                          |
+| Node/FFmpeg 媒体 runtime                                                                                                    | 聚焦 Node/FFmpeg、Range/PCM、取消与资源释放测试；涉及 Renderer 时增加真实 Electron 媒体路径验收                                                                                                                |
+| Agent evaluation harness、scenario manifest、debug automation 或 facts 契约                                                 | 显式本地运行 `pnpm test:agent:eval`；该命令不得进入 CI，且仅是 key-free harness 自测，不得描述为真实 Agent 行为验收                                                                                            |
+| prompt、Skill、capability/tool routing、provider/model、AgentSession、validation/recovery 或 Desktop Agent event projection | 按 `.codex/skills/neko-agent-evaluation/SKILL.md` 运行真实 API：功能路径用可见 Electron UI，批量回归用隐藏完整 Desktop session；覆盖适用的对话/压缩/重开/生成记录/切换/隔离矩阵，无法运行时记录 blocker 与风险 |
+| Renderer/Webview 视觉、交互、CSP、消息、焦点或媒体                                                                          | 受影响构建/测试，加真实 Electron Desktop 聚焦场景；普通浏览器/Vite/Chrome 不能替代 preload/IPC/窗口生命周期验收；UI 运行态测试不得进入 CI                                                                      |
+| 发布链路或影响面不易限定的高风险改动                                                                                        | `pnpm ci:local`，并按领域分别显式本地运行适用的 evaluation、Electron Desktop UI 或 Node/FFmpeg 运行态验证；不得把本地专用入口并入 CI 命令                                                                      |
 
 - 新路径、迁移和 bug 修复必须同时验证结果与执行路径：断言 canonical contract、handler、renderer、adapter 或 Node/FFmpeg path 被命中，并证明 legacy/fallback 路径未参与。
 - 验证应重点发现循环依赖、Layer 0 反向依赖、Renderer/Webview 依赖 Electron/Node、Desktop Main 依赖 React、包到应用反向依赖等架构违规。

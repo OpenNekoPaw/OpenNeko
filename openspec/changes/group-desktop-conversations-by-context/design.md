@@ -132,7 +132,20 @@ The renderer retains confirmation presentation only; it cannot alter the owner o
 | Owner-qualified conversation summary | `@neko/agent-contracts` + `@neko/agent-runtime/application`              | Pi catalog/context reader and Agent projection                   | `@neko/host`                  | host-neutral contract + Node/SQLite adapter | Workspace-only `AgentHomeNavigationIdentity` and fabricated Project ID |
 | Project/standalone navigation groups | `@neko/host/desktop-shell-contract`                                      | Desktop Shell service using Project + Agent projections          | preload/renderer              | Host-neutral state/application service      | renderer-side two-list interpretation                                  |
 | Scene/lifecycle delegation           | `@neko/host` contracts, Desktop concrete adapters                        | Host transition authority + Desktop exact context/grant adapters | Agent/Workspace/Preview Roots | Electron sender/Window boundary             | Project-required Assistant validation                                  |
+| Initial provider turn                | `@neko/agent-runtime/application` function-valued controller port        | Agent controller composition                                     | Desktop lifecycle provider    | host-neutral application port               | receiver-dependent detached class method                               |
 | Sidebar presentation                 | existing Desktop `ApplicationPrimarySidebar` using `@neko/ui` primitives | validated Host projection                                        | user                          | sandboxed renderer                          | separate recent Projects/recent conversations JSX                      |
+
+The lifecycle provider resolves the exact Assistant or Workspace runtime, materializes the
+conversation there, and then invokes the controller's function-valued initial-turn port with that
+same runtime identity. The port must remain callable when passed across composition boundaries; it
+must not depend on a JavaScript method receiver or fall back to the currently active Workspace.
+
+Running-state projection is owned once per exact Agent Workspace runtime by the existing
+`AgentStateRuntime`. Renderer connections subscribe to that runtime snapshot. This keeps a visible
+connection attached after Entry materialization consistent with the authority-started turn: it can
+hydrate an already-running state and receives the terminal removal even though the authority itself
+has no renderer post port. Connection-local `post` state is presentation delivery only, never the
+owner of whether a Conversation is running.
 
 Production code retained in `apps/neko-desktop` is limited to Electron sender/Window identity, native grant restoration, typed bridge calls and React slot composition. Grouping, owner validation, sorting and lifecycle rules remain in package-owned contracts/services because they do not require Electron.
 
@@ -144,6 +157,22 @@ Production code retained in `apps/neko-desktop` is limited to Electron sender/Wi
 - [Sidebar becomes long] -> Show a bounded recent subset per group with explicit expand/collapse; preserve stable dimensions and scrolling without adding nested card shells.
 - [Same Workspace has multiple active conversations] -> Conversation runtime state remains isolated; Workspace document editing continues through one Workspace/DocumentSession owner and one editable View policy.
 - [Breaking stored/UI projection] -> Migrate exact supported records once and bump strict contract versions; unknown versions/kinds fail instead of dual-reading old navigation identities.
+- [Retired Pi table still embeds context columns] -> Strictly recognize the exact pre-canonical
+  `context_schema_version/context_kind/context_id/project_id/workspace_id` table shape and rebuild it
+  once into the canonical Pi catalog shape before any writer opens. Preserve conversation and branch
+  identities; retain an old Scratch `context_id` only as its exact Pi runtime scope, never as a default
+  Assistant owner. Unknown table shapes fail visibly without attempting an INSERT compatibility path.
+- [Initial provider port loses its controller receiver] -> Expose the port as a bound function value,
+  call it with the exact materialized runtime, and cover detached invocation before the visible
+  provider-backed Electron acceptance. Missing ports and mismatched conversation/runtime identities
+  remain fail-visible; Desktop does not retry against an active or recent runtime.
+- [Entry authority completes after the visible connection attaches] -> Project phase changes through
+  the Workspace-owned `AgentStateRuntime` to every bound connection. A terminal turn removes the
+  exact Conversation state and publishes the new snapshot, preventing a completed response from
+  retaining a stale Thinking indicator.
+- [Provider response completes while launch journal remains running] -> Persist `completed` after the
+  exact initial-turn port resolves. Provider or persistence failure remains `failed` with a visible
+  diagnostic; replay never restarts a claimed terminal turn.
 
 ## Migration Plan
 
@@ -154,6 +183,10 @@ Production code retained in `apps/neko-desktop` is limited to Electron sender/Wi
 5. Replace PrimarySidebar two-list rendering and remove old labels/helpers/styles/tests.
 6. Bump Desktop shell wire/stored projection versions only where serialized shape changes; migrate supported Assistant/Workspace state, preserving user conversations.
 7. Validate producer/consumer paths, key-free Agent Evaluation, real Electron navigation/reload/delete, full quality gates and documentation before accepting the change.
+8. Rebuild the retired embedded-context `pi_conversations` table before opening an authority, preserving
+   rows and foreign-key integrity while removing the obsolete columns and indexes. Validate a real
+   user-visible composer submit and provider response in a visible Electron fixture; bridge-created
+   conversations do not satisfy this UI acceptance.
 
 Rollback is source-level before release. User conversation/context rows are not destructively rewritten; reverting the binary may require rebuilding the derived sidebar projection, while unknown newer contract versions fail visibly.
 

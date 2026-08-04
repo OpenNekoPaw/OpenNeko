@@ -27,6 +27,26 @@ Therefore:
 - The runner must not import `AgentSession` directly or substitute a mock provider, final-answer
   text or default success for missing runtime evidence.
 
+## Real-Provider Acceptance Lanes
+
+Agent development uses two complementary local lanes:
+
+- Feature acceptance drives a visible Electron window through actual user controls and a real
+  provider API. It must prove the submitted UI action, exact conversation/Scene identity, rendered
+  response, terminal controls, navigation state and visible diagnostics. Fixture automation may
+  observe or select controls, but it must not create the conversation through a bridge or seed the
+  success state.
+- Batch behavior evaluation runs without a visible UI while retaining the complete Desktop app and
+  session owner, public Agent input path, production provider/model resolution and real API. It is
+  not permission to call a turn runner directly, replace the Desktop assembly or use a mock.
+
+The foundational regression matrix covers basic and multi-turn conversation, context compaction
+with continuation, transcript restoration after a real owner/application reopen, generation
+Tool/Job/artifact record restoration, switching between multiple conversations, and isolation of
+transcripts, queues, configuration, context, artifacts and asynchronous state. A focused change may
+run only the affected cells, but its report must record the disposition of every cell. Session,
+persistence, projection and release acceptance require the full applicable matrix.
+
 ## Ownership Boundary
 
 - `apps/neko-desktop` owns application/session lifecycle, runtime configuration, input dispatch,

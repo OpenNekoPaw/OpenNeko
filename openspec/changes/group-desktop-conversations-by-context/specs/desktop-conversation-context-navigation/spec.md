@@ -145,6 +145,21 @@ The breaking navigation projection migration SHALL preserve supported Assistant 
 - **THEN** catalog/restore exposes an unresolved-context diagnostic
 - **AND** it does not return an empty success projection or another owner's conversation
 
+#### Scenario: Retired embedded-context Pi table is migrated
+
+- **WHEN** startup finds the exact retired `pi_conversations` shape with embedded context columns
+- **THEN** Agent Runtime transactionally rebuilds it into the canonical Pi catalog shape before opening any writer
+- **AND** existing conversation, branch and Pi Session identities remain unchanged
+- **AND** an old Workspace row keeps its exact `workspace_id`
+- **AND** an old Scratch row retains its exact `context_id` only as Pi runtime scope and is not assigned to the default Assistant Space
+- **AND** the obsolete context columns and indexes are absent after migration
+
+#### Scenario: Pi table shape is unknown
+
+- **WHEN** the existing `pi_conversations` table is neither canonical nor the exact retired embedded-context shape
+- **THEN** startup fails visibly before writing or rebuilding the table
+- **AND** Agent launch does not retry with a compatibility INSERT or partial default values
+
 ### Requirement: PrimarySidebar is the user-visible conversation switcher
 
 PrimarySidebar SHALL provide the user-visible grouped conversation navigation for the Window. Agent presentation MUST NOT expose a second top-level conversation Tab system that can switch transcript independently of the complete owner-qualified Scene.
@@ -155,8 +170,46 @@ PrimarySidebar SHALL provide the user-visible grouped conversation navigation fo
 - **THEN** the complete exact context transition is coordinated by Host
 - **AND** Agent, conversation-scoped Preview/artifacts and owner Scene remain identity-consistent
 
+#### Scenario: User starts a conversation from the visible composer
+
+- **WHEN** the user enters a message in the visible Entry or Workspace Draft composer and submits it
+- **THEN** Desktop launches and materializes the exact owner-bound Agent conversation
+- **AND** the user message and real provider response become visible in the Agent panel
+- **AND** the new exact conversation appears in PrimarySidebar without a global launch error
+- **AND** acceptance drives the UI controls rather than creating the conversation through fixture automation or a direct bridge call
+
+#### Scenario: Initial provider port crosses the Desktop composition boundary
+
+- **WHEN** lifecycle materializes an exact owner-bound conversation and delegates its first turn through the Agent controller application port
+- **THEN** the port executes against that same materialized runtime without relying on an object method receiver
+- **AND** a missing port or mismatched conversation/runtime identity fails visibly
+- **AND** Desktop does not retry against an active, recent or default Workspace runtime
+
+#### Scenario: Visible connection attaches while the initial turn is running
+
+- **WHEN** the Entry authority starts a turn before the visible Agent connection is attached
+- **THEN** the visible connection hydrates the exact Conversation's current running state from its Workspace runtime
+- **AND** completion publishes the terminal state removal to that connection
+- **AND** the completed response is not displayed together with a stale Thinking or Stop state
+- **AND** the launch lifecycle records the exact initial turn as completed rather than leaving it running
+
 #### Scenario: Room contains participant AgentSessions
 
 - **WHEN** a future Room runtime uses multiple internal participant AgentSessions
 - **THEN** those sessions remain Room-owned runtime participants
 - **AND** they are not projected as user-visible Agent Tabs or unrelated sidebar conversations
+
+### Requirement: Agent development acceptance uses visible and batch real-provider lanes
+
+Agent user-feature acceptance SHALL use actual visible Electron controls with a real provider API.
+Batch behavior evaluation SHALL run without a visible UI while retaining the complete Desktop
+session owner, public Agent input path and real provider API. Neither lane SHALL use bridge-created
+conversation setup, a direct turn runner, mock provider or alternate session assembly as behavior
+evidence.
+
+#### Scenario: Conversation lifecycle behavior is accepted
+
+- **WHEN** Agent session, persistence, generation or projection behavior changes
+- **THEN** visible feature evidence covers the affected user controls and presentation
+- **AND** batch evidence covers the affected cells among conversation, compaction, reopen restoration, generation-record restoration, switching and isolation
+- **AND** the verification record identifies covered, unaffected and blocked matrix cells

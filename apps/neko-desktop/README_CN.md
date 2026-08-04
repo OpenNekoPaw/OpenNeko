@@ -61,15 +61,17 @@ workspace runtime、不打开 transcript 或获取 execution lease。Agent Root 
 菜单不得复制背景或依赖消费者 Tailwind 扫描共享包源码。Workbench 在没有 creative Main View
 时允许 `Chat + Main` 并展示明确空 Main surface；`Main only` 仍要求已有 Main View。
 
-完整 provider-backed 宿主验收仍未完成：Evaluation 只使用用户区 `~/.neko/config.toml`，不接受其他
+provider-backed 宿主与可见 UI 基础会话验收已接通：Evaluation 只使用用户区 `~/.neko/config.toml`，不接受其他
 用户配置、JSON/YAML 或 mock 降级。Desktop 边界验证原生 TOML 后将其原样复制到隔离 fixture，
 不执行格式编译、不合并默认值、不推断 provider，也不写回用户目录；凭据仍由产品配置 owner 解析。
-当前宿主尚未提供显式 provider/model 与成本授权，因此不会启动 Desktop 或真实 API。当前已实现通过公开 Agent bridge
+开发者通过显式 provider/model 与成本授权启动真实 API；`desktop-agent-provider-ui` 从可见 Entry composer
+提交并验证 Assistant 会话 materialization、真实回复、PrimarySidebar 激活和 terminal UI。另已实现通过公开 Agent bridge
 与 fixture-only automation contract 运行的 Desktop complete-session driver、通用多轮 workflow
 interpreter、Tool approval、cancel/recovery、renderer reload/reconnect、application restart/disposal、重复
 matrix、预算/分片和完整报告阶段，并增加受保护的可见 Tool/Timeline/reload/focus/close 场景。确定性测试、
 key-free Evaluation harness、production package 和无模型成本的 Electron Shell/Agent Root 路径仍不能
-替代真实模型、真实 UI 与消融验收。
+替代真实模型、真实 UI 与消融验收。完整基础矩阵还必须继续覆盖上下文压缩、完整应用重开、生成记录恢复、
+多会话切换和会话隔离。
 Canvas 工具栏按宿主 capability 显示。Desktop 当前已接通 source-add、selection/pan、
 undo/redo、资源放置、Preview、Cut、Media Library copy 和已提交 Generation result 的
 regenerate。Generation draft/edit-and-generate、playback、Canvas export/package 与
