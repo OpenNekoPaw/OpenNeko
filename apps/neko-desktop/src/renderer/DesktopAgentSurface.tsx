@@ -14,6 +14,7 @@ import {
 } from './desktop-agent-launch-host-runtime-adapter';
 import { loadDesktopAgentWebviewRootModule } from './desktop-agent-module';
 import type { AgentComposerWorkspacePresentation } from '@neko/agent-webview/root';
+import type { AgentEntryScopeActions } from '@neko/agent-webview/root';
 
 const AgentWebviewRoot = lazy(() =>
   loadDesktopAgentWebviewRootModule().then((module) => ({ default: module.AgentWebviewRoot })),
@@ -40,12 +41,14 @@ type DesktopAgentSurfaceProps =
       readonly tab: DesktopProjectTabProjection;
       readonly agentPresentation?: AgentRootPresentation;
       readonly composerWorkspace?: AgentComposerWorkspacePresentation;
+      readonly entryScopeActions?: AgentEntryScopeActions;
     }
   | {
       readonly binding: 'launch';
       readonly agentPresentation: AgentRootPresentation;
       readonly viewId: string;
       readonly composerWorkspace?: AgentComposerWorkspacePresentation;
+      readonly entryScopeActions?: AgentEntryScopeActions;
     };
 
 export function DesktopAgentSurface(props: DesktopAgentSurfaceProps): JSX.Element {
@@ -68,8 +71,7 @@ export function DesktopAgentSurface(props: DesktopAgentSurfaceProps): JSX.Elemen
       }
       bootstrapOperation = prepareDesktopAgentSurfaceResources({
         loadModule: loadDesktopAgentWebviewRootModule,
-        getBootstrap: () =>
-          window.openNekoDesktop.agent.getBootstrap(projectId, viewId, viewEpoch),
+        getBootstrap: () => window.openNekoDesktop.agent.getBootstrap(projectId, viewId, viewEpoch),
       });
     } else if (agentPresentation === undefined) {
       throw new Error('Launch-bound Agent requires an explicit presentation.');
@@ -199,6 +201,7 @@ export function DesktopAgentSurface(props: DesktopAgentSurfaceProps): JSX.Elemen
             hostRuntimeAdapter={state.adapter}
             agentPresentation={state.agentPresentation}
             composerWorkspace={props.composerWorkspace}
+            entryScopeActions={props.entryScopeActions}
             initialConversation={
               state.agentPresentation?.kind === 'session'
                 ? { id: state.agentPresentation.conversationId, title: '' }
@@ -226,19 +229,17 @@ function createDesktopAgentConnectionKey(props: DesktopAgentSurfaceProps): strin
     return ['workspace', props.tab.projectId, viewId, viewEpoch, 'implicit-session'].join(':');
   }
   const scope =
-    presentation.scope.kind === 'assistant'
-      ? ['assistant', presentation.scope.assistantSpaceId]
-      : [
-          'workspace',
-          presentation.scope.workspaceId,
-          presentation.scope.workspaceGrantId,
-        ];
+    presentation.scope.kind === 'unbound'
+      ? ['unbound', presentation.scope.draftId]
+      : presentation.scope.kind === 'assistant'
+        ? ['assistant', presentation.scope.assistantSpaceId]
+        : ['workspace', presentation.scope.workspaceId, presentation.scope.workspaceGrantId];
   return [
     props.binding,
     viewId,
     viewEpoch,
     presentation.kind,
-    presentation.kind === 'session' ? presentation.conversationId : 'draft',
+    presentation.kind === 'session' ? presentation.conversationId : presentation.draftId,
     ...scope,
   ].join(':');
 }

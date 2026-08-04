@@ -62,6 +62,24 @@ export function EmptyState({
           <p className="mt-1 text-[12px] leading-5 text-[var(--agent-empty-muted)]">
             {t('chat.emptyState.desktopDockDescription')}
           </p>
+          <div className="agent-empty-actions mt-4 grid grid-cols-1 gap-1.5">
+            {EMPTY_STATE_ENTRIES.map((entry) => (
+              <button
+                key={entry.action}
+                type="button"
+                onClick={() => onEntryAction?.(entry.action)}
+                disabled={disabled}
+                className={`agent-empty-action flex min-h-9 w-full min-w-0 items-center rounded-md border px-3 py-2 text-left text-[12px] leading-5 transition-colors disabled:cursor-default disabled:opacity-60 ${
+                  selectedAction === entry.action
+                    ? 'agent-empty-action-selected border-[var(--agent-empty-action-hover-border)]'
+                    : 'border-[var(--agent-empty-action-border)] bg-[var(--agent-empty-action-bg)]'
+                }`}
+                aria-pressed={selectedAction === entry.action}
+              >
+                <span className="min-w-0 flex-1 break-words">{t(entry.labelKey)}</span>
+              </button>
+            ))}
+          </div>
           {suggestedSkills.length > 0 ? (
             <div className="agent-empty-skill-suggestions mt-4">
               <p className="agent-empty-skill-label">{t('chat.emptyState.desktopDockSkills')}</p>

@@ -167,6 +167,32 @@ describe('DesktopApplication scene lifecycle', () => {
     await act(async () => root.unmount());
   });
 
+  it('routes every Start Creating action to a fresh Host-owned Entry Draft transition', async () => {
+    const projection = createProjection();
+    const transition = vi.fn(async () => ({
+      status: 'transitioned' as const,
+      requestId: 'start-creating-1',
+      scene: projection.window.scene,
+    }));
+    installBridge({ projection, transition });
+    const { container, root } = await renderApplication();
+    const startCreating = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
+      (button) => button.textContent?.trim() === 'Start creating',
+    );
+    if (!startCreating) throw new Error('Desktop fixture requires Start Creating navigation.');
+
+    await act(async () => startCreating.click());
+    await waitFor(() => transition.mock.calls.length === 1);
+
+    expect(transition).toHaveBeenCalledWith(
+      'window-1',
+      { kind: 'open-agent-entry' },
+      projection.window.revision,
+      projection.window.scene.revision,
+    );
+    await act(async () => root.unmount());
+  });
+
   it('shows owner-qualified unavailable without replacing the current scene', async () => {
     const projection = createProjection();
     const getSnapshot = vi.fn(async () => projection);
@@ -518,6 +544,7 @@ describe('DesktopApplication scene lifecycle', () => {
             agentViewId: tab.viewId,
             scope: {
               kind: 'workspace',
+              draftId: 'draft-workspace-empty',
               workspaceId: project.workspaceId,
               workspaceGrantId: 'workspace-grant:empty',
             },
@@ -529,6 +556,7 @@ describe('DesktopApplication scene lifecycle', () => {
               phase: 'draft',
               scope: {
                 kind: 'workspace',
+                draftId: 'draft-workspace-empty',
                 workspaceId: project.workspaceId,
                 workspaceGrantId: 'workspace-grant:empty',
               },

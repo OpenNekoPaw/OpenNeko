@@ -95,7 +95,7 @@ describe('EmptyState', () => {
     expect(screen.getByRole('heading', { name: 'Hi, create with chat' })).toBeTruthy();
     expect(screen.getByText('Describe an idea or mention a resource.')).toBeTruthy();
     expect(screen.getByText('Try a Skill')).toBeTruthy();
-    expect(screen.getAllByRole('button')).toHaveLength(4);
+    expect(document.querySelectorAll('.agent-empty-skill-button')).toHaveLength(4);
     expect(document.querySelector('.agent-empty-state--desktop-dock')).toBeTruthy();
     expect(document.querySelector('.agent-empty-state--desktop-dock')?.className).toContain('px-3');
     expect(screen.queryByRole('button', { name: 'disabled' })).toBeNull();
@@ -110,7 +110,7 @@ describe('EmptyState', () => {
     render(<EmptyState presentation="desktop-dock" skills={[skill('disabled', false)]} />);
 
     expect(screen.queryByText('Try a Skill')).toBeNull();
-    expect(screen.queryByRole('button')).toBeNull();
+    expect(document.querySelector('.agent-empty-skill-button')).toBeNull();
   });
 });
 

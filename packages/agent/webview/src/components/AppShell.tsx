@@ -15,16 +15,19 @@ import { OnboardingFlow } from './OnboardingFlow';
 import { useConfigState, useResourceState } from '../hooks';
 import { ConversationController } from './ConversationController';
 import type { AgentRootPresentation } from '@neko/agent-contracts';
+import type { AgentEntryScopeActions } from '../root';
 
 export interface AppShellProps {
   readonly initialConversation?: { readonly id: string; readonly title: string };
   readonly initialInput?: { readonly id: string; readonly value: string };
   readonly presentation?: 'default' | 'desktop-dock';
   readonly agentPresentation?: AgentRootPresentation;
+  readonly entryScopeActions?: AgentEntryScopeActions;
 }
 
 export function AppShell({
   agentPresentation,
+  entryScopeActions,
   initialConversation,
   initialInput,
   presentation = 'default',
@@ -85,6 +88,7 @@ export function AppShell({
     >
       <ConversationController
         agentPresentation={agentPresentation}
+        entryScopeActions={entryScopeActions}
         emptyStatePresentation={presentation === 'desktop-dock' ? 'desktop-dock' : 'default'}
         initialConversation={initialConversation}
         initialInput={initialInput}

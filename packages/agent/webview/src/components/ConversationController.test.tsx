@@ -448,7 +448,7 @@ describe('ConversationController entry state', () => {
     render(
       <ConversationController
         {...createProps()}
-        agentPresentation={createAgentDraftPresentation({
+        agentPresentation={createAgentDraftPresentation('draft-1', {
           kind: 'workspace',
           workspaceId: 'workspace-1',
           workspaceGrantId: 'workspace-grant-1',
@@ -496,6 +496,105 @@ describe('ConversationController entry state', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: 'Select Entity Mention' }));
     expect(screen.getByTestId('entry-context-chips').textContent).toContain('小橘');
+    expect(hostMocks.newConversation).not.toHaveBeenCalled();
+  });
+
+  it('binds an unbound Entry Draft to Assistant without creating a conversation', () => {
+    vi.clearAllMocks();
+    const selectAssistant = vi.fn();
+    render(
+      <ConversationController
+        {...createProps()}
+        agentPresentation={createAgentDraftPresentation('draft-entry-1', {
+          kind: 'unbound',
+          draftId: 'draft-entry-1',
+        })}
+        emptyStatePresentation="desktop-dock"
+        entryScopeActions={{ selectAssistant }}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Start Chat' }));
+
+    expect(selectAssistant).toHaveBeenCalledWith('draft-entry-1');
+    expect(hostMocks.newConversation).not.toHaveBeenCalled();
+    expect(hostMocks.submitDraft).not.toHaveBeenCalled();
+  });
+
+  it('resets prior presentation state when the same controller receives a fresh draft identity', () => {
+    vi.clearAllMocks();
+    const props = createProps();
+    const firstDraft = createAgentDraftPresentation('draft-old', {
+      kind: 'assistant',
+      assistantSpaceId: 'assistant:1',
+    });
+    const view = render(
+      <ConversationController
+        {...props}
+        agentPresentation={firstDraft}
+        emptyStatePresentation="desktop-dock"
+      />,
+    );
+
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'old draft input' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Select Entity Mention' }));
+    const retainedModel = screen.getByTestId('entry-selected-model').textContent;
+    act(() => {
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: {
+            type: 'sessionDiagnostic',
+            code: 'conversation-durability-failed',
+            severity: 'error',
+            message: 'Old presentation error.',
+          },
+        }),
+      );
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: {
+            type: 'tabState',
+            revision: 1,
+            tabState: {
+              openTabs: [{ id: 'tab-old', title: 'Old Chat', conversationId: 'conversation-old' }],
+              activeTabId: 'tab-old',
+            },
+          },
+        }),
+      );
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: {
+            type: 'activeConversation',
+            conversation: {
+              id: 'conversation-old',
+              title: 'Old Chat',
+              messages: [message('message-old', 'old transcript')],
+            },
+          },
+        }),
+      );
+    });
+    expect(document.querySelector('[data-testid^="workspace-runtime-"]')).toBeTruthy();
+    expect(screen.getByRole('alert').textContent).toContain('Old presentation error.');
+
+    view.rerender(
+      <ConversationController
+        {...props}
+        agentPresentation={createAgentDraftPresentation('draft-new', {
+          kind: 'unbound',
+          draftId: 'draft-new',
+        })}
+        emptyStatePresentation="desktop-dock"
+        entryScopeActions={{ selectAssistant: vi.fn() }}
+      />,
+    );
+
+    expect(document.querySelector('[data-testid^="workspace-runtime-"]')).toBeNull();
+    expect(screen.getByRole('textbox')).toHaveProperty('value', '');
+    expect(screen.getByTestId('entry-context-chips').textContent).toBe('');
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.getByTestId('entry-selected-model').textContent).toBe(retainedModel);
     expect(hostMocks.newConversation).not.toHaveBeenCalled();
   });
 

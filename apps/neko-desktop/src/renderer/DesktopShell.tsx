@@ -73,7 +73,11 @@ import {
   DesktopApplicationBrand,
   DesktopApplicationNavigationButton,
 } from './DesktopApplicationSidebar';
-import type { AgentRootPresentation } from '@neko/agent-contracts';
+import {
+  createAgentDraftPresentation,
+  createAgentSessionPresentation,
+  type AgentRootPresentation,
+} from '@neko/agent-contracts';
 
 type ShellState =
   | { readonly kind: 'loading' }
@@ -374,37 +378,47 @@ function DesktopSceneWorkbench({
     projection,
     project: workspaceProject,
   });
-  const assistantContext =
-    scene.context.kind === 'agent' && scene.context.scope.kind === 'assistant'
+  const launchContext =
+    scene.context.kind === 'agent' && scene.context.scope.kind !== 'workspace'
       ? { ...scene.context, scope: scene.context.scope }
       : undefined;
-  const assistantScope = assistantContext?.scope;
+  const launchScope = launchContext?.scope;
+  const assistantScope = launchScope?.kind === 'assistant' ? launchScope : undefined;
   const assistantPreviewRef =
     assistantScope && scene.slots.main?.kind === 'assistant-preview' ? scene.slots.main : undefined;
   const settingsSection =
     scene.context.kind === 'settings'
       ? parseDesktopSettingsSection(scene.context.settingsSectionId)
       : undefined;
-  const assistantAgent = assistantScope ? (
-    <div className="project-dock-panel" data-dock-owner="agent">
-      <section
-        className="agent-workspace desktop-assistant-agent"
-        data-agent-scope="assistant"
-        data-primary-surface="agent"
-      >
-        <DesktopAgentSurface
-          binding="launch"
-          composerWorkspace={{
-            kind: 'assistant',
-            onChoose: actions.onChooseWorkspace,
-            disabled: pending || !interactive,
-          }}
-          viewId={assistantContext.agentViewId}
-          agentPresentation={createAssistantAgentPresentation(assistantScope)}
-        />
-      </section>
-    </div>
-  ) : undefined;
+  const launchAgent =
+    launchScope && launchContext ? (
+      <div className="project-dock-panel" data-dock-owner="agent">
+        <section
+          className="agent-workspace desktop-assistant-agent"
+          data-agent-scope={launchScope.kind}
+          data-primary-surface="agent"
+        >
+          <DesktopAgentSurface
+            binding="launch"
+            composerWorkspace={{
+              kind: 'assistant',
+              onChoose: actions.onChooseWorkspace,
+              disabled: pending || !interactive,
+            }}
+            entryScopeActions={
+              launchScope.kind === 'unbound'
+                ? {
+                    selectAssistant: (draftId) =>
+                      actions.onTransitionScene({ kind: 'bind-agent-assistant', draftId }),
+                  }
+                : undefined
+            }
+            viewId={launchContext.agentViewId}
+            agentPresentation={createLaunchAgentPresentation(launchScope)}
+          />
+        </section>
+      </div>
+    ) : undefined;
   const assistantPreview =
     assistantPreviewRef && assistantScope?.conversationId ? (
       <DesktopAssistantPreviewSurface
@@ -454,7 +468,7 @@ function DesktopSceneWorkbench({
       workspaceSlots.main
     ) : assistantScope ? (
       (assistantPreview ?? null)
-    ) : (
+    ) : launchScope?.kind === 'unbound' ? null : (
       <SceneSurfaceUnavailable owner="agent" />
     );
   const main =
@@ -495,8 +509,8 @@ function DesktopSceneWorkbench({
           actions.onTransitionScene({ kind: 'open-settings', sectionId: section })
         }
       />
-    ) : assistantScope ? (
-      assistantAgent
+    ) : launchScope ? (
+      launchAgent
     ) : scene.context.kind === 'agent' && scene.context.scope.kind === 'workspace' ? (
       workspaceSlots.leftDock
     ) : undefined;
@@ -536,7 +550,7 @@ function DesktopSceneWorkbench({
   ) : (
     secondaryMainContent
   );
-  const sceneShape = assistantScope
+  const sceneShape = launchScope
     ? assistantPreview
       ? 'assistant'
       : 'agent-only'
@@ -604,19 +618,19 @@ function DesktopSceneWorkbench({
       }
       leftDock={leftDock}
       leftDockPresentation={
-        settingsSection !== undefined || assistantScope
+        settingsSection !== undefined || launchScope
           ? 'docked'
           : workspaceSlots.leftDockPresentation
       }
       leftDockWidth={
         settingsSection !== undefined
           ? 300
-          : assistantScope
+          : launchScope
             ? projection.window.workbench.display.chatWidth
             : workspaceSlots.leftDockWidth
       }
       leftDockResize={
-        settingsSection !== undefined || assistantScope ? undefined : workspaceSlots.leftDockResize
+        settingsSection !== undefined || launchScope ? undefined : workspaceSlots.leftDockResize
       }
       rightDock={rightDock}
       rightDockPresentation={workspaceScene ? workspaceSlots.rightDockPresentation : 'hidden'}
@@ -694,27 +708,25 @@ function WorkbenchMainPanelSurface({
   );
 }
 
-function createAssistantAgentPresentation(
+function createLaunchAgentPresentation(
   scope: Extract<
     DesktopShellProjection['window']['scene']['context'],
     { readonly kind: 'agent' }
   >['scope'],
 ): AgentRootPresentation {
-  if (scope.kind !== 'assistant') {
-    throw new Error('Assistant Agent presentation requires Assistant scope.');
+  if (scope.kind === 'workspace') {
+    throw new Error('Launch Agent presentation cannot use Workspace scope.');
   }
-  const authorityScope = {
-    kind: 'assistant' as const,
-    assistantSpaceId: scope.assistantSpaceId,
-  };
+  if (scope.kind === 'unbound') {
+    return createAgentDraftPresentation(scope.draftId, {
+      kind: 'unbound',
+      draftId: scope.draftId,
+    });
+  }
+  const authorityScope = { kind: 'assistant' as const, assistantSpaceId: scope.assistantSpaceId };
   return scope.conversationId
-    ? {
-        schemaVersion: 1,
-        kind: 'session',
-        scope: authorityScope,
-        conversationId: scope.conversationId,
-      }
-    : { schemaVersion: 1, kind: 'draft', scope: authorityScope };
+    ? createAgentSessionPresentation(authorityScope, scope.conversationId)
+    : createAgentDraftPresentation(scope.draftId, authorityScope);
 }
 
 export function resolveAssetCenterPreviewSession(
@@ -787,7 +799,7 @@ function resolveWorkspaceSceneProject(
 function sceneIntentForSection(section: HomeSection): DesktopSceneTransitionIntent {
   switch (section) {
     case 'create':
-      return { kind: 'open-agent-assistant' };
+      return { kind: 'open-agent-entry' };
     case 'assets':
       return { kind: 'open-asset-center' };
     case 'extensions':
@@ -1209,9 +1221,14 @@ function createWorkspaceAgentPresentation(
   const context = projection.window.scene.context;
   if (context.kind !== 'agent' || context.scope.kind !== 'workspace') return undefined;
   const conversationId = context.scope.conversationId;
+  const authorityScope = {
+    kind: 'workspace' as const,
+    workspaceId: context.scope.workspaceId,
+    workspaceGrantId: context.scope.workspaceGrantId,
+  };
   return conversationId === undefined
-    ? { schemaVersion: 1, kind: 'draft', scope: context.scope }
-    : { schemaVersion: 1, kind: 'session', scope: context.scope, conversationId };
+    ? createAgentDraftPresentation(context.scope.draftId, authorityScope)
+    : createAgentSessionPresentation(authorityScope, conversationId);
 }
 
 function MainViewGroupSurface({

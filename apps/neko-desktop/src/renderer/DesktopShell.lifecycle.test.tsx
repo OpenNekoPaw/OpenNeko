@@ -249,6 +249,7 @@ function projectProjection(
           agentViewId: 'view-1',
           scope: {
             kind: 'workspace',
+            draftId: 'draft-workspace-1',
             workspaceId: project.workspaceId,
             workspaceGrantId: 'workspace-grant-1',
           },
@@ -260,6 +261,7 @@ function projectProjection(
             phase: 'draft',
             scope: {
               kind: 'workspace',
+              draftId: 'draft-workspace-1',
               workspaceId: project.workspaceId,
               workspaceGrantId: 'workspace-grant-1',
             },

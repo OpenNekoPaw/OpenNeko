@@ -34,6 +34,11 @@ export interface AgentWebviewRootProps {
   readonly presentation?: 'default' | 'desktop-dock';
   readonly agentPresentation?: AgentRootPresentation;
   readonly composerWorkspace?: AgentComposerWorkspacePresentation;
+  readonly entryScopeActions?: AgentEntryScopeActions;
+}
+
+export interface AgentEntryScopeActions {
+  readonly selectAssistant: (draftId: string) => void;
 }
 
 export function AgentWebviewRoot({
@@ -41,6 +46,7 @@ export function AgentWebviewRoot({
   hostRuntimeAdapter,
   agentPresentation,
   composerWorkspace,
+  entryScopeActions,
   initialConversation,
   initialInput,
   locale,
@@ -80,6 +86,7 @@ export function AgentWebviewRoot({
             <ComposerWorkspaceProvider value={composerWorkspace}>
               <AppShell
                 agentPresentation={agentPresentation}
+                entryScopeActions={entryScopeActions}
                 initialConversation={initialConversation}
                 initialInput={initialInput}
                 presentation={presentation}

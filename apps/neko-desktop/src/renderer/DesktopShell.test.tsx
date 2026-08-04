@@ -256,7 +256,7 @@ describe('Desktop scene Workbench', () => {
     };
     const markup = renderShell(<DesktopShellView projection={misleading} />);
     expect(markup).toContain('Connecting to Agent');
-    expect(markup).toContain('data-agent-scope="assistant"');
+    expect(markup).toContain('data-agent-scope="unbound"');
     expect(markup).not.toContain('data-main-view-id=');
 
     const workspace = workspaceProjection();
@@ -467,6 +467,7 @@ function baseProjection(): DesktopShellProjection {
 function workspaceScene(): DesktopWorkbenchSceneProjection {
   const scope = {
     kind: 'workspace' as const,
+    draftId: 'draft-workspace-1',
     workspaceId: 'workspace-1',
     workspaceGrantId: 'workspace-grant-1',
   };
@@ -502,9 +503,10 @@ function assetCenterScene(): DesktopWorkbenchSceneProjection {
 }
 
 function assistantPreviewScene(): DesktopWorkbenchSceneProjection {
-  const draft = createDefaultDesktopAgentScene('window-1', 'assistant-space:test');
+  const draft = createDefaultDesktopAgentScene('window-1', 'draft-assistant-1');
   const scope = {
     kind: 'assistant' as const,
+    draftId: 'draft-assistant-1',
     assistantSpaceId: 'assistant-space:test',
     conversationId: 'conversation-1',
   };

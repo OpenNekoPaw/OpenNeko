@@ -102,6 +102,7 @@ import { useProjectionEndpoint } from '../render-runtime/useProjectionEndpoint';
 import type { AgentContextPayload } from '@neko/agent-contracts';
 import type { ConversationRenderCoordinator } from '../render-lifecycle/conversation-render-coordinator';
 import { submitRoleplayEntrySelection } from './ChatView/roleplay-entry-action';
+import type { AgentEntryScopeActions } from '../root';
 
 // =============================================================================
 // Props
@@ -132,6 +133,7 @@ export interface ConversationControllerProps {
   initialInput?: { readonly id: string; readonly value: string };
   emptyStatePresentation?: 'default' | 'desktop-dock';
   agentPresentation?: AgentRootPresentation;
+  entryScopeActions?: AgentEntryScopeActions;
   settings: SettingsState;
   hasConfigSnapshot: boolean;
   setSettings: React.Dispatch<React.SetStateAction<SettingsState>>;
@@ -180,6 +182,7 @@ function applyConversationSettingsSnapshot(
 
 export function ConversationController({
   agentPresentation,
+  entryScopeActions,
   emptyStatePresentation = 'default',
   initialConversation,
   initialInput,
@@ -264,6 +267,7 @@ export function ConversationController({
   const [entrySessionMode, setEntrySessionMode] = useState<SessionMode>('agent');
   const [entryGenCategory, setEntryGenCategory] = useState<GenCategory>('image');
   const [entryGenParams, setEntryGenParams] = useState<GenerationParams>(DEFAULT_GENERATION_PARAMS);
+  const activeDraftIdRef = useRef<string>();
 
   // ---- Per-conversation ref Maps ----
   const conversationTokenCountRef = useRef<Map<string, number>>(new Map());
@@ -382,6 +386,37 @@ export function ConversationController({
   } | null>(null);
   const [entryPromptMenu, setEntryPromptMenu] = useState<EntryPromptMenu | null>(null);
   const nextQueuedEditRequestIdRef = useRef(0);
+
+  useEffect(() => {
+    if (agentPresentation?.kind !== 'draft') return;
+    if (activeDraftIdRef.current === agentPresentation.draftId) return;
+    activeDraftIdRef.current = agentPresentation.draftId;
+
+    setOpenTabs([]);
+    setActiveTabId(null);
+    setActiveConversationId(null);
+    clearVisibleState();
+    setActiveTab('chat');
+    setEntryAction('start-chat');
+    updateEntryInputValue('');
+    setEntryContextReferences([]);
+    setGlobalError(null);
+    setPendingSendRequest(null);
+    setInitialInputRequest(null);
+    setInitialSessionModeRequest(null);
+    setEntryPromptMenu(null);
+    pendingForegroundConversationActivationRef.current = null;
+    setIsForegroundConversationActivationPending(false);
+    setForegroundAvailabilityByConversation(new Map());
+    isTablessConversationViewRef.current = true;
+  }, [
+    agentPresentation,
+    clearVisibleState,
+    setActiveConversationId,
+    setActiveTabId,
+    setOpenTabs,
+    updateEntryInputValue,
+  ]);
 
   // ---- Context chips & ambient nodes ----
   const [ambientNodesByConversation, setAmbientNodesByConversation] = useState<
@@ -962,6 +997,16 @@ export function ConversationController({
           setInitialSessionModeRequest(null);
           setEntryPromptMenu(null);
           updateEntryInputValue('');
+          if (agentPresentation?.kind === 'draft' && agentPresentation.scope.kind === 'unbound') {
+            const selectAssistant = entryScopeActions?.selectAssistant;
+            if (!selectAssistant) {
+              setGlobalError('Assistant scope selection is unavailable.');
+              return;
+            }
+            selectAssistant(agentPresentation.draftId);
+            return;
+          }
+          if (agentPresentation?.kind === 'draft') return;
           startNewForegroundConversation();
           return;
         case 'generate-assets':
@@ -969,17 +1014,35 @@ export function ConversationController({
           setInitialInputRequest(null);
           setInitialSessionModeRequest(null);
           setEntryPromptMenu('generate-assets');
+          if (agentPresentation?.kind === 'draft' && agentPresentation.scope.kind === 'unbound') {
+            const selectAssistant = entryScopeActions?.selectAssistant;
+            if (!selectAssistant) {
+              setGlobalError('Assistant scope selection is unavailable.');
+              return;
+            }
+            selectAssistant(agentPresentation.draftId);
+          }
           return;
         case 'roleplay':
           setPendingSendRequest(null);
           setInitialInputRequest(null);
           setInitialSessionModeRequest(null);
           setEntryPromptMenu('roleplay');
+          if (agentPresentation?.kind === 'draft') {
+            setGlobalError('Character and Room scope is not available.');
+            return;
+          }
           handleRequestRoleplayItems();
           return;
       }
     },
-    [handleRequestRoleplayItems, startNewForegroundConversation, updateEntryInputValue],
+    [
+      agentPresentation,
+      entryScopeActions,
+      handleRequestRoleplayItems,
+      startNewForegroundConversation,
+      updateEntryInputValue,
+    ],
   );
 
   const handleSendWithoutConversation = useCallback(
@@ -1005,6 +1068,10 @@ export function ConversationController({
         const submitDraft = hostRuntimeAdapter.submitDraft;
         if (!submitDraft || !agentPresentation) {
           setGlobalError('Agent draft submit authority is unavailable.');
+          return;
+        }
+        if (agentPresentation.scope.kind === 'unbound') {
+          setGlobalError('Select Assistant or a Workspace before sending.');
           return;
         }
         const selectedModel = activeSettings.chatModelOptions.find(
@@ -1116,6 +1183,14 @@ export function ConversationController({
     (mode: SessionMode) => {
       setEntrySessionMode(mode);
       setEntryAction('start-chat');
+      if (agentPresentation?.kind === 'draft' && agentPresentation.scope.kind === 'unbound') {
+        const selectAssistant = entryScopeActions?.selectAssistant;
+        if (!selectAssistant) {
+          setGlobalError('Assistant scope selection is unavailable.');
+        } else {
+          selectAssistant(agentPresentation.draftId);
+        }
+      }
       setEntryMediaModelSelection((prev) => {
         const projection = projectMediaModelSelectionForSessionModeChange({
           sessionMode: mode,
@@ -1125,7 +1200,7 @@ export function ConversationController({
         return projection.updated ? projection.mediaModelSelection : prev;
       });
     },
-    [activeSettings.chatModelOptions],
+    [activeSettings.chatModelOptions, agentPresentation, entryScopeActions],
   );
 
   const handleEntryGenerationModeSelect = useCallback(

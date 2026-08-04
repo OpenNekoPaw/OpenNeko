@@ -111,8 +111,9 @@ describe('AgentWebviewRoot foundation wiring', () => {
     render(
       <AgentWebviewRoot
         agentPresentation={{
-          schemaVersion: 1,
+          schemaVersion: 2,
           kind: 'draft',
+          draftId: 'draft-1',
           scope: { kind: 'assistant', assistantSpaceId: 'assistant:1' },
         }}
         hostRuntimeAdapter={createAdapter('assistant-draft-adapter')}

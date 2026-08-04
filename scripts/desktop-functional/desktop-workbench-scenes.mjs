@@ -66,6 +66,7 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
     const agent = await inspectWorkbench(evaluate, 'agent-only');
     assertSingleWorkbench(agent);
     assertAgentOnly(agent);
+    const initialEntryDraft = await inspectEntryDraft(evaluate);
     const draftControls = await inspectAgentDraftControls(evaluate);
     assertAgentDraftControls(draftControls);
     const sidebarLifecycle = await exercisePrimarySidebar(evaluate, click, drag);
@@ -222,6 +223,16 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
     await resizeWindow(evaluate, 1440, 960);
     await click('.home-primary-navigation .home-nav-button', 0);
     await waitForSelector('.desktop-scene-workbench--agent-only .agent-composer-textarea');
+    const freshEntryDraft = await inspectEntryDraft(evaluate, [
+      initialEntryDraft.draftId,
+      workspaceActivation.draftId,
+    ]);
+    const assistantDraft = await bindAssistantDraft(evaluate);
+    checkpoint('fresh-entry-draft-assistant-bind', {
+      initialEntryDraft,
+      freshEntryDraft,
+      assistantDraft,
+    });
     await evaluate(`(() => {
       globalThis.__openNekoAgentSessionEvents = [];
       globalThis.__openNekoAgentSessionEventSubscription?.();
@@ -378,8 +389,80 @@ async function chooseFixtureWorkspace(evaluate) {
       workspaceGrantId: result.grant.workspaceGrantId,
       workspaceId: transition.scene.context.scope.workspaceId,
       projectId: project.projectId,
+      draftId: transition.scene.context.scope.draftId,
       conversationCount: committed.agentHome.conversations.length,
     };
+  })()`);
+}
+
+async function inspectEntryDraft(evaluate, forbiddenDraftIds = []) {
+  return evaluate(`(async () => {
+    const projection = await window.openNekoDesktop.shell.getSnapshot();
+    const context = projection.window.scene.context;
+    if (context.kind !== 'agent' || context.scope.kind !== 'unbound') {
+      throw new Error('Agent-only entry inspection requires an unbound Entry Draft.');
+    }
+    if (${JSON.stringify(forbiddenDraftIds)}.includes(context.scope.draftId)) {
+      throw new Error('Start Creating reused a prior Agent draft identity.');
+    }
+    if (document.querySelector('[data-testid="conversation-tabs"]')) {
+      throw new Error('Entry Draft retained session-only conversation Tabs.');
+    }
+    if (document.querySelectorAll('[data-testid="message-item"]').length > 0) {
+      throw new Error('Entry Draft retained a prior conversation transcript.');
+    }
+    const textarea = document.querySelector('.agent-composer-textarea');
+    if (!(textarea instanceof HTMLTextAreaElement) || textarea.value !== '') {
+      throw new Error('Entry Draft did not reset its composer input.');
+    }
+    return {
+      draftId: context.scope.draftId,
+      conversationCount: projection.agentHome.conversations.length,
+    };
+  })()`);
+}
+
+async function bindAssistantDraft(evaluate) {
+  return evaluate(`(async () => {
+    const before = await window.openNekoDesktop.shell.getSnapshot();
+    const beforeContext = before.window.scene.context;
+    if (beforeContext.kind !== 'agent' || beforeContext.scope.kind !== 'unbound') {
+      throw new Error('Assistant binding requires an unbound Entry Draft.');
+    }
+    const root = document.querySelector('.desktop-agent-root');
+    const action = document.querySelector('[data-agent-scope="unbound"] .agent-empty-action');
+    if (!(action instanceof HTMLButtonElement) || action.disabled) {
+      throw new Error('Entry Draft Assistant action is unavailable.');
+    }
+    action.click();
+    const deadline = Date.now() + 10_000;
+    while (Date.now() < deadline) {
+      const projection = await window.openNekoDesktop.shell.getSnapshot();
+      const context = projection.window.scene.context;
+      if (context.kind === 'agent' && context.scope.kind === 'assistant') {
+        if (context.scope.draftId !== beforeContext.scope.draftId) {
+          throw new Error('Assistant binding replaced the exact Entry Draft identity.');
+        }
+        if (projection.agentHome.conversations.length !== before.agentHome.conversations.length) {
+          throw new Error('Assistant binding created a conversation before first submit.');
+        }
+        while (Date.now() < deadline) {
+          if (document.querySelector('[data-agent-scope="assistant"] .agent-composer-textarea')) {
+            if (document.querySelector('.desktop-agent-root') !== root) {
+              throw new Error('Assistant binding remounted the package-owned Agent Root.');
+            }
+            return {
+              draftId: context.scope.draftId,
+              assistantSpaceId: context.scope.assistantSpaceId,
+              conversationCount: projection.agentHome.conversations.length,
+            };
+          }
+          await new Promise((resolve) => setTimeout(resolve, 50));
+        }
+      }
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    throw new Error('Entry Draft did not bind to Assistant before timeout.');
   })()`);
 }
 

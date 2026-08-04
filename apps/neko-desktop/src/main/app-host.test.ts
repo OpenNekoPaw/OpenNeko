@@ -411,6 +411,44 @@ describe('DesktopAppHost', () => {
     await fixture.appHost.dispose();
   });
 
+  it('binds Agent launch attach to the exact unbound Entry Draft identity', async () => {
+    const agentLaunch = createAgentLaunchRuntime();
+    const fixture = await createShellAppHost({ agentLaunch });
+    const scene = fixture.projection.window.scene;
+    if (scene.context.kind !== 'agent' || scene.context.scope.kind !== 'unbound') {
+      throw new Error('Agent launch AppHost fixture requires an unbound Entry Draft.');
+    }
+    const scope = { kind: 'unbound' as const, draftId: scene.context.scope.draftId };
+    const catalog = createLaunchCatalog({
+      applicationInstanceId: 'app-1',
+      windowId: fixture.windowId,
+      viewId: scene.context.agentViewId,
+      rendererEpoch: 1,
+      connectionEpoch: 1,
+      connectionId: 'launch-entry-1',
+      scope,
+    });
+    vi.spyOn(agentLaunch, 'attach').mockResolvedValue(catalog);
+
+    await expect(
+      fixture.appHost.executeAgentLaunchRequest(fixture.sender, {
+        schemaVersion: AGENT_LAUNCH_CONTRACT_VERSION,
+        requestId: 'launch-entry-attach-1',
+        operation: 'attach',
+        viewId: scene.context.agentViewId,
+        scope,
+      }),
+    ).resolves.toMatchObject({ status: 'ready', catalog });
+    expect(agentLaunch.attach).toHaveBeenCalledWith({
+      applicationInstanceId: 'app-1',
+      windowId: fixture.windowId,
+      viewId: scene.context.agentViewId,
+      rendererEpoch: 1,
+      scope,
+    });
+    await fixture.appHost.dispose();
+  });
+
   it('commits Assistant first submit once and idempotently attaches the exact session Scene', async () => {
     const providerStart = vi.fn(async () => undefined);
     let identity = 0;
