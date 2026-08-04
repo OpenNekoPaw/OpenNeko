@@ -9,7 +9,7 @@
 
 - [x] 2.1 Implement the atomic `neko/entities.json` repository in `@neko/entity-node` with path authorization, expected revision, cancellation, and fail-visible diagnostics.
 - [x] 2.2 Implement a read-only migration inventory, immutable archive, field classification, ambiguity report, and expected-source/project-revision plan for fragmented authorities.
-- [ ] 2.3 Migrate confirmed facts and bindings atomically, preserve unresolved values, rebuild proven projections, and retain old files only through explicit recovery/inspection.
+- [x] 2.3 Migrate confirmed facts and bindings atomically, preserve unresolved values, rebuild proven projections, and retain old files only through explicit recovery/inspection.
 - [ ] 2.4 Delete or poison fragmented normal readers/writers, dual authorities, and fallback mappings; add producer tests, consumer/delegation tests, and proof that legacy paths cannot return success.
 
 ## 3. Candidates, availability, and references

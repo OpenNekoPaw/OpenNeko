@@ -101,6 +101,17 @@ export interface ProjectEntityMigrationArchiveResult {
   readonly manifest: ProjectEntityMigrationArchiveManifest;
 }
 
+export interface ProjectEntityMigrationArchivedSource {
+  readonly sourceId: ProjectEntityLegacySourceId;
+  readonly relativePath: string;
+  readonly value: unknown;
+}
+
+export interface ProjectEntityMigrationArchiveSnapshot {
+  readonly manifest: ProjectEntityMigrationArchiveManifest;
+  readonly sources: readonly ProjectEntityMigrationArchivedSource[];
+}
+
 export interface NodeProjectEntityMigrationInventoryOptions {
   readonly workspacePath: string;
   readonly projectId: string;
@@ -143,6 +154,7 @@ interface SourceClassification {
 interface SourceSnapshot {
   readonly inventory: ProjectEntityMigrationSourceInventory;
   readonly bytes: Buffer | null;
+  readonly value?: unknown;
 }
 
 const LEGACY_SOURCES: readonly LegacySourceDefinition[] = [
@@ -209,7 +221,14 @@ export class NodeProjectEntityMigrationInventory {
       snapshots.push(await this.readSource(definition, signal));
     }
     const createdAt = (this.options.now ?? (() => new Date()))().toISOString();
-    const sources = snapshots.map((snapshot) => snapshot.inventory);
+    const semanticAmbiguities = collectCrossSourceAmbiguities(snapshots);
+    const sources = snapshots.map((snapshot) => ({
+      ...snapshot.inventory,
+      ambiguities: [
+        ...snapshot.inventory.ambiguities,
+        ...(semanticAmbiguities.get(snapshot.inventory.sourceId) ?? []),
+      ],
+    }));
     const expectedSources = sources.map(toExpectedSource);
     const blockers = sources.flatMap((source) => source.ambiguities);
     const planId = buildPlanId(
@@ -238,31 +257,7 @@ export class NodeProjectEntityMigrationInventory {
     inventory: ProjectEntityMigrationInventory,
     signal?: AbortSignal,
   ): Promise<ProjectEntityMigrationArchiveResult> {
-    validateInventoryIdentity(inventory, this.options.projectId);
-    throwIfAborted(signal);
-    await authorizeWorkspace(this.workspacePath);
-    const canonical = await this.options.repository.load(signal);
-    if (canonical.revision !== inventory.plan.expectedProjectRevision) {
-      throw migrationError(
-        'project-entity-migration-source-changed',
-        'Project Entity revision changed after migration inventory was created.',
-      );
-    }
-
-    const snapshots: SourceSnapshot[] = [];
-    for (const definition of LEGACY_SOURCES) {
-      const snapshot = await this.readSource(definition, signal);
-      const expected = inventory.plan.expectedSources.find(
-        (source) => source.sourceId === definition.sourceId,
-      );
-      if (!expected || !sameExpectedSource(snapshot.inventory, expected)) {
-        throw migrationError(
-          'project-entity-migration-source-changed',
-          `Project Entity migration source '${definition.relativePath}' changed after inventory.`,
-        );
-      }
-      snapshots.push(snapshot);
-    }
+    const snapshots = await this.readExpectedCurrentSources(inventory, signal);
 
     const archivePath = resolveOwnedPath(this.workspacePath, inventory.plan.archiveRelativePath);
     await authorizeOwnedPath(this.workspacePath, archivePath, true);
@@ -277,16 +272,7 @@ export class NodeProjectEntityMigrationInventory {
     await mkdir(archiveParent, { recursive: true });
     await authorizeOwnedPath(this.workspacePath, archiveParent, false);
     const temporaryPath = path.join(archiveParent, `.archive-${randomUUID()}.tmp`);
-    const manifest: ProjectEntityMigrationArchiveManifest = {
-      schemaVersion: PROJECT_ENTITY_MIGRATION_ARCHIVE_SCHEMA_VERSION,
-      projectId: inventory.projectId,
-      planId: inventory.plan.planId,
-      createdAt: inventory.createdAt,
-      expectedProjectRevision: inventory.plan.expectedProjectRevision,
-      sources: inventory.plan.expectedSources,
-      inventorySources: inventory.sources,
-      blockers: inventory.plan.blockers,
-    };
+    const manifest = buildArchiveManifest(inventory);
     let published = false;
     try {
       await mkdir(temporaryPath);
@@ -332,6 +318,88 @@ export class NodeProjectEntityMigrationInventory {
     } finally {
       if (!published) await rm(temporaryPath, { recursive: true, force: true });
     }
+  }
+
+  async verifyCurrentSources(
+    inventory: ProjectEntityMigrationInventory,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    await this.readExpectedCurrentSources(inventory, signal);
+  }
+
+  async loadArchive(
+    inventory: ProjectEntityMigrationInventory,
+    signal?: AbortSignal,
+  ): Promise<ProjectEntityMigrationArchiveSnapshot> {
+    validateInventoryIdentity(inventory, this.options.projectId);
+    throwIfAborted(signal);
+    await authorizeWorkspace(this.workspacePath);
+    const archivePath = resolveOwnedPath(this.workspacePath, inventory.plan.archiveRelativePath);
+    await authorizeOwnedPath(this.workspacePath, archivePath, false);
+    let manifestValue: unknown;
+    try {
+      manifestValue = JSON.parse(await readFile(path.join(archivePath, 'manifest.json'), 'utf8'));
+    } catch (error: unknown) {
+      throw migrationError(
+        'project-entity-migration-io-failed',
+        'Project Entity migration archive manifest could not be read.',
+        error,
+      );
+    }
+    const expectedManifest = buildArchiveManifest(inventory);
+    if (JSON.stringify(manifestValue) !== JSON.stringify(expectedManifest)) {
+      throw migrationError(
+        'project-entity-migration-source-changed',
+        'Project Entity migration archive manifest does not match the approved inventory.',
+      );
+    }
+    const sources: ProjectEntityMigrationArchivedSource[] = [];
+    for (const expected of inventory.plan.expectedSources) {
+      throwIfAborted(signal);
+      const sourcePath = resolveOwnedPath(archivePath, `sources/${expected.relativePath}`);
+      if (expected.expectedDigest === null) {
+        if (await pathExists(sourcePath)) {
+          throw migrationError(
+            'project-entity-migration-source-changed',
+            `Archive unexpectedly contains absent source '${expected.relativePath}'.`,
+          );
+        }
+        continue;
+      }
+      await authorizeOwnedPath(archivePath, sourcePath, false);
+      let bytes: Buffer;
+      try {
+        bytes = await readFile(sourcePath);
+      } catch (error: unknown) {
+        throw migrationError(
+          'project-entity-migration-io-failed',
+          `Archived source '${expected.relativePath}' could not be read.`,
+          error,
+        );
+      }
+      if (digest(bytes) !== expected.expectedDigest) {
+        throw migrationError(
+          'project-entity-migration-source-changed',
+          `Archived source '${expected.relativePath}' no longer matches its approved digest.`,
+        );
+      }
+      let value: unknown;
+      try {
+        value = JSON.parse(bytes.toString('utf8'));
+      } catch (error: unknown) {
+        throw migrationError(
+          'project-entity-migration-source-changed',
+          `Archived source '${expected.relativePath}' is not valid migration JSON.`,
+          error,
+        );
+      }
+      sources.push({
+        sourceId: expected.sourceId,
+        relativePath: expected.relativePath,
+        value,
+      });
+    }
+    return { manifest: expectedManifest, sources };
   }
 
   private async readSource(
@@ -411,6 +479,7 @@ export class NodeProjectEntityMigrationInventory {
     }
     return {
       bytes,
+      value,
       inventory: {
         sourceId: definition.sourceId,
         relativePath: definition.relativePath,
@@ -431,6 +500,218 @@ export class NodeProjectEntityMigrationInventory {
       },
     };
   }
+
+  private async readExpectedCurrentSources(
+    inventory: ProjectEntityMigrationInventory,
+    signal?: AbortSignal,
+  ): Promise<readonly SourceSnapshot[]> {
+    validateInventoryIdentity(inventory, this.options.projectId);
+    throwIfAborted(signal);
+    await authorizeWorkspace(this.workspacePath);
+    const canonical = await this.options.repository.load(signal);
+    if (canonical.revision !== inventory.plan.expectedProjectRevision) {
+      throw migrationError(
+        'project-entity-migration-source-changed',
+        'Project Entity revision changed after migration inventory was created.',
+      );
+    }
+    const snapshots: SourceSnapshot[] = [];
+    for (const definition of LEGACY_SOURCES) {
+      const snapshot = await this.readSource(definition, signal);
+      const expected = inventory.plan.expectedSources.find(
+        (source) => source.sourceId === definition.sourceId,
+      );
+      if (!expected || !sameExpectedSource(snapshot.inventory, expected)) {
+        throw migrationError(
+          'project-entity-migration-source-changed',
+          `Project Entity migration source '${definition.relativePath}' changed after inventory.`,
+        );
+      }
+      snapshots.push(snapshot);
+    }
+    return snapshots;
+  }
+}
+
+interface LegacyEntityIdentity {
+  readonly sourceId: ProjectEntityLegacySourceId;
+  readonly pointer: string;
+  readonly entityId: string;
+  readonly kind: string;
+  readonly lookupKeys: readonly string[];
+}
+
+function collectCrossSourceAmbiguities(
+  snapshots: readonly SourceSnapshot[],
+): ReadonlyMap<ProjectEntityLegacySourceId, readonly ProjectEntityMigrationAmbiguity[]> {
+  const ambiguities = new Map<ProjectEntityLegacySourceId, ProjectEntityMigrationAmbiguity[]>();
+  const identities = snapshots.flatMap(collectLegacyIdentities);
+  const byEntityId = groupBy(identities, (identity) => identity.entityId);
+  for (const duplicate of byEntityId.values()) {
+    if (duplicate.length < 2) continue;
+    for (const identity of duplicate) {
+      addCrossSourceAmbiguity(
+        ambiguities,
+        identity.sourceId,
+        identity.pointer,
+        'Duplicate legacy Entity ID requires an explicit merge decision.',
+      );
+    }
+  }
+  const byLookupKey = groupBy(
+    identities.flatMap((identity) =>
+      identity.lookupKeys.map((lookupKey) => ({
+        identity,
+        lookupKey: `${identity.kind}:${lookupKey}`,
+      })),
+    ),
+    (entry) => entry.lookupKey,
+  );
+  for (const collision of byLookupKey.values()) {
+    const entityIds = new Set(collision.map((entry) => entry.identity.entityId));
+    if (entityIds.size < 2) continue;
+    for (const entry of collision) {
+      addCrossSourceAmbiguity(
+        ambiguities,
+        entry.identity.sourceId,
+        entry.identity.pointer,
+        'Legacy Entity names or aliases collide and require an explicit identity decision.',
+      );
+    }
+  }
+
+  const entityIds = new Set(identities.map((identity) => identity.entityId));
+  const entityKinds = new Map(identities.map((identity) => [identity.entityId, identity.kind]));
+  const bindingSnapshot = snapshots.find(
+    (snapshot) => snapshot.inventory.sourceId === 'representation-bindings',
+  );
+  const bindings = bindingSnapshot?.value;
+  if (bindingSnapshot?.inventory.schemaStatus === 'valid' && isRecord(bindings)) {
+    const records = bindings['bindings'];
+    if (Array.isArray(records)) {
+      const bindingIds = new Map<string, number[]>();
+      records.forEach((record, index) => {
+        if (!isRecord(record)) return;
+        const bindingId = record['id'];
+        if (typeof bindingId === 'string') {
+          const indexes = bindingIds.get(bindingId) ?? [];
+          indexes.push(index);
+          bindingIds.set(bindingId, indexes);
+        }
+        if (
+          record['status'] === 'confirmed' &&
+          typeof record['entityId'] === 'string' &&
+          !entityIds.has(record['entityId'])
+        ) {
+          addCrossSourceAmbiguity(
+            ambiguities,
+            'representation-bindings',
+            `/bindings/${String(index)}/entityId`,
+            'Confirmed binding references an Entity that is absent from legacy fact authorities.',
+          );
+        } else if (
+          record['status'] === 'confirmed' &&
+          typeof record['entityId'] === 'string' &&
+          typeof record['entityKind'] === 'string' &&
+          entityKinds.get(record['entityId']) !== record['entityKind']
+        ) {
+          addCrossSourceAmbiguity(
+            ambiguities,
+            'representation-bindings',
+            `/bindings/${String(index)}/entityKind`,
+            'Confirmed binding Entity kind does not match its legacy fact authority.',
+          );
+        }
+      });
+      for (const indexes of bindingIds.values()) {
+        if (indexes.length < 2) continue;
+        for (const index of indexes) {
+          addCrossSourceAmbiguity(
+            ambiguities,
+            'representation-bindings',
+            `/bindings/${String(index)}/id`,
+            'Duplicate legacy binding ID requires explicit resolution.',
+          );
+        }
+      }
+    }
+  }
+  return ambiguities;
+}
+
+function collectLegacyIdentities(snapshot: SourceSnapshot): LegacyEntityIdentity[] {
+  const sourceValue = snapshot.value;
+  if (snapshot.inventory.schemaStatus !== 'valid' || !isRecord(sourceValue)) return [];
+  const arrayField =
+    snapshot.inventory.sourceId === 'character-registry' ? 'characters' : 'entities';
+  if (
+    !snapshot.inventory.sourceId.endsWith('-registry') ||
+    snapshot.inventory.sourceId === 'candidate-registry'
+  ) {
+    return [];
+  }
+  const records = sourceValue[arrayField];
+  if (!Array.isArray(records)) return [];
+  return records.flatMap((record, index) => {
+    if (
+      !isRecord(record) ||
+      typeof record['id'] !== 'string' ||
+      typeof record['canonicalName'] !== 'string'
+    ) {
+      return [];
+    }
+    const aliases = Array.isArray(record['aliases'])
+      ? record['aliases'].filter((alias): alias is string => typeof alias === 'string')
+      : [];
+    const displayName = typeof record['displayName'] === 'string' ? [record['displayName']] : [];
+    const sourceKind =
+      snapshot.inventory.sourceId === 'character-registry'
+        ? 'character'
+        : typeof sourceValue['kind'] === 'string'
+          ? sourceValue['kind']
+          : 'unknown';
+    return [
+      {
+        sourceId: snapshot.inventory.sourceId,
+        pointer: `/${arrayField}/${String(index)}`,
+        entityId: record['id'],
+        kind: sourceKind,
+        lookupKeys: [record['canonicalName'], ...displayName, ...aliases]
+          .map(normalizeLookupKey)
+          .filter((key) => key.length > 0),
+      },
+    ];
+  });
+}
+
+function addCrossSourceAmbiguity(
+  ambiguities: Map<ProjectEntityLegacySourceId, ProjectEntityMigrationAmbiguity[]>,
+  sourceId: ProjectEntityLegacySourceId,
+  jsonPointer: string,
+  message: string,
+): void {
+  const current = ambiguities.get(sourceId) ?? [];
+  if (current.some((item) => item.jsonPointer === jsonPointer && item.message === message)) return;
+  current.push({ sourceId, jsonPointer, code: 'identity-resolution-required', message });
+  ambiguities.set(sourceId, current);
+}
+
+function groupBy<T>(
+  values: readonly T[],
+  keyOf: (value: T) => string,
+): ReadonlyMap<string, readonly T[]> {
+  const groups = new Map<string, T[]>();
+  for (const value of values) {
+    const key = keyOf(value);
+    const current = groups.get(key) ?? [];
+    current.push(value);
+    groups.set(key, current);
+  }
+  return groups;
+}
+
+function normalizeLookupKey(value: string): string {
+  return value.trim().replace(/\s+/gu, ' ').toLocaleLowerCase();
 }
 
 const REGISTRY_ROOT_KEYS = new Set(['version', 'characters', 'kind', 'entities']);
@@ -802,6 +1083,21 @@ function buildPlanId(
     .update(JSON.stringify({ projectId, revision, sources, blockers }))
     .digest('hex')
     .slice(0, 32);
+}
+
+function buildArchiveManifest(
+  inventory: ProjectEntityMigrationInventory,
+): ProjectEntityMigrationArchiveManifest {
+  return {
+    schemaVersion: PROJECT_ENTITY_MIGRATION_ARCHIVE_SCHEMA_VERSION,
+    projectId: inventory.projectId,
+    planId: inventory.plan.planId,
+    createdAt: inventory.createdAt,
+    expectedProjectRevision: inventory.plan.expectedProjectRevision,
+    sources: inventory.plan.expectedSources,
+    inventorySources: inventory.sources,
+    blockers: inventory.plan.blockers,
+  };
 }
 
 function validateInventoryIdentity(

@@ -167,6 +167,72 @@ describe('NodeProjectEntityMigrationInventory', () => {
     expect(inventory.plan.blockers).toHaveLength(2);
   });
 
+  it('reports cross-source identity and confirmed binding ambiguities before apply', async () => {
+    const workspacePath = await createWorkspace();
+    await writeJson(workspacePath, 'characters.json', {
+      version: 1,
+      characters: [
+        {
+          id: 'shared-id',
+          canonicalName: 'Rin',
+          aliases: [],
+          status: 'confirmed',
+        },
+      ],
+    });
+    await writeJson(workspacePath, 'neko/entities/objects.json', {
+      version: 1,
+      kind: 'object',
+      entities: [
+        {
+          id: 'shared-id',
+          kind: 'object',
+          canonicalName: 'Pendant',
+          aliases: [],
+          status: 'confirmed',
+        },
+      ],
+    });
+    await writeJson(workspacePath, 'neko/entity-representation-bindings.json', {
+      version: 2,
+      bindings: [
+        {
+          id: 'missing-entity-binding',
+          entityId: 'missing-character',
+          entityKind: 'character',
+          representation: { kind: 'workspace-file', path: 'portraits/missing.png' },
+          role: 'portrait',
+          status: 'confirmed',
+          availability: 'active',
+          source: 'user',
+          updatedAt: '2026-08-05T00:00:00.000Z',
+        },
+      ],
+    });
+
+    const inventory = await createInventory(workspacePath).inspect();
+
+    expect(requireSource(inventory, 'character-registry').ambiguities).toContainEqual(
+      expect.objectContaining({
+        jsonPointer: '/characters/0',
+        code: 'identity-resolution-required',
+      }),
+    );
+    expect(requireSource(inventory, 'object-registry').ambiguities).toContainEqual(
+      expect.objectContaining({
+        jsonPointer: '/entities/0',
+        code: 'identity-resolution-required',
+      }),
+    );
+    expect(requireSource(inventory, 'representation-bindings').ambiguities).toContainEqual(
+      expect.objectContaining({
+        jsonPointer: '/bindings/0/entityId',
+        code: 'identity-resolution-required',
+      }),
+    );
+    expect(inventory.plan.blockers).toHaveLength(3);
+  });
+
   it('archives exact source bytes atomically without removing or overwriting legacy files', async () => {
     const workspacePath = await createWorkspace();
     const characters = Buffer.from(
