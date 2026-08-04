@@ -239,3 +239,33 @@ The Agent Webview SHALL present live execution activity inside the owning conver
 - **WHEN** a state snapshot for the active conversation arrives after mount or reload
 - **THEN** the transcript activity reflects that exact conversation snapshot
 - **AND** stale or mismatched conversation state is not displayed
+
+### Requirement: Sent messages remain visible in one centered transcript rail
+
+The Agent Webview SHALL commit a submitted user message to the owning conversation render lifecycle before Host projection can replace visible state. User, assistant, thinking, Tool Call, Process Record and execution activity items SHALL share one centered maximum-width transcript rail aligned with the composer.
+
+#### Scenario: Host projection follows an optimistic user commit
+
+- **WHEN** a user message is committed and the owning conversation subsequently receives an empty or assistant-only Host/Timeline projection
+- **THEN** the exact submitted user content remains visible in that conversation
+- **AND** an authoritative persisted user record replaces, rather than duplicates, the pending record when acknowledgement arrives
+- **AND** another conversation cannot acknowledge or display that record
+
+#### Scenario: Transcript renders in a wide Agent panel
+
+- **WHEN** user, assistant, process or live execution records are displayed in a panel wider than the composer maximum width
+- **THEN** every record is contained by the same centered transcript rail
+- **AND** the rail maximum width matches the composer maximum width
+- **AND** user content aligns to the right within the rail rather than to the panel edge
+- **AND** narrow panels retain bounded inline space without horizontal overflow
+
+### Requirement: Desktop Dock omits package-owned roleplay navigation
+
+The Agent Webview SHALL treat the roleplay selector as package-owned conversation navigation chrome. Desktop Dock presentation SHALL omit that selector together with Agent Tab, new-chat and history controls; standalone Agent presentation SHALL retain the existing selector.
+
+#### Scenario: Workspace Agent renders without package conversation tabs
+
+- **WHEN** Desktop mounts Agent using `desktop-dock` presentation
+- **THEN** the Header does not render the roleplay selector
+- **AND** no duplicate character-session entry remains in the Agent panel
+- **AND** entity discovery and character-session launch remain owned by Resource management entity interactions

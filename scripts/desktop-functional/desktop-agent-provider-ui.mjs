@@ -92,6 +92,13 @@ export const desktopAgentProviderUiScenario = Object.freeze({
       })()`,
       'Visible Entry Draft did not materialize an Assistant conversation.',
     );
+    await waitForCondition(
+      evaluate,
+      `(() => [...document.querySelectorAll(
+        '[data-owner-root="agent"] .agent-user-prompt',
+      )].some((element) => element.textContent?.trim() === ${JSON.stringify(prompt)}))()`,
+      'Visible Desktop Agent did not retain the exact sent prompt in the transcript.',
+    );
     checkpoint(
       'visible-assistant-conversation-materialized',
       await inspectProviderWaitState(evaluate),
@@ -121,6 +128,9 @@ export const desktopAgentProviderUiScenario = Object.freeze({
         const responseVisible = assistantRows.some((row) =>
           row.textContent?.includes(${JSON.stringify(RESPONSE_MARKER)}) === true,
         );
+        const sentPromptVisible = [...document.querySelectorAll(
+          '[data-owner-root="agent"] .agent-user-prompt',
+        )].some((element) => element.textContent?.trim() === ${JSON.stringify(prompt)});
         const activeConversationVisible = Boolean(document.querySelector(
           '.primary-conversation-group[data-group-kind="assistant"] '
             + '.primary-recent-conversation-row[data-active="true"] .home-conversation-link',
@@ -135,6 +145,7 @@ export const desktopAgentProviderUiScenario = Object.freeze({
           context.scope.kind === 'assistant' &&
           typeof context.scope.conversationId === 'string' &&
           activeConversation?.navigation.owner.kind === 'assistant' &&
+          sentPromptVisible &&
           responseVisible &&
           activeConversationVisible &&
           !document.querySelector('.agent-run-status') &&
@@ -145,7 +156,7 @@ export const desktopAgentProviderUiScenario = Object.freeze({
     );
 
     const [evidence, lifecycle] = await Promise.all([
-      inspectCompletedConversation(evaluate),
+      inspectCompletedConversation(evaluate, prompt),
       readLatestLifecycleState(prepared.databasePath),
     ]);
     if (lifecycle?.status !== 'completed') {
@@ -207,7 +218,7 @@ async function inspectSelectedModel(evaluate) {
   })()`);
 }
 
-async function inspectCompletedConversation(evaluate) {
+async function inspectCompletedConversation(evaluate, sentPrompt) {
   return evaluate(`(async () => {
     const projection = await window.openNekoDesktop.shell.getSnapshot();
     const context = projection.window.scene.context;
@@ -227,6 +238,34 @@ async function inspectCompletedConversation(evaluate) {
     const response = assistantRows.find((row) =>
       row.textContent?.includes(${JSON.stringify(RESPONSE_MARKER)}) === true,
     );
+    const userPrompt = [...document.querySelectorAll(
+      '[data-owner-root="agent"] .agent-user-prompt',
+    )].find((element) => element.textContent?.trim() === ${JSON.stringify(sentPrompt)});
+    const messageList = document.querySelector('[data-owner-root="agent"] .agent-message-list');
+    const visibleItems = [...document.querySelectorAll(
+      '[data-owner-root="agent"] .agent-message-list-item',
+    )].filter((element) => element.getBoundingClientRect().height > 0);
+    const visibleRails = visibleItems.map((item) => item.firstElementChild).filter(
+      (element) => element instanceof HTMLElement && element.classList.contains('agent-transcript-rail'),
+    );
+    if (!(messageList instanceof HTMLElement) || visibleItems.length === 0 ||
+        visibleRails.length !== visibleItems.length) {
+      throw new Error('Visible provider transcript does not use one rail for every visible item.');
+    }
+    const messageListRect = messageList.getBoundingClientRect();
+    const railLayouts = visibleRails.map((rail) => {
+      const rect = rail.getBoundingClientRect();
+      return {
+        width: rect.width,
+        inlineStart: rect.left - messageListRect.left,
+        inlineEnd: messageListRect.right - rect.right,
+      };
+    });
+    const railLayoutValid = railLayouts.every((layout) =>
+      layout.width <= 820.5 &&
+      layout.width < messageListRect.width &&
+      Math.abs(layout.inlineStart - layout.inlineEnd) <= 1,
+    );
     const alerts = [...document.querySelectorAll('[role="alert"]')]
       .map((element) => element.textContent?.trim() ?? '')
       .filter(Boolean);
@@ -238,11 +277,13 @@ async function inspectCompletedConversation(evaluate) {
     ].filter((diagnostic) => document.body.textContent?.includes(diagnostic));
     const activityObservation = window.__openNekoAgentProviderUiObservation;
     activityObservation?.observer.disconnect();
-    if (!(response instanceof HTMLElement) || alerts.length > 0 || forbiddenDiagnostics.length > 0 ||
+    if (!(userPrompt instanceof HTMLElement) || !(response instanceof HTMLElement) ||
+        !railLayoutValid || alerts.length > 0 || forbiddenDiagnostics.length > 0 ||
         activityObservation?.sawTranscriptActivity !== true ||
         activityObservation.sawLegacyRunStatus === true ||
         document.querySelector('.agent-execution-activity') ||
-        document.querySelector('.agent-run-status')) {
+        document.querySelector('.agent-run-status') ||
+        document.querySelector('.agent-header-action-roleplay')) {
       throw new Error('Visible provider response completed with a launch or projection diagnostic.');
     }
     const activeNavigation = document.querySelector(
@@ -257,7 +298,12 @@ async function inspectCompletedConversation(evaluate) {
       assistantSpaceId: context.scope.assistantSpaceId,
       ownerKind: summary.navigation.owner.kind,
       responseMarker: ${JSON.stringify(RESPONSE_MARKER)},
+      sentPrompt: userPrompt.textContent?.trim() ?? '',
       assistantResponse: response.textContent?.trim() ?? '',
+      transcriptLayout: {
+        messageListWidth: messageListRect.width,
+        rails: railLayouts,
+      },
       activeNavigationLabel: activeNavigation.textContent?.trim() ?? '',
       conversationCount: projection.agentHome.conversations.length,
       alerts,

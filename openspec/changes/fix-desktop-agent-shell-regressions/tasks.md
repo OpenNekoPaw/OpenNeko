@@ -12,6 +12,7 @@
 - [x] 1.10 Add Home renderer/CSS red tests proving the application brand contains only interactive `OpenNeko` text and the Agent launchpad is centered with a low-height safety rule.
 - [x] 1.11 Add Home renderer/CSS red tests proving the Agent heading has no standalone icon tile and centers its title/subtitle without removing action icons.
 - [x] 1.12 Add Agent Webview red tests proving live activity is inside MessageList, the composer-adjacent run-status region is absent, canonical tool/streaming records are not duplicated, and idle/conversation switching clears the temporary item.
+- [x] 1.13 Add red tests proving a committed user message survives assistant-only projection and every transcript item uses one centered maximum-width rail, while Desktop Dock renders no roleplay Header action.
 
 ## 2. Persistent Agent Home catalog
 
@@ -27,6 +28,7 @@
 - [x] 3.4 Bind pending send to the Host-created conversation/Tab realm, consume it only after the owning render coordinator receives the user message, and prevent ordinary Tab reconciliation from clearing it.
 - [x] 3.5 Move Agent module loading to one renderer-startup-owned promise and make every Agent Surface reuse it while keeping bootstrap and adapter state View scoped.
 - [x] 3.6 Project the active conversation Agent state through MessageList, replace the legacy thinking bubble with a transcript execution activity, and delete the independent `AgentRunStatus` path.
+- [x] 3.7 Preserve the owning user message across Host/Timeline completion and render user, assistant, process and execution records through the canonical transcript rail.
 
 ## 4. Desktop portal and Workbench layout
 
@@ -39,6 +41,7 @@
 - [x] 4.7 Rename the Desktop Dock to Resource management and render Resource Browser in embedded mode without its duplicate package title row.
 - [x] 4.8 Replace Home primary-sidebar brand icons with the existing visibility action on `OpenNeko` text and center the Home Agent launchpad without changing its internal feature ownership.
 - [x] 4.9 Remove the decorative Agent heading icon tile and align the launchpad title/subtitle on one centered text axis while preserving task/template icons.
+- [x] 4.10 Hide the roleplay selector with the rest of package-owned conversation navigation in Desktop Dock and keep standalone Agent navigation unchanged.
 
 ## 5. Verification and documentation
 
@@ -47,4 +50,5 @@
 - [x] 5.3 Update active Desktop/Agent architecture or status documentation, record evaluation evidence and blockers, and complete the Neko quality review.
 - [ ] 5.4 Re-run focused tests/build/evaluation and isolated Electron acceptance for opaque Popover computed style, visible sent text, default Canvas and Resource Browser Main View; replace superseded evidence and repeat quality review.
 - [x] 5.5 Extend `desktop-agent-provider-ui` to observe live transcript execution with the real provider, prove the legacy status region is absent throughout the run, and retain terminal response/lifecycle evidence.
-  Evidence: `desktop-agent-provider-ui` passed with `nekoapi-chat / gpt-5.6-luna`; the report recorded transcript activity, no legacy status, no terminal activity residue, a visible provider response, and a completed persisted lifecycle.
+      Evidence: `desktop-agent-provider-ui` passed with `nekoapi-chat / gpt-5.6-luna`; the report recorded transcript activity, no legacy status, no terminal activity residue, a visible provider response, and a completed persisted lifecycle.
+- [x] 5.6 Extend the real-provider Electron scenario to assert the exact sent prompt remains visible and the transcript rail is centered and narrower than the Agent panel, then rerun focused tests, build, evaluation and quality review.

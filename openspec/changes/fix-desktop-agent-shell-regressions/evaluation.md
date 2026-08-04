@@ -130,3 +130,48 @@ Date: 2026-08-03
   input.
 - Provider-backed Agent execution, Tool approval and checkpoint/cleanup remain unverified until
   credentials or a Desktop complete-session driver with explicit cost authorization are available.
+
+## 2026-08-05 Sent-message and transcript-rail update
+
+### Evaluation Scope
+
+- Change/feature: Entry Draft initial user-message projection across draft → session Surface
+  replacement, centered transcript rail, and removal of Desktop Dock roleplay Header chrome.
+- Decision and owning suite: `update` the existing visible `desktop-agent-provider-ui` scenario for
+  exact sent-text and computed-layout assertions; `reuse`
+  `agent-runtime.workflow-controller/conversation-persistence-resume` for non-UI real-provider
+  persistence and owner-reopen coverage.
+- Canonical path: visible composer → Agent launch first-submit → persisted lifecycle initial message
+  → Desktop session bootstrap → Agent controller active-conversation projection → Webview
+  coordinator/MessageList. The forbidden fallback is retaining the replaced draft Webview,
+  synthesizing a second transcript in Renderer, or relying on final assistant text alone.
+
+### Verification
+
+- Visible real-provider Desktop: `desktop-agent-provider-ui` passed with
+  `nekoapi-chat / gpt-5.6-luna`. The exact submitted prompt was visible while the initial turn was
+  running and after completion; the real response marker rendered; lifecycle status was
+  `completed`; no console error, renderer exception, legacy run status or roleplay Header action was
+  present. MessageList width was `1190px`; both visible transcript rails were `820px` with equal
+  `185px` inline gutters. Report:
+  `reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-04T18-47-01.962Z-desktop-agent-provider-ui-development/report.json`.
+- Hidden real-provider Desktop: focused
+  `agent-runtime.workflow-controller/conversation-persistence-resume` passed with the same provider
+  and model. It disposed the first Desktop session owner, restored the same Pi/SQLite conversation,
+  observed persisted history, and completed a continuation turn. Aggregate:
+  `reports/agent-eval/agent-runtime.workflow-controller/conversation-persistence-resume/focused-1-msf0hp7j/aggregate.json`.
+- Deterministic coverage: Agent runtime tests cover lifecycle projection and bootstrap history merge;
+  Desktop bridge/AppHost tests assert the package-owned initial message reaches the exact session
+  effects owner; Webview tests cover Host reconciliation, rail ownership and Header visibility.
+
+### Foundational matrix and residual risk
+
+- Basic conversation: covered by visible real-provider Desktop.
+- Multi-turn, owner/application reopen and transcript persistence: covered by the focused hidden
+  real-provider resume case.
+- Context compaction, generation-record restoration, cross-conversation switching and isolation:
+  unchanged by this initial-message/bootstrap and layout delta; existing indexed suites and
+  deterministic conversation-scoped tests remain authoritative and were not rerun as provider-backed
+  cases for this focused change.
+- The visible scenario uses a wide `1440px` Desktop viewport. Narrow-panel behavior is covered by
+  CSS/DOM contract tests, not a second real-provider screenshot.

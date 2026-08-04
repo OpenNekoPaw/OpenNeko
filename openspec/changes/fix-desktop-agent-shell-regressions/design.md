@@ -117,6 +117,16 @@ Agent 标题层只删除 `home-launchpad-heading-icon` 节点及其专属 CSS，
 
 `AgentStateRuntime` 继续是 authoritative run phase owner，Webview 不复制状态机，也不把 phase 写入 transcript。`ConversationController` 仍按 conversation identity 选择状态快照，并把目标会话的 `AgentState` 交给 MessageList presentation。MessageList 在没有可代表当前活动的 streaming assistant message 或真实工具/process item 时，才在虚拟列表尾部增加临时 execution activity item。
 
+### Sent-message ownership and transcript rail
+
+用户提交消息后，`ConversationRenderCoordinator` 是一个已连接 Webview realm 内的可见记录 owner。普通会话中，带稳定 pending identity 的本地 commit 必须跨越随后到达的空 Host snapshot、仅包含 assistant Timeline 的 projection 和完成事件；只有 authoritative user history 明确确认同一次提交后才能替换 pending record。
+
+Entry Draft 的首轮提交会把 launch Surface 从 draft connection 替换为 session connection，因此不得尝试跨 owner 保留旧 Webview state。`AgentConversationLifecycleRecord.initialMessage` 已在 Surface 切换前持久提交，Agent runtime 将它作为 session bootstrap 的 initial user-message projection；`AgentControllerComposition` 在 Pi history 尚未包含同一用户记录时合并该 projection，history 确认后由 canonical Pi record 替换。Desktop Main 只校验 Scene/lifecycle identity 并传递 package-owned projection，Renderer 与 `ChatWorkspace` 不得通过独立 transcript 或完成后 fallback 重建用户消息。
+
+`MessageList` 在每个虚拟 item 内提供统一的 `agent-transcript-rail`。该 rail 使用与 composer 一致的 `820px` 最大宽度和受控的窄屏 inline gutter；用户消息在 rail 内右对齐，assistant、thinking、Tool Call、Process Record 与临时 execution activity 使用同一横向坐标系。虚拟列表仍拥有滚动、测量和绝对定位，rail 只负责内容宽度，不成为新的状态或滚动 owner。
+
+Desktop Dock 已把会话导航交给 Desktop 一级侧栏，因此 Agent Header 的 Tab、新建、历史和角色入口必须作为同一组 package-owned navigation chrome 隐藏。角色实体的发现与发起属于工作区 Resource management 的实体管理交互，不在工作区 Agent Header 再保留平行选择入口；默认 standalone Agent 继续保留现有角色选择能力。
+
 thinking 等待期使用无“思考中”文字的轻量动态活动；acting 阶段若已有同轮 Tool Call 或 Process Record，则只显示真实记录；streaming 阶段由正在增长的 assistant message 表达，不增加第二条状态。进入 idle 后临时 item 消失，已完成/失败的工具与生成记录按既有 Timeline projection 保留。固定在 composer 上方的 `AgentRunStatus` 和其独立 elapsed timer 被删除。
 
 该方案复用 `message-list-presenter`、`ThinkingBlock`、`ProcessRecordsGroup`、`ToolCallDisplay` 与 streaming message，不新增 renderer-owned执行历史、第二套 design system 或从文本猜测出的完成状态。真实 Electron 验收必须在 provider 回答完成前观察 transcript activity 或真实 process record，并同时证明 `.agent-run-status` 从未出现。
