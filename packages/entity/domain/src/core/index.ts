@@ -8,6 +8,7 @@ export * from './representationResolver';
 export * from './representationAccess';
 export * from './CreativeEntityService';
 export * from './ProjectEntityOperationService';
+export * from './ProjectEntityInspectorIntentService';
 export * from './ProjectEntityBindingAvailabilityService';
 export * from './ProjectEntityAssetInstantiationService';
 export * from './ProjectEntityAssetPublicationService';

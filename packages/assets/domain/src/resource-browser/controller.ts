@@ -15,6 +15,7 @@ import {
   type ResourceBrowserHostRuntime,
   type ResourceBrowserIdentity,
   type ResourceBrowserIntentRequest,
+  type ResourceBrowserItem,
   type ResourceBrowserProjection,
   type ResourceBrowserProjectionEvent,
   type ResourceBrowserQuickPreviewReleaseRequest,
@@ -298,6 +299,28 @@ export class ResourceBrowserController implements ResourceBrowserHostRuntime {
       this.publish(this.projection);
       return this.projection;
     }
+    if (parsed.route === RESOURCE_BROWSER_ROUTES.manageEntity) {
+      if (item.facet !== 'entities' || !parsed.entityIntent) {
+        throw new ResourceBrowserContractError(
+          'invalid-resource-browser-payload',
+          'Resource Browser Entity management requires an Entity item and intent.',
+        );
+      }
+      assertEntityIntentMatchesItem(item, parsed.entityIntent);
+      await this.options.interactions.manageEntity({
+        identity: this.identity,
+        item,
+        intent: parsed.entityIntent,
+      });
+      this.projection = await this.readProjection(
+        'entities',
+        current.query,
+        100,
+        current.revision + 1,
+      );
+      this.publish(this.projection);
+      return this.projection;
+    }
     switch (parsed.route) {
       case RESOURCE_BROWSER_ROUTES.preview:
         if (!parsed.targetPreview) {
@@ -423,6 +446,9 @@ export class ResourceBrowserController implements ResourceBrowserHostRuntime {
         presentResourceBrowserEntityItem(projection, {
           canvasAvailable: this.options.canvasAvailable,
           projectRevision: result.projectRevision,
+          capabilities: result.inspectorCapabilities?.find(
+            (candidate) => candidate.projectionId === projection.projectionId,
+          )?.capabilities,
         }),
       );
   }
@@ -441,5 +467,30 @@ export class ResourceBrowserController implements ResourceBrowserHostRuntime {
     if (this.disposed) {
       throw new Error('Resource Browser controller is disposed.');
     }
+  }
+}
+
+function assertEntityIntentMatchesItem(
+  item: Extract<ResourceBrowserItem, { readonly facet: 'entities' }>,
+  intent: NonNullable<ResourceBrowserIntentRequest['entityIntent']>,
+): void {
+  if (!item.inspector.operations.includes(intent.type)) {
+    throw new ResourceBrowserContractError(
+      'invalid-resource-browser-payload',
+      `Resource Browser Entity operation '${intent.type}' is not available.`,
+    );
+  }
+  const intentEntityId = 'entityId' in intent ? intent.entityId : undefined;
+  const intentCandidateId = 'candidateId' in intent ? intent.candidateId : undefined;
+  if (
+    (item.entityStatus === 'candidate'
+      ? intentCandidateId !== item.candidateRef.candidateId
+      : intentEntityId !== item.entityRef.entityId) ||
+    ('expectedRevision' in intent && intent.expectedRevision !== item.inspector.projectRevision)
+  ) {
+    throw new ResourceBrowserContractError(
+      'resource-browser-stale-identity',
+      'Resource Browser Entity intent identity or revision is stale.',
+    );
   }
 }

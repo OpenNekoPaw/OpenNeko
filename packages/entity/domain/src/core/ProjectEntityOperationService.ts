@@ -9,6 +9,9 @@ import {
   type ProjectEntityDocumentRepository,
   type ProjectEntityOperationCommitPort,
   type ProjectEntityRecord,
+  type ProjectEntityFactValue,
+  type ProjectEntityNames,
+  type ProjectEntityRepresentationBinding,
   type ProjectEntityReferenceOperationKind,
   type ProjectEntityReferenceOperationRequest,
   type ProjectEntityReferenceOwnerReadyPlan,
@@ -38,6 +41,30 @@ export interface MergeProjectEntityCandidateRequest {
 export interface DismissProjectEntityCandidateRequest {
   readonly expectedRevision: number;
   readonly candidateId: string;
+}
+
+export interface EditProjectEntityRequest {
+  readonly expectedRevision: number;
+  readonly entityId: string;
+  readonly changes: {
+    readonly names?: ProjectEntityNames;
+    readonly facts?: Readonly<Record<string, ProjectEntityFactValue>>;
+  };
+  readonly updatedAt: string;
+}
+
+export interface BindProjectEntityRepresentationRequest {
+  readonly expectedRevision: number;
+  readonly entityId: string;
+  readonly binding: ProjectEntityRepresentationBinding;
+  readonly updatedAt: string;
+}
+
+export interface UnbindProjectEntityRepresentationRequest {
+  readonly expectedRevision: number;
+  readonly entityId: string;
+  readonly bindingId: string;
+  readonly updatedAt: string;
 }
 
 export interface MergeProjectEntitiesRequest {
@@ -139,6 +166,94 @@ export class ProjectEntityOperationService {
     await this.loadExpected(request.expectedRevision, signal);
     const candidate = await this.requireCandidate(request.candidateId, signal);
     await this.options.candidates.dismiss({ kind: 'dismiss', candidate }, signal);
+  }
+
+  async edit(
+    request: EditProjectEntityRequest,
+    signal?: AbortSignal,
+  ): Promise<ProjectEntityDocument> {
+    const current = await this.loadExpected(request.expectedRevision, signal);
+    const entity = requireActiveEntity(current, request.entityId);
+    if (!request.changes.names && !request.changes.facts) {
+      throw operationError(
+        'project-entity-operation-invalid',
+        'Project Entity edit requires at least one semantic change.',
+        { entityId: entity.entityId },
+      );
+    }
+    return this.commit(
+      current,
+      replaceEntity(current.entities, {
+        ...entity,
+        ...(request.changes.names ? { names: request.changes.names } : {}),
+        ...(request.changes.facts ? { facts: request.changes.facts } : {}),
+        updatedAt: request.updatedAt,
+      }),
+      {},
+      signal,
+    );
+  }
+
+  async bind(
+    request: BindProjectEntityRepresentationRequest,
+    signal?: AbortSignal,
+  ): Promise<ProjectEntityDocument> {
+    const current = await this.loadExpected(request.expectedRevision, signal);
+    const entity = requireActiveEntity(current, request.entityId);
+    if (
+      current.entities.some((candidate) =>
+        candidate.representations.some(
+          (binding) => binding.bindingId === request.binding.bindingId,
+        ),
+      )
+    ) {
+      throw operationError(
+        'duplicate-project-entity-binding-id',
+        `Project Entity binding '${request.binding.bindingId}' already exists.`,
+        { entityId: entity.entityId },
+      );
+    }
+    const representations = request.binding.isDefault
+      ? [
+          ...entity.representations.map((binding) =>
+            binding.role === request.binding.role ? withoutDefault(binding) : binding,
+          ),
+          request.binding,
+        ]
+      : [...entity.representations, request.binding];
+    return this.commit(
+      current,
+      replaceEntity(current.entities, { ...entity, representations, updatedAt: request.updatedAt }),
+      {},
+      signal,
+    );
+  }
+
+  async unbind(
+    request: UnbindProjectEntityRepresentationRequest,
+    signal?: AbortSignal,
+  ): Promise<ProjectEntityDocument> {
+    const current = await this.loadExpected(request.expectedRevision, signal);
+    const entity = requireActiveEntity(current, request.entityId);
+    if (!entity.representations.some((binding) => binding.bindingId === request.bindingId)) {
+      throw operationError(
+        'project-entity-operation-invalid',
+        `Project Entity binding '${request.bindingId}' does not exist.`,
+        { entityId: entity.entityId },
+      );
+    }
+    return this.commit(
+      current,
+      replaceEntity(current.entities, {
+        ...entity,
+        representations: entity.representations.filter(
+          (binding) => binding.bindingId !== request.bindingId,
+        ),
+        updatedAt: request.updatedAt,
+      }),
+      {},
+      signal,
+    );
   }
 
   async merge(
@@ -293,6 +408,13 @@ export class ProjectEntityOperationService {
       throw error;
     }
   }
+}
+
+function withoutDefault(
+  binding: ProjectEntityRepresentationBinding,
+): ProjectEntityRepresentationBinding {
+  const { isDefault: _isDefault, ...rest } = binding;
+  return rest;
 }
 
 function referenceOperation(

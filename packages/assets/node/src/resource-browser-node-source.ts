@@ -28,6 +28,7 @@ import {
 import type { AssetWorkspaceResolution } from '@neko/assets-domain/contracts';
 import { resolveWorkspaceContentLocator } from './workspace-content-locator';
 import { readProjectEntityManagementResources } from '@neko/entity-node';
+import type { EntityAssetProjectionRepository } from '@neko/entity-domain';
 import {
   listGlobalMediaLibraryConnections,
   type GlobalMediaLibraryConnection,
@@ -51,6 +52,7 @@ export interface ResourceBrowserNodeSourceOptions {
   readonly globalMediaLibraryRoot: string;
   readonly workspaceMediaLibrarySync?: WorkspaceMediaLibrarySyncService;
   readonly workspace: AssetWorkspaceResolution;
+  readonly entityProjections?: Pick<EntityAssetProjectionRepository, 'list'>;
   readonly host: Pick<NekoHostPorts, 'files' | 'external'>;
   readonly openPreview: (input: {
     readonly identity: ResourceBrowserIdentity;
@@ -79,11 +81,12 @@ export interface ResourceBrowserNodeSourceOptions {
   readonly createThumbnail: (absolutePath: string) => Promise<string>;
   readonly addToCanvas: ResourceBrowserInteractionPort['addToCanvas'];
   readonly addToCut: ResourceBrowserInteractionPort['addToCut'];
+  readonly manageEntity: ResourceBrowserInteractionPort['manageEntity'];
 }
 
 export type ResourceBrowserNodeReadSourceOptions = Pick<
   ResourceBrowserNodeSourceOptions,
-  'globalAssetRoot' | 'workspace' | 'host' | 'workspaceMediaLibrarySync'
+  'globalAssetRoot' | 'workspace' | 'host' | 'workspaceMediaLibrarySync' | 'entityProjections'
 >;
 
 export async function searchGlobalAssetCatalog(input: {
@@ -244,16 +247,54 @@ export function createResourceBrowserNodeReadSource(
         }),
     },
     entities: {
-      list: async () =>
-        readProjectEntityManagementResources({
+      list: async () => {
+        const result = await readProjectEntityManagementResources({
           workspace: options.workspace,
-        }),
+          ...(options.entityProjections
+            ? {
+                derivedProjection: {
+                  repository: options.entityProjections,
+                  partition: {
+                    scope: 'workspace',
+                    workspaceId: options.workspace.workspaceId,
+                    domain: 'entity-asset-projection',
+                  },
+                },
+              }
+            : {}),
+        });
+        return {
+          ...result,
+          inspectorCapabilities: result.projections.map((projection) => ({
+            projectionId: projection.projectionId,
+            capabilities: {
+              blockers:
+                projection.status === 'candidate'
+                  ? [REFERENCE_REWRITE_BLOCKERS[0]]
+                  : REFERENCE_REWRITE_BLOCKERS,
+            },
+          })),
+        };
+      },
     },
     async refresh(): Promise<void> {
       // Sources are read-through; refresh invalidates no package-local catalog or cache.
     },
   };
 }
+
+const REFERENCE_REWRITE_BLOCKERS = [
+  {
+    code: 'reference-owners-not-configured',
+    message: 'Project reference owners are not configured for a complete rewrite.',
+    operation: 'merge' as const,
+  },
+  {
+    code: 'reference-owners-not-configured',
+    message: 'Project reference owners are not configured for a complete rewrite.',
+    operation: 'deprecate' as const,
+  },
+] as const;
 
 export function createResourceBrowserNodeProjectionSource(
   options: ResourceBrowserNodeSourceOptions,
@@ -267,6 +308,7 @@ export function createResourceBrowserNodeProjectionSource(
     new WorkspaceMediaLibrarySyncService(options.globalMediaLibraryRoot);
 
   const interactions: ResourceBrowserInteractionPort = {
+    manageEntity: options.manageEntity,
     async linkGlobalLibrary({ identity }): Promise<'linked' | 'cancelled'> {
       const linkedNames = new Set(
         (await listWorkspaceLinkedMediaLibraries(options.workspace.workspacePath)).map((library) =>

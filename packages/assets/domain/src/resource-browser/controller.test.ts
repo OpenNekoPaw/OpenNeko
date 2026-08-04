@@ -5,6 +5,7 @@ import {
   RESOURCE_BROWSER_ROUTES,
   ResourceBrowserContractError,
   createResourceBrowserChildrenRequest,
+  createResourceBrowserEntityIntentRequest,
   createResourceBrowserSearchRequest,
   createResourceBrowserThumbnailRequest,
   type ResourceBrowserIdentity,
@@ -159,6 +160,59 @@ describe('Resource Browser controller', () => {
       code: 'resource-browser-stale-identity',
     } satisfies Partial<ResourceBrowserContractError>);
     expect(interactions.resolveThumbnail).not.toHaveBeenCalled();
+  });
+
+  it('delegates Entity intents only after capability, identity, and project revision checks', async () => {
+    const interactions = createInteractions();
+    const controller = new ResourceBrowserController({
+      identity,
+      source: createSource(),
+      interactions,
+      initialFacet: 'entities',
+    });
+    const snapshot = await controller.getSnapshot();
+    const item = snapshot.items[0];
+    if (!item || item.facet !== 'entities' || item.entityStatus === 'candidate') {
+      throw new Error('Missing confirmed Entity fixture.');
+    }
+    const intent = {
+      type: 'edit' as const,
+      expectedRevision: item.inspector.projectRevision,
+      entityId: item.entityRef.entityId,
+      changes: { names: { canonical: 'Neko Aoki', aliases: ['Neko'] } },
+    };
+
+    await controller.execute(
+      createResourceBrowserEntityIntentRequest({
+        requestId: 'entity-edit',
+        identity,
+        resourceId: item.resourceId,
+        intent,
+      }),
+    );
+    expect(interactions.manageEntity).toHaveBeenCalledWith({ identity, item, intent });
+
+    await expect(
+      controller.execute(
+        createResourceBrowserEntityIntentRequest({
+          requestId: 'entity-stale',
+          identity,
+          resourceId: item.resourceId,
+          intent: { ...intent, expectedRevision: intent.expectedRevision - 1 },
+        }),
+      ),
+    ).rejects.toMatchObject({ code: 'resource-browser-stale-identity' });
+    await expect(
+      controller.execute(
+        createResourceBrowserEntityIntentRequest({
+          requestId: 'entity-wrong-owner',
+          identity,
+          resourceId: item.resourceId,
+          intent: { ...intent, entityId: 'character-other' },
+        }),
+      ),
+    ).rejects.toMatchObject({ code: 'resource-browser-stale-identity' });
+    expect(interactions.manageEntity).toHaveBeenCalledTimes(1);
   });
 
   it('requires an explicit Canvas target and releases subscriptions on dispose', async () => {
@@ -363,6 +417,7 @@ function createSource(): ResourceBrowserProjectionSource & {
 }
 
 function createInteractions(): ResourceBrowserInteractionPort & {
+  readonly manageEntity: ReturnType<typeof vi.fn>;
   readonly linkGlobalLibrary: ReturnType<typeof vi.fn>;
   readonly addDirectoryLibrary: ReturnType<typeof vi.fn>;
   readonly preview: ReturnType<typeof vi.fn>;
@@ -373,6 +428,7 @@ function createInteractions(): ResourceBrowserInteractionPort & {
   readonly addToCut: ReturnType<typeof vi.fn>;
 } {
   return {
+    manageEntity: vi.fn(async () => undefined),
     linkGlobalLibrary: vi.fn(async () => 'linked' as const),
     addDirectoryLibrary: vi.fn(async () => 'added' as const),
     relinkSource: vi.fn(async () => 'relinked' as const),

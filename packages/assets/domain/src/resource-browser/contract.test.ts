@@ -352,6 +352,7 @@ describe('Resource Browser contract', () => {
         'children',
         'cut.add',
         'cut.open',
+        'entity.manage',
         'preview',
         'quick-preview.release',
         'quick-preview.resolve',
@@ -443,6 +444,36 @@ describe('Resource Browser contract', () => {
       candidateRef: { candidateId: 'candidate-nova' },
     });
     expect(result.items[0]).not.toHaveProperty('entityRef');
+  });
+
+  it('parses Entity management only through the versioned Resource Browser route', () => {
+    expect(
+      parseResourceBrowserIntentRequest({
+        schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
+        requestId: 'entity-edit',
+        identity,
+        route: RESOURCE_BROWSER_ROUTES.manageEntity,
+        resourceId: 'entity-nova',
+        entityIntent: {
+          type: 'edit',
+          expectedRevision: 3,
+          entityId: 'entity-nova',
+          changes: { facts: { role: 'lead' } },
+        },
+      }),
+    ).toMatchObject({
+      route: 'entity.manage',
+      entityIntent: { type: 'edit', entityId: 'entity-nova', expectedRevision: 3 },
+    });
+    expect(() =>
+      parseResourceBrowserIntentRequest({
+        schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
+        requestId: 'entity-missing-intent',
+        identity,
+        route: RESOURCE_BROWSER_ROUTES.manageEntity,
+        resourceId: 'entity-nova',
+      }),
+    ).toThrowError(ResourceBrowserContractError);
   });
 
   it('requires explicit Preview and Cut handoff targets', () => {

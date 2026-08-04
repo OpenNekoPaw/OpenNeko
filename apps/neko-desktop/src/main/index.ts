@@ -48,6 +48,7 @@ import {
 } from '@neko/agent-runtime/application';
 import { NodePiConversationCatalogReader } from '@neko/agent-runtime/pi';
 import { NodeVideoThumbnail } from '@neko/media/node';
+import { NodeProjectEntityInspectorRuntime } from '@neko/entity-node';
 import {
   resolveDesktopAgentAutomationLaunch,
   resolveDesktopFunctionalCutExport,
@@ -585,6 +586,13 @@ async function startDesktop(): Promise<void> {
     canvas: canvasRuntime,
     cut: {
       addResource: (input) => cutRuntime.addResource(input).then(() => undefined),
+    },
+    entity: {
+      executeIntent: ({ intent, workspace }) =>
+        new NodeProjectEntityInspectorRuntime({
+          workspace,
+          projections: workspaceRegistry.metadataRepositories?.entityAssetProjections,
+        }).execute(intent),
     },
     openPreview: (input) => previewRuntime.open(input).then(() => undefined),
     openQuickPreview: (input) => previewRuntime.openQuickPreview(input),

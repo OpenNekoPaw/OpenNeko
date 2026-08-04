@@ -1,5 +1,6 @@
 import {
   projectEntityInspector,
+  type ProjectEntityInspectorOwnerCapabilities,
   type ProjectEntityManagementProjection,
 } from '@neko/entity-domain';
 import { contentLocatorKey } from '@neko/content';
@@ -51,11 +52,16 @@ export function presentResourceBrowserContentItem(
 
 export function presentResourceBrowserEntityItem(
   projection: ProjectEntityManagementProjection,
-  options: { readonly canvasAvailable?: boolean; readonly projectRevision: number },
+  options: {
+    readonly canvasAvailable?: boolean;
+    readonly projectRevision: number;
+    readonly capabilities?: ProjectEntityInspectorOwnerCapabilities;
+  },
 ): ResourceBrowserEntityItem {
   const inspector = projectEntityInspector({
     projectRevision: options.projectRevision,
     projection,
+    capabilities: options.capabilities,
   });
   if (projection.status === 'candidate') {
     const candidate = projection.candidate;

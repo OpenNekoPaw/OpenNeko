@@ -138,6 +138,9 @@ importers:
       '@neko/entity-domain':
         specifier: workspace:*
         version: link:../../packages/entity/domain
+      '@neko/entity-node':
+        specifier: workspace:*
+        version: link:../../packages/entity/node
       '@neko/host':
         specifier: workspace:*
         version: link:../../packages/host

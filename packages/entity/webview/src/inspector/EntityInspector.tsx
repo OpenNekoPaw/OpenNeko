@@ -39,11 +39,17 @@ export function EntityInspector({
     });
   };
   const submitMerge = (): void => {
-    if (!entityId || !mergeTargetId.trim()) return;
+    if ((!entityId && !candidateId) || !mergeTargetId.trim()) return;
+    const source = entityId
+      ? { sourceEntityId: entityId }
+      : candidateId
+        ? { candidateId }
+        : undefined;
+    if (!source) return;
     void onIntent({
       type: 'merge',
       expectedRevision: projection.projectRevision,
-      sourceEntityId: entityId,
+      ...source,
       targetEntityId: mergeTargetId.trim(),
     });
   };
@@ -208,7 +214,7 @@ export function EntityInspector({
             </button>
           </div>
         ) : null}
-        {can('merge') && entityId ? (
+        {can('merge') && (entityId || candidateId) ? (
           <div className="neko-entity-inspector__input-action">
             <input
               aria-label={labels.mergeTarget}

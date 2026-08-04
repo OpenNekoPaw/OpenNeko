@@ -1,4 +1,8 @@
-import type { ProjectEntityManagementProjection } from '@neko/entity-domain';
+import type {
+  ProjectEntityInspectorIntent,
+  ProjectEntityInspectorOwnerCapabilities,
+  ProjectEntityManagementProjection,
+} from '@neko/entity-domain';
 import type { ContentLocator } from '@neko/content';
 import type { GlobalAssetItem } from '../global-library/contract';
 import type {
@@ -57,6 +61,10 @@ export interface ResourceBrowserEntityReader {
   }): Promise<{
     readonly projectRevision: number;
     readonly projections: readonly ProjectEntityManagementProjection[];
+    readonly inspectorCapabilities?: readonly {
+      readonly projectionId: string;
+      readonly capabilities: ProjectEntityInspectorOwnerCapabilities;
+    }[];
   }>;
 }
 
@@ -77,6 +85,11 @@ export interface ResourceBrowserProjectionSource {
 }
 
 export interface ResourceBrowserInteractionPort {
+  manageEntity(input: {
+    readonly identity: ResourceBrowserIdentity;
+    readonly item: Extract<ResourceBrowserItem, { readonly facet: 'entities' }>;
+    readonly intent: ProjectEntityInspectorIntent;
+  }): Promise<void>;
   linkGlobalLibrary(input: {
     readonly identity: ResourceBrowserIdentity;
   }): Promise<'linked' | 'cancelled'>;

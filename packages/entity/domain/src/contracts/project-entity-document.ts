@@ -166,8 +166,8 @@ export type ProjectEntityDocumentDecodeResult =
 export class ProjectEntityContractError extends Error {
   readonly diagnostics: readonly ProjectEntityDiagnostic[];
 
-  constructor(diagnostics: readonly ProjectEntityDiagnostic[]) {
-    super(diagnostics.map((diagnostic) => diagnostic.message).join(' '));
+  constructor(diagnostics: readonly ProjectEntityDiagnostic[], options?: ErrorOptions) {
+    super(diagnostics.map((diagnostic) => diagnostic.message).join(' '), options);
     this.name = 'ProjectEntityContractError';
     this.diagnostics = diagnostics;
   }

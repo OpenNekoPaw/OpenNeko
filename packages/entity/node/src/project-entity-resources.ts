@@ -1,5 +1,7 @@
 import {
   projectEntityManagement,
+  type EntityAssetProjectionPartition,
+  type EntityAssetProjectionRepository,
   type EntityBindingAvailabilityProjectionValue,
   type ProjectEntityCandidateProjection,
   type ProjectEntityManagementProjection,
@@ -33,18 +35,40 @@ export async function readProjectEntityManagementResources(input: {
   readonly workspace: { readonly workspaceId: string; readonly workspacePath: string };
   readonly candidates?: readonly ProjectEntityCandidateProjection[];
   readonly bindingAvailability?: readonly EntityBindingAvailabilityProjectionValue[];
+  readonly derivedProjection?: {
+    readonly repository: Pick<EntityAssetProjectionRepository, 'list'>;
+    readonly partition: EntityAssetProjectionPartition;
+  };
   readonly signal?: AbortSignal;
 }): Promise<ProjectEntityManagementResources> {
   const document = await new NodeProjectEntityRepository({
     workspacePath: input.workspace.workspacePath,
     projectId: input.workspace.workspaceId,
   }).load(input.signal);
+  const records = input.derivedProjection
+    ? await input.derivedProjection.repository.list({
+        partition: input.derivedProjection.partition,
+        kinds: ['entity-candidate', 'binding-availability'],
+      })
+    : [];
+  const candidates = [
+    ...(input.candidates ?? []),
+    ...records.flatMap((record) =>
+      record.kind === 'entity-candidate' && record.value.freshness !== 'failed'
+        ? [record.value]
+        : [],
+    ),
+  ];
+  const bindingAvailability = [
+    ...(input.bindingAvailability ?? []),
+    ...records.flatMap((record) => (record.kind === 'binding-availability' ? [record.value] : [])),
+  ];
   return {
     projectRevision: document.revision,
     projections: projectEntityManagement({
       document,
-      candidates: input.candidates ?? [],
-      bindingAvailability: input.bindingAvailability ?? [],
+      candidates,
+      bindingAvailability,
     }),
   };
 }

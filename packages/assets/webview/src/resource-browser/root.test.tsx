@@ -777,6 +777,63 @@ describe('ResourceBrowserRoot', () => {
     expect(document.querySelector('.neko-resource-browser__actions')).toBeNull();
   });
 
+  it('submits Entity edits through the canonical Resource Browser runtime', async () => {
+    const entityProjection: ResourceBrowserProjection = {
+      ...projection,
+      facet: 'entities',
+      items: [
+        {
+          resourceId: 'entity:character-rin',
+          facet: 'entities',
+          role: 'entity',
+          depth: 0,
+          kind: 'character',
+          label: 'Rin',
+          entityRef: { entityId: 'character-rin', entityKind: 'character' },
+          entityStatus: 'confirmed',
+          sourceOwners: ['project-entity'],
+          attentionBindingIds: [],
+          representationAvailability: 'unbound',
+          inspector: {
+            projectRevision: 5,
+            status: 'confirmed',
+            kind: 'character',
+            names: { canonical: 'Rin', aliases: [] },
+            facts: {},
+            entityId: 'character-rin',
+            bindings: [],
+            operations: ['edit'],
+            blockers: [],
+          },
+          capabilities: [],
+        },
+      ],
+    };
+    const runtime = createRuntime(entityProjection);
+    render(<ResourceBrowserRoot runtime={runtime} locale="en" />);
+
+    fireEvent.click(await screen.findByText('Rin'));
+    fireEvent.change(screen.getByRole('textbox', { name: 'Name' }), {
+      target: { value: 'Rin Aoki' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() =>
+      expect(runtime.execute).toHaveBeenCalledWith(
+        expect.objectContaining({
+          route: 'entity.manage',
+          resourceId: 'entity:character-rin',
+          entityIntent: {
+            type: 'edit',
+            expectedRevision: 5,
+            entityId: 'character-rin',
+            changes: { names: { canonical: 'Rin Aoki', aliases: [] } },
+          },
+        }),
+      ),
+    );
+  });
+
   it('keeps missing library identity across list/grid and confirms revisioned recovery', async () => {
     const libraryProjection: ResourceBrowserProjection = {
       ...projection,

@@ -176,6 +176,13 @@ export interface ResourceBrowserNodeRuntimeOptions {
       };
     }): Promise<void>;
   };
+  readonly entity: {
+    executeIntent(
+      input: Parameters<ResourceBrowserNodeSourceOptions['manageEntity']>[0] & {
+        readonly workspace: AssetWorkspaceResolution;
+      },
+    ): Promise<void>;
+  };
 }
 
 export class ResourceBrowserNodeRuntime {
@@ -893,6 +900,7 @@ export class ResourceBrowserNodeRuntime {
       globalAssetRoot: this.options.globalAssetRoot,
       globalMediaLibraryRoot: this.options.globalMediaLibraryRoot,
       workspaceMediaLibrarySync: this.workspaceMediaLibrarySync,
+      entityProjections: this.options.localMetadataRepositories?.entityAssetProjections,
       workspace,
       host: this.options.host,
       openPreview: this.options.openPreview,
@@ -906,6 +914,7 @@ export class ResourceBrowserNodeRuntime {
       createThumbnail: this.options.createThumbnail,
       addToCanvas,
       addToCut,
+      manageEntity: (input) => this.options.entity.executeIntent({ ...input, workspace }),
     });
     const controller = new ResourceBrowserController({
       identity: expected,

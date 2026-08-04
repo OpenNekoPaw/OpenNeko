@@ -35,6 +35,7 @@ import {
   RESOURCE_BROWSER_CONTRACT_VERSION,
   RESOURCE_BROWSER_ROUTES,
   createResourceBrowserChildrenRequest,
+  createResourceBrowserEntityIntentRequest,
   createResourceBrowserQuickPreviewReleaseRequest,
   createResourceBrowserQuickPreviewRequest,
   createResourceBrowserRecoveryApplyRequest,
@@ -50,8 +51,7 @@ import {
   type ResourceBrowserRecoveryPlanResult,
 } from '@neko/assets-domain/resource-browser/contract';
 import { getResourceBrowserLabels } from './labels';
-import { EntityInspector } from '@neko/entity-webview/inspector';
-import type { ProjectEntityInspectorIntent } from '@neko/entity-domain';
+import { EntityInspector, type EntityInspectorProps } from '@neko/entity-webview/inspector';
 import './style.css';
 
 export interface ResourceBrowserRootProps {
@@ -69,7 +69,6 @@ export interface ResourceBrowserRootProps {
   readonly renderQuickPreview?: (
     descriptor: ResourceBrowserQuickPreviewResult['descriptor'],
   ) => ReactNode;
-  readonly onEntityIntent?: (intent: ProjectEntityInspectorIntent) => void | Promise<void>;
 }
 
 type ResourceBrowserRootState =
@@ -91,7 +90,6 @@ export function ResourceBrowserRoot({
   chrome = 'standalone',
   defaultViewMode = 'list',
   locale,
-  onEntityIntent,
   onOpenCanvas,
   previewTarget,
   refreshControl = 'visible',
@@ -375,6 +373,26 @@ export function ResourceBrowserRoot({
   const selectedId = selectedIdByFacet[projection.facet];
   const selectedItem = projection.items.find((item) => item.resourceId === selectedId);
   const selectedEntity = selectedItem?.facet === 'entities' ? selectedItem : undefined;
+  const executeEntityIntent: EntityInspectorProps['onIntent'] = async (intent) => {
+    if (!selectedEntity) throw new Error('Resource Browser Entity selection is stale.');
+    requestSequence.current += 1;
+    setPending(true);
+    try {
+      const next = await runtime.execute(
+        createResourceBrowserEntityIntentRequest({
+          requestId: `resource-entity-${requestSequence.current}`,
+          identity: runtime.identity,
+          resourceId: selectedEntity.resourceId,
+          intent,
+        }),
+      );
+      setState({ kind: 'ready', projection: next });
+    } catch (error: unknown) {
+      setState({ kind: 'error', message: describeError(error) });
+    } finally {
+      setPending(false);
+    }
+  };
   const requestRecovery = async (
     item: ResourceBrowserItem,
     candidate: 'existing-global' | 'select-directory',
@@ -854,10 +872,10 @@ export function ResourceBrowserRoot({
       </div>
       {selectedEntity ? (
         <EntityInspector
-          disabled={pending || !onEntityIntent}
+          disabled={pending}
           locale={locale}
           projection={selectedEntity.inspector}
-          onIntent={(intent) => onEntityIntent?.(intent)}
+          onIntent={executeEntityIntent}
         />
       ) : null}
       {recovery ? (

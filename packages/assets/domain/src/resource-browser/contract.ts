@@ -1,10 +1,12 @@
 import {
   assertProjectEntityInspectorProjection,
+  assertProjectEntityInspectorIntent,
   isEntityRepresentationRole,
   isCreativeEntityKind,
   type CreativeEntityKind,
   type EntityRepresentationRole,
   type ProjectEntityInspectorProjection,
+  type ProjectEntityInspectorIntent,
 } from '@neko/entity-domain';
 import { validateContentLocator, type ContentLocator } from '@neko/content';
 import {
@@ -14,7 +16,7 @@ import {
   type WorkspaceMediaLibraryStatus,
 } from '@neko/assets-domain/contracts';
 
-export const RESOURCE_BROWSER_CONTRACT_VERSION = 10 as const;
+export const RESOURCE_BROWSER_CONTRACT_VERSION = 11 as const;
 
 export function createResourceBrowserViewId(projectViewId: string): string {
   return `resource-browser:${projectViewId}`;
@@ -40,6 +42,7 @@ export const RESOURCE_BROWSER_ROUTES = {
   addToCut: 'cut.add',
   reveal: 'reveal',
   addToCanvas: 'canvas.add',
+  manageEntity: 'entity.manage',
 } as const;
 
 export type ResourceBrowserRoute =
@@ -287,7 +290,8 @@ export interface ResourceBrowserIntentRequest extends ResourceBrowserRequest {
     | typeof RESOURCE_BROWSER_ROUTES.openCut
     | typeof RESOURCE_BROWSER_ROUTES.addToCut
     | typeof RESOURCE_BROWSER_ROUTES.reveal
-    | typeof RESOURCE_BROWSER_ROUTES.addToCanvas;
+    | typeof RESOURCE_BROWSER_ROUTES.addToCanvas
+    | typeof RESOURCE_BROWSER_ROUTES.manageEntity;
   readonly resourceId?: string;
   readonly expectedRevision?: number;
   readonly targetPreview?: {
@@ -307,6 +311,7 @@ export interface ResourceBrowserIntentRequest extends ResourceBrowserRequest {
     readonly sessionId: string;
     readonly expectedRevision: number;
   };
+  readonly entityIntent?: ProjectEntityInspectorIntent;
 }
 
 export interface ResourceBrowserProjectionEvent {
@@ -346,8 +351,8 @@ export class ResourceBrowserContractError extends Error {
     | 'unsupported-resource-browser-version'
     | 'resource-browser-stale-identity';
 
-  constructor(code: ResourceBrowserContractError['code'], message: string) {
-    super(message);
+  constructor(code: ResourceBrowserContractError['code'], message: string, options?: ErrorOptions) {
+    super(message, options);
     this.name = 'ResourceBrowserContractError';
     this.code = code;
   }
@@ -495,6 +500,22 @@ export function createResourceBrowserRecoveryCancelRequest(input: {
     identity: input.identity,
     route: RESOURCE_BROWSER_ROUTES.recoveryCancel,
     planId: input.planId,
+  });
+}
+
+export function createResourceBrowserEntityIntentRequest(input: {
+  readonly requestId: string;
+  readonly identity: ResourceBrowserIdentity;
+  readonly resourceId: string;
+  readonly intent: ProjectEntityInspectorIntent;
+}): ResourceBrowserIntentRequest {
+  return parseResourceBrowserIntentRequest({
+    schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
+    requestId: input.requestId,
+    identity: input.identity,
+    route: RESOURCE_BROWSER_ROUTES.manageEntity,
+    resourceId: input.resourceId,
+    entityIntent: input.intent,
   });
 }
 
@@ -992,7 +1013,8 @@ export function parseResourceBrowserIntentRequest(value: unknown): ResourceBrows
     route !== RESOURCE_BROWSER_ROUTES.openCut &&
     route !== RESOURCE_BROWSER_ROUTES.addToCut &&
     route !== RESOURCE_BROWSER_ROUTES.reveal &&
-    route !== RESOURCE_BROWSER_ROUTES.addToCanvas
+    route !== RESOURCE_BROWSER_ROUTES.addToCanvas &&
+    route !== RESOURCE_BROWSER_ROUTES.manageEntity
   ) {
     throw invalidPayload('Resource Browser intent route is invalid.');
   }
@@ -1028,6 +1050,13 @@ export function parseResourceBrowserIntentRequest(value: unknown): ResourceBrows
     record['resourceId'],
     'Resource Browser item identity is required.',
   );
+  if (route === RESOURCE_BROWSER_ROUTES.manageEntity) {
+    return {
+      ...request,
+      resourceId,
+      entityIntent: parseEntityIntent(record['entityIntent']),
+    };
+  }
   if (
     route === RESOURCE_BROWSER_ROUTES.relinkSource ||
     route === RESOURCE_BROWSER_ROUTES.removeSource
@@ -1864,4 +1893,16 @@ function requireBoundedInteger(value: unknown, min: number, max: number, message
 
 function invalidPayload(message: string): ResourceBrowserContractError {
   return new ResourceBrowserContractError('invalid-resource-browser-payload', message);
+}
+
+function parseEntityIntent(value: unknown): ProjectEntityInspectorIntent {
+  try {
+    return assertProjectEntityInspectorIntent(value);
+  } catch (error: unknown) {
+    throw new ResourceBrowserContractError(
+      'invalid-resource-browser-payload',
+      'Resource Browser Entity intent is invalid.',
+      { cause: error },
+    );
+  }
 }

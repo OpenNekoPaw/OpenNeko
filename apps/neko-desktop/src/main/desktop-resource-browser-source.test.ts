@@ -962,6 +962,9 @@ function createComposition(
     createThumbnail: effects.createThumbnail ?? (async () => 'data:image/png;base64,aW1hZ2U='),
     addToCanvas: async () => undefined,
     addToCut: async () => undefined,
+    manageEntity: async () => {
+      throw new Error('Entity management is not expected by this source test.');
+    },
   });
 }
 

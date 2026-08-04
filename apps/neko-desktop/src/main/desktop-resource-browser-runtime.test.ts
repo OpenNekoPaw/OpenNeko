@@ -8,7 +8,11 @@ import {
   parseCanvasHostIntentRequest,
   type CanvasHostIntentResult,
 } from '@neko/canvas-domain';
-import { createResourceBrowserSnapshotRequest } from '@neko/assets-domain/resource-browser/contract';
+import {
+  createResourceBrowserEntityIntentRequest,
+  createResourceBrowserSearchRequest,
+  createResourceBrowserSnapshotRequest,
+} from '@neko/assets-domain/resource-browser/contract';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createCanvasHostSessionId } from '@neko/canvas-domain';
 import { createDesktopResourceBrowserIdentity } from '../shared/resource-browser-bridge-contract';
@@ -276,6 +280,28 @@ describe('ResourceBrowserNodeRuntime Project identity', () => {
     const tab = projection.window.tabs[0];
     const project = projection.catalog.projects[0];
     if (!tab || !project) throw new Error('Project Resource runtime fixture failed to attach.');
+    await mkdir(path.join(workspacePath, 'neko'), { recursive: true });
+    await writeFile(
+      path.join(workspacePath, 'neko', 'entities.json'),
+      `${JSON.stringify({
+        schemaVersion: 1,
+        projectId: project.workspaceId,
+        revision: 2,
+        entities: [
+          {
+            entityId: 'character-rin',
+            kind: 'character',
+            names: { canonical: 'Rin', aliases: [] },
+            facts: {},
+            representations: [],
+            lifecycle: { state: 'active' },
+            createdAt: '2026-08-05T00:00:00.000Z',
+            updatedAt: '2026-08-05T00:00:00.000Z',
+          },
+        ],
+      })}\n`,
+      'utf8',
+    );
     const identity = createDesktopResourceBrowserIdentity({
       projectId: project.projectId,
       workspaceId: project.workspaceId,
@@ -291,6 +317,7 @@ describe('ResourceBrowserNodeRuntime Project identity', () => {
       logger: createLogger(),
       revealPath: () => undefined,
     });
+    const executeEntityIntent = vi.fn(async () => undefined);
     const runtime = new ResourceBrowserNodeRuntime({
       globalAssetRoot: path.join(root, '.neko', 'assets'),
       globalMediaLibraryRoot: path.join(root, '.neko', 'media-libraries'),
@@ -314,6 +341,9 @@ describe('ResourceBrowserNodeRuntime Project identity', () => {
           throw new Error('Canvas execution is not expected by this identity test.');
         },
       },
+      entity: {
+        executeIntent: executeEntityIntent,
+      },
       cut: { addResource: async () => undefined },
     });
 
@@ -327,6 +357,43 @@ describe('ResourceBrowserNodeRuntime Project identity', () => {
       expect(projection.window.workbench.main.views).toEqual([
         expect.objectContaining({ kind: 'canvas' }),
       ]);
+      const entities = await runtime.search(
+        windowId,
+        createResourceBrowserSearchRequest({
+          requestId: 'search-entities',
+          identity,
+          facet: 'entities',
+          query: 'Rin',
+        }),
+      );
+      const entity = entities.items[0];
+      if (!entity || entity.facet !== 'entities' || entity.entityStatus === 'candidate') {
+        throw new Error('Project Resource runtime fixture did not project its canonical Entity.');
+      }
+      const intent = {
+        type: 'edit' as const,
+        expectedRevision: 2,
+        entityId: 'character-rin',
+        changes: { facts: { role: 'lead' } },
+      };
+      await runtime.execute(
+        windowId,
+        createResourceBrowserEntityIntentRequest({
+          requestId: 'edit-entity',
+          identity,
+          resourceId: entity.resourceId,
+          intent,
+        }),
+      );
+      expect(executeEntityIntent).toHaveBeenCalledWith({
+        identity,
+        item: entity,
+        intent,
+        workspace: expect.objectContaining({
+          workspaceId: project.workspaceId,
+          workspacePath,
+        }),
+      });
       await expect(
         runtime.getSnapshot(
           windowId,
@@ -630,6 +697,11 @@ async function createGlobalLibraryRuntimeFixture(
     canvas: {
       executeIntent: async () => {
         throw new Error('Canvas execution is not expected by this global-library test.');
+      },
+    },
+    entity: {
+      executeIntent: async () => {
+        throw new Error('Entity execution is not expected by this global-library test.');
       },
     },
     cut: {

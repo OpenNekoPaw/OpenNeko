@@ -70,6 +70,88 @@ describe('ProjectEntityOperationService', () => {
     expect(harness.commits).toHaveLength(1);
   });
 
+  it('edits facts and bindings only through the canonical commit port', async () => {
+    harness.document = document([record('character-rin', 'Rin')], 2);
+
+    await harness.service.edit({
+      expectedRevision: 2,
+      entityId: 'character-rin',
+      changes: {
+        names: { canonical: 'Rin', display: 'Rin Aoki', aliases: ['Aoki'] },
+        facts: { role: 'lead' },
+      },
+      updatedAt: LATER,
+    });
+    await harness.service.bind({
+      expectedRevision: 3,
+      entityId: 'character-rin',
+      binding: binding('binding-rin-primary', true),
+      updatedAt: LATER,
+    });
+    await harness.service.bind({
+      expectedRevision: 4,
+      entityId: 'character-rin',
+      binding: binding('binding-rin-secondary', true),
+      updatedAt: LATER,
+    });
+    await harness.service.unbind({
+      expectedRevision: 5,
+      entityId: 'character-rin',
+      bindingId: 'binding-rin-secondary',
+      updatedAt: LATER,
+    });
+
+    expect(harness.commits).toHaveLength(4);
+    expect(harness.document.entities[0]).toMatchObject({
+      names: { canonical: 'Rin', display: 'Rin Aoki', aliases: ['Aoki'] },
+      facts: { role: 'lead' },
+      representations: [expect.objectContaining({ bindingId: 'binding-rin-primary' })],
+      updatedAt: LATER,
+    });
+    expect(harness.commits[2]?.next.entities[0]?.representations).toEqual([
+      expect.not.objectContaining({ isDefault: true }),
+      binding('binding-rin-secondary', true),
+    ]);
+  });
+
+  it('rejects empty edits, duplicate binding IDs, and missing unbind targets', async () => {
+    harness.document = document(
+      [
+        {
+          ...record('character-rin', 'Rin'),
+          representations: [binding('binding-rin-primary', true)],
+        },
+      ],
+      7,
+    );
+
+    await expect(
+      harness.service.edit({
+        expectedRevision: 7,
+        entityId: 'character-rin',
+        changes: {},
+        updatedAt: LATER,
+      }),
+    ).rejects.toMatchObject({ diagnostics: [{ code: 'project-entity-operation-invalid' }] });
+    await expect(
+      harness.service.bind({
+        expectedRevision: 7,
+        entityId: 'character-rin',
+        binding: binding('binding-rin-primary'),
+        updatedAt: LATER,
+      }),
+    ).rejects.toMatchObject({ diagnostics: [{ code: 'duplicate-project-entity-binding-id' }] });
+    await expect(
+      harness.service.unbind({
+        expectedRevision: 7,
+        entityId: 'character-rin',
+        bindingId: 'binding-missing',
+        updatedAt: LATER,
+      }),
+    ).rejects.toMatchObject({ diagnostics: [{ code: 'project-entity-operation-invalid' }] });
+    expect(harness.commits).toHaveLength(0);
+  });
+
   it('merges confirmed Entities only after every reference owner prepares', async () => {
     harness.document = document(
       [record('character-old', 'Old Rin'), record('character-rin', 'Rin')],
@@ -317,6 +399,17 @@ function record(
     lifecycle: { state: 'active' as const },
     createdAt: NOW,
     updatedAt: NOW,
+  };
+}
+
+function binding(bindingId: string, isDefault = false) {
+  return {
+    bindingId,
+    role: 'portrait' as const,
+    target: { kind: 'workspace-file' as const, path: `${bindingId}.png` },
+    source: 'user' as const,
+    ...(isDefault ? { isDefault: true } : {}),
+    acceptedAt: NOW,
   };
 }
 

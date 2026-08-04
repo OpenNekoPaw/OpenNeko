@@ -119,6 +119,12 @@ export type ProjectEntityInspectorIntent =
       readonly targetEntityId: string;
     }
   | {
+      readonly type: 'merge';
+      readonly expectedRevision: number;
+      readonly candidateId: string;
+      readonly targetEntityId: string;
+    }
+  | {
       readonly type: 'deprecate';
       readonly expectedRevision: number;
       readonly entityId: string;
@@ -209,14 +215,28 @@ export function assertProjectEntityInspectorIntent(value: unknown): ProjectEntit
         entityId: requireIdentity(record['entityId']),
         bindingId: requireIdentity(record['bindingId']),
       };
-    case 'merge':
-      requireOnlyKeys(record, ['type', 'expectedRevision', 'sourceEntityId', 'targetEntityId']);
-      return {
+    case 'merge': {
+      const candidateId = optionalIdentity(record['candidateId']);
+      const sourceEntityId = optionalIdentity(record['sourceEntityId']);
+      if ((candidateId === undefined) === (sourceEntityId === undefined)) {
+        throw new Error('Project Entity merge requires exactly one source identity.');
+      }
+      requireOnlyKeys(record, [
+        'type',
+        'expectedRevision',
+        'candidateId',
+        'sourceEntityId',
+        'targetEntityId',
+      ]);
+      const base = {
         type,
         expectedRevision: requireRevision(record['expectedRevision']),
-        sourceEntityId: requireIdentity(record['sourceEntityId']),
         targetEntityId: requireIdentity(record['targetEntityId']),
-      };
+      } as const;
+      if (candidateId) return { ...base, candidateId };
+      if (sourceEntityId) return { ...base, sourceEntityId };
+      throw new Error('Project Entity merge source identity is invalid.');
+    }
     case 'deprecate': {
       requireOnlyKeys(record, ['type', 'expectedRevision', 'entityId', 'replacementEntityId']);
       const replacementEntityId = optionalIdentity(record['replacementEntityId']);
