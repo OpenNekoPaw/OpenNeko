@@ -225,6 +225,7 @@ export class PortableMediaLibrarySnapshotService {
       try {
         stagedReferences = await rewriteProjectContentReferences({
           stagedWorkspacePath: plan.stagingPath,
+          projectId: input.workspace.workspaceId,
           replacements: plan.replacements,
         });
       } catch (error: unknown) {
@@ -358,7 +359,10 @@ export class PortableMediaLibrarySnapshotService {
     });
     const [projection, references] = await Promise.all([
       this.options.syncService.inspect(input.workspace),
-      readProjectContentReferences(input.workspace.workspacePath),
+      readProjectContentReferences({
+        workspacePath: input.workspace.workspacePath,
+        projectId: input.workspace.workspaceId,
+      }),
     ]);
     requireSnapshotReady(projection, references);
     const reader = this.createReader(input.workspace.workspacePath);
@@ -424,7 +428,10 @@ export class PortableMediaLibrarySnapshotService {
   ): Promise<void> {
     const [projection, references] = await Promise.all([
       this.options.syncService.inspect(workspace),
-      readProjectContentReferences(workspace.workspacePath),
+      readProjectContentReferences({
+        workspacePath: workspace.workspacePath,
+        projectId: workspace.workspaceId,
+      }),
     ]);
     if (
       references.requirements.revision !== plan.publicPlan.requirementRevision ||

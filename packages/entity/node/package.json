@@ -3,12 +3,15 @@
   "private": true,
   "version": "0.0.1",
   "type": "module",
-  "exports": { ".": "./src/index.ts" },
+  "exports": {
+    ".": "./src/index.ts"
+  },
   "scripts": {
     "test": "vitest --run",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@neko/content": "workspace:*",
     "@neko/entity-domain": "workspace:*",
     "@neko/local-metadata": "workspace:*"
   },

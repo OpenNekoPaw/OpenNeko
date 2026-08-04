@@ -1,10 +1,6 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
-import {
-  ENTITY_REPRESENTATION_BINDING_FILE_VERSION,
-  encodeEntityRepresentationBindingFile,
-} from '@neko/entity-domain';
 import type { LocalMetadataRepositories } from '@neko/local-metadata';
 import { createNodeSqliteLocalMetadataStore } from '@neko/local-metadata/node-sqlite-local-metadata-store';
 import {
@@ -177,25 +173,38 @@ async function createFixture(): Promise<{
 async function writeBinding(workspacePath: string): Promise<void> {
   await mkdir(path.join(workspacePath, 'neko'), { recursive: true });
   await writeFile(
-    path.join(workspacePath, 'neko/entity-representation-bindings.json'),
-    encodeEntityRepresentationBindingFile({
-      version: ENTITY_REPRESENTATION_BINDING_FILE_VERSION,
-      bindings: [
-        {
-          id: 'binding-a',
-          entityId: 'character-a',
-          entityKind: 'character',
-          representation: {
-            kind: 'workspace-file',
-            path: 'neko/assets/Footage/shot.mov',
+    path.join(workspacePath, 'neko/entities.json'),
+    `${JSON.stringify(
+      {
+        schemaVersion: 1,
+        projectId: 'workspace-a',
+        revision: 1,
+        entities: [
+          {
+            entityId: 'character-a',
+            kind: 'character',
+            names: { canonical: 'Character A', aliases: [] },
+            facts: {},
+            representations: [
+              {
+                bindingId: 'binding-a',
+                target: {
+                  kind: 'workspace-file',
+                  path: 'neko/assets/Footage/shot.mov',
+                },
+                role: 'portrait',
+                source: 'user',
+                acceptedAt: '2026-08-01T00:00:00.000Z',
+              },
+            ],
+            lifecycle: { state: 'active' },
+            createdAt: '2026-08-01T00:00:00.000Z',
+            updatedAt: '2026-08-01T00:00:00.000Z',
           },
-          role: 'portrait',
-          status: 'confirmed',
-          availability: 'active',
-          source: 'user',
-          updatedAt: '2026-08-01T00:00:00.000Z',
-        },
-      ],
-    }),
+        ],
+      },
+      null,
+      2,
+    )}\n`,
   );
 }

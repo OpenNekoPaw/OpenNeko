@@ -11,10 +11,6 @@ import {
 } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
-import {
-  ENTITY_REPRESENTATION_BINDING_FILE_VERSION,
-  encodeEntityRepresentationBindingFile,
-} from '@neko/entity-domain';
 import { type ContentReadService } from '@neko/content';
 import { createNodeHostContentReadService } from '@neko/content/node';
 import {
@@ -105,16 +101,19 @@ describe('Desktop portable Media Library snapshot', () => {
       code: 'ENOENT',
     });
     expect(
-      JSON.parse(
-        await readFile(path.join(destination, 'neko/entity-representation-bindings.json'), 'utf8'),
-      ),
+      JSON.parse(await readFile(path.join(destination, 'neko/entities.json'), 'utf8')),
     ).toMatchObject({
-      bindings: [
+      revision: 2,
+      entities: [
         {
-          representation: {
-            kind: 'workspace-file',
-            path: 'media/collected/Footage/shot.mov',
-          },
+          representations: [
+            {
+              target: {
+                kind: 'workspace-file',
+                path: 'media/collected/Footage/shot.mov',
+              },
+            },
+          ],
         },
       ],
     });
@@ -475,7 +474,7 @@ async function createFixture(): Promise<{
   return {
     root,
     workspace,
-    bindingPath: path.join(workspacePath, 'neko/entity-representation-bindings.json'),
+    bindingPath: path.join(workspacePath, 'neko/entities.json'),
     mediaPath,
     repositories: store.repositories,
     createReader: (targetWorkspacePath) => snapshotReader(targetWorkspacePath),
@@ -491,26 +490,36 @@ async function writeBinding(
 ): Promise<void> {
   await mkdir(path.join(workspacePath, 'neko'), { recursive: true });
   await writeFile(
-    path.join(workspacePath, 'neko/entity-representation-bindings.json'),
-    encodeEntityRepresentationBindingFile({
-      version: ENTITY_REPRESENTATION_BINDING_FILE_VERSION,
-      bindings: [
-        {
-          id: 'binding-a',
-          entityId: 'character-a',
-          entityKind: 'character',
-          representation: {
-            kind: 'workspace-file',
-            path: locatorPath,
+    path.join(workspacePath, 'neko/entities.json'),
+    `${JSON.stringify(
+      {
+        schemaVersion: 1,
+        projectId: 'workspace-a',
+        revision: 1,
+        entities: [
+          {
+            entityId: 'character-a',
+            kind: 'character',
+            names: { canonical: 'Character A', aliases: [] },
+            facts: {},
+            representations: [
+              {
+                bindingId: 'binding-a',
+                target: { kind: 'workspace-file', path: locatorPath },
+                role: 'portrait',
+                source: 'user',
+                acceptedAt: updatedAt,
+              },
+            ],
+            lifecycle: { state: 'active' },
+            createdAt: updatedAt,
+            updatedAt,
           },
-          role: 'portrait',
-          status: 'confirmed',
-          availability: 'active',
-          source: 'user',
-          updatedAt,
-        },
-      ],
-    }),
+        ],
+      },
+      null,
+      2,
+    )}\n`,
   );
 }
 

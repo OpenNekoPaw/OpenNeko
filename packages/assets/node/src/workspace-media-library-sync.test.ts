@@ -12,10 +12,6 @@ import {
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import {
-  ENTITY_REPRESENTATION_BINDING_FILE_VERSION,
-  encodeEntityRepresentationBindingFile,
-} from '@neko/entity-domain';
-import {
   createWorkspaceLinkedMediaLibrary,
   removeWorkspaceLinkedMediaLibrary,
 } from '@neko/assets-node';
@@ -340,22 +336,35 @@ async function writeBindings(
   const nekoDirectory = path.join(workspacePath, 'neko');
   await mkdir(nekoDirectory, { recursive: true });
   await writeFile(
-    path.join(nekoDirectory, 'entity-representation-bindings.json'),
-    encodeEntityRepresentationBindingFile({
-      version: ENTITY_REPRESENTATION_BINDING_FILE_VERSION,
-      bindings: [
-        {
-          id: 'binding-a',
-          entityId: 'character-a',
-          entityKind: 'character',
-          representation: { kind: 'workspace-file', path: locatorPath },
-          role: 'portrait',
-          status: 'confirmed',
-          availability: 'active',
-          source: 'user',
-          updatedAt,
-        },
-      ],
-    }),
+    path.join(nekoDirectory, 'entities.json'),
+    `${JSON.stringify(
+      {
+        schemaVersion: 1,
+        projectId: 'workspace-a',
+        revision: 1,
+        entities: [
+          {
+            entityId: 'character-a',
+            kind: 'character',
+            names: { canonical: 'Character A', aliases: [] },
+            facts: {},
+            representations: [
+              {
+                bindingId: 'binding-a',
+                target: { kind: 'workspace-file', path: locatorPath },
+                role: 'portrait',
+                source: 'user',
+                acceptedAt: updatedAt,
+              },
+            ],
+            lifecycle: { state: 'active' },
+            createdAt: updatedAt,
+            updatedAt,
+          },
+        ],
+      },
+      null,
+      2,
+    )}\n`,
   );
 }

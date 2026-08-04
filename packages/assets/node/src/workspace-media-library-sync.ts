@@ -71,7 +71,10 @@ export class WorkspaceMediaLibrarySyncService {
   ) {}
 
   async inspect(workspace: AssetWorkspaceResolution): Promise<WorkspaceMediaLibrarySyncProjection> {
-    const references = await readProjectContentReferences(workspace.workspacePath);
+    const references = await readProjectContentReferences({
+      workspacePath: workspace.workspacePath,
+      projectId: workspace.workspaceId,
+    });
     const statuses = await inspectStatuses({
       workspacePath: workspace.workspacePath,
       globalMediaLibraryRoot: this.globalMediaLibraryRoot,
@@ -138,7 +141,10 @@ export class WorkspaceMediaLibrarySyncService {
   }): Promise<WorkspaceMediaLibraryRecoveryPlan> {
     const current = await this.inspect(input.workspace);
     const status = requireRecoverableStatus(current, input.libraryName);
-    const references = await readProjectContentReferences(input.workspace.workspacePath);
+    const references = await readProjectContentReferences({
+      workspacePath: input.workspace.workspacePath,
+      projectId: input.workspace.workspaceId,
+    });
     const requirement = requireRequirement(references, input.libraryName);
     const candidates = (
       await listGlobalMediaLibraryConnections(this.globalMediaLibraryRoot)
@@ -187,7 +193,10 @@ export class WorkspaceMediaLibrarySyncService {
     }
     const current = await this.inspect(input.workspace);
     const status = requireRecoverableStatus(current, input.libraryName);
-    const references = await readProjectContentReferences(input.workspace.workspacePath);
+    const references = await readProjectContentReferences({
+      workspacePath: input.workspace.workspacePath,
+      projectId: input.workspace.workspaceId,
+    });
     const requirement = requireRequirement(references, input.libraryName);
     await validateRequirementAtRoot(input.sourceDirectory, requirement);
     const exactConnections = (
@@ -234,7 +243,10 @@ export class WorkspaceMediaLibrarySyncService {
       this.plans.delete(input.planId);
       throw stalePlan();
     }
-    const references = await readProjectContentReferences(input.workspace.workspacePath);
+    const references = await readProjectContentReferences({
+      workspacePath: input.workspace.workspacePath,
+      projectId: input.workspace.workspaceId,
+    });
     const requirement = requireRequirement(references, plan.publicPlan.libraryName);
     await validateRequirementAtRoot(plan.candidatePath, requirement);
 
