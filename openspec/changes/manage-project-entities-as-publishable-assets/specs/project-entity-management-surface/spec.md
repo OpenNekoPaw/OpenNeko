@@ -1,10 +1,18 @@
 ## ADDED Requirements
 
-### Requirement: Resource Browser exposes an Entity facet
+### Requirement: Resource Browser exposes owner-preserving project resource facets
 
-Resource Browser SHALL expose Project Entities through an `entities` facet rather than the ambiguous
-`materials` name. The facet SHALL distinguish confirmed, candidate, needs-attention, and deprecated
-states while preserving Project Entity identity independently from file and Asset identities.
+Resource Browser SHALL expose exactly `files`, `media`, `assets`, and `entities` facets rather than the
+ambiguous `materials` name. Files SHALL preserve workspace Content identity, Media SHALL preserve linked
+Media Library identity and availability, Assets SHALL preserve exact Asset Library identity, and Entities
+SHALL preserve Project Entity identity independently from file, Media, and Asset identities. Switching
+facets MUST remain Resource Browser display state and MUST NOT add a Workbench or Inspector tab bar.
+
+#### Scenario: Switch project resource facets
+
+- **WHEN** the user switches between Files, Media, Assets, and Entities
+- **THEN** the Resource Browser queries the selected owner projection and preserves the other facets'
+  selection and navigation display state without copying or converting resources
 
 #### Scenario: Browse Entity states
 
@@ -31,6 +39,26 @@ files, mutate Asset packages, or infer destructive intent in the Renderer.
 
 - **WHEN** the host reports reference blockers for a proposed merge
 - **THEN** the Inspector displays those blockers and does not report or locally project a completed merge
+
+### Requirement: Entity interaction actions are capability-gated and owner-routed
+
+The Entity Inspector SHALL derive available preview, reference, Character dialogue, Room open, and
+Character embody actions from typed owner capabilities. It MUST hide unsupported actions and MUST route
+supported actions through their owning integration contract with exact Entity and Conversation context.
+It MUST NOT synthesize Agent commands, mutate sibling Webview state, or reintroduce an Agent Header
+roleplay entry.
+
+#### Scenario: Start dialogue with a confirmed Character
+
+- **WHEN** a confirmed Character exposes the dialogue capability and the user selects Start dialogue
+- **THEN** the Character conversation owner creates or opens the exact Character-scoped conversation and
+  the Resource Browser does not create an Assistant or Workspace fallback conversation
+
+#### Scenario: Inspect a non-dialogue Entity
+
+- **WHEN** a Location or Object does not expose a dialogue or embody capability
+- **THEN** those actions are absent while preview, edit, bind, and reference actions remain available as
+  declared
 
 ### Requirement: Candidate evidence supports inline decisions
 

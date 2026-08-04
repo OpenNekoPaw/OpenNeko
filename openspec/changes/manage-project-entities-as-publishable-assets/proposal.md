@@ -17,8 +17,10 @@ global Entity catalog or synchronization system.
 - Make workspace/document analysis and Asset/Media discovery produce directly searchable candidate and
   occurrence projections; stable Entity operations require explicit create, confirm, merge, or import
   intent.
-- Replace Resource Browser `materials` with an `entities` facet covering confirmed, candidate,
-  needs-attention, and deprecated views plus Entity Inspector operations.
+- Replace Resource Browser `materials` with four owner-preserving project resource facets: workspace
+  `files`, linked `media`, reusable `assets`, and semantic `entities`. The Entity facet covers
+  confirmed, candidate, needs-attention, and deprecated views plus Entity Inspector operations;
+  Asset results retain global Asset identity and never become Project Entity facts implicitly.
 - Add explicit Entity Asset instantiate, bind, publish, update-available, diff, and apply workflows using
   Asset Library ports. Projects retain `originAssetId` and applied revision as provenance; no implicit
   bidirectional sync or automatic overwrite is allowed.
@@ -37,8 +39,9 @@ global Entity catalog or synchronization system.
 
 - `project-entity-authority`: Canonical project Entity document, candidate/confirmed lifecycle,
   searchable projections, reference-safe merge/deprecate, and derived availability rules.
-- `project-entity-management-surface`: Resource Browser Entity facet, Entity Inspector, inline candidate
-  confirmation, binding management, attention states, and project-reference navigation.
+- `project-entity-management-surface`: Resource Browser File, Media, Asset, and Entity facets; Entity
+  Inspector; inline candidate confirmation; binding management; attention states; and typed
+  project-reference/dialogue entry intents.
 - `entity-asset-publication`: Project Entity instantiate/bind/publish/update workflows over Asset Library
   revisions without a separate Entity catalog or sync authority.
 

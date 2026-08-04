@@ -132,6 +132,29 @@ Production logic remains in `apps/neko-desktop` only for Electron sender authori
 projection, window/workspace lifecycle, and composition. Entity semantics, persistence, search projection,
 and publication conversion stay package-owned.
 
+### 8. Resource Browser facets are owner-preserving projections
+
+Workspace Resource management exposes exactly four peer facets: `files`, `media`, `assets`, and
+`entities`. They are views over different authorities, not copied catalogs:
+
+- `files` browses workspace-owned directory and file locators.
+- `media` browses workspace links into Media Library and preserves link availability.
+- `assets` browses reusable Asset Library items by exact Asset identity; selecting one does not
+  instantiate an Entity or copy bytes into the workspace.
+- `entities` browses Project Entity semantic identity and derives representation availability from
+  its owning resources.
+
+Facet switching is Resource Browser display state, not Workbench navigation and not a second tab bar in
+the preview/detail shell. Each facet retains its own selection and navigation state. Cross-owner search
+results must retain their facet, owner identity, lifecycle, availability, and supported operations.
+
+The Entity Inspector is the single semantic management surface. Preview and management intents remain
+Entity/resource operations. Referencing an Entity in the active Agent context, starting Character
+dialogue, opening a Room, or embodying a Character are capability-gated integration intents. Their
+owning package must provide a typed handler and exact Conversation/Character/Room identity; the
+Resource Browser must not synthesize an Agent slash command, mutate Agent Webview state, or restore the
+removed Agent Header roleplay selector.
+
 ## Risks / Trade-offs
 
 - **[Risk] Canonical migration loses fragmented facts** → Inventory every source, archive exact inputs,
