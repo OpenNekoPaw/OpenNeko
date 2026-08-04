@@ -29,9 +29,11 @@ import {
   parseDesktopWindowMutationRequest,
   type DesktopOpenContentResult,
   type DesktopProfileRequestResult,
+  type DesktopShellProjection,
   type DesktopShellResponse,
 } from '@neko/host/desktop-shell-contract';
 import {
+  createDesktopSceneTransitionRequest,
   parseDesktopApplicationSidebarMutationRequest,
   parseDesktopSceneTransitionRequest,
   type DesktopWorkbenchSceneProjection,
@@ -863,18 +865,31 @@ export class DesktopAppHost {
         projection: await this.shell.getProjection(window.windowId),
       };
     }
-    const opened = await this.shell.openContent(
-      window.windowId,
-      workspacePath,
-      request.expectedEndpointEpoch,
-      request.expectedWindowRevision,
+    const initial = await this.shell.getProjection(window.windowId);
+    const grant = this.workspaceGrants.authorize({
+      windowId: window.windowId,
+      label: workspacePath,
+      hostResource: workspacePath,
+    });
+    const transitioned = await this.transitionScene(
+      sender,
+      createDesktopSceneTransitionRequest({
+        requestId: request.requestId,
+        expectedEndpointEpoch: request.expectedEndpointEpoch,
+        windowId: window.windowId,
+        expectedWindowRevision: request.expectedWindowRevision,
+        expectedSceneRevision: initial.window.scene.revision,
+        intent: { kind: 'open-workspace', workspaceGrantId: grant.workspaceGrantId },
+      }),
     );
-    await this.agent.attachWorkspace(opened.workspace);
+    if (transitioned.status !== 'transitioned') {
+      throw new Error('Authorized Workspace open did not activate its Workspace Scene.');
+    }
     return {
       schemaVersion: DESKTOP_SHELL_CONTRACT_VERSION,
       requestId: request.requestId,
       status: 'opened',
-      projection: opened.projection,
+      projection: await this.shell.getProjection(window.windowId),
     };
   }
 
@@ -885,18 +900,26 @@ export class DesktopAppHost {
     this.requireActive();
     const request = parseDesktopProjectOpenRequest(payload);
     const window = this.windows.resolveSender(sender);
-    const opened = await this.shell.openCatalogProject(
-      window.windowId,
-      request.projectId,
-      request.expectedEndpointEpoch,
-      request.expectedWindowRevision,
+    const initial = await this.shell.getProjection(window.windowId);
+    const transitioned = await this.transitionScene(
+      sender,
+      createDesktopSceneTransitionRequest({
+        requestId: request.requestId,
+        expectedEndpointEpoch: request.expectedEndpointEpoch,
+        windowId: window.windowId,
+        expectedWindowRevision: request.expectedWindowRevision,
+        expectedSceneRevision: initial.window.scene.revision,
+        intent: { kind: 'open-project-workspace', projectId: request.projectId },
+      }),
     );
-    await this.agent.attachWorkspace(opened.workspace);
+    if (transitioned.status !== 'transitioned') {
+      throw new Error('Catalog Project open did not activate its Workspace Scene.');
+    }
     return {
       schemaVersion: DESKTOP_SHELL_CONTRACT_VERSION,
       requestId: request.requestId,
       status: 'opened',
-      projection: opened.projection,
+      projection: await this.shell.getProjection(window.windowId),
     };
   }
 
@@ -1909,28 +1932,38 @@ export class DesktopAppHost {
     this.requireActive();
     const request = parseDesktopTabMutationRequest(payload);
     const window = this.windows.resolveSender(sender);
-    const closingView =
-      operation === 'close'
-        ? (await this.shell.getProjection(window.windowId)).window.tabs.find(
-            (tab) => tab.tabId === request.tabId,
-          )
-        : undefined;
-    const projection =
-      operation === 'activate'
-        ? await this.shell.activateTab(
-            window.windowId,
-            request.tabId,
-            request.expectedEndpointEpoch,
-            request.expectedWindowRevision,
-          )
-        : await this.shell.closeTab(
-            window.windowId,
-            request.tabId,
-            request.expectedEndpointEpoch,
-            request.expectedWindowRevision,
-          );
-    if (operation === 'close' && closingView) {
-      this.agentBridge.detachView(window.windowId, closingView.viewId);
+    const current = await this.shell.getProjection(window.windowId);
+    const targetTab = current.window.tabs.find((tab) => tab.tabId === request.tabId);
+    if (!targetTab) {
+      throw new Error(`Unknown Desktop Project Tab '${request.tabId}' for Window '${window.windowId}'.`);
+    }
+    let projection: DesktopShellProjection;
+    if (operation === 'activate') {
+      const transitioned = await this.transitionScene(
+        sender,
+        createDesktopSceneTransitionRequest({
+          requestId: request.requestId,
+          expectedEndpointEpoch: request.expectedEndpointEpoch,
+          windowId: window.windowId,
+          expectedWindowRevision: request.expectedWindowRevision,
+          expectedSceneRevision: current.window.scene.revision,
+          intent: { kind: 'open-project-workspace', projectId: targetTab.projectId },
+        }),
+      );
+      if (transitioned.status !== 'transitioned') {
+        throw new Error('Project Tab activation did not activate its Workspace Scene.');
+      }
+      projection = await this.shell.getProjection(window.windowId);
+    } else {
+      projection = await this.shell.closeTab(
+        window.windowId,
+        request.tabId,
+        request.expectedEndpointEpoch,
+        request.expectedWindowRevision,
+      );
+    }
+    if (operation === 'close') {
+      this.agentBridge.detachView(window.windowId, targetTab.viewId);
     }
     this.preview?.reconcileWorkbench(window.windowId, projection.window.workbench);
     this.canvas?.reconcileWorkbench(window.windowId, projection.window.workbench);

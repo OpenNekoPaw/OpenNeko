@@ -1155,7 +1155,7 @@ describe('DesktopAppHost', () => {
     expect(fixture.agent.attachWorkspace).not.toHaveBeenCalled();
   });
 
-  it('attaches the Agent composition with the workspace resolution used by Shell', async () => {
+  it('opens a selected directory as a fresh Workspace Agent Scene', async () => {
     const fixture = await createShellAppHost();
     const resolution = createWorkspaceResolution();
     fixture.registry.resolve.mockResolvedValue(resolution);
@@ -1171,6 +1171,23 @@ describe('DesktopAppHost', () => {
     );
 
     expect(result.status).toBe('opened');
+    expect(result.projection.window.scene).toMatchObject({
+      context: {
+        kind: 'agent',
+        scope: {
+          kind: 'workspace',
+          workspaceId: resolution.workspaceId,
+        },
+      },
+      slots: {
+        interaction: { kind: 'agent', phase: 'draft' },
+        main: { kind: 'workspace-main', workspaceId: resolution.workspaceId },
+        rightManager: { kind: 'workspace-resources', workspaceId: resolution.workspaceId },
+      },
+    });
+    expect(result.projection.window.scene.context).not.toHaveProperty(
+      'scope.conversationId',
+    );
     expect(fixture.agent.attachWorkspace).toHaveBeenCalledWith(resolution);
   });
 
@@ -1213,9 +1230,29 @@ describe('DesktopAppHost', () => {
         window: {
           activeTarget: { kind: 'project' },
           tabs: [{ projectId: project.projectId }],
+          scene: {
+            context: {
+              kind: 'agent',
+              scope: {
+                kind: 'workspace',
+                workspaceId: resolution.workspaceId,
+              },
+            },
+            slots: {
+              interaction: { kind: 'agent', phase: 'draft' },
+              main: { kind: 'workspace-main', workspaceId: resolution.workspaceId },
+              rightManager: {
+                kind: 'workspace-resources',
+                workspaceId: resolution.workspaceId,
+              },
+            },
+          },
         },
       },
     });
+    expect(reopened.projection.window.scene.context).not.toHaveProperty(
+      'scope.conversationId',
+    );
     expect(fixture.agent.attachWorkspace).toHaveBeenLastCalledWith(resolution);
     expect(fixture.agent.attachWorkspace).toHaveBeenCalledTimes(2);
   });
@@ -1703,7 +1740,19 @@ function createWorkspaceGrantAuthority(
     },
   },
 ): DesktopWorkspaceGrantAuthority {
-  return new DesktopWorkspaceGrantAuthority({ resolver, createIdentity: () => 'grant-1' });
+  return new DesktopWorkspaceGrantAuthority({
+    resolver: {
+      resolve: (hostResource) => resolver.resolve(hostResource),
+      restore: async (workspaceId) => {
+        const resolution = await resolver.resolve(workspaceId);
+        if (resolution.workspaceId !== workspaceId) {
+          throw new Error(`Restored Workspace '${workspaceId}' resolved to another identity.`);
+        }
+        return resolution;
+      },
+    },
+    createIdentity: () => 'grant-1',
+  });
 }
 
 function createConversationLifecycle() {
