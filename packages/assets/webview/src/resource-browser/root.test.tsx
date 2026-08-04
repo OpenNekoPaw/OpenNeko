@@ -60,6 +60,21 @@ describe('ResourceBrowserRoot', () => {
     expect(document.querySelector('.neko-resource-browser__header')).toBeNull();
   });
 
+  it('hides only the global refresh control when composed by Workspace', async () => {
+    render(
+      <ResourceBrowserRoot
+        runtime={createRuntime()}
+        locale="en"
+        chrome="embedded"
+        refreshControl="hidden"
+      />,
+    );
+
+    await screen.findByText('cat.png');
+    expect(screen.queryByRole('button', { name: 'Refresh' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Configure media libraries' })).toBeTruthy();
+  });
+
   it('opens a previewable item on single click without a persistent action footer', async () => {
     const runtime = createRuntime();
     render(

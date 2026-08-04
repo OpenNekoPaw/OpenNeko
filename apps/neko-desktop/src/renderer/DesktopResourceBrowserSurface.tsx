@@ -67,6 +67,7 @@ export function DesktopResourceBrowserSurface({
           chrome="embedded"
           runtime={runtime}
           locale={locale}
+          refreshControl="hidden"
           defaultViewMode={applicationSettings.projection.preferences.resourceBrowserView}
           previewTarget={{
             viewId: `preview:${tab.viewId}:temporary`,

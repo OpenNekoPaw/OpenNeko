@@ -31,7 +31,10 @@ import './style.css';
 export interface PreviewRootProps {
   readonly runtime: PreviewHostRuntime;
   readonly locale: SupportedLocale;
+  readonly chrome?: PreviewChrome;
 }
+
+export type PreviewChrome = 'default' | 'content-only';
 
 export interface QuickPreviewSurfaceProps {
   readonly descriptor: PreviewMediaDescriptor;
@@ -112,11 +115,13 @@ export function getPreviewViewerRegistry(): readonly PreviewViewerRegistration[]
 export function PreviewPresentation({
   actions,
   authorizedPreviewSessionId,
+  chrome = 'default',
   descriptor,
   locale,
 }: {
   readonly actions?: ReactNode;
   readonly authorizedPreviewSessionId?: string;
+  readonly chrome?: PreviewChrome;
   readonly descriptor: PreviewMediaDescriptor;
   readonly locale: SupportedLocale;
 }): ReactElement {
@@ -128,16 +133,19 @@ export function PreviewPresentation({
     <section
       className="neko-preview-root"
       data-authorized-preview-session-id={authorizedPreviewSessionId}
+      data-preview-chrome={chrome}
       data-preview-kind={descriptor.contentKind}
       data-preview-presentation-owner="preview-webview"
     >
-      <header>
-        <div className="neko-preview-root__heading">
-          <strong>{descriptor.displayName}</strong>
-          <span>{descriptor.mediaType}</span>
-        </div>
-        {actions}
-      </header>
+      {chrome === 'default' ? (
+        <header>
+          <div className="neko-preview-root__heading">
+            <strong>{descriptor.displayName}</strong>
+            <span>{descriptor.mediaType}</span>
+          </div>
+          {actions}
+        </header>
+      ) : null}
       <div className="neko-preview-root__viewer">
         {viewer.render({ descriptor, sourceUrl: descriptor.url, locale })}
       </div>
@@ -145,7 +153,11 @@ export function PreviewPresentation({
   );
 }
 
-export function PreviewRoot({ locale, runtime }: PreviewRootProps): ReactElement {
+export function PreviewRoot({
+  chrome = 'default',
+  locale,
+  runtime,
+}: PreviewRootProps): ReactElement {
   const [state, setState] = useState<PreviewRootState>({ kind: 'loading' });
   const [pendingRoute, setPendingRoute] = useState<PreviewHostRuntimeRoute>();
   const sequence = useRef(0);
@@ -228,6 +240,7 @@ export function PreviewRoot({ locale, runtime }: PreviewRootProps): ReactElement
   };
   return (
     <PreviewPresentation
+      chrome={chrome}
       descriptor={projection.descriptor}
       locale={locale}
       actions={

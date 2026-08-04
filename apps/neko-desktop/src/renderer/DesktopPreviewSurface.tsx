@@ -1,6 +1,9 @@
 import { lazy, Suspense, useMemo } from 'react';
 import { useTranslation } from '@neko/ui/i18n/react';
-import type { DesktopProjectCatalogItem, DesktopShellProjection } from '@neko/host/desktop-shell-contract';
+import type {
+  DesktopProjectCatalogItem,
+  DesktopShellProjection,
+} from '@neko/host/desktop-shell-contract';
 import type { DesktopWorkbenchViewRef } from '@neko/host/desktop-workbench-contract';
 import { createElectronPreviewHostRuntime } from './desktop-preview-host-runtime';
 
@@ -62,7 +65,7 @@ export function DesktopPreviewSurface({
           </div>
         }
       >
-        <PreviewRoot runtime={runtime} locale={locale} />
+        <PreviewRoot chrome="content-only" runtime={runtime} locale={locale} />
       </Suspense>
     </section>
   );

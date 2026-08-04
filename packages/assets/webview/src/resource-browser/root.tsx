@@ -57,6 +57,7 @@ export interface ResourceBrowserRootProps {
   readonly locale: SupportedLocale;
   readonly chrome?: 'standalone' | 'embedded';
   readonly defaultViewMode?: 'list' | 'grid';
+  readonly refreshControl?: 'visible' | 'hidden';
   readonly previewTarget?: {
     readonly viewId: string;
     readonly presentation: 'temporary' | 'side';
@@ -89,6 +90,7 @@ export function ResourceBrowserRoot({
   locale,
   onOpenCanvas,
   previewTarget,
+  refreshControl = 'visible',
   renderQuickPreview,
   runtime,
 }: ResourceBrowserRootProps): ReactElement {
@@ -568,16 +570,18 @@ export function ResourceBrowserRoot({
               </div>
             ) : null}
           </div>
-          <button
-            type="button"
-            className="neko-resource-browser__icon-button"
-            disabled={pending}
-            aria-label={labels.refresh}
-            title={labels.refresh}
-            onClick={() => void execute(RESOURCE_BROWSER_ROUTES.refresh)}
-          >
-            <RefreshIcon size={15} />
-          </button>
+          {refreshControl === 'visible' ? (
+            <button
+              type="button"
+              className="neko-resource-browser__icon-button"
+              disabled={pending}
+              aria-label={labels.refresh}
+              title={labels.refresh}
+              onClick={() => void execute(RESOURCE_BROWSER_ROUTES.refresh)}
+            >
+              <RefreshIcon size={15} />
+            </button>
+          ) : null}
           <div className="neko-resource-browser__view-modes">
             <button
               type="button"

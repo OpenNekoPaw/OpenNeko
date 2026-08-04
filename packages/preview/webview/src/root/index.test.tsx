@@ -105,6 +105,7 @@ describe('PreviewRoot', () => {
     await act(async () => {
       workspaceRoot.render(
         <PreviewRoot
+          chrome="content-only"
           locale="en"
           runtime={createRuntime({
             schemaVersion: PREVIEW_HOST_RUNTIME_VERSION,
@@ -124,10 +125,14 @@ describe('PreviewRoot', () => {
         container.querySelector('[data-preview-presentation-owner="preview-webview"]'),
       ).toBeTruthy();
       expect(container.querySelector('img')?.getAttribute('src')).toBe(descriptor.url);
-      expect(container.querySelector('.neko-preview-root__heading')?.textContent).toContain(
-        'shared.png',
-      );
     }
+    expect(
+      workspaceContainer.querySelector('.neko-preview-root')?.getAttribute('data-preview-chrome'),
+    ).toBe('content-only');
+    expect(workspaceContainer.querySelector('.neko-preview-root > header')).toBeNull();
+    expect(authorizedContainer.querySelector('.neko-preview-root__heading')?.textContent).toContain(
+      'shared.png',
+    );
     expect(
       authorizedContainer
         .querySelector('.neko-preview-root')
