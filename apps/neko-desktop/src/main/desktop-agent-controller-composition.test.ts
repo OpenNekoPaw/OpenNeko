@@ -70,6 +70,52 @@ describe('Agent controller composition', () => {
     await composition.dispose?.();
   });
 
+  it('keeps the initial-turn application port bound across a composition boundary', async () => {
+    const workspace = createWorkspace();
+    await workspace.createConversation('conversation-bound-port');
+    const composition = createAgentControllerComposition({
+      host: createHost(),
+      userHome: '/Users/fixture',
+      credentialRuntime: createCredentialRuntime(),
+      resources: {
+        registerFile: vi.fn(async () => ({
+          url: 'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+          release: vi.fn(),
+        })),
+      },
+      contentInteraction: {
+        openContent: vi.fn(),
+        revealDocument: vi.fn(),
+        selectWorkspaceWriteTarget: vi.fn(),
+      },
+      configInteraction: {
+        openUserConfig: vi.fn(),
+        openWorkspaceConfig: vi.fn(),
+      },
+      reportError: vi.fn(),
+    });
+    const startInitialTurn = composition.startInitialTurn;
+    if (!startInitialTurn) throw new Error('Initial-turn application port is unavailable.');
+
+    await expect(
+      startInitialTurn({
+        workspace,
+        conversationId: 'conversation-bound-port',
+        turnId: 'turn-bound-port',
+        messageText: 'retain this prompt',
+        providerId: 'provider-missing',
+        modelId: 'model-missing',
+        locale: 'en',
+      }),
+    ).rejects.toThrow('Effective Agent configuration is blocked: missingConfig');
+    expect(workspace.checkpointFailedInitialTurn).toHaveBeenCalledWith({
+      conversationId: 'conversation-bound-port',
+      turnId: 'turn-bound-port',
+      messageText: 'retain this prompt',
+    });
+    await composition.dispose?.();
+  });
+
   it('bootstraps the exact persisted Conversation as the active Tab at revision zero', async () => {
     const workspace = createWorkspace();
     await workspace.createConversation('conversation-1');

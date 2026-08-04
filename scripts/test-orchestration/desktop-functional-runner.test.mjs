@@ -10,12 +10,43 @@ import {
   scrollDesktopElement,
   typeDesktopText,
 } from '../desktop-functional/runner.mjs';
+import { resolveVisibleAgentProviderAuthorization } from '../desktop-functional/desktop-agent-provider-ui.mjs';
 import {
   validateDesktopFunctionalScenario,
   validatePreparedDesktopFixture,
 } from '../desktop-functional/scenario-contract.mjs';
 
 describe('Desktop automated functional runner contract', () => {
+  it('requires explicit provider, model, and cost authorization for visible Agent UI', () => {
+    assert.deepEqual(
+      resolveVisibleAgentProviderAuthorization(
+        {
+          OPENNEKO_AGENT_EVAL_PROVIDER_ID: 'provider-1',
+          OPENNEKO_AGENT_EVAL_MODEL_ID: 'model-1',
+          OPENNEKO_AGENT_EVAL_COST_APPROVED: 'true',
+        },
+        '/Users/fixture',
+      ),
+      {
+        providerId: 'provider-1',
+        modelId: 'model-1',
+        configurationFile: '/Users/fixture/.neko/config.toml',
+      },
+    );
+    assert.throws(
+      () =>
+        resolveVisibleAgentProviderAuthorization(
+          {
+            OPENNEKO_AGENT_EVAL_PROVIDER_ID: 'provider-1',
+            OPENNEKO_AGENT_EVAL_MODEL_ID: 'model-1',
+            OPENNEKO_AGENT_EVAL_COST_APPROVED: 'false',
+          },
+          '/Users/fixture',
+        ),
+      /cost authorization is not approved/u,
+    );
+  });
+
   it('launches development Electron with isolated workspace and CDP control', () => {
     const launch = createAutomatedDesktopLaunch({
       platform: 'darwin',

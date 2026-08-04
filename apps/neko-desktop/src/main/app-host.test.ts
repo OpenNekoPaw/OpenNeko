@@ -600,7 +600,17 @@ describe('DesktopAppHost', () => {
     finishProvider?.();
     await conversationLifecycle.waitForProviderIdle();
     const second = await fixture.appHost.executeAgentLaunchRequest(fixture.sender, request);
-    expect(second).toEqual(first);
+    expect(second).toMatchObject({
+      schemaVersion: 1,
+      requestId: request.requestId,
+      status: 'committed',
+      projection: {
+        conversationId: 'conversation:first-submit-1',
+        turnId: 'turn:first-submit-2',
+        turnStatus: 'completed',
+      },
+    });
+    expect(providerStart).toHaveBeenCalledOnce();
     await fixture.appHost.dispose();
   });
 

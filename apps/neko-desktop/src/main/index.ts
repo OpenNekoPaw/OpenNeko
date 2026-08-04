@@ -888,11 +888,10 @@ async function startDesktop(): Promise<void> {
     provider: {
       start: async (request) => {
         const workspace = await resolveConversationWorkspace(request.context);
-        const startInitialTurn = agentControllerComposition.startInitialTurn;
-        if (!startInitialTurn) {
+        if (!agentControllerComposition.startInitialTurn) {
           throw new Error('Agent initial-turn provider adapter is unavailable.');
         }
-        await startInitialTurn({
+        await agentControllerComposition.startInitialTurn({
           workspace,
           conversationId: request.conversationId,
           turnId: request.turnId,
