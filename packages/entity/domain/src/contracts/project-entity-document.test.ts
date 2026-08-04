@@ -78,6 +78,7 @@ describe('Project Entity document contract', () => {
             facts: { personality: 'published base' },
             representations: [],
           },
+          representationOrigins: [],
         },
       },
     ]);
@@ -87,6 +88,38 @@ describe('Project Entity document contract', () => {
         personality: 'published base',
       },
     );
+  });
+
+  it('rejects Asset binding lineage that does not resolve on both sides', () => {
+    const entity = createEntity({ entityId: 'character-rin', kind: 'character', canonical: 'Rin' });
+    expect(
+      decodeProjectEntityDocument(
+        createDocument([
+          {
+            ...entity,
+            provenance: {
+              origin: { assetId: 'asset-rin', revision: 'revision-1', digest: DIGEST_A },
+              applied: { assetId: 'asset-rin', revision: 'revision-1', digest: DIGEST_A },
+              importBase: {
+                kind: entity.kind,
+                names: entity.names,
+                facts: {},
+                representations: [],
+              },
+              representationOrigins: [
+                {
+                  assetBindingId: 'asset-binding-missing',
+                  projectBindingId: 'project-binding-missing',
+                },
+              ],
+            },
+          },
+        ]),
+      ),
+    ).toMatchObject({
+      ok: false,
+      diagnostics: [{ code: 'invalid-project-entity-asset-provenance' }],
+    });
   });
 
   it('rejects unknown versions and projection or workflow authority fields', () => {

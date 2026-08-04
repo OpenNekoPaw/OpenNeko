@@ -30,6 +30,12 @@ describe('ProjectEntityAssetInstantiationService', () => {
       origin: ASSET_REF,
       applied: ASSET_REF,
       importBase: SNAPSHOT.semantic,
+      representationOrigins: [
+        {
+          assetBindingId: 'asset-binding-rin',
+          projectBindingId: 'project-entity-1:asset-binding-rin',
+        },
+      ],
     });
     expect(harness.document.entities[0]?.provenance).not.toBe(
       harness.document.entities[1]?.provenance,

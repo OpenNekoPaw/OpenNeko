@@ -1,7 +1,10 @@
 import type {
+  ProjectEntityFactValue,
   ProjectEntityAssetRevisionRef,
+  ProjectEntityRepresentationBinding,
   ProjectEntitySemanticSnapshot,
 } from './project-entity-document';
+import type { CreativeEntityKind } from './creative-entity-identity';
 import type { ContentLocator } from '@neko/content';
 
 export interface ProjectEntityAssetSnapshot {
@@ -55,4 +58,51 @@ export interface ProjectEntityAssetPublicationAdapter {
     signal?: AbortSignal,
   ): Promise<ProjectEntityAssetRevisionRef>;
   abort(operationId: string): Promise<void>;
+}
+
+export type ProjectEntitySemanticField =
+  | 'kind'
+  | 'names.canonical'
+  | 'names.display'
+  | 'names.aliases'
+  | 'representations'
+  | `facts/${string}`;
+
+export type ProjectEntitySemanticFieldValue =
+  | CreativeEntityKind
+  | string
+  | readonly string[]
+  | ProjectEntityFactValue
+  | readonly ProjectEntityRepresentationBinding[]
+  | undefined;
+
+export type ProjectEntityAssetDiffStatus =
+  'applicable' | 'conflict' | 'local-only' | 'already-applied';
+
+export interface ProjectEntityAssetDiffEntry {
+  readonly field: ProjectEntitySemanticField;
+  readonly status: ProjectEntityAssetDiffStatus;
+  readonly base: ProjectEntitySemanticFieldValue;
+  readonly current: ProjectEntitySemanticFieldValue;
+  readonly incoming: ProjectEntitySemanticFieldValue;
+}
+
+export interface ProjectEntityAssetUpdateDiff {
+  readonly entityId: string;
+  readonly currentRevision: ProjectEntityAssetRevisionRef;
+  readonly availableRevision: ProjectEntityAssetRevisionRef;
+  readonly entries: readonly ProjectEntityAssetDiffEntry[];
+}
+
+export interface ProjectEntityAssetUpdateAvailability {
+  readonly entityId: string;
+  readonly origin: ProjectEntityAssetRevisionRef;
+  readonly applied: ProjectEntityAssetRevisionRef;
+  readonly available: ProjectEntityAssetRevisionRef;
+  readonly status: 'current' | 'update-available';
+}
+
+export interface ProjectEntityAssetConflictResolution {
+  readonly field: ProjectEntitySemanticField;
+  readonly resolution: 'current' | 'incoming';
 }

@@ -68,6 +68,19 @@ export class ProjectEntityAssetInstantiationService {
       current,
       this.options.createBindingId,
     );
+    const representationOrigins = asset.semantic.representations.map((binding, index) => {
+      const projectBinding = semantic.representations[index];
+      if (!projectBinding) {
+        throw assetError(
+          'invalid-project-entity-asset-snapshot',
+          'Entity Asset representation instantiation lost binding lineage.',
+        );
+      }
+      return {
+        assetBindingId: binding.bindingId,
+        projectBindingId: projectBinding.bindingId,
+      };
+    });
     const record: ProjectEntityRecord = {
       entityId,
       ...semantic,
@@ -76,6 +89,7 @@ export class ProjectEntityAssetInstantiationService {
         origin: { ...request.asset },
         applied: { ...request.asset },
         importBase: cloneSemantic(asset.semantic),
+        representationOrigins,
       },
       createdAt: request.createdAt,
       updatedAt: request.createdAt,

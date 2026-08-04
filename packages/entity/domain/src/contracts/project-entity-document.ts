@@ -79,6 +79,12 @@ export interface ProjectEntityAssetProvenance {
   readonly origin: ProjectEntityAssetRevisionRef;
   readonly applied: ProjectEntityAssetRevisionRef;
   readonly importBase: ProjectEntitySemanticSnapshot;
+  readonly representationOrigins: readonly ProjectEntityRepresentationOrigin[];
+}
+
+export interface ProjectEntityRepresentationOrigin {
+  readonly assetBindingId: string;
+  readonly projectBindingId: string;
 }
 
 export interface ProjectEntityRecord extends ProjectEntitySemanticSnapshot {
@@ -201,6 +207,13 @@ export function decodeProjectEntityDocument(value: unknown): ProjectEntityDocume
         );
       }
       bindingIds.add(binding.bindingId);
+    }
+    if (entity.provenance && !hasValidRepresentationOrigins(entity)) {
+      return invalidDocument(
+        'invalid-project-entity-asset-provenance',
+        `Project Entity '${entity.entityId}' has invalid Asset representation lineage.`,
+        { entityId: entity.entityId },
+      );
     }
   }
   for (const entity of document.entities) {
@@ -433,8 +446,57 @@ function parseOptionalProvenance(value: unknown): ProjectEntityAssetProvenance |
   const origin = parseAssetRevision(value['origin']);
   const applied = parseAssetRevision(value['applied']);
   const importBase = parseImportBase(value['importBase']);
-  if (!origin || !applied || !importBase || origin.assetId !== applied.assetId) return false;
-  return { origin, applied, importBase };
+  const representationOrigins = parseRepresentationOrigins(value['representationOrigins']);
+  if (
+    !origin ||
+    !applied ||
+    !importBase ||
+    !representationOrigins ||
+    origin.assetId !== applied.assetId
+  ) {
+    return false;
+  }
+  return { origin, applied, importBase, representationOrigins };
+}
+
+function parseRepresentationOrigins(
+  value: unknown,
+): readonly ProjectEntityRepresentationOrigin[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const origins: ProjectEntityRepresentationOrigin[] = [];
+  for (const candidate of value) {
+    if (
+      !isRecord(candidate) ||
+      !hasOnlyKeys(candidate, REPRESENTATION_ORIGIN_KEYS) ||
+      !isStableIdentity(candidate['assetBindingId']) ||
+      !isStableIdentity(candidate['projectBindingId'])
+    ) {
+      return undefined;
+    }
+    origins.push({
+      assetBindingId: candidate['assetBindingId'],
+      projectBindingId: candidate['projectBindingId'],
+    });
+  }
+  return origins;
+}
+
+function hasValidRepresentationOrigins(entity: ProjectEntityRecord): boolean {
+  if (!entity.provenance) return true;
+  const origins = entity.provenance.representationOrigins;
+  const assetBindingIds = new Set(
+    entity.provenance.importBase.representations.map((binding) => binding.bindingId),
+  );
+  const projectBindingIds = new Set(entity.representations.map((binding) => binding.bindingId));
+  return (
+    new Set(origins.map((origin) => origin.assetBindingId)).size === origins.length &&
+    new Set(origins.map((origin) => origin.projectBindingId)).size === origins.length &&
+    origins.every(
+      (origin) =>
+        assetBindingIds.has(origin.assetBindingId) &&
+        projectBindingIds.has(origin.projectBindingId),
+    )
+  );
 }
 
 function parseImportBase(value: unknown): ProjectEntitySemanticSnapshot | undefined {
@@ -565,7 +627,8 @@ const REPRESENTATION_KEYS = [
   'isDefault',
   'acceptedAt',
 ] as const;
-const PROVENANCE_KEYS = ['origin', 'applied', 'importBase'] as const;
+const PROVENANCE_KEYS = ['origin', 'applied', 'importBase', 'representationOrigins'] as const;
+const REPRESENTATION_ORIGIN_KEYS = ['assetBindingId', 'projectBindingId'] as const;
 const ASSET_REVISION_KEYS = ['assetId', 'revision', 'digest'] as const;
 const CANDIDATE_KEYS = [
   'candidateId',
