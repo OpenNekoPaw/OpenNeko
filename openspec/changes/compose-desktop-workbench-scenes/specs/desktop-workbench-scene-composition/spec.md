@@ -261,7 +261,7 @@ Assistant scope SHALL use an OpenNeko-managed logical user space, explicit resou
 
 ### Requirement: First submit commits locally and starts external execution idempotently
 
-Submitting an Agent draft SHALL validate the explicit scope and grants, atomically persist conversation context, conversation, initial user message and a durable pending-turn intent, then start provider execution idempotently with the same request/turn identity. Renderer activation MUST NOT trigger execution.
+Submitting an Agent draft SHALL validate the explicit scope and grants, atomically persist conversation context, conversation, initial user message and a durable pending-turn intent in lifecycle authority, materialize that exact conversation identity in the scope-owned Agent workspace, then start provider execution idempotently with the same request/turn identity. Renderer activation MUST NOT trigger execution, and session Scene activation MUST NOT succeed before materialization can bootstrap the exact conversation. Pi terminal checkpoints SHALL be written only by actual turn execution and MUST NOT be fabricated to represent the lifecycle pending intent.
 
 #### Scenario: Assistant draft is submitted
 
@@ -280,6 +280,22 @@ Submitting an Agent draft SHALL validate the explicit scope and grants, atomical
 - **WHEN** the renderer reloads or its adapter is replaced after local commit
 - **THEN** it reattaches the exact conversation and observes the existing pending/running/failed turn
 - **AND** it does not duplicate the conversation, initial message, provider request or execution lease
+
+#### Scenario: A committed first submit is replayed after provider claim
+
+- **WHEN** lifecycle metadata and the provider execution claim exist but the exact scope-owned Agent workspace conversation is missing
+- **THEN** Agent authority idempotently materializes the exact committed conversation before returning the record
+- **AND** the Assistant or Workspace bootstrap succeeds against that exact identity
+- **AND** provider execution is not claimed or started again
+- **AND** an existing mismatched conversation or checkpoint fails visibly instead of falling back to the active conversation
+
+#### Scenario: Entry Draft connection becomes a session connection
+
+- **WHEN** first submit activates the committed session and replaces the launch projection endpoint
+- **THEN** the existing Agent Root retires every launch attachment through the old launch binding before attaching through the new session binding
+- **AND** the session Scene, scope, conversation and endpoint identities match before the next message is accepted
+- **AND** stale endpoint frames and identity mismatches remain fail-visible
+- **AND** Desktop does not remount a second Agent controller or suppress attachment errors
 
 #### Scenario: Provider startup fails
 

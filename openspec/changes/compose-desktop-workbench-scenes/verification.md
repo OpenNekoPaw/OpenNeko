@@ -273,6 +273,41 @@ first packaged scenario attempt reached the final Assistant activation check whi
 an immediate isolated rerun passed the complete scenario, so this remains a non-deterministic Agent
 activation residual rather than evidence of a Preview/Project regression.
 
+The 10.17 first-submit handoff regression was reproduced again in the packaged application before the
+fix:
+
+`reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-04T12-23-08.407Z-desktop-workbench-scenes-packaged/report.json`
+
+That run committed the Entry Draft reference and reached the exact Workspace checks, but failed before
+the Assistant activation checkpoint because the conversation lifecycle record existed while the
+scope-owned Agent runtime conversation and session Scene were not yet available. The failure was not
+accepted as timing noise.
+
+The final development and rebuilt packaged scenarios passed on the corrected lifecycle and IPC path:
+
+`reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-04T12-26-49.100Z-desktop-workbench-scenes-development/report.json`
+
+`reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-04T12-28-47.200Z-desktop-workbench-scenes-packaged/report.json`
+
+Both runs prove direct Entry Draft submit activates the exact Assistant session, explicit directory
+selection retains the exact Workspace scope, and the activated Assistant accepts a second message.
+The scenario rejects `attachment-identity-mismatch` and endpoint-mismatch alerts after launch/session
+adapter replacement. The final reports have `poisonedRequestCount: 0`, no console errors and no
+renderer exceptions.
+
+Focused path tests additionally prove that lifecycle replay materializes the exact conversation even
+after the provider claim was consumed, concurrent materialization remains idempotent, provider context
+resolution cannot delay session activation, resolution/provider failure becomes a durable failed-turn
+diagnostic, and old/new renderer adapters send and subscribe through their own connection identities.
+The final affected suites passed Agent Runtime `115 files / 1080 tests`, Agent Webview `90 / 697` and
+Desktop `65 / 343`.
+
+After the final async-boundary correction, `pnpm build`, `pnpm test`, `pnpm check` and
+`pnpm check:quality` passed again. The Desktop production package was rebuilt and its darwin-arm64
+output verified; application-boundary findings remained zero across 1427 files, dependency findings
+remained zero across 1398 modules, and the unused scan reported only the existing 73 configuration
+hints.
+
 ## Agent Evaluation
 
 `pnpm test:agent:eval` passed its key-free checks: `45 files / 284 tests`, with `22 suites / 53 cases`
@@ -288,6 +323,15 @@ The focused real-run preflight for
 `agent-runtime.workflow-controller/conversation-persistence-resume` returned
 `infrastructure-blocked` before Desktop/API launch with the exact diagnostic that explicit provider,
 model and cost authorization are required. No provider behavior is claimed from this preflight.
+
+The 10.17 disposition remains `update` for
+`session-workflows -> agent-runtime.workflow-controller`. The canonical evidence now also requires
+exact scope-owned session materialization before provider claim and old-binding detach before the new
+projection endpoint accepts a second message. `pnpm test:agent:eval` passed again at `45 files / 284
+tests` and `22 suites / 53 cases` dry-run. A real provider-backed Entry Draft case remains
+infrastructure-blocked because the complete-session driver does not expose Entry Draft submit,
+materialization/claim ordering or projection endpoint replacement facts; deterministic tests and the
+visible Electron scenarios are not presented as model-behavior acceptance.
 
 ## Quality Review And Residual Risk
 

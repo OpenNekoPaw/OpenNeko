@@ -250,11 +250,16 @@ Draft submit request 携带 requestId、scope、selected model/configuration 和
 
 1. 验证 scope 与 grants；
 2. 在本地 authority 原子提交 context、conversation、initial user message 和 durable pending-turn intent；
-3. 返回已提交 conversation identity；
-4. 以同一 requestId/turn identity 幂等启动 provider execution；
-5. renderer 只附着 projection，不触发 turn。
+3. 通过 package-owned session materialization port，把同一 conversation identity 幂等物化到 context 指向的精确 Assistant/Workspace Agent workspace；initial user message 与 pending intent 仍由 lifecycle authority 拥有，Pi terminal checkpoint 只由真实 turn execution 写入；
+4. 只有物化成功后才允许 Host 把 Scene 切换为 session 并返回已提交 conversation identity；
+5. 以同一 requestId/turn identity 幂等启动 provider execution；
+6. renderer 只附着 projection，不触发 turn。
 
 Provider failure、reload 或 adapter replacement不得重复 initial message/turn。失败保留 conversation 和 pending/failed turn diagnostic，可由现有 recovery policy恢复；不能回滚为 Home handoff、空 conversation 或另一个 scope。
+
+Session materialization 与 provider execution lease 是两个独立阶段。重放已提交 record 时，即使 provider lease 已被领取，也必须先校验并修复 exact Agent workspace conversation，再返回 record；物化缺失或 scope identity 冲突必须 fail-visible，不能由 bootstrap fallback 到 active conversation，也不能重新领取或执行 provider turn。lifecycle initial message/pending intent 与后续 Pi terminal checkpoint 使用各自真实 authority，不创建会阻塞同一 turn 执行的伪 pending Pi checkpoint。
+
+Entry Draft 到 session 的 renderer 交接保留同一个 `AgentWebviewRoot`，但 launch connection 与 session connection 拥有不同 endpoint epoch。endpoint replacement 必须先使用旧 binding/Host owner detach 旧 attachment，再接受新 endpoint attachment；旧 endpoint frame 继续因 stale/mismatch 失败，不能吞掉 `attachment-identity-mismatch`、用新 adapter 代旧 owner detach，或通过 React key remount 第二个 controller规避生命周期。
 
 ### 9. Asset Center is an Assets-owned management and preview session
 
@@ -316,6 +321,8 @@ The canonical fix remains fail-visible after final disposal: methods on a dispos
 - [Assistant 变成隐式全盘文件权限] -> product-managed AssistantSpace + explicit ResourceGrant；poison Home/config/credential/raw-path访问。
 - [目录选择误建会话或扩大权限] -> picker grant 与 conversation creation分离；显式 scope projection和 no-fallback tests。
 - [初始 turn 重复] -> 本地 pending intent事务 + request/turn identity；renderer只 attach，不执行。
+- [提交后 lifecycle record 与 Agent workspace 会话分裂] -> provider lease 前执行幂等 session materialization；replay 先修复 exact conversation/checkpoint，再返回 session Scene，且不重跑 provider。
+- [launch/session endpoint replacement 交叉释放] -> attachment 保留创建它的 binding；旧 binding 完成 detach 后再附着新 endpoint，identity mismatch 继续 fail-visible。
 - [Scratch 丢失有价值产物] -> publish-before-cleanup contract；conversation删除/显式清理才回收。
 - [Asset manager/preview selection漂移] -> 单一 AssetCenterSession revision与 exact preview session binding。
 - [缺失 Extensions/Project detail Root] -> owner-qualified empty/unavailable；不复制 app-local domain UI。

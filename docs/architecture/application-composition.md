@@ -119,6 +119,15 @@ Character/Room owner 的选择必须 fail-visible，不能降级为 Assistant �
 属于窗口级 presentation chrome，只在 exact Workspace scene 中出现在 PrimarySidebar 顶部品牌控件组、
 紧邻 sidebar 显隐按钮；不得放入 footer、Main tab 或领域 Root。
 
+首次提交的 lifecycle authority 原子持有 context、initial message 和 pending-turn intent，并在领取
+provider execution 前通过 package-owned materialization port 幂等确保 exact Assistant/Workspace
+Agent runtime 已拥有同一 conversation identity；只有该 conversation 可以 bootstrap 后，Host 才把
+Scene 暴露为 session。Desktop Main 只实现 context 到 concrete runtime 的组合 adapter，不拥有提交或
+恢复规则。renderer 的 session adapter 与 preload 传输按显式 connection identity 绑定 send 和
+subscription；endpoint replacement 必须用创建旧 attachment 的 binding 发送 `endpoint-replaced`
+detach，再由新 connection attach。全局 active connection 不得代替 instance owner，endpoint identity
+mismatch 继续 fail-visible。
+
 Workspace Main 的真实多 View group 是唯一拥有 Workbench tab strip 的区域。所有 Workbench 内 Preview
 内容都通过 canonical `@neko/preview-webview` content-only presentation 渲染，不再添加 descriptor
 header，并以透明内容背景继承所在 shell 主题。Management 和合格的可选 Preview/Detail 分别占据两个

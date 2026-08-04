@@ -55,7 +55,7 @@ supports their public operations and facts:
 - Real cases and reports: not run. A provider-backed run requires native `~/.neko/config.toml`,
   explicit provider/model identity, cost authorization and the missing driver operations/facts below.
 - Focused provider preflight: `node scripts/agent-eval/local-run.mjs --mode focused --suite
-  agent-runtime.workflow-controller --case conversation-persistence-resume` returned
+agent-runtime.workflow-controller --case conversation-persistence-resume` returned
   `infrastructure-blocked` before Desktop/API launch because explicit provider, model and cost
   authorization were absent. The redacted local summary is `reports/agent-eval/local-run-summary.json`.
 - Blocked or unexecuted cases: all five proposed cases above remain blocked by unsupported Desktop
@@ -76,6 +76,22 @@ supports their public operations and facts:
   restore remain unverified by Evaluation.
 - Key-free success, dry-run selection, mock output or an ordinary Workspace final answer must not be
   described as acceptance for this change.
+
+## First-Submit Session Handoff Update
+
+- Disposition remains `update` for
+  `session-workflows -> agent-runtime.workflow-controller`; this is the same first-submit session
+  workflow, not a second Evaluation owner.
+- The canonical path now includes lifecycle commit -> exact Assistant/Workspace runtime conversation
+  materialization -> provider claim -> session Scene attach -> old-binding projection detach -> new
+  connection attach and second-message delivery.
+- Forbidden paths now also include provider-adapter conversation creation, bootstrap fallback to an
+  active conversation, global-current-connection send/subscribe and detaching an old attachment
+  through the replacement adapter.
+- Agent Runtime, Webview, Desktop and visible development/packaged Electron evidence prove the
+  identity/order boundary and reject endpoint mismatch. Real provider behavior remains blocked because
+  the complete-session driver does not expose Entry Draft submit, materialization/claim ordering or
+  endpoint replacement facts; no model-quality or provider-success claim is made.
 
 ## Error Diagnostic And Activation Regression Decision
 

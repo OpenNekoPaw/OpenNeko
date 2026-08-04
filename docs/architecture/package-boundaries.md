@@ -217,6 +217,13 @@ Desktop 的产品级组合位于 `apps/neko-desktop`。Agent contracts/runtime �
 capability/tool schema 和宿主副作用按各自边界维护。Pi 只接收已经解析好的
 model/prompt/tool snapshot，不接收 `ConfigManager`、领域 service 或 Host process adapter。
 
+Entry Draft first-submit 的 context、initial message、pending intent、provider claim 和 session
+materialization 顺序由 `@neko/agent-runtime` application service 拥有。Desktop 只注入精确
+Assistant/Workspace runtime resolver；不得把 `workspace.createConversation` 隐藏在 provider adapter
+中。Agent renderer adapter、preload 和 Main message route 必须携带同一显式 connection identity，
+旧 projection attachment 只能通过其创建时 binding 释放，不能使用全局 active connection 切换参数
+模拟多个 session instance。
+
 `@neko/shared/job-lifecycle` 只提供 typed Job identity、phase、revision/CAS、终态不可变和
 versioned observation。Generation、Cut 等 owning domain 各自拥有 submit、具体 snapshot
 schema、provider/executor identity、持久 migration、reconciliation、retry policy 和原子结果提交；
