@@ -121,7 +121,7 @@
 - Evaluation Skill 只负责覆盖判断、声明式 authoring 草案和证据解释；可执行测试意图必须进入严格 suite/Scenario/assertion/ablation artifact。Skill 不得生成或执行每 case JavaScript、注册 handler、决定 outcome、持有凭据/进程协议，中央 runner 也不得按 `scenario.id`、Skill 名或业务功能名增加成功分支。
 - 确定性 case 解析由现有 Evaluation runner 复用 strict schema、引用、profile、supported-kind 和 workflow 状态机完成。没有跨进程持久计划、多个真实执行后端或不可变计划缓存等实际消费者时，不得新建 compiler service、workspace package、动态插件系统或通用 UI/Agent DSL；达到提取条件后必须通过 OpenSpec 重新定义 owner、contract、lifecycle、errors 和验证证据。
 - `pnpm test:agent:eval`、key-free harness、provider-backed case、hidden/visible Desktop、重复 matrix、configuration/implementation ablation 和图形化 Electron 验收都必须由开发者通过显式本地入口运行，不得直接或间接加入 GitHub Actions、`check:ci`、`gate:local`、`gate:remote`、`ci:local`、`ci:remote` 或其他通用 CI script composition。CI 只能运行普通 unit/contract/headless 测试和“本地入口不可达”的编排回归。
-- 真实 API Evaluation 唯一允许的用户配置来源是 `~/.neko/config.toml`；本地 CLI 和环境变量不得改写该路径，也不得回退到 JSON/YAML、其他用户配置或 mock。Evaluation 只在启动前验证原生 TOML，并以 `0600` 权限原样复制到隔离 fixture；不得编译另一格式、合并默认值、推断 provider、写回用户目录或把配置内容写入报告。
+- 真实 API Evaluation 唯一允许的用户配置来源是 `~/.neko/config.toml`；本地 CLI 和环境变量不得改写该路径，也不得回退到 JSON/YAML、其他用户配置或 mock。Evaluation 只在启动前验证可读的原生 TOML，不得要求精确的 POSIX 权限模式、修改用户配置权限、编译另一格式、合并默认值、推断 provider、写回用户目录或把配置内容写入报告。配置原样复制到隔离 fixture 时可为新建的 fixture 文件选用安全默认权限，但该默认值不是源配置的运行资格条件。
 - `~/.neko/config.toml` 内凭据由产品配置 owner 解析；Evaluation 不得读取、打印或投影 secret。provider/model identity 与成本授权必须显式提供，缺失时在启动 Desktop 和调用 API 前返回 `infrastructure-blocked`。
 - key-free、dry-run、mock、最终文本、单次 Judge 或 hidden window 结果只表示 harness/authoring readiness，不是 Agent 行为、模型质量、真实 API、UI 或消融验收证据。
 

@@ -21,7 +21,7 @@
 ## 4. Documentation And Evaluation
 
 - [x] 4.1 Update Agent, Desktop application composition, package boundaries and Chara owner documentation with transcript/context/group separation and PrimarySidebar switching rules.
-- [x] 4.2 Record `neko-agent-evaluation` disposition and focused canonical-path/no-fallback evidence for Assistant versus Workspace restore; run key-free validation and real Desktop complete-session cases when infrastructure is available.
+- [x] 4.2 Record `neko-agent-evaluation` disposition and focused canonical-path/no-fallback evidence for Assistant versus Workspace restore; run key-free validation and a provider-backed Desktop complete-session conversation with persisted resume.
 - [x] 4.3 Run isolated development and packaged Electron scenarios for grouped navigation, Project Draft activation, Assistant/Workspace restore/delete, expand/collapse, reload and narrow/large layouts; record evidence in `verification.md`.
 
 ## 5. Quality And Completion
