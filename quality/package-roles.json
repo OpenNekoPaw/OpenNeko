@@ -164,6 +164,15 @@
       "architectureState": "converged"
     },
     {
+      "path": "packages/entity/webview",
+      "name": "@neko/entity-webview",
+      "family": "entity",
+      "roles": ["webview"],
+      "runtimes": ["browser"],
+      "productStatus": "active-product",
+      "architectureState": "converged"
+    },
+    {
       "path": "packages/generation",
       "name": "@neko/generation",
       "family": "generation",

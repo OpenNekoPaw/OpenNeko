@@ -529,9 +529,6 @@ importers:
       '@neko/content':
         specifier: workspace:*
         version: link:../../content
-      '@neko/entity-domain':
-        specifier: workspace:*
-        version: link:../../entity/domain
       '@neko/entity-webview':
         specifier: workspace:*
         version: link:../../entity/webview
