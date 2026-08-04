@@ -200,7 +200,9 @@ describe('Desktop architecture boundaries', () => {
     expect(cutSurface).toMatch(/<CutWebviewRoot[\s\S]*bridge=\{bridge\}/u);
     expect(cutSurface).toContain('timelineTarget={timelineTarget}');
     expect(previewSurface).toContain("import('@neko/preview-webview/root')");
-    expect(previewSurface).toContain('<PreviewRoot runtime={runtime}');
+    expect(previewSurface).toContain('<PreviewRoot');
+    expect(previewSurface).toContain('runtime={runtime}');
+    expect(previewSurface).toContain('chrome="content-only"');
     for (const source of [cutSurface, previewSurface, shell]) {
       expect(source).not.toContain('/host-adapter');
       expect(source).not.toContain('CutHostAdapterSurface');
