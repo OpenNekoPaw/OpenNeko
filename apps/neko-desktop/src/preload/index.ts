@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron';
+import type { AgentHostToWebviewMessage } from '@neko/agent-contracts';
 import {
   createDesktopAgentBootstrapRequest,
   createDesktopAssistantAgentBootstrapRequest,
@@ -184,7 +185,10 @@ import {
 let requestSequence = 0;
 let latestShellProjection: DesktopShellProjectionCursor | undefined;
 let currentAgentEventCursor: DesktopAgentEventCursor | undefined;
-const agentListeners = new Set<Parameters<OpenNekoDesktopAgentBridge['agent']['subscribe']>[0]>();
+const agentListeners = new Set<{
+  readonly connection: DesktopAgentEventCursor['connection'];
+  readonly listener: (message: AgentHostToWebviewMessage) => void;
+}>();
 let currentResourceIdentity: ResourceBrowserIdentity | undefined;
 let currentResourceEventSequence = 0;
 const resourceListeners = new Set<
@@ -346,14 +350,7 @@ const bridge: OpenNekoDesktopBridge &
           : undefined;
       return projection;
     },
-    send(message) {
-      const connection = currentAgentEventCursor?.connection;
-      if (!connection) {
-        throw new DesktopAgentContractError(
-          'desktop-agent-identity-mismatch',
-          'Desktop Agent send requires a ready sender-bound bootstrap.',
-        );
-      }
+    send(connection, message) {
       const request = createDesktopAgentMessageRequest(
         nextRequestId('desktop-agent-message'),
         connection,
@@ -364,17 +361,24 @@ const bridge: OpenNekoDesktopBridge &
         .then((response: unknown) => {
           const result = parseDesktopAgentMessageResult(response, request.requestId);
           if (result.status === 'unavailable') {
-            emitAgentMessage(projectDesktopAgentSendFailure(message, result.diagnostic.message));
+            emitAgentMessage(
+              connection,
+              projectDesktopAgentSendFailure(message, result.diagnostic.message),
+            );
           }
         })
         .catch((error: unknown) => {
-          emitAgentMessage(projectDesktopAgentSendFailure(message, describeError(error)));
+          emitAgentMessage(
+            connection,
+            projectDesktopAgentSendFailure(message, describeError(error)),
+          );
         });
     },
-    subscribe(listener) {
-      agentListeners.add(listener);
+    subscribe(connection, listener) {
+      const subscription = { connection, listener };
+      agentListeners.add(subscription);
       return () => {
-        agentListeners.delete(listener);
+        agentListeners.delete(subscription);
       };
     },
     ...(process.argv.includes('--openneko-functional-fixture')
@@ -1155,14 +1159,14 @@ ipcRenderer.on(
     const event = parseDesktopAgentMessageEvent(value);
     const current = currentAgentEventCursor;
     if (!current || !isSameDesktopAgentEventConnection(event.connection, current.connection)) {
-      emitAgentMessage({
+      emitAgentMessage(current?.connection ?? event.connection, {
         type: 'globalError',
         message: 'Desktop Agent rejected an event for a stale or foreign connection.',
       });
       return;
     }
     if (event.sequence !== current.sequence + 1) {
-      emitAgentMessage({
+      emitAgentMessage(current.connection, {
         type: 'globalError',
         message: `Desktop Agent event sequence ${event.sequence} does not follow ${current.sequence}.`,
       });
@@ -1172,7 +1176,7 @@ ipcRenderer.on(
       connection: current.connection,
       sequence: event.sequence,
     };
-    emitAgentMessage(event.message);
+    emitAgentMessage(event.connection, event.message);
   },
 );
 
@@ -1276,9 +1280,14 @@ function requireShellMutationContext(): {
 }
 
 function emitAgentMessage(
-  message: Parameters<Parameters<OpenNekoDesktopAgentBridge['agent']['subscribe']>[0]>[0],
+  connection: DesktopAgentEventCursor['connection'],
+  message: AgentHostToWebviewMessage,
 ): void {
-  for (const listener of agentListeners) listener(message);
+  for (const subscription of agentListeners) {
+    if (isSameDesktopAgentEventConnection(subscription.connection, connection)) {
+      subscription.listener(message);
+    }
+  }
 }
 
 function describeError(error: unknown): string {

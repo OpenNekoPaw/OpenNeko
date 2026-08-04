@@ -167,7 +167,7 @@ describe('ProjectionEndpointController', () => {
     });
   });
 
-  it('abandons old endpoint attachments locally and reattaches retained replicas', () => {
+  it('detaches old endpoint attachments through their binding before reattaching replicas', () => {
     const { host, registry, errors } = createHarness([
       { tabId: 'tab-a', conversationId: 'conv-a' },
     ]);
@@ -198,7 +198,13 @@ describe('ProjectionEndpointController', () => {
         (message) =>
           message.type === 'projectionDetach' && message.key.endpointEpoch === 'endpoint-1',
       ),
-    ).toEqual([]);
+    ).toEqual([
+      {
+        type: 'projectionDetach',
+        key: oldKey,
+        reason: 'endpoint-replaced',
+      },
+    ]);
     expect(
       registry.require('tab-a').projectionReplica.getSnapshot().projection?.projectionVersion,
     ).toBe(2);

@@ -52,7 +52,6 @@ export interface ProjectionAttachmentClient {
   attach(identity: Pick<ProjectionAttachmentKey, 'endpointEpoch' | 'attachmentId'>): void;
   accept(frame: ConversationProjectionAttachmentFrame): void;
   detach(reason: ProjectionDetachMessage['reason']): void;
-  abandon(): void;
   dispose(): void;
 }
 
@@ -141,16 +140,6 @@ class DefaultProjectionAttachmentClient implements ProjectionAttachmentClient {
     const key = this.snapshot.key;
     if (!key) return;
     this.options.send({ type: 'projectionDetach', key, reason });
-    this.snapshot = Object.freeze({
-      phase: 'detached',
-      key: null,
-      lastSequence: -1,
-      projectionVersion: null,
-    });
-  }
-
-  abandon(): void {
-    this.assertNotDisposed();
     this.snapshot = Object.freeze({
       phase: 'detached',
       key: null,

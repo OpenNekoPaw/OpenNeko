@@ -384,7 +384,7 @@ class DefaultTabRenderRuntime implements TabRenderRuntime {
     const current = this.currentProjectionAttachment;
     if (current) {
       if (reason === 'endpoint-replaced') {
-        current.abandon();
+        current.detach('endpoint-replaced');
       } else {
         current.detach('protocol-fatal');
       }

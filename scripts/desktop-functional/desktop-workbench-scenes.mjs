@@ -264,42 +264,6 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
       initialEntryDraft,
       freshEntryDraft,
     });
-    await evaluate(`(() => {
-      globalThis.__openNekoAgentSessionEvents = [];
-      globalThis.__openNekoAgentSessionEventSubscription?.();
-      globalThis.__openNekoAgentSessionEventSubscription = window.openNekoDesktop.agent.subscribe(
-        (message) => {
-          globalThis.__openNekoAgentSessionEvents.push({
-            type: message.type,
-            ...(message.type === 'tabState'
-              ? {
-                  revision: message.revision,
-                  tabIds: message.tabState?.openTabs?.map((tab) => tab.conversationId) ?? [],
-                  activeTabId: message.tabState?.activeTabId,
-                }
-              : {}),
-            ...(message.type === 'activeConversation'
-              ? {
-                  conversationId: message.conversation?.id,
-                  messages: message.conversation?.messages?.map((item) => ({
-                    role: item.role,
-                    content: item.content,
-                  })) ?? [],
-                }
-              : {}),
-            ...(message.type === 'conversationSnapshot'
-              ? {
-                  conversationId: message.conversation.id,
-                  messages: message.conversation.messages.map((item) => ({
-                    role: item.role,
-                    content: item.content,
-                  })),
-                }
-              : {}),
-          });
-        },
-      );
-    })()`);
     await click('.agent-composer-tool-button', 0);
     await waitForCondition(
       evaluate,
@@ -330,6 +294,27 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
     const assistantActivation = await waitForAssistantSession(evaluate);
     if (assistantActivation.conversationCount !== freshEntryDraft.conversationCount + 1) {
       throw new Error('Direct Entry Draft submit did not create exactly one Assistant session.');
+    }
+    await type('.agent-composer-textarea', 'Continue in the activated Assistant session.');
+    await click('.agent-composer-send');
+    await waitForCondition(
+      evaluate,
+      `document.querySelector('[data-owner-root="agent"]')?.textContent
+        ?.includes('Continue in the activated Assistant session.') === true`,
+      'Activated Assistant session did not accept a second message.',
+    );
+    const projectionEndpointErrors = await evaluate(`(() =>
+      [...document.querySelectorAll('[role="alert"]')]
+        .map((element) => element.textContent?.trim() ?? '')
+        .filter((message) =>
+          message.includes('attachment-identity-mismatch') ||
+          message.includes('attachment endpoint mismatch'),
+        )
+    )()`);
+    if (projectionEndpointErrors.length > 0) {
+      throw new Error(
+        `Assistant endpoint replacement emitted identity errors: ${JSON.stringify(projectionEndpointErrors)}`,
+      );
     }
     await click('.home-primary-navigation .home-nav-button', 1);
     await waitForSelector('[data-owner-root="asset-management"]');
@@ -687,7 +672,6 @@ async function waitForAssistantSession(evaluate, expectedConversationId) {
           .map((element) => element.textContent?.trim()).filter(Boolean),
         tabs: [...document.querySelectorAll('[data-testid="conversation-tabs"] button')]
           .map((element) => element.textContent?.trim()).filter(Boolean),
-        sessionEvents: globalThis.__openNekoAgentSessionEvents ?? [],
       };
     })()`);
     throw new Error(

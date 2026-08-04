@@ -33,16 +33,17 @@ export interface DesktopWorkspaceAgentBootstrapRequest extends DesktopAgentViewI
   readonly requestId: string;
 }
 
-export interface DesktopAssistantAgentBootstrapRequest
-  extends Omit<DesktopAssistantAgentViewIdentity, 'viewEpoch'> {
+export interface DesktopAssistantAgentBootstrapRequest extends Omit<
+  DesktopAssistantAgentViewIdentity,
+  'viewEpoch'
+> {
   readonly schemaVersion: typeof DESKTOP_AGENT_CONTRACT_VERSION;
   readonly requestId: string;
   readonly conversationId: string;
 }
 
 export type DesktopAgentBootstrapRequest =
-  | DesktopWorkspaceAgentBootstrapRequest
-  | DesktopAssistantAgentBootstrapRequest;
+  DesktopWorkspaceAgentBootstrapRequest | DesktopAssistantAgentBootstrapRequest;
 
 export interface DesktopAgentReadyBootstrapProjection {
   readonly schemaVersion: typeof DESKTOP_AGENT_CONTRACT_VERSION;
@@ -110,8 +111,11 @@ export interface OpenNekoDesktopAgentBridge {
       conversationId: string,
       viewId: string,
     ): Promise<DesktopAgentBootstrapProjection>;
-    send(message: AgentWebviewToHostMessage): void;
-    subscribe(listener: (message: AgentHostToWebviewMessage) => void): () => void;
+    send(connection: DesktopAgentConnectionIdentity, message: AgentWebviewToHostMessage): void;
+    subscribe(
+      connection: DesktopAgentConnectionIdentity,
+      listener: (message: AgentHostToWebviewMessage) => void,
+    ): () => void;
   };
 }
 

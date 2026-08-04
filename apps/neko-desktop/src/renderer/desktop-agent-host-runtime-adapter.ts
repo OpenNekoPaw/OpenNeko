@@ -21,10 +21,10 @@ export function createElectronAgentHostRuntimeAdapter(input: {
     hostKind: 'electron',
     runtimeId: `neko.agent.webview.electron:${connection.connectionId}`,
     send(message): void {
-      input.bridge.agent.send(message);
+      input.bridge.agent.send(connection, message);
     },
     subscribe(listener) {
-      const unsubscribe = input.bridge.agent.subscribe(listener);
+      const unsubscribe = input.bridge.agent.subscribe(connection, listener);
       return {
         dispose(): void {
           unsubscribe();
