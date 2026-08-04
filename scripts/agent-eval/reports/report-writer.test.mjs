@@ -74,6 +74,35 @@ describe('Agent Evaluation report writer', () => {
     expect(JSON.stringify(documents.summary)).not.toContain('hidden prompt');
   });
 
+  it('summarizes Desktop complete-session facts by conversation turns and terminal state', () => {
+    const desktop = input();
+    desktop.facts = {
+      schema: 'neko.agent-eval.desktop-session-facts.v1',
+      snapshot: {
+        messages: [
+          { role: 'user', content: 'first' },
+          { role: 'assistant', content: 'first reply' },
+          { role: 'user', content: 'second' },
+          { role: 'assistant', content: 'second reply' },
+        ],
+      },
+      workflow: { terminalIdle: { identity: { turnId: 'turn-2', runId: 'run-2' } } },
+      neutralFacts: {
+        projection: { terminalState: 'completed' },
+        diagnostics: {
+          items: [{ severity: 'warning', code: 'unsupported-thinking-budget' }],
+          droppedCount: 0,
+        },
+      },
+    };
+
+    const documents = createM1ReportDocuments(desktop);
+
+    expect(documents.evidence.items[0].summary).toBe(
+      'Observed 2 turn(s), 0 runtime error(s), fullyIdle=true.',
+    );
+  });
+
   it('writes all raw and sanitized artifacts under the selected report root', async () => {
     const outputRoot = await fs.mkdtemp(join(os.tmpdir(), 'neko-agent-eval-report-'));
     temporaryDirectories.push(outputRoot);

@@ -233,7 +233,13 @@ function desktopEvidence(artifactChecks) {
       configuration: {
         effective: {
           digest: HASH,
-          values: { modelBinding: { providerId: 'provider-1', modelId: 'model-1' } },
+          values: {
+            modelBinding: {
+              purpose: 'agent.main',
+              providerId: 'provider-1',
+              modelId: 'model-1',
+            },
+          },
         },
       },
       receipts: {

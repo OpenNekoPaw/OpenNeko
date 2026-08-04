@@ -280,6 +280,17 @@ function projectHardGateResult(gate) {
 }
 
 function summarizeFacts(facts) {
+  if (facts?.schema === 'neko.agent-eval.desktop-session-facts.v1') {
+    const messages = Array.isArray(facts.snapshot?.messages) ? facts.snapshot.messages : [];
+    const diagnostics = Array.isArray(facts.neutralFacts?.diagnostics?.items)
+      ? facts.neutralFacts.diagnostics.items
+      : [];
+    const terminalState = facts.neutralFacts?.projection?.terminalState;
+    const fullyIdle =
+      facts.workflow?.terminalIdle?.identity !== undefined &&
+      (terminalState === 'completed' || terminalState === 'cancelled');
+    return `Observed ${messages.filter((message) => message?.role === 'user').length} turn(s), ${diagnostics.filter((diagnostic) => diagnostic?.severity === 'error').length} runtime error(s), fullyIdle=${fullyIdle}.`;
+  }
   return `Observed ${Array.isArray(facts?.turns) ? facts.turns.length : 0} turn(s), ${Array.isArray(facts?.runtimeErrors) ? facts.runtimeErrors.length : 0} runtime error(s), fullyIdle=${facts?.idle?.fullyIdle === true}.`;
 }
 

@@ -70,6 +70,92 @@ describe('Desktop Agent external driver adapter', () => {
     expect(expression).toContain('operation identity was not observed');
   });
 
+  it('fails immediately when submit projects a conversation-scoped error before identity', async () => {
+    let publish;
+    const previousWindow = globalThis.window;
+    globalThis.window = {
+      openNekoDesktop: {
+        agent: {
+          getBootstrap: vi.fn(async () => ({
+            status: 'ready',
+            connection: { projectId: 'project-1', viewId: 'view-1', viewEpoch: 1 },
+          })),
+          subscribe: vi.fn((_connection, listener) => {
+            publish = listener;
+            return () => {};
+          }),
+          send: vi.fn(),
+          automation: { execute: vi.fn() },
+        },
+      },
+    };
+    const driver = createDesktopAgentDriver({
+      evaluate: async (expression) => (0, eval)(expression),
+    });
+    try {
+      await driver.connect({ projectId: 'project-1', viewId: 'view-1', viewEpoch: 1 });
+      await driver.submit({ conversationId: 'conversation-1', prompt: 'hello' });
+      const waiting = driver.waitForIdentity('conversation-1', 0, 1000);
+      await Promise.resolve();
+      publish({
+        type: 'error',
+        conversationId: 'conversation-1',
+        message: 'configured provider is unavailable',
+      });
+      await expect(waiting).rejects.toThrow(
+        'Desktop Agent public projection failed: configured provider is unavailable',
+      );
+    } finally {
+      await driver.dispose();
+      globalThis.window = previousWindow;
+    }
+  });
+
+  it('allows facts only for an identity returned by terminal idle observation', async () => {
+    const identity = {
+      conversationId: 'conversation-1',
+      turnId: 'turn-1',
+      runId: 'run-1',
+    };
+    const automation = {
+      execute: vi
+        .fn()
+        .mockResolvedValueOnce({ status: 'idle', identity })
+        .mockResolvedValueOnce({ status: 'facts', facts: { identity } }),
+    };
+    const previousWindow = globalThis.window;
+    globalThis.window = {
+      openNekoDesktop: {
+        agent: {
+          getBootstrap: vi.fn(async () => ({
+            status: 'ready',
+            connection: { projectId: 'project-1', viewId: 'view-1', viewEpoch: 1 },
+          })),
+          subscribe: vi.fn(() => () => {}),
+          send: vi.fn(),
+          automation,
+        },
+      },
+    };
+    const driver = createDesktopAgentDriver({
+      evaluate: async (expression) => (0, eval)(expression),
+    });
+    try {
+      await driver.connect({ projectId: 'project-1', viewId: 'view-1', viewEpoch: 1 });
+      await expect(driver.readFacts(identity)).rejects.toThrow(
+        'facts identity was not observed at terminal idle',
+      );
+      await driver.waitForIdle(identity.conversationId, 1000);
+      await expect(driver.readFacts(identity)).resolves.toEqual({
+        status: 'facts',
+        facts: { identity },
+      });
+    } finally {
+      await driver.dispose();
+      globalThis.window = previousWindow;
+    }
+  });
+
   it('waits for exact identities and pending Tool confirmation from public projection events', async () => {
     let publish;
     const sent = [];
@@ -81,11 +167,11 @@ describe('Desktop Agent external driver adapter', () => {
             status: 'ready',
             connection: { projectId: 'project-1', viewId: 'view-1', viewEpoch: 1 },
           })),
-          subscribe: vi.fn((listener) => {
+          subscribe: vi.fn((_connection, listener) => {
             publish = listener;
             return () => {};
           }),
-          send: vi.fn((message) => sent.push(message)),
+          send: vi.fn((connection, message) => sent.push({ connection, message })),
         },
       },
     };
@@ -149,7 +235,13 @@ describe('Desktop Agent external driver adapter', () => {
         events: [expect.objectContaining({ type: 'projectionPatch' })],
       });
       expect(sent).toEqual([
-        expect.objectContaining({ type: 'sendMessage', conversationId: 'conversation-1' }),
+        {
+          connection: { projectId: 'project-1', viewId: 'view-1', viewEpoch: 1 },
+          message: expect.objectContaining({
+            type: 'sendMessage',
+            conversationId: 'conversation-1',
+          }),
+        },
       ]);
     } finally {
       await driver.dispose();

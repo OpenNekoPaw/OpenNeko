@@ -83,6 +83,7 @@ export interface AgentControllerEffects extends AgentHostControllerEffectPorts {
     waitForIdle(
       conversationId: string,
       timeoutMs: number,
+      afterIdentity?: { readonly turnId: string; readonly runId: string },
     ): Promise<{
       readonly conversationId: string;
       readonly turnId: string;
@@ -316,28 +317,14 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
         );
       },
       automation: {
-        waitForIdle: async (conversationId, timeoutMs) => {
-          const deadline = Date.now() + timeoutMs;
-          while (input.workspace.readActiveTurn(conversationId)) {
-            if (Date.now() >= deadline) {
-              throw new Error(
-                `Desktop Agent conversation '${conversationId}' did not reach terminal idle within ${timeoutMs}ms.`,
-              );
-            }
-            await waitForFactsPoll();
-          }
-          const identity = facts.readLatestIdentity(conversationId);
-          if (!identity) {
-            throw new Error(
-              `Desktop Agent conversation '${conversationId}' has no observed turn identity.`,
-            );
-          }
-          return {
-            conversationId: identity.conversationId,
-            turnId: identity.turnId,
-            runId: identity.runId,
-          };
-        },
+        waitForIdle: (conversationId, timeoutMs, afterIdentity) =>
+          waitForDesktopAgentIdle({
+            conversationId,
+            timeoutMs,
+            afterIdentity,
+            readActiveTurn: () => input.workspace.readActiveTurn(conversationId),
+            readLatestIdentity: () => facts.readLatestIdentity(conversationId),
+          }),
         readLatestTurnIdentity: (conversationId) => facts.readLatestIdentity(conversationId),
         readFacts: (identity) => facts.readFacts(identity),
         disposeAndReadFacts: async (identity) => {
@@ -1267,6 +1254,54 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
       },
     );
   }
+}
+
+export async function waitForDesktopAgentIdle(input: {
+  readonly conversationId: string;
+  readonly timeoutMs: number;
+  readonly afterIdentity?: { readonly turnId: string; readonly runId: string };
+  readonly readActiveTurn: () => unknown;
+  readonly readLatestIdentity: () =>
+    | { readonly conversationId: string; readonly turnId: string; readonly runId: string }
+    | undefined;
+  readonly now?: () => number;
+  readonly waitForPoll?: () => Promise<void>;
+}): Promise<{ readonly conversationId: string; readonly turnId: string; readonly runId: string }> {
+  const now = input.now ?? Date.now;
+  const waitForPoll = input.waitForPoll ?? waitForFactsPoll;
+  const deadline = now() + input.timeoutMs;
+  for (;;) {
+    const identity = input.readLatestIdentity();
+    if (identity && !sameTurnIdentity(identity, input.afterIdentity) && !input.readActiveTurn()) {
+      return {
+        conversationId: identity.conversationId,
+        turnId: identity.turnId,
+        runId: identity.runId,
+      };
+    }
+    if (now() >= deadline) {
+      if (!identity) {
+        throw new Error(
+          `Desktop Agent conversation '${input.conversationId}' has no observed turn identity within ${input.timeoutMs}ms.`,
+        );
+      }
+      throw new Error(
+        `Desktop Agent conversation '${input.conversationId}' did not reach terminal idle within ${input.timeoutMs}ms.`,
+      );
+    }
+    await waitForPoll();
+  }
+}
+
+function sameTurnIdentity(
+  identity: { readonly turnId: string; readonly runId: string },
+  expected: { readonly turnId: string; readonly runId: string } | undefined,
+): boolean {
+  return (
+    expected !== undefined &&
+    identity.turnId === expected.turnId &&
+    identity.runId === expected.runId
+  );
 }
 
 interface ConnectionState {

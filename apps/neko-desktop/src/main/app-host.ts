@@ -775,6 +775,7 @@ export class DesktopAppHost {
             grant,
             request.operation.conversationId,
             request.operation.timeoutMs,
+            request.operation.afterIdentity,
           ),
         };
       case 'read-facts':

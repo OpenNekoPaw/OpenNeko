@@ -2,14 +2,19 @@ import { describe, expect, it } from 'vitest';
 import {
   assertDesktopAgentAutomationLaunch,
   createDesktopAgentAutomationRequest,
+  DESKTOP_AGENT_AUTOMATION_RENDERER_ARGUMENT,
   parseDesktopAgentAutomationResult,
   parseDesktopAgentAutomationRequest,
 } from './agent-automation-contract';
 
 describe('Desktop Agent fixture automation contract', () => {
+  it('uses one dedicated renderer argument after Main qualifies the isolated fixture', () => {
+    expect(DESKTOP_AGENT_AUTOMATION_RENDERER_ARGUMENT).toBe('--openneko-agent-automation');
+  });
+
   it('accepts only fixed identity-bound operations', () => {
     expect(parseDesktopAgentAutomationRequest(request({ kind: 'reload-renderer' }))).toMatchObject({
-      schemaVersion: 1,
+      schemaVersion: 2,
       requestId: 'request-1',
       operation: { kind: 'reload-renderer' },
     });
@@ -25,6 +30,21 @@ describe('Desktop Agent fixture automation contract', () => {
         }),
       ),
     ).toMatchObject({ operation: { kind: 'confirm', approved: true } });
+    expect(
+      parseDesktopAgentAutomationRequest(
+        request({
+          kind: 'wait-for-idle',
+          conversationId: 'conversation-1',
+          timeoutMs: 1000,
+          afterIdentity: { turnId: 'turn-1', runId: 'run-1' },
+        }),
+      ),
+    ).toMatchObject({
+      operation: {
+        kind: 'wait-for-idle',
+        afterIdentity: { turnId: 'turn-1', runId: 'run-1' },
+      },
+    });
   });
 
   it.each(['channel', 'command', 'path', 'credential', 'owner'])(
@@ -72,7 +92,7 @@ describe('Desktop Agent fixture automation contract', () => {
     expect(
       parseDesktopAgentAutomationResult(
         {
-          schemaVersion: 1,
+          schemaVersion: 2,
           requestId: 'request-1',
           status: 'idle',
           identity: {
@@ -86,7 +106,7 @@ describe('Desktop Agent fixture automation contract', () => {
     ).toMatchObject({ status: 'idle', identity: { runId: 'run-1' } });
     expect(() =>
       parseDesktopAgentAutomationResult(
-        { schemaVersion: 1, requestId: 'stale', status: 'accepted' },
+        { schemaVersion: 2, requestId: 'stale', status: 'accepted' },
         'request-1',
       ),
     ).toThrow('request identity does not match');
@@ -95,7 +115,7 @@ describe('Desktop Agent fixture automation contract', () => {
 
 function request(operation: Record<string, unknown>): MutableRequest {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     requestId: 'request-1',
     connection: {
       applicationInstanceId: 'application-1',

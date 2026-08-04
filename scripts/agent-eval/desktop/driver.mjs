@@ -198,6 +198,19 @@ export function driverExpression(command) {
       }
       return undefined;
     };
+    const assertNoAgentError = (value, conversationId) => {
+      if (!value || typeof value !== 'object') return;
+      if (
+        (value.type === 'globalError' ||
+          (value.type === 'error' && value.conversationId === conversationId)) &&
+        typeof value.message === 'string' &&
+        value.message.trim().length > 0
+      ) {
+        throw new Error('Desktop Agent public projection failed: ' + value.message);
+      }
+      const values = Array.isArray(value) ? value : Object.values(value);
+      for (const item of values) assertNoAgentError(item, conversationId);
+    };
     const findPendingTool = (value, conversationId, toolName) => {
       if (!value || typeof value !== 'object') return undefined;
       const toolCall = value.kind === 'tool_call' ? value.payload?.toolCall : undefined;
@@ -267,6 +280,15 @@ export function driverExpression(command) {
         throw new Error('Desktop Agent operation identity was not observed from the public projection.');
       }
     };
+    const assertTerminalIdentity = (state, identity) => {
+      const key =
+        requireText(identity?.conversationId, 'Conversation identity') + '\\u0000' +
+        requireText(identity?.turnId, 'turn identity') + '\\u0000' +
+        requireText(identity?.runId, 'run identity');
+      if (!state.terminalIdentities.has(key)) {
+        throw new Error('Desktop Agent facts identity was not observed at terminal idle.');
+      }
+    };
     switch (command.kind) {
       case 'connect': {
         globalThis[stateKey]?.unsubscribe?.();
@@ -279,8 +301,14 @@ export function driverExpression(command) {
         if (bootstrap.status !== 'ready') {
           throw new Error(bootstrap.diagnostic?.message ?? 'Desktop Agent bootstrap is unavailable.');
         }
-        const state = { connection: bootstrap.connection, events: [], identities: new Set() };
-        state.unsubscribe = bridge.subscribe((message) => {
+        const state = {
+          connection: bootstrap.connection,
+          events: [],
+          identities: new Set(),
+          terminalIdentities: new Set(),
+          terminalIdentityByConversation: new Map(),
+        };
+        state.unsubscribe = bridge.subscribe(bootstrap.connection, (message) => {
           state.events.push(message);
           collectIdentity(state, message);
         });
@@ -291,7 +319,7 @@ export function driverExpression(command) {
       case 'queue': {
         const state = requireState();
         const eventOffset = state.events.length;
-        bridge.send({
+        bridge.send(state.connection, {
           type: 'sendMessage',
           conversationId: requireText(command.conversationId, 'Conversation identity'),
           message: requireText(command.prompt, 'Agent prompt'),
@@ -307,7 +335,7 @@ export function driverExpression(command) {
       case 'create-conversation': {
         const state = requireState();
         const eventOffset = state.events.length;
-        bridge.send({ type: 'newConversation' });
+        bridge.send(state.connection, { type: 'newConversation' });
         const deadline = Date.now() + (Number.isFinite(command.timeoutMs) ? command.timeoutMs : 10000);
         while (Date.now() < deadline) {
           const created = state.events.slice(eventOffset).find(
@@ -323,13 +351,16 @@ export function driverExpression(command) {
       case 'cancel': {
         const state = requireState();
         assertObservedIdentity(state, command.identity);
-        bridge.send({ type: 'cancelMessage', conversationId: command.identity.conversationId });
+        bridge.send(state.connection, {
+          type: 'cancelMessage',
+          conversationId: command.identity.conversationId,
+        });
         return { accepted: true, identity: command.identity };
       }
       case 'confirm': {
         const state = requireState();
         assertObservedIdentity(state, command);
-        bridge.send({
+        bridge.send(state.connection, {
           type: 'confirmTool',
           conversationId: command.conversationId,
           toolCallId: requireText(command.toolCallId, 'Tool Call identity'),
@@ -349,7 +380,7 @@ export function driverExpression(command) {
         const state = requireState();
         const eventOffset = state.events.length;
         const conversationId = requireText(command.conversationId, 'Conversation identity');
-        bridge.send({
+        bridge.send(state.connection, {
           type: 'getConversationSnapshot',
           conversationId,
         });
@@ -371,7 +402,10 @@ export function driverExpression(command) {
           state,
           command.afterEventOffset,
           command.timeoutMs,
-          (event) => findIdentity(event, conversationId),
+          (event) => {
+            assertNoAgentError(event, conversationId);
+            return findIdentity(event, conversationId);
+          },
           'Desktop Agent public projection did not publish a turn/run identity.',
         );
         return identity;
@@ -397,16 +431,32 @@ export function driverExpression(command) {
         return { connection: state.connection, events };
       }
       case 'wait-for-idle': {
-        requireState();
-        return requireAutomation().execute({
+        const state = requireState();
+        const conversationId = requireText(command.conversationId, 'Conversation identity');
+        const afterIdentity = state.terminalIdentityByConversation.get(conversationId);
+        const result = await requireAutomation().execute({
           kind: 'wait-for-idle',
-          conversationId: requireText(command.conversationId, 'Conversation identity'),
+          conversationId,
           timeoutMs: command.timeoutMs,
+          ...(afterIdentity ? { afterIdentity } : {}),
         });
+        if (result?.status !== 'idle' || !result.identity) {
+          throw new Error('Desktop Agent idle observation did not return a terminal identity.');
+        }
+        state.terminalIdentities.add(
+          result.identity.conversationId + '\\u0000' +
+            result.identity.turnId + '\\u0000' +
+            result.identity.runId,
+        );
+        state.terminalIdentityByConversation.set(conversationId, {
+          turnId: result.identity.turnId,
+          runId: result.identity.runId,
+        });
+        return result;
       }
       case 'read-facts': {
         const state = requireState();
-        assertObservedIdentity(state, command.identity);
+        assertTerminalIdentity(state, command.identity);
         return requireAutomation().execute({ kind: 'read-facts', ...command.identity });
       }
       case 'reload-renderer':

@@ -4,7 +4,9 @@ import {
   type DesktopAgentNeutralFacts,
 } from '@neko/agent-contracts';
 
-export const DESKTOP_AGENT_AUTOMATION_VERSION = 1 as const;
+export const DESKTOP_AGENT_AUTOMATION_VERSION = 2 as const;
+export const DESKTOP_AGENT_AUTOMATION_RENDERER_ARGUMENT =
+  '--openneko-agent-automation' as const;
 export const DESKTOP_AGENT_AUTOMATION_CHANNEL =
   'openneko:desktop:agent:automation:execute' as const;
 
@@ -36,6 +38,10 @@ export type DesktopAgentAutomationOperation =
       readonly kind: 'wait-for-idle';
       readonly conversationId: string;
       readonly timeoutMs: number;
+      readonly afterIdentity?: {
+        readonly turnId: string;
+        readonly runId: string;
+      };
     }
   | {
       readonly kind: 'read-facts';
@@ -229,13 +235,34 @@ function parseOperation(input: unknown): DesktopAgentAutomationOperation {
     case 'wait-for-idle':
       requireExactKeys(
         record,
-        ['kind', 'conversationId', 'timeoutMs'],
+        [
+          'kind',
+          'conversationId',
+          'timeoutMs',
+          ...(record['afterIdentity'] === undefined ? [] : ['afterIdentity']),
+        ],
         'automation idle operation',
       );
+      const afterIdentity =
+        record['afterIdentity'] === undefined
+          ? undefined
+          : requireExactRecord(
+              record['afterIdentity'],
+              ['turnId', 'runId'],
+              'automation idle predecessor identity',
+            );
       return {
         kind: 'wait-for-idle',
         conversationId: requireIdentity(record['conversationId'], 'Conversation'),
         timeoutMs: requireTimeout(record['timeoutMs']),
+        ...(afterIdentity === undefined
+          ? {}
+          : {
+              afterIdentity: {
+                turnId: requireIdentity(afterIdentity['turnId'], 'prior turn'),
+                runId: requireIdentity(afterIdentity['runId'], 'prior run'),
+              },
+            }),
       };
     case 'read-facts':
       requireExactKeys(

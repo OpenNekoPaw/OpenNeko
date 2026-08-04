@@ -55,6 +55,7 @@ import {
   resolveDesktopFunctionalWindowMode,
   resolveDesktopRuntimeHome,
 } from './desktop-functional-fixture';
+import { DESKTOP_AGENT_AUTOMATION_RENDERER_ARGUMENT } from '../shared/agent-automation-contract';
 import { createAgentCredentialRuntime } from '@neko/agent-runtime/pi';
 import { createAgentControllerComposition } from '@neko/agent-runtime/application';
 import { createEncryptedDesktopSecretPort } from './encrypted-desktop-secret-port';
@@ -1039,7 +1040,12 @@ async function startDesktop(): Promise<void> {
               trafficLightPosition: { x: 18, y: 16 },
             }
           : {}),
-        webPreferences: createDesktopWebPreferences(path.join(__dirname, 'preload.cjs')),
+        webPreferences: {
+          ...createDesktopWebPreferences(path.join(__dirname, 'preload.cjs')),
+          ...(agentAutomationLaunch
+            ? { additionalArguments: [DESKTOP_AGENT_AUTOMATION_RENDERER_ARGUMENT] }
+            : {}),
+        },
       });
       window = createdWindow;
       windowsById.set(windowId, createdWindow);

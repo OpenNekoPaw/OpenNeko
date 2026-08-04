@@ -130,7 +130,7 @@ export function createDesktopAgentEvaluationScenario(executionCase, authorizatio
   });
 }
 
-async function readAuthorizedConfiguration(authorization) {
+export async function readAuthorizedConfiguration(authorization) {
   const configText = await readFile(authorization.configurationFile, 'utf8').catch(() => {
     throw authorizationError(
       'Authorized Desktop Agent configuration ~/.neko/config.toml is unavailable.',

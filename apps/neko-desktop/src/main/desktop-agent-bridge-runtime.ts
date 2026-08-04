@@ -79,6 +79,7 @@ export interface DesktopAgentBridgeRuntime {
     grant: DesktopAnyAgentConnectionGrant,
     conversationId: string,
     timeoutMs: number,
+    afterIdentity?: { readonly turnId: string; readonly runId: string },
   ): Promise<{ readonly conversationId: string; readonly turnId: string; readonly runId: string }>;
   readFacts(
     connection: DesktopAgentConnectionIdentity,
@@ -331,10 +332,11 @@ class DefaultDesktopAgentBridgeRuntime implements DesktopAgentBridgeRuntime {
     grant: DesktopAnyAgentConnectionGrant,
     conversationId: string,
     timeoutMs: number,
+    afterIdentity?: { readonly turnId: string; readonly runId: string },
   ): Promise<{ readonly conversationId: string; readonly turnId: string; readonly runId: string }> {
     const connection = this.requireAutomationConnection(connectionIdentity, grant);
     const automation = requireAutomationEffects(connection);
-    return automation.waitForIdle(conversationId, timeoutMs);
+    return automation.waitForIdle(conversationId, timeoutMs, afterIdentity);
   }
 
   readFacts(

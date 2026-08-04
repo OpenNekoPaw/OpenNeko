@@ -500,7 +500,7 @@ describe('Desktop Agent bridge runtime', () => {
       turnId: 'turn-1',
       runId: 'run-1',
     });
-    expect(waitForIdle).toHaveBeenCalledWith('conversation-1', 30_000);
+    expect(waitForIdle).toHaveBeenCalledWith('conversation-1', 30_000, undefined);
     expect(() =>
       runtime.waitForIdle(
         projection.connection,

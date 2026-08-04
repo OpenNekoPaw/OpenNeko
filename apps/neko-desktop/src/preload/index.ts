@@ -14,6 +14,7 @@ import {
 import {
   createDesktopAgentAutomationRequest,
   DESKTOP_AGENT_AUTOMATION_CHANNEL,
+  DESKTOP_AGENT_AUTOMATION_RENDERER_ARGUMENT,
   parseDesktopAgentAutomationResult,
   type OpenNekoDesktopAgentAutomationBridge,
 } from '../shared/agent-automation-contract';
@@ -381,7 +382,7 @@ const bridge: OpenNekoDesktopBridge &
         agentListeners.delete(subscription);
       };
     },
-    ...(process.argv.includes('--openneko-functional-fixture')
+    ...(process.argv.includes(DESKTOP_AGENT_AUTOMATION_RENDERER_ARGUMENT)
       ? {
           automation: {
             async execute(operation) {

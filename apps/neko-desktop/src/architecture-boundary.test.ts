@@ -387,7 +387,9 @@ describe('Desktop architecture boundaries', () => {
     expect(preload).toContain('workbench: {');
     expect(preload).toContain('resources: {');
     expect(preload).toContain('parseResourceBrowserSnapshotRequest');
-    expect(preload).toContain("process.argv.includes('--openneko-functional-fixture')");
+    expect(preload).toContain(
+      'process.argv.includes(DESKTOP_AGENT_AUTOMATION_RENDERER_ARGUMENT)',
+    );
     expect(preload).toContain('createDesktopAgentAutomationRequest');
     expect(preload).toContain('DESKTOP_AGENT_AUTOMATION_CHANNEL');
     expect(preload).not.toContain('ipcRenderer.send');
