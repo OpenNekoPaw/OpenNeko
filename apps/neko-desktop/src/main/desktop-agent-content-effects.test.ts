@@ -66,37 +66,28 @@ describe('Desktop Agent content effects', () => {
     await writeWorkspaceFile(fixture.workspace.workspacePath, 'assets/小橘.png', 'image');
     await writeWorkspaceFile(
       fixture.workspace.workspacePath,
-      'characters.json',
+      'neko/entities.json',
       JSON.stringify({
-        version: 1,
-        characters: [
+        schemaVersion: 1,
+        projectId: fixture.workspace.workspaceId,
+        revision: 1,
+        entities: [
           {
-            id: 'char_小橘',
-            canonicalName: '小橘',
-            aliases: ['橘猫'],
-            status: 'confirmed',
-          },
-        ],
-      }),
-    );
-    await writeWorkspaceFile(
-      fixture.workspace.workspacePath,
-      'neko/entity-representation-bindings.json',
-      JSON.stringify({
-        version: 2,
-        bindings: [
-          {
-            id: 'binding-xiaoju-portrait',
             entityId: 'char_小橘',
-            entityKind: 'character',
-            representation: {
-              kind: 'workspace-file',
-              path: 'assets/小橘.png',
-            },
-            role: 'portrait',
-            status: 'confirmed',
-            availability: 'active',
-            source: 'user',
+            kind: 'character',
+            names: { canonical: '小橘', aliases: ['橘猫'] },
+            facts: {},
+            representations: [
+              {
+                bindingId: 'binding-xiaoju-portrait',
+                target: { kind: 'workspace-file', path: 'assets/小橘.png' },
+                role: 'portrait',
+                source: 'user',
+                acceptedAt: '2026-07-29T00:00:00.000Z',
+              },
+            ],
+            lifecycle: { state: 'active' },
+            createdAt: '2026-07-29T00:00:00.000Z',
             updatedAt: '2026-07-29T00:00:00.000Z',
           },
         ],

@@ -24,7 +24,7 @@ import {
   type WorkspaceFileContentLocator,
 } from '@neko/content';
 import type { AssetWorkspaceResolution } from '@neko/assets-domain/contracts';
-import { readConfirmedEntityResources } from '@neko/entity-node';
+import { readProjectEntityResources } from '@neko/entity-node';
 
 const MAX_SVG_BYTES = 10 * 1024 * 1024;
 
@@ -222,19 +222,18 @@ async function searchGrantedWorkspaceEntities(
   plan: AgentProjectFileSearchPlan,
 ): Promise<readonly AgentProjectMentionCandidate[]> {
   await assertHostAccess(host, 'list', workspace.workspacePath);
-  const { entities, bindings } = await readConfirmedEntityResources({
+  const { entities } = await readProjectEntityResources({
     workspace,
-    host,
   });
   const filter = extractSearchFilter(plan.includePattern);
   return entities
     .filter((entity) => {
       const searchText = [
-        entity.displayName,
-        entity.canonicalName,
-        ...entity.aliases,
+        entity.names.display,
+        entity.names.canonical,
+        ...entity.names.aliases,
         entity.kind,
-        entity.id,
+        entity.entityId,
       ]
         .filter((value): value is string => typeof value === 'string')
         .join(' ')
@@ -243,25 +242,21 @@ async function searchGrantedWorkspaceEntities(
     })
     .slice(0, plan.limit)
     .map((entity): AgentProjectMentionCandidate => {
-      const binding = bindings.find(
-        (candidate) =>
-          candidate.entityId === entity.id &&
-          candidate.entityKind === entity.kind &&
-          candidate.status === 'confirmed' &&
-          candidate.availability === 'active',
-      );
-      const label = entity.displayName ?? entity.canonicalName;
+      const binding =
+        entity.representations.find((candidate) => candidate.isDefault) ??
+        entity.representations[0];
+      const label = entity.names.display ?? entity.names.canonical;
       return {
         type: 'entity',
-        id: `entity:${entity.kind}:${entity.id}`,
+        id: `entity:${entity.kind}:${entity.entityId}`,
         label,
         summary: `${titleCaseEntityKind(entity.kind)}: ${label}`,
-        searchText: [label, ...entity.aliases, entity.kind, entity.id].join(' '),
+        searchText: [label, ...entity.names.aliases, entity.kind, entity.entityId].join(' '),
         source: 'entity-graph',
-        ...(binding ? { contentLocator: binding.representation } : {}),
+        ...(binding ? { contentLocator: binding.target } : {}),
         entityType: entity.kind,
         navigationData: {
-          entityId: entity.id,
+          entityId: entity.entityId,
           entityKind: entity.kind,
         },
       };

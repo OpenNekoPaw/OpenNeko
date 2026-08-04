@@ -27,7 +27,7 @@ import {
 } from '@neko/assets-domain/global-library/contract';
 import type { AssetWorkspaceResolution } from '@neko/assets-domain/contracts';
 import { resolveWorkspaceContentLocator } from './workspace-content-locator';
-import { readConfirmedEntityResources } from '@neko/entity-node';
+import { readProjectEntityResources } from '@neko/entity-node';
 import {
   listGlobalMediaLibraryConnections,
   type GlobalMediaLibraryConnection,
@@ -245,9 +245,8 @@ export function createResourceBrowserNodeReadSource(
     },
     entities: {
       list: async () =>
-        readConfirmedEntityResources({
+        readProjectEntityResources({
           workspace: options.workspace,
-          host: options.host,
         }),
     },
     async refresh(): Promise<void> {

@@ -1,4 +1,4 @@
-import type { CreativeEntity, EntityRepresentationBinding } from '@neko/entity-domain';
+import type { ProjectEntityRecord } from '@neko/entity-domain';
 import { describe, expect, it } from 'vitest';
 import {
   presentResourceBrowserAssetItem,
@@ -33,22 +33,28 @@ describe('Resource Browser presenter', () => {
     expect(JSON.stringify(item)).not.toContain('/Users/');
   });
 
-  it('projects a Character with only its confirmed active representation', () => {
-    const entity: CreativeEntity = {
-      id: 'character-neko',
+  it('projects a Character from its canonical default representation', () => {
+    const entity: ProjectEntityRecord = {
+      entityId: 'character-neko',
       kind: 'character',
-      canonicalName: 'Neko',
-      displayName: 'Neko',
-      aliases: ['猫'],
-      status: 'confirmed',
+      names: { canonical: 'Neko', display: 'Neko', aliases: ['猫'] },
+      facts: {},
+      representations: [
+        {
+          bindingId: 'binding-neko',
+          role: 'portrait',
+          target: { kind: 'workspace-file', path: 'characters/neko.png' },
+          source: 'user',
+          isDefault: true,
+          acceptedAt: '2026-07-28T00:00:00.000Z',
+        },
+      ],
+      lifecycle: { state: 'active' },
+      createdAt: '2026-07-28T00:00:00.000Z',
+      updatedAt: '2026-07-28T00:00:00.000Z',
     };
-    const bindings: readonly EntityRepresentationBinding[] = [
-      binding('rejected', 'active', 'characters/rejected.png'),
-      binding('confirmed', 'orphaned', 'characters/orphaned.png'),
-      binding('confirmed', 'active', 'characters/neko.png'),
-    ];
 
-    const item = presentResourceBrowserEntityItem(entity, bindings, {
+    const item = presentResourceBrowserEntityItem(entity, {
       canvasAvailable: true,
     });
 
@@ -62,7 +68,7 @@ describe('Resource Browser presenter', () => {
         kind: 'workspace-file',
         path: 'characters/neko.png',
       },
-      representationBindingId: 'confirmed-active',
+      representationBindingId: 'binding-neko',
       representationRole: 'portrait',
       capabilities: ['preview', 'add-to-canvas'],
     });
@@ -117,21 +123,3 @@ describe('Resource Browser presenter', () => {
     expect(document.capabilities).not.toContain('add-to-cut');
   });
 });
-
-function binding(
-  status: EntityRepresentationBinding['status'],
-  availability: EntityRepresentationBinding['availability'],
-  path: string,
-): EntityRepresentationBinding {
-  return {
-    id: `${status}-${availability}`,
-    entityId: 'character-neko',
-    entityKind: 'character',
-    representation: { kind: 'workspace-file', path },
-    role: 'portrait',
-    status,
-    availability,
-    source: 'user',
-    updatedAt: '2026-07-28T00:00:00.000Z',
-  };
-}

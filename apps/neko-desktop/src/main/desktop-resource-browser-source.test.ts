@@ -357,36 +357,28 @@ describe('Desktop Resource Browser source', () => {
     await writeFile(path.join(fixture.workspace, 'index.ts'), 'export {};');
     await writeFile(path.join(fixture.workspace, 'workspace-only.mp4'), 'video');
     await writeFile(
-      path.join(fixture.workspace, 'characters.json'),
+      path.join(fixture.workspace, 'neko', 'entities.json'),
       JSON.stringify({
-        version: 1,
-        characters: [
+        schemaVersion: 1,
+        projectId: 'workspace-1',
+        revision: 1,
+        entities: [
           {
-            id: 'character-neko',
-            canonicalName: 'Neko',
-            aliases: ['猫'],
-            status: 'confirmed',
-          },
-        ],
-      }),
-    );
-    await writeFile(
-      path.join(fixture.workspace, 'neko', 'entity-representation-bindings.json'),
-      JSON.stringify({
-        version: 2,
-        bindings: [
-          {
-            id: 'binding-neko',
             entityId: 'character-neko',
-            entityKind: 'character',
-            representation: {
-              kind: 'workspace-file',
-              path: 'characters/neko.png',
-            },
-            role: 'portrait',
-            status: 'confirmed',
-            availability: 'active',
-            source: 'user',
+            kind: 'character',
+            names: { canonical: 'Neko', aliases: ['猫'] },
+            facts: {},
+            representations: [
+              {
+                bindingId: 'binding-neko',
+                target: { kind: 'workspace-file', path: 'characters/neko.png' },
+                role: 'portrait',
+                source: 'user',
+                acceptedAt: '2026-07-28T00:00:00.000Z',
+              },
+            ],
+            lifecycle: { state: 'active' },
+            createdAt: '2026-07-28T00:00:00.000Z',
             updatedAt: '2026-07-28T00:00:00.000Z',
           },
         ],
@@ -426,15 +418,7 @@ describe('Desktop Resource Browser source', () => {
       ]),
     );
     expect(entityProjection).toMatchObject({
-      entities: [{ id: 'character-neko', kind: 'character' }],
-      bindings: [
-        {
-          representation: {
-            kind: 'workspace-file',
-            path: 'characters/neko.png',
-          },
-        },
-      ],
+      entities: [{ entityId: 'character-neko', kind: 'character' }],
     });
     expect(assets).toEqual([
       expect.objectContaining({
@@ -609,39 +593,41 @@ describe('Desktop Resource Browser source', () => {
     const fixture = await createFixture();
     await mkdir(path.join(fixture.workspace, 'neko'), { recursive: true });
     await writeFile(
-      path.join(fixture.workspace, 'characters.json'),
+      path.join(fixture.workspace, 'neko', 'entities.json'),
       JSON.stringify({
-        version: 1,
-        characters: [
+        schemaVersion: 1,
+        projectId: 'workspace-1',
+        revision: 1,
+        entities: [
           {
-            id: 'confirmed',
-            canonicalName: 'Confirmed',
-            aliases: [],
-            status: 'confirmed',
-          },
-          {
-            id: 'candidate',
-            canonicalName: 'Candidate',
-            aliases: [],
-            status: 'candidate',
-          },
-        ],
-      }),
-    );
-    await writeFile(
-      path.join(fixture.workspace, 'neko', 'entity-representation-bindings.json'),
-      JSON.stringify({
-        version: 2,
-        bindings: [
-          {
-            id: 'binding-confirmed',
             entityId: 'confirmed',
-            entityKind: 'character',
-            representation: { kind: 'workspace-file', path: 'confirmed.png' },
-            role: 'portrait',
-            status: 'confirmed',
-            availability: 'active',
-            source: 'user',
+            kind: 'character',
+            names: { canonical: 'Confirmed', aliases: [] },
+            facts: {},
+            representations: [
+              {
+                bindingId: 'binding-confirmed',
+                target: { kind: 'workspace-file', path: 'confirmed.png' },
+                role: 'portrait',
+                source: 'user',
+                acceptedAt: '2026-07-29T00:00:00.000Z',
+              },
+            ],
+            lifecycle: { state: 'active' },
+            createdAt: '2026-07-29T00:00:00.000Z',
+            updatedAt: '2026-07-29T00:00:00.000Z',
+          },
+          {
+            entityId: 'deprecated',
+            kind: 'character',
+            names: { canonical: 'Deprecated', aliases: [] },
+            facts: {},
+            representations: [],
+            lifecycle: {
+              state: 'deprecated',
+              deprecatedAt: '2026-07-29T00:00:00.000Z',
+            },
+            createdAt: '2026-07-29T00:00:00.000Z',
             updatedAt: '2026-07-29T00:00:00.000Z',
           },
         ],
@@ -654,8 +640,7 @@ describe('Desktop Resource Browser source', () => {
       limit: 20,
     });
 
-    expect(result.entities.map((entity) => entity.id)).toEqual(['confirmed']);
-    expect(result.bindings.map((binding) => binding.id)).toEqual(['binding-confirmed']);
+    expect(result.entities.map((entity) => entity.entityId)).toEqual(['confirmed']);
   });
 
   it('adds a selected directory through links without copying the library', async () => {

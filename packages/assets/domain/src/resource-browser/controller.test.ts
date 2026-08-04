@@ -1,4 +1,4 @@
-import type { CreativeEntity, EntityRepresentationBinding } from '@neko/entity-domain';
+import type { ProjectEntityRecord } from '@neko/entity-domain';
 import { describe, expect, it, vi } from 'vitest';
 import {
   RESOURCE_BROWSER_CONTRACT_VERSION,
@@ -306,22 +306,22 @@ function createSource(): ResourceBrowserProjectionSource & {
     role: 'content',
     depth: 0,
   };
-  const entity: CreativeEntity = {
-    id: 'character-neko',
+  const entity: ProjectEntityRecord = {
+    entityId: 'character-neko',
     kind: 'character',
-    canonicalName: 'Neko',
-    aliases: ['猫'],
-    status: 'confirmed',
-  };
-  const binding: EntityRepresentationBinding = {
-    id: 'binding-neko',
-    entityId: entity.id,
-    entityKind: entity.kind,
-    representation: { kind: 'workspace-file', path: 'characters/neko.png' },
-    role: 'portrait',
-    status: 'confirmed',
-    availability: 'active',
-    source: 'user',
+    names: { canonical: 'Neko', aliases: ['猫'] },
+    facts: {},
+    representations: [
+      {
+        bindingId: 'binding-neko',
+        target: { kind: 'workspace-file', path: 'characters/neko.png' },
+        role: 'portrait',
+        source: 'user',
+        acceptedAt: '2026-07-28T00:00:00.000Z',
+      },
+    ],
+    lifecycle: { state: 'active' },
+    createdAt: '2026-07-28T00:00:00.000Z',
     updatedAt: '2026-07-28T00:00:00.000Z',
   };
   return {
@@ -344,7 +344,7 @@ function createSource(): ResourceBrowserProjectionSource & {
         },
       ]),
     },
-    entities: { list: vi.fn(async () => ({ entities: [entity], bindings: [binding] })) },
+    entities: { list: vi.fn(async () => ({ entities: [entity] })) },
     refresh: vi.fn(async () => undefined),
   };
 }

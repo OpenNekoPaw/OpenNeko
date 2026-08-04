@@ -410,13 +410,13 @@ export class ResourceBrowserController implements ResourceBrowserHostRuntime {
       .filter((entity) =>
         normalizedQuery.length === 0
           ? true
-          : [entity.canonicalName, entity.displayName, ...entity.aliases]
+          : [entity.names.canonical, entity.names.display, ...entity.names.aliases]
               .filter((value): value is string => typeof value === 'string')
               .some((value) => value.toLocaleLowerCase().includes(normalizedQuery)),
       )
       .slice(0, limit)
       .map((entity) =>
-        presentResourceBrowserEntityItem(entity, result.bindings, {
+        presentResourceBrowserEntityItem(entity, {
           canvasAvailable: this.options.canvasAvailable,
         }),
       );
