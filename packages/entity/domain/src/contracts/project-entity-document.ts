@@ -101,6 +101,11 @@ export interface ProjectEntityCommitRequest {
   readonly next: ProjectEntityDocument;
 }
 
+export interface ProjectEntityDocumentRepository {
+  load(signal?: AbortSignal): Promise<ProjectEntityDocument>;
+  commit(request: ProjectEntityCommitRequest, signal?: AbortSignal): Promise<ProjectEntityDocument>;
+}
+
 export interface ProjectEntityCandidateEvidence {
   readonly evidenceId: string;
   readonly owner: ProjectEntityCandidateSourceOwner;
@@ -131,7 +136,10 @@ export type ProjectEntityDiagnosticCode =
   | 'project-entity-reference-plan-incomplete'
   | 'project-entity-binding-unavailable'
   | 'invalid-project-entity-asset-provenance'
-  | 'project-entity-migration-required';
+  | 'project-entity-migration-required'
+  | 'project-entity-path-unauthorized'
+  | 'project-entity-operation-cancelled'
+  | 'project-entity-io-failed';
 
 export interface ProjectEntityDiagnostic {
   readonly code: ProjectEntityDiagnosticCode;
