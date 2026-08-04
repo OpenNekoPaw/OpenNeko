@@ -137,6 +137,8 @@ export type ProjectEntityDiagnosticCode =
   | 'project-entity-operation-invalid'
   | 'project-entity-reference-plan-incomplete'
   | 'project-entity-binding-unavailable'
+  | 'project-entity-asset-not-found'
+  | 'invalid-project-entity-asset-snapshot'
   | 'invalid-project-entity-asset-provenance'
   | 'project-entity-migration-required'
   | 'project-entity-path-unauthorized'
