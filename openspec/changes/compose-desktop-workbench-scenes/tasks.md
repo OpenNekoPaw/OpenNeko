@@ -100,3 +100,4 @@
 - [x] 10.13 Compose Assets, Extensions and Projects management plus Preview/Detail as two visually and structurally independent sibling shells with their own chrome/overflow boundaries and a resize gutter; add structure and real Electron layout evidence.
 - [x] 10.14 Re-run focused/full quality gates, update verification/architecture evidence and apply `neko-quality-review` for the corrected entry and management shell behavior.
 - [x] 10.15 Bind exact Entry Draft resource grants to deterministic Assistant scope before first-submit validation; reject partial/cross-draft binding and qualify an attached-file direct submit in development and packaged Electron.
+- [x] 10.16 Render authorized Preview through canonical content-only chrome with inherited shell theme, omit low-information Project Detail while preserving an explicit catalog open action, and qualify focused plus development/packaged Electron paths.

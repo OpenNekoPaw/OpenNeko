@@ -125,9 +125,9 @@ renderer 不接收 raw path。scene switch、renderer reload、Window teardown �
 
 Asset Management 与 authorized Preview 使用两个独立、无单项 tab strip 的共享 Workbench panel shell，
 并由共享 resize primitive 组合。Preview viewer 只能来自 canonical `@neko/preview-webview` presentation
-和 viewer registry；Asset Center 因外层 shell 无 tab 可保留 descriptor header，而 Workspace Preview
-位于真实 View tab strip 下时必须使用 content-only chrome。Desktop 和 Assets management 均不得实现
-第二套 viewer。
+和 viewer registry；Asset Center 与 Workspace Preview 都必须使用 content-only chrome，不在 Workbench
+panel shell 内重复 descriptor header。Preview 内容背景保持透明并继承所在 shell 的主题；Desktop 和
+Assets management 均不得实现第二套 viewer 或复制 Preview 主题。
 
 ### 素材云同步（目标）
 

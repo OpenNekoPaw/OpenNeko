@@ -182,8 +182,9 @@ Both isolated Electron runs record the Workspace Agent title `工作区已就绪
 actions, the Workspace layout control in the PrimarySidebar top brand controls and not the footer,
 zero global refresh controls in Workspace Resources while its library control remains available, and
 Workspace Preview chrome `content-only` with one outer Workbench tab strip and zero internal headers.
-Assets Preview remains owned by `preview-webview`, keeps its descriptor header in the independent
-tabless shell, and management/detail panel tab-header lists remain empty. Large/small layout,
+Assets Preview remains owned by `preview-webview`; at this qualification point it still kept its
+descriptor header in the independent tabless shell, while management/detail panel tab-header lists
+remained empty. Large/small layout,
 management split resize, application restart and renderer error checks passed without touching user
 state.
 
@@ -233,7 +234,7 @@ AssistantSpace, consumed by the canonical first-submit preflight and restored wi
 The producer regression additionally proves that one missing/cross-connection grant rejects the whole
 binding set without partially changing a valid grant, while same-Assistant retry remains idempotent.
 
-Asset Preview and Project Detail record `data-main-composition="independent-shells"`, exact Primary
+Asset Preview and the then-present Project Detail recorded `data-main-composition="independent-shells"`, exact Primary
 and Secondary shell identities, a 10 px sibling gutter and no overlap. At 1440 x 960 the panels are
 364/698 px; at 1040 x 700 Asset Preview remains visible at 228/434 px. The enclosing Main has no
 border/radius/shadow and visible overflow, while both child shells have a 1 px border, 18 px radius,
@@ -248,6 +249,29 @@ validation. Relevant full-test totals are Agent Contracts `41 files / 281 tests`
 `90 / 697`, Agent Runtime `115 / 1076`, Host `36 / 318`, UI `47 / 204` and Desktop `65 / 342`.
 Application-boundary findings were zero across 1427 checked files; the unused scan reported only the
 existing 73 configuration hints and no blocking production path.
+
+The 10.16 development and rebuilt packaged qualification passed on the current code:
+
+`reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-04T10-28-07.173Z-desktop-workbench-scenes-development/report.json`
+
+`reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-04T10-32-30.728Z-desktop-workbench-scenes-packaged/report.json`
+
+Both Electron runs prove that Asset authorized Preview still renders through the canonical
+`preview-webview` presentation and viewer registry, now with `content-only` chrome, zero descriptor
+headers and zero synthetic panel tab strips. The Preview content background is transparent, while
+the Primary and Secondary shell computed backgrounds both resolve to `rgb(255, 255, 255)`, so the
+content inherits the shared Workbench theme instead of replacing it.
+
+Project selection now records only `project-management` in Main, `mainSplit: none`,
+`mainComposition: continuous`, no Secondary Main, no gutter and no `project-detail`. The selected row
+retains a separate explicit open action; selection itself remains a management fact and does not open
+Workspace. Focused Preview/Desktop regressions passed `4 files / 37 tests`, and the complete Desktop
+suite passed `65 files / 342 tests`; Preview Webview build, Desktop typecheck, Desktop packaging,
+`pnpm build`, `pnpm test`, `pnpm check`, `pnpm check:quality`, `pnpm check:legacy-debt`,
+`pnpm check:application-boundaries`, `git diff --check` and strict OpenSpec validation passed. The
+first packaged scenario attempt reached the final Assistant activation check while still in draft;
+an immediate isolated rerun passed the complete scenario, so this remains a non-deterministic Agent
+activation residual rather than evidence of a Preview/Project regression.
 
 ## Agent Evaluation
 

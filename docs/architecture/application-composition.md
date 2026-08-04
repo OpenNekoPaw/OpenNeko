@@ -99,10 +99,11 @@ active/first/recent Project 或模型文本推断场景和权限。
 
 Workbench 是可变形态，不是固定的 Workspace 页面：默认 Agent draft 只有 Interaction；Assistant
 激活后是 Agent + Preview Main；Workspace 是 Agent + creative Main + 右侧 Workspace Resources；
-资源中心与扩展中心分别把 Asset Management 和 Extension Management 放入 Main，选中对象的
-Preview/Detail 只能进入可选 Secondary Main。Settings 和项目管理同样使用该 Shell。未具备真实
-owner/runtime/public Root 的 Character/Chatroom scene 必须返回 owner-qualified unavailable，Desktop
-不得伪造占位业务 UI。
+资源中心与扩展中心分别把 Asset Management 和 Extension Management 放入 Main，信息充分且由 owner
+提供的 Preview/Detail 只能进入可选 Secondary Main。Settings 和项目管理同样使用该 Shell；低信息量的
+Project selection 保留在 catalog，并以独立行操作显式打开 Workspace，不创建空洞的 Detail shell。
+未具备真实 owner/runtime/public Root 的 Character/Chatroom scene 必须返回 owner-qualified unavailable，
+Desktop 不得伪造占位业务 UI。
 
 PrimarySidebar 独立消费 Host 的项目 catalog 和 Agent conversation catalog，因此场景切换、renderer
 reload 和应用重启不得丢失最近项目、最近会话及其精确 identity 操作。sidebar 展开、折叠和宽度修改只
@@ -118,12 +119,13 @@ Character/Room owner 的选择必须 fail-visible，不能降级为 Assistant �
 属于窗口级 presentation chrome，只在 exact Workspace scene 中出现在 PrimarySidebar 顶部品牌控件组、
 紧邻 sidebar 显隐按钮；不得放入 footer、Main tab 或领域 Root。
 
-Workspace Main 的真实多 View group 是唯一拥有 Workbench tab strip 的区域。其 Preview 内容通过
-canonical `@neko/preview-webview` content-only presentation 渲染，不再添加 descriptor header。Assets、
-Extensions 与 Projects 的 management 和可选 Preview/Detail 分别占据两个兄弟 panel shell，通过同一
-resize primitive 和可见 gutter 连接。两个 shell 各自拥有边框、圆角、背景、阴影、裁切和 overflow
-边界，不能共享一块连续 Main 底板，也不制造单项 tab strip。Workspace Resources 复用 package-owned
-Root，并隐藏与 Host 自动 projection 重复的顶部全局刷新；relink、recovery 等领域操作仍由该 Root 保留。
+Workspace Main 的真实多 View group 是唯一拥有 Workbench tab strip 的区域。所有 Workbench 内 Preview
+内容都通过 canonical `@neko/preview-webview` content-only presentation 渲染，不再添加 descriptor
+header，并以透明内容背景继承所在 shell 主题。Management 和合格的可选 Preview/Detail 分别占据两个
+兄弟 panel shell，通过同一 resize primitive 和可见 gutter 连接；没有合格 Detail 时不得保留 secondary
+column 或 gutter。两个 shell 各自拥有边框、圆角、背景、阴影、裁切和 overflow 边界，不能共享一块
+连续 Main 底板，也不制造单项 tab strip。Workspace Resources 复用 package-owned Root，并隐藏与 Host
+自动 projection 重复的顶部全局刷新；relink、recovery 等领域操作仍由该 Root 保留。
 
 ## 数据与资源
 

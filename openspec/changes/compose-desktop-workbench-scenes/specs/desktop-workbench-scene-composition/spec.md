@@ -312,11 +312,11 @@ The resource center SHALL use one Assets-owned `AssetCenterSession` for catalog,
 - **AND** Preview renders through its package-owned Root without receiving a raw path
 - **AND** the authorized Preview and Workspace Preview reuse the same package-owned preview presentation and viewer registry
 
-#### Scenario: Workspace Preview avoids duplicate chrome
+#### Scenario: Workbench Preview avoids duplicate chrome
 
-- **WHEN** a Workspace Preview View is active under the Workbench editor tab strip
+- **WHEN** a Workspace Preview View or Asset Center authorized Preview is active inside a Workbench panel shell
 - **THEN** the canonical Preview Root renders its content-only presentation without a second file header or tab strip
-- **AND** Asset Center authorized Preview may retain its descriptor header because its independent shell has no Workbench tab strip
+- **AND** Preview content inherits the containing shell theme without introducing a package-local panel background
 
 #### Scenario: Selected resource cannot be previewed
 
@@ -332,7 +332,7 @@ The resource center SHALL use one Assets-owned `AssetCenterSession` for catalog,
 
 ### Requirement: Management and Settings surfaces use the same scene model
 
-Extensions and project management SHALL place their package-owned management Roots in Main, with detail as optional Secondary Main. Settings SHALL compose its navigation and Main in the same Workbench. Their domain facts and mutations SHALL remain with their owning package or Host service; Desktop only places Roots and binds typed adapters.
+Extensions and project management SHALL place their package-owned management Roots in Main, with content-rich owner-qualified detail as optional Secondary Main. Settings SHALL compose its navigation and Main in the same Workbench. Their domain facts and mutations SHALL remain with their owning package or Host service; Desktop only places Roots and binds typed adapters.
 
 #### Scenario: User opens Extensions or project management
 
@@ -348,6 +348,12 @@ Extensions and project management SHALL place their package-owned management Roo
 - **AND** Preview content continues through the canonical `@neko/preview-webview` presentation and viewer registry
 - **AND** Desktop does not implement another viewer, nested page card or management-owned preview renderer
 
+#### Scenario: Low-information Project selection remains in management Main
+
+- **WHEN** a Project catalog selection has no content-rich owner-qualified Detail Root
+- **THEN** Workbench keeps Project Management as the only Main shell and does not reserve a Secondary Main column or resize gutter
+- **AND** the selected row exposes a separate explicit open action without making selection itself open the Workspace
+
 #### Scenario: Management and detail use independent tabless shells
 
 - **WHEN** Assets, Extensions or Projects composes management beside Preview/Detail
@@ -355,6 +361,7 @@ Extensions and project management SHALL place their package-owned management Roo
 - **AND** each sibling shell has its own DOM, border, radius, background, clipping and overflow boundary with a visible gutter between them
 - **AND** the composition does not render both contents on one continuous Main surface separated only by a line
 - **AND** neither shell renders a synthetic single-item Workbench tab strip
+- **AND** Preview/Detail content does not render a descriptor header and inherits the same theme background as its sibling management shell
 
 #### Scenario: Workspace resources omit redundant global refresh
 
