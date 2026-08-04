@@ -169,6 +169,8 @@ describe('createResourceToCanvasInteraction', () => {
         label: 'Neko',
         entityRef: { entityId: 'character-neko', entityKind: 'character' },
         entityStatus: 'confirmed',
+        sourceOwners: ['project-entity'],
+        attentionBindingIds: [],
         representationAvailability: 'active',
         representationLocator: {
           kind: 'workspace-file',

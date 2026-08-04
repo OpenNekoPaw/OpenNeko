@@ -54,14 +54,23 @@ describe('Resource Browser presenter', () => {
       updatedAt: '2026-07-28T00:00:00.000Z',
     };
 
-    const item = presentResourceBrowserEntityItem(entity, {
-      canvasAvailable: true,
-    });
+    const item = presentResourceBrowserEntityItem(
+      {
+        projectionId: 'entity:character-neko',
+        status: 'confirmed',
+        entity,
+        bindingAvailability: [],
+        sourceOwners: ['project-entity'],
+      },
+      { canvasAvailable: true },
+    );
 
     expect(item).toMatchObject({
       facet: 'entities',
       kind: 'character',
       entityStatus: 'confirmed',
+      sourceOwners: ['project-entity'],
+      attentionBindingIds: [],
       representationAvailability: 'active',
       entityRef: { entityId: 'character-neko', entityKind: 'character' },
       representationLocator: {
@@ -72,6 +81,32 @@ describe('Resource Browser presenter', () => {
       representationRole: 'portrait',
       capabilities: ['preview', 'add-to-canvas'],
     });
+  });
+
+  it('projects candidates with evidence ownership but without a stable Entity identity', () => {
+    const item = presentResourceBrowserEntityItem({
+      projectionId: 'candidate:candidate-neko',
+      status: 'candidate',
+      candidate: {
+        candidateId: 'candidate-neko',
+        kind: 'character',
+        proposedNames: { canonical: 'Neko?', aliases: [] },
+        freshness: 'fresh',
+        evidence: [
+          { evidenceId: 'evidence-workspace', owner: 'workspace', sourceId: 'story.fountain' },
+        ],
+      },
+      sourceOwners: ['workspace'],
+    });
+
+    expect(item).toMatchObject({
+      entityStatus: 'candidate',
+      candidateRef: { candidateId: 'candidate-neko', entityKind: 'character' },
+      sourceOwners: ['workspace'],
+      evidenceCount: 1,
+      capabilities: [],
+    });
+    expect(item).not.toHaveProperty('entityRef');
   });
 
   it('projects reusable Assets without exposing a global filesystem path', () => {

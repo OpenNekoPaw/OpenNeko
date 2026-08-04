@@ -451,7 +451,12 @@ describe('Desktop Resource Browser source', () => {
       ]),
     );
     expect(entityProjection).toMatchObject({
-      entities: [{ entityId: 'character-neko', kind: 'character' }],
+      projections: [
+        {
+          status: 'confirmed',
+          entity: { entityId: 'character-neko', kind: 'character' },
+        },
+      ],
     });
     expect(assets).toEqual([
       expect.objectContaining({
@@ -622,7 +627,7 @@ describe('Desktop Resource Browser source', () => {
     });
   });
 
-  it('shares the confirmed Entity and active representation policy with Agent mentions', async () => {
+  it('retains deprecated Entities for management instead of applying the Agent active-only filter', async () => {
     const fixture = await createFixture();
     await mkdir(path.join(fixture.workspace, 'neko'), { recursive: true });
     await writeFile(
@@ -673,7 +678,17 @@ describe('Desktop Resource Browser source', () => {
       limit: 20,
     });
 
-    expect(result.entities.map((entity) => entity.entityId)).toEqual(['confirmed']);
+    expect(
+      result.projections.map((projection) => [
+        projection.status,
+        projection.status === 'candidate'
+          ? projection.candidate.candidateId
+          : projection.entity.entityId,
+      ]),
+    ).toEqual([
+      ['confirmed', 'confirmed'],
+      ['deprecated', 'deprecated'],
+    ]);
   });
 
   it('adds a selected directory through links without copying the library', async () => {

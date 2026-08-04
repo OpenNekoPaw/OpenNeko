@@ -406,17 +406,21 @@ export class ResourceBrowserController implements ResourceBrowserHostRuntime {
       limit,
     });
     const normalizedQuery = query.trim().toLocaleLowerCase();
-    return result.entities
-      .filter((entity) =>
-        normalizedQuery.length === 0
+    return result.projections
+      .filter((projection) => {
+        const names =
+          projection.status === 'candidate'
+            ? projection.candidate.proposedNames
+            : projection.entity.names;
+        return normalizedQuery.length === 0
           ? true
-          : [entity.names.canonical, entity.names.display, ...entity.names.aliases]
+          : [names.canonical, names.display, ...names.aliases]
               .filter((value): value is string => typeof value === 'string')
-              .some((value) => value.toLocaleLowerCase().includes(normalizedQuery)),
-      )
+              .some((value) => value.toLocaleLowerCase().includes(normalizedQuery));
+      })
       .slice(0, limit)
-      .map((entity) =>
-        presentResourceBrowserEntityItem(entity, {
+      .map((projection) =>
+        presentResourceBrowserEntityItem(projection, {
           canvasAvailable: this.options.canvasAvailable,
         }),
       );

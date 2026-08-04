@@ -29,7 +29,7 @@
 ## 5. Resource Browser and Desktop composition
 
 - [x] 5.1a Replace the Resource Browser `materials` facet with owner-preserving `files`, `media`, `assets`, and `entities` facets, retain per-facet selection/navigation display state, and reject the retired facet through the versioned contract.
-- [ ] 5.1b Add confirmed, candidate, needs-attention, and deprecated Entity projections plus owner-preserving cross-source search.
+- [x] 5.1b Add confirmed, candidate, needs-attention, and deprecated Entity projections plus owner-preserving cross-source search.
 - [ ] 5.2 Implement Entity Inspector and typed confirm, edit, bind, merge, deprecate, instantiate, publish, diff, apply, reference, Character dialogue, Room open, and Character embody intents with visible provenance, capability gating, and blockers.
 - [ ] 5.3 Wire Entity domain/node/search/webview and generic Asset ports through sender-bound Desktop IPC without retaining Entity semantics or file IO in the Renderer/application root.
 - [ ] 5.4 Add producer, Webview consumer, Desktop delegation, stale-event, conflict, and canonical-handler path tests for every ownership migration.

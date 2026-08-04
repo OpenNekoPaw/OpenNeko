@@ -1,4 +1,4 @@
-import type { ProjectEntityRecord } from '@neko/entity-domain';
+import type { ProjectEntityManagementProjection } from '@neko/entity-domain';
 import { contentLocatorKey } from '@neko/content';
 import { type MediaLibraryProjectionEntry } from '@neko/assets-domain/contracts';
 import type { GlobalAssetItem } from '../global-library/contract';
@@ -47,12 +47,35 @@ export function presentResourceBrowserContentItem(
 }
 
 export function presentResourceBrowserEntityItem(
-  entity: ProjectEntityRecord,
+  projection: ProjectEntityManagementProjection,
   options: { readonly canvasAvailable?: boolean } = {},
 ): ResourceBrowserEntityItem {
+  if (projection.status === 'candidate') {
+    const candidate = projection.candidate;
+    return {
+      resourceId: stableResourceId('candidate', candidate.candidateId),
+      facet: 'entities',
+      kind: candidate.kind,
+      label: candidate.proposedNames.display ?? candidate.proposedNames.canonical,
+      ...(candidate.proposedNames.aliases.length > 0
+        ? { description: candidate.proposedNames.aliases.join(', ') }
+        : {}),
+      candidateRef: { candidateId: candidate.candidateId, entityKind: candidate.kind },
+      entityStatus: 'candidate',
+      sourceOwners: projection.sourceOwners,
+      evidenceCount: candidate.evidence.length,
+      role: 'entity',
+      depth: 0,
+      capabilities: [],
+    };
+  }
+  const entity = projection.entity;
   const binding =
     entity.representations.find((candidate) => candidate.isDefault) ?? entity.representations[0];
   const representationLocator = binding?.target;
+  const attentionBindingIds = projection.bindingAvailability
+    .filter((candidate) => candidate.availability === 'needs-attention')
+    .map((candidate) => candidate.bindingId);
   return {
     resourceId: stableResourceId('entity', `${entity.kind}:${entity.entityId}`),
     facet: 'entities',
@@ -63,8 +86,15 @@ export function presentResourceBrowserEntityItem(
       entityId: entity.entityId,
       entityKind: entity.kind,
     },
-    entityStatus: 'confirmed',
-    representationAvailability: representationLocator ? 'active' : 'unbound',
+    entityStatus: projection.status,
+    sourceOwners: projection.sourceOwners,
+    attentionBindingIds,
+    representationAvailability:
+      attentionBindingIds.length > 0
+        ? 'needs-attention'
+        : representationLocator
+          ? 'active'
+          : 'unbound',
     role: 'entity',
     depth: 0,
     ...(representationLocator ? { representationLocator } : {}),
@@ -83,9 +113,10 @@ export function presentResourceBrowserEntityItem(
           },
         }
       : {}),
-    capabilities: representationLocator
-      ? ['preview', ...(options.canvasAvailable ? (['add-to-canvas'] as const) : [])]
-      : [],
+    capabilities:
+      representationLocator && projection.status !== 'deprecated'
+        ? ['preview', ...(options.canvasAvailable ? (['add-to-canvas'] as const) : [])]
+        : [],
   };
 }
 

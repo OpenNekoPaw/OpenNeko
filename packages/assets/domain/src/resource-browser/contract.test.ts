@@ -117,6 +117,8 @@ describe('Resource Browser contract', () => {
           label: 'Neko',
           entityRef: { entityId: 'character-1', entityKind: 'character' },
           entityStatus: 'confirmed',
+          sourceOwners: ['project-entity'],
+          attentionBindingIds: [],
           representationAvailability: 'active',
           representationLocator: { kind: 'workspace-file', path: 'characters/neko.png' },
           representationBindingId: 'binding-neko-portrait',

@@ -344,7 +344,19 @@ function createSource(): ResourceBrowserProjectionSource & {
         },
       ]),
     },
-    entities: { list: vi.fn(async () => ({ entities: [entity] })) },
+    entities: {
+      list: vi.fn(async () => ({
+        projections: [
+          {
+            projectionId: `entity:${entity.entityId}`,
+            status: 'confirmed' as const,
+            entity,
+            bindingAvailability: [],
+            sourceOwners: ['project-entity'] as const,
+          },
+        ],
+      })),
+    },
     refresh: vi.fn(async () => undefined),
   };
 }

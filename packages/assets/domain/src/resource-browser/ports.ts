@@ -1,4 +1,4 @@
-import type { ProjectEntityRecord } from '@neko/entity-domain';
+import type { ProjectEntityManagementProjection } from '@neko/entity-domain';
 import type { ContentLocator } from '@neko/content';
 import type { GlobalAssetItem } from '../global-library/contract';
 import type {
@@ -55,7 +55,7 @@ export interface ResourceBrowserEntityReader {
     readonly query: string;
     readonly limit: number;
   }): Promise<{
-    readonly entities: readonly ProjectEntityRecord[];
+    readonly projections: readonly ProjectEntityManagementProjection[];
   }>;
 }
 

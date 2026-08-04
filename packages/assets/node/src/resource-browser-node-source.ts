@@ -27,7 +27,7 @@ import {
 } from '@neko/assets-domain/global-library/contract';
 import type { AssetWorkspaceResolution } from '@neko/assets-domain/contracts';
 import { resolveWorkspaceContentLocator } from './workspace-content-locator';
-import { readProjectEntityResources } from '@neko/entity-node';
+import { readProjectEntityManagementResources } from '@neko/entity-node';
 import {
   listGlobalMediaLibraryConnections,
   type GlobalMediaLibraryConnection,
@@ -245,7 +245,7 @@ export function createResourceBrowserNodeReadSource(
     },
     entities: {
       list: async () =>
-        readProjectEntityResources({
+        readProjectEntityManagementResources({
           workspace: options.workspace,
         }),
     },
@@ -714,7 +714,11 @@ export async function resolveResourceBrowserItemPath(input: {
     });
   }
   const locator =
-    input.item.facet === 'entities' ? input.item.representationLocator : input.item.locator;
+    input.item.facet === 'entities'
+      ? input.item.entityStatus === 'candidate'
+        ? undefined
+        : input.item.representationLocator
+      : input.item.locator;
   if (!locator) {
     throw new Error('Desktop Resource Browser item has no local presentation.');
   }

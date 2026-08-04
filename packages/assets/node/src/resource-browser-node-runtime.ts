@@ -992,7 +992,9 @@ export function createResourceToCanvasInteraction(options: {
     };
     const locator =
       item.facet === 'entities'
-        ? item.representationLocator
+        ? item.entityStatus === 'candidate'
+          ? undefined
+          : item.representationLocator
         : item.facet === 'assets'
           ? undefined
           : item.locator;
@@ -1030,7 +1032,7 @@ export function createResourceToCanvasInteraction(options: {
             locator,
             mediaKind: resourceItemMediaKind(item),
             title: item.label,
-            ...(item.facet === 'entities'
+            ...(item.facet === 'entities' && item.entityStatus !== 'candidate'
               ? {
                   entity: {
                     entityId: item.entityRef.entityId,
@@ -1052,6 +1054,9 @@ export function createResourceToCanvasInteraction(options: {
 function requireEntityRepresentationBindingId(
   item: Extract<ResourceBrowserItem, { readonly facet: 'entities' }>,
 ): string {
+  if (item.entityStatus === 'candidate') {
+    throw new Error('Resource Browser candidate has no representation binding identity.');
+  }
   if (!item.representationBindingId) {
     throw new Error('Resource Browser Entity has no active representation binding identity.');
   }
@@ -1061,6 +1066,9 @@ function requireEntityRepresentationBindingId(
 function requireEntityRepresentationRole(
   item: Extract<ResourceBrowserItem, { readonly facet: 'entities' }>,
 ) {
+  if (item.entityStatus === 'candidate') {
+    throw new Error('Resource Browser candidate has no representation role.');
+  }
   if (!item.representationRole) {
     throw new Error('Resource Browser Entity has no active representation role.');
   }

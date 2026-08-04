@@ -924,7 +924,9 @@ function hasManagedLibraryLink(item: ResourceBrowserItem): boolean {
 function canDragResourceToCanvas(item: ResourceBrowserItem): boolean {
   return (
     item.capabilities.includes('add-to-canvas') &&
-    (item.facet === 'entities' ? item.representationLocator !== undefined : item.facet !== 'assets')
+    (item.facet === 'entities'
+      ? item.entityStatus !== 'candidate' && item.representationLocator !== undefined
+      : item.facet !== 'assets')
   );
 }
 
@@ -1095,7 +1097,9 @@ function startResourceCanvasDrag(
 ): void {
   const locator =
     item.facet === 'entities'
-      ? item.representationLocator
+      ? item.entityStatus === 'candidate'
+        ? undefined
+        : item.representationLocator
       : item.facet === 'assets'
         ? undefined
         : item.locator;

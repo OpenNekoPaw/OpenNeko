@@ -12,7 +12,7 @@ import {
   type WorkspaceMediaLibraryStatus,
 } from '@neko/assets-domain/contracts';
 
-export const RESOURCE_BROWSER_CONTRACT_VERSION = 9 as const;
+export const RESOURCE_BROWSER_CONTRACT_VERSION = 10 as const;
 
 export function createResourceBrowserViewId(projectViewId: string): string {
   return `resource-browser:${projectViewId}`;
@@ -73,6 +73,11 @@ export interface ResourceBrowserEntityRef {
   readonly entityKind: CreativeEntityKind;
 }
 
+export interface ResourceBrowserCandidateRef {
+  readonly candidateId: string;
+  readonly entityKind: CreativeEntityKind;
+}
+
 export interface ResourceBrowserThumbnailDescriptor {
   readonly descriptorId: string;
   readonly revision: string;
@@ -109,15 +114,26 @@ export interface ResourceBrowserAssetItem extends ResourceBrowserItemBase {
   readonly availability: 'available' | 'unavailable';
 }
 
-export interface ResourceBrowserEntityItem extends ResourceBrowserItemBase {
+interface ResourceBrowserEntityItemBase extends ResourceBrowserItemBase {
   readonly facet: 'entities';
-  readonly entityRef: ResourceBrowserEntityRef;
-  readonly entityStatus: 'confirmed';
-  readonly representationAvailability: 'active' | 'unbound';
-  readonly representationLocator?: ContentLocator;
-  readonly representationBindingId?: string;
-  readonly representationRole?: EntityRepresentationRole;
+  readonly sourceOwners: readonly string[];
 }
+
+export type ResourceBrowserEntityItem =
+  | (ResourceBrowserEntityItemBase & {
+      readonly entityRef: ResourceBrowserEntityRef;
+      readonly entityStatus: 'confirmed' | 'needs-attention' | 'deprecated';
+      readonly representationAvailability: 'active' | 'unbound' | 'needs-attention';
+      readonly attentionBindingIds: readonly string[];
+      readonly representationLocator?: ContentLocator;
+      readonly representationBindingId?: string;
+      readonly representationRole?: EntityRepresentationRole;
+    })
+  | (ResourceBrowserEntityItemBase & {
+      readonly candidateRef: ResourceBrowserCandidateRef;
+      readonly entityStatus: 'candidate';
+      readonly evidenceCount: number;
+    });
 
 export type ResourceBrowserItem =
   ResourceBrowserContentItem | ResourceBrowserAssetItem | ResourceBrowserEntityItem;
@@ -1217,12 +1233,41 @@ function parseResourceBrowserItem(value: unknown): ResourceBrowserItem {
     if (base.libraryStatus) {
       throw invalidPayload('Resource Browser Entity must not contain Media Library status.');
     }
+    if (base.role !== 'entity') {
+      throw invalidPayload('Resource Browser Entity item role is invalid.');
+    }
+    const entityStatus = requireEntityStatus(record['entityStatus']);
+    const sourceOwners = requireStringArray(record['sourceOwners'], 'Entity source owners');
+    if (entityStatus === 'candidate') {
+      const candidateRef = parseResourceBrowserCandidateRef(record['candidateRef']);
+      if (base.kind !== candidateRef.entityKind) {
+        throw invalidPayload('Resource Browser candidate kind does not match its identity.');
+      }
+      if (
+        record['entityRef'] !== undefined ||
+        record['representationAvailability'] !== undefined ||
+        record['attentionBindingIds'] !== undefined ||
+        record['representationLocator'] !== undefined ||
+        record['representationBindingId'] !== undefined ||
+        record['representationRole'] !== undefined
+      ) {
+        throw invalidPayload('Resource Browser candidate contains confirmed Entity fields.');
+      }
+      return {
+        ...base,
+        facet,
+        candidateRef,
+        entityStatus,
+        sourceOwners,
+        evidenceCount: requireNonNegativeInteger(
+          record['evidenceCount'],
+          'Resource Browser candidate evidence count is invalid.',
+        ),
+      };
+    }
     const entityRef = parseResourceBrowserEntityRef(record['entityRef']);
     if (base.kind !== entityRef.entityKind) {
       throw invalidPayload('Resource Browser Entity kind does not match its Entity identity.');
-    }
-    if (base.role !== 'entity') {
-      throw invalidPayload('Resource Browser Entity item role is invalid.');
     }
     const representationAvailability = requireRepresentationAvailability(
       record['representationAvailability'],
@@ -1237,7 +1282,12 @@ function parseResourceBrowserItem(value: unknown): ResourceBrowserItem {
       ...base,
       facet,
       entityRef,
-      entityStatus: requireConfirmedEntityStatus(record['entityStatus']),
+      entityStatus,
+      sourceOwners,
+      attentionBindingIds: requireStringArray(
+        record['attentionBindingIds'],
+        'Entity attention binding identities',
+      ),
       representationAvailability,
       ...representation,
     };
@@ -1295,18 +1345,42 @@ function requireResourceAvailability(value: unknown): 'available' | 'unavailable
   return value;
 }
 
-function requireConfirmedEntityStatus(value: unknown): 'confirmed' {
-  if (value !== 'confirmed') {
-    throw invalidPayload('Resource Browser Entity status must be confirmed.');
+function requireEntityStatus(
+  value: unknown,
+): 'confirmed' | 'candidate' | 'needs-attention' | 'deprecated' {
+  if (
+    value !== 'confirmed' &&
+    value !== 'candidate' &&
+    value !== 'needs-attention' &&
+    value !== 'deprecated'
+  ) {
+    throw invalidPayload('Resource Browser Entity status is invalid.');
   }
   return value;
 }
 
-function requireRepresentationAvailability(value: unknown): 'active' | 'unbound' {
-  if (value !== 'active' && value !== 'unbound') {
+function requireRepresentationAvailability(
+  value: unknown,
+): 'active' | 'unbound' | 'needs-attention' {
+  if (value !== 'active' && value !== 'unbound' && value !== 'needs-attention') {
     throw invalidPayload('Resource Browser Entity representation availability is invalid.');
   }
   return value;
+}
+
+function parseResourceBrowserCandidateRef(value: unknown): ResourceBrowserCandidateRef {
+  const record = requireRecord(value, 'Resource Browser candidate identity is required.');
+  const entityKind = record['entityKind'];
+  if (!isCreativeEntityKind(entityKind)) {
+    throw invalidPayload('Resource Browser candidate kind is invalid.');
+  }
+  return {
+    candidateId: requireOpaqueIdentity(
+      record['candidateId'],
+      'Resource Browser candidate identity is required.',
+    ),
+    entityKind,
+  };
 }
 
 function parseResourceBrowserEntityRef(value: unknown): ResourceBrowserEntityRef {
@@ -1545,7 +1619,7 @@ function requireMediaLibraryLocationKind(value: unknown): 'local' | 'nas' | 'clo
 }
 
 function readEntityRepresentation(
-  availability: 'active' | 'unbound',
+  availability: 'active' | 'unbound' | 'needs-attention',
   locator: unknown,
   bindingId: unknown,
   role: unknown,
@@ -1573,6 +1647,12 @@ function readEntityRepresentation(
     ),
     representationRole: role,
   };
+}
+
+function requireStringArray(value: unknown, field: string): readonly string[] {
+  return requireArray(value, `Resource Browser ${field} must be an array.`).map((entry) =>
+    requireOpaqueIdentity(entry, `Resource Browser ${field} contains an invalid identity.`),
+  );
 }
 
 function requireContentLocator(value: unknown, field: string): ContentLocator {

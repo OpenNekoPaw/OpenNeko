@@ -2,7 +2,10 @@ import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { readProjectEntityResources } from './project-entity-resources';
+import {
+  readProjectEntityManagementResources,
+  readProjectEntityResources,
+} from './project-entity-resources';
 
 const roots: string[] = [];
 
@@ -65,6 +68,39 @@ describe('readProjectEntityResources', () => {
         workspace: { workspaceId: 'project-neko', workspacePath },
       }),
     ).rejects.toMatchObject({ diagnostic: { code: 'project-entity-path-unauthorized' } });
+  });
+
+  it('projects deprecated records and rebuildable candidate state for management consumers', async () => {
+    const workspacePath = await createWorkspace();
+    await writeJson(workspacePath, 'neko/entities.json', {
+      schemaVersion: 1,
+      projectId: 'project-neko',
+      revision: 1,
+      entities: [
+        entity('deprecated-character', 'Deprecated', {
+          state: 'deprecated',
+          deprecatedAt: '2026-08-05T00:00:00.000Z',
+        }),
+      ],
+    });
+
+    const result = await readProjectEntityManagementResources({
+      workspace: { workspaceId: 'project-neko', workspacePath },
+      candidates: [
+        {
+          candidateId: 'candidate-nova',
+          kind: 'character',
+          proposedNames: { canonical: 'Nova', aliases: [] },
+          freshness: 'fresh',
+          evidence: [{ evidenceId: 'evidence-nova', owner: 'workspace', sourceId: 'story' }],
+        },
+      ],
+    });
+
+    expect(result.projections.map(({ projectionId, status }) => [projectionId, status])).toEqual([
+      ['entity:deprecated-character', 'deprecated'],
+      ['candidate:candidate-nova', 'candidate'],
+    ]);
   });
 });
 
