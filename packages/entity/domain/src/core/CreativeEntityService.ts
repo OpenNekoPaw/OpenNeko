@@ -35,6 +35,7 @@ import {
   resolveProjectEntityFilePath,
   resolveVisualIdentityDraftsPath,
 } from './paths';
+import { rejectRetiredProjectEntityAuthority } from './retiredAuthority';
 
 export interface CreativeEntityServiceOptions {
   readonly projectRoot: string;
@@ -118,6 +119,7 @@ export class CreativeEntityService {
   readonly drafts: VisualIdentityDraftService;
 
   constructor(private readonly options: CreativeEntityServiceOptions) {
+    rejectRetiredProjectEntityAuthority();
     this.store = options.store ?? new ProjectEntityStore(options);
     this.candidates = options.candidates ?? new EntityCandidateStore(options);
     this.bindings = options.bindings ?? new EntityRepresentationBindingService(options);

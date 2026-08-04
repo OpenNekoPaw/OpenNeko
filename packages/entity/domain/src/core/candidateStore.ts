@@ -10,10 +10,11 @@ import {
   withCreativeEntityCandidateDefaults,
   withCreativeEntityCandidateFileDefaults,
 } from '../contracts';
-import type { EntityRuntimePorts } from './ports';
+import type { EntityRuntimeLock, EntityRuntimePorts } from './ports';
 import { SerialEntityRuntimeLock, nowFromPorts } from './ports';
 import { buildEntityId, normalizeAliasList } from './adapters';
 import { assertGitTrackedEntityFactPath, resolveEntityCandidateFilePath } from './paths';
+import { rejectRetiredProjectEntityAuthority } from './retiredAuthority';
 
 export interface EntityCandidateStoreOptions {
   readonly projectRoot: string;
@@ -41,12 +42,13 @@ export interface EntityCandidateFactMigrationReport {
 
 export class EntityCandidateStore {
   private readonly filePath: string;
-  private readonly lock;
+  private readonly lock: EntityRuntimeLock;
 
   constructor(private readonly options: EntityCandidateStoreOptions) {
     this.filePath = resolveEntityCandidateFilePath(options.projectRoot);
     this.lock = options.ports.lock ?? new SerialEntityRuntimeLock();
     assertGitTrackedEntityFactPath(this.filePath);
+    rejectRetiredProjectEntityAuthority();
   }
 
   async load(): Promise<CreativeEntityCandidateFile> {

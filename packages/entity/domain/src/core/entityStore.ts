@@ -13,7 +13,7 @@ import {
   type CharacterRecord,
   type CharacterRegistryFile,
 } from '../contracts';
-import type { EntityRuntimePorts } from './ports';
+import type { EntityRuntimeLock, EntityRuntimePorts } from './ports';
 import { SerialEntityRuntimeLock } from './ports';
 import {
   buildEntityId,
@@ -28,6 +28,7 @@ import {
   resolveCharacterRegistryPath,
   resolveProjectEntityFilePath,
 } from './paths';
+import { rejectRetiredProjectEntityAuthority } from './retiredAuthority';
 
 const NON_CHARACTER_KINDS: readonly Exclude<CreativeEntityKind, 'character'>[] = [
   'scene',
@@ -42,10 +43,11 @@ export interface EntityStoreOptions {
 }
 
 export class ProjectEntityStore {
-  private readonly lock;
+  private readonly lock: EntityRuntimeLock;
 
   constructor(private readonly options: EntityStoreOptions) {
     this.lock = options.ports.lock ?? new SerialEntityRuntimeLock();
+    rejectRetiredProjectEntityAuthority();
   }
 
   get projectRoot(): string {

@@ -629,6 +629,8 @@ function isMigrationOnlySurface(lowerFile) {
     'packages/generation/src/media/generated-asset-index.ts',
     'packages/generation/src/media/generated-output-adoption.ts',
     'packages/generation/src/media/index.ts',
+    'packages/entity/node/src/node-project-entity-migration-inventory.ts',
+    'packages/entity/node/src/node-project-entity-migration.ts',
     'packages/local-metadata/src/migration-planner.ts',
   ]);
 }

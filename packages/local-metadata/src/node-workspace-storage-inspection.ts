@@ -54,11 +54,6 @@ const LEGACY_METADATA_PATHS: readonly KnownWorkspacePath[] = [
 const MISPLACED_PROJECT_FACT_PATHS: readonly KnownWorkspacePath[] = [
   misplacedProjectFact('.neko/assets/library.json', 'neko/assets/library.json'),
   misplacedProjectFact('.neko/entity-bindings.json', 'neko/entity-bindings.json'),
-  misplacedProjectFact('.neko/visual-identity-drafts.json', 'neko/visual-identity-drafts.json'),
-  misplacedProjectFact(
-    '.neko/entity-asset-requirements.json',
-    'neko/entity-asset-requirements.json',
-  ),
   misplacedProjectFact('.neko/providers', 'neko/providers'),
 ];
 

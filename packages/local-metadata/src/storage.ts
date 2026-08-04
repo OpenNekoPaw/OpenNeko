@@ -663,8 +663,6 @@ export interface IProjectFactsLayout {
   readonly settings: string;
   readonly providerCards: string;
   readonly entityBindings: string;
-  readonly visualIdentityDrafts: string;
-  readonly entityAssetRequirements: string;
 }
 
 /** Project cache artifacts (`.neko/.cache/`) — derived and not Git-tracked. */
@@ -741,8 +739,6 @@ export function resolveStorageLayout(workspaceRoot: string, homedir: string): IS
     settings: join(factsRoot, 'settings.json'),
     providerCards: join(factsRoot, 'providers'),
     entityBindings: join(factsRoot, 'entity-bindings.json'),
-    visualIdentityDrafts: join(factsRoot, 'visual-identity-drafts.json'),
-    entityAssetRequirements: join(factsRoot, 'entity-asset-requirements.json'),
   };
 
   const cache: ICacheLayout = {

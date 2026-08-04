@@ -14,7 +14,7 @@ import {
   isVisualIdentityDraftFile,
   normalizeEntityRepresentationBindingFile,
 } from '../contracts';
-import type { EntityRuntimePorts } from './ports';
+import type { EntityRuntimeLock, EntityRuntimePorts } from './ports';
 import { SerialEntityRuntimeLock } from './ports';
 import {
   assertGitTrackedEntityFactPath,
@@ -22,6 +22,7 @@ import {
   resolveEntityAssetRequirementsPath,
   resolveVisualIdentityDraftsPath,
 } from './paths';
+import { rejectRetiredProjectEntityAuthority } from './retiredAuthority';
 
 export interface EntityFactServiceOptions {
   readonly projectRoot: string;
@@ -30,12 +31,13 @@ export interface EntityFactServiceOptions {
 
 export class EntityRepresentationBindingService {
   private readonly filePath: string;
-  private readonly lock;
+  private readonly lock: EntityRuntimeLock;
 
   constructor(private readonly options: EntityFactServiceOptions) {
     this.filePath = resolveEntityRepresentationBindingsPath(options.projectRoot);
     this.lock = options.ports.lock ?? new SerialEntityRuntimeLock();
     assertGitTrackedEntityFactPath(this.filePath);
+    rejectRetiredProjectEntityAuthority();
   }
 
   static fromProjectRoot(
@@ -129,12 +131,13 @@ export class EntityRepresentationBindingService {
 
 export class VisualIdentityDraftService {
   private readonly filePath: string;
-  private readonly lock;
+  private readonly lock: EntityRuntimeLock;
 
   constructor(private readonly options: EntityFactServiceOptions) {
     this.filePath = resolveVisualIdentityDraftsPath(options.projectRoot);
     this.lock = options.ports.lock ?? new SerialEntityRuntimeLock();
     assertGitTrackedEntityFactPath(this.filePath);
+    rejectRetiredProjectEntityAuthority();
   }
 
   static fromProjectRoot(
@@ -187,12 +190,13 @@ export class VisualIdentityDraftService {
 
 export class EntityAssetRequirementService {
   private readonly filePath: string;
-  private readonly lock;
+  private readonly lock: EntityRuntimeLock;
 
   constructor(private readonly options: EntityFactServiceOptions) {
     this.filePath = resolveEntityAssetRequirementsPath(options.projectRoot);
     this.lock = options.ports.lock ?? new SerialEntityRuntimeLock();
     assertGitTrackedEntityFactPath(this.filePath);
+    rejectRetiredProjectEntityAuthority();
   }
 
   static fromProjectRoot(

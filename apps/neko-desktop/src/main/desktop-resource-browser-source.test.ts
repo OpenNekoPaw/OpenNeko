@@ -14,7 +14,9 @@ import * as path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   ENTITY_REPRESENTATION_BINDING_FILE_VERSION,
+  PROJECT_ENTITY_DOCUMENT_SCHEMA_VERSION,
   encodeEntityRepresentationBindingFile,
+  encodeProjectEntityDocument,
 } from '@neko/entity-domain';
 import type { ILogger } from '@neko/shared/logger';
 import type { ResourceBrowserIdentity } from '@neko/assets-domain/resource-browser/contract';
@@ -51,22 +53,53 @@ afterEach(async () => {
 });
 
 describe('Desktop Resource Browser source', () => {
-  it('projects a required-but-unlinked Media Library from authoritative project references', async () => {
+  it('projects a required-but-unlinked Media Library only from canonical project references', async () => {
     const fixture = await createFixture();
     const nekoDirectory = path.join(fixture.workspace, 'neko');
     await mkdir(nekoDirectory, { recursive: true });
+    await writeFile(
+      path.join(nekoDirectory, 'entities.json'),
+      encodeProjectEntityDocument({
+        schemaVersion: PROJECT_ENTITY_DOCUMENT_SCHEMA_VERSION,
+        projectId: identity.workspaceId,
+        revision: 1,
+        entities: [
+          {
+            entityId: 'character-a',
+            kind: 'character',
+            names: { canonical: 'Character A', aliases: [] },
+            facts: {},
+            representations: [
+              {
+                bindingId: 'binding-footage',
+                target: {
+                  kind: 'workspace-file',
+                  path: 'neko/assets/Footage/shot.mov',
+                },
+                role: 'portrait',
+                source: 'user',
+                acceptedAt: '2026-08-01T00:00:00.000Z',
+              },
+            ],
+            lifecycle: { state: 'active' },
+            createdAt: '2026-08-01T00:00:00.000Z',
+            updatedAt: '2026-08-01T00:00:00.000Z',
+          },
+        ],
+      }),
+    );
     await writeFile(
       path.join(nekoDirectory, 'entity-representation-bindings.json'),
       encodeEntityRepresentationBindingFile({
         version: ENTITY_REPRESENTATION_BINDING_FILE_VERSION,
         bindings: [
           {
-            id: 'binding-footage',
+            id: 'binding-retired',
             entityId: 'character-a',
             entityKind: 'character',
             representation: {
               kind: 'workspace-file',
-              path: 'neko/assets/Footage/shot.mov',
+              path: 'neko/assets/Retired/shot.mov',
             },
             role: 'portrait',
             status: 'confirmed',
