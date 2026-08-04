@@ -195,6 +195,25 @@ function assertOwnerPlan(
     if (operation.operation === 'delete' && resolution.action !== 'remove') {
       throw incompletePlan('Project Entity delete must remove every known reference.');
     }
+    if (operation.operation === 'deprecate' && operation.replacement !== undefined) {
+      if (
+        resolution.action !== 'rewrite' ||
+        !sameReferenceTarget(resolution.replacement, operation.replacement)
+      ) {
+        throw incompletePlan(
+          'Project Entity deprecation with a replacement must rewrite every known reference.',
+        );
+      }
+    }
+    if (
+      operation.operation === 'deprecate' &&
+      operation.replacement === undefined &&
+      resolution.action !== 'preserve'
+    ) {
+      throw incompletePlan(
+        'Project Entity deprecation without a replacement must preserve every known reference.',
+      );
+    }
   }
 }
 

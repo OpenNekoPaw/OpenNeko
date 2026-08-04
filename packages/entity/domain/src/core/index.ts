@@ -7,4 +7,5 @@ export * from './candidateStore';
 export * from './representationResolver';
 export * from './representationAccess';
 export * from './CreativeEntityService';
+export * from './ProjectEntityOperationService';
 export * from './retiredAuthority';

@@ -157,6 +157,54 @@ describe('Project Entity reference rewrite contract', () => {
       }),
     ).toThrowError(/delete must remove every known reference/u);
   });
+
+  it('requires deprecation to rewrite to an explicit replacement or preserve in place', () => {
+    const merge = createMergeOperation();
+    const withReplacement: ProjectEntityReferenceOperationRequest = {
+      ...merge,
+      operationId: 'operation-deprecate-rin',
+      operation: 'deprecate',
+    };
+    const preservingPlans = PROJECT_ENTITY_REFERENCE_OWNER_IDS.map((ownerId) => {
+      const plan = createReadyPlan(withReplacement, ownerId);
+      return {
+        ...plan,
+        resolutions: plan.resolutions.map((resolution) => ({
+          action: 'preserve' as const,
+          referenceId: resolution.referenceId,
+        })),
+      };
+    });
+    expect(() =>
+      createProjectEntityReferenceRewritePlan({
+        operation: withReplacement,
+        ownerPlans: preservingPlans,
+      }),
+    ).toThrowError(/must rewrite every known reference/u);
+
+    const withoutReplacement: ProjectEntityReferenceOperationRequest = {
+      ...withReplacement,
+      operationId: 'operation-deprecate-in-place',
+      replacement: undefined,
+    };
+    const preserveInPlace = PROJECT_ENTITY_REFERENCE_OWNER_IDS.map((ownerId) => {
+      const plan = createReadyPlan(withReplacement, ownerId);
+      return {
+        ...plan,
+        operationId: withoutReplacement.operationId,
+        resolutions: plan.resolutions.map((resolution) => ({
+          action: 'preserve' as const,
+          referenceId: resolution.referenceId,
+        })),
+      };
+    });
+    expect(
+      createProjectEntityReferenceRewritePlan({
+        operation: withoutReplacement,
+        ownerPlans: preserveInPlace,
+      }).owners,
+    ).toHaveLength(PROJECT_ENTITY_REFERENCE_OWNER_IDS.length);
+  });
 });
 
 function createMergeOperation(): ProjectEntityReferenceOperationRequest {
