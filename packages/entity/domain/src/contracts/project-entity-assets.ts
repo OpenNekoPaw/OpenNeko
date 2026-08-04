@@ -106,3 +106,64 @@ export interface ProjectEntityAssetConflictResolution {
   readonly field: ProjectEntitySemanticField;
   readonly resolution: 'current' | 'incoming';
 }
+
+export type ProjectEntityAssetLifecycleState = 'installed' | 'uninstalled' | 'remote-tombstone';
+
+export interface ProjectEntityAssetLifecycleEvent {
+  readonly asset: ProjectEntityAssetRevisionRef;
+  readonly state: ProjectEntityAssetLifecycleState;
+  readonly observedAt: string;
+}
+
+export interface ProjectEntityAssetProvenanceAvailabilityProjection {
+  readonly entityId: string;
+  readonly asset: ProjectEntityAssetRevisionRef;
+  readonly relation: 'origin' | 'applied' | 'origin-and-applied';
+  readonly availability: 'available' | 'unavailable' | 'remote-tombstone';
+  readonly observedAt: string;
+}
+
+export function assertProjectEntityAssetLifecycleEvent(
+  value: unknown,
+): ProjectEntityAssetLifecycleEvent {
+  if (
+    !isRecord(value) ||
+    !hasOnlyKeys(value, ['asset', 'state', 'observedAt']) ||
+    !isAssetRevision(value['asset']) ||
+    (value['state'] !== 'installed' &&
+      value['state'] !== 'uninstalled' &&
+      value['state'] !== 'remote-tombstone') ||
+    typeof value['observedAt'] !== 'string' ||
+    !Number.isFinite(Date.parse(value['observedAt']))
+  ) {
+    throw new Error('Project Entity Asset lifecycle event is invalid.');
+  }
+  return {
+    asset: value['asset'],
+    state: value['state'],
+    observedAt: value['observedAt'],
+  };
+}
+
+function isAssetRevision(value: unknown): value is ProjectEntityAssetRevisionRef {
+  return (
+    isRecord(value) &&
+    hasOnlyKeys(value, ['assetId', 'revision', 'digest']) &&
+    isIdentity(value['assetId']) &&
+    isIdentity(value['revision']) &&
+    typeof value['digest'] === 'string' &&
+    /^[a-f0-9]{64}$/u.test(value['digest'])
+  );
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function hasOnlyKeys(value: Record<string, unknown>, keys: readonly string[]): boolean {
+  return Object.keys(value).every((key) => keys.includes(key));
+}
+
+function isIdentity(value: unknown): value is string {
+  return typeof value === 'string' && value.trim().length > 0 && !/[\\/\0]/u.test(value);
+}
