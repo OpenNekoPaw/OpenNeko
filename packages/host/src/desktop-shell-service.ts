@@ -1,9 +1,14 @@
 import { randomUUID } from 'node:crypto';
 import type { HostDiagnostic } from './ports';
-import type { DesktopAgentViewIdentity } from '@neko/agent-contracts';
+import {
+  AGENT_HOME_PROJECTION_VERSION,
+  isSameAgentConversationOwner,
+  type DesktopAgentViewIdentity,
+} from '@neko/agent-contracts';
 import {
   DESKTOP_SHELL_CONTRACT_VERSION,
   DesktopShellContractError,
+  projectDesktopConversationNavigation,
   type DesktopAgentHomeNavigationIdentity,
   type DesktopDomainCapabilityProjection,
   type DesktopAgentHomeProjection,
@@ -359,39 +364,21 @@ export class DesktopShellService {
           request.intent.kind === 'open-project-workspace'
             ? requireStoredProject(state, request.intent.projectId)
             : undefined;
-        const conversationId =
-          window.scene.context.kind === 'agent' && window.scene.context.scope.kind !== 'unbound'
-            ? window.scene.context.scope.conversationId
-            : undefined;
-        if (conversationId) {
-          if (
-            targetProject &&
-            window.activeTarget.kind === 'project' &&
-            window.activeTarget.tabId ===
-              requireProjectTab(window, targetProject.projectId).tabId &&
-            window.scene.context.kind === 'agent' &&
-            window.scene.context.scope.kind === 'workspace' &&
-            window.scene.context.scope.workspaceId === targetProject.workspaceId
-          ) {
-            return {
-              status: 'transitioned',
-              requestId: request.requestId,
-              scene: window.scene,
-            };
-          }
+        if (
+          targetProject &&
+          window.activeTarget.kind === 'project' &&
+          window.activeTarget.tabId === requireProjectTab(window, targetProject.projectId).tabId &&
+          window.scene.context.kind === 'agent' &&
+          window.scene.context.scope.kind === 'workspace' &&
+          window.scene.context.scope.workspaceId === targetProject.workspaceId &&
+          window.scene.context.scope.conversationId === undefined &&
+          window.scene.slots.interaction?.kind === 'agent' &&
+          window.scene.slots.interaction.phase === 'draft'
+        ) {
           return {
-            status: 'rejected',
+            status: 'transitioned',
             requestId: request.requestId,
-            diagnostic: {
-              code: 'new-conversation-required',
-              severity: 'error',
-              message: 'Open a new conversation before changing Workspace scope.',
-              metadata: {
-                owner: 'agent-conversation-authority',
-                intentKind: request.intent.kind,
-                conversationId,
-              },
-            },
+            scene: window.scene,
           };
         }
         const workspaceGrantAuthority = this.options.workspaceGrantAuthority;
@@ -527,21 +514,30 @@ export class DesktopShellService {
       }
       if (
         current.context.kind !== 'agent' ||
-        current.context.scope.kind === 'unbound' ||
         current.context.agentViewId !== input.agentViewId ||
         !interaction ||
         interaction.kind !== 'agent' ||
         interaction.agentViewId !== input.agentViewId ||
         interaction.phase !== 'draft' ||
-        current.context.scope.conversationId !== undefined ||
-        !conversationContextMatchesSceneScope(input.context, current.context.scope)
+        (current.context.scope.kind !== 'unbound' &&
+          current.context.scope.conversationId !== undefined) ||
+        (current.context.scope.kind === 'unbound'
+          ? input.context.kind !== 'assistant'
+          : !conversationContextMatchesSceneScope(input.context, current.context.scope))
       ) {
         throw new DesktopSceneContractError(
           'desktop-scene-scope-mismatch',
           'Committed Agent Conversation does not match the exact active draft Scene.',
         );
       }
-      const scope = { ...current.context.scope, conversationId: input.conversationId };
+      const scope =
+        current.context.scope.kind === 'unbound'
+          ? createAssistantConversationScope(
+              current.context.scope.draftId,
+              input.context,
+              input.conversationId,
+            )
+          : { ...current.context.scope, conversationId: input.conversationId };
       const scene = parseDesktopWorkbenchSceneProjection({
         ...current,
         revision: current.revision + 1,
@@ -577,7 +573,8 @@ export class DesktopShellService {
         'Agent Conversation restore requires a restore-conversation intent.',
       );
     }
-    const conversationId = request.intent.conversationId;
+    const navigation = request.intent.navigation;
+    const conversationId = navigation.conversationId;
     return this.enqueue(async () => {
       this.requireActive();
       this.assertMutationContext(request.windowId, request.expectedEndpointEpoch);
@@ -597,6 +594,27 @@ export class DesktopShellService {
         );
       }
       const context = input.context;
+      const homeConversation = this.readAgentHomeProjection(state).conversations.find(
+        (candidate) =>
+          candidate.navigation.conversationId === navigation.conversationId &&
+          isSameAgentConversationOwner(candidate.navigation.owner, navigation.owner),
+      );
+      if (!homeConversation) {
+        throw new DesktopSceneContractError(
+          'desktop-scene-stale-identity',
+          `Agent Conversation '${conversationId}' does not match the authoritative navigation owner.`,
+        );
+      }
+      const contextOwner =
+        context.kind === 'assistant'
+          ? { kind: 'assistant' as const, assistantSpaceId: context.assistantSpaceId }
+          : { kind: 'workspace' as const, workspaceId: context.workspaceId };
+      if (!isSameAgentConversationOwner(navigation.owner, contextOwner)) {
+        throw new DesktopSceneContractError(
+          'desktop-scene-scope-mismatch',
+          `Agent Conversation '${conversationId}' lifecycle context does not match its navigation owner.`,
+        );
+      }
       let draft: DesktopWorkbenchSceneProjection;
       let workspaceAttachment:
         | {
@@ -976,22 +994,10 @@ export class DesktopShellService {
           `Desktop Agent Home revision ${expectedAgentHomeRevision} is stale; current revision is ${agentHome.revision}.`,
         );
       }
-      const project = state.projects.find(
-        (candidate) =>
-          candidate.projectId === navigation.projectId &&
-          candidate.workspaceId === navigation.workspaceId,
-      );
-      if (!project) {
-        throw new DesktopShellContractError(
-          'desktop-shell-project-identity-mismatch',
-          `Desktop Agent Home conversation '${navigation.conversationId}' belongs to an unknown Project or Workspace.`,
-        );
-      }
       const conversation = agentHome.conversations.find(
         (candidate) =>
-          candidate.navigation.projectId === navigation.projectId &&
-          candidate.navigation.workspaceId === navigation.workspaceId &&
-          candidate.navigation.conversationId === navigation.conversationId,
+          candidate.navigation.conversationId === navigation.conversationId &&
+          isSameAgentConversationOwner(candidate.navigation.owner, navigation.owner),
       );
       if (!conversation) {
         throw new DesktopShellContractError(
@@ -1473,6 +1479,7 @@ export class DesktopShellService {
     this.requireAgentHomeProjectionHealthy();
     return (
       this.agentHomeProjectionSource?.readHomeProjection() ?? {
+        schemaVersion: AGENT_HOME_PROJECTION_VERSION,
         revision: 0,
         conversations: [],
         attention: { needsInput: 0, needsReview: 0, running: 0 },
@@ -1585,15 +1592,16 @@ function projectShellState(
     createdAt: project.createdAt,
     updatedAt: project.updatedAt,
   }));
+  const catalog = {
+    revision: state.catalogRevision,
+    projects,
+  };
   return {
     schemaVersion: DESKTOP_SHELL_CONTRACT_VERSION,
     applicationInstanceId,
     endpointEpoch: `${applicationInstanceId}:${windowId}:${rendererEpoch}`,
     projectionRevision: state.storageRevision,
-    catalog: {
-      revision: state.catalogRevision,
-      projects,
-    },
+    catalog,
     window: {
       windowId: window.windowId,
       revision: window.revision,
@@ -1607,6 +1615,7 @@ function projectShellState(
       applicationSidebar: window.applicationSidebar,
     },
     agentHome,
+    conversationNavigation: projectDesktopConversationNavigation(catalog, agentHome),
     domains: domainCapabilities,
   };
 }
@@ -1910,6 +1919,25 @@ function conversationContextMatchesSceneScope(
     : scope.kind === 'workspace' &&
         context.workspaceId === scope.workspaceId &&
         context.workspaceGrantId === scope.workspaceGrantId;
+}
+
+function createAssistantConversationScope(
+  draftId: string,
+  context: AgentConversationContext,
+  conversationId: string,
+): Extract<DesktopAgentScopeProjection, { readonly kind: 'assistant' }> {
+  if (context.kind !== 'assistant') {
+    throw new DesktopSceneContractError(
+      'desktop-scene-scope-mismatch',
+      'An unbound Agent Draft can only commit an Assistant Conversation context.',
+    );
+  }
+  return {
+    kind: 'assistant',
+    draftId,
+    assistantSpaceId: context.assistantSpaceId,
+    conversationId,
+  };
 }
 
 function attachConversationToDraftScene(

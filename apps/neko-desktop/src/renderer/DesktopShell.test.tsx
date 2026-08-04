@@ -1,8 +1,10 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import { I18nProvider } from '@neko/ui/i18n/react';
+import { AGENT_HOME_PROJECTION_VERSION } from '@neko/agent-contracts';
 import {
   DESKTOP_SHELL_CONTRACT_VERSION,
+  projectDesktopConversationNavigation,
   type DesktopShellProjection,
 } from '@neko/host/desktop-shell-contract';
 import {
@@ -446,15 +448,36 @@ function projectionWithScene(scene: DesktopWorkbenchSceneProjection): DesktopShe
 }
 
 function baseProjection(): DesktopShellProjection {
+  const catalog = {
+    revision: 1,
+    projects: [projectFixture('workspace-1', '2026-07-27T00:00:00.000Z')],
+  };
+  const agentHome = {
+    schemaVersion: AGENT_HOME_PROJECTION_VERSION,
+    revision: 0,
+    conversations: [
+      {
+        navigation: {
+          conversationId: 'conversation-1',
+          owner: { kind: 'workspace' as const, workspaceId: 'workspace-1' },
+        },
+        title: 'Conversation one',
+        updatedAt: '2026-07-29T00:00:00.000Z',
+        attention: 'none' as const,
+        lastActivity: {
+          kind: 'conversation-updated' as const,
+          occurredAt: '2026-07-29T00:00:00.000Z',
+        },
+      },
+    ],
+    attention: { needsInput: 0, needsReview: 0, running: 0 },
+  };
   return {
     schemaVersion: DESKTOP_SHELL_CONTRACT_VERSION,
     applicationInstanceId: 'app-1',
     endpointEpoch: 'app-1:window-1:1',
     projectionRevision: 2,
-    catalog: {
-      revision: 1,
-      projects: [projectFixture('workspace-1', '2026-07-27T00:00:00.000Z')],
-    },
+    catalog,
     window: {
       windowId: 'window-1',
       revision: 1,
@@ -464,26 +487,8 @@ function baseProjection(): DesktopShellProjection {
       scene: createDefaultDesktopAgentScene('window-1', 'assistant-space:test'),
       applicationSidebar: createDefaultDesktopApplicationSidebar('window-1'),
     },
-    agentHome: {
-      revision: 0,
-      conversations: [
-        {
-          navigation: {
-            projectId: 'content:workspace-1',
-            workspaceId: 'workspace-1',
-            conversationId: 'conversation-1',
-          },
-          title: 'Conversation one',
-          updatedAt: '2026-07-29T00:00:00.000Z',
-          attention: 'none',
-          lastActivity: {
-            kind: 'conversation-updated',
-            occurredAt: '2026-07-29T00:00:00.000Z',
-          },
-        },
-      ],
-      attention: { needsInput: 0, needsReview: 0, running: 0 },
-    },
+    agentHome,
+    conversationNavigation: projectDesktopConversationNavigation(catalog, agentHome),
     domains: [],
   };
 }

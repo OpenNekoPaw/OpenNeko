@@ -243,6 +243,39 @@ describe('Desktop Scene contract', () => {
         intent: { kind: 'open-project-workspace', projectId: 'project-1' },
       }).intent,
     ).toEqual({ kind: 'open-project-workspace', projectId: 'project-1' });
+    expect(
+      createDesktopSceneTransitionRequest({
+        requestId: 'request-conversation',
+        expectedEndpointEpoch: 'endpoint-1',
+        windowId: 'window-1',
+        expectedWindowRevision: 4,
+        expectedSceneRevision: 2,
+        intent: {
+          kind: 'restore-conversation',
+          navigation: {
+            conversationId: 'conversation-1',
+            owner: { kind: 'assistant', assistantSpaceId: 'assistant-space:user' },
+          },
+        },
+      }).intent,
+    ).toEqual({
+      kind: 'restore-conversation',
+      navigation: {
+        conversationId: 'conversation-1',
+        owner: { kind: 'assistant', assistantSpaceId: 'assistant-space:user' },
+      },
+    });
+    expect(() =>
+      parseDesktopSceneTransitionRequest({
+        schemaVersion: DESKTOP_SCENE_CONTRACT_VERSION,
+        requestId: 'request-legacy-conversation',
+        expectedEndpointEpoch: 'endpoint-1',
+        windowId: 'window-1',
+        expectedWindowRevision: 4,
+        expectedSceneRevision: 2,
+        intent: { kind: 'restore-conversation', conversationId: 'conversation-1' },
+      }),
+    ).toThrow("Restore Conversation intent contains unknown field 'conversationId'");
     expect(() =>
       parseDesktopSceneTransitionRequest({
         schemaVersion: DESKTOP_SCENE_CONTRACT_VERSION,
@@ -282,6 +315,24 @@ describe('Desktop Scene contract', () => {
     ).toMatchObject({
       status: 'unavailable',
       diagnostic: { metadata: { owner: 'workspace-authority' } },
+    });
+    expect(
+      parseDesktopSceneTransitionResult({
+        status: 'unavailable',
+        requestId: 'request-character',
+        diagnostic: {
+          code: 'desktop-scene-owner-unavailable',
+          severity: 'error',
+          message: 'Character owner is unavailable.',
+          metadata: {
+            owner: 'agent-conversation-authority',
+            intentKind: 'restore-conversation',
+            conversationOwnerKind: 'character',
+          },
+        },
+      }),
+    ).toMatchObject({
+      diagnostic: { metadata: { conversationOwnerKind: 'character' } },
     });
     expect(() =>
       parseDesktopSceneTransitionResult({

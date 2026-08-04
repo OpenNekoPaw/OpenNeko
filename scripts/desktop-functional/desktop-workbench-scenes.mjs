@@ -292,6 +292,7 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
     );
     await click('.agent-composer-send');
     const assistantActivation = await waitForAssistantSession(evaluate);
+    assertAssistantConversationNavigation(assistantActivation);
     if (assistantActivation.conversationCount !== freshEntryDraft.conversationCount + 1) {
       throw new Error('Direct Entry Draft submit did not create exactly one Assistant session.');
     }
@@ -319,11 +320,12 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
     await click('.home-primary-navigation .home-nav-button', 1);
     await waitForSelector('[data-owner-root="asset-management"]');
     await waitForSelector('.home-conversation-link');
-    await click('.home-conversation-link');
+    await openAssistantConversation(evaluate, assistantActivation.conversationId);
     const assistantRestore = await waitForAssistantSession(
       evaluate,
       assistantActivation.conversationId,
     );
+    assertAssistantConversationNavigation(assistantRestore);
     const assistantRestoreScreenshot = await screenshot('assistant-session-exact-restore-large');
     checkpoint('assistant-session-exact-restore-large', {
       activation: assistantActivation,
@@ -356,6 +358,57 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
         smallAssetsScreenshot,
         assistantRestoreScreenshot,
       ],
+    };
+  },
+});
+
+export const desktopConversationNavigationScenario = Object.freeze({
+  id: 'desktop-conversation-navigation',
+  owner: '@neko/app-desktop',
+  prepare: desktopWorkbenchScenesScenario.prepare,
+  async run({ checkpoint, click, evaluate, screenshot, type, waitForSelector }) {
+    await resizeWindow(evaluate, 1440, 960);
+    await waitForSelector('.desktop-scene-workbench--agent-only .agent-composer-textarea');
+    const initialDraft = await inspectEntryDraft(evaluate);
+    await type('.agent-composer-textarea', 'Verify atomic Assistant session activation.');
+    await waitForCondition(
+      evaluate,
+      `(() => {
+        const send = document.querySelector('.agent-composer-send');
+        return send instanceof HTMLButtonElement && !send.disabled;
+      })()`,
+      'Conversation navigation fixture did not enable its initial send control.',
+    );
+    await click('.agent-composer-send');
+    const initialSession = await waitForAssistantSession(evaluate);
+    assertAssistantConversationNavigation(initialSession);
+    if (initialSession.conversationCount !== initialDraft.conversationCount + 1) {
+      throw new Error('Conversation navigation fixture did not create one initial session.');
+    }
+
+    const groupLifecycle = await exerciseAssistantConversationGroup(
+      evaluate,
+      click,
+      type,
+      initialSession.conversationId,
+    );
+    checkpoint('assistant-conversation-group-lifecycle', groupLifecycle);
+
+    await click('.home-primary-navigation .home-nav-button', 1);
+    await waitForSelector('[data-owner-root="asset-management"]');
+    await waitForSelector('.home-conversation-link');
+    await openAssistantConversation(evaluate, initialSession.conversationId);
+    const restoredSession = await waitForAssistantSession(evaluate, initialSession.conversationId);
+    assertAssistantConversationNavigation(restoredSession);
+    const restoredScreenshot = await screenshot('assistant-group-exact-restore');
+    checkpoint('assistant-group-exact-restore', restoredSession);
+
+    return {
+      initialDraft,
+      initialSession,
+      groupLifecycle,
+      restoredSession,
+      screenshots: [restoredScreenshot],
     };
   },
 });
@@ -702,9 +755,203 @@ async function waitForAssistantSession(evaluate, expectedConversationId) {
       conversationCount: projection.agentHome.conversations.length,
       hasAgent: true,
       previousManagementVisible,
+      standaloneAssistantGroupCount: document.querySelectorAll(
+        '.primary-conversation-group[data-group-kind="assistant"]',
+      ).length,
+      visibleConversationChildCount: document.querySelectorAll(
+        '.primary-conversation-group[data-group-kind="assistant"] .home-conversation-link',
+      ).length,
+      packageConversationTabsVisible: Boolean(document.querySelector('.agent-tab-list')),
+      packageHistoryVisible: Boolean(document.querySelector('.agent-header-action-history')),
       transcriptContainsSubmittedMessage:
         document.body.textContent?.includes('Verify atomic Assistant session activation.') ?? false,
     };
+  })()`);
+}
+
+async function exerciseAssistantConversationGroup(evaluate, click, type, originalConversationId) {
+  for (let conversationNumber = 2; conversationNumber <= 6; conversationNumber += 1) {
+    await click('.home-primary-navigation .home-nav-button', 0);
+    await waitForCondition(
+      evaluate,
+      `(async () => {
+        const projection = await window.openNekoDesktop.shell.getSnapshot();
+        const context = projection.window.scene.context;
+        const root = document.querySelector(
+          '.desktop-scene-workbench--agent-only .desktop-agent-root:not([hidden])',
+        );
+        const textarea = root?.querySelector('.agent-composer-textarea');
+        return context.kind === 'agent' &&
+          context.scope.kind === 'unbound' &&
+          root?.querySelector('.agent-empty-state') instanceof HTMLElement &&
+          textarea instanceof HTMLTextAreaElement &&
+          textarea.value === '';
+      })()`,
+      'Start Creating did not provide a fresh Entry Draft for grouped navigation.',
+    );
+    const message = `Grouped Assistant conversation ${String(conversationNumber)}.`;
+    await type('.agent-composer-textarea', message);
+    await waitForCondition(
+      evaluate,
+      `(() => {
+        const send = document.querySelector('.agent-composer-send');
+        return send instanceof HTMLButtonElement && !send.disabled;
+      })()`,
+      `Assistant draft ${String(conversationNumber)} did not enable its send control.`,
+    );
+    await click('.agent-composer-send');
+    await waitForCondition(
+      evaluate,
+      `(async () => {
+        const projection = await window.openNekoDesktop.shell.getSnapshot();
+        const context = projection.window.scene.context;
+        return projection.agentHome.conversations.length === ${String(conversationNumber)} &&
+          context.kind === 'agent' &&
+          context.scope.kind === 'assistant' &&
+          typeof context.scope.conversationId === 'string' &&
+          document.querySelector('[data-owner-root="agent"]')?.textContent
+            ?.includes(${JSON.stringify(message)}) === true;
+      })()`,
+      `Assistant conversation ${String(conversationNumber)} did not activate exactly.`,
+    );
+  }
+
+  const collapsed = await inspectAssistantConversationGroup(evaluate);
+  if (
+    collapsed.totalConversationCount !== 6 ||
+    collapsed.visibleConversationCount !== 5 ||
+    !collapsed.expandControlVisible
+  ) {
+    throw new Error(
+      `Assistant group did not preserve its bounded collapsed state: ${JSON.stringify(collapsed)}`,
+    );
+  }
+  await click(
+    '.primary-conversation-group[data-group-kind="assistant"] .primary-conversation-group__expand',
+  );
+  await waitForCondition(
+    evaluate,
+    `document.querySelectorAll(
+      '.primary-conversation-group[data-group-kind="assistant"] .home-conversation-link',
+    ).length === 6`,
+    'Assistant group did not expand all conversation children.',
+  );
+  const expanded = await inspectAssistantConversationGroup(evaluate);
+  await click(
+    '.primary-conversation-group[data-group-kind="assistant"] .primary-conversation-group__expand',
+  );
+  await waitForCondition(
+    evaluate,
+    `document.querySelectorAll(
+      '.primary-conversation-group[data-group-kind="assistant"] .home-conversation-link',
+    ).length === 5`,
+    'Assistant group did not return to its bounded collapsed state.',
+  );
+
+  const deletion = await evaluate(`(async () => {
+    const projection = await window.openNekoDesktop.shell.getSnapshot();
+    const context = projection.window.scene.context;
+    const group = projection.conversationNavigation.groups.find(
+      (candidate) => candidate.kind === 'assistant',
+    );
+    if (context.kind !== 'agent' || context.scope.kind !== 'assistant' || !group) {
+      throw new Error('Assistant deletion requires the exact active group and Scene.');
+    }
+    const deletedConversationId = group.conversations[1]?.navigation.conversationId;
+    if (!deletedConversationId || deletedConversationId === context.scope.conversationId) {
+      throw new Error('Assistant deletion fixture did not select a non-active conversation.');
+    }
+    globalThis.confirm = () => true;
+    const deleteButtons = document.querySelectorAll(
+      '.primary-conversation-group[data-group-kind="assistant"] ' +
+        '.primary-recent-conversation-row > button:last-child',
+    );
+    const deleteButton = deleteButtons[1];
+    if (!(deleteButton instanceof HTMLButtonElement) || deleteButton.disabled) {
+      throw new Error('Assistant conversation delete control is unavailable.');
+    }
+    deleteButton.click();
+    return {
+      activeConversationId: context.scope.conversationId,
+      deletedConversationId,
+    };
+  })()`);
+  await waitForCondition(
+    evaluate,
+    `(async () => {
+      const projection = await window.openNekoDesktop.shell.getSnapshot();
+      const context = projection.window.scene.context;
+      return projection.agentHome.conversations.length === 5 &&
+        !projection.agentHome.conversations.some(
+          (conversation) => conversation.navigation.conversationId === ${JSON.stringify(
+            deletion.deletedConversationId,
+          )},
+        ) &&
+        context.kind === 'agent' &&
+        context.scope.kind === 'assistant' &&
+        context.scope.conversationId === ${JSON.stringify(deletion.activeConversationId)} &&
+        !document.querySelector(
+          '.primary-conversation-group[data-group-kind="assistant"] ' +
+            '.primary-conversation-group__expand',
+        );
+    })()`,
+    'Assistant conversation deletion did not preserve the exact active session.',
+  );
+  const afterDelete = await inspectAssistantConversationGroup(evaluate);
+  if (
+    afterDelete.totalConversationCount !== 5 ||
+    afterDelete.visibleConversationCount !== 5 ||
+    afterDelete.expandControlVisible ||
+    !afterDelete.conversationIds.includes(originalConversationId)
+  ) {
+    throw new Error(
+      `Assistant group did not update after exact deletion: ${JSON.stringify(afterDelete)}`,
+    );
+  }
+  return { collapsed, expanded, deletion, afterDelete };
+}
+
+async function inspectAssistantConversationGroup(evaluate) {
+  return evaluate(`(async () => {
+    const projection = await window.openNekoDesktop.shell.getSnapshot();
+    const group = projection.conversationNavigation.groups.find(
+      (candidate) => candidate.kind === 'assistant',
+    );
+    if (!group) throw new Error('Assistant conversation group is unavailable.');
+    return {
+      totalConversationCount: group.conversations.length,
+      visibleConversationCount: document.querySelectorAll(
+        '.primary-conversation-group[data-group-kind="assistant"] .home-conversation-link',
+      ).length,
+      expandControlVisible: Boolean(document.querySelector(
+        '.primary-conversation-group[data-group-kind="assistant"] ' +
+          '.primary-conversation-group__expand',
+      )),
+      conversationIds: group.conversations.map(
+        (conversation) => conversation.navigation.conversationId,
+      ),
+    };
+  })()`);
+}
+
+async function openAssistantConversation(evaluate, conversationId) {
+  await evaluate(`(async () => {
+    const projection = await window.openNekoDesktop.shell.getSnapshot();
+    const group = projection.conversationNavigation.groups.find(
+      (candidate) => candidate.kind === 'assistant',
+    );
+    const index = group?.conversations.findIndex(
+      (conversation) => conversation.navigation.conversationId === ${JSON.stringify(conversationId)},
+    );
+    const buttons = document.querySelectorAll(
+      '.primary-conversation-group[data-group-kind="assistant"] .home-conversation-link',
+    );
+    const button = typeof index === 'number' && index >= 0 ? buttons[index] : undefined;
+    if (!(button instanceof HTMLButtonElement) || button.disabled) {
+      throw new Error('Exact Assistant conversation control is unavailable.');
+    }
+    button.click();
+    return true;
   })()`);
 }
 
@@ -1083,6 +1330,15 @@ async function inspectWorkbench(evaluate, expectedShape, expectedOwner) {
       primaryCount: document.querySelectorAll('[data-primary-sidebar="application"]').length,
       recentNavigationVisible: Boolean(primary?.querySelector('.home-recent-navigation')),
       recentSectionCount: primary?.querySelectorAll('.home-sidebar-heading').length ?? 0,
+      conversationGroupCount: primary?.querySelectorAll('.primary-conversation-group').length ?? 0,
+      projectConversationGroupCount:
+        primary?.querySelectorAll('.primary-conversation-group[data-group-kind="project"]').length ?? 0,
+      standaloneConversationGroupCount:
+        primary?.querySelectorAll(
+          '.primary-conversation-group[data-group-kind="assistant"], ' +
+          '.primary-conversation-group[data-group-kind="character"], ' +
+          '.primary-conversation-group[data-group-kind="room"]',
+        ).length ?? 0,
       hasAgentDock: Boolean(shell.querySelector('[data-dock-owner="agent"]')),
       hasLeftDock: leftDock instanceof HTMLElement,
       hasRightDock: rightDock instanceof HTMLElement,
@@ -1297,8 +1553,10 @@ function assertSingleWorkbench(detail) {
   if (detail.shellCount !== 1 || detail.primaryCount !== 1) {
     throw new Error('Desktop scene did not preserve exactly one Workbench and PrimarySidebar.');
   }
-  if (!detail.recentNavigationVisible || detail.recentSectionCount !== 2) {
-    throw new Error('PrimarySidebar did not preserve recent Project and conversation sections.');
+  if (!detail.recentNavigationVisible || detail.recentSectionCount !== 1) {
+    throw new Error(
+      'PrimarySidebar did not preserve one authoritative grouped navigation surface.',
+    );
   }
 }
 
@@ -1306,6 +1564,20 @@ function assertAgentOnly(detail) {
   assertSingleWorkbench(detail);
   if (!detail.hasAgentDock || detail.hasLeftDock !== true || detail.mainDisplay !== 'none') {
     throw new Error('Agent-only did not expand the Agent dock and remove the empty Main column.');
+  }
+}
+
+function assertAssistantConversationNavigation(detail) {
+  if (
+    detail.standaloneAssistantGroupCount !== 1 ||
+    detail.conversationCount < 1 ||
+    detail.visibleConversationChildCount !== Math.min(detail.conversationCount, 5) ||
+    detail.packageConversationTabsVisible ||
+    detail.packageHistoryVisible
+  ) {
+    throw new Error(
+      `Assistant session did not use PrimarySidebar as its only conversation switcher: ${JSON.stringify(detail)}`,
+    );
   }
 }
 

@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { AGENT_HOME_PROJECTION_VERSION } from '@neko/agent-contracts';
 import { DESKTOP_WORKSPACE_GRANT_CHANNEL } from '@neko/host/desktop-workspace-grant-contract';
-import { DESKTOP_SHELL_CONTRACT_VERSION } from '@neko/host/desktop-shell-contract';
+import {
+  DESKTOP_CONVERSATION_NAVIGATION_VERSION,
+  DESKTOP_SHELL_CONTRACT_VERSION,
+} from '@neko/host/desktop-shell-contract';
 import { createDefaultDesktopWorkbenchLayout } from '@neko/host/desktop-workbench-contract';
 import {
   createDefaultDesktopAgentScene,
@@ -145,9 +149,16 @@ function shellProjection() {
       applicationSidebar: createDefaultDesktopApplicationSidebar('window-1'),
     },
     agentHome: {
+      schemaVersion: AGENT_HOME_PROJECTION_VERSION,
       revision: 0,
       conversations: [],
       attention: { needsInput: 0, needsReview: 0, running: 0 },
+    },
+    conversationNavigation: {
+      schemaVersion: DESKTOP_CONVERSATION_NAVIGATION_VERSION,
+      projectCatalogRevision: 0,
+      agentHomeRevision: 0,
+      groups: [],
     },
     domains: [],
   };

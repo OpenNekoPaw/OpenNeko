@@ -4,8 +4,18 @@ import type { AgentRootPresentation, SettingsState } from '@neko/agent-contracts
 import { AppShell } from './AppShell';
 
 vi.mock('./Header', () => ({
-  Header: ({ showAccountBar }: { readonly showAccountBar?: boolean }) => (
-    <div data-testid="header" data-show-account-bar={String(showAccountBar)} />
+  Header: ({
+    showAccountBar,
+    showConversationNavigation,
+  }: {
+    readonly showAccountBar?: boolean;
+    readonly showConversationNavigation?: boolean;
+  }) => (
+    <div
+      data-testid="header"
+      data-show-account-bar={String(showAccountBar)}
+      data-show-conversation-navigation={String(showConversationNavigation)}
+    />
   ),
 }));
 
@@ -165,6 +175,9 @@ describe('AppShell onboarding lifecycle', () => {
 
     expect(screen.queryByTestId('onboarding')).toBeNull();
     expect(screen.getByTestId('header').getAttribute('data-show-account-bar')).toBe('false');
+    expect(screen.getByTestId('header').getAttribute('data-show-conversation-navigation')).toBe(
+      'false',
+    );
     expect(screen.getByTestId('empty-state-presentation').textContent).toBe('desktop-dock');
     expect(
       screen
@@ -172,6 +185,15 @@ describe('AppShell onboarding lifecycle', () => {
         .closest('[data-presentation]')
         ?.getAttribute('data-presentation'),
     ).toBe('desktop-dock');
+  });
+
+  it('keeps package-owned conversation navigation in standalone presentation', () => {
+    render(<AppShell />);
+
+    expect(screen.getByTestId('header').getAttribute('data-show-account-bar')).toBe('true');
+    expect(screen.getByTestId('header').getAttribute('data-show-conversation-navigation')).toBe(
+      'true',
+    );
   });
 
   it('preserves the complete Workspace controller wiring in Desktop dock presentation', () => {

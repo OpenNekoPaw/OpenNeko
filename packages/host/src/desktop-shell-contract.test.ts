@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { AGENT_HOME_PROJECTION_VERSION } from '@neko/agent-contracts';
 import {
+  DESKTOP_CONVERSATION_NAVIGATION_VERSION,
   DESKTOP_SHELL_CONTRACT_VERSION,
   createDesktopConversationDeleteRequest,
   createDesktopProfileRequest,
@@ -9,6 +11,7 @@ import {
   DesktopShellContractError,
   parseDesktopShellProjection,
   parseDesktopShellProjectionEvent,
+  projectDesktopConversationNavigation,
 } from './desktop-shell-contract';
 import { createDefaultDesktopWorkbenchLayout } from './desktop-workbench-contract';
 import {
@@ -17,6 +20,110 @@ import {
 } from './desktop-scene-contract';
 
 describe('Desktop Shell contract', () => {
+  it('groups Workspace conversations under exact Projects and Assistant conversations standalone', () => {
+    const catalog = validProjection().catalog;
+    const workspaceConversation = conversation('workspace-conversation', {
+      kind: 'workspace',
+      workspaceId: 'workspace-1',
+    });
+    const assistantConversation = conversation('assistant-conversation', {
+      kind: 'assistant',
+      assistantSpaceId: 'assistant-space:local-user',
+    });
+    const navigation = projectDesktopConversationNavigation(catalog, {
+      schemaVersion: AGENT_HOME_PROJECTION_VERSION,
+      revision: 3,
+      conversations: [assistantConversation, workspaceConversation],
+      attention: { needsInput: 0, needsReview: 0, running: 0 },
+    });
+
+    expect(navigation.groups).toEqual([
+      expect.objectContaining({
+        kind: 'project',
+        projectId: 'content:workspace-1',
+        conversations: [workspaceConversation],
+      }),
+      expect.objectContaining({
+        kind: 'assistant',
+        assistantSpaceId: 'assistant-space:local-user',
+        conversations: [assistantConversation],
+      }),
+    ]);
+  });
+
+  it('places an explicitly grouped Assistant conversation without changing its owner', () => {
+    const catalog = validProjection().catalog;
+    const assistantConversation = {
+      ...conversation('assistant-conversation', {
+        kind: 'assistant' as const,
+        assistantSpaceId: 'assistant-space:local-user',
+      }),
+      groupedProjectId: 'content:workspace-1',
+    };
+
+    const navigation = projectDesktopConversationNavigation(catalog, {
+      schemaVersion: AGENT_HOME_PROJECTION_VERSION,
+      revision: 3,
+      conversations: [assistantConversation],
+      attention: { needsInput: 0, needsReview: 0, running: 0 },
+    });
+
+    expect(navigation.groups[0]).toMatchObject({
+      kind: 'project',
+      conversations: [
+        {
+          groupedProjectId: 'content:workspace-1',
+          navigation: {
+            owner: { kind: 'assistant', assistantSpaceId: 'assistant-space:local-user' },
+          },
+        },
+      ],
+    });
+  });
+
+  it('rejects Workspace conversations without one exact Project and unknown associations', () => {
+    expect(() =>
+      projectDesktopConversationNavigation(
+        { revision: 1, projects: [] },
+        {
+          schemaVersion: AGENT_HOME_PROJECTION_VERSION,
+          revision: 1,
+          conversations: [
+            conversation('workspace-conversation', {
+              kind: 'workspace',
+              workspaceId: 'workspace-missing',
+            }),
+          ],
+          attention: { needsInput: 0, needsReview: 0, running: 0 },
+        },
+      ),
+    ).toThrowError(
+      expect.objectContaining<Partial<DesktopShellContractError>>({
+        code: 'desktop-shell-project-identity-mismatch',
+      }),
+    );
+    expect(() =>
+      projectDesktopConversationNavigation(validProjection().catalog, {
+        schemaVersion: AGENT_HOME_PROJECTION_VERSION,
+        revision: 1,
+        conversations: [
+          {
+            ...conversation('assistant-conversation', {
+              kind: 'assistant',
+              assistantSpaceId: 'assistant-space:local-user',
+            }),
+            groupedProjectId: 'project-missing',
+          },
+        ],
+        attention: { needsInput: 0, needsReview: 0, running: 0 },
+      }),
+    ).toThrowError(
+      expect.objectContaining<Partial<DesktopShellContractError>>({
+        code: 'desktop-shell-project-identity-mismatch',
+      }),
+    );
+  });
+
   it('creates fixed profile and revision-bound Tab requests', () => {
     expect(createDesktopProfileRequest('request-1', 'character')).toEqual({
       schemaVersion: DESKTOP_SHELL_CONTRACT_VERSION,
@@ -59,9 +166,8 @@ describe('Desktop Shell contract', () => {
       createDesktopConversationDeleteRequest(
         'request-5',
         {
-          projectId: 'content:workspace-1',
-          workspaceId: 'workspace-1',
           conversationId: 'conversation-1',
+          owner: { kind: 'workspace', workspaceId: 'workspace-1' },
         },
         'app-1:window-1:1',
         5,
@@ -74,9 +180,8 @@ describe('Desktop Shell contract', () => {
       expectedWindowRevision: 5,
       expectedAgentHomeRevision: 7,
       navigation: {
-        projectId: 'content:workspace-1',
-        workspaceId: 'workspace-1',
         conversationId: 'conversation-1',
+        owner: { kind: 'workspace', workspaceId: 'workspace-1' },
       },
     });
   });
@@ -233,9 +338,24 @@ function validProjection() {
       applicationSidebar: createDefaultDesktopApplicationSidebar('window-1'),
     },
     agentHome: {
+      schemaVersion: AGENT_HOME_PROJECTION_VERSION,
       revision: 0,
       conversations: [],
       attention: { needsInput: 0, needsReview: 0, running: 0 },
+    },
+    conversationNavigation: {
+      schemaVersion: DESKTOP_CONVERSATION_NAVIGATION_VERSION,
+      projectCatalogRevision: 1,
+      agentHomeRevision: 0,
+      groups: [
+        {
+          kind: 'project' as const,
+          projectId: 'content:workspace-1',
+          workspaceId: 'workspace-1',
+          displayName: 'Fixture',
+          conversations: [],
+        },
+      ],
     },
     domains: [
       {
@@ -245,5 +365,23 @@ function validProjection() {
         diagnosticCode: 'desktop-domain-surface-unavailable' as const,
       },
     ],
+  };
+}
+
+function conversation(
+  conversationId: string,
+  owner:
+    | { readonly kind: 'assistant'; readonly assistantSpaceId: string }
+    | { readonly kind: 'workspace'; readonly workspaceId: string },
+) {
+  return {
+    navigation: { conversationId, owner },
+    title: conversationId,
+    updatedAt: '2026-08-04T00:00:00.000Z',
+    attention: 'none' as const,
+    lastActivity: {
+      kind: 'conversation-updated' as const,
+      occurredAt: '2026-08-04T00:00:00.000Z',
+    },
   };
 }

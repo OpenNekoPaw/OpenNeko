@@ -13,11 +13,13 @@ import {
   type CutHostRuntimeIdentity,
 } from '@neko/cut-domain';
 import { ConsoleLogger } from '@neko/shared/logger';
+import { AGENT_HOME_PROJECTION_VERSION } from '@neko/agent-contracts';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createElectronNekoHostPorts } from './electron-host-ports';
 import { DesktopCutRuntime } from './desktop-cut-runtime';
 import {
   DESKTOP_SHELL_CONTRACT_VERSION,
+  projectDesktopConversationNavigation,
   type DesktopShellProjection,
 } from '@neko/host/desktop-shell-contract';
 import {
@@ -155,15 +157,19 @@ describe('DesktopCutRuntime', () => {
       createdAt: '2026-07-29T00:00:00.000Z',
       updatedAt: '2026-07-29T00:00:00.000Z',
     };
+    const agentHome = {
+      schemaVersion: AGENT_HOME_PROJECTION_VERSION,
+      revision: 0,
+      conversations: [],
+      attention: { needsInput: 0, needsReview: 0, running: 0 },
+    } as const;
+    const catalog = { revision: 1, projects: [project] };
     const getProjection = (): DesktopShellProjection => ({
       schemaVersion: DESKTOP_SHELL_CONTRACT_VERSION,
       applicationInstanceId: 'application-1',
       endpointEpoch: 'endpoint-1',
       projectionRevision: workbench.revision,
-      catalog: {
-        revision: 1,
-        projects: [project],
-      },
+      catalog,
       window: {
         windowId: 'window-1',
         revision: workbench.revision,
@@ -180,11 +186,8 @@ describe('DesktopCutRuntime', () => {
         scene: createDefaultDesktopAgentScene('window-1', 'assistant-space:test'),
         applicationSidebar: createDefaultDesktopApplicationSidebar('window-1'),
       },
-      agentHome: {
-        revision: 0,
-        conversations: [],
-        attention: { needsInput: 0, needsReview: 0, running: 0 },
-      },
+      agentHome,
+      conversationNavigation: projectDesktopConversationNavigation(catalog, agentHome),
       domains: [],
     });
     const updateWorkbench = vi.fn(

@@ -26,6 +26,7 @@ import { useTranslation } from '@neko/ui/i18n/react';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type {
   DesktopAgentHomeConversationSummary,
+  DesktopConversationNavigationGroup,
   DesktopProjectCatalogItem,
   DesktopShellProjection,
 } from '@neko/host/desktop-shell-contract';
@@ -212,7 +213,7 @@ export function DesktopApplication(): JSX.Element {
     onOpenConversation: (conversation) =>
       transitionScene({
         kind: 'restore-conversation',
-        conversationId: conversation.navigation.conversationId,
+        navigation: conversation.navigation,
       }),
     onDeleteConversation: (conversation) => {
       if (
@@ -2022,71 +2023,178 @@ function PrimaryRecentNavigation({
   readonly projection: DesktopShellProjection;
 }): JSX.Element {
   const { t } = useTranslation();
+  const [expandedGroups, setExpandedGroups] = useState<ReadonlySet<string>>(() => new Set());
+  const activeConversationId =
+    projection.window.scene.context.kind === 'agent' &&
+    projection.window.scene.context.scope.kind !== 'unbound'
+      ? projection.window.scene.context.scope.conversationId
+      : undefined;
+  const toggleExpanded = (group: DesktopConversationNavigationGroup) => {
+    const key = conversationGroupKey(group);
+    setExpandedGroups((current) => {
+      const next = new Set(current);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
   return (
     <div className="home-recent-navigation">
       <div className="home-sidebar-heading">
-        <span>{t('home.recentProjects')}</span>
-        <span>{projection.catalog.projects.length}</span>
+        <span>{t('home.conversationGroups')}</span>
+        <span>{projection.conversationNavigation.groups.length}</span>
       </div>
-      {projection.catalog.projects.slice(0, 6).map((project) => (
-        <div
-          className="primary-recent-project-row"
-          data-active={project.projectId === activeProjectId ? 'true' : 'false'}
-          key={project.projectId}
-        >
-          <button
-            type="button"
-            className="home-project-link"
-            disabled={disabled}
-            onClick={() => onOpenRecent(project.projectId)}
-          >
-            <FolderIcon size={15} />
-            <span>{project.displayName}</span>
-          </button>
-          <IconButton
-            disabled={disabled}
-            size="xs"
-            label={t('shell.removeRecentProject', { project: project.displayName })}
-            icon={<TrashIcon size={13} />}
-            onClick={() => onRemoveRecentProject(project)}
-          />
-        </div>
-      ))}
-      <div className="home-sidebar-heading home-sidebar-conversation-heading">
-        <span>{t('home.recentConversations')}</span>
-        <span>{projection.agentHome.conversations.length}</span>
-      </div>
-      {projection.agentHome.conversations.slice(0, 8).map((conversation) => (
-        <div
-          className="primary-recent-project-row primary-recent-conversation-row"
-          key={`${conversation.navigation.workspaceId}:${conversation.navigation.conversationId}`}
-        >
-          <button
-            type="button"
-            className="home-project-link home-conversation-link"
-            disabled={disabled}
-            onClick={() => onOpenConversation(conversation)}
-          >
-            <StorylineIcon size={15} />
-            <span>{conversation.title}</span>
-            {conversation.attention !== 'none' ? (
-              <span
-                className={`home-conversation-attention is-${conversation.attention}`}
-                aria-label={formatAttention(conversation.attention, t)}
-              />
-            ) : null}
-          </button>
-          <IconButton
-            disabled={disabled}
-            size="xs"
-            label={t('shell.deleteConversation', { conversation: conversation.title })}
-            icon={<TrashIcon size={13} />}
-            onClick={() => onDeleteConversation(conversation)}
-          />
-        </div>
-      ))}
+      {projection.conversationNavigation.groups.map((group) => {
+        const key = conversationGroupKey(group);
+        const expanded = expandedGroups.has(key);
+        const conversations = expanded
+          ? group.conversations
+          : group.conversations.slice(0, INITIAL_CONVERSATIONS_PER_GROUP);
+        const project =
+          group.kind === 'project'
+            ? projection.catalog.projects.find(
+                (candidate) => candidate.projectId === group.projectId,
+              )
+            : undefined;
+        if (group.kind === 'project' && !project) {
+          throw new Error(
+            `Conversation navigation references missing Project '${group.projectId}'.`,
+          );
+        }
+        return (
+          <section className="primary-conversation-group" data-group-kind={group.kind} key={key}>
+            {group.kind === 'project' && project ? (
+              <div
+                className="primary-recent-project-row primary-conversation-group__header"
+                data-active={project.projectId === activeProjectId ? 'true' : 'false'}
+              >
+                <button
+                  type="button"
+                  className="home-project-link"
+                  disabled={disabled}
+                  onClick={() => onOpenRecent(project.projectId)}
+                >
+                  <FolderIcon size={15} />
+                  <span>{project.displayName}</span>
+                </button>
+                <IconButton
+                  disabled={disabled}
+                  size="xs"
+                  label={t('shell.removeRecentProject', { project: project.displayName })}
+                  icon={<TrashIcon size={13} />}
+                  onClick={() => onRemoveRecentProject(project)}
+                />
+              </div>
+            ) : (
+              <div className="primary-conversation-group__standalone-heading">
+                <StorylineIcon size={14} />
+                <span>{formatStandaloneConversationGroup(group, t)}</span>
+                <span>{group.conversations.length}</span>
+              </div>
+            )}
+            <div className="primary-conversation-group__children">
+              {conversations.map((conversation) => (
+                <ConversationNavigationRow
+                  active={conversation.navigation.conversationId === activeConversationId}
+                  conversation={conversation}
+                  disabled={disabled}
+                  key={conversation.navigation.conversationId}
+                  onDelete={onDeleteConversation}
+                  onOpen={onOpenConversation}
+                />
+              ))}
+              {group.conversations.length > INITIAL_CONVERSATIONS_PER_GROUP ? (
+                <button
+                  type="button"
+                  className="primary-conversation-group__expand"
+                  disabled={disabled}
+                  onClick={() => toggleExpanded(group)}
+                >
+                  {expanded ? t('home.collapseConversations') : t('home.expandConversations')}
+                </button>
+              ) : null}
+            </div>
+          </section>
+        );
+      })}
     </div>
   );
+}
+
+const INITIAL_CONVERSATIONS_PER_GROUP = 5;
+
+function ConversationNavigationRow({
+  active,
+  conversation,
+  disabled,
+  onDelete,
+  onOpen,
+}: {
+  readonly active: boolean;
+  readonly conversation: DesktopAgentHomeConversationSummary;
+  readonly disabled: boolean;
+  readonly onDelete: (conversation: DesktopAgentHomeConversationSummary) => void;
+  readonly onOpen: (conversation: DesktopAgentHomeConversationSummary) => void;
+}): JSX.Element {
+  const { t } = useTranslation();
+  return (
+    <div
+      className="primary-recent-project-row primary-recent-conversation-row"
+      data-active={active ? 'true' : 'false'}
+    >
+      <button
+        type="button"
+        className="home-project-link home-conversation-link"
+        disabled={disabled}
+        onClick={() => onOpen(conversation)}
+      >
+        <StorylineIcon size={13} />
+        <span>{conversation.title}</span>
+        {conversation.attention !== 'none' ? (
+          <span
+            className={`home-conversation-attention is-${conversation.attention}`}
+            aria-label={formatAttention(conversation.attention, t)}
+          />
+        ) : null}
+      </button>
+      <IconButton
+        disabled={disabled}
+        size="xs"
+        label={t('shell.deleteConversation', { conversation: conversation.title })}
+        icon={<TrashIcon size={13} />}
+        onClick={() => onDelete(conversation)}
+      />
+    </div>
+  );
+}
+
+function conversationGroupKey(group: DesktopConversationNavigationGroup): string {
+  switch (group.kind) {
+    case 'project':
+      return `project:${group.projectId}`;
+    case 'assistant':
+      return `assistant:${group.assistantSpaceId}`;
+    case 'character':
+      return `character:${group.characterId}`;
+    case 'room':
+      return `room:${group.roomId}`;
+  }
+}
+
+function formatStandaloneConversationGroup(
+  group: DesktopConversationNavigationGroup,
+  t: TranslationFunction,
+): string {
+  switch (group.kind) {
+    case 'project':
+      return group.displayName;
+    case 'assistant':
+      return t('home.personalAssistant');
+    case 'character':
+      return t('home.characterConversations');
+    case 'room':
+      return t('home.roomConversations');
+  }
 }
 
 function PrimarySidebarBrand({

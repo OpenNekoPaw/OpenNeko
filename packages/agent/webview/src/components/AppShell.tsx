@@ -111,6 +111,7 @@ export function AppShell({
             configuredProviders={settings.configuredProviders}
             onOpenOnboarding={() => setShowOnboarding(true)}
             showAccountBar={presentation === 'default'}
+            showConversationNavigation={presentation === 'default'}
           />
         )}
       />

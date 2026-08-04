@@ -4,6 +4,7 @@ import { act, StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { I18nProvider } from '@neko/ui/i18n/react';
+import { AGENT_HOME_PROJECTION_VERSION } from '@neko/agent-contracts';
 import { createDefaultDesktopWorkbenchLayout } from '@neko/host/desktop-workbench-contract';
 import {
   DESKTOP_SCENE_CONTRACT_VERSION,
@@ -13,6 +14,7 @@ import {
 } from '@neko/host/desktop-scene-contract';
 import {
   DESKTOP_SHELL_CONTRACT_VERSION,
+  projectDesktopConversationNavigation,
   type DesktopShellProjection,
   type DesktopShellProjectionEvent,
 } from '@neko/host/desktop-shell-contract';
@@ -411,9 +413,8 @@ describe('DesktopApplication scene lifecycle', () => {
     };
     const conversation = {
       navigation: {
-        projectId: project.projectId,
-        workspaceId: project.workspaceId,
         conversationId: 'conversation-1',
+        owner: { kind: 'workspace' as const, workspaceId: project.workspaceId },
       },
       title: 'Conversation one',
       updatedAt: '2026-07-29T00:00:00.000Z',
@@ -423,14 +424,18 @@ describe('DesktopApplication scene lifecycle', () => {
         occurredAt: '2026-07-29T00:00:00.000Z',
       },
     };
+    const catalog = { revision: 3, projects: [project] };
+    const agentHome = {
+      schemaVersion: AGENT_HOME_PROJECTION_VERSION,
+      revision: 4,
+      conversations: [conversation],
+      attention: { needsInput: 0, needsReview: 0, running: 0 },
+    } as const;
     const projection: DesktopShellProjection = {
       ...base,
-      catalog: { revision: 3, projects: [project] },
-      agentHome: {
-        revision: 4,
-        conversations: [conversation],
-        attention: { needsInput: 0, needsReview: 0, running: 0 },
-      },
+      catalog,
+      agentHome,
+      conversationNavigation: projectDesktopConversationNavigation(catalog, agentHome),
     };
     const transition = vi.fn(
       async (
@@ -478,7 +483,7 @@ describe('DesktopApplication scene lifecycle', () => {
     expect(transition).toHaveBeenNthCalledWith(
       2,
       projection.window.windowId,
-      { kind: 'restore-conversation', conversationId: conversation.navigation.conversationId },
+      { kind: 'restore-conversation', navigation: conversation.navigation },
       projection.window.revision,
       projection.window.scene.revision,
     );
@@ -505,6 +510,78 @@ describe('DesktopApplication scene lifecycle', () => {
       conversation.navigation,
       projection.window.revision,
       projection.agentHome.revision,
+    );
+    await act(async () => root.unmount());
+  });
+
+  it('groups standalone Assistant conversations and expands beyond the bounded initial list', async () => {
+    const base = createProjection();
+    const conversations = Array.from({ length: 6 }, (_, index) => ({
+      navigation: {
+        conversationId: `assistant-conversation-${index + 1}`,
+        owner: {
+          kind: 'assistant' as const,
+          assistantSpaceId: 'assistant-space:local-user',
+        },
+      },
+      title: `Assistant conversation ${index + 1}`,
+      updatedAt: `2026-08-0${index + 1}T00:00:00.000Z`,
+      attention: 'none' as const,
+      lastActivity: {
+        kind: 'conversation-updated' as const,
+        occurredAt: `2026-08-0${index + 1}T00:00:00.000Z`,
+      },
+    }));
+    const catalog = { revision: 1, projects: [] };
+    const agentHome = {
+      schemaVersion: AGENT_HOME_PROJECTION_VERSION,
+      revision: 2,
+      conversations,
+      attention: { needsInput: 0, needsReview: 0, running: 0 },
+    } as const;
+    const projection: DesktopShellProjection = {
+      ...base,
+      catalog,
+      agentHome,
+      conversationNavigation: projectDesktopConversationNavigation(catalog, agentHome),
+    };
+    const transition = vi.fn(async () => ({
+      status: 'transitioned' as const,
+      requestId: 'assistant-transition',
+      scene: projection.window.scene,
+    }));
+    installBridge({ projection, transition });
+    const { container, root } = await renderApplication();
+
+    const group = container.querySelector<HTMLElement>(
+      '.primary-conversation-group[data-group-kind="assistant"]',
+    );
+    if (!group) throw new Error('Desktop fixture requires a standalone Assistant group.');
+    expect(group.textContent).toContain('Personal assistant');
+    expect(group.querySelectorAll('.primary-recent-conversation-row')).toHaveLength(5);
+    expect(group.textContent).not.toContain('Assistant conversation 1');
+    expect(group.textContent).toContain('Assistant conversation 6');
+
+    const expand = group.querySelector<HTMLButtonElement>(
+      '.primary-conversation-group__expand',
+    );
+    if (!expand) throw new Error('Desktop fixture requires the conversation expand action.');
+    expect(expand.textContent).toContain('Show more');
+    await act(async () => expand.click());
+    expect(group.querySelectorAll('.primary-recent-conversation-row')).toHaveLength(6);
+    expect(expand.textContent).toContain('Show less');
+
+    const oldest = [...group.querySelectorAll<HTMLButtonElement>('.home-conversation-link')].find(
+      (button) => button.textContent?.includes('Assistant conversation 1'),
+    );
+    if (!oldest) throw new Error('Expanded Assistant conversation is missing.');
+    await act(async () => oldest.click());
+    await waitFor(() => transition.mock.calls.length === 1);
+    expect(transition).toHaveBeenCalledWith(
+      projection.window.windowId,
+      { kind: 'restore-conversation', navigation: conversations[0]?.navigation },
+      projection.window.revision,
+      projection.window.scene.revision,
     );
     await act(async () => root.unmount());
   });
@@ -654,12 +731,19 @@ async function renderApplication(strict = false) {
 }
 
 function createProjection(): DesktopShellProjection {
+  const catalog = { revision: 0, projects: [] } as const;
+  const agentHome = {
+    schemaVersion: AGENT_HOME_PROJECTION_VERSION,
+    revision: 0,
+    conversations: [],
+    attention: { needsInput: 0, needsReview: 0, running: 0 },
+  } as const;
   return {
     schemaVersion: DESKTOP_SHELL_CONTRACT_VERSION,
     applicationInstanceId: 'app-1',
     endpointEpoch: 'app-1:window-1:1',
     projectionRevision: 2,
-    catalog: { revision: 0, projects: [] },
+    catalog,
     window: {
       windowId: 'window-1',
       revision: 1,
@@ -669,11 +753,8 @@ function createProjection(): DesktopShellProjection {
       scene: createDefaultDesktopAgentScene('window-1', 'assistant-space:test'),
       applicationSidebar: createDefaultDesktopApplicationSidebar('window-1'),
     },
-    agentHome: {
-      revision: 0,
-      conversations: [],
-      attention: { needsInput: 0, needsReview: 0, running: 0 },
-    },
+    agentHome,
+    conversationNavigation: projectDesktopConversationNavigation(catalog, agentHome),
     domains: [],
   };
 }

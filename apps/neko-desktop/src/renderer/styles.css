@@ -659,6 +659,60 @@ code {
   margin-top: 16px;
 }
 
+.primary-conversation-group + .primary-conversation-group {
+  margin-top: 10px;
+}
+
+.primary-conversation-group__header {
+  margin-bottom: 1px;
+}
+
+.primary-conversation-group__standalone-heading {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 7px;
+  min-height: 30px;
+  padding: 0 9px;
+  color: var(--neko-desktop-text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.primary-conversation-group__standalone-heading span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.primary-conversation-group__children {
+  padding-left: 18px;
+}
+
+.primary-recent-conversation-row[data-active='true'] {
+  background: var(--neko-accent-soft);
+}
+
+.primary-conversation-group__expand {
+  min-height: 27px;
+  padding: 0 9px;
+  border: 0;
+  background: transparent;
+  color: var(--neko-desktop-text-subtle);
+  font: inherit;
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.primary-conversation-group__expand:hover:not(:disabled) {
+  color: var(--neko-desktop-text-primary);
+}
+
+.primary-conversation-group__expand:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
 .home-conversation-link {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;

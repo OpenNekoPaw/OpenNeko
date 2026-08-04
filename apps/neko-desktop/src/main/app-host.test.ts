@@ -16,6 +16,10 @@ import { createAgentExtensionManagementHostRequest } from '@neko/agent-contracts
 import { AGENT_LAUNCH_CONTRACT_VERSION } from '@neko/agent-contracts/agent-launch-host';
 import { ASSISTANT_RESOURCE_HOST_VERSION } from '@neko/agent-contracts/assistant-resource-host';
 import {
+  AGENT_HOME_PROJECTION_VERSION,
+  type AgentHomeNavigationIdentity,
+} from '@neko/agent-contracts';
+import {
   DESKTOP_SHELL_CONTRACT_VERSION,
   createDesktopConversationDeleteRequest,
   createDesktopProjectOpenRequest,
@@ -564,6 +568,7 @@ describe('DesktopAppHost', () => {
       },
     };
 
+    const transitionScene = vi.spyOn(fixture.appHost.shell, 'transitionScene');
     const first = await fixture.appHost.executeAgentLaunchRequest(fixture.sender, request);
     expect(providerStart).toHaveBeenCalledOnce();
     expect(materializeSession).toHaveBeenCalledOnce();
@@ -582,6 +587,7 @@ describe('DesktopAppHost', () => {
       ['grant:entry-1'],
     );
     expect(first).toMatchObject({ status: 'committed' });
+    expect(transitionScene).not.toHaveBeenCalled();
     const committedScene = await fixture.appHost.shell.getSceneProjection(fixture.windowId);
     expect(committedScene).toMatchObject({
       context: {
@@ -634,6 +640,10 @@ describe('DesktopAppHost', () => {
       configuration: { providerId: 'openai', modelId: 'gpt-5', executionMode: 'ask' },
     });
     const fixture = await createShellAppHost({ conversationLifecycle });
+    setAgentHomeConversation(fixture.agent, {
+      conversationId: record.conversationId,
+      owner: { kind: 'assistant', assistantSpaceId: 'assistant-space:local-user' },
+    });
     const settings = await fixture.appHost.transitionScene(
       fixture.sender,
       createDesktopSceneTransitionRequest({
@@ -655,7 +665,16 @@ describe('DesktopAppHost', () => {
         windowId: fixture.windowId,
         expectedWindowRevision: projection.window.revision,
         expectedSceneRevision: projection.window.scene.revision,
-        intent: { kind: 'restore-conversation', conversationId: record.conversationId },
+        intent: {
+          kind: 'restore-conversation',
+          navigation: {
+            conversationId: record.conversationId,
+            owner: {
+              kind: 'assistant',
+              assistantSpaceId: 'assistant-space:local-user',
+            },
+          },
+        },
       }),
     );
 
@@ -694,6 +713,88 @@ describe('DesktopAppHost', () => {
     );
     expect(createBootstrap).toHaveBeenCalledWith(
       expect.objectContaining({ initialConversationId: record.conversationId }),
+    );
+    await fixture.appHost.dispose();
+  });
+
+  it('returns owner-qualified unavailable before reading Character conversation context', async () => {
+    const conversationLifecycle = createConversationLifecycle();
+    const readConversationContext = vi.spyOn(conversationLifecycle, 'readConversationContext');
+    const fixture = await createShellAppHost({ conversationLifecycle });
+    const navigation = {
+      conversationId: 'conversation-character-1',
+      owner: {
+        kind: 'character' as const,
+        characterId: 'character-1',
+        characterRunId: 'character-run-1',
+      },
+    };
+    setAgentHomeConversation(fixture.agent, navigation);
+    const projection = await fixture.appHost.shell.getProjection(fixture.windowId);
+
+    const result = await fixture.appHost.transitionScene(
+      fixture.sender,
+      createDesktopSceneTransitionRequest({
+        requestId: 'restore-character-unavailable',
+        expectedEndpointEpoch: projection.endpointEpoch,
+        windowId: fixture.windowId,
+        expectedWindowRevision: projection.window.revision,
+        expectedSceneRevision: projection.window.scene.revision,
+        intent: { kind: 'restore-conversation', navigation },
+      }),
+    );
+
+    expect(result).toMatchObject({
+      status: 'unavailable',
+      diagnostic: {
+        metadata: {
+          owner: 'agent-conversation-authority',
+          intentKind: 'restore-conversation',
+          conversationOwnerKind: 'character',
+        },
+      },
+    });
+    expect(readConversationContext).not.toHaveBeenCalled();
+    await fixture.appHost.dispose();
+  });
+
+  it('rejects restore when navigation owner differs from immutable lifecycle context', async () => {
+    const conversationLifecycle = createConversationLifecycle();
+    const record = await conversationLifecycle.firstSubmit({
+      requestId: 'restore-owner-mismatch-submit',
+      context: {
+        schemaVersion: 1,
+        kind: 'assistant',
+        assistantSpaceId: 'assistant-space:local-user',
+        baseGrantIds: [],
+      },
+      messageText: 'Do not restore under another owner',
+      resourceGrantIds: [],
+      configuration: { providerId: 'openai', modelId: 'gpt-5', executionMode: 'ask' },
+    });
+    const fixture = await createShellAppHost({ conversationLifecycle });
+    const navigation = {
+      conversationId: record.conversationId,
+      owner: { kind: 'assistant' as const, assistantSpaceId: 'assistant-space:other' },
+    };
+    setAgentHomeConversation(fixture.agent, navigation);
+    const projection = await fixture.appHost.shell.getProjection(fixture.windowId);
+
+    await expect(
+      fixture.appHost.transitionScene(
+        fixture.sender,
+        createDesktopSceneTransitionRequest({
+          requestId: 'restore-owner-mismatch',
+          expectedEndpointEpoch: projection.endpointEpoch,
+          windowId: fixture.windowId,
+          expectedWindowRevision: projection.window.revision,
+          expectedSceneRevision: projection.window.scene.revision,
+          intent: { kind: 'restore-conversation', navigation },
+        }),
+      ),
+    ).rejects.toThrow('lifecycle context does not match its navigation owner');
+    expect((await fixture.appHost.shell.getProjection(fixture.windowId)).window.scene).toEqual(
+      projection.window.scene,
     );
     await fixture.appHost.dispose();
   });
@@ -740,6 +841,10 @@ describe('DesktopAppHost', () => {
       releasePreview: vi.fn(),
     };
     const fixture = await createShellAppHost({ conversationLifecycle, assistantResources });
+    setAgentHomeConversation(fixture.agent, {
+      conversationId: record.conversationId,
+      owner: { kind: 'assistant', assistantSpaceId: 'assistant-space:local-user' },
+    });
     const restored = await fixture.appHost.transitionScene(
       fixture.sender,
       createDesktopSceneTransitionRequest({
@@ -748,7 +853,16 @@ describe('DesktopAppHost', () => {
         windowId: fixture.windowId,
         expectedWindowRevision: fixture.projection.window.revision,
         expectedSceneRevision: fixture.projection.window.scene.revision,
-        intent: { kind: 'restore-conversation', conversationId: record.conversationId },
+        intent: {
+          kind: 'restore-conversation',
+          navigation: {
+            conversationId: record.conversationId,
+            owner: {
+              kind: 'assistant',
+              assistantSpaceId: 'assistant-space:local-user',
+            },
+          },
+        },
       }),
     );
     if (restored.status !== 'transitioned') throw new Error('Expected Assistant restore.');
@@ -871,6 +985,10 @@ describe('DesktopAppHost', () => {
       resourceGrantIds: [],
       configuration: { providerId: 'openai', modelId: 'gpt-5', executionMode: 'ask' },
     });
+    setAgentHomeConversation(fixture.agent, {
+      conversationId: record.conversationId,
+      owner: { kind: 'workspace', workspaceId: workspace.workspaceId },
+    });
     const afterOpen = await fixture.appHost.shell.getProjection(fixture.windowId);
     await fixture.appHost.transitionScene(
       fixture.sender,
@@ -892,7 +1010,13 @@ describe('DesktopAppHost', () => {
         windowId: fixture.windowId,
         expectedWindowRevision: settings.window.revision,
         expectedSceneRevision: settings.window.scene.revision,
-        intent: { kind: 'restore-conversation', conversationId: record.conversationId },
+        intent: {
+          kind: 'restore-conversation',
+          navigation: {
+            conversationId: record.conversationId,
+            owner: { kind: 'workspace', workspaceId: workspace.workspaceId },
+          },
+        },
       }),
     );
 
@@ -1085,11 +1209,11 @@ describe('DesktopAppHost', () => {
     );
     const project = opened.projection.catalog.projects[0]!;
     const navigation = {
-      projectId: project.projectId,
-      workspaceId: project.workspaceId,
       conversationId: 'conversation-1',
+      owner: { kind: 'workspace' as const, workspaceId: project.workspaceId },
     };
     fixture.agent.readHomeProjection.mockReturnValue({
+      schemaVersion: AGENT_HOME_PROJECTION_VERSION,
       revision: 1,
       conversations: [
         {
@@ -1108,6 +1232,7 @@ describe('DesktopAppHost', () => {
     const runtime = createAgentWorkspaceRuntime(project.workspaceId);
     const deleteConversation = vi.fn(async () => {
       fixture.agent.readHomeProjection.mockReturnValue({
+        schemaVersion: AGENT_HOME_PROJECTION_VERSION,
         revision: 2,
         conversations: [],
         attention: { needsInput: 0, needsReview: 0, running: 0 },
@@ -1135,6 +1260,62 @@ describe('DesktopAppHost', () => {
       revision: 2,
       conversations: [],
     });
+  });
+
+  it('deletes a standalone Assistant conversation without resolving a Project', async () => {
+    const fixture = await createShellAppHost();
+    const navigation = {
+      conversationId: 'conversation-assistant',
+      owner: {
+        kind: 'assistant' as const,
+        assistantSpaceId: 'assistant-space:local-user',
+      },
+    };
+    fixture.agent.readHomeProjection.mockReturnValue({
+      schemaVersion: AGENT_HOME_PROJECTION_VERSION,
+      revision: 1,
+      conversations: [
+        {
+          navigation,
+          title: 'Assistant conversation',
+          updatedAt: '2026-08-04T00:00:00.000Z',
+          attention: 'none',
+          lastActivity: {
+            kind: 'conversation-updated',
+            occurredAt: '2026-08-04T00:00:00.000Z',
+          },
+        },
+      ],
+      attention: { needsInput: 0, needsReview: 0, running: 0 },
+    });
+    const deleteConversation = vi.fn(async () => {
+      fixture.agent.readHomeProjection.mockReturnValue({
+        schemaVersion: AGENT_HOME_PROJECTION_VERSION,
+        revision: 2,
+        conversations: [],
+        attention: { needsInput: 0, needsReview: 0, running: 0 },
+      });
+    });
+    fixture.agent.getWorkspace.mockImplementation((workspaceId) =>
+      workspaceId === navigation.owner.assistantSpaceId
+        ? { ...createAgentWorkspaceRuntime(workspaceId), deleteConversation }
+        : undefined,
+    );
+    const projection = await fixture.appHost.shell.getProjection(fixture.windowId);
+
+    const result = await fixture.appHost.deleteHomeConversation(
+      fixture.sender,
+      createDesktopConversationDeleteRequest(
+        'assistant-conversation-delete',
+        navigation,
+        projection.endpointEpoch,
+        projection.window.revision,
+        projection.agentHome.revision,
+      ),
+    );
+
+    expect(deleteConversation).toHaveBeenCalledWith(navigation.conversationId);
+    expect(result.projection.agentHome.conversations).toEqual([]);
   });
 
   it('projects sanitized global Skills and verified extensions without a Project', async () => {
@@ -1719,6 +1900,7 @@ function createAgentComposition(): AgentAppHost & {
     hasActiveTurns: vi.fn(() => false),
     reconcilePluginRuntime: vi.fn(async () => new Map()),
     readHomeProjection: vi.fn(() => ({
+      schemaVersion: AGENT_HOME_PROJECTION_VERSION,
       revision: 0,
       conversations: [],
       attention: { needsInput: 0, needsReview: 0, running: 0 },
@@ -1726,6 +1908,29 @@ function createAgentComposition(): AgentAppHost & {
     subscribeHomeProjection: vi.fn(() => () => undefined),
     dispose: vi.fn(async () => undefined),
   };
+}
+
+function setAgentHomeConversation(
+  agent: ReturnType<typeof createAgentComposition>,
+  navigation: AgentHomeNavigationIdentity,
+): void {
+  agent.readHomeProjection.mockReturnValue({
+    schemaVersion: AGENT_HOME_PROJECTION_VERSION,
+    revision: 1,
+    conversations: [
+      {
+        navigation,
+        title: navigation.conversationId,
+        updatedAt: '2026-08-04T00:00:00.000Z',
+        attention: 'none',
+        lastActivity: {
+          kind: 'conversation-updated',
+          occurredAt: '2026-08-04T00:00:00.000Z',
+        },
+      },
+    ],
+    attention: { needsInput: 0, needsReview: 0, running: 0 },
+  });
 }
 
 function createAgentLaunchRuntime(): DesktopAgentLaunchRuntime {

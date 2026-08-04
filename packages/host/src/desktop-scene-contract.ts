@@ -1,3 +1,9 @@
+import {
+  parseAgentHomeNavigationIdentity,
+  type AgentConversationOwnerRef,
+  type AgentHomeNavigationIdentity,
+} from '@neko/agent-contracts';
+
 export const DESKTOP_SCENE_CONTRACT_VERSION = 2 as const;
 export const DESKTOP_APPLICATION_SIDEBAR_CONTRACT_VERSION = 1 as const;
 export const DESKTOP_APPLICATION_SIDEBAR_DEFAULT_WIDTH = 240;
@@ -117,7 +123,7 @@ export type DesktopSceneTransitionIntent =
   | { readonly kind: 'open-extensions' }
   | { readonly kind: 'open-project-management' }
   | { readonly kind: 'open-settings'; readonly sectionId?: string }
-  | { readonly kind: 'restore-conversation'; readonly conversationId: string };
+  | { readonly kind: 'restore-conversation'; readonly navigation: AgentHomeNavigationIdentity };
 
 export interface DesktopSceneTransitionRequest {
   readonly schemaVersion: typeof DESKTOP_SCENE_CONTRACT_VERSION;
@@ -136,6 +142,7 @@ export interface DesktopSceneUnavailableDiagnostic {
   readonly metadata: {
     readonly owner: 'workspace-authority' | 'agent-conversation-authority';
     readonly intentKind: 'open-workspace' | 'open-project-workspace' | 'restore-conversation';
+    readonly conversationOwnerKind?: AgentConversationOwnerRef['kind'];
   };
 }
 
@@ -203,9 +210,15 @@ export function parseDesktopSceneTransitionResult(value: unknown): DesktopSceneT
       diagnostic['metadata'],
       'Desktop Scene unavailable metadata must be an object.',
     );
-    requireExactKeys(metadata, ['owner', 'intentKind'], 'Desktop Scene unavailable metadata');
+    requireExactKeys(
+      metadata,
+      ['owner', 'intentKind', 'conversationOwnerKind'],
+      'Desktop Scene unavailable metadata',
+      ['conversationOwnerKind'],
+    );
     const owner = metadata['owner'];
     const intentKind = metadata['intentKind'];
+    const conversationOwnerKind = metadata['conversationOwnerKind'];
     if (owner !== 'workspace-authority' && owner !== 'agent-conversation-authority') {
       throw invalid(`Unknown Desktop Scene unavailable owner '${String(owner)}'.`);
     }
@@ -216,6 +229,17 @@ export function parseDesktopSceneTransitionResult(value: unknown): DesktopSceneT
     ) {
       throw invalid(`Unknown Desktop Scene unavailable intent '${String(intentKind)}'.`);
     }
+    if (
+      conversationOwnerKind !== undefined &&
+      conversationOwnerKind !== 'assistant' &&
+      conversationOwnerKind !== 'workspace' &&
+      conversationOwnerKind !== 'character' &&
+      conversationOwnerKind !== 'room'
+    ) {
+      throw invalid(
+        `Unknown Desktop Scene unavailable Conversation owner '${String(conversationOwnerKind)}'.`,
+      );
+    }
     return {
       status,
       requestId: requireIdentity(record['requestId'], 'Desktop Scene request'),
@@ -223,7 +247,11 @@ export function parseDesktopSceneTransitionResult(value: unknown): DesktopSceneT
         code: 'desktop-scene-owner-unavailable',
         severity: 'error',
         message: requireIdentity(diagnostic['message'], 'Desktop Scene unavailable message'),
-        metadata: { owner, intentKind },
+        metadata: {
+          owner,
+          intentKind,
+          ...(conversationOwnerKind === undefined ? {} : { conversationOwnerKind }),
+        },
       },
     };
   }
@@ -851,8 +879,8 @@ function parseSceneTransitionIntent(value: unknown): DesktopSceneTransitionInten
     };
   }
   if (kind === 'restore-conversation') {
-    requireExactKeys(record, ['kind', 'conversationId'], 'Restore Conversation intent');
-    return { kind, conversationId: requireIdentity(record['conversationId'], 'Conversation') };
+    requireExactKeys(record, ['kind', 'navigation'], 'Restore Conversation intent');
+    return { kind, navigation: parseAgentHomeNavigationIdentity(record['navigation']) };
   }
   throw unsupported(`Unknown Desktop Scene transition intent '${String(kind)}'.`);
 }

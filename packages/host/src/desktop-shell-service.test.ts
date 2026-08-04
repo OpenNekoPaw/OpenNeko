@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { AGENT_HOME_PROJECTION_VERSION } from '@neko/agent-contracts';
 import type { AssetWorkspaceResolution } from '@neko/assets-domain/contracts';
 import { DesktopWorkspaceGrantAuthority } from './desktop-workspace-grant-authority';
 import { createCutHostSessionId } from '@neko/cut-domain';
@@ -61,6 +62,7 @@ describe('DesktopShellService', () => {
     second.service.setAgentHomeProjectionSource({
       setHomeWorkspaceScope,
       readHomeProjection: () => ({
+        schemaVersion: AGENT_HOME_PROJECTION_VERSION,
         revision: 1,
         conversations: [],
         attention: { needsInput: 0, needsReview: 0, running: 0 },
@@ -73,6 +75,62 @@ describe('DesktopShellService', () => {
     await second.service.getProjection(restoredWindowId);
 
     expect(setHomeWorkspaceScope).toHaveBeenCalledWith(['11111111-1111-4111-8111-111111111111']);
+  });
+
+  it('validates standalone Assistant lifecycle identity without requiring a Project', async () => {
+    const fixture = createFixture();
+    const navigation = {
+      conversationId: 'conversation:assistant',
+      owner: { kind: 'assistant' as const, assistantSpaceId: 'assistant-space:local-user' },
+    };
+    fixture.service.setAgentHomeProjectionSource({
+      setHomeWorkspaceScope: () => undefined,
+      readHomeProjection: () => ({
+        schemaVersion: AGENT_HOME_PROJECTION_VERSION,
+        revision: 4,
+        conversations: [
+          {
+            navigation,
+            title: 'Assistant conversation',
+            updatedAt: '2026-08-04T00:00:00.000Z',
+            attention: 'none',
+            lastActivity: {
+              kind: 'conversation-updated',
+              occurredAt: '2026-08-04T00:00:00.000Z',
+            },
+          },
+        ],
+        attention: { needsInput: 0, needsReview: 0, running: 0 },
+      }),
+      subscribeHomeProjection: () => () => undefined,
+    });
+    const windowId = await fixture.service.claimWindowId();
+    fixture.service.setRendererEpoch(windowId, 1);
+    const projection = await fixture.service.getProjection(windowId);
+
+    await expect(
+      fixture.service.assertAgentHomeConversation(
+        windowId,
+        projection.endpointEpoch,
+        projection.window.revision,
+        projection.agentHome.revision,
+        navigation,
+      ),
+    ).resolves.toBeUndefined();
+    await expect(
+      fixture.service.assertAgentHomeConversation(
+        windowId,
+        projection.endpointEpoch,
+        projection.window.revision,
+        projection.agentHome.revision,
+        {
+          conversationId: navigation.conversationId,
+          owner: { kind: 'assistant', assistantSpaceId: 'assistant-space:other' },
+        },
+      ),
+    ).rejects.toMatchObject({
+      code: 'desktop-shell-conversation-not-found',
+    });
   });
 
   it('projects only fully composed Agent and Resource Browser capabilities as ready', async () => {
@@ -535,9 +593,15 @@ describe('DesktopShellService', () => {
     });
   });
 
-  it('requires a new conversation before rebinding an active Agent scope', async () => {
+  it('opens a requested Workspace as a fresh Draft from an active Agent session', async () => {
     const repository = createInMemoryDesktopShellStateRepository();
-    const resolve = vi.fn();
+    const workspace: AssetWorkspaceResolution = {
+      workspaceId: '11111111-1111-4111-8111-111111111111',
+      workspacePath: '/workspace/demo',
+      displayName: 'Demo',
+      locator: { kind: 'variable', value: '${HOME}/workspace/demo' },
+    };
+    const resolve = vi.fn(async () => workspace);
     const authority = new DesktopWorkspaceGrantAuthority({
       resolver: { resolve },
       createIdentity: () => 'grant-1',
@@ -545,6 +609,11 @@ describe('DesktopShellService', () => {
     const fixture = createFixture(repository, 'home', authority);
     const windowId = await fixture.service.claimWindowId();
     fixture.service.setRendererEpoch(windowId, 1);
+    const grant = authority.authorize({
+      windowId,
+      label: workspace.displayName,
+      hostResource: workspace.workspacePath,
+    });
     const stored = await repository.read();
     const window = stored.windows[0]!;
     const currentContext = window.scene.context;
@@ -578,29 +647,49 @@ describe('DesktopShellService', () => {
     });
     const projection = await fixture.service.getProjection(windowId);
 
-    await expect(
-      fixture.service.transitionScene(
-        createDesktopSceneTransitionRequest({
-          requestId: 'scene-request-rebind',
-          expectedEndpointEpoch: projection.endpointEpoch,
-          windowId,
-          expectedWindowRevision: projection.window.revision,
-          expectedSceneRevision: scene.revision,
-          intent: { kind: 'open-workspace', workspaceGrantId: 'workspace-grant:other' },
-        }),
-      ),
-    ).resolves.toMatchObject({
-      status: 'rejected',
-      diagnostic: {
-        code: 'new-conversation-required',
-        metadata: { conversationId: 'conversation-1' },
+    const result = await fixture.service.transitionScene(
+      createDesktopSceneTransitionRequest({
+        requestId: 'scene-request-rebind',
+        expectedEndpointEpoch: projection.endpointEpoch,
+        windowId,
+        expectedWindowRevision: projection.window.revision,
+        expectedSceneRevision: scene.revision,
+        intent: { kind: 'open-workspace', workspaceGrantId: grant.workspaceGrantId },
+      }),
+    );
+    expect(result).toMatchObject({
+      status: 'transitioned',
+      scene: {
+        context: {
+          kind: 'agent',
+          scope: {
+            kind: 'workspace',
+            workspaceId: workspace.workspaceId,
+            workspaceGrantId: grant.workspaceGrantId,
+          },
+        },
+        slots: {
+          interaction: {
+            kind: 'agent',
+            phase: 'draft',
+            scope: { kind: 'workspace' },
+          },
+        },
       },
     });
-    expect(resolve).not.toHaveBeenCalled();
-    expect(await fixture.service.getSceneProjection(windowId)).toEqual(scene);
+    if (
+      result.status !== 'transitioned' ||
+      result.scene.context.kind !== 'agent' ||
+      result.scene.context.scope.kind !== 'workspace'
+    ) {
+      throw new Error('Workspace rebinding fixture did not create a Workspace Draft.');
+    }
+    expect(result.scene.context.scope).not.toHaveProperty('conversationId');
+    expect(resolve).toHaveBeenCalledWith('/workspace/demo');
+    expect(await fixture.service.getSceneProjection(windowId)).not.toEqual(scene);
   });
 
-  it('treats the active Workspace Project as an idempotent Scene transition', async () => {
+  it('treats the active Workspace Project Draft as an idempotent Scene transition', async () => {
     const repository = createInMemoryDesktopShellStateRepository();
     const workspace = {
       workspaceId: '11111111-1111-4111-8111-111111111111',
@@ -637,32 +726,6 @@ describe('DesktopShellService', () => {
     if (workspaceResult.status !== 'transitioned') {
       throw new Error('Workspace Project fixture did not transition.');
     }
-    const state = await repository.read();
-    const storedWindow = state.windows[0]!;
-    const context = workspaceResult.scene.context;
-    if (context.kind !== 'agent' || context.scope.kind !== 'workspace') {
-      throw new Error('Workspace Project fixture requires Workspace Agent scope.');
-    }
-    const scope = { ...context.scope, conversationId: 'conversation-1' };
-    const scene = parseDesktopWorkbenchSceneProjection({
-      ...workspaceResult.scene,
-      revision: workspaceResult.scene.revision + 1,
-      context: { ...context, scope },
-      slots: {
-        ...workspaceResult.scene.slots,
-        interaction: {
-          kind: 'agent',
-          agentViewId: context.agentViewId,
-          phase: 'session',
-          scope,
-        },
-      },
-    });
-    await repository.commit(state.storageRevision, {
-      ...state,
-      storageRevision: state.storageRevision + 1,
-      windows: [{ ...storedWindow, revision: storedWindow.revision + 1, scene }],
-    });
     const before = await fixture.service.getProjection(windowId);
     restore.mockClear();
 
@@ -682,7 +745,7 @@ describe('DesktopShellService', () => {
         expectedEndpointEpoch: before.endpointEpoch,
         windowId,
         expectedWindowRevision: before.window.revision,
-        expectedSceneRevision: scene.revision,
+        expectedSceneRevision: before.window.scene.revision,
         intent: { kind: 'open-project-workspace', projectId: project.projectId },
       }),
     );
@@ -690,10 +753,119 @@ describe('DesktopShellService', () => {
     expect(result).toEqual({
       status: 'transitioned',
       requestId: 'scene-request-current-project',
-      scene,
+      scene: before.window.scene,
     });
     expect(restore).not.toHaveBeenCalled();
     expect(await fixture.service.getProjection(windowId)).toEqual(before);
+  });
+
+  it('opens the active Workspace Project session as a fresh Project Draft', async () => {
+    const repository = createInMemoryDesktopShellStateRepository();
+    const workspace = {
+      workspaceId: '11111111-1111-4111-8111-111111111111',
+      workspacePath: '/workspace/demo',
+      displayName: 'Demo',
+      locator: { kind: 'variable' as const, value: '${HOME}/workspace/demo' },
+    };
+    const restore = vi.fn(async () => workspace);
+    const authority = new DesktopWorkspaceGrantAuthority({
+      resolver: { resolve: vi.fn(async () => workspace), restore },
+      createIdentity: () => 'project-grant',
+    });
+    const fixture = createFixture(repository, 'home', authority);
+    const windowId = await fixture.service.claimWindowId();
+    fixture.service.setRendererEpoch(windowId, 1);
+    const initial = await fixture.service.getProjection(windowId);
+    const opened = await fixture.service.openContent(
+      windowId,
+      workspace.workspacePath,
+      initial.endpointEpoch,
+      initial.window.revision,
+    );
+    const project = opened.projection.catalog.projects[0]!;
+    const workspaceResult = await fixture.service.transitionScene(
+      createDesktopSceneTransitionRequest({
+        requestId: 'scene-request-open-project-session-fixture',
+        expectedEndpointEpoch: opened.projection.endpointEpoch,
+        windowId,
+        expectedWindowRevision: opened.projection.window.revision,
+        expectedSceneRevision: opened.projection.window.scene.revision,
+        intent: { kind: 'open-project-workspace', projectId: project.projectId },
+      }),
+    );
+    if (workspaceResult.status !== 'transitioned') {
+      throw new Error('Workspace Project session fixture did not transition.');
+    }
+    const state = await repository.read();
+    const storedWindow = state.windows[0]!;
+    const context = workspaceResult.scene.context;
+    if (context.kind !== 'agent' || context.scope.kind !== 'workspace') {
+      throw new Error('Workspace Project session fixture requires Workspace Agent scope.');
+    }
+    const scope = { ...context.scope, conversationId: 'conversation-1' };
+    const sessionScene = parseDesktopWorkbenchSceneProjection({
+      ...workspaceResult.scene,
+      revision: workspaceResult.scene.revision + 1,
+      context: { ...context, scope },
+      slots: {
+        ...workspaceResult.scene.slots,
+        interaction: {
+          kind: 'agent',
+          agentViewId: context.agentViewId,
+          phase: 'session',
+          scope,
+        },
+      },
+    });
+    await repository.commit(state.storageRevision, {
+      ...state,
+      storageRevision: state.storageRevision + 1,
+      windows: [{ ...storedWindow, revision: storedWindow.revision + 1, scene: sessionScene }],
+    });
+    const before = await fixture.service.getProjection(windowId);
+    restore.mockClear();
+
+    const result = await fixture.service.transitionScene(
+      createDesktopSceneTransitionRequest({
+        requestId: 'scene-request-current-project-session',
+        expectedEndpointEpoch: before.endpointEpoch,
+        windowId,
+        expectedWindowRevision: before.window.revision,
+        expectedSceneRevision: sessionScene.revision,
+        intent: { kind: 'open-project-workspace', projectId: project.projectId },
+      }),
+    );
+
+    expect(result).toMatchObject({
+      status: 'transitioned',
+      requestId: 'scene-request-current-project-session',
+      scene: {
+        context: {
+          kind: 'agent',
+          scope: {
+            kind: 'workspace',
+            workspaceId: project.workspaceId,
+          },
+        },
+        slots: {
+          interaction: {
+            kind: 'agent',
+            phase: 'draft',
+            scope: { kind: 'workspace' },
+          },
+        },
+      },
+    });
+    if (
+      result.status !== 'transitioned' ||
+      result.scene.context.kind !== 'agent' ||
+      result.scene.context.scope.kind !== 'workspace'
+    ) {
+      throw new Error('Workspace Project fixture did not create a fresh Draft.');
+    }
+    expect(result.scene.context.scope).not.toHaveProperty('conversationId');
+    expect(restore).toHaveBeenCalledWith(project.workspaceId);
+    expect(await fixture.service.getSceneProjection(windowId)).not.toEqual(sessionScene);
   });
 
   it('persists Sidebar CAS independently from Window and Workbench revisions', async () => {
@@ -941,6 +1113,30 @@ describe('DesktopShellService', () => {
     await first.service.dispose();
 
     const restored = createFixture(file, 'home');
+    restored.service.setAgentHomeProjectionSource({
+      setHomeWorkspaceScope: () => undefined,
+      readHomeProjection: () => ({
+        schemaVersion: AGENT_HOME_PROJECTION_VERSION,
+        revision: 1,
+        conversations: [
+          {
+            navigation: {
+              conversationId: 'conversation-workspace-1',
+              owner: { kind: 'workspace', workspaceId: project.workspaceId },
+            },
+            title: 'Workspace conversation',
+            updatedAt: '2026-08-04T00:00:00.000Z',
+            attention: 'none',
+            lastActivity: {
+              kind: 'conversation-updated',
+              occurredAt: '2026-08-04T00:00:00.000Z',
+            },
+          },
+        ],
+        attention: { needsInput: 0, needsReview: 0, running: 0 },
+      }),
+      subscribeHomeProjection: () => () => undefined,
+    });
     const restoredWindowId = await restored.service.claimWindowId();
     restored.service.setRendererEpoch(restoredWindowId, 1);
     const entry = await restored.service.getProjection(restoredWindowId);
@@ -953,7 +1149,13 @@ describe('DesktopShellService', () => {
         windowId: restoredWindowId,
         expectedWindowRevision: entry.window.revision,
         expectedSceneRevision: entry.window.scene.revision,
-        intent: { kind: 'restore-conversation', conversationId: 'conversation-workspace-1' },
+        intent: {
+          kind: 'restore-conversation',
+          navigation: {
+            conversationId: 'conversation-workspace-1',
+            owner: { kind: 'workspace', workspaceId: project.workspaceId },
+          },
+        },
       }),
       context: {
         schemaVersion: 1,

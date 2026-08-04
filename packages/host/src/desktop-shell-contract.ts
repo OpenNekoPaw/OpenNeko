@@ -1,5 +1,17 @@
 import type { HostDiagnostic } from '@neko/host/ports';
 import {
+  parseAgentHomeConversationSummary as parseCanonicalAgentHomeConversationSummary,
+  parseAgentHomeNavigationIdentity as parseCanonicalAgentHomeNavigationIdentity,
+  parseAgentHomeProjection,
+  type AgentConversationOwnerRef,
+  type AgentHomeActivityKind,
+  type AgentHomeActivitySummary,
+  type AgentHomeAttentionStatus,
+  type AgentHomeConversationSummary,
+  type AgentHomeNavigationIdentity,
+  type AgentHomeProjection,
+} from '@neko/agent-contracts';
+import {
   parseDesktopWorkbenchLayout,
   type DesktopWorkbenchLayoutProjection,
 } from './desktop-workbench-contract';
@@ -12,7 +24,8 @@ import {
   type DesktopSceneTransitionResult,
 } from './desktop-scene-contract';
 
-export const DESKTOP_SHELL_CONTRACT_VERSION = 2 as const;
+export const DESKTOP_SHELL_CONTRACT_VERSION = 3 as const;
+export const DESKTOP_CONVERSATION_NAVIGATION_VERSION = 1 as const;
 
 export const DESKTOP_SHELL_CHANNELS = {
   snapshotGet: 'openneko:desktop:shell:snapshot:get',
@@ -122,6 +135,37 @@ export type DesktopAgentHomeConversationSummary = AgentHomeConversationSummary;
 
 export type DesktopAgentHomeProjection = AgentHomeProjection;
 
+export type DesktopConversationNavigationGroup =
+  | {
+      readonly kind: 'project';
+      readonly projectId: string;
+      readonly workspaceId: string;
+      readonly displayName: string;
+      readonly conversations: readonly DesktopAgentHomeConversationSummary[];
+    }
+  | {
+      readonly kind: 'assistant';
+      readonly assistantSpaceId: string;
+      readonly conversations: readonly DesktopAgentHomeConversationSummary[];
+    }
+  | {
+      readonly kind: 'character';
+      readonly characterId: string;
+      readonly conversations: readonly DesktopAgentHomeConversationSummary[];
+    }
+  | {
+      readonly kind: 'room';
+      readonly roomId: string;
+      readonly conversations: readonly DesktopAgentHomeConversationSummary[];
+    };
+
+export interface DesktopConversationNavigationProjection {
+  readonly schemaVersion: typeof DESKTOP_CONVERSATION_NAVIGATION_VERSION;
+  readonly projectCatalogRevision: number;
+  readonly agentHomeRevision: number;
+  readonly groups: readonly DesktopConversationNavigationGroup[];
+}
+
 export type DesktopReadyDomainCapabilityProjection =
   | {
       readonly surface: 'agent';
@@ -167,6 +211,7 @@ export interface DesktopShellProjection {
   readonly catalog: DesktopProjectCatalogProjection;
   readonly window: DesktopWindowShellProjection;
   readonly agentHome: DesktopAgentHomeProjection;
+  readonly conversationNavigation: DesktopConversationNavigationProjection;
   readonly domains: readonly DesktopDomainCapabilityProjection[];
 }
 
@@ -278,6 +323,127 @@ export class DesktopShellContractError extends Error {
     super(message);
     this.name = 'DesktopShellContractError';
     this.code = code;
+  }
+}
+
+export function projectDesktopConversationNavigation(
+  catalog: DesktopProjectCatalogProjection,
+  agentHome: DesktopAgentHomeProjection,
+): DesktopConversationNavigationProjection {
+  const projectGroups = new Map<
+    string,
+    Extract<DesktopConversationNavigationGroup, { readonly kind: 'project' }>
+  >(
+    catalog.projects.map((project) => [
+      project.projectId,
+      {
+        kind: 'project',
+        projectId: project.projectId,
+        workspaceId: project.workspaceId,
+        displayName: project.displayName,
+        conversations: [],
+      },
+    ]),
+  );
+  const projectsByWorkspace = new Map<string, DesktopProjectCatalogItem[]>();
+  for (const project of catalog.projects) {
+    projectsByWorkspace.set(project.workspaceId, [
+      ...(projectsByWorkspace.get(project.workspaceId) ?? []),
+      project,
+    ]);
+  }
+  const standaloneGroups = new Map<string, DesktopConversationNavigationGroup>();
+  for (const conversation of agentHome.conversations) {
+    const explicitProjectId = conversation.groupedProjectId;
+    if (explicitProjectId !== undefined) {
+      const projectGroup = projectGroups.get(explicitProjectId);
+      if (!projectGroup) {
+        throw new DesktopShellContractError(
+          'desktop-shell-project-identity-mismatch',
+          `Agent Conversation '${conversation.navigation.conversationId}' references unknown Project '${explicitProjectId}'.`,
+        );
+      }
+      if (
+        conversation.navigation.owner.kind === 'workspace' &&
+        conversation.navigation.owner.workspaceId !== projectGroup.workspaceId
+      ) {
+        throw new DesktopShellContractError(
+          'desktop-shell-project-identity-mismatch',
+          `Workspace Conversation '${conversation.navigation.conversationId}' is grouped under another Project.`,
+        );
+      }
+      projectGroups.set(explicitProjectId, appendConversation(projectGroup, conversation));
+      continue;
+    }
+    if (conversation.navigation.owner.kind === 'workspace') {
+      const projects = projectsByWorkspace.get(conversation.navigation.owner.workspaceId) ?? [];
+      if (projects.length !== 1) {
+        throw new DesktopShellContractError(
+          'desktop-shell-project-identity-mismatch',
+          `Workspace Conversation '${conversation.navigation.conversationId}' does not resolve to one exact Project.`,
+        );
+      }
+      const project = projects[0];
+      if (!project) throw new Error('Exact Workspace Project resolution is missing.');
+      const projectGroup = projectGroups.get(project.projectId);
+      if (!projectGroup) throw new Error('Exact Workspace Project group is missing.');
+      projectGroups.set(project.projectId, appendConversation(projectGroup, conversation));
+      continue;
+    }
+    const key = standaloneGroupKey(conversation.navigation.owner);
+    const current =
+      standaloneGroups.get(key) ?? createStandaloneGroup(conversation.navigation.owner);
+    standaloneGroups.set(key, appendConversation(current, conversation));
+  }
+  return Object.freeze({
+    schemaVersion: DESKTOP_CONVERSATION_NAVIGATION_VERSION,
+    projectCatalogRevision: catalog.revision,
+    agentHomeRevision: agentHome.revision,
+    groups: Object.freeze(
+      [...projectGroups.values(), ...standaloneGroups.values()].map((group) =>
+        Object.freeze({
+          ...group,
+          conversations: Object.freeze(
+            [...group.conversations].sort((left, right) =>
+              right.updatedAt.localeCompare(left.updatedAt),
+            ),
+          ),
+        }),
+      ),
+    ),
+  });
+}
+
+function appendConversation<T extends DesktopConversationNavigationGroup>(
+  group: T,
+  conversation: DesktopAgentHomeConversationSummary,
+): T {
+  return { ...group, conversations: [...group.conversations, conversation] };
+}
+
+function standaloneGroupKey(
+  owner: Exclude<AgentConversationOwnerRef, { kind: 'workspace' }>,
+): string {
+  switch (owner.kind) {
+    case 'assistant':
+      return `assistant:${owner.assistantSpaceId}`;
+    case 'character':
+      return `character:${owner.characterId}`;
+    case 'room':
+      return `room:${owner.roomId}`;
+  }
+}
+
+function createStandaloneGroup(
+  owner: Exclude<AgentConversationOwnerRef, { kind: 'workspace' }>,
+): DesktopConversationNavigationGroup {
+  switch (owner.kind) {
+    case 'assistant':
+      return { kind: owner.kind, assistantSpaceId: owner.assistantSpaceId, conversations: [] };
+    case 'character':
+      return { kind: owner.kind, characterId: owner.characterId, conversations: [] };
+    case 'room':
+      return { kind: owner.kind, roomId: owner.roomId, conversations: [] };
   }
 }
 
@@ -603,14 +769,21 @@ export function parseDesktopShellProjection(value: unknown): DesktopShellProject
     record['agentHome'],
     'Desktop Agent Home projection is required.',
   );
-  const attentionRecord = requireRecord(
-    agentHomeRecord['attention'],
-    'Desktop Agent Home Attention projection is required.',
+  const agentHome = parseAgentHomeProjection(agentHomeRecord);
+  const conversationNavigation = parseDesktopConversationNavigationProjection(
+    record['conversationNavigation'],
   );
   const projects = requireArray(
     catalogRecord['projects'],
     'Desktop Project catalog items must be an array.',
   ).map(parseProjectCatalogItem);
+  const catalog: DesktopProjectCatalogProjection = {
+    revision: requireNonNegativeInteger(
+      catalogRecord['revision'],
+      'Desktop Project catalog revision must be a non-negative integer.',
+    ),
+    projects,
+  };
   const tabs = requireArray(windowRecord['tabs'], 'Desktop Project Tabs must be an array.').map(
     parseProjectTab,
   );
@@ -660,13 +833,7 @@ export function parseDesktopShellProjection(value: unknown): DesktopShellProject
       record['projectionRevision'],
       'Desktop Shell projection revision must be a non-negative integer.',
     ),
-    catalog: {
-      revision: requireNonNegativeInteger(
-        catalogRecord['revision'],
-        'Desktop Project catalog revision must be a non-negative integer.',
-      ),
-      projects,
-    },
+    catalog,
     window: {
       windowId,
       revision: requireNonNegativeInteger(
@@ -679,30 +846,12 @@ export function parseDesktopShellProjection(value: unknown): DesktopShellProject
       scene,
       applicationSidebar,
     },
-    agentHome: {
-      revision: requireNonNegativeInteger(
-        agentHomeRecord['revision'],
-        'Desktop Agent Home revision must be a non-negative integer.',
-      ),
-      conversations: requireArray(
-        agentHomeRecord['conversations'],
-        'Desktop Agent Home conversations must be an array.',
-      ).map(parseAgentHomeConversationSummary),
-      attention: {
-        needsInput: requireNonNegativeInteger(
-          attentionRecord['needsInput'],
-          'Desktop Attention needsInput count is invalid.',
-        ),
-        needsReview: requireNonNegativeInteger(
-          attentionRecord['needsReview'],
-          'Desktop Attention needsReview count is invalid.',
-        ),
-        running: requireNonNegativeInteger(
-          attentionRecord['running'],
-          'Desktop Attention running count is invalid.',
-        ),
-      },
-    },
+    agentHome,
+    conversationNavigation: assertConversationNavigationProjection(
+      conversationNavigation,
+      catalog,
+      agentHome,
+    ),
     domains: requireArray(
       record['domains'],
       'Desktop domain capability projection must be an array.',
@@ -710,119 +859,146 @@ export function parseDesktopShellProjection(value: unknown): DesktopShellProject
   };
 }
 
-function parseAgentHomeConversationSummary(value: unknown): DesktopAgentHomeConversationSummary {
-  const record = requireRecord(value, 'Desktop Agent Home conversation summary must be an object.');
-  const navigation = parseDesktopAgentHomeNavigationIdentity(record['navigation']);
-  const lastActivity = requireRecord(
-    record['lastActivity'],
-    'Desktop Agent Home last activity is required.',
+export function parseDesktopConversationNavigationProjection(
+  value: unknown,
+): DesktopConversationNavigationProjection {
+  const record = requireRecord(
+    value,
+    'Desktop Conversation navigation projection must be an object.',
   );
-  const attention = record['attention'];
-  if (
-    attention !== 'none' &&
-    attention !== 'needs-input' &&
-    attention !== 'needs-review' &&
-    attention !== 'running'
-  ) {
-    throw invalidPayload('Desktop Agent Home attention status is invalid.');
+  requireExactKeys(
+    record,
+    ['schemaVersion', 'projectCatalogRevision', 'agentHomeRevision', 'groups'],
+    'Desktop Conversation navigation projection',
+  );
+  if (record['schemaVersion'] !== DESKTOP_CONVERSATION_NAVIGATION_VERSION) {
+    throw invalidPayload(
+      `Unsupported Desktop Conversation navigation version '${String(record['schemaVersion'])}'.`,
+    );
   }
-  const kind = lastActivity['kind'];
-  if (
-    kind !== 'conversation-updated' &&
-    kind !== 'turn-running' &&
-    kind !== 'turn-completed' &&
-    kind !== 'turn-cancelled' &&
-    kind !== 'turn-failed' &&
-    kind !== 'tool-confirmation-required'
-  ) {
-    throw invalidPayload('Desktop Agent Home activity kind is invalid.');
+  const groups = requireArray(
+    record['groups'],
+    'Desktop Conversation navigation groups must be an array.',
+  ).map(parseDesktopConversationNavigationGroup);
+  const conversationIds = groups.flatMap((group) =>
+    group.conversations.map((conversation) => conversation.navigation.conversationId),
+  );
+  if (new Set(conversationIds).size !== conversationIds.length) {
+    throw invalidPayload('Desktop Conversation navigation places a Conversation more than once.');
   }
-  return {
-    navigation: {
-      ...navigation,
-    },
-    title: requireNonEmptyString(
-      record['title'],
-      'Desktop Agent Home conversation title is required.',
+  return Object.freeze({
+    schemaVersion: DESKTOP_CONVERSATION_NAVIGATION_VERSION,
+    projectCatalogRevision: requireNonNegativeInteger(
+      record['projectCatalogRevision'],
+      'Desktop Conversation Project catalog revision is invalid.',
     ),
-    updatedAt: requireIsoDateString(
-      record['updatedAt'],
-      'Desktop Agent Home conversation updatedAt is invalid.',
+    agentHomeRevision: requireNonNegativeInteger(
+      record['agentHomeRevision'],
+      'Desktop Conversation Agent Home revision is invalid.',
     ),
-    attention,
-    lastActivity: {
+    groups: Object.freeze(groups),
+  });
+}
+
+function parseDesktopConversationNavigationGroup(
+  value: unknown,
+): DesktopConversationNavigationGroup {
+  const record = requireRecord(value, 'Desktop Conversation navigation group must be an object.');
+  const kind = record['kind'];
+  const conversations = requireArray(
+    record['conversations'],
+    'Desktop Conversation navigation group conversations must be an array.',
+  ).map(parseAgentHomeConversationSummary);
+  if (kind === 'project') {
+    requireExactKeys(
+      record,
+      ['kind', 'projectId', 'workspaceId', 'displayName', 'conversations'],
+      'Desktop Project Conversation group',
+    );
+    return Object.freeze({
       kind,
-      occurredAt: requireIsoDateString(
-        lastActivity['occurredAt'],
-        'Desktop Agent Home activity occurredAt is invalid.',
+      projectId: requireNonEmptyString(
+        record['projectId'],
+        'Desktop Project identity is required.',
       ),
-      ...readOptionalIdentity(lastActivity, 'turnId'),
-      ...readOptionalIdentity(lastActivity, 'runId'),
-      ...readOptionalIdentity(lastActivity, 'toolCallId'),
-      ...parseOptionalGenerationJob(lastActivity['generationJob']),
-    },
-  };
+      workspaceId: requireNonEmptyString(
+        record['workspaceId'],
+        'Desktop Workspace identity is required.',
+      ),
+      displayName: requireNonEmptyString(
+        record['displayName'],
+        'Desktop Project display name is required.',
+      ),
+      conversations: Object.freeze(conversations),
+    });
+  }
+  if (kind === 'assistant') {
+    requireExactKeys(
+      record,
+      ['kind', 'assistantSpaceId', 'conversations'],
+      'Desktop Assistant Conversation group',
+    );
+    return Object.freeze({
+      kind,
+      assistantSpaceId: requireNonEmptyString(
+        record['assistantSpaceId'],
+        'Desktop Assistant Space identity is required.',
+      ),
+      conversations: Object.freeze(conversations),
+    });
+  }
+  if (kind === 'character') {
+    requireExactKeys(
+      record,
+      ['kind', 'characterId', 'conversations'],
+      'Desktop Character Conversation group',
+    );
+    return Object.freeze({
+      kind,
+      characterId: requireNonEmptyString(
+        record['characterId'],
+        'Desktop Character identity is required.',
+      ),
+      conversations: Object.freeze(conversations),
+    });
+  }
+  if (kind === 'room') {
+    requireExactKeys(
+      record,
+      ['kind', 'roomId', 'conversations'],
+      'Desktop Room Conversation group',
+    );
+    return Object.freeze({
+      kind,
+      roomId: requireNonEmptyString(record['roomId'], 'Desktop Room identity is required.'),
+      conversations: Object.freeze(conversations),
+    });
+  }
+  throw invalidPayload(`Unknown Desktop Conversation navigation group '${String(kind)}'.`);
+}
+
+function assertConversationNavigationProjection(
+  actual: DesktopConversationNavigationProjection,
+  catalog: DesktopProjectCatalogProjection,
+  agentHome: DesktopAgentHomeProjection,
+): DesktopConversationNavigationProjection {
+  const expected = projectDesktopConversationNavigation(catalog, agentHome);
+  if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+    throw invalidPayload(
+      'Desktop Conversation navigation projection does not match Project and Agent authorities.',
+    );
+  }
+  return actual;
+}
+
+function parseAgentHomeConversationSummary(value: unknown): DesktopAgentHomeConversationSummary {
+  return parseCanonicalAgentHomeConversationSummary(value);
 }
 
 function parseDesktopAgentHomeNavigationIdentity(
   value: unknown,
 ): DesktopAgentHomeNavigationIdentity {
-  const navigation = requireRecord(value, 'Desktop Agent Home navigation identity is required.');
-  return {
-    projectId: requireNonEmptyString(
-      navigation['projectId'],
-      'Desktop Agent Home Project identity is required.',
-    ),
-    workspaceId: requireNonEmptyString(
-      navigation['workspaceId'],
-      'Desktop Agent Home Workspace identity is required.',
-    ),
-    conversationId: requireNonEmptyString(
-      navigation['conversationId'],
-      'Desktop Agent Home Conversation identity is required.',
-    ),
-  };
-}
-
-function parseOptionalGenerationJob(
-  value: unknown,
-): Pick<DesktopAgentHomeActivitySummary, 'generationJob'> | Record<string, never> {
-  if (value === undefined) return {};
-  const record = requireRecord(
-    value,
-    'Desktop Agent Home GenerationJob summary must be an object.',
-  );
-  return {
-    generationJob: {
-      jobId: requireNonEmptyString(
-        record['jobId'],
-        'Desktop Agent Home GenerationJob identity is required.',
-      ),
-      revision: requireNonNegativeInteger(
-        record['revision'],
-        'Desktop Agent Home GenerationJob revision is invalid.',
-      ),
-      phase: requireNonEmptyString(
-        record['phase'],
-        'Desktop Agent Home GenerationJob phase is required.',
-      ),
-    },
-  };
-}
-
-function readOptionalIdentity(
-  record: Record<string, unknown>,
-  key: 'turnId' | 'runId' | 'toolCallId',
-): Partial<Record<'turnId' | 'runId' | 'toolCallId', string>> {
-  const value = record[key];
-  if (value === undefined) return {};
-  return { [key]: requireNonEmptyString(value, `Desktop Agent Home ${key} is invalid.`) };
-}
-
-function requireIsoDateString(value: unknown, message: string): string {
-  const date = requireNonEmptyString(value, message);
-  if (Number.isNaN(Date.parse(date))) throw invalidPayload(message);
-  return date;
+  return parseCanonicalAgentHomeNavigationIdentity(value);
 }
 
 export function parseDesktopShellProjectionEvent(value: unknown): DesktopShellProjectionEvent {
@@ -1022,14 +1198,18 @@ function readOptionalMetadata(record: Readonly<Record<string, unknown>>): {
   return { metadata: requireRecord(metadata, 'Desktop diagnostic metadata must be an object.') };
 }
 
+function requireExactKeys(
+  record: Readonly<Record<string, unknown>>,
+  keys: readonly string[],
+  label: string,
+): void {
+  const expected = new Set(keys);
+  const unknown = Object.keys(record).find((key) => !expected.has(key));
+  if (unknown) throw invalidPayload(`${label} contains unknown field '${unknown}'.`);
+  const missing = keys.find((key) => !(key in record));
+  if (missing) throw invalidPayload(`${label} is missing field '${missing}'.`);
+}
+
 function invalidPayload(message: string): DesktopShellContractError {
   return new DesktopShellContractError('invalid-desktop-shell-payload', message);
 }
-import type {
-  AgentHomeActivityKind,
-  AgentHomeActivitySummary,
-  AgentHomeAttentionStatus,
-  AgentHomeConversationSummary,
-  AgentHomeNavigationIdentity,
-  AgentHomeProjection,
-} from '@neko/agent-contracts';

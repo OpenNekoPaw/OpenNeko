@@ -52,6 +52,7 @@ import {
   type DesktopAgentConnectionGrant,
 } from './desktop-agent-bridge-runtime';
 import type { DesktopShellService } from '@neko/host/desktop-shell-service';
+import { DESKTOP_DEFAULT_ASSISTANT_SPACE_ID } from '@neko/host/desktop-shell-state';
 import type {
   ResourceBrowserChildrenRequest,
   ResourceBrowserIntentRequest,
@@ -147,7 +148,11 @@ import {
 import type { DesktopWorkspaceGrantAuthority } from '@neko/host/desktop-workspace-grant-authority';
 import type { AgentConversationLifecycleService } from '@neko/agent-runtime/application';
 import type { AssistantResourceService } from '@neko/agent-runtime/application';
-import type { AgentConversationContext } from '@neko/agent-contracts';
+import {
+  isSameAgentConversationOwner,
+  type AgentConversationContext,
+  type AgentConversationOwnerRef,
+} from '@neko/agent-contracts';
 import {
   ASSISTANT_RESOURCE_HOST_VERSION,
   parseAssistantResourceHostRequest,
@@ -500,48 +505,35 @@ export class DesktopAppHost {
             'Automatic Assistant draft submit does not match its unbound launch connection.',
           );
         }
-        let scene = shellProjection.window.scene;
-        if (
-          scene.context.kind === 'agent' &&
-          scene.context.scope.kind === 'unbound' &&
-          scene.context.scope.draftId === target.draftId &&
-          scene.context.agentViewId === connection.viewId
-        ) {
-          const transition = await this.shell.transitionScene(
-            createDesktopSceneTransitionRequest({
-              requestId: `${request.requestId}:bind-assistant`,
-              expectedEndpointEpoch: shellProjection.endpointEpoch,
-              windowId: window.windowId,
-              expectedWindowRevision: shellProjection.window.revision,
-              expectedSceneRevision: scene.revision,
-              intent: { kind: 'bind-agent-assistant', draftId: target.draftId },
-            }),
-          );
-          if (transition.status !== 'transitioned') {
-            throw new Error(transition.diagnostic.message);
-          }
-          scene = transition.scene;
-        }
+        const scene = shellProjection.window.scene;
         if (
           scene.context.kind !== 'agent' ||
-          scene.context.scope.kind !== 'assistant' ||
           scene.context.scope.draftId !== target.draftId ||
           scene.context.agentViewId !== connection.viewId
         ) {
           throw new Error('Automatic Assistant draft submit is not the exact active Entry Draft.');
         }
+        const assistantSpaceId =
+          scene.context.scope.kind === 'unbound'
+            ? DESKTOP_DEFAULT_ASSISTANT_SPACE_ID
+            : scene.context.scope.kind === 'assistant'
+              ? scene.context.scope.assistantSpaceId
+              : undefined;
+        if (!assistantSpaceId) {
+          throw new Error('Automatic Assistant draft submit cannot use Workspace scope.');
+        }
         context = {
           schemaVersion: 1,
           kind: 'assistant',
-          assistantSpaceId: scene.context.scope.assistantSpaceId,
+          assistantSpaceId,
           baseGrantIds: request.input.resourceGrantIds,
         };
         await this.agentLaunch.bindAssistantResourceGrants(
           connection,
-          scene.context.scope.assistantSpaceId,
+          assistantSpaceId,
           request.input.resourceGrantIds,
         );
-        if (scene.context.scope.conversationId) {
+        if (scene.context.scope.kind === 'assistant' && scene.context.scope.conversationId) {
           existingRecord = await this.conversationLifecycle.readFirstSubmitByRequest(
             request.requestId,
           );
@@ -550,7 +542,7 @@ export class DesktopAppHost {
             existingRecord.conversationId !== scene.context.scope.conversationId ||
             !conversationContextMatchesLaunchScope(existingRecord.context, {
               kind: 'assistant',
-              assistantSpaceId: scene.context.scope.assistantSpaceId,
+              assistantSpaceId,
             })
           ) {
             throw new Error(
@@ -922,12 +914,25 @@ export class DesktopAppHost {
       request.expectedAgentHomeRevision,
       request.navigation,
     );
-    const workspaceResolution = await this.shell.resolveAgentWorkspace(
-      request.navigation.workspaceId,
-    );
-    const workspace =
-      this.agent.getWorkspace(request.navigation.workspaceId) ??
-      (await this.agent.attachWorkspace(workspaceResolution));
+    const owner = request.navigation.owner;
+    let workspace: AgentWorkspaceRuntime;
+    if (owner.kind === 'workspace') {
+      workspace =
+        this.agent.getWorkspace(owner.workspaceId) ??
+        (await this.agent.attachWorkspace(await this.shell.resolveAgentWorkspace(owner.workspaceId)));
+    } else if (owner.kind === 'assistant') {
+      const assistant = this.agent.getWorkspace(owner.assistantSpaceId);
+      if (!assistant) {
+        throw new Error(
+          `Desktop Assistant Space '${owner.assistantSpaceId}' has no attached Agent runtime.`,
+        );
+      }
+      workspace = assistant;
+    } else {
+      throw new Error(
+        `Desktop ${owner.kind} Conversation deletion requires its qualified owner runtime.`,
+      );
+    }
     await workspace.deleteConversation(request.navigation.conversationId);
     return {
       schemaVersion: DESKTOP_SHELL_CONTRACT_VERSION,
@@ -1272,9 +1277,29 @@ export class DesktopAppHost {
     }
     const previous = await this.shell.getProjection(window.windowId);
     if (request.intent.kind === 'restore-conversation') {
-      const context = await this.conversationLifecycle.readConversationContext(
-        request.intent.conversationId,
+      const navigation = request.intent.navigation;
+      const conversation = previous.agentHome.conversations.find(
+        (candidate) =>
+          candidate.navigation.conversationId === navigation.conversationId &&
+          isSameAgentConversationOwner(candidate.navigation.owner, navigation.owner),
       );
+      if (!conversation) {
+        throw new Error(
+          `Desktop Conversation '${navigation.conversationId}' does not match its authoritative navigation owner.`,
+        );
+      }
+      if (navigation.owner.kind === 'character' || navigation.owner.kind === 'room') {
+        return unavailableConversationOwner(request.requestId, navigation.owner);
+      }
+      const context = await this.conversationLifecycle.readConversationContext(
+        navigation.conversationId,
+      );
+      const contextOwner = conversationOwnerFromContext(context);
+      if (!isSameAgentConversationOwner(navigation.owner, contextOwner)) {
+        throw new Error(
+          `Desktop Conversation '${navigation.conversationId}' lifecycle context does not match its navigation owner.`,
+        );
+      }
       if (context.kind === 'workspace') {
         const resolution = await this.workspaceGrants.restore(
           window.windowId,
@@ -1894,6 +1919,32 @@ export class DesktopAppHost {
       projection,
     };
   }
+}
+
+function conversationOwnerFromContext(context: AgentConversationContext): AgentConversationOwnerRef {
+  return context.kind === 'assistant'
+    ? { kind: 'assistant', assistantSpaceId: context.assistantSpaceId }
+    : { kind: 'workspace', workspaceId: context.workspaceId };
+}
+
+function unavailableConversationOwner(
+  requestId: string,
+  owner: Extract<AgentConversationOwnerRef, { readonly kind: 'character' | 'room' }>,
+): DesktopSceneTransitionResult {
+  return {
+    status: 'unavailable',
+    requestId,
+    diagnostic: {
+      code: 'desktop-scene-owner-unavailable',
+      severity: 'error',
+      message: `Desktop ${owner.kind} Conversation requires its qualified owner runtime.`,
+      metadata: {
+        owner: 'agent-conversation-authority',
+        intentKind: 'restore-conversation',
+        conversationOwnerKind: owner.kind,
+      },
+    },
+  };
 }
 
 export async function deliverCutAgentContext(

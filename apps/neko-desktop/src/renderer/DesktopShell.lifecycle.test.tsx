@@ -4,12 +4,14 @@ import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { I18nProvider } from '@neko/ui/i18n/react';
+import { AGENT_HOME_PROJECTION_VERSION } from '@neko/agent-contracts';
 import {
   DEFAULT_DESKTOP_APPLICATION_PREFERENCES,
   DESKTOP_APPLICATION_SETTINGS_CONTRACT_VERSION,
 } from '@neko/host/application-settings';
 import {
   DESKTOP_SHELL_CONTRACT_VERSION,
+  projectDesktopConversationNavigation,
   type DesktopShellProjection,
 } from '@neko/host/desktop-shell-contract';
 import {
@@ -217,15 +219,19 @@ function projectProjection(
       height: 280,
     },
   };
+  const catalog = { revision: 1, projects: [project] };
+  const agentHome = {
+    schemaVersion: AGENT_HOME_PROJECTION_VERSION,
+    revision: 0,
+    conversations: [],
+    attention: { needsInput: 0, needsReview: 0, running: 0 },
+  } as const;
   return {
     schemaVersion: DESKTOP_SHELL_CONTRACT_VERSION,
     applicationInstanceId: 'app-1',
     endpointEpoch: 'app-1:window-1:1',
     projectionRevision: 2,
-    catalog: {
-      revision: 1,
-      projects: [project],
-    },
+    catalog,
     window: {
       windowId: 'window-1',
       revision: 1,
@@ -287,11 +293,8 @@ function projectProjection(
       }),
       applicationSidebar: createDefaultDesktopApplicationSidebar('window-1'),
     },
-    agentHome: {
-      revision: 0,
-      conversations: [],
-      attention: { needsInput: 0, needsReview: 0, running: 0 },
-    },
+    agentHome,
+    conversationNavigation: projectDesktopConversationNavigation(catalog, agentHome),
     domains: [
       { surface: 'agent', status: 'ready', ownerSlice: 'P1.3' },
       { surface: 'canvas', status: 'ready', ownerSlice: 'P1.4' },
