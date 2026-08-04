@@ -155,6 +155,33 @@ owning package must provide a typed handler and exact Conversation/Character/Roo
 Resource Browser must not synthesize an Agent slash command, mutate Agent Webview state, or restore the
 removed Agent Header roleplay selector.
 
+### 9. Current authority and consumer inventory
+
+The migration boundary covers every current normal producer of Entity semantic facts rather than only
+the Resource Browser reader. The following sources were audited before defining the canonical document:
+
+| Current source                                                                      | Current producer / reader                                                                          | Classification and target                                                                                                                                                                                                  |
+| ----------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| root `characters.json`                                                              | `ProjectEntityStore`, character registry adapters, Character profile assembly                      | Accepted character identity/name/alias/semantic fields migrate to canonical facts; character-only runtime projections remain owned by Chara.                                                                               |
+| `neko/entities/scenes.json`, `locations.json`, `objects.json`, `styles.json`        | `ProjectEntityStore`, `CreativeEntityService`, Agent core tools                                    | Accepted identity/name/alias/semantic fields migrate to canonical facts; per-kind normal readers are poisoned after commit.                                                                                                |
+| `neko/entities/candidates.json`                                                     | `CandidateStore`, `CreativeEntityService`, Search Entity adapter                                   | Evidence, confidence, source references, freshness, rejection and dismissal are rebuildable/workflow projection state; an explicitly confirmed or merged result becomes a canonical operation, not a copied candidate row. |
+| `neko/entity-representation-bindings.json`                                          | `EntityRepresentationBindingService`, Resource Browser, Canvas/Cut/Agent representation resolution | Confirmed durable target, role, default selection, source and acceptance time migrate to canonical binding facts; suggested/rejected status, availability and orphan timestamps remain workflow/derived state.             |
+| `neko/entity-asset-requirements.json`                                               | `EntityAssetRequirementService`, Chara profile assembly                                            | Current missing/suggested/generated/bound/dismissed rows are workflow state. Explicitly accepted representation intent is represented by canonical bindings; unresolved rows are archived for inspection.                  |
+| `neko/visual-identity-drafts.json`                                                  | `VisualIdentityDraftService`, Chara profile assembly                                               | Prompts, generated output selections and extracted suggestions are authoring workflow state and remain outside canonical identity facts; accepted semantic values or bindings enter only through typed Entity operations.  |
+| Entity Asset projection records in local metadata                                   | `EntityAssetMetadataProjector`, Search local metadata binding                                      | Candidate, occurrence, binding availability and freshness remain rebuildable projections; they never become a second fact authority.                                                                                       |
+| Asset manifests and installed packages                                              | Assets manifest/lifecycle readers                                                                  | Immutable Entity Asset snapshots and exact package resources are import/publication inputs. Install, uninstall and sync never mutate Project Entity facts.                                                                 |
+| Canvas/NKC, Agent context, Chara memory/dialogue and project portability references | Canvas contracts, Agent content effects/tools, Chara runtimes, Assets reference readers            | These are typed reference consumers. Merge/deprecate/delete must obtain a complete rewrite or blocker response from each owner; they do not own Entity facts.                                                              |
+
+The normal consumer switch includes `CreativeEntityService`, Search `creative-entities`, Resource Browser,
+Agent Entity capability/content effects, Canvas material Entity refs, Chara profile/dialogue projection,
+and Assets project-reference/portability readers. Tests and migration-only inspectors may read archived
+legacy inputs, but no normal consumer may return success from them after the canonical commit.
+
+`scene` is a valid Project Entity kind in the v1 document. The current generic Asset manifest
+`IdentityMetadata.identityKind` does not yet include `scene`; therefore scene Entity Asset publication
+must fail with a typed unsupported-kind diagnostic until task 4.2 expands and tests that public Asset
+contract. Project Entity storage and management must not omit or remap scene identity in the meantime.
+
 ## Risks / Trade-offs
 
 - **[Risk] Canonical migration loses fragmented facts** → Inventory every source, archive exact inputs,
@@ -189,8 +216,5 @@ normal legacy readers are not re-enabled.
 
 ## Open Questions
 
-- Which existing Entity-related fields are true accepted project facts versus workflow drafts requiring
-  archive-only preservation?
-- Which project reference owners must participate in the first merge/rewrite transaction?
-- Should `scene` be added to the current `IdentityMetadata.identityKind` in the same implementation or in
-  a prerequisite contract cleanup?
+- Which Canvas, Agent, Chara, document, and portability reference owners can participate atomically in
+  the first merge/rewrite transaction, and which must initially return a typed blocker?

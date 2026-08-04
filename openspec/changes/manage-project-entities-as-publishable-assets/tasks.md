@@ -1,9 +1,9 @@
 ## 1. Canonical Entity contracts
 
-- [ ] 1.1 Inventory all current Entity, character, per-kind, candidate, binding, draft, requirement, and project-reference producers/consumers and classify authoritative versus rebuildable/workflow fields.
-- [ ] 1.2 Define the versioned Project Entity document, expected-revision operations, lifecycle, provenance/import-base, package binding, candidate evidence, and typed diagnostic contracts in `@neko/entity-domain`.
-- [ ] 1.3 Add contract/codec tests for all supported Entity kinds, including the `scene` identity metadata decision, invalid authority fields, exact package references, conflicts, and unknown schema/version failure.
-- [ ] 1.4 Define the typed project-reference index/rewrite participants required for merge, deprecate, and delete without an app-owned registry or silent partial rewrite.
+- [x] 1.1 Inventory all current Entity, character, per-kind, candidate, binding, draft, requirement, and project-reference producers/consumers and classify authoritative versus rebuildable/workflow fields.
+- [x] 1.2 Define the versioned Project Entity document, expected-revision operations, lifecycle, provenance/import-base, package binding, candidate evidence, and typed diagnostic contracts in `@neko/entity-domain`.
+- [x] 1.3 Add contract/codec tests for all supported Entity kinds, including the `scene` identity metadata decision, invalid authority fields, exact package references, conflicts, and unknown schema/version failure.
+- [x] 1.4 Define the typed project-reference index/rewrite participants required for merge, deprecate, and delete without an app-owned registry or silent partial rewrite.
 
 ## 2. Entity authority and migration
 
