@@ -532,7 +532,7 @@ async function inspectEntryDraft(evaluate, forbiddenDraftIds = []) {
 }
 
 async function inspectActivatedWorkspaceAgent(evaluate) {
-  const initial = await evaluate(`(() => {
+  await evaluate(`(() => {
     const scope = document.querySelector('[data-agent-scope="workspace"]');
     const title = scope?.querySelector('.agent-empty-title')?.textContent?.trim() ?? '';
     const ownerActions = scope?.querySelectorAll('.agent-empty-action').length ?? 0;

@@ -852,13 +852,14 @@ function useDisposeRuntime<T extends { dispose(): void }>(runtime: T | undefined
   const disposalTokens = useRef(new Map<T, symbol>());
   useEffect(() => {
     if (!runtime) return;
+    const tokens = disposalTokens.current;
     const token = Symbol('desktop-runtime-disposal');
-    disposalTokens.current.set(runtime, token);
+    tokens.set(runtime, token);
     return () => {
       // StrictMode remounts effects without recreating the memoized runtime.
       queueMicrotask(() => {
-        if (disposalTokens.current.get(runtime) !== token) return;
-        disposalTokens.current.delete(runtime);
+        if (!Object.is(tokens.get(runtime), token)) return;
+        tokens.delete(runtime);
         runtime.dispose();
       });
     };
