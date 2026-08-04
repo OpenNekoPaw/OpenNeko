@@ -747,6 +747,7 @@ function expectManagementSplit(
 ): void {
   const shell = container.querySelector<HTMLElement>('[data-neko-controlled-workbench="true"]');
   expect(shell?.dataset.mainSplit).toBe('columns');
+  expect(shell?.dataset.mainComposition).toBe('independent-shells');
   expect(shell?.style.getPropertyValue('--neko-controlled-main-split-ratio')).toBe('34%');
   expect(
     container.querySelector(
@@ -754,6 +755,9 @@ function expectManagementSplit(
     ),
   ).not.toBeNull();
   expect(container.querySelector(`[data-workbench-main-panel="${detailPanelId}"]`)).not.toBeNull();
+  expect(container.querySelector('[data-workbench-main-shell="primary"]')).not.toBeNull();
+  expect(container.querySelector('[data-workbench-main-shell="secondary"]')).not.toBeNull();
+  expect(container.querySelector('[data-workbench-main-gutter="true"]')).not.toBeNull();
   expect(container.querySelector('[aria-label="Resize Main split"]')).not.toBeNull();
 }
 

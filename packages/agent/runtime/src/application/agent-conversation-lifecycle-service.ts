@@ -52,6 +52,9 @@ export interface AgentConversationLifecycleRepositoryPort {
     turn: AgentConversationLifecycleRecord['pendingTurn'],
   ): Promise<AgentConversationLifecycleRecord>;
   readConversation(conversationId: string): Promise<AgentConversationLifecycleRecord | undefined>;
+  readFirstSubmitByRequest(
+    requestId: string,
+  ): Promise<AgentConversationLifecycleRecord | undefined>;
   readConversationContext(conversationId: string): Promise<AgentConversationContext | undefined>;
   commitMigratedConversationContext(
     conversationId: string,
@@ -116,6 +119,9 @@ export interface AgentProviderExecutionPort {
 export interface AgentConversationLifecycleService {
   firstSubmit(input: AgentFirstSubmitInput): Promise<AgentConversationLifecycleRecord>;
   readConversation(conversationId: string): Promise<AgentConversationLifecycleRecord>;
+  readFirstSubmitByRequest(
+    requestId: string,
+  ): Promise<AgentConversationLifecycleRecord | undefined>;
   readConversationContext(conversationId: string): Promise<AgentConversationContext>;
   createScratch(input: {
     readonly conversationId: string;
@@ -286,6 +292,10 @@ export function createAgentConversationLifecycleService(options: {
   return {
     firstSubmit,
     readConversation,
+    readFirstSubmitByRequest: (requestId) =>
+      options.repository.readFirstSubmitByRequest(
+        requireIdentity(requestId, 'Agent first-submit request'),
+      ),
     readConversationContext,
     async createScratch(input) {
       const record = await readConversation(input.conversationId);
@@ -378,6 +388,11 @@ export function createInMemoryAgentConversationLifecycleRepository(): AgentConve
     async readConversation(conversationId) {
       const current = recordsByConversation.get(conversationId);
       return current ? cloneRecord(current) : undefined;
+    },
+    async readFirstSubmitByRequest(requestId) {
+      const conversationId = conversationByRequest.get(requestId);
+      if (!conversationId) return undefined;
+      return cloneRecord(requireRecord(recordsByConversation, conversationId));
     },
     async readConversationContext(conversationId) {
       const context = contextsByConversation.get(conversationId);

@@ -42,6 +42,7 @@ export type {
 export type {
   ControlledWorkbenchDockPresentation,
   ControlledWorkbenchMainSplit,
+  ControlledWorkbenchMainComposition,
   ControlledWorkbenchResizeBinding,
   ControlledWorkbenchShellProps,
   EditorWorkbenchShellProps,

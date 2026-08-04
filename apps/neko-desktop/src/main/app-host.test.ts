@@ -450,7 +450,7 @@ describe('DesktopAppHost', () => {
     await fixture.appHost.dispose();
   });
 
-  it('commits Assistant first submit once and idempotently attaches the exact session Scene', async () => {
+  it('automatically binds an unbound Entry Draft to Assistant and commits first submit once', async () => {
     const providerStart = vi.fn(async () => undefined);
     let identity = 0;
     const conversationLifecycle = createAgentConversationLifecycleService({
@@ -473,10 +473,9 @@ describe('DesktopAppHost', () => {
       now: () => '2026-08-03T00:00:00.000Z',
     });
     const fixture = await createShellAppHost({ conversationLifecycle });
-    const projection = await bindAssistantDraft(fixture);
-    const scene = projection.window.scene;
-    if (scene.context.kind !== 'agent' || scene.context.scope.kind !== 'assistant') {
-      throw new Error('Assistant first-submit fixture requires an Assistant Scene.');
+    const scene = fixture.projection.window.scene;
+    if (scene.context.kind !== 'agent' || scene.context.scope.kind !== 'unbound') {
+      throw new Error('Assistant first-submit fixture requires an unbound Entry Draft.');
     }
     const connection = createLaunchCatalog({
       applicationInstanceId: 'app-1',
@@ -485,7 +484,7 @@ describe('DesktopAppHost', () => {
       rendererEpoch: 1,
       connectionEpoch: 1,
       connectionId: 'launch-first-submit',
-      scope: { kind: 'assistant', assistantSpaceId: scene.context.scope.assistantSpaceId },
+      scope: { kind: 'unbound', draftId: scene.context.scope.draftId },
     }).connection;
     const request = {
       schemaVersion: AGENT_LAUNCH_CONTRACT_VERSION,
@@ -494,12 +493,7 @@ describe('DesktopAppHost', () => {
       connection,
       input: {
         schemaVersion: 1 as const,
-        context: {
-          schemaVersion: 1 as const,
-          kind: 'assistant' as const,
-          assistantSpaceId: scene.context.scope.assistantSpaceId,
-          baseGrantIds: [],
-        },
+        target: { kind: 'automatic-assistant' as const, draftId: scene.context.scope.draftId },
         messageText: 'Create a plan',
         resourceGrantIds: [],
         configuration: { providerId: 'openai', modelId: 'gpt-5', executionMode: 'ask' as const },

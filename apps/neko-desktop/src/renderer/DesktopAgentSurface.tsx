@@ -14,7 +14,6 @@ import {
 } from './desktop-agent-launch-host-runtime-adapter';
 import { loadDesktopAgentWebviewRootModule } from './desktop-agent-module';
 import type { AgentComposerWorkspacePresentation } from '@neko/agent-webview/root';
-import type { AgentEntryScopeActions } from '@neko/agent-webview/root';
 
 const AgentWebviewRoot = lazy(() =>
   loadDesktopAgentWebviewRootModule().then((module) => ({ default: module.AgentWebviewRoot })),
@@ -41,14 +40,12 @@ type DesktopAgentSurfaceProps =
       readonly tab: DesktopProjectTabProjection;
       readonly agentPresentation?: AgentRootPresentation;
       readonly composerWorkspace?: AgentComposerWorkspacePresentation;
-      readonly entryScopeActions?: AgentEntryScopeActions;
     }
   | {
       readonly binding: 'launch';
       readonly agentPresentation: AgentRootPresentation;
       readonly viewId: string;
       readonly composerWorkspace?: AgentComposerWorkspacePresentation;
-      readonly entryScopeActions?: AgentEntryScopeActions;
     };
 
 export function DesktopAgentSurface(props: DesktopAgentSurfaceProps): JSX.Element {
@@ -201,7 +198,6 @@ export function DesktopAgentSurface(props: DesktopAgentSurfaceProps): JSX.Elemen
             hostRuntimeAdapter={state.adapter}
             agentPresentation={state.agentPresentation}
             composerWorkspace={props.composerWorkspace}
-            entryScopeActions={props.entryScopeActions}
             initialConversation={
               state.agentPresentation?.kind === 'session'
                 ? { id: state.agentPresentation.conversationId, title: '' }

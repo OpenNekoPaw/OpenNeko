@@ -14,7 +14,6 @@ vi.mock('@neko/agent-webview/root', () => ({
     agentPresentation,
     initialConversation,
     composerWorkspace,
-    entryScopeActions,
     locale,
     presentation,
   }: {
@@ -24,7 +23,6 @@ vi.mock('@neko/agent-webview/root', () => ({
     readonly composerWorkspace?:
       | { readonly kind: 'assistant'; readonly onChoose: () => void; readonly disabled?: boolean }
       | { readonly kind: 'workspace'; readonly label: string };
-    readonly entryScopeActions?: { readonly selectAssistant: (draftId: string) => void };
     readonly locale: string;
     readonly presentation: string;
   }) => (
@@ -41,14 +39,6 @@ vi.mock('@neko/agent-webview/root', () => ({
       }
     >
       {hostRuntimeAdapter.runtimeId}:{locale}
-      {entryScopeActions && agentPresentation?.kind === 'draft' ? (
-        <button
-          type="button"
-          onClick={() => entryScopeActions.selectAssistant(agentPresentation.draftId)}
-        >
-          Select Assistant
-        </button>
-      ) : null}
     </div>
   ),
 }));
@@ -217,37 +207,6 @@ describe('DesktopAgentSurface', () => {
     expect(detach).toHaveBeenCalledWith(launchCatalog('assistant:1', 1, 'launch-1').connection);
   });
 
-  it('forwards exact Entry Draft scope actions to the package-owned Root', async () => {
-    const attach = vi.fn(async () => launchCatalog('assistant:1', 1, 'launch-1'));
-    const detach = vi.fn(async () => undefined);
-    installBridge(
-      vi.fn(async () => readyBootstrap()),
-      { attach, detach },
-    );
-    const selectAssistant = vi.fn();
-    const container = document.createElement('div');
-    document.body.append(container);
-    const root = createRoot(container);
-
-    await act(async () => {
-      root.render(
-        <TestLaunchAgentSurface
-          assistantSpaceId="assistant:1"
-          entryScopeActions={{ selectAssistant, selectWorkspace: vi.fn() }}
-        />,
-      );
-    });
-    await act(async () => undefined);
-    const select = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
-      (button) => button.textContent === 'Select Assistant',
-    );
-    if (!select) throw new Error('Agent Root fixture requires Assistant selection.');
-
-    await act(async () => select.click());
-    expect(selectAssistant).toHaveBeenCalledWith('draft-launch-1');
-    await act(async () => root.unmount());
-  });
-
   it('keeps the Root DOM identity while replacing the launch adapter by exact epoch', async () => {
     const getBootstrap = vi.fn(async () => readyBootstrap());
     const attach = vi
@@ -380,21 +339,15 @@ function TestAgentSurface({
 function TestLaunchAgentSurface({
   assistantSpaceId,
   conversationId,
-  entryScopeActions,
 }: {
   readonly assistantSpaceId: string;
   readonly conversationId?: string;
-  readonly entryScopeActions?: {
-    readonly selectAssistant: (draftId: string) => void;
-    readonly selectWorkspace: () => void;
-  };
 }) {
   const i18n = createDesktopI18n('en');
   return (
     <I18nProvider service={i18n.i18nService}>
       <DesktopAgentSurface
         binding="launch"
-        entryScopeActions={entryScopeActions}
         viewId="agent-view:window-1"
         agentPresentation={{
           schemaVersion: 2,

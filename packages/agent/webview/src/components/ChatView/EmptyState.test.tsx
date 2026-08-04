@@ -77,19 +77,14 @@ describe('EmptyState', () => {
     expect(onEntryAction).toHaveBeenCalledWith('generate-assets');
   });
 
-  it('uses owner choices only for an unbound Entry Draft', () => {
-    const onEntryAction = vi.fn();
-    const view = render(
-      <EmptyState draftScope="unbound" onEntryAction={onEntryAction} presentation="desktop-dock" />,
-    );
+  it('does not block an unbound Entry Draft with owner choices', () => {
+    const view = render(<EmptyState draftScope="unbound" presentation="desktop-dock" />);
 
-    expect(screen.getByRole('heading', { name: 'Choose a creative space' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Assistant' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Workspace' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Character / Room' })).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'Generate Assets' })).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Workspace' }));
-    expect(onEntryAction).toHaveBeenCalledWith('workspace');
+    expect(screen.getByRole('heading', { name: 'Hi, create with chat' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Assistant' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Workspace' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Character / Room' })).toBeNull();
+    expect(document.querySelector('.agent-empty-actions')).toBeNull();
 
     view.rerender(<EmptyState draftScope="workspace" presentation="desktop-dock" />);
     expect(screen.getByRole('heading', { name: 'Workspace is ready' })).toBeTruthy();

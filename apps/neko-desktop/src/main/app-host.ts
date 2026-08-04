@@ -32,6 +32,7 @@ import {
   type DesktopShellResponse,
 } from '@neko/host/desktop-shell-contract';
 import {
+  createDesktopSceneTransitionRequest,
   parseDesktopApplicationSidebarMutationRequest,
   parseDesktopSceneTransitionRequest,
   type DesktopWorkbenchSceneProjection,
@@ -487,17 +488,86 @@ export class DesktopAppHost {
           };
     }
     if (request.operation === 'submit-draft') {
-      if (!conversationContextMatchesLaunchScope(request.input.context, connection.scope)) {
-        throw new Error('Agent draft submit context does not match its launch connection scope.');
-      }
       const shellProjection = await this.shell.getProjection(window.windowId);
-      const record = await this.conversationLifecycle.firstSubmit({
-        requestId: request.requestId,
-        context: request.input.context,
-        messageText: request.input.messageText,
-        resourceGrantIds: request.input.resourceGrantIds,
-        configuration: request.input.configuration,
-      });
+      const target = request.input.target;
+      let context: AgentConversationContext;
+      let existingRecord:
+        | Awaited<ReturnType<AgentConversationLifecycleService['readFirstSubmitByRequest']>>
+        | undefined;
+      if (target.kind === 'automatic-assistant') {
+        if (connection.scope.kind !== 'unbound' || connection.scope.draftId !== target.draftId) {
+          throw new Error(
+            'Automatic Assistant draft submit does not match its unbound launch connection.',
+          );
+        }
+        let scene = shellProjection.window.scene;
+        if (
+          scene.context.kind === 'agent' &&
+          scene.context.scope.kind === 'unbound' &&
+          scene.context.scope.draftId === target.draftId &&
+          scene.context.agentViewId === connection.viewId
+        ) {
+          const transition = await this.shell.transitionScene(
+            createDesktopSceneTransitionRequest({
+              requestId: `${request.requestId}:bind-assistant`,
+              expectedEndpointEpoch: shellProjection.endpointEpoch,
+              windowId: window.windowId,
+              expectedWindowRevision: shellProjection.window.revision,
+              expectedSceneRevision: scene.revision,
+              intent: { kind: 'bind-agent-assistant', draftId: target.draftId },
+            }),
+          );
+          if (transition.status !== 'transitioned') {
+            throw new Error(transition.diagnostic.message);
+          }
+          scene = transition.scene;
+        }
+        if (
+          scene.context.kind !== 'agent' ||
+          scene.context.scope.kind !== 'assistant' ||
+          scene.context.scope.draftId !== target.draftId ||
+          scene.context.agentViewId !== connection.viewId
+        ) {
+          throw new Error('Automatic Assistant draft submit is not the exact active Entry Draft.');
+        }
+        context = {
+          schemaVersion: 1,
+          kind: 'assistant',
+          assistantSpaceId: scene.context.scope.assistantSpaceId,
+          baseGrantIds: request.input.resourceGrantIds,
+        };
+        if (scene.context.scope.conversationId) {
+          existingRecord = await this.conversationLifecycle.readFirstSubmitByRequest(
+            request.requestId,
+          );
+          if (
+            !existingRecord ||
+            existingRecord.conversationId !== scene.context.scope.conversationId ||
+            !conversationContextMatchesLaunchScope(existingRecord.context, {
+              kind: 'assistant',
+              assistantSpaceId: scene.context.scope.assistantSpaceId,
+            })
+          ) {
+            throw new Error(
+              'Automatic Assistant draft submit request does not match the committed session.',
+            );
+          }
+        }
+      } else {
+        context = target.context;
+        if (!conversationContextMatchesLaunchScope(context, connection.scope)) {
+          throw new Error('Agent draft submit context does not match its launch connection scope.');
+        }
+      }
+      const record =
+        existingRecord ??
+        (await this.conversationLifecycle.firstSubmit({
+          requestId: request.requestId,
+          context,
+          messageText: request.input.messageText,
+          resourceGrantIds: request.input.resourceGrantIds,
+          configuration: request.input.configuration,
+        }));
       await this.agentLaunch.commitResourceGrants(
         connection,
         record.conversationId,

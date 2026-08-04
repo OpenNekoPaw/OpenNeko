@@ -136,13 +136,19 @@ export function createElectronAgentLaunchHostRuntimeAdapter(input: {
     async submitDraft(draftInput) {
       if (disposed) throw new Error('Agent launch adapter is disposed.');
       const contextMatches =
-        draftInput.context.kind === 'assistant'
-          ? connection.scope.kind === 'assistant' &&
-            draftInput.context.assistantSpaceId === connection.scope.assistantSpaceId &&
-            sameIdentities(draftInput.context.baseGrantIds, draftInput.resourceGrantIds)
-          : connection.scope.kind === 'workspace' &&
-            draftInput.context.workspaceId === connection.scope.workspaceId &&
-            draftInput.context.workspaceGrantId === connection.scope.workspaceGrantId;
+        draftInput.target.kind === 'automatic-assistant'
+          ? connection.scope.kind === 'unbound' &&
+            connection.scope.draftId === draftInput.target.draftId
+          : draftInput.target.context.kind === 'assistant'
+            ? connection.scope.kind === 'assistant' &&
+              draftInput.target.context.assistantSpaceId === connection.scope.assistantSpaceId &&
+              sameIdentities(
+                draftInput.target.context.baseGrantIds,
+                draftInput.resourceGrantIds,
+              )
+            : connection.scope.kind === 'workspace' &&
+              draftInput.target.context.workspaceId === connection.scope.workspaceId &&
+              draftInput.target.context.workspaceGrantId === connection.scope.workspaceGrantId;
       if (!contextMatches) {
         throw new Error('Agent draft submit context does not match its launch connection scope.');
       }

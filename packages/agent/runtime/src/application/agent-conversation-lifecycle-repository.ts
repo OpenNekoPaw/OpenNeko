@@ -174,6 +174,20 @@ export function createPersistentAgentConversationLifecycleRepository(options: {
           return decodeRequiredRow(rows, conversationId);
         },
       ),
+    readFirstSubmitByRequest: (requestId) =>
+      options.metadataStore.transaction(
+        { mode: 'read', ownership: 'state', operation: 'read-agent-first-submit-request' },
+        async ({ sql }) => {
+          const rows = await sql.all(
+            `SELECT conversation_id, request_id, turn_id, snapshot_version, snapshot_json
+               FROM agent_conversation_lifecycle
+              WHERE request_id = ?`,
+            [requestId],
+          );
+          if (rows.length === 0) return undefined;
+          return decodeRequiredRequestRow(rows, requestId);
+        },
+      ),
     readConversationContext: (conversationId) =>
       options.metadataStore.transaction(
         { mode: 'read', ownership: 'state', operation: 'read-agent-conversation-context' },

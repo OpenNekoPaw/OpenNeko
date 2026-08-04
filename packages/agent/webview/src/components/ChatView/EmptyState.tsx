@@ -1,7 +1,7 @@
 import { useTranslation } from '../../i18n/I18nContext';
 import type { SkillSummary } from './InputArea/types';
 
-export type EmptyStateEntryAction = 'start-chat' | 'generate-assets' | 'workspace' | 'roleplay';
+export type EmptyStateEntryAction = 'start-chat' | 'generate-assets' | 'roleplay';
 
 interface EmptyStateProps {
   selectedAction?: EmptyStateEntryAction;
@@ -35,28 +35,6 @@ const EMPTY_STATE_ENTRIES: readonly {
   },
 ];
 
-const ENTRY_SCOPE_ENTRIES: readonly {
-  action: EmptyStateEntryAction;
-  labelKey: string;
-  helperKey: string;
-}[] = [
-  {
-    action: 'start-chat',
-    labelKey: 'chat.emptyState.scope.assistant',
-    helperKey: 'chat.emptyState.scope.assistantHelper',
-  },
-  {
-    action: 'workspace',
-    labelKey: 'chat.emptyState.scope.workspace',
-    helperKey: 'chat.emptyState.scope.workspaceHelper',
-  },
-  {
-    action: 'roleplay',
-    labelKey: 'chat.emptyState.scope.characterRoom',
-    helperKey: 'chat.emptyState.scope.characterRoomHelper',
-  },
-];
-
 export function EmptyState({
   selectedAction = 'start-chat',
   disabled = false,
@@ -67,10 +45,10 @@ export function EmptyState({
   onSkillSelect,
 }: EmptyStateProps) {
   const { t } = useTranslation();
-  const entries = draftScope === 'unbound' ? ENTRY_SCOPE_ENTRIES : EMPTY_STATE_ENTRIES;
+  const entries = EMPTY_STATE_ENTRIES;
   const selectedEntry = entries.find((entry) => entry.action === selectedAction);
   const suggestedSkills = skills.filter((skill) => skill.enabled).slice(0, 4);
-  const ownerBoundDraft = draftScope === 'assistant' || draftScope === 'workspace';
+  const draftPresentation = draftScope !== undefined;
 
   if (presentation === 'desktop-dock') {
     return (
@@ -84,25 +62,21 @@ export function EmptyState({
             className="agent-empty-title text-[15px] font-semibold leading-6 text-[var(--agent-fg)]"
           >
             {t(
-              draftScope === 'unbound'
-                ? 'chat.emptyState.scope.title'
-                : draftScope === 'assistant'
-                  ? 'chat.emptyState.scope.assistantActiveTitle'
-                  : draftScope === 'workspace'
-                    ? 'chat.emptyState.scope.workspaceActiveTitle'
-                    : 'chat.emptyState.desktopDockTitle',
+              draftScope === 'assistant'
+                ? 'chat.emptyState.scope.assistantActiveTitle'
+                : draftScope === 'workspace'
+                  ? 'chat.emptyState.scope.workspaceActiveTitle'
+                  : 'chat.emptyState.desktopDockTitle',
             )}
           </h2>
           <p className="mt-1 text-[12px] leading-5 text-[var(--agent-empty-muted)]">
             {t(
-              draftScope === 'unbound'
-                ? 'chat.emptyState.scope.description'
-                : ownerBoundDraft
-                  ? 'chat.emptyState.scope.activeDescription'
-                  : 'chat.emptyState.desktopDockDescription',
+              draftPresentation
+                ? 'chat.emptyState.scope.activeDescription'
+                : 'chat.emptyState.desktopDockDescription',
             )}
           </p>
-          {ownerBoundDraft ? null : (
+          {draftPresentation ? null : (
             <div className="agent-empty-actions mt-4 grid grid-cols-1 gap-1.5">
               {entries.map((entry) => (
                 <button
@@ -164,7 +138,7 @@ export function EmptyState({
           </p>
         </div>
 
-        {ownerBoundDraft ? null : (
+        {draftPresentation ? null : (
           <div className="agent-empty-actions mt-5 grid grid-cols-1 gap-1.5">
             {entries.map((entry) => (
               <button

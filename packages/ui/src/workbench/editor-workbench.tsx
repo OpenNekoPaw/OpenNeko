@@ -123,6 +123,7 @@ export interface WorkbenchWebviewRuntimeFrameProps {
 
 export type ControlledWorkbenchDockPresentation = 'hidden' | 'docked' | 'overlay';
 export type ControlledWorkbenchMainSplit = 'none' | 'columns' | 'rows';
+export type ControlledWorkbenchMainComposition = 'continuous' | 'independent-shells';
 
 export interface ControlledWorkbenchResizeBinding {
   readonly label: string;
@@ -140,6 +141,7 @@ export interface ControlledWorkbenchShellProps {
   readonly main: ReactNode;
   readonly secondaryMain?: ReactNode;
   readonly mainSplit?: ControlledWorkbenchMainSplit;
+  readonly mainComposition?: ControlledWorkbenchMainComposition;
   readonly mainSplitRatio?: number;
   readonly mainSplitResize?: ControlledWorkbenchResizeBinding;
   readonly leftDock?: ReactNode;
@@ -207,6 +209,7 @@ export function ControlledWorkbenchShell({
   leftDockResize,
   leftDockWidth = 320,
   main,
+  mainComposition = 'continuous',
   mainSplit = 'none',
   mainSplitRatio = 0.5,
   mainSplitResize,
@@ -283,6 +286,7 @@ export function ControlledWorkbenchShell({
       data-left-presentation={leftPresentation}
       data-right-presentation={rightPresentation}
       data-main-split={effectiveSplit}
+      data-main-composition={mainComposition}
       data-timeline-visible={timeline && timelineVisible ? 'true' : 'false'}
       style={shellStyle}
     >
@@ -329,12 +333,29 @@ export function ControlledWorkbenchShell({
           mainSplitResizeState.containerRef.current = element;
         }}
         className="neko-controlled-workbench-main"
+        data-main-composition={mainComposition}
         data-resizing={mainSplitResizeState.isResizing ? 'true' : 'false'}
       >
-        <div className="neko-controlled-workbench-main__primary">{main}</div>
+        <div
+          className="neko-controlled-workbench-main__primary"
+          data-workbench-main-shell="primary"
+        >
+          {main}
+        </div>
         {secondaryMain ? (
           <>
-            <div className="neko-controlled-workbench-main__secondary">{secondaryMain}</div>
+            {mainComposition === 'independent-shells' ? (
+              <div
+                className="neko-controlled-workbench-main__gutter"
+                data-workbench-main-gutter="true"
+              />
+            ) : null}
+            <div
+              className="neko-controlled-workbench-main__secondary"
+              data-workbench-main-shell="secondary"
+            >
+              {secondaryMain}
+            </div>
             {mainSplitResize && effectiveSplit !== 'none' ? (
               <ResizeHandle
                 className={`neko-controlled-workbench-main-split-handle neko-controlled-workbench-main-split-handle--${effectiveSplit}`}

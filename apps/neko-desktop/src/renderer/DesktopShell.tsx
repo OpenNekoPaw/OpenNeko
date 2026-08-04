@@ -405,15 +405,6 @@ function DesktopSceneWorkbench({
               onChoose: actions.onChooseWorkspace,
               disabled: pending || !interactive,
             }}
-            entryScopeActions={
-              launchScope.kind === 'unbound'
-                ? {
-                    selectAssistant: (draftId) =>
-                      actions.onTransitionScene({ kind: 'bind-agent-assistant', draftId }),
-                    selectWorkspace: actions.onChooseWorkspace,
-                  }
-                : undefined
-            }
             viewId={launchContext.agentViewId}
             agentPresentation={createLaunchAgentPresentation(launchScope)}
           />
@@ -605,6 +596,7 @@ function DesktopSceneWorkbench({
       })}
       main={main}
       secondaryMain={secondaryMain}
+      mainComposition={managementDetailVisible ? 'independent-shells' : 'continuous'}
       mainSplit={managementDetailVisible ? 'columns' : workspaceSlots.mainSplit}
       mainSplitRatio={managementSplitScene ? managementSplitRatio : workspaceSlots.mainSplitRatio}
       mainSplitResize={

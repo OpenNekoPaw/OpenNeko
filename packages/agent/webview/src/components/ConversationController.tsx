@@ -102,7 +102,6 @@ import { useProjectionEndpoint } from '../render-runtime/useProjectionEndpoint';
 import type { AgentContextPayload } from '@neko/agent-contracts';
 import type { ConversationRenderCoordinator } from '../render-lifecycle/conversation-render-coordinator';
 import { submitRoleplayEntrySelection } from './ChatView/roleplay-entry-action';
-import type { AgentEntryScopeActions } from '../root';
 
 // =============================================================================
 // Props
@@ -133,7 +132,6 @@ export interface ConversationControllerProps {
   initialInput?: { readonly id: string; readonly value: string };
   emptyStatePresentation?: 'default' | 'desktop-dock';
   agentPresentation?: AgentRootPresentation;
-  entryScopeActions?: AgentEntryScopeActions;
   settings: SettingsState;
   hasConfigSnapshot: boolean;
   setSettings: React.Dispatch<React.SetStateAction<SettingsState>>;
@@ -182,7 +180,6 @@ function applyConversationSettingsSnapshot(
 
 export function ConversationController({
   agentPresentation,
-  entryScopeActions,
   emptyStatePresentation = 'default',
   initialConversation,
   initialInput,
@@ -997,15 +994,6 @@ export function ConversationController({
           setInitialSessionModeRequest(null);
           setEntryPromptMenu(null);
           updateEntryInputValue('');
-          if (agentPresentation?.kind === 'draft' && agentPresentation.scope.kind === 'unbound') {
-            const selectAssistant = entryScopeActions?.selectAssistant;
-            if (!selectAssistant) {
-              setGlobalError('Assistant scope selection is unavailable.');
-              return;
-            }
-            selectAssistant(agentPresentation.draftId);
-            return;
-          }
           if (agentPresentation?.kind === 'draft') return;
           startNewForegroundConversation();
           return;
@@ -1014,29 +1002,6 @@ export function ConversationController({
           setInitialInputRequest(null);
           setInitialSessionModeRequest(null);
           setEntryPromptMenu('generate-assets');
-          if (agentPresentation?.kind === 'draft' && agentPresentation.scope.kind === 'unbound') {
-            const selectAssistant = entryScopeActions?.selectAssistant;
-            if (!selectAssistant) {
-              setGlobalError('Assistant scope selection is unavailable.');
-              return;
-            }
-            selectAssistant(agentPresentation.draftId);
-          }
-          return;
-        case 'workspace':
-          setPendingSendRequest(null);
-          setInitialInputRequest(null);
-          setInitialSessionModeRequest(null);
-          setEntryPromptMenu(null);
-          if (agentPresentation?.kind !== 'draft' || agentPresentation.scope.kind !== 'unbound') {
-            setGlobalError('Workspace scope selection requires an unbound Entry Draft.');
-            return;
-          }
-          if (!entryScopeActions) {
-            setGlobalError('Workspace scope selection is unavailable.');
-            return;
-          }
-          entryScopeActions.selectWorkspace();
           return;
         case 'roleplay':
           setPendingSendRequest(null);
@@ -1054,7 +1019,6 @@ export function ConversationController({
     },
     [
       agentPresentation,
-      entryScopeActions,
       handleRequestRoleplayItems,
       startNewForegroundConversation,
       updateEntryInputValue,
@@ -1086,10 +1050,6 @@ export function ConversationController({
           setGlobalError('Agent draft submit authority is unavailable.');
           return;
         }
-        if (agentPresentation.scope.kind === 'unbound') {
-          setGlobalError('Select Assistant or a Workspace before sending.');
-          return;
-        }
         const selectedModel = activeSettings.chatModelOptions.find(
           (option) => option.id === entrySelectedModel,
         );
@@ -1098,24 +1058,30 @@ export function ConversationController({
           return;
         }
         const resourceGrantIds = contextPayloads.map((payload) => payload.id);
-        const context =
-          agentPresentation.scope.kind === 'assistant'
-            ? {
-                schemaVersion: 1 as const,
-                kind: 'assistant' as const,
-                assistantSpaceId: agentPresentation.scope.assistantSpaceId,
-                baseGrantIds: resourceGrantIds,
-              }
+        const target =
+          agentPresentation.scope.kind === 'unbound'
+            ? { kind: 'automatic-assistant' as const, draftId: agentPresentation.draftId }
             : {
-                schemaVersion: 1 as const,
-                kind: 'workspace' as const,
-                workspaceId: agentPresentation.scope.workspaceId,
-                workspaceGrantId: agentPresentation.scope.workspaceGrantId,
+                kind: 'bound-context' as const,
+                context:
+                  agentPresentation.scope.kind === 'assistant'
+                    ? {
+                        schemaVersion: 1 as const,
+                        kind: 'assistant' as const,
+                        assistantSpaceId: agentPresentation.scope.assistantSpaceId,
+                        baseGrantIds: resourceGrantIds,
+                      }
+                    : {
+                        schemaVersion: 1 as const,
+                        kind: 'workspace' as const,
+                        workspaceId: agentPresentation.scope.workspaceId,
+                        workspaceGrantId: agentPresentation.scope.workspaceGrantId,
+                      },
               };
         setIsForegroundConversationActivationPending(true);
         void submitDraft({
           schemaVersion: 1,
-          context,
+          target,
           messageText,
           resourceGrantIds,
           configuration: {

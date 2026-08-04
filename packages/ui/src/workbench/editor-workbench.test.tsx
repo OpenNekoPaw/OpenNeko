@@ -116,6 +116,7 @@ describe('editor workbench shell primitives', () => {
           }}
           main={<div data-testid="main" />}
           secondaryMain={<div data-testid="secondary-main" />}
+          mainComposition="independent-shells"
           mainSplit="columns"
           mainSplitRatio={0.4}
           mainSplitResize={{
@@ -159,6 +160,7 @@ describe('editor workbench shell primitives', () => {
     expect(shell?.dataset['leftPresentation']).toBe('overlay');
     expect(shell?.dataset['rightPresentation']).toBe('docked');
     expect(shell?.dataset['mainSplit']).toBe('columns');
+    expect(shell?.dataset['mainComposition']).toBe('independent-shells');
     expect(shell?.dataset['timelineVisible']).toBe('true');
     expect(shell?.style.getPropertyValue('--neko-controlled-primary-width')).toBe('232px');
     expect(shell?.style.getPropertyValue('--neko-controlled-timeline-height')).toBe('220px');
@@ -171,6 +173,9 @@ describe('editor workbench shell primitives', () => {
         '.neko-controlled-workbench-main__secondary [data-testid="secondary-main"]',
       ),
     ).not.toBeNull();
+    expect(host.querySelector('[data-workbench-main-shell="primary"]')).not.toBeNull();
+    expect(host.querySelector('[data-workbench-main-shell="secondary"]')).not.toBeNull();
+    expect(host.querySelector('[data-workbench-main-gutter="true"]')).not.toBeNull();
     expect(
       host.querySelector('.neko-controlled-workbench-dock--left[data-presentation="overlay"]'),
     ).not.toBeNull();

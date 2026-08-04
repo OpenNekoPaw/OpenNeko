@@ -6,7 +6,7 @@ import {
 
 export interface AgentDraftSubmitInput {
   readonly schemaVersion: typeof AGENT_CONVERSATION_CONTEXT_VERSION;
-  readonly context: AgentConversationContext;
+  readonly target: AgentDraftSubmitTarget;
   readonly messageText: string;
   readonly resourceGrantIds: readonly string[];
   readonly configuration: {
@@ -15,6 +15,16 @@ export interface AgentDraftSubmitInput {
     readonly executionMode: 'plan' | 'ask' | 'auto';
   };
 }
+
+export type AgentDraftSubmitTarget =
+  | {
+      readonly kind: 'automatic-assistant';
+      readonly draftId: string;
+    }
+  | {
+      readonly kind: 'bound-context';
+      readonly context: AgentConversationContext;
+    };
 
 export interface AgentDraftSubmitProjection {
   readonly schemaVersion: typeof AGENT_CONVERSATION_CONTEXT_VERSION;
@@ -29,7 +39,7 @@ export function parseAgentDraftSubmitInput(value: unknown): AgentDraftSubmitInpu
   requireVersion(record['schemaVersion']);
   requireExactKeys(
     record,
-    ['schemaVersion', 'context', 'messageText', 'resourceGrantIds', 'configuration'],
+    ['schemaVersion', 'target', 'messageText', 'resourceGrantIds', 'configuration'],
     'Agent draft submit input',
   );
   const configuration = requireRecord(
@@ -47,7 +57,7 @@ export function parseAgentDraftSubmitInput(value: unknown): AgentDraftSubmitInpu
   }
   return {
     schemaVersion: AGENT_CONVERSATION_CONTEXT_VERSION,
-    context: parseAgentConversationContext(record['context']),
+    target: parseTarget(record['target']),
     messageText: requireIdentity(record['messageText'], 'message'),
     resourceGrantIds: requireIdentityArray(record['resourceGrantIds'], 'Resource grant'),
     configuration: {
@@ -56,6 +66,22 @@ export function parseAgentDraftSubmitInput(value: unknown): AgentDraftSubmitInpu
       executionMode,
     },
   };
+}
+
+function parseTarget(value: unknown): AgentDraftSubmitTarget {
+  const record = requireRecord(value, 'Agent draft submit target must be an object.');
+  if (record['kind'] === 'automatic-assistant') {
+    requireExactKeys(record, ['kind', 'draftId'], 'Automatic Assistant draft target');
+    return {
+      kind: 'automatic-assistant',
+      draftId: requireIdentity(record['draftId'], 'Draft'),
+    };
+  }
+  if (record['kind'] === 'bound-context') {
+    requireExactKeys(record, ['kind', 'context'], 'Bound Agent draft target');
+    return { kind: 'bound-context', context: parseAgentConversationContext(record['context']) };
+  }
+  throw new Error(`Unknown Agent draft submit target '${String(record['kind'])}'.`);
 }
 
 export function parseAgentDraftSubmitProjection(value: unknown): AgentDraftSubmitProjection {
