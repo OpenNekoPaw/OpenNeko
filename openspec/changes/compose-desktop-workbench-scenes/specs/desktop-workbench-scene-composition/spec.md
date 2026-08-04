@@ -50,6 +50,12 @@ Sidebar visibility, width, hover reveal and resize lifecycle SHALL be a versione
 - **AND** the control exposes the inverse action without using the application brand text as the only target
 - **AND** the same sidebar presentation CAS handles both directions
 
+#### Scenario: Workspace layout controls are available
+
+- **WHEN** the active scene owns an exact Workspace Workbench composition
+- **THEN** its layout control is rendered in the PrimarySidebar top brand control group beside the sidebar visibility control
+- **AND** it is not rendered in the sidebar footer, Workspace Main tab header or a domain Surface
+
 ### Requirement: Workbench uses explicit variable scene shapes
 
 The shared Workbench SHALL reuse the Workspace visual/layout primitives while supporting scene-specific slot counts. It MUST NOT force every scene into the same manager/main split, reinterpret Interaction as Main, place a management Main Root in a narrow manager dock, or drop the Workspace style scope while claiming component reuse.
@@ -124,6 +130,18 @@ The existing package-owned `AgentWebviewRoot`, controller, composer and Host pro
 - **THEN** Host binds that draft to the matching owner-qualified scope and activates its Workbench shape without creating a conversation
 - **AND** the first submit creates one exact conversation/session and atomically activates its Agent phase and layout
 - **AND** a stale draft identity or unavailable Character/Room owner fails visibly
+
+#### Scenario: Entry Draft presents owner choices
+
+- **WHEN** the Agent presentation scope is `unbound`
+- **THEN** its prompt offers Assistant, Workspace, and unavailable Character/Room owner choices
+- **AND** it does not label task modes such as chat or asset generation as authority scopes
+
+#### Scenario: Workspace owner binding activates the Agent presentation
+
+- **WHEN** an exact Entry Draft is bound to a Workspace through a directory or Project selection
+- **THEN** the same Agent Root switches immediately to the Workspace-bound draft presentation and the creative Workbench slots
+- **AND** the unbound owner-selection prompt is no longer visible before the first conversation is submitted
 
 #### Scenario: Workspace conversation renders normally
 
@@ -285,6 +303,12 @@ The resource center SHALL use one Assets-owned `AssetCenterSession` for catalog,
 - **AND** Preview renders through its package-owned Root without receiving a raw path
 - **AND** the authorized Preview and Workspace Preview reuse the same package-owned preview presentation and viewer registry
 
+#### Scenario: Workspace Preview avoids duplicate chrome
+
+- **WHEN** a Workspace Preview View is active under the Workbench editor tab strip
+- **THEN** the canonical Preview Root renders its content-only presentation without a second file header or tab strip
+- **AND** Asset Center authorized Preview may retain its descriptor header because its independent shell has no Workbench tab strip
+
 #### Scenario: Selected resource cannot be previewed
 
 - **WHEN** the selected resource has no qualified preview producer or authorization fails
@@ -314,6 +338,18 @@ Extensions and project management SHALL place their package-owned management Roo
 - **THEN** Workbench composes a compact management panel beside a primary Preview/Detail panel using the shared Workspace panel chrome and resize primitive
 - **AND** Preview content continues through the canonical `@neko/preview-webview` presentation and viewer registry
 - **AND** Desktop does not implement another viewer, nested page card or management-owned preview renderer
+
+#### Scenario: Management and detail use independent tabless shells
+
+- **WHEN** Assets, Extensions or Projects composes management beside Preview/Detail
+- **THEN** management and Preview/Detail occupy two independent shared panel shells connected by the shared resize primitive
+- **AND** neither shell renders a synthetic single-item Workbench tab strip
+
+#### Scenario: Workspace resources omit redundant global refresh
+
+- **WHEN** the Workspace Resource Browser is composed in the right manager slot
+- **THEN** its package-owned Root hides the top-level global refresh control
+- **AND** source recovery, relink and other domain-specific resource actions remain available
 
 #### Scenario: User opens Settings
 

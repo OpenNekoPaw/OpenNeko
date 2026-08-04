@@ -73,6 +73,8 @@ DesktopApplication
 
 PrimarySidebar 不属于任何旧 Home scene。它持续消费 `catalog.projects` 与 `agentHome.conversations`，因此删除 Home composer/management page 时必须保留最近项目、最近会话、attention 和显式恢复/删除操作。
 
+Sidebar 顶部品牌区同时承载两个窗口级 presentation 控件：PrimarySidebar 显隐和当前 Workspace Workbench 布局。布局控件只在存在 exact Workspace composition 时出现，并紧邻显隐按钮；它不得沉入侧栏 footer、Workspace Main tab header 或领域 Surface。footer 只保留 lifecycle、attention、Settings 等非布局操作。
+
 `HomeWorkspace`、`ContentProjectWorkspace` 和 Settings 顶层条件分支被替换为 scene slot builders。Scene 切换只替换 slots；PrimarySidebar 和 ControlledWorkbenchShell 的 React identity 保持不变。Project slot builder 复用现有 Agent/Main/Resource/Timeline components、View identity、layout helpers 和 `.project-workspace` 视觉契约，不自行创建 Shell 或 sidebar frame。Renderer 必须逐一消费 Host 的 `interaction/main/secondaryMain/leftManager/rightManager` 语义，不能把 Interaction 临时当 Main、把 management Main 当 Dock，或仅复用 Shell JSX 而丢失 Workspace CSS scope。
 
 ### 2. Scene projection is closed, versioned and slot-specific
@@ -194,11 +196,11 @@ type AgentRootPresentation =
   | { kind: 'session'; scope: AgentScopeProjection; conversationId: ConversationId };
 ```
 
-Draft 隐藏 conversation Tabs/history 等 session-only chrome，但继续复用当前 `ConversationController`、`EmptyState`、`InputAreaProvider` 和 `InputArea`。模型配置、launch-safe commands/Skills、授权文件/引用、语音入口以及创建 turn 后的执行/审批均走相同 Webview contract。普通 workspace session 未传入 draft presentation 时，现有 DOM、Host messages 和行为保持不变。
+Draft 隐藏 conversation Tabs/history 等 session-only chrome，但继续复用当前 `ConversationController`、`EmptyState`、`InputAreaProvider` 和 `InputArea`。模型配置、launch-safe commands/Skills、授权文件/引用、语音入口以及创建 turn 后的执行/审批均走相同 Webview contract。普通 workspace session 未传入 draft presentation 时，现有 DOM、Host messages 和行为保持不变。`unbound` Entry Draft 与 owner-bound draft 使用不同的 EmptyState presentation：只有前者显示 owner 选择；Assistant/Workspace 绑定成功后立即显示对应已激活空会话状态，不得继续显示入口 owner 卡片。
 
 `draftId` 是 presentation instance identity，不是 conversation identity。Controller 观察到新的 `draftId` 时，必须在 package 内完成一次显式 draft transition：清空 `openTabs`、`activeConversationId`、retained transcript/render subscription、entry input/reference 和 transient error；全局模型 catalog、用户 settings 与静态 capability catalog 不重建。Desktop 不通过 React `key` 重建第二个 Root，也不发送伪造 close-tab 消息来达到清理效果。
 
-Entry Draft 的 `unbound` scope 只允许 scope-neutral catalog 与“选择 Assistant / 选择目录 / 未来选择 Character 或 Room”的显式操作。选择 Assistant 绑定 AssistantSpace draft；选择目录/Project绑定 Workspace draft并激活 creative slots；首次提交沿既有 local transaction 变成 exact session。每次再次点击“开始创作”都回到新的 `unbound` draft，而不是恢复任何已有 conversation。
+Entry Draft 的 `unbound` scope 只允许 scope-neutral catalog 与“选择 Assistant / 选择目录 / 未来选择 Character 或 Room”的显式操作。入口文案和卡片必须表达这些 owner 选择，不能继续使用“开始对话 / 生成素材 / 角色扮演”这类任务模式冒充 scope。选择 Assistant 绑定 AssistantSpace draft；选择目录/Project绑定 Workspace draft并激活 creative slots；首次提交沿既有 local transaction 变成 exact session。每次再次点击“开始创作”都回到新的 `unbound` draft，而不是恢复任何已有 conversation。
 
 Capability catalog 必须标记 scope requirements。Assistant draft 不展示 Workspace-only Tool/Skill 为可执行成功能力；缺少 Workspace scope 时返回 typed `workspace-scope-required`，不能 fallback 到 active Project。Root 不因 scope 改变而换成另一套 controller。
 
@@ -270,7 +272,7 @@ Extensions 使用 Agent extension application contract 与 package public manage
 
 若当前没有真实 detail Root，scene 只挂载 owner-qualified catalog/empty/unavailable Surface，不在 Desktop 创建临时 domain implementation。所有 scene 都保留同一 PrimarySidebar、Workbench、主题和 resize lifecycle。
 
-Management Main 与可选 Preview/Detail 使用 Workspace Main 相同的 panel chrome、tab/header/content frame 和 resize primitive。Assets、Extensions 与 Projects 只提供各自 package-owned management/detail content，不复制 Workspace Preview viewer 或在 Desktop 创建第二套 panel implementation。组合时 management panel 使用紧凑目录宽度，Preview/Detail 获得主要内容宽度；未选择 detail 时明确省略或显示 owner-qualified empty Surface。
+Management Main 与可选 Preview/Detail 使用 Workspace Main 相同的 panel shell、content frame 和 resize primitive，但它们是两个独立 shell，且都不渲染 Workspace View tab/header。只有 Workspace Main 的真实多 View group 拥有 Workbench tab；其 Preview 内容使用 `@neko/preview-webview` 的 content-only chrome，避免 Workbench tab 下再次出现 Preview 文件 header。Asset Center 的独立 authorized Preview 仍可保留 descriptor header，因为其 shell 本身没有 Workbench tab。Assets、Extensions 与 Projects 只提供各自 package-owned management/detail content，不复制 Workspace Preview viewer 或在 Desktop 创建第二套 panel implementation。组合时 management panel 使用紧凑目录宽度，Preview/Detail 获得主要内容宽度；未选择 detail 时明确省略或显示 owner-qualified empty Surface。Workspace Resource Browser 继续复用 package Root，但隐藏与 Host 自动投影重复的顶部全局刷新按钮；relink/recovery 等真实领域操作保持可用。
 
 ### 11. Scene activation and empty Main are atomic presentation states
 
