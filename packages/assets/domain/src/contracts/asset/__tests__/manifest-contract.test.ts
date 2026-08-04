@@ -67,6 +67,24 @@ describe('AssetManifest v4 contract', () => {
     expect(getAssetCategory('bundle')).toBe('bundle');
   });
 
+  it('accepts scene as an identity Asset kind', () => {
+    const manifest = validManifest({
+      id: '@studio/scene-rainy-street',
+      name: 'Rainy street',
+      type: 'identity',
+      typeMetadata: {
+        type: 'identity',
+        data: {
+          identityKind: 'scene',
+          identityId: 'scene-rainy-street',
+          forms: [{ role: 'reference', packageRef: 'scene/rainy-street.png' }],
+        },
+      },
+    });
+
+    expect(validateAssetManifest(manifest)).toEqual({ valid: true, issues: [] });
+  });
+
   it('accepts profile-only packages without skill metadata', () => {
     const manifest = validManifest({
       id: '@studio/storyboard-profiles',

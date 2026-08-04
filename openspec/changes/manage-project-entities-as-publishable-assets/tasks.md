@@ -22,7 +22,7 @@
 ## 4. Entity Asset workflows
 
 - [x] 4.1 Implement Entity Asset instantiation with a new Project Entity ID, frozen import base, and exact origin revision/digest provenance through the generic Asset adapter.
-- [ ] 4.2 Implement portable publication conversion that snapshots accepted semantics and packages or rejects external representations before generic Asset publication.
+- [x] 4.2 Implement portable publication conversion that snapshots accepted semantics and packages or rejects external representations before generic Asset publication.
 - [ ] 4.3 Implement update-available projection and explicit three-way semantic diff/apply with selected changes, conflict preservation, and expected project revision.
 - [ ] 4.4 Add tests proving Asset cloud sync never reads/uploads the mutable project Entity document and Asset uninstall/tombstone never controls Project Entity lifecycle.
 

@@ -10,4 +10,5 @@ export * from './CreativeEntityService';
 export * from './ProjectEntityOperationService';
 export * from './ProjectEntityBindingAvailabilityService';
 export * from './ProjectEntityAssetInstantiationService';
+export * from './ProjectEntityAssetPublicationService';
 export * from './retiredAuthority';

@@ -173,7 +173,7 @@ export interface StarterMetadata {
 }
 
 export interface IdentityMetadata {
-  identityKind: 'character' | 'location' | 'object' | 'style';
+  identityKind: 'character' | 'scene' | 'location' | 'object' | 'style';
   identityId: string;
   forms: Array<{
     role: '3d-rigged' | '2d-rigged' | 'portrait' | 'voice' | 'bio' | 'reference';
