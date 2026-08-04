@@ -13,13 +13,14 @@ Desktop 当前把 Home、项目工作区、管理入口和 Settings 实现为不
 - 定义 closed、versioned、slot-specific Workbench scene projection。Scene authority 只投影 owner-qualified Surface identity；Desktop renderer 只将公开 Roots 放入 Interaction、Main、Secondary Main、Manager、Timeline 和 Status slots。
 - 定义可变形 Workbench：默认 draft 只显示 Agent；Assistant 激活后显示 Agent + Preview Main；Workspace 显示 Agent + creative Main + Workspace Resources；未来角色扮演/聊天室显示 Agent 对话或群聊 + Interactive Main + Character Manager。缺少真实 Character/Interactive owner 时必须 owner-qualified unavailable，不在 Desktop 伪造实现。
 - 以现有 `AgentWebviewRoot` 作为入口、assistant session 和 workspace session 的唯一 Agent UI/controller/composer。未创建会话时只隐藏 session-only chrome，不复制 textarea、模型选择、命令、Skill、附件、审批或语音控件。
-- “开始创作”改为创建带全新 `draftId` 的 `unbound` Entry Draft；它没有 conversation、AssistantSpace、Workspace 或角色 owner。选择 Assistant、Workspace 或未来 Character/Room 后才显式绑定 scope；首次提交再创建并激活精确 session。
+- “开始创作”改为创建带全新 `draftId` 的 `unbound` Entry Draft；它没有 conversation、AssistantSpace、Workspace 或角色 owner。用户直接输入并提交时自动绑定 Assistant 用户区并创建精确 session；选择目录/Project 时绑定 Workspace，选择未来 Character/Room 时绑定对应角色 owner。
 - Agent Webview 以 `draftId` 作为 presentation instance identity；进入新 draft 时必须清除旧 conversation Tabs、active conversation、transcript、输入引用和瞬态错误，同时保留全局模型目录与用户设置。
 - 将 Agent 的 presentation phase 与 authority scope 分离：draft/session 决定会话 chrome，`assistant | workspace` 决定可用目录、资源、Tool、Skill 和 scene composition。
 - Assistant scope 使用 OpenNeko 管理的用户资源投影、用户显式授权文件和 conversation-scoped scratch；它不得获得整个用户 Home、配置、凭据、插件安装根或任意本地路径。
 - 用户显式选择目录时由 Desktop Main 授权并返回 opaque directory grant；Host/Agent authority 建立精确 Workspace identity并激活原有 Agent + Canvas/Preview/Cut + Workspace Resources composition。选择目录不自动创建 conversation。
-- Scene 或权限 scope 只由显式用户操作、已持久化 conversation context 和 owner capability facts 决定；模型文本不得选择 scene、发明目录/Project identity 或扩大权限。需要 workspace 能力但尚未选择目录时返回明确的选择要求。
+- Scene 或权限 scope 只由入口动作、已持久化 conversation context 和 owner capability facts 决定：未选择 owner 的普通直接提交确定性使用 Assistant，目录/Project 选择使用 Workspace，角色选择使用对应角色 owner。模型文本不得发明目录/Project identity 或扩大权限；需要 workspace 能力但尚未选择目录时返回明确的选择要求。
 - 资源中心建立 Assets-owned `AssetCenterSession`，由同一 session 的 Management Root 在 Main 管理 catalog/filter/selection，并把选中资源通过授权 descriptor 投影给可选 Secondary Preview Root；Desktop 不拥有 Asset selection、资源事实或 preview 类型判断。
+- 资产、项目与扩展的 Management 和 Preview/Detail 必须呈现为两个视觉、DOM 与 overflow 边界独立的共享 panel shell；两个 shell 各自拥有边框、圆角、背景并由带间距的 resize composition 连接，不能只在同一连续 Main 底板上画分隔线。
 - 扩展/Skill、项目管理和 Settings 也通过明确 Surface slots 组合；缺失真实 owner/public Root 时显示 owner-qualified unavailable，而不是在 Desktop 复制临时业务实现。
 - Conversation 创建本地原子提交 context、conversation、initial message 和 durable pending-turn intent；外部 provider turn 以 request identity 幂等启动和恢复，不宣称与本地事务原子。
 - **BREAKING**：删除 `HomeStartCreating`、Home 独立 Agent composer、`agentInitialInput` handoff、Home/Project/Settings 顶层分支、场景级 sidebar frame、默认首个/最近/active Project fallback，以及模型意图决定可执行场景的路径；不保留成功 fallback。

@@ -26,6 +26,7 @@ Desktop 目前由 `DesktopShell` 在 Home、Project workspace 和 Settings 三�
 - 一级侧栏只提交 typed scene intent，不渲染或拥有领域页面。
 - 同一个 AgentWebviewRoot 服务入口 draft、Assistant session 和 Workspace session。
 - 每次“开始创作”创建新的未绑定 Entry Draft identity，旧 session UI 状态不能泄漏到新 draft。
+- 未绑定 Entry Draft 直接提交时自动使用 Assistant 用户区；选择目录/Project 时使用 Workspace；选择角色/Room 时使用对应 owner，不要求发送前先点 owner 卡片。
 - Assistant 使用 OpenNeko 用户资源、显式文件 grant 和可恢复 conversation scratch。
 - 用户显式选择目录后获得 Workspace scope 和现有 creative Workbench composition，不自动创建 conversation。
 - 资源中心以 Assets management 为 Main，authorized Preview 只作为可选 Secondary Main。
@@ -196,11 +197,11 @@ type AgentRootPresentation =
   | { kind: 'session'; scope: AgentScopeProjection; conversationId: ConversationId };
 ```
 
-Draft 隐藏 conversation Tabs/history 等 session-only chrome，但继续复用当前 `ConversationController`、`EmptyState`、`InputAreaProvider` 和 `InputArea`。模型配置、launch-safe commands/Skills、授权文件/引用、语音入口以及创建 turn 后的执行/审批均走相同 Webview contract。普通 workspace session 未传入 draft presentation 时，现有 DOM、Host messages 和行为保持不变。`unbound` Entry Draft 与 owner-bound draft 使用不同的 EmptyState presentation：只有前者显示 owner 选择；Assistant/Workspace 绑定成功后立即显示对应已激活空会话状态，不得继续显示入口 owner 卡片。
+Draft 隐藏 conversation Tabs/history 等 session-only chrome，但继续复用当前 `ConversationController`、`EmptyState`、`InputAreaProvider` 和 `InputArea`。模型配置、launch-safe commands/Skills、授权文件/引用、语音入口以及创建 turn 后的执行/审批均走相同 Webview contract。普通 workspace session 未传入 draft presentation 时，现有 DOM、Host messages 和行为保持不变。`unbound` Entry Draft 与 owner-bound draft 使用同一个简洁入口 EmptyState；入口不显示强制 owner 选择卡。Assistant/Workspace 绑定成功后立即显示对应已激活空会话状态。
 
 `draftId` 是 presentation instance identity，不是 conversation identity。Controller 观察到新的 `draftId` 时，必须在 package 内完成一次显式 draft transition：清空 `openTabs`、`activeConversationId`、retained transcript/render subscription、entry input/reference 和 transient error；全局模型 catalog、用户 settings 与静态 capability catalog 不重建。Desktop 不通过 React `key` 重建第二个 Root，也不发送伪造 close-tab 消息来达到清理效果。
 
-Entry Draft 的 `unbound` scope 只允许 scope-neutral catalog 与“选择 Assistant / 选择目录 / 未来选择 Character 或 Room”的显式操作。入口文案和卡片必须表达这些 owner 选择，不能继续使用“开始对话 / 生成素材 / 角色扮演”这类任务模式冒充 scope。选择 Assistant 绑定 AssistantSpace draft；选择目录/Project绑定 Workspace draft并激活 creative slots；首次提交沿既有 local transaction 变成 exact session。每次再次点击“开始创作”都回到新的 `unbound` draft，而不是恢复任何已有 conversation。
+Entry Draft 的 `unbound` scope 只允许 scope-neutral catalog，以及目录/Project、未来 Character/Room 等会扩大或改变 owner 的显式选择。普通直接提交由 package-owned Agent 入口确定性绑定 Assistant 用户区并沿既有 local transaction 创建 exact session；它不依赖关键词、模型推断或 active Project。选择目录/Project 绑定 Workspace draft并激活 creative slots；选择未来 Character/Room 绑定对应 owner。入口不得用 owner 选择卡阻塞普通输入。每次再次点击“开始创作”都回到新的 `unbound` draft，而不是恢复任何已有 conversation。
 
 Capability catalog 必须标记 scope requirements。Assistant draft 不展示 Workspace-only Tool/Skill 为可执行成功能力；缺少 Workspace scope 时返回 typed `workspace-scope-required`，不能 fallback 到 active Project。Root 不因 scope 改变而换成另一套 controller。
 
@@ -272,7 +273,7 @@ Extensions 使用 Agent extension application contract 与 package public manage
 
 若当前没有真实 detail Root，scene 只挂载 owner-qualified catalog/empty/unavailable Surface，不在 Desktop 创建临时 domain implementation。所有 scene 都保留同一 PrimarySidebar、Workbench、主题和 resize lifecycle。
 
-Management Main 与可选 Preview/Detail 使用 Workspace Main 相同的 panel shell、content frame 和 resize primitive，但它们是两个独立 shell，且都不渲染 Workspace View tab/header。只有 Workspace Main 的真实多 View group 拥有 Workbench tab；其 Preview 内容使用 `@neko/preview-webview` 的 content-only chrome，避免 Workbench tab 下再次出现 Preview 文件 header。Asset Center 的独立 authorized Preview 仍可保留 descriptor header，因为其 shell 本身没有 Workbench tab。Assets、Extensions 与 Projects 只提供各自 package-owned management/detail content，不复制 Workspace Preview viewer 或在 Desktop 创建第二套 panel implementation。组合时 management panel 使用紧凑目录宽度，Preview/Detail 获得主要内容宽度；未选择 detail 时明确省略或显示 owner-qualified empty Surface。Workspace Resource Browser 继续复用 package Root，但隐藏与 Host 自动投影重复的顶部全局刷新按钮；relink/recovery 等真实领域操作保持可用。
+Management Main 与可选 Preview/Detail 使用 Workspace Main 相同的 panel shell、content frame 和 resize primitive，但它们是两个兄弟 shell：各自拥有独立 DOM、边框、圆角、背景、裁切和 overflow 边界，并由保留可见 gutter 的 resize composition 连接。禁止让两个内容区共享一块连续 Main 底板后只绘制分隔线。两个 shell 都不渲染 Workspace View tab/header；只有 Workspace Main 的真实多 View group 拥有 Workbench tab。Workspace Preview 内容使用 `@neko/preview-webview` 的 content-only chrome，避免 Workbench tab 下再次出现 Preview 文件 header。Asset Center 的独立 authorized Preview 仍可保留 descriptor header，因为其 shell 本身没有 Workbench tab。Assets、Extensions 与 Projects 只提供各自 package-owned management/detail content，不复制 Workspace Preview viewer 或在 Desktop 创建第二套 panel implementation。组合时 management panel 使用紧凑目录宽度，Preview/Detail 获得主要内容宽度；未选择 detail 时 management shell 独占可用区域。Workspace Resource Browser 继续复用 package Root，但隐藏与 Host 自动投影重复的顶部全局刷新按钮；relink/recovery 等真实领域操作保持可用。
 
 ### 11. Scene activation and empty Main are atomic presentation states
 
@@ -332,7 +333,7 @@ The canonical fix remains fail-visible after final disposal: methods on a dispos
 7. 增加 directory grant、AssistantSpace/scratch、conversation context migration和幂等 first-submit authority。
 8. 删除 Home composer、agentInitialInput、模型 intent scene routing与所有默认 Project fallback。
 9. 运行 package tests/build、Agent evaluation、legacy/boundary gates和隔离真实 Electron大/小窗口场景。
-10. 引入 unbound Entry Draft identity、显式 scope binding 与 package-owned presentation reset；修复 renderer runtime StrictMode lifecycle并复验用户启动路径。
+10. 引入 unbound Entry Draft identity、确定性的自动 Assistant 首次提交、显式 Workspace/Role binding 与 package-owned presentation reset；修复 renderer runtime StrictMode lifecycle并复验用户启动路径。
 
 回滚只能整体恢复上一稳定 commit 的 composition，不能删除实施期间创建的 conversation、published Asset、Workspace或用户授权记录。新 schema 若已写入，旧版本必须明确拒绝或执行有版本的单次迁移；不能静默回退 Home composer、默认 Project或双 sidebar路径。
 

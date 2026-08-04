@@ -124,24 +124,25 @@ The existing package-owned `AgentWebviewRoot`, controller, composer and Host pro
 - **AND** it retains global model catalogs and user settings
 - **AND** Desktop does not remount a second controller or infer the reset from active Project state
 
-#### Scenario: User selects an Agent owner from Entry Draft
+#### Scenario: User selects an explicit owner from Entry Draft
 
-- **WHEN** the user explicitly chooses Assistant or a Workspace directory/Project for the current exact draft
+- **WHEN** the user explicitly chooses a Workspace directory/Project or a future Character/Room for the current exact draft
 - **THEN** Host binds that draft to the matching owner-qualified scope and activates its Workbench shape without creating a conversation
 - **AND** the first submit creates one exact conversation/session and atomically activates its Agent phase and layout
 - **AND** a stale draft identity or unavailable Character/Room owner fails visibly
 
-#### Scenario: Entry Draft presents owner choices
+#### Scenario: Direct Entry Draft submit uses Assistant
 
-- **WHEN** the Agent presentation scope is `unbound`
-- **THEN** its prompt offers Assistant, Workspace, and unavailable Character/Room owner choices
-- **AND** it does not label task modes such as chat or asset generation as authority scopes
+- **WHEN** the user submits a first message from an `unbound` Agent presentation without selecting a Project directory, Character or Room
+- **THEN** the package-owned Agent entry path deterministically selects Assistant user-space
+- **AND** it binds the exact current draft and commits the first Assistant conversation through the canonical draft-submit transaction
+- **AND** no owner-selection card blocks sending and no active, first or recent Project fallback participates
 
 #### Scenario: Workspace owner binding activates the Agent presentation
 
 - **WHEN** an exact Entry Draft is bound to a Workspace through a directory or Project selection
 - **THEN** the same Agent Root switches immediately to the Workspace-bound draft presentation and the creative Workbench slots
-- **AND** the unbound owner-selection prompt is no longer visible before the first conversation is submitted
+- **AND** ordinary message text cannot fabricate the directory grant or Workspace identity
 
 #### Scenario: Workspace conversation renders normally
 
@@ -343,6 +344,8 @@ Extensions and project management SHALL place their package-owned management Roo
 
 - **WHEN** Assets, Extensions or Projects composes management beside Preview/Detail
 - **THEN** management and Preview/Detail occupy two independent shared panel shells connected by the shared resize primitive
+- **AND** each sibling shell has its own DOM, border, radius, background, clipping and overflow boundary with a visible gutter between them
+- **AND** the composition does not render both contents on one continuous Main surface separated only by a line
 - **AND** neither shell renders a synthetic single-item Workbench tab strip
 
 #### Scenario: Workspace resources omit redundant global refresh

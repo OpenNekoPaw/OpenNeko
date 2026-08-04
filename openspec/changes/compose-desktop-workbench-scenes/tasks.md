@@ -96,3 +96,6 @@
 - [x] 10.9 Correct Entry Draft owner prompts, remove unbound prompts after Workspace binding, and place the Workspace layout control beside the PrimarySidebar top visibility control; add Agent/Desktop/AppHost path regressions.
 - [x] 10.10 Render Workspace Preview through canonical content-only Preview chrome, compose management/detail as independent tabless shells, and hide only the Workspace Resource Browser global refresh control; add package/Desktop regressions.
 - [x] 10.11 Qualify the corrected Agent activation and shell chrome in isolated development and packaged Electron at large/small sizes, then update `verification.md` and architecture documentation.
+- [ ] 10.12 Replace blocking Entry Draft owner selection with deterministic direct-submit Assistant binding while preserving explicit Workspace directory and future Role owner selection; add Agent Webview, Host and Desktop path regressions plus focused Evaluation evidence.
+- [ ] 10.13 Compose Assets, Extensions and Projects management plus Preview/Detail as two visually and structurally independent sibling shells with their own chrome/overflow boundaries and a resize gutter; add structure and real Electron layout evidence.
+- [ ] 10.14 Re-run focused/full quality gates, update verification/architecture evidence and apply `neko-quality-review` for the corrected entry and management shell behavior.
