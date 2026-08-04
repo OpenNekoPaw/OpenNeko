@@ -1,4 +1,4 @@
-import { access, mkdtemp, rm } from 'node:fs/promises';
+import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -18,6 +18,9 @@ describe('workspace semantic/entity metadata binding', () => {
     const homedir = await mkdtemp(join(tmpdir(), 'neko-semantic-entity-binding-'));
     const workDir = join(homedir, 'workspace');
     temporaryDirectories.push(homedir);
+    const entityPath = join(workDir, 'neko', 'entities.json');
+    await mkdir(join(workDir, 'neko'), { recursive: true });
+    await writeFile(entityPath, CANONICAL_ENTITY_SOURCE, 'utf8');
     const binding = await createNodeWorkspaceSemanticEntityMetadataBinding({
       homedir,
       workDir,
@@ -98,6 +101,7 @@ describe('workspace semantic/entity metadata binding', () => {
     ).resolves.toBe(true);
     await expect(binding.getSource(request.source.sourceId)).resolves.toBeNull();
     await expect(binding.listCandidateProjections()).resolves.toEqual([]);
+    await expect(readFile(entityPath, 'utf8')).resolves.toBe(CANONICAL_ENTITY_SOURCE);
     await binding.dispose();
   });
 
@@ -248,3 +252,14 @@ function occurrence(input: {
     sourceFingerprint,
   };
 }
+
+const CANONICAL_ENTITY_SOURCE = `${JSON.stringify(
+  {
+    schemaVersion: 1,
+    projectId: '56f0b16b-a627-4d47-bcf4-42a15a119dae',
+    revision: 1,
+    entities: [],
+  },
+  null,
+  2,
+)}\n`;
