@@ -229,7 +229,7 @@ export class DesktopShellService {
               activeTarget: { kind: 'home' },
               tabs: [],
               workbench: createDefaultDesktopWorkbenchLayout(windowId),
-              scene: createDefaultDesktopAgentScene(windowId, DESKTOP_DEFAULT_ASSISTANT_SPACE_ID),
+              scene: createDefaultDesktopAgentScene(windowId, `draft:${this.createIdentity()}`),
               applicationSidebar: createDefaultDesktopApplicationSidebar(windowId),
             },
           ],
@@ -360,7 +360,7 @@ export class DesktopShellService {
             ? requireStoredProject(state, request.intent.projectId)
             : undefined;
         const conversationId =
-          window.scene.context.kind === 'agent'
+          window.scene.context.kind === 'agent' && window.scene.context.scope.kind !== 'unbound'
             ? window.scene.context.scope.conversationId
             : undefined;
         if (conversationId) {
@@ -419,6 +419,10 @@ export class DesktopShellService {
         const tab = requireProjectTab(openedWindow, project.projectId);
         const scene = createWorkspaceAgentScene({
           current: window.scene,
+          draftId:
+            window.scene.context.kind === 'agent' && window.scene.context.scope.kind === 'unbound'
+              ? window.scene.context.scope.draftId
+              : `draft:${this.createIdentity()}`,
           workspaceGrantId: resolution.workspaceGrantId,
           workspaceId: resolution.workspace.workspaceId,
           tab,
@@ -509,10 +513,12 @@ export class DesktopShellService {
       const interaction = current.slots.interaction;
       if (
         current.context.kind === 'agent' &&
+        current.context.scope.kind !== 'unbound' &&
         current.context.agentViewId === input.agentViewId &&
         current.context.scope.conversationId === input.conversationId &&
         conversationContextMatchesSceneScope(input.context, current.context.scope) &&
         interaction?.kind === 'agent' &&
+        interaction.scope.kind !== 'unbound' &&
         interaction.agentViewId === input.agentViewId &&
         interaction.phase === 'session' &&
         interaction.scope.conversationId === input.conversationId
@@ -521,6 +527,7 @@ export class DesktopShellService {
       }
       if (
         current.context.kind !== 'agent' ||
+        current.context.scope.kind === 'unbound' ||
         current.context.agentViewId !== input.agentViewId ||
         !interaction ||
         interaction.kind !== 'agent' ||
@@ -598,9 +605,10 @@ export class DesktopShellService {
           }
         | undefined;
       if (context.kind === 'assistant') {
-        draft = parseDesktopWorkbenchSceneProjection({
-          ...createDefaultDesktopAgentScene(request.windowId, context.assistantSpaceId),
-          revision: window.scene.revision + 1,
+        draft = createAssistantAgentScene({
+          current: window.scene,
+          assistantSpaceId: context.assistantSpaceId,
+          draftId: `draft:${this.createIdentity()}`,
         });
       } else {
         const project = state.projects.find(
@@ -623,6 +631,7 @@ export class DesktopShellService {
         workspaceAttachment = { tab, workbench };
         draft = createWorkspaceAgentScene({
           current: window.scene,
+          draftId: `draft:${this.createIdentity()}`,
           workspaceGrantId: context.workspaceGrantId,
           workspaceId: context.workspaceId,
           tab,
@@ -1895,6 +1904,7 @@ function conversationContextMatchesSceneScope(
   context: AgentConversationContext,
   scope: DesktopAgentScopeProjection,
 ): boolean {
+  if (scope.kind === 'unbound') return false;
   return context.kind === 'assistant'
     ? scope.kind === 'assistant' && context.assistantSpaceId === scope.assistantSpaceId
     : scope.kind === 'workspace' &&
@@ -1929,8 +1939,45 @@ function attachConversationToDraftScene(
   });
 }
 
+function createAssistantAgentScene(input: {
+  readonly current: DesktopWorkbenchSceneProjection;
+  readonly assistantSpaceId: string;
+  readonly draftId: string;
+}): DesktopWorkbenchSceneProjection {
+  const sceneId = `scene:${input.current.windowId}:agent:${input.draftId}`;
+  const agentViewId =
+    input.current.context.kind === 'agent' && input.current.context.scope.draftId === input.draftId
+      ? input.current.context.agentViewId
+      : `agent-view:${input.current.windowId}:${input.draftId}`;
+  const scope = {
+    kind: 'assistant' as const,
+    draftId: input.draftId,
+    assistantSpaceId: input.assistantSpaceId,
+  };
+  return parseDesktopWorkbenchSceneProjection({
+    ...input.current,
+    sceneId,
+    revision: input.current.revision + 1,
+    context: {
+      kind: 'agent',
+      agentViewId,
+      scope,
+    },
+    slots: {
+      interaction: {
+        kind: 'agent',
+        agentViewId,
+        phase: 'draft',
+        scope,
+      },
+      status: { kind: 'scene-status', sceneId },
+    },
+  });
+}
+
 function createWorkspaceAgentScene(input: {
   readonly current: DesktopWorkbenchSceneProjection;
+  readonly draftId: string;
   readonly workspaceGrantId: string;
   readonly workspaceId: string;
   readonly tab: DesktopStoredWindow['tabs'][number];
@@ -1957,6 +2004,7 @@ function createWorkspaceAgentScene(input: {
   const sceneId = `scene:${input.current.windowId}:${input.workspaceId}`;
   const scope = {
     kind: 'workspace' as const,
+    draftId: input.draftId,
     workspaceId: input.workspaceId,
     workspaceGrantId: input.workspaceGrantId,
   };
@@ -2127,14 +2175,28 @@ function createTransitionedScene(
 ): DesktopWorkbenchSceneProjection {
   const revision = current.revision + 1;
   const windowId = current.windowId;
-  if (intent.kind === 'open-agent-assistant') {
-    const assistantSpaceId =
-      current.context.kind === 'agent' && current.context.scope.kind === 'assistant'
-        ? current.context.scope.assistantSpaceId
-        : DESKTOP_DEFAULT_ASSISTANT_SPACE_ID;
+  if (intent.kind === 'open-agent-entry') {
     return parseDesktopWorkbenchSceneProjection({
-      ...createDefaultDesktopAgentScene(windowId, assistantSpaceId),
+      ...createDefaultDesktopAgentScene(windowId, `draft:${createIdentity()}`),
       revision,
+    });
+  }
+  if (intent.kind === 'bind-agent-assistant') {
+    if (
+      current.context.kind !== 'agent' ||
+      current.context.scope.kind !== 'unbound' ||
+      current.context.scope.draftId !== intent.draftId ||
+      current.slots.interaction?.phase !== 'draft'
+    ) {
+      throw new DesktopSceneContractError(
+        'desktop-scene-stale-identity',
+        `Agent Draft '${intent.draftId}' is not the exact active Entry Draft.`,
+      );
+    }
+    return createAssistantAgentScene({
+      current,
+      assistantSpaceId: DESKTOP_DEFAULT_ASSISTANT_SPACE_ID,
+      draftId: intent.draftId,
     });
   }
   if (intent.kind === 'open-asset-center') {

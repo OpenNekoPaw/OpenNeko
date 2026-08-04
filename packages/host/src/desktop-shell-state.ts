@@ -22,7 +22,7 @@ import {
   type DesktopWorkbenchLayoutProjection,
 } from './desktop-workbench-contract';
 
-export const DESKTOP_SHELL_STATE_VERSION = 6 as const;
+export const DESKTOP_SHELL_STATE_VERSION = 7 as const;
 // Version 1 remains readable because it contains user-owned local Project and Window state.
 const DESKTOP_SHELL_STATE_V1 = 1 as const;
 // Version 2 carries the prelaunch Workbench v1 presentation.
@@ -33,6 +33,8 @@ const DESKTOP_SHELL_STATE_V3 = 3 as const;
 const DESKTOP_SHELL_STATE_V4 = 4 as const;
 // Version 5 contains prelaunch Scene slots whose management catalogs lived in Manager surfaces.
 const DESKTOP_SHELL_STATE_V5 = 5 as const;
+// Version 6 is the final state whose Agent draft was implicitly Assistant-bound.
+const DESKTOP_SHELL_STATE_V6 = 6 as const;
 
 export const DESKTOP_DEFAULT_ASSISTANT_SPACE_ID = 'assistant-space:local-user' as const;
 
@@ -115,6 +117,7 @@ export function parseDesktopShellStoredState(value: unknown): DesktopShellStored
   const sourceVersion = record['schemaVersion'];
   if (
     sourceVersion !== DESKTOP_SHELL_STATE_VERSION &&
+    sourceVersion !== DESKTOP_SHELL_STATE_V6 &&
     sourceVersion !== DESKTOP_SHELL_STATE_V5 &&
     sourceVersion !== DESKTOP_SHELL_STATE_V4 &&
     sourceVersion !== DESKTOP_SHELL_STATE_V3 &&
@@ -240,6 +243,7 @@ function parseStoredWindow(
   projectIds: ReadonlySet<string>,
   sourceVersion:
     | typeof DESKTOP_SHELL_STATE_VERSION
+    | typeof DESKTOP_SHELL_STATE_V6
     | typeof DESKTOP_SHELL_STATE_V5
     | typeof DESKTOP_SHELL_STATE_V4
     | typeof DESKTOP_SHELL_STATE_V3
@@ -251,7 +255,9 @@ function parseStoredWindow(
     record,
     sourceVersion === DESKTOP_SHELL_STATE_V1
       ? ['windowId', 'revision', 'activeTarget', 'tabs']
-      : sourceVersion === DESKTOP_SHELL_STATE_VERSION || sourceVersion === DESKTOP_SHELL_STATE_V5
+      : sourceVersion === DESKTOP_SHELL_STATE_VERSION ||
+          sourceVersion === DESKTOP_SHELL_STATE_V6 ||
+          sourceVersion === DESKTOP_SHELL_STATE_V5
         ? [
             'windowId',
             'revision',
@@ -294,11 +300,18 @@ function parseStoredWindow(
   const scene =
     sourceVersion === DESKTOP_SHELL_STATE_VERSION
       ? parseStoredScene(record['scene'], windowId)
-      : sourceVersion === DESKTOP_SHELL_STATE_V5
-        ? migrateStoredSceneV5(record['scene'], windowId)
-        : createDefaultDesktopAgentScene(windowId, DESKTOP_DEFAULT_ASSISTANT_SPACE_ID);
+      : sourceVersion === DESKTOP_SHELL_STATE_V6
+        ? migrateStoredSceneV6(record['scene'], windowId)
+        : sourceVersion === DESKTOP_SHELL_STATE_V5
+          ? migrateStoredSceneV5(record['scene'], windowId)
+          : createDefaultDesktopAgentScene(
+              windowId,
+              `draft:migrated:${windowId}:v${String(sourceVersion)}`,
+            );
   const applicationSidebar =
-    sourceVersion === DESKTOP_SHELL_STATE_VERSION || sourceVersion === DESKTOP_SHELL_STATE_V5
+    sourceVersion === DESKTOP_SHELL_STATE_VERSION ||
+    sourceVersion === DESKTOP_SHELL_STATE_V6 ||
+    sourceVersion === DESKTOP_SHELL_STATE_V5
       ? parseStoredApplicationSidebar(record['applicationSidebar'], windowId)
       : {
           ...createDefaultDesktopApplicationSidebar(windowId),
@@ -325,6 +338,7 @@ function parseStoredWorkbench(
   windowId: string,
   sourceVersion:
     | typeof DESKTOP_SHELL_STATE_VERSION
+    | typeof DESKTOP_SHELL_STATE_V6
     | typeof DESKTOP_SHELL_STATE_V5
     | typeof DESKTOP_SHELL_STATE_V4
     | typeof DESKTOP_SHELL_STATE_V3
@@ -368,11 +382,54 @@ function parseStoredScene(value: unknown, windowId: string): DesktopWorkbenchSce
   return scene;
 }
 
+function migrateStoredSceneV6(value: unknown, windowId: string): DesktopWorkbenchSceneProjection {
+  const record = requireRecord(value, 'Desktop version 6 Scene must be an object.');
+  if (record['schemaVersion'] !== 1) {
+    throw invalidState('Desktop version 6 Scene contract version must be 1.');
+  }
+  const context = requireRecord(record['context'], 'Desktop version 6 Scene context is required.');
+  if (context['kind'] !== 'agent') {
+    return parseStoredScene({ ...record, schemaVersion: 2 }, windowId);
+  }
+  const sceneId = requireNonEmptyString(
+    record['sceneId'],
+    'Desktop version 6 Scene identity is required.',
+  );
+  const revision = requireNonNegativeInteger(
+    record['revision'],
+    'Desktop version 6 Scene revision is invalid.',
+  );
+  const draftId = `draft:migrated:${windowId}:${sceneId}:${String(revision)}`;
+  const scope = migrateStoredAgentScopeV6(context['scope'], draftId);
+  const slots = requireRecord(record['slots'], 'Desktop version 6 Scene slots are required.');
+  const interaction = requireRecord(
+    slots['interaction'],
+    'Desktop version 6 Agent Scene interaction is required.',
+  );
+  return parseStoredScene(
+    {
+      ...record,
+      schemaVersion: 2,
+      context: { ...context, scope },
+      slots: { ...slots, interaction: { ...interaction, scope } },
+    },
+    windowId,
+  );
+}
+
+function migrateStoredAgentScopeV6(value: unknown, draftId: string): Record<string, unknown> {
+  const scope = requireRecord(value, 'Desktop version 6 Agent scope must be an object.');
+  if (scope['kind'] !== 'assistant' && scope['kind'] !== 'workspace') {
+    throw invalidState(`Unknown Desktop version 6 Agent scope '${String(scope['kind'])}'.`);
+  }
+  return { ...scope, draftId };
+}
+
 function migrateStoredSceneV5(value: unknown, windowId: string): DesktopWorkbenchSceneProjection {
   const record = requireRecord(value, 'Desktop version 5 Scene must be an object.');
   const slots = requireRecord(record['slots'], 'Desktop version 5 Scene slots must be an object.');
   const leftManager = slots['leftManager'];
-  if (!isUnknownRecord(leftManager)) return parseStoredScene(value, windowId);
+  if (!isUnknownRecord(leftManager)) return migrateStoredSceneV6(value, windowId);
 
   const kind = leftManager['kind'];
   if (kind === 'assistant-resources') {
@@ -385,7 +442,7 @@ function migrateStoredSceneV5(value: unknown, windowId: string): DesktopWorkbenc
       leftManager['assistantSpaceId'],
       'Desktop version 5 Assistant Space identity is required.',
     );
-    const migrated = parseStoredScene(
+    const migrated = migrateStoredSceneV6(
       { ...record, slots: copySlotsWithout(slots, ['leftManager']) },
       windowId,
     );
@@ -400,12 +457,12 @@ function migrateStoredSceneV5(value: unknown, windowId: string): DesktopWorkbenc
   }
 
   const management = readVersion5ManagementCatalog(leftManager);
-  if (!management) return parseStoredScene(value, windowId);
+  if (!management) return migrateStoredSceneV6(value, windowId);
   if (slots['secondaryMain'] !== undefined) {
     throw invalidState('Desktop version 5 management Scene already contains Secondary Main.');
   }
   const previousMain = slots['main'];
-  return parseStoredScene(
+  return migrateStoredSceneV6(
     {
       ...record,
       slots: {

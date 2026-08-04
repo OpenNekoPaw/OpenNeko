@@ -1,6 +1,7 @@
-export const AGENT_ROOT_PRESENTATION_VERSION = 1 as const;
+export const AGENT_ROOT_PRESENTATION_VERSION = 2 as const;
 
 export type AgentAuthorityScopeProjection =
+  | { readonly kind: 'unbound'; readonly draftId: string }
   | {
       readonly kind: 'assistant';
       readonly assistantSpaceId: string;
@@ -11,31 +12,39 @@ export type AgentAuthorityScopeProjection =
       readonly workspaceGrantId: string;
     };
 
+export type AgentBoundAuthorityScopeProjection = Exclude<
+  AgentAuthorityScopeProjection,
+  { readonly kind: 'unbound' }
+>;
+
 export type AgentRootPresentation =
   | {
       readonly schemaVersion: typeof AGENT_ROOT_PRESENTATION_VERSION;
       readonly kind: 'draft';
+      readonly draftId: string;
       readonly scope: AgentAuthorityScopeProjection;
     }
   | {
       readonly schemaVersion: typeof AGENT_ROOT_PRESENTATION_VERSION;
       readonly kind: 'session';
-      readonly scope: AgentAuthorityScopeProjection;
+      readonly scope: AgentBoundAuthorityScopeProjection;
       readonly conversationId: string;
     };
 
 export function createAgentDraftPresentation(
+  draftId: string,
   scope: AgentAuthorityScopeProjection,
 ): AgentRootPresentation {
   return parseAgentRootPresentation({
     schemaVersion: AGENT_ROOT_PRESENTATION_VERSION,
     kind: 'draft',
+    draftId,
     scope,
   });
 }
 
 export function createAgentSessionPresentation(
-  scope: AgentAuthorityScopeProjection,
+  scope: AgentBoundAuthorityScopeProjection,
   conversationId: string,
 ): AgentRootPresentation {
   return parseAgentRootPresentation({
@@ -52,19 +61,29 @@ export function parseAgentRootPresentation(value: unknown): AgentRootPresentatio
     throw new Error('Agent Root presentation version is unsupported.');
   }
   if (record['kind'] === 'draft') {
-    requireExactKeys(record, ['schemaVersion', 'kind', 'scope']);
+    requireExactKeys(record, ['schemaVersion', 'kind', 'draftId', 'scope']);
+    const draftId = requireIdentity(record['draftId'], 'draft');
+    const scope = parseAgentAuthorityScopeProjection(record['scope']);
+    if (scope.kind === 'unbound' && scope.draftId !== draftId) {
+      throw new Error('Agent unbound authority scope does not match its draft identity.');
+    }
     return {
       schemaVersion: AGENT_ROOT_PRESENTATION_VERSION,
       kind: 'draft',
-      scope: parseAgentAuthorityScopeProjection(record['scope']),
+      draftId,
+      scope,
     };
   }
   if (record['kind'] === 'session') {
     requireExactKeys(record, ['schemaVersion', 'kind', 'scope', 'conversationId']);
+    const scope = parseAgentAuthorityScopeProjection(record['scope']);
+    if (scope.kind === 'unbound') {
+      throw new Error('Agent session presentation requires a bound authority scope.');
+    }
     return {
       schemaVersion: AGENT_ROOT_PRESENTATION_VERSION,
       kind: 'session',
-      scope: parseAgentAuthorityScopeProjection(record['scope']),
+      scope,
       conversationId: requireIdentity(record['conversationId'], 'conversation'),
     };
   }
@@ -73,6 +92,10 @@ export function parseAgentRootPresentation(value: unknown): AgentRootPresentatio
 
 export function parseAgentAuthorityScopeProjection(value: unknown): AgentAuthorityScopeProjection {
   const record = requireRecord(value, 'Agent authority scope must be an object.');
+  if (record['kind'] === 'unbound') {
+    requireExactKeys(record, ['kind', 'draftId']);
+    return { kind: 'unbound', draftId: requireIdentity(record['draftId'], 'draft') };
+  }
   if (record['kind'] === 'assistant') {
     requireExactKeys(record, ['kind', 'assistantSpaceId']);
     return {

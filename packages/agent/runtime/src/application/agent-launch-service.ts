@@ -312,6 +312,9 @@ function sameScope(
   right: AgentAuthorityScopeProjection,
 ): boolean {
   if (left.kind !== right.kind) return false;
+  if (left.kind === 'unbound' && right.kind === 'unbound') {
+    return left.draftId === right.draftId;
+  }
   if (left.kind === 'assistant' && right.kind === 'assistant') {
     return left.assistantSpaceId === right.assistantSpaceId;
   }

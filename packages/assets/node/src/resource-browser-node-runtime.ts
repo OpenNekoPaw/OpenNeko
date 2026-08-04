@@ -100,6 +100,7 @@ export interface ResourceBrowserShellProjection {
             readonly kind: 'agent';
             readonly agentViewId: string;
             readonly scope:
+              | { readonly kind: 'unbound' }
               | { readonly kind: 'assistant' }
               | { readonly kind: 'workspace'; readonly workspaceId: string };
           }

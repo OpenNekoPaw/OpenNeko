@@ -1888,6 +1888,9 @@ function sameAgentScope(
   left: AgentAuthorityScopeProjection,
   right: AgentAuthorityScopeProjection,
 ): boolean {
+  if (left.kind === 'unbound' || right.kind === 'unbound') {
+    return left.kind === 'unbound' && right.kind === 'unbound' && left.draftId === right.draftId;
+  }
   if (left.kind === 'assistant' && right.kind === 'assistant') {
     return left.assistantSpaceId === right.assistantSpaceId;
   }
@@ -1903,6 +1906,7 @@ function conversationContextMatchesLaunchScope(
   context: AgentConversationContext,
   scope: AgentAuthorityScopeProjection,
 ): boolean {
+  if (scope.kind === 'unbound') return false;
   return context.kind === 'assistant'
     ? scope.kind === 'assistant' && context.assistantSpaceId === scope.assistantSpaceId
     : scope.kind === 'workspace' &&

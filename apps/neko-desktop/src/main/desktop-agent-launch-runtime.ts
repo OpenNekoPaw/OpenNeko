@@ -107,7 +107,7 @@ export function createDesktopAgentLaunchRuntime(input: {
             kind: 'resource',
             id: `resource:${resourceGrantId}`,
             label: selected.label,
-            scopeRequirement: connection.scope.kind,
+            scopeRequirement: connection.scope.kind === 'unbound' ? 'any' : connection.scope.kind,
             resourceGrantId,
             resourceKind,
           },

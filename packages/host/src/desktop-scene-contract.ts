@@ -1,16 +1,19 @@
-export const DESKTOP_SCENE_CONTRACT_VERSION = 1 as const;
+export const DESKTOP_SCENE_CONTRACT_VERSION = 2 as const;
 export const DESKTOP_APPLICATION_SIDEBAR_CONTRACT_VERSION = 1 as const;
 export const DESKTOP_APPLICATION_SIDEBAR_DEFAULT_WIDTH = 240;
 export const DESKTOP_APPLICATION_SIDEBAR_WIDTH_LIMITS = { min: 208, max: 360 } as const;
 
 export type DesktopAgentScopeProjection =
+  | { readonly kind: 'unbound'; readonly draftId: string }
   | {
       readonly kind: 'assistant';
+      readonly draftId: string;
       readonly assistantSpaceId: string;
       readonly conversationId?: string;
     }
   | {
       readonly kind: 'workspace';
+      readonly draftId: string;
       readonly workspaceId: string;
       readonly workspaceGrantId: string;
       readonly conversationId?: string;
@@ -106,7 +109,8 @@ export interface DesktopApplicationSidebarProjection {
 }
 
 export type DesktopSceneTransitionIntent =
-  | { readonly kind: 'open-agent-assistant' }
+  | { readonly kind: 'open-agent-entry' }
+  | { readonly kind: 'bind-agent-assistant'; readonly draftId: string }
   | { readonly kind: 'open-workspace'; readonly workspaceGrantId: string }
   | { readonly kind: 'open-project-workspace'; readonly projectId: string }
   | { readonly kind: 'open-asset-center' }
@@ -316,16 +320,13 @@ export function createDefaultDesktopApplicationSidebar(
 
 export function createDefaultDesktopAgentScene(
   windowId: string,
-  assistantSpaceId: string,
+  draftId: string,
 ): DesktopWorkbenchSceneProjection {
   const exactWindowId = requireIdentity(windowId, 'Desktop Scene Window');
-  const exactAssistantSpaceId = requireIdentity(assistantSpaceId, 'Assistant Space');
-  const sceneId = `scene:${exactWindowId}:agent`;
-  const agentViewId = `agent-view:${exactWindowId}`;
-  const scope: DesktopAgentScopeProjection = {
-    kind: 'assistant',
-    assistantSpaceId: exactAssistantSpaceId,
-  };
+  const exactDraftId = requireIdentity(draftId, 'Agent Draft');
+  const sceneId = `scene:${exactWindowId}:agent:${exactDraftId}`;
+  const agentViewId = `agent-view:${exactWindowId}:${exactDraftId}`;
+  const scope: DesktopAgentScopeProjection = { kind: 'unbound', draftId: exactDraftId };
   return {
     schemaVersion: DESKTOP_SCENE_CONTRACT_VERSION,
     sceneId,
@@ -569,12 +570,20 @@ function parseSceneContext(value: unknown): DesktopWorkbenchSceneContext {
 function parseAgentScope(value: unknown): DesktopAgentScopeProjection {
   const record = requireRecord(value, 'Agent scope must be an object.');
   const kind = record['kind'];
+  if (kind === 'unbound') {
+    requireExactKeys(record, ['kind', 'draftId'], 'Unbound Agent scope');
+    return { kind, draftId: requireIdentity(record['draftId'], 'Agent Draft') };
+  }
   if (kind === 'assistant') {
-    requireExactKeys(record, ['kind', 'assistantSpaceId', 'conversationId'], 'Assistant scope', [
-      'conversationId',
-    ]);
+    requireExactKeys(
+      record,
+      ['kind', 'draftId', 'assistantSpaceId', 'conversationId'],
+      'Assistant scope',
+      ['conversationId'],
+    );
     return {
       kind,
+      draftId: requireIdentity(record['draftId'], 'Agent Draft'),
       assistantSpaceId: requireIdentity(record['assistantSpaceId'], 'Assistant Space'),
       ...readConversationId(record),
     };
@@ -582,12 +591,13 @@ function parseAgentScope(value: unknown): DesktopAgentScopeProjection {
   if (kind === 'workspace') {
     requireExactKeys(
       record,
-      ['kind', 'workspaceId', 'workspaceGrantId', 'conversationId'],
+      ['kind', 'draftId', 'workspaceId', 'workspaceGrantId', 'conversationId'],
       'Workspace scope',
       ['conversationId'],
     );
     return {
       kind,
+      draftId: requireIdentity(record['draftId'], 'Agent Draft'),
       workspaceId: requireIdentity(record['workspaceId'], 'Workspace'),
       workspaceGrantId: requireIdentity(record['workspaceGrantId'], 'Workspace Grant'),
       ...readConversationId(record),
@@ -805,13 +815,17 @@ function parseSceneTransitionIntent(value: unknown): DesktopSceneTransitionInten
   const record = requireRecord(value, 'Desktop Scene transition intent must be an object.');
   const kind = record['kind'];
   if (
-    kind === 'open-agent-assistant' ||
+    kind === 'open-agent-entry' ||
     kind === 'open-asset-center' ||
     kind === 'open-extensions' ||
     kind === 'open-project-management'
   ) {
     requireExactKeys(record, ['kind'], 'Desktop Scene transition intent');
     return { kind };
+  }
+  if (kind === 'bind-agent-assistant') {
+    requireExactKeys(record, ['kind', 'draftId'], 'Desktop Scene transition intent');
+    return { kind, draftId: requireIdentity(record['draftId'], 'Agent Draft') };
   }
   if (kind === 'open-workspace') {
     requireExactKeys(record, ['kind', 'workspaceGrantId'], 'Open Workspace intent');
@@ -855,7 +869,8 @@ function validateSceneProjection(projection: DesktopWorkbenchSceneProjection): v
     if (!equalAgentScope(slots.interaction.scope, context.scope)) {
       throw mismatch('Agent Interaction scope does not match Scene context.');
     }
-    const expectsSession = context.scope.conversationId !== undefined;
+    const expectsSession =
+      context.scope.kind !== 'unbound' && context.scope.conversationId !== undefined;
     if ((slots.interaction.phase === 'session') !== expectsSession) {
       throw mismatch('Agent presentation phase does not match Conversation binding.');
     }
@@ -929,6 +944,9 @@ function validateAgentMain(
   ref: DesktopWorkbenchMainSurfaceRef | undefined,
 ): void {
   if (!ref) return;
+  if (scope.kind === 'unbound') {
+    throw mismatch(`Unbound Agent Scene cannot mount Main Surface '${ref.kind}'.`);
+  }
   if (scope.kind === 'assistant') {
     if (
       ref.kind !== 'assistant-preview' ||
@@ -949,6 +967,9 @@ function validateAgentManager(
   ref: DesktopWorkbenchManagerSurfaceRef | undefined,
 ): void {
   if (!ref) return;
+  if (scope.kind === 'unbound') {
+    throw mismatch(`Unbound Agent Scene cannot mount Manager Surface '${ref.kind}'.`);
+  }
   if (scope.kind === 'assistant') {
     throw mismatch(`Assistant Scene cannot mount Manager Surface '${ref.kind}'.`);
   }
@@ -1008,14 +1029,23 @@ function equalAgentScope(
   left: DesktopAgentScopeProjection,
   right: DesktopAgentScopeProjection,
 ): boolean {
+  if (left.kind === 'unbound' || right.kind === 'unbound') {
+    return left.kind === 'unbound' && right.kind === 'unbound' && left.draftId === right.draftId;
+  }
+  if (left.kind === 'assistant' || right.kind === 'assistant') {
+    return (
+      left.kind === 'assistant' &&
+      right.kind === 'assistant' &&
+      left.draftId === right.draftId &&
+      left.conversationId === right.conversationId &&
+      left.assistantSpaceId === right.assistantSpaceId
+    );
+  }
   return (
-    left.kind === right.kind &&
+    left.draftId === right.draftId &&
     left.conversationId === right.conversationId &&
-    (left.kind === 'assistant'
-      ? right.kind === 'assistant' && left.assistantSpaceId === right.assistantSpaceId
-      : right.kind === 'workspace' &&
-        left.workspaceId === right.workspaceId &&
-        left.workspaceGrantId === right.workspaceGrantId)
+    left.workspaceId === right.workspaceId &&
+    left.workspaceGrantId === right.workspaceGrantId
   );
 }
 

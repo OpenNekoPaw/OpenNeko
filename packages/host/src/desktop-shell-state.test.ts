@@ -8,6 +8,7 @@ import {
   type DesktopShellStoredState,
 } from './desktop-shell-state';
 import {
+  DESKTOP_SCENE_CONTRACT_VERSION,
   createDefaultDesktopAgentScene,
   createDefaultDesktopApplicationSidebar,
 } from './desktop-scene-contract';
@@ -80,7 +81,7 @@ describe('Desktop Shell state codec', () => {
       schemaVersion: DESKTOP_SHELL_STATE_VERSION,
       windows: [
         {
-          scene: { context: { kind: 'agent', scope: { kind: 'assistant' } } },
+          scene: { context: { kind: 'agent', scope: { kind: 'unbound' } } },
           applicationSidebar: { visible: true, width: 240 },
           workbench: { schemaVersion: 4, display: { mode: 'chat-only' } },
         },
@@ -266,7 +267,7 @@ describe('Desktop Shell state codec', () => {
         {
           scene: {
             windowId: 'window-1',
-            context: { kind: 'agent', scope: { kind: 'assistant' } },
+            context: { kind: 'agent', scope: { kind: 'unbound' } },
           },
           applicationSidebar: {
             windowId: 'window-1',
@@ -316,11 +317,85 @@ describe('Desktop Shell state codec', () => {
     expect(migrated.windows[1]?.scene.slots).not.toHaveProperty('leftManager');
   });
 
+  it('migrates the exact version 6 Assistant Scene to contract v2 with a stable draft identity', () => {
+    const legacyScene = createVersion6AssistantScene('window-1');
+    const migrated = parseDesktopShellStoredState({
+      schemaVersion: 6,
+      storageRevision: 31,
+      catalogRevision: 0,
+      primaryWindowId: 'window-1',
+      projects: [],
+      windows: [
+        {
+          windowId: 'window-1',
+          revision: 4,
+          activeTarget: { kind: 'home' },
+          tabs: [],
+          workbench: createDefaultDesktopWorkbenchLayout('window-1'),
+          scene: legacyScene,
+          applicationSidebar: createDefaultDesktopApplicationSidebar('window-1'),
+        },
+      ],
+    });
+
+    const scene = migrated.windows[0]?.scene;
+    expect(scene).toMatchObject({
+      schemaVersion: DESKTOP_SCENE_CONTRACT_VERSION,
+      sceneId: 'scene:window-1:agent',
+      revision: 0,
+      context: {
+        kind: 'agent',
+        scope: {
+          kind: 'assistant',
+          draftId: 'draft:migrated:window-1:scene:window-1:agent:0',
+          assistantSpaceId: DESKTOP_DEFAULT_ASSISTANT_SPACE_ID,
+        },
+      },
+      slots: {
+        interaction: {
+          phase: 'draft',
+          scope: { draftId: 'draft:migrated:window-1:scene:window-1:agent:0' },
+        },
+      },
+    });
+  });
+
   it('keeps retired Manager Surface kinds invalid in the current stored-state version', () => {
+    const sceneId = 'scene:window-1:project-management';
     expect(() =>
       parseDesktopShellStoredState({
-        ...createVersion5RetiredSceneState(),
         schemaVersion: DESKTOP_SHELL_STATE_VERSION,
+        storageRevision: 894,
+        catalogRevision: 0,
+        primaryWindowId: 'window-1',
+        projects: [],
+        windows: [
+          {
+            windowId: 'window-1',
+            revision: 28,
+            activeTarget: { kind: 'home' },
+            tabs: [],
+            workbench: createDefaultDesktopWorkbenchLayout('window-1'),
+            scene: {
+              schemaVersion: DESKTOP_SCENE_CONTRACT_VERSION,
+              sceneId,
+              windowId: 'window-1',
+              revision: 28,
+              context: {
+                kind: 'project-management',
+                projectManagementSessionId: 'project-management:1',
+              },
+              slots: {
+                leftManager: {
+                  kind: 'project-catalog',
+                  projectManagementSessionId: 'project-management:1',
+                },
+                status: { kind: 'scene-status', sceneId },
+              },
+            },
+            applicationSidebar: createDefaultDesktopApplicationSidebar('window-1'),
+          },
+        ],
       }),
     ).toThrow("Unknown Manager Surface kind 'project-catalog'");
   });
@@ -446,10 +521,7 @@ function withPrimaryWindow(
 
 function createVersion5RetiredSceneState(): unknown {
   const projectSceneId = 'scene:window-1:project-management';
-  const assistantScene = createDefaultDesktopAgentScene(
-    'window-2',
-    DESKTOP_DEFAULT_ASSISTANT_SPACE_ID,
-  );
+  const assistantScene = createVersion6AssistantScene('window-2');
   return {
     schemaVersion: 5,
     storageRevision: 894,
@@ -501,6 +573,26 @@ function createVersion5RetiredSceneState(): unknown {
         applicationSidebar: createDefaultDesktopApplicationSidebar('window-2'),
       },
     ],
+  };
+}
+
+function createVersion6AssistantScene(windowId: string): Record<string, unknown> {
+  const sceneId = `scene:${windowId}:agent`;
+  const agentViewId = `agent-view:${windowId}`;
+  const scope = {
+    kind: 'assistant',
+    assistantSpaceId: DESKTOP_DEFAULT_ASSISTANT_SPACE_ID,
+  };
+  return {
+    schemaVersion: 1,
+    sceneId,
+    windowId,
+    revision: 0,
+    context: { kind: 'agent', agentViewId, scope },
+    slots: {
+      interaction: { kind: 'agent', agentViewId, phase: 'draft', scope },
+      status: { kind: 'scene-status', sceneId },
+    },
   };
 }
 

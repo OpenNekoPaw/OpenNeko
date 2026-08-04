@@ -16,25 +16,25 @@ import {
 } from './desktop-scene-contract';
 
 describe('Desktop Scene contract', () => {
-  it('creates an Assistant draft scene with exact Window and shared scope identities', () => {
-    expect(createDefaultDesktopAgentScene('window-1', 'assistant-space:user')).toEqual({
+  it('creates an unbound Entry Draft scene with exact Window and draft identities', () => {
+    expect(createDefaultDesktopAgentScene('window-1', 'draft-1')).toEqual({
       schemaVersion: DESKTOP_SCENE_CONTRACT_VERSION,
-      sceneId: 'scene:window-1:agent',
+      sceneId: 'scene:window-1:agent:draft-1',
       windowId: 'window-1',
       revision: 0,
       context: {
         kind: 'agent',
-        agentViewId: 'agent-view:window-1',
-        scope: { kind: 'assistant', assistantSpaceId: 'assistant-space:user' },
+        agentViewId: 'agent-view:window-1:draft-1',
+        scope: { kind: 'unbound', draftId: 'draft-1' },
       },
       slots: {
         interaction: {
           kind: 'agent',
-          agentViewId: 'agent-view:window-1',
+          agentViewId: 'agent-view:window-1:draft-1',
           phase: 'draft',
-          scope: { kind: 'assistant', assistantSpaceId: 'assistant-space:user' },
+          scope: { kind: 'unbound', draftId: 'draft-1' },
         },
-        status: { kind: 'scene-status', sceneId: 'scene:window-1:agent' },
+        status: { kind: 'scene-status', sceneId: 'scene:window-1:agent:draft-1' },
       },
     });
   });
@@ -59,7 +59,20 @@ describe('Desktop Scene contract', () => {
   });
 
   it('rejects incompatible slots, unknown kinds and renderer component payloads', () => {
-    const assistant = createDefaultDesktopAgentScene('window-1', 'assistant-space:user');
+    const assistantDraft = createDefaultDesktopAgentScene('window-1', 'draft-1');
+    const assistantScope = {
+      kind: 'assistant' as const,
+      draftId: 'draft-1',
+      assistantSpaceId: 'assistant-space:user',
+    };
+    const assistant = {
+      ...assistantDraft,
+      context: { ...assistantDraft.context, scope: assistantScope },
+      slots: {
+        ...assistantDraft.slots,
+        interaction: { ...assistantDraft.slots.interaction, scope: assistantScope },
+      },
+    };
     expect(() =>
       parseDesktopWorkbenchSceneProjection({
         ...assistant,
@@ -89,9 +102,10 @@ describe('Desktop Scene contract', () => {
   });
 
   it('requires an exact Assistant Conversation and Scratch owner for Preview', () => {
-    const draft = createDefaultDesktopAgentScene('window-1', 'assistant-space:user');
+    const draft = createDefaultDesktopAgentScene('window-1', 'draft-1');
     const scope = {
       kind: 'assistant' as const,
+      draftId: 'draft-1',
       assistantSpaceId: 'assistant-space:user',
       conversationId: 'conversation:1',
     };
@@ -354,6 +368,7 @@ function workspaceScene() {
       agentViewId: 'agent-view:window-1',
       scope: {
         kind: 'workspace' as const,
+        draftId: 'draft-1',
         workspaceId: 'workspace-1',
         workspaceGrantId: 'grant-1',
         conversationId: 'conversation-1',
@@ -366,6 +381,7 @@ function workspaceScene() {
         phase: 'session' as const,
         scope: {
           kind: 'workspace' as const,
+          draftId: 'draft-1',
           workspaceId: 'workspace-1',
           workspaceGrantId: 'grant-1',
           conversationId: 'conversation-1',

@@ -355,10 +355,15 @@ describe('DesktopAppHost', () => {
   it('binds Agent launch attach to the exact Assistant Scene and renderer epoch', async () => {
     const agentLaunch = createAgentLaunchRuntime();
     const fixture = await createShellAppHost({ agentLaunch });
-    const scene = fixture.projection.window.scene;
+    const projection = await bindAssistantDraft(fixture);
+    const scene = projection.window.scene;
     if (scene.context.kind !== 'agent' || scene.context.scope.kind !== 'assistant') {
       throw new Error('Agent launch AppHost fixture requires an Assistant Scene.');
     }
+    const launchScope = {
+      kind: 'assistant' as const,
+      assistantSpaceId: scene.context.scope.assistantSpaceId,
+    };
     const catalog = createLaunchCatalog({
       applicationInstanceId: 'app-1',
       windowId: fixture.windowId,
@@ -366,7 +371,7 @@ describe('DesktopAppHost', () => {
       rendererEpoch: 1,
       connectionEpoch: 1,
       connectionId: 'launch-1',
-      scope: scene.context.scope,
+      scope: launchScope,
     });
     vi.spyOn(agentLaunch, 'attach').mockResolvedValue(catalog);
 
@@ -376,7 +381,7 @@ describe('DesktopAppHost', () => {
         requestId: 'launch-attach-1',
         operation: 'attach',
         viewId: scene.context.agentViewId,
-        scope: scene.context.scope,
+        scope: launchScope,
       }),
     ).resolves.toEqual({
       schemaVersion: AGENT_LAUNCH_CONTRACT_VERSION,
@@ -389,7 +394,7 @@ describe('DesktopAppHost', () => {
       windowId: fixture.windowId,
       viewId: scene.context.agentViewId,
       rendererEpoch: 1,
-      scope: scene.context.scope,
+      scope: launchScope,
     });
 
     fixture.appHost.windows.rendererLoading(fixture.windowId, 'app-1');
@@ -429,7 +434,8 @@ describe('DesktopAppHost', () => {
       now: () => '2026-08-03T00:00:00.000Z',
     });
     const fixture = await createShellAppHost({ conversationLifecycle });
-    const scene = fixture.projection.window.scene;
+    const projection = await bindAssistantDraft(fixture);
+    const scene = projection.window.scene;
     if (scene.context.kind !== 'agent' || scene.context.scope.kind !== 'assistant') {
       throw new Error('Assistant first-submit fixture requires an Assistant Scene.');
     }
@@ -1451,6 +1457,25 @@ async function createShellAppHost(options?: {
     },
     projection: await appHost.shell.getProjection(windowId),
   };
+}
+
+async function bindAssistantDraft(fixture: Awaited<ReturnType<typeof createShellAppHost>>) {
+  const scene = fixture.projection.window.scene;
+  if (scene.context.kind !== 'agent' || scene.context.scope.kind !== 'unbound') {
+    throw new Error('Assistant binding fixture requires an unbound Entry Draft.');
+  }
+  await fixture.appHost.transitionScene(
+    fixture.sender,
+    createDesktopSceneTransitionRequest({
+      requestId: 'bind-assistant-fixture',
+      expectedEndpointEpoch: fixture.projection.endpointEpoch,
+      windowId: fixture.windowId,
+      expectedWindowRevision: fixture.projection.window.revision,
+      expectedSceneRevision: scene.revision,
+      intent: { kind: 'bind-agent-assistant', draftId: scene.context.scope.draftId },
+    }),
+  );
+  return fixture.appHost.shell.getProjection(fixture.windowId);
 }
 
 function createLaunchCatalog(

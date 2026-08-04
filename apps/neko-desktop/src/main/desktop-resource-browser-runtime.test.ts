@@ -330,7 +330,7 @@ describe('ResourceBrowserNodeRuntime Project identity', () => {
           windowId,
           expectedWindowRevision: projection.window.revision,
           expectedSceneRevision: projection.window.scene.revision,
-          intent: { kind: 'open-agent-assistant' },
+          intent: { kind: 'open-agent-entry' },
         }),
       );
       await expect(
