@@ -25,13 +25,13 @@ Date: 2026-08-04
 The suite update requires the following focused case groups once the Desktop complete-session driver
 supports their public operations and facts:
 
-| Case | Group | Required hard evidence | Fail-visible / forbidden evidence |
-| --- | --- | --- | --- |
-| `assistant-first-submit-exactly-once` | canonical | Assistant scope identity; requested/effective provider and model; committed conversation/message/request/turn identities; one provider-start claim; terminal idle | no Home handoff, Workspace/Project identity or duplicate initial turn |
-| `workspace-directory-grant-first-submit` | canonical | native directory choice; sender/Window-bound opaque grant; exact Workspace identity; draft scope switch; frozen conversation context; terminal provider turn | no raw path in renderer/facts and no active/first/recent Project lookup |
-| `assistant-workspace-scope-required` | failure | Assistant scope plus typed `workspace-scope-required` diagnostic for a Workspace-only route | no Workspace Tool execution, mutation or default Project resolution |
-| `workspace-directory-cancel-preserves-draft` | boundary | cancelled picker; unchanged scene/scope revisions; no Workspace or conversation creation | cancellation cannot report a successful grant or transition |
-| `workspace-conversation-exact-restore` | regression | persisted conversation context; exact grant restore; exact Workspace and session attachment after restart | unresolved/revoked/mismatched context fails closed; no current Project lookup |
+| Case                                         | Group      | Required hard evidence                                                                                                                                            | Fail-visible / forbidden evidence                                             |
+| -------------------------------------------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `assistant-first-submit-exactly-once`        | canonical  | Assistant scope identity; requested/effective provider and model; committed conversation/message/request/turn identities; one provider-start claim; terminal idle | no Home handoff, Workspace/Project identity or duplicate initial turn         |
+| `workspace-directory-grant-first-submit`     | canonical  | native directory choice; sender/Window-bound opaque grant; exact Workspace identity; draft scope switch; frozen conversation context; terminal provider turn      | no raw path in renderer/facts and no active/first/recent Project lookup       |
+| `assistant-workspace-scope-required`         | failure    | Assistant scope plus typed `workspace-scope-required` diagnostic for a Workspace-only route                                                                       | no Workspace Tool execution, mutation or default Project resolution           |
+| `workspace-directory-cancel-preserves-draft` | boundary   | cancelled picker; unchanged scene/scope revisions; no Workspace or conversation creation                                                                          | cancellation cannot report a successful grant or transition                   |
+| `workspace-conversation-exact-restore`       | regression | persisted conversation context; exact grant restore; exact Workspace and session attachment after restart                                                         | unresolved/revoked/mismatched context fails closed; no current Project lookup |
 
 - Evidence and coverage delta: current deterministic contracts expose scene/grant/context/request/turn
   identities and provider claim semantics. The Evaluation driver exposes ordinary Workspace session
@@ -82,9 +82,19 @@ supports their public operations and facts:
   function is a pure, strict projection from a persisted Pi assistant entry to one UI Message; it
   does not select a provider/model, start/retry a turn, route a Tool or mutate session authority.
   `pnpm --dir packages/agent/runtime exec vitest run
-  src/runtime/projection/__tests__/pi-conversation-history-projector.test.ts` is the authoritative
+src/runtime/projection/__tests__/pi-conversation-history-projector.test.ts` is the authoritative
   deterministic validation.
 - Canonical path: Pi Session error entry with `stopReason: error` and `errorMessage` ->
   `projectPiConversationEntries` -> conversation-scoped `Message.isError` -> package-owned Agent
   error card. Forbidden fallback: empty content, fixed label-only Error, automatic retry, hidden
   failed turn or Desktop-owned error renderer.
+- Assistant/Workspace exact bootstrap and provider-preflight failure checkpointing are `excluded`
+  from provider-backed Evaluation as deterministic identity and persistence boundaries. Host/AppHost,
+  bridge and controller tests prove Scene conversation -> exact connection -> active conversation/Tab
+  state, poison the prior connection, and fail visibly for a missing conversation. Agent Runtime tests
+  prove that a preflight failure checkpoints the original user message once under the committed
+  conversation/turn identity, while a provider-started failure preserves the existing Pi checkpoint.
+- The visible development and packaged Electron scenario additionally proves that the locally
+  committed Assistant message renders immediately in session phase and restores through the exact
+  recent-conversation identity after leaving the Agent scene. This does not replace the still-blocked
+  provider-backed `assistant-first-submit-exactly-once` success case or prove model output quality.

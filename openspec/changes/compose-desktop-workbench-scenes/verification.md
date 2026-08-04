@@ -70,6 +70,14 @@ The 9.10/9.11 regression rerun added path evidence for:
 Focused commands passed with Host `36 files / 315 tests`, Desktop `3 files / 37 tests`, Agent
 projector `3 / 3`, Desktop and Agent Runtime typechecks, and `git diff --check`.
 
+The final exact-session and management-composition rerun passed Agent Runtime `115 files / 1076
+tests`, Agent Webview `90 / 691`, Desktop `65 / 335`, Assets Webview `5 / 35`, and the repository
+typecheck. The added path assertions prove that Host bootstrap supplies the exact Scene conversation,
+the bridge replaces a same-View connection when its conversation changes, the controller initializes
+the exact active conversation and Tab at revision zero, and a missing conversation fails visibly.
+The initial-turn regression also proves preflight checkpoint idempotency and preservation of an
+existing Pi checkpoint after provider execution has started.
+
 The final full rerun passed `pnpm build`, `pnpm test`, `pnpm check` and `pnpm check:quality`. The
 updated totals include Preview Webview `16 files / 85 tests`, Agent Webview `90 / 689`, Host
 `36 / 313`, Assets Node `9 / 50` and Desktop `65 / 326`.
@@ -116,6 +124,12 @@ The 9.9 development Electron rerun passed after the final presentation changes:
 
 `reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-03T20-47-50.423Z-desktop-workbench-scenes-development/report.json`
 
+The final development and packaged qualification reruns passed:
+
+`reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-04T00-03-59.499Z-desktop-workbench-scenes-development/report.json`
+
+`reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-04T00-07-17.696Z-desktop-workbench-scenes-packaged/report.json`
+
 It records the dedicated compact Sidebar control outside the brand, bounded 1006 px Project and
 Extension management Roots inside a 1072 px Main, Asset Center Preview owned by `preview-webview`,
 and aligned EmptyState/composer widths of 820 px in Agent-only and 334 px in the Workspace dock. The
@@ -133,8 +147,15 @@ The scenario proves:
 - Asset Management remains Main at large and 960 x 720 windows; an authorized PNG Preview loads
   through one `openneko-resource` request in Secondary Main;
 - Extension Management remains Main rather than a detail/preview surface;
+- Asset and Project management switch to the shared 34/66 resizable Main split only when Preview or
+  Detail exists, remain full-width otherwise, and preserve non-overlapping large/small geometry;
 - explicit opaque directory grant activates the exact Workspace with Agent + creative Main + right
   Resources, all display modes, zero early conversations, restart restore and no renderer raw path;
+- cancellation through the isolated Electron Main picker boundary leaves Window revision, Scene
+  revision, exact Scene content and Project catalog unchanged before the subsequent successful grant;
+- Assistant first submit activates session phase and the exact conversation immediately, renders the
+  locally committed initial message despite provider preflight failure, and restores the same message
+  and conversation after navigating through a management scene;
 - `poisonedRequestCount: 0`, no console errors and no renderer exceptions.
 
 The latest run records the Assistant composer at 820 px inside a 1190 px owner and the narrow
@@ -148,10 +169,12 @@ conversations, the exact Workspace Agent/Canvas/Resources composition, and the i
 without a renderer exception. The Scene/Workbench and Resource Browser authority fixes preserve that
 state instead of clearing or rewriting the user database.
 
-Native picker cancellation and Assistant first-submit/provider execution are covered by deterministic
-Desktop producer/consumer tests. They are not claimed as provider-backed Electron acceptance because
-the isolated Electron fixture intentionally selects its contained Workspace and no authorized real
-provider/model case was available.
+The Electron fixture exercises cancellation through a one-shot fixture-only Main marker before the
+normal contained Workspace grant. Production user state never reads this marker. The scenario proves
+the production cancellation state contract and subsequent chooser recovery, but it does not claim an
+OS dialog screenshot. Assistant provider execution is not claimed as accepted because no authorized
+real provider/model case was available; the visible scenario proves only local commit, preflight
+failure checkpointing, exact activation and restore.
 
 ## Agent Evaluation
 
@@ -168,7 +191,7 @@ Desktop Main React import, raw-path Preview payload, management-in-dock path, Pr
 production `console.log`, or new production `any` in the change. Character/Chatroom remains
 owner-qualified unavailable as designed.
 
-Residual risk is limited to real provider/model Assistant first-submit behavior, native picker cancel
-interaction in a visible Electron dialog, existing voice readiness, and Preview types beyond the
-currently supported authorized descriptors. Cross-scope continuation remains intentionally deferred;
-an active conversation requires a new conversation rather than in-place scope rebinding.
+Residual risk is limited to real provider/model Assistant first-submit behavior, existing voice
+readiness, and Preview types beyond the currently supported authorized descriptors. Cross-scope
+continuation remains intentionally deferred; an active conversation requires a new conversation
+rather than in-place scope rebinding.
