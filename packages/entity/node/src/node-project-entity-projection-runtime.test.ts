@@ -9,6 +9,7 @@ import {
 import { resolveGlobalStorageLayout } from '@neko/local-metadata';
 import { createNodeSqliteLocalMetadataStore } from '@neko/local-metadata/node-sqlite-local-metadata-store';
 import { ensureNodeWorkspaceIdentityDescriptor } from '@neko/local-metadata/node-workspace-identity';
+import { createNodeWorkspaceSemanticEntityMetadataBinding } from '@neko/search-local-metadata';
 import { NodeProjectEntityProjectionRuntime } from './node-project-entity-projection-runtime';
 
 describe('NodeProjectEntityProjectionRuntime', () => {
@@ -99,6 +100,60 @@ describe('NodeProjectEntityProjectionRuntime', () => {
     );
 
     await runtime.dispose();
+    expect(metadataStore.state).toBe('open');
+    await metadataStore.dispose();
+  });
+
+  it('releases a metadata binding created concurrently with disposal', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'openneko-entity-projection-dispose-'));
+    roots.push(root);
+    const homedir = path.join(root, 'home');
+    const workspacePath = path.join(root, 'workspace');
+    await Promise.all([
+      mkdir(homedir, { recursive: true }),
+      mkdir(workspacePath, { recursive: true }),
+    ]);
+    await ensureNodeWorkspaceIdentityDescriptor(workspacePath, () => WORKSPACE_ID);
+    const metadataStore = createNodeSqliteLocalMetadataStore({ homedir });
+    await metadataStore.open({
+      databasePath: resolveGlobalStorageLayout(homedir).database,
+      busyTimeoutMs: 2_000,
+    });
+    let signalBindingReady = () => {};
+    const bindingReady = new Promise<void>((resolve) => {
+      signalBindingReady = resolve;
+    });
+    let releaseBinding = () => {};
+    const bindingGate = new Promise<void>((resolve) => {
+      releaseBinding = resolve;
+    });
+    let bindingDisposeCount = 0;
+    const runtime = new NodeProjectEntityProjectionRuntime({
+      homedir,
+      metadataStore,
+      projections: metadataStore.repositories.entityAssetProjections,
+      createMetadataBinding: async (options) => {
+        const binding = await createNodeWorkspaceSemanticEntityMetadataBinding(options);
+        signalBindingReady();
+        await bindingGate;
+        return {
+          ...binding,
+          dispose: async () => {
+            bindingDisposeCount += 1;
+            await binding.dispose();
+          },
+        };
+      },
+    });
+
+    const refreshing = runtime.refresh({ workspaceId: WORKSPACE_ID, workspacePath });
+    await bindingReady;
+    const disposing = runtime.dispose();
+    releaseBinding();
+
+    await expect(refreshing).rejects.toThrow('projection runtime is disposed');
+    await disposing;
+    expect(bindingDisposeCount).toBe(1);
     expect(metadataStore.state).toBe('open');
     await metadataStore.dispose();
   });

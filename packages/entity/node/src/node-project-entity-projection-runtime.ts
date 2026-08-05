@@ -30,6 +30,8 @@ export class NodeProjectEntityProjectionRuntime {
       readonly metadataStore: LocalMetadataStore;
       readonly projections: EntityAssetProjectionRepository;
       readonly now?: () => string;
+      readonly createMetadataBinding?: typeof createNodeWorkspaceSemanticEntityMetadataBinding;
+      readonly createSemanticRuntime?: typeof createNodeWorkspaceSemanticEntityRuntime;
     },
   ) {}
 
@@ -84,6 +86,7 @@ export class NodeProjectEntityProjectionRuntime {
   private async resolveState(
     workspace: NodeProjectEntityProjectionWorkspace,
   ): Promise<ProjectEntityProjectionState> {
+    this.requireActive();
     const workspacePath = path.resolve(workspace.workspacePath);
     const current = this.states.get(workspace.workspaceId);
     if (current?.workspacePath === workspacePath) return current;
@@ -92,12 +95,18 @@ export class NodeProjectEntityProjectionRuntime {
       await current.binding.dispose();
       this.states.delete(workspace.workspaceId);
     }
-    const binding = await createNodeWorkspaceSemanticEntityMetadataBinding({
+    const createMetadataBinding =
+      this.options.createMetadataBinding ?? createNodeWorkspaceSemanticEntityMetadataBinding;
+    const binding = await createMetadataBinding({
       homedir: this.options.homedir,
       workDir: workspacePath,
       metadataStore: this.options.metadataStore,
       ...(this.options.now ? { now: this.options.now } : {}),
     });
+    if (this.disposed) {
+      await binding.dispose();
+      this.requireActive();
+    }
     if (binding.workspaceId !== workspace.workspaceId) {
       await binding.dispose();
       throw new Error('Project Entity projection resolved a different Workspace identity.');
@@ -106,15 +115,28 @@ export class NodeProjectEntityProjectionRuntime {
       workspacePath,
       projectId: workspace.workspaceId,
     });
-    const semantic = await createNodeWorkspaceSemanticEntityRuntime({
-      workspace: { workspaceId: workspace.workspaceId, workspacePath },
-      projection: binding,
-      getEntitySnapshot: async () => {
-        const document = await repository.load();
-        return { revision: document.revision, entities: document.entities };
-      },
-      ...(this.options.now ? { now: this.options.now } : {}),
-    });
+    const createSemanticRuntime =
+      this.options.createSemanticRuntime ?? createNodeWorkspaceSemanticEntityRuntime;
+    let semantic: NodeWorkspaceSemanticEntityRuntime;
+    try {
+      semantic = await createSemanticRuntime({
+        workspace: { workspaceId: workspace.workspaceId, workspacePath },
+        projection: binding,
+        getEntitySnapshot: async () => {
+          const document = await repository.load();
+          return { revision: document.revision, entities: document.entities };
+        },
+        ...(this.options.now ? { now: this.options.now } : {}),
+      });
+    } catch (error: unknown) {
+      await binding.dispose();
+      throw error;
+    }
+    if (this.disposed) {
+      semantic.dispose();
+      await binding.dispose();
+      this.requireActive();
+    }
     const contentRead = createNodeHostContentReadService({ workspaceRoot: workspacePath });
     const stat = {
       stat: (
