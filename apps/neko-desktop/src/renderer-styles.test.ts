@@ -107,7 +107,7 @@ describe('Desktop renderer styles', () => {
   it('keeps VS Code-style region controls in PrimarySidebar top chrome rather than Main content', () => {
     expect(styles).toContain("@import '@neko/ui/icons/codicon.css';");
     expect(styles).toMatch(
-      /\.primary-sidebar-brand__controls\s*\{[\s\S]*?position\s*:\s*absolute[\s\S]*?top\s*:\s*6px[\s\S]*?right\s*:\s*8px/u,
+      /\.primary-sidebar-brand__controls\s*\{[\s\S]*?position\s*:\s*absolute[\s\S]*?top\s*:\s*12px[\s\S]*?right\s*:\s*8px/u,
     );
     expect(styles).toMatch(
       /\.primary-sidebar-brand__controls \.workbench-region-toggle\s*\{[\s\S]*?width\s*:\s*22px[\s\S]*?height\s*:\s*22px[\s\S]*?border\s*:\s*0[\s\S]*?background\s*:\s*transparent/u,

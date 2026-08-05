@@ -389,7 +389,7 @@ code {
 .primary-sidebar-brand__controls {
   position: absolute;
   z-index: 2;
-  top: 6px;
+  top: 12px;
   right: 8px;
   display: flex;
   flex: 0 0 auto;
