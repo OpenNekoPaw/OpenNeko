@@ -381,7 +381,7 @@ describe('Desktop architecture boundaries', () => {
     const preload = readFileSync(path.join(sourceRoot, 'preload', 'index.ts'), 'utf8');
     const contract = readFileSync(path.join(sourceRoot, 'shared', 'agent-contract.ts'), 'utf8');
     expect(preload).toContain('agent: {');
-    expect(preload).toContain('getBootstrap(projectId, viewId, viewEpoch)');
+    expect(preload).toContain('getBootstrap(projectId, viewId, viewEpoch, conversationId)');
     expect(preload).toContain('createDesktopAgentMessageRequest');
     expect(preload).toContain('createDesktopWorkbenchMutationRequest');
     expect(preload).toContain('workbench: {');

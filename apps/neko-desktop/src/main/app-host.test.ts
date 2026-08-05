@@ -5,6 +5,7 @@ import type { ILogger } from '@neko/shared/logger';
 import {
   createDesktopAgentBootstrapRequest,
   createDesktopAssistantAgentBootstrapRequest,
+  createDesktopAgentMessageRequest,
 } from '../shared/agent-contract';
 import { createDesktopBootstrapRequest } from '../shared/bridge-contract';
 import {
@@ -28,6 +29,7 @@ import {
 import { DesktopAppHost } from './app-host';
 import { createDesktopSceneTransitionRequest } from '@neko/host/desktop-scene-contract';
 import { createDesktopWorkspaceGrantChooseRequest } from '@neko/host/desktop-workspace-grant-contract';
+import { createAssetCenterHostRequest } from '@neko/assets-domain/asset-center';
 import {
   createAgentConversationLifecycleService,
   createInMemoryAgentConversationLifecycleRepository,
@@ -55,6 +57,10 @@ import type {
 import type { PersonalSkillManager } from '@neko/agent-runtime/pi';
 import type { DesktopAgentLaunchRuntime } from './desktop-agent-launch-runtime';
 import { DesktopWorkspaceGrantAuthority } from '@neko/host/desktop-workspace-grant-authority';
+import {
+  AssetCenterNodeRuntime,
+  type AssetCenterNodeRuntimeOptions,
+} from '@neko/assets-node';
 
 describe('DesktopAppHost', () => {
   it('keeps Desktop settings sender-bound and opens Agent configuration through its owner action', async () => {
@@ -1610,6 +1616,70 @@ describe('DesktopAppHost', () => {
     expect(fixture.extensionManager.removePlugin).not.toHaveBeenCalled();
   });
 
+  it('cleans up an Asset Center Preview after leaving its Scene without projecting into the new Scene', async () => {
+    const assetCenter = createAssetCenterRuntime();
+    const fixture = await createShellAppHost({ assetCenter });
+    const opened = await fixture.appHost.transitionScene(
+      fixture.sender,
+      createDesktopSceneTransitionRequest({
+        requestId: 'open-asset-center-1',
+        expectedEndpointEpoch: fixture.projection.endpointEpoch,
+        windowId: fixture.windowId,
+        expectedWindowRevision: fixture.projection.window.revision,
+        expectedSceneRevision: fixture.projection.window.scene.revision,
+        intent: { kind: 'open-asset-center' },
+      }),
+    );
+    if (opened.status !== 'transitioned' || opened.scene.context.kind !== 'asset-center') {
+      throw new Error('Expected an Asset Center scene.');
+    }
+    const identity = {
+      windowId: fixture.windowId,
+      assetCenterSessionId: opened.scene.context.assetCenterSessionId,
+    };
+    const assetProjection = await fixture.appHost.shell.getProjection(fixture.windowId);
+    await fixture.appHost.executeAssetCenter(
+      fixture.sender,
+      createAssetCenterHostRequest({
+        route: 'attach',
+        requestId: 'asset-center-attach-1',
+        endpointEpoch: assetProjection.endpointEpoch,
+        identity,
+        initialViewMode: 'grid',
+      }),
+    );
+    const beforeLeave = await fixture.appHost.shell.getProjection(fixture.windowId);
+    await fixture.appHost.transitionScene(
+      fixture.sender,
+      createDesktopSceneTransitionRequest({
+        requestId: 'leave-asset-center-1',
+        expectedEndpointEpoch: beforeLeave.endpointEpoch,
+        windowId: fixture.windowId,
+        expectedWindowRevision: beforeLeave.window.revision,
+        expectedSceneRevision: beforeLeave.window.scene.revision,
+        intent: { kind: 'open-settings', sectionId: 'general' },
+      }),
+    );
+    const projectPreview = vi.spyOn(fixture.appHost.shell, 'projectAssetCenterPreview');
+
+    await expect(
+      fixture.appHost.executeAssetCenter(
+        fixture.sender,
+        createAssetCenterHostRequest({
+          route: 'preview.detach',
+          requestId: 'asset-center-detach-after-leave-1',
+          endpointEpoch: beforeLeave.endpointEpoch,
+          identity,
+        }),
+      ),
+    ).resolves.toMatchObject({
+      route: 'preview.detach',
+      projection: { identity, preview: { status: 'empty' } },
+    });
+    expect(projectPreview).not.toHaveBeenCalled();
+    expect(assetCenter.getSnapshot(identity).preview).toEqual({ status: 'empty' });
+  });
+
   it('derives the Agent View grant from Shell and keeps incomplete startup unavailable', async () => {
     const fixture = await createShellAppHost();
     const resolution = createWorkspaceResolution();
@@ -1683,6 +1753,58 @@ describe('DesktopAppHost', () => {
       ),
     ).rejects.toMatchObject({ code: 'desktop-agent-stale-view-epoch' });
     expect(publish).not.toHaveBeenCalled();
+  });
+
+  it('routes exact projection cleanup by sender connection while business messages stay active-Scene fenced', async () => {
+    const fixture = await createShellAppHost();
+    const connection = {
+      applicationInstanceId: 'app-1',
+      windowId: fixture.windowId,
+      assistantSpaceId: 'assistant-space:local-user',
+      workspaceId: 'assistant-space:local-user',
+      viewId: 'agent-view:retained-1',
+      viewEpoch: 1,
+      rendererEpoch: 1,
+      connectionId: 'connection-retained-1',
+    };
+    const cleanup = vi.spyOn(fixture.appHost.agentBridge, 'sendProjectionControl').mockResolvedValue({
+      schemaVersion: 1,
+      requestId: 'projection-detach-1',
+      status: 'accepted',
+    });
+
+    await expect(
+      fixture.appHost.sendAgentMessage(
+        fixture.sender,
+        createDesktopAgentMessageRequest('projection-detach-1', connection, {
+          type: 'projectionDetach',
+          key: {
+            endpointEpoch: connection.connectionId,
+            attachmentId: 'attachment-1',
+            tabId: 'tab-1',
+            conversationId: 'conversation-1',
+          },
+          reason: 'endpoint-replaced',
+        }),
+      ),
+    ).resolves.toMatchObject({ status: 'accepted' });
+    expect(cleanup).toHaveBeenCalledWith(
+      expect.objectContaining({ connection }),
+      {
+        applicationInstanceId: 'app-1',
+        windowId: fixture.windowId,
+        rendererEpoch: 1,
+      },
+    );
+
+    await expect(
+      fixture.appHost.sendAgentMessage(
+        fixture.sender,
+        createDesktopAgentMessageRequest('business-retained-1', connection, {
+          type: 'getConversations',
+        }),
+      ),
+    ).rejects.toThrow('exact active Scene');
   });
 });
 
@@ -1785,6 +1907,7 @@ async function createShellAppHost(options?: {
   readonly agentLaunch?: DesktopAgentLaunchRuntime;
   readonly conversationLifecycle?: AgentConversationLifecycleService;
   readonly assistantResources?: AssistantResourceService;
+  readonly assetCenter?: AssetCenterNodeRuntime;
 }) {
   const logger = createLogger();
   const fixture = createShellFixture('app-1');
@@ -1806,6 +1929,7 @@ async function createShellAppHost(options?: {
     workspaceGrants: fixture.workspaceGrants,
     conversationLifecycle: options?.conversationLifecycle ?? createConversationLifecycle(),
     assistantResources: options?.assistantResources,
+    assetCenter: options?.assetCenter,
     extensionManager,
     personalSkillManager: createPersonalSkillManager(),
     settings: createSettingsService(),
@@ -1832,6 +1956,29 @@ async function createShellAppHost(options?: {
     },
     projection: await appHost.shell.getProjection(windowId),
   };
+}
+
+function createAssetCenterRuntime(): AssetCenterNodeRuntime {
+  const resourceBrowser = {
+    searchHomeAssets: vi.fn(),
+    searchHomeMediaLibraries: vi.fn(),
+    readHomeMediaLibraryChildren: vi.fn(),
+    resolveHomeLibraryThumbnail: vi.fn(),
+    importHomeAssets: vi.fn(),
+    removeHomeAsset: vi.fn(),
+    addHomeMediaLibrary: vi.fn(),
+    relinkHomeMediaLibrary: vi.fn(),
+    removeHomeMediaLibrary: vi.fn(),
+    revealHomeMediaLibrary: vi.fn(),
+    resolveAssetCenterSelection: vi.fn(),
+  } satisfies AssetCenterNodeRuntimeOptions['resourceBrowser'];
+  return new AssetCenterNodeRuntime({
+    resourceBrowser,
+    resources: {
+      registerFile: vi.fn(),
+      releaseSession: vi.fn(),
+    },
+  });
 }
 
 async function bindAssistantDraft(fixture: Awaited<ReturnType<typeof createShellAppHost>>) {

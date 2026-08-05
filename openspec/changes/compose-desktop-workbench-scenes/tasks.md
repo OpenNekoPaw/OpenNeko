@@ -103,3 +103,13 @@
 - [x] 10.16 Render authorized Preview through canonical content-only chrome with inherited shell theme, omit low-information Project Detail while preserving an explicit catalog open action, and qualify focused plus development/packaged Electron paths.
 - [x] 10.17 Make Entry Draft first-submit atomically hand off to the exact scope-owned Agent session and projection endpoint: materialize/replay the committed runtime conversation after lifecycle initial-message commit and before provider claim, retire launch attachments through their old binding, prove default Assistant and explicit Workspace activation plus second-message delivery, and update focused Evaluation/quality evidence.
 - [x] 10.18 Replace the mixed Workspace layout menu and Main-header buttons with VS Code-style PrimarySidebar-top controls that independently toggle PrimarySidebar, Agent, Main and management presentation; add ownership, placement, interaction and focused renderer/style regressions.
+
+## 11. Multi-Workbench And Agent Surface Instances
+
+- [ ] 11.1 Add red Host contract/state tests for a Window open Workbench instance catalog, one instance per AssistantSpace/Workspace owner, independent layout revisions and active-instance visibility selection.
+- [ ] 11.2 Add red Desktop lifecycle tests proving two Workspace panel trees and multiple same-Workspace Agent Roots stay mounted across switching, while close/delete/archive releases only the exact owner.
+- [ ] 11.3 Replace Window-global Workbench mutable state with instance-owned layouts and active identity; migrate the exact prelaunch stored shape once and reject unknown/current-invalid shapes visibly.
+- [ ] 11.4 Add Host-owned open Agent Surface identity and lifecycle projection; reuse an existing Workspace instance when creating/restoring another associated conversation and keep draft-to-session Root identity stable.
+- [ ] 11.5 Make Main/preload/renderer Agent connections multi-instance: connection-scoped event cursors and projection control, active-Surface fencing for user business actions, and no stale-event projection into another Surface.
+- [ ] 11.6 Render all open Workbench View and Agent Surface Roots through stable slot stacks inside the one ControlledWorkbenchShell; switch only `activeWorkbenchInstanceId`/`activeAgentSurfaceId` visibility.
+- [ ] 11.7 Run focused Host/Desktop/Agent tests and typechecks, strict OpenSpec/quality gates, then visible real-provider Electron acceptance across two Workspaces and two conversations with background execution, switching and restart restoration.

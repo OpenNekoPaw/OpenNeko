@@ -823,6 +823,8 @@ describe('DesktopShellService', () => {
       windows: [{ ...storedWindow, revision: storedWindow.revision + 1, scene: sessionScene }],
     });
     const before = await fixture.service.getProjection(windowId);
+    const existingProjectTabs = before.window.tabs;
+    const existingWorkbench = before.window.workbench;
     restore.mockClear();
 
     const result = await fixture.service.transitionScene(
@@ -865,7 +867,30 @@ describe('DesktopShellService', () => {
     }
     expect(result.scene.context.scope).not.toHaveProperty('conversationId');
     expect(restore).toHaveBeenCalledWith(project.workspaceId);
-    expect(await fixture.service.getSceneProjection(windowId)).not.toEqual(sessionScene);
+    const draftProjection = await fixture.service.getProjection(windowId);
+    expect(draftProjection.window.tabs).toEqual(existingProjectTabs);
+    expect(draftProjection.window.workbench).toEqual(existingWorkbench);
+    expect(draftProjection.window.scene).not.toEqual(sessionScene);
+
+    const attached = await fixture.service.attachAgentConversation({
+      windowId,
+      expectedEndpointEpoch: draftProjection.endpointEpoch,
+      agentViewId: result.scene.context.agentViewId,
+      context: {
+        schemaVersion: 1,
+        kind: 'workspace',
+        workspaceId: project.workspaceId,
+        workspaceGrantId: result.scene.context.scope.workspaceGrantId,
+      },
+      conversationId: 'conversation-2',
+    });
+    const sessionProjection = await fixture.service.getProjection(windowId);
+    expect(attached).toMatchObject({
+      context: { scope: { conversationId: 'conversation-2' } },
+      slots: { interaction: { phase: 'session' } },
+    });
+    expect(sessionProjection.window.tabs).toEqual(existingProjectTabs);
+    expect(sessionProjection.window.workbench).toEqual(existingWorkbench);
   });
 
   it('persists Sidebar CAS independently from Window and Workbench revisions', async () => {
@@ -1132,6 +1157,19 @@ describe('DesktopShellService', () => {
               occurredAt: '2026-08-04T00:00:00.000Z',
             },
           },
+          {
+            navigation: {
+              conversationId: 'conversation-workspace-2',
+              owner: { kind: 'workspace', workspaceId: project.workspaceId },
+            },
+            title: 'Second Workspace conversation',
+            updatedAt: '2026-08-04T00:01:00.000Z',
+            attention: 'none',
+            lastActivity: {
+              kind: 'conversation-updated',
+              occurredAt: '2026-08-04T00:01:00.000Z',
+            },
+          },
         ],
         attention: { needsInput: 0, needsReview: 0, running: 0 },
       }),
@@ -1185,6 +1223,41 @@ describe('DesktopShellService', () => {
       }),
     ]);
     expect(committed.window.scene).toEqual(result.scene);
+
+    const existingWorkbench = committed.window.workbench;
+    const second = await restored.service.restoreAgentConversation({
+      request: createDesktopSceneTransitionRequest({
+        requestId: 'restore-second-workspace-conversation-in-existing-workbench',
+        expectedEndpointEpoch: committed.endpointEpoch,
+        windowId: restoredWindowId,
+        expectedWindowRevision: committed.window.revision,
+        expectedSceneRevision: committed.window.scene.revision,
+        intent: {
+          kind: 'restore-conversation',
+          navigation: {
+            conversationId: 'conversation-workspace-2',
+            owner: { kind: 'workspace', workspaceId: project.workspaceId },
+          },
+        },
+      }),
+      context: {
+        schemaVersion: 1,
+        kind: 'workspace',
+        workspaceId: project.workspaceId,
+        workspaceGrantId: 'workspace-grant:conversation-workspace-2',
+      },
+    });
+    const afterSecond = await restored.service.getProjection(restoredWindowId);
+    expect(second).toMatchObject({
+      status: 'transitioned',
+      scene: {
+        context: {
+          scope: { conversationId: 'conversation-workspace-2' },
+        },
+      },
+    });
+    expect(afterSecond.window.tabs).toEqual(committed.window.tabs);
+    expect(afterSecond.window.workbench).toEqual(existingWorkbench);
   });
 
   it('shares a Project owner while isolating cross-window Tab and View identity', async () => {

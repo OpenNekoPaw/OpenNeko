@@ -42,7 +42,11 @@ import {
   type DesktopApplicationSidebarProjection,
   type DesktopSceneTransitionIntent,
 } from '@neko/host/desktop-scene-contract';
-import { DesktopAgentSurface } from './DesktopAgentSurface';
+import {
+  DesktopAgentSurface,
+  RetainedDesktopAgentSurfaceDeck,
+  type DesktopAgentSurfaceProps,
+} from './DesktopAgentSurface';
 import { DesktopResourceBrowserSurface } from './DesktopResourceBrowserSurface';
 import { DesktopPreviewSurface } from './DesktopPreviewSurface';
 import { DesktopCanvasSurface } from './DesktopCanvasSurface';
@@ -366,11 +370,23 @@ function DesktopSceneWorkbench({
           ? 'projects'
           : 'create';
   const workspaceProject = resolveWorkspaceSceneProject(projection);
+  const retainedWorkspaceConversationIds = new Set(
+    workspaceProject
+      ? projection.agentHome.conversations
+          .filter(
+            (conversation) =>
+              conversation.navigation.owner.kind === 'workspace' &&
+              conversation.navigation.owner.workspaceId === workspaceProject.workspaceId,
+          )
+          .map((conversation) => conversation.navigation.conversationId)
+      : [],
+  );
   const workspaceSlots = useContentProjectWorkbenchSlots({
     actions,
     pending,
     projection,
     project: workspaceProject,
+    retainedConversationIds: retainedWorkspaceConversationIds,
   });
   const launchContext =
     scene.context.kind === 'agent' && scene.context.scope.kind !== 'workspace'
@@ -923,6 +939,7 @@ function useContentProjectWorkbenchSlots({
   pending,
   projection,
   project,
+  retainedConversationIds,
 }: {
   readonly actions: ShellActions;
   readonly initialConversation?: { readonly id: string; readonly title: string };
@@ -930,6 +947,7 @@ function useContentProjectWorkbenchSlots({
   readonly pending: boolean;
   readonly projection: DesktopShellProjection;
   readonly project?: DesktopProjectCatalogItem;
+  readonly retainedConversationIds: ReadonlySet<string>;
 }): ContentProjectWorkbenchSlots {
   const { t } = useTranslation();
   const [cutTimelineTarget, setCutTimelineTarget] = useState<HTMLDivElement | null>(null);
@@ -973,6 +991,7 @@ function useContentProjectWorkbenchSlots({
       initialConversation={initialConversation}
       initialInput={initialInput}
       project={project}
+      retainedConversationIds={retainedConversationIds}
       tab={tab}
     />
   );
@@ -1579,7 +1598,7 @@ export function activateWorkbenchMainView(
 
 type WorkbenchRegion = 'agent' | 'main' | 'management';
 
-export function isWorkbenchRegionVisible(
+function isWorkbenchRegionVisible(
   workbench: DesktopWorkbenchLayoutProjection,
   region: WorkbenchRegion,
 ): boolean {
@@ -1777,6 +1796,7 @@ function AgentWorkspaceSurface({
   initialConversation,
   initialInput,
   project,
+  retainedConversationIds,
   tab,
 }: {
   readonly agentReady: boolean;
@@ -1784,6 +1804,7 @@ function AgentWorkspaceSurface({
   readonly initialConversation?: { readonly id: string; readonly title: string };
   readonly initialInput?: { readonly id: string; readonly value: string };
   readonly project: DesktopProjectCatalogItem;
+  readonly retainedConversationIds: ReadonlySet<string>;
   readonly tab: DesktopShellProjection['window']['tabs'][number];
 }): JSX.Element {
   const { t } = useTranslation();
@@ -1795,13 +1816,18 @@ function AgentWorkspaceSurface({
       aria-label={`${t('workspace.agent')} · ${project.displayName}`}
     >
       {agentReady ? (
-        <DesktopAgentSurface
-          agentPresentation={agentPresentation}
-          binding="workspace"
-          composerWorkspace={{ kind: 'workspace', label: project.displayName }}
-          initialConversation={initialConversation}
-          initialInput={initialInput}
-          tab={tab}
+        <RetainedDesktopAgentSurfaceDeck
+          retainedConversationIds={retainedConversationIds}
+          activeSurface={
+            {
+              agentPresentation,
+              binding: 'workspace',
+              composerWorkspace: { kind: 'workspace', label: project.displayName },
+              initialConversation,
+              initialInput,
+              tab,
+            } satisfies DesktopAgentSurfaceProps
+          }
         />
       ) : (
         <div className="agent-unavailable-card">

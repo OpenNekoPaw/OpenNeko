@@ -9,6 +9,101 @@ export interface DesktopAgentEventCursor {
   readonly sequence: number;
 }
 
+export type DesktopAgentEventCursorAdvanceResult =
+  | {
+      readonly kind: 'accepted';
+      readonly connection: DesktopAgentConnectionIdentity;
+    }
+  | { readonly kind: 'retired' }
+  | {
+      readonly kind: 'foreign';
+      readonly currentConnection?: DesktopAgentConnectionIdentity;
+    }
+  | {
+      readonly kind: 'sequence-mismatch';
+      readonly connection: DesktopAgentConnectionIdentity;
+      readonly expectedSequence: number;
+      readonly receivedSequence: number;
+    };
+
+const MAX_RETIRED_AGENT_CONNECTIONS = 128;
+
+export class DesktopAgentEventCursorRegistry {
+  private readonly active = new Map<string, DesktopAgentEventCursor>();
+  private readonly retired = new Map<string, DesktopAgentConnectionIdentity>();
+
+  register(connection: DesktopAgentConnectionIdentity): DesktopAgentEventCursor {
+    const existing = this.active.get(connection.connectionId);
+    if (existing) {
+      if (!isSameDesktopAgentEventConnection(existing.connection, connection)) {
+        throw new Error(
+          `Desktop Agent connection '${connection.connectionId}' was registered with conflicting identity.`,
+        );
+      }
+      this.active.delete(connection.connectionId);
+      this.active.set(connection.connectionId, existing);
+      return existing;
+    }
+    if (this.retired.has(connection.connectionId)) {
+      throw new Error(
+        `Desktop Agent connection '${connection.connectionId}' cannot be registered after retirement.`,
+      );
+    }
+    const cursor = { connection, sequence: 0 };
+    this.active.set(connection.connectionId, cursor);
+    return cursor;
+  }
+
+  retire(connection: DesktopAgentConnectionIdentity): void {
+    const current = this.active.get(connection.connectionId);
+    if (!current || !isSameDesktopAgentEventConnection(current.connection, connection)) return;
+    this.active.delete(connection.connectionId);
+    this.retired.set(connection.connectionId, current.connection);
+    while (this.retired.size > MAX_RETIRED_AGENT_CONNECTIONS) {
+      const oldest = this.retired.keys().next().value as string | undefined;
+      if (oldest === undefined) break;
+      this.retired.delete(oldest);
+    }
+  }
+
+  advance(
+    connection: DesktopAgentConnectionIdentity,
+    sequence: number,
+  ): DesktopAgentEventCursorAdvanceResult {
+    const current = this.active.get(connection.connectionId);
+    if (current) {
+      if (!isSameDesktopAgentEventConnection(current.connection, connection)) {
+        return { kind: 'foreign', currentConnection: this.currentConnection };
+      }
+      const expectedSequence = current.sequence + 1;
+      if (sequence !== expectedSequence) {
+        return {
+          kind: 'sequence-mismatch',
+          connection: current.connection,
+          expectedSequence,
+          receivedSequence: sequence,
+        };
+      }
+      this.active.set(connection.connectionId, {
+        connection: current.connection,
+        sequence,
+      });
+      return { kind: 'accepted', connection: current.connection };
+    }
+    const retired = this.retired.get(connection.connectionId);
+    if (retired && isSameDesktopAgentEventConnection(retired, connection)) {
+      return { kind: 'retired' };
+    }
+    return { kind: 'foreign', currentConnection: this.currentConnection };
+  }
+
+  get currentConnection(): DesktopAgentConnectionIdentity | undefined {
+    let current: DesktopAgentConnectionIdentity | undefined;
+    for (const cursor of this.active.values()) current = cursor.connection;
+    return current;
+  }
+}
+
 export function projectDesktopAgentSendFailure(
   message: AgentWebviewToHostMessage,
   failure: string,

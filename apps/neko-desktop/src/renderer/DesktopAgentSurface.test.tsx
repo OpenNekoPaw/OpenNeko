@@ -5,7 +5,11 @@ import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { I18nProvider } from '@neko/ui/i18n/react';
 import type { AgentHostRuntimeAdapter, AgentRootPresentation } from '@neko/agent-contracts';
-import { DesktopAgentSurface, prepareDesktopAgentSurfaceResources } from './DesktopAgentSurface';
+import {
+  DesktopAgentSurface,
+  RetainedDesktopAgentSurfaceDeck,
+  prepareDesktopAgentSurfaceResources,
+} from './DesktopAgentSurface';
 import { createDesktopI18n } from './i18n';
 
 vi.mock('@neko/agent-webview/root', () => ({
@@ -67,7 +71,7 @@ describe('DesktopAgentSurface', () => {
     });
     await act(async () => undefined);
 
-    expect(getBootstrap).toHaveBeenCalledWith('project-1', 'view-1', 2);
+    expect(getBootstrap).toHaveBeenCalledWith('project-1', 'view-1', 2, 'conversation-1');
     expect(container.textContent).toContain('neko.agent.webview.electron:connection-1:en');
     expect(
       container
@@ -304,7 +308,90 @@ describe('DesktopAgentSurface', () => {
     expect(agentRoot?.closest('.desktop-agent-root')?.hasAttribute('hidden')).toBe(false);
     await act(async () => root.unmount());
   });
+
+  it('retains same-Workspace conversation Roots and only changes active visibility', async () => {
+    let connection = 0;
+    const getBootstrap = vi.fn(async () => ({
+      ...readyBootstrap(),
+      connection: {
+        ...readyBootstrap().connection,
+        connectionId: `connection-${++connection}`,
+      },
+    }));
+    installBridge(getBootstrap);
+    const container = document.createElement('div');
+    document.body.append(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(<TestRetainedWorkspaceAgentSurface conversationId="conversation-1" />);
+    });
+    await act(async () => undefined);
+    const firstRoot = container.querySelector('[data-testid="agent-root"]');
+
+    await act(async () => {
+      root.render(<TestRetainedWorkspaceAgentSurface conversationId="conversation-2" />);
+    });
+    await act(async () => undefined);
+
+    const roots = container.querySelectorAll('[data-testid="agent-root"]');
+    expect(roots).toHaveLength(2);
+    expect(roots[0]).toBe(firstRoot);
+    expect(roots[0]?.closest('.desktop-agent-surface-deck__item')?.hasAttribute('hidden')).toBe(true);
+    expect(roots[1]?.closest('.desktop-agent-surface-deck__item')?.hasAttribute('hidden')).toBe(
+      false,
+    );
+    expect(getBootstrap).toHaveBeenNthCalledWith(
+      1,
+      'project-1',
+      'view-1',
+      2,
+      'conversation-1',
+    );
+    expect(getBootstrap).toHaveBeenNthCalledWith(
+      2,
+      'project-1',
+      'view-1',
+      2,
+      'conversation-2',
+    );
+    await act(async () => root.unmount());
+  });
 });
+
+function TestRetainedWorkspaceAgentSurface({
+  conversationId,
+}: {
+  readonly conversationId: string;
+}): JSX.Element {
+  const i18n = createDesktopI18n('en');
+  return (
+    <I18nProvider service={i18n.i18nService}>
+      <RetainedDesktopAgentSurfaceDeck
+        retainedConversationIds={new Set(['conversation-1', 'conversation-2'])}
+        activeSurface={{
+          binding: 'workspace',
+          agentPresentation: {
+            schemaVersion: 2,
+            kind: 'session',
+            conversationId,
+            scope: {
+              kind: 'workspace',
+              workspaceId: 'workspace-1',
+              workspaceGrantId: 'workspace-grant-1',
+            },
+          },
+          tab: {
+            tabId: 'tab-1',
+            projectId: 'project-1',
+            viewId: 'view-1',
+            viewEpoch: 2,
+          },
+        }}
+      />
+    </I18nProvider>
+  );
+}
 
 function TestAgentSurface({
   agentPresentation,

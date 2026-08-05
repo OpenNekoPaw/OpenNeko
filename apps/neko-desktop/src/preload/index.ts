@@ -1,5 +1,8 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import type { AgentHostToWebviewMessage } from '@neko/agent-contracts';
+import type {
+  AgentHostToWebviewMessage,
+  DesktopAgentConnectionIdentity,
+} from '@neko/agent-contracts';
 import {
   createDesktopAgentBootstrapRequest,
   createDesktopAssistantAgentBootstrapRequest,
@@ -53,10 +56,9 @@ import {
   type DesktopShellProjectionCursor,
 } from '../shared/projection-revision';
 import {
-  advanceDesktopAgentBootstrapCursor,
+  DesktopAgentEventCursorRegistry,
   isSameDesktopAgentEventConnection,
   projectDesktopAgentSendFailure,
-  type DesktopAgentEventCursor,
 } from './desktop-agent-event-cursor';
 import { preserveDesktopBootstrapEventSequence } from './desktop-runtime-event-cursor';
 import {
@@ -185,11 +187,12 @@ import {
 
 let requestSequence = 0;
 let latestShellProjection: DesktopShellProjectionCursor | undefined;
-let currentAgentEventCursor: DesktopAgentEventCursor | undefined;
+const agentEventCursors = new DesktopAgentEventCursorRegistry();
 const agentListeners = new Set<{
-  readonly connection: DesktopAgentEventCursor['connection'];
+  readonly connection: DesktopAgentConnectionIdentity;
   readonly listener: (message: AgentHostToWebviewMessage) => void;
 }>();
+const pendingAgentRetirements = new Map<string, symbol>();
 let currentResourceIdentity: ResourceBrowserIdentity | undefined;
 let currentResourceEventSequence = 0;
 const resourceListeners = new Set<
@@ -315,22 +318,20 @@ const bridge: OpenNekoDesktopBridge &
     },
   },
   agent: {
-    async getBootstrap(projectId, viewId, viewEpoch) {
+    async getBootstrap(projectId, viewId, viewEpoch, conversationId) {
       const request = createDesktopAgentBootstrapRequest(
         nextRequestId('desktop-agent-bootstrap'),
         projectId,
         viewId,
         viewEpoch,
+        conversationId,
       );
       const response: unknown = await ipcRenderer.invoke(
         DESKTOP_AGENT_CHANNELS.bootstrapGet,
         request,
       );
       const projection = parseDesktopAgentBootstrapProjection(response, request.requestId);
-      currentAgentEventCursor =
-        projection.status === 'ready'
-          ? advanceDesktopAgentBootstrapCursor(currentAgentEventCursor, projection.connection)
-          : undefined;
+      if (projection.status === 'ready') agentEventCursors.register(projection.connection);
       return projection;
     },
     async getAssistantBootstrap(assistantSpaceId, conversationId, viewId) {
@@ -345,10 +346,7 @@ const bridge: OpenNekoDesktopBridge &
         request,
       );
       const projection = parseDesktopAgentBootstrapProjection(response, request.requestId);
-      currentAgentEventCursor =
-        projection.status === 'ready'
-          ? advanceDesktopAgentBootstrapCursor(currentAgentEventCursor, projection.connection)
-          : undefined;
+      if (projection.status === 'ready') agentEventCursors.register(projection.connection);
       return projection;
     },
     send(connection, message) {
@@ -377,16 +375,27 @@ const bridge: OpenNekoDesktopBridge &
     },
     subscribe(connection, listener) {
       const subscription = { connection, listener };
+      pendingAgentRetirements.delete(connection.connectionId);
       agentListeners.add(subscription);
       return () => {
         agentListeners.delete(subscription);
+        const retirement = Symbol(connection.connectionId);
+        pendingAgentRetirements.set(connection.connectionId, retirement);
+        queueMicrotask(() => {
+          if (pendingAgentRetirements.get(connection.connectionId) !== retirement) return;
+          pendingAgentRetirements.delete(connection.connectionId);
+          const hasAnotherListener = [...agentListeners].some((entry) =>
+            isSameDesktopAgentEventConnection(entry.connection, connection),
+          );
+          if (!hasAnotherListener) agentEventCursors.retire(connection);
+        });
       };
     },
     ...(process.argv.includes(DESKTOP_AGENT_AUTOMATION_RENDERER_ARGUMENT)
       ? {
           automation: {
             async execute(operation) {
-              const connection = currentAgentEventCursor?.connection;
+              const connection = agentEventCursors.currentConnection;
               if (!connection) {
                 throw new DesktopAgentContractError(
                   'desktop-agent-identity-mismatch',
@@ -1158,26 +1167,23 @@ ipcRenderer.on(
   DESKTOP_AGENT_CHANNELS.messageEvent,
   (_event: Electron.IpcRendererEvent, value: unknown): void => {
     const event = parseDesktopAgentMessageEvent(value);
-    const current = currentAgentEventCursor;
-    if (!current || !isSameDesktopAgentEventConnection(event.connection, current.connection)) {
-      emitAgentMessage(current?.connection ?? event.connection, {
+    const result = agentEventCursors.advance(event.connection, event.sequence);
+    if (result.kind === 'retired') return;
+    if (result.kind === 'foreign') {
+      emitAgentMessage(result.currentConnection ?? event.connection, {
         type: 'globalError',
         message: 'Desktop Agent rejected an event for a stale or foreign connection.',
       });
       return;
     }
-    if (event.sequence !== current.sequence + 1) {
-      emitAgentMessage(current.connection, {
+    if (result.kind === 'sequence-mismatch') {
+      emitAgentMessage(result.connection, {
         type: 'globalError',
-        message: `Desktop Agent event sequence ${event.sequence} does not follow ${current.sequence}.`,
+        message: `Desktop Agent event sequence ${result.receivedSequence} does not follow ${result.expectedSequence - 1}.`,
       });
       return;
     }
-    currentAgentEventCursor = {
-      connection: current.connection,
-      sequence: event.sequence,
-    };
-    emitAgentMessage(event.connection, event.message);
+    emitAgentMessage(result.connection, event.message);
   },
 );
 
@@ -1281,7 +1287,7 @@ function requireShellMutationContext(): {
 }
 
 function emitAgentMessage(
-  connection: DesktopAgentEventCursor['connection'],
+  connection: DesktopAgentConnectionIdentity,
   message: AgentHostToWebviewMessage,
 ): void {
   for (const subscription of agentListeners) {

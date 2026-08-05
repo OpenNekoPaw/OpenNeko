@@ -28,6 +28,13 @@ Desktop 当前把 Home、项目工作区、管理入口和 Settings 实现为不
 - PrimarySidebar 将“最近会话”定义为恢复精确 interactive session，将“最近打开”定义为打开 Project/Character/Room 容器并进入新的 owner-bound draft；不得把容器选择当作旧会话恢复，也不得把内部角色 AgentSession 作为 Room 最近项暴露。
 - Workspace 顶部布局 chrome 使用 VS Code 风格的紧凑独立图标控件，分别管理一级侧栏、Agent、Main 与管理面板显隐；Main tab header 和领域 Surface 不再重复渲染布局按钮。
 - Renderer view-scoped runtime 的 effect 只拥有 subscription；runtime instance 只在 identity 被替换或组件真正卸载时 dispose。StrictMode remount、renderer reload 和生产构建都必须保持可启动，并以真实 Electron exception/DOM 证据验收。
+- Window Shell 在唯一 `ControlledWorkbenchShell` 内管理多个逻辑 Workbench instance。每个已打开
+  Workspace 只有一个 instance 并独立保留布局、Main/Manager/Timeline Views 与运行资源；Assistant
+  用户区拥有自己的 instance。关联到已打开 Workspace 的新 Agent 会话只向该 instance 增加独立
+  Agent Surface，不重复打开 Workspace。
+- 每个未关闭、未删除或未归档的 Agent draft/session 都是独立常驻的 Webview Root/connection/UI
+  state owner；每个 Workbench instance 只切换 `activeAgentSurfaceId`，Workspace 切换只切换
+  `activeWorkbenchInstanceId`。选择状态不得模拟实例所有权或触发隐藏实例释放/重建。
 - 本变更定义 Character/Chatroom 的 Workbench 形态，但不实现尚不存在的 Character Manager、Interactive Main、World authoring/experience owner；未具备 owner/runtime/Surface 的显式导航请求返回 unavailable，active conversation 不允许原地 rebind。
 
 ## Capabilities
@@ -50,4 +57,6 @@ Desktop 当前把 Home、项目工作区、管理入口和 Settings 实现为不
 - Agent extension management UI 必须通过 Agent package public Root/port 暴露；项目目录与 Settings 只保留 app-level placement，领域状态与操作继续委托 owning Host/package contract。
 - `apps/neko-desktop` 只保留 Electron Window/View 生命周期、typed IPC/preload、目录/文件/麦克风授权 adapter 和将公开 Roots 放入已验证 slots 的 presentation composition。
 - `@neko/host` 同时拥有 Entry Draft identity 与 `unbound -> owner-bound draft -> session` Scene transition fencing；`@neko/agent-webview` 拥有同一 Root 内 presentation reset，Desktop renderer 不推断或缓存 scope。
+- `@neko/host` 拥有 Window 内 open Workbench/Agent Surface 目录、active identity 和关闭生命周期；
+  package runtime 继续拥有各实例业务状态，Desktop renderer 只把全部 open Roots 常驻挂载并切换可见性。
 - 用户数据不删除、不复制、不静默迁移。现有 Project/Workspace conversation 保持；旧 sidebar 值一次性迁移到独立窗口 presentation aggregate。Assistant scratch 在 conversation 存续期间可恢复，只有删除 conversation 或显式清理时回收；接受的产物必须先发布到资源中心或 workspace。

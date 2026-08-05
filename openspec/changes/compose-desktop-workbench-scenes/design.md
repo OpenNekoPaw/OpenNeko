@@ -44,20 +44,49 @@ Desktop 目前由 `DesktopShell` 在 Home、Project workspace 和 Settings 三�
 
 ## Decisions
 
-### 1. One window owns one Workbench for every scene
+### 1. One window shell hosts multiple retained Workbench instances
 
-`DesktopShell` 始终渲染同一个结构；Settings 也只是 Workbench scene。Workbench 的 slot 数量按场景变化，不能把 management Root 压入固定窄栏或用 Preview 替代 management Main：
+`DesktopShell` 始终渲染一个 `ControlledWorkbenchShell` 结构；Settings 也只是 Workbench scene。
+该 React shell 是窗口级 chrome，不等同于唯一业务状态实例。Host 在 Window 下维护多个逻辑
+`WorkbenchInstance`，renderer 在同一 shell 的 slot stacks 中常驻挂载全部 open instance，只让
+`activeWorkbenchInstanceId` 对应的节点可见。Workbench 的 slot 数量按场景变化，不能把
+management Root 压入固定窄栏或用 Preview 替代 management Main：
 
 ```text
 DesktopApplication
 └─ ControlledWorkbenchShell
    ├─ primarySidebar: ApplicationPrimarySidebar
-   ├─ interaction
-   ├─ main / secondaryMain
-   ├─ leftManager / rightManager
-   ├─ timeline
+   ├─ interactionStack: open Agent Surface Roots
+   ├─ mainStack: open Workbench Main View Roots
+   ├─ managerStack: open Manager Roots
+   ├─ timelineStack: open Timeline Roots
    └─ status
 ```
+
+实例层级固定为：
+
+```text
+Window
+├─ activeWorkbenchInstanceId
+└─ WorkbenchInstance[]
+   ├─ owner: assistant-space | workspace | management | entry-draft
+   ├─ layout + Main/Manager/Timeline View identities
+   ├─ activeAgentSurfaceId
+   └─ AgentSurface[]
+      └─ draft/session connection + Webview UI state
+```
+
+同一 `workspaceId` 在一个 Window 内最多一个 open Workbench instance。恢复或新建属于该 Workspace
+的 conversation 时，Host 复用该 instance、增加或聚焦 Agent Surface 并保持 layout/Main/Manager/
+Timeline runtime；不得再创建另一个 Workspace instance。不同 Workspace 的 instance 完全隔离，
+切换只改变 active identity。Assistant conversations 同样在 AssistantSpace instance 内保留各自
+Agent Surface。Entry Draft 首次提交后原 Surface 原地从 draft 交接到 session，不复制 Root。
+
+关闭 Workspace instance 才释放其所有 View/Agent runtime；关闭、删除或归档 conversation 只释放
+对应 Agent Surface。Window/renderer 结束释放全部短生命周期资源。隐藏、PrimarySidebar 导航和
+普通 scene 切换都不构成 disposal。持久布局用于应用重开恢复；scroll、输入 selection 等 renderer
+可恢复 UI state 在进程存续期由常驻 Root 保留，必要的 draft/input state 继续经现有 presentation
+storage 恢复，但不能伪造正在运行的资源句柄。
 
 明确形态矩阵：
 
@@ -76,7 +105,13 @@ PrimarySidebar 不属于任何旧 Home scene。它持续消费 `catalog.projects
 
 Sidebar 顶部品牌区承载一组 VS Code 风格的窗口级 presentation 图标控件。PrimarySidebar 显隐控件始终存在；exact Workspace composition 另外提供 Agent、Main 与管理面板三个独立控件。每个控件只改变其所属区域的 presentation，不能通过一个混合菜单或 Main 内按钮同时管理多个区域；Agent 与 Main 仍必须保证至少一个业务区域可见。控件使用紧凑、无边框、透明默认态和清晰 hover/pressed/focus 状态，并位于一级侧栏顶部 chrome，不随品牌内容或 Main tab 数量移动。它们不得沉入侧栏 footer、Workspace Main tab header 或领域 Surface。footer 只保留 lifecycle、attention、Settings 等非布局操作。
 
-`HomeWorkspace`、`ContentProjectWorkspace` 和 Settings 顶层条件分支被替换为 scene slot builders。Scene 切换只替换 slots；PrimarySidebar 和 ControlledWorkbenchShell 的 React identity 保持不变。Project slot builder 复用现有 Agent/Main/Resource/Timeline components、View identity、layout helpers 和 `.project-workspace` 视觉契约，不自行创建 Shell 或 sidebar frame。Renderer 必须逐一消费 Host 的 `interaction/main/secondaryMain/leftManager/rightManager` 语义，不能把 Interaction 临时当 Main、把 management Main 当 Dock，或仅复用 Shell JSX 而丢失 Workspace CSS scope。
+`HomeWorkspace`、`ContentProjectWorkspace` 和 Settings 顶层条件分支被替换为 scene slot builders。
+Scene 切换只更新 active instance/slot projection；PrimarySidebar、ControlledWorkbenchShell 以及未关闭
+instance 的 package Root identity 保持不变。Project slot builder 复用现有 Agent/Main/Resource/
+Timeline components、View identity、layout helpers 和 `.project-workspace` 视觉契约，不自行创建
+Shell 或 sidebar frame。Renderer 必须逐一消费 Host 的 `interaction/main/secondaryMain/leftManager/
+rightManager` 语义，不能把 Interaction 临时当 Main、把 management Main 当 Dock，或仅复用 Shell
+JSX 而丢失 Workspace CSS scope。
 
 ### 2. Scene projection is closed, versioned and slot-specific
 

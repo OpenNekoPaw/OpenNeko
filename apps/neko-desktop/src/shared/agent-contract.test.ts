@@ -19,6 +19,25 @@ describe('Desktop Agent contract', () => {
     });
   });
 
+  it('binds a retained Workspace Surface bootstrap to its exact conversation', () => {
+    expect(
+      createDesktopAgentBootstrapRequest(
+        'request-1',
+        'project-1',
+        'view-1',
+        2,
+        'conversation-1',
+      ),
+    ).toEqual({
+      schemaVersion: 1,
+      requestId: 'request-1',
+      projectId: 'project-1',
+      viewId: 'view-1',
+      viewEpoch: 2,
+      conversationId: 'conversation-1',
+    });
+  });
+
   it('rejects invalid Agent messages before they reach Main routing', () => {
     expect(() =>
       createDesktopAgentMessageRequest('request-1', connection(), {

@@ -31,6 +31,7 @@ export type DesktopAgentRuntimeRequirement = (typeof DESKTOP_AGENT_RUNTIME_REQUI
 export interface DesktopWorkspaceAgentBootstrapRequest extends DesktopAgentViewIdentity {
   readonly schemaVersion: typeof DESKTOP_AGENT_CONTRACT_VERSION;
   readonly requestId: string;
+  readonly conversationId?: string;
 }
 
 export interface DesktopAssistantAgentBootstrapRequest extends Omit<
@@ -105,6 +106,7 @@ export interface OpenNekoDesktopAgentBridge {
       projectId: string,
       viewId: string,
       viewEpoch: number,
+      conversationId?: string,
     ): Promise<DesktopAgentBootstrapProjection>;
     getAssistantBootstrap(
       assistantSpaceId: string,
@@ -140,6 +142,7 @@ export function createDesktopAgentBootstrapRequest(
   projectId: string,
   viewId: string,
   viewEpoch: number,
+  conversationId?: string,
 ): DesktopAgentBootstrapRequest {
   return {
     schemaVersion: DESKTOP_AGENT_CONTRACT_VERSION,
@@ -150,6 +153,14 @@ export function createDesktopAgentBootstrapRequest(
       viewEpoch,
       'Desktop Agent View epoch must be a positive integer.',
     ),
+    ...(conversationId === undefined
+      ? {}
+      : {
+          conversationId: requireNonEmptyString(
+            conversationId,
+            'Desktop Agent Conversation identity is required.',
+          ),
+        }),
   };
 }
 
@@ -198,7 +209,14 @@ export function parseDesktopAgentBootstrapRequest(value: unknown): DesktopAgentB
   }
   requireExactKeys(
     record,
-    ['schemaVersion', 'requestId', 'projectId', 'viewId', 'viewEpoch'],
+    [
+      'schemaVersion',
+      'requestId',
+      'projectId',
+      'viewId',
+      'viewEpoch',
+      ...('conversationId' in record ? ['conversationId'] : []),
+    ],
     'Desktop Workspace Agent bootstrap request',
   );
   return createDesktopAgentBootstrapRequest(
@@ -212,6 +230,12 @@ export function parseDesktopAgentBootstrapRequest(value: unknown): DesktopAgentB
       record['viewEpoch'],
       'Desktop Agent bootstrap View epoch must be a positive integer.',
     ),
+    'conversationId' in record
+      ? requireNonEmptyString(
+          record['conversationId'],
+          'Desktop Agent Conversation identity is required.',
+        )
+      : undefined,
   );
 }
 

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { DesktopAgentConnectionIdentity } from '@neko/agent-contracts';
 import {
   advanceDesktopAgentBootstrapCursor,
+  DesktopAgentEventCursorRegistry,
   projectDesktopAgentSendFailure,
 } from './desktop-agent-event-cursor';
 
@@ -51,6 +52,74 @@ describe('Desktop Agent preload event cursor', () => {
       type: 'globalError',
       message: 'Catalog request rejected.',
     });
+  });
+
+  it('keeps two same-View conversation connections independently sequenced', () => {
+    const registry = new DesktopAgentEventCursorRegistry();
+    const previous = createConnection('connection-1', 1, 1);
+    const replacement = createConnection('connection-2', 1, 1);
+    registry.register(previous);
+    registry.register(replacement);
+
+    expect(registry.advance(previous, 1)).toEqual({
+      kind: 'accepted',
+      connection: previous,
+    });
+    expect(registry.advance(replacement, 1)).toEqual({
+      kind: 'accepted',
+      connection: replacement,
+    });
+    expect(registry.advance(replacement, 2)).toEqual({
+      kind: 'accepted',
+      connection: replacement,
+    });
+  });
+
+  it('drops a queued event only after the exact connection is retired', () => {
+    const registry = new DesktopAgentEventCursorRegistry();
+    const previous = createConnection('connection-1', 1, 1);
+    const current = createConnection('connection-2', 1, 1);
+    registry.register(previous);
+    registry.register(current);
+    registry.retire(previous);
+
+    expect(registry.advance(previous, 1)).toEqual({ kind: 'retired' });
+    expect(registry.advance(current, 1)).toEqual({ kind: 'accepted', connection: current });
+  });
+
+  it('keeps unknown and identity-conflicting events fail-visible', () => {
+    const registry = new DesktopAgentEventCursorRegistry();
+    const current = createConnection('connection-current', 1, 1);
+    registry.register(current);
+
+    expect(registry.advance(createConnection('connection-foreign', 1, 1), 1)).toEqual({
+      kind: 'foreign',
+      currentConnection: current,
+    });
+    expect(
+      registry.advance({ ...current, workspaceId: 'workspace-forged' }, 1),
+    ).toEqual({
+      kind: 'foreign',
+      currentConnection: current,
+    });
+    expect(registry.advance(current, 3)).toEqual({
+      kind: 'sequence-mismatch',
+      connection: current,
+      expectedSequence: 1,
+      receivedSequence: 3,
+    });
+  });
+
+  it('retires an unsubscribed connection and preserves another active View', () => {
+    const registry = new DesktopAgentEventCursorRegistry();
+    const first = createConnection('connection-1', 1, 1);
+    const second = { ...createConnection('connection-2', 1, 1), viewId: 'view-2' };
+    registry.register(first);
+    registry.register(second);
+    registry.retire(second);
+
+    expect(registry.advance(second, 1)).toEqual({ kind: 'retired' });
+    expect(registry.advance(first, 1)).toEqual({ kind: 'accepted', connection: first });
   });
 });
 

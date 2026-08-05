@@ -422,7 +422,7 @@ export class DesktopAppHost {
     }
     const scene = await this.shell.getSceneProjection(window.windowId);
     const interaction = scene.slots.interaction;
-    const initialConversationId =
+    const activeConversationId =
       scene.context.kind === 'agent' &&
       scene.context.agentViewId === grant.viewId &&
       scene.context.scope.kind === 'workspace' &&
@@ -432,6 +432,22 @@ export class DesktopAppHost {
       interaction.agentViewId === grant.viewId
         ? scene.context.scope.conversationId
         : undefined;
+    const initialConversationId = request.conversationId ?? activeConversationId;
+    if (request.conversationId === undefined && activeConversationId === undefined) {
+      const isActiveWorkspaceDraft =
+        scene.context.kind === 'agent' &&
+        scene.context.agentViewId === grant.viewId &&
+        scene.context.scope.kind === 'workspace' &&
+        scene.context.scope.workspaceId === grant.workspaceId &&
+        interaction?.kind === 'agent' &&
+        interaction.phase === 'draft' &&
+        interaction.agentViewId === grant.viewId;
+      if (!isActiveWorkspaceDraft) {
+        throw new Error(
+          'Desktop Workspace Agent draft bootstrap does not match the exact active Scene.',
+        );
+      }
+    }
     const initialConversationRecord = initialConversationId
       ? await this.conversationLifecycle.readConversation(initialConversationId)
       : undefined;
@@ -761,6 +777,13 @@ export class DesktopAppHost {
     this.requireActive();
     const request = parseDesktopAgentMessageRequest(payload);
     const window = this.windows.resolveSender(sender);
+    if (isAgentProjectionControlMessage(request.message.type)) {
+      return this.agentBridge.sendProjectionControl(request, {
+        applicationInstanceId: this.applicationIdentity.instanceId,
+        windowId: window.windowId,
+        rendererEpoch: window.rendererEpoch,
+      });
+    }
     const grant = await this.resolveAgentConnectionGrant(
       window.windowId,
       window.rendererEpoch,
@@ -979,6 +1002,7 @@ export class DesktopAppHost {
       );
     }
     await workspace.deleteConversation(request.navigation.conversationId);
+    this.agentBridge.detachConversation(window.windowId, request.navigation.conversationId);
     return {
       schemaVersion: DESKTOP_SHELL_CONTRACT_VERSION,
       requestId: request.requestId,
@@ -1065,14 +1089,20 @@ export class DesktopAppHost {
       request.route === 'asset.remove' ||
       request.route === 'preview.detach'
     ) {
-      await this.shell.projectAssetCenterPreview({
-        windowId: window.windowId,
-        expectedEndpointEpoch: request.endpointEpoch,
-        assetCenterSessionId: request.identity.assetCenterSessionId,
-        ...(projection.preview.status === 'ready'
-          ? { previewSessionId: projection.preview.previewSessionId }
-          : {}),
-      });
+      const currentScene = await this.shell.getSceneProjection(window.windowId);
+      if (
+        currentScene.context.kind === 'asset-center' &&
+        currentScene.context.assetCenterSessionId === request.identity.assetCenterSessionId
+      ) {
+        await this.shell.projectAssetCenterPreview({
+          windowId: window.windowId,
+          expectedEndpointEpoch: request.endpointEpoch,
+          assetCenterSessionId: request.identity.assetCenterSessionId,
+          ...(projection.preview.status === 'ready'
+            ? { previewSessionId: projection.preview.previewSessionId }
+            : {}),
+        });
+      }
     }
     return {
       schemaVersion: ASSET_CENTER_SESSION_CONTRACT_VERSION,
@@ -1939,7 +1969,9 @@ export class DesktopAppHost {
     const current = await this.shell.getProjection(window.windowId);
     const targetTab = current.window.tabs.find((tab) => tab.tabId === request.tabId);
     if (!targetTab) {
-      throw new Error(`Unknown Desktop Project Tab '${request.tabId}' for Window '${window.windowId}'.`);
+      throw new Error(
+        `Unknown Desktop Project Tab '${request.tabId}' for Window '${window.windowId}'.`,
+      );
     }
     let projection: DesktopShellProjection;
     if (operation === 'activate') {
@@ -1978,6 +2010,15 @@ export class DesktopAppHost {
       projection,
     };
   }
+}
+
+function isAgentProjectionControlMessage(type: string): boolean {
+  return (
+    type === 'projectionEndpointDiscover' ||
+    type === 'projectionAttach' ||
+    type === 'projectionSnapshotAck' ||
+    type === 'projectionDetach'
+  );
 }
 
 function conversationOwnerFromContext(

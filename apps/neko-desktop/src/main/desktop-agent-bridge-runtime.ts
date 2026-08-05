@@ -15,6 +15,7 @@ import {
   type DesktopAgentConnectionIdentity,
   type AgentContextPayload,
   type Message,
+  type ProjectionAttachmentKey,
 } from '@neko/agent-contracts';
 import {
   DESKTOP_AGENT_CONTRACT_VERSION,
@@ -56,6 +57,12 @@ export interface DesktopAssistantAgentConnectionGrant {
 export type DesktopAnyAgentConnectionGrant =
   DesktopAgentConnectionGrant | DesktopAssistantAgentConnectionGrant;
 
+export interface DesktopAgentProjectionSenderGrant {
+  readonly applicationInstanceId: string;
+  readonly windowId: string;
+  readonly rendererEpoch: number;
+}
+
 export interface DesktopAgentBridgeRuntime {
   readonly startup: DesktopAgentStartupAudit;
   createBootstrap(input: {
@@ -69,6 +76,10 @@ export interface DesktopAgentBridgeRuntime {
   send(
     request: DesktopAgentMessageRequest,
     grant: DesktopAnyAgentConnectionGrant,
+  ): Promise<DesktopAgentMessageResult>;
+  sendProjectionControl(
+    request: DesktopAgentMessageRequest,
+    grant: DesktopAgentProjectionSenderGrant,
   ): Promise<DesktopAgentMessageResult>;
   injectContext(input: {
     readonly windowId: string;
@@ -93,6 +104,7 @@ export interface DesktopAgentBridgeRuntime {
     grant: DesktopAnyAgentConnectionGrant,
   ): Promise<DesktopAgentNeutralFacts>;
   detachView(windowId: string, viewId: string): void;
+  detachConversation(windowId: string, conversationId: string): void;
   detachWindow(windowId: string): void;
   dispose(): void;
 }
@@ -142,6 +154,7 @@ interface DesktopAgentConnection {
   readonly controller: AgentHostMessageController;
   publish: (event: DesktopAgentMessageEvent) => void;
   readonly effects: AgentControllerEffects;
+  readonly projectionAttachments: Map<string, ProjectionAttachmentKey>;
   lastFactsIdentity?: {
     readonly conversationId: string;
     readonly turnId: string;
@@ -150,9 +163,17 @@ interface DesktopAgentConnection {
   sequence: number;
 }
 
+interface RetiredDesktopAgentConnection {
+  readonly identity: DesktopAgentConnectionIdentity;
+  readonly projectionAttachments: ReadonlyMap<string, ProjectionAttachmentKey>;
+}
+
+const MAX_RETIRED_AGENT_CONNECTIONS = 128;
+
 class DefaultDesktopAgentBridgeRuntime implements DesktopAgentBridgeRuntime {
   readonly startup: DesktopAgentStartupAudit;
   private readonly connections = new Map<string, DesktopAgentConnection>();
+  private readonly retiredConnections = new Map<string, RetiredDesktopAgentConnection>();
   private disposed = false;
 
   constructor(
@@ -219,10 +240,11 @@ class DefaultDesktopAgentBridgeRuntime implements DesktopAgentBridgeRuntime {
     for (const [connectionId, connection] of this.connections) {
       if (
         connection.identity.windowId === identity.windowId &&
-        (connection.identity.viewId === identity.viewId ||
-          connection.identity.rendererEpoch !== identity.rendererEpoch)
+        (connection.identity.rendererEpoch !== identity.rendererEpoch ||
+          (connection.identity.viewId === identity.viewId &&
+            connection.identity.viewEpoch !== identity.viewEpoch))
       ) {
-        this.disposeConnection(connectionId, connection);
+        this.disposeConnection(connectionId, connection, true);
       }
     }
     const effects = composition.createEffects({
@@ -262,6 +284,7 @@ class DefaultDesktopAgentBridgeRuntime implements DesktopAgentBridgeRuntime {
       }),
       publish: input.publish,
       effects,
+      projectionAttachments: new Map(),
       sequence: 0,
     };
     this.connections.set(identity.connectionId, connection);
@@ -308,6 +331,51 @@ class DefaultDesktopAgentBridgeRuntime implements DesktopAgentBridgeRuntime {
       requestId: request.requestId,
       status: 'accepted',
     };
+  }
+
+  async sendProjectionControl(
+    request: DesktopAgentMessageRequest,
+    grant: DesktopAgentProjectionSenderGrant,
+  ): Promise<DesktopAgentMessageResult> {
+    this.requireActive();
+    assertProjectionSender(request.connection, grant);
+    const connection = this.connections.get(request.connection.connectionId);
+    if (connection) {
+      assertConnectionIdentity(request.connection, connection.identity);
+      if (!isProjectionControlMessage(request.message.type)) {
+        throw new DesktopAgentContractError(
+          'desktop-agent-identity-mismatch',
+          `Desktop Agent route '${request.message.type}' is not connection-owned projection control.`,
+        );
+      }
+      const operation = connection.controller.tryHandle(request.message);
+      if (!operation) {
+        throw new Error(
+          `Desktop Agent projection route '${request.message.type}' has no shared controller handler.`,
+        );
+      }
+      await operation;
+      trackProjectionAttachment(connection, request.message);
+      return acceptedAgentMessageResult(request.requestId);
+    }
+    const retired = this.retiredConnections.get(request.connection.connectionId);
+    const retiredAttachment =
+      request.message.type === 'projectionDetach'
+        ? retired?.projectionAttachments.get(projectionAttachmentIdentity(request.message.key))
+        : undefined;
+    if (
+      !retired ||
+      request.message.type !== 'projectionDetach' ||
+      !isSameExactConnection(request.connection, retired.identity) ||
+      !retiredAttachment ||
+      !isSameProjectionAttachmentKey(request.message.key, retiredAttachment)
+    ) {
+      throw new DesktopAgentContractError(
+        'desktop-agent-identity-mismatch',
+        `Unknown or mismatched Desktop Agent projection connection '${request.connection.connectionId}'.`,
+      );
+    }
+    return acceptedAgentMessageResult(request.requestId);
   }
 
   async injectContext(input: {
@@ -373,7 +441,19 @@ class DefaultDesktopAgentBridgeRuntime implements DesktopAgentBridgeRuntime {
     this.requireActive();
     for (const [connectionId, connection] of this.connections) {
       if (connection.identity.windowId === windowId && connection.identity.viewId === viewId) {
-        this.disposeConnection(connectionId, connection);
+        this.disposeConnection(connectionId, connection, true);
+      }
+    }
+  }
+
+  detachConversation(windowId: string, conversationId: string): void {
+    this.requireActive();
+    for (const [connectionId, connection] of this.connections) {
+      if (
+        connection.identity.windowId === windowId &&
+        connection.initialConversationId === conversationId
+      ) {
+        this.disposeConnection(connectionId, connection, true);
       }
     }
   }
@@ -382,7 +462,7 @@ class DefaultDesktopAgentBridgeRuntime implements DesktopAgentBridgeRuntime {
     this.requireActive();
     for (const [connectionId, connection] of this.connections) {
       if (connection.identity.windowId === windowId) {
-        this.disposeConnection(connectionId, connection);
+        this.disposeConnection(connectionId, connection, false);
       }
     }
   }
@@ -393,7 +473,7 @@ class DefaultDesktopAgentBridgeRuntime implements DesktopAgentBridgeRuntime {
     const errors: unknown[] = [];
     for (const [connectionId, connection] of this.connections) {
       try {
-        this.disposeConnection(connectionId, connection);
+        this.disposeConnection(connectionId, connection, false);
       } catch (error) {
         errors.push(error);
       }
@@ -424,11 +504,104 @@ class DefaultDesktopAgentBridgeRuntime implements DesktopAgentBridgeRuntime {
     return connection;
   }
 
-  private disposeConnection(connectionId: string, connection: DesktopAgentConnection): void {
+  private disposeConnection(
+    connectionId: string,
+    connection: DesktopAgentConnection,
+    retainTombstone: boolean,
+  ): void {
     if (this.connections.get(connectionId) !== connection) return;
     this.connections.delete(connectionId);
     connection.effects.dispose();
+    if (!retainTombstone) return;
+    this.retiredConnections.set(connectionId, {
+      identity: connection.identity,
+      projectionAttachments: new Map(connection.projectionAttachments),
+    });
+    while (this.retiredConnections.size > MAX_RETIRED_AGENT_CONNECTIONS) {
+      const oldest = this.retiredConnections.keys().next().value as string | undefined;
+      if (oldest === undefined) break;
+      this.retiredConnections.delete(oldest);
+    }
   }
+}
+
+function trackProjectionAttachment(
+  connection: DesktopAgentConnection,
+  message: DesktopAgentMessageRequest['message'],
+): void {
+  if (message.type === 'projectionAttach') {
+    connection.projectionAttachments.set(projectionAttachmentIdentity(message.key), message.key);
+    return;
+  }
+  if (message.type === 'projectionDetach') {
+    connection.projectionAttachments.delete(projectionAttachmentIdentity(message.key));
+  }
+}
+
+function projectionAttachmentIdentity(key: ProjectionAttachmentKey): string {
+  return JSON.stringify([
+    key.endpointEpoch,
+    key.attachmentId,
+    key.tabId,
+    key.conversationId,
+  ]);
+}
+
+function isSameProjectionAttachmentKey(
+  left: ProjectionAttachmentKey,
+  right: ProjectionAttachmentKey,
+): boolean {
+  return (
+    left.endpointEpoch === right.endpointEpoch &&
+    left.attachmentId === right.attachmentId &&
+    left.tabId === right.tabId &&
+    left.conversationId === right.conversationId
+  );
+}
+
+function acceptedAgentMessageResult(requestId: string): DesktopAgentMessageResult {
+  return {
+    schemaVersion: DESKTOP_AGENT_CONTRACT_VERSION,
+    requestId,
+    status: 'accepted',
+  };
+}
+
+function isProjectionControlMessage(type: string): boolean {
+  return (
+    type === 'projectionEndpointDiscover' ||
+    type === 'projectionAttach' ||
+    type === 'projectionSnapshotAck' ||
+    type === 'projectionDetach'
+  );
+}
+
+function assertProjectionSender(
+  connection: DesktopAgentConnectionIdentity,
+  grant: DesktopAgentProjectionSenderGrant,
+): void {
+  if (connection.rendererEpoch !== grant.rendererEpoch) {
+    throw new DesktopAgentContractError(
+      'desktop-agent-stale-renderer-epoch',
+      `Desktop Agent renderer epoch ${connection.rendererEpoch} is stale; current epoch is ${grant.rendererEpoch}.`,
+    );
+  }
+  if (
+    connection.applicationInstanceId !== grant.applicationInstanceId ||
+    connection.windowId !== grant.windowId
+  ) {
+    throw new DesktopAgentContractError(
+      'desktop-agent-identity-mismatch',
+      `Desktop Agent connection '${connection.connectionId}' does not match its sender-derived Window.`,
+    );
+  }
+}
+
+function isSameExactConnection(
+  left: DesktopAgentConnectionIdentity,
+  right: DesktopAgentConnectionIdentity,
+): boolean {
+  return isSameConnectionGrant(left, right) && left.connectionId === right.connectionId;
 }
 
 function requireAutomationEffects(

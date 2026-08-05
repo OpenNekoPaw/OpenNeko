@@ -451,3 +451,60 @@ PrimarySidebar SHALL keep owner-qualified recent session and recent container pr
 - **WHEN** the owning Desktop window closes
 - **THEN** sender-bound grants, adapters, listeners, handles and subscriptions are explicitly released
 - **AND** durable conversations, published Assets, Workspace facts and application settings remain intact
+
+### Requirement: Window retains multiple independent Workbench instances
+
+The Window-owned shell SHALL maintain an explicit catalog of open Workbench instances and one active instance
+identity. Each AssistantSpace or Workspace owner SHALL have at most one open Workbench instance in a Window.
+Switching the active instance SHALL change visibility only and SHALL NOT replace, dispose or reconstruct another
+open instance's layout, Views, subscriptions, running tasks or renderer UI state.
+
+#### Scenario: User switches between two open Workspaces
+
+- **WHEN** Workspace A and Workspace B are both open and the user activates B after editing A
+- **THEN** A retains its exact layout, Main Views, manager selection, Timeline ownership and running resources
+- **AND** B displays its own independent state
+- **AND** switching back to A reuses the same mounted package Roots and runtime identities
+
+#### Scenario: User changes one Workspace layout
+
+- **WHEN** the user resizes, opens, closes or reorders panels in Workspace A
+- **THEN** only A's Workbench revision and layout change
+- **AND** Workspace B and the Assistant Workbench retain their revisions and layouts
+
+#### Scenario: Workspace instance closes
+
+- **WHEN** the user explicitly closes Workspace A or its Project container is removed from the Window
+- **THEN** Host removes A's open instance and releases its Agent/View/resource runtimes exactly once
+- **AND** other Workbench instances remain mounted and unaffected
+
+### Requirement: Open Agent Surfaces retain independent Webview state
+
+Every open Agent draft or conversation SHALL own an independent Agent Webview Root, connection, transcript,
+composer and execution projection. A Workbench instance SHALL select one `activeAgentSurfaceId` for display;
+selection SHALL NOT be used as the state owner.
+
+#### Scenario: User switches conversations inside one Workspace
+
+- **WHEN** two Agent conversations are open in the same Workspace Workbench
+- **THEN** switching changes only the active Agent Surface
+- **AND** both Webview Roots remain mounted with isolated transcript, input, scroll, configuration and run state
+- **AND** no adapter, projection endpoint or controller is recreated merely because visibility changed
+
+#### Scenario: New conversation targets an already open Workspace
+
+- **WHEN** the user creates or restores another Agent conversation whose exact `workspaceId` already has an open Workbench instance
+- **THEN** Host adds or focuses an Agent Surface within that instance
+- **AND** it does not open a second Workspace Workbench or reset the existing layout and Views
+
+#### Scenario: Agent Surface reaches terminal lifecycle
+
+- **WHEN** its draft/conversation is explicitly closed, deleted or archived
+- **THEN** only that Surface's subscription, projection attachment, connection and renderer state are released
+- **AND** sibling conversations and the owning Workbench remain active
+
+#### Scenario: Hidden Agent connection receives projection progress
+
+- **WHEN** a running hidden conversation receives events or acknowledges its connection-owned projection frames
+- **THEN** exact connection-scoped delivery continues without routing through the visible conversation
+- **AND** stale, unknown or forged connections remain fail-visible

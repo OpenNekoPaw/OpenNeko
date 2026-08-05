@@ -364,3 +364,33 @@ owned region, the final business region control became disabled, Workspace Main 
 document tabs, and the user layout was restored to all regions visible after acceptance. Follow-up
 macOS visual evidence found the initial compact `72px` offset overlapping the traffic-light controls;
 the control row now starts at `90px`, with the corrected offset covered by the focused style test.
+
+## Same-Workspace Agent Surface Reuse
+
+The current implementation covers the same-active-Workspace slice of tasks 11.4-11.6. Host tests
+prove that opening a fresh draft for an already open Project, attaching its new conversation and
+restoring a second conversation for the same exact `workspaceId` preserve the existing Project Tabs,
+Workbench layout/revision and Main View identities. Only the Agent Scene phase and conversation
+identity change. Renderer tests prove that both same-Workspace `AgentWebviewRoot` instances remain
+mounted and switching changes only their `hidden` state; removed conversations are pruned and
+cross-Workspace conversation identities are not retained in the active Workspace deck.
+
+Main/preload projection tests additionally prove exact connection-scoped attachment ownership,
+bounded retired endpoints and fail-visible forged attachment identity. Projection cleanup may use
+its retired owning connection, while user business messages remain fenced to the exact active Scene.
+This removes the prior endpoint mismatch without routing a hidden conversation through the visible
+one.
+
+The rebuilt packaged Electron scenario passed on 2026-08-05:
+
+`reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-05T10-08-20.185Z-desktop-workbench-scenes-packaged/report.json`
+
+It completed Workspace activation/reload, Agent draft, Assistant activation/restore, management and
+Preview checkpoints with `consoleErrors: []`, `consoleWarnings: []`, `exceptions: []` and
+`poisonedRequestCount: 0`. A focused AppHost regression also proves that an Asset Center
+`preview.detach` arriving after Scene exit still cleans up its exact runtime session but no longer
+projects Preview state into the newly active Scene.
+
+This evidence does not complete the Window-owned multi-Workbench catalog. Tasks 11.1-11.7 remain
+open for retained panel trees across two different Workspaces, instance-owned layout persistence,
+close/archive lifecycle and visible real-provider background execution across Workspace switching.

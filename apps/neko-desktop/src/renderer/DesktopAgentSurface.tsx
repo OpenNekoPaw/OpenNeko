@@ -32,7 +32,7 @@ type DesktopAgentSurfaceState =
   | { readonly kind: 'unavailable'; readonly connectionKey: string; readonly message: string }
   | { readonly kind: 'error'; readonly connectionKey: string; readonly message: string };
 
-type DesktopAgentSurfaceProps =
+export type DesktopAgentSurfaceProps =
   | {
       readonly binding: 'workspace';
       readonly initialConversation?: { readonly id: string; readonly title: string };
@@ -68,7 +68,15 @@ export function DesktopAgentSurface(props: DesktopAgentSurfaceProps): JSX.Elemen
       }
       bootstrapOperation = prepareDesktopAgentSurfaceResources({
         loadModule: loadDesktopAgentWebviewRootModule,
-        getBootstrap: () => window.openNekoDesktop.agent.getBootstrap(projectId, viewId, viewEpoch),
+        getBootstrap: () =>
+          window.openNekoDesktop.agent.getBootstrap(
+            projectId,
+            viewId,
+            viewEpoch,
+            agentPresentation?.kind === 'session'
+              ? agentPresentation.conversationId
+              : props.initialConversation?.id,
+          ),
       });
     } else if (agentPresentation === undefined) {
       throw new Error('Launch-bound Agent requires an explicit presentation.');
@@ -211,6 +219,45 @@ export function DesktopAgentSurface(props: DesktopAgentSurfaceProps): JSX.Elemen
       </div>
       {connectionReady ? null : <AgentSurfaceStatus message={t('agent.connecting')} />}
     </>
+  );
+}
+
+export function RetainedDesktopAgentSurfaceDeck({
+  activeSurface,
+  retainedConversationIds,
+}: {
+  readonly activeSurface: DesktopAgentSurfaceProps;
+  readonly retainedConversationIds: ReadonlySet<string>;
+}): JSX.Element {
+  const surfacesRef = useRef(new Map<string, DesktopAgentSurfaceProps>());
+  const activeKey = createDesktopAgentConnectionKey(activeSurface);
+  for (const [key, surface] of surfacesRef.current) {
+    const presentation = surface.agentPresentation;
+    if (
+      key !== activeKey &&
+      (presentation?.kind === 'draft' ||
+        (presentation?.kind === 'session' &&
+          !retainedConversationIds.has(presentation.conversationId)))
+    ) {
+      surfacesRef.current.delete(key);
+    }
+  }
+  surfacesRef.current.set(activeKey, activeSurface);
+
+  return (
+    <div className="desktop-agent-surface-deck" data-agent-surface-count={surfacesRef.current.size}>
+      {[...surfacesRef.current].map(([key, surface]) => (
+        <div
+          className="desktop-agent-surface-deck__item"
+          data-active={key === activeKey ? 'true' : 'false'}
+          data-agent-surface-id={key}
+          hidden={key !== activeKey}
+          key={key}
+        >
+          <DesktopAgentSurface {...surface} />
+        </div>
+      ))}
+    </div>
   );
 }
 
