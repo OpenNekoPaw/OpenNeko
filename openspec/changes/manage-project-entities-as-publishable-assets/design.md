@@ -218,3 +218,37 @@ normal legacy readers are not re-enabled.
 
 - Which Canvas, Agent, Chara, document, and portability reference owners can participate atomically in
   the first merge/rewrite transaction, and which must initially return a typed blocker?
+
+## Implementation Dependency Status
+
+As of 2026-08-05, the canonical `neko/entities.json` repository, migration/poison path, candidate and
+availability projections, Resource Browser Inspector, package-owned `entity.manage` route, and basic
+confirm/edit/bind/unbind Desktop delegation are implemented. The Desktop application root only injects
+the exact workspace and public repositories; Entity IDs, timestamps, operation semantics, canonical
+commit, candidate decision, and interruption recovery remain package-owned.
+
+Production merge/deprecate remains capability-blocked because the complete Canvas, Agent, Chara,
+document, portability, and other reference-owner participant set is not yet configured. The dependency
+change `establish-manifest-backed-asset-library` remains 0/25: there is no production immutable package
+runtime, exact-revision reader, publication lifecycle, cloud provider, or tombstone path. Entity Asset
+services and typed ports are deterministic and tested, but instantiate/publish/diff/apply-update must not
+be exposed as successful production operations until that owner is implemented and wired.
+
+## Verification Status
+
+On 2026-08-05, affected package tests/typechecks, `pnpm build`, `pnpm test`, `pnpm check`,
+`pnpm check:legacy-debt`, `pnpm check:unused`, and the complete `pnpm ci:local` gate passed. Canonical
+resource and migration tests poison fragmented readers, require expected revisions, preserve migration
+archives, and recover interrupted candidate decisions without returning partial success.
+
+The real Electron `resource-browser-entity-management` scenario passed and produced canonical revision 2
+after candidate confirmation, then projected a missing binding as needs-attention and retained two exact
+reference blockers. Unsupported Asset lifecycle operations were absent, and the run recorded no console
+errors, warnings, or exceptions. The report is stored under the gitignored local evidence root at
+`reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-04T23-22-38.720Z-resource-browser-entity-management-development/report.json`.
+
+Unknown legacy fields remain classified as `unresolved-archive`; ambiguous identity or binding values
+remain explicit confirmation items. Residual user-data risk is limited to real heterogeneous workspace
+migration coverage, not an unclassified deletion path. Complete reference-owner participation and the
+manifest-backed publication/provider/tombstone runtime remain capability blockers, so tasks 5.3, 5.4,
+and 6.3 stay open.

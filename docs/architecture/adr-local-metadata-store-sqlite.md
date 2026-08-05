@@ -2,7 +2,7 @@
 
 状态：Accepted
 
-更新日期：2026-08-03
+更新日期：2026-08-05
 
 范围：Electron Desktop、本地 SQLite、项目文件、Agent、Assets、Entity、Search、任务投影和缓存索引。
 
@@ -95,6 +95,12 @@ Entity 等可重建索引进入 `neko.db#cache`。大型派生字节位于
   不回滚已成功项目写入，也不把旧 projection 当作成功结果。
 - 数据库事务只保护同一 Store 内的原子更新。跨领域写入通过 application port 和显式 revision
   协调，不用一个大事务制造跨领域所有权。
+- Project Entity candidate confirmation 是一个窄例外：canonical `neko/entities.json` commit 与
+  rebuildable candidate projection decision 之间使用 workspace-scoped
+  `neko/entity-operation-journal.json` 恢复中断。journal 只保存完成该 operation 所需的 revisioned
+  recovery state，下一次 Entity operation 必须先恢复；完成后删除。它不是第二份 Entity authority，
+  也不是通用跨领域 transaction。未知 schema、损坏内容或 canonical revision 分歧必须停止操作并
+  fail-visible，不能忽略 journal、返回成功或回退到 candidate 文件。
 - schema 使用单调版本和显式 migration。未知版本、损坏数据库或 migration 失败必须停止相关
   capability 并给出可操作诊断；不得静默创建空库掩盖有价值数据。
 - “必须迁移”还表示数据是否必须通过重装、设备迁移、工作区复制或显式 export 独立转移；它与每个

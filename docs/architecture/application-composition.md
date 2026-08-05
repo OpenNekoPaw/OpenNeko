@@ -2,7 +2,7 @@
 
 状态：Accepted
 
-更新日期：2026-08-04
+更新日期：2026-08-05
 对应变更：`replace-desktop-media-scheme-with-http-resource-gateway`、
 `enforce-thin-desktop-application-root`、`compose-desktop-workbench-scenes`
 
@@ -78,6 +78,15 @@ Canvas material authoring/generation、Media Library sync、project portability�
 application settings、Agent content/facts/resource projection 与 personal Skill lifecycle 已迁入各自
 package。Desktop 对这些能力只保留 sender/path/trust 授权、Electron 资源绑定、native interaction、
 public port wiring 与 disposal；旧 app-owned 路径由边界测试和 legacy gate 持续 poison。
+
+Resource Browser 的 `entity.manage` 继续复用同一个 sender-bound Desktop bridge。Desktop 根据已授权
+workspace 构造 `@neko/entity-node` runtime，并注入 canonical Entity repository 与 local-metadata public
+repository；`@neko/assets-node` controller 校验选择、capability、Entity/candidate identity 和 expected
+project revision 后委托 exact Entity owner。Entity ID、binding ID、时间、canonical commit、candidate
+decision 和恢复 journal 都由 Entity package 持有，应用根不复制其业务语义或文件 workflow。生产环境
+缺失 manifest-backed Asset lifecycle、完整 reference-rewrite participant、Character、Room 或
+Conversation owner 时，对应 Inspector capability 必须隐藏或返回 owner-qualified blocker，不得在
+Desktop 中以 flat Asset、Agent command、fallback conversation 或 no-op handler 补齐。
 
 workspace package 的角色、拆分条件、领域家族命名和 inactive capability 语义统一遵循
 [`package-taxonomy.md`](package-taxonomy.md)，应用根不得通过私有 source alias 或 wildcard export

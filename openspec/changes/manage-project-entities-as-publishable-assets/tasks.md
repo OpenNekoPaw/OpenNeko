@@ -32,11 +32,20 @@
 - [x] 5.1b Add confirmed, candidate, needs-attention, and deprecated Entity projections plus owner-preserving cross-source search.
 - [x] 5.2 Implement Entity Inspector and typed confirm, edit, bind, merge, deprecate, instantiate, publish, diff, apply, reference, Character dialogue, Room open, and Character embody intents with visible provenance, capability gating, and blockers.
 - [ ] 5.3 Wire Entity domain/node/search/webview and generic Asset ports through sender-bound Desktop IPC without retaining Entity semantics or file IO in the Renderer/application root.
+  - Basic Entity operations use the package-owned `entity.manage` path through the existing sender-bound Resource Browser bridge. Generic Asset production wiring is blocked by `establish-manifest-backed-asset-library` (0/25); unsupported capabilities remain hidden.
 - [ ] 5.4 Add producer, Webview consumer, Desktop delegation, stale-event, conflict, and canonical-handler path tests for every ownership migration.
+  - Canonical/basic Entity ownership paths have producer, Webview, Desktop delegation, stale revision, conflict, journal recovery, and handler-path coverage. Asset and complete reference-owner migrations do not yet have production owners to exercise.
 
 ## 6. Verification and documentation
 
-- [ ] 6.1 Update Entity, Asset Library, Resource Browser, workspace data, local metadata, and package-boundary documentation in Chinese and English where semantics changed.
-- [ ] 6.2 Run affected package tests/typechecks plus `pnpm build`, `pnpm test`, `pnpm check`, `pnpm check:legacy-debt`, and `pnpm check:unused`; record results and canonical-path/poison evidence.
+- [x] 6.1 Update Entity, Asset Library, Resource Browser, workspace data, local metadata, and package-boundary documentation in Chinese and English where semantics changed.
+- [x] 6.2 Run affected package tests/typechecks plus `pnpm build`, `pnpm test`, `pnpm check`, `pnpm check:legacy-debt`, and `pnpm check:unused`; record results and canonical-path/poison evidence.
+  - Affected Entity, Search, Assets, Desktop, and AppHost tests/typechecks passed. `pnpm build`, `pnpm test`, `pnpm check`, `pnpm check:legacy-debt`, and `pnpm check:unused` passed on 2026-08-05.
+  - Canonical and poison evidence is asserted by `legacy-authority-poison.test.ts`, `project-entity-resources.test.ts`, `node-project-entity-migration.test.ts`, `node-project-entity-inspector-runtime.test.ts`, Entity Webview consumer tests, and Desktop Resource Browser delegation tests.
 - [ ] 6.3 Run a real Electron fixture scenario covering candidate confirmation, binding attention, merge blockers, Entity Asset instantiate/publish/update conflict, and remote Asset tombstone.
-- [ ] 6.4 Complete `pnpm ci:local`, record unresolved migration classifications and residual reference, publication, provider, and user-data risks, and verify no fragmented authority returned success.
+  - `pnpm test:local:ui --scenario resource-browser-entity-management` passed against real Electron on 2026-08-05. Its report records candidate confirmation to canonical revision 2, binding needs-attention, two reference blockers, hidden unsupported Asset actions, and no console errors, warnings, or exceptions.
+  - Asset instantiate/publish/update/tombstone runtime coverage depends on the manifest-backed Asset production owner and must not be replaced by an in-memory or flat-file success path.
+- [x] 6.4 Complete `pnpm ci:local`, record unresolved migration classifications and residual reference, publication, provider, and user-data risks, and verify no fragmented authority returned success.
+  - `pnpm ci:local` passed on 2026-08-05, including formatting, lint, all workspace typechecks/builds, Desktop arm64 packaging, all tests, unused/dependency checks, architecture gates, and strict OpenSpec validation.
+  - Unknown legacy fields remain `unresolved-archive`; ambiguous identity/binding values remain explicit user-confirmation items. Immutable archives preserve their source bytes, while normal fragmented readers are poisoned and canonical resource tests prove they cannot return success.
+  - Residual risks remain capability-blocked: incomplete reference-owner participation, absent manifest-backed publication/provider/tombstone runtime, and real heterogeneous user-workspace migration coverage. None is exposed through a fallback success path.

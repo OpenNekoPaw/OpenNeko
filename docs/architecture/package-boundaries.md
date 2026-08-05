@@ -2,7 +2,7 @@
 
 状态：Accepted
 
-更新日期：2026-08-04
+更新日期：2026-08-05
 对应变更：`replace-desktop-media-scheme-with-http-resource-gateway`、
 `enforce-thin-desktop-application-root`、`normalize-package-naming-topology`、
 `define-character-chatroom-play-use`、`compose-desktop-workbench-scenes`
@@ -99,7 +99,18 @@ provider、下载、输出落盘与生命周期实现只能从 `@neko/generation
 实体和搜索是 host-neutral 跨领域服务。
 
 - core/projection 通过 port 注入文件、锁、日志和事件能力，不依赖 Electron、React 或功能包内部实现。
-- Desktop Main 组合 Entity runtime、Media Library、metadata binding 和 Inspector 所需 host ports。
+- `@neko/entity-node` 拥有 canonical repository、Host-owned Entity/binding identity materialization，
+  以及 candidate confirmation 跨 canonical fact 与 rebuildable projection 的 workspace-scoped recovery
+  journal；Desktop Main 不解释这些 operation 或恢复规则。
+- `@neko/assets-node` 的 Resource Browser runtime 通过 package-owned `entity.manage` typed intent
+  委托 exact Entity owner；它读取 canonical Entity snapshot 与 local-metadata candidate/availability
+  projection，但不复制 Entity 语义或写项目文件。
+- Desktop Main 组合 Entity runtime、Media Library、metadata binding 和 Inspector 所需 host ports；
+  复用既有 sender-bound Resource Browser bridge，只注入 exact workspace identity、canonical
+  repository 与 local-metadata public repository。
+- `@neko/search-local-metadata` 已由生产 Resource Browser Entity projection 路径直接使用，因此是
+  `active-product` Node package；它只持有可重建 candidate/occurrence/availability rows，不得升级为
+  Project Entity fact authority。
 - Canvas、Assets 和 Agent 通过 canonical facade/contract 访问 Entity；不存在 Dashboard fallback。
 - projection 不泄露 store/cache/index 绝对路径、token、Webview URI 或 manifest path。
 - `@neko/search-domain` 的 semantic source coordinator 拥有 source scope、fingerprint、freshness、reconciliation 和 analyzer scheduling；`@neko/entity-domain` 提供 host-neutral deterministic text analyzer，二者通过共享 semantic-source contract 组合。

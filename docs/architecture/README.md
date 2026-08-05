@@ -62,7 +62,7 @@ composition。
 | [`package-taxonomy.md`](package-taxonomy.md)                                                                                                                 | Workspace package 角色、拆包条件、领域家族命名、显式 exports 与产品状态语义                                                 |
 | [`proto-and-wire-contracts.md`](proto-and-wire-contracts.md)                                                                                                 | Wire contract、package-owned contract、项目格式与未来 Proto 准入条件                                                        |
 | [`ui-theme-i18n-error-logging.md`](ui-theme-i18n-error-logging.md)                                                                                           | UI 公共层、主题 token、国际化、错误处理、日志和诊断边界                                                                     |
-| [`unified-entity.md`](unified-entity.md)                                                                                                                     | 统一实体、候选、实体素材绑定、视觉草案、展示投影和搜索投影                                                                  |
+| [`unified-entity.md`](unified-entity.md) / [`English`](unified-entity.en.md)                                                                                 | 统一实体、候选、实体素材绑定、视觉草案、展示投影和搜索投影                                                                  |
 
 ## Proposed 评审目标
 
